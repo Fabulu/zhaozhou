@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "5e6649dc10cd6c45ddab7f000560a3d39bf21fd2",
+    "newestRunCommit":  "69598991e75a21e13a782dc5e1ab3e18fe65a2a1",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -203,6 +203,45 @@
                        "rtlCleanAtHead":  false,
                        "status":  "timeout",
                        "seconds":  5308.1
+                   },
+                   {
+                       "module":  "zhao_forge_cliff@golden-for-F-CLIFF1",
+                       "status":  "ok",
+                       "sourceCommit":  "69598991e75a21e13a782dc5e1ab3e18fe65a2a1",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "fa1229382b3805cfc30a3025824ae29a72d7639893132387e4e665a941cea6d8",
+                       "variantOf":  "zhao_forge_cliff",
+                       "seconds":  1047.6,
+                       "sourcesHashed":  1,
+                       "alms":  6674,
+                       "registers":  4025,
+                       "blockMemoryBits":  119808,
+                       "ramBlocks":  14,
+                       "dspBlocks":  2,
+                       "virtualPins":  265,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  39.59,
+                       "fmaxClock":  "clk",
+                       "fmaxByClock":  [
+                                           {
+                                               "clock":  "clk",
+                                               "fmaxMhz":  39.59,
+                                               "restrictedMhz":  39.59
+                                           }
+                                       ],
+                       "setupSlackNs":  -15.259,
+                       "setupTnsNs":  -10377.202,
+                       "gatingClock":  "clk",
+                       "gatingFmaxMhz":  39.59,
+                       "gatingPeriodNs":  25.259,
+                       "holdSlackNs":  0.263,
+                       "holdTnsNs":  0
                    },
                    {
                        "module":  "zhao_forge_cliff_ram@first-measurement",

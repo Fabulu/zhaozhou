@@ -1543,3 +1543,82 @@ regression introduced by enabling it. Docket D17's live residual is relevant: CI
 pins cppcheck 2.19.0, this machine has 2.20.0, and D17's finding **does not
 reproduce on 2.20.0 at all** — same command, same file, different answer. So a
 local-versus-CI disagreement on that lane is expected and already documented.
+
+## R142 — F-CLIFF-GOLDEN LANDED: **5,698 ALM, fit-minus-fit, on the target part**
+
+**2026-09-20 18:20, `zhao_forge_cliff@golden-for-F-CLIFF1`, `FIT_RC=0`.**
+Read against the four outcome bands committed to `FIT-PLAN-AT-ZERO.md` **before
+the number existed**, so the interpretation could not be chosen after the fact.
+
+### Provenance first, per the standing rule
+
+`.sources.sha256` records `445a89ba…` and
+`fpga/rtl/forge/zhao_forge_cliff.sv` hashes to `445a89ba…` at this commit. **The
+receipt describes the file in the tree today.** Device `5CSEBA6U23I7`, Quartus
+17.0.2 — **the same part, tool and stage as the candidate's**, which is the only
+thing that makes a subtraction legitimate.
+
+### The numbers
+
+| | golden `zhao_forge_cliff` | candidate `zhao_forge_cliff_ram` | delta |
+|---|---|---|---|
+| **fitted ALM** | **6,674** (16% of device) | **976** (2%) | **−5,698** |
+| fitted registers | 4,025 | 939 | −3,086 |
+| DSP | 2 | 2 | — |
+| RAM blocks | 14 | 15 | +1 |
+| block memory bits | 119,808 | 120,964 | +1,156 |
+| map comb ALUT | 8,149 | 1,326 | −6,823 |
+| map registers | 3,875 | 826 | −3,049 |
+
+**The band this lands in is "roughly 6,000–8,000 ALM → the map estimate was
+sound; adopt, subject to R117's two named items; quote the delta as
+fit-minus-fit."** So: **the swap saves 5,698 ALM and 3,086 registers, for one
+extra RAM block and about 1.2k memory bits, with DSP unchanged.** That is
+**13.6% of the device's 41,910 ALM.**
+
+**And the old map-only row reproduced EXACTLY** — 8,149 ALUT, 3,875 registers,
+119,808 memory bits, matching the recorded estimate to the digit. The fitted
+6,674 sits ~13% under the map's 7,664 ALM figure, which is the normal direction
+for a map estimate. **The estimate was honest; it simply was not a fit, and the
+distinction mattered enough to spend fifteen minutes settling.**
+
+### R117'S TWO BLOCKERS ARE BOTH NON-DIFFERENTIAL, and this is the finding I did not expect
+
+I ruled adoption blocked on two items found in the candidate's receipt. **The
+golden has both, in identical quantity:**
+
+* **four `Warning (276020)`** RAM pass-through insertions — the golden has
+  **exactly four as well**;
+* **one inferred latch** — the golden has **exactly one as well**.
+
+**So neither is introduced by the RAM candidate. Both are pre-existing
+properties of this block in either implementation**, and R117 framed them as
+costs of the swap when they are costs of the *design*. Adopting the candidate
+does not add a latch or a pass-through; it removes 5,698 ALM and leaves those
+untouched.
+
+**R117 is amended accordingly:** the two items remain worth fixing, but they are
+**not adoption blockers** and must not be quoted as the price of the swap. That
+was a comparison made against one side only — the same one-sided-comparison
+error this run has found nine times in instruments, here committed by me in a
+ruling.
+
+### The context, stated carefully so it is not over-read
+
+The console's only composed fit reads **47,582 ALM against the 41,910 ceiling —
+5,672 over.** This swap saves **5,698**.
+
+**That near-coincidence must NOT be reported as "the swap closes the gap."**
+That 47,582 came from a **dirty tree**, carrying a live metadata-swap defect,
+**before this run's twenty-odd repairs**, and `zhao_block_fit.json`'s row for it
+**does not contain FIELD at all** — its `.sources.sha256` lists exactly one field
+file. Three independent reasons the denominator is wrong. What can honestly be
+said is narrower and still large: **this is the biggest single measured ALM lever
+found in the campaign, and it is worth about a seventh of the whole device.**
+
+### What this fit does NOT settle
+
+**It measures AREA.** It says nothing about whether the two implementations agree
+functionally — that is `tests/forge/forge_cliff_ram_differential.cpp`'s job, and
+Verilator's, not Quartus's. Declared in the plan before the run and repeated here
+so no one reads a fitted number as a correctness result.

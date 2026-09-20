@@ -1,0 +1,17 @@
+Analysis & Synthesis Status : Successful - Sun Sep 20 18:04:22 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_forge_cliff
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 3875
+Total pins : 0
+Total virtual pins : 265
+Total block memory bits : 119,808
+Total DSP Blocks : 2
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0
+Total DLLs : 0

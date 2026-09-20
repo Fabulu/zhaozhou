@@ -65,7 +65,23 @@ ruling into this plan. A ruling number made an unverified claim read as more
 authoritative rather than less. It was found only because I went to run the gate
 and looked for the runner.
 
-### F-CLIFF-GOLDEN — a leaf fit, and the ONLY honest way to state the saving
+### F-CLIFF-GOLDEN — **RUN 2026-09-20 18:20. RESULT: 6,674 ALM fitted.**
+
+**ANSWERED.** `FIT_RC=0`, device `5CSEBA6U23I7`, `.sources.sha256` matching the
+current source. Landed in the pre-committed band "roughly 6,000-8,000 ALM", so:
+**the swap saves 5,698 ALM fit-minus-fit** (6,674 -> 976) **and 3,086 registers**,
+for one extra RAM block and ~1.2k memory bits, DSP unchanged. **13.6% of the
+device.** The old map-only row reproduced exactly (8,149 ALUT / 3,875 reg /
+119,808 bits). Full reading in ruling R142.
+
+**R117's two blockers are NON-DIFFERENTIAL:** the golden has the same four
+`Warning (276020)` and the same one inferred latch. Neither is introduced by the
+candidate, so neither is an adoption blocker -- they are costs of the design, not
+of the swap.
+
+*(Original entry, kept because its reasoning is why the fit was worth spending:)*
+
+### ~~F-CLIFF-GOLDEN~~ -- the question, as posed before the run
 
 **Question: what does `zhao_forge_cliff` actually FIT at on `5CSEBA6U23I7`?**
 
