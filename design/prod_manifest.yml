@@ -1467,3 +1467,18 @@ excluded:
   # records above and for the same reason: composing it would wire a service
   # nobody calls.
   - zhao_terrain_heighttap: not-yet-adopted  world (x,z) -> {height, no_ground, NORMAL}, mirroring zhao_forge_shadow's tap_* port signal for signal, and from 2026-09-19 (owner ruling R1) the collision normal normalize3_approx(face_normal) of the 4.3-picked triangle plus the whole CELL it came from; 2,272 directed checks differential against zref::terrain::column_query and ::collision_normal. INSTANTIATED by zhao_console_core only (item 14, PART.COLLIDE's terrain sample through PART.TERRAIN_TAP), as a pass-through in front of the compose cache's read ports. Not in this census top for the same reason as its client zhao_part_collide: the console core is not yet the census root
+
+  # --- 2026-09-21, TERRAIN.PAGEIO -------------------------------------------
+  # BUILT and composed nowhere, which is the same deliberate state
+  # FORGE.PRIM.EVAL and TERRAIN.HEIGHTTAP record above and for the same reason:
+  # composing it would wire a service nobody calls.
+  #
+  # `not-yet-adopted` RATHER THAN A `top:` ROW IS THE POINT. Adding an unfitted
+  # block to the production fit's closure changes what that fit measures, and
+  # this one carries a 1,089-flop vertex-domain shadow plane and ~3 M10K of page
+  # buffers -- an area decision, taken at a fit gate with a stated question,
+  # never quietly inside a packet. tools/budget/uncashed_cheques.py reads this
+  # wording and leaves the module PENDING in its check 1, which is exactly the
+  # watch this row wants: the discharge condition is written below and the tool
+  # is what will ask whether it was performed.
+  - zhao_terrain_pageio: not-yet-adopted  TERRAIN.BAKE's page window (design/contracts/TERRAIN.PAGEIO.md, owner ruling R210, design/blocks.yml id TERRAIN.PAGEIO): layer D in, layers B and D out, inside one resident TERRAIN.PAGE_POOL slot, plus the directory's deformation mark terr_dm_*. 79 checks in pageio_rtl_directed with layers A, C and E asserted byte-identical after a bake and the detector itself fired by a mutant. One new requester on the existing write-capable share (u_build_share, .N(3) -> .N(4)); NO guard change, no new client id, no new region -- zhao_mem_guard already admits ZHAO_CLIENT_TERRAIN_BUILD on this pool in both directions, and the bench's real-guard observer passes and forwards every request the block makes. ADOPT when zhao_terrain_bake_v2 composes, which needs two things this packet does not own: a producer for bake's cmd_* record (ruling R15's depth-table work; zhao_terrain_cmd emits a patch-directory record, not a bake record) and an owner decision on the zhao_surface_sheet request arbiter between SURFACE.STAMP and bake's layer-F reader. Fit gate F-PAGEIO1 in design/fit_targets.yml prices the shadow plane and the two page buffers before then
