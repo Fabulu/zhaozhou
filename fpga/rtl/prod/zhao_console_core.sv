@@ -1332,7 +1332,7 @@
 //          POST.GATHER'S INPUT IS THE RESOLVED STREAM, NOT THE PRE-RESOLVE
 //          ONE. Its own header's first sentence is "RESOLVED FRAGMENTS carry
 //          effect tags" and its port group is commented "from RASTER.RESOLVE,
-//          and NEVER backpressured" (`zhao_post_gather.sv` lines 6 and 104).
+//          and NEVER backpressured" (`zhao_post_gather.sv` lines 6 and 79).
 //          So the sentence above conceded the half that was true and then
 //          refused on a stream this block never asked for.
 //
