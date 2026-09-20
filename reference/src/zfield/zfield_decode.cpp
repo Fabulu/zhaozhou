@@ -8,6 +8,10 @@
 
 #include <cstdio>
 
+// The ONE canonical operation table. decode() was the last consumer in the
+// tree still carrying its own hand-written copy of these shapes (R127).
+#include "zfield/generated/zfield_optable.hpp"
+
 namespace zfield {
 
 namespace {
@@ -22,89 +26,61 @@ struct Fail {
   std::string detail;
 };
 
-// op metadata mirrors field-ir.md §2 (dst group width, source group widths,
-// imm use) — duplicated from types.ts by hand ONCE, asserted by the fuzz
-// corpus replay (any drift shows up as a decode/interpret divergence).
+// OP METADATA COMES FROM THE GENERATED TABLE. There is no third description of
+// opcode shape any more (ruling R127, packet L1, 2026-09-20).
+//
+// WHAT WAS HERE, AND WHY IT WENT. This was a hand-transcribed switch over all
+// 31 canonical opcodes whose own comment read: "duplicated from types.ts by
+// hand ONCE, asserted by the fuzz corpus replay (any drift shows up as a
+// decode/interpret divergence)." Both halves of that sentence were true and the
+// conclusion drawn from it was not:
+//
+//   * The corpus reaches 19 of 31 opcodes. `compiler/src/field_ir/fuzz_gen.ts`
+//     selects ops from a SIXTEEN-ARM SWITCH (lines 77-94) plus one appended
+//     NOISE2; it can never emit DOT2, DOT3, LEN2, LEN3, DIST2, NORMALIZE2,
+//     NORMALIZE3, COS, RING, RIDGE, ROT2 or ROT3. Counting the three committed
+//     Earth programs as well (they add DIST2, RING and COS) the whole repo
+//     reached 22 of 31, so EIGHT OF THIS SWITCH'S NINETEEN ROWS had never once
+//     executed -- and they were the wide ones. `dstW == 3` was never validated
+//     by anything, nor was imm kind 5 (the ROT3 axis), nor a source group of
+//     width 3.
+//   * The divergence signal needed BOTH sides to run. decode() reached this
+//     table; interpret() reads the generated one. For any opcode the corpus
+//     does not contain, there was no comparison to diverge.
+//   * `field_fplan_diff.cpp` DOES draw uniformly from all 31 shapes, but it
+//     builds a zfield::Decoded in memory and never serialises a .zprog, so it
+//     never called decode() and never reached here at all.
+//
+// So the hand table could have disagreed with the generated one across nine
+// opcodes indefinitely while every test stayed green -- CLAUDE.md's own law
+// that a gate which cannot reach the state is not evidence about the state.
+// (Measured 2026-09-20: the two tables AGREED on all 31 shapes at the moment of
+// folding, so nothing was silently wrong. The point is that nothing was
+// watching, and the flattering direction would have been to quote the silence.)
+//
+// Delegating removes the possibility rather than re-auditing it. The generated
+// table is already the single source for zfield_plan.cpp and
+// zfield_interpret.cpp; decode() was the lone hold-out.
 struct OpMeta {
   int dstW;
   int srcGroups[3];
   int nGroups;
   char imm;
-};  // imm: 0 none, 1 raw, 2 cmp, 3 table, 4 seed, 5 rot3
+};  // imm: 0 none, 1 raw, 2 cmp, 3 table, 4 seed, 5 rot3 -- the IMM_* order
+    // of zfield/generated/zfield_optable.hpp, asserted below.
+static_assert(optable::IMM_NONE == 0 && optable::IMM_RAW == 1 && optable::IMM_CMP == 2 &&
+                  optable::IMM_TABLE == 3 && optable::IMM_SEED == 4 &&
+                  optable::IMM_ROT3_AXIS == 5,
+              "OpMeta::imm and optable IMM_* have come apart");
+
 bool opMeta(uint8_t op, OpMeta& m) {
-  switch (op) {
-    case OP_END:
-      m = {0, {0, 0, 0}, 0, 0};
-      return true;
-    case OP_MOV:
-      m = {1, {1, 0, 0}, 1, 0};
-      return true;
-    case OP_LDC:
-      m = {1, {0, 0, 0}, 0, 1};
-      return true;
-    case OP_ADD:
-    case OP_SUB:
-    case OP_MUL:
-    case OP_MIN:
-    case OP_MAX:
-      m = {1, {1, 1, 0}, 2, 0};
-      return true;
-    case OP_MAD:
-    case OP_CLAMP:
-    case OP_SELECT:
-      m = {1, {1, 1, 1}, 3, 0};
-      return true;
-    case OP_ABS:
-    case OP_RCP:
-    case OP_SIN:
-    case OP_COS:
-      m = {1, {1, 0, 0}, 1, 0};
-      return true;
-    case OP_CMP:
-      m = {1, {1, 1, 0}, 2, 2};
-      return true;
-    case OP_DOT2:
-    case OP_DIST2:
-      m = {1, {2, 2, 0}, 2, 0};
-      return true;
-    case OP_DOT3:
-      m = {1, {3, 3, 0}, 2, 0};
-      return true;
-    case OP_LEN2:
-      m = {1, {2, 0, 0}, 1, 0};
-      return true;
-    case OP_LEN3:
-      m = {1, {3, 0, 0}, 1, 0};
-      return true;
-    case OP_NORMALIZE2:
-      m = {2, {2, 0, 0}, 1, 0};
-      return true;
-    case OP_NORMALIZE3:
-      m = {3, {3, 0, 0}, 1, 0};
-      return true;
-    case OP_CURVE:
-    case OP_SPLINE:
-    case OP_DCURVE:
-      m = {1, {1, 0, 0}, 1, 3};
-      return true;
-    case OP_NOISE2:
-      m = {2, {2, 0, 0}, 1, 4};
-      return true;
-    case OP_RING:
-      m = {1, {1, 1, 1}, 3, 0};
-      return true;
-    case OP_RIDGE:
-      m = {1, {1, 1, 0}, 2, 4};
-      return true;
-    case OP_ROT2:
-      m = {2, {2, 1, 0}, 2, 0};
-      return true;
-    case OP_ROT3:
-      m = {3, {3, 1, 0}, 2, 5};
-      return true;
-    default:
-      return false;
-  }
+  const optable::OpShape* sh = optable::shape_of(op);
+  if (sh == nullptr) return false;  // a non-canonical byte, exactly as before
+  m.dstW = sh->dst_width;
+  m.nGroups = sh->n_groups;
+  for (int g = 0; g < 3; ++g) m.srcGroups[g] = sh->group_width[g];
+  m.imm = (char)sh->imm_kind;
+  return true;
 }
 
 }  // namespace

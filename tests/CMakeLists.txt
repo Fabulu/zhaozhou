@@ -268,6 +268,26 @@ add_test(NAME field_fplan_random COMMAND test_field_fplan_diff --random 40)
 set_tests_properties(field_fplan_random PROPERTIES LABELS "fast;nightly")
 add_test(NAME field_fplan_random_nightly COMMAND test_field_fplan_diff --random 600)
 set_tests_properties(field_fplan_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# ---- packet L1: the production lowerer (zfield/zfield_host_plan.hpp) -------
+# Directed cases for every opcode shape the owner directive section 5.3
+# enumerates, EACH WITH A DELIBERATE MISWIRE CONTROL; the ordinal<->window
+# translation on a real program; the directive 6.2 initialisation proof; and
+# R111's required_mask==0 gate shown failing with its positive control
+# separate. Needs compiler/tests/generated for crater_ring.hpp, exactly as
+# field_fplan_diff above does.
+add_executable(test_field_host_plan_directed differential/field_host_plan_directed.cpp)
+target_link_libraries(test_field_host_plan_directed PRIVATE zhao_zref)
+target_include_directories(test_field_host_plan_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME field_host_plan_directed COMMAND test_field_host_plan_directed)
+set_tests_properties(field_host_plan_directed PROPERTIES LABELS "fast;nightly")
+
+# The ZFH2 packer (directive 5.2 "and a tool: tools/field/pack_field_host.cpp").
+# Built by the test lane so it cannot rot unbuilt -- a packer that does not
+# compile is the "BUILT, INSTALLED NOWHERE" shape with the sign reversed.
+add_executable(pack_field_host ${CMAKE_SOURCE_DIR}/tools/field/pack_field_host.cpp)
+target_link_libraries(pack_field_host PRIVATE zhao_zref)
 # The generated canonical-operation table (reference/include/zfield/generated/
 # zfield_optable.hpp) is pinned against OP_INFO by compiler/tests/
 # optable.test.ts â€” the same place the other TS-generated committed artifacts
