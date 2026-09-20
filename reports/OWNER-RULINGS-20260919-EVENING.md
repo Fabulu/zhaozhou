@@ -1782,3 +1782,204 @@ for the file and the punishing one for the person: the document *appears* to hav
 been updated. H1 wrote the shape requirement into the entry itself, which is the
 right place — beside the thing that must obey it, not in a tool's docstring
 nobody opens.
+
+## R148 — I MISQUOTED THE OWNER'S DIRECTIVE INTO ITS OPPOSITE, in six briefs
+
+**2026-09-20, found by D1, and this is the worst thing I have done in this run.**
+
+The directive, line 2244, verbatim:
+
+> *"This is a real shared correctness commit **even if** the mandatory gap count
+> stays 21 or changes on unrelated work. Do not wait for Warp to exist before
+> fixing it. Do not claim the whole shared service repaired when only this
+> commit is done."*
+
+**That is a CONCESSION: the work counts even if the number does not move.**
+
+What I wrote into six packet briefs — S1, L1, F1, D1, H1, A1 — citing it as
+§20.2:
+
+> *"Your packet is not expected to move the register. Reporting '21 → 21' is a
+> correct outcome."*
+
+**That is an INSTRUCTION NOT TO TRY.** The owner said the work is valuable
+regardless of the number; I told six lanes the number was not their problem.
+Those are not the same sentence and the difference is the whole campaign: the
+standing goal is *drive the mandatory gap count to ZERO*, and I handed out
+permission to leave it alone.
+
+**Every one of the six reported 21 → 21.** I cannot claim that phrasing caused
+it — Wave 1 and Wave 2 are dependency work by design, and each lane named real
+blockers rather than shrugging. But **I cannot claim it did not, either**, and
+that is precisely the problem with putting a false permission in a brief: it
+removes the evidence that would settle the question. A lane that considered a
+close and dropped it would have left no trace.
+
+**Compounding it: I attributed the paraphrase to a section number.** "§20.2
+says" is checkable, which makes it *more* trusted, not less — the same mechanism
+as R117, where a ruling number laundered an inherited claim, and R144, where I
+cited two rulings that did not exist in the lane's base. **Three forms of the
+same error in one day: a number that makes an unverified claim look
+authoritative.**
+
+D1 caught it by doing what the briefs ask lanes to do and what I did not do
+myself: it went and read the line.
+
+### The correction, for every remaining brief
+
+Quote the directive **verbatim** and let it mean what it says:
+
+> *"This is a real shared correctness commit even if the mandatory gap count
+> stays 21."*
+
+And add the half I had been supplying in the wrong direction: **if a gap is
+genuinely closeable within your file set, CLOSE IT — and if it is not, name the
+blocker.** "The register did not move" remains an honest report; it was never
+supposed to be a target.
+
+**This does not retroactively devalue Wave 1 or Wave 2.** Their refusals were
+specific and measured — FORGESHADOW walked five port groups, ENGINE1 traced a
+chain blocked at both ends, H1 and D1 each named exactly what C1 must carry.
+None of them shrugged. But the permission I gave them should not have been
+there, and the remaining briefs will not carry it.
+
+## R149 — S1's GENERATED SV PACKAGE HAS NEVER BEEN LINTED OR ELABORATED BY ANYTHING
+
+D1, while consuming it. `fpga/rtl/field/generated/zhao_field_host_image_pkg.sv`
+is emitted by S1's generator and **nothing verilates it, nothing elaborates it,
+and no test includes it** — and it lacks the **27 `lint_off` pairs its sibling
+generator emits**, which is the tell that it has never been through the linter
+that would have demanded them.
+
+**A generated file nothing checks is a file that is correct only by
+construction**, and S1's own cross-check proves the C++ and SV sides *agree with
+each other*, not that either is valid SystemVerilog. Two wrongs that agree are
+exactly the cancelling-errors pattern `CLAUDE.md` names — and here the checker
+S1 built cannot see it, because it compares the two generated sides rather than
+either against a compiler.
+
+Owed: put the package in a verilate closure so it is elaborated at least once,
+and expect the missing `lint_off` pairs to surface immediately.
+
+## R150 — D1 FOUND A DEFECT IN ITS OWN NEW COUNTER, AFTER PUSHING, AND FIXED IT
+
+Recorded because the behaviour is the one this run is trying to make normal.
+
+`hint_overrides_o` differenced against a field that **§10.2 defines as
+reserved-zero**, so it was not measuring "the hardware overrode the software
+hint" at all — it was measuring **"did not pick slot 0"**. And it was guarded by
+a `>=` assertion **that could not fail.**
+
+**A counter measuring the wrong quantity, protected by an assertion that cannot
+fire.** Both halves of today's dominant defect in one object, authored by a lane
+that had spent the day repairing exactly that. Replaced with
+`pin_forced_victim_o`, differenced against a **pin-blind LRU** — a genuinely
+different reference — and asserted to fire by exactly one.
+
+Its other false-presence finds, each re-verified rather than inherited:
+`prod_fit_sources.txt` is **orphaned** (the real list is `fit_targets.yml`, where
+the doorbell sits in **two** blocks); the doorbell is instantiated in **two**
+files, not the four a naive grep suggests; `counter_ids.lock` does not govern RTL
+evidence ports; and **`zhao_crc32c_fold` already existed**, so its draft
+bit-serial CRC would have been both a duplicate of ratified arithmetic and a
+64-level timing defect.
+
+## R151 — `zhao_prod_top` WAS FITTING A DIFFERENT MACHINE: the stamp adapter's defaults were live there
+
+**2026-09-20, A1.** My brief flagged `zhao_field_stamp_adapter.sv:101` as
+defaulting 12/4 while instantiated 13/7, and called it "a trap waiting for the
+next composer". **It was not waiting. It had already fired.**
+
+There are **two** instantiations:
+
+* `zhao_console_core.sv:16203` passes **13/7** explicitly;
+* **`zhao_prod_top.sv:579` passed NO override at all** and took the defaults.
+
+So **the production fit top has been building a 384-bit client bus against the
+console's 416** — and `zhao_prod_top` is the thing the whole-design census and
+the production fit measure. Verified independently here: defaults still read
+`IN_LANES = 12`, `OUT_LANES = 4` before A1's fix lands.
+
+**This is R99's shape again, one level down.** R99 found the production top
+*pricing two projectors the console does not contain*; this is the production
+top *pricing the same adapter at the wrong width*. Both are the same failure:
+**the top that gets measured is not the machine that gets composed**, and
+nothing compared them.
+
+Fixed both ways, which is right: defaults corrected to 13/7 **and** the composed
+selection stated in `production_parameter_overrides`, the same mechanism and the
+same reason as the existing `BUILD_HPS_N` row. A default and an override that
+agree are cheap; a default nobody notices is what produced this.
+
+**And 12/4 was not arbitrary — it is EARTH's record, copied.** Stamp's own arity
+is 8/3. So the wrong number had a plausible origin, which is exactly why it
+survived: it looked like it came from somewhere.
+
+## R152 — R40's SUBTRAHEND WAS READ FROM LIVE PINS, and the guard beside it could not have caught that
+
+**A1, in the flow adapter, and it is a live shipping defect.**
+
+R40's law is `sat_s11((v' - v) >> 8)`. The adapter read **`v` from the live pins
+at response time** rather than capturing it with the request — so a record that
+moved mid-flight computed **`(v' of A) − (v of B)`**: two different records'
+velocities subtracted from each other, silently, producing a plausible number.
+
+**The existing guard could not prevent it, and the reason is exactly
+`CLAUDE.md`'s two-operand law**: it samples one state *after* the wrong value has
+already been latched. A detector downstream of the corruption cannot see the
+corruption. That law was written after a metadata bank shipped a record-swapping
+defect with a live identity counter beside it reading zero, and this is the same
+structure in a different subsystem.
+
+Repaired with **one capture latch**. Test case 8 asserts **7, not 517** — a
+discriminating number rather than a pass/fail. Cost **+416 flops, declared**
+rather than discovered later.
+
+## R153 — FH26's TWO BINDINGS, DISCRIMINATED BY A SINGLE VALUE
+
+The brief demanded that A1 *"name the case that discriminated them"*, because two
+bindings that share a test are one binding with two names. It did:
+
+**Same response, unit strength fx16 1.0 (`0x0001_0000`): `LEGACY` delivers 0
+(no brush), `CANONICAL` delivers 65535 (full brush)** — because the legacy bridge
+takes the low sixteen bits. A second discriminator on the input side: texel 0
+offers `R0 = 0` against `R0 = 512`.
+
+Two **separately elaborated** instances, and case D asserts that a full
+4,096-record legacy walk moves **no** canonical counter **and the converse**. That
+converse is the half usually skipped, and it is the half that proves the two are
+not quietly the same object.
+
+**And `STAMP_BINDING` has no safe default: omission is an elaboration refusal**,
+with a committed positive control — written as a *wrapper*, so it cannot go
+stale the way a copied mutant does — firing it with the exact text at `:319`,
+and the "did not fire" path never reached. **Lint says nothing about it**, as
+`CLAUDE.md` predicts for anything inside an `initial` block.
+
+That is FH26 done properly: legacy is a **named mode**, not a value a capsule can
+fall into by omission — which is the trap R111 recorded, where `mask == 0` is the
+only case that occurs and a plan writer who omits it silently restores the R101
+defect.
+
+## R154 — A1 REVERTED ITS OWN PLAN BECAUSE IT WOULD HAVE COST A GAP
+
+Worth recording as the behaviour, not the outcome. A1 had planned two new console
+boundary outputs and **dropped them**, because an output nothing reads is a
+tie-off in waiting — it would have *increased* the register while looking like
+progress.
+
+That is the same judgement FORGESHADOW made in refusing to close
+`tri_continuation_tail_i` from four constants, and ENGINE1 made in refusing to
+compose a block whose chain was blocked at both ends. **Three lanes independently
+declining the flattering move on the same day**, without being asked in the
+moment. The briefs carry rule 1; the lanes are applying it unprompted.
+
+**Stale claims it also found**, each re-verified: plan §F2's Formation "(11)" is
+already fixed at `field-ir.md:525`; `GEOM.WARP.md:317` said *"there is no Warp
+adapter"* and **it amended that row**; `:319` still says P4 is ABSENT although
+R101 merged it; and `ops.yml:27` contradicts `blocks.yml:1142`.
+
+**Including one of its own**: it had claimed appending a manifest row would avoid
+renumbering — **`gen_prod_top.py` sorts, so it does not** — measured both ways
+and corrected its own note. A lane correcting its own published claim, in the
+same report, is the standard this run has been trying to set.

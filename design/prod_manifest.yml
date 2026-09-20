@@ -479,6 +479,19 @@ top:
   # pattern). Counted because zhao_console_core instantiates it and it
   # closes entry I42: the loader and both directory phases have an owner.
   - zhao_field_doorbell
+  # --- 2026-09-20, the FH2 transactional loader (packet D1) ------------------
+  # Owner decisions FH13 (reserve -> fill -> validate -> seal -> bind), FH15
+  # (backing storage is not the active cache) and FH16 (pin at association
+  # open), against the install FSM of directive section 10.3. COUNTED, not
+  # deferred: zhao_console_core instantiates it, the doorbell's op-3 arm drives
+  # it, and its bytes come through the HPS arbiter as client 5.
+  #
+  # It is NOT a replacement for zhao_field_progcache and must not be read as
+  # one. The directory owns residency of the ACTIVE cache; this owns the
+  # BACKING STORE's descriptor table -- installed immutable capsules, their
+  # generations, their pin counts and their READY bits. FH15 is precisely the
+  # statement that those are different objects with different lifetimes.
+  - zhao_field_loader
   # GEOM.LOOM's NODE-STREAM CARRIER (owner rulings R58 and R69, on the same
   # R14 doorbell pattern). Counted because zhao_console_core instantiates it
   # and it closes entry I50: SW.STREAM's topologically sorted stream reaches
