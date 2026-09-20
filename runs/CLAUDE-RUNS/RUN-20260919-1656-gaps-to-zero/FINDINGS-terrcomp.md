@@ -266,6 +266,15 @@ WHY IT STILL CANNOT CLOSE HONESTLY. Six absences, measured:
     disconnected -- closing one gap by opening another. Worse, R83 rules it
     currently WRONG: the derived proj reaches 443.41 while the governor's port
     is [15:0] Q8.8 capping at 255.996, so it saturates below 90 deg hfov and
+
+> **RETRACTED BELOW — READ ADDENDUM 2.** This item quotes R83's Q8.8
+> saturation as LIVE. It is not: the widening is DONE, `PROJW = 20`, Q12.8 in
+> 20 bits, with a real producer. TERRCOMP self-corrected this ~270 lines
+> further down, **where a grep for `Q8.8` never lands** — which is owner
+> ruling R175's shape exactly (a warning the reader's search window never
+> shows them). Pointer added by the coordinator 2026-09-20 on packet
+> POSTMEAS's recommendation; the retraction stays where its author wrote it.
+
     PEGS THE LOD LADDER AT ITS FINEST RUNG -- maximum triangle cost, no visible
     symptom, no counter that can see it. Wiring it first composes a circuit
     already known wrong.
