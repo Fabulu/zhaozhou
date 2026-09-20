@@ -187,3 +187,22 @@ All three live-history legs pass on clean renders (the earlier FAILs were my own
 orphan-cleanup kill landing mid-render, not a regression). Nothing else in the
 matrix was affected by that cleanup: every other leg is a fresh run in this
 same invocation.
+
+### 2026-09-20 - PACKET 4: dedicated vertical built; STOP reported
+- Option (a) built: `kKneadDipCarryCancelPm`. The nodule solve is a sequential
+  CARRIED solve, so lowering B lowers C, and C starts the return arm -- that
+  carry (not which carriers move) is why packet 3's seven rankings all landed on
+  the same C-E figure. B goes down by d, C is handed +d back, and the reaction is
+  absorbed in the A..C stretch through the existing signed-span helpers.
+- It works: B strictly lowest 0/21 -> 9/21 at the same gain, 13/21 at 650,
+  17/21 at 1000, and at 650 THE ATTACHMENT SPAN IS INSIDE ITS BOUND (C-E 438 vs
+  440) with the only breaches on A-B (+2 pm) and B-C (-12 pm), both interior.
+- It is still not enough: clearing those two interior bounds exposes two other
+  mspan legs (carrier jerk; SpanDeltaE/RearSocket meet at End) that fail at
+  every amplitude down to gain 350. All 21 needs ~gain 1000, i.e. C-E at 524 pm
+  against 440 -- a 19% overshoot of the attachment bound. NOT TAKEN.
+- SHIPPING: gain 550, cancel 0, all gates green, B not strictly lowest anywhere.
+  Reported as NOT DONE. Ledger in P20-DIP-STOP.md.
+- kSpanStretchMaxPm / kSpanCompactionMinPm / kSpanMinRunMm all exactly as pass 19
+  left them. P20-GATE-CHANGES.md 7 records the considered-and-rejected widening.
+- Matrix 144/144 in ONE invocation.
