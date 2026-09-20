@@ -8942,6 +8942,60 @@ verilate(test_terrain_bake_v2_directed
 add_test(NAME terrain_bake_v2_directed COMMAND test_terrain_bake_v2_directed)
 set_tests_properties(terrain_bake_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---------------------------------------------------------------------------
+# THE POSITIVE CONTROL FOR V2'S MEETS-PLANE ROW WINDOW -- ruling R93.
+#
+# `tests/mutants/zhao_terrain_bake_v2_mutant.sv` was committed 2026-09-09 and
+# refreshed 2026-09-20 and NO TARGET EVER ELABORATED IT: one grep hit in
+# tests/, the file itself. R93 -- "an uninstantiated MODULE costs the fitter
+# nothing, but an unrun MUTANT is cited as evidence" -- gives the next terrain
+# packet a driver or retirement. This is the driver (terrain8, 2026-09-20).
+#
+# Verilated under the GOLDEN's prefix so `bake_dev.hpp` and the control
+# compile unchanged; in this executable the class Vzhao_terrain_bake_v2 IS the
+# mutant. Same arrangement as the forge cliff-RAM controls above.
+#
+# INVERTED POLARITY: it passes when the apply_breach_law comparison FAILS.
+# The CORRECT behaviour is asserted by `terrain_bake_v2_directed` against the
+# real block -- two separate targets, per CLAUDE.md's "do not write a test that
+# asserts the bug".
+add_executable(test_terrain_bake_v2_mutant_control terrain/terrain_bake_v2_mutant_control.cpp)
+target_link_libraries(test_terrain_bake_v2_mutant_control PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_v2_mutant_control PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_bake_v2_mutant_control
+  PREFIX Vzhao_terrain_bake_v2
+  TOP_MODULE zhao_terrain_bake_v2_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_bake_v2_mutant.sv)
+add_test(NAME terrain_bake_v2_mutant_control COMMAND test_terrain_bake_v2_mutant_control)
+set_tests_properties(terrain_bake_v2_mutant_control PROPERTIES
+                     LABELS "fast;nightly;mutant" TIMEOUT 600)
+
+# THE NEGATIVE CONTROL: the SAME driver against the REAL block, WILL_FAIL.
+#
+# CLAUDE.md's rule for every macro-selected mutant -- "compile the mutant with
+# the macro UNDEFINED and confirm the output differs" -- applied to a
+# prefix-selected one. Without this, "the control passed" is only evidence that
+# the executable ran; it says nothing about WHICH module it ran, and two
+# combiner mutants once passed while measuring unmutated production.
+#
+# It is not a test that asserts the bug. It asserts that the real block does
+# NOT present the fault, by the only route that also proves the driver can tell
+# the difference -- and it is a live regression guard in its own right: if
+# production ever acquires the row-window lag, this driver SUCCEEDS on it and
+# WILL_FAIL turns that into a red.
+add_executable(test_terrain_bake_v2_mutant_negative terrain/terrain_bake_v2_mutant_control.cpp)
+target_link_libraries(test_terrain_bake_v2_mutant_negative PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_v2_mutant_negative PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_bake_v2_mutant_negative
+  PREFIX Vzhao_terrain_bake_v2
+  TOP_MODULE zhao_terrain_bake_v2
+  SOURCES ${ZHAO_TERRAIN_BAKE_V2_SV})
+add_test(NAME terrain_bake_v2_mutant_negative COMMAND test_terrain_bake_v2_mutant_negative)
+set_tests_properties(terrain_bake_v2_mutant_negative PROPERTIES
+                     WILL_FAIL TRUE LABELS "fast;nightly;mutant" TIMEOUT 600)
+
 # BAKE -> PATCH: the `baked_scars` seam, both blocks REAL. This is the first
 # time layer B has had a producer in RTL, so it is the first time the Mantle
 # entry point can be fed the plane its contract says TERRAIN.BAKE owns.
