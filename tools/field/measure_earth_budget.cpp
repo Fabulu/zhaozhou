@@ -59,9 +59,33 @@
 
 namespace {
 
-// spec/form/cost-model.md: 273 four-point groups make one 1,089-vertex
-// association, and the Earth stress frame is 128 associations.
-constexpr int kGroupsPerAssociation = 273;
+// 297 four-point groups make one 1,089-vertex association's UPDATE walk, and
+// the Earth stress frame is 128 associations.
+//
+// CORRECTED 2026-09-20, FROM 273. `spec/form/cost-model.md:183` still says
+// "vector groups per association (273 for a full patch)" and it is describing
+// the wrong traversal -- see `design/contracts/FIELD.SEQ.EARTH.md:137-154`,
+// which corrected this on 2026-08-27:
+//
+//     UPDATE      33 * ceil(33/4) = 297   row-bounded quad groups
+//     INIT/DRAIN  ceil(1089/4)    = 273   flat ALIGNED quad groups
+//
+// The walk is row-major over 33x33 and 33 is not a multiple of 4, so an UPDATE
+// group may not straddle a row: 9 groups a row, 33 rows, 297. Only INIT and
+// DRAIN pack the 1,089 flat and aligned, and only they cost 273.
+//
+// This constant multiplies a per-group II into the per-association and
+// per-frame costs THIS TOOL PRINTS OK/OVER AGAINST, so 273 here understated
+// every program's association cost by 8.8% -- in the flattering direction,
+// because a smaller group count turns an OVER into an OK. A program whose true
+// association cost lands between 6,000 and 6,527 clocks printed OK.
+constexpr int kGroupsPerAssociation = 297;
+static_assert(kGroupsPerAssociation == 33 * ((33 + 3) / 4),
+              "UPDATE groups are row-bounded: 33 rows x ceil(33/4)");
+// The aligned INIT/DRAIN count, named rather than deleted so the next reader
+// does not "restore" it over the line above. It is not wrong, it was misplaced.
+constexpr int kGroupsPerAssociationAligned = (33 * 33 + 3) / 4;  // 273
+static_assert(kGroupsPerAssociationAligned == 273, "ceil(1089/4)");
 constexpr int kAssociationsPerFrame = 128;
 constexpr long kFrameBudget = 850000;
 constexpr long kAssociationBudget = 6000;

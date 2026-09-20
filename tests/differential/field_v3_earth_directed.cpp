@@ -6,8 +6,32 @@
 // WHAT THIS ANSWERS AND WHY NOTHING ELSE COULD
 // ---------------------------------------------------------------------------
 // The admission law is two numbers: <= 6,000 clocks per association and
-// <= 850,000 clocks for the 128-association stress frame. 273 four-point groups
-// per association, 34,944 groups per frame, so 24.3 clocks per group.
+// <= 850,000 clocks for the 128-association stress frame. 297 four-point groups
+// per association, 38,016 groups per frame, so 22.4 clocks per group.
+//
+// THAT 297 WAS 273 UNTIL 2026-09-20 AND THE OLD NUMBER WAS THE WRONG PHASE'S.
+// Both counts are real and they belong to different phases, which is exactly
+// why substituting one for the other was invisible:
+//
+//     UPDATE      33 * ceil(33/4) = 297   row-bounded quad groups
+//     INIT/DRAIN  ceil(1089/4)    = 273   flat ALIGNED quad groups
+//
+// The walk is row-major over a 33x33 lattice and 33 is not a multiple of 4, so
+// an UPDATE group may not straddle a row: every row costs 9 groups and a full
+// patch costs 9 * 33 = 297. Only the INIT and DRAIN phases, which pack the
+// 1,089 vertices flat and aligned, cost 273.
+//
+// `kGroupsPerAssoc` below scales a measured per-group cost into the per-
+// ASSOCIATION and per-FRAME budgets, and what an association costs is its
+// UPDATE walk. Using 273 there under-provisioned the executor by 8.8% -- and
+// in the FLATTERING direction, because a smaller group count makes every
+// program's extrapolated frame cost smaller and more of them "FIT".
+//
+// `fpga/rtl/terrain/zhao_terrain_field_walk.sv` measured 297 directly (its own
+// header, "Probe 5 measured exactly that"); the owner's directive derives it
+// independently at section 2.10 and 13.5 and names the stale assumption in
+// this driver -- "The benchmark driver still contains a 273-group scaling
+// assumption ... Correct the harness scope before inheriting any pass label."
 //
 // `tools/field/measure_earth_budget.cpp` answers that question by ARITHMETIC:
 // it plans a real program, looks each uop's measured initiation interval up in
@@ -142,8 +166,25 @@ constexpr int kDriveQuad = 2;
 // The law, from reports/Fieldv3.md and the owner's own number.
 constexpr long kFrameBudget = 850000;
 constexpr long kAssocBudget = 6000;
-constexpr long kGroupsPerAssoc = 273;
+// THE UPDATE COUNT, not the INIT/DRAIN one. See the header: a row-major walk
+// over 33x33 costs 33 * ceil(33/4) = 297 row-bounded quad groups, because a
+// group may not straddle a row. The 273 this held until 2026-09-20 is
+// ceil(1089/4), the ALIGNED flat packing, which is what INIT and DRAIN use and
+// what an association's UPDATE walk never costs.
+constexpr long kGroupsPerAssoc = 297;
+// Kept named rather than deleted: the INIT/DRAIN phases genuinely do cost this,
+// so the number is not wrong, it was merely in the wrong place. A later phase
+// budget wants it, and leaving it named stops the next reader "restoring" 273
+// over the line above.
+constexpr long kGroupsPerAssocAligned = 273;
 constexpr long kAssocPerFrame = 128;
+static_assert(kGroupsPerAssoc == 33 * ((33 + 3) / 4),
+              "UPDATE groups are row-bounded: 33 rows x ceil(33/4)");
+static_assert(kGroupsPerAssocAligned == (33 * 33 + 3) / 4,
+              "INIT/DRAIN groups are the flat aligned packing, ceil(1089/4)");
+static_assert(kGroupsPerAssoc > kGroupsPerAssocAligned,
+              "the row-bounded walk costs MORE than the aligned packing; if this "
+              "ever inverts, the two have been swapped again");
 
 int failures = 0;       // gates the exit status
 int diag_failures = 0;  // real, recorded, and NOT yet gating -- see the report
