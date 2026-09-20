@@ -80,3 +80,64 @@ PASS p-mnodule-C rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a fa
 PASS p-mnodule-E rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
 PASS p-mnodule-ignore rc=0 exp=0 | FAIL: 6 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
 PASS p-mprobe-mirror rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-outline rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-scale rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-support rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-support-depth rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-moutline-owner rc=1 exp=1 | MUTANT] enclosed-opening owner disabled
+PASS p-moutline-repaint rc=1 exp=1 | MUTANT] stale post-energy ink restore enabled
+PASS p-mqa-lane rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with lane 0 answering for every lane Q1 reports the corpse as dead, which is exactly what the shipped gate does
+PASS p-mqa-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports 2 death(s) standing back up, which is the fault pass 12 shipped
+PASS p-mqa-eyesnap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- Q2 rejects both death eye resets at their own settle keys
+PASS p-mqa-startle-step rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Startle timing exceeds its unchanged 260 mm ceiling
+PASS p-mqa-rootstep rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with the sag carry at one key Q3 reports 1 clip(s) over ceiling, which is the 240 mm teleport pass 12 shipped
+PASS p-mqa-fall-wrap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Fall wrap makes Q5 reject 4 contract/channel item(s), including the non-root pose reset
+PASS p-meyesize-L rc=0 exp=0 | RED LEG OK: mute L restores only its eye to identity
+PASS p-meyesize-R rc=0 exp=0 | RED LEG OK: mute R restores only its eye to identity
+PASS p-meyesize-wrong rc=0 exp=0 | RED LEG OK: wrong-bone scale fails only left Eye->Pupil registration
+PASS f-mqa-trick-spin-gain rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-gain [Q6a] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 1 = declared: Q3 slot-13 root step, two turns in one window)
+PASS f-mqa-trick-spin-ease rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-ease [Q6b] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-trick-spin-pivot rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-pivot [Q6c] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-trick-plant-pin rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-plant-pin [Q6d] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-flight-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-flight-seam [Q7] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-sel-spin-bogus rc=2 exp=2 | ZHAO_U02_TRICK_SPIN=bogus invalid (expected normal|none)
+PASS f-sel-start-range rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_START_KEY=78 outside 79..147
+PASS f-sel-short-seg rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_*_KEY: start 100 turn 104 settle 140 leaves a segment under 8 keys
+PASS f-sel-overshoot rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM=300 outside 0..250
+PASS f-sel-gain rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_GAIN_PM=-1 outside 0..2000
+PASS f-sel-trick-bias rc=2 exp=2 | ZHAO_U02_TRICK_CAM_BIAS=abc is not an integer; expected -40000..40000
+PASS f-sel-trick-k rc=2 exp=2 | ZHAO_U02_TRICK_CAM_K=1 outside 60000..600000
+PASS f-sel-cycles rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_CYCLES=0 outside 1..12
+PASS f-sel-amp rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_MM=-5 outside 0..2000
+PASS f-sel-rise rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16=100 outside 16384..49152
+PASS f-sel-warp rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16/TOP_HANG16: warp |(4096,10000)| exceeds 10000 (the clock would run backwards)
+PASS f-sel-flight-k rc=2 exp=2 | ZHAO_U02_FLIGHT_CAM_K=5 outside 60000..400000
+PASS f-sel-drift-bx rc=2 exp=2 | ZHAO_U02_DRIFT_CAM_BX=x is not an integer; expected -40000..40000
+PASS f-sel-lift rc=2 exp=2 | ZHAO_U02_FLIGHT_LIFT_MM=3000 outside 0..2000
+PASS f-sel-plant-pin rc=2 exp=2 | ZHAO_U02_TRICK_PLANT_PIN=bogus invalid (expected pinned|legacy)
+PASS f-sel-pin-release rc=2 exp=2 | ZHAO_U02_TRICK_PIN_RELEASE_KEYS=99 outside 2..30
+PASS f-sel-rear-frame rc=2 exp=2 | ZHAO_U02_REAR_SOCKET_FRAME=root invalid (expected arm|legacy-root)
+PASS f-sel-rear-follow rc=2 exp=2 | ZHAO_U02_REAR_SOCKET_FOLLOW_PM=1001 outside 0..1000
+PASS f-sel-rear-ambient rc=2 exp=2 | ZHAO_U02_REAR_AMBIENT_GAIN_PM=abc is not an integer; expected 0..1000
+PASS f-sel-line-scale rc=2 exp=2 | ZHAO_U02_MANA_LINE_SCALE=wide invalid (expected distance|legacy)
+PASS f-sel-line-full rc=2 exp=2 | ZHAO_U02_MANA_LINE_FULL_PX=10 outside 40..2000
+PASS f-sel-end-swell-rx rc=2 exp=2 | ZHAO_U02_END_SWELL_RX_MM=81 outside 0..80
+PASS f-sel-end-ball-rz rc=2 exp=2 | ZHAO_U02_END_BALL_RZ_MM=abc is not an integer; expected 0..80
+PASS f-sel-end-ball-half rc=2 exp=2 | ZHAO_U02_END_BALL_HALF_MM=10 outside 40..280
+PASS f-sel-end-ball-at rc=2 exp=2 | ZHAO_U02_END_BALL_AT_MM=2300 outside 2380..2700
+PASS f-sel-end-ball-support rc=2 exp=2 | ZHAO_U02_END_BALL_AT/HALF: ball leaves the End swell support
+PASS f-sel-span-limit rc=2 exp=2 | 
+PASS f-sel-span-travel rc=2 exp=2 | ZHAO_U02_REAR_SPAN_TRAVEL_MM=10 outside 40..2000
+PASS f-sel-span-soft rc=2 exp=2 | ZHAO_U02_REAR_SPAN_SOFT_MM=5 outside 10..1999
+PASS f-sel-span-knee rc=2 exp=2 | 
+PASS f-sel-dip-pm rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_PM=1001 outside 0..1000
+PASS f-sel-dip-depth rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_DEPTH_MM=abc is not an integer; expected 0..1200
+PASS f-sel-dip-fold rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_FOLD_PM=-1 outside 0..3000
+PASS f-sel-fold-dip rc=2 exp=2 | ZHAO_U02_FOLD_DIP_PM=2000 outside 0..1000
+PASS f-sel-dip-fold-hi rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_FOLD_PM=3001 outside 0..3000
+PASS f-sel-bow-bogus rc=2 exp=2 | 
+PASS f-sel-bow-sign rc=2 exp=2 | ZHAO_U02_REAR_BOW_SIGN=2 outside -1..1
+PASS f-sel-bow-onset rc=2 exp=2 | ZHAO_U02_REAR_BOW_ONSET_MM=2001 outside 0..2000
+PASS f-sel-bow-maxa rc=2 exp=2 | ZHAO_U02_REAR_BOW_MAX_A16=32001 outside 64..32000
+PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
+PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK

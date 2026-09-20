@@ -154,3 +154,7 @@ not a moved goalpost.
 - **Legacy toggle byte-exact 3/3** against the authoritative
   P19-FINAL-BANK-INTEGRITY values. Open item 3 (CRC discrepancy) is CLOSED:
   P19-IMPLEMENTATION's numbers were pre-review.
+
+### Gate matrix after the repair: 143/143 PASS, 0 FAIL
+All 11 normals green, `n-mrear-dip` green, `--fail-rear-strain` now firing 0x8
+on the real defect, and four new bow selectors returning RC 2.
