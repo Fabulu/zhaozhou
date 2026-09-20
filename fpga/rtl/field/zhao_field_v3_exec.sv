@@ -725,14 +725,59 @@ module zhao_field_v3_exec #(
   // ---- the op law, reused verbatim from the v2 engine ---------------------
   logic signed [DW-1:0] alu_result;
   logic               alu_is_end, alu_writes, alu_unsupported;
+
+  // THE ALU'S GROUP LEDGER PORTS, REDUNDANT AT THIS CALL SITE ON PURPOSE.
+  //
+  // This block reduces its own sticky ledger from the NARROW per-lane flags
+  // below, so it does not read these. They are not a dropped status -- the
+  // identical information leaves this module on `sat_add_o`/`sat_mul_o`/
+  // `sat_rescale_o`, reduced one level closer to where it was produced.
+  //
+  // That distinction is the whole point and it is worth stating, because this
+  // tree already terminates SEVEN services' per-lane status into `*_unused`
+  // wires where the information exists nowhere else. This is not one of those:
+  // nothing is lost here, a port is merely duplicated.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic               alu_sat_add, alu_sat_mul, alu_sat_rescale;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   logic alu_lane_desync;
+
+  // ---- THE LIVE MASK handed to the ALU ------------------------------------
+  //
+  // `zhao_field_alu_vec` masks its per-lane saturation flags with this and
+  // reduces the group ledger from the masked result, so a lane that is NOT
+  // marked live can neither publish a status of its own nor contaminate a
+  // neighbour's (owner directive 2026-09-20 §8.4: "A group-level aggregate may
+  // OR only LIVE lane statuses").
+  //
+  // WHAT MAKES ALL LANES LIVE HERE, AND WHEN THAT STOPS BEING TRUE.
+  // This executor issues ONE instruction for ONE context and widens only the
+  // datapath -- the header's "LANES: ONE INSTRUCTION, FOUR POINTS". It has no
+  // partial-group notion anywhere: there is a single `s4_v_r`, no per-lane
+  // occupancy input, and nothing upstream that can present this block a quad
+  // with a tail. So every lane of a VALID instruction carries a real point,
+  // and every lane of an invalid one carries none.
+  //
+  // That makes `{LANES{s4_v_r}}` the TRUTH today and not a tie-off, and it is
+  // written as a named signal rather than inlined so it is a knob the owner can
+  // see. WHEN a tail-masked gatherer arrives -- which is what FH11's width
+  // question brings with it -- this is the line that must be driven from real
+  // occupancy instead, and the ALU is already ready for it.
+  logic [LANES-1:0] alu_lane_live_c;
+  assign alu_lane_live_c = {LANES{s4_v_r}};
+
+  // The narrow flags, per lane, masked. Today they feed the sticky group
+  // ledger below; carrying them onward WITH CONTEXT IDENTITY through
+  // retirement is the host's half of FH11 and is not done here.
+  logic [LANES-1:0] alu_sat_add_lane, alu_sat_mul_lane, alu_sat_rescale_lane;
+
   zhao_field_alu_vec #(
       .LANES(LANES)
   ) u_alu (
       .op_i  (s4_op_r),
       .imm_i (s4_imm_r),
+      .lane_live_i(alu_lane_live_c),
       .a0_i  (s4_a0_r), .a1_i(s4_a1_r), .a2_i(s4_a2_r),
       .b0_i  (s4_b0_r), .b1_i(s4_b1_r), .b2_i(s4_b2_r),
       .c_i   (s4_c_r),
@@ -747,6 +792,9 @@ module zhao_field_v3_exec #(
       .is_end_o(alu_is_end),
       .writes_o(alu_writes),
       .op_unsupported_o(alu_unsupported),
+      .sat_add_lane_o(alu_sat_add_lane),
+      .sat_mul_lane_o(alu_sat_mul_lane),
+      .sat_rescale_lane_o(alu_sat_rescale_lane),
       .sat_add_o(alu_sat_add),
       .sat_mul_o(alu_sat_mul),
       .sat_rescale_o(alu_sat_rescale),
@@ -1289,9 +1337,14 @@ module zhao_field_v3_exec #(
         // something unusual. Same alarm, because both say the same thing: this
         // block was asked for something it cannot honestly answer.
         if (alu_unsupported || dot_here_c || alu_lane_desync) unsupported_o <= 1'b1;
-        if (alu_sat_add) sat_add_o <= 1'b1;
-        if (alu_sat_mul) sat_mul_o <= 1'b1;
-        if (alu_sat_rescale) sat_rescale_o <= 1'b1;
+        // REDUCED FROM THE NARROW FLAGS, not from the ALU's group ports. Both
+        // carry the same value today; taking the per-lane bus is what makes
+        // the masked, attributable flags load-bearing in production rather
+        // than an extraction point nobody reads. A live mask that only a test
+        // exercises is a live mask that rots.
+        if (|alu_sat_add_lane) sat_add_o <= 1'b1;
+        if (|alu_sat_mul_lane) sat_mul_o <= 1'b1;
+        if (|alu_sat_rescale_lane) sat_rescale_o <= 1'b1;
       end
 
       end  // downstream: !hold_c

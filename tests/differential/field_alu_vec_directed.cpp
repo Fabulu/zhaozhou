@@ -87,6 +87,13 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_field_alu_vec top;
 
+  // EVERY LANE LIVE unless a check says otherwise. Section 5 is the only place
+  // that lowers this, and it lowers it deliberately. Setting it here rather
+  // than leaving Verilator's zero-init in place matters: with the mask at 0
+  // every saturation flag in the file would read 0 and sections 1-4 would pass
+  // for the wrong reason.
+  top.lane_live_i = 0xF;
+
   const uint8_t kOps[] = {zfield::OP_ADD, zfield::OP_SUB, zfield::OP_MIN, zfield::OP_ABS,
                           zfield::OP_CLAMP};
 
@@ -165,11 +172,80 @@ int main(int argc, char** argv) {
     }
   }
 
-  printf("== section 3: ONE lane saturating raises the group flag, and only it ==\n");
+  printf("== section 3: FT039 -- ONE lane saturates, the OTHER THREE DO NOT ==\n");
   {
-    // The case that separates a DATA flag from an OPCODE flag. Three lanes add
-    // harmlessly; lane 2 overflows. `sat_add` must rise for the group, and the
-    // opcode-shaped flags must not move.
+    // The case that separates a DATA flag from an OPCODE flag, and now also the
+    // case FT039 names: the per-point flags must stay DISTINCT, and the group
+    // aggregate must equal their masked OR.
+    //
+    // THE DEFECT THIS CATCHES is a reduction that cannot say WHICH lane. Before
+    // the per-lane ports existed, `sat_add_o == 1` was the whole of the
+    // evidence, and it is satisfied identically by "lane 2 saturated" and by
+    // "all four saturated" -- so three innocent points carried a status they
+    // did not earn and nothing in the suite could tell the two apart.
+    //
+    // EVERY LANE IS DRIVEN SEPARATELY, so the expected mask is a different
+    // number for each sub-case. A test that only ever saturated lane 2 would
+    // pass against RTL that hard-wired the answer to 0b0100.
+    const int kSoloLanes[] = {0, 1, 2, 3};
+    for (int sat_lane : kSoloLanes) {
+      top.lane_live_i = 0xF;
+      for (int l = 0; l < kLanes; ++l) {
+        put(top.a0_i.data(), l, l == sat_lane ? INT32_MAX : 1);
+        put(top.b0_i.data(), l, l == sat_lane ? INT32_MAX : 1);
+        put(top.c_i.data(), l, 0);
+      }
+      top.op_i = zfield::OP_ADD;
+      top.imm_i = 0;
+      top.eval();
+
+      const uint32_t want_mask = 1u << sat_lane;
+      char what[128];
+      snprintf(what, sizeof what, "FT039: only lane %d is flagged, mask 0x%X", sat_lane,
+               want_mask);
+      zhao::check((uint32_t)top.sat_add_lane_o == want_mask, what, want_mask,
+                  (uint32_t)top.sat_add_lane_o);
+
+      snprintf(what, sizeof what, "FT039: group aggregate equals the masked OR (lane %d)",
+               sat_lane);
+      zhao::check(top.sat_add_o == ((top.sat_add_lane_o != 0) ? 1 : 0), what,
+                  (top.sat_add_lane_o != 0) ? 1u : 0u, (uint32_t)top.sat_add_o);
+
+      // The other two causes must stay silent: a saturating ADD is not a
+      // saturating MUL, and the reference keeps the lanes apart.
+      snprintf(what, sizeof what, "FT039: an ADD overflow does not raise MUL (lane %d)",
+               sat_lane);
+      zhao::check(top.sat_mul_lane_o == 0, what, 0, (uint32_t)top.sat_mul_lane_o);
+
+      // The opcode-shaped flags must not move.
+      zhao::check(top.lane_desync_o == 0, "and no lane disagrees about the opcode", 0,
+                  (uint32_t)top.lane_desync_o);
+      zhao::check(top.writes_o == 1, "ADD still writes", 1, (uint32_t)top.writes_o);
+      zhao::check(top.is_end_o == 0, "and is not END", 0, (uint32_t)top.is_end_o);
+
+      // The quiet lanes still carry their own correct answer.
+      for (int l = 0; l < kLanes; ++l) {
+        if (l == sat_lane) continue;
+        snprintf(what, sizeof what, "lane %d is unharmed by lane %d saturating", l, sat_lane);
+        zhao::check((int32_t)top.result_o[l] == 2, what, 2, top.result_o[l]);
+      }
+    }
+  }
+
+  printf("== section 3b: FT039/FT045 -- a DEAD lane votes on nothing ==\n");
+  {
+    // The masked half of FT039, and FT045's "padding produces no ... logical
+    // saturation contamination".
+    //
+    // Lane 2 is fed operands that genuinely overflow, exactly as in section 3 --
+    // padding arithmetic is real arithmetic -- but the caller declares lane 2
+    // NOT LIVE. Its flag must not appear in the per-lane view and must not
+    // reach the group aggregate, because there is no point there to own it.
+    //
+    // This is the case that fails on the pre-FH11 RTL for a reason the old
+    // group flag could not express: the old `|l_sadd` had no idea a lane was
+    // padding and published a group saturation produced by a point that does
+    // not exist.
     for (int l = 0; l < kLanes; ++l) {
       put(top.a0_i.data(), l, l == 2 ? INT32_MAX : 1);
       put(top.b0_i.data(), l, l == 2 ? INT32_MAX : 1);
@@ -177,21 +253,51 @@ int main(int argc, char** argv) {
     }
     top.op_i = zfield::OP_ADD;
     top.imm_i = 0;
-    top.eval();
-    zhao::check(top.sat_add_o == 1, "one lane saturating raises the group's add flag", 1,
-                (uint32_t)top.sat_add_o);
-    zhao::check(top.lane_desync_o == 0, "and no lane disagrees about the opcode", 0,
-                (uint32_t)top.lane_desync_o);
-    zhao::check(top.writes_o == 1, "ADD still writes", 1, (uint32_t)top.writes_o);
-    zhao::check(top.is_end_o == 0, "and is not END", 0, (uint32_t)top.is_end_o);
 
-    // The quiet lanes still carry their own correct answer.
+    top.lane_live_i = 0xF;
+    top.eval();
+    zhao::check((uint32_t)top.sat_add_lane_o == 0x4u,
+                "control: with lane 2 LIVE the overflow is reported", 0x4u,
+                (uint32_t)top.sat_add_lane_o);
+    zhao::check(top.sat_add_o == 1, "control: and reaches the group aggregate", 1,
+                (uint32_t)top.sat_add_o);
+
+    // The SAME operands, the SAME opcode: only the mask moves. Anything that
+    // changes is caused by the mask and by nothing else.
+    top.lane_live_i = 0xB;  // 0b1011 -- lane 2 is padding
+    top.eval();
+    zhao::check((uint32_t)top.sat_add_lane_o == 0x0u,
+                "FT045: a DEAD lane's saturation is not published per-lane", 0x0u,
+                (uint32_t)top.sat_add_lane_o);
+    zhao::check(top.sat_add_o == 0,
+                "FT039: and cannot contaminate the group aggregate", 0,
+                (uint32_t)top.sat_add_o);
+
+    // And the live lanes are untouched by the masking -- the mask gates STATUS,
+    // never arithmetic. A mask that also suppressed results would pass the two
+    // checks above while breaking the machine.
     for (int l = 0; l < kLanes; ++l) {
       if (l == 2) continue;
-      char what[80];
-      snprintf(what, sizeof what, "lane %d is unharmed by lane 2 saturating", l);
+      char what[96];
+      snprintf(what, sizeof what, "lane %d still computes while lane 2 is masked", l);
       zhao::check((int32_t)top.result_o[l] == 2, what, 2, top.result_o[l]);
     }
+
+    // A live lane BESIDE a dead saturating one keeps its own flag. This
+    // separates "the mask works" from "the mask zeroes everything".
+    for (int l = 0; l < kLanes; ++l) {
+      put(top.a0_i.data(), l, (l == 2 || l == 3) ? INT32_MAX : 1);
+      put(top.b0_i.data(), l, (l == 2 || l == 3) ? INT32_MAX : 1);
+    }
+    top.lane_live_i = 0xB;  // lane 2 padding, lane 3 live -- both overflow
+    top.eval();
+    zhao::check((uint32_t)top.sat_add_lane_o == 0x8u,
+                "FT039: the LIVE saturating lane survives the mask, alone", 0x8u,
+                (uint32_t)top.sat_add_lane_o);
+    zhao::check(top.sat_add_o == 1, "and the aggregate is its masked OR", 1,
+                (uint32_t)top.sat_add_o);
+
+    top.lane_live_i = 0xF;
   }
 
   printf("== section 4: the opcode-shaped flags follow the opcode ==\n");
