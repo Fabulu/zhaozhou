@@ -88,6 +88,36 @@ Given ALMs are the binding constraint and the console sits at roughly 113% of
 the device, this is plausibly the largest single lever in the tree — which is
 exactly why its headline number must not be manufactured.
 
+#### F-CLIFF-GOLDEN: what each outcome MEANS, written BEFORE the number lands
+
+Launched 2026-09-20 evening, `-RowLabel @golden-for-F-CLIFF1`, same device as the
+candidate (`5CSEBA6U23I7`), same tool, same stage. **These readings are fixed in
+advance so the interpretation cannot be chosen after the fact** -- which is the
+whole reason CLAUDE.md requires a fit's question to be named before it runs.
+
+The candidate `zhao_forge_cliff_ram` is **fitted at 976 ALM**. The golden's only
+existing figure is **7,664 ALM, map-only, never fitted**
+(`FORGE-CLIFF-BITMAP-RAM-20260910.md:165` says so in as many words), and
+`BUDGET_HEATMAP.md:159` puts that at **18.3% of the whole ALM budget**.
+
+| golden fits at | what it means | what I do |
+|---|---|---|
+| **roughly 6,000-8,000 ALM** | the map estimate was sound; the swap is worth ~15-17% of the device | adopt, subject to R117's two named items; quote the delta as fit-minus-fit |
+| **materially below ~4,000** | **the map estimate was badly wrong and the case shrinks** | say so plainly, re-price the swap, and do NOT quote the old 7,664 anywhere again |
+| **above ~8,000** | the estimate was conservative and the lever is larger | adopt, but re-check that the two designs are functionally equivalent before believing a delta that large |
+| **fails to place** | the golden does not fit the target ALONE, which is itself a finding | that makes adoption near-mandatory rather than optional, and it goes to the owner |
+
+**In every branch the delta is quoted fit-minus-fit or not at all.** Setting the
+candidate's 976 against an unfitted 7,664 is the mismatched comparison this
+repository keeps landing in the flattering direction -- the same error as R104's
+cost model, R112's budget-versus-residual, R98's truncating container and
+ZIDL's `forge_kind`-versus-`j_family_i`.
+
+**And one thing this fit CANNOT settle**, stated now so it is not claimed later:
+it measures AREA. It says nothing about whether the two implementations agree
+functionally. That is `tests/forge/forge_cliff_ram_differential.cpp`'s job and it
+is Verilator's, not Quartus's.
+
 ### F-CONSOLE-TARGET — the VERDICT fit, on `5CSEBA6U23I7`
 
 **Question: does the frozen console place and route inside 41,910 ALM / 112 DSP
