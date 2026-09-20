@@ -3835,3 +3835,35 @@ whose banner nobody reads.
 which is real — but `find -name zhao_mem_share_n.sv` returns **nothing**, because
 the module lives inside `zhao_mem_share2.sv`. **Grep for `module <name>`, never
 for a file.**
+
+### R207, VERIFIED INDEPENDENTLY BY THE COORDINATOR ON THE MERGED TREE
+
+UNTEX reported the `$finish` defect fixed. **I re-ran both mutant forms myself
+rather than quoting its green**, because R207 is precisely a ruling about
+trusting a mutant form's exit code:
+
+```
+%Fatal lines across BOTH forms : 0        (was NINE on the R197 arm)
+nonzero SMOKE_RC               : 0
+
+-Mutant        MUTANT PASS -- terr_pl_slot_overflow_o fired 1 time(s)
+-UntexMutant   geom_untex_refused_o=16 (want 16) clip_submitted=0
+               setup_submitted=0 raster_pixels=0 matwin[unpub/underflow]=[0 0]
+```
+
+**The `-UntexMutant` verdict is stronger than "the counter moved", and that is
+the part worth keeping.** It asserts four things at once:
+
+* the counter fired **exactly 16 times**, the predicted number, not merely
+  non-zero;
+* **`clip_submitted = 0` and `setup_submitted = 0`** — nothing entered
+  GEOM.CLIP, so the door refused *before* the pipeline rather than after;
+* **`raster_pixels = 0`** — nothing reached the rasteriser;
+* **`matwin[unpub/underflow] = [0 0]`** — the material window's accounting
+  **held**, which was UNTEX's specific design claim: the refusal sits before the
+  window's accounted span, so *"there is no fourth outcome for a triangle in
+  that span"* survives.
+
+**A control that proves the absence of four consequences is worth more than one
+that proves the presence of a count.** The count alone would be satisfied by a
+counter incremented in the wrong place.

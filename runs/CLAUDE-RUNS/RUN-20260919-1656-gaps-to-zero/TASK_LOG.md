@@ -471,3 +471,27 @@ while the content was perfect. `git ls-files --eol` said it in one line:
 `i/lf w/crlf attr/text eol=lf`. **A `.gitattributes` pin governs future
 checkouts and does not rewrite a copy already on disk** — the `.gitignore`
 lesson in a line-ending costume.
+
+## UNTEX + SEAMDIG merged; R207 verified; three packets relaunched (2026-09-21)
+
+**Where I am:** head pushed, register **21**, all gates green, core tie-off
+audit **0 SILENT**. Running: **PAGEIO**, **POSEABI**, **POSTGATHER**.
+**Next step: attend whichever lands first; check its diff against the INCOMPLETE
+block before merging.**
+
+* **UNTEX** built R197's law — one bit, per primitive, refused at GEOM.CLIP's
+  door and counted, **never encoded**. Seven-slot packet unchanged. Its own
+  finding, R208: *"don't care" was a LIE* — the tile pipe ORs every lane's
+  `q_error_o`, so arbitrary slot content could terminate a frame; the null plane
+  makes the words true instead of making producers careful.
+* **SEAMDIG** spent R194 — §9.3's two laws in RTL for the first time, with the
+  64x64 freeze enforced by an **elaboration guard**, no multiplier, and a
+  counter carrying positive *and* negative control in one executable.
+* **R207 verified independently**: both mutant forms re-run here, **0 `%Fatal`
+  across both**, `geom_untex_refused_o=16 (want 16)` with
+  `clip_submitted=0 / setup_submitted=0 / raster_pixels=0 / matwin=[0 0]`.
+* **R194 corrected in place** — it claimed I32 was unblocked "directly"; all
+  five of I32's blockers are live. That sentence was mine, not a measurement.
+* **R210 is the reframing:** `TERRAIN.PAGEIO` has a contract and **no
+  `blocks.yml` row**, so no gate can see it is missing. **21 has never been
+  wrong — it has been answering a smaller question than a reader assumes.**
