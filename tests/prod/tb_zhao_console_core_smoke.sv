@@ -2678,6 +2678,46 @@ module tb_zhao_console_core_smoke
     end
   end
 
+  // ---- R57: WHERE GEOM.ASSETFETCH'S FETCH CLOCKS GO -----------------------
+  // The loop measurement says the fetch is the largest term; this says what the
+  // fetch is made of, because "84 clocks per 64-byte line" is a number somebody
+  // will size an outstanding-request engine against and it must not be quoted
+  // without its parts. Three disjoint counts over every line ASSETFETCH asks
+  // for, from the clock it raises `valid` to the clock its last beat lands:
+  //
+  //   offered  the request is up and MEM.GUARD has not accepted it -- this is
+  //            CONTENTION (somebody else holds the forwarding stage), not
+  //            latency of ours;
+  //   waiting  accepted, and no beat has arrived yet -- the guard's verdict
+  //            cycle plus the arbiter and the SDRAM's own turnaround. THIS is
+  //            what a second outstanding read would hide;
+  //   beating  from the first beat to the last -- the DATA, eight beats, which
+  //            no amount of pipelining removes.
+  int unsigned af_lines_q, af_offered_q, af_waiting_q, af_beating_q;
+  bit          af_inflight_q, af_seen_beat_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      af_lines_q <= 0; af_offered_q <= 0; af_waiting_q <= 0; af_beating_q <= 0;
+      af_inflight_q <= 1'b0; af_seen_beat_q <= 1'b0;
+    end else begin
+      if (`PC_CORE.af_guard_req.valid && !af_inflight_q) begin
+        af_inflight_q  <= 1'b1;
+        af_seen_beat_q <= 1'b0;
+        af_lines_q     <= af_lines_q + 1;
+      end
+      if (af_inflight_q || `PC_CORE.af_guard_req.valid) begin
+        if (`PC_CORE.af_guard_req.valid && !`PC_CORE.af_guard_rsp.ready)
+          af_offered_q <= af_offered_q + 1;
+        else if (!af_seen_beat_q && !`PC_CORE.af_beat_valid)
+          af_waiting_q <= af_waiting_q + 1;
+        else
+          af_beating_q <= af_beating_q + 1;
+      end
+      if (`PC_CORE.af_beat_valid) af_seen_beat_q <= 1'b1;
+      if (`PC_CORE.af_beat_valid && `PC_CORE.af_beat_last) af_inflight_q <= 1'b0;
+    end
+  end
+
   int unsigned geom_lit_seen_q, geom_lit_bad_q;
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
@@ -4198,6 +4238,10 @@ module tb_zhao_console_core_smoke
     // `af_release` is the asset buffer going back, which is what LETS the next
     // meshlet start. Printed beside the first retirement so the two moments can
     // be compared: before R57 they were the same clock, by construction.
+    $display("SMOKE: aflat      GEOM.ASSETFETCH %0d line request(s): contention=%0d clk, verdict+SDRAM wait=%0d clk, beats=%0d clk | %0d.%02d clk per 64-byte line",
+             af_lines_q, af_offered_q, af_waiting_q, af_beating_q,
+             (af_lines_q > 0) ? (af_offered_q + af_waiting_q + af_beating_q) / af_lines_q : 0,
+             (af_lines_q > 0) ? (((af_offered_q + af_waiting_q + af_beating_q) * 100) / af_lines_q) % 100 : 0);
     $display("SMOKE: invtx      IN-MESHLET vertex rate %0d.%02d clk/vertex over %0d vertices of meshlet 1 (the frame-wide figure on the rate line spans the gaps BETWEEN meshlets and is a different quantity)",
              (rt_skin_m1_last_q > rt_skin_first_q) ? (rt_skin_m1_last_q - rt_skin_first_q) / (N_GEOM_VERTS - 1) : 0,
              (rt_skin_m1_last_q > rt_skin_first_q) ? (((rt_skin_m1_last_q - rt_skin_first_q) * 100) / (N_GEOM_VERTS - 1)) % 100 : 0,
