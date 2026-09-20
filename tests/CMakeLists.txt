@@ -13987,6 +13987,38 @@ add_test(NAME lint_zhao_geom_ladderbank
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv)
 set_tests_properties(lint_zhao_geom_ladderbank PROPERTIES LABELS "lint;fast")
 
+# ---- THE WHOLE R68 CHAIN (owner ruling R68 sub-build 3) --------------------
+# zhao_view_projscale + zhao_geom_ladderbank + zhao_geom_lodstate (which holds
+# zhao_geom_projradius and zhao_geom_lod), every block REAL, against
+# zref::creature::lod_update run as a LIVE MODEL alongside -- one LodState per
+# instance on the C++ side, stepped with the same projected radius, so the
+# hysteresis and the minimum hold are compared across sixty frames rather than
+# at one point. A block that lost its state, cleared it on the frame pulse or
+# held the wrong instance's only shows up over time.
+add_executable(test_geom_lodstate_directed geometry/geom_lodstate_directed.cpp)
+target_link_libraries(test_geom_lodstate_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_lodstate_directed
+  PREFIX Vtb_geom_lodstate
+  TOP_MODULE tb_geom_lodstate
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lodstate.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_lodstate.sv)
+add_test(NAME geom_lodstate_directed COMMAND test_geom_lodstate_directed)
+set_tests_properties(geom_lodstate_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+add_test(NAME lint_zhao_geom_lodstate
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_lodstate
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lodstate.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lod.sv)
+set_tests_properties(lint_zhao_geom_lodstate PROPERTIES LABELS "lint;fast")
+
 # ---- GEOM.LOD's projected bound radius (owner ruling R68 sub-build 4) ------
 # The REAL zhao_view_projscale feeding the REAL zhao_geom_projradius, so the
 # driver writes a view MATRIX onto the projector configuration bus and the

@@ -151,6 +151,19 @@ modules:
       because the descriptor bank has no producer for reasons of ownership and format
       rather than wiring -- zhao_console_core.sv's lighting section carries that
       argument in full."
+  zhao_geom_lodstate:
+    disposition: pending_compose
+    why: "THE PER-INSTANCE LADDER STATE (R68 sub-build 3) -- the owner zhao_geom_lod has
+      been waiting for since phase 8, and the answer to the FIFTEENTH false-absence claim
+      (zhao_console_core.sv: 'NOBODY HOLDS LADDER STATE AT ALL'). It holds one
+      zref::creature::LodState per instance, ticks once per DRAW off the
+      GEOM.DRAWJOB -> GEOM.MESHFETCH handshake as a TAP, and instantiates
+      zhao_geom_projradius and zhao_geom_lod, which have no other customer. Differenced
+      against zref::creature::lod_update as a live model over sixty frames and four
+      creatures. NOT composed yet: its pr_* port wants the instance centre's w from the
+      shared projector's client A, and owner ruling R3 keeps client A a time-multiplex --
+      so a front-mux on the geometry arm (and one more GEOM_PAY_A_W bit) is owed before
+      this can be wired. That mux is the half of R68 sub-build 4 this packet did not land."
   zhao_geom_projradius:
     disposition: pending_compose
     why: "GEOM.LOD's proj_radius_q8_i, which IS
