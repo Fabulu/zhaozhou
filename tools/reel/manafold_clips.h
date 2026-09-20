@@ -144,12 +144,72 @@ inline bool eye_size_muted(bool left) {
          (!left && g_u02_eye_size_mute == EyeSizeMute::kRight);
 }
 
+/** PASS 20 (Direction 21 item 1): THE REAR SPAN'S SOFT TRAVEL LIMIT.
+ *
+ *  See kRearSpanTravelMm in manafold_art.h for the measurement this exists for.
+ *  Signed, odd (f(-d) == -f(d)), strictly monotone, and bounded by the travel
+ *  ceiling however large the input.
+ *
+ *    |d| <= soft            ->  d                         (identity; C1 at the
+ *                                                          knee, slope 1)
+ *    |d| >  soft            ->  soft + (L-soft) * t/(1+t)
+ *                               with t = (|d|-soft)/(L-soft)
+ *
+ *  ⚠ IT IS A RATIONAL EASE, NOT A min(). A clamp is C0: the solve would sit ON
+ *  the ceiling for a stretch of frames and then leave it, and a value that
+ *  parks and departs is a corner -- exactly the per-sample snap R2 exists to
+ *  catch. This curve never reaches L, so there is nothing to park on.
+ *
+ *  Fixed point throughout, in the same fx16 units the span tracks carry.
+ */
+inline int32_t rear_span_limit_fx(int32_t full_delta_fx) {
+  if (g_u02_rear_span_limit_legacy || g_u02_rear_span_travel_mm <= 0)
+    return full_delta_fx;
+  const int32_t soft_fx = fxu(g_u02_rear_span_soft_mm);
+  const int32_t lim_fx = fxu(g_u02_rear_span_travel_mm);
+  if (lim_fx <= soft_fx) return full_delta_fx;
+  const int64_t d = full_delta_fx < 0 ? -static_cast<int64_t>(full_delta_fx)
+                                      : static_cast<int64_t>(full_delta_fx);
+  if (d <= soft_fx) return full_delta_fx;
+  const int64_t room = lim_fx - soft_fx;   // > 0
+  const int64_t over = d - soft_fx;        // > 0
+  // soft + room * over / (room + over), rounded once.
+  const int64_t add = (room * over + (room + over) / 2) / (room + over);
+  const int64_t out = soft_fx + add;
+  return static_cast<int32_t>(full_delta_fx < 0 ? -out : out);
+}
+
 inline int32_t span_fraction_delta_fx(int32_t full_delta_fx,
                                       int32_t run_mm,
                                       int32_t gradient_mm) {
   const int64_t n = static_cast<int64_t>(full_delta_fx) * run_mm;
   const int64_t mag = n < 0 ? -n : n;
   const int64_t q = (mag + gradient_mm / 2) / gradient_mm;
+  return static_cast<int32_t>(n < 0 ? -q : q);
+}
+
+/** PASS 20: the REAR helpers' share, with kRearSpanDeepBiasPm bending the share
+ *  curve late. u = run/gradient; share = u*(1-b) + u^2*b. At u == 1 the share
+ *  is 1 for every b, so THE CLOSURE IS EXACT AT EVERY BIAS -- that is the whole
+ *  reason this is a share curve and not a limit. b == 0 reproduces
+ *  span_fraction_delta_fx bit-for-bit (the arithmetic below collapses to the
+ *  same single-rounded expression), which is what keeps the legacy control
+ *  byte-exact. Front helpers deliberately do not call this. */
+inline int32_t rear_span_fraction_delta_fx(int32_t full_delta_fx,
+                                           int32_t run_mm,
+                                           int32_t gradient_mm) {
+  const int32_t b = g_u02_rear_span_deep_bias_pm;
+  if (b <= 0 || gradient_mm <= 0)
+    return span_fraction_delta_fx(full_delta_fx, run_mm, gradient_mm);
+  // eff_run = run * ((1000-b) + b*run/gradient) / 1000, then the same
+  // magnitude-symmetric rounded divide the linear form uses.
+  const int64_t g = gradient_mm;
+  const int64_t r = run_mm;
+  const int64_t shaped = (r * ((1000 - b) * g + b * r) + (g * 1000) / 2) /
+                         (g * 1000);
+  const int64_t n = static_cast<int64_t>(full_delta_fx) * shaped;
+  const int64_t mag = n < 0 ? -n : n;
+  const int64_t q = (mag + g / 2) / g;
   return static_cast<int32_t>(n < 0 ? -q : q);
 }
 
@@ -165,47 +225,57 @@ inline int32_t front_root_delta_fx(int32_t full_delta_fx) {
 }
 
 inline int32_t rear_preroot_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx, kRearPreRootDeltaRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx, kRearPreRootDeltaRunMm,
+                                     kSpanEGradientMm);
 }
 
 inline int32_t rear_root_turn_mid_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx,
-                                kRearRootTurnMidDeltaRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx,
+                                     kRearRootTurnMidDeltaRunMm,
+                                     kSpanEGradientMm);
 }
 
 inline int32_t rear_root_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx, kRearRootDeltaRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx, kRearRootDeltaRunMm,
+                                     kSpanEGradientMm);
 }
 
 inline int32_t span_e_start_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx, kSpanEStartRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx, kSpanEStartRunMm,
+                                     kSpanEGradientMm);
 }
 
 inline int32_t span_e_mid_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx, kSpanEMidRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx, kSpanEMidRunMm,
+                                     kSpanEGradientMm);
 }
 
 inline int32_t span_e_presocket_delta_fx(int32_t full_delta_fx) {
-  return span_fraction_delta_fx(full_delta_fx, kSpanEPreSocketRunMm,
-                                kSpanEGradientMm);
+  return rear_span_fraction_delta_fx(full_delta_fx, kSpanEPreSocketRunMm,
+                                     kSpanEGradientMm);
 }
 
+/** PASS 20: `skin_delta_fx` is what the SKINNED helpers carry (travel-limited);
+ *  `solved_delta_fx` is the raw solve. They differ only past the soft knee.
+ *
+ *  ⚠ THE RECEIPT KEEPS THE RAW SOLVE ON PURPOSE. kBSpanDeltaE skins nothing --
+ *  it exists so mspan can compare the solved chain endpoint against the
+ *  Root-attached RearSocket. Writing the limited value there would make the
+ *  receipt agree with the skin by construction, and a receipt that cannot
+ *  disagree with the thing it audits is not a receipt. It would also hide the
+ *  very excursion this pass exists to bound: the instrument must still be able
+ *  to report "the solve asked for 662 mm", which is how anyone later can tell
+ *  the limiter is doing work rather than sitting unused. */
 inline void write_rear_span_delta(std::vector<int32_t>& track, size_t tbase,
-                                  int32_t full_delta_fx) {
+                                  int32_t skin_delta_fx,
+                                  int32_t solved_delta_fx) {
   track[tbase + static_cast<size_t>(kBSpanDeltaEStart) * 3u + 1u] =
-      span_e_start_delta_fx(full_delta_fx);
+      span_e_start_delta_fx(skin_delta_fx);
   track[tbase + static_cast<size_t>(kBSpanDeltaEMid) * 3u + 1u] =
-      span_e_mid_delta_fx(full_delta_fx);
+      span_e_mid_delta_fx(skin_delta_fx);
   track[tbase + static_cast<size_t>(kBSpanDeltaEPreSocket) * 3u + 1u] =
-      span_e_presocket_delta_fx(full_delta_fx);
-  // The full helper is an unskinned, independent receipt used to compare the
-  // solved chain endpoint against the Root-attached RearSocket.
-  track[tbase + static_cast<size_t>(kBSpanDeltaE) * 3u + 1u] = full_delta_fx;
+      span_e_presocket_delta_fx(skin_delta_fx);
+  track[tbase + static_cast<size_t>(kBSpanDeltaE) * 3u + 1u] = solved_delta_fx;
 }
 
 /** The per-key quat/translation/scale accumulator (mirrors zixx's Rig; bodies differ). */
@@ -749,7 +819,12 @@ inline void finalize_rear_follow(zc::Clip& c) {
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
     const int32_t full_delta_fx =
         fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
-    write_rear_span_delta(c.local_translation, tbase, full_delta_fx);
+    // PASS 20: the skin sees the travel-limited excursion; the receipt keeps
+    // the raw solve. rear_span_limit_fx is identity below the soft knee, so
+    // ordinary motion is bit-for-bit what it was.
+    const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
+    write_rear_span_delta(c.local_translation, tbase, skin_delta_fx,
+                          full_delta_fx);
 
     // Version 18 rear helpers retain the exact version-17 signed translation
     // slope. RearPre remains HingeD-rotated through the free run; RearRoot adds
@@ -769,13 +844,13 @@ inline void finalize_rear_follow(zc::Clip& c) {
     c.quats[qbase + kBRearRootDelta] = rear_relative;
     c.local_translation[
         tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
-        rear_preroot_delta_fx(full_delta_fx);
+        rear_preroot_delta_fx(skin_delta_fx);
     c.local_translation[
         tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
-        rear_root_turn_mid_delta_fx(full_delta_fx);
+        rear_root_turn_mid_delta_fx(skin_delta_fx);
     c.local_translation[
         tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
-        rear_root_delta_fx(full_delta_fx);
+        rear_root_delta_fx(skin_delta_fx);
     const int32_t tx_fx = mag > 0
         ? sx + signed_scaled_fx(dx, kRearSocketBurialMm, mag)
         : sx;
@@ -937,7 +1012,9 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
     const int32_t full_delta_fx =
         fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
-    write_rear_span_delta(c.mid_local_translation, tbase, full_delta_fx);
+    const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
+    write_rear_span_delta(c.mid_local_translation, tbase, skin_delta_fx,
+                          full_delta_fx);
     const zc::quat16 qd =
         quat_mul(Q, c.mid_quats[qbase + kBHingeD]);
     const zc::quat16 rear_relative = quat_mul(
@@ -950,13 +1027,13 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     c.mid_quats[qbase + kBRearRootDelta] = rear_relative;
     c.mid_local_translation[
         tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
-        rear_preroot_delta_fx(full_delta_fx);
+        rear_preroot_delta_fx(skin_delta_fx);
     c.mid_local_translation[
         tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
-        rear_root_turn_mid_delta_fx(full_delta_fx);
+        rear_root_turn_mid_delta_fx(skin_delta_fx);
     c.mid_local_translation[
         tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
-        rear_root_delta_fx(full_delta_fx);
+        rear_root_delta_fx(skin_delta_fx);
     const int32_t tx_fx = mag > 0
         ? sx + signed_scaled_fx(dx, kRearSocketBurialMm, mag)
         : sx;
@@ -1453,7 +1530,15 @@ inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   hp.tilt_neck = t[0]; hp.yaw_neck = y[0];
   hp.tilt_a = t[1];    hp.yaw_a = y[1];
   hp.tilt_b = t[2];    hp.yaw_b = y[2];
-  hp.tilt_c = t[3];    hp.yaw_c = y[3];
+  // PASS 20: C is the back nodule the eye reads, and its always-on rotation is
+  // the long-lever term in the rear closure. Shared named share.
+  {
+    const int32_t cg = rear_carrier_calm_pm();
+    hp.tilt_c = cg == 1000 ? t[3] : static_cast<int32_t>(
+        (static_cast<int64_t>(t[3]) * cg) / 1000);
+    hp.yaw_c = cg == 1000 ? y[3] : static_cast<int32_t>(
+        (static_cast<int64_t>(y[3]) * cg) / 1000);
+  }
   // PASS 19: the End station is one of the two AMBIENT End authorities; its
   // share is the named kRearSocketAmbientGainPm (exactly 1000 under legacy-root).
   const int32_t amb = rear_ambient_gain_pm();
@@ -2387,6 +2472,19 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and
   // therefore the exact pass-11 pose.
   g.nod = nodule_schedule(slot, keys, f);
+  // PASS 20: the BACK NODULE's own ambient travel. NoduleOffsets.c* is, in its
+  // own comment, "nodule C -- the upper-rear ball" -- the thing the owner is
+  // pointing at. Its TRANSLATION (not HingeC's rotation, which is a 0.7% term)
+  // is what moves the point the return arm starts from, and therefore what the
+  // rear span has to cover. Shared named share; authored beats are untouched.
+  {
+    const int32_t cg = rear_carrier_calm_pm();
+    if (cg != 1000) {
+      g.nod.cx = static_cast<int32_t>((static_cast<int64_t>(g.nod.cx) * cg) / 1000);
+      g.nod.cy = static_cast<int32_t>((static_cast<int64_t>(g.nod.cy) * cg) / 1000);
+      g.nod.cz = static_cast<int32_t>((static_cast<int64_t>(g.nod.cz) * cg) / 1000);
+    }
+  }
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
   // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x
   // its authored 250, and the owner's knob did nothing)
@@ -2431,8 +2529,12 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   g.q[kBHingeB] = quat_mul(
       g.q[kBHingeB],
       quat_z(a(kKneadGripBA16, ph_b.amp_pm) + legacy_trem / 2));
-  g.q[kBHingeC] = quat_mul(g.q[kBHingeC],
-                           quat_z(a(kKneadGripCA16, ph_c.amp_pm)));
+  // PASS 20: the same named share on the knead's C grip.
+  g.q[kBHingeC] = quat_mul(
+      g.q[kBHingeC],
+      quat_z(static_cast<int32_t>(
+          (static_cast<int64_t>(a(kKneadGripCA16, ph_c.amp_pm)) *
+           rear_carrier_calm_pm()) / 1000)));
   // PASS 6 C.1/C.3: THE OUT-OF-PLANE CHANNEL -- the axis that did not exist
   // until this pass. A, B and C swing ACROSS the loop plane on their own
   // period, so "up and down separately" is now something the rig can express.
@@ -2447,7 +2549,11 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     };
     g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_x(oop(kKneadOopAA16, ph_a, 0)));
     g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_x(oop(kKneadOopBA16, ph_b, 0x3000)));
-    g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_x(oop(kKneadOopCA16, ph_c, 0x6800)));
+    g.q[kBHingeC] = quat_mul(
+        g.q[kBHingeC],
+        quat_x(static_cast<int32_t>(
+            (static_cast<int64_t>(oop(kKneadOopCA16, ph_c, 0x6800)) *
+             rear_carrier_calm_pm()) / 1000)));
   }
   // KNEAD: the two hands wedge in counter-rotation; the neck stirs
   // out-of-plane; the rear junction's closure ANCHOR slides. One consistent
@@ -2479,8 +2585,10 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
             (static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16), 0)));
     g.q[kBHingeC] = quat_mul(
         g.q[kBHingeC],
-        quat_z(-legacy_accent(static_cast<int32_t>(
-            (static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)));
+        quat_z(-static_cast<int32_t>(
+            (static_cast<int64_t>(legacy_accent(static_cast<int32_t>(
+                 (static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)) *
+             rear_carrier_calm_pm()) / 1000)));
     g.q[kBNeck] = quat_mul(
         g.q[kBNeck],
         quat_x(legacy_accent(static_cast<int32_t>(

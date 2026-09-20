@@ -2402,6 +2402,133 @@ constexpr int32_t kSpanEGradientEndMm =
     kKnuckleAtEndMm - kLoopCarrierCoreHalfMm[4];
 constexpr int32_t kSpanEGradientMm =
     kSpanEGradientEndMm - kSpanEGradientStartMm;
+// ---- PASS 20 (Owner Direction 21 item 1, as corrected): THE REAR SPAN'S
+// ---- TRAVEL LIMIT ---------------------------------------------------------
+//
+// Owner, 2026-09-20: "the rear doesn't leave the body, but it RIPS A BIG PIECE
+// OUT and it STRETCHES TOO MUCH."
+//
+// THE MECHANISM, measured (P20-DIAGNOSIS.md, manafold-rear-audit): the rear
+// span from carrier C to the body socket is kRearSocketFromCMm = 1010 mm at
+// rest. finalize_rear_follow solves the live |C -> socket| distance every sample
+// and writes the WHOLE difference into the three SpanDeltaE helpers as pure +Y,
+// so the rear skin absorbs all of it. On Inspect that difference reaches
+// -662 mm: the span is telescoped to 34% OF ITS OWN LENGTH, twice a loop,
+// against 24 mm standing still. Linear blend skinning cannot render that. A
+// longitudinal skin edge at ring 49 is driven to 0.147 of its rest length --
+// the rings pile through one another and the surface between them splays into
+// the broad flat wedge the owner sees standing proud of the body.
+//
+// ⚠ THE FIX IS NOT DAMPING THE BACK NODULE, and the ablation says so plainly:
+// with the End carrier's ambient rotation switched entirely OFF the fold reads
+// 0.150 against the shipping 0.147. That rotation drives the RATE (strain step
+// 0.0296 -> 0.0983 at gain 1000), which is why it reads as "too much motion" --
+// it is what makes the flap flick. The flap itself is the span.
+//
+// SO THE SPAN GETS A TRAVEL LIMIT. Below kRearSpanSoftMm the solve is passed
+// through UNCHANGED, so ordinary breathing and the authored beats are exactly
+// what they were. Past it the excursion eases onto a ceiling through
+// rear_span_limit(), which is C1 at the knee (its derivative there is exactly
+// 1, matching the identity branch), strictly monotone, and can never exceed
+// kRearSpanTravelMm however far the solve asks. There is no clamp to sit on and
+// therefore no new snap: that is the whole reason for the rational ease rather
+// than a min().
+//
+// ⚠ WHAT IS DELIBERATELY *NOT* LIMITED: the socket's own translation, the
+// ReturnTip's burial and HingeD's aim are all solved from the socket POINT and
+// its DIRECTION, never from this magnitude. They are untouched, so the return
+// stays attached to the body exactly as before -- the limit costs a little
+// exactness in the middle of the run, which is skin nobody can see folding,
+// and buys the surface back.
+//
+// SELECTED BY EYE (P20-IMPLEMENTATION.md) from a ladder rendered on Inspect's
+// own worst frames. Values are millimetres of one-sided travel.
+// ⚠ A TRAVEL LIMIT ON THE SKIN ALONE WAS TRIED FIRST AND IS WRONG. Keep this
+// paragraph: the ladder is committed in P20-IMPLEMENTATION.md and it fails
+// MONOTONICALLY, which is worth more than the knob. Limiting what the helpers
+// carry while kBRearSocket keeps its absolute, body-following translation opens
+// a GAP between where the span run ends and where the socket is, and that gap
+// is the fold. Measured on Inspect, worst rear rail and worst two-bone
+// disagreement against the limit:
+//   legacy (no limit)  rail 1.249 / 0.147, hand-off 260 mm
+//   travel 600 mm      rail 1.249 / 0.005, hand-off 264 mm
+//   travel 450 mm      rail 1.754 / 0.004, hand-off 343 mm
+//   travel 300 mm      rail 2.449 / 0.013, hand-off 433 mm
+//   travel 150 mm      rail 3.290 / 0.011, hand-off 539 mm
+// The tighter the limit, the worse the tear. THE SPAN IS THE CLOSURE: it is not
+// a free parameter that can be clamped, it is the distance the band must cover
+// to reach the socket, and shortening what the skin carries does not shorten
+// that distance. The knob survives as a committed NEGATIVE CONTROL -- it is how
+// the strain gate's positive control is fired, and it is the evidence that this
+// route was measured rather than assumed. It ships OFF.
+constexpr int32_t kRearSpanTravelMm = 300;
+constexpr int32_t kRearSpanSoftMm = 150;
+static_assert(kRearSpanSoftMm > 0 && kRearSpanSoftMm < kRearSpanTravelMm,
+              "the soft knee must lie inside the travel ceiling");
+inline int32_t g_u02_rear_span_travel_mm = kRearSpanTravelMm;
+inline int32_t g_u02_rear_span_soft_mm = kRearSpanSoftMm;
+// SHIPPING IS `true` == no limit == the exact pass-19 solve. See above.
+inline bool g_u02_rear_span_limit_legacy = true;
+
+// ---- PASS 20: WHERE THE REAR SPAN'S CHANGE IS ABSORBED ---------------------
+//
+// The span excursion CANNOT be reduced -- it is the closure (see the failed
+// travel-limit ladder above), and it is dominated by the loop's own authored
+// fold, not by any rear authority: ablating the End's ambient rotation moves
+// the fold 0.147 -> 0.150, carrier C's always-on ROTATION moves it 0.7%, and
+// muting the back nodule's ambient TRANSLATION entirely moves it 0.147 -> 0.170.
+// All three were measured, and all three are recorded in P20-IMPLEMENTATION.md
+// so the next pass does not spend a day re-finding them.
+//
+// What CAN be chosen is WHERE along the band the change is absorbed. Each rear
+// helper currently takes a share of the excursion LINEAR in its run along the
+// 840 mm C->socket gradient, so every ring in that gradient compresses by the
+// same fraction -- and at -662 mm that fraction is 79%, which LBS renders as the
+// flap. The total at the socket end is what closes the chain, so ANY share
+// curve that still reaches 1.0 at the gradient's end closes it exactly.
+//
+// kRearSpanDeepBiasPm bends that curve late: 0 is linear and byte-for-byte
+// pass 19; 1000 is fully quadratic. The early, fully exposed rings near carrier
+// C then move much less, and the change piles into the last rings before the
+// socket, which sit at and under the body surface where a compression does not
+// read as a torn flap. Monotone in run at every value, so the 6-bit LBS staging
+// stays monotone (kBSpanDeltaEMid's own comment).
+//   ZHAO_U02_REAR_SPAN_DEEP_BIAS_PM=0..1000
+constexpr int32_t kRearSpanDeepBiasPm = 0;  // laddered by eye; see below
+inline int32_t g_u02_rear_span_deep_bias_pm = kRearSpanDeepBiasPm;
+
+// ---- PASS 20: CALMING THE BACK NODULE, which is CARRIER C ------------------
+//
+// The owner's word is "the back nodule", and pass 19 read that as the End
+// carrier (kBRearSocket, the buried socket). That reading is why pass 19's
+// repair did not take: switching the End's ambient rotation entirely off moves
+// the fold from 0.147 to 0.150, i.e. nothing at all.
+//
+// THE BACK NODULE THE EYE SEES IS CARRIER C -- the upper-rear ball, the last
+// VISIBLE one before the band turns down into the body. And C is the bone that
+// actually drives this fault, for a reason that is plain once the closure is
+// read: finalize_rear_follow walks the arm's end point `p` through
+// JunctionF -> Neck -> HingeA -> HingeB -> HingeC, so C's rotation is the LAST
+// and LONGEST-LEVER term in where the return arm starts. The rear span then has
+// to cover |socket - p|, and the whole difference from its 1010 mm rest length
+// is written into the SpanDeltaE helpers as pure +Y for the skin to absorb.
+//
+// Measured on Inspect: that difference has a mean of -283 mm and reaches
+// -662 mm -- the band asked to shorten to 34% of itself -- and the samples where
+// it is worst are, one for one, the samples where the skin folds (rail 0.147 at
+// sample 380, span -641; rail 0.153 at 158, span -662). Rest sits at the same
+// -289 mm mean. Taunt III (-16) and Trick (+21) are balanced, and neither shows
+// the flap.
+//
+// So the lever is C's ALWAYS-ON rotation: the knead's grip, out-of-plane and wag
+// at the C station, plus hinge_play's C station. It deliberately does NOT touch
+// C's authored beats, C's translation, or any carrier in front of it -- the
+// antenna's life is upstream and stays exactly as it was.
+//   ZHAO_U02_REAR_CARRIER_CALM_PM=0..1000, 1000 = pass-19 as authored.
+constexpr int32_t kRearCarrierCalmPm = 1000;
+inline int32_t g_u02_rear_carrier_calm_pm = kRearCarrierCalmPm;
+inline int32_t rear_carrier_calm_pm() { return g_u02_rear_carrier_calm_pm; }
+
 constexpr int32_t kSpanEStartRunMm = kFoldBlendMm[3];
 constexpr int32_t kSpanEMidRunMm = kSpanEGradientMm / 2;
 constexpr int32_t kSpanEPreSocketRunMm =

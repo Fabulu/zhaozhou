@@ -411,6 +411,31 @@ constexpr double kGateBendMaxDeg = 60.0;
 constexpr double kGateJointStepMaxDeg = 6.0;
 constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 
+// ---- R4 STRAIN ceilings (PASS 20) -----------------------------------------
+//
+// TWO thresholds, and the distinction is the point.
+//
+// kGateRailTargetFloor is the ART TARGET: the value below which a longitudinal
+// skin edge is folding through itself and the owner sees a flap. Shipping
+// BREACHES it today (worst 0.147 on Inspect). That breach is DECLARED, dated
+// and printed loudly on every run; it is not a pass.
+//
+// kGateRailRegressFloor is the REGRESSION guard, set below today's measured
+// worst with margin. Breaching it is a hard R4 failure.
+//
+// ⚠ THE SPLIT EXISTS SO THIS CANNOT BE READ AS A GREEN LIGHT. CLAUDE.md says
+// not to write a test that asserts the bug, and a single floor set at 0.14
+// would do exactly that -- it would pass today, keep passing after a repair,
+// and quietly record 0.147 as acceptable. The target floor states what correct
+// is; the regress floor stops it getting worse while the repair is outstanding.
+// When the arc-vs-chord repair lands, the target floor becomes the only one
+// that matters and the regress floor is raised to meet it.
+constexpr double kGateRailTargetFloor = 0.50;
+constexpr double kGateRailRegressFloor = 0.12;
+constexpr double kGateRailCeiling = 1.80;    // stretch, against a worst of 1.441
+constexpr double kGateHandoffMaxMm = 320.0;  // against a worst of 260
+constexpr double kGateRailStepMax = 0.12;    // against a worst of 0.053
+
 struct ClipStats {
   size_t samples = 0;
   double rel_max = 0, rel_mean = 0, rel_step = 0, axis_max = 0;
@@ -614,12 +639,14 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       }
       if (csv)
         std::printf("csv,%d,%d,%u,%.2f,%.2f,%.2f,%d,%.2f,%.2f,%.2f,"
-                    "%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%d,%d,%.4f\n",
+                    "%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%d,%d,%.4f,"
+                    "%.1f,%.1f\n",
                     slot, f, sub, s.rel, s.axis, s.bend, s.bend_ring,
                     s.front_bend, s.sock, s.arm, s.end.x, s.end.y, s.end.z,
                     s.last.x, s.last.y, s.last.z,
                     s.str.rail_max, s.str.rail_min, s.str.rail_ring,
-                    s.str.rail_min_ring, s.str.hoop_max);
+                    s.str.rail_min_ring, s.str.hoop_max, s.span_mm,
+                    s.str.handoff_mm);
       seq.push_back(s);
     }
   }
@@ -842,6 +869,19 @@ int main(int argc, char** argv) {
       gate = true;
       u02::g_u02_rear_ambient_gain_pm = 3 * u02::kRearSocketAmbientGainPm;
       std::printf("MUTANT: --fail-rear-joint (End ambient rotation x3)\n");
+    } else if (std::strcmp(argv[i], "--fail-rear-strain") == 0) {
+      gate = true;
+      // The committed NEGATIVE CONTROL from manafold_art.h: limiting what the
+      // skinned span helpers carry while kBRearSocket keeps its absolute
+      // body-following translation opens a gap between the end of the span run
+      // and the socket. On Inspect it drives the worst rear rail to 0.004 and
+      // the hand-off to 433 mm, so it fires R4 and nothing else. It is evidence
+      // about the INSTRUMENT, not about the design.
+      u02::g_u02_rear_span_limit_legacy = false;
+      u02::g_u02_rear_span_travel_mm = 300;
+      u02::g_u02_rear_span_soft_mm = 150;
+      std::printf("MUTANT: --fail-rear-strain (rear span travel limited to "
+                  "300 mm, which opens a closure gap)\n");
     } else if (std::strcmp(argv[i], "--fail-line-flag") == 0) {
       gate = true;
       g_fail_line_flag = true;
@@ -870,6 +910,23 @@ int main(int argc, char** argv) {
     u02::g_u02_rear_socket_follow_pm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_REAR_AMBIENT_GAIN_PM"))
     u02::g_u02_rear_ambient_gain_pm = std::atoi(e);
+  // PASS 20: the rear span travel limit, so the ladder can be audited too.
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_LIMIT")) {
+    if (std::strcmp(e, "on") == 0)
+      u02::g_u02_rear_span_limit_legacy = false;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_rear_span_limit_legacy = true;
+    else
+      return 2;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_TRAVEL_MM"))
+    u02::g_u02_rear_span_travel_mm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_SOFT_MM"))
+    u02::g_u02_rear_span_soft_mm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_CARRIER_CALM_PM"))
+    u02::g_u02_rear_carrier_calm_pm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_DEEP_BIAS_PM"))
+    u02::g_u02_rear_span_deep_bias_pm = std::atoi(e);
 
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
@@ -895,6 +952,10 @@ int main(int argc, char** argv) {
   unsigned mask = 0;
   double w_rel = 0, w_bend = 0, w_step = 0;
   int w_rel_slot = -1, w_bend_slot = -1, w_step_slot = -1;
+  // R4 STRAIN worsts
+  double w_rail_min = 1e9, w_rail_max = 0, w_handoff = 0, w_rail_step = 0;
+  int w_rail_min_slot = -1, w_rail_max_slot = -1, w_handoff_slot = -1;
+  int w_rail_min_ring = -1;
   for (int want : slots) {
     const zc::Clip* clip = nullptr;
     for (const zc::Clip& c : T.bank.clips)
@@ -918,6 +979,20 @@ int main(int argc, char** argv) {
       w_step = st.rel_step;
       w_step_slot = want;
     }
+    if (st.rail_min < w_rail_min) {
+      w_rail_min = st.rail_min;
+      w_rail_min_slot = want;
+      w_rail_min_ring = st.rail_min_ring;
+    }
+    if (st.rail_max > w_rail_max) {
+      w_rail_max = st.rail_max;
+      w_rail_max_slot = want;
+    }
+    if (st.handoff_mm > w_handoff) {
+      w_handoff = st.handoff_mm;
+      w_handoff_slot = want;
+    }
+    w_rail_step = std::max(w_rail_step, st.rail_step);
   }
   if (!gate) return 0;
   std::printf("\nR1 FRAME: worst arm<->End rotation %.2f deg (slot %d, ceiling %.1f); "
@@ -939,6 +1014,32 @@ int main(int argc, char** argv) {
   if (lf != 0) {
     mask |= 0x4;
     std::printf("FAIL R3 LINE: mana lines do not thin with distance like the ink\n");
+  }
+  // ---- R4 STRAIN ----------------------------------------------------------
+  std::printf(
+      "R4 STRAIN: worst rear rail %.3f (slot %d, ring %d) .. %.3f (slot %d); "
+      "worst hand-off %.0f mm (slot %d); worst rail step %.4f\n",
+      w_rail_min, w_rail_min_slot, w_rail_min_ring, w_rail_max, w_rail_max_slot,
+      w_handoff, w_handoff_slot, w_rail_step);
+  std::printf("  target floor %.2f | regression floor %.2f | ceiling %.2f | "
+              "hand-off max %.0f mm | step max %.3f\n",
+              kGateRailTargetFloor, kGateRailRegressFloor, kGateRailCeiling,
+              kGateHandoffMaxMm, kGateRailStepMax);
+  if (w_rail_min < kGateRailRegressFloor || w_rail_max > kGateRailCeiling ||
+      w_handoff > kGateHandoffMaxMm || w_rail_step > kGateRailStepMax) {
+    mask |= 0x8;
+    std::printf("FAIL R4 STRAIN: the rear skin is strained past the "
+                "regression guard\n");
+  } else if (w_rail_min < kGateRailTargetFloor) {
+    std::printf(
+        "OPEN BREACH R4 (declared 2026-09-20, Direction 21 item 1): the rear "
+        "skin FOLDS -- worst rail %.3f against a target floor of %.2f. Root "
+        "cause is arc-vs-chord in the rear closure: the span's rest length is "
+        "an ARC (kRearSocketFromCMm, 1010 mm) while finalize_rear_follow "
+        "measures a CHORD, so a band that should BOW is told to SHORTEN, by up "
+        "to 662 mm. Not repaired in pass 20; three candidate fixes were "
+        "measured and falsified (P20-IMPLEMENTATION.md).\n",
+        w_rail_min, kGateRailTargetFloor);
   }
   std::printf("rear gate mask 0x%X -> %s\n", mask, mask ? "RED" : "GREEN");
   return mask ? 1 : 0;

@@ -8018,6 +8018,30 @@ int main(int argc, char** argv) {
       return 2;
     u02::g_u02_rear_ambient_gain_pm = v;
   }
+  // PASS 20 (Direction 21 item 1): the rear span's travel limit. `legacy`
+  // restores the unbounded pass-19 solve byte-for-byte.
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_LIMIT")) {
+    if (std::strcmp(e, "on") == 0)
+      u02::g_u02_rear_span_limit_legacy = false;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_rear_span_limit_legacy = true;
+    else
+      return 2;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_TRAVEL_MM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_SPAN_TRAVEL_MM", e, 40, 2000, v))
+      return 2;
+    u02::g_u02_rear_span_travel_mm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_SOFT_MM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_SPAN_SOFT_MM", e, 10, 1999, v))
+      return 2;
+    u02::g_u02_rear_span_soft_mm = v;
+  }
+  // The knee must stay inside the ceiling whichever order the two were set in.
+  if (u02::g_u02_rear_span_soft_mm >= u02::g_u02_rear_span_travel_mm) return 2;
   // PASS 19 REVIEW: End swell / End ball authoring ladder (manafold_art.h).
   {
     struct EndKnob {
