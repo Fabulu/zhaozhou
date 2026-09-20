@@ -124,6 +124,17 @@ back and re-capture.
 * Backtick is PowerShell's escape character inside double quotes.
 * Read/write files with `[IO.File]::ReadAllText/WriteAllText`, not
   `Get-Content | -join`. Read fully, transform, THEN open for writing.
+  **AND ALWAYS WITH AN ABSOLUTE PATH — this very line used to aim packets at
+  the coordinator's checkout.** `[IO.File]` resolves a RELATIVE path against
+  `[Environment]::CurrentDirectory`, which is the session's *startup*
+  directory and **never changes when you `cd`**. Two packets wrote into
+  `zhaozhou-ceiling-lane-20260912` this way on 2026-09-20 while believing they
+  were in their own worktree; one caught it only because `git status` came
+  back CLEAN after a write it had just seen succeed. That is the tell, and it
+  is a quiet one. Use `Join-Path $PSScriptRoot ...` or a full literal path,
+  and if you do hit someone else's tree, revert with `git apply --reverse`,
+  **never `git checkout --`** — unstaged work has no reflog and other lanes
+  had live edits in those files both times.
 * A comment whose first word after `//` is `verilator` is a pragma → lint error.
 * Quartus 17 rejects: inline `for (genvar`, module-scope `if` guards, implicit
   generate, `-W'(x)`. `check_quartus17_syntax.py` catches these.
