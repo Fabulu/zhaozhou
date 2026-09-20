@@ -3436,6 +3436,23 @@
 //       5,698 ALM fit-minus-fit, 13.6% of the device) and the CAPABILITY is
 //       still a gap: no page issuer, no solid-window producer, no vdist master,
 //       all three re-searched at this commit and all three still absent.
+//     * AND THE FAR END IS A CLOSED DOOR FOR ALL FOUR, which no earlier pass
+//       over this entry had measured. It is recorded where the misleading claim
+//       lives -- `design/blocks.yml`'s GEOM.SETUP row -- and summarised here
+//       because this is where a composer reads. `zhao_geom_setup` IS composed
+//       in this file; its ONE triangle arm is fully occupied by GEOM.CLIP
+//       through the ATTRPACK fork, with no arbiter and no second arm; and the
+//       arm is SCREEN space (`tri_ax_i` signed [20:0], `tri_area2_i` signed
+//       [47:0]) while `zhao_forge_prim` emits INDEX TRIPLES and no coordinate,
+//       `zhao_forge_prim_eval` emits WORLD fx16 and the cliff emits a rim edge.
+//       `zhao_part_expand` is ALREADY composed, already emits the right SHAPE
+//       (screen triangles at signed [21:0]) and already leaves this module as a
+//       boundary under entry I24 for want of that same door. So GEOM.SETUP's
+//       `upstream:` names SIX producers of which exactly ONE is a port -- the
+//       THIRD ledger-edge-read-as-a-port in this one entry, after
+//       GEOM.MESHFETCH's `MEASURE.GOVERNOR` and FORGE.CLIFF's `TERRAIN.TESS`.
+//       Three in one entry is not a coincidence: IN THIS LEDGER `upstream:` IS
+//       A DESIGN INTENT AND NOT A WIRING CLAIM.
 //
 //   FORGE.PRIM and FORGE.PRIM_EVAL are the TOPOLOGY and the POSITIONS of one
 //   primitive -- indices from one, fx16 vertices from the other -- and they do

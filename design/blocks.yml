@@ -3925,6 +3925,43 @@ blocks:
     owner_issue: ZH-057
     inputs: [clipped_triangles, forge_primitives, expanded_particles]
     outputs: [setup_triangles]
+    # THIS `upstream:` NAMES SIX PRODUCERS AND EXACTLY ONE OF THEM IS A PORT.
+    # Measured 2026-09-20 by the forge4 packet, and recorded HERE rather than in
+    # a refusal, because this row is where the misleading claim lives.
+    #
+    # `zhao_geom_setup` IS COMPOSED in `zhao_console_core.sv` and has exactly ONE
+    # triangle input arm -- tri_valid_i / tri_ready_o / tri_ax_i..tri_cy_i /
+    # tri_area2_i / tri_min_x_i.. -- and that arm is FULLY OCCUPIED by GEOM.CLIP
+    # through the declared fork with GEOM.ATTRPACK
+    # (`.tri_valid_i (cl_o_valid && ap_tri_ready_w)`, and
+    # `cl_o_ready = st_tri_ready_w && ap_tri_ready_w`). There is no arbiter and
+    # no second arm, so the other five have nowhere to arrive.
+    #
+    # AND THE ARM IS SCREEN SPACE, which is the half a port count would miss:
+    # `tri_ax_i` is signed [20:0] and `tri_area2_i` is signed [47:0] -- a
+    # CLIPPED, PROJECTED triangle. `zhao_forge_prim` emits INDEX TRIPLES
+    # (t_i0_o/t_i1_o/t_i2_o, 16-bit) and no coordinate at all;
+    # `zhao_forge_prim_eval` emits WORLD fx16 (v_x_o/v_y_o/v_z_o, signed
+    # [31:0]); `zhao_forge_cliff` emits a RIM EDGE. Not one of the three is the
+    # shape this port takes, so even a forge page, a forge_kind and a dispatch
+    # would deliver to nowhere -- what sits between them and this door is a
+    # projection and a clip.
+    #
+    # THE EVIDENCE THAT MAKES THIS MEASURABLE RATHER THAN ARGUABLE: PART.EXPAND
+    # is ALREADY COMPOSED and already queued at this door. It emits screen
+    # triangles at signed [21:0] -- the closest thing in the tree to what this
+    # block takes -- and its packet LEAVES `zhao_console_core` as a BOUNDARY
+    # under that file's entry I24: "the triangle's customer is the same absent
+    # GEOM replay/setup path I11, I12 and I13 name". A block that already
+    # produces the right SHAPE cannot get in either.
+    #
+    # THIS IS THE THIRD LEDGER-EDGE-READ-AS-A-PORT FOUND IN ONE REFUSAL ENTRY:
+    # GEOM.MESHFETCH's `upstream: MEASURE.GOVERNOR` and FORGE.CLIFF's
+    # `upstream: TERRAIN.TESS` are the other two, both already recorded in
+    # `zhao_console_core.sv`. Three in one entry is not a coincidence, so it is
+    # worth stating once and generally: IN THIS LEDGER `upstream:` IS A DESIGN
+    # INTENT, NOT A WIRING CLAIM. A packet that reads it as one concludes a
+    # composition is nearly done when its consumer has no door.
     upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.PRIM.EVAL, FORGE.CLIFF, PART.EXPAND, FORGE.SHADOW]
     downstream: [GEOM.BINNER]
     backpressure: ready_valid
