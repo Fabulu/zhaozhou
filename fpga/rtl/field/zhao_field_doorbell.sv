@@ -83,6 +83,31 @@
 //    `ret_refused_o` set and `ret_ok_o` clear, and `commits_refused_o` counts
 //    it. ANSWERED AND COUNTED, NEVER HUNG -- owner ruling R20.
 //
+// 2b. TO WHOEVER WRITES THE PLAN THAT FILLS THIS MAILBOX, and it is the one
+//    thing in this file that is easy to leave out: the HEADER word now carries
+//    a REQUIRED-OUTPUT MASK in bits [32 +: OUT_LANES] (owner ruling R101).
+//    This block forwards the 96 bits verbatim and cannot supply it.
+//
+//    `mask == 0` means "the program declared nothing", and `zhao_field_host`
+//    then falls back to its pre-R101 test -- a run counts as successful if ANY
+//    lane of the output window was written. A plan that omits the mask
+//    therefore LOADS AND RUNS AND PASSES EVERY GATE, and silently restores the
+//    exact defect R101 repaired: a program that writes four of its seven
+//    declared lanes answers 8'h00 SUCCESS with three lanes carrying the zero
+//    the host cleared them to.
+//
+//    That is not hypothetical arithmetic. `tools/field/zprog_output_coverage.py`
+//    measured all three Earth programs this repo ships -- crater_ring,
+//    impact_wave, wave_pool -- and every one of them leaves THREE of the
+//    console's seven window lanes unwritten, because the IR does not require a
+//    program's output registers to be contiguous and the capture window is.
+//    The mask each one needs is printed by that probe (0x17, 0x1D, 0x17).
+//
+//    The mask is derived, not invented: it is `spec/form/field-ir.md` 5.3's
+//    I/O map, which names the output registers, indexed from `out_base`. The
+//    probe computes it from the `.zprog` and the plan writer should too,
+//    rather than by hand.
+//
 // 3. THE RETURN QUEUE CANNOT OVERFLOW, BY CREDIT. A commit is consumed only
 //    while fewer than RETQ consumed commits still owe their return record.
 //    Each owes exactly one. The directory's response cannot be stalled by this
