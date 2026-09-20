@@ -3176,9 +3176,25 @@ which sounds harmless. Four of 99 shared border vertices disagree at the worst
 placement the tool can construct. *"Measurement can remove a BIAS; it cannot
 choose a VALUE."* The owner's eye chose it in one sentence.
 
-**Unblocked immediately:** tie-off **I32** (`surf_res_*`),
-**`zhao_terrain_bake_v2`**'s Option A layer-F reader — whose address generator
-was *exactly* the contested thing — and the page format itself.
+**Unblocked immediately:** **`zhao_terrain_bake_v2`**'s Option A layer-F reader
+— whose address generator was *exactly* the contested thing — and the page
+format itself.
+
+> **CORRECTION, 2026-09-21.** This ruling originally also claimed I32 was
+> unblocked **"directly"**. **That was overstated**, flagged first by
+> DOSSIERCHECK and then measured by SEAMDIG, which spent this ruling and
+> re-ran all five of I32's blockers in its own tree: **every one is still
+> live.** Layer D has no reader anywhere; **zero** consumers exist for
+> `res_texel_i` / `res_strength_i` / `res_before_i` in `fpga/` *or* `tests/`,
+> so I32's named consumer does not exist as a port at all; `vtx_nobake_i` has
+> no producer; `cmd_*` has no producer; and `TERRAIN.PAGEIO` has a written
+> contract and **no `design/blocks.yml` row**.
+>
+> **The owner's decision was still the right one and it was still spent** — the
+> reader is built, §9.3's two laws are in RTL for the first time, and the page
+> format is frozen. **But "unblocks I32 directly" was my sentence, not a
+> measurement**, and it is exactly the R180 shape: reading a blocker's removal
+> as a wiring change when what remains is a missing subsystem.
 
 **Saved:** +38.3% page size, three tripped elaboration guards, and a page that
 would have nearly doubled (8,450 B → 16,384) because `zhao_terrain_jdoorbell`
@@ -3743,3 +3759,79 @@ something it believed was NOT a tie-off, in four places, precisely so the
 judgement could be overturned by someone else.** That is the standard — the
 register's blind spot is closed not by a better parser but by a lane that writes
 down the thing it could have left silent.
+
+## R210 — A BLOCK WITH A CONTRACT AND NO `blocks.yml` ROW IS INVISIBLE TO EVERY GATE
+
+**SEAMDIG, refusing I32.** The sharpest of its five measurements:
+
+> **`TERRAIN.PAGEIO` has a written contract and NO `design/blocks.yml` row, so
+> no gate can see it is missing.**
+
+**This is the inverse of every instrument finding in this ledger.** All day the
+pattern has been *a checker that cannot see its subject* — a regex without
+`re.M`, a canary that is unsigned, a sweep that predates its producer. **This is
+a subject that no checker has been told to look for.** `completion_register.py`
+walks the ledger; a capability with no row is not *absent from the console*, it
+is absent from the **question**.
+
+So the console is missing a block that **three separate core entries depend on**,
+and the count has never included it. **21 has never been wrong — it has been
+answering a smaller question than anyone reading it assumes.**
+
+**And it makes the next packet obvious and large:** one block closes `sc_*`,
+layer D's two reads, **I27's deformation mark and I28's writeback** — *three
+core entries under one owner*. **It needs a `blocks.yml` row first**, because
+until it has one, building it closes nothing the register can see.
+
+**SEAMDIG deliberately did NOT build the sheet arbiter**, and the reason is the
+standard: *"it would add a disconnected block without closing anything, and its
+policy between a live stamp and a bake read is a decision, not a wire."*
+Eleven lanes have now declined to add a disconnected implementation to look busy.
+
+## R211 — THE FORMAT FREEZE IS ENFORCED IN RTL, NOT MERELY RECORDED
+
+`zhao_terrain_stampdepth.sv` carries **an elaboration guard that refuses
+`SheetEdge != 64`, citing R194.**
+
+**That is the right way to spend an owner decision.** R194 froze the terrain page
+format at 64×64. A ruling in a document is a claim about intent that the next
+parameterisation can silently contradict; **an elaboration guard makes the
+decision unrepresentable.** It costs nothing in silicon — but note `CLAUDE.md`'s
+warning that `--lint-only` does **not** execute `initial` blocks, so a clean lint
+says nothing whatever about it. `check_quartus17_syntax.py` is what keeps it
+synthesizable, and it passed.
+
+**Three more things done right in the same block, all unprompted:**
+
+* **No multiplier.** The `(b−a)*fr` interpolation is an explicit four-term
+  shift-add, *"so nothing can spend a DSP inside the block that exists to hold
+  exactly one."* On a device **39 DSP over**, that is the correct instinct
+  applied without being asked.
+* **The new mode is ADDITIVE, and it was MEASURED to be.** The sheet arm feeds
+  v1's own scar arithmetic — clamp, rails and §3.4 meets **shared, not
+  duplicated** (R176's lesson applied the same day it was learned) — and
+  `terrain_bake_v2_directed` still passes **267/267 unchanged**. An unchanged
+  count on the pre-existing suite is the evidence that a new mode did not quietly
+  become a replacement.
+* **The counter arrived with BOTH controls in one executable, by stimulus.**
+  `sheet_vertices_dug_o` goes **0 → 255** on a sheet record at `cmd_radius_i = 0`
+  — a radius at which the disc law *provably* writes nothing, so every moved
+  height came from layer F — and **stays at 0** on a disc record carrying the
+  same full sheet while that record still digs 109 vertices. No mutant owed.
+
+### R175's rename paid off within hours
+
+`zhao_terrain_bake_v2.sv`'s header cited `fpga/quartus/prod_fit_sources.txt`.
+**That file no longer exists** — R175 renamed it to
+`prod_fit_sources.ORPHANED.txt` precisely so a grep hit would carry its own
+warning, after that file was misread four times in eleven days.
+
+**It worked, and faster than expected:** the very next packet to read that header
+found a citation to a path that is gone, and the new name told it why **in the
+filename**. A stale pointer that fails loudly beats a live pointer to a file
+whose banner nobody reads.
+
+**One grep trap recorded for the next lane:** entry I32 cites `zhao_mem_share_n`,
+which is real — but `find -name zhao_mem_share_n.sv` returns **nothing**, because
+the module lives inside `zhao_mem_share2.sv`. **Grep for `module <name>`, never
+for a file.**
