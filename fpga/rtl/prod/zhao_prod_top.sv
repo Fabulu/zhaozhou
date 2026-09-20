@@ -2389,6 +2389,7 @@ module zhao_prod_top (
   logic [32-1:0] u30_dq_refused_o;
   logic [32-1:0] u30_dq_stray_o;
   logic [32-1:0] u30_uv_waits_o;
+  logic [32-1:0] u30_done_stall_o;
   zhao_geom_vattr u30_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -2427,12 +2428,13 @@ module zhao_prod_top (
       .profile_mixed_o(u30_profile_mixed_o),
       .dq_refused_o(u30_dq_refused_o),
       .dq_stray_o(u30_dq_stray_o),
-      .uv_waits_o(u30_uv_waits_o)
+      .uv_waits_o(u30_uv_waits_o),
+      .done_stall_o(u30_done_stall_o)
   );
   logic u30_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u30_fold_q <= 1'b0;
-    else u30_fold_q <= u30_fold_q ^ (((^u30_lit_ready_o)) & u30_src[0]) ^ (((^u30_done_o)) & u30_src[1]) ^ (((^u30_poison_o)) & u30_src[2]) ^ (((^u30_rep_valid_o)) & u30_src[3]) ^ (((^u30_rep_invw24_o)) & u30_src[4]) ^ (((^u30_rep_data_o)) & u30_src[5]) ^ (((^u30_landings_o)) & u30_src[6]) ^ (((^u30_rows_written_o)) & u30_src[7]) ^ (((^u30_colours_written_o)) & u30_src[8]) ^ (((^u30_uv_staged_o)) & u30_src[9]) ^ (((^u30_lq_overflow_o)) & u30_src[10]) ^ (((^u30_index_oob_o)) & u30_src[11]) ^ (((^u30_look_oob_o)) & u30_src[12]) ^ (((^u30_profile_mixed_o)) & u30_src[13]) ^ (((^u30_dq_refused_o)) & u30_src[14]) ^ (((^u30_dq_stray_o)) & u30_src[15]) ^ (((^u30_uv_waits_o)) & u30_src[16]);
+    else u30_fold_q <= u30_fold_q ^ (((^u30_lit_ready_o)) & u30_src[0]) ^ (((^u30_done_o)) & u30_src[1]) ^ (((^u30_poison_o)) & u30_src[2]) ^ (((^u30_rep_valid_o)) & u30_src[3]) ^ (((^u30_rep_invw24_o)) & u30_src[4]) ^ (((^u30_rep_data_o)) & u30_src[5]) ^ (((^u30_landings_o)) & u30_src[6]) ^ (((^u30_rows_written_o)) & u30_src[7]) ^ (((^u30_colours_written_o)) & u30_src[8]) ^ (((^u30_uv_staged_o)) & u30_src[9]) ^ (((^u30_lq_overflow_o)) & u30_src[10]) ^ (((^u30_index_oob_o)) & u30_src[11]) ^ (((^u30_look_oob_o)) & u30_src[12]) ^ (((^u30_profile_mixed_o)) & u30_src[13]) ^ (((^u30_dq_refused_o)) & u30_src[14]) ^ (((^u30_dq_stray_o)) & u30_src[15]) ^ (((^u30_uv_waits_o)) & u30_src[16]) ^ (((^u30_done_stall_o)) & u30_src[17]);
 
   // ---- zhao_geom_vdecode ----
   logic [63:0] u31_lfsr_q;

@@ -3401,11 +3401,24 @@
 //        batch that never earns its rows never hands over its arena, never
 //        gets it released, exhausts `GEOM_ARENAS` and backpressures
 //        GEOM.PROJ_LANE until no triangle reaches GEOM.CLIP at all. There is
-//        NO timeout, NO abort and NO counter that fires for it -- the tell
-//        would be `colours_written_o` frozen while `uv_staged_o` and
-//        `landings_o` climb, and nothing differences them. This is CLAUDE.md's
-//        ALIVE-AT-ZERO-CPU shape in silicon, and composing it would not leave
-//        a gap open, it would ship a DEADLOCK behind a closed gap.
+//        NO timeout and NO abort -- releasing the handle early would serve
+//        REPLAY rows that were never written, which is a POLICY change, not a
+//        repair. This is CLAUDE.md's ALIVE-AT-ZERO-CPU shape in silicon, and
+//        composing the hull this way would not leave a gap open, it would ship
+//        a DEADLOCK behind a closed gap.
+//
+//        THERE IS NOW A COUNTER, by owner ruling R88 and INDEPENDENTLY of
+//        FORGE.SHADOW: `geom_va_done_stall_o`. When this was first written the
+//        sentence here read "NO counter that fires for it -- the tell would be
+//        `colours_written_o` frozen while `uv_staged_o` and `landings_o` climb,
+//        and nothing differences them". `zhao_geom_vattr`'s watchdog now
+//        differences a free-running clock counter against the block's own
+//        idle-and-not-done predicate -- two quantities with different enables,
+//        which is the property CLAUDE.md's detector chapter requires -- and
+//        counts one episode per `STALL_LIMIT` clocks of owing something while
+//        nothing moves at any input. It is fired by legal stimulus in
+//        `geom_vattr_directed` cases L and M and reads ZERO on the smoke, so
+//        its silence is worth something. It OBSERVES; it does not release.
 //
 //     2. THE CONSOLE HAS NO VERTEX ALPHA, SO THE SHADOW WOULD DRAW OPAQUE.
 //        FORGE.SHADOW's whole output is "ordinary TRANSPARENT geometry
@@ -4620,6 +4633,15 @@ module zhao_console_core
   // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
   output logic [31:0]             geom_va_uv_waits_o,
   output logic                    geom_va_poison_o,
+  // OWNER RULING R88: `u_geom_vattr.done_o` gates BOTH sides of the
+  // GROUP_SEQ -> REPLAY handshake (:7354 and :13722), and two of its six terms
+  // are count equalities a producer can leave open forever -- a batch whose
+  // vertices are never lit wedges the WHOLE geometry front end. There is no
+  // timeout (releasing early would serve REPLAY rows that were never written)
+  // so there is a WATCHDOG instead: one count per episode in which the store
+  // owed something, every machine in it was idle, and nothing moved at any of
+  // its inputs for its `STALL_LIMIT` clocks. Zero on every healthy frame.
+  output logic [31:0]             geom_va_done_stall_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -14922,7 +14944,8 @@ module zhao_console_core
     .profile_mixed_o   (geom_va_profile_mixed_o),
     .dq_refused_o      (geom_va_dq_refused_o),
     .dq_stray_o        (geom_va_dq_stray_o),
-    .uv_waits_o        (geom_va_uv_waits_o)
+    .uv_waits_o        (geom_va_uv_waits_o),
+    .done_stall_o      (geom_va_done_stall_o)
   );
 
   // THE RULING-5 PACKET, per corner: slot 0 is GEOM.DEPTHQUANT's invw24,

@@ -788,6 +788,10 @@ module zhao_console_core_slot_overflow_mutant
   // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
   output logic [31:0]             geom_va_uv_waits_o,
   output logic                    geom_va_poison_o,
+  // OWNER RULING R88: GEOM.VATTR's stall watchdog. Carried here because `.*`
+  // binds by name -- a production port missing from this list fails to
+  // elaborate, which is this wrapper's whole staleness guarantee.
+  output logic [31:0]             geom_va_done_stall_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,

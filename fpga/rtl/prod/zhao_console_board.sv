@@ -1065,6 +1065,15 @@ module zhao_console_board
   // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
   output logic [31:0]             geom_va_uv_waits_o,
   output logic                    geom_va_poison_o,
+  // OWNER RULING R88: `u_geom_vattr.done_o` gates BOTH sides of the
+  // GROUP_SEQ -> REPLAY handshake (:7354 and :13722), and two of its six terms
+  // are count equalities a producer can leave open forever -- a batch whose
+  // vertices are never lit wedges the WHOLE geometry front end. There is no
+  // timeout (releasing early would serve REPLAY rows that were never written)
+  // so there is a WATCHDOG instead: one count per episode in which the store
+  // owed something, every machine in it was idle, and nothing moved at any of
+  // its inputs for its `STALL_LIMIT` clocks. Zero on every healthy frame.
+  output logic [31:0]             geom_va_done_stall_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -3188,6 +3197,7 @@ module zhao_console_board
       .geom_va_dq_stray_o                 (geom_va_dq_stray_o),
       .geom_va_uv_waits_o                 (geom_va_uv_waits_o),
       .geom_va_poison_o                   (geom_va_poison_o),
+      .geom_va_done_stall_o               (geom_va_done_stall_o),
       .geom_rp_meshlets_o                 (geom_rp_meshlets_o),
       .geom_rp_groups_o                   (geom_rp_groups_o),
       .geom_rp_triangles_in_o             (geom_rp_triangles_in_o),
