@@ -346,3 +346,38 @@ carry the current state -- but it will mislead the next reader.
   `ninja: error: rebuilding 'build.ninja': subcommand failed` with the real
   diagnostic above the point a `| Select-Object -Last 6` can see. Capture the
   whole log.
+
+---
+
+## Gates at `HEAD` (gz/texmat2)
+
+| gate | result |
+|---|---|
+| `completion_register.py` | **28** (was 29 at the branch point) |
+| `check_console_inventory.py` | OK -- 203 modules elaborated by the core, 207 fit sources |
+| `check_prod_manifest.py` | OK -- 337 modules, 66 tops |
+| `gen_prod_top.py --check` | fresh (66 instances) |
+| `gen_console_board.py --check` | FRESH (1,195 core ports) |
+| `gen_shell_paired_diff.py --check` | fresh (59 shared inputs, 91 compared outputs) |
+| `mutant_copy_drift.py` | OK -- 48 copies |
+| `check_quartus17_syntax.py` | RC 0 -- 327 files |
+| console-board lint | **SILENT RC 0** (was RC 1 at the branch point -- repaired, see above) |
+| smoke, plain | PASS, `raster pixels=2560`, `frames_admitted=1`, **`samples=1190`** |
+| smoke `-Mutant` | PASS -- `terr_pl_slot_overflow_o` fired once |
+
+**R60 (the directed tests must BUILD and RUN, with their check counts):**
+
+| test | result |
+|---|---|
+| `material_window_directed` (mine) | **45 checks, 0 failures** |
+| `cmd_exec_directed` | **677 checks passed** |
+| `geom_replay_directed` (leaf I changed) | **113 checks, 0 failed** |
+| `geom_assemble_directed` (leaf I changed) | **11 checks passed** |
+
+Three benches needed the new ports connected and would otherwise have failed
+the next build with `PINMISSING`, which is what "a port on a leaf costs its
+whole instantiation chain plus every bench" means in practice:
+`tests/geometry/tb_geom_bin_pipe_v2.sv`, `tests/shell/zhao_shell_v2_lease_path.sv`
+and `tests/shell/tb_zhao_shell.sv`. The raster-texture v3 fit top needed it too
+and was REGENERATED through its template rather than hand-edited, with the new
+counter added to its signature mux so it is read rather than declared.

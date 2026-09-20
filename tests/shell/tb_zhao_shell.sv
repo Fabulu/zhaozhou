@@ -891,6 +891,9 @@ module tb_zhao_shell (
       .t_valid_o(asm_t_valid), .t_ready_i(1'b1),
       .t_v0_o(asm_v0), .t_v1_o(asm_v1), .t_v2_o(asm_v2),
       .t_material_o(asm_material), .t_raster_o(asm_raster),
+      // I49: the material set and the quality tier ride out of GEOM.ASSEMBLE
+      // for MATERIAL.RESOLVE's request. This bench has no draw and no resolve.
+      .t_material_set_o(), .t_quality_tier_o(),
       .t_src_id_o(asm_src), .t_last_o(asm_t_last), .m_done_o(),
       .meshlets_o(asm_meshlets), .triangles_o(dbg_asm_triangles_o),
       .refused_limits_o(asm_ref_lim), .refused_index_o(asm_ref_idx));
