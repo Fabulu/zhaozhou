@@ -92,6 +92,32 @@ updated, so the whole verilate step failed on the merged tree — on a file the
 packet never touched. Grep the tree for every instantiation of anything whose
 ports you change, benches included, and connect them.
 
+## Two rules about YOUR OWN PROCESSES AND OUTPUT, both learned the hard way on 2026-09-20
+
+**NEVER KILL BY PROCESS NAME OR START TIME (ruling R81).** Several lanes and
+the coordinator share this machine and all of them run `verilator_bin` and
+`g++`. **Classify by command line and parent PID FIRST, and only ever kill your
+own subtree.** A packet killed two `verilator_bin` PIDs before checking and one
+of them was the coordinator's live `-NoEchoArm` smoke; the merge it was gating
+then reported three failing forms that were nothing but the kills.
+
+A killed `g++` is also the whole of the `COMPILE FAILED` mystery: no `.o`, **no
+error text at all**, the same file compiles clean by hand, an identical re-run
+passes. `tools/quartus/run_block_fit.ps1:955-966` already carries this incident
+from 2026-09-06 — two concurrent fits, the later one dead ten minutes in with
+no error in its log, *"the signature of an external Stop-Process"*, two
+50-minute placements lost — and scopes its kills to its own parent PID in both
+directions. Copy that, do not re-derive it.
+
+**CAPTURE THE FULL OUTPUT, THEN FILTER THE FILE (ruling R82).** Four separate
+instances in one day of throwing the evidence away at capture time, including
+twice by the coordinator and once by the script that gates every merge. Write
+`... 2>&1 | Out-File -Encoding utf8 <log>` and read the log. Never
+`| Select-String` or `| Select-Object` on the live stream, and never
+`| Out-Null`. Filtering costs nothing when the run passes and costs the entire
+diagnosis when it fails — and a failing run is precisely the one you cannot go
+back and re-capture.
+
 ## Traps (full list in handover §5)
 
 * Bash is broken in this tree. **PowerShell only.**

@@ -126,6 +126,24 @@ module zhao_terrain_lodfeed #(
     // placed column/row stream at serve time, and only the height has to be
     // carried across, because the lattice is gone by then.
     output var logic signed [15:0] w_cy_o,
+    // THE SOURCE ID OF THE PAGE THIS RECORD CAME FROM.  Added 2026-09-20 for
+    // owner ruling R70, whose first requirement is "the interval's `src_id`
+    // recording which source an interval came from" -- MEASURE.HISTOGRAM's
+    // `ev_src_id_i` needs a value and the obvious one is wrong.
+    //
+    // IT IS NOT `src_q` AND THE DIFFERENCE IS THE WHOLE POINT.  `src_q` is the
+    // id of the lattice currently FILLING; the walk that emits these records
+    // runs behind it and a new page may have started (that is what
+    // `lattices_dropped_o` counts).  Taking `src_q` -- or TERRAIN.MIPFEED's
+    // `ps_src_id_o`, which is the same hazard one block up -- would stamp
+    // page B's id on page A's deviations, and nothing downstream could see it:
+    // the histogram is metric-agnostic by design and would bucket a correct
+    // magnitude under a wrong source forever.
+    //
+    // `zhao_terrain_loddev`'s `dev_src_id_o` is the echo of the `start_src_id_i`
+    // it was STARTED with, so it travels with the walk by construction.  That
+    // is the value, and it costs no register here.
+    output var logic [15:0]      w_src_id_o,
 
     // ---- the store's invalidation: this slot's records are now stale ------
     // Raised on the START of a lattice, not its end: from that moment the
@@ -198,12 +216,17 @@ module zhao_terrain_lodfeed #(
   /* verilator lint_off UNUSEDSIGNAL */
   wire        dv_surface_req  = dv_lat_surface;
   wire        dv_surface_echo_w;
-  wire [15:0] dv_src_echo_w;
   /* verilator lint_on UNUSEDSIGNAL */
   wire        dv_surface_echo;
   wire [15:0] dv_src_echo;
   assign dv_surface_echo_w = dv_surface_echo;
-  assign dv_src_echo_w     = dv_src_echo;
+  // THE SOURCE ECHO STOPPED BEING WASTE on 2026-09-20 (ruling R70). It used to
+  // be waived beside the surface echo with the comment "the slot is the key,
+  // not the src id" -- true of `zhao_terrain_devstore`, which keys on the slot,
+  // and NOT true of MEASURE.HISTOGRAM, which keys intervals on the src id. The
+  // waiver is narrowed to the surface echo rather than left covering both,
+  // because a lint waiver that covers a signal somebody later uses stops being
+  // a statement about anything.
 
   zhao_terrain_loddev #(
     .DEV_INCLUDE_BOUNDARY(DEV_INCLUDE_BOUNDARY)
@@ -229,7 +252,7 @@ module zhao_terrain_lodfeed #(
     .dev1_o       (w_dev1_o),
     .dev2_o       (w_dev2_o),
     .dev3_o       (w_dev3_o),
-    .dev_src_id_o (dv_src_echo),      // the slot is the key, not the src id
+    .dev_src_id_o (dv_src_echo),      // -> w_src_id_o; see its port comment
     .done_o       (dv_done),
 
     .vertices_measured_o(dev_vertices_o),
@@ -239,8 +262,9 @@ module zhao_terrain_lodfeed #(
     .busy_o             (dv_busy)
   );
 
-  assign w_slot_o = slot_q;
-  assign w_cy_o   = cy_q[w_sp_o];
+  assign w_slot_o   = slot_q;
+  assign w_cy_o     = cy_q[w_sp_o];
+  assign w_src_id_o = dv_src_echo;
   assign busy_o   = dv_busy || fill_active_q || dv_start_v || have_q;
   // BUSY IS EVERY STATE A NEW PAGE WOULD DISTURB, not just the walk.  The
   // handover window -- a surface complete (have_q), the start presented and

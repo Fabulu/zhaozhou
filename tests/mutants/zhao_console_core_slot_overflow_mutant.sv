@@ -1378,15 +1378,11 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
 
-  // ---- I18: the histogram's events ----------------------------------------
-  // Its HOST WINDOW is no longer here. `hist_rd_*` was entry I19 and is now
-  // driven inside this file by `u_hostreg_hist` off the HPS register aperture
-  // (section 7b-iii, owner ruling R51).
-  input  logic                    hist_ev_valid_i,
-  input  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i,
-  input  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i,
-  input  logic [15:0]             hist_ev_src_id_i,
-  output logic                    hist_ev_ready_o,
+  // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
+  // I18 CLOSED 2026-09-20 (owner ruling R70): the five `hist_ev_*` ports left
+  // the core's list because `zhao_terrain_lodfeed` is composed inside it. Its
+  // HOST WINDOW went the same way one day earlier -- `hist_rd_*` was entry I19,
+  // now driven by `u_hostreg_hist` off the HPS register aperture (ruling R51).
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -2226,6 +2222,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
+
+  // ---- TERRAIN.LODFEED (entry I18, owner ruling R70, 2026-09-20) -----------
+  output logic [31:0]  terr_lodfeed_lattices_walked_o,
+  output logic [31:0]  terr_lodfeed_lattices_dropped_o,
+  output logic [31:0]  terr_lodfeed_dev_records_o,
+  output logic [31:0]  terr_lodfeed_stray_samples_o,
 
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.

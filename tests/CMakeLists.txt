@@ -8868,6 +8868,52 @@ set_tests_properties(terrain_bake_random PROPERTIES LABELS "fast;nightly" TIMEOU
 add_test(NAME terrain_bake_random_nightly COMMAND test_terrain_bake_random --nightly)
 set_tests_properties(terrain_bake_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# ---------------------------------------------------------------------------
+# THE SAME SUITE AGAINST V2, WHICH IS THE BLOCK A COMPOSITION MAY INSTANTIATE
+#
+# Added 2026-09-20 (terrain6), and the reason is a defect in the EVIDENCE, not
+# in the RTL. `design/console_inventory.yml` records `zhao_terrain_bake:
+# superseded_by: zhao_terrain_bake_v2`, so under the owner's 2026-09-19
+# only-the-latest-version ruling v2 is the block core entry I32 must one day
+# compose. `design/prod_manifest.yml` quotes it at "267/267 against the zref
+# oracle with a committed mutant seen to fail".
+#
+# NO CMAKE TARGET BUILT IT. The suite source carries the recipe -- three -D
+# flags, in its own header comment -- and the v2 file's header names
+# `terrain_bake_v2_directed` as what holds it to the oracle, and nothing in
+# this file ever produced that target. So the 267/267 was UNREPRODUCIBLE FROM
+# THE TREE, which is exactly the fault `design/blocks.yml` already records
+# against TERRAIN.NORMALMAP ("no CMake target compiled the named suite") --
+# twice now, in the same subsystem, found by two different passes.
+#
+# It reads in the flattering direction, which is why nobody looked: a number in
+# a manifest with no way to re-run it is indistinguishable from a number that
+# was re-run yesterday.
+#
+# The rate bounds are V2's OWN declared price (24 covered / 5 uncovered against
+# v1's 19 / 2 -- the sequenced shared multiplier), so a regression past its own
+# declaration fails loudly.
+set(ZHAO_TERRAIN_BAKE_V2_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_delta.sv)
+
+add_executable(test_terrain_bake_v2_directed terrain/terrain_bake_directed.cpp)
+target_link_libraries(test_terrain_bake_v2_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_v2_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+target_compile_definitions(test_terrain_bake_v2_directed PRIVATE
+  ZHAO_BAKE_DUT_HEADER="Vzhao_terrain_bake_v2.h"
+  ZHAO_BAKE_DUT_CLASS=Vzhao_terrain_bake_v2
+  ZHAO_BAKE_SUITE_NAME="terrain_bake_v2_directed"
+  ZHAO_BAKE_RATE_COVERED_MAX=25.0
+  ZHAO_BAKE_RATE_UNCOVERED_MAX=6.0)
+verilate(test_terrain_bake_v2_directed
+  PREFIX Vzhao_terrain_bake_v2
+  TOP_MODULE zhao_terrain_bake_v2
+  SOURCES ${ZHAO_TERRAIN_BAKE_V2_SV})
+add_test(NAME terrain_bake_v2_directed COMMAND test_terrain_bake_v2_directed)
+set_tests_properties(terrain_bake_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # BAKE -> PATCH: the `baked_scars` seam, both blocks REAL. This is the first
 # time layer B has had a producer in RTL, so it is the first time the Mantle
 # entry point can be fed the plane its contract says TERRAIN.BAKE owns.
@@ -9725,6 +9771,57 @@ verilate(test_terrain_lodpath_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
 add_test(NAME terrain_lodpath_directed COMMAND test_terrain_lodpath_directed)
 set_tests_properties(terrain_lodpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
+# THE SAME PRODUCER INTO THE OTHER CONSUMER -- core entry I18, ruling R70:
+#   zhao_terrain_lodfeed -> the 24 -> 32 widening -> zhao_measure_histogram
+# The path above ends at the STORE and proves the deviation is CORRECT; this
+# one ends at the ORGAN THE CONSOLE COMPOSES and proves it ARRIVES, in the
+# right bin. The console smoke cannot show it: every page it plays fails its
+# CRC, so the fine stream never moves (measured -- the bench prints the lane).
+# tests/terrain/tb_terrain_lodhist.sv is a wrapper and its widening is copied
+# from zhao_console_core.sv character for character.
+# ---------------------------------------------------------------------------
+add_executable(test_terrain_lodhist_directed terrain/terrain_lodhist_directed.cpp)
+target_link_libraries(test_terrain_lodhist_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_lodhist_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/measure)
+verilate(test_terrain_lodhist_directed
+  PREFIX Vtb_terrain_lodhist
+  TOP_MODULE tb_terrain_lodhist
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
+          # The histogram's double bank. It is the reason the block is RAM and
+          # not 3,072 registers, so it is a real dependency, not glue.
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+add_test(NAME terrain_lodhist_directed COMMAND test_terrain_lodhist_directed)
+set_tests_properties(terrain_lodhist_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# THE WIDTH GUARD'S POSITIVE CONTROL. The same wrapper at EW=16, where the
+# 24-bit deviations would be TRUNCATED -- a fault that reads LOW in an organ
+# that is metric-agnostic and therefore cannot notice. WILL_FAIL: it passes
+# when the elaboration $fatal stops the process. The driver's header records
+# why this cannot be a lint (`--lint-only` does not run `initial` blocks) and
+# why the guard's first version could never have fired at all.
+add_executable(test_terrain_lodhist_widthguard terrain/terrain_lodhist_widthguard_control.cpp)
+target_link_libraries(test_terrain_lodhist_widthguard PRIVATE zhao_harness)
+verilate(test_terrain_lodhist_widthguard
+  PREFIX Vtb_terrain_lodhist
+  TOP_MODULE tb_terrain_lodhist
+  VERILATOR_ARGS -GEW=16
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+add_test(NAME terrain_lodhist_widthguard COMMAND test_terrain_lodhist_widthguard)
+# TIMEOUT 60, deliberately short. The driver's own watchdog exits at 2 seconds
+# and the honest failure path exits in milliseconds, so anything past a minute
+# is the watchdog itself having wedged -- and a TIMEOUT is the one result
+# WILL_FAIL cannot invert, so it must surface in a minute rather than five.
+set_tests_properties(terrain_lodhist_widthguard PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 60 WILL_FAIL TRUE)
 
 # ---------------------------------------------------------------------------
 # THE EYE (owner ruling R63). SetView 0x0010 carries `fx16 eye[3]`, zhao_cmd_exec

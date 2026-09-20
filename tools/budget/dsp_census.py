@@ -888,6 +888,53 @@ def main():
             if not st.startswith("- "):
                 break
             unbuilt.append(st[2:])
+    # ...AND THE LIST IS A DECLARATION, SO IT IS CHECKED AGAINST THE TREE.
+    #
+    # Added 2026-09-20. `unpriced_requirements:` is hand-maintained in
+    # prod_manifest.yml and this tool printed it verbatim as "no RTL, nothing
+    # to measure, and therefore NOT in the N DSP above". It never looked at the
+    # filesystem. On 2026-09-20 all THREE entries named modules whose `.sv`
+    # files exist, and one of them -- `zhao_mem_upload` -- is exercised by every
+    # smoke run (`uploads=3`). A stale list was silently subtracting real
+    # silicon from the pre-fit expectation.
+    #
+    # The direction is the whole point: a declaration that a block does not
+    # exist makes the bill SMALLER, which is the reading nobody audits, and
+    # this number is one of the inputs to a four-hour fit decision. So a row
+    # whose module IS on disk is no longer printed as absent -- it is printed
+    # as a STALE DECLARATION, loudly, because the list disagreeing with the
+    # tree is itself the defect.
+    def _module_of(entry: str) -> str:
+        # "TERRAIN.SHADE: zhao_terrain_shade  terrain shading; ..."
+        tail = entry.split(":", 1)[1] if ":" in entry else entry
+        for tok in tail.replace(";", " ").split():
+            if tok.startswith("zhao_"):
+                return tok
+        return ""
+
+    def _on_disk(mod: str) -> str:
+        if not mod:
+            return ""
+        for dirpath, _dirnames, filenames in os.walk(os.path.join("fpga", "rtl")):
+            if mod + ".sv" in filenames:
+                return os.path.join(dirpath, mod + ".sv").replace(os.sep, "/")
+        return ""
+
+    stale = [(u, _on_disk(_module_of(u))) for u in unbuilt]
+    present = [(u, p) for u, p in stale if p]
+    unbuilt = [u for u, p in stale if not p]
+
+    if present:
+        print()
+        print("  !! %d ROW(S) OF `unpriced_requirements:` NAME A MODULE THAT EXISTS."
+              % len(present))
+        print("  The list says these are unbuilt and the tree disagrees. Until it is")
+        print("  reconciled the DSP total above reads LOW, because a row declared")
+        print("  absent is a row nobody prices. Fix design/prod_manifest.yml:")
+        for u, p in present:
+            print("     %s" % u)
+            print("        -> %s IS ON DISK" % p)
+
     if unbuilt:
         print()
         print("  SPECIFIED BUT NOT BUILT (%d) -- no RTL, nothing to measure, and"

@@ -24,9 +24,7 @@ modules:
   zhao_terrain_devstore:
     disposition: pending_compose
     why: "TERRAIN.LOD's per-page deviation and history store (owner rulings R24 and R59), built and tested by terrain_lodpath_directed. It is not composed because its CONSUMER, zhao_terrain_lod, cannot be composed: TERRAIN.LOD's cam0/cam1 eye positions are x16 world units (design/contracts/TERRAIN.LOD.md line 64) and NO RATIFIED COMMAND CARRIES A CAMERA POSITION -- spec/commands.zidl's SetView 0x0010 carries view_projection, pixel_error and token counts and nothing else. Composing the store alone would add 160 M10K with no reader. See FINDINGS-terrain4.md, owner decision D1."
-  zhao_terrain_lodfeed:
-    disposition: pending_compose
-    why: "the page-load deviation pass (owner ruling R24): it observes TERRAIN.MIPFEED's fine stream, buffers one surface and drives zhao_terrain_loddev into zhao_terrain_devstore. Built and tested by terrain_lodpath_directed (286 checks, four counters fired). Blocked with the store above on the same missing camera-position producer."
+
   zhao_view_eye:
     disposition: pending_compose
     why: "the two views' CAMERA POSITIONS (owner ruling R63), which is the producer half of the blocker the two entries above cite. SetView 0x0010 now carries fx16 eye[3] and zhao_cmd_exec commits it as steps 17/18/19 of the view walk onto projector configuration addresses 19/20/21; this block registers those three words per view and hands them out as the six fx16 wires zhao_terrain_lod's cam0_x_i..cam1_z_i want. It SNOOPS the bus rather than living inside zhao_project_core, because that leaf has seven instantiation sites and a committed mutant copy and not one of its readers wants an eye. Tested by cmd_exec_directed cases 22-24 (order, per-view routing, idempotence, and no write for a refused view_id) and by view_eye_directed. It is not composed because its consumer zhao_terrain_lod is not (core entry I21)."
@@ -375,9 +373,6 @@ modules:
   zhao_terrain_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_terrain_loddev:
-    disposition: pending_compose
-    why: "TERRAIN.LOD's deviation producer (owner ruling R8), built 2026-09-19 with the ONE selector DEV_INCLUDE_BOUNDARY and differentially tested against zref::terrain::lod_deviation in both readings. Not composed: TERRAIN.LOD itself is not composed (entry I21 -- its cameras, per-subpatch history, neighbour levels and the job port's material/view fields have no producer yet), and where this block sits depends on the open WHEN question of reports/TERRAIN-LOD-DEVIATION-20260907.md (at load behind MIPGEN, or per frame behind TERRAIN.PATCH)."
   zhao_terrain_normalmap:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

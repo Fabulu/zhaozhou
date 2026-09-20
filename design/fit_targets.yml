@@ -2920,6 +2920,18 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_mipreq.sv
       - fpga/rtl/terrain/zhao_terrain_mipfeed.sv
       - fpga/rtl/terrain/zhao_terrain_mipgen.sv
+      # ---- TERRAIN.LODFEED, composed 2026-09-20 (core entry I18, ruling R70)
+      # It rides the mip pass above and answers a question no fit here has
+      # asked: `zhao_terrain_lodfeed` holds a 1,089 x 16-bit lattice buffer
+      # (17,424 bits) that its own header estimates at ~4 M10K on Cyclone V --
+      # "a 1,089-deep 16-bit array does not pack tightly; the theoretical floor
+      # is 2". THAT ESTIMATE IS UNMEASURED and this is the fit that measures it,
+      # because an array that stops inferring memory is the failure mode this
+      # tree has already paid 95,947 ALMs for once (see the layer-F padding
+      # argument in spec/terrain_rules.md 9.3). `zhao_terrain_loddev` is the
+      # walker it instantiates and carries no storage.
+      - fpga/rtl/terrain/zhao_terrain_loddev.sv
+      - fpga/rtl/terrain/zhao_terrain_lodfeed.sv
       # ---- FIELD v3, composed 2026-09-19 (core entry I42) -------------------
       # THE LATEST VERSION, AND ONLY THE LATEST. An earlier revision of this
       # packet put FIELD v1 here -- `zhao_field_seq` and its op units -- because
