@@ -3999,6 +3999,90 @@ blocks:
     # worth stating once and generally: IN THIS LEDGER `upstream:` IS A DESIGN
     # INTENT, NOT A WIRING CLAIM. A packet that reads it as one concludes a
     # composition is nearly done when its consumer has no door.
+    #
+    # -----------------------------------------------------------------------
+    # THE FAR END, MEASURED AGAIN 2026-09-20 (setupdoor), COMMISSIONED TO BUILD
+    # THE ARBITER THE NOTE ABOVE ASKS FOR. IT IS REFUSED, AND THE REASON IS NOT
+    # THE ARBITER.
+    # -----------------------------------------------------------------------
+    # The note above says PART.EXPAND "already produces the right SHAPE" and is
+    # held out only for want of a door. The shape half is CONFIRMED and the
+    # conclusion is not: an arbiter on `tri_*_i` is the SMALLEST of four
+    # blockers and closes none of the other three.
+    #
+    # 1. THE ARM IS NOT A STREAM ENDPOINT. IT IS ONE TINE OF A THREE-WAY
+    #    ORDERED JOIN, and the join pairs by ARRIVAL ORDER with no tag:
+    #      * GEOM.SETUP  -- the edge functions
+    #      * GEOM.ATTRPACK -- three 240-bit interpolation planes
+    #      * `u_material_window` -- the resolved material, AND an occupancy
+    #        accounting over the whole span
+    #    A producer entering at one tine and not the other two breaks the
+    #    pairing, and `zhao_console_core.sv` states the invariant it would
+    #    break in as many words: "There is no fourth outcome for a triangle in
+    #    that span". A particle reaching the door is that fourth outcome.
+    #
+    # 2. IT DEADLOCKS, COMBINATIONALLY, AND THE PROOF IS THREE ASSIGNS IN THE
+    #    CORE:
+    #      cl_o_ready       = st_tri_ready_w && ap_tri_ready_w
+    #      st_o_ready       = door_tri_ready_w && ap_o_valid_w
+    #      door_tri_valid_w = st_o_valid && ap_o_valid_w
+    #    Put a particle in SETUP alone. ATTRPACK never saw it, so
+    #    `ap_o_valid_w` is low; `st_o_ready` is therefore low; SETUP cannot
+    #    drain; `st_tri_ready_w` falls; `cl_o_ready` falls; GEOM.CLIP stalls --
+    #    and ATTRPACK can only become valid through GEOM.CLIP. The cycle is
+    #    closed and permanent. If a mesh triangle HAPPENS to be in ATTRPACK the
+    #    particle's edge functions are instead joined to THAT triangle's planes
+    #    and THAT triangle's material: a record swap, permanently skewed by one
+    #    for the rest of the frame. Both outcomes, and no arbiter on this arm
+    #    changes either. This is owner ruling R133's warning arriving at a
+    #    different block: "composing it wrong costs a deadlock".
+    #
+    # 3. TWO COMMITTED ERROR COUNTERS WOULD FIRE ON EVERY PARTICLE, which is
+    #    the tree saying this out loud already. `zhao_material_window` carries
+    #    `err_occupancy_underflow_o` (a `d_leave_i` with no matching
+    #    `d_enter_i` -- exactly a particle at the door) and `err_unpublished_o`,
+    #    whose comment is "a triangle is being shaded with a material nobody
+    #    resolved". They are not hypothetical detectors; they are the interlock
+    #    this composition would violate.
+    #
+    # 4. AND THE BINDING BLOCKER IS THE SEVEN-SLOT ATTRIBUTE PACKET, the SAME
+    #    one `zhao_console_core.sv`'s entry (b) already records for TERRAIN.
+    #    `GEOM_CLIP_ATTRS = 7` -- invw24, u/w, v/w, lit r, g, b, alpha -- per
+    #    CORNER. A polygon particle has a flat colour, ONE shared 1/w, and
+    #    **no texture coordinates by LAW, not by omission**: the reference's
+    #    `draw_population` tris branch calls `raster_tri` with a flat colour
+    #    and a TriMode carrying only depth_test/depth_write. So u/w and v/w
+    #    have no value a particle could honestly supply, and zeroing them to
+    #    make the composition fit would sample texel (0,0) on every particle --
+    #    closing a gap by narrowing function, which rule 1 forbids.
+    #
+    # TERRAIN AND PARTICLES HIT THE IDENTICAL WALL INDEPENDENTLY, and that is
+    # the general finding: GEOM.SETUP's arm is not short of an ARBITER, it is
+    # short of an ATTRIBUTE LAW FOR EVERY NON-MESH PRODUCER. The arbiter is
+    # real work and it is the last step, not the first.
+    #
+    # THE WIDTH QUESTION IS ANSWERED AND IT IS THE EASY ONE. PART.EXPAND emits
+    # signed [21:0] against this arm's signed [20:0], and the extra bit is
+    # HEADROOM, NEVER RANGE. `zhao_project_core::to_screen_xy` CLAMPS to
+    # +-524288 ("the clamp is the law; it is not a clip and it is not
+    # optional") and is the only producer of the particle centre, so
+    # max |vertex| = 524288 + 4080 = 528368 < 2^20. Proved exhaustively over
+    # all 256 size bytes at all four rail corners in
+    # `tests/particles/part_expand_directed.cpp` section 7, asserted on every
+    # vector of the directed AND random lanes, and the invariant was seen to
+    # FIRE when the clamp premise is removed. A future door may narrow 22 -> 21
+    # losslessly; it must NOT widen the arm, which would ripple through the
+    # shell door (`render_ax_i` signed [20:0]), both shell tops and the raster
+    # for a bit that cannot be set.
+    #
+    # ONE MORE MEASURED FACT A FUTURE DOOR NEEDS: THE PARTICLE FAN IS WOUND THE
+    # WRONG WAY. GEOM.SETUP's header states its precondition as "a triangle
+    # arriving here has 2A > 0" (GEOM.CLIP normalised it). The fan's
+    # 2A = -2 * half_w * (half_drop + side_sub) is NEGATIVE for every size, and
+    # size 0 gives 2A = 0 -- the zero-area case GEOM.CLIP rejects and
+    # GEOM.SETUP explicitly does not. Both are pinned by committed checks in
+    # section 8 of that same test, so the packet that builds the door inherits
+    # the measurement instead of the bug.
     upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.PRIM.EVAL, FORGE.CLIFF, PART.EXPAND, FORGE.SHADOW]
     downstream: [GEOM.BINNER]
     backpressure: ready_valid
