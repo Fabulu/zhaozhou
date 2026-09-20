@@ -107,6 +107,7 @@ void reset(Dut& d) {
   d.req_ready_i = 0;
   d.resp_valid_i = 0;
   d.resp_status_i = 0;
+  d.resp_present_i = 0;
   for (int i = 0; i < 7; ++i) d.resp_out_i[i] = 0;
   present_vertex(d);
   d.eval();
@@ -124,7 +125,12 @@ struct Offer {
 // One vertex through the adapter. Returns the offer (if any) and leaves the
 // DUT parked in its answer state with `ans_valid_o` high, so the caller can
 // inspect the result before retiring it.
-Offer run_vertex(Dut& d, const uint32_t out[6], uint8_t status, int budget = 40) {
+// `present` is the host's ORDINAL-indexed `output_present_mask` (R168).
+// 0x3F -- all six canonical Warp ordinals -- is the whole-record default; a
+// caller passing anything else is modelling a SHORT record, which is a
+// different thing from a fault and is now counted as one.
+Offer run_vertex(Dut& d, const uint32_t out[6], uint8_t status, int budget = 40,
+                 uint8_t present = 0x3F) {
   Offer o;
   d.vtx_valid_i = 1;
   d.eval();
@@ -145,6 +151,7 @@ Offer run_vertex(Dut& d, const uint32_t out[6], uint8_t status, int budget = 40)
       for (int i = 0; i < 6; ++i) d.resp_out_i[i] = out[i];
       d.resp_out_i[6] = 0;
       d.resp_status_i = status;
+      d.resp_present_i = present;
       d.resp_valid_i = 1;
     }
   }
@@ -342,6 +349,70 @@ int main(int argc, char** argv) {
           dut.warp_valid_o);
     check(dut.faults_o == f_before + 1, "D6: counted as a fault", f_before + 1,
           dut.faults_o);
+    retire(dut);
+  }
+  {
+    // =======================================================================
+    // D7. OWNER RULING R168 -- A STATUS OF ZERO WITH A SHORT RECORD
+    // =======================================================================
+    // THE CASE THE OLD DECISION COULD NOT SEE, and it needs no mutant: it is
+    // reachable with entirely legal stimulus. `zhao_field_host_v2` answers
+    // StOk when every ordinal in the slot's REQUIRED mask landed. An image
+    // whose required mask declares five of the six canonical Warp ordinals
+    // therefore retires OK with present bit 5 CLEAR -- and the word at
+    // ordinal 5 is the zero cleared at grant, not a result.
+    //
+    // Before R168 this published that zero as a replacement normal component:
+    // a whole, confident, wrong vertex. W10 forbids exactly it -- "publish no
+    // partially warped meshlet", "an absent output must not look like a zero
+    // result".
+    //
+    // Note what is asserted. NOT "the counter fires on the bug" -- CLAUDE.md
+    // forbids a test that asserts the defect. The assertion is the CORRECT
+    // behaviour (the short record is refused) with the counter beside it
+    // saying which refusal it was.
+    const uint32_t f_before = dut.faults_o;
+    const uint32_t v_before = dut.vertices_o;
+    const uint32_t a_before = dut.absent_outputs_o;
+    const uint32_t out6[6] = {0x1111'1111u, 0x2222'2222u, 0x3333'3333u,
+                              0x4444'4444u, 0x5555'5555u, 0u};
+    // status OK, ordinal 5 ABSENT: present = 0b011111.
+    run_vertex(dut, out6, 0x00, 40, 0x1F);
+    check(dut.ans_valid_o == 1, "D7 SHORT RECORD: the vertex is still ANSWERED", 1,
+          dut.ans_valid_o);
+    check(dut.warp_valid_o == 0,
+          "D7 R168: a status of ZERO with ordinal 5 ABSENT is NOT a deformation", 0,
+          dut.warp_valid_o);
+    check(dut.vertices_o == v_before,
+          "D7: and it was NOT counted as a real result", v_before, dut.vertices_o);
+    check(dut.absent_outputs_o == a_before + 1,
+          "D7: absent_outputs_o FIRED -- the new counter moves on legal stimulus",
+          a_before + 1, dut.absent_outputs_o);
+    check(dut.faults_o == f_before,
+          "D7: ... and faults_o did NOT. A short image is not a broken engine",
+          f_before, dut.faults_o);
+    retire(dut);
+  }
+  {
+    // The NEGATIVE CONTROL for D7, and it is the half that makes D7 mean
+    // something. Identical stimulus, identical status, present mask WHOLE.
+    // Without this, D7 would show only that the block refuses something.
+    const uint32_t a_before = dut.absent_outputs_o;
+    const uint32_t v_before = dut.vertices_o;
+    const uint32_t out6[6] = {0x1111'1111u, 0x2222'2222u, 0x3333'3333u,
+                              0x4444'4444u, 0x5555'5555u, 0u};
+    run_vertex(dut, out6, 0x00, 40, 0x3F);
+    check(dut.warp_valid_o == 1,
+          "D7b CONTROL: the SAME words with a WHOLE present mask ARE a deformation", 1,
+          dut.warp_valid_o);
+    check(dut.vertices_o == v_before + 1, "D7b: counted as a real result",
+          v_before + 1, dut.vertices_o);
+    check(dut.absent_outputs_o == a_before,
+          "D7b: and absent_outputs_o stayed put -- it discriminates on PRESENCE, "
+          "not on the words", a_before, dut.absent_outputs_o);
+    check(dut.nz_o == 0u,
+          "D7b: ordinal 5 IS legitimately zero here -- which is precisely why the "
+          "status alone could never have told D7 from D7b", 0, dut.nz_o);
     retire(dut);
   }
 

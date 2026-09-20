@@ -846,6 +846,7 @@ module zhao_prod_top (
   logic [32-1:0] u07_noprog_o;
   logic [32-1:0] u07_sig_refused_o;
   logic [32-1:0] u07_faults_o;
+  logic [32-1:0] u07_absent_outputs_o;
   logic [32-1:0] u07_stall_cycles_o;
   logic [32-1:0] u07_vtx_changed_o;
   zhao_field_warp_adapter #(
@@ -876,7 +877,8 @@ module zhao_prod_top (
       .resp_valid_i(u07_src[105 +: 1]),
       .resp_ready_o(u07_resp_ready_o),
       .resp_out_i(u07_src[112 +: 224]),
-      .resp_status_i(u07_src[119 +: 8]),
+      .resp_present_i(u07_src[119 +: 7]),
+      .resp_status_i(u07_src[126 +: 8]),
       .ans_valid_o(u07_ans_valid_o),
       .warp_valid_o(u07_warp_valid_o),
       .dx_o(u07_dx_o),
@@ -891,13 +893,14 @@ module zhao_prod_top (
       .noprog_o(u07_noprog_o),
       .sig_refused_o(u07_sig_refused_o),
       .faults_o(u07_faults_o),
+      .absent_outputs_o(u07_absent_outputs_o),
       .stall_cycles_o(u07_stall_cycles_o),
       .vtx_changed_o(u07_vtx_changed_o)
   );
   logic u07_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u07_fold_q <= 1'b0;
-    else u07_fold_q <= u07_fold_q ^ (((^u07_req_valid_o)) & u07_src[0]) ^ (((^u07_req_slot_o)) & u07_src[1]) ^ (((^u07_req_noprog_o)) & u07_src[2]) ^ (((^u07_req_in_o)) & u07_src[3]) ^ (((^u07_resp_ready_o)) & u07_src[4]) ^ (((^u07_ans_valid_o)) & u07_src[5]) ^ (((^u07_warp_valid_o)) & u07_src[6]) ^ (((^u07_dx_o)) & u07_src[7]) ^ (((^u07_dy_o)) & u07_src[8]) ^ (((^u07_dz_o)) & u07_src[9]) ^ (((^u07_nx_o)) & u07_src[10]) ^ (((^u07_ny_o)) & u07_src[11]) ^ (((^u07_nz_o)) & u07_src[12]) ^ (((^u07_vertices_o)) & u07_src[13]) ^ (((^u07_identities_o)) & u07_src[14]) ^ (((^u07_bypassed_o)) & u07_src[15]) ^ (((^u07_noprog_o)) & u07_src[16]) ^ (((^u07_sig_refused_o)) & u07_src[17]) ^ (((^u07_faults_o)) & u07_src[18]) ^ (((^u07_stall_cycles_o)) & u07_src[19]) ^ (((^u07_vtx_changed_o)) & u07_src[20]);
+    else u07_fold_q <= u07_fold_q ^ (((^u07_req_valid_o)) & u07_src[0]) ^ (((^u07_req_slot_o)) & u07_src[1]) ^ (((^u07_req_noprog_o)) & u07_src[2]) ^ (((^u07_req_in_o)) & u07_src[3]) ^ (((^u07_resp_ready_o)) & u07_src[4]) ^ (((^u07_ans_valid_o)) & u07_src[5]) ^ (((^u07_warp_valid_o)) & u07_src[6]) ^ (((^u07_dx_o)) & u07_src[7]) ^ (((^u07_dy_o)) & u07_src[8]) ^ (((^u07_dz_o)) & u07_src[9]) ^ (((^u07_nx_o)) & u07_src[10]) ^ (((^u07_ny_o)) & u07_src[11]) ^ (((^u07_nz_o)) & u07_src[12]) ^ (((^u07_vertices_o)) & u07_src[13]) ^ (((^u07_identities_o)) & u07_src[14]) ^ (((^u07_bypassed_o)) & u07_src[15]) ^ (((^u07_noprog_o)) & u07_src[16]) ^ (((^u07_sig_refused_o)) & u07_src[17]) ^ (((^u07_faults_o)) & u07_src[18]) ^ (((^u07_absent_outputs_o)) & u07_src[19]) ^ (((^u07_stall_cycles_o)) & u07_src[20]) ^ (((^u07_vtx_changed_o)) & u07_src[21]);
 
   // ---- zhao_forge_cliff ----
   logic [63:0] u08_lfsr_q;
