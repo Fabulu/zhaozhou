@@ -308,6 +308,35 @@ ruled rather than proposed.
 21,376-byte page. The two mip pools are **derived caches, not canonical
 assets**: losing one costs a regeneration, not data.
 
+> **THE TWO MIP POOLS ARE RETIRED — owner ruling R64, 2026-09-20.**
+> `TERRAIN.RESIDENT_MIP_POOL` (1,024 × 1,536 B) and `TERRAIN.COMPOSED_MIP_POOL`
+> (256 × 1,536 B) have **no consumer anywhere** and cannot acquire one that a
+> reader of the fine lattice could not serve. Ruling T8's decimation is nested
+> and unrounded — `mip17[i,j] = fine33[2i,2j]`, `mip9[i,j] = fine33[4i,4j]` — so
+> a coarse vertex **is** a fine vertex, bit for bit, and a pool of them stores a
+> strided copy of bytes that are already resident. The bit identity is a
+> committed test, `tests/terrain/terrain_mipgen_directed.cpp` case 3b, which
+> compares the RTL planes against the fine lattice **with no oracle in between**
+> (the case beside it compares RTL against `zref::terrain::mipgen`, and could
+> not see a law that was wrong in both).
+>
+> The 1.875 MB stays in this table, struck through in prose rather than deleted
+> from the map, until the packet that owns memory removes the regions. **The
+> region constants are still live** in `fpga/rtl/common/zhao_pkg.sv` and
+> `fpga/rtl/memory/zhao_mem_guard.sv`, with `tests/formal/formal_mem_guard.sv`
+> and `tests/mutants/zhao_mem_guard_resbound_mutant.sv` behind them: removing a
+> guard region means re-proving `mem_guard_no_escape`, which belongs with
+> rulings R4/R32/R55 and not to a terrain packet editing another lane's file
+> mid-flight. **The address space is recoverable and is not yet recovered.**
+>
+> What WAS removed on 2026-09-20 is the console's boundary that fed them —
+> `terr_mg_m17_*` / `terr_mg_m9_*` on `zhao_console_core` (entry I44). The
+> write COUNTERS stayed, so the decimation still has an observable consumer and
+> cannot be pruned with nothing able to notice. `TERRAIN.MIPGEN` itself stays
+> composed: its `done_o` is `TERRAIN.RESIDENCY`'s second completion, without
+> which `resident_o` is structurally zero. **A named consumer reverts all of
+> this in one ledger line.**
+
 **Every region starts DENY-BY-DEFAULT, with state-aware permissions.** This is
 stronger than the Phase-2 rule and the difference matters:
 

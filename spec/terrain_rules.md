@@ -106,9 +106,27 @@ Per patch (all little-endian; offsets within the VRAM-resident page):
 | H | Vertex tint | 33×33 | RGB565 | 2,178 | LMAP heir, per-VERTEX (§6.4) |
 | | **Total** | | | **21,320** | page stride 21,376 B (334 × 64-B bursts, 56 B pad) |
 
-Layers derived at load/bake, not streamed: coarse height mips per surface
-(17×17 + 9×9 = 740 B ×2 surfaces = 1,480 B/patch) for TERRAIN.LOD, and the
-per-frame composed-height cache (§4.2).
+Layers derived at load/bake, not streamed: ~~coarse height mips per surface
+(17×17 + 9×9 = 740 B ×2 surfaces = 1,480 B/patch) for TERRAIN.LOD~~ (**RETIRED,
+owner ruling R64, 2026-09-20 — see below**), and the per-frame composed-height
+cache (§4.2).
+
+> **The coarse height mips are RETIRED as a duplicate provider.** The clause
+> above is the only place a mip STORE was ever specified, and the consumer it
+> names never read one: `zref::terrain::lod_deviation` walks the fine lattice at
+> stride `1 << level` and takes no mip array at all. Ruling T8's decimation is
+> nested and unrounded, so `mip17[i,j] = fine33[2i,2j]` bit for bit — a coarse
+> vertex IS a fine vertex — and a store of them can never yield a number the
+> fine lattice does not already contain. The bit identity is a committed test
+> (`tests/terrain/terrain_mipgen_directed.cpp` case 3b), not prose here.
+>
+> `TERRAIN.MIPGEN` is NOT retired: it still walks the fine lattice at page load,
+> its `done_o` is `TERRAIN.RESIDENCY`'s second completion, and the R24 deviation
+> pass rides the same stream. What is gone is the claim that anything downstream
+> needs the decimated planes, and the console boundary that carried them. The
+> two pools in `spec/memory_rules.md` §5b go with it; the guard regions behind
+> them are still live and are owed to the memory packet. **A named consumer
+> reverts this in one ledger line.**
 
 ### 2.1 Header (64 B)
 
@@ -729,6 +747,50 @@ gradient: the whole scar field is misregistered against the geometry by a
 quarter cell, uniformly, which reads as the dig being slightly off-centre
 rather than as distortion. The seam figure is the visible fault R56 names, and
 it is the price of the frozen format.
+
+#### (c) A HALF CELL SIDEWAYS IS NOT A HALF METRE DOWN — 2026-09-20, ruling R65
+
+Added by the pass that rendered R65's picture, because the table above is
+correct and is read wrong, including by the packet that wrote it. **Every
+figure in it is a HORIZONTAL displacement — where the sample is taken from.
+None of them is the height difference that results.**
+
+Depth is a function of strength, and a stamp's coverage test is a THRESHOLD
+(`zref::surface::covers` is `d² ≤ r²`). So when the half-cell offset moves a
+sample across a stamp's rim, strength does not change by a little: it changes
+from 0 to the stamp's full value. The two pages then give a shared border
+vertex two heights that differ by **the whole dig depth**.
+
+Measured by `tools/terrain/seam_dig_render.cpp` on the worst placement it can
+construct — a 9 m disc whose rim is TANGENT to the seam, strength 128
+(−3.25 m), a 1 m pitch:
+
+| quantity | value |
+|---|---|
+| shared border vertices whose two pages disagree | **4 of 99** |
+| worst height tear at such a vertex | **3.2500 m** — the dig's full depth |
+| where the tear is at all | only where a rim crosses the half-cell band |
+
+Both patches still draw their own border column, so the meshes do not meet
+there and the fault is a genuine discontinuity in the surface, not a shading
+artefact.
+
+**AND YET IT DOES NOT READ AS A SEAM**, which is the finding the render exists
+to produce and is the opposite of what the number suggests. At a 1 m lattice
+the rim of any dig is ALREADY quantised to whole vertices, so it is a ragged
+staircase of vertical faces everywhere. `reports/terrain-seam-dig/
+seam_dig_contact.png`'s DIFF panel shows the two laws differing in scattered
+rim segments all the way round the crater and NOT concentrated at x = 64: the
+quarter-cell offset perturbs the rim globally, and the seam is merely where the
+offset changes sign. The full-depth tear lands inside that staircase and is not
+distinguishable from it.
+
+So the honest statement of the cost is: **the nearest-texel fallback does not
+produce a visible CRACK ALONG THE SEAM. It produces a rim that is wrong by up
+to one vertex, everywhere, and the seam is one of the places it is wrong.**
+That is a different defect from the one R56 was arguing about, it is milder to
+look at and harder to argue away, and the owner's decision should be taken
+against the render rather than against the 0.50 m figure.
 
 Choosing the other tie-break (`max(2v−1, 0)`) flips the interior sign and
 leaves the seam discontinuity at exactly ½ cell. **No integer rounding rule

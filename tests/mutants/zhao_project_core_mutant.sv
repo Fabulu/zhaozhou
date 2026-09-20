@@ -320,6 +320,17 @@ module zhao_project_core_mutant #(
     // addr 16     : { y0[27:16], x0[11:0] }
     // addr 17     : { h [27:16], w [11:0] }
     // addr 18     : { 30'b0, depth_profile[1:0] }   -- SetView flags[1:0]
+    // addr 19/20/21: eye x / y / z, fx16 Q16.16 world metres -- SetView.eye[3],
+    //                ruling R63. NOT DECODED HERE, and deliberately so:
+    //                zhao_view_eye snoops this same bus and owns those three
+    //                addresses. The eye takes part in no arithmetic in this
+    //                block -- the matrix it belongs to was built from it
+    //                upstream -- so giving this leaf six more output ports
+    //                would cost all seven of its instantiation sites and this
+    //                committed copy to carry a value none of them read. They
+    //                are listed here because THIS comment is the address map,
+    //                and an address map with a hole in it is how two writers
+    //                come to share one address.
     //
     // ADDR 18 IS NEW, 2026-09-19, and it needs NO port change on this bus:
     // `cfg_addr_i` has been five bits since the viewport words landed, so every

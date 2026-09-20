@@ -94,6 +94,55 @@ def tieoffs() -> list[dict]:
     if cur:
         out.append(cur)
 
+    # THE WALK STOPS AT THE FIRST NON-COMMENT LINE, AND THAT IS A SILENT
+    # TRUNCATION unless somebody checks. Added 2026-09-20 after it happened.
+    #
+    # The loop above breaks out of the block the moment a line does not start
+    # with `//`. That is the right way to find the block's END -- but a single
+    # BLANK LINE accidentally left between two entries ends the walk there too,
+    # and everything after it is never parsed. The register then reports a
+    # SMALLER number with no complaint whatever.
+    #
+    # It cost nothing to find only because the drop was implausible: closing one
+    # entry moved the count by five. Had the blank line been left between the
+    # last two entries, the count would have moved by one -- exactly what was
+    # expected -- and the register would have been wrong and believed. This is
+    # the broken-instrument law in its purest form: the defect reads LOW, which
+    # is the direction nobody audits, and the tool's own docstring already warns
+    # that a reformatted header makes it "go blind". It just had no way to say
+    # so.
+    #
+    # The guard is cheap and exact: after the walk, look for any entry head in
+    # the REST of the file. An entry the walk never reached is one the register
+    # cannot count, so it is a hard failure and it names the id.
+    # COLUMN ZERO ONLY, and the restriction is not cosmetic. The walk itself
+    # matches on `line.strip()`, so an INDENTED comment deep in the port list
+    # ("  // I22.  `zhao_terrain_compcache_front` is composed below") looks
+    # exactly like an entry head to it. Every real entry in the block begins at
+    # column 0; prose that CITES an id is indented, because it is inside
+    # something. Without this, the guard's first run reported I22 -- a genuine
+    # sentence about a genuinely CLOSED entry -- and a check that cries wolf on
+    # a closed gap is one people learn to skip.
+    seen = {t["id"] for t in out}
+    missed = [m.group(1) for m in
+              (_TIEOFF.match(ln) for ln in text[start:].splitlines()
+               if ln.startswith("//"))
+              if m and m.group(1) not in seen]
+    if missed:
+        raise SystemExit(
+            "completion_register: THE ENTRY WALK STOPPED EARLY.\n"
+            "  parsed %d entries, but %s appear later in the file and were "
+            "never reached.\n"
+            "  The walk ends at the first line that does not begin with `//`, so "
+            "a single\n"
+            "  blank line between two entries silently truncates the register -- "
+            "and it\n"
+            "  truncates it DOWNWARD, which is the direction nobody questions. "
+            "Find the\n"
+            "  blank line inside zhao_console_core.sv's INCOMPLETE block and make "
+            "it `//`."
+            % (len(out), ", ".join(missed)))
+
     # DUPLICATE ENTRY IDS ARE A HARD FAILURE.
     #
     # On 2026-09-19 two packets, within one hour, both numbered a new entry I42
@@ -1148,6 +1197,27 @@ def _self_test() -> None:
         if sum(1 for t in ts if t["mandatory_gap"]) != 2:
             bad.append("expected 2 mandatory gaps, got %d"
                        % sum(1 for t in ts if t["mandatory_gap"]))
+        # THE POSITIVE CONTROL for the truncation guard above. A detector that
+        # has not been seen to FIRE has not been tested (CLAUDE.md), and this
+        # one guards a failure that reads LOW -- so it is the one to prove.
+        # A blank line between I1 and I2 must be a hard failure naming I2 and
+        # I3, not a quiet register of one.
+        truncated = (
+            "// INCOMPLETE -- TIED OFF, AND WHY\n"
+            "//  I1. SOMETHING (`a_i`) -- BOUNDARY. no owner exists.\n"
+            "\n"
+            "//  I2. OTHER (`b_i`) -- TIED TO ZERO, a real interface mismatch.\n"
+            "//  I3. THIRD (`c_i`) -- NOT a tie-off: the core assigns it.\n"
+        )
+        tmp.write_text(truncated, encoding="utf-8")
+        fired = ""
+        try:
+            tieoffs()
+        except SystemExit as exc:
+            fired = str(exc)
+        if "WALK STOPPED EARLY" not in fired or "I2" not in fired or "I3" not in fired:
+            bad.append("the truncation guard did not fire on a planted blank "
+                       "line (got %r)" % fired[:120])
         if bad:
             sys.stderr.write("completion_register SELF-TEST FAILED:\n")
             for b in bad:

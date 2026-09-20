@@ -2130,14 +2130,6 @@ module zhao_console_core_slot_overflow_mutant
   // I32 gives about layer D: a decimated height written nowhere and a
   // decimated height written wrongly are indistinguishable from inside, and a
   // port is the one place the difference is visible.
-  output logic         terr_mg_m17_valid_o,
-  output logic [ 8:0]  terr_mg_m17_addr_o,
-  output logic         terr_mg_m17_surf_o,
-  output logic [15:0]  terr_mg_m17_h_o,
-  output logic         terr_mg_m9_valid_o,
-  output logic [ 6:0]  terr_mg_m9_addr_o,
-  output logic         terr_mg_m9_surf_o,
-  output logic [15:0]  terr_mg_m9_h_o,
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,

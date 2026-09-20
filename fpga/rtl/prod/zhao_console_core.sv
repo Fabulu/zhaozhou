@@ -1952,100 +1952,102 @@
 //      whoever owns the draw and this assignment is wrong.
 //
 //
-// I44. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
-//      `terr_mg_m9_*`) -- BOUNDARY. NEW 2026-09-19, opened by composing the
-//      second completion (connected item 12), and it is the SUCCESSOR to a
-//      larger absence rather than a new discovery.
+// (I44 CLOSED 2026-09-20 (terrain5), under owner ruling R64. TERRAIN.MIPGEN's
+//      COARSE-HEIGHT PLANES are RETIRED as a DUPLICATE PROVIDER, which is a
+//      Phase-2 allowed act. The entry is kept in full below rather than
+//      deleted, because a retirement is a claim and the next person is owed
+//      the argument and the way back.
 //
-//      RENUMBERED FROM I42 LATER THE SAME DAY, AND THE COLLISION IS WORTH ONE
-//      PARAGRAPH because it had already made two cross-references ambiguous.
-//      Two entries were written as `I42` by two packets in the same hour --
-//      this one and THE FIELD ENGINE'S PROGRAM LOADER below -- and both were
-//      then cited by number: I21 pointed at `I42` meaning the deviation store
-//      (this entry) while I34 pointed at `I42` meaning the program store (the
-//      other one). `completion_register.py` keeps its entries in a LIST, so it
-//      counted both and reported no defect; the ambiguity was only ever
-//      readable by a person, which is the kind a gate cannot catch. This entry
-//      moved because I43 was already taken and the FIELD entry is another
-//      packet's to edit. I21's citation is updated with it.
+//      THE ARGUMENT, in one line: ruling T8's decimation is NESTED and
+//      UNROUNDED, so a coarse vertex IS a fine vertex, bit for bit. A plane
+//      store can therefore never yield a number the fine lattice does not
+//      already contain. It buys BANDWIDTH and never a different answer -- and
+//      the deviation pass this campaign built reads the fine lattice at page
+//      load anyway, off the mip pass's own stream, so even the bandwidth is
+//      not bought.
 //
-//      WHAT LEAVES. The 17x17 and 9x9 decimations of the page's height
-//      lattice, address and surface beside each value, one write per clock.
-//      `spec/terrain_rules.md` 2 calls them "17x17 + 9x9 ... for TERRAIN.LOD"
-//      and ruling T8 makes the decimation NESTED so shared vertices stay
-//      bit-identical -- the law is settled and the arithmetic is built and
-//      tested (`tests/terrain/terrain_mipgen_directed.cpp`).
+//      IT IS A TEST NOW, NOT PROSE, which is what R64 asked for and is the
+//      part that had been missing. `tests/terrain/terrain_mipgen_directed.cpp`
+//      case 3b compares the RTL's mip17/mip9 against the FINE LATTICE at
+//      stride, with the strides written out and NO ORACLE IN BETWEEN:
 //
-//      WHAT IS ABSENT IS THE STORE, and the owner is not identified. It is
-//      1,024 patches x 2 surfaces x (289 + 81) words of height16, about 12
-//      Mbit if every resident page keeps both levels -- so it is an SDRAM
-//      structure with a residency of its own, not an M10K this composer could
-//      add. Nothing in `fpga/rtl` declares it: SEARCHED for a consumer of a
-//      17x17 or 9x9 height plane and the only block that names one is
-//      TERRAIN.LOD, which takes three PER-SUBPATCH DEVIATIONS (`sp_dev1_i`,
-//      `sp_dev2_i`, `sp_dev3_i`) and not the planes themselves. The block
-//      between them -- the one that keeps the mips and differences them
-//      against the fine lattice to produce a deviation -- has no name in the
-//      ledger and no file.
+//          mip17[i,j] == fine33[2i,2j]      mip9[i,j] == fine33[4i,4j]
 //
-//      CORRECTED 2026-09-20 (terrain pass 4). "NO FILE" IS FALSE:
-//      `fpga/rtl/terrain/zhao_terrain_loddev.sv` was committed at 786f52ba the
-//      day before this entry was written, is `zref::terrain::lod_deviation` in
-//      hardware, is differentially tested, and emits exactly TERRAIN.LOD's
-//      `sp_dev1/2/3`. As of this pass `zhao_terrain_lodfeed` drives it at page
-//      load and `zhao_terrain_devstore` holds its records. The claim was false
-//      in the direction that MANUFACTURES WORK: it sends the next reader to
-//      build an SDRAM mip-pool residency engine.
+//      That is a different claim from the case beside it. Case 2 compares the
+//      RTL against `zref::terrain::mipgen`, which is the right check for "is
+//      the mip law implemented correctly" and is USELESS for this question:
+//      both sides could round or average the same way and agree perfectly.
+//      Case 3b also pins the ORACLE to the same identity, so the redundancy
+//      argument cannot hold for the hardware while zref quietly models
+//      something else. Vacuity control, run by hand on the fixture: at a WRONG
+//      stride 272 of the 289 coarse cells mismatch, so the check is not
+//      passing because every sample happens to be equal.
 //
-//      AND THE PLANES ARE REDUNDANT WITH THE FINE LATTICE, which is the real
-//      finding and is an OWNER DECISION rather than a wiring gap. Ruling T8's
-//      decimation is NESTED and unrounded -- `design/contracts/TERRAIN.MIPGEN.md`
-//      44-45 gives `mip17[i,j] = fine33[2i, 2j]` and 65 says "both mips are
-//      strided subsets of the same scan", and `design/blocks.yml` 2840 says "a
-//      coarse vertex IS a fine vertex bit for bit". `zref::terrain::
-//      lod_deviation` (zref_terrain_tess.hpp 271-323) reads ONLY the fine
-//      lattice at stride `1 << level` and takes no mip array at all. So a mip
-//      store buys BANDWIDTH, never a different number -- and this pass's
-//      deviation walk reads the fine lattice at page load anyway, off the mip
-//      pass's own stream, so the round trip through
-//      TERRAIN.RESIDENT_MIP_POOL would buy nothing at all.
+//      WHAT REVERTS IT, in one ledger line: a named consumer. If the
+//      decimation is ever changed to an AVERAGE, case 3b fails -- and it
+//      should, because an averaged mip would be a real second source of
+//      information, and the seams would crack as shared vertices stopped
+//      matching. That test failing means this retirement has expired.
 //
-//      SEARCHED for any OTHER consumer of a 17x17 or 9x9 coarse height plane:
-//      `fpga/rtl/**` including `fpga/rtl/synth/` for `terr_mg_m17_|terr_mg_m9_`
-//      (four files: this one, the board, the smoke bench and a mutant copy --
-//      all carriers, no consumer); `reference/` for `mip17_at|mip9_at`
-//      (declared in zref_terrain.hpp 284-294, called only by
-//      `tests/terrain/terrain_mipgen_directed.cpp`); `design/contracts/` and
-//      `design/blocks.yml` (`downstream: [TERRAIN.LOD]` and nothing else);
-//      `spec/` (terrain_rules 109 "for TERRAIN.LOD", memory_rules 5b for the
-//      addresses); `tools/`; and the cross-cutting sweep
-//      `mip.*(collision|cull|shadow|physic|occlus|nav|query|stream)` over the
-//      whole tree, whose every hit is TEXTURE mip policy. PART.COLLIDE's
+//      WHAT WAS ACTUALLY REMOVED, and what was not:
+//        REMOVED  the eight data ports `terr_mg_m17_{valid,addr,surf,h}_o` and
+//                 `terr_mg_m9_{...}_o` from this module, the generated board,
+//                 the slot-overflow mutant wrapper's port block and the smoke
+//                 bench. The block's own outputs are left named-and-empty at
+//                 the instantiation, so the retirement is visible where it is
+//                 used.
+//        KEPT     `terr_mg_m17_writes_o` / `terr_mg_m9_writes_o`. They are the
+//                 only remaining evidence at this boundary that the decimation
+//                 ran, and dropping them too would let the whole coarse path
+//                 be pruned with nothing able to notice -- the exact shape
+//                 entry I32 records for layer D.
+//        KEPT     TERRAIN.MIPGEN, composed. Its `done_o` is
+//                 TERRAIN.RESIDENCY's SECOND COMPLETION; without it
+//                 `resident_o` is structurally zero and no patch ever reaches
+//                 the compose door. The block is not the duplicate; the
+//                 PLANES were.
+//        NOT DONE, AND OWED TO WHOEVER OWNS MEMORY NEXT: the two pools
+//                 themselves. `TERRAIN.RESIDENT_MIP_POOL` (1,024 x 1,536 B)
+//                 and `TERRAIN.COMPOSED_MIP_POOL` (256 x 1,536 B) are marked
+//                 RETIRED in `spec/memory_rules.md` 5b, but their region
+//                 constants still exist in `fpga/rtl/common/zhao_pkg.sv` and
+//                 `fpga/rtl/memory/zhao_mem_guard.sv`, with
+//                 `tests/formal/formal_mem_guard.sv` and
+//                 `tests/mutants/zhao_mem_guard_resbound_mutant.sv` behind
+//                 them. Removing a guard region means re-proving
+//                 `mem_guard_no_escape`, and MEM is another packet's lane
+//                 under rulings R4/R32/R55 -- editing it from here while that
+//                 packet is live is the shared-file hazard CLAUDE.md now has
+//                 three sections about. 1.875 MB of the memory map is
+//                 recoverable and is NOT recovered by this commit. Said
+//                 plainly rather than left to look done.
+//
+// THE ENTRY AS IT STOOD, kept because the search behind it is the evidence:
+//
+// I44-was. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
+//      `terr_mg_m9_*`) -- was a boundary. SEARCHED for any consumer of a 17x17
+//      or 9x9 coarse height plane: `fpga/rtl/**` including `fpga/rtl/synth/`
+//      for `terr_mg_m17_|terr_mg_m9_` (four files: this one, the board, the
+//      smoke bench and a mutant copy -- all carriers, no consumer);
+//      `reference/` for `mip17_at|mip9_at` (declared in zref_terrain.hpp
+//      284-294, called only by `tests/terrain/terrain_mipgen_directed.cpp`);
+//      `design/contracts/` and `design/blocks.yml` (`downstream: [TERRAIN.LOD]`
+//      and nothing else); `spec/` (terrain_rules 109 "for TERRAIN.LOD",
+//      memory_rules 5b for the addresses); `tools/`; and the cross-cutting
+//      sweep `mip.*(collision|cull|shadow|physic|occlus|nav|query|stream)` over
+//      the whole tree, whose every hit is TEXTURE mip policy. PART.COLLIDE's
 //      terrain sample goes through TERRAIN.HEIGHTTAP on the FINE lattice.
-//      There is no second consumer.
+//      That search was terrain4's; terrain5 repeated the `terr_mg_m17_|
+//      terr_mg_m9_` sweep and the `mip17|mip9` sweep over sources after two
+//      more packets had landed, and found no new hit. There is no consumer.
 //
-//      SO THE OWNER DECISION IS: name a consumer for the coarse-height planes,
-//      or retire them (and the two mip pools) from spec 2 and memory_rules 5b.
-//      TERRAIN.MIPGEN stays composed either way, because its `done_o` is
-//      TERRAIN.RESIDENCY's second completion and that is load-bearing. Naming
-//      CMD.SCHEDULER or TERRAIN.SEQ as the store's owner would still be
-//      guessing.
+//      The entry also recorded a FALSE ABSENCE worth keeping: it used to say
+//      the block that differences mips against the fine lattice "has no name
+//      in the ledger and no file". `fpga/rtl/terrain/zhao_terrain_loddev.sv`
+//      had landed at 786f52ba the day before the sentence was written. False
+//      in the direction that MANUFACTURES WORK -- it sends the next reader to
+//      build an SDRAM mip-pool residency engine that nothing needs.)
 //
-//      WHY THE CHAIN IS COMPOSED ANYWAY, which is the part worth reading. The
-//      mip pass is composed for its COMPLETION, not for its planes.
-//      TERRAIN.RESIDENCY publishes on two completions and had one, so
-//      `resident_o` was structurally zero and the compose door could never be
-//      offered a patch (see item 8). TERRAIN.MIPGEN's `done_o` with its
-//      {slot, gen, epoch} is that second completion, and it is real whether or
-//      not the planes have a home: the block decimates the page it was given
-//      and reports on the page it was given. A composition that waited for the
-//      store would have kept a working machine switched off for a store
-//      nobody has specified.
-//
-//      THEY ARE PORTS AND NOT DROPPED OUTPUTS for the reason I32 gives about
-//      layer D: a decimated height written nowhere and a decimated height
-//      written wrongly are indistinguishable from inside this module, and a
-//      port is the one place the difference can be seen.
 //
 // I42. THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
 //      (`fld_pc_*`) AND ITS SECOND CLIENT (`fld_req_*` / `fld_resp_*`) --
@@ -4807,20 +4809,23 @@ module zhao_console_core
   output logic [31:0]  terr_psmux_stray_v_o,
   output logic [31:0]  terr_psmux_stray_done_o,
 
-  // I42: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
-  // 9x9 ... for TERRAIN.LOD" is a STORED quantity, and the store does not
-  // exist.  These are real ports rather than dropped outputs for the reason
-  // I32 gives about layer D: a decimated height written nowhere and a
-  // decimated height written wrongly are indistinguishable from inside, and a
-  // port is the one place the difference is visible.
-  output logic         terr_mg_m17_valid_o,
-  output logic [ 8:0]  terr_mg_m17_addr_o,
-  output logic         terr_mg_m17_surf_o,
-  output logic [15:0]  terr_mg_m17_h_o,
-  output logic         terr_mg_m9_valid_o,
-  output logic [ 6:0]  terr_mg_m9_addr_o,
-  output logic         terr_mg_m9_surf_o,
-  output logic [15:0]  terr_mg_m9_h_o,
+  // THE COARSE-HEIGHT MIP PLANES ARE RETIRED, owner ruling R64, 2026-09-20.
+  // Entry I44 carried them as a boundary. They are gone, and the argument is
+  // in that entry's closure note; the short form is that ruling T8's
+  // decimation is NESTED and UNROUNDED, so `mip17[i,j] == fine33[2i,2j]` bit
+  // for bit and a coarse vertex IS a fine vertex. A plane store could
+  // therefore never produce a number the fine lattice does not already
+  // contain -- it is a DUPLICATE PROVIDER, not a source -- and the bit
+  // identity is now a committed test (`tests/terrain/
+  // terrain_mipgen_directed.cpp` case 3b) rather than prose in a contract.
+  //
+  // THE COUNTERS STAY, and that is deliberate rather than an oversight. They
+  // are the only remaining evidence at this boundary that the decimation ran
+  // at all, and without them the block's whole coarse path would be pruned
+  // silently -- which is the shape this file's own I32 entry warns about for
+  // layer D. TERRAIN.MIPGEN also stays composed: its `done_o` is
+  // TERRAIN.RESIDENCY's SECOND COMPLETION, and without it `resident_o` is
+  // structurally zero and no patch ever reaches the compose door.
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
@@ -13020,15 +13025,21 @@ module zhao_console_core
     .fine_ready_o(tmg_fine_ready),
     .fine_h_i    (tmg_fine_h),
 
-    // I42: the decimated planes.  No store exists; see the note above.
-    .m17_valid_o(terr_mg_m17_valid_o),
-    .m17_addr_o (terr_mg_m17_addr_o),
-    .m17_surf_o (terr_mg_m17_surf_o),
-    .m17_h_o    (terr_mg_m17_h_o),
-    .m9_valid_o (terr_mg_m9_valid_o),
-    .m9_addr_o  (terr_mg_m9_addr_o),
-    .m9_surf_o  (terr_mg_m9_surf_o),
-    .m9_h_o     (terr_mg_m9_h_o),
+    // THE DECIMATED PLANES ARE RETIRED (owner ruling R64) and are left
+    // UNCONNECTED HERE ON PURPOSE. The block keeps them because the block is
+    // correct and is ruling T8 in hardware, differentially tested; what was
+    // retired is the CLAIM that anything downstream needs them. Naming them
+    // with empty parentheses -- rather than deleting them from the instance --
+    // is what makes the retirement visible at the point of use instead of
+    // being a silent absence somebody later reads as an oversight.
+    .m17_valid_o(),
+    .m17_addr_o (),
+    .m17_surf_o (),
+    .m17_h_o    (),
+    .m9_valid_o (),
+    .m9_addr_o  (),
+    .m9_surf_o  (),
+    .m9_h_o     (),
 
     .samples_o   (tmg_samples),
     .m17_writes_o(terr_mg_m17_writes_o),

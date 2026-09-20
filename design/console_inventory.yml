@@ -27,6 +27,9 @@ modules:
   zhao_terrain_lodfeed:
     disposition: pending_compose
     why: "the page-load deviation pass (owner ruling R24): it observes TERRAIN.MIPFEED's fine stream, buffers one surface and drives zhao_terrain_loddev into zhao_terrain_devstore. Built and tested by terrain_lodpath_directed (286 checks, four counters fired). Blocked with the store above on the same missing camera-position producer."
+  zhao_view_eye:
+    disposition: pending_compose
+    why: "the two views' CAMERA POSITIONS (owner ruling R63), which is the producer half of the blocker the two entries above cite. SetView 0x0010 now carries fx16 eye[3] and zhao_cmd_exec commits it as steps 17/18/19 of the view walk onto projector configuration addresses 19/20/21; this block registers those three words per view and hands them out as the six fx16 wires zhao_terrain_lod's cam0_x_i..cam1_z_i want. It SNOOPS the bus rather than living inside zhao_project_core, because that leaf has seven instantiation sites and a committed mutant copy and not one of its readers wants an eye. Tested by cmd_exec_directed cases 22-24 (order, per-view routing, idempotence, and no write for a refused view_id) and by view_eye_directed. It is not composed because its consumer zhao_terrain_lod is not (core entry I21)."
   zhao_engine1_raw_last_v2:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

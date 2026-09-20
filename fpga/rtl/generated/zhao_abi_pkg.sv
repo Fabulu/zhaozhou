@@ -371,9 +371,13 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_END_FRAME_OFF_EXPECTED_FRAMEBUFFER_CRC = 24;
   localparam int unsigned ZHAO_END_FRAME_OFF_PAD = 28;
 
-  // SetView 0x0010: 96-B record (implemented).
+  // SetView 0x0010: 112-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
+    logic [31:0] pad;  // 4 zero byte(s) @108
+    logic [31:0] eye_2;  // fx16 = Q16.16 in 32 bits (qformats.md) @104
+    logic [31:0] eye_1;  // fx16 = Q16.16 in 32 bits (qformats.md) @100
+    logic [31:0] eye_0;  // fx16 = Q16.16 in 32 bits (qformats.md) @96
     logic [31:0] fragment_tokens;  // u32 @92
     logic [31:0] geometry_tokens;  // u32 @88
     logic [31:0] pixel_error;  // fx16 = Q16.16 in 32 bits (qformats.md) @84
@@ -389,7 +393,7 @@ package zhao_abi_pkg;
   } zhao_rec_set_view_t;
 
   /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned ZHAO_SET_VIEW_BYTES = 96;
+  localparam int unsigned ZHAO_SET_VIEW_BYTES = 112;
   /* verilator lint_on UNUSEDPARAM */
   localparam int unsigned ZHAO_SET_VIEW_OFF_H_OPCODE = 0;
   localparam int unsigned ZHAO_SET_VIEW_OFF_H_RECORD_BYTES = 2;
@@ -403,6 +407,10 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SET_VIEW_OFF_PIXEL_ERROR = 84;
   localparam int unsigned ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS = 88;
   localparam int unsigned ZHAO_SET_VIEW_OFF_FRAGMENT_TOKENS = 92;
+  localparam int unsigned ZHAO_SET_VIEW_OFF_EYE_0 = 96;
+  localparam int unsigned ZHAO_SET_VIEW_OFF_EYE_1 = 100;
+  localparam int unsigned ZHAO_SET_VIEW_OFF_EYE_2 = 104;
+  localparam int unsigned ZHAO_SET_VIEW_OFF_PAD = 108;
 
   // SetPresentationContract 0x0020: 48-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -1656,8 +1664,8 @@ package zhao_abi_pkg;
     end
   endfunction
 
-  function automatic logic [767:0] zhao_pack_set_view(input zhao_rec_set_view_t c);
-    logic [767:0] v;
+  function automatic logic [895:0] zhao_pack_set_view(input zhao_rec_set_view_t c);
+    logic [895:0] v;
     begin
       v[ZHAO_SET_VIEW_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
       v[ZHAO_SET_VIEW_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
@@ -1671,11 +1679,15 @@ package zhao_abi_pkg;
       v[ZHAO_SET_VIEW_OFF_PIXEL_ERROR*8 +: 32] = c.pixel_error;
       v[ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS*8 +: 32] = c.geometry_tokens;
       v[ZHAO_SET_VIEW_OFF_FRAGMENT_TOKENS*8 +: 32] = c.fragment_tokens;
+      v[ZHAO_SET_VIEW_OFF_EYE_0*8 +: 32] = c.eye_0;
+      v[ZHAO_SET_VIEW_OFF_EYE_1*8 +: 32] = c.eye_1;
+      v[ZHAO_SET_VIEW_OFF_EYE_2*8 +: 32] = c.eye_2;
+      v[ZHAO_SET_VIEW_OFF_PAD*8 +: 32] = c.pad;
       zhao_pack_set_view = v;
     end
   endfunction
 
-  function automatic zhao_rec_set_view_t zhao_unpack_set_view(input logic [767:0] v);
+  function automatic zhao_rec_set_view_t zhao_unpack_set_view(input logic [895:0] v);
     zhao_rec_set_view_t c;
     begin
       c.h_opcode = v[ZHAO_SET_VIEW_OFF_H_OPCODE*8 +: 16];
@@ -1690,6 +1702,10 @@ package zhao_abi_pkg;
       c.pixel_error = v[ZHAO_SET_VIEW_OFF_PIXEL_ERROR*8 +: 32];
       c.geometry_tokens = v[ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS*8 +: 32];
       c.fragment_tokens = v[ZHAO_SET_VIEW_OFF_FRAGMENT_TOKENS*8 +: 32];
+      c.eye_0 = v[ZHAO_SET_VIEW_OFF_EYE_0*8 +: 32];
+      c.eye_1 = v[ZHAO_SET_VIEW_OFF_EYE_1*8 +: 32];
+      c.eye_2 = v[ZHAO_SET_VIEW_OFF_EYE_2*8 +: 32];
+      c.pad = v[ZHAO_SET_VIEW_OFF_PAD*8 +: 32];
       zhao_unpack_set_view = c;
     end
   endfunction
@@ -2759,7 +2775,7 @@ package zhao_abi_pkg;
         ZHAO_OP_NOP: zhao_opcode_record_bytes = 16;
         ZHAO_OP_BEGIN_FRAME: zhao_opcode_record_bytes = 32;
         ZHAO_OP_END_FRAME: zhao_opcode_record_bytes = 32;
-        ZHAO_OP_SET_VIEW: zhao_opcode_record_bytes = 96;
+        ZHAO_OP_SET_VIEW: zhao_opcode_record_bytes = 112;
         ZHAO_OP_SET_PRESENTATION_CONTRACT: zhao_opcode_record_bytes = 48;
         ZHAO_OP_TERRAIN_FIELD: zhao_opcode_record_bytes = 112;
         ZHAO_OP_SURFACE_STAMP: zhao_opcode_record_bytes = 64;
@@ -2811,6 +2827,9 @@ package zhao_abi_pkg;
       case (op)
         ZHAO_OP_END_FRAME: begin
           if (zhao_bytes_nonzero(p, base, 28, 4)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_SET_VIEW: begin
+          if (zhao_bytes_nonzero(p, base, 108, 4)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_SET_PRESENTATION_CONTRACT: begin
           if (zhao_bytes_nonzero(p, base, 40, 8)) zhao_record_pad_nonzero = 1'b1;
@@ -2950,7 +2969,7 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_nop_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_begin_frame_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_end_frame_t) != 8*32) zhao_layout_ok = 1'b0;
-      if ($bits(zhao_rec_set_view_t) != 8*96) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_set_view_t) != 8*112) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_presentation_contract_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_terrain_field_t) != 8*112) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_surface_stamp_t) != 8*64) zhao_layout_ok = 1'b0;

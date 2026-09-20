@@ -678,14 +678,6 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_psmux_b_jobs_o;
   logic [31:0]             terr_psmux_stray_v_o;
   logic [31:0]             terr_psmux_stray_done_o;
-  logic                    terr_mg_m17_valid_o;
-  logic [ 8:0]             terr_mg_m17_addr_o;
-  logic                    terr_mg_m17_surf_o;
-  logic [15:0]             terr_mg_m17_h_o;
-  logic                    terr_mg_m9_valid_o;
-  logic [ 6:0]             terr_mg_m9_addr_o;
-  logic                    terr_mg_m9_surf_o;
-  logic [15:0]             terr_mg_m9_h_o;
   logic [31:0]             terr_mg_m17_writes_o;
   logic [31:0]             terr_mg_m9_writes_o;
   logic [31:0]             terr_mg_aborts_o;
@@ -1843,7 +1835,7 @@ module tb_zhao_console_core_smoke
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 768;   // 608 B of records + header + CRC (twelve records after the 2026-09-20 merges)
+  localparam int unsigned PKT_MAX_C     = 768;   // records + header + CRC; o below is the arithmetic (twelve records, SetView 112 B since R63)
   // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
   // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
   // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
@@ -3655,10 +3647,18 @@ module tb_zhao_console_core_smoke
       logic [255:0] bfv, efv;
       logic [383:0] prv, pr2v, pr3v, pcv, sev, spopv;
       logic [255:0] dfv;
-      logic [767:0] svv;
+      logic [8*zhao_abi_pkg::ZHAO_SET_VIEW_BYTES-1:0] svv;   // R63 grew SetView 96 -> 112; take the width from the package
       logic [511:0] matv;
       logic [31:0]  c;
       int unsigned  o;
+      // THE RUNNING RECORD OFFSET, added 2026-09-20 with ruling R63. The ten
+      // offsets below used to be literals, and when SetView grew from 96 to 112
+      // bytes every record after it landed 16 bytes early -- with a VALID CRC
+      // over the wrong bytes, so the decoder refused the packet and the smoke
+      // reported "GEOM.REPLAY released no meshlet", which reads as a geometry
+      // fault and is a layout one. A running sum cannot make that mistake, and
+      // `ro` at the end IS the byte count the header must declare.
+      int unsigned  ro;
       zhao_abi_pkg::zhao_rec_set_post_t         sp;
       zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
       logic [255:0] spv;
@@ -3683,12 +3683,29 @@ module tb_zhao_console_core_smoke
       // SetView, view 1, carrying THE SAME camera the host already wrote
       // (SGF_MAT, profile 0) so the raster is unchanged -- and view 1's REQUEST.
       for (int unsigned k = 0; k < 16; k++) matv[32*k +: 32] = SGF_MAT[k];
-      sv.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_VIEW; sv.h_record_bytes = 16'd96;
+      sv.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_VIEW;
+      // FROM THE PACKAGE, NOT A LITERAL. This was `16'd96` until ruling R63
+      // grew the record to 112 bytes; taking it from the generated constant is
+      // what stops the bench and the ABI from disagreeing again.
+      sv.h_record_bytes = 16'(zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
       sv.view_id = 8'd1; sv.viewport_id = 8'd1; sv.flags = 16'd0;
       sv.view_projection = zhao_abi_pkg::zhao_mat4fx_t'(matv);
       sv.pixel_error     = 32'h0001_0000;
       sv.geometry_tokens = TOK_REQ_G1_C;
       sv.fragment_tokens = TOK_REQ_F1_C;
+      // THE EYE (ruling R63), carried but NOT YET OBSERVED IN THIS BENCH, and
+      // said so rather than left to be inferred. `zhao_cmd_exec` commits these
+      // three words to projector configuration addresses 19/20/21, and the block
+      // that decodes them -- `zhao_view_eye` -- is not composed into
+      // `zhao_console_core` yet because its consumer `zhao_terrain_lod` is not
+      // (core entry I21). The producer is proven at `tests/command/
+      // cmd_exec_directed.cpp` cases 22-24 and the store at `view_eye_directed`.
+      // A DISTINCTIVE, NON-ZERO value is used anyway: zero is a legal eye, so a
+      // zero here would prove nothing the day the consumer lands, and a value
+      // that is already flowing is one less thing to add then.
+      sv.eye_0 = 32'h0004_0000;   // x = +4.0 m, fx16
+      sv.eye_1 = 32'h0002_8000;   // y = +2.5 m
+      sv.eye_2 = 32'hFFF6_0000;   // z = -10.0 m, signed on purpose
 
       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
       bf.frame_id = 32'd1;
@@ -3814,39 +3831,90 @@ module tb_zhao_console_core_smoke
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
       // ONE packet, ALL FOUR lanes' records (coordinator merge 2026-09-20):
-      // BeginFrame 32 | SetPresentationContract 48 | SetView 96 | PublishResource 48 x3 |
+      // BeginFrame 32 | SetPresentationContract 48 | SetView 112 | PublishResource 48 x3 |
       // SetEnvironment 48 | SetPost 32 | SetGradeTable 96 | SetPopulation 48 |
-      // DrawForm 32 | EndFrame 32 = 608 bytes, TWELVE records. The draw stays after every
-      // publication and after the look; SetPopulation applies at the packet's COMMIT.
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
-      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = pr2v[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = pr3v[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 320 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 368 + k] = spv[8*k +: 8];
-      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 400 + k] = gtv2[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 496 + k] = spopv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 544 + k] = dfv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 576 + k] = efv[8*k +: 8];
+      // DrawForm 32 | EndFrame 32 = 624 bytes, TWELVE records. The sizes are documentation;
+      // `ro` is the arithmetic, so the header cannot declare a length the packing did not
+      // produce (terrain5's mechanism, kept). The draw stays after every publication and
+      // after the look; SetPopulation applies at the packet's COMMIT.
+      ro = 0;
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = bfv[8*k +: 8];
+      ro = ro + 32;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pcv[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < zhao_abi_pkg::ZHAO_SET_VIEW_BYTES; k++)
+        pkt_mem[o + ro + k] = svv[8*k +: 8];
+      ro = ro + zhao_abi_pkg::ZHAO_SET_VIEW_BYTES;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = prv[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr2v[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr3v[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = sev[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = spv[8*k +: 8];
+      ro = ro + 32;
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + ro + k] = gtv2[8*k +: 8];
+      ro = ro + 96;
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = spopv[8*k +: 8];
+      ro = ro + 48;
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = dfv[8*k +: 8];
+      ro = ro + 32;
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = efv[8*k +: 8];
+      ro = ro + 32;
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), TEN records, 512 bytes of them
+      // deadline 0 (the mode's period), TEN records, ro bytes of them (ro is the running sum above)
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
       {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd12;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd608;
+      // `ro` IS THE BYTE COUNT -- the same running sum that placed the records,
+      // so the header cannot declare a length the packing did not produce.
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'(ro);
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 608; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+611], pkt_mem[o+610], pkt_mem[o+609], pkt_mem[o+608]} = ~c;
-      pkt_len_q   = o + 608 + 4;
+      for (int unsigned k = 0; k < ro; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+ro+3], pkt_mem[o+ro+2], pkt_mem[o+ro+1], pkt_mem[o+ro]} = ~c;
+      pkt_len_q   = o + ro + 4;
       pkt_armed_q = 1'b1;
+      // Printed at BUILD time, not at the end: when the packet is malformed the
+      // bench dies inside GEOM.REPLAY's watchdog and every summary line below is
+      // unreachable, so the one fact that would have identified a layout fault
+      // is the one fact you cannot see. Ruling R63's SetView growth cost a whole
+      // debugging pass to exactly that.
+      $display("SMOKE: packet    records=10 command_bytes=%0d pkt_len=%0d setview=%0d",
+               ro, pkt_len_q, zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
+      // EVERY RECORD'S OWN HEADER, AGAINST THE LAWFUL SIZE FOR ITS OPCODE.
+      // This walks the bytes that will actually be fetched, not the variables
+      // that wrote them, and it exists because of a real defect: a lost edit
+      // left `sv.h_record_bytes` at zero, and the ONLY symptom anywhere in the
+      // console was `zhao_cmd_dma` returning ST_BAD_LENGTH -- which surfaces
+      // 200,000 cycles later as "GEOM.REPLAY released no meshlet", a sentence
+      // about the wrong subsystem entirely. Four lines here name the record.
+      begin : dump_records
+        int unsigned wo;
+        int unsigned rbv;
+        wo = 0;
+        while (wo < ro) begin
+          rbv = 32'({pkt_mem[o+wo+3], pkt_mem[o+wo+2]});
+          $display("SMOKE: record    off=%0d opcode=%04h record_bytes=%0d lawful=%0d",
+                   wo, {pkt_mem[o+wo+1], pkt_mem[o+wo]}, rbv,
+                   zhao_abi_pkg::zhao_opcode_record_bytes({pkt_mem[o+wo+1], pkt_mem[o+wo]}));
+          // A malformed record_bytes would otherwise spin this loop forever and
+          // the bench would hang instead of reporting -- a hung test is neither
+          // a pass nor a fail, which is the worst of the three.
+          if (rbv < 16) begin
+            $display("SMOKE: record    MALFORMED -- record_bytes < 16, walk abandoned");
+            wo = ro;
+          end else begin
+            wo = wo + rbv;
+          end
+        end
+      end
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
     upl_cfg_arena_base_i   = 64'(UPL_ARENA_C);
@@ -4003,7 +4071,18 @@ module tb_zhao_console_core_smoke
       @(posedge gpu_clk);
       guard = guard + 1;
     end
-    if (geom_rp_meshlets_o < N_GEOM_MESHLETS)
+    // THE COMMAND FRONT END, PRINTED BEFORE THE GEOMETRY VERDICT. Everything
+    // this watchdog reports is downstream of a decoded packet, so when the
+    // packet itself is refused the message describes the wrong subsystem: it
+    // says "GEOM.REPLAY released no meshlet" and sends the reader into the
+    // replay path. Ruling R63's SetView growth produced exactly that reading.
+    // These four counters separate "the front end never delivered" from "the
+    // front end delivered and geometry lost it", and they cost one line.
+    if (geom_rp_meshlets_o == 0)
+      $display("SMOKE: front-end dma_done=%b dma_status=%0d decoder_records=%0d decoder_err=%0d exec_committed=%0d exec_abandoned=%0d",
+               dma_done_o, dma_status_o, cmd_commands_o, cmd_decode_error_o,
+               cmd_exec_committed_o, cmd_exec_abandoned_o);
+    if (geom_rp_meshlets_o == 0)
       $fatal(1, "SMOKE: GEOM.REPLAY released no meshlet in %0d cycles -- replayed %0d of %0d view-triangles, handles=%0d, fetched=%0d meshlet(s), skinned=%0d, landings=%0d, descriptor refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]; THE DRAW: draws=%0d jobs=%0d masked=%0d empty=%0d hdr_reads=%0d hdr_crc_fail=%0d refused[cull/resident/stale/xform/denied/fmt/crc/resv/layout]=[%0d %0d %0d %0d %0d %0d %0d %0d %0d]; THE LOOM: nodes=%0d streams=%0d pal_writes=%0d pal_dropped=%0d loom_refused[sorted/parent/ovf/kind/shear/framing]=[%0d %0d %0d %0d %0d %0d]; THE UPLOAD: published=%0d status=%0d",
              guard, geom_rp_triangles_out_o, SGF_EXP_REPLAYED, geom_rp_groups_o,
              geom_af_meshlets_fetched_o, geom_skin_vertices_transformed_o, geom_landings_o,

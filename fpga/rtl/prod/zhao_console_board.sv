@@ -2393,20 +2393,23 @@ module zhao_console_board
   output logic [31:0]  terr_psmux_stray_v_o,
   output logic [31:0]  terr_psmux_stray_done_o,
 
-  // I42: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
-  // 9x9 ... for TERRAIN.LOD" is a STORED quantity, and the store does not
-  // exist.  These are real ports rather than dropped outputs for the reason
-  // I32 gives about layer D: a decimated height written nowhere and a
-  // decimated height written wrongly are indistinguishable from inside, and a
-  // port is the one place the difference is visible.
-  output logic         terr_mg_m17_valid_o,
-  output logic [ 8:0]  terr_mg_m17_addr_o,
-  output logic         terr_mg_m17_surf_o,
-  output logic [15:0]  terr_mg_m17_h_o,
-  output logic         terr_mg_m9_valid_o,
-  output logic [ 6:0]  terr_mg_m9_addr_o,
-  output logic         terr_mg_m9_surf_o,
-  output logic [15:0]  terr_mg_m9_h_o,
+  // THE COARSE-HEIGHT MIP PLANES ARE RETIRED, owner ruling R64, 2026-09-20.
+  // Entry I44 carried them as a boundary. They are gone, and the argument is
+  // in that entry's closure note; the short form is that ruling T8's
+  // decimation is NESTED and UNROUNDED, so `mip17[i,j] == fine33[2i,2j]` bit
+  // for bit and a coarse vertex IS a fine vertex. A plane store could
+  // therefore never produce a number the fine lattice does not already
+  // contain -- it is a DUPLICATE PROVIDER, not a source -- and the bit
+  // identity is now a committed test (`tests/terrain/
+  // terrain_mipgen_directed.cpp` case 3b) rather than prose in a contract.
+  //
+  // THE COUNTERS STAY, and that is deliberate rather than an oversight. They
+  // are the only remaining evidence at this boundary that the decimation ran
+  // at all, and without them the block's whole coarse path would be pruned
+  // silently -- which is the shape this file's own I32 entry warns about for
+  // layer D. TERRAIN.MIPGEN also stays composed: its `done_o` is
+  // TERRAIN.RESIDENCY's SECOND COMPLETION, and without it `resident_o` is
+  // structurally zero and no patch ever reaches the compose door.
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
@@ -3802,14 +3805,6 @@ module zhao_console_board
       .terr_psmux_b_jobs_o               (terr_psmux_b_jobs_o),
       .terr_psmux_stray_v_o              (terr_psmux_stray_v_o),
       .terr_psmux_stray_done_o           (terr_psmux_stray_done_o),
-      .terr_mg_m17_valid_o               (terr_mg_m17_valid_o),
-      .terr_mg_m17_addr_o                (terr_mg_m17_addr_o),
-      .terr_mg_m17_surf_o                (terr_mg_m17_surf_o),
-      .terr_mg_m17_h_o                   (terr_mg_m17_h_o),
-      .terr_mg_m9_valid_o                (terr_mg_m9_valid_o),
-      .terr_mg_m9_addr_o                 (terr_mg_m9_addr_o),
-      .terr_mg_m9_surf_o                 (terr_mg_m9_surf_o),
-      .terr_mg_m9_h_o                    (terr_mg_m9_h_o),
       .terr_mg_m17_writes_o              (terr_mg_m17_writes_o),
       .terr_mg_m9_writes_o               (terr_mg_m9_writes_o),
       .terr_mg_aborts_o                  (terr_mg_aborts_o),
