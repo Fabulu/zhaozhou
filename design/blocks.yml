@@ -3662,9 +3662,15 @@ blocks:
     latency: variable
     target_throughput: 1 warped vertex per clock
     reference_model: zref::GeomWarp
+    # Corrected 2026-09-20: both of these named files DID NOT EXIST. A ledger
+    # pointing at a test that was never written is the same defect class as the
+    # zref::GeomWarp phantom two lines above -- it reads as coverage. Only what
+    # exists is named; what is owed is named as owed.
     tests:
-      directed: tests/geometry/geom_warp_directed.cpp
-      random: tests/geometry/geom_warp_random.cpp
+      directed: tests/geometry/geom_warp_reference_directed.cpp   # REFERENCE ONLY, 95 checks
+      random: "OWED -- NOT WRITTEN"
+      rtl_directed: "OWED -- NOT WRITTEN (no zhao_geom_warp.sv exists)"
+      formal: "OWED -- NOT WRITTEN"
     counters: [geom_warp_vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
