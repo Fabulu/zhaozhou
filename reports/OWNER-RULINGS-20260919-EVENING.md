@@ -4119,3 +4119,116 @@ suite reads the working tree and a half-written file produces reds that look
 real. A semantically null atomic write is very probably harmless — **and a lane
 that reports brushing a rule, unprompted, is worth more than one that never
 appears to.**
+
+## R218 — `zhao_post_gather` IS COMPOSED. The owner's gather ruling is silicon
+
+**2026-09-21, POSTGATHER. A real close: 22 → 21 on the merged tree.**
+
+R195 ratified the law by looking; this builds it with **not one coefficient
+moved and every one a PARAMETER**, which is what R37 demanded and what keeps it
+editable afterwards. Three blocks: the tag law, R5's accumulator **unchanged**,
+and the plane at **27 M10K** against I17's estimate of 30.
+
+**The evidence is one-for-one against a number the packet did not produce:**
+
+```
+gather frags=2560 [untagged=2560 below_knee=0 lit=0 reserved=0]
+       cells_flushed=160  plane written=160 oob=0  miss[gd/gg]=[0 0]
+```
+
+2,560 fragments against the raster's own `pixels=2560`; 160 cells is exactly ten
+whole tiles; zero misses. **A count that matches an independently produced count
+is worth more than a count that matches itself.**
+
+**POSTMEAS's flush-address blocker — which R195 did NOT address — is solved and
+cheaper than the proposal.** The tile origin is
+`(fb_x − addr[3:0], fb_y − addr[7:4])`, a four-bit subtract on every beat, so
+**there is no tile-start pulse and therefore no second thing that can be one
+cycle out.** That is a design that REMOVES a failure mode rather than detecting
+it.
+
+**And it was fire-tested against the alternative:** a scratchpad copy with a
+one-deep origin pipeline **failed 4 of 22 checks and passed the other 18.** The
+sentence is the lesson — *a one-register store passes everything except the case
+that discriminates it* — and it is why a suite's green says nothing until you
+know which of its cases can tell two designs apart.
+
+### DECLARED, NOT HIDDEN: the blur is not built
+
+**R195 ratified two blur passes. Nothing performs them.** The glow reaches the
+compositor **cell-quantised**. The packet wrote that into I17, the contract and
+the ledger, and priced it: 23,040 cell-steps, ~14 M10K, and a shell post-lease
+change.
+
+**And `completion_register.py` REJECTED its first wording of that paragraph.**
+The packet's own verdict: *"a phrase that could settle an entry must be a
+declaration, not prose. It was right."* **The register refusing a form of words
+is the INCOMPLETE block working as designed** — R159 said the fix for its blind
+spot was a rule plus a reviewer, and here the tool itself held the line on how a
+deferral must be written.
+
+**I17 did not close.** Bullet (c) did; the HUD half needs an owner decision on
+**153 of 553 M10K** that nobody has been asked for.
+
+## R219 — WHY `untagged=2560` IS CORRECT, AND IT POINTS AT I20
+
+**The packet's most important finding, and it is about something other than its
+own block.**
+
+The shell composes `zhao_raster_tile_pipe_v2`, where the fragment tag comes from
+**`tri_continuation_tail_i[15:8]` — a boundary port with NO PRODUCER in this
+console (entry I20).** So every fragment is legitimately untagged, and **the glow
+cannot be exercised end to end until I20 has a producer.**
+
+The bench cannot paper over it either: it **cannot carry a lit fragment without
+breaking its own `$fatal` that the post pass is an identity.**
+
+**So a green here is honest and incomplete at the same time**, and the packet
+said so rather than letting `frags=2560` read as a working glow. It costed the
+remedy and named its shape — a `-GlowTag` smoke form — without building it.
+
+**This is the seam FORGESHADOW refused to close from four constants on
+2026-09-20**, reappearing as the thing that gates a different subsystem's
+evidence. **A boundary tie-off is not only a gap in the register; it is a hole in
+what every downstream test can prove.**
+
+### Three of its own instruments caught unflattering things
+
+1. **The full-console smoke found a LIVE defect its block bench had missed.** The
+   plane's lifetime was taken from the frame tick — and the post pass runs
+   **823,547 cycles**, so the tick fires *inside* it: **582,252 misses on a
+   complete plane.** Fixed by deleting the port.
+2. **Its positive control failed itself.** The folded-law check was scored on
+   **red**, where `tint = 255` makes the fold an identity — so it could not fail.
+   Scored on all three channels: **1,221,632 differ.** A control run on the one
+   channel where the transformation is a no-op is R173's canary in another
+   costume.
+3. **A sweep header claimed the full walk was too slow, so it sampled 4,094
+   points. The full walk takes 2.3 seconds.** A performance excuse nobody had
+   timed.
+
+### And `-Mutant` went RED FIRST, which is the good outcome
+
+31 errors, because the wrapper mutant needed the core's new ports. **The mutant's
+own 18-day-old header promised it could not go stale silently — and this is the
+first time that promise has been DEMONSTRATED rather than asserted.**
+
+R121 and the stale-copy law say a committed control drifts in the flattering
+direction. **This one drifted in the loud direction, by design.**
+
+### One judgement I am recording rather than overriding
+
+POSTGATHER did **not** write `blocks.yml` rows for its two new blocks, reasoning
+that a row needs a contract and *"inventing one to satisfy a reporting tool is
+backwards."*
+
+**That sits in apparent tension with R214**, where PAGEIO's row made the register
+rise and that rise was the point. **Both are right, and the distinction is
+whether the capability is ALREADY SPECIFIED.** `TERRAIN.PAGEIO` had a written
+contract and no row — the row made an existing, specified, absent thing visible.
+POSTGATHER's two new blocks are **implementation detail of a capability that
+already has a row**, and giving them their own would inflate the denominator
+without naming a missing function.
+
+**Declaring a gap is honest; manufacturing a ledger entry to have something to
+declare is not.**
