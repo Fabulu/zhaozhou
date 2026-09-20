@@ -966,15 +966,28 @@
 //       `vtx_vj_o` by its own chosen law ("the block OWNS the sweep"), while
 //       TERRAIN.PAGESTREAM walks the lattice on its own schedule. Joining two
 //       address masters is a scheduler, and a composer may not write one.
-//     * AND ITS OUTPUT HAS NOWHERE TO GO, which the first sweep did not state
-//       and which is the same shape as entry I44. `vv_*` is the
-//       `spec/terrain_rules.md` 4.2 velocity lattice -- "height16-scaled,
-//       2 B/vertex, 545 KiB" per frame -- and the block's own header says "no
-//       VRAM port and no lattice-sized buffer ... the 2 B/vertex store belongs
-//       to whoever owns the VRAM page". Nothing owns it. Composing the block
-//       would produce a lattice with no reader, exactly as I44's decimated
-//       planes do, and its `moving_mask_o` is already documented as "PRODUCED,
-//       NEVER CONSUMED".
+//     * AND ITS OUTPUT HAS NO WRITER, which is NOT the same statement as the
+//       one that stood here and the difference is worth the correction.
+//
+//       WHAT THIS BULLET USED TO SAY, until 2026-09-20: "AND ITS OUTPUT HAS
+//       NOWHERE TO GO ... Nothing owns it." THAT IS FALSE AND THE SPEC SAYS
+//       SO. `spec/memory_rules.md` section 5b ratifies the destination by
+//       name: `| 0x056F_0000 .. 0x0577_FFFF | TERRAIN.COMPOSED_VELOCITY |
+//       256 x 2,304 B |`. The lattice has a ratified home, an address and a
+//       size. Calling it unowned was the third refusal in this file found
+//       asserting an absence that a two-minute grep of `spec/` refutes, and
+//       "nothing owns it" is the sentence that would have sent the next
+//       person to invent a region that already exists.
+//
+//       WHAT IS ACTUALLY MISSING is the WRITE PATH between the two: `vv_*` is
+//       the `spec/terrain_rules.md` 4.2 velocity lattice ("height16-scaled,
+//       2 B/vertex, 545 KiB" per frame), the block's own header says it has
+//       "no VRAM port and no lattice-sized buffer ... the 2 B/vertex store
+//       belongs to whoever owns the VRAM page", and no client in this module
+//       writes that region. A destination without a writer is a smaller gap
+//       than a destination that does not exist, and it is a different job.
+//       `moving_mask_o` remains honestly "PRODUCED, NEVER CONSUMED" -- the
+//       block's own chosen law V5 -- and that half is unchanged.
 //
 //   ONE THING THAT IS NOT A BLOCKER, named so it is not re-derived:
 //   `lane_covers_i` DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`,
@@ -1663,8 +1676,37 @@
 //      Not one field of the first is a field of the second. Wiring them by
 //      name-matching would have produced a LOD decision made from a height.
 //
-//      SO THE REAL BLOCKER IS THE DEVIATIONS, and this entry now names it
-//      instead of naming the wrong block. `sp_dev1/2/3` are the differences
+//      THE DEVIATION HALF OF THIS ENTRY IS SPENT, 2026-09-20 (terrain6). What
+//      follows was written when neither the quantity nor a store for it
+//      existed. BOTH EXIST NOW AND THE PRODUCER IS COMPOSED IN THIS FILE:
+//
+//        * the LAW was chosen by owner rulings R8/R22 (the MESH reading) and
+//          is `zref::terrain::lod_deviation` with `zhao_terrain_loddev` as its
+//          RTL, differentially tested in both readings;
+//        * WHEN was chosen by ruling R24: at page load, and
+//          `u_terrain_lodfeed` is composed below doing exactly that -- it
+//          observes TERRAIN.MIPFEED's fine stream and emits the sixteen
+//          records. So `sp_dev1/2/3` now has a LIVE producer in this module;
+//        * the STORE exists: `zhao_terrain_devstore`, built and tested by
+//          `terrain_lodpath_directed`, priced by ruling R59 at ~77 M10K.
+//
+//      SO WHAT IS LEFT OF THE DEVIATIONS IS A COST, NOT AN ABSENCE. Composing
+//      the store today spends ~77 M10K of 553 on records whose only reader is
+//      TERRAIN.LOD, which the rest of this entry still refuses -- the
+//      "BUILT, INSTALLED NOWHERE" shape. `u_terrain_lodfeed`'s `tlf_w_ready`
+//      is a named wire for that reason: the store joins as an AND and nothing
+//      else moves. THE EYE IS ALSO NO LONGER MISSING -- ruling R63 landed
+//      `fx16 eye[3]` on `SetView 0x0010` and `zhao_view_eye` is built and
+//      tested. What has NOT moved is everything below this paragraph: the
+//      job port's three material fields, the view-mask reconciliation, the
+//      neighbour edge levels and the compose-cache retirement. Read on.
+//
+//      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
+//      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
+//      different things wearing one ledger name -- is still true and is the
+//      reason nobody should wire them together.
+//
+//      `sp_dev1/2/3` are the differences
 //      between the fine lattice and its coarse mips -- the "17x17 + 9x9 ...
 //      for TERRAIN.LOD" of `spec/terrain_rules.md` 2. TERRAIN.MIPGEN computes
 //      those mips and is composed as of 2026-09-19, and THE STORE THAT WOULD
@@ -1915,18 +1957,64 @@
 //      SO FIRST. `zhao_surface_stamp`'s result stream is PER TEXEL of a 64x64
 //      layer-F sheet -- `res_texel_o[11:0]`, `res_tag_o`, `res_strength_o`,
 //      `res_before_o`, `res_src_id_o`, which is what `surf_res_*` carries out
-//      of this module. `zhao_terrain_bake`'s `cmd_*` is ONE RECORD PER PATCH
+//      of this module. `zhao_terrain_bake_v2`'s `cmd_*` is ONE RECORD PER PATCH
 //      BAKE: {patch_id, cx, cz, radius, depth_from, depth_to, env_x0/z0/x1/z1,
 //      dual, cells, src_id}. Every field differs but `src_id`. The block wrote
 //      the conflict down when it was built (`zhao_terrain_bake.sv` 29-48): "the
 //      ledger says `inputs: [stamp_results]` ... This contract's own packet
 //      table says something DIFFERENT ... Those are two different wires wearing
-//      one name", and it refuses to bridge them for a stated reason -- closing
-//      that seam needs TWO LAWS THAT DO NOT EXIST ANYWHERE IN THIS TREE: a
-//      strength(u8) -> depth(fx16) mapping and a 64x64 -> 33x33 resample.
-//      "Inventing them here would put a fabrication under every permanent
-//      wound in the game." That is a better refusal than the one it replaces
-//      because it names what would have to be RATIFIED, not what is not wired.
+//      one name."
+//
+//      AND ITS STATED BLOCKER EXPIRED ON 2026-09-19, ONE DAY AFTER IT WAS
+//      WRITTEN. Corrected 2026-09-20 by the terrain6 packet, because this is
+//      the third refusal in this file found still quoting a cause that had
+//      lapsed. The sentence was: closing the seam "needs TWO LAWS THAT DO NOT
+//      EXIST ANYWHERE IN THIS TREE: a strength(u8) -> depth(fx16) mapping and
+//      a 64x64 -> 33x33 resample." BOTH EXIST NOW, ratified by owner rulings
+//      R15/R56/R65 and landed at commit `d1568a61`:
+//        * `spec/terrain_rules.md` section 9.3(a) and
+//          `zref::terrain::kStampDepthTable` -- sixteen EDITABLE fx16 metres
+//          indexed by `strength >> 4`, one round-half-up on the delta,
+//          endpoints exact, last segment held;
+//        * section 9.3(b) and `zref::terrain::sheet_texel_for_vertex` -- the
+//          resample, NEAREST-TEXEL with the seam error measured and declared,
+//          because the format must stay frozen (three elaboration guards
+//          reject the vertex-aligned 65x65; R65 revised R56's price from
+//          +1.2% to +38.3%);
+//        * `tests/terrain/stamp_to_bake_laws_directed.cpp`, 306 checks.
+//
+//      SO THE REAL BLOCKER IS SMALLER, HARDER AND IS AN OWNER DECISION.
+//      SEARCHED: `fpga/rtl` for `stamp_depth|kStampDepthTable|
+//      sheet_texel_for_vertex|depth_table` (case-insensitive, all of
+//      `fpga/rtl` including `synth/`) -- ZERO HITS. The laws exist in the
+//      REFERENCE and in the SPEC and in NO RTL. And when they are built, they
+//      do not fit this block's port:
+//
+//        R15 describes a PER-VERTEX depth read out of layer F -- pick the
+//        vertex's texel, look its strength up in the art table, get a depth.
+//        `zhao_terrain_bake_v2`'s dig is a PARAMETRIC DISC: `cmd_radius_i`
+//        (fx16, "<= 0 writes nothing"), `cmd_depth_from_i`/`cmd_depth_to_i`,
+//        with a radial falloff whose oracle is `zref::terrain::bake_dig`.
+//        THOSE ARE TWO DIFFERENT DIG LAWS producing two different scars, and
+//        no adapter can turn a texel stream into {cx, cz, radius, depth_from,
+//        depth_to} without fitting a disc to a field -- an invention exactly
+//        of the kind the original refusal was right to refuse.
+//
+//      The owner decision is therefore WHICH LAW DIGS: bake keeps its disc and
+//      layer F drives something else, or bake gains a second, per-vertex depth
+//      input and the disc becomes one way of filling it. Written up with a
+//      recommendation in FINDINGS-terrain6.md. R15 ratified the CONVERSION and
+//      left the CONSUMER's shape untouched, which is why reading R15 as "the
+//      blocker is gone" would put a fabrication under every permanent wound in
+//      the game after all -- just one ruling later.
+//
+//      A THIRD ABSENCE, AND IT IS ARBITRATION: `zhao_surface_sheet` IS COMPOSED
+//      in this module (search for `u_surface_sheet`) and holds layer F, so the
+//      sheet is NOT missing -- that would have been a false-absence claim. But
+//      its request port is annotated at the instance "REAL: SURFACE.STAMP is
+//      the only requester", one `req_*` channel with no arbitration. Whatever
+//      reads layer F for the dig is its SECOND requester, and choosing between
+//      them is a scheduler, which a composer may not write.
 //
 //      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
 //      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
