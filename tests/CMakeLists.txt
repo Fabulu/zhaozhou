@@ -15080,6 +15080,149 @@ verilate(test_field_host_directed
 add_test(NAME field_host_directed COMMAND test_field_host_directed)
 set_tests_properties(field_host_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 # --------------------------------------------------------------------------
+# THE ASSOCIATION-AWARE FIELD HOST (packet H1) -- zhao_field_host_v2.
+#
+# `zhao_field_host` above is RETAINED as the named oracle (FH02) and keeps its
+# own driver. It appears in THIS file and never in a production source list:
+# `completion_register.py`'s `superseded_in_closure()` reports every
+# INSTANTIATED module for which a higher-versioned sibling exists on disk, so
+# composing the unversioned host beside `zhao_field_host_v2` would breach the
+# "only the latest version composes" ruling. Two drivers, two hosts, one
+# production closure.
+#
+# Every case is about the OUTPUT CONTRACT -- which canonical output ordinals a
+# point owes, whether it produced them, and whether a caller can tell a value
+# from a hole. The arithmetic stays with the fabric's own differential.
+set(ZHAO_FIELD_HOST_V2_SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_host_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+
+add_executable(test_field_host_v2_directed field/field_host_v2_directed.cpp)
+target_link_libraries(test_field_host_v2_directed PRIVATE zhao_harness)
+verilate(test_field_host_v2_directed
+  PREFIX Vzhao_field_host_v2
+  TOP_MODULE zhao_field_host_v2
+  SOURCES ${ZHAO_FIELD_HOST_V2_SOURCES})
+add_test(NAME field_host_v2_directed COMMAND test_field_host_v2_directed)
+set_tests_properties(field_host_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# --------------------------------------------------------------------------
+# R126's GUARD, SEEN TO FIRE. Owner ruling R126 assigns this to H1 and names
+# both traps: Quartus 17.0 rejects a bare module-scope `if`, so the guard lives
+# in `initial begin ... end`; and **`--lint-only` does not run `initial`
+# blocks**, so a clean Verilator lint is "no evidence whatever" about it.
+#
+# This target is the evidence. It is the SAME host, elaborated with
+# OUT_LANES=5 while the generated schema fixes ZFH_WINDOW_MASK_BITS=7 -- the
+# exact disagreement R126 describes, which is invisible at runtime because a
+# mask of the wrong width still packs, still transmits and still compares.
+#
+# THE DRIVER'S POLARITY IS INVERTED: it PASSES when elaboration FATALs. It is
+# evidence about the instrument, not about the design, which is why it is a
+# separate target with its own build directory tag rather than a case inside
+# the directed test.
+add_executable(test_field_host_v2_r126 field/field_host_v2_r126_guard.cpp)
+target_link_libraries(test_field_host_v2_r126 PRIVATE zhao_harness)
+verilate(test_field_host_v2_r126
+  PREFIX Vzhao_field_host_v2_r126
+  TOP_MODULE zhao_field_host_v2
+  VERILATOR_ARGS -GOUT_LANES=5
+  SOURCES ${ZHAO_FIELD_HOST_V2_SOURCES})
+#
+# The ctest runs the INVERTING DRIVER, not the binary. The driver requires the
+# fatal text to name BOTH quantities, because "the process exited non-zero" is
+# satisfied by a segfault or a kill from another lane sharing this machine, and
+# a control that accepts any death would go on passing after somebody deleted
+# the guard.
+add_test(NAME field_host_v2_r126_guard
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/field/run_r126_guard.ps1
+          -Exe $<TARGET_FILE:test_field_host_v2_r126>)
+set_tests_properties(field_host_v2_r126_guard PROPERTIES LABELS "fast;mutant" TIMEOUT 300)
+
+# --------------------------------------------------------------------------
+# R101's DEFECT, RE-PLANTED AGAINST THE NEW HOST. A COMMITTED POSITIVE CONTROL.
+#
+# `tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv` is a COPY of the
+# production host, renamed so no source list can elaborate it by mistake, with
+# exactly one substantive line changed: the completion rule's `== req_mask_c`
+# (ALL) becomes `!= '0` (ANY). That is R101 verbatim.
+#
+# The driver's polarity is INVERTED -- it passes when the mutant ACCEPTS an
+# incomplete result. Its NEGATIVE CONTROL is the identical stimulus in
+# field_host_v2_directed case 1d polarity B, where production answers 0xF3.
+# Neither run is evidence alone.
+#
+# NOTE THE SOURCE LIST: the production host is ABSENT and the mutant stands in
+# its place. A build that carried both would elaborate whichever the top-module
+# name selected and the other would sit there looking like coverage.
+add_executable(test_field_host_v2_any_not_all_mutant
+               field/field_host_v2_any_not_all_mutant.cpp)
+target_link_libraries(test_field_host_v2_any_not_all_mutant PRIVATE zhao_harness)
+verilate(test_field_host_v2_any_not_all_mutant
+  PREFIX Vzhao_field_host_v2_any_not_all_mutant
+  TOP_MODULE zhao_field_host_v2_any_not_all_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME field_host_v2_any_not_all_mutant
+         COMMAND test_field_host_v2_any_not_all_mutant)
+set_tests_properties(field_host_v2_any_not_all_mutant
+  PROPERTIES LABELS "fast;mutant" TIMEOUT 900)
+# --------------------------------------------------------------------------
 # THE ZFH2 HOST-IMAGE ENVELOPE (packet S1). spec/form/field-host-image.md.
 #
 # Three lanes, because the schema owes three different kinds of evidence and

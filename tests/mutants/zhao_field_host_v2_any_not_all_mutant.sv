@@ -1,3 +1,45 @@
+// zhao_field_host_v2_any_not_all_mutant.sv -- A COMMITTED POSITIVE CONTROL.
+// THIS IS NOT PRODUCTION RTL. It is a COPY of
+// fpga/rtl/field/zhao_field_host_v2.sv with the module RENAMED so that no
+// source list can elaborate it by mistake, and with EXACTLY ONE SUBSTANTIVE
+// LINE CHANGED.
+//
+// WHAT WAS CHANGED, AND WHY THIS PARTICULAR LINE
+// -----------------------------------------------
+//   production:  wire complete_c = ((seen_next_c & req_mask_c) == req_mask_c);
+//   here:        wire complete_c = ((seen_next_c & req_mask_c) != '0);
+//
+// ALL becomes ANY. That is owner ruling R101's defect, verbatim, re-planted
+// against the new host: "`cur_out_seen == '0'` tests whether ANY output was
+// written, not whether ALL REQUIRED ones were. A point that writes 5 of 6
+// declared lanes reports SUCCESS, with the sixth reading the zero that was
+// cleared at grant."
+//
+// R101 is the most consequential find of its run, and the reason it survived is
+// worth keeping in front of whoever reads this file: THE AUTHOR'S COMMENT
+// STATED THE EXACT HAZARD AND THEN GUARDED ONLY THE ALL-ZERO CASE, and a
+// committed test asserting "status is OK" for a program writing 1 of 4 passed,
+// green, for as long as the defect existed.
+//
+// THE DRIVER'S POLARITY IS INVERTED: tests/field/field_host_v2_any_not_all_mutant.cpp
+// PASSES WHEN THIS MUTANT ACCEPTS AN INCOMPLETE RESULT. It is evidence about
+// the INSTRUMENT -- that the directed test discriminates on the completion rule
+// and not on something incidental -- and it is not evidence about the design.
+//
+// ITS NEGATIVE CONTROL is the identical stimulus in
+// tests/field/field_host_v2_directed.cpp case 1d polarity B, where production
+// answers ST_PARTIAL (0xF3) and moves `out_incomplete_o`. Neither run is
+// evidence without the other: the mutant alone would show only that SOMETHING
+// changed, and production alone would show only that it passes today.
+//
+// REGENERATE IT if zhao_field_host_v2.sv changes shape. This is a COPY, and a
+// copy of an old version is a positive control for a block that no longer
+// exists -- thirteen combiner copies and eight AUX-pipe copies in this tree
+// went stale exactly that way and kept passing. `tools/budget/mutant_copy_drift.py`
+// detects it by PROVENANCE: if production has been committed since this file
+// was, this file cannot contain what production gained. To refresh, THREE-WAY
+// MERGE against the revision this was cut from; do not transplant.
+
 // zhao_field_host_v2.sv — THE ASSOCIATION-AWARE FIELD HOST.
 //
 // Contract: design/contracts/FIELD.SEQ.CORE.md
@@ -218,7 +260,7 @@
 
 `default_nettype none
 
-module zhao_field_host_v2
+module zhao_field_host_v2_any_not_all_mutant
   import zhao_field_host_image_pkg::*;
 #(
     // ---- IDENTITY AND CAPACITY ---------------------------------------------
@@ -499,18 +541,18 @@ module zhao_field_host_v2
     // `.OUT_LANES(7)` for `u_field_host` is at 15910. The claim is true; the
     // line number is not.)
     if (OUT_LANES != ZFH_WINDOW_MASK_BITS) begin
-      $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d but the generated schema fixes ZFH_WINDOW_MASK_BITS=%0d. The window mask would pack, transmit and compare at the wrong width, silently. Regenerate the schema or compose the matching width; do not widen one side.", OUT_LANES, ZFH_WINDOW_MASK_BITS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_LANES=%0d but the generated schema fixes ZFH_WINDOW_MASK_BITS=%0d. The window mask would pack, transmit and compare at the wrong width, silently. Regenerate the schema or compose the matching width; do not widen one side.", OUT_LANES, ZFH_WINDOW_MASK_BITS);
     end
     // The ordinal mask is carried in a u8 by the schema and is meaningful only
     // to the profile's output count. A host with more ordinals than the
     // schema's carrier is a host whose top ordinals cannot be declared.
     if (OUT_ORDINALS > ZFH_MAX_CANONICAL_OUTPUTS) begin
-      $fatal(1, "zhao_field_host_v2: OUT_ORDINALS=%0d exceeds the schema's ZFH_MAX_CANONICAL_OUTPUTS=%0d", OUT_ORDINALS, ZFH_MAX_CANONICAL_OUTPUTS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_ORDINALS=%0d exceeds the schema's ZFH_MAX_CANONICAL_OUTPUTS=%0d", OUT_ORDINALS, ZFH_MAX_CANONICAL_OUTPUTS);
     end
     if (OUT_ORDINALS > ZFH_REQUIRED_MASK_BITS) begin
-      $fatal(1, "zhao_field_host_v2: OUT_ORDINALS=%0d exceeds ZFH_REQUIRED_MASK_BITS=%0d, so the top ordinals could never be declared", OUT_ORDINALS, ZFH_REQUIRED_MASK_BITS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_ORDINALS=%0d exceeds ZFH_REQUIRED_MASK_BITS=%0d, so the top ordinals could never be declared", OUT_ORDINALS, ZFH_REQUIRED_MASK_BITS);
     end
-    if (OUT_ORDINALS < 1) $fatal(1, "zhao_field_host_v2: OUT_ORDINALS must be at least 1");
+    if (OUT_ORDINALS < 1) $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_ORDINALS must be at least 1");
 
     // The v2 header word's field plan. The window mask keeps R101's home at
     // [32 +: OUT_LANES]; the ordinal mask, output count, execution form and
@@ -518,44 +560,44 @@ module zhao_field_host_v2
     // bit 47 or the two would overlap -- and an overlap here is the exact
     // ordinal/window confusion this file exists to prevent, expressed in bits.
     if (OUT_LANES > 16) begin
-      $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d; the v2 header word puts the WINDOW mask at [32 +: OUT_LANES] and the ORDINAL mask at [48 +: 8], so 16 is the ceiling before they overlap", OUT_LANES);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_LANES=%0d; the v2 header word puts the WINDOW mask at [32 +: OUT_LANES] and the ORDINAL mask at [48 +: 8], so 16 is the ceiling before they overlap", OUT_LANES);
     end
 
-    if (IN_LANES > REGS)   $fatal(1, "zhao_field_host_v2: IN_LANES=%0d exceeds REGS=%0d", IN_LANES, REGS);
-    if (OUT_LANES > REGS)  $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
-    if (CLIENTS < 1)       $fatal(1, "zhao_field_host_v2: CLIENTS must be at least 1");
-    if (CREDITS < 1)       $fatal(1, "zhao_field_host_v2: CREDITS must be at least 1");
-    if (PREP_SCALARS < 1)  $fatal(1, "zhao_field_host_v2: PREP_SCALARS must be at least 1");
-    if (FAB_LANES < 1)     $fatal(1, "zhao_field_host_v2: FAB_LANES must be at least 1");
+    if (IN_LANES > REGS)   $fatal(1, "zhao_field_host_v2_any_not_all_mutant: IN_LANES=%0d exceeds REGS=%0d", IN_LANES, REGS);
+    if (OUT_LANES > REGS)  $fatal(1, "zhao_field_host_v2_any_not_all_mutant: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
+    if (CLIENTS < 1)       $fatal(1, "zhao_field_host_v2_any_not_all_mutant: CLIENTS must be at least 1");
+    if (CREDITS < 1)       $fatal(1, "zhao_field_host_v2_any_not_all_mutant: CREDITS must be at least 1");
+    if (PREP_SCALARS < 1)  $fatal(1, "zhao_field_host_v2_any_not_all_mutant: PREP_SCALARS must be at least 1");
+    if (FAB_LANES < 1)     $fatal(1, "zhao_field_host_v2_any_not_all_mutant: FAB_LANES must be at least 1");
     if (FAB_OUTSTANDING < 1 || FAB_LONGQ < 1 || FAB_GATHERS < 1 ||
         FAB_DIST_BANKS < 1 || FAB_RING_UNITS < 1 || FAB_RING_DESC < 1) begin
-      $fatal(1, "zhao_field_host_v2: every fabric knob must be at least 1");
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: every fabric knob must be at least 1");
     end
     // The 64-bit uop word packs four SIX-bit register fields edge to edge, so
     // REGS > 64 makes each [N +: REGW] slice overlap the next and `dst` eats
     // `a`'s bit 0 -- silent, and it produces a program that runs and computes
     // the wrong thing.
     if (REGW > 6) begin
-      $fatal(1, "zhao_field_host_v2: REGS=%0d needs REGW=%0d, but the 64-bit uop word packs four 6-bit register fields", REGS, REGW);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: REGS=%0d needs REGW=%0d, but the 64-bit uop word packs four 6-bit register fields", REGS, REGW);
     end
     if (SLOTW != ((PROGS > 1) ? $clog2(PROGS) : 1))
-      $fatal(1, "zhao_field_host_v2: SLOTW=%0d disagrees with clog2(PROGS=%0d)", SLOTW, PROGS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: SLOTW=%0d disagrees with clog2(PROGS=%0d)", SLOTW, PROGS);
     if (PCW != ((INSTR_N > 1) ? $clog2(INSTR_N) : 1))
-      $fatal(1, "zhao_field_host_v2: PCW=%0d disagrees with clog2(INSTR_N=%0d)", PCW, INSTR_N);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: PCW=%0d disagrees with clog2(INSTR_N=%0d)", PCW, INSTR_N);
     if (REGW != ((REGS > 1) ? $clog2(REGS) : 1))
-      $fatal(1, "zhao_field_host_v2: REGW=%0d disagrees with clog2(REGS=%0d)", REGW, REGS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: REGW=%0d disagrees with clog2(REGS=%0d)", REGW, REGS);
     if (TSELW != ((TABLES > 1) ? $clog2(TABLES) : 1))
-      $fatal(1, "zhao_field_host_v2: TSELW=%0d disagrees with clog2(TABLES=%0d)", TSELW, TABLES);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: TSELW=%0d disagrees with clog2(TABLES=%0d)", TSELW, TABLES);
     if (TIDXW != ((TBL_N > 1) ? $clog2(TBL_N) : 1))
-      $fatal(1, "zhao_field_host_v2: TIDXW=%0d disagrees with clog2(TBL_N=%0d)", TIDXW, TBL_N);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: TIDXW=%0d disagrees with clog2(TBL_N=%0d)", TIDXW, TBL_N);
     if (LDADDRW != ((PCW > (TSELW + TIDXW)) ? PCW : (TSELW + TIDXW)))
-      $fatal(1, "zhao_field_host_v2: LDADDRW=%0d disagrees with max(PCW, TSELW+TIDXW)", LDADDRW);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: LDADDRW=%0d disagrees with max(PCW, TSELW+TIDXW)", LDADDRW);
     if (ORDW != ((OUT_ORDINALS > 1) ? $clog2(OUT_ORDINALS) : 1))
-      $fatal(1, "zhao_field_host_v2: ORDW=%0d disagrees with clog2(OUT_ORDINALS=%0d)", ORDW, OUT_ORDINALS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: ORDW=%0d disagrees with clog2(OUT_ORDINALS=%0d)", ORDW, OUT_ORDINALS);
     if (PREPW != ((PREP_SCALARS > 1) ? $clog2(PREP_SCALARS) : 1))
-      $fatal(1, "zhao_field_host_v2: PREPW=%0d disagrees with clog2(PREP_SCALARS=%0d)", PREPW, PREP_SCALARS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: PREPW=%0d disagrees with clog2(PREP_SCALARS=%0d)", PREPW, PREP_SCALARS);
     if (CRDW != ((CREDITS > 1) ? $clog2(CREDITS) : 1))
-      $fatal(1, "zhao_field_host_v2: CRDW=%0d disagrees with clog2(CREDITS=%0d)", CRDW, CREDITS);
+      $fatal(1, "zhao_field_host_v2_any_not_all_mutant: CRDW=%0d disagrees with clog2(CREDITS=%0d)", CRDW, CREDITS);
   end
 
   // ==========================================================================
@@ -923,7 +965,8 @@ module zhao_field_host_v2
   // that is FT024 and it is a one-line difference with a two-case consequence.
   wire [OUT_ORDINALS-1:0] seen_next_c = cur_seen | (capture_c ? wr_hits_c : '0);
   wire [OUT_ORDINALS-1:0] req_mask_c  = hdr_reqmask[cur_slot];
-  wire complete_c   = ((seen_next_c & req_mask_c) == req_mask_c);
+  // THE MUTATION. Production is `== req_mask_c` (ALL). This is `!= 0` (ANY).
+  wire complete_c   = ((seen_next_c & req_mask_c) != '0);
   wire nothing_c    = (seen_next_c == '0);
 
   wire alarm_c = fab_unsupported || fab_exec_desync || fab_bank_desync ||
@@ -1658,6 +1701,6 @@ module zhao_field_host_v2
     end
   end
 
-endmodule : zhao_field_host_v2
+endmodule : zhao_field_host_v2_any_not_all_mutant
 
 `default_nettype wire
