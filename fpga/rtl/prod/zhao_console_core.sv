@@ -2929,6 +2929,15 @@ module zhao_console_core
   output logic [31:0]             part_hps_wr_bursts_o,
   output logic [31:0]             part_hps_records_read_o,
   output logic [31:0]             part_hps_records_written_o,
+  // R54, 2026-09-19 evening: the bridge refusal `zhao_part_hps` used to be
+  // blind to. `bridge_errs` is expected to read ZERO here -- the arbiter
+  // pulses the bridge only from A_IDLE and every burst is aligned -- and that
+  // expectation is now an EXPECTATION with an instrument behind it rather than
+  // an argument standing in place of one. It is fired by stimulus in
+  // tests/particles/part_hps_directed.cpp CASE H/I.
+  output logic [31:0]             part_hps_bridge_errs_o,
+  output logic [31:0]             part_hps_ticks_faulted_o,
+  output logic [31:0]             part_hps_records_discarded_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -3732,6 +3741,14 @@ module zhao_console_core
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
+  // pending slot is already occupied is DROPPED, and used to be dropped in
+  // silence. These two are that reading -- a count of distinct dropped
+  // offerings and a sticky mask naming the client. Expected zero here, and
+  // the arbiter's header argues structurally why; the argument is no longer
+  // the only thing standing where the instrument should be.
+  output logic [31:0]             terr_hps_pend_dropped_o,
+  output logic [3:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -5289,7 +5306,7 @@ module zhao_console_core
   logic [63:0]         ptb_hps_wdata;
   logic                ptb_hps_wvalid, ptb_hps_wlast;
 
-  logic                   ph_tick_start, ph_rd_empty;
+  logic                   ph_tick_start, ph_rd_empty, ph_tick_abort;
   logic                   ph_rd_valid, ph_rd_ready, ph_rd_last;
   logic [PART_REC_W-1:0]  ph_rd_record;
   logic                   ph_wr_valid, ph_wr_ready;
@@ -5314,6 +5331,7 @@ module zhao_console_core
     .tick_i           (core_tick_c),
     .ps_tick_start_o  (ph_tick_start),
     .ps_rd_empty_o    (ph_rd_empty),
+    .ps_tick_abort_o  (ph_tick_abort),
     .ps_tick_done_i   (part_tick_done_o),
     .rd_valid_o       (ph_rd_valid),
     .rd_ready_i       (ph_rd_ready),
@@ -5340,7 +5358,10 @@ module zhao_console_core
     .rd_bursts_o      (part_hps_rd_bursts_o),
     .wr_bursts_o      (part_hps_wr_bursts_o),
     .records_read_o   (part_hps_records_read_o),
-    .records_written_o(part_hps_records_written_o)
+    .records_written_o(part_hps_records_written_o),
+    .bridge_errs_o       (part_hps_bridge_errs_o),
+    .ticks_faulted_o     (part_hps_ticks_faulted_o),
+    .records_discarded_o (part_hps_records_discarded_o)
   );
 
   zhao_part_state #(
@@ -5367,6 +5388,9 @@ module zhao_console_core
     .rd_record_i  (ph_rd_record),
     .rd_last_i    (ph_rd_last),
     .rd_empty_i   (ph_rd_empty),
+    // REAL (R54): the store could not finish reading the generation out of
+    // DDR, so the survivor pass ends here instead of waiting forever.
+    .tick_abort_i (ph_tick_abort),
 
     // REAL: straight into PART.UPDATE.
     .prt_valid_o  (ps_prt_valid),
@@ -9132,7 +9156,14 @@ module zhao_console_core
     .b_wr_last_o  (terr_hps_wr_last),
     .b_rsp_i      (terr_hps_rsp),
     .bursts_o     (thps_bursts),
-    .wait_cycles_o(thps_wait)
+    .wait_cycles_o(thps_wait),
+    // R55: the pending slot holds ONE request per client, and a second,
+    // different one offered while it is occupied is dropped. No client here
+    // can do it -- each is a holder whose request fields do not move inside
+    // its request state (the arbiter's rule 6c names all four) -- so this
+    // reads zero, and now it reads zero rather than being argued to.
+    .pend_dropped_o     (terr_hps_pend_dropped_o),
+    .pend_dropped_mask_o(terr_hps_pend_dropped_mask_o)
   );
 
   // ---- TERRAIN.CMD -> TERRAIN.SEQ -----------------------------------------

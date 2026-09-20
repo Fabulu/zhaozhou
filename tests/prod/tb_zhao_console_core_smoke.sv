@@ -163,6 +163,16 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_wr_bursts_o;
   logic [31:0]             part_hps_records_read_o;
   logic [31:0]             part_hps_records_written_o;
+  // R54 / R55: the two silences this composition is now able to read. The
+  // store's bridge refusal and the arbiter's dropped pending request are both
+  // argued to be unreachable HERE -- and both are asserted zero below, which
+  // is a check on the argument rather than a restatement of it. Each is fired
+  // on purpose in its own directed test.
+  logic [31:0]             part_hps_bridge_errs_o;
+  logic [31:0]             part_hps_ticks_faulted_o;
+  logic [31:0]             part_hps_records_discarded_o;
+  logic [31:0]             terr_hps_pend_dropped_o;
+  logic [3:0]              terr_hps_pend_dropped_mask_o;
   logic [31:0]             terr_hps_c3_bursts_o;
   logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
@@ -4075,6 +4085,22 @@ module tb_zhao_console_core_smoke
              terr_hps_c3_bursts_o, part_hps_rd_bursts_o + part_hps_wr_bursts_o);
     if ((part_hps_ticks_o >= 2) && (part_hps_records_read_o <= N_PART_RECORDS))
       $fatal(1, "SMOKE: %0d store ticks but no generation was read back out of DDR", part_hps_ticks_o);
+    // R54 / R55. These two zeros are CLAIMS about this composition -- that the
+    // bridge never refuses the store (every burst aligned, the arbiter pulses
+    // only from idle) and that no client offers a second different request
+    // while one is pending (all four are holders). Both are instruments that
+    // have been seen to fire elsewhere, so their zero here means something.
+    $display("SMOKE: particle store faults: bridge_errs=%0d ticks_faulted=%0d discarded=%0d ; arbiter pend_dropped=%0d mask=%b",
+             part_hps_bridge_errs_o, part_hps_ticks_faulted_o,
+             part_hps_records_discarded_o, terr_hps_pend_dropped_o,
+             terr_hps_pend_dropped_mask_o);
+    if ((part_hps_bridge_errs_o != 0) || (part_hps_ticks_faulted_o != 0) ||
+        (part_hps_records_discarded_o != 0))
+      $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
+             part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 4'd0))
+      $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
+             terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is
     // downstream of a meshlet arriving. Firing the `-BadDescriptor` control
     // with these checks placed AFTER the ones below stopped the run at

@@ -73,6 +73,8 @@
 // chl_ready_o, the S_APPEND exit term and two assertions).
 // Carried forward 2026-09-19 (gz/pfs): production gained `rd_empty_i` and its
 // one assignment in S_IDLE; both are applied here verbatim, the mutation untouched.
+// Carried forward 2026-09-19 evening (gz/pfs2, ruling R54): production gained
+// `tick_abort_i` and its one pre-case assignment; both applied here verbatim.
 //
 // Everything below this line is zhao_part_state.sv verbatim except for the
 // module name, the `endmodule` label, and the block marked MUTATION.
@@ -294,6 +296,9 @@ module zhao_part_state_child_order_mutant #(
     // THE PREVIOUS GENERATION IS EMPTY -- carried forward from production
     // (2026-09-19, gz/pfs, entry I1); see zhao_part_state.sv for the argument.
     input  wire                  rd_empty_i,
+    // THE SOURCE CANNOT DELIVER THE REST OF THIS GENERATION (R54, gz/pfs2);
+    // see zhao_part_state.sv for the argument.
+    input  wire                  tick_abort_i,
 
     // ---- offered to PART.UPDATE ----------------------------------------------
     output wire                  prt_valid_o,
@@ -514,6 +519,9 @@ module zhao_part_state_child_order_mutant #(
       end
 
       if (wr_fire_c) wr_v_q <= 1'b0;
+
+      // THE ABORT, BEFORE THE CASE ON PURPOSE (R54); see zhao_part_state.sv.
+      if (tick_abort_i) rd_done_q <= 1'b1;
 
       case (st_q)
         S_IDLE: begin

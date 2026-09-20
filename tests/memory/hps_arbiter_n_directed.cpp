@@ -594,6 +594,63 @@ int main() {
     check(dut.hps_err_count_o == 0, "9.no violation", 0, dut.hps_err_count_o);
   }
 
+  // ---- 10. RULE 6c / R55: a SECOND, DIFFERENT request into an occupied
+  // pending slot is dropped, and the drop is no longer silent.
+  //
+  // The slot holds ONE request. Rule 6b promises that an offered request WILL
+  // be served, and that promise does not extend to a second one offered while
+  // the first is still waiting -- a pulser would simply lose it, and the
+  // symptom would appear in the CLIENT as a wait with no end. No client in the
+  // console can do it (the arbiter's header names all six holders and the one
+  // pulser, and says structurally why), so the counter is expected to read
+  // zero -- which is exactly the reading that has to be fired on purpose
+  // before its zero means anything.
+  //
+  // Both halves are here: a holder re-presenting the SAME request must NOT
+  // move it, or the instrument would be crying wolf at every legal client.
+  {
+    reset(dut);
+    Bench b(dut);
+    b.c[0].at(0xB000'0000u, 2);        // a holder, and the owner for a while
+    int guard = 0;
+    while (!b.c[0].in_flight && guard++ < 40) b.step();
+    b.run(2);
+    check(dut.pend_dropped_o == 0, "10.a HOLDER re-presenting the same request is not a drop", 0,
+          dut.pend_dropped_o);
+
+    Client& p = b.c[2];
+    p.base = p.addr = p.next_addr = 0xB200'0000u;   // request A
+    p.bursts_wanted = 0;
+    b.pulse = 1u << 2;
+    b.step();                                        // A lands in the empty slot
+    check(dut.pend_dropped_o == 0, "10.a request into an EMPTY slot is not a drop", 0,
+          dut.pend_dropped_o);
+
+    p.addr = 0xB400'0000u;                           // request B, different
+    b.pulse = 1u << 2;
+    b.step();
+    check(dut.pend_dropped_o == 1, "10.a second DIFFERENT request into an occupied slot FIRES it",
+          1, dut.pend_dropped_o);
+    check(((dut.pend_dropped_mask_o >> 2) & 1u) == 1u,
+          "10.and the sticky mask names client 2", 1,
+          static_cast<uint32_t>((dut.pend_dropped_mask_o >> 2) & 1u));
+    check((dut.pend_dropped_mask_o & 0x3u) == 0u, "10.and names nobody else", 0,
+          static_cast<uint32_t>(dut.pend_dropped_mask_o & 0x3u));
+
+    // The arbiter is not corrupted by the illegal offer: the request it DID
+    // accept is served, once, whole, and from its own address.
+    p.addr = p.next_addr = 0xB200'0000u;
+    b.run(200);
+    check(p.beats == 8 && p.data_ok,
+          "10.the accepted request is still served whole, from its own address", 1,
+          p.beats == 8 && p.data_ok);
+    check(bursts(dut, 2) == 1, "10.exactly one burst: the dropped one was never served", 1,
+          bursts(dut, 2));
+    check(dut.pend_dropped_o == 1, "10.and nothing else was counted as a drop", 1,
+          dut.pend_dropped_o);
+    check(dut.hps_err_count_o == 0, "10.no violation", 0, dut.hps_err_count_o);
+  }
+
   dut.final();
   return zhao::report_and_exit("hps_arbiter_n_directed");
 }

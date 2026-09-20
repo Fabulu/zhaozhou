@@ -2373,6 +2373,10 @@ module zhao_shell_top_v2
   zhao_hps_burst_rsp_t [HPS_N-1:0]       hn_rsp;
   logic                [HPS_N-1:0][31:0] hn_bursts;
   logic                [HPS_N-1:1][31:0] hn_wait;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic                [31:0]            hn_pend_dropped;       // R55, see below
+  logic                [HPS_N-1:0]       hn_pend_dropped_mask;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   always_comb begin
     hn_req[0] = dma_hps_req;
@@ -2415,7 +2419,15 @@ module zhao_shell_top_v2
     .b_wr_last_o   (arb_wr_last),
     .b_rsp_i       (arb_hps_rsp),
     .bursts_o      (hn_bursts),
-    .wait_cycles_o (hn_wait)
+    .wait_cycles_o (hn_wait),
+    // Rule 6c / R55. Not a port of this shell: adding one here would put an
+    // output on V2 that V1 does not have, which the paired differential then
+    // has to declare sibling-only -- for a counter the socket clients cannot
+    // move (every one of them is a holder; see the arbiter's rule 6c). The
+    // reading that matters is `zhao_console_core`'s, on the four-client
+    // instance whose clients are the real ones.
+    .pend_dropped_o     (hn_pend_dropped),
+    .pend_dropped_mask_o(hn_pend_dropped_mask)
   );
 
   zhao_hps_bridge u_bridge (

@@ -548,6 +548,15 @@ module zhao_console_board
   output logic [31:0]             part_hps_wr_bursts_o,
   output logic [31:0]             part_hps_records_read_o,
   output logic [31:0]             part_hps_records_written_o,
+  // R54, 2026-09-19 evening: the bridge refusal `zhao_part_hps` used to be
+  // blind to. `bridge_errs` is expected to read ZERO here -- the arbiter
+  // pulses the bridge only from A_IDLE and every burst is aligned -- and that
+  // expectation is now an EXPECTATION with an instrument behind it rather than
+  // an argument standing in place of one. It is fired by stimulus in
+  // tests/particles/part_hps_directed.cpp CASE H/I.
+  output logic [31:0]             part_hps_bridge_errs_o,
+  output logic [31:0]             part_hps_ticks_faulted_o,
+  output logic [31:0]             part_hps_records_discarded_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -1351,6 +1360,14 @@ module zhao_console_board
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
+  // pending slot is already occupied is DROPPED, and used to be dropped in
+  // silence. These two are that reading -- a count of distinct dropped
+  // offerings and a sticky mask naming the client. Expected zero here, and
+  // the arbiter's header argues structurally why; the argument is no longer
+  // the only thing standing where the instrument should be.
+  output logic [31:0]             terr_hps_pend_dropped_o,
+  output logic [3:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -2662,6 +2679,9 @@ module zhao_console_board
       .part_hps_wr_bursts_o              (part_hps_wr_bursts_o),
       .part_hps_records_read_o           (part_hps_records_read_o),
       .part_hps_records_written_o        (part_hps_records_written_o),
+      .part_hps_bridge_errs_o            (part_hps_bridge_errs_o),
+      .part_hps_ticks_faulted_o          (part_hps_ticks_faulted_o),
+      .part_hps_records_discarded_o      (part_hps_records_discarded_o),
       .part_tbl_ld_valid_i               (part_tbl_ld_valid_i),
       .part_tbl_ld_ready_o               (part_tbl_ld_ready_o),
       .part_tbl_ld_sel_i                 (part_tbl_ld_sel_i),
@@ -3126,6 +3146,8 @@ module zhao_console_board
       .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
       .terr_hps_c3_bursts_o              (terr_hps_c3_bursts_o),
       .terr_hps_c3_wait_cycles_o         (terr_hps_c3_wait_cycles_o),
+      .terr_hps_pend_dropped_o           (terr_hps_pend_dropped_o),
+      .terr_hps_pend_dropped_mask_o      (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                (cmd_exec_uploads_o),
       .cmd_exec_upload_overflow_o        (cmd_exec_upload_overflow_o),
       .upl_cfg_region_base_i             (upl_cfg_region_base_i),
