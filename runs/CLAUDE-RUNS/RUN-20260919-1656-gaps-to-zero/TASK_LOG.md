@@ -264,3 +264,40 @@
 - D1'S OTHER FALSE-PRESENCE FINDS, each re-verified: prod_fit_sources.txt is ORPHANED (the real list is fit_targets.yml, where the doorbell sits in TWO blocks); the doorbell is instantiated in TWO files, not the four a naive grep suggests; counter_ids.lock does not govern RTL evidence ports; and **zhao_crc32c_fold ALREADY EXISTED**, so D1's draft bit-serial CRC would have been both a duplicate of ratified arithmetic and a 64-level timing defect.
 - D1 COMPOSED THE LOADER AND ADDED A SIXTH HPS ARBITER CLIENT, and warned of a conflict with gz/fieldh1 in zhao_console_core.sv. Git auto-merged it with NO textual conflict -- which is precisely the merge trap, two sides each valid alone. Checked by measurement rather than by reading the hunk: **all three generators report FRESH** after a substantial port addition, which is the decisive check because gen_prod_top instantiates every production block BY NAME and a port nobody connects is a PINMISSING only the next fit would find. Inventory, prod_manifest, quartus17 and uncashed_cheques all RC 0.
 - A1 HAS PUSHED BUT NOT REPORTED, so it is NOT merged: a packet lands when it REPORTS, not when it pushes. That rule is in this log from this morning and it holds regardless of how tempting a green branch looks.
+
+## Coordinator, tie-off audit interlude (while C1's smoke runs)
+
+**Where I was before this**, per the fit rule: C1 merged and smoking; E1
+(`gz/fielde1` @ `4186789e`) reported and NOT yet merged; W1 and CMDFIELD still
+running. Next step after the smoke: merge E1, gate, push.
+
+Done in the gap, none of it touching RTL:
+
+* R163–R165 recorded from E1's close-out (`2217e810`). The one worth carrying:
+  **a `_v2` file that exists but is not composed CREATES a superseded violation**
+  across three production roots — the mirror of R159, and the reason a `_v2` must
+  be born in the commit that composes it.
+* **Answered R159's open worry** by pointing `packet_h_tieoff_audit.py` at
+  `zhao_console_core.sv` for the first time. It reported `0 declared, 19 silent`
+  and **all nineteen were my tool's fault** — 18 of 88 instantiations visible,
+  the wrong marker dialect, no understanding of a group comment. Calibrated
+  19 → 1. Committed at `479f1f2e`, ruling at `be5e6519`.
+* **One real finding, not yet fixed:** `zhao_console_core.sv:14824`,
+  `u_material_resolve.dir_valid_i (1'b1)` — the only literal in the console with
+  no reason near it. Benign (you never publish an invalid directory entry) and
+  wants a one-line comment. **Deliberately NOT edited: the smoke is reading the
+  live tree.** Do it after the merge.
+* Tree-wide sweep: 97 silent literals in 23 files. **Docket candidates, not a
+  defect count** — every one of those files may have its own dialect, as the
+  core did.
+
+**Trap re-encountered, reading direction:** `git log origin/<branch>` reported
+the coordinator branch 10 commits BEHIND while `git push` said "Everything
+up-to-date". Both were consistent: the local remote-tracking ref is stale
+because this branch has no tracking configuration. `git ls-remote origin` showed
+the true head (`be5e6519`, my HEAD, correctly pushed). **Use `ls-remote` to ask
+about the remote; `origin/<branch>` is a cache with no guarantee.**
+
+And I captured `PUSH_RC=$?` after a pipe to `tail` — reading `tail`'s status,
+the exact trap `CLAUDE.md` names — inside the same hour I wrote a ruling about
+instruments that cannot see their subject.

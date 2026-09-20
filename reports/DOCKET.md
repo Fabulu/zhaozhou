@@ -5406,3 +5406,40 @@ Every item below needs either the toolchain or an owner:
   than guessing, which is what today falsified four times;
 * `gen_prod_top.py`'s struct-port bug — recorded, and deprioritised by the
   owner's own direction.
+
+## Silent literal tie-offs, tree-wide (added 2026-09-20, coordinator)
+
+`tools/design/packet_h_tieoff_audit.py` now takes targets on the command line
+and understands both marker dialects and the group-comment convention
+(R166/R167). Swept across `fpga/rtl`, it reports **97 literal connections with
+no reason anywhere near them, in 23 files**:
+
+```
+zhao_texture_island_v3_top.sv         23     zhao_pair_tess_normals.sv        4
+zhao_raster_texture_v3_fit_top.sv     14     zhao_pair_tmu_cache.sv           3
+zhao_shell_top.sv                     13     zhao_terrain_heighttap.sv        2
+zhao_dual18_mul.sv                     9     zhao_pair_pagestream_patch.sv    2
+zhao_texture_island_top.sv             7     zhao_pair_setup_binner.sv        2
+zhao_field_flow_adapter.sv             6     ... and 12 files with 1 each
+```
+
+**READ R166 BEFORE ACTING ON THIS NUMBER.** Pointed at `zhao_console_core.sv`,
+this same tool reported 19 silent connections and **every one was the tool's own
+blindness** — it could see 18 of 88 instantiations, it knew `TIE:` but not the
+core's `REAL:` (163 uses), and it did not understand a reason written above a
+run of connections. Calibrated, the core has **one**.
+
+So each file above may equally have a dialect the tool has not been taught, and
+**97 is a count of things to LOOK AT, not of defects.** Take one file, read three
+of its rows by hand, and only then decide whether the rest of that file's rows
+are real. The cheapest first checks are the ones that caught R166: does the tool
+see every instantiation in the file (`grep -c` the two forms), and what marker
+does the file actually use?
+
+Ordering note: `zhao_shell_top.sv` is the V1 shell and `*_fit_top.sv` are
+generated fit harnesses, so neither is in the console's composed closure —
+**`zhao_field_flow_adapter.sv` (6) is the one on the production path**, and A1
+worked in that file today (R152).
+
+The one confirmed finding, already isolated: `zhao_console_core.sv:14824`,
+`u_material_resolve.dir_valid_i (1'b1)`.
