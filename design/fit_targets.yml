@@ -2100,6 +2100,8 @@ targets:
       - fpga/rtl/field/zhao_field_seq.sv
       - fpga/rtl/field/zhao_field_host.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
+      - fpga/rtl/field/zhao_field_flow_adapter.sv
+      - fpga/rtl/field/zhao_field_doorbell.sv
       - fpga/rtl/field/zhao_field_isqrt.sv
       - fpga/rtl/field/zhao_field_mul.sv
       - fpga/rtl/field/zhao_field_progcache.sv
@@ -2945,4 +2947,6 @@ targets:
       - fpga/rtl/field/zhao_field_progcache.sv
       - fpga/rtl/field/zhao_field_host.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
+      - fpga/rtl/field/zhao_field_flow_adapter.sv
+      - fpga/rtl/field/zhao_field_doorbell.sv
       - fpga/rtl/prod/zhao_console_core.sv

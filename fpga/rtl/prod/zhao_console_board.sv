@@ -581,11 +581,38 @@ module zhao_console_board
   output logic [31:0]             part_tbl_truncated_o,
   output logic [31:0]             part_tbl_denied_o,
 
-  // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
-  input  logic                    part_fld_valid_i,
-  input  logic signed [10:0]      part_fld_ax_i,
-  input  logic signed [10:0]      part_fld_ay_i,
-  input  logic signed [10:0]      part_fld_az_i,
+  // ---- (I5's four `part_fld_*` inputs were here. CLOSED 2026-09-20 under
+  //  owner ruling R40: `zhao_field_flow_adapter` is the F profile's stream
+  //  adapter and it is composed below as client 1 of `u_field_host`. The
+  //  acceleration is computed from the flow program's own velocity output by
+  //  R40's law, joined to the record it belongs to in the same cycle. The
+  //  evidence below is that adapter's.)
+  //
+  // WHICH RESIDENT PROGRAM IS THE WIND, and whether one is resident at all.
+  // NOT A TIE-OFF and not I5 moved sideways: it is the same console-policy
+  // shape as `fld_stamp_slot_i` below, for the same reason I30 records --
+  // no ratified opcode carries it, so an executor filling it in would be
+  // choosing a value the ABI does not contain. With `slot_valid` LOW the
+  // adapter answers every record immediately with the sample ABSENT, which
+  // PART.UPDATE already handles by not adding the term; that is a console
+  // with no wind armed, not a wind of zero.
+  input  logic [2:0]              fld_flow_slot_i,
+  input  logic                    fld_flow_slot_valid_i,
+  // p0..p3 of the flow profile's input record (spec/form/field-ir.md 7.1).
+  // The PROGRAM's parameters, not the particle's -- SW.STREAM's, travelling
+  // with the plan that named the program (owner ruling R43).
+  input  logic [127:0]            fld_flow_par_i,
+
+  output logic [31:0]             part_fld_samples_o,
+  output logic [31:0]             part_fld_bypassed_o,
+  output logic [31:0]             part_fld_noprog_o,
+  output logic [31:0]             part_fld_faults_o,
+  output logic [31:0]             part_fld_saturations_o,
+  output logic [31:0]             part_fld_stall_cycles_o,
+  // The identity guard: the record offered while an answer is held is not the
+  // record that answer was computed from. Its two operands are clocked by
+  // different things, which is what makes it able to fire at all.
+  output logic [31:0]             part_fld_rec_changed_o,
 
   // (I2's PART.COLLIDE slice -- `part_col_d_response_i` and the three
   //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
@@ -2417,41 +2444,54 @@ module zhao_console_board
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
   // ==========================================================================
-  // THE PROGRAM LOADER. Nothing inside this console loads a field program, and
-  // the named owner is CMD.EXEC's TerrainField 0x0200 arm (spec/commands.zidl:
-  // `handle32[program] program` -> the cartridge PROGRAM page, spec/cartridge.md
-  // 3 kind 0) together with the software decoder. `ld_kind_i` is 0 instruction,
-  // 1 table entry, 2 header; the header is written LAST and is what marks a slot
-  // runnable, so a partially written program can never execute.
-  input  logic         fld_ld_valid_i,
-  output logic         fld_ld_ready_o,
-  input  logic [ 1:0]  fld_ld_kind_i,
-  input  logic [ 2:0]  fld_ld_slot_i,
-  input  logic [ 6:0]  fld_ld_addr_i,
-  input  logic [95:0]  fld_ld_data_i,
-
-  // FIELD.PROGCACHE's TWO PHASES. Both face outward because the decode a miss
-  // requires is `zfield::decode`'s and lives in software -- that block's own
-  // contract says the caller decodes and reports one bit. What is INTERNAL, and
-  // is why the directory is composed rather than left at this edge, is the
-  // insert: it invalidates the program store's slot, so no profile can run
-  // microcode the directory has already promised to another hash.
-  input  logic         fld_pc_lu_valid_i,
-  output logic         fld_pc_lu_ready_o,
-  input  logic [31:0]  fld_pc_lu_hash_i,
-  output logic         fld_pc_lu_resp_valid_o,
-  input  logic         fld_pc_lu_resp_ready_i,
-  output logic         fld_pc_lu_hit_o,
-  output logic [ 2:0]  fld_pc_lu_slot_o,
-  input  logic         fld_pc_cm_valid_i,
-  output logic         fld_pc_cm_ready_o,
-  input  logic [31:0]  fld_pc_cm_hash_i,
-  input  logic         fld_pc_cm_ok_i,
-  output logic         fld_pc_cm_resp_valid_o,
-  input  logic         fld_pc_cm_resp_ready_i,
-  output logic         fld_pc_cm_inserted_o,
-  output logic         fld_pc_cm_evicted_o,
-  output logic [ 2:0]  fld_pc_cm_slot_o,
+  // THE FIELD PROGRAM DOORBELL -- SW.STREAM's own words, owner ruling R43.
+  // NOT A TIE-OFF, and not entry I42 moved sideways: I42 is CLOSED. The
+  // loader words and both directory phases are driven by
+  // `zhao_field_doorbell` below, and what crosses THIS edge is the HPS
+  // itself -- the plan's epoch identity, the posts it makes and the ticketed
+  // returns hardware hands back. In Verilator the harness IS the HPS,
+  // exactly as it is for `terr_jdb_*` above (owner ruling R14, the pattern
+  // R43 names) and for the FRAME_RING view.
+  //
+  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP. For a LOAD WORD,
+  // `post_kind_i` is the host's own 0 uop / 1 table entry / 2 header /
+  // 3 uniform, and the HEADER is written LAST because it is what marks a slot
+  // runnable -- so a partially written program can never execute.
+  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, trace only
+  input  logic         fld_db_post_valid_i,
+  output logic         fld_db_post_ready_o,
+  input  logic [ 1:0]  fld_db_post_op_i,
+  input  logic [ 1:0]  fld_db_post_kind_i,
+  input  logic [ 2:0]  fld_db_post_slot_i,
+  input  logic [ 6:0]  fld_db_post_addr_i,
+  input  logic [95:0]  fld_db_post_data_i,
+  input  logic [31:0]  fld_db_post_hash_i,
+  input  logic         fld_db_post_ok_i,
+  input  logic [31:0]  fld_db_post_ticket_i,
+  output logic         fld_db_ret_valid_o,
+  input  logic         fld_db_ret_ready_i,
+  output logic [31:0]  fld_db_ret_ticket_o,
+  output logic [ 1:0]  fld_db_ret_op_o,
+  output logic         fld_db_ret_ok_o,
+  output logic         fld_db_ret_refused_o,
+  output logic         fld_db_ret_inserted_o,
+  output logic         fld_db_ret_evicted_o,
+  output logic [ 2:0]  fld_db_ret_slot_o,
+  output logic [31:0]  fld_db_ret_plan_o,
+  output logic [31:0]  fld_db_posts_o,
+  output logic [31:0]  fld_db_load_words_o,
+  output logic [31:0]  fld_db_lookups_o,
+  output logic [31:0]  fld_db_commits_o,
+  // A COMMIT for a slot whose HEADER was not written since the last commit.
+  // REFUSED, ANSWERED and COUNTED (owner ruling R20) -- the directory is never
+  // offered a hash for microcode that is not there.
+  output logic [31:0]  fld_db_commits_refused_o,
+  // Cycles a post was offered into a full mailbox. HELD, never dropped: owner
+  // ruling R55's shape, and the number that says whether POSTS is big enough.
+  output logic [31:0]  fld_db_post_stalls_o,
+  // Unreachable while the return credit is right, so its zero is an argument
+  // and not a measurement. Fired by tests/mutants/zhao_field_doorbell_mutant.sv.
+  output logic [31:0]  fld_db_ret_overflow_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
   // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
@@ -2461,25 +2501,14 @@ module zhao_console_board
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
 
-  // THE ENGINE'S SECOND CLIENT. It is the seam the FLOW and EARTH adapters take
-  // over when I5 and I34 close, and until then it is what makes the arbiter's
-  // contention reachable with legal stimulus: a counter that cannot be fired is
-  // not evidence about the thing it watches.
-  //
-  // The two widths are literals because a port list cannot see a body
-  // localparam. `u_field_host` is instantiated with IN_LANES = 12 (the
-  // ratified E record of spec/form/field-ir.md 7.1) and OUT_LANES = 4, and the
-  // elaboration guard beside the instance refuses any disagreement rather than
-  // leaving the two places to drift.
-  input  logic          fld_req_valid_i,
-  output logic          fld_req_ready_o,
-  input  logic [  2:0]  fld_req_slot_i,
-  input  logic          fld_req_noprog_i,
-  input  logic [383:0]  fld_req_in_i,
-  output logic          fld_resp_valid_o,
-  input  logic          fld_resp_ready_i,
-  output logic [127:0]  fld_resp_out_o,
-  output logic [  7:0]  fld_resp_status_o,
+  // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is
+  //  CLOSED 2026-09-20: entry I42 said it "is the seam the FLOW and EARTH
+  //  adapters take over when I5 and I34 close", and the FLOW adapter has taken
+  //  it. `zhao_field_flow_adapter` is client 1 and `zhao_field_stamp_adapter`
+  //  is client 0, so the arbiter's contention is still reachable with legal
+  //  stimulus -- two REAL profiles offering in the same cycle, which is what
+  //  the edge port was standing in for. `fld_contended_grants_o` below is the
+  //  counter that was the entry's reason for keeping it.)
 
   output logic [31:0]  fld_runs_o,
   output logic [31:0]  fld_run_faults_o,
@@ -2708,10 +2737,16 @@ module zhao_console_board
       .part_tbl_bad_magic_o              (part_tbl_bad_magic_o),
       .part_tbl_truncated_o              (part_tbl_truncated_o),
       .part_tbl_denied_o                 (part_tbl_denied_o),
-      .part_fld_valid_i                  (part_fld_valid_i),
-      .part_fld_ax_i                     (part_fld_ax_i),
-      .part_fld_ay_i                     (part_fld_ay_i),
-      .part_fld_az_i                     (part_fld_az_i),
+      .fld_flow_slot_i                   (fld_flow_slot_i),
+      .fld_flow_slot_valid_i             (fld_flow_slot_valid_i),
+      .fld_flow_par_i                    (fld_flow_par_i),
+      .part_fld_samples_o                (part_fld_samples_o),
+      .part_fld_bypassed_o               (part_fld_bypassed_o),
+      .part_fld_noprog_o                 (part_fld_noprog_o),
+      .part_fld_faults_o                 (part_fld_faults_o),
+      .part_fld_saturations_o            (part_fld_saturations_o),
+      .part_fld_stall_cycles_o           (part_fld_stall_cycles_o),
+      .part_fld_rec_changed_o            (part_fld_rec_changed_o),
       .part_ter_particles_o              (part_ter_particles_o),
       .part_ter_ground_o                 (part_ter_ground_o),
       .part_ter_no_ground_o              (part_ter_no_ground_o),
@@ -3808,39 +3843,36 @@ module zhao_console_board
       .terr_mg_m17_writes_o              (terr_mg_m17_writes_o),
       .terr_mg_m9_writes_o               (terr_mg_m9_writes_o),
       .terr_mg_aborts_o                  (terr_mg_aborts_o),
-      .fld_ld_valid_i                    (fld_ld_valid_i),
-      .fld_ld_ready_o                    (fld_ld_ready_o),
-      .fld_ld_kind_i                     (fld_ld_kind_i),
-      .fld_ld_slot_i                     (fld_ld_slot_i),
-      .fld_ld_addr_i                     (fld_ld_addr_i),
-      .fld_ld_data_i                     (fld_ld_data_i),
-      .fld_pc_lu_valid_i                 (fld_pc_lu_valid_i),
-      .fld_pc_lu_ready_o                 (fld_pc_lu_ready_o),
-      .fld_pc_lu_hash_i                  (fld_pc_lu_hash_i),
-      .fld_pc_lu_resp_valid_o            (fld_pc_lu_resp_valid_o),
-      .fld_pc_lu_resp_ready_i            (fld_pc_lu_resp_ready_i),
-      .fld_pc_lu_hit_o                   (fld_pc_lu_hit_o),
-      .fld_pc_lu_slot_o                  (fld_pc_lu_slot_o),
-      .fld_pc_cm_valid_i                 (fld_pc_cm_valid_i),
-      .fld_pc_cm_ready_o                 (fld_pc_cm_ready_o),
-      .fld_pc_cm_hash_i                  (fld_pc_cm_hash_i),
-      .fld_pc_cm_ok_i                    (fld_pc_cm_ok_i),
-      .fld_pc_cm_resp_valid_o            (fld_pc_cm_resp_valid_o),
-      .fld_pc_cm_resp_ready_i            (fld_pc_cm_resp_ready_i),
-      .fld_pc_cm_inserted_o              (fld_pc_cm_inserted_o),
-      .fld_pc_cm_evicted_o               (fld_pc_cm_evicted_o),
-      .fld_pc_cm_slot_o                  (fld_pc_cm_slot_o),
+      .fld_cfg_plan_base_i               (fld_cfg_plan_base_i),
+      .fld_db_post_valid_i               (fld_db_post_valid_i),
+      .fld_db_post_ready_o               (fld_db_post_ready_o),
+      .fld_db_post_op_i                  (fld_db_post_op_i),
+      .fld_db_post_kind_i                (fld_db_post_kind_i),
+      .fld_db_post_slot_i                (fld_db_post_slot_i),
+      .fld_db_post_addr_i                (fld_db_post_addr_i),
+      .fld_db_post_data_i                (fld_db_post_data_i),
+      .fld_db_post_hash_i                (fld_db_post_hash_i),
+      .fld_db_post_ok_i                  (fld_db_post_ok_i),
+      .fld_db_post_ticket_i              (fld_db_post_ticket_i),
+      .fld_db_ret_valid_o                (fld_db_ret_valid_o),
+      .fld_db_ret_ready_i                (fld_db_ret_ready_i),
+      .fld_db_ret_ticket_o               (fld_db_ret_ticket_o),
+      .fld_db_ret_op_o                   (fld_db_ret_op_o),
+      .fld_db_ret_ok_o                   (fld_db_ret_ok_o),
+      .fld_db_ret_refused_o              (fld_db_ret_refused_o),
+      .fld_db_ret_inserted_o             (fld_db_ret_inserted_o),
+      .fld_db_ret_evicted_o              (fld_db_ret_evicted_o),
+      .fld_db_ret_slot_o                 (fld_db_ret_slot_o),
+      .fld_db_ret_plan_o                 (fld_db_ret_plan_o),
+      .fld_db_posts_o                    (fld_db_posts_o),
+      .fld_db_load_words_o               (fld_db_load_words_o),
+      .fld_db_lookups_o                  (fld_db_lookups_o),
+      .fld_db_commits_o                  (fld_db_commits_o),
+      .fld_db_commits_refused_o          (fld_db_commits_refused_o),
+      .fld_db_post_stalls_o              (fld_db_post_stalls_o),
+      .fld_db_ret_overflow_o             (fld_db_ret_overflow_o),
       .fld_stamp_slot_i                  (fld_stamp_slot_i),
       .fld_stamp_slot_valid_i            (fld_stamp_slot_valid_i),
-      .fld_req_valid_i                   (fld_req_valid_i),
-      .fld_req_ready_o                   (fld_req_ready_o),
-      .fld_req_slot_i                    (fld_req_slot_i),
-      .fld_req_noprog_i                  (fld_req_noprog_i),
-      .fld_req_in_i                      (fld_req_in_i),
-      .fld_resp_valid_o                  (fld_resp_valid_o),
-      .fld_resp_ready_i                  (fld_resp_ready_i),
-      .fld_resp_out_o                    (fld_resp_out_o),
-      .fld_resp_status_o                 (fld_resp_status_o),
       .fld_runs_o                        (fld_runs_o),
       .fld_run_faults_o                  (fld_run_faults_o),
       .fld_noprog_o                      (fld_noprog_o),
