@@ -684,6 +684,11 @@ module zhao_terrain_pageio
   logic [12:0] nbv_bix_c;
   assign nbv_bix_c = 13'(D_LEAD) + {{(13 - CIX) {1'b0}}, nbv_k_q};
 
+  // The beat the write path prefetches: the next one, held at the last.
+  logic [3:0] beat_next_c;
+  assign beat_next_c = (guard_wready_i && (beat_q != 4'(BEATS - 1)))
+                       ? (beat_q + 4'd1) : beat_q;
+
   always_comb begin
     bwrd_we = 1'b0;
     bwrd_wa = '0;
@@ -738,12 +743,18 @@ module zhao_terrain_pageio
       end
 
       // ---- draining to the guard: one word per beat ------------------------
+      // THE NEXT BEAT IS PREFETCHED, AND THE ADVANCE IS CLAMPED AT THE LAST
+      // ONE. Without the clamp, the accepted last beat of the last burst
+      // addresses word `B_NBURST * BEATS` = 280, one past the end of a
+      // 280-entry array. The value is never used -- the final beat is already
+      // on the wire and the state leaves -- so it is benign in behaviour, and
+      // it is still an out-of-range index in a structure meant to infer an
+      // M10K. Quartus is free to treat that differently from Verilator, and
+      // "benign today" is not a property anyone re-checks.
       S_BWR_VERD: bwrd_ra = BWA'({4'b0, burst_q} * BEATS);
-      S_BWR_BEAT: bwrd_ra = BWA'({4'b0, burst_q} * BEATS +
-                                 {4'b0, (guard_wready_i ? beat_q + 4'd1 : beat_q)});
+      S_BWR_BEAT: bwrd_ra = BWA'({4'b0, burst_q} * BEATS + {4'b0, beat_next_c});
       S_DWR_VERD: dwrd_ra = DWA'({4'b0, burst_q} * BEATS);
-      S_DWR_BEAT: dwrd_ra = DWA'({4'b0, burst_q} * BEATS +
-                                 {4'b0, (guard_wready_i ? beat_q + 4'd1 : beat_q)});
+      S_DWR_BEAT: dwrd_ra = DWA'({4'b0, burst_q} * BEATS + {4'b0, beat_next_c});
       default: ;
     endcase
   end
