@@ -14419,6 +14419,75 @@ add_test(NAME lint_zhao_field_host
 set_tests_properties(lint_zhao_field_host PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# THE FIELD PROGRAM DOORBELL -- zhao_console_core entry I42, owner ruling R43.
+#
+# SW.STREAM's program-load mailbox, on the R14 pattern. The DUT is the doorbell
+# ALONE: the loader's ready and both directory phases are PLAYED by the driver,
+# which is what lets a case construct a hit, an eviction or a stalled drain on
+# cue. What the COMPOSED article does is checked by the console smoke bench.
+#
+# Every case is a counter that must move, and each asserts the CORRECT
+# behaviour rather than the defect. `ret_overflow_o` is the one that cannot be
+# fired with legal stimulus -- the return credit is what makes the state
+# unreachable -- so it has a committed mutant beside it.
+add_executable(test_field_doorbell_directed field/field_doorbell_directed.cpp)
+target_link_libraries(test_field_doorbell_directed PRIVATE zhao_harness)
+verilate(test_field_doorbell_directed
+  PREFIX Vzhao_field_doorbell
+  TOP_MODULE zhao_field_doorbell
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_doorbell.sv)
+add_test(NAME field_doorbell_directed COMMAND test_field_doorbell_directed)
+set_tests_properties(field_doorbell_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# THE POSITIVE CONTROL for `ret_overflow_o`. INVERTED POLARITY: it passes when
+# the counter FIRES. Its DUT is the committed mutant, whose one substantive
+# change is the removal of the return credit.
+add_executable(test_field_doorbell_mutant_control field/field_doorbell_mutant_control.cpp)
+target_link_libraries(test_field_doorbell_mutant_control PRIVATE zhao_harness)
+verilate(test_field_doorbell_mutant_control
+  PREFIX Vzhao_field_doorbell_mutant
+  TOP_MODULE zhao_field_doorbell_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_doorbell_mutant.sv)
+add_test(NAME field_doorbell_mutant_control COMMAND test_field_doorbell_mutant_control)
+set_tests_properties(field_doorbell_mutant_control PROPERTIES LABELS "fast;mutant" TIMEOUT 300)
+
+add_test(NAME lint_zhao_field_doorbell
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_doorbell
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_doorbell.sv)
+set_tests_properties(lint_zhao_field_doorbell PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# FIELD.SEQ.FLOW's STREAM ADAPTER -- zhao_console_core entry I5, ruling R40.
+#
+# The engine is PLAYED here for the same reason the stamp adapter's is mocked:
+# checking R40's mapping needs an exact velocity output, and getting one from
+# the real engine would mean choosing a program -- which is the ABI decision
+# entry I5 refused to make inside a composition. `zhao_part_record` is in the
+# closure because the adapter INSTANTIATES the one codec rather than re-slicing
+# the particle128 layout.
+add_executable(test_field_flow_adapter_directed field/field_flow_adapter_directed.cpp)
+target_link_libraries(test_field_flow_adapter_directed PRIVATE zhao_harness)
+verilate(test_field_flow_adapter_directed
+  PREFIX Vzhao_field_flow_adapter
+  TOP_MODULE zhao_field_flow_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_flow_adapter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+add_test(NAME field_flow_adapter_directed COMMAND test_field_flow_adapter_directed)
+set_tests_properties(field_flow_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_field_flow_adapter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_flow_adapter
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_flow_adapter.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+set_tests_properties(lint_zhao_field_flow_adapter PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # --------------------------------------------------------------------------
 # FIELD.SEQ.STAMP's STREAM ADAPTER -- the stencil walk.
 #
