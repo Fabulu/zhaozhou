@@ -2252,7 +2252,13 @@ targets:
       # WHAT LEFT: zhao_shell_top.sv, and the four blocks only it composed --
       # zhao_geom_bin_pipe, zhao_geom_binner, zhao_raster_tile_pipe,
       # zhao_video_slotmgr -- plus zhao_terrain_bake and its delta child.
-      # zhao_hps_arbiter was never in this list; the V2 shell takes the N core.
+      # zhao_hps_arbiter leaves the MACHINE (the V2 shell takes the N core,
+      # owner ruling R4) but its FILE stays in this list, because
+      # fpga/rtl/memory/zhao_hps_arbiter.sv declares BOTH modules -- the N core
+      # at :179 and the 2-client wrapper at :422. A file is not a module, and
+      # deleting the line to match the accounting would take the console's
+      # arbiter out of the fit. (This comment first said the file "was never in
+      # this list". It was, at line 2191, and one grep said so.)
       #
       # WHAT ENTERED: the V2 shell, its six writer-aware video organs, the
       # POST.COMPOSITE lease trio, and the Packet-D geometry/raster V2 pipeline

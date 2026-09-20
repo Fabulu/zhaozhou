@@ -605,6 +605,20 @@ _ALIAS: dict[str, str | None] = {
     # port ({epoch, island, ix, iz} key, SEQW claim sequence, pin/unpin) and do
     # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
     "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
+    # TERRAIN.BAKE FOLLOWS THE SELECTED CENSUS, 2026-09-20, owner ruling R86.
+    # This alias makes the number NEITHER smaller NOR larger -- both modules are
+    # unconnected today, so the capability is a gap either way -- and that is
+    # exactly why it has to be written now rather than when it closes. The
+    # convention resolves TERRAIN.BAKE to `zhao_terrain_bake`, which
+    # `design/console_inventory.yml` records as `superseded_by:
+    # zhao_terrain_bake_v2` and `design/prod_manifest.yml` now excludes on that
+    # ground. Leaving the alias unwritten means the gap would be CLOSEABLE BY
+    # WIRING THE SUPERSEDED MODULE, and the register would have said "connected"
+    # -- which is the defect `superseded_in_closure()`'s docstring confesses to,
+    # arriving a second time by the same route. Checked against blocks.yml's own
+    # TERRAIN.BAKE row: its contract, directed and random tests are shared by
+    # both implementations, so nothing in that row prefers v1.
+    "TERRAIN.BAKE":      "zhao_terrain_bake_v2",
     "GEOM.POSE":         "zhao_geom_pose_decode",
     # GEOM.PROJECT IS THE SHARED SERVICE'S CLIENT A, BY OWNER RULING. Resolved
     # 2026-09-19 (geom packet). THIS MAKES THE NUMBER SMALLER, so it carries
@@ -952,14 +966,29 @@ def declaring_file(mod: str) -> pathlib.Path | None:
     flattering direction, which is the whole family of defect this file is
     about.
     """
-    pat = re.compile(r"^\s*module\s+" + re.escape(mod) + r"\b", re.M)
-    for p in RTL.rglob("*.sv"):
+    return _declaration_index().get(mod)
+
+
+_DECL_INDEX: dict[str, pathlib.Path] = {}
+
+
+def _declaration_index() -> dict[str, pathlib.Path]:
+    """`{module: file}` for every module under fpga/rtl, built once.
+
+    Cached because the sweep asks this of ~140 roots and the uncached version
+    re-read every file each time.
+    """
+    if _DECL_INDEX:
+        return _DECL_INDEX
+    pat = re.compile(r"^\s*module\s+(\w+)", re.M)
+    for p in sorted(RTL.rglob("*.sv")):
         try:
-            if pat.search(p.read_text(encoding="utf-8", errors="replace")):
-                return p
+            text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-    return None
+        for name in pat.findall(text):
+            _DECL_INDEX.setdefault(name, p)
+    return _DECL_INDEX
 
 
 def production_roots() -> list[str]:
@@ -1482,7 +1511,15 @@ def audit() -> dict:
                                 for root, mod, newer in _root_hits[0]],
         "superseded_roots_unfound": list(_root_hits[1]),
         "superseded_roots_checked": production_roots(),
-        "superseded_roots_advisory_unchecked": advisory_roots(),
+        # ASKED, AND REPORTED WITHOUT BEING FATAL. An earlier draft listed these
+        # as "not checked", which is a truthful label on a useless field: a list
+        # of roots nobody asked is precisely the blind spot R86 is about. They
+        # are asked; they do not gate, because most are leaf measurements and
+        # retained oracles that exist BECAUSE they are the superseded version.
+        "superseded_in_advisory_roots": [
+            [root, mod, list(newer)]
+            for root, mod, newer in superseded_in_roots(advisory_roots())[0]],
+        "superseded_roots_advisory": advisory_roots(),
         "closure_modules": len(closure),
         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
                     for k in sorted({t["kind"] for t in ties})},
@@ -1844,11 +1881,18 @@ def main(argv: list[str]) -> int:
         print("!" * 74)
         print()
     else:
-        print("superseded check: %d production roots clean, %d fit-target tops"
-              % (len(rep["superseded_roots_checked"]),
-                 len(rep["superseded_roots_advisory_unchecked"])))
-        print("    NOT asked (leaf measurements and retained oracles, which are"
-              " kept BECAUSE they are the old version)")
+        print("superseded check: %d production roots CLEAN"
+              % len(rep["superseded_roots_checked"]))
+
+    adv = rep["superseded_in_advisory_roots"]
+    print("    %d further fit-target tops asked, NOT fatal (leaf measurements"
+          % len(rep["superseded_roots_advisory"]))
+    print("    and retained oracles, kept BECAUSE they are the old version)"
+          "  -- %d hit(s)" % len(adv))
+    for root, mod, newer in adv:
+        print("      note   %-26s wires %-26s superseded by %s"
+              % (root, mod, ", ".join(newer)))
+    print()
 
     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
     if rep["board_addition_modules"]:
