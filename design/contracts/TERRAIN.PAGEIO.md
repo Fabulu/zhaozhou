@@ -1,10 +1,22 @@
 # Contract — TERRAIN.PAGEIO (bake's page window: layer D in, layers B and D out)
 
-> Ledger: **no `design/blocks.yml` row yet, deliberately.** A mandatory
-> capability that is not built is a gap, and this packet is forbidden to close
-> one gap by opening another. The ledger row, the fit-target entry and the
-> manifest entry land in the SAME commit as the RTL. Written 2026-09-20 by the
-> terrain8 packet; nothing here is built.
+> **STATUS 2026-09-21: BUILT.** `fpga/rtl/terrain/zhao_terrain_pageio.sv`,
+> ledger id `TERRAIN.PAGEIO`, `tests/terrain/pageio_rtl_directed.cpp` (79
+> checks), fit gate `F-PAGEIO1`, inventory `pending_compose`, manifest
+> `not-yet-adopted`. NOT COMPOSED: see §7bis decision 5 and §8.
+>
+> ~~Ledger: **no `design/blocks.yml` row yet, deliberately.**~~ *Written
+> 2026-09-20 by the terrain8 packet. The reasoning was that an unbuilt row is
+> itself a gap, so the row should wait for the RTL. **Owner ruling R210 found
+> the opposite**: `tools/budget/completion_register.py` walks
+> `design/blocks.yml`, so a capability with NO ROW is not absent from the
+> console — it is absent from the QUESTION. The register's total was never
+> wrong; it was answering a smaller question than its readers assumed. The row
+> landed FIRST, before the RTL, and the total ROSE from 21 to 22 when it did.
+> That rise is the instrument starting to work.*
+>
+> *Keep the shape, not the rule: a gap that no instrument can see is worse than
+> a gap that every run prints.*
 >
 > Law: `spec/terrain_rules.md` §2 (page layout), §3.3 (cell-state byte and the
 > no_bake corner shadow), §3.4 (breach law), §7 (ownership).
@@ -241,10 +253,43 @@ neighbouring layers — layer A before B, layer C before D, layer E after D.
 Writing a whole burst from a zero-filled buffer would **destroy layer A's last
 2 bytes, layer C's last 6 bytes and layer E's first 58 bytes**. The edge
 bursts must be read first and merged, or the write must be byte-enabled
-(`guard_req_o.be`). Byte enables are preferable and the guard request type
-already carries `.be`; whichever is taken, it needs a directed test that
+(`guard_req_o.be`). ~~Byte enables are preferable and the guard request type
+already carries `.be`~~; whichever is taken, it needs a directed test that
 asserts the neighbouring layers are byte-identical after a bake, because this
 is a silent corruption of layers nothing in the machine reads back yet.
+
+> **CORRECTED 2026-09-21 by the build. BYTE ENABLES ARE STRUCTURALLY
+> UNAVAILABLE**, so "whichever is taken" is one option, not two. The request
+> type does carry `.be`, and the guard **refuses a sparse one**:
+>
+> ```systemverilog
+> zhao_mem_guard.sv:  be_ok    = (req.be == mask_of(req.len));   // FULL mask
+>                     shape_ok = len_ok && be_ok;
+> ```
+>
+> Its own header says byte_enable *"must be the FULL contiguous mask over
+> [addr, addr+len) (Phase-2 clients issue whole spans; partial-word masking is
+> **NOT in the Phase-2 arbiter**)"*, and `zhao_vram_arbiter.sv` confirms it
+> from the other side — it converts `len` to **words** (`words_of()`) and the
+> SDRAM controller never sees a byte mask at all. A sparse `be` is a guard
+> **violation**, not an optimisation. Every existing client of this guard uses
+> exactly one shape: 64-byte aligned address, `len` 64, `be` all ones.
+>
+> So it is read-modify-write, and **it is smaller than this section feared**.
+> Not the edge BURSTS in general: layer D's seventeen bursts are read anyway to
+> serve `cell_state_i`, so both of its edge bursts are already held verbatim
+> and cost nothing. Only **layer B's two** (bursts 35 and 69) are read for
+> their foreign bytes, which is **two extra reads per bake** — 19 reads, 52
+> writes.
+>
+> The directed test this paragraph asks for exists and is the block's headline:
+> `pageio_rtl_directed` reads the page image back and asserts layers A, C and E
+> and the header are byte-identical. **The detector was fired**, by a mutant
+> that skips the two layer-B edge reads: it reported exactly **2** bytes of
+> layer A and **60** of layer C — the counts this section's own arithmetic
+> predicts — with layer C's 6-byte tail correctly surviving because layer D's
+> edge bursts are read. The arithmetic and the detector corroborate each other
+> rather than agreeing by construction.
 
 ---
 
@@ -309,6 +354,13 @@ reads every pass as a denial, silently.
 
 ## 7. OWNER DECISIONS this surfaces — do not decide these inside a packet
 
+> **BUILT 2026-09-21 by the PAGEIO packet.** `fpga/rtl/terrain/zhao_terrain_pageio.sv`,
+> with `design/blocks.yml` id `TERRAIN.PAGEIO`, `tests/terrain/pageio_rtl_directed.cpp`
+> (79 checks) and fit gate `F-PAGEIO1`. This section is amended BELOW rather
+> than rewritten: decision 1 turns out to be already ruled, decision 3's
+> settled half is taken and its open half is not, and a FOURTH decision the
+> contract did not name is stated and refused. See **§7bis**.
+
 **1. Is layer B persisted through the HPS journal, or is a direct pool write
 the whole of it?** Layer F's writeback does NOT simply write the pool: it
 streams the sheet to an **HPS journal** under the R14 doorbell contract, with
@@ -343,6 +395,105 @@ question and should be answered once.*
 **4. NOT owned here, and flagged only so it is not lost: the layer-E reader.**
 Offset 7,622, zero hits under `fpga/`, blocking entry I21 under ruling R13.
 Same shape, same page, different consumer, different packet.
+
+---
+
+## 7bis. What the build found out about §7 — 2026-09-21
+
+### Decision 1 is NOT an owner decision. Ruling T4 already answered it.
+
+The question above — journal or pool write — is settled, and the sentence was
+in the tree the whole time. `zhao_terrain_writeback.sv`'s header states T4 as:
+
+> B and D are **NEVER** written back (the HPS keeps the canonical mirror
+> current from the same deterministic commands); layer F has no canonical
+> mirror, so it MUST be, and *"wait for journal acknowledgement before the slot
+> may enter LOADING"*.
+
+That is the whole answer and it is given as the *reason layer F needs the
+doorbell*. The pool write is the whole of it: no second doorbell, no second
+ticket space. §7's own recommended reading is the ruled one, and its stated
+worry — that "persistent" might mean the journal — is answered by T4 naming the
+HPS's deterministic replay as the canonical mirror for exactly these two layers.
+
+**The shape is worth keeping.** The contract asked the owner for a ruling that
+existed, in a header its own §4 cites for a different reason. Before escalating
+a decision, grep for the ruling.
+
+### Decision 2 is TAKEN, as §7 recommended, and the test asserts it.
+
+A bake does **not** bump the generation: `dm_gen_o <= job_gen_q`. The slot still
+holds the same patch and `terr_dm_*`'s per-layer dirty bits are the mechanism
+for "this content moved". Bumping would make every handle held across a bake
+stale and start `terr_chk_stale_o` firing on live handles.
+`pageio_rtl_directed` asserts the echo, so the alternative reading cannot be
+adopted silently — it would turn a test red.
+
+### Decision 3: the settled half is taken, the open half is NOT.
+
+`dm_f_o` is **low**: a bake dirties B and D and does not touch the F sheet.
+That half is not in doubt and is not an owner decision.
+
+`dm_mips_o` is **high**, and this is a *safe default under an open ruling*, not
+an answer. Whether a bake invalidates the mips depends on
+`zhao_terrain_pagestream.sv`'s still-open ruling about which surface MIPGEN
+sees: mips built from layer A alone are untouched by a bake, mips built from
+`compose_top` are invalidated by every one. High is the reading under which a
+stale mip can never be shown; the cost of being wrong is regenerating mips that
+did not need it. Low would be the reading under which a wrong one can. **They
+are the same question and should be answered once, for both blocks.** The
+constant is one line beside a comment that says so.
+
+### Decision 5 — NEW, not in §7, and REFUSED here: who serves bake's layer-F read
+
+`zhao_terrain_bake_v2` gained `sheet_texel_o` / `sheet_strength_i` under ruling
+R194, and its own port comment says *"WHO SERVES IT is NOT this block and is
+not settled"*, naming a scheduler. **This packet did not build it, and the
+reason is that it is not a scheduler-shaped problem.** Measured against the
+actual port rather than the description:
+
+* `zhao_surface_sheet`'s `req_*` is a **control-and-read port**, not a memory
+  read: `req_op_i` carries `OP_ACQUIRE` / `OP_READ` / `OP_RELEASE`, it takes a
+  32-bit residency **handle**, and the answer comes back on a separate response
+  stream `pg_*` with a **status** — `ST_HIT`, `ST_ALLOCATED`, `ST_OVERFLOW`,
+  `ST_MISS`.
+* Bake wants a **combinational lookup**: `sheet_texel_o` is combinational on
+  the dig cursor and `sheet_strength_i` is sampled with `vtx_valid_i`, on the
+  same beat as base/scar/bottom/nobake.
+* The core's composition annotates the port `// REAL: SURFACE.STAMP is the only
+  requester`, and `zhao_console_core.sv` says of it *"one `req_*` channel with
+  no arbitration"*.
+
+So four things are missing, and only the third is an arbiter:
+
+1. **A handle, and its lifetime.** Who issues `OP_ACQUIRE` for the patch's
+   sheet page, and who issues `OP_RELEASE`? A bake that acquires and never
+   releases leaks one of `Slots` (default **2**) pages.
+2. **A latency adapter.** A ready/valid request with a separate response stream
+   cannot answer on the beat bake samples. Either bake's dig stalls per vertex
+   — 1,089 round trips per record — or something prefetches the 64×64 sheet,
+   which is 8,192 bytes and a second copy of layer F on chip.
+3. **The arbiter proper.** SURFACE.STAMP writes the same sheet in the same
+   frame. Its policy between a live stamp and a bake read is a **decision**: a
+   bake that reads a half-applied stamp digs a shape the player did not make,
+   and a stamp that waits for a bake drops frames.
+4. **A law for `ST_MISS`**, which is the one that is not an engineering
+   question at all. If the sheet page is not resident when a `cmd_depth_sheet_i`
+   record digs, the vertex gets *something*, and the options are not
+   cosmetically different: **fail the record** (the deformation does not
+   happen, and the player's action is silently lost), **dig zero** (the
+   deformation happens with no depth, which is a visible no-op), or **fall back
+   to the parametric disc** (§9.3's other law, which is a different shape).
+
+**Recommendation, and it is only that:** decision 4 first, because it is the
+one with a player-visible consequence, and the other three are cheap once it is
+written. Do not take 1–3 without it — an arrangement built around a miss policy
+nobody chose will have chosen one.
+
+**This is why entry I32 does not close on this block.** The *page* obstacle is
+removed; the *record* obstacle (`cmd_*` has no producer — `zhao_terrain_cmd`
+emits a patch-directory record, not a bake record) and this *sheet* obstacle
+are separate, and one of them is an owner's sentence to write.
 
 ---
 
