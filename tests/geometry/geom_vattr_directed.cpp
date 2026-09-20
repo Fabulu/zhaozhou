@@ -27,6 +27,14 @@
 //      batch's -- stored and counted under the same ordinal.
 //   K  done_o, read the way the composer reads it: at the first clock it is
 //      high after the last landing, every landing is a row or a counted loss.
+//
+// Owner ruling R88 (cases L and M): `done_o` gates BOTH sides of the composer's
+// GROUP_SEQ -> REPLAY handshake, so a batch that never satisfies it wedges the
+// whole geometry front end with no timeout and no abort. `done_stall_o` is the
+// watchdog that says so. L fires it with a batch nobody lights (R88's own
+// case); M fires it with a colour OFFERED and refused forever, which is the
+// case a watchdog reset by `lit_valid_i` rather than by the accepted handshake
+// would sleep through. A..K are the negative control: zero on all of them.
 //   poison_o rises on a lost row (C drop, G out of store) and is low on a
 //   clean batch (A) -- the composer ORs it into REPLAY's handle poison.
 #include <cstdint>
@@ -453,10 +461,107 @@ int main(int argc, char** argv) {
        "J: vertex 0's u/v, staged ON the boundary clock, keys row 0 of the NEW batch");
   }
 
+  // ---- L, M: THE STALL WATCHDOG, FIRED BY LEGAL STIMULUS (owner ruling R88) -
+  // `done_o` gates both sides of the composer's GROUP_SEQ -> REPLAY handshake,
+  // so a batch that never satisfies it wedges the whole geometry front end,
+  // with no timeout and no abort. `done_stall_o` is the instrument, and an
+  // instrument asserted zero and never seen to move is an argument. Both
+  // episodes below are reachable at these ports with every handshake obeyed --
+  // no mutant is owed, and the CLEAN cases above are the negative control.
+  const uint32_t stall_before = b.t.done_stall_o;
+  ck(stall_before == 0,
+     "L: NEGATIVE CONTROL -- eleven clean batches (A..K) fired the watchdog not once");
+
+  // L: R88's own case. A batch decodes vertices and NOTHING EVER LIGHTS THEM
+  // (a hull is not skinned and is not lit), so `lit_ord_q` never reaches
+  // `uv_ord_q` and no input can close the gap.
+  {
+    b.zero();
+    b.t.batch_i = 1; b.t.batch_views_i = 0b01;
+    b.step();
+    b.zero();
+    b.t.op_valid_i = 1; b.t.op_arena_i = 0;
+    b.step();
+    for (int i = 0; i < 4; ++i) {
+      b.zero();
+      b.t.uv_valid_i = 1; b.t.uv_u_i = 0x0100; b.t.uv_v_i = 0x0200;
+      b.step();
+    }
+    b.zero();
+    b.t.eval();
+    ck(!b.t.done_o, "L: a batch whose vertices are never lit never completes");
+    long fired_at = -1;
+    for (long g = 0; g < 200000; ++g) {
+      b.step();
+      b.t.eval();
+      if (b.t.done_stall_o != stall_before) { fired_at = g; break; }
+    }
+    ck(fired_at >= 0, "L: done_stall_o FIRES on a batch that owes a colour nobody will send");
+    ck(b.t.done_stall_o == stall_before + 1, "L: ... exactly once, not once per clock");
+    ck(!b.t.done_o, "L: ... and the watchdog OBSERVES -- it does not release the handle");
+    std::printf("  L: unlit batch: done_stall_o fired %ld clocks after the last input\n", fired_at);
+    // It re-arms: one more accepted input restarts the watch, and a SECOND
+    // episode of silence is counted again.
+    b.zero();
+    b.t.uv_valid_i = 1; b.t.uv_u_i = 0; b.t.uv_v_i = 0;
+    b.step();
+    b.zero();
+    long again = -1;
+    for (long g = 0; g < 200000; ++g) {
+      b.step();
+      b.t.eval();
+      if (b.t.done_stall_o == stall_before + 2) { again = g; break; }
+    }
+    ck(again >= 0, "L: the watchdog RE-ARMS -- an accepted input restarts the watch");
+  }
+
+  // M: the second wedge shape. A colour is OFFERED and held high forever while
+  // the batch's opens never arrive, so `lit_ready_o` stays low and the store
+  // takes nothing. A watchdog reset by `lit_valid_i` instead of the accepted
+  // handshake would be silent here; this is the case that proves it is not.
+  {
+    const uint32_t s0 = b.t.done_stall_o;
+    b.zero();
+    b.t.batch_i = 1; b.t.batch_views_i = 0b01;   // one arena expected
+    b.step();
+    b.zero();
+    b.t.uv_valid_i = 1; b.t.uv_u_i = 0x0040; b.t.uv_v_i = 0x0080;
+    b.step();
+    b.zero();
+    b.t.lit_valid_i = 1; b.t.lit_r_i = 0x100; b.t.lit_g_i = 0x200; b.t.lit_b_i = 0x300;
+    b.t.eval();
+    ck(b.t.lit_ready_o == 0, "M: with no open, the colour is refused (lit_ready_o low)");
+    long fired_at = -1;
+    for (long g = 0; g < 200000; ++g) {
+      b.step();                       // lit_valid_i stays asserted throughout
+      b.t.eval();
+      if (b.t.done_stall_o != s0) { fired_at = g; break; }
+    }
+    ck(fired_at >= 0,
+       "M: done_stall_o FIRES while a colour is OFFERED and refused -- an offer is not progress");
+    ck(b.t.lit_ready_o == 0, "M: ... and it was refused for the whole episode");
+    std::printf("  M: colour offered without an open: done_stall_o fired %ld clocks in\n", fired_at);
+    // And the wedge CLEARS the honest way: give the batch its arena, the store
+    // takes the colour, the counts agree and `done_o` rises.
+    b.zero();
+    b.t.op_valid_i = 1; b.t.op_arena_i = 1;
+    b.step();
+    b.zero();
+    b.t.lit_valid_i = 1; b.t.lit_r_i = 0x100; b.t.lit_g_i = 0x200; b.t.lit_b_i = 0x300;
+    b.t.eval();
+    ck(b.t.lit_ready_o == 1, "M: the open arrives and the colour is taken");
+    b.step();
+    b.zero();
+    bool done = false;
+    for (int g = 0; g < 400 && !done; ++g) { b.step(); b.t.eval(); done = b.t.done_o; }
+    ck(done, "M: the batch completes once the colour it owed is in -- the stall was real, not fatal");
+  }
+
   std::printf("geom_vattr_directed: %d checks, %d failed (landings=%u rows=%u colours=%u uv=%u "
-              "lq_overflow=%u index_oob=%u look_oob=%u mixed=%u dq_refused=%u dq_stray=%u)\n",
+              "lq_overflow=%u index_oob=%u look_oob=%u mixed=%u dq_refused=%u dq_stray=%u "
+              "done_stall=%u)\n",
               g_checks, g_fail, b.t.landings_o, b.t.rows_written_o, b.t.colours_written_o,
               b.t.uv_staged_o, b.t.lq_overflow_o, b.t.index_oob_o, b.t.look_oob_o,
-              b.t.profile_mixed_o, b.t.dq_refused_o, b.t.dq_stray_o);
+              b.t.profile_mixed_o, b.t.dq_refused_o, b.t.dq_stray_o, b.t.done_stall_o);
   zhao::exit_hard(g_fail ? 1 : 0);
 }

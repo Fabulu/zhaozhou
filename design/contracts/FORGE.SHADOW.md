@@ -1,8 +1,14 @@
 # Contract — FORGE.SHADOW (Contact shadows, as ordinary geometry)
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: not built
-> Reference: `zref::forge::shadow_*` — PLANNED AND NOT WRITTEN
+> RTL: `fpga/rtl/forge/zhao_forge_shadow.sv` — BUILT and UNIT-TESTED
+> (`tests/forge/forge_shadow_directed.cpp`, 39 checks), NOT COMPOSED. The
+> "RTL: not built" line that stood here was stale; corrected 2026-09-20 by the
+> geomseam packet, which read the file. The ledger's `tests:` rows still say
+> `PLANNED -- NOT WRITTEN` and are stale the same way.
+> Reference: `zref::forge::shadow_*` — PLANNED AND NOT WRITTEN. Searched
+> `reference/` for `shadow_hull` on 2026-09-20: zero hits, so the ledger's
+> `reference_model: zref::forge::shadow_hull` names a function nobody wrote.
 
 ## Purpose and exclusions
 
@@ -75,6 +81,45 @@ None. It reads terrain heights through the ordinary terrain path.
 Positions fx16 world units, as everything else in the geometry path.
 `strength` is unit8 (value = raw/256, so 255 is the largest representable and
 not 1.0).
+
+## Where the transparency comes from — OWNER RULING R89, and R48 reconciled
+
+**This section exists because two written laws disagreed.** Owner ruling R48
+(2026-09-19) fixed the console's vertex alpha at the named constant `ALPHA_C` =
+fx16 1.0 (opaque), reasoning *"no ratified vertex format carries alpha, so
+nothing is being stubbed"*. This contract's exclusions say the output is
+*"ordinary **transparent** geometry through the main renderer"*, and
+`zhao_forge_shadow.sv:147` emits a per-vertex `vtx_alpha_o`. A shadow composed
+under R48 as written would be a flat **opaque** polygon under every creature —
+the two documents contradicted each other, and each was cited on its own.
+
+**R89 resolves it, and both documents now say the same thing.** The resolution
+is not a compromise, it is a reading of what this block actually produces:
+
+* `zhao_forge_shadow.sv:295` is `assign vtx_alpha_o = strength_q`, and
+  `strength_q` is latched per CASTER. **Alpha is already constant over the
+  hull.** The per-vertex port carries a per-primitive quantity.
+* So what FORGE.SHADOW needs is a **flat per-triangle alpha**, and the console
+  already has carriage for exactly that: `tri_continuation_tail_i`'s
+  `vertex_alpha` field, feeding the composed `zhao_raster_blend` (six instances
+  in `zhao_raster_fragment.sv:490-510`). Giving that open boundary a producer
+  is the whole job.
+* **R48 therefore stands, unamended and true.** No ratified vertex format
+  carries alpha and none is being invented here. The alternative — a fourth
+  `zhao_geom_attrpack` plane AND a fourth `zhao_raster_tile_pipe_v2` lane, for
+  a value that does not vary across the primitive — is a real feature
+  (interpolated per-vertex alpha) that should be commissioned as one, not
+  smuggled in as part of closing a shadow gap.
+
+**So this contract's `vtx_alpha_o` is hereby declared PER-PRIMITIVE, not
+per-vertex.** It is emitted once per caster and every vertex of that caster's
+hull carries the same value; a consumer is entitled to sample it once.
+Interpolating it is not required and, until the fourth attribute lane exists,
+not possible.
+
+Recorded in both places by ruling: here, and against R48 in
+`reports/OWNER-RULINGS-20260919-EVENING.md`. *A contract corrected in one place
+and not the other is how this pair got here.*
 
 ## Latency (fixed or variable)
 

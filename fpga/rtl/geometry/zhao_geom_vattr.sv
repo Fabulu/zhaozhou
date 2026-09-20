@@ -120,6 +120,49 @@
 //   poison_o       not a counter: the batch lost a row (a drop or an
 //                  out-of-store landing), ORed into REPLAY's handle poison.
 //   uv_waits_o     not a fault: depth results that waited for their u/v.
+//   done_stall_o   THE WATCHDOG -- see the next section.
+//
+// ---------------------------------------------------------------------------
+// `done_o` CAN WEDGE THE WHOLE GEOMETRY FRONT END, AND NOW IT SAYS SO
+// ---------------------------------------------------------------------------
+// Owner ruling R88 (2026-09-20): "A composed path that can wedge the whole
+// front end with no timeout and no counter is the shape [CLAUDE.md's] own
+// chapter is about -- nobody will be debugging shadows when it fires."
+//
+// `done_o` is a six-term AND and the composer gates GROUP_SEQ's handle into
+// REPLAY on it from BOTH sides (`zhao_console_core.sv` :7354 and :13722). Two
+// of its terms are COUNT EQUALITIES, and either can be left unmet forever by a
+// producer that simply stops:
+//
+//   rows_b_q == lands_b_q   a landing whose row is never written;
+//   lit_ord_q == uv_ord_q   a DECODED VERTEX THAT NEVER RECEIVES A COLOUR.
+//
+// The second is the reachable one and it needs no defect upstream: a batch
+// whose vertices are not lit -- R88's shadow hull is the example that found it
+// -- decodes u/v and never offers `lit_valid_i`, so the batch never releases
+// its arena, GEOM_ARENAS exhausts and the front end stops. There is no timeout
+// and no abort, and adding one would be a POLICY change (a batch released
+// early serves REPLAY rows that were never written). So this block does not
+// abort; it OBSERVES, which is what R88 asks for.
+//
+// THE WATCHDOG'S TWO SIDES ARE CLOCKED BY DIFFERENT THINGS, deliberately
+// (CLAUDE.md, "a detector wired to two operands that move together cannot
+// fire"): one side is a free-running clock counter, the other is every
+// HANDSHAKE in the block. `done_stall_o` counts EPISODES in which
+//
+//   * the store OWES something (`!done_o`), and
+//   * for `STALL_LIMIT` consecutive clocks NOTHING MOVED -- no input accepted,
+//     no landing dequeued, no depth result taken, no reciprocal launched or
+//     retired. See `va_move_c` for why every term is an EVENT and none is a
+//     "busy" LEVEL: a hang holds a busy level high forever, so a watchdog that
+//     trusts one is silent through the hang it exists for.
+//
+// It fires ONCE per episode and re-arms on the next event or on completion.
+// It says the front end is stuck, not WHY; difference `uv_staged_o` against
+// the colours taken (`colours_written_o` / views) and `landings_o` against
+// `rows_written_o + lq_overflow_o + index_oob_o` to see which equality is open.
+// Fired by legal stimulus in geom_vattr_directed cases L and M, and asserted
+// ZERO on every clean batch -- no mutant is owed.
 //
 // Conservative SystemVerilog subset only (charter section 2).
 `default_nettype none
@@ -137,6 +180,16 @@ module zhao_geom_vattr #(
     // bursts (two views of one vertex land back to back) against a depth
     // stream that takes one landing a clock while a context is free.
     parameter int unsigned LQ_DEPTH = 8,
+    // THE WATCHDOG'S PATIENCE, in clocks (owner ruling R88; see the header).
+    // An EDITABLE knob, not a derived one. 65,536 is ~3.9% of a Z60 frame's
+    // 1.67M gpu clocks and far beyond any legitimate wait inside one batch of
+    // at most VSLOTS vertices: the longest honest quiescent-but-not-done window
+    // in composition is a colour held while GROUP_SEQ waits for a free arena,
+    // which is bounded by one REPLAY drain (hundreds of clocks, R66's 555-clock
+    // meshlet period). Raise it if a legitimate wait ever grows; never lower it
+    // to make a test cheap, because then the shipped block is not the one
+    // measured.
+    parameter int unsigned STALL_LIMIT = 65536,
     // Opaque, fx16 1.0: format 0 carries no alpha (see the header).
     parameter logic [31:0] ALPHA_C  = 32'h0001_0000
 ) (
@@ -203,7 +256,12 @@ module zhao_geom_vattr #(
     // WAITS for it (see "u/v BEFORE ITS ROW") and this counts each such result
     // once. Not a fault -- the wait makes the row right -- but the evidence
     // that the join is a HANDSHAKE rather than a timing assumption.
-    output logic [31:0]             uv_waits_o
+    output logic [31:0]             uv_waits_o,
+    // THE FRONT END IS WEDGED ON THIS BLOCK (owner ruling R88). One count per
+    // episode of STALL_LIMIT consecutive clocks in which `done_o` is low, every
+    // machine here is idle, and nothing moved at any input port. See the
+    // header: it observes, it does not abort.
+    output logic [31:0]             done_stall_o
 );
 
   localparam int unsigned VIW  = $clog2(VSLOTS);
@@ -213,6 +271,7 @@ module zhao_geom_vattr #(
   localparam int unsigned NA   = 1 << ARENA_W;
   localparam int unsigned TAGW = ARENA_W + INDEX_W;
   localparam int unsigned LQW  = (LQ_DEPTH <= 2) ? 1 : $clog2(LQ_DEPTH);
+  localparam int unsigned SCW  = $clog2(STALL_LIMIT + 1);
 
   initial begin
     if ((VSLOTS & (VSLOTS - 1)) != 0 || VSLOTS < 2)
@@ -225,6 +284,10 @@ module zhao_geom_vattr #(
       $fatal(1, "zhao_geom_vattr: VSLOTS (%0d) exceeds what INDEX_W (%0d) can name", VSLOTS, INDEX_W);
     if ((LQ_DEPTH & (LQ_DEPTH - 1)) != 0 || LQ_DEPTH < 2)
       $fatal(1, "zhao_geom_vattr: LQ_DEPTH (%0d) must be a power of two >= 2", LQ_DEPTH);
+    // A watchdog that can fire inside one batch is worse than none: it would
+    // report a stall on every ordinary colour wait and be learned to ignore.
+    if (STALL_LIMIT < 1024)
+      $fatal(1, "zhao_geom_vattr: STALL_LIMIT (%0d) is below one batch's honest wait", STALL_LIMIT);
   end
 
   // A row address, or "no row" when {arena, index} is outside the store.
@@ -491,6 +554,31 @@ module zhao_geom_vattr #(
                   lq_empty_c && dq_idle && (w_st_q == W_IDLE) && (c_st_q == C_IDLE);
 
   // ==========================================================================
+  // THE STALL WATCHDOG (owner ruling R88) -- see the header
+  // ==========================================================================
+  // MOVEMENT IS EVERY HANDSHAKE AND EVERY WRITE IN THIS BLOCK, AND NOTHING
+  // ELSE. Deliberately no LEVEL terms -- not `dq_idle`, not `w_st_q !=
+  // W_IDLE`. A first version reset the watchdog while the block was "busy",
+  // which is exactly the blind spot CLAUDE.md's detector chapter describes: a
+  // reciprocal that accepted a job and never returned it holds `dq_idle` LOW
+  // FOREVER, so a busy-means-alive watchdog would be silent through the one
+  // hang it cannot be argued out of. Every term below is an EVENT:
+  //
+  //   the five inputs, accepted -- `lit_take_c` and not `lit_valid_i`, because
+  //     a colour offered and refused forever (the batch's opens never arrived)
+  //     is the second wedge shape and must FIRE the watchdog, not silence it;
+  //   the landing queue draining into the depth stream;
+  //   a depth result taken by the row writer (which is also W_IDLE -> W_U, so
+  //     the row writer's own two clocks need no term of their own);
+  //   the reciprocal's two handshakes, launch and retire.
+  wire va_blocked_c = !done_o;
+  wire va_move_c = batch_i || op_valid_i || uv_valid_i || lit_take_c || fl_valid_i ||
+                   lq_pop_c || (dq_d_valid && dq_d_ready) ||
+                   (rcp_v_valid && rcp_v_ready) || (rcp_r_valid && rcp_r_ready);
+  logic [SCW-1:0] stall_ctr_q;
+  logic           stall_seen_q;   // this episode is already counted
+
+  // ==========================================================================
   // THE MACHINE
   // ==========================================================================
   integer ai;
@@ -529,6 +617,9 @@ module zhao_geom_vattr #(
       index_oob_o      <= '0;
       look_oob_o       <= '0;
       profile_mixed_o  <= '0;
+      stall_ctr_q      <= '0;
+      stall_seen_q     <= 1'b0;
+      done_stall_o     <= '0;
     end else begin
       // --- the batch boundary ---------------------------------------------
       // One meshlet is between GEOM.ASSETFETCH and GEOM.REPLAY at a time (the
@@ -637,6 +728,21 @@ module zhao_geom_vattr #(
         end
         default: c_st_q <= C_IDLE;
       endcase
+
+      // --- the stall watchdog (R88) -----------------------------------------
+      // The episode ends on completion OR on any accepted input; only
+      // STALL_LIMIT consecutive clocks of neither raise the count, and only
+      // once, so a permanently wedged front end reads 1 rather than climbing
+      // forever.
+      if (!va_blocked_c || va_move_c) begin
+        stall_ctr_q  <= '0;
+        stall_seen_q <= 1'b0;
+      end else if (stall_ctr_q != SCW'(STALL_LIMIT)) begin
+        stall_ctr_q <= stall_ctr_q + SCW'(1);
+      end else if (!stall_seen_q) begin
+        stall_seen_q <= 1'b1;
+        if (done_stall_o != 32'hFFFF_FFFF) done_stall_o <= done_stall_o + 32'd1;
+      end
 
       // --- the read port's valid, the arena's one-clock timing -------------
       rep_valid_o <= look_valid_i;

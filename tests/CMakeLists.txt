@@ -11212,6 +11212,26 @@ add_test(NAME mutant_copy_drift
 set_tests_properties(mutant_copy_drift PROPERTIES
   LABELS "fast;lint;nightly" TIMEOUT 300)
 
+# THE OTHER QUESTION ABOUT A COMMITTED MUTANT (owner ruling R93, 2026-09-20).
+# `mutant_copy_drift` proves a copy is CURRENT. It says nothing whatever about
+# whether anything RUNS it -- and `zhao_terrain_bake_v2_mutant.sv` was found
+# with ONE grep hit, the file itself: never elaborated, never asserted, and
+# refreshed on a merge anyway. An uninstantiated MODULE costs the fitter
+# nothing; an unrun MUTANT is cited as evidence.
+#
+# This gate is GREEN on the three known-undriven files, which sit on a debt
+# list inside the tool with a reason and an owner, and RED the moment a NEW
+# undriven mutant is committed -- the regression worth catching -- or when a
+# debt-list entry gains a driver and the list should shrink. Fired on purpose
+# by planting an undriven file under tests/mutants/: RC 1, and RC 0 again when
+# it was removed.
+add_test(NAME mutant_drivers
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/mutant_drivers.py
+    --repo-root ${CMAKE_SOURCE_DIR})
+set_tests_properties(mutant_drivers PROPERTIES
+  LABELS "fast;lint;nightly" TIMEOUT 300)
+
 # A directed test's case labels must identify their own block (ruling R62).
 # Three blocks were numbered 17 and one label named 35 checks across all three;
 # nothing in the compiler can see that, so it is a gate or it is nothing.

@@ -1130,6 +1130,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_va_dq_stray_o;
   logic [31:0] geom_va_uv_waits_o;
   logic        geom_va_poison_o;
+  logic [31:0] geom_va_done_stall_o;   // R88's watchdog
   // ---- GEOM.REPLAY's evidence
   logic [31:0] geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o;
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
@@ -5877,9 +5878,18 @@ module tb_zhao_console_core_smoke
     // Review of d52ae6c0: in composition decode precedes projection, so no
     // depth result should have had to wait for its u/v, and a clean batch
     // loses no row. (Both are fired in geom_vattr_directed cases I, C, G.)
-    $display("SMOKE: vattr join uv_waits=%0d poison=%0d", geom_va_uv_waits_o, geom_va_poison_o);
+    $display("SMOKE: vattr join uv_waits=%0d poison=%0d done_stall=%0d",
+             geom_va_uv_waits_o, geom_va_poison_o, geom_va_done_stall_o);
     if (geom_va_poison_o)
       $fatal(1, "SMOKE: GEOM.VATTR poisoned a clean batch");
+    // OWNER RULING R88. The watchdog is the negative control here and the
+    // POSITIVE control lives in geom_vattr_directed cases L and M, where legal
+    // stimulus fires it. A non-zero here means the geometry front end spent
+    // STALL_LIMIT clocks owing a row or a colour with nothing moving -- the
+    // wedge that has no timeout -- and the smoke must not pass through it.
+    if (geom_va_done_stall_o != 0)
+      $fatal(1, "SMOKE: GEOM.VATTR's done_o watchdog fired %0d time(s) -- the front end stalled",
+             geom_va_done_stall_o);
     // The attribute store and the arena answered on the SAME clock every time.
     // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
     // `-BadVertex` is the positive control that moves all four.
