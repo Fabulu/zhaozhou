@@ -1187,6 +1187,18 @@
 //                     which is the Mosaic layer-E triple -- it names WHICH
 //                     materials blend, not WHERE on them to sample. A terrain
 //                     texture-coordinate law does not exist in this tree.
+//
+//                     RECLASSIFIED 2026-09-20 under OWNER RULING R197 (untex
+//                     packet): this half is no longer a missing PRODUCER, it
+//                     is a DECLARATION. A primitive may enter GEOM.CLIP with
+//                     u/w and v/w undefined provided it presents `untex = 1`
+//                     at the door (`cl_in_untex_c`, see `u_geom_clip`); the
+//                     door refuses it only under a material that samples,
+//                     and GEOM.ATTRPACK never reads the two slots. A terrain
+//                     triangle would declare 1 here and need NO coordinate
+//                     law to enter. What remains of (b) is the lit r/g/b
+//                     line below, which R197 explicitly does NOT take
+//                     (dossier decision 5: terrain art content).
 //        lit r/g/b -- `terr_light_base_o` is ONE signed 32-bit SCALAR shade,
 //                     not three channels. Turning it into lit rgb needs the
 //                     material's COLOUR.
@@ -4796,6 +4808,21 @@ module zhao_console_core
   // The vertex-attribute store's word (owner ruling R11): slots 1..6 of the
   // packet above -- everything but invw24, which is GEOM.DEPTHQUANT's alone.
   parameter int unsigned GEOM_ATTR_STORE_W = (GEOM_CLIP_ATTRS - 1) * 32,
+  // THE UNTEXTURED DECLARATION OF THE MESH PRODUCER (owner ruling R197,
+  // 2026-09-20). Every triangle GEOM.REPLAY presents at GEOM.CLIP's door
+  // carries the per-primitive `untex` bit, and this is the value it carries:
+  // ZERO, TEXTURED, because every REPLAY triangle is built from a format-0
+  // vertex record (GEOM.VDECODE refuses every other format_id, and the
+  // format-0 layout carries u and v), so its u/w and v/w slots are real. This
+  // is R48's `ALPHA_C` shape exactly -- a per-primitive constant attribute at
+  // a named seam, not a stub: a producer whose records carry no texture
+  // coordinates replaces this value at this seam and nothing else moves. It
+  // is a PARAMETER rather than a localparam so that the committed wrapper
+  // `tests/mutants/zhao_console_core_untex_decl_mutant.sv` can set it to ONE
+  // and prove `geom_untex_refused_o` fires through the composed door -- the
+  // state is unreachable by legal stimulus while the only producer is
+  // textured, and a counter never seen to move is a claim, not a measurement.
+  parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -5474,6 +5501,23 @@ module zhao_console_core
   output logic [31:0]             geom_clip_culled_o,
   output logic signed [47:0]      geom_setup_area2_o,
   output logic [31:0]             geom_setup_triangles_submitted_o,
+  // THE UNTEXTURED DOOR'S REFUSAL (owner ruling R197, law 3): a primitive
+  // offered at GEOM.CLIP's input DECLARING it has no texture coordinates,
+  // while the material the window has published for it takes one or more
+  // samples. It is consumed at the door, never entered, and counted here --
+  // never silently sampled, because with u/w and v/w undefined a sample is a
+  // sample of texel (0,0) on every pixel. EXPECTED ZERO in this arrangement:
+  // the only composed producer (GEOM.REPLAY, format 0) declares TEXTURED by
+  // `GEOM_REPLAY_UNTEX_DECL`, so the state is unreachable by legal stimulus.
+  // Its zero is a measurement and not an argument because the committed
+  // wrapper `tests/mutants/zhao_console_core_untex_decl_mutant.sv` flips that
+  // declaration and `run_console_core_smoke.ps1 -UntexMutant` asserts this
+  // counter reaches the reference's replayed count with the raster untouched
+  // (INVERTED polarity). The two halves the door relies on are fired by
+  // stimulus at block level: the bit's carriage through GEOM.CLIP
+  // (`geom_clip_directed` case 12) and GEOM.ATTRPACK's branch on it
+  // (`geom_attrpack_directed` case 5).
+  output logic [31:0]             geom_untex_refused_o,
   // GEOM.ATTRPACK's two counters, out of the module for the same reason every
   // other block's are: a counter nobody can read is not evidence. Their RATIO
   // is the thing worth asserting -- `planes` must be exactly three times
@@ -9232,6 +9276,66 @@ module zhao_console_core
   wire signed [47:0] cl_o_area2;
   wire signed [11:0] cl_o_min_x, cl_o_max_x, cl_o_min_y, cl_o_max_y;
   wire        [15:0] cl_o_src_id;
+  wire               cl_o_untex;
+
+  // ==========================================================================
+  // THE UNTEXTURED DOOR -- owner ruling R197 (2026-09-20), law 3.
+  //
+  // This is the one place a primitive's DECLARATION ("I carry no texture
+  // coordinates") meets the MATERIAL it will be shaded with (the window's
+  // published record: `sample_count` is the number of texture samples that
+  // material takes). The two can disagree in exactly one direction that
+  // matters: an untextured primitive under a material that samples. There is
+  // no honest picture for that -- the sampler would read u/w = v/w = whatever
+  // the slots hold, and a zero there is texel (0,0), not "no texture" (spec
+  // rule W10; the R168/R181 hole in a different coat). So it is REFUSED at
+  // the door and COUNTED, never entered. The other three combinations pass:
+  // textured under a sampling material (every mesh triangle today), textured
+  // under a zero-sample material (the `page == 255` creature, whose vertices
+  // still carry u/v -- spec/creature_rules.md 1.2), and untextured under a
+  // zero-sample material (the profile this ruling sanctions).
+  //
+  // WHY HERE AND NOT AT THE SHELL'S DOOR. Downstream of this point every
+  // triangle is inside the material window's accounted span (entered here,
+  // retired by GEOM.CLIP or taken by the shell door -- "there is no fourth
+  // outcome"). A refusal inside the span would be that fourth outcome and
+  // would have to be threaded back into the window's occupancy. A refusal
+  // BEFORE the span is invisible to it: the triangle is consumed from the
+  // window (`mw_t_ready` high) and never enters (`cl_in_valid` low), so
+  // `d_enter_i` does not fire and the drain law is untouched. It is also the
+  // door R187 names for every non-mesh producer -- "the honest door is at
+  // GEOM.CLIP's input" -- so the arbiter that eventually admits particles and
+  // shadow hulls will present its `untex` bit to THIS gate, not to a second
+  // copy of it downstream.
+  //
+  // THE HANDSHAKE IS SAFE BY CONSTRUCTION. `cl_in_refuse_c` is a function of
+  // the offered declaration and of the window's registered publication only
+  // -- never of `mw_t_valid` and never of GEOM.CLIP's ready -- so the ready
+  // handed back to the window does not depend on the valid it hands out, and
+  // GEOM.REPLAY's registered valid cannot see its own ready. The counter moves
+  // on the handshake (`mw_t_valid && cl_in_refuse_c`, one clock per refused
+  // triangle, because the ready is high on that clock).
+  //
+  // THE PRODUCER'S DECLARATION is `GEOM_REPLAY_UNTEX_DECL` (see the parameter
+  // block): TEXTURED, for a reason that is a fact about the vertex format and
+  // not a convenience. When a second producer is arbitrated into this door its
+  // own bit is muxed here beside its triangle, on the same handshake, exactly
+  // as `rp_o_src_id` is.
+  // ==========================================================================
+  wire cl_in_valid, cl_in_ready;
+  wire cl_in_untex_c  = (GEOM_REPLAY_UNTEX_DECL != 0);
+  wire cl_in_refuse_c = cl_in_untex_c && (mw_pub_sample_count != 2'd0);
+  assign cl_in_valid = mw_t_valid && !cl_in_refuse_c;
+  assign mw_t_ready  = cl_in_refuse_c || cl_in_ready;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      geom_untex_refused_o <= 32'd0;
+    end else if (mw_t_valid && cl_in_refuse_c &&
+                 (geom_untex_refused_o != 32'hffff_ffff)) begin
+      geom_untex_refused_o <= geom_untex_refused_o + 32'd1;
+    end
+  end
 
   zhao_geom_clip #(
     .ATTRS (GEOM_CLIP_ATTRS)
@@ -9247,8 +9351,16 @@ module zhao_console_core
     // GEOM.REPLAY's. The window holds a triangle whose material is not the
     // published one until the span below has drained and the resolve has
     // answered. Every DATA wire beneath is still GEOM.REPLAY's own, unbuffered.
-    .tri_valid_i  (mw_t_valid),
-    .tri_ready_o  (mw_t_ready),
+    // R197, 2026-09-20: and it passes through the UNTEXTURED DOOR above,
+    // which consumes a declared-untextured triangle under a sampling material
+    // before it can enter. `cl_in_*` is that gated pair.
+    .tri_valid_i  (cl_in_valid),
+    .tri_ready_o  (cl_in_ready),
+    // REAL: the producer's untextured declaration (R197), the R48-shaped
+    // named seam `GEOM_REPLAY_UNTEX_DECL` -- see its parameter comment. Not a
+    // tie-off: it is the true value for the format-0 records this producer is
+    // built from, and the seam is where a producer without u/v changes it.
+    .tri_untex_i  (cl_in_untex_c),
     .tri_ax_i     (rp_o_ax),
     .tri_ay_i     (rp_o_ay),
     .tri_bx_i     (rp_o_bx),
@@ -9289,6 +9401,9 @@ module zhao_console_core
     .out_min_y_o  (cl_o_min_y),
     .out_max_y_o  (cl_o_max_y),
     .out_src_id_o (cl_o_src_id),
+    // REAL: the declaration, carried with the accepted triangle, into the one
+    // block that reads the slots it governs (GEOM.ATTRPACK below).
+    .out_untex_o  (cl_o_untex),
 
     // The winding-flipped attributes and the verdict leave the module: their
     // customer (GEOM.ATTRSETUP) is not composed, and dropping the swap here
@@ -9475,6 +9590,10 @@ module zhao_console_core
     .tri_attr_b_i (geom_clip_attr_b_o),
     .tri_attr_c_i (geom_clip_attr_c_o),
     .tri_src_id_i (cl_o_src_id),
+    // REAL: R197's declaration, off GEOM.CLIP's accepted packet. GEOM.ATTRPACK
+    // is the ONLY reader of the u/w and v/w slots in the tree, and with this
+    // bit set it does not read them (its header says what it packs instead).
+    .tri_untex_i  (cl_o_untex),
 
     // REAL: the shell's Packet-D attribute carriage.
     .out_valid_o          (ap_o_valid_w),
@@ -15849,7 +15968,9 @@ module zhao_console_core
   // triangle door, and its three disposal events are all real nets of this
   // module:
   //
-  //   d_enter_i   GEOM.CLIP accepted a triangle  (mw_t_valid && mw_t_ready)
+  //   d_enter_i   GEOM.CLIP accepted a triangle  (cl_in_valid && cl_in_ready;
+  //               NOT the window's handshake -- R197's door consumes a
+  //               refused triangle between the two, see `u_geom_clip`)
   //   d_reject_i  GEOM.CLIP retired one with a non-ACCEPT verdict -- its own
   //               `ret_valid_o` / `ret_verdict_o`, which fire once per
   //               submitted triangle, so a dropped triangle is never lost to
@@ -15882,8 +16003,12 @@ module zhao_console_core
     .t_valid_o (mw_t_valid),
     .t_ready_i (mw_t_ready),
 
-    // REAL: the span's three disposal events.
-    .d_enter_i  (mw_t_valid && mw_t_ready),
+    // REAL: the span's three disposal events. `d_enter_i` is GEOM.CLIP's OWN
+    // accept (`cl_in_*`), not the window's handshake: R197's untextured door
+    // sits between the two and CONSUMES a refused triangle without entering
+    // it, so counting the window's handshake here would enter a triangle that
+    // never leaves and the drain would wait for it forever.
+    .d_enter_i  (cl_in_valid && cl_in_ready),
     .d_reject_i (mw_clip_reject_c),
     .d_leave_i  (door_tri_valid_w && door_tri_ready_w),
 

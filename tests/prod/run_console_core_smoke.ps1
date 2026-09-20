@@ -149,6 +149,19 @@ param(
   [string]$BuildIn = $null,
   [switch]$SkipVerilate,
   [switch]$Mutant,
+  # ---------------------------------------------------------------------------
+  # -UntexMutant: THE POSITIVE CONTROL FOR `geom_untex_refused_o` (R197)
+  # ---------------------------------------------------------------------------
+  # Added 2026-09-20 with the untextured attribute law. The refusal counter at
+  # GEOM.CLIP's door cannot move under legal stimulus while the only composed
+  # producer (GEOM.REPLAY, format 0) declares TEXTURED, so this form builds the
+  # same bench and closure against
+  # `tests/mutants/zhao_console_core_untex_decl_mutant.sv` -- a WRAPPER with
+  # GEOM_REPLAY_UNTEX_DECL = 1 -- selected by `-DZHAO_MUT_UNTEX_DECL`. Its
+  # polarity is INVERTED: it passes when the counter reaches the reference's
+  # replayed count and NOTHING enters GEOM.CLIP; the plain run is the negative
+  # control and asserts the counter ZERO. Own build directory, own TAG.
+  [switch]$UntexMutant,
   [switch]$NoTableLoad,
   [switch]$BadDescriptor,
   [switch]$BadVertex,
@@ -208,6 +221,7 @@ $env:PATH = "C:\programmieren\zencrifice\.tools\oss-cad-suite\bin;C:\programmier
 
 if (-not $BuildIn) {
   $tag = if ($Mutant) { 'zhao_console_core_smoke_mut' }
+         elseif ($UntexMutant) { 'zhao_console_core_smoke_untex' }
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          elseif ($BadVertex) { 'zhao_console_core_smoke_badvtx' }
@@ -276,6 +290,11 @@ if ($Mutant) {
   $srcs += "$repoFwd/tests/mutants/zhao_console_core_slot_overflow_mutant.sv"
   $defs += '-DZHAO_MUT_SLOT_OVERFLOW'
   Write-Host 'MUTANT BUILD: zhao_console_core_slot_overflow_mutant, INVERTED POLARITY (passes when the counter fires)'
+}
+if ($UntexMutant) {
+  $srcs += "$repoFwd/tests/mutants/zhao_console_core_untex_decl_mutant.sv"
+  $defs += '-DZHAO_MUT_UNTEX_DECL'
+  Write-Host 'MUTANT BUILD: zhao_console_core_untex_decl_mutant, INVERTED POLARITY (passes when geom_untex_refused_o reaches the replayed count and nothing enters GEOM.CLIP)'
 }
 if ($NoTableLoad) {
   $defs += '+define+ZHAO_SMOKE_BAD_SPECIES_PAGE'

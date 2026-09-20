@@ -35,6 +35,10 @@
 //  10. counters      — submitted / clipped / culled are disjoint and sum
 //  11. backpressure  — the same triangles with out_ready_i gated by a PCG bit
 //                      stream: identical packets, held stable while stalled
+//  12. untex         — owner ruling R197's per-primitive untextured
+//                      declaration rides beside src_id through all three
+//                      stages, untouched by the flip, toggled between
+//                      consecutive triangles, and changes nothing else
 
 #define ZHAO_GEOM_DEV_CLIP
 #include "geom_dev.hpp"
@@ -361,6 +365,54 @@ void test_backpressure() {
   }
 }
 
+// --------------------------------------------------------------- 12 --------
+// THE UNTEXTURED DECLARATION (owner ruling R197). One bit, per primitive,
+// beside src_id. The block must carry it through all three stages UNTOUCHED
+// by the winding flip -- so the two triangles below are the SAME triangle
+// wound both ways, one of which the block flips -- and the verdict, the
+// packet and the box must be exactly what they are with the bit clear: the
+// declaration is metadata about the attributes, and the block interprets
+// neither. The driver diffs `out_untex_o` against what it offered on every
+// accepted packet, so this case is also the place a bit that leaked from the
+// previous triangle (a stage that stopped loading it) would be caught: the
+// declaration is toggled between consecutive triangles in both directions.
+void test_untex_declaration() {
+  const Clip::In ccw = tri(60 * 256 + 37, 70 * 256 + 200, 130 * 256 + 91, 80 * 256 + 5,
+                           95 * 256 + 133, 150 * 256 + 64);
+  const Clip::In cw = tri(60 * 256 + 37, 70 * 256 + 200, 95 * 256 + 133, 150 * 256 + 64,
+                          130 * 256 + 91, 80 * 256 + 5);
+
+  dev().untex = true;
+  const Clip::Out a = diff(ccw, kVp, Clip::kCullNone, "untex=1: accepted, packet unchanged");
+  const Clip::Out b = diff(cw, kVp, Clip::kCullNone, "untex=1: flipped, packet unchanged");
+  dev().untex = false;
+  const Clip::Out c = diff(ccw, kVp, Clip::kCullNone, "untex=0 after 1: no carry-over");
+  dev().untex = true;
+  const Clip::Out d = diff(cw, kVp, Clip::kCullNone, "untex=1 after 0: no carry-over");
+  dev().untex = false;
+
+  // Both windings normalise to one triangle, with or without the declaration.
+  check(a.ax == b.ax && a.ay == b.ay && a.bx == b.bx && a.by == b.by && a.cx == b.cx &&
+            a.cy == b.cy && a.area2 == b.area2,
+        "untex: the flip normalises the same triangle regardless of the bit", 0, 1);
+  check(a.ax == c.ax && a.area2 == c.area2 && b.ax == d.ax && b.area2 == d.area2,
+        "untex: the bit changes nothing about the geometry", 0, 1);
+
+  // And a rejected triangle retires the same way with the bit set: the
+  // declaration never reaches the verdict.
+  dev().untex = true;
+  diff(tri(-1000 * 256, 0, -900 * 256, 0, -950 * 256, 100 * 256), kVp, Clip::kCullNone,
+       "untex=1: an offscreen triangle is still offscreen");
+  diff(tri(50 * 256, 50 * 256, 60 * 256, 60 * 256, 80 * 256, 80 * 256), kVp, Clip::kCullNone,
+       "untex=1: a zero-area triangle is still culled");
+  dev().untex = false;
+
+  // Under backpressure the bit is held with the rest of the packet.
+  dev().untex = true;
+  diff(ccw, kVp, Clip::kCullNone, "untex=1: held stable under backpressure", 0x1234567u);
+  dev().untex = false;
+}
+
 }  // namespace
 
 int main() {
@@ -375,6 +427,7 @@ int main() {
   test_backface();
   test_counters();
   test_backpressure();
+  test_untex_declaration();
 
   return zhao::report_and_exit("geom_clip_directed");
 }

@@ -46,6 +46,8 @@ Input (`tri_valid_i` / `tri_ready_o`), sampled on the accepting edge:
 | `tri_ax_i` … `tri_cy_i` | 6 × signed 21 | projected screen vertices, S 12.8 subpixels (§8), already guard-band clamped |
 | `tri_behind_i` | 3 | bit *k* = vertex *k* had `w ≤ 0` at projection (rast.cpp `ProjOut::in`, inverted); bit 0 = A |
 | `tri_src_id_i` | 16 | source id, carried through untouched (`source_ids: true`) |
+| `tri_untex_i` | 1 | **the untextured declaration** (R197): this primitive carries NO texture coordinates; packet slots `u_over_w` and `v_over_w` are don't-care. Per primitive, carried through untouched. See "The untextured declaration" below |
+| `tri_attr_a_i` … `tri_attr_c_i` | 3 × `ATTRS`·32 | the ruling-5 per-corner attribute packet (`ATTRS = 7`: invw24, u/w, v/w, lit r, g, b, alpha), carried through and B/C-swapped with the winding flip |
 
 Configuration, sampled with the packet: `vp_x0_i` / `vp_y0_i` / `vp_w_i` / `vp_h_i` (12 bits unsigned each — the scissor rectangle in whole pixels: a canvas in Z60/Storm, one 256×192 view block in Duo, `spec/video_rules.md` §3.1) and `cull_mode_i` (2 bits, see above).
 
@@ -57,6 +59,8 @@ Output (`out_valid_o` / `out_ready_i`), only for an ACCEPTED triangle:
 | `out_area2_o` | signed 48 | 2A in subpixel², strictly positive |
 | `out_min_x_o`, `out_max_x_o`, `out_min_y_o`, `out_max_y_o` | signed 12 | the scissored scan box, INCLUSIVE whole pixels |
 | `out_src_id_o` | 16 | the packet's source id |
+| `out_untex_o` | 1 | the packet's untextured declaration, unchanged (the flip has nothing to swap in a per-primitive bit) |
+| `out_attr_a_o` … `out_attr_c_o`, `out_flip_o` | — | the attribute packet following its vertices through the flip, and the flip actually applied |
 
 Per-triangle verdict: `ret_valid_o` pulses for one cycle as EVERY triangle retires (accepted or not), with `ret_verdict_o` ∈ {0 accept, 1 near-plane, 2 zero-area, 3 backface, 4 offscreen} — the same encoding as `zref::Clip::Verdict`. `out_valid_o` is high on exactly the cycles where `ret_verdict_o == 0`, which the test driver asserts.
 
@@ -96,6 +100,123 @@ The ledger says `variable`; it is **fixed at 3 cycles** at full downstream readi
 ## Counters and traces
 
 `triangles_submitted_o`, `triangles_clipped_o`, `triangles_culled_o`, all u32 and **saturating at `0xFFFF_FFFF`** per `spec/counters.md` §4 (never wrap). The event definitions are the CHOSEN split above. The catalog ids and the `frame_tick` shadow-latch (counters.md §3/§5) are NOT implemented here — this block has no snapshot channel, exactly as RASTER.EDGEWALK's contract records for `covered_fragments`; wiring the three into DEBUG.COUNTERS belongs with that integration wave. Trace: `ret_valid_o` + `ret_verdict_o` is a one-cycle-per-triangle verdict stream, which is what the differential lanes compare.
+
+## The untextured declaration — owner ruling R197, 2026-09-20
+
+**A primitive MAY enter GEOM.CLIP with `u/w` and `v/w` undefined, provided it
+DECLARES that it has none.** This is the law that unblocks every non-mesh
+producer — terrain's texture half (core entry I13), the polygon particle
+(I24), the shadow hull (FORGE.SHADOW route B, whose design note already says
+*"u/v unused"*) — all of which reached the seven-slot packet independently and
+stopped, because a primitive with a flat colour and no texture coordinates has
+no value it could honestly write into slots 1 and 2. The ratified oracle says
+the same thing in its own words: `ScreenV::u, v` are *"read only when
+raster_tri carries a TextureSpan"* — texturedness is a fact about the CALL,
+never inferred from the vertex.
+
+**THE BINDING CONSTRAINT: the absence is DECLARED, never ENCODED.**
+`u/w = v/w = 0` is not "no texture"; it is texel (0,0) on every pixel of the
+primitive. Spec rule W10 — *an absent output must not look like a zero
+result* — and rulings R168/R181 are the same hole one seam over: an adapter
+that decided on `resp_status_i == 0` could not tell "not requested" from
+"requested and came back zero", and the hole was reachable with legal
+stimulus. **A sentinel value is the defect; a flag is the fix.** No consumer
+anywhere may infer "untextured" from the CONTENT of a slot. The four laws:
+
+1. **What the flag is and where it rides.** ONE bit, `untex`, **per
+   PRIMITIVE**, presented at this block's input beside `tri_src_id_i` on the
+   same handshake and carried through the three stages exactly as the source
+   id is (`s1_untex → s2_untex → s3_untex → out_untex_o`). It is
+   deliberately NOT a slot of the per-corner packet, and this is the
+   justification the ruling asked for: a triangle is textured or not as a
+   whole (the oracle's `TextureSpan` is per call); three per-corner copies
+   could disagree and would need a corner-agreement checker whose zero would
+   be one more silent instrument; the B/C winding swap has nothing to swap in
+   it; and the vertex-attribute store (GEOM.VATTR, keyed per vertex) would
+   carry a bit that is constant across the row.
+
+   **The seven-slot packet does not change shape.** `GEOM_CLIP_ATTRS` stays
+   7, `GEOM_CLIP_ATTRW` stays 224, `GEOM_ATTR_STORE_W` stays 192, and every
+   `[ATTRS*32-1:0]` port in the tree is untouched — the flag is a sideband
+   bit, and the proof is the diff: no attribute width moved anywhere.
+
+2. **What every consumer does when it is set — named by INSTANTIATION in
+   `zhao_console_core.sv`, not by ledger row** (R180: `upstream:` is intent,
+   not wiring):
+   * **the door at `u_geom_clip`'s input** (the core's `cl_in_*` gate, before
+     this block): law 3 below. It is the only place the primitive's
+     declaration meets the material it will be shaded with (the material
+     window's published `sample_count`).
+   * **`u_geom_clip`** (this block): carries the bit, interprets nothing. The
+     verdict, the packet, the box and the counters are identical with the bit
+     set or clear — `geom_clip_directed` case 12 diffs both windings of the
+     same triangle both ways against `zref::Clip`, toggles the bit between
+     consecutive triangles, and holds it under backpressure.
+   * **`u_geom_attrpack`** — **the ONLY reader of slots `u_over_w` and
+     `v_over_w` in the tree.** With the bit set it does not latch them: lanes
+     1 and 2 of its shared `zhao_geom_attrsetup` core are fed the ZERO
+     operand, so the slot content never enters the plane arithmetic and the
+     packed u/w and v/w planes are the null plane `{n0 = 0, dndx = 0, dndy
+     = 0}`. The null plane is the plane of the constant 0, which
+     `zhao_raster_attrgrad_v2`'s dividers cannot refuse (`0 / 2A` never
+     saturates or errors) — which matters, because arbitrary don't-care
+     content in those slots COULD raise `zhao_raster_tile_pipe_v2`'s
+     frame-terminating range fault through lane 1 or 2's `q_error_o`. The
+     lane schedule is unchanged (`planes_o == 3 × triangles_o` still holds).
+     `geom_attrpack_directed` case 5 plants loud values in slots 1 and 2
+     with the bit set and asserts the null planes, an unchanged invw24 plane,
+     and a full read on the next triangle with the bit clear.
+   * **`u_geom_setup`**: unchanged. It reads no attribute and needs no bit.
+   * **the shell (`zhao_shell_top_v2` → `zhao_raster_tile_pipe_v2` → the
+     texture island)**: unchanged, and honestly so. Downstream of the door the
+     invariant `untex ⇒ sample_count == 0` holds by construction, and the
+     island's existing branch on a zero-sample material (`required_mask_of`
+     issues no sample; `zhao_texture_combine`'s `untextured_c` takes the base
+     colour) is the branch that keeps the slot from a sampler. The tile pipe
+     still interpolates the null planes and runs the perspective divide on
+     them (`u = v = 0` land in a fragment record whose material reads them
+     nowhere); skipping that work would need the bit inside Packet-D's frozen
+     1,157-bit metadata word, which is an ABI change and is not taken here.
+
+3. **What is refused and counted, and where.** A primitive offered at the
+   door DECLARING untextured while the published material takes one or more
+   samples is **consumed at the door, never entered, and counted on
+   `zhao_console_core.geom_untex_refused_o`** — never silently sampled. The
+   refusal sits BEFORE the material window's accounted span (its `d_enter_i`
+   is GEOM.CLIP's own accept, not the window's handshake), so the drain law
+   is untouched; the ready handed to the window depends only on the offered
+   declaration and the registered publication, never on the valid, so the
+   pair cannot lock. The other three combinations pass: textured under a
+   sampling material (every mesh triangle), textured under a zero-sample
+   material (the `page == 255` creature of `spec/creature_rules.md` §1.2,
+   whose vertices still carry u/v), and untextured under a zero-sample
+   material (the profile this ruling sanctions).
+
+   **The counter has been seen to fire.** Its state is unreachable by legal
+   stimulus while the only composed producer declares textured, so the
+   positive control is the committed wrapper
+   `tests/mutants/zhao_console_core_untex_decl_mutant.sv` (one substantive
+   line, `GEOM_REPLAY_UNTEX_DECL = 0 → 1`), driven by
+   `tests/prod/run_console_core_smoke.ps1 -UntexMutant` with INVERTED
+   polarity: it passes only when the counter equals the reference's replayed
+   count, GEOM.CLIP submits nothing and the window's guards stay silent. The
+   plain run is the negative control and asserts the counter zero.
+
+4. **`R48`'s `ALPHA_C` is the precedent, and the producer's declaration takes
+   its shape.** The one composed producer, GEOM.REPLAY, declares TEXTURED
+   through the named seam `GEOM_REPLAY_UNTEX_DECL = 0` in the core's parameter
+   block — truthfully, because every REPLAY triangle is a format-0 vertex
+   record and format 0 carries u and v (GEOM.VDECODE refuses every other
+   format). Nothing is stubbed: it is the true value at a named, editable
+   seam, and a producer without texture coordinates presents `1` at the same
+   door when it is arbitrated in (R187: *"the honest door is at GEOM.CLIP's
+   input"* — this gate is that door's first tine).
+
+**What this law does NOT decide**, so it is not over-read: terrain's `lit r,
+g, b` (one signed 32-bit scalar shade against three channels) is terrain art
+content and remains the owner's (dossier decision 5); the arbiter that admits
+a second producer at this door, and the per-tine flat request it needs, are
+the door's remaining work (R187), not this ruling's.
 
 ## THE NEAR-PLANE OBLIGATION — 2026-09-03
 
@@ -170,3 +291,5 @@ None. The block is not in `ZHAO_SHELL_RTL`, is not in `fpga/files.qip`, has no c
 Guard band ±2048 px ratified (A3c); fixed-point clipping exactly per reference.
 
 Deliberately not built, so the next wave knows: no near-plane vertex GENERATION (the law is whole-primitive rejection, see above), no far-plane test (no spec states one and `invw24` has no far rail), no small-triangle or sub-pixel cull (rast.cpp keeps them and so must this), no per-triangle scissor rectangle (the viewport is a configuration input, latched per packet), no counter-catalog wiring, and no ratification of a winding convention.
+
+Since 2026-09-20 the block also carries the per-primitive untextured declaration `tri_untex_i → out_untex_o` (owner ruling R197, section above). The directed test's count grew by case 12; the oracle is unchanged, because the bit is metadata the block never interprets and the differential asserts exactly that.

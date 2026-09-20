@@ -122,8 +122,9 @@ struct Result {
 
 /** Offer one triangle, run until the pack is emitted, accept it. */
 Result run_one(Vzhao_geom_attrpack& t, const Vtx& A, const Vtx& B, const Vtx& C,
-               uint16_t src_id, int hold_ready_low) {
+               uint16_t src_id, int hold_ready_low, bool untex = false) {
   Result r{};
+  t.tri_untex_i = untex ? 1 : 0;
   t.tri_ax_i = A.x;
   t.tri_ay_i = A.y;
   t.tri_bx_i = B.x;
@@ -325,6 +326,68 @@ int main(int argc, char** argv) {
   check(top.planes_o == 3 * top.triangles_o,
         "at rest, planes is exactly three times triangles -- no lane stopped asking");
   check(top.triangles_o == static_cast<uint32_t>(ncase), "every case was counted once");
+
+  // -------------------------------------------------------------- case 5 --
+  // THE UNTEXTURED DECLARATION (owner ruling R197). This block is the only
+  // reader of slots u_over_w and v_over_w in the tree, so it is where "when
+  // the bit is set, nothing reads the slot" is either true or not. The same
+  // right triangle as case 1, with LOUD values planted in slots 1 and 2 --
+  // values that, read, would produce planes whose constant term is
+  // unmistakable -- and the bit set:
+  //   * the invw24 plane must be exactly what it is without the bit (the
+  //     declaration governs u/v only);
+  //   * the u/w and v/w planes must be the NULL plane {0, 0, 0}: the slot
+  //     content never entered the arithmetic;
+  //   * the lane schedule is unchanged: three planes were still asked for;
+  //   * and the NEXT triangle, with the bit clear, must read its slots again
+  //     (no carry-over of the branch, no carry-over of the null plane).
+  {
+    ++ncase;
+    Vtx a = mk(0, 0, 0x100000, 0x5A5A5A5A, static_cast<int32_t>(0xDEADBEEF));
+    Vtx b = mk(64, 0, 0x200000, 0x3C3C3C3C, 0x0BADF00D);
+    Vtx c = mk(0, 48, 0x300000, static_cast<int32_t>(0xCAFEBABE), 0x7FFFFFFF);
+    const int64_t area = orient(a.x, a.y, b.x, b.y, c.x, c.y);
+    const Result r = run_one(top, a, b, c, 0x0197, 2, /*untex=*/true);
+    check(r.got, "case 'untex': the pack was emitted");
+    if (r.got) {
+      for (int k = 0; k < 3; ++k) {
+        const Vtx* vs[3] = {&a, &b, &c};
+        check(plane_holds_at(r.plane[0], area, *vs[k], kSlotInvw),
+              "case 'untex': the invw24 plane is unaffected by the declaration");
+      }
+      check(r.plane[1].n0 == 0 && r.plane[1].dndx == 0 && r.plane[1].dndy == 0,
+            "case 'untex': the u/w plane is the NULL plane -- slot 1 was not read");
+      check(r.plane[2].n0 == 0 && r.plane[2].dndx == 0 && r.plane[2].dndy == 0,
+            "case 'untex': the v/w plane is the NULL plane -- slot 2 was not read");
+      check(r.src_id == 0x0197, "case 'untex': the identity travelled with the planes");
+      check(r.triangles - prev_tris == 1 && r.planes - prev_planes == 3,
+            "case 'untex': one triangle, three lanes -- the schedule is unchanged");
+      prev_tris = r.triangles;
+      prev_planes = r.planes;
+    }
+
+    // The bit cleared again on the very next triangle: every slot read.
+    ++ncase;
+    Vtx a2 = mk(0, 0, 0x100000, 1 << 20, -(1 << 20));
+    Vtx b2 = mk(64, 0, 0x200000, -(1 << 19), 3 << 18);
+    Vtx c2 = mk(0, 48, 0x300000, 7 << 17, 5 << 16);
+    const int64_t area2 = orient(a2.x, a2.y, b2.x, b2.y, c2.x, c2.y);
+    const Result r2 = run_one(top, a2, b2, c2, 0x0198, 0, /*untex=*/false);
+    check(r2.got, "case 'untex cleared': the pack was emitted");
+    if (r2.got) {
+      const int slots[3] = {kSlotInvw, kSlotU, kSlotV};
+      const Vtx* vs[3] = {&a2, &b2, &c2};
+      for (int lane = 0; lane < 3; ++lane)
+        for (int k = 0; k < 3; ++k)
+          check(plane_holds_at(r2.plane[lane], area2, *vs[k], slots[lane]),
+                "case 'untex cleared': every plane reads its slot again -- no carry-over");
+      prev_tris = r2.triangles;
+      prev_planes = r2.planes;
+    }
+    check(top.planes_o == 3 * top.triangles_o,
+          "after the untex cases, planes is still exactly three times triangles");
+    check(top.triangles_o == static_cast<uint32_t>(ncase), "the untex cases were counted");
+  }
 
   std::printf("geom_attrpack_directed: %d case(s), counters triangles=%u planes=%u, %d failure(s)\n",
               ncase, top.triangles_o, top.planes_o, fails);

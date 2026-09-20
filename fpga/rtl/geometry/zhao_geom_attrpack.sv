@@ -125,6 +125,31 @@ module zhao_geom_attrpack #(
     input  logic [ATTRS*32-1:0] tri_attr_c_i,
     /* verilator lint_on UNUSEDSIGNAL */
     input  logic    [IDW-1:0]   tri_src_id_i,
+    // THE UNTEXTURED DECLARATION (owner ruling R197). THIS BLOCK IS THE ONLY
+    // READER OF SLOTS U_OVER_W AND V_OVER_W IN THE TREE, so this is where the
+    // law's "consumers BRANCH on the flag; when set, nothing reads the slot"
+    // is discharged. With the bit set the two slots are NOT LATCHED: lanes 1
+    // and 2 are fed the ZERO operand instead, so whatever the producer left in
+    // the slots never enters the plane arithmetic, and the packed u/w and v/w
+    // planes are the null plane {n0 = 0, dndx = 0, dndy = 0} -- the plane of
+    // the constant 0, which the raster's gradient dividers cannot refuse
+    // (0 / 2A never saturates or errors), so a declared-absent attribute can
+    // never raise the tile pipe's frame-terminating range fault the way
+    // don't-care content honestly could. The lane SCHEDULE is unchanged: the
+    // core still runs three lanes, so `planes_o == 3 * triangles_o` stays the
+    // invariant the composer asserts. (Four clocks per untextured triangle
+    // could be reclaimed by skipping the two lanes; not taken, because it
+    // would change that ratio and buy throughput nothing asks for.)
+    //
+    // The bit is a DECLARATION and the zero is its CONSEQUENCE here, not the
+    // other way round: no consumer may infer "untextured" from a zero plane.
+    // The door at GEOM.CLIP's input has already refused any declared-untextured
+    // primitive whose material takes a sample, so downstream of this block
+    // `untex` implies `sample_count == 0` and the null plane is read by nothing
+    // that samples. `geom_attrpack_directed.cpp` case 5 pins both halves:
+    // the same corners with the bit set yield the null u/w and v/w planes and
+    // an UNCHANGED invw24 plane.
+    input  logic                tri_untex_i,
 
     // ---- the three Packet-D planes ----------------------------------------
     output logic                out_valid_o,
@@ -267,12 +292,23 @@ module zhao_geom_attrpack #(
         va_q[0]  <= $signed(tri_attr_a_i[32*SLOT_INVW     +: 32]);
         vb_q[0]  <= $signed(tri_attr_b_i[32*SLOT_INVW     +: 32]);
         vc_q[0]  <= $signed(tri_attr_c_i[32*SLOT_INVW     +: 32]);
-        va_q[1]  <= $signed(tri_attr_a_i[32*SLOT_U_OVER_W +: 32]);
-        vb_q[1]  <= $signed(tri_attr_b_i[32*SLOT_U_OVER_W +: 32]);
-        vc_q[1]  <= $signed(tri_attr_c_i[32*SLOT_U_OVER_W +: 32]);
-        va_q[2]  <= $signed(tri_attr_a_i[32*SLOT_V_OVER_W +: 32]);
-        vb_q[2]  <= $signed(tri_attr_b_i[32*SLOT_V_OVER_W +: 32]);
-        vc_q[2]  <= $signed(tri_attr_c_i[32*SLOT_V_OVER_W +: 32]);
+        // R197's branch: a declared-untextured primitive's u/w and v/w slots
+        // are never read. See the port's comment.
+        if (tri_untex_i) begin
+          va_q[1] <= 32'sd0;
+          vb_q[1] <= 32'sd0;
+          vc_q[1] <= 32'sd0;
+          va_q[2] <= 32'sd0;
+          vb_q[2] <= 32'sd0;
+          vc_q[2] <= 32'sd0;
+        end else begin
+          va_q[1] <= $signed(tri_attr_a_i[32*SLOT_U_OVER_W +: 32]);
+          vb_q[1] <= $signed(tri_attr_b_i[32*SLOT_U_OVER_W +: 32]);
+          vc_q[1] <= $signed(tri_attr_c_i[32*SLOT_U_OVER_W +: 32]);
+          va_q[2] <= $signed(tri_attr_a_i[32*SLOT_V_OVER_W +: 32]);
+          vb_q[2] <= $signed(tri_attr_b_i[32*SLOT_V_OVER_W +: 32]);
+          vc_q[2] <= $signed(tri_attr_c_i[32*SLOT_V_OVER_W +: 32]);
+        end
 
         lane_q      <= 2'd0;
         lane_sent_q <= 1'b0;

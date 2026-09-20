@@ -1289,6 +1289,7 @@ module zhao_prod_top (
   logic signed [12-1:0] u14_out_min_y_o;
   logic signed [12-1:0] u14_out_max_y_o;
   logic [16-1:0] u14_out_src_id_o;
+  logic [1-1:0] u14_out_untex_o;
   logic [224-1:0] u14_out_attr_a_o;
   logic [224-1:0] u14_out_attr_b_o;
   logic [224-1:0] u14_out_attr_c_o;
@@ -1311,16 +1312,17 @@ module zhao_prod_top (
       .tri_cy_i(u14_src[42 +: 21]),
       .tri_behind_i(u14_src[49 +: 3]),
       .tri_src_id_i(u14_src[56 +: 16]),
-      .tri_attr_a_i(u14_src[63 +: 224]),
-      .tri_attr_b_i(u14_src[70 +: 224]),
-      .tri_attr_c_i(u14_src[77 +: 224]),
-      .vp_x0_i(u14_src[84 +: 12]),
-      .vp_y0_i(u14_src[91 +: 12]),
-      .vp_w_i(u14_src[98 +: 12]),
-      .vp_h_i(u14_src[105 +: 12]),
-      .cull_mode_i(u14_src[112 +: 2]),
+      .tri_untex_i(u14_src[63 +: 1]),
+      .tri_attr_a_i(u14_src[70 +: 224]),
+      .tri_attr_b_i(u14_src[77 +: 224]),
+      .tri_attr_c_i(u14_src[84 +: 224]),
+      .vp_x0_i(u14_src[91 +: 12]),
+      .vp_y0_i(u14_src[98 +: 12]),
+      .vp_w_i(u14_src[105 +: 12]),
+      .vp_h_i(u14_src[112 +: 12]),
+      .cull_mode_i(u14_src[119 +: 2]),
       .out_valid_o(u14_out_valid_o),
-      .out_ready_i(u14_src[119 +: 1]),
+      .out_ready_i(u14_src[126 +: 1]),
       .out_ax_o(u14_out_ax_o),
       .out_ay_o(u14_out_ay_o),
       .out_bx_o(u14_out_bx_o),
@@ -1333,6 +1335,7 @@ module zhao_prod_top (
       .out_min_y_o(u14_out_min_y_o),
       .out_max_y_o(u14_out_max_y_o),
       .out_src_id_o(u14_out_src_id_o),
+      .out_untex_o(u14_out_untex_o),
       .out_attr_a_o(u14_out_attr_a_o),
       .out_attr_b_o(u14_out_attr_b_o),
       .out_attr_c_o(u14_out_attr_c_o),
@@ -1346,7 +1349,7 @@ module zhao_prod_top (
   logic u14_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u14_fold_q <= 1'b0;
-    else u14_fold_q <= u14_fold_q ^ (((^u14_tri_ready_o)) & u14_src[0]) ^ (((^u14_out_valid_o)) & u14_src[1]) ^ (((^u14_out_ax_o)) & u14_src[2]) ^ (((^u14_out_ay_o)) & u14_src[3]) ^ (((^u14_out_bx_o)) & u14_src[4]) ^ (((^u14_out_by_o)) & u14_src[5]) ^ (((^u14_out_cx_o)) & u14_src[6]) ^ (((^u14_out_cy_o)) & u14_src[7]) ^ (((^u14_out_area2_o)) & u14_src[8]) ^ (((^u14_out_min_x_o)) & u14_src[9]) ^ (((^u14_out_max_x_o)) & u14_src[10]) ^ (((^u14_out_min_y_o)) & u14_src[11]) ^ (((^u14_out_max_y_o)) & u14_src[12]) ^ (((^u14_out_src_id_o)) & u14_src[13]) ^ (((^u14_out_attr_a_o)) & u14_src[14]) ^ (((^u14_out_attr_b_o)) & u14_src[15]) ^ (((^u14_out_attr_c_o)) & u14_src[16]) ^ (((^u14_out_flip_o)) & u14_src[17]) ^ (((^u14_ret_valid_o)) & u14_src[18]) ^ (((^u14_ret_verdict_o)) & u14_src[19]) ^ (((^u14_triangles_submitted_o)) & u14_src[20]) ^ (((^u14_triangles_clipped_o)) & u14_src[21]) ^ (((^u14_triangles_culled_o)) & u14_src[22]);
+    else u14_fold_q <= u14_fold_q ^ (((^u14_tri_ready_o)) & u14_src[0]) ^ (((^u14_out_valid_o)) & u14_src[1]) ^ (((^u14_out_ax_o)) & u14_src[2]) ^ (((^u14_out_ay_o)) & u14_src[3]) ^ (((^u14_out_bx_o)) & u14_src[4]) ^ (((^u14_out_by_o)) & u14_src[5]) ^ (((^u14_out_cx_o)) & u14_src[6]) ^ (((^u14_out_cy_o)) & u14_src[7]) ^ (((^u14_out_area2_o)) & u14_src[8]) ^ (((^u14_out_min_x_o)) & u14_src[9]) ^ (((^u14_out_max_x_o)) & u14_src[10]) ^ (((^u14_out_min_y_o)) & u14_src[11]) ^ (((^u14_out_max_y_o)) & u14_src[12]) ^ (((^u14_out_src_id_o)) & u14_src[13]) ^ (((^u14_out_untex_o)) & u14_src[14]) ^ (((^u14_out_attr_a_o)) & u14_src[15]) ^ (((^u14_out_attr_b_o)) & u14_src[16]) ^ (((^u14_out_attr_c_o)) & u14_src[17]) ^ (((^u14_out_flip_o)) & u14_src[18]) ^ (((^u14_ret_valid_o)) & u14_src[19]) ^ (((^u14_ret_verdict_o)) & u14_src[20]) ^ (((^u14_triangles_submitted_o)) & u14_src[21]) ^ (((^u14_triangles_clipped_o)) & u14_src[22]) ^ (((^u14_triangles_culled_o)) & u14_src[23]);
 
   // ---- zhao_geom_cull ----
   logic [63:0] u15_lfsr_q;

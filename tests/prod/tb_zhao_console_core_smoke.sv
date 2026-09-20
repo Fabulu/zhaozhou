@@ -1163,6 +1163,7 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_clip_culled_o;
   logic signed [47:0]      geom_setup_area2_o;
   logic [31:0]             geom_setup_triangles_submitted_o;
+  logic [31:0]             geom_untex_refused_o;
   logic [63:0] render_fill_word_i;
   logic [63:0] render_clear_word_i;
   logic [31:0] render_state_i;
@@ -1715,6 +1716,14 @@ module tb_zhao_console_core_smoke
   // has no copied body to go stale. Its own header carries the argument.
 `ifdef ZHAO_MUT_SLOT_OVERFLOW
   zhao_console_core_slot_overflow_mutant dut (.*);
+`elsif ZHAO_MUT_UNTEX_DECL
+  // The SECOND wrapper mutant, same shape (owner ruling R197): it sets
+  // GEOM_REPLAY_UNTEX_DECL to ONE, so every triangle GEOM.REPLAY presents
+  // DECLARES it has no texture coordinates while the smoke's material takes
+  // a sample -- the one combination the untextured door must refuse. Its
+  // header carries the argument; this bench asserts `geom_untex_refused_o`
+  // reaches the reference's replayed count and NOTHING enters GEOM.CLIP.
+  zhao_console_core_untex_decl_mutant dut (.*);
 `else
   zhao_console_core dut (.*);
 `endif
@@ -2139,8 +2148,13 @@ module tb_zhao_console_core_smoke
   function automatic logic [7:0] sm_grade_byte(input int unsigned k);
     sm_grade_byte = 8'(8'h11 + 8'(k * 37));
   endfunction
-  // The shell's and the core's paths: the mutant build's DUT is a wrapper.
+  // The shell's and the core's paths: EVERY wrapper-mutant build's DUT is a
+  // wrapper, so every such define must be listed here -- a mutant added
+  // without this line fails 47 hierarchical probes at elaboration and looks
+  // like a broken core (found 2026-09-20 adding the R197 wrapper).
 `ifdef ZHAO_MUT_SLOT_OVERFLOW
+  `define PC_CORE dut.u_dut
+`elsif ZHAO_MUT_UNTEX_DECL
   `define PC_CORE dut.u_dut
 `else
   `define PC_CORE dut
@@ -3329,8 +3343,11 @@ module tb_zhao_console_core_smoke
   // arbiter's grant stream says for whom; the ENGINE0 share's state says how
   // long a read holds the one logical request slot; and the two FBWRITEs and
   // the reader say who is waiting on whom.
-  // The shell's path: the mutant build's DUT is a wrapper around the core.
+  // The shell's path: every wrapper-mutant build's DUT is a wrapper around
+  // the core (same list as `PC_CORE` above; keep the two in step).
 `ifdef ZHAO_MUT_SLOT_OVERFLOW
+  `define PC_SHELL dut.u_dut.u_shell
+`elsif ZHAO_MUT_UNTEX_DECL
   `define PC_SHELL dut.u_dut.u_shell
 `else
   `define PC_SHELL dut.u_shell
@@ -5778,6 +5795,35 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: MUTANT PASS -- terr_pl_slot_overflow_o fired %0d time(s). The detector works; production's zero is a measurement.",
              terr_pl_slot_overflow_o);
     $finish;
+`elsif ZHAO_MUT_UNTEX_DECL
+    // R197's door, INVERTED polarity. With the mesh producer declaring
+    // UNTEXTURED against a material that samples (this smoke's record 1 --
+    // the plain run asserts `render_texture_samples_o != 0` on it), every
+    // triangle the window releases must be consumed at the door and counted,
+    // and NONE may enter GEOM.CLIP. The count is compared to the SAME
+    // reference number the plain run compares `geom_clip_submitted_o` to, so
+    // "the counter fired" cannot be satisfied by a stray increment.
+    $display("SMOKE: MUTANT zhao_console_core_untex_decl_mutant -- geom_untex_refused_o=%0d (want %0d) clip_submitted=%0d setup_submitted=%0d raster_pixels=%0d matwin[unpub/underflow]=[%0d %0d]",
+             geom_untex_refused_o, SGF_EXP_REPLAYED, geom_clip_submitted_o,
+             geom_setup_triangles_submitted_o, render_pixels_o,
+             mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    if (geom_untex_refused_o == 0)
+      $fatal(1, "MUTANT FAILED: geom_untex_refused_o stayed 0 with GEOM_REPLAY_UNTEX_DECL=1 -- the untextured door did not refuse, so its zero in production is not evidence");
+    if (geom_untex_refused_o != SGF_EXP_REPLAYED)
+      $fatal(1, "MUTANT FAILED: geom_untex_refused_o=%0d but the reference replays %0d triangles -- the door refused the wrong number",
+             geom_untex_refused_o, SGF_EXP_REPLAYED);
+    if (geom_clip_submitted_o != 0 || geom_setup_triangles_submitted_o != 0)
+      $fatal(1, "MUTANT FAILED: %0d triangle(s) entered GEOM.CLIP (%0d reached SETUP) past a refusal -- a refused primitive was sampled after all",
+             geom_clip_submitted_o, geom_setup_triangles_submitted_o);
+    // The refusal happens BEFORE the material window's span, so the window's
+    // structural guards must stay silent: a refusal that leaked into the
+    // occupancy would show here as an underflow or an unpublished departure.
+    if (mat_win_err_unpublished_o != 0 || mat_win_err_underflow_o != 0)
+      $fatal(1, "MUTANT FAILED: the material window's guards fired (unpublished %0d, underflow %0d) -- the door's refusal entered the accounted span",
+             mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    $display("SMOKE: MUTANT PASS -- geom_untex_refused_o fired %0d time(s), nothing entered GEOM.CLIP, the window's accounting held. The detector works; production's zero is a measurement.",
+             geom_untex_refused_o);
+    $finish;
 `else
 
     // ---- 1. THE COMMAND WAS READ OVER THE BRIDGE -------------------------
@@ -6257,6 +6303,12 @@ module tb_zhao_console_core_smoke
     if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
       $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",
              geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED);
+    // R197's untextured door. The mesh producer declares TEXTURED (format 0
+    // carries u/v), so the door must refuse NOTHING here. This zero is a
+    // measurement, not an invariant restated: `-UntexMutant` flips the
+    // declaration and asserts the same counter reaches SGF_EXP_REPLAYED.
+    if (geom_untex_refused_o != 0)
+      $fatal(1, "SMOKE: the untextured door refused %0d triangle(s) from a producer that declares TEXTURED", geom_untex_refused_o);
 
     // A PIXEL NOW TRAVERSES THE RENDER PATH, so this is a CHECK and no longer
     // a note. What stood here said "raster pixels=0 because frames_admitted=0

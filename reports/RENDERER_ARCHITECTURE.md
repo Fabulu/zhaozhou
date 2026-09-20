@@ -187,6 +187,19 @@ Keep the current clean edge block and add a companion **GEOM.ATTRSETUP** rather
 than inserting a tagged divider service into the existing three-cycle edge
 setup. Flat and untextured triangles bypass it.
 
+> **HOW "bypass" IS BUILT — owner ruling R197, 2026-09-20.** The sentence
+> above is the fifth independent statement of the untextured profile and it
+> is now law with a mechanism. "Bypass" is not literal: the composed raster
+> wants three attribute lanes on every job, so a primitive cannot simply skip
+> the plane front end. Instead the primitive DECLARES it has no texture
+> coordinates (one bit, per primitive, beside the source id at GEOM.CLIP's
+> input), GEOM.ATTRPACK — the only reader of the u/w and v/w slots — feeds its
+> shared core the zero operand for those two lanes so the slot content never
+> enters the arithmetic, and the door refuses and counts a declared-untextured
+> primitive under a material that samples. The absence is declared, never
+> encoded as a zero coordinate. `design/contracts/GEOM.CLIP.md`, "The
+> untextured declaration", is the ratified text.
+
 ---
 
 ## RULING 6 — use the ratified plane-equation law, not the software stand-in

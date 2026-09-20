@@ -3933,6 +3933,18 @@ blocks:
     counters: [geom_clip_triangles_submitted, triangles_clipped, triangles_culled]
     counter_ports:
       geom_clip_triangles_submitted: triangles_submitted_o
+    # OWNER RULING R197 (2026-09-20): the block carries a per-PRIMITIVE
+    # untextured declaration, `tri_untex_i -> out_untex_o`, beside the source
+    # id. It is NOT a slot of the seven-slot per-corner packet (GEOM_CLIP_ATTRS
+    # stays 7); the absence of u/w, v/w is DECLARED by the bit, never ENCODED
+    # as a zero coordinate. The block interprets nothing; the refusal (a
+    # declared-untextured primitive under a material that samples) is the
+    # composer's door at this block's INPUT, counted on
+    # `zhao_console_core.geom_untex_refused_o`, and the only reader of the two
+    # slots (GEOM.ATTRPACK) branches on the bit. Contract: GEOM.CLIP.md, "The
+    # untextured declaration". The `upstream:` row above still names TERRAIN
+    # .PROJECT and GEOM.ASSEMBLE as INTENT (R180); the composed producer is
+    # GEOM.REPLAY through the material window, and it declares TEXTURED.
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
