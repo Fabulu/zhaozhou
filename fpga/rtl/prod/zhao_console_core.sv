@@ -16204,6 +16204,18 @@ module zhao_console_core
     .SHEET_W  (64),
     .SHEET_H  (64),
     .SLOTW    (3),
+    // FH26: WHICH CONTRACT THIS INSTANCE SPEAKS, stated rather than defaulted.
+    // 1 = LEGACY_STAMP_BRUSH -- the exact pre-2026-09-20 bridge: raw integer
+    // texel indices in, the LOW 16 BITS of canonical ordinal 1 out. It is
+    // chosen here deliberately and it preserves today's stamp pictures byte
+    // for byte. Owner directive 15.2 forbids switching this console to
+    // CANONICAL_STAMP silently -- "Do not break the existing stamp pictures by
+    // silently interpreting raw texel indices as Q16.16 units, or by taking
+    // the low 16 bits of Q16.16 1.0 (which is zero)" -- so the migration to 2
+    // is a deliberate application act with its own pictures, not a default.
+    // The adapter REFUSES AT ELABORATION if this is omitted (FH26), which is
+    // why there is no way to arrive at the permissive bridge by accident.
+    .STAMP_BINDING(1),
     // The SHARED port's lane counts, not the S profile's own (8 in / 3 out).
     // They follow `u_field_host`'s, which owner ruling R40 set to the FLOW
     // record's 13/7; the stamp adapter fills lanes 0 and 1 and reads lanes 0
@@ -16226,6 +16238,19 @@ module zhao_console_core
     .fld_ready_i   (sfa_fld_ready),
     .fld_tag_op_o  (sfa_fld_tag_op),
     .fld_strength_o(sfa_fld_strength),
+    // CANONICAL ORDINAL 2, DELIBERATELY NOT CONSUMED BY THIS CONSOLE, and
+    // said out loud here because owner directive 15.2 requires the exclusion
+    // to be LISTED rather than left "as an undocumented discarded lane in the
+    // host". `zhao_surface_stamp` has no emissive input -- there is no port to
+    // connect this to, and inventing a console boundary output for a lane
+    // nothing reads would convert an honest exclusion into a disconnected
+    // entry in the completion register. 15.2 is explicit that this is correct:
+    // "Do not claim the surface renderer uses the emissive output if it does
+    // not. Retaining and correctly returning it is shared-host conformance;
+    // commissioning its eventual surface effect is a separate application
+    // policy." The adapter computes and DECLARES it; this composer records
+    // that today's consumer has nowhere to put it.
+    .fld_emissive_o(),
 
     .req_valid_o  (sfa_req_valid),
     .req_ready_i  (sfa_req_ready),
@@ -16237,11 +16262,20 @@ module zhao_console_core
     .resp_out_i   (fld_resp_out_c),
     .resp_status_i(fld_resp_status_c),
 
-    .stamps_o  (surf_fld_stamps_o),
-    .texels_o  (surf_fld_texels_o),
-    .faults_o  (surf_fld_faults_o),
-    .restarts_o(surf_fld_restarts_o),
-    .busy_o    (surf_fld_busy_o)
+    .stamps_o      (surf_fld_stamps_o),
+    .texels_o      (surf_fld_texels_o),
+    .faults_o      (surf_fld_faults_o),
+    .restarts_o    (surf_fld_restarts_o),
+    // Structurally zero while this console composes LEGACY_STAMP_BRUSH, which
+    // performs no unit conversion and so can never clamp. It is left
+    // unconnected for the same reason as `fld_emissive_o`: it belongs to the
+    // CANONICAL binding, and exporting a counter that this configuration can
+    // prove is always zero would be an instrument that reads green because it
+    // cannot see anything -- the defect class this campaign exists to remove.
+    // It is fired, on the canonical binding, in
+    // tests/field/field_stamp_adapter_directed.cpp.
+    .canon_clamps_o(),
+    .busy_o        (surf_fld_busy_o)
   );
 
 endmodule : zhao_console_core

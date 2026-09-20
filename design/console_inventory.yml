@@ -96,6 +96,9 @@ modules:
   zhao_field_sinks:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_warp_adapter:
+    disposition: pending_compose
+    why: "The W profile's STREAM ADAPTER, built 2026-09-20 as GEOM.WARP prerequisite P2. `pending_compose` is the honest word and it is chosen deliberately over `instrument`: the block BELONGS in the console and is not wired yet, which is what this disposition means, and `instrument` would be a SETTLED disposition that silences `uncashed_cheques.py` about a cheque that is genuinely outstanding -- the C5 defect FIELD-REPAIR-PLAN-20260920.md found in this very file for the two Earth probes. It is not composed because it CANNOT yet be: `zhao_console_core` composes the shared client port at `.IN_LANES(13)` and the W profile is FIFTEEN lanes (spec/form/field-ir.md 7.1 line 523, decision W01), so the adapter's own elaboration guard refuses the narrow pair rather than silently dropping p3 -- exactly the failure field-ir.md:536-545 records, where a dropped lane 'does not read as absent, it reads as whatever the host's register clear left in R14'. Widening the three composition sites to 15 and taking CLIENTS from 2 to 3 is R103's prerequisite P1/P2 and is the composer's single atomic act. Directed test: tests/field/field_warp_adapter_directed.cpp."
   zhao_field_v2_core:
     disposition: superseded
     superseded_by: zhao_field_v3_core

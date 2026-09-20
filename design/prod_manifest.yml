@@ -447,6 +447,34 @@ top:
   # closes entry I5 under owner ruling R40: PART.UPDATE's acceleration
   # sample has a producer, and it is the one engine rather than a second.
   - zhao_field_flow_adapter
+  # The W profile's STREAM ADAPTER, GEOM.WARP prerequisite P2, built 2026-09-20.
+  # Counted as a CENSUS TOP and NOT as part of the console closure, because
+  # `zhao_console_core` does not instantiate it and must not yet: the shared
+  # client port is composed at IN_LANES(13) and the W profile is FIFTEEN
+  # (spec/form/field-ir.md 7.1 line 523, decision W01), so the adapter's own
+  # elaboration guard refuses the narrow pair by design. Widening the three
+  # composition sites to 15 is R103's prerequisite P1 and is the composer's
+  # single atomic act, not this block's.
+  #
+  # It is deliberately NOT declared absent or excluded. A block that is built
+  # and installed nowhere is an UNCASHED CHEQUE, and `uncashed_cheques.py`
+  # check 1 is written to watch exactly this -- so the note above is a
+  # DEFERRAL WRITTEN DOWN ("until it is composed"), which that tool treats as
+  # an open question, rather than a settled disposition that would silence it.
+  # That is the C5 lesson from FIELD-REPAIR-PLAN-20260920.md applied before it
+  # could bite a second time.
+  #
+  # A NOTE FOR WHOEVER MERGES THIS, because I got it wrong first and measured
+  # it second. Adding this row regenerates `zhao_prod_top.sv` with an 8,256-line
+  # diff, and the obvious mitigation -- append the row at the END of this list
+  # so nothing renumbers -- DOES NOT WORK. `gen_prod_top.py` emits its census
+  # instances in SORTED order, not manifest order, so this block lands at u06
+  # between the flow adapter and `zhao_forge_cliff` wherever the row is written,
+  # and u06..u68 shift by one regardless. Measured both ways: identical output.
+  # The file was verified FRESH at 77128711 before any of this, so that whole
+  # diff is this packet's and contains no other lane's work. Resolve a conflict
+  # in it by RE-RUNNING THE GENERATOR, never by hand.
+  - zhao_field_warp_adapter
   # SW.STREAM's program-load mailbox (owner ruling R43, on R14's doorbell
   # pattern). Counted because zhao_console_core instantiates it and it
   # closes entry I42: the loader and both directory phases have an owner.
@@ -529,9 +557,30 @@ retired_census_slots:
 # resource top taking the default would size the HPS arbiter for one client and
 # report the shell's memory front too small. The default was what the v1 shell
 # was fitted at.
+#
+# AND THE SAME DEFECT, FOUND AND REPAIRED 2026-09-20 IN THE STAMP ADAPTER.
+# `zhao_prod_top.sv` instantiated `zhao_field_stamp_adapter` with NO parameter
+# override, so the census measured the module's DEFAULTS -- which were 12 in /
+# 4 out, neither the S profile's own arity (8/3) nor the pair the console
+# actually composes (13/7, zhao_console_core.sv:16212-16213). They were EARTH's
+# record, copied. So the resource top sized the client's request bus at 384
+# bits while the console builds it at 416, and the census row described a
+# machine nobody composes. The defaults are now 13/7, and the composed
+# selection is stated here as well so that the two cannot drift apart silently
+# a second time.
+#
+# STAMP_BINDING has NO SAFE DEFAULT (owner directive FH26: "legacy is an
+# explicit mode, never the strict default"). The adapter refuses at elaboration
+# if it is omitted, so this row is MANDATORY rather than a refinement -- which
+# is the point: a census top can no longer take the permissive bridge by
+# accident. 1 = LEGACY_STAMP_BRUSH, the binding the console composes today.
 production_parameter_overrides:
   zhao_shell_top_v2:
     BUILD_HPS_N: 32'd2
+  zhao_field_stamp_adapter:
+    STAMP_BINDING: 32'd1
+    IN_LANES: 32'd13
+    OUT_LANES: 32'd7
 
 # ==============================================================================
 # SELECTED PROFILES -- intended measurement profile, not current evidence

@@ -2116,6 +2116,14 @@ targets:
       - fpga/rtl/field/zhao_field_host.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
+      # GEOM.WARP prerequisite P2. In THIS list because zhao_prod_top is a
+      # census top that instantiates it; deliberately NOT in the
+      # zhao_console_core closure, which does not compose it. Being in the
+      # manifest is not enough on its own -- zhao_geom_assemble and
+      # zhao_geom_depthquant were added to the manifest on 2026-09-04 and the
+      # production fit still died at elaboration because nobody added them
+      # here. This line is that second act.
+      - fpga/rtl/field/zhao_field_warp_adapter.sv
       - fpga/rtl/field/zhao_field_doorbell.sv
       - fpga/rtl/geometry/zhao_geom_loomfeed.sv
       - fpga/rtl/field/zhao_field_isqrt.sv
