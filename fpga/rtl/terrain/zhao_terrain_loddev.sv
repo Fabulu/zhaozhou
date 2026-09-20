@@ -30,9 +30,11 @@
 //                             never morphed (`morph_case` returns 0 there),
 //                             so they stay bit-identical to the fine lattice,
 //                             the same guarantee T8's nested decimation gives
-//                             shared vertices. PROVISIONAL DEFAULT per R8.
+//                             shared vertices.  Was the default until R22.
 //   DEV_INCLUDE_BOUNDARY = 1  the MESH deviation -- how far the coarse mesh
 //                             departs from the fine one, border included.
+//                             THE DEFAULT SINCE 2026-09-20, owner ruling R22,
+//                             provisional until the owner confirms by eye.
 // The owner picks by eye from the side-by-side render
 // (reports/terrain-lod-readings/); the pick is this one parameter. Its twin in
 // software is `zref::terrain::kLodDevIncludeBoundary`, and the directed test
@@ -60,7 +62,11 @@
 module zhao_terrain_loddev #(
     // R8's selector. 0 = morph deviation (border ring excluded), 1 = mesh
     // deviation (border included). See the header.
-    parameter bit DEV_INCLUDE_BOUNDARY = 1'b0
+    // OWNER RULING R22 (2026-09-19 evening), provisional and to be confirmed
+    // by eye from reports/terrain-lod-readings/lod_readings_contact.png: the
+    // MESH reading.  Its software twin is `zref::terrain::kLodDevIncludeBoundary`
+    // and tests/terrain/terrain_loddev_directed.cpp FAILS if only one moves.
+    parameter bit DEV_INCLUDE_BOUNDARY = 1'b1
 ) (
     input  var logic clk,
     input  var logic rst_n,

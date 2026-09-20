@@ -1000,12 +1000,25 @@
 //      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
 //      and `zhao_terrain_tess` are composed below and drive both, so the
 //      shared projector is measured here with BOTH of its clients live and
-//      `proj_contended_o` can move. What remains is the far end: the replayed
-//      triangle's customer is GEOM.SETUP, which is not composed, and the
-//      shell's own triangle door (`render_kx0_i` and its siblings) takes EDGE
-//      FUNCTIONS -- setup's arithmetic, not a rename of these corners. Wiring
-//      the corners into a port that wants edge functions would be exactly the
-//      hidden adapter this file must not contain.
+//      `proj_contended_o` can move.
+//
+//      CORRECTED 2026-09-20 (terrain pass 4): this entry said "the replayed
+//      triangle's customer is GEOM.SETUP, which is not composed". THAT CLAUSE
+//      IS FALSE. `zhao_geom_setup u_geom_setup` is instantiated in this file,
+//      takes GEOM.CLIP's packet and drives the shell's triangle door with real
+//      edge functions -- it landed with the geometry pass that closed the draw
+//      chain, and this entry was not re-read afterwards. The smoke's
+//      `raster pixels=2560` from 14 triangles is that path running.
+//
+//      WHAT ACTUALLY REMAINS, which the stale clause was hiding: GEOM.CLIP has
+//      exactly ONE triangle producer, `rp_o_valid` from GEOM.REPLAY, and there
+//      is NO TWO-PRODUCER MERGE. Terrain's projected corners leave this module
+//      on `proj_out_*` and its lit colour on `terr_light_*`, and both land
+//      nowhere. So the missing pieces are (a) the merge into GEOM.CLIP and
+//      (b) terrain's `invw24` -- GEOM.DEPTHQUANT lives inside GEOM.VATTR and
+//      serves the geometry lane only. Wiring the corners into a port that
+//      wants edge functions would still be the hidden adapter this file must
+//      not contain; that part of the old text stands.
 //
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
@@ -2012,8 +2025,50 @@
 //      `sp_dev2_i`, `sp_dev3_i`) and not the planes themselves. The block
 //      between them -- the one that keeps the mips and differences them
 //      against the fine lattice to produce a deviation -- has no name in the
-//      ledger and no file. Naming CMD.SCHEDULER or TERRAIN.SEQ here would be
-//      guessing; the honest statement is that the owner is UNIDENTIFIED.
+//      ledger and no file.
+//
+//      CORRECTED 2026-09-20 (terrain pass 4). "NO FILE" IS FALSE:
+//      `fpga/rtl/terrain/zhao_terrain_loddev.sv` was committed at 786f52ba the
+//      day before this entry was written, is `zref::terrain::lod_deviation` in
+//      hardware, is differentially tested, and emits exactly TERRAIN.LOD's
+//      `sp_dev1/2/3`. As of this pass `zhao_terrain_lodfeed` drives it at page
+//      load and `zhao_terrain_devstore` holds its records. The claim was false
+//      in the direction that MANUFACTURES WORK: it sends the next reader to
+//      build an SDRAM mip-pool residency engine.
+//
+//      AND THE PLANES ARE REDUNDANT WITH THE FINE LATTICE, which is the real
+//      finding and is an OWNER DECISION rather than a wiring gap. Ruling T8's
+//      decimation is NESTED and unrounded -- `design/contracts/TERRAIN.MIPGEN.md`
+//      44-45 gives `mip17[i,j] = fine33[2i, 2j]` and 65 says "both mips are
+//      strided subsets of the same scan", and `design/blocks.yml` 2840 says "a
+//      coarse vertex IS a fine vertex bit for bit". `zref::terrain::
+//      lod_deviation` (zref_terrain_tess.hpp 271-323) reads ONLY the fine
+//      lattice at stride `1 << level` and takes no mip array at all. So a mip
+//      store buys BANDWIDTH, never a different number -- and this pass's
+//      deviation walk reads the fine lattice at page load anyway, off the mip
+//      pass's own stream, so the round trip through
+//      TERRAIN.RESIDENT_MIP_POOL would buy nothing at all.
+//
+//      SEARCHED for any OTHER consumer of a 17x17 or 9x9 coarse height plane:
+//      `fpga/rtl/**` including `fpga/rtl/synth/` for `terr_mg_m17_|terr_mg_m9_`
+//      (four files: this one, the board, the smoke bench and a mutant copy --
+//      all carriers, no consumer); `reference/` for `mip17_at|mip9_at`
+//      (declared in zref_terrain.hpp 284-294, called only by
+//      `tests/terrain/terrain_mipgen_directed.cpp`); `design/contracts/` and
+//      `design/blocks.yml` (`downstream: [TERRAIN.LOD]` and nothing else);
+//      `spec/` (terrain_rules 109 "for TERRAIN.LOD", memory_rules 5b for the
+//      addresses); `tools/`; and the cross-cutting sweep
+//      `mip.*(collision|cull|shadow|physic|occlus|nav|query|stream)` over the
+//      whole tree, whose every hit is TEXTURE mip policy. PART.COLLIDE's
+//      terrain sample goes through TERRAIN.HEIGHTTAP on the FINE lattice.
+//      There is no second consumer.
+//
+//      SO THE OWNER DECISION IS: name a consumer for the coarse-height planes,
+//      or retire them (and the two mip pools) from spec 2 and memory_rules 5b.
+//      TERRAIN.MIPGEN stays composed either way, because its `done_o` is
+//      TERRAIN.RESIDENCY's second completion and that is load-bearing. Naming
+//      CMD.SCHEDULER or TERRAIN.SEQ as the store's owner would still be
+//      guessing.
 //
 //      WHY THE CHAIN IS COMPOSED ANYWAY, which is the part worth reading. The
 //      mip pass is composed for its COMPLETION, not for its planes.

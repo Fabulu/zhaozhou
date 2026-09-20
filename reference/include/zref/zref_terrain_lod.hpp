@@ -15,8 +15,16 @@
 //     (design/contracts/MEASURE.GOVERNOR.md: "Hysteresis/hold constants
 //     provisional until Wound Lab evidence").
 //   · spec/terrain_rules.md §2 derives the coarse height mips (17×17 + 9×9 per
-//     surface) and names TERRAIN.LOD as the consumer, so the per-level height
-//     deviation is a real stored quantity and not an invention.
+//     surface) and names TERRAIN.LOD as the consumer.
+//     CORRECTED 2026-09-20: this line used to conclude "so the per-level
+//     height deviation is a real stored quantity and not an invention", and
+//     that was a claim of PRESENCE that was false twice over. The deviation is
+//     NOT the same quantity as the planes -- under ruling T8 a mip sample IS a
+//     fine-lattice sample bit for bit, and `lod_deviation` differences the
+//     fine lattice against its own strided subset and reads no plane -- and it
+//     was stored NOWHERE until `zhao_terrain_devstore` (rulings R24/R59,
+//     2026-09-20). Until `zhao_terrain_loddev` (R8, 2026-09-19) nothing in
+//     this repository had ever executed either reading of it.
 //   · spec/qformats.md §7.2 `isqrt_u64` is the RATIFIED exact floor square
 //     root, already used for a distance in terrain_rules §3.7 ("the largest
 //     distance … floored to whole metres (isqrt of the squared distance)").

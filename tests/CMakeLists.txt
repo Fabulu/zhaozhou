@@ -9575,7 +9575,8 @@ set_tests_properties(jdoorbell_mutant_control PROPERTIES LABELS "fast;nightly" T
 # Differential against zref::terrain::lod_deviation, built TWICE from one
 # source: at the block's DEFAULT selector (which must equal
 # zref::terrain::kLodDevIncludeBoundary, so the owner's pick cannot move in one
-# language only) and with DEV_INCLUDE_BOUNDARY=1 (the mesh reading).
+# language only, and which is the MESH reading since owner ruling R22) and with
+# DEV_INCLUDE_BOUNDARY=0 (the morph reading), so both readings stay covered.
 add_test(NAME lint_terrain_loddev
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_loddev
@@ -9591,16 +9592,57 @@ verilate(test_terrain_loddev_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
 add_test(NAME terrain_loddev_directed COMMAND test_terrain_loddev_directed)
 set_tests_properties(terrain_loddev_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
-add_executable(test_terrain_loddev_mesh_directed terrain/terrain_loddev_directed.cpp)
-target_compile_definitions(test_terrain_loddev_mesh_directed PRIVATE LODDEV_MESH=1)
-target_link_libraries(test_terrain_loddev_mesh_directed PRIVATE zhao_harness zhao_zref)
-verilate(test_terrain_loddev_mesh_directed
-  PREFIX Vzhao_terrain_loddev_mesh
+add_executable(test_terrain_loddev_morph_directed terrain/terrain_loddev_directed.cpp)
+target_compile_definitions(test_terrain_loddev_morph_directed PRIVATE LODDEV_MORPH=1)
+target_link_libraries(test_terrain_loddev_morph_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_loddev_morph_directed
+  PREFIX Vzhao_terrain_loddev_morph
   TOP_MODULE zhao_terrain_loddev
-  VERILATOR_ARGS -GDEV_INCLUDE_BOUNDARY=1
+  VERILATOR_ARGS -GDEV_INCLUDE_BOUNDARY=0
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
-add_test(NAME terrain_loddev_mesh_directed COMMAND test_terrain_loddev_mesh_directed)
-set_tests_properties(terrain_loddev_mesh_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_test(NAME terrain_loddev_morph_directed COMMAND test_terrain_loddev_morph_directed)
+set_tests_properties(terrain_loddev_morph_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+# The two laws TERRAIN.BAKE was missing (owner rulings R15/R56, spec 9.3):
+# zref::terrain::stamp_depth (the ART table) and sheet_texel_for_vertex (the
+# 64x64 -> 33x33 nearest-texel resample). Pure zref, no RTL: the laws are what
+# had to be RATIFIED before the block's per-vertex depth mode can be written.
+add_executable(test_stamp_to_bake_laws_directed terrain/stamp_to_bake_laws_directed.cpp)
+target_link_libraries(test_stamp_to_bake_laws_directed PRIVATE zhao_zref)
+add_test(NAME stamp_to_bake_laws_directed COMMAND test_stamp_to_bake_laws_directed)
+set_tests_properties(stamp_to_bake_laws_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+# ---------------------------------------------------------------------------
+# THE PAGE-LOAD DEVIATION PATH (owner rulings R22/R24/R59):
+#   zhao_terrain_lodfeed (the mip pass's fine stream, buffered, walked)
+#   -> zhao_terrain_devstore (the per-page deviation and history store)
+# tests/terrain/tb_terrain_lodpath.sv is a WRAPPER, not a model: both blocks
+# are the production files and every wire is port to port.
+# ---------------------------------------------------------------------------
+add_test(NAME lint_terrain_devstore
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_devstore
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
+set_tests_properties(lint_terrain_devstore PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_terrain_lodfeed
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_lodfeed
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
+set_tests_properties(lint_terrain_lodfeed PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_lodpath_directed terrain/terrain_lodpath_directed.cpp)
+target_link_libraries(test_terrain_lodpath_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_lodpath_directed
+  PREFIX Vtb_terrain_lodpath
+  TOP_MODULE tb_terrain_lodpath
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
+add_test(NAME terrain_lodpath_directed COMMAND test_terrain_lodpath_directed)
+set_tests_properties(terrain_lodpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 # R8's side-by-side render of both deviation readings (a tool, not a test):
 # tools/terrain/lod_readings_sheet.py builds it, runs it and assembles the PNG.
 add_executable(terrain_lod_readings_render ${CMAKE_SOURCE_DIR}/tools/terrain/lod_readings_render.cpp)

@@ -28,15 +28,17 @@
 #include <vector>
 
 #include "verilated.h"
-
-#ifdef LODDEV_MESH
-#include "Vzhao_terrain_loddev_mesh.h"
-using Dut = Vzhao_terrain_loddev_mesh;
-constexpr bool kBuildIncludesBoundary = true;
+#ifdef LODDEV_MORPH
+#include "Vzhao_terrain_loddev_morph.h"
+using Dut = Vzhao_terrain_loddev_morph;
+constexpr bool kBuildIncludesBoundary = false;
 #else
 #include "Vzhao_terrain_loddev.h"
 using Dut = Vzhao_terrain_loddev;
-constexpr bool kBuildIncludesBoundary = false;
+// Owner ruling R22: the MESH reading is the block's default AND
+// `zref::terrain::kLodDevIncludeBoundary`'s.  This build FAILS if only one
+// of the two moves.
+constexpr bool kBuildIncludesBoundary = true;
 #endif
 
 #include "zhao_sim.hpp"
@@ -200,12 +202,12 @@ int main(int argc, char** argv) {
   // constant's; if either default moved alone, this compares a block reading
   // one law against an oracle reading the other and fails below on the
   // "readings differ" lattice.
-#ifndef LODDEV_MESH
+#ifndef LODDEV_MORPH
   const bool oracle_reading = zt::kLodDevIncludeBoundary;
   std::printf("selector: RTL default DEV_INCLUDE_BOUNDARY=%d, zref kLodDevIncludeBoundary=%d\n",
               kBuildIncludesBoundary ? 1 : 0, oracle_reading ? 1 : 0);
 #else
-  const bool oracle_reading = true;
+  const bool oracle_reading = false;   // the explicit MORPH build
 #endif
 
   int differ = 0;

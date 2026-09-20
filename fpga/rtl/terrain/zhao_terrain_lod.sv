@@ -83,7 +83,14 @@
 // 5. THE HISTORY RIDES THE PACKET. `sp_prev_level_i`, `sp_prev_morph_i` and
 //    `sp_hold_i` come in; the new level, morph and hold go out, for the caller
 //    to store. REJECTED: an internal history RAM. 1,024 patches × 16 subpatches
-//    × (2 + 17 + 8) bits is 6.6 KB of M10K that only this block can address,
+//    × (2 + 17 + 8) bits is 442,368 bits -- 54 KB, about 44 M10K --
+//    that only this block can address,
+//    (This line said 6.6 KB until 2026-09-20; the arithmetic had been divided
+//    by eight TWICE. Corrected against `zhao_terrain_devstore`, which now holds
+//    that history and measures it. The slip understated the REJECTED
+//    alternative, so it argued against this block's own decision rather than
+//    for it -- a mistake in the UNFLATTERING direction, which is exactly why
+//    nobody audited it.)
 //    and TERRAIN.PATCH already owns the per-patch state this belongs beside.
 //    A block whose contract can say "Memory ownership: none" is worth more than
 //    one that saved a packet field.

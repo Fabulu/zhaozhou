@@ -263,7 +263,7 @@ inline int morph_case(const SubpatchJob& job, int vi, int vj) {
 // constant's hardware twin, and tests/terrain/terrain_loddev_directed.cpp FAILS
 // if their defaults disagree. The owner's pick is a one-line change here and
 // one there, and the test says so if only one moves.
-inline constexpr bool kLodDevIncludeBoundary = false;
+inline constexpr bool kLodDevIncludeBoundary = true;  // owner ruling R22: the MESH reading
 
 // NO NEW ARITHMETIC. The coarse height at a midpoint is `coarse_height` of the
 // relevant pair and which pair it is comes from `morph_case` -- both ratified,
