@@ -34,6 +34,9 @@ struct Frame {
 /** The published targets, read straight off the ports. */
 struct Targets {
   uint16_t scale[2] = {0, 0};
+  // The per-camera pixel-error THRESHOLD, S12.8 (owner ruling R26). Published
+  // in the same cycle and under the same `targets_valid_o` pulse as the ratio.
+  int32_t thresh_q8[2] = {0, 0};
   bool en[2] = {false, false};
   uint16_t hyst = 0;
   uint8_t min_hold = 0;
@@ -46,6 +49,8 @@ inline Targets read_targets(const Vzhao_measure_governor& dut) {
   Targets t;
   t.scale[0] = dut.cam0_scale_o;
   t.scale[1] = dut.cam1_scale_o;
+  t.thresh_q8[0] = static_cast<int32_t>(dut.cam0_thresh_q8_o);
+  t.thresh_q8[1] = static_cast<int32_t>(dut.cam1_thresh_q8_o);
   t.en[0] = dut.cam0_en_o != 0;
   t.en[1] = dut.cam1_en_o != 0;
   t.hyst = dut.hyst_o;
@@ -118,6 +123,7 @@ inline Targets decide(Vzhao_measure_governor& dut, const Frame& f, int* clocks =
     if (dut.targets_valid_o) break;
     const Targets mid = read_targets(dut);
     if (mid.scale[0] != before.scale[0] || mid.scale[1] != before.scale[1] ||
+        mid.thresh_q8[0] != before.thresh_q8[0] || mid.thresh_q8[1] != before.thresh_q8[1] ||
         mid.en[0] != before.en[0] || mid.en[1] != before.en[1] || mid.src_id != before.src_id) {
       held = false;
     }

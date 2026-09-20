@@ -171,6 +171,16 @@ param(
   # for the run -- it proves the tree ELABORATES, and says nothing whatever
   # about what the console then does.
   #
+  # A PASS IN A FRACTION OF A SECOND IS REAL, AND IT IS NOT NOTHING.
+  # Verilator's `--skip-identical` is CONTENT-hashed, so a merge that touches
+  # no file in the closure makes this return in about 0.3 s. That reads
+  # exactly like a gate that has stopped doing anything, so it was proved
+  # rather than assumed: planting `this_is_not_systemverilog endmodule` in
+  # `zhao_console_core.sv` makes the SAME warm directory return nonzero with a
+  # real `%Error` in 0.7 s. The cache hit is evidence from the elaboration it
+  # matched, not an absence of one. Touching the mtime does NOT invalidate it;
+  # only the content does.
+  #
   # SEEN TO FIRE, not assumed. `spt_entry`'s `end`/`endfunction` was deleted
   # from the bench on purpose -- the exact damage the 2026-09-20 hostdbg merge
   # did -- and this switch returned nonzero with

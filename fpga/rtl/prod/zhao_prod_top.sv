@@ -2766,6 +2766,8 @@ module zhao_prod_top (
   logic [1-1:0] u38_busy_o;
   logic [16-1:0] u38_cam0_scale_o;
   logic [16-1:0] u38_cam1_scale_o;
+  logic signed [32-1:0] u38_cam0_thresh_q8_o;
+  logic signed [32-1:0] u38_cam1_thresh_q8_o;
   logic [1-1:0] u38_cam0_en_o;
   logic [1-1:0] u38_cam1_en_o;
   logic [16-1:0] u38_hyst_o;
@@ -2794,6 +2796,8 @@ module zhao_prod_top (
       .busy_o(u38_busy_o),
       .cam0_scale_o(u38_cam0_scale_o),
       .cam1_scale_o(u38_cam1_scale_o),
+      .cam0_thresh_q8_o(u38_cam0_thresh_q8_o),
+      .cam1_thresh_q8_o(u38_cam1_thresh_q8_o),
       .cam0_en_o(u38_cam0_en_o),
       .cam1_en_o(u38_cam1_en_o),
       .hyst_o(u38_hyst_o),
@@ -2810,7 +2814,7 @@ module zhao_prod_top (
   logic u38_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u38_fold_q <= 1'b0;
-    else u38_fold_q <= u38_fold_q ^ (((^u38_targets_valid_o)) & u38_src[0]) ^ (((^u38_busy_o)) & u38_src[1]) ^ (((^u38_cam0_scale_o)) & u38_src[2]) ^ (((^u38_cam1_scale_o)) & u38_src[3]) ^ (((^u38_cam0_en_o)) & u38_src[4]) ^ (((^u38_cam1_en_o)) & u38_src[5]) ^ (((^u38_hyst_o)) & u38_src[6]) ^ (((^u38_min_hold_o)) & u38_src[7]) ^ (((^u38_morph_step_o)) & u38_src[8]) ^ (((^u38_src_id_o)) & u38_src[9]) ^ (((^u38_deg0_o)) & u38_src[10]) ^ (((^u38_deg1_o)) & u38_src[11]) ^ (((^u38_lod_rep_count0_o)) & u38_src[12]) ^ (((^u38_lod_rep_count1_o)) & u38_src[13]) ^ (((^u38_lod_rep_count2_o)) & u38_src[14]) ^ (((^u38_lod_rep_count3_o)) & u38_src[15]);
+    else u38_fold_q <= u38_fold_q ^ (((^u38_targets_valid_o)) & u38_src[0]) ^ (((^u38_busy_o)) & u38_src[1]) ^ (((^u38_cam0_scale_o)) & u38_src[2]) ^ (((^u38_cam1_scale_o)) & u38_src[3]) ^ (((^u38_cam0_thresh_q8_o)) & u38_src[4]) ^ (((^u38_cam1_thresh_q8_o)) & u38_src[5]) ^ (((^u38_cam0_en_o)) & u38_src[6]) ^ (((^u38_cam1_en_o)) & u38_src[7]) ^ (((^u38_hyst_o)) & u38_src[8]) ^ (((^u38_min_hold_o)) & u38_src[9]) ^ (((^u38_morph_step_o)) & u38_src[10]) ^ (((^u38_src_id_o)) & u38_src[11]) ^ (((^u38_deg0_o)) & u38_src[12]) ^ (((^u38_deg1_o)) & u38_src[13]) ^ (((^u38_lod_rep_count0_o)) & u38_src[14]) ^ (((^u38_lod_rep_count1_o)) & u38_src[15]) ^ (((^u38_lod_rep_count2_o)) & u38_src[16]) ^ (((^u38_lod_rep_count3_o)) & u38_src[17]);
 
   // ---- zhao_measure_tokens ----
   logic [63:0] u39_lfsr_q;

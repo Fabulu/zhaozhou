@@ -207,7 +207,8 @@ what unblocks the loader and the uploader.
   root fx16[3] + s16[4] quantized quats + event tags). Byte-exact layouts
   freeze with SW.TOOLS.ASSET at Phase-12 entry (creature_rules §9); until
   then the packer refuses to emit them (deterministic refusal, never a
-  guessed layout).
+  guessed layout) — **except kind 8's HEADER and LADDER TABLE, which owner
+  ruling R26 (2026-09-19) unfroze and §4c freezes now.**
 - **Tone bank (kind 5):** the wave-2 mixer tone set the EmitAudioEvent path
   consumes (MixerTone records; spec/audio_rules.md): one header
   `{u32 tone_count}` + tone records `{u32 event_id; u16 gain; i16 pan;
@@ -262,6 +263,78 @@ mixture of two authors' physics, which reads as a tuning problem and is not one.
 Model: `reference/include/zref/zref_species_page.hpp` (`build` and
 `decode`). Hardware: `zhao_part_table_loader`, differenced against it in
 `tests/particles/part_table_loader_directed.cpp`.
+
+## §4c — CREATURE_FORM's LADDER TABLE (owner rulings R26 / R68, 2026-09-19)
+
+**A PARTIAL lift of the kind-8 freeze, for four fields and no others.** R26:
+*"Lift the kind-8 freeze for GEOM.LOD's FOUR constants only (bound radius,
+micro/splat/glint error). Their layout is frozen now and the packer emits
+them."* R68 schedules it as its own packet.
+
+`fpga/rtl/geometry/zhao_geom_lod.sv` — the creature representation ladder — is
+built, unit-verified and fit. Four of its five inputs are these constants, and
+`fpga/rtl/prod/zhao_console_core.sv` traced FORGE.SHADOW's whole refusal to
+them: *"There is no layout to read because the project has ruled that there
+must not be one yet."* This section is the ruling that ends that.
+
+**What is frozen here is the HEADER and the LADDER TABLE. Nothing else.**
+Parts, meshlet ids, the bone hierarchy, attachments and hitboxes remain frozen
+until SW.TOOLS.ASSET at Phase-12 entry, exactly as §4 says. The header's
+`body_off` names the byte offset at which that body will begin, so the
+unfrozen half can be appended later without moving a byte of the frozen half;
+`body_off == 0` means "no body in this page", which is what the packer emits
+until SW.TOOLS.ASSET exists. Passing a nonzero `body_off` to a packer that
+writes no body is **refused**.
+
+Everything is 64-byte shaped for the reason §4b gives: `MEM.GUARD`'s read is at
+most 64 bytes and its shape rule requires the byte mask to match the length, so
+a reader that asks for whole lines is the simplest one that can be correct. A
+record is 32 bytes rather than the 20 its fields need, so two fit a line
+exactly and no record ever straddles a read.
+
+```
+HEADER - 64 bytes, one line, at the page's base
+  u32 magic      'ZCFM'  (0x4D46435A little-endian on the wire)
+  u16 version    1
+  u16 records    how many ladder records follow
+  u32 body_off   byte offset of the Phase-12 body, or 0 if absent
+  u8  rsv[52]    zero
+
+LADDER RECORD - 32 bytes, TWO per line, starting at byte 64
+  bytes  0..3   u32 form_index    MESH_STREAM handle index, bits 23:0;
+                                  bits 31:24 MUST be zero
+  bytes  4..7   i32 bound_radius  fx16 world metres, > 0
+  bytes  8..11  i32 micro_error   fx16, >= 0
+  bytes 12..15  i32 splat_error   fx16, >= 0
+  bytes 16..19  i32 glint_error   fx16, >= 0
+  bytes 20..31  rsv[12]           zero
+```
+
+**The key is the MESH_STREAM handle index, not an invented type id.**
+`zref::creature::CreatureType::type_id` is software's own key and no hardware
+port carries it; `DrawForm.form` is a `handle32` whose index
+`zhao_geom_drawjob` already keys its MESH_STREAM residency directory by
+(rule §5f.1). Two instances of one creature share that index, so it IS the
+per-creature-type key at the hardware boundary — and using it means the ladder
+bank and the mesh directory agree by construction rather than by a second
+mapping law (the same decision R45 made for the stamp's patch).
+
+A page is **REFUSED WHOLE** on a wrong magic, a wrong version, a `records`
+count that runs past the length the publication declared, a count larger than
+the reader's row capacity, or **any illegal record** — a `bound_radius` at or
+below zero, a negative error, or a nonzero high byte in `form_index`. It is
+never partially loaded: a bank holding four rows of one author's creature and
+the rest of another's reads as an art problem and is not one, and
+`zref::creature::lod_raw`'s divide-free identities hold only for a positive
+bound radius and non-negative errors.
+
+Model: `reference/include/zref/zref_creature_page.hpp` (`build`, `decode`,
+`record_legal`, `lookup`). Packer: `tools/pack/mkcreatureladder.py`, whose
+`--check` rebuilds the committed golden
+`tests/golden/creature_ladder/ladder_page_v1.bin`. Hardware:
+`fpga/rtl/geometry/zhao_geom_ladderbank.sv`, differenced against the model and
+required to read that same golden in
+`tests/geometry/geom_ladderbank_directed.cpp`.
 
 ## 5. Packing discipline (tools/pack, W3.6)
 

@@ -162,6 +162,12 @@ Stats run_lane(Vzhao_measure_governor& dut, Rng& rng, long frames, bool limit) {
     check(held, "random: targets held stable through the decision", 1, held ? 1 : 0);
     check(got.scale[0] == want.scale[0], "random: scale0", want.scale[0], got.scale[0]);
     check(got.scale[1] == want.scale[1], "random: scale1", want.scale[1], got.scale[1]);
+    // Owner ruling R26's threshold, differenced against the reference on every
+    // random frame -- including every degrade rung the lane walks through.
+    check(got.thresh_q8[0] == want.thresh_q8[0], "random: thresh0",
+          static_cast<uint64_t>(want.thresh_q8[0]), static_cast<uint64_t>(got.thresh_q8[0]));
+    check(got.thresh_q8[1] == want.thresh_q8[1], "random: thresh1",
+          static_cast<uint64_t>(want.thresh_q8[1]), static_cast<uint64_t>(got.thresh_q8[1]));
     check(got.en[0] == want.en[0], "random: en0", want.en[0] ? 1 : 0, got.en[0] ? 1 : 0);
     check(got.en[1] == want.en[1], "random: en1", want.en[1] ? 1 : 0, got.en[1] ? 1 : 0);
     check(got.deg[0] == want.deg[0], "random: rung0", want.deg[0], got.deg[0]);

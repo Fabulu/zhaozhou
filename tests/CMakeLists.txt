@@ -9140,6 +9140,24 @@ verilate(test_measure_governor_directed
 add_test(NAME measure_governor_directed COMMAND test_measure_governor_directed)
 set_tests_properties(measure_governor_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# The per-camera PIXEL-ERROR THRESHOLD (owner ruling R26, scheduled by R68).
+# A SEPARATE suite rather than more cases in measure_governor_directed, for the
+# reason part_state_capacity_backstop is separate: that suite's check count is
+# quoted as evidence, and a number that moves whenever somebody adds a case is
+# a number nobody can use. It links zhao_zref and runs the published threshold
+# through zref::creature::lod_raw -- the law zhao_geom_lod implements -- so the
+# number means something rather than merely being self-consistent.
+add_executable(test_measure_governor_thresh measure/measure_governor_thresh.cpp)
+target_link_libraries(test_measure_governor_thresh PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_governor_thresh PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_governor_thresh
+  PREFIX Vzhao_measure_governor
+  TOP_MODULE zhao_measure_governor
+  SOURCES ${ZHAO_MEASURE_GOVERNOR_SV})
+add_test(NAME measure_governor_thresh COMMAND test_measure_governor_thresh)
+set_tests_properties(measure_governor_thresh PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_measure_governor_random measure/measure_governor_random.cpp)
 target_link_libraries(test_measure_governor_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_measure_governor_random PRIVATE
@@ -13996,6 +14014,118 @@ add_test(NAME lint_zhao_part_table_loader
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv)
 set_tests_properties(lint_zhao_part_table_loader PROPERTIES LABELS "lint;fast")
+
+# ---- GEOM.LOD's ladder-constant bank (owner rulings R26/R68) ---------------
+# The same discipline as the species-page loader above, plus one case that only
+# a DOUBLE-BANKED store can pass: an illegal record FIVE rows into a seven-row
+# page, with the previous page's rows required to still answer bit for bit
+# afterwards. "Fewer rows" is not the test; "the same rows" is.
+add_executable(test_geom_ladderbank_directed geometry/geom_ladderbank_directed.cpp)
+target_link_libraries(test_geom_ladderbank_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_ladderbank_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_ladderbank_directed
+  PREFIX Vtb_geom_ladderbank
+  TOP_MODULE tb_geom_ladderbank
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_ladderbank.sv)
+add_test(NAME geom_ladderbank_directed COMMAND test_geom_ladderbank_directed)
+set_tests_properties(geom_ladderbank_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_geom_ladderbank
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_ladderbank
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv)
+set_tests_properties(lint_zhao_geom_ladderbank PROPERTIES LABELS "lint;fast")
+
+# ---- THE WHOLE R68 CHAIN (owner ruling R68 sub-build 3) --------------------
+# zhao_view_projscale + zhao_geom_ladderbank + zhao_geom_lodstate (which holds
+# zhao_geom_projradius and zhao_geom_lod), every block REAL, against
+# zref::creature::lod_update run as a LIVE MODEL alongside -- one LodState per
+# instance on the C++ side, stepped with the same projected radius, so the
+# hysteresis and the minimum hold are compared across sixty frames rather than
+# at one point. A block that lost its state, cleared it on the frame pulse or
+# held the wrong instance's only shows up over time.
+add_executable(test_geom_lodstate_directed geometry/geom_lodstate_directed.cpp)
+target_link_libraries(test_geom_lodstate_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_lodstate_directed
+  PREFIX Vtb_geom_lodstate
+  TOP_MODULE tb_geom_lodstate
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lodstate.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_lodstate.sv)
+add_test(NAME geom_lodstate_directed COMMAND test_geom_lodstate_directed)
+set_tests_properties(geom_lodstate_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+add_test(NAME lint_zhao_geom_lodstate
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_lodstate
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lodstate.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lod.sv)
+set_tests_properties(lint_zhao_geom_lodstate PROPERTIES LABELS "lint;fast")
+
+# ---- GEOM.LOD's projected bound radius (owner ruling R68 sub-build 4) ------
+# The REAL zhao_view_projscale feeding the REAL zhao_geom_projradius, so the
+# driver writes a view MATRIX onto the projector configuration bus and the
+# projected radius comes out the far end. Every expected value is
+# zref::creature::projected_bound_radius_q8's own -- the oracle is CALLED, not
+# transcribed. Four cameras put the largest row-0 magnitude in a different
+# element each time, including one with m[0][0] == 0, which is the case an
+# implementation reading m[0][0] alone gets silently and catastrophically wrong.
+add_executable(test_geom_projradius_directed geometry/geom_projradius_directed.cpp)
+target_link_libraries(test_geom_projradius_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_projradius_directed
+  PREFIX Vtb_geom_projradius
+  TOP_MODULE tb_geom_projradius
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_projradius.sv)
+add_test(NAME geom_projradius_directed COMMAND test_geom_projradius_directed)
+set_tests_properties(geom_projradius_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 600)
+
+add_test(NAME lint_zhao_geom_projradius
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_projradius
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv)
+set_tests_properties(lint_zhao_geom_projradius PROPERTIES LABELS "lint;fast")
+
+# ...and the POSITIVE CONTROL for the one guard legal stimulus cannot reach.
+# `saturated_o` needs a quotient past 2^31 subpixels -- 8.4 million -- which no
+# legal camera produces, so it is fired through a COMMITTED MUTANT whose
+# overflow test is narrowed from bit 31 to bit 12. INVERTED POLARITY: it passes
+# when the counter fires and the answer clamps.
+add_executable(test_geom_projradius_mutant_control mutants/geom_projradius_mutant_control.cpp)
+target_link_libraries(test_geom_projradius_mutant_control PRIVATE zhao_harness)
+verilate(test_geom_projradius_mutant_control
+  PREFIX Vzhao_geom_projradius_mutant
+  TOP_MODULE zhao_geom_projradius_mutant
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mutants/zhao_geom_projradius_mutant.sv)
+add_test(NAME geom_projradius_mutant_control COMMAND test_geom_projradius_mutant_control)
+set_tests_properties(geom_projradius_mutant_control PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_view_projscale
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_view_projscale
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv)
+set_tests_properties(lint_zhao_view_projscale PROPERTIES LABELS "lint;fast")
+
+# ...and the PACKER, which is the third statement of the same layout. It
+# rebuilds the committed golden from its own constants and fires each of its
+# four refusals; geom_ladderbank_directed requires zref::creature_page::build
+# to reproduce that SAME file and the RTL to read it. Three statements, one
+# artefact.
+add_test(NAME pack_creature_ladder_check
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/pack/mkcreatureladder.py" --check)
+set_tests_properties(pack_creature_ladder_check PROPERTIES LABELS "fast;tools" TIMEOUT 120)
 
 # ---------------------------------------------------------------------------
 # PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.

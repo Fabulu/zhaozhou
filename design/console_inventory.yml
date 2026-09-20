@@ -151,6 +151,43 @@ modules:
       because the descriptor bank has no producer for reasons of ownership and format
       rather than wiring -- zhao_console_core.sv's lighting section carries that
       argument in full."
+  zhao_geom_lodstate:
+    disposition: pending_compose
+    why: "THE PER-INSTANCE LADDER STATE (R68 sub-build 3) -- the owner zhao_geom_lod has
+      been waiting for since phase 8, and the answer to the FIFTEENTH false-absence claim
+      (zhao_console_core.sv: 'NOBODY HOLDS LADDER STATE AT ALL'). It holds one
+      zref::creature::LodState per instance, ticks once per DRAW off the
+      GEOM.DRAWJOB -> GEOM.MESHFETCH handshake as a TAP, and instantiates
+      zhao_geom_projradius and zhao_geom_lod, which have no other customer. Differenced
+      against zref::creature::lod_update as a live model over sixty frames and four
+      creatures. NOT composed yet: its pr_* port wants the instance centre's w from the
+      shared projector's client A, and owner ruling R3 keeps client A a time-multiplex --
+      so a front-mux on the geometry arm (and one more GEOM_PAY_A_W bit) is owed before
+      this can be wired. That mux is the half of R68 sub-build 4 this packet did not land."
+  zhao_geom_projradius:
+    disposition: pending_compose
+    why: "GEOM.LOD's proj_radius_q8_i, which IS
+      zref::creature::projected_bound_radius_q8 (R68 sub-build 4). Zero DSP and zero
+      M10K: every product is a shift-add and the quotient a 76-step restoring divide,
+      because this is evaluated once per creature instance per view per frame and 121
+      clocks of the 3,255 available is not a cost. Differenced against the oracle on 600
+      random cases across four cameras. NOT composed yet: its w comes from the shared
+      projector's client A for the INSTANCE CENTRE, and that stream is the half of R68
+      sub-build 4 this packet did not land."
+  zhao_view_projscale:
+    disposition: pending_compose
+    why: "The two views' kx = max(|m[0][0..2]|) and viewport width, snooped off the
+      projector configuration bus on zhao_view_eye's pattern (R68 sub-build 4). It is
+      zhao_geom_projradius's only other input and lands with it."
+  zhao_geom_ladderbank:
+    disposition: pending_compose
+    why: "GEOM.LOD's four per-creature-type constants, read from the CREATURE_FORM page
+      layout owner ruling R26 unfroze and spec/cartridge.md 4c freezes (R68 sub-builds 1
+      and 3). Differenced against zref::creature_page and required to read the packer's
+      own committed golden. NOT composed yet because its consumer -- the per-instance
+      LodState owner that drives zhao_geom_lod -- is R68 sub-build 3 and lands with it;
+      composing a bank whose only reader does not exist would connect nothing at either
+      end, which is the test TERRAIN.HEIGHTTAP and GEOM.LOOM were held against."
   zhao_geom_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
