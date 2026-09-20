@@ -2308,11 +2308,54 @@
 //      the caller owns, and the block's own header says it "owns none of them
 //      and holds no cache".
 //
-//      THE OWNER IS GEOM.MESHFETCH plus the clip-bank pages behind MEM.GUARD,
-//      and it is the same obstacle as I23, one asset kind over: the pages come
-//      back through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`, and there is no
-//      behavioural SDRAM model in this tree. A composition onto that socket
-//      would elaborate, lint and never see a beat.
+//      THE OWNER IS GEOM.MESHFETCH plus the clip-bank pages behind MEM.GUARD.
+//
+//      ITS STATED CAUSE EXPIRED BEFORE IT WAS WRITTEN, and it is the
+//      SIXTEENTH false-absence claim in this tree. Corrected 2026-09-20 by
+//      the forge packet. The sentence was: "it is the same obstacle as I23,
+//      one asset kind over: the pages come back through MEM.VRAM.ARBITER and
+//      `zhao_sdram_ctrl`, and THERE IS NO BEHAVIOURAL SDRAM MODEL IN THIS
+//      TREE. A composition onto that socket would elaborate, lint and never
+//      see a beat."
+//
+//      It was right to name I23 and wrong about what I23 says. The I23 record
+//      some fourteen hundred lines ABOVE THIS ONE, in this same file, is the
+//      correction of that exact sentence: `sim/models/zhao_sdram_model.sv` is
+//      219 lines, cycle-true against `zhao_sdram_params_pkg`, carries a POKE
+//      BACKDOOR written for this case, and is already instantiated against
+//      `zhao_shell_top_v2` by `tests/shell/tb_zhao_shell.sv` in `realmem_mode`.
+//      SEARCHED 2026-09-20 and the file is still there. So this entry inherited
+//      a cause that the paragraph above it had already retired -- the same
+//      refusal outliving its own cause, in one file, twice.
+//
+//      THE REAL BLOCKER IS A RULING, NOT AN ABSENCE, and it is the one
+//      FORGE.SHADOW's ladder constants had until owner ruling R26.
+//      `spec/cartridge.md` 4 puts the skeleton in KIND 8 (creature form:
+//      "parts->meshlet ids, BONE HIERARCHY, attachments, hitboxes") and the
+//      animation clips in KIND 9 (clip bank), and freezes both: "Byte-exact
+//      layouts freeze with SW.TOOLS.ASSET at Phase-12 entry (creature_rules
+//      9); until then the packer refuses to emit them (deterministic refusal,
+//      never a guessed layout)."
+//
+//      R26 LIFTED THAT FREEZE ONLY PARTLY, and 4c says exactly how far in its
+//      own words: "What is frozen here is the HEADER and the LADDER TABLE.
+//      Nothing else. Parts, meshlet ids, THE BONE HIERARCHY, attachments and
+//      hitboxes remain frozen until SW.TOOLS.ASSET at Phase-12 entry, exactly
+//      as 4 says." Kind 9 was not touched at all. `geom_pose_bone_parent_i`,
+//      `geom_pose_bone_t*_i` and `geom_pose_inv_rest_i` ARE the bone
+//      hierarchy; `geom_pose_quat_*_i` and `geom_pose_root_d*_i` are a kind-9
+//      clip frame. Building a reader for either is the guessed layout that
+//      sentence exists to forbid.
+//
+//      SO THE MEMORY PATH IS NOT THE OBSTACLE AND NOBODY SHOULD BUILD ONE FOR
+//      IT. What this gap needs is an OWNER DECISION of exactly R26's shape --
+//      a second partial lift, for the bone hierarchy and a clip frame -- and
+//      4c's own `body_off` mechanism was designed to make one cheap: the
+//      header "names the byte offset at which that body will begin, so the
+//      unfrozen half can be appended later without moving a byte of the frozen
+//      half". The recommendation and its evidence are in
+//      FINDINGS-forge.md. Until it is ruled, this stays a gap and the reason
+//      is a freeze, not a missing model.
 //
 //      WHAT IS NOT PART OF THIS GAP, because the distinction is the whole
 //      point of closing I10: the palette STORE is present and internal. A
@@ -3066,6 +3109,37 @@
 //   Its own output is a RIM EDGE, not a triangle, so even the far end needs a
 //   block that is not built.
 //
+//   RE-VERIFIED 2026-09-20 (forge packet) AND THE CAUSE SURVIVES, named
+//   search by named search so the next reader need not repeat it:
+//     * `solid\w*_o` as an output port across every subdirectory of
+//       `fpga/rtl` including `synth/` and the probes: ZERO HITS. The only
+//       34-dimensioned solid structures in the tree are the two CONSUMERS'
+//       own storage (`zhao_forge_cliff.sv:291`, `zhao_forge_cliff_ram.sv:18`).
+//       Nearest misses, each rejected for a reason: `zhao_terrain_tess.sv:377`
+//       holds a 64-bit solid mask that is an INTERNAL 8x8 subpatch variable,
+//       not a port; `zhao_terrain_heighttap.sv:245`'s `taps_void_o` is a
+//       per-tap census, not a window.
+//     * `vdist` across `fpga/rtl`: FOUR files, and all four are the wrong
+//       end -- `zhao_forge_cliff.sv` and `zhao_forge_cliff_ram.sv` (the two
+//       consumers), this file (the refusal quoting itself) and
+//       `zhao_prod_top.sv` (the LFSR pricing harness). It exists as a real
+//       quantity ONLY in the C++ oracle (`zref_terrain.hpp`'s `rim_plan`
+//       taking `const int32_t* vdist`) and in the contract. No RTL computes
+//       one.
+//     * a lattice-walking PAGE ISSUER: none. `fpga/rtl/synth/` was read file
+//       by file and `zhao_probe_walk_earth.sv` IS a real lattice walker --
+//       and the wrong one: it emits four-wide world (x,z) groups for the
+//       FIELD v3 executor over a 33x33 patch, with no page ci/cj, no cell
+//       extents, no solid bits and no vdist. A genuine near-miss, recorded so
+//       it is not re-found and mistaken for the answer.
+//     * AND `design/blocks.yml` DECLARES AN UPSTREAM THAT DOES NOT FIT THE
+//       PORTS: `inputs: [terrain_mesh]`, `upstream: [TERRAIN.TESS]`. TESS's
+//       output is a vertex/triangle stream and this block's inputs are a page
+//       command, a 34x34 solid window and a vdist master. The ledger edge is
+//       an INTENTION, exactly as GEOM.MESHFETCH's `upstream: MEASURE.GOVERNOR`
+//       turned out to be -- and a ledger edge read as a port is how somebody
+//       concludes this entry is out of date.
+//
 //   FORGE.SHADOW landed 2026-09-19 and is refused for the same shape, listed
 //   here because it is new and would otherwise be absent from this record. It
 //   needs a shadow CASTER -- {world x, world z, radius, strength, rung,
@@ -3177,6 +3251,146 @@
 //   there must not be one yet. Building a reader for it would be the guessed
 //   layout that sentence exists to forbid.
 //
+//   THAT PARAGRAPH IS NOW SPENT, AND SO IS THE ONE AFTER IT. Owner ruling R26
+//   (2026-09-19) lifted the kind-8 freeze FOR THOSE FOUR CONSTANTS ONLY and
+//   `spec/cartridge.md` 4c froze their layout; the R68 packet built the whole
+//   input chain on 2026-09-20 -- `zhao_geom_ladderbank` (the page reader),
+//   `zhao_geom_lodstate` (the per-instance LodState nobody held),
+//   `zhao_geom_projradius` and `zhao_view_projscale`. Five blocks, all
+//   unit-verified against `zref::creature`, all `pending_compose`. THE CASTER
+//   IS REAL. What is still owed on the INPUT side is one thing and it is
+//   named: `GEOM_PAY_A_W` is 16 and FULL -- ARENA_W 3 + INDEX_W 12 = 15 with
+//   the geometry/particle owner tag at bit 15 (see the elaboration guard
+//   below) -- so the instance centre's `1/w` needs the payload widened to 17
+//   AND a front mux on `zhao_part_project`'s geometry arm, owner ruling R3
+//   keeping client A a time-multiplex. That is R68's sub-build 4, unlanded.
+//
+//   AND THE BLOCKER HAS MOVED TWICE MORE, WHICH IS WHY THIS ENTRY IS LONG
+//   RATHER THAN CLOSED. Traced 2026-09-20 by the forge packet, under owner
+//   ruling R75 ("take the ARENA ROUTE ... rather than building a second
+//   geometry path").
+//
+//   FIRST, A CORRECTION TO THE PREMISE R75 WAS GIVEN, because it is false in
+//   its letter and the ruling is RIGHT ANYWAY -- which is the more useful
+//   shape to record. The finding handed up was "nothing in `fpga/rtl`
+//   (incl. `synth/` and the probes) consumes a world-vertex fan", from a
+//   search for `vtx_`-shaped inputs. A CONSUMER OF A WORLD-VERTEX STREAM
+//   EXISTS AND IS COMPOSED IN THIS FILE: `zhao_geom_group_seq`'s
+//   `v_valid_i`/`v_ready_o`/`v_x_i`/`v_y_i`/`v_z_i` (its :208-212), three
+//   `signed [31:0]` -- the same type and width as `zhao_forge_shadow`'s
+//   `vtx_{x,y,z}_o`. The search missed it because the port is spelled `v_`
+//   and not `vtx_`: CLAUDE.md section 9's law, READ THE STRUCTURE NOT THE
+//   CONVENTION, costing a search rather than a tool this time. So the honest
+//   statement is not "no consumer exists" -- it is that the consumer's BATCH
+//   owes things downstream that a shadow hull cannot pay, which is a much
+//   narrower and much more actionable claim. R75's conclusion stands and its
+//   reasoning is now load-bearing rather than incidental.
+//
+//   ONE REAL SEAM THAT PORT COMPARISON HIDES, stated so "it is drop-in" is
+//   never said about it: `v_*` is documented as "skinned vertices in,
+//   view-independent, LOCAL (REBASED) coords" and the arena's origin carries
+//   the rebase. `zhao_forge_shadow` emits ABSOLUTE world fx16 (its `cast_x_i`
+//   plus a unit-circle offset, and a terrain height for y). Same width, same
+//   type, DIFFERENT FRAME. Whatever composes this owes the rebase explicitly.
+//
+//   WITH THAT SAID, THE ARENA ROUTE IS NOT REACHABLE TODAY, for two reasons
+//   that are structural rather than arguable, and NEITHER WAS KNOWN WHEN R75
+//   WAS WRITTEN:
+//
+//     1. COMPOSING THE HULL AS A GEOMETRY BATCH WEDGES THE WHOLE FRONT END.
+//        `zhao_geom_vattr`'s `done_o` (its :490) is a six-term AND including
+//        `lit_ord_q == uv_ord_q` -- every decoded vertex must receive a lit
+//        r/g/b from GEOM.LIGHT and every landing a u/v from GEOM.VDECODE. A
+//        shadow hull has NEITHER: it is not skinned, carries no texture
+//        coordinate and is not lit. `va_done` gates BOTH sides of the
+//        GROUP_SEQ -> REPLAY handshake (this file's :7354 and :13722), so a
+//        batch that never earns its rows never hands over its arena, never
+//        gets it released, exhausts `GEOM_ARENAS` and backpressures
+//        GEOM.PROJ_LANE until no triangle reaches GEOM.CLIP at all. There is
+//        NO timeout, NO abort and NO counter that fires for it -- the tell
+//        would be `colours_written_o` frozen while `uv_staged_o` and
+//        `landings_o` climb, and nothing differences them. This is CLAUDE.md's
+//        ALIVE-AT-ZERO-CPU shape in silicon, and composing it would not leave
+//        a gap open, it would ship a DEADLOCK behind a closed gap.
+//
+//     2. THE CONSOLE HAS NO VERTEX ALPHA, SO THE SHADOW WOULD DRAW OPAQUE.
+//        FORGE.SHADOW's whole output is "ordinary TRANSPARENT geometry
+//        through the main renderer" and its `vtx_alpha_o` is a per-vertex
+//        unit8. SEARCHED, and the blend ALU is NOT the missing piece -- it is
+//        real and composed (`zhao_raster_blend`, six instances in
+//        `zhao_raster_fragment.sv:490-510`, live through
+//        `zhao_raster_tile_pipe_v2`). What is missing is every path that
+//        would reach it:
+//          * `zhao_geom_vattr.sv:474` injects the packet's alpha slot as the
+//            named constant `ALPHA_C` = fx16 1.0 (OPAQUE) and its own header
+//            :69-74 says why: "ALPHA HAS NO PRODUCER ... R11's 'rgb/alpha
+//            from zhao_light_stream' names a quantity that does not exist";
+//          * `zhao_geom_attrpack` emits exactly THREE planes and indexes only
+//            SLOT_INVW / SLOT_U_OVER_W / SLOT_V_OVER_W (its :225-227, :267-275),
+//            and the rasteriser has exactly three attribute lanes
+//            (`zhao_raster_tile_pipe_v2.sv:601`), so slots 3..6 -- lit r/g/b
+//            AND alpha -- have no interpolator and no carriage even if a
+//            producer existed;
+//          * the flat per-triangle alpha and the blend-mode selector are
+//            `tri_continuation_tail_i` and `tri_fragment_state_i`, which this
+//            module's own port table already marks "OPEN, still a BOUNDARY";
+//          * and the one alpha the console does supply is
+//            `MAT_BASE_ALPHA_C = 8'hFF` by owner ruling R48, whose stated
+//            reason is "no ratified vertex format carries alpha".
+//        R48 AND THE FORGE.SHADOW CONTRACT CONTRADICT EACH OTHER IN WRITING.
+//        That is an OWNER DECISION, written up with evidence and a
+//        recommendation in FINDINGS-forge.md, and it is the thing to settle
+//        before any more of this chain is built: a shadow composed today is a
+//        flat opaque dark polygon with a depth bias under every creature,
+//        which is exactly the art defect CLAUDE.md's ground-contact law
+//        exists to refuse -- shipped, and counted as a gap closed.
+//
+//   AND THERE ARE TWO READINGS OF "THE ARENA ROUTE", WHICH IS WORTH SAYING
+//   BECAUSE ONLY ONE OF THEM HITS REASON 1. Reason 1 is an objection to
+//   route A, not to the ruling:
+//     A. THE BATCH ROUTE -- the hull becomes a meshlet in the existing front
+//        end (a token at the GEOM.ASSETFETCH fork, vertices muxed into
+//        GROUP_SEQ's `v_*`, a triangle stream muxed into GEOM.ASSEMBLE's).
+//        Maximum reuse, and it inherits GEOM.VATTR's `done_o` -- so it
+//        WEDGES, per reason 1 above. Four muxed seams and a deadlock.
+//     B. THE PRIVATE-ARENA ROUTE -- a SECOND, SMALL `zhao_vertex_arena`
+//        instance (16 deep against GEOM_DEPTH's 1089, which is what R75's
+//        parenthetical prices), filled from the SAME client A and the SAME
+//        `zhao_project_core`, walked by a small fan replay whose triangles
+//        are ARBITRATED into GEOM.CLIP's input beside GEOM.REPLAY's. This
+//        does NOT duplicate the ratified projection arithmetic -- which is
+//        the duplication R75 exists to forbid -- and it touches GEOM.VATTR
+//        not at all, because the hull carries its OWN attribute packet
+//        (invw24 from its own w; u/v unused; rgb and alpha AUTHORED, which is
+//        this block's whole design). Reason 1 does not apply to it.
+//        Route B is the recommendation. It still needs: the client-A
+//        widening below, an arbiter at GEOM.CLIP's door (and a material
+//        constant for `u_material_window`, which is an authored value and not
+//        an invention), the rebase named above -- and it is STILL GATED ON
+//        REASON 2, because an opaque shadow is the wrong picture however
+//        elegantly it arrives.
+//
+//   A DETAIL THE WIDENING ARITHMETIC NEEDS AND NOBODY HAS WRITTEN DOWN: with
+//   a THIRD owner on client A, the single top tag bit stops being enough.
+//   `zhao_part_project.sv:356` is `TAG_BIT = PAY_W - 1` and `:53`'s
+//   `geom_tag_collision_o` counts a geometry rider arriving with that bit
+//   set -- a ONE-BIT, TWO-OWNER law. Three owners make it a two-bit owner
+//   field, so the payload goes to 17 AT LEAST and that counter's meaning
+//   changes with it. Sizing the widening as "16 -> 17" without re-authoring
+//   the tag law is how the collision counter silently stops meaning anything.
+//
+//   TWO SMALLER CORRECTIONS FROM THE SAME RE-SEARCH, both about what the
+//   forge files ARE, because each one would send a reader to the wrong block:
+//     * `zhao_forge_cliff_ram.sv` IS NOT A CHILD OF `zhao_forge_cliff`. Its
+//       own first lines call it "the bitmap-RAM CANDIDATE beside the golden
+//       `zhao_forge_cliff.sv`" -- a RIVAL implementation of the same contract
+//       (the 34x34 window in one RAM instead of 1,156 flops), verilated side
+//       by side with it by `forge_cliff_ram_differential`. `zhao_forge_cliff`
+//       instantiates NOTHING. So "compose FORGE.CLIFF" is also a
+//       latest-version question with two candidates and no ruling.
+//     * `zhao_forge_jitter_rom.sv` belongs to FORGE.PRIM_EVAL, not to the
+//       cliff: it is instantiated at `zhao_forge_prim_eval.sv:314`.
+//
 //     - AND A CORRECTION TO THE FORGE.PRIM PARAGRAPH ABOVE, which says "the
 //       missing owner is a PAGE READER". That is the right shape for the wrong
 //       layer. RE-SEARCHED: no RTL touches a `.zpak` container, a RESOURCE_PAGES
@@ -3193,6 +3407,39 @@
 //       FORGE.PRIM actually needs is a forge page KIND with a frozen layout and
 //       a staging path, on the terrain pattern -- not a hardware cartridge
 //       reader.
+//
+//     - RE-VERIFIED 2026-09-20 (forge packet) AND THE CAUSE SURVIVES, with
+//       TWO facts added that make it stronger and narrower. Searched: every
+//       page kind in `spec/cartridge.md` 4 (0 field programs, 1 sourceids, 2
+//       generated-code manifest, 3 sky set, 4 terrain patch, 5 tone bank, 6
+//       island patch, 7 island table, 8 creature form, 9 clip bank, plus 4b
+//       SPECIES_TABLE and 4c the ladder table) -- NONE is a forge program
+//       page; and `j_family|j_segments|j_sides` across all of `fpga/rtl`
+//       including `synth/` and every `probe`-named file, whose only hits are
+//       the two forge blocks' own inputs and the LFSR noise source in the
+//       generated fit harness `zhao_prod_top.sv`.
+//         * THE ABI CANNOT NAME ONE OF THE SIX. `spec/commands.zidl:133-136`
+//           declares `enum forge_kind : u8` with EXACTLY ONE member,
+//           `FORGE_HEIGHTFIELD_PATCH = 0`, and :131 calls it "the one
+//           implemented kind". `zhao_forge_prim`'s six families -- ribbon,
+//           fan, tube, shell, billboard, cliff -- have no encoding in any
+//           ratified command, so the gap is not only a missing page: it is a
+//           missing ENUM MEMBER SET as well, and both are owner decisions.
+//         * FORGE.PRIM AND FORGE.PRIM_EVAL DO NOT MEET BY A SINGLE WIRE, and
+//           the paragraph above is right that neither drives the other -- but
+//           the reason is worth stating, because "wire them together" is the
+//           obvious wrong move. They are the two HALVES of a meshlet, not two
+//           stages of a chain: PRIM emits index triples, PRIM_EVAL emits fx16
+//           positions, and they are joined only by an ORDERING CONVENTION
+//           written in `zhao_forge_prim_eval.sv:24-32` ("the topology walker's
+//           ribbon references vertices in ring-major order ... this block
+//           emits positions in EXACTLY that order"). Their meeting place is
+//           GEOM.SETUP, which `design/blocks.yml` declares and no RTL wires.
+//           And PRIM_EVAL is NOT a general evaluator for PRIM's six: its own
+//           header calls it "the lightning position evaluator"
+//           (reports/ADDLIGHTNING.md), and it serves the RIBBON family only.
+//           So even with a page and an enum, four of the six families would
+//           still have no evaluator.
 //
 //   ITS TERRAIN HEIGHT TAPS ARE NO LONGER A REFUSAL. THE BLOCK IS BUILT.
 //   This entry used to end: "Across all of `fpga/rtl` -- every one of the 23
@@ -3332,12 +3579,33 @@
 //   READ BACK OUT of that arena, and SEARCHED: nothing in `fpga/rtl` writes
 //   one into memory. RE-SEARCHED 2026-09-19 and the refusal stands, with one
 //   sentence added because the next reader will otherwise think it is stale.
-//   Every geometry memory client is hard-coded READ-ONLY in source --
-//   `zhao_geom_meshfetch.sv:319`, `zhao_geom_assetfetch.sv:341` and
-//   `zhao_geom_mem_adapter.sv:190` all assign `write = 1'b0`, the last with the
-//   comment "the asset window is READ-ONLY by construction" -- and the only
-//   five blocks in the whole tree that assert `write = 1'b1` are RASTER.FBWRITE,
-//   DEBUG.FRAMEBLIT, MEM.UPLOAD and two terrain paths. None is geometry, and
+//   Every geometry memory client is hard-coded READ-ONLY in source. THE
+//   CITATIONS WERE RE-CHECKED 2026-09-20 (forge packet) AND ALL THREE HAD
+//   DRIFTED, one of them onto a mechanism that is not the one described --
+//   which matters because a refusal is only as durable as the line it stands
+//   on, and a reader who spot-checks one stale citation throws out the whole
+//   entry. Now, verified line by line:
+//     * `zhao_geom_meshfetch.sv:340`  `assign guard_req_o.write = 1'b0;`
+//       (was cited as :319, which is now a multiplier declaration)
+//     * `zhao_geom_assetfetch.sv:360` `assign guard_req_o.write = 1'b0;` with
+//       the comment "READ ONLY. The pool admits" (was cited as :341)
+//     * `zhao_geom_mem_adapter.sv` HAS NO `write = 1'b0` ANYWHERE. It is
+//       read-only by a STRONGER mechanism than the one this entry claimed: a
+//       parameter on its `zhao_mem_share2`, `.FORCE_READ(1'b1)` at :175, with
+//       the quoted comment "the asset window is READ-ONLY by construction"
+//       at :16 and :175 rather than at the cited :190 (a port connection).
+//   TWO MORE GEOMETRY CLIENTS THE OLD LIST MISSED, both agreeing with it:
+//   `zhao_geom_drawjob.sv:308` and `zhao_geom_ladderbank.sv:222`, both
+//   `write = 1'b0`. So the claim got STRONGER when it was checked, which is
+//   the direction that almost never happens and is worth recording -- and the
+//   only five blocks in the whole tree that assert `write = 1'b1` are
+//   RASTER.FBWRITE (`zhao_raster_fbwrite.sv:218`), DEBUG.FRAMEBLIT
+//   (`zhao_debug_frameblit.sv:391`), MEM.UPLOAD (`zhao_mem_upload.sv:394`) and
+//   two terrain paths -- TERRAIN.PAGELOADER (`zhao_terrain_pageloader.sv:381`)
+//   and TERRAIN.WRITEBACK (`zhao_terrain_writeback.sv:583`), both named
+//   2026-09-20 so the phrase "two terrain paths" stops being a thing the next
+//   reader has to re-find. The count is exact and was re-counted. None is
+//   geometry, and
 //   `spec/memory_rules.md` 5f declares RENDER.ASSET_POOL read-only with a formal
 //   assertion (`a1_render_asset_ro`) to match, so a writer today would be built
 //   against a region the guard is PROVEN to refuse.
