@@ -7137,6 +7137,7 @@ add_test(NAME geom_cull_mutant_control COMMAND test_geom_cull_mutant_control)
 set_tests_properties(geom_cull_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 set(ZHAO_TERRAIN_PATCH_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
 
 # FIELD.OUT.HEIGHT: the op ops.yml declares with "no dedicated opcode" -- the op
@@ -7354,6 +7355,7 @@ set_tests_properties(lint_terrain_patch PROPERTIES
 # construction â€” the contract's crack invariant, checked on real emitted
 # geometry in terrain_tess_directed rather than argued in prose.
 set(ZHAO_TERRAIN_TESS_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv)
 
 add_executable(test_terrain_tess_directed terrain/terrain_tess_directed.cpp)
@@ -7568,6 +7570,7 @@ set_tests_properties(lint_proj_subsystem PROPERTIES
 # and gives release_unsafe_o an inverted-polarity committed-mutant control.
 set(ZHAO_TERRAIN_PIPE_COMMON_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
     ${ZHAO_PROJ_SUBSYSTEM_SV})
 set(ZHAO_TERRAIN_PIPE_SV
@@ -9264,6 +9267,7 @@ endif()
 # address it asks for â€” which is what makes the z-then-x scan order a checkable
 # fact instead of an assumption.
 set(ZHAO_TERRAIN_VELOCITY_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_velocity.sv)
 
 # FIELD.OUT.VELOCITY: the op ops.yml declares, and TERRAIN.VELOCITY's only
@@ -10096,6 +10100,7 @@ set_tests_properties(lint_terrain_devstore PROPERTIES
 add_test(NAME lint_terrain_lodfeed
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_lodfeed
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
 set_tests_properties(lint_terrain_lodfeed PROPERTIES
@@ -10107,6 +10112,7 @@ verilate(test_terrain_lodpath_directed
   PREFIX Vtb_terrain_lodpath
   TOP_MODULE tb_terrain_lodpath
   SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
@@ -10130,6 +10136,7 @@ verilate(test_terrain_lodhist_directed
   PREFIX Vtb_terrain_lodhist
   TOP_MODULE tb_terrain_lodhist
   SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
@@ -10152,6 +10159,7 @@ verilate(test_terrain_lodhist_widthguard
   TOP_MODULE tb_terrain_lodhist
   VERILATOR_ARGS -GEW=16
   SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
@@ -10271,6 +10279,7 @@ verilate(test_compose_rtl_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
@@ -12846,6 +12855,7 @@ set(ZHAO_G8B_TERRAIN_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_proj_subsystem.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_wcache.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_group_seq.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pipe.sv

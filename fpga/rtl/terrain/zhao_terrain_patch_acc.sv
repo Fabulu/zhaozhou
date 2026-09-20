@@ -186,21 +186,16 @@ module zhao_terrain_patch_acc (
   // check 3 because that check compares the `reference_model` strings declared
   // in design/blocks.yml and never looks at a function body.
   //
-  // Local names kept as one-line forwarders so the body below is UNTOUCHED by
-  // the factoring, which is what lets the existing 39,232 directed checks stand
-  // as the evidence that nothing moved.
-  function automatic logic signed [31:0] fx_add_sat(input logic signed [31:0] a,
-                                                    input logic signed [31:0] b);
-    begin
-      fx_add_sat = zhao_tp_fx_add_sat(a, b);
-    end
-  endfunction
-
-  function automatic logic fx_add_fired(input logic signed [31:0] a, input logic signed [31:0] b);
-    begin
-      fx_add_fired = zhao_tp_fx_add_fired(a, b);
-    end
-  endfunction
+  // THE ONE-LINE FORWARDERS ARE GONE, 2026-09-20 (packet TERRLAW, R176), and
+  // the call sites below name the package functions directly. E1 kept them so
+  // the body would be untouched and the 39,232 directed checks would stand
+  // unarguably -- a good reason at the time. But a forwarder is still a
+  // FUNCTION DEFINITION, so `tools/budget/duplicate_functions.py` went on
+  // reporting `fx_add_sat` in this file: the law was single and the instrument
+  // that found R176 still said it was not. The checks stand anyway --
+  // `field_patch_acc_directed` and `field_patch_acc_random` are run at the
+  // commit that makes this change, and a forwarder and its target are the same
+  // expression by construction.
 
   // ---- input lane bundles --------------------------------------------------
   logic signed [15:0] in_base[BANKS];
@@ -261,7 +256,7 @@ module zhao_terrain_patch_acc (
   logic signed [31:0] init_top[BANKS];
   always_comb begin
     for (int b = 0; b < BANKS; b++) begin
-      init_t[b] = fx_add_sat(32'($signed(in_base[b])) <<< 8, 32'($signed(in_scar[b])) <<< 8);
+      init_t[b] = zhao_tp_fx_add_sat(32'($signed(in_base[b])) <<< 8, 32'($signed(in_scar[b])) <<< 8);
       init_botfx[b] = 32'($signed(in_bot[b])) <<< 8;
       init_top[b] = (in_dual_i[b] && (init_t[b] < init_botfx[b])) ? init_botfx[b] : init_t[b];
     end
@@ -342,13 +337,13 @@ module zhao_terrain_patch_acc (
   logic               satb_h[BANKS], satb_v[BANKS], satb_n[BANKS];
   always_comb begin
     for (int b = 0; b < BANKS; b++) begin
-      new_h[b]  = fx_add_sat(old_h[b], m_h[b]);
-      satb_h[b] = fx_add_fired(old_h[b], m_h[b]);
-      new_v[b]  = fx_add_sat(old_v[b], m_v[b]);
-      satb_v[b] = fx_add_fired(old_v[b], m_v[b]);
+      new_h[b]  = zhao_tp_fx_add_sat(old_h[b], m_h[b]);
+      satb_h[b] = zhao_tp_fx_add_fired(old_h[b], m_h[b]);
+      new_v[b]  = zhao_tp_fx_add_sat(old_v[b], m_v[b]);
+      satb_v[b] = zhao_tp_fx_add_fired(old_v[b], m_v[b]);
       new_m[b]  = m_m[b];  // writer-selection: this writer wins wholesale
-      new_n[b]  = fx_add_sat(old_n[b], m_n[b]);
-      satb_n[b] = fx_add_fired(old_n[b], m_n[b]);
+      new_n[b]  = zhao_tp_fx_add_sat(old_n[b], m_n[b]);
+      satb_n[b] = zhao_tp_fx_add_fired(old_n[b], m_n[b]);
     end
   end
 

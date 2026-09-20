@@ -620,6 +620,7 @@ targets:
   # before a clean composed fit.
   - top: zhao_terrain_pipe
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_pipe.sv
       - fpga/rtl/terrain/zhao_terrain_group_seq.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
@@ -1172,6 +1173,7 @@ targets:
   # expected it has not been shown to be needed.
   - top: zhao_pair_tess_normals
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/synth/zhao_pair_tess_normals.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
       - fpga/rtl/terrain/zhao_terrain_normals.sv
@@ -1232,6 +1234,7 @@ targets:
   #             large the answer is an accumulator. Gate 8.
   - top: zhao_pair_pagestream_patch
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/synth/zhao_pair_pagestream_patch.sv
       - fpga/rtl/terrain/zhao_terrain_pagestream.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
@@ -1467,6 +1470,7 @@ targets:
   # 100 MHz is the operating requirement of the machine, not a guess.
   - top: zhao_terrain_pipe_rpp3_matw18_fit_top
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/common/zhao_project_core.sv
       - fpga/rtl/common/zhao_project_service.sv
       - fpga/rtl/common/zhao_proj_subsystem.sv
@@ -1724,10 +1728,12 @@ targets:
 
   - top: zhao_terrain_patch
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
 
   - top: zhao_terrain_velocity
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_velocity.sv
 
   - top: zhao_twod_plane
@@ -1851,6 +1857,7 @@ targets:
 
   - top: zhao_terrain_tess
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
 
   - top: zhao_terrain_lod
@@ -2017,6 +2024,7 @@ targets:
 
   - top: zhao_prod_top
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --
       # and the island brings its own children with it. Every file below was
@@ -2528,6 +2536,7 @@ targets:
   # comparable) plus exactly the seventeen additions.
   - top: zhao_console_core
     sources:
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/generated/zhao_abi_pkg.sv
       # The ONE long-op table. Both the v3 executor's `is_long` and the
       # dispatcher's `dst_width_of` call it, which is what makes the
