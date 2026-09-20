@@ -3403,6 +3403,40 @@
 //   four is an unsourced boundary in this tree, and `design/blocks.yml` never
 //   names a producer for the resource types they consume.
 //
+//   RE-MEASURED AGAIN 2026-09-20 EVENING (the forge4 packet), which is the
+//   fourth pass over this entry. **ALL FOUR REFUSALS SURVIVE. Register 21 -> 21:
+//   no gap closed and none opened.** What moved is not a refusal but a
+//   DECISION -- FORGE.CLIFF's two rivals are adopted one way round at last (the
+//   long note below, and owner ruling R142) -- and one blocker EXPIRED and is
+//   corrected in place rather than deleted (`forge_kind` now has six members
+//   under R108). The summary, per block, so a reader need not walk all of it:
+//     * FORGE.SHADOW -- refused by a STANDING OWNER INSTRUCTION, not by this
+//       file's judgement. Owner ruling R133's D-FORGESHADOW-B: *"schedule no
+//       further FORGE.SHADOW wiring packet ... Leaving it costs 1 on the
+//       register; composing it wrong costs a deadlock behind a closed gap."*
+//       It is a SUBSYSTEM -- LODSTATE and SHADOW mutually blocked and composable
+//       only together, ladderbank as a sixth adapter requester, the governor,
+//       Route B and a client-A widening that re-authors a ratified law -- and it
+//       will not be closed by a wiring job. Re-measured here: none of
+//       `zhao_geom_ladderbank`, `zhao_geom_lodstate`, `zhao_geom_projradius` or
+//       `zhao_view_projscale` is instantiated in this file (every hit is prose),
+//       `zhao_measure_governor` likewise, and `tri_continuation_tail_i` is still
+//       a BOUNDARY on this module's own port table -- so R133's four blockers
+//       all stand at this commit.
+//     * FORGE.PRIM and FORGE.PRIM_EVAL -- the ABI half of the blocker is SPENT
+//       (R108 granted the five missing `forge_kind` members) and the PAGE half
+//       is live and sharper for it: there is still no forge program page kind
+//       anywhere in `spec/cartridge.md` 4, and `handle32[forge_program]` names a
+//       resource type that occurs in exactly two places in the tree, both of
+//       them `DrawProcedural`'s own declaration and its generated ABI table.
+//       Lowering the command today would stage a record for a reader of a page
+//       format that does not exist. Four of the six families still have no
+//       evaluator besides.
+//     * FORGE.CLIFF -- the RIVALRY is decided (adopt `zhao_forge_cliff_ram`;
+//       5,698 ALM fit-minus-fit, 13.6% of the device) and the CAPABILITY is
+//       still a gap: no page issuer, no solid-window producer, no vdist master,
+//       all three re-searched at this commit and all three still absent.
+//
 //   FORGE.PRIM and FORGE.PRIM_EVAL are the TOPOLOGY and the POSITIONS of one
 //   primitive -- indices from one, fx16 vertices from the other -- and they do
 //   NOT meet each other: neither has a port the other drives. Both aim at
@@ -3785,6 +3819,46 @@
 //       by side with it by `forge_cliff_ram_differential`. `zhao_forge_cliff`
 //       instantiates NOTHING. So "compose FORGE.CLIFF" is also a
 //       latest-version question with two candidates and no ruling.
+//
+//       THE "NO RULING" HALF IS SPENT, AND THE ADOPTION IS NOW EXECUTED
+//       (2026-09-20, the forge4 packet). It was true when written -- owner
+//       ruling R109 said in as many words that until the deciding gate ran
+//       NEITHER may compose, "because composing either one would be choosing by
+//       default". THE GATE HAS RUN TWICE, on the target part `5CSEBA6U23I7`,
+//       same tool and same stage both times: F-CLIFF1 fitted the CANDIDATE at
+//       **976 ALM** (18 September, owner ruling R117 -- R109's "it has never
+//       run" was itself false and R117 corrects it), and F-CLIFF-GOLDEN fitted
+//       the GOLDEN at **6,674 ALM** (20 September, owner ruling R142), landing
+//       inside the band "roughly 6,000-8,000 -> adopt" that `FIT-PLAN-AT-ZERO.md`
+//       committed to BEFORE the number existed. **Fit minus fit: 5,698 ALM and
+//       3,086 registers, for one extra RAM block and ~1.2k memory bits, DSP
+//       unchanged -- 13.6% of the 41,910-ALM device.** R117's two named
+//       adoption blockers were amended away by R142 on measurement: the golden
+//       carries the SAME four `Warning (276020)` pass-throughs and the SAME one
+//       inferred latch, so neither is introduced by the swap.
+//
+//       So `zhao_forge_cliff_ram` is the adopted implementation and
+//       `zhao_forge_cliff` is `superseded` in `design/console_inventory.yml`,
+//       a `top:` swap in `design/prod_manifest.yml`, an `implementation:` line
+//       on FORGE.CLIFF in `design/blocks.yml` (the rivalry is not a version
+//       SUFFIX, so `completion_register.py:successor_in()` structurally cannot
+//       see it -- it has to be declared or the register goes on naming the
+//       6,674-ALM module as the thing to compose), and the golden's `.sv` is
+//       out of `zhao_prod_top`'s source list. The golden stays on disk as the
+//       executable RTL side of `forge_cliff_ram_differential`, exactly as
+//       `zhao_terrain_bake` and `zhao_raster_attrdiv` are retained.
+//
+//       **AND ADOPTION IS NOT COMPOSITION. FORGE.CLIFF IS STILL A GAP**, for
+//       the three reasons below, all re-measured 2026-09-20 and all surviving:
+//       no lattice-walking page ISSUER, no 34x34 solid-bit window producer
+//       (`solid\w*_o` as an output port across every subdirectory of `fpga/rtl`
+//       including `synth/` and the probes: still ZERO hits; the only near miss
+//       remains `zhao_terrain_heighttap.sv`'s `taps_void_o`, a per-tap census)
+//       and no vdist read master (`vdist` still occurs in exactly four files --
+//       the two rivals, this one quoting itself, and the pricing harness). The
+//       decision says WHICH module the console composes when those exist. It
+//       does not make one composable, and the register is right to go on
+//       counting the capability.
 //     * `zhao_forge_jitter_rom.sv` belongs to FORGE.PRIM_EVAL, not to the
 //       cliff: it is instantiated at `zhao_forge_prim_eval.sv:314`.
 //
@@ -3822,6 +3896,46 @@
 //           fan, tube, shell, billboard, cliff -- have no encoding in any
 //           ratified command, so the gap is not only a missing page: it is a
 //           missing ENUM MEMBER SET as well, and both are owner decisions.
+//
+//           **THIS HALF HAS EXPIRED AND THE CITATION HAS ROTTED. Corrected in
+//           place 2026-09-20 by the forge4 packet rather than deleted, so the
+//           next reader can see which half moved** -- and it is the shape owner
+//           ruling R165 names: a refusal is a claim about a MOMENT, and this
+//           tree moves fast enough that a blocker written yesterday may be spent
+//           today. **`enum forge_kind : u8` now has SIX members**, not one:
+//           `FORGE_HEIGHTFIELD_PATCH = 0`, `FORGE_RIBBON = 1`,
+//           `FORGE_RADIAL_FAN = 2`, `FORGE_TUBE = 3`, and two more, granted by
+//           OWNER RULING R108 (2026-09-20) applying the zidl's own additive law
+//           -- no `abi_version` bump implied. The declaration also moved: it is
+//           at `spec/commands.zidl:177`, not `:133-136`, which is now R108's own
+//           preamble. **So "the ABI cannot name five of the six" is FALSE
+//           today.** R108 says so itself and says what it does not buy: *"It
+//           closes no gap on its own ... A forge page kind must still be frozen,
+//           and four of the six families have no evaluator. The ABI stops being
+//           the blocker; it does not become the implementation."*
+//
+//           **THE PAGE HALF ABOVE IS STILL LIVE, re-measured 2026-09-20
+//           (forge4): `spec/cartridge.md` 4 still declares kinds 0-9 plus 4b and
+//           4c and NONE is a forge program page**, while `DrawProcedural 0x0302`
+//           still says "forge parameters do NOT travel inline; `program` names
+//           the cartridge terrain-patch page (spec/cartridge.md 4 kind 4)" --
+//           a HEIGHTFIELD with no `j_family`, no `j_segments`, no `j_sides` and
+//           nothing resembling PRIM_EVAL's thirty fx16 anchors. And
+//           `handle32[forge_program]` names a resource type that occurs in
+//           exactly two places in the whole tree, both of them that one command
+//           and its generated ABI table. So the live blocker is narrower and
+//           sharper than it was: **a forge PROGRAM PAGE KIND with a frozen
+//           layout and a staging path on the terrain pattern**, which is an
+//           owner decision of the same shape R108 just took for the enum.
+//
+//           ONE TRAP THE ENUM BROUGHT WITH IT, recorded here because this is
+//           where somebody will reach for it: `spec/commands.zidl:142` says in
+//           capitals that `forge_kind` **IS NOT** `zhao_forge_prim`'s
+//           `j_family_i` encoding -- the file's own note makes it
+//           `forge_kind = (FAM_* + 1) mod 6`, and *"a straight-through
+//           assignment is silently wrong for all six values"*. Whoever first
+//           wires DrawProcedural to a FORGE.PRIM job owns that conversion and
+//           owes it a directed check.
 //         * FORGE.PRIM AND FORGE.PRIM_EVAL DO NOT MEET BY A SINGLE WIRE, and
 //           the paragraph above is right that neither drives the other -- but
 //           the reason is worth stating, because "wire them together" is the

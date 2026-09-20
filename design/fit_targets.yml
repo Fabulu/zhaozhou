@@ -2159,7 +2159,12 @@ targets:
       - fpga/rtl/field/zhao_field_v3_engine.sv
       - fpga/rtl/field/zhao_field_v3_exec.sv
       - fpga/rtl/field/zhao_field_v3_svcpath.sv
-      - fpga/rtl/forge/zhao_forge_cliff.sv
+      # THE RAM CANDIDATE, NOT THE GOLDEN, SINCE 2026-09-20 (owner ruling R142).
+      # `zhao_prod_top` instantiates whatever `design/prod_manifest.yml`'s `top:`
+      # names, and that row moved to `zhao_forge_cliff_ram` when the forge4
+      # packet executed R142's adoption. Fit minus fit on `5CSEBA6U23I7`: the
+      # golden 6,674 ALM / 4,025 reg against 976 / 939 -- 13.6% of the device.
+      - fpga/rtl/forge/zhao_forge_cliff_ram.sv
       - fpga/rtl/forge/zhao_forge_prim.sv
       - fpga/rtl/geometry/zhao_geom_arena.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv

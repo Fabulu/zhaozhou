@@ -5425,6 +5425,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 skirt vertex per clock
+    # THE ADOPTED IMPLEMENTATION IS THE RAM CANDIDATE, NOT THE GOLDEN, SINCE
+    # 2026-09-20 (owner ruling R142; R109 refused to let either compose until the
+    # deciding gate ran, and R117/R142 are that gate, run twice on the target part
+    # `5CSEBA6U23I7`). Fit minus fit: `zhao_forge_cliff` 6,674 ALM / 4,025 regs
+    # against `zhao_forge_cliff_ram` 976 / 939 -- 5,698 ALM and 3,086 registers for
+    # one extra RAM block, DSP unchanged, 13.6% of the 41,910-ALM device. Without
+    # this line the capability resolves BY NAMING CONVENTION to `zhao_forge_cliff`,
+    # so the completion register would go on naming the superseded module as the
+    # thing to compose -- the exact failure CLAUDE.md's "only the latest version"
+    # ruling records for FIELD, where "connected" was satisfiable by wiring the
+    # superseded block and the instrument said fine. The rivalry is NOT a version
+    # suffix, so `successor_in()` cannot see it: it has to be declared.
+    implementation: fpga/rtl/forge/zhao_forge_cliff_ram.sv
     reference_model: zref::forge::rim_plan
     tests:
       directed: tests/forge/forge_cliff_directed.cpp
