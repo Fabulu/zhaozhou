@@ -76,6 +76,9 @@ modules:
   zhao_field_progdir_scan:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_host_v2:
+    disposition: pending_compose
+    why: "THE ASSOCIATION-AWARE FIELD HOST (packet H1, owner directive sections 6 and 7; decisions FH02/FH03/FH05/FH06/FH08/FH09/FH20). It replaces the completion rule the console ships: results are indexed by canonical output ORDINAL rather than by contiguous capture-window position -- R101's mask is window-indexed, and R111 measured all three shipped Earth programs at window masks 0x17/0x1D/0x17, every one leaving three of seven window lanes unwritten, so holes are the NORMAL case and a window mask can never return results in declared order. A PREPARED_SCALAR ordinal is a RESULT, seeded at point start under an independently driven valid bit and an association-generation check, which L1 measured is not optional: every shipped Earth program has uniform outputs no window mask can observe (crater_ring 2 of 4, impact_wave 1, wave_pool 1). END is followed by a real drain FENCE rather than a same-clock verdict. The per-point register walk is skipped only under the image's INIT_PROOF, with cfg_slow_clear_i keeping the slow form for the differential. EVIDENCE: 152 checks in field_host_v2_directed, RC 0, built and run; R126's elaboration guard SEEN TO FIRE by field_host_v2_r126_guard, which exists precisely because a clean --lint-only says nothing whatever about an initial block; R101's ANY-not-ALL defect re-planted as tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv, one substantive line, fired, with case 1d polarity B as its negative control. It is NOT composed because zhao_console_core.sv is packet C1's serialised act: the response bus changes width (OUT_ORDINALS, not OUT_LANES) and gains resp_present_o/resp_window_o/resp_count_o, so both generated tops must be regenerated in the same act. The unversioned zhao_field_host is RETAINED as the named oracle (FH02) and stays out of every production source list, because composing both is exactly what superseded_in_closure() exists to catch. See version_exceptions at the foot of this file, which is the other half of this entry and is meant to be DELETED when C1 lands."
   zhao_field_rcp:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -538,3 +541,43 @@ modules:
 # Modules the console elaborates DESPITE a newer sibling existing. Each needs a
 # reason good enough to survive the owner reading it.
 version_exceptions:
+  # THIS ENTRY IS A WORK ITEM WITH A DELETION DATE, NOT A SETTLEMENT, and it is
+  # the first one this file has ever carried. Read it as an obligation on packet
+  # C1, because that is what it is.
+  #
+  # The owner's ruling is not in doubt: "YOU ONLY GET TO FIT THE LATEST VERSION.
+  # IF IT IS BROKEN YOU FIX IT." CLAUDE.md adds the half that matters here --
+  # "'It is broken so I composed the old one' is not an answer ... Falling back
+  # is a decision to ship the old thing, and it must not be made quietly inside
+  # a packet."
+  #
+  # SO, SAID PLAINLY: zhao_field_host_v2 IS NOT BROKEN. It is NEW. It was built
+  # on 2026-09-20 by packet H1 with 152 directed checks green, R126's
+  # elaboration guard seen to fire, and R101's defect re-planted as a committed
+  # mutant that fires. Nothing about it is a fallback.
+  #
+  # The console still elaborates the unversioned host for ONE reason, and it is
+  # a sequencing reason rather than a quality one: composing the new host is an
+  # edit to zhao_console_core.sv, which the FIELD repair plan assigns to packet
+  # C1 as a SERIALISED, NEVER-CONCURRENT act. The new host's response bus is
+  # OUT_ORDINALS wide where the old one is OUT_LANES wide, and it gains
+  # resp_present_o, resp_window_o and resp_count_o, so the composition, both
+  # adapters and both generated tops have to move together or the next fit
+  # discovers a PINMISSING. H1 doing that edit concurrently with C1 is the
+  # live-tree hazard this run has already paid for twice.
+  #
+  # WHAT REMOVES THIS ENTRY: C1 composing zhao_field_host_v2 and regenerating
+  # gen_prod_top.py and gen_console_board.py. Deleting these lines is part of
+  # that packet's definition of done, and if this entry is still here after C1
+  # has landed, the composition did not happen and this file is the only thing
+  # that will say so.
+  #
+  # NOTE THE SHAPE: the reason goes on the SAME LINE as the name. The parser at
+  # check_console_inventory.py:153 matches `^  (\S+):\s*(.+)$` for this section,
+  # so a nested `why:` block -- which is what the modules section above uses --
+  # falls through and is recorded as NOTHING. The gate then goes on failing
+  # while the file looks as though it carries an exception, which is the wrong
+  # direction to be wrong in only by luck: an exception that silently does not
+  # register fails LOUD, where one that silently did would have hidden a
+  # superseded composition.
+  zhao_field_host: "INTERIM, 2026-09-20, owned by packet C1 -- A WORK ITEM, NOT A SETTLEMENT. The newer host zhao_field_host_v2 is built and tested and is NOT BROKEN: 152 checks in field_host_v2_directed, R126's elaboration guard seen to fire, R101's ANY-not-ALL defect re-planted as a committed mutant that fires. It is simply not composed yet, and the reason is sequencing rather than quality. Composing it is an edit to zhao_console_core.sv, which the FIELD repair plan assigns to packet C1 as a SERIALISED, NEVER-CONCURRENT act: the new host's response bus is OUT_ORDINALS wide where this one is OUT_LANES wide, and it gains resp_present_o, resp_window_o and resp_count_o, so the composition, both adapters and both generated tops must move together or the next fit discovers a PINMISSING. H1 making that edit concurrently with C1 is the live-tree hazard this run has already paid for twice. zhao_field_host is ALSO retained deliberately as the named oracle (FH02) and appears in tests/CMakeLists.txt only, never in a production source list. DELETE THIS ENTRY when C1 composes zhao_field_host_v2 -- that deletion is part of C1's definition of done, and this entry still being here after C1 has landed is itself the alarm that the composition did not happen."

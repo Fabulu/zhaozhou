@@ -663,6 +663,27 @@ excluded:
   - zhao_field_normalize: superseded  by zhao_field_v3_normalize
   - zhao_field_ring: superseded  by zhao_field_v3_ring, which zhao_field_v3_ring_svc carries
   - zhao_field_rot: superseded  by zhao_field_v3_rot, with zhao_field_v3_trig supplying sin/cos
+  # --- 2026-09-20, THE ASSOCIATION-AWARE HOST (packet H1) --------------------
+  # BUILT, TESTED, AND COMPOSED NOWHERE YET -- and the wording below is chosen
+  # deliberately. "not-yet-adopted" is the deferral wording uncashed_cheques.py
+  # watches for; "superseded" or "probe" would CLOSE the question, and this
+  # question is open. Being NAMED in this manifest is not being SETTLED by it.
+  #
+  # zhao_field_host_v2 is the strict-output-contract host: results indexed by
+  # canonical output ORDINAL rather than by capture-window position, uniform
+  # outputs seeded from prepared scalars as results, a real post-END drain
+  # fence, and the no-clear fast path gated on the image's INIT_PROOF. The
+  # unversioned zhao_field_host is RETAINED as the named oracle (FH02) and
+  # appears only in tests/CMakeLists.txt -- never in a production source list,
+  # because composing both is exactly what superseded_in_closure() exists to
+  # catch.
+  #
+  # It is not composed because composition of zhao_console_core.sv is packet
+  # C1's serialised act, and it needs a port change there (the host's response
+  # is OUT_ORDINALS wide, not OUT_LANES) plus both generated tops regenerated.
+  # See design/console_inventory.yml's version_exceptions entry, which is the
+  # other half of this and is meant to be DELETED when C1 lands.
+  - zhao_field_host_v2: not-yet-adopted  the strict-output-contract FIELD host (owner directive sections 6/7, decisions FH02/FH03/FH05/FH06/FH08/FH09/FH20); 152 checks in field_host_v2_directed, R126's elaboration guard fired by field_host_v2_r126_guard, and R101's ANY-not-ALL defect re-planted as tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv with its negative control in case 1d; adopt in place of zhao_field_host when C1 composes it
   - zhao_field_rcp: superseded  the v1 reciprocal; the v3 normalize path uses zhao_field_rcp24_rom, which stays counted because it is version-neutral and used outside FIELD
   - zhao_field_rcp_rom: superseded  the v1 reciprocal table, read only by zhao_field_rcp  # --- 2026-09-09, FORGE.PRIM.EVAL (the lightning evaluator) -----------------
   # Both BUILT and composed nowhere -- deliberately. The evaluator emits the
