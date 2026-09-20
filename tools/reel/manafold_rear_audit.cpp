@@ -482,7 +482,25 @@ constexpr double kGateRailRegressFloor = 0.40;
 // still HOLDS (the gesture costs item 1 nothing) but at the repaired value, not
 // at the rip's. That parity is the number to check if either is ever moved.
 constexpr double kGateRailCeiling = 2.10;
-constexpr double kGateHandoffMaxMm = 320.0;  // against a worst of 260
+// ⚠ PASS 20 CLOSE -- THE BOUND IS BACK, AND HIGHER. The pass demoted this to
+// "reported only" because the bow makes a legitimately curved band read as
+// disagreement, and that reasoning is right about the OLD number: 320 was
+// calibrated against a band that could not bend, and the repaired band reads
+// 361. But demoting it left the quantity that FOUND the rip with no regression
+// guard at all, past a bound that was still being printed -- the review's row 3.
+//
+// So the bound is re-calibrated for the new solve instead of removed: 420 mm,
+// 16% of margin over the shipping 361, which is where the repaired band sits
+// with the dip ON and (identically) with ZHAO_U02_KNEAD_DIP_PM=0, so the beat
+// costs it nothing. It is a REGRESSION ceiling and claims nothing about what
+// the right curvature is -- only that from here on, a band whose two bones
+// disagree by more than 420 mm about the same vertex is a skinning-smear risk
+// that has to be looked at.
+//
+// FIRED: `--fail-rear-frame` (the version-18 legacy-root End frame, the defect
+// this pass repaired) drives it to 523 mm. `--fail-rear-joint` reads 393 and
+// deliberately stays UNDER, so it keeps failing only its own R1 detector.
+constexpr double kGateHandoffMaxMm = 420.0;  // shipping 361, control 523
 // Continuity, and it was raised 0.12 -> 0.18 by the bow repair. Saying so, and
 // saying what it does NOT mean: the pre-repair band was a rigid shape that only
 // stretched, so its strain barely moved per sample (0.053); the repaired band
@@ -495,7 +513,12 @@ constexpr double kGateRailStepMax = 0.18;
 // 20 mm is about 3 px at native -- small, because the requirement is the
 // RANKING; how deep it looks is an art value chosen by eye, not by this gate.
 constexpr double kGateDipMarginMm = 20.0;
-// B's own vertical travel over the clip: the dip must go and COME BACK.
+// THE DIP MUST GO AND COME BACK, measured on the RANKING: somewhere in the clip
+// B has to be at least this far ABOVE the lower of A and C again. See
+// ClipStats::dip_up_margin_mm for why B's own vertical travel -- the quantity
+// this used to read -- cannot see a stuck dip at all. 60 mm is the same order
+// as the 20 mm ranking margin with room for the resting pose to breathe;
+// shipping clips clear it by hundreds.
 constexpr double kGateDipReturnMm = 60.0;
 
 struct ClipStats {
@@ -526,6 +549,20 @@ struct ClipStats {
   double dip_margin_mm = -1e9;
   double b_low = 1e9, b_high = -1e9;
   size_t dip_at = 0;
+  // ⚠ "DID IT COME BACK" MEASURED ON THE RANKING, NOT ON B'S TRAVEL. The first
+  // version of this arm differenced B's own highest and lowest Y over the clip
+  // and asked for 60 mm of it. That quantity is dominated by EVERY OTHER LAYER
+  // -- the ambient nodule schedule, the breathing, the body's own rise and fall
+  // -- so a dip frozen permanently at the bottom still measured 280-520 mm of
+  // travel and the arm could not fire. Its own control proved it: --fail-dip-
+  // stuck returned rc 0. Same law as G10's first probe and as the metadata bank
+  // in CLAUDE.md -- a detector differencing two quantities that move together
+  // for other reasons is blind to the fault it names.
+  //
+  // The dip's contract is a RANKING that goes and returns, so the return is
+  // measured on the ranking: at some sample of the clip B must be clearly NOT
+  // the lowest carrier. Nothing but the dip can hide that.
+  double dip_up_margin_mm = -1e9;  // best (lowest of A,C) - B with B ABOVE
 };
 
 ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
@@ -783,6 +820,8 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       }
       st.b_low = std::min(st.b_low, s.ball_b_y);
       st.b_high = std::max(st.b_high, s.ball_b_y);
+      // the most B is ABOVE the lower outer ball anywhere in the clip
+      if (-m > st.dip_up_margin_mm) st.dip_up_margin_mm = -m;
     }
     if (i > 0)
       st.span_step_mm =
@@ -861,6 +900,21 @@ void print_stats(int slot, const ClipStats& s) {
       s.rail_max - s.front_rail_max, s.rail_min - s.front_rail_min,
       s.handoff_mm, s.handoff_ring, s.handoff_b0, s.handoff_b1,
       s.span_max_mm, s.span_min_mm, s.span_max_at, s.span_step_mm);
+  // ⚠ R5's MARGIN IS PRINTED ON EVERY SLOT, PASSING OR NOT. The leg used to
+  // print a line only where it failed, so the one number that says HOW CLOSE a
+  // clip is to the owner's ranking -- the number the per-clip share table is
+  // steered by -- was invisible on exactly the clips that were fine. Same fault
+  // the review repaired in mspan's G6: a detector that prints only its failures
+  // cannot be read for margin. `dip share` is the authored per-clip factor, so
+  // the line also says which knob moves it.
+  const int32_t share = slot >= 0 && slot < u02::kKneadClipSlots
+                            ? u02::kKneadDipClipPm[slot]
+                            : 750;
+  std::printf(
+      "  R5 DIP: B lowest margin %+.0f mm (need >= %.0f), returns to %+.0f mm "
+      "above (need >= %.0f), B travel %.0f mm, dip share %d pm\n",
+      s.dip_margin_mm, kGateDipMarginMm, s.dip_up_margin_mm, kGateDipReturnMm,
+      s.b_high - s.b_low, share);
 }
 
 // R3: the width law, swept over projected size for every line radius in use.
@@ -977,6 +1031,14 @@ int main(int argc, char** argv) {
       // gate can see the dip and that the mechanism is cleanly removable.
       u02::g_u02_knead_dip_gain_pm = 0;
       std::printf("MUTANT: --fail-no-dip (kneading dip switched off)\n");
+    } else if (std::strcmp(argv[i], "--fail-dip-stuck") == 0) {
+      gate = true;
+      g_force_dip_leg = true;
+      // R5's SECOND arm, which had no control until the pass-20 close: the dip
+      // presses B down and never releases it. See
+      // g_u02_knead_dip_stuck_control.
+      u02::g_u02_knead_dip_stuck_control = true;
+      std::printf("MUTANT: --fail-dip-stuck (the dip never returns)\n");
     } else if (std::strcmp(argv[i], "--dip") == 0) {
       gate = true;
       g_force_dip_leg = true;
@@ -1150,10 +1212,11 @@ int main(int argc, char** argv) {
       // turned this leg RED on short clips whose ramps are floored and whose
       // envelope never reaches 1. A knob that breaks a gate by being turned up
       // is a gate measuring the wrong operand.
-      if (st.b_high - st.b_low < kGateDipReturnMm) {
+      if (st.dip_up_margin_mm < kGateDipReturnMm) {
         ++dip_stuck;
-        std::printf("  R5 slot %2d: B's travel is only %.0f mm -- the dip does "
-                    "not return\n", want, st.b_high - st.b_low);
+        std::printf("  R5 slot %2d: B never gets back above the outer balls "
+                    "(best %.0f mm above, need %.0f) -- the dip does not "
+                    "return\n", want, st.dip_up_margin_mm, kGateDipReturnMm);
       }
       if (st.dip_margin_mm < dip_worst_margin) {
         dip_worst_margin = st.dip_margin_mm;
@@ -1162,6 +1225,11 @@ int main(int argc, char** argv) {
     }
   }
   if (!gate) return 0;
+  // No figure from this gate may be read without knowing what it judged. This
+  // line is the `--dip` defect's permanent answer: a leg that judges a knob
+  // nobody ships now says so, in the log, beside its own headline.
+  std::printf("\n");
+  u02::print_judged_config("mrear");
   std::printf("\nR1 FRAME: worst arm<->End rotation %.2f deg (slot %d, ceiling %.1f); "
               "worst rear centreline turn %.2f deg (slot %d, ceiling %.1f)\n",
               w_rel, w_rel_slot, kGateRelMaxDeg, w_bend, w_bend_slot,
@@ -1200,11 +1268,21 @@ int main(int argc, char** argv) {
   // measures HOW CURVED THE BAND IS. Bounding it would be a gate encoding a
   // shape decision, which is the thing the house rules refuse. The rail strain
   // is the fold; it is bounded, and it is what this leg judges.
-  if (w_rail_min < kGateRailRegressFloor || w_rail_max > kGateRailCeiling ||
-      w_rail_step > kGateRailStepMax) {
+  // ⚠ WHICH CONDITION FIRED IS PRINTED. Four quantities share one mask bit, so
+  // a bare "FAIL R4 STRAIN" cannot be attributed to a cause by a reader or by
+  // the matrix; the named list can.
+  const bool bad_floor = w_rail_min < kGateRailRegressFloor;
+  const bool bad_ceil = w_rail_max > kGateRailCeiling;
+  const bool bad_step = w_rail_step > kGateRailStepMax;
+  // ⚠ RE-BOUNDED AT THE CLOSE (see kGateHandoffMaxMm). The pass demoted this to
+  // reported-only and left 361 mm past a printed 320 with nothing guarding it.
+  const bool bad_handoff = w_handoff > kGateHandoffMaxMm;
+  if (bad_floor || bad_ceil || bad_step || bad_handoff) {
     mask |= 0x8;
     std::printf("FAIL R4 STRAIN: the rear skin is strained past the "
-                "regression guard\n");
+                "regression guard [%s%s%s%s]\n",
+                bad_floor ? "rail-floor " : "", bad_ceil ? "rail-ceiling " : "",
+                bad_step ? "rail-step " : "", bad_handoff ? "hand-off " : "");
   } else if (w_rail_min < kGateRailTargetFloor) {
     std::printf(
         "OPEN BREACH R4 (declared 2026-09-20, Direction 21 item 1): the rear "
@@ -1249,19 +1327,21 @@ int main(int argc, char** argv) {
                 "every clip that authors one\n");
   } else if (dip_missing != 0) {
     std::printf(
-        "OPEN R5 (declared 2026-09-20, Direction 21 item 2; restated by the "
-        "pass-20 review): the dip runs on all %d clips and returns on all of "
-        "them, but B reaches the BOTTOM of the ranking on only %d. The owner "
-        "asked for it on EVERY animation, so this is the item's outstanding "
-        "half, not a rounding.\n"
-        "  ⚠ AND IT IS NOT A KNOB AWAY. The amplitude lever is "
-        "ZHAO_U02_KNEAD_DIP_PM x ZHAO_U02_KNEAD_DENT_DEPTH_PM (they multiply "
-        "into the same s), and the ranking trades MONOTONICALLY against mspan's "
-        "G9 angular-step ceiling of 8 deg: gain 550 -> 7.77 deg / 4 clips, 650 "
-        "-> 9.21 / 9, 750 -> 11.28 / 14, 1000 -> 50.96 / 19. Every setting that "
-        "delivers the ranking is a carrier roll flip. The dent mechanism cannot "
-        "reach the owner's ask inside the continuity gate; that needs authoring "
-        "(redistribution across A/B/C), not a larger number here.\n",
+        "OPEN R5 (Direction 21 item 2): the dip runs on all %d hosting clips "
+        "and returns on all of them, but B reaches the BOTTOM of the ranking on "
+        "only %d. The owner asked for it on EVERY animation.\n"
+        "  ⚠ THIS WAS CLOSED AT THE PASS-20 CLOSE AT 19 OF 19, so if the line "
+        "is printing again something REGRESSED rather than was never finished. "
+        "The earlier text here said the ranking trades monotonically against "
+        "mspan's G9 ceiling and that no setting delivers both; that was true of "
+        "the AIM, not of the mechanism. shortest_arc_from_y recovered its "
+        "rotation axis from a cross product whose magnitude vanishes exactly "
+        "where a deep press sends the segment, so the axis was quantised away "
+        "and the roll flip returned with depth (50.96 deg at gain 1000 on a "
+        "carrier whose POSITION step was flat). arc_from_y_about conditions the "
+        "axis on the beat's own fold normal and the trade disappears. Check "
+        "THAT first: kNoduleAimFlipAxis, the dent's axis argument, and whether "
+        "any aim path has gone back to composing z-then-x.\n",
         dip_clips, dip_clips - dip_missing);
   }
   std::printf("rear gate mask 0x%X -> %s\n", mask, mask ? "RED" : "GREEN");

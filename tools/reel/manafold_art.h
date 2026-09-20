@@ -24,6 +24,9 @@
 #ifndef ZHAO_REEL_MANAFOLD_ART_H
 #define ZHAO_REEL_MANAFOLD_ART_H
 
+#include <cstdint>
+#include <cstdio>
+
 namespace u02 {
 
 // Q16.16 raw from millimetres (same rounding as the reel's fxm; local so the
@@ -4622,7 +4625,37 @@ constexpr int32_t kKneadDipHoldPm = 70;
 constexpr int32_t kKneadDipFallPm = 160;
 // Floors in KEYS so a short clip still gets a knead and not a snap (the same
 // reason eye_travel_life_pm floors its ramps).
-constexpr int kKneadDipMinRampKeys = 9;
+// ⚠ PASS 20 CLOSE: THIS FLOOR IS WHAT CAPPED THE DEPTH, and it is an ART value
+// before it is a gate one. `kKneadDipRisePm` is a fraction of the clip, so on a
+// short clip the floor is what actually runs -- and 9 keys is 0.3 s at 30 Hz,
+// which is a JAB, not a knead. The clips that held the whole bank's depth down
+// (slots 3, 4, 6, 8, 10, 11) were all on the floor: mspan's per-slot angular
+// trace shows their whole beat as one smooth symmetric 16-frame hump, no spike
+// and no flip, peaking at exactly the rate the floor sets. A knead is a slow,
+// deliberate press; slowing the short clips is the reading of the gesture AND
+// the headroom that lets B actually reach the bottom on them. 16 keys is the
+// eye's value off the ladder {9, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 34},
+// bounded by G9's unmoved 8 deg ceiling. `win_keys` clamps every window at
+// span/3, so the floor can never push a short clip's window past its own length.
+//
+// 30 keys is ONE SECOND of press at 30 Hz, and it is the value at which every
+// hosting clip can reach the ranking: the floor scan reads 17/19 at 18, 18/19 at
+// 20-28 (a different clip missing at each rung, as the dip COUNT flips between
+// two and one at different lengths) and 19/19 from 30 up. On a clip under ~230
+// keys it also turns two fast presses into ONE deliberate one, which is the
+// gesture the owner named -- "that's a kneading operation" -- rather than a
+// compromise made for the gate.
+// ⚠ R5's `dip_stuck` ARM HAS A CONTROL NOW, AND THIS IS IT. R5 fails on
+// `(dip_clips == 0 && forced) || dip_stuck != 0`, and only the first arm had a
+// control (`--fail-no-dip`, which sets the gain to 0). The second arm -- B sags
+// and never comes back up, the interesting failure -- had never been seen to
+// fire, which by the house rule makes it a claim rather than an instrument.
+// With this set, knead_dip_window_env returns a permanent full envelope: the
+// dip goes down on the first key and stays there for the whole clip, so B's
+// travel collapses and `dip_stuck` fires.
+inline bool g_u02_knead_dip_stuck_control = false;
+constexpr int kKneadDipMinRampKeys = 30;
+inline int32_t g_u02_knead_dip_min_ramp_keys = kKneadDipMinRampKeys;
 constexpr int kKneadDipMinHoldKeys = 3;
 // At most this many dips per loop, dropped until they fit with real rest
 // between them. A crowded dip is a wobble, not a knead.
@@ -4680,11 +4713,43 @@ constexpr int32_t kKneadDipOuterLiftPm = 180;
 enum class KneadDipSolver : uint8_t { kCarried, kDent };
 constexpr KneadDipSolver kKneadDipSolver = KneadDipSolver::kDent;
 inline KneadDipSolver g_u02_knead_dip_solver = kKneadDipSolver;
-constexpr int32_t kKneadDentDepthPm = 2200;
+// PASS 20 CLOSE: 4200. The 2200 above was the depth the ROLL FLIP allowed, not
+// the depth the gesture wants: with the axis-conditioned aim (arc_from_y_about)
+// and the 30-key ramp floor, 4200 puts every hosting clip past the mirror with
+// B clearly the lowest ball and leaves G9's unmoved 8 deg ceiling with real
+// margin. The per-clip trim is kKneadDipClipPm, one clip at a time.
+constexpr int32_t kKneadDentDepthPm = 4200;
 inline int32_t g_u02_knead_dent_depth_pm = kKneadDentDepthPm;
 // Slides the crossing point along the chord from B's foot, per mille of |AC|,
 // to redistribute the ~102 mm the two interior spans must give up AT the
 // crossing. 0 = through the foot.
+// ---- G10 DENT PIN: the pin's own bound and its instrument ------------------
+//
+// The dent's central contract in one number: how far the PINNED carrier C moves
+// between the pose the dent was handed and the pose it produces, L1, in mm, over
+// every dent sample in the bank. It is zero by construction and small in
+// practice (integer rounding in two aims and one renormalisation); what it must
+// never be is a LEAK, because C is where the return arm starts and the C-E span
+// is what the attachment gate protects.
+//
+// ⚠ SPECIFIED IN P20-SOLVER-ARCHITECTURE REVISION 1 AND NEVER BUILT. The review
+// found "G10 DENT PIN was specified and never built ... the dent's central
+// contract is ungated". This is the leg, its bound and its control.
+//
+// The ceiling is a REGRESSION bound, not a target: shipping measures 3 mm, and
+// 20 is comfortably above the rounding floor while still an order of magnitude
+// below the +19 mm leak packet 5 actually had.
+constexpr int32_t kDentPinMaxMm = 20;
+// ⚠ AND THE FRAME. The position half of this leg is structurally blind to the
+// pin -- see the probe's own comment in manafold_clips.h -- so the bound that
+// actually governs the contract is this one. 1 deg of a16 is 182; shipping
+// measures under a degree and the ceiling is 4.
+constexpr int32_t kDentPinMaxFrameA16 = 4 * 65536 / 360;
+inline int64_t g_u02_dent_pin_worst_frame_a16 = 0;
+inline bool g_u02_dent_pin_probe = false;       // gates switch it on
+inline bool g_u02_dent_pin_control = false;     // --fail-dent-pin
+inline int64_t g_u02_dent_pin_worst_mm = 0;
+inline int64_t g_u02_dent_pin_samples = 0;
 constexpr int32_t kKneadDentCrossPm = 0;
 inline int32_t g_u02_knead_dent_cross_pm = kKneadDentCrossPm;
 // "The press owns the carriers while it presses." Scales the AMBIENT nodule
@@ -4816,14 +4881,63 @@ static_assert(kFoldDipOnsetMm < kFoldDipRefMm,
               "the fold's dip onset must lie below its reference depth");
 constexpr int32_t kFoldDipGainPm = 650;
 inline int32_t g_u02_fold_dip_gain_pm = kFoldDipGainPm;
-// ⚠ SLOT 20 (blown) CARRIES 900 RATHER THAN 750. It is the one gameplay clip
-// whose pose kept B above the ranking at the shipping depth (-26 mm, R5), and
-// the per-clip share is the lever this table exists to be. The two clips still
-// short of the ranking after it are 15 (the lab diagnostic) and 16
-// (nodule-solo) -- diagnostics, excluded by the owner's own carve-out.
-constexpr int kKneadDipClipPm[23] = {1000, 900, 950, 900, 800, 850, 900,
-                                     0,    850, 700, 750, 900, 800, 0,   700,
-                                     750,  750, 700, 650, 900, 900, 0, 800};
+// ---- PASS 20 CLOSE: THE REACTION IS A SHAPE, NOT A SCALAR NUDGE ------------
+//
+// ⚠ THE FIRST VERSION MEASURED PRESENT AND WAS INVISIBLE -- CLAUDE.md's crayon
+// grain, exactly. All it did was ADD `dip_pm` to `agit`, the agitation scalar
+// the fold already runs near the top of; on Hover 588 of 600 frames came back
+// BYTE-IDENTICAL to the reaction switched off, and the strongest frame moved
+// 72 pixels of 92,160 -- against 6,145 for the geometry beside it. At 10x it
+// was one lightning bolt a few pixels longer. The identity leg ("FOLD_DIP_PM=0
+// changes the bytes") was TRUE and said nothing whatever about visibility.
+//
+// So the reaction is now a MOTION of the whole mana body, in the owner's own
+// vocabulary from Direction 7 -- "the shapes should look a bit malleable like
+// they're being knead". When B presses down, the mana under it is SQUEEZED:
+// the figure and its particle cloud flatten, spread sideways and are carried
+// down with the press, then come back with it. One coherent gesture the eye
+// cannot miss, made of the same motes, the same palette and the same
+// distance-scaled lines -- nothing about the version-18/19 mana character
+// changes except its shape while it is being kneaded.
+//
+// All three are per mille of the full reaction and scale with `dip_pm`, so
+// ZHAO_U02_FOLD_DIP_PM still ladders the whole thing and 0 is still the EXACT
+// -OFF control. Chosen by eye against the ladder {0, 40, 70, 100, 140} percent
+// on Hover and the fixed antenna view at native resolution, with the off bank
+// beside them; see P20-IMPLEMENTATION.md for the pictures.
+constexpr int32_t kFoldDipDropMm = 330;    // how far the mana body rides down
+constexpr int32_t kFoldDipSquashPm = 430;  // vertical flatten at a full dip
+constexpr int32_t kFoldDipSpreadPm = 700;  // the sideways give that goes with it
+static_assert(kFoldDipSquashPm >= 0 && kFoldDipSquashPm < 1000,
+              "the squash may flatten the mana body, never invert it");
+// ⚠ [SUPERSEDED AT THE PASS-20 CLOSE, kept for the record] "SLOT 20 (blown)
+// CARRIES 900 RATHER THAN 750. It is the one gameplay clip whose pose kept B
+// above the ranking at the shipping depth (-26 mm, R5)." That reading was taken
+// at depth 2200 through the roll-flipping aim; with the axis-conditioned aim and
+// the 30-key ramp floor every clip's requirement changed and the whole table was
+// re-solved. Slot 20 now carries 815 and reads +67 mm.
+// ⚠ PASS 20 CLOSE -- RE-TRIMMED, ONE CLIP AT A TIME, AGAINST THE MEASURED
+// PER-CLIP MARGIN. The table used to be a rough descending guess; with the
+// global depth now at 4200 each entry is set so that clip reaches a READABLE
+// B-lowest margin (target 70-180 mm over the next-lowest carrier, where the
+// mechanism gives a choice) and no deeper, because depth it does not need is
+// continuity headroom it spends for nothing. The measured pair per clip -- R5
+// margin and that clip's own worst 60 Hz angular step -- is in
+// P20-IMPLEMENTATION.md; both instruments read the SHIPPING constants.
+//
+// ⚠ SLOTS 15 AND 16 ARE NOW 0, and this is a bookkeeping REPAIR, not a
+// retreat. Neither clip calls `antenna_knead`/`swallow_nodules` at all: the lab
+// (15) runs a forked `lab_antenna_knead` on its own timeline, and nodule-solo
+// (16) exists to show each nodule moving INDEPENDENTLY, which a dip pressing B
+// would be the two-authorities fault against. So the dent could never run on
+// them, while a nonzero entry told R5 they HOSTED a dip -- a permanently red,
+// structurally unreachable leg on two clips, which is exactly the "gate that
+// cannot reach the state" trap. They now declare what is true, and they join
+// 7 (Still, a two-frame diagnostic), 13 (Trick, whose plant contact is pinned)
+// and 21 (Taunt III, whose crown shuffle already owns the rankings).
+constexpr int kKneadDipClipPm[23] = { 715, 730, 680, 730, 650, 770, 730,
+                                     0,    770, 950, 820, 815, 650, 0,   635,
+                                     0,    0,   635, 590, 645, 815, 0, 800};
 static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
                               sizeof(kKneadDipClipPm[0])) == kKneadClipSlots,
               "the dip gain table must stay in step with kKneadClipPm");
@@ -4889,12 +5003,28 @@ static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
 // ZHAO_U02_KNEAD_DIP_PM ladders the amplitude; `mrear --gate --dip` forces the
 // R5 leg to be JUDGED and (since the pass-20 review) judges it at whatever gain
 // is configured, so the leg cannot report a creature nobody renders.
-// ⚠ THE SHIPPING NUMBER IS 4 OF 21, NOT 15 AND NOT 19. At 550 the bank reaches
-// B-strictly-lowest on slots 0, 1, 2 and 7 only. Deeper settings buy the
-// ranking and lose mspan's G9: 650 -> 9.21 deg / 9 clips, 750 -> 11.28 / 14,
-// 1000 -> 50.96 / 19, against an 8 deg ceiling. Gain and kKneadDentDepthPm
-// multiply into the same `s`, so this is a property of the mechanism, not of
-// which knob is turned. Direction 21 item 2 is OUTSTANDING.
+// ⚠ [SUPERSEDED AT THE PASS-20 CLOSE] "THE SHIPPING NUMBER IS 4 OF 21, NOT 15
+// AND NOT 19 ... deeper settings buy the ranking and lose mspan's G9: 650 ->
+// 9.21 deg / 9 clips, 750 -> 11.28 / 14, 1000 -> 50.96 / 19 ... this is a
+// property of the MECHANISM, not of which knob is turned."
+//
+// The ladder was real and the conclusion was wrong, in an instructive way. That
+// trade was not a property of the mechanism at all -- it was a property of the
+// AIM: `shortest_arc_from_y` recovers its rotation axis from a cross product
+// whose magnitude vanishes exactly where the deep press sends the segment, so
+// the axis was being quantised away and the "roll flip" came back with depth.
+// With `arc_from_y_about` conditioning the axis on the beat's own fold normal,
+// depth 2200 costs G9 NOTHING (7.591, the dip-off bank's own worst) and the
+// unmoved 8 deg ceiling admits 4200.
+//
+// ⚠ THE SHIPPING NUMBER IS 19 OF 19 HOSTING CLIPS, worst margin +37 mm
+// (slot 9), G9 worst 7.642 against the unmoved 8.0. The clips that do not host
+// the beat are 7, 13, 15, 16 and 21, each for a named reason beside its zero in
+// kKneadDipClipPm above -- and 21 (Taunt III) reads +64 mm anyway, by the crown
+// shuffle the owner named as the reference. Direction 21 item 2 is DELIVERED.
+//
+// The gain stays at 550 because `s` is a product and the DEPTH is the knob the
+// eye was laddered on; moving both would make neither legible.
 constexpr int32_t kKneadDipGainPm = 550;
 inline int32_t g_u02_knead_dip_gain_pm = kKneadDipGainPm;
 inline int32_t g_u02_knead_dip_depth_mm = kKneadDipDepthMm;  // authoring ladder
@@ -4917,6 +5047,64 @@ constexpr int32_t kU02CamKTrick = 330000;  // WAVE F by eye (L12; house 360000)
 inline int32_t g_u02_trick_cam_k = kU02CamKTrick;
 
 // ============================ END KNOBS ====================================
+
+// ---- THE JUDGED-CONFIGURATION BANNER --------------------------------------
+//
+// ⚠ THIS EXISTS BECAUSE A GATE LEG SPENT A WHOLE PACKET DESCRIBING A CREATURE
+// NOBODY RENDERS. `mrear --gate --dip` set `g_u02_knead_dip_gain_pm = 1000`
+// while the tree shipped 550, and the headline figure taken from that run --
+// "B strictly lowest on 19 of 21" -- was quoted into two reports and a matrix
+// leg. It was not a wrong measurement; it was a correct measurement of the
+// wrong configuration, and nothing in the log said so.
+//
+// So every gate prints, in one line, the value it is ACTUALLY judging for each
+// constant a flag or an environment variable can move, beside the shipping
+// value, and marks any that differ. A deliberate override is then named in the
+// log by construction, and a figure quoted from an overridden run cannot be
+// mistaken for a shipping one by a reader, by a later session, or by a matrix.
+//
+// Add a row whenever a new knob gets an override path. The rule the rows
+// encode: a gate READS the shipping constants; it does not choose them.
+inline int print_judged_config(const char* who) {
+  struct Row { const char* name; long long live, ship; };
+  const Row rows[] = {
+      {"knead dip gain pm", g_u02_knead_dip_gain_pm, kKneadDipGainPm},
+      {"dent depth pm", g_u02_knead_dent_depth_pm, kKneadDentDepthPm},
+      {"dent cross pm", g_u02_knead_dent_cross_pm, kKneadDentCrossPm},
+      {"dent swing pm", g_u02_knead_dent_swing_pm, kKneadDentSwingPm},
+      {"dent overpress pm", g_u02_knead_dent_overpress_pm, kKneadDentOverpressPm},
+      {"dent ambient duck pm", g_u02_knead_dent_ambient_duck_pm,
+       kKneadDentAmbientDuckPm},
+      {"dip ramp floor keys", g_u02_knead_dip_min_ramp_keys,
+       kKneadDipMinRampKeys},
+      {"dip depth mm (carried)", g_u02_knead_dip_depth_mm, kKneadDipDepthMm},
+      {"dip fold pm", g_u02_knead_dip_fold_pm, kKneadDipFoldPm},
+      {"fold dip reaction pm", g_u02_fold_dip_gain_pm, kFoldDipGainPm},
+      {"rear socket follow pm", g_u02_rear_socket_follow_pm,
+       kRearSocketArmFollowPm},
+      {"rear ambient gain pm", g_u02_rear_ambient_gain_pm,
+       kRearSocketAmbientGainPm},
+      {"rear bow sign", g_u02_rear_bow_sign, kRearBowSign},
+      {"rear bow onset mm", g_u02_rear_bow_onset_mm, kRearBowOnsetMm},
+  };
+  int overridden = 0;
+  std::printf("CONFIG JUDGED (%s): ", who);
+  for (const Row& r : rows) {
+    if (r.live == r.ship) continue;
+    ++overridden;
+    std::printf("%s%s %lld **OVERRIDE, shipping %lld**", overridden > 1 ? "; " : "",
+                r.name, r.live, r.ship);
+  }
+  if (overridden == 0)
+    std::printf("every shipping constant at its shipped value (dip gain %lld, "
+                "dent depth %lld, ramp floor %lld, fold reaction %lld)",
+                static_cast<long long>(kKneadDipGainPm),
+                static_cast<long long>(kKneadDentDepthPm),
+                static_cast<long long>(kKneadDipMinRampKeys),
+                static_cast<long long>(kFoldDipGainPm));
+  std::printf("\n");
+  return overridden;
+}
 
 }  // namespace u02
 

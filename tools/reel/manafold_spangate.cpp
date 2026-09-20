@@ -72,6 +72,7 @@ enum GateCategory : uint32_t {
   kCatSwellSize = 1u << 13,
   kCatTerminalCap = 1u << 14,
   kCatWalk = 1u << 15,
+  kCatDentPin = 1u << 16,
 };
 uint32_t g_failure_bits = 0;
 uint32_t g_current_category = kCatConfig;
@@ -1906,6 +1907,40 @@ void check_loop_walk_pairing(bool fail_walk_pairing) {
     fail("loop_walk pairs a span's arc with the wrong bone's span delta");
 }
 
+// ---- G10 DENT PIN (specified in P20-SOLVER-ARCHITECTURE r1; built at close) -
+//
+// ⚠ THE DENT'S CENTRAL CONTRACT, AND IT WAS UNGATED UNTIL NOW. The dent claims
+// that carrier C keeps its world position and frame, which is WHY the C-E span
+// -- the attachment the whole pass exists to protect -- is charged nothing for
+// the gesture. The number existed only behind a private `-DZHAO_P20_PINPROBE`
+// rebuild, so the +19 mm leak packet 5 measured and packet 6 repaired could
+// have returned in complete silence.
+//
+// The accumulator is filled by the DENT ITSELF while the bank is built (it
+// walks the chain to C again after the pin and differences it), so this leg
+// reads the shipping solve on every dent sample of every clip, not a synthetic
+// one. Its control drops the pin write and the residual becomes the excursion
+// of the whole dent.
+void check_dent_pin(bool fail_dent_pin) {
+  std::printf("G10 dent pin: %lld dent samples, worst |C_after - C_before| "
+              "%lld mm (L1, ceiling %d), worst frame drift %.3f deg "
+              "(ceiling %.3f)%s\n",
+              static_cast<long long>(u02::g_u02_dent_pin_samples),
+              static_cast<long long>(u02::g_u02_dent_pin_worst_mm),
+              u02::kDentPinMaxMm,
+              u02::g_u02_dent_pin_worst_frame_a16 * 360.0 / 65536.0,
+              u02::kDentPinMaxFrameA16 * 360.0 / 65536.0,
+              fail_dent_pin ? "  [MUTANT: HingeC pin dropped]" : "");
+  // ⚠ A LEG THAT NEVER REACHED ITS STATE IS NOT EVIDENCE. If the dent never ran
+  // there is nothing to bound, and a silent pass would be the reassuring zero.
+  if (u02::g_u02_dent_pin_samples == 0)
+    fail("the dent never ran, so its pin was never measured");
+  if (u02::g_u02_dent_pin_worst_mm > u02::kDentPinMaxMm ||
+      u02::g_u02_dent_pin_worst_frame_a16 > u02::kDentPinMaxFrameA16)
+    fail("the dent moves the pinned carrier C, so the rear closure is charged "
+         "for it");
+}
+
 void check_rear_closure(const zc::CreatureType& type,
                         const Stations& stations) {
   const int32_t x = u02::fxu(u02::kLoopTubeXMm);
@@ -1972,7 +2007,7 @@ void usage(const char* argv0) {
                "[--fail-accent-switch] [--fail-hold-tremor] "
                "[--fail-compress-wrap] [--fail-final-dwell] "
                "[--fail-root-authority] [--fail-front-flex] "
-               "[--fail-swell-size] [--fail-terminal-cap] [--fail-walk-pairing] "
+               "[--fail-swell-size] [--fail-terminal-cap] [--fail-walk-pairing] [--fail-dent-pin] "
                "[--motion-csv] "
                "[--held-only]\n",
                argv0);
@@ -2004,6 +2039,7 @@ int main(int argc, char** argv) {
   bool fail_swell_size = false;
   bool fail_terminal_cap = false;
   bool fail_walk_pairing = false;
+  bool fail_dent_pin = false;
   bool motion_csv = false;
   bool held_only = false;
   u02::PublicJointMute fail_mute = u02::PublicJointMute::kNone;
@@ -2051,6 +2087,8 @@ int main(int argc, char** argv) {
       fail_swell_size = true;
     } else if (std::strcmp(argv[i], "--fail-walk-pairing") == 0) {
       fail_walk_pairing = true;
+    } else if (std::strcmp(argv[i], "--fail-dent-pin") == 0) {
+      fail_dent_pin = true;
     } else if (std::strcmp(argv[i], "--fail-terminal-cap") == 0) {
       fail_terminal_cap = true;
     } else if (std::strcmp(argv[i], "--motion-csv") == 0) {
@@ -2114,6 +2152,13 @@ int main(int argc, char** argv) {
   select_mutant(fail_front_flex, "front-flex", kCatFrontFlex,
                 kCatFrontFlex);
   select_mutant(fail_walk_pairing, "walk-pairing", kCatWalk, kCatWalk);
+  // ⚠ THE ALLOWED SET IS WIDER THAN THE EXPECTED ONE ON PURPOSE, and the reason
+  // IS the leg's argument: dropping the pin breaks G10 AND the two things the
+  // pin exists to protect -- the rear closure and carrier continuity. A control
+  // that fired G10 alone would have to be a perturbation rather than the real
+  // defect, and the real defect is what this leg is for.
+  select_mutant(fail_dent_pin, "dent-pin", kCatDentPin,
+                kCatDentPin | kCatContinuity | kCatClosure);
   select_mutant(fail_swell_size, "swell-size", kCatSwellSize,
                 kCatSwellSize);
   select_mutant(fail_terminal_cap, "terminal-cap", kCatTerminalCap,
@@ -2153,12 +2198,19 @@ int main(int argc, char** argv) {
     u02::g_u02_terminal_cap_control = true;
   if (fail_mute != u02::PublicJointMute::kNone && !held_only)
     u02::g_u02_public_joint_mute = fail_mute;
+  // ⚠ BOTH OF THESE MUST BE SET BEFORE THE BANK IS BUILT. The dent runs inside
+  // the clip builders, so a probe switched on after `u02::type()` would measure
+  // nothing and read a reassuring zero -- the broken-instrument law.
+  u02::g_u02_dent_pin_probe = true;
+  if (fail_dent_pin) u02::g_u02_dent_pin_control = true;
   const Stations stations;
   zc::CreatureType type = u02::type();
   mutate_rigid_span(type, rigid_span, stations);
 
   std::printf("MANAFOLD PASS-17 SIGNED-SPAN GATE%s\n",
               held_only ? " [HELD-PUNCHLINE FOCUS]" : "");
+  // No figure from this gate may be read without knowing what it judged.
+  u02::print_judged_config("mspan");
   std::printf("  bones %u/%d; helpers A/B/C/E/EStart/EMid/EPre = "
               "%u/%u/%u/%u/%u/%u/%u\n",
               type.skeleton.bone_count, zc::kMaxBones,
@@ -2219,6 +2271,8 @@ int main(int argc, char** argv) {
     std::printf("  [MUTANT] restore the authored 42/26 profile on the buried terminal ring\n");
   if (fail_walk_pairing)
     std::printf("  [MUTANT] restore the packet-5 one-bone-early dent walk\n");
+  if (fail_dent_pin)
+    std::printf("  [MUTANT] drop the dent's HingeC world-frame pin\n");
   std::printf("\n");
 
   g_current_category = kCatConfig;
@@ -2229,6 +2283,9 @@ int main(int argc, char** argv) {
 
   g_current_category = kCatWalk;
   check_loop_walk_pairing(fail_walk_pairing);
+
+  g_current_category = kCatDentPin;
+  check_dent_pin(fail_dent_pin);
 
   if (held_only) {
     g_current_category = kCatCrown;

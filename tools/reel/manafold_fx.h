@@ -3043,6 +3043,35 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   }
   int32_t agit = stfx.knead_visible + dip_pm;
   if (agit > 1000) agit = 1000;
+  // ---- PASS 20 CLOSE: THE PRESS SQUEEZES THE MANA --------------------------
+  //
+  // See kFoldDipDropMm in manafold_art.h. `dip_pm` above is the reaction
+  // authority; these are the three motions it drives. They are applied to the
+  // lightning figure in `place()` and to the particle cloud beside it, about
+  // the SAME pivot (the conduit ring centre) and in the SAME frame, so the
+  // figure and its motes are squeezed together as one body rather than sliding
+  // through each other.
+  const int32_t dip_drop = fxu(kFoldDipDropMm) * dip_pm / 1000;
+  const int32_t dip_squash_pm = kFoldDipSquashPm * dip_pm / 1000;
+  const int32_t dip_spread_pm = kFoldDipSpreadPm * dip_pm / 1000;
+  // ⚠ ONE HELPER, so the figure and the motes cannot drift apart. `pivot` is
+  // the ring centre on each axis; everything is measured from it.
+  // It is SEPARABLE -- each axis depends only on itself -- so the same law can
+  // be applied to a whole point or to one lane of an expression, and the figure
+  // and the motes cannot end up squeezed differently.
+  const auto dip_ax = [&](int k, int32_t v, int32_t pivot) {
+    if (dip_pm <= 0) return v;  // exact-off: not one arithmetic operation
+    const int32_t g = k == 0 ? 1000 + dip_spread_pm
+                    : k == 1 ? 1000 - dip_squash_pm
+                             : 1000 + dip_spread_pm / 2;
+    const int32_t r = pivot + static_cast<int32_t>(
+        (static_cast<int64_t>(v - pivot) * g) / 1000);
+    return k == 1 ? r - dip_drop : r;
+  };
+  const auto dip_squeeze = [&](int32_t P[3], const int32_t pivot[3]) {
+    if (dip_pm <= 0) return;
+    for (int k = 0; k < 3; ++k) P[k] = dip_ax(k, P[k], pivot[k]);
+  };
   // DRAG: hinge B's relative velocity, C1-smoothed before entering the lag
   // buffer. Raw acceleration spikes otherwise get multiplied by 2.6x and make
   // the particle field look more violent than the antenna that carries it.
@@ -3316,6 +3345,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     P[0] = A.ring[0] + o[0] + fxu(kStencilClearXMm) + fxu(lasso.off_mm[0]);
     P[1] = A.ring[1] + o[1] + fxu(kStencilClearYMm) + fxu(lasso.off_mm[1]);
     P[2] = A.ring[2] + o[2] + fxu(kStencilClearZMm) + fxu(lasso.off_mm[2]);
+    // The knead the OWNER asked for, last, so it is in the figure's own upright
+    // frame and the flatten is always vertical whatever the slow all-axis sway
+    // has done. A.ring is the pivot the motes use too.
+    dip_squeeze(P, A.ring);
   };
 
   // Direction 18: THE EDGE NEVER DISAPPEARS TO BE REPLACED BY A NEW SHAPE.
@@ -3624,6 +3657,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
              static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(th + (ph1 ^ 0x9A00u))) >> 16) +
              static_cast<int32_t>((static_cast<int64_t>(fxu(220)) * fx_sin16(th_slow + ph1)) >> 16);
       P[2] = A.ring[2] + static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(th + ph1 + 0x4000u)) >> 16);
+      // The wanderers are shoved by the press too -- they are the mana that
+      // gets pushed OUT of the pocket, which is most of what makes the squeeze
+      // read as the field giving way rather than the figure resizing.
+      dip_squeeze(P, A.ring);
     } else {
       const int stn = m * kStencilPts / (n_shape > 0 ? n_shape : 1);
       const auto bary = [&](uint8_t shape_id, int32_t q[3]) {
@@ -3696,7 +3733,11 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         // Shipping endpoint: ordinary independent particle motion around the
         // conduit centre. Jitter and drag are applied below as particle motion,
         // not as a transform copied from the lightning figure.
-        const int32_t independent = independent_centre[k] + cloud_off[k] + orb[k];
+        // The press squeezes the particle cloud about the SAME pivot as the
+        // figure (`place` applies it to the lightning). `folded` already
+        // carries it, through place(Pst) above, so only this lane is wrapped.
+        const int32_t independent = dip_ax(
+            k, independent_centre[k] + cloud_off[k] + orb[k], A.ring[k]);
         P[k] = lerp32(independent, folded, mote_shape_follow_pm, 1000);
       }
     }

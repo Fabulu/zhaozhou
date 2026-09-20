@@ -695,18 +695,111 @@ inline zc::quat16 shortest_arc_from_y(int32_t vx, int32_t vy, int32_t vz) {
   return zc::quat16{{s(qw), s(qx), s(qy), s(qz)}};
 }
 
+/** PASS 20 CLOSE: THE AXIS-CONDITIONED ARC -- the repair for the roll flip
+ *  that `shortest_arc_from_y` above only pushed past the shipping amplitude.
+ *
+ *  ⚠ WHAT WAS ACTUALLY WRONG. `shortest_arc_from_y`'s axis is `a x v`, whose
+ *  MAGNITUDE vanishes as v approaches -a. The rotation it represents is
+ *  continuous through that neighbourhood in exact arithmetic; in int16 lanes it
+ *  is not, because the axis direction is then recovered from (vz, 0, -vx) --
+ *  two MILLIMETRE integers that have both collapsed to a handful of counts. The
+ *  axis is quantised to tens of degrees, and a ~180 degree turn about an axis
+ *  tens of degrees off is an orientation tens of degrees wrong. That is the
+ *  packet-6 roll flip: it never left, it only moved out past gain 550.
+ *
+ *  THE FIX IS TO STOP DERIVING THE AXIS FROM THE THING THAT VANISHES. The caller
+ *  hands in an axis the BEAT ITSELF defines and carries continuously: the normal
+ *  of the pre-dent (A, B, C) triangle, computed ONCE per sample from the
+ *  carriers as the ambient pose left them. It has NO TERM IN `dent_pm` at all,
+ *  so it cannot move when the beat deepens -- which is what makes the aim
+ *  continuous through the deep region by construction rather than by staying out
+ *  of it. That is the whole difference from `kNoduleAimFlipAxis`, which is a
+ *  constant chosen at one instant.
+ *
+ *  ⚠ IT IS A CONDITIONER, NOT AN EXACT DECOMPOSITION, and saying which matters.
+ *  For the packet-5 PRESS (swing 0) B stays in the triangle's plane and both
+ *  aims really are rotations about this normal, exactly. The SHIPPING dent is
+ *  the packet-6 SWING: B rotates rigidly about the A-C chord and therefore
+ *  LEAVES that plane by up to |h|. The normal is still the right axis to
+ *  condition against -- it is perpendicular to the segment by construction, so
+ *  the +Y-component drop below costs nothing, and it takes out the large turn --
+ *  and the residual shortest arc finishes the job in a neighbourhood that is now
+ *  well conditioned. THE CHORD, which is the swing's own exact rotation axis,
+ *  was tried and measured WORSE (G9 9.773 deg at depth 2200 and 164.5 at 6000,
+ *  against 7.591 and 15.9 for the normal) precisely because it is NOT
+ *  perpendicular to the segment. The measurement chose between two authored
+ *  candidates; it did not pick a value.
+ *
+ *  `|u|` is `|AB||AC|sin(ABC)`, hundreds of thousands of square millimetres. It
+ *  never collapses, so the axis is never quantised away, and the turn becomes an
+ *  ANGLE about a known axis, built with the production `quat_axis` (fx_sin /
+ *  fx_cos of the half angle). The half-angle form is never recovered from a
+ *  near-zero norm, so there is no ill-conditioned neighbourhood to stay out of:
+ *  a 179.9 degree turn is as accurate as a 5 degree one.
+ *
+ *  Degenerate cases, in order, all declared:
+ *    * |v| == 0                -> identity (nothing to aim at).
+ *    * |u| == 0 after removing  -> the reference is useless (the triangle is
+ *      its +Y component           degenerate: A, B, C collinear); fall back to
+ *                                 `shortest_arc_from_y`, whose named flip axis
+ *                                 still backstops the exact pole.
+ *    * v off the u-plane       -> the in-plane part is turned to first, and the
+ *                                 residual out-of-plane component is aimed by a
+ *                                 following shortest arc -- well conditioned,
+ *                                 because the big angle has already gone. For
+ *                                 the dent, where v is in-plane, it is exactly
+ *                                 the identity.
+ */
+inline zc::quat16 arc_from_y_about(int32_t vx, int32_t vy, int32_t vz,
+                                   int32_t ux_in, int32_t uy_in, int32_t uz_in) {
+  const int64_t x = vx, y = vy, z = vz;
+  if (x == 0 && y == 0 && z == 0) return zc::quat16{{zc::kQuatOne, 0, 0, 0}};
+  // a = +Y, so only u's X/Z part can be an axis perpendicular to the segment;
+  // for a true in-plane normal uy is already ~0 and this drops nothing.
+  (void)uy_in;
+  const int64_t ux = ux_in, uz = uz_in;
+  const int64_t un2 = ux * ux + uz * uz;
+  if (un2 <= 0) return shortest_arc_from_y(vx, vy, vz);
+  const int64_t un = isqrt64(un2);
+  // e1 = a = +Y, e2 = u x a = (-u_z, 0, u_x)/|u|. So, to |v| scale,
+  //   cos(theta) = v.e1 = y,   sin(theta) = v.e2 = (u_x z - u_z x)/|u|.
+  // angle16_of's convention is dir(t) = (-sin t, +cos t), so it is handed
+  // (-sin, cos) and returns the turn from +Y to v measured about u.
+  const int64_t sin_num = uz * x - ux * z;  // = -sin(theta)*|v|*|u|
+  const int64_t sin_s = (sin_num >= 0 ? sin_num + un / 2 : sin_num - un / 2) / un;
+  const int32_t turn = angle16_of(sin_s, y);
+  const auto unit = [&](int64_t c) {
+    const int64_t m = c < 0 ? -c : c;
+    const int64_t r = (m * 65536 + un / 2) / un;
+    return static_cast<int32_t>(c < 0 ? -r : r);
+  };
+  const zc::quat16 corr = quat_axis(unit(ux), 0, unit(uz), turn);
+  int32_t wx, wy, wz;
+  quat_rot_vec(quat_conj(corr), vx, vy, vz, wx, wy, wz);
+  return quat_mul(corr, shortest_arc_from_y(wx, wy, wz));
+}
+
 /** `nodule_aim`'s bookkeeping -- the same `want`, the same reported delta, the
  *  same advance onto the target -- with the roll-stable correction above in
  *  place of the z-then-x one.
  *
  *  ⚠ IT IS A SEPARATE FUNCTION ON PURPOSE. The production nodule solve keeps
  *  `nodule_aim` verbatim, so the shipping carriers do not move by a single
- *  LSB; only the dent, which is new, aims this way. */
+ *  LSB; only the dent, which is new, aims this way.
+ *
+ *  ⚠ PASS 20 CLOSE -- THE AXIS IS NOW CARRIED IN. `wax/way/waz` is the WORLD
+ *  axis the turn is known to be about (the dent's own fold plane normal, taken
+ *  once from the pre-dent triangle). When it is given, the correction comes from
+ *  `arc_from_y_about`, which is uniformly conditioned; when it is all zero the
+ *  behaviour is `shortest_arc_from_y`'s, unchanged. Append-only: an existing
+ *  caller that does not name an axis gets exactly what it got before. */
 inline void nodule_aim_rollstable(zc::quat16& local, zc::quat16& Q, int32_t len,
                                   int32_t& px, int32_t& py, int32_t& pz,
                                   int32_t tx, int32_t ty, int32_t tz,
                                   int32_t* short_pm = nullptr,
-                                  int32_t* delta_mm = nullptr) {
+                                  int32_t* delta_mm = nullptr,
+                                  int32_t wax = 0, int32_t way = 0,
+                                  int32_t waz = 0) {
   const int64_t dx_target = tx - px, dy_target = ty - py, dz_target = tz - pz;
   const int64_t want = isqrt64(dx_target * dx_target + dy_target * dy_target +
                                dz_target * dz_target);
@@ -715,7 +808,14 @@ inline void nodule_aim_rollstable(zc::quat16& local, zc::quat16& Q, int32_t len,
   if (delta_mm != nullptr) *delta_mm = static_cast<int32_t>(want - len);
   int32_t vx, vy, vz;
   quat_rot_vec(quat_conj(Q), tx - px, ty - py, tz - pz, vx, vy, vz);
-  const zc::quat16 corr = shortest_arc_from_y(vx, vy, vz);
+  zc::quat16 corr;
+  if ((wax | way | waz) != 0) {
+    int32_t ax, ay, az;
+    quat_rot_vec(quat_conj(Q), wax, way, waz, ax, ay, az);
+    corr = arc_from_y_about(vx, vy, vz, ax, ay, az);
+  } else {
+    corr = shortest_arc_from_y(vx, vy, vz);
+  }
   local = quat_mul(local, corr);
   Q = quat_mul(Q, corr);
   int32_t dx, dy, dz;
@@ -1014,6 +1114,52 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     dent_target_mm(pax, pay, paz, pbx, pby, pbz, pcx, pcy, pcz,
                    g.dent_pm, g_u02_knead_dent_cross_pm, btx, bty, btz);
 
+    // ---- THE FOLD AXIS THE BEAT ITSELF DEFINES ---------------------------
+    //
+    // ⚠ THIS IS THE REPAIR FOR THE ROLL FLIP, and it is one quantity: the normal
+    // of the (A, B, C) triangle. Taken ONCE, from the carriers as the pose left
+    // them, BEFORE the press -- so it is a continuous function of the AMBIENT
+    // pose and has no term in `dent_pm` at all, and cannot move when the beat
+    // deepens. That is what makes the aim continuous through the deep region BY
+    // CONSTRUCTION rather than by staying out of it.
+    //
+    // ⚠ It CONDITIONS the aim; it is not an exact decomposition of the shipping
+    // swing, which lifts B out of this plane. `arc_from_y_about`'s own comment
+    // has the full argument and the ladder that chose it over the chord.
+    //
+    // The old `shortest_arc_from_y` recovered this same axis from `a x v`,
+    // whose magnitude vanishes as the press drives the segment toward
+    // antiparallel -- leaving the axis to be read off two millimetre integers
+    // that had both collapsed to a few counts. 50.963 deg of angular step in
+    // one 60 Hz sample at gain 1000, on a carrier whose POSITION step was flat
+    // at 72.36 mm, was that quantisation and nothing else.
+    //
+    // Scaled to fit comfortably inside quat_rot_vec's int32 lanes while keeping
+    // far more direction precision than the aim needs (|N| is ~10^5 mm^2 and
+    // the target scale is 2^20).
+    int32_t nax = 0, nay = 0, naz = 0;
+    {
+      const int64_t e1x = pbx - pax, e1y = pby - pay, e1z = pbz - paz;
+      const int64_t e2x = pcx - pax, e2y = pcy - pay, e2z = pcz - paz;
+      int64_t nx = e1y * e2z - e1z * e2y;
+      int64_t ny = e1z * e2x - e1x * e2z;
+      int64_t nz = e1x * e2y - e1y * e2x;
+      const int64_t nm = isqrt64(nx * nx + ny * ny + nz * nz);
+      if (nm > 0) {
+        const auto sc = [&](int64_t c) {
+          const int64_t m = c < 0 ? -c : c;
+          const int64_t r = (m * (1 << 20) + nm / 2) / nm;
+          return static_cast<int32_t>(c < 0 ? -r : r);
+        };
+        nax = sc(nx);
+        nay = sc(ny);
+        naz = sc(nz);
+        // All-zero means "no axis" to the aim, and a normal that rounds to zero
+        // on every lane is a degenerate triangle; leave it zero and the aim
+        // falls back to the declared-flip shortest arc, as documented.
+      }
+    }
+
     // Two aims, through the production primitive: A->B(s), then B(s)->the
     // SAVED world C. nodule_aim reports the absolute length delta and advances
     // p exactly onto the target, so the second aim starts from B(s) precisely.
@@ -1021,7 +1167,7 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     int32_t p2x = pax, p2y = pay, p2z = paz;
     int32_t d1 = 0, d2 = 0;
     nodule_aim_rollstable(g.q[kBHingeA], NQ, kLoopArcMm[2], p2x, p2y, p2z,
-                          btx, bty, btz, &g.span_pm[1], &d1);
+                          btx, bty, btz, &g.span_pm[1], &d1, nax, nay, naz);
     // ⚠ RENORMALISE EVERY QUAT THE AIM TOUCHED. quat16_to_mat3 scales a vector
     // by |q|^2, so a local rotation left a few LSB short SHORTENS the segment
     // the closure walk then rebuilds from it, and the dent adds two products
@@ -1036,8 +1182,12 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(1, d1);
     NQ = quat_mul(NQ, g.q[kBHingeB]);
+    // ⚠ THE SAME AXIS, and it has to be the same one. The first correction was
+    // itself a rotation about this normal, so the frame it hands on has been
+    // turned in the plane and its +Y is still in the plane; the target C - B(s)
+    // is in the plane too. Both aims are in-plane turns about one axis.
     nodule_aim_rollstable(g.q[kBHingeB], NQ, kLoopArcMm[3], p2x, p2y, p2z,
-                          pcx, pcy, pcz, &g.span_pm[2], &d2);
+                          pcx, pcy, pcz, &g.span_pm[2], &d2, nax, nay, naz);
     g.q[kBHingeB] = zc::quat16_nlerp(g.q[kBHingeB], g.q[kBHingeB], 1, 2);
     NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(2, d2);
@@ -1046,9 +1196,56 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     // reason rear_socket_compose gives: a long quat16 product is not unit and
     // quat16_to_mat3 scales by |q|^2.
     const zc::quat16 pin = quat_mul(quat_conj(NQ), qc_world);
-    g.q[kBHingeC] = zc::quat16_nlerp(pin, pin, 1, 2);
+    // ⚠ G10's POSITIVE CONTROL, and it is the real defect rather than a
+    // perturbation: WITHOUT this write HingeC keeps its pre-dent LOCAL frame
+    // while its parents have turned, so the pinned carrier C is dragged by the
+    // whole dent and the rear closure is charged for a gesture that is supposed
+    // to cost it nothing. Exactly the fault the pin exists to exclude.
+    if (!g_u02_dent_pin_control) g.q[kBHingeC] = zc::quat16_nlerp(pin, pin, 1, 2);
+    // ---- G10 DENT PIN: the pin's residual, always available -------------
+    //
+    // ⚠ THIS USED TO BE AN `#ifdef` ONLY. The number it produces is the dent's
+    // CENTRAL CONTRACT -- "A and C keep their world position AND frame, so the
+    // attachment cannot be charged for this gesture" -- and it was reachable
+    // only by rebuilding with a private define, which is why mspan's specified
+    // G10 DENT PIN leg was never built and the +19 mm leak packet 5 measured
+    // could have come back in silence. It is now a runtime-gated accumulator
+    // that any gate can switch on, and `g_u02_dent_pin_control` is the mutant
+    // that proves the leg can fire.
+    if (g_u02_dent_pin_probe) {
+      int32_t cx2, cy2, cz2;
+      zc::quat16 qq;
+      loop_walk(g, 4, cx2, cy2, cz2, qq);
+      const int64_t e = (cx2 > pcx ? cx2 - pcx : pcx - cx2) +
+                        (cy2 > pcy ? cy2 - pcy : pcy - cy2) +
+                        (cz2 > pcz ? cz2 - pcz : pcz - cz2);
+      ++g_u02_dent_pin_samples;
+      if (e > g_u02_dent_pin_worst_mm) g_u02_dent_pin_worst_mm = e;
+      // ⚠ AND THE FRAME, WHICH IS THE HALF THE POSITION CANNOT SEE.
+      // `loop_walk(g, 4, ...)` composes HingeC's rotation into Q *after* it has
+      // advanced the position, so C's POSITION does not depend on the pin at
+      // all. The first version of this probe measured position alone, and the
+      // control -- dropping the pin entirely -- left it reading an unchanged
+      // 8 mm while the closure and continuity legs went red downstream. That is
+      // CLAUDE.md's "detector wired to two operands that move together": the
+      // quantity it differenced was structurally blind to the fault it was
+      // built for, and it would have shipped reading a reassuring number.
+      // The pin's contract is the world FRAME at C, so the frame is measured.
+      const zc::quat16 rel = quat_mul(quat_conj(qc_world), qq);
+      const int64_t vw = rel.q[0] < 0 ? -rel.q[0] : rel.q[0];
+      const int64_t vx = rel.q[1], vy = rel.q[2], vz = rel.q[3];
+      const int64_t vn = isqrt64(vx * vx + vy * vy + vz * vz);
+      (void)vw;
+      const int32_t half = asin16(static_cast<int32_t>(vn > zc::kQuatOne
+                                                           ? zc::kQuatOne
+                                                           : vn),
+                                  zc::kQuatOne);
+      const int64_t a16 = 2 * static_cast<int64_t>(half);
+      if (a16 > g_u02_dent_pin_worst_frame_a16)
+        g_u02_dent_pin_worst_frame_a16 = a16;
+    }
 #ifdef ZHAO_P20_PINPROBE
-    // THE COMMITTED PIN PROBE. Build any clip-building binary with
+    // THE COMMITTED PIN PROBE, stderr form. Build any clip-building binary with
     // -DZHAO_P20_PINPROBE and it reports, on stderr at exit, how far the dent
     // moves the pinned carrier C -- the quantity the C-E span is charged for.
     //
@@ -2855,11 +3052,18 @@ inline bool apply_knead_dip_env() {
   if (!num("ZHAO_U02_KNEAD_DENT_OVERPRESS_PM", 0, 3000,
            g_u02_knead_dent_overpress_pm))
     return false;
+  // The authoring ladder for the ramp FLOOR -- the knob that decides how fast a
+  // SHORT clip's knead presses, and therefore how deep it may go inside G9.
+  if (!num("ZHAO_U02_KNEAD_DIP_RAMP_KEYS", 1, 60, g_u02_knead_dip_min_ramp_keys))
+    return false;
   return true;
 }
 
 inline int32_t knead_dip_window_env(uint32_t slot, int keys, int f) {
   if (keys <= 0) return 0;
+  // R5's dip_stuck positive control: the dip that never returns. See
+  // g_u02_knead_dip_stuck_control in manafold_art.h.
+  if (g_u02_knead_dip_stuck_control) return 1000;
   const int span = keys;
   const auto win_keys = [&](int32_t pm, int floor_k) {
     int k = static_cast<int>((static_cast<int64_t>(span) * pm) / 1000);
@@ -2868,9 +3072,10 @@ inline int32_t knead_dip_window_env(uint32_t slot, int keys, int f) {
     if (k < 1) k = 1;
     return k;
   };
-  const int rise = win_keys(kKneadDipRisePm, kKneadDipMinRampKeys);
+  const int ramp_floor = static_cast<int>(g_u02_knead_dip_min_ramp_keys);
+  const int rise = win_keys(kKneadDipRisePm, ramp_floor);
   const int hold = win_keys(kKneadDipHoldPm, kKneadDipMinHoldKeys);
-  const int fall = win_keys(kKneadDipFallPm, kKneadDipMinRampKeys);
+  const int fall = win_keys(kKneadDipFallPm, ramp_floor);
   const int win = rise + hold + fall;
   if (win >= span) return 0;  // nothing that would leave B permanently down
   int n = kKneadDipCount;
