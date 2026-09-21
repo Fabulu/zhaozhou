@@ -215,8 +215,30 @@ module zhao_host_regwin #(
   assign unmapped_c   = ({{(32-TIDW){1'b0}}, tid_c} >= NTENANT);
 
   // ---- the tenant-facing offer --------------------------------------------
-  integer si;
-  always_comb begin
+  //
+  // THE LOOP VARIABLE IS DECLARED INSIDE A NAMED BLOCK, NOT AT MODULE SCOPE,
+  // and that is load-bearing rather than style. Until 2026-09-21 this read
+  // `integer si;` at module scope, and Quartus 17.0 refused the whole design:
+  //
+  //   Error (10166): SystemVerilog RTL Coding error at zhao_host_regwin.sv(220):
+  //                  always_comb construct does not infer purely combinational
+  //                  logic
+  //   Error (12152): Can't elaborate user hierarchy "zhao_host_regwin:u_hostreg"
+  //
+  // WHY, and it is not what the message suggests: `t_sel_o` is assigned `'0`
+  // unconditionally on entry, so IT cannot latch. The offender is `si` itself
+  // -- a MODULE-SCOPE variable assigned inside `always_comb` retains its value
+  // between evaluations, which is a latch by definition, and one latch makes
+  // the whole block impure. Moving the declaration inside a named block makes
+  // it local to each evaluation and the inference is clean.
+  //
+  // R212's class exactly: VERILATOR LINTS THIS FORM CLEAN. `--lint-only` had
+  // nothing to say about it, and no gate in this tree could see it, because
+  // the console core had never been through `quartus_map` -- the first full
+  // console fit, 2026-09-21, died on it in 30 seconds. A block that has never
+  // been mapped has not been shown to be synthesizable, however clean its lint.
+  always_comb begin : p_tenant_sel
+    integer si;
     t_sel_o = '0;
     if (st_q == S_SEL) begin
       for (si = 0; si < NTENANT; si = si + 1) begin
