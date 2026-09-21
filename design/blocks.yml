@@ -3264,6 +3264,49 @@ blocks:
       reference speak stamp records, and the layer-F -> layer-B conversion
       needs two laws that do not exist yet (contract, "the sheet seam").
 
+  - id: TERRAIN.JOBISSUE
+    name: The subpatch job issuer
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: The producer entry I21 says does not exist -- joins TERRAIN.LOD's lod_target stream to the patch's own draw context, drives TERRAIN.GROUP_SEQ's subpatch job port, and drives TERRAIN.COMPCACHE's retirement pulse. Thirteen fields, not sixteen -- R13 rules the material triple the wrong carrier.
+    contract: design/contracts/TERRAIN.JOBISSUE.md
+    phase: 6
+    owner_issue: ZH-050
+    inputs: [lod_decisions, patch_state]
+    outputs: [subpatch_jobs]
+    upstream: [TERRAIN.LOD, TERRAIN.COMPCACHE]
+    downstream: [TERRAIN.GROUP_SEQ]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 job per subpatch
+    tests:
+      directed: tests/terrain/terrain_jobissue_directed.cpp
+    counters: [terrain_jobissue_ctx_refused, terrain_jobissue_ctx_src_mismatch]
+    counter_ports:
+      terrain_jobissue_ctx_refused: ctx_refused_o
+      terrain_jobissue_ctx_src_mismatch: ctx_src_mismatch_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    # REGISTERED BY THE COORDINATOR, 2026-09-21, and it RAISES the register
+    # 23 -> 24 on purpose. Packet JOBISSUE built this block with a contract and
+    # 138 directed checks and then declined a ledger row, citing R214 as a
+    # caution against INVENTING rows. Packet CLIPDOOR cited the same R214 the
+    # same day as a MANDATE to add one, and added GEOM.CLIPDOOR. Two lanes, one
+    # ruling, opposite acts -- so the headline number meant two different things
+    # depending on which lane last touched it.
+    #
+    # R214's test is CONTRACT *AND* SILICON, and POSEPAGE is the precedent that
+    # fixes which half is which: it declined a rise because "the clip page has a
+    # contract and no silicon, which is the wrong half of R214's test". This
+    # block has both. So it owes a row.
+    #
+    # And the deciding evidence is the contract's OWN HEADER, which already
+    # reads "Ledger: design/blocks.yml - owner ZH-050 - phase 6". It CITED a
+    # ledger row that did not exist. A block invisible to the register is the
+    # exact failure R159 and R214 exist to prevent, and an honest 24 beats a
+    # flattering 23.
   - id: TERRAIN.LOD
     name: Terrain LOD selector
     kind: rtl

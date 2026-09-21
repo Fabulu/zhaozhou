@@ -6312,3 +6312,77 @@ predating packets C1 and D1:
 specified) + two one-line parameters + P8 measured + P5/P6 dispositions.** It is
 **not** a law question and **not** a cheap close. **It goes in the queue, not to
 the owner.**
+
+## R241 — TWO OWNER DECISIONS, 2026-09-21 (second batch). **(owner, explicit)**
+
+**Put to Fabian after each survived R240's ratification check** — that is, after
+grepping `reports/OWNER-RATIFICATION-*.md` and the owner's own directive commits
+to confirm neither had already been answered. **A third question was returned
+for rephrasing and is recorded below as still open.**
+
+### D-TICK-A — `frame_tick` is sourced from `DrawProcedural`'s `pad[11]`
+
+**Decided: per-draw, not broadcast.**
+
+`spec/cartridge.md` §2 declares this open in its own words — *"`frame_tick` is
+sourced at DISPATCH, not from here… Where the dispatch gets it is an **open
+owner question**… **This section does not decide it**"* — and names the two
+candidates. **The owner took `pad[11]`.**
+
+**What that buys, and it is the reason to prefer it:** software can **phase,
+pause, scrub or slow each effect independently**. A broadcast frame counter
+animates every bolt in lockstep and gives software no way to hold one still
+without rewriting its page — and a cartridge page is **immutable and uploaded
+once**, so "rewrite the page" is not an option at runtime.
+
+**It costs an ABI reinterpretation and a generated-consumer pass, and the
+precedent is already set:** `forge_kind` itself used the **same mandatory-zero
+reinterpretation** of a reserved `pad` byte. So this is not a new mechanism,
+it is the second use of an existing one.
+
+**`frame_tick == 0` remains a complete, deterministic, static primitive**, which
+means **nothing already built becomes wrong** and pages that do not animate need
+no change.
+
+### D-LADDER-A — the per-instance ladder PAYS THE CAMERA INDEX BIT
+
+**Decided: one more bit × INSTANCES, so each creature's ladder measures against
+the right camera.**
+
+`zhao_geom_drawjob` emits `j_active_mask_o [1:0]`, a two-view **mask**;
+`zhao_geom_lodstate`'s `j_view_i` is a **single bit**. **For
+`active_mask == 2'b11` there was no honest answer in the tree**, and
+`zhao_geom_lodstate`'s own header had already docked it: *"ONE LodState PER
+INSTANCE, NOT PER CAMERA — AND THAT IS A DEVIATION… the disagreement is
+REPORTED rather than resolved here."*
+
+**The two candidate authorities disagreed and neither ratified creatures.**
+`zref::creature` holds ONE LodState and takes ONE threshold; **PART.LADDER's
+2026-08-31 §2.5 ruling makes the sibling PARTICLE selection PER CAMERA.**
+SHADOWSUB's recommendation was to pay the bit, and the owner agreed.
+
+**The failure mode this buys off** is the one that would never have been
+diagnosed: **a creature that pops LOD rungs in the second view for reasons
+nothing records.** As SHADOWSUB put it, *"the reference's silence is not a
+ruling"* — and **composition is exactly where it stops being reportable:
+something must choose, and choosing silently is inventing.**
+
+This also settles the shape by **agreeing with the particle rule rather than
+diverging from it**, so creatures and particles now select LOD the same way —
+one fewer place where two subsystems do the same thing differently.
+
+### Still open, and returned for rephrasing — THE KIND-8 QUESTION
+
+I put *"is a kind-8 page one creature or a bank?"* to the owner in terms of
+records, offsets and goldens. **He sent it back:** *"Please talk to me about
+repercussions, not implementation details of this."*
+
+**That correction is right and it is about me, not about the question.** I had
+taken FORMIDX's measurement — three ladder records against one 6-bone body, and
+that being the FORMAT rather than the fixture — and handed the owner the
+**measurement** to rule on. **The owner rules on what the console can DO.** The
+byte layout is the consequence of his answer, not the substance of it; presenting
+it as the substance asks him to do the engineering and then ratify it.
+
+**It is re-put to him in those terms.** The decision is recorded here as **OPEN**,
+and `zhao_geom_clipread`'s wrong-animal blocker stays live until it lands.
