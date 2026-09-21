@@ -20,6 +20,10 @@ RUN = os.path.join(REPO, "runs", "CLAUDE-RUNS",
 
 # lane -> the commits whose messages ARE its record, oldest first.
 LANES = {
+    "terracomp":  ["89a9ce32"],
+    "terrassem":  ["c60f454d"],
+    "forgecomp":  ["6072d3bf"],
+    "warpbuild":  ["20261b1b"],
     "cfgarm":     ["f056e586", "5db18f12", "926df70f", "e1b4cbd7", "e0ab6551"],
     "sheetseam":  ["778e4846"],
     "projout":    ["935245ab", "890449d2"],
