@@ -53,10 +53,41 @@ PAIRS = [
      "fpga/rtl/prod/zhao_console_core.sv"),
 ]
 
-# A port declaration line. The trailing `_i` / `_o` is this tree's own
-# convention and is what keeps parameters and locals out of the set.
-_PORT = re.compile(
-    r"^\s*(?:input|output)\s+.*?\b(\w+_[io])\s*,?\s*(?://.*)?$", re.M)
+# THIS USED TO BE ONE LINE-ANCHORED REGEX AND IT COUNTED LOW, SILENTLY.
+#
+#     ^\s*(?:input|output)\s+.*?\b(\w+_[io])\s*,?\s*(?://.*)?$
+#
+# The `$` means ONE port per line. Two declarations sharing a line -- which is
+# legal, common, and what a here-string produces when it eats a newline -- and
+# the first one is simply not seen.
+#
+# Both failure directions were met in one day, 2026-09-21:
+#
+#  * FALSE POSITIVE. Pointed at the texture wrappers it reported "8 of 14 RED",
+#    and every phantom missing name contained `_valid_` -- the leading half of
+#    `input logic frag_valid_i, output logic frag_ready_o,`. Committing that
+#    would have reddened the tree for every running lane (owner ruling R225).
+#  * FALSE NEGATIVE, and this is the one that matters. Packet DELTALAW ADDED a
+#    port and the gate still read **1270 = 1270**. A here-string had put two
+#    declarations on one line, the regex stopped counting the first, and
+#    because BOTH sides of the comparison were parsed by the same blind
+#    pattern, the SYMMETRY HELD and the gate passed. Every other gate was happy
+#    too.
+#
+# That second shape is this repository's own law about a checker whose two
+# operands move together: the comparison could not see a fault its own parser
+# participates in. **The number moving is the evidence** -- 1271 = 1271 after
+# the fix, where the port count had been stuck.
+#
+# So: split the header on commas and read each fragment. A fragment carrying a
+# direction keyword opens a declaration; bare fragments after it are the
+# comma-continuation form (`input logic [31:0] a_i, b_i,`), which
+# `gen_prod_top`'s parser has a hard-won fix for and whose own comment warns
+# that a silently narrowed port is not cosmetic.
+_DIR = re.compile(r"\b(?:input|output)\b")
+_STOP = re.compile(r"\b(?:parameter|localparam)\b")
+_NAME = re.compile(r"\b(\w+_[io])\b")
+_COMMENT = re.compile(r"//[^\n]*")
 
 
 def ports(path):
@@ -67,7 +98,24 @@ def ports(path):
     # The header ends at the first `\n);` -- everything after is the body, and
     # a body may legitimately mention a name that is not a port.
     end = text.find("\n);")
-    return set(_PORT.findall(text if end < 0 else text[:end]))
+    head = _COMMENT.sub(" ", text if end < 0 else text[:end])
+
+    found, declaring = set(), False
+    for frag in head.split(","):
+        if _STOP.search(frag):
+            declaring = False
+            continue
+        if _DIR.search(frag):
+            declaring = True
+        elif not declaring:
+            continue
+        names = _NAME.findall(frag)
+        if names:
+            # The LAST `_i`/`_o` token is the port; anything earlier in the
+            # fragment is a type or a packed range (`zhao_guard_req_t`,
+            # `[BUILD_HPS_N-1:0]`) that happens to match.
+            found.add(names[-1])
+    return found
 
 
 def main():
@@ -106,13 +154,45 @@ def main():
 
 # SELF-CHECK. A parser that matched nothing would report perfect parity for
 # every pair forever -- this repository's most repeated failure, and the one
-# this very tool exists because of. Prove the pattern still bites, in both
-# the comma and the final-port forms, and that it ignores what it must.
-assert _PORT.findall("  input  var logic [31:0] foo_i,") == ["foo_i"]
-assert _PORT.findall("  output logic bar_o") == ["bar_o"]
-assert _PORT.findall("  output logic [W-1:0] baz_o,  // trailing note") == ["baz_o"]
-assert _PORT.findall("  parameter int unsigned NOPE = 4,") == []
-assert _PORT.findall("  localparam logic thing_i = 1;") == []
+# this very tool exists because of. It runs against the real `ports()` now,
+# not a bare regex, because the defect this replaced was in the SPLITTING and
+# a pattern test could not have seen it.
+def _parse(text):
+    """`ports()` over a literal header, for the self-test only."""
+    head = _COMMENT.sub(" ", text)
+    found, declaring = set(), False
+    for frag in head.split(","):
+        if _STOP.search(frag):
+            declaring = False
+            continue
+        if _DIR.search(frag):
+            declaring = True
+        elif not declaring:
+            continue
+        names = _NAME.findall(frag)
+        if names:
+            found.add(names[-1])
+    return found
+
+
+assert _parse("  input  var logic [31:0] foo_i,") == {"foo_i"}
+assert _parse("  output logic bar_o") == {"bar_o"}
+assert _parse("  output logic [W-1:0] baz_o,  // trailing note") == {"baz_o"}
+# THE REGRESSION THAT MATTERS: two declarations on ONE line. The old pattern
+# saw only `frag_ready_o` and silently dropped `frag_valid_i` -- which read as
+# a phantom "missing" port on the texture wrappers, and as a port that did not
+# exist when DELTALAW added one.
+assert _parse("  input logic frag_valid_i, output logic frag_ready_o,") == {
+    "frag_valid_i", "frag_ready_o"}
+# the comma-continuation form, whose loss `gen_prod_top` warns is not cosmetic
+assert _parse("  input logic [31:0] a_i, b_i,") == {"a_i", "b_i"}
+# a TYPEDEF port keeps its name, not its type
+assert _parse("  input var zhao_guard_req_t geom_guard_req_i,") == {
+    "geom_guard_req_i"}
+# and what must still be ignored
+assert _parse("  parameter int unsigned NOPE = 4,") == set()
+assert _parse("  localparam logic thing_i = 1;") == set()
+assert _parse("  parameter int P = 1, input logic real_i,") == {"real_i"}
 
 if __name__ == "__main__":
     sys.exit(main())
