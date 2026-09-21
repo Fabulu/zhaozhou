@@ -154,8 +154,21 @@ module zhao_texture_binding_resolver_v2_mutant_wrap #(
   logic [31:0] shadow_canonical_crc_c, shadow_stale_crc_c;
   logic [31:0] canonical_work_c, stale_work_c;
   logic [79:0] canonical_row_c, stale_row_c;
-  integer selector_index, byte_index;
-  always_comb begin
+  integer selector_index;
+  // `byte_index` moved INSIDE the block, 2026-09-21. It was declared here at
+  // module scope and assigned by a `for` nested inside an `if`, which is the
+  // form Quartus 17.0 refuses outright -- the variable is left unassigned on
+  // the else path, so it holds its value and the whole `always_comb` stops
+  // inferring purely combinational logic. That shape killed the first full
+  // console fit in `zhao_host_regwin.sv`.
+  //
+  // This file is NOT in any fit closure, so it was never going to fail a map.
+  // Fixed anyway because the change is semantically null and a mutant that
+  // cannot be synthesized is a control with a second, unrelated reason to
+  // fail. THE MUTATIONS ARE UNTOUCHED: this moves a loop variable, nothing
+  // else, and no driver polarity or compared value changes.
+  always_comb begin : p_shadow_crc
+    integer byte_index;
     canonical_work_c = crc32_byte(32'hFFFF_FFFF,
                                   shadow_staging_generation_q);
     stale_work_c = canonical_work_c;

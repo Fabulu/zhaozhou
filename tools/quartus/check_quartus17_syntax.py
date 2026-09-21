@@ -253,10 +253,111 @@ def strip_comments(text: str) -> str:
     return "".join(out)
 
 
+# ---------------------------------------------------------------------------
+# FORM 7, added 2026-09-21: a loop variable declared at MODULE SCOPE and then
+# assigned inside `always_comb`. It killed the FIRST FULL CONSOLE FIT, in 30.3
+# seconds, at `zhao_host_regwin.sv`:
+#
+#   Error (10166): always_comb construct does not infer purely combinational
+#                  logic
+#   Error (12152): Can't elaborate user hierarchy "zhao_host_regwin:u_hostreg"
+#
+# THE MESSAGE POINTS AT THE WRONG THING, which is why this is worth detecting
+# rather than remembering. The output the block drives was assigned `'0`
+# unconditionally on entry, so IT could not latch. The offender is the LOOP
+# VARIABLE: a module-scope object assigned inside `always_comb` retains its
+# value between evaluations, which is a latch by definition, and one latch
+# makes the whole block impure.
+#
+# Verilator lints the form clean, so nothing in this tree could see it -- the
+# console core had simply never been through `quartus_map`.
+#
+# THE DISCRIMINATOR IS WHERE THE DECLARATION LIVES, not the loop syntax, and
+# that is the whole subtlety: the REPAIRED code still reads `for (si = 0; ...)`
+# with `integer si;` moved inside a named block. A check that flagged the bare
+# loop form would flag the fix. So this walks the block and asks whether the
+# variable is declared WITHIN it.
+_COMB_KW = re.compile(r"\balways_comb\b")
+_BEGIN_END = re.compile(r"\b(begin|end)\b")
+_BARE_FOR = re.compile(r"\bfor\s*\(\s*(\w+)\s*=")
+_DECL_KW = r"(?:int|integer|longint|shortint|byte|bit|logic|reg|genvar)"
+
+
+def scan_comb_loopvar(clean: str) -> list[tuple[int, str]]:
+    """always_comb loops over a variable declared outside the block."""
+    hits = []
+    for kw in _COMB_KW.finditer(clean):
+        b = clean.find("begin", kw.end())
+        if b < 0:
+            continue                      # single-statement form: no loop body
+        # Walk to the matching `end`. `endmodule`/`endcase`/`endfunction` do
+        # not match `\bend\b`, so only real block enders move the depth.
+        depth, pos, stop = 0, b, -1
+        for t in _BEGIN_END.finditer(clean, b):
+            depth += 1 if t.group(1) == "begin" else -1
+            if depth == 0:
+                stop = t.start()
+                break
+        if stop < 0:
+            continue                      # unbalanced; not this check's job
+        body = clean[b:stop]
+        for f in _BARE_FOR.finditer(body):
+            var = f.group(1)
+            declared = re.search(
+                r"\b%s\b[^;\n]*\b%s\b" % (_DECL_KW, re.escape(var)), body)
+            if declared:
+                continue
+            # THE SECOND DISCRIMINATOR, and without it this check reported 40
+            # sites where Quartus rejects ONE. A module-scope loop variable is
+            # only a latch if some path through the block LEAVES IT UNASSIGNED.
+            # A loop at the top level of the `always_comb` always runs, so the
+            # variable always ends at the bound and nothing is held:
+            #
+            #   always_comb begin          <- benign, 39 sites in this tree
+            #     resp_out_o = '0;
+            #     for (oi = 0; oi < N; oi = oi + 1) ...
+            #
+            #   always_comb begin          <- FATAL, and the one Quartus killed
+            #     t_sel_o = '0;
+            #     if (st_q == S_SEL) begin
+            #       for (si = 0; si < N; si = si + 1) ...
+            #
+            # Measured, not reasoned: the first console fit died on the nested
+            # form in `zhao_host_regwin.sv` and ran for minutes past the other
+            # thirty-nine. Proxy for "conditional" is begin/end depth at the
+            # `for`, which is 0 at the top level of the block.
+            #
+            # KNOWN LIMIT, stated rather than hidden: `if (x) for (i = ...)`
+            # with no `begin` is conditional at depth 0 and is MISSED. That
+            # under-reports, which is the wrong direction for a checker -- but
+            # a false RED here reds the tree for every lane, and quartus_map
+            # adjudicates this class in 30 seconds. Under-report, and let the
+            # tool that owns the opinion have it.
+            # Start at len("begin"): `body` OPENS with the block's own `begin`,
+            # and counting it put every site at depth 1 -- the narrowed check
+            # then reported the same 40 as the wide one. Caught by running both
+            # shapes through it before committing, which is the only reason
+            # this comment is here rather than a second false alarm in the tree.
+            depth_at_for = 0
+            for t in _BEGIN_END.finditer(body, 5, f.start()):
+                depth_at_for += 1 if t.group(1) == "begin" else -1
+            if depth_at_for <= 0:
+                continue
+            line = clean.count("\n", 0, b + f.start()) + 1
+            hits.append((line, "`for (%s = ...)` inside always_comb, with `%s` "
+                               "declared OUTSIDE the block -- it retains its "
+                               "value between evaluations, so Quartus 17.0 "
+                               "refuses the block as not purely combinational. "
+                               "Declare it inside: `begin : name` + `integer "
+                               "%s;`" % (var, var, var)))
+    return hits
+
+
 def scan_text(text: str) -> list[tuple[int, str]]:
     """Return [(line_number, form)] for rejected constructs."""
     clean = strip_comments(text)
     hits = []
+    hits.extend(scan_comb_loopvar(clean))
     for m in _INLINE_GENVAR.finditer(clean):
         line = clean.count("\n", 0, m.start()) + 1
         hits.append((line, "for (genvar ...) -- inline genvar in a loop generate"))
@@ -342,6 +443,27 @@ _MUST_FLAG = [
     "  assign a = b;\r  assign c = d;",
 ]
 _MUST_NOT_FLAG = [
+    # FORM 7's REPAIRED SHAPE, and it is the most important negative here
+    # because it is nearly identical to the positive. `zhao_host_regwin.sv`
+    # still writes `for (si = 0; ...)`; only the DECLARATION moved inside the
+    # named block. A check that flagged the loop syntax would flag the fix, and
+    # would have been "corrected" by reverting the repair.
+    "  always_comb begin : p_tenant_sel\n"
+    "    integer si;\n"
+    "    t_sel_o = '0;\n"
+    "    if (st_q == S_SEL) begin\n"
+    "      for (si = 0; si < NTENANT; si = si + 1) begin\n"
+    "        if (si == sel_q) t_sel_o[si] = 1'b1;\n"
+    "      end\n"
+    "    end\n"
+    "  end\n",
+    # an inline declaration is equally fine and is the commoner idiom
+    "  always_comb begin\n    y = '0;\n"
+    "    for (int k = 0; k < N; k++) y[k] = a[k];\n  end\n",
+    # a bare loop variable in always_FF is NOT this fault -- the block is
+    # sequential by construction and Quartus does not object.
+    "  integer j;\n  always_ff @(posedge clk) begin\n"
+    "    for (j = 0; j < N; j = j + 1) q[j] <= d[j];\n  end\n",
     # form 6's LEGAL shape, and this is the assertion that keeps the check
     # narrow. `zhao_console_core.sv` writes exactly this and has been through
     # quartus_map; 49 files in the tree use it. If form 6 ever fires here, it
