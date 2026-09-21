@@ -1333,7 +1333,12 @@
 //      and lit r/g/b is not dead carriage -- it is the ARRIVAL POINT of a
 //      capability the console has not composed yet. Narrowing it would close the
 //      distance to a gap by deleting the place the answer lands, which is this
-//      file's first law. The slots are EMPTY, not SPARE.
+//      file's first law. The slots are EMPTY, not SPARE -- and the oracle says
+//      where the answer comes from: owner ruling R7's `ProjectedVertex` record
+//      (`zref_geom.hpp`, GEOM.PARAMBUF's record layer) is screen x, screen y,
+//      invw24 plus status, u_over_w, v_over_w AND `rgba8` -- a per-vertex
+//      colour, ratified, in a block that is itself on the disconnected list.
+//      The carriage is waiting for its producer, which is the opposite of dead.
 //
 //      FALSE SENTENCE 2: "the merge in (a) is a day's work once (b) exists".
 //      `u_material_window` sits IN the stream between GEOM.REPLAY and GEOM.CLIP
@@ -1363,7 +1368,13 @@
 //      added up. The good news in the same measurement: obligation 1's detector
 //      is NOT one of this repository's blind ones -- `err_occupancy_underflow_o`
 //      is fired by stimulus at `material_window_directed` case 7, checked to be
-//      exactly 1, with case 5's zero as its negative control.
+//      exactly 1, and case 7 carries its OWN negative control in the next
+//      breath: an arrival and a departure on one clock cancel and the counter
+//      stays at 1. Case 1 asserts it silent across a legal twelve-triangle run.
+//      (This sentence first cited "case 5" and that was wrong -- corrected here
+//      by the lane that wrote it, before anybody inherited it. A citation is
+//      the cheapest thing in this file to get wrong and the most expensive to
+//      leave.)
 //
 //      `invw24` IS STILL ABSENT, and only its COSTING is corrected. It is not a
 //      second `zhao_geom_depthquant_stream` beside a second `zhao_raster_rcp24_v4`:
