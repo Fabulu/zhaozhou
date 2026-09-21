@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = e45f63693d9775583709d3a1809db73b70a673ae5ebb4b0f799117d8e9fe95ee
-//   zidl_sha256         = 39b8ba0609d7c9a52ddc70a2c5689ccb9fc62bdcb62e797e26258c86eef7e005
+//   abi_identity_sha256 = a9ee401a0a066c6771623710f264198953a4461c31d6229661a928bcec2dfd71
+//   zidl_sha256         = bfb5a6204077d0d62052b7b9247b0910fcf7fb265a2890176f83f07d2ec63a2c
 #pragma once
 
 #include <cstdint>
@@ -81,6 +81,7 @@ constexpr uint16_t ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
 constexpr uint16_t ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_DRAW_POSED_FORM = 0x0305; // 48 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -901,6 +902,37 @@ struct ZhRecordDebugTraceArm {
 };
 static_assert(sizeof(ZhRecordDebugTraceArm) == 32, "layout drift: DebugTraceArm record");
 
+// DrawPosedForm 0x0305: 48-byte record (implemented)
+struct ZhCmdDrawPosedForm {
+  uint32_t form;  // handle32 {index:24, generation:8} kind=form
+  uint32_t material_set;  // handle32 {index:24, generation:8} kind=material_set
+  uint32_t transform;  // handle32 {index:24, generation:8} kind=transform
+  uint8_t viewport_mask;
+  uint8_t semantic_weight;
+  uint16_t flags;
+  uint16_t clip_id;
+  uint16_t frame_no;
+  uint8_t sub;
+  uint8_t pad[11];
+};
+static_assert(offsetof(ZhCmdDrawPosedForm, form) == 0, "layout drift: DrawPosedForm.form");
+static_assert(offsetof(ZhCmdDrawPosedForm, material_set) == 4, "layout drift: DrawPosedForm.material_set");
+static_assert(offsetof(ZhCmdDrawPosedForm, transform) == 8, "layout drift: DrawPosedForm.transform");
+static_assert(offsetof(ZhCmdDrawPosedForm, viewport_mask) == 12, "layout drift: DrawPosedForm.viewport_mask");
+static_assert(offsetof(ZhCmdDrawPosedForm, semantic_weight) == 13, "layout drift: DrawPosedForm.semantic_weight");
+static_assert(offsetof(ZhCmdDrawPosedForm, flags) == 14, "layout drift: DrawPosedForm.flags");
+static_assert(offsetof(ZhCmdDrawPosedForm, clip_id) == 16, "layout drift: DrawPosedForm.clip_id");
+static_assert(offsetof(ZhCmdDrawPosedForm, frame_no) == 18, "layout drift: DrawPosedForm.frame_no");
+static_assert(offsetof(ZhCmdDrawPosedForm, sub) == 20, "layout drift: DrawPosedForm.sub");
+static_assert(offsetof(ZhCmdDrawPosedForm, pad[0]) == 21, "layout drift: DrawPosedForm.pad");
+static_assert(sizeof(ZhCmdDrawPosedForm) == 32, "layout drift: DrawPosedForm payload");
+
+struct ZhRecordDrawPosedForm {
+  ZhCmdHeader hdr;
+  ZhCmdDrawPosedForm payload;
+};
+static_assert(sizeof(ZhRecordDrawPosedForm) == 48, "layout drift: DrawPosedForm record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1495,6 +1527,25 @@ inline ZhRecordDebugTraceArm zhao_sample_debug_trace_arm() {
   return r;
 }
 
+inline ZhRecordDrawPosedForm zhao_sample_draw_posed_form() {
+  ZhRecordDrawPosedForm r{};
+  r.hdr.opcode       = ZHAO_OP_DRAW_POSED_FORM;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242839u; // kind 5, module 1, index 23
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.form = 704643073u;
+  r.payload.material_set = 704643074u;
+  r.payload.transform = 704643075u;
+  r.payload.viewport_mask = 16u;
+  r.payload.semantic_weight = 94u;
+  r.payload.flags = 45880u;
+  r.payload.clip_id = 59139u;
+  r.payload.frame_no = 64773u;
+  r.payload.sub = 205u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1820,6 +1871,22 @@ inline void zhao_pack_debug_trace_arm(const ZhRecordDebugTraceArm& r, std::vecto
   w.u8(r.payload.stage_mask);
   w.u8(r.payload.flags);
   for (int i = 0; i < 14; ++i) w.u8(r.payload.pad[i]);
+}
+
+inline void zhao_pack_draw_posed_form(const ZhRecordDrawPosedForm& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.form);
+  w.u32(r.payload.material_set);
+  w.u32(r.payload.transform);
+  w.u8(r.payload.viewport_mask);
+  w.u8(r.payload.semantic_weight);
+  w.u16(r.payload.flags);
+  w.u16(r.payload.clip_id);
+  w.u16(r.payload.frame_no);
+  w.u8(r.payload.sub);
+  for (int i = 0; i < 11; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -2388,6 +2455,24 @@ inline bool zhao_unpack_debug_trace_arm(ZhReader& r, ZhRecordDebugTraceArm& out)
   return true;
 }
 
+inline bool zhao_unpack_draw_posed_form(ZhReader& r, ZhRecordDrawPosedForm& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.form = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.material_set = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.transform = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.viewport_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.semantic_weight = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.flags = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.clip_id = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.frame_no = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.sub = t; }
+  if (!r.skip(11)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -2411,6 +2496,7 @@ constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
 constexpr uint16_t ZHAO_PADS_SET_POST[] = {3, 14, 15};
 constexpr uint16_t ZHAO_PADS_SET_GRADE_TABLE[] = {3, 76, 77, 78, 79};
 constexpr uint16_t ZHAO_PADS_DEBUG_TRACE_ARM[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+constexpr uint16_t ZHAO_PADS_DRAW_POSED_FORM[] = {21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -2435,8 +2521,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"SetGradeTable", 0x0041, 96, true, ZHAO_PADS_SET_GRADE_TABLE, 5},
   {"SetPopulation", 0x0303, 48, true, nullptr, 0},
   {"DebugTraceArm", 0xF003, 32, true, ZHAO_PADS_DEBUG_TRACE_ARM, 14},
+  {"DrawPosedForm", 0x0305, 48, true, ZHAO_PADS_DRAW_POSED_FORM, 11},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 23;
+constexpr size_t ZHAO_COMMAND_COUNT = 24;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2471,8 +2558,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xE4, 0x5F, 0x63, 0x69, 0x3D, 0x97, 0x75, 0x58, 0x37, 0x09, 0xD3, 0xA1, 0x80, 0x9D, 0xB7, 0x3B, 0x70, 0xA6, 0x73, 0xAE, 0x5E, 0xBB, 0x4B, 0x0F, 0x79, 0x91, 0x17, 0xD8, 0xE9, 0xFE, 0x95, 0xEE};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x39, 0xB8, 0xBA, 0x06, 0x09, 0xD7, 0xC9, 0xA5, 0x2D, 0xDC, 0x70, 0xA2, 0xC5, 0x68, 0x9C, 0xCB, 0x9F, 0xC6, 0x2B, 0xDC, 0xB6, 0x2E, 0x79, 0x7E, 0x26, 0x25, 0x8C, 0x86, 0xEE, 0xF7, 0xE0, 0x05};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xA9, 0xEE, 0x40, 0x1A, 0x0A, 0x06, 0x6C, 0x67, 0x71, 0x62, 0x37, 0x10, 0xF2, 0x64, 0x19, 0x89, 0x53, 0xA4, 0x46, 0x1C, 0x31, 0xD6, 0x22, 0x96, 0x61, 0xA9, 0x28, 0xBC, 0xEC, 0x2D, 0xFD, 0x71};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBF, 0xB5, 0xA6, 0x20, 0x40, 0x77, 0xD0, 0xD6, 0x20, 0x52, 0xB7, 0xB9, 0x24, 0x7B, 0x09, 0x10, 0xFC, 0xF7, 0xFB, 0x26, 0x5A, 0x28, 0x90, 0x17, 0x6F, 0x83, 0xF0, 0x7D, 0x2E, 0xC6, 0x3A, 0x2C};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

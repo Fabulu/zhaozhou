@@ -573,6 +573,17 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
+  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
+  // Added to the WRAPPER because the real module gained them, never the other
+  // way round (owner ruling R220). `.*` cannot bind a port the wrapper does
+  // not declare, so without these six lines this control would not elaborate.
+  output logic                     cmd_draw_posed_o,
+  output logic [15:0]              cmd_draw_clip_id_o,
+  output logic [15:0]              cmd_draw_frame_no_o,
+  output logic [ 7:0]              cmd_draw_sub_o,
+  output logic [31:0]              cmd_exec_posed_draws_o,
+  output logic [31:0]              cmd_exec_pose_clip_refused_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order

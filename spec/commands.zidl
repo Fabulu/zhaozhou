@@ -954,3 +954,118 @@ command DebugTraceArm 0xF003 implemented {
   u8 flags;       // bit0 = clear the ring and the drop count; bits 1-7 reserved 0
   pad[14];        // rsv -- 16-B payload, 32-B record
 }
+
+// ---- posed creature draw (owner ruling R229, 2026-09-21) --------------------
+//
+// DrawPosedForm: THE ONE COMMAND THAT NAMES WHICH ANIMATION FRAME A DRAW IS IN.
+// Ruling R229 (reports/OWNER-RULINGS-20260919-EVENING.md), decision
+// D-POSEPAGE-A, in its own words: "take `DrawPosedForm` at 0x0305, carrying
+// {clip_id, frame_no, sub}, with `DrawForm` keeping its meaning as bind pose".
+//
+// It spends a deferral that was recorded eighteen days earlier and never cited:
+// `reports/ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md` (owner-ratified
+// 2026-09-03) 4.2 says in terms that "the exact command-record representation
+// is deferred". THIS IS THAT REPRESENTATION, and nothing more than it.
+//
+// WHY A PER-DRAW RECORD AND NOT A `SetPose` STATE COMMAND. The alternative was
+// raised fairly on SetPopulation 0x0303's precedent and R229 refused it: POSE
+// VARIES PER CREATURE. Ruling R13's clause is the governing analogy -- "the job
+// port is not widened to carry a subpatch-uniform value that is not true" --
+// and a pose placed in STATE is that same error one level up, a per-draw
+// quantity in a carrier whose shape claims it is uniform. A `SetPose` before
+// every `DrawForm` is the same byte count with an ordering hazard added.
+//
+// THE FIRST SIXTEEN PAYLOAD BYTES ARE `DrawForm`'s, BYTE FOR BYTE, and that is
+// the whole of R229's "clean split that breaks no existing content":
+//
+//     offset     0            4              8           12       13
+//     DrawForm   form         material_set   transform   vp_mask  weight
+//     offset     14           16             18          20       21..31
+//     DrawForm   flags        --             --          --       --
+//     this       flags        clip_id        frame_no    sub      pad
+//
+// `DrawForm` 0x0300 is UNTOUCHED and keeps its meaning: a draw with no clip
+// named is the BIND POSE. Every committed capture stays valid; a v3 decoder
+// built before this line reports ZH_ABI_UNKNOWN_OPCODE on 0x0305, a clean
+// refusal. Sharing the prefix is not a convenience -- it is what lets CMD.EXEC
+// capture both opcodes with ONE set of field offsets, so the executor cannot
+// develop a second opinion about where a form handle lives.
+//
+// THE FIELDS, and why each is the width it is. Every one is a lane of the pose
+// cache's KEY (`fpga/rtl/geometry/zhao_geom_pose_cache.sv`, tag layout
+// [15:0] type [31:16] clip [47:32] frame [55:48] sub), carried at the width
+// that block consumes:
+//
+//   clip_id    the clip's SLOT ID, which is `zref::clip_page`'s directory key
+//              (`kOffSlotId`, u16) and `spec/creature_rules.md` 5's own
+//              `slot_id u16`. NOT a row index: the bank answers a lookup by
+//              slot, and a page may order its rows freely.
+//              `creature_rules` 2.1 freezes "64 authored slots"
+//              (`zref::clip_page::kMaxClips`), so a slot at or above 64 names
+//              a row no legal page can contain -- REFUSED AND COUNTED by
+//              `zhao_cmd_exec` (`pose_clip_refused_o`), never truncated. That
+//              is REPRESENTABILITY, not resolvability: whether a page actually
+//              HOLDS clip 7 is the clip bank's judgement and this command
+//              surface has no opinion on it. Same law as SetPopulation's
+//              `plane_nx` -- a value the consumer cannot represent is refused
+//              whole rather than silently narrowed.
+//   frame_no   the key index within the clip, u16, matching the directory's
+//              own `frame_count u16` (`zref::clip_page::kOffFrameCount`) and
+//              the cache's `acq_frame_i [15:0]`. A frame past the clip's end
+//              is `acq_resolvable_i` low -- the cache's rule 1, BAD_ID, bind
+//              pose -- and is likewise not this surface's judgement to make.
+//   sub        THE HALF-KEY PHASE, and IT IS NOT PADDING. The cache's own
+//              header records what omitting it cost: with baked 60 Hz
+//              presentation data "a key and its midpoint had the SAME
+//              {type, clip, frame} and aliased -- the cache returned the wrong
+//              palette and nothing reported an error". The reference
+//              `zref::creature::PoseBank::acquire(type, slot, frame, sub)` has
+//              always carried it. u8, exactly `acq_sub_i [7:0]`.
+//
+// WHAT IS DELIBERATELY ABSENT, so nobody reads a hole as an oversight:
+//
+//   type_id    NOT a field. The pose cache's `acq_type_i` is the CREATURE TYPE,
+//              and the draw already names it: `form` is the form resource
+//              handle and its 24-bit index is `spec/memory_rules.md` 5f.1's
+//              directory key. Carrying a second identity for one creature
+//              beside the first is the two-sources-of-truth shape this repo
+//              keeps finding; whoever resolves `form` to a type owes that
+//              mapping a directed check, and owes it in ONE place.
+//   generation NOT a field, and this is the ruling's stated boundary. R229:
+//   / epoch    "4.2's request-side representation -- a validated resident
+//              handle with generation and epoch, not a naked slot and frame --
+//              is a DIFFERENT LAYER and remains undetermined." The residency
+//              generation is published by `PublishResource` 0x0030's
+//              `new_generation` and is the resident-handle layer's to carry.
+//              A game-facing record cannot state a generation it does not own.
+//
+// VERSION DECISION: `abi version` STAYS 3, on the PublishResource 0x0030 /
+// TerrainEpoch 0x0220 / SetPost 0x0040 / SetPopulation 0x0303 / DebugTraceArm
+// 0xF003 precedent -- five times over. No opcode, field set or size of an
+// existing command moves, so every committed capture stays valid.
+//
+// APPENDED AT THE END OF THE FILE, under owner ruling R171's standing
+// instruction for exactly this range: "Inserting beside `DrawForm` rewrites
+// nine goldens, and a golden rewrite is a change nobody can review." The reason
+// is mechanical, not stylistic -- `tools/abi-gen/src/sample.ts` stamps a
+// sample's `source_id` from the command's INDEX in this file, so an insert
+// renumbers every command after it and churns their goldens for no change in
+// meaning. Position in the file carries no semantics; the opcode does.
+//
+// 0x0305 AND NOT 0x0304. 0x0304 IS SPOKEN FOR -- plan W04 allocates it to
+// `DrawWarpedForm` (reports/OWNER-RATIFICATION-20260920-WARP.md, ruling R171)
+// and it is not yet in this file, so reading the file alone makes it look free.
+// It is not. The next free draw opcode is 0x0305. 0x0306..0x030F remain free;
+// 0x0310 is DrawSky and 0x0311..0x031F stay sky-reserved.
+command DrawPosedForm 0x0305 implemented {
+  handle32[form] form;
+  handle32[material_set] material_set;
+  handle32[transform] transform;
+  u8 viewport_mask;
+  u8 semantic_weight;
+  u16 flags;           // DrawForm 0x0300's flags, same bits, same meanings
+  u16 clip_id;         // clip SLOT id (creature_rules 5); >= 64 is REFUSED
+  u16 frame_no;        // key index within the clip
+  u8  sub;             // half-key phase -- part of the cache KEY, not padding
+  pad[11];             // rsv -- 32-B payload, 48-B record
+}

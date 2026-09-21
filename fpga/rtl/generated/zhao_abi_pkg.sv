@@ -105,6 +105,7 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_SET_GRADE_TABLE = 16'h0041;
   localparam logic [15:0] ZHAO_OP_SET_POPULATION = 16'h0303;
   localparam logic [15:0] ZHAO_OP_DEBUG_TRACE_ARM = 16'hF003;
+  localparam logic [15:0] ZHAO_OP_DRAW_POSED_FORM = 16'h0305;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1410,6 +1411,45 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DEBUG_TRACE_ARM_OFF_STAGE_MASK = 16;
   localparam int unsigned ZHAO_DEBUG_TRACE_ARM_OFF_FLAGS = 17;
   localparam int unsigned ZHAO_DEBUG_TRACE_ARM_OFF_PAD = 18;
+
+  // DrawPosedForm 0x0305: 48-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [87:0] pad;  // 11 zero byte(s) @37
+    logic [7:0] sub;  // u8 @36
+    logic [15:0] frame_no;  // u16 @34
+    logic [15:0] clip_id;  // u16 @32
+    logic [15:0] flags;  // u16 @30
+    logic [7:0] semantic_weight;  // u8 @29
+    logic [7:0] viewport_mask;  // u8 @28
+    logic [31:0] transform;  // handle32 @24  // handle32 {index:24, generation:8}
+    logic [31:0] material_set;  // handle32 @20  // handle32 {index:24, generation:8}
+    logic [31:0] form;  // handle32 @16  // handle32 {index:24, generation:8}
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_draw_posed_form_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_FORM = 16;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_MATERIAL_SET = 20;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_TRANSFORM = 24;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_VIEWPORT_MASK = 28;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_SEMANTIC_WEIGHT = 29;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_FLAGS = 30;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_CLIP_ID = 32;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO = 34;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_SUB = 36;
+  localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_PAD = 37;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -2829,6 +2869,50 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [383:0] zhao_pack_draw_posed_form(input zhao_rec_draw_posed_form_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_DRAW_POSED_FORM_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DRAW_POSED_FORM_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DRAW_POSED_FORM_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DRAW_POSED_FORM_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DRAW_POSED_FORM_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DRAW_POSED_FORM_OFF_FORM*8 +: 32] = c.form;
+      v[ZHAO_DRAW_POSED_FORM_OFF_MATERIAL_SET*8 +: 32] = c.material_set;
+      v[ZHAO_DRAW_POSED_FORM_OFF_TRANSFORM*8 +: 32] = c.transform;
+      v[ZHAO_DRAW_POSED_FORM_OFF_VIEWPORT_MASK*8 +: 8] = c.viewport_mask;
+      v[ZHAO_DRAW_POSED_FORM_OFF_SEMANTIC_WEIGHT*8 +: 8] = c.semantic_weight;
+      v[ZHAO_DRAW_POSED_FORM_OFF_FLAGS*8 +: 16] = c.flags;
+      v[ZHAO_DRAW_POSED_FORM_OFF_CLIP_ID*8 +: 16] = c.clip_id;
+      v[ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO*8 +: 16] = c.frame_no;
+      v[ZHAO_DRAW_POSED_FORM_OFF_SUB*8 +: 8] = c.sub;
+      v[ZHAO_DRAW_POSED_FORM_OFF_PAD*8 +: 88] = c.pad;
+      zhao_pack_draw_posed_form = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_draw_posed_form_t zhao_unpack_draw_posed_form(input logic [383:0] v);
+    zhao_rec_draw_posed_form_t c;
+    begin
+      c.h_opcode = v[ZHAO_DRAW_POSED_FORM_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DRAW_POSED_FORM_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DRAW_POSED_FORM_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DRAW_POSED_FORM_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DRAW_POSED_FORM_OFF_H_RESERVED0*8 +: 32];
+      c.form = v[ZHAO_DRAW_POSED_FORM_OFF_FORM*8 +: 32];
+      c.material_set = v[ZHAO_DRAW_POSED_FORM_OFF_MATERIAL_SET*8 +: 32];
+      c.transform = v[ZHAO_DRAW_POSED_FORM_OFF_TRANSFORM*8 +: 32];
+      c.viewport_mask = v[ZHAO_DRAW_POSED_FORM_OFF_VIEWPORT_MASK*8 +: 8];
+      c.semantic_weight = v[ZHAO_DRAW_POSED_FORM_OFF_SEMANTIC_WEIGHT*8 +: 8];
+      c.flags = v[ZHAO_DRAW_POSED_FORM_OFF_FLAGS*8 +: 16];
+      c.clip_id = v[ZHAO_DRAW_POSED_FORM_OFF_CLIP_ID*8 +: 16];
+      c.frame_no = v[ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO*8 +: 16];
+      c.sub = v[ZHAO_DRAW_POSED_FORM_OFF_SUB*8 +: 8];
+      c.pad = v[ZHAO_DRAW_POSED_FORM_OFF_PAD*8 +: 88];
+      zhao_unpack_draw_posed_form = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -2856,6 +2940,7 @@ package zhao_abi_pkg;
         ZHAO_OP_SET_GRADE_TABLE: zhao_opcode_record_bytes = 96;
         ZHAO_OP_SET_POPULATION: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DEBUG_TRACE_ARM: zhao_opcode_record_bytes = 32;
+        ZHAO_OP_DRAW_POSED_FORM: zhao_opcode_record_bytes = 48;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -2934,6 +3019,9 @@ package zhao_abi_pkg;
         end
         ZHAO_OP_DEBUG_TRACE_ARM: begin
           if (zhao_bytes_nonzero(p, base, 18, 14)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_DRAW_POSED_FORM: begin
+          if (zhao_bytes_nonzero(p, base, 37, 11)) zhao_record_pad_nonzero = 1'b1;
         end
         default: zhao_record_pad_nonzero = 1'b0;
       endcase
@@ -3054,6 +3142,7 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_set_grade_table_t) != 8*96) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_population_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_trace_arm_t) != 8*32) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_draw_posed_form_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;

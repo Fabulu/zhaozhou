@@ -863,6 +863,32 @@ module zhao_console_board
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
+  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
+  // These leave the module ON PURPOSE, and the purpose is measurement rather
+  // than routing. The consumer is GEOM.MESHFETCH's instance walk, which does
+  // not exist -- that is entry I29 blocker (b), and supplying this carrier is
+  // what ruling R229 ratified. R229 is equally explicit that ratifying the
+  // command "does not by itself enable the RTL reader", so none is built here.
+  //
+  // WHY NOT LEAVE THEM AS UNCONSUMED INTERNAL WIRES. Because an output nobody
+  // reads lets synthesis delete the logic BEHIND it, and this block's own
+  // header states the consequence: a fit would then report the pose lane's
+  // registers as free. The tie-off block warns about a constant on a wide
+  // INPUT for exactly this reason; an unread output is the same lie in the
+  // other direction. At the edge, the capture registers survive and the next
+  // fit prices them honestly.
+  //
+  // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
+  // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
+  // meaningful only while it is high.
+  output logic                     cmd_draw_posed_o,
+  output logic [15:0]              cmd_draw_clip_id_o,
+  output logic [15:0]              cmd_draw_frame_no_o,
+  output logic [ 7:0]              cmd_draw_sub_o,
+  // Evidence, not a boundary -- the same standing as the three counters above.
+  output logic [31:0]              cmd_exec_posed_draws_o,
+  output logic [31:0]              cmd_exec_pose_clip_refused_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order
@@ -3356,6 +3382,12 @@ module zhao_console_board
       .cmd_exec_draws_o                   (cmd_exec_draws_o),
       .cmd_exec_draw_overflow_o           (cmd_exec_draw_overflow_o),
       .cmd_exec_draw_src_truncated_o      (cmd_exec_draw_src_truncated_o),
+      .cmd_draw_posed_o                   (cmd_draw_posed_o),
+      .cmd_draw_clip_id_o                 (cmd_draw_clip_id_o),
+      .cmd_draw_frame_no_o                (cmd_draw_frame_no_o),
+      .cmd_draw_sub_o                     (cmd_draw_sub_o),
+      .cmd_exec_posed_draws_o             (cmd_exec_posed_draws_o),
+      .cmd_exec_pose_clip_refused_o       (cmd_exec_pose_clip_refused_o),
       .geom_mf_meshlets_considered_o      (geom_mf_meshlets_considered_o),
       .geom_mf_culled_all_cameras_o       (geom_mf_culled_all_cameras_o),
       .geom_mf_descriptors_fetched_o      (geom_mf_descriptors_fetched_o),

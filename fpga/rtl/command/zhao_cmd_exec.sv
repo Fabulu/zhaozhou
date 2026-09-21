@@ -448,6 +448,34 @@ module zhao_cmd_exec
     output logic [15:0] draw_flags_o,
     output logic [15:0] draw_src_id_o,
 
+    // ---- R229: the POSED half of the same dispatch -------------------------
+    // `DrawPosedForm` 0x0305 (owner ruling R229, decision D-POSEPAGE-A) is a
+    // DrawForm whose payload continues past byte 15 with the animation key the
+    // pose cache needs. It is NOT a second dispatch port, and that is the whole
+    // design: the pose travels on `draw_valid_o`/`draw_ready_i`, in the SAME
+    // `dq` entry, latched by the SAME write.
+    //
+    // WHY THAT MATTERS MORE THAN THE THREE WIRES IT SAVES. CLAUDE.md's
+    // metadata-bank defect was a record and its metadata held by two different
+    // register enables, so a stall produced one response's data beside another
+    // response's metadata while every counter balanced. A pose and its draw are
+    // ONE record; giving them one enable means there is no stall that can
+    // separate them, and no checker is needed for a skew that cannot occur.
+    //
+    // R13's clause -- "the job port is not widened to carry a subpatch-uniform
+    // value that is not true" -- FORBIDS widening for a uniform value and is
+    // what SELECTS this shape for a per-draw one. R229: "pose varies per
+    // creature", which is why the `SetPose` state alternative was refused.
+    //
+    // `draw_posed_o` LOW is the BIND POSE, and it is low for every `DrawForm`
+    // 0x0300 ever recorded. Without it, clip 0 frame 0 would be
+    // indistinguishable from "no pose named", and the clean split R229 asked
+    // for would exist in the ABI and not on the wire.
+    output logic        draw_posed_o,     // 0 = bind pose (DrawForm 0x0300)
+    output logic [15:0] draw_clip_id_o,   // clip SLOT id; valid only when posed
+    output logic [15:0] draw_frame_no_o,  // key index within the clip
+    output logic [ 7:0] draw_sub_o,       // half-key phase (pose cache acq_sub_i)
+
     // ---- R17: PublishResource -> MEM.UPLOAD's request port -----------------
     // Field for field MEM.UPLOAD's `req_*`, from the GENERATED offsets. What is
     // NOT carried, and why: the handle's 8-bit GENERATION. MEM.UPLOAD's
@@ -691,6 +719,23 @@ module zhao_cmd_exec
     output logic [31:0] draws_issued_o,
     output logic [31:0] draw_overflow_o,
     output logic [31:0] draw_src_truncated_o,
+    // R229. `posed_draws_issued_o` counts the subset of `draws_issued_o` that
+    // left with `draw_posed_o` high, at the SAME instant and from the SAME
+    // dq_head, so the two can never disagree about one draw.
+    output logic [31:0] posed_draws_issued_o,
+    // R229. A `clip_id` at or above `creature_rules` 2.1's 64 authored slots
+    // (`zref::clip_page::kMaxClips`) names a directory row no legal page can
+    // contain. REFUSED AND COUNTED, never truncated -- SetPopulation's
+    // `plane_nx` law, where narrowing 0x0800 to twelve bits flips a plane.
+    //
+    // THE REFUSAL DOES NOT DROP THE DRAW, and that is deliberate rather than
+    // lenient. The pose cache's own rule 1 already defines what an unusable
+    // key does: BAD_ID, "it uses the identity bind pose". So an unrepresentable
+    // clip emits the draw with `draw_posed_o` LOW -- an existing, defined,
+    // authored behaviour -- rather than making a creature vanish. Refusing the
+    // POSE whole is the refusal; refusing the RECORD whole would be a narrowing
+    // of function wearing a refusal's clothes.
+    output logic [31:0] pose_clip_refused_o,
     output logic [31:0] uploads_issued_o,    // handed to MEM.UPLOAD
     output logic [31:0] upload_overflow_o,   // packets refused: > UPL_Q uploads
     output logic [31:0] post_looks_applied_o,    // SetPost looks handed to POST.COMPOSITE
@@ -744,6 +789,22 @@ module zhao_cmd_exec
   localparam int unsigned OFF_DF_VPMASK = ZHAO_DRAW_FORM_OFF_VIEWPORT_MASK;
   localparam int unsigned OFF_DF_WEIGHT = ZHAO_DRAW_FORM_OFF_SEMANTIC_WEIGHT;
   localparam int unsigned OFF_DF_FLAGS  = ZHAO_DRAW_FORM_OFF_FLAGS;
+
+  // DrawPosedForm 0x0305 (R229). ONLY the three fields DrawForm does not have
+  // are named here. The other six are read through the OFF_DF_* constants
+  // above, because the two records share their first sixteen payload bytes BY
+  // RATIFICATION -- and the elaboration guard below is what stops that from
+  // being an assumption. Two sets of offsets for one layout is how a block
+  // develops a second opinion about where a form handle lives.
+  localparam int unsigned OFF_DP_CLIP  = ZHAO_DRAW_POSED_FORM_OFF_CLIP_ID;
+  localparam int unsigned OFF_DP_FRAME = ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO;
+  localparam int unsigned OFF_DP_SUB   = ZHAO_DRAW_POSED_FORM_OFF_SUB;
+
+  // `spec/creature_rules.md` 2.1's "64 authored slots", which is also
+  // `zref::clip_page::kMaxClips`. NAMED AND EDITABLE rather than implied by the
+  // u16 field: it is the ceiling a clip bank's directory must hold, and this
+  // block refuses above it rather than truncating.
+  localparam int unsigned POSE_MAX_CLIPS = 64;
 
   // SetView's token request and SetPresentationContract's ceilings (R18/R33).
   localparam int unsigned OFF_SV_GTOK = ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS;
@@ -905,6 +966,42 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: DrawForm's flags are no longer its last field; df_flags_c is stale");
     if (ZHAO_DRAW_FORM_OFF_H_SOURCE_ID != RH_SRC)
       $fatal(1, "zhao_cmd_exec: DrawForm's header source_id moved off the shared offset");
+    // ---- R229: DrawPosedForm 0x0305 -----------------------------------------
+    // THE PREFIX IDENTITY IS LOAD-BEARING AND IS CHECKED, NOT ASSUMED. This arm
+    // reads six of its nine fields through DrawForm's offsets; if the ABI ever
+    // moves one of them apart, the shared read becomes silently wrong for one
+    // of the two opcodes. That is the exact shape of defect this file's other
+    // guards exist for, so it gets a guard of its own -- per field, so the
+    // message names which one moved.
+    if (ZHAO_DRAW_POSED_FORM_BYTES != 48)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm record size moved; re-read the offsets");
+    if (ZHAO_DRAW_POSED_FORM_OFF_FORM != OFF_DF_FORM)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.form no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_MATERIAL_SET != OFF_DF_MSET)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.material_set no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_TRANSFORM != OFF_DF_XFORM)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.transform no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_VIEWPORT_MASK != OFF_DF_VPMASK)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.viewport_mask no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_SEMANTIC_WEIGHT != OFF_DF_WEIGHT)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.semantic_weight no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_FLAGS != OFF_DF_FLAGS)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.flags no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_POSED_FORM_OFF_H_SOURCE_ID != RH_SRC)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm's header source_id moved off the shared offset");
+    // AND THE OPPOSITE OF DrawForm's HAZARD, stated so it is not copied by
+    // habit. DrawForm needs `df_flags_c` because its last field byte IS the
+    // record's last byte. DrawPosedForm's last field byte is `sub` at 36 of 48,
+    // eleven bytes of pad before `rec_done`, so every capture is settled when
+    // the ring write reads it and NO bypass is correct here. `df_flags_c` is
+    // already gated on `ZHAO_OP_DRAW_FORM` and must stay that way: applied to
+    // this opcode it would inject a byte from the middle of the pad.
+    if ((OFF_DP_SUB + 1) >= ZHAO_DRAW_POSED_FORM_BYTES)
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.sub is its last byte; add a df_flags_c-style bypass");
+    if (OFF_DP_CLIP < (OFF_DF_FLAGS + 2))
+      $fatal(1, "zhao_cmd_exec: DrawPosedForm.clip_id overlaps DrawForm's shared prefix");
+    if (POSE_MAX_CLIPS > 65536)
+      $fatal(1, "zhao_cmd_exec: POSE_MAX_CLIPS exceeds what a u16 clip_id can name");
     if (ZHAO_PUBLISH_RESOURCE_BYTES != 48)
       $fatal(1, "zhao_cmd_exec: PublishResource record size moved; re-read the offsets");
     // Its last field byte (`kind`) must land BEFORE the record's last byte, or
@@ -1060,13 +1157,38 @@ module zhao_cmd_exec
   localparam int unsigned DQ_WEIGHT_LO = 104;
   localparam int unsigned DQ_FLAGS_LO  = 112;
   localparam int unsigned DQ_SRC_LO    = 128;
-  localparam int unsigned DRAW_W       = 144;
+  // R229. The pose rides the SAME entry, so a draw and its pose are latched by
+  // one write and dequeued by one read. See the port comment: this is what
+  // makes a skew between them structurally impossible rather than merely
+  // checked for.
+  localparam int unsigned DQ_POSED_LO  = 144;
+  localparam int unsigned DQ_CLIP_LO   = 145;
+  localparam int unsigned DQ_FRAME_LO  = 161;
+  localparam int unsigned DQ_SUB_LO    = 177;
+  localparam int unsigned DRAW_W       = 185;
   localparam int unsigned DQW          = $clog2(DRAW_Q);
 
   logic [31:0] df_form, df_mset, df_xform;
   logic [ 7:0] df_vpmask, df_weight;
   logic [15:0] df_flags;
   logic        df_src_hi_nz;   // the dropped half of source_id was not zero
+  // R229's three additional fields. They are captured ONLY under 0x0305, so a
+  // DrawForm can never leave a stale pose behind it: the emit arm below writes
+  // `posed` from the OPCODE, not from whether these happen to hold something.
+  logic [15:0] dp_clip, dp_frame;
+  logic [ 7:0] dp_sub;
+
+  // Both draw opcodes, named once. Every DrawForm capture below is shared by
+  // 0x0305 because the two records agree byte for byte over that range --
+  // pinned by the per-field elaboration guards above, not by this comment.
+  wire df_any_c = (r_op == ZHAO_OP_DRAW_FORM) || (r_op == ZHAO_OP_DRAW_POSED_FORM);
+
+  // The pose is representable, judged at the record's end from the captured
+  // key. `clip_id` is the only field with a ceiling: `frame_no` past a clip's
+  // end and a `sub` phase the bank does not hold are RESOLVABILITY, which the
+  // clip bank owns (`zhao_geom_pose_cache`'s rule 1) and this surface has no
+  // opinion on.
+  wire dp_clip_ok_c = (32'(dp_clip) < 32'(POSE_MAX_CLIPS));
 
   // THE LAST BYTE OF A DrawForm IS A FIELD BYTE. `df_flags`'s high half
   // arrives on the same cycle `rec_done` fires, so the register still holds
@@ -1096,6 +1218,10 @@ module zhao_cmd_exec
   assign draw_semantic_weight_o = dq_head[DQ_WEIGHT_LO +: 8];
   assign draw_flags_o          = dq_head[DQ_FLAGS_LO  +: 16];
   assign draw_src_id_o         = dq_head[DQ_SRC_LO    +: 16];
+  assign draw_posed_o          = dq_head[DQ_POSED_LO];
+  assign draw_clip_id_o        = dq_head[DQ_CLIP_LO   +: 16];
+  assign draw_frame_no_o       = dq_head[DQ_FRAME_LO  +: 16];
+  assign draw_sub_o            = dq_head[DQ_SUB_LO    +: 8];
 
   // ---- PublishResource staging (R17): a ring of EVENTS, then a PENDING queue
   // An upload is an event (two uploads are two copies), so it stages like a
@@ -1387,6 +1513,7 @@ module zhao_cmd_exec
       df_form <= 32'd0; df_mset <= 32'd0; df_xform <= 32'd0;
       df_vpmask <= 8'd0; df_weight <= 8'd0; df_flags <= 16'd0;
       df_src_hi_nz <= 1'b0;
+      dp_clip <= 16'd0; dp_frame <= 16'd0; dp_sub <= 8'd0;   // R229
       dq_wp <= '0; dq_rp <= '0; dq_head <= '0;
       pr_res <= 32'd0; pr_hlo <= 32'd0; pr_hhi <= 32'd0; pr_vram <= 32'd0;
       pr_len <= 32'd0; pr_crc <= 32'd0; pr_gen <= 16'd0; pr_epoch <= 16'd0;
@@ -1412,6 +1539,7 @@ module zhao_cmd_exec
       draw_valid_o <= 1'b0;
       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
       draw_src_truncated_o <= 32'd0;
+      posed_draws_issued_o <= 32'd0; pose_clip_refused_o <= 32'd0;   // R229
       poisoned <= 1'b0;
       st <= EX_STAGE; cv <= 1'b0; cw <= 5'd0;
       proj_cfg_we_o <= 1'b0; proj_cfg_view_o <= 1'b0;
@@ -1559,8 +1687,11 @@ module zhao_cmd_exec
                   ss_ring <= {pkt_byte_i, ss_ring[31:8]};
               end
 
-              // ---- DrawForm -----------------------------------------------
-              if (r_op == ZHAO_OP_DRAW_FORM) begin
+              // ---- DrawForm 0x0300 AND DrawPosedForm 0x0305 (R229) ---------
+              // ONE capture for both, over the sixteen payload bytes the two
+              // records share by ratification. The pose fields below are the
+              // only thing 0x0305 adds.
+              if (df_any_c) begin
                 if ((rpos >= 16'(OFF_DF_FORM)) && (rpos < 16'(OFF_DF_FORM + 4)))
                   df_form <= {pkt_byte_i, df_form[31:8]};
                 if ((rpos >= 16'(OFF_DF_MSET)) && (rpos < 16'(OFF_DF_MSET + 4)))
@@ -1571,6 +1702,18 @@ module zhao_cmd_exec
                 if (rpos == 16'(OFF_DF_WEIGHT)) df_weight <= pkt_byte_i;
                 if ((rpos >= 16'(OFF_DF_FLAGS)) && (rpos < 16'(OFF_DF_FLAGS + 2)))
                   df_flags <= {pkt_byte_i, df_flags[15:8]};
+              end
+
+              // ---- DrawPosedForm's animation key alone (R229) --------------
+              // Gated on the POSED opcode only: these bytes are DrawForm's pad
+              // region, and capturing them there would let a 0x0300 leave a key
+              // behind for the next 0x0305 to inherit.
+              if (r_op == ZHAO_OP_DRAW_POSED_FORM) begin
+                if ((rpos >= 16'(OFF_DP_CLIP)) && (rpos < 16'(OFF_DP_CLIP + 2)))
+                  dp_clip  <= {pkt_byte_i, dp_clip[15:8]};
+                if ((rpos >= 16'(OFF_DP_FRAME)) && (rpos < 16'(OFF_DP_FRAME + 2)))
+                  dp_frame <= {pkt_byte_i, dp_frame[15:8]};
+                if (rpos == 16'(OFF_DP_SUB)) dp_sub <= pkt_byte_i;
               end
 
               // ---- PublishResource (R17) ------------------------------------
@@ -1674,15 +1817,28 @@ module zhao_cmd_exec
                                            ss_patch};
                     sq_wp <= sq_wp + (SQW+1)'(1);
                   end
-                end else if (r_op == ZHAO_OP_DRAW_FORM) begin
+                end else if (df_any_c) begin
                   if (df_src_hi_nz) begin
                     `ZHAO_EXEC_INC(draw_src_truncated_o);
+                  end
+                  // R229. The refusal is judged and counted HERE, at the
+                  // record's end, whether or not the queue has room -- an
+                  // unrepresentable clip is a property of the record, not of
+                  // the backpressure it met. `posed` is written from the
+                  // OPCODE and the verdict together, so a 0x0300 is always
+                  // bind pose and a refused 0x0305 degrades to bind pose
+                  // exactly as `zhao_geom_pose_cache`'s BAD_ID rule does.
+                  if ((r_op == ZHAO_OP_DRAW_POSED_FORM) && !dp_clip_ok_c) begin
+                    `ZHAO_EXEC_INC(pose_clip_refused_o);
                   end
                   if (dq_full) begin
                     poisoned <= 1'b1;
                     `ZHAO_EXEC_INC(draw_overflow_o);
                   end else begin
-                    dq[dq_wp[DQW-1:0]] <= {ss_src, df_flags_c, df_weight,
+                    dq[dq_wp[DQW-1:0]] <= {dp_sub, dp_frame, dp_clip,
+                                           ((r_op == ZHAO_OP_DRAW_POSED_FORM)
+                                            && dp_clip_ok_c),
+                                           ss_src, df_flags_c, df_weight,
                                            df_vpmask, df_xform, df_mset,
                                            df_form};
                     dq_wp <= dq_wp + (DQW+1)'(1);
@@ -2103,6 +2259,14 @@ module zhao_cmd_exec
               draw_valid_o <= 1'b0;
               dq_rp        <= dq_rp + (DQW+1)'(1);
               `ZHAO_EXEC_INC(draws_issued_o);
+              // R229. Read from `dq_head` -- THE SAME REGISTER the consumer
+              // just accepted -- on the same cycle as `draws_issued_o`. Not
+              // from the opcode or the staging shadow: those have already
+              // moved on to the next record, and a counter differencing a
+              // value against a later version of itself is CLAUDE.md's
+              // lockstep-corruption shape. `posed_draws_issued_o` is a strict
+              // subset of `draws_issued_o` by construction.
+              if (draw_posed_o) `ZHAO_EXEC_INC(posed_draws_issued_o);
             end
           end else if (dq_occ != '0) begin
             dq_head      <= dq[dq_rp[DQW-1:0]];
