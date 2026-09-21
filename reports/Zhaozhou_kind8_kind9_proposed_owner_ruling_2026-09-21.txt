@@ -1,0 +1,213 @@
+ZHAOZHOU — PROPOSED OWNER RULING: KIND-8 / KIND-9 OWNERSHIP
+21 September 2026
+
+Status: proposed instruction for Fabian to approve and forward. This document
+has NOT been posted to GitHub and is not itself an existing owner ratification.
+Evidence snapshot: claude/ceiling-architecture-20260912,
+18cbbcb7df7397ec7a38c580bbc2a8819be88490.
+
+DECISION
+
+Choose explicit form ownership in both the creature BODY and the CLIP_BANK.
+Preserve kind-8's existing multi-form LADDER TABLE. Do not require a resource's
+publication index to equal the MESH_STREAM form index it describes.
+
+The precise cardinality is:
+  kind 8: a table of independently keyed ladder records, plus zero or one
+          BODY section in the currently defined layout;
+  BODY:   exactly one explicitly named form's skeleton;
+  kind 9: a directory of clips for exactly one explicitly named form.
+
+"Bank-capable kind 8" does NOT mean that its single body supplies the skeleton
+for every ladder record. It does NOT establish a multi-body directory or a
+multi-resident skeleton cache. Preserve existing capacities and all mandatory
+capabilities; neither narrowing them nor declaring them delivered is authorized
+by this identity ruling.
+
+1. SEPARATE THE THREE IDENTITIES
+
+A. Form identity: the full 24-bit MESH_STREAM index already obtained from a
+   validated DrawForm/DrawPosedForm handle. This names the semantic owner.
+B. Resource identity: each body's and clip bank's own published resource index
+   and full 16-bit residency generation, with existing kind/extent checks.
+C. Instance identity: the draw/instance being rendered. Multiple instances of
+   one form may reuse a decoded pose; page ownership is NOT per-instance.
+
+Keep these distinct. Bone count, loader order, first ladder row, physical slot,
+and equality of publication indices are NOT proofs of form ownership.
+Do not introduce a second game-facing type identity or add a bank handle to
+DrawPosedForm to evade the association check.
+
+2. BYTE-LEVEL AMENDMENT
+
+Use one aligned little-endian u32 storage word for each semantic u24 owner.
+Bits 23:0 = owner_form_index; bits 31:24 MUST be zero. Index zero must not be
+used as an implicit "owner absent" sentinel: presence follows version and
+validated section presence, not the numeric value of the index.
+
+  BODY header (TCB8): bytes 16..19 = owner_form_index word.
+  CLIP_BANK header (ZCLP): bytes 20..23 = owner_form_index word.
+
+Both headers remain 64 bytes. Keep all existing bone/clip record offsets,
+frame strides, ladder record layouts, and body_off semantics unchanged.
+The BODY word at 12..15 remains reserved zero.
+
+Keep the outer kind-8 ZCFM header and ladder format at version 1. Introduce
+BODY version 2 and CLIP_BANK version 2. Split clipread's current shared VERSION
+constant into separately checked outer-form, body and clip versions. Merely
+changing that single constant to 2 would reject the still-v1 outer header.
+
+New packers require an explicit owner supplied by the asset definition/manifest.
+Never infer the body owner from row zero or from matching bone counts. Validate
+that a body-bearing kind-8 page contains a ladder record for its body owner;
+the other ladder records remain independently owned metadata, not users of that
+body. Retain the current ladder lookup and replacement semantics.
+
+Keep historical v1 fixtures identifiable. Add new v2 body/clip goldens and
+update their packers, references, RTL checks and registered tests together.
+Unowned v1 BODY/CLIP_BANK data is not accepted on the new posed-render path.
+An offline conversion requires a supplied, validated owner; it cannot discover
+one from the old ambiguous bytes. A bodyless outer-v1 ladder page stays legal.
+
+3. END-TO-END ASSOCIATION
+
+Expose the already existing drawjob form_idx_q on the actual accepted job/pose
+request, with all 24 bits and with the request's lifetime/handshake. Do not read
+an unrelated live register later. Land the producer and consumer together.
+
+Before a pose can be decoded, published to the cache, or used for a draw, prove:
+  - the request names a valid, generation-checked MESH_STREAM form;
+  - the body and clip resources are completely adopted and live;
+  - request.form_index == body.owner_form_index;
+  - request.form_index == clip.owner_form_index;
+  - body and clip bone counts agree and meet the existing ceiling;
+  - the requested clip, frame and sub-phase are legal under existing semantics;
+  - the resident association remains stable until the result is safely owned
+    by its consumer/cache entry.
+
+An ownership mismatch is refused and counted, never treated as a cache miss
+that can decode the wrong resident creature. Use the existing defined fallback
+when applicable; a fallback must not consume an unverified foreign skeleton.
+The same ownership condition must protect cache hits, not only miss decoding.
+
+Data, ownership and validity are adopted as one logical state. Do not publish
+an owner while the associated body or directory is only partly loaded. The
+current single-store invalidation-on-first-write scheme may be retained:
+failed partial loading leaves the affected association invalid. This ruling
+does not demand a second skeleton store just to preserve an old payload.
+
+Preserve the ladder loader's atomic whole-page replacement. Do not quietly
+convert it into an incremental table or restrict it to a single active form.
+Likewise, switching the one decoded-body staging store must not be represented
+as proof of simultaneous multi-body residency.
+
+4. TWO CACHE OBLIGATIONS THAT THE HEADER CHANGE ALONE DOES NOT SATISFY
+
+4a. Width
+
+zhao_geom_pose_cache.acq_type_i and its stored type tag are currently 16 bits;
+form indices are 24 bits. A direct connection using the low 16 bits aliases
+forms such as 0x000100 and 0x010100.
+
+For this direct-form-key path, carry the full 24-bit form identity through the
+cache request, latched state, RAM tag, comparisons, and response association.
+A TYPE_W parameter can preserve legacy bench configurations, but production
+must use 24 bits and the high-bit-alias negative test must run. Do not invent
+a compact mapping merely to retain the old width.
+
+4b. Asset lifetime / freshness
+
+Owner equality proves the intended form, not which version of its skeleton and
+animation produced a cached palette. The current cache's clip-generation tag
+alone does not demonstrate invalidation after a body-only change.
+
+Cache validity must distinguish the accepted body and clip resource identities
+and generations, including sub-phase, or use a demonstrated invalidation/pinning
+protocol that is equivalent for the supported residency schedule. Never compare
+body_generation == clip_generation: they belong to independent publications.
+Likewise, two different clip resources may have equal local generation numbers.
+A cache hit must not confuse them.
+
+Preserve memory_rules 5f.1's full 16-bit publication generations. Do not reduce
+them to the handle's low eight bits. A form index must not be repurposed for an
+incompatible skeleton ABI while old dependent resources, requests or palettes
+remain live. Reuse requires a drained, invalidated resource transition.
+
+Implementation may choose tags versus existing invalidation based on actual
+resource and scheduling evidence. Do not silently discard palette-sharing
+behavior or let a whole-cache flush substitute for an unmeasured performance
+claim. The correctness requirement is fixed; its cheapest faithful realization
+is implementation work, not another owner question.
+
+5. OWNERSHIP IS NOT RESOURCE DISCOVERY
+
+Two owner fields make the association verifiable. They do not tell a loader
+which of several nonresident resource pages to fetch. Keep the current
+publication-triggered one-body/one-directory staging behavior as its actual
+measured tier. Record the selected resource identities and test the transition
+between forms. Where the wider runtime needs a directory or scheduling logic,
+that work remains visible; do not call I29 closed merely because these fields
+exist. Do not grow an unrelated multi-body object database in this packet.
+
+6. REQUIRED DISCRIMINATING TESTS
+
+A. Correct draw A / body A / clips A succeeds. Two different instances of A
+   reuse the correct pose under the existing cache contract.
+B. Draw A / body A / clips B fails even when A and B have identical bone counts,
+   clip ids, frame counts, frame number and sub-phase. No foreign palette is
+   emitted or inserted.
+C. Draw A / body B / clips A fails under the same equal-shape conditions.
+D. Draw B / body A / clips A fails: matching resources must also match the draw.
+E. Kind-8 page with several distinct ladder records and a body explicitly owned
+   by one of them preserves every ladder lookup. The body is not implicitly
+   shared. A subsequent whole-page ladder adoption still has the existing
+   replace-whole semantics; it is not an incremental merge.
+F. Interleave body/clip publications and requests with ready/valid stalls. A
+   request cannot combine identity from one adoption with payload from another.
+   Truncated or otherwise failed partial loads cannot publish usable new state.
+G. Warm the cache, then change ONLY the body's identity/generation. A stale
+   palette cannot hit. Repeat for a clip-bank replacement with the same form,
+   clip id, frame and sub-phase; include distinct resource indices with the
+   same generation number and generations differing only above bit 7.
+H. Form indices differing only in bits 23:16 remain distinct on both cache-hit
+   and cache-miss paths. Keep the key/midpoint sub-phase distinction too.
+I. Version/format tests: unowned v1 body or clips refused for posed rendering;
+   outer-v1 bodyless ladder still accepted; body-v2/clip-v2 round-trip; reserved
+   high owner byte rejected; explicit owner zero treated according to the
+   existing handle-validity law, never as a magical missing value.
+J. At least one deliberate mutation bypassing each new ownership comparison
+   must turn the corresponding negative test red, while valid traffic stays
+   green. Verify the fault was actually planted before citing the result.
+
+7. COST AND SCOPE
+
+The new owner words consume eight bytes of existing header padding in total,
+not eight additional bytes of page length. They need no additional header
+memory transaction in the existing whole-64-byte reader. Ownership comparison
+requires registers, equality logic and control, not DSP arithmetic.
+
+Widening only the existing cache type field by eight bits adds 1,024 logical
+bits (128 bytes) at TUPLES=128. This is NOT an estimate of final M10K or ALM
+usage. Any additional resource-version tags, control, port propagation and
+physical RAM packing must be counted separately.
+
+Keep the standing no-Quartus-before-completion instruction. No fit savings,
+new whole-console fit, elapsed-time promise, or complete-I29 claim follows from
+this ruling. Deliver the byte format, reference, packers, loader association,
+cache-safe identity path and tests together; report remaining instance-walk,
+residency or other composition work separately and accurately.
+
+EVIDENCE INSPECTED AT THE PINNED COMMIT
+
+spec/creature_rules.md, section 5
+spec/cartridge.md, sections 4 and 4c
+spec/memory_rules.md, section 5f.1
+reference/include/zref/zref_creature_page.hpp
+reference/include/zref/zref_clip_page.hpp
+fpga/rtl/geometry/zhao_geom_ladderbank.sv
+fpga/rtl/geometry/zhao_geom_clipread.sv
+fpga/rtl/geometry/zhao_geom_pose_cache.sv
+design/contracts/GEOM.POSE.md
+
+No repository changes or independent Quartus/Verilator execution were performed
+as part of preparing this recommendation.
