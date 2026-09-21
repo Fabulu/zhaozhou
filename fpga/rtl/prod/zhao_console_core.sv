@@ -2478,9 +2478,32 @@
 //      >> THAN INHERITED. Four survived; the fifth did not, and it asserted an
 //      >> absence twice over.
 //      >>
-//      >> 1. THE LAYER-E READER. CONFIRMED ABSENT. `zref_terrain_page.hpp:318`
-//      >>    puts layer E at page offset 7,622; **that literal appears in zero
-//      >>    files under `fpga/`.** `zhao_terrain_pagestream.sv:251` reads
+//      >> RE-MEASURED AGAIN 2026-09-21 (gz/viewmask), ALL FIVE, ONE AT A TIME
+//      >> IN THIS PACKET'S OWN TREE. The tally moved and the entry did NOT
+//      >> close: **THREE STAND AS WRITTEN (1, 2, 4), ONE IS SETTLED AND WAS
+//      >> NEVER A QUESTION (3), ONE HAS HALF EXPIRED (5).** Two of the three
+//      >> survivors were being held up by a citation that had rotted since it
+//      >> was written -- the claims held, their proofs did not, and that is
+//      >> recorded at each rather than quietly refreshed. A blocker nobody
+//      >> re-measures is a blocker nobody can retire, which is ruling R165's
+//      >> whole sentence; on this entry it cut the open count from five to
+//      >> three and a half without one line of RTL changing.
+//      >>
+//      >> 1. THE LAYER-E READER. CONFIRMED ABSENT, RE-MEASURED 2026-09-21
+//      >>    (gz/viewmask) -- **and its supporting sentence has gone stale
+//      >>    while the claim it supports got STRONGER.** `zref_terrain_page.hpp
+//      >>    :318` puts layer E at page offset 7,622. That literal no longer
+//      >>    "appears in zero files under `fpga/`": `zhao_terrain_pageio.sv`
+//      >>    carries it twice (its line 101, "layer D = [6598, 7622)", and its
+//      >>    line 103, "[7622, 7680) 58 bytes -- layer E's head"). READ WHAT
+//      >>    THAT BLOCK DOES WITH THEM BEFORE READING IT AS A PRODUCER: pageio
+//      >>    names E's head only as a FOREIGN-BYTE boundary of layer D's burst
+//      >>    window, reads those bytes to write them back unchanged, and
+//      >>    `pageio_rtl_directed` ASSERTS that layers A, C and E are
+//      >>    byte-identical after a bake. So a block now handles layer E's
+//      >>    bytes and deliberately interprets none of them -- which is the
+//      >>    absence stated more sharply than a grep count ever stated it.
+//      >>    `zhao_terrain_pagestream.sv:251` reads
 //      >>    exactly `'{A_OFF, B_OFF, C_OFF}` and `zhao_terrain_compcache_front`
 //      >>    holds layer D and composed heights and no material plane. The
 //      >>    whole console treats matA/matB/weight as values handed IN at this
@@ -2491,17 +2514,74 @@
 //      >>    which is a change to TESS and GROUP_SEQ, not a wire here.
 //      >>
 //      >> 2. THE NEIGHBOUR EDGE LEVELS. CONFIRMED ABSENT, and deliberately so.
-//      >>    `edge_nz/pz/nx/px` has exactly ten hits in the tree; the only RTL
-//      >>    driver is the LFSR `u59_src` in the generated `zhao_prod_top`.
+//      >>    RE-MEASURED 2026-09-21 (gz/viewmask): still the only RTL driver is
+//      >>    an LFSR in the generated `zhao_prod_top` -- but it is `u64_src`
+//      >>    (`.edge_nz_i(u64_src[98 +: 8])`, its line 5193), not `u59_src`.
+//      >>    The generator renumbers its instances, so an instance name quoted
+//      >>    from a GENERATED file is a citation with a shelf life; `u59_src`
+//      >>    still exists and now feeds something else entirely. The claim is
+//      >>    unchanged and the contract still refuses ownership in writing --
+//      >>    `design/contracts/MEASURE.GOVERNOR.md` prints the `lod_targets`
+//      >>    table and then says "**The camera POSITIONS, `dual` and `edge_*`
+//      >>    are NOT here**".
 //      >>    `design/contracts/MEASURE.GOVERNOR.md:243-248` REFUSES ownership
 //      >>    in writing -- "none of them can come from a block that sees one
 //      >>    number per frame per camera". `zhao_terrain_lod` self-supplies the
 //      >>    twelve INTERIOR subpatch neighbours from its own `lvl[]`; the four
 //      >>    `edge_*` ports are exactly the inter-patch cases it cannot.
 //      >>
-//      >> 3. THE VIEW-MASK RECONCILIATION. Unchanged and still an owner
-//      >>    question: eight bits of PLAYER mask at the door against two bits
-//      >>    of PROJECTOR VIEW mask at the job port. See below.
+//      >> 3. THE VIEW-MASK RECONCILIATION. **SETTLED 2026-09-21 (gz/viewmask).
+//      >>    IT WAS NEVER AN OWNER QUESTION: THERE IS NO PLAYER MASK.** Both
+//      >>    quantities are VIEW masks and the mapping is ratified spec. The
+//      >>    evidence below was re-measured in this packet's own tree rather
+//      >>    than inherited, because the premise being refuted is this entry's
+//      >>    own sentence:
+//      >>      * `spec/commands.zidl`, `SubmitTerrainSet 0x0230`, declares
+//      >>        `u8 view_mask;  // which views this set was unioned for`;
+//      >>      * ruling T5 (`reports/OWNER-RULINGS-BUILDABILITY-20260902.md`)
+//      >>        names the field `view_mask:u8` in BOTH the command and the
+//      >>        32-byte patch record, and its canonical sort key is the
+//      >>        "view-union" key. **T5 contains the word "player" nowhere
+//      >>        near this field.** "T5's per-player tag", below, traces to
+//      >>        THIS FILE'S commentary and nothing else -- the entry read its
+//      >>        own prose back as a citation;
+//      >>      * `spec/video_rules.md` 3.1, ratified 2026-08-15 (review
+//      >>        MAJOR-3), maps **View 0 (P1)** and **View 1 (P2)** by name in
+//      >>        the document that owns the canvas. They do not "very probably
+//      >>        coincide"; they coincide by construction;
+//      >>      * the golden model already uses bits [1:0] ONLY:
+//      >>        `zref_sw_stream.hpp` accumulates `e.view_mask |= view_bit`
+//      >>        ("union the views before deduplication", T7) and tests
+//      >>        `c.view_mask == 0x3` for the dual flag;
+//      >>      * `zhao_geom_group_seq.sv:284` `$fatal`s unless `NVIEWS == 2`,
+//      >>        "the slot fan-out is written for the camera pair". (The
+//      >>        dossier cites this file under `fpga/rtl/geom/`; it is in
+//      >>        `fpga/rtl/geometry/`. The claim holds, the path did not.)
+//      >>    So the 8 -> 2 narrowing is the discard of six bits that carry no
+//      >>    ratified meaning, and it is NOT a hidden adapter.
+//      >>
+//      >>    **AND IT STILL DOES NOT CLOSE THIS ENTRY, WHICH IS THE PART WORTH
+//      >>    WRITING DOWN.** Settling the mask does not produce a job. The
+//      >>    core's own `terr_job_view_mask_i` is ALREADY two bits wide at the
+//      >>    boundary (see its declaration below), and the other fifteen job
+//      >>    fields arrive on that same boundary from the absent issuer.
+//      >>    Driving `job_view_mask` from the internal `tis_view_mask` while
+//      >>    `terr_job_ox/oz/level/morph/...` continue to arrive from outside
+//      >>    would join two things that move independently -- a worse hidden
+//      >>    adapter than the one this entry refused to build, and one wearing
+//      >>    a settled ruling as cover. The view mask rides THE JOB, and the
+//      >>    job has no producer. Blockers 1, 2, 4 and 5 below are untouched
+//      >>    by this and each was re-measured the same day; see them.
+//      >>
+//      >>    THE RESIDUE, recorded so it is not rediscovered as a defect: the
+//      >>    six high bits have no declared meaning. `zhao_terrain_cmd.sv:356`
+//      >>    forwards byte 22 uninterpreted as `rec_view_mask_o[7:0]`,
+//      >>    `zhao_terrain_seq.sv:394` carries all eight to `is_view_mask_o`,
+//      >>    and nothing in hardware reads a bit of it. Whoever composes the
+//      >>    consumer decides must-be-zero / refuse / ignore IN THAT COMMIT and
+//      >>    counts the refusal. It is ABI hygiene, not a design choice, and it
+//      >>    is deliberately NOT decided here: a refusal counter on a field no
+//      >>    block consumes is a guard that cannot be shown to matter.
 //      >>
 //      >> 4. `terr_cc_serve_release_i`. Unchanged; same absent owner.
 //      >>
@@ -2568,6 +2648,37 @@
 //      >>    the counter's presence makes it read as handled.
 //      >>    `zhao_view_projq88` is also instantiated by NO production root:
 //      >>    BUILT, INSTALLED NOWHERE, like `zhao_view_projscale` beside it.
+//      >>
+//      >>    **THE FORMAT HALF OF THIS BLOCKER HAS EXPIRED, 2026-09-21
+//      >>    (gz/viewmask), AND THE ENTRY DID NOT KNOW** -- ruling R165's shape
+//      >>    exactly, found by re-measuring a blocker instead of quoting it.
+//      >>    Two sentences above are now FALSE and are corrected rather than
+//      >>    deleted, because a blocker that expired silently is the finding:
+//      >>      * "**R83 IS IMPLEMENTED NOWHERE**" -- it is implemented. Owner
+//      >>        ruling R98 landed the widening in BOTH ports, which is what
+//      >>        terrain8 correctly said it would take.
+//      >>      * "`zhao_measure_governor.sv:244-245` still declares `proj0_i`
+//      >>        and `proj1_i` as `[15:0]`" -- it declares them
+//      >>        `[PROJW-1:0]` with `PROJW = 20` (its line 202), and
+//      >>        `zhao_view_projq88.sv` declares `proj0_o`/`proj1_o` the same
+//      >>        way off its own `PROJW = 20` (its line 145). The governor's
+//      >>        header now carries R83's saturation table and the line
+//      >>        "DONE: PROJW = 20 (Q12.8, ceiling 4095.996)", with `STEPS`
+//      >>        DERIVED from PROJW rather than written down twice.
+//      >>    So the "fit a circuit you already know is wrong" objection is
+//      >>    SPENT: wiring TERRAIN.LOD's scale input no longer composes a
+//      >>    silently-saturating format.
+//      >>
+//      >>    WHAT SURVIVES IS SMALLER AND IS STILL LIVE. Neither block is
+//      >>    instantiated by any production root -- `design/prod_manifest.yml`
+//      >>    stamps `zhao_view_projq88` `unused` and `zhao_view_projscale`
+//      >>    `not-yet-adopted ... Instantiated by no production root yet`, and
+//      >>    a deferral that cites no ruling is an open question. AND THE
+//      >>    MANIFEST NAMES THE REMAINING DEPENDENCY: projq88 is "additionally
+//      >>    dependent on I14's still-open half (the viewport rect at projector
+//      >>    cfg address 17 has no CMD producer)" -- projq88's `vw` comes from
+//      >>    that rect. So blocker 5 is now A COMPOSITION BEHIND ENTRY I14, not
+//      >>    a format defect, and it is stated at that size.
 //
 //      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
 //      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
@@ -2628,6 +2739,23 @@
 //      "very probably coincide" is exactly the reasoning that produces a hidden
 //      adapter, so the narrowing is named here and not performed.
 //
+//      ^^ THE PARAGRAPH ABOVE IS WRONG AND IS KEPT ONLY AS THE RECORD OF HOW.
+//      STRUCK 2026-09-21 (gz/viewmask); the correction is blocker 3 above, and
+//      the two sentences that did the damage are these: "T5's per-player tag"
+//      (T5 says `view_mask`, and the phrase came from this file) and "they very
+//      probably coincide" (`spec/video_rules.md` 3.1 has said View 0 = P1 and
+//      View 1 = P2 since 2026-08-15, which is not a probability). **BOTH MASKS
+//      ARE VIEW MASKS. THERE IS NO PLAYER MASK ANYWHERE IN THIS TREE.**
+//
+//      The lesson is worth more than the line it cost, because the reasoning
+//      was CAREFUL and that is what made it durable: the entry refused to
+//      narrow on the grounds that "very probably coincide" produces hidden
+//      adapters, which is a correct law correctly applied -- to a premise the
+//      author had written himself one paragraph earlier. Six passes then
+//      inherited it as T5's. **A caution invented in this file and quoted back
+//      as ratified is indistinguishable from a ruling, and it outranked the
+//      spec for five weeks.** Cite the spec, not the neighbouring comment.
+//
 //      THE THREE THAT REMAIN UNOWNED are `job_mat_a`, `job_mat_b` and
 //      `job_weight` -- the material pair and its blend weight. SEARCHED: the
 //      T5 record carries {island, ix, iz, hps_addr, crc, flags, view_mask,
@@ -2652,6 +2780,29 @@
 //      a contract conflict between TERRAIN.GROUP_SEQ's port and terrain_rules
 //      6, and it is the owner's, not this file's. SEARCHED: `grep -i "layer
 //      E|mat_a|material" fpga/rtl/terrain` -- only riders and comments.
+//
+//      **(b) IS ANSWERED, AND HAS BEEN SINCE 2026-09-19. Owner ruling R13**
+//      (`reports/OWNER-RULINGS-20260919-EVENING.md`), recorded here 2026-09-21
+//      (gz/viewmask) because this paragraph still calls it open while blocker 1
+//      above already quotes the answer -- the same entry disagreeing with
+//      itself across ninety lines:
+//        "Join PER TRIANGLE, by the triangle's cell. The per-cell layer-E
+//         value is read at tessellation, where the triangle's cell is known,
+//         and travels with the triangle. **The job port is not widened to
+//         carry a subpatch-uniform value that is not true.**"
+//      So the contract conflict is decided in terrain_rules 6's favour, and
+//      the last clause decides something about THIS port specifically:
+//      `terr_job_mat_a/_b/_weight` are the WRONG CARRIER and are not to be
+//      fed. They are not three fields awaiting an owner -- they are three
+//      fields R13 rules should not carry the value at all, and the honest
+//      closure of this third of the entry is their REMOVAL once a per-triangle
+//      layer-E path exists to replace them. That is a function move, not a
+//      narrowing: nothing may leave until the replacement lands.
+//      WHAT R13 DOES NOT SUPPLY IS (a). The reader is still absent -- blocker 1
+//      above, re-measured the same day -- and R13 puts it inside TESS, which
+//      is a build and not a wire here. So this third of I21 is now ONE absence
+//      with a ruled destination, which is a smaller statement than "three
+//      fields whose owner is UNIDENTIFIED" and supersedes it.
 //
 //      WIDENED 2026-09-19, and it is one more end of the SAME absent owner
 //      rather than a second gap: `terr_cc_serve_release_i`, TERRAIN.COMPCACHE's
