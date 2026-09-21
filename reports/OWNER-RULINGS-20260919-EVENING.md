@@ -4975,3 +4975,121 @@ doing: **an over-run gate costs hours and looks like diligence**, so nobody
 audits it — the same blind spot as a green that hides a defect, wearing the
 opposite costume. `CLAUDE.md`'s broken-instrument law says *nobody audits good
 news*; this is its twin, **nobody audits thoroughness.**
+
+## R228 — A PER-VERTEX QUANTITY IS COMPUTED, CARRIED FOUR BLOCKS, AND DELIVERED AS A CONSTANT NOTHING DRIVES
+
+**2026-09-21, PROJOUT, entry I13. Register 22 → 22, comment-only, nothing
+built — and it is the most valuable lane of the campaign.**
+
+### The finding
+
+**GEOM.CLIP slots 3–6 have no reader anywhere in `fpga/rtl`.** ATTRPACK packs
+three planes; the shell has three plane ports; the tile pipe joins three lanes.
+And the chain behind that is worse than a spare slot:
+
+> **GEOM.LIGHT computes per-vertex colour, VATTR stores it, GEOM.CLIP carries it
+> in slots 3–5 — and ATTRPACK DROPS IT.** What reaches `frag_vert_rgb_i`, whose
+> own port comment reads *"interpolated, lit, tinted and already-fogged vertex
+> colour"*, is `post_earlyz.vertex_rgb` ← `job_meta_i[345:298]` ←
+> **`tri_continuation_tail_i`, a per-triangle CONSTANT with no producer.**
+
+**The consumer's port comment describes a quantity the console computes and
+never delivers.** A reader checking whether lit vertex colour exists finds the
+computation, finds the carrier, finds the port comment, and would reasonably
+conclude it works.
+
+**This is `CLAUDE.md`'s uncashed-cheque chapter in its purest form** — *"a thing
+BUILT is not a thing INSTALLED"* — except the deferral was never even written
+down. Nobody decided to drop it. **It is commissioned as packet ATTRLANE, and
+the two possible answers are opposites: either the computation is dead ALM to
+reclaim on a console 5,672 over its ceiling, or the delivery is severed and
+should be rejoined. The packet is forbidden from assuming which.**
+
+### And it corrects R197, which is mine
+
+R197 refused its option B partly because that option *"forces a terrain
+texture-coordinate law, which is art content and the owner's to author."*
+
+**The law exists and is frozen.** `reference/src/zrender/terrain.cpp` carries
+`u_top[k] = wx[i] >> top_shift` with its own comment *"pitch = 2^k metres → u =
+wx >> k"*, and `zhao_texture_mosaic.sv` cites `spec/terrain_rules.md` §6.2 as
+**FROZEN 2026-08-16, capture-exact.**
+
+**R197's MECHANISM is untouched** and still unblocks FORGE.SHADOW/PRIM. **Its
+premise was over-scoped**: there was no art law to author for terrain, because
+terrain's was authored five weeks earlier. **Recorded rather than quietly
+narrowed** — R197 stands as a mechanism and its stated reason is wrong for one
+of the two subsystems it covers.
+
+### The citation lesson, and it explains SIX passes of blindness
+
+Entry I13 claimed *"a terrain texture-coordinate law does not exist in this
+tree"*. **The search was honest. Its SCOPE was `fpga/rtl/terrain/**`, written
+one line above a claim about THE TREE** — and `reference/` is in the tree.
+
+> **A search that NAMES ITS SCOPE reads as more rigorous, not less.**
+
+That is the whole mechanism. A bare "I looked and it isn't there" invites
+challenge; "I searched `fpga/rtl/terrain/**` and it isn't there" reads as
+disciplined work and **nobody checks the gap between the scope and the
+conclusion.** Six passes read past it.
+
+**So: when you search for an ABSENCE, state the scope AND ask what is outside
+it.** This is the twin of R225 — there a uniform result exposed a broken
+instrument; here a *well-documented* instrument produced a conclusion wider than
+its own aperture.
+
+### Three more results, each measured
+
+* **I13 and I14 do NOT share a producer** — my premise, tested and rejected.
+  `u_geom_clip.tri_valid_i` is `cl_in_valid = mw_t_valid && !cl_in_refuse_c`.
+  One chain, no CMD record, no executor.
+* **The merge blocker STANDS and is LARGER than the entry claims.** *"A day's
+  work once (b) exists"* is false: `u_material_window` sits **in** the stream, so
+  a second producer owes three unwritten obligations — it must fire `d_enter_i`
+  or `occupancy_q` underflows, is clamped to zero, and **`drained_c` reads TRUE
+  with triangles in flight, so the interlock's own drain condition becomes a
+  lie**; it must carry `{material_set, material_id}`, which **terrain does not
+  have — zero hits in `fpga/rtl/terrain/`** because terrain textures through the
+  mosaic; and `err_unpublished_o`'s premise is falsified by any second door.
+  *"This is not an argument against R187 — it is the unpaid bill for it."*
+* **`invw24` stands; only its COSTING was wrong.** `zhao_geom_depthquant_stream`
+  is tag-through over `NSLOT = 16`, so a second client is an arbiter plus a
+  demux, **not** a second instance. Costing it as a copy would have repeated the
+  projector, and `TERRAIN.PROJECT.md` already holds that receipt.
+
+### And it corrected ITSELF twice, leaving both wrong versions in place
+
+It mis-cited the underflow control, and its **first owner recommendation was
+half wrong**: it nearly recommended terrain's colour on the flat `base_rgb`
+seam, then found `spec/terrain_rules.md` §6.5 — quoted inside
+`zhao_texture_aux.sv` — saying **"tint moved to vertices"**, with the oracle
+calling its per-cell tint *"the FLAT stand-in for the Gouraud tint."*
+
+> **Recommending the flat route would have ratified a stand-in that names itself
+> one.**
+
+**Both corrections sit BESIDE the wrong versions rather than replacing them**,
+which is the practice this ledger wants and rarely gets.
+
+**No mutant was owed and it checked before writing one:**
+`err_occupancy_underflow_o` is already fired by stimulus at
+`material_window_directed` case 7, asserted exactly 1, with its own cancellation
+control alongside.
+
+### The method note, which produced three of the four findings
+
+> **Every one came from asking "who READS this?" rather than "does this
+> EXIST?". The entry's own searches were all the second kind and all honest.
+> Reading a layout is not reading a reader — and it is the cheaper search, which
+> is presumably why it keeps being the one performed.**
+
+**That sentence is the campaign's most transferable result** and it is now in
+every brief.
+
+### One bound it could not settle, stated as a bound
+
+The mosaic's consumer is `zhao_texture_island_v3_top`'s `u_mosaic`, **which this
+core does not instantiate** — so *"terrain runs textured"* is **ratified intent,
+not composed fact.** Whoever builds the UV producer confirms the consumer's
+residency first.
