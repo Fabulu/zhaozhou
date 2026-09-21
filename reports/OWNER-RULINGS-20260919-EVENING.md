@@ -5554,3 +5554,133 @@ no ruling and the next lane meets it immediately.**
 **which settles one tool's opinion** (R212). A fit is owed at the next subsystem
 boundary, and its question is named: **the ALM cost of `DRAW_W` 144 → 185 across
 `DRAW_Q` entries, plus four core ports.**
+
+## R233 — THE HUD BAND IS 12 M10K, R222's PREMISE WAS FALSE, AND I MADE THE VERY ERROR I HAD JUST RULED AGAINST
+
+**2026-09-21, HUDBAND. Zero files changed. Register 22 → 22.** A packet that
+built nothing and settled the entry.
+
+### The arithmetic, done properly and cross-validated twice
+
+For an L-line store at 384 wide × 17 bits (`hud_rgb_i[15:0]` plus
+`hud_valid_i`, read off the port list), the floor over all six Cyclone V aspect
+ratios is exactly **`ceil(0.75 × L)`**.
+
+**It was checked against two numbers this tree stated before the lane arrived,
+which is what makes it trustworthy:**
+
+* **L = 240 → 180**, reproducing R222's own table *including* its 360 / 207 /
+  204 rows;
+* **L = 9 at 16 bits → 7**, which is **POST.COMPOSITE's contract figure** for
+  its nine-line ring.
+
+**A formula that reproduces an independently authored contract number is worth
+more than one that only reproduces itself.**
+
+**The band needs L = 16 → 12 M10K.** And **the 17th bit is free at every L** —
+depth binds, width is slack at 512×20 — so there is no reason to reach for a
+transparent colour key.
+
+### My 48 was the right number by the REFUSED METHOD
+
+R222 called for pricing a band and offered **~48 M10K at B=32**, flagging it as
+shape arithmetic. **The number is reachable** — B=32 double-buffered is L=64,
+and `ceil(0.75 × 64) = 48`. **But the route I wrote down,
+`384·B·17·2 ÷ 10,240`, gives 40.8**, which is **logical bits divided by an
+M10K's capacity — the exact inference R222 had just refused, three paragraphs
+earlier, as the thing that made 153 unreachable.**
+
+**I ruled against the method and then used it in the same ruling.** The lane
+caught it, and the distinction matters: *"right number, refused method"* is how
+a bad practice survives a correct answer.
+
+### AND R222's PREMISE WAS FALSE. The measurement existed.
+
+R222 refused the frame store partly because *"no fit has ever measured this
+console's M10K occupancy."*
+
+**`reports/OWNER-DECISIONS-20260920.md`, dated the day before, line 14:**
+
+```
+zhao_console_core@console-core-first-light,  47,582 ALM / 151 DSP / 306 M10K
+```
+
+**R222's closing sentence cites 47,582 ALM — from that same row — while
+declaring the M10K absent.** One row, two columns, **one quoted and one called
+missing.** The same document is already reasoning with it at line 766: *"against
+306 of 553 already used."*
+
+**That is the broken-instrument law in the flattering direction, committed by
+me:** "nobody has measured it" is a more comfortable refusal than "it is
+measured and here is the number."
+
+### The correction STRENGTHENS the refusal, which is why it is safe to record
+
+Every caveat on that row — dirty tree, FIELD absent, *"do not quote it as the
+console's size"* — **understates**. So **306 is a FLOOR: usable to REFUSE, never
+to LICENSE.**
+
+* floor + FIELD's two clean leaf rows = **344 / 553**
+* the double-buffered frame store — **the form that actually works** — is
+  **704 / 553. Over the device.**
+* and it **cannot coexist** with the 185-M10K TERRAIN deviation store the same
+  dossier puts to the owner.
+
+**And the row ran on `5CEBA9F31C7`, not the target part**, so its printed
+percentages are wrong by **2.2×** — a trap for anyone quoting the percentage
+rather than the count.
+
+## RULED — take the BAND, and this one is mine to take
+
+**This is an engineering choice with a decisive measurement, not a visual
+question.** The HUD looks identical under all three structures; only the cost
+and the schedule differ. **So unlike R230's Gouraud question, no picture is
+owed and no owner ruling is required.**
+
+```
+                      M10K        frame cost        verdict
+  frame store (2x)    704/553     fits             OVER THE DEVICE
+  line ring           ~12         133% of frame    cannot draw a HUD
+  BAND (B=4, L=16)      12        11.1% of frame   TAKEN
+```
+
+**Structure 2's defect was never the buffer.** Structure 2 costs
+**Σ heights × a line-time = 122,880 clk = 133% of frame**; structure 3 costs
+**Σ areas = 10,240 clk = 11.1%**, a **9× margin**. What killed it was
+**TWOD.SPRITE holding `busy_q` for one whole descriptor — descriptor-major
+order.** *The two can use the identical memory.* **A structure rejected for the
+cost of its memory was actually rejected for its walk order, and the note said
+"ring".**
+
+**~595 ALM, zero DSP**, from ~700 flops counted structurally times the
+**measured** 0.849 ALM/register from the console's own fit row. **The sort or
+Y-bucket I anticipated is not needed** — a 64-descriptor extent re-walk is 4.2%
+of frame at B=4. The cursor needs **no multiply**, and the scanout address is a
+**counter**, because `hud_req_*` is a **monotonic sweep, not the random access
+I17 calls it.**
+
+**It reuses `zhao_twod_sprite`** via band-clipped descriptors rather than
+growing a second walker — *"I17's risk this time is rebuilding what exists, not
+missing it."*
+
+### The ONE thing still owed, and it is a law, not a wire
+
+**The band's admission test is stricter than a frame store's and must be decided
+BEFORE rasterising, because `TWOD.SPRITE.md` forbids partial sprites.** So there
+is a bucket-overflow case, and **it is R221's shape exactly: an absence must not
+look like a result.** Dropping a sprite silently is W10 in a HUD.
+
+**Not ruled here** — it needs the same treatment R221 got, and it should be
+decided by whoever writes the TWOD.BAND contract, **with the fallback COUNTED**.
+
+**Also still owed:** a TWOD.BAND contract *before* any `blocks.yml` row (R214),
+the descriptor record — and note the band **imposes no new requirement on it** —
+and **a leaf fit to turn the 12 into a measurement.**
+
+### One more instrument finding
+
+**`RAM-INFERENCE-SCAN.txt` is committed and STALE** — no `post_composite`
+section, no WEAK SIGNAL annotation. HUDBAND ran `check_ram_inference.py` live
+**with a positive control** rather than quoting the file. `ring_q`'s only flag
+is the tool's own known false positive — **and that flat one-write-address shape
+is the band buffer's exact shape, sitting inside the 306.**
