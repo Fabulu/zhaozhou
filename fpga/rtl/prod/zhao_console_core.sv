@@ -20060,7 +20060,16 @@ module zhao_console_core
   wire [ 1:0] tji_job_view_mask;
   wire        tji_sparse_fill;
   wire        tji_serve_release;
-  wire        tji_ctx_ready, tji_lod_ready;
+  // THE TWO DOOR READIES. Neither GATES the push, and that is correct rather
+  // than lazy: `tdoor_push_c` is the compose cache ACCEPTING a fill -- a fact
+  // that has already happened, not a request either queue may decline. A full
+  // queue therefore REFUSES the entry and COUNTS it (`door_refused_o`,
+  // `ctx_refused_o`), which is the two blocks' own law. They are named here so
+  // the symmetry is visible and so neither reads as an oversight.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire        tji_ctx_ready;
+  wire        tsp_door_ready;
+  /* verilator lint_on UNUSEDSIGNAL */
   wire        tji_h_valid, tji_h_ready;
   wire [ 1:0] tji_h_level;
   wire [16:0] tji_h_morph;
@@ -20354,7 +20363,7 @@ module zhao_console_core
     .rst_n(rst_n),
 
     .door_valid_i (tdoor_push_c),
-    .door_ready_o (),
+    .door_ready_o (tsp_door_ready),
     .door_slot_i  (tps_v_slot[TERR_SLOTW-1:0]),
     .door_src_id_i(tps_v_src_id[15:0]),
 
