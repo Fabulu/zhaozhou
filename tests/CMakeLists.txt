@@ -14710,6 +14710,25 @@ verilate(test_geom_bonesrc_latefetch_mutant
 add_test(NAME geom_bonesrc_latefetch_mutant COMMAND test_geom_bonesrc_latefetch_mutant)
 set_tests_properties(geom_bonesrc_latefetch_mutant PROPERTIES LABELS "fast;geometry;mutant" TIMEOUT 900)
 
+# The CLIP_BANK page (cartridge kind 9) -- owner ruling R90's recommendation
+# item 1, whose kind-9 half POSEABI did not reach. Model-only, deliberately:
+# the layout is stated twice (zref_clip_page.hpp and tools/pack/mkclipbank.py)
+# and this is what pins both to the committed golden, exactly as
+# geom_ladderbank_directed pins the kind-8 ladder table. An RTL reader becomes
+# the third statement when it is built and joins this same artefact.
+add_executable(test_clip_page_directed geometry/clip_page_directed.cpp)
+target_link_libraries(test_clip_page_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_clip_page_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME clip_page_directed COMMAND test_clip_page_directed)
+set_tests_properties(clip_page_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+# The packer's own `--check`: it rebuilds the golden from its constants and
+# fires every refusal. The C++ test above proves the MODEL matches the golden;
+# this proves the PACKER does. Two statements, one artefact, two gates.
+add_test(NAME mkclipbank_check
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/pack/mkclipbank.py" --check)
+set_tests_properties(mkclipbank_check PROPERTIES LABELS "fast;tools" TIMEOUT 120)
+
 add_test(NAME lint_zhao_geom_ladderbank
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_geom_ladderbank
