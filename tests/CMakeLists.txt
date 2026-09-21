@@ -10814,6 +10814,37 @@ add_test(NAME sheetseam_rtl_directed COMMAND test_sheetseam_rtl_directed)
 set_tests_properties(sheetseam_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
+# TERRAIN.BAKEREC -- the patch-bake record producer (core entry I32, closed)
+# ---------------------------------------------------------------------------
+# NO BENCH WRAPPER, DELIBERATELY. This block has no submodule and all four of
+# its neighbours are ready/valid, so the DUT is the real module at its own
+# ports -- which is what lets a case hold `io_serving_i` LOW and require the
+# seam to be offered nothing. No composition of the real blocks can hold the
+# page face dark on purpose, and that interlock is the one whose absence is
+# invisible: a dig started before TERRAIN.PAGEIO reaches S_SERVE reads an EMPTY
+# no-bake plane, so section 3.3's corner shadow vanishes with every handshake
+# and every counter agreeing.
+#
+# All eleven counters are asserted SILENT and then FIRED from the block's own
+# boundary with legal stimulus, so none owes a committed mutant.
+add_test(NAME lint_terrain_bakerec
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_bakerec
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bakerec.sv)
+set_tests_properties(lint_terrain_bakerec PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_bakerec_rtl_directed terrain/bakerec_rtl_directed.cpp)
+target_link_libraries(test_bakerec_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_bakerec_rtl_directed
+  PREFIX Vzhao_terrain_bakerec
+  TOP_MODULE zhao_terrain_bakerec
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bakerec.sv)
+add_test(NAME bakerec_rtl_directed COMMAND test_bakerec_rtl_directed)
+set_tests_properties(bakerec_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
 # TERRAIN.LOADQ -- the load queue, against its reference model.
 #
 # A queue is the block whose test writes itself badly: push some, pop some,

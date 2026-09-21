@@ -144,6 +144,10 @@ module tb_pageio
     output var logic [31:0] c_refused,
     output var logic [31:0] c_nobake_mutated,
     output var logic [31:0] c_cell_refetch,
+    // THE BAKE FACE IS LIVE. Added 2026-09-21 (terrabake): the composer needs
+    // it and cannot derive it, and this bench exposes it so the directed suite
+    // can hold it against the block's own phases rather than against a guess.
+    output var logic        c_serving,
     output var logic        c_idle,
 
     // ---- what the BENCH saw -------------------------------------------------
@@ -269,6 +273,7 @@ module tb_pageio
       .jobs_refused_o   (c_refused),
       .nobake_mutated_o (c_nobake_mutated),
       .cell_refetch_o   (c_cell_refetch),
+      .serving_o        (c_serving),
       .idle_o           (c_idle)
   );
 

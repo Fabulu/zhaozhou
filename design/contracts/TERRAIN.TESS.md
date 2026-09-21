@@ -342,6 +342,24 @@ in `zhao_console_core.sv`; what does not exist is the composed-height cache
 BEHIND it, which is what the parenthesis in that first clause means and is worth
 not collapsing into "TERRAIN.PATCH does not exist" the same way.
 
+**CORRECTED AGAIN 2026-09-21 (gz/terrabake), and the correction above has
+itself gone stale in ONE DAY.** `TERRAIN.LOD` is now **COMPOSED** --
+`u_terrain_lod` in `zhao_console_core.sv`, landed by the TERRACOMP packet with
+`zhao_terrain_devstore`, `zhao_terrain_spdesc` and `zhao_terrain_jobissue`
+around it. So "it is not COMPOSED" is no longer true of it either, and the
+sentence above now over-states the gap in the same direction the one it
+replaced did. `FORGE.CLIFF` is still uncomposed. The composed-height cache
+behind `TERRAIN.PATCH` is still absent -- `zhao_terrain_compcache_front` is a
+two-buffer FRONT and not that store, which `zhao_console_core.sv` entry I27
+says at `is_cslot_o`.
+
+The general lesson is the one the correction above cites R165 for, arriving a
+second time on the same paragraph: **a not-composed list is a snapshot, and a
+snapshot in a contract reads as a law.** What this paragraph is actually for is
+the PHASE-6 GATE CAPTURES, which remain open; the composition state of the
+neighbours belongs in `completion_register.py`, which computes it from the tree
+on every run, and a reader who wants it should go there.
+
 ## Notes
 
 **LAWS FOUND** (each cited, none invented): the fixed i00–i11 diagonal and the

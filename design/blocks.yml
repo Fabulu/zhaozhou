@@ -3536,6 +3536,89 @@ blocks:
       no producer for the same reason and it is the same gap: whatever block
       emits bake records must emit the patch's sheet handle32 beside them.
 
+      ~~BUILT AND NOT COMPOSED, and the blocker is not this block's. Its
+      consumer `zhao_terrain_bake_v2` is not composed, and bake's `cmd_*`
+      record port still has no producer anywhere.~~ STRUCK 2026-09-21
+      (terrabake): both are composed in `zhao_console_core`, and the block
+      this paragraph asks for -- "whatever block emits bake records must emit
+      the patch's sheet handle32 beside them" -- is TERRAIN.BAKEREC below,
+      which does exactly that and carries the handle rather than deriving one.
+
+  - id: TERRAIN.BAKEREC
+    name: The patch-bake record producer
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Forms the ONE patch-bake record per patch per frame that zhao_terrain_bake_v2's cmd_* port has never had a producer for, and sequences the three page agents a bake needs. zhao_console_core entry I32 commissioned it in as many words -- 'WHAT IS MISSING IS A THIRD BLOCK BETWEEN THEM' -- after measuring that both halves it sits between already exist: the ratified SurfaceStamp 0x0210 record and zhao_cmd_exec's EX_STAMP arm. It takes the stamp on SURFACE.STAMP's own accept, with SURFACE.DISPATCH's ruling-R45 envelope and patch key on the same wires, and it WATCHES TERRAIN.HDRREAD's forwarded job for the page identity -- slot, generation, epoch and the T5 record flags -- so it never looks a patch up and never pins one. Records COALESCE by patch key, which is a consequence of owner ruling R231's delta law rather than a convenience: layer F holds the accumulated after and the seam's plane holds the first pre-blend before, so one dig of (after - before) is the sum of every stamp on that patch exactly. It orders PAGEIO first and waits on serving_o (nb_o is combinational on a shadow plane that does not exist until S_SERVE, and nothing else on that face says so), then the seam -- whose job_ready_o IS its 1,089-texel prefetch's completion -- then the lattice pass. cmd_depth_from_i/cmd_depth_to_i are ZERO by parameter: a stamp-derived record is a SHEET record, the disc arm belongs to a cast's progress in the FIELD subsystem, and on an R221 ST_MISS fallback the record digs nothing and is RE-QUEUED rather than digging an absolute depth into an accumulating scar -- which is precisely the defect R231 repaired. The deferral is exact because the seam does not consume its before-plane on a fallback."
+    contract: design/contracts/TERRAIN.BAKEREC.md
+    phase: 7
+    owner_issue: ZH-036
+    inputs: [stamp_results]
+    outputs: [page_bake_jobs]
+    upstream: [SURFACE.STAMP, TERRAIN.HDRREAD]
+    downstream: [TERRAIN.SHEETSEAM, TERRAIN.BAKE, TERRAIN.PAGEIO, TERRAIN.PAGESTREAM]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one record per bake, which is one patch per bake by construction -- coalescing is what keeps BAKE_PATCH_BUDGET a budget. The record's own cost is the chain's: PAGEIO's layer-D read, then the seam's 1,089-texel prefetch, then the lattice pass."
+    tests:
+      directed: tests/terrain/bakerec_rtl_directed.cpp
+      random: tests/terrain/bakerec_rtl_directed.cpp
+    counters: [bakerec_stamps_seen, bakerec_records_queued, bakerec_coalesced, bakerec_overflow, bakerec_unplaced, bakerec_records_issued, bakerec_records_retired, bakerec_records_retried, bakerec_records_dropped, bakerec_aged_out, bakerec_stray_done]
+    counter_ports:
+      bakerec_stamps_seen: stamps_seen_o
+      bakerec_records_queued: records_queued_o
+      bakerec_coalesced: coalesced_o
+      bakerec_overflow: overflow_o
+      bakerec_unplaced: unplaced_o
+      bakerec_records_issued: records_issued_o
+      bakerec_records_retired: records_retired_o
+      bakerec_records_retried: records_retried_o
+      bakerec_records_dropped: records_dropped_o
+      bakerec_aged_out: aged_out_o
+      bakerec_stray_done: stray_done_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-21"
+        commit: "terrabake"
+        evidence: tests/terrain/bakerec_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      NO `reference_model:`, DELIBERATELY, AND THE ABSENCE IS THE CLAIM --
+      TERRAIN.SHEETSEAM's row makes the same one for the same reason. This
+      block implements NO arithmetic. Every field it emits is CARRIED: the
+      handle is the ABI's own `handle32[patch]` (SURFACE.SHEET choice C4, and
+      entry I32 names synthesising it from `cmd_patch_id_i` as the cheap
+      mistake to avoid), the envelope is `zhao_surface_dispatch`'s ruling-R45
+      world->patch law computed once and read here, and the page identity is
+      TERRAIN.HDRREAD's forwarded job. Declaring a reference model here would
+      be a second claim on `zref::terrain::stamp_depth_at_vertex`, which is
+      exactly what `tools/budget/uncashed_cheques.py` check 3 catches.
+
+      `cmd_patch_id_o` IS A TRACE KEY AND NOT AN IDENTITY. It is the low byte
+      of each of the patch's ix and iz, and `zhao_terrain_bake_v2` reads it
+      for `trace_patch_id_o` and nothing else. Said here because a 16-bit
+      field called `patch_id` beside a 32-bit field called `handle` is exactly
+      the shape somebody keys a cache on later.
+
+      TWO PARAMETERS ARE OWNER KNOBS AND BOTH ARE STATEMENTS ABOUT THE
+      COMPOSITION rather than about this block. `CELLS_PRESENT` says layer D
+      is served, which is true because TERRAIN.PAGEIO is composed beside it;
+      `FALLBACK_DEPTH_FROM`/`FALLBACK_DEPTH_TO` say an R221 fallback digs
+      nothing, which is a decision the owner may reverse in one edit and
+      therefore may not be a literal.
+
+      THE QUEUE IS TWO DEEP AND THE THIRD PATCH IS A COUNTER, NOT A STALL.
+      `overflow_o` fires and the stamp's scar is LOST -- which is loud on
+      purpose. Stamps coalesce by patch, so reaching it needs three DIFFERENT
+      patches stamped inside one bake window; if that turns out to be a real
+      workload the parameter is the lever and the counter is how anyone would
+      know.
+
   # SURFACE — Scar Scribe (fpga/rtl/surface)
   # ===========================================================================
 

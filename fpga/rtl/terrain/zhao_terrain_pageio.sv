@@ -312,6 +312,16 @@ module zhao_terrain_pageio
     // A pending cell read whose answer was dropped because bake's cursor moved
     // underneath it. Zero in scan order; fired by stimulus.
     output var logic [31:0] cell_refetch_o,
+    // THE BAKE FACE IS LIVE. `S_SERVE` and nothing else -- published as a port
+    // 2026-09-21 (terrabake) because a COMPOSER needs it and cannot derive it.
+    // `nb_o` is COMBINATIONAL on `nbv_q`, which is only populated at the end of
+    // `S_NBV`; before that it reads a stale or reset shadow and every handshake
+    // still agrees. `idle_o` cannot substitute: it drops at the JOB ACCEPT,
+    // roughly 1,200 clocks before the face is actually live, so a composer that
+    // used it would start the dig against an empty no-bake plane and get a
+    // legitimate-looking bake with §3.3's corner shadow silently absent.
+    // It publishes an existing internal fact; it adds no state and no decision.
+    output var logic        serving_o,
     output var logic        idle_o
 );
 
@@ -643,6 +653,7 @@ module zhao_terrain_pageio
 
   assign j_ready_o = (state_q == S_IDLE) && !done_valid_o && !dm_valid_o;
   assign idle_o    = (state_q == S_IDLE) && !done_valid_o && !dm_valid_o;
+  assign serving_o = (state_q == S_SERVE);
 
   // ==========================================================================
   // THE BAKE-FACE HANDSHAKES
