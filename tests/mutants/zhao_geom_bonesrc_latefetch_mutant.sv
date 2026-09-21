@@ -41,6 +41,26 @@
 // DISCRIMINATES rather than merely moves (owner ruling R95).
 //
 // DO NOT "FIX" THIS FILE. A green run here means the mutation is gone.
+//
+// DRIFT RE-VERIFIED 2026-09-21 (coordinator), and the verification is recorded
+// rather than the gate silenced. `mutant_copy_drift` went RED here because
+// production `zhao_geom_bonesrc.sv` was committed TWELVE MINUTES after this
+// copy, at `10635433` ("POSEABI: re-measure after the repairs"). The tool was
+// right on its own terms and it is deliberately provenance-based — CLAUDE.md:
+// "the signal is provenance, not similarity" — so a later production commit is
+// always worth the alarm.
+//
+// WHAT THAT COMMIT ACTUALLY CHANGED: nothing this copy contains. The whole
+// diff `3b87e411..10635433` on that file is COMMENT-ONLY — an ALM row
+// re-measured 829 -> 830 and 865 -> 866 registers, being the one flip-flop
+// `started_q` added — and it lives in a header block this trimmed copy does
+// not carry at all. Checked by filtering the diff to non-comment lines: zero.
+//
+// So the BODY is current and the mutation is intact. Re-committing this file
+// is what clears the gate, and the note is here because the next reader
+// deserves the evidence rather than an unexplained touch — a refreshed copy
+// with no record of what was compared is the stale-copy trap with a newer
+// timestamp.
 module zhao_geom_bonesrc_latefetch_mutant #(
     parameter int MAX_BONES = 32,
 
