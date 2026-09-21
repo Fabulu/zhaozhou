@@ -728,3 +728,32 @@ whether those judgements are right.** R133's engineering content stands.
 **Next step: attend whichever of the three lands first. CFGARM has been told to
 stand down and kill its pass-2 monitor; its work is merged and re-verified on
 the merged tree.**
+
+### R133 re-measured by the coordinator — NO EXPIRY. Recorded because a negative result is a disposition
+
+**2026-09-21, read-only, no lane touched.** Every entry re-measured tonight has
+turned up a spent blocker (R165's two, VIEWMASK's two, CFGARM's one), so before
+weighing a FORGE.SHADOW subsystem packet I checked whether R133's five had gone
+the same way. **They have not.**
+
+```
+  zhao_geom_ladderbank   0 production instantiations
+  zhao_geom_lodstate     0
+  zhao_view_projscale    0
+  zhao_geom_projradius   1  <- but ONLY by zhao_geom_lodstate.sv, itself uncomposed
+  zhao_measure_governor  1  <- but ONLY by zhao_prod_top.sv, the GENERATED fit top
+  zhao_forge_shadow      1  <- likewise
+```
+
+**The raw count says three are now instantiated and that reading is false.** Two
+appear only in `zhao_prod_top.sv`, which is generated and names every production
+block **for fitting**, not for console composition; the third sits inside the
+parked subsystem itself. **R225's rule applied to my own sweep: check what a
+total is MADE OF before reporting it.** Stopping at the count would have had me
+announce three expiries that do not exist.
+
+**So FORGE.SHADOW remains a genuine subsystem build**, exactly as R133 says, and
+R133 stands on the merits rather than on the authority R223 wrongly gave it
+(corrected by R226). The open question is not whether it is blocked but whether
+to spend a wave on it, and that is the coordinator's call to make when a slot
+frees — not an escalation.
