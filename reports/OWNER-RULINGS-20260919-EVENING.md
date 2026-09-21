@@ -4564,10 +4564,20 @@ restating as one of:
 
 * **fit at the floor** — every gap closed except the ones with a cited standing
   ruling, which is 17 and is a condition that can actually be met; or
-* **reverse R133 and/or R199** — the owner's call, not mine. R133 is the owner's
-  own instruction and only he can spend it; R199 is mine and I will reverse it
-  the moment the evaluators it waits on exist, which is the condition I wrote
-  into it.
+* **reverse R133 and/or R199** — ~~the owner's call, not mine. R133 is the
+  owner's own instruction and only he can spend it~~; R199 is mine and I will
+  reverse it the moment the evaluators it waits on exist, which is the
+  condition I wrote into it.
+
+  **CORRECTED 2026-09-21 by R226, and the struck sentence was wrong in the
+  direction that made this ruling sound more final than it is. R133 IS NOT THE
+  OWNER'S.** It is a `## R133` prose section, coordinator-authored on
+  2026-09-20 from packet FORGESHADOW, and its own first line says so — *"I
+  wrote R132 accepting ENGINE1's escalation."* Only **R1–R7** carry
+  `(owner, explicit)`. **So the quoted "leaving it costs 1 on the register" is
+  the coordinator's reasoning, not the owner pricing anything**, and *both*
+  rulings that put a floor under the gap count are coordinator-provisional and
+  revisable under the owner's standing delegation. See R226.
 
 **I recommend the first**, and I am not treating that as decided. What I am
 doing is refusing to schedule a fit against a number that cannot occur, and
@@ -4782,3 +4792,114 @@ independent defects do not all contain `_valid_`; eight parse failures do.
 hand before believing the total"* — this is the first time in this campaign that
 rule caught something on the way OUT rather than on the way in, and the cost of
 obeying it was two greps against a total I had already written down.
+
+## R226 — HUNDREDS OF SITES SAY "OWNER RULING" FOR A COORDINATOR ONE, AND I DID IT TO MY OWN R223 TWO HOURS AGO
+
+**2026-09-21. Found by CFGARM while checking its own citation of R28** — which
+is the detail that makes it worth a ruling: **the lane was verifying a claim it
+had itself written**, and found the defect underneath it.
+
+### The measurement, and it has grown tonight
+
+CFGARM reported **223 mis-attributed sites** across `fpga/`, `reference/` and
+`design/`, **62 in the console core.** At this head, split properly:
+
+```
+  "owner ruling R<n>" total          360
+  legitimately R1-R7                  67
+  MIS-ATTRIBUTED (R8 and up)         293
+```
+
+**The two figures measure different things and both are right.** CFGARM counted
+only the mis-attributed ones, at `aea45c4a`, several merges back; my first pass
+counted *all* citations including the 67 correct ones, which would have
+overstated the defect by a fifth. **The honest number is 293, and it went UP
+tonight — some of the increase is mine.**
+
+**CFGARM's own sweep is worth quoting on this, because it nearly shipped the
+opposite error:** its first tree-wide count returned **zero**, because a nested
+`-match` clobbered `$Matches` before the id was captured. It caught that *"only
+because a precise zero is a broken instrument until proven otherwise"* and
+re-ran with a positive control (81 coordinator ids, R1 correctly excluded).
+**A lane auditing citation hygiene nearly published a citation-hygiene number
+produced by a broken instrument.**
+
+**The boundary is exact and the file states it in its own preamble:**
+
+> *"Items marked **(owner, explicit)** were chosen by the owner directly. The
+> owner then said 'go with your recommended answers for now and don't stop to
+> quiz me', so items marked **(provisional, coordinator's recommendation)**
+> stand until the owner revises them."*
+
+**Seven rulings — R1 through R7 — are the owner's.** 9 lines carry the marker,
+37 carry `(provisional, coordinator)`, and there are 91 table rows plus some
+thirty prose sections. **Everything from R8 up is a coordinator recommendation
+standing under a delegation.**
+
+### AND R223 IS WRONG, IN THE DIRECTION THAT MADE IT SOUND FINAL
+
+Two hours ago I ruled that zero is unreachable, and wrote:
+
+> *"reverse R133 and/or R199 — the owner's call, not mine. **R133 is the owner's
+> own instruction and only he can spend it.**"*
+
+**R133 is not the owner's.** It is a `## R133` prose section dated 2026-09-20,
+written by the coordinator from packet FORGESHADOW's findings, and **its own
+first line says so**: *"I wrote R132 accepting ENGINE1's escalation."*
+
+So the sentence I built R223's conclusion on — *"Leaving it costs 1 on the
+register; composing it wrong costs a deadlock behind a closed gap"* — is **not
+the owner pricing a cost and accepting it.** It is the coordinator's reasoning,
+recorded in a file whose title says "Owner rulings". I read the title and not
+the preamble, and then told the owner that only he could lift it.
+
+**R223 is corrected in place rather than deleted**, because the correction is
+the useful artefact.
+
+### What this changes, and what it does not
+
+**CHANGES:** the floor under the gap count is **coordinator-made, not
+owner-made.** Both R133 and R199 are provisional recommendations standing under
+*"go with your recommended answers for now"*. **So zero is not blocked by the
+owner's instructions — it is blocked by two coordinator judgements, one of them
+mine, and both revisable by me under the same delegation that created them.**
+The fit gate is a question I can answer, not one I must escalate.
+
+**DOES NOT CHANGE:** whether those judgements are *right*. R133's engineering
+content is untouched by this — FORGE.SHADOW really is a subsystem (LODSTATE and
+SHADOW mutually blocked, composable only together, plus a client-A widening that
+re-authors a ratified law), and the cluster has gone **21 → 21 five times**.
+R199's content is untouched too. **I am correcting an authority claim, not
+overturning a decision**, and the distinction is the whole point: a provisional
+ruling can be *argued with on the merits*; an owner instruction can only be
+obeyed or escalated. **Mislabelling the first as the second removes the
+argument.**
+
+### This is VIEWMASK's finding one level up, and that is why it recurs
+
+Hours ago VIEWMASK found that entry I21's controlling premise traced to **the
+core's own commentary**, not to any ruling:
+
+> *"A caution invented in a comment and cited by its neighbours is
+> indistinguishable from a ruling. Six passes quoted the comment back as
+> ratified law"* — and it outranked ratified spec for five weeks.
+
+**Here the same disease has climbed a level: a coordinator ruling cited as an
+owner ruling is indistinguishable from one.** Both are citation-laundering, and
+both run in the direction that makes a claim harder to question. **Three hundred
+and sixty sites is not a slip; it is a convention nobody chose.**
+
+### What I am doing about it
+
+**Not a tree-wide rewrite.** 360 sites is a mechanical edit across files three
+packets are holding, and the phrase binds a packet identically either way.
+
+**What changes is the escalation path, and it goes in every brief from now:**
+*when an entry says "owner ruling R<n>", check that ruling's own row before
+treating it as unliftable — only R1–R7 are the owner's.* Two of tonight's briefs
+already carry it. **And I stop writing "owner ruling R<n>" for my own rulings**,
+which I did all evening for R220, R222, R223 and R225.
+
+The owner's file *"has already struck this twice as a one-lane slip"* (CFGARM).
+**It is not a slip and it is not one lane. Recording it as a convention defect
+is the only way it stops being restruck.**
