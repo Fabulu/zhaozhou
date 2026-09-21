@@ -6966,6 +6966,30 @@ add_test(NAME wrapper_port_parity
 set_tests_properties(wrapper_port_parity PROPERTIES
   LABELS "fast;lint;mutant" TIMEOUT 120)
 
+# EVERY `FINDINGS-<lane>.md` CITED IN THE TREE MUST EXIST. The harness refuses
+# to let a packet write its own findings file, so transcribing is the
+# coordinator's job -- and a job that depends on somebody remembering is a job
+# that silently does not get done.
+#
+# Found 2026-09-21 by packet GOURAUDLOOK, which noticed that
+# `zhao_geom_attrpack.sv` and `zhao_raster_tile_pipe_v2.sv` BOTH cited
+# `FINDINGS-attrlane.md` for the cost working behind a +24 DSP decision, and
+# the file was in no commit. Sweeping the general case found EIGHT more, none
+# present in any of the 88 run folders, four of them in PRODUCTION RTL.
+#
+# The eight are GRANDFATHERED because their lanes closed in earlier sessions
+# and the files cannot be written now without inventing them -- but the tool
+# PRINTS them on every run, pass or fail. An allowlist that goes quiet is how a
+# debt becomes invisible. New dangling citations FAIL.
+#
+# Proven in both directions before registration: RC 1 on a planted citation,
+# naming both the missing file and the file citing it, RC 0 restored.
+add_test(NAME findings_citations
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/check_findings_citations.py)
+set_tests_properties(findings_citations PROPERTIES
+  LABELS "fast;lint" TIMEOUT 120)
+
 add_test(NAME lint_shell_v2_lease_path
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
           --top-module zhao_shell_v2_lease_path
