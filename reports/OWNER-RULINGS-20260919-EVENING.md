@@ -6101,3 +6101,214 @@ throughout; **only `-GlowTag` could see it**, and my own brief had once carried
 an eight-form list. **A control a change invalidates is not a failing test —
 it is a test whose question changed**, and the repair is to ask the new
 question, out loud, in the assertion.
+
+## R239 — THE FORM KEY EXISTS AND THE QUESTION IS STILL A LAW. FORMIDX verified a passing remark instead of inheriting it, and the decision got BIGGER
+
+**2026-09-21, packet FORMIDX. Register 22 → 22, and I29 reduced in PRECISION
+rather than in count** — which is the honest way to report a blocker that got
+sharper instead of smaller.
+
+I commissioned this because SHADOWSUB said, in passing, while mapping something
+else, that **`zhao_geom_drawjob`'s form index is exposable, not inventable.** I
+wrote in R237 that it was *"to be verified by whoever takes it, not assumed from
+here."* **It was verified, and that instruction is the reason the answer is
+worth anything.**
+
+### The half that is real, and it is more solid than the remark claimed
+
+**`form_idx_q [23:0]` exists** in `zhao_geom_drawjob`, loaded as
+`d_form_i[31:8]` in `S_IDLE`.
+
+* **It is the right numbering BY CITATION, not by inference** —
+  `reference/include/zref/zref_creature_page.hpp`'s own header section *"THE KEY
+  IS THE MESH_STREAM HANDLE INDEX, NOT AN INVENTED TYPE ID"* names that exact
+  expression as the hardware key.
+* **It is NOT entry I39's failure**, which was the specific risk I named:
+  `d_ready_o = (st_q == S_IDLE)`, so the FSM **cannot admit a second draw**
+  while the first is in `S_CHECK..S_EMIT`, and the register is loaded by the
+  **same enable that admits the draw**. There is no second pipeline stage for it
+  to run ahead of. I39's `mf_r_material_id` fails because *"two live wires are
+  not a producer"*; this is one wire with one enable.
+* **One qualification, recorded rather than glossed:** in `S_IDLE` it holds the
+  **previous** draw, so any exposure must be **gated by state and never offered
+  bare.**
+
+### And the half that decides it is missing, which is why the shortcut fails
+
+> **`form_idx_q` supplies the REQUESTER's half. POSEREAD's blocker is the
+> BANK's half. A comparison with one operand is not a comparison.**
+
+**The two lanes were looking at different seams.** SHADOWSUB's subject was
+`zhao_geom_lodstate.j_form_index_i` — the **ladder table** key, which **is
+ruled**. POSEREAD's is the **clip bank's identity**, which is not. My hope that
+one closed the other was the cheap reading, and it is wrong.
+
+### The finding that moves the cost the WRONG way, which is why I believe it
+
+`zhao_geom_clipread.sv`'s header asserted *"so kind-8 → form IS ruled"*.
+**That is true of the ladder TABLE and false of the BODY** — the half that block
+actually reads.
+
+**Measured on the committed golden `ladder_page_body_v1.bin`:** 448 bytes,
+**three** ladder records (`form_index` 256, 257, 40983) against a `body_off` of
+192 naming **one** 6-bone body. And `tools/pack/mkcreatureladder.py:build` makes
+that **the FORMAT, not the fixture** — a list of records beside a single bone
+list, with `build_body` packing `"<IHBBII"` and **no form index anywhere.**
+
+> **So the wrong-animal failure is reachable through the SKELETON exactly as it
+> is through the clip bank, and `bone_mismatch_o` is blind to both whenever the
+> bone counts agree.**
+
+**Re-costed against POSEREAD's three options:** (i) is **two fields and two
+goldens**, not one — **but both headers carry spare reserved bytes, so no page
+grows and no offset moves.** (ii) is *cheaper* for wiring than costed, since
+both operands already exist as signals, and **impossible for kind 8** (three
+forms, one index). (iii) is worse than costed.
+
+### What is genuinely the owner's, and it is now ONE SENTENCE
+
+> **Is a kind-8 page ONE CREATURE, or a BANK?**
+
+`spec/creature_rules.md` §5 reads it as one creature. `zhao_geom_ladderbank`
+reads it as a **`ROWS=16` bank**. **Both are live and they disagree** — and
+every costing downstream depends on which is true. **This goes to him as a law,
+with the options; it is not decided in a packet.**
+
+### What it declined to build, and it was right twice
+
+**It did not add `j_form_index_o`.** There is **no consumer today** — lodstate
+is blocked behind `forge_shadow`, clipread behind this ruling — so the port
+would be the **BUILT-INSTALLED-NOWHERE** shape `uncashed_cheques.py` exists to
+catch, **billing three generators and a 1281-port parity re-read for zero
+function.** SHADOWSUB reached the identical conclusion from the other side, and
+**two lanes independently refusing the same cheque is the check working.**
+
+**No ABI invented. No tie-off created. No register rise manufactured.** The diff
+is comment-only, and **I verified that here rather than accepting it**: every
+added line in both files is a comment.
+
+**Its own confession, which I record because my brief warned about exactly
+it:** the lane's first `completion_register` run was **piped into `tail` and
+reported RC 0**; bare, it is **1**. The tool told the truth about the pipe. It
+caught itself and said so.
+
+## R240 — A STALE BLOCKER DOES NOT ONLY DELAY WORK, IT MISDIRECTS THE SEARCH FOR THE REAL ONE. Three layers of one rot, and the third nearly had me escalating RATIFIED LAW
+
+**2026-09-21, coordinator, found while scoping GEOM.WARP as a candidate packet.
+Nothing was built; this is an archaeology finding and it changes what the next
+lane does.** Register unmoved at 22.
+
+### Layer 1 — the sentence in production RTL is FALSE
+
+`zhao_console_core.sv`, at the composed `zhao_field_host_v2`, explains why it
+passes `.CLIENTS(2)`:
+
+> *"GEOM.WARP prerequisite P2 asks for `CLIENTS(3)` so the warp adapter has a
+> port; a third client whose `req_valid_i` is a constant zero is a TIE-OFF, and
+> rule 1 forbids creating one even in the service of closing a gap.
+> **`zhao_geom_warp.sv` does not exist in this tree**, so there is nothing to
+> drive it with."*
+
+**`fpga/rtl/geometry/zhao_geom_warp.sv` exists — 36,227 bytes, built
+2026-09-20 by packet FIELDW1** (`3285a290`, *"GEOM.WARP is BUILT, and the
+register honestly does not move"*), **alongside
+`fpga/rtl/field/zhao_field_warp_adapter.sv` at 33,001 bytes.** The sentence was
+true when written and is false now.
+
+### Layer 2 — and this is the part that is NEW
+
+**R165 already says: re-measure a blocker before quoting it.** Apply it here
+exactly as written and you get a **confident wrong answer.**
+
+A lane re-measures *"`zhao_geom_warp.sv` does not exist"*, finds that **it
+does**, concludes **the blocker has expired**, changes `.CLIENTS(2)` to `(3)`,
+composes the adapter — and ships a function that **cannot be reached by any
+draw**. Because the real blocker is somewhere else entirely, and it is bigger:
+
+> **`zhao_geom_warp.sv` itself says it: *"there is no `DrawWarpedForm` command,
+> so no draw can set `d_warp_en_i`."*** A composed `zhao_geom_warp` under
+> today's ABI **sits permanently in its W09 bypass — function present and
+> structurally unreachable.** That is not a composition.
+
+**So the stale sentence was not merely out of date. It NAMED THE WRONG
+BLOCKER**, and it named one that is **cheap and checkable**, standing in front
+of one that is **expensive and easy to miss**. Re-measuring the *stated* blocker
+is not the same act as finding the *actual* one.
+
+**The rule that follows, and it is the sharper half of R165:** when a stated
+blocker turns out to have expired, **do not read that as "the path is clear".
+Read it as evidence the entry stopped being maintained**, and go find what else
+holds it. **A blocker sentence that has rotted once is a sentence nobody has
+been checking** — the expiry is a signal about the *document*, not only about
+the *claim*. The authority is the **contract's timestamped prerequisite
+table** (`design/contracts/GEOM.WARP.md`), not a parenthesis in an
+instantiation.
+
+### Layer 3 — I then went looking for the real blocker and nearly escalated a question the owner had ALREADY ANSWERED
+
+Having found that GEOM.WARP is unreachable without `DrawWarpedForm`, I was
+about to put *"do we add a new draw opcode?"* to the owner as a **law** — an
+ABI addition, exactly the class this campaign refuses to invent inside a
+packet, so escalating felt not just safe but **correct**.
+
+**It is ratified, and has been since 2026-09-20.**
+
+`reports/OWNER-RATIFICATION-20260920-WARP.md`, decision **W04**:
+
+> *"Add **`DrawWarpedForm` at opcode 0x0304**, 96-byte record / 80-byte payload.
+> `DrawForm 0x0300` and raw vertex format 0 stay **byte-for-byte** unchanged."*
+
+Ratified by **Fabian's own commit `4c256137`**, 2026-09-20, whose message is
+*"Agent please read — implement this warp architecture **and architect
+implement whatever else is missing when it comes up**"*. The ratification file
+is explicit that **W01–W18 are new law as of 2026-09-20**. And
+`spec/commands.zidl` already knows: *"0x0304 IS SPOKEN FOR — plan W04 allocates
+it to `DrawWarpedForm`"*, which is precisely why POSECMD correctly took
+**0x0305** for `DrawPosedForm`.
+
+> **The opcode is allocated, the record size is specified, and the owner has
+> said in writing to implement it. There is no law question here. There is a
+> BUILD.**
+
+**This would have been the FOURTH supposed law question to dissolve under
+measurement** — after R3, after SHADOWSUB's arena claim, and after R237 recorded
+that *"neither of this subsystem's two supposed law questions was real."* The
+pattern is now established well enough to be a standing rule:
+
+> **Before escalating anything as a law, grep `reports/OWNER-RATIFICATION-*.md`
+> and the owner's own directive commits.** This tree has a directory of answers
+> in it. **Escalating a settled question is not the safe direction — it costs a
+> round trip, it spends the owner's attention on something he already spent it
+> on, and it stalls a build that was authorised days ago.** R237's law applies
+> to me here: *asking* looks conservative and rigorous, which is exactly why it
+> does not get challenged.
+
+### What GEOM.WARP actually needs, from the authority rather than the parenthesis
+
+From `design/contracts/GEOM.WARP.md`'s **measured, timestamped** table, itself
+corrected on merge under R165 because four rows had been measured against a base
+predating packets C1 and D1:
+
+* **P1 — CLOSED.** `.IN_LANES(15)` composed by C1.
+* **P2 — ABSENT.** `.CLIENTS(2)`, one site. **A one-line parameter change.**
+* **P3, P4 — PRESENT AND NOW COMPOSED** in `zhao_field_host_v2`.
+* **P5 — DEFERRED, NOT CLOSED.** `prep_value` is still one flat 64-entry array
+  with no context dimension; the per-slot generation stamp **detects** a stale
+  prepared scalar but does **not isolate** two simultaneously eligible plans.
+  **Satisfied only if Warp never interleaves with Earth inside a frame.**
+* **P6 — STILL PARTIAL.** `TABLES = 2` against a fabric carrying 4.
+* **P7 — ABSENT.** `.INSTR_N(32)` against a required 48. **A one-line change**,
+  though host_v2's own default is 32 as well.
+* **P8 — UNMEASURED, and honestly labelled so.** D1 **is** merged now and
+  `zhao_field_doorbell.sv` carries `BIND_PROGRAM`; **whether that satisfies
+  §9.3's BIND/SEAL has not been measured.** The row says so rather than
+  guessing, which is R165 working.
+* **P9 — NOW EXISTS**, discharging R103's standing claim that the R91 fast path
+  *"does NOT exist anywhere in the tree"*. **Still unmeasured in clocks** — and
+  the contract is careful that `51 + T_run` and `19 + T_run` are **FSM
+  arithmetic, not benchmarks and not fits.**
+
+**So GEOM.WARP is a real packet and a large one: `DrawWarpedForm` (ratified,
+specified) + two one-line parameters + P8 measured + P5/P6 dispositions.** It is
+**not** a law question and **not** a cheap close. **It goes in the queue, not to
+the owner.**

@@ -52,7 +52,11 @@ unchanged. **Do not run Quartus.** The machine belongs to the packets.
 |---|---|---|
 | **BANDBUILD** | the HUD band (R233/R235); bears on **I17** | `gz/bandbuild` |
 | **CLIPDOOR** | the `GEOM_CLIP_ATTRS = 7` input door — the binding wall | `gz/clipdoor` |
-| **FORMIDX** | is `form -> clip bank` a WIRE? bears on **I29** | `gz/formidx` |
+| **JOBISSUE** | I21 — TERRAIN's subpatch job issuer (item 0) | `gz/jobissue` |
+
+**FORMIDX landed** (`gz/formidx`, merged): `form_idx_q` is real and correctly
+keyed, **but it is the REQUESTER's half and POSEREAD's blocker is the BANK's**.
+The question stays a law and **got bigger** — see **R239**. Register 22 → 22.
 
 **Landed today:** DELTALAW (R231's depth law), SHADOWSUB (the tap arbiter; it
 **withdrew its own blocker** — R237), GOURAUDBUILD (D1 built — R238).
@@ -62,8 +66,9 @@ unchanged. **Do not run Quartus.** The machine belongs to the packets.
 ## NEXT SLOTS, best first
 
 **0. TERRAIN.GROUP_SEQ's SUBPATCH JOB ISSUER — entry I21. THE LARGEST
-UNCOVERED ITEM IN THE REGISTER, and it is now scoped.** Analysed by the
-coordinator 2026-09-21; **launch this into the first free slot.**
+UNCOVERED ITEM IN THE REGISTER — IN FLIGHT AS `JOBISSUE` (`gz/jobissue`),
+launched 2026-09-21.** Scoping kept below because the lane's report should be
+read against it.
 
 *Why it dominates:* the register's 22 is **9 tie-offs + 13 disconnected
 modules**, and **TERRAIN holds 7 of the 13** (`pageio`, `normalmap`,
@@ -116,6 +121,43 @@ quoting it (R165); do not inherit this entry's prose.**
 R75's "close one gap, open another". **Compose the TERRAIN group as a
 subsystem, or not at all.** R223's hold stands for the governor *by itself*;
 this packet is the thing that dissolves it.
+
+**0.5. GEOM.WARP — AUTHORISED IN WRITING SINCE 2026-09-20 AND NOBODY HAS TAKEN
+IT. Take the next free slot with this.** See **R240**.
+
+**It is NOT a law question, and I nearly made it one.** The core's own
+instantiation says *"`zhao_geom_warp.sv` does not exist in this tree"* — **it
+does**, 36,227 bytes, built by FIELDW1 on 2026-09-20 with its adapter beside
+it. That stale sentence **names the wrong blocker**: the real one is that
+**there is no `DrawWarpedForm` command, so no draw can set `d_warp_en_i`** and a
+composed warp would sit permanently in its W09 bypass — *function present and
+structurally unreachable.*
+
+**And `DrawWarpedForm` is RATIFIED.** `reports/OWNER-RATIFICATION-20260920-WARP.md`
+**W04**: *"Add `DrawWarpedForm` at opcode **0x0304**, **96-byte record /
+80-byte payload**. `DrawForm 0x0300` and raw vertex format 0 stay byte-for-byte
+unchanged."* Ratified by Fabian's commit `4c256137`, whose message is *"implement
+this warp architecture and architect implement whatever else is missing when it
+comes up."* **W01–W18 are new law as of 2026-09-20.** `spec/commands.zidl`
+already records that 0x0304 is spoken for, which is why POSECMD took 0x0305.
+
+**The work, from the contract's MEASURED table (`design/contracts/GEOM.WARP.md`)
+and not from the core's parenthesis:**
+
+| # | state | what it costs |
+|---|---|---|
+| P1 | **CLOSED** by C1 | — |
+| P2 | **ABSENT** — `.CLIENTS(2)`, one site | one-line parameter |
+| P3/P4 | **PRESENT AND COMPOSED** | — |
+| P5 | **DEFERRED, NOT CLOSED** — `prep_value` is one flat array, no context dimension; the per-slot stamp DETECTS a stale scalar but does not ISOLATE two eligible plans | satisfied only if Warp never interleaves with Earth in a frame — **needs a disposition** |
+| P6 | **STILL PARTIAL** — `TABLES = 2`, fabric carries 4 | a disposition |
+| P7 | **ABSENT** — `.INSTR_N(32)` vs 48 required | one-line parameter |
+| P8 | **UNMEASURED** — D1 is merged and `zhao_field_doorbell.sv` carries `BIND_PROGRAM`; whether it satisfies §9.3's BIND/SEAL **has not been measured** | **measure it first** |
+| P9 | **NOW EXISTS**, discharging R103 | unmeasured in clocks; `51 + T_run` and `19 + T_run` are **FSM arithmetic, not benchmarks** |
+
+**Do not quote the prerequisite table without re-measuring it (R165) — four of
+its nine rows were already corrected once on merge for having been measured
+against a base predating packets C1 and D1.**
 
 **1. FORGE.PRIM / FORGE.PRIM_EVAL — now UNBLOCKED by D2.** R199 deferred the
 forge program page kind because four of six families have no evaluator; **the
