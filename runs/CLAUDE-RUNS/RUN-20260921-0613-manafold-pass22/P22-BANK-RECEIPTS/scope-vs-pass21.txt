@@ -1,0 +1,37 @@
+# Pass 22 scope proof: SHIPPING bank vs the SAME renderer with both new
+# knobs off (ZHAO_U02_MANA_DOT_SCALE=legacy, ZHAO_U02_FOLD_DIP_SHAPE_PM=0).
+# Exact-off was byte-verified against a freshly built pass-21 renderer on
+# hover/inspect/drift/hasty (1740/1740 frames), so the off column IS pass 21.
+# subject	frames	changed	worst_px	worst_frame
+manafold-blown	292	292	2997	0165
+manafold-channel	420	420	4294	0273
+manafold-crackle	600	600	5232	0268
+manafold-curious	180	180	4557	0177
+manafold-damage	464	464	4163	0329
+manafold-death-drop	450	227	2605	0006
+manafold-death-gutter	590	216	2529	0008
+manafold-drift	300	300	2310	0289
+manafold-fall	340	340	2721	0220
+manafold-flight	352	352	3185	0215
+manafold-hasty	240	240	2145	0012
+manafold-hit	140	140	3929	0082
+manafold-hover	600	246	3798	0529
+manafold-inspect	600	127	2873	0591
+manafold-lasso	336	336	3708	0088
+manafold-pirouette	240	240	4662	0008
+manafold-rest	400	400	4548	0186
+manafold-startle	160	160	4578	0156
+manafold-taunt	280	280	4120	0131
+manafold-taunt2	240	240	6603	0172
+manafold-taunt3	368	368	3718	0043
+manafold-trick	400	400	4562	0224
+# TOTAL frames=7992 changed=6568 (82.2%) subjects_changed=22/22
+# worst frames bank-wide (by changed pixels):
+#   manafold-taunt2 f0172 6603 px
+#   manafold-crackle f0268 5232 px
+#   manafold-pirouette f0008 4662 px
+#   manafold-startle f0156 4578 px
+#   manafold-trick f0224 4562 px
+#   manafold-curious f0177 4557 px
+#   manafold-rest f0186 4548 px
+#   manafold-channel f0273 4294 px
