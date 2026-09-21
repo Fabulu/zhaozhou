@@ -4305,3 +4305,49 @@ gate rather than better briefing — advisory prose loses, as `CLAUDE.md` alread
 knows from the fit hook. **Any file that mirrors another file's interface needs
 a parity check, because the mirror breaks when the original moves and nothing
 about the original's change looks wrong.**
+
+## R221 — THE `ST_MISS` LAW: FALL BACK TO THE PARAMETRIC DISC, AND COUNT IT
+
+**Taken by the coordinator under the owner's standing delegation (2026-09-20:
+*"answer dossier questions yourself"*).** PAGEIO surfaced this while refusing
+decision 5, and it is the same class: a decision with player-visible outcomes
+that no packet may take quietly.
+
+**The question:** when bake asks `zhao_surface_sheet` for a layer-F page and the
+response is `ST_MISS`, what happens to the player's dig?
+
+| option | what the player sees |
+|---|---|
+| **Fail the record** | the dig is **silently lost** |
+| **Dig zero** | a **visible no-op** — they acted, the ground did not move |
+| **Fall back to the parametric disc** | **a crater**, of the shape that shipped before sheets existed |
+
+**RULED: fall back to the parametric disc, and COUNT the fallback.**
+
+**Why, and it follows from two rulings already on the board rather than from
+taste:**
+
+1. **The disc is not an invention — it is the RATIFIED v1 LAW.** SEAMDIG
+   measured that the sheet mode is **additive**: `terrain_bake_v2_directed`
+   passes **267/267 unchanged** with the sheet arm present. So falling back
+   reaches behaviour that is already ratified, already tested and already
+   shipped. **R197's reasoning applies directly** — option B there was refused
+   because it would have forced *inventing* an art law, and the same standard
+   forbids inventing a third crater shape here.
+2. **The other two make an absence look like a result**, which is W10 and the
+   defect this campaign has spent two days finding. *"Fail the record"* loses a
+   player's action with nothing to show for it; *"dig zero"* is precisely *"an
+   absent output must not look like a zero result"* rendered in terrain. R168
+   and R181 are the same shape in silicon, and both were live bugs.
+
+**The fallback MUST be counted**, and that is not optional decoration: a miss is
+a residency failure, and an uncounted fallback is a console quietly serving the
+wrong crater shape with no way to know how often. **The counter owes a positive
+control** — by stimulus if a miss is legally reachable, by a committed mutant if
+it is not.
+
+**What this does NOT decide.** PAGEIO measured that decision 5 is *not* an
+arbiter and named four missing pieces; this ruling supplies **only the fourth**,
+the miss law. **The handle lifetime, the latency adapter and the arbiter remain
+engineering**, and PAGEIO's recommendation — *take the miss law first, the rest
+are cheap once it is written* — is why this one is answered now.
