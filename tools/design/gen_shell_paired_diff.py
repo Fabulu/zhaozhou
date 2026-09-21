@@ -402,7 +402,13 @@ def main(check=False, mutant=False):
         if cur.replace('\r\n', '\n') != text:
             print('FAIL: %s is STALE.' % (MUT if mutant else OUT).relative_to(REPO).as_posix())
             print('  The shells moved and the generated harness did not.')
-            print('  Regenerate: python tools/design/gen_shell_paired_diff.py')
+            # THE REMEDY MUST CARRY --mutant WHEN IT IS THE MUTANT THAT IS
+            # STALE. It did not until 2026-09-21, and the bare command ran
+            # clean, rewrote the OTHER file, and left the check still failing
+            # -- a remedy line that looks authoritative and does not work sends
+            # the reader hunting for a second fault. Found by following it.
+            print('  Regenerate: python tools/design/gen_shell_paired_diff.py%s'
+                  % (' --mutant' if mutant else ''))
             return 1
         print('paired diff harness: fresh (%d shared inputs, %d compared '
               'outputs, %d declared divergent)'
