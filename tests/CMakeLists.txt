@@ -10282,6 +10282,29 @@ verilate(test_jdoorbell_mutant_control
 add_test(NAME jdoorbell_mutant_control COMMAND test_jdoorbell_mutant_control)
 set_tests_properties(jdoorbell_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.JOBISSUE -- the SUBPATCH JOB ISSUER, core entry I21's missing block.
+# It joins zhao_terrain_lod's `lod_target` stream to the patch's own draw
+# context and drives zhao_terrain_group_seq's THIRTEEN-field job port, plus
+# zhao_terrain_compcache_front's retirement pulse. No mutant is registered here
+# and that is a measured claim, not an omission: all seven of its fault
+# counters are reachable from the block's own boundary with legal stimulus, and
+# terrain_jobissue_directed fires each one and shows each silent beside it.
+add_test(NAME lint_terrain_jobissue
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_jobissue
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jobissue.sv)
+set_tests_properties(lint_terrain_jobissue PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_jobissue_directed terrain/terrain_jobissue_directed.cpp)
+target_link_libraries(test_terrain_jobissue_directed PRIVATE zhao_harness)
+verilate(test_terrain_jobissue_directed
+  PREFIX Vzhao_terrain_jobissue
+  TOP_MODULE zhao_terrain_jobissue
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jobissue.sv)
+add_test(NAME terrain_jobissue_directed COMMAND test_terrain_jobissue_directed)
+set_tests_properties(terrain_jobissue_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TERRAIN.LOD's three deviations (owner ruling R8), zhao_terrain_loddev.
 # Differential against zref::terrain::lod_deviation, built TWICE from one
 # source: at the block's DEFAULT selector (which must equal
