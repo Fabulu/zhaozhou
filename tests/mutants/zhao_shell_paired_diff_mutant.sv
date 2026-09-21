@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 56 inputs exist only on the sibling. They get harness ports of
+// 59 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -102,6 +102,9 @@ module zhao_shell_paired_diff_mut
   input  logic [239:0] tri_invw_plane_i,
   input  logic [239:0] tri_u_over_w_plane_i,
   input  logic [239:0] tri_v_over_w_plane_i,
+  input  logic [239:0] tri_r_plane_i,
+  input  logic [239:0] tri_g_plane_i,
+  input  logic [239:0] tri_b_plane_i,
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0] tri_continuation_tail_i,
   input  logic [31:0] tri_fragment_state_i,
@@ -531,6 +534,9 @@ module zhao_shell_paired_diff_mut
     .tri_invw_plane_i(tri_invw_plane_i),
     .tri_u_over_w_plane_i(tri_u_over_w_plane_i),
     .tri_v_over_w_plane_i(tri_v_over_w_plane_i),
+    .tri_r_plane_i(tri_r_plane_i),
+    .tri_g_plane_i(tri_g_plane_i),
+    .tri_b_plane_i(tri_b_plane_i),
     .tri_flat_request_i(tri_flat_request_i),
     .tri_continuation_tail_i(tri_continuation_tail_i),
     .tri_fragment_state_i(tri_fragment_state_i),

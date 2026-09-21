@@ -1,7 +1,7 @@
 // zhao_geom_bin_pipe_v2.sv -- Packet-D GEOM.BINNER V2 to raster-tile V2.
 //
-// The 1,157-bit metadata record is constructed once from the accepted setup
-// triangle's area/min-X/three planes and flat typed-material fields, then stored
+// The 1,877-bit metadata record is constructed once from the accepted setup
+// triangle's area/min-X/SIX planes and flat typed-material fields, then stored
 // by zhao_geom_binner_v2 under the binner's own triangle identity.  Drained jobs
 // splice that exact record into zhao_raster_tile_pipe_v2.  After raster abort,
 // the tile pipe's sink-ready drains every remaining binner job without starting
@@ -60,6 +60,14 @@ module zhao_geom_bin_pipe_v2 #(
     input  logic       [239:0] tri_invw_plane_i,
     input  logic       [239:0] tri_u_over_w_plane_i,
     input  logic       [239:0] tri_v_over_w_plane_i,
+    // THE GOURAUD PLANES (owner decision R234 D1, 2026-09-21). GEOM.ATTRPACK's
+    // lanes 3..5, carrying the lit per-vertex colour that GEOM.LIGHT computes,
+    // GEOM.VATTR stores and GEOM.CLIP winding-flips. They widened METAW from
+    // 1157 to 1877, which is 29 -> 47 forty-bit slices of the binner's
+    // metadata bank -- the M10K half of the decision's price.
+    input  logic       [239:0] tri_r_plane_i,
+    input  logic       [239:0] tri_g_plane_i,
+    input  logic       [239:0] tri_b_plane_i,
     input  logic       [297:0] tri_flat_request_i,
     input  logic        [47:0] tri_continuation_tail_i,
     input  logic        [31:0] tri_fragment_state_i,
@@ -190,9 +198,9 @@ module zhao_geom_bin_pipe_v2 #(
 
     // Structural probes for the directed gate and committed mutants.
     output logic               coverage_hold_valid_o,
-    output logic        [2:0]  coverage_delivered_mask_o,
-    output logic        [4:0]  start_delivered_mask_o,
-    output logic        [2:0]  attribute_idle_o,
+    output logic        [5:0]  coverage_delivered_mask_o,
+    output logic        [7:0]  start_delivered_mask_o,
+    output logic        [5:0]  attribute_idle_o,
     output logic               earlyz_hold_valid_o,
     output logic        [1:0]  skid_level_o,
     output logic               stage_candidate_valid_o,
@@ -212,22 +220,45 @@ module zhao_geom_bin_pipe_v2 #(
     output logic        [7:0]  bin_mask_o,
     output logic        [23:0] z_floor_o
 `ifdef ZHAO_PACKET_D_TEST_HOOKS
-    , input logic        [4:0]  test_start_enable_i
-    , input logic        [2:0]  test_attr_cov_enable_i
+    , input logic        [7:0]  test_start_enable_i
+    , input logic        [5:0]  test_attr_cov_enable_i
     , input logic               test_stage_admit_enable_i
 `endif
 );
 
-  localparam int unsigned METAW = 1157;
+  // THE METADATA ABI, and why this arithmetic is spelled out rather than
+  // written as a literal. It was `1157` for three planes; R234 D1 bought three
+  // more and it is `1877`. Stating the sum makes the next change one term, and
+  // makes the 720-bit step visible to a reader instead of being a number that
+  // moved for no stated reason.
+  localparam int unsigned META_PLANES   = 6;
+  localparam int unsigned META_PLANE_W  = 240;   // {n0[95:0], dndx[71:0], dndy[71:0]}
+  localparam int unsigned META_FIXED_W  = 298    // tri_flat_request_i
+                                        +  48    // tri_continuation_tail_i
+                                        +  32    // tri_fragment_state_i
+                                        +  47    // tri_area2_i
+                                        +  12;   // tri_min_x_i
+  localparam int unsigned METAW = META_FIXED_W + META_PLANES * META_PLANE_W;
   initial begin : p_packet_d_meta_contract
     if ($bits(tri_meta_w) != METAW)
       $fatal(1, "zhao_geom_bin_pipe_v2: metadata width changed");
+    if (METAW != 1877)
+      $fatal(1, "zhao_geom_bin_pipe_v2: METAW is not the ratified 1877");
   end
 
   // Exact ABI concatenation, MSB to LSB.  zhao_geom_binner_v2 samples it only on
   // the same tri_we edge that stores the corresponding 142-bit triangle.
+  //
+  // THE PLANE ORDER IS THE LANE ORDER and it is load-bearing: the tile pipe
+  // unpacks plane k at `437 + 240*k`, so appending the Gouraud planes ABOVE
+  // v/w keeps lanes 0..2 bit-identical to the three-plane layout. That is why
+  // the r/g/b planes are the new MOST significant fields rather than being
+  // inserted anywhere tidier.
   logic [METAW-1:0] tri_meta_w;
-  assign tri_meta_w = {tri_v_over_w_plane_i,
+  assign tri_meta_w = {tri_b_plane_i,
+                       tri_g_plane_i,
+                       tri_r_plane_i,
+                       tri_v_over_w_plane_i,
                        tri_u_over_w_plane_i,
                        tri_invw_plane_i,
                        tri_min_x_i,

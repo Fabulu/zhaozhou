@@ -543,15 +543,24 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "module zhao_raster_tile_pipe_v2 #(",
         "parameter bit ATTR_DSP3 = 1'b0",
         "parameter bit BILERP_DSP2 = 1'b0",
-        "input  logic       [1156:0] job_meta_i",
-        "output logic          [4:0] start_delivered_mask_o",
+        # SIX attribute lanes since owner decision R234 D1 (2026-09-21), which
+        # reconnected the lit per-vertex colour. `job_meta_i` carries six
+        # 240-bit planes instead of three (1157 -> 1877), and the start fanout
+        # has eight destinations instead of five: EDGEWALK, six lanes, the
+        # tilestore clear. Every other marker in this list is unchanged, which
+        # is the evidence that the lane count moved and the SHAPE did not.
+        "input  logic       [1876:0] job_meta_i",
+        "output logic          [7:0] start_delivered_mask_o",
+        "localparam int unsigned ATTR_LANES  = 6;",
+        "localparam int unsigned START_CLEAR = ATTR_LANES + 1;",
+        "localparam int unsigned META_W = META_PLANE_LO + ATTR_LANES * META_PLANE_W;",
         "assign start_valid_w[0] = (rs_state_q == RS_START)",
         "assign start_fire_w[0] = start_valid_w[0] && ew_job_ready_w;",
         "assign start_delivered_next_w = start_delivered_q | start_fire_w;",
         "assign ew_job_valid_w = start_valid_w[0];",
         ".job_valid_i(start_valid_w[ga+1])",
         "assign row_delivered_next_w = row_delivered_q | row_lane_fire_w;",
-        "for (ga = 0; ga < 3; ga = ga + 1)",
+        "for (ga = 0; ga < ATTR_LANES; ga = ga + 1)",
         "if (ATTR_DSP3) begin : g_dsp3",
         "zhao_raster_attrgrad_dsp3 u_attrgrad",
         "zhao_raster_attrgrad_v2 u_attrgrad",
@@ -560,8 +569,15 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "assign attr_join_room_w = !attr_bundle_valid_w || attr_join_consume_w;",
         "assign attr_join_capture_w = attr_source_valid_w && attr_join_room_w;",
         "attr_join_valid_q <= attr_join_capture_w ||",
-        "request_w.u_over_w              = attr_join_q_q[1];",
-        "continuation_w.earlyz.in_tile_addr = {attr_join_row_q[0], attr_join_col_q[0]};",
+        "request_w.u_over_w              = attr_join_q_q[LANE_UOW];",
+        "continuation_w.earlyz.in_tile_addr = {attr_join_row_q[LANE_INVW],",
+        # R234 D1: `vertex_rgb` is built per fragment off lanes 3..5 through
+        # one saturating conversion, in place of the per-triangle constant it
+        # used to take from `continuation_tail_bits_q`. Nothing downstream of
+        # this module changed to make that work, and this marker is what says
+        # so: the carrier, its width and its consumer are all untouched.
+        "continuation_w.post_earlyz.vertex_rgb = {lit_unit8(attr_join_q_q[LANE_R]),",
+        "function automatic logic [7:0] lit_unit8(input logic signed [31:0] v);",
         "(&attr_idle_w) && !(|attr_q_valid_w) &&\n"
         "                            !attr_bundle_valid_w;",
         "pretex_w = make_raster_pretex(continuation_w, request_w);",
@@ -607,27 +623,44 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         )
     if "job_metadata_capture_w" not in tile_active:
         raise AssertionError("Packet-D metadata capture predicate is not active code")
+    # THE PROPERTY IS "NO START VALID DEPENDS ON A READY", and it is checked by
+    # enumerating every `assign start_valid_w[...]` rather than by listing the
+    # destinations. The old form spelled out indices 0..4; owner decision R234
+    # D1 (2026-09-21) made the attribute lanes six, so their strobe moved into
+    # the `g_attr` generate beside the lane it starts and is written once with
+    # the genvar. Enumerating the ASSIGNMENTS keeps the check total -- a new
+    # destination that named a ready would have to appear here -- where a list
+    # of indices would silently stop covering the lanes it no longer names.
     expected_start_rhs = {
-        0: "(rs_state_q == RS_START) && !start_delivered_q[0] && start_gate_w[0]",
-        1: "(rs_state_q == RS_START) && !start_delivered_q[1] && start_gate_w[1]",
-        2: "(rs_state_q == RS_START) && !start_delivered_q[2] && start_gate_w[2]",
-        3: "(rs_state_q == RS_START) && !start_delivered_q[3] && start_gate_w[3]",
-        4: "(rs_state_q == RS_START) && first_q && !start_delivered_q[4] && start_gate_w[4]",
+        "0": "(rs_state_q == RS_START) && !start_delivered_q[0] && start_gate_w[0]",
+        "ga+1": "(rs_state_q == RS_START) && !start_delivered_q[ga+1] && start_gate_w[ga+1]",
+        "START_CLEAR": (
+            "(rs_state_q == RS_START) && first_q && "
+            "!start_delivered_q[START_CLEAR] && start_gate_w[START_CLEAR]"
+        ),
     }
-    for index, expected in expected_start_rhs.items():
-        matches = re.findall(
-            rf"assign\s+start_valid_w\[{index}\]\s*=\s*(.*?);",
-            tile_active,
-            re.DOTALL,
+    start_valid_assignments = re.findall(
+        r"assign\s+start_valid_w\[([^\]]+)\]\s*=\s*(.*?);",
+        tile_active,
+        re.DOTALL,
+    )
+    if len(start_valid_assignments) != len(expected_start_rhs):
+        raise AssertionError(
+            "Packet-D start-valid assignment count changed: "
+            f"{len(start_valid_assignments)} sites"
         )
-        if len(matches) != 1 or " ".join(matches[0].split()) != expected:
-            raise AssertionError(f"Packet-D active start-valid {index} changed or depends on ready")
+    for index, rhs in start_valid_assignments:
+        key = " ".join(index.split()).replace(" ", "")
+        if key not in expected_start_rhs:
+            raise AssertionError(f"Packet-D unknown start-valid destination {key}")
+        if " ".join(rhs.split()) != expected_start_rhs[key]:
+            raise AssertionError(f"Packet-D active start-valid {key} changed or depends on ready")
     clear_assignments = re.findall(
         r"assign\s+ts_clear_w\s*=\s*(.*?);",
         tile_active,
         re.DOTALL,
     )
-    if len(clear_assignments) != 1 or " ".join(clear_assignments[0].split()) != "start_valid_w[4]":
+    if len(clear_assignments) != 1 or " ".join(clear_assignments[0].split()) != "start_valid_w[START_CLEAR]":
         raise AssertionError("Packet-D active clear valid is not the held destination valid")
     if "assign start_fire_w =" in tile_active or "start_all_ready_w" in tile_active:
         raise AssertionError("Packet-D tile restored ready-derived monolithic start")
@@ -635,7 +668,11 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "module zhao_geom_bin_pipe_v2 #(",
         "parameter bit ATTR_DSP3           = 1'b0",
         "parameter bit BILERP_DSP2         = 1'b0",
-        "localparam int unsigned METAW = 1157;",
+        "localparam int unsigned META_PLANES   = 6;",
+        "localparam int unsigned METAW = META_FIXED_W + META_PLANES * META_PLANE_W;",
+        "tri_b_plane_i,",
+        "tri_g_plane_i,",
+        "tri_r_plane_i,",
         "tri_v_over_w_plane_i,",
         "tri_u_over_w_plane_i,",
         "tri_invw_plane_i,",
@@ -724,9 +761,15 @@ class PacketDClosureTests(unittest.TestCase):
             encoding="utf-8"
         )
         validate_d3_shape(tile, binpipe, mutant)
-        for index in range(5):
+        # THE POSITIVE CONTROL FOR THE CHECK ABOVE: make each start-valid depend
+        # on a ready and confirm the checker says so. The destinations are named
+        # rather than numbered since owner decision R234 D1 (2026-09-21) moved
+        # the six attribute lanes' strobe into the `g_attr` generate -- so this
+        # list is exactly the three assignment SITES the RTL now has, and
+        # `validate_d3_shape` independently refuses any fourth.
+        for index in ("0", "ga+1", "START_CLEAR"):
             mutation, changed = re.subn(
-                rf"(assign\s+start_valid_w\[{index}\]\s*=\s*)",
+                rf"(assign\s+start_valid_w\[{re.escape(index)}\]\s*=\s*)",
                 r"\1ew_job_ready_w && ",
                 tile,
                 count=1,
@@ -735,15 +778,15 @@ class PacketDClosureTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 validate_d3_shape(mutation, binpipe, mutant)
         active_bad, changed = re.subn(
-            r"(assign\s+start_valid_w\[2\]\s*=\s*)",
-            r"\1attr_job_ready_w[1] && ",
+            r"(assign\s+start_valid_w\[ga\+1\]\s*=\s*)",
+            r"\1attr_job_ready_w[ga] && ",
             tile,
             count=1,
         )
         self.assertEqual(changed, 1)
         clean_shadow = (
-            "assign start_valid_w[2] = (rs_state_q == RS_START) && "
-            "!start_delivered_q[2] && start_gate_w[2];\n"
+            "assign start_valid_w[ga+1] = (rs_state_q == RS_START) && "
+            "!start_delivered_q[ga+1] && start_gate_w[ga+1];\n"
         )
         for shadowed in (
             "// " + clean_shadow + active_bad,
@@ -758,8 +801,8 @@ class PacketDClosureTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_d3_shape(
                 tile.replace(
-                    "assign ts_clear_w = start_valid_w[4];",
-                    "assign ts_clear_w = start_fire_w[4];",
+                    "assign ts_clear_w = start_valid_w[START_CLEAR];",
+                    "assign ts_clear_w = start_fire_w[START_CLEAR];",
                     1,
                 ),
                 binpipe,

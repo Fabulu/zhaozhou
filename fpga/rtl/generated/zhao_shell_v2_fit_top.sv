@@ -1,8 +1,8 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: 8bf15b0d3414e9d0b5acb408ab8aadb0b716d997b89e50479195c4655cbb8080
-// policy-sha256: 00fb17fcb296c6e93419b71d4a7c78daad65cf5cb447df13ad730f68cea051b3
-// generator-sha256: 7734f1ac63564fc0762ee9cbd98d28c0e30825fac9ee0df70247a3c70f8ce7f7
+// shell-declaration-sha256: 0669f22f9951ae033cd9c6e4455b37f8c9519b01a73474d23aeefd5cd5a4f168
+// policy-sha256: 449230ed1b8be49030d25d15c3f279fc9f0cdc4748b763eff6788c18c3dfa59e
+// generator-sha256: 57b882d61b2481915d3c63e51c71a4b916bd221016bcfd944ecb89069f523033
 // parser-sha256: cf10b580276970bf2be1e4abea5cb6d97248e46671ba525027f45c8079815fc5
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
@@ -46,6 +46,9 @@ module shell_v2_top
   (* keep = "true" *) logic [239:0] shell_tri_invw_plane_i;
   (* keep = "true" *) logic [239:0] shell_tri_u_over_w_plane_i;
   (* keep = "true" *) logic [239:0] shell_tri_v_over_w_plane_i;
+  (* keep = "true" *) logic [239:0] shell_tri_r_plane_i;
+  (* keep = "true" *) logic [239:0] shell_tri_g_plane_i;
+  (* keep = "true" *) logic [239:0] shell_tri_b_plane_i;
   (* keep = "true" *) logic [297:0] shell_tri_flat_request_i;
   (* keep = "true" *) logic [47:0] shell_tri_continuation_tail_i;
   (* keep = "true" *) logic [31:0] shell_tri_fragment_state_i;
@@ -245,6 +248,21 @@ module shell_v2_top
   (* keep = "true" *) logic [31:0] shell_render_retired_words_o;
   (* keep = "true" *) logic shell_render_overflow_o;
   (* keep = "true" *) logic shell_render_fragment_error_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_fragments_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_cache_hits_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_cache_misses_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_palette_lookups_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_plan_accepted_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_dispatch_accepted_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_combine_refused_o;
+  (* keep = "true" *) logic [31:0] shell_render_texture_samples_o;
+  (* keep = "true" *) logic shell_gth_valid_o;
+  (* keep = "true" *) logic [15:0] shell_gth_rgb565_o;
+  (* keep = "true" *) logic [7:0] shell_gth_tag_o;
+  (* keep = "true" *) logic [7:0] shell_gth_addr_o;
+  (* keep = "true" *) logic signed [11:0] shell_gth_x_o;
+  (* keep = "true" *) logic signed [11:0] shell_gth_y_o;
+  (* keep = "true" *) logic shell_gth_last_o;
   (* keep = "true" *) logic [8:0] shell_post_frame_w_i;
   (* keep = "true" *) logic [7:0] shell_post_frame_h_i;
   (* keep = "true" *) logic shell_post_duo_i;
@@ -291,9 +309,9 @@ module shell_v2_top
   (* keep = "true" *) logic [31:0] shell_cmd_pkt_len_o;
   (* keep = "true" *) logic shell_cmd_pkt_ready_i;
 
-  logic [2827:0] gpu_payload_c;
+  logic [3141:0] gpu_payload_c;
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [2827:0] gpu_capture_bus;
+  logic [3141:0] gpu_capture_bus;
   /* verilator lint_on UNUSEDSIGNAL */
   always_comb begin
     gpu_payload_c = '0;
@@ -414,36 +432,51 @@ module shell_v2_top
     gpu_payload_c[2372 +: 32] = shell_render_retired_words_o;
     gpu_payload_c[2404 +: 1] = shell_render_overflow_o;
     gpu_payload_c[2405 +: 1] = shell_render_fragment_error_o;
-    gpu_payload_c[2406 +: 1] = shell_post_pass_start_o;
-    gpu_payload_c[2407 +: 1] = shell_post_view_o;
-    gpu_payload_c[2408 +: 1] = shell_post_src_valid_o;
-    gpu_payload_c[2409 +: 16] = shell_post_src_rgb_o;
-    gpu_payload_c[2425 +: 1] = shell_post_out_ready_o;
-    gpu_payload_c[2426 +: 1] = shell_post_busy_o;
-    gpu_payload_c[2427 +: 32] = shell_post_passes_o;
-    gpu_payload_c[2459 +: 32] = shell_post_frames_o;
-    gpu_payload_c[2491 +: 1] = shell_post_fault_o;
-    gpu_payload_c[2492 +: 32] = shell_post_src_reads_o;
-    gpu_payload_c[2524 +: 32] = shell_post_src_pixels_o;
-    gpu_payload_c[2556 +: 32] = shell_post_retire_unowned_o;
-    gpu_payload_c[2588 +: 32] = shell_post_share_contention_o;
-    gpu_payload_c[2620 +: 32] = shell_echo_passes_complete_o;
-    gpu_payload_c[2652 +: 32] = shell_echo_passes_torn_o;
-    gpu_payload_c[2684 +: 32] = shell_echo_pixels_written_o;
-    gpu_payload_c[2716 +: 32] = shell_echo_pixels_dropped_o;
-    gpu_payload_c[2748 +: 1] = shell_echo_fault_o;
-    gpu_payload_c[2749 +: 1] = shell_phy_cs_n_o;
-    gpu_payload_c[2750 +: 1] = shell_phy_ras_n_o;
-    gpu_payload_c[2751 +: 1] = shell_phy_cas_n_o;
-    gpu_payload_c[2752 +: 1] = shell_phy_we_n_o;
-    gpu_payload_c[2753 +: 13] = shell_phy_a_o;
-    gpu_payload_c[2766 +: 2] = shell_phy_ba_o;
-    gpu_payload_c[2768 +: 16] = shell_phy_dq_o;
-    gpu_payload_c[2784 +: 1] = shell_phy_dq_oe_o;
-    gpu_payload_c[2785 +: 2] = shell_phy_dqm_o;
-    gpu_payload_c[2787 +: 1] = shell_cmd_pkt_valid_o;
-    gpu_payload_c[2788 +: 8] = shell_cmd_pkt_byte_o;
-    gpu_payload_c[2796 +: 32] = shell_cmd_pkt_len_o;
+    gpu_payload_c[2406 +: 32] = shell_render_texture_fragments_o;
+    gpu_payload_c[2438 +: 32] = shell_render_texture_cache_hits_o;
+    gpu_payload_c[2470 +: 32] = shell_render_texture_cache_misses_o;
+    gpu_payload_c[2502 +: 32] = shell_render_texture_palette_lookups_o;
+    gpu_payload_c[2534 +: 32] = shell_render_texture_plan_accepted_o;
+    gpu_payload_c[2566 +: 32] = shell_render_texture_dispatch_accepted_o;
+    gpu_payload_c[2598 +: 32] = shell_render_texture_combine_refused_o;
+    gpu_payload_c[2630 +: 32] = shell_render_texture_samples_o;
+    gpu_payload_c[2662 +: 1] = shell_gth_valid_o;
+    gpu_payload_c[2663 +: 16] = shell_gth_rgb565_o;
+    gpu_payload_c[2679 +: 8] = shell_gth_tag_o;
+    gpu_payload_c[2687 +: 8] = shell_gth_addr_o;
+    gpu_payload_c[2695 +: 12] = shell_gth_x_o;
+    gpu_payload_c[2707 +: 12] = shell_gth_y_o;
+    gpu_payload_c[2719 +: 1] = shell_gth_last_o;
+    gpu_payload_c[2720 +: 1] = shell_post_pass_start_o;
+    gpu_payload_c[2721 +: 1] = shell_post_view_o;
+    gpu_payload_c[2722 +: 1] = shell_post_src_valid_o;
+    gpu_payload_c[2723 +: 16] = shell_post_src_rgb_o;
+    gpu_payload_c[2739 +: 1] = shell_post_out_ready_o;
+    gpu_payload_c[2740 +: 1] = shell_post_busy_o;
+    gpu_payload_c[2741 +: 32] = shell_post_passes_o;
+    gpu_payload_c[2773 +: 32] = shell_post_frames_o;
+    gpu_payload_c[2805 +: 1] = shell_post_fault_o;
+    gpu_payload_c[2806 +: 32] = shell_post_src_reads_o;
+    gpu_payload_c[2838 +: 32] = shell_post_src_pixels_o;
+    gpu_payload_c[2870 +: 32] = shell_post_retire_unowned_o;
+    gpu_payload_c[2902 +: 32] = shell_post_share_contention_o;
+    gpu_payload_c[2934 +: 32] = shell_echo_passes_complete_o;
+    gpu_payload_c[2966 +: 32] = shell_echo_passes_torn_o;
+    gpu_payload_c[2998 +: 32] = shell_echo_pixels_written_o;
+    gpu_payload_c[3030 +: 32] = shell_echo_pixels_dropped_o;
+    gpu_payload_c[3062 +: 1] = shell_echo_fault_o;
+    gpu_payload_c[3063 +: 1] = shell_phy_cs_n_o;
+    gpu_payload_c[3064 +: 1] = shell_phy_ras_n_o;
+    gpu_payload_c[3065 +: 1] = shell_phy_cas_n_o;
+    gpu_payload_c[3066 +: 1] = shell_phy_we_n_o;
+    gpu_payload_c[3067 +: 13] = shell_phy_a_o;
+    gpu_payload_c[3080 +: 2] = shell_phy_ba_o;
+    gpu_payload_c[3082 +: 16] = shell_phy_dq_o;
+    gpu_payload_c[3098 +: 1] = shell_phy_dq_oe_o;
+    gpu_payload_c[3099 +: 2] = shell_phy_dqm_o;
+    gpu_payload_c[3101 +: 1] = shell_cmd_pkt_valid_o;
+    gpu_payload_c[3102 +: 8] = shell_cmd_pkt_byte_o;
+    gpu_payload_c[3110 +: 32] = shell_cmd_pkt_len_o;
   end
 
   logic [171:0] video_payload_c;
@@ -500,15 +533,15 @@ module shell_v2_top
     .geom_guard_rsp_o_captured_i(zhao_guard_rsp_t'(gpu_capture_bus[2023 +: 3])),
     .geom_beat_valid_o_captured_i(gpu_capture_bus[2026 +: 1]),
     .geom_beat_last_o_captured_i(gpu_capture_bus[2091 +: 1]),
-    .phy_cs_n_o_captured_i(gpu_capture_bus[2749 +: 1]),
-    .phy_ras_n_o_captured_i(gpu_capture_bus[2750 +: 1]),
-    .phy_cas_n_o_captured_i(gpu_capture_bus[2751 +: 1]),
-    .phy_we_n_o_captured_i(gpu_capture_bus[2752 +: 1]),
-    .phy_a_o_captured_i(gpu_capture_bus[2753 +: 13]),
-    .phy_ba_o_captured_i(gpu_capture_bus[2766 +: 2]),
-    .phy_dq_o_captured_i(gpu_capture_bus[2768 +: 16]),
-    .phy_dq_oe_o_captured_i(gpu_capture_bus[2784 +: 1]),
-    .phy_dqm_o_captured_i(gpu_capture_bus[2785 +: 2]),
+    .phy_cs_n_o_captured_i(gpu_capture_bus[3063 +: 1]),
+    .phy_ras_n_o_captured_i(gpu_capture_bus[3064 +: 1]),
+    .phy_cas_n_o_captured_i(gpu_capture_bus[3065 +: 1]),
+    .phy_we_n_o_captured_i(gpu_capture_bus[3066 +: 1]),
+    .phy_a_o_captured_i(gpu_capture_bus[3067 +: 13]),
+    .phy_ba_o_captured_i(gpu_capture_bus[3080 +: 2]),
+    .phy_dq_o_captured_i(gpu_capture_bus[3082 +: 16]),
+    .phy_dq_oe_o_captured_i(gpu_capture_bus[3098 +: 1]),
+    .phy_dqm_o_captured_i(gpu_capture_bus[3099 +: 2]),
     .cfg_valid_i(shell_cfg_valid_i),
     .cfg_op_i(shell_cfg_op_i),
     .cfg_page_generation_i(shell_cfg_page_generation_i),
@@ -527,6 +560,9 @@ module shell_v2_top
     .tri_invw_plane_i(shell_tri_invw_plane_i),
     .tri_u_over_w_plane_i(shell_tri_u_over_w_plane_i),
     .tri_v_over_w_plane_i(shell_tri_v_over_w_plane_i),
+    .tri_r_plane_i(shell_tri_r_plane_i),
+    .tri_g_plane_i(shell_tri_g_plane_i),
+    .tri_b_plane_i(shell_tri_b_plane_i),
     .tri_flat_request_i(shell_tri_flat_request_i),
     .tri_continuation_tail_i(shell_tri_continuation_tail_i),
     .tri_fragment_state_i(shell_tri_fragment_state_i),
@@ -652,6 +688,9 @@ module shell_v2_top
     .tri_invw_plane_i(shell_tri_invw_plane_i),
     .tri_u_over_w_plane_i(shell_tri_u_over_w_plane_i),
     .tri_v_over_w_plane_i(shell_tri_v_over_w_plane_i),
+    .tri_r_plane_i(shell_tri_r_plane_i),
+    .tri_g_plane_i(shell_tri_g_plane_i),
+    .tri_b_plane_i(shell_tri_b_plane_i),
     .tri_flat_request_i(shell_tri_flat_request_i),
     .tri_continuation_tail_i(shell_tri_continuation_tail_i),
     .tri_fragment_state_i(shell_tri_fragment_state_i),
@@ -851,6 +890,21 @@ module shell_v2_top
     .render_retired_words_o(shell_render_retired_words_o),
     .render_overflow_o(shell_render_overflow_o),
     .render_fragment_error_o(shell_render_fragment_error_o),
+    .render_texture_fragments_o(shell_render_texture_fragments_o),
+    .render_texture_cache_hits_o(shell_render_texture_cache_hits_o),
+    .render_texture_cache_misses_o(shell_render_texture_cache_misses_o),
+    .render_texture_palette_lookups_o(shell_render_texture_palette_lookups_o),
+    .render_texture_plan_accepted_o(shell_render_texture_plan_accepted_o),
+    .render_texture_dispatch_accepted_o(shell_render_texture_dispatch_accepted_o),
+    .render_texture_combine_refused_o(shell_render_texture_combine_refused_o),
+    .render_texture_samples_o(shell_render_texture_samples_o),
+    .gth_valid_o(shell_gth_valid_o),
+    .gth_rgb565_o(shell_gth_rgb565_o),
+    .gth_tag_o(shell_gth_tag_o),
+    .gth_addr_o(shell_gth_addr_o),
+    .gth_x_o(shell_gth_x_o),
+    .gth_y_o(shell_gth_y_o),
+    .gth_last_o(shell_gth_last_o),
     .post_frame_w_i(shell_post_frame_w_i),
     .post_frame_h_i(shell_post_frame_h_i),
     .post_duo_i(shell_post_duo_i),
@@ -980,6 +1034,9 @@ module shell_v2_stimulus
   (* preserve *) output var logic [239:0] tri_invw_plane_i,
   (* preserve *) output var logic [239:0] tri_u_over_w_plane_i,
   (* preserve *) output var logic [239:0] tri_v_over_w_plane_i,
+  (* preserve *) output var logic [239:0] tri_r_plane_i,
+  (* preserve *) output var logic [239:0] tri_g_plane_i,
+  (* preserve *) output var logic [239:0] tri_b_plane_i,
   (* preserve *) output var logic [297:0] tri_flat_request_i,
   (* preserve *) output var logic [47:0] tri_continuation_tail_i,
   (* preserve *) output var logic [31:0] tri_fragment_state_i,
@@ -1114,26 +1171,26 @@ module shell_v2_stimulus
   logic render_profile_done_q;
   logic render_offer_stalled_q;
   logic render_offer_mutated_q;
-  logic [1883:0] render_offer_payload_c;
-  logic [1883:0] render_offer_snapshot_q;
-  logic [1883:0] render_entropy_offer_snapshot_q /* verilator public_flat_rd */;
-  logic [1883:0] render_accepted_payload_q /* verilator public_flat_rd */;
-  logic [1883:0] render_entropy_accepted_payload_q /* verilator public_flat_rd */;
+  logic [2603:0] render_offer_payload_c;
+  logic [2603:0] render_offer_snapshot_q;
+  logic [2603:0] render_entropy_offer_snapshot_q /* verilator public_flat_rd */;
+  logic [2603:0] render_accepted_payload_q /* verilator public_flat_rd */;
+  logic [2603:0] render_entropy_accepted_payload_q /* verilator public_flat_rd */;
   logic [281:0] render_triangle_coefficients_c;
   logic [125:0] render_triangle_vertices_c;
   logic [47:0] render_triangle_bounds_c;
   logic [18:0] render_triangle_identity_c;
-  logic [1144:0] render_triangle_attributes_c;
+  logic [1864:0] render_triangle_attributes_c;
   logic [281:0] render_directed_accepted_coefficients_q /* verilator public_flat_rd */;
   logic [125:0] render_directed_accepted_vertices_q /* verilator public_flat_rd */;
   logic [47:0] render_directed_accepted_bounds_q /* verilator public_flat_rd */;
   logic [18:0] render_directed_accepted_identity_q /* verilator public_flat_rd */;
-  logic [1144:0] render_directed_accepted_attributes_q /* verilator public_flat_rd */;
+  logic [1864:0] render_directed_accepted_attributes_q /* verilator public_flat_rd */;
   logic [281:0] render_entropy_accepted_coefficients_q /* verilator public_flat_rd */;
   logic [125:0] render_entropy_accepted_vertices_q /* verilator public_flat_rd */;
   logic [47:0] render_entropy_accepted_bounds_q /* verilator public_flat_rd */;
   logic [18:0] render_entropy_accepted_identity_q /* verilator public_flat_rd */;
-  logic [1144:0] render_entropy_accepted_attributes_q /* verilator public_flat_rd */;
+  logic [1864:0] render_entropy_accepted_attributes_q /* verilator public_flat_rd */;
   logic [15:0] render_wait_q;
   logic [31:0] render_issued_start_q;
   logic [31:0] render_retired_start_q;
@@ -1266,12 +1323,12 @@ module shell_v2_stimulus
        (guard_beat_count_q == 4'd7)) ? 1'b0 :
       geom_beat_last_o_captured_i;
   assign sdr_dq_oe_checked_c = phy_dq_oe_o_captured_i;
-  assign render_offer_payload_c = {render_grid_w_i, render_grid_h_i, render_fill_word_i, render_clear_word_i, render_state_i, render_src_a_i, render_texel_rgb_i, render_texel_a_i, render_texel_idx_i, render_fb_base_i, render_fb_stride_i, fb_writer_i, tri_area2_i, tri_invw_plane_i, tri_u_over_w_plane_i, tri_v_over_w_plane_i, tri_flat_request_i, tri_continuation_tail_i, tri_fragment_state_i, render_kx0_i, render_ky0_i, render_kc0_i, render_kx1_i, render_ky1_i, render_kc1_i, render_kx2_i, render_ky2_i, render_kc2_i, render_tl_i, render_ax_i, render_ay_i, render_bx_i, render_by_i, render_cx_i, render_cy_i, render_min_x_i, render_max_x_i, render_min_y_i, render_max_y_i, render_src_id_i};
+  assign render_offer_payload_c = {render_grid_w_i, render_grid_h_i, render_fill_word_i, render_clear_word_i, render_state_i, render_src_a_i, render_texel_rgb_i, render_texel_a_i, render_texel_idx_i, render_fb_base_i, render_fb_stride_i, fb_writer_i, tri_area2_i, tri_invw_plane_i, tri_u_over_w_plane_i, tri_v_over_w_plane_i, tri_r_plane_i, tri_g_plane_i, tri_b_plane_i, tri_flat_request_i, tri_continuation_tail_i, tri_fragment_state_i, render_kx0_i, render_ky0_i, render_kc0_i, render_kx1_i, render_ky1_i, render_kc1_i, render_kx2_i, render_ky2_i, render_kc2_i, render_tl_i, render_ax_i, render_ay_i, render_bx_i, render_by_i, render_cx_i, render_cy_i, render_min_x_i, render_max_x_i, render_min_y_i, render_max_y_i, render_src_id_i};
   assign render_triangle_coefficients_c = {render_kx0_i, render_ky0_i, render_kc0_i, render_kx1_i, render_ky1_i, render_kc1_i, render_kx2_i, render_ky2_i, render_kc2_i};
   assign render_triangle_vertices_c = {render_ax_i, render_ay_i, render_bx_i, render_by_i, render_cx_i, render_cy_i};
   assign render_triangle_bounds_c = {render_min_x_i, render_max_x_i, render_min_y_i, render_max_y_i};
   assign render_triangle_identity_c = {render_tl_i, render_src_id_i};
-  assign render_triangle_attributes_c = {tri_area2_i, tri_invw_plane_i, tri_u_over_w_plane_i, tri_v_over_w_plane_i, tri_flat_request_i, tri_continuation_tail_i, tri_fragment_state_i};
+  assign render_triangle_attributes_c = {tri_area2_i, tri_invw_plane_i, tri_u_over_w_plane_i, tri_v_over_w_plane_i, tri_r_plane_i, tri_g_plane_i, tri_b_plane_i, tri_flat_request_i, tri_continuation_tail_i, tri_fragment_state_i};
 
   function automatic logic [7:0] packet_byte(input logic [31:0] address);
     begin
@@ -1589,6 +1646,9 @@ module shell_v2_stimulus
       tri_invw_plane_i <= '0;
       tri_u_over_w_plane_i <= '0;
       tri_v_over_w_plane_i <= '0;
+      tri_r_plane_i <= '0;
+      tri_g_plane_i <= '0;
+      tri_b_plane_i <= '0;
       tri_flat_request_i <= '0;
       tri_continuation_tail_i <= '0;
       tri_fragment_state_i <= '0;
@@ -1970,6 +2030,9 @@ module shell_v2_stimulus
             tri_invw_plane_i <= render_width_cover_q ? 240'h000000000000000000ee0000fffffffffffffffa00000000000000004600 : 240'h00000000000000000dd00000ffffffffffffffcc00ffffffffffffffcc00;
             tri_u_over_w_plane_i <= render_width_cover_q ? 240'h00000000000000000f4a0000ffffffffffffffc400ffffffffffffffbd00 : 240'hffffffffffffffffff300000000000000000003800fffffffffffffffc00;
             tri_v_over_w_plane_i <= render_width_cover_q ? 240'h000000000000000001c20000000000000000004200fffffffffffffffd00 : 240'hffffffffffffffffff300000fffffffffffffffc00000000000000003800;
+            tri_r_plane_i <= render_width_cover_q ? 240'hfffffffffffffffffffffa00000000000000004600000000000000ee0000 : 240'hffffffffffffffffffffcc00ffffffffffffffcc0000000000000dd00000;
+            tri_g_plane_i <= render_width_cover_q ? 240'hffffffffffffffffffffc400ffffffffffffffbd0000000000000f4a0000 : 240'h000000000000000000003800fffffffffffffffc00ffffffffffff300000;
+            tri_b_plane_i <= render_width_cover_q ? 240'h000000000000000000004200fffffffffffffffd00000000000001c20000 : 240'hfffffffffffffffffffffc00000000000000003800ffffffffffff300000;
             tri_flat_request_i <= render_width_cover_q ? 298'h3466600000000000000000000000000000000000000000000000000000000000000c41dd5e7 : 298'h0a49800000000000000000000000000000000000000000000000000000000000000261a2a2a;
             tri_continuation_tail_i <= render_width_cover_q ? 48'h314227aa0000 : 48'h441b7eb00000;
             tri_fragment_state_i <= render_width_cover_q ? 32'h0511ed8d : 32'ha662c38e;
@@ -2053,7 +2116,7 @@ module shell_v2_stimulus
               if ((render_state_i == 32'ha5e0_0068) &&
                   (render_fill_word_i != 64'ha5a5_a5a5_a5a5_a5a5) &&
                   (render_clear_word_i != 64'h5a5a_5a5a_5a5a_5a5a) &&
-                  ((render_triangle_coefficients_c == {-23'sd1536, 23'sd17920, 48'sd15597568, -23'sd15360, -23'sd17152, 48'sd256507904, 23'sd16896, -23'sd768, 48'sd29491200}) && (render_triangle_vertices_c == {-21'sd1024, 21'sd15872, -21'sd1792, -21'sd1024, 21'sd16128, 21'sd512}) && (render_triangle_bounds_c == {12'sd0, 12'sd63, 12'sd0, 12'sd62}) && (render_triangle_identity_c == {3'b011, 16'hd5e7}) && (render_triangle_attributes_c == {47'h000011fa0000, 240'h000000000000000000ee0000fffffffffffffffa00000000000000004600, 240'h00000000000000000f4a0000ffffffffffffffc400ffffffffffffffbd00, 240'h000000000000000001c20000000000000000004200fffffffffffffffd00, 298'h3466600000000000000000000000000000000000000000000000000000000000000c41dd5e7, 48'h314227aa0000, 32'h0511ed8d})))
+                  ((render_triangle_coefficients_c == {-23'sd1536, 23'sd17920, 48'sd15597568, -23'sd15360, -23'sd17152, 48'sd256507904, 23'sd16896, -23'sd768, 48'sd29491200}) && (render_triangle_vertices_c == {-21'sd1024, 21'sd15872, -21'sd1792, -21'sd1024, 21'sd16128, 21'sd512}) && (render_triangle_bounds_c == {12'sd0, 12'sd63, 12'sd0, 12'sd62}) && (render_triangle_identity_c == {3'b011, 16'hd5e7}) && (render_triangle_attributes_c == {47'h000011fa0000, 240'h000000000000000000ee0000fffffffffffffffa00000000000000004600, 240'h00000000000000000f4a0000ffffffffffffffc400ffffffffffffffbd00, 240'h000000000000000001c20000000000000000004200fffffffffffffffd00, 240'hfffffffffffffffffffffa00000000000000004600000000000000ee0000, 240'hffffffffffffffffffffc400ffffffffffffffbd0000000000000f4a0000, 240'h000000000000000000004200fffffffffffffffd00000000000001c20000, 298'h3466600000000000000000000000000000000000000000000000000000000000000c41dd5e7, 48'h314227aa0000, 32'h0511ed8d})))
                 render_entropy_accepts_q <= render_entropy_accepts_q + 32'd1;
               else
                 render_accept_class_errors_q <= render_accept_class_errors_q + 32'd1;
@@ -2066,7 +2129,7 @@ module shell_v2_stimulus
               if ((render_state_i == 32'h0000_0000) &&
                   (render_fill_word_i == 64'ha5a5_a5a5_a5a5_a5a5) &&
                   (render_clear_word_i == 64'h5a5a_5a5a_5a5a_5a5a) &&
-                  ((render_triangle_coefficients_c == {-23'sd13312, -23'sd13312, 48'sd231735296, 23'sd14336, -23'sd1024, -48'sd13631488, -23'sd1024, 23'sd14336, -48'sd13631488}) && (render_triangle_vertices_c == {21'sd1024, 21'sd1024, 21'sd15360, 21'sd2048, 21'sd2048, 21'sd15360}) && (render_triangle_bounds_c == {12'sd4, 12'sd60, 12'sd4, 12'sd60}) && (render_triangle_identity_c == {3'b101, 16'h2a2a}) && (render_triangle_attributes_c == {47'h00000c300000, 240'h00000000000000000dd00000ffffffffffffffcc00ffffffffffffffcc00, 240'hffffffffffffffffff300000000000000000003800fffffffffffffffc00, 240'hffffffffffffffffff300000fffffffffffffffc00000000000000003800, 298'h0a49800000000000000000000000000000000000000000000000000000000000000261a2a2a, 48'h441b7eb00000, 32'ha662c38e})))
+                  ((render_triangle_coefficients_c == {-23'sd13312, -23'sd13312, 48'sd231735296, 23'sd14336, -23'sd1024, -48'sd13631488, -23'sd1024, 23'sd14336, -48'sd13631488}) && (render_triangle_vertices_c == {21'sd1024, 21'sd1024, 21'sd15360, 21'sd2048, 21'sd2048, 21'sd15360}) && (render_triangle_bounds_c == {12'sd4, 12'sd60, 12'sd4, 12'sd60}) && (render_triangle_identity_c == {3'b101, 16'h2a2a}) && (render_triangle_attributes_c == {47'h00000c300000, 240'h00000000000000000dd00000ffffffffffffffcc00ffffffffffffffcc00, 240'hffffffffffffffffff300000000000000000003800fffffffffffffffc00, 240'hffffffffffffffffff300000fffffffffffffffc00000000000000003800, 240'hffffffffffffffffffffcc00ffffffffffffffcc0000000000000dd00000, 240'h000000000000000000003800fffffffffffffffc00ffffffffffff300000, 240'hfffffffffffffffffffffc00000000000000003800ffffffffffff300000, 298'h0a49800000000000000000000000000000000000000000000000000000000000000261a2a2a, 48'h441b7eb00000, 32'ha662c38e})))
                 render_directed_accepts_q <= render_directed_accepts_q + 32'd1;
               else
                 render_accept_class_errors_q <= render_accept_class_errors_q + 32'd1;
@@ -2351,14 +2414,14 @@ endmodule
 module shell_v2_gpu_sink (
   input  logic clk,
   input  logic rst_n,
-  input  logic [2827:0] payload_i,
-  output logic [2827:0] capture_o,
+  input  logic [3141:0] payload_i,
+  output logic [3141:0] capture_o,
   output logic signature_o,
   output logic epoch_o
 );
 
   // Immediate native-domain endpoint for every shell output bit.
-  (* preserve *) logic [2827:0] capture_q;
+  (* preserve *) logic [3141:0] capture_q;
   always_ff @(posedge clk) capture_q <= payload_i;
   assign capture_o = capture_q;
 
@@ -2473,8 +2536,18 @@ module shell_v2_gpu_sink (
       7'd85: selected_c = capture_q[2720 +: 32];
       7'd86: selected_c = capture_q[2752 +: 32];
       7'd87: selected_c = capture_q[2784 +: 32];
-      7'd88: begin
-        selected_c[11:0] = capture_q[2816 +: 12];
+      7'd88: selected_c = capture_q[2816 +: 32];
+      7'd89: selected_c = capture_q[2848 +: 32];
+      7'd90: selected_c = capture_q[2880 +: 32];
+      7'd91: selected_c = capture_q[2912 +: 32];
+      7'd92: selected_c = capture_q[2944 +: 32];
+      7'd93: selected_c = capture_q[2976 +: 32];
+      7'd94: selected_c = capture_q[3008 +: 32];
+      7'd95: selected_c = capture_q[3040 +: 32];
+      7'd96: selected_c = capture_q[3072 +: 32];
+      7'd97: selected_c = capture_q[3104 +: 32];
+      7'd98: begin
+        selected_c[5:0] = capture_q[3136 +: 6];
       end
       default: selected_c = 32'h0;
     endcase
@@ -2519,7 +2592,7 @@ module shell_v2_gpu_sink (
       selected_q <= selected_c;
       selected_index_q <= chunk_index_q;
       selected_valid_q <= 1'b1;
-      if (chunk_index_q == 7'd88) begin
+      if (chunk_index_q == 7'd98) begin
         chunk_index_q <= '0;
       end else begin
         chunk_index_q <= chunk_index_q + 7'd1;
@@ -2527,7 +2600,7 @@ module shell_v2_gpu_sink (
 
       if (selected_valid_q) begin
         misr_q <= misr_next_c;
-        if (selected_index_q == 7'd88) begin
+        if (selected_index_q == 7'd98) begin
           chunk_wraps_q <= chunk_wraps_q + 32'd1;
           if (!serializer_busy_q) begin
             snapshot_q <= misr_next_c;

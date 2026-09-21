@@ -364,6 +364,13 @@ module zhao_console_board
   parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
   parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
   parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
+  // THE GOURAUD SLOTS (owner decision R234 D1, 2026-09-21). GEOM.VATTR writes
+  // these three from `zhao_light_stream`; GEOM.CLIP winding-flips them with the
+  // corners; GEOM.ATTRPACK now turns them into three more interpolation planes
+  // instead of dropping them. See that block's `tri_attr_a_i` waiver.
+  parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
+  parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
+  parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -3194,6 +3201,9 @@ module zhao_console_board
       .GEOM_ATTR_SLOT_INVW      (GEOM_ATTR_SLOT_INVW),
       .GEOM_ATTR_SLOT_U_OVER_W  (GEOM_ATTR_SLOT_U_OVER_W),
       .GEOM_ATTR_SLOT_V_OVER_W  (GEOM_ATTR_SLOT_V_OVER_W),
+      .GEOM_ATTR_SLOT_R         (GEOM_ATTR_SLOT_R),
+      .GEOM_ATTR_SLOT_G         (GEOM_ATTR_SLOT_G),
+      .GEOM_ATTR_SLOT_B         (GEOM_ATTR_SLOT_B),
       .PROJ_T_ARENAS            (PROJ_T_ARENAS),
       .PROJ_T_DEPTH             (PROJ_T_DEPTH),
       .PROJ_T_INDEX_W           (PROJ_T_INDEX_W),

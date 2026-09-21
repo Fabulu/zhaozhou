@@ -184,6 +184,12 @@ module zhao_shell_top_v2
   input  logic [239:0] tri_invw_plane_i,
   input  logic [239:0] tri_u_over_w_plane_i,
   input  logic [239:0] tri_v_over_w_plane_i,
+  // THE GOURAUD PLANES (owner decision R234 D1, 2026-09-21). GEOM.ATTRPACK's
+  // lanes 3..5. They pass straight through to `zhao_geom_bin_pipe_v2`, which
+  // concatenates them above v/w into the now 1,877-bit Packet-D metadata.
+  input  logic [239:0] tri_r_plane_i,
+  input  logic [239:0] tri_g_plane_i,
+  input  logic [239:0] tri_b_plane_i,
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
@@ -1196,6 +1202,9 @@ module zhao_shell_top_v2
     .tri_invw_plane_i(tri_invw_plane_i),
     .tri_u_over_w_plane_i(tri_u_over_w_plane_i),
     .tri_v_over_w_plane_i(tri_v_over_w_plane_i),
+    .tri_r_plane_i(tri_r_plane_i),
+    .tri_g_plane_i(tri_g_plane_i),
+    .tri_b_plane_i(tri_b_plane_i),
     .tri_flat_request_i(tri_flat_request_i),
     .tri_continuation_tail_i(tri_continuation_tail_i),
     .tri_fragment_state_i(tri_fragment_state_i),
