@@ -602,6 +602,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [15:0]              cmd_draw_clip_id_o,
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
+
+  // I29's producer half (owner ruling 2026-09-21 section 3): the ACCEPTED
+  // job's 24-bit form index and its lifetime. Kept in step with the real
+  // module's port list -- `tools/design/wrapper_port_parity.py` compares them.
+  output logic                     geom_job_valid_o,
+  output logic [23:0]              geom_job_form_idx_o,
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
 

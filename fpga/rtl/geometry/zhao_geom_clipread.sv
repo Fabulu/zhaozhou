@@ -188,6 +188,21 @@ module zhao_geom_clipread
     // business.
     input  var logic        p_valid_i,
     output var logic        p_ready_o,
+    // THE DRAW'S OWN FORM. `zhao_geom_drawjob.j_form_idx_o`, which is that
+    // block's `form_idx_q` = `d_form_i[31:8]` -- the MESH_STREAM handle index
+    // `spec/memory_rules.md` 5f.1 keys residency by and
+    // `zref_creature_page.hpp` names as THE hardware per-creature-type key.
+    // All 24 bits: the producer gates it by state (it is offered only while
+    // the job is emitting) precisely because in its own S_IDLE the register
+    // still holds the PREVIOUS draw.
+    //
+    // It is the third operand of this block's ownership comparison, and the
+    // one that makes the comparison mean anything. `body_owner_q` and
+    // `clip_owner_q` are loaded by two DIFFERENT publications in two
+    // DIFFERENT states, and this arrives on a third path -- so no single
+    // register enable moves two sides of the compare together, which is the
+    // blind-detector shape this tree refuses.
+    input  var logic [23:0] p_form_idx_i,
     input  var logic [15:0] p_clip_id_i,
     input  var logic [15:0] p_frame_no_i,
 
@@ -229,6 +244,16 @@ module zhao_geom_clipread
     output var logic [23:0] res_clip_index_o,
     output var logic [15:0] res_clip_gen_o,
 
+    // ---- WHICH FORM each resident section says it belongs to ---------------
+    // The 2026-09-21 ownership ruling's three identities, kept apart: these
+    // are FORM identity (the 24-bit MESH_STREAM index the page NAMES), while
+    // `res_*_index_o`/`res_*_gen_o` above are RESOURCE identity (which
+    // publication answered). They are not the same number and are not derived
+    // from one another -- a body and its clip bank are published under two
+    // independent resource indices and still name ONE form.
+    output var logic [23:0] res_body_owner_o,
+    output var logic [23:0] res_clip_owner_o,
+
     // ---- evidence -----------------------------------------------------------
     output var logic [31:0] bodies_o,         // kind-8 skeletons adopted whole
     output var logic [31:0] clips_o,          // kind-9 directories adopted whole
@@ -246,6 +271,12 @@ module zhao_geom_clipread
     output var logic [31:0] clip_miss_o,      // a request whose slot has no row
     output var logic [31:0] frame_oob_o,      // frame_no at or past frame_count
     output var logic [31:0] not_resident_o,   // a request before both stores hold
+    // A request whose form is not the form the resident body and clip bank
+    // NAME. REFUSED AND COUNTED, never treated as a clip miss: a miss is a
+    // question this bank could have answered, and this is a question it must
+    // not answer. Distinct from `bone_mismatch_o`, which is blind to exactly
+    // this whenever the two creatures happen to have the same bone count.
+    output var logic [31:0] owner_mismatch_o,
     output var logic        busy_o
 );
 
@@ -261,7 +292,20 @@ module zhao_geom_clipread
   localparam logic [31:0] BODY_MAGIC = 32'h38424354;
   // 'Z','C','L','P' little-endian -- the kind-9 page header.
   localparam logic [31:0] CLIP_MAGIC = 32'h504C435A;
-  localparam logic [15:0] VERSION    = 16'd1;
+
+  // THREE VERSIONS, CHECKED SEPARATELY. The 2026-09-21 ownership ruling keeps
+  // the OUTER kind-8 header and the ladder format at 1 and introduces BODY 2
+  // and CLIP_BANK 2, and says why this cannot be one constant: "merely
+  // changing that single constant to 2 would reject the still-v1 outer
+  // header." It WAS one constant here until this packet.
+  localparam logic [15:0] FORM_VERSION = 16'd1;   // kind-8 outer page / ladder
+  localparam logic [15:0] BODY_VERSION = 16'd2;   // kind-8 BODY section
+  localparam logic [15:0] CLIP_VERSION = 16'd2;   // kind-9 CLIP_BANK page
+
+  // The owner word stores a SEMANTIC u24 in one aligned little-endian u32.
+  // Bits 31:24 MUST be zero -- a page setting them is refused, so the 24-bit
+  // value can never be read out of 32 meaningful bits.
+  localparam logic [7:0] OWNER_RSV_ZERO = 8'd0;
 
   localparam int unsigned ROWW = (CLIP_ROWS <= 1) ? 1 : $clog2(CLIP_ROWS);
 
@@ -288,10 +332,12 @@ module zhao_geom_clipread
   // ---- the resident BODY (kind 8) -----------------------------------------
   logic        body_v_q;        // a whole skeleton is in bonesrc's sel-0 store
   logic [ 5:0] body_bones_q;
+  logic [23:0] body_owner_q;    // the FORM this skeleton says it belongs to
 
   // ---- the resident CLIP DIRECTORY (kind 9) -------------------------------
   logic        clip_v_q;
   logic [ 5:0] clip_bones_q;
+  logic [23:0] clip_owner_q;    // the FORM this bank says it animates
   logic [15:0] clip_n_q;        // rows the page declared
   logic [31:0] cbase_q;
   logic [31:0] cextent_q;
@@ -339,6 +385,19 @@ module zhao_geom_clipread
   logic [15:0] rows_done_q;     // directory rows stored so far
   logic [ 2:0] fw_q;            // word within the line being filled
 
+  // THE OWNER AS READ, BEFORE IT IS ADOPTED. It is deliberately NOT written
+  // straight into `body_owner_q`/`clip_owner_q` at the header, and the reason
+  // is the exact failure this tree writes down hardest: those two registers
+  // are read by `owner_ok_c` while `body_v_q`/`clip_v_q` still describe the
+  // PREVIOUS page. A header parsed and then a read DENIED (S_BR_REQ,
+  // S_CD_REQ) would otherwise leave the old skeleton resident wearing the new
+  // page's owner -- a live store and a fresh identity that belong to two
+  // different creatures, with every counter green.
+  //
+  // One staging register serves both walks because only one walk runs at a
+  // time (`p_ready_o` and the publication arms are gated on S_IDLE).
+  logic [23:0] owner_stage_q;
+
   // ---- header field views, restated rather than derived --------------------
   // A change on either side must show up as a failure rather than track
   // silently -- `zhao_geom_ladderbank` states the same rule over the same page.
@@ -354,6 +413,8 @@ module zhao_geom_clipread
   wire [ 7:0] bh_flags_c  = line_q[63:56];
   wire [31:0] bh_bonesoff_c = line_q[95:64];
   wire [31:0] bh_rsv_c    = line_q[127:96];
+  // BODY v2's owner word at bytes 16..19 (`zref::…::body::kOffOwnerForm`).
+  wire [31:0] bh_owner_c  = line_q[159:128];
 
   // kind-9 page header: bone_count at 6, rsv0 at 7, clip_count at 8..9,
   // rsv1 at 10..11, dir_off at 12..15, frames_off at 16..19.
@@ -363,6 +424,8 @@ module zhao_geom_clipread
   wire [15:0] ch_rsv1_c   = line_q[95:80];
   wire [31:0] ch_diroff_c = line_q[127:96];
   wire [31:0] ch_frmoff_c = line_q[159:128];
+  // CLIP_BANK v2's owner word at bytes 20..23 (`zref::clip_page::kOffOwnerForm`).
+  wire [31:0] ch_owner_c  = line_q[191:160];
 
   // ---- the two directory rows in a line ------------------------------------
   // `zref::clip_page`'s offsets: slot_id u16 @0, frame_count u16 @2,
@@ -424,6 +487,18 @@ module zhao_geom_clipread
   // loaded in two different states from two different publications, so this
   // comparison is not blind to the fault it names.
   wire resident_c = body_v_q && clip_v_q && (body_bones_q == clip_bones_q);
+
+  // ---- ownership, as the request sees it -----------------------------------
+  // BOTH sections must name THE DRAW'S form. Not each other -- that would pass
+  // for two pages of one foreign creature, which is exactly the "matching
+  // resources must also match the draw" case the ruling names (its test D).
+  //
+  // Each side of each comparison has an independent clock enable: the request
+  // arrives combinationally on `p_form_idx_i`, `body_owner_q` is written in
+  // S_BR_FILL out of a kind-8 publication, `clip_owner_q` in S_CD_ROW out of a
+  // kind-9 one. Three loads, three paths, so the compare is not structurally
+  // blind to any fault a single enable participates in.
+  wire owner_ok_c = (body_owner_q == p_form_idx_i) && (clip_owner_q == p_form_idx_i);
 
   // ---- the clip lookup -----------------------------------------------------
   // One level of compare across the resident rows. CLIP_ROWS is small by
@@ -512,8 +587,11 @@ module zhao_geom_clipread
       fw_q         <= 3'd0;
       body_v_q     <= 1'b0;
       body_bones_q <= 6'd0;
+      body_owner_q <= 24'd0;
+      owner_stage_q <= 24'd0;
       clip_v_q     <= 1'b0;
       clip_bones_q <= 6'd0;
+      clip_owner_q <= 24'd0;
       clip_n_q     <= 16'd0;
       cbase_q      <= 32'd0;
       cextent_q    <= 32'd0;
@@ -526,6 +604,8 @@ module zhao_geom_clipread
       res_body_gen_o   <= 16'd0;
       res_clip_index_o <= 24'd0;
       res_clip_gen_o   <= 16'd0;
+      res_body_owner_o <= 24'd0;
+      res_clip_owner_o <= 24'd0;
       for (i = 0; i < int'(CLIP_ROWS); i = i + 1) begin
         row_v_q[i]    <= 1'b0;
         row_slot_q[i] <= 16'd0;
@@ -548,6 +628,7 @@ module zhao_geom_clipread
       clip_miss_o      <= 32'd0;
       frame_oob_o      <= 32'd0;
       not_resident_o   <= 32'd0;
+      owner_mismatch_o <= 32'd0;
     end else begin
       src_req_o <= 1'b0;
 
@@ -598,6 +679,15 @@ module zhao_geom_clipread
               not_resident_o <= not_resident_o + 32'd1;
               if (body_v_q && clip_v_q && (body_bones_q != clip_bones_q))
                 bone_mismatch_o <= bone_mismatch_o + 32'd1;
+            end else if (!owner_ok_c) begin
+              // The stores hold a consistent creature -- and it is NOT this
+              // draw's creature. Refused and counted. It is deliberately NOT
+              // folded into `not_resident_o`: that counter says "nothing is
+              // loaded", and this one says "something is loaded and it belongs
+              // to somebody else", which is the failure the bone-count check
+              // cannot see and the one that ships a well-formed palette for
+              // the wrong animal.
+              owner_mismatch_o <= owner_mismatch_o + 32'd1;
             end else if (!chit_c) begin
               clip_miss_o <= clip_miss_o + 32'd1;
             end else if (p_frame_no_i >= row_fcnt_q[crow_c]) begin
@@ -633,7 +723,7 @@ module zhao_geom_clipread
         end
 
         S_PH_HDR: begin
-          if ((h_magic_c != FORM_MAGIC) || (h_version_c != VERSION)) begin
+          if ((h_magic_c != FORM_MAGIC) || (h_version_c != FORM_VERSION)) begin
             bad_magic_o <= bad_magic_o + 32'd1;
             st_q        <= S_IDLE;
           end else if (ph_bodyoff_c == 32'd0) begin
@@ -674,7 +764,7 @@ module zhao_geom_clipread
 
         S_BH_HDR: begin
           n_q <= 6'(bh_bones_c[5:0]);
-          if ((h_magic_c != BODY_MAGIC) || (h_version_c != VERSION)) begin
+          if ((h_magic_c != BODY_MAGIC) || (h_version_c != BODY_VERSION)) begin
             bad_magic_o <= bad_magic_o + 32'd1;
             st_q        <= S_IDLE;
           end else if (bh_flags_c != FLAG_RIGID) begin
@@ -687,6 +777,12 @@ module zhao_geom_clipread
           end else if (bh_rsv_c != 32'd0) begin
             reserved_nz_o <= reserved_nz_o + 32'd1;
             st_q          <= S_IDLE;
+          end else if (bh_owner_c[31:24] != OWNER_RSV_ZERO) begin
+            // The owner is a u24 in a u32 slot. A page using the high byte is
+            // refused rather than masked: masking would make two different
+            // stored words mean one form.
+            reserved_nz_o <= reserved_nz_o + 32'd1;
+            st_q          <= S_IDLE;
           end else if ((bh_bones_c == 8'd0) || (bh_bones_c > 8'(MAX_BONES))) begin
             bad_bone_count_o <= bad_bone_count_o + 32'd1;
             st_q             <= S_IDLE;
@@ -697,6 +793,10 @@ module zhao_geom_clipread
             truncated_o <= truncated_o + 32'd1;
             st_q        <= S_IDLE;
           end else begin
+            // STAGED across the record walk and committed with the body
+            // below -- adopted as ONE logical state with the bones, never
+            // before them.
+            owner_stage_q <= bh_owner_c[23:0];
             addr_q <= base_q + bh_bonesoff_c;
             done_q <= 6'd0;
             beat_q <= 3'd0;
@@ -749,6 +849,12 @@ module zhao_geom_clipread
               body_bones_q <= n_q;
               res_body_index_o <= pidx_q;
               res_body_gen_o   <= pgen_q;
+              // Data, ownership and validity adopted together. `body_owner_q`
+              // was captured at the header and only becomes VISIBLE here,
+              // with `body_v_q`, so a torn or refused load cannot publish an
+              // owner for bones that never landed.
+              body_owner_q     <= owner_stage_q;
+              res_body_owner_o <= owner_stage_q;
               bodies_o     <= bodies_o + 32'd1;
               st_q         <= S_IDLE;
             end else begin
@@ -780,10 +886,11 @@ module zhao_geom_clipread
           clip_n_q  <= ch_clips_c;
           cbase_q   <= base_q;
           cextent_q <= extent_q;
-          if ((h_magic_c != CLIP_MAGIC) || (h_version_c != VERSION)) begin
+          if ((h_magic_c != CLIP_MAGIC) || (h_version_c != CLIP_VERSION)) begin
             bad_magic_o <= bad_magic_o + 32'd1;
             st_q        <= S_IDLE;
-          end else if ((ch_rsv0_c != 8'd0) || (ch_rsv1_c != 16'd0)) begin
+          end else if ((ch_rsv0_c != 8'd0) || (ch_rsv1_c != 16'd0)
+                       || (ch_owner_c[31:24] != OWNER_RSV_ZERO)) begin
             reserved_nz_o <= reserved_nz_o + 32'd1;
             st_q          <= S_IDLE;
           end else if ((ch_bones_c == 8'd0) || (ch_bones_c > 8'(MAX_BONES))) begin
@@ -811,6 +918,7 @@ module zhao_geom_clipread
             st_q         <= S_IDLE;
           end else begin
             clip_bones_q <= 6'(ch_bones_c[5:0]);
+            owner_stage_q <= ch_owner_c[23:0];
             addr_q       <= base_q + ch_diroff_c;
             rows_done_q  <= 16'd0;
             beat_q       <= 3'd0;
@@ -867,6 +975,8 @@ module zhao_geom_clipread
               clip_v_q <= 1'b1;             // ADOPT, whole
               res_clip_index_o <= pidx_q;
               res_clip_gen_o   <= pgen_q;
+              clip_owner_q     <= owner_stage_q;
+              res_clip_owner_o <= owner_stage_q;
               clips_o  <= clips_o + 32'd1;
               st_q     <= S_IDLE;
             end else if (!rows_done_q[0]) begin

@@ -27,6 +27,7 @@ module tb_geom_clipread
 
     input  var logic        p_valid_i,
     output var logic        p_ready_o,
+    input  var logic [23:0] p_form_idx_i,
     input  var logic [15:0] p_clip_id_i,
     input  var logic [15:0] p_frame_no_i,
 
@@ -61,6 +62,8 @@ module tb_geom_clipread
     output var logic [15:0] res_body_gen_o,
     output var logic [23:0] res_clip_index_o,
     output var logic [15:0] res_clip_gen_o,
+    output var logic [23:0] res_body_owner_o,
+    output var logic [23:0] res_clip_owner_o,
 
     output var logic [31:0] bodies_o,
     output var logic [31:0] clips_o,
@@ -78,6 +81,7 @@ module tb_geom_clipread
     output var logic [31:0] clip_miss_o,
     output var logic [31:0] frame_oob_o,
     output var logic [31:0] not_resident_o,
+    output var logic [31:0] owner_mismatch_o,
     output var logic        busy_o
 );
 
@@ -114,8 +118,9 @@ module tb_geom_clipread
       .pub_base_i      (pub_base_i),
       .pub_extent_i    (pub_extent_i),
 
-      .p_valid_i   (p_valid_i),
-      .p_ready_o   (p_ready_o),
+      .p_valid_i    (p_valid_i),
+      .p_ready_o    (p_ready_o),
+      .p_form_idx_i (p_form_idx_i),
       .p_clip_id_i (p_clip_id_i),
       .p_frame_no_i(p_frame_no_i),
 
@@ -142,6 +147,8 @@ module tb_geom_clipread
       .res_body_gen_o  (res_body_gen_o),
       .res_clip_index_o(res_clip_index_o),
       .res_clip_gen_o  (res_clip_gen_o),
+      .res_body_owner_o(res_body_owner_o),
+      .res_clip_owner_o(res_clip_owner_o),
 
       .bodies_o        (bodies_o),
       .clips_o         (clips_o),
@@ -159,6 +166,7 @@ module tb_geom_clipread
       .clip_miss_o     (clip_miss_o),
       .frame_oob_o     (frame_oob_o),
       .not_resident_o  (not_resident_o),
+      .owner_mismatch_o(owner_mismatch_o),
       .busy_o          (busy_o)
   );
 

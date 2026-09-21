@@ -7362,6 +7362,32 @@ module zhao_console_core
   output logic [15:0]              cmd_draw_clip_id_o,
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
+
+  // ---- the ACCEPTED JOB's FORM INDEX -- BOUNDARY, entry I29 ----------------
+  // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
+  // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
+  // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
+  // existing `form_idx_q` rather than re-derived from an unrelated live
+  // register later.
+  //
+  // THIS IS THE RESOLVED JOB, NOT THE COMMAND. `cmd_draw_*` above leaves the
+  // module unresolved by design; this pair leaves it AFTER GEOM.DRAWJOB has
+  // validated the handle against real residency, which is the only form index
+  // an ownership comparison may legitimately use. Reading `cmd_draw_form_w`
+  // instead would be precisely the "unrelated live register" the ruling names.
+  //
+  // `geom_job_valid_o` IS the lifetime. `geom_job_form_idx_o` is driven from
+  // the register only while the job is emitting and is zero otherwise, but
+  // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
+  // is the valid, exactly as for every other job field.
+  //
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: the consumer
+  // (`zhao_geom_clipread.p_form_idx_i`, built and differenced in this same
+  // commit) is not composed, and this file's own R229 paragraph gives the
+  // rule for that case -- an output nobody reads lets synthesis delete the
+  // logic behind it and a fit then reports the lane's registers as free.
+  output logic                     geom_job_valid_o,
+  output logic [23:0]              geom_job_form_idx_o,
   // Evidence, not a boundary -- the same standing as the three counters above.
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
@@ -17649,6 +17675,7 @@ module zhao_console_core
   wire signed [31:0]    dj_j_xform [12];
   wire [31:0]           dj_j_stream_base;
   wire [GEOM_SIDE_W-1:0] dj_j_side;
+  wire [23:0]           dj_j_form_idx;
   wire [31:0]           dj_refused [9];
   // ---- GEOM.LOOM -> the instance transform palette -------------------------
   wire               lm_out_valid;
@@ -17937,6 +17964,8 @@ module zhao_console_core
     .j_xform_o      (dj_j_xform),
     .j_stream_base_o(dj_j_stream_base),
     .j_side_o       (dj_j_side),
+    // I29, the 2026-09-21 ownership ruling's section 3: exposed, not invented.
+    .j_form_idx_o   (dj_j_form_idx),
 
     .draws_o      (geom_dj_draws_o),
     .jobs_o       (geom_dj_jobs_o),
@@ -18011,6 +18040,10 @@ module zhao_console_core
     .vis_o   (mf_cull_vis),
     .reject_o(mf_cull_reject)
   );
+
+  // I29's producer half, at the edge. See the port declaration.
+  assign geom_job_valid_o    = dj_j_valid;
+  assign geom_job_form_idx_o = dj_j_form_idx;
 
   zhao_geom_meshfetch u_geom_meshfetch (
     .clk   (gpu_clk),

@@ -105,7 +105,20 @@ namespace clip_page {
 inline constexpr uint8_t kPageKind = 9;
 
 inline constexpr uint32_t kMagic = 0x504C435Au;  // 'Z','C','L','P' little-endian
-inline constexpr uint16_t kVersion = 1;
+
+/** VERSION 2 -- the OWNER FORM INDEX, owner ruling of 2026-09-21 (kind-8 /
+ *  kind-9 ownership), section 2. A v1 bank carries no statement of WHICH form
+ *  its frames animate, so a resident bank could answer any draw and produce a
+ *  well-formed palette for the wrong animal with every counter green.
+ *
+ *  `kVersionV1` is kept NAMED rather than deleted because the ruling requires
+ *  historical v1 fixtures to stay IDENTIFIABLE:
+ *  `tests/golden/creature_clip/clip_page_v1.bin` is still committed, is still
+ *  a legal v1 page, and `decode` refuses it -- which is the ruling's "unowned
+ *  v1 CLIP_BANK data is not accepted on the new posed-render path", stated as
+ *  a refusal rather than as prose. */
+inline constexpr uint16_t kVersionV1 = 1;
+inline constexpr uint16_t kVersion = 2;
 
 /** The page header, the clip-directory record and the per-frame header are all
  *  64/32-byte shaped for the reason in the file header. */
@@ -145,6 +158,20 @@ inline constexpr size_t kOffClipCount = 8;
 inline constexpr size_t kOffHdrRsv1 = 10;
 inline constexpr size_t kOffDirOff = 12;
 inline constexpr size_t kOffFramesOff = 16;
+/** v2's owner word. ONE ALIGNED LITTLE-ENDIAN u32 for a SEMANTIC u24: bits
+ *  23:0 are the owner's MESH_STREAM form index, bits 31:24 MUST be zero. The
+ *  word sits in EXISTING header padding -- the header was and remains 64
+ *  bytes, and no clip record, frame stride or offset moves. */
+inline constexpr size_t kOffOwnerForm = 20;
+
+/** The handle index is 24 bits (`handle32` = {index[31:8], generation[7:0]}),
+ *  the same mask `zref::creature_page::kFormIndexMask` states for the ladder.
+ *
+ *  INDEX ZERO IS NOT A SENTINEL. The ruling is explicit: "Index zero must not
+ *  be used as an implicit 'owner absent' sentinel: presence follows version
+ *  and validated section presence, not the numeric value of the index." So a
+ *  bank owned by form 0 is an ordinary bank and is compared like any other. */
+inline constexpr uint32_t kOwnerFormMask = 0x00FFFFFFu;
 
 /** Clip-directory record byte offsets, frozen. The first three fields are
  *  creature_rules 5's own `{slot_id u16, frame_count u16, event_count u16}`,
@@ -192,6 +219,12 @@ enum class Verdict : uint8_t {
                         //!< answers the FIRST match, so the page's meaning
                         //!< would depend on row order
   kReservedNz = 9,      //!< a reserved field is not zero
+  kBadOwner = 10,       //!< the owner word's bits 31:24 are not zero. NOT a
+                        //!< statement about WHICH form owns the bank -- that
+                        //!< comparison belongs to the loader, which has the
+                        //!< request to compare against; this is the FORMAT
+                        //!< rule that keeps the 24-bit semantic value from
+                        //!< being read out of 32 stored bits.
 };
 
 inline void put_u32(uint8_t* p, uint32_t v) {
@@ -229,8 +262,9 @@ inline size_t round_up_line(size_t n) {
  * page and others from the last one.
  */
 inline bool bank_legal(const std::vector<Clip>& clips, int bone_count,
-                       int rows, Verdict* why) {
+                       uint32_t owner_form_index, int rows, Verdict* why) {
   const auto no = [&](Verdict v) { if (why) *why = v; return false; };
+  if ((owner_form_index & ~kOwnerFormMask) != 0u) return no(Verdict::kBadOwner);
   if (bone_count <= 0 || bone_count > kMaxBones) return no(Verdict::kBadBoneCount);
   if (clips.empty() || static_cast<int>(clips.size()) > rows ||
       static_cast<int>(clips.size()) > kMaxClips)
@@ -253,9 +287,10 @@ inline bool bank_legal(const std::vector<Clip>& clips, int bone_count,
  * it (`spec/cartridge.md` 4's "deterministic refusal, never a guessed layout").
  */
 inline std::vector<uint8_t> build(const std::vector<Clip>& clips, int bone_count,
+                                  uint32_t owner_form_index,
                                   int rows = kMaxClips) {
   Verdict why = Verdict::kOk;
-  if (!bank_legal(clips, bone_count, rows, &why)) return {};
+  if (!bank_legal(clips, bone_count, owner_form_index, rows, &why)) return {};
 
   const size_t stride = frame_stride(bone_count);
   const size_t dir_off = kHeaderBytes;
@@ -283,6 +318,11 @@ inline std::vector<uint8_t> build(const std::vector<Clip>& clips, int bone_count
   put_u16(page.data() + kOffClipCount, static_cast<uint16_t>(clips.size()));
   put_u32(page.data() + kOffDirOff, static_cast<uint32_t>(dir_off));
   put_u32(page.data() + kOffFramesOff, static_cast<uint32_t>(frames_off));
+  // The owner is SUPPLIED, never inferred. There is nothing in a bank's own
+  // bytes that could name its creature -- the ruling forbids deriving it from
+  // bone count, row order or publication index, and this packer has no way to
+  // do so even if it were allowed to.
+  put_u32(page.data() + kOffOwnerForm, owner_form_index & kOwnerFormMask);
 
   for (size_t i = 0; i < clips.size(); ++i) {
     uint8_t* d = page.data() + dir_off + kClipBytes * i;
@@ -321,14 +361,20 @@ inline std::vector<uint8_t> build(const std::vector<Clip>& clips, int bone_count
  * holding four frames of one author's clip and four of another's.
  */
 inline Verdict decode(const uint8_t* page, size_t bytes, int rows,
-                      std::vector<Clip>& out, int* bone_count_o = nullptr) {
+                      std::vector<Clip>& out, int* bone_count_o = nullptr,
+                      uint32_t* owner_form_index_o = nullptr) {
   out.clear();
   if (bone_count_o) *bone_count_o = 0;
+  if (owner_form_index_o) *owner_form_index_o = 0;
   if (bytes < kHeaderBytes) return Verdict::kTruncated;
   if (get_u32(page + kOffMagic) != kMagic) return Verdict::kBadMagic;
+  // A v1 bank is REFUSED here, not upgraded. An offline conversion needs a
+  // SUPPLIED, validated owner; it cannot discover one from the old bytes.
   if (get_u16(page + kOffVersion) != kVersion) return Verdict::kBadVersion;
   if (page[kOffHdrRsv0] != 0u) return Verdict::kReservedNz;
   if (get_u16(page + kOffHdrRsv1) != 0u) return Verdict::kReservedNz;
+  const uint32_t owner_w = get_u32(page + kOffOwnerForm);
+  if ((owner_w & ~kOwnerFormMask) != 0u) return Verdict::kBadOwner;
 
   const int bone_count = static_cast<int>(page[kOffBoneCount]);
   if (bone_count <= 0 || bone_count > kMaxBones) return Verdict::kBadBoneCount;
@@ -396,7 +442,22 @@ inline Verdict decode(const uint8_t* page, size_t bytes, int rows,
   }
   out.swap(staged);
   if (bone_count_o) *bone_count_o = bone_count;
+  if (owner_form_index_o) *owner_form_index_o = owner_w;
   return Verdict::kOk;
+}
+
+/** The header's declared version, WITHOUT judging the page. This is how a v1
+ *  fixture stays identifiable after `decode` starts refusing it. */
+inline uint16_t page_version(const uint8_t* page, size_t bytes) {
+  if (bytes < kHeaderBytes) return 0;
+  return get_u16(page + kOffVersion);
+}
+
+/** The owner word AS STORED, high byte included, without judging it. The RTL
+ *  reader is differenced against this rather than against a recomputation. */
+inline uint32_t page_owner_word(const uint8_t* page, size_t bytes) {
+  if (bytes < kHeaderBytes) return 0;
+  return get_u32(page + kOffOwnerForm);
 }
 
 /**

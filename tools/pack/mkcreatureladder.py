@@ -62,7 +62,12 @@ REPO = HERE.parents[1]
 GOLDEN = REPO / "tests" / "golden" / "creature_ladder" / "ladder_page_v1.bin"
 # The SECOND golden, added with R90's body lift. The first is NOT regenerated
 # -- that is the whole proof that the append is an append.
-GOLDEN_BODY = REPO / "tests" / "golden" / "creature_ladder" / "ladder_page_body_v1.bin"
+# The BODY golden. v2 is the one this packer REBUILDS; v1 stays committed and
+# unrebuilt, because the 2026-09-21 ownership ruling requires historical v1
+# fixtures to stay IDENTIFIABLE -- `--check` asserts it is still on disk and
+# still declares BODY version 1, and the reference's `decode_body` refuses it.
+GOLDEN_BODY_V1 = REPO / "tests" / "golden" / "creature_ladder" / "ladder_page_body_v1.bin"
+GOLDEN_BODY = REPO / "tests" / "golden" / "creature_ladder" / "ladder_page_body_v2.bin"
 
 # zref::creature_page, restated. See the module docstring on why a third
 # statement exists and what pins it.
@@ -138,7 +143,14 @@ FIELDS = ("form_index", "bound_radius", "micro_error", "splat_error", "glint_err
 # same three-way pin the ladder table already lives under -- see the module
 # docstring.
 BODY_MAGIC = 0x38424354  # 'T','C','B','8' little-endian -- 'ZCB8' minus the Z
-BODY_VERSION = 1
+# BODY VERSION 2 -- the OWNER FORM INDEX (owner ruling 2026-09-21, section 2).
+# The OUTER kind-8 header and the LADDER TABLE stay at VERSION 1 above; the two
+# constants are SEPARATE for that reason, and bumping the outer one instead
+# would reject every page this packer has ever written.
+BODY_VERSION_V1 = 1
+BODY_VERSION = 2
+BODY_OWNER_OFF = 16           # bytes 16..19 of the BODY header
+BODY_OWNER_MASK = 0x00FFFFFF  # bits 31:24 MUST be zero
 BODY_HEADER_BYTES = 64
 BONE_BYTES = 32
 MAX_BONES = 32
@@ -268,9 +280,22 @@ def bake_bones(bones):
     return out
 
 
-def build_body(bones):
+def build_body(bones, owner_form_index):
     """The BODY section bytes: a 64-byte header then one 32-byte record per
-    bone. Padded to 64, as every uploaded run must be."""
+    bone. Padded to 64, as every uploaded run must be.
+
+    `owner_form_index` is SUPPLIED by the asset definition and is never
+    inferred -- not from row zero of the ladder, not from a matching bone
+    count, not from the publication index. That is the ruling's rule, and it is
+    also simply true of this function: nothing in a bone list names a form."""
+    if not isinstance(owner_form_index, int) or isinstance(owner_form_index, bool):
+        raise Refusal("body owner %r is not an integer" % (owner_form_index,))
+    if owner_form_index & ~BODY_OWNER_MASK:
+        raise Refusal(
+            "body owner 0x%X sets bits 31:24 -- the owner word stores a "
+            "SEMANTIC u24 in an aligned u32 and its high byte MUST be zero"
+            % owner_form_index
+        )
     baked = bake_bones(bones)
     n = BODY_HEADER_BYTES + BONE_BYTES * len(baked)
     if n % 64:
@@ -280,6 +305,7 @@ def build_body(bones):
         "<IHBBII", body, 0,
         BODY_MAGIC, BODY_VERSION, len(baked), FLAG_RIGID_REST, BODY_HEADER_BYTES, 0,
     )
+    struct.pack_into("<I", body, BODY_OWNER_OFF, owner_form_index & BODY_OWNER_MASK)
     for i, (parent, tx, ty, tz, ix, iy, iz) in enumerate(baked):
         o = BODY_HEADER_BYTES + BONE_BYTES * i
         struct.pack_into(
@@ -289,13 +315,18 @@ def build_body(bones):
     return bytes(body)
 
 
-def build(records, body_off=0, bones=None):
+def build(records, body_off=0, bones=None, body_owner=None):
     """The page bytes. Padded to a multiple of 64, which is what MEM.UPLOAD's
     length rule requires of every upload.
 
     `bones` appends a BODY SECTION and computes `body_off` itself; passing both
     is refused, because an offset naming bytes the packer did not place is the
-    guessed layout spec/cartridge.md 4 exists to forbid."""
+    guessed layout spec/cartridge.md 4 exists to forbid.
+
+    `body_owner` is REQUIRED beside `bones` and must name a form this page's
+    LADDER TABLE already carries a record for (owner ruling 2026-09-21,
+    section 2). The other ladder records stay independently owned metadata --
+    they are NOT users of this body, and the bank stays a multi-form table."""
     check_records(records)
     if bones is not None and body_off:
         raise Refusal(
@@ -303,12 +334,34 @@ def build(records, body_off=0, bones=None):
             "the offset of the body it writes, and an offset supplied beside it "
             "can only disagree"
         )
+    if bones is not None:
+        if body_owner is None:
+            raise Refusal(
+                "a bone list was given with no --body-owner. A body must name "
+                "the form it belongs to EXPLICITLY; inferring it from row zero "
+                "or from a matching bone count is what the 2026-09-21 ruling "
+                "forbids, and a skeleton composed against the wrong draw is a "
+                "well-formed palette for the wrong animal"
+            )
+        if not isinstance(body_owner, int) or isinstance(body_owner, bool):
+            raise Refusal("--body-owner %r is not an integer" % (body_owner,))
+        if body_owner & ~BODY_OWNER_MASK:
+            raise Refusal("--body-owner 0x%X sets bits 31:24" % body_owner)
+        if not any((r["form_index"] & FORM_INDEX_MASK) == body_owner
+                   for r in records):
+            raise Refusal(
+                "--body-owner 0x%06X has no LADDER RECORD on this page -- a "
+                "body-bearing kind-8 page whose two halves name different "
+                "forms describes nothing consistently" % body_owner
+            )
+    elif body_owner is not None:
+        raise Refusal("--body-owner was given with no bone list to own")
     n = HEADER_BYTES + RECORD_BYTES * len(records)
     if n % 64:
         n += 64 - (n % 64)
     body = b""
     if bones is not None:
-        body = build_body(bones)
+        body = build_body(bones, body_owner)
         body_off = n
     page = bytearray(n)
     struct.pack_into("<IHHI", page, 0, MAGIC, VERSION, len(records), body_off)
@@ -370,6 +423,14 @@ GOLDEN_RECORDS = [
 # The resulting world_rest, which is what inv_rest negates, is therefore
 # bone 2 = (0.25, 1.50, 0) and bone 3 = (0.25, 2.25, 0) -- two different sums
 # down one chain, which a bake that forgot the accumulation would get wrong.
+# THE BODY GOLDEN'S OWNER. 0x000101 is GOLDEN_RECORDS' SECOND row, chosen
+# deliberately: a packer or a reader that quietly takes row zero (0x000100)
+# produces different bytes and the golden catches it. The bank stays a
+# THREE-form ladder table with a ONE-form skeleton, which is the cardinality
+# the 2026-09-21 ruling preserved rather than collapsed.
+GOLDEN_BODY_OWNER = 0x000101
+
+
 GOLDEN_BONES = [
     {"parent": 0, "tx": 0, "ty": 0, "tz": 0},               # 0 root
     {"parent": 0, "tx": 0, "ty": 65536, "tz": 0},           # 1 spine   (0, 1.00, 0)
@@ -398,6 +459,14 @@ def main(argv):
         "lift of the kind-8 freeze).",
     )
     ap.add_argument(
+        "--body-owner",
+        type=lambda v: int(v, 0),
+        default=None,
+        help="the MESH_STREAM form index (24 bits) the body belongs to. "
+        "REQUIRED beside --bones, must have a ladder record on this page, and "
+        "is never inferred (owner ruling 2026-09-21).",
+    )
+    ap.add_argument(
         "--check",
         action="store_true",
         help="rebuild the committed golden from source and compare byte for byte",
@@ -423,7 +492,9 @@ def main(argv):
     if a.write_golden:
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN.write_bytes(build(GOLDEN_RECORDS))
-        GOLDEN_BODY.write_bytes(build(GOLDEN_RECORDS, bones=GOLDEN_BONES))
+        GOLDEN_BODY.write_bytes(
+            build(GOLDEN_RECORDS, bones=GOLDEN_BONES, body_owner=GOLDEN_BODY_OWNER)
+        )
         print(
             "mkcreatureladder: wrote %s (%d bytes) and %s (%d bytes)"
             % (GOLDEN, GOLDEN.stat().st_size, GOLDEN_BODY, GOLDEN_BODY.stat().st_size)
@@ -459,7 +530,8 @@ def main(argv):
             print("mkcreatureladder: %s is missing" % GOLDEN_BODY, file=sys.stderr)
             return 1
         want_body = GOLDEN_BODY.read_bytes()
-        got_body = build(GOLDEN_RECORDS, bones=GOLDEN_BONES)
+        got_body = build(GOLDEN_RECORDS, bones=GOLDEN_BONES,
+                         body_owner=GOLDEN_BODY_OWNER)
         if got_body != want_body:
             print(
                 "mkcreatureladder: the packer no longer reproduces %s (%d bytes "
@@ -492,6 +564,56 @@ def main(argv):
         if struct.unpack_from("<I", want, 8)[0] != 0:
             print("mkcreatureladder: the BODYLESS golden's body_off is not 0",
                   file=sys.stderr)
+            return 1
+
+        # THE OWNER WORD, read back out of the artefact rather than out of the
+        # constant that wrote it. A reader is differenced against these bytes.
+        body_ver = struct.unpack_from("<H", want_body, body_off + 4)[0]
+        owner_w = struct.unpack_from("<I", want_body, body_off + BODY_OWNER_OFF)[0]
+        if body_ver != BODY_VERSION:
+            print("mkcreatureladder: the BODY golden declares version %d, not %d"
+                  % (body_ver, BODY_VERSION), file=sys.stderr)
+            return 1
+        if owner_w != GOLDEN_BODY_OWNER:
+            print("mkcreatureladder: the BODY golden's owner word is 0x%08X, "
+                  "expected 0x%06X" % (owner_w, GOLDEN_BODY_OWNER), file=sys.stderr)
+            return 1
+        # The OUTER header is still v1. The ruling keeps it there, and a shared
+        # version constant would have moved it silently.
+        outer_ver = struct.unpack_from("<H", want_body, 4)[0]
+        if outer_ver != VERSION or VERSION != 1:
+            print("mkcreatureladder: the OUTER kind-8 header is version %d; the "
+                  "2026-09-21 ruling keeps it at 1" % outer_ver, file=sys.stderr)
+            return 1
+        # The owner is NOT row zero. If it were, "inferred from row zero" and
+        # "supplied explicitly" would produce the same bytes and this golden
+        # would discriminate nothing.
+        if owner_w == (GOLDEN_RECORDS[0]["form_index"] & FORM_INDEX_MASK):
+            print("mkcreatureladder: the BODY golden's owner IS row zero -- the "
+                  "fixture no longer separates a supplied owner from an "
+                  "inferred one", file=sys.stderr)
+            return 1
+
+        # THE v1 FIXTURE STAYS IDENTIFIABLE. It is not rebuilt and not deleted:
+        # the ruling requires historical v1 data to remain recognisable, and
+        # `zref::creature_page::body::decode_body` refuses it for posed
+        # rendering. Both halves are asserted here.
+        if not GOLDEN_BODY_V1.exists():
+            print("mkcreatureladder: the historical %s is gone -- the 2026-09-21 "
+                  "ruling requires v1 fixtures to stay identifiable"
+                  % GOLDEN_BODY_V1, file=sys.stderr)
+            return 1
+        v1 = GOLDEN_BODY_V1.read_bytes()
+        v1_body_off = struct.unpack_from("<I", v1, 8)[0]
+        v1_ver = struct.unpack_from("<H", v1, v1_body_off + 4)[0]
+        if v1_ver != BODY_VERSION_V1:
+            print("mkcreatureladder: %s declares BODY version %d, not %d -- it is "
+                  "no longer the historical fixture it is kept as"
+                  % (GOLDEN_BODY_V1, v1_ver, BODY_VERSION_V1), file=sys.stderr)
+            return 1
+        if v1 == want_body:
+            print("mkcreatureladder: the v1 and v2 body goldens are identical -- "
+                  "the version bump did not reach the bytes", file=sys.stderr)
             return 1
 
         # A refusal that never fires is a claim. Fire each one here, where a
@@ -540,7 +662,8 @@ def main(argv):
                 print("mkcreatureladder: %s was NOT refused" % why, file=sys.stderr)
                 return 1
         try:
-            build(GOLDEN_RECORDS, body_off=4096, bones=GOLDEN_BONES)
+            build(GOLDEN_RECORDS, body_off=4096, bones=GOLDEN_BONES,
+                  body_owner=GOLDEN_BODY_OWNER)
         except Refusal:
             fired += 1
         else:
@@ -548,12 +671,34 @@ def main(argv):
                   file=sys.stderr)
             return 1
 
+        # THE OWNERSHIP REFUSALS. Each one is a way the 2026-09-21 ruling can be
+        # violated by a packer, and an unfired refusal is a claim about a guard
+        # nobody has reached.
+        for kwargs, why in (
+            (dict(bones=GOLDEN_BONES),
+             "a bone list with no --body-owner"),
+            (dict(bones=GOLDEN_BONES, body_owner=0x01000101),
+             "a --body-owner setting bits 31:24"),
+            (dict(bones=GOLDEN_BONES, body_owner=0x00BEEF),
+             "a --body-owner with no ladder record on the page"),
+            (dict(body_owner=GOLDEN_BODY_OWNER),
+             "a --body-owner with no bone list to own"),
+        ):
+            try:
+                build(GOLDEN_RECORDS, **kwargs)
+            except Refusal:
+                fired += 1
+            else:
+                print("mkcreatureladder: %s was NOT refused" % why, file=sys.stderr)
+                return 1
+
         print(
             "mkcreatureladder: golden reproduced byte for byte (%d bytes, %d records); "
-            "body golden reproduced (%d bytes, %d bones, body_off=%d); frozen half "
-            "byte-identical across the append; %d refusals fired"
+            "body golden reproduced (%d bytes, %d bones, body_off=%d, BODY v%d, "
+            "owner 0x%06X, outer v%d); historical v1 body golden present and still "
+            "v1; frozen half byte-identical across the append; %d refusals fired"
             % (len(got), len(GOLDEN_RECORDS), len(got_body), len(GOLDEN_BONES),
-               body_off, fired)
+               body_off, body_ver, owner_w, outer_ver, fired)
         )
         return 0
 
@@ -567,7 +712,8 @@ def main(argv):
     if a.bones:
         bones = json.loads(Path(a.bones).read_text(encoding="utf-8"))
     try:
-        page = build(records, body_off=a.body_off, bones=bones)
+        page = build(records, body_off=a.body_off, bones=bones,
+                     body_owner=a.body_owner)
     except Refusal as e:
         print("mkcreatureladder: REFUSED -- %s" % e, file=sys.stderr)
         return 1

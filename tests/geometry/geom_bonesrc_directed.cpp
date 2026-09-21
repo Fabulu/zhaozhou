@@ -218,7 +218,7 @@ int main() {
   // =========================================================================
   char golden_path[512];
   std::snprintf(golden_path, sizeof golden_path,
-                "%s/tests/golden/creature_ladder/ladder_page_body_v1.bin", ZHAO_SOURCE_DIR);
+                "%s/tests/golden/creature_ladder/ladder_page_body_v2.bin", ZHAO_SOURCE_DIR);
   const std::vector<uint8_t> golden = read_file(golden_path);
   check(!golden.empty(), "the body golden is present");
 
@@ -227,7 +227,12 @@ int main() {
       {0x000101, 65536, 1311, 32768, 65536},
       {0x00A017, 163840, 4096, 81920, 163840},
   };
-  const std::vector<uint8_t> built = cp::build_with_body(recs, kGoldenBones);
+  // mkcreatureladder.py's GOLDEN_BODY_OWNER: the SECOND ladder row, supplied
+  // rather than inferred (owner ruling 2026-09-21, section 2). Row zero is
+  // 0x000100, so a reader taking row zero produces different bytes here.
+  const uint32_t kGoldenBodyOwner = 0x000101u;
+  const std::vector<uint8_t> built =
+      cp::build_with_body(recs, kGoldenBones, kGoldenBodyOwner);
   check(built.size() == golden.size(), "model and packer agree on the page LENGTH");
   bool same = true;
   for (size_t i = 0; i < golden.size() && i < built.size(); ++i)
@@ -257,10 +262,20 @@ int main() {
   // CASE 2 — the page's bake agrees with the RATIFIED bake, matrix for matrix
   // =========================================================================
   std::vector<cb::BoneRecord> decoded;
-  const cb::BodyVerdict v =
-      cb::decode_body(golden.data() + body_off, golden.size() - body_off, decoded);
+  uint32_t decoded_owner = 0;
+  const cb::BodyVerdict v = cb::decode_body(golden.data() + body_off,
+                                            golden.size() - body_off, decoded,
+                                            &decoded_owner);
   check(v == cb::BodyVerdict::kOk, "the golden's body decodes kOk");
   check(decoded.size() == kGoldenBones.size(), "every bone came back");
+  check(decoded_owner == kGoldenBodyOwner,
+        "and it NAMES the form it belongs to (BODY v2's owner word)");
+  check(decoded_owner != recs[0].form_index,
+        "which is NOT the page's first ladder row -- supplied, not inferred");
+  check(cp::body_owner_in_ladder(recs, decoded_owner),
+        "and the page does carry a ladder record for it");
+  check(cp::build_with_body(recs, kGoldenBones, 0x00BEEFu).empty(),
+        "a body owner with no ladder record on the page is REFUSED");
 
   const zref::creature::CreatureType type = make_type(kGoldenBones);
   bool bake_same = true;
