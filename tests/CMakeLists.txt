@@ -16435,3 +16435,45 @@ add_test(NAME lint_warp_field_chain_winidx_mutant
     ${CMAKE_SOURCE_DIR}/tests/mutants/tb_warp_field_chain_winidx_mutant.sv)
 set_tests_properties(lint_warp_field_chain_winidx_mutant PROPERTIES
   LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ===========================================================================
+# TERRAIN.HEIGHTTAP's ARBITER -- zhao_terrain_tapshare
+# ===========================================================================
+# The tap has exactly ONE requester port and PART.TERRAIN_TAP already holds
+# every wire of it, so FORGE.SHADOW's `tap_*` -- which the contract had marked
+# the one clear port group in that subsystem -- needs an arbiter in front. The
+# service's response carries NO tag and NO rider, so the arbiter holds the
+# owner itself; `terrain_tapshare_directed` is what says it holds the RIGHT one
+# across a multi-cycle walk while another client is asking.
+add_executable(test_terrain_tapshare_directed terrain/terrain_tapshare_directed.cpp)
+target_link_libraries(test_terrain_tapshare_directed PRIVATE zhao_harness)
+verilate(test_terrain_tapshare_directed
+  PREFIX Vtb_terrain_tapshare
+  TOP_MODULE tb_terrain_tapshare
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tapshare.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_tapshare.sv)
+add_test(NAME terrain_tapshare_directed COMMAND test_terrain_tapshare_directed)
+set_tests_properties(terrain_tapshare_directed PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
+
+add_test(NAME lint_zhao_terrain_tapshare
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_terrain_tapshare
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tapshare.sv)
+set_tests_properties(lint_zhao_terrain_tapshare PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE POSITIVE CONTROL, POLARITY INVERTED: it passes when `stray_rsp_o` FIRES.
+# That counter is unreachable with legal stimulus while the owner latch is
+# correct, so its silence in the directed test is a NEGATIVE control and this
+# is the other half. Evidence about the instrument, not about the design.
+add_executable(test_terrain_tapshare_mutant_control terrain/terrain_tapshare_mutant_control.cpp)
+target_link_libraries(test_terrain_tapshare_mutant_control PRIVATE zhao_harness)
+verilate(test_terrain_tapshare_mutant_control
+  PREFIX Vtb_terrain_tapshare_mutant
+  TOP_MODULE tb_terrain_tapshare_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_tapshare_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/tb_terrain_tapshare_mutant.sv)
+add_test(NAME terrain_tapshare_mutant_control
+         COMMAND test_terrain_tapshare_mutant_control)
+set_tests_properties(terrain_tapshare_mutant_control
+  PROPERTIES LABELS "fast;terrain" TIMEOUT 300)

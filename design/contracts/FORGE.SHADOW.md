@@ -218,7 +218,7 @@ group of `zhao_forge_shadow` (`:106-164`):
 
 | port group | blocker | status |
 |---|---|---|
-| `tap_*` (`:131-137`) | ~~**NONE — this one is genuinely clear.**~~ **THIS ✅ IS WRONG AND IS CORRECTED BELOW (SHADOWSUB, 2026-09-21).** `zhao_terrain_heighttap` does mirror the ports and is composed — and its **single** requester port is **fully occupied by `u_part_terrain_tap`**. A port SHAPE was read as port AVAILABILITY. | ❌ |
+| `tap_*` (`:131-137`) | ~~**NONE — this one is genuinely clear.**~~ **THIS ✅ WAS WRONG (SHADOWSUB, 2026-09-21).** `zhao_terrain_heighttap` does mirror the ports and is composed — and its **single** requester port is **fully occupied by `u_part_terrain_tap`**. A port SHAPE was read as port AVAILABILITY. **The arbiter that answers it is now BUILT AND TESTED** — `zhao_terrain_tapshare`, 97 checks — **and composes with this block.** | 🔧 built, not composed |
 | `cast_strength_i` (`:118`) | **no producer anywhere** (above). Owner decision. | ❌ |
 | `cast_{x,z,radius,rung,src_id}` (`:115-120`) | `zhao_geom_lodstate`'s `c_*`, and **LODSTATE is not composed**; it needs `zhao_geom_ladderbank`, which needs an ENGINE1 share and a page-publication path. | ❌ |
 | `rung_floor_i` (`:125`) | its only producer is the **uncomposed `zhao_measure_governor`** (R118, itself blocked at both ends). Named exactly, so the subsystem packet does not rediscover it: **`deg0_o` / `deg1_o`** (`zhao_measure_governor.sv:314-315`), 2-bit per-camera degradation — the same width and the same meaning as `rung_floor_i`. The governor is instantiated **only** at `zhao_prod_top.sv:2877`, the LFSR census top. | ❌ |
@@ -349,13 +349,30 @@ shadow-hull vertices need their own arena address, that is a
 `GEOM_PAY_A_W` widening and the elaboration guard will say so — loudly, which
 is what it is for.
 
-**What would genuinely re-author a ratified law** is narrower than R133 stated:
-not the owner field, but an **arena-fill path on client A's RESULT port**.
-Client B has one (`fill_landed_o` / `fill_arena_o` into `zhao_terrain_wcache`);
-client A does not, and `zhao_geom_proj_lane` cannot refuse a result
-(`a_ready_o` does not exist on that side). Whether shadow hulls get an arena of
-their own is a real design question. **It is not the one R133 named, and it is
-not blocked by R3.**
+**I first wrote here that what would genuinely re-author a law is an
+arena-fill path on client A's RESULT port, and that whether shadow hulls get an
+arena of their own is a real design question. THAT IS WITHDRAWN. THEY DO NOT
+NEED ONE, AND COMPOSED SILICON ALREADY PROVES IT.**
+
+`zhao_part_project` takes its particle results **straight out on `q_*`** —
+`q_x_o` / `q_y_o` as `signed [20:0]` canvas coordinates, `q_d_o`, size, colour
+— with **no arena anywhere on that path**. The only occurrences of `arena` in
+that file are the geometry rider's bit layout and one comment. A client A
+client is therefore **not obliged to land in an arena**; it is obliged to carry
+an owner in the rider and take its results back on a demux arm. Particles do
+exactly that, today, in the composed console.
+
+So a shadow hull's route is the particle's, not terrain's: world vertices into
+client A under an owner, screen-space vertices back on a demux arm, a small fan
+assembler, and GEOM.CLIP's door. **And the widths already agree** —
+`q_x_o`/`q_y_o` are `signed [20:0]` and `zhao_geom_clip`'s `tri_ax_i` is
+`signed [20:0]`, which is R188's finding that the clamp is the law and the
+extra bit is headroom, arriving where it is needed.
+
+**With that, NOTHING in this subsystem re-authors a ratified law.** R133's
+sentence has no surviving referent: the owner-field widening was performed
+under R68 sub-build 4 and R3 sanctions it, and the arena path it might have
+meant is not required. What remains is entirely engineering.
 
 ### 2. `tap_*` IS NOT CLEAR — ONE REQUESTER PORT, ALREADY TAKEN
 
@@ -498,14 +515,44 @@ governor by name. **It is one commit or none.** In dependency order:
    output.
 6. The two DRAWJOB seam ports (§4), one of which is an owner decision.
 7. `zhao_geom_mem_adapter` at six (§5), then `zhao_geom_ladderbank`.
-8. The third client-A arm (§1), then `zhao_geom_lodstate`.
-9. A heighttap arbiter (§2), then `zhao_forge_shadow` with `cast_strength_i`
-   from a named constant — **R133's D-FORGESHADOW-A, accepted, still the right
-   treatment.**
-10. The GEOM.CLIP-door arbiter and the shadow material span (§3).
+8. The third client-A arm (§1), then `zhao_geom_lodstate`. **The arm cannot
+   land on its own**: adding ports to `zhao_part_project` obliges
+   `zhao_console_core` to connect them, and with no LODSTATE to connect them to
+   that is a new tie-off — a gap opened to close none. It lands in LODSTATE's
+   commit or not at all.
+9. **`zhao_terrain_tapshare` IS BUILT** (SHADOWSUB, 2026-09-21) — the arbiter
+   §2 says is missing. 97 checks in `terrain_tapshare_directed` plus an
+   inverted-polarity positive control for `stray_rsp_o`; `pending_compose` in
+   `console_inventory`, `not-yet-adopted` in `prod_manifest`. It is NOT
+   composed, because an arbiter in front of a port with one user is cost
+   without capability. It composes in the same commit as `zhao_forge_shadow`,
+   whose `cast_strength_i` comes from a named constant — **R133's
+   D-FORGESHADOW-A, accepted, still the right treatment.**
+10. The shadow fan assembler, the GEOM.CLIP-door arbiter and the shadow
+    material span (§3). **This is the terminal link and the largest remaining
+    build.** It is blocked by NO law: the door exists and carries the `untex`
+    bit, the core's own comment says the arbiter that admits shadow hulls
+    presents its bit to that gate, and the projection route is the particle's
+    `q_*` shape rather than an arena.
 
 **Steps 5 and 6b are decisions, not builds.** They are docked in the findings
 with the evidence attached rather than taken here.
+
+### WHAT R3'S SCHEDULE PROOF STILL OWES, and why it is not in this packet
+
+The RATE half needs a bench holding `zhao_part_project` against the real
+`zhao_proj_subsystem` with every arm saturated. `tb_part_project` drives the
+block **standalone** — its `verilate()` sources are `zhao_part_project.sv` and
+`zhao_part_record.sv`, no service and no core — so the composed multi-client
+throughput has never been measured, and cannot be from any bench in this tree
+until the third arm exists. Quoting `zhao_project_service`'s header figure of
+398,784 of 1,666,666 clocks as the answer would be comparing a current design
+to an old claim, which is exactly what `CLAUDE.md` says never to do with a
+measurement.
+
+**So both halves of R3's proof land with the arm** — which is a smaller
+statement than it looks, because the arm, LODSTATE and the proof are one commit
+anyway, for the tie-off reason in step 8.
 
 ### What was deliberately NOT done, and why
 
