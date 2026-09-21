@@ -1290,6 +1290,83 @@
 //          entry; see I17 item 2, corrected there.
 //        * I21's blocker 5 -- its stated dependency ON THIS ENTRY HAS EXPIRED.
 //          See the correction at that blocker.
+//        * A FIFTH CUSTOMER was re-docketed onto this entry mid-packet by
+//          OWNER RULING R224 -- I20's PER-DRAW FRAGMENT CONSTANTS,
+//          `tri_continuation_tail_i` (48b) and `tri_fragment_state_i` (32b),
+//          on the reasoning that the tail IS `zref`'s per-triangle constant
+//          group field for field (24/8/8/8) and that "what has no producer is
+//          the per-draw constant delivery path -- the same missing executor
+//          I14 and I30 describe". **MEASURED HERE, AND IT IS NOT.** It makes
+//          the refusal five-for-five instead of four, and the two halves fail
+//          the hypothesis for two DIFFERENT reasons:
+//
+//            `tri_fragment_state_i` -- ITS DELIVERY PATH IS BUILT, RATIFIED
+//            AND LIVE. Owner ruling R28 ratified the word
+//            (`reference/include/zref/zref_raster_state.hpp`): `[1:0]`
+//            cull_mode from `DrawForm.flags[3:2]`, `[31:2]` the material's
+//            half from `MaterialRecord.raster_state[31:2]` "carried
+//            unchanged". CMD.EXEC lowers DrawForm whole; GEOM.DRAWJOB composes
+//            the word; it rides the 72-bit draw-state sideband
+//            (`GEOM_SIDE_W`, `zref::drawjob`'s packing under R28/R29) through
+//            MESHFETCH, ASSETFETCH and ASSEMBLE, and entry I39 CLOSED that
+//            carriage on 2026-09-20. `zhao_material_resolve` publishes the
+//            material's half as `rsp_raster_state_o` off the record's bytes
+//            20-23 and IS COMPOSED. No executor is missing anywhere on it.
+//
+//            `tri_continuation_tail_i` -- NOT a delivery gap either: it is
+//            ABSENT DATA. SEARCHED `spec/*.zidl` and `spec/*.md` for
+//            `effect_tag`, `stencil_reference`, `vertex_rgb`, `vertex_alpha`,
+//            `sten_ref`, `sten_mask`: **ZERO hits** (the one match,
+//            `cloud_vertex_alpha`, is a zref sky function). What holds the
+//            24/8/8/8 layout is `zref` -- the reference ORACLE -- which under
+//            ruling R73's distinction makes these DERIVED and not ABI fields.
+//            That supports R224's "no new ABI bits", and it moves the
+//            question: derived FROM WHAT ratified input? For the viewport rect
+//            the answer was `SetView.viewport_id`, an actual ABI field. Here
+//            NO ratified record carries a vertex colour, an alpha, an effect
+//            tag or a stencil reference, so there is nothing to derive from.
+//
+//          THE RECOMMENDATION, since R224 asks for it to be decided ONCE and
+//          this entry is where it was docketed. The ratified container with
+//          room is the MATERIAL_SET page (kind 11), whose record already
+//          reserves bytes 24-31 -- `zhao_material_resolve.sv`'s `OFF_RSV0` and
+//          `OFF_RSV1`, 64 bits against the tail's 48 -- and whose delivery is
+//          already composed end to end (PublishResource -> MEM.UPLOAD ->
+//          MATERIAL.RESOLVE -> `u_material_window`'s per-triangle join). That
+//          is R42/SPECIES_TABLE's pattern: owner-authored DATA in a page, not
+//          a new command. **IT DOES NOT COVER THE WHOLE TAIL, and the split is
+//          the owner's to take:** `effect_tag` and `stencil_reference` are
+//          material/primitive state and fit the page; `vertex_rgb` and
+//          `vertex_alpha` are contested, because ruling R11 makes base_rgb the
+//          VERTEX's colour and not the material's -- putting them in a
+//          material record contradicts R11, and that is I13's and I20's open
+//          art question, not a packaging choice. **No field is allocated
+//          here.**
+//
+//          AND THE ONE THING R224 FLAGGED AND DID NOT RESOLVE IS SETTLED, with
+//          the ruling in favour of the lane rather than the coordinator.
+//          TAGPROD's "`raster_state[31:2]` has no v1 consumer" is CORRECT --
+//          it is owner ruling R28's own sentence, quoted in
+//          `zref_drawjob.hpp`: *"no bit of it has a ratified consumer in v1,
+//          so a v1 material writes 0 there"*, with the named constant
+//          `kV1MaterialRaster` and R48's ALPHA_C as the stated precedent. The
+//          counter-citation (`zref`'s `State::pack()` allocating `[31:24]`)
+//          IS ABOUT A DIFFERENT WORD, which is the first of the two readings
+//          R224 offered and is the right one. **Two 32-bit words, two zref
+//          headers, both called "state":**
+//            `zref_raster_state.hpp`  R28's DRAW-state sideband word:
+//                                     [1:0] cull_mode, [31:2] material half.
+//                                     -> `u_geom_assemble.m_raster_state_i`.
+//            `zref_fragment.hpp`      `FragmentPipeline::State`, the FRAGMENT
+//                                     word: [0] z_test_en ... [31:24]
+//                                     sten_mask, matching
+//                                     `zhao_raster_fragment.sv` 228-235 and
+//                                     400-406 bit for bit, all 32 consumed.
+//                                     -> `tri_fragment_state_i`.
+//          So no correction is owed to that lane and no allocation is implied
+//          by that half. Recorded here because a collision between two
+//          identically-named ratified words is the kind of thing that gets
+//          re-derived every time somebody greps `raster_state`.
 //
 //      THE INPUT SIDE OF THE GOVERNOR IS NOW FULLY REACHABLE, which is worth
 //      writing down because the next lane will otherwise re-derive it and
