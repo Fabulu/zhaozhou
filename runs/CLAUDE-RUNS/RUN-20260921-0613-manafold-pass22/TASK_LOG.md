@@ -147,3 +147,40 @@ differing from pass 21 on three of the four -- so the leg is live, not vacuous.
 
 Then: 2.5 GB of `.rgb` render intermediates purged (CLAUDE.md). Curated
 evidence committed is 1.8 MB, no raw frames.
+
+## 2026-09-21 -- Independent review (Part 1): VERDICT PASS
+
+Reviewer rebuilt everything and re-ran every claim rather than reading receipts.
+
+- Built the pass-22 renderer AND a **fresh pass-21 renderer** from a worktree at
+  `b9de3059`, so byte claims could be checked against a real baseline instead of
+  a CRC against a printed CRC.
+- **Exact-off: 1,740 / 1,740 frames byte-identical** across hover/inspect/drift/
+  hasty. Identity legs are live -- the shipping render differs on all four.
+- **Hover near read: PRESERVED.** Isolated the dot law (knead off): 180/600
+  frames move, worst 3,270 px. At native the worst frame is indistinguishable;
+  at 5x the motes are marginally tighter. Arithmetic agrees (16->14 at 285 px vs
+  16->9 at Drift's 128 px). NOT a fault, NOT blocked.
+- **Distant read: PASS.** Drift and Hasty both clearly improved; dots smaller and
+  still dots. Rendered the strength ladder myself: **1000 really does delete the
+  effect** (implementer's key judgement confirmed by eye), 800 borderline, **600
+  right**. Would not move it.
+- **Lightning size: VERIFIED** three ways -- structure (`dot` written once by
+  `mote_push`, read once, `line` short-circuits first), the census re-run exactly
+  (24 clips, 691,182/11,561,258/164,900, zero non-dot moved), and visually across
+  four dot strengths where the strand never changes width.
+- **Knead: PASS on both named acceptance clips.** Inspect and Hover both turn and
+  re-form plainly at native; four press beats ramp cleanly; frames 0 and 599 are
+  byte-identical so the loop seam is exact. Reference 150 is right for what was
+  asked; the five shallow slots stay an open issue, not a blocker.
+- **Gates:** fired all three controls from my own build -- each fires its exact
+  mask and nothing else. Neither gate samples a subset (R6 walks all 24; R7 walks
+  all and declares its 19). **Zero constexpr removed or changed.** Env bounds
+  strict both ways (RC 2 on six bad values, RC 0 on two boundary-valid ones).
+- Two minor instrument findings recorded in P22-REVIEW.md: **F1** R6's LINE
+  far-leg is tautological (same expression both sides) -- does not weaken the
+  claim, which rests on the plain branch and the near leg, but must not be quoted
+  as if the far half were evidence. **F2** R7 gates on the bank MAXIMUM, so it
+  cannot see the spread widening.
+
+Proceeding to Part 2 (publish).
