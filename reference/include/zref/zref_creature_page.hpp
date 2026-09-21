@@ -269,6 +269,28 @@ inline bool lookup(const std::vector<Record>& bank, uint32_t form_index,
 // format under amendment C1 — four s16 lanes, S 1.0.14, hemisphere-canonical —
 // and §7's table row states it again. A kind-9 frame reader therefore has a
 // layout to read and needs no lift; what it needs is a producer.
+//
+// CORRECTED 2026-09-21 (POSEPAGE). THE PARAGRAPH ABOVE IS TRUE OF A FRAME AND
+// FALSE OF A PAGE, and it is left standing because it is the record of what was
+// believed when the body section landed. §2.1 freezes what one frame CONTAINS.
+// §5 sketches the PAGE in one clause — "clip directory {slot_id u16,
+// frame_count u16, event_count u16} + frames + event tags" — under a heading
+// reading "Cartridge pages (additive; LAYOUTS FREEZE WITH SW.TOOLS.ASSET AT
+// PHASE 12 ENTRY)". No magic, no version, no field order, no offsets, no
+// alignment, and no statement of where frame `f` of clip `c` begins.
+//
+// A READER CANNOT READ A FROZEN FRAME IT CANNOT LOCATE, so the container was
+// exactly the guessed layout `spec/cartridge.md` §4's deterministic-refusal
+// sentence forbids inventing — and exactly what R90's recommendation item 1
+// authorised AUTHORING: "author/freeze the body section AND A MINIMAL KIND-9
+// FRAME WITH A ZREF MODEL". The body half landed here; the kind-9 half is now
+// `reference/include/zref/zref_clip_page.hpp`, with `tools/pack/mkclipbank.py`
+// and the golden `tests/golden/creature_clip/clip_page_v1.bin` pinning it the
+// way this file's own layout is pinned.
+//
+// The sentence "what it needs is a producer" remains correct and is now the
+// WHOLE of what core entry I29 waits on — see that entry's blocker (b), which
+// is that nothing in `spec/commands.zidl` carries a clip or a frame number.
 namespace body {
 
 inline constexpr uint32_t kMagic = 0x38424354u;  //!< 'T','C','B','8' LE
