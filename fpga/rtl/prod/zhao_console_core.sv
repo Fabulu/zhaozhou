@@ -3196,6 +3196,71 @@
 //      TERRAIN.LOD emits none of the four. Taking its 12 matching fields and
 //      inventing the other 4 here is the hidden-adapter failure.
 //
+//      >> THE ISSUER NOW EXISTS. BUILT 2026-09-21 (gz/jobissue) as
+//      >> `fpga/rtl/terrain/zhao_terrain_jobissue.sv`, with
+//      >> `design/contracts/TERRAIN.JOBISSUE.md` and 138 checks in
+//      >> `terrain_jobissue_directed`. This entry had asked for a block for
+//      >> two days and no lane had built one; the first that tried found the
+//      >> refusal was answerable and the composition was not. Both halves of
+//      >> that are recorded here.
+//      >>
+//      >> WHAT IT ANSWERS, and it is this entry's own objection rather than a
+//      >> way around it. The refusal below says driving `job_view_mask` from
+//      >> `tis_view_mask` while the rest arrives from outside "joins two
+//      >> things that move independently". That objection is about
+//      >> INDEPENDENT MOVEMENT, not about the mask, so the block makes them
+//      >> move together AND makes the skew visible: the draw context
+//      >> {src_id, view_mask, sparse_fill} is captured AT the compose door,
+//      >> queued, popped for the patch the cache actually serves, and its
+//      >> src_id differenced against `serve_src_id_o`. The two operands are
+//      >> written by DIFFERENT ENABLES and arrive through DIFFERENT PORTS, so
+//      >> unlike this file's metadata-swap chapter that detector can fire --
+//      >> and the directed test fires it before its silence is quoted.
+//      >>
+//      >> IT OWES THIRTEEN FIELDS, NOT SIXTEEN, and the block has no
+//      >> `mat_a`/`mat_b`/`weight` port at all. Ruling R13 rules them the
+//      >> WRONG CARRIER; their honest closure is still REMOVAL once a
+//      >> per-triangle layer-E path exists inside TESS, and nothing may leave
+//      >> until that replacement lands. The paragraph ~200 lines below that
+//      >> still calls their owner UNIDENTIFIED is the position this entry
+//      >> argues against itself with, and R13 is the one that stands.
+//      >>
+//      >> AND BLOCKER 4 NOW HAS AN OWNER. `terr_cc_serve_release_i` is driven
+//      >> by the same block, for the reason this entry gives in its own words
+//      >> ("the block that knows when a patch is finished is the block that
+//      >> issued its subpatch jobs and counted them home"). It releases on
+//      >> `job_ready_i` returning high after the last job, which by
+//      >> `zhao_terrain_group_seq`'s own exit proof is the cycle every
+//      >> reference has been accepted by the shell -- not a counter, not a
+//      >> timeout, and not a policy invented in a composer.
+//      >>
+//      >> IT IS NOT COMPOSED, AND THE REASON IS MEASURED HERE RATHER THAN
+//      >> INHERITED. Composing the issuer ALONE dangles its `lod_*` input at
+//      >> this boundary and puts the register UP by one -- closing a gap by
+//      >> opening one, which R75 endorses refusing. Composing the TERRAIN
+//      >> GROUP needs TERRAIN.LOD, and **TERRAIN.LOD's `sp_*` INPUT HAS NO
+//      >> ASSEMBLER.** Three measurements, taken in gz/jobissue's own tree
+//      >> before the note at line ~2804 was read, and they agree with it:
+//      >>   * `sp_cx_i`/`sp_cz_i` have NO PRODUCER. `zhao_terrain_devstore`
+//      >>     stores one coordinate, `w_cy_i`, "subpatch centre height16".
+//      >>     `zhao_terrain_lodfeed.sv`'s own port comment NAMES the source of
+//      >>     the other two -- "x and z come free from TERRAIN.PLACE's placed
+//      >>     column/row stream at serve time" -- and NOTHING READS IT. A
+//      >>     named source with no reader is a build, not an absence, which is
+//      >>     a smaller statement than "no producer" and still a second block.
+//      >>   * `zhao_terrain_devstore` HAS NO `src_id` COLUMN. Its write port is
+//      >>     {slot, sp, dev1/2/3, cy} and its read port returns no id, while
+//      >>     `zhao_terrain_lodfeed` emits `w_src_id_o` that the store has no
+//      >>     port for. So `sp_src_id_i` is dropped at that join.
+//      >>   * THE STORE IS KEYED BY PAGE SLOT AND THE CACHE SERVES BY SRC_ID,
+//      >>     with no map between them. `r_start_i`/`r_slot_i` cannot be
+//      >>     driven from `serve_src_id_o` without inventing that mapping.
+//      >> The issuer REFUSES all three by name in its own header rather than
+//      >> adapting around them -- it is keyed by `src_id` and says so. **What
+//      >> I21 needs next is the sp_* ASSEMBLER**, and that is a smaller and
+//      >> truer statement of this entry's remainder than "TERRAIN.LOD is a
+//      >> near-producer that is not wired".
+//
 //      CORRECTED 2026-09-19, and the correction makes this entry HARDER rather
 //      than easier, which is why it is worth the space. The entry used to add:
 //      "TERRAIN.LOD is itself unfed besides: its `sp_*` patch_state
