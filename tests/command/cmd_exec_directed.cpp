@@ -2732,5 +2732,52 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---- 49. A FULL QUEUE AND A BAD RECORD, WHICH NO OTHER CASE PRESENTS ----
+  // Found by re-reading the emit arm, not by a gate. The first version asked
+  // `dq_full` BEFORE `dw_bad_c`, so a malformed warp record arriving at a full
+  // draw queue counted a `draw_overflow_o` for a draw that needed no slot AND
+  // POISONED THE WHOLE PACKET -- one bad record costing a frame.
+  //
+  // Every counter still balanced and all of cases 42..48 still passed, because
+  // none of them presents both conditions at once. That is the shape this repo
+  // keeps finding: a wrong answer nothing is looking at.
+  //
+  // `DRAW_Q` is 4, so five draws in one packet reach the full condition. Four
+  // lawful draws fill it; the fifth is a warped record with a negative bound.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (int i = 0; i < 4; ++i) {
+      b.append_record(drawFormRecord(static_cast<uint32_t>(0x0100u + i), 0xC000u, 0xC100u,
+                                     0xC200u, 1, 0x10u, 0x0000u));
+    }
+    WarpSnap w;
+    w.program = 0x00009999u;
+    w.bound[1] = -1;                    // DRAW_INVALID
+    b.append_record(drawWarpedFormRecord(0x0104u, 0xC001u, 0xC100u, 0xC200u, 1, 0x10u,
+                                         0x0000u, w));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK,
+          "case49: the PACKET is well formed -- the refusal is ours",
+          zhao_abi::ZH_ABI_OK, r.err);
+    check(r.warp_draw_refused == 1, "case49: the malformed record is refused", 1,
+          r.warp_draw_refused);
+    // THE THREE LINES THE REORDER IS FOR.
+    check(r.draw_overflow == 0,
+          "case49: NO overflow -- a refused draw never needed a queue slot", 0,
+          r.draw_overflow);
+    check(r.committed == 1,
+          "case49: the packet COMMITS -- one bad record must not cost a frame", 1,
+          r.committed);
+    check(r.abandoned == 0, "case49: and it is not abandoned", 0, r.abandoned);
+    // The four lawful draws are unharmed, which is what "must not cost a frame"
+    // means in terms of what actually reaches the geometry front.
+    check(r.draws_issued == 4, "case49: all four lawful draws still leave", 4,
+          r.draws_issued);
+    check(r.warp_draws == 0, "case49: and none of them is warped", 0, r.warp_draws);
+  }
+
   return zhao::report_and_exit("cmd_exec_directed");
 }

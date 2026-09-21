@@ -2128,10 +2128,22 @@ module zhao_cmd_exec
                   if (dw_bad_c) begin
                     `ZHAO_EXEC_INC(warp_draw_refused_o);
                   end
-                  if (dq_full) begin
-                    poisoned <= 1'b1;
-                    `ZHAO_EXEC_INC(draw_overflow_o);
-                  end else if (dw_bad_c) begin
+                  // THE REFUSAL IS JUDGED BEFORE THE CAPACITY, AND THE ORDER IS
+                  // LOAD-BEARING. Contract section 9 puts DRAW_INVALID's
+                  // disposition as "refuse BEFORE emitting meshlets", and a
+                  // refused record never needs a queue slot at all -- so asking
+                  // `dq_full` about it first would count a `draw_overflow_o`
+                  // for a draw that wanted no room, AND POISON THE WHOLE PACKET
+                  // over a record that was going to be dropped anyway. One
+                  // malformed draw would then cost a frame.
+                  //
+                  // Written the other way round first, and caught by re-reading
+                  // the arm rather than by any gate: every counter still
+                  // balanced and every directed case still passed, because no
+                  // case presented a full queue and a bad record together. That
+                  // is the shape this repo keeps finding -- a wrong answer
+                  // nothing is looking at.
+                  if (dw_bad_c) begin
                     // Refused whole. The draw is NOT enqueued, NOT degraded to
                     // an unwarped DrawForm, and the packet is NOT poisoned --
                     // one malformed draw is not a malformed frame, and the
@@ -2145,6 +2157,9 @@ module zhao_cmd_exec
                     // rule in the other, and this is the difference between
                     // them.
                     ;
+                  end else if (dq_full) begin
+                    poisoned <= 1'b1;
+                    `ZHAO_EXEC_INC(draw_overflow_o);
                   end else begin
                     dq[dq_wp[DQW-1:0]] <= {dw_armed_c,
                                            dp_sub, dp_frame, dp_clip,
