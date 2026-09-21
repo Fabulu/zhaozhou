@@ -8031,13 +8031,58 @@ module zhao_console_core
   input  logic                    proj_en_i,
 
   // ---- TERRAIN: the subpatch job that drives client B (I21) ---------------
-  // THIRTEEN OF THE SEVENTEEN LEFT THIS LIST 2026-09-21 (packet TERRACOMP).
-  // The subpatch job's whole decision chain is composed below -- MEASURE.
-  // GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC, TERRAIN.LOD and
-  // TERRAIN.JOBISSUE, with the view chain that feeds the governor -- so
-  // `job_valid/ready` and the twelve DECISION fields are driven inside this
-  // module by the block that decides them rather than by a harness. Entry I21
-  // is narrowed accordingly.
+  // THE THIRTEEN DECISION FIELDS HAVE AN INTERNAL PRODUCER AS OF 2026-09-21
+  // (packet TERRACOMP): MEASURE.GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC,
+  // TERRAIN.LOD and TERRAIN.JOBISSUE are composed at the end of this file and
+  // `zhao_terrain_jobissue` drives the sequencer's job port. Entry I21 is
+  // narrowed accordingly.
+  //
+  // THEY STAY ON THIS BOUNDARY AS AN OVERRIDE, AND THE FIRST VERSION OF THIS
+  // PACKET DELETED THEM. That was wrong, and the way it was wrong is worth the
+  // space because it is the shape a composition packet is most likely to take.
+  //
+  // Deleting them made the register move by exactly the same amount -- the
+  // four gaps that closed are MODULES becoming connected, and a port is not a
+  // module. What deleting them actually cost was EVIDENCE:
+  // `tb_zhao_console_core_smoke.sv` injected one subpatch job here, and that
+  // injection was the only thing in the console smoke that made TERRAIN.TESS
+  // run. SIX assertions stand on it -- TESS emitting a window vertex,
+  // GROUP_SEQ forwarding to client B, the shared projector GRANTING its second
+  // client, and the whole TERRAIN.NORMALS -> TERRAIN.SHADE light lane behind
+  // them. All six went dead, and the plain smoke said so in 270 seconds:
+  //   "TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job port is
+  //    dead"
+  //
+  // THE INTERNAL PRODUCER CANNOT REACH THEM IN THAT BENCH, and the reason is
+  // upstream of everything this packet built: every terrain page the smoke
+  // plays FAILS ITS CRC, so no page becomes resident, so TERRAIN.SEQ issues no
+  // compose job, so the cache never fills, never serves, and never opens the
+  // door that TERRAIN.SPDESC and TERRAIN.JOBISSUE wait at. Removing the
+  // injection does not make the console better; it makes the bench blind to a
+  // subsystem that IS wired.
+  //
+  // SO THIS IS AN OVERRIDE, ON THE PATTERN THIS FILE ALREADY USES. The host's
+  // `proj_cfg_*_i` overrides CMD.EXEC's lowering onto the projector bank and
+  // "still wins the cycle, but it is now an OVERRIDE rather than the only
+  // producer". Same shape, same arbitration, same one-line mux, stated in the
+  // same words. It costs a 13-field 2:1 mux -- order 30 ALM -- and it is the
+  // difference between a composition with evidence and one without.
+  //
+  // WHEN IT CLOSES: when the smoke's terrain pages LOAD. That is the real hole
+  // and this port was hiding it; it is now named in entry I21 instead.
+  input  logic                    terr_job_valid_i,
+  output logic                    terr_job_ready_o,
+  input  logic [5:0]              terr_job_ox_i,
+  input  logic [5:0]              terr_job_oz_i,
+  input  logic [1:0]              terr_job_level_i,
+  input  logic [1:0]              terr_job_lvl_nz_i,
+  input  logic [1:0]              terr_job_lvl_pz_i,
+  input  logic [1:0]              terr_job_lvl_nx_i,
+  input  logic [1:0]              terr_job_lvl_px_i,
+  input  logic [16:0]             terr_job_morph_i,
+  input  logic                    terr_job_surface_i,
+  input  logic                    terr_job_dual_i,
+  input  logic [15:0]             terr_job_src_id_i,
   //
   // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
   // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
@@ -8225,12 +8270,16 @@ module zhao_console_core
   input  logic [1:0]              terr_cc_cs_substance_i,
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
-  // THIS PORT LEFT THE LIST 2026-09-21 (packet TERRACOMP). "TESS is finished
-  // with the served patch", one patch per RISING EDGE.  The block that knows
-  // is the one that issued the subpatch jobs -- `zhao_terrain_jobissue`,
-  // composed below, which releases on `job_ready_i` returning high after the
-  // last job.  That is `zhao_terrain_group_seq`'s own exit proof and not a
-  // counter, a timeout or a policy invented in this composer.
+  // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
+  // `job_ready_i` returning high after the last job of the patch, which is
+  // `zhao_terrain_group_seq`'s own exit proof -- not a counter, not a timeout
+  // and not a policy invented in this composer.
+  //
+  // THE PORT REMAINS AND IS OR-ed WITH IT, for the injection above: a harness
+  // that drives a job by hand must be able to retire the patch it drove. An OR
+  // and not a mux, because this is a PULSE and the two producers describe
+  // different patches -- taking either is correct and losing one is not.
+  input  logic                    terr_cc_serve_release_i,
 
   // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
   // Events, never cycles.  These are what say a PAGE became a LATTICE rather
@@ -12646,6 +12695,7 @@ module zhao_console_core
   // The invalidation: every event that can change what the compose cache
   // SERVES. See item 14's COHERENCE paragraph for why it errs wide.
   assign ptt_inval_c = tcc_fill_start || terr_cc_fill_done_o || tji_serve_release ||
+                       terr_cc_serve_release_i ||
                        terr_cc_cs_we_i || tpc_pos_we;
   // THE PITCH THE SERVED LATTICE WAS PLACED AT -- HELD, NOT THE HEADER WIRE.
   //
@@ -12886,20 +12936,20 @@ module zhao_console_core
     // `zhao_terrain_jobissue`, composed at the end of this file at the head of
     // the subpatch decision chain. Entry I21's boundary is now three material
     // riders that ruling R13 says must NOT be produced here.
-    .job_valid_i    (tji_job_valid),
-    .job_ready_o    (tji_job_ready),
-    .job_ox_i       (tji_job_ox),
-    .job_oz_i       (tji_job_oz),
-    .job_level_i    (tji_job_level),
-    .job_lvl_nz_i   (tji_job_lvl_nz),
-    .job_lvl_pz_i   (tji_job_lvl_pz),
-    .job_lvl_nx_i   (tji_job_lvl_nx),
-    .job_lvl_px_i   (tji_job_lvl_px),
-    .job_morph_i    (tji_job_morph),
-    .job_surface_i  (tji_job_surface),
-    .job_dual_i     (tji_job_dual),
-    .job_src_id_i   (tji_job_src_id),
-    .job_view_mask_i(tji_job_view_mask),
+    .job_valid_i    (terr_job_m_valid),
+    .job_ready_o    (terr_job_m_ready),
+    .job_ox_i       (terr_job_m_ox),
+    .job_oz_i       (terr_job_m_oz),
+    .job_level_i    (terr_job_m_level),
+    .job_lvl_nz_i   (terr_job_m_nz),
+    .job_lvl_pz_i   (terr_job_m_pz),
+    .job_lvl_nx_i   (terr_job_m_nx),
+    .job_lvl_px_i   (terr_job_m_px),
+    .job_morph_i    (terr_job_m_morph),
+    .job_surface_i  (terr_job_m_surface),
+    .job_dual_i     (terr_job_m_dual),
+    .job_src_id_i   (terr_job_m_src_id),
+    .job_view_mask_i(terr_job_view_mask_i),
     // STILL THE BOUNDARY'S, under ruling R13 (entry I21). These three are the
     // WRONG CARRIER and their honest closure is removal, so they are not
     // invented here and not adapted from anything the issuer emits.
@@ -12914,7 +12964,7 @@ module zhao_console_core
     // low and it is exposed rather than frozen. It reaches the sequencer
     // THROUGH the issuer's draw context now, so the knob and the patch it
     // applies to arrive as one record.
-    .sparse_fill_i  (tji_sparse_fill),
+    .sparse_fill_i  (tji_sparse_fill),  // the knob, through the draw context
 
     // REAL: the tessellator, both modes.
     .t_job_valid_o  (tt_job_valid),
@@ -18051,10 +18101,10 @@ module zhao_console_core
 
     .fill_done_o(terr_cc_fill_done_o),
 
-    // I21, CLOSED on this port 2026-09-21: the retirement pulse's owner is the
-    // subpatch issuer, and the issuer is composed. It releases on `job_ready_i`
-    // returning high after the last job of the patch.
-    .serve_release_i(tji_serve_release),
+    // I21: the retirement pulse's owner is the subpatch issuer, and the issuer
+    // is composed. The boundary keeps a way in for the injected job -- see the
+    // port's own note for why an OR and not a mux.
+    .serve_release_i(tji_serve_release || terr_cc_serve_release_i),
     .serve_valid_o  (terr_cc_serve_valid_o),
     .serve_src_id_o (terr_cc_serve_src_id_o),
 
@@ -20032,10 +20082,77 @@ module zhao_console_core
   wire [16:0] spd_sp_prev_morph;
   wire [ 7:0] spd_sp_hold;
   wire [15:0] spd_sp_src_id;
+  wire        spd_patch_dual;
   /* verilator lint_off UNUSEDSIGNAL */
   wire [31:0] spd_patches_assembled, spd_store_wait, spd_lat_wait, spd_assemble_clocks;
   wire        spd_busy;
   /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- THE GOVERNOR'S TARGETS, HELD ACROSS A PATCH JOB --------------------
+  // `design/contracts/TERRAIN.LOD.md` is explicit and this composition owes it:
+  //
+  //   > The governor's targets (`cam*`, `hyst_i`, `min_hold_i`, `morph_step_i`,
+  //   > `dual_i`, `edge_*`) are **not registered**: they are sampled as each
+  //   > descriptor is decided. They must be held stable across a patch job.
+  //
+  // THAT IS A REQUIREMENT ON THE CALLER, AND THE CALLER IS THIS FILE. Wiring
+  // the governor's outputs straight across would have been correct-LOOKING and
+  // wrong: `zhao_measure_governor` republishes on its own `frame_i`, which is
+  // `core_tick_c`, and NOTHING makes a frame boundary miss the middle of a
+  // patch. Sixteen subpatches decided against two different error budgets is a
+  // level mismatch between adjacent subpatches of the SAME patch -- a crack,
+  // arriving at whatever rate the frame edge happens to land inside a job.
+  //
+  // THE HOLD IS ONE REGISTER AND ITS ENABLE IS THE CONSUMER'S OWN IDLE. While
+  // `zhao_terrain_lod` is idle the held copy TRACKS the governor; the moment it
+  // takes a descriptor the copy freezes until the patch is done. No new law is
+  // invented here -- `idle_o` is the block's own statement that it is between
+  // patches, and the hold uses no other event.
+  //
+  // `dual` IS NOT IN THIS REGISTER, deliberately: it is held by TERRAIN.SPDESC
+  // instead, on the queue that already carries the served page's identity,
+  // because stability was only HALF its problem. The live net is the FILLING
+  // page's flag while the patch being decided is the SERVED one -- with the
+  // cache holding one of each they are different pages, so a hold here would
+  // have frozen the WRONG PATCH's flag very stably indeed.
+  logic [15:0] gv_cam0_scale_q, gv_cam1_scale_q;
+  logic        gv_cam0_en_q, gv_cam1_en_q;
+  logic [15:0] gv_hyst_q;
+  logic [ 7:0] gv_min_hold_q;
+  logic [16:0] gv_morph_step_q;
+  logic signed [31:0] gv_eye0_x_q, gv_eye0_y_q, gv_eye0_z_q;
+  logic signed [31:0] gv_eye1_x_q, gv_eye1_y_q, gv_eye1_z_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      gv_cam0_scale_q <= '0;
+      gv_cam1_scale_q <= '0;
+      gv_cam0_en_q    <= 1'b0;
+      gv_cam1_en_q    <= 1'b0;
+      gv_hyst_q       <= '0;
+      gv_min_hold_q   <= '0;
+      gv_morph_step_q <= '0;
+      gv_eye0_x_q     <= '0;
+      gv_eye0_y_q     <= '0;
+      gv_eye0_z_q     <= '0;
+      gv_eye1_x_q     <= '0;
+      gv_eye1_y_q     <= '0;
+      gv_eye1_z_q     <= '0;
+    end else if (tld_idle) begin
+      gv_cam0_scale_q <= mgv_cam0_scale;
+      gv_cam1_scale_q <= mgv_cam1_scale;
+      gv_cam0_en_q    <= mgv_cam0_en;
+      gv_cam1_en_q    <= mgv_cam1_en;
+      gv_hyst_q       <= mgv_hyst;
+      gv_min_hold_q   <= mgv_min_hold;
+      gv_morph_step_q <= mgv_morph_step;
+      gv_eye0_x_q     <= veye0_x;
+      gv_eye0_y_q     <= veye0_y;
+      gv_eye0_z_q     <= veye0_z;
+      gv_eye1_x_q     <= veye1_x;
+      gv_eye1_y_q     <= veye1_y;
+      gv_eye1_z_q     <= veye1_z;
+    end
+  end
 
   // ---- TERRAIN.LOD -> TERRAIN.JOBISSUE ------------------------------------
   wire        tld_out_valid, tld_out_ready;
@@ -20045,12 +20162,39 @@ module zhao_console_core
   wire        tld_out_surface, tld_out_dual;
   wire [15:0] tld_out_src_id;
   wire [ 7:0] tld_out_hold;
-  /* verilator lint_off UNUSEDSIGNAL */
+  // READ, not waived: `idle_o` is the enable of the governor-target hold above.
   wire        tld_idle;
-  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- THE JOB PORT'S OVERRIDE MUX ----------------------------------------
+  // The boundary WINS THE CYCLE when it offers, exactly as the host's
+  // `proj_cfg_we_i` wins over CMD.EXEC's lowering, and for the same reason: a
+  // producer that can be overridden is easier to reason about than two
+  // producers arbitrating. `terr_job_ready_o` reports the sequencer's ready to
+  // the boundary unconditionally, so an injected job sees the real handshake;
+  // the issuer sees the same ready AND must not be told its job was taken when
+  // the boundary's was, which is what the `&& !terr_job_valid_i` below is.
+  //
+  // IT IS NOT A TIE-OFF AND IT IS NOT FAKE STIMULUS. With the boundary idle --
+  // which is every configuration except a bench that drives it -- these nets
+  // ARE the issuer's, cycle for cycle.
+  wire        terr_job_m_valid   = terr_job_valid_i || tji_job_valid;
+  wire [ 5:0] terr_job_m_ox      = terr_job_valid_i ? terr_job_ox_i     : tji_job_ox;
+  wire [ 5:0] terr_job_m_oz      = terr_job_valid_i ? terr_job_oz_i     : tji_job_oz;
+  wire [ 1:0] terr_job_m_level   = terr_job_valid_i ? terr_job_level_i  : tji_job_level;
+  wire [ 1:0] terr_job_m_nz      = terr_job_valid_i ? terr_job_lvl_nz_i : tji_job_lvl_nz;
+  wire [ 1:0] terr_job_m_pz      = terr_job_valid_i ? terr_job_lvl_pz_i : tji_job_lvl_pz;
+  wire [ 1:0] terr_job_m_nx      = terr_job_valid_i ? terr_job_lvl_nx_i : tji_job_lvl_nx;
+  wire [ 1:0] terr_job_m_px      = terr_job_valid_i ? terr_job_lvl_px_i : tji_job_lvl_px;
+  wire [16:0] terr_job_m_morph   = terr_job_valid_i ? terr_job_morph_i  : tji_job_morph;
+  wire        terr_job_m_surface = terr_job_valid_i ? terr_job_surface_i: tji_job_surface;
+  wire        terr_job_m_dual    = terr_job_valid_i ? terr_job_dual_i   : tji_job_dual;
+  wire [15:0] terr_job_m_src_id  = terr_job_valid_i ? terr_job_src_id_i : tji_job_src_id;
+  wire        terr_job_m_ready;
+  assign terr_job_ready_o = terr_job_m_ready;
+  assign tji_job_ready    = terr_job_m_ready && !terr_job_valid_i;
 
   // ---- TERRAIN.JOBISSUE ----------------------------------------------------
-  wire        tji_job_valid, tji_job_ready;
+  wire        tji_job_valid;
   wire [ 5:0] tji_job_ox, tji_job_oz;
   wire [ 1:0] tji_job_level, tji_job_lvl_nz, tji_job_lvl_pz;
   wire [ 1:0] tji_job_lvl_nx, tji_job_lvl_px;
@@ -20366,6 +20510,9 @@ module zhao_console_core
     .door_ready_o (tsp_door_ready),
     .door_slot_i  (tps_v_slot[TERR_SLOTW-1:0]),
     .door_src_id_i(tps_v_src_id[15:0]),
+    // The page's underside flag, on the SAME vertex beat as the slot and the
+    // id. NOT read live at TERRAIN.LOD: see the hold below.
+    .door_dual_i  (tps_v_flags[TERR_FLAG_DUAL_BIT]),
 
     .serve_valid_i (terr_cc_serve_valid_o),
     .serve_src_id_i(terr_cc_serve_src_id_o),
@@ -20412,6 +20559,7 @@ module zhao_console_core
     .sp_prev_morph_o(spd_sp_prev_morph),
     .sp_hold_o      (spd_sp_hold),
     .sp_src_id_o    (spd_sp_src_id),
+    .patch_dual_o   (spd_patch_dual),
 
     .patches_assembled_o  (spd_patches_assembled),
     .descriptors_emitted_o(terr_sp_descriptors_o),
@@ -20435,20 +20583,26 @@ module zhao_console_core
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    .cam0_x_i(veye0_x),
-    .cam0_y_i(veye0_y),
-    .cam0_z_i(veye0_z),
-    .cam0_scale_i(mgv_cam0_scale),
-    .cam0_en_i   (mgv_cam0_en),
-    .cam1_x_i(veye1_x),
-    .cam1_y_i(veye1_y),
-    .cam1_z_i(veye1_z),
-    .cam1_scale_i(mgv_cam1_scale),
-    .cam1_en_i   (mgv_cam1_en),
-    .hyst_i      (mgv_hyst),
-    .min_hold_i  (mgv_min_hold),
-    .morph_step_i(mgv_morph_step),
-    .dual_i      (tps_v_flags[TERR_FLAG_DUAL_BIT]),
+    // THE HELD COPIES, not the live nets -- see the hold above and
+    // TERRAIN.LOD.md's "must be held stable across a patch job".
+    .cam0_x_i(gv_eye0_x_q),
+    .cam0_y_i(gv_eye0_y_q),
+    .cam0_z_i(gv_eye0_z_q),
+    .cam0_scale_i(gv_cam0_scale_q),
+    .cam0_en_i   (gv_cam0_en_q),
+    .cam1_x_i(gv_eye1_x_q),
+    .cam1_y_i(gv_eye1_y_q),
+    .cam1_z_i(gv_eye1_z_q),
+    .cam1_scale_i(gv_cam1_scale_q),
+    .cam1_en_i   (gv_cam1_en_q),
+    .hyst_i      (gv_hyst_q),
+    .min_hold_i  (gv_min_hold_q),
+    .morph_step_i(gv_morph_step_q),
+    // THE SERVED PATCH's flag, popped from TERRAIN.SPDESC's door queue beside
+    // the slot it read the deviations with -- NOT `tps_v_flags`, which is the
+    // FILLING page's and therefore a different patch whenever the cache holds
+    // one of each.
+    .dual_i      (spd_patch_dual),
 
     // TIED OFF -- entry I21, declared. The four adjacent patches' chosen
     // levels have no producer: a cross-patch reconciliation pass needs every

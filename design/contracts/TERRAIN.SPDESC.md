@@ -26,6 +26,24 @@ belongs in a composer.
 | `sp_cy_i` | `zhao_terrain_devstore.r_cy_o` | `raw << 8`, exact (`spec/qformats.md` §9) |
 | `sp_cx_i` / `sp_cz_i` | `zhao_terrain_compcache_front.lat_wx_o` / `lat_wz_o` | read at the centre vertex |
 | `sp_src_id_i` | the compose door | popped beside the slot |
+| `dual_i` (TERRAIN.LOD's, as `patch_dual_o`) | the compose door | popped beside the slot |
+
+**`patch_dual_o` was added 2026-09-21 (packet TERRACOMP) and it is a REPAIR,
+not a convenience.** `zhao_terrain_lod` takes `dual_i` as a module-level level
+and its own contract lists it among the targets that "must be held stable
+across a patch job". The composer's available net was
+`zhao_terrain_pagestream`'s live `v_flags_o[DUAL]` — which is the **FILLING**
+page's. With the compose cache holding one page filling and another served
+those are **different pages**, so the console would have decided each patch
+with the *next* patch's underside flag: missing or spurious undersides, with
+every counter agreeing. Stability was only half the problem and identity was
+the other half. The door queue already carries the {slot, src_id} pair captured
+at fill acceptance and popped at serve; the flag is the same fact about the
+same page on the same beat, and it costs one bit per entry. It is emitted as a
+**level**, not a descriptor field, because `dual` is a property of the page and
+is identical for all sixteen subpatches. `terrain_spdesc_directed` case 2
+serves a DUAL page while a NON-dual page sits at the door, which is the exact
+arrangement a live net gets wrong.
 
 The **centre vertex of subpatch `sp` is `(ox + CENTRE_OFF, oz + CENTRE_OFF)`**,
 with `ox = sp[1:0] * SUB_EDGE` and `oz = sp[3:2] * SUB_EDGE` — the encoding

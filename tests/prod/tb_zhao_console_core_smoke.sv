@@ -493,26 +493,38 @@ module tb_zhao_console_core_smoke
   // Client B, its arena lifetime and its reference port are NO LONGER PORTS:
   // TERRAIN.GROUP_SEQ and TERRAIN.TESS drive them inside the DUT. What the
   // bench declares instead is the terrain producer's OWN boundary.
-  // THE SUBPATCH JOB'S THIRTEEN DECISION FIELDS ARE GONE FROM THE CORE'S EDGE
-  // (entry I21, 2026-09-21): `zhao_terrain_jobissue` issues them inside the
-  // core, from `zhao_terrain_lod`'s decisions, from descriptors
-  // `zhao_terrain_spdesc` assembles out of `zhao_terrain_devstore`. This bench
-  // used to inject one job here; it now injects none, exactly as it stopped
-  // injecting GEOM.GROUP_SEQ's when the meshlet dispatcher was composed.
+  // THE SUBPATCH JOB PORT IS AN OVERRIDE NOW, NOT THE ONLY PRODUCER (entry
+  // I21, 2026-09-21). `zhao_terrain_jobissue` issues these thirteen fields
+  // inside the core, from `zhao_terrain_lod`'s decisions, from descriptors
+  // `zhao_terrain_spdesc` assembles out of `zhao_terrain_devstore`. THE BENCH
+  // STILL DRIVES THEM, and that is deliberate rather than left over.
   //
-  // WHAT THAT COSTS THIS BENCH, SAID PLAINLY RATHER THAN LEFT TO BE NOTICED:
-  // the injected job was this smoke's ONLY exercise of TERRAIN.TESS client B
-  // (the 81-vertex window fill and its replay), and the internal producer
-  // cannot replace it HERE, because every terrain page this bench plays fails
-  // its CRC -- the directory reports `crc_fail=3` -- so no lattice is ever
-  // mipped, TERRAIN.LODFEED writes no deviation record, TERRAIN.DEVSTORE is
-  // never written and no patch is ever composed or served. The injection was
-  // a WORKAROUND for that upstream failure and removing it exposes it rather
-  // than creating it. Client B's coverage is `terrain_group_seq_directed` and
-  // the terrain differential; the decision chain's is
-  // `terrain_lodpath_directed`, `terrain_spdesc_directed` and
-  // `terrain_jobissue_directed`. A green smoke is not evidence about any of
-  // them and was not before.
+  // WHY THIS BENCH CANNOT USE THE INTERNAL PRODUCER, and it is upstream of
+  // everything the composition did: every terrain page this bench plays FAILS
+  // ITS CRC -- the directory reports `crc_fail=3` -- so no page becomes
+  // resident, TERRAIN.SEQ issues no compose job, the compose cache never
+  // fills, never serves, and never opens the door the assembler and the issuer
+  // wait at. The injection below is therefore the ONLY thing here that makes
+  // TERRAIN.TESS run, and SIX assertions stand on it.
+  //
+  // Deleting it was tried and reverted inside this packet. It cost exactly
+  // those six assertions and bought nothing: the completion register moves on
+  // MODULES becoming connected, and a port is not a module. The real hole is
+  // the CRC failure, and this injection was hiding it -- it is now named in
+  // the core's entry I21 instead of being papered over here.
+  logic                    terr_job_valid_i;
+  logic                    terr_job_ready_o;
+  logic [5:0]              terr_job_ox_i;
+  logic [5:0]              terr_job_oz_i;
+  logic [1:0]              terr_job_level_i;
+  logic [1:0]              terr_job_lvl_nz_i;
+  logic [1:0]              terr_job_lvl_pz_i;
+  logic [1:0]              terr_job_lvl_nx_i;
+  logic [1:0]              terr_job_lvl_px_i;
+  logic [16:0]             terr_job_morph_i;
+  logic                    terr_job_surface_i;
+  logic                    terr_job_dual_i;
+  logic [15:0]             terr_job_src_id_i;
   logic [1:0]              terr_job_view_mask_i;
   logic [7:0]              terr_job_mat_a_i;
   logic [7:0]              terr_job_mat_b_i;
@@ -605,9 +617,10 @@ module tb_zhao_console_core_smoke
   logic [4:0]              terr_cc_cs_ci_i;
   logic [4:0]              terr_cc_cs_cj_i;
   logic [1:0]              terr_cc_cs_substance_i;
-  // `terr_cc_serve_release_i` left the core's edge with the job port above:
-  // its owner is `zhao_terrain_jobissue`, which knows when a patch's subpatch
-  // jobs have all been accepted.
+  // `terr_cc_serve_release_i` is OR-ed with `zhao_terrain_jobissue`'s release
+  // inside the core: a harness that drives a job by hand must be able to
+  // retire the patch it drove.
+  logic                    terr_cc_serve_release_i;
 
   logic [31:0]             terr_ps_lattices_o;
   logic [31:0]             terr_ps_lattices_refused_o;
@@ -3777,6 +3790,19 @@ module tb_zhao_console_core_smoke
     terr_pt_fld_valid_i = '0;
     terr_pt_fld_height_i = '0;
     terr_pt_fld_add_valid_i = '0;
+    terr_job_valid_i = '0;
+    terr_job_ox_i = '0;
+    terr_job_oz_i = '0;
+    terr_job_level_i = '0;
+    terr_job_lvl_nz_i = '0;
+    terr_job_lvl_pz_i = '0;
+    terr_job_lvl_nx_i = '0;
+    terr_job_lvl_px_i = '0;
+    terr_job_morph_i = '0;
+    terr_job_surface_i = '0;
+    terr_job_dual_i = '0;
+    terr_job_src_id_i = '0;
+    terr_cc_serve_release_i = '0;
     terr_pt_fld_add_x0_i = '0;
     terr_pt_fld_add_z0_i = '0;
     terr_pt_fld_add_x1_i = '0;
@@ -5050,28 +5076,48 @@ module tb_zhao_console_core_smoke
     // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
     // fork inside the core issues it, from the meshlet the draw above fetched.)
 
-    // ---- the terrain job: NO LONGER INJECTED (entry I21, 2026-09-21) -------
-    // `zhao_terrain_jobissue` issues the subpatch jobs inside the core now, so
-    // there is no port to drive. What still crosses this edge is the four
-    // fields the issuer does NOT produce: the view mask, which nothing carries
-    // alongside a page yet, and the three material riders ruling R13 calls the
-    // wrong carrier. They are SET here rather than left at reset, so the
-    // sequencer sees a lawful context if the internal producer ever does issue
-    // a job in this bench.
+    // ---- the terrain job, INJECTED THROUGH THE OVERRIDE -------------------
+    // One subpatch, one view, level 0, top surface, no geomorph. The tess
+    // turns this into 81 window vertices (client B's fill) and then its
+    // triangles (the replay), so both halves of client B are exercised by ONE
+    // job. `sparse_fill_i` stays LOW: the subsystem here carries a dense shell,
+    // and a sparse fill against a dense shell is a seal-short fault the terrain
+    // differential fires on purpose -- not something a wiring smoke bench
+    // should provoke.
     //
-    // IT WILL NOT, AND THE REASON IS UPSTREAM AND ALREADY PRINTED. Every page
-    // this bench plays fails its CRC, so `tpl_fin_ok` never rises, TERRAIN.
-    // MIPREQ issues no job, no lattice is streamed, TERRAIN.LODFEED writes no
-    // deviation record and no patch is ever composed. The injected job was a
-    // WORKAROUND for exactly that, and removing the workaround exposes the
-    // upstream hole rather than creating one. Do not read this bench's green
-    // as evidence about client B; it never was, and now it does not pretend.
+    // SINCE 2026-09-21 THIS IS AN OVERRIDE AND NOT THE ONLY PRODUCER.
+    // `zhao_terrain_jobissue` issues the same thirteen fields inside the core
+    // and cannot be reached from HERE -- see the declaration block above for
+    // why, and note that the reason is the CRC failure and not the
+    // composition. While this bench drives `terr_job_valid_i` the boundary
+    // wins the cycle, exactly as the host's `proj_cfg_we_i` wins over
+    // CMD.EXEC's lowering onto the projector bank.
     @(posedge gpu_clk);
+    terr_job_ox_i        <= 6'd0;
+    terr_job_oz_i        <= 6'd0;
+    terr_job_level_i     <= 2'd0;
+    terr_job_lvl_nz_i    <= 2'd0;
+    terr_job_lvl_pz_i    <= 2'd0;
+    terr_job_lvl_nx_i    <= 2'd0;
+    terr_job_lvl_px_i    <= 2'd0;
+    terr_job_morph_i     <= 17'd0;
+    terr_job_surface_i   <= 1'b0;
+    terr_job_dual_i      <= 1'b0;
+    terr_job_src_id_i    <= 16'h5678;
     terr_job_view_mask_i <= 2'b01;
     terr_job_mat_a_i     <= 8'h11;
     terr_job_mat_b_i     <= 8'h22;
     terr_job_weight_i    <= 8'hFF;
+    terr_job_valid_i     <= 1'b1;
+    guard = 0;
+    while (!(terr_job_valid_i && terr_job_ready_o) && (guard < 1000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
     @(posedge gpu_clk);
+    terr_job_valid_i <= 1'b0;
+    if (guard >= 1000)
+      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ never accepted a job (job_ready_o stuck low)");
 
     // ---- run until the shell reaches two frame edges ----------------------
     // Two rather than one: the first proves FRAMECTL runs, the second gives

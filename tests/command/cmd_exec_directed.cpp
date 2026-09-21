@@ -175,6 +175,13 @@ struct Run {
   // The viewport rect, cfg addresses 16 and 17 (2026-09-20).
   std::vector<CfgWrite> rects;
   uint32_t viewport_refused = 0;
+  // MEASURE.GOVERNOR's two ratified fields (2026-09-21, packet TERRACOMP) and
+  // the refusal counter that owns `view_count`'s verdict. LEVELS, sampled
+  // after the packet commits, because that is how the governor reads them.
+  uint32_t gov_view_count = 0;
+  uint32_t gov_px_err0 = 0;
+  uint32_t gov_px_err1 = 0;
+  uint32_t view_count_refused = 0;
   std::vector<StampOut> stamps;
   std::vector<DrawOut> draws;
   std::vector<UploadOut> uploads;
@@ -468,6 +475,10 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.post_refused = dut.post_refused_o;
   r.grade_overflow = dut.grade_overflow_o;
   r.viewport_refused = dut.viewport_range_refused_o;
+  r.gov_view_count = dut.gov_view_count_o;
+  r.gov_px_err0 = dut.gov_px_err0_o;
+  r.gov_px_err1 = dut.gov_px_err1_o;
+  r.view_count_refused = dut.view_count_refused_o;
   return r;
 }
 
@@ -476,7 +487,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
 std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word,
                                    uint32_t gtok = 0, uint32_t ftok = 0,
                                    int32_t eye_x = 0, int32_t eye_y = 0, int32_t eye_z = 0,
-                                   uint8_t viewport_id = 0) {
+                                   uint8_t viewport_id = 0, uint32_t pixel_error = 0) {
   zhao_abi::ZhRecordSetView rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
   // FROM THE TYPE, NOT A LITERAL. This was `96` until ruling R63 grew the
@@ -512,7 +523,11 @@ std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t 
   vp.m31 = first_word + 13;
   vp.m32 = first_word + 14;
   vp.m33 = first_word + 15;
-  rec.payload.pixel_error = 0;
+  // TERRACOMP: carried, not zeroed. It DEFAULTS to zero so every existing case
+  // in this file keeps meaning what it meant -- and zero is a legal, defined
+  // budget that `zhao_measure_governor` reads as "not stated", not an absent
+  // field.
+  rec.payload.pixel_error = pixel_error;
   rec.payload.geometry_tokens = gtok;
   rec.payload.fragment_tokens = ftok;
   // R63: the eye. Defaulted to the origin so every existing case in this file
@@ -679,7 +694,8 @@ std::vector<uint8_t> drawPosedFormRecord(uint32_t source_id, uint32_t form,
 // SetPresentationContract, the token CEILING (R18/R33), by the generated packer.
 std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint32_t f1,
                                     uint32_t sh,
-                                    zhao_abi::video_mode mode = zhao_abi::VIDEO_DUO) {
+                                    zhao_abi::video_mode mode = zhao_abi::VIDEO_DUO,
+                                    uint8_t view_count = 2) {
   zhao_abi::ZhRecordSetPresentationContract rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
   rec.hdr.record_bytes = 48;
@@ -687,7 +703,7 @@ std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint3
   // The mode is what indexes the viewport table in the executor as well as
   // what retimes the raster in the scheduler. Both parse this one byte.
   rec.payload.mode = mode;
-  rec.payload.view_count = 2;
+  rec.payload.view_count = view_count;
   rec.payload.geometry_tokens[0] = g0;
   rec.payload.geometry_tokens[1] = g1;
   rec.payload.fragment_tokens[0] = f0;
@@ -2777,6 +2793,118 @@ int main(int argc, char** argv) {
     check(r.draws_issued == 4, "case49: all four lawful draws still leave", 4,
           r.draws_issued);
     check(r.warp_draws == 0, "case49: and none of them is warped", 0, r.warp_draws);
+  }
+
+  // ---- 50. MEASURE.GOVERNOR's TWO RATIFIED FIELDS (packet TERRACOMP) ------
+  // `SetView.pixel_error` and `SetPresentationContract.view_count` have been
+  // in `spec/commands.zidl` since ratification and their offsets have been
+  // generated all along. NEITHER WAS EVER DECODED, and this block's own header
+  // said "NOT `pixel_error` -- MEASURE.GOVERNOR is not composed", which three
+  // passes of the completion campaign read as "the field does not exist". The
+  // decode arms landed 2026-09-21; this case is what says they work.
+  //
+  // FOUR THINGS ARE ASSERTED AND EACH ONE IS A DIFFERENT FAILURE:
+  //   (a) the budget reaches the RIGHT VIEW -- a swap here is invisible to
+  //       every other counter and would make view 1 measure with view 0's
+  //       error budget forever;
+  //   (b) the refusal counter FIRES on an unlawful `view_count` -- R95;
+  //   (c) its NEGATIVE CONTROL, in this same case, on a lawful one -- without
+  //       which "it fired" does not distinguish a real verdict from a counter
+  //       that increments on every contract;
+  //   (d) a REFUSED byte HOLDS the previous count rather than adopting it.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    // A lawful contract: two views. The NEGATIVE CONTROL for (b).
+    b.append_record(contractRecord(1u, 2u, 3u, 4u, 5u, zhao_abi::VIDEO_DUO, 2));
+    // Two distinguishable budgets, one per view. 0x0000'C000 is 0.75 in fx16
+    // and 0x0001'8000 is 1.5 -- different in every byte, so a byte-swapped or
+    // wrong-view capture cannot coincide with the right answer.
+    b.append_record(setViewRecord(0, 0x0000'0041u, 0x0011'0000, 0, 0, 0, 0, 0, 0,
+                                  0x0000'C000u));
+    b.append_record(setViewRecord(1, 0x0000'0042u, 0x0022'0000, 0, 0, 0, 0, 0, 0,
+                                  0x0001'8000u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.done && r.err == zhao_abi::ZH_ABI_OK, "case50: well formed", 1,
+          r.done ? 1 : 0);
+    check(r.committed == 1, "case50: committed", 1, r.committed);
+    // (a) THE BUDGETS, PER VIEW.
+    check(r.gov_px_err0 == 0x0000'C000u, "case50: view 0's pixel_error, as sent",
+          0x0000'C000u, r.gov_px_err0);
+    check(r.gov_px_err1 == 0x0001'8000u, "case50: view 1's pixel_error, as sent",
+          0x0001'8000u, r.gov_px_err1);
+    // And they are DIFFERENT, which is the property a swap or a single shared
+    // register would break while both checks above still passed if the two
+    // values happened to be equal. They are not, deliberately.
+    check(r.gov_px_err0 != r.gov_px_err1,
+          "case50: the two views hold DIFFERENT budgets (not one register)", 1,
+          r.gov_px_err0 != r.gov_px_err1 ? 1 : 0);
+    // (c) THE NEGATIVE CONTROL: a LAWFUL view_count is adopted and NOT counted.
+    check(r.gov_view_count == 2, "case50: view_count 2 adopted", 2,
+          r.gov_view_count);
+    check(r.view_count_refused == 0,
+          "case50: a lawful view_count is NOT counted as refused", 0,
+          r.view_count_refused);
+  }
+
+  // ---- 50b. THE SAME COUNTER, FIRED (R95) ---------------------------------
+  // `video_rules.md` 3.1 ratifies TWO views, so 1 and 2 are the lawful bytes.
+  // CMD.DMA's Phase-2 structural walk deliberately omits the decoder's
+  // BAD_VALUE step, so an unlawful byte CAN arrive here -- which is why this
+  // verdict exists at all, and why the stimulus below is LEGAL rather than a
+  // mutant. CMD.SCHEDULER judges this record's `mode` and NOT this field, so
+  // without this counter the verdict would have no owner.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    // First a lawful one, so there is a previous value for (d) to hold.
+    b.append_record(contractRecord(1u, 2u, 3u, 4u, 5u, zhao_abi::VIDEO_DUO, 1));
+    b.end_frame(0);
+    const Run warm = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(warm.gov_view_count == 1, "case50b: view_count 1 adopted first", 1,
+          warm.gov_view_count);
+    check(warm.view_count_refused == 0, "case50b: and not counted", 0,
+          warm.view_count_refused);
+  }
+  {
+    // 7 is not 1 and not 2. THE FIRING CASE.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(1u, 2u, 3u, 4u, 5u, zhao_abi::VIDEO_DUO, 7));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.err == zhao_abi::ZH_ABI_OK,
+          "case50b: the PACKET is well formed -- the refusal is ours",
+          zhao_abi::ZH_ABI_OK, r.err);
+    check(r.committed == 1,
+          "case50b: the packet COMMITS -- one unlawful byte must not cost a frame",
+          1, r.committed);
+    check(r.contracts == 1, "case50b: the contract still applies its ceiling", 1,
+          r.contracts);
+    // (b) IT FIRES.
+    check(r.view_count_refused == 1, "case50b: view_count_refused_o FIRES on 7",
+          1, r.view_count_refused);
+    // (d) AND IT HOLDS. This is the half that matters more than the count: a
+    // counter that fired while the bad value was adopted anyway would be a
+    // reassuring instrument on a broken decode.
+    check(r.gov_view_count != 3, "case50b: the unlawful byte is NOT adopted", 1,
+          r.gov_view_count != 3 ? 1 : 0);
+  }
+  {
+    // ZERO IS ALSO UNLAWFUL, and it is the value a zeroed record carries -- so
+    // a decode that refused "too big" and accepted "none" would pass case50b
+    // and present nothing. Checked separately for that reason.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(1u, 2u, 3u, 4u, 5u, zhao_abi::VIDEO_DUO, 0));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.view_count_refused == 1, "case50b: view_count 0 is refused too", 1,
+          r.view_count_refused);
+    check(r.gov_view_count != 0, "case50b: and zero is not adopted", 1,
+          r.gov_view_count != 0 ? 1 : 0);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

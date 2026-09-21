@@ -910,14 +910,59 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    proj_en_i,
 
   // ---- TERRAIN: the subpatch job that drives client B (I21) ---------------
-  // THIRTEEN OF THE SEVENTEEN LEFT THIS LIST 2026-09-21 (packet TERRACOMP).
-  // The subpatch job's whole decision chain is composed below -- MEASURE.
-  // GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC, TERRAIN.LOD and
-  // TERRAIN.JOBISSUE, with the view chain that feeds the governor -- so
-  // `job_valid/ready` and the twelve DECISION fields are driven inside this
-  // module by the block that decides them rather than by a harness. Entry I21
-  // is narrowed accordingly.
+  // THE THIRTEEN DECISION FIELDS HAVE AN INTERNAL PRODUCER AS OF 2026-09-21
+  // (packet TERRACOMP): MEASURE.GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC,
+  // TERRAIN.LOD and TERRAIN.JOBISSUE are composed at the end of this file and
+  // `zhao_terrain_jobissue` drives the sequencer's job port. Entry I21 is
+  // narrowed accordingly.
   //
+  // THEY STAY ON THIS BOUNDARY AS AN OVERRIDE, AND THE FIRST VERSION OF THIS
+  // PACKET DELETED THEM. That was wrong, and the way it was wrong is worth the
+  // space because it is the shape a composition packet is most likely to take.
+  //
+  // Deleting them made the register move by exactly the same amount -- the
+  // four gaps that closed are MODULES becoming connected, and a port is not a
+  // module. What deleting them actually cost was EVIDENCE:
+  // `tb_zhao_console_core_smoke.sv` injected one subpatch job here, and that
+  // injection was the only thing in the console smoke that made TERRAIN.TESS
+  // run. SIX assertions stand on it -- TESS emitting a window vertex,
+  // GROUP_SEQ forwarding to client B, the shared projector GRANTING its second
+  // client, and the whole TERRAIN.NORMALS -> TERRAIN.SHADE light lane behind
+  // them. All six went dead, and the plain smoke said so in 270 seconds:
+  //   "TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job port is
+  //    dead"
+  //
+  // THE INTERNAL PRODUCER CANNOT REACH THEM IN THAT BENCH, and the reason is
+  // upstream of everything this packet built: every terrain page the smoke
+  // plays FAILS ITS CRC, so no page becomes resident, so TERRAIN.SEQ issues no
+  // compose job, so the cache never fills, never serves, and never opens the
+  // door that TERRAIN.SPDESC and TERRAIN.JOBISSUE wait at. Removing the
+  // injection does not make the console better; it makes the bench blind to a
+  // subsystem that IS wired.
+  //
+  // SO THIS IS AN OVERRIDE, ON THE PATTERN THIS FILE ALREADY USES. The host's
+  // `proj_cfg_*_i` overrides CMD.EXEC's lowering onto the projector bank and
+  // "still wins the cycle, but it is now an OVERRIDE rather than the only
+  // producer". Same shape, same arbitration, same one-line mux, stated in the
+  // same words. It costs a 13-field 2:1 mux -- order 30 ALM -- and it is the
+  // difference between a composition with evidence and one without.
+  //
+  // WHEN IT CLOSES: when the smoke's terrain pages LOAD. That is the real hole
+  // and this port was hiding it; it is now named in entry I21 instead.
+  input  logic                    terr_job_valid_i,
+  output logic                    terr_job_ready_o,
+  input  logic [5:0]              terr_job_ox_i,
+  input  logic [5:0]              terr_job_oz_i,
+  input  logic [1:0]              terr_job_level_i,
+  input  logic [1:0]              terr_job_lvl_nz_i,
+  input  logic [1:0]              terr_job_lvl_pz_i,
+  input  logic [1:0]              terr_job_lvl_nx_i,
+  input  logic [1:0]              terr_job_lvl_px_i,
+  input  logic [16:0]             terr_job_morph_i,
+  input  logic                    terr_job_surface_i,
+  input  logic                    terr_job_dual_i,
+  input  logic [15:0]             terr_job_src_id_i,
+  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
   // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
   // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
   // slot and source id, and carries it to the sequencer joined to the patch it
@@ -1104,12 +1149,16 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [1:0]              terr_cc_cs_substance_i,
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
-  // THIS PORT LEFT THE LIST 2026-09-21 (packet TERRACOMP). "TESS is finished
-  // with the served patch", one patch per RISING EDGE.  The block that knows
-  // is the one that issued the subpatch jobs -- `zhao_terrain_jobissue`,
-  // composed below, which releases on `job_ready_i` returning high after the
-  // last job.  That is `zhao_terrain_group_seq`'s own exit proof and not a
-  // counter, a timeout or a policy invented in this composer.
+  // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
+  // `job_ready_i` returning high after the last job of the patch, which is
+  // `zhao_terrain_group_seq`'s own exit proof -- not a counter, not a timeout
+  // and not a policy invented in this composer.
+  //
+  // THE PORT REMAINS AND IS OR-ed WITH IT, for the injection above: a harness
+  // that drives a job by hand must be able to retire the patch it drove. An OR
+  // and not a mux, because this is a PULSE and the two producers describe
+  // different patches -- taking either is correct and losing one is not.
+  input  logic                    terr_cc_serve_release_i,
 
   // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
   // Events, never cycles.  These are what say a PAGE became a LATTICE rather

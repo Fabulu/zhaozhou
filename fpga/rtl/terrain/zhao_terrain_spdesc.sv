@@ -194,6 +194,19 @@ module zhao_terrain_spdesc #(
     output var logic             door_ready_o,
     input  var logic [SLOTW-1:0] door_slot_i,
     input  var logic [15:0]      door_src_id_i,
+    // THE PAGE'S DUAL FLAG, taken on the same beat as the slot and the id.
+    // Added 2026-09-21 (packet TERRACOMP) when the composition found it had no
+    // other honest source. `zhao_terrain_lod` takes `dual_i` as a LEVEL for
+    // the patch it is deciding, and its contract says the governor targets --
+    // `dual_i` among them -- "must be held stable across a patch job". The
+    // composer's available net is TERRAIN.PAGESTREAM's live `v_flags_o`, which
+    // is the FILLING page's: with one patch filling and another served those
+    // are DIFFERENT PAGES, so wiring it live would have decided the served
+    // patch with the next patch's underside flag. The queue below already
+    // carries the {slot, src_id} pair captured at fill and popped at serve --
+    // this is the same fact about the same page, on the same beat, and it
+    // costs one bit per entry.
+    input  var logic             door_dual_i,
 
     // ---- TERRAIN.COMPCACHE's serve side -------------------------------------
     input  var logic        serve_valid_i,     // LEVEL: a patch is served
@@ -248,6 +261,12 @@ module zhao_terrain_spdesc #(
     output var logic [MORPHW-1:0]  sp_prev_morph_o,
     output var logic [7:0]         sp_hold_o,
     output var logic [15:0]        sp_src_id_o,
+    // THE PATCH'S DUAL FLAG, as a LEVEL rather than a descriptor field: it is a
+    // property of the PAGE, identical for all sixteen subpatches, and
+    // `zhao_terrain_lod` takes it as a module input. Stable for the whole burst
+    // by construction -- it is loaded with `act_slot_q` and `act_src_q` when a
+    // patch is adopted and not touched again until the next one.
+    output var logic               patch_dual_o,
 
     // ---- evidence -----------------------------------------------------------
     output var logic [31:0] patches_assembled_o,
@@ -323,6 +342,7 @@ module zhao_terrain_spdesc #(
   // ---------------------------------------------------------------------------
   logic [SLOTW-1:0] dq_slot [0:DOORD-1];
   logic [15:0]      dq_src  [0:DOORD-1];
+  logic             dq_dual [0:DOORD-1];
   logic [IDXW-1:0]  dq_wr_q, dq_rd_q;
   logic [CNTW-1:0]  dq_cnt_q;
 
@@ -347,6 +367,7 @@ module zhao_terrain_spdesc #(
   state_e st_q;
 
   logic [SLOTW-1:0] act_slot_q;
+  logic             act_dual_q;
   logic [15:0]      act_src_q;
   logic [4:0]       act_count_q;   // 0..16, so five bits
   logic             serve_seen_q;
@@ -390,6 +411,7 @@ module zhao_terrain_spdesc #(
 
   assign r_start_o = (st_q == StStart);
   assign r_slot_o  = act_slot_q;
+  assign patch_dual_o = act_dual_q;
   assign r_ready_o = (st_q == StRec);
 
   assign sp_valid_o      = (st_q == StEmit);
@@ -416,6 +438,10 @@ module zhao_terrain_spdesc #(
 
       st_q         <= StIdle;
       act_slot_q   <= '0;
+      // A page with no underside is the legacy single-surface page, which is
+      // what an unwritten flag should mean: reset to 0 presents no underside
+      // rather than inventing one.
+      act_dual_q   <= 1'b0;
       act_src_q    <= '0;
       act_count_q  <= '0;
       serve_seen_q <= 1'b0;
@@ -450,6 +476,7 @@ module zhao_terrain_spdesc #(
       if (dq_push_c) begin
         dq_slot[dq_wr_q] <= door_slot_i;
         dq_src[dq_wr_q]  <= door_src_id_i;
+        dq_dual[dq_wr_q] <= door_dual_i;
         dq_wr_q          <= (dq_wr_q == IDXW'(DOORD - 1)) ? '0 : dq_wr_q + IDXW'(1);
       end
       if (dq_pop_c) begin
@@ -499,6 +526,7 @@ module zhao_terrain_spdesc #(
             end else begin
               act_slot_q  <= dq_slot[dq_rd_q];
               act_src_q   <= dq_src[dq_rd_q];
+              act_dual_q  <= dq_dual[dq_rd_q];
               act_count_q <= '0;
               // THE PAIRING, CHECKED.  See fact 3 in the header for why these
               // two operands are not corrupted in lockstep.
