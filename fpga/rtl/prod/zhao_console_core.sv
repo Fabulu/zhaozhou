@@ -1668,6 +1668,18 @@
 //          should cost it as such. It is not done HERE because exposing it
 //          with no consumer would dangle a producer at this module's edge and
 //          put the register up by one, which is the trade R75 refused.
+//
+//          **DONE, AND THIS PARAGRAPH IS HISTORY -- checked 2026-09-21
+//          (gz/cfgarm) rather than assumed from the head of the entry.**
+//          `rp_fb_tag_unused` and `rp_fb_addr_unused` are GONE from
+//          `zhao_shell_top_v2.sv` (its own line 1131 says so); `fb_tag_o` now
+//          connects to `rpx_tag`, and the shell exports the whole `gth_*`
+//          group -- `gth_valid_o`, `gth_rgb565_o`, `gth_tag_o`, `gth_addr_o`,
+//          `gth_x_o`, `gth_y_o`, `gth_last_o`. The consumer arrived first
+//          (POST.GATHER composed, R218/R195), so the dangle this paragraph
+//          refused never had to happen. Marked HERE, at the refusal, because
+//          the closure is recorded 100 lines up at (c) and a reader who greps
+//          `rp_fb_tag_unused` lands on the stale sentence, not on the fix.
 //        * ITS OUTPUT IS A THIRD GAP. The block flushes sixteen cells per tile
 //          as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
 //          The store between a flush and a random access is the same shape of
