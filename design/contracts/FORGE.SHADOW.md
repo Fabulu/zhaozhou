@@ -218,11 +218,11 @@ group of `zhao_forge_shadow` (`:106-164`):
 
 | port group | blocker | status |
 |---|---|---|
-| `tap_*` (`:131-137`) | **NONE — this one is genuinely clear.** `zhao_terrain_heighttap` mirrors these ports signal for signal (its `:21`, `:168`) and is **already composed** at `zhao_console_core.sv:9233`. | ✅ |
+| `tap_*` (`:131-137`) | ~~**NONE — this one is genuinely clear.**~~ **THIS ✅ IS WRONG AND IS CORRECTED BELOW (SHADOWSUB, 2026-09-21).** `zhao_terrain_heighttap` does mirror the ports and is composed — and its **single** requester port is **fully occupied by `u_part_terrain_tap`**. A port SHAPE was read as port AVAILABILITY. | ❌ |
 | `cast_strength_i` (`:118`) | **no producer anywhere** (above). Owner decision. | ❌ |
 | `cast_{x,z,radius,rung,src_id}` (`:115-120`) | `zhao_geom_lodstate`'s `c_*`, and **LODSTATE is not composed**; it needs `zhao_geom_ladderbank`, which needs an ENGINE1 share and a page-publication path. | ❌ |
 | `rung_floor_i` (`:125`) | its only producer is the **uncomposed `zhao_measure_governor`** (R118, itself blocked at both ends). Named exactly, so the subsystem packet does not rediscover it: **`deg0_o` / `deg1_o`** (`zhao_measure_governor.sv:314-315`), 2-bit per-camera degradation — the same width and the same meaning as `rung_floor_i`. The governor is instantiated **only** at `zhao_prod_top.sv:2877`, the LFSR census top. | ❌ |
-| `vtx_*` (`:142-154`) | **no consumer.** Route A (batch, through `GEOM.GROUP_SEQ`'s `v_*`) **DEADLOCKS** on `zhao_geom_vattr.sv:490`'s `done_o`, a six-term AND requiring a lit rgb and a u/v that a shadow hull has neither of. Route B (private arena) is unbuilt and needs the client-A widening, an arbiter at GEOM.CLIP's door, and the absolute→rebased frame conversion. | ❌ |
+| `vtx_*` (`:142-154`) | **no consumer.** Route A (batch, through `GEOM.GROUP_SEQ`'s `v_*`) **DEADLOCKS** on `zhao_geom_vattr.sv`'s `done_o` — **the citation `:490` is a comment banner; `done_o` is `:553`** (R133 recorded the correction and this table was never updated). Route B (private arena) is unbuilt and needs an arbiter at GEOM.CLIP's door and the absolute→rebased frame conversion. **The "client-A widening" clause is STRUCK: that widening was PERFORMED under R68 sub-build 4 and R3 sanctions it — see the 2026-09-21 section below.** | ❌ |
 
 ### The chain is THREE blocks long and none of them is composed
 
@@ -261,6 +261,251 @@ because FORGE.SHADOW is uncomposed, and `cast_*` has no producer because
 LODSTATE is uncomposed. **They can only be composed together, and even then the
 other three blockers remain.** So FORGE.SHADOW is a **subsystem packet**, not a
 wiring job, and it should not be scheduled as one again.
+
+## THE SUBSYSTEM RE-MEASURED UNDER D2 — SHADOWSUB, 2026-09-21, at `fe1d3ca0`
+
+Owner decision **R234 D2 `(owner, explicit)`** commissioned this as a subsystem
+packet, which is what R133 said it needed. **R133 is spent, not overturned, and
+it was right that a wiring job cannot close this.** Everything below was
+verified by instantiation and by reading the port lists, never by grep on a
+mention — the distinction R133 itself established for this cluster.
+
+**The five parked blocks are still uncomposed.** Searched every `.sv` under
+`fpga/rtl` for an instantiation at statement position, excluding each module's
+own file and every comment:
+
+```
+  zhao_geom_ladderbank   0
+  zhao_geom_lodstate     0
+  zhao_view_projscale    0
+  zhao_geom_projradius   1  -- zhao_geom_lodstate.sv only, itself uncomposed
+  zhao_measure_governor  1  -- zhao_prod_top.sv only, the GENERATED pricing top
+  zhao_forge_shadow      1  -- likewise
+```
+
+**No blocker of the five has expired.** Two have MOVED, one of them in the
+direction nobody was watching.
+
+### 1. THE CLIENT-A WIDENING WAS ALREADY PERFORMED, AND R3 SANCTIONS IT
+
+**This is the correction that matters, because "re-authors a ratified law" is
+the sentence that made this a subsystem rather than a build.**
+
+The ratified law is **owner ruling R3 `(owner, explicit)`** — one of the seven
+only the owner can lift:
+
+> *"Third projector port for particles / FORGE.SHADOW (I24). **Keep the
+> time-multiplex. No third port in v1.** Owed: **a written schedule proof**
+> that geometry, particles and FORGE.SHADOW's instance-centre 1/w share client
+> A's bandwidth within the frame at the guaranteed content tier."*
+
+**R3 does not forbid this subsystem's use of client A. It NAMES it**, as one of
+the three sharers, and what it withholds is a third *port on
+`zhao_project_service`* — not a third *client*.
+
+And the widening has already happened. `zhao_part_project.sv`'s header records
+it as a deliberate act under **R68 sub-build 4**, in terms:
+
+> *"WHY THE FIELD IS TWO BITS AND NOT ONE. One bit names two owners, and this
+> port has a third coming: **`zhao_geom_lodstate` projects the INSTANCE CENTRE
+> through the same client A** so `zhao_geom_projradius` can divide by its `w`.
+> **Owner ruling R3 keeps client A a time-multiplex, so the third owner is a
+> third arm here and not a second projector. The encoding is sized for it
+> NOW**, because the failure mode of sizing it later is silent."*
+
+Verified in the RTL, not taken from the header: `PAY_W = 17` (was 16),
+`OWNER_W = 2` (was one bit `TAG_BIT`), `OWNER_GEOM = 2'd0`, `OWNER_PART = 2'd1`,
+**`2'd2` and `2'd3` unallocated**, with `owner_unroutable_o` counting a result
+that carries one and `geom_tag_collision_o` counting a geometry rider that
+arrives with any owner bit set. The console mirrors it: `GEOM_PAY_A_W = 17`,
+`GEOM_OWNER_W_C = 2`, and a live `initial` elaboration guard requiring
+`GEOM_ARENA_W + GEOM_INDEX_W <= GEOM_PAY_A_W - GEOM_OWNER_W_C` (3 + 12 <= 15).
+
+**So the instance-centre half of Route B needs NO new law and NO owner
+decision.** What it needs is:
+
+* **a third request arm on `zhao_part_project`** claiming `OWNER_LOD = 2'd2`.
+  The block has exactly two input arms today (`g_*` geometry pass-through,
+  `p_*` particles) and no third. This is an edit to a composed, verified block,
+  so it costs its whole instantiation chain plus every bench — but it is the
+  arrangement R3 and the block's own header both prescribe.
+* **the written schedule proof R3 OWES and that has never been produced.** It
+  is a measurement, not a decision, and it is the one outstanding obligation of
+  an owner-explicit ruling in this cluster. **It has two halves and only one of
+  them can be measured today, which is worth stating rather than blurring.**
+  The RATE half — does the third client's per-frame demand fit inside client
+  A's frame budget at the guaranteed content tier — is answerable now, from
+  each client's demand against the service's measured throughput, and should be
+  answered BEFORE the arm is designed. The FAIRNESS half — does round-robin at
+  three starve anyone, and does `zhao_geom_lodstate`'s single-in-flight FSM
+  still close its 200-clock evaluation under contention — **cannot be measured
+  without the arm**, so it is owed at the same commit that adds it. Quoting the
+  first as though it settled the second is the shape this file's own table just
+  got caught in.
+
+**The rider is FULL at 17 bits** (3 arena + 12 index + 2 owner), so a FOURTH
+owner fits the field but any additional rider *payload* does not. If Route B's
+shadow-hull vertices need their own arena address, that is a
+`GEOM_PAY_A_W` widening and the elaboration guard will say so — loudly, which
+is what it is for.
+
+**What would genuinely re-author a ratified law** is narrower than R133 stated:
+not the owner field, but an **arena-fill path on client A's RESULT port**.
+Client B has one (`fill_landed_o` / `fill_arena_o` into `zhao_terrain_wcache`);
+client A does not, and `zhao_geom_proj_lane` cannot refuse a result
+(`a_ready_o` does not exist on that side). Whether shadow hulls get an arena of
+their own is a real design question. **It is not the one R133 named, and it is
+not blocked by R3.**
+
+### 2. `tap_*` IS NOT CLEAR — ONE REQUESTER PORT, ALREADY TAKEN
+
+The table above marked this ✅ on the grounds that `zhao_terrain_heighttap`
+"mirrors these ports signal for signal and is already composed". **Both halves
+of that sentence are true and the conclusion does not follow.**
+
+`zhao_terrain_heighttap` has **exactly one** requester port group —
+`req_valid_i`, `req_ready_o`, `req_x_i`, `req_z_i`, `req_surface_i` — and in
+`zhao_console_core.sv` every one of them is connected to `htp_req_*`, which is
+driven by `u_part_terrain_tap`'s `tap_req_*_o`. **There is no second port and
+no arbitration.**
+
+Worse for a would-be second client: **the response carries no tag and no
+rider.** `rsp_valid_o` and its eighteen data outputs arrive with nothing saying
+whose request they answer, so an arbiter in front of `req_*` must hold the
+outstanding owner itself — the `u_terrain_rdshare` shape. **No such arbiter
+exists.**
+
+**And the core already half-knows this.** Above `u_part_terrain_tap` it declares
+`htp_height`, `htp_nx`, `htp_ny`, `htp_nz` under `lint_off UNUSEDSIGNAL` and
+says why:
+
+> *"The point answer's height and normal are the SERVICE's answer to its
+> requester; this requester evaluates its own points from the cell... **FORGE.SHADOW,
+> the point answer's other customer, is not composed** (its own blocker, the
+> creature rung, is in the FORGE.SHADOW header)."*
+
+So the console names FORGE.SHADOW as the point answer's customer, names a
+*different* blocker, and **nobody looked at the requester port**. The point
+answer is live silicon that nothing reads — R228's shape exactly — and the ✅
+above is why the contention was never measured. **Ask who READS this, not
+whether it EXISTS.**
+
+### 3. R197's UNTEXTURED DOOR IS BUILT AND COMPOSED — the u/v half is DISCHARGED
+
+Route A and Route B were both recorded as blocked by an attribute wall that a
+shadow hull cannot climb, because it has no `u/v` by law. **Owner ruling R197
+sanctioned the declared-untextured profile, and the mechanism has since been
+built, composed and given a fired positive control.** Verified first-hand:
+
+* `zhao_geom_clip` carries `tri_untex_i` through three pipeline stages to
+  `out_untex_o`; `zhao_geom_attrpack` branches on `tri_untex_i`.
+* `zhao_console_core.sv` implements R197 law 3 at GEOM.CLIP's input door —
+  `cl_in_untex_c`, `cl_in_refuse_c`, and `geom_untex_refused_o` counting each
+  refused triangle. The producer's declaration is the named seam
+  `GEOM_REPLAY_UNTEX_DECL`.
+* `tests/mutants/zhao_console_core_untex_decl_mutant.sv` is the committed
+  positive control, driven by `run_console_core_smoke.ps1 -UntexMutant` with
+  inverted polarity, because no legal stimulus can move that counter.
+
+And the core states the intent this contract needs, unprompted:
+
+> *"It is also the door R187 names for every non-mesh producer — 'the honest
+> door is at GEOM.CLIP's input' — so **the arbiter that eventually admits
+> particles and shadow hulls will present its `untex` bit to THIS gate**, not
+> to a second copy of it downstream... When a second producer is arbitrated
+> into this door its own bit is muxed here beside its triangle, on the same
+> handshake."*
+
+**So the `u/v` half of the vertex-consumer blocker is discharged and the door
+is already the right shape.** What remains for `vtx_*` is the **arbiter** at
+that door and the **material-window span** — `cl_in_refuse_c` refuses an
+untextured primitive whenever `mw_pub_sample_count != 0`, so a shadow hull must
+arrive under a published zero-sample material, and the window's occupancy
+accounting (R187's three-way ordered join) is what decides that. That is a real
+piece of work and it is smaller than the wall this table recorded.
+
+**Route A's stated cause is also wrong on the merits, and the correction does
+not rescue it.** `done_o`'s binding term is `(lit_ord_q == uv_ord_q)` — a COUNT
+EQUALITY, which a hull supplying neither satisfies trivially — not a
+requirement that a lit rgb and a u/v exist. Route A's actual obstacle is that
+`zhao_geom_vattr` is fed by the meshlet batch protocol (`batch_i`, `op_valid_i`
+arenas, decoded `uv_valid_i`/`lit_valid_i` streams) that a shadow hull has no
+producer for. **Route B remains the route; the reason recorded for preferring
+it was not the reason.**
+
+### 4. TWO BLOCKERS NOBODY HAD MEASURED, both on GEOM.DRAWJOB's job seam
+
+`zhao_geom_lodstate` taps the DRAWJOB → MESHFETCH handshake for
+`{j_instance_id_i, j_form_index_i[23:0], j_cx/cy/cz_i, j_view_i}`. The
+handshake is composed and carries **neither of the last two**:
+
+* **No form index.** `zhao_geom_drawjob` emits `j_desc_addr_o [26:0]`,
+  `j_format_o [7:0]` (the VERTEX format, not the form), `j_generation_o` and
+  `j_stream_base_o`. `zhao_geom_ladderbank`'s key is the **MESH_STREAM handle
+  index** — the value that arrives on `upl_publish_index_o [23:0]` and that
+  DRAWJOB writes into its residency directory — and **the job does not carry it
+  out.** Closing this is a new output on a composed block, and therefore its
+  whole instantiation chain plus every bench.
+* **No view index, and this one is an OWNER DECISION.** DRAWJOB emits
+  `j_active_mask_o [1:0]`, a two-view **mask**. `lodstate`'s `j_view_i` is a
+  single bit selecting *which camera's threshold the instance's one ladder is
+  measured against*. For `active_mask == 2'b11` there is no honest answer in
+  the tree. **`zhao_geom_lodstate`'s own header already docks this** — *"ONE
+  LodState PER INSTANCE, NOT PER CAMERA — AND THAT IS A DEVIATION... the
+  disagreement is REPORTED rather than resolved here. It is an owner decision,
+  and the cost of changing it is one more index bit on the store."* Composition
+  is where it stops being reportable: something must choose, and choosing
+  silently is inventing.
+
+### 5. LADDERBANK IS A SIXTH ADAPTER REQUESTER, AND THE WRAPPER IS FIXED AT FIVE
+
+`zhao_geom_mem_adapter` takes **no parameters**. It is a fixed A–E wrapper —
+`s_req[0..4]` and an inner `zhao_mem_share_n #(.N(5))` — with the five slots
+held by MESHFETCH, ASSETFETCH, MATERIAL.RESOLVE, DRAWJOB and PART.TABLE.LOADER.
+A sixth requester is `f_*` ports, an `s_req[5]` assign and `.N(6)`; the
+round-robin law is bounded at `N-1` turns and must be re-proved at six, not
+assumed.
+
+LADDERBANK's trigger is easier than the entry implies: `upl_publish_valid_o`,
+`_tag_o`, `_base_o` and `_extent_o` are already core outputs and already feed
+`u_part_table_loader` with exactly the four-signal shape LADDERBANK declares.
+The kind-dispatch pattern to copy is the port-level `valid && (tag == KIND)`
+used for DRAWJOB's directory and MATERIAL.RESOLVE; LADDERBANK's `PAGE_KIND` is
+`8'd8`, CREATURE_FORM.
+
+### THE BUILD ORDER, for whoever takes this next
+
+**Nothing in this chain composes alone.** Every link's outputs terminate on the
+next link, so composing any prefix dangles an edge and closes a gap by opening
+one — the trade R75 endorsed refusing and the one R223 records against the
+governor by name. **It is one commit or none.** In dependency order:
+
+1. **Discharge R3's owed schedule proof** (standalone, no composed file
+   touched, no tie-off created).
+2. `zhao_view_projscale` — pure cfg-bus snoop, 0 DSP, 0 M10K, back-pressures
+   nothing. Feeds `zhao_view_projq88` (also uncomposed) and `lodstate`'s
+   `kx/vw`.
+3. `zhao_measure_starve` (uncomposed) → the governor's `starved0/1_i`.
+4. **The governor's upstream** — `px_err0/1_i` and `view_count_i` still need
+   CMD.EXEC arms (R118, re-checked here and still true), and the frame pulse is
+   `core_tick_c` (`= gpu_tick_o`, FRAMECTL's boundary), which also serves
+   `lodstate`'s `frame_i`.
+5. **The governor's TERRAIN.LOD output group** — `cam0/1_scale_o`,
+   `targets_valid_o`, `cam*_en_o`, `hyst_o`, `min_hold_o`, `morph_step_o`,
+   `src_id_o` — has no consumer until `zhao_terrain_lod` composes. **This is
+   the trade R223 names and it has not moved.** `zhao_terrain_lodfeed` is
+   composed and is NOT it: it is the deviation feed and consumes no governor
+   output.
+6. The two DRAWJOB seam ports (§4), one of which is an owner decision.
+7. `zhao_geom_mem_adapter` at six (§5), then `zhao_geom_ladderbank`.
+8. The third client-A arm (§1), then `zhao_geom_lodstate`.
+9. A heighttap arbiter (§2), then `zhao_forge_shadow` with `cast_strength_i`
+   from a named constant — **R133's D-FORGESHADOW-A, accepted, still the right
+   treatment.**
+10. The GEOM.CLIP-door arbiter and the shadow material span (§3).
+
+**Steps 5 and 6b are decisions, not builds.** They are docked in the findings
+with the evidence attached rather than taken here.
 
 ### What was deliberately NOT done, and why
 
