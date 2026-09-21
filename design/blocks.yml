@@ -231,6 +231,9 @@ counter_catalog:
   - sheetseam_dig_stall_cycles
   - sheetseam_bad_texels
   - sheetseam_stray_done
+  - sheetseam_before_texels
+  - sheetseam_sr_dropped
+  - sheetseam_before_torn
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -3385,8 +3388,11 @@ blocks:
     tests:
       directed: tests/terrain/sheetseam_rtl_directed.cpp
       random: tests/terrain/sheetseam_rtl_directed.cpp
-    counters: [sheetseam_jobs, sheetseam_sheet_served, sheetseam_fallbacks, sheetseam_miss_texels, sheetseam_prefetch_beats, sheetseam_refetches, sheetseam_dig_stall_cycles, sheetseam_bad_texels, sheetseam_stray_done]
+    counters: [sheetseam_jobs, sheetseam_sheet_served, sheetseam_fallbacks, sheetseam_miss_texels, sheetseam_prefetch_beats, sheetseam_refetches, sheetseam_dig_stall_cycles, sheetseam_bad_texels, sheetseam_stray_done, sheetseam_before_texels, sheetseam_sr_dropped, sheetseam_before_torn]
     counter_ports:
+      sheetseam_before_texels: before_texels_o
+      sheetseam_sr_dropped: sr_dropped_o
+      sheetseam_before_torn: before_torn_o
       sheetseam_jobs: jobs_o
       sheetseam_sheet_served: sheet_served_o
       sheetseam_fallbacks: fallbacks_o
