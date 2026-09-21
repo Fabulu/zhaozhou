@@ -1452,8 +1452,60 @@
 //      NOT "what colour is terrain", which would be art; it is WHICH OF THE TWO
 //      RATIFIED PROFILES the console runs, and who produces `tint` (layer H)
 //      and `sheet` if it is the second. That is a smaller and more answerable
-//      question than the one this entry has been carrying, and it is the one
-//      FINDINGS-projout.md puts to the owner.
+//      question than the one this entry has been carrying.
+//
+//      AND THE PARAGRAPH ABOVE IS ITSELF HALF WRONG -- corrected here by the
+//      lane that wrote it, an hour later, because the correction is worth more
+//      than the tidiness of deleting it. "Terrain's colour is flat, so it fits
+//      the flat seam" is TRUE OF THE SHADE AND FALSE OF THE TINT, and the tint
+//      is the half with a ratified home:
+//
+//        * `spec/terrain_rules.md` 6.5, quoted verbatim inside
+//          `zhao_texture_aux.sv`: the aux budget holds "ONE aux consumer on
+//          terrain fragments, because TINT MOVED TO VERTICES." Layer-H tint is
+//          a PER-VERTEX quantity by ratified spec.
+//        * and the oracle says the same about itself. `terrain.cpp` introduces
+//          its per-cell tint as "the FLAT STAND-IN for the Gouraud tint -- the
+//          average of the four corner RGB565 values". **A stand-in that names
+//          itself one.** Recommending the flat route would have ratified the
+//          stand-in as the design, which is this file's own standing warning
+//          about composing the simplification that happens to exist.
+//
+//      SO THE SLOTS' EMPTINESS HAS A CAUSE, AND IT IS BIGGER THAN THIS ENTRY.
+//      The console computes per-vertex colour and then throws it away:
+//      GEOM.LIGHT produces lit r/g/b, GEOM.VATTR stores it per vertex under
+//      R11, it rides GEOM.CLIP in slots 3..5 winding-flipped with its corners
+//      -- and GEOM.ATTRPACK packs THREE planes, so it is dropped there. What
+//      actually reaches the fragment is `frag_vert_rgb_i`, whose own port
+//      comment reads "interpolated, lit, tinted, FOGGED", and it is driven
+//      from `returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb`
+//      -- the 48-bit CONTINUATION TAIL, `job_meta_i[345:298]`, which is
+//      `tri_continuation_tail_i`: a PER-TRIANGLE CONSTANT with no producer,
+//      entry I20. **A per-vertex quantity is computed, carried four blocks, and
+//      delivered as a per-triangle constant that nothing drives.**
+//
+//      THAT ALSO ANSWERS R224's "DERIVED FROM WHAT?", for terrain at least.
+//      That ruling searched `spec/*.zidl` and `spec/*.md` for `vertex_rgb`,
+//      `vertex_alpha`, `effect_tag` and `stencil_reference`, got ZERO, and
+//      concluded the tail is ABSENT DATA with nothing to derive from. The
+//      search was right and a LITERAL-TOKEN search cannot see terrain_rules
+//      6.5, because that sentence says "tint moved to vertices" and never
+//      writes the field's name. For terrain the derivation is: per-vertex
+//      layer-H tint, modulated by the flat shade `terr_light_base_o` already
+//      leaves this module with. **This does not overturn R224** -- the other
+//      three tail fields are untouched and terrain is one primitive class of
+//      several. It removes exactly one of that ruling's four "nothing to derive
+//      from" claims, and it is the one I13 depends on.
+//
+//      THE CORRECTED RECOMMENDATION, then, and it is a question rather than an
+//      answer because the answer is above this lane's pay grade: terrain's
+//      colour is PER-VERTEX by spec, its destination is either slots 3..5
+//      (which need ATTRPACK to grow from three planes to six, real silicon) or
+//      the continuation tail's `vertex_rgb` (which needs I20's producer). **If
+//      the flat stand-in is chosen anyway -- and it may well be the right call
+//      on the ALM budget -- it must be NAMED a stand-in in the RTL, with
+//      terrain_rules 6.5 cited beside it**, or the next reader inherits a
+//      Gouraud law silently implemented as a constant.
 //
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
