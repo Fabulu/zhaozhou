@@ -141,6 +141,9 @@ modules:
   zhao_forge_prim_eval:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_ring_eval:
+    disposition: pending_compose
+    why: "built and not composed; the POSITION law for the four forge families R199 recorded as having no evaluator (fan, tube, radial shell, billboard sheet), bought by owner decision R234 D2 on 2026-09-21. It is NOT a rival to zhao_forge_prim_eval and NOT a version of it: that block is the RIBBON family's lightning law and this one is the other four, so the two are disjoint by family and are adopted together. It carries no design/blocks.yml row of its own DELIBERATELY -- FORGE.PRIM.EVAL is the capability and this extends that contract's coverage rather than naming a new capability, so the completion register's count is unchanged and honest (R214's test: a row is legitimate when a capability already has a written contract and NO row). Its blocker is the one design/contracts/FORGE.PRIM.EVAL.md's closing section maps for its sibling: there is no forge dispatch that reads a FORGE_PROGRAM page and no door into the geometry path."
   zhao_forge_shadow:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

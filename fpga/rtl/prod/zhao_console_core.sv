@@ -5981,9 +5981,50 @@
 //           and four of the six families have no evaluator. The ABI stops being
 //           the blocker; it does not become the implementation."*
 //
-//           **THE PAGE HALF ABOVE IS STILL LIVE, re-measured 2026-09-20
-//           (forge4): `spec/cartridge.md` 4 still declares kinds 0-9 plus 4b and
-//           4c and NONE is a forge program page**, while `DrawProcedural 0x0302`
+//           **THE PAGE HALF HAS NOW EXPIRED TOO, 2026-09-21 (forgeprim), AND
+//           SO HAS THE EVALUATOR HALF. Corrected in place rather than deleted,
+//           so the next reader can see which halves moved and when.** OWNER
+//           DECISION R234 D2, `(owner, explicit)`, reverses R199 in as many
+//           words: *"I deferred the forge program page kind because four of six
+//           families have no evaluator; the owner has chosen to PAY FOR THE
+//           EVALUATORS rather than accept the deferral. The page kind is to be
+//           frozen and FORGE.PRIM / FORGE.PRIM_EVAL built."*
+//             * **THE PAGE KIND IS FROZEN.** `spec/cartridge.md` 4d, kind 14,
+//               section type 0x0012: a 64-byte header and 192-byte (three
+//               MEM.GUARD line) records carrying `family`, `segments`, `sides`,
+//               `view_mask`, `src_id` AND the anchors, axes and radii the
+//               evaluators place vertices from. Model `zref::forge_page`,
+//               packer `tools/pack/mkforgeprogram.py` with `--check`, golden
+//               `tests/golden/forge_program/forge_page_v1.bin`.
+//             * **FOUR OF THE FIVE MISSING EVALUATORS ARE BUILT.**
+//               `zhao_forge_ring_eval` is the position law for fan, tube,
+//               radial shell and billboard sheet -- the exact four
+//               `spec/commands.zidl` names as having none -- against
+//               `zref::forge_ring::eval_job`. The fifth, cliff, is FORGE.CLIFF's
+//               and was never owed here. So "four of six families have no
+//               evaluator" is FALSE today.
+//             * **AND THE ROTATION TRAP BELOW IS DISCHARGED**: the conversion
+//               `forge_kind = (family + 1) mod 6` is written ONCE, in
+//               `zref::forge_page::kind_of_family`/`family_of_kind`, walked all
+//               six values BOTH ways in `tests/forge/forge_page_directed.cpp`,
+//               and asserted to agree with the identity on NO family.
+//             * **WHAT REMAINS IS DISPATCH AND A DOOR, NOT A LAW**, and the map
+//               is in `design/contracts/FORGE.PRIM.EVAL.md`'s closing section,
+//               measured by reading port maps. In short: `zhao_cmd_exec` has NO
+//               arm for 0x0302 (the record lands on `unsupported_o`); no bank
+//               stages a forge page; `zhao_geom_setup` has exactly ONE triangle
+//               arm, fully driven by `zhao_geom_clip`, and it is a tine of a
+//               three-way ordered join so entering alone DEADLOCKS;
+//               `zhao_project_service`'s two client arms are both taken; and the
+//               binding one is `GEOM_CLIP_ATTRS = 7`, the same seven-slot
+//               attribute law `zhao_part_expand` is waiting on at boundary I24.
+//               That last is a SUBSYSTEM question shared by three subsystems.
+//
+//           THE ORIGINAL SENTENCE IS KEPT BELOW so the record reads as a
+//           sequence rather than as a claim about today:
+//           **the page half was STILL LIVE, re-measured 2026-09-20
+//           (forge4): `spec/cartridge.md` 4 then declared kinds 0-9 plus 4b and
+//           4c and NONE was a forge program page**, while `DrawProcedural 0x0302`
 //           still says "forge parameters do NOT travel inline; `program` names
 //           the cartridge terrain-patch page (spec/cartridge.md 4 kind 4)" --
 //           a HEIGHTFIELD with no `j_family`, no `j_segments`, no `j_sides` and
