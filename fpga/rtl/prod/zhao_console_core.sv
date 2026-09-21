@@ -3346,6 +3346,73 @@
 //      >> truer statement of this entry's remainder than "TERRAIN.LOD is a
 //      >> near-producer that is not wired".
 //
+//      >> THE ASSEMBLER NOW EXISTS. BUILT 2026-09-21 (gz/terrassem) as
+//      >> `fpga/rtl/terrain/zhao_terrain_spdesc.sv`, with
+//      >> `design/contracts/TERRAIN.SPDESC.md` and 1,035 checks in
+//      >> `terrain_spdesc_directed`. TWO OF THE THREE ABSENCES ABOVE ARE
+//      >> SMALLER THAN THEY WERE WRITTEN, and both were ATTEMPTED before
+//      >> either was believed, which is the only instrument that finds this:
+//      >>   * `sp_cx_i`/`sp_cz_i`: the named source has a reader now. The
+//      >>     block reads `zhao_terrain_compcache_front`'s `lat_wx_o`/
+//      >>     `lat_wz_o` at the subpatch centre vertex (ox+4, oz+4) -- the
+//      >>     vertex `zhao_terrain_lodfeed` sampled `w_cy_o` at. It does NOT
+//      >>     recompute placement from an origin and a pitch, which is the
+//      >>     available shortcut and a second implementation of
+//      >>     TERRAIN.PLACE's law.
+//      >>   * `zhao_terrain_devstore`'s MISSING `src_id` COLUMN IS NOT A
+//      >>     BLOCKER AND THE STORE DOES NOT NEED ONE. The store is read with
+//      >>     a slot the assembler already holds; `sp_src_id_i` is the id
+//      >>     popped from the door BESIDE that slot. `w_src_id_o` keeps its
+//      >>     R70 reader untouched.
+//      >>   * THE SLOT-VERSUS-SRC_ID GAP IS REAL AND IS ANSWERED WITHOUT A
+//      >>     MAP. A `src_id`->slot map is a 1,024-entry CAM, because a page
+//      >>     stays resident across frames. But `zhao_terrain_pagestream`
+//      >>     emits `v_slot_o` and `v_src_id_o` ON THE SAME VERTEX BEAT, and
+//      >>     the compose fill starts on one of those beats -- so the pair is
+//      >>     captured at the door, queued, and popped for the patch the
+//      >>     cache serves. That is `zhao_terrain_jobissue`'s draw-context
+//      >>     queue exactly, and its `serve_seen_q` arming law is COPIED
+//      >>     rather than re-derived, because two blocks arming off one event
+//      >>     must not have two laws.
+//      >> It adds NO port to the compose cache: it splices into the existing
+//      >> lattice chain and injects only on cycles the upstream client leaves,
+//      >> which is `zhao_terrain_heighttap`'s law and is FORCED -- `lat_req_i`
+//      >> has no ready, so a request not forwarded on its own cycle is
+//      >> DESTROYED rather than delayed.
+//      >>
+//      >> SO I21's REMAINDER IS NOW SMALLER AGAIN, AND IT HAS MOVED OFF
+//      >> TERRAIN.LOD's `sp_*` PORT ENTIRELY. What is left, measured in
+//      >> gz/terrassem's own tree:
+//      >>   (a) MEASURE.GOVERNOR's six knobs -- `cam0/1_scale_i`,
+//      >>       `cam0/1_en_i`, `hyst_i`, `min_hold_i`, `morph_step_i`. The
+//      >>       governor is built and uncomposed and TWO of its inputs have no
+//      >>       producer: `px_err0/1_i` and `view_count_i`.
+//      >>   (b) the four contract-refused `edge_*` neighbour levels, which
+//      >>       become ONE declared tie-off when the group composes.
+//      >>   (c) `zhao_terrain_devstore`'s 185 M10K of 553 (33%).
+//      >>   (d) the layer-E reader, which R13 puts inside TESS.
+//      >> `cam0/1_x/y/z_i` and `dual_i` are NOT the governor's and must not be
+//      >> wired to it: the eye is `zhao_view_eye`'s (ruling R63) and `dual_i`
+//      >> is already live in this file as
+//      >> `tps_v_flags[TERR_FLAG_DUAL_BIT]`.
+//      >>
+//      >> AND (a) IS A BUILD, NOT AN ABSENCE -- THE THIRD ROTTED REFUSAL OF
+//      >> THIS FAMILY IN ONE SUBSYSTEM. `zhao_cmd_exec.sv` says "NOT
+//      >> `pixel_error` -- MEASURE.GOVERNOR is not composed", and this
+//      >> campaign has been reading that as "the field is not available".
+//      >> BOTH FIELDS ARE IN THE RATIFIED ABI: `spec/commands.zidl` declares
+//      >> `fx16 pixel_error` and `u8 view_count`. What is missing is a DECODE
+//      >> ARM in CMD.EXEC -- exactly the shape ruling R63 already landed for
+//      >> `eye[3]` as steps 17/18/19 of the view walk. The governor's other
+//      >> three gaps each close by composing a BUILT leaf onto a net this file
+//      >> already carries: `zhao_view_projscale` -> `zhao_view_projq88` for
+//      >> `proj0/1_i` (both snoop `proj_cfg_*_m`, as `u_proj_subsystem` and
+//      >> `zhao_geom_cull` already do), and `zhao_measure_starve` for
+//      >> `starved0/1_i` off the composed `u_measure_tokens`'s `tok_den_*`.
+//      >> R223 item 4 parks the governor transitively and that ruling still
+//      >> stands; what has changed is that the parked thing is now a NAMED
+//      >> SEQUENCE OF FOUR BUILDS rather than an argument.
+//
 //      CORRECTED 2026-09-19, and the correction makes this entry HARDER rather
 //      than easier, which is why it is worth the space. The entry used to add:
 //      "TERRAIN.LOD is itself unfed besides: its `sp_*` patch_state

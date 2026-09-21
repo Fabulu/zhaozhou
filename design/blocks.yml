@@ -3264,6 +3264,47 @@ blocks:
       reference speak stamp records, and the layer-F -> layer-B conversion
       needs two laws that do not exist yet (contract, "the sheet seam").
 
+  - id: TERRAIN.SPDESC
+    name: The subpatch descriptor assembler
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: >-
+      TERRAIN.LOD's sp_* patch_state input, which nothing produced. The other half of
+      entry I21: it reads TERRAIN.DEVSTORE for the three deviations, the history and the
+      centre height, TERRAIN.COMPCACHE's served lattice for the centre's x and z at the
+      subpatch centre vertex, and takes the {slot, src_id} identity from the compose
+      door, where TERRAIN.PAGESTREAM emits both on the same vertex beat. That door queue
+      is the answer to 'the store is keyed by SLOT and the cache serves by SRC_ID with no
+      map' -- the pairing is in hand at the door, so no map is needed.
+    contract: design/contracts/TERRAIN.SPDESC.md
+    phase: 6
+    owner_issue: ZH-050
+    inputs: [patch_state, lod_deviations]
+    outputs: [patch_state]
+    upstream: [TERRAIN.DEVSTORE, TERRAIN.COMPCACHE, TERRAIN.PAGESTREAM]
+    downstream: [TERRAIN.LOD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 16 descriptors per patch
+    tests:
+      directed: tests/terrain/terrain_spdesc_directed.cpp
+    counters: [terrain_spdesc_door_src_mismatch, terrain_spdesc_serve_no_door]
+    counter_ports:
+      terrain_spdesc_door_src_mismatch: door_src_mismatch_o
+      terrain_spdesc_serve_no_door: serve_no_door_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    # REGISTERED BY THE PACKET THAT BUILT IT, 2026-09-21 (TERRASSEM), and it RAISES
+    # the register by one ON PURPOSE. R214: a block with a contract AND silicon owes a
+    # row, and POSEPAGE's precedent is that contract-without-silicon is the wrong half.
+    # Packet JOBISSUE declined its own row the same morning, citing R214 as a caution
+    # against INVENTING rows, and the coordinator added it anyway (23 -> 24). The
+    # register reading honestly UP beats it reading flatteringly flat: this capability
+    # IS mandatory -- TERRAIN.LOD cannot decide a level without it -- and a gap nobody
+    # counts is a gap nobody closes.
+
   - id: TERRAIN.JOBISSUE
     name: The subpatch job issuer
     kind: rtl

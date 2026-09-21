@@ -10335,6 +10335,30 @@ verilate(test_terrain_jobissue_directed
 add_test(NAME terrain_jobissue_directed COMMAND test_terrain_jobissue_directed)
 set_tests_properties(terrain_jobissue_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.SPDESC -- the SUBPATCH DESCRIPTOR ASSEMBLER, the other half of entry
+# I21. It builds zhao_terrain_lod's `sp_*` patch_state input from the three
+# places its fields live: zhao_terrain_devstore's deviations and history,
+# zhao_terrain_compcache_front's placed column/row positions, and the
+# {slot, src_id} pair captured at the compose door. No mutant is registered
+# here and that is a measured claim, not an omission: all five of its fault
+# counters are reachable from the block's own boundary with legal stimulus,
+# and terrain_spdesc_directed fires each one with a negative control beside it.
+add_test(NAME lint_terrain_spdesc
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_spdesc
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_spdesc.sv)
+set_tests_properties(lint_terrain_spdesc PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_spdesc_directed terrain/terrain_spdesc_directed.cpp)
+target_link_libraries(test_terrain_spdesc_directed PRIVATE zhao_harness)
+verilate(test_terrain_spdesc_directed
+  PREFIX Vzhao_terrain_spdesc
+  TOP_MODULE zhao_terrain_spdesc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_spdesc.sv)
+add_test(NAME terrain_spdesc_directed COMMAND test_terrain_spdesc_directed)
+set_tests_properties(terrain_spdesc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TERRAIN.LOD's three deviations (owner ruling R8), zhao_terrain_loddev.
 # Differential against zref::terrain::lod_deviation, built TWICE from one
 # source: at the block's DEFAULT selector (which must equal
