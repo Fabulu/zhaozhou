@@ -5610,6 +5610,71 @@
 //   zero-area triangle it does not reject; both are pinned by committed checks
 //   in section 8 of that test.
 //
+//   AND THE DOOR IS BUILT, 2026-09-21 (the clipdoor packet), which is the
+//   SIXTH pass over this entry and the first that moved it. The recommendation
+//   above was acted on: `fpga/rtl/geometry/zhao_geom_clipdoor.sv` is the
+//   N-producer arbiter at GEOM.CLIP's INPUT (owner ruling R187), unit-verified
+//   over 175 checks with its unreachable guard FIRED by a committed mutant.
+//   The entry for it is GEOM.CLIPDOOR in `design/blocks.yml` and the full
+//   argument is `design/contracts/GEOM.CLIPDOOR.md`. Three corrections to the
+//   four blockers above, all measured in the tree at this commit:
+//
+//   * BLOCKERS 1, 2 AND 3 ARE PROPERTIES OF *GEOM.SETUP'S ARM*, and they do
+//     not survive the move to GEOM.CLIP's input. The three-way ordered join,
+//     the combinational deadlock and the two material-window error counters
+//     all arise from entering ONE tine directly. A producer entering at
+//     GEOM.CLIP's input goes through the fork that already exists, reaches
+//     GEOM.SETUP and GEOM.ATTRPACK in lockstep on their single shared ready,
+//     and is inside `u_material_window`'s span accounting from `d_enter_i`
+//     onward exactly as a mesh triangle is. Nothing about the join changes.
+//     That is what R187 meant by "all three tines in step, for free".
+//
+//   * BLOCKER 4 -- "THE BINDING ONE" -- IS SPENT, and it was spent the day it
+//     was written. Owner ruling R197 ratified the untextured attribute law and
+//     R197 NAMES PARTICLES ("invents u/v for shadow hulls and particles that
+//     have none by law"). It is silicon a few thousand lines below: the
+//     UNTEXTURED DOOR block, `cl_in_untex_c`, `cl_in_refuse_c`,
+//     `geom_untex_refused_o`, `zhao_geom_clip.tri_untex_i` and
+//     `zhao_geom_attrpack.tri_untex_i` -- and that last one is the ONLY reader
+//     of the u/w and v/w slots in this tree, and it branches on the bit. So a
+//     particle enters with `untex = 1`, those two slots are don't-care BY
+//     RULING, and `GEOM_CLIP_ATTRS` does not move for particles at all.
+//
+//   * WHAT ACTUALLY REMAINS is two things, neither of them an attribute count,
+//     and both smaller than the wall they were hiding behind:
+//       (a) THE PARTICLE HAS NO CANONICAL DEPTH. `zhao_part_expand.t_d_o` is
+//           Q16.16 1/w (`zref::ScreenV::d`); slot 0 of the packet is invw24,
+//           and `zhao_geom_depthquant`'s header carries owner ruling D-4 --
+//           "no consumer performs its own profile conversion". The conversion
+//           consumes `w`, NOT `1/w`; `w` exists on the particle path as
+//           `zhao_part_project`'s `a_w_i` / `h_w_o` and is DROPPED at the
+//           ladder queue (`proj_wr_c` has no `w` field), so `q_*` never
+//           carries it. The arm owes a `w` lane plus a
+//           `zhao_geom_depthquant_stream` + `zhao_raster_rcp24_v4` pair -- the
+//           `u_dq`/`u_rcp` pattern `zhao_geom_vattr` already holds. That is an
+//           area cost on the binding constraint, and owner ruling R236 says
+//           cost is a fact to record rather than a veto; it is named here so
+//           the next packet prices it instead of discovering it.
+//       (b) THE PARTICLE HAS NO MATERIAL IDENTITY, and this one is a LAW. The
+//           window publishes one material per span and R197's door refuses a
+//           declared-untextured primitive under a sampling material -- so a
+//           particle admitted during a textured mesh material would be
+//           DROPPED. `draw_population`'s tris branch calls `raster_tri` with
+//           no TextureSpan at all: a polygon particle has no material. This is
+//           R197's UNRULED SIBLING and it is an owner decision; the
+//           recommendation, recorded not taken, is in GEOM.CLIPDOOR.md.
+//
+//   WHAT IS NOT A BLOCKER, checked at this commit so nobody re-derives it: the
+//   width (see above -- narrow 22 -> 21, lossless and proved); the behind bits
+//   (`zhao_part_expand`'s `emits = take && p_in_i` means it never emits one, so
+//   `tri_behind_i = 3'b000` is a fact about the producer and not a tie-off);
+//   the cull mode (CULL_NONE, which is GEOM.CLIP's own reset value and
+//   `draw_population`'s `const TriMode m;`); the winding (GEOM.CLIP normalises
+//   it and rejects zero area, which is the whole reason R187 put the door
+//   here); and the flat colour, whose u8 -> Q0.16 expansion is DERIVED rather
+//   than chosen -- `zhao_raster_tile_pipe_v2::lit_unit8(v)` is `v[15:8]`
+//   saturating, so `{c, 8'd0}` is its exact left inverse.
+//
 //   FORGE.PRIM and FORGE.PRIM_EVAL are the TOPOLOGY and the POSITIONS of one
 //   primitive -- indices from one, fx16 vertices from the other -- and they do
 //   NOT meet each other: neither has a port the other drives. Both aim at
@@ -16223,6 +16288,30 @@ module zhao_console_core
     //
     // So this stays a boundary, deliberately, and the next packet to look at
     // it should start at GEOM.CLIP's input rather than GEOM.SETUP's.
+    //
+    // RE-MEASURED 2026-09-21 (the clipdoor packet), WHICH DID START THERE.
+    // The door it needs is BUILT -- `zhao_geom_clipdoor`, GEOM.CLIPDOOR in
+    // `design/blocks.yml`, argued in `design/contracts/GEOM.CLIPDOOR.md` --
+    // and the paragraph above is now wrong in one important word: the binding
+    // blocker was NOT the seven-slot packet. Owner ruling R197 discharged that
+    // on the day it was written, and R197 names particles; a particle enters
+    // with `untex = 1` and its u/w and v/w slots are don't-care by ruling,
+    // read by nothing (`zhao_geom_attrpack.tri_untex_i` is the only reader of
+    // those slots in the tree and it branches on the bit).
+    //
+    // WHAT THIS PORT GROUP IS ACTUALLY WAITING FOR is two named things, and
+    // the first of them is the one nobody had located:
+    //   (a) A CANONICAL DEPTH. `t_d_o` below is Q16.16 1/w and slot 0 of
+    //       GEOM.CLIP's packet is invw24. Owner ruling D-4: "all downstream
+    //       consumers receive only the canonical invw24. No consumer performs
+    //       its own profile conversion." They share one depth buffer with the
+    //       mesh path, so the difference is a wrong z-test on every particle.
+    //       `w` -- which is what the conversion consumes -- exists upstream at
+    //       `zhao_part_project`'s `a_w_i`/`h_w_o` and is dropped at that
+    //       block's ladder queue, so it never reaches `p_d_i` here.
+    //   (b) A MATERIAL LAW FOR NON-MESH PRODUCERS. R197's unruled sibling, and
+    //       an owner decision. See the entry above and the contract.
+    // Neither is a wiring job and neither is an attribute count.
     .t_valid_o      (part_exp_valid_o),
     .t_ready_i      (part_exp_ready_i),
     .t_ax_o         (part_exp_ax_o),

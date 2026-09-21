@@ -4190,6 +4190,69 @@ blocks:
     superseded_by: null
     notes: Guard band ±2048 px ratified (A3c); fixed-point clipping exactly per reference.
 
+  - id: GEOM.CLIPDOOR
+    name: The clip-input door
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: The N-producer arbiter at GEOM.CLIP's INPUT -- owner ruling R187's "honest door" -- carrying the material half and the triangle half of one beat together.
+    contract: design/contracts/GEOM.CLIPDOOR.md
+    phase: 5
+    owner_issue: ZH-056
+    inputs: [clipped_triangles]
+    outputs: [clipped_triangles]
+    # WHY THE DOOR IS HERE AND NOT AT GEOM.SETUP'S ARM. Owner ruling R187,
+    # taking SETUPDOOR's measurement: "the honest door is at GEOM.CLIP's INPUT,
+    # not GEOM.SETUP's -- it yields winding normalisation, 2A, bbox, zero-area
+    # reject and three-tine lockstep for free". Entering at GEOM.SETUP's arm
+    # deadlocks combinationally because that arm is one tine of a three-way
+    # ordered join; entering HERE feeds all three tines through the existing
+    # fork and no tine is bypassed.
+    #
+    # THE ARBITRATION LAW IS RUN-LENGTH FAIR, NOT BEAT FAIR, and it is forced by
+    # `zhao_material_window`, which DRAINS the whole GEOM.CLIP..door span before
+    # it changes what it publishes. A beat-fair round robin between two
+    # producers of different materials issues a drain and a resolve between
+    # every pair of triangles -- a throughput collapse with every counter in the
+    # console reading healthy. The block's header carries the argument.
+    # `upstream:` HERE IS DESIGN INTENT AND NOT A WIRING CLAIM (owner ruling
+    # R180), labelled because that ledger-edge-read-as-a-port confusion is what
+    # sent five passes at GEOM.SETUP's arm. Exactly ONE of the four is a wired
+    # producer today -- GEOM.REPLAY, through `u_material_window` -- and it is
+    # wired to GEOM.CLIP DIRECTLY, not through this block. The other three are
+    # the customers the door exists for.
+    upstream: [GEOM.REPLAY, PART.EXPAND, FORGE.PRIM, FORGE.SHADOW]
+    downstream: [GEOM.CLIP]
+    backpressure: ready_valid
+    latency: 0 (combinational select on a registered grant)
+    target_throughput: 1 beat per clock
+    reference_model: null
+    tests:
+      directed: tests/geometry/geom_clipdoor_directed.cpp
+      random: null
+    counters: [granted, switches, idle_offered, err_hold_broken]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-21"
+        evidence: tests/geometry/geom_clipdoor_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    # NOT YET COMPOSED, and the reason is a NAMED, MEASURED remainder rather
+    # than a deferral: see design/contracts/GEOM.CLIPDOOR.md "WHAT THE SECOND
+    # ARM STILL OWES". Two things, neither of them the attribute packet that
+    # five passes believed was the wall:
+    #   1. PART.EXPAND emits Q16.16 1/w and slot 0 of GEOM.CLIP's packet is
+    #      canonical invw24 (owner ruling D-4: "no consumer performs its own
+    #      profile conversion"). `w` exists at zhao_part_project's a_w_i and is
+    #      dropped at the ladder queue.
+    #   2. A particle has no material identity, and zhao_material_window
+    #      publishes one material per span.
+    notes: not-yet-composed -- built, unit-verified and waiting on the particle depth lane and a non-mesh material law (both named in the contract).
+
   - id: GEOM.SETUP
     name: Triangle setup
     kind: rtl
@@ -4299,6 +4362,30 @@ blocks:
     # the general finding: GEOM.SETUP's arm is not short of an ARBITER, it is
     # short of an ATTRIBUTE LAW FOR EVERY NON-MESH PRODUCER. The arbiter is
     # real work and it is the last step, not the first.
+    #
+    # BLOCKER 4 IS SPENT, 2026-09-21 (packet CLIPDOOR). The attribute law the
+    # paragraph above asks for WAS RULED -- owner ruling R197, on the same day
+    # blocker 4 was written -- and it is SILICON at this commit, not a plan:
+    # `zhao_geom_clip.tri_untex_i`/`out_untex_o`, `zhao_geom_attrpack
+    # .tri_untex_i` (the only reader of the u/w and v/w slots in the tree, and
+    # it branches on the bit), `zhao_console_core`'s `cl_in_refuse_c` /
+    # `geom_untex_refused_o` refuse-and-count gate, and the committed control
+    # `tests/mutants/zhao_console_core_untex_decl_mutant.sv`. R197 names
+    # particles in its own text: option B "invents u/v for shadow hulls and
+    # particles that have none by law". So a particle enters with `untex = 1`,
+    # its u/w and v/w slots are DON'T-CARE BY RULING, and `GEOM_CLIP_ATTRS`
+    # does not move for particles. The text above is kept rather than deleted
+    # because it is the record of what was believed for five passes, and the
+    # correction is worth more beside it than instead of it.
+    #
+    # WHAT ACTUALLY REMAINS is measured and named in
+    # `design/contracts/GEOM.CLIPDOOR.md`: (1) a canonical DEPTH -- PART.EXPAND
+    # emits Q16.16 1/w and slot 0 is invw24, owner ruling D-4 forbids a consumer
+    # converting, and `w` is dropped at `zhao_part_project`'s ladder queue; and
+    # (2) a MATERIAL law for non-mesh producers, which is R197's unruled
+    # sibling. Neither is an attribute count. The DOOR ITSELF IS BUILT --
+    # `fpga/rtl/geometry/zhao_geom_clipdoor.sv`, GEOM.CLIPDOOR above -- and it
+    # is at GEOM.CLIP's input, not this arm, per owner ruling R187.
     #
     # THE WIDTH QUESTION IS ANSWERED AND IT IS THE EASY ONE. PART.EXPAND emits
     # signed [21:0] against this arm's signed [20:0], and the extra bit is
