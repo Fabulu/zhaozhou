@@ -15392,6 +15392,22 @@ set_tests_properties(lint_geom_attrpack PROPERTIES
 # The script inverts the verdict, so this test PASSES when the bench fails: if
 # the descriptor were not really reaching the asset path, changing a reserved
 # byte could not change the outcome.
+#
+# THIS FORM PASSES **WITH ONE `%Fatal` LINE, BY DESIGN**, and that is not a
+# footnote -- it is the form's whole mechanism. The bench is SUPPOSED to die on
+# the corrupted descriptor; the `%Fatal` IS the evidence, and the inverted
+# driver converts it into a pass.
+#
+# So a blanket "`%Fatal` must be 0" sweep REDS A WORKING CONTROL. Owner ruling
+# R207 is written about forms where a stray `%Fatal` means an arm ran that
+# should not have -- a `$finish` is not a `return`, and one form once passed
+# while printing nine of them. Applied to an INVERTED control the same rule
+# inverts: here zero `%Fatal` lines would mean the corruption changed nothing,
+# which is the failure.
+#
+# Reported by POSEPAGE, 2026-09-21, after running every form and reading the
+# logs rather than the exit codes. Recorded here because this test is new and
+# the next reader to sweep for `%Fatal` will find it first.
 add_test(NAME console_core_baddescriptor_control
   COMMAND powershell -NoProfile -ExecutionPolicy Bypass
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BadDescriptor)
