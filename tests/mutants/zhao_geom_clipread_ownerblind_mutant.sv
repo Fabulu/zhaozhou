@@ -891,10 +891,11 @@ module zhao_geom_clipread_ownerblind_mutant
               body_bones_q <= n_q;
               res_body_index_o <= pidx_q;
               res_body_gen_o   <= pgen_q;
-              // Data, ownership and validity adopted together. `body_owner_q`
-              // was captured at the header and only becomes VISIBLE here,
-              // with `body_v_q`, so a torn or refused load cannot publish an
-              // owner for bones that never landed.
+              // Data, ownership and validity adopted together. The owner was
+              // read at the header into `owner_stage_q` and reaches the
+              // register `owner_ok_c` compares only HERE, beside `body_v_q`,
+              // so a torn or refused load cannot publish an owner for bones
+              // that never landed.
               body_owner_q     <= owner_stage_q;
               res_body_owner_o <= owner_stage_q;
               bodies_o     <= bodies_o + 32'd1;
