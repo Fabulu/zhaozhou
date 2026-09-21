@@ -4572,3 +4572,113 @@ restating as one of:
 **I recommend the first**, and I am not treating that as decided. What I am
 doing is refusing to schedule a fit against a number that cannot occur, and
 saying so now rather than at hour three of a Quartus run.
+
+## R224 — TAGPROD'S TWO DECISIONS ARE ONE, AND IT IS THE CMD EXECUTOR GAP AGAIN
+
+**2026-09-21, coordinator.** TAGPROD docked two owner decisions from its I20
+refusal: *allocate an effect-tag field in the ABI*, and *the vertex colour /
+stencil reference pair*. **Both were well found and neither is the decision it
+looks like.** Under R216's rule — *grep for the ruling, search the SUBJECT not
+the title, and search RTL headers and CONTRACTS, not only `reports/`* — the
+answer was already on disk in three places.
+
+### The structural fact that settles it
+
+`tri_continuation_tail_i` is 48 bits:
+
+```
+  vertex_rgb        [47:24]   24
+  vertex_alpha      [23:16]    8
+  effect_tag        [15:8]     8
+  stencil_reference [7:0]      8
+```
+
+`reference/include/zref/zref_fragment.hpp`'s `struct Frag` — *"one shaded
+candidate as RASTER.EARLYZ hands it over"* — carries `vr, vg, vb` (24),
+`va` (8), `tag` (8, commented **"the constant-tag source"**) and `sten_ref` (8,
+**"stencil reference AND REPLACE value"**). **Twenty-four, eight, eight, eight.**
+
+**The tail IS the reference model's per-triangle constant group, field for
+field and width for width.** That is not a coincidence and it is checkable in
+one read.
+
+**So the ABI concept is not missing — it is RATIFIED, in the reference model,
+for all four fields.** What has no producer is the hardware path that delivers
+these constants per draw. **That is one gap, not two, and it is not an ABI
+design question.**
+
+### Why "allocate a field in the ABI" is the wrong remedy, measured
+
+TAGPROD proposed `MaterialRecord.flags` bits 3-15, `raster_state[31:2]`, or
+`DrawForm.flags` bits 4-15 as reserved room. **The fragment state word has no
+room at all.** `State::pack()` allocates every one of its 32 bits:
+
+```
+[0] z_test_en   [1] z_write_dis  [2] z_force_far  [4:3] blend
+[5] shade_mod   [6] alpha_mod    [7] atest_en     [15:8] atest_ref
+[17:16] sten_func [19:18] sten_op [20] tag_write_dis
+[21] tag_from_texel  [23:22] tag_channel   [31:24] sten_mask
+```
+
+**`[31:24]` is `sten_mask`, not spare.** So the *"raster_state[31:2] has no v1
+consumer"* reading needs re-checking against this packing before anyone builds
+on it — either the RTL's `raster_state` is a different word from `zref`'s
+`State`, or the claim is about consumers rather than allocation. **I am flagging
+it rather than resolving it, because I did not measure the RTL side.**
+
+**And the selector is already built on both sides.** The contract
+(`RASTER.FRAGMENT.md`) lists `TAG_CHANNEL = GLOW` as part of `sun_additive`'s
+*state*, and TAGPROD found the RTL selecting on `tri_fragment_state_i[21]` and
+`[23:22]` — **exactly `tag_from_texel` and `tag_channel`.** The machinery that
+would *use* a constant tag exists. Only the value's delivery does not.
+
+### RULED
+
+**No new ABI bits are allocated today, and the question is re-docketed where it
+belongs: the per-draw constant path, which is the CMD executor gap that entries
+I14 and I30 already describe.**
+
+Three reasons, in order of weight:
+
+1. **The values are already ratified** — `Frag`'s four fields. Allocating a
+   *second* home for a quantity the reference model already defines is how this
+   tree got two projectors. **Before building a carrier, read the contract of
+   the block that consumes the same quantity** (`CLAUDE.md`, uncashed-cheque
+   check 3).
+2. **This is the inverse of R199 and must not be confused with it.** R199
+   deferred the forge page kind because *the consumer did not exist*. Here the
+   consumer **exists and is proven**: `zhao_post_gather` is composed, and
+   TAGPROD's `-GlowTag` form lit **1,062 fragments and 1,344 bloom cells against
+   0/0 plain**. So the case for building is stronger — **which is exactly why
+   it should be built once, in the right place, rather than twice.**
+3. **Two lanes would choose different bits.** CFGARM is measuring I14's executor
+   right now and I17's descriptor gap is *"the SAME gap I14 and I30 already
+   describe"*. A tag field allocated independently here is a third answer to a
+   question one lane is already holding.
+
+**What is NOT deferred:** `sun_additive` cannot bloom until this lands, and
+`RASTER.FRAGMENT.md` is explicit that its tag is *constant, not from a texel
+index* — *"the sun quad's texture is 64x64 ARGB4444, direct colour, with no CLUT
+index to read a strength from."* **That is a player-visible absence with a
+ratified cause**, and it is now attached to the executor that will fix it rather
+than floating as an unowned ABI question.
+
+### And the vertex colour half is ALREADY RULED, in a contract
+
+*"No provoking-vertex law exists anywhere"* is true as a search result and the
+wrong frame. **`design/contracts/FORGE.SHADOW.md` already records the
+disposition**, quoting the core back at itself: the vertex colour *"is left at
+its constants deliberately rather than invented"*, and building the tail from
+four constants would be *"moving a tie-off from a port into the core, which
+closes a gap on the register while changing nothing in the silicon."*
+
+**That is R48's pattern, already applied:** a named constant at a seam, held
+until a ratified format supplies the value. It is the fourth time in three days
+a decision has been found already spent — R165 (two of I34's three blockers),
+R190, DOSSIERCHECK's four, R216's T4 — and **the third found in a file that is
+not under `reports/`.**
+
+**The provoking-vertex question becomes real only when something produces
+per-vertex colour into this port.** Nothing does. Asking it now would freeze a
+convention ahead of its producer, which is the same error R199 refused from the
+other end.
