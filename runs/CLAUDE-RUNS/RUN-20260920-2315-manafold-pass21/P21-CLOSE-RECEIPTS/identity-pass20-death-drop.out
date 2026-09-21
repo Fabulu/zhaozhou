@@ -1,0 +1,4 @@
+zhao-reel: deterministic frame sequences -> --crc
+manafold-death-drop: 16925 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-death-drop declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-death-drop: 450 frames, 16925 unique colours, sequence_crc32c=0xCBA3990E

@@ -194,3 +194,68 @@ Manafold pass 21 from Owner Direction 22: the antenna reads as having too many j
   is beside the creature.
 - NEXT: the creatures.json pass-20 archive generation + checkarchive lock, then
   the exact 22-subject bank from this frozen source.
+
+### 2026-09-21 01:55-03:10 - CLOSING WORKER, part 2: archive, bank, review, encode, gates
+- **Manifest + lock for pass 20.** One archive generation "Pass 20 - 2026-09-20"
+  inserted before Pass 19 (newest), 22 clips declared exactly once with pass 19's
+  item labels carried over; archive note SIXTEEN generations; assemble 760 -> 782
+  entries. The manifest is rewritten as CRLF at indent 2 -- what it already was --
+  so the diff is **99 insertions / 1 deletion**, not 291 KB of reformatting.
+  checkarchive gained one LOCKED row and one LIVE_PHASES row (the shape the
+  pass-20 close built those tables for) and SIX selftest legs found BY LABEL:
+  **twenty-one red legs fire, up from fifteen**.
+- **THE EXACT BANK.** Clean build, 0 warnings, tools/reel clean at bd29d4f9.
+  Renderer MD5 fe1bab84ae82b7aa6efac5432413abc4, SHA-256 60623fa7... ONE
+  invocation over the 22 live subjects, ZIXX_EXP=celmain
+  ZIXX_LIGHT=diagonal-cool-cross, ZHAO_U02_LIVE_MIST unset, no override:
+  **RENDER_RC=0**, live-history OK 22/22. Validator PASS: **22 subjects, 7,992
+  frames, 2,209,692,096 bytes, manifest SHA-256 639c370cf32cb777e63896af064fc56a0d48f01edf354f2ee15d68e1ea395633**.
+- **SCOPE: 22/22 CHANGED against pass 20 and every frame count identical** -- what
+  a rig change should look like. ATTRIBUTION: the shipping binary with
+  ZHAO_U02_RIG=pass20 reproduces the pass-20 bank **exactly on 22/22**, frame
+  counts and sequence CRCs, so everything that changed comes from the rig and
+  nothing else. (death-drop is mangled by an interleaved stderr diagnostic in the
+  combined log; re-measured on its own with the streams separated it is 450
+  frames / 0xCBA3990E, the recorded pass-20 value.)
+- **FRAME REVIEW: NO FAULT FOUND.** All 22 subjects, all 7,992 frames, on complete
+  every-frame sheets; no missing, blank, black, torn or half-drawn frame anywhere.
+  18 images, all <=1600 px JPEG q80, notes to disk after each look
+  (P21-CLOSE-RECEIPTS/look-notes.md). Close looks chosen BY BADNESS from mrod's
+  own CSV: the whole Inspect orbit at 2x (straight runs, bends on the balls, in
+  all twelve frames); the three sharpest joints in the bank -- **C 152.1 (Fall
+  f80), A 150.4 and B 100.2 (Hover f246/f242)** -- at 3x and 4x, all reading as
+  folded hinges with **no wedge, spike or visible crotch** and the ink enclosed;
+  the deepest knead press in the bank (slot 0 key 288 = frame 576) where press and
+  release read clearly and the mana rides down with it; and Trick's plant at 4x.
+- **THE END, MEASURED AND DRAWN, BEFORE AND AFTER.** New committed probe
+  p21_endtrace.py plots End-ball speed and jerk per 60 Hz sample from the posed
+  skin, five clips, one instrument, both rigs. Pass 20's inspect/hover row is a
+  **field of erratic spikes**; pass 21's is a clean regular oscillation. Median
+  jerk falls **55-73 % on all five clips**. Honest exception recorded: **Blown's
+  PEAK jerk is 22 % HIGHER** (8.61 vs 7.03) while its median falls 71 % -- an
+  authored impact now carried by a rigid rod, inside every bound.
+- Whole-bank like-for-like on my build: rear rod turn RATE **18.82 -> 0.02
+  deg/sample**, rear centreline total bend **113.03 -> 18.44 deg**, worst rod turn
+  **66.50 -> 0.02**, worst rod sag **328.22 -> 0.02 mm**. The implementation
+  report published **9.53** for that turn rate; over the whole bank it is 18.82.
+  A published number really was wrong from partial sampling -- the exact fault
+  part 1 repaired. Corrected in PASS-21-FINDINGS.md.
+- Ground contact re-measured with the committed 3D probe on this bank: slot 13
+  declared contact keys 78..148 +2-key apron, **deepest vertex -25 mm** (declared
+  -25, accepted -60..-5), carrier B owns 140/140, depth-fail 0.
+- **ENCODE**: junction repointed to the exact accepted root, ONE invocation, no
+  pipe: **ENCODE_RC=0, 22/22 WebMs + 22/22 posters**. Independent probe 44/44,
+  0 errors. P21-LIVE-MEDIA-SHA256.txt = 43,766,439 bytes.
+- **LIVE-PHASE CONTROL on the real tree**: before the pass-21 receipt existed,
+  checkarchive refused **44 of 44** live files (pass 20's equivalent saw 43/44).
+- **NO-SKIP LOCAL GATE**, real exit code: assemble 2/782, playback OK, archive
+  v17 56/56 + v18 44/44 + pass-19 44/44 + **pass-20 44/44 (44,980,318 B)** + live
+  44/44 against the pass-21 receipt, robots exactly noindex+nofollow, freshness
+  **22 fresh / 0 stale / 0 absent / 0 unknown**, decode **1,552 / 1,552 with NO
+  skip**, **DEPLOY_ASSEMBLEONLY_RC=0**. Index 455,500 bytes, SHA-256
+  a3506db25c97a785b075ac6b9f4fab59d34ff19e7971e7c5c7c73c0a6dc4dfff.
+- **A stray 83 MB of .rgb found at the zhaozhou ROOT** (manafold-lasso/, 311
+  frames, dated 2026-09-20 10:32 -- pass 20's session, not this one). .gitignore
+  hides it from git status, which is exactly the law about making waste invisible
+  to your tooling. Queued for the purge tool at cleanup.
+- NEXT: publish (FF both mains, deploy), then production-verify both hosts.

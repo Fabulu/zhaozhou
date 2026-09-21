@@ -1,0 +1,31 @@
+9700 samples
+
+--- joint A: worst angle per slot (rendered slots marked) ---
+   150.4 deg  slot 23 key 123.0  presframe  246  << crackle
+   150.4 deg  slot  0 key 123.0  presframe  246  << hover + inspect
+   147.9 deg  slot 22 key 111.0  presframe  222  << flight
+   146.9 deg  slot  5 key  85.0  presframe  170  << rest
+   142.4 deg  slot  1 key  88.0  presframe  176  << drift
+   135.8 deg  slot  8 key  24.0  presframe   48  << hasty
+   135.5 deg  slot 20 key  52.0  presframe  104  << blown
+   132.4 deg  slot  3 key  79.0  presframe  158  << curious
+
+--- joint B: worst angle per slot (rendered slots marked) ---
+   100.2 deg  slot 23 key 121.0  presframe  242  << crackle
+   100.2 deg  slot  0 key 121.0  presframe  242  << hover + inspect
+    99.9 deg  slot 16 key 413.0  presframe  826  << (nodule-solo, not live)
+    88.9 deg  slot 19 key 103.0  presframe  206  << lasso
+    88.5 deg  slot  8 key  53.0  presframe  106  << hasty
+    88.5 deg  slot  2 key 123.0  presframe  246  << channel
+    87.7 deg  slot  6 key  55.0  presframe  110  << pirouette
+    86.0 deg  slot  5 key 134.0  presframe  268  << rest
+
+--- joint C: worst angle per slot (rendered slots marked) ---
+   152.1 deg  slot  9 key  40.0  presframe   80  << fall
+   147.7 deg  slot 11 key  67.0  presframe  134  << taunt
+   147.2 deg  slot  8 key  41.0  presframe   82  << hasty
+   146.8 deg  slot 23 key 134.0  presframe  268  << crackle
+   146.8 deg  slot  0 key 134.0  presframe  268  << hover + inspect
+   140.1 deg  slot  2 key  34.1  presframe   69  << channel
+   139.6 deg  slot 19 key  50.0  presframe  100  << lasso
+   138.6 deg  slot  6 key   4.0  presframe    8  << pirouette
