@@ -1053,13 +1053,16 @@
 //   ONE THING THAT IS NOT A BLOCKER, named so it is not re-derived:
 //   `lane_covers_i` DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`,
 //   exported deliberately for it. And whoever takes the height lane should look
-//   at `fpga/rtl/synth/zhao_probe_walk_earth.sv` FIRST: it is the Earth lattice
-//   walker, differentially tested
-//   (`tests/differential/field_walk_earth_directed.cpp`), its own header names
-//   "ready/valid toward TERRAIN.PATCH's field-major reducer" as its downstream,
-//   and it is still in `synth/` under a probe name -- which is precisely the
-//   shape of the thing FIELD v3 was promoted out of earlier today. A file is not
-//   a probe because its name says so.
+//   at the Earth lattice walker FIRST. Its PATH CHANGED 2026-09-20 and this
+//   sentence used to send readers to `fpga/rtl/synth/zhao_probe_walk_earth.sv`,
+//   which NO LONGER EXISTS: the file was promoted and renamed to
+//   `fpga/rtl/terrain/zhao_terrain_field_walk.sv`, carried `not-yet-adopted` in
+//   `design/prod_manifest.yml`. It is differentially tested
+//   (`tests/differential/field_walk_earth_directed.cpp`, which kept its own
+//   name), and its header names "ready/valid toward TERRAIN.PATCH's field-major
+//   reducer" as its downstream. The point the old wording was making -- a file
+//   is not a probe because its name says so -- was RIGHT, and acting on it is
+//   what moved the file.
 //
 //   TERRAIN.LOD -- REFUSED; entry I21 carries the whole argument and was
 //   CORRECTED by both sweeps, because the blocker it named first (TERRAIN.PATCH
@@ -4006,6 +4009,22 @@
 //          explicitly declined as insufficient. Section 13.1 closes with "Do
 //          not leave two opposite stream-order laws alive."
 //
+//      S5. A BLOCKER THIS ENTRY NEVER STATED, AND IT IS THE STRONGEST ONE.
+//          Found in `design/console_inventory.yml`'s own `why` text, not here:
+//          "closing I34 needs velocity/material/nav channels that
+//          zhao_terrain_patch.sv does not have, and section 20.8 forbids
+//          closing it by wiring only height." VERIFIED in the RTL rather than
+//          inherited: `zhao_terrain_patch` offers exactly ONE return lane --
+//          `fld_valid_i` / `fld_ready_o` / `fld_height_i` -- and there is no
+//          velocity, material or nav_cost input anywhere on the block. The
+//          Earth record declares FOUR output channels and the composed
+//          consumer can receive one. That is a CONSUMER-side gap, entirely
+//          independent of section 13.1's architecture ruling, and it would
+//          still forbid the one-wire join even if 13.2 had never been written.
+//          It belongs in this entry, and the fact that it lived only in a
+//          ledger's prose while this entry argued four other points is the
+//          same defect as the stale sweeps above, running the other way.
+//
 //      SO WHAT REMAINS IS A BUILD, NOT AN ABSENCE, AND THE OWNER HAS SCOPED
 //      IT. Directive section 13.2 commissions "the production field-major
 //      implementation under the TERRAIN.PATCH capability (for example
@@ -4028,7 +4047,9 @@
 //      RTL. Store the actual required association identity in the new list
 //      explicitly; do not pretend the existing block already retained a
 //      program binding" -- and the same section takes the old serial
-//      implementation out of the shipping datapath for the patch it owns. A
+//      implementation out of the shipping datapath for the patch it owns. S5
+//      above forbids it a second time and from the other end: the consumer
+//      has one return channel of the four the record declares. A
 //      join into the block the owner has just made an ORACLE is composing the
 //      superseded arrangement, and `CLAUDE.md`'s rule about only ever
 //      composing the latest version is the general form of it. The join
@@ -4831,6 +4852,9 @@
 //       one.
 //     * a lattice-walking PAGE ISSUER: none. `fpga/rtl/synth/` was read file
 //       by file and `zhao_probe_walk_earth.sv` IS a real lattice walker --
+//       (that file is now `fpga/rtl/terrain/zhao_terrain_field_walk.sv`,
+//       promoted and renamed 2026-09-20; the near-miss below is unchanged by
+//       the move, only its path is)
 //       and the wrong one: it emits four-wide world (x,z) groups for the
 //       FIELD v3 executor over a 33x33 patch, with no page ci/cj, no cell
 //       extents, no solid bits and no vdist. A genuine near-miss, recorded so
