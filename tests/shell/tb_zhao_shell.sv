@@ -754,6 +754,12 @@ module tb_zhao_shell (
 
   zhao_geom_meshfetch u_meshfetch (
       .clk(gpu_clk), .rst_n(rst_n),
+      // 0x0304's descriptor cookie. This bench issues no warped draw, so the
+      // cookie is the ZERO one -- `en` clear, which `zhao_geom_warpbook`
+      // answers as "no warp". Connected rather than left empty: a pin bound
+      // by omission is a PINMISSING warning, and a warning nobody reads is
+      // how a real mis-wiring gets through.
+      .j_warp_cookie_i(6'd0), .r_warp_cookie_o(),
       .j_valid_i(render_tri_valid_i & meshfetch_mode_i & ~mf_sent_r),
       .j_ready_o(mf_j_ready),
       .j_instance_id_i(16'h1234), .j_desc_addr_i(27'h40),
@@ -1072,6 +1078,7 @@ module tb_zhao_shell (
 
   zhao_geom_assetfetch #(.SRCW(16)) u_assetfetch (
       .clk(gpu_clk), .rst_n(rst_n),
+      .m_warp_cookie_i(6'd0), .v_warp_cookie_o(),
       .m_valid_i(render_tri_valid_i & assetfetch_mode_i & ~af_sent_r
                  & (~meshfetch_mode_i | mf_have_r)),
       .m_ready_o(af_m_ready),
@@ -1158,6 +1165,7 @@ module tb_zhao_shell (
 
   zhao_geom_vdecode #(.SRCW(16)) u_vdecode (
       .clk(gpu_clk), .rst_n(rst_n),
+      .v_warp_cookie_i(6'd0), .d_warp_cookie_o(),
       .v_valid_i(vd_v_valid), .v_ready_o(vd_v_ready),
       .v_bytes_i(assetfetch_mode_i ? af_v_bytes : vd_rec_i[vd_wp_r[1:0]]),
       .v_format_i(3'd0), .v_src_id_i({13'd0, vd_wp_r}),

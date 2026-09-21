@@ -10101,6 +10101,28 @@ add_test(NAME lint_geom_desc_crc
 set_tests_properties(lint_geom_desc_crc PROPERTIES
   LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# GEOM.WARP's PER-DRAW DESCRIPTOR BOOK (packet WARPCOMP, 2026-09-22). One file,
+# no dependencies: directive 7.1's "compact descriptor cookie" store, four
+# entries with a 5-bit allocation stamp so the ring's own overwrite is DETECTED
+# rather than prevented. Every counter in it is reached by LEGAL stimulus --
+# five warped draws and a read of the first one's cookie -- so no mutant is
+# owed, and `stale_o` is discriminated in BOTH directions inside one trace.
+add_executable(test_geom_warpbook_directed geometry/geom_warpbook_directed.cpp)
+target_link_libraries(test_geom_warpbook_directed PRIVATE zhao_harness)
+verilate(test_geom_warpbook_directed
+  PREFIX Vzhao_geom_warpbook
+  TOP_MODULE zhao_geom_warpbook
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warpbook.sv)
+add_test(NAME geom_warpbook_directed COMMAND test_geom_warpbook_directed)
+set_tests_properties(geom_warpbook_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+# -Wall, and warnings FATAL: `verilate()` does not pass -Wall.
+add_test(NAME lint_geom_warpbook
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_warpbook
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warpbook.sv)
+set_tests_properties(lint_geom_warpbook PROPERTIES
+  LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.REPLAY -- the geometry replay customer (core entries I11/I12/I24/I38/I39).
 # The arena and the vertex-attribute store are modelled with the arena's
 # contract. Since owner ruling R31 (2026-09-19) it computes no depth: GEOM.VATTR

@@ -22604,6 +22604,23 @@ module zhao_console_core
     // NOT AN ALM NUMBER -- whether it infers as M10K or as registers is what
     // a fit answers and what arithmetic cannot. No Quartus was run here.
     .INSTR_N  (48),
+    // SIX, AND IT IS NOT DERIVED. `PCW` is a SEPARATE parameter of this host,
+    // not `$clog2(INSTR_N)` computed in the module -- the block keeps them
+    // apart deliberately and $fatals at elaboration when they disagree. Moving
+    // INSTR_N to 48 without this line is exactly that disagreement.
+    //
+    // IT COST 205 SECONDS TO FIND, AND THE 205 SECONDS ARE THE POINT.
+    // `--lint-only` DOES NOT RUN `initial` BLOCKS, so `run_console_core_smoke
+    // -LintOnly` returned RC 0 in 25 s over the broken parameterisation and
+    // said nothing. The guard that caught it is inside an `initial begin`
+    // (`zhao_field_host_v2.sv:559`) and only the real smoke reaches it:
+    //   %Fatal: zhao_field_host_v2: PCW=5 disagrees with clog2(INSTR_N=48)
+    // A clean lint is not evidence about an elaboration check (CLAUDE.md).
+    //
+    // LDADDRW is UNCHANGED at 7: it is max(PCW, TSELW+TIDXW) = max(6, 7), so
+    // no port width at the host's edge moves and `u_field_doorbell`'s
+    // `.LDADDRW(7)` below still agrees with this host.
+    .PCW      (6),
     // The shipped REGS is 64, and 64 is also the uop encoding's native size --
     // the 64-bit word packs four SIX-bit register fields, so at 32 the top bit
     // of each is wasted (`zhao_field_host.sv` guards REGW > 6 for the other
