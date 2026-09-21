@@ -1398,20 +1398,18 @@ module zhao_console_core_untex_decl_mutant
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
   // (I15, 2026-09-19): the pass, its view and its pixels come from the shell's
   // `zhao_post_lease`, which reads the back buffer in raster order.
-  output logic                    post_gd_req_v_o,
-  output logic                    post_gd_view_o,
-  output logic [POST_XW-3:0]      post_gd_cx_o,
-  output logic [POST_YW-3:0]      post_gd_cy_o,
-  input  logic                    post_gd_present_i,
-  input  logic signed [7:0]       post_gd_dx_i,
-  input  logic signed [7:0]       post_gd_dy_i,
-  output logic                    post_gg_req_v_o,
-  output logic                    post_gg_view_o,
-  output logic [POST_XW-3:0]      post_gg_cx_o,
-  output logic [POST_YW-3:0]      post_gg_cy_o,
-  input  logic                    post_gg_present_i,
-  input  logic [15:0]             post_gg_glow_i,
-  input  logic                    post_gg_ink_i,
+  // THE FOURTEEN post_gd_* / post_gg_* PORTS WERE REMOVED HERE ON MERGE,
+  // 2026-09-21 (owner ruling R220). They were entry I17's boundary tie-off;
+  // packet POSTGATHER composed zhao_post_gather and they became INTERNAL, so
+  // the core no longer has them and `u_dut (.*)` could not bind a name that
+  // no longer exists. POSTGATHER updated the wrapper mutant it could see and
+  // branched BEFORE this one existed -- the cross product of two lanes landing
+  // in the same window.
+  //
+  // R162 EXACTLY: a wrapper cannot drift in its BODY, but its PORT LIST can,
+  // and mutant_copy_drift is blind to that half BY DESIGN -- it passed RC 0
+  // on this tree while this control would not elaborate. Caught by RUNNING
+  // the control, not by a gate.
   // The `atm_*` GROUP IS GONE FROM THIS EDGE, 2026-09-19. It is now internal:
   // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
   // this module and the atmosphere sheet never leaves. Entry I17 records what
@@ -1464,6 +1462,54 @@ module zhao_console_core_untex_decl_mutant
   // -- `hist_rd_*` was entry I19 and is now driven inside this file by
   // `u_hostreg_hist` off the HPS register aperture (section 7b-iii, ruling
   // R51). What is left here is only the block's OUTPUT evidence.
+
+  // ADDED BY THE COORDINATOR ON MERGE, 2026-09-21 (owner ruling R220).
+  // POSTGATHER added these core ports and updated the wrapper mutants it
+  // could see -- but it branched BEFORE this one existed, so the cross
+  // product of two lanes landing in the same window left this port list
+  // short and `u_dut (.*)` could not bind. That is R162 exactly: a wrapper
+  // cannot drift in its BODY, but its PORT LIST can, and mutant_copy_drift
+  // is blind to that half by design -- it passed RC 0 while this would not
+  // elaborate. Caught by RUNNING the control, not by a gate.
+
+  // ---- POST.GATHER evidence (composed 2026-09-21, ruling R195) -------------
+  // THE FOUR TAG COUNTERS PARTITION THE RESOLVED STREAM, which is what makes
+  // them readable together: every accepted fragment lands in exactly one of
+  // untagged / below-knee / lit / reserved-channel, and the four must sum to
+  // `gather_fragments_o`. A partition is a much stronger instrument than four
+  // independent tallies -- one wrong branch breaks the sum, and no single
+  // counter can hide a miscount by being read on its own.
+  output logic [31:0]             gather_frag_untagged_o,
+  output logic [31:0]             gather_frag_below_knee_o,
+  output logic [31:0]             gather_frag_lit_o,
+  // R195 decision 3's instrument: channels 0b10 and 0b11 are unallocated in
+  // the frozen spec, so this reads the number of fragments that asked for a
+  // displacement or an ink bit the law does not yet supply. The day
+  // `stars_and_flares.md` allocates one, this says whether anything was
+  // already drawing it.
+  output logic [31:0]             gather_reserved_channel_o,
+  output logic [31:0]             gather_fragments_o,
+  output logic [31:0]             gather_glow_saturations_o,
+  output logic [31:0]             gather_disp_clamps_o,
+  output logic [31:0]             gather_cells_flushed_o,
+  // ---- the plane store -----------------------------------------------------
+  output logic [31:0]             gather_cells_written_o,
+  output logic [31:0]             gather_oob_writes_o,     // a cell off the plane
+  output logic [31:0]             gather_gd_reads_o,
+  output logic [31:0]             gather_gg_reads_o,
+  output logic [31:0]             gather_gd_miss_o,
+  output logic [31:0]             gather_gg_miss_o,
+  // TRIPWIRES, and they are named as such so that nobody quotes their silence
+  // without firing them first. `flush_overrun_o` differences the gather's own
+  // sixteen-clock flush walk against the raster's 256-pixel tile cadence --
+  // two operands, two clocks, nothing in common. `rdw_collide_o` is the
+  // instrument for the claim that one plane is enough, i.e. that the raster
+  // and post phases never overlap. Both are fired deliberately in
+  // `tests/compositor/post_gather_store_directed.cpp`; in the composed
+  // console both must read ZERO.
+  output logic [31:0]             gather_flush_overrun_o,
+  output logic [31:0]             gather_rdw_collide_o,
+  output logic [31:0]             gather_plane_commits_o,
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,

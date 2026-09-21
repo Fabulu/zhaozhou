@@ -4232,3 +4232,76 @@ without naming a missing function.
 
 **Declaring a gap is honest; manufacturing a ledger entry to have something to
 declare is not.**
+
+## R220 — TWO LANES BROKE THE SAME WRAPPER IN OPPOSITE DIRECTIONS, AND EVERY STATIC GATE STAYED GREEN
+
+**2026-09-21, found by the coordinator running the seven smoke forms on the
+merged tree. `-UntexMutant` returned RC 1 with 15 `%Error` lines while all
+fifteen static gates read RC 0.**
+
+**The cross product of two lanes landing in the same window:**
+
+* **UNTEX** added `zhao_console_core_untex_decl_mutant.sv`, a wrapper that
+  instantiates the real core with `.*` — so **every core port must exist by
+  name in the wrapper's own header.**
+* **POSTGATHER branched BEFORE that file existed**, then **added seventeen
+  `gather_*` ports** to the core and **removed fourteen `post_gd_*` /
+  `post_gg_*`** — entry I17's boundary tie-off, which it composed internal.
+* It updated the one wrapper it could see. **It could not see the other.**
+
+**So the wrapper was wrong in BOTH directions at once**: short seventeen ports
+the core now has, and carrying fourteen the core had dropped.
+
+**`mutant_copy_drift.py` returned RC 0 throughout, correctly.** R162 says why,
+and said it a day early:
+
+> *"a wrapper cannot drift in its BODY, but its PORT LIST can, and
+> `mutant_copy_drift` is blind to that half BY DESIGN."*
+
+It compares **commit order**. Commit order was fine. **The control simply would
+not elaborate**, and nothing static could tell.
+
+### The stale direction is the expensive one, and it is worth separating
+
+A **missing** port reads as *"the mutant is out of date"* — annoying, obvious,
+cheap. A **stale** port — one the wrapper still declares after the core dropped
+it — produces `Can't find definition of variable: 'post_gd_cx_o'` **against a
+name that used to be real**, and that reads as *"the core is broken."*
+
+**I misdiagnosed it in exactly that direction for three tool calls**, assuming
+ports needed ADDING and even writing a patch to add them, before checking
+whether the core still had them. It did not. **The fix was to delete.** A lane
+meeting this alone would have gone looking in production RTL for a regression
+that does not exist.
+
+### `tools/design/wrapper_port_parity.py`, registered as `wrapper_port_parity`
+
+The half R162 named as missing, now built: it compares a wrapper's port set
+against the real module's **in both directions** and reports `missing` and
+`stale` separately, with the diagnosis attached to each — *"fix the WRAPPER,
+never the module."*
+
+**Proven in both directions before registration**, because a gate that has not
+been seen to fire has not been tested: **RC 1 on a planted missing port AND on a
+planted stale one, in the same run; RC 0 restored.** Clean state is
+**1264 = 1264** on both wrappers.
+
+**It carries the boundary of its own competence in its docstring**, which
+matters more than the check: it compares two port lists **as text**. It cannot
+see a width that changed, a direction that flipped, or a body that stopped
+meaning what it meant. **It exists because those failures are loud and this one
+is silent.** It is not a substitute for elaborating the mutant.
+
+### And the general lesson about merge windows
+
+Every packet in this campaign is briefed to keep its file sets disjoint, and all
+of them did. **These two never touched the same file.** UNTEX created a wrapper;
+POSTGATHER changed the module that wrapper mirrors. **Disjoint file sets are not
+disjoint SEMANTICS**, and the coupling here is a `.*` in a third file neither
+lane was looking at.
+
+**That is a coordinator failure, not a lane failure**, and the mitigation is the
+gate rather than better briefing — advisory prose loses, as `CLAUDE.md` already
+knows from the fit hook. **Any file that mirrors another file's interface needs
+a parity check, because the mirror breaks when the original moves and nothing
+about the original's change looks wrong.**

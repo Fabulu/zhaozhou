@@ -6938,6 +6938,24 @@ add_test(NAME console_core_tieoff_audit
 set_tests_properties(console_core_tieoff_audit PROPERTIES
   LABELS "fast;lint" TIMEOUT 120)
 
+# THE HALF mutant_copy_drift IS BLIND TO, BY DESIGN.
+#
+# Owner ruling R162: "a wrapper cannot drift in its BODY, but its PORT LIST
+# can, and mutant_copy_drift is blind to that half by design." On 2026-09-21
+# two lanes landing in the same window broke both wrappers in OPPOSITE
+# directions at once -- seventeen ports added to the core, fourteen removed --
+# and every static gate stayed green while the control would not elaborate
+# (owner ruling R220). It was found by RUNNING the smoke form, which is the
+# expensive way.
+#
+# Proven in both directions before registration: RC 1 on a planted missing
+# port AND on a planted stale one, RC 0 restored.
+add_test(NAME wrapper_port_parity
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/wrapper_port_parity.py)
+set_tests_properties(wrapper_port_parity PROPERTIES
+  LABELS "fast;lint;mutant" TIMEOUT 120)
+
 add_test(NAME lint_shell_v2_lease_path
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
           --top-module zhao_shell_v2_lease_path
