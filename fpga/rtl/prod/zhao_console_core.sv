@@ -428,6 +428,67 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+// ---------------------------------------------------------------------------
+// A RECORD ABOUT CITATIONS, NOT ABOUT A GAP -- "OWNER RULING R<n>" IS WRONG
+// FOR MOST OF THE RULINGS THIS FILE CITES. Added 2026-09-21 (gz/cfgarm).
+// ---------------------------------------------------------------------------
+// It sits HERE, in the prose before the first entry, for the reason the
+// placement note above gives: this region attaches to no entry, and a record
+// is not a gap. It changes nothing about the design and everything about how
+// hard a blocker is to move, which is why it is in the file rather than in a
+// findings document the harness refuses.
+//
+// MEASURED, with the instrument's own positive control stated because the
+// first run of it returned ZERO and that zero was a bug (a nested `-match`
+// clobbered `$Matches` before the id was captured -- the broken-instrument
+// law, reporting less than the truth, exactly as CLAUDE.md says it always
+// does). The corrected sweep sees 81 coordinator ids and correctly excludes
+// R1, which is an owner ruling.
+//
+//   `reports/OWNER-RULINGS-20260919-EVENING.md`'s decision table:
+//     81 of 91 rows are marked **(provisional, coordinator)**.
+//     SEVEN rows in the entire table say "(owner, explicit)": R1..R7.
+//   Citations of the form "owner ruling R<n>" where R<n> is one of those 81:
+//     223 across `fpga/`, `reference/` and `design/`
+//      62 in THIS FILE, over 26 distinct rulings
+//      27 in `design/prod_manifest.yml`, 16 in `zhao_console_board.sv`,
+//      10 in `design/console_inventory.yml`, 7 in `design/blocks.yml`,
+//      and the rest spread through RTL and the reference oracle.
+//   Of this file's 26, TWENTY-THREE have no prose section anywhere in
+//   `reports/` -- the coordinator-provisional table row is the only record
+//   there is, so no later owner upgrade is being missed by the count.
+//
+// THIS IS NOT A NEW CLASS OF ERROR, IT IS A KNOWN ONE AT SCALE. The owner's
+// own file has struck it twice: once on R65, and again on R133 --
+// "**R133's D-FORGESHADOW-B is the COORDINATOR's** ... Attributing a
+// coordinator ruling to the owner is the same mis-attribution this file
+// struck R65 for, **and here it is doing real work**: the whole 'wrong order'
+// argument rests on it." Both strikes treated it as a slip by one lane. It is
+// 223 citations.
+//
+// WHY IT DOES REAL WORK, in this entry block specifically. A packet that
+// reads "owner ruling R28 says every v1 material writes 0 there" believes it
+// is looking at a frozen owner decision and stops. A packet that reads
+// "provisional, coordinator" knows the decision can be re-asked for the cost
+// of asking. The two sentences are the same fact and a completely different
+// cost of moving it, and THIS FILE PRINTS THE FIRST ONE 62 TIMES. The
+// campaign's standing complaint is that blockers outlive their evidence; this
+// is the same disease in the evidence's ATTRIBUTION rather than in its
+// content, and it is larger.
+//
+// NOTHING IS RE-OPENED HERE. A coordinator's provisional ruling is a real
+// ruling and binds a packet exactly as before -- R133 and R199 still park
+// FORGE, R223 still closes it to packets, and this record does not license
+// anyone to reach past one. What changes is only WHO CAN LIFT IT, and that is
+// information every escalation needs and none of them has had. The repair is
+// mechanical (cite "R<n>" and let the table say whose it is, or say
+// "coordinator ruling R<n>"), it touches hundreds of comments across files
+// three live packets are editing, and it is therefore NOT done here: doing it
+// inside a packet would be a tree-wide rewrite nobody could review against
+// its own lane. It is written down so it can be scheduled once.
+//
+// ---------------------------------------------------------------------------
+//
 //  * I33 was PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`), six ports whose
 //    entry's whole argument was one sentence: "NO RATIFIED COMMAND CARRIES A
 //    SPECIES DESCRIPTOR ... Inventing one here would mean this file choosing

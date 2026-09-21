@@ -1,5 +1,26 @@
-// zref_raster_state.hpp -- the per-triangle RASTER STATE word, owner ruling R28
+// zref_raster_state.hpp -- the per-triangle RASTER STATE word, ruling R28
 // (provisional, coordinator, 2026-09-19).
+//
+// THE FIRST LINE SAID "owner ruling R28" AND THE SECOND SAID "(provisional,
+// coordinator)" -- two consecutive lines contradicting each other, with the
+// wrong half first. Corrected 2026-09-21 (gz/cfgarm): the decision table's
+// R28 row reads "**(provisional, coordinator)** Ratify a `raster_state u32`
+// layout in the ABI", and only R1..R7 in that whole table are "(owner,
+// explicit)". It matters here and not only pedantically: R28's "no bit of
+// [31:2] has a ratified consumer in v1" is a CO-ORDINATOR's provisional call,
+// so whoever next needs those bits -- the per-draw fragment constants of
+// entries I14/I20 are the live case -- is re-asking a question, not
+// overturning the owner. See the citation record in
+// `zhao_console_core.sv`'s tie-off block: 223 sites tree-wide say "owner
+// ruling" for a coordinator-provisional one.
+//
+// NOT A DIFFERENT WORD FROM THIS ONE, said here because the names collide and
+// two lanes have now reasoned across them: `zref::FragmentPipeline::State` in
+// `zref_fragment.hpp` is a SEPARATE 32-bit word ([0] z_test_en ... [31:24]
+// sten_mask, matching `zhao_raster_fragment.sv`) carried on
+// `tri_fragment_state_i`. THIS word is the TriangleDescriptor's draw-state
+// sideband, carried on `zhao_geom_assemble.m_raster_state_i`. Same width,
+// same English name, different layouts, different ports.
 //
 // R28: "Ratify a `raster_state u32` layout in the ABI. Cull mode comes FIRST and
 // from the DRAW (DrawForm flags); the remaining bits come from the material
