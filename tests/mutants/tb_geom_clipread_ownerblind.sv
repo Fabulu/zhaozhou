@@ -1,20 +1,18 @@
-// tb_geom_clipread.sv -- the REAL `zhao_geom_clipread` with its two
-// packed-struct ports flattened, so the C++ driver names fields instead of bit
-// ranges. Nothing here decides anything.
+// tb_geom_clipread_ownerblind.sv -- the flattening bench for
+// `zhao_geom_clipread_ownerblind_mutant`, the owner ruling of 2026-09-21's
+// test J.
 //
-// The flattening is the whole file, and it exists for the reason the repo's
-// other struct-port benches exist: a driver that pokes `g_req_o[97:71]` is a
-// driver that will still compile after somebody inserts a field.
+// It is NOT a copy of `tests/geometry/tb_geom_clipread.sv`: it carries only
+// the ports the inverted-polarity driver reads, so it cannot go stale in the
+// flattering direction by holding an old view of a port this fire test never
+// looks at. The two packed-struct ports are flattened for the same reason the
+// production bench flattens them -- a driver that pokes `g_req_o[97:71]` still
+// compiles after somebody inserts a field.
 `default_nettype none
 
-module tb_geom_clipread
+module tb_geom_clipread_ownerblind
   import zhao_pkg::*;
-#(
-    parameter int unsigned CLIP_ROWS = 16,
-    parameter int unsigned MAX_BONES = 32,
-    parameter logic [7:0]  BODY_KIND = 8'd8,
-    parameter logic [7:0]  CLIP_KIND = 8'd9
-) (
+(
     input  var logic clk,
     input  var logic rst_n,
 
@@ -31,13 +29,8 @@ module tb_geom_clipread
     input  var logic [15:0] p_clip_id_i,
     input  var logic [15:0] p_frame_no_i,
 
-    // the asset window, field by field
     output var logic        req_valid_o,
-    output var logic        req_write_o,
     output var logic [26:0] req_addr_o,
-    output var logic [ 6:0] req_len_o,
-    output var logic [63:0] req_be_o,
-    output var logic [ 2:0] req_client_o,
     input  var logic        rsp_ready_i,
     input  var logic        rsp_ok_i,
     input  var logic        rsp_violation_i,
@@ -54,32 +47,13 @@ module tb_geom_clipread
     output var logic [ 5:0] src_bone_count_o,
     input  var logic        src_ready_i,
 
-    output var logic signed [31:0] root_dx_o,
-    output var logic signed [31:0] root_dy_o,
-    output var logic signed [31:0] root_dz_o,
-
-    output var logic [23:0] res_body_index_o,
-    output var logic [15:0] res_body_gen_o,
-    output var logic [23:0] res_clip_index_o,
-    output var logic [15:0] res_clip_gen_o,
     output var logic [23:0] res_body_owner_o,
     output var logic [23:0] res_clip_owner_o,
 
     output var logic [31:0] bodies_o,
     output var logic [31:0] clips_o,
     output var logic [31:0] frames_o,
-    output var logic [31:0] pages_dropped_o,
-    output var logic [31:0] bad_magic_o,
-    output var logic [31:0] truncated_o,
-    output var logic [31:0] misaligned_o,
-    output var logic [31:0] bad_bone_count_o,
     output var logic [31:0] bone_mismatch_o,
-    output var logic [31:0] overflow_o,
-    output var logic [31:0] not_rigid_o,
-    output var logic [31:0] reserved_nz_o,
-    output var logic [31:0] denied_o,
-    output var logic [31:0] clip_miss_o,
-    output var logic [31:0] frame_oob_o,
     output var logic [31:0] not_resident_o,
     output var logic [31:0] owner_mismatch_o,
     output var logic        busy_o
@@ -88,12 +62,8 @@ module tb_geom_clipread
   zhao_guard_req_t req_c;
   zhao_guard_rsp_t rsp_c;
 
-  assign req_valid_o  = req_c.valid;
-  assign req_write_o  = req_c.write;
-  assign req_addr_o   = req_c.addr;
-  assign req_len_o    = req_c.len;
-  assign req_be_o     = req_c.be;
-  assign req_client_o = 3'(req_c.client);
+  assign req_valid_o = req_c.valid;
+  assign req_addr_o  = req_c.addr;
 
   always_comb begin
     rsp_c           = '0;
@@ -102,12 +72,10 @@ module tb_geom_clipread
     rsp_c.violation = rsp_violation_i;
   end
 
-  zhao_geom_clipread #(
-      .CLIP_ROWS(CLIP_ROWS),
-      .MAX_BONES(MAX_BONES),
-      .BODY_KIND(BODY_KIND),
-      .CLIP_KIND(CLIP_KIND)
-  ) u_dut (
+  // Everything this bench does not read is left unconnected deliberately; the
+  // fire test asks exactly one question.
+  /* verilator lint_off PINCONNECTEMPTY */
+  zhao_geom_clipread_ownerblind_mutant u_dut (
       .clk  (clk),
       .rst_n(rst_n),
 
@@ -118,9 +86,9 @@ module tb_geom_clipread
       .pub_base_i      (pub_base_i),
       .pub_extent_i    (pub_extent_i),
 
-      .p_valid_i    (p_valid_i),
-      .p_ready_o    (p_ready_o),
-      .p_form_idx_i (p_form_idx_i),
+      .p_valid_i   (p_valid_i),
+      .p_ready_o   (p_ready_o),
+      .p_form_idx_i(p_form_idx_i),
       .p_clip_id_i (p_clip_id_i),
       .p_frame_no_i(p_frame_no_i),
 
@@ -139,37 +107,38 @@ module tb_geom_clipread
       .src_bone_count_o(src_bone_count_o),
       .src_ready_i     (src_ready_i),
 
-      .root_dx_o(root_dx_o),
-      .root_dy_o(root_dy_o),
-      .root_dz_o(root_dz_o),
+      .root_dx_o(),
+      .root_dy_o(),
+      .root_dz_o(),
 
-      .res_body_index_o(res_body_index_o),
-      .res_body_gen_o  (res_body_gen_o),
-      .res_clip_index_o(res_clip_index_o),
-      .res_clip_gen_o  (res_clip_gen_o),
+      .res_body_index_o(),
+      .res_body_gen_o  (),
+      .res_clip_index_o(),
+      .res_clip_gen_o  (),
       .res_body_owner_o(res_body_owner_o),
       .res_clip_owner_o(res_clip_owner_o),
 
       .bodies_o        (bodies_o),
       .clips_o         (clips_o),
       .frames_o        (frames_o),
-      .pages_dropped_o (pages_dropped_o),
-      .bad_magic_o     (bad_magic_o),
-      .truncated_o     (truncated_o),
-      .misaligned_o    (misaligned_o),
-      .bad_bone_count_o(bad_bone_count_o),
+      .pages_dropped_o (),
+      .bad_magic_o     (),
+      .truncated_o     (),
+      .misaligned_o    (),
+      .bad_bone_count_o(),
       .bone_mismatch_o (bone_mismatch_o),
-      .overflow_o      (overflow_o),
-      .not_rigid_o     (not_rigid_o),
-      .reserved_nz_o   (reserved_nz_o),
-      .denied_o        (denied_o),
-      .clip_miss_o     (clip_miss_o),
-      .frame_oob_o     (frame_oob_o),
+      .overflow_o      (),
+      .not_rigid_o     (),
+      .reserved_nz_o   (),
+      .denied_o        (),
+      .clip_miss_o     (),
+      .frame_oob_o     (),
       .not_resident_o  (not_resident_o),
       .owner_mismatch_o(owner_mismatch_o),
       .busy_o          (busy_o)
   );
+  /* verilator lint_on PINCONNECTEMPTY */
 
-endmodule : tb_geom_clipread
+endmodule : tb_geom_clipread_ownerblind
 
 `default_nettype wire

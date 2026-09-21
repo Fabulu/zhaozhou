@@ -892,6 +892,32 @@ module zhao_console_board
   output logic [15:0]              cmd_draw_clip_id_o,
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
+
+  // ---- the ACCEPTED JOB's FORM INDEX -- BOUNDARY, entry I29 ----------------
+  // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
+  // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
+  // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
+  // existing `form_idx_q` rather than re-derived from an unrelated live
+  // register later.
+  //
+  // THIS IS THE RESOLVED JOB, NOT THE COMMAND. `cmd_draw_*` above leaves the
+  // module unresolved by design; this pair leaves it AFTER GEOM.DRAWJOB has
+  // validated the handle against real residency, which is the only form index
+  // an ownership comparison may legitimately use. Reading `cmd_draw_form_w`
+  // instead would be precisely the "unrelated live register" the ruling names.
+  //
+  // `geom_job_valid_o` IS the lifetime. `geom_job_form_idx_o` is driven from
+  // the register only while the job is emitting and is zero otherwise, but
+  // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
+  // is the valid, exactly as for every other job field.
+  //
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: the consumer
+  // (`zhao_geom_clipread.p_form_idx_i`, built and differenced in this same
+  // commit) is not composed, and this file's own R229 paragraph gives the
+  // rule for that case -- an output nobody reads lets synthesis delete the
+  // logic behind it and a fit then reports the lane's registers as free.
+  output logic                     geom_job_valid_o,
+  output logic [23:0]              geom_job_form_idx_o,
   // Evidence, not a boundary -- the same standing as the three counters above.
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
@@ -3413,6 +3439,8 @@ module zhao_console_board
       .cmd_draw_clip_id_o                 (cmd_draw_clip_id_o),
       .cmd_draw_frame_no_o                (cmd_draw_frame_no_o),
       .cmd_draw_sub_o                     (cmd_draw_sub_o),
+      .geom_job_valid_o                   (geom_job_valid_o),
+      .geom_job_form_idx_o                (geom_job_form_idx_o),
       .cmd_exec_posed_draws_o             (cmd_exec_posed_draws_o),
       .cmd_exec_pose_clip_refused_o       (cmd_exec_pose_clip_refused_o),
       .geom_mf_meshlets_considered_o      (geom_mf_meshlets_considered_o),

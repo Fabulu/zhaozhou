@@ -131,6 +131,25 @@ module zhao_geom_drawjob
     output var logic signed [31:0]    j_xform_o [12],
     output var logic [31:0]           j_stream_base_o,
     output var logic [SIDEW-1:0]      j_side_o,
+    // THE DRAW'S FORM INDEX, all 24 bits, on the job that was ACCEPTED.
+    //
+    // This is `form_idx_q` -- `d_form_i[31:8]`, `spec/memory_rules.md` 5f.1's
+    // residency key and the number `zref_creature_page.hpp` names as THE
+    // per-creature-type key at the hardware boundary ("THE KEY IS THE
+    // MESH_STREAM HANDLE INDEX, NOT AN INVENTED TYPE ID"). The owner ruling of
+    // 2026-09-21 section 3 requires it to be EXPOSED here rather than
+    // re-derived, and requires its CONSUMER to land with it:
+    // `zhao_geom_clipread.p_form_idx_i` is that consumer and lands in the same
+    // commit.
+    //
+    // IT IS GATED BY STATE AND NOT OFFERED BARE. `d_ready_o` is
+    // `(st_q == S_IDLE)`, so in S_IDLE the register still holds the PREVIOUS
+    // draw; a consumer reading it there would associate this draw's pages with
+    // the last draw's form. It is therefore driven from the register ONLY
+    // while `j_valid_o` is high -- the job's own lifetime and handshake -- and
+    // zero otherwise. Zero is not a sentinel (index 0 is a legal form); the
+    // QUALIFIER is `j_valid_o`, exactly as it is for every other `j_*` field.
+    output var logic [23:0]           j_form_idx_o,
 
     // ---- evidence -----------------------------------------------------------
     output var logic [31:0] draws_o,          // DrawForms accepted
@@ -319,6 +338,7 @@ module zhao_geom_drawjob
   assign j_active_mask_o = mask_q;
   assign j_stream_base_o = sbase_q;
   assign j_side_o        = {weight_q, mset_q, raster_q};
+  assign j_form_idx_o    = (st_q == S_EMIT) ? form_idx_q : 24'd0;
 
   always_comb begin
     for (int unsigned k = 0; k < 12; k++)

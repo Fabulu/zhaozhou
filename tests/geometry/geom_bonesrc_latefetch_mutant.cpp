@@ -88,7 +88,7 @@ int main() {
 
   char golden_path[512];
   std::snprintf(golden_path, sizeof golden_path,
-                "%s/tests/golden/creature_ladder/ladder_page_body_v1.bin", ZHAO_SOURCE_DIR);
+                "%s/tests/golden/creature_ladder/ladder_page_body_v2.bin", ZHAO_SOURCE_DIR);
   const std::vector<uint8_t> golden = read_file(golden_path);
   check(!golden.empty(), "the body golden is present");
   const uint32_t body_off = cp::get_u32(golden.data() + 8);

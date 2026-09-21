@@ -1,3 +1,41 @@
+// zhao_geom_clipread_ownerblind_mutant.sv -- A DELIBERATELY BROKEN COPY of
+// `fpga/rtl/geometry/zhao_geom_clipread.sv`. It is EVIDENCE ABOUT AN
+// INSTRUMENT, not a design. Nothing ships it and no source list names it; the
+// module is renamed so it cannot be elaborated by accident.
+//
+// WHAT WAS CHANGED, and it is one line:
+//
+//     wire owner_ok_c = (body_owner_q == p_form_idx_i)
+//                    && (clip_owner_q == p_form_idx_i);   // production
+//     wire owner_ok_c = 1'b1;                             // here
+//
+// WHY IT EXISTS. The owner ruling of 2026-09-21 (kind-8 / kind-9 ownership),
+// section 6 test J: "At least one deliberate mutation bypassing each new
+// ownership comparison must turn the corresponding negative test red, while
+// valid traffic stays green. Verify the fault was actually planted before
+// citing the result."
+//
+// `owner_mismatch_o` CAN be fired by legal stimulus -- `geom_clipread_directed`
+// fires it five times. So this mutant is not here because the guard is
+// unreachable; it is here because the ruling requires the NEGATIVE TESTS to be
+// shown to depend on the comparison rather than on something else that happens
+// to refuse the same traffic. Cases B, C and D of that test present pages with
+// identical bone counts, clip ids, frame counts, frame numbers and sub-phases;
+// if they went red for any reason but ownership, removing the ownership check
+// would leave them red. It does not. It makes the block emit a well-formed
+// palette for the wrong animal, which is the defect the whole ruling exists to
+// make impossible.
+//
+// THE DRIVER'S POLARITY IS INVERTED: `tests/mutants/geom_clipread_ownerblind_
+// mutant.cpp` PASSES when the foreign frame IS served and `owner_mismatch_o`
+// STAYS ZERO. It also proves the PLANT before quoting the result -- it reads
+// this file and requires the mutated line to be present and the production
+// expression to be absent, because a fire test on an unmutated copy is a test
+// of nothing that reports success.
+//
+// REGENERATE IT if `zhao_geom_clipread.sv` changes shape: this is a COPY, and a
+// copy of an old version is a positive control for a block that no longer
+// exists. `tools/budget/mutant_copy_drift.py` watches for that.
 // zhao_geom_clipread.sv -- the kind-8 BODY and kind-9 CLIP FRAME page reader
 // that fills `zhao_geom_bonesrc`. Entry I29 of `zhao_console_core.sv`.
 //
@@ -142,7 +180,7 @@
 // multiply is the frame stride, which is a small unsigned product.
 `default_nettype none
 
-module zhao_geom_clipread
+module zhao_geom_clipread_ownerblind_mutant
   import zhao_pkg::*;
 #(
     // Clip directory rows held for the resident bank. NAMED AND EDITABLE
@@ -498,7 +536,11 @@ module zhao_geom_clipread
   // S_BR_FILL out of a kind-8 publication, `clip_owner_q` in S_CD_ROW out of a
   // kind-9 one. Three loads, three paths, so the compare is not structurally
   // blind to any fault a single enable participates in.
-  wire owner_ok_c = (body_owner_q == p_form_idx_i) && (clip_owner_q == p_form_idx_i);
+  // THE MUTATION, and it is this file's ONLY substantive line:
+  //   was: (body_owner_q == p_form_idx_i) && (clip_owner_q == p_form_idx_i)
+  // Both halves of the ownership comparison are bypassed at once. The block is
+  // otherwise byte-for-byte production.
+  wire owner_ok_c = 1'b1;
 
   // ---- the clip lookup -----------------------------------------------------
   // One level of compare across the resident rows. CLIP_ROWS is small by

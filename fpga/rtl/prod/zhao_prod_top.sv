@@ -1477,6 +1477,7 @@ module zhao_prod_top (
   end
   logic [32-1:0] u17_j_stream_base_o;
   logic [72-1:0] u17_j_side_o;
+  logic [24-1:0] u17_j_form_idx_o;
   logic [32-1:0] u17_draws_o;
   logic [32-1:0] u17_jobs_o;
   logic [32-1:0] u17_masked_o;
@@ -1535,6 +1536,7 @@ module zhao_prod_top (
       .j_xform_o(u17_j_xform_o),
       .j_stream_base_o(u17_j_stream_base_o),
       .j_side_o(u17_j_side_o),
+      .j_form_idx_o(u17_j_form_idx_o),
       .draws_o(u17_draws_o),
       .jobs_o(u17_jobs_o),
       .masked_o(u17_masked_o),
@@ -1546,7 +1548,7 @@ module zhao_prod_top (
   logic u17_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_fold_q <= 1'b0;
-    else u17_fold_q <= u17_fold_q ^ (((^u17_d_ready_o)) & u17_src[0]) ^ (((^u17_guard_req_o)) & u17_src[1]) ^ (((^u17_j_valid_o)) & u17_src[2]) ^ (((^u17_j_instance_id_o)) & u17_src[3]) ^ (((^u17_j_desc_addr_o)) & u17_src[4]) ^ (((^u17_j_format_o)) & u17_src[5]) ^ (((^u17_j_generation_o)) & u17_src[6]) ^ (((^u17_j_active_mask_o)) & u17_src[7]) ^ ((u17_j_xform_o_fold) & u17_src[8]) ^ (((^u17_j_stream_base_o)) & u17_src[9]) ^ (((^u17_j_side_o)) & u17_src[10]) ^ (((^u17_draws_o)) & u17_src[11]) ^ (((^u17_jobs_o)) & u17_src[12]) ^ (((^u17_masked_o)) & u17_src[13]) ^ (((^u17_empty_o)) & u17_src[14]) ^ (((^u17_pal_writes_o)) & u17_src[15]) ^ (((^u17_pal_dropped_o)) & u17_src[16]) ^ ((u17_refused_o_fold) & u17_src[17]);
+    else u17_fold_q <= u17_fold_q ^ (((^u17_d_ready_o)) & u17_src[0]) ^ (((^u17_guard_req_o)) & u17_src[1]) ^ (((^u17_j_valid_o)) & u17_src[2]) ^ (((^u17_j_instance_id_o)) & u17_src[3]) ^ (((^u17_j_desc_addr_o)) & u17_src[4]) ^ (((^u17_j_format_o)) & u17_src[5]) ^ (((^u17_j_generation_o)) & u17_src[6]) ^ (((^u17_j_active_mask_o)) & u17_src[7]) ^ ((u17_j_xform_o_fold) & u17_src[8]) ^ (((^u17_j_stream_base_o)) & u17_src[9]) ^ (((^u17_j_side_o)) & u17_src[10]) ^ (((^u17_j_form_idx_o)) & u17_src[11]) ^ (((^u17_draws_o)) & u17_src[12]) ^ (((^u17_jobs_o)) & u17_src[13]) ^ (((^u17_masked_o)) & u17_src[14]) ^ (((^u17_empty_o)) & u17_src[15]) ^ (((^u17_pal_writes_o)) & u17_src[16]) ^ (((^u17_pal_dropped_o)) & u17_src[17]) ^ ((u17_refused_o_fold) & u17_src[18]);
 
   // ---- zhao_geom_fogfactor ----
   logic [63:0] u18_lfsr_q;
@@ -2186,14 +2188,17 @@ module zhao_prod_top (
       .begin_frame_i(u25_src[0 +: 1]),
       .acq_valid_i(u25_src[7 +: 1]),
       .acq_ready_o(u25_acq_ready_o),
-      .acq_type_i(u25_src[14 +: 16]),
+      .acq_type_i(u25_src[14 +: 24]),
       .acq_clip_i(u25_src[21 +: 16]),
       .acq_frame_i(u25_src[28 +: 16]),
       .acq_sub_i(u25_src[35 +: 8]),
       .acq_gen_i(u25_src[42 +: 16]),
-      .acq_resolvable_i(u25_src[49 +: 1]),
+      .acq_body_idx_i(u25_src[49 +: 24]),
+      .acq_body_gen_i(u25_src[56 +: 16]),
+      .acq_clip_idx_i(u25_src[63 +: 24]),
+      .acq_resolvable_i(u25_src[70 +: 1]),
       .resp_valid_o(u25_resp_valid_o),
-      .resp_ready_i(u25_src[56 +: 1]),
+      .resp_ready_i(u25_src[77 +: 1]),
       .resp_kind_o(u25_resp_kind_o),
       .resp_slot_o(u25_resp_slot_o),
       .hits_o(u25_hits_o),

@@ -294,7 +294,23 @@ inline bool lookup(const std::vector<Record>& bank, uint32_t form_index,
 namespace body {
 
 inline constexpr uint32_t kMagic = 0x38424354u;  //!< 'T','C','B','8' LE
-inline constexpr uint16_t kVersion = 1u;
+
+/** VERSION 2 -- the OWNER FORM INDEX, owner ruling of 2026-09-21 (kind-8 /
+ *  kind-9 ownership), section 2. A v1 body says which BONES it has and never
+ *  which FORM they belong to, so a resident skeleton could be composed against
+ *  any draw. `bone_mismatch` is blind to that whenever the two creatures have
+ *  the same bone count, which is the common case.
+ *
+ *  THE OUTER kind-8 HEADER AND THE LADDER TABLE STAY AT v1. The ruling says so
+ *  in terms, and it is why the version constants are SEPARATE here and in
+ *  `zhao_geom_clipread` rather than one shared symbol: bumping one constant to
+ *  2 would reject the still-v1 outer header the body is appended to.
+ *
+ *  `kVersionV1` stays NAMED so historical fixtures remain identifiable --
+ *  `tests/golden/creature_ladder/ladder_page_body_v1.bin` is still committed,
+ *  is still a legal v1 body, and `decode_body` refuses it. */
+inline constexpr uint16_t kVersionV1 = 1u;
+inline constexpr uint16_t kVersion = 2u;
 inline constexpr size_t kHeaderBytes = 64;
 inline constexpr size_t kBoneBytes = 32;
 inline constexpr int kMaxBones = 32;  //!< creature_rules §1.2
@@ -309,6 +325,23 @@ inline constexpr size_t kOffFlags = 1;
 inline constexpr size_t kOffRestTx = 4;
 inline constexpr size_t kOffInvTx = 16;
 
+// BODY HEADER byte offsets. Bytes 0..15 are v1's and do not move:
+//   +0  u32 magic   +4 u16 version   +6 u8 bone_count   +7 u8 flags
+//   +8  u32 bones_off                +12 u32 reserved, still zero in v2.
+/** v2's owner word: ONE ALIGNED LITTLE-ENDIAN u32 for a SEMANTIC u24, bits
+ *  23:0 the owner's MESH_STREAM form index, bits 31:24 MUST be zero. It sits
+ *  in EXISTING padding -- the body header was and remains 64 bytes, and every
+ *  bone record offset and `body_off` semantic is unchanged. */
+inline constexpr size_t kOffOwnerForm = 16;
+
+/** The same 24-bit handle index the ladder record keys on, named once more in
+ *  this scope so the two statements of the mask cannot drift.
+ *
+ *  INDEX ZERO IS NOT A SENTINEL. Presence of an owner follows the VERSION and
+ *  the validated presence of the section, never the numeric value. A body
+ *  owned by form 0 is an ordinary body. */
+inline constexpr uint32_t kOwnerFormMask = kFormIndexMask;
+
 enum class BodyVerdict : uint8_t {
   kOk = 0,
   kBadMagic = 1,
@@ -319,6 +352,14 @@ enum class BodyVerdict : uint8_t {
   kNotRigidRest = 6,   //!< a record claiming a rest rotation this build cannot
                        //!< decode — refused, never decoded wrongly
   kReservedNz = 7,     //!< a reserved field is not zero
+  kBadOwner = 8,       //!< the owner word's bits 31:24 are not zero. The
+                       //!< FORMAT rule only; WHICH form owns the body is the
+                       //!< loader's comparison, because only the loader holds
+                       //!< the request to compare it against.
+  kOwnerNotInLadder = 9,  //!< a body-bearing kind-8 page with no LADDER RECORD
+                       //!< for the body's own owner. The ruling: a page that
+                       //!< carries a skeleton for a form it does not otherwise
+                       //!< describe is a page whose two halves disagree.
 };
 
 /**
@@ -389,8 +430,10 @@ inline void inv_rest_matrix(const BoneRecord& r, int32_t m[12]) {
 
 /** The body section bytes: a 64-byte header then one 32-byte record per bone,
  *  padded to 64. Empty on any refusal `bake_body` makes. */
-inline std::vector<uint8_t> build_body(const std::vector<BoneRecord>& bones) {
+inline std::vector<uint8_t> build_body(const std::vector<BoneRecord>& bones,
+                                       uint32_t owner_form_index) {
   std::vector<BoneRecord> baked;
+  if ((owner_form_index & ~kOwnerFormMask) != 0u) return {};
   if (!bake_body(bones, baked)) return {};
   size_t n = kHeaderBytes + kBoneBytes * baked.size();
   if (n % 64u != 0u) n += 64u - (n % 64u);
@@ -401,6 +444,10 @@ inline std::vector<uint8_t> build_body(const std::vector<BoneRecord>& bones) {
   body[6] = static_cast<uint8_t>(baked.size() & 0xFFu);
   body[7] = kFlagRigidRest;
   put_u32(body.data() + 8, static_cast<uint32_t>(kHeaderBytes));
+  // SUPPLIED, never inferred. The ruling forbids deriving the owner from row
+  // zero of the ladder or from a matching bone count; this function is given
+  // the number or it emits nothing.
+  put_u32(body.data() + kOffOwnerForm, owner_form_index & kOwnerFormMask);
   for (size_t i = 0; i < baked.size(); ++i) {
     uint8_t* p = body.data() + kHeaderBytes + kBoneBytes * i;
     p[kOffParent] = baked[i].parent;
@@ -418,18 +465,24 @@ inline std::vector<uint8_t> build_body(const std::vector<BoneRecord>& bones) {
 /** Decode a body section. `out` is left EMPTY on any verdict but kOk — a
  *  refused body is refused whole, exactly as a refused page is. */
 inline BodyVerdict decode_body(const uint8_t* body, size_t bytes,
-                               std::vector<BoneRecord>& out) {
+                               std::vector<BoneRecord>& out,
+                               uint32_t* owner_form_index_o = nullptr) {
   out.clear();
+  if (owner_form_index_o) *owner_form_index_o = 0;
   if (bytes < kHeaderBytes) return BodyVerdict::kTruncated;
   if (get_u32(body) != kMagic) return BodyVerdict::kBadMagic;
   const uint16_t version =
       static_cast<uint16_t>(body[4] | (static_cast<uint16_t>(body[5]) << 8));
+  // A v1 body is REFUSED, not upgraded: it carries no owner and no conversion
+  // can invent one out of the bytes that are there.
   if (version != kVersion) return BodyVerdict::kBadVersion;
   const uint8_t count = body[6];
   if (body[7] != kFlagRigidRest) return BodyVerdict::kNotRigidRest;
   if (count == 0 || count > kMaxBones) return BodyVerdict::kBadBoneCount;
   const uint32_t bones_off = get_u32(body + 8);
   if (get_u32(body + 12) != 0u) return BodyVerdict::kReservedNz;
+  const uint32_t owner_w = get_u32(body + kOffOwnerForm);
+  if ((owner_w & ~kOwnerFormMask) != 0u) return BodyVerdict::kBadOwner;
   if (bones_off + kBoneBytes * static_cast<size_t>(count) > bytes)
     return BodyVerdict::kTruncated;
   std::vector<BoneRecord> staged;
@@ -452,21 +505,62 @@ inline BodyVerdict decode_body(const uint8_t* body, size_t bytes,
     staged.push_back(r);
   }
   out.swap(staged);
+  if (owner_form_index_o) *owner_form_index_o = owner_w;
   return BodyVerdict::kOk;
+}
+
+/** The body header's declared version, WITHOUT judging it -- how a v1 fixture
+ *  stays identifiable once `decode_body` refuses it. */
+inline uint16_t body_version(const uint8_t* body, size_t bytes) {
+  if (bytes < kHeaderBytes) return 0;
+  return static_cast<uint16_t>(body[4] | (static_cast<uint16_t>(body[5]) << 8));
+}
+
+/** The owner word AS STORED, high byte included and unjudged. The RTL reader
+ *  is differenced against this rather than against a recomputation. */
+inline uint32_t body_owner_word(const uint8_t* body, size_t bytes) {
+  if (bytes < kHeaderBytes) return 0;
+  return get_u32(body + kOffOwnerForm);
 }
 
 }  // namespace body
 
 /**
+ * THE PAGE'S TWO HALVES MUST AGREE ABOUT WHO THE BODY BELONGS TO.
+ *
+ * Owner ruling of 2026-09-21, section 2: "Validate that a body-bearing kind-8
+ * page contains a ladder record for its body owner; the other ladder records
+ * remain independently owned metadata, NOT users of that body."
+ *
+ * The record does not have to be ROW ZERO and the bank stays a MULTI-FORM
+ * TABLE -- the committed golden's body is owned by its SECOND record on
+ * purpose, so a packer or reader that quietly reads row zero is caught by the
+ * fixture rather than by an argument.
+ */
+inline bool body_owner_in_ladder(const std::vector<Record>& records,
+                                 uint32_t body_owner_form_index) {
+  if ((body_owner_form_index & ~kFormIndexMask) != 0u) return false;
+  for (const Record& r : records)
+    if (r.form_index == body_owner_form_index) return true;
+  return false;
+}
+
+/**
  * Build a page WITH a body appended. The bodyless `build` above is untouched
  * and still emits `body_off == 0`; this one computes the offset of the body it
  * actually writes, which is the only honest source for that number.
+ *
+ * `body_owner_form_index` is SUPPLIED by the asset definition. It is never
+ * inferred from row zero, from a matching bone count, from the publication
+ * index or from the loader's order.
  */
 inline std::vector<uint8_t> build_with_body(
     const std::vector<Record>& records,
-    const std::vector<body::BoneRecord>& bones) {
+    const std::vector<body::BoneRecord>& bones,
+    uint32_t body_owner_form_index) {
+  if (!body_owner_in_ladder(records, body_owner_form_index)) return {};
   std::vector<uint8_t> page = build(records, 0u);
-  std::vector<uint8_t> b = body::build_body(bones);
+  std::vector<uint8_t> b = body::build_body(bones, body_owner_form_index);
   if (b.empty()) return {};
   put_u32(page.data() + 8, static_cast<uint32_t>(page.size()));
   page.insert(page.end(), b.begin(), b.end());

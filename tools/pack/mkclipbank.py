@@ -61,12 +61,23 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-GOLDEN = REPO / "tests" / "golden" / "creature_clip" / "clip_page_v1.bin"
+# v2 is the page this packer REBUILDS; v1 stays committed and unrebuilt,
+# because the 2026-09-21 ownership ruling requires historical v1 fixtures to
+# stay IDENTIFIABLE. `--check` asserts it is on disk, still declares version 1,
+# and differs from v2 -- and `zref::clip_page::decode` refuses it.
+GOLDEN_V1 = REPO / "tests" / "golden" / "creature_clip" / "clip_page_v1.bin"
+GOLDEN = REPO / "tests" / "golden" / "creature_clip" / "clip_page_v2.bin"
 
 # zref::clip_page, restated. See the module docstring on why a second statement
 # exists and what pins it.
 MAGIC = 0x504C435A  # 'Z','C','L','P' little-endian
-VERSION = 1
+# VERSION 2 -- the OWNER FORM INDEX (owner ruling 2026-09-21, section 2). A v1
+# bank never said which form its frames animate, so any resident bank could
+# answer any draw and produce a well-formed palette for the wrong animal.
+VERSION_V1 = 1
+VERSION = 2
+OWNER_OFF = 20            # bytes 20..23 of the 64-byte page header
+OWNER_MASK = 0x00FFFFFF   # bits 31:24 MUST be zero
 HEADER_BYTES = 64
 CLIP_BYTES = 32
 FRAME_HEADER_BYTES = 64
@@ -118,9 +129,21 @@ def _i16(v, where):
     return v
 
 
-def check_bank(clips, bone_count, rows=MAX_CLIPS):
+def check_bank(clips, bone_count, owner_form_index, rows=MAX_CLIPS):
     """Every legality `zref::clip_page::bank_legal` enforces, plus the JSON
-    shape errors a C++ struct cannot have."""
+    shape errors a C++ struct cannot have.
+
+    `owner_form_index` is SUPPLIED. Nothing in a bank's own bytes names a
+    creature, so there is no honest way to infer it and the 2026-09-21 ruling
+    forbids the dishonest ones -- publication index, loader order, bone count."""
+    if not isinstance(owner_form_index, int) or isinstance(owner_form_index, bool):
+        raise Refusal("owner_form_index %r is not an integer" % (owner_form_index,))
+    if owner_form_index & ~OWNER_MASK:
+        raise Refusal(
+            "owner_form_index 0x%X sets bits 31:24 -- the owner word stores a "
+            "SEMANTIC u24 in an aligned u32 and its high byte MUST be zero"
+            % owner_form_index
+        )
     if not isinstance(bone_count, int) or isinstance(bone_count, bool):
         raise Refusal("bone_count: %r is not an integer" % (bone_count,))
     if bone_count < 1 or bone_count > MAX_BONES:
@@ -206,8 +229,8 @@ def check_bank(clips, bone_count, rows=MAX_CLIPS):
     return True
 
 
-def build(clips, bone_count, rows=MAX_CLIPS):
-    check_bank(clips, bone_count, rows)
+def build(clips, bone_count, owner_form_index, rows=MAX_CLIPS):
+    check_bank(clips, bone_count, owner_form_index, rows)
     stride = frame_stride(bone_count)
     dir_off = HEADER_BYTES
     frames_off = round_up_line(dir_off + CLIP_BYTES * len(clips))
@@ -228,6 +251,7 @@ def build(clips, bone_count, rows=MAX_CLIPS):
     page = bytearray(round_up_line(cur))
     struct.pack_into("<IHBBHH", page, 0, MAGIC, VERSION, bone_count, 0, len(clips), 0)
     struct.pack_into("<II", page, 12, dir_off, frames_off)
+    struct.pack_into("<I", page, OWNER_OFF, owner_form_index & OWNER_MASK)
 
     for i, c in enumerate(clips):
         d = dir_off + CLIP_BYTES * i
@@ -260,6 +284,12 @@ def build(clips, bone_count, rows=MAX_CLIPS):
 # generator and not a new one.
 GOLDEN_BONE_COUNT = 6
 
+# THE OWNER. The same form `mkcreatureladder.py`'s BODY golden names
+# (GOLDEN_BODY_OWNER, 0x000101) -- the two goldens describe ONE creature, so a
+# reader differenced against both must agree that they do. It is that packer's
+# SECOND ladder row, not its first.
+GOLDEN_OWNER = 0x000101
+
 
 def _bone_quat(b):
     return [16384 - 300 * b, 1500 * (b + 1), 700 * b, -400 * b]
@@ -288,6 +318,10 @@ def main(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("source", nargs="?", help="a JSON object {bone_count, clips}")
     ap.add_argument("out", nargs="?", help="the .bin to write")
+    ap.add_argument("--owner", type=lambda v: int(v, 0), default=None,
+                    help="the MESH_STREAM form index (24 bits) this bank "
+                         "animates. REQUIRED, and never inferred (owner "
+                         "ruling 2026-09-21).")
     ap.add_argument("--check", action="store_true",
                     help="rebuild the golden and compare byte for byte")
     ap.add_argument("--write-golden", action="store_true",
@@ -296,7 +330,7 @@ def main(argv):
 
     if a.write_golden:
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
-        page = build(GOLDEN_CLIPS, GOLDEN_BONE_COUNT)
+        page = build(GOLDEN_CLIPS, GOLDEN_BONE_COUNT, GOLDEN_OWNER)
         GOLDEN.write_bytes(page)
         print("mkclipbank: wrote %s, %d bytes, %d clips, %d bones"
               % (GOLDEN, len(page), len(GOLDEN_CLIPS), GOLDEN_BONE_COUNT))
@@ -307,7 +341,7 @@ def main(argv):
             print("mkclipbank: %s is missing" % GOLDEN, file=sys.stderr)
             return 1
         want = GOLDEN.read_bytes()
-        got = build(GOLDEN_CLIPS, GOLDEN_BONE_COUNT)
+        got = build(GOLDEN_CLIPS, GOLDEN_BONE_COUNT, GOLDEN_OWNER)
         if got != want:
             print(
                 "mkclipbank: the packer no longer reproduces %s (%d bytes built, "
@@ -327,6 +361,33 @@ def main(argv):
         if magic != MAGIC or version != VERSION or rsv0 or rsv1:
             print("mkclipbank: the golden's own header does not read back",
                   file=sys.stderr)
+            return 1
+        # THE OWNER WORD, off the artefact rather than out of the constant that
+        # wrote it -- the RTL reader is differenced against these bytes.
+        owner_w = struct.unpack_from("<I", want, OWNER_OFF)[0]
+        if owner_w != GOLDEN_OWNER:
+            print("mkclipbank: the golden's owner word is 0x%08X, expected 0x%06X"
+                  % (owner_w, GOLDEN_OWNER), file=sys.stderr)
+            return 1
+        # THE v1 FIXTURE STAYS IDENTIFIABLE: on disk, still declaring version 1,
+        # and not byte-equal to v2. `zref::clip_page::decode` refuses it, which
+        # is the ruling's "unowned v1 CLIP_BANK data is not accepted".
+        if not GOLDEN_V1.exists():
+            print("mkclipbank: the historical %s is gone -- the 2026-09-21 ruling "
+                  "requires v1 fixtures to stay identifiable" % GOLDEN_V1,
+                  file=sys.stderr)
+            return 1
+        v1 = GOLDEN_V1.read_bytes()
+        v1_ver = struct.unpack_from("<H", v1, 4)[0]
+        if v1_ver != VERSION_V1:
+            print("mkclipbank: %s declares version %d, not %d -- it is no longer "
+                  "the historical fixture it is kept as" % (GOLDEN_V1, v1_ver,
+                                                            VERSION_V1),
+                  file=sys.stderr)
+            return 1
+        if v1 == want:
+            print("mkclipbank: the v1 and v2 goldens are identical -- the version "
+                  "bump did not reach the bytes", file=sys.stderr)
             return 1
         stride = frame_stride(bones)
         for i in range(clips):
@@ -373,14 +434,14 @@ def main(argv):
              "an event_count naming bytes that are not there"),
         ):
             try:
-                build(bad_clips, bad_bones)
+                build(bad_clips, bad_bones, GOLDEN_OWNER)
             except Refusal:
                 fired += 1
             else:
                 print("mkclipbank: %s was NOT refused" % why, file=sys.stderr)
                 return 1
         try:
-            build(good, GOLDEN_BONE_COUNT, rows=1)
+            build(good, GOLDEN_BONE_COUNT, GOLDEN_OWNER, rows=1)
         except Refusal:
             fired += 1
         else:
@@ -388,10 +449,24 @@ def main(argv):
                   file=sys.stderr)
             return 1
 
+        # THE OWNERSHIP REFUSALS, fired rather than claimed.
+        for bad_owner, why in (
+            (0x01000101, "an owner setting bits 31:24"),
+            ("0x000101", "an owner that is not an integer"),
+        ):
+            try:
+                build(good, GOLDEN_BONE_COUNT, bad_owner)
+            except Refusal:
+                fired += 1
+            else:
+                print("mkclipbank: %s was NOT refused" % why, file=sys.stderr)
+                return 1
+
         print("mkclipbank: golden reproduced byte for byte (%d bytes, %d clips, "
-              "%d bones, frame stride %d); header and directory read back; "
+              "%d bones, frame stride %d, v%d, owner 0x%06X); historical v1 "
+              "golden present and still v1; header and directory read back; "
               "%d refusals fired"
-              % (len(got), clips, bones, stride, fired))
+              % (len(got), clips, bones, stride, version, owner_w, fired))
         return 0
 
     if not a.source or not a.out:
@@ -401,8 +476,17 @@ def main(argv):
         print("mkclipbank: %s is not {\"bone_count\": n, \"clips\": [...]}" % a.source,
               file=sys.stderr)
         return 2
+    owner = doc.get("owner_form_index", a.owner)
+    if owner is None:
+        print("mkclipbank: no owner. A CLIP_BANK must name the MESH_STREAM form "
+              "it animates EXPLICITLY -- pass --owner or put owner_form_index in "
+              "the JSON. Inferring it from the publication index or the loader's "
+              "order is what the 2026-09-21 ruling forbids, and an unattributed "
+              "bank decodes a well-formed palette for the wrong animal.",
+              file=sys.stderr)
+        return 2
     try:
-        page = build(doc["clips"], doc["bone_count"])
+        page = build(doc["clips"], doc["bone_count"], owner)
     except Refusal as e:
         print("mkclipbank: REFUSED -- %s" % e, file=sys.stderr)
         return 1

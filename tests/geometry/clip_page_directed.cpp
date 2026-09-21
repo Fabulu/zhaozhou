@@ -84,9 +84,13 @@ std::vector<cl::Clip> golden_clips() {
   return {a, b};
 }
 
+// mkclipbank.py's GOLDEN_OWNER: the form this bank animates, supplied by the
+// asset definition and never inferred (owner ruling 2026-09-21, section 2).
+constexpr uint32_t kGoldenOwner = 0x000101u;
+
 std::vector<uint8_t> read_golden() {
   std::vector<uint8_t> out;
-  const char* path = ZHAO_SOURCE_DIR "/tests/golden/creature_clip/clip_page_v1.bin";
+  const char* path = ZHAO_SOURCE_DIR "/tests/golden/creature_clip/clip_page_v2.bin";
   std::FILE* f = std::fopen(path, "rb");
   check(f != nullptr, "the committed clip-page golden opens");
   if (!f) return out;
@@ -117,6 +121,7 @@ const char* name_of(cl::Verdict v) {
     case cl::Verdict::kMisaligned: return "kMisaligned";
     case cl::Verdict::kDuplicateSlot: return "kDuplicateSlot";
     case cl::Verdict::kReservedNz: return "kReservedNz";
+    case cl::Verdict::kBadOwner: return "kBadOwner";
   }
   return "?";
 }
@@ -130,7 +135,7 @@ int main() {
   if (golden.empty()) return zhao::report_and_exit("clip_page_directed");
 
   // ---- 1. the model reproduces the packer, byte for byte -------------------
-  const std::vector<uint8_t> built = cl::build(fixture, kBones);
+  const std::vector<uint8_t> built = cl::build(fixture, kBones, kGoldenOwner);
   check(built.size() == golden.size(), "zref::clip_page::build matches the golden's length");
   check(built == golden,
         "zref::clip_page::build reproduces tools/pack/mkclipbank.py's golden byte for byte");
@@ -274,8 +279,16 @@ int main() {
   }
   {
     std::vector<uint8_t> p = golden;
-    cl::put_u16(p.data() + cl::kOffVersion, 2);
+    cl::put_u16(p.data() + cl::kOffVersion,
+                static_cast<uint16_t>(cl::kVersion + 1));
     expect(p, cl::Verdict::kBadVersion, "a future version is kBadVersion");
+  }
+  {
+    // AND THE PAST ONE. v1 carried no owner, so it is refused rather than read
+    // with a zero owner -- owner ruling of 2026-09-21, section 2.
+    std::vector<uint8_t> p = golden;
+    cl::put_u16(p.data() + cl::kOffVersion, cl::kVersionV1);
+    expect(p, cl::Verdict::kBadVersion, "an UNOWNED v1 page is kBadVersion too");
   }
   {
     std::vector<uint8_t> p = golden;
@@ -365,17 +378,79 @@ int main() {
   {
     std::vector<cl::Clip> bad = fixture;
     bad[1].slot_id = 7;
-    check(cl::build(bad, kBones).empty(), "build REFUSES a duplicate slot_id");
-    check(cl::build({}, kBones).empty(), "build REFUSES a bank with no clips");
-    check(cl::build(fixture, 0).empty(), "build REFUSES a zero bone_count");
-    check(cl::build(fixture, cl::kMaxBones + 1).empty(),
+    check(cl::build(bad, kBones, kGoldenOwner).empty(),
+          "build REFUSES a duplicate slot_id");
+    check(cl::build({}, kBones, kGoldenOwner).empty(),
+          "build REFUSES a bank with no clips");
+    check(cl::build(fixture, 0, kGoldenOwner).empty(), "build REFUSES a zero bone_count");
+    check(cl::build(fixture, cl::kMaxBones + 1, kGoldenOwner).empty(),
           "build REFUSES a bone_count past the ceiling");
-    check(cl::build(fixture, kBones, 1).empty(),
+    check(cl::build(fixture, kBones, kGoldenOwner, 1).empty(),
           "build REFUSES a bank past the reader's rows");
     std::vector<cl::Clip> narrow = fixture;
     narrow[0].frames[0].bones.pop_back();
-    check(cl::build(narrow, kBones).empty(),
+    check(cl::build(narrow, kBones, kGoldenOwner).empty(),
           "build REFUSES a frame that is not the bank's width");
+  }
+
+  // ---- OWNERSHIP, owner ruling of 2026-09-21 section 2 --------------------
+  {
+    check(cl::kVersion == 2, "the CLIP_BANK page is at version 2");
+    check(cl::kOffOwnerForm == 20, "its owner word is at bytes 20..23");
+    check(cl::kHeaderBytes == 64,
+          "and the header is STILL 64 bytes -- the word went into existing padding");
+    check(cl::page_owner_word(golden.data(), golden.size()) == kGoldenOwner,
+          "the golden's owner word reads back as the form the packer was GIVEN");
+
+    // The owner is the only difference between two otherwise identical banks.
+    const std::vector<uint8_t> other = cl::build(fixture, kBones, 0x010101u);
+    check(other.size() == golden.size(),
+          "a bank for a DIFFERENT form is byte-for-byte the same size");
+    size_t diffs = 0;
+    for (size_t i = 0; i < other.size() && i < golden.size(); ++i)
+      if (other[i] != golden[i]) ++diffs;
+    check(diffs > 0 && diffs <= 4,
+          "and differs ONLY inside the owner word -- which is exactly why nothing "
+          "before this version could tell the two apart");
+
+    check(cl::build(fixture, kBones, 0x01000101u).empty(),
+          "build REFUSES an owner setting bits 31:24");
+    std::vector<uint8_t> high = golden;
+    high[cl::kOffOwnerForm + 3] = 0x01u;
+    check(verdict_of(high) == cl::Verdict::kBadOwner,
+          "decode REFUSES a stored owner word with a non-zero high byte");
+
+    // A v1 page is identifiable and refused: the ruling's "unowned v1
+    // CLIP_BANK data is not accepted on the new posed-render path".
+    std::vector<uint8_t> v1;
+    {
+      const char* path = ZHAO_SOURCE_DIR "/tests/golden/creature_clip/clip_page_v1.bin";
+      std::FILE* f = std::fopen(path, "rb");
+      check(f != nullptr, "the historical v1 golden is still committed");
+      if (f) {
+        uint8_t buf[4096];
+        size_t n;
+        while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0)
+          v1.insert(v1.end(), buf, buf + n);
+        std::fclose(f);
+      }
+    }
+    if (!v1.empty()) {
+      check(cl::page_version(v1.data(), v1.size()) == cl::kVersionV1,
+            "and still declares version 1 -- it stays IDENTIFIABLE");
+      check(verdict_of(v1) == cl::Verdict::kBadVersion,
+            "and decode refuses it: an unowned bank cannot be upgraded by a reader, "
+            "because nothing in its bytes names a form");
+    }
+
+    // Index zero is a form, not a sentinel.
+    const std::vector<uint8_t> zero = cl::build(fixture, kBones, 0u);
+    uint32_t zowner = 0xFFFFFFFFu;
+    std::vector<cl::Clip> zback;
+    check(cl::decode(zero.data(), zero.size(), cl::kMaxClips, zback, nullptr, &zowner) ==
+              cl::Verdict::kOk,
+          "a bank owned by form ZERO is an ordinary bank");
+    check(zowner == 0u, "and decodes with owner 0 rather than 'absent'");
   }
 
   std::printf("[clip_page_directed] golden %zu bytes, %zu clips, %d bones, stride %zu, "
