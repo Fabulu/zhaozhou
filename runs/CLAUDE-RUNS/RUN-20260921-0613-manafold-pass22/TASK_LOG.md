@@ -1,7 +1,7 @@
-# Task Log: RUN-20260921-0613 - [Describe objective here]
+# Task Log: RUN-20260921-0613 - Manafold pass 22 (small): dots shrink with distance, lightning answers the knead
 
 **Created:** 2026-09-21 06:13 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260921-0613-manafold-pass22/
 
 ---
@@ -184,3 +184,43 @@ Reviewer rebuilt everything and re-ran every claim rather than reading receipts.
   cannot see the spread widening.
 
 Proceeding to Part 2 (publish).
+
+## 2026-09-21 -- PUBLISHED and production-verified. Status: Complete.
+
+Review verdict was PASS, so Part 2 ran in the pass-21 order.
+
+- **Archive first, before the encode.** All 44 live pass-21 files verified
+  against the published, production-verified receipt, copied to immutable
+  `archive-p21-manafold-*` and the copies re-hashed: 44/44, 43,766,439 bytes.
+  One new generation "Pass 21 - 2026-09-21", each clip declared once, archive
+  note SIXTEEN -> SEVENTEEN, count 3x22 -> 4x22. checkarchive gained its lock
+  row, its live phase and six selftest legs found by label (27 reds now).
+- **The bank:** 22 subjects, 7,992 frames, ONE invocation, production ink,
+  RC 0, every subject at its exact pass-21 frame count. The four witness clips
+  reproduce the separately reviewed witness render BYTE FOR BYTE, which ties
+  the shipped bank to the reviewed configuration rather than to a claim.
+- **Scope proof:** the whole bank rendered a SECOND time with both knobs off
+  and differenced frame by frame -- 22/22 subjects changed, 6,568/7,992 frames.
+- **Looking:** complete every-frame sheets for all 22 (7,992 frames, none
+  omitted). Four read in full: Inspect's whole orbit, Rest and Curious (the two
+  strongest presses) and Drift (the furthest). The three worst-changed frames
+  bank-wide, chosen by badness, opened close up -- all correct, no fault.
+- **Encode** RC 0, 22/22 + posters; media receipt re-probed all 44 with ffprobe,
+  0 errors. Gates all green with real exit codes, full decode 1,596/1,596.
+- **Deploy** RC 0 -> https://upheaval.pages.dev (alias 1664776d).
+- **Production:** 60/60 on BOTH hosts, 0 mismatches, 0 retries, index identical
+  and byte-equal to the local deployed file. 15 archive spot checks across all
+  five locked generations. The verifier was selftested on broken copies FIRST.
+
+### The instructive failure of the close: a check wired to one operand twice
+
+The first Zhaozhou fast-forward did not happen. `git checkout main` aborted on
+an uncommitted log file, the script carried on and merged `manafold-pass22`
+into ITSELF, and printed "Already up to date" plus a `branch == main? YES` that
+was comparing the branch head to the branch head. **A green verdict on a merge
+that never ran** -- this project's own recurring defect, in my own shell, at the
+last step. Caught by reading the abort message rather than the verdict. Redone
+with the checkout's exit code gating the merge and the comparison taken after
+it. Both mains are now genuinely fast-forwarded and all four heads agree.
+
+Final: Zhaozhou main `0d796c4a`, Upheaval main `ca51e26d`.

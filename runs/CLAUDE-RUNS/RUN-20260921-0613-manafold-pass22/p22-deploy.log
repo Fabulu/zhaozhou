@@ -1,0 +1,24 @@
+﻿assemble: wrote C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public\index.html - 2 creature(s), 804 render(s)
+checkplayback: OK Fall is controls-only/non-looping and Hover remains autoplay+loop
+checkarchive: OK version-17 56/56 archive files, 70576645 bytes; version-18 44/44 archive files, 44743343 bytes, equal to the published version-18 receipt; pass-19 44/44 archive files, 44320731 bytes, equal to the published pass-19 receipt; pass-20 44/44 archive files, 44980318 bytes, equal to the published pass-20 receipt; pass-21 44/44 archive files, 43766439 bytes, equal to the published pass-21 receipt; live names match the pass-22 receipt 44/44; 4x22 locked-generation clips, 22+6 version-17 clips and 10 labs declared once; archived playback is controls+loop/no-autoplay/preload-none
+gate: robots meta is 'noindex, nofollow' - private, ok
+gate: is the encoded bank all one generation?
+checkfresh: 22 rendered subject(s) -- 22 live fresh, 0 archived, 0 STALE, 0 absent, 0 unknown
+checkfresh: OK every live encoded clip is newer than its source; archived source exemptions are explicit
+gate: decoding every declared media file (~22 min; -SkipDecodeSweep to bypass)
+checkmedia: 1596 declared files, 1596 decoded
+checkmedia: every declared file decodes
+deploying C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public -> project 'upheaval', branch 'main'
+
+ ⛅️ wrangler 4.86.0
+───────────────────
+Uploading... (1622/1663)
+Uploading... (1635/1663)
+Uploading... (1649/1663)
+Uploading... (1663/1663)
+✨ Success! Uploaded 41 files (1622 already uploaded) (13.14 sec)
+
+🌎 Deploying...
+✨ Deployment complete! Take a peek over at https://1664776d.upheaval.pages.dev
+deploy record written: 
+C:\programmieren\zencrifice\manafold-p16\Upheaval\website\deploy-records\deploy-20260921-074508.txt
