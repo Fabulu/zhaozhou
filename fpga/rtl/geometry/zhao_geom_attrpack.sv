@@ -119,6 +119,59 @@ module zhao_geom_attrpack #(
     // times -- this block asks the three that `zhao_raster_tile_pipe_v2`
     // unpacks, and reading the other four would mean packing planes with no
     // port to carry them.
+    //
+    // WHAT THAT SENTENCE DOES NOT SAY, AND MUST (gz/attrlane, 2026-09-21):
+    // SLOTS 3, 4 AND 5 ARRIVE HERE FULL. They are not spare, not don't-care and
+    // not waiting on a producer. The chain is composed and live, every hop
+    // verified by hand in this tree:
+    //
+    //   zhao_light_stream  (GEOM.LIGHT, owner ruling R2)
+    //     -> geom_light_{valid,r,g,b}_o, 17 bits per channel
+    //     -> zhao_geom_vattr .lit_*_i, latched into the colour store
+    //        (`c_rgb_q`, counted by `colours_written_o`)
+    //     -> rep_data_o[95:64] r, [127:96] g, [159:128] b
+    //     -> GEOM.REPLAY's attribute store -> rp_st_{a,b,c}
+    //     -> rp_attr_* = {rp_st_*, 8'd0, rp_invw_*}      == packet slots 3,4,5
+    //     -> zhao_geom_clip, winding-flipped WITH the corners
+    //     -> geom_clip_attr_{a,b,c}_o -> tri_attr_{a,b,c}_i, immediately below.
+    //
+    // So the console COMPUTES per-vertex lit colour, carries it through four
+    // blocks including a winding swap performed specifically for it, and drops
+    // it HERE, at this port, by not asking for its planes. This is severed
+    // DELIVERY, not dead computation: removing the lighting would be removing
+    // function, and is refused.
+    //
+    // THE OTHER END OF THE SEVERANCE is `zhao_raster_tile_pipe_v2`'s
+    // `continuation_w.post_earlyz` -- see the comment there. The 24-bit carrier
+    // that reaches `zhao_raster_fragment.frag_vert_rgb_i` exists, is assembled
+    // per fragment three lines below the per-pixel lanes, and is fed from a
+    // per-triangle constant for want of lanes 3..5. Growing this block to SIX
+    // planes and the tile pipe to SIX lanes is the whole repair; nothing
+    // downstream of the tile pipe changes.
+    //
+    // IT IS NOT DONE HERE BECAUSE IT IS A SUBSYSTEM, NOT A WIRING JOB, AND THE
+    // COST IS MEASURED RATHER THAN GUESSED. From section 17 of
+    // `reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt`
+    // (truth device 5CSEBA6U23I7, `rtlCleanAtHead: true`), one raster attribute
+    // lane is 488.1 / 463.6 / 467.8 ALM and **8 DSP** each -- of which
+    // `zhao_raster_attrdiv_v2` alone is ~295 ALM, because the plane is
+    // unnormalised and EVERY lane divides by 2A. Three more lanes is therefore
+    // **~1,420 ALM and +24 DSP**, the latter being 21% of the device's whole
+    // 112-DSP budget. (Do NOT quote the 3-DSP figure: that is the
+    // `ATTR_DSP3 = 1` variant, which is G8A characterization only. The composed
+    // console runs `ATTR_DSP3 = 0`.) It also widens `METAW` from 1157 to 1877,
+    // taking `zhao_geom_binner_v2`'s metadata bank from 29 forty-bit slices to
+    // 47 -- M10K AND per-triangle bank time. Against a console already measured
+    // at 47,582 ALM on a 41,910 ceiling with FIELD still additive, that is the
+    // owner's call and not this block's. THE GEOMETRY SIDE IS THE CHEAP END:
+    // the shared attrsetup core is time-multiplexed, so six lanes add no
+    // arithmetic here at all, only +2 clocks per lane against ~41 of budget.
+    // Full working in
+    // `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-attrlane.md`.
+    //
+    // `ATTRS` STAYS 7. Entry I13's refusal to narrow `GEOM_CLIP_ATTRS` to 3 is
+    // load-bearing and is honoured here: these slots are FULL, not spare, and a
+    // narrower packet would delete the only copy of the value.
     /* verilator lint_off UNUSEDSIGNAL */
     input  logic [ATTRS*32-1:0] tri_attr_a_i,
     input  logic [ATTRS*32-1:0] tri_attr_b_i,

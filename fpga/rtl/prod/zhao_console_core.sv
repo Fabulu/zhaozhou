@@ -1510,6 +1510,126 @@
 //      terrain_rules 6.5 cited beside it**, or the next reader inherits a
 //      Gouraud law silently implemented as a constant.
 //
+//      RE-MEASURED 2026-09-21 (gz/attrlane), WHICH EXISTED TO ANSWER THAT
+//      QUESTION. The finding above HOLDS in every particular and the SEVERANCE
+//      IS REAL -- but the recommendation's "EITHER ... OR" IS FALSE, and it is
+//      false in the direction that makes the work look like two jobs when it is
+//      one. **Slots 3..5 and the continuation tail's `vertex_rgb` ARE THE SAME
+//      PATH, and `zhao_raster_tile_pipe_v2` is where they meet.** Read its
+//      attribute `always_comb` as a block:
+//
+//          request_w.u_over_w           = attr_join_q_q[1];   PER FRAGMENT
+//          request_w.v_over_w           = attr_join_q_q[2];   PER FRAGMENT
+//          continuation_w.earlyz.invw24 = attr_join_q_q[0];   PER FRAGMENT
+//          continuation_w.post_earlyz   = continuation_tail_bits_q;  per TRIANGLE
+//
+//      The tail is assembled PER FRAGMENT, three lines under the per-pixel
+//      lanes, from a register loaded once per triangle at job-metadata capture.
+//      So `vertex_rgb` does not need "I20's producer" as a separate build: with
+//      lanes 3..5 present that line becomes a field build off
+//      `attr_join_q_q[3..5]` and **nothing downstream of the tile pipe changes
+//      at all** -- not Early-Z, not the texture round trip, not
+//      `zhao_raster_fragment`, whose 24-bit `frag_vert_rgb_i` is already the
+//      right width and already fed from this field. One job, not two.
+//
+//      DEAD COMPUTATION OR SEVERED DELIVERY? **SEVERED DELIVERY**, settled by
+//      walking the chain rather than the layout. Every hop from
+//      `zhao_light_stream` to `zhao_geom_attrpack`'s input port is composed,
+//      live and counted -- `colours_written_o` in GEOM.VATTR moves on the
+//      stored colour, and GEOM.CLIP performs a winding swap on slots 3..5 that
+//      exists for no other purpose. The lighting is NOT dead silicon and must
+//      not be reclaimed; the delivery is three attribute lanes short.
+//
+//      DOES R89 TRANSFER? **ITS REASON DOES NOT; ITS CONCLUSION DOES, FOR A
+//      DIFFERENT REASON, AND THE DIFFERENCE MUST BE KEPT.** R89 refused a
+//      fourth plane because shadow alpha "does not vary across the primitive"
+//      -- true of `zhao_forge_shadow`'s per-caster `strength_q`, and FALSE of
+//      lit vertex colour, which varies by construction (`rast.cpp`'s `m.gouraud`
+//      lanes interpolate `cr`/`cg`/`cb` with a full barycentric re-evaluation
+//      per row; `internal.hpp` calls it "the ordinary Gouraud path"). Citing
+//      R89's SENTENCE here would be citing a fact that is not true of this
+//      quantity. R133 draws the sharper line: of alpha it said "the plumbing is
+//      finished, only the faucet is missing", and the faucet could not be built
+//      because `cast_strength_i` has no producer ANYWHERE. For `vertex_rgb` the
+//      plumbing is equally finished AND THE WATER IS ALREADY IN THE BUILDING --
+//      it is at ATTRPACK's input port. This is refused on COST, not on absence,
+//      and the next lane must not be told otherwise.
+//
+//      THE COST, AND IT IS MEASURED, NOT ESTIMATED. No LEAF row for
+//      `zhao_raster_attrgrad_v2` exists in `reports/synthesis/zhao_block_fit.json`
+//      -- which is where this lane looked first and wrongly concluded "unpriced".
+//      The number is in the G8A characterization fit's section 17, *Fitter
+//      Resource Utilization by Entity*, on the truth device 5CSEBA6U23I7 with
+//      `rtlCleanAtHead: true`:
+//      `reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt`
+//
+//        zhao_raster_attrgrad_v2:g_attr[0].u_attrgrad   488.1 ALM   8 DSP
+//          `- zhao_raster_attrdiv_v2:u_div              298.1 ALM   0 DSP
+//        zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad   463.6 ALM   8 DSP
+//        zhao_raster_attrgrad_v2:g_attr[2].u_attrgrad   467.8 ALM   8 DSP
+//
+//      **One attribute lane is ~470 ALM and 8 DSP. Three -- an r/g/b triad --
+//      is ~1,420 ALM and +24 DSP**, and the divider is roughly two thirds of the
+//      ALM because the plane is unnormalised and every lane divides by 2A.
+//
+//      THE DSP NUMBER IS PROBABLY THE ONE THAT DECIDES THIS, and this entry got
+//      it wrong once before correcting it, in the flattering direction: the
+//      `ATTR_DSP3 = 1` variant costs only 3 DSP per lane and it is **G8A
+//      characterization only** -- the composed console runs `ATTR_DSP3 = 0`.
+//      Quoting 9 instead of 24 would have understated it by a factor of nearly
+//      three. **+24 DSP is 21% of the device's entire 112-DSP budget**, against
+//      a raster/texture top already measuring 49.
+//
+//      The rest, priced structurally:
+//        * ATTRPACK 3 -> 6 lanes is the CHEAP end -- the attrsetup core is
+//          already time-multiplexed, so no new arithmetic: +9 latched 32-bit
+//          words, 7 -> 13 clocks per triangle against ~41 of budget, and the
+//          composer's invariant becomes `planes_o == 6 * triangles_o`;
+//        * the tile pipe's `for (ga = 0; ga < 3; ...)` becomes 6, and with it
+//          the join (`attr_source_valid_w = &attr_q_valid_w` is all-or-nothing
+//          across the lanes), `row_delivered_q[2:0]`, `start_delivered_q[4:0]`,
+//          the `incoming_coordinate_bad_c` agreement cone -- the very cone
+//          TIMING4 D2 moved behind a register -- and the `[2:0]` ports
+//          `attribute_idle_o` and `coverage_delivered_mask_o`;
+//        * and the one that is easy to miss: **`METAW` 1157 -> 1877**. The plane
+//          words ride `job_meta` through `zhao_geom_binner_v2`'s metadata bank,
+//          which stores them as META_SLICES x 40 bits -- **29 slices -> 47**.
+//          That is M10K *and per-triangle bank write/read time*, a throughput
+//          change in the binner, not merely area. It drags `zhao_geom_bin_pipe_v2`,
+//          `zhao_shell_top_v2` (+3 x 240-bit ports), this file,
+//          `zhao_console_board`, `zhao_prod_top`, `gen_shell_fit_top.py` and both
+//          committed core mutants with it.
+//      AND THE CONSUMERS AT THE FAR END ARE ALREADY BUILT AND UNINSTALLED,
+//      which is the fact that settles "subsystem" rather than "wiring job".
+//      `zhao_raster_toon` takes `r_i`/`g_i`/`b_i` as `signed [31:0]` -- exactly
+//      the shape `attr_join_q_q[3..5]` would produce -- and its header says it
+//      "quantises the INTERPOLATED light". `zhao_raster_fog` sits behind it and
+//      its own header places it "AFTER `zhao_raster_toon`". NEITHER IS
+//      INSTANTIATED BY ANY COMPOSED TOP: both appear only in `zhao_prod_top.sv`,
+//      the pricing census, and `design/prod_manifest.yml` says so in as many
+//      words -- "production hardware on the per-pixel path ... even though no
+//      composed top instantiates it yet". So a whole per-pixel colour stage
+//      (interpolate -> toon-quantise -> fog-mix) is authored and waiting, and
+//      the three attribute lanes are its missing front end. This is the
+//      uncashed-cheque shape CLAUDE.md names -- BUILT, INSTALLED NOWHERE -- and
+//      it is evidence that the Gouraud path is INTENDED function that was
+//      deferred, not a feature being invented here.
+//
+//      There is no BLOCKER anywhere -- unlike FORGE.SHADOW, nothing is missing a
+//      producer -- but the SPAN is eleven files including a RAM bank's slice
+//      geometry, on a device measured at 47,582 ALM against a 41,910 ceiling
+//      with FIELD's ~13,700 still additive. **A subsystem by size, not by
+//      blockage.** That is the owner decision this entry now carries.
+//
+//      DISCHARGED MEANWHILE, because it was the half nobody had done: the flat
+//      stand-in is now NAMED AS ONE IN THE RTL, at both ends of the severance --
+//      `zhao_raster_tile_pipe_v2.sv` beside `continuation_w.post_earlyz`, and
+//      `zhao_geom_attrpack.sv` at the four-slot lint waiver, each citing
+//      terrain_rules 6.5, the oracle's Gouraud lanes, and the other end. No
+//      tie-off was created and none was removed; the register does not move.
+//      And `GEOM_CLIP_ATTRS` STAYS 7 -- this entry's refusal to narrow it is
+//      re-affirmed and is now load-bearing twice over: the slots are FULL.
+//
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
 //      closed is named here so nobody re-solves it.
