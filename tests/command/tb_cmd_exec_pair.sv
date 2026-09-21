@@ -90,6 +90,15 @@ module tb_cmd_exec_pair #(
     output logic [ 7:0] draw_semantic_weight_o,
     output logic [15:0] draw_flags_o,
     output logic [15:0] draw_src_id_o,
+    // R229: DrawPosedForm 0x0305's key, on the SAME `draw_valid_o` beat.
+    // Brought out as REAL OUTPUTS rather than left unbound: a bench that does
+    // not carry a block's new ports fails to verilate, and no gate in this tree
+    // can see a bench that fails to verilate (the trap `tb_cmd_exec_pair`
+    // itself fell into on 2026-09-20 with hostdbg's five trace ports).
+    output logic        draw_posed_o,
+    output logic [15:0] draw_clip_id_o,
+    output logic [15:0] draw_frame_no_o,
+    output logic [ 7:0] draw_sub_o,
 
     output logic        upl_valid_o,
     output logic [23:0] upl_index_o,
@@ -184,6 +193,8 @@ module tb_cmd_exec_pair #(
     output logic [31:0] draws_issued_o,
     output logic [31:0] draw_overflow_o,
     output logic [31:0] draw_src_truncated_o,
+    output logic [31:0] posed_draws_issued_o,   // R229
+    output logic [31:0] pose_clip_refused_o,    // R229
     output logic [31:0] uploads_issued_o,
     output logic [31:0] upload_overflow_o,
     output logic [31:0] post_looks_applied_o,
@@ -286,6 +297,10 @@ module tb_cmd_exec_pair #(
       .draw_semantic_weight_o(draw_semantic_weight_o),
       .draw_flags_o          (draw_flags_o),
       .draw_src_id_o         (draw_src_id_o),
+      .draw_posed_o          (draw_posed_o),
+      .draw_clip_id_o        (draw_clip_id_o),
+      .draw_frame_no_o       (draw_frame_no_o),
+      .draw_sub_o            (draw_sub_o),
 
       .upl_valid_o    (upl_valid_o),
       .upl_ready_i    (upl_ready_i),
@@ -373,6 +388,8 @@ module tb_cmd_exec_pair #(
       .draws_issued_o       (draws_issued_o),
       .draw_overflow_o      (draw_overflow_o),
       .draw_src_truncated_o (draw_src_truncated_o),
+      .posed_draws_issued_o (posed_draws_issued_o),
+      .pose_clip_refused_o  (pose_clip_refused_o),
       .uploads_issued_o     (uploads_issued_o),
       .upload_overflow_o    (upload_overflow_o),
       .post_looks_applied_o (post_looks_applied_o),

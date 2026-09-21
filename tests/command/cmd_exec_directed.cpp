@@ -92,6 +92,14 @@ struct DrawOut {
   uint8_t semantic_weight;
   uint16_t flags;
   uint16_t src_id;
+  // R229: DrawPosedForm 0x0305's key, captured off the SAME beat as the
+  // fields above. Kept in ONE struct on purpose -- a second vector filled
+  // from a second condition could disagree about which draw it describes,
+  // which is the very skew the one-enable design removes.
+  bool posed;
+  uint16_t clip_id;
+  uint16_t frame_no;
+  uint8_t sub;
 };
 
 struct UploadOut {
@@ -164,6 +172,7 @@ struct Run {
   uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
   uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
+  uint32_t posed_draws = 0, pose_clip_refused = 0;   // R229
   std::vector<EnvOut> envs;
   uint32_t envs_issued = 0;
   // R35/R36: the look as the run LEFT it, every table write, and the hold.
@@ -294,6 +303,10 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       d.semantic_weight = static_cast<uint8_t>(dut.draw_semantic_weight_o);
       d.flags = static_cast<uint16_t>(dut.draw_flags_o);
       d.src_id = static_cast<uint16_t>(dut.draw_src_id_o);
+      d.posed = (dut.draw_posed_o != 0);
+      d.clip_id = static_cast<uint16_t>(dut.draw_clip_id_o);
+      d.frame_no = static_cast<uint16_t>(dut.draw_frame_no_o);
+      d.sub = static_cast<uint8_t>(dut.draw_sub_o);
     }
 
     const bool upl_fires = (dut.upl_valid_o != 0) && (dut.upl_ready_i != 0);
@@ -402,6 +415,8 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.draws_issued = dut.draws_issued_o;
   r.draw_overflow = dut.draw_overflow_o;
   r.draw_truncated = dut.draw_src_truncated_o;
+  r.posed_draws = dut.posed_draws_issued_o;
+  r.pose_clip_refused = dut.pose_clip_refused_o;
   r.uploads_issued = dut.uploads_issued_o;
   r.upload_overflow = dut.upload_overflow_o;
   r.envs_issued = dut.envs_issued_o;
@@ -550,6 +565,36 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
   rec.payload.flags = flags;
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_draw_form(rec, out);
+  return out;
+}
+
+// DrawPosedForm 0x0305 (owner ruling R229), by the GENERATED packer -- never
+// by a hand-written byte layout. The RTL reads its offsets from
+// `zhao_abi_pkg.sv` and this writes through `zhao_pack_draw_posed_form` in
+// `zhao_abi.h`; both come from the same .zidl and neither is retyped here, so
+// a field that lands at the wrong offset on one side FAILS AGAINST THE OTHER.
+// A test that built its stimulus from the RTL's own constants would agree
+// with any offset whatsoever.
+std::vector<uint8_t> drawPosedFormRecord(uint32_t source_id, uint32_t form,
+                                         uint32_t material_set, uint32_t transform,
+                                         uint8_t viewport_mask, uint8_t semantic_weight,
+                                         uint16_t flags, uint16_t clip_id,
+                                         uint16_t frame_no, uint8_t sub) {
+  zhao_abi::ZhRecordDrawPosedForm rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_DRAW_POSED_FORM;
+  rec.hdr.record_bytes = 48;
+  rec.hdr.source_id = source_id;
+  rec.payload.form = form;
+  rec.payload.material_set = material_set;
+  rec.payload.transform = transform;
+  rec.payload.viewport_mask = viewport_mask;
+  rec.payload.semantic_weight = semantic_weight;
+  rec.payload.flags = flags;
+  rec.payload.clip_id = clip_id;
+  rec.payload.frame_no = frame_no;
+  rec.payload.sub = sub;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_draw_posed_form(rec, out);
   return out;
 }
 
@@ -1877,6 +1922,336 @@ int main(int argc, char** argv) {
           r.viewport_refused);
     if (r.rects.size() == 2)
       check(r.rects[1].data == ext, "case35: and it is Z60's full canvas", ext, r.rects[1].data);
+  }
+
+  // ==========================================================================
+  // R229 -- DrawPosedForm 0x0305. Cases 36..41.
+  //
+  // The layout is a DIFFERENTIAL, exactly as this file's header describes for
+  // SetView and SurfaceStamp: the RTL reads its offsets from
+  // `fpga/rtl/generated/zhao_abi_pkg.sv`, these cases write through
+  // `zhao_pack_draw_posed_form` in `runtime/include/zhao_abi.h`, and neither
+  // side is hand-written here. Both come from `spec/commands.zidl`.
+  //
+  // WHAT THESE SIX ARE FOR, and each names the defect it would catch:
+  //   36  every field of the record, read back off the dispatch. The three new
+  //       ones and the six it shares with DrawForm.
+  //   37  THE CLEAN SPLIT R229 ASKED FOR: a DrawForm in the same packet is
+  //       still bind pose, in BOTH orders. Catches a pose leaking forward.
+  //   38  `pose_clip_refused_o` FIRES AND DISCRIMINATES (R95), with the
+  //       boundary on both sides, and the draw still leaves.
+  //   39  THE SAME PACKET UNDER BACKPRESSURE. This is the important one.
+  //   40  an abandoned packet's pose never leaves.
+  //   41  `sub` is carried and is NOT padding -- the aliasing case the pose
+  //       cache's own header says cost it a wrong palette.
+  // ==========================================================================
+
+  // ---- 36. one DrawPosedForm, whole --------------------------------------
+  // Values deliberately all-different and byte-asymmetric, for case 10's
+  // reason: a transposed field or an offset one out fails on the VALUE and
+  // names the field, rather than producing a plausible draw nobody can tell
+  // from a right one.
+  //
+  // `flags` IS 0xBEEF AGAIN, AND FOR THE OPPOSITE REASON TO CASE 10. There it
+  // proves `df_flags_c`'s bypass is present; here it proves the bypass does
+  // NOT apply. `flags` occupies bytes 30..31 of a 48-byte record, so eleven
+  // pad bytes follow it and the register is long settled at `rec_done`. If
+  // somebody ever "fixes" `df_flags_c` by symmetry to cover this opcode, it
+  // would inject a byte from the middle of the pad and this reads 0x00EF.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawPosedFormRecord(0x0031u, 0x2345'67B8u, 0x9ABC'DE14u, 0x1F2E'3D6Du, 0x05u,
+                                        0x66u, 0xBEEFu, /*clip*/ 0x0027u, /*frame*/ 0x01A4u,
+                                        /*sub*/ 0x5Au));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case36: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    checkNothingEscapedEarly(r, "case36");
+    check(r.committed == 1, "case36: packets_committed_o", 1, r.committed);
+    check(r.draws_issued == 1, "case36: draws_issued_o -- a posed draw IS a draw", 1,
+          r.draws_issued);
+    check(r.posed_draws == 1, "case36: posed_draws_issued_o", 1, r.posed_draws);
+    check(r.pose_clip_refused == 0, "case36: pose_clip_refused_o, clip 0x27 is well inside 64", 0,
+          r.pose_clip_refused);
+    check(r.draws.size() == 1, "case36: exactly one dispatch left the block", 1, r.draws.size());
+    check(r.draw_overflow == 0, "case36: draw_overflow_o", 0, r.draw_overflow);
+    check(r.draw_truncated == 0, "case36: draw_src_truncated_o", 0, r.draw_truncated);
+    // The arm exists, so 0x0305 must NOT land in the unsupported count. This is
+    // the check that catches an arm added to the CAPTURE and not to the EMIT.
+    check(r.unsupported == 2, "case36: unsupported_o is BeginFrame + EndFrame only", 2,
+          r.unsupported);
+    if (r.draws.size() == 1) {
+      const DrawOut& d = r.draws[0];
+      check(d.posed, "case36: draw_posed_o is HIGH", 1, d.posed ? 1 : 0);
+      check(d.clip_id == 0x0027u, "case36: clip_id", 0x0027u, d.clip_id);
+      check(d.frame_no == 0x01A4u, "case36: frame_no", 0x01A4u, d.frame_no);
+      check(d.sub == 0x5Au, "case36: sub -- the half-key phase", 0x5Au, d.sub);
+      // The six shared with DrawForm, read through the SAME dq slots. A prefix
+      // that stopped being byte-identical fails here, not at elaboration.
+      check(d.form == 0x2345'67B8u, "case36: form handle", 0x2345'67B8u, d.form);
+      check(d.material_set == 0x9ABC'DE14u, "case36: material_set handle", 0x9ABC'DE14u,
+            d.material_set);
+      check(d.transform == 0x1F2E'3D6Du, "case36: transform handle", 0x1F2E'3D6Du, d.transform);
+      check(d.viewport_mask == 0x05u, "case36: viewport_mask", 0x05u, d.viewport_mask);
+      check(d.semantic_weight == 0x66u, "case36: semantic_weight", 0x66u, d.semantic_weight);
+      check(d.flags == 0xBEEFu, "case36: flags -- and NO df_flags_c bypass applies here", 0xBEEFu,
+            d.flags);
+      check(d.src_id == 0x0031u, "case36: the record header's source_id", 0x0031u, d.src_id);
+    }
+  }
+
+  // ---- 37. THE CLEAN SPLIT: DrawForm stays bind pose, in BOTH orders ------
+  // R229's whole reason for a second opcode is that "`DrawForm` keeping its
+  // meaning as bind pose is a clean split that breaks no existing content". A
+  // split that held only until a posed draw went first would break exactly the
+  // content it promises not to.
+  //
+  // `dp_clip`/`dp_frame`/`dp_sub` are NOT cleared between records -- they are
+  // overwritten whole by the next 0x0305 and otherwise persist. That is safe
+  // ONLY because `posed` is written from the OPCODE rather than from whether
+  // those registers happen to hold something. THIS CASE IS THAT ARGUMENT'S
+  // EVIDENCE: draw 3 follows a posed draw carrying a loud key, and must still
+  // report bind pose. The leading DrawForm is the other polarity -- a posed
+  // draw after an unposed one must not inherit a zeroed key.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawFormRecord(0x0040u, 0x0A00u, 0x0B00u, 0x0C00u, 0x01u, 0x10u, 0x1111u));
+    b.append_record(drawPosedFormRecord(0x0041u, 0x0A01u, 0x0B01u, 0x0C01u, 0x02u, 0x11u, 0x2222u,
+                                        /*clip*/ 0x003Bu, /*frame*/ 0xFFFEu, /*sub*/ 0xA5u));
+    b.append_record(drawFormRecord(0x0042u, 0x0A02u, 0x0B02u, 0x0C02u, 0x04u, 0x12u, 0x3333u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case37: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.draws_issued == 3, "case37: three draws left", 3, r.draws_issued);
+    check(r.posed_draws == 1, "case37: exactly ONE of them was posed", 1, r.posed_draws);
+    check(r.pose_clip_refused == 0, "case37: clip 0x3B is the last legal slot, not a refusal", 0,
+          r.pose_clip_refused);
+    check(r.draws.size() == 3, "case37: three dispatches", 3, r.draws.size());
+    if (r.draws.size() == 3) {
+      // In SUBMISSION ORDER -- the dq is a ring, so an order fault shows here.
+      check(r.draws[0].form == 0x0A00u, "case37: draw 0 is the first DrawForm", 0x0A00u,
+            r.draws[0].form);
+      check(r.draws[1].form == 0x0A01u, "case37: draw 1 is the DrawPosedForm", 0x0A01u,
+            r.draws[1].form);
+      check(r.draws[2].form == 0x0A02u, "case37: draw 2 is the second DrawForm", 0x0A02u,
+            r.draws[2].form);
+
+      check(!r.draws[0].posed, "case37: a DrawForm BEFORE any pose is bind pose", 0,
+            r.draws[0].posed ? 1 : 0);
+      check(r.draws[1].posed, "case37: the DrawPosedForm is posed", 1, r.draws[1].posed ? 1 : 0);
+      check(r.draws[1].clip_id == 0x003Bu, "case37: and carries its own clip", 0x003Bu,
+            r.draws[1].clip_id);
+      check(r.draws[1].frame_no == 0xFFFEu, "case37: and its own frame", 0xFFFEu,
+            r.draws[1].frame_no);
+      check(r.draws[1].sub == 0xA5u, "case37: and its own sub", 0xA5u, r.draws[1].sub);
+      // THE ONE THAT MATTERS. A pose that leaked forward would make this high.
+      check(!r.draws[2].posed,
+            "case37: a DrawForm AFTER a posed draw is STILL bind pose -- no leak", 0,
+            r.draws[2].posed ? 1 : 0);
+    }
+  }
+
+  // ---- 38. pose_clip_refused_o FIRES, and DISCRIMINATES -------------------
+  // CLAUDE.md: a counter asserted zero and never seen to move is a claim, not
+  // evidence -- and R95 adds that moving is not enough either, it must
+  // DISCRIMINATE. So the boundary is driven from BOTH sides in one packet.
+  //
+  // `creature_rules` 2.1 freezes 64 authored slots, so 63 is the last legal
+  // clip and 64 is the first that no page can hold. Legal stimulus reaches it,
+  // which is why this guard needs no committed mutant.
+  //
+  // AND THE REFUSAL DOES NOT DROP THE DRAW. Three records in, three draws out:
+  // an unrepresentable clip degrades to the bind pose that
+  // `zhao_geom_pose_cache`'s BAD_ID rule already defines, rather than making a
+  // creature vanish.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    // NEGATIVE CONTROL 1: the last legal slot.
+    b.append_record(drawPosedFormRecord(0x0050u, 0x0D00u, 0x0E00u, 0x0F00u, 1, 0x20u, 0x4444u,
+                                        /*clip*/ 63u, 7u, 1u));
+    // THE FIRING CASE: one past it.
+    b.append_record(drawPosedFormRecord(0x0051u, 0x0D01u, 0x0E01u, 0x0F01u, 1, 0x21u, 0x5555u,
+                                        /*clip*/ 64u, 8u, 2u));
+    // NEGATIVE CONTROL 2: a plain DrawForm cannot be refused for a clip it
+    // does not carry. Catches a refusal keyed on the stale shadow rather than
+    // on the opcode.
+    b.append_record(drawFormRecord(0x0052u, 0x0D02u, 0x0E02u, 0x0F02u, 1, 0x22u, 0x6666u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case38: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.committed == 1, "case38: the packet still COMMITS -- a refused pose is not a poison",
+          1, r.committed);
+    check(r.abandoned == 0, "case38: and is not abandoned", 0, r.abandoned);
+    check(r.pose_clip_refused == 1, "case38: pose_clip_refused_o FIRES, exactly once", 1,
+          r.pose_clip_refused);
+    check(r.draws_issued == 3, "case38: all three draws still left the block", 3, r.draws_issued);
+    check(r.posed_draws == 1, "case38: only the legal one is posed", 1, r.posed_draws);
+    check(r.draws.size() == 3, "case38: three dispatches", 3, r.draws.size());
+    if (r.draws.size() == 3) {
+      check(r.draws[0].posed, "case38: clip 63 is ACCEPTED -- the boundary is not off by one", 1,
+            r.draws[0].posed ? 1 : 0);
+      check(r.draws[0].clip_id == 63u, "case38: and carries clip 63", 63u, r.draws[0].clip_id);
+      check(!r.draws[1].posed, "case38: clip 64 degrades to BIND POSE", 0,
+            r.draws[1].posed ? 1 : 0);
+      check(r.draws[1].form == 0x0D01u,
+            "case38: and the refused record's DRAW still leaves, whole", 0x0D01u,
+            r.draws[1].form);
+      check(r.draws[1].flags == 0x5555u, "case38: with its own flags", 0x5555u, r.draws[1].flags);
+      check(!r.draws[2].posed, "case38: and the DrawForm is untouched by any of it", 0,
+            r.draws[2].posed ? 1 : 0);
+    }
+  }
+
+  // ---- 39. THE SAME PACKET UNDER BACKPRESSURE ----------------------------
+  // THIS IS THE CASE THE DESIGN EXISTS FOR.
+  //
+  // CLAUDE.md's metadata-bank defect: a record and its metadata held by two
+  // different register enables produced "response A's data, A's token, and B's
+  // metadata" the moment the join STALLED -- and every accepted/emitted
+  // counter balanced, because no counter looked at the field that moved. The
+  // workload that shipped never stalled the join, so 392 byte-identical paired
+  // records could not see it.
+  //
+  // A pose here rides the SAME `dq` entry as its draw, so there is no second
+  // enable and no skew is representable. That is an argument until a stall is
+  // driven through it. `draw_mask = 0x00000001` holds `draw_ready_i` low for 31
+  // of every 32 cycles, so the queue fills and every dispatch waits -- exactly
+  // the condition the metadata bank was blind to.
+  //
+  // FOUR DRAWS, FOUR DISTINCT KEYS, deliberately NOT in a pattern a wrong
+  // pairing could still satisfy: a rotation or an off-by-one in the pairing
+  // shows as one draw wearing another's clip.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawPosedFormRecord(0x0060u, 0x1100u, 0x2200u, 0x3300u, 1, 0x30u, 0x7001u,
+                                        /*clip*/ 11u, /*frame*/ 0x0301u, /*sub*/ 0x11u));
+    b.append_record(drawFormRecord(0x0061u, 0x1101u, 0x2201u, 0x3301u, 1, 0x31u, 0x7002u));
+    b.append_record(drawPosedFormRecord(0x0062u, 0x1102u, 0x2202u, 0x3302u, 1, 0x32u, 0x7003u,
+                                        /*clip*/ 47u, /*frame*/ 0x0002u, /*sub*/ 0xEEu));
+    b.append_record(drawPosedFormRecord(0x0063u, 0x1103u, 0x2203u, 0x3303u, 1, 0x33u, 0x7004u,
+                                        /*clip*/ 2u, /*frame*/ 0x00FFu, /*sub*/ 0x00u));
+    b.end_frame(0);
+    // DRAW_Q is 4 in the bench, so four draws is the bound and not over it --
+    // this stalls the DRAIN, it does not overflow the ring (case 11 does that).
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, /*draw_mask*/ 0x00000001u);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case39: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.draw_overflow == 0, "case39: four draws is the bound, NOT an overflow", 0,
+          r.draw_overflow);
+    check(r.draws_issued == 4, "case39: all four left, only slower", 4, r.draws_issued);
+    check(r.posed_draws == 3, "case39: three of the four were posed", 3, r.posed_draws);
+    check(r.pose_clip_refused == 0, "case39: every clip is inside 64", 0, r.pose_clip_refused);
+    check(r.draws.size() == 4, "case39: four dispatches", 4, r.draws.size());
+    if (r.draws.size() == 4) {
+      // EVERY DRAW AGAINST ITS OWN KEY. The form handle identifies the record;
+      // the pose must be the one that record carried, not a neighbour's.
+      const uint32_t forms[4] = {0x1100u, 0x1101u, 0x1102u, 0x1103u};
+      const bool posed[4] = {true, false, true, true};
+      const uint16_t clips[4] = {11u, 0u, 47u, 2u};
+      const uint16_t frames[4] = {0x0301u, 0u, 0x0002u, 0x00FFu};
+      const uint8_t subs[4] = {0x11u, 0u, 0xEEu, 0x00u};
+      for (int k = 0; k < 4; ++k) {
+        const std::string t = "case39: draw " + std::to_string(k);
+        check(r.draws[k].form == forms[k], (t + " is the record it should be").c_str(), forms[k],
+              r.draws[k].form);
+        check(r.draws[k].posed == posed[k], (t + " has ITS OWN posed bit under stall").c_str(),
+              posed[k] ? 1 : 0, r.draws[k].posed ? 1 : 0);
+        if (posed[k]) {
+          check(r.draws[k].clip_id == clips[k], (t + " has ITS OWN clip under stall").c_str(),
+                clips[k], r.draws[k].clip_id);
+          check(r.draws[k].frame_no == frames[k], (t + " has ITS OWN frame under stall").c_str(),
+                frames[k], r.draws[k].frame_no);
+          check(r.draws[k].sub == subs[k], (t + " has ITS OWN sub under stall").c_str(), subs[k],
+                r.draws[k].sub);
+        }
+      }
+      // And the stall was REAL. Without this the case could pass having never
+      // backpressured anything, which is the gate-that-cannot-reach-the-state
+      // failure: a control that proves nothing while looking like proof.
+      check(r.draws[3].cycle > r.draws[0].cycle + 32u,
+            "case39: the drain really was stalled (>32 cycles across four draws)", 1,
+            (r.draws[3].cycle > r.draws[0].cycle + 32u) ? 1 : 0);
+    }
+  }
+
+  // ---- 40. an abandoned packet's pose never leaves ------------------------
+  // The architectural law this block is built on: nothing console-visible
+  // happens before the verdict. A posed draw is no exception, and a pose that
+  // escaped a failed packet would name a frame for a creature the frame never
+  // drew.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawPosedFormRecord(0x0070u, 0x4400u, 0x5500u, 0x6600u, 1, 0x40u, 0x8888u,
+                                        /*clip*/ 9u, /*frame*/ 0x0123u, /*sub*/ 0x77u));
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    // Corrupt a byte INSIDE the posed record's payload: the CRC fails, and the
+    // byte chosen is `frame_no`'s low half, so the packet is refused for the
+    // very field under test.
+    p[36 + 32 + 18] = static_cast<uint8_t>(p[36 + 32 + 18] ^ 0xFFu);
+    const Run r = runPacket(p, 0xFFFFFFFFu);
+
+    check(r.abandoned == 1, "case40: the packet is abandoned", 1, r.abandoned);
+    check(r.committed == 0, "case40: and never commits", 0, r.committed);
+    check(r.draws.empty(), "case40: NO dispatch left the block", 0, r.draws.size());
+    check(r.draws_issued == 0, "case40: draws_issued_o stays put", 0, r.draws_issued);
+    check(r.posed_draws == 0, "case40: posed_draws_issued_o stays put", 0, r.posed_draws);
+  }
+
+  // ---- 41. `sub` IS CARRIED, AND IT IS NOT PADDING -----------------------
+  // `zhao_geom_pose_cache`'s own header records what dropping it cost: with
+  // baked 60 Hz presentation data "a key and its midpoint had the SAME
+  // {type, clip, frame} and aliased -- the cache returned the wrong palette and
+  // nothing reported an error". R229 ratified `sub` on exactly that evidence.
+  //
+  // So this case is the aliasing pair itself: two draws of ONE creature, ONE
+  // clip and ONE frame, differing in NOTHING but `sub`. If `sub` were dropped,
+  // narrowed or treated as pad, the two dispatches become indistinguishable --
+  // and that is the silent wrong answer, not a failure anything else reports.
+  // Every OTHER check in this file would still pass.
+  //
+  // 0x00 and 0xFF are the two ends of the u8, so a width narrowed anywhere on
+  // the path shows as equality here.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawPosedFormRecord(0x0080u, 0x7700u, 0x8800u, 0x9900u, 1, 0x50u, 0x9999u,
+                                        /*clip*/ 5u, /*frame*/ 0x0042u, /*sub*/ 0x00u));
+    b.append_record(drawPosedFormRecord(0x0081u, 0x7700u, 0x8800u, 0x9900u, 1, 0x50u, 0x9999u,
+                                        /*clip*/ 5u, /*frame*/ 0x0042u, /*sub*/ 0xFFu));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draws_issued == 2, "case41: two draws left", 2, r.draws_issued);
+    check(r.posed_draws == 2, "case41: both posed", 2, r.posed_draws);
+    check(r.draws.size() == 2, "case41: two dispatches", 2, r.draws.size());
+    if (r.draws.size() == 2) {
+      check(r.draws[0].sub == 0x00u, "case41: the key's sub", 0x00u, r.draws[0].sub);
+      check(r.draws[1].sub == 0xFFu, "case41: the MIDPOINT's sub", 0xFFu, r.draws[1].sub);
+      check(r.draws[0].sub != r.draws[1].sub,
+            "case41: the two keys are DISTINGUISHABLE -- this is the aliasing defect", 1,
+            (r.draws[0].sub != r.draws[1].sub) ? 1 : 0);
+      // And everything else about them really is identical, or the check above
+      // would be satisfied by two draws that differ for some other reason.
+      check(r.draws[0].clip_id == r.draws[1].clip_id, "case41: same clip", 1,
+            (r.draws[0].clip_id == r.draws[1].clip_id) ? 1 : 0);
+      check(r.draws[0].frame_no == r.draws[1].frame_no, "case41: same frame", 1,
+            (r.draws[0].frame_no == r.draws[1].frame_no) ? 1 : 0);
+      check(r.draws[0].form == r.draws[1].form, "case41: same creature", 1,
+            (r.draws[0].form == r.draws[1].form) ? 1 : 0);
+    }
   }
 
   return zhao::report_and_exit("cmd_exec_directed");
