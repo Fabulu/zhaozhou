@@ -8304,6 +8304,37 @@ add_test(NAME packet_h_paired_diff_fresh
 set_tests_properties(packet_h_paired_diff_fresh PROPERTIES
   LABELS "fast;lint;packet-h" TIMEOUT 120)
 
+# THE OTHER HALF OF THIS CHECK -- `--check --mutant`, over
+# `tests/mutants/zhao_shell_paired_diff_mutant.sv` -- IS ALREADY REGISTERED,
+# as `packet_h_paired_diff_mutant_fresh`, about eighty lines below, next to
+# the mutant control it guards.
+#
+# This comment exists because on 2026-09-21 that gate was RED and nobody could
+# have known. `zhao_shell_top_v2` gained the seven `gth_*` gather outputs; the
+# generated harness above picked them up and the committed mutant did not, so
+# its `u_v2` instantiation was short seven pins and
+# `verilate(test_shell_paired_diff_mutant)` failed with 7 PINMISSING promoted
+# to an error -- **which stops `cmake --preset windows-native` BEFORE it
+# reaches the `add_test` that registers the detector.**
+#
+# So the gate was not missing and was not skipped. It was UNREGISTERABLE, by
+# the very defect it exists to report, from a target twenty lines above it.
+# CLAUDE.md's "a gate that cannot reach the state is not evidence about the
+# state" has a second form: a gate that cannot be INSTALLED is not evidence
+# either, and the two are indistinguishable from a green gate list -- because
+# a test that was never registered cannot fail.
+#
+# Every static gate was green throughout. `mutant_copy_drift.py` skipped the
+# file entirely (it compares COMMIT ORDER against a PRODUCTION module, and
+# this copy's subject is a GENERATED harness, so it is one of that tool's own
+# "16 files matched no production module"); `wrapper_port_parity.py` covers
+# the two `zhao_console_core` wrappers and compares PORT LISTS, while this
+# fault is in an INSTANTIATION's PIN LIST; `mutant_drivers.py` asks whether
+# something BUILDS the mutant, and something does.
+#
+# Repaired by regeneration: `python tools/design/gen_shell_paired_diff.py
+# --mutant`. R220's shape, in a third mirror file.
+
 add_executable(test_shell_paired_diff_directed
   shell/shell_paired_diff_directed.cpp)
 target_link_libraries(test_shell_paired_diff_directed PRIVATE zhao_harness)
