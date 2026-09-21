@@ -4000,6 +4000,46 @@
 //            `fpga/rtl/geometry/`, and `spec/commands.zidl` has no pose, clip
 //            or animation command of any opcode.
 //
+//            CARRIER RATIFIED AND BUILT 2026-09-21 (POSECMD), owner ruling
+//            R229 / D-POSEPAGE-A: `DrawPosedForm` 0x0305 carries
+//            {clip_id, frame_no, sub}, `DrawForm` 0x0300 keeps its meaning as
+//            BIND POSE, and `abi version` stays 3. `spec/commands.zidl` has
+//            the record and its reasoning; `zhao_cmd_exec` has the arm, which
+//            shares DrawForm's first sixteen payload bytes under per-field
+//            elaboration guards and emits the key IN THE SAME `dq` ENTRY as
+//            the draw -- one enable, so no stall can separate a pose from the
+//            draw it belongs to. THIS BLOCKER IS GONE; `clip_id`, `frame_no`
+//            and `sub` are no longer absent from the command surface.
+//
+//            WHAT REMAINS OF (b) IS THE CONSUMER, AND IT IS THIS ENTRY'S
+//            BOUNDARY RATHER THAN A NEW ONE. `cmd_draw_posed_o`,
+//            `cmd_draw_clip_id_o`, `cmd_draw_frame_no_o` and `cmd_draw_sub_o`
+//            leave this module beside `geom_pose_*`, waiting on the SAME
+//            missing owner -- GEOM.MESHFETCH's instance walk, which
+//            `design/contracts/GEOM.POSE.md` names as the source of
+//            "{type_id, clip_id, frame_no, bone_count}". A separate entry for
+//            them would be a register row for a gap this one already counts,
+//            and R229 is explicit that ratifying the command "does not by
+//            itself enable the RTL reader", so no reader was built.
+//
+//            `type_id` IS DELIBERATELY NOT ON THE WIRE, and its absence is
+//            not a fourth blocker. The pose cache keys on the CREATURE TYPE;
+//            the draw already names the creature through `form`, whose 24-bit
+//            index is `spec/memory_rules.md` 5f.1's directory key. Whoever
+//            resolves form -> type owes that mapping a directed check and owes
+//            it in ONE place; carrying a second identity beside the first is
+//            the two-sources-of-truth shape this file keeps striking.
+//
+//            SO THE REMAINING WORK ON I29, STATED PLAINLY: the kind-8/kind-9
+//            page reader, the sixth `u_geom_mem_adapter` requester (an
+//            in-core edit at `zhao_mem_share_n` N = 5 -> 6, no boundary port),
+//            the form -> type resolution, and the instance walk that turns an
+//            accepted draw into a `pose_requests` beat. The BYTES, the PAGE
+//            CONTAINER, the STORE and now the COMMAND are all present.
+//
+//            [the original 2026-09-21 text of blocker (b), kept because the
+//             reasoning that produced D-POSEPAGE-A is the record of why the
+//             opcode exists:]
 //            So building the page reader and the sixth requester gives this
 //            entry REAL BYTES and still no statement of WHICH FRAME. That is
 //            an ABI addition and therefore an owner decision, filed as
@@ -6886,6 +6926,32 @@ module zhao_console_core
   output logic [31:0]              cmd_exec_draws_o,
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
+
+  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
+  // These leave the module ON PURPOSE, and the purpose is measurement rather
+  // than routing. The consumer is GEOM.MESHFETCH's instance walk, which does
+  // not exist -- that is entry I29 blocker (b), and supplying this carrier is
+  // what ruling R229 ratified. R229 is equally explicit that ratifying the
+  // command "does not by itself enable the RTL reader", so none is built here.
+  //
+  // WHY NOT LEAVE THEM AS UNCONSUMED INTERNAL WIRES. Because an output nobody
+  // reads lets synthesis delete the logic BEHIND it, and this block's own
+  // header states the consequence: a fit would then report the pose lane's
+  // registers as free. The tie-off block warns about a constant on a wide
+  // INPUT for exactly this reason; an unread output is the same lie in the
+  // other direction. At the edge, the capture registers survive and the next
+  // fit prices them honestly.
+  //
+  // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
+  // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
+  // meaningful only while it is high.
+  output logic                     cmd_draw_posed_o,
+  output logic [15:0]              cmd_draw_clip_id_o,
+  output logic [15:0]              cmd_draw_frame_no_o,
+  output logic [ 7:0]              cmd_draw_sub_o,
+  // Evidence, not a boundary -- the same standing as the three counters above.
+  output logic [31:0]              cmd_exec_posed_draws_o,
+  output logic [31:0]              cmd_exec_pose_clip_refused_o,
 
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
@@ -16149,6 +16215,12 @@ module zhao_console_core
     .draw_semantic_weight_o(cmd_draw_semantic_weight_w),
     .draw_flags_o          (cmd_draw_flags_w),
     .draw_src_id_o         (cmd_draw_src_id_w),
+    // R229: the pose rides the same `draw_valid_o` beat, so these need no
+    // handshake of their own and cannot skew against the draw they belong to.
+    .draw_posed_o          (cmd_draw_posed_o),
+    .draw_clip_id_o        (cmd_draw_clip_id_o),
+    .draw_frame_no_o       (cmd_draw_frame_no_o),
+    .draw_sub_o            (cmd_draw_sub_o),
 
     // R17: PublishResource -> MEM.UPLOAD's request port.
     .upl_valid_o    (cmd_upl_valid),
@@ -16226,6 +16298,8 @@ module zhao_console_core
     .draws_issued_o       (cmd_exec_draws_o),
     .draw_overflow_o      (cmd_exec_draw_overflow_o),
     .draw_src_truncated_o (cmd_exec_draw_src_truncated_o),
+    .posed_draws_issued_o (cmd_exec_posed_draws_o),          // R229
+    .pose_clip_refused_o  (cmd_exec_pose_clip_refused_o),    // R229
     .uploads_issued_o     (cmd_exec_uploads_o),
     .upload_overflow_o    (cmd_exec_upload_overflow_o),
     .post_looks_applied_o (cmd_exec_post_looks_o),

@@ -1525,6 +1525,19 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_draw_overflow_o;
   logic [31:0] cmd_exec_draw_src_truncated_o;
 
+  // R229 (POSECMD): DrawPosedForm 0x0305's key and its two counters. The core
+  // is bound with `.*`, so a port this bench does not DECLARE is not merely
+  // unchecked -- verilation FAILS, and every form of this smoke stops running.
+  // That is how these six were found: the ten-form sweep returned RC 1 in one
+  // second flat, which is not a smoke run. Declared here in the same branch as
+  // the ports.
+  logic        cmd_draw_posed_o;
+  logic [15:0] cmd_draw_clip_id_o;
+  logic [15:0] cmd_draw_frame_no_o;
+  logic [ 7:0] cmd_draw_sub_o;
+  logic [31:0] cmd_exec_posed_draws_o;
+  logic [31:0] cmd_exec_pose_clip_refused_o;
+
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
   // 2026-09-19. Declared here for the same reason the command front above is:
