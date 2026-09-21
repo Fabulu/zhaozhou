@@ -495,3 +495,87 @@ block before merging.**
 * **R210 is the reframing:** `TERRAIN.PAGEIO` has a contract and **no
   `blocks.yml` row**, so no gate can see it is missing. **21 has never been
   wrong — it has been answering a smaller question than a reader assumes.**
+
+---
+
+## 2026-09-21, coordinator — WAVE 6, and a floor under the goal
+
+**Head `aea45c4a`. Register 21. Rulings 119.**
+Running: **TAGPROD** (I20, the raster fragment tag), **SHEETSEAM** (the sheet
+residency seam), **CFGARM** (I14, the projector cfg / CMD executor hub).
+
+**Where I was before reading anything** (the rule: write it down FIRST):
+three slots had drained to zero and the goal requires three. Refilled first,
+then took the two decisions that were mine under the standing delegation.
+
+### R222 — the HUD store refused at 180 M10K, and the number I was handed was wrong
+
+Entry I17 asked for exactly the right thing — *"put 153/553 in front of the
+owner instead of inheriting the word SDRAM"* — and **153 is unreachable.** It is
+logical bits ÷ 10,240 and divides **exactly**, which is the tell. A Cyclone V
+M10K cannot be 17 bits wide; against 92,160 words the floor is **180 (32.5%)**,
+reached independently by 512x20, 1024x10 and 2048x5, so it is not one packing
+guess a fitter might beat. The entry understated by 27 blocks — 5% of the
+device — in the flattering direction.
+
+**The ruling I17 cited forbids exactly that inference in its own limit 3**, which
+the entry did not quote; its limit 2 forbids full-frame structures; and its
+headline authorises memory that **SAVES ALMs**, which a HUD store does not.
+
+Refused — and **SDRAM is not the fallback**, because refusing option A does not
+ratify option B. The entry names **three** structures and costs one; the third,
+*"a display list that can re-walk ONE SCANLINE across many descriptors"*, has
+never been priced. A bounded double-buffered band looks like ~48 M10K against
+180 — **and that number is mine and is shape arithmetic, so it is exactly what
+this ruling just refused.** A reason to do the work, not a result.
+
+### R223 — ZERO is unreachable, and one of the two reasons is MINE
+
+**Four of the 21 cannot close under standing rulings:**
+
+* **FORGE.SHADOW** — R133: *"Leaving it costs 1 on the register."* The owner
+  priced the register cost and took it. That sentence predates the goal.
+* **FORGE.PRIM + PRIM_EVAL** — **R199, which I ruled this morning.** The
+  reasoning holds; **I failed to state the consequence and should have.**
+* **`zhao_measure_governor`** — transitively parked; its outputs go to
+  `zhao_geom_lodstate`, which R133 names as inseparable from SHADOW.
+
+**So this campaign's honest landing point is 17, not 0.**
+
+`completion_register.py` has a `deferred_or_blocked` bucket **excluded from the
+total** — four edits and it reads 17, or 0 with more of the same. **I did not,
+because R133 says the cost lands ON THE REGISTER:** the owner elected to keep
+paying visibly, and reclassifying would overturn that while quoting the ruling
+that made it. **R214's lesson wearing better paperwork.** The count stays 21.
+
+**And I caught myself about to commission a SIXTH forge packet.** That cluster
+has gone 21 → 21 five times, and **passes four and five were mine.** Recorded in
+R223 so the next slot does not get filled with one.
+
+### VIEWMASK landed — refused, and the refusal is worth more than a close
+
+I21 **refused with measurements**, register 21 → 21, comment-only. The struck
+decision **held** under its own re-measurement (five primary sources), **and
+settling it does not close the entry**: `terr_job_view_mask_i` is already 2 bits,
+so the narrowing was never the obstacle — *"the view mask rides THE JOB, and the
+job has no producer."*
+
+Three findings I am carrying forward:
+
+* **A caution invented in a comment and cited by its neighbours is
+  indistinguishable from a ruling.** The "per-player tag" premise traced to the
+  core's own commentary, not to T5, and **outranked ratified spec for five
+  weeks across six passes.**
+* **Two of five blockers were held open by ROTTED CITATIONS** — re-measuring all
+  five took under an hour and cut the open count to three and a half **with no
+  RTL changing.** Budget that on every entry before commissioning against it.
+* It **declined to manufacture a register rise** (no invented `VIEW.*` rows):
+  *"an honest 21 beats a dishonest 22."* The distinction against R214 is exact —
+  PAGEIO's row described a capability that **already had a contract**.
+
+**That finding is why CFGARM exists:** VIEWMASK's blocker 5 resolved to *"a
+composition behind entry I14"*, and I17 says its descriptor gap is *"the SAME
+gap I14 and I30 already describe"*. I14 is a hub, not a leaf.
+
+**Next step: attend whichever of the three lands first; re-run the seven smoke
+forms and `wrapper_port_parity` on the merged tree before believing the gates.**
