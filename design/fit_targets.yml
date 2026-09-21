@@ -2930,6 +2930,33 @@ targets:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # ---- THE FORGE CHAIN, composed 2026-09-21 (packet FORGECOMP) ----------
+      # SIX BLOCKS IN ONE ACT, and the ordering below is DEPENDENCY ORDER with
+      # the leaves first. They land together for the reason five previous FORGE
+      # passes moved the register by zero: every one of them is a producer
+      # whose only consumer is another of them. zhao_forge_prim emits index
+      # triples nothing could look up; the two evaluators emit world positions
+      # nothing could project; the assembler emits screen triangles with no
+      # door; the door has one client and no second. A prefix of this list is a
+      # tie-off wearing a composition's clothes.
+      #
+      # zhao_forge_ring_eval takes no design/blocks.yml row ON PURPOSE (it
+      # extends FORGE.PRIM.EVAL's capability rather than being one), and it is
+      # here because WITHOUT it four of the six families would have topology and
+      # no positions -- the dispatch would have to refuse them, which is a
+      # narrowing and not a composition.
+      #
+      # zhao_geom_depthquant.sv and zhao_raster_rcp24_v4.sv are ALREADY in this
+      # closure for GEOM.VATTR; the assembler instantiates a SECOND pair of
+      # them, which is ruling D-4's canonical law used twice rather than
+      # expressed twice, and adds no source line.
+      - fpga/rtl/forge/zhao_forge_jitter_rom.sv
+      - fpga/rtl/forge/zhao_forge_prim.sv
+      - fpga/rtl/forge/zhao_forge_prim_eval.sv
+      - fpga/rtl/forge/zhao_forge_ring_eval.sv
+      - fpga/rtl/forge/zhao_forge_pagebank.sv
+      - fpga/rtl/forge/zhao_forge_assemble.sv
+      - fpga/rtl/geometry/zhao_geom_clipdoor.sv
       # Added 2026-09-19, packet P-GEOMFORGE. GEOM.SKIN.NORM, composed on the
       # SAME handshake as GEOM.SKIN through an AND-fork on GEOM.POSE's palette
       # store -- which now carries the packed normal through beside the vertex,

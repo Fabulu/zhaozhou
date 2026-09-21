@@ -249,7 +249,15 @@ module zhao_part_project #(
     // shift is the conversion and it is a named knob for exactly that reason:
     // 8 reads the record as fx8 world units. The day the scale is ruled, this
     // is the one line that moves.
-    parameter int unsigned POS_SHIFT = 8
+    parameter int unsigned POS_SHIFT = 8,
+    // THE OWNER FIELD'S WIDTH, promoted from a localparam to a parameter when
+    // the third arm landed (2026-09-21). The forge arm's slot port is
+    // PAY_W - OWNER_W_P bits wide and a port width cannot see a localparam, so
+    // the alternative was a literal 15 beside a localparam 2 -- two statements
+    // of one number, which is exactly the drift this block's header says it was
+    // sized early to prevent. The localparam OWNER_W now derives from this and
+    // nothing else reads the raw value.
+    parameter int unsigned OWNER_W_P = 2
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -292,6 +300,28 @@ module zhao_part_project #(
     input  var logic               g_view_i,
     input  var logic [PAY_W-1:0]   g_payload_i,
 
+    // ---- the shared projector, client A: FORGE IN ---------------------------
+    // THE THIRD OWNER, added 2026-09-21 (FORGECOMP). `OWNER_FORGE = 2'd2` is
+    // the value this block's encoding has RESERVED since R68 sub-build 4, and
+    // the header's own sentence commissioned it: "this port has a third
+    // coming ... the third owner is a third arm here and not a second
+    // projector". Owner ruling R3 is UNTOUCHED -- it withholds a third PORT on
+    // `zhao_project_service` and NAMES the time multiplex as the thing to keep,
+    // which is precisely what this is.
+    //
+    // The forge rider is the assembler's VERTEX SLOT and nothing else: unlike
+    // geometry's {arena, index} it needs no structure, because
+    // `zhao_forge_assemble` addresses its own store directly by that number.
+    // 15 bits is what the owner field leaves of PAY_W, and the assembler's
+    // elaboration guard refuses a MAX_VERTS that would not fit it.
+    input  var logic               f_valid_i,
+    output var logic               f_ready_o,
+    input  var logic signed [31:0] f_vx_i,
+    input  var logic signed [31:0] f_vy_i,
+    input  var logic signed [31:0] f_vz_i,
+    input  var logic               f_view_i,
+    input  var logic [PAY_W-OWNER_W_P-1:0] f_slot_i,
+
     // ---- the shared projector, client A: THE MULTIPLEXED REQUEST ------------
     output var logic               a_valid_o,
     input  var logic               a_ready_i,
@@ -321,6 +351,19 @@ module zhao_part_project #(
     output var logic        [30:0] h_w_o,
     output var logic               h_behind_o,
     output var logic [PAY_W-1:0]   h_payload_o,
+
+    // ---- forge's results, demultiplexed back out ----------------------------
+    // NO READY, mirroring the service: a result is handed over on the cycle it
+    // arrives and `zhao_forge_assemble` is built never to be unable to take
+    // one. `rf_slot_o` is the rider's payload half, returned verbatim -- the
+    // rider "cannot drift from the data it describes", which is
+    // `zhao_project_service`'s own reason for carrying one at all.
+    output var logic               rf_valid_o,
+    output var logic signed [20:0] rf_x_o,
+    output var logic signed [20:0] rf_y_o,
+    output var logic        [30:0] rf_w_o,
+    output var logic               rf_behind_o,
+    output var logic [PAY_W-OWNER_W_P-1:0] rf_slot_o,
 
     // ---- the ladder loop: out to PART.LADDER ... ----------------------------
     output var logic        lad_valid_o,
@@ -401,11 +444,18 @@ module zhao_part_project #(
   // the rider it packs, so a geometry rider is correctly owned with no change
   // to that block. Renumbering these values is therefore NOT cosmetic: it would
   // silently re-own every vertex in flight.
-  localparam int unsigned OWNER_W  = 2;
+  // OWNER_W_P (the parameter) and OWNER_W (the localparam) are ONE value said
+  // twice, and the elaboration guard below is what keeps them one. The port
+  // widths above need it before the body, and SystemVerilog gives a localparam
+  // no visibility there; making the port widths a magic 15 instead is how the
+  // owner field and the payload width drift apart, which this block's header
+  // names as the failure mode it was sized early to prevent.
+  localparam int unsigned OWNER_W  = OWNER_W_P;
   localparam int unsigned OWNER_LO = PAY_W - OWNER_W;
 
   localparam logic [OWNER_W-1:0] OWNER_GEOM = 2'd0;  // GEOM.GROUP_SEQ's vertices
   localparam logic [OWNER_W-1:0] OWNER_PART = 2'd1;  // this block's particles
+  localparam logic [OWNER_W-1:0] OWNER_FORGE = 2'd2; // FORGE.PRIM's vertices
   // 2'd2 and 2'd3 are UNCLAIMED. 2'd2 is reserved for GEOM.LOD's instance
   // centre (`zhao_geom_lodstate.pr_*`); it is not wired here because that block
   // is not composed in `zhao_console_core` yet -- see this packet's FINDINGS.
@@ -527,33 +577,92 @@ module zhao_part_project #(
   logic pv_valid_c, pv_take_c;
   assign pv_valid_c = p_valid_i && !slot_full_c;
 
-  logic both_c, sel_p_c;
-  logic prefer_p_q;
-  assign both_c  = g_valid_i && pv_valid_c;
-  assign sel_p_c = (both_c && prefer_p_q) || (!g_valid_i && pv_valid_c);
+  // ==========================================================================
+  // THREE CLIENTS, ROTATING PRIORITY, BOUND N-1 = 2 TURNS.
+  //
+  // This replaced a two-way `prefer_p_q` toggle when the forge arm landed, and
+  // the replacement is DELIBERATELY BEHAVIOUR-PRESERVING FOR TWO CLIENTS. With
+  // `f_valid_i` low the grant sequence is identical to the toggle's: from
+  // turn 0 with both asking, geometry takes it and the turn moves to 1;
+  // particles take it and the turn moves to 2; at turn 2 forge is not asking so
+  // the scan wraps to geometry -- g, p, g, p, exactly as before. That property
+  // is why the console's composed numbers do not move, and it is asserted in
+  // the directed test rather than argued here.
+  //
+  // THE ROTATION IS THE SAME LAW `zhao_mem_share_n` AND `zhao_terrain_tapshare`
+  // USE, for the same reason: a fixed priority would let two busy clients
+  // starve the third for an unbounded time, and R3's schedule proof is owed
+  // against a BOUND, not against an average.
+  logic both_c, sel_p_c, sel_f_c;
+  logic [1:0] turn_q;
+  logic any_c;
 
-  assign a_valid_o   = g_valid_i || pv_valid_c;
-  assign a_vx_o      = sel_p_c ? p_wx_c : g_vx_i;
-  assign a_vy_o      = sel_p_c ? p_wy_c : g_vy_i;
-  assign a_vz_o      = sel_p_c ? p_wz_c : g_vz_i;
-  assign a_view_o    = sel_p_c ? cfg_view_i : g_view_i;
+  logic [2:0] ask_c;
+  assign ask_c = {f_valid_i, pv_valid_c, g_valid_i};   // 2 forge, 1 part, 0 geom
+
+  logic [1:0] grant_c;
+  always_comb begin
+    grant_c = 2'd0;
+    any_c   = 1'b0;
+    // Scan from `turn_q` cyclically and take the first asker. Three arms, so
+    // this is three terms and not a loop -- Quartus 17.0 has opinions about
+    // inline `for` in a comb block and the explicit form is also the readable
+    // one at N=3.
+    if (ask_c[turn_q]) begin
+      grant_c = turn_q;
+      any_c   = 1'b1;
+    end else if (ask_c[(turn_q == 2'd2) ? 2'd0 : (turn_q + 2'd1)]) begin
+      grant_c = (turn_q == 2'd2) ? 2'd0 : (turn_q + 2'd1);
+      any_c   = 1'b1;
+    end else if (ask_c[(turn_q == 2'd0) ? 2'd2 : (turn_q - 2'd1)]) begin
+      grant_c = (turn_q == 2'd0) ? 2'd2 : (turn_q - 2'd1);
+      any_c   = 1'b1;
+    end
+  end
+
+  // `both_c` keeps its name and its meaning -- the two clients whose contention
+  // `prefer_p_q` used to arbitrate -- because `slot_pressure_o`'s and the
+  // directed test's reading of it has not changed.
+  assign both_c  = g_valid_i && pv_valid_c;
+  assign sel_p_c = any_c && (grant_c == 2'd1);
+  assign sel_f_c = any_c && (grant_c == 2'd2);
+
+  // READS ONLY THE VALIDS, NEVER `a_ready_i`. The service's `a_ready_o` is a
+  // function of its own `a_valid_i`, so a valid that read its ready would close
+  // a combinational loop through two modules. That sentence was true of the
+  // two-client form and is why the third arm is written the same way.
+  assign a_valid_o   = any_c;
+  assign a_vx_o      = sel_f_c ? f_vx_i : (sel_p_c ? p_wx_c : g_vx_i);
+  assign a_vy_o      = sel_f_c ? f_vy_i : (sel_p_c ? p_wy_c : g_vy_i);
+  assign a_vz_o      = sel_f_c ? f_vz_i : (sel_p_c ? p_wz_c : g_vz_i);
+  assign a_view_o    = sel_f_c ? f_view_i : (sel_p_c ? cfg_view_i : g_view_i);
 
   // The particle rider: the owner field, then zero padding, then the slot. The
   // geometry rider passes through with its owner field FORCED to `OWNER_GEOM`
   // -- the guard and the lane's own zero padding say it is already that, and
   // `geom_tag_collision_o` is what says so at run time instead of a comment
   // saying it.
-  logic [PAY_W-1:0] ride_p_c, ride_g_c;
+  logic [PAY_W-1:0] ride_p_c, ride_g_c, ride_f_c;
   always_comb begin
     ride_p_c                       = '0;
     ride_p_c[OWNER_LO +: OWNER_W]  = OWNER_PART;
     ride_p_c[SLOT_W-1:0]           = wp_q[SLOT_W-1:0];
     ride_g_c                       = g_payload_i;
     ride_g_c[OWNER_LO +: OWNER_W]  = OWNER_GEOM;
+    // The forge rider is the slot in the low bits and the owner on top. No
+    // structure, because the assembler addresses its own store by that number.
+    ride_f_c                       = '0;
+    ride_f_c[OWNER_LO-1:0]         = f_slot_i;
+    ride_f_c[OWNER_LO +: OWNER_W]  = OWNER_FORGE;
   end
-  assign a_payload_o = sel_p_c ? ride_p_c : ride_g_c;
+  assign a_payload_o = sel_f_c ? ride_f_c : (sel_p_c ? ride_p_c : ride_g_c);
 
-  assign g_ready_o = a_ready_i && !sel_p_c;
+  // Each client's ready is the accept AND its own grant. `g_ready_o` was
+  // `!sel_p_c`; at three arms "not the other one" is no longer the same
+  // statement as "mine", and writing it the old way would hand geometry an
+  // accept that went to forge.
+  assign g_ready_o = a_ready_i && any_c && (grant_c == 2'd0);
+  assign f_ready_o = a_ready_i && sel_f_c;
   assign pv_take_c = a_ready_i && sel_p_c && pv_valid_c;
   assign p_ready_o = a_ready_i && sel_p_c && !slot_full_c;
 
@@ -579,6 +688,13 @@ module zhao_part_project #(
   assign h_w_o       = a_w_i;
   assign h_behind_o  = a_behind_i;
   assign h_payload_o = a_payload_i;
+
+  assign rf_valid_o  = a_valid_i && (res_owner_c == OWNER_FORGE);
+  assign rf_x_o      = a_x_i;
+  assign rf_y_o      = a_y_i;
+  assign rf_w_o      = a_w_i;
+  assign rf_behind_o = a_behind_i;
+  assign rf_slot_o   = a_payload_i[OWNER_LO-1:0];
 
   // ---- THE RATIFIED HALF-EXTENT ------------------------------------------
   //     w_fx     = fx_mul(radius_fx16, d)  = sat32( (p + 2^15) >>> 16 )
@@ -756,7 +872,7 @@ module zhao_part_project #(
       rp_q                  <= '0;
       lq_wp_q               <= '0;
       lq_rp_q               <= '0;
-      prefer_p_q            <= 1'b0;
+      turn_q                <= 2'd0;
       particles_projected_o <= '0;
       particles_behind_o    <= '0;
       geom_grants_o         <= '0;
@@ -769,8 +885,13 @@ module zhao_part_project #(
       ladder_unexpected_o   <= '0;
     end else begin
       // ---- the shared port ------------------------------------------------
+      // THE TURN ADVANCES PAST WHOEVER WAS GRANTED, which is what bounds the
+      // wait at N-1. Advancing on every CYCLE instead would let a client that
+      // is merely slow to assert lose its turn to nobody.
+      if (any_c && a_ready_i) begin
+        turn_q <= (grant_c == 2'd2) ? 2'd0 : (grant_c + 2'd1);
+      end
       if (both_c && a_ready_i) begin
-        prefer_p_q  <= ~prefer_p_q;
         contended_o <= contended_o + 32'd1;
       end
       if (g_take_c) begin
@@ -787,7 +908,14 @@ module zhao_part_project #(
       // one-bit tag this state did not exist; with a two-bit field it does,
       // and an undetected drop here would present downstream as a vertex that
       // never landed -- i.e. as a fault in the arena, several blocks away.
-      if (a_valid_i && (res_owner_c != OWNER_GEOM) && (res_owner_c != OWNER_PART))
+      // UPDATED WITH THE THIRD ARM, and it had to be: leaving it would have made
+      // every forge result "unroutable" while the demux above routed it
+      // perfectly well -- a counter reading high about a path that works, which
+      // is the mirror of the detector-that-cannot-fire fault and just as
+      // misleading to whoever reads it next. 2'd3 remains unallocated and is
+      // what this counter still watches for.
+      if (a_valid_i && (res_owner_c != OWNER_GEOM) && (res_owner_c != OWNER_PART)
+                    && (res_owner_c != OWNER_FORGE))
         owner_unroutable_o <= owner_unroutable_o + 32'd1;
       if (pv_take_c) begin
         part_grants_o            <= part_grants_o + 32'd1;
