@@ -524,10 +524,16 @@ module zhao_geom_clipread
             pgen_q   <= pub_generation_i;
             beat_q   <= 3'd0;
             done_q   <= 6'd0;
-            // The skeleton stops being resident the moment a new one starts
-            // landing. A half-written store that still reads "valid" is the
-            // torn frame this repository keeps recording.
-            body_v_q <= 1'b0;
+            // NOT invalidated here. `zhao_geom_ladderbank` keeps its live half
+            // byte-identical through a refusal, and that is the right law; it
+            // can only afford it because it pays ROWS*128 spare bits for a
+            // second bank. `zhao_geom_bonesrc`'s store is SINGLE and this
+            // block cannot give it a second one, so residency is dropped at
+            // the moment the store is first WRITTEN instead -- which keeps
+            // every HEADER-level refusal (magic, version, flags, alignment,
+            // extent) harmless and drops residency only when a refusal has
+            // genuinely torn the store. Stated rather than silently differing
+            // from the block this entry cites as the pattern.
             if (pub_extent_i < 32'(HDR_BYTES)) truncated_o <= truncated_o + 32'd1;
             else                               st_q <= S_PH_REQ;
           end else if (pub_clip_c) begin
@@ -538,8 +544,7 @@ module zhao_geom_clipread
             pgen_q   <= pub_generation_i;
             beat_q   <= 3'd0;
             rows_done_q <= 16'd0;
-            clip_v_q <= 1'b0;
-            for (i = 0; i < int'(CLIP_ROWS); i = i + 1) row_v_q[i] <= 1'b0;
+            // Dropped at the first ROW STORE, not here -- see the kind-8 arm.
             if (pub_extent_i < 32'(HDR_BYTES)) truncated_o <= truncated_o + 32'd1;
             else                               st_q <= S_CH_REQ;
           end else if (p_valid_i) begin
@@ -669,6 +674,10 @@ module zhao_geom_clipread
             if (beat_q == 3'd7) begin
               fw_q <= 3'd0;
               st_q <= S_BR_FILL;
+              // THE STORE IS ABOUT TO BE OVERWRITTEN. From here a refusal
+              // leaves a torn skeleton, so residency ends here and is re-earned
+              // by the adoption below.
+              body_v_q <= 1'b0;
             end
           end
         end
@@ -797,6 +806,16 @@ module zhao_geom_clipread
             truncated_o <= truncated_o + 32'd1;
             st_q        <= S_IDLE;
           end else begin
+            // THE ROWS ARE ABOUT TO BE OVERWRITTEN. Same law as the body's,
+            // one store over: every header-level refusal above this line
+            // leaves the resident directory whole, and only a row that is
+            // being written ends its residency. The filling rows are cleared
+            // with the first store so a SHORTER page cannot leave the previous
+            // load's slots answering behind it.
+            if (rows_done_q == 16'd0) begin
+              clip_v_q <= 1'b0;
+              for (i = 0; i < int'(CLIP_ROWS); i = i + 1) row_v_q[i] <= 1'b0;
+            end
             row_v_q   [rows_done_q[ROWW-1:0]] <= 1'b1;
             row_slot_q[rows_done_q[ROWW-1:0]] <= dr_slot_c;
             row_fcnt_q[rows_done_q[ROWW-1:0]] <= dr_fcnt_c;
