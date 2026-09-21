@@ -5316,3 +5316,164 @@ building."** The two conflicted and **the protocol won, which is the right
 precedence.** *The conflict was mine* — a brief may not quietly license what the
 protocol forbids. The number was already on disk, which is where a price should
 be looked for first.
+
+## R231 — THE DEPTH LAW WAS ALREADY RATIFIED, AND THE THING I COMMISSIONED LAST NIGHT IS THE OPTION IT REJECTS BY NAME
+
+**2026-09-21, TERRCMD, entries I27/I32. Register 22 → 22.** Found while
+measuring something else entirely, which is how the expensive ones arrive.
+
+### The defect, verified in my own tree rather than taken on report
+
+Four pieces, each checked:
+
+1. **`design/contracts/SURFACE.STAMP.md` S3** — *"`stamp_results` carries
+   `{texel, tag, strength_after, strength_before}`. `TERRAIN.BAKE` turns stamps
+   into layer-B height16 scars and **needs the DELTA, not just the new
+   value**; sending `before` costs eight wires and **saves BAKE a second read
+   port onto the sheet**."*
+2. **The same clause rejects the alternative BY NAME** — *"**Rejected:**
+   emitting only the new value and letting BAKE re-read — a second reader on a
+   store whose whole rate budget is one texel per clock."*
+3. **`zref_terrain_page.hpp`'s `stamp_depth_at_vertex` returns
+   `stamp_depth(strength[...])`** — a function of the CURRENT sheet strength
+   alone. **Absolute, not a delta.**
+4. **`zhao_terrain_bake_v2.sv`: `scar_sum = h_scar + delta16`** — the scar
+   **ACCUMULATES**.
+
+**An absolute depth added to an accumulating scar double-digs.** A stamp
+re-issued at the same place digs the full depth again; two stamps overlapping
+in one frame both dig the accumulated sheet. Under the delta law the same
+re-issue correctly digs **nothing**, because op 0 replaces and `before ==
+after`.
+
+**And `zhao_terrain_sheetseam` — which I commissioned as packet SHEETSEAM
+yesterday and merged — IS the second reader the contract rejects.**
+
+### Why no instrument could have caught it
+
+`sheet_vertices_dug_o`, `fallbacks_o` and `prefetch_beats_o` **all describe a
+perfectly healthy read of a sheet that is telling the truth.** The fault is not
+in the answer; it is in **which question is asked.** Every counter measures the
+answer.
+
+**This is `CLAUDE.md`'s metadata-bank law in its purest form** — *"counters that
+balance perfectly because none of them looks at the field that moved"* — and it
+is the second time this campaign has produced it. R215 found the same shape in
+PAGEIO: 1,023 of 1,024 cells landing, *"the page written, the mark published,
+`done_ok` high, and every counter agreeing with every other."*
+
+### THIS IS NOT AN OWNER DECISION. The contract already ruled it.
+
+TERRCMD offered it as **D-TERRCMD-A** and recommended the delta. **I am not
+taking it as a decision, because S3 is RATIFIED and decided it already** —
+including rejecting the built branch by name, with a **committed mutant
+(mutation 8: *"`stamp_results` loses the pre-blend strength (the delta BAKE
+needs)"*)** standing guard over it, and with `surf_res_before_o` — **the very
+port entry I32 is named after** — existing for this and nothing else.
+
+**RULED: take the DELTA.** It is the only idempotent option, it is what
+`surf_res_before_o` was mutation-tested to deliver, and it restores §9.2's
+deferral identity. Cost, recorded *before* the decision as it should be: **one
+more 1,089-byte M10K half in the seam.**
+
+**R216's rule, for the sixth time this week: the decision was already spent, in
+a file nobody opened.**
+
+### And the brief that missed it was mine
+
+`CLAUDE.md` says, in as many words: *"before building a block, read the contract
+of every block that consumes or produces the same quantity."* **SHEETSEAM's
+brief pointed it at PAGEIO's and SEAMDIG's findings and at §9.3's laws. It did
+not point at `SURFACE.STAMP.md`, which owns the other half of the same
+quantity.** Nor did R221, which I wrote about the same seam.
+
+**SHEETSEAM did excellent work inside the frame I gave it** — 81 directed
+checks, a fired miss counter on three routes, a latency price 7.5× better than
+the brief's. **The frame was wrong at its edge, and that is a coordinator
+failure, not a lane failure.** It is the same shape as R220: *disjoint file sets
+are not disjoint SEMANTICS.*
+
+**Nothing is deleted and nothing is narrowed.** The seam is repaired to carry
+`before`, which is what S3 always said it should carry.
+
+### Three more results, and one of them is the campaign's premise collapsing
+
+**`cmd_*` WAS NEVER ONE ABSENCE, and three lanes forwarded it as one.** It is
+**thirteen fields. Nine are already live on the core's wires** — `cx`/`cz` from
+`cmd_exec_stamp_tx_w`/`_ty_w`, `radius`, `src_id`, the four `env_*` port-for-port
+from `u_surface_dispatch` under R45, `dual` from `tps_v_flags`, `patch_id` from
+the dispatch key. **Four are absent — `depth_from`, `depth_to`, `cells`,
+`depth_sheet` — and each is a DECISION, not a wire**, which is exactly why no
+amount of composition work ever reached it.
+
+**My TERRCMD brief's premise — "two entries behind one wall" — is false.** I27
+and I32 **do not need the same thing**: `terr_chk_*` waits on
+`zhao_terrain_devstore`, and *a `cmd_*` producer would close it **never***.
+
+**And my C4 boundary was satisfiable all along:** `job_handle_i` need not be
+synthesised from `cmd_patch_id_i`, because **`stamp_patch_o` IS the ABI's
+`handle32[patch]`**, already composed as `cmd_exec_stamp_patch_w`. The value is
+present and validated. **C4 is satisfied by CARRYING it, not deriving it.**
+
+### Two rots found, and one sought and honestly NOT found
+
+**I32 calls `TERRAIN.PAGEIO` "NOT BUILT" with "NO `design/blocks.yml` row", in
+two places.** It is **63,729 bytes**, at `blocks.yml:2377`, and it consumes
+`sc_*` and serves layer D — which I32 says have no consumer and no reader.
+**Three of I32's four listed holds are spent, and two lanes had already
+inherited "PAGEIO does not exist" from those sentences.**
+
+**And R229 working as intended:** I27's `terr_chk_*` waits on
+`zhao_terrain_devstore` composing. The file exists and greps **eight times** in
+the core — *"reads exactly like a composition."* **All eight are comments.** The
+blocker stands.
+
+> **"I expected to file an expiry and did not."**
+
+**That is the sentence R229 asked for.** A re-measurement lane's flattering
+direction is *finding* rot, and this one looked, found the grep that would have
+justified the claim, opened the hits, and reported the boring truth.
+
+### And a SECOND brief error from the same lane: the smoke list is short by two
+
+`run_console_core_smoke.ps1`'s `param()` block declares **ten** switches.
+`-SkipVerilate` is a modifier, so the forms are **nine plus plain = TEN**:
+
+```
+plain  -Mutant  -UntexMutant  -NoTableLoad  -BadDescriptor  -BadVertex
+-NoEchoArm  -BadTraceArm  -GlowTag  -LintOnly
+```
+
+**Every brief I have written says EIGHT**, omitting **`-NoTableLoad`** and
+**`-BadDescriptor`**. So a lane changing RTL behaviour and dutifully running
+"all eight" **leaves two controls unrun while reporting a complete sweep** —
+and one of the two is `-BadDescriptor`, the inverted control I had just sent a
+correction about.
+
+**This is the same shape as the silently-accepted flag, one level up: the LIST
+and the SCRIPT disagreed, and only the script is authoritative.** A hardcoded
+enumeration in a brief is a copy, and *a copy goes stale in the flattering
+direction* — here it reads as a **complete** sweep.
+
+**So the instruction changes from an enumeration to a DERIVATION**, and it goes
+in every brief:
+
+```
+awk '/^param\(/,/^\)/' tests/prod/run_console_core_smoke.ps1 \
+  | grep -oE '\[switch\]\$\w+'
+```
+
+**Three brief defects in one night, all mine, all found by lanes:** the gate
+list missing `--check --mutant` (which hid a broken configure), the
+unconditional eight-form mandate (R227, three hours of contended machine time),
+and now the eight-form list itself being wrong. **The common cause is that I
+wrote down a snapshot of a thing that moves.**
+
+**And TERRCMD justified its own zero rather than asserting it**, which is the
+standard: *"`-LintOnly` is not an inverted control — it elaborates and never
+runs the console, so it has no verdict arm to die in. Zero `%Fatal` is the
+correct expectation there, not an assumed one."* It gave three independent
+confirmations its flag had bound: the verdict line is `-LintOnly`-specific, the
+plain run's markers (`raster pixels=2560`, `frames_admitted=1`) are **absent**,
+and RC was 0 rather than the **2** the repaired script now returns for an
+unknown argument.
