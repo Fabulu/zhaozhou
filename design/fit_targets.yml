@@ -1698,6 +1698,46 @@ targets:
       - fpga/rtl/forge/zhao_forge_prim_eval.sv
       - fpga/rtl/forge/zhao_forge_jitter_rom.sv
 
+  # FORGE.PRIM.EVAL's OTHER FOUR FAMILIES -- fan, tube, radial shell and
+  # billboard sheet, built 2026-09-21 under owner decision R234 D2, which
+  # reversed R199 with the words "the owner has chosen to pay for the
+  # evaluators rather than accept the deferral". Batched with the row above per
+  # the 2026-09-08 batching law: they are the two position halves of ONE
+  # dispatch seam and pricing one without the other answers half a question.
+  #
+  # THE QUESTION THIS GATE ASKS, and it is deliberately not the same as its
+  # sibling's: (a) does the shared 33x33 multiplier land in <= 4 DSP with its
+  # output register used -- this block has exactly ONE nonconstant multiplier
+  # site and any number above that means the operand mux was duplicated rather
+  # than shared; (b) does the 43-iteration bit-serial divider stay at ZERO DSP,
+  # which is the whole reason it is bit-serial; (c) does the instantiated
+  # zhao_field_sin's 257x17 table infer memory rather than melting into ALMs,
+  # as it does in zhao_geom_loom and zhao_light_env; and (d) does prim + BOTH
+  # evaluators fit inside FORGE.PRIM.md's contract ceiling of 2,800 ALM /
+  # 10 DSP / 2 M10K -- a ceiling written when there was one evaluator, so this
+  # gate may well be the evidence that it has to move. Owner ruling R236 makes
+  # that a fact to record and not a reason to build less.
+  #
+  # Correctness, determinism under four stall patterns, the refusal taxonomy,
+  # the whole-job vertex count and throughput in clocks are ALREADY answered by
+  # Verilator (tests/forge/forge_ring_eval_directed.cpp, 297 checks) and do not
+  # need Quartus.
+  #
+  # A NOTE ON THE LABEL "F-EVAL1", because it cost a lane five minutes and
+  # would cost the next one the same: design/prod_manifest.yml says twice that
+  # the gate is "named in design/fit_targets.yml", and the STRING F-EVAL1
+  # appears nowhere in this file. The gate ENTRY is real -- it is the
+  # `- top: zhao_forge_prim_eval` row above, with its question written out --
+  # and only the LABEL is missing. That is a much smaller fault than a phantom
+  # citation, and it is recorded here rather than by renaming rows, because the
+  # rows in this file are keyed by `top:` and a label nothing reads would be a
+  # second naming law.
+  - top: zhao_forge_ring_eval
+    sources:
+      - fpga/rtl/forge/zhao_forge_ring_eval.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+
   - top: zhao_geom_assemble
     sources:
       - fpga/rtl/geometry/zhao_geom_assemble.sv

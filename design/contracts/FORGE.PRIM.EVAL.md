@@ -31,6 +31,44 @@ glint, not Forge — and growing five laws speculatively is how a block misses
 its one required function. When a family's positions are needed, they extend
 this contract by ratification, not by drift.
 
+> **RATIFIED 2026-09-21 — OWNER DECISION R234 D2, `(owner, explicit)`.** The
+> paragraph above is kept exactly as written because it was right, and because
+> the sentence it ends with is the one that just fired: *"when a family's
+> positions are needed, they extend this contract by ratification, not by
+> drift."* **This is that ratification.** R199 deferred the forge page kind on
+> the grounds that *"four of the six forge families have no evaluator at all …
+> a page ruling buys one of six"*; D2 reverses it because *"the owner has
+> chosen to pay for the evaluators rather than accept the deferral."*
+>
+> **Four of the five are now built**, as a SECOND MODULE and not as growth
+> inside this one: `fpga/rtl/forge/zhao_forge_ring_eval.sv`, reference
+> `zref::forge_ring::eval_job`
+> (`reference/include/zref/zref_forge_ring.hpp`), test
+> `tests/forge/forge_ring_eval_directed.cpp`. It serves **fan, tube, radial
+> shell and billboard sheet** — exactly the four `spec/commands.zidl` names as
+> having no evaluator — and it **refuses the ribbon and the cliff on their own
+> counter**, because this block owns the ribbon and FORGE.CLIFF owns the cliff.
+>
+> **Two modules rather than one, deliberately.** The lightning law is a jitter
+> law with branches and a hash stream; the ring law is a swept ring with a
+> quarter-wave table. Folding them together would put two unrelated laws behind
+> one FSM and force every ribbon job to carry ring state it never reads. They
+> share the ONE thing they genuinely share — `eval_lerp_off`, the exact
+> rational `floor((2Di + N)/(2N))` — by the ring reference **calling** this
+> one's, never by copying it.
+>
+> **They agree about the OPEN ring without either importing the other.** A
+> ribbon pair is `(P − wvec)` then `(P + wvec)`; a billboard's open ring is
+> `C − R·U` then `C + R·U`, in that order. Same two vertices, same order, and
+> the ring test asserts it against a hand-computed expectation.
+>
+> **The fifth, cliff, is NOT covered and is not owed here.** Its positions come
+> from the terrain lattice and belong to FORGE.CLIFF, whose own adoption landed
+> under R142. Re-deriving them from a parameter block would be the second
+> implementation of ratified arithmetic this file already refuses.
+>
+> **What the pair still lacks is a DISPATCH, not a law.** See "Notes" below.
+
 ## Clock and reset semantics
 
 Single `gpu_clk`, asynchronous active-low `rst_n` (house pattern of
@@ -215,3 +253,64 @@ ladder near-ribbon → mid-ribbon → PART.SOFT streak → glint, ≤ 2 branches
 1–3 spell-light samples) is SKETCHED in reports/ADDLIGHTNING.md and not yet
 ratified; it is dispatch/composition, not a seventh Forge family, and it is
 the remaining work between this block and a bolt on screen.
+
+## What the evaluator pair still lacks — measured 2026-09-21, not inherited
+
+Both position laws now exist and neither is composed. The remaining work is
+**dispatch and a door**, and it is named here so the next packet inherits a map
+rather than an argument. Each item was verified by reading the port map, not the
+ledger — `upstream:` in `design/blocks.yml` is DESIGN INTENT and not a wiring
+claim (R180).
+
+1. **A FORGE DISPATCH.** `spec/commands.zidl`'s `DrawProcedural 0x0302` is
+   ratified and **`fpga/rtl/command/zhao_cmd_exec.sv` has no arm for it** —
+   zero hits for the opcode anywhere in `fpga/rtl/command/`. The record falls
+   into the catch-all and increments `unsupported_o`. `zhao_geom_drawjob`
+   decodes DrawForm/DrawPosedForm only and emits a MESH job (`j_format_o`
+   checked against the mesh descriptor format); nothing it emits could carry a
+   family, a subdivision or an anchor.
+2. **A PAGE READER.** The page format itself is no longer missing — owner
+   decision R234 D2 froze it as `spec/cartridge.md` §4d, kind 14, model
+   `zref::forge_page`, packer `tools/pack/mkforgeprogram.py`, golden
+   `tests/golden/forge_program/forge_page_v1.bin`. **What is missing is the
+   staging path**, on the terrain pattern: `zhao_terrain_pageloader` moves a
+   body from HPS DDR into a pool and `zhao_terrain_hdrread` turns a header into
+   registers. A forge bank copies that shape. `zhao_geom_ladderbank` is the
+   closer precedent for the TABLE half.
+3. **THE ROTATION THAT CONVERSION OWES.** `DrawProcedural.kind` is `forge_kind`
+   and the job field is `j_family_i`; they are two numberings of the same six
+   and `forge_kind = (family + 1) mod 6`. `zref::forge_page::kind_of_family` /
+   `family_of_kind` are the one place it is written and
+   `tests/forge/forge_page_directed.cpp` walks all six both ways.
+4. **THE DOOR, and it is at GEOM.CLIP's INPUT rather than GEOM.SETUP's.**
+   `zhao_geom_setup` has **exactly one** triangle arm, `signed [20:0]` SCREEN
+   subpixels with edge functions, and it is a tine of a three-way ordered join
+   with `zhao_geom_attrpack` and `zhao_material_window` that pairs by ARRIVAL
+   ORDER with no tag. `zhao_geom_clip` drives it port for port and there is no
+   arbiter. Entering at one tine alone deadlocks combinationally. Entering at
+   GEOM.CLIP's input instead yields winding normalisation, `2A`, the bounding
+   box and the zero-area reject for free and keeps all three tines in step.
+5. **A WORLD → SCREEN HOP.** Both evaluators emit `signed [31:0]` WORLD fx16.
+   `zhao_project_service` performs exactly that transform to `signed [20:0]`
+   screen — and has **exactly two client arms, both taken**: A by
+   `zhao_part_project` (itself already time-multiplexing geometry and
+   particles through it) and B by TERRAIN.GROUP_SEQ. There is no free arm; a
+   forge requester needs a third client or a second guest on A's pattern.
+   **Check for a free ARM, not for a matching port list.**
+6. **THE ATTRIBUTE LAW, and it is the binding one.** `GEOM_CLIP_ATTRS = 7` per
+   corner — invw24, u/w, v/w, lit r, g, b, alpha. A forge ribbon has no
+   ratified value for those seven, and **this is the same wall TERRAIN and
+   PARTICLES each hit independently**; `zhao_part_expand` is composed, emits
+   `signed [21:0]` screen triangles, and leaves the core as boundary **I24**
+   for exactly this reason. Whoever settles it settles it for three subsystems
+   at once, which is the argument for doing it as a subsystem packet rather
+   than as forge wiring.
+
+**A live `tick_phase` is the one OWNER question in the list.** A cartridge page
+is immutable, so the ribbon's animating phase cannot come from it: §4d freezes
+`tick_phase_base` and says the evaluator's phase is `base + frame_tick` with
+`frame_tick` sourced at dispatch. Whether that arrives by reinterpreting
+`DrawProcedural`'s `pad[11]` (the precedent `forge_kind` itself used) or by a
+console frame-sequence broadcast is an ABI decision and is left open
+deliberately. With `frame_tick == 0` the page alone is complete and
+deterministic, so nothing is blocked on the answer.

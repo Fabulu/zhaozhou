@@ -75,6 +75,34 @@ it does not restart and it does not skip.
 **`job_ready_o` never depends on `job_valid_i`.** The generator accepts a job
 only when it can guarantee the whole primitive — see acceptance below.
 
+## Where the parameters come from — FROZEN 2026-09-21
+
+> **OWNER DECISION R234 D2, `(owner, explicit)`.** `DrawProcedural 0x0302`
+> carries `handle32[forge_program] program` and states that *"forge parameters
+> do NOT travel inline"*. Until 2026-09-21 `forge_program` named a resource type
+> occurring in exactly **two** places in the whole tree — that command and its
+> generated ABI table — so the draw arm pointed at a format nobody had written,
+> and R199 had deferred writing it.
+>
+> D2 reverses R199. The format is **`spec/cartridge.md` §4d, page kind 14**:
+> a 64-byte header and 192-byte records, one record per program, carrying this
+> block's job fields (`family`, `segments`, `sides`, `view_mask`, `src_id`)
+> together with the evaluators' anchors, axes and radii. Model
+> `zref::forge_page`; packer `tools/pack/mkforgeprogram.py`; golden
+> `tests/golden/forge_program/forge_page_v1.bin`.
+>
+> **The page's `family` GOVERNS and the command's `kind` must agree**, refusing
+> the draw and counting it otherwise — `forge_kind = (family + 1) mod 6`, a
+> ROTATION that `spec/commands.zidl` warns about in capitals and that
+> `zref::forge_page::kind_of_family` is the one place to compute.
+>
+> **This does not change this block.** `Memory ownership` below still reads
+> **None**, and it is still true: the page is staged and read by a BANK, and
+> this generator receives a job. If this block ever grows a fetch path it has
+> become a mesh renderer and the saving is gone. **That bank does not exist
+> yet** and is named as the next packet's work in
+> `design/contracts/FORGE.PRIM.EVAL.md`.
+
 ## Memory ownership
 **None.** Parameters arrive in the job; the topology is generated, not fetched.
 
