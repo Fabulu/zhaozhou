@@ -232,6 +232,54 @@ wrapper mutants were updated in the same commit.
 **ABI not touched** — no opcode, field or size moved, so `npm run abi:check`
 was not required. `0x0304` and `0x0305` were not disturbed.
 
+**The registered harness, not just the binaries.** R60 wants a directed test to
+BUILD AND RUN, so all sixteen `ctest` names in this subsystem were run through
+ctest itself and all sixteen pass: `geom_pose_cache_{directed,random,
+random_nightly,elab_guard}`, `lint_zhao_geom_pose_cache`,
+`geom_ladderbank_directed`, `geom_clipread_directed`, `lint_zhao_geom_clipread`,
+`geom_clipread_elab_guard`, `geom_clipread_ownerblind_mutant`,
+`geom_bonesrc_directed`, `geom_bonesrc_latefetch_mutant`, `clip_page_directed`,
+`lint_zhao_geom_ladderbank`, `geom_drawjob_directed`, `lint_geom_drawjob`.
+**One of them was "Not Run" on the first attempt** — `geom_clipread_elab_guard`,
+because its executable had never been built in this tree. "Not Run" is an
+ABSENT test, not a red one, and in a gate list the two look identical; the
+target was built and it passes.
+
+**The console-core smoke.** Adding two ports to the core broke VERILATION of
+`tb_zhao_console_core_smoke.sv` — it binds with `.*`, so an undeclared port is
+not an unchecked port, it is a sweep that returns RC 1 in one second and is not
+a smoke run at all. Declared, and the plain form then **PASSED** end to end (223
+sources, 72 translation units, `SMOKE_RC=0`, "the connected core carries traffic
+on every wire this bench can reach"), as did **`-Mutant`**
+(`terr_pl_slot_overflow_o` fired once — "the detector works; production's zero
+is a measurement").
+
+**THE REMAINING SIX FORMS WERE STILL RUNNING WHEN THIS WAS WRITTEN** and are
+NOT claimed as passing. Each builds its own closure from scratch and takes
+10–15 minutes. Results land in the session scratchpad as
+`formown_smoke_<Form>.txt` with `formown_smoke_SUMMARY.txt` written last;
+`-NoTableLoad` and `-BadDescriptor` are INVERTED and pass WITH one `%Fatal`,
+and `-GlowTag`'s assertion was inverted by D1 rather than deleted, so RC alone
+does not read them. **Whoever picks this up must read that summary before
+calling the lane closed** — a background sweep outliving the agent that started
+it is this tree's own recorded hazard.
+
+Worth recording because it also bounds the risk: `zhao_geom_clipread.sv`,
+`zhao_geom_pose_cache.sv` and `zhao_geom_bonesrc.sv` are **not** in the smoke's
+223-file `zhao_console_core` closure (checked directly against
+`design/fit_targets.yml`, which is where the script reads it from). The only
+file this packet changed that the sweep compiles is `zhao_console_core.sv`
+itself, and the change there is two outputs driven from an existing internal
+wire — no internal behaviour moved.
+
+**One tool trap, recorded because it cost a sweep.** Driving the forms as
+`& .\run_console_core_smoke.ps1 "-$f"` binds the string POSITIONALLY as
+`$Repo`, and the script then resolves its closure against
+`<primary working directory>\-Mutant\design\fit_targets.yml` — a path in
+ANOTHER worktree. That is CLAUDE.md's `[Environment]::CurrentDirectory` trap
+reached from the argument side, and the script's own param block predicts it in
+terms. Splat a hashtable: `$p = @{}; $p[$f] = $true; & .\script.ps1 @p`.
+
 **No Quartus.** Standing instruction, and no question here needs one:
 correctness, handshake behaviour, field routing and atomicity under
 backpressure are Verilator questions and answered in seconds.
