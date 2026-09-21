@@ -1,0 +1,15 @@
+# Pass 22 identity receipts -- zhao-reel-cel, ZIXX_EXP=celmain
+# ZIXX_LIGHT=diagonal-cool-cross. Order is the renderer's own output order.
+#                               hover      inspect    drift      hasty
+pass-21 baseline (.tmp/p22/base) 0x200AA3E7 0x1CFE8375 0xFB17B7D6 0x425AA389
+exact-off  DOT_SCALE=legacy
+           FOLD_DIP_SHAPE_PM=0   0x200AA3E7 0x1CFE8375 0xFB17B7D6 0x425AA389   <- 4/4 IDENTICAL
+dots on, knead off
+           FOLD_DIP_SHAPE_PM=0   0xE379F918 0x1CFE8375 0x148ABAF0 0x40E54E64   <- inspect IDENTICAL
+shipping (both on)               0xEFCCD8FA 0x6B1077D0 0xB6AB88AA 0x6B85677A
+#
+# Inspect is the byte-exact near witness because its projected radius never
+# drops below 363.7 px (the ink's close radius is 360). Hover dips to 284.7 and
+# is NOT byte-exact under the dot law -- it must not be quoted as the near proof.
+# Projected radius per clip, off the reel's own celmain telemetry:
+#   drift 127.7 flat | hasty 117.1-138.4 | hover 284.7-402.6 | inspect 363.7-514.4

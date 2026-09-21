@@ -1,0 +1,18 @@
+# Pass 22 binaries, built by the pass-22 worker from commit 379bd8bc
+# g++ 16.1.0 winlibs (C:\programmieren\dsstuff\mingw64\bin), tools/reel/build-direct.sh, 0 warnings
+b7b3fb4403b15e3b8b10d190b28b2ac8 *.tmp/p22/g/bin/manafold-eyesize.exe
+a8be8aab23c307429b45b378d6727fd9 *.tmp/p22/g/bin/manafold-meshcheck.exe
+b3298739e5bfb7cd4b875c16e523dcf5 *.tmp/p22/g/bin/manafold-motiongate.exe
+8de72448efa9a8a7db80a6b5997dadc0 *.tmp/p22/g/bin/manafold-nodule.exe
+615e53f6cf07d3b7585c490e943c4c09 *.tmp/p22/g/bin/manafold-outlinegate.exe
+34d23a3896172c7062044cd154b1cdcc *.tmp/p22/g/bin/manafold-probe.exe
+a0f18ca6c393e3d6ca616d94afaf6a79 *.tmp/p22/g/bin/manafold-public-jointgate.exe
+4edd93b41de8c27ce1c6e7d776a0c23b *.tmp/p22/g/bin/manafold-qa-p12.exe
+17e3006744af216ea34efd29a69c9c34 *.tmp/p22/g/bin/manafold-rear-audit.exe
+10bf003b821dee7f113f097e74f03ea2 *.tmp/p22/g/bin/manafold-rodgate.exe
+caa36f7560aa2d0101c0bd58b7be5a92 *.tmp/p22/g/bin/manafold-shellgate.exe
+487e9ba92017e2da34a32184a713d96c *.tmp/p22/g/bin/manafold-spangate.exe
+cc6babcc4b1694f392830fff568fc12a *.tmp/p22/g/bin/zhao-reel-cel.exe
+
+# SHA-256 of the shipping renderer
+9ca0a94f1499e993b06d6b9b10ae058259e4b0b401e2ae6512221e65acd8ede3 *.tmp/p22/g/bin/zhao-reel-cel.exe
