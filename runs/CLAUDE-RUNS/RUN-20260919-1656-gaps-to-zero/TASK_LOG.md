@@ -579,3 +579,58 @@ gap I14 and I30 already describe"*. I14 is a hub, not a leaf.
 
 **Next step: attend whichever of the three lands first; re-run the seven smoke
 forms and `wrapper_port_parity` on the merged tree before believing the gates.**
+
+### Wave 6 continued — TAGPROD landed, R224, and a red gate cleared
+
+**Head `4101b385`. Register 21. Rulings 120.**
+Running: **SHEETSEAM**, **CFGARM** (I14), **POSEPAGE** (I29, new).
+
+**TAGPROD merged.** I20 **refused** — the third refusal, and FORGESHADOW was
+right — but now **field by field**, each blocker verified first-hand, and
+`stencil_reference` **named for the first time**: every prior pass said "four
+constants" without saying which.
+
+**R219's mandate delivered anyway:** `-GlowTag`, the eighth smoke form, green in
+both polarities — **1,062 lit and 1,344 bloom cells against 0/0 plain.** The
+glow is provable end to end without I20 closing, because the bench drives a
+boundary port, which is stimulus and not composition.
+
+**Its best moment was being wrong.** The assertion *"tag on every triangle ⇒ all
+2560 lit"* failed at 1062: `gather_fragments_o` is **not** the covered-fragment
+count — RESOLVE sweeps a touched tile whole. The shipped assertion is now a
+**cross-check between two instruments sharing no logic.**
+
+**A register defect found by causing it:** `completion_register.py` matches
+`^//\s*(I\d+)\.\s+` on **every line**, so a wrapped comment beginning with an
+entry number **registers a phantom gap** — 21 → 22 with no RTL change. It reads
+**HIGH**, the audited direction, and is **deliberately left alone** because
+twelve lanes gate on its number. Guard: entry ids are strictly monotonic.
+**Do not "fix" it by tightening the indent — `I9` is legitimately two-space-aligned.**
+
+**R224 — TAGPROD's two docked decisions are ONE, and it is CFGARM's gap.**
+`tri_continuation_tail_i` is 24/8/8/8; `zref_fragment.hpp`'s `struct Frag` is
+`vr,vg,vb` 24 + `va` 8 + `tag` 8 + `sten_ref` 8. **Field for field.** So the ABI
+is already ratified and what is missing is the **per-draw constant path** — the
+I14/I30 executor. Ruled **no new ABI bits**, precisely so two lanes do not
+allocate two homes. This is the **inverse of R199**: there the consumer did not
+exist; here it is composed and proven.
+
+**And the vertex-colour half was already ruled** — `FORGE.SHADOW.md` quotes the
+core: the colour *"is left at its constants deliberately rather than invented"*.
+**Fourth spent decision in three days, third found outside `reports/`.**
+
+**A red gate cleared with evidence, not silence.** `mutant_copy_drift` was RED on
+`zhao_geom_bonesrc_latefetch_mutant` — production committed twelve minutes
+later. The upstream diff is **comment-only** (an ALM row 829 → 830, the one
+flip-flop `started_q` added), verified by filtering to non-comment lines: zero.
+Body current, mutation intact, **the comparison recorded in the mutant's own
+header** — a refreshed copy with no record of what was compared is the
+stale-copy trap wearing a newer timestamp.
+
+**Citation drift for future briefs:** `// REAL:` is now **173**, not 163; there
+are **eight** smoke forms, not seven.
+
+**Next step: attend whichever of the three lands first. CFGARM has been told
+R224 widens its question and has been asked to check one thing I could not —
+whether the RTL's `raster_state` is the same word as `zref`'s `State`, whose
+`pack()` allocates all 32 bits with `[31:24] = sten_mask`.**
