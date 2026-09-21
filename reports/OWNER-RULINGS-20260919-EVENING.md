@@ -5205,3 +5205,114 @@ POSEPAGE verified `packet_h_paired_diff_mutant_fresh` **is now registered in
 `build/tests/CTestTestfile.cmake`**, and noted that its own two new ctests are
 model-only `add_test`s with **no `verilate()` above them**, so neither can be
 silently skipped the way that one was.
+
+## R230 — THE LIT COLOUR IS SEVERED, NOT DEAD. Refused on COST, and the decision needs a LOOK
+
+**2026-09-21, ATTRLANE, entry I13. Register 22 → 22, 213 insertions, zero
+deletions, all comments.**
+
+### The verdict
+
+**SEVERED DELIVERY.** ATTRLANE walked the chain by hand rather than grepping a
+layout: `zhao_light_stream` → `geom_light_*_o` → `zhao_geom_vattr` (latched into
+`c_rgb_q` and **counted** by `colours_written_o`) → `rep_data_o` → GEOM.REPLAY →
+**slots 3, 4, 5** → `zhao_geom_clip`, **winding-swapped with the corners** →
+`zhao_geom_attrpack.tri_attr_*_i`, **where it arrives full and stops.**
+
+**The lighting is NOT dead silicon, and the proof is elegant: GEOM.CLIP performs
+a winding swap on those slots that exists for no other purpose.** A block does
+not swap what it does not carry. **Reclaiming it would be removing function, and
+that was refused** — which is the answer I wanted the packet to be able to reach
+and forbade it from assuming.
+
+### It corrects R224, which is mine
+
+**PROJOUT framed the destination as EITHER slots 3–5 OR the continuation tail's
+`vertex_rgb`, and R224 acted on that framing by docketing the tail constants to
+the CMD executor. They are the same path.** In
+`zhao_raster_tile_pipe_v2`'s attribute `always_comb`, `continuation_w` is
+assembled **per fragment**, three lines under `attr_join_q_q[1]` and `[2]`.
+
+**So `vertex_rgb` needs no separate I20 producer.** With lanes 3–5 present that
+line becomes a field build off `attr_join_q_q[3..5]` and **nothing downstream of
+the tile pipe changes.** R224's disposition of the *other three* tail fields
+stands; its `vertex_rgb` clause does not. **The error ran in the direction that
+made the work look like two jobs.**
+
+### R89 does not transfer, and that must not be inherited
+
+R89 refused a fourth plane for alpha because the value *"does not vary across
+the primitive."* **True of shadow alpha, false of lit vertex colour.** R133 drew
+the right line for alpha — *"the plumbing is finished, only the faucet is
+missing"*, and the faucet was unbuildable. **Here the plumbing is finished AND
+the water is already in the building.**
+
+**This is refused on COST, not on absence.** The next lane must not inherit
+*"R89 settled it."*
+
+### The cost, and it caught its own error in the flattering direction
+
+**~1,420 ALM and +24 DSP** for three lanes (488.1 / 463.6 / 467.8 ALM and 8 DSP
+per lane, from section 17 of `zhao_raster_texture_v3_fit_top@g8a.fit.rpt`, truth
+device, `rtlCleanAtHead: true`). Plus `METAW` **1157 → 1877**, taking the
+binner's metadata bank from **29 forty-bit slices to 47** — M10K *and*
+per-triangle bank time.
+
+**It first wrote +9 DSP, from the `ATTR_DSP3=1` variant — G8A characterization
+only; the console runs `ATTR_DSP3=0`.** Nearly **3× understated**, caught by
+reading the production row by hand. **+24 DSP is 21% of the entire 112-DSP
+budget**, on a console `BUDGET_HEATMAP` already puts at **185 DSP against 112**.
+
+### And a third built-but-uninstalled stage, found on the way
+
+**`zhao_raster_toon` takes `r_i`/`g_i`/`b_i` as `signed [31:0]` — exactly
+`attr_join_q_q[]`'s shape — with `zhao_raster_fog` behind it. Neither is
+instantiated by any composed top**, and `prod_manifest.yml` says so outright.
+**A whole per-pixel colour stage is authored and waiting on the far side of the
+severance.** That settles "subsystem" over "wiring job" and it is deferred
+intent, not new scope.
+
+## RULED — the three lanes are NOT taken today, and the decision goes to a LOOK
+
+**+24 DSP on a device already 73 DSP over its ceiling is not a spend I will make
+on a coordinator's judgement.** But **I am not deciding it from the DSP table
+either**, and `CLAUDE.md`'s first law is why:
+
+> **Measurement never trumps actually looking at things.** *"Component checks
+> passing is not likeness evidence… Look at the whole thing, in motion, against
+> the concept."*
+
+**Gouraud versus a flat stand-in is a VISUAL question**, and this campaign has
+spent the night proving that a number offered in place of a judgement is how
+wrong values become unadjustable. **A DSP column is exactly such a number here.**
+
+**And the look is FREE.** The oracle already computes both:
+`creature_sim.cpp` carries `gouraud = a.lit && b.lit && c.lit`. **No silicon, no
+fit, no commitment is required to produce the comparison** — which is precisely
+the *"author by eye, render, look, compare"* loop the art law asks for.
+
+**So: render both readings from the reference model, at final resolution, and
+put them in front of the owner.** Commissioned as packet **GOURAUDLOOK**. If the
+flat stand-in holds up at 240p, it ships **named as a stand-in** — which
+ATTRLANE has already made true in the RTL at both ends of the severance, so the
+next reader cannot mistake the slots for spare. If it does not hold up, the
+owner has a real cost to weigh against a real picture.
+
+**What is NOT deferred:** the severance is now *named in the RTL at both ends*,
+and `GEOM_CLIP_ATTRS` stays at its width. ATTRLANE re-affirmed PROJOUT's refusal
+to narrow it, **so the "four unread slots" finding still cannot be mistaken for
+spare silicon.**
+
+### Two things ATTRLANE declined, both correctly
+
+**A hardware drop counter — refused because the ORACLE already answers it free.**
+Spending silicon on an over-ceiling device to measure a quantity the reference
+model computes is the wrong trade, and saying so is better engineering than
+building the counter.
+
+**And it started a leaf fit, then stood down**, because `PACKET-PROTOCOL.md`
+says *"Do not run Quartus"* and **my brief said "price it in ALM before
+building."** The two conflicted and **the protocol won, which is the right
+precedence.** *The conflict was mine* — a brief may not quietly license what the
+protocol forbids. The number was already on disk, which is where a price should
+be looked for first.
