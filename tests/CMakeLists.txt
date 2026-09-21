@@ -14798,6 +14798,15 @@ set_tests_properties(lint_zhao_geom_clipread PROPERTIES LABELS "lint;fast")
 # the refusal under test is the design's and nothing else's.
 add_executable(test_geom_clipread_elab_guard geometry/geom_clipread_elab_guard.cpp)
 target_link_libraries(test_geom_clipread_elab_guard PRIVATE zhao_harness zhao_zref)
+# MEASURED, not anticipated: the first run of this test printed the %Fatal and
+# then HUNG for the full 120 s timeout, and a ctest TIMEOUT is a failure whatever
+# WILL_FAIL says -- so the guard fired and the test went red anyway. $fatal never
+# reaches zhao::exit_hard, and zhao_sim.hpp documents at length why every
+# Verilated exe on this toolchain must. These two defines let the test supply its
+# own vl_stop/vl_fatal with that same tail; they go on the TARGET because
+# Verilator's #ifndef lives in verilated.cpp, which the .cpp's own define could
+# never reach.
+target_compile_definitions(test_geom_clipread_elab_guard PRIVATE VL_USER_STOP VL_USER_FATAL)
 verilate(test_geom_clipread_elab_guard
   PREFIX Vtb_geom_clipread_elab
   TOP_MODULE tb_geom_clipread
