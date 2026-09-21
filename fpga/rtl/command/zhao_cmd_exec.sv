@@ -546,6 +546,24 @@ module zhao_cmd_exec
     // BIND post kind I34 recommends exists. Wiring this output into a port
     // called `hash` would put a handle in a trace field that says hash, which
     // is a lie that costs nothing today and an afternoon later.
+    //
+    // THE ZERO-HIT SWEEP IS STRUCK, 2026-09-21 (gz/fieldlane); THE DECISION IT
+    // SUPPORTS IS NOT. Re-running that exact pattern today returns 22 hits
+    // under `fpga/rtl`, and the decisive one is `pub_prog_hash_o` in
+    // `zhao_field_loader.sv` -- which MATCHES `prog_hash`. The pattern was
+    // never wrong; the sweep was a claim about a MOMENT, and the producer
+    // landed either side of it. So {handle -> hash} IS resolvable in hardware:
+    // the loader publishes `pub_handle_o` and `pub_prog_hash_o` together off
+    // `pub_sel_i` over its 8 objects, and its own comment says that indexed
+    // read "costs one mux the descriptor table needs anyway".
+    //
+    // KEEPING THE HANDLE ON THIS PORT REMAINS RIGHT, for a reason that
+    // outlives the sweep: resolving a handle needs `pub_sel_i`, which
+    // `zhao_console_core` promotes to its BOUNDARY rather than driving, so the
+    // resolver is a two-client share and not a wire. Naming this output the
+    // handle keeps the unresolved step visible instead of burying it in a
+    // field called hash. That is the right call for a better reason than the
+    // one originally written, and the original reason should not be re-quoted.
     output logic               tfld_valid_o,
     input  logic               tfld_ready_i,
     output logic signed [31:0] tfld_x0_o,          // footprint rectfx.x0, fx16
