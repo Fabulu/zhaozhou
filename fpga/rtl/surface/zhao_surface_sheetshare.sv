@@ -91,6 +91,28 @@
 // response is consumed and COUNTED rather than left to wedge the store for
 // ever, because a silent stall is worse evidence than a counted anomaly.
 //
+// ---------------------------------------------------------------------------
+// THE GRANT READS THE CLIENTS' `valid` COMBINATIONALLY, AND BOTH WERE CHECKED
+// ---------------------------------------------------------------------------
+// That is ordinary for an arbiter and it makes each client's `ready` a
+// function of its own `valid`, which is safe only while neither client derives
+// `valid` from `ready`. `zhao_terrain_psmux` states the same requirement and
+// names its two clients; this one names its own, VERIFIED rather than
+// inherited:
+//
+//   * CLIENT A, `zhao_surface_stamp`: `req_valid_o` is
+//     `(acq_valid && !acq_sent) || (cursor_slot && geom_ready && fld_ok &&
+//     covered && s1_free_next)`. Its only uses of `req_ready_i` are
+//     `read_path_ok` -- which feeds `fld_ready_o` and `advance`, NOT
+//     `req_valid_o` -- and the `acq_sent` latch. So `req_valid_o` is a pure
+//     function of registered state.
+//   * CLIENT B, `zhao_terrain_sheetseam`: `req_valid_o` is
+//     `(state_q == S_FILL) && !pf_missed_q && (i_idx_q != Texels)`, all
+//     registers.
+//
+// And if one ever did, Verilator's UNOPTFLAT would say so rather than the
+// design quietly oscillating.
+//
 // WHAT THIS BLOCK IS NOT.  It does not touch the sheet's WRITE port (`wr_*`).
 // terrain_rules 7 says layer F is written by SURFACE.STAMP and by nothing
 // else, and the store's write port is physically separate from its request
