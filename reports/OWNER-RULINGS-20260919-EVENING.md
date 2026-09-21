@@ -5684,3 +5684,125 @@ section, no WEAK SIGNAL annotation. HUDBAND ran `check_ram_inference.py` live
 **with a positive control** rather than quoting the file. `ring_q`'s only flag
 is the tool's own known false positive — **and that flat one-write-address shape
 is the band buffer's exact shape, sitting inside the 306.**
+
+## R234 — FOUR OWNER DECISIONS, 2026-09-21. **(owner, explicit)**
+
+**These four were chosen by Fabian directly, from a quiz with the evidence
+attached. They are `(owner, explicit)` and join R1–R7 as rulings only he can
+lift.** R226 found **293 sites** in this tree writing *"owner ruling R<n>"* for
+a coordinator-provisional one; **these are not that.** Cite them as his.
+
+---
+
+### D1 — VERTEX COLOUR: **SHIP GOURAUD.** *(owner, explicit)*
+
+The lit per-vertex colour is reconnected. **~1,420 ALM and +24 DSP**, plus
+`METAW` 1157 → 1877 (29 → 47 forty-bit M10K slices).
+
+Decided **by looking**, on GOURAUDLOOK's boards, which is what `CLAUDE.md`'s
+first law demands and what R230 refused to short-circuit with a DSP column.
+**The evidence the owner ruled against:** the free stand-in is not face-Lambert
+but a **provoking-vertex pick** that produces a herringbone sawtooth crawling
+the body — *"noise, not style"* — and **100.00% of 3,168,243 drawn triangles
+take the Gouraud path**, so the stand-in differs on nearly every triangle of
+every frame.
+
+**ATTRLANE has already mapped the work precisely:** slots 3–5 arrive **full** at
+`zhao_geom_attrpack` and stop; `continuation_w` is assembled per fragment three
+lines under `attr_join_q_q[1]`/`[2]`, so **`vertex_rgb` needs no separate I20
+producer** and nothing downstream of the tile pipe changes. **R89 does not
+transfer** — it refused a fourth plane for a value that *"does not vary across
+the primitive"*, and varying across the primitive is what Gouraud IS.
+
+### D2 — THE FIT GATE: **REACH TRUE ZERO FIRST.** *(owner, explicit)*
+
+**Not "fit at the floor."** The campaign continues until the register is
+genuinely zero.
+
+**Two consequences follow immediately, and both are now authorised:**
+
+* **`R199 IS REVERSED`** by this decision. I deferred the forge program page
+  kind because four of six families have no evaluator; the owner has chosen to
+  pay for the evaluators rather than accept the deferral. **The page kind is to
+  be frozen and FORGE.PRIM / FORGE.PRIM_EVAL built.**
+* **FORGE.SHADOW is commissioned as a SUBSYSTEM packet**, which is exactly what
+  R133 said it needed and what no one had ever sent. Its five blockers were
+  re-measured today and **all five stand** — LODSTATE and SHADOW mutually
+  blocked, ladderbank as a sixth adapter requester, the governor, Route B, and
+  a client-A widening that **re-authors a ratified law**.
+
+**R133 is not overturned; it is SPENT.** It said *"it will not be closed by a
+wiring job"* and it was right. It never said it could not be closed.
+
+### D3 — M10K: **GRANT THE 185 FOR THE TERRAIN DEVIATION STORE.** *(owner, explicit)*
+
+Under the standing 2026-09-18 ruling that more M10K is fine, particularly where
+it saves ALMs.
+
+**Recorded plainly, because the next reader is owed it:** nobody has yet priced
+what ALM the deviation store removes. The owner granted it anyway, which is his
+call to make. **If a later pass shows it removes no logic, that is a fact worth
+surfacing — not a licence to revoke a granted budget.**
+
+### D4 — HUD BAND OVERFLOW: **delegated to the coordinator, and ruled below.**
+
+---
+
+## R235 — THE BAND ADMISSION LAW: refuse the sprite WHOLE, and COUNT it
+
+**Ruled under D4's delegation, on R221's precedent, which the owner endorsed by
+choosing it.**
+
+`TWOD.SPRITE.md` forbids partial sprites, and the band's admission test is
+stricter than a frame store's, so a sprite that will not fit the budget must be
+disposed of **before rasterising**.
+
+**RULED: refuse the sprite WHOLE, and COUNT the refusal.**
+
+The reasoning is R221's, applied to a place players look: **the alternatives
+make an ABSENCE LOOK LIKE A RESULT.** Dropping a HUD sprite silently is W10 —
+and W10 is not theoretical here, it is the exact defect R168 and R181 found live
+in silicon this week. **An uncounted refusal is a HUD that quietly stops telling
+the player something, with no way to know how often.**
+
+**Buying headroom instead was refused as paying for a case that may not exist.**
+HUDBAND measured a **9× margin**: a full-width 32-row status bar sits *exactly*
+at rate, and 40 glyphs over it need 10 lines of burst, which **B=4, L=16 clears
+with 12 M10K**. Raising B/L costs `ceil(0.75 × L)` and would buy insurance
+against an overflow the schedule says is nearly unreachable — **while leaving
+the law unwritten anyway.**
+
+**The counter owes a positive control** (R95: it must DISCRIMINATE, not merely
+move). Since a legal workload may never overflow, that control is likely a
+**committed mutant** under `tests/mutants/`, per `CLAUDE.md`'s rule for a guard
+unreachable by legal stimulus.
+
+---
+
+## WHAT THESE FOUR NOW IMPLY, stated once and not relitigated
+
+**The owner has ruled and the campaign executes.** But the coordinator's job is
+to say what follows, and three budgets move together:
+
+```
+  DSP     185 (current)  + 24 (Gouraud)          = 209  against 112
+  M10K    306 (floor)    + 38 FIELD + 185 + 12   = 541  against 553  (98%)
+  ALM     47,582         + 1,420 + ~595 + ~13,700 FIELD = ~63,300  against 41,910
+```
+
+**None of this is an argument against the decisions.** It is the statement of
+where the ceiling work now has to happen, and the owner's own standing rules
+already say how: **never by removing, disconnecting, stubbing or narrowing
+mandatory function** — only by architectural sharing, time-multiplexing where a
+schedule proves the deadline, exact lookups, RAM-backed state and measured ARM
+offload.
+
+**One lever is now nearly spent and that is the new fact.** *"Trade ALMs for
+M10K"* has been this campaign's main instrument, and **M10K at 98% can no longer
+absorb much.** The DSP savings register (`reports/DSP-SAVINGS-REGISTER-20260918.md`)
+prices a freed DSP at **~135 ALM** while demand exceeds supply, so **DSP work is
+now the highest-leverage ceiling work available** — and D1 has just added 24 to
+the demand side deliberately, for a reason that was looked at.
+
+**Nothing here is deferred and nothing is narrowed.** It is recorded so that the
+fit, when it finally runs at true zero, surprises nobody.
