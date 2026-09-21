@@ -654,6 +654,46 @@ module zhao_raster_tile_pipe_v2 #(
     continuation_w.earlyz.invw24 = attr_join_q_q[0][23:0];
     continuation_w.earlyz.fragment_state = fragment_state_q;
     continuation_w.earlyz.source_id = source_id_q;
+    // THE FLAT STAND-IN FOR THE GOURAUD TINT, NAMED AS ONE (gz/attrlane,
+    // 2026-09-21, discharging the instruction `zhao_console_core.sv` entry I13
+    // leaves open: "it must be NAMED a stand-in in the RTL, with terrain_rules
+    // 6.5 cited beside it, or the next reader inherits a Gouraud law silently
+    // implemented as a constant").
+    //
+    // READ THE FOUR ASSIGNMENTS ABOVE TOGETHER. `invw24`, `u_over_w` and
+    // `v_over_w` come from `attr_join_q_q[0..2]` -- PER FRAGMENT, this pixel's
+    // own interpolated value off its attribute lane. `post_earlyz` comes from
+    // `continuation_tail_bits_q`, loaded ONCE PER TRIANGLE from
+    // `job_meta_i[345:298]`. It is the one field in this block that is
+    // per-primitive while its neighbours are per-pixel, and nothing about the
+    // surrounding code says so.
+    //
+    // THAT MATTERS BECAUSE ITS `vertex_rgb` IS NOT SUPPOSED TO BE FLAT. It is
+    // delivered to `zhao_raster_fragment.frag_vert_rgb_i`, whose port comment
+    // reads "interpolated, lit, tinted, FOGGED" -- and under this arrangement it
+    // is none of those. `spec/terrain_rules.md` 6.5 says "tint moved to
+    // vertices"; the reference oracle interpolates it for real
+    // (`reference/src/zrender/rast.cpp`, the `m.gouraud` lanes `cr`/`cg`/`cb`,
+    // full barycentric re-evaluation per row, with
+    // `reference/src/zrender/internal.hpp` calling it "the ordinary Gouraud
+    // path"). A per-triangle constant is the Phase-3 stand-in for that, and it
+    // is a stand-in, not the design.
+    //
+    // AND THE VALUE IT STANDS IN FOR IS ALREADY COMPUTED AND ALREADY THROWN
+    // AWAY. `zhao_light_stream` produces lit per-vertex r/g/b,
+    // `zhao_geom_vattr` stores it, `zhao_geom_clip` carries it winding-flipped
+    // in packet slots 3..5 -- and `zhao_geom_attrpack` packs THREE planes, so it
+    // stops at that block's input port. See that file's waiver comment for the
+    // other end of the same severance.
+    //
+    // WHAT WOULD FIX IT IS THREE MORE ATTRIBUTE LANES, END TO END -- not a new
+    // fragment port. The carrier below is already 24 bits, already per-fragment
+    // assembled, and already traverses Early-Z, the texture round trip and the
+    // fragment leaf. With lanes 3..5 present this line becomes a field build
+    // off `attr_join_q_q[3..5]` and NOTHING DOWNSTREAM CHANGES. The cost is
+    // priced in `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/
+    // FINDINGS-attrlane.md`; it is a subsystem, not a wiring job, and it is the
+    // owner's call.
     continuation_w.post_earlyz =
         zhao_raster_continuation_tail_v2_t'(continuation_tail_bits_q);
 
