@@ -5806,3 +5806,84 @@ the demand side deliberately, for a reason that was looked at.
 
 **Nothing here is deferred and nothing is narrowed.** It is recorded so that the
 fit, when it finally runs at true zero, surprises nobody.
+
+## R236 — I MISREAD THE OWNER AND RAN A FIT. It is killed, and the rule he gave instead is bigger than the correction
+
+**2026-09-21. `(owner, explicit)` on both counts.**
+
+### What he said, and what I did with it
+
+> *"I took the expensive options. We just want the full capability. We're over
+> budget a hundred times already. The important thing now is to get a fit now.
+> A full fit, no caveats. So we can assess the damage."*
+
+**I read "a full fit, no caveats" as an instruction to fit IMMEDIATELY**, treated
+*"fit at completion only"* as superseded, and launched a full console fit. **I
+then wrote that reading into three durable places** — the handover's §14, the
+run's `TASK_LOG.md`, and `PACKET-QUEUE.md` — where the next reader would have
+inherited it.
+
+**The correction, in his words:**
+
+> *"You misunderstood the hell out of me. We're not fitting now. We're going
+> zero gaps. We want a full composed console. Fit now is useless. We are picking
+> all the expensive options to see how big damage is."*
+
+> *"Don't fit now. If you started fit, cancel it. Get all the gaps sorted."*
+
+**The fit is killed** — `quartus_map` stopped, verified clear with a positive
+control on the process query, and its artifacts reverted so the tree is clean.
+
+### Why I was wrong, stated so the error is legible
+
+***"No caveats" is a property of the DESIGN being complete, not of the fit
+command's flags.*** I optimised the flags — clean tree, real device, FIELD in —
+and felt I had earned the phrase. **But the fit I launched measured a console
+missing Gouraud, the deviation store, the HUD band, DELTALAW's repair,
+FORGE.SHADOW and `zhao_geom_clipread`.** I even wrote, in the same breath,
+*"read the number as a FLOOR"* — **which is a caveat, written by me, in the
+document announcing a fit with no caveats.** The contradiction was on the page
+and I did not see it.
+
+**The expensive options were chosen so that the EVENTUAL fit measures the whole
+machine.** Taking them and then fitting early throws away the reason for taking
+them.
+
+**"Fit at completion only" was never superseded. D2 stands: reach true zero.**
+
+## THE STANDING RULE — capability wins, and the question is closed
+
+> *"If the question is about keeping capability and not having enough resources
+> — we already don't have enough resources."*
+
+**This retires a whole class of questions I have been putting to him**, and it
+should change how every packet reasons:
+
+* **Never trade a capability away for a resource number.** Not ALM, not DSP, not
+  M10K. Being further over is not a new problem; **losing a function is.**
+* **A cost is a fact to record, not a veto.** Price it, write it down, build the
+  thing. R222 refusing the HUD frame store on M10K was *structurally* right — a
+  cheaper structure existed that kept the capability whole — **but if no cheaper
+  structure had existed, the frame store was the answer and the 180 M10K was
+  just the bill.**
+* **Stop escalating cost tradeoffs as owner decisions.** They are not decisions;
+  they have a standing answer. **Escalate LAWS** — art, ABI, semantics, anything
+  player-visible — which is what D1's Gouraud boards actually were.
+
+**This is `CLAUDE.md`'s existing prohibition made positive.** That file already
+forbids making a resource number smaller by *"removing, disconnecting, stubbing,
+narrowing or silently reducing mandatory function"*. **R236 says the same thing
+from the front: when the two collide, the function is not the variable.**
+
+### What changes right now
+
+**Nothing is fitted until the register reads zero and the console is fully
+composed.** The machine belongs to the packets. **Do not run Quartus.**
+
+**Three packets are live and all three are gap work** — DELTALAW (R231's depth
+repair, may close I32), SHADOWSUB (FORGE.SHADOW under D2), GOURAUDBUILD (D1).
+**That is the right shape and it continues.**
+
+**And the queue's next items are now unambiguous:** FORGE.PRIM / FORGE.PRIM_EVAL
+(unblocked by D2's reversal of R199), the `form -> clip bank` law, the HUD band,
+I29's consumer, FORGE.CLIFF. **Cost is not a reason to defer any of them.**

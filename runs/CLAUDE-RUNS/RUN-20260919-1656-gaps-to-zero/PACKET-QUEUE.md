@@ -4,201 +4,129 @@ Ceiling is THREE concurrent packets. When one lands, the next one down starts.
 This file is the coordinator's, and it is a WORK LIST: delete a line when the
 gap it names is closed, never when it is merely attempted.
 
-**Rewritten 2026-09-20 evening (third revision today).** A stale queue is worse
-than none, because the next free slot gets filled from fiction. The previous
-version was accurate for about four hours.
+**Rewritten 2026-09-21, early hours.** The previous version was from 21:53 the
+night before and had gone stale in every section — it claimed register 21 and
+listed lanes that had finished hours earlier. **A stale queue is worse than
+none, because the next free slot gets filled from fiction.** Verify the running
+list against `git ls-remote` before trusting it; that is not paranoia, it is
+the documented failure of this exact file.
 
-**Register: 21** = 9 tie-offs + 11 disconnected + 1 unbuilt. Measure it yourself
-with `python tools/budget/completion_register.py`; this line goes stale.
+**Register: 22** = 9 tie-offs + 13 disconnected. **Measure it yourself** —
+`python tools/budget/completion_register.py`, exit 1 while gaps remain, which
+is normal. This line goes stale.
 
-## THE PRE-FIT BLOCKERS ARE GONE
+---
 
-`superseded check: 71 production roots CLEAN`. R86's check reads **zero** —
-ATTRDIV cleared the last one by adopting `zhao_raster_attrdiv_v2` at both sites.
+## THE SITUATION CHANGED TWICE TODAY, AND BOTH CHANGES BIND
 
-Of the **seven** preconditions in `reports/FIT-PLAN-AT-ZERO.md`, **exactly one
-is unmet: the register itself.** Clean tree, manifest, generators, worst paths,
-syntax and census are all in place. **The gaps are now the only thing between
-this run and the fit**, which is a different situation from this morning and
-should change how the next slots are spent.
+**1. The owner spent the budget (R234, `(owner, explicit)`).** Ship Gouraud
+(+24 DSP). Reach true zero, **not** a floor — which **reversed R199** and put
+FORGE back in scope. Grant the deviation store's 185 M10K.
 
-## Running
+**2. "FIT AT COMPLETION ONLY" STANDS. I misread it and ran a fit; it is killed.**
 
-*(Updated 2026-09-20, 22:10. **Verify against `git ls-remote origin` before
-filling a slot from this table** -- and note `git log origin/<branch>` is NOT
-that check: the coordinator branch's local tracking ref is stale and reported it
-10 commits behind while `git push` correctly said up-to-date.)*
+The owner's words were *"A full fit, no caveats. So we can assess the damage"*,
+and I read them as *fit immediately*. **They mean the opposite of what I did.**
+Corrected in his own words:
 
-| lane | owns | branch | state |
-|---|---|---|---|
-| FORGE4 | composing `zhao_forge_shadow` / `_prim` / `_prim_eval` / `_cliff`, and the cliff RAM-vs-logic decision (6,674 ALM against 976) | `gz/forge4` | RUNNING |
-| WARPFIX | R168: the warp adapter's ordinal-vs-window mis-wiring, the SPARSE case as a named test, and `resp_present_o` | `gz/warpfix` | RUNNING |
-| POSTMEAS | composing `zhao_post_gather`, `zhao_measure_governor`, `zhao_geom_parambuf` | `gz/postmeas` | RUNNING |
+> *"We're not fitting now. We're going zero gaps. We want a full composed
+> console. Fit now is useless. We are picking all the expensive options to see
+> how big damage is."*
 
-**Merged since the last revision:** FIELD-E1, FIELD-W1, CMDFIELD, TERRCOMP.
+**The expensive options exist so that the EVENTUAL fit measures the whole
+machine.** A fit today measures a console missing Gouraud, the deviation store,
+the HUD band, the delta repair, FORGE.SHADOW and `zhao_geom_clipread` — **a
+floor, which is exactly the caveated number he was ruling out.** *"No caveats"
+is a property of the DESIGN being complete, not of the fit command's flags.*
 
-**TERRCOMP refused all four terrain compositions and changed zero files**, and
-that is a success, not a stall -- its findings are transcribed in
-`FINDINGS-terrcomp.md` and produced rulings R173-R177. `zhao_terrain_normalmap`
-is blocked on owner ruling **R115** (its recommendation: supersede, which would
-drop 21 -> 20 honestly -- **an owner call, not a packet's and not mine**).
+**So: zero gaps first, full composition, then one honest fit.** D2 stands
+unchanged. **Do not run Quartus.** The machine belongs to the packets.
 
-## NEXT SLOT
+---
 
-**R176: the ratified terrain law package is imported only by the module that is
-NOT composed.** `zhao_terrain_patch_law_pkg.sv` was created this evening
-precisely so a v2 could not copy the arithmetic; `patch` and `lodfeed`, both
-COMPOSED, still carry their own `fx_add_sat` / `covers` / `h16 -> fx`. Three
-implementations of a law with one ratified statement. It closes no gap, so it
-ranks below composition work -- but it is **area**, the binding constraint, and
-`duplicate_functions.py` now reports **43** duplicated names against the 30 it
-could see this morning (`sub_sat` in 9 files, `resc16` in 8).
+## RUNNING NOW — verify before trusting
 
-**Landed today:** field, geomlod, texmat2, terrain6, projinput, post3, terrain7,
-forge, carriers, warp, projadopt, forgeconnect, fieldp4, terrain9, post3b,
-attrdiv, geompay4, engine1, forgeshadow, zidl, and FIELD Wave 1 (S1/L1/F1).
+| packet | target | branch |
+|---|---|---|
+| **DELTALAW** | R231's depth-law repair; may close **I32** | `gz/deltalaw` |
+| **SHADOWSUB** | the FORGE.SHADOW subsystem, under D2 | `gz/shadowsub` |
+| **GOURAUDBUILD** | D1 — reconnect the lit vertex colour | `gz/gouraudbuild` |
 
-## Queued, in the order I would start them
+---
 
-### 1. ~~The zidl bundle~~ -- LANDED 2026-09-20 (`968d414e`)
+## NEXT SLOTS, best first
 
-R108's five additive `forge_kind` members, the DebugTraceArm over-broad
-guarantee and R77's `tmu_mode` comment, all in ONE commit. All five golden
-captures regenerated through their real producers and verified byte-wise to
-differ **only** in the container CRC `[56..59]` and the two 32-byte sha fields.
-`abi_version` unmoved, `abi:check` clean.
+**1. FORGE.PRIM / FORGE.PRIM_EVAL — now UNBLOCKED by D2.** R199 deferred the
+forge program page kind because four of six families have no evaluator; **the
+owner chose to pay for the evaluators.** Freeze the page kind, build them.
+**Do not take opcode 0x0304 (W04) or 0x0305 (`DrawPosedForm`).**
 
-**Kept here rather than deleted, because it carries a landmine worth
-remembering: `forge_kind` is NOT `j_family_i`.** They differ by
-`(FAM_* + 1) mod 6`, so a straight-through assignment is silently wrong for all
-six values. The mapping table is in the zidl.
+**2. `form -> clip bank` — an OWNER DECISION, surfaced by POSEREAD, not yet
+put to him.** `zref::creature_page::Record` keys ladder rows by `form_index`;
+`zref::clip_page`'s header carries **no form index, no type key, no handle**.
+Wiring the draw through would assert *"the resident bank is this draw's bank"*
+and serve **a correct palette for the wrong animal**, invisible to
+`bone_mismatch_o` when bone counts match. Three options costed; the cheapest is
+one `u24` field and one golden rebuilt. **This should go to the owner with the
+options, not be decided in a packet.**
 
-**Still open: D-ZIDL-1** -- the five-for-six arithmetic works only if member 0
-already names a family, and nothing written says which. Recommendation accepted
-as implemented; if the owner rules otherwise, cliff/skirt appends at `6` under
-the same additive law, no renumber, nothing shipped changes.
+**3. The HUD band (R233, ruled).** 12 M10K, ~595 ALM, zero DSP, 11.1% of frame.
+Needs a **TWOD.BAND contract before any `blocks.yml` row**, and the admission
+law is already ruled (R235: refuse the sprite whole and **COUNT** it). The
+counter owes a positive control — likely a committed mutant, since legal
+stimulus may never overflow at a 9x margin.
 
-### 2. FORGE.CLIFF adoption — R117, and the data is already in hand
+**4. I29's consumer**, now that POSEREAD established the request side is
+determined by `spec/memory_rules.md` §5f.1. Blocked behind item 2.
 
-**Do not re-run F-CLIFF1. It ran on 18 September** — a full fit on the target
-part, `.sources.sha256` matching the current source. Five inferred memories,
-MLAB bits 0, **976 ALM fitted, 2% of device**, against a golden that is
-**18.3% of the entire ALM budget**.
+**5. FORGE.CLIFF.** Rivalry decided (R142, adopt `zhao_forge_cliff_ram`), and
+the capability is still absent: **no page issuer, no solid-window producer, no
+vdist master**, all three re-searched 2026-09-20 and all three still missing.
+A real build, and a large one.
 
-Adoption is blocked on exactly two named items, neither of them a gate to run:
+---
 
-1. the **four `Warning (276020)`** pass-through insertions — the gate demanded
-   `ramConversionWarnings 0`, so either accept them in writing with their cost
-   or match the RAM's native read-during-write behaviour;
-2. the **bit-0 inferred latch** on `triangles_submitted_o` — cosmetic (the
-   counter increments by 2, so bit 0 is provably constant), but a latch cell is
-   real area.
+## DO NOT SPEND A SLOT ON THESE
 
-Then `console_inventory.yml:109-127` stops giving the two rivals the identical
-boilerplate disposition, and the golden becomes `superseded`.
+* **A sixth FORGE.SHADOW *wiring* packet.** The cluster has gone **21 → 21 five
+  times**. It needed a subsystem packet and now has one (SHADOWSUB).
+* **I27 via a `cmd_*` producer.** TERRCMD measured it: `terr_chk_*` waits on
+  `zhao_terrain_devstore`, and **a `cmd_*` producer would close I27 never.**
+  (Devstore greps eight times in the core and **all eight are comments**.)
+* **Re-measuring I34.** FIELDLANE found **all four** stated blockers spent; the
+  one live blocker is prose in `console_inventory.yml` — one return lane against
+  the Earth record's four channels — and **§20.8 forbids the shortcut by entry
+  number.** I34 is the directive's **Commit G**.
 
-**And `zhao_forge_cliff` needs its own FITTED row (F-CLIFF-GOLDEN) before anyone
-quotes a saving** — 976 is a fit and 7,664 is an unfitted estimate, and setting
-those against each other is the mismatched comparison this repo keeps landing in
-the flattering direction.
+---
 
-### 3. FIELD Wave 2 — requires S1 + L1 + F1 all merged
+## BEFORE COMMISSIONING ANYTHING: re-measure the blockers
 
-**D1** (doorbell and loader; FH13, FH14; and it must **refresh
-`zhao_field_doorbell_mutant.sv`**, which has already drifted once today),
-**H1** (the new host; FH02/03/05/06/08/09/20 — and it owns **R126's elaboration
-guard** tying `ZFH_WINDOW_MASK_BITS` to composed `OUT_LANES`), **A1** (adapters;
-FH17, FH26).
+**This is the highest-yield hour available and six lanes have now proved it.**
+R165 found two of I34's three spent; FIELDLANE then found all four; VIEWMASK
+found two of I21's five held open by **rotted citations**, cutting the count
+*"from five to three and a half with no RTL changing"*; CFGARM found I14's hold
+on I21 already expired, with the rot **live in production RTL**.
 
-Full briefs are cuttable from `reports/FIELD-REPAIR-PLAN-20260920.md` §3.
+**And the inverse trap, R229:** a re-measurement lane's flattering direction is
+**finding** rot. POSEPAGE nearly filed one that did not exist. ***"I expected to
+file an expiry and did not"* is a real result.**
 
-### 4. FIELD Wave 3 — E1, W1, then C1
+---
 
-**E1** closes **I34** — but only with a **port change**, because
-`zhao_terrain_patch.sv:154-156` has `fld_valid_i / fld_ready_o / fld_height_i`
-and **nothing else**, so wiring only height is the only thing the current ports
-permit. Its brief must open with `zhao_console_core.sv:2732`'s capitalised
-warning to read `fpga/rtl/synth/zhao_probe_walk_earth.sv` first — that walker
-already exists, is field-major, is differentially tested and **already emits the
-corrected 297 groups**, and the owner's directive never mentions it.
+## BRIEF DEFECTS FIXED TODAY — do not reintroduce them
 
-**W1** closes **GEOM.WARP**, and only if it composes live. **A tie-off does not
-count and must not be attempted** — that converts an honestly-absent entry into
-a tie-off, which the warp lane already refused once.
-
-**C1** is coordinator-owned, serialised, never concurrent: core, prod_top and
-board regenerated, the three yml files, the smoke bench, `tests/CMakeLists.txt`.
-
-### 5. The remaining boundary tie-offs
-
-**I13/I14** (PROJ — I14 needs the smoke's viewport case moved to DUO with the
-reference-derived pixel count regenerated in the SAME commit, both numbers
-stated, plus a `proj_en_i` producer), **I17** (POST — now priced at 153/553
-M10K, 27.7%, see R120), **I20**, **I21**, **I27**, **I29**, **I32**.
-
-### 5b. LEDGER DEBT surfaced today -- two small packets, neither on the critical path
-
-**(a) 153 undeclared counter ports (R140).** `check_counters.py` now looks both
-ways and reports **153 self-incrementing 32-bit outputs across 35 blocks that no
-ledger row names**, against 252 that it does -- roughly 38% of the counter
-surface. They are QUESTIONS, not defects: either the ledger owes each a name, or
-it is not a counter and the row is noise. Needs one pass with the contracts open.
-`design/counter_catalog` is APPEND-ONLY with ids equal to positions, so **exactly
-one lane may hold it**.
-
-**(b) The six unresolved `reference_model:` rows (R139).** The expensive half is
-done: `zref::part::` and `zref::post::` DO exist and already serve PART.LADDER,
-PART.EXPAND, PART.SOFT and the grade/echo paths. The six that do not resolve name
-laws that are **genuinely absent, not renamed** -- no collision, spawn or
-integration law in `zref::part::`, no composite in `zref::post::`. Five look like
-removals with a stated reason; **PART.STATE could go either way**, because
-`particle_pack`/`particle_unpack` may be a FORMAT rather than its state law. That
-one needs the contract in hand, and guessing it in the "name a plausible symbol"
-direction is exactly the defect R94 exists to prevent.
-
-### 6. Whatever the running three refuse
-
-Every packet that refuses must name its exact blocker. **Those blockers are the
-real queue and they outrank this list** — and they have been right more often
-than this page has.
-
-## Owed to the OWNER — five, and R65 is the expensive one
-
-1. **`reports/terrain-seam-dig/seam_dig_contact.png` (R65).** **One look
-   unblocks four packets.** It gates I32, TERRAIN.BAKE's option A and the
-   terrain page format. **Six terrain lanes have closed zero of the same four
-   blocks** — that is one blocker seen six times, not six failures. The packer
-   does not exist yet, so the format is cheaper to change now than it ever will
-   be. And the render changed the question: spec §9.3(c) says the half-cell step
-   "does not read as a seam"; the sheet shows a rim wrong by up to one vertex,
-   everywhere. Under the art law only the owner's look settles it.
-2. **FH22 sequencing.** `REGS=64` doubles `E_ZERO` from 32 to 64 clocks on a
-   path already at 481% of allowance. FH08 dissolves the reason — but only after
-   H1 lands, so **the intermediate state is worse than either endpoint.**
-3. **FH11 lane width.** Semantics adopted in F1; the width is ~+6,000 ALM and
-   +12 DSP against a budget already ~5,672 ALM over, and
-   `zhao_block_fit.json`'s console row **does not contain FIELD at all**.
-4. **R115.** TERRAIN.NORMALMAP has a contract, a ledger row, an oracle and a
-   4,738-check suite and **no ratified spec sentence**. Ratify or supersede —
-   writing one now to match the implementation would be ratifying whatever got
-   built.
-5. **`reports/post-gather-law/gather_law_contact.png` (R37).** Blocks
-   `zhao_post_gather` and I17, and nothing else.
-
-Plus, lower stakes: the six unresolved `reference_model:` rows
-(`zref::MeasureHistogram`, `zref::PostComposite`, four PART.*) each need the
-per-row call R94 defined — name the law that exists, or remove the key and say
-why. **Inventing a plausible symbol is the same defect with a better name.**
-
-## The fit
-
-`reports/FIT-PLAN-AT-ZERO.md` is the plan and it names the gates in advance.
-Three runs: **F-CLIFF-GOLDEN** (a leaf fit, the only honest way to state the
-cliff saving), **F-CONSOLE-TARGET** (the verdict on `5CSEBA6U23I7`) and
-**F-CONSOLE-SIZE** (the map on `5CEBA9F31C7`, because **a refusal is not a
-map**).
-
-The only composed number that exists is 47,582 ALM / 151 DSP / 306 M10K on the
-sizing device, from a **dirty tree** carrying a live metadata-swap defect,
-before this run's repairs. **It is a starting estimate. Do not quote it as the
-console's size.**
+* **Derive the smoke list, never enumerate it.** The script declares **ten**
+  forms; my briefs said eight for weeks, omitting `-NoTableLoad` and
+  `-BadDescriptor` — **both INVERTED controls that pass WITH one `%Fatal`.**
+  ```
+  awk '/^param\(/,/^\)/' tests/prod/run_console_core_smoke.ps1 | grep -oE '\[switch\]\$\w+'
+  ```
+* **Two generators are in `tools/quartus/`, one in `tools/design/`.** A gate at
+  a wrong path returns **RC 2 "No such file"** — *a failing gate that was never
+  run.*
+* **Run BOTH `gen_shell_paired_diff` forms.** The bare `--check` returned RC 0
+  *"fresh"* while `--check --mutant` returned RC 1 *"STALE"*, and the stale
+  mutant **aborted `cmake --preset` for every lane.**
+* **Scale the gate set to the change (R227).** Comment-only RTL owes the static
+  gates, the tie-off audit, the register and `-LintOnly` — *nothing else.*

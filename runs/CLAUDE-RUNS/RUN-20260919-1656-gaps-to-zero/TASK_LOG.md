@@ -846,3 +846,12 @@ store** (D3, 185 M10K), the **HUD band** (R233, 12 M10K / ~595 ALM),
 (built, uncomposed, outside the closure).
 
 **So the number is a FLOOR, and every authorised item above adds to it.**
+
+### CORRECTION, same session: the fit above was a MISREADING and is killed
+
+See R236. "No caveats" is a property of the DESIGN being complete, not of the
+fit command flags. "Fit at completion only" STANDS; D2 stands; zero gaps and
+full composition come first. The standing rule he gave instead is larger than
+the correction: **when keeping a capability collides with a resource number,
+the capability wins** -- *"we already do not have enough resources"*. Cost is a
+fact to record, never a veto, and cost tradeoffs are no longer owner decisions.
