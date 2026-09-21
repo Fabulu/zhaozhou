@@ -46,23 +46,89 @@ unchanged. **Do not run Quartus.** The machine belongs to the packets.
 
 ## RUNNING NOW — verify before trusting
 
+**Updated 2026-09-21 after DELTALAW, SHADOWSUB and GOURAUDBUILD all landed.**
+
 | packet | target | branch |
 |---|---|---|
-| **DELTALAW** | R231's depth-law repair; may close **I32** | `gz/deltalaw` |
-| **SHADOWSUB** | the FORGE.SHADOW subsystem, under D2 | `gz/shadowsub` |
-| **GOURAUDBUILD** | D1 — reconnect the lit vertex colour | `gz/gouraudbuild` |
+| **BANDBUILD** | the HUD band (R233/R235); bears on **I17** | `gz/bandbuild` |
+| **CLIPDOOR** | the `GEOM_CLIP_ATTRS = 7` input door — the binding wall | `gz/clipdoor` |
+| **FORMIDX** | is `form -> clip bank` a WIRE? bears on **I29** | `gz/formidx` |
+
+**Landed today:** DELTALAW (R231's depth law), SHADOWSUB (the tap arbiter; it
+**withdrew its own blocker** — R237), GOURAUDBUILD (D1 built — R238).
 
 ---
 
 ## NEXT SLOTS, best first
+
+**0. TERRAIN.GROUP_SEQ's SUBPATCH JOB ISSUER — entry I21. THE LARGEST
+UNCOVERED ITEM IN THE REGISTER, and it is now scoped.** Analysed by the
+coordinator 2026-09-21; **launch this into the first free slot.**
+
+*Why it dominates:* the register's 22 is **9 tie-offs + 13 disconnected
+modules**, and **TERRAIN holds 7 of the 13** (`pageio`, `normalmap`,
+`velocity`, `bake_v2`, `lod`, `sheetseam`, + `measure_governor`) **and 4 of the
+9** (I21, I27, I32, I34). No other cluster is close.
+
+*What it is, precisely — this is a BUILD, not a wire.* `zhao_terrain_lod`
+exists and its header says its output is *"EXACTLY `zhao_terrain_tess`'s job
+port"*. **It is not the SEQUENCER's job port.** The sequencer needs
+`job_view_mask`, `job_mat_a`, `job_mat_b` and `job_weight` as well, and
+TERRAIN.LOD emits **none of the four**. Measured by the coordinator: the only
+thing in the tree driving those four is a **stimulus LFSR in a generated fit
+top** (`zhao_terrain_pipe_rpp3_matw18_fit_top.sv`). **There is no production
+producer.** Taking LOD's twelve matching fields and inventing the other four is
+the hidden-adapter failure the entry refuses by name.
+
+*Three shortcuts are already closed, in writing — do not re-open them:*
+
+* **VIEWMASK closed the view-mask shortcut:** `terr_job_view_mask_i` is already
+  2 bits at the boundary, so **the narrowing was never the obstacle**. Driving
+  `job_view_mask` from the internal `tis_view_mask` while the rest of the job
+  comes from outside *"joins two things that move independently: a worse hidden
+  adapter than the one the entry refused to build, wearing a settled ruling as
+  cover."* **The view mask rides THE JOB. The job has no producer.**
+* **R13 disposes of `job_mat_a`/`_b`/`_weight`:** *"The job port is not widened
+  to carry a subpatch-uniform value that is not true."* They are the **WRONG
+  CARRIER** — not three fields awaiting an owner. Their honest closure is
+  **REMOVAL once a per-triangle layer-E path exists**, which is **a function
+  MOVE: nothing leaves until the replacement lands.** So the issuer owes
+  **thirteen** fields, not sixteen.
+* **B5's "fit a circuit you already know is wrong" objection is SPENT** —
+  `proj0_i`/`proj1_i` are `[PROJW-1:0]`, `PROJW = 20`, R83 implemented under
+  R98. What survives is *"neither block is instantiated by any production
+  root"*, **a composition behind I14, not a format defect.**
+
+*What actually stands, re-measured 2026-09-21 by VIEWMASK:* **B1** the layer-E
+reader (R13 puts it **inside TESS** — one absence with a ruled destination),
+**B2** neighbour edge levels (`MEASURE.GOVERNOR.md` still refuses in writing),
+**B4** `terr_cc_serve_release_i` (boundary input, no internal driver anywhere).
+
+*Two traps in this entry specifically.* It **argues with itself** — it quotes
+R13 at blocker 1 and ninety lines later still calls the same question open, and
+calls those three fields' owner UNIDENTIFIED. And **an instance name quoted
+from a GENERATED file has a shelf life**: B2's LFSR is `u64_src`, not
+`u59_src`, because the generator renumbers. **Re-measure every blocker before
+quoting it (R165); do not inherit this entry's prose.**
+
+*And my own held decision, resolved by the above:* **do not compose
+`zhao_measure_governor` alone with its TERRAIN.LOD group dangling** — that is
+R75's "close one gap, open another". **Compose the TERRAIN group as a
+subsystem, or not at all.** R223's hold stands for the governor *by itself*;
+this packet is the thing that dissolves it.
 
 **1. FORGE.PRIM / FORGE.PRIM_EVAL — now UNBLOCKED by D2.** R199 deferred the
 forge program page kind because four of six families have no evaluator; **the
 owner chose to pay for the evaluators.** Freeze the page kind, build them.
 **Do not take opcode 0x0304 (W04) or 0x0305 (`DrawPosedForm`).**
 
-**2. `form -> clip bank` — an OWNER DECISION, surfaced by POSEREAD, not yet
-put to him.** `zref::creature_page::Record` keys ladder rows by `form_index`;
+**2. `form -> clip bank` — IN FLIGHT AS `FORMIDX`, and it may not be a decision
+at all.** SHADOWSUB reported in passing that **`zhao_geom_drawjob` already
+holds `form_idx_q`** — so the index may be **exposable, not inventable**, and
+the question a wire rather than a law. **FORMIDX is verifying that first**,
+because it is a passing remark from a lane whose subject was something else. If
+it does not hold, this goes to the owner with the three options below,
+unchanged. The original statement of the question: `zref::creature_page::Record` keys ladder rows by `form_index`;
 `zref::clip_page`'s header carries **no form index, no type key, no handle**.
 Wiring the draw through would assert *"the resident bank is this draw's bank"*
 and serve **a correct palette for the wrong animal**, invisible to
@@ -70,14 +136,15 @@ and serve **a correct palette for the wrong animal**, invisible to
 one `u24` field and one golden rebuilt. **This should go to the owner with the
 options, not be decided in a packet.**
 
-**3. The HUD band (R233, ruled).** 12 M10K, ~595 ALM, zero DSP, 11.1% of frame.
+**3. The HUD band (R233, ruled) — IN FLIGHT AS `BANDBUILD`.** 12 M10K, ~595 ALM, zero DSP, 11.1% of frame.
 Needs a **TWOD.BAND contract before any `blocks.yml` row**, and the admission
 law is already ruled (R235: refuse the sprite whole and **COUNT** it). The
 counter owes a positive control — likely a committed mutant, since legal
 stimulus may never overflow at a 9x margin.
 
 **4. I29's consumer**, now that POSEREAD established the request side is
-determined by `spec/memory_rules.md` §5f.1. Blocked behind item 2.
+determined by `spec/memory_rules.md` §5f.1. Blocked behind item 2 — **and
+`FORMIDX` is the packet that unblocks or re-poses it.**
 
 **5. FORGE.CLIFF.** Rivalry decided (R142, adopt `zhao_forge_cliff_ram`), and
 the capability is still absent: **no page issuer, no solid-window producer, no
