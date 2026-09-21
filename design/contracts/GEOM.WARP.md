@@ -27,7 +27,8 @@ never lets the three read alike.
 |---|---|
 | Semantics (lanes, application law, bounds, failure taxonomy) | **RATIFIED** — W01–W18 |
 | Scalar reference `zref::GeomWarp` | **BUILT AND TESTED** — `reference/include/zref/zref_geom_warp.hpp`, **102** directed checks, 3 fired mutants |
-| `DrawWarpedForm 0x0304` ABI | **NOT BUILT** — and 0x0304 re-verified free 2026-09-20 |
+| `DrawWarpedForm 0x0304` ABI | **BUILT 2026-09-21** — `spec/commands.zidl`, 96-byte record / 80-byte payload, generated through every consumer. The generator's own pad map (`ZHAO_PADS_DRAW_WARPED_FORM = {62,63,76,77,78,79}`) agrees with directive 6.1 byte for byte. Of the 27 files in `tests/abi/golden/`, exactly two moved — the new record and `zcap_minimal.zcap`'s two sha fields — so `DrawForm`'s byte-for-byte survival under W04 is **measured, not promised**. |
+| CMD.EXEC's 0x0304 arm + per-draw snapshot | **BUILT AND TESTED 2026-09-21** — `zhao_cmd_exec`'s capture arm, the `wq` descriptor sidecar (directive 7.1's split: one `warp_enabled` bit in the draw item, the 456-bit snapshot in a RAM-shaped array on `dq`'s own pointers), and the DRAW_INVALID refusal. `cmd_exec_directed` 850 → **954 checks**, cases 42–48. Case 48 — two warped draws differing only in their snapshot — was **watched to fail** against a planted global-register mutation (9 red, draw 0 receiving draw 1's program) and then watched to pass restored. |
 | `zhao_geom_warp.sv` and the application stage | **BUILT AND TESTED 2026-09-20** — `fpga/rtl/geometry/zhao_geom_warp.sv`, 2,468 directed checks against `zref::geom_warp::apply_outputs`, every counter seen to fire, one committed mutant with a measured fire rate |
 | The join (descriptor sidecar, meshlet poison/drain) | **NOT BUILT** |
 | Composition into `zhao_console_core` | **BLOCKED** — on P1, P2, P7 and the absent command; see the prerequisite table |
@@ -376,10 +377,10 @@ before the host it depends on existed.
 | P2 | **A free client port.** | **ABSENT.** `.CLIENTS(2)` at `:15875`, one site tree-wide; both taken by the stamp and flow adapters. |
 | P3 | **Sparse output map.** | **PRESENT, AND NOW COMPOSED.** *Corrected on merge: C1 composed `zhao_field_host_v2` into `zhao_console_core`, so the qualifier 'which is not composed' has expired.*  Originally: **PRESENT — in `zhao_field_host_v2`.** `omap_kind[slot][j]` / `omap_index[slot][j]` are the ordinal↔window translation, aliasing falls out for free, and an `OUTPUT_MAP` row naming a `VECTOR_REG` outside the window is a **load-time refusal** (`:402`). H1 closed this. |
 | P4 | **ALL-outputs completion.** | **PRESENT, AND NOW COMPOSED.** *Corrected on merge, same reason as P3.*  Originally: **PRESENT — in `zhao_field_host_v2`.** `complete_c = ((seen_next_c & req_mask_c) == req_mask_c)` at `:926` — ALL required ordinals, not ANY — with `StPartial = 8'hF3` at `:468`. R101's defect is repaired and re-planted as a committed mutant. |
-| P5 | **Per-context prepared uniforms.** | **DEFERRED, NOT CLOSED, and here is exactly what the weaker means is.** `prep_value[0:PREP_SCALARS-1]` (`:622`) is still **one flat 64-entry array** with no context dimension. What H1 added beside it is a per-slot **generation stamp** (`prep_gen`, `prep_valid`) — which detects a stale prepared scalar but does **not** isolate two simultaneously eligible plans. That satisfies Warp only if Warp never interleaves with Earth inside a frame. **Report it as deferred. It is not closed.** |
-| P6 | **Four independent tables.** | **STILL PARTIAL — and the plan says YES.** `zhao_field_host_v2.sv:230` declares `parameter int unsigned TABLES = 2`, the same as the old host; the fabric carries 4. H1 did not raise it and nothing else did. *Correction to the repair plan §4.* |
-| P7 | **48-instruction capacity.** | **ABSENT.** `.INSTR_N(32)` at `:15889`, and host_v2's own default is 32 as well. A full-length Warp program does not fit the uop store. |
-| P8 | **Handle → resident-slot binding.** | **RE-MEASURE BEFORE RE-QUOTING (owner ruling R165).** *Corrected on merge:* W1 measured this against a base where **D1 was not merged**, and said so honestly in the row itself. D1 IS merged now, and `zhao_field_doorbell.sv` carries `BIND_PROGRAM`. What W1 wrote below is therefore a true statement about a tree that no longer exists, and the remaining question -- whether D1's BIND satisfies §9.3's BIND/SEAL -- is UNMEASURED. Old text:  **STILL ABSENT — and the plan says YES.** `zhao_field_doorbell.sv:440-442`: the final `else` still sends **everything** to `D_LOAD`, and `post_op_i` is still `[1:0]` (`:157`), so value 3 remains encodable and not inert. A tree-wide search of `fpga/rtl/field/` for `D_BIND`, `D_SEAL`, `bind_slot` or `handle_to_slot` returns **nothing**. D1's branch exists and is **not merged into this base**. *Correction to the repair plan §4.* |
+| P5 | **Per-context prepared uniforms.** | **MEASURED 2026-09-21. ITS STATED CLAUSE IS DISCHARGED AT THIS COMPOSITION; A NARROWER ONE REPLACES IT.** The array is still flat — `prep_value`/`prep_valid`/`prep_gen` carry no slot dimension — and that much of the old row stands. What was never measured is whether this console can *produce* two simultaneously eligible plans, and **it cannot.** `req_ready_o` is gated on `state == E_IDLE`; the FSM cannot return there without passing `E_RETIRE`, which is itself gated on a **whole-fabric** fence, `fab_active == '0'` across all `PROGS` contexts rather than `fab_active[cur_slot]`. There is exactly one `state`, one `cur_slot`, one `cur_export`, none dimensioned by any parameter, and `prep_value` is read on exactly **one clock per point** — the grant clock — into registers, after which the running point never touches the array again. Loads cannot race that read either: `ld_ready_o = (state == E_IDLE)` and the `E_IDLE` arm takes `ld_valid_i` in strict priority over a grant, so a load and a grant never land together. **Parameter-independent** across `CLIENTS`, `PROGS`, `FAB_LANES` (which replicates one point across lanes and discards the surplus — it does not add points), `FAB_GROUP_PTS`, `FAB_OUTSTANDING` and `CREDITS` (whose overlap is a *retired, already-captured* response waiting in the queue, downstream of `cur_export`). It reopens only on an RTL change that adds a second front — the "gathering front" the console's own `PROGS` note defers. **So Warp interleaving with Earth inside a frame is structurally impossible here, and the clause as written is discharged.**  **AND THE GENERATION CHECK IS NOT LOCKSTEP-BLIND**, which had to be asked: `ggen_c = hdr_assoc_gen[gslot_c]` is written only under `LdAssoc` (kind 5, `ld_data_i[7:0]`, per **slot**) and `prep_gen[i]` only under `LdPrepared` (kind 7, `ld_data_i[47:40]`, per **prep index**). The enables are mutually exclusive by decode, so the two sides of the comparison cannot move together — and the detector has been **seen to fire**: `field_host_v2_directed` FT036 bumps the association generation over an unchanged prepared file and asserts `StBadPrep` with `prep_bad_o` moving by exactly one.  **THE NARROWER OBLIGATION, RECORDED BECAUSE IT IS REAL AND UNGUARDED: PREP-INDEX DISJOINTNESS.** `prep_gen` is indexed by prepared-scalar index while `ggen_c` is indexed by slot, and `omap_index[slot][j]` is chosen by **software**. If a Warp slot and an Earth slot both name prep index 0, the later `LdPrepared` overwrites the earlier value, and the seed check compares `prep_gen[0]` against `hdr_assoc_gen[warp_slot]` — two 8-bit bytes that software assigns and nothing in RTL forces to differ. If they happen to agree, **Warp silently consumes Earth's scalar.** This needs no interleaving; serialisation does not touch it. It is unreachable today only for the weakest possible reason: **nothing produces prepared scalars at all.** `PREPARED_SCALARS` (§0x0022) is defined in `tools/field/gen_field_host_schema.py` and mirrored into `zhao_field_host_image_pkg.sv`, and **neither `tools/field/pack_field_host.cpp` nor `compiler/src/field_ir/serialize.ts` emits it**; `zprog_output_coverage.py` over the three shipped Earth programs reports every declared output satisfied by a vector-register write. A guard quiet because its input does not exist is not a guard that passed. |
+| P6 | **Four independent tables.** | **STILL PARTIAL — and RE-MEASURED 2026-09-21, which changed what it COSTS.** `zhao_field_host_v2`'s `TABLES = 2` stands and the composed console passes 2. What is new is the measurement of the other side: the fabric's table store is **hard-wired to four and is not parameterised at all** — `zhao_field_v3_curve.sv` declares `logic [95:0] tbl_ram[0:255]` (4 × TBL_N) and `logic [6:0] meta_n [4]`, and `tl_tbl_i` is a literal `[1:0]` through `zhao_field_v3_engine` and `zhao_field_v3_svcpath`. The host at `TSELW=1` writes `fab_tl_tbl = 2'(ld_addr_i[...])`, zero-extending a one-bit selector into that two-bit port. **So `TABLES=2` saves NO fabric area; it makes tables 2 and 3 of an already-built RAM unaddressable.** Closing it is `TSELW` 1→2 and `LDADDRW` `max(PCW, TSELW+TIDXW)` 7→8 — and the doorbell is **already sized for it**: the console composes `u_field_doorbell` with `.POSTADDRW(8)` against the loader's 7, and it refuses a legacy load that does not fit rather than narrowing it. **DISPOSITION: open, cheap, and not this packet's** — it is a Field-host parameter whose question ("does a shipped Warp program need more than two curve tables?") no composed program can yet ask. |
+| P7 | **48-instruction capacity.** | **ABSENT, CONFIRMED 2026-09-21 by elaboration rather than by grep.** `check_prod_manifest.py` reads the composed parameters out of the Verilator AST and prints `INSTR_N=32'd32` for `zhao_field_host_v2` — so this is the value the console actually elaborates, not the value a line of source says. W14's canonical ceiling is **48**, so a full-length Warp program does not fit the uop store. **What it costs, measured from the parameter relations rather than from a fit:** `PCW = $clog2(INSTR_N)` goes 5 → 6, and `LDADDRW = max(PCW, TSELW+TIDXW) = max(6, 7)` stays **7** — so no port width at the host's edge moves. The uop store itself grows by 16 × 64-bit words **per context**, and `PROGS = 8`, so the honest figure is **16 × 64 × 8 = 8,192 bits** of additional store. **PHYSICAL FIT PENDING — that is a capacity number, not an ALM number**, and whether it infers as M10K or as registers is exactly the question a fit answers and arithmetic does not. **DISPOSITION: lands with the composition**, because widening the uop store before any Warp program can be admitted buys capacity nothing asks for — the argument the console already makes in writing for `REGS`. |
+| P8 | **Handle → resident-slot binding.** | **MEASURED 2026-09-21 (packet WARPBUILD). VERDICT: PARTIAL — and the half that is missing is the half P8 is NAMED for.**  **THE BIND HALF IS PRESENT AND STRONGER THAN §9.3 ASKED.** `post_op` 3 is exhaustively decoded (`OpLoad`/`OpCommit`/`OpLookup`/`OpFh2` with a counted `V_BAD_OPERATION` default and a committed control at `tests/mutants/zhao_field_doorbell_op3_alias_mutant.sv`) — the old catch-all `else → D_LOAD` is gone. `BIND_PROGRAM` is not a doorbell state at all: the doorbell is a **credited relay** (`D_FH2`/`D_FH2_RESP`, return record reserved before the post is taken), and the binding lives in `zhao_field_loader`'s `K_BIND` arm, which validates a six-way conjunction against **one exact object** — handle reserved bits, `obj_ready`, `!obj_staging`, `obj_gen`, `obj_handle32`, `obj_epoch` and `obj_full_crc` — refusing anything else as `V_BAD_BINDING`. BIND never resolves by canonical hash, which discharges §9.1's aliasing clause directly.  **THE SEAL HALF IS NOT A BINDING OPERATION.** `L_SEAL` is the only writer of `obj_ready`, and it is reachable **only from the INSTALL arm**. `K_BIND` runs `L_ACCEPT → L_CHECK → L_RETURN` and never enters it. §9.3 wants SEAL to be a *consumed binding operation with its own completion*; here it is an internal state of a different command, with no verb, no ticket and no counter. **`BIND_META` and `UNBIND` do not exist** — the nearest thing to revocation, `VERB_RELEASE_BINDING`, is aliased with two other verbs into one arm that only decrements `obj_pins`; it does not revoke, `obj_ready` stays set and `obj_gen` is not bumped. (§9.3's "never invalidate live work silently" *is* honoured, by a different mechanism: the allocator skips pinned objects and answers `V_NO_CAPACITY`.) The four `post_kind` values §9.3 specifies were **superseded**, not implemented — the RTL follows `Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt` §10.2's encoding, which is a stated choice and is cited in the file.  **AND THE CHAIN P8 IS ABOUT IS BROKEN IN THE MIDDLE.** handle → canonical program is PRESENT (`fh2_resp_handle_o`, `pub_handle_o`/`pub_prog_hash_o`/`pub_gen_o`). resident slot → prepared plan is PRESENT (`hdr_assoc_gen`, `prep_gen`, `hdr_loaded`, `hdr_ipok`). **canonical program → resident slot is ABSENT**: hash→slot lives in `zhao_field_progcache`, reachable only through the legacy `post_op=2` LOOKUP path, and the loader never issues a lookup while the doorbell's FH2 arm never touches `pc_lu_*`. **Nothing joins a binding object to a directory slot**, so §9.2's row field *current resident slot* has **no storage anywhere in the tree**, and `hdr_assoc_gen` (8-bit, software-supplied) is never differenced against `obj_gen` — two generation counters in two modules that nothing compares. The resolution port has no consumer either: `pub_sel_i` is promoted to `fld_ldr_pub_sel_i` with **no in-console driver**, which the core's own note S2 records.  **CONSEQUENCE FOR WARP, STATED PLAINLY:** contract §9's `PROGRAM_NOT_RESIDENT` / `STALE_BINDING` / `PLAN_NOT_READY` refusals **have no hardware that can compute them**, and `zhao_geom_warp`'s `d_slot_i` / `d_slot_valid_i` have no producer that can resolve `DrawWarpedForm.warp_program` into a slot. **P8 is the prerequisite that gates a WORKING warp, as distinct from a composed one.**  **AND ONE DEFECT FOUND ON THE WAY**, recorded here because it is load-bearing for any future BIND: in `zhao_field_loader`, `st_idx` is assigned at **exactly one site** — `L_RESERVE`, the INSTALL path — yet `L_RETURN` unconditionally emits `fh2_resp_slot_o <= st_idx` and builds `fh2_resp_handle_o` from `obj_gen[st_idx]`. **A successful `K_BIND` therefore replies with the slot and generation of whatever object the LAST INSTALL reserved.** It survives testing because the natural stimulus is install-then-bind-the-thing-you-just-installed, where `st_idx` is correct by accident; it diverges on install(A), install(B), bind(A), and on a bind after reset. Not repaired here — `fpga/rtl/field/` is not this packet's file set — but it is a real reply-identity fault and it is written down rather than carried.  Old text, kept because it is a true statement about a tree that no longer exists: **RE-MEASURE BEFORE RE-QUOTING (owner ruling R165).** *Corrected on merge:* W1 measured this against a base where **D1 was not merged**, and said so honestly in the row itself. D1 IS merged now, and `zhao_field_doorbell.sv` carries `BIND_PROGRAM`. What W1 wrote below is therefore a true statement about a tree that no longer exists, and the remaining question -- whether D1's BIND satisfies §9.3's BIND/SEAL -- is UNMEASURED. Old text:  **STILL ABSENT — and the plan says YES.** `zhao_field_doorbell.sv:440-442`: the final `else` still sends **everything** to `D_LOAD`, and `post_op_i` is still `[1:0]` (`:157`), so value 3 remains encodable and not inert. A tree-wide search of `fpga/rtl/field/` for `D_BIND`, `D_SEAL`, `bind_slot` or `handle_to_slot` returns **nothing**. D1's branch exists and is **not merged into this base**. *Correction to the repair plan §4.* |
 | P9 | **Per-point cost / the R91 lever.** | **NOW EXISTS — and this DISCHARGES a standing claim.** `zhao_field_host_v2.sv:1167-1171`: *"E_ZERO is skipped entirely under FH08, so the fast path's preload is IN_LANES clocks where the oracle's is REGS + IN_LANES"*, gated on an accepted `INIT_PROOF` (`hdr_ipok[slot]`). **R103 states that the R91 fast path "does NOT exist anywhere in the tree." It does now**, in H1's host. Still **unmeasured in clocks** — see below. |
 
 **THE COST NUMBER IS ARITHMETIC ON THE FSM, NOT A RESULT.** `51 + T_run` at
@@ -389,16 +390,88 @@ unconditional clear. With P9's fast path that term becomes `IN_LANES + 4 + T_run
 neither is a fit. **PHYSICAL FIT PENDING**, and the clock count is a Verilator
 question that has not been asked yet.
 
-**Consequence, stated plainly, and it has CHANGED.** P3 and P4 are built and P9's
-lever exists — all three in `zhao_field_host_v2`, which **the console does not
-compose**. What still blocks a live composition is **P1, P2 and P7** (all three
-one-line parameter changes in `zhao_console_core.sv`, which is C1's file and
-C1's act), **P8**, and one thing no prerequisite table listed:
+**Consequence, RESTATED 2026-09-21, and it has changed AGAIN — this table moves
+faster than the paragraphs under it, which is R165's whole point.** The sentence
+below was written when the console did not compose `zhao_field_host_v2`. It does
+now. And the item the old text called "one thing no prerequisite table listed"
+is closed.
 
-**THERE IS NO `DrawWarpedForm` COMMAND, SO NO DRAW CAN EVER ENABLE WARP.** A
-composed `zhao_geom_warp` with today's ABI would sit permanently in its W09
-bypass — function present and structurally unreachable. That is not a
-composition; see the owner decision in packet W1's COMMIT MESSAGES on branch `gz/fieldw1` (the harness refuses `.md` under `runs/`; `gz/fieldh1` hit the same refusal at `89bb9bad`, and the earlier warp lane's `FINDINGS-warp.md` was never written for that reason either).
+**Where the nine actually stand at this commit:**
+
+* **P1, P3, P4, P9 — CLOSED.** Composed and measured.
+* **P5 — DISCHARGED AT THIS COMPOSITION**, structurally, with a narrower
+  obligation recorded in its place (prep-index disjointness).
+* **P2, P7 — one parameter each, and they land in the composing act.** Neither
+  may land alone: a third client whose `req_valid_i` is constant zero is a
+  tie-off, and widening the uop store before a Warp program can be admitted
+  buys capacity nothing asks for.
+* **P6 — open, and now known to be nearly free.** It does not save area; it
+  makes half an already-built RAM unaddressable.
+* **P8 — PARTIAL, and it is the one that matters most.** BIND is present;
+  SEAL-as-a-binding-operation, `BIND_META` and `UNBIND` are not; and
+  **canonical program → resident slot has no storage anywhere in the tree.**
+
+**SO THE HONEST STATEMENT OF WHAT IS LEFT IS TWO THINGS, NOT A LIST.**
+
+1. **THE CARRIER.** The per-draw snapshot exists at `zhao_console_core`'s
+   boundary and `zhao_geom_warp`'s `d_*_i` group is waiting for it; what is
+   missing is the ride between them, through `zhao_geom_drawjob`'s `SIDEW`
+   bundle and a new `v_side_o` on `zhao_geom_assetfetch`. That is a
+   COMPOSITION problem and it is mechanical.
+2. **P8'S MIDDLE LINK.** Even with the carrier, `d_slot_i` / `d_slot_valid_i`
+   need something that resolves `DrawWarpedForm.warp_program` — a handle — into
+   a physical resident slot, and **no such thing exists**. W07 is explicit that
+   "a handle is not a content hash; a content hash is not a physical resident
+   slot", and the tree currently has the first and third of those three with no
+   join between them. **A carrier without P8 gives a composed Warp that can be
+   reached and cannot be armed** — better than today's unreachable one, and
+   still not W18's end-to-end evidence.
+
+**GEOM.PARAMBUF IS NOT CLOSED BY THIS AND WAS MEASURED RATHER THAN HOPED.** It
+was plausible that composing Warp would give `zhao_geom_parambuf` a consumer; it
+does not. That block's blocker is an **arena WRITER**: every geometry memory
+client is hard-coded read-only in source (`zhao_geom_meshfetch`,
+`zhao_geom_assetfetch`, `zhao_geom_mem_adapter`, `zhao_geom_drawjob`,
+`zhao_geom_ladderbank`, `zhao_geom_loomfeed`), `spec/memory_rules.md` 5f
+declares RENDER.ASSET_POOL read-only with a formal assertion, and none of its
+four ledger counters appears in any `.sv`. Warp is a vertex-stream deformer
+between SKIN and PROJECT; it neither allocates the arena nor writes SDRAM.
+**Treat the two as independent.**
+
+Superseded text, kept because it was true when written: P3 and P4 are built and
+P9's lever exists — all three in `zhao_field_host_v2`, which **the console does
+not compose**. What still blocks a live composition is **P1, P2 and P7** (all
+three one-line parameter changes in `zhao_console_core.sv`, which is C1's file
+and C1's act), **P8**, and one thing no prerequisite table listed:
+
+**~~THERE IS NO `DrawWarpedForm` COMMAND, SO NO DRAW CAN EVER ENABLE WARP.~~
+CLOSED 2026-09-21 (packet WARPBUILD).** The sentence was true when written and
+is the reason it was written: a composed `zhao_geom_warp` under the old ABI
+would have sat permanently in its W09 bypass — function present and
+structurally unreachable — and that is not a composition. `DrawWarpedForm
+0x0304` now exists (W04, 96-byte record), `zhao_cmd_exec` decodes it, and the
+per-draw snapshot leaves `zhao_console_core` as `cmd_draw_warp_*_o`.
+
+**WHAT REPLACES IT AS THE BLOCKER, AND IT IS A DIFFERENT KIND OF THING.** The
+producer exists and the consumer exists; what is missing is the **carrier
+between them**. `zhao_geom_warp` is POST-SKIN, and the geometry front is
+pipelined, so draw N's tail vertices overlap draw N+1's head — a single held
+register at the skin stage would hand vertex B's position to descriptor A, with
+every counter balancing while it happened. Directive 7.1 names the shape: the
+draw item carries "`warp_enabled` plus a compact descriptor cookie", and the
+cookie rides the **job handshake**, the way `j_side_o` already carries a draw's
+raster word (composer entry I39: *"a meshlet cannot then be paired with another
+draw's state, because there is no second path for it to arrive on"*). That ride
+passes through `zhao_geom_drawjob`'s `SIDEW` bundle — whose `$fatal` guard on
+`SIDEW != 72` is there precisely to make a half-done layout move impossible to
+ship quietly — and needs a `v_side_o` beside `zhao_geom_assetfetch`'s per-vertex
+port, where `src_q` already proves the per-meshlet fanout works.
+
+**DO NOT KEY THAT CARRIER ON `src_id`.** Measured 2026-09-21: `src_id` is
+`capture_format.md` §5's `index` field ALONE — a compiler source-registry
+ordinal naming an **emit site**, so two draws from one statement share it — with
+`kind`/`module` truncated onto `draw_src_truncated_o`. W08 says so from the
+other side: *"`source_id` remains attribution, not identity."*
 
 **What W1 did instead of tying the port off.** The block is built, and its Field
 request port is a real client port shaped to `zhao_field_warp_adapter`'s declared

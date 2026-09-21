@@ -922,6 +922,57 @@ module zhao_console_board
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
 
+  // ---- W04: DrawWarpedForm 0x0304's per-draw Warp snapshot -- BOUNDARY -----
+  // Same standing as the pose lane directly above, same argument, and one
+  // difference worth stating because it decides what the NEXT packet does.
+  //
+  // The pose lane's consumer does not exist. THIS ONE DOES:
+  // `fpga/rtl/geometry/zhao_geom_warp.sv` is BUILT and TESTED (2,468 directed
+  // checks) and its `d_warp_en_i` / `d_slot_i` / `d_time_i` / `d_par_i` /
+  // `d_bx_i` port group is this bus, field for field. What is missing is not
+  // the producer and not the consumer -- it is the CARRIER BETWEEN THEM.
+  //
+  // WHY THE CARRIER IS NOT BUILT HERE, stated so the gap is a decision and not
+  // an omission. `zhao_geom_warp` sits POST-SKIN, and a draw's snapshot has to
+  // arrive there in phase with that draw's vertices. The geometry front is
+  // pipelined, so draw N's tail vertices overlap draw N+1's head: a single held
+  // register at the skin stage would hand vertex B's position to descriptor A,
+  // which is CLAUDE.md's metadata-swap defect exactly, and every counter would
+  // balance while it happened. Directive 7.1 names the correct shape -- the
+  // draw item carries "`warp_enabled` plus a compact descriptor cookie", and
+  // the cookie rides the job handshake the way `j_side_o` already carries a
+  // draw's raster word (composer entry I39: "a meshlet cannot then be paired
+  // with another draw's state, because there is no second path for it to
+  // arrive on"). That ride passes through `zhao_geom_drawjob`'s `SIDEW` bundle
+  // and needs a `v_side_o` beside `zhao_geom_assetfetch`'s per-vertex port.
+  // `zhao_geom_drawjob.sv` is a LIVE LANE at this commit, and two agents
+  // editing one file is the hazard CLAUDE.md gives a chapter to.
+  //
+  // So the snapshot leaves HERE, at the edge, for the reason the pose block
+  // gives: an output nobody reads lets synthesis delete the capture registers
+  // behind it, and a fit would then price this lane at zero. It is DRIVEN --
+  // by `zhao_cmd_exec`'s decoded record fields and by nothing constant -- so
+  // it is not a tie-off and it is not in the INCOMPLETE block.
+  //
+  // `cmd_draw_warp_en_o` LOW is an ORDINARY DRAW: every 0x0300, every 0x0305,
+  // and every 0x0304 naming no program. W09 requires that path to perform zero
+  // Warp lookups and evaluations, so the ENABLE is what a consumer switches
+  // on, never the data -- an identity Warp returns all zeroes and must not be
+  // readable as "no warp".
+  output logic                     cmd_draw_warp_en_o,
+  output logic [31:0]              cmd_draw_warp_program_o,
+  output logic [31:0]              cmd_draw_warp_time_o,
+  output logic [127:0]             cmd_draw_warp_par_o,
+  output logic [127:0]             cmd_draw_warp_attr_o,
+  output logic [31:0]              cmd_draw_warp_attr_res_o,
+  output logic [ 7:0]              cmd_draw_warp_attr_mode_o,
+  output logic signed [31:0]       cmd_draw_warp_bx_o,
+  output logic signed [31:0]       cmd_draw_warp_by_o,
+  output logic signed [31:0]       cmd_draw_warp_bz_o,
+  // Evidence, not a boundary.
+  output logic [31:0]              cmd_exec_warp_draws_o,
+  output logic [31:0]              cmd_exec_warp_draw_refused_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order
@@ -3443,6 +3494,18 @@ module zhao_console_board
       .geom_job_form_idx_o                (geom_job_form_idx_o),
       .cmd_exec_posed_draws_o             (cmd_exec_posed_draws_o),
       .cmd_exec_pose_clip_refused_o       (cmd_exec_pose_clip_refused_o),
+      .cmd_draw_warp_en_o                 (cmd_draw_warp_en_o),
+      .cmd_draw_warp_program_o            (cmd_draw_warp_program_o),
+      .cmd_draw_warp_time_o               (cmd_draw_warp_time_o),
+      .cmd_draw_warp_par_o                (cmd_draw_warp_par_o),
+      .cmd_draw_warp_attr_o               (cmd_draw_warp_attr_o),
+      .cmd_draw_warp_attr_res_o           (cmd_draw_warp_attr_res_o),
+      .cmd_draw_warp_attr_mode_o          (cmd_draw_warp_attr_mode_o),
+      .cmd_draw_warp_bx_o                 (cmd_draw_warp_bx_o),
+      .cmd_draw_warp_by_o                 (cmd_draw_warp_by_o),
+      .cmd_draw_warp_bz_o                 (cmd_draw_warp_bz_o),
+      .cmd_exec_warp_draws_o              (cmd_exec_warp_draws_o),
+      .cmd_exec_warp_draw_refused_o       (cmd_exec_warp_draw_refused_o),
       .geom_mf_meshlets_considered_o      (geom_mf_meshlets_considered_o),
       .geom_mf_culled_all_cameras_o       (geom_mf_culled_all_cameras_o),
       .geom_mf_descriptors_fetched_o      (geom_mf_descriptors_fetched_o),

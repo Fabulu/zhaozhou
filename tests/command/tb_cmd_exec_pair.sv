@@ -99,6 +99,21 @@ module tb_cmd_exec_pair #(
     output logic [15:0] draw_clip_id_o,
     output logic [15:0] draw_frame_no_o,
     output logic [ 7:0] draw_sub_o,
+    // W04: DrawWarpedForm 0x0304's per-draw snapshot, on the SAME
+    // `draw_valid_o` beat and out of the SAME queue entry. Brought out as REAL
+    // OUTPUTS for the reason the pose block above gives -- a bench that does not
+    // carry a block's new ports fails to verilate, and no gate in this tree can
+    // see a bench that fails to verilate.
+    output logic        draw_warp_en_o,
+    output logic [31:0] draw_warp_program_o,
+    output logic [31:0] draw_warp_time_o,
+    output logic [127:0] draw_warp_par_o,
+    output logic [127:0] draw_warp_attr_o,
+    output logic [31:0] draw_warp_attr_res_o,
+    output logic [ 7:0] draw_warp_attr_mode_o,
+    output logic signed [31:0] draw_warp_bx_o,
+    output logic signed [31:0] draw_warp_by_o,
+    output logic signed [31:0] draw_warp_bz_o,
 
     output logic        upl_valid_o,
     output logic [23:0] upl_index_o,
@@ -195,6 +210,8 @@ module tb_cmd_exec_pair #(
     output logic [31:0] draw_src_truncated_o,
     output logic [31:0] posed_draws_issued_o,   // R229
     output logic [31:0] pose_clip_refused_o,    // R229
+    output logic [31:0] warp_draws_issued_o,    // W04
+    output logic [31:0] warp_draw_refused_o,    // W04
     output logic [31:0] uploads_issued_o,
     output logic [31:0] upload_overflow_o,
     output logic [31:0] post_looks_applied_o,
@@ -301,6 +318,16 @@ module tb_cmd_exec_pair #(
       .draw_clip_id_o        (draw_clip_id_o),
       .draw_frame_no_o       (draw_frame_no_o),
       .draw_sub_o            (draw_sub_o),
+      .draw_warp_en_o        (draw_warp_en_o),
+      .draw_warp_program_o   (draw_warp_program_o),
+      .draw_warp_time_o      (draw_warp_time_o),
+      .draw_warp_par_o       (draw_warp_par_o),
+      .draw_warp_attr_o      (draw_warp_attr_o),
+      .draw_warp_attr_res_o  (draw_warp_attr_res_o),
+      .draw_warp_attr_mode_o (draw_warp_attr_mode_o),
+      .draw_warp_bx_o        (draw_warp_bx_o),
+      .draw_warp_by_o        (draw_warp_by_o),
+      .draw_warp_bz_o        (draw_warp_bz_o),
 
       .upl_valid_o    (upl_valid_o),
       .upl_ready_i    (upl_ready_i),
@@ -390,6 +417,8 @@ module tb_cmd_exec_pair #(
       .draw_src_truncated_o (draw_src_truncated_o),
       .posed_draws_issued_o (posed_draws_issued_o),
       .pose_clip_refused_o  (pose_clip_refused_o),
+      .warp_draws_issued_o  (warp_draws_issued_o),
+      .warp_draw_refused_o  (warp_draw_refused_o),
       .uploads_issued_o     (uploads_issued_o),
       .upload_overflow_o    (upload_overflow_o),
       .post_looks_applied_o (post_looks_applied_o),

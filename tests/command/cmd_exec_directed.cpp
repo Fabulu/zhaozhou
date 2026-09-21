@@ -100,6 +100,18 @@ struct DrawOut {
   uint16_t clip_id;
   uint16_t frame_no;
   uint8_t sub;
+  // W04: DrawWarpedForm 0x0304's snapshot, captured off the SAME beat, in the
+  // SAME struct, for the reason the pose comment above gives. A second vector
+  // filled from a second condition could disagree about which draw it
+  // describes, and the whole point of the one-enable design is that it cannot.
+  bool warp_en;
+  uint32_t warp_program;
+  uint32_t warp_time;
+  uint32_t warp_par[4];
+  uint32_t warp_attr[4];
+  uint32_t warp_attr_res;
+  uint8_t warp_attr_mode;
+  int32_t warp_bound[3];
 };
 
 struct UploadOut {
@@ -173,6 +185,7 @@ struct Run {
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
   uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
   uint32_t posed_draws = 0, pose_clip_refused = 0;   // R229
+  uint32_t warp_draws = 0, warp_draw_refused = 0;    // W04
   std::vector<EnvOut> envs;
   uint32_t envs_issued = 0;
   // R35/R36: the look as the run LEFT it, every table write, and the hold.
@@ -304,6 +317,22 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       d.flags = static_cast<uint16_t>(dut.draw_flags_o);
       d.src_id = static_cast<uint16_t>(dut.draw_src_id_o);
       d.posed = (dut.draw_posed_o != 0);
+      d.warp_en = (dut.draw_warp_en_o != 0);
+      d.warp_program = dut.draw_warp_program_o;
+      d.warp_time = dut.draw_warp_time_o;
+      // The 128-bit lanes are read word by word out of the Verilated array.
+      // p0 / a0 are the LOW word: `spec/commands.zidl` puts params[0] at the
+      // lowest payload offset and `zhao_cmd_exec` accumulates little-endian, so
+      // word 0 here is lane 11 / lane 6 there.
+      for (int k = 0; k < 4; ++k) {
+        d.warp_par[k] = dut.draw_warp_par_o[k];
+        d.warp_attr[k] = dut.draw_warp_attr_o[k];
+      }
+      d.warp_attr_res = dut.draw_warp_attr_res_o;
+      d.warp_attr_mode = static_cast<uint8_t>(dut.draw_warp_attr_mode_o);
+      d.warp_bound[0] = static_cast<int32_t>(dut.draw_warp_bx_o);
+      d.warp_bound[1] = static_cast<int32_t>(dut.draw_warp_by_o);
+      d.warp_bound[2] = static_cast<int32_t>(dut.draw_warp_bz_o);
       d.clip_id = static_cast<uint16_t>(dut.draw_clip_id_o);
       d.frame_no = static_cast<uint16_t>(dut.draw_frame_no_o);
       d.sub = static_cast<uint8_t>(dut.draw_sub_o);
@@ -417,6 +446,8 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.draw_truncated = dut.draw_src_truncated_o;
   r.posed_draws = dut.posed_draws_issued_o;
   r.pose_clip_refused = dut.pose_clip_refused_o;
+  r.warp_draws = dut.warp_draws_issued_o;
+  r.warp_draw_refused = dut.warp_draw_refused_o;
   r.uploads_issued = dut.uploads_issued_o;
   r.upload_overflow = dut.upload_overflow_o;
   r.envs_issued = dut.envs_issued_o;
@@ -565,6 +596,53 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
   rec.payload.flags = flags;
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_draw_form(rec, out);
+  return out;
+}
+
+// DrawWarpedForm 0x0304 (owner decision W04), by the GENERATED packer, for the
+// same reason the posed builder below gives: the RTL reads its offsets from
+// `zhao_abi_pkg.sv` and this writes through `zhao_pack_draw_warped_form` in
+// `zhao_abi.h`, both from the same .zidl, neither retyped here. A field that
+// lands at the wrong offset on one side FAILS AGAINST THE OTHER. A test that
+// built its stimulus from the RTL's own constants would agree with any offset
+// whatsoever -- which is the shape of a test that cannot fail.
+struct WarpSnap {
+  uint32_t program = 0;
+  uint32_t time = 0;
+  int32_t params[4] = {0, 0, 0, 0};
+  int32_t attributes[4] = {0, 0, 0, 0};
+  uint32_t attr_resource = 0;
+  uint8_t attr_mode = 0;   // warp_attribute_mode
+  uint8_t warp_flags = 0;
+  int32_t bound[3] = {0, 0, 0};
+};
+
+std::vector<uint8_t> drawWarpedFormRecord(uint32_t source_id, uint32_t form,
+                                          uint32_t material_set, uint32_t transform,
+                                          uint8_t viewport_mask, uint8_t semantic_weight,
+                                          uint16_t flags, const WarpSnap& w) {
+  zhao_abi::ZhRecordDrawWarpedForm rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_DRAW_WARPED_FORM;
+  rec.hdr.record_bytes = 96;
+  rec.hdr.source_id = source_id;
+  rec.payload.form = form;
+  rec.payload.material_set = material_set;
+  rec.payload.transform = transform;
+  rec.payload.viewport_mask = viewport_mask;
+  rec.payload.semantic_weight = semantic_weight;
+  rec.payload.flags = flags;
+  rec.payload.warp_program = w.program;
+  rec.payload.time = w.time;
+  for (int k = 0; k < 4; ++k) {
+    rec.payload.params[k] = w.params[k];
+    rec.payload.attributes[k] = w.attributes[k];
+  }
+  rec.payload.warp_attributes = w.attr_resource;
+  rec.payload.attribute_mode = static_cast<zhao_abi::warp_attribute_mode>(w.attr_mode);
+  rec.payload.warp_flags = w.warp_flags;
+  for (int k = 0; k < 3; ++k) rec.payload.displacement_bound[k] = w.bound[k];
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_draw_warped_form(rec, out);
   return out;
 }
 
@@ -2252,6 +2330,453 @@ int main(int argc, char** argv) {
       check(r.draws[0].form == r.draws[1].form, "case41: same creature", 1,
             (r.draws[0].form == r.draws[1].form) ? 1 : 0);
     }
+  }
+
+  // ==========================================================================
+  // W04 -- DrawWarpedForm 0x0304. Cases 42..48.
+  // ==========================================================================
+  // Owner decision W04, ratified 2026-09-20 in
+  // reports/OWNER-RATIFICATION-20260920-WARP.md. What these cases are FOR, in
+  // one line each, because the interesting ones are not the round-trip:
+  //
+  //   42  every field of the snapshot leaves, through the generated packer.
+  //   43  the clean split: a DrawForm before and after a warped draw is an
+  //       ORDINARY draw and inherits nothing.
+  //   44  `warp_program == 0` is a LEGAL ordinary draw, not a refusal. W09.
+  //   45  a negative displacement bound is DRAW_INVALID: refused, NOT drawn,
+  //       and NOT degraded to an unwarped draw.
+  //   46  the mode/resource disagreement, BOTH directions.
+  //   47  a nonzero `warp_flags`.
+  //   48  THE ONE THAT MATTERS: two warped draws in one packet, differing only
+  //       in their snapshot. This is W05's whole content and the case a
+  //       mutable global `current_warp` register would fail.
+
+  // ---- 42. one DrawWarpedForm, whole --------------------------------------
+  {
+    WarpSnap w;
+    w.program = 0x0055AA01u;
+    w.time = 0x12345678u;
+    w.params[0] = 0x00010000;   // 1.0 in Q16.16
+    w.params[1] = -0x00020000;  // -2.0, so a sign-extension fault shows
+    w.params[2] = 0x7FFFFFFF;
+    w.params[3] = static_cast<int32_t>(0x80000000u);
+    w.attributes[0] = 0x0000BEEF;
+    w.attributes[1] = -1;
+    w.attributes[2] = 0x00FF00FF;
+    w.attributes[3] = 0x11223344;
+    w.attr_resource = 0;                  // INLINE4 requires this to be zero
+    w.attr_mode = 0;                      // WARP_ATTR_INLINE4
+    w.bound[0] = 0x00040000;
+    w.bound[1] = 0x00000001;              // the smallest legal nonzero bound
+    w.bound[2] = 0;                       // ZERO is legal: nonnegative, not positive
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawWarpedFormRecord(0x0090u, 0x4400u, 0x5500u, 0x6600u, 1, 0x30u,
+                                         0x0004u, w));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draws_issued == 1, "case42: the draw left", 1, r.draws_issued);
+    check(r.warp_draws == 1, "case42: warp_draws_issued_o", 1, r.warp_draws);
+    check(r.warp_draw_refused == 0, "case42: a lawful record is not refused", 0,
+          r.warp_draw_refused);
+    check(r.draws.size() == 1, "case42: one dispatch", 1, r.draws.size());
+    if (r.draws.size() == 1) {
+      const DrawOut& d = r.draws[0];
+      check(d.warp_en, "case42: draw_warp_en_o is HIGH", 1, d.warp_en ? 1 : 0);
+      // The six shared bytes still arrive: 0x0304 reads them through DrawForm's
+      // offsets and the elaboration guards pin that. If the prefix ever moved,
+      // this is where it shows.
+      check(d.form == 0x4400u, "case42: form, through the SHARED prefix", 0x4400u, d.form);
+      check(d.material_set == 0x5500u, "case42: material_set", 0x5500u, d.material_set);
+      check(d.transform == 0x6600u, "case42: transform", 0x6600u, d.transform);
+      check(d.viewport_mask == 1u, "case42: viewport_mask", 1u, d.viewport_mask);
+      check(d.semantic_weight == 0x30u, "case42: semantic_weight", 0x30u, d.semantic_weight);
+      check(d.flags == 0x0004u, "case42: flags (R28 cull mode 1)", 0x0004u, d.flags);
+      // And the extension.
+      check(d.warp_program == 0x0055AA01u, "case42: warp_program", 0x0055AA01u, d.warp_program);
+      check(d.warp_time == 0x12345678u, "case42: time is TICK DATA, bit-cast", 0x12345678u,
+            d.warp_time);
+      check(d.warp_par[0] == 0x00010000u, "case42: p0 is the LOW word", 0x00010000u,
+            d.warp_par[0]);
+      check(d.warp_par[1] == 0xFFFE0000u, "case42: p1, negative, not sign-mangled", 0xFFFE0000u,
+            d.warp_par[1]);
+      check(d.warp_par[2] == 0x7FFFFFFFu, "case42: p2 at the positive rail", 0x7FFFFFFFu,
+            d.warp_par[2]);
+      // p3 IS THE LANE W01 IS ABOUT. `field-ir.md` 7.1 listed fifteen warp
+      // input fields and wrote "(14)" after them; building to fourteen drops
+      // exactly this word, and a dropped lane does not read as missing -- it
+      // reads as whatever the Field front cleared that register to. Which is
+      // why the value here is 0x80000000 and not zero.
+      check(d.warp_par[3] == 0x80000000u, "case42: p3 -- the lane W01 exists to keep",
+            0x80000000u, d.warp_par[3]);
+      check(d.warp_attr[0] == 0x0000BEEFu, "case42: a0", 0x0000BEEFu, d.warp_attr[0]);
+      check(d.warp_attr[1] == 0xFFFFFFFFu, "case42: a1", 0xFFFFFFFFu, d.warp_attr[1]);
+      check(d.warp_attr[2] == 0x00FF00FFu, "case42: a2", 0x00FF00FFu, d.warp_attr[2]);
+      check(d.warp_attr[3] == 0x11223344u, "case42: a3", 0x11223344u, d.warp_attr[3]);
+      check(d.warp_attr_res == 0u, "case42: warp_attributes is 0 under INLINE4", 0u,
+            d.warp_attr_res);
+      check(d.warp_attr_mode == 0u, "case42: attribute_mode INLINE4", 0u, d.warp_attr_mode);
+      check(d.warp_bound[0] == 0x00040000, "case42: bound x", 0x00040000, d.warp_bound[0]);
+      check(d.warp_bound[1] == 0x00000001, "case42: bound y, the smallest nonzero", 1,
+            d.warp_bound[1]);
+      check(d.warp_bound[2] == 0, "case42: bound z -- ZERO IS LEGAL, nonnegative is the rule",
+            0, d.warp_bound[2]);
+    }
+  }
+
+  // ---- 43. the clean split: a DrawForm inherits NOTHING --------------------
+  // W04 keeps `DrawForm` 0x0300 byte-for-byte, and W09 requires that path to
+  // perform zero Warp lookups and evaluations. The failure this case is built
+  // to catch is the one `zhao_cmd_exec`'s gating exists for: if the 0x0304
+  // capture arm were not gated on the opcode, a 0x0300 would write DrawForm's
+  // PAD BYTES into the warp registers, and the NEXT warped draw would inherit
+  // them. Ordering DrawForm / warped / DrawForm exercises both directions.
+  {
+    WarpSnap w;
+    w.program = 0x00ABCDEFu;
+    w.time = 0xFEEDFACEu;
+    w.params[0] = 0x0BADF00D;
+    w.bound[0] = 0x00010000;
+    w.bound[1] = 0x00010000;
+    w.bound[2] = 0x00010000;
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawFormRecord(0x00A0u, 0x1100u, 0x2200u, 0x3300u, 1, 0x10u, 0x0000u));
+    b.append_record(drawWarpedFormRecord(0x00A1u, 0x1101u, 0x2200u, 0x3300u, 1, 0x10u,
+                                         0x0000u, w));
+    b.append_record(drawFormRecord(0x00A2u, 0x1102u, 0x2200u, 0x3300u, 1, 0x10u, 0x0000u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draws_issued == 3, "case43: all three draws left", 3, r.draws_issued);
+    check(r.warp_draws == 1, "case43: exactly ONE of them was warped", 1, r.warp_draws);
+    check(r.draws.size() == 3, "case43: three dispatches", 3, r.draws.size());
+    if (r.draws.size() == 3) {
+      check(!r.draws[0].warp_en, "case43: a DrawForm BEFORE any warp is ordinary", 0,
+            r.draws[0].warp_en ? 1 : 0);
+      check(r.draws[1].warp_en, "case43: the DrawWarpedForm is warped", 1,
+            r.draws[1].warp_en ? 1 : 0);
+      check(r.draws[1].warp_program == 0x00ABCDEFu, "case43: and it carries its own program",
+            0x00ABCDEFu, r.draws[1].warp_program);
+      // THE CLEAN SPLIT. A DrawForm AFTER a warped draw must not inherit it --
+      // this is the sentence W04 ratifies ("DrawForm stays byte-for-byte
+      // unchanged") tested rather than trusted.
+      check(!r.draws[2].warp_en,
+            "case43: a DrawForm AFTER a warped draw is STILL ordinary -- the clean split", 0,
+            r.draws[2].warp_en ? 1 : 0);
+      // And its snapshot is the inert one, not the previous draw's. An enable
+      // held low over stale data is a latent defect: the day something reads
+      // the data without the enable, it gets the wrong creature's deformation.
+      check(r.draws[2].warp_program == 0u,
+            "case43: and its snapshot is INERT, not the last warp's", 0u,
+            r.draws[2].warp_program);
+      check(r.draws[2].warp_time == 0u, "case43: inert time too", 0u, r.draws[2].warp_time);
+      check(r.draws[2].warp_par[0] == 0u, "case43: inert p0", 0u, r.draws[2].warp_par[0]);
+    }
+  }
+
+  // ---- 44. warp_program == 0 is an ORDINARY DRAW, not a refusal ------------
+  // `spec/commands.zidl` says so at the field, and W09 is why it must stay that
+  // way. The failure mode this catches is a validator that treats "no program"
+  // as a malformed record and refuses a legal draw -- a narrowing of function
+  // wearing a refusal's clothes. Note the record also carries a NEGATIVE bound,
+  // which WOULD be DRAW_INVALID on an armed draw: an unarmed record is not held
+  // to the warp rules at all, and that is the discriminating half.
+  {
+    WarpSnap w;
+    w.program = 0;                          // no warp
+    w.attr_resource = 0x00DEAD00u;          // would disagree with INLINE4...
+    w.attr_mode = 0;
+    w.bound[0] = -1;                        // ...and this would be illegal...
+    w.warp_flags = 0x7Fu;                   // ...and so would this.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawWarpedFormRecord(0x00B0u, 0x7A00u, 0x7B00u, 0x7C00u, 1, 0x20u,
+                                         0x0008u, w));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draws_issued == 1, "case44: the draw LEFT -- naming no program is legal", 1,
+          r.draws_issued);
+    check(r.warp_draw_refused == 0,
+          "case44: and it is NOT refused, though every warp rule in it is broken", 0,
+          r.warp_draw_refused);
+    check(r.warp_draws == 0, "case44: it is not counted as a warped draw either", 0,
+          r.warp_draws);
+    if (r.draws.size() == 1) {
+      check(!r.draws[0].warp_en, "case44: draw_warp_en_o is LOW", 0,
+            r.draws[0].warp_en ? 1 : 0);
+      check(r.draws[0].form == 0x7A00u, "case44: and it draws the form it named", 0x7A00u,
+            r.draws[0].form);
+    }
+  }
+
+  // ---- 45. a negative displacement bound is DRAW_INVALID -------------------
+  // W11 and directive 6.3: "displacement bounds must be nonnegative signed fx
+  // values." Contract section 9 puts this in the DRAW_INVALID class, disposition
+  // "refuse BEFORE emitting meshlets" -- so the draw does not enter the queue.
+  //
+  // THE THREE COMPONENTS ARE TESTED SEPARATELY, because a check written as one
+  // OR over a packed 96-bit word would pass with any single component wired to
+  // the wrong bit. Each record here is legal but for ONE sign.
+  {
+    for (int axis = 0; axis < 3; ++axis) {
+      WarpSnap w;
+      w.program = 0x00001234u;
+      w.bound[0] = 0x00010000;
+      w.bound[1] = 0x00010000;
+      w.bound[2] = 0x00010000;
+      w.bound[axis] = -1;
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(drawWarpedFormRecord(0x00C0u, 0x8800u, 0x8900u, 0x8A00u, 1, 0x10u,
+                                           0x0000u, w));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+      const char* names[3] = {"case45: bound X negative", "case45: bound Y negative",
+                              "case45: bound Z negative"};
+      check(r.warp_draw_refused == 1, names[axis], 1, r.warp_draw_refused);
+      check(r.draws_issued == 0, "case45: REFUSED means the draw does not leave", 0,
+            r.draws_issued);
+      check(r.draws.empty(), "case45: and nothing is dispatched", 0, r.draws.size());
+      // NOT DEGRADED. The pose's rule is to degrade; this one's is to refuse,
+      // and the difference is the whole reason both counters exist.
+      check(r.warp_draws == 0, "case45: it is not silently drawn unwarped either", 0,
+            r.warp_draws);
+      // The packet is still COMMITTED: one malformed draw is not a malformed
+      // frame, and the other draws in it are lawful.
+      check(r.committed == 1, "case45: the packet still commits", 1, r.committed);
+    }
+    // And the boundary, in the other direction: bound == 0 is LEGAL. The rule
+    // is nonnegative, not positive, and an off-by-one here would refuse every
+    // draw that declares "this axis does not move".
+    WarpSnap w;
+    w.program = 0x00001234u;
+    w.bound[0] = 0;
+    w.bound[1] = 0;
+    w.bound[2] = 0;
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawWarpedFormRecord(0x00C3u, 0x8800u, 0x8900u, 0x8A00u, 1, 0x10u,
+                                         0x0000u, w));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.warp_draw_refused == 0, "case45: an ALL-ZERO bound is LEGAL, not a refusal", 0,
+          r.warp_draw_refused);
+    check(r.warp_draws == 1, "case45: and it is a warped draw", 1, r.warp_draws);
+  }
+
+  // ---- 46. the mode/resource disagreement, BOTH directions -----------------
+  // Directive 6.3: "attribute_mode 0 uses all four inline words and requires
+  // warp_attributes=0" and "attribute_mode 1 requires a resident matching
+  // WARP_ATTRIBUTES resource; inline attribute words must be zero to avoid
+  // unused ambiguous content."
+  //
+  // BOTH directions are tested because a one-sided check passes on the half
+  // somebody happened to write, and the other half is then a record carrying a
+  // value the consumer for that mode will never read -- which is exactly the
+  // "unused ambiguous content" 6.3 names.
+  {
+    struct Bad { uint8_t mode; uint32_t res; int32_t a0; const char* what; };
+    const Bad bad[] = {
+      {0u, 0x00001111u, 0, "case46: INLINE4 with a nonzero warp_attributes"},
+      {1u, 0u, 0, "case46: STREAM4 with NO resource named"},
+      {1u, 0x00002222u, 0x55, "case46: STREAM4 with a nonzero inline word"},
+    };
+    for (const Bad& t : bad) {
+      WarpSnap w;
+      w.program = 0x00004321u;
+      w.attr_mode = t.mode;
+      w.attr_resource = t.res;
+      w.attributes[0] = t.a0;
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(drawWarpedFormRecord(0x00D0u, 0x9900u, 0x9A00u, 0x9B00u, 1, 0x10u,
+                                           0x0000u, w));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+      check(r.warp_draw_refused == 1, t.what, 1, r.warp_draw_refused);
+      check(r.draws_issued == 0, "case46: refused draws do not leave", 0, r.draws_issued);
+    }
+    // The two LAWFUL pairings, so the three refusals above are not satisfied by
+    // a check that refuses everything. This is the discriminator R95 asks for.
+    {
+      WarpSnap w;
+      w.program = 0x00004321u;
+      w.attr_mode = 1u;                 // STREAM4
+      w.attr_resource = 0x00002222u;    // named
+      // inline words all zero
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(drawWarpedFormRecord(0x00D3u, 0x9900u, 0x9A00u, 0x9B00u, 1, 0x10u,
+                                           0x0000u, w));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+      check(r.warp_draw_refused == 0, "case46: a lawful STREAM4 record is ACCEPTED", 0,
+            r.warp_draw_refused);
+      check(r.warp_draws == 1, "case46: and it is a warped draw", 1, r.warp_draws);
+      if (r.draws.size() == 1) {
+        check(r.draws[0].warp_attr_mode == 1u, "case46: STREAM4 reaches the port", 1u,
+              r.draws[0].warp_attr_mode);
+        check(r.draws[0].warp_attr_res == 0x00002222u, "case46: and so does its resource",
+              0x00002222u, r.draws[0].warp_attr_res);
+      }
+    }
+  }
+
+  // ---- 47. a nonzero warp_flags --------------------------------------------
+  // Directive 6.3: "warp_flags and pads must be zero." The PADS are the
+  // generated decoder's (the pad map); `warp_flags` is a FIELD, so no generated
+  // check covers it and this arm is the only thing between a future flag bit
+  // and a consumer that does not know what it means.
+  {
+    for (uint8_t bit = 0; bit < 8; ++bit) {
+      WarpSnap w;
+      w.program = 0x00005555u;
+      w.warp_flags = static_cast<uint8_t>(1u << bit);
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(drawWarpedFormRecord(0x00E0u, 0xAA00u, 0xAB00u, 0xAC00u, 1, 0x10u,
+                                           0x0000u, w));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+      check(r.warp_draw_refused == 1, "case47: every reserved warp_flags bit is refused", 1,
+            r.warp_draw_refused);
+      check(r.draws_issued == 0, "case47: and the draw does not leave", 0, r.draws_issued);
+    }
+  }
+
+  // ---- 48. TWO WARPED DRAWS, AND THIS IS W05's WHOLE CONTENT ---------------
+  // W05: "Snapshot every draw. Program handle, time, params, attribute mode,
+  // attribute resource and displacement bound belong to THAT draw. No mutable
+  // global `current_warp` register."
+  //
+  // Directive 6.2 refuses `SetWarp` + `DrawForm` by name because CMD.EXEC groups
+  // state updates before draws, so a last-writer setting "could retroactively
+  // change older draws". A single global register would pass EVERY OTHER CASE IN
+  // THIS FILE -- 42 through 47 each present one warped draw at a time, and a
+  // global register answers those perfectly. This is the case that separates
+  // them, and it is the reason the sidecar is an array and not a register.
+  //
+  // Two draws of the same creature, differing in NOTHING but their snapshot. If
+  // the snapshot were global, both dispatches carry the SECOND one's values and
+  // nothing else in this file notices.
+  {
+    WarpSnap w0;
+    w0.program = 0x00000101u;
+    w0.time = 0x00000001u;
+    w0.params[0] = 0x00010000;
+    w0.params[3] = 0x000000AA;
+    w0.attributes[0] = 0x0000AAAA;
+    w0.bound[0] = 0x00010000;
+    w0.bound[1] = 0x00020000;
+    w0.bound[2] = 0x00030000;
+
+    WarpSnap w1;
+    w1.program = 0x00000202u;
+    w1.time = 0xFFFFFFFFu;
+    w1.params[0] = -0x00010000;
+    w1.params[3] = 0x000000BB;
+    w1.attributes[0] = 0x0000BBBB;
+    w1.bound[0] = 0x00040000;
+    w1.bound[1] = 0x00050000;
+    w1.bound[2] = 0x00060000;
+
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawWarpedFormRecord(0x00F0u, 0xBB00u, 0xBC00u, 0xBD00u, 1, 0x10u,
+                                         0x0000u, w0));
+    b.append_record(drawWarpedFormRecord(0x00F1u, 0xBB00u, 0xBC00u, 0xBD00u, 1, 0x10u,
+                                         0x0000u, w1));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draws_issued == 2, "case48: two draws left", 2, r.draws_issued);
+    check(r.warp_draws == 2, "case48: both warped", 2, r.warp_draws);
+    check(r.draws.size() == 2, "case48: two dispatches", 2, r.draws.size());
+    if (r.draws.size() == 2) {
+      const DrawOut& a = r.draws[0];
+      const DrawOut& c = r.draws[1];
+      check(a.warp_program == 0x00000101u, "case48: draw 0 keeps ITS program", 0x00000101u,
+            a.warp_program);
+      check(c.warp_program == 0x00000202u, "case48: draw 1 keeps ITS program", 0x00000202u,
+            c.warp_program);
+      check(a.warp_time == 0x00000001u, "case48: draw 0's time", 0x00000001u, a.warp_time);
+      check(c.warp_time == 0xFFFFFFFFu, "case48: draw 1's time", 0xFFFFFFFFu, c.warp_time);
+      check(a.warp_par[0] == 0x00010000u, "case48: draw 0's p0", 0x00010000u, a.warp_par[0]);
+      check(c.warp_par[0] == 0xFFFF0000u, "case48: draw 1's p0", 0xFFFF0000u, c.warp_par[0]);
+      check(a.warp_par[3] == 0x000000AAu, "case48: draw 0's p3", 0x000000AAu, a.warp_par[3]);
+      check(c.warp_par[3] == 0x000000BBu, "case48: draw 1's p3", 0x000000BBu, c.warp_par[3]);
+      check(a.warp_attr[0] == 0x0000AAAAu, "case48: draw 0's a0", 0x0000AAAAu, a.warp_attr[0]);
+      check(c.warp_attr[0] == 0x0000BBBBu, "case48: draw 1's a0", 0x0000BBBBu, c.warp_attr[0]);
+      check(a.warp_bound[0] == 0x00010000, "case48: draw 0's bound x", 0x00010000,
+            a.warp_bound[0]);
+      check(c.warp_bound[0] == 0x00040000, "case48: draw 1's bound x", 0x00040000,
+            c.warp_bound[0]);
+      check(a.warp_bound[2] == 0x00030000, "case48: draw 0's bound z", 0x00030000,
+            a.warp_bound[2]);
+      check(c.warp_bound[2] == 0x00060000, "case48: draw 1's bound z", 0x00060000,
+            c.warp_bound[2]);
+      // The statement, made directly rather than inferred from the pairs above.
+      // A global `current_warp` register gives these two the SAME values, and
+      // this line is the one that would go red.
+      check(a.warp_program != c.warp_program,
+            "case48: the two snapshots are DISTINCT -- W05, no global current_warp", 1,
+            (a.warp_program != c.warp_program) ? 1 : 0);
+      // And the draws really are otherwise identical, or the line above could
+      // be satisfied by two draws that differ for some other reason.
+      check(a.form == c.form, "case48: same creature", 1, (a.form == c.form) ? 1 : 0);
+      check(a.transform == c.transform, "case48: same transform", 1,
+            (a.transform == c.transform) ? 1 : 0);
+    }
+  }
+
+  // ---- 49. A FULL QUEUE AND A BAD RECORD, WHICH NO OTHER CASE PRESENTS ----
+  // Found by re-reading the emit arm, not by a gate. The first version asked
+  // `dq_full` BEFORE `dw_bad_c`, so a malformed warp record arriving at a full
+  // draw queue counted a `draw_overflow_o` for a draw that needed no slot AND
+  // POISONED THE WHOLE PACKET -- one bad record costing a frame.
+  //
+  // Every counter still balanced and all of cases 42..48 still passed, because
+  // none of them presents both conditions at once. That is the shape this repo
+  // keeps finding: a wrong answer nothing is looking at.
+  //
+  // `DRAW_Q` is 4, so five draws in one packet reach the full condition. Four
+  // lawful draws fill it; the fifth is a warped record with a negative bound.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (int i = 0; i < 4; ++i) {
+      b.append_record(drawFormRecord(static_cast<uint32_t>(0x0100u + i), 0xC000u, 0xC100u,
+                                     0xC200u, 1, 0x10u, 0x0000u));
+    }
+    WarpSnap w;
+    w.program = 0x00009999u;
+    w.bound[1] = -1;                    // DRAW_INVALID
+    b.append_record(drawWarpedFormRecord(0x0104u, 0xC001u, 0xC100u, 0xC200u, 1, 0x10u,
+                                         0x0000u, w));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK,
+          "case49: the PACKET is well formed -- the refusal is ours",
+          zhao_abi::ZH_ABI_OK, r.err);
+    check(r.warp_draw_refused == 1, "case49: the malformed record is refused", 1,
+          r.warp_draw_refused);
+    // THE THREE LINES THE REORDER IS FOR.
+    check(r.draw_overflow == 0,
+          "case49: NO overflow -- a refused draw never needed a queue slot", 0,
+          r.draw_overflow);
+    check(r.committed == 1,
+          "case49: the packet COMMITS -- one bad record must not cost a frame", 1,
+          r.committed);
+    check(r.abandoned == 0, "case49: and it is not abandoned", 0, r.abandoned);
+    // The four lawful draws are unharmed, which is what "must not cost a frame"
+    // means in terms of what actually reaches the geometry front.
+    check(r.draws_issued == 4, "case49: all four lawful draws still leave", 4,
+          r.draws_issued);
+    check(r.warp_draws == 0, "case49: and none of them is warped", 0, r.warp_draws);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

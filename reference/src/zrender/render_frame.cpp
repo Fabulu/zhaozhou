@@ -205,6 +205,22 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     uint16_t clip_id = 0;
     uint16_t frame_no = 0;
     uint8_t sub = 0;
+    // W04: DrawWarpedForm 0x0304's per-draw Warp snapshot, CARRIED for the same
+    // reason the pose key above is -- so a capture that names a deformation can
+    // be read back without guessing. `warped` false is an ORDINARY DRAW and is
+    // what every DrawForm 0x0300, every DrawPosedForm 0x0305, and every 0x0304
+    // naming no program produces. W09 makes that path's exactness a contract:
+    // it "performs zero Warp lookups/evaluations, and preserves every existing
+    // output", so the flag must be the thing read, never the data -- an
+    // identity Warp is d = 0 and must not be readable as "no warp".
+    bool warped = false;
+    uint32_t warp_program = 0;
+    uint32_t warp_time = 0;
+    int32_t warp_params[4] = {0, 0, 0, 0};
+    int32_t warp_attributes[4] = {0, 0, 0, 0};
+    uint32_t warp_attr_resource = 0;
+    uint8_t warp_attr_mode = 0;
+    int32_t warp_bound[3] = {0, 0, 0};
   };
   std::vector<FormDraw> forms;
   struct PopDraw {
@@ -393,6 +409,92 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           fd.clip_id = c.payload.clip_id;
           fd.frame_no = c.payload.frame_no;
           fd.sub = c.payload.sub;
+        }
+        forms.push_back(fd);
+        break;
+      }
+      case zhao_abi::ZHAO_OP_DRAW_WARPED_FORM: {
+        // IMPLEMENTED with the opcode (owner decision W04, 2026-09-20). It
+        // resolves and draws EXACTLY as DrawForm does -- the two records share
+        // their first sixteen payload bytes by ratification -- and it CARRIES
+        // the Warp snapshot beside the draw.
+        //
+        // Giving it no arm was the alternative and it is strictly worse, by the
+        // argument the DrawPosedForm arm above makes: `default:` SKIPS a
+        // record, so a capture containing 0x0304 would draw NOTHING. That is a
+        // removal of function rather than a deferral of one.
+        //
+        // THE DEFORMATION IS NOT APPLIED BY THIS RENDERER, and saying so is the
+        // point rather than an apology. `zref::GeomWarp` is the arithmetic
+        // authority for the application law and it is built and tested
+        // (`reference/include/zref/zref_geom_warp.hpp`, 102 directed checks);
+        // what this software renderer lacks is the thing that would feed it --
+        // a post-skin vertex stream. Its marker/billboard form path has no
+        // skinning stage, exactly as it has none for the pose. So the draw is
+        // undeformed either way today, and the DIFFERENCE between 0x0300 and
+        // 0x0304 is recorded rather than flattened -- which is what lets the
+        // hardware's `draw_warp_en_o` be differenced against something.
+        //
+        // THE REFUSAL IS MIRRORED, and it must be, because an oracle that
+        // accepted a record the silicon refuses would disagree with it on the
+        // one case that matters. These are directive 6.3's three between-field
+        // rules, the same three `zhao_cmd_exec`'s `dw_ok_c` applies and in the
+        // same direction: a mode/resource pair that disagrees, a nonzero
+        // `warp_flags`, or a negative displacement bound. Contract section 9
+        // puts them in the DRAW_INVALID class, whose disposition is "refuse
+        // BEFORE emitting meshlets" -- so the draw is dropped whole, NOT
+        // degraded to an unwarped one. That asymmetry against the pose's
+        // degrade-to-bind-pose is deliberate on both sides of the seam: there
+        // is no authored behaviour for "the deformation you asked for, minus
+        // the deformation", and drawing one would be a confidently wrong shape.
+        //
+        // `attribute_mode`'s own legality and the four pad bytes are NOT
+        // re-checked here: the generated decoder already refuses them
+        // (ZH_ABI_BAD_VALUE and the pad map), and restating a generated rule in
+        // hand-written code is the second-implementation failure this tree
+        // keeps finding.
+        zhao_abi::ZhRecordDrawWarpedForm c;
+        zhao_unpack_draw_warped_form(r, c);
+        const FormPattern* form = res.form(c.payload.form);
+        const FormTransform* xf = res.transform(c.payload.transform);
+        if (form == nullptr || xf == nullptr) {
+          rr.resource_misses += (form == nullptr) + (xf == nullptr);
+          break;
+        }
+        FormDraw fd{form, xf, c.payload.viewport_mask, c.payload.flags};
+        const bool armed = (c.payload.warp_program != 0);
+        if (armed) {
+          const bool inline4 =
+              (c.payload.attribute_mode == zhao_abi::WARP_ATTR_INLINE4);
+          const bool stream4 =
+              (c.payload.attribute_mode == zhao_abi::WARP_ATTR_STREAM4);
+          bool attrs_zero = true;
+          for (int k = 0; k < 4; ++k) {
+            if (c.payload.attributes[k] != 0) attrs_zero = false;
+          }
+          const bool mode_ok =
+              (inline4 && c.payload.warp_attributes == 0) ||
+              (stream4 && c.payload.warp_attributes != 0 && attrs_zero);
+          const bool bound_ok = (c.payload.displacement_bound[0] >= 0) &&
+                                (c.payload.displacement_bound[1] >= 0) &&
+                                (c.payload.displacement_bound[2] >= 0);
+          if (!mode_ok || !bound_ok || c.payload.warp_flags != 0) {
+            // Refused whole. Not pushed, not degraded, and the frame is not
+            // abandoned -- one malformed draw is not a malformed frame.
+            break;
+          }
+          fd.warped = true;
+          fd.warp_program = c.payload.warp_program;
+          fd.warp_time = c.payload.time;
+          fd.warp_attr_resource = c.payload.warp_attributes;
+          fd.warp_attr_mode = static_cast<uint8_t>(c.payload.attribute_mode);
+          for (int k = 0; k < 4; ++k) {
+            fd.warp_params[k] = c.payload.params[k];
+            fd.warp_attributes[k] = c.payload.attributes[k];
+          }
+          for (int k = 0; k < 3; ++k) {
+            fd.warp_bound[k] = c.payload.displacement_bound[k];
+          }
         }
         forms.push_back(fd);
         break;

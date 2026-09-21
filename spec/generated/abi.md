@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = a9ee401a0a066c6771623710f264198953a4461c31d6229661a928bcec2dfd71
-zidl_sha256         = bfb5a6204077d0d62052b7b9247b0910fcf7fb265a2890176f83f07d2ec63a2c
+abi_identity_sha256 = 8ba03b43686282a3c4bd70b7826cfbc736228f3dc3bca37432a004c717aa17e3
+zidl_sha256         = 54abc34d6b67f51675a93b8c79976bd9ff1a226aec87e4dcbce52002bc730bcd
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-24 commands (20 implemented).
+25 commands (21 implemented).
 
 ## Commands
 
@@ -41,6 +41,7 @@ ABI version **3**, little-endian, command alignment
 | `SetPopulation` | `0x0303` | 48 | implemented |
 | `DebugTraceArm` | `0xF003` | 32 | implemented |
 | `DrawPosedForm` | `0x0305` | 48 | implemented |
+| `DrawWarpedForm` | `0x0304` | 96 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -619,6 +620,34 @@ Golden sample: `tests/abi/golden/cmd_draw_posed_form.bin` (C++ packer
 TS `zhaoPackDrawPosedForm(zhaoSampleDrawPosedForm(), ...)`, SV round-trips it via
 `zhao_unpack_draw_posed_form`/`zhao_pack_draw_posed_form`).
 
+### DrawWarpedForm — 0x0304 (96 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `form` | handle32 [form] |
+| 4 | 4 | `material_set` | handle32 [material_set] |
+| 8 | 4 | `transform` | handle32 [transform] |
+| 12 | 1 | `viewport_mask` | u8 |
+| 13 | 1 | `semantic_weight` | u8 |
+| 14 | 2 | `flags` | u16 |
+| 16 | 4 | `warp_program` | handle32 [program] |
+| 20 | 4 | `time` | u32 |
+| 24 | 16 | `params` | fx16 ×4 |
+| 40 | 16 | `attributes` | fx16 ×4 |
+| 56 | 4 | `warp_attributes` | handle32 [resource] |
+| 60 | 1 | `attribute_mode` | warp_attribute_mode |
+| 61 | 1 | `warp_flags` | u8 |
+| 62 | 2 | `pad` | pad (zero) ×2 |
+| 64 | 12 | `displacement_bound` | fx16 ×3 |
+| 76 | 4 | `pad_1` | pad (zero) ×4 |
+
+Golden sample: `tests/abi/golden/cmd_draw_warped_form.bin` (C++ packer
+`zhao_abi::zhao_pack_draw_warped_form(zhao_abi::zhao_sample_draw_warped_form(), ...)`,
+TS `zhaoPackDrawWarpedForm(zhaoSampleDrawWarpedForm(), ...)`, SV round-trips it via
+`zhao_unpack_draw_warped_form`/`zhao_pack_draw_warped_form`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -733,6 +762,13 @@ TS `zhaoPackDrawPosedForm(zhaoSampleDrawPosedForm(), ...)`, SV round-trips it vi
 | 0 | `FOG_OFF` |
 | 1 | `FOG_LINEAR` |
 
+### `warp_attribute_mode` — backing `u8`
+
+| Value | Name |
+|---|---|
+| 0 | `WARP_ATTR_INLINE4` |
+| 1 | `WARP_ATTR_STREAM4` |
+
 ## Error codes (generated enum, shared verbatim C++/TS/SV)
 
 | Value | Name | Meaning |
@@ -787,6 +823,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_set_population.bin` | canonical SetPopulation sample record |
 | `tests/abi/golden/cmd_debug_trace_arm.bin` | canonical DebugTraceArm sample record |
 | `tests/abi/golden/cmd_draw_posed_form.bin` | canonical DrawPosedForm sample record |
+| `tests/abi/golden/cmd_draw_warped_form.bin` | canonical DrawWarpedForm sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |

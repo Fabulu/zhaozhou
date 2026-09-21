@@ -593,6 +593,25 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
 
+  // ---- W04: DrawWarpedForm 0x0304's per-draw Warp snapshot ----------------
+  // Wrapper parity only (owner ruling R220: fix the WRAPPER, never the
+  // module). `.*` cannot bind a port the wrapper does not declare, so without
+  // these twelve lines this positive control stops elaborating -- which is the
+  // failure mode that matters, because a control that does not run is a
+  // control that cannot fail.
+  output logic                     cmd_draw_warp_en_o,
+  output logic [31:0]              cmd_draw_warp_program_o,
+  output logic [31:0]              cmd_draw_warp_time_o,
+  output logic [127:0]             cmd_draw_warp_par_o,
+  output logic [127:0]             cmd_draw_warp_attr_o,
+  output logic [31:0]              cmd_draw_warp_attr_res_o,
+  output logic [ 7:0]              cmd_draw_warp_attr_mode_o,
+  output logic signed [31:0]       cmd_draw_warp_bx_o,
+  output logic signed [31:0]       cmd_draw_warp_by_o,
+  output logic signed [31:0]       cmd_draw_warp_bz_o,
+  output logic [31:0]              cmd_exec_warp_draws_o,
+  output logic [31:0]              cmd_exec_warp_draw_refused_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order

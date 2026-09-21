@@ -476,6 +476,38 @@ module zhao_cmd_exec
     output logic [15:0] draw_frame_no_o,  // key index within the clip
     output logic [ 7:0] draw_sub_o,       // half-key phase (pose cache acq_sub_i)
 
+    // ---- W04: DrawWarpedForm 0x0304's per-draw Warp snapshot ---------------
+    // THE SAME HANDSHAKE AND THE SAME QUEUE ENTRY AS THE DRAW, for the reason
+    // the pose block above gives at length: one register enable means no stall
+    // can separate a draw from its snapshot, so there is no skew for a checker
+    // to look for. These are `zhao_geom_warp.sv`'s `d_*_i` port group, field
+    // for field, and they are the reason that block stops being unreachable.
+    //
+    // WHY A SNAPSHOT AND NOT A STATE COMMAND, once, here, because this is the
+    // port that would have been a register: directive 6.2 refuses
+    // `SetWarp` + `DrawForm` BY NAME, because CMD.EXEC groups some state
+    // updates before draws and a last-writer Warp setting "could retroactively
+    // change older draws". W05: "No mutable global `current_warp` register."
+    //
+    // `draw_warp_en_o` LOW is an ORDINARY DRAW, and it is low for every
+    // `DrawForm` 0x0300 and every `DrawPosedForm` 0x0305 ever recorded -- and
+    // also for a 0x0304 whose `warp_program` is zero, which is a legal record
+    // asking for no deformation. W09 requires that path to perform zero Warp
+    // lookups and zero Warp evaluations, so the ENABLE is the thing the
+    // consumer switches on, never the data.
+    output logic        draw_warp_en_o,
+    output logic [31:0] draw_warp_program_o,   // W-profile program handle
+    output logic [31:0] draw_warp_time_o,      // THIS draw's tick, lane 10
+    output logic [127:0] draw_warp_par_o,      // p0..p3, lanes 11..14, p0 low
+    output logic [127:0] draw_warp_attr_o,     // a0..a3 INLINE4, lanes 6..9
+    output logic [31:0] draw_warp_attr_res_o,  // STREAM4 resource handle
+    output logic [ 7:0] draw_warp_attr_mode_o, // warp_attribute_mode
+    // W11's componentwise world-space bound. NONNEGATIVE by the refusal below,
+    // so a consumer may compare against it without re-checking its sign.
+    output logic signed [31:0] draw_warp_bx_o,
+    output logic signed [31:0] draw_warp_by_o,
+    output logic signed [31:0] draw_warp_bz_o,
+
     // ---- R17: PublishResource -> MEM.UPLOAD's request port -----------------
     // Field for field MEM.UPLOAD's `req_*`, from the GENERATED offsets. What is
     // NOT carried, and why: the handle's 8-bit GENERATION. MEM.UPLOAD's
@@ -736,6 +768,25 @@ module zhao_cmd_exec
     // POSE whole is the refusal; refusing the RECORD whole would be a narrowing
     // of function wearing a refusal's clothes.
     output logic [31:0] pose_clip_refused_o,
+    // W04. `warp_draws_issued_o` counts the subset of `draws_issued_o` that
+    // left with `draw_warp_en_o` high, at the SAME instant and from the SAME
+    // dq_head -- the pose counter's discipline, for the same reason.
+    output logic [31:0] warp_draws_issued_o,
+    // W04 / GEOM.WARP contract section 9's DRAW_INVALID class. A 0x0304 that
+    // NAMES A PROGRAM and breaks one of the three between-field rules directive
+    // 6.3 states: a mode/resource pair that disagrees, a nonzero `warp_flags`,
+    // or a negative displacement bound.
+    //
+    // AND HERE IT IS THE OPPOSITE OF `pose_clip_refused_o` ABOVE, which is the
+    // comparison worth making because the two sit four lines apart and do
+    // different things. A bad clip DEGRADES: the cache's rule 1 already defines
+    // an unusable key as the bind pose, so the draw survives and only the pose
+    // is refused. A bad Warp record cannot degrade to an unwarped draw, because
+    // there is no authored behaviour for "the deformation you asked for, minus
+    // the deformation" -- it is a confidently wrong shape with nothing
+    // downstream able to tell. Section 9 puts this class in the REFUSE column
+    // and the draw does not enter the queue.
+    output logic [31:0] warp_draw_refused_o,
     output logic [31:0] uploads_issued_o,    // handed to MEM.UPLOAD
     output logic [31:0] upload_overflow_o,   // packets refused: > UPL_Q uploads
     output logic [31:0] post_looks_applied_o,    // SetPost looks handed to POST.COMPOSITE
@@ -799,6 +850,33 @@ module zhao_cmd_exec
   localparam int unsigned OFF_DP_CLIP  = ZHAO_DRAW_POSED_FORM_OFF_CLIP_ID;
   localparam int unsigned OFF_DP_FRAME = ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO;
   localparam int unsigned OFF_DP_SUB   = ZHAO_DRAW_POSED_FORM_OFF_SUB;
+
+  // DrawWarpedForm 0x0304 (owner directive W04). SAME RULE AS ABOVE: only the
+  // eleven fields DrawForm does not have are named here; the six it shares are
+  // read through the OFF_DF_* constants, and the per-field elaboration guards
+  // below are what stop that from being an assumption. Three draw opcodes now
+  // read one prefix, which is exactly why there must never be a second set of
+  // offsets for it.
+  localparam int unsigned OFF_DW_PROG  = ZHAO_DRAW_WARPED_FORM_OFF_WARP_PROGRAM;
+  localparam int unsigned OFF_DW_TIME  = ZHAO_DRAW_WARPED_FORM_OFF_TIME;
+  localparam int unsigned OFF_DW_PAR0  = ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_0;
+  localparam int unsigned OFF_DW_ATT0  = ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_0;
+  localparam int unsigned OFF_DW_ARES  = ZHAO_DRAW_WARPED_FORM_OFF_WARP_ATTRIBUTES;
+  localparam int unsigned OFF_DW_AMODE = ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTE_MODE;
+  localparam int unsigned OFF_DW_WFLG  = ZHAO_DRAW_WARPED_FORM_OFF_WARP_FLAGS;
+  localparam int unsigned OFF_DW_BND0  = ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_0;
+
+  // `warp_attribute_mode`'s two members are NOT redeclared here. The generated
+  // package already emits them -- `zhao_abi_pkg.sv`'s `WARP_ATTR_INLINE4` /
+  // `WARP_ATTR_STREAM4` -- and Verilator said so, VARHIDDEN, the first time
+  // this block tried to name them locally. That warning was right and the local
+  // copy is deleted rather than waived: two constants for one ABI value is the
+  // shape `uncashed_cheques.py` check 3 exists to find, and a shadowing copy is
+  // the version that goes stale silently when the .zidl moves.
+  //
+  // The 6.3 consistency rules below are therefore written against the ENUM the
+  // generator produced from the same line of `spec/commands.zidl` the decoder's
+  // ZH_ABI_BAD_VALUE check was produced from.
 
   // `spec/creature_rules.md` 2.1's "64 authored slots", which is also
   // `zref::clip_page::kMaxClips`. NAMED AND EDITABLE rather than implied by the
@@ -1002,6 +1080,55 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: DrawPosedForm.clip_id overlaps DrawForm's shared prefix");
     if (POSE_MAX_CLIPS > 65536)
       $fatal(1, "zhao_cmd_exec: POSE_MAX_CLIPS exceeds what a u16 clip_id can name");
+    // ---- W04: DrawWarpedForm 0x0304 ----------------------------------------
+    // The SAME per-field prefix guards DrawPosedForm gets, for the same reason
+    // and with the same per-field messages. This arm reads six of its
+    // seventeen fields through DrawForm's offsets; if the ABI ever moves one of
+    // them apart, the shared read becomes silently wrong for one of THREE
+    // opcodes rather than two.
+    if (ZHAO_DRAW_WARPED_FORM_BYTES != 96)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm record size moved; re-read the offsets");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_FORM != OFF_DF_FORM)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.form no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_MATERIAL_SET != OFF_DF_MSET)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.material_set no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_TRANSFORM != OFF_DF_XFORM)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.transform no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_VIEWPORT_MASK != OFF_DF_VPMASK)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.viewport_mask no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_SEMANTIC_WEIGHT != OFF_DF_WEIGHT)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.semantic_weight no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_FLAGS != OFF_DF_FLAGS)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.flags no longer shares DrawForm's offset");
+    if (ZHAO_DRAW_WARPED_FORM_OFF_H_SOURCE_ID != RH_SRC)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm's header source_id moved off the shared offset");
+    // DrawForm's `df_flags_c` bypass exists because its last FIELD byte is the
+    // record's last byte. This record's last field byte is
+    // `displacement_bound[2]`'s high byte at 91 of 96, with four bytes of pad
+    // after it, so every capture is settled when the ring write reads it and NO
+    // bypass is correct here -- the same statement DrawPosedForm's guard makes,
+    // and the guard is what keeps it true rather than remembered.
+    if ((OFF_DW_BND0 + 12) >= ZHAO_DRAW_WARPED_FORM_BYTES)
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.displacement_bound is its last byte; add a df_flags_c-style bypass");
+    // The extension must start clear of the sixteen shared bytes, or the two
+    // capture arms below would write the same register from one byte.
+    if (OFF_DW_PROG < (OFF_DF_FLAGS + 2))
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.warp_program overlaps DrawForm's shared prefix");
+    // The four params and the four attributes are read by ONE indexed loop
+    // each, so their elements must be contiguous 4-byte words in declaration
+    // order. If the ABI ever spaces them differently the loop reads the wrong
+    // bytes silently, which is the flattering direction: it produces numbers.
+    if ((ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_1 != OFF_DW_PAR0 + 4)
+        || (ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_2 != OFF_DW_PAR0 + 8)
+        || (ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_3 != OFF_DW_PAR0 + 12))
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.params[] is no longer four contiguous words");
+    if ((ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_1 != OFF_DW_ATT0 + 4)
+        || (ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_2 != OFF_DW_ATT0 + 8)
+        || (ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_3 != OFF_DW_ATT0 + 12))
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.attributes[] is no longer four contiguous words");
+    if ((ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_1 != OFF_DW_BND0 + 4)
+        || (ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_2 != OFF_DW_BND0 + 8))
+      $fatal(1, "zhao_cmd_exec: DrawWarpedForm.displacement_bound[] is no longer three contiguous words");
     if (ZHAO_PUBLISH_RESOURCE_BYTES != 48)
       $fatal(1, "zhao_cmd_exec: PublishResource record size moved; re-read the offsets");
     // Its last field byte (`kind`) must land BEFORE the record's last byte, or
@@ -1165,8 +1292,48 @@ module zhao_cmd_exec
   localparam int unsigned DQ_CLIP_LO   = 145;
   localparam int unsigned DQ_FRAME_LO  = 161;
   localparam int unsigned DQ_SUB_LO    = 177;
-  localparam int unsigned DRAW_W       = 185;
+  // W04. ONE BIT in the common draw item, and the eleven-field snapshot lives
+  // in the RAM-shaped sidecar below. Directive 7.1 asks for exactly this split
+  // BY NAME: "The common draw item holds `warp_enabled` plus a compact
+  // descriptor cookie, not an 80-byte Warp record copied through every geometry
+  // stage." The cookie here is the draw queue slot itself, which costs nothing
+  // to carry because the reader already has it.
+  localparam int unsigned DQ_WARP_LO   = 185;
+  localparam int unsigned DRAW_W       = 186;
   localparam int unsigned DQW          = $clog2(DRAW_Q);
+
+  // ---- W04's per-draw Warp snapshot, the descriptor sidecar ----------------
+  // W05 forbids a mutable global `current_warp` register: "Snapshot every draw.
+  // Program handle, time, params, attribute mode, attribute resource and
+  // displacement bound belong to THAT draw." Directive 6.2 gives the reason in
+  // the negative -- CMD.EXEC groups some state updates before draws, so a
+  // last-writer Warp setting "could retroactively change older draws".
+  //
+  // IT IS INDEXED BY THE DRAW QUEUE SLOT, so its capacity IS the draw queue's
+  // capacity. Directive 7.1: "The sidecar capacity must cover the current
+  // ordered DRAW queue capacity; it is not permitted to reduce the number of
+  // legal draws merely because only two Warp slots were easy to build." Sharing
+  // the pointer makes that structural rather than checked -- there is no
+  // second capacity to get wrong, and no second overflow rule to declare.
+  //
+  // WRITTEN BY THE SAME ENABLE AS `dq`, AND THAT IS DELIBERATE RATHER THAN
+  // CARELESS. CLAUDE.md's metadata-bank law warns that a DETECTOR whose two
+  // operands share one register enable is blind to every timing fault that
+  // enable participates in. This is the other side of that coin and R229 states
+  // it for the pose: there is no detector here, there is a PAYLOAD, and giving
+  // the payload and its draw one enable means no stall can separate them. A
+  // checker is not needed for a skew that cannot occur; what would need one is
+  // a second, independently clocked path, which is precisely what is refused.
+  localparam int unsigned WD_PROG_LO  = 0;    // 32
+  localparam int unsigned WD_TIME_LO  = 32;   // 32
+  localparam int unsigned WD_PAR_LO   = 64;   // 128, p0 in the low word
+  localparam int unsigned WD_ATTR_LO  = 192;  // 128, a0 in the low word
+  localparam int unsigned WD_ARES_LO  = 320;  // 32
+  localparam int unsigned WD_AMODE_LO = 352;  // 8
+  localparam int unsigned WD_BX_LO    = 360;  // 32
+  localparam int unsigned WD_BY_LO    = 392;  // 32
+  localparam int unsigned WD_BZ_LO    = 424;  // 32
+  localparam int unsigned WARP_W      = 456;
 
   logic [31:0] df_form, df_mset, df_xform;
   logic [ 7:0] df_vpmask, df_weight;
@@ -1178,10 +1345,68 @@ module zhao_cmd_exec
   logic [15:0] dp_clip, dp_frame;
   logic [ 7:0] dp_sub;
 
-  // Both draw opcodes, named once. Every DrawForm capture below is shared by
-  // 0x0305 because the two records agree byte for byte over that range --
-  // pinned by the per-field elaboration guards above, not by this comment.
-  wire df_any_c = (r_op == ZHAO_OP_DRAW_FORM) || (r_op == ZHAO_OP_DRAW_POSED_FORM);
+  // W04's eleven additional fields. Captured ONLY under 0x0304, by the same
+  // rule and for the same reason as the pose above: these bytes are DrawForm's
+  // pad region, and capturing them there would let a 0x0300 leave a warp
+  // snapshot behind for the next 0x0304 to inherit.
+  logic [31:0]        dw_prog, dw_time, dw_ares;
+  logic [127:0]       dw_par, dw_attr;
+  logic [ 7:0]        dw_amode, dw_wflags;
+  logic signed [31:0] dw_bx, dw_by, dw_bz;
+
+  // ALL THREE draw opcodes, named once. Every DrawForm capture below is shared
+  // by 0x0305 and 0x0304 because the three records agree byte for byte over
+  // that range -- pinned by the per-field elaboration guards above, not by this
+  // comment.
+  wire df_any_c = (r_op == ZHAO_OP_DRAW_FORM)
+               || (r_op == ZHAO_OP_DRAW_POSED_FORM)
+               || (r_op == ZHAO_OP_DRAW_WARPED_FORM);
+
+  // ---- W04's DRAW_INVALID, judged at the record's end ----------------------
+  // `design/contracts/GEOM.WARP.md` section 9 gives this class one disposition
+  // and it is not the pose's: "DRAW_INVALID (bad attribute mode, reserved
+  // flags, negative bound, wrong signature) -- refuse BEFORE emitting
+  // meshlets." That differs from R229's clip refusal ON PURPOSE. An
+  // unrepresentable clip degrades to the bind pose because refusing it would
+  // make a creature vanish; a malformed WARP record cannot be degraded the same
+  // way, because drawing it unwarped would show a confidently wrong SHAPE and
+  // nothing would report it. The record is illegal, so the draw is refused.
+  //
+  // WHAT IS **NOT** CHECKED HERE, so no reader thinks it was forgotten. The
+  // legality of `attribute_mode` itself, and the zero-ness of the four pad
+  // bytes, are the GENERATED decoder's (ZH_ABI_BAD_VALUE / the pad map), which
+  // is what directive 6.3 means by "payload validation is generated/centralized
+  // with the decoder". Re-checking them here would be a second implementation
+  // of a ratified rule -- `uncashed_cheques.py` check 3's failure. These three
+  // are the ones no generated check can see, because each is a relationship
+  // BETWEEN fields or a sign, not a value:
+  //
+  //   * 6.3: "attribute_mode 0 uses all four inline words and requires
+  //     warp_attributes=0" and "attribute_mode 1 requires a resident matching
+  //     WARP_ATTRIBUTES resource; inline attribute words must be zero to avoid
+  //     unused ambiguous content." Both directions, so neither mode can carry a
+  //     value the other mode's consumer would read.
+  //   * 6.3: "warp_flags and pads must be zero." `warp_flags` is a FIELD, not a
+  //     pad, so the generated pad map does not cover it.
+  //   * 6.3 and W11: "displacement bounds must be nonnegative signed fx
+  //     values." A negative bound is refused, NEVER absolute-valued into
+  //     something usable -- `zhao_geom_warp`'s own `C_NEG_BOUND` says the same
+  //     from the other end.
+  wire dw_attr_zero_c = (dw_attr == 128'd0);
+  wire dw_mode_ok_c   =
+      ((dw_amode == WARP_ATTR_INLINE4) && (dw_ares == 32'd0))
+   || ((dw_amode == WARP_ATTR_STREAM4) && (dw_ares != 32'd0) && dw_attr_zero_c);
+  wire dw_bound_ok_c  = !dw_bx[31] && !dw_by[31] && !dw_bz[31];
+  wire dw_ok_c        = dw_mode_ok_c && dw_bound_ok_c && (dw_wflags == 8'd0);
+
+  // A 0x0304 whose `warp_program` is ZERO is an ORDINARY DRAW and is legal.
+  // `spec/commands.zidl` says so at the field and W09 is why it must stay that
+  // way: "DrawForm disables Warp, performs zero Warp lookups/evaluations, and
+  // preserves every existing output." A record that names no program asks for
+  // no warp, so it is not held to the warp rules -- checking it against them
+  // would refuse a legal draw, which is the narrowing this packet forbids.
+  wire dw_armed_c = (r_op == ZHAO_OP_DRAW_WARPED_FORM) && (dw_prog != 32'd0);
+  wire dw_bad_c   = dw_armed_c && !dw_ok_c;
 
   // The pose is representable, judged at the record's end from the captured
   // key. `clip_id` is the only field with a ceiling: `frame_no` past a clip's
@@ -1211,6 +1436,9 @@ module zhao_cmd_exec
   assign dq_full = (dq_occ >= (DQW+1)'(DRAW_Q));
 
   logic [DRAW_W-1:0] dq_head;
+  // W04's sidecar, the same depth and the same pointers as `dq`.
+  logic [WARP_W-1:0] wq [0:DRAW_Q-1];
+  logic [WARP_W-1:0] wq_head;
   assign draw_form_o           = dq_head[DQ_FORM_LO   +: 32];
   assign draw_material_set_o   = dq_head[DQ_MSET_LO   +: 32];
   assign draw_transform_o      = dq_head[DQ_XFORM_LO  +: 32];
@@ -1222,6 +1450,16 @@ module zhao_cmd_exec
   assign draw_clip_id_o        = dq_head[DQ_CLIP_LO   +: 16];
   assign draw_frame_no_o       = dq_head[DQ_FRAME_LO  +: 16];
   assign draw_sub_o            = dq_head[DQ_SUB_LO    +: 8];
+  assign draw_warp_en_o        = dq_head[DQ_WARP_LO];
+  assign draw_warp_program_o   = wq_head[WD_PROG_LO  +: 32];
+  assign draw_warp_time_o      = wq_head[WD_TIME_LO  +: 32];
+  assign draw_warp_par_o       = wq_head[WD_PAR_LO   +: 128];
+  assign draw_warp_attr_o      = wq_head[WD_ATTR_LO  +: 128];
+  assign draw_warp_attr_res_o  = wq_head[WD_ARES_LO  +: 32];
+  assign draw_warp_attr_mode_o = wq_head[WD_AMODE_LO +: 8];
+  assign draw_warp_bx_o        = signed'(wq_head[WD_BX_LO +: 32]);
+  assign draw_warp_by_o        = signed'(wq_head[WD_BY_LO +: 32]);
+  assign draw_warp_bz_o        = signed'(wq_head[WD_BZ_LO +: 32]);
 
   // ---- PublishResource staging (R17): a ring of EVENTS, then a PENDING queue
   // An upload is an event (two uploads are two copies), so it stages like a
@@ -1514,6 +1752,12 @@ module zhao_cmd_exec
       df_vpmask <= 8'd0; df_weight <= 8'd0; df_flags <= 16'd0;
       df_src_hi_nz <= 1'b0;
       dp_clip <= 16'd0; dp_frame <= 16'd0; dp_sub <= 8'd0;   // R229
+      // W04. Reset to the INERT snapshot -- program 0 is "no warp", which
+      // is the one value that cannot be mistaken for an armed draw.
+      dw_prog <= 32'd0; dw_time <= 32'd0; dw_ares <= 32'd0;
+      dw_par <= 128'd0; dw_attr <= 128'd0;
+      dw_amode <= 8'd0; dw_wflags <= 8'd0;
+      dw_bx <= 32'sd0; dw_by <= 32'sd0; dw_bz <= 32'sd0;
       dq_wp <= '0; dq_rp <= '0; dq_head <= '0;
       pr_res <= 32'd0; pr_hlo <= 32'd0; pr_hhi <= 32'd0; pr_vram <= 32'd0;
       pr_len <= 32'd0; pr_crc <= 32'd0; pr_gen <= 16'd0; pr_epoch <= 16'd0;
@@ -1540,6 +1784,8 @@ module zhao_cmd_exec
       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
       draw_src_truncated_o <= 32'd0;
       posed_draws_issued_o <= 32'd0; pose_clip_refused_o <= 32'd0;   // R229
+      wq_head <= '0;                                                 // W04
+      warp_draws_issued_o <= 32'd0; warp_draw_refused_o <= 32'd0;    // W04
       poisoned <= 1'b0;
       st <= EX_STAGE; cv <= 1'b0; cw <= 5'd0;
       proj_cfg_we_o <= 1'b0; proj_cfg_view_o <= 1'b0;
@@ -1716,6 +1962,46 @@ module zhao_cmd_exec
                 if (rpos == 16'(OFF_DP_SUB)) dp_sub <= pkt_byte_i;
               end
 
+              // ---- DrawWarpedForm's Warp snapshot alone (W04) --------------
+              // Gated on the WARPED opcode only, for the reason immediately
+              // above: these bytes are DrawForm's pad region, and a 0x0300
+              // capturing them would leave a program handle and a bound behind
+              // for the next 0x0304 to inherit. W05's snapshot is only a
+              // snapshot if nothing else can write it.
+              //
+              // The four-word groups are read by an indexed loop rather than
+              // four copied lines, and the elaboration guards above are what
+              // make that legal: they assert the words are contiguous and in
+              // declaration order, so the loop cannot quietly read the wrong
+              // bytes if the ABI moves.
+              if (r_op == ZHAO_OP_DRAW_WARPED_FORM) begin
+                if ((rpos >= 16'(OFF_DW_PROG)) && (rpos < 16'(OFF_DW_PROG + 4)))
+                  dw_prog <= {pkt_byte_i, dw_prog[31:8]};
+                if ((rpos >= 16'(OFF_DW_TIME)) && (rpos < 16'(OFF_DW_TIME + 4)))
+                  dw_time <= {pkt_byte_i, dw_time[31:8]};
+                // p0..p3 and a0..a3: one 128-bit shift each, low word first,
+                // which is the same little-endian accumulate the 32-bit fields
+                // use with four times the run.
+                if ((rpos >= 16'(OFF_DW_PAR0)) && (rpos < 16'(OFF_DW_PAR0 + 16)))
+                  dw_par <= {pkt_byte_i, dw_par[127:8]};
+                if ((rpos >= 16'(OFF_DW_ATT0)) && (rpos < 16'(OFF_DW_ATT0 + 16)))
+                  dw_attr <= {pkt_byte_i, dw_attr[127:8]};
+                if ((rpos >= 16'(OFF_DW_ARES)) && (rpos < 16'(OFF_DW_ARES + 4)))
+                  dw_ares <= {pkt_byte_i, dw_ares[31:8]};
+                if (rpos == 16'(OFF_DW_AMODE)) dw_amode  <= pkt_byte_i;
+                if (rpos == 16'(OFF_DW_WFLG))  dw_wflags <= pkt_byte_i;
+                // The bound is THREE separate words, not one 96-bit shift:
+                // each is compared for sign on its own and each is a separate
+                // port, so keeping them apart here costs nothing and means the
+                // refusal can say which component was negative.
+                if ((rpos >= 16'(OFF_DW_BND0)) && (rpos < 16'(OFF_DW_BND0 + 4)))
+                  dw_bx <= signed'({pkt_byte_i, dw_bx[31:8]});
+                if ((rpos >= 16'(OFF_DW_BND0 + 4)) && (rpos < 16'(OFF_DW_BND0 + 8)))
+                  dw_by <= signed'({pkt_byte_i, dw_by[31:8]});
+                if ((rpos >= 16'(OFF_DW_BND0 + 8)) && (rpos < 16'(OFF_DW_BND0 + 12)))
+                  dw_bz <= signed'({pkt_byte_i, dw_bz[31:8]});
+              end
+
               // ---- PublishResource (R17) ------------------------------------
               if (r_op == ZHAO_OP_PUBLISH_RESOURCE) begin
                 if ((rpos >= 16'(OFF_PR_RES)) && (rpos < 16'(OFF_PR_RES + 4)))
@@ -1831,16 +2117,66 @@ module zhao_cmd_exec
                   if ((r_op == ZHAO_OP_DRAW_POSED_FORM) && !dp_clip_ok_c) begin
                     `ZHAO_EXEC_INC(pose_clip_refused_o);
                   end
-                  if (dq_full) begin
+                  // W04 / contract section 9. DRAW_INVALID is judged HERE, at
+                  // the record's end and BEFORE the enqueue, which is what
+                  // "refuse before emitting meshlets" means at this block's
+                  // level: an entry that never reaches `dq` never reaches
+                  // GEOM.DRAWJOB, so no meshlet is emitted for it. Counted
+                  // whether or not the queue had room, for the same reason the
+                  // clip refusal is: an illegal record is a property of the
+                  // record, not of the backpressure it met.
+                  if (dw_bad_c) begin
+                    `ZHAO_EXEC_INC(warp_draw_refused_o);
+                  end
+                  // THE REFUSAL IS JUDGED BEFORE THE CAPACITY, AND THE ORDER IS
+                  // LOAD-BEARING. Contract section 9 puts DRAW_INVALID's
+                  // disposition as "refuse BEFORE emitting meshlets", and a
+                  // refused record never needs a queue slot at all -- so asking
+                  // `dq_full` about it first would count a `draw_overflow_o`
+                  // for a draw that wanted no room, AND POISON THE WHOLE PACKET
+                  // over a record that was going to be dropped anyway. One
+                  // malformed draw would then cost a frame.
+                  //
+                  // Written the other way round first, and caught by re-reading
+                  // the arm rather than by any gate: every counter still
+                  // balanced and every directed case still passed, because no
+                  // case presented a full queue and a bad record together. That
+                  // is the shape this repo keeps finding -- a wrong answer
+                  // nothing is looking at.
+                  if (dw_bad_c) begin
+                    // Refused whole. The draw is NOT enqueued, NOT degraded to
+                    // an unwarped DrawForm, and the packet is NOT poisoned --
+                    // one malformed draw is not a malformed frame, and the
+                    // other draws in it are lawful.
+                    //
+                    // WHY NOT DEGRADE, restated where the code does it: an
+                    // unwarped draw of a creature whose record asked for a
+                    // deformation is a confidently wrong SHAPE that nothing
+                    // downstream could detect. Section 9's table puts
+                    // DRAW_INVALID in the refuse column and R229's degrade
+                    // rule in the other, and this is the difference between
+                    // them.
+                    ;
+                  end else if (dq_full) begin
                     poisoned <= 1'b1;
                     `ZHAO_EXEC_INC(draw_overflow_o);
                   end else begin
-                    dq[dq_wp[DQW-1:0]] <= {dp_sub, dp_frame, dp_clip,
+                    dq[dq_wp[DQW-1:0]] <= {dw_armed_c,
+                                           dp_sub, dp_frame, dp_clip,
                                            ((r_op == ZHAO_OP_DRAW_POSED_FORM)
                                             && dp_clip_ok_c),
                                            ss_src, df_flags_c, df_weight,
                                            df_vpmask, df_xform, df_mset,
                                            df_form};
+                    // W05's snapshot, written by THIS enable into THIS slot.
+                    // The values are the ones this record carried; a 0x0300 or
+                    // a 0x0305 writes the reset values beside its `warp_en`
+                    // low, so a stale snapshot cannot survive behind a draw
+                    // that did not ask for one.
+                    wq[dq_wp[DQW-1:0]] <= dw_armed_c
+                        ? {dw_bz, dw_by, dw_bx, dw_amode, dw_ares,
+                           dw_attr, dw_par, dw_time, dw_prog}
+                        : {WARP_W{1'b0}};
                     dq_wp <= dq_wp + (DQW+1)'(1);
                   end
                 end else if (r_op == ZHAO_OP_PUBLISH_RESOURCE) begin
@@ -2267,9 +2603,20 @@ module zhao_cmd_exec
               // lockstep-corruption shape. `posed_draws_issued_o` is a strict
               // subset of `draws_issued_o` by construction.
               if (draw_posed_o) `ZHAO_EXEC_INC(posed_draws_issued_o);
+              // W04, and the SAME rule applied: read the bit out of `dq_head`,
+              // the register the consumer just accepted, never out of `r_op`.
+              // `warp_draws_issued_o` is a strict subset of `draws_issued_o`.
+              if (draw_warp_en_o) `ZHAO_EXEC_INC(warp_draws_issued_o);
             end
           end else if (dq_occ != '0) begin
             dq_head      <= dq[dq_rp[DQW-1:0]];
+            // W04. ONE index, ONE enable, ONE cycle -- the draw item and its
+            // Warp snapshot are read as a pair, exactly as they were written
+            // as a pair. This is the register-enable discipline R229 adopted
+            // for the pose, and it is why `draw_warp_*_o` needs no identity
+            // tag: there is no cycle in which `dq_head` names one draw and
+            // `wq_head` names another.
+            wq_head      <= wq[dq_rp[DQW-1:0]];
             draw_valid_o <= 1'b1;
           end else begin
             `ZHAO_EXEC_INC(packets_committed_o);

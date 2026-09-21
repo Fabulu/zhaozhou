@@ -1545,6 +1545,22 @@ module tb_zhao_console_core_smoke
   // RC 1 means and it is not a smoke run.
   logic        geom_job_valid_o;
   logic [23:0] geom_job_form_idx_o;
+  // W04's twelve, declared for the SAME reason and found the same way: the
+  // core is bound with `.*`, so an undeclared port is not an unchecked port --
+  // verilation FAILS and every form of this smoke returns RC 1 in about a
+  // second, which is the duration rather than the exit code giving it away.
+  logic        cmd_draw_warp_en_o;
+  logic [31:0] cmd_draw_warp_program_o;
+  logic [31:0] cmd_draw_warp_time_o;
+  logic [127:0] cmd_draw_warp_par_o;
+  logic [127:0] cmd_draw_warp_attr_o;
+  logic [31:0] cmd_draw_warp_attr_res_o;
+  logic [ 7:0] cmd_draw_warp_attr_mode_o;
+  logic signed [31:0] cmd_draw_warp_bx_o;
+  logic signed [31:0] cmd_draw_warp_by_o;
+  logic signed [31:0] cmd_draw_warp_bz_o;
+  logic [31:0] cmd_exec_warp_draws_o;
+  logic [31:0] cmd_exec_warp_draw_refused_o;
 
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed

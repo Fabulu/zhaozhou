@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = a9ee401a0a066c6771623710f264198953a4461c31d6229661a928bcec2dfd71
-//   zidl_sha256         = bfb5a6204077d0d62052b7b9247b0910fcf7fb265a2890176f83f07d2ec63a2c
+//   abi_identity_sha256 = 8ba03b43686282a3c4bd70b7826cfbc736228f3dc3bca37432a004c717aa17e3
+//   zidl_sha256         = 54abc34d6b67f51675a93b8c79976bd9ff1a226aec87e4dcbce52002bc730bcd
 
 // ---------------------------------------------------------------- abi ---
 
@@ -65,6 +65,11 @@ export const FOG_OFF = 0 as const;
 export const FOG_LINEAR = 1 as const;
 export const ZHAO_ENUM_FOG_MODE: readonly number[] = [0, 1];
 
+// enum warp_attribute_mode: u8 on the wire (capture_format.md 3.2 step 7)
+export const WARP_ATTR_INLINE4 = 0 as const;
+export const WARP_ATTR_STREAM4 = 1 as const;
+export const ZHAO_ENUM_WARP_ATTRIBUTE_MODE: readonly number[] = [0, 1];
+
 // opcodes
 export const ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 export const ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
@@ -90,6 +95,7 @@ export const ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
 export const ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 export const ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
 export const ZHAO_OP_DRAW_POSED_FORM = 0x0305; // 48 B, implemented
+export const ZHAO_OP_DRAW_WARPED_FORM = 0x0304; // 96 B, implemented
 
 // frame packet (capture_format.md 3)
 export const ZHAO_FRAME_MAGIC = 0x314b505a; // 'Z','P','K','1' LE
@@ -464,6 +470,25 @@ export interface ZhRecordDrawPosedForm {
   sub: number; // u8, @20
 }
 
+/** DrawWarpedForm 0x0304: 96-byte record (implemented) */
+export interface ZhRecordDrawWarpedForm {
+  hdr: ZhCmdHeader;
+  form: number; // handle32, @0
+  material_set: number; // handle32, @4
+  transform: number; // handle32, @8
+  viewport_mask: number; // u8, @12
+  semantic_weight: number; // u8, @13
+  flags: number; // u16, @14
+  warp_program: number; // handle32, @16
+  time: number; // u32, @20
+  params: number[]; // fx16 (Q16.16, int32), @24
+  attributes: number[]; // fx16 (Q16.16, int32), @40
+  warp_attributes: number; // handle32, @56
+  attribute_mode: number; // warp_attribute_mode (u8), @60
+  warp_flags: number; // u8, @61
+  displacement_bound: number[]; // fx16 (Q16.16, int32), @64
+}
+
 export interface ZhCommandInfo {
   name: string;
   opcode: number;
@@ -499,8 +524,9 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'SetPopulation', opcode: 0x0303, recordBytes: 48, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DebugTraceArm', opcode: 0xF003, recordBytes: 32, implemented: true, padOffsets: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
   { name: 'DrawPosedForm', opcode: 0x0305, recordBytes: 48, implemented: true, padOffsets: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [] },
+  { name: 'DrawWarpedForm', opcode: 0x0304, recordBytes: 96, implemented: true, padOffsets: [62, 63, 76, 77, 78, 79], enumChecks: [{ offset: 60, size: 1, values: [0, 1] }] },
 ];
-export const ZHAO_COMMAND_COUNT = 24 as const;
+export const ZHAO_COMMAND_COUNT = 25 as const;
 export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
@@ -1067,6 +1093,31 @@ export function zhaoSampleDrawPosedForm(): ZhRecordDrawPosedForm {
   };
 }
 
+export function zhaoSampleDrawWarpedForm(): ZhRecordDrawWarpedForm {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_DRAW_WARPED_FORM,
+      recordBytes: 96,
+      sourceId: 1342242840, // kind 5, module 1, index 24
+      flags: 0,
+    },
+    form: 704643073,
+    material_set: 704643074,
+    transform: 704643075,
+    viewport_mask: 16,
+    semantic_weight: 94,
+    flags: 45880,
+    warp_program: 704643079,
+    time: 0,
+    params: [88599, 154135, 219671, 285207],
+    attributes: [350743, 416279, 481815, 547351],
+    warp_attributes: 704643089,
+    attribute_mode: 1,
+    warp_flags: 184,
+    displacement_bound: [416279, 481815, 547351],
+  };
+}
+
 export function zhaoPackMat4fx(v: ZhMat4fx, w: ZhByteWriter): void {
   w.fx16(v.m00);
   w.fx16(v.m01);
@@ -1386,8 +1437,29 @@ export function zhaoPackDrawPosedForm(r: ZhRecordDrawPosedForm, w: ZhByteWriter)
   w.zeros(11); // pad
 }
 
+export function zhaoPackDrawWarpedForm(r: ZhRecordDrawWarpedForm, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u32(r.form);
+  w.u32(r.material_set);
+  w.u32(r.transform);
+  w.u8(r.viewport_mask);
+  w.u8(r.semantic_weight);
+  w.u16(r.flags);
+  w.u32(r.warp_program);
+  w.u32(r.time);
+  for (let i = 0; i < 4; i++) w.fx16(r.params[i]!);
+  for (let i = 0; i < 4; i++) w.fx16(r.attributes[i]!);
+  w.u32(r.warp_attributes);
+  w.u8(r.attribute_mode);
+  w.u8(r.warp_flags);
+  w.zeros(2); // pad
+  for (let i = 0; i < 3; i++) w.fx16(r.displacement_bound[i]!);
+  w.zeros(4); // pad_1
+}
+
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xA9, 0xEE, 0x40, 0x1A, 0x0A, 0x06, 0x6C, 0x67, 0x71, 0x62, 0x37, 0x10, 0xF2, 0x64, 0x19, 0x89, 0x53, 0xA4, 0x46, 0x1C, 0x31, 0xD6, 0x22, 0x96, 0x61, 0xA9, 0x28, 0xBC, 0xEC, 0x2D, 0xFD, 0x71];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0xBF, 0xB5, 0xA6, 0x20, 0x40, 0x77, 0xD0, 0xD6, 0x20, 0x52, 0xB7, 0xB9, 0x24, 0x7B, 0x09, 0x10, 0xFC, 0xF7, 0xFB, 0x26, 0x5A, 0x28, 0x90, 0x17, 0x6F, 0x83, 0xF0, 0x7D, 0x2E, 0xC6, 0x3A, 0x2C];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x8B, 0xA0, 0x3B, 0x43, 0x68, 0x62, 0x82, 0xA3, 0xC4, 0xBD, 0x70, 0xB7, 0x82, 0x6C, 0xFB, 0xC7, 0x36, 0x22, 0x8F, 0x3D, 0xC3, 0xBC, 0xA3, 0x74, 0x32, 0xA0, 0x04, 0xC7, 0x17, 0xAA, 0x17, 0xE3];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x54, 0xAB, 0xC3, 0x4D, 0x6B, 0x67, 0xF5, 0x16, 0x75, 0xA9, 0x3B, 0x8C, 0x79, 0x97, 0x6B, 0xD9, 0xFF, 0x1A, 0x22, 0x6A, 0xEC, 0x87, 0xE4, 0xDC, 0xBC, 0xE5, 0x20, 0x02, 0xBC, 0x73, 0x0B, 0xCD];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

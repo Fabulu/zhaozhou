@@ -193,6 +193,35 @@ enum fog_mode : u8 {
   FOG_LINEAR = 1;
 }
 
+// [v3, GEOM.WARP decision W06] How `DrawWarpedForm 0x0304` supplies the Warp
+// program's four attribute lanes a0..a3 (spec/form/field-ir.md 7.1, canonical
+// input lanes 6..9).
+//
+// IT IS AN ENUM AND NOT THE DIRECTIVE'S `u8`, AND THAT IS THE WHOLE POINT.
+// reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt 6.3 requires that
+// "other values [are] refused" and, one line further down, that "payload
+// validation is generated/centralized with the decoder". An enum field is
+// exactly that mechanism already built: `tools/abi-gen/src/oracle.ts` emits a
+// payload-relative {offset, size, valid values} row for every enum field and
+// the decoder answers ZH_ABI_BAD_VALUE on anything else (capture_format.md 3.2
+// step 7, active since ABI v2). Declaring it `u8` would have left 6.3's refusal
+// to a hand-written check in whichever consumer remembered to write one --
+// which is the private-switch failure 6.4 names by hand. The WIRE IS
+// IDENTICAL: an enum rides its backing prim, so this is one byte at payload
+// offset 60 either way and W04's 80-byte payload is unchanged.
+//
+// Members ascend additively (the forge_kind member-0 precedent). A third
+// attribute source appends at 2; it never renumbers these two.
+enum warp_attribute_mode : u8 {
+  // Four inline constant words in the record, the same for every vertex of the
+  // draw. `warp_attributes` MUST be 0 (6.3).
+  WARP_ATTR_INLINE4 = 0;
+  // Four per-vertex words from the resident WARP_ATTRIBUTES resource named by
+  // `warp_attributes`. The four inline words MUST be zero (6.3) -- unused
+  // ambiguous content is refused rather than ignored.
+  WARP_ATTR_STREAM4 = 1;
+}
+
 // ---- composed fixed-point containers (element = fx16, Q16.16, spec/qformats.md)
 
 // Axis-aligned footprint in world units.
@@ -1068,4 +1097,164 @@ command DrawPosedForm 0x0305 implemented {
   u16 frame_no;        // key index within the clip
   u8  sub;             // half-key phase -- part of the cache KEY, not padding
   pad[11];             // rsv -- 32-B payload, 48-B record
+}
+
+// ---- warped creature/form draw (owner directive W04, 2026-09-20) ------------
+//
+// DrawWarpedForm: THE ONE COMMAND THAT CAN TURN WARP ON. Until this line
+// existed, `zhao_geom_warp.sv` and `zhao_field_warp_adapter.sv` were both BUILT
+// and both STRUCTURALLY UNREACHABLE -- there was no draw that could set
+// `d_warp_en_i`, so a composed Warp would have sat permanently in its W09
+// bypass. That is not a missing feature at the edge of the design; it is the
+// reason the block could not be composed at all, and it is recorded as such in
+// `design/contracts/GEOM.WARP.md`'s prerequisite table.
+//
+// AUTHORITY. Decision W04 of the owner directive
+// `reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt` (rev 1.1, owner
+// commit `4c256137`, Fabian, 2026-09-20), ratified in
+// `reports/OWNER-RATIFICATION-20260920-WARP.md`: "Add `DrawWarpedForm` at
+// opcode 0x0304, 96-byte record / 80-byte payload. `DrawForm 0x0300` and raw
+// vertex format 0 stay byte-for-byte unchanged. 0x0312-0x031F remain
+// sky-reserved." The layout below is directive 6.1's, field for field.
+//
+// 0x0304 WAS RESERVED IN PROSE BEFORE IT WAS RESERVED IN GRAMMAR, and the
+// `DrawPosedForm 0x0305` note above says so in as many words: "0x0304 IS
+// SPOKEN FOR -- plan W04 allocates it to `DrawWarpedForm` ... and it is not yet
+// in this file, so reading the file alone makes it look free." This line is
+// what makes the file agree with the plan. Re-verified free at this commit:
+// 0x0304 appears in no other `command` declaration here.
+//
+// THE FIRST SIXTEEN PAYLOAD BYTES ARE `DrawForm`'s, BYTE FOR BYTE -- the same
+// discipline `DrawPosedForm` adopted, and for the same mechanical reason: it
+// lets CMD.EXEC capture all three draw opcodes with ONE set of field offsets,
+// so the executor cannot develop a second opinion about where a form handle
+// lives.
+//
+//     offset     0            4              8           12       13
+//     DrawForm   form         material_set   transform   vp_mask  weight
+//     offset     14           16             20          24       40
+//     DrawForm   flags        --             --          --       --
+//     this       flags        warp_program   time        params   attributes
+//     offset     56             60         61          62    64      76
+//     this       warp_attrs     attr_mode  warp_flags  rsv   bound   rsv
+//
+// `DrawForm` 0x0300 is UNTOUCHED and keeps its meaning: a draw that names no
+// Warp program is an ORDINARY draw and W09 requires it to perform zero Warp
+// lookups and zero Warp evaluations. Every committed capture stays valid; a
+// decoder built before this line reports ZH_ABI_UNKNOWN_OPCODE on 0x0304, a
+// clean refusal. Raw vertex format 0 is not touched here or anywhere -- W04
+// says byte-for-byte and directive section A puts "reinterpreting reserved
+// bytes" of format 0 on the prohibited list.
+//
+// NO HIDDEN STATE, and this is decision W05 rather than a taste. Directive 6.2
+// refuses `SetWarp` + ordinary `DrawForm` BY NAME: CMD.EXEC groups some state
+// updates before draws, so a mutable last-writer `current_warp` register could
+// RETROACTIVELY CHANGE OLDER DRAWS. It equally refuses making every `DrawForm`
+// read a mutable per-instance Warp table, which would change the meaning of old
+// commands. This record carries its own snapshot -- program, time, params,
+// attribute mode, attribute resource and displacement bound all belong to THIS
+// draw -- and avoids that entire class. It is the same argument `DrawPosedForm`
+// makes against `SetPose`, one level along.
+//
+// THE FIELDS, and why each is here.
+//
+//   warp_program   the W-profile field program. A `program` handle, the SAME
+//                  kind `TerrainField 0x0200` uses for the Earth profile, and
+//                  for the same reason: it names a cartridge PROGRAM page and
+//                  it is resolved by the ONE shared program-binding authority
+//                  (W07) -- handle -> canonical program -> prepared plan /
+//                  resident slot. W07 is explicit that "a handle is not a
+//                  content hash; a content hash is not a physical resident
+//                  slot", so this field is a HANDLE and nothing else. Zero
+//                  means NO WARP: an ordinary draw that happens to use this
+//                  opcode, which is legal and is the bypass W09 protects.
+//   time           u32 TICK DATA, bit-cast and not converted, canonical input
+//                  lane 10. THIS DRAW'S tick and never a clock read -- a Warp
+//                  evaluated from a free-running counter would give two
+//                  different answers to the two cameras, and GEOM.WARP is
+//                  VIEW-INDEPENDENT by contract section 1.
+//   params[4]      p0..p3, canonical input lanes 11..14. FOUR, not three:
+//                  directive conflict C01 records that `spec/form/field-ir.md`
+//                  7.1 listed fifteen warp input fields and then wrote "(14)"
+//                  after them, and decision W01 rules that THE FIELDS ARE RIGHT
+//                  AND THE COUNT WAS WRONG. Building to fourteen drops p3, and
+//                  a dropped lane does not read as missing -- it reads as
+//                  whatever the Field front cleared that register to.
+//   attributes[4]  a0..a3 INLINE4, canonical input lanes 6..9. Constant across
+//                  the draw. Must be zero under STREAM4.
+//   warp_attributes  the versioned WARP_ATTRIBUTES resource for STREAM4, a
+//                  `resource` handle on `PublishResource 0x0030`'s generation
+//                  law. Must be zero under INLINE4. W06 forbids the three
+//                  cheaper alternatives BY NAME: do not steal format-0 reserved
+//                  bytes, do not commandeer vertex formats 1/2, and do not
+//                  synthesize attributes from guessed UV units.
+//   attribute_mode   the enum above. Generated legality, ZH_ABI_BAD_VALUE.
+//   warp_flags     reserved zero in this revision. A future flag lands here and
+//                  not in `flags`, which is `DrawForm`'s word and keeps
+//                  `DrawForm`'s bit meanings including R28's cull mode.
+//   displacement_bound[3]
+//                  THE W11 DECLARATION, and it is load-bearing in two separate
+//                  places rather than one. Visibility is conservative BEFORE
+//                  fetch and deform, so MESHFETCH/CULL expand the draw's
+//                  world-space bounds by this triple before culling and account
+//                  for it in LOD error; and the RETURNED displacement is
+//                  runtime-checked against it, |d[k]| > bound[k] POISONING
+//                  the meshlet. Each component is a NONNEGATIVE signed fx: a
+//                  negative one is a DRAW_INVALID refused before any meshlet is
+//                  emitted (contract section 9), never absolute-valued into
+//                  something usable. And directive 5.6: "do not clamp the
+//                  displacement to the bound and pretend the program computed
+//                  that clamp" -- `zhao_geom_warp` preserves the offending
+//                  value on its poison port precisely so the evidence survives
+//                  the refusal.
+//
+// WHAT IS DELIBERATELY ABSENT.
+//
+//   clip_id /      NOT fields. This is `DrawForm`'s extension, not
+//   frame_no / sub `DrawPosedForm`'s. A warped POSED draw is a third opcode if
+//                  the owner ever asks for one; synthesising it by widening
+//                  this record would make two commands' payloads disagree about
+//                  what lives at offset 16, which is the one property the
+//                  shared 16-byte prefix exists to guarantee.
+//   amplitude /    NOT fields, and W03 forbids them BY NAME along with a
+//   blend weight   Jacobian, finite differences and any extra normalization.
+//                  The normal-deformation law is authored by the WARP PROGRAM
+//                  (W17), not by the command surface and not by the shell.
+//   generation /   NOT fields, on `DrawPosedForm`'s stated boundary: the
+//   epoch          residency generation is published by `PublishResource
+//                  0x0030` and belongs to the resident-handle layer. A
+//                  game-facing record cannot state a generation it does not own.
+//
+// VERSION DECISION: `abi version` STAYS 3. Directive 6.4 asks for exactly this
+// and asks that the decision be RECORDED rather than inherited from
+// contradictory historical comments. The precedent is now six deep --
+// PublishResource 0x0030 / TerrainEpoch 0x0220 / SetPost 0x0040 /
+// SetPopulation 0x0303 / DebugTraceArm 0xF003 / DrawPosedForm 0x0305. No
+// opcode, field set, size or offset of an existing command moves, so every
+// committed capture stays valid and old decoders reject the unknown opcode.
+//
+// APPENDED AT THE END OF THE FILE, under owner ruling R171: `sample.ts` stamps
+// a sample's `source_id` from the command's INDEX in this file, so an insert
+// beside `DrawForm` renumbers every command after it and churns nine goldens
+// for no change in meaning. Position carries no semantics; the opcode does.
+//
+// 0x0306..0x030F remain free; 0x0310 is DrawSky and 0x0311 is SetEnvironment,
+// with 0x0312..0x031F still sky-reserved (W04 restates that reservation).
+command DrawWarpedForm 0x0304 implemented {
+  handle32[form] form;
+  handle32[material_set] material_set;
+  handle32[transform] transform;
+  u8 viewport_mask;
+  u8 semantic_weight;
+  u16 flags;                        // DrawForm 0x0300's flags, same bits
+  handle32[program] warp_program;   // W-profile program; 0 = no warp (W09 bypass)
+  u32 time;                         // THIS draw's tick, lane 10; never a clock read
+  fx16 params[4];                   // p0..p3, lanes 11..14 (FOUR -- W01)
+  fx16 attributes[4];               // a0..a3 INLINE4, lanes 6..9
+  handle32[resource] warp_attributes;  // STREAM4 source; 0 under INLINE4
+  warp_attribute_mode attribute_mode;  // generated legality: ZH_ABI_BAD_VALUE
+  u8 warp_flags;                    // reserved 0 in this revision
+  pad[2];                           // rsv
+  fx16 displacement_bound[3];       // W11, each >= 0, world-space componentwise
+  pad[4];                           // rsv -- 80-B payload, 96-B record (W04)
 }
