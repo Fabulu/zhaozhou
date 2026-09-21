@@ -7,7 +7,8 @@ share of `zhao_surface_sheet`'s single request port — a separate file because
 is "an arbiter nobody can point at")
 **Law:** owner rulings **R194** (the seam dig accepted, the page format frozen
 at 64×64) and **R221** (the `ST_MISS` law).
-**Test:** `tests/terrain/sheetseam_rtl_directed.cpp` — 81 checks, built and run.
+**Test:** `tests/terrain/sheetseam_rtl_directed.cpp` — **103 checks**, built and run
+(81 before owner ruling R231 added the `before` plane; cases 13 and 14 are its).
 
 ---
 
@@ -201,6 +202,77 @@ handle32 beside them; it must not be synthesised from `cmd_patch_id_i` (§2).
 > synthesis — so the constraint above is **satisfiable and needs no new
 > identity law**. Only the carrier is missing.
 
+> **DISCHARGED 2026-09-21 (deltalaw) — OWNER RULING R231 TOOK THE DELTA.**
+> The note below was right, and the cost it recorded before the decision was
+> close but LOW. What was actually built, and what it actually costs:
+>
+> * **`sheet_before_o`**, beside `sheet_strength_o`. Bake ACCUMULATES, so what
+>   is added to it must be a CHANGE; the pair `{before, after}` is what S3 has
+>   said this seam owes its consumer since the stamp was written.
+> * **A `stamp_results` SINK (`sr_*`)** — `surf_res_before_o`'s FIRST CONSUMER
+>   IN THIS TREE. The PAGEIO packet had measured *"ZERO CONSUMERS of
+>   `res_texel_i` / `res_strength_i` / `res_before_i` in `fpga/` OR `tests/`"*;
+>   that stops being true here. `zhao_surface_stamp` gains `res_handle_o` so
+>   the stream can be ROUTED to a patch — `st_handle` presented, not a new
+>   register and not a derived identity, which is choice C4 satisfied by
+>   CARRYING as §7 below says it can be.
+> * **`sr_ready_o` is constant high**, and that is a decision: the stamp's rate
+>   budget is one texel per clock and it is the PLAYER'S OWN ACTION. A seam
+>   that backpressured it would drop frames to protect a bake. A result the
+>   plane cannot HOLD is dropped and COUNTED (`zhao_terrain_psmux`'s rule).
+>
+> **THE PRICE, CORRECTED.** The note says "one more 1,089-byte M10K half", and
+> R231 records that figure. The plane is **1,089 × 9 bits** — a ninth `seen`
+> bit per entry, not eight — so it is 9,801 bits rather than 8,712, plus a
+> 32-bit handle, an 11-bit occupancy count and two flags. Nine bits is free in
+> M10K terms (the word COUNT is what picks the block, and 1,089 words is the
+> same either way), so the figure is right in blocks and light in bits. It is
+> recorded corrected rather than quietly accepted.
+>
+> **AND A NOTE ON "ONE M10K", WHICH IS THIS FILE'S OWN CLAIM AND IS NOT YET
+> MEASURED.** §3 says 1,089 bytes "= 8,712 bits = one M10K". An M10K is 1,024
+> words deep in ×8/×10 mode and the plane is **1,089 words**, so depth — not
+> bit count — may force a second block, and there are now two planes. This
+> packet may not run Quartus, so it is flagged rather than decided:
+> `F-SHEETSEAM1` already carries `min_m10k` as well as `max_m10k` precisely
+> because nobody has measured whether these stores infer RAM at all. **Do not
+> quote "one M10K" as measured.**
+>
+> **THE PLANE CLEARS ON CONSUME**, and two simpler schemes were designed and
+> rejected with their reasons (the RTL header carries them):
+> * a clear-at-`bake_done` **sweep** has a 1,089-cycle window in which an
+>   arriving stamp is silently wiped — it UNDER-digs, which is R221's refused
+>   *"dig zero: a visible no-op"*;
+> * an **epoch tag** aliases (a 1-bit toggle mistakes epoch N−2 for N, and
+>   widening only moves the period); an aliased entry reads as `seen` with a
+>   stale `before` and DOUBLE-DIGS — the very defect R231 repaired,
+>   reintroduced by the instrument meant to prevent it.
+>
+> Clearing on the dig's own read has neither hazard and costs nothing: the dig
+> visits every vertex, so it retires exactly the deltas the scar just absorbed.
+> A dig abandoned mid-lattice leaves the vertices it never reached still
+> `seen`, which is right — they have not been dug. **Idempotence is a
+> structural property of this block, not an assertion about it.**
+>
+> **NO COLD-START HOLE.** A patch is only baked BECAUSE something stamped it,
+> and those stamps arrive here first reporting `before = 0` on a fresh sheet.
+> `kStampDepthTable[0]` is 0, so the first bake digs the full depth exactly as
+> the absolute law did.
+>
+> **TWO NEW WAYS TO REFUSE, BOTH ON R221's EXISTING LAW AND NEITHER A NEW ONE.**
+> `bk_depth_sheet_o` also requires that the plane is THIS record's or empty
+> (`bf_ok_c`), and that no result has been dropped since it was emptied
+> (`bf_torn_q`). Without the first, a record would dig its crater from another
+> patch's pre-blend strengths — §6's record-swap defect through the door R231
+> opened, and invisible to every counter for the same reason R231 itself was.
+> `bf_torn_q` clears on ANY retirement, served or fallen back: gated on a
+> SERVED dig it could never clear at all, because a fallback leaves `serve_q`
+> low, and the sheet law would be silently dead for the life of the machine
+> with every counter agreeing.
+>
+> *The original note follows, unedited, because the cost it recorded before the
+> decision is exactly what it was for.*
+>
 > **AND ONE THING THIS BLOCK SHOULD KNOW ABOUT ITS OWN READ (D-TERRCMD-A).**
 > `design/contracts/SURFACE.STAMP.md` S3 rejects, by name, *"emitting only the
 > new value and letting BAKE re-read — a second reader on a store whose whole
@@ -232,6 +304,16 @@ is refused here rather than taken quietly.
 | `dig_stall_cycles_o` | bake was ready and we were not | `dig_ready` held through a jumping cursor |
 | `bad_texels_o` | an address no lattice vertex can produce | an odd texel |
 | `stray_done_o` | `bake_done` with no record in flight | a bare pulse |
+| `before_texels_o` | **R231**: a `stamp_results` beat absorbed into the plane | stimulus; fired at 1,089 in case 13 |
+| `sr_dropped_o` | ... and one the plane could not hold | a result for a second handle while the first is live |
+| `before_torn_o` | a RECORD diverted to the disc because of a drop | the same, then a record offered |
+
+`sr_dropped_o` and `before_torn_o` are two counters and not one deliberately:
+the first says a RESULT was lost, the second says a RECORD paid for it. A
+design that loses a result for a patch nobody bakes moves only the first. That
+is R95's *discriminate, do not merely move*, and case 14 pins it by asserting
+`miss_texels_o` is still zero while `before_torn_o` reads one — so the fallback
+cannot be misread as a residency problem.
 
 Every one is asserted **silent** on the clean path and then **fired**. The one
 structural invariant that no legal input can reach — two reads in flight —
