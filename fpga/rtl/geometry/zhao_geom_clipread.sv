@@ -97,7 +97,7 @@
 // Raising the tier needs a fact the tree does not contain. `zhao_geom_drawjob`
 // resolves `form` -> MESH_STREAM page through 5f.1's directory, and
 // `zref::creature_page::Record` keys each kind-8 LADDER row by a
-// `form_index` -- so kind-8 -> form IS ruled. **`zref::clip_page`'s header is
+// `form_index`. **`zref::clip_page`'s header is
 // {magic, version, bone_count, clip_count, dir_off, frames_off} and carries no
 // form index, no creature-type key and no handle of any kind.** Nothing
 // anywhere says which clip bank belongs to which form. Inventing that mapping
@@ -105,6 +105,38 @@
 // block choosing an ABI the spec declines to define, which is the refusal
 // entries I7, I33 and CMD.EXEC's draw arm already carry. It is filed as an
 // owner decision instead.
+//
+// CORRECTED 2026-09-21 (FORMIDX). THE SENTENCE ABOVE USED TO END "-- so
+// kind-8 -> form IS ruled", AND THAT IS TRUE OF THE LADDER TABLE AND FALSE OF
+// THE BODY -- which is the half THIS BLOCK READS. It is exactly the shape
+// POSEPAGE found one layer up ("true of a FRAME and false of a PAGE"),
+// repeated inside the page it was found on, and it matters because the
+// costing of the owner decision rested on it.
+//
+// MEASURED, not inferred, from the committed golden
+// `tests/golden/creature_ladder/ladder_page_body_v1.bin`: 448 bytes,
+// THREE ladder records -- form_index 256, 257 and 40983 -- and `body_off`
+// 192 naming exactly ONE 6-bone body section. `tools/pack/mkcreatureladder.py`
+// makes that the FORMAT rather than the fixture: `build(records, body_off=0,
+// bones=None)` takes a LIST of records and a SINGLE bone list, and
+// `build_body` packs "<IHBBII" -- magic, version, bone_count, flags,
+// bones_off, reserved. **There is no form index anywhere in the body header.**
+//
+// So one kind-8 page is an N-form LADDER TABLE plus a 1-creature SKELETON, and
+// the two halves have DIFFERENT CARDINALITY. `zhao_geom_ladderbank` reads the
+// first half as a bank of ROWS=16 creature types keyed by `form_index`;
+// `spec/creature_rules.md` 5 describes kind 8 as ONE creature ("compiled part
+// table, bone hierarchy (parent-before-child, <=32), attachment points, hitbox
+// class + per-bone 8-corner hitboxes"). Both readings are live in this tree and
+// they disagree.
+//
+// THE CONSEQUENCE FOR THIS BLOCK: `res_body_index_o` and `res_clip_index_o`
+// carry each resident page's PUBLICATION index, never a form index, and
+// nothing relates either to the draw's form. The wrong-animal failure this
+// section describes is therefore available on the SKELETON exactly as it is on
+// the clip bank, and `bone_mismatch_o` is equally blind to it when the bone
+// counts agree. A ruling that gives only the kind-9 header a form key closes
+// HALF of this.
 //
 // Conservative SystemVerilog subset only (charter 2). No divider; the one
 // multiply is the frame stride, which is a small unsigned product.

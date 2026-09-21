@@ -4082,6 +4082,47 @@
 //            accepted draw into a `pose_requests` beat. The BYTES, the PAGE
 //            CONTAINER, the STORE and now the COMMAND are all present.
 //
+//        (c) form -> RESIDENT PAGE IS UNRULED ON BOTH PAGE KINDS, AND THAT IS
+//            WHAT "the form -> type resolution" ABOVE ACTUALLY COSTS. Surfaced
+//            by POSEREAD for kind 9; MEASURED 2026-09-21 (FORMIDX) and found to
+//            cover kind 8 as well.
+//
+//            THE REQUESTER'S HALF IS NOT MISSING AND MUST NOT BE RE-DERIVED.
+//            `zhao_geom_drawjob` already holds `form_idx_q [23:0]` =
+//            `d_form_i[31:8]`, and `zref_creature_page.hpp`'s own header names
+//            that exact expression as the hardware key ("THE KEY IS THE
+//            MESH_STREAM HANDLE INDEX, NOT AN INVENTED TYPE ID"). It is VALID
+//            FOR THE WHOLE DRAW: `d_ready_o` is `(st_q == S_IDLE)`, so the FSM
+//            cannot admit a second draw while the first is in S_CHECK..S_EMIT,
+//            and the register that holds it is loaded by the SAME enable that
+//            admits the draw. It is therefore NOT entry I39's failure -- there
+//            is no second pipeline stage for it to move on ahead of. In S_IDLE
+//            it holds the PREVIOUS draw, so any exposure must be qualified by
+//            state, not offered bare. It is EXPOSABLE, NOT INVENTABLE.
+//
+//            WHAT IS MISSING IS THE BANK'S HALF, on both kinds, and a
+//            comparison with one operand is not a comparison:
+//              - kind 9: `zref::clip_page`'s header is {magic, version,
+//                bone_count, clip_count, dir_off, frames_off} -- no form index,
+//                no type key, no handle.
+//              - kind 8: the LADDER TABLE keys every record by `form_index`,
+//                but the BODY -- the half `zhao_geom_clipread` reads -- does
+//                not. MEASURED on the committed golden
+//                `ladder_page_body_v1.bin`: THREE ladder records (form_index
+//                256, 257, 40983) and `body_off` 192 naming ONE 6-bone body.
+//                `mkcreatureladder.py:build` makes that the FORMAT, taking a
+//                LIST of records beside a SINGLE bone list.
+//
+//            SO ONE KIND-8 PAGE IS AN N-FORM TABLE PLUS A 1-CREATURE SKELETON,
+//            and `spec/creature_rules.md` 5 reads kind 8 as ONE creature while
+//            `zhao_geom_ladderbank` reads it as a ROWS=16 bank. THAT CARDINALITY
+//            CONFLICT IS THE DECISION, and it is larger than the one field
+//            POSEREAD costed: a ruling that keys only the kind-9 header leaves
+//            the skeleton unattributed, and a well-formed palette for the wrong
+//            animal is reachable through the BODY exactly as through the bank,
+//            with `bone_mismatch_o` blind to both when the bone counts agree.
+//            NOT DECIDED HERE -- see FINDINGS-formidx for the re-costed options.
+//
 //            [the original 2026-09-21 text of blocker (b), kept because the
 //             reasoning that produced D-POSEPAGE-A is the record of why the
 //             opcode exists:]
