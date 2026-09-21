@@ -4351,3 +4351,121 @@ arbiter and named four missing pieces; this ruling supplies **only the fourth**,
 the miss law. **The handle lifetime, the latency adapter and the arbiter remain
 engineering**, and PAGEIO's recommendation — *take the miss law first, the rest
 are cheap once it is written* — is why this one is answered now.
+
+## R222 — THE HUD STORE IS REFUSED AS POSED, AND THE NUMBER PUT TO ME WAS WRONG IN THE FLATTERING DIRECTION
+
+**2026-09-21, coordinator, under the owner's standing delegation to answer the
+dossier's questions.** Entry I17 asked for exactly one thing — *"put 153/553 in
+front of the owner instead of inheriting the word SDRAM"* — and it was right to
+ask, because the entry before it had eliminated on-chip memory by naming a
+TECHNOLOGY rather than producing a NUMBER. **The question was well posed. The
+number was not.**
+
+### The arithmetic: 153 is unreachable, the floor is 180
+
+The entry computed `384 x 240 x 17 = 1,566,720` logical bits, divided by an
+M10K's 10,240, and got **153.0 — exactly, with no remainder.** *A perfect
+division is a tell*, and this repository's own law says so: **precision at a
+round number is a tell, not a result.**
+
+A Cyclone V M10K cannot be 17 bits wide. Its aspect ratios are fixed, and this
+tree records them twice independently — `reports/FIELD-PROGDIR-20260910.md`
+(*"simple-dual-port aspect ratios 256x40, 512x20, ..."*) and
+`reports/FORGE-CLIFF-BITMAP-RAM-20260910.md` (*"Cyclone V M10K port shapes:
+256x40, 512x20, 1024x10, 2048x5, 4096x2, 8192x1"*). Against 92,160 words of 17
+bits:
+
+```
+  256x40  ->  1 wide x 360 deep =  360 M10K  (65.1% of 553)
+  512x20  ->  1 wide x 180 deep =  180 M10K  (32.5%)
+ 1024x10  ->  2 wide x  90 deep =  180 M10K  (32.5%)
+ 2048x5   ->  4 wide x  45 deep =  180 M10K  (32.5%)
+ 4096x2   ->  9 wide x  23 deep =  207 M10K  (37.4%)
+ 8192x1   -> 17 wide x  12 deep =  204 M10K  (36.9%)
+```
+
+**The floor is 180, and three different aspect ratios reach it independently.**
+That robustness matters: this is not one packing guess that a fitter might beat.
+**No configuration this device has can deliver 153.** The quoted figure understates
+the true cost by 27 blocks — *5% of the entire device* — and it understates it in
+the direction that makes the proposal look payable.
+
+**This is plan 14.5 exactly, and the ruling being cited quotes it in its own
+limit 3:** *"Physical M10K reserve must be measured, not inferred from logical
+bit occupancy."* The entry inferred. It even flagged its own arithmetic as *"the
+easy half"* — it was the wrong half.
+
+### The citation was partial, and the omitted part is the governing part
+
+I17 quotes `OWNER-RULING-M10K-CEILINGS-20260918.md`'s headline — *"Using some
+more M10K is fine, we have enough, particularly if it saves ALMs"* — and its
+19-M10K precedent. **It does not quote that ruling's three stated limits, and
+two of them are directly on point:**
+
+* **Limit 3** is the logical-versus-physical rule above, which the proposal
+  breaks.
+* **Limit 2:** *"It is not permission for full-frame lookup tables or port
+  replication... The ruling raises a CEILING; it does not delete the
+  ARCHITECTURE."*
+
+And the headline's own mechanism does not reach this case. **The owner
+authorised memory that SAVES ALMs** — *"they're our only weapon against our
+massive ALM debt."* A HUD frame store saves no ALMs. It is new state. Spending a
+third of the weapon on something that does not reduce the debt is the one use of
+it the sentence cannot be read to license, on a console sitting at 47,582 ALM
+against 41,910 **with FIELD's ~13,700 still additive.**
+
+### RULED
+
+**The full-frame on-chip HUD store is REFUSED at 180 M10K.** Not because 32.5%
+is unaffordable in principle — *nobody can say, because no fit has ever measured
+this console's M10K occupancy* — but because a number that has never been
+measured cannot be spent, and because this particular spend is the wrong use of
+the one slack resource.
+
+**And SDRAM is NOT the fallback.** Refusing option A does not ratify option B.
+Inheriting the word `SDRAM` is precisely what the entry was trying to stop.
+
+### What was never priced, in the entry's own words
+
+The entry names **three** structures and costs only one. Read its own text:
+
+1. **a frame-resident store** — priced (wrongly), refused here;
+2. **a line ring with backpressure** — *worked through and REJECTED*, with a
+   real measurement: ten 32-row sprites need 320 lines of a 240-line frame.
+   **That refusal is sound and stands.**
+3. *"or a display list that can re-walk ONE SCANLINE across many descriptors,
+   which is a different block from the one TWOD.SPRITE is"* — **named, and never
+   costed at all.**
+
+**The entry put the option it had a number for in front of the owner, and left
+the option it had no number for as a subordinate clause.** That is not
+dishonesty; it is what happens when one branch is arithmetic and the other is
+design work. But it means the decision I was asked to take was a choice between
+two of three candidates, with the third unexamined.
+
+**So: price structure 3 before either expensive option is taken.** A bounded
+band — B lines, double-buffered so rasterisation and scanout do not collide —
+costs `384 x B x 17 x 2` bits, which is **48 M10K at B=32 against 180**, and the
+sprite is re-entered per band by the display list rather than trickled one row
+per composited line, which is the specific defect that killed structure 2.
+
+**That number is MINE and it is shape arithmetic, so it is exactly the kind of
+figure this ruling just refused.** It is offered as *a reason to do the work*,
+not as a result. What it establishes is only this: **the gap between 48 and 180
+is large enough that nobody should buy 180 without looking.**
+
+### Why this does not leave I17 stranded
+
+The HUD is mandatory v1 and this ruling closes nothing. **Refusing a structure is
+not deferring a function**, and the rule against closing gaps by narrowing
+applies to me as hard as to any packet. I17 stays open, at its full size, with
+its remaining half now stated as *"the re-walkable display list is unpriced"*
+rather than *"the owner owes a decision on 153 M10K"* — **a smaller and more
+answerable question than the one I was handed.**
+
+**What I am NOT deciding:** whether 180 would be affordable if measured. If the
+band is priced and comes back worse than it looks, the frame store returns as a
+live candidate **with a real occupancy measurement beside it** and the owner can
+be asked properly. The refusal is of *an unmeasured spend justified by a
+misquoted ruling*, not of the structure forever.
