@@ -402,17 +402,18 @@ def main(check=False, mutant=False):
         if cur.replace('\r\n', '\n') != text:
             print('FAIL: %s is STALE.' % (MUT if mutant else OUT).relative_to(REPO).as_posix())
             print('  The shells moved and the generated harness did not.')
-            # THE REMEDY MUST CARRY --mutant WHEN IT IS THE MUTANT THAT IS
-            # STALE. It did not until 2026-09-21, and the bare command ran
-            # clean, rewrote the OTHER file, and left the check still failing
-            # -- a remedy line that looks authoritative and does not work sends
-            # the reader hunting for a second fault. Found by following it.
+            # NAME THE COMMAND THAT REGENERATES *THIS* FILE. Until 2026-09-21
+            # this line printed the bare command for both paths, so a reader
+            # whose MUTANT was stale was told to rewrite the file that was
+            # already fresh -- a repair instruction that reports success and
+            # changes nothing.
             print('  Regenerate: python tools/design/gen_shell_paired_diff.py%s'
                   % (' --mutant' if mutant else ''))
             return 1
-        print('paired diff harness: fresh (%d shared inputs, %d compared '
+        print('paired diff harness: %s fresh (%d shared inputs, %d compared '
               'outputs, %d declared divergent)'
-              % (len(shared_in), len(compared), len(DIVERGENT)))
+              % ('mutant' if mutant else 'harness',
+                 len(shared_in), len(compared), len(DIVERGENT)))
         return 0
 
     dest = MUT if mutant else OUT
@@ -427,4 +428,23 @@ def main(check=False, mutant=False):
 
 
 if __name__ == '__main__':
-    sys.exit(main(check='--check' in sys.argv, mutant='--mutant' in sys.argv))
+    _check = '--check' in sys.argv
+    _mutant = '--mutant' in sys.argv
+    if _check and not _mutant:
+        # A BARE `--check` CHECKS BOTH GENERATED FILES, and that is a repair
+        # rather than a convenience. This script writes TWO files -- OUT and
+        # MUT -- and until 2026-09-21 `--check` read only OUT, while the gate
+        # list in PACKET-PROTOCOL.md and in every packet brief runs exactly
+        # that bare form. So when `zhao_shell_top_v2` gained the seven `gth_*`
+        # POST.GATHER outputs at d3f90937 and only OUT was regenerated
+        # (6b1fe2a0), the mutant stayed at ce25a260, the gate printed "fresh",
+        # and `cmake --preset windows-native` then died for EVERY lane on
+        # seven PINMISSING errors in a file no gate was reading.
+        #
+        # That is the broken-instrument law in its usual direction: the tool
+        # reported less than the truth, and the tool's own silence was quoted
+        # as evidence the pair was in step. `mutant_copy_drift.py` does not
+        # cover it either -- it reads provenance for hand-cut copies, and this
+        # one is GENERATED, so nobody owned the question.
+        sys.exit(main(check=True, mutant=False) or main(check=True, mutant=True))
+    sys.exit(main(check=_check, mutant=_mutant))

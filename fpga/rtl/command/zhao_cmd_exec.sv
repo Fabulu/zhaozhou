@@ -1861,12 +1861,33 @@ module zhao_cmd_exec
         // ------------------------------------------------------------------
         // ISSUE, THEN RETIRE -- one word per two clocks, and the second clock
         // is the point. `proj_cfg_ready_i` exists because the matrix bank has
-        // a SECOND writer: the console's own `proj_cfg_*_i` host port, which
-        // owns cfg addresses 16 and 17 (the viewport rect) that no ratified
-        // command carries. Without a handshake the composer would have to drop
-        // one of the two writes and count it, and a dropped matrix word is a
-        // silently wrong camera. With it the merge is LOSSLESS in both
-        // directions: the host wins the cycle, this block re-presents.
+        // a SECOND writer: the console's own `proj_cfg_*_i` host port. Without
+        // a handshake the composer would have to drop one of the two writes
+        // and count it, and a dropped matrix word is a silently wrong camera.
+        // With it the merge is LOSSLESS in both directions: the host wins the
+        // cycle, this block re-presents.
+        //
+        // CORRECTED 2026-09-21 (gz/cfgarm). This paragraph used to justify the
+        // handshake with "the host port ... OWNS cfg addresses 16 and 17 (the
+        // viewport rect) THAT NO RATIFIED COMMAND CARRIES". That clause was
+        // already false when it was read: the viewport lowering landed on
+        // 2026-09-20 as steps 20/21 of this very walk, sixty lines below, and
+        // the comment above it says so ("the host port still writes 16/17 and
+        // still wins the cycle, but it is now an OVERRIDE rather than the only
+        // producer"). One block, two comments, opposite claims -- and the
+        // false one is the one a grep for "viewport" reaches first.
+        //
+        // IT IS LEFT AS A CORRECTION RATHER THAN A DELETION because a comment
+        // is a citable source in this tree whether or not anybody meant it to
+        // be: `design/prod_manifest.yml`'s `zhao_view_projq88` row refused a
+        // composition on exactly this sentence, in exactly these words, and
+        // entry I21's blocker 5 then inherited the refusal from the manifest.
+        // A caution invented in a comment and quoted by its neighbours is
+        // indistinguishable from a ruling.
+        //
+        // The handshake is NOT stale with it: two writers still exist, the
+        // host's override is still a real capability, and removing the
+        // handshake would remove function. Only the reason given was wrong.
         //
         // The bubble costs 80 clocks per frame at two full views -- 64 for the
         // matrix words, 4 for the two profile writes and 12 for the two eyes
