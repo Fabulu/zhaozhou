@@ -1,0 +1,7 @@
+# Pass 23 per-frame trajectory: shipping vs exact-off (pass-22 depths).
+# The SHAPE is the claim: rise into the press, return to zero.
+# subject	frames	changed	first	last	peak_any	peak_vis	max_delta
+manafold-drift	300	168	104	286	1570	813	255
+manafold-damage	464	362	50	455	10886	4055	255
+manafold-death-drop	450	207	0	225	1988	1116	255
+manafold-death-gutter	590	277	0	354	1779	781	255
