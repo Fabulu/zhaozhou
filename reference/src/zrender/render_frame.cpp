@@ -45,6 +45,10 @@
 
 #include "zfield/zfield.hpp"
 #include "zref/zref_frame.hpp"
+// R229: `zref::clip_page::kMaxClips` -- creature_rules 2.1's 64 authored
+// slots. Taken from the frozen page model rather than retyped, so this arm
+// and `zhao_cmd_exec` refuse the same clip ids by construction.
+#include "zref/zref_clip_page.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -192,6 +196,15 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     const FormTransform* xf;
     uint8_t viewport_mask;
     uint16_t flags;
+    // R229: DrawPosedForm 0x0305's animation key, CARRIED so a capture that
+    // names a frame can be read back without guessing. `posed` false is the
+    // BIND POSE and is what every DrawForm 0x0300 produces -- the clean split
+    // the ruling ratified, represented here as it is on the wire rather than
+    // as "clip 0 might mean nothing".
+    bool posed = false;
+    uint16_t clip_id = 0;
+    uint16_t frame_no = 0;
+    uint8_t sub = 0;
   };
   std::vector<FormDraw> forms;
   struct PopDraw {
@@ -338,6 +351,50 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           break;
         }
         forms.push_back(FormDraw{form, xf, c.payload.viewport_mask, c.payload.flags});
+        break;
+      }
+      case zhao_abi::ZHAO_OP_DRAW_POSED_FORM: {
+        // IMPLEMENTED since owner ruling R229 (2026-09-21), and it resolves and
+        // draws EXACTLY as DrawForm does -- the two records share their first
+        // sixteen payload bytes by ratification. Giving it no arm here was the
+        // alternative and it is strictly worse: the `default:` below skips a
+        // record, so a capture containing 0x0305 would draw NOTHING, which is a
+        // removal of function rather than a deferral of one.
+        //
+        // THE KEY IS CARRIED AND IS NOT YET OBSERVED BY THIS RENDERER'S FORM
+        // PATH, stated plainly for the reason the SetEnvironment arm above
+        // states the same thing: a reader must not conclude otherwise from the
+        // field being present. R229 is explicit that the request-side layer --
+        // "a validated resident handle with generation and epoch, not a naked
+        // slot and frame" -- remains undetermined, and this software renderer's
+        // marker/billboard form path has no skinning stage to apply a pose to.
+        // The pose cache that WOULD consume it is `zref::creature::PoseBank`,
+        // whose `acquire(type, slot, frame, sub)` takes exactly these lanes.
+        //
+        // So the draw is the bind pose either way today, and the DIFFERENCE
+        // between the two opcodes is recorded rather than flattened -- which is
+        // what lets the hardware's `draw_posed_o` be differenced against
+        // something when a consumer does arrive.
+        zhao_abi::ZhRecordDrawPosedForm c;
+        zhao_unpack_draw_posed_form(r, c);
+        const FormPattern* form = res.form(c.payload.form);
+        const FormTransform* xf = res.transform(c.payload.transform);
+        if (form == nullptr || xf == nullptr) {
+          rr.resource_misses += (form == nullptr) + (xf == nullptr);
+          break;
+        }
+        FormDraw fd{form, xf, c.payload.viewport_mask, c.payload.flags};
+        // `creature_rules` 2.1's 64 authored slots, the same ceiling
+        // `zhao_cmd_exec` refuses above. A clip no legal page can hold degrades
+        // to the bind pose here too, so the oracle and the silicon agree about
+        // what an unrepresentable key draws.
+        if (c.payload.clip_id < zref::clip_page::kMaxClips) {
+          fd.posed = true;
+          fd.clip_id = c.payload.clip_id;
+          fd.frame_no = c.payload.frame_no;
+          fd.sub = c.payload.sub;
+        }
+        forms.push_back(fd);
         break;
       }
       case zhao_abi::ZHAO_OP_DRAW_POPULATION: {
