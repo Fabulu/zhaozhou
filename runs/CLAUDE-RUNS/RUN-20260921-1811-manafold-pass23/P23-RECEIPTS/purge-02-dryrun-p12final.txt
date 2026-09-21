@@ -1,0 +1,14 @@
+purge_render_intermediates: C:\programmieren\zencrifice\p12-final
+  candidates : 10988 files, 2.83 GB
+  spared     : 0 modified within 48 h, plus the 3 newest run folders
+  largest holders:
+     158.21 MB  render\manafold-crackle
+     158.21 MB  render\manafold-hover
+     158.21 MB  render\manafold-inspect
+     155.57 MB  render\manafold-death-gutter
+     122.35 MB  render\manafold-damage
+     118.66 MB  render\manafold-death-drop
+     110.75 MB  render\manafold-antenna-fixed
+     110.75 MB  render\manafold-antenna-quarter
+
+  DRY RUN -- nothing deleted. Re-run with --apply to reclaim 2.83 GB.
