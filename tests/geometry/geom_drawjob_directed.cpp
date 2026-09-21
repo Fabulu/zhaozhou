@@ -59,9 +59,14 @@ struct SeenJob {
   uint32_t raster_state;
   uint32_t material_set;
   uint8_t semantic_weight;
+  // The 24-bit MESH_STREAM form index, as the ACCEPTED job presents it (owner
+  // ruling of 2026-09-21, section 3). Sampled on the handshake like every
+  // other field here, which is the lifetime the ruling requires.
+  uint32_t form_idx;
 };
 
 struct Run {
+  int form_idx_offered_bare = 0;
   std::vector<SeenJob> jobs;
   bool saw_request = false;
   int request_len = -1;
@@ -187,10 +192,16 @@ Run drive(Vzhao_geom_drawjob& t, const dj::DrawForm& d, const uint8_t* header) {
       j.raster_state = t.j_side_o[0];
       j.material_set = t.j_side_o[1];
       j.semantic_weight = static_cast<uint8_t>(t.j_side_o[2] & 0xFFu);
+      j.form_idx = t.j_form_idx_o;
       r.jobs.push_back(j);
     }
     // `d_ready_o` is high only in S_IDLE, and the block cannot be back there
     // until this draw has emitted or refused everything it is going to.
+    // NOT OFFERED BARE. `d_ready_o` is `(st_q == S_IDLE)`, and in S_IDLE the
+    // block's `form_idx_q` still holds the PREVIOUS draw -- so a consumer that
+    // read the port there would associate this draw's pages with the last
+    // draw's form. Recorded every cycle the job is not being offered.
+    if (!t.j_valid_o && t.j_form_idx_o != 0) ++r.form_idx_offered_bare;
     if (t.d_ready_o && c > 0) finished = true;
     zhao::tick(t);
   }
@@ -298,6 +309,21 @@ int main(int argc, char** argv) {
     check(r.jobs.size() == 3 && r.jobs[1].desc_addr - r.jobs[0].desc_addr == 64,
           "A: desc_addr steps by 64", r.jobs.size() == 3 ? r.jobs[1].desc_addr - r.jobs[0].desc_addr : -1,
           64);
+
+    // ---- the ACCEPTED JOB'S FORM INDEX -- owner ruling 2026-09-21 §3 ------
+    // EXPOSED, NOT INVENTED. `zhao_geom_drawjob` has always held
+    // `form_idx_q = d_form_i[31:8]`; this packet routes it out of the block so
+    // the pose request can carry the DRAW'S own form rather than re-reading an
+    // unrelated live register later. The consumer,
+    // `zhao_geom_clipread.p_form_idx_i`, lands in the same commit.
+    bool form_on_every_job = !r.jobs.empty();
+    for (const SeenJob& j : r.jobs) form_on_every_job = form_on_every_job && j.form_idx == kIndex;
+    check(form_on_every_job,
+          "A: every emitted job carries the draw's 24-bit form index (d_form_i[31:8])",
+          form_on_every_job, 1);
+    check(r.form_idx_offered_bare == 0,
+          "A: and it is NEVER offered while the job is not valid -- in S_IDLE the "
+          "register still holds the PREVIOUS draw", 0, r.form_idx_offered_bare);
   }
 
   // ---- the refusals, each against the oracle's ordinal --------------------

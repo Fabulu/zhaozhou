@@ -1445,6 +1445,24 @@ set_tests_properties(lint_zhao_geom_pose_cache PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# THE TYPE_W GUARD, PROVEN TO FIRE. The owner ruling of 2026-09-21 section 4a
+# permits a TYPE_W parameter for legacy BENCHES and requires 24 bits in
+# production; the module refuses anything outside 16..24 from an `initial`
+# block, and `--lint-only` does not run those, so the clean lint above is not
+# evidence about it. WILL_FAIL inverts the polarity: GREEN when the design
+# refuses to elaborate at TYPE_W=8.
+add_executable(test_geom_pose_cache_elab_guard geometry/geom_pose_cache_elab_guard.cpp)
+target_link_libraries(test_geom_pose_cache_elab_guard PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_pose_cache_elab_guard PRIVATE VL_USER_STOP VL_USER_FATAL)
+verilate(test_geom_pose_cache_elab_guard
+  PREFIX Vzhao_geom_pose_cache_elab
+  TOP_MODULE zhao_geom_pose_cache
+  VERILATOR_ARGS -GTYPE_W=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_cache.sv)
+add_test(NAME geom_pose_cache_elab_guard COMMAND test_geom_pose_cache_elab_guard)
+set_tests_properties(geom_pose_cache_elab_guard PROPERTIES
+  LABELS "fast;geometry" TIMEOUT 120 WILL_FAIL TRUE)
+
 # GEOM.POSE's decode chain: the first WHOLE-CHAIN differential in the creature
 # path -- one quaternion engine and one shared multiply engine over a real
 # skeleton, against zref::creature::decode_pose. The chain failures are
@@ -14974,6 +14992,34 @@ verilate(test_geom_clipread_elab_guard
 add_test(NAME geom_clipread_elab_guard COMMAND test_geom_clipread_elab_guard)
 set_tests_properties(geom_clipread_elab_guard PROPERTIES
   LABELS "fast;geometry" TIMEOUT 120 WILL_FAIL TRUE)
+
+# THE OWNERSHIP COMPARISON'S POSITIVE CONTROL -- owner ruling of 2026-09-21
+# (kind-8 / kind-9 ownership), section 6 test J: "At least one deliberate
+# mutation bypassing each new ownership comparison must turn the corresponding
+# negative test red, while valid traffic stays green."
+#
+# NOT a WILL_FAIL test. The POLARITY IS IN THE DRIVER: it passes when the
+# foreign frame IS served and `owner_mismatch_o` STAYS ZERO, which is the
+# defect. It proves the PLANT first -- it reads the mutant source and requires
+# the mutated line present AND the production expression absent -- because a
+# fire test compiled against an unmutated copy reports success while measuring
+# nothing.
+add_executable(test_geom_clipread_ownerblind_mutant
+  mutants/geom_clipread_ownerblind_mutant.cpp)
+target_link_libraries(test_geom_clipread_ownerblind_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_clipread_ownerblind_mutant
+  PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_clipread_ownerblind_mutant
+  PREFIX Vtb_geom_clipread_ownerblind
+  TOP_MODULE tb_geom_clipread_ownerblind
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/mutants/zhao_geom_clipread_ownerblind_mutant.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/mutants/tb_geom_clipread_ownerblind.sv)
+add_test(NAME geom_clipread_ownerblind_mutant
+         COMMAND test_geom_clipread_ownerblind_mutant)
+set_tests_properties(geom_clipread_ownerblind_mutant PROPERTIES
+  LABELS "fast;geometry;mutant" TIMEOUT 300)
 
 # GEOM.POSE's bone source -- entry I29's producer (POSEABI, owner ruling R90).
 # The bench holds BOTH zhao_geom_bonesrc and the REAL zhao_geom_pose_decode,

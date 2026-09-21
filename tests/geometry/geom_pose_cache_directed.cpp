@@ -45,11 +45,22 @@ namespace zc = zref::creature;
 constexpr int kTuples = 128;  // must match the RTL default and PoseBank
 
 struct Req {
-  uint16_t type;
+  // THE FORM INDEX, 24 BITS. Owner ruling of 2026-09-21, section 4a: this was
+  // a uint16_t and the port was [15:0], so forms differing only above bit 15
+  // -- 0x000100 and 0x010100 -- were ONE cache line. `spec/memory_rules.md`
+  // 5f.1's key is {index:24} and nothing may carry less of it.
+  uint32_t type;
   uint16_t clip;
   uint16_t frame;
   uint8_t sub = 0;   // the half-key phase; 1 is the baked 60 Hz midpoint
-  uint16_t gen = 0;  // the clip-bank residency generation (D-3)
+  uint16_t gen = 0;  // the CLIP BANK's residency generation (D-3)
+  // ASSET LIFETIME (section 4b). The accepted resources' own identities, which
+  // owner equality does not imply: republish the BODY alone and every other
+  // field still matches. These are `zhao_geom_clipread`'s res_body_index_o /
+  // res_body_gen_o / res_clip_index_o.
+  uint32_t body_idx = 0;
+  uint16_t body_gen = 0;
+  uint32_t clip_idx = 0;
 };
 
 /** Creature types built so their clip tables are easy to reason about. */
@@ -130,6 +141,9 @@ int rtl_acquire(Vzhao_geom_pose_cache& dut, const Req& r, bool resolvable) {
   dut.acq_frame_i = r.frame;
   dut.acq_sub_i = r.sub;
   dut.acq_gen_i = r.gen;
+  dut.acq_body_idx_i = r.body_idx;
+  dut.acq_body_gen_i = r.body_gen;
+  dut.acq_clip_idx_i = r.clip_idx;
   dut.acq_resolvable_i = resolvable ? 1 : 0;
   dut.resp_ready_i = 1;
   dut.eval();
@@ -534,6 +548,129 @@ int main(int argc, char** argv) {
                 "while the new generation's own entry hits, so the insert "
                 "really happened",
                 0, c);
+  }
+
+
+  // ---- 10. SECTION 4a: 24 BITS OF FORM, AND THE ALIAS THAT PROVES IT ------
+  // The owner ruling of 2026-09-21 names the failure exactly: "A direct
+  // connection using the low 16 bits aliases forms such as 0x000100 and
+  // 0x010100." With the old [15:0] port those two ARE one key -- same clip,
+  // same frame, same sub, same generation, same resources -- so the second
+  // creature is handed the first one's palette and hits, quietly.
+  {
+    Vzhao_geom_pose_cache dut4;
+    dut4.rst_n = 0;
+    for (int i = 0; i < 4; ++i) zhao::tick(dut4);
+    dut4.rst_n = 1;
+    zhao::tick(dut4);
+    rtl_begin_frame(dut4);
+
+    Req lo{}; lo.type = 0x000100u; lo.clip = 4; lo.frame = 6;
+    Req hi{}; hi.type = 0x010100u; hi.clip = 4; hi.frame = 6;
+    zhao::check((lo.type & 0xFFFFu) == (hi.type & 0xFFFFu),
+                "THE ALIAS: the two forms are IDENTICAL in sixteen bits", 1, 1);
+
+    const int a = rtl_acquire(dut4, lo, true);
+    const int b = rtl_acquire(dut4, hi, true);
+    zhao::check(a == 1 && b == 1,
+                "forms differing ONLY in bits 23:16 are different cache entries "
+                "on the MISS path -- at 16 bits the second was a hit and the "
+                "creature got another animal's palette",
+                1, (a == 1 && b == 1) ? 1 : 0);
+
+    // AND ON THE HIT PATH. The ruling's test H asks for both, because an
+    // insert that stored 24 bits and a comparison that read 16 would pass the
+    // check above and fail here.
+    const int c = rtl_acquire(dut4, lo, true);
+    const int d2 = rtl_acquire(dut4, hi, true);
+    zhao::check(c == 0 && d2 == 0,
+                "and each hits its OWN entry on the second ask -- the hit path "
+                "carries all 24 bits too",
+                1, (c == 0 && d2 == 0) ? 1 : 0);
+    // The midpoint distinction survives the widening.
+    Req hi_mid = hi; hi_mid.sub = 1;
+    zhao::check(rtl_acquire(dut4, hi_mid, true) == 1,
+                "and `sub` still separates a key from its 60 Hz midpoint", 1, 1);
+  }
+
+  // ---- 11. SECTION 4b: ASSET LIFETIME ------------------------------------
+  // "Owner equality proves the intended form, not which version of its
+  // skeleton and animation produced a cached palette." Every case below holds
+  // form, clip, frame and sub-phase CONSTANT. Only a resource identity moves.
+  {
+    Vzhao_geom_pose_cache dut5;
+    dut5.rst_n = 0;
+    for (int i = 0; i < 4; ++i) zhao::tick(dut5);
+    dut5.rst_n = 1;
+    zhao::tick(dut5);
+    rtl_begin_frame(dut5);
+
+    Req warm{};
+    warm.type = 0x00A017u; warm.clip = 2; warm.frame = 5; warm.sub = 0;
+    warm.gen = 0x0041; warm.body_idx = 0x000900u; warm.body_gen = 0x0007;
+    warm.clip_idx = 0x000901u;
+
+    zhao::check(rtl_acquire(dut5, warm, true) == 1, "warm the cache", 1, 1);
+    zhao::check(rtl_acquire(dut5, warm, true) == 0,
+                "and the identical request hits -- the negative control, without "
+                "which every refusal below could be an unrelated miss", 0, 0);
+
+    // 11a. THE BODY'S GENERATION ALONE. A re-rigged creature: same form, same
+    // clips, same frame, same sub. Before this packet nothing here moved.
+    Req body_regen = warm; body_regen.body_gen = 0x0008;
+    zhao::check(rtl_acquire(dut5, body_regen, true) == 1,
+                "a BODY-ONLY republication misses -- the clip generation alone "
+                "could not have seen it, which is section 4b's whole point",
+                1, 1);
+
+    // 11b. THE BODY'S RESOURCE INDEX ALONE, generation unchanged.
+    Req body_reslot = warm; body_reslot.body_idx = 0x000A00u;
+    zhao::check(rtl_acquire(dut5, body_reslot, true) == 1,
+                "a body published under a DIFFERENT resource index misses, even "
+                "at the same generation number", 1, 1);
+
+    // 11c. A DIFFERENT CLIP RESOURCE AT THE SAME GENERATION NUMBER. The ruling
+    // names this one specifically: "two different clip resources may have equal
+    // local generation numbers. A cache hit must not confuse them."
+    Req clip_reslot = warm; clip_reslot.clip_idx = 0x000B01u;
+    zhao::check(rtl_acquire(dut5, clip_reslot, true) == 1,
+                "two DIFFERENT clip resources carrying the SAME generation "
+                "number are different cache entries", 1, 1);
+
+    // 11d. GENERATIONS DIFFERING ONLY ABOVE BIT 7. memory_rules 5f.1's
+    // publication generations are 16 bits; the handle's are 8. "Do not reduce
+    // them to the handle's low eight bits."
+    Req gen_high = warm; gen_high.gen = static_cast<uint16_t>(0x0141);
+    zhao::check((gen_high.gen & 0xFFu) == (warm.gen & 0xFFu),
+                "the two clip generations are IDENTICAL in eight bits", 1, 1);
+    zhao::check(rtl_acquire(dut5, gen_high, true) == 1,
+                "and still miss -- the full 16-bit publication generation is "
+                "kept, not the handle's low byte", 1, 1);
+    Req bgen_high = warm; bgen_high.body_gen = static_cast<uint16_t>(0x0107);
+    zhao::check(rtl_acquire(dut5, bgen_high, true) == 1,
+                "and the same for the BODY's generation", 1, 1);
+
+    // 11e. AND THE ORIGINAL STILL HITS. Every miss above must be the new
+    // request missing, never the warm entry being evicted or overwritten -- a
+    // cache that dropped the original on each probe would produce the same six
+    // MISS verdicts and be broken in the opposite direction.
+    zhao::check(rtl_acquire(dut5, warm, true) == 0,
+                "and the ORIGINAL entry is still there and still hits: every "
+                "miss above was the new key missing, not the old one dying",
+                0, 0);
+
+    // 11f. NO FIELD IS EVER COMPARED TO ANOTHER FIELD. "Never compare
+    // body_generation == clip_generation: they belong to independent
+    // publications." A request whose two generations happen to be EQUAL is an
+    // ordinary request and behaves like one.
+    Req equal_gens = warm;
+    equal_gens.gen = 0x0033; equal_gens.body_gen = 0x0033;
+    zhao::check(rtl_acquire(dut5, equal_gens, true) == 1,
+                "a request whose body and clip generations are EQUAL is an "
+                "ordinary miss", 1, 1);
+    zhao::check(rtl_acquire(dut5, equal_gens, true) == 0,
+                "and hits on the second ask like any other -- the equality is "
+                "a coincidence the cache has no opinion about", 0, 0);
   }
 
   return zhao::report_and_exit("geom_pose_cache_directed");
