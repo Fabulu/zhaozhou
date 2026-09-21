@@ -1122,6 +1122,67 @@ extern int g_cel_bands;
 extern int g_smooth_toon_bands;
 
 /* ---------------------------------------------------------------------------
+ * R230 / packet GOURAUDLOOK -- THE FLAT STAND-IN LANE
+ * ---------------------------------------------------------------------------
+ * The console carries a lit per-vertex colour from zhao_light_stream as far as
+ * GEOM.ATTRPACK and drops it there. Finishing that delivery costs ~1,420 ALM
+ * and +24 DSP; the alternative is to ship a FLAT per-face stand-in, which the
+ * existing flat modulation lanes already deliver for free. That is a VISUAL
+ * question and CLAUDE.md's first law forbids settling it from a cost table, so
+ * this knob renders the stand-in out of the oracle and the two get LOOKED AT.
+ *
+ * THERE ARE TWO DIFFERENT FLAT STAND-INS and they do not look the same, so
+ * both are here. Which one the console would actually ship is not a free
+ * choice -- see below.
+ *
+ *   kShadeGouraud (0)  the ship default. Every render bit-identical to before
+ *                      this knob existed: corner lights blended per
+ *                      kSmoothMixNum, riding the interpolated colour lanes.
+ *
+ *   kShadeFlatFace(1)  one FACE Lambert held across the triangle -- the path a
+ *                      normal-less mesh already takes today. Clean and
+ *                      symmetric, but it needs a per-FACE normal.
+ *
+ *   kShadeFlatPvA/B/C  (2/3/4) PROVOKING VERTEX: compute the three corner
+ *                      lights exactly as Gouraud does, then hold ONE of them
+ *                      across the whole triangle.
+ *
+ * The provoking-vertex readings are here because they are what the hardware
+ * would actually do. `zhao_raster_tile_pipe_v2.sv` already names a flat
+ * stand-in -- the 24-bit `vertex_rgb` of the continuation tail, loaded ONCE
+ * PER TRIANGLE -- and `zhao_console_core.sv` records that it has no producer
+ * and that picking the corner is an open owner decision: "There is no
+ * PROVOKING-VERTEX law in this tree." GEOM.VATTR holds PER-VERTEX colours, so
+ * the cheap stand-in selects one of them; recovering a face normal instead
+ * would be additional arithmetic nobody has budgeted. Rendering only the face
+ * Lambert would therefore have compared against a stand-in the console cannot
+ * cheaply build -- the mismatched-poses error in a new costume.
+ *
+ * It is a knob and not a compile switch on purpose (CLAUDE.md rule 6): the
+ * owner keeps control of the choice, and the comparison is reproducible.
+ */
+enum : int {
+  kShadeGouraud = 0,
+  kShadeFlatFace = 1,
+  kShadeFlatPvA = 2,
+  kShadeFlatPvB = 3,
+  kShadeFlatPvC = 4,
+};
+extern int g_force_flat_shading;
+
+/* Coverage instrumentation for the SAME question: how often does the choice
+ * even arise? `gouraud = a.lit && b.lit && c.lit`, so a mesh whose vertices
+ * carry no compiled normal is ALREADY flat and the stand-in changes nothing
+ * for it. These count drawn (post-near-plane-reject) creature triangles by
+ * that natural predicate, INDEPENDENTLY of g_force_flat_shading -- so both
+ * runs of a paired render report the same totals, which is itself the
+ * cross-check that the pair rendered the same content.
+ */
+extern uint64_t g_shade_tri_gouraud;  // all three corners carry a normal
+extern uint64_t g_shade_tri_flat;     // at least one corner does not
+void shade_counters_reset();
+
+/* ---------------------------------------------------------------------------
  * THE CREATURE EXTENT LAW (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 3)
  * ---------------------------------------------------------------------------
  * What this buys, and why it is an ASSET law rather than a hardware one:

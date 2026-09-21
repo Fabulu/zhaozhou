@@ -172,6 +172,16 @@ set_tests_properties(capture_cli_verify PROPERTIES LABELS "fast;nightly")
 add_test(NAME reel_sequence_crc COMMAND zhao-reel --check)
 set_tests_properties(reel_sequence_crc PROPERTIES LABELS "fast;nightly")
 
+# R230 / packet GOURAUDLOOK: the POSITIVE CONTROL for the flat per-face
+# stand-in lane (ZIXX_SHADE=flat). The comparison the owner rules R230 from is
+# only evidence if the switch is known to reach the framebuffer -- two
+# identical galleries would otherwise read as "the +24 DSP buys nothing",
+# which is the stale-binary trap's shape and the flattering direction. This
+# asserts the knob FIRES, that both readings drew identical content, and that
+# the Gouraud reading is untouched by the knob's existence.
+add_test(NAME reel_shade_lane COMMAND zhao-reel --shade-lane-check)
+set_tests_properties(reel_shade_lane PROPERTIES LABELS "fast;nightly")
+
 # npm staleness shim (R11): regenerates all abi outputs and diffs them.
 # npm must be the Windows launcher (npm.cmd), not the bundled sh script
 unset(ZHAO_NPM_BIN CACHE)
