@@ -885,6 +885,117 @@ int main(int argc, char** argv) {
     }
   }
 
+  // =========================================================================
+  // FT066. THE REPLY NAMES THE OBJECT THE REQUEST NAMED, NOT THE LAST INSTALL.
+  // =========================================================================
+  //
+  // `st_idx` is what `L_RETURN` puts on `fh2_resp_slot_o` and what it builds
+  // `fh2_resp_handle_o` from, and until 2026-09-22 it was written at EXACTLY
+  // ONE SITE -- `L_RESERVE`, on the INSTALL path. A successful BIND therefore
+  // replied with the slot and generation of whatever object the LAST INSTALL
+  // reserved. Found by packet WARPBUILD, repaired by packet WARPCOMP.
+  //
+  // WHY EVERY EARLIER TEST MISSED IT, which is the part worth writing down:
+  // the natural stimulus is install-then-bind-the-thing-you-just-installed,
+  // and there `st_idx` is CORRECT BY ACCIDENT. The BIND block above does
+  // exactly that and cannot see this fault. The stimulus that separates the
+  // two is install(A), install(B), bind(A) -- two installs, then a bind
+  // against the EARLIER one -- so the last install's slot and the named
+  // object's slot are different numbers.
+  //
+  // THIS ASSERTS THE CORRECT BEHAVIOUR, NOT THE BUG (CLAUDE.md: "do not write
+  // a test that asserts the bug"). It is a statement about where a reply
+  // points, and it stays true and stays meaningful after the repair.
+  {
+    reset(dut);
+
+    Capsule ca = build_capsule(kHandle + 0x300u);
+    Capsule cb = build_capsule(kHandle + 0x301u);
+    check(ca.ok && cb.ok, "FT066: (setup) two DISTINCT capsules were packed", 1,
+          (ca.ok && cb.ok) ? 1 : 0);
+
+    Reply ra = install(dut, ca.bytes, ca.crc, kStageBase, 0xA001);
+    Reply rb2 = install(dut, cb.bytes, cb.crc, kStageBase, 0xA002);
+    check(ra.ok && rb2.ok, "FT066: (setup) both installed", 1,
+          (ra.ok && rb2.ok) ? 1 : 0);
+    // The premise of the whole case. If the allocator gave them the same slot
+    // there is nothing here to discriminate, and every assertion below would
+    // pass on a broken loader.
+    check(ra.slot != rb2.slot,
+          "FT066: (premise) the two installs took DIFFERENT slots -- without "
+          "this the case cannot discriminate",
+          1, (ra.slot != rb2.slot) ? 1 : 0);
+
+    const uint32_t crc_a =
+        rd32(ca.bytes, hi::ZFH_HDR_OFF_CANONICAL_FULL_IMAGE_CRC32C);
+    const uint32_t crc_b =
+        rd32(cb.bytes, hi::ZFH_HDR_OFF_CANONICAL_FULL_IMAGE_CRC32C);
+
+    // ---- bind the EARLIER object -------------------------------------------
+    offer(dut, kKBind, 0, kHandle + 0x300u, ra.handle, kEpoch, crc_a, 0xA003);
+    Reply ba = run(dut, 400);
+    check(ba.seen && ba.ok, "FT066: bind(A) after install(A), install(B) SUCCEEDS",
+          1, (ba.seen && ba.ok) ? 1 : 0);
+    check(ba.slot == ra.slot,
+          "FT066: and the reply names A's slot -- NOT the last install's",
+          static_cast<int>(ra.slot), static_cast<int>(ba.slot));
+    check(ba.handle == ra.handle,
+          "FT066: and A's binding handle, generation included",
+          static_cast<int>(ra.handle), static_cast<int>(ba.handle));
+
+    // ---- and the later one, so the assertion above is not satisfied by a
+    // loader that simply always answers zero ---------------------------------
+    offer(dut, kKBind, 0, kHandle + 0x301u, rb2.handle, kEpoch, crc_b, 0xA004);
+    Reply bb = run(dut, 400);
+    check(bb.seen && bb.ok, "FT066: bind(B) SUCCEEDS", 1,
+          (bb.seen && bb.ok) ? 1 : 0);
+    check(bb.slot == rb2.slot,
+          "FT066 NEGATIVE CONTROL: bind(B) names B's slot -- the reply TRACKS "
+          "the request rather than being a constant",
+          static_cast<int>(rb2.slot), static_cast<int>(bb.slot));
+
+    // ---- the CONTROL verbs address their object through the other field,
+    // and their reply had the same fault ------------------------------------
+    offer(dut, kKControl, kVerbQuery, ra.handle, 0, 0, 0, 0xA005);
+    Reply qa = run(dut, 400);
+    check(qa.seen && qa.ok, "FT066: QUERY_OBJECT against A is accepted", 1,
+          (qa.seen && qa.ok) ? 1 : 0);
+    check(qa.slot == ra.slot,
+          "FT066: and ITS reply names A's slot too -- the control path carries "
+          "the same reply identity",
+          static_cast<int>(ra.slot), static_cast<int>(qa.slot));
+
+    // ---- a REFUSED bind still names the object the caller asked about ------
+    // A refusal that reported a different object's slot would send the caller
+    // to re-examine something it never named.
+    offer(dut, kKBind, 0, kHandle + 0x300u, ra.handle, kEpoch ^ 0xFFu, crc_a,
+          0xA006);
+    Reply bf = run(dut, 400);
+    check(bf.seen && !bf.ok, "FT066: a bind with a wrong epoch is REFUSED", 1,
+          (bf.seen && !bf.ok) ? 1 : 0);
+    check(bf.slot == ra.slot,
+          "FT066: and the REFUSAL still names the object the request named",
+          static_cast<int>(ra.slot), static_cast<int>(bf.slot));
+
+    // ---- a bind IMMEDIATELY AFTER RESET, with no install at all ------------
+    // The second divergent case WARPBUILD named. There is no last install for
+    // `st_idx` to inherit, so this asserts the reply is about the named object
+    // and not about an uninitialised register.
+    reset(dut);
+    const uint32_t named_idx = 3u;
+    offer(dut, kKBind, 0, kHandle + 0x300u,
+          (7u << 16) | named_idx, kEpoch, crc_a, 0xA007);
+    Reply br = run(dut, 400);
+    check(br.seen && !br.ok,
+          "FT066: a bind after reset against an absent object is REFUSED", 1,
+          (br.seen && !br.ok) ? 1 : 0);
+    check(br.verdict == kVBadBinding, "FT066: with BAD_BINDING", kVBadBinding,
+          br.verdict);
+    check(br.slot == named_idx,
+          "FT066: and the reply names the object index the REQUEST carried",
+          static_cast<int>(named_idx), static_cast<int>(br.slot));
+  }
+
   std::printf(
       "field_loader_directed: installs_ok=%u installs_failed=%u binds_ok=%u "
       "binds_failed=%u bad_op=%u bad_env=%u bad_range=%u bad_sec=%u bad_crc=%u "
