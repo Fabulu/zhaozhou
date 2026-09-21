@@ -14758,6 +14758,67 @@ verilate(test_geom_ladderbank_directed
 add_test(NAME geom_ladderbank_directed COMMAND test_geom_ladderbank_directed)
 set_tests_properties(geom_ladderbank_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
 
+# GEOM.POSE's kind-8 BODY and kind-9 CLIP FRAME page reader -- entry I29's
+# consumer (POSEREAD). The bench is both ends of the block: MEM.UPLOAD's
+# publication (spec/memory_rules.md 5f.1's row) and the asset window it reads
+# through, with every page built by the REFERENCE so a layout disagreement can
+# show up at all. It also asserts the LATE-FETCH LAW the committed
+# zhao_geom_bonesrc_latefetch_mutant states -- no read after src_req_o.
+add_executable(test_geom_clipread_directed geometry/geom_clipread_directed.cpp)
+target_link_libraries(test_geom_clipread_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_clipread_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_clipread_directed
+  PREFIX Vtb_geom_clipread
+  TOP_MODULE tb_geom_clipread
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipread.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_clipread.sv)
+add_test(NAME geom_clipread_directed COMMAND test_geom_clipread_directed)
+set_tests_properties(geom_clipread_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_geom_clipread
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_clipread
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipread.sv)
+set_tests_properties(lint_zhao_geom_clipread PROPERTIES LABELS "lint;fast")
+
+# THE ELABORATION GUARD, PROVEN TO FIRE. `--lint-only` does not run `initial`
+# blocks (CLAUDE.md, 2026-09-09), so the clean lint above says nothing about
+# the CLIP_ROWS guard. This builds the SAME bench with -GCLIP_ROWS=65 and does
+# nothing but eval the model; WILL_FAIL inverts the polarity, so it is GREEN
+# when the design refuses to elaborate and RED when the guard stops firing.
+#
+# 65 AND NOT 0, WHICH IS A FACT ABOUT THE TOOL RATHER THAN THE DESIGN.
+# `-GCLIP_ROWS=0` makes Verilator reject `logic [31:0] row_foff_q [0]` -- a
+# zero-sized range -- and fail the BUILD, which is not a red test but a broken
+# tree. 65 is a perfectly legal elaboration that only the $fatal objects to, so
+# the refusal under test is the design's and nothing else's.
+add_executable(test_geom_clipread_elab_guard geometry/geom_clipread_elab_guard.cpp)
+target_link_libraries(test_geom_clipread_elab_guard PRIVATE zhao_harness zhao_zref)
+# MEASURED, not anticipated: the first run of this test printed the %Fatal and
+# then HUNG for the full 120 s timeout, and a ctest TIMEOUT is a failure whatever
+# WILL_FAIL says -- so the guard fired and the test went red anyway. $fatal never
+# reaches zhao::exit_hard, and zhao_sim.hpp documents at length why every
+# Verilated exe on this toolchain must. These two defines let the test supply its
+# own vl_stop/vl_fatal with that same tail; they go on the TARGET because
+# Verilator's #ifndef lives in verilated.cpp, which the .cpp's own define could
+# never reach.
+target_compile_definitions(test_geom_clipread_elab_guard PRIVATE VL_USER_STOP VL_USER_FATAL)
+verilate(test_geom_clipread_elab_guard
+  PREFIX Vtb_geom_clipread_elab
+  TOP_MODULE tb_geom_clipread
+  VERILATOR_ARGS -GCLIP_ROWS=65
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipread.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_clipread.sv)
+add_test(NAME geom_clipread_elab_guard COMMAND test_geom_clipread_elab_guard)
+set_tests_properties(geom_clipread_elab_guard PROPERTIES
+  LABELS "fast;geometry" TIMEOUT 120 WILL_FAIL TRUE)
+
 # GEOM.POSE's bone source -- entry I29's producer (POSEABI, owner ruling R90).
 # The bench holds BOTH zhao_geom_bonesrc and the REAL zhao_geom_pose_decode,
 # because the claim under test is about the JOIN between them: that the
