@@ -1537,6 +1537,15 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_posed_draws_o;
   logic [31:0] cmd_exec_pose_clip_refused_o;
 
+  // FORMOWN (owner ruling of 2026-09-21, section 3): the ACCEPTED job's 24-bit
+  // form index and its lifetime, `zhao_geom_drawjob`'s `form_idx_q` exposed at
+  // the core's edge. Declared here for the reason the six above were: the core
+  // is bound with `.*`, so a port this bench does not DECLARE fails VERILATION
+  // and every form of this smoke stops running -- which is what a one-second
+  // RC 1 means and it is not a smoke run.
+  logic        geom_job_valid_o;
+  logic [23:0] geom_job_form_idx_o;
+
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
   // 2026-09-19. Declared here for the same reason the command front above is:
