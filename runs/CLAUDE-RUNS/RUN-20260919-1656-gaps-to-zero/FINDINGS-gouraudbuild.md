@@ -562,3 +562,158 @@ colour. It is repaired by inverting one assertion rather than deleting it, and
 the repair makes the control STRONGER: `smk_glow_px_q` must now read zero in
 every form, which is D1's severance of the stand-in measured from the side
 nothing else can see.
+
+---
+
+## The ten smoke forms — sweep 1, at `52e561c3`, which is where `-GlowTag` was caught
+
+Derived rather than trusted, per the brief:
+`awk '/^param\(/,/^\)/' tests/prod/run_console_core_smoke.ps1 | grep -oE '\[switch\]\$\w+'`
+→ ten switches; `-SkipVerilate` is a modifier, so **nine forms plus plain**.
+
+| form | RC | secs | `%Fatal` | verdict |
+|---|---|---|---|---|
+| plain | 0 | 274 | 0 | PASS — `raster pixels=2560`, `frames_admitted=1` |
+| `-Mutant` | 0 | 275 | 0 | PASS — `terr_pl_slot_overflow_o fired 1 time(s)` |
+| `-UntexMutant` | 0 | 277 | 0 | PASS |
+| `-NoTableLoad` | 0 | 253 | **1** | PASS — **INVERTED, one `%Fatal` by design** |
+| `-BadDescriptor` | 0 | 275 | **1** | PASS — **INVERTED, one `%Fatal` by design** |
+| `-BadVertex` | 0 | 269 | 0 | PASS |
+| `-NoEchoArm` | 0 | 252 | 0 | PASS |
+| `-BadTraceArm` | 0 | 259 | 0 | PASS |
+| `-GlowTag` | **1** | 268 | 1 | **FAIL — the finding** |
+| `-LintOnly` | 0 | 24 | 0 | PASS |
+
+**R207: the exit code is not the evidence.** The two inverted forms return RC 0
+WITH a `%Fatal`, and a clean log there would be the failure. The durations are
+all 250–277 s except `-LintOnly`'s 24 s, so none of them is the *"all ten RC 1
+in one second"* shape that means the bench could not verilate.
+
+**`-GlowTag`'s failure, quoted rather than paraphrased:**
+
+```
+SMOKE: gather   frags=2560 [untagged=1498 below_knee=0 lit=1062 reserved=0]
+SMOKE: bloom    cells_contributing=1344
+SMOKE: -GlowTag  the post pass CHANGED 1344 word(s)
+%Fatal: -GlowTag put 0xb5aab5 on the continuation tail and NOT ONE framebuffer
+        word came out 0xb556. The tail's vertex colour is not reaching the
+        fragment shader, so nothing downstream of it is being tested.
+```
+
+**Read it carefully: the TAG still arrives and the bloom still lights the
+frame — 1,062 lit fragments, 1,344 bloom cells, 1,344 words changed. Only the
+COLOUR stopped, which is precisely and only what D1 changed.** That is the
+measurement, not the prediction; the prediction came first and the sweep
+confirmed it exactly.
+
+---
+
+## The ten smoke forms — sweep 2, at `3ebf81a3`, the commit that is pushed
+
+**ALL TEN PASS.**
+
+| form | RC | secs | `%Fatal` |
+|---|---|---|---|
+| plain | 0 | 262 | 0 |
+| `-Mutant` | 0 | 284 | 0 |
+| `-UntexMutant` | 0 | 272 | 0 |
+| `-NoTableLoad` | 0 | 251 | **1 (by design)** |
+| `-BadDescriptor` | 0 | 256 | **1 (by design)** |
+| `-BadVertex` | 0 | 256 | 0 |
+| `-NoEchoArm` | 0 | 241 | 0 |
+| `-BadTraceArm` | 0 | 248 | 0 |
+| `-GlowTag` | **0** | 257 | **0** |
+| `-LintOnly` | 0 | 25 | 0 |
+
+### The number this whole packet exists to produce
+
+```
+SMOKE: gouraud    1062 of 2560 drawn word(s) carry a COLOUR (the rest are the
+                  tile clear) -- GEOM.LIGHT lit 24 vertex/vertices and
+                  GEOM.VATTR stored 48 colour(s)
+```
+
+**It was ZERO before 2026-09-21, and it could not have been anything else.**
+The bench's own prior measurement, committed months before this packet, is the
+baseline: *"exactly 1,062 snapshot words are 0xB556 and every one of the other
+1,498 drawn words is 0x0000."*
+
+**1,062 is not an approximation — it is the same 1,062 that R195's own counter
+reports**, from a different instrument sharing no logic:
+
+```
+SMOKE: gather    frags=2560 [untagged=1498 below_knee=0 lit=1062 reserved=0]
+SMOKE: -GlowTag  END TO END: tag 0x7f on one boundary port -> 1062 covered
+                 pixel(s) of 2560 resolved -> 1062 LIT by R195's law ->
+                 1344 bloom cell(s) -> the frame.
+```
+
+Every covered fragment carries both the tail's TAG and the lanes' COLOUR, and
+the two counts agree exactly. **The lit per-vertex colour reaches the picture in
+the composed console.**
+
+---
+
+## Summary for the coordinator
+
+**Built:** the Gouraud vertex colour, end to end, under owner decision R234 D1.
+`zhao_geom_attrpack` 3 → 6 lanes; `zhao_shell_top_v2` and
+`zhao_geom_bin_pipe_v2` +3 × 240-bit ports and `METAW` 1157 → 1877;
+`zhao_raster_tile_pipe_v2` 3 → 6 `zhao_raster_attrgrad_v2` lanes; `vertex_rgb`
+built per fragment off `attr_join_q_q[3..5]` through one saturating `lit_unit8`.
+
+**Nothing downstream of the tile pipe changed.** No new fragment port, no new
+continuation field, no packet width moved, no `zhao_render_texture_pkg` edit.
+
+**Register 22 → 22**, which is correct and is the register's documented blind
+spot (R159/R228): the severance was a drop by omission, not a tie-off.
+
+**Cost:** +24 DSP exactly, ~1,420 ALM for the three lanes (confirmed against
+the G8A receipt), **plus ~1,000–1,300 ALM of carriage the headline never
+covered** — my estimate, counted by hand, Quartus not run. +18 M10K.
+
+**Three things the next lane should have:**
+
+1. **`zhao_raster_toon` needs a per-material ramp bank and a producer**, plus a
+   throughput check at 4.11 clocks a cel fragment. It has **no fit row at all**
+   — its area is unknown, not small. Its input shape and scale are already
+   exactly what the lanes deliver.
+2. **`zhao_raster_fog` needs a SEVENTH attribute lane end to end** — `fogf_i`
+   has no producer and no slot, so `GEOM_CLIP_ATTRS` would go 7 → 8 and
+   `METAW` 1877 → 2117. The block itself is cheap and measured: 247 ALM, 3 DSP.
+3. **A fit, with the three questions named above**, of which the M10K
+   inference on a 47-slice bank is the one that could most change the picture.
+
+**Everything green at `3ebf81a3`:** thirteen static gates, six generator
+freshness checks, two directed benches (107,273 + attrpack), five committed
+Packet-D mutant controls all FIRING, and **all ten console smoke forms**.
+
+---
+
+## Re-run at `3ebf81a3` — every directed test rebuilt and run at the pushed commit
+
+R60: *"the directed tests must BUILD and RUN, not merely lint."* The last commit
+touched `zhao_geom_binner_v2.sv`, which is inside `pd_full`'s closure, so all of
+this was rebuilt rather than assumed unchanged.
+
+```
+BUILD_RC=0
+geom_attrpack_directed        6 case(s), triangles=6 planes=36, 0 failure(s)
+geom_bin_pipe_v2_directed     PASS tests=5 checks=107273 cycles=28879
+cmd_exec_directed             850 checks passed        (R60 names this one)
+pd_coord     Packet-D coordinate mutant FIRED
+pd_quiet     Packet-D omit-V3-quiet mutant FIRED
+pd_ident     Packet-D identity/cancel control FIRED
+pd_old       Packet-D old-ready mutant FIRED
+pd_cancel    Packet-D skip-cancel mutant FIRED
+```
+
+Generator freshness, all RC 0 at the pushed commit:
+`gen_prod_top --check`, `gen_console_board --check`,
+`gen_shell_paired_diff --check`, `--check --mutant`,
+`gen_shell_fit_top --check` (legacy **and** `shell_v2`),
+`gen_raster_texture_v3_fit_top --check`.
+
+`packet_h_tieoff_audit.py fpga/rtl/prod/zhao_console_core.sv` →
+**0 SILENT**, unchanged from the start of the packet.
+`completion_register.py` → **22**, unchanged from the start of the packet.
