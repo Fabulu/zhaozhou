@@ -2298,13 +2298,20 @@ targets:
       - fpga/rtl/field/zhao_field_host_v2.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
-      # GEOM.WARP prerequisite P2. In THIS list because zhao_prod_top is a
-      # census top that instantiates it; deliberately NOT in the
-      # zhao_console_core closure, which does not compose it. Being in the
-      # manifest is not enough on its own -- zhao_geom_assemble and
-      # zhao_geom_depthquant were added to the manifest on 2026-09-04 and the
-      # production fit still died at elaboration because nobody added them
-      # here. This line is that second act.
+      # GEOM.WARP. In THIS list because zhao_prod_top is a census top that
+      # instantiates it. Being in the manifest is not enough on its own --
+      # zhao_geom_assemble and zhao_geom_depthquant were added to the manifest
+      # on 2026-09-04 and the production fit still died at elaboration because
+      # nobody added them here. These lines are that second act.
+      #
+      # THIS NOTE SAID "deliberately NOT in the zhao_console_core closure,
+      # which does not compose it" UNTIL 2026-09-22. That was true when it was
+      # written and it is not true now: packet WARPCOMP composes the adapter as
+      # `zhao_field_host_v2`'s third client, with `zhao_geom_warp` and
+      # `zhao_geom_warpbook` beside it, and all three are in the console core
+      # closure below. Corrected in place rather than deleted, because a
+      # sentence naming a state the tree has left is exactly what WARPBUILD
+      # found costing a packet at the console boundary.
       - fpga/rtl/field/zhao_field_warp_adapter.sv
       - fpga/rtl/field/zhao_field_doorbell.sv
       - fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
@@ -3040,6 +3047,21 @@ targets:
       - fpga/rtl/geometry/zhao_geom_pose_decode.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_quat2mat.sv
+      # GEOM.WARP, composed 2026-09-22 (packet WARPCOMP). Three files: the
+      # deformer, its per-draw descriptor book, and the W-profile stream
+      # adapter that is `zhao_field_host_v2`'s THIRD client. They enter this
+      # list together because they were composed together -- a Warp without
+      # its adapter has no engine, and an adapter without the Warp is a client
+      # whose `req_valid_i` is a constant zero, which is a tie-off.
+      #
+      # THIS ROW'S AREA NUMBER WILL MOVE, and the direction is known without a
+      # fit: `.CLIENTS` 2 -> 3 widens the host's request mux and its arbiter by
+      # one port, and `.INSTR_N` 32 -> 48 adds 8,192 bits of uop store. Whether
+      # that store infers as M10K or as registers is exactly what this row is
+      # for; no Quartus was run in the packet that added it.
+      - fpga/rtl/geometry/zhao_geom_warp.sv
+      - fpga/rtl/geometry/zhao_geom_warpbook.sv
+      - fpga/rtl/field/zhao_field_warp_adapter.sv
       # Added 2026-09-19, packet P-TERRAIN. THE PAGING SPINE: five blocks in
       # one chain, TERRAIN.CMD -> TERRAIN.SEQ -> TERRAIN.RESIDENCY /
       # TERRAIN.LOADQ -> TERRAIN.PAGELOADER -> TERRAIN.RESIDENCY. Every seam

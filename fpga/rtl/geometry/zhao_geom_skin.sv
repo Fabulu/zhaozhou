@@ -173,7 +173,9 @@
 // it is rather than annotated into submission.
 module zhao_geom_skin #(
     // 1, 3 or 6. See the frontier table above. 3 is the intended setting.
-    parameter int MUL_LANES = 3
+    parameter int MUL_LANES = 3,
+    // DrawWarpedForm 0x0304's descriptor cookie, {en, stamp[4:0]}.
+    parameter int WCKW = 6
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -187,6 +189,9 @@ module zhao_geom_skin #(
     input  logic        [ 6:0] v_w0_i,     // 1/64 quanta; 64 == rigid
     input  logic               v_rigid_i,  // b1 == b0, decided upstream
     input  logic        [15:0] v_src_id_i,
+    // 0x0304's descriptor cookie, carried in `wck_q` beside `src_q` and
+    // retired with it. GEOM.WARP reads it one block along.
+    input  logic    [WCKW-1:0] v_warp_cookie_i,
 
     // ---- the two bone matrices for this vertex, row-major fx16 ------------
     // Presented with the vertex and LATCHED on accept. The palette itself is
@@ -204,6 +209,7 @@ module zhao_geom_skin #(
     output logic signed [31:0] o_y_o,
     output logic signed [31:0] o_z_o,
     output logic        [15:0] o_src_id_o,
+    output logic    [WCKW-1:0] o_warp_cookie_o,
 
     output logic [31:0] vertices_transformed_o
 );
@@ -259,6 +265,7 @@ module zhao_geom_skin #(
                                // w0 <= 63, and 63 is six bits. ENFORCED-BY above.
   logic               rigid_q;
   logic        [15:0] src_q;
+  logic    [WCKW-1:0] wck_q;
 
   // ---- the accumulators, one per row-product ------------------------------
   logic signed [ACCW-1:0] acc      [6];
@@ -474,6 +481,7 @@ module zhao_geom_skin #(
     if (!rst_n) begin
       o_valid_o <= 1'b0;
       o_x_o <= '0; o_y_o <= '0; o_z_o <= '0; o_src_id_o <= '0;
+      o_warp_cookie_o <= '0;
       vertices_transformed_o <= '0;
       busy <= 1'b0;
       issuing <= 1'b0;
@@ -593,6 +601,7 @@ module zhao_geom_skin #(
           // the issue interval.
           busy <= 1'b0;
           o_src_id_o <= src_q;
+          o_warp_cookie_o <= wck_q;
           o_valid_o <= 1'b1;
         end
       end
@@ -614,6 +623,7 @@ module zhao_geom_skin #(
         // reference's own branch, not an optimisation of it.
         rigid_q <= v_rigid_i || (v_w0_i == 7'd64);
         src_q <= v_src_id_i;
+        wck_q <= v_warp_cookie_i;
 
         // The translation SEEDS each accumulator: pa = (m3 << 16) + three
         // products, so the shifted translation is the accumulator's initial

@@ -1668,6 +1668,46 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_warp_draws_o;
   logic [31:0] cmd_exec_warp_draw_refused_o;
 
+  // ---- GEOM.WARP, COMPOSED 2026-09-22 (packet WARPCOMP) ------------------
+  // The block and its Field adapter are inside the core now, so every one of
+  // their counters is a core port and `.*` needs a net for each. This bench
+  // admits NO field program, so `fld_warp_slot_valid_i` is low below and the
+  // lane is expected to take W09's bypass throughout -- the negative
+  // assertions say so rather than leaving it to be assumed.
+  logic [31:0] geom_warp_vertices_transformed_o;
+  logic [31:0] geom_warp_bypassed_o;
+  logic [31:0] geom_warp_app_saturations_o;
+  logic [31:0] geom_warp_normal_reduced_o;
+  logic [31:0] geom_warp_degenerate_o;
+  logic [31:0] geom_warp_bound_violations_o;
+  logic [31:0] geom_warp_negative_bounds_o;
+  logic [31:0] geom_warp_normal_width_faults_o;
+  logic [31:0] geom_warp_profile_mismatches_o;
+  logic [31:0] geom_warp_field_faults_o;
+  logic [31:0] geom_warp_p_accepts_o;
+  logic [31:0] geom_warp_n_accepts_o;
+  logic        geom_warp_poison_valid_o;
+  logic [15:0] geom_warp_poison_src_id_o;
+  logic [ 2:0] geom_warp_poison_cause_o;
+  logic signed [31:0] geom_warp_poison_dx_o;
+  logic signed [31:0] geom_warp_poison_dy_o;
+  logic signed [31:0] geom_warp_poison_dz_o;
+  logic [31:0] geom_warp_desc_allocated_o;
+  logic [31:0] geom_warp_desc_hits_o;
+  logic [31:0] geom_warp_desc_stale_o;
+  logic [31:0] fld_warp_vertices_o;
+  logic [31:0] fld_warp_identities_o;
+  logic [31:0] fld_warp_bypassed_o;
+  logic [31:0] fld_warp_noprog_o;
+  logic [31:0] fld_warp_sig_refused_o;
+  logic [31:0] fld_warp_faults_o;
+  logic [31:0] fld_warp_absent_outputs_o;
+  logic [31:0] fld_warp_stall_cycles_o;
+  logic [31:0] fld_warp_vtx_changed_o;
+  logic [ 2:0] fld_warp_slot_i;
+  logic        fld_warp_slot_valid_i;
+  logic [ 7:0] fld_warp_prog_profile_i;
+
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
   // 2026-09-19. Declared here for the same reason the command front above is:
@@ -1974,6 +2014,16 @@ module tb_zhao_console_core_smoke
   assign fld_cfg_slow_clear_i   = 1'b0;
   assign fld_stamp_slot_i       = 3'd0;
   assign fld_stamp_slot_valid_i = 1'b0;
+  // GEOM.WARP's Field binding. LOW for the same reason the stamp's is: this
+  // bench admits no field program, so there is no resident Warp slot to name,
+  // and a number here would be this bench asserting a residency it did not
+  // create. The profile id is the W profile's own (`field-ir.md` 7.1: earth
+  // 0, warp 1) so that `geom_warp_profile_mismatches_o` staying at zero means
+  // "no mismatch" rather than "no comparison" -- a zero from a check that
+  // never ran is the reading this campaign exists to remove.
+  assign fld_warp_slot_i        = 3'd0;
+  assign fld_warp_slot_valid_i  = 1'b0;
+  assign fld_warp_prog_profile_i = 8'd1;
   assign fld_db_ret_ready_i     = 1'b1;
   assign fld_db_post_kind_i     = 3'd0;
   assign fld_db_post_addr_i     = 8'd0;

@@ -612,6 +612,43 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]              cmd_exec_warp_draws_o,
   output logic [31:0]              cmd_exec_warp_draw_refused_o,
 
+  // ---- GEOM.WARP, composed into the core 2026-09-22 (packet WARPCOMP) ----
+  // A WRAPPER, NOT A COPY: `u_dut (.*)` binds by name, so every port the core
+  // gains must be declared here or the bind fails. Owner ruling R220 -- fix
+  // the wrapper, never the module. `tools/design/wrapper_port_parity.py`
+  // FIRED on all 33 of these before they were added, which is the instrument
+  // working rather than its silence being quoted.
+  output logic [31:0] geom_warp_vertices_transformed_o,
+  output logic [31:0] geom_warp_bypassed_o,
+  output logic [31:0] geom_warp_app_saturations_o,
+  output logic [31:0] geom_warp_normal_reduced_o,
+  output logic [31:0] geom_warp_degenerate_o,
+  output logic [31:0] geom_warp_bound_violations_o,
+  output logic [31:0] geom_warp_negative_bounds_o,
+  output logic [31:0] geom_warp_normal_width_faults_o,
+  output logic [31:0] geom_warp_profile_mismatches_o,
+  output logic [31:0] geom_warp_field_faults_o,
+  output logic [31:0] geom_warp_p_accepts_o,
+  output logic [31:0] geom_warp_n_accepts_o,
+  output logic        geom_warp_poison_valid_o,
+  output logic [15:0] geom_warp_poison_src_id_o,
+  output logic [ 2:0] geom_warp_poison_cause_o,
+  output logic signed [31:0] geom_warp_poison_dx_o,
+  output logic signed [31:0] geom_warp_poison_dy_o,
+  output logic signed [31:0] geom_warp_poison_dz_o,
+  output logic [31:0] geom_warp_desc_allocated_o,
+  output logic [31:0] geom_warp_desc_hits_o,
+  output logic [31:0] geom_warp_desc_stale_o,
+  output logic [31:0] fld_warp_vertices_o,
+  output logic [31:0] fld_warp_identities_o,
+  output logic [31:0] fld_warp_bypassed_o,
+  output logic [31:0] fld_warp_noprog_o,
+  output logic [31:0] fld_warp_sig_refused_o,
+  output logic [31:0] fld_warp_faults_o,
+  output logic [31:0] fld_warp_absent_outputs_o,
+  output logic [31:0] fld_warp_stall_cycles_o,
+  output logic [31:0] fld_warp_vtx_changed_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order
@@ -2873,6 +2910,9 @@ module zhao_console_core_untex_decl_mutant
   // contain.
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
+  input  logic [ 2:0]  fld_warp_slot_i,
+  input  logic         fld_warp_slot_valid_i,
+  input  logic [ 7:0]  fld_warp_prog_profile_i,
 
   // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is
   //  CLOSED 2026-09-20: entry I42 said it "is the seam the FLOW and EARTH
