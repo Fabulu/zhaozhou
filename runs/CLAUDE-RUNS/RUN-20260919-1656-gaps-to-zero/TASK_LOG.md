@@ -757,3 +757,92 @@ R133 stands on the merits rather than on the authority R223 wrongly gave it
 (corrected by R226). The open question is not whether it is blocked but whether
 to spend a wave on it, and that is the coordinator's call to make when a slot
 frees — not an escalation.
+
+## THE FULL CONSOLE FIT — owner instruction, 2026-09-21
+
+**Fabian, superseding both "fit at completion only" and the D2 answer he had
+given minutes earlier:**
+
+> *"I took the expensive options. We just want the full capability. We're over
+> budget a hundred times already. The important thing now is to get a fit now.
+> A full fit, no caveats. So we can assess the damage."*
+
+### The three caveats that made the last console row unusable are GONE
+
+1. **DEVICE.** `run_block_fit.ps1`'s own header: *"A SIZING DEVICE. Empty means
+   the QSF's own part, which is the TRUTH: 5CSEBA6U23I7, 41,910 ALM, and the
+   only device any closure claim may cite."* **`-Device` left empty.** The
+   `console-core-first-light` row ran on **`5CEBA9F31C7`** — HUDBAND found its
+   printed percentages wrong by **2.2x**.
+2. **CLEAN TREE** at launch, so the row carries `rtlCleanAtHead: true`. 222
+   sources, digest `331394f37610`.
+3. **FIELD** composed, unlike the 47,582 row that excluded all but one ROM.
+
+### ATTEMPT 1 DIED IN 30.3 SECONDS AND THE RUNNER RETURNED 0
+
+```
+zhao_console_core   incomplete:failed:quartus_map.exe   30.3s   ALM -
+FIT_RC=0
+```
+
+**The script succeeded at RECORDING a failure.** A full console fit cannot take
+30 seconds — **the duration is what caught it, not the exit code.** Same shape
+POSECMD reported an hour earlier, where ten smoke forms returning RC 1 in one
+second meant the bench could not verilate.
+
+**Cause:** a module-scope loop variable assigned inside `always_comb` in
+`zhao_host_regwin.sv`, nested in an `if` so the else path holds it — a latch,
+and one latch makes the block impure. **Verilator lints it clean** and the core
+had never been mapped, so nothing here could see it. Fixed at `a7b7d22d`;
+gate added as form 7 at `86dcd273`.
+
+**Attempt 2 never ran** — `-MapOnly` refused without `-RowLabel`, correctly,
+because an unlabelled map row would overwrite the full-fit row on merge. **The
+trap was that my output then showed the STALE report from attempt 1.** Delete
+the report before each run.
+
+### A RULE I WROTE DOWN WRONG, AND THE HOOK CORRECTED ME
+
+**The first version of this entry said "do not edit RTL in this tree until the
+fit returns." THAT IS FALSE and it is the exact superseded caution the fit-guard
+hook exists to kill.**
+
+`run_block_fit.ps1` **SNAPSHOTS** every declared source into
+`<workspace>/src` and points the QSF at the copy. **It printed the proof in my
+own log** — *"snapshot: 222 source(s) copied into the workspace; the live tree
+cannot reach this fit"* — **and I read that line and wrote the opposite rule
+anyway.** `QUARTUS_GOTCHAS` §11 carries a supersession box saying so, added
+2026-09-03.
+
+**What IS still true, and is a different rule:** `design/fit_targets.yml` is
+re-read **LIVE** at each block's preflight (§13), so a truncating rewrite of
+the config mid-fit still kills it. And a **SHELL or composed** fit declares no
+closure, so it has nothing to snapshot and **does** read the tree. *Sources and
+config now have different rules, and the split is what gets misremembered as
+one — check for the snapshot line before assuming either way.*
+
+### WHERE I WAS, written down BEFORE the results land
+
+**Three packets landed while the fit ran; SHADOWSUB is still live.**
+
+* **POSEREAD — merged.** `memory_rules` §5f.1 already determines the request
+  side and **postdates the architecture doc by sixteen days**. Surfaced a new
+  blocker: **`form -> clip bank` is unruled**, and wiring it through would serve
+  a correct palette for the **wrong animal**.
+* **DELTALAW** — repairing R231's depth law. **Not yet reported.**
+* **SHADOWSUB** — the FORGE.SHADOW subsystem, still running, with a sub-agent
+  mapping composition points.
+
+**Register 22. Rulings through R235.**
+
+### WHAT THIS FIT CONTAINS — not caveats, the state of the machine
+
+**IN:** FIELD, `zhao_post_gather`, `DrawPosedForm 0x0305`, the sheet seam, and
+the synthesis repair.
+
+**NOT IN:** **Gouraud** (D1, ~1,420 ALM / +24 DSP), the **TERRAIN deviation
+store** (D3, 185 M10K), the **HUD band** (R233, 12 M10K / ~595 ALM),
+**DELTALAW's repair**, **FORGE.SHADOW**, and **POSEREAD's `zhao_geom_clipread`**
+(built, uncomposed, outside the closure).
+
+**So the number is a FLOOR, and every authorised item above adds to it.**
