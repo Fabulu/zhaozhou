@@ -122,19 +122,35 @@
 // ---------------------------------------------------------------------------
 // The divider dominates and is entered a bounded number of times:
 //
-//     ring angles     K divides                       <= 8
-//     per ring        3 centre + 1 radius (+1 dome)   <= 5 x (N+1) <= 325
+//     ring angles     K divides                          <= 8
+//     LINEAR ring     3 centre + 1 radius   = 4 divides
+//     DOME ring       1 angle  + 1 radius   = 2 divides, + 3 products + 1 trig pair
 //
-// at 43 iterations each, plus ~4 clocks per trig pair and 2 per product. The
-// worst legal job -- a 64-segment, 8-sided DOME shell, 520 vertices -- is about
-// **16,000 clocks, or 0.96% of `computeClocksPerFrame` (1,666,666)**. Sixteen
-// of them would be 15%, which is the number to watch and is the same number
-// FORGE.PRIM.md flags for its own worst case.
+// at 43 iterations each, plus ~4 clocks per trig pair and 2 per product.
+//
+// **MEASURED, not argued** (`forge_ring_eval_directed` prints it on every run,
+// always-ready consumer, 520 vertices each):
+//
+//     LINEAR  64 x 8 tube   18,145 clocks   1.09% of computeClocksPerFrame
+//     DOME    64 x 8 shell  13,140 clocks   0.79%
+//
+// **AND THE DOME IS THE CHEAPER ONE, which is the opposite of what this header
+// said before the number was taken.** The comfortable reasoning -- a dome does
+// a quarter-wave lookup *as well as* a sweep, so it must cost more -- arrives
+// first and is wrong: DOME replaces THREE 43-iteration divides per ring with
+// three two-clock products and one trig pair, so it does strictly less work.
+// The expensive case is the plain LINEAR sweep, and a reader optimising this
+// block would have spent the effort on the wrong one. Recorded here rather
+// than quietly corrected, because the error is the instructive part.
+//
+// Sixteen worst-case primitives in one frame would be ~17%, which is the number
+// to watch and is the same shape FORGE.PRIM.md flags for its own worst case.
 //
 // **The lever, if that ever binds, is named rather than taken:** the divides
 // exist only because `segments` and `sides` are not restricted to powers of
 // two, and a per-ring reciprocal would trade exactness for rate. Exactness is
-// what makes the capture CRC a contract, so it is not traded here.
+// what makes the capture CRC a contract, so it is not traded here. Owner ruling
+// R236 settles the rest: a cost is a fact to record, never a veto.
 `default_nettype none
 
 module zhao_forge_ring_eval #(

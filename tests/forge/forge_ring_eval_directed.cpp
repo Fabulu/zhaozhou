@@ -148,13 +148,21 @@ bool ready_now(int pattern, int cycle, uint32_t& lrng) {
   }
 }
 
-/** Collect an accepted job's whole stream, terminating on `v_last_o`. */
+/**
+ * Collect an accepted job's whole stream, terminating on `v_last_o`.
+ * `g_last_cycles` is the walk's measured length -- the block header PRICES this
+ * block and a price is a measurement, not an argument (owner ruling R236: a
+ * cost is a fact to RECORD).
+ */
+int g_last_cycles = 0;
 std::vector<OutVertex> collect(Vzhao_forge_ring_eval& top, int pattern,
                                int max_cycles = 4000000) {
   std::vector<OutVertex> out;
   uint32_t lrng = 0xB0B0CAFEu;
   bool saw_last = false;
+  g_last_cycles = 0;
   for (int c = 0; c < max_cycles && !saw_last; ++c) {
+    g_last_cycles = c + 1;
     top.v_ready_i = ready_now(pattern, c, lrng) ? 1 : 0;
     top.eval();
     if (top.v_valid_o && top.v_ready_i) {
@@ -278,6 +286,45 @@ int main(int argc, char** argv) {
     run_case(top, p, 1, 0, "tube, minimum subdivision", cum);
     p = tube_case(fr::kMaxSegments, fr::kMaxSides);
     run_case(top, p, 1, 0, "tube, 64 x 8 -- the contract's worst case", cum);
+    const int linear_worst = g_last_cycles;
+    // THE PRICE, MEASURED, because the module header quotes it and a price is
+    // a measurement rather than an argument (R236: a cost is a fact to RECORD).
+    //
+    // IT ALSO CORRECTED THE HEADER. The obvious reading -- a DOME does a
+    // quarter-wave lookup as well as a sweep, so it must be the expensive case
+    // -- is WRONG, and this measurement is what said so: DOME replaces three
+    // 43-iteration divides per ring with three two-clock products and one trig
+    // pair, so the plain LINEAR sweep is the costly one. Both are taken here,
+    // and both are held to the envelope, so nobody has to remember which.
+    p = tube_case(fr::kMaxSegments, fr::kMaxSides);
+    p.family = fr::kFamShell;
+    p.sweep = fr::kSweepDome;
+    p.radius1 = p.radius0;
+    run_case(top, p, 1, 0, "radial shell, 64 x 8 DOME -- the maximal dome job", cum);
+    const int dome_worst = g_last_cycles;
+    std::printf(
+        "[forge_ring_eval] PRICE, measured with an always-ready consumer, "
+        "520 vertices each: LINEAR 64x8 = %d clocks (%.2f%%), DOME 64x8 = %d "
+        "clocks (%.2f%%) of computeClocksPerFrame = 1,666,666\n",
+        linear_worst, 100.0 * linear_worst / 1666666.0, dome_worst,
+        100.0 * dome_worst / 1666666.0);
+    // Hold BOTH to an order of magnitude, so a structural change that made the
+    // walk ten times longer is caught without pinning a number that legitimate
+    // retuning moves. The envelope is the header's "under 2% of a frame".
+    check(linear_worst > 0 && linear_worst < 40000,
+          "the LINEAR worst case stays inside the header's quoted envelope", 1,
+          (linear_worst > 0 && linear_worst < 40000) ? 1 : 0);
+    check(dome_worst > 0 && dome_worst < 40000,
+          "the DOME worst case stays inside the header's quoted envelope", 1,
+          (dome_worst > 0 && dome_worst < 40000) ? 1 : 0);
+    // And pin the DIRECTION, which is the thing that was wrong in the header:
+    // the dome trades three divides for three products, so it is CHEAPER. If a
+    // future edit reverses that, the header's explanation has stopped being
+    // true and somebody should find out from a test rather than from a fit.
+    check(dome_worst < linear_worst,
+          "the DOME sweep is CHEAPER than LINEAR -- it trades divides for products", 1,
+          dome_worst < linear_worst ? 1 : 0);
+
     // Every ring size, including the ones whose turn does NOT divide 65536.
     for (int sides = 1; sides <= fr::kMaxSides; ++sides) {
       p = tube_case(3, sides);

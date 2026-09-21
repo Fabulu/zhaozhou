@@ -519,6 +519,17 @@ staging path is the terrain pattern (`zhao_terrain_pageloader` moves a body,
 remaining work in `design/contracts/FORGE.PRIM.md`. Freezing the format is what
 R234 D2 authorised; building its reader is the next packet.
 
+**And §5's deterministic section ORDER is not extended here, deliberately.** That
+list names eleven section types and the registry in §2 now holds eighteen —
+`CREATURE_FORM`, `CLIP_BANK`, `TEXTURE_PAGE`, `MATERIAL_SET`, `MESH_STREAM` and
+`SPECIES_TABLE` were all absent from it before this section existed, so
+`FORGE_PROGRAM` is the seventh and not the first. Choosing a position is a
+ruling about pack determinism, and `tools/pack` has no forge writer to be
+constrained by it yet; picking one here would be freezing a second thing nobody
+asked for, in a section whose whole subject is what R199 said about freezing
+ahead of consumers. **Whoever writes the forge packer takes that position and
+extends §5 for all seven at once.**
+
 ## 5. Packing discipline (tools/pack, W3.6)
 
 - **Deterministic:** sections are written in a fixed order (~~ABI_INFO, then
