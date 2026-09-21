@@ -31,6 +31,45 @@ correctness-neutral, only a latency event).
 
 - `pose_requests` (from GEOM.MESHFETCH instance walk): {type_id, clip_id,
   frame_no, bone_count}.
+
+  **THE GAME-FACING CARRIER IS `DrawPosedForm` 0x0305**, ratified by owner
+  ruling R229 (D-POSEPAGE-A) on 2026-09-21 and specified in
+  `spec/commands.zidl`. Until then this clause named four fields that
+  appeared in NO command at any opcode, which is what kept core entry I29
+  open after its bytes, its page container and its store had all been
+  settled. `zhao_cmd_exec` lowers the record onto
+  `draw_posed_o`/`draw_clip_id_o`/`draw_frame_no_o`/`draw_sub_o`, riding the
+  same `draw_valid_o` beat as the draw itself.
+
+  **TWO OF THE FOUR FIELDS ABOVE DO NOT COME FROM THE COMMAND, and a reader
+  wiring this up owes both of them somewhere else:**
+
+  * `type_id` is the CREATURE TYPE and is deliberately absent from the
+    record. The draw names the creature through `form`, a handle32 whose
+    24-bit index is `spec/memory_rules.md` 5f.1's directory key. The
+    form -> type resolution is owed ONE implementation and a directed check;
+    carrying a second identity on the wire beside the first would be the
+    two-sources-of-truth shape this tree keeps striking.
+  * `bone_count` is a property of the CREATURE PAGE, not of the request --
+    `zref::clip_page`'s header carries it at `kOffBoneCount`, and
+    `creature_rules` 1.2 ceilings it at 32.
+
+  **AND THE COMMAND CARRIES A FIFTH FIELD THIS CLAUSE OMITS: `sub`, the
+  half-key phase.** It is not optional. This block's own cache
+  (`zhao_geom_pose_cache`) takes it as `acq_sub_i` and its header records
+  what omitting it cost -- with baked 60 Hz data "a key and its midpoint had
+  the SAME {type, clip, frame} and aliased ... the cache returned the wrong
+  palette and nothing reported an error". A request built from this clause's
+  four fields alone would reintroduce that defect.
+
+  **WHAT IS STILL UNDETERMINED**, so nobody reads the above as a green light:
+  R229 ratified the COMMAND layer only. Section 4.2 of
+  `reports/ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md` (owner-ratified
+  2026-09-03) wants the request side to be "a validated resident handle with
+  generation and epoch, not a naked slot and frame", and that is a different
+  layer with no ruling. The clip-bank GENERATION the cache keys on
+  (`acq_gen_i`, owner ruling D-3) is published by `PublishResource` 0x0030's
+  `new_generation` and is NOT on the draw record.
 - `clip_pages` (VRAM read via MEM.GUARD): kind-9 clip-bank bytes
   (spec/cartridge.md §4).
 - Output `bone_matrices`: palette handle + ≤32 × 3×4 fx16 matrices (48
