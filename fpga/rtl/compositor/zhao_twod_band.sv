@@ -17,6 +17,10 @@
 //     line ring            ~12 M10K     133% of frame    cannot draw a HUD
 //     BAND (B=4, L=16)      12 M10K     11.1% of frame   TAKEN
 //
+// THAT 12 IS THE RULING'S NUMBER AND NOT THIS BLOCK'S BILL. It is right for a
+// word of 20 bits or fewer; the shipped word is 40. See FRESHNESS below, which
+// is where the difference comes from and where the cheaper form is priced.
+//
 // AND THE THING THAT KILLED STRUCTURE 2 WAS NOT ITS MEMORY. It cost
 // `sum of HEIGHTS x a line-time`; the band costs `sum of AREAS`. The two use the
 // IDENTICAL memory. What separated them was TWOD.SPRITE holding `busy_q` for one
@@ -867,8 +871,17 @@ module zhao_twod_band #(
       // ---- the pass boundary ----------------------------------------------
       if (sweep_sync_c)       sweeping_q <= 1'b1;
       else if (sweep_last_c)  sweeping_q <= 1'b0;
-      if (restart_c)          armed_q    <= 1'b1;
-      else if (sweep_last_c)  armed_q    <= 1'b0;
+      // `armed_q` IS CLEARED BY THE SWEEP'S ORIGIN AS WELL AS BY ITS END, and
+      // that one extra term is what makes this self-recovering. It says "a
+      // restart has already happened for the pass about to begin"; once the
+      // pass HAS begun it has served its purpose. Without it, a pass that never
+      // reaches its last pixel -- a mode change, an aborted frame -- leaves
+      // `sweeping_q` set so every tick is ignored, AND leaves `armed_q` set so
+      // the fallback never fires: the band freezes until reset, with no counter
+      // able to say why. With it, the next sweep origin finds `armed_q` low and
+      // restarts the fill itself.
+      if (restart_c)                              armed_q <= 1'b1;
+      else if (sweep_last_c || sweep_sync_c)      armed_q <= 1'b0;
 
       // A descriptor arriving on this same clock is accepted into the cleared
       // list, because the intake above ran first.
