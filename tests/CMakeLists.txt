@@ -15349,14 +15349,34 @@ set_tests_properties(lint_geom_attrpack PROPERTIES
 # missing producer went unnoticed for so long, and a producer emitting
 # rubbish would write the same 1,536 pixels.
 #
-# -BadAttribute changes ONE NUMBER, vertex A's invw24, to a value whose
-# interpolant leaves 24 bits. The script inverts the verdict, so this test
-# PASSES when the bench fails. If the planes were not really reaching the
-# attribute lanes, changing a vertex attribute could not change the outcome.
-add_test(NAME console_core_attrpack_control
+# THIS TEST RAN `-BadAttribute` AND MEASURED NOTHING FROM 2026-09-19 TO
+# 2026-09-21. Found by FIELDLANE. `-BadAttribute` was RETIRED on 2026-09-19
+# when core entry I46 closed -- the smoke script's own line 121 records the
+# retirement -- and the ctest was never updated. It stayed GREEN and LABELLED
+# the whole time, because `powershell -File` binds an undeclared switch to
+# NOTHING and says NOTHING: no error, no warning, RC 0. The retired flag simply
+# ran the PLAIN smoke, which passes.
+#
+# A test that cannot fail is worse than a missing one: a missing test is
+# visibly absent, while this one appeared in every `ctest` summary as evidence
+# about a control that no longer existed. The script now REJECTS unrecognised
+# arguments with RC 2, so this class cannot recur silently.
+#
+# REPLACED RATHER THAN DELETED, because the same audit found the opposite
+# defect one line over: `-BadDescriptor` is a COMMITTED positive control -- the
+# smoke script calls it "THE POSITIVE CONTROL FOR THE GEOMETRY ASSET PATH" and
+# implements it in two places -- that NO ctest and no gate list ever ran. One
+# built-and-uninstalled control, one installed-and-dead test; this edit
+# settles both.
+#
+# -BadDescriptor corrupts ONE byte of the descriptor's reserved span (36..59).
+# The script inverts the verdict, so this test PASSES when the bench fails: if
+# the descriptor were not really reaching the asset path, changing a reserved
+# byte could not change the outcome.
+add_test(NAME console_core_baddescriptor_control
   COMMAND powershell -NoProfile -ExecutionPolicy Bypass
-          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BadAttribute)
-set_tests_properties(console_core_attrpack_control PROPERTIES
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BadDescriptor)
+set_tests_properties(console_core_baddescriptor_control PROPERTIES
   LABELS "prod;mutant")
 # --------------------------------------------------------------------------
 # THE CONSOLE'S FIELD HOST -- zhao_field_host: the loader, the residency
