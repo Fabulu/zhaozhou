@@ -3995,7 +3995,8 @@
 //
 // I29. GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
 //      `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
-//      `geom_pose_root_d*`) -- BOUNDARY. NEW 2026-09-19, and it is I10's
+//      `geom_pose_root_d*`, and since 2026-09-21 `geom_job_valid_o` /
+//      `geom_job_form_idx_o`) -- BOUNDARY. NEW 2026-09-19, and it is I10's
 //      SUCCESSOR rather than a new discovery: closing I10 composed
 //      `zhao_geom_pose_decode`, and a composed block's inputs become this
 //      module's edge until their own producer arrives.
@@ -4271,7 +4272,123 @@
 //            the skeleton unattributed, and a well-formed palette for the wrong
 //            animal is reachable through the BODY exactly as through the bank,
 //            with `bone_mismatch_o` blind to both when the bone counts agree.
-//            NOT DECIDED HERE -- see FINDINGS-formidx for the re-costed options.
+//            DECIDED 2026-09-21 AND IMPLEMENTED (packet FORMOWN). The owner
+//            ruling is `reports/Zhaozhou_kind8_kind9_proposed_owner_ruling_
+//            2026-09-21.txt`, pushed by the owner with the commit message
+//            "Agent please read - The ruling you wanted". BLOCKER (c) IS GONE;
+//            what it asked for now exists in bytes, in the reference, in both
+//            packers, in the RTL and in tests. In the ruling's own terms:
+//
+//              * THREE IDENTITIES, KEPT APART. FORM identity is the 24-bit
+//                MESH_STREAM index a page NAMES. RESOURCE identity is the
+//                publication's own index plus its full 16-bit generation.
+//                INSTANCE identity is the draw. "Bone count, loader order,
+//                first ladder row, physical slot, and equality of publication
+//                indices are NOT proofs of form ownership." `zhao_geom_clipread`
+//                reports form identity on `res_body_owner_o`/`res_clip_owner_o`
+//                BESIDE resource identity on `res_*_index_o`/`res_*_gen_o`, and
+//                the directed test loads one creature under two different
+//                resource indices so the two cannot be confused for one number.
+//
+//              * THE BYTES. One aligned little-endian u32 per semantic u24:
+//                bits 23:0 the owner form index, bits 31:24 MUST be zero and
+//                are REFUSED rather than masked. BODY header (TCB8) bytes
+//                16..19; CLIP_BANK header (ZCLP) bytes 20..23. Both headers
+//                stay 64 bytes -- the words went into EXISTING padding, so the
+//                clip golden is still 704 bytes and no bone record, clip
+//                record, frame stride or `body_off` semantic moved. Index zero
+//                is NOT a sentinel; a page owned by form 0 is an ordinary page
+//                and is served.
+//
+//              * THE VERSIONS ARE SPLIT, NOT BUMPED. BODY v2 and CLIP_BANK v2;
+//                this page kind's OUTER ZCFM header and the ladder format stay
+//                v1. `zhao_geom_clipread` had ONE `VERSION` constant and now
+//                has FORM_VERSION / BODY_VERSION / CLIP_VERSION, for the
+//                ruling's stated reason: "merely changing that single constant
+//                to 2 would reject the still-v1 outer header." A BODYLESS
+//                outer-v1 ladder page stays legal and the bench asserts it
+//                raises no fault counter.
+//
+//              * THE CARDINALITY CONFLICT IS RESOLVED BY KEEPING BOTH HALVES.
+//                Kind 8 stays an N-FORM LADDER TABLE plus at most ONE
+//                explicitly named skeleton. The body does NOT become the
+//                skeleton for every row; the other records stay independently
+//                owned metadata. A body-bearing page must carry a LADDER RECORD
+//                for its body's owner, and the committed golden's body is owned
+//                by its SECOND row on purpose so "read the owner word" and
+//                "read row zero" are separable measurements.
+//
+//              * THE PRODUCER IS EXPOSED, NOT INVENTED, AND LANDED WITH ITS
+//                CONSUMER. `zhao_geom_drawjob.j_form_idx_o` is `form_idx_q`
+//                itself, all 24 bits, driven from the register ONLY while
+//                `j_valid_o` is high -- because in that block's S_IDLE it still
+//                holds the PREVIOUS draw, which is why this entry said it must
+//                be qualified by state and never offered bare. It reaches this
+//                module's edge as `geom_job_valid_o` / `geom_job_form_idx_o`,
+//                for the same reason the R229 pose key is at the edge: an
+//                output nobody reads lets synthesis delete the registers behind
+//                it and the next fit prices the lane at zero. The CONSUMER,
+//                `zhao_geom_clipread.p_form_idx_i`, landed in the same commit
+//                and refuses any request whose form is not the form BOTH
+//                resident sections name, counting it on `owner_mismatch_o` --
+//                which is deliberately neither `clip_miss_o` (a miss is a
+//                question this bank could have answered) nor `not_resident_o`
+//                (something IS loaded; it belongs to somebody else).
+//
+//              * THE COMPARISON IS NOT BLIND, which is this tree's own hardest
+//                law. Three operands with three independent loads:
+//                `p_form_idx_i` arrives combinationally from the draw,
+//                `body_owner_q` is written in S_BR_FILL out of a kind-8
+//                publication, `clip_owner_q` in S_CD_ROW out of a kind-9 one.
+//                No single register enable moves two sides of it. And the owner
+//                read out of a header is STAGED, committed only beside
+//                `body_v_q`/`clip_v_q` -- adopting it at the header would leave
+//                a read DENIED mid-walk with the previous skeleton resident
+//                wearing the new page's identity.
+//
+//              * IT DISCRIMINATES, AND THE PROOF IS A COMMITTED MUTANT.
+//                `owner_mismatch_o` fires five times under legal stimulus with
+//                the matched triple silent beside it (R95). Draw A/body A/clips
+//                B, draw A/body B/clips A and draw B/body A/clips A are all
+//                refused AT IDENTICAL BONE COUNTS, clip ids, frame counts and
+//                frame numbers, with `bone_mismatch_o` asserted SILENT
+//                throughout -- 6 bones under 6 bones agrees perfectly, which is
+//                exactly the blindness this entry predicted. The two forms
+//                differ ONLY in bits 23:16, so every refusal would be a HIT on
+//                a 16-bit key. `tests/mutants/zhao_geom_clipread_ownerblind_
+//                mutant.sv` removes the one expression and the block then
+//                serves draw A from creature B's bank -- six quaternion words
+//                of a foreign palette into the store with every counter green.
+//
+//              * THE POSE CACHE'S TWO OBLIGATIONS (ruling section 4), which the
+//                header change alone does not satisfy, are done too.
+//                `zhao_geom_pose_cache.acq_type_i` and its stored tag were 16
+//                bits against a 24-bit form index, so 0x000100 and 0x010100
+//                were one key; TYPE_W now parameterises it at 24 in production
+//                with an elaboration guard FIRED at -GTYPE_W=8, and the alias
+//                is asserted distinct on the hit path as well as the miss path.
+//                And `acq_body_idx_i` / `acq_body_gen_i` / `acq_clip_idx_i`
+//                join the clip generation so a BODY-ONLY republication cannot
+//                hit a stale palette -- no field is compared to another field
+//                anywhere in that file, because the two generations belong to
+//                independent publications.
+//
+//            WHAT (c) DID NOT BUY, stated because the ruling says so in terms:
+//            "Ownership is not resource discovery. Two owner fields make the
+//            association VERIFIABLE. They do not tell a loader which of several
+//            nonresident resource pages to fetch ... do not call I29 closed
+//            merely because these fields exist." The one-body/one-directory
+//            staging tier is unchanged and is still the measured tier.
+//
+//            SO WHAT REMAINS OF I29 IS THE COMPOSITION AND THE WALK: the sixth
+//            `u_geom_mem_adapter` requester (an in-core edit at
+//            `zhao_mem_share_n` N = 5 -> 6, no boundary port), and the instance
+//            walk that turns an accepted draw into a `pose_requests` beat --
+//            which is what `geom_job_valid_o`/`geom_job_form_idx_o` now carry
+//            the identity half of. Composing `zhao_geom_clipread` with
+//            `zhao_geom_bonesrc` is a SUBSYSTEM boundary and owes one fit.
+//            See FINDINGS-formown.md; FINDINGS-formidx's re-costed options are
+//            superseded by the ruling.
 //
 //            [the original 2026-09-21 text of blocker (b), kept because the
 //             reasoning that produced D-POSEPAGE-A is the record of why the

@@ -50,6 +50,30 @@ correctness-neutral, only a latency event).
     form -> type resolution is owed ONE implementation and a directed check;
     carrying a second identity on the wire beside the first would be the
     two-sources-of-truth shape this tree keeps striking.
+
+    **SETTLED 2026-09-21 (owner ruling on kind-8 / kind-9 ownership;
+    `spec/cartridge.md` §4e).** There is no form -> type mapping, because
+    there is no second type id: **the 24-bit form index IS the key**, and the
+    resource now says which form it belongs to rather than the loader
+    guessing. The `BODY` header (v2, bytes 16..19) and the `CLIP_BANK` header
+    (v2, bytes 20..23) each carry an explicit `owner_form_index`, and the
+    request carries the DRAW'S OWN form index —
+    `zhao_geom_drawjob.j_form_idx_o`, which is that block's existing
+    `form_idx_q` (`d_form_i[31:8]`) exposed on the accepted job with the job's
+    own handshake, **never re-read from an unrelated live register later**.
+    `zhao_geom_clipread.p_form_idx_i` is the consumer; a request whose form is
+    not the form BOTH resident sections name is refused and counted on
+    `owner_mismatch_o`, not recorded as a clip miss and not as an absent
+    resident.
+
+    **Three identities, kept apart, and this clause used to conflate two of
+    them.** FORM identity is the 24-bit index a page NAMES. RESOURCE identity
+    is the publication's own index plus its full 16-bit generation
+    (`res_body_index_o`/`res_body_gen_o`, `res_clip_index_o`/`res_clip_gen_o`).
+    INSTANCE identity is the draw. A body and its clip bank are published under
+    two independent resource indices and still name one form; a publication
+    index is **not** a proof of ownership, and neither is a matching bone
+    count, loader order, the first ladder row or a physical slot.
   * `bone_count` is a property of the CREATURE PAGE, not of the request --
     `zref::clip_page`'s header carries it at `kOffBoneCount`, and
     `creature_rules` 1.2 ceilings it at 32.
@@ -70,6 +94,36 @@ correctness-neutral, only a latency event).
   layer with no ruling. The clip-bank GENERATION the cache keys on
   (`acq_gen_i`, owner ruling D-3) is published by `PublishResource` 0x0030's
   `new_generation` and is NOT on the draw record.
+
+  **THE CACHE KEY IS WIDER THAN THAT CLAUSE SAYS, AS OF 2026-09-21.** The
+  ownership ruling's section 4 names two obligations the byte format alone
+  does not satisfy, and `zhao_geom_pose_cache` now carries both:
+
+  * **24 BITS OF FORM.** `acq_type_i` and the stored tag were 16 bits against
+    a 24-bit form index, so `0x000100` and `0x010100` were ONE cache line.
+    `TYPE_W` parameterises the field, **24 in production** with an elaboration
+    guard refusing anything outside 16..24 (fired at `-GTYPE_W=8` by
+    `geom_pose_cache_elab_guard`, because `--lint-only` does not run `initial`
+    blocks). The alias is asserted distinct on the **hit** path as well as the
+    miss path — an insert storing 24 bits with a comparison reading 16 passes
+    only the second.
+  * **ASSET LIFETIME.** Owner equality proves the intended FORM, not which
+    version of its skeleton and animation produced a cached palette.
+    Republish the BODY alone — same form, same clips, same frame, same
+    sub-phase — and `acq_gen_i` cannot see it. So `acq_body_idx_i`,
+    `acq_body_gen_i` and `acq_clip_idx_i` join the key, taken from
+    `zhao_geom_clipread`'s `res_body_index_o` / `res_body_gen_o` /
+    `res_clip_index_o`. **No field is ever compared to another field**: body
+    and clip generations belong to independent publications, and two different
+    clip resources may carry equal local generation numbers. The full 16-bit
+    publication generations are kept, never reduced to the handle's low eight
+    bits.
+
+  Cost, recorded: the tag is 192 bits against 120 at TUPLES=128 — +9,216
+  LOGICAL bits, of which 1,024 are the eight form bits and 8,192 the two
+  resource indices and the body generation. That is not an M10K or ALM figure;
+  physical packing, the wider comparator and the four extra ports are what a
+  fit measures.
 - `clip_pages` (VRAM read via MEM.GUARD): kind-9 clip-bank bytes
   (spec/cartridge.md §4).
 - Output `bone_matrices`: palette handle + ≤32 × 3×4 fx16 matrices (48

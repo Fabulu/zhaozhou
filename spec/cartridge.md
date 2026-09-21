@@ -530,6 +530,109 @@ asked for, in a section whose whole subject is what R199 said about freezing
 ahead of consumers. **Whoever writes the forge packer takes that position and
 extends §5 for all seven at once.**
 
+## §4e — FORM OWNERSHIP in the BODY and the CLIP_BANK (owner ruling, 2026-09-21)
+
+**Ruling:** `reports/Zhaozhou_kind8_kind9_proposed_owner_ruling_2026-09-21.txt`.
+It resolves the cardinality question §4c's `body_off` left open — *one kind-8
+page is an N-form ladder table plus at most ONE creature's skeleton, and
+nothing said whose* — and the identical absence one page kind over, where a
+`CLIP_BANK` header carried no form key at all.
+
+**Why an absence rather than a bug.** A resident skeleton and a resident clip
+bank could answer any draw. Bone counts agree in the common case, so a
+mismatch detector reading zero was telling the truth about the wrong quantity,
+and the result is a **well-formed palette for the wrong animal with every
+counter green**. The ruling's fix is a field, not a heuristic: *"Bone count,
+loader order, first ladder row, physical slot, and equality of publication
+indices are NOT proofs of form ownership."*
+
+### The bytes
+
+One aligned little-endian `u32` storage word per semantic `u24`. **Bits 23:0
+are the owner's MESH_STREAM form index; bits 31:24 MUST be zero** and a page
+setting them is REFUSED, never masked — masking would make two stored words
+mean one form.
+
+```
+BODY header (TCB8), version 2     bytes 16..19   u32 owner_form_index
+CLIP_BANK header (ZCLP), version 2 bytes 20..23   u32 owner_form_index
+```
+
+**Both headers remain 64 bytes.** The words went into existing padding, so no
+page grew, no bone record, clip record or frame stride moved, `body_off` keeps
+its §4c meaning, and the reader needs no additional header transaction — its
+read was already a whole 64-byte line.
+
+**Index zero is not a sentinel.** Presence of an owner follows the VERSION and
+the validated presence of the section, never the numeric value. A body or bank
+owned by form 0 is an ordinary one and is served.
+
+### The versions are SPLIT, not bumped
+
+**`BODY` and `CLIP_BANK` go to version 2. The outer kind-8 `ZCFM` header and
+§4c's ladder record stay at version 1.** A reader must therefore check three
+versions separately; `zhao_geom_clipread` had one shared `VERSION` constant and
+now has `FORM_VERSION` / `BODY_VERSION` / `CLIP_VERSION`, because in the
+ruling's words *"merely changing that single constant to 2 would reject the
+still-v1 outer header."*
+
+**A bodyless outer-v1 ladder page stays legal** — §4c's `body_off == 0` is
+unchanged and raises no fault.
+
+**Unowned v1 body or clip data is NOT accepted on the posed-render path.** An
+offline conversion needs a supplied, validated owner; it cannot discover one
+from bytes that never held it. The historical v1 goldens stay committed and
+stay identifiable, and the reader reads them and refuses them.
+
+### What a packer must do, and must not
+
+The owner is **supplied by the asset definition or manifest**. It is never
+inferred from row zero of the ladder, from a matching bone count, from the
+publication index or from loader order — none of those is evidence, and a
+packer has no honest way to guess.
+
+**A body-bearing kind-8 page must contain a LADDER RECORD for its body's
+owner.** The other ladder records remain independently owned metadata; they are
+**not** users of that body. §4c's ladder lookup and whole-page replacement
+semantics are unchanged, and the bank stays a multi-form table.
+
+### What the loader must prove
+
+Before a pose is decoded, published or drawn: the request names a valid,
+generation-checked MESH_STREAM form; body and clip resources are completely
+adopted; `request.form_index == body.owner_form_index`; `request.form_index ==
+clip.owner_form_index`; the bone counts agree; the clip, frame and sub-phase
+are legal. **A mismatch is refused and counted, never treated as a cache miss.**
+The same condition protects cache hits, not only miss decoding.
+
+**Data, ownership and validity are adopted as one logical state.** An owner
+read out of a header is staged and committed only with its payload — publishing
+it earlier leaves a load that is later denied with the previous section still
+resident wearing the new page's identity.
+
+### Where it is stated, and what pins it
+
+Model: `reference/include/zref/zref_creature_page.hpp` (`body::kOffOwnerForm`,
+`body::build_body`, `body::decode_body`, `body_owner_in_ladder`,
+`build_with_body`) and `reference/include/zref/zref_clip_page.hpp`
+(`kOffOwnerForm`, `build`, `decode`). Packers: `tools/pack/mkcreatureladder.py
+--body-owner` and `tools/pack/mkclipbank.py --owner`, both REQUIRED, both with
+`--check`. Goldens: `tests/golden/creature_ladder/ladder_page_body_v2.bin` and
+`tests/golden/creature_clip/clip_page_v2.bin`, whose owner is the ladder's
+**second** row on purpose, so "read the owner word" and "read row zero" are
+separable measurements. Hardware: `fpga/rtl/geometry/zhao_geom_clipread.sv`
+(`p_form_idx_i`, `res_body_owner_o`, `res_clip_owner_o`, `owner_mismatch_o`),
+fed by `fpga/rtl/geometry/zhao_geom_drawjob.sv`'s `j_form_idx_o`. Evidence:
+`tests/geometry/geom_clipread_directed.cpp`, `tests/geometry/clip_page_directed.cpp`
+and the positive control `tests/mutants/zhao_geom_clipread_ownerblind_mutant.sv`.
+
+### Ownership is not resource discovery
+
+Two owner fields make the association **verifiable**. They do not tell a loader
+which of several nonresident pages to fetch, and they do not establish a
+multi-body directory or a multi-resident skeleton cache. The
+one-body/one-directory staging tier is unchanged and is still the measured one.
+
 ## 5. Packing discipline (tools/pack, W3.6)
 
 - **Deterministic:** sections are written in a fixed order (~~ABI_INFO, then
