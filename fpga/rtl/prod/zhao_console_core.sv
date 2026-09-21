@@ -6752,6 +6752,55 @@ module zhao_console_core
   // and prove `geom_untex_refused_o` fires through the composed door -- the
   // state is unreachable by legal stimulus while the only producer is
   // textured, and a counter never seen to move is a claim, not a measurement.
+  // ==========================================================================
+  // THE FORGE CHAIN'S KNOBS, composed 2026-09-21 (FORGECOMP)
+  // ==========================================================================
+  // (MAX_SEGMENTS + 1) * MAX_SIDES = 65 * 8, `zhao_forge_prim`'s own frozen
+  // bounds restated as a capacity. Raising either bound without raising this
+  // is what `zhao_forge_assemble`'s `vtx_overflow_o` exists to catch.
+  parameter int unsigned FORGE_MAX_VERTS = 520,
+  // In-flight projector requests. The service's result port has NO
+  // backpressure and its stated latency is 36 clocks; the assembler's
+  // elaboration guard refuses anything below that.
+  parameter int unsigned FORGE_INFLIGHT  = 64,
+  // Forge programs resident per page. A page declaring more is REFUSED WHOLE.
+  parameter int unsigned FORGE_MAX_SCAN  = 16,
+  //
+  // THE AUTHORED COLOUR -- CLAUDE.md rule 6, and the treatment owner ruling
+  // R133's D-FORGESHADOW-A already accepted for `cast_strength_i`.
+  //
+  // A forge primitive's PRE-LIT colour has no producer: the frozen
+  // FORGE_PROGRAM record (`zref_forge_page.hpp`) carries anchors, axes, radii,
+  // a seed and a phase, and NO colour field. R234 D1 rules that the Gouraud
+  // lanes are exactly where an untextured primitive's pre-lit colour belongs,
+  // so the mechanism is ratified and only the VALUE is ours.
+  //
+  // THESE ARE STARTING VALUES CHOSEN BY REASONING AND NOT YET BY LOOKING. The
+  // first forge primitive is a lightning bolt, so they are a hot near-white
+  // with a cool cast rather than a flat white -- but nothing has been rendered
+  // and CLAUDE.md is explicit that measurement cannot choose a value and that
+  // the read at final resolution against what it sits on is the thing. Expect
+  // to move them. They are Q16.16 on the Gouraud lanes, so 65536 is 1.0.
+  parameter int signed FORGE_LIT_R = 32'sd62259,   // 0.95
+  parameter int signed FORGE_LIT_G = 32'sd63897,   // 0.975
+  parameter int signed FORGE_LIT_B = 32'sd65536,   // 1.0
+  parameter int signed FORGE_ALPHA = 32'sd65536,   // 1.0, opaque
+  // The draw's semantic weight, which MATERIAL.RESOLVE ECHOES and reads
+  // nowhere -- a label travelling with its request, not a policy invented here.
+  parameter logic [7:0] FORGE_QUALITY_TIER = 8'd128,
+  // `zhao_geom_clip`'s cull mode for a forge primitive. ZERO = no culling, and
+  // that is the authored choice rather than a default: a ribbon is a two-sided
+  // sheet and a bolt seen from behind must still draw. `zref::raster_state`'s
+  // own numbering.
+  parameter logic [1:0] FORGE_CULL_MODE = 2'd0,
+  // `DrawProcedural` carries NO viewport_mask -- the only draw in the ABI that
+  // does not. So the command asserts BOTH views and the PAGE's own `view_mask`
+  // governs alone, which is where `zref_forge_page.hpp` puts it. This is a
+  // named constant rather than a literal because it is a statement about the
+  // command surface, and the day DrawProcedural grows a mask it is the line
+  // that changes.
+  parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
+
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
@@ -6769,6 +6818,14 @@ module zhao_console_core
   parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
   parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
   parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
+  // THE SEVENTH SLOT, NAMED 2026-09-21 (FORGECOMP). It was the only one of the
+  // ruling-5 packet's seven with no parameter here, which read as though the
+  // packet were six wide plus a spare. It is not: `zhao_geom_replay`'s own
+  // ATTRW comment enumerates the attribute store as "(u_over_w, v_over_w, r,
+  // g, b, alpha)" and GEOM_ATTR_STORE_W is (GEOM_CLIP_ATTRS - 1) * 32, so slot
+  // 6 is ALPHA and always was. Naming it is not a change; it is the end of a
+  // reader having to derive it.
+  parameter int unsigned GEOM_ATTR_SLOT_ALPHA    = 6,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -7525,6 +7582,69 @@ module zhao_console_core
   // was full. Backpressure, never a drop -- and the instrument that says the
   // queue's sizing assumption (twice MAX_TRIANGLES) still holds.
   output logic [31:0]             geom_rp_triq_stall_o,
+
+  // ---- THE FORGE CHAIN's evidence (composed 2026-09-21) --------------------
+  // DrawProcedural 0x0302 -> the program page -> topology and positions ->
+  // the projector's third owner -> GEOM.CLIP's door. Every counter below is
+  // fired by legal stimulus at its own block's ports except
+  // `forge_asm_vtx_overflow_o`, which is unreachable while the evaluators'
+  // bounds and FORGE_MAX_VERTS agree and therefore owes a committed mutant.
+  output logic [31:0] forge_pb_pages_o,
+  output logic [31:0] forge_pb_draws_o,
+  output logic [31:0] forge_pb_bad_magic_o,
+  output logic [31:0] forge_pb_page_overflow_o,
+  output logic [31:0] forge_pb_truncated_o,
+  output logic [31:0] forge_pb_lookup_miss_o,
+  output logic [31:0] forge_pb_refused_kind_o,
+  output logic [31:0] forge_pb_refused_cliff_o,
+  output logic [31:0] forge_pb_bad_record_o,
+  output logic [31:0] forge_pb_refused_nopage_o,
+  output logic [31:0] forge_pb_denied_o,
+  output logic        forge_pb_busy_o,
+  output logic [31:0] forge_prim_jobs_o,
+  output logic [31:0] forge_prim_triangles_o,
+  output logic [31:0] forge_prim_refused_family_o,
+  output logic [31:0] forge_prim_refused_limit_o,
+  output logic [31:0] forge_prim_skipped_view_o,
+  output logic [31:0] forge_eval_jobs_o,
+  output logic [31:0] forge_eval_points_o,
+  output logic [31:0] forge_eval_vertices_o,
+  output logic [31:0] forge_eval_refused_limit_o,
+  output logic [31:0] forge_eval_skipped_view_o,
+  output logic [31:0] forge_eval_sat_events_o,
+  output logic [31:0] forge_eval_walk_overrun_o,
+  output logic [31:0] forge_ring_jobs_o,
+  output logic [31:0] forge_ring_rings_o,
+  output logic [31:0] forge_ring_vertices_o,
+  output logic [31:0] forge_ring_refused_family_o,
+  output logic [31:0] forge_ring_refused_elsewhere_o,
+  output logic [31:0] forge_ring_refused_limit_o,
+  output logic [31:0] forge_ring_skipped_view_o,
+  output logic [31:0] forge_ring_sat_events_o,
+  output logic [31:0] forge_asm_jobs_o,
+  output logic [31:0] forge_asm_vertices_o,
+  output logic [31:0] forge_asm_triangles_o,
+  output logic [31:0] forge_asm_index_oor_o,
+  output logic [31:0] forge_asm_vtx_overflow_o,
+  output logic [31:0] forge_asm_slot_pressure_o,
+  output logic [31:0] forge_asm_dq_refused_o,
+  output logic [31:0] forge_asm_dq_stray_o,
+  output logic [31:0] forge_asm_proj_stray_o,
+  // CMD.EXEC's own half of the dispatch.
+  output logic [31:0] cmd_exec_forges_o,
+  output logic [31:0] cmd_exec_forge_overflow_o,
+  output logic [31:0] cmd_exec_forge_src_truncated_o,
+  // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
+  // from the other five so the scan's cost is a NUMBER rather than an argument.
+  output logic [31:0] geom_ma_jobs_f_o,
+
+  // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
+  // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
+  // `granted_o` is flattened 32 bits each, least significant slice client 0.
+  output logic [63:0] geom_clipdoor_granted_o,
+  output logic [31:0] geom_clipdoor_switches_o,
+  output logic [31:0] geom_clipdoor_idle_offered_o,
+  output logic [31:0] geom_clipdoor_err_hold_broken_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -11538,6 +11658,597 @@ module zhao_console_core
   wire               cl_o_untex;
 
   // ==========================================================================
+  // THE FORGE CHAIN -- composed 2026-09-21 (FORGECOMP), SIX BLOCKS IN ONE ACT
+  //
+  // DrawProcedural 0x0302 -> zhao_forge_pagebank (the program page, and the
+  // dispatch) -> zhao_forge_prim (topology) and zhao_forge_prim_eval /
+  // zhao_forge_ring_eval (positions) -> zhao_forge_assemble (the join, the
+  // projector's third owner, the canonical depth and the attribute packet) ->
+  // zhao_geom_clipdoor (owner ruling R187's honest door) -> the material
+  // window -> GEOM.CLIP.
+  //
+  // WHY ALL OF IT IN ONE COMMIT, which is the only way it could land: every
+  // block here is a producer whose only consumer is another of them.
+  // `zhao_forge_prim` emits index triples nothing could look up; the
+  // evaluators emit world positions nothing could project; the assembler emits
+  // screen triangles with no door; the door has one client and no second. A
+  // prefix of this chain is a tie-off wearing a composition's clothes, which is
+  // this campaign's first prohibition -- and it is exactly why five FORGE
+  // passes moved the register by zero.
+  //
+  // THE THREE SEAMS THIS OPENS INTO COMPOSED BLOCKS, each with its authority:
+  //   * `zhao_cmd_exec` gains an arm for 0x0302. The record previously fell
+  //     through to `unsupported_o`, which this file's own FORGE CLUSTER section
+  //     said in as many words and which is now out of date.
+  //   * `zhao_geom_mem_adapter` gains requester F. spec/memory_rules.md 5f's
+  //     condition is met -- same pool, same client, same direction -- and the
+  //     traffic is one header per PUBLICATION plus a bounded scan per
+  //     PROCEDURAL DRAW, the lightest on the share after E.
+  //   * `zhao_part_project` gains its third owner, `OWNER_FORGE = 2'd2`. That
+  //     value has been RESERVED in the encoding since R68 sub-build 4 and the
+  //     block's header commissioned the arm in writing. OWNER RULING R3 IS NOT
+  //     TOUCHED: R3 withholds a third PORT on `zhao_project_service` and NAMES
+  //     the time multiplex as the thing to keep, and a third client on the
+  //     front mux is that multiplex doing its job.
+  //
+  // WHAT R3 STILL OWES AND THIS PACKET DOES NOT DISCHARGE: the written schedule
+  // proof that geometry, particles and this third client share client A's
+  // bandwidth within the frame at the guaranteed content tier. The arm now
+  // exists, so the FAIRNESS half is measurable for the first time (it was not
+  // before -- `tb_part_project` drives the block standalone); the RATE half
+  // needs a per-client demand figure this composition does not produce. Named
+  // here rather than claimed, and named in FORGE.PRIM.EVAL.md's closing section.
+  // ==========================================================================
+  wire         fpb_p_valid, fpb_p_ready;
+  wire [ 2:0]  fpb_p_family;
+  wire [ 6:0]  fpb_p_segments;
+  wire [ 3:0]  fpb_p_sides;
+  wire [15:0]  fpb_p_material;
+  wire [ 1:0]  fpb_p_view_mask;
+  wire [15:0]  fpb_p_src_id;
+  wire [31:0]  fpb_material_set;
+
+  wire         fpb_e_valid, fpb_e_ready;
+  wire signed [31:0] fpb_e_sx, fpb_e_sy, fpb_e_sz, fpb_e_ex, fpb_e_ey, fpb_e_ez;
+  wire signed [31:0] fpb_e_p1x, fpb_e_p1y, fpb_e_p1z;
+  wire signed [31:0] fpb_e_p2x, fpb_e_p2y, fpb_e_p2z;
+  wire signed [31:0] fpb_e_wx, fpb_e_wy, fpb_e_wz;
+  wire signed [31:0] fpb_e_hw, fpb_e_bhw, fpb_e_amp, fpb_e_bamp;
+  wire [31:0]  fpb_e_seed;
+  wire [15:0]  fpb_e_phase;
+  wire [ 6:0]  fpb_e_segments;
+  wire [ 1:0]  fpb_e_brcount;
+  wire [ 6:0]  fpb_e_b0att, fpb_e_b1att;
+  wire [ 3:0]  fpb_e_b0seg, fpb_e_b1seg;
+  wire signed [31:0] fpb_e_b0x, fpb_e_b0y, fpb_e_b0z;
+  wire signed [31:0] fpb_e_b1x, fpb_e_b1y, fpb_e_b1z;
+  wire [ 1:0]  fpb_e_vmask;
+  wire [15:0]  fpb_e_src_id;
+
+  wire         fpb_r_valid, fpb_r_ready;
+  wire [ 2:0]  fpb_r_family;
+  wire         fpb_r_sweep;
+  wire [ 6:0]  fpb_r_segments;
+  wire [ 3:0]  fpb_r_sides;
+  wire signed [31:0] fpb_r_a0x, fpb_r_a0y, fpb_r_a0z;
+  wire signed [31:0] fpb_r_a1x, fpb_r_a1y, fpb_r_a1z;
+  wire signed [31:0] fpb_r_ux, fpb_r_uy, fpb_r_uz;
+  wire signed [31:0] fpb_r_vx, fpb_r_vy, fpb_r_vz;
+  wire signed [31:0] fpb_r_r0, fpb_r_r1;
+  wire [ 1:0]  fpb_r_vmask;
+  wire [15:0]  fpb_r_src_id;
+
+  wire         fp_t_valid, fp_t_ready;
+  wire [15:0]  fp_t_i0, fp_t_i1, fp_t_i2, fp_t_material, fp_t_src_id;
+  wire         fp_t_last;
+
+  wire         fe_v_valid, fe_v_ready;
+  wire signed [31:0] fe_v_x, fe_v_y, fe_v_z;
+  wire         fe_v_last;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The ribbon evaluator's polygon tag and per-vertex source id, and the ring
+  // evaluator's (s, k) lattice coordinates. LEFT UNREAD DELIBERATELY: the join
+  // this console performs is by ORDER, which `zref_forge_page.hpp` names as the
+  // whole of the contract between the two halves. A composer that read the
+  // lattice coordinates and paired on them would be inventing a SECOND join
+  // law beside the ratified one, and the two would then be able to disagree.
+  wire [ 1:0]  fe_v_poly;
+  wire [15:0]  fe_v_src_id;
+  wire [ 6:0]  fr_v_ring;
+  wire [ 4:0]  fr_v_k;
+  wire [15:0]  fr_v_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  wire         fr_v_valid, fr_v_ready;
+  wire signed [31:0] fr_v_x, fr_v_y, fr_v_z;
+  wire         fr_v_last;
+
+  // THE POSITION STREAMS MERGE BY FAMILY, and the merge is a plain mux because
+  // only one of the two can ever be running: `zhao_forge_pagebank` issues a
+  // job to the ribbon evaluator OR to the ring evaluator, never both, and holds
+  // the next draw until the assembler retires the primitive. So this is a
+  // selection, not an arbitration, and giving it an arbiter would be spending
+  // ALM to resolve a contention the dispatch makes impossible.
+  wire fa_v_valid = fe_v_valid || fr_v_valid;
+  wire fa_from_ring_c = fr_v_valid;
+  wire signed [31:0] fa_v_x = fa_from_ring_c ? fr_v_x : fe_v_x;
+  wire signed [31:0] fa_v_y = fa_from_ring_c ? fr_v_y : fe_v_y;
+  wire signed [31:0] fa_v_z = fa_from_ring_c ? fr_v_z : fe_v_z;
+  wire fa_v_last = fa_from_ring_c ? fr_v_last : fe_v_last;
+  wire fa_v_ready;
+  assign fe_v_ready = fa_v_ready && !fa_from_ring_c;
+  assign fr_v_ready = fa_v_ready &&  fa_from_ring_c;
+
+  // The currently-rendering view, as the two-bit MASK the evaluators compare
+  // against a job's own `view_mask`. The console's view index is one bit; this
+  // is that bit expanded, in one place, rather than at three instances.
+  wire [1:0] forge_view_sel_c = part_prj_view_i ? 2'b10 : 2'b01;
+
+  wire        fpb_g_beat_valid;
+  wire [63:0] fpb_g_beat_data;
+  zhao_guard_req_t fpb_guard_req;
+  zhao_guard_rsp_t fpb_guard_rsp;
+
+  wire         fa_f_valid, fa_f_ready;
+  wire signed [31:0] fa_f_vx, fa_f_vy, fa_f_vz;
+  wire         fa_f_view;
+  wire [14:0]  fa_f_slot;
+  wire         pj_f_valid;
+  wire signed [20:0] pj_f_x, pj_f_y;
+  wire [30:0]  pj_f_w;
+  wire         pj_f_behind;
+  wire [14:0]  pj_f_slot;
+
+  wire         fa_o_valid, fa_o_ready;
+  wire signed [20:0] fa_o_ax, fa_o_ay, fa_o_bx, fa_o_by, fa_o_cx, fa_o_cy;
+  wire [ 2:0]  fa_o_behind;
+  wire [15:0]  fa_o_src_id;
+  wire         fa_o_untex;
+  wire [ 1:0]  fa_o_cull_mode;
+  wire [GEOM_CLIP_ATTRW-1:0] fa_o_attr_a, fa_o_attr_b, fa_o_attr_c;
+  wire [31:0]  fa_o_material_set;
+  wire [15:0]  fa_o_material_id;
+  wire [ 7:0]  fa_o_quality_tier;
+  wire         fa_busy;
+
+  // CMD.EXEC's forge record, on the `cmd_*_w` convention the stamp, draw,
+  // upload and terrain-field seams already use.
+  wire        cmd_forge_valid_w, cmd_forge_ready_w;
+  wire [31:0] cmd_forge_program_w, cmd_forge_material_w;
+  wire [ 7:0] cmd_forge_kind_w;
+  wire [15:0] cmd_forge_frame_tick_w, cmd_forge_src_id_w;
+
+  zhao_forge_pagebank #(
+    .MAX_SCAN (FORGE_MAX_SCAN)
+  ) u_forge_pagebank (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: MEM.UPLOAD's 5f.1 publication, the same four wires
+    // `zhao_geom_ladderbank` declares and `u_part_table_loader` already takes.
+    // The tag selects FORGE_PROGRAM; nothing else here reads a publication.
+    .pub_valid_i (upl_publish_valid_o),
+    .pub_tag_i   (upl_publish_tag_o),
+    .pub_base_i  (upl_publish_base_o),
+    .pub_extent_i(upl_publish_extent_o),
+
+    // REAL: requester F of the ENGINE1 share.
+    .g_req_o       (fpb_guard_req),
+    .g_rsp_i       (fpb_guard_rsp),
+    .g_beat_valid_i(fpb_g_beat_valid),
+    .g_beat_data_i (fpb_g_beat_data),
+
+    // REAL: CMD.EXEC's ratified DrawProcedural.
+    .d_valid_i     (cmd_forge_valid_w),
+    .d_ready_o     (cmd_forge_ready_w),
+    .d_program_i   (cmd_forge_program_w),
+    .d_kind_i      (cmd_forge_kind_w),
+    .d_material_i  (cmd_forge_material_w),
+    .d_frame_tick_i(cmd_forge_frame_tick_w),
+    // REAL, and a NAMED SEAM rather than a tie-off: DrawProcedural carries no
+    // viewport_mask, so the command asserts both views and the PAGE's own mask
+    // governs alone. See FORGE_CMD_VIEW_MASK's parameter comment.
+    .d_view_mask_i (FORGE_CMD_VIEW_MASK),
+    .d_src_id_i    (cmd_forge_src_id_w),
+
+    // REAL: the assembler's interlock, so the material set cannot change under
+    // a primitive in flight.
+    .asm_busy_i    (fa_busy),
+
+    .p_valid_o    (fpb_p_valid),
+    .p_ready_i    (fpb_p_ready),
+    .p_family_o   (fpb_p_family),
+    .p_segments_o (fpb_p_segments),
+    .p_sides_o    (fpb_p_sides),
+    .p_material_o (fpb_p_material),
+    .p_view_mask_o(fpb_p_view_mask),
+    .p_src_id_o   (fpb_p_src_id),
+    .p_material_set_o(fpb_material_set),
+
+    .e_valid_o (fpb_e_valid),
+    .e_ready_i (fpb_e_ready),
+    .e_start_x_o(fpb_e_sx), .e_start_y_o(fpb_e_sy), .e_start_z_o(fpb_e_sz),
+    .e_end_x_o  (fpb_e_ex), .e_end_y_o  (fpb_e_ey), .e_end_z_o  (fpb_e_ez),
+    .e_perp1_x_o(fpb_e_p1x), .e_perp1_y_o(fpb_e_p1y), .e_perp1_z_o(fpb_e_p1z),
+    .e_perp2_x_o(fpb_e_p2x), .e_perp2_y_o(fpb_e_p2y), .e_perp2_z_o(fpb_e_p2z),
+    .e_waxis_x_o(fpb_e_wx), .e_waxis_y_o(fpb_e_wy), .e_waxis_z_o(fpb_e_wz),
+    .e_half_width_o       (fpb_e_hw),
+    .e_branch_half_width_o(fpb_e_bhw),
+    .e_amp_o              (fpb_e_amp),
+    .e_branch_amp_o       (fpb_e_bamp),
+    .e_seed_o             (fpb_e_seed),
+    .e_tick_phase_o       (fpb_e_phase),
+    .e_segments_o         (fpb_e_segments),
+    .e_branch_count_o     (fpb_e_brcount),
+    .e_br0_attach_o  (fpb_e_b0att), .e_br0_segments_o(fpb_e_b0seg),
+    .e_br0_end_x_o   (fpb_e_b0x), .e_br0_end_y_o(fpb_e_b0y), .e_br0_end_z_o(fpb_e_b0z),
+    .e_br1_attach_o  (fpb_e_b1att), .e_br1_segments_o(fpb_e_b1seg),
+    .e_br1_end_x_o   (fpb_e_b1x), .e_br1_end_y_o(fpb_e_b1y), .e_br1_end_z_o(fpb_e_b1z),
+    .e_view_mask_o   (fpb_e_vmask),
+    .e_src_id_o      (fpb_e_src_id),
+
+    .r_valid_o   (fpb_r_valid),
+    .r_ready_i   (fpb_r_ready),
+    .r_family_o  (fpb_r_family),
+    .r_sweep_o   (fpb_r_sweep),
+    .r_segments_o(fpb_r_segments),
+    .r_sides_o   (fpb_r_sides),
+    .r_a0_x_o(fpb_r_a0x), .r_a0_y_o(fpb_r_a0y), .r_a0_z_o(fpb_r_a0z),
+    .r_a1_x_o(fpb_r_a1x), .r_a1_y_o(fpb_r_a1y), .r_a1_z_o(fpb_r_a1z),
+    .r_u_x_o (fpb_r_ux),  .r_u_y_o (fpb_r_uy),  .r_u_z_o (fpb_r_uz),
+    .r_v_x_o (fpb_r_vx),  .r_v_y_o (fpb_r_vy),  .r_v_z_o (fpb_r_vz),
+    .r_r0_o  (fpb_r_r0),  .r_r1_o  (fpb_r_r1),
+    .r_view_mask_o(fpb_r_vmask),
+    .r_src_id_o   (fpb_r_src_id),
+
+    .pages_o         (forge_pb_pages_o),
+    .draws_o         (forge_pb_draws_o),
+    .bad_magic_o     (forge_pb_bad_magic_o),
+    .page_overflow_o (forge_pb_page_overflow_o),
+    .truncated_o     (forge_pb_truncated_o),
+    .lookup_miss_o   (forge_pb_lookup_miss_o),
+    .refused_kind_o  (forge_pb_refused_kind_o),
+    .refused_cliff_o (forge_pb_refused_cliff_o),
+    .bad_record_o    (forge_pb_bad_record_o),
+    .refused_nopage_o(forge_pb_refused_nopage_o),
+    .denied_o        (forge_pb_denied_o),
+    .busy_o          (forge_pb_busy_o)
+  );
+
+  zhao_forge_prim #(
+    .MAX_SEGMENTS (64),
+    .MAX_SIDES    (8)
+  ) u_forge_prim (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the page's topology half.
+    .j_valid_i    (fpb_p_valid),
+    .j_ready_o    (fpb_p_ready),
+    .j_family_i   (fpb_p_family),
+    .j_segments_i (fpb_p_segments),
+    .j_sides_i    (fpb_p_sides),
+    .j_material_i (fpb_p_material),
+    .j_view_mask_i(fpb_p_view_mask),
+    .j_src_id_i   (fpb_p_src_id),
+    .view_sel_i   (forge_view_sel_c),
+
+    // REAL: into the assembler, which holds the vertices these index.
+    .t_valid_o   (fp_t_valid),
+    .t_ready_i   (fp_t_ready),
+    .t_i0_o      (fp_t_i0),
+    .t_i1_o      (fp_t_i1),
+    .t_i2_o      (fp_t_i2),
+    .t_material_o(fp_t_material),
+    .t_src_id_o  (fp_t_src_id),
+    .t_last_o    (fp_t_last),
+
+    .jobs_o           (forge_prim_jobs_o),
+    .triangles_o      (forge_prim_triangles_o),
+    .refused_family_o (forge_prim_refused_family_o),
+    .refused_limit_o  (forge_prim_refused_limit_o),
+    .skipped_view_o   (forge_prim_skipped_view_o)
+  );
+
+  zhao_forge_prim_eval u_forge_prim_eval (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the page's RIBBON parameters, and the live phase R241 D-TICK-A
+    // rules is `tick_phase_base + frame_tick` -- the bank performs that add.
+    .j_valid_i  (fpb_e_valid),
+    .j_ready_o  (fpb_e_ready),
+    .j_start_x_i(fpb_e_sx), .j_start_y_i(fpb_e_sy), .j_start_z_i(fpb_e_sz),
+    .j_end_x_i  (fpb_e_ex), .j_end_y_i  (fpb_e_ey), .j_end_z_i  (fpb_e_ez),
+    .j_perp1_x_i(fpb_e_p1x), .j_perp1_y_i(fpb_e_p1y), .j_perp1_z_i(fpb_e_p1z),
+    .j_perp2_x_i(fpb_e_p2x), .j_perp2_y_i(fpb_e_p2y), .j_perp2_z_i(fpb_e_p2z),
+    .j_waxis_x_i(fpb_e_wx), .j_waxis_y_i(fpb_e_wy), .j_waxis_z_i(fpb_e_wz),
+    .j_half_width_i       (fpb_e_hw),
+    .j_branch_half_width_i(fpb_e_bhw),
+    .j_amp_i              (fpb_e_amp),
+    .j_branch_amp_i       (fpb_e_bamp),
+    .j_seed_i             (fpb_e_seed),
+    .j_tick_phase_i       (fpb_e_phase),
+    .j_segments_i         (fpb_e_segments),
+    .j_branch_count_i     (fpb_e_brcount),
+    .j_br0_attach_i  (fpb_e_b0att), .j_br0_segments_i(fpb_e_b0seg),
+    .j_br0_end_x_i   (fpb_e_b0x), .j_br0_end_y_i(fpb_e_b0y), .j_br0_end_z_i(fpb_e_b0z),
+    .j_br1_attach_i  (fpb_e_b1att), .j_br1_segments_i(fpb_e_b1seg),
+    .j_br1_end_x_i   (fpb_e_b1x), .j_br1_end_y_i(fpb_e_b1y), .j_br1_end_z_i(fpb_e_b1z),
+    .j_view_mask_i   (fpb_e_vmask),
+    .j_src_id_i      (fpb_e_src_id),
+    .view_sel_i      (forge_view_sel_c),
+
+    // REAL: into the assembler's vertex phase.
+    .v_valid_o (fe_v_valid),
+    .v_ready_i (fe_v_ready),
+    .v_x_o     (fe_v_x),
+    .v_y_o     (fe_v_y),
+    .v_z_o     (fe_v_z),
+    .v_poly_o  (fe_v_poly),
+    .v_last_o  (fe_v_last),
+    .v_src_id_o(fe_v_src_id),
+
+    .jobs_o          (forge_eval_jobs_o),
+    .points_o        (forge_eval_points_o),
+    .vertices_o      (forge_eval_vertices_o),
+    .refused_limit_o (forge_eval_refused_limit_o),
+    .skipped_view_o  (forge_eval_skipped_view_o),
+    .sat_events_o    (forge_eval_sat_events_o),
+    .walk_overrun_o  (forge_eval_walk_overrun_o)
+  );
+
+  // THE FIFTH BLOCK, AND IT TAKES NO LEDGER ROW. `zhao_forge_ring_eval` covers
+  // the fan, tube, radial shell and billboard sheet -- the four families
+  // spec/commands.zidl named as having no evaluator until R234 D2 paid for
+  // them. It is FORGE.PRIM.EVAL's capability extended, not a capability of its
+  // own, which is why FINDINGS-forgeprim gave it no `design/blocks.yml` row on
+  // purpose. Composing it here is what keeps the dispatch from NARROWING: with
+  // only the ribbon evaluator, four of the six families would have topology and
+  // no positions and the bank would have to refuse them.
+  zhao_forge_ring_eval #(
+    .MAX_SEGMENTS (64),
+    .MAX_SIDES    (8)
+  ) u_forge_ring_eval (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .j_valid_i   (fpb_r_valid),
+    .j_ready_o   (fpb_r_ready),
+    .j_family_i  (fpb_r_family),
+    .j_sweep_i   (fpb_r_sweep),
+    .j_segments_i(fpb_r_segments),
+    .j_sides_i   (fpb_r_sides),
+    .j_a0_x_i(fpb_r_a0x), .j_a0_y_i(fpb_r_a0y), .j_a0_z_i(fpb_r_a0z),
+    .j_a1_x_i(fpb_r_a1x), .j_a1_y_i(fpb_r_a1y), .j_a1_z_i(fpb_r_a1z),
+    .j_u_x_i (fpb_r_ux),  .j_u_y_i (fpb_r_uy),  .j_u_z_i (fpb_r_uz),
+    .j_v_x_i (fpb_r_vx),  .j_v_y_i (fpb_r_vy),  .j_v_z_i (fpb_r_vz),
+    .j_r0_i  (fpb_r_r0),  .j_r1_i  (fpb_r_r1),
+    .j_view_mask_i(fpb_r_vmask),
+    .j_src_id_i   (fpb_r_src_id),
+    .view_sel_i   (forge_view_sel_c),
+
+    .v_valid_o (fr_v_valid),
+    .v_ready_i (fr_v_ready),
+    .v_x_o     (fr_v_x),
+    .v_y_o     (fr_v_y),
+    .v_z_o     (fr_v_z),
+    .v_ring_o  (fr_v_ring),
+    .v_k_o     (fr_v_k),
+    .v_last_o  (fr_v_last),
+    .v_src_id_o(fr_v_src_id),
+
+    .jobs_o              (forge_ring_jobs_o),
+    .rings_o             (forge_ring_rings_o),
+    .vertices_o          (forge_ring_vertices_o),
+    .refused_family_o    (forge_ring_refused_family_o),
+    .refused_elsewhere_o (forge_ring_refused_elsewhere_o),
+    .refused_limit_o     (forge_ring_refused_limit_o),
+    .skipped_view_o      (forge_ring_skipped_view_o),
+    .sat_events_o        (forge_ring_sat_events_o)
+  );
+
+  zhao_forge_assemble #(
+    .MAX_VERTS (FORGE_MAX_VERTS),
+    .IDW       (16),
+    .ATTRS     (GEOM_CLIP_ATTRS),
+    .INFLIGHT  (FORGE_INFLIGHT),
+    .SLOT_INVW (GEOM_ATTR_SLOT_INVW),
+    .SLOT_UOW  (GEOM_ATTR_SLOT_U_OVER_W),
+    .SLOT_VOW  (GEOM_ATTR_SLOT_V_OVER_W),
+    .SLOT_R    (GEOM_ATTR_SLOT_R),
+    .SLOT_G    (GEOM_ATTR_SLOT_G),
+    .SLOT_B    (GEOM_ATTR_SLOT_B),
+    .SLOT_ALPHA(GEOM_ATTR_SLOT_ALPHA)
+  ) u_forge_assemble (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: whichever evaluator this family's positions come from. The two can
+    // never both be running -- see the mux's comment above.
+    .v_valid_i(fa_v_valid),
+    .v_ready_o(fa_v_ready),
+    .v_x_i    (fa_v_x),
+    .v_y_i    (fa_v_y),
+    .v_z_i    (fa_v_z),
+    .v_last_i (fa_v_last),
+
+    // REAL: FORGE.PRIM's index triples.
+    .t_valid_i   (fp_t_valid),
+    .t_ready_o   (fp_t_ready),
+    .t_i0_i      (fp_t_i0),
+    .t_i1_i      (fp_t_i1),
+    .t_i2_i      (fp_t_i2),
+    .t_material_i(fp_t_material),
+    .t_src_id_i  (fp_t_src_id),
+    .t_last_i    (fp_t_last),
+
+    // REAL: the primitive's material set, held by the bank against `busy_o`.
+    .j_material_set_i(fpb_material_set),
+
+    // AUTHORED, at the named seams. See the parameters' comments; these are the
+    // owner's knobs and they must not become derived.
+    .art_r_i           (FORGE_LIT_R),
+    .art_g_i           (FORGE_LIT_G),
+    .art_b_i           (FORGE_LIT_B),
+    .art_alpha_i       (FORGE_ALPHA),
+    .art_quality_tier_i(FORGE_QUALITY_TIER),
+    .art_cull_mode_i   (FORGE_CULL_MODE),
+
+    // REAL: the projector's third owner and its demux arm.
+    .f_valid_o  (fa_f_valid),
+    .f_ready_i  (fa_f_ready),
+    .f_vx_o     (fa_f_vx),
+    .f_vy_o     (fa_f_vy),
+    .f_vz_o     (fa_f_vz),
+    .f_view_o   (fa_f_view),
+    .f_slot_o   (fa_f_slot),
+    .rs_valid_i (pj_f_valid),
+    .rs_x_i     (pj_f_x),
+    .rs_y_i     (pj_f_y),
+    .rs_w_i     (pj_f_w),
+    .rs_behind_i(pj_f_behind),
+    // REAL, and taken from the SUBSYSTEM rather than through the front mux,
+    // because `zhao_part_project` has no profile port: `proj_a_profile_o` is
+    // the service's own `a_profile_o` and is valid on the same cycle as the
+    // result it describes, so it cannot skew from it.
+    .rs_profile_i(proj_a_profile_o),
+    .rs_slot_i   (pj_f_slot),
+
+    .view_sel_i (part_prj_view_i),
+
+    // REAL: client 1 of GEOM.CLIP's door.
+    .o_valid_o       (fa_o_valid),
+    .o_ready_i       (fa_o_ready),
+    .o_ax_o          (fa_o_ax),
+    .o_ay_o          (fa_o_ay),
+    .o_bx_o          (fa_o_bx),
+    .o_by_o          (fa_o_by),
+    .o_cx_o          (fa_o_cx),
+    .o_cy_o          (fa_o_cy),
+    .o_behind_o      (fa_o_behind),
+    .o_src_id_o      (fa_o_src_id),
+    .o_untex_o       (fa_o_untex),
+    .o_cull_mode_o   (fa_o_cull_mode),
+    .o_attr_a_o      (fa_o_attr_a),
+    .o_attr_b_o      (fa_o_attr_b),
+    .o_attr_c_o      (fa_o_attr_c),
+    .o_material_set_o(fa_o_material_set),
+    .o_material_id_o (fa_o_material_id),
+    .o_quality_tier_o(fa_o_quality_tier),
+
+    .busy_o          (fa_busy),
+
+    .jobs_o          (forge_asm_jobs_o),
+    .vertices_o      (forge_asm_vertices_o),
+    .triangles_o     (forge_asm_triangles_o),
+    .index_oor_o     (forge_asm_index_oor_o),
+    .vtx_overflow_o  (forge_asm_vtx_overflow_o),
+    .slot_pressure_o (forge_asm_slot_pressure_o),
+    .dq_refused_o    (forge_asm_dq_refused_o),
+    .dq_stray_o      (forge_asm_dq_stray_o),
+    .proj_stray_o    (forge_asm_proj_stray_o)
+  );
+
+  // ==========================================================================
+  // THE DOOR -- owner ruling R187's "honest door ... at GEOM.CLIP's INPUT"
+  //
+  // Two clients: GEOM.REPLAY's mesh triangles through the material window (0)
+  // and the forge (1). It carries the MATERIAL HALF and the TRIANGLE HALF of
+  // one beat together, which is the whole reason it sits HERE and not at
+  // GEOM.SETUP's arm: that arm is one tine of a three-way ordered join and
+  // entering it alone deadlocks combinationally, while entering here feeds all
+  // three tines through the existing fork and bypasses none.
+  //
+  // WHY THE MESH PATH'S NUMBERS DO NOT MOVE. With one client asking, a rotating
+  // door grants that client every beat, and `grant_q` is a REGISTER so nothing
+  // downstream sees a different handshake than it did. `granted_o[0]` is the
+  // measurement that says so rather than this sentence.
+  //
+  // THE ARBITRATION IS RUN-LENGTH FAIR, NOT BEAT FAIR, and the block's header
+  // carries the argument: `zhao_material_window` DRAINS the whole
+  // GEOM.CLIP..door span before it changes what it publishes, so a beat-fair
+  // round robin between two producers of different materials would issue a
+  // drain and a resolve between every pair of triangles -- a throughput
+  // collapse with every counter in the console reading healthy.
+  // ==========================================================================
+  wire               cd_o_valid, cd_o_ready;
+  wire signed [20:0] cd_o_ax, cd_o_ay, cd_o_bx, cd_o_by, cd_o_cx, cd_o_cy;
+  wire [ 2:0]        cd_o_behind;
+  wire [15:0]        cd_o_src_id;
+  wire               cd_o_untex;
+  wire [ 1:0]        cd_o_cull_mode;
+  wire [GEOM_CLIP_ATTRW-1:0] cd_o_attr_a, cd_o_attr_b, cd_o_attr_c;
+  wire [31:0]        cd_o_material_set;
+  wire [15:0]        cd_o_material_id;
+  wire [ 7:0]        cd_o_quality_tier;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // Which client the beat belongs to. The door publishes it so a composer or a
+  // bench can SAY so out loud rather than infer it; nothing downstream routes
+  // on it, because a triangle that has entered is a triangle.
+  wire [1:0]         cd_o_owner;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // GEOM.REPLAY's untextured declaration -- the R48-shaped named seam, now
+  // presented at the door beside its triangle rather than at the gate below.
+  wire rp_untex_c = (GEOM_REPLAY_UNTEX_DECL != 0);
+
+  zhao_geom_clipdoor #(
+    .NCLIENT (2),
+    .ATTRS   (GEOM_CLIP_ATTRS),
+    .IDW     (16)
+  ) u_geom_clipdoor (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // Flattened, least significant slice is client 0. Quartus 17.0 will not
+    // take an unpacked array port.
+    .c_valid_i       ({fa_o_valid,        rp_o_valid}),
+    .c_ready_o       ({fa_o_ready,        rp_o_ready}),
+    .c_ax_i          ({fa_o_ax,           rp_o_ax}),
+    .c_ay_i          ({fa_o_ay,           rp_o_ay}),
+    .c_bx_i          ({fa_o_bx,           rp_o_bx}),
+    .c_by_i          ({fa_o_by,           rp_o_by}),
+    .c_cx_i          ({fa_o_cx,           rp_o_cx}),
+    .c_cy_i          ({fa_o_cy,           rp_o_cy}),
+    .c_behind_i      ({fa_o_behind,       rp_o_behind}),
+    .c_src_id_i      ({fa_o_src_id,       rp_o_src_id}),
+    .c_untex_i       ({fa_o_untex,        rp_untex_c}),
+    .c_cull_mode_i   ({fa_o_cull_mode,    rp_o_raster[1:0]}),
+    .c_attr_a_i      ({fa_o_attr_a,       rp_attr_a}),
+    .c_attr_b_i      ({fa_o_attr_b,       rp_attr_b}),
+    .c_attr_c_i      ({fa_o_attr_c,       rp_attr_c}),
+    .c_material_set_i({fa_o_material_set, rp_o_material_set}),
+    .c_material_id_i ({fa_o_material_id,  rp_o_material}),
+    .c_quality_tier_i({fa_o_quality_tier, rp_o_quality_tier}),
+
+    .o_valid_o       (cd_o_valid),
+    .o_ready_i       (cd_o_ready),
+    .o_ax_o          (cd_o_ax),
+    .o_ay_o          (cd_o_ay),
+    .o_bx_o          (cd_o_bx),
+    .o_by_o          (cd_o_by),
+    .o_cx_o          (cd_o_cx),
+    .o_cy_o          (cd_o_cy),
+    .o_behind_o      (cd_o_behind),
+    .o_src_id_o      (cd_o_src_id),
+    .o_untex_o       (cd_o_untex),
+    .o_cull_mode_o   (cd_o_cull_mode),
+    .o_attr_a_o      (cd_o_attr_a),
+    .o_attr_b_o      (cd_o_attr_b),
+    .o_attr_c_o      (cd_o_attr_c),
+    .o_material_set_o(cd_o_material_set),
+    .o_material_id_o (cd_o_material_id),
+    .o_quality_tier_o(cd_o_quality_tier),
+    .o_owner_o       (cd_o_owner),
+
+    .granted_o      (geom_clipdoor_granted_o),
+    .switches_o     (geom_clipdoor_switches_o),
+    .idle_offered_o (geom_clipdoor_idle_offered_o),
+    .err_hold_broken_o(geom_clipdoor_err_hold_broken_o)
+  );
+
+  // ==========================================================================
   // THE UNTEXTURED DOOR -- owner ruling R197 (2026-09-20), law 3.
   //
   // This is the one place a primitive's DECLARATION ("I carry no texture
@@ -11582,7 +12293,13 @@ module zhao_console_core
   // as `rp_o_src_id` is.
   // ==========================================================================
   wire cl_in_valid, cl_in_ready;
-  wire cl_in_untex_c  = (GEOM_REPLAY_UNTEX_DECL != 0);
+  // THE DECLARATION IS NOW THE DOOR'S, AND THAT IS WHAT THIS BLOCK'S OWN
+  // COMMENT ASKED FOR: "when a second producer is arbitrated into this door its
+  // own bit is muxed here beside its triangle, on the same handshake, exactly
+  // as `rp_o_src_id` is". `u_geom_clipdoor` performs that mux, so the bit
+  // arrives with the beat it describes rather than being a console constant
+  // that happened to be right while there was one producer.
+  wire cl_in_untex_c  = cd_o_untex;
   wire cl_in_refuse_c = cl_in_untex_c && (mw_pub_sample_count != 2'd0);
   assign cl_in_valid = mw_t_valid && !cl_in_refuse_c;
   assign mw_t_ready  = cl_in_refuse_c || cl_in_ready;
@@ -11613,6 +12330,12 @@ module zhao_console_core
     // R197, 2026-09-20: and it passes through the UNTEXTURED DOOR above,
     // which consumes a declared-untextured triangle under a sampling material
     // before it can enter. `cl_in_*` is that gated pair.
+    // FORGECOMP 2026-09-21: the handshake is still the material window's and
+    // the untextured door's, and every DATA wire beneath is now
+    // `u_geom_clipdoor`'s output rather than GEOM.REPLAY's own. That is not a
+    // buffer appearing: the door's `grant_q` is a REGISTER and its data path is
+    // a mux, so the granted client's wires reach here unbuffered exactly as
+    // before -- what changed is WHICH client's.
     .tri_valid_i  (cl_in_valid),
     .tri_ready_o  (cl_in_ready),
     // REAL: the producer's untextured declaration (R197), the R48-shaped
@@ -11620,17 +12343,17 @@ module zhao_console_core
     // tie-off: it is the true value for the format-0 records this producer is
     // built from, and the seam is where a producer without u/v changes it.
     .tri_untex_i  (cl_in_untex_c),
-    .tri_ax_i     (rp_o_ax),
-    .tri_ay_i     (rp_o_ay),
-    .tri_bx_i     (rp_o_bx),
-    .tri_by_i     (rp_o_by),
-    .tri_cx_i     (rp_o_cx),
-    .tri_cy_i     (rp_o_cy),
-    .tri_behind_i (rp_o_behind),
-    .tri_src_id_i (rp_o_src_id),
-    .tri_attr_a_i (rp_attr_a),
-    .tri_attr_b_i (rp_attr_b),
-    .tri_attr_c_i (rp_attr_c),
+    .tri_ax_i     (cd_o_ax),
+    .tri_ay_i     (cd_o_ay),
+    .tri_bx_i     (cd_o_bx),
+    .tri_by_i     (cd_o_by),
+    .tri_cx_i     (cd_o_cx),
+    .tri_cy_i     (cd_o_cy),
+    .tri_behind_i (cd_o_behind),
+    .tri_src_id_i (cd_o_src_id),
+    .tri_attr_a_i (cd_o_attr_a),
+    .tri_attr_b_i (cd_o_attr_b),
+    .tri_attr_c_i (cd_o_attr_c),
 
     // REAL: the scissor is the console's own pass geometry (GLUE 1).
     .vp_x0_i      (12'd0),
@@ -11643,7 +12366,11 @@ module zhao_console_core
     // the meshlet from GEOM.DRAWJOB -- job, to meshlet, to triangle -- never on
     // a second path, which is why meshlet N cannot be culled by draw M's mode.
     // `zref::raster_state::cull_mode` is the same field selector.
-    .cull_mode_i  (rp_o_raster[1:0]),
+    // FORGECOMP: the cull mode is still THIS TRIANGLE'S OWN -- the door carries
+    // it beside the corners on the same beat, so a forge primitive cannot be
+    // culled by a mesh draw's mode and vice versa. For the mesh client it is
+    // still bits [1:0] of GEOM.REPLAY's raster word, presented at the door.
+    .cull_mode_i  (cd_o_cull_mode),
 
     // REAL: into GEOM.SETUP.
     .out_valid_o  (cl_o_valid),
@@ -16754,6 +17481,20 @@ module zhao_console_core
     .g_view_i   (gs_a_view),
     .g_payload_i(gs_a_payload),
 
+    // REAL: the THIRD owner on this front mux -- FORGE.PRIM's vertices, under
+    // `OWNER_FORGE = 2'd2`. That code has been RESERVED in this block's
+    // encoding since R68 sub-build 4 and its header commissioned the arm in
+    // writing. Owner ruling R3 is untouched: it withholds a third PORT on
+    // `zhao_project_service`, and this is a third CLIENT on the multiplex R3
+    // names as the thing to keep.
+    .f_valid_i (fa_f_valid),
+    .f_ready_o (fa_f_ready),
+    .f_vx_i    (fa_f_vx),
+    .f_vy_i    (fa_f_vy),
+    .f_vz_i    (fa_f_vz),
+    .f_view_i  (fa_f_view),
+    .f_slot_i  (fa_f_slot),
+
     // REAL: the multiplexed request into client A of the ONE projector.
     .a_valid_o  (pa_a_valid),
     .a_ready_i  (pa_a_ready),
@@ -16780,6 +17521,17 @@ module zhao_console_core
     .h_w_o      (pj_a_w),
     .h_behind_o (pj_a_behind),
     .h_payload_o(pj_a_payload),
+
+    // REAL: forge's half of that result, on its own demux arm. It carries `w`
+    // rather than dropping it, which is the one thing the particle path cannot
+    // do -- `w` dies at the ladder queue there -- and is why the forge
+    // assembler can produce the canonical invw24 that GEOM.CLIP's slot 0 wants.
+    .rf_valid_o (pj_f_valid),
+    .rf_x_o     (pj_f_x),
+    .rf_y_o     (pj_f_y),
+    .rf_w_o     (pj_f_w),
+    .rf_behind_o(pj_f_behind),
+    .rf_slot_o  (pj_f_slot),
 
     // REAL: the ladder loop, both directions.
     .lad_valid_o    (pp_lad_valid),
@@ -17260,6 +18012,20 @@ module zhao_console_core
     .dbg_trace_clear_o    (cx_trace_clear_c),
     .trace_arms_applied_o (cmd_exec_trace_arms_o),
     .trace_arm_refused_o  (cmd_exec_trace_arm_refused_o),
+    // R234 D2 / R241 D-TICK-A: DrawProcedural 0x0302 -> the forge page bank.
+    // Until this arm landed the record fell through to `unsupported_o`, which
+    // is why that counter is the one to watch move DOWN on a forge capture.
+    .forge_valid_o     (cmd_forge_valid_w),
+    .forge_ready_i     (cmd_forge_ready_w),
+    .forge_program_o   (cmd_forge_program_w),
+    .forge_material_o  (cmd_forge_material_w),
+    .forge_kind_o      (cmd_forge_kind_w),
+    .forge_frame_tick_o(cmd_forge_frame_tick_w),
+    .forge_src_id_o    (cmd_forge_src_id_w),
+    .forges_issued_o       (cmd_exec_forges_o),
+    .forge_overflow_o      (cmd_exec_forge_overflow_o),
+    .forge_src_truncated_o (cmd_exec_forge_src_truncated_o),
+
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 
@@ -18646,6 +19412,19 @@ module zhao_console_core
     .d_beat_data_o (dj_beat_data),
     .d_beat_last_o (dj_beat_last),
 
+    // REAL: requester F, FORGE.PRIM's program-page bank (R234 D2). One 64-byte
+    // header per PUBLICATION and a bounded scan per PROCEDURAL DRAW -- the
+    // lightest traffic on this share after E, and the same pool, client and
+    // direction as the five above, which is 5f's condition for joining here.
+    .f_req_i       (fpb_guard_req),
+    .f_rsp_o       (fpb_guard_rsp),
+    .f_beat_valid_o(fpb_g_beat_valid),
+    .f_beat_data_o (fpb_g_beat_data),
+    // The bank reads whole 64-byte lines and judges completeness from its own
+    // beat count, so it does not take `last`. Left unconnected rather than
+    // wired to a net nothing reads.
+    .f_beat_last_o (),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -18658,6 +19437,7 @@ module zhao_console_core
     .jobs_c_o     (geom_ma_jobs_c_o),
     .jobs_d_o     (geom_ma_jobs_d_o),
     .jobs_e_o     (geom_ma_jobs_e_o),
+    .jobs_f_o     (geom_ma_jobs_f_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
@@ -19043,12 +19823,19 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // REAL: GEOM.REPLAY's triangle handshake, and the triangle's own material.
-    .t_valid_i        (rp_o_valid),
-    .t_ready_o        (rp_o_ready),
-    .t_material_set_i (rp_o_material_set),
-    .t_material_id_i  (rp_o_material),
-    .t_quality_tier_i (rp_o_quality_tier),
+    // REAL: the DOOR's granted beat, and ITS triangle's own material.
+    // FORGECOMP 2026-09-21: this was GEOM.REPLAY's handshake directly, and the
+    // paragraph above -- "two fields of one record" -- is still exactly true,
+    // because `u_geom_clipdoor` carries the material half and the triangle half
+    // of one beat TOGETHER and grants them as one. That property is the whole
+    // reason the door sits in front of this block rather than behind it: a door
+    // that arbitrated only the triangle would let a resolve answer for the
+    // material of a beat that did not win.
+    .t_valid_i        (cd_o_valid),
+    .t_ready_o        (cd_o_ready),
+    .t_material_set_i (cd_o_material_set),
+    .t_material_id_i  (cd_o_material_id),
+    .t_quality_tier_i (cd_o_quality_tier),
 
     // REAL: into GEOM.CLIP, gated.
     .t_valid_o (mw_t_valid),

@@ -103,6 +103,23 @@ module zhao_geom_mem_adapter
     output var logic [63:0]     e_beat_data_o,
     output var logic            e_beat_last_o,
 
+    // Requester F, FORGE.PRIM's program-page bank (owner ruling R234 D2, core
+    // entry for the forge chain). 64-byte lines: ONE page header per
+    // publication, then a bounded scan of record line 0 per PROCEDURAL DRAW.
+    // That is the rarest traffic on this share after E -- a draw, not a meshlet
+    // -- and it reads the asset pool by the same client in the same direction
+    // as the five above, which is the condition spec/memory_rules.md 5f states
+    // for joining here rather than taking a second ENGINE1 path.
+    //
+    // THE ROUND ROBIN'S BOUND IS N-1 TURNS AND IT MUST BE RE-PROVED AT SIX, NOT
+    // ASSUMED -- `zhao_mem_share_n`'s own directed test carries the proof and
+    // `geom_mem_adapter_directed` runs against the widened adapter.
+    input  var zhao_guard_req_t f_req_i,
+    output var zhao_guard_rsp_t f_rsp_o,
+    output var logic            f_beat_valid_o,
+    output var logic [63:0]     f_beat_data_o,
+    output var logic            f_beat_last_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -116,6 +133,7 @@ module zhao_geom_mem_adapter
     output var logic [31:0]     jobs_c_o,          // ...and C
     output var logic [31:0]     jobs_d_o,          // ...and D
     output var logic [31:0]     jobs_e_o,          // ...and E
+    output var logic [31:0]     jobs_f_o,          // ...and F
     output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
@@ -127,50 +145,56 @@ module zhao_geom_mem_adapter
   // share: a leaf test's generic client input must never be able to reach the
   // production guard through this path.
   //
-  // THE N-REQUESTER CORE (902949ea), at N=3 since requester C landed. Its
+  // THE N-REQUESTER CORE (902949ea), at N=6 since requester F landed 2026-09-21. Its
   // round robin is bounded at N-1 turns, so C's addition lengthens A's and B's
   // worst-case wait by at most one 32-byte record -- and it is the SAME core the
   // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
   // two-cycle verdict law is re-derived here.
-  zhao_guard_req_t [4:0] s_req;
-  zhao_guard_rsp_t [4:0] s_rsp;
-  logic            [4:0] s_bv, s_bl;
+  zhao_guard_req_t [5:0] s_req;
+  zhao_guard_rsp_t [5:0] s_rsp;
+  logic            [5:0] s_bv, s_bl;
   logic           [63:0] s_bd;
-  logic      [4:0][31:0] s_jobs;
+  logic      [5:0][31:0] s_jobs;
 
   assign s_req[0] = a_req_i;
   assign s_req[1] = b_req_i;
   assign s_req[2] = c_req_i;
   assign s_req[3] = d_req_i;
   assign s_req[4] = e_req_i;
+  assign s_req[5] = f_req_i;
   assign a_rsp_o = s_rsp[0];
   assign b_rsp_o = s_rsp[1];
   assign c_rsp_o = s_rsp[2];
   assign d_rsp_o = s_rsp[3];
   assign e_rsp_o = s_rsp[4];
+  assign f_rsp_o = s_rsp[5];
   assign a_beat_valid_o = s_bv[0];
   assign b_beat_valid_o = s_bv[1];
   assign c_beat_valid_o = s_bv[2];
   assign d_beat_valid_o = s_bv[3];
   assign e_beat_valid_o = s_bv[4];
+  assign f_beat_valid_o = s_bv[5];
   assign a_beat_last_o  = s_bl[0];
   assign b_beat_last_o  = s_bl[1];
   assign c_beat_last_o  = s_bl[2];
   assign d_beat_last_o  = s_bl[3];
   assign e_beat_last_o  = s_bl[4];
+  assign f_beat_last_o  = s_bl[5];
   assign a_beat_data_o  = s_bd;   // ONE bus; valid routes it
   assign b_beat_data_o  = s_bd;
   assign c_beat_data_o  = s_bd;
   assign d_beat_data_o  = s_bd;
   assign e_beat_data_o  = s_bd;
+  assign f_beat_data_o  = s_bd;
   assign jobs_a_o = s_jobs[0];
   assign jobs_b_o = s_jobs[1];
   assign jobs_c_o = s_jobs[2];
   assign jobs_d_o = s_jobs[3];
   assign jobs_e_o = s_jobs[4];
+  assign jobs_f_o = s_jobs[5];
 
   zhao_mem_share_n #(
-    .N         (5),
+    .N         (6),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (

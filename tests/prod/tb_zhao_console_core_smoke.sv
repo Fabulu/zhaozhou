@@ -1225,6 +1225,61 @@ module tb_zhao_console_core_smoke
   logic signed [47:0]      geom_setup_area2_o;
   logic [31:0]             geom_setup_triangles_submitted_o;
   logic [31:0]             geom_untex_refused_o;
+
+  // ---- THE FORGE CHAIN's evidence (composed 2026-09-21, FORGECOMP) --------
+  // The bench binds with `.*`, so every core port must be declared here or
+  // the build fails with `Can't find definition of variable` -- which is the
+  // good failure: a port that appeared and was never declared would otherwise
+  // be a silently unread output.
+  logic        forge_pb_busy_o;
+  logic [63:0] geom_clipdoor_granted_o;
+  logic [31:0] forge_pb_pages_o;
+  logic [31:0] forge_pb_draws_o;
+  logic [31:0] forge_pb_bad_magic_o;
+  logic [31:0] forge_pb_page_overflow_o;
+  logic [31:0] forge_pb_truncated_o;
+  logic [31:0] forge_pb_lookup_miss_o;
+  logic [31:0] forge_pb_refused_kind_o;
+  logic [31:0] forge_pb_refused_cliff_o;
+  logic [31:0] forge_pb_bad_record_o;
+  logic [31:0] forge_pb_refused_nopage_o;
+  logic [31:0] forge_pb_denied_o;
+  logic [31:0] forge_prim_jobs_o;
+  logic [31:0] forge_prim_triangles_o;
+  logic [31:0] forge_prim_refused_family_o;
+  logic [31:0] forge_prim_refused_limit_o;
+  logic [31:0] forge_prim_skipped_view_o;
+  logic [31:0] forge_eval_jobs_o;
+  logic [31:0] forge_eval_points_o;
+  logic [31:0] forge_eval_vertices_o;
+  logic [31:0] forge_eval_refused_limit_o;
+  logic [31:0] forge_eval_skipped_view_o;
+  logic [31:0] forge_eval_sat_events_o;
+  logic [31:0] forge_eval_walk_overrun_o;
+  logic [31:0] forge_ring_jobs_o;
+  logic [31:0] forge_ring_rings_o;
+  logic [31:0] forge_ring_vertices_o;
+  logic [31:0] forge_ring_refused_family_o;
+  logic [31:0] forge_ring_refused_elsewhere_o;
+  logic [31:0] forge_ring_refused_limit_o;
+  logic [31:0] forge_ring_skipped_view_o;
+  logic [31:0] forge_ring_sat_events_o;
+  logic [31:0] forge_asm_jobs_o;
+  logic [31:0] forge_asm_vertices_o;
+  logic [31:0] forge_asm_triangles_o;
+  logic [31:0] forge_asm_index_oor_o;
+  logic [31:0] forge_asm_vtx_overflow_o;
+  logic [31:0] forge_asm_slot_pressure_o;
+  logic [31:0] forge_asm_dq_refused_o;
+  logic [31:0] forge_asm_dq_stray_o;
+  logic [31:0] forge_asm_proj_stray_o;
+  logic [31:0] cmd_exec_forges_o;
+  logic [31:0] cmd_exec_forge_overflow_o;
+  logic [31:0] cmd_exec_forge_src_truncated_o;
+  logic [31:0] geom_ma_jobs_f_o;
+  logic [31:0] geom_clipdoor_switches_o;
+  logic [31:0] geom_clipdoor_idle_offered_o;
+  logic [31:0] geom_clipdoor_err_hold_broken_o;
   logic [63:0] render_fill_word_i;
   logic [63:0] render_clear_word_i;
   logic [31:0] render_state_i;

@@ -380,7 +380,12 @@ module zhao_cmd_exec
     // is the thing that bounds how many lanes a vertex can get, and the
     // 16-field tail-reject policy of the directive's 13.7 lives THERE, in
     // command order, not here -- this block does not re-decide it.
-    parameter int unsigned TFLD_Q = 4
+    parameter int unsigned TFLD_Q = 4,
+    // Procedural draws staged per packet. Four, for TFLD_Q's reason: the queue
+    // exists so a packet's records are published or rolled back WHOLE, not so
+    // the console can buffer a frame's worth. A packet carrying more is refused
+    // entire on `forge_overflow_o`.
+    parameter int unsigned FORGE_Q = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -651,6 +656,30 @@ module zhao_cmd_exec
     output logic        [31:0] tfld_duration_o,    // R3 phase uniform's span
     output logic       [255:0] tfld_params_o,      // p0..p7, Q16.16 LE, R4..R11
     output logic        [31:0] tflds_issued_o,     // records handed downstream
+    // ---- DrawProcedural 0x0302, the PRIMITIVE FORGE dispatch ---------------
+    // NEW 2026-09-21 (FORGECOMP), under owner rulings R234 D2 (the page kind
+    // frozen and the evaluators paid for) and R241 D-TICK-A (frame_tick from
+    // pad[11]). Until this arm existed the record fell through the chain below
+    // and incremented `unsupported_o` -- the core's own header said so in as
+    // many words, and that sentence is now out of date.
+    //
+    // THE RECORD IS CARRIED, NOT INTERPRETED. `program` and `material` are
+    // handle32s this block does not resolve, `kind` is the ROTATED forge_kind
+    // numbering this block does not convert (`zhao_forge_pagebank` owns that
+    // conversion and owes it the directed check), and `frame_tick` is two bytes
+    // of a field the ABI calls padding. An executor that decoded any of them
+    // would be a second opinion about a law that lives elsewhere.
+    output logic               forge_valid_o,
+    input  logic               forge_ready_i,
+    output logic        [31:0] forge_program_o,    // handle32[forge_program]
+    output logic        [31:0] forge_material_o,   // handle32[material]
+    output logic        [ 7:0] forge_kind_o,       // forge_kind, the ROTATED numbering
+    output logic        [15:0] forge_frame_tick_o, // R241 D-TICK-A, from pad[11]
+    output logic        [15:0] forge_src_id_o,     // record source_id, low 16
+    output logic        [31:0] forges_issued_o,
+    output logic        [31:0] forge_overflow_o,      // packets refused: > FORGE_Q
+    output logic        [31:0] forge_src_truncated_o, // source_id did not fit 16 b
+
     output logic        [31:0] tfld_overflow_o,    // packets refused: > TFLD_Q
     output logic        [31:0] tfld_src_truncated_o,  // source_id did not fit 16 b
 
@@ -2344,6 +2373,7 @@ module zhao_cmd_exec
                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
                              && (r_op != ZHAO_OP_SET_POPULATION) // R41: likewise
                              && (r_op != ZHAO_OP_TERRAIN_FIELD)  // I34 (a): likewise
+           && (r_op != ZHAO_OP_DRAW_PROCEDURAL) // FORGECOMP: its own arm below
                              && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
                   // A record the ABI defines and this block has no arm for.
                   // Counted rather than narrated, so the distance between the
@@ -3079,6 +3109,146 @@ module zhao_cmd_exec
         if (tq_ovf) `ZHAO_EXEC_INC(tfld_overflow_o);
         tq_ovf       <= 1'b0;
         tf_src_hi_nz <= 1'b0;
+      end
+    end
+  end
+
+  // ==========================================================================
+  // DrawProcedural 0x0302 -- THE PRIMITIVE FORGE DISPATCH
+  //
+  // Built to the TerrainField arm's shape above rather than to a new one:
+  // byte-accumulate into registers, push at `rec_done`, publish or roll back
+  // WHOLE at the verdict. Three pointers, so not one console-visible bit moves
+  // before `verdict_valid_i`.
+  //
+  // ONE ABI FIELD IS DELIBERATELY NOT DECODED, AND SAYING SO IS THE POINT.
+  // `screen_error` (offset 48) is real and this arm does not carry it. The
+  // FORGE_PROGRAM page AUTHORS `segments` and `sides`, `zhao_forge_prim`
+  // refuses out-of-range values on its own port, and no screen-error LOD clamp
+  // exists anywhere in the tree. Decoding the field into a register nothing
+  // reads is the uncashed-cheque shape this repo has a committed detector for
+  // (`tools/budget/uncashed_cheques.py`), so it is left undecoded and NAMED:
+  // whoever builds the clamp adds four lines here and a port beside
+  // `forge_kind_o`, and nothing else moves.
+  //
+  // `frame_tick` IS TWO BYTES OF `pad[11]` (offset 53), little-endian, which is
+  // R241 D-TICK-A executed. The ruling names the field and not the width; two
+  // bytes is what `zhao_forge_prim_eval`'s `j_tick_phase_i` is, and the
+  // remaining nine pad bytes stay mandatory-zero and unread -- the same
+  // discipline `forge_kind` itself was promoted under (R108).
+  // ==========================================================================
+  localparam int unsigned OFF_FG_SRC   = ZHAO_DRAW_PROCEDURAL_OFF_H_SOURCE_ID;
+  localparam int unsigned OFF_FG_PROG  = ZHAO_DRAW_PROCEDURAL_OFF_PROGRAM;
+  localparam int unsigned OFF_FG_MAT   = ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL;
+  localparam int unsigned OFF_FG_KIND  = ZHAO_DRAW_PROCEDURAL_OFF_KIND;
+  localparam int unsigned OFF_FG_PAD   = ZHAO_DRAW_PROCEDURAL_OFF_PAD;
+
+  // Quartus 17.0 requires an elaboration check inside `initial begin`; and
+  // `--lint-only` does not run one, so this is not evidence a clean lint gives.
+  // synthesis translate_off
+  initial begin
+    if (FORGE_Q < 2)
+      $fatal(1, "zhao_cmd_exec: FORGE_Q must be >= 2 (the pointers need a bit)");
+    // The frame_tick reinterpretation lives INSIDE the pad, or it is reading a
+    // field that belongs to something else.
+    if ((OFF_FG_PAD + 2) > ZHAO_DRAW_PROCEDURAL_BYTES)
+      $fatal(1, "zhao_cmd_exec: frame_tick's two bytes run past the DrawProcedural record");
+    if (OFF_FG_KIND >= OFF_FG_PAD)
+      $fatal(1, "zhao_cmd_exec: forge_kind and the pad have moved relative to each other");
+  end
+  // synthesis translate_on
+
+  localparam int unsigned FQ_PROG_LO = 0;
+  localparam int unsigned FQ_MAT_LO  = 32;
+  localparam int unsigned FQ_KIND_LO = 64;
+  localparam int unsigned FQ_TICK_LO = 72;
+  localparam int unsigned FQ_SRC_LO  = 88;
+  localparam int unsigned FQ_TRN_LO  = 104;   // source_id did not fit 16 bits
+  localparam int unsigned FORGE_W    = 105;
+  localparam int unsigned FQW        = $clog2(FORGE_Q);
+
+  logic [31:0] fg_prog, fg_mat;
+  logic [ 7:0] fg_kind;
+  logic [15:0] fg_tick, fg_src;
+  logic        fg_src_hi_nz;
+
+  logic [FORGE_W-1:0] fq [0:FORGE_Q-1];
+  logic [FQW:0] fq_wp, fq_rp, fq_cp;
+  logic         fq_ovf;
+  wire  [FQW:0] fq_occ  = fq_wp - fq_rp;
+  wire          fq_full = (fq_occ >= (FQW+1)'(FORGE_Q));
+
+  wire [FORGE_W-1:0] fq_head = fq[fq_rp[FQW-1:0]];
+  assign forge_valid_o      = (fq_rp != fq_cp);
+  assign forge_program_o    = fq_head[FQ_PROG_LO +: 32];
+  assign forge_material_o   = fq_head[FQ_MAT_LO  +: 32];
+  assign forge_kind_o       = fq_head[FQ_KIND_LO +:  8];
+  assign forge_frame_tick_o = fq_head[FQ_TICK_LO +: 16];
+  assign forge_src_id_o     = fq_head[FQ_SRC_LO  +: 16];
+
+  wire fg_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_DRAW_PROCEDURAL);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      fg_prog <= 32'd0; fg_mat <= 32'd0;
+      fg_kind <= 8'd0;  fg_tick <= 16'd0; fg_src <= 16'd0;
+      fg_src_hi_nz <= 1'b0;
+      fq_wp <= '0; fq_rp <= '0; fq_cp <= '0;
+      fq_ovf <= 1'b0;
+      forges_issued_o <= 32'd0;
+      forge_overflow_o <= 32'd0;
+      forge_src_truncated_o <= 32'd0;
+    end else begin
+      if (fg_byte_c) begin
+        // Little-endian on the wire: every field shifts DOWN and the new byte
+        // enters at the top, the assembly every other arm here uses.
+        if ((rpos >= 16'(OFF_FG_PROG)) && (rpos < 16'(OFF_FG_PROG + 4)))
+          fg_prog <= {pkt_byte_i, fg_prog[31:8]};
+        if ((rpos >= 16'(OFF_FG_MAT))  && (rpos < 16'(OFF_FG_MAT + 4)))
+          fg_mat  <= {pkt_byte_i, fg_mat[31:8]};
+        if (rpos == 16'(OFF_FG_KIND))
+          fg_kind <= pkt_byte_i;
+        if ((rpos >= 16'(OFF_FG_PAD))  && (rpos < 16'(OFF_FG_PAD + 2)))
+          fg_tick <= {pkt_byte_i, fg_tick[15:8]};
+        // source_id is u32 on the wire and every consumer's src id is 16 bits.
+        // NARROWED like the stamp, draw and terrain-field arms, and the dropped
+        // half COUNTED rather than discarded quietly.
+        if ((rpos >= 16'(OFF_FG_SRC))     && (rpos < 16'(OFF_FG_SRC + 2)))
+          fg_src <= {pkt_byte_i, fg_src[15:8]};
+        if ((rpos >= 16'(OFF_FG_SRC + 2)) && (rpos < 16'(OFF_FG_SRC + 4))
+            && (pkt_byte_i != 8'd0))
+          fg_src_hi_nz <= 1'b1;
+
+        if (rec_done) begin
+          if (fq_full) begin
+            fq_ovf <= 1'b1;
+          end else begin
+            fq[fq_wp[FQW-1:0]] <= {fg_src_hi_nz, fg_src, fg_tick,
+                                   fg_kind, fg_mat, fg_prog};
+            fq_wp <= fq_wp + 1'b1;
+          end
+          fg_src_hi_nz <= 1'b0;
+        end
+      end
+
+      if (forge_valid_o && forge_ready_i) begin
+        fq_rp <= fq_rp + 1'b1;
+        `ZHAO_EXEC_INC(forges_issued_o);
+        // Counted on the way OUT, so an abandoned packet's records never reach
+        // this counter -- the TerrainField arm's reasoning, unchanged.
+        if (fq_head[FQ_TRN_LO]) `ZHAO_EXEC_INC(forge_src_truncated_o);
+      end
+
+      if ((st == EX_STAGE) && verdict_valid_i) begin
+        if ((verdict_error_i == ZH_ABI_OK) && !poisoned && !fq_ovf) begin
+          fq_cp <= fq_wp;
+        end else begin
+          fq_wp <= fq_cp;
+        end
+        if (fq_ovf) `ZHAO_EXEC_INC(forge_overflow_o);
+        fq_ovf       <= 1'b0;
+        fg_src_hi_nz <= 1'b0;
       end
     end
   end

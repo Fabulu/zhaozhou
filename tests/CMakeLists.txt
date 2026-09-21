@@ -16609,6 +16609,66 @@ verilate(test_terrain_tapshare_directed
 add_test(NAME terrain_tapshare_directed COMMAND test_terrain_tapshare_directed)
 set_tests_properties(terrain_tapshare_directed PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
 
+# ==========================================================================
+# THE FORGE CHAIN, composed 2026-09-21 (packet FORGECOMP)
+# ==========================================================================
+# `zhao_forge_assemble` is the JOIN the chain never had: zhao_forge_prim emits
+# index triples and no coordinate, the two evaluators emit world positions and
+# no topology, and `zref_forge_page.hpp` names the ring-major ORDERING
+# CONVENTION as the only thing relating them. Nothing held the vertices an
+# index could name.
+#
+# The bench carries a FAKE PROJECTOR rather than the real one, and the fake
+# reproduces the three properties the assembler is built against: the result
+# port has NO READY, the rider comes back verbatim, and the order is FIFO. Its
+# arithmetic is INVERTIBLE on purpose, so the test can assert that corner B
+# carries vertex i1's numbers -- a fake returning a constant would let a
+# completely broken join pass every check.
+add_executable(test_forge_assemble_directed forge/forge_assemble_directed.cpp)
+target_link_libraries(test_forge_assemble_directed PRIVATE zhao_harness)
+verilate(test_forge_assemble_directed
+  PREFIX Vtb_forge_assemble
+  TOP_MODULE tb_forge_assemble
+  # The reciprocal's own closure, copied from geom_vattr_rtl_directed's list
+  # rather than re-derived: this block instantiates the SAME pair GEOM.VATTR
+  # does, which is ruling D-4's canonical law used twice, so it owes the same
+  # sources. A shorter list here would mean the two are not the same pair.
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_assemble.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/forge/tb_forge_assemble.sv)
+add_test(NAME forge_assemble_directed COMMAND test_forge_assemble_directed)
+set_tests_properties(forge_assemble_directed PROPERTIES LABELS "fast;forge" TIMEOUT 300)
+
+add_test(NAME lint_zhao_forge_assemble
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_forge_assemble
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/geometry
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/raster
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/field
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_assemble.sv)
+set_tests_properties(lint_zhao_forge_assemble PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_zhao_forge_pagebank
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_forge_pagebank
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/common
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_pagebank.sv)
+set_tests_properties(lint_zhao_forge_pagebank PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_zhao_terrain_tapshare
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
     --top-module zhao_terrain_tapshare

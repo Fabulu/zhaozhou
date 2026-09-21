@@ -354,6 +354,55 @@ module zhao_console_board
   // and prove `geom_untex_refused_o` fires through the composed door -- the
   // state is unreachable by legal stimulus while the only producer is
   // textured, and a counter never seen to move is a claim, not a measurement.
+  // ==========================================================================
+  // THE FORGE CHAIN'S KNOBS, composed 2026-09-21 (FORGECOMP)
+  // ==========================================================================
+  // (MAX_SEGMENTS + 1) * MAX_SIDES = 65 * 8, `zhao_forge_prim`'s own frozen
+  // bounds restated as a capacity. Raising either bound without raising this
+  // is what `zhao_forge_assemble`'s `vtx_overflow_o` exists to catch.
+  parameter int unsigned FORGE_MAX_VERTS = 520,
+  // In-flight projector requests. The service's result port has NO
+  // backpressure and its stated latency is 36 clocks; the assembler's
+  // elaboration guard refuses anything below that.
+  parameter int unsigned FORGE_INFLIGHT  = 64,
+  // Forge programs resident per page. A page declaring more is REFUSED WHOLE.
+  parameter int unsigned FORGE_MAX_SCAN  = 16,
+  //
+  // THE AUTHORED COLOUR -- CLAUDE.md rule 6, and the treatment owner ruling
+  // R133's D-FORGESHADOW-A already accepted for `cast_strength_i`.
+  //
+  // A forge primitive's PRE-LIT colour has no producer: the frozen
+  // FORGE_PROGRAM record (`zref_forge_page.hpp`) carries anchors, axes, radii,
+  // a seed and a phase, and NO colour field. R234 D1 rules that the Gouraud
+  // lanes are exactly where an untextured primitive's pre-lit colour belongs,
+  // so the mechanism is ratified and only the VALUE is ours.
+  //
+  // THESE ARE STARTING VALUES CHOSEN BY REASONING AND NOT YET BY LOOKING. The
+  // first forge primitive is a lightning bolt, so they are a hot near-white
+  // with a cool cast rather than a flat white -- but nothing has been rendered
+  // and CLAUDE.md is explicit that measurement cannot choose a value and that
+  // the read at final resolution against what it sits on is the thing. Expect
+  // to move them. They are Q16.16 on the Gouraud lanes, so 65536 is 1.0.
+  parameter int signed FORGE_LIT_R = 32'sd62259,   // 0.95
+  parameter int signed FORGE_LIT_G = 32'sd63897,   // 0.975
+  parameter int signed FORGE_LIT_B = 32'sd65536,   // 1.0
+  parameter int signed FORGE_ALPHA = 32'sd65536,   // 1.0, opaque
+  // The draw's semantic weight, which MATERIAL.RESOLVE ECHOES and reads
+  // nowhere -- a label travelling with its request, not a policy invented here.
+  parameter logic [7:0] FORGE_QUALITY_TIER = 8'd128,
+  // `zhao_geom_clip`'s cull mode for a forge primitive. ZERO = no culling, and
+  // that is the authored choice rather than a default: a ribbon is a two-sided
+  // sheet and a bolt seen from behind must still draw. `zref::raster_state`'s
+  // own numbering.
+  parameter logic [1:0] FORGE_CULL_MODE = 2'd0,
+  // `DrawProcedural` carries NO viewport_mask -- the only draw in the ABI that
+  // does not. So the command asserts BOTH views and the PAGE's own `view_mask`
+  // governs alone, which is where `zref_forge_page.hpp` puts it. This is a
+  // named constant rather than a literal because it is a statement about the
+  // command surface, and the day DrawProcedural grows a mask it is the line
+  // that changes.
+  parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
+
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
@@ -371,6 +420,14 @@ module zhao_console_board
   parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
   parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
   parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
+  // THE SEVENTH SLOT, NAMED 2026-09-21 (FORGECOMP). It was the only one of the
+  // ruling-5 packet's seven with no parameter here, which read as though the
+  // packet were six wide plus a spare. It is not: `zhao_geom_replay`'s own
+  // ATTRW comment enumerates the attribute store as "(u_over_w, v_over_w, r,
+  // g, b, alpha)" and GEOM_ATTR_STORE_W is (GEOM_CLIP_ATTRS - 1) * 32, so slot
+  // 6 is ALPHA and always was. Naming it is not a change; it is the end of a
+  // reader having to derive it.
+  parameter int unsigned GEOM_ATTR_SLOT_ALPHA    = 6,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -1219,6 +1276,69 @@ module zhao_console_board
   // was full. Backpressure, never a drop -- and the instrument that says the
   // queue's sizing assumption (twice MAX_TRIANGLES) still holds.
   output logic [31:0]             geom_rp_triq_stall_o,
+
+  // ---- THE FORGE CHAIN's evidence (composed 2026-09-21) --------------------
+  // DrawProcedural 0x0302 -> the program page -> topology and positions ->
+  // the projector's third owner -> GEOM.CLIP's door. Every counter below is
+  // fired by legal stimulus at its own block's ports except
+  // `forge_asm_vtx_overflow_o`, which is unreachable while the evaluators'
+  // bounds and FORGE_MAX_VERTS agree and therefore owes a committed mutant.
+  output logic [31:0] forge_pb_pages_o,
+  output logic [31:0] forge_pb_draws_o,
+  output logic [31:0] forge_pb_bad_magic_o,
+  output logic [31:0] forge_pb_page_overflow_o,
+  output logic [31:0] forge_pb_truncated_o,
+  output logic [31:0] forge_pb_lookup_miss_o,
+  output logic [31:0] forge_pb_refused_kind_o,
+  output logic [31:0] forge_pb_refused_cliff_o,
+  output logic [31:0] forge_pb_bad_record_o,
+  output logic [31:0] forge_pb_refused_nopage_o,
+  output logic [31:0] forge_pb_denied_o,
+  output logic        forge_pb_busy_o,
+  output logic [31:0] forge_prim_jobs_o,
+  output logic [31:0] forge_prim_triangles_o,
+  output logic [31:0] forge_prim_refused_family_o,
+  output logic [31:0] forge_prim_refused_limit_o,
+  output logic [31:0] forge_prim_skipped_view_o,
+  output logic [31:0] forge_eval_jobs_o,
+  output logic [31:0] forge_eval_points_o,
+  output logic [31:0] forge_eval_vertices_o,
+  output logic [31:0] forge_eval_refused_limit_o,
+  output logic [31:0] forge_eval_skipped_view_o,
+  output logic [31:0] forge_eval_sat_events_o,
+  output logic [31:0] forge_eval_walk_overrun_o,
+  output logic [31:0] forge_ring_jobs_o,
+  output logic [31:0] forge_ring_rings_o,
+  output logic [31:0] forge_ring_vertices_o,
+  output logic [31:0] forge_ring_refused_family_o,
+  output logic [31:0] forge_ring_refused_elsewhere_o,
+  output logic [31:0] forge_ring_refused_limit_o,
+  output logic [31:0] forge_ring_skipped_view_o,
+  output logic [31:0] forge_ring_sat_events_o,
+  output logic [31:0] forge_asm_jobs_o,
+  output logic [31:0] forge_asm_vertices_o,
+  output logic [31:0] forge_asm_triangles_o,
+  output logic [31:0] forge_asm_index_oor_o,
+  output logic [31:0] forge_asm_vtx_overflow_o,
+  output logic [31:0] forge_asm_slot_pressure_o,
+  output logic [31:0] forge_asm_dq_refused_o,
+  output logic [31:0] forge_asm_dq_stray_o,
+  output logic [31:0] forge_asm_proj_stray_o,
+  // CMD.EXEC's own half of the dispatch.
+  output logic [31:0] cmd_exec_forges_o,
+  output logic [31:0] cmd_exec_forge_overflow_o,
+  output logic [31:0] cmd_exec_forge_src_truncated_o,
+  // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
+  // from the other five so the scan's cost is a NUMBER rather than an argument.
+  output logic [31:0] geom_ma_jobs_f_o,
+
+  // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
+  // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
+  // `granted_o` is flattened 32 bits each, least significant slice client 0.
+  output logic [63:0] geom_clipdoor_granted_o,
+  output logic [31:0] geom_clipdoor_switches_o,
+  output logic [31:0] geom_clipdoor_idle_offered_o,
+  output logic [31:0] geom_clipdoor_err_hold_broken_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -3428,6 +3548,16 @@ module zhao_console_board
       .GEOM_CLIP_ATTRS          (GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW          (GEOM_CLIP_ATTRW),
       .GEOM_ATTR_STORE_W        (GEOM_ATTR_STORE_W),
+      .FORGE_MAX_VERTS          (FORGE_MAX_VERTS),
+      .FORGE_INFLIGHT           (FORGE_INFLIGHT),
+      .FORGE_MAX_SCAN           (FORGE_MAX_SCAN),
+      .FORGE_LIT_R              (FORGE_LIT_R),
+      .FORGE_LIT_G              (FORGE_LIT_G),
+      .FORGE_LIT_B              (FORGE_LIT_B),
+      .FORGE_ALPHA              (FORGE_ALPHA),
+      .FORGE_QUALITY_TIER       (FORGE_QUALITY_TIER),
+      .FORGE_CULL_MODE          (FORGE_CULL_MODE),
+      .FORGE_CMD_VIEW_MASK      (FORGE_CMD_VIEW_MASK),
       .GEOM_REPLAY_UNTEX_DECL   (GEOM_REPLAY_UNTEX_DECL),
       .GEOM_ATTR_SLOT_INVW      (GEOM_ATTR_SLOT_INVW),
       .GEOM_ATTR_SLOT_U_OVER_W  (GEOM_ATTR_SLOT_U_OVER_W),
@@ -3435,6 +3565,7 @@ module zhao_console_board
       .GEOM_ATTR_SLOT_R         (GEOM_ATTR_SLOT_R),
       .GEOM_ATTR_SLOT_G         (GEOM_ATTR_SLOT_G),
       .GEOM_ATTR_SLOT_B         (GEOM_ATTR_SLOT_B),
+      .GEOM_ATTR_SLOT_ALPHA     (GEOM_ATTR_SLOT_ALPHA),
       .PROJ_T_ARENAS            (PROJ_T_ARENAS),
       .PROJ_T_DEPTH             (PROJ_T_DEPTH),
       .PROJ_T_INDEX_W           (PROJ_T_INDEX_W),
@@ -3785,6 +3916,55 @@ module zhao_console_board
       .geom_rp_view_bad_o                 (geom_rp_view_bad_o),
       .geom_rp_poisoned_o                 (geom_rp_poisoned_o),
       .geom_rp_triq_stall_o               (geom_rp_triq_stall_o),
+      .forge_pb_pages_o                   (forge_pb_pages_o),
+      .forge_pb_draws_o                   (forge_pb_draws_o),
+      .forge_pb_bad_magic_o               (forge_pb_bad_magic_o),
+      .forge_pb_page_overflow_o           (forge_pb_page_overflow_o),
+      .forge_pb_truncated_o               (forge_pb_truncated_o),
+      .forge_pb_lookup_miss_o             (forge_pb_lookup_miss_o),
+      .forge_pb_refused_kind_o            (forge_pb_refused_kind_o),
+      .forge_pb_refused_cliff_o           (forge_pb_refused_cliff_o),
+      .forge_pb_bad_record_o              (forge_pb_bad_record_o),
+      .forge_pb_refused_nopage_o          (forge_pb_refused_nopage_o),
+      .forge_pb_denied_o                  (forge_pb_denied_o),
+      .forge_pb_busy_o                    (forge_pb_busy_o),
+      .forge_prim_jobs_o                  (forge_prim_jobs_o),
+      .forge_prim_triangles_o             (forge_prim_triangles_o),
+      .forge_prim_refused_family_o        (forge_prim_refused_family_o),
+      .forge_prim_refused_limit_o         (forge_prim_refused_limit_o),
+      .forge_prim_skipped_view_o          (forge_prim_skipped_view_o),
+      .forge_eval_jobs_o                  (forge_eval_jobs_o),
+      .forge_eval_points_o                (forge_eval_points_o),
+      .forge_eval_vertices_o              (forge_eval_vertices_o),
+      .forge_eval_refused_limit_o         (forge_eval_refused_limit_o),
+      .forge_eval_skipped_view_o          (forge_eval_skipped_view_o),
+      .forge_eval_sat_events_o            (forge_eval_sat_events_o),
+      .forge_eval_walk_overrun_o          (forge_eval_walk_overrun_o),
+      .forge_ring_jobs_o                  (forge_ring_jobs_o),
+      .forge_ring_rings_o                 (forge_ring_rings_o),
+      .forge_ring_vertices_o              (forge_ring_vertices_o),
+      .forge_ring_refused_family_o        (forge_ring_refused_family_o),
+      .forge_ring_refused_elsewhere_o     (forge_ring_refused_elsewhere_o),
+      .forge_ring_refused_limit_o         (forge_ring_refused_limit_o),
+      .forge_ring_skipped_view_o          (forge_ring_skipped_view_o),
+      .forge_ring_sat_events_o            (forge_ring_sat_events_o),
+      .forge_asm_jobs_o                   (forge_asm_jobs_o),
+      .forge_asm_vertices_o               (forge_asm_vertices_o),
+      .forge_asm_triangles_o              (forge_asm_triangles_o),
+      .forge_asm_index_oor_o              (forge_asm_index_oor_o),
+      .forge_asm_vtx_overflow_o           (forge_asm_vtx_overflow_o),
+      .forge_asm_slot_pressure_o          (forge_asm_slot_pressure_o),
+      .forge_asm_dq_refused_o             (forge_asm_dq_refused_o),
+      .forge_asm_dq_stray_o               (forge_asm_dq_stray_o),
+      .forge_asm_proj_stray_o             (forge_asm_proj_stray_o),
+      .cmd_exec_forges_o                  (cmd_exec_forges_o),
+      .cmd_exec_forge_overflow_o          (cmd_exec_forge_overflow_o),
+      .cmd_exec_forge_src_truncated_o     (cmd_exec_forge_src_truncated_o),
+      .geom_ma_jobs_f_o                   (geom_ma_jobs_f_o),
+      .geom_clipdoor_granted_o            (geom_clipdoor_granted_o),
+      .geom_clipdoor_switches_o           (geom_clipdoor_switches_o),
+      .geom_clipdoor_idle_offered_o       (geom_clipdoor_idle_offered_o),
+      .geom_clipdoor_err_hold_broken_o    (geom_clipdoor_err_hold_broken_o),
       .geom_clip_attr_a_o                 (geom_clip_attr_a_o),
       .geom_clip_attr_b_o                 (geom_clip_attr_b_o),
       .geom_clip_attr_c_o                 (geom_clip_attr_c_o),
