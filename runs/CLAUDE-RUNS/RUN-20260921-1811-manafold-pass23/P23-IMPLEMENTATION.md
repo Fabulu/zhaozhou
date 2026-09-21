@@ -119,9 +119,17 @@ floored at 2.0 deg / 12.0 pm so it cannot quietly fall to zero.
 * **B strictly lowest: 19 of 19 hosting clips, re-measured.** `R5 DIP: 19
   clip(s) author a dip; 0 never reach lowest; 0 do not return; worst margin
   29 mm (slot 9, need 20)` — the same worst clip and the same number as
-  pass 22. The four raised clips' own margins moved +78->+80 (drift),
-  +94->+167 (damage), +115->+171 (death-drop), +93->+145 (gutter), all inside
+  pass 22. The four raised clips' own margins moved **+78->+79 (drift),
+  +94->+159 (damage), +115->+167 (death-drop), +93->+163 (gutter)**, all inside
   the pass-20 authoring target of 70-180 mm.
+
+  > ⚠ **CORRECTED BY THE PASS-23 REVIEW (P23-REVIEW.md §6, R1).** This line
+  > originally read `+78->+80`, `+94->+167`, `+115->+171`, `+93->+145`. The
+  > BEFORE values were right; the AFTER values were carried over from ladder
+  > rungs and never re-read from the shipping run. The figures above are the
+  > shipping run's, from `P23-RECEIPTS/p23-mrear-gate.txt` and from the
+  > reviewer's independently built binary, which produced a byte-identical file.
+  > The conclusion is unchanged: all four are inside 70-180 mm.
 * **mspan PASS: 0 failures.** G9's bank-wide worsts are **unchanged to three
   decimals** — angular step 7.642 deg slot 8 f0101 B (ceiling 8.0), position
   step 72.157 mm slot 20 f0053 C. The raised presses cost the continuity budget
@@ -328,7 +336,7 @@ act this pass did not have authority for. One command when the owner wants it:
 
 | file | what |
 |---|---|
-| `P23-LOOKS/01`, `02` | the four responsive clips, before/after at native 2x and at the dip bottom 4x |
+| `P23-LOOKS/01`, `02` | the four responsive clips, before/after at native 2x and at the dip bottom 4x. ⚠ **`02`'s gutter panel is a LADDER RUNG (590->680), not the shipped 720** — corrected by the review (P23-REVIEW.md §6, R2); the shipped comparison is `P23-REVIEW-LOOKS/01`-`02`, and 720 does appear in the `04` ladder |
 | `P23-LOOKS/03`-`06` | the four press-depth ladders at 4x — where each value was chosen |
 | `P23-LOOKS/07` | per-frame changed-pixel trajectory vs pass 22, all four clips |
 | `P23-LOOKS/08`, `09` | the damage f414 spike: six consecutive frames, and the diff map that explains it |

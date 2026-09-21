@@ -88,3 +88,16 @@ runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/zha
 runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/Upheaval-blueprint/
 runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/zhaozhou-blueprint/
 fit-round2.log
+
+# The scratch build/render directory. `.tmp/` is where build-direct.sh puts
+# binaries and objects and where every pass drops its working logs, sweeps and
+# frame roots. It has ALWAYS been untracked-but-not-ignored, which works only
+# for as long as nobody types `git add -A` -- and on 2026-09-22 the pass-23
+# reviewer did, and swept 12,790 scratch files into a commit. Caught before the
+# push and reset, but that is the same over-broad add that cost a history
+# rewrite on 2026-08-28.
+#
+# ⚠ AND AN IGNORE RULE IS ONLY HALF: `tools/maintenance/purge_render_intermediates.py`
+# is what actually removes the bulk of what lands here (the `.rgb` frame roots).
+# Making this invisible to git does not make it small.
+.tmp/

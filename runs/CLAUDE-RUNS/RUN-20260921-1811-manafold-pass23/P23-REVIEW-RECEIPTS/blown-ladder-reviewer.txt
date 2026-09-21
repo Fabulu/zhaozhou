@@ -1,0 +1,10 @@
+pm     R7rot      R7form     R5margin  
+300    46.69      216.6      -189       rear gate mask 0x0 -> GREEN
+400    28.26      170.5      -189       rear gate mask 0x0 -> GREEN
+500    15.30      100.1      -132       rear gate mask 0x0 -> GREEN
+700    6.29       45.2       -3         rear gate mask 0x0 -> GREEN
+740    4.90       34.0       +17        rear gate mask 0x0 -> GREEN
+780    4.47       30.4       +34        rear gate mask 0x0 -> GREEN
+815    3.70       24.7       +45        rear gate mask 0x0 -> GREEN
+900    2.28       14.8       +56        rear gate mask 0x0 -> GREEN
+1000   0.65       4.0        +56        rear gate mask 0x40 -> RED

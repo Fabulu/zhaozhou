@@ -107,3 +107,82 @@ Plates: `P23-LOOKS/01`-`15`. Receipts: `P23-RECEIPTS/`.
 **Next:** commit source, then curated evidence, push `manafold-pass23`. The
 coordinator sends the review/publish packet; no bank render, encode, merge or
 deploy from here.
+
+### 2026-09-22 ~00:30 - INDEPENDENT REVIEW: verdict FIXED, clear to publish
+
+Built 13 binaries of my own (`.tmp/p23rev`, RC 0) plus a **pass-22 binary from a
+`git worktree` at 83002801** for the blindness comparison. Nothing below is
+quoted from the implementer's receipts.
+
+- **My shipping gate output is BYTE-IDENTICAL to the committed
+  `P23-RECEIPTS/p23-mrear-gate.txt`.** Independent build, independent run, same
+  file.
+- **Matrix re-run on my binaries: 195/195 PASS, 0 FAIL, one invocation.**
+- **The diff:** exactly ONE `constexpr` line modified tree-wide
+  (`kKneadDipClipPm`, four entries); every other new `constexpr` is a gate
+  addition. No span/compaction/attachment bound moved. Verified by reading.
+- **B strictly lowest 19/19, worst margin 29 mm slot 9** - reproduced.
+  **mspan PASS**, G9 worsts unchanged to three decimals.
+- **Blown's inversion REPRODUCED over nine rungs, every figure matching**
+  (46.69 -> 0.65 deg as the press deepens). Exemption judged **HONEST**: the
+  premise genuinely fails there, the useful direction breaks an owner-named
+  constraint, it is declared in source and printed by the gate, and **I fired
+  the residual floor** - at 1000 pm slot 20 falls to 0.65/4.0, goes UNDER
+  2.0/12.0 and R7 goes RED at mask 0x40.
+- **Nine controls fired, all RC=1**, masks exactly as declared. Both reported
+  pass-22 exposures reproduce on a pass-22 binary I built: R6 "0 violations"
+  over 11,561,258 line splats under `--fail-line-scale`, and R7 GREEN under
+  `--fail-no-dip` while 17 of 19 clips had lost the reaction.
+- **Byte-identity 4/4 on both rungs**; only drift moves; the new rung is not
+  vacuous.
+- **Two record errors found and CORRECTED in P23-IMPLEMENTATION.md**: the
+  post-change R5 margins were ladder figures, not the shipping run's
+  (+79/+159/+167/+163, not +80/+167/+171/+145); and `P23-LOOKS/02`'s gutter
+  panel shows the 680 rung, not the shipped 720. Neither changes a shipped
+  value. I rendered the shipped gutter comparison myself
+  (`P23-REVIEW-LOOKS/01`-`02`) rather than overwrite the implementer's plate.
+- **Visual verdicts:** drift, damage, death-drop and death-gutter all GOOD and
+  readable at native; 760 on gutter genuinely reads as a buckling arm and was
+  correctly rejected - my eye reached that independently. Frame-to-frame motion
+  energy on gutter is UNCHANGED before/after (same max, same frame, same worst
+  local ratio), so the deeper press is not a spasm.
+
+Write-up: `P23-REVIEW.md`.
+
+### 2026-09-22 - Part 2 (publish) begun
+
+- **Pass 22 archived FIRST**, before any encode: 44/44 live files verified
+  against the published pass-22 receipt, copied to `archive-p22-manafold-*`,
+  copies re-hashed 44/44, **43,665,082 bytes**. `P22-ARCHIVE-SHA256.txt` written.
+- One new generation **"Pass 22 - 2026-09-21"**, 22 clips each declared once,
+  archive note SEVENTEEN -> **EIGHTEEN** distinct generations (20 collections;
+  three share the one "Version 17" generation name, so 18 is correct - checked
+  rather than assumed).
+- **checkarchive extended to lock pass 22** (LOCKED row, live-phase ladder row
+  for pass-23, fixture collection, and four new selftest legs found by label).
+  **Selftest OK, 31 red legs fire, 12 positive legs accept.**
+  ⚠ Its success message carried the hand-maintained WORD "twenty-seven" and
+  would have read twenty-seven while thirty-one fired. It now **counts itself**
+  from the source, anchored at statement position so the two search patterns do
+  not count themselves - the first attempt at that did, and reported 33.
+- Archive integrity with the index reassembled: **v17, v18, p19, p20, p21 and
+  p22 all locked**, live names match the pass-22 receipt 44/44.
+
+### 2026-09-22 - ⚠ A near-miss of my own, recorded because it is the house defect
+
+Committing the review I typed `git add -A` and **swept 12,790 scratch files out
+of `.tmp/` into the commit.** Caught by reading the commit's own file list
+before pushing, reset with `--soft`, and recommitted with explicit paths.
+
+`.gitignore` has covered `*.rgb` since 2026-08-28 -- so **zero raw frames were
+caught, and that is exactly why the rest got through.** The ignore rule was
+written for the frames and `.tmp/` itself was left untracked-but-not-ignored,
+which is safe only while nobody types `add -A`. It is now ignored, with a note
+saying that making it invisible to git does not make it small: the purge tool is
+what actually removes the bulk.
+
+The instructive part is the ordering. This is CLAUDE.md's own over-broad-add
+lesson, in the session whose whole job was checking whether someone else's
+claims survived scrutiny -- and it was caught by looking at what the command
+actually did rather than at the fact that it succeeded. `git commit` printed
+success both times.
