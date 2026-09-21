@@ -1,7 +1,7 @@
 # Task Log: RUN-20260920-2315 - [Describe objective here]
 
 **Created:** 2026-09-20 23:15 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260920-2315-manafold-pass21/
 
 ---
@@ -259,3 +259,35 @@ Manafold pass 21 from Owner Direction 22: the antenna reads as having too many j
   hides it from git status, which is exactly the law about making waste invisible
   to your tooling. Queued for the purge tool at cleanup.
 - NEXT: publish (FF both mains, deploy), then production-verify both hosts.
+
+### 2026-09-21 02:09-02:25 - PUBLISHED and PRODUCTION-VERIFIED
+- Both mains fast-forwarded, PROVED not assumed (`git merge-base --is-ancestor`
+  against local and origin, then `git push . manafold-pass21:main`, which refuses
+  anything that is not a fast-forward). Zhaozhou `4bcf83db -> 806aecf7`, Upheaval
+  `343c4ed2 -> 76c6a3f`.
+- `deploy.ps1 -Project upheaval -Branch main`, no skip flag, **DEPLOY_RC=0** read
+  off the deploy and not off a pipe. Deployment
+  **https://3a1aca54.upheaval.pages.dev**, alias https://upheaval.pages.dev.
+  Wrangler uploaded 45 files (the 44 changed live media + the index) and reused
+  1,574; the 22 archive-p20 files were not re-uploaded because their bytes were
+  already on the host as the pass-20 live files -- which is what byte-for-byte
+  copies means.
+- **Verifier SELFTESTED FIRST on deliberately broken copies** (RC 0): the local
+  page passes, and every negative fires -- hover's loop stripped, robots
+  index/follow, an altered renderer MD5, the old pass-20 card, a dropped
+  archive-p19 declaration, **a dropped archive-p20 declaration (the new lock's
+  own negative, never run before)**, a stale generation count, plus a one-byte
+  corrupted / truncated / non-200 media response.
+- **PRODUCTION: 57/57 on BOTH hosts, 73,222,298 bytes each, 0 mismatches, 0
+  retries, all THIRTEEN index checks true on both.** Index 455,500 B SHA-256
+  d4bafc4c31d8c35390a567c83abc16af84f92f460065000b555b4b8ef0ecef35; 44 live media
+  43,766,439 B; **12 archive spot checks, one set per locked generation** (v17,
+  v18, pass 19, pass 20) 29,000,359 B. Record: `P21-PRODUCTION-VERIFY.md`.
+- Four locked archive generations now serve, each cross-locked to the live
+  receipt production actually served. The page remains `noindex, nofollow`.
+
+## FINAL STATE
+- Zhaozhou `main` == `manafold-pass21`; Upheaval `main` == `manafold-pass21`.
+- Raw frame root and full-resolution sheets deleted after verification; the
+  stray 83 MB `.rgb` directory left at the zhaozhou root by the PASS-20 session
+  removed with the committed purge tool.
