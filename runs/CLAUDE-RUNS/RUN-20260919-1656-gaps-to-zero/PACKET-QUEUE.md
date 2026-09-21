@@ -86,6 +86,38 @@ A real build, and a large one.
 
 ---
 
+## FORGE.SHADOW — MAPPED 2026-09-21 BY SHADOWSUB, which composed NOTHING on purpose
+
+**The blocker list it was scheduled against was wrong in four places.** Read
+`design/contracts/FORGE.SHADOW.md` before scheduling the follow-up; it carries
+the whole map.
+
+* **The chain is SEVEN blocks, not five.** `zhao_view_projq88` and
+  `zhao_measure_starve` are also uncomposed and also required. All five original
+  blockers stand — re-measured **by instantiation at statement position, not by
+  grep**.
+* **THE RATIFIED-LAW QUESTION NEEDS NO OWNER DECISION.** R133 called the
+  client-A widening a law re-authoring. The law is **R3 `(owner, explicit)`** —
+  keep the time-multiplex, no third *port*, schedule proof owed — **and R3 NAMES
+  FORGE.SHADOW's instance-centre 1/w as one of the three sharers.** The widening
+  was already performed under R68 sub-build 4 (`PAY_W` 16→17, two-bit `OWNER`,
+  `2'd2`/`2'd3` unallocated, `owner_unroutable_o` watching). **What is missing
+  is a third ARM and the schedule proof nobody has produced.**
+* **What WOULD re-author a law is narrower:** an arena-fill path on client A's
+  **result** port. Client B has one; A has none and cannot refuse a result.
+* **`tap_*` was marked done and is NOT.** `zhao_terrain_heighttap` has one
+  requester group, fully connected, and its response carries **no tag and no
+  rider**, so a second client needs an arbiter that does not exist. ***Port
+  SHAPE was read as port AVAILABILITY*** — the error to watch for everywhere.
+* **R197's untextured door IS built and composed**, so the u/v half of the
+  vertex wall is discharged.
+* **New, and it blocks more than this lane:** `zhao_geom_drawjob` emits **no
+  form index** and **no view index**.
+
+**Freed by D2 and worth a slot on its own:** the CMD.EXEC
+`SetView.pixel_error` and `SetPresentationContract.view_count` arms. **I14
+defers them only because MEASURE.GOVERNOR was parked, and D2 lifted that.**
+
 ## DO NOT SPEND A SLOT ON THESE
 
 * **A sixth FORGE.SHADOW *wiring* packet.** The cluster has gone **21 → 21 five
