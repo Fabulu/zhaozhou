@@ -72,36 +72,56 @@ another, so the filler may run at most `L/B - 1` bands ahead.
 
 Two RAMs, both on-chip, **no external memory and no client index**.
 
-**The band store.** `LINE_W × L` words of `16 + GENW` bits. An M10K holds
-10,240 bits and offers 512 × 20, so at any width ≤ 20 the M10K count is
+**The band store.** `LINE_W × L` words of `16 + GENW` bits, `GENW = 24`.
+
+R233's formula is `ceil(0.75 × L)`, and it is right **for a word of 20 bits or
+fewer** — an M10K holds 10,240 bits and offers `512 × 20`:
 
 ```
-  ceil(LINE_W * L / 512)   =   ceil(0.75 * L)      at LINE_W = 384
+  ceil(LINE_W * L / 512)   =   ceil(0.75 * L)      at LINE_W = 384, width <= 20
 ```
 
 **That formula is trusted because it reproduces two numbers this tree stated
 before it was written** (R233): `L = 240 -> 180`, which is R222's own table
 including its 360/207/204 rows, and `L = 9 at 16 bits -> 7`, which is
-POST.COMPOSITE's own contract figure for its nine-line ring.
+POST.COMPOSITE's own contract figure for its nine-line ring. **It is not the
+formula this block pays**, because the word is 40 bits wide and the
+configuration is `256 × 40`:
 
-**B = 4, L = 16 -> 12 M10K.**
+```
+  ceil(LINE_W * L / 256)   =   24 M10K            at LINE_W = 384, L = 16
+```
 
-**The spare width is SPENT, and this contract is where that is recorded.**
-R233 observed that "the 17th bit is free at every L — depth binds, width is
-slack at 512×20". v1 spends **two** of those spare bits on a per-row
-GENERATION tag rather than one on a valid bit, and the reason is a cost that
-the three-structure comparison did not price:
+**Why the word is 40 bits, and why it is not negotiable.** A band slot is
+re-used every `L/B` bands and must not show the previous occupant's pixels.
+There are exactly three ways to get that:
 
-> **A band slot re-used every `L/B` bands must not show the previous
-> occupant's pixels.** Clearing `B × LINE_W` words costs `B × LINE_W` write
-> cycles — *exactly one band drain time* — which would halve the 9× margin
-> R233 took the band for. The generation tag removes the clear entirely: a word
-> reads as HUD only when its stored generation equals the row's current one.
+* **Clear the slot.** `B × LINE_W` = 1,536 writes per band against 1,536 clocks
+  of band drain — the clear alone is 100% of the write port, for the whole
+  frame. Measured, not guessed: `BANDS × B × LINE_W` = 92,160 = exactly one
+  frame of clocks. Leading by N bands multiplies both sides, so it is
+  unaffordable at any lead.
+* **A tag that cannot repeat.** Impossible in a fixed width.
+* **A per-row GENERATION tag wide enough not to wrap in a session**, which is
+  what this block does. `gen_q[row]` is bumped when that row's band opens, and a
+  word reads as HUD only when its stored tag equals it. **The whole clear is `B`
+  counter increments.** Generations run `1 .. GEN_MAX` and **never 0**, so a
+  word that has never been written — an M10K powers up at zero — can never be
+  mistaken for a HUD pixel.
 
-Generations run `1, 2, 3, 1, ...` and **never 0**, so a word that has never
-been written (an M10K powers up at zero) can never be mistaken for a HUD pixel.
-A stale word is stale by exactly one generation, so two bits is one more than
-the law needs.
+**R233's "the 17th bit is free at every L" is true and it buys a VALID BIT. It
+does not buy FRESHNESS.** See *The M10K number MOVED* under **Synthesis**, which
+also prices the cheaper exact form that was declined.
+
+**A SCRUB WAS BUILT FIRST AND IT WAS UNSOUND**, and it is recorded because the
+general form is worth keeping. It wrote generation 0 into idle write cycles over
+"the slots the filler and the reader have both finished with" — and in a FIFO
+that is running there are no such slots: with `L/B` slots, one is being filled
+and the rest hold bands the reader has not reached. It erased bands between the
+fill and the read, and the directed bench caught it as two missing bands of a
+20-row sprite. **A free resource in a pipelined store is free only in the window
+between the last consumer and the next producer, and a full pipeline has no such
+window.**
 
 **The display list.** `MAX_DESC` entries of `DESCW` bits — the frozen sprite
 descriptor plus the per-sprite state this block adds (cursor `u`/`v`, lifecycle
@@ -161,7 +181,14 @@ two quantities SHOULD move together, because they are one word.
 
 ## Backpressure rules
 
-* `d_ready_o` is low only when the list is full.
+* **`d_ready_o` is always high.** `TWOD.SPRITE.md`: *"descriptor count over the
+  frame budget — drop the tail, deterministically by `order`, and count — the
+  HUD must not fault a frame."* So the handshake always completes and the
+  surplus descriptor is dropped here. Lowering `ready` instead would
+  **backpressure the command stream** on a HUD overflow, stalling the whole
+  console for the least important thing on screen — and it would make the
+  refusal uncountable, because a held offer and a new offer are
+  indistinguishable on the wire.
 * `e_valid_o`/`e_ready_i` is the sprite walker's own handshake; a slice is held
   until accepted and is never withdrawn.
 * `c_ready_o` is high whenever a band is open for fill. The write port is one
@@ -234,7 +261,7 @@ arrived — also whole, also before rasterising) and
 | condition | behaviour |
 |---|---|
 | bucket cannot cover the sprite | **refuse the WHOLE sprite for the frame, count `sprites_refused_budget_o`** (R235) |
-| display list full | refuse the descriptor whole, count `desc_overflow_o` |
+| display list full | drop the tail whole, count `desc_overflow_o`; `ready` stays high |
 | sprite not for this view | skipped, charged nothing, not an error |
 | sprite entirely off the bottom / top | skipped, charged nothing |
 | a colour arrives for a row outside the open band | dropped, count `write_oob_o` |
@@ -298,6 +325,7 @@ HUD, against the line ring's 133%.
 | `scan_addr_mismatch_o` | the offered read address left the sweep |
 | `tint_dropped_o` | a pixel carried a tint that was not applied |
 | `blend_dropped_o` | a pixel carried a non-replace blend that was not applied |
+| `order_inversion_o` | a sprite's `order` fell below the one before it |
 | `bands_o` | bands closed |
 
 **Every one of these is fired by legal stimulus at this block's own ports** in
@@ -328,12 +356,25 @@ instantiates the production module cannot drift, and must not be counted as a
 copy"* — and `tools/design/wrapper_port_parity.py` checks the half a wrapper
 CAN get wrong.
 
-## Scalar reference function
+## Scalar reference function — DECLARED ABSENT, with the reason
 
-`zref::twod::band_u` — owns the admission arithmetic (the marginal-excess
-bucket), the band schedule and the generation law. It does **not** own
-sampling, blending or descriptor interpretation: those are TWOD.SAMPLER's and
-TWOD.SPRITE's, already frozen.
+**No `reference_model:` is declared, deliberately.** `refmodel_liveness.py`
+already names six blocks whose declared oracle symbol exists nowhere; a seventh
+would be a cheque nobody intends to cash, and the ledger row would read like a
+claim.
+
+What this block owns is a **schedule**, not an arithmetic law: the
+marginal-excess bucket, the band order and the generation tag. A scalar oracle
+for it would be the same author's second implementation of the same schedule,
+which is the weaker of the two checks available. **The stronger one is used
+instead**: the directed bench asserts R233's own two PUBLISHED numbers — the
+full-width bar at `need = 0` and the 40 glyphs at `Σ need = 3,840` — which were
+written down before this block existed. A model that reproduces a number an
+independent document stated is worth more than one that reproduces itself; that
+is R233's own test for the `ceil(0.75 × L)` formula, applied here.
+
+Sampling, blending and descriptor interpretation are TWOD.SAMPLER's and
+TWOD.SPRITE's, already frozen, and are not re-modelled here.
 
 ## Directed tests
 
@@ -380,18 +421,64 @@ would be sampling the bench author's imagination.
 not fitting now, we're going zero gaps"*).
 
 ```
-  band store        ceil(0.75 * L)              =  12 M10K at L = 16
+  band store        ceil(LINE_W * L / 256)      =  24 M10K at L = 16, DW = 40
   display list      ceil(DESCW / 40)            =  10 M10K at MAX_DESC <= 256
-  registers         ~850 flops x 0.849 ALM/reg  =  ~720 ALM
+  registers         ~500 flops x 0.849 ALM/reg  =  ~430 ALM
   combinational     bucket, comparators, the shared serial shift-add
   DSP               ZERO -- every multiply is serial shift-add or by a constant
 ```
 
-**Ceiling: 1,400 ALM, 0 DSP, ≤ 24 M10K.** A leaf fit row in
+**Ceiling: 1,400 ALM, 0 DSP, ≤ 36 M10K.** A leaf fit row in
 `design/fit_targets.yml` asks exactly the question this arithmetic cannot
 answer.
 
+### The M10K number MOVED, and that is this contract's main correction
+
+**R233's `ceil(0.75 × L)` is right for a word of 20 bits or fewer** — an M10K is
+512 × 20 — and it reproduces R222's table and POST.COMPOSITE's contract figure
+exactly, which is why it was trustworthy. **It stops being the right formula the
+moment the word needs more than 20 bits**, and freshness makes it need 40:
+
+```
+  R233 as posed     16 bit colour + 1 valid, 512 x 20   ceil(0.75 * L) = 12
+  as built          16 bit colour + 24 gen,  256 x 40   ceil(LINE_W*L/256) = 24
+```
+
+**"The 17th bit is free at every L" is true and it buys a VALID BIT. It does not
+buy FRESHNESS**, and freshness is not optional: a band slot re-used every `L/B`
+bands must not show the previous occupant's pixels, a clear costs 100% of the
+write port for the whole frame (measured: `BANDS × B × LINE_W` = exactly one
+frame of clocks), and no tag of fixed width is exact forever.
+
+**The cheaper exact form is priced and NOT taken**, so the owner can buy it: a
+separate one-bit-per-pixel **presence plane** (`LINE_W × L` bits, 1 M10K) can be
+cleared a WORD at a time — 77 writes per band instead of 1,536 — which keeps the
+colour store at 20 bits and 12 M10K, for **13 + 10 = 23 total against 34**. It
+costs a write-combining buffer on the colour path, because setting one bit of a
+20-bit mask word is a read-modify-write. It was declined because this block has
+to be right the first time with no fit available to check it, not because it is
+worse.
+
 **R236 governs the number:** *"if the question is about keeping capability and
 not having enough resources — we already don't have enough resources."* The
-22 M10K is a fact to record. It is not a veto, and it is not a reason to shrink
+34 M10K is a fact to record. It is not a veto, and it is not a reason to shrink
 `MAX_DESC` or `L` below what the HUD needs.
+
+### One declared limit: a SOFT reset does not clear the store
+
+`rst_n` clears the per-row generation counters and nothing can clear 6,144
+words, so after a mid-session soft reset the generation sequence restarts at 1
+and a word written before the reset can read fresh. **The console's reset is a
+CONFIGURATION reset and an M10K comes up zero, which never matches** — value 0
+is reserved and no live row ever carries it. The exposure is a soft reset
+without reconfiguration, and it is stated here rather than left to be found.
+`tests/compositor/twod_band_directed.cpp` starts each case from a configured
+device for exactly this reason, and says so.
+
+### And the generation tag is a BOUND, not an absence
+
+24 bits gives 16,777,215 opens before a row's tag repeats, and a row is opened
+`MAX_H / L` = 15 times per frame — about 1.1 million frames, five hours at
+60 Hz. A word would have to survive that unwritten and then be read at exactly
+the aliasing generation. Stated so the next reader inherits the number rather
+than the word "never".

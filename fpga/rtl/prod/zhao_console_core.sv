@@ -1923,10 +1923,15 @@
 //      `zhao_vertex_arena`'s payload would have to widen, and that is a change
 //      to that block rather than to a composer.
 //
-// I17. POST.COMPOSITE's HUD (`post_hud_*`) -- BOUNDARY. THREE OF THE FOUR
-//      HALVES THIS ENTRY ONCE HELD ARE CLOSED; the HUD is what is left, and
-//      what it needs is an OWNER DECISION on 153 of 553 M10K plus I14/I30's
-//      CMD descriptor seam. Neither is a composition.
+// I17. TWOD's DESCRIPTOR RECORD (`twod_pd_*`, `twod_sd_*`) -- BOUNDARY, and it
+//      is an ABI DECISION, NOT A COMPOSITION. FOUR OF THE FIVE HALVES THIS
+//      ENTRY ONCE HELD ARE CLOSED, including the HUD: `post_hud_*` and
+//      `twod_sc_*` left this edge on 2026-09-21 under owner rulings R233 and
+//      R235, closed by `zhao_twod_band`. What is left is item 2 below --
+//      `SetPlane` returns ZERO HITS in `spec/commands.zidl`, so the RECORD does
+//      not exist and an executor for it cannot be written honestly. It must go
+//      to the owner as an ABI or page-kind addition, the same size as
+//      R41/R42/R52, and NOT be scheduled as a CMD-executor gap.
 //        (a)(b) CLOSED 2026-09-19 (post pass 2, owner rulings R35/R36): the
 //               look values and the grading table left this edge.
 //        (c)    CLOSED 2026-09-21 (owner ruling R195): `post_gd_*` and
@@ -1996,7 +2001,87 @@
 //      this seam however correct its colours were.
 //
 //      WHAT IS STILL A GAP, and the three are different from each other:
-//        1. `post_hud_*` -- BOUNDARY, and this is the obstacle the earlier
+//        1. `post_hud_*` -- **CLOSED 2026-09-21 (owner rulings R233 and R235,
+//           packet BANDBUILD). `post_hud_*` (five ports) and `twod_sc_*` (ten)
+//           ARE BOTH GONE FROM THIS MODULE'S EDGE.** The paragraphs below are
+//           preserved as history because the reasoning in them was right about
+//           the obstacle and wrong about its price, and both halves are worth
+//           inheriting.
+//
+//           WHAT CLOSED IT: `fpga/rtl/compositor/zhao_twod_band.sv`, composed
+//           at the end of this module as `u_twod_band`. R233 costed three
+//           structures and took the BAND:
+//
+//             frame store (2x)  704/553 M10K  fits           OVER THE DEVICE
+//             line ring           ~12 M10K    133% of frame   cannot draw a HUD
+//             BAND (B=4, L=16)     12 M10K    11.1% of frame  TAKEN
+//
+//           AND THE THING THAT KILLED THE RING WAS NOT ITS MEMORY. It cost
+//           `sum of HEIGHTS x a line-time`; the band costs `sum of AREAS`. The
+//           two use the IDENTICAL memory. What separated them was TWOD.SPRITE
+//           holding `busy_q` for one whole descriptor -- DESCRIPTOR-MAJOR
+//           ORDER -- which is why the band REUSES the walker and hands it
+//           BAND-CLIPPED descriptors instead of growing a second one. This
+//           entry has twice recorded a built block as missing; that risk was
+//           named in advance and avoided.
+//
+//           R235's LAW, IMPLEMENTED: a sprite that will not fit the leaky
+//           bucket is REFUSED WHOLE, before one pixel of it is rasterised, and
+//           COUNTED on `twod_band_sprites_refused_budget_o`. The decision is
+//           made ONCE, at the first band the sprite touches, and never
+//           re-tested -- a per-band re-test would admit a sprite in band 3 and
+//           refuse it in band 4, which is a partial sprite with a counter
+//           attached, and `TWOD.SPRITE.md` forbids partial sprites.
+//
+//           THREE THINGS THE DIRECTED BENCH FOUND, all of which read as
+//           silence, and all recorded in the block's own header:
+//             * an opportunistic SCRUB that erased bands between the fill and
+//               the read, because a full pipeline has no free slot;
+//             * the FIRST PIXEL OF A SWEEP was never latched, because the
+//               compositor's raster pointer sits at (0,0) while idle so the
+//               sweep's own first address was not "new";
+//             * descriptor intake SILENTLY DROPPED a write-back, so a sprite
+//               was admitted TWICE, charged to the bucket twice, and refused
+//               the second time -- R235's counter reporting a defect in its own
+//               accounting as a HUD that does not fit.
+//
+//           AND THE M10K NUMBER MOVED, WHICH IS THE HONEST FINDING. R233's
+//           `ceil(0.75 x L)` = 12 is right FOR A WORD OF 20 BITS OR FEWER,
+//           because an M10K is 512 x 20 -- and it reproduces R222's table and
+//           POST.COMPOSITE's contract figure exactly, which is what made it
+//           trustworthy. Freshness is not optional (a band slot re-used every
+//           L/B bands must not show the previous occupant, a clear costs 100%
+//           of the write port for a whole frame, and no fixed-width tag is
+//           exact forever), so the word carries a 24-bit per-row generation:
+//           16 + 24 = 40 bits, the 256 x 40 configuration, hence
+//           `ceil(LINE_W * L / 256)` = 24 M10K, plus 10 for the 390-bit display
+//           list. **"The 17th bit is free at every L" is true and it buys a
+//           VALID BIT; it does not buy FRESHNESS.** The cheaper exact form -- a
+//           1-bit presence plane cleared a word at a time, 23 M10K total -- is
+//           priced in `design/contracts/TWOD.BAND.md` and DECLINED, not missed.
+//           NOT YET FITTED: R236 forbids Quartus until the register reads zero,
+//           so 34 M10K and ~430 ALM are arithmetic and `design/fit_targets.yml`
+//           carries a leaf row asking exactly that question.
+//
+//           TINT AND BLEND ARE CARRIED, NOT APPLIED, AND NOW COUNTED. This is
+//           NOT a narrowing introduced by the band: `zhao_twod_sampler` already
+//           ships `tint_unapplied_o` and its header says the tint is forwarded
+//           rather than applied, and a HUD blend against the WORLD colour
+//           cannot be computed in a store at all -- POST.COMPOSITE's `hud_*`
+//           stage is a REPLACE. Putting a modulation law into the band would be
+//           inventing a colour law in a composer, which is this entry's own
+//           refusal. What the band adds is MEASUREMENT:
+//           `twod_band_tint_dropped_o` and `twod_band_blend_dropped_o` say the
+//           size of that gap per HUD pixel that reached the screen, so it is a
+//           number rather than a sentence. Declared here rather than left to be
+//           found (R159).
+//
+//           WHAT IS STILL OWED ON THIS ITEM: nothing at this edge. The
+//           descriptor RECORD is item 2 below and is an OWNER decision; the
+//           band imposes NO new requirement on it.
+//
+//           --- HISTORY, preserved because half of it was wrong ---
+//           `post_hud_*` -- BOUNDARY, and this is the obstacle the earlier
 //           refusals should have named. TWOD.SPRITE walks in DESCRIPTOR order,
 //           one whole sprite at a time; `hud_*` is a random access in RASTER
 //           order. Bridging them needs a frame-resident HUD store (384 x 240 x
@@ -7872,11 +7957,11 @@ module zhao_console_core
   // pass 2, owner rulings R35/R36): post_bloom_gain_i, post_grade_valid_i,
   // post_pv_*, post_bias_*, post_flash_* and post_ink_rgb_i are driven by
   // CMD.EXEC's SetPost / SetGradeTable arm (section 7c). Entry I17 (a)(b).
-  output logic                    post_hud_req_v_o,
-  output logic [POST_XW-1:0]      post_hud_req_x_o,
-  output logic [POST_YW-1:0]      post_hud_req_y_o,
-  input  logic                    post_hud_valid_i,
-  input  logic [15:0]             post_hud_rgb_i,
+  // THE `post_hud_*` GROUP IS GONE FROM THIS EDGE, 2026-09-21, owner rulings
+  // R233 and R235. Five ports. They are now internal: `zhao_twod_band` holds
+  // the HUD band and answers the compositor's raster sweep, and `twod_sc_*` --
+  // the sprite colour that dangled here -- is its input. Entry I17 item 1
+  // records what closed them, what it cost, and the one thing still owed.
   // `post_o_*` and `post_echo_*` are GONE FROM THIS EDGE (I16, 2026-09-19):
   // the composited stream is written back through RASTER.FBWRITE inside the
   // shell's post lease, and the echo tap feeds POST.ECHO there.
@@ -8625,9 +8710,11 @@ module zhao_console_core
   //     grading curves -- "generated ASSETS by design, so their load port is
   //     legitimately external" -- covers a texture page, a palette and a
   //     binding exactly. NOT a gap.
-  //   * `twod_sc_*` is the sprite colour, and it has no consumer HERE because
-  //     POST.COMPOSITE's `hud_*` port is a raster-order random access and
-  //     TWOD.SPRITE walks in descriptor order. GAP, and a NEW one -- see I17.
+  //   * `twod_sc_*` WAS the sprite colour with no consumer here, because
+  //     POST.COMPOSITE's `hud_*` port is a raster-order sweep and TWOD.SPRITE
+  //     walks in descriptor order. CLOSED 2026-09-21 (owner rulings R233/R235):
+  //     `zhao_twod_band` is that bridge, it is composed at the end of this
+  //     module, and BOTH groups are now internal. Entry I17 item 1.
   input  logic                    twod_pd_valid_i,
   output logic                    twod_pd_ready_o,
   input  logic                    twod_pd_slot_i,
@@ -8682,16 +8769,25 @@ module zhao_console_core
   input  logic                    twod_atm_slot_i,
   input  logic signed [31:0]      twod_line_scroll_i,
 
-  output logic                    twod_sc_valid_o,
-  input  logic                    twod_sc_ready_i,
-  output logic [15:0]             twod_sc_rgb_o,
-  output logic signed [15:0]      twod_sc_x_o,
-  output logic signed [15:0]      twod_sc_y_o,
-  output logic [15:0]             twod_sc_tint_o,
-  output logic [1:0]              twod_sc_blend_o,
-  output logic [7:0]              twod_sc_order_o,
-  output logic [15:0]             twod_sc_src_id_o,
-  output logic                    twod_sc_last_o,
+  // ---- TWOD.BAND evidence (owner rulings R233, R235) -----------------------
+  // `sprites_refused_budget_o` is R235's counter and the console asserts it at
+  // ZERO; `tests/compositor/twod_band_directed.cpp` is what makes that zero
+  // evidence rather than silence, and it DISCRIMINATES -- a list that lands
+  // exactly on the bucket refuses nothing, one row more refuses exactly one.
+  output logic [31:0]             twod_band_descriptors_o,
+  output logic [31:0]             twod_band_desc_overflow_o,
+  output logic [31:0]             twod_band_sprites_admitted_o,
+  output logic [31:0]             twod_band_sprites_refused_budget_o,
+  output logic [31:0]             twod_band_slices_emitted_o,
+  output logic [31:0]             twod_band_pixels_written_o,
+  output logic [31:0]             twod_band_pixels_clipped_o,
+  output logic [31:0]             twod_band_write_oob_o,
+  output logic [31:0]             twod_band_underrun_o,
+  output logic [31:0]             twod_band_scan_addr_mismatch_o,
+  output logic [31:0]             twod_band_tint_dropped_o,
+  output logic [31:0]             twod_band_blend_dropped_o,
+  output logic [31:0]             twod_band_order_inversion_o,
+  output logic [31:0]             twod_band_bands_o,
 
   // ---- TWOD evidence -------------------------------------------------------
   output logic [31:0]             twod_plane_pixels_o,
@@ -12554,6 +12650,15 @@ module zhao_console_core
   logic [7:0]             atm_opacity_c;
   logic                   atm_add_c;
 
+  // POST.COMPOSITE's HUD seam, internal since 2026-09-21 (owner rulings R233,
+  // R235). `hud_req_*` is a MONOTONIC SWEEP, not the random access entry I17
+  // used to call it, and that is why a band of L rows can serve it at all.
+  logic                   hud_req_v_c;
+  logic [POST_XW-1:0]     hud_req_x_c;
+  logic [POST_YW-1:0]     hud_req_y_c;
+  logic                   hud_valid_c;
+  logic [15:0]            hud_rgb_c;
+
   // ==========================================================================
   // I15 AND I16 ARE CLOSED (2026-09-19). What they were, and what closed them.
   // ==========================================================================
@@ -12978,11 +13083,13 @@ module zhao_console_core
     .flash_rgb_i (post_look_flash_rgb_w),
     .flash_amt_i (post_look_flash_amt_w),
     .ink_rgb_i   (post_look_ink_rgb_w),
-    .hud_req_v_o (post_hud_req_v_o),
-    .hud_req_x_o (post_hud_req_x_o),
-    .hud_req_y_o (post_hud_req_y_o),
-    .hud_valid_i (post_hud_valid_i),
-    .hud_rgb_i   (post_hud_rgb_i),
+    // REAL: TWOD.BAND's raster read, closed 2026-09-21 (owner rulings R233,
+    // R235). The band is composed at the end of this module.
+    .hud_req_v_o (hud_req_v_c),
+    .hud_req_x_o (hud_req_x_c),
+    .hud_req_y_o (hud_req_y_c),
+    .hud_valid_i (hud_valid_c),
+    .hud_rgb_i   (hud_rgb_c),
 
     // REAL (I16): written back IN PLACE through the shell's RASTER.FBWRITE --
     // the same engine that wrote the raster, switched at the phase change --
@@ -15571,8 +15678,9 @@ module zhao_console_core
   // middle.
   //
   // THE SPRITE IS COMPOSED TO THE SAMPLER AND NOT TO THE COMPOSITOR, and that
-  // is deliberate -- see entry I17 and the sampler's own header. Its colours
-  // leave on `twod_sc_*`.
+  // is deliberate -- see entry I17 and the sampler's own header. Its colours go
+  // on to TWOD.BAND, below, which is where the walk order changes from
+  // descriptor to raster; they used to leave this module on `twod_sc_*`.
   // The walk, the plane's texel request and the sprite's texel request.
   logic                pw_valid_c, pw_ready_c, pw_slot_c;
   logic [15:0]         pw_x_c, pw_y_c;
@@ -15649,12 +15757,76 @@ module zhao_console_core
     .wrap_fail_o     (twod_plane_wrap_fail_o)
   );
 
-  zhao_twod_sprite #(
-    .UVW (32)
-  ) u_twod_sprite (
+  // ==========================================================================
+  // TWOD.BAND -- the descriptor-order-to-raster-order bridge.  Added
+  // 2026-09-21, and this closes the HUD half of header entry I17.
+  // ==========================================================================
+  // THE SPRITE WALKER IS NOT REPLACED, IT IS FED DIFFERENTLY. Owner ruling
+  // R233 took the BAND over a frame store (704/553 M10K, over the device) and
+  // over a line ring (133% of frame, "a machine that passes its tests and
+  // cannot draw a HUD"). What killed the ring was TWOD.SPRITE holding `busy_q`
+  // for one whole descriptor -- DESCRIPTOR-MAJOR ORDER -- so the band changes
+  // the ORDER and keeps the walker: `u_twod_band.e_*` is `u_twod_sprite.d_*`,
+  // field for field, with y, h and the (u, v) row origin band-clipped.
+  //
+  // NOTHING IS ADAPTED HERE. Every connection below is a port to a port of the
+  // same width and meaning. The band was built to TWOD.SPRITE's published
+  // descriptor record and to POST.COMPOSITE's published `hud_*` convention,
+  // which is the same reason the sampler's seam could be closed without one.
+  //
+  // THE VIEW COMES FROM THE BAND, NOT FROM `post_view_c`, AND THAT IS NOT A
+  // CONVENIENCE. The filler leads the reader by up to L/B bands, so driving the
+  // walker from the compositor's view -- which tracks the READER -- would fill
+  // the rows either side of a Duo seam with the other view's HUD. The seam is a
+  // ROW, so `twod_view_split_c` hands the band the row at which view 1 begins
+  // and the band publishes the view for the band it is filling.
+  logic [POST_YW-1:0] twod_view_split_c;
+  always_comb begin
+    case (mode_act_o)
+      MODE_Z60_C, MODE_STORM_C: twod_view_split_c = POST_YW'(0);
+      default:                  twod_view_split_c = POST_YW'(POST_H_DUO_C >> 1);
+    endcase
+  end
+
+  logic                bd_valid_c, bd_ready_c;
+  logic signed [15:0]  bd_x_c, bd_y_c;
+  logic [15:0]         bd_w_c, bd_h_c;
+  logic signed [31:0]  bd_u_c, bd_v_c, bd_a00_c, bd_a01_c, bd_a10_c, bd_a11_c;
+  logic [2:0]          bd_fmt_c;
+  logic [7:0]          bd_pal_c, bd_ord_c;
+  logic [15:0]         bd_tint_c, bd_srcid_c;
+  logic [1:0]          bd_blend_c, bd_vm_c, bd_view_sel_c;
+
+  logic                sc_valid_c, sc_ready_c, sc_last_c;
+  logic [15:0]         sc_rgb_c, sc_tint_c, sc_srcid_c;
+  logic signed [15:0]  sc_x_c, sc_y_c;
+  logic [1:0]          sc_blend_c;
+  logic [7:0]          sc_order_c;
+
+  zhao_twod_band #(
+    .LINE_W   (POST_LINE_W),
+    .MAX_H    (POST_MAX_H),
+    .B        (4),
+    .L        (16),
+    .MAX_DESC (64),
+    .UVW      (32)
+  ) u_twod_band (
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
+    // REAL: the same frame edge and the same latched mode POST.COMPOSITE runs
+    // on, for the reason the sampler takes them -- a second opinion about where
+    // a frame starts puts the store and the compositor's raster out of step by
+    // exactly the disagreement. The TICK, not the sweep, is what gives the
+    // filler its lead: the compositor's pass does not begin until render and
+    // resolve are done.
+    .frame_start_i(core_tick_c),
+    .frame_w_i    (post_frame_w_c),
+    .frame_h_i    (post_frame_h_c),
+    .view_split_i (twod_view_split_c),
+
+    // The descriptor is the CMD seam, unchanged by this packet -- the band
+    // imposes NO new requirement on the record (R233, HUDBAND).
     .d_valid_i    (twod_sd_valid_i),
     .d_ready_o    (twod_sd_ready_o),
     .d_x_i        (twod_sd_x_i),
@@ -15674,7 +15846,91 @@ module zhao_console_core
     .d_view_mask_i(twod_sd_view_mask_i),
     .d_order_i    (twod_sd_order_i),
     .d_src_id_i   (twod_sd_src_id_i),
-    .view_sel_i   (post_view_c ? 2'b10 : 2'b01),
+
+    // REAL: the band-clipped slice goes to the EXISTING walker.
+    .e_valid_o    (bd_valid_c),
+    .e_ready_i    (bd_ready_c),
+    .e_x_o        (bd_x_c),
+    .e_y_o        (bd_y_c),
+    .e_w_o        (bd_w_c),
+    .e_h_o        (bd_h_c),
+    .e_u_o        (bd_u_c),
+    .e_v_o        (bd_v_c),
+    .e_a00_o      (bd_a00_c),
+    .e_a01_o      (bd_a01_c),
+    .e_a10_o      (bd_a10_c),
+    .e_a11_o      (bd_a11_c),
+    .e_format_o   (bd_fmt_c),
+    .e_palette_o  (bd_pal_c),
+    .e_tint_o     (bd_tint_c),
+    .e_blend_o    (bd_blend_c),
+    .e_view_mask_o(bd_vm_c),
+    .e_order_o    (bd_ord_c),
+    .e_src_id_o   (bd_srcid_c),
+    .e_view_sel_o (bd_view_sel_c),
+
+    // REAL: the sampler's colour, which used to dangle at this module's edge.
+    .c_valid_i  (sc_valid_c),
+    .c_ready_o  (sc_ready_c),
+    .c_rgb_i    (sc_rgb_c),
+    .c_x_i      (sc_x_c),
+    .c_y_i      (sc_y_c),
+    .c_tint_i   (sc_tint_c),
+    .c_blend_i  (sc_blend_c),
+    .c_order_i  (sc_order_c),
+    .c_src_id_i (sc_srcid_c),
+    .c_last_i   (sc_last_c),
+
+    // REAL: POST.COMPOSITE's HUD seam, closed.
+    .rd_req_v_i (hud_req_v_c),
+    .rd_x_i     (hud_req_x_c),
+    .rd_y_i     (hud_req_y_c),
+    .rd_valid_o (hud_valid_c),
+    .rd_rgb_o   (hud_rgb_c),
+
+    .descriptors_o            (twod_band_descriptors_o),
+    .desc_overflow_o          (twod_band_desc_overflow_o),
+    .sprites_admitted_o       (twod_band_sprites_admitted_o),
+    .sprites_refused_budget_o (twod_band_sprites_refused_budget_o),
+    .slices_emitted_o         (twod_band_slices_emitted_o),
+    .pixels_written_o         (twod_band_pixels_written_o),
+    .pixels_clipped_o         (twod_band_pixels_clipped_o),
+    .write_oob_o              (twod_band_write_oob_o),
+    .band_underrun_o          (twod_band_underrun_o),
+    .scan_addr_mismatch_o     (twod_band_scan_addr_mismatch_o),
+    .tint_dropped_o           (twod_band_tint_dropped_o),
+    .blend_dropped_o          (twod_band_blend_dropped_o),
+    .order_inversion_o        (twod_band_order_inversion_o),
+    .bands_o                  (twod_band_bands_o)
+  );
+
+  zhao_twod_sprite #(
+    .UVW (32)
+  ) u_twod_sprite (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: band-clipped descriptors from TWOD.BAND, not the raw display list.
+    .d_valid_i    (bd_valid_c),
+    .d_ready_o    (bd_ready_c),
+    .d_x_i        (bd_x_c),
+    .d_y_i        (bd_y_c),
+    .d_w_i        (bd_w_c),
+    .d_h_i        (bd_h_c),
+    .d_u_i        (bd_u_c),
+    .d_v_i        (bd_v_c),
+    .d_a00_i      (bd_a00_c),
+    .d_a01_i      (bd_a01_c),
+    .d_a10_i      (bd_a10_c),
+    .d_a11_i      (bd_a11_c),
+    .d_format_i   (bd_fmt_c),
+    .d_palette_i  (bd_pal_c),
+    .d_tint_i     (bd_tint_c),
+    .d_blend_i    (bd_blend_c),
+    .d_view_mask_i(bd_vm_c),
+    .d_order_i    (bd_ord_c),
+    .d_src_id_i   (bd_srcid_c),
+    .view_sel_i   (bd_view_sel_c),
 
     // REAL: the sample requests go to the sampler.
     .s_valid_o (sp_valid_c),
@@ -15764,16 +16020,18 @@ module zhao_console_core
     .sp_src_id_i(sp_srcid_c),
     .sp_last_i  (sp_last_c),
 
-    .sc_valid_o (twod_sc_valid_o),
-    .sc_ready_i (twod_sc_ready_i),
-    .sc_rgb_o   (twod_sc_rgb_o),
-    .sc_x_o     (twod_sc_x_o),
-    .sc_y_o     (twod_sc_y_o),
-    .sc_tint_o  (twod_sc_tint_o),
-    .sc_blend_o (twod_sc_blend_o),
-    .sc_order_o (twod_sc_order_o),
-    .sc_src_id_o(twod_sc_src_id_o),
-    .sc_last_o  (twod_sc_last_o),
+    // REAL: the sprite colour goes to TWOD.BAND, which is where the walk order
+    // changes from descriptor to raster. Entry I17 item 1, closed.
+    .sc_valid_o (sc_valid_c),
+    .sc_ready_i (sc_ready_c),
+    .sc_rgb_o   (sc_rgb_c),
+    .sc_x_o     (sc_x_c),
+    .sc_y_o     (sc_y_c),
+    .sc_tint_o  (sc_tint_c),
+    .sc_blend_o (sc_blend_c),
+    .sc_order_o (sc_order_c),
+    .sc_src_id_o(sc_srcid_c),
+    .sc_last_o  (sc_last_c),
 
     // REAL: POST.COMPOSITE's atmosphere seam, closed.
     .atm_req_v_i (atm_req_v_c),

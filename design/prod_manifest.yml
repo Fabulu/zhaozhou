@@ -389,6 +389,13 @@ top:
   - zhao_post_gather_store
   - zhao_twod_plane
   - zhao_twod_sprite
+  # TWOD.BAND, built 2026-09-21 (owner rulings R233 and R235, core entry I17
+  # item 1). The descriptor-order-to-raster-order bridge between TWOD.SAMPLER's
+  # `sc_*` and POST.COMPOSITE's `hud_*`. A counted TOP for the same reason the
+  # sampler below is: it is instantiated in `zhao_console_core` and the HUD seam
+  # is closed through it. It is not inside any other block's closure -- it
+  # instantiates nothing and FEEDS `zhao_twod_sprite` rather than containing it.
+  - zhao_twod_band
   # TWOD.SAMPLER, built 2026-09-19. The texel-request-to-colour block between
   # the two above and POST.COMPOSITE. It is counted because the console does not
   # merely intend to have it -- it is instantiated in zhao_console_core and the

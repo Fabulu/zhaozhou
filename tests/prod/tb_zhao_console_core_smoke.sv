@@ -879,11 +879,9 @@ module tb_zhao_console_core_smoke
   logic [7:0]              post_atm_opacity_i;
   logic                    post_atm_add_i;
   // post_bloom_gain_i .. post_ink_rgb_i are GONE (R36): CMD.EXEC drives them.
-  logic                    post_hud_req_v_o;
-  logic [POST_XW-1:0]      post_hud_req_x_o;
-  logic [POST_YW-1:0]      post_hud_req_y_o;
-  logic                    post_hud_valid_i;
-  logic [15:0]             post_hud_rgb_i;
+  // `post_hud_*` IS GONE FROM THE CORE'S EDGE (2026-09-21, owner rulings R233
+  // and R235): TWOD.BAND holds the HUD band inside the core and answers the
+  // compositor's raster sweep. Its evidence is the `twod_band_*` group below.
   // POST.COMPOSITE's lease and POST.ECHO (I15/I16 closed 2026-09-19): the
   // source, the output and the echo tap are internal now; this is their
   // evidence.
@@ -1693,16 +1691,22 @@ module tb_zhao_console_core_smoke
   logic         [3:0]                  twod_ld_bind_lheight_i;
   logic                                twod_atm_slot_i;
   logic signed  [31:0]                 twod_line_scroll_i;
-  logic                                twod_sc_valid_o;
-  logic                                twod_sc_ready_i;
-  logic         [15:0]                 twod_sc_rgb_o;
-  logic signed  [15:0]                 twod_sc_x_o;
-  logic signed  [15:0]                 twod_sc_y_o;
-  logic         [15:0]                 twod_sc_tint_o;
-  logic         [1:0]                  twod_sc_blend_o;
-  logic         [7:0]                  twod_sc_order_o;
-  logic         [15:0]                 twod_sc_src_id_o;
-  logic                                twod_sc_last_o;
+  // `twod_sc_*` IS GONE FROM THE CORE'S EDGE (2026-09-21): the sprite colour
+  // now has a consumer inside the core, which is what closed entry I17 item 1.
+  logic         [31:0]                 twod_band_descriptors_o;
+  logic         [31:0]                 twod_band_desc_overflow_o;
+  logic         [31:0]                 twod_band_sprites_admitted_o;
+  logic         [31:0]                 twod_band_sprites_refused_budget_o;
+  logic         [31:0]                 twod_band_slices_emitted_o;
+  logic         [31:0]                 twod_band_pixels_written_o;
+  logic         [31:0]                 twod_band_pixels_clipped_o;
+  logic         [31:0]                 twod_band_write_oob_o;
+  logic         [31:0]                 twod_band_underrun_o;
+  logic         [31:0]                 twod_band_scan_addr_mismatch_o;
+  logic         [31:0]                 twod_band_tint_dropped_o;
+  logic         [31:0]                 twod_band_blend_dropped_o;
+  logic         [31:0]                 twod_band_order_inversion_o;
+  logic         [31:0]                 twod_band_bands_o;
   logic         [31:0]                 twod_plane_pixels_o;
   logic         [31:0]                 twod_plane_refused_role_o;
   logic         [31:0]                 twod_plane_refused_blend_o;
@@ -3813,8 +3817,6 @@ module tb_zhao_console_core_smoke
     post_atm_rgb_i = '0;
     post_atm_opacity_i = '0;
     post_atm_add_i = '0;
-    post_hud_valid_i = '0;
-    post_hud_rgb_i = '0;
     // The four `hist_ev_*` drives that stood here are GONE with the ports:
     // entry I18 closed and the histogram's events come from TERRAIN.LODFEED
     // inside the core. There is nothing for this bench to initialise.
@@ -5055,6 +5057,40 @@ module tb_zhao_console_core_smoke
                pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q,
                bank_conflicts_o - pc_conflicts0_q, `PC_SHELL.refresh_stalls_o - pc_refresh0_q,
                pc_share_fill_q, pc_fbw_stall_q, pc_src_starve_q, pc_src_block_q);
+      // TWOD.BAND (owner rulings R233, R235, core entry I17 item 1). This
+      // bench sends NO sprite descriptors, so the HUD is legitimately empty and
+      // every one of these reads zero -- which is exactly the shape CLAUDE.md
+      // calls a claim. The zeros are worth something here ONLY because
+      // `tests/compositor/twod_band_directed.cpp` fires all four with legal
+      // stimulus at the block's own ports, and because
+      // `tests/mutants/zhao_twod_band_burst_mutant.sv` makes `band_underrun`
+      // move with a healthy sampler once the admission law is removed. The
+      // bands DO advance, and that is the part of this line that is not a zero:
+      // the filler sweeps the frame whether or not there is anything to draw.
+      $display("SMOKE: twod band  descs=%0d admitted=%0d refused_budget=%0d desc_overflow=%0d bands=%0d px=%0d clipped=%0d oob=%0d underrun=%0d addr_mismatch=%0d order_inv=%0d tint_dropped=%0d blend_dropped=%0d",
+               twod_band_descriptors_o, twod_band_sprites_admitted_o,
+               twod_band_sprites_refused_budget_o, twod_band_desc_overflow_o,
+               twod_band_bands_o, twod_band_pixels_written_o,
+               twod_band_pixels_clipped_o, twod_band_write_oob_o,
+               twod_band_underrun_o, twod_band_scan_addr_mismatch_o,
+               twod_band_order_inversion_o, twod_band_tint_dropped_o,
+               twod_band_blend_dropped_o);
+      if (twod_band_write_oob_o != 32'd0 || twod_band_scan_addr_mismatch_o != 32'd0
+          || twod_band_sprites_refused_budget_o != 32'd0
+          || twod_band_desc_overflow_o != 32'd0)
+        $fatal(1, "SMOKE: TWOD.BAND guard fired in the composed console -- oob=%0d addr_mismatch=%0d refused=%0d overflow=%0d. None of these is reachable here: the band chooses its own rows, `hud_req_*` is POST.COMPOSITE's own monotonic sweep, and no descriptor is sent.",
+               twod_band_write_oob_o, twod_band_scan_addr_mismatch_o,
+               twod_band_sprites_refused_budget_o, twod_band_desc_overflow_o);
+      // `band_underrun_o` IS NOT ASSERTED AT ZERO, and the bound is the point.
+      // A pass restarts the fill at band 0 with NO LEAD -- buying one would
+      // mean a second frame of storage, which is the structure R233 refused at
+      // 704 of 553 M10K -- so the reader outruns the filler for as long as it
+      // takes to close band 0 and never again. That is at most one band's
+      // worth of reads. A number ABOVE that is the schedule failing, not the
+      // transient, and this is where the two are told apart.
+      if (twod_band_underrun_o > 32'd1536)
+        $fatal(1, "SMOKE: TWOD.BAND underrun=%0d exceeds one band of reads (B*LINE_W = 1536). That is not the start-of-pass transient; the filler is not keeping up with the sweep.",
+               twod_band_underrun_o);
       $display("SMOKE: echo       complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
                echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
                echo_pixels_dropped_o, echo_fault_o);

@@ -5931,6 +5931,92 @@ blocks:
     superseded_by: null
     notes: Text/heat-map tiles via the TMU's CLUT path only — no private sampler.
 
+  # TWOD.BAND, 2026-09-21 (packet BANDBUILD). Owner ruling R233 chose the BAND
+  # over a frame store (704/553 M10K) and a line ring (133% of frame) for
+  # console entry I17's HUD half; R235 ruled its overflow law.
+  #
+  # THE CONTRACT WAS WRITTEN BEFORE THIS ROW, per R214 — the ruling that says a
+  # block with a contract and no row is invisible to every gate, and that a
+  # count which RISES because something was declared is the instrument starting
+  # to work.
+  #
+  # NO `reference_model:` IS DECLARED, DELIBERATELY. What this block owns is a
+  # SCHEDULE, not an arithmetic law, and a scalar oracle for it would be the
+  # same author's second implementation of the same schedule.
+  # `refmodel_liveness.py` already names six blocks whose declared symbol exists
+  # nowhere; a seventh would be a cheque nobody intends to cash. The stronger
+  # check is used instead: the directed bench asserts R233's own two PUBLISHED
+  # numbers — the full-width bar at need = 0 and 40 glyphs at Σ need = 3,840 —
+  # which were written down before this block existed.
+  #
+  # No `_vN` suffix (R179: a rival implementation is structurally invisible to
+  # `successor_in()`), no `implementation:` key (`ledger_blocks()`'s own
+  # docstring says that field is unusable), and `upstream:`/`downstream:` are
+  # design intent (R180).
+  - id: TWOD.BAND
+    name: HUD band store
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: "Descriptor-order to raster-order bridge for the HUD: an L-row band store, a per-band re-walk of the display list into band-clipped descriptors for TWOD.SPRITE, and R235's whole-sprite admission law against a leaky bucket."
+    contract: design/contracts/TWOD.BAND.md
+    phase: 11
+    owner_issue: ZH-069
+    inputs: [dispatch, sprite_fragments]
+    outputs: [sprite_fragments]
+    upstream: [CMD.SCHEDULER, TWOD.SAMPLER]
+    downstream: [TWOD.SPRITE, POST.COMPOSITE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 HUD pixel written and 1 read per clock
+    tests:
+      directed: tests/compositor/twod_band_directed.cpp
+      # The positive control for the LAW rather than for a counter: BURST_PX
+      # raised past the FIFO slack is "admit everything", and the driver passes
+      # when `band_underrun_o` FIRES with a perfectly healthy sampler. It is a
+      # WRAPPER, so it cannot drift in its body.
+      mutant: tests/mutants/twod_band_burst_mutant_driver.cpp
+    counters:
+      [twod_band_sprites_admitted, twod_band_sprites_refused_budget,
+       twod_band_desc_overflow, twod_band_underrun, twod_band_pixels_written]
+    counter_ports:
+      twod_band_sprites_admitted: sprites_admitted_o
+      twod_band_sprites_refused_budget: sprites_refused_budget_o
+      twod_band_desc_overflow: desc_overflow_o
+      twod_band_underrun: band_underrun_o
+      twod_band_pixels_written: pixels_written_o
+    source_ids: true
+    budget_group: twod_post
+    maturity: RTL_VERIFIED
+    maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-09-21"
+        commit: "gz/bandbuild"
+        evidence: >-
+          fpga/rtl/compositor/zhao_twod_band.sv, composed in zhao_console_core
+          (owner rulings R233 and R235, core entry I17). 39 directed checks
+          green with every counter fired by legal stimulus at the block's own
+          ports; the burst mutant fires band_underrun with a healthy sampler and
+          proves its own plant first (refused == 0 where production refuses five
+          of six). NOT YET FITTED — R236 forbids Quartus until the register
+          reads zero. The 24 + 10 M10K and ~430 ALM are ARITHMETIC: a leaf fit
+          row in design/fit_targets.yml asks exactly that question.
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      R233's ceil(0.75 x L) = 12 M10K is right for a word of 20 bits or fewer
+      (an M10K is 512 x 20) and is NOT what this block pays: freshness needs a
+      per-row generation tag, 16 + 24 = 40 bits, the 256 x 40 configuration, so
+      the store is ceil(LINE_W x L / 256) = 24 M10K plus 10 for the display
+      list. "The 17th bit is free" buys a VALID BIT, not freshness. The cheaper
+      exact form (a 1-bit presence plane cleared a word at a time, 23 M10K
+      total) is priced in the contract and declined, not missed. Tint and blend
+      are CARRIED, NOT APPLIED and counted per HUD pixel — an existing declared
+      gap (zhao_twod_sampler's tint_unapplied_o), made measurable, not a new
+      one. The descriptor RECORD (twod_sd_*) remains an OWNER decision and the
+      band imposes no new requirement on it.
+
   # ===========================================================================
   # POST — Mirror Gate (fpga/rtl/compositor)
   # ===========================================================================

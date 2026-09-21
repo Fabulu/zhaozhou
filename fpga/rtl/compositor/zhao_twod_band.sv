@@ -393,28 +393,54 @@ module zhao_twod_band #(
   // ==========================================================================
   // FRAME AND SWEEP
   // ==========================================================================
-  // THE FILLER IS RESTARTED BY THE FRAME TICK, NOT BY THE SWEEP, AND THE
-  // DIFFERENCE IS THE WHOLE STARTUP MARGIN. `frame_start_i` is the console's
-  // frame edge (`gpu_tick_o`); the compositor's pass does not begin until
-  // render and resolve are done, so the filler gets that entire interval as a
-  // head start on the reader. Restarting on the sweep's own origin instead
-  // would hand the filler zero lead and underrun band 0 of every frame.
+  // TWO FRAME EDGES, AND THEY ARE NOT THE SAME EDGE. This block first used
+  // `frame_start_i` for both and the COMPOSED CONSOLE rejected it: 582,261
+  // underruns and a band counter that reached 18 of 60, because the console's
+  // frame tick is not the compositor's PASS and a tick landing mid-sweep sent
+  // the filler back to band 0 while the reader was most of the way down the
+  // screen. The tick is a fact about the FRAME; the sweep is a fact about the
+  // READER; the band has to follow the reader.
   //
-  // A SECOND SWEEP WITHOUT A NEW TICK IS NOT A REFILL. The generations are not
-  // bumped, so the store still holds the frame that was filled, and the pass
-  // re-reads it. That is the correct answer for a repeated pass and it costs
-  // nothing to get right.
+  //   `frame_start_i`  -> the DISPLAY LIST. A new frame's commands begin, so
+  //                       the previous frame's descriptors are discarded.
+  //   the sweep origin -> the BAND SCHEDULE. `rd_*` at (0, 0) is the pass
+  //                       starting, so the fill restarts at band 0 with a fresh
+  //                       bucket, and the read-address instrument resyncs.
+  //
+  // THE FILLER THEREFORE STARTS WITH NO LEAD, AND THAT IS COUNTED RATHER THAN
+  // ASSUMED AWAY. It has to fill band 0 while the reader crosses it -- `B *
+  // LINE_W` reads -- and the compositor's pass in this console spends about
+  // nine clocks per output pixel, so the margin is large; where it is not,
+  // `band_underrun_o` says so. Buying a lead instead would mean a second frame
+  // of storage, which is the structure R233 refused at 704 of 553 M10K.
+  //
+  // A SECOND SWEEP WITHOUT A NEW TICK RE-READS what the first one filled: the
+  // list is not cleared, but every descriptor is ST_DEAD by then, so the store
+  // holds the pass that was drawn and the second pass shows it unchanged. That
+  // is the right answer for a repeated pass; a pass that must DIFFER needs its
+  // own tick, and that is declared rather than discovered.
+  logic sweep_org_c, sweep_org_q, sweep_sync_c, sweep_last_c;
+  logic sweeping_q, armed_q;
   logic restart_c;
-  assign restart_c = frame_start_i;
 
-  // The sweep's origin resynchronises the read-address INSTRUMENT only.
-  logic sweep_org_c, sweep_org_q, sweep_sync_c;
-  assign sweep_org_c = rd_req_v_i && (rd_x_i == XW'(0)) && (rd_y_i == YW'(0));
+  assign sweep_org_c  = rd_req_v_i && (rd_x_i == XW'(0)) && (rd_y_i == YW'(0));
+  assign sweep_last_c = rd_req_v_i && (32'(rd_x_i) == 32'(frame_w_i) - 1)
+                                   && (32'(rd_y_i) == 32'(frame_h_i) - 1);
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) sweep_org_q <= 1'b0;
     else        sweep_org_q <= sweep_org_c;
   end
-  assign sweep_sync_c = (sweep_org_c && !sweep_org_q) || restart_c;
+  assign sweep_sync_c = sweep_org_c && !sweep_org_q;
+
+  // A TICK IS HONOURED BETWEEN PASSES AND IGNORED INSIDE ONE, and the sweep's
+  // own origin is the FALLBACK when no tick was honoured. `armed_q` is what
+  // makes the fallback a fallback rather than a second restart: it says a
+  // restart has already happened for the pass about to begin, so the lead the
+  // tick bought is kept. Without the fallback a console whose pass outlasts its
+  // frame would fill once and show that HUD forever; without the guard, a tick
+  // landing mid-pass sends the filler to band 0 while the reader is at row 200,
+  // which is the defect the composed console reported as 582,261 underruns.
+  assign restart_c = (frame_start_i && !sweeping_q) || (sweep_sync_c && !armed_q);
 
   // ==========================================================================
   // THE READ SIDE
@@ -728,6 +754,8 @@ module zhao_twod_band #(
       rd_count_q      <= '0;
       rd_hold_v_q     <= 1'b0;
       rd_hold_rgb_q   <= '0;
+      sweeping_q      <= 1'b0;
+      armed_q         <= 1'b0;
       for (ri = 0; ri < L; ri = ri + 1) gen_q[ri] <= GENW'(0);
       descriptors_o            <= '0;
       desc_overflow_o          <= '0;
@@ -764,12 +792,20 @@ module zhao_twod_band #(
         // can see a timing fault and not merely a value one. It is resynced --
         // never merely silenced -- at the sweep's own origin, so the first
         // pixel of a pass is not a false alarm.
+        // ONLY ON AN ADDRESS CHANGE. `rd_req_v_i` is a LEVEL, not a beat:
+        // POST.COMPOSITE holds it through a stall with the address unchanged,
+        // which is exactly what makes the held response correct. The first
+        // version of this counter incremented per CYCLE and read 770,155 in the
+        // composed console -- an instrument measuring the compositor's stalls
+        // and reporting them as a broken sweep. The property that is actually
+        // promised is that each NEW address is the previous one plus one.
         if (sweep_sync_c) begin
-          rd_count_q <= AW'(1);
-        end else begin
-          if (br_addr_c != rd_count_q)
+          rd_count_q <= AW'(0);
+        end else if (br_addr_c != rd_addr_q) begin
+          if (br_addr_c != ((rd_count_q == AW'(WORDS - 1)) ? AW'(0)
+                                                           : (rd_count_q + AW'(1))))
             scan_addr_mismatch_o <= scan_addr_mismatch_o + 32'd1;
-          rd_count_q <= (rd_count_q == AW'(WORDS - 1)) ? AW'(0) : (rd_count_q + AW'(1));
+          rd_count_q <= br_addr_c;
         end
         if (!rd_ok_c) band_underrun_o <= band_underrun_o + 32'd1;
       end
@@ -828,11 +864,18 @@ module zhao_twod_band #(
         if ((mul_b_q >> 1) == 16'd0) mul_busy_q <= 1'b0;
       end
 
-      // ---- restart ---------------------------------------------------------
+      // ---- the pass boundary ----------------------------------------------
+      if (sweep_sync_c)       sweeping_q <= 1'b1;
+      else if (sweep_last_c)  sweeping_q <= 1'b0;
+      if (restart_c)          armed_q    <= 1'b1;
+      else if (sweep_last_c)  armed_q    <= 1'b0;
+
+      // A descriptor arriving on this same clock is accepted into the cleared
+      // list, because the intake above ran first.
       if (restart_c) begin
+        count_q       <= '0;
         st_q          <= S_IDLE;
         idx_q         <= '0;
-        count_q       <= '0;
         fill_band_q   <= '0;
         rd_band_q     <= '0;
         band_open_q   <= 1'b0;

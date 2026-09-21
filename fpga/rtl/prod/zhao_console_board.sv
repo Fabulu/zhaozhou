@@ -1744,11 +1744,11 @@ module zhao_console_board
   // pass 2, owner rulings R35/R36): post_bloom_gain_i, post_grade_valid_i,
   // post_pv_*, post_bias_*, post_flash_* and post_ink_rgb_i are driven by
   // CMD.EXEC's SetPost / SetGradeTable arm (section 7c). Entry I17 (a)(b).
-  output logic                    post_hud_req_v_o,
-  output logic [POST_XW-1:0]      post_hud_req_x_o,
-  output logic [POST_YW-1:0]      post_hud_req_y_o,
-  input  logic                    post_hud_valid_i,
-  input  logic [15:0]             post_hud_rgb_i,
+  // THE `post_hud_*` GROUP IS GONE FROM THIS EDGE, 2026-09-21, owner rulings
+  // R233 and R235. Five ports. They are now internal: `zhao_twod_band` holds
+  // the HUD band and answers the compositor's raster sweep, and `twod_sc_*` --
+  // the sprite colour that dangled here -- is its input. Entry I17 item 1
+  // records what closed them, what it cost, and the one thing still owed.
   // `post_o_*` and `post_echo_*` are GONE FROM THIS EDGE (I16, 2026-09-19):
   // the composited stream is written back through RASTER.FBWRITE inside the
   // shell's post lease, and the echo tap feeds POST.ECHO there.
@@ -2494,9 +2494,11 @@ module zhao_console_board
   //     grading curves -- "generated ASSETS by design, so their load port is
   //     legitimately external" -- covers a texture page, a palette and a
   //     binding exactly. NOT a gap.
-  //   * `twod_sc_*` is the sprite colour, and it has no consumer HERE because
-  //     POST.COMPOSITE's `hud_*` port is a raster-order random access and
-  //     TWOD.SPRITE walks in descriptor order. GAP, and a NEW one -- see I17.
+  //   * `twod_sc_*` WAS the sprite colour with no consumer here, because
+  //     POST.COMPOSITE's `hud_*` port is a raster-order sweep and TWOD.SPRITE
+  //     walks in descriptor order. CLOSED 2026-09-21 (owner rulings R233/R235):
+  //     `zhao_twod_band` is that bridge, it is composed at the end of this
+  //     module, and BOTH groups are now internal. Entry I17 item 1.
   input  logic                    twod_pd_valid_i,
   output logic                    twod_pd_ready_o,
   input  logic                    twod_pd_slot_i,
@@ -2551,16 +2553,25 @@ module zhao_console_board
   input  logic                    twod_atm_slot_i,
   input  logic signed [31:0]      twod_line_scroll_i,
 
-  output logic                    twod_sc_valid_o,
-  input  logic                    twod_sc_ready_i,
-  output logic [15:0]             twod_sc_rgb_o,
-  output logic signed [15:0]      twod_sc_x_o,
-  output logic signed [15:0]      twod_sc_y_o,
-  output logic [15:0]             twod_sc_tint_o,
-  output logic [1:0]              twod_sc_blend_o,
-  output logic [7:0]              twod_sc_order_o,
-  output logic [15:0]             twod_sc_src_id_o,
-  output logic                    twod_sc_last_o,
+  // ---- TWOD.BAND evidence (owner rulings R233, R235) -----------------------
+  // `sprites_refused_budget_o` is R235's counter and the console asserts it at
+  // ZERO; `tests/compositor/twod_band_directed.cpp` is what makes that zero
+  // evidence rather than silence, and it DISCRIMINATES -- a list that lands
+  // exactly on the bucket refuses nothing, one row more refuses exactly one.
+  output logic [31:0]             twod_band_descriptors_o,
+  output logic [31:0]             twod_band_desc_overflow_o,
+  output logic [31:0]             twod_band_sprites_admitted_o,
+  output logic [31:0]             twod_band_sprites_refused_budget_o,
+  output logic [31:0]             twod_band_slices_emitted_o,
+  output logic [31:0]             twod_band_pixels_written_o,
+  output logic [31:0]             twod_band_pixels_clipped_o,
+  output logic [31:0]             twod_band_write_oob_o,
+  output logic [31:0]             twod_band_underrun_o,
+  output logic [31:0]             twod_band_scan_addr_mismatch_o,
+  output logic [31:0]             twod_band_tint_dropped_o,
+  output logic [31:0]             twod_band_blend_dropped_o,
+  output logic [31:0]             twod_band_order_inversion_o,
+  output logic [31:0]             twod_band_bands_o,
 
   // ---- TWOD evidence -------------------------------------------------------
   output logic [31:0]             twod_plane_pixels_o,
@@ -3878,11 +3889,6 @@ module zhao_console_board
       .terr_light_degen_mismatch_o        (terr_light_degen_mismatch_o),
       .proj_contended_o                   (proj_contended_o),
       .proj_mat_refused_o                 (proj_mat_refused_o),
-      .post_hud_req_v_o                   (post_hud_req_v_o),
-      .post_hud_req_x_o                   (post_hud_req_x_o),
-      .post_hud_req_y_o                   (post_hud_req_y_o),
-      .post_hud_valid_i                   (post_hud_valid_i),
-      .post_hud_rgb_i                     (post_hud_rgb_i),
       .post_busy_o                        (post_busy_o),
       .post_passes_o                      (post_passes_o),
       .post_frames_o                      (post_frames_o),
@@ -4293,16 +4299,20 @@ module zhao_console_board
       .twod_ld_bind_lheight_i             (twod_ld_bind_lheight_i),
       .twod_atm_slot_i                    (twod_atm_slot_i),
       .twod_line_scroll_i                 (twod_line_scroll_i),
-      .twod_sc_valid_o                    (twod_sc_valid_o),
-      .twod_sc_ready_i                    (twod_sc_ready_i),
-      .twod_sc_rgb_o                      (twod_sc_rgb_o),
-      .twod_sc_x_o                        (twod_sc_x_o),
-      .twod_sc_y_o                        (twod_sc_y_o),
-      .twod_sc_tint_o                     (twod_sc_tint_o),
-      .twod_sc_blend_o                    (twod_sc_blend_o),
-      .twod_sc_order_o                    (twod_sc_order_o),
-      .twod_sc_src_id_o                   (twod_sc_src_id_o),
-      .twod_sc_last_o                     (twod_sc_last_o),
+      .twod_band_descriptors_o            (twod_band_descriptors_o),
+      .twod_band_desc_overflow_o          (twod_band_desc_overflow_o),
+      .twod_band_sprites_admitted_o       (twod_band_sprites_admitted_o),
+      .twod_band_sprites_refused_budget_o (twod_band_sprites_refused_budget_o),
+      .twod_band_slices_emitted_o         (twod_band_slices_emitted_o),
+      .twod_band_pixels_written_o         (twod_band_pixels_written_o),
+      .twod_band_pixels_clipped_o         (twod_band_pixels_clipped_o),
+      .twod_band_write_oob_o              (twod_band_write_oob_o),
+      .twod_band_underrun_o               (twod_band_underrun_o),
+      .twod_band_scan_addr_mismatch_o     (twod_band_scan_addr_mismatch_o),
+      .twod_band_tint_dropped_o           (twod_band_tint_dropped_o),
+      .twod_band_blend_dropped_o          (twod_band_blend_dropped_o),
+      .twod_band_order_inversion_o        (twod_band_order_inversion_o),
+      .twod_band_bands_o                  (twod_band_bands_o),
       .twod_plane_pixels_o                (twod_plane_pixels_o),
       .twod_plane_refused_role_o          (twod_plane_refused_role_o),
       .twod_plane_refused_blend_o         (twod_plane_refused_blend_o),

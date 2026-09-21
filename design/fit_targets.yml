@@ -1848,6 +1848,20 @@ targets:
     sources:
       - fpga/rtl/compositor/zhao_twod_sampler.sv
 
+  # TWOD.BAND, added 2026-09-21 (owner rulings R233, R235). A LEAF ROW ON
+  # PURPOSE, and it asks a question nothing else in this campaign can answer:
+  # the band's M10K count is ARITHMETIC and the arithmetic MOVED. R233 costed it
+  # at `ceil(0.75 * L)` = 12, which is right for a word of 20 bits or fewer
+  # because an M10K is 512 x 20; the shipped word is 40 bits (16 colour + a
+  # 24-bit freshness generation), so it should be `ceil(LINE_W * L / 256)` = 24,
+  # plus 10 for the 390-bit display list. WHETHER QUARTUS INFERS EITHER OF THEM
+  # AS M10K, OR SPENDS REGISTERS, IS EXACTLY WHAT A LEAF FIT ANSWERS AND LINT
+  # CANNOT. Ceiling: 1,400 ALM, 0 DSP, <= 36 M10K. It is composed in
+  # zhao_console_core as well, so this row is the differential.
+  - top: zhao_twod_band
+    sources:
+      - fpga/rtl/compositor/zhao_twod_band.sv
+
   # ==========================================================================
   # FOURTEEN MORE, and several already have a NUMBER but no way to reproduce it
   # ==========================================================================
@@ -2215,6 +2229,10 @@ targets:
       - fpga/rtl/compositor/zhao_twod_sampler.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
+      # TWOD.BAND (owner rulings R233 and R235, 2026-09-21). Registering a block
+      # in the ledger, the manifest and THIS list are three different acts --
+      # CLAUDE.md's build chapter -- and this is the third.
+      - fpga/rtl/compositor/zhao_twod_band.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
@@ -3058,6 +3076,12 @@ targets:
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv
+      # TWOD.BAND, composed 2026-09-21 (entry I17 item 1, owner rulings R233 and
+      # R235). The descriptor-order-to-raster-order bridge: it FEEDS
+      # `zhao_twod_sprite` band-clipped descriptors rather than replacing it, so
+      # the walker above stays exactly as it was and this is a fourth sibling
+      # the core wires in series, not a closure.
+      - fpga/rtl/compositor/zhao_twod_band.sv
       # POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195).
       # Three files because the gap was three separate things: the ART LAW
       # (`_tag`, R195's coefficients, every one a parameter), R5's tile-local

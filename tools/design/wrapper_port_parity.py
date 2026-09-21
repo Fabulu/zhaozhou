@@ -51,6 +51,13 @@ PAIRS = [
      "fpga/rtl/prod/zhao_console_core.sv"),
     ("tests/mutants/zhao_console_core_slot_overflow_mutant.sv",
      "fpga/rtl/prod/zhao_console_core.sv"),
+    # TWOD.BAND's burst mutant (owner ruling R235, packet BANDBUILD). A wrapper
+    # with one parameter changed -- BURST_PX raised past the FIFO slack, which
+    # is "admit everything" -- whose driver passes when `band_underrun_o` FIRES.
+    # Registered HERE as well as built, because R220's lesson is that a wrapper
+    # nobody checks is a control that goes stale in the reassuring direction.
+    ("tests/mutants/zhao_twod_band_burst_mutant.sv",
+     "fpga/rtl/compositor/zhao_twod_band.sv"),
 ]
 
 # THIS USED TO BE ONE LINE-ANCHORED REGEX AND IT COUNTED LOW, SILENTLY.
