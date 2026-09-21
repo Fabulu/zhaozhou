@@ -1422,14 +1422,13 @@ module zhao_console_board
   //      is what unpins the page.  What is left here is the deformation mark,
   //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
   //      caller is the same absent subpatch issuer as entry I21.
-  input  logic                    terr_dm_valid_i,
-  output logic                    terr_dm_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_dm_gen_i,
-  input  logic [31:0]             terr_dm_epoch_i,
-  input  logic                    terr_dm_bd_i,
-  input  logic                    terr_dm_f_i,
-  input  logic                    terr_dm_mips_i,
+  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
+  // the slot, the generation and the epoch the patch was served under, learns
+  // from `bake_done_i` that the record retired, and drives the directory
+  // directly. The eight ports are GONE from this edge rather than driven from
+  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
+  // by this: its first honest caller is lodfeed-with-the-devstore, and the
+  // devstore is composed but the lodfeed does not key on it yet.
 
   input  logic                    terr_chk_valid_i,
   input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
@@ -1501,11 +1500,9 @@ module zhao_console_board
   output logic [15:0]             terr_pt_trace_cmd_o,
   output logic [31:0]             terr_pt_programs_rejected_o,
 
-  // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
-  input  logic                    terr_cc_cs_we_i,
-  input  logic [4:0]              terr_cc_cs_ci_i,
-  input  logic [4:0]              terr_cc_cs_cj_i,
-  input  logic [1:0]              terr_cc_cs_substance_i,
+  // ---- I32 (extended), CLOSED 2026-09-21: TERRAIN.COMPCACHE's layer-D
+  // cell-state write is driven by TERRAIN.BAKE inside this module. The four
+  // ports are GONE from this edge rather than driven from it.
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
   // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
@@ -2409,9 +2406,13 @@ module zhao_console_board
   // rather than driven from it, which is the difference between a seam that
   // closed and a seam that acquired a producer.
 
-  // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
+  // I32 CLOSED 2026-09-21: `stamp_results` -> TERRAIN.SHEETSEAM -> TERRAIN.BAKE,
+  // all three composed at the end of this module. `surf_res_ready_i` is GONE
+  // from this edge rather than driven from it -- the difference between a seam
+  // that closed and a seam that acquired a producer -- and `surf_res_taken_o`
+  // replaces it so the accept stays observable from outside.
   output logic        surf_res_valid_o,
-  input  logic        surf_res_ready_i,
+  output logic        surf_res_taken_o,
   output logic [11:0] surf_res_texel_o,
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
@@ -3843,14 +3844,6 @@ module zhao_console_board
       .terr_bsock_contention_o            (terr_bsock_contention_o),
       .terr_bsock_retire_unowned_o        (terr_bsock_retire_unowned_o),
       .terr_bsock_wbeat_unowned_o         (terr_bsock_wbeat_unowned_o),
-      .terr_dm_valid_i                    (terr_dm_valid_i),
-      .terr_dm_ready_o                    (terr_dm_ready_o),
-      .terr_dm_slot_i                     (terr_dm_slot_i),
-      .terr_dm_gen_i                      (terr_dm_gen_i),
-      .terr_dm_epoch_i                    (terr_dm_epoch_i),
-      .terr_dm_bd_i                       (terr_dm_bd_i),
-      .terr_dm_f_i                        (terr_dm_f_i),
-      .terr_dm_mips_i                     (terr_dm_mips_i),
       .terr_chk_valid_i                   (terr_chk_valid_i),
       .terr_chk_slot_i                    (terr_chk_slot_i),
       .terr_chk_gen_i                     (terr_chk_gen_i),
@@ -3900,10 +3893,6 @@ module zhao_console_board
       .terr_pt_trace_hash_o               (terr_pt_trace_hash_o),
       .terr_pt_trace_cmd_o                (terr_pt_trace_cmd_o),
       .terr_pt_programs_rejected_o        (terr_pt_programs_rejected_o),
-      .terr_cc_cs_we_i                    (terr_cc_cs_we_i),
-      .terr_cc_cs_ci_i                    (terr_cc_cs_ci_i),
-      .terr_cc_cs_cj_i                    (terr_cc_cs_cj_i),
-      .terr_cc_cs_substance_i             (terr_cc_cs_substance_i),
       .terr_cc_serve_release_i            (terr_cc_serve_release_i),
       .terr_ps_lattices_o                 (terr_ps_lattices_o),
       .terr_ps_lattices_refused_o         (terr_ps_lattices_refused_o),
@@ -4396,7 +4385,7 @@ module zhao_console_board
       .surf_disp_env_x0_o                 (surf_disp_env_x0_o),
       .surf_disp_env_x1_o                 (surf_disp_env_x1_o),
       .surf_res_valid_o                   (surf_res_valid_o),
-      .surf_res_ready_i                   (surf_res_ready_i),
+      .surf_res_taken_o                   (surf_res_taken_o),
       .surf_res_texel_o                   (surf_res_texel_o),
       .surf_res_tag_o                     (surf_res_tag_o),
       .surf_res_strength_o                (surf_res_strength_o),

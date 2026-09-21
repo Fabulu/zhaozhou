@@ -1045,14 +1045,6 @@ module zhao_console_core_untex_decl_mutant
   //      is what unpins the page.  What is left here is the deformation mark,
   //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
   //      caller is the same absent subpatch issuer as entry I21.
-  input  logic                    terr_dm_valid_i,
-  output logic                    terr_dm_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_dm_gen_i,
-  input  logic [31:0]             terr_dm_epoch_i,
-  input  logic                    terr_dm_bd_i,
-  input  logic                    terr_dm_f_i,
-  input  logic                    terr_dm_mips_i,
 
   input  logic                    terr_chk_valid_i,
   input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
@@ -1125,10 +1117,6 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_pt_programs_rejected_o,
 
   // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
-  input  logic                    terr_cc_cs_we_i,
-  input  logic [4:0]              terr_cc_cs_ci_i,
-  input  logic [4:0]              terr_cc_cs_cj_i,
-  input  logic [1:0]              terr_cc_cs_substance_i,
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
   // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
@@ -2052,7 +2040,7 @@ module zhao_console_core_untex_decl_mutant
 
   // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
   output logic        surf_res_valid_o,
-  input  logic        surf_res_ready_i,
+  output logic        surf_res_taken_o,
   output logic [11:0] surf_res_texel_o,
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,

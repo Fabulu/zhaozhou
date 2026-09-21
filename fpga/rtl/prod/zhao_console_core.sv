@@ -4060,10 +4060,26 @@
 //      pending-slot repair (ruling R55); this composition waited for it rather
 //      than working around it.)
 //
-// I27. THE DIRECTORY's DEFORMATION MARK and HANDLE CHECK (`terr_dm_*`,
-//      `terr_chk_*`) -- BOUNDARY. NARROWED 2026-09-19, and the two halves that
-//      left are recorded here rather than deleted with them, because this entry
-//      is where the next reader will look for them:
+// I27. THE DIRECTORY's HANDLE CHECK (`terr_chk_*`) -- BOUNDARY. NARROWED
+//      THREE TIMES; the halves that left are recorded here rather than deleted
+//      with them, because this entry is where the next reader will look:
+//
+//        * THE DEFORMATION MARK (`terr_dm_*`) IS CLOSED, 2026-09-21
+//          (gz/terrabake), and it closed exactly as this entry's own 2026-09-20
+//          correction predicted it would have to. "Its writer is TERRAIN.BAKE"
+//          was an INTENTION IN THE LEDGER AND NOT A PORT MATCH -- bake has no
+//          slot, no generation, no epoch and no per-layer dirty bit anywhere on
+//          it -- so composing bake would NOT have closed this half, and the
+//          entry said so. The third block it then commissioned,
+//          `zhao_terrain_pageio`, is composed at the end of this module and
+//          drives `dm_slot_o`/`dm_gen_o`/`dm_epoch_o`/`dm_bd_o`/`dm_f_o`/
+//          `dm_mips_o` into the directory directly. Eight ports left the edge.
+//          THE GENERATION DOES NOT BUMP -- the coupling this entry names below
+//          is decided the way it recommends, at the directory's instance.
+//          And note what it means for entry I28, which has been CLOSED and
+//          never traversed: this console can now DIRTY A PAGE, so the F-sheet
+//          writeback's path can finally see a beat from stimulus rather than
+//          only from `world_composed_directed`.
 //
 //        * THE COMPOSE DOOR (`terr_is_*`) IS CLOSED. It drives
 //          TERRAIN.PAGESTREAM's job port and TERRAIN.PLACE's patch header
@@ -4079,11 +4095,14 @@
 //      WHAT IS LEFT, and they are two different absent owners kept in one entry
 //      only because they are two ports of ONE block, the directory:
 //
-//        * `terr_dm_*`, the deformation mark. Its writer is TERRAIN.BAKE, which
-//          is built and not composed -- entry I32 carries the full argument and
-//          this is the same refusal seen from the directory's side. Nothing in
-//          this core can dirty a page, which is also why I28's writeback could
-//          not see a beat.
+//        * ~~`terr_dm_*`, the deformation mark. Its writer is TERRAIN.BAKE,
+//          which is built and not composed -- entry I32 carries the full
+//          argument and this is the same refusal seen from the directory's
+//          side. Nothing in this core can dirty a page, which is also why
+//          I28's writeback could not see a beat.~~ STRUCK AND CLOSED
+//          2026-09-21; the closure is at the head of this entry. The prose
+//          below is kept because its argument is what produced the block that
+//          closed it.
 //
 //          AND THAT SENTENCE ASSERTS A PRESENCE THAT IS NOT THERE. Corrected
 //          2026-09-20 (terrain7), against `zhao_terrain_bake_v2`'s port list
@@ -4679,579 +4698,62 @@
 //      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
 //      before its pose did. The missing thing is the BYTES, not the path.
 //
-// I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
-//      is the named consumer, it is built and it is NOT composed. The port is
-//      on this module's edge so the result stream is observable rather than
-//      dropped.
+// (I32 CLOSED 2026-09-21 (gz/terrabake). SURFACE.STAMP's `stamp_results`
+//      (`surf_res_*`) has its named consumer: TERRAIN.BAKE is COMPOSED in this
+//      module, `zhao_terrain_sheetseam` takes `res_before_o` into the plane the
+//      dig differences against, and `surf_res_ready_i` has LEFT this module's
+//      port list rather than being driven from it. The entry is DELETED rather
+//      than marked, for the reason the I4 note above gives -- a stale closed
+//      entry under-reports progress exactly as deleting an open one would
+//      over-report it -- and what follows is the closure against its own text,
+//      because eight lanes refused this seam and each was owed an answer.
 //
-//      THE REASON CHANGED 2026-09-19 AND THE ONE IT REPLACES HAD EXPIRED.
-//      This entry used to read: "TERRAIN.BAKE belongs to the terrain compose
-//      engine that entry I27 says is blocked on a placement owner, and adopting
-//      it for this one port would pull that whole subsystem in behind a seam
-//      I27 already records as unclosable today." Entry I27 does not say that
-//      any more and says the opposite in its first bullet -- "THE COMPOSE DOOR
-//      (`terr_is_*`) IS CLOSED ... `zhao_terrain_place` is that owner" -- and
-//      the compose engine is composed below. A refusal whose cited authority
-//      has since withdrawn the citation is the shape this header exists to
-//      catch, so it is replaced rather than patched, and the real one is
-//      harder.
+//      THE ENTRY's FINAL FORM LISTED FOUR HOLDS. Every one is now spent:
 //
-//      THE TWO PORTS ARE NOT THE SAME PACKET, AND THE BLOCK'S OWN HEADER SAYS
-//      SO FIRST. `zhao_surface_stamp`'s result stream is PER TEXEL of a 64x64
-//      layer-F sheet -- `res_texel_o[11:0]`, `res_tag_o`, `res_strength_o`,
-//      `res_before_o`, `res_src_id_o`, which is what `surf_res_*` carries out
-//      of this module. `zhao_terrain_bake_v2`'s `cmd_*` is ONE RECORD PER PATCH
-//      BAKE: {patch_id, cx, cz, radius, depth_from, depth_to, env_x0/z0/x1/z1,
-//      dual, cells, src_id}. Every field differs but `src_id`. The block wrote
-//      the conflict down when it was built (`zhao_terrain_bake.sv` 29-48): "the
-//      ledger says `inputs: [stamp_results]` ... This contract's own packet
-//      table says something DIFFERENT ... Those are two different wires wearing
-//      one name."
+//        * THE LAYER-F READER. Built 2026-09-20 (seamdig) under owner ruling
+//          R194 and amended to a DELTA 2026-09-21 (deltalaw) under R231.
+//        * THE ARBITER. `zhao_surface_sheetshare`, composed above as
+//          `u_surface_sheetshare` -- the two-client round robin this entry
+//          specified BY TYPE, with SURFACE.STAMP client A and the seam client
+//          B, OP_READ and nothing else on the second port.
+//        * THE PAGE PORTS. "LAYER D HAS NO READER ANYWHERE IN THE MACHINE"
+//          and "`sc_*` HAS NO CONSUMER ANYWHERE IN THIS TREE" were both true
+//          and are both false now: `u_terrain_pageio` reads layer D for the
+//          corner shadow and the breach phase, and writes layers B and D back
+//          through requester 3 of `u_build_share`. The A/B/C push-to-pull join
+//          the entry asked for is `tbk_vtx_valid_c` at the bake instance: an
+//          AND of two valids with the cursor equality ASSERTED, because both
+//          walkers run vi-fast from (0,0) and that agreement is checked rather
+//          than assumed.
+//        * THE `cmd_*` RECORD. `zhao_terrain_bakerec` is the "THIRD BLOCK
+//          BETWEEN THEM" this entry commissioned. `cmd_cells_i` is now a
+//          statement about the composition (pageio serves layer D);
+//          `cmd_dual_i` is TERRAIN.PAGESTREAM's own `kFlagDual`, carried from
+//          the header reader's forwarded job; and `cmd_depth_from_i` /
+//          `cmd_depth_to_i` are ZERO ON PURPOSE with the whole argument in
+//          that block's header -- a record from a stamp is a SHEET record, the
+//          disc arm belongs to a different producer (a cast's progress), and
+//          on an R221 fallback the record digs nothing and is RE-QUEUED rather
+//          than digging an absolute depth into an accumulating scar, which is
+//          the defect R231 had just repaired. The seam does not consume its
+//          before-plane on a fallback -- `bf_live_q` is cleared only
+//          `if (serve_q)` -- so the deferral is exact, which is D-TERRCMD-C's
+//          own test and the reason the delta law passes it where the absolute
+//          law could not.
 //
-//      AND ITS STATED BLOCKER EXPIRED ON 2026-09-19, ONE DAY AFTER IT WAS
-//      WRITTEN. Corrected 2026-09-20 by the terrain6 packet, because this is
-//      the third refusal in this file found still quoting a cause that had
-//      lapsed. The sentence was: closing the seam "needs TWO LAWS THAT DO NOT
-//      EXIST ANYWHERE IN THIS TREE: a strength(u8) -> depth(fx16) mapping and
-//      a 64x64 -> 33x33 resample." BOTH EXIST NOW, ratified by owner rulings
-//      R15/R56/R65 and landed at commit `d1568a61`:
-//        * `spec/terrain_rules.md` section 9.3(a) and
-//          `zref::terrain::kStampDepthTable` -- sixteen EDITABLE fx16 metres
-//          indexed by `strength >> 4`, one round-half-up on the delta,
-//          endpoints exact, last segment held;
-//        * section 9.3(b) and `zref::terrain::sheet_texel_for_vertex` -- the
-//          resample, NEAREST-TEXEL with the seam error measured and declared,
-//          because the format must stay frozen (three elaboration guards
-//          reject the vertex-aligned 65x65; R65 revised R56's price from
-//          +1.2% to +38.3%);
-//        * `tests/terrain/stamp_to_bake_laws_directed.cpp`, 306 checks.
+//      WHAT WAS LEFT STANDING AND IS NOW SOMEBODY ELSE's: the entry's
+//      D-TERRCMD-B observed that a DISC record cannot be formed from the ABI
+//      at all, and that remains true. It is no longer a blocker here because
+//      nothing in this console needs one: the disc arm is the FIELD
+//      subsystem's, for section 9.2's "(to - from) x stencil so an interrupted
+//      cast un-applies", and it will arrive with the cast producer.
 //
-//      SO THE REAL BLOCKER IS SMALLER, HARDER AND IS AN OWNER DECISION.
-//      SEARCHED: `fpga/rtl` for `stamp_depth|kStampDepthTable|
-//      sheet_texel_for_vertex|depth_table` (case-insensitive, all of
-//      `fpga/rtl` including `synth/`) -- ZERO HITS. The laws exist in the
-//      REFERENCE and in the SPEC and in NO RTL. And when they are built, they
-//      do not fit this block's port:
-//
-//        R15 describes a PER-VERTEX depth read out of layer F -- pick the
-//        vertex's texel, look its strength up in the art table, get a depth.
-//        `zhao_terrain_bake_v2`'s dig is a PARAMETRIC DISC: `cmd_radius_i`
-//        (fx16, "<= 0 writes nothing"), `cmd_depth_from_i`/`cmd_depth_to_i`,
-//        with a radial falloff whose oracle is `zref::terrain::bake_dig`.
-//        THOSE ARE TWO DIFFERENT DIG LAWS producing two different scars, and
-//        no adapter can turn a texel stream into {cx, cz, radius, depth_from,
-//        depth_to} without fitting a disc to a field -- an invention exactly
-//        of the kind the original refusal was right to refuse.
-//
-//      The owner decision is therefore WHICH LAW DIGS: bake keeps its disc and
-//      layer F drives something else, or bake gains a second, per-vertex depth
-//      input and the disc becomes one way of filling it. Written up with a
-//      recommendation in FINDINGS-terrain6.md. R15 ratified the CONVERSION and
-//      left the CONSUMER's shape untouched, which is why reading R15 as "the
-//      blocker is gone" would put a fabrication under every permanent wound in
-//      the game after all -- just one ruling later.
-//
-//      >> THAT DECISION HAS BEEN TAKEN: **OPTION A**. Recorded 2026-09-20
-//      >> (terrain7) so it is not re-opened. `zhao_terrain_bake_v2` KEEPS its
-//      >> parametric disc -- it is what `zref::terrain::bake_dig` models, what
-//      >> 267 directed checks hold, and what a gameplay dig naturally produces
-//      >> (a spell has a centre and a radius, not a 64x64 sheet) -- and GAINS a
-//      >> second, per-vertex depth input mode fed from layer F through the R15
-//      >> laws. The new mode is additive and independently testable;
-//      >> `zref::terrain::stamp_depth_at_vertex` is already the oracle it is
-//      >> written against (`spec/terrain_rules.md` 9.3(c)'s closing line says
-//      >> so in as many words).
-//
-//      >> AND THE ART JUDGEMENT THAT BLOCKED IT HAS BEEN MADE. **OWNER RULING
-//      >> R194, 2026-09-20, BY LOOKING: "Shipped is fine. Slightly different
-//      >> but not off."** The nearest-texel rim is ACCEPTED, the terrain page
-//      >> format is FROZEN AT 64x64, and `sheet_texel_for_vertex` stands as
-//      >> written -- it does NOT become the identity. The reader's ADDRESS
-//      >> GENERATOR was exactly the contested thing, and it is decided; every
-//      >> later terrain block inherits the 64x64 format.
-//      >>
-//      >> This paragraph used to end "building it now would commit the silicon
-//      >> to a format decision the owner has not made, which is why terrain7
-//      >> did not build it." That refusal was correct and it has EXPIRED. R116
-//      >> called this "not six failures; it is one blocker seen six times", and
-//      >> the blocker was a question nobody had been asked.
-//
-//      >> SO THE LAYER-F READER IS BUILT, 2026-09-20 (seamdig).
-//      >>   * `fpga/rtl/terrain/zhao_terrain_stampdepth.sv` -- 9.3(a)'s ART
-//      >>     TABLE (sixteen editable fx16 metres, one symmetric round on the
-//      >>     low-nibble delta, last segment HELD) and 9.3(b)'s NEAREST-TEXEL
-//      >>     address generator, in RTL for the first time. The search recorded
-//      >>     above -- all of `fpga/rtl` for these law names, ZERO HITS -- is
-//      >>     no longer true, and this is where it stopped being true.
-//      >>   * `zhao_terrain_bake_v2` gained `cmd_depth_sheet_i`, `sheet_texel_o`
-//      >>     and `sheet_strength_i`, plus `sheet_vertices_dug_o`. The DISC law
-//      >>     did not move: `terrain_bake_v2_directed` still passes 267/267.
-//      >>   * `tests/terrain/terrain_stampdepth_directed.cpp` -- 6,505 checks,
-//      >>     every one of the 33x33 vertices and all 256 strengths against
-//      >>     zref, plus the composed law over a seam-tangent disc.
-//      >>   * `tests/terrain/terrain_bake_v2_sheet_directed.cpp` -- 6,548
-//      >>     checks. `sheet_vertices_dug_o` FIRED at 255 on a sheet record and
-//      >>     stayed at 0 on a disc record carrying the same sheet, which is
-//      >>     the positive and the negative control in one executable.
-//      >>
-//      >> THIS DOES NOT CLOSE THIS ENTRY, and the dossier said so before the
-//      >> decision was taken: `design/contracts/TERRAIN.PAGEIO.md` section 8 --
-//      >> "I32 does not close on this block alone." What R194 removed is one of
-//      >> the FOUR things holding TERRAIN.BAKE out of this module, and it was
-//      >> the smallest. The other three are below and in
-//      >> `zhao_terrain_bake_v2.sv`'s own header: layer D has no reader
-//      >> anywhere in the machine (needed on TWO of bake's ports), `sc_*` --
-//      >> the layer-B scar writeback -- has no consumer anywhere, and nothing
-//      >> in this console writes a height layer back to a page at all. ~~All
-//      >> three are ONE unbuilt block, TERRAIN.PAGEIO, which has a written
-//      >> contract and NO `design/blocks.yml` row.~~
-//      >>
-//      >> STRUCK 2026-09-21 (terrcmd), RE-MEASURED IN THIS TREE. It is one
-//      >> block and that block is BUILT AND REGISTERED. `design/blocks.yml`
-//      >> carries `- id: TERRAIN.PAGEIO`; `fpga/rtl/terrain/zhao_terrain_pageio.sv`
-//      >> is 63,729 bytes; `completion_register.py` lists `zhao_terrain_pageio`
-//      >> under BUILT BUT NOT CONNECTED, which it could not do without both.
-//      >> And it consumes what the sentence above says has no consumer:
-//      >> `sc_valid_i`/`sc_scar_i` take the layer-B scar writeback, `cell_ci_i`/
-//      >> `cell_state_o` serve the layer-D read, and `vtx_nobake_i`'s producer
-//      >> is its corner-shadow scatter. So THREE of the four holds this
-//      >> paragraph lists are spent -- not closed, because pageio is not
-//      >> COMPOSED, but the thing they were waiting for is no longer missing.
-//      >> Two lanes have now read this sentence and inherited "TERRAIN.PAGEIO
-//      >> does not exist"; it stops here.
-//
-//      A THIRD ABSENCE, AND IT IS ARBITRATION: `zhao_surface_sheet` IS COMPOSED
-//      in this module (search for `u_surface_sheet`) and holds layer F, so the
-//      sheet is NOT missing -- that would have been a false-absence claim. But
-//      its request port is annotated at the instance "REAL: SURFACE.STAMP is
-//      the only requester", one `req_*` channel with no arbitration. Whatever
-//      reads layer F for the dig is its SECOND requester, and choosing between
-//      them is a scheduler, which a composer may not write.
-//
-//      >> STILL TRUE, AND MIS-SCOPED. Narrowed 2026-09-20 (terrain7): this
-//      >> reads as though a scheduler had to be INVENTED, and it does not.
-//      >> `zhao_terrain_psmux` is a two-client round-robin share of a
-//      >> handshaked stream, composed in this module, with a contract and a
-//      >> test, and its own header states the governing rule -- "arbitration is
-//      >> state, state belongs in a file with a contract and a test, and a mux
-//      >> written inline in a composer is an arbiter nobody can point at".
-//      >> `zhao_mem_share_n` is the same machine with N a parameter. Neither
-//      >> has the sheet port's TYPE ({op[1:0], handle[31:0], texel[11:0],
-//      >> src_id} out, {op, status, tag, strength, src_id} back), so neither
-//      >> drops in -- but this is ONE SMALL BLOCK WITH A CONTRACT, of a shape
-//      >> already built twice here, not a subsystem. It is not what blocks
-//      >> this entry; `sc_*` and R65 are.
-//
-//      >> AND THAT BLOCK NOW EXISTS -- BOTH OF THEM. Built 2026-09-21
-//      >> (sheetseam) under OWNER RULING R221. Recorded here because this
-//      >> paragraph is where the next reader will look for the arbiter, and a
-//      >> precise specification for a block that already exists is how
-//      >> `zhao_vertex_arena` came to be built twice.
-//      >>   * `fpga/rtl/surface/zhao_surface_sheetshare.sv` -- the two-client
-//      >>     share this paragraph asks for, at the exact type it names.
-//      >>     Round robin, one `last_q` flip-flop, ADOPTED from
-//      >>     `zhao_terrain_psmux` rather than re-decided; both priority
-//      >>     orders are rejected in its header with their numbers.
-//      >>   * `fpga/rtl/terrain/zhao_terrain_sheetseam.sv` -- and this is the
-//      >>     part the paragraph above UNDERSTATES, which PAGEIO measured and
-//      >>     recorded as decision 5 in `design/contracts/TERRAIN.PAGEIO.md`:
-//      >>     the sheet port is a CONTROL-AND-READ port with a separate
-//      >>     response stream and a residency STATUS, while bake wants a
-//      >>     combinational lookup on the A/B/C beat. So an arbiter alone
-//      >>     serves nothing. This block prefetches the 1,089 texels the
-//      >>     33x33 lattice can address -- 1,089 of 4,096 because section
-//      >>     9.3(b) decimates, one byte of two because bake has no tag port
-//      >>     -- into ONE M10K, and answers the dig from it.
-//      >>
-//      >> THE MISS LAW IS OWNER RULING R221 AND IT IS ONE BIT.
-//      >> `bk_depth_sheet_o` goes LOW on any non-ST_HIT, so the record digs
-//      >> the RATIFIED parametric disc and the fallback is COUNTED. Note what
-//      >> that rules OUT, because it is a live hazard in this seam: an
-//      >> `OP_ACQUIRE` on a non-resident handle ALLOCATES A BLANK SHEET and
-//      >> answers ST_ALLOCATED, which is R221's refused "dig zero" wearing a
-//      >> status code that says HIT -- and steals one of `SURF_SLOTS` = 2 from
-//      >> the only block terrain_rules 7 allows to write layer F. The reader
-//      >> therefore issues `OP_READ` AND NOTHING ELSE, measured over the whole
-//      >> of `sheetseam_rtl_directed` rather than claimed in a header.
-//      >>
-//      >> THIS DOES NOT CLOSE THIS ENTRY, and the arithmetic of the refusal is
-//      >> unchanged by it: the sheet seam was never what blocked I32. Both new
-//      >> blocks are BUILT and NOT COMPOSED, because their consumer
-//      >> `zhao_terrain_bake_v2` is not composed and `cmd_*` still has no
-//      >> producer -- RE-VERIFIED IN THIS TREE 2026-09-21, `zhao_terrain_cmd`
-//      >> emits `rec_island_o`/`rec_ix_o`/`rec_iz_o`/`rec_hps_addr_o`/
-//      >> `rec_crc_o`/`rec_flags_o`, a patch DIRECTORY record, and nothing
-//      >> resembling {cx, cz, radius, depth_from, depth_to}. Composing the
-//      >> share alone would put an arbiter between SURFACE.STAMP and a dead
-//      >> second client, which is a tie-off wearing a block's clothes.
-//      >>
-//      >> ONE NEW THING FOR WHOEVER BUILDS THE RECORD PRODUCER, and it is
-//      >> cheap to get wrong: `zhao_terrain_sheetseam`'s `job_handle_i` is the
-//      >> patch's SHEET handle32 and it is an INPUT on purpose. It must NOT be
-//      >> synthesised from `cmd_patch_id_i`. `zhao_surface_sheet`'s own choice
-//      >> C4 is the reason -- "the handle is the identity the ABI carries
-//      >> (`commands.zidl` SurfaceStamp `handle32[patch] patch`); using
-//      >> anything else re-derives identity that was already stated" -- and a
-//      >> second identity law invented inside a bake-record producer is
-//      >> exactly the kind nobody would look for later.
-//
-//      >> AND THE PRODUCER IT ASKS FOR IS ALREADY ON THIS MODULE'S WIRES.
-//      >> Measured 2026-09-21 (terrcmd): `zhao_cmd_exec`'s `stamp_patch_o` is
-//      >> the 32-bit `handle32[patch]` lifted off a validated SurfaceStamp
-//      >> packet, composed here as `cmd_exec_stamp_patch_w` and already muxed
-//      >> into `surf_cmd_handle_m`. Carrying THAT beside the record satisfies
-//      >> C4 exactly -- it is the ABI's own identity, not a synthesis from
-//      >> `cmd_patch_id_i` -- so the boundary the paragraph above sets is
-//      >> SATISFIABLE and does not need a new identity law. `job_handle_i`
-//      >> has no producer today only because no record producer exists to
-//      >> carry it; the VALUE is present, validated and 32 bits wide.
-//
-//      ------------------------------------------------------------------
-//      WHAT `cmd_*` ACTUALLY NEEDS, FIELD BY FIELD. Measured 2026-09-21
-//      (terrcmd), because three lanes have now reported "`cmd_*` has no
-//      producer" as though it were one absence, and it is THIRTEEN FIELDS OF
-//      WHICH MOST ARE LIVE IN THIS MODULE ALREADY.
-//      ------------------------------------------------------------------
-//      FIRST, TWO THINGS THAT ARE **NOT** MISSING, named because a lane sent
-//      to "add the record" would look for both and find them:
-//
-//        * THE COMMAND RECORD EXISTS. `spec/commands.zidl` SurfaceStamp
-//          0x0210 is `implemented`, and carries `handle32[patch] patch`,
-//          `transform2fx transform` (translation = centre), `fx16 radius`,
-//          `u16 strength`, `u8 tag`, `u8 operation`, `fx16 ring_width`. This
-//          is NOT I17's shape -- there `SetPlane` was zero hits in the ZIDL
-//          and the gap was a missing RECORD. Here the record is ratified.
-//        * THE EXECUTOR ARM EXISTS. `zhao_cmd_exec`'s EX_STAMP state drains
-//          the stamp ring and drives nine ports -- `stamp_patch_o`,
-//          `stamp_operation_o`, `stamp_tag_o`, `stamp_strength_o`,
-//          `stamp_tx_o`, `stamp_ty_o`, `stamp_radius_o`, `stamp_ring_width_o`,
-//          `stamp_src_id_o` -- off a CRC-validated packet. So this is not a
-//          missing arm either. Both halves of I30 already did that work.
-//
-//      WHAT IS MISSING IS A THIRD BLOCK BETWEEN THEM, and here is its intake
-//      measured against what this module can already hand it:
-//
-//        cmd_cx_i / cmd_cz_i    LIVE  `cmd_exec_stamp_tx_w` / `_ty_w`
-//        cmd_radius_i           LIVE  `cmd_exec_stamp_radius_w`
-//        cmd_env_x0/z0/x1/z1_i  LIVE  `u_surface_dispatch`'s `env_*_o`,
-//                                     port for port, ruling R45
-//        cmd_src_id_i           LIVE  `cmd_exec_stamp_src_id_w`
-//        job_handle_i           LIVE  `cmd_exec_stamp_patch_w` (above)
-//        cmd_dual_i             REACHABLE  `tps_v_flags[TERR_FLAG_DUAL_BIT]`
-//                                     is TERRAIN.PAGESTREAM's flag and is
-//                                     already read by two consumers here
-//        cmd_patch_id_i         REACHABLE  the dispatch's {patch_ix, patch_iz}
-//                                     key, which R45 put there for exactly
-//                                     "whoever keys on a patch"
-//        cmd_depth_from_i       ABSENT
-//        cmd_depth_to_i         ABSENT
-//        cmd_cells_i            ABSENT
-//        cmd_depth_sheet_i      LIVE  `zhao_terrain_sheetseam.bk_depth_sheet_o`
-//                                     (R221's fallback law in one bit, and
-//                                     R231's torn/foreign-plane refusals on
-//                                     the same wire). Was ABSENT until
-//                                     2026-09-21.
-//
-//      SO THE REFUSAL IS NOW FOUR FIELDS, NOT A SUBSYSTEM, and each is a
-//      DECISION rather than a wire. They are written up as D-TERRCMD-A/B/C.
-//
-//      D-TERRCMD-A -- **THE DEPTH LAW IS ABSOLUTE IN ONE RATIFIED CONTRACT
-//      AND A DELTA IN THE OTHER, AND THE BUILT PATH TOOK THE ABSOLUTE ONE.**
-//      This is the finding that matters and it is not about a missing wire.
-//
-//        `design/contracts/SURFACE.STAMP.md` decision S3 is explicit:
-//        "`stamp_results` carries {texel, tag, strength_after,
-//        strength_before}. TERRAIN.BAKE turns stamps into layer-B height16
-//        scars and NEEDS THE DELTA, NOT JUST THE NEW VALUE; sending `before`
-//        costs eight wires and SAVES BAKE A SECOND READ PORT ONTO THE SHEET."
-//        Its *Rejected* line names the alternative by name: "emitting only
-//        the new value and letting BAKE re-read -- a second reader on a store
-//        whose whole rate budget is one texel per clock." That decision is
-//        load-bearing enough to carry a committed positive control: mutation
-//        8 of that contract's table is "`stamp_results` loses the pre-blend
-//        strength (the delta BAKE needs)", caught by the directed suite and
-//        both random lanes. `surf_res_before_o` -- THE PORT THIS ENTRY IS
-//        NAMED AFTER -- exists for this and nothing else.
-//
-//        What was built is the rejected branch. `zref::terrain::
-//        stamp_depth_at_vertex(strength, vi, vj)` takes ONE strength plane
-//        and returns `stamp_depth(strength[...])` -- an ABSOLUTE depth, no
-//        `before` anywhere in the signature. `zhao_terrain_stampdepth`
-//        implements that, `zhao_terrain_sheetseam` prefetches 1,089 CURRENT
-//        strengths through `zhao_surface_sheetshare` (which is precisely the
-//        "second reader" S3 rejected), and `zhao_terrain_bake_v2` selects
-//        `delta16 = c_sheet ? sd_depth_h16 : (g_from_c - g_to_c)` into
-//        `scar_sum = h_scar + delta16`. THE SCAR ACCUMULATES AND THE DEPTH IS
-//        ABSOLUTE.
-//
-//        The consequence, and it is not a corner case: **a stamp re-issued at
-//        the same place digs the full depth again.** Operation 0 (the only op
-//        L1 uses) REPLACES the texel, so `before == after` on a repeat and the
-//        delta law digs nothing, which is correct; the absolute law digs
-//        `table(strength)` a second time and the crater doubles. Two stamps
-//        overlapping within ONE frame queue two records and both dig the
-//        accumulated sheet over their intersection. No counter in the seam can
-//        see it -- `sheet_vertices_dug_o`, `fallbacks_o`, `miss_texels_o` and
-//        `prefetch_beats_o` all report a perfectly healthy read of a sheet
-//        that is telling the truth. The defect is in WHICH QUESTION IS ASKED
-//        of it, and every instrument here measures the answer.
-//
-//        >> RULED 2026-09-21. **OWNER RULING R231: TAKE THE DELTA**, and it
-//        >> was never an owner decision -- "S3 is RATIFIED and decided it
-//        >> already, including rejecting the built branch by name". BUILT the
-//        >> same day (deltalaw); what follows is left standing because a
-//        >> question asked and closed must not read as a question never asked.
-//        >>
-//        >> `zref::terrain::stamp_delta_at_vertex` is the law, expressed as a
-//        >> DIFFERENCE OF the ratified absolute one rather than a second art
-//        >> table. `zhao_terrain_bake_v2` gained `sheet_before_i` and a SECOND
-//        >> `zhao_terrain_stampdepth` INSTANCE; its sheet arm is now
-//        >> `sd_delta_h16 = sd_depth_h16 - sd_before_h16`. The disc arm never
-//        >> moved -- and it was ALWAYS a delta, `(g_from_c - g_to_c)`, which
-//        >> is this whole defect in one line: two laws feeding one
-//        >> accumulator and only one of them differencing.
-//        >>
-//        >> `zhao_terrain_sheetseam` gained `sheet_before_o` and a 1,089x9-bit
-//        >> plane fed from a `stamp_results` SINK, and `zhao_surface_stamp`
-//        >> gained `res_handle_o` so that stream can be ROUTED to a patch --
-//        >> `st_handle` CARRIED, not derived, which is SURFACE.SHEET's C4
-//        >> satisfied the way the paragraph below says it can be.
-//        >> **`surf_res_before_o` -- the port this entry is NAMED after -- now
-//        >> has its first consumer in the tree.** PAGEIO had measured "ZERO
-//        >> CONSUMERS of `res_texel_i` / `res_strength_i` / `res_before_i` in
-//        >> `fpga/` OR `tests/`"; that sentence is no longer true.
-//        >>
-//        >> THE COLD CASE IS NOT A SPECIAL CASE. `kStampDepthTable[0]` is 0
-//        >> (now `static_assert`ed -- it was undefended by any gate), so a
-//        >> `before` plane of zeroes makes the delta law EQUAL the absolute
-//        >> one bit for bit. `terrain_bake_v2_sheet_directed`'s 6,548 checks
-//        >> and `terrain_bake_v2_directed`'s 267 pass UNCHANGED, measured.
-//        >>
-//        >> EVIDENCE: `tests/terrain/bake_delta_idempotence_directed.cpp`,
-//        >> 5,952 checks, 0 failures. A DIFFERENTIAL against the oracle across
-//        >> two bakes, because no counter can see this class of fault -- R215's
-//        >> shape. Its case 3 is the positive control and REQUIRES the crater
-//        >> to double when `before` is forced to zero, because a test that
-//        >> passes on an inert machine looks like one that passes on a correct
-//        >> machine. `sheetseam_rtl_directed` went 81 -> 103 checks with the
-//        >> three new counters asserted silent and then fired.
-//        >>
-//        >> TWO CORRECTIONS TO THE PARAGRAPH BELOW, both found by checking it:
-//        >>   * "Operation 0 (the only op L1 uses) REPLACES the texel" is
-//        >>     WRONG. ABI operation 0 is `max(dst, src)`
-//        >>     (`zref::surface::blend_of_abi_operation`, SURFACE.STAMP S1);
-//        >>     REPLACE is `kBlendReplace = 5`, reachable only through
-//        >>     `cmd_blend_en_i`. Idempotence holds anyway -- under max, an
-//        >>     identical re-stamp leaves `after == before` -- so the ruling is
-//        >>     right for a reason nobody had checked.
-//        >>   * "a committed mutant (mutation 8)" is a row in SURFACE.STAMP's
-//        >>     table headed "Before the rearchitecture (2026-08-21), kept for
-//        >>     the record". It is a HISTORICAL sweep, not a live control.
-//        >>
-//        >> AND THIS ENTRY STILL DOES NOT CLOSE. `cmd_depth_sheet_i` now HAS a
-//        >> producer -- the seam's `bk_depth_sheet_o` -- so the four absent
-//        >> fields below are THREE: `cmd_depth_from_i`, `cmd_depth_to_i` and
-//        >> `cmd_cells_i`. Re-verified in this tree: every `depth_from` /
-//        >> `depth_to` hit under `fpga/rtl` is bake's own port, its internal
-//        >> `c_from`/`c_to`, or `zhao_terrain_bake_delta`'s. D-TERRCMD-B
-//        >> stands, and with it the refusal.
-//
-//        ~~NEITHER SIDE MAY BE PICKED INSIDE A PACKET.~~ S3 is a ratified
-//        contract decision with a committed mutant; `stamp_depth_at_vertex`
-//        is the oracle owner ruling R194 named, and 9.3(c)'s closing line
-//        ratifies it as "the oracle TERRAIN.BAKE's per-vertex depth mode is
-//        written against". Two ratified statements, opposite shapes, and
-//        NEITHER NAMES THE OTHER -- which is this file's own "read the
-//        SIBLING contract" law, arriving for the third time in this subsystem.
-//        RECOMMENDED: the DELTA. It is the only one of the two that is
-//        idempotent under re-stamping, it is what `surf_res_before_o` was
-//        built and mutation-tested to deliver, and it costs the seam nothing
-//        that is not already spent. It is an OWNER decision because it changes
-//        a ruled oracle.
-//
-//      D-TERRCMD-B -- `cmd_depth_from_i`/`cmd_depth_to_i` HAVE NO SOURCE
-//      ANYWHERE, AND NEITHER DOES `cmd_cells_i`. SEARCHED: all of
-//      `fpga/rtl/**` for `depth_from|depth_to` -- every hit is either a
-//      COMMENT in this entry or `zhao_prod_top.sv`'s generated LFSR stimulus
-//      (`u61_src[42 +: 32]`), which is a fit harness and not a producer. The
-//      ABI has no depth field: SurfaceStamp carries `strength`, and 9.3(a)'s
-//      art table converts strength to depth PER TEXEL, which is sheet mode.
-//      So a stamp-derived DISC record cannot be formed at all, and the disc
-//      arm's real producer is a cast's progress -- the FIELD subsystem, and
-//      §9.2's "(to - from) x stencil so an interrupted cast un-applies".
-//      `cmd_cells_i` ("layer D present") has no flag bit anywhere; the only
-//      layer-presence bit in this module is `TERR_FLAG_DUAL_BIT = 3`. There
-//      is no CELLS sibling, in the flags word or out of it.
-//
-//      D-TERRCMD-C -- **§9.2's DEFERRAL LAW DOES NOT COVER THE ONLY RECORD
-//      SHAPE THE ABI CAN PRODUCE.** `design/contracts/TERRAIN.BAKE.md` says
-//      it in one sentence: "terrain_rules §9.2's deferral identity is written
-//      in `from`/`to` depths AND IN NOTHING ELSE." §9.2 item 3 is that
-//      identity -- "applying from->mid then mid->to == from->to, so a
-//      deferred patch takes one larger step at its next bake". A sheet-mode
-//      record has no `from` and no `to`, so a deferred one has no
-//      state-exactness argument at all, and BAKE_PATCH_BUDGET = 64 with a
-//      carry-over FIFO is exactly a deferral machine. §9.2 item 4 makes the
-//      constant replay-semantics-affecting, so this is not a detail that can
-//      be settled later by whoever composes. It is the same decision as
-//      D-TERRCMD-A seen from the queue's side: the delta law restores the
-//      identity (two deferred deltas over one sheet sum to the whole), and
-//      the absolute law does not.
-//
-//      WHY NO REGISTER ROW WAS ADDED FOR THE PRODUCER. It has a written
-//      contract -- TERRAIN.BAKE.md's `stamp_results` packet table plus §9.2's
-//      deferral law -- and NO SILICON. That is the wrong half of R214's test,
-//      the half POSEPAGE declined a rise for, so no row. The register is 22
-//      before this commit and 22 after it; this entry gained no gap and lost
-//      none, and the whole diff is comment.
-//
-//      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
-//      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
-//      ({base, scar, bottom, nobake}) with a layer-B writeback on `sc_*`, and
-//      its BREACH phase does the same for layer D on `cell_*`. It has no VRAM
-//      port by design ("no VRAM port and no residency directory", its lines
-//      118-124), so a composer must SERVE those.
-//
-//      >> THE READ HALF OF THAT PARAGRAPH EXPIRED AND IS STRUCK. Corrected
-//      >> 2026-09-20 (terrain7); this is the SIXTH refusal in this file found
-//      >> still quoting a lapsed cause, and it is the one that was hiding the
-//      >> real blocker. The struck sentence read: "`zhao_terrain_compcache_front`
-//      >> cannot: it holds COMPOSED HEIGHTS (top/bottom) and a cell-state
-//      >> plane, not the page's A/B/C layers, **and the resident page itself is
-//      >> reachable from in here only through the guard socket entry I26
-//      >> records as absent**. So two of bake's four input groups have no
-//      >> server in this module."
-//      >>
-//      >> The first clause is still true and the second is dead: **I26 closed
-//      >> on 2026-09-19** (see its own entry above), and the page is served in
-//      >> this module today. `u_terrain_pagestream` emits `v_base_o`,
-//      >> `v_scar_o`, `v_bottom_o`, `v_vi_o`, `v_vj_o` -- which is bake's
-//      >> `vtx_base_i`, `vtx_scar_i`, `vtx_bottom_i` and its two index outputs
-//      >> PORT FOR PORT, same widths, same signedness, same vi=column /
-//      >> vj=row convention. And the arbitration precedent is composed too:
-//      >> `u_terrain_psmux` already shares that exact stream between the
-//      >> compose door and the mip pass, so a third client is a widening of a
-//      >> block that has a contract and a test, not a mux invented here.
-//      >>
-//      >> WHAT IS GENUINELY LEFT ON THE READ SIDE is therefore small and
-//      >> nameable: (a) the streamer PUSHES (`v_vi_o` is its output) while bake
-//      >> PULLS (`vtx_vi_o` is bake's output), so the join is a cursor-match
-//      >> adapter -- not a memory, not a reorder buffer; (b) `vtx_nobake_i`,
-//      >> the section 3.3 corner shadow, is the one DIG input the stream does
-//      >> not carry and it has no producer anywhere.
-//
-//      >> AND THE BLOCKER NOBODY HAD WRITTEN DOWN IS ON THE OTHER SIDE:
-//      >> **`sc_*`, BAKE'S LAYER-B SCAR WRITEBACK, HAS NO CONSUMER ANYWHERE IN
-//      >> THIS TREE.** SEARCHED: `zhao_terrain_compcache_front` accepts
-//      >> cell-state writes (`cs_we_i`/`cs_w_ci_i`/`cs_w_cj_i`/
-//      >> `cs_w_substance_i`) and composed heights (`st_*`) and never a scar;
-//      >> `zhao_terrain_pagestream` is read-only; `zhao_terrain_writeback`
-//      >> writes the F SHEET, not layer B. Nothing in the closure writes a
-//      >> page's height layers at all.
-//      >>
-//      >> That inverts the shape of this refusal and is worth stating plainly:
-//      >> the DIG phase's INPUT is now served and its OUTPUT is the hole. A
-//      >> bake whose scar cannot be stored has not deformed anything -- it has
-//      >> computed a deformation and dropped it -- which is also, from the
-//      >> other end, why entry I27's deformation mark has no writer and why
-//      >> I28's writeback could not see a beat. One absent owner, three
-//      >> entries, and the previous reading had it filed under the wrong one.
-//
-//      >> CORRECTED 2026-09-20 (terrain8), AND THE CORRECTION RUNS TOWARD MORE
-//      >> MISSING WORK, WHICH IS WHY IT WAS NOT MADE. "The DIG phase's INPUT is
-//      >> now served" is true of layers A, B and C and FALSE of layer D, which
-//      >> this block needs on TWO ports, one per phase:
-//      >>    * `vtx_nobake_i` -- the section 3.3 corner shadow (already named
-//      >>      two paragraphs above, and it is a LAYER-D read, not a gap in the
-//      >>      A/B/C stream);
-//      >>    * `cell_state_i` with `cell_ci_o`/`cell_cj_o` -- the BREACH phase's
-//      >>      32x32 layer-D read-modify-write. **NOT RECORDED IN ANY ENTRY OR
-//      >>      HEADER BEFORE NOW.**
-//      >>
-//      >> **LAYER D HAS NO READER ANYWHERE IN THE MACHINE.**
-//      >> `zref_terrain_page.hpp:317` puts layer D at page offset 6,598.
-//      >> SEARCHED every .sv/.v/.txt/.qsf/.yml under `fpga/` for 6598, 6,598,
-//      >> `D_OFF` and kLayerDOff: ZERO hits that are a page offset -- the only
-//      >> matches are `d_off`/`rd_off` (FIELD and CMD.DMA variables a
-//      >> case-insensitive search picks up) and the area figure "6,598 ALM"
-//      >> quoted in three headers. Corroborating, from three directions:
-//      >> `zhao_terrain_pagestream.sv:251` reads exactly '{A_OFF, B_OFF, C_OFF};
-//      >> `zhao_terrain_pageloader` writes WHOLE pages at load and reads none
-//      >> back; `zhao_terrain_writeback` is layer F only (F_OFF = 10694).
-//      >> This is the same shape as the layer-E absence at offset 7,622 (entry
-//      >> I21 blocker 1, re-verified 2026-09-20 and still true): **TWO of the
-//      >> eight page layers have no reader, and both are on this block's
-//      >> critical path.**
-//      >>
-//      >> SO THE ARITHMETIC OF THE REFUSAL CHANGES. It is not one absent owner
-//      >> under three entries; it is FOUR unserved ports -- and they are ONE
-//      >> BLOCK, because every one of them needs the same residency SLOT, the
-//      >> same GENERATION and the same guard socket on the page pool, and bake
-//      >> processes one record at a time with strictly sequential phases.
-//      >> `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, ~~NOT BUILT,
-//      >> and deliberately with NO design/blocks.yml row~~ -- BUILT AND
-//      >> REGISTERED 2026-09-21 under ruling R210; struck by terrcmd, see the
-//      >> measurement above -- a mandatory
-//      >> capability that is not built is a gap, and this packet may not close
-//      >> one gap by opening another) specifies it: both faces port for port,
-//      >> what it must not own, the alignment argument, the
-//      >> `zhao_mem_share_wr .N(3) -> .N(4)` composition with no guard change
-//      >> and no new client id, both memory sizes per ruling R59, and the four
-//      >> owner decisions it surfaces.
-//      >> IT IS ALSO THE ONLY HONEST WRITER OF ENTRY I27's `terr_dm_*`, for the
-//      >> reason I27 itself gives: whoever drives the mark must hold the slot
-//      >> and generation the patch was served under, and this agent is the only
-//      >> thing in the proposal that does.
-//
-//      WHAT WOULD BE FIELD ROUTING, SAID SO NOBODY RE-DERIVES IT: the layer-D
-//      WRITE half matches. Bake's `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o`
-//      map onto `zhao_terrain_compcache_front`'s `cs_we_i`/`cs_w_substance_i`/
-//      `cs_w_ci_i`/`cs_w_cj_i` with only a 6-to-5 bit address narrowing, and
-//      that is the port the next paragraph exports. The gap is the block, not
-//      that seam.
-//
-//      AND READ THAT PARAGRAPH EXACTLY (2026-09-20, terrain8): the seam is real
-//      and it is NOT A PAGE WRITE. `zhao_terrain_compcache_front` is an ON-CHIP
-//      M10K mirror of one patch, double buffered; it has NO VRAM PORT AT ALL
-//      (swept its whole file for guard_/vram/beat_/burst: zero hits), and it
-//      stores `logic [1:0] sub_m` -- the SUBSTANCE field only, with
-//      `cs_w_substance_i` two bits wide. Bake deliberately preserves section
-//      3.3's flag bits (`zhao_terrain_bake_v2.sv:886`,
-//      `cs_state_o <= {cell_state_i[7:2], sub_out}`) and through this seam all
-//      SIX are DROPPED, while `cs_state_o` -- the byte that carries them -- has
-//      no consumer on it at all. Wiring it alone would let THIS FRAME's
-//      composed lattice see the new substance while the page keeps the old one:
-//      the flags are lost and the deformation dies at the next page load. Both
-//      consumers are wanted and they are DIFFERENT consumers; only the page
-//      write discharges terrain_rules section 7.
-//
-//      AND THE BLOCK TO COMPOSE IS NOT THE ONE THIS ENTRY USED TO NAME.
-//      `design/console_inventory.yml` already records `zhao_terrain_bake:
-//      superseded_by: zhao_terrain_bake_v2`, and v2's own first lines say it is
-//      "PORT-COMPATIBLE with zhao_terrain_bake: same ports, same laws, same
-//      counters, same handshake contracts", trading seven private multipliers
-//      and 1,089 flops for one operand-muxed multiply and one M10K. Under the
-//      ONLY-THE-LATEST-VERSION ruling v2 is what a composition packet may
-//      instantiate, and `design/prod_manifest.yml` 474 keeps v1 selected only
-//      "until fit gate T1 runs" on the structural DSP prediction. Pointing this
-//      entry at `zhao_terrain_bake.sv` would have sent the next packet to
-//      compose the superseded file, which is the trap that ruling is about.
-//
-//      WIDENED 2026-09-19 BY LAYER D (`terr_cc_cs_*`), TERRAIN.COMPCACHE's
-//      cell-state write port, and it is the same absent block from the other
-//      side: TERRAIN.BAKE emits `cs_event_o`/`cs_sub_o` and is the only thing
-//      in the tree that does. TERRAIN.PAGESTREAM reads planes A, B and C out of
-//      a page (offsets 64, 2242 and 4420) and does NOT read D, so the page's
-//      own copy of the plane has no reader either -- both halves of the gap are
-//      real and neither is closed by this packet.
-//
-//      TIEING IT TO ZERO WOULD HAVE BEEN INVISIBLE, which is why it is a port.
-//      spec/terrain_rules.md 3.3 makes 0 = SOLID, so a never-written plane
-//      reads as solid rock everywhere and every triangle TERRAIN.TESS emits
-//      from it is legitimate-looking terrain. There is no counter that could
-//      distinguish "the world is solid" from "nothing ever wrote the world".
-//      The cache's `cs_oob_o` is exported beside it, and reads zero because no
-//      write is attempted rather than because every write was in range.
+//      AND THE PORT DELETIONS, listed so the next reader can check them: eight
+//      `terr_dm_*`, four `terr_cc_cs_*` and `surf_res_ready_i` left the edge.
+//      `surf_res_taken_o` was ADDED in the last one's place so the accept
+//      stays observable -- the smoke's `records == texels_touched` assertion
+//      measures an accept, and an assertion that silently began measuring the
+//      OFFER would have been a gate quietly losing its meaning.)
 //
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
@@ -8226,14 +7728,13 @@ module zhao_console_core
   //      is what unpins the page.  What is left here is the deformation mark,
   //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
   //      caller is the same absent subpatch issuer as entry I21.
-  input  logic                    terr_dm_valid_i,
-  output logic                    terr_dm_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_dm_gen_i,
-  input  logic [31:0]             terr_dm_epoch_i,
-  input  logic                    terr_dm_bd_i,
-  input  logic                    terr_dm_f_i,
-  input  logic                    terr_dm_mips_i,
+  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
+  // the slot, the generation and the epoch the patch was served under, learns
+  // from `bake_done_i` that the record retired, and drives the directory
+  // directly. The eight ports are GONE from this edge rather than driven from
+  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
+  // by this: its first honest caller is lodfeed-with-the-devstore, and the
+  // devstore is composed but the lodfeed does not key on it yet.
 
   input  logic                    terr_chk_valid_i,
   input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
@@ -8305,11 +7806,9 @@ module zhao_console_core
   output logic [15:0]             terr_pt_trace_cmd_o,
   output logic [31:0]             terr_pt_programs_rejected_o,
 
-  // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
-  input  logic                    terr_cc_cs_we_i,
-  input  logic [4:0]              terr_cc_cs_ci_i,
-  input  logic [4:0]              terr_cc_cs_cj_i,
-  input  logic [1:0]              terr_cc_cs_substance_i,
+  // ---- I32 (extended), CLOSED 2026-09-21: TERRAIN.COMPCACHE's layer-D
+  // cell-state write is driven by TERRAIN.BAKE inside this module. The four
+  // ports are GONE from this edge rather than driven from it.
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
   // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
@@ -9216,9 +8715,13 @@ module zhao_console_core
   // rather than driven from it, which is the difference between a seam that
   // closed and a seam that acquired a producer.
 
-  // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
+  // I32 CLOSED 2026-09-21: `stamp_results` -> TERRAIN.SHEETSEAM -> TERRAIN.BAKE,
+  // all three composed at the end of this module. `surf_res_ready_i` is GONE
+  // from this edge rather than driven from it -- the difference between a seam
+  // that closed and a seam that acquired a producer -- and `surf_res_taken_o`
+  // replaces it so the accept stays observable from outside.
   output logic        surf_res_valid_o,
-  input  logic        surf_res_ready_i,
+  output logic        surf_res_taken_o,
   output logic [11:0] surf_res_texel_o,
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
@@ -10129,6 +9632,34 @@ module zhao_console_core
   // this copy exists only so the console can check its own rider against it,
   // and the guard is what catches the two drifting apart.
   localparam int unsigned GEOM_OWNER_W_C = 2;
+
+  // ==========================================================================
+  // THE BAKE CHAIN's FORWARD WIRES (2026-09-21, terrabake)
+  // ==========================================================================
+  // TERRAIN.BAKEREC -> TERRAIN.SHEETSEAM -> TERRAIN.BAKE, with TERRAIN.PAGEIO
+  // holding the page open under them, is composed at the END of this module,
+  // where the whole chain is argued in one place. Four of its consumers are
+  // ABOVE it and read these wires: the compose cache's invalidation (which
+  // must see a cell-state write), the compose cache's write port, the
+  // directory's deformation mark, and the build socket's fourth requester.
+  // They are declared here, once, rather than scattered at their first use.
+  wire        tbk_cs_valid, tbk_cs_ready;
+  wire [ 7:0] tbk_cs_state;
+  wire [ 5:0] tbk_cs_ci, tbk_cs_cj;
+  wire [ 1:0] tbk_cs_sub;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // TERRAIN.BAKE's two OBSERVATION outputs on this stream, named rather than
+  // left as empty connections. `cs_event_o` is section 3.4's transition -- the
+  // TRACE event -- and `cs_src_id_o` is the record's source id; neither is page
+  // state, and `design/contracts/TERRAIN.PAGEIO.md` section 2 says so in as
+  // many words: "they do not enter this block; they go to the trace and
+  // counter fabric". The trace fabric has no row for them yet, so they are
+  // sunk here with the reason attached instead of silently dropped.
+  wire        tbk_cs_event;
+  wire [15:0] tbk_cs_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire        tbk_cs_fire_c;
+  assign      tbk_cs_fire_c = tbk_cs_valid && tbk_cs_ready;
 
   // ==========================================================================
   // ELABORATION GUARDS.
@@ -12738,7 +12269,7 @@ module zhao_console_core
   // SERVES. See item 14's COHERENCE paragraph for why it errs wide.
   assign ptt_inval_c = tcc_fill_start || terr_cc_fill_done_o || tji_serve_release ||
                        terr_cc_serve_release_i ||
-                       terr_cc_cs_we_i || tpc_pos_we;
+                       tbk_cs_fire_c || tpc_pos_we;
   // THE PITCH THE SERVED LATTICE WAS PLACED AT -- HELD, NOT THE HEADER WIRE.
   //
   // The tap's own header asks for "the SAME net that drives
@@ -14309,6 +13840,55 @@ module zhao_console_core
   wire [ 1:0] surf_pg_status;
   wire [ 7:0] surf_pg_strength;
 
+  // ---- THE SHEET SHARE (2026-09-21, terrabake) -----------------------------
+  // Client A is SURFACE.STAMP above; client B is TERRAIN.SHEETSEAM's prefetch,
+  // composed with the bake chain at the end of this module. The seam's wires
+  // are declared HERE because the share is here and a `logic` must precede its
+  // first reference.
+  wire        ssh_a_pg_valid, ssh_a_pg_ready;
+  wire        ssh_b_pg_valid;
+  wire        ssh_s_req_valid, ssh_s_req_ready;
+  wire [ 1:0] ssh_s_req_op;
+  wire [31:0] ssh_s_req_handle;
+  wire [11:0] ssh_s_req_texel;
+  wire [15:0] ssh_s_req_src_id;
+  wire        ssm_req_valid, ssm_req_ready;
+  wire [ 1:0] ssm_req_op;
+  wire [31:0] ssm_req_handle;
+  wire [11:0] ssm_req_texel;
+  wire [15:0] ssm_req_src_id;
+  wire        ssm_pg_ready;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The share's own evidence. `ssh_busy`/`ssh_owner` are its state for a
+  // waveform, and the four counters are read by no port of this module; they
+  // are named here rather than left as empty connections so a reader can see
+  // that the decision was taken.
+  wire        ssh_busy, ssh_owner;
+  wire [31:0] ssh_a_reqs, ssh_b_reqs, ssh_pg_orphan, ssh_pg_op_mismatch;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TWO MORE OF THE BAKE CHAIN's FORWARD WIRES --------------------------
+  // `ssm_sr_ready` is the `stamp_results` SINK's ready and it is read by
+  // SURFACE.STAMP immediately below; `pio_dm_*` is TERRAIN.PAGEIO's
+  // deformation mark and it is read by the directory some 1,500 lines down.
+  // Both blocks are composed at the end of this module.
+  wire                    ssm_sr_ready;
+  wire                    pio_dm_valid, pio_dm_ready;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // THE POOL's EXTRA REFUSAL BIT. TERRAIN.PAGEIO carries TERR_MEMSLOT -- one
+  // bit wider than the directory's handle, so a computed slot of 1,024 cannot
+  // alias to slot 0 -- and the directory takes TERR_SLOTW. The top bit is
+  // structurally zero on this path because the block REFUSES a job at or
+  // beyond REGION_SLOTS (`jobs_refused_o`) rather than clamping it, and the
+  // job it is given is a TERR_SLOTW handle zero-extended upstream. A counter
+  // on it would report zero about a wire that cannot be set, which is not
+  // evidence about anything -- the same argument the unpin path makes.
+  wire [TERR_MEMSLOT-1:0] pio_dm_slot;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire [TERR_GENW-1:0]    pio_dm_gen;
+  wire [31:0]             pio_dm_epoch;
+  wire                    pio_dm_bd, pio_dm_f, pio_dm_mips;
+
   wire        surf_wr_valid, surf_wr_ready;
   wire [31:0] surf_wr_handle;
   wire [11:0] surf_wr_texel;
@@ -14496,9 +14076,13 @@ module zhao_console_core
     .req_texel_o (surf_req_texel),
     .req_src_id_o(surf_req_src_id),
 
-    // REAL: SURFACE.SHEET's page responses.
-    .pg_valid_i   (surf_pg_valid),
-    .pg_ready_o   (surf_pg_ready),
+    // REAL: SURFACE.SHEET's page responses, through `u_surface_sheetshare`
+    // from 2026-09-21. THE DATA IS BROADCAST AND THE HANDSHAKE IS DEMUXED --
+    // the share's own law, and the reason it is a share and not a buffer: no
+    // response is stored, copied or reordered. `surf_pg_status`/`_strength`
+    // are the store's own wires, unchanged; only the valid/ready moved.
+    .pg_valid_i   (ssh_a_pg_valid),
+    .pg_ready_o   (ssh_a_pg_ready),
     .pg_status_i  (surf_pg_status),
     .pg_strength_i(surf_pg_strength),
 
@@ -14513,9 +14097,18 @@ module zhao_console_core
     .wr_we_strength_o (surf_wr_we_strength),
     .wr_src_id_o      (surf_wr_src_id),
 
-    // I32: TERRAIN.BAKE is not composed.
+    // I32, CLOSED 2026-09-21. `stamp_results` HAS ITS NAMED CONSUMER: the
+    // ready comes from `u_terrain_sheetseam`'s `before`-plane sink, which is
+    // what SURFACE.STAMP's decision S3 has specified since the stamp was
+    // written -- "TERRAIN.BAKE ... NEEDS THE DELTA, NOT JUST THE NEW VALUE".
+    // The DATA outputs stay on this module's edge as observation, which is
+    // what they were for before a consumer existed; only the ready moved
+    // inside, because a consumer whose ready comes from the harness is not a
+    // consumer. `surf_res_taken_o` carries the accept out in its place so the
+    // smoke's `records == texels_touched` assertion still measures the accept
+    // and not the offer.
     .res_valid_o   (surf_res_valid_o),
-    .res_ready_i   (surf_res_ready_i),
+    .res_ready_i   (ssm_sr_ready),
     .res_texel_o   (surf_res_texel_o),
     .res_tag_o     (surf_res_tag_o),
     .res_strength_o(surf_res_strength_o),
@@ -14536,13 +14129,19 @@ module zhao_console_core
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // REAL: SURFACE.STAMP is the only requester.
-    .req_valid_i (surf_req_valid),
-    .req_ready_o (surf_req_ready),
-    .req_op_i    (surf_req_op),
-    .req_handle_i(surf_req_handle),
-    .req_texel_i (surf_req_texel),
-    .req_src_id_i(surf_req_src_id),
+    // TWO REQUESTERS FROM 2026-09-21, THROUGH A BLOCK WITH A CONTRACT.
+    // SURFACE.STAMP is client A and TERRAIN.SHEETSEAM is client B, shared by
+    // `u_surface_sheetshare` (`zhao_surface_sheetshare`) -- the two-client
+    // round robin entry I32 asked for BY TYPE. The seam issues OP_READ and
+    // nothing else, so it can neither allocate a blank sheet (R221's refused
+    // "dig zero" in a residency costume) nor steal one of SURF_SLOTS from the
+    // only block terrain_rules section 7 allows to write layer F.
+    .req_valid_i (ssh_s_req_valid),
+    .req_ready_o (ssh_s_req_ready),
+    .req_op_i    (ssh_s_req_op),
+    .req_handle_i(ssh_s_req_handle),
+    .req_texel_i (ssh_s_req_texel),
+    .req_src_id_i(ssh_s_req_src_id),
 
     // REAL: the response stream. STAMP takes `status` and `strength`; the
     // other three leave this module as evidence (see the port declarations).
@@ -14573,6 +14172,69 @@ module zhao_console_core
 
     .surface_texels_touched_o(surf_sheet_texels_touched_o),
     .idle_o                  (surf_sheet_idle_o)
+  );
+
+  // ==========================================================================
+  // SURFACE.SHEETSHARE -- the two-client round robin entry I32 specified
+  // ==========================================================================
+  // I32's third absence was ARBITRATION: "`zhao_surface_sheet` IS COMPOSED in
+  // this module and holds layer F, so the sheet is NOT missing ... But its
+  // request port is annotated 'REAL: SURFACE.STAMP is the only requester'.
+  // Whatever reads layer F for the dig is its SECOND requester, and choosing
+  // between them is a scheduler, which a composer may not write."
+  //
+  // It is not written here. `zhao_surface_sheetshare` is that block, built
+  // 2026-09-21 under ruling R221, at the exact type the entry names, with its
+  // round robin ADOPTED from `zhao_terrain_psmux` rather than re-decided and
+  // both priority orders rejected in its own header with their numbers.
+  //
+  // THE PRICE OF THE SECOND CLIENT IS MEASURED, NOT ASSUMED, and it is the
+  // number SURFACE.STAMP's S3 was worried about: the round robin bounds both
+  // clients at one beat, and the seam measured the stamp waiting ZERO cycles
+  // with its own prefetch going 1,091 -> 1,092. S3's rate-budget concern is
+  // real in principle and about 0.1% here.
+  zhao_surface_sheetshare u_surface_sheetshare (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // CLIENT A -- SURFACE.STAMP. The player's own action; it is never made to
+    // wait for a bake by anything but one in-flight beat.
+    .a_req_valid_i (surf_req_valid),
+    .a_req_ready_o (surf_req_ready),
+    .a_req_op_i    (surf_req_op),
+    .a_req_handle_i(surf_req_handle),
+    .a_req_texel_i (surf_req_texel),
+    .a_req_src_id_i(surf_req_src_id),
+    .a_pg_valid_o  (ssh_a_pg_valid),
+    .a_pg_ready_i  (ssh_a_pg_ready),
+
+    // CLIENT B -- TERRAIN.SHEETSEAM's 1,089-texel prefetch. OP_READ only.
+    .b_req_valid_i (ssm_req_valid),
+    .b_req_ready_o (ssm_req_ready),
+    .b_req_op_i    (ssm_req_op),
+    .b_req_handle_i(ssm_req_handle),
+    .b_req_texel_i (ssm_req_texel),
+    .b_req_src_id_i(ssm_req_src_id),
+    .b_pg_valid_o  (ssh_b_pg_valid),
+    .b_pg_ready_i  (ssm_pg_ready),
+
+    // THE STORE.
+    .s_req_valid_o (ssh_s_req_valid),
+    .s_req_ready_i (ssh_s_req_ready),
+    .s_req_op_o    (ssh_s_req_op),
+    .s_req_handle_o(ssh_s_req_handle),
+    .s_req_texel_o (ssh_s_req_texel),
+    .s_req_src_id_o(ssh_s_req_src_id),
+    .s_pg_valid_i  (surf_pg_valid),
+    .s_pg_ready_o  (surf_pg_ready),
+    .s_pg_op_i     (surf_pg_op_o),
+
+    .busy_o           (ssh_busy),
+    .owner_o          (ssh_owner),
+    .a_reqs_o         (ssh_a_reqs),
+    .b_reqs_o         (ssh_b_reqs),
+    .pg_orphan_o      (ssh_pg_orphan),
+    .pg_op_mismatch_o (ssh_pg_op_mismatch)
   );
 
   // ==========================================================================
@@ -14670,46 +14332,71 @@ module zhao_console_core
   logic                    bsk_beat_valid, bsk_beat_last;
   logic [63:0]             bsk_beat_data;
 
-  zhao_guard_req_t [2:0]       bs_req;
-  zhao_guard_rsp_t [2:0]       bs_rsp;
+  // REQUESTER 3 IS TERRAIN.PAGEIO, added 2026-09-21 (terrabake). It is the
+  // only requester on this share that both READS and WRITES -- layer D in,
+  // layers B and D out -- which is why `zhao_mem_share_wr` and not
+  // `zhao_mem_share_n` is the block underneath. MEM.GUARD needs no change and
+  // no new client id: `zhao_mem_guard.sv`'s `terrain_ok` requires `req.write`
+  // and `terrain_rd_ok` requires `!req.write`, both already under
+  // ZHAO_CLIENT_TERRAIN_BUILD, so both directions are already admitted.
+  // The block is composed ~6,000 lines below; these wires are declared here
+  // because the share is.
+  zhao_guard_req_t         pio_g_req;
+  zhao_guard_rsp_t         pio_g_rsp;
+  logic [63:0]             pio_g_wdata;
+  logic                    pio_g_wvalid, pio_g_wlast, pio_g_wready;
+  logic                    pio_g_beat_valid, pio_g_beat_last;
+  logic [63:0]             pio_g_beat_data;
+
+  zhao_guard_req_t [3:0]       bs_req;
+  zhao_guard_rsp_t [3:0]       bs_rsp;
   logic            [63:0]      bs_beat_data;
-  logic            [2:0][63:0] bs_wdata;
-  logic            [2:0]       bs_wvalid, bs_wlast;
+  logic            [3:0][63:0] bs_wdata;
+  logic            [3:0]       bs_wvalid, bs_wlast;
   /* verilator lint_off UNUSEDSIGNAL */
   // Beats for requesters 0 and 1 (the two writers never read, so the share
   // never routes them one), requester 2's write ready (the read share never
   // writes), and the two retirement streams nobody consumes -- see below.
-  logic            [2:0]       bs_beat_valid, bs_beat_last;
-  logic            [2:0]       bs_wready;
-  logic            [2:0][7:0]  bs_retire;
+  logic            [3:0]       bs_beat_valid, bs_beat_last;
+  logic            [3:0]       bs_wready;
+  logic            [3:0][7:0]  bs_retire;
   // Per-requester job counts, the share's own denial/short/long/unowned and
   // ledger counters, and the retirement streams of the two requesters that do
   // not consume one: TERRAIN.PAGELOADER publishes on its last beat's
   // acceptance (the pool is read back through the SAME client, so the
   // arbiter's per-slot order already puts its reads after its writes), and a
   // read's retirement means nothing to a reader. All sunk here, named.
-  logic            [2:0][31:0] bs_jobs;
+  logic            [3:0][31:0] bs_jobs;
   logic [31:0]                 bs_denied, bs_short, bs_long, bs_unowned, bs_ledger_full;
   /* verilator lint_on UNUSEDSIGNAL */
 
   assign bs_req[0]      = upl_guard_req;
   assign bs_req[1]      = tpl_g_req;
   assign bs_req[2]      = trs_m_req;
+  assign bs_req[3]      = pio_g_req;
   assign upl_guard_rsp  = bs_rsp[0];
   assign tpl_g_rsp      = bs_rsp[1];
   assign trs_m_rsp      = bs_rsp[2];
-  assign bs_wdata       = {64'd0, tpl_g_wdata, upl_wdata};
-  assign bs_wvalid      = {1'b0, tpl_g_wvalid, upl_wvalid};
-  assign bs_wlast       = {1'b0, tpl_g_wlast, upl_wlast};
+  assign pio_g_rsp      = bs_rsp[3];
+  assign bs_wdata       = {pio_g_wdata, 64'd0, tpl_g_wdata, upl_wdata};
+  assign bs_wvalid      = {pio_g_wvalid, 1'b0, tpl_g_wvalid, upl_wvalid};
+  assign bs_wlast       = {pio_g_wlast, 1'b0, tpl_g_wlast, upl_wlast};
   assign upl_wready     = bs_wready[0];
   assign tpl_g_wready   = bs_wready[1];
+  assign pio_g_wready   = bs_wready[3];
   assign upl_retire_words = bs_retire[0];
   assign trs_m_beat_valid = bs_beat_valid[2];
   assign trs_m_beat_last  = bs_beat_last[2];
   assign trs_m_beat_data  = bs_beat_data;
+  // The beat DATA is broadcast by the share and the HANDSHAKE is demuxed, the
+  // same law the read share and the streamer already work under -- so both
+  // readers take `bs_beat_data` and only their own `bs_beat_valid` bit.
+  assign pio_g_beat_valid = bs_beat_valid[3];
+  assign pio_g_beat_last  = bs_beat_last[3];
+  assign pio_g_beat_data  = bs_beat_data;
 
   zhao_mem_share_wr #(
-    .N         (3),
+    .N         (4),
     .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
     .RQ        (4)
   ) u_build_share (
@@ -16095,16 +15782,34 @@ module zhao_console_core
     .fin_ok_i   (tres_fin_a_v ? tpl_fin_ok    : tmf_fin_ok),
     .fin_crc_i  (tres_fin_a_v ? tpl_fin_crc   : tmf_fin_crc),
 
-    // I27: TERRAIN.BAKE marks a page dirty and the compose engine unpins it on
-    // job completion. Neither is composed, so both leave the module.
-    .dm_valid_i(terr_dm_valid_i),
-    .dm_ready_o(terr_dm_ready_o),
-    .dm_slot_i (terr_dm_slot_i),
-    .dm_gen_i  (terr_dm_gen_i),
-    .dm_epoch_i(terr_dm_epoch_i),
-    .dm_bd_i   (terr_dm_bd_i),
-    .dm_f_i    (terr_dm_f_i),
-    .dm_mips_i (terr_dm_mips_i),
+    // I27's FIRST HALF, CLOSED 2026-09-21. The mark's writer is
+    // `u_terrain_pageio`, not TERRAIN.BAKE -- which is the correction entry
+    // I27 made against itself on 2026-09-20 and the reason it commissioned a
+    // third block: bake has no `slot`, no generation, no epoch and no
+    // per-layer dirty bit anywhere on it, and never learns the page identity
+    // of the patch it digs. PAGEIO takes all four on its job port, holds them
+    // across the bake, and learns from `bake_done_i` that the record retired.
+    //
+    // THE GENERATION DOES NOT BUMP, which is OWNER DECISION 2 of
+    // `design/contracts/TERRAIN.PAGEIO.md` taken as that section recommends:
+    // the slot still holds the same patch, and the per-layer dirty bits are
+    // the mechanism for "this content moved". Bumping it would make every
+    // handle held across a bake stale and start `terr_chk_stale_o` firing on
+    // live handles -- so the two halves of I27 are coupled, and the coupling
+    // is a decision rather than an accident.
+    //
+    // THE SLOT NARROWS and the bit it drops is structurally zero: PAGEIO
+    // REFUSES a job whose slot is at or beyond REGION_SLOTS rather than
+    // clamping it (`jobs_refused_o`), and the job it is given here is the
+    // directory's own TERR_SLOTW handle zero-extended one block upstream.
+    .dm_valid_i(pio_dm_valid),
+    .dm_ready_o(pio_dm_ready),
+    .dm_slot_i (pio_dm_slot[TERR_SLOTW-1:0]),
+    .dm_gen_i  (pio_dm_gen),
+    .dm_epoch_i(pio_dm_epoch),
+    .dm_bd_i   (pio_dm_bd),
+    .dm_f_i    (pio_dm_f),
+    .dm_mips_i (pio_dm_mips),
 
     .pin_valid_i(tsq_pin_valid),
     .pin_ready_o(tsq_pin_ready),
@@ -18134,10 +17839,29 @@ module zhao_console_core
 
     // I32, extended: layer D.  TERRAIN.BAKE writes cell substance and is not
     // composed; TERRAIN.PAGESTREAM reads planes A, B and C and not D.
-    .cs_we_i         (terr_cc_cs_we_i),
-    .cs_w_ci_i       (terr_cc_cs_ci_i),
-    .cs_w_cj_i       (terr_cc_cs_cj_i),
-    .cs_w_substance_i(terr_cc_cs_substance_i),
+    // REAL FROM 2026-09-21: TERRAIN.BAKE's layer-D cell-state write, which
+    // entry I32 named as this port's only producer in the tree and which was a
+    // module boundary until the bake chain composed.
+    //
+    // READ WHAT CROSSES AND WHAT DOES NOT. This cache stores `logic [1:0]
+    // sub_m` -- the SUBSTANCE field and nothing else -- while bake deliberately
+    // preserves section 3.3's flag bits (`cs_state_o <= {cell_state_i[7:2],
+    // sub_out}`). So through THIS seam the upper six bits including kNoBakeBit
+    // are DROPPED, and that is correct rather than a loss: the FULL byte goes
+    // to `u_terrain_pageio` and into the page, which is what discharges
+    // terrain_rules section 7. Two consumers, two different things wanted.
+    // Wiring only this one would have let THIS frame's composed lattice see the
+    // new substance while the page kept the old one, and the deformation would
+    // have died at the next page load.
+    //
+    // THE ADDRESS NARROWS 6 -> 5 AND IT IS A REFUSAL, NOT A CLAMP, one level
+    // out: bake's cursor runs 0..CELLS-1 = 0..31 over a 32x32 plane, so bit 5
+    // is structurally zero on this path, and the cache's own `cs_oob_o` counts
+    // anything that arrives out of range.
+    .cs_we_i         (tbk_cs_fire_c),
+    .cs_w_ci_i       (tbk_cs_ci[4:0]),
+    .cs_w_cj_i       (tbk_cs_cj[4:0]),
+    .cs_w_substance_i(tbk_cs_sub),
 
     .dual_i(tps_v_flags[TERR_FLAG_DUAL_BIT]),
 
@@ -19636,24 +19360,29 @@ module zhao_console_core
     .a_done_valid_o(tps_done_valid),
     .a_done_ready_i(tres_unpin_ready),
 
-    // CLIENT B -- the mip pass.
-    .b_j_valid_i (tmf_ps_valid),
-    .b_j_ready_o (tmf_ps_ready),
-    .b_j_slot_i  (tmf_ps_slot),
-    .b_j_gen_i   (tmf_ps_gen),
-    .b_j_epoch_i (tmf_ps_epoch),
-    .b_j_src_id_i(tmf_ps_src_id),
-    // TIED, AND THE REASON IS THE BENCH'S OWN.  The streamer carries T5's
-    // record flags as identity because TERRAIN.PATCH's compose lane needs
-    // `kFlagDual`; MIPGEN decimates heights and has no use for any of them, so
-    // TERRAIN.MIPFEED has no flags port.  A passthrough nobody reads would be
-    // worse than this zero, which says plainly that nothing on this path wants
-    // them.
-    .b_j_flags_i (16'd0),
-    .b_v_valid_o (tmf_v_valid),
-    .b_v_ready_i (tmf_v_ready),
-    .b_done_valid_o(tmf_done_valid),
-    .b_done_ready_i(tmf_done_ready),
+    // CLIENT B -- A SECOND INSTANCE OF THIS SAME BLOCK from 2026-09-21, which
+    // carries the mip pass AND the bake's lattice pass below it. The share is
+    // two-client by contract and a third client was wanted; CHAINING is how
+    // that is had without widening a block that has a test, and without
+    // writing an arbiter inline -- "arbitration is state, state belongs in a
+    // file with a contract and a test", which is this block's own header.
+    //
+    // THE ORDER IS DELIBERATE. The compose door stays client A of the OUTER
+    // share, so a frame's own lattice is never made to wait behind a bake or a
+    // mip pass by more than one job; the two background passes share what is
+    // left between themselves. Round robin at both levels, so neither
+    // background pass can starve the other.
+    .b_j_valid_i (ps2_p_j_valid),
+    .b_j_ready_o (ps2_p_j_ready),
+    .b_j_slot_i  (ps2_p_j_slot),
+    .b_j_gen_i   (ps2_p_j_gen),
+    .b_j_epoch_i (ps2_p_j_epoch),
+    .b_j_src_id_i(ps2_p_j_src_id),
+    .b_j_flags_i (ps2_p_j_flags),
+    .b_v_valid_o (ps2_p_v_valid),
+    .b_v_ready_i (ps2_p_v_ready),
+    .b_done_valid_o(ps2_p_done_valid),
+    .b_done_ready_i(ps2_p_done_ready),
 
     // THE SHARED STREAMER.
     .p_j_valid_o (tpsx_j_valid),
@@ -19674,6 +19403,95 @@ module zhao_console_core
     .b_jobs_o    (terr_psmux_b_jobs_o),
     .stray_v_o   (terr_psmux_stray_v_o),
     .stray_done_o(terr_psmux_stray_done_o)
+  );
+
+  // ---- THE INNER SHARE: the bake's lattice pass and the mip pass -----------
+  // Same block, same parameters, chained under client B above. Its client A is
+  // TERRAIN.BAKEREC's lattice pass, composed at the end of this module; its
+  // client B is TERRAIN.MIPFEED, which used to sit directly on the outer
+  // share and is wired here unchanged, `16'd0` flags and all.
+  wire                  ps2_a_j_valid, ps2_a_j_ready;
+  wire [TERR_MEMSLOT-1:0] ps2_a_j_slot;
+  wire [TERR_GENW-1:0]  ps2_a_j_gen;
+  wire [31:0]           ps2_a_j_epoch, ps2_a_j_src_id;
+  wire [15:0]           ps2_a_j_flags;
+  wire                  ps2_a_v_valid, ps2_a_v_ready;
+  wire                  ps2_a_done_valid, ps2_a_done_ready;
+
+  wire                  ps2_p_j_valid, ps2_p_j_ready;
+  wire [TERR_MEMSLOT-1:0] ps2_p_j_slot;
+  wire [TERR_GENW-1:0]  ps2_p_j_gen;
+  wire [31:0]           ps2_p_j_epoch, ps2_p_j_src_id;
+  wire [15:0]           ps2_p_j_flags;
+  wire                  ps2_p_v_valid, ps2_p_v_ready;
+  wire                  ps2_p_done_valid, ps2_p_done_ready;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The inner share's own state and counters, read by no port of this module.
+  wire                  ps2_busy, ps2_owner;
+  wire [31:0]           ps2_a_jobs, ps2_b_jobs, ps2_stray_v, ps2_stray_done;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_psmux #(
+    .SLOTW(TERR_MEMSLOT),
+    .GENW (TERR_GENW)
+  ) u_terrain_psmux2 (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // CLIENT A -- the BAKE's lattice pass (layers A, B and C for the dig).
+    .a_j_valid_i (ps2_a_j_valid),
+    .a_j_ready_o (ps2_a_j_ready),
+    .a_j_slot_i  (ps2_a_j_slot),
+    .a_j_gen_i   (ps2_a_j_gen),
+    .a_j_epoch_i (ps2_a_j_epoch),
+    .a_j_src_id_i(ps2_a_j_src_id),
+    // REAL, and NOT the zero the mip pass gets: the dig reads layer C on a
+    // dual-surface page, so `kFlagDual` has to survive the share. The flags
+    // come from TERRAIN.HDRREAD's forwarded job, carried by TERRAIN.BAKEREC.
+    .a_j_flags_i (ps2_a_j_flags),
+    .a_v_valid_o (ps2_a_v_valid),
+    .a_v_ready_i (ps2_a_v_ready),
+    .a_done_valid_o(ps2_a_done_valid),
+    .a_done_ready_i(ps2_a_done_ready),
+
+    // CLIENT B -- the mip pass, moved down one level and otherwise unchanged.
+    .b_j_valid_i (tmf_ps_valid),
+    .b_j_ready_o (tmf_ps_ready),
+    .b_j_slot_i  (tmf_ps_slot),
+    .b_j_gen_i   (tmf_ps_gen),
+    .b_j_epoch_i (tmf_ps_epoch),
+    .b_j_src_id_i(tmf_ps_src_id),
+    // TIED, AND THE REASON IS THE BENCH'S OWN.  The streamer carries T5's
+    // record flags as identity because TERRAIN.PATCH's compose lane needs
+    // `kFlagDual`; MIPGEN decimates heights and has no use for any of them, so
+    // TERRAIN.MIPFEED has no flags port.  A passthrough nobody reads would be
+    // worse than this zero, which says plainly that nothing on this path wants
+    // them.
+    .b_j_flags_i (16'd0),
+    .b_v_valid_o (tmf_v_valid),
+    .b_v_ready_i (tmf_v_ready),
+    .b_done_valid_o(tmf_done_valid),
+    .b_done_ready_i(tmf_done_ready),
+
+    // UP to the outer share.
+    .p_j_valid_o (ps2_p_j_valid),
+    .p_j_ready_i (ps2_p_j_ready),
+    .p_j_slot_o  (ps2_p_j_slot),
+    .p_j_gen_o   (ps2_p_j_gen),
+    .p_j_epoch_o (ps2_p_j_epoch),
+    .p_j_src_id_o(ps2_p_j_src_id),
+    .p_j_flags_o (ps2_p_j_flags),
+    .p_v_valid_i (ps2_p_v_valid),
+    .p_v_ready_o (ps2_p_v_ready),
+    .p_done_valid_i(ps2_p_done_valid),
+    .p_done_ready_o(ps2_p_done_ready),
+
+    .busy_o      (ps2_busy),
+    .owner_o     (ps2_owner),
+    .a_jobs_o    (ps2_a_jobs),
+    .b_jobs_o    (ps2_b_jobs),
+    .stray_v_o   (ps2_stray_v),
+    .stray_done_o(ps2_stray_done)
   );
 
   // ---- TERRAIN.MIPREQ ------------------------------------------------------
@@ -20781,6 +20599,549 @@ module zhao_console_core
     .decision_wait_clocks_o(tji_decision_wait),
     .issue_clocks_o        (tji_issue_clocks),
     .busy_o                (tji_busy)
+  );
+
+  // ==========================================================================
+  // THE BAKE CHAIN -- ENTRY I32, AND I27's DEFORMATION MARK, CLOSED
+  // ==========================================================================
+  // TERRAIN.BAKEREC -> TERRAIN.SHEETSEAM -> TERRAIN.BAKE, with TERRAIN.PAGEIO
+  // holding the page open underneath all three. FIVE blocks land together and
+  // that is not ambition: every one of them is a PRODUCER whose only consumer
+  // is another of them, so composing any one alone forces a tie-off and the
+  // register does not move. Seven lanes refused this seam a block at a time
+  // and each refusal was locally correct.
+  //
+  // WHAT EACH ONE IS FOR, in the order a record travels:
+  //
+  //   `u_terrain_bakerec`    forms the patch-bake record off CMD.EXEC's
+  //                          ratified SurfaceStamp arm and SURFACE.DISPATCH's
+  //                          envelope, and holds the page identity it watched
+  //                          TERRAIN.HDRREAD forward. I32: "WHAT IS MISSING IS
+  //                          A THIRD BLOCK BETWEEN THEM."
+  //   `u_terrain_pageio`     serves the FOUR bake ports nothing in the machine
+  //                          served -- layer D had ZERO readers anywhere under
+  //                          `fpga/`, layers B and D had no writer -- and is
+  //                          the only thing that holds the slot, generation
+  //                          and epoch the patch was served under, which is
+  //                          why it and not bake writes `terr_dm_*`.
+  //   `u_terrain_sheetseam`  reads layer F at the rate the dig needs it, under
+  //                          R221's ST_MISS law, and carries R231's `before`
+  //                          plane so what bake ADDS to an accumulating scar
+  //                          is a CHANGE and not an absolute depth.
+  //   `u_terrain_bake`       the dig itself (`zhao_terrain_bake_v2`): R194's
+  //                          per-vertex sheet mode as R231 amended it, and the
+  //                          ratified parametric disc on the fallback.
+  //   `u_terrain_psmux2`     above, with the outer share: the lattice pass.
+  //
+  // AND THE ONE THING THIS DOES **NOT** CLOSE, said here because the entry it
+  // half-closes will otherwise be read as closed: I27's SECOND half,
+  // `terr_chk_*`, is untouched. Its first honest caller is
+  // lodfeed-with-the-devstore and the lodfeed does not key on the store yet.
+  // The two halves of I27 have different roots and only one of them is here.
+  // ==========================================================================
+
+  // ---- the record producer's wires ----------------------------------------
+  wire                    brc_io_valid;
+  wire [TERR_MEMSLOT-1:0] brc_io_slot;
+  wire [TERR_GENW-1:0]    brc_io_gen;
+  wire [31:0]             brc_io_epoch, brc_io_src_id;
+  wire                    brc_io_done_ready;
+  wire                    brc_job_valid, brc_job_want_sheet;
+  wire [31:0]             brc_job_handle;
+  wire [15:0]             brc_job_src_id;
+  wire [15:0]             brc_cmd_patch_id, brc_cmd_src_id;
+  wire signed [31:0]      brc_cmd_cx, brc_cmd_cz, brc_cmd_radius;
+  wire signed [31:0]      brc_cmd_depth_from, brc_cmd_depth_to;
+  wire signed [31:0]      brc_cmd_env_x0, brc_cmd_env_z0, brc_cmd_env_x1, brc_cmd_env_z1;
+  wire                    brc_cmd_dual, brc_cmd_cells;
+
+  // ---- the seam's wires ----------------------------------------------------
+  wire                    ssm_job_ready;
+  wire                    ssm_bk_valid, ssm_bk_depth_sheet, ssm_bk_fallback;
+  wire [ 7:0]             ssm_sheet_strength, ssm_sheet_before;
+  wire                    ssm_str_valid;
+
+  // ---- the dig's wires -----------------------------------------------------
+  wire                    tbk_cmd_ready;
+  wire [ 5:0]             tbk_vtx_vi, tbk_vtx_vj;
+  wire                    tbk_vtx_ready;
+  wire [11:0]             tbk_sheet_texel;
+  wire                    tbk_sc_valid;
+  wire signed [15:0]      tbk_sc_scar;
+  wire [ 5:0]             tbk_sc_vi, tbk_sc_vj;
+  wire [ 5:0]             tbk_cell_ci, tbk_cell_cj;
+  wire                    tbk_cell_valid, tbk_cell_ready;
+  wire [ 7:0]             tbk_cell_state;
+  wire                    tbk_dig_done, tbk_bake_done;
+
+  // ---- the page agent's wires ----------------------------------------------
+  wire                    pio_j_ready, pio_serving;
+  wire                    pio_nb;
+  wire                    pio_sc_ready, pio_cs_ready;
+  wire                    pio_done_valid;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  // THE CHAIN's EVIDENCE. Every one of these is a real counter on a composed
+  // block, read by no port of this module, and named here rather than left as
+  // an empty connection so that the decision is visible. The blocks' own
+  // directed suites assert them; `design/blocks.yml` maps each to its port.
+  // When the trace fabric gains room these are the rows to promote first --
+  // `brc_records_dropped` (a LOST scar), `ssm_fallbacks` (R221 fired) and
+  // `pio_stale_gen` (a bake against a page that moved) before any other.
+  wire [31:0] brc_stamps_seen, brc_records_queued, brc_coalesced, brc_overflow;
+  wire [31:0] brc_unplaced, brc_records_issued, brc_records_retired;
+  wire [31:0] brc_records_retried, brc_records_dropped, brc_aged_out;
+  wire [31:0] brc_stray_done;
+  wire        brc_idle;
+  wire [31:0] ssm_jobs, ssm_sheet_served, ssm_fallbacks, ssm_miss_texels;
+  wire [31:0] ssm_prefetch_beats, ssm_refetches, ssm_dig_stall, ssm_bad_texels;
+  wire [31:0] ssm_stray_done, ssm_before_texels, ssm_sr_dropped, ssm_before_torn;
+  wire        ssm_idle;
+  wire        tbk_budget_full, tbk_breach_active, tbk_idle;
+  wire [ 7:0] tbk_bakes_this_frame;
+  wire [15:0] tbk_trace_patch_id;
+  wire        tbk_sc_touched, tbk_sc_meets, tbk_sc_clamped;
+  wire [15:0] tbk_sc_src_id;
+  wire [31:0] tbk_surface_texels, tbk_breach_events, tbk_scar_sats;
+  wire [31:0] tbk_nobake_clamps, tbk_radius_rejects, tbk_sheet_vertices_dug;
+  wire [31:0] pio_pages_read, pio_pages_written, pio_guard_denied;
+  wire [31:0] pio_bursts_read, pio_bursts_written, pio_stale_gen;
+  wire [31:0] pio_marks_emitted, pio_jobs_refused, pio_nobake_mutated;
+  wire [31:0] pio_cell_refetch;
+  wire        pio_done_ok, pio_idle;
+  wire [ 3:0] pio_done_verdict;
+  wire [TERR_MEMSLOT-1:0] pio_done_slot;
+  wire [31:0] pio_done_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- THE PATCH IDENTITY OF THE PAGE BEING FORWARDED ----------------------
+  // HELD, NOT THE HEADER WIRE, and for the same reason the served lattice's
+  // pitch is held a few thousand lines above: TERRAIN.HDRREAD accepts the job,
+  // spends a burst reading the page header, and only THEN offers the job to
+  // the streamer's share, so `h_patch_ix_o` is the header's answer on the
+  // cycle a header is being presented and not on the cycle the job moves on.
+  //
+  // What is held is the JOB's own `tis_ix`/`tis_iz` -- the directory record's
+  // identity, which the header reader CHECKS the page's copy against
+  // (`ident_fails_o`). The block takes one job at a time (`j_ready_o` is low
+  // while it is busy), so the pair held here always belongs to the job now
+  // being forwarded.
+  logic signed [15:0] bkr_pg_ix_q, bkr_pg_iz_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      bkr_pg_ix_q <= 16'sd0;
+      bkr_pg_iz_q <= 16'sd0;
+    end else if (tis_valid && tce_can_start && thr_j_ready) begin
+      bkr_pg_ix_q <= tis_ix;
+      bkr_pg_iz_q <= tis_iz;
+    end
+  end
+
+  zhao_terrain_bakerec #(
+    .SLOTW  (TERR_MEMSLOT),
+    .GENW   (TERR_GENW),
+    .DEPTH  (2),
+    .RETRIES(3),
+    .MAX_AGE(8),
+    // R221's fallback digs NOTHING and the record is RE-QUEUED. The block's
+    // header carries the whole argument and the two branches it rejects; the
+    // short form is that an ABSOLUTE depth added to an accumulating scar is
+    // exactly the defect owner ruling R231 repaired, and a fabricated
+    // `from`/`to` pair is an art value invented inside a composition.
+    .FALLBACK_DEPTH_FROM(32'sd0),
+    .FALLBACK_DEPTH_TO  (32'sd0),
+    .DUAL_BIT      (TERR_FLAG_DUAL_BIT),
+    // LAYER D IS PRESENT because `u_terrain_pageio` below reads it out of the
+    // page before it serves a vertex and writes it back after. This parameter
+    // is the statement of that fact, and it is a parameter because a console
+    // composed WITHOUT the page agent would have to set it low.
+    .CELLS_PRESENT (1'b1)
+  ) u_terrain_bakerec (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .frame_start_i(core_tick_c),
+
+    // THE STAMP, on SURFACE.STAMP's own accept. `u_surface_dispatch.cmd_fire_i`
+    // is the same expression, which is what makes the envelope and the command
+    // structurally simultaneous rather than simultaneous by inspection.
+    .st_fire_i       (surf_cmd_valid_m && surf_cmd_ready_int),
+    .st_patch_valid_i(sd_patch_valid_c),
+    .st_handle_i     (surf_cmd_handle_m),
+    .st_patch_ix_i   (surf_disp_patch_ix_o),
+    .st_patch_iz_i   (surf_disp_patch_iz_o),
+    .st_cx_i         (surf_cmd_tx_m),
+    .st_cz_i         (surf_cmd_ty_m),
+    .st_radius_i     (surf_cmd_radius_m),
+    .st_env_x0_i     (sd_env_x0_c),
+    .st_env_z0_i     (sd_env_z0_c),
+    .st_env_x1_i     (sd_env_x1_c),
+    .st_env_z1_i     (sd_env_z1_c),
+    .st_src_id_i     (surf_cmd_src_id_m),
+
+    // THE PAGE, watched off the header reader's forward handshake.
+    .pg_fire_i (thr_f_valid && tps_j_ready),
+    .pg_ix_i   (bkr_pg_ix_q),
+    .pg_iz_i   (bkr_pg_iz_q),
+    .pg_slot_i (thr_f_slot),
+    .pg_gen_i  (thr_f_gen),
+    .pg_epoch_i(thr_f_epoch),
+    .pg_flags_i(thr_f_flags),
+
+    .io_valid_o     (brc_io_valid),
+    .io_ready_i     (pio_j_ready),
+    .io_slot_o      (brc_io_slot),
+    .io_gen_o       (brc_io_gen),
+    .io_epoch_o     (brc_io_epoch),
+    .io_src_id_o    (brc_io_src_id),
+    .io_serving_i   (pio_serving),
+    .io_done_valid_i(pio_done_valid),
+    .io_done_ready_o(brc_io_done_ready),
+
+    .job_valid_o     (brc_job_valid),
+    .job_ready_i     (ssm_job_ready),
+    .job_handle_o    (brc_job_handle),
+    .job_want_sheet_o(brc_job_want_sheet),
+    .job_src_id_o    (brc_job_src_id),
+    .bk_valid_i      (ssm_bk_valid),
+    .bk_ready_i      (tbk_cmd_ready),
+    .bk_fallback_i   (ssm_bk_fallback),
+
+    .cmd_patch_id_o  (brc_cmd_patch_id),
+    .cmd_cx_o        (brc_cmd_cx),
+    .cmd_cz_o        (brc_cmd_cz),
+    .cmd_radius_o    (brc_cmd_radius),
+    .cmd_depth_from_o(brc_cmd_depth_from),
+    .cmd_depth_to_o  (brc_cmd_depth_to),
+    .cmd_env_x0_o    (brc_cmd_env_x0),
+    .cmd_env_z0_o    (brc_cmd_env_z0),
+    .cmd_env_x1_o    (brc_cmd_env_x1),
+    .cmd_env_z1_o    (brc_cmd_env_z1),
+    .cmd_dual_o      (brc_cmd_dual),
+    .cmd_cells_o     (brc_cmd_cells),
+    .cmd_src_id_o    (brc_cmd_src_id),
+
+    .ps_j_valid_o   (ps2_a_j_valid),
+    .ps_j_ready_i   (ps2_a_j_ready),
+    .ps_j_slot_o    (ps2_a_j_slot),
+    .ps_j_gen_o     (ps2_a_j_gen),
+    .ps_j_epoch_o   (ps2_a_j_epoch),
+    .ps_j_src_id_o  (ps2_a_j_src_id),
+    .ps_j_flags_o   (ps2_a_j_flags),
+    .ps_done_valid_i(ps2_a_done_valid),
+    .ps_done_ready_o(ps2_a_done_ready),
+
+    .bake_done_i(tbk_bake_done),
+
+    .stamps_seen_o    (brc_stamps_seen),
+    .records_queued_o (brc_records_queued),
+    .coalesced_o      (brc_coalesced),
+    .overflow_o       (brc_overflow),
+    .unplaced_o       (brc_unplaced),
+    .records_issued_o (brc_records_issued),
+    .records_retired_o(brc_records_retired),
+    .records_retried_o(brc_records_retried),
+    .records_dropped_o(brc_records_dropped),
+    .aged_out_o       (brc_aged_out),
+    .stray_done_o     (brc_stray_done),
+    .idle_o           (brc_idle)
+  );
+
+  // ==========================================================================
+  // TERRAIN.SHEETSEAM -- layer F at the dig's rate, R221 and R231
+  // ==========================================================================
+  zhao_terrain_sheetseam u_terrain_sheetseam (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .job_valid_i     (brc_job_valid),
+    .job_ready_o     (ssm_job_ready),
+    // CARRIED, NOT DERIVED. `zhao_surface_sheet`'s choice C4: the handle is
+    // the identity the ABI carries, and a second identity law invented inside
+    // a record producer is exactly what entry I32 warns the next packet off.
+    .job_handle_i    (brc_job_handle),
+    .job_want_sheet_i(brc_job_want_sheet),
+    .job_src_id_i    (brc_job_src_id),
+
+    .bk_valid_o      (ssm_bk_valid),
+    .bk_ready_i      (tbk_cmd_ready),
+    .bk_depth_sheet_o(ssm_bk_depth_sheet),
+    .bk_fallback_o   (ssm_bk_fallback),
+
+    .sheet_texel_i   (tbk_sheet_texel),
+    .sheet_strength_o(ssm_sheet_strength),
+    .sheet_before_o  (ssm_sheet_before),
+    .str_valid_o     (ssm_str_valid),
+    .dig_ready_i     (tbk_vtx_ready),
+    .bake_done_i     (tbk_bake_done),
+
+    // CLIENT B of the sheet share, composed with the store far above.
+    .req_valid_o  (ssm_req_valid),
+    .req_ready_i  (ssm_req_ready),
+    .req_op_o     (ssm_req_op),
+    .req_handle_o (ssm_req_handle),
+    .req_texel_o  (ssm_req_texel),
+    .req_src_id_o (ssm_req_src_id),
+    .pg_valid_i   (ssh_b_pg_valid),
+    .pg_ready_o   (ssm_pg_ready),
+    .pg_status_i  (surf_pg_status),
+    .pg_strength_i(surf_pg_strength),
+
+    // THE `stamp_results` SINK -- entry I32's named port, with a consumer at
+    // last. `sr_ready_o` is constant high by the block's own decision: the
+    // stamp is the PLAYER'S OWN ACTION and a seam that backpressured it would
+    // drop frames to protect a bake, so a result the plane cannot hold is
+    // DROPPED AND COUNTED rather than stalling the store.
+    .sr_valid_i (surf_res_valid_o),
+    .sr_ready_o (ssm_sr_ready),
+    .sr_handle_i(surf_res_handle_o),
+    .sr_texel_i (surf_res_texel_o),
+    .sr_before_i(surf_res_before_o),
+
+    .jobs_o            (ssm_jobs),
+    .sheet_served_o    (ssm_sheet_served),
+    .fallbacks_o       (ssm_fallbacks),
+    .miss_texels_o     (ssm_miss_texels),
+    .prefetch_beats_o  (ssm_prefetch_beats),
+    .refetches_o       (ssm_refetches),
+    .dig_stall_cycles_o(ssm_dig_stall),
+    .bad_texels_o      (ssm_bad_texels),
+    .stray_done_o      (ssm_stray_done),
+    .before_texels_o   (ssm_before_texels),
+    .sr_dropped_o      (ssm_sr_dropped),
+    .before_torn_o     (ssm_before_torn),
+    .idle_o            (ssm_idle)
+  );
+
+  assign surf_res_taken_o = surf_res_valid_o && ssm_sr_ready;
+
+  // ==========================================================================
+  // TERRAIN.BAKE -- v2, and v2 ONLY
+  // ==========================================================================
+  // `design/console_inventory.yml` records `zhao_terrain_bake:
+  // superseded_by: zhao_terrain_bake_v2`, and v2's own first lines say it is
+  // "PORT-COMPATIBLE with zhao_terrain_bake: same ports, same laws, same
+  // counters, same handshake contracts", trading seven private multipliers and
+  // 1,089 flops for one operand-muxed multiply and one M10K. Under the
+  // ONLY-THE-LATEST-VERSION ruling v2 is what may be instantiated here.
+  //
+  // THE VERTEX JOIN, and it is the one piece of glue in this chain.
+  // TERRAIN.PAGESTREAM PUSHES (`v_vi_o` is its output) and this block PULLS
+  // (`vtx_vi_o` is its output). Both walk the 33x33 lattice with vi as the
+  // FAST axis and vj as the slow one, both from (0,0), and both hold their
+  // beat under ready/valid -- so the join is an AND of two valids and not a
+  // reorder buffer, a cursor FIFO or a memory. The equality is nevertheless
+  // ASSERTED below rather than assumed, because "they agree by construction"
+  // is the claim this file exists to stop anyone making silently.
+  //
+  // `ssm_str_valid` is the seam's own instruction: "AND this into bake's
+  // `vtx_valid_i`", and it is HIGH throughout a record that is not on the
+  // sheet law, so a disc record or an R221 fallback runs at full speed.
+  wire tbk_vtx_valid_c = ps2_a_v_valid && ssm_str_valid;
+  assign ps2_a_v_ready = tbk_vtx_ready && ssm_str_valid;
+
+  // synthesis translate_off
+  // AN ASSERTION AND NOT A COUNTER, deliberately. A desync between the two
+  // cursors is unreachable while both walkers are correct, so a counter here
+  // would read zero for ever and owe a committed mutant to say anything at
+  // all; the seam's own two-reads-in-flight invariant made the same call for
+  // the same reason. What WOULD catch a stray beat is
+  // `u_terrain_psmux2.stray_v_o`, which is a real counter on a reachable
+  // state. Note the two sides are clocked by DIFFERENT things -- the
+  // streamer's walk and this block's dig cursor -- so this comparison can see
+  // a timing fault and not only a value fault.
+  always_ff @(posedge gpu_clk) begin
+    if (rst_n && tbk_vtx_valid_c && tbk_vtx_ready
+        && ((tps_v_vi != tbk_vtx_vi) || (tps_v_vj != tbk_vtx_vj)))
+      $fatal(1, "zhao_console_core: bake/pagestream cursor desync");
+  end
+  // synthesis translate_on
+
+  zhao_terrain_bake_v2 u_terrain_bake (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .frame_start_i     (core_tick_c),
+    .budget_full_o     (tbk_budget_full),
+    .bakes_this_frame_o(tbk_bakes_this_frame),
+
+    // THE RECORD. `cmd_valid_i` comes from the SEAM and not from the producer,
+    // because the seam holds the record back for the whole 1,089-texel
+    // prefetch and then decides ONE field of it -- R221's `bk_depth_sheet_o`.
+    .cmd_valid_i      (ssm_bk_valid),
+    .cmd_ready_o      (tbk_cmd_ready),
+    .cmd_patch_id_i   (brc_cmd_patch_id),
+    .cmd_cx_i         (brc_cmd_cx),
+    .cmd_cz_i         (brc_cmd_cz),
+    .cmd_radius_i     (brc_cmd_radius),
+    .cmd_depth_from_i (brc_cmd_depth_from),
+    .cmd_depth_to_i   (brc_cmd_depth_to),
+    .cmd_env_x0_i     (brc_cmd_env_x0),
+    .cmd_env_z0_i     (brc_cmd_env_z0),
+    .cmd_env_x1_i     (brc_cmd_env_x1),
+    .cmd_env_z1_i     (brc_cmd_env_z1),
+    .cmd_dual_i       (brc_cmd_dual),
+    .cmd_cells_i      (brc_cmd_cells),
+    .cmd_src_id_i     (brc_cmd_src_id),
+    .cmd_depth_sheet_i(ssm_bk_depth_sheet),
+    .trace_patch_id_o (tbk_trace_patch_id),
+
+    .vtx_vi_o    (tbk_vtx_vi),
+    .vtx_vj_o    (tbk_vtx_vj),
+    .vtx_valid_i (tbk_vtx_valid_c),
+    .vtx_ready_o (tbk_vtx_ready),
+    .vtx_base_i  (tps_v_base),
+    .vtx_scar_i  (tps_v_scar),
+    .vtx_bottom_i(tps_v_bottom),
+    // THE SECTION 3.3 CORNER SHADOW, out of layer D. This is the input entry
+    // I32 recorded as having "no producer anywhere", and it is a LAYER-D read
+    // rather than a hole in the A/B/C stream -- which is why the page agent
+    // and not the streamer serves it.
+    .vtx_nobake_i(pio_nb),
+
+    .sheet_texel_o   (tbk_sheet_texel),
+    .sheet_strength_i(ssm_sheet_strength),
+    .sheet_before_i  (ssm_sheet_before),
+
+    .sc_valid_o  (tbk_sc_valid),
+    .sc_ready_i  (pio_sc_ready),
+    .sc_scar_o   (tbk_sc_scar),
+    .sc_vi_o     (tbk_sc_vi),
+    .sc_vj_o     (tbk_sc_vj),
+    .sc_touched_o(tbk_sc_touched),
+    .sc_meets_o  (tbk_sc_meets),
+    .sc_clamped_o(tbk_sc_clamped),
+    .sc_src_id_o (tbk_sc_src_id),
+
+    .cell_ci_o   (tbk_cell_ci),
+    .cell_cj_o   (tbk_cell_cj),
+    .cell_valid_i(tbk_cell_valid),
+    .cell_ready_o(tbk_cell_ready),
+    .cell_state_i(tbk_cell_state),
+
+    .cs_valid_o (tbk_cs_valid),
+    .cs_ready_i (tbk_cs_ready),
+    .cs_state_o (tbk_cs_state),
+    .cs_ci_o    (tbk_cs_ci),
+    .cs_cj_o    (tbk_cs_cj),
+    .cs_event_o (tbk_cs_event),
+    .cs_sub_o   (tbk_cs_sub),
+    .cs_src_id_o(tbk_cs_src_id),
+
+    .dig_done_o              (tbk_dig_done),
+    .bake_done_o             (tbk_bake_done),
+    .breach_active_o         (tbk_breach_active),
+    .surface_texels_touched_o(tbk_surface_texels),
+    .breach_events_o         (tbk_breach_events),
+    .scar_saturations_o      (tbk_scar_sats),
+    .nobake_clamps_o         (tbk_nobake_clamps),
+    .bake_radius_rejects_o   (tbk_radius_rejects),
+    .sheet_vertices_dug_o    (tbk_sheet_vertices_dug),
+    .idle_o                  (tbk_idle)
+  );
+
+  // THE CELL-STATE WRITE HAS TWO CONSUMERS AND ONE READY, which is correct
+  // rather than a shortcut: `u_terrain_compcache_front`'s `cs_we_i` is a
+  // fire-and-forget write port with no ready at all, so the page agent -- the
+  // one that can refuse -- owns the handshake and the cache takes the same
+  // accepted beat. A cache that could backpressure would need a share; it
+  // cannot, so it does not.
+  assign tbk_cs_ready = pio_cs_ready;
+
+  // ==========================================================================
+  // TERRAIN.PAGEIO -- the page window: layer D in, layers B and D out
+  // ==========================================================================
+  zhao_terrain_pageio #(
+    .PAGE_BYTES  (TERR_PAGE_BYTES),
+    .REGION_BASE (TERR_POOL_BASE),
+    .REGION_SLOTS(TERR_POOL_SLOTS),
+    .SLOTW       (TERR_MEMSLOT),
+    .GENW        (TERR_GENW)
+  ) u_terrain_pageio (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_epoch_i      (terr_cfg_epoch_i),
+
+    .j_valid_i (brc_io_valid),
+    .j_ready_o (pio_j_ready),
+    .j_slot_i  (brc_io_slot),
+    .j_gen_i   (brc_io_gen),
+    .j_epoch_i (brc_io_epoch),
+    .j_src_id_i(brc_io_src_id),
+
+    // REQUESTER 3 of the build socket's write-capable share. Both directions
+    // on one client id; see the share's own note far above.
+    .guard_req_o   (pio_g_req),
+    .guard_rsp_i   (pio_g_rsp),
+    .beat_valid_i  (pio_g_beat_valid),
+    .beat_data_i   (pio_g_beat_data),
+    .beat_last_i   (pio_g_beat_last),
+    .guard_wdata_o (pio_g_wdata),
+    .guard_wvalid_o(pio_g_wvalid),
+    .guard_wready_i(pio_g_wready),
+    .guard_wlast_o (pio_g_wlast),
+
+    // THE BAKE FACE. `nb_o` is COMBINATIONAL on the dig cursor and is only
+    // meaningful once `serving_o` is high, which is the interlock
+    // `u_terrain_bakerec` waits on before it offers the seam its job.
+    .nb_vi_i (tbk_vtx_vi),
+    .nb_vj_i (tbk_vtx_vj),
+    .nb_req_i(tbk_vtx_valid_c),
+    .nb_o    (pio_nb),
+
+    .cell_ci_i   (tbk_cell_ci),
+    .cell_cj_i   (tbk_cell_cj),
+    .cell_valid_o(tbk_cell_valid),
+    .cell_ready_i(tbk_cell_ready),
+    .cell_state_o(tbk_cell_state),
+
+    .sc_valid_i(tbk_sc_valid),
+    .sc_ready_o(pio_sc_ready),
+    .sc_scar_i (tbk_sc_scar),
+    .sc_vi_i   (tbk_sc_vi),
+    .sc_vj_i   (tbk_sc_vj),
+
+    // THE FULL BYTE, flags included -- the other consumer of this stream, the
+    // compose cache far above, takes the SUBSTANCE only. Both are wanted.
+    .cs_valid_i(tbk_cs_valid),
+    .cs_ready_o(pio_cs_ready),
+    .cs_state_i(tbk_cs_state),
+    .cs_ci_i   (tbk_cs_ci),
+    .cs_cj_i   (tbk_cs_cj),
+
+    .dig_done_i (tbk_dig_done),
+    .bake_done_i(tbk_bake_done),
+
+    .dm_valid_o(pio_dm_valid),
+    .dm_ready_i(pio_dm_ready),
+    .dm_slot_o (pio_dm_slot),
+    .dm_gen_o  (pio_dm_gen),
+    .dm_epoch_o(pio_dm_epoch),
+    .dm_bd_o   (pio_dm_bd),
+    .dm_f_o    (pio_dm_f),
+    .dm_mips_o (pio_dm_mips),
+
+    .done_valid_o  (pio_done_valid),
+    .done_ready_i  (brc_io_done_ready),
+    .done_ok_o     (pio_done_ok),
+    .done_verdict_o(pio_done_verdict),
+    .done_slot_o   (pio_done_slot),
+    .done_src_id_o (pio_done_src_id),
+
+    .pages_read_o    (pio_pages_read),
+    .pages_written_o (pio_pages_written),
+    .guard_denied_o  (pio_guard_denied),
+    .bursts_read_o   (pio_bursts_read),
+    .bursts_written_o(pio_bursts_written),
+    .stale_gen_o     (pio_stale_gen),
+    .marks_emitted_o (pio_marks_emitted),
+    .jobs_refused_o  (pio_jobs_refused),
+    .nobake_mutated_o(pio_nobake_mutated),
+    .cell_refetch_o  (pio_cell_refetch),
+    .serving_o       (pio_serving),
+    .idle_o          (pio_idle)
   );
 
   // ==========================================================================

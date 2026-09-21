@@ -613,10 +613,8 @@ module tb_zhao_console_core_smoke
   logic [15:0]             terr_pt_trace_cmd_o;
   logic [31:0]             terr_pt_programs_rejected_o;
 
-  logic                    terr_cc_cs_we_i;
-  logic [4:0]              terr_cc_cs_ci_i;
-  logic [4:0]              terr_cc_cs_cj_i;
-  logic [1:0]              terr_cc_cs_substance_i;
+  // (`terr_cc_cs_*` LEFT THE CORE's EDGE 2026-09-21, core entry I32: the
+  // compose cache's layer-D write is driven by TERRAIN.BAKE inside the core.)
   // `terr_cc_serve_release_i` is OR-ed with `zhao_terrain_jobissue`'s release
   // inside the core: a harness that drives a job by hand must be able to
   // retire the patch it drove.
@@ -652,14 +650,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_cc_lat_oob_o;
   logic [31:0]             terr_cc_cs_oob_o;
 
-  logic                    terr_dm_valid_i;
-  logic                    terr_dm_ready_o;
-  logic [TERR_SLOTW_C-1:0] terr_dm_slot_i;
-  logic [TERR_GENW_C-1:0]  terr_dm_gen_i;
-  logic [31:0]             terr_dm_epoch_i;
-  logic                    terr_dm_bd_i;
-  logic                    terr_dm_f_i;
-  logic                    terr_dm_mips_i;
+  // (`terr_dm_*` LEFT THE CORE's EDGE 2026-09-21, core entry I27's first half:
+  // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
+  // served under and marks the directory itself.)
 
   logic                    terr_chk_valid_i;
   logic [TERR_SLOTW_C-1:0] terr_chk_slot_i;
@@ -1437,7 +1430,7 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_pc_evictions_o;
   logic        [ 3:0] fld_pc_occupancy_o;
   logic               surf_res_valid_o;
-  logic               surf_res_ready_i;
+  logic               surf_res_taken_o;   // the ACCEPT, exported 2026-09-21
   logic        [11:0] surf_res_texel_o;
   logic        [ 7:0] surf_res_tag_o;
   logic        [ 7:0] surf_res_strength_o;
@@ -1891,7 +1884,13 @@ module tb_zhao_console_core_smoke
       if (surf_res_overflow_o)   surf_overflow_seen_q <= 1'b1;
       if (surf_sheet_wr_miss_o)  surf_wr_miss_seen_q  <= 1'b1;
       if (surf_stamp_done_o)     surf_done_seen_q     <= 1'b1;
-      if (surf_res_valid_o && surf_res_ready_i)
+      // THE ACCEPT, NOT THE OFFER. `surf_res_ready_i` left this edge when
+      // TERRAIN.SHEETSEAM became the consumer; `surf_res_taken_o` is the core's
+      // own `valid && ready` in its place, so this count still measures a beat
+      // that MOVED. Counting `surf_res_valid_o` alone would have turned the
+      // `records == texels_touched` check below into a check of the offer,
+      // which is a gate quietly losing its meaning.
+      if (surf_res_taken_o)
         surf_res_records_q <= surf_res_records_q + 32'd1;
     end
   end
@@ -2020,12 +2019,16 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  // I32: TERRAIN.BAKE does not exist, so this bench plays its consumer and is
-  // ALWAYS READY. That is not a convenience: `s2_accept` inside SURFACE.STAMP
-  // requires the RESULT beat to be taken as well as the write, so a low
-  // `res_ready` would stall the pair and both texel counters would read zero
-  // for a reason that has nothing to do with the seam under test.
-  assign surf_res_ready_i = 1'b1;
+  // I32 CLOSED 2026-09-21. TERRAIN.BAKE IS COMPOSED, so this bench no longer
+  // plays its consumer: `res_ready` comes from `zhao_terrain_sheetseam`'s
+  // `before`-plane sink inside the core, which is constant high by that
+  // block's own decision -- the stamp is the player's own action and a seam
+  // that backpressured it would drop frames to protect a bake. The paragraph
+  // that stood here warned that a LOW ready would stall `s2_accept` and read
+  // both texel counters as zero; that hazard is unchanged and is now the
+  // core's to honour rather than the bench's. `surf_res_taken_o` is the ACCEPT
+  // the core exports in the input's place, and the check at the end of this
+  // bench counts it rather than the offer.
 
   // The command's payload is constant; only `valid` moves. Holding the fields
   // steady is what the block's contract expects of a dispatch and it keeps the
@@ -3809,29 +3812,23 @@ module tb_zhao_console_core_smoke
     terr_pt_fld_add_z1_i = '0;
     terr_pt_fld_add_hash_i = '0;
     terr_pt_fld_add_cmd_i = '0;
-    // I32: layer D. No writer is composed, so the plane is never written and
-    // every cell reads SOLID, which terrain_rules 3.3 makes the zero encoding.
-    terr_cc_cs_we_i = '0;
-    terr_cc_cs_ci_i = '0;
-    terr_cc_cs_cj_i = '0;
-    terr_cc_cs_substance_i = '0;
-    // I21: the served patch's retirement. Never pulsed here, because the block
-    // that would pulse it is the absent subpatch issuer.
-    terr_dm_valid_i = '0;
-    terr_dm_slot_i = '0;
-    terr_dm_gen_i = '0;
-    terr_dm_epoch_i = '0;
-    terr_dm_bd_i = '0;
-    terr_dm_f_i = '0;
-    terr_dm_mips_i = '0;
+    // (I32: layer D's writer and I27's deformation mark are both INSIDE the
+    // core from 2026-09-21, so there is nothing here to hold at zero. The
+    // plane still reads SOLID through this run for a different reason: no
+    // page this bench loads passes the header identity check, so no bake
+    // record ever gets a page identity and none is ever issued.)
     terr_chk_valid_i = '0;
     terr_chk_slot_i = '0;
     terr_chk_gen_i = '0;
     terr_chk_epoch_i = '0;
-    // TERRAIN.WRITEBACK IS COMPOSED (entry I28 closed) and this bench CANNOT
-    // REACH IT: a writeback job needs a dirty-F eviction, and `terr_dm_f_i` is
-    // never raised here -- nor could a page become resident to be dirtied,
-    // since every page this bench loads fails the header identity check. So
+    // TERRAIN.WRITEBACK IS COMPOSED (entry I28 closed) and this bench STILL
+    // CANNOT REACH IT, for a reason that CHANGED on 2026-09-21 and is worth
+    // stating rather than inheriting: the mark is no longer a harness input
+    // that is simply never raised -- `zhao_terrain_pageio` raises it, and
+    // `dm_f_o` is low on a bake anyway because a bake dirties B and D and does
+    // not touch the F sheet. What still stops a dirty-F eviction here is the
+    // older half: no page this bench loads passes the header identity check,
+    // so none becomes resident to be dirtied at all. So
     // the played SW.STREAM posts NO grants and sends NO ACKs, and the end of
     // the run asserts that no job ever reached the doorbell. The traversal is
     // tests/terrain/world_composed_directed.cpp's, which composes the same

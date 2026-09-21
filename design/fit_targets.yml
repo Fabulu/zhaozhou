@@ -3245,6 +3245,16 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_spdesc.sv
       - fpga/rtl/terrain/zhao_terrain_lod.sv
       - fpga/rtl/terrain/zhao_terrain_jobissue.sv
+      # ---- THE BAKE CHAIN, composed 2026-09-21 (core entries I32, I27) ------
+      # `zhao_terrain_stampdepth` is a LEAF of `zhao_terrain_bake_v2` -- two
+      # instances of it, the absolute law and the `before` it is differenced
+      # against under owner ruling R231 -- and is listed before its user.
+      - fpga/rtl/terrain/zhao_terrain_stampdepth.sv
+      - fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+      - fpga/rtl/surface/zhao_surface_sheetshare.sv
+      - fpga/rtl/terrain/zhao_terrain_sheetseam.sv
+      - fpga/rtl/terrain/zhao_terrain_pageio.sv
+      - fpga/rtl/terrain/zhao_terrain_bakerec.sv
       # ---- FIELD v3, composed 2026-09-19 (core entry I42) -------------------
       # THE LATEST VERSION, AND ONLY THE LATEST. An earlier revision of this
       # packet put FIELD v1 here -- `zhao_field_seq` and its op units -- because
