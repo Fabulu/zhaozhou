@@ -1,7 +1,7 @@
 # Task Log: RUN-20260921-1811 - [Describe objective here]
 
 **Created:** 2026-09-21 18:11 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260921-1811-manafold-pass23/
 
 ---
@@ -186,3 +186,53 @@ lesson, in the session whose whole job was checking whether someone else's
 claims survived scrutiny -- and it was caught by looking at what the command
 actually did rather than at the fact that it succeeded. `git commit` printed
 success both times.
+
+### 2026-09-22 - PUBLISHED and production-verified. Status: Complete.
+
+Review verdict was FIXED, so Part 2 ran in the pass-22 order.
+
+- **Archive first:** 44/44 pass-22 files verified against the published receipt,
+  copied to `archive-p22-manafold-*`, copies re-hashed, 43,665,082 bytes. One
+  new generation, 22 clips declared once, note SEVENTEEN -> EIGHTEEN distinct
+  generations. checkarchive gained the lock and four selftest legs.
+- **The bank:** 22 subjects, 7,992 frames, ONE invocation, RC 0, from the
+  reviewer's own build. Frame counts verified against the frames ON DISK, which
+  mattered: interleaved debug output carried a CR that ate the start of one
+  subject's log line, so names are resolved from disk and matched by suffix.
+- **Scope, NAMED:** exactly 4 of 22 moved (drift, damage, death-drop,
+  death-gutter); 18 byte-identical across 7,992 frames. Trajectories rise into
+  the press and return to exactly zero; drift's loop seam is exact.
+- **Looking:** complete every-frame sheets for all 22, each CHECKED to hold its
+  full frame count. Damage read in full. Worst-changed frames opened at 4x and
+  correct. The f414 any-change spike is sub-perceptual, confirmed by eye.
+- **Encode** RC 0, 22/22. Gates all green with real exit codes; full decode
+  1,640/1,640.
+- **Deploy** RC 0 -> https://upheaval.pages.dev (alias dfecbade). Wrangler
+  uploaded exactly 25 new files -- 22 videos + 2 posters + index -- which is
+  the set the receipts predicted.
+- **Production: 63/63 on BOTH hosts, 0 mismatches, 0 retries**, all 16 index
+  checks true, index byte-equal to the local deployed file. 18 archive spot
+  checks across all six locked generations. The verifier was selftested on
+  broken copies FIRST; 10 negatives fire, three of them new this pass.
+- **Cleanup:** both frame roots, the sheets and scratch-reel deleted; a sweep
+  found 15,984 more `.rgb` (4.2 GB) left by my own matrix's live-history legs
+  and removed those too. **Zero `.rgb` remain in either tree.** The committed
+  purge tool reports the only remaining 2.83 GB is the sibling creature
+  directory, out of Direction 24's named scope.
+
+### Two instrument findings from the publish phase
+
+**Pass 22's bank-manifest CRC column does not describe what pass 22 shipped.**
+Against it all 22 pass-23 subjects "changed", which cannot be true when 18 are
+untouched. Pass 22's own identity receipt, a fresh exact-off render and --
+decisively -- the LOSSLESS poster stills coming out byte-identical to pass 22's
+published posters all agree against that manifest. Its SHA was published as
+provenance. Pass 23 does not compare against it.
+
+**The video encoder is not byte-reproducible.** The same 600 frames encoded
+twice give different bitstreams of identical length, so a video hash can never
+prove a clip did not change. Frames are the evidence. A poster is not a
+positive control either: drift is a CHANGED clip whose poster matches, because
+frame 160 sits outside its press window.
+
+Final: Zhaozhou main `5b167ca9`, Upheaval main `0d805d75` (before this record).

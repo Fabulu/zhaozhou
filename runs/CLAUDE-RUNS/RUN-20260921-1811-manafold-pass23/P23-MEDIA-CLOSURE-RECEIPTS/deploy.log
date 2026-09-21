@@ -1,0 +1,18 @@
+﻿assemble: wrote C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public\index.html - 2 creature(s), 826 render(s)
+checkplayback: OK Fall is controls-only/non-looping and Hover remains autoplay+loop
+checkarchive: OK version-17 56/56 archive files, 70576645 bytes; version-18 44/44 archive files, 44743343 bytes, equal to the published version-18 receipt; pass-19 44/44 archive files, 44320731 bytes, equal to the published pass-19 receipt; pass-20 44/44 archive files, 44980318 bytes, equal to the published pass-20 receipt; pass-21 44/44 archive files, 43766439 bytes, equal to the published pass-21 receipt; pass-22 44/44 archive files, 43665082 bytes, equal to the published pass-22 receipt; live names match the pass-23 receipt 44/44; 5x22 locked-generation clips, 22+6 version-17 clips and 10 labs declared once; archived playback is controls+loop/no-autoplay/preload-none
+checkfresh: 22 rendered subject(s) -- 22 live fresh, 0 archived, 0 STALE, 0 absent, 0 unknown
+checkfresh: OK every live encoded clip is newer than its source; archived source exemptions are explicit
+checkmedia: 1640 declared files, 1640 decoded
+checkmedia: every declared file decodes
+
+ ⛅️ wrangler 4.86.0
+───────────────────
+Uploading... (1682/1707)
+Uploading... (1690/1707)
+Uploading... (1698/1707)
+Uploading... (1707/1707)
+✨ Success! Uploaded 25 files (1682 already uploaded) (13.19 sec)
+
+🌎 Deploying...
+✨ Deployment complete! Take a peek over at https://dfecbade.upheaval.pages.dev
