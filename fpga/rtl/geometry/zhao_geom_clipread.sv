@@ -26,11 +26,22 @@
 //       key   {index:24}
 //       row   {slot:8, base:32, extent:32, kind:8}   + generation:16
 //
-//   and it is already implemented, twice, in composed silicon:
-//   `zhao_mem_upload`'s `publish_{valid,slot,generation,tag,index,base,extent}`
-//   is the producer; `zhao_geom_drawjob`'s `dir_*` port is one consumer and
-//   `zhao_geom_ladderbank`'s `pub_*` port is the other. This block is the
-//   THIRD instance of one rule, not a fourth opinion about resident handles.
+//   and FOUR blocks in this tree already carry that shape. Stated exactly,
+//   because "already implemented" is the kind of claim this tree keeps finding
+//   half-true:
+//
+//     PRODUCER   `zhao_mem_upload`'s `publish_{valid,slot,generation,tag,
+//                index,base,extent}` -- COMPOSED (`zhao_console_core`).
+//     CONSUMER   `zhao_geom_drawjob`'s `dir_{we,entry,index,generation,base,
+//                extent}` -- COMPOSED, and driven from exactly those ports.
+//     CONSUMER   `zhao_material_resolve`'s `dir_{we,entry,set_index,
+//                generation,base,count}` -- BUILT, not composed.
+//     CONSUMER   `zhao_geom_ladderbank`'s `pub_{valid,tag,base,extent}` --
+//                BUILT, not composed, and parked behind R133 besides.
+//
+//   So the rule has one composed producer and one composed consumer, and this
+//   block is its fifth instance rather than a fourth opinion about resident
+//   handles.
 //
 // **THE EPOCH IS NOT ON THIS PORT, AND THAT IS A MECHANISM RATHER THAN AN
 // OMISSION.** Section 4.2 lists `generation` and `resource_epoch` on the
