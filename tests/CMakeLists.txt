@@ -4228,6 +4228,36 @@ verilate(test_twod_sampler_directed
 add_test(NAME twod_sampler_directed COMMAND test_twod_sampler_directed)
 set_tests_properties(twod_sampler_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# TWOD.BAND -- the descriptor-order-to-raster-order bridge (owner rulings R233
+# and R235, console entry I17). Case 4 is the one that matters: R235's refusal
+# counter must DISCRIMINATE, so the bench packs the bucket EXACTLY (zero
+# refusals), then adds one row (exactly one refusal), and then requires the
+# refused sprite to have drawn nothing in ANY band.
+add_executable(test_twod_band_directed compositor/twod_band_directed.cpp)
+target_link_libraries(test_twod_band_directed PRIVATE zhao_harness)
+verilate(test_twod_band_directed
+  PREFIX Vzhao_twod_band
+  TOP_MODULE zhao_twod_band
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_band.sv)
+add_test(NAME twod_band_directed COMMAND test_twod_band_directed)
+set_tests_properties(twod_band_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# The positive control for the LAW rather than for a counter: `BURST_PX` raised
+# past the FIFO slack is "admit everything", and the driver passes when
+# `band_underrun_o` FIRES and `sprites_refused_budget_o` stays ZERO. It is a
+# WRAPPER, not a copy -- it instantiates production with `.*` -- so it cannot
+# drift in its body, and `tools/design/wrapper_port_parity.py` checks the half
+# it can get wrong.
+add_executable(test_twod_band_burst_mutant mutants/twod_band_burst_mutant_driver.cpp)
+target_link_libraries(test_twod_band_burst_mutant PRIVATE zhao_harness)
+verilate(test_twod_band_burst_mutant
+  PREFIX Vzhao_twod_band_burst_mutant
+  TOP_MODULE zhao_twod_band_burst_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_twod_band_burst_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_band.sv)
+add_test(NAME twod_band_burst_mutant COMMAND test_twod_band_burst_mutant)
+set_tests_properties(twod_band_burst_mutant PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # PART.LADDER -- the representation ladder of the 2026-08-31 ruling. Its two
 # halves pull against each other: a particle MAY change representation while
 # alive (so there is hysteresis) and the simulation NEVER changes because of it
