@@ -2408,6 +2408,129 @@
 //      asked. The 2026-09-20 host register window (ruling R51) has nothing to
 //      do with any of it and closes none of it.
 //
+//      THAT PARAGRAPH IS STALE IN A WAY THAT COSTS THE NEXT PACKET A LANE, and
+//      it is corrected here rather than deleted because the correction is the
+//      useful part. It was written when THREE ports were open; one of them,
+//      `tri_flat_request_i`, closed the next day, and the texture lane's entry
+//      really was its blocker. THE OTHER TWO WERE NEVER THAT ENTRY's.
+//
+//      (That sentence is deliberately written WITHOUT the bare entry number at
+//      the head of a line, and this note is here so the next editor does not
+//      helpfully re-wrap it. `completion_register.py` finds entries with
+//      `^//\s*(I\d+)\.\s+`, matched against every line of this block -- so a
+//      wrapped sentence that merely BEGINS with an entry number silently
+//      REGISTERS A NEW GAP. Measured: it took the count 21 -> 22 with no RTL
+//      change whatever. The tool is already hardened against the opposite
+//      direction -- its own comment records a stray blank line truncating the
+//      walk and reading LOW -- and this is the complementary hazard, reading
+//      HIGH, which is at least the direction somebody audits. The exact guard,
+//      recorded rather than applied because twelve lanes are gating on this
+//      tool's number: the real entry ids are STRICTLY MONOTONIC (I9 I13 I14
+//      I17 I20 I21 I25 I27 I29 I32 I34 I40) and the phantom landed between I20
+//      and I21, so a monotonicity check catches it exactly. Tightening the
+//      indent instead would be wrong: `I9` is legitimately indented TWO spaces
+//      to align its digit with the two-digit entries.)
+//
+//      Walked field by field, 2026-09-21
+//      (tagprod): NOT ONE of the continuation tail's four fields is anywhere in
+//      MATERIAL.RESOLVE's output -- `zhao_material_resolve.sv`'s response port
+//      is status / has_record / record / quality_tier / sample_count /
+//      material_recipe / recipe_weight / base_binding / selector_overflow /
+//      palette_base / raster_state / flags / three samples' modes, and the tail
+//      wants a vertex colour, a vertex alpha, an effect tag and a stencil
+//      reference. A packet that read the sentence above and waited for I49
+//      would wait forever, and `tri_fragment_state_i` is in the same position.
+//
+//      SO THE TWO OPEN PORTS GET THEIR OWN BLOCKERS, ONE PER FIELD, EACH
+//      VERIFIED FIRST-HAND. This is the third refusal of this port -- FORGE-
+//      SHADOW refused it on 2026-09-20 from four constants, correctly -- and it
+//      is written out in full so there is not a fourth re-derivation:
+//
+//        vertex_rgb [47:24]  THE VERTEX's, and this entry has already said why
+//                  it is not a composer's to pick: GEOM.VATTR holds a PER-VERTEX
+//                  colour (R11), the tail is FLAT, and choosing a corner is an
+//                  art decision. There is no PROVOKING-VERTEX law in this tree
+//                  -- searched every .sv, .md, .hpp and .zidl; ZERO hits -- so
+//                  there is not even a convention to appeal to. OWNER DECISION.
+//        vertex_alpha [23:16] R89 ruled the route (flat, not a fourth attrpack
+//                  plane) and FORGE.SHADOW.md's own section records that the
+//                  VALUE has no producer: `zhao_forge_shadow`'s `strength_q`
+//                  comes from `cast_strength_i`, which has no producer in the
+//                  tree, no source in the ladder and no field in the ABI.
+//        effect_tag [15:8]   see below -- this one is not what it looks like.
+//        stencil_reference [7:0] NAMED HERE FOR THE FIRST TIME, because every
+//                  previous pass said "four constants" without saying which.
+//                  Searched `stencil_reference` and `sten_ref` across the whole
+//                  tree: the only producers are BENCH stimulus and the
+//                  `zhao_pair_fragment_tilestore` probe. No command carries a
+//                  stencil reference, no MaterialRecord field holds one, and
+//                  RASTER.FRAGMENT's own contract says it DEFINED the stencil
+//                  function set itself because "no spec in this repository
+//                  defines" one. A value whose ENUM was invented by its consumer
+//                  has no producer by construction. OWNER DECISION.
+//
+//      AND THE EFFECT TAG IS THE INTERESTING ONE, because half of it is already
+//      in this console and the seam is the OTHER open port. `spec/
+//      stars_and_flares.md` 1 is FROZEN: `tag = (channel << 6) | strength`,
+//      GLOW = 2'b01, and **strength = the source texel's CLUT intensity**. That
+//      is a PER-FRAGMENT quantity, not a per-triangle one, and
+//      `zhao_raster_fragment.sv` already implements it --
+//
+//          out_tag = st_tag_write_dis  ? dst_tag
+//                  : st_tag_from_texel ? {st_tag_channel, s1_tidx_r[5:0]}
+//                                      : s1_tag_r;
+//
+//      -- where `s1_tidx_r` is the sampled CLUT index that
+//      `zhao_raster_texture_stage_v3` emits as `frag_texel_idx_o` ONE PORT OVER
+//      from `frag_tag_o`, off the same `returned_result_w`. The selector is
+//      FRAGMENT STATE bits [21] TAG_FROM_TEXEL and [23:22] TAG_CHANNEL. So for
+//      the two STAR recipes the tail's tag is not the seam at all: the strength
+//      has a real producer already and what is missing is a fragment state, the
+//      other half of this entry.
+//
+//      THE HALF THAT GENUINELY WANTS THE TAIL IS `sun_additive`, and the
+//      reference says so in its own words: "the sun quad's texture is 64x64
+//      ARGB4444 -- direct colour, with no CLUT index to read a strength out of
+//      ... The sun's glow tag therefore rides the packet's constant `tag`
+//      field" (`reference/src/zrender/fragment.cpp`, FragmentPipeline::
+//      sun_additive). So a per-triangle constant tag is RATIFIED and REQUIRED,
+//      and NOTHING IN THE ABI CARRIES IT: `MaterialRecord.flags` is bit0 toon,
+//      bit1 ink, bit2 alpha_test with 3-15 reserved-0; `MaterialRecord.
+//      raster_state[31:2]` is carried unchanged with, in R28's own words, "no
+//      ratified consumer in v1"; `DrawForm.flags[3:2]` is the cull mode and the
+//      rest reserved. OWNER DECISION, and it is a SMALL one -- one reserved bit
+//      field in a record that already has room.
+//
+//      WHAT CHANGED TODAY IS NOT THE GAP BUT WHAT CAN BE SEEN THROUGH IT.
+//      Packet POSTGATHER composed POST.GATHER and its smoke reported
+//      `frags=2560 [untagged=2560 below_knee=0 lit=0 reserved=0]` -- correct,
+//      and caused by this port. So R195's law was proven exhaustively on its own
+//      bench and the seam was proven in the console, and NO TEST DID BOTH AT
+//      ONCE: a green smoke on an untagged stream is not evidence about bloom.
+//      `tests/prod/run_console_core_smoke.ps1 -GlowTag` is that test, and it
+//      is GREEN in both polarities as of 2026-09-21:
+//
+//        -GlowTag  frags=2560 [untagged=1498 below_knee=0 lit=1062 reserved=0]
+//                  1062 framebuffer pixels carry the tail's own colour,
+//                  bloom cells_contributing=1344, the post pass CHANGED 1344
+//                  words -- tag -> law -> plane -> compositor -> the frame
+//        plain     frags=2560 [untagged=2560 ... lit=0], 0 pixels, 0 cells,
+//                  0 words changed. Both halves are required.
+//
+//      NOT EVERY RESOLVED FRAGMENT IS LIT, AND THAT IS CORRECT: RASTER.RESOLVE
+//      sweeps a touched TILE WHOLE, so `gather_fragments_o` counts all 256
+//      pixels of each of the ten tiles this fixture enters. 1,062 are covered;
+//      the other 1,498 carry the tile clear, tag 0. The first version of the
+//      assertion demanded all 2,560 and failed -- the assertion was wrong, not
+//      the console.
+//
+//      THE FORM DRIVES
+//      this boundary port from the BENCH -- stimulus, which a bench may do and
+//      this composer may not -- and carries a lit fragment all the way to
+//      `gather_frag_lit_o` and into the picture. The tie-off is unchanged and
+//      the register does not move; what moves is that the day a producer is
+//      ruled, the evidence path is already built and fired.
+//
 // I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
 //      that is NOT wired, which is worth stating precisely so nobody wires it
