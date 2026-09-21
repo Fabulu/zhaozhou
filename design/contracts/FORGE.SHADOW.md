@@ -331,9 +331,17 @@ decision.** What it needs is:
   arrangement R3 and the block's own header both prescribe.
 * **the written schedule proof R3 OWES and that has never been produced.** It
   is a measurement, not a decision, and it is the one outstanding obligation of
-  an owner-explicit ruling in this cluster. **The next lane should discharge it
-  before adding the arm**, because a proof taken after the arm exists is a
-  measurement of a choice already made.
+  an owner-explicit ruling in this cluster. **It has two halves and only one of
+  them can be measured today, which is worth stating rather than blurring.**
+  The RATE half — does the third client's per-frame demand fit inside client
+  A's frame budget at the guaranteed content tier — is answerable now, from
+  each client's demand against the service's measured throughput, and should be
+  answered BEFORE the arm is designed. The FAIRNESS half — does round-robin at
+  three starve anyone, and does `zhao_geom_lodstate`'s single-in-flight FSM
+  still close its 200-clock evaluation under contention — **cannot be measured
+  without the arm**, so it is owed at the same commit that adds it. Quoting the
+  first as though it settled the second is the shape this file's own table just
+  got caught in.
 
 **The rider is FULL at 17 bits** (3 arena + 12 index + 2 owner), so a FOURTH
 owner fits the field but any additional rider *payload* does not. If Route B's
