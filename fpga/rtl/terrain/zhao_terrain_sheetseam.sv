@@ -437,6 +437,33 @@ module zhao_terrain_sheetseam #(
   logic bf_torn_q;
   logic [8:0] bf_rd_q;
 
+  // ---- THE ONE-DEEP SKID, and why the store cannot do without it ---------
+  // `bf_q` has ONE write port, because 1,089 x 9 bits in flip-flops is 9,801
+  // of them and the whole point of this plane is that it is a MEMORY. The dig's
+  // read must also WRITE (it clears the `seen` bit on consume), so a stamp
+  // result landing in the same cycle as a dig read has nowhere to go.
+  //
+  // WITHOUT THIS IT IS LOST SILENTLY AND THE COUNTER SAYS IT ARRIVED. That is
+  // the exact shape of the defect this packet exists to repair, one level down:
+  // `before_texels_o` would increment, `bf_live_q` would increment, and the
+  // texel's `seen` bit would never be set -- so the vertex serves
+  // `before == after`, digs nothing, and every instrument agrees it was stored.
+  // An UNDER-dig, which is ruling R221's refused "the ground did not move".
+  //
+  // The collision is not rare enough to wave away: `rd_issue_c` runs at about
+  // one cycle in four through a 1,089-vertex dig, so roughly a quarter of any
+  // stamp arriving during a bake would hit it.
+  //
+  // One entry is enough, and the reason is structural rather than statistical:
+  // the dig issues at most one read per vertex and takes three states between
+  // vertices, so `rd_issue_c` is never high on consecutive cycles and the skid
+  // always drains on the very next one. A second collision while it is
+  // occupied is therefore unreachable by the dig's own cadence -- and if it
+  // ever happens it is DROPPED AND COUNTED like any other, never lost quietly.
+  logic        sk_valid_q;
+  logic [IdxW-1:0] sk_idx_q;
+  logic [ 7:0] sk_before_q;
+
   // ---- the record in flight ------------------------------------------------
   logic serve_q;  // bake is digging on the layer-F law
   logic busy_sheet_q;  // ... and therefore owes us a bake_done
@@ -532,8 +559,16 @@ module zhao_terrain_sheetseam #(
   // another patch's dig -- this file's own record-swap defect, arriving
   // through the one door it did not previously have.
   wire sr_keyed_c = (bf_live_q == '0) || (sr_handle_i == bf_handle_q);
-  wire sr_take_c = sr_fire_c && sr_addressable && sr_keyed_c;
-  wire sr_drop_c = sr_fire_c && sr_addressable && !sr_keyed_c;
+  // A result is TAKEN if the plane will accept it: either the write port is
+  // free this cycle, or the skid is.
+  wire sr_room_c = !rd_issue_c || !sk_valid_q;
+  wire sr_take_c = sr_fire_c && sr_addressable && sr_keyed_c && sr_room_c;
+  // DROPPED for either reason, and both are counted on the same port because
+  // both mean the same thing to the record: the plane no longer describes a
+  // whole epoch. `before_torn_o` then says whether a RECORD paid for it.
+  wire sr_drop_c = sr_fire_c && sr_addressable && (!sr_keyed_c || !sr_room_c);
+  // The skid drains whenever the write port is free.
+  wire sk_drain_c = sk_valid_q && !rd_issue_c;
 
   assign sheet_strength_o = serve_q ? rd_data_q : 8'd0;
   // `seen` low serves `after`, so the delta is zero and the vertex is not dug
@@ -627,9 +662,17 @@ module zhao_terrain_sheetseam #(
     // behind it would dig it twice.  Written as one if/else so the priority is
     // STRUCTURAL rather than a race between two statements a synthesiser is
     // free to order.
+    // ONE WRITE PORT, and its priority is structural rather than a race two
+    // statements a synthesiser is free to order:
+    //   1. the dig's read-and-clear -- it has already taken that delta, and
+    //      re-arming the vertex behind it would dig it twice;
+    //   2. the skid, which is older than anything arriving now;
+    //   3. a result arriving this cycle.
     if (rd_issue_c) begin
       bf_rd_q <= bf_q[rd_idx_c];
       bf_q[rd_idx_c][8] <= 1'b0;
+    end else if (sk_valid_q) begin
+      bf_q[sk_idx_q] <= {1'b1, sk_before_q};
     end else if (sr_take_c) begin
       bf_q[sr_idx_c] <= {1'b1, sr_before_i};
     end
@@ -665,6 +708,9 @@ module zhao_terrain_sheetseam #(
       bf_handle_q <= 32'd0;
       bf_live_q <= '0;
       bf_torn_q <= 1'b0;
+      sk_valid_q <= 1'b0;
+      sk_idx_q <= '0;
+      sk_before_q <= 8'd0;
       before_texels_o <= 32'd0;
       sr_dropped_o <= 32'd0;
       before_torn_o <= 32'd0;
@@ -709,6 +755,17 @@ module zhao_terrain_sheetseam #(
       // a stamp is the player's action and does not wait for a bake.  The
       // plane's WRITE is in the store process above; this is only the
       // accounting that says whose data it holds.
+      // The skid: park a result the write port could not take, drain it the
+      // moment the port is free. Both in one if/else so a drain and a park in
+      // the same cycle cannot both claim the register.
+      if (sr_take_c && rd_issue_c) begin
+        sk_valid_q  <= 1'b1;
+        sk_idx_q    <= sr_idx_c;
+        sk_before_q <= sr_before_i;
+      end else if (sk_drain_c) begin
+        sk_valid_q <= 1'b0;
+      end
+
       if (sr_take_c) begin
         bf_handle_q <= sr_handle_i;
         if (bf_live_q != IdxW'(Texels)) bf_live_q <= bf_live_q + IdxW'(1);

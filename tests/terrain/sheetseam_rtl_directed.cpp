@@ -245,6 +245,22 @@ struct World {
     d.eval();
   }
 
+  // Arm the sink for exactly the NEXT edge, without ticking. The caller owns
+  // the clock, which is what lets case 15 place a result at a chosen phase of
+  // the dig's own four-cycle vertex loop.
+  void sink_arm(uint32_t handle, int texel, uint8_t before) {
+    d.sr_valid_i = 1;
+    d.sr_handle_i = handle;
+    d.sr_texel_i = uint16_t(texel);
+    d.sr_before_i = before;
+    d.eval();
+  }
+
+  void sink_disarm() {
+    d.sr_valid_i = 0;
+    d.eval();
+  }
+
   // Feed the sink one result per addressable vertex, as a stamp covering the
   // whole lattice would.
   void sink_lattice(uint32_t handle, int salt) {
@@ -940,6 +956,110 @@ int main(int argc, char** argv) {
     ckv(a2.fallback == 0, "14 and is not a fallback", 0, a2.fallback);
     const int bad = dig(w, wantA);
     ckv(bad == 0, "14 with all 1,089 `after` strengths still right", 0, bad);
+    retire(w);
+  }
+
+  // =========================================================================
+  // 15 -- A RESULT ARRIVING DURING A DIG IS NEVER LOST, AT ANY PHASE
+  // =========================================================================
+  // `bf_q` has ONE write port -- 1,089 x 9 bits belongs in a memory, not in
+  // 9,801 flip-flops -- and the dig's read must also WRITE, because it clears
+  // the `seen` bit on consume. So a stamp result landing in the same cycle as
+  // a dig read has nowhere to go, and the FIRST version of this block lost it
+  // SILENTLY while `before_texels_o` counted it as stored.
+  //
+  // That is this packet's own defect one level down: the counter says the
+  // delta arrived, the `seen` bit is clear, the vertex serves
+  // `before == after`, digs nothing, and every instrument agrees. An UNDER-dig
+  // -- R221's refused "they acted, the ground did not move".
+  //
+  // It is not rare: `rd_issue_c` runs about one cycle in four through a
+  // 1,089-vertex dig. A one-deep skid absorbs it. This case places a result at
+  // EACH of the four phases of the dig's vertex loop and requires all four to
+  // be stored -- phase 0 is the colliding one, and the other three are the
+  // negative controls that stop the check passing for the wrong reason.
+  {
+    w.reset();
+    ckv(w.req_a(kOpAcquire, kHandleA, 0) == kStAllocated, "15 ACQUIRE A", kStAllocated, -1);
+    w.stamp_sheet(kHandleA, 0);
+
+    const Admit a = offer(w, kHandleA, true);
+    ckv(a.depth_sheet == 1, "15 served on the layer-F law", 1, a.depth_sheet);
+
+    // Four target vertices the dig passes EARLY, so that by the time each
+    // result is injected the dig has already consumed and cleared them --
+    // otherwise the dig's own clear would retire the write we are testing for
+    // and the case would pass while proving nothing.
+    const int tgt_vi[4] = {0, 1, 2, 3};
+    const uint8_t tgt_before[4] = {231, 232, 233, 234};
+    const long bt0 = long(d.before_texels_o);
+    const long dr0 = long(d.sr_dropped_o);
+
+    int inject = 0;
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        // Inject on four separate vertices, one at each phase 0..3. Phase 0 is
+        // the cycle `rd_issue_c` fires in, because the texel has just changed.
+        const bool doing = (vj == 5) && (vi >= 10) && (vi < 14);
+        const int phase = doing ? (vi - 10) : -1;
+        if (phase == 0) w.sink_arm(kHandleA, w.law_texel(tgt_vi[0], 0), tgt_before[0]);
+        w.tick();  // StVxM
+        if (phase == 0) { w.sink_disarm(); ++inject; }
+        if (phase == 1) w.sink_arm(kHandleA, w.law_texel(tgt_vi[1], 0), tgt_before[1]);
+        w.tick();  // StVxC
+        if (phase == 1) { w.sink_disarm(); ++inject; }
+        if (phase == 2) w.sink_arm(kHandleA, w.law_texel(tgt_vi[2], 0), tgt_before[2]);
+        w.tick();  // StDxM
+        if (phase == 2) { w.sink_disarm(); ++inject; }
+        if (phase == 3) w.sink_arm(kHandleA, w.law_texel(tgt_vi[3], 0), tgt_before[3]);
+        d.dig_ready_i = 1;
+        d.eval();
+        w.tick();  // the accept edge
+        if (phase == 3) { w.sink_disarm(); ++inject; }
+      }
+    }
+    d.dig_ready_i = 0;
+    w.idle(4);  // let the skid drain
+
+    ckv(inject == 4, "15 four results were injected, one per phase", 4, inject);
+    ckv(long(d.before_texels_o) - bt0 == 4,
+        "15 before_texels_o counted all four", 4, long(d.before_texels_o) - bt0);
+    ckv(long(d.sr_dropped_o) - dr0 == 0,
+        "15 and NONE was dropped -- the skid absorbed the colliding one", 0,
+        long(d.sr_dropped_o) - dr0);
+    retire(w);
+
+    // THE COUNTER SAYING "STORED" IS THE CLAIM. This is the check of it: the
+    // plane must actually SERVE those four `before` values on the next dig,
+    // and `after` everywhere else. A silent loss moves the counter and fails
+    // exactly here, which is why the counter alone was never enough.
+    const Admit a2 = offer(w, kHandleA, true);
+    ckv(a2.depth_sheet == 1, "15 the next record is served", 1, a2.depth_sheet);
+    int wrong = 0, served = 0;
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        w.tick();
+        w.tick();
+        w.tick();
+        d.dig_ready_i = 1;
+        d.eval();
+        int want = int(d.sheet_strength_o);  // unseen serves `after`
+        for (int k = 0; k < 4; ++k)
+          if (vj == 0 && vi == tgt_vi[k]) { want = int(tgt_before[k]); ++served; }
+        if (int(d.sheet_before_o) != want) ++wrong;
+        w.tick();
+      }
+    }
+    d.dig_ready_i = 0;
+    ckv(served == 4, "15 all four target vertices were visited", 4, served);
+    ckv(wrong == 0,
+        "15 EVERY injected `before` was actually STORED and served, and every "
+        "other vertex serves `after` -- the counter's claim, checked",
+        0, wrong);
     retire(w);
   }
 
