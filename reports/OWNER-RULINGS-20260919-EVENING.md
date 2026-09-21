@@ -4903,3 +4903,75 @@ which I did all evening for R220, R222, R223 and R225.
 The owner's file *"has already struck this twice as a one-lane slip"* (CFGARM).
 **It is not a slip and it is not one lane. Recording it as a convention defect
 is the only way it stops being restruck.**
+
+## R227 — SCALE THE GATE SET TO THE CHANGE. My brief was spending three hours to re-prove that comments do not simulate
+
+**2026-09-21, coordinator.** Two lanes reported comment-only work and then
+settled in to run **all eight smoke forms each**. With three lanes contending on
+one machine, FIELDLANE measured each form at **10-15 minutes** — so the pair was
+committed to roughly **three hours of machine time**, while slowing the third
+lane, to establish something a filter settles in one second.
+
+**The filter, run on both branches:**
+
+```
+git diff <base>..<branch> -- '*.sv' | non-comment, non-blank lines
+  gz/fieldlane   0      (zhao_cmd_exec, zhao_field_host, zhao_console_core)
+  gz/projout     0      (zhao_console_core, +212 lines, all comments)
+```
+
+**Verilator cannot produce a different simulation from a comment.** Eight forms
+were going to re-derive `raster pixels=2560` seven more times each.
+
+### This is my error and it has a name in my own memory
+
+*"Exhaustive validation is an AI failure mode; set a risk-based budget and stop
+when the acceptance question is answered."* The brief mandates eight forms
+**unconditionally**, which is precisely the default it warns about. **The cost
+was invisible while lanes ran alone and became visible only under contention** —
+so the defect had been in every brief for the whole campaign and nothing
+surfaced it until the machine was busy enough to notice.
+
+### The rule
+
+**A gate earns its runtime by being able to change its answer.** Ask what class
+the change is in, then run the gates whose SUBJECT that class can affect:
+
+* **Comment-only RTL** → the static gates, `packet_h_tieoff_audit`,
+  `completion_register.py`, and **`-LintOnly`**. Nothing else. **And those four
+  are not ceremonial here** — the tie-off audit's subject *is* comments, and
+  TAGPROD proved `completion_register.py` will register a **phantom gap** from a
+  wrapped line that merely begins with an entry number. A 212-line comment
+  insertion is exactly the shape that springs that trap.
+* **RTL behaviour changed** → the full eight, as before, with `%Fatal` grepped
+  from the logs rather than inferred from exit codes (R207).
+* **Ports changed** → add `gen_prod_top`, `gen_console_board`,
+  `wrapper_port_parity`, and both `gen_shell_paired_diff` forms. **Tonight
+  proved why:** seven `gth_*` ports were added and a mirroring mutant did not
+  follow, which aborted `cmake --preset` for every lane.
+* **A new block** → its directed bench must BUILD AND RUN (R60), and any counter
+  owes a fired positive control (R95).
+
+**Three caveats, because the shortcut has edges and each one is real:**
+
+1. **Uncommenting code is not a comment-only change**, and the filter catches it
+   — restored code appears as an added line that is not `//`.
+2. **A Verilator pragma lives in a comment.** `// verilator lint_off` changes
+   behaviour, which is why `-LintOnly` stays in the minimal set. And
+   `CLAUDE.md` records that `// synthesis translate_off` does **not** make
+   Verilator skip a block, so a guard in there is live in simulation.
+3. **The filter only strips `//` lines**, so an edit inside a `/* */` block
+   reads as non-comment and forces the full set. **That errs toward running
+   more, which is the safe direction for a shortcut to fail in.**
+
+### What this does NOT license
+
+**Not "skip the gates".** Both lanes' static gates, tie-off audit and register
+were run and green, and form 1 was run in full. **The claim is about the
+SEVENTH re-run of a form whose input did not move**, not about the first.
+
+And note the asymmetry that makes this worth writing down rather than just
+doing: **an over-run gate costs hours and looks like diligence**, so nobody
+audits it — the same blind spot as a green that hides a defect, wearing the
+opposite costume. `CLAUDE.md`'s broken-instrument law says *nobody audits good
+news*; this is its twin, **nobody audits thoroughness.**
