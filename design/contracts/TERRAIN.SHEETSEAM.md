@@ -193,6 +193,27 @@ emits a patch *directory* record (`rec_island_o` / `rec_ix_o` / `rec_iz_o` /
 Whatever block eventually emits bake records must emit the patch's sheet
 handle32 beside them; it must not be synthesised from `cmd_patch_id_i` (§2).
 
+> **The VALUE, though, is already on the console's wires.** Measured
+> 2026-09-21 (terrcmd): `zhao_cmd_exec`'s `stamp_patch_o` is the 32-bit
+> `handle32[patch]` lifted off a CRC-validated SurfaceStamp packet, composed in
+> `zhao_console_core` as `cmd_exec_stamp_patch_w`. Carrying that beside the
+> record satisfies §2/C4 exactly — it is the ABI's own identity, not a
+> synthesis — so the constraint above is **satisfiable and needs no new
+> identity law**. Only the carrier is missing.
+
+> **AND ONE THING THIS BLOCK SHOULD KNOW ABOUT ITS OWN READ (D-TERRCMD-A).**
+> `design/contracts/SURFACE.STAMP.md` S3 rejects, by name, *"emitting only the
+> new value and letting BAKE re-read — a second reader on a store whose whole
+> rate budget is one texel per clock"*, because TERRAIN.BAKE *"needs the DELTA,
+> not just the new value"*. **This block is that second reader, and it reads
+> `strength_after`.** Since bake accumulates (`scar += delta`) while
+> `stamp_depth_at_vertex` is absolute, a re-issued stamp digs twice. Whether
+> the law is the delta or the absolute is an **owner decision**, written up in
+> `design/contracts/TERRAIN.BAKE.md` and in `zhao_console_core.sv` entry I32.
+> If the delta is chosen this block needs a `before` plane beside its prefetch,
+> which is one more 1,089-byte M10K half — recorded now so the cost is known
+> before the decision rather than discovered after it.
+
 Composing this seam alone would connect a port to a block nothing drives, so it
 is refused here rather than taken quietly.
 
