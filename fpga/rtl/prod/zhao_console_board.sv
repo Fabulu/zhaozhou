@@ -2256,6 +2256,12 @@ module zhao_console_board
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
   output logic [ 7:0] surf_res_before_o,
+  // WHICH SHEET THOSE TEXELS BELONG TO. Added 2026-09-21 under OWNER RULING
+  // R231: `zhao_terrain_sheetseam` now consumes `res_before_o` to build
+  // TERRAIN.BAKE's delta, and a result stream with no identity cannot be
+  // ROUTED to a patch. It is `zhao_surface_stamp`'s own held `st_handle` --
+  // the ABI's `handle32[patch]`, CARRIED and not derived (SURFACE.SHEET C4).
+  output logic [31:0] surf_res_handle_o,
   output logic [15:0] surf_res_src_id_o,
 
   // SURFACE.SHEET's spare response fields. NOT a gap: SURFACE.STAMP consumes
@@ -4146,6 +4152,7 @@ module zhao_console_board
       .surf_res_tag_o                     (surf_res_tag_o),
       .surf_res_strength_o                (surf_res_strength_o),
       .surf_res_before_o                  (surf_res_before_o),
+      .surf_res_handle_o                  (surf_res_handle_o),
       .surf_res_src_id_o                  (surf_res_src_id_o),
       .surf_pg_op_o                       (surf_pg_op_o),
       .surf_pg_tag_o                      (surf_pg_tag_o),

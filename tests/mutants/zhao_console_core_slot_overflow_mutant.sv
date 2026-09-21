@@ -1956,6 +1956,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
   output logic [ 7:0] surf_res_before_o,
+  output logic [31:0] surf_res_handle_o,
   output logic [15:0] surf_res_src_id_o,
 
   // SURFACE.SHEET's spare response fields. NOT a gap: SURFACE.STAMP consumes

@@ -587,11 +587,23 @@ module zhao_terrain_sheetseam #(
   assign bk_valid_o = job_valid_i && admit_c;
   assign job_ready_o = admit_c && bk_ready_i;
   // R221: the sheet law survives only if every one of the 1,089 reads hit.
-  // R231 adds ONE term to R221's existing law and no new law.  A torn plane is
-  // another way of saying "this block cannot serve this record", which is
-  // exactly what `bk_depth_sheet_o` going low already means.
-  assign bk_depth_sheet_o = job_match_c && !pf_missed_q && !bf_torn_q;
-  assign bk_fallback_o = job_match_c && (pf_missed_q || bf_torn_q);
+  // THE BEFORE PLANE MUST BE THIS RECORD'S, OR EMPTY.  Without this the block
+  // would serve one patch's dig from ANOTHER patch's `before` values -- this
+  // file's own record-swap defect, through the door R231 opened, and invisible
+  // to every counter for exactly the reason R231 itself is: the strengths are
+  // real, the handshakes are legal, and only the CRATER is wrong.
+  //
+  // `bf_live_q == 0` is safe and is not a special case: an empty plane has
+  // every `seen` bit clear, so `before` is served AS `after`, the delta is zero
+  // and a patch with no stamps outstanding correctly digs nothing.
+  wire bf_ok_c = (bf_live_q == '0) || (job_handle_i == bf_handle_q);
+
+  // R231 adds TWO terms to R221's existing law and no new law.  Both are ways
+  // of saying "this block cannot serve this record", which is exactly what
+  // `bk_depth_sheet_o` going low already means, so the record digs the
+  // ratified parametric disc and the fallback is counted.
+  assign bk_depth_sheet_o = job_match_c && !pf_missed_q && bf_ok_c && !bf_torn_q;
+  assign bk_fallback_o = job_match_c && (pf_missed_q || !bf_ok_c || bf_torn_q);
 
   wire accept_c = bk_valid_o && bk_ready_i;
 
@@ -804,8 +816,9 @@ module zhao_terrain_sheetseam #(
             // before plane would read as a residency problem -- a wrong
             // diagnosis attached to a right alarm, which CLAUDE.md's broken
             // instrument chapter calls out by name.
-            if (bf_torn_q && !pf_missed_q) before_torn_o <= sat_inc(before_torn_o);
-            if (pf_missed_q || bf_torn_q) begin
+            if ((bf_torn_q || !bf_ok_c) && !pf_missed_q)
+              before_torn_o <= sat_inc(before_torn_o);
+            if (pf_missed_q || bf_torn_q || !bf_ok_c) begin
               // ***** OWNER RULING R221, IN ONE PLACE *****
               // The record goes to bake with `cmd_depth_sheet_i` LOW, which
               // is the ratified parametric disc, and the fallback is counted
@@ -840,10 +853,21 @@ module zhao_terrain_sheetseam #(
             // plane: its deltas are still owed and must survive to the next
             // sheet bake.  Conservative in the direction that cannot lose a
             // player's dig.
-            if (serve_q) begin
-              bf_live_q <= sr_take_c ? IdxW'(1) : '0;
-              bf_torn_q <= 1'b0;
-            end
+            // `bf_live_q` is cleared only by a SERVED dig, because only a
+            // served dig read the plane and retired its `seen` bits.  A
+            // FALLBACK record never touched it, so its deltas are still owed
+            // and must survive -- conservative in the one direction that
+            // cannot lose a player's dig.
+            if (serve_q) bf_live_q <= sr_take_c ? IdxW'(1) : '0;
+            // `bf_torn_q` CLEARS ON ANY RETIREMENT, served or fallen back, and
+            // that is load-bearing rather than tidy.  Gated on `serve_q` it
+            // could never clear at all: a torn record falls back, a fallback
+            // leaves `serve_q` LOW, and the flag would latch for the life of
+            // the machine -- the sheet law silently dead with every counter
+            // agreeing.  One record pays for a dropped result with ruling
+            // R221's ratified disc, `before_torn_o` says how often, and the
+            // state cannot wedge.
+            bf_torn_q <= 1'b0;
           end
         end
 

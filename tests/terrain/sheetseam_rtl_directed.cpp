@@ -102,6 +102,13 @@ constexpr uint8_t kPoison = 255;
 
 uint8_t legal_value(int vi, int vj, int salt) { return uint8_t(1 + ((vj * 33 + vi + salt) % 200)); }
 
+// A `before` value DISTINCT from every `legal_value`, so a plane serving
+// `after` where it should serve `before` (or the reverse) cannot pass by
+// coincidence. `legal_value` lands in 1..200; this lands in 201..250.
+uint8_t before_value(int vi, int vj, int salt) {
+  return uint8_t(201 + ((vj * 33 + vi + salt) % 50));
+}
+
 struct World {
   Vtb_sheetseam& d;
   explicit World(Vtb_sheetseam& dd) : d(dd) {}
@@ -156,6 +163,10 @@ struct World {
     d.p_a_pg_ready_i = 1;
     d.law_vi_i = 0;
     d.law_vj_i = 0;
+    d.sr_valid_i = 0;
+    d.sr_handle_i = 0;
+    d.sr_texel_i = 0;
+    d.sr_before_i = 0;
     for (int i = 0; i < 4; ++i) tick();
     d.rst_n = 1;
     for (int i = 0; i < 2; ++i) tick();
@@ -217,6 +228,29 @@ struct World {
       if (fired) break;
     }
     d.wr_valid_i = 0;
+  }
+
+  // ---- the `stamp_results` sink, OWNER RULING R231 -----------------------
+  // Stands where `zhao_surface_stamp.res_*` stands. `sr_ready_o` is constant
+  // high by design (the stamp is the player's action and must never be
+  // backpressured by a bake), so one beat is one result.
+  void sink(uint32_t handle, int texel, uint8_t before) {
+    d.sr_valid_i = 1;
+    d.sr_handle_i = handle;
+    d.sr_texel_i = uint16_t(texel);
+    d.sr_before_i = before;
+    d.eval();
+    tick();
+    d.sr_valid_i = 0;
+    d.eval();
+  }
+
+  // Feed the sink one result per addressable vertex, as a stamp covering the
+  // whole lattice would.
+  void sink_lattice(uint32_t handle, int salt) {
+    for (int vj = 0; vj < kLat; ++vj)
+      for (int vi = 0; vi < kLat; ++vi)
+        sink(handle, law_texel(vi, vj), before_value(vi, vj, salt));
   }
 
   // Fill a resident sheet: poison everywhere, then the legal value on the
@@ -771,6 +805,142 @@ int main(int argc, char** argv) {
         "12 OVER THE WHOLE SUITE the seam issued not one OP_ACQUIRE", 0, w.seam_ops[kOpAcquire]);
     ckv(w.seam_ops[kOpRelease] == 0, "12 nor one OP_RELEASE", 0, w.seam_ops[kOpRelease]);
     ck(w.seam_ops[kOpRead] > 3000, "12 and thousands of OP_READs");
+  }
+
+  // =========================================================================
+  // 13 -- THE BEFORE PLANE (OWNER RULING R231), AND IT CLEARS ON CONSUME
+  // =========================================================================
+  // The seam now owes bake TWO strengths per vertex, because bake ACCUMULATES
+  // and what is added to an accumulator must be a CHANGE. This case drives the
+  // `stamp_results` sink -- `surf_res_before_o`'s first consumer in this tree
+  // -- and checks all three halves of the invariant:
+  //
+  //   seen = 1  ->  `sheet_before_o` is the pre-blend strength the stamp
+  //                 reported, and it is DISTINCT from `after` so the two
+  //                 cannot be confused;
+  //   the read  ->  CLEARS the seen bit, so the SAME dig repeated serves
+  //                 `after` and the delta collapses to zero. That is
+  //                 idempotence as a structural property of this block rather
+  //                 than an assertion about it;
+  //   seen = 0  ->  `sheet_before_o` IS `sheet_strength_o`.
+  {
+    w.reset();
+    ckv(w.req_a(kOpAcquire, kHandleA, 0) == kStAllocated, "13 ACQUIRE A", kStAllocated, -1);
+    w.stamp_sheet(kHandleA, 0);
+
+    const long bt0 = long(d.before_texels_o);
+    ckv(bt0 == 0, "13 before_texels_o is SILENT before any stamp result", 0, bt0);
+    w.sink_lattice(kHandleA, 0);
+    ckv(long(d.before_texels_o) == long(kLat * kLat),
+        "13 before_texels_o FIRED once per addressable result", long(kLat * kLat),
+        long(d.before_texels_o));
+    ckv(long(d.sr_dropped_o) == 0, "13 and nothing was dropped", 0, long(d.sr_dropped_o));
+
+    const Admit a = offer(w, kHandleA, true);
+    ckv(a.depth_sheet == 1, "13 the record is served on the layer-F law", 1, a.depth_sheet);
+    ckv(a.fallback == 0, "13 and it is not a fallback", 0, a.fallback);
+
+    // First dig: `before` is what the stamps reported, `after` is the sheet.
+    int bad_after = 0, bad_before = 0;
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        w.tick();
+        w.tick();
+        w.tick();
+        d.dig_ready_i = 1;
+        d.eval();
+        if (int(d.sheet_strength_o) != int(legal_value(vi, vj, 0))) ++bad_after;
+        if (int(d.sheet_before_o) != int(before_value(vi, vj, 0))) ++bad_before;
+        w.tick();
+      }
+    }
+    d.dig_ready_i = 0;
+    ckv(bad_after == 0, "13 all 1,089 `after` strengths are right", 0, bad_after);
+    ckv(bad_before == 0, "13 all 1,089 `before` strengths are right", 0, bad_before);
+    retire(w);
+
+    // THE CLEAR ON CONSUME. Re-offer the SAME record with no new stamps: every
+    // seen bit was retired by the dig above, so `before` must now BE `after`
+    // and the delta bake computes is exactly zero. This is the seam's half of
+    // idempotence, and `bake_delta_idempotence_directed` holds bake's half.
+    const Admit a2 = offer(w, kHandleA, true);
+    ckv(a2.depth_sheet == 1, "13 the re-offered record is still served", 1, a2.depth_sheet);
+    int not_equal = 0;
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        w.tick();
+        w.tick();
+        w.tick();
+        d.dig_ready_i = 1;
+        d.eval();
+        if (int(d.sheet_before_o) != int(d.sheet_strength_o)) ++not_equal;
+        w.tick();
+      }
+    }
+    d.dig_ready_i = 0;
+    ckv(not_equal == 0,
+        "13 THE READ CLEARED THE PLANE: a second dig with no new stamp serves "
+        "`before` == `after`, so the delta is zero and the ground moves once",
+        0, not_equal);
+    retire(w);
+  }
+
+  // =========================================================================
+  // 14 -- A RESULT THE PLANE CANNOT HOLD IS DROPPED, COUNTED, AND THE RECORD
+  //       TAKES RULING R221's RATIFIED FALLBACK -- THEN RECOVERS
+  // =========================================================================
+  // The plane is one patch deep. A result for a SECOND handle while the first
+  // is still live cannot be stored without putting one patch's `before` under
+  // another patch's dig -- this file's own record-swap defect, through the
+  // door R231 opened. So it is dropped and counted, and the next record pays
+  // for it with the disc law rather than with a half-populated delta.
+  //
+  // THE RECOVERY IS THE HALF THAT IS EASY TO GET WRONG, and the first draft of
+  // the RTL did: with the torn flag cleared only on a SERVED dig, a torn
+  // record falls back, a fallback leaves `serve_q` low, and the flag latches
+  // for the life of the machine -- the sheet law silently dead with every
+  // counter agreeing. So this case asserts the block comes BACK.
+  {
+    w.reset();
+    ckv(w.req_a(kOpAcquire, kHandleA, 0) == kStAllocated, "14 ACQUIRE A", kStAllocated, -1);
+    ckv(w.req_a(kOpAcquire, kHandleB, 0) == kStAllocated, "14 ACQUIRE B", kStAllocated, -1);
+    w.stamp_sheet(kHandleA, 0);
+
+    w.sink(kHandleA, w.law_texel(4, 4), 210);
+    ckv(long(d.sr_dropped_o) == 0, "14 sr_dropped_o SILENT while one handle owns the plane", 0,
+        long(d.sr_dropped_o));
+    ckv(long(d.before_torn_o) == 0, "14 before_torn_o SILENT too", 0, long(d.before_torn_o));
+
+    // A second handle, while A's entry is still live.
+    w.sink(kHandleB, w.law_texel(5, 5), 220);
+    ckv(long(d.sr_dropped_o) == 1, "14 sr_dropped_o FIRED on the result the plane cannot hold", 1,
+        long(d.sr_dropped_o));
+
+    const Admit a = offer(w, kHandleA, true);
+    ckv(a.depth_sheet == 0, "14 R221: a torn plane drops cmd_depth_sheet_i", 0, a.depth_sheet);
+    ckv(a.fallback == 1, "14 and the record is flagged as a fallback", 1, a.fallback);
+    ckv(long(d.before_torn_o) == 1,
+        "14 before_torn_o FIRED, and it DISCRIMINATES: miss_texels_o is still zero, so the "
+        "fallback reads as a torn plane and not as a residency problem",
+        1, long(d.before_torn_o));
+    ckv(long(d.miss_texels_o) == 0, "14 ... no residency miss happened", 0,
+        long(d.miss_texels_o));
+    retire(w);
+
+    // AND IT COMES BACK. One record paid; the block must serve the next one.
+    w.sink_lattice(kHandleA, 3);
+    const Admit a2 = offer(w, kHandleA, true);
+    ckv(a2.depth_sheet == 1,
+        "14 THE TORN FLAG DID NOT LATCH: the next record is served on layer F again", 1,
+        a2.depth_sheet);
+    ckv(a2.fallback == 0, "14 and is not a fallback", 0, a2.fallback);
+    const int bad = dig(w, wantA);
+    ckv(bad == 0, "14 with all 1,089 `after` strengths still right", 0, bad);
+    retire(w);
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
