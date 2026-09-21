@@ -16477,3 +16477,50 @@ add_test(NAME terrain_tapshare_mutant_control
          COMMAND test_terrain_tapshare_mutant_control)
 set_tests_properties(terrain_tapshare_mutant_control
   PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# GEOM.CLIP's INPUT DOOR -- zhao_geom_clipdoor (packet CLIPDOOR, 2026-09-21)
+# ---------------------------------------------------------------------------
+# Owner ruling R187 named GEOM.CLIP's input as "the honest door" for every
+# non-mesh producer. The door carries the MATERIAL half (into
+# zhao_material_window) and the TRIANGLE half (into zhao_geom_clip) of ONE beat,
+# because the window is a pure combinational gate between them -- so one arbiter
+# owns both and splitting them would be the metadata-swap shape.
+#
+# The check a plain arbiter test would not make is section 3: with both clients
+# offering forever the grant must NOT alternate, because the material window
+# DRAINS the whole span on every material change.
+add_executable(test_geom_clipdoor_directed geometry/geom_clipdoor_directed.cpp)
+target_link_libraries(test_geom_clipdoor_directed PRIVATE zhao_harness)
+verilate(test_geom_clipdoor_directed
+  PREFIX Vtb_geom_clipdoor
+  TOP_MODULE tb_geom_clipdoor
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_clipdoor.sv)
+add_test(NAME geom_clipdoor_directed COMMAND test_geom_clipdoor_directed)
+set_tests_properties(geom_clipdoor_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_geom_clipdoor
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_clipdoor
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv)
+set_tests_properties(lint_zhao_geom_clipdoor PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE POSITIVE CONTROL, POLARITY INVERTED: it passes when `err_hold_broken_o`
+# FIRES. That counter is unreachable with legal stimulus while the hold law is
+# correct -- `take_new_c` requires `!owner_offering_c` and `o_valid_o` IS
+# `owner_offering_c` -- so its silence in the directed test is a NEGATIVE
+# control and this is the other half. Evidence about the instrument, not about
+# the design.
+add_executable(test_geom_clipdoor_mutant_control geometry/geom_clipdoor_mutant_control.cpp)
+target_link_libraries(test_geom_clipdoor_mutant_control PRIVATE zhao_harness)
+verilate(test_geom_clipdoor_mutant_control
+  PREFIX Vtb_geom_clipdoor_mutant
+  TOP_MODULE tb_geom_clipdoor_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_clipdoor_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/tb_geom_clipdoor_mutant.sv)
+add_test(NAME geom_clipdoor_mutant_control
+         COMMAND test_geom_clipdoor_mutant_control)
+set_tests_properties(geom_clipdoor_mutant_control
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
