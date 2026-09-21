@@ -1222,6 +1222,18 @@
 //      is not mistaken for wiring". The difference matters for scheduling: the
 //      merge in (a) is a day's work once (b) exists, and (b) is not.
 //
+//      RE-MEASURED 2026-09-21 (gz/cfgarm) as I14's sibling, because that
+//      entry's hub packet was commissioned on the premise that the two share a
+//      producer. **THEY DO NOT, and (a) is unchanged at the RTL.**
+//      `u_geom_clip.tri_valid_i` is `cl_in_valid`, and `cl_in_valid` is
+//      `mw_t_valid && !cl_in_refuse_c` -- still ONE producer chain through
+//      `u_material_window`'s gate, still no merge. (b)'s lit r/g/b still points
+//      at I20. Nothing this entry needs is a CMD record or a CMD executor, so
+//      I14's remaining halves -- an owner decision on `proj_en_i` and a
+//      ruling-parked MEASURE.GOVERNOR -- would not move it if both closed
+//      tomorrow. The two entries share a PORT GROUP PREFIX and a subsystem,
+//      and nothing else.
+//
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
 //      closed is named here so nobody re-solves it.
@@ -1250,6 +1262,47 @@
 //      which is why this entry does not close today. `proj_en_i` needs the
 //      OWNER (see FINDINGS-projinput.md D-1, re-measured and still open);
 //      `pixel_error` needs a block another packet owns.
+//
+//      RE-MEASURED 2026-09-21 (gz/cfgarm), BOTH ITEMS, AND THE SECOND ONE IS
+//      NOW HARDER THAN "ANOTHER PACKET OWNS IT". This entry was opened as a
+//      HUB -- three other entries name it as their blocker -- on the premise
+//      that ONE MISSING CMD EXECUTOR sits behind I14, I30, I17's descriptors
+//      and I21's blocker 5. **THAT PREMISE IS FALSE, measured four ways, and
+//      the four customers need four different kinds of thing:**
+//
+//        * `proj_en_i` -- an OWNER DECISION. No CMD record is involved at all;
+//          `zhao_project_core.sv` calls it "the rigid-pipeline enable, owned
+//          by the CALLER" and there is no caller left outside the subsystem.
+//          Unchanged, and it is the one item here a ruling could close today.
+//        * `pixel_error` -- NOT a missing executor either, and the executor
+//          arm is the SMALLEST part of it. MEASURE.GOVERNOR is PARKED, not
+//          merely uncomposed: R223 item 4 (2026-09-21) records that
+//          `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`, that lodstate is
+//          inside R133's parked FORGE.SHADOW subsystem ("LODSTATE and SHADOW
+//          mutually blocked and composable only together"), and that R133
+//          PRICED the register cost and took it. So building the two CMD.EXEC
+//          arms (`SetView.pixel_error`, `SetPresentationContract.view_count`)
+//          today would be an uncashed cheque written against a standing
+//          ruling -- the one shape this file has a chapter about.
+//        * I30 -- **DOES NOT EXIST.** It is in the CLOSED AND DELETED ledger
+//          above, closed 2026-09-19 under owner ruling R45. Every entry still
+//          citing "the same gap I14 and I30 describe" is citing a deleted
+//          entry; see I17 item 2, corrected there.
+//        * I21's blocker 5 -- its stated dependency ON THIS ENTRY HAS EXPIRED.
+//          See the correction at that blocker.
+//
+//      THE INPUT SIDE OF THE GOVERNOR IS NOW FULLY REACHABLE, which is worth
+//      writing down because the next lane will otherwise re-derive it and
+//      because it is what makes the parked OUTPUT side the whole of the
+//      blocker. `frame_i` <- `core_tick_c`; `starved0/1_i` <-
+//      `zhao_measure_starve` off the composed `zhao_measure_tokens`;
+//      `proj0/1_i` <- `zhao_view_projq88` <- `zhao_view_projscale`, whose `kx`
+//      comes from the merged cfg bus and whose `vw` comes from cfg 17 -- WHICH
+//      NOW HAS A CMD PRODUCER, so the sentence recorded at I18's governor note
+//      below ("that is I14's other half and it is a genuine hole") is spent;
+//      `px_err0/1_i` and `view_count_i` <- two new CMD.EXEC arms, both fields
+//      ratified. Every one of those is engineering. NONE of them helps while
+//      R133/R223 park the consumer.
 //
 //        * THE VIEWPORT RECT, cfg addresses 16 and 17 -- CLOSED 2026-09-20.
 //          SetView carries a `viewport_id` and NOT a rectangle.
@@ -1510,11 +1563,49 @@
 //           IT DOES NOT UNBLOCK I17 TODAY and is not offered as if it did. The
 //           gather half is still held by R37, so this entry cannot close
 //           whatever happens to the HUD. Recorded now because it is cheap now.
-//        2. `twod_pd_*` and `twod_sd_*` -- the DESCRIPTORS. These are the CMD
-//           seam and they are the SAME gap I14 and I30 already describe, not a
-//           new one: `zhao_cmd_decoder` emits record headers, and the executor
-//           that would turn a SetPlane record into a plane descriptor does not
-//           exist.
+//        2. `twod_pd_*` and `twod_sd_*` -- the DESCRIPTORS. This bullet used
+//           to read: "These are the CMD seam and they are the SAME gap I14 and
+//           I30 already describe, not a new one: `zhao_cmd_decoder` emits
+//           record headers, and the executor that would turn a SetPlane record
+//           into a plane descriptor does not exist."
+//
+//           BOTH OF ITS CITATIONS ARE WRONG, corrected 2026-09-21 (gz/cfgarm),
+//           and the correction makes this bullet BIGGER rather than smaller --
+//           which is why it is written out instead of quietly refreshed.
+//
+//             * "I30" HAS NOT EXISTED SINCE 2026-09-19. It is in the CLOSED
+//               AND DELETED ledger at the top of this block, closed under
+//               owner ruling R45. An entry that cites a deleted entry as
+//               corroboration is citing nothing, and this one was read as
+//               "three entries agree" by the packet that commissioned a hub
+//               against them.
+//             * "THE EXECUTOR DOES NOT EXIST" UNDERSTATES IT BY A WHOLE LEVEL:
+//               **THE RECORD DOES NOT EXIST.** `SetPlane` returns ZERO hits in
+//               `spec/commands.zidl` -- SEARCHED, with the search named:
+//               `spec/*.zidl` and `spec/*.md` for SetPlane, SetSprite,
+//               DrawSprite, SetOverlay, DrawHud, "2D plane" and twod, and the
+//               only ratified `plane` in the ABI is `SetPopulation`'s analytic
+//               COLLISION plane (`plane_c`, `plane_nx/ny/nz`), which is a
+//               particle surface and not a compositor layer. The cartridge's
+//               page kinds are 0..13 (`spec/cartridge.md` 3) and none is a 2D
+//               descriptor set, so the R42/I33 route -- descriptors travelling
+//               as a published page -- is not available either.
+//               `spec/qformats.md` 744-745 says the same from the other side,
+//               in the document that owns the number formats: the charter 16
+//               2D plane mode is "listed by the charter, OWNED BY NO SPEC
+//               YET".
+//
+//           SO THIS IS NOT A CMD-EXECUTOR GAP AND MUST NOT BE SCHEDULED AS
+//           ONE. It is an ABI or page-kind addition, which is an OWNER
+//           decision of the same size as R41/R42/R52 -- each of which ratified
+//           a new record before a lane could lower it. Whoever takes it should
+//           put the RECORD in front of the owner first; an executor for a
+//           record nobody has ratified is a file that cannot be written
+//           honestly, because this composer would be choosing what a 2D plane
+//           IS, which is owner DATA. (Note the shape of the old text: it named
+//           a record, `SetPlane`, that reads exactly like a ratified opcode and
+//           is not one. A plausible name is the most expensive kind of absent
+//           citation -- nobody greps for a thing they have just read.)
 //        3. `twod_ld_*` -- NOT A GAP. A texture page, a palette and a binding
 //           are generated assets, which is this entry's own classification for
 //           the grading curves, applied to a texture.
@@ -2044,7 +2135,11 @@
 //          `cmd_exec_cfg_*_w` onto it and CMD.EXEC lowers SetView's
 //          `view_projection` onto cfg addresses 0..15. What is still absent is
 //          I14's OTHER half, the VIEWPORT RECT at cfg address 17, which is
-//          where `zhao_view_projq88`'s `vw` comes from. `px_err0/1_i` needs one
+//          where `zhao_view_projq88`'s `vw` comes from.
+//          (**NO LONGER ABSENT, 2026-09-21 (gz/cfgarm): the rect landed as
+//          steps 20/21 of the same walk on 2026-09-20. See the expiry note at
+//          `proj0/1_i` below, which carries the running evidence.**)
+//          `px_err0/1_i` needs one
 //          more arm on CMD.EXEC's existing SetView walk -- the field is
 //          ratified (`spec/commands.zidl:344`) and the walk is already
 //          TWENTY steps (`zhao_cmd_exec.sv:1555-1609`, `cw` runs 0..19 and
@@ -2116,6 +2211,16 @@
 //                              17, THE VIEWPORT RECT, which only the external
 //                              host port writes. That is I14's other half and
 //                              it is a genuine hole, not a wiring oversight.
+//                              **EXPIRED 2026-09-21 (gz/cfgarm).** cfg 16/17
+//                              gained their CMD producer the day AFTER this
+//                              was written -- `zhao_cmd_exec` steps 20/21,
+//                              2026-09-20 (projbound) -- so the host port is
+//                              an OVERRIDE now and not the only writer.
+//                              Measured, not read: `cmd_exec_directed` 762
+//                              checks at gz/cfgarm, cases 32-35 differenced
+//                              against `zref::render::viewports_of()` with
+//                              `viewport_range_refused_o` fired in case 33.
+//                              This input is REACHABLE today.
 //            `px_err0/1_i`,
 //            `view_count_i` -- two new CMD.EXEC arms, as corrected above.
 //          So the governor is blocked at BOTH ends, and the two ends need
@@ -2123,6 +2228,26 @@
 //          arms plus I14's viewport rect), the output side needs a RULING or a
 //          consumer somebody else composes. Whichever lands first, the other is
 //          still required -- this entry does not close on either alone.
+//
+//          **THE RULING ARRIVED AND IT WENT THE OTHER WAY, 2026-09-21
+//          (gz/cfgarm).** R223 item 4 records MEASURE.GOVERNOR as PARKED, not
+//          pending: its `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`,
+//          lodstate is inside R133's parked FORGE.SHADOW subsystem ("LODSTATE
+//          and SHADOW mutually blocked and composable only together"), and
+//          R133 priced the register cost in words and took it. R223 also
+//          closes FORGE to packets outright after five passes for 21 -> 21.
+//
+//          SO THE TWO ENDS ARE NOT SYMMETRIC ANY MORE, and the asymmetry
+//          matters for scheduling. THE INPUT SIDE IS NOW ENTIRELY REACHABLE:
+//          the viewport rect expired as a blocker the day after this paragraph
+//          was written (see `proj0/1_i` above), so every one of the five
+//          inputs is buildable engineering. THE OUTPUT SIDE IS PARKED BY A
+//          STANDING RULING. Building the input side first would therefore
+//          produce five new producers with no consumer -- the uncashed cheque,
+//          written deliberately, against a ruling that says the consumer is
+//          not coming. **The input work is correct and must NOT be done until
+//          R133/R199 move.** Recorded at this size so the next lane does not
+//          read "nearly clear" as "nearly worth doing".
 //
 //          RE-VERIFIED A THIRD TIME 2026-09-20 (postmeas), AND THE OUTPUT
 //          BLOCKER HOLDS -- with the instrument checked before its null was
@@ -2679,6 +2804,46 @@
 //      >>    cfg address 17 has no CMD producer)" -- projq88's `vw` comes from
 //      >>    that rect. So blocker 5 is now A COMPOSITION BEHIND ENTRY I14, not
 //      >>    a format defect, and it is stated at that size.
+//      >>
+//      >>    **AND THAT DEPENDENCY HAD ALREADY EXPIRED WHEN IT WAS WRITTEN,
+//      >>    2026-09-21 (gz/cfgarm). THE SAME DEFECT TWICE ON ONE BLOCKER, ONE
+//      >>    DAY APART, AND THE SECOND TIME IT WAS INHERITED FROM A REGISTRY
+//      >>    ROW RATHER THAN FROM THE ENTRY.** cfg addresses 16 and 17 HAVE a
+//      >>    CMD producer: `zhao_cmd_exec` parses `SetView.viewport_id` (ABI
+//      >>    byte 17), indexes video_rules 3.2 and writes the rect as steps
+//      >>    20/21 of the view walk, landed 2026-09-20 (projbound). I14's own
+//      >>    viewport bullet has read "THIS BULLET IS CLOSED" since that day,
+//      >>    ~1,300 lines above this one.
+//      >>
+//      >>    MEASURED RATHER THAN READ OFF THE RTL, because a comment is what
+//      >>    misled this blocker twice already. `test_cmd_exec_directed` built
+//      >>    and RAN at this commit: **762 checks passed, no `%Fatal`.** Cases
+//      >>    32-35 difference all four rectangles against the ORACLE
+//      >>    `zref::render::viewports_of()`; case 33 FIRES
+//      >>    `viewport_range_refused_o` by legal stimulus and asserts the
+//      >>    camera still lands (16 matrix words, `views_written_o` 1) while
+//      >>    the rectangle is refused; cases 34/35 are its negative controls
+//      >>    and prove the counter reads the MODE, not merely the id. And
+//      >>    `zhao_project_core.sv` 627/633/636 consumes addresses 16 and 17,
+//      >>    so the rect has a real reader as well as a real writer.
+//      >>
+//      >>    WHAT SURVIVES OF BLOCKER 5 AFTER THAT IS ONE SENTENCE, AND IT IS
+//      >>    A STANDING RULING RATHER THAN AN ABSENCE: both `zhao_view_projq88`
+//      >>    and `zhao_view_projscale` exist only to feed MEASURE.GOVERNOR, and
+//      >>    **R223 item 4 (2026-09-21) parks the governor transitively** --
+//      >>    `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`, lodstate is
+//      >>    inside R133's parked FORGE.SHADOW subsystem, and R133 priced the
+//      >>    register cost and took it. So composing the pair today dangles a
+//      >>    producer behind a parked consumer (the trade R75 endorsed
+//      >>    refusing), and the blocker is NOT "a composition behind entry
+//      >>    I14" any more: it is FORGE's park, reached through two hops
+//      >>    nobody had traced. The manifest rows now say so.
+//      >>
+//      >>    THE PATTERN, SINCE THIS IS THE THIRD TIME ON ONE BLOCKER: each
+//      >>    re-measurement moved the refusal to a SMALLER and TRUER statement
+//      >>    (format defect -> composition behind I14 -> standing ruling), and
+//      >>    each intermediate one outlived its evidence by about a day. The
+//      >>    blocker never stopped being real; every proof of it did.
 //
 //      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
 //      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
