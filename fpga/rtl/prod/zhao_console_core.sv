@@ -3329,6 +3329,33 @@
 //            D-POSEPAGE-A. The precedent is in this tree: ruling W04 appended
 //            `DrawWarpedForm` at 0x0304 rather than widening `DrawForm`, and
 //            appended it at the END precisely so nine goldens are not rewritten.
+//            W09 gives the companion rule -- "PRESERVE THE ORDINARY PATH" --
+//            which here means `DrawForm` keeps meaning BIND POSE and does not
+//            move a byte.
+//
+//            THREE FACTS FOR WHOEVER DRAFTS IT, each checked rather than
+//            assumed, because the confident one-line version of this is where
+//            the error would live:
+//              - 0x0304 IS SPOKEN FOR. W04 allocates it and it is not yet in
+//                `spec/commands.zidl` at this commit (its lane is live), so the
+//                next free draw opcode is 0x0305, not 0x0304.
+//              - `abi version` DOES NOT BUMP. The obvious reading -- "a new
+//                opcode is a wire change, so 3 -> 4" -- is the SetEnvironment
+//                0x0311 precedent and it has been superseded four times since:
+//                TerrainEpoch, SubmitTerrainSet, PublishResource 0x0030, SetPost
+//                and SetGradeTable all added opcodes and all "STAY 3", because
+//                an additive opcode moves no existing opcode, field set or size
+//                and a older decoder answers ZH_ABI_UNKNOWN_OPCODE, which is a
+//                clean refusal. Declare it LAST so no golden's sample values
+//                shift.
+//              - THE BYTES ALREADY REACH VRAM. `PublishResource 0x0030` carries
+//                a `u8 kind`, so a CLIP_BANK page publishes today exactly as a
+//                CREATURE_FORM one does. What is missing is only WHICH FRAME to
+//                decode, never how the page arrives.
+//              - `sub` IS NOT PADDING. `zhao_geom_pose_cache`'s own header
+//                records that without it "a key and its 60 Hz midpoint alias
+//                and the cache returns the wrong palette", and the 2026-09-03
+//                ruling permits baked 60 Hz for EVERY creature.
 //
 //      AND THE RULING THAT GOVERNS THE PRODUCER'S SHAPE, which this entry has
 //      never cited: `reports/ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md`,
