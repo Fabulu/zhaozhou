@@ -3264,9 +3264,99 @@
 //          device at ~113% of its ALM ceiling that is an owner-visible
 //          decision, not a packaging step: see D-GEOMSEAM-A.
 //
-//      Until those are settled this stays a gap, and the reason is a freeze
-//      PLUS an absent byte layout PLUS an unpriced store -- not a missing
-//      memory model.
+//      RE-MEASURED 2026-09-21 (POSEPAGE), every recorded blocker re-read in
+//      the tree rather than inherited. THREE ARE RETIRED AND THE RECORD OF
+//      THEM IS EXACT -- unusually, nothing above this line has rotted:
+//
+//        * the kind-8 body freeze: `tests/golden/creature_ladder/
+//          ladder_page_body_v1.bin` is present at 448 bytes, the
+//          `zref::creature_page::body` namespace is at
+//          `zref_creature_page.hpp:272`, and `mkcreatureladder.py --check`
+//          reproduces both goldens. RETIRED, as recorded.
+//        * the behavioural SDRAM model: `sim/models/zhao_sdram_model.sv` is
+//          219 lines EXACTLY as this entry says, its POKE backdoor is at
+//          `:56`, and it is instantiated FOUR times -- `tb_zhao_shell.sv:1527`,
+//          `tb_zhao_mem_chain.sv:158`, `tb_zhao_mem_guard.sv:139` and, most
+//          usefully here, `tb_zhao_console_core_smoke.sv:3482` as
+//          `u_geom_sdram`. So a composed pose reader has a bench that already
+//          holds real memory behind the real core.
+//        * the store: `zhao_geom_bonesrc.sv` exists, is parameterised by
+//          SRC_STYLE, and carries the three measured map rows. RETIRED.
+//
+//      AND THE FOURTH STANDS: `u_geom_mem_adapter` is `zhao_mem_share_n` at
+//      N = 5 with requesters A..E all driven, so a sixth is an in-core edit
+//      and no boundary port; `zhao_geom_ladderbank` is still uncomposed (five
+//      hits in this file, all of them comments).
+//
+//      TWO BLOCKERS THIS ENTRY DOES NOT RECORD, and the second decides it.
+//
+//        (a) THE KIND-9 PAGE CONTAINER WAS NEVER FROZEN -- only the FRAME.
+//            `zref_creature_page.hpp` says above its `body` namespace that "a
+//            kind-9 frame reader therefore has a layout to read and needs no
+//            lift; what it needs is a producer". That is TRUE OF A FRAME AND
+//            FALSE OF A PAGE. `spec/creature_rules.md` 2.1 freezes what one
+//            frame CONTAINS; 5 sketches the page in one clause -- "clip
+//            directory {slot_id u16, frame_count u16, event_count u16} +
+//            frames + event tags" -- under a heading reading "layouts freeze
+//            with SW.TOOLS.ASSET at Phase 12 entry". No magic, no version, no
+//            field order, no offsets, no alignment, and no statement of where
+//            frame `f` of clip `c` begins. A reader cannot read a frozen frame
+//            IT CANNOT LOCATE.
+//
+//            AUTHORED AND FROZEN 2026-09-21 (POSEPAGE), under R90's own
+//            recommendation item 1 -- "author/freeze the body section AND A
+//            MINIMAL KIND-9 FRAME WITH A ZREF MODEL", whose kind-9 half was
+//            not reached. `reference/include/zref/zref_clip_page.hpp`,
+//            `tools/pack/mkclipbank.py` and the golden
+//            `tests/golden/creature_clip/clip_page_v1.bin`, pinned the way the
+//            ladder table is pinned. THIS BLOCKER IS GONE.
+//
+//        (b) `pose_requests` HAS NO CARRIER, and this is the one that keeps
+//            the entry open. `design/contracts/GEOM.POSE.md` names the input
+//            as "{type_id, clip_id, frame_no, bone_count}" from GEOM.MESHFETCH's
+//            instance walk; `reports/DOCKET.md` triages `MESHFETCH.dispatch`
+//            as "external -- the caller's instance walk"; and the caller's
+//            command, `DrawForm 0x0300`, carries form, material_set,
+//            transform, viewport_mask, semantic_weight and flags -- NO
+//            ANIMATION STATE AT ALL. Searched 2026-09-21: `clip_id`,
+//            `clip_slot`, `frame_no` and `type_id` appear in ZERO files under
+//            `fpga/rtl/geometry/`, and `spec/commands.zidl` has no pose, clip
+//            or animation command of any opcode.
+//
+//            So building the page reader and the sixth requester gives this
+//            entry REAL BYTES and still no statement of WHICH FRAME. That is
+//            an ABI addition and therefore an owner decision, filed as
+//            D-POSEPAGE-A. The precedent is in this tree: ruling W04 appended
+//            `DrawWarpedForm` at 0x0304 rather than widening `DrawForm`, and
+//            appended it at the END precisely so nine goldens are not rewritten.
+//
+//      AND THE RULING THAT GOVERNS THE PRODUCER'S SHAPE, which this entry has
+//      never cited: `reports/ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md`,
+//      OWNER-RATIFIED 2026-09-03, whose scope line is "creature clip-bank
+//      storage ... and the GEOM.POSE memory seam". Its 10.1 rules that the
+//      decision "requires no new animation-specific arithmetic block and no
+//      direct GEOM.POSE connection to MEM.HPS.BRIDGE"; its 6 makes FRAME
+//      SEALING conditional on residency so GEOM.POSE never waits on a page;
+//      and its 4.2 freezes "frame packets refer to validated resident
+//      animation resources, never naked long-lived local-SDRAM addresses"
+//      while saying in terms that "the exact command-record representation is
+//      deferred". THAT DEFERRAL IS BLOCKER (b), named by the owner eighteen
+//      days before this entry was written and never read back into it.
+//
+//      ONE CONSEQUENCE FOR WHOEVER BUILDS THE READER, from this subsystem's
+//      own committed mutant. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv`
+//      models "a page read that misses can easily exceed 115 cycles" against
+//      the decoder's measured 115.4 cycles per bone. So the reader must fill
+//      BOTH stores WHOLE before it raises `req_i`, exactly as
+//      `zhao_geom_ladderbank` adopts a page before it answers a lookup -- never
+//      per-bone behind the decode. A reader that fetched on demand would turn
+//      `bone_prefetch_late_o` from a dead counter into a live fault, which is
+//      the one thing that mutant exists to say.
+//
+//      Until those are settled this stays a gap, and the reason is now ONE
+//      thing rather than three: an absent CARRIER for the clip and frame.
+//      The freeze is lifted, the bytes are authored on both page kinds, the
+//      store is built and priced, and the memory model was never missing.
 //
 //      WHAT IS NOT PART OF THIS GAP, because the distinction is the whole
 //      point of closing I10: the palette STORE is present and internal. A
