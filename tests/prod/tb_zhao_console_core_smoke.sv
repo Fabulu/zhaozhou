@@ -493,6 +493,25 @@ module tb_zhao_console_core_smoke
   // Client B, its arena lifetime and its reference port are NO LONGER PORTS:
   // TERRAIN.GROUP_SEQ and TERRAIN.TESS drive them inside the DUT. What the
   // bench declares instead is the terrain producer's OWN boundary.
+  // THE SUBPATCH JOB PORT IS AN OVERRIDE NOW, NOT THE ONLY PRODUCER (entry
+  // I21, 2026-09-21). `zhao_terrain_jobissue` issues these thirteen fields
+  // inside the core, from `zhao_terrain_lod`'s decisions, from descriptors
+  // `zhao_terrain_spdesc` assembles out of `zhao_terrain_devstore`. THE BENCH
+  // STILL DRIVES THEM, and that is deliberate rather than left over.
+  //
+  // WHY THIS BENCH CANNOT USE THE INTERNAL PRODUCER, and it is upstream of
+  // everything the composition did: every terrain page this bench plays FAILS
+  // ITS CRC -- the directory reports `crc_fail=3` -- so no page becomes
+  // resident, TERRAIN.SEQ issues no compose job, the compose cache never
+  // fills, never serves, and never opens the door the assembler and the issuer
+  // wait at. The injection below is therefore the ONLY thing here that makes
+  // TERRAIN.TESS run, and SIX assertions stand on it.
+  //
+  // Deleting it was tried and reverted inside this packet. It cost exactly
+  // those six assertions and bought nothing: the completion register moves on
+  // MODULES becoming connected, and a port is not a module. The real hole is
+  // the CRC failure, and this injection was hiding it -- it is now named in
+  // the core's entry I21 instead of being papered over here.
   logic                    terr_job_valid_i;
   logic                    terr_job_ready_o;
   logic [5:0]              terr_job_ox_i;
@@ -598,6 +617,9 @@ module tb_zhao_console_core_smoke
   logic [4:0]              terr_cc_cs_ci_i;
   logic [4:0]              terr_cc_cs_cj_i;
   logic [1:0]              terr_cc_cs_substance_i;
+  // `terr_cc_serve_release_i` is OR-ed with `zhao_terrain_jobissue`'s release
+  // inside the core: a harness that drives a job by hand must be able to
+  // retire the patch it drove.
   logic                    terr_cc_serve_release_i;
 
   logic [31:0]             terr_ps_lattices_o;
@@ -935,6 +957,42 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_lodfeed_lattices_dropped_o;
   logic [31:0]             terr_lodfeed_dev_records_o;
   logic [31:0]             terr_lodfeed_stray_samples_o;
+  // THE SUBPATCH DECISION CHAIN'S EVIDENCE (entry I21, composed 2026-09-21).
+  // Declared, not asserted on: see the note at the terrain job above for why
+  // every one of them reads ZERO in this bench and why that zero is the
+  // upstream CRC failure rather than anything about these five blocks. The
+  // bench prints them on the `lod` line so the zero is visible and explained
+  // instead of absent.
+  logic [31:0]             terr_ds_patches_read_o;
+  logic [31:0]             terr_ds_read_unwritten_o;
+  logic [31:0]             terr_ds_hist_step_bad_o;
+  logic [31:0]             terr_sp_descriptors_o;
+  logic [31:0]             terr_sp_door_refused_o;
+  logic [31:0]             terr_sp_serve_no_door_o;
+  logic [31:0]             terr_sp_door_src_mismatch_o;
+  logic [31:0]             terr_sp_order_bad_o;
+  logic [31:0]             terr_sp_patches_unfresh_o;
+  logic [31:0]             terr_lod_rep_count0_o;
+  logic [31:0]             terr_lod_rep_count1_o;
+  logic [31:0]             terr_lod_rep_count2_o;
+  logic [31:0]             terr_lod_rep_count3_o;
+  logic [31:0]             terr_lod_triangles_emitted_o;
+  logic [31:0]             terr_ji_jobs_issued_o;
+  logic [31:0]             terr_ji_patches_dropped_o;
+  logic [31:0]             terr_ji_ctx_refused_o;
+  logic [31:0]             terr_ji_serve_no_ctx_o;
+  logic [31:0]             terr_ji_ctx_src_mismatch_o;
+  logic [31:0]             terr_ji_lod_src_mismatch_o;
+  logic [31:0]             meas_gov_rep_count0_o;
+  logic [31:0]             meas_gov_rep_count1_o;
+  logic [31:0]             meas_gov_rep_count2_o;
+  logic [31:0]             meas_gov_rep_count3_o;
+  logic [31:0]             meas_starve_denials_o;
+  logic [31:0]             meas_starve_frames0_o;
+  logic [31:0]             meas_starve_frames1_o;
+  logic [31:0]             view_kx_saturated_o;
+  logic [31:0]             view_proj_saturations_o;
+  logic [31:0]             cmd_view_count_refused_o;
   // `hist_rd_*` is GONE from the core's edge (entry I19 closed 2026-09-20):
   // the histogram's read port is driven inside the core by the HPS register
   // aperture's tenant 0. This bench reads bins through `hostreg_*` instead.
@@ -3732,6 +3790,19 @@ module tb_zhao_console_core_smoke
     terr_pt_fld_valid_i = '0;
     terr_pt_fld_height_i = '0;
     terr_pt_fld_add_valid_i = '0;
+    terr_job_valid_i = '0;
+    terr_job_ox_i = '0;
+    terr_job_oz_i = '0;
+    terr_job_level_i = '0;
+    terr_job_lvl_nz_i = '0;
+    terr_job_lvl_pz_i = '0;
+    terr_job_lvl_nx_i = '0;
+    terr_job_lvl_px_i = '0;
+    terr_job_morph_i = '0;
+    terr_job_surface_i = '0;
+    terr_job_dual_i = '0;
+    terr_job_src_id_i = '0;
+    terr_cc_serve_release_i = '0;
     terr_pt_fld_add_x0_i = '0;
     terr_pt_fld_add_z0_i = '0;
     terr_pt_fld_add_x1_i = '0;
@@ -3746,7 +3817,6 @@ module tb_zhao_console_core_smoke
     terr_cc_cs_substance_i = '0;
     // I21: the served patch's retirement. Never pulsed here, because the block
     // that would pulse it is the absent subpatch issuer.
-    terr_cc_serve_release_i = '0;
     terr_dm_valid_i = '0;
     terr_dm_slot_i = '0;
     terr_dm_gen_i = '0;
@@ -3847,18 +3917,6 @@ module tb_zhao_console_core_smoke
     proj_cfg_addr_i = '0;
     proj_cfg_data_i = '0;
     proj_en_i = '0;
-    terr_job_valid_i = '0;
-    terr_job_ox_i = '0;
-    terr_job_oz_i = '0;
-    terr_job_level_i = '0;
-    terr_job_lvl_nz_i = '0;
-    terr_job_lvl_pz_i = '0;
-    terr_job_lvl_nx_i = '0;
-    terr_job_lvl_px_i = '0;
-    terr_job_morph_i = '0;
-    terr_job_surface_i = '0;
-    terr_job_dual_i = '0;
-    terr_job_src_id_i = '0;
     terr_job_view_mask_i = '0;
     terr_job_mat_a_i = '0;
     terr_job_mat_b_i = '0;
@@ -5018,14 +5076,22 @@ module tb_zhao_console_core_smoke
     // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
     // fork inside the core issues it, from the meshlet the draw above fetched.)
 
-    // ---- the terrain job --------------------------------------------------
+    // ---- the terrain job, INJECTED THROUGH THE OVERRIDE -------------------
     // One subpatch, one view, level 0, top surface, no geomorph. The tess
     // turns this into 81 window vertices (client B's fill) and then its
     // triangles (the replay), so both halves of client B are exercised by ONE
-    // job. `sparse_fill_i` stays LOW: the subsystem here carries a dense
-    // shell, and a sparse fill against a dense shell is a seal-short fault the
-    // terrain differential fires on purpose -- not something a wiring smoke
-    // bench should provoke.
+    // job. `sparse_fill_i` stays LOW: the subsystem here carries a dense shell,
+    // and a sparse fill against a dense shell is a seal-short fault the terrain
+    // differential fires on purpose -- not something a wiring smoke bench
+    // should provoke.
+    //
+    // SINCE 2026-09-21 THIS IS AN OVERRIDE AND NOT THE ONLY PRODUCER.
+    // `zhao_terrain_jobissue` issues the same thirteen fields inside the core
+    // and cannot be reached from HERE -- see the declaration block above for
+    // why, and note that the reason is the CRC failure and not the
+    // composition. While this bench drives `terr_job_valid_i` the boundary
+    // wins the cycle, exactly as the host's `proj_cfg_we_i` wins over
+    // CMD.EXEC's lowering onto the projector bank.
     @(posedge gpu_clk);
     terr_job_ox_i        <= 6'd0;
     terr_job_oz_i        <= 6'd0;

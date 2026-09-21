@@ -180,6 +180,14 @@ module tb_cmd_exec_pair #(
   output logic [31:0] tok_vreq_geom_o,
   output logic [31:0] tok_vreq_frag_o,
   output logic [31:0] contracts_applied_o,
+  // MEASURE.GOVERNOR's two ratified fields and the `view_count` verdict
+  // (2026-09-21, packet TERRACOMP). Exposed here because a port this pair does
+  // not connect is a PINMISSING that only the next elaboration finds -- which
+  // is exactly how this one was found.
+  output logic [ 1:0] gov_view_count_o,
+  output logic [31:0] gov_px_err0_o,
+  output logic [31:0] gov_px_err1_o,
+  output logic [31:0] view_count_refused_o,
 
     output logic              post_look_busy_o,
     output logic [ 7:0]       post_bloom_gain_o,
@@ -387,6 +395,10 @@ module tb_cmd_exec_pair #(
     .tok_vreq_geom_o    (tok_vreq_geom_o),
     .tok_vreq_frag_o    (tok_vreq_frag_o),
     .contracts_applied_o(contracts_applied_o),
+    .gov_view_count_o    (gov_view_count_o),
+    .gov_px_err0_o       (gov_px_err0_o),
+    .gov_px_err1_o       (gov_px_err1_o),
+    .view_count_refused_o(view_count_refused_o),
 
       .post_idle_i       (post_idle_i),
       .post_look_busy_o  (post_look_busy_o),

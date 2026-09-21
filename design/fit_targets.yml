@@ -3223,6 +3223,28 @@ targets:
       # walker it instantiates and carries no storage.
       - fpga/rtl/terrain/zhao_terrain_loddev.sv
       - fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+      # ---- THE SUBPATCH DECISION CHAIN, composed 2026-09-21 (entry I21) ----
+      # Nine blocks in one commit, because each is the next one's producer and
+      # composing any of them alone would leave a dangling port -- R75. The
+      # view chain snoops the projector's configuration bus; MEASURE.STARVE
+      # reads MEASURE.TOKENS' denial stream; the governor's six knobs are
+      # TERRAIN.LOD's, and TERRAIN.LOD's decisions are TERRAIN.JOBISSUE's,
+      # which drives TERRAIN.GROUP_SEQ's job port -- previously this module's
+      # boundary.
+      #
+      # `zhao_terrain_devstore` is the 185 M10K the owner GRANTED as ruling
+      # R234 D3 (2026-09-21). It is a third of the device's memory and it is a
+      # recorded cost, not a veto -- the ruling's own budget line prices the
+      # console at 541 of 553 M10K WITH it.
+      - fpga/rtl/common/zhao_view_eye.sv
+      - fpga/rtl/common/zhao_view_projscale.sv
+      - fpga/rtl/common/zhao_view_projq88.sv
+      - fpga/rtl/measure/zhao_measure_starve.sv
+      - fpga/rtl/measure/zhao_measure_governor.sv
+      - fpga/rtl/terrain/zhao_terrain_devstore.sv
+      - fpga/rtl/terrain/zhao_terrain_spdesc.sv
+      - fpga/rtl/terrain/zhao_terrain_lod.sv
+      - fpga/rtl/terrain/zhao_terrain_jobissue.sv
       # ---- FIELD v3, composed 2026-09-19 (core entry I42) -------------------
       # THE LATEST VERSION, AND ONLY THE LATEST. An earlier revision of this
       # packet put FIELD v1 here -- `zhao_field_seq` and its op units -- because

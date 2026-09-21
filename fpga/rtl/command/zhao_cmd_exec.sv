@@ -197,7 +197,22 @@
 //                                  matrix and the profile, so a view can never
 //                                  run with this frame's camera and last
 //                                  frame's eye.
-//   NOT       pixel_error       -- MEASURE.GOVERNOR is not composed.
+//   CARRIED   pixel_error       -- the view's per-pixel error budget, fx16, as
+//                                  of 2026-09-21 (packet TERRACOMP). Published
+//                                  on `gov_px_err0_o`/`gov_px_err1_o` at the
+//                                  END of the same view walk that writes the
+//                                  matrix, the profile and the eye, under the
+//                                  SAME `sv_dirty` bit -- so MEASURE.GOVERNOR
+//                                  can never decide a level from this frame's
+//                                  camera and last frame's error budget.
+//                                  THE SENTENCE THIS REPLACES SAID "MEASURE.
+//                                  GOVERNOR is not composed", and three passes
+//                                  of this campaign read that as "the field is
+//                                  not in the ABI". It always was: the zidl has
+//                                  declared `fx16 pixel_error` since
+//                                  ratification and `ZHAO_SET_VIEW_OFF_
+//                                  PIXEL_ERROR` has been generated all along.
+//                                  What was missing was this decode arm.
 //   READ      geometry_tokens   -- the view's token REQUEST (rulings R18/R33),
 //   READ      fragment_tokens      committed to MEASURE.TOKENS as `tok_vreq_*`,
 //                                  which clamps it to the contract's ceiling.
@@ -654,6 +669,24 @@ module zhao_cmd_exec
     output logic [31:0] tok_vreq_frag_o,
     output logic [31:0] contracts_applied_o,  // SetPresentationContract records committed
 
+    // ---- MEASURE.GOVERNOR: the two ratified fields it reads ---------------
+    // Both are LEVELS, not pulses: the governor samples them on its own
+    // `frame_i` and holds between frames, so a handshake would only invent a
+    // second opinion about when a budget is current. They persist across
+    // packets exactly as `pc_mode` does -- a packet carrying neither field
+    // leaves the governor deciding from the last one that did.
+    output logic [ 1:0] gov_view_count_o,
+    output logic [31:0] gov_px_err0_o,
+    output logic [31:0] gov_px_err1_o,
+    // `view_count` OUT OF RANGE. `video_rules.md` 3.1 ratifies TWO views, so 1
+    // and 2 are the lawful bytes. The refusal law is `pc_mode`'s, verbatim and
+    // for its reason: CMD.DMA's Phase-2 structural walk deliberately omits the
+    // decoder's BAD_VALUE step, so an unlawful byte CAN arrive. LAST VALID
+    // WINS. UNLIKE `pc_mode` IT IS COUNTED HERE, because CMD.SCHEDULER parses
+    // this record and does NOT judge this field -- it judges `mode` only. An
+    // unowned verdict is how a field gets adopted silently.
+    output logic [31:0] view_count_refused_o,
+
     // ---- R35/R36: SetPost and SetGradeTable -> POST.COMPOSITE and POST.ECHO --
     // The LOOK (every value POST.COMPOSITE takes per frame) and the grading
     // table's product vectors, applied ONLY while the post lease is idle
@@ -899,6 +932,15 @@ module zhao_cmd_exec
   localparam int unsigned CFG_EYE_X = 19;
   localparam int unsigned CFG_EYE_Y = 20;
   localparam int unsigned CFG_EYE_Z = 21;
+
+  // SetView.pixel_error and SetPresentationContract.view_count -- the two
+  // fields MEASURE.GOVERNOR reads. Imported from the generated package like
+  // every other offset; this block reads no layout it did not import.
+  // NEITHER GOES ON THE cfg BUS. The eye does because the projector bank is a
+  // bank and `zhao_view_eye` is its reader; these two have no bank, so a cfg
+  // address for them would invent a holder block to read it back out again.
+  localparam int unsigned OFF_SV_PXERR = ZHAO_SET_VIEW_OFF_PIXEL_ERROR;
+  localparam int unsigned OFF_PC_VIEWS = ZHAO_SET_PRESENTATION_CONTRACT_OFF_VIEW_COUNT;
 
   // ---- THE VIEWPORT RECT (cfg 16/17): SetView.viewport_id, lowered ---------
   // `SetView.viewport_id` is a SEPARATE field from `view_id` -- 17 and 16 of
@@ -1197,6 +1239,16 @@ module zhao_cmd_exec
   logic [31:0] sv_eyex [0:1];
   logic [31:0] sv_eyey [0:1];
   logic [31:0] sv_eyez [0:1];
+  // The view's PIXEL ERROR BUDGET, shadowed per view for the eye's reason and
+  // under the eye's dirty bit. MEASURE.GOVERNOR divides by it, so its ZERO is
+  // handled where the division is (`zhao_measure_governor.sv` substitutes 1 and
+  // records `zero0_r`); this block carries the wire value and does not correct
+  // it, because a command executor that quietly repaired a budget would make
+  // the governor's zero-guard unreachable and its counter a claim.
+  logic [31:0] sv_pxerr [0:1];
+  // SetPresentationContract.view_count, one byte, staged raw so the lawfulness
+  // test below reads what arrived rather than what was already accepted.
+  logic [ 7:0] pc_views;
   // The view's VIEWPORT ID, shadowed per view exactly like the profile and
   // the eye, and committed under the SAME `sv_dirty` bit -- for the same
   // reason: a view whose camera is this frame's and whose rectangle is last
@@ -1722,12 +1774,24 @@ module zhao_cmd_exec
         sv_eyex[vi] <= 32'd0;
         sv_eyey[vi] <= 32'd0;
         sv_eyez[vi] <= 32'd0;
+        // ZERO IS THE RESET AND IT IS NOT A DEFAULT BUDGET. The governor reads
+        // zero as "no budget stated" and holds its previous targets; a console
+        // that never issues a SetView therefore never makes the governor decide
+        // from a number nobody chose.
+        sv_pxerr[vi] <= 32'd0;
         // Viewport 0 is legal in every mode, so the reset value is in range
         // for all three and a console that never issues a viewport_id gets
         // the mode's full canvas rather than a refusal.
         sv_vpid[vi] <= 8'd0;
       end
       pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
+      // ONE view until a contract says two -- `video_rules.md` 3.1's floor, and
+      // the value `zhao_measure_governor` reads as "view 1 is not presented".
+      pc_views         <= 8'd1;
+      gov_view_count_o <= 2'd1;
+      gov_px_err0_o    <= 32'd0;
+      gov_px_err1_o    <= 32'd0;
+      view_count_refused_o <= 32'd0;
       // VIDEO_Z60, the same reset mode `zhao_cmd_scheduler` and
       // `zhao_video_mode` both take, so the three agree before any contract.
       pc_mode <= 2'd0;
@@ -1887,6 +1951,10 @@ module zhao_cmd_exec
                   sv_eyey[sv_view] <= {pkt_byte_i, sv_eyey[sv_view][31:8]};
                 if ((rpos >= 16'(OFF_SV_EYEZ)) && (rpos < 16'(OFF_SV_EYEZ + 4)) && sv_ok)
                   sv_eyez[sv_view] <= {pkt_byte_i, sv_eyez[sv_view][31:8]};
+                // THE PIXEL ERROR BUDGET. Same shift, same gate, same shadow.
+                // Byte 84..87 of 96, so it also ends before the record does.
+                if ((rpos >= 16'(OFF_SV_PXERR)) && (rpos < 16'(OFF_SV_PXERR + 4)) && sv_ok)
+                  sv_pxerr[sv_view] <= {pkt_byte_i, sv_pxerr[sv_view][31:8]};
                 if (sv_in_mat) begin
                   wacc <= {pkt_byte_i, wacc[23:8]};
                   if ((mo[1:0] == 2'd3) && sv_ok)
@@ -1908,6 +1976,11 @@ module zhao_cmd_exec
                 // would report one bad packet as two.
                 if ((rpos == 16'(OFF_PC_MODE)) && (pkt_byte_i <= 8'd2))
                   pc_mode <= pkt_byte_i[1:0];
+                // THE VIEW COUNT, staged RAW. The lawfulness test is at the
+                // record's end rather than here, because a byte refused here
+                // would leave nothing to count it against: `pc_views` must
+                // still hold the arriving byte for the verdict to look at.
+                if (rpos == 16'(OFF_PC_VIEWS)) pc_views <= pkt_byte_i;
                 if ((rpos >= 16'(OFF_PC_G0)) && (rpos < 16'(OFF_PC_G0 + 4))) pc_g0 <= {pkt_byte_i, pc_g0[31:8]};
                 if ((rpos >= 16'(OFF_PC_G1)) && (rpos < 16'(OFF_PC_G1 + 4))) pc_g1 <= {pkt_byte_i, pc_g1[31:8]};
                 if ((rpos >= 16'(OFF_PC_F0)) && (rpos < 16'(OFF_PC_F0 + 4))) pc_f0 <= {pkt_byte_i, pc_f0[31:8]};
@@ -2349,6 +2422,16 @@ module zhao_cmd_exec
                 tok_budget_shared_o <= pc_sh;
                 pc_dirty            <= 1'b0;
                 `ZHAO_EXEC_INC(contracts_applied_o);
+                // THE VIEW COUNT'S VERDICT, taken with the ceiling it arrived
+                // beside. `video_rules.md` 3.1 ratifies two views: 1 and 2 are
+                // the lawful bytes and everything else -- INCLUDING ZERO, which
+                // would present nothing -- holds the previous count and is
+                // counted. Adopting the byte would hand MEASURE.GOVERNOR a view
+                // count the picture does not have.
+                if ((pc_views == 8'd1) || (pc_views == 8'd2))
+                  gov_view_count_o <= pc_views[1:0];
+                else
+                  `ZHAO_EXEC_INC(view_count_refused_o);
               end
               tk <= 2'd1;
             end
@@ -2414,6 +2497,18 @@ module zhao_cmd_exec
               if (cw == vp_last_c) begin
                 cw           <= 5'd0;
                 sv_dirty[cv] <= 1'b0;
+                // THE PIXEL ERROR BUDGET LANDS HERE, at the END of the walk,
+                // NOT beside the eye at step 17. It is off the cfg bus, so it
+                // has no step -- and publishing it at the walk's end is what
+                // puts it under the same `sv_dirty` edge as the matrix, the
+                // profile, the eye and the rectangle. Publishing it at CAPTURE
+                // time instead would move the governor's budget on a record
+                // that `verdict_error_i` later abandons -- the clear above sets
+                // `sv_dirty <= 2'd0` and no walk ever runs, so nothing else of
+                // that record reaches the machine. This field would have been
+                // the one exception.
+                if (cv) gov_px_err1_o <= sv_pxerr[1];
+                else    gov_px_err0_o <= sv_pxerr[0];
                 `ZHAO_EXEC_INC(views_written_o);
                 if (!vp_ok_c) begin
                   `ZHAO_EXEC_INC(viewport_range_refused_o);

@@ -201,6 +201,7 @@ class Rig {
     t.door_valid_i = 0;
     t.door_slot_i = 0;
     t.door_src_id_i = 0;
+    t.door_dual_i = 0;
     t.serve_valid_i = 0;
     t.serve_src_id_i = 0;
     t.o_lat_req_i = 0;
@@ -352,11 +353,15 @@ class Rig {
     for (int i = 0; i < n; ++i) step();
   }
 
-  // Push one {slot, src_id} at the compose door. Returns true if it was taken.
-  bool push_door(uint32_t slot, uint32_t src_id) {
+  // Push one {slot, src_id, dual} at the compose door. Returns true if it was
+  // taken. `dual` defaults false so every case written before 2026-09-21 means
+  // exactly what it meant: a page with no underside is the legacy
+  // single-surface page, which is what an unwritten flag should say.
+  bool push_door(uint32_t slot, uint32_t src_id, bool dual = false) {
     t.door_valid_i = 1;
     t.door_slot_i = slot;
     t.door_src_id_i = src_id;
+    t.door_dual_i = dual ? 1 : 0;
     drive();
     const bool taken = t.door_ready_o != 0;
     step();
@@ -451,7 +456,12 @@ void case2_two_patches() {
   r.store.fresh_of_slot[9] = true;
 
   r.lat.base = 0x00200000;
-  check_true(r.push_door(3, 0xA1A1), "case2: door takes A");
+  // PAGE A IS DUAL AND PAGE B IS NOT. That asymmetry is the point: the console
+  // used to read this flag off TERRAIN.PAGESTREAM's LIVE `v_flags_o`, which is
+  // the FILLING page's -- so with one page filling and another served it was
+  // the wrong patch's flag entirely, not merely an unstable one. Here A is
+  // served while B is at the door, and `patch_dual_o` must still say A.
+  check_true(r.push_door(3, 0xA1A1, true), "case2: door takes A");
   r.serve(0xA1A1);
   const StoreModel store_a = r.store;
   const LatticeModel lat_a = r.lat;
@@ -459,8 +469,13 @@ void case2_two_patches() {
   // A new patch: new slot, new src_id, and the cache's serve parity has
   // swapped to a different placement.
   r.lat.base = 0x05500000;
-  check_true(r.push_door(9, 0xB2B2), "case2: door takes B");
+  check_true(r.push_door(9, 0xB2B2, false), "case2: door takes B");
+  // A's flag must still be the one on the port while A is the served patch --
+  // sampled BEFORE B is served, because B's push has already happened and a
+  // live net would have moved on B's door beat.
+  check_eq(r.t.patch_dual_o, 1, "case2: patch_dual_o is A's while A is served");
   r.serve(0xB2B2);
+  check_eq(r.t.patch_dual_o, 0, "case2: and B's once B is served");
 
   check_eq(r.descs.size(), 32, "case2: thirty-two descriptors");
   check_eq(r.t.patches_assembled_o, 2, "case2: two patches assembled");
