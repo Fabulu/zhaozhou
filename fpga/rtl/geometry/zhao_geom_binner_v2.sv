@@ -387,6 +387,15 @@ module zhao_geom_binner_v2 #(
   // The Packet-D bank is physically META_SLICES independent 40-bit RAMs. At
   // the default METAW=1157 this is exactly 29 ascending slices and the image is
   // {3'b0, metadata1157}; no pointer or caller cookie is stored beside it.
+  //
+  // THE COMPOSED CONSOLE NO LONGER PASSES THE DEFAULT. Owner decision R234 D1
+  // (2026-09-21) gave `zhao_geom_bin_pipe_v2` three more attribute planes, so
+  // it instantiates this block with METAW = 1877: 47 slices of 40 x TRI_CAP,
+  // and the pad is still exactly three bits (1880 - 1877), which is why the
+  // waiver below and the two-bit profile-verdict guard both hold unchanged.
+  // The DEFAULT stays 1157 deliberately -- it is what this block's own directed
+  // bench and `tests/tools/test_render_texture_packet_d.py` pin, and a
+  // parameter default that tracks its one caller stops being a parameter.
   // The top physical pad has no ABI-visible consumer. Keep the full vector so
   // each generated slice is exactly 40 bits, and waive only the deliberate
   // unexported pad bits (three bits at the Packet-D default).

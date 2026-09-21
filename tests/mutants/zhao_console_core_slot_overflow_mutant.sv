@@ -184,6 +184,9 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
   parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
   parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
+  parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
+  parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
+  parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,

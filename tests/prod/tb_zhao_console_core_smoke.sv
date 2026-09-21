@@ -3387,11 +3387,31 @@ module tb_zhao_console_core_smoke
   // ---- the colour, and why it is NOT white ---------------------------------
   // The glow BORROWS the fragment's own resolved colour (R195 decision 1), so a
   // BLACK fragment has a black halo and lights nothing. The bench's raster
-  // pixels are black only because this same port's `vertex_rgb` field is zero:
+  // pixels WERE black only because this same port's `vertex_rgb` field is zero:
   // with FRAGMENT STATE 0, `zhao_raster_fragment.sv`'s SHADE_MOD is off and
   // `s1_src_rgb_r <= s0_vrgb_r` -- the vertex colour IS the pixel. So the tag
   // alone would have produced `lit=2560` and a plane of zeros, which is a
   // counter moving and a picture that cannot change. Both halves are set.
+  //
+  // ---------------------------------------------------------------------------
+  // AND AS OF 2026-09-21 THE COLOUR NO LONGER ARRIVES, WHICH IS THE POINT
+  // ---------------------------------------------------------------------------
+  // Owner decision R234 D1 reconnected the lit per-vertex colour:
+  // `zhao_raster_tile_pipe_v2` now OVERWRITES `continuation_w.post_earlyz
+  // .vertex_rgb` per fragment from attribute lanes 3..5, so the tail's bits are
+  // dead from that block onward. This form still writes `SMK_GLOW_RGB_C` onto
+  // the tail, and the assertion on `smk_glow_px_q` is INVERTED rather than
+  // deleted: it must now come out ZERO in every form. That is D1's severance of
+  // the stand-in, measured from the other side -- if one word came out 0xB556
+  // the tail would still be reaching the fragment shader and the reconnection
+  // would be a comment rather than a change.
+  //
+  // The fragments are not black any more either, so the glow has a real colour
+  // to borrow. What it borrows is now GEOM.LIGHT's own output, interpolated, so
+  // it is NOT a value this bench can predict -- `smk_lit_px_q` below counts
+  // COLOURED pixels instead of pixels of a chosen colour. That is the same
+  // correction the sentinel-overwrite count already had to make once: the
+  // predicted constant was the defect.
   //
   // THREE CONSTRAINTS PICKED THIS VALUE, and each one would have produced a
   // flaky or blind test on its own:
@@ -3420,6 +3440,14 @@ module tb_zhao_console_core_smoke
   // continuation tail reached, and the whole point is that it is arrived at by
   // walking memory rather than by reading a counter the DUT maintains.
   int unsigned smk_glow_px_q;
+  // How many words of the RASTER's frame carry ANY colour -- drawn (not the
+  // sentinel) and not black. Before R234 D1 this was structurally zero in every
+  // form but -GlowTag, because `vertex_rgb` was a boundary constant at '0 and
+  // fragment state 0 makes the vertex colour the pixel. It is now the count of
+  // covered pixels carrying GEOM.LIGHT's interpolated output, and it is the one
+  // number in this bench that says the Gouraud delivery is live END TO END in
+  // the composed console rather than in a directed harness.
+  int unsigned smk_lit_px_q;
   bit          post_snap_taken_q;
   // The pass's duration: every cycle the post lease is busy (armed at the
   // raster's frame_end, done when the last written-back word has retired).
@@ -5042,6 +5070,8 @@ module tb_zhao_console_core_smoke
           drawn++;
         end
         if (post_fb_snap[w] === SMK_GLOW_PX565_C) smk_glow_px_q++;
+        if ((post_fb_snap[w] !== sentinel_c) && (post_fb_snap[w] !== 16'h0000))
+          smk_lit_px_q++;
       end
       $display("SMOKE: post       frames=%0d passes=%0d src_reads=%0d src_px=%0d line_fill=%0d out=%0d fault=%0d unowned=%0d share_waits=%0d waited=%0d",
                post_frames_o, post_passes_o, post_src_reads_o, post_src_pixels_o,
@@ -5059,6 +5089,9 @@ module tb_zhao_console_core_smoke
                echo_pixels_dropped_o, echo_fault_o);
       $display("SMOKE: post       raster-overwritten=%0d (first drawn pixel 0x%04h) | framebuffer after post differs in %0d word(s) | capture differs in %0d word(s)",
                drawn, first_drawn_px, fb_bad, cap_bad);
+      $display("SMOKE: gouraud    %0d of %0d drawn word(s) carry a COLOUR (the rest are the tile clear) -- GEOM.LIGHT lit %0d vertex/vertices and GEOM.VATTR stored %0d colour(s)",
+               smk_lit_px_q, drawn, geom_light_vertices_lit_o,
+               geom_va_colours_written_o);
       if (post_frames_o != 1 || post_passes_o != 1)
         $fatal(1, "SMOKE: POST.COMPOSITE's lease completed %0d frame(s) / %0d pass(es) after %0d cycles, not 1/1 -- busy=%0d fault=%0d src_px=%0d out=%0d",
                post_frames_o, post_passes_o, guard, post_busy_o, post_fault_o,
@@ -6637,12 +6670,26 @@ module tb_zhao_console_core_smoke
     // received its TAG, and no other pixel may be lit. A tail that reached only
     // some fragments, or a tag leaking onto the tile clear, breaks it -- and a
     // `> 0` test would have passed through both.
-    if (smk_glow_px_q == 0)
-      $fatal(1, "SMOKE: -GlowTag put 0x%06h on the continuation tail and NOT ONE framebuffer word came out 0x%04h. The tail's vertex colour is not reaching the fragment shader, so nothing downstream of it is being tested.",
-             SMK_GLOW_RGB_C, SMK_GLOW_PX565_C);
-    if (gather_frag_lit_o != smk_glow_px_q)
-      $fatal(1, "SMOKE: %0d pixel(s) carry the tail's COLOUR and %0d fragment(s) came out LIT. The same 48-bit word feeds both fields, so they must agree exactly -- [untagged=%0d below_knee=%0d reserved=%0d] of %0d resolved.",
-             smk_glow_px_q, gather_frag_lit_o, gather_frag_untagged_o,
+    // INVERTED BY R234 D1, NOT DELETED. The tail still carries 0x%06h and it
+    // must no longer arrive: `zhao_raster_tile_pipe_v2` overwrites
+    // `vertex_rgb` per fragment from the Gouraud lanes, so a single word of the
+    // tail's colour in the frame would mean the overwrite is not happening and
+    // the reconnection is cosmetic.
+    if (smk_glow_px_q != 0)
+      $fatal(1, "SMOKE: -GlowTag put 0x%06h on the continuation tail and %0d framebuffer word(s) came out 0x%04h. Owner decision R234 D1 makes `vertex_rgb` the INTERPOLATED lit colour off attribute lanes 3..5, so the tail's colour must not reach the fragment shader at all.",
+             SMK_GLOW_RGB_C, smk_glow_px_q, SMK_GLOW_PX565_C);
+    if (smk_lit_px_q == 0)
+      $fatal(1, "SMOKE: -GlowTag tagged the stream and NOT ONE framebuffer word carries a colour. The glow BORROWS the fragment's own colour, so with a black frame this form would be testing a tag against a plane of zeros -- which is what it existed to exclude.");
+    // THE CROSS-CHECK SURVIVES D1, over a different quantity. It used to
+    // difference `gather_frag_lit_o` against the count of pixels carrying the
+    // TAIL's colour; it now differences it against the count of pixels carrying
+    // ANY colour. Both are still two instruments sharing no logic --
+    // `gather_frag_lit_o` is a counter inside R195's law, `smk_lit_px_q` is this
+    // bench walking memory -- and both still say the same thing: every COVERED
+    // fragment got the tag, and no tile-clear word did.
+    if (gather_frag_lit_o != smk_lit_px_q)
+      $fatal(1, "SMOKE: %0d pixel(s) carry a COLOUR and %0d fragment(s) came out LIT. Every covered fragment carries both the tail's tag and the lanes' colour, so they must agree exactly -- [untagged=%0d below_knee=%0d reserved=%0d] of %0d resolved.",
+             smk_lit_px_q, gather_frag_lit_o, gather_frag_untagged_o,
              gather_frag_below_knee_o, gather_reserved_channel_o, gather_fragments_o);
     if (gather_frag_below_knee_o != 0 || gather_reserved_channel_o != 0)
       $fatal(1, "SMOKE: tag 0x%02h is channel GLOW at strength 63, whose ramp gain is 68 -- it is neither below the knee (%0d) nor a reserved channel (%0d). R195's classifier is decoding the tag differently from the frozen `(channel << 6) | strength`.",
@@ -6651,7 +6698,7 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: %0d LIT fragment(s) reached R195's law and POST.COMPOSITE's bloom stage found NO cell contributing. The gather's plane flush and the compositor's plane read disagree about where the cells are.",
              gather_frag_lit_o);
     $display("SMOKE: -GlowTag  END TO END: tag 0x%02h on one boundary port -> %0d covered pixel(s) of %0d resolved -> %0d LIT by R195's law -> %0d bloom cell(s) -> the frame. The composed console has carried a lit fragment.",
-             SMK_GLOW_TAG_C, smk_glow_px_q, gather_fragments_o,
+             SMK_GLOW_TAG_C, smk_lit_px_q, gather_fragments_o,
              gather_frag_lit_o, post_bloom_cells_contributing_o);
 `else
     // NEGATIVE, and it is the half that makes the positive mean anything. With
@@ -6666,14 +6713,38 @@ module tb_zhao_console_core_smoke
     if (post_bloom_cells_contributing_o != 0)
       $fatal(1, "SMOKE: no fragment was tagged and POST.COMPOSITE's bloom stage still found %0d contributing cell(s) -- the plane is not being cleared between frames, or the read is off the flush's coordinate",
              post_bloom_cells_contributing_o);
-    // The other half of -GlowTag's cross-check, in the direction that says the
-    // COLOUR is coming from the tail too: with the port at its boundary zero no
-    // pixel may carry that colour. If one did, 0xB556 would be arriving from
-    // somewhere other than `tri_continuation_tail_i` and the positive form
-    // would be counting the wrong thing.
+    // The other half of -GlowTag's cross-check. It used to read "with the port
+    // at its boundary zero no pixel may carry that colour"; since R234 D1 the
+    // tail's `vertex_rgb` reaches nothing in EITHER form, so this now says the
+    // same thing in both and is kept in both for exactly that reason.
     if (smk_glow_px_q != 0)
-      $fatal(1, "SMOKE: `tri_continuation_tail_i` is '0, so no fragment has a vertex colour -- and %0d framebuffer word(s) came out 0x%04h anyway.",
+      $fatal(1, "SMOKE: `tri_continuation_tail_i` is '0 and the tile pipe overwrites `vertex_rgb` from the Gouraud lanes regardless -- and %0d framebuffer word(s) came out 0x%04h anyway.",
              smk_glow_px_q, SMK_GLOW_PX565_C);
+    // AND THE D1 EVIDENCE, IN THE FORM THAT HAS NO TAG AND NO GLOW.
+    //
+    // This number was STRUCTURALLY ZERO in the plain form until 2026-09-21.
+    // `frag_vert_rgb_i` came from `tri_continuation_tail_i`'s `vertex_rgb`, a
+    // boundary port this bench drives '0, and fragment state 0 makes the vertex
+    // colour the pixel -- so every covered pixel resolved to 0x0000. The
+    // -GlowTag form measured it from the other side: 1,062 glow words and
+    // "every one of the other 1,498 drawn words is 0x0000".
+    //
+    // Owner decision R234 D1 made `vertex_rgb` the interpolated lit colour off
+    // attribute lanes 3..5. GEOM.LIGHT in this same run reports lit vertices
+    // with `last_rgb` matching its reference, and GEOM.VATTR stores them -- so a
+    // frame in which nothing carries a colour means the chain is severed again
+    // somewhere between `zhao_geom_vattr` and `zhao_raster_fragment`, and every
+    // other counter in this bench would still read healthy. That is the failure
+    // this one number exists to catch, and it is the only check in the tree that
+    // can see it in the COMPOSED console.
+    //
+    // It deliberately does not predict the colour. The per-pixel oracle is
+    // `geom_bin_pipe_v2_directed`, which walks it through `current_rast_attr`
+    // and `lit_unit8`; a predicted constant here would be the defect the
+    // sentinel-overwrite count above already had to be rescued from once.
+    if (smk_lit_px_q == 0)
+      $fatal(1, "SMOKE: every drawn pixel is black. GEOM.LIGHT lit %0d vertex/vertices and GEOM.VATTR stored %0d colour(s), and none of it reached the framebuffer -- the Gouraud delivery of owner decision R234 D1 is severed again.",
+             geom_light_vertices_lit_o, geom_va_colours_written_o);
 `endif
     // Every tile writes all SIXTEEN cells including zeros -- that is R5's
     // reason there is no giant reset loop -- so a flush that is not a
@@ -6716,7 +6787,7 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the texture fill socket served %0d line(s) in %0d beat(s) -- a line is exactly eight",
              tfill_lines_q, tfill_beats_q);
 
-    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s), and %0d of those fragments CARRIED A TEXEL. As of 2026-09-20 (entry I49) this bench no longer plays the material seam and the console no longer needs it to: CMD.EXEC lowers a PublishResource, MEM.UPLOAD lands the MATERIAL_SET in RENDER.ASSET_POOL and publishes 5f.1's row, GEOM.DRAWJOB puts the draw's material_set in the job's sideband, it rides the meshlet through GEOM.MESHFETCH, GEOM.ASSETFETCH, GEOM.ASSEMBLE and GEOM.REPLAY beside the meshlet's own material id and the draw's semantic weight, and zhao_material_window reads all three off ONE triangle record and issues the resolve. MATERIAL.RESOLVE finds the set in the directory, fetches RECORD 1 -- the record the MESHLET names, which differs from record 0 in every field the flat request carries -- as ENGINE1 through the adapter's third requester, and the window publishes the answer as the material half of tri_flat_request. The binding page this bench seals (a DIRECT RGB565 row, whose palette slot and generation are ZERO BY THE ROW'S OWN LEGALITY LAW rather than by anyone's choice) accepts the witnesses, the cache misses %0d line(s), the fill socket serves each as eight 16-bit beats, and the island publishes a TMU sample into every fragment. WHAT IS STILL NOT DRIVEN, and is named rather than left to be re-derived: base_rgb is the VERTEX's colour and GEOM.VATTR holds a PER-VERTEX one, so the flat base colour stays a named constant (entry I20's remaining half); tri_continuation_tail_i and tri_fragment_state_i are still boundary ports; and a CLUT material's palette slot and generation have no producer in this console at all, which mat_win_clut_unowned_o counts rather than hides.",
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s), and %0d of those fragments CARRIED A TEXEL. As of 2026-09-20 (entry I49) this bench no longer plays the material seam and the console no longer needs it to: CMD.EXEC lowers a PublishResource, MEM.UPLOAD lands the MATERIAL_SET in RENDER.ASSET_POOL and publishes 5f.1's row, GEOM.DRAWJOB puts the draw's material_set in the job's sideband, it rides the meshlet through GEOM.MESHFETCH, GEOM.ASSETFETCH, GEOM.ASSEMBLE and GEOM.REPLAY beside the meshlet's own material id and the draw's semantic weight, and zhao_material_window reads all three off ONE triangle record and issues the resolve. MATERIAL.RESOLVE finds the set in the directory, fetches RECORD 1 -- the record the MESHLET names, which differs from record 0 in every field the flat request carries -- as ENGINE1 through the adapter's third requester, and the window publishes the answer as the material half of tri_flat_request. The binding page this bench seals (a DIRECT RGB565 row, whose palette slot and generation are ZERO BY THE ROW'S OWN LEGALITY LAW rather than by anyone's choice) accepts the witnesses, the cache misses %0d line(s), the fill socket serves each as eight 16-bit beats, and the island publishes a TMU sample into every fragment. WHAT IS STILL NOT DRIVEN, and is named rather than left to be re-derived: base_rgb is the VERTEX's colour and GEOM.VATTR holds a PER-VERTEX one, so the flat base colour stays a named constant (entry I20's remaining half); tri_continuation_tail_i and tri_fragment_state_i are still boundary ports -- though the tail's vertex_rgb FIELD NO LONGER REACHES THE FRAGMENT, because owner decision R234 D1 (2026-09-21) made zhao_raster_tile_pipe_v2 overwrite it per fragment from attribute lanes 3..5, so what the tail still supplies is vertex_alpha, effect_tag and stencil_reference; and a CLUT material's palette slot and generation have no producer in this console at all, which mat_win_clut_unowned_o counts rather than hides.",
              render_pixels_o, render_bursts_o,
              geom_setup_triangles_submitted_o, v2_frames_admitted_o,
              render_texture_samples_o, render_texture_cache_misses_o);
