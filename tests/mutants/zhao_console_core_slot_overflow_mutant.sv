@@ -910,27 +910,52 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    proj_en_i,
 
   // ---- TERRAIN: the subpatch job that drives client B (I21) ---------------
-  // TERRAIN.GROUP_SEQ's own job port. TERRAIN.LOD exists and its header says
-  // its output is "EXACTLY zhao_terrain_tess's job port" -- but it emits no
-  // view mask and no material riders, and its own `sp_*` producer
-  // (TERRAIN.PATCH's patch_state) is not composed here. See entry I21.
-  input  logic                    terr_job_valid_i,
-  output logic                    terr_job_ready_o,
-  input  logic [5:0]              terr_job_ox_i,
-  input  logic [5:0]              terr_job_oz_i,
-  input  logic [1:0]              terr_job_level_i,
-  input  logic [1:0]              terr_job_lvl_nz_i,
-  input  logic [1:0]              terr_job_lvl_pz_i,
-  input  logic [1:0]              terr_job_lvl_nx_i,
-  input  logic [1:0]              terr_job_lvl_px_i,
-  input  logic [16:0]             terr_job_morph_i,
-  input  logic                    terr_job_surface_i,
-  input  logic                    terr_job_dual_i,
-  input  logic [15:0]             terr_job_src_id_i,
+  // THIRTEEN OF THE SEVENTEEN LEFT THIS LIST 2026-09-21 (packet TERRACOMP).
+  // The subpatch job's whole decision chain is composed below -- MEASURE.
+  // GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC, TERRAIN.LOD and
+  // TERRAIN.JOBISSUE, with the view chain that feeds the governor -- so
+  // `job_valid/ready` and the twelve DECISION fields are driven inside this
+  // module by the block that decides them rather than by a harness. Entry I21
+  // is narrowed accordingly.
+  //
+  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
+  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
+  // slot and source id, and carries it to the sequencer joined to the patch it
+  // describes -- which is strictly better than today, where it reached the
+  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
+  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
+  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
+  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
+  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
+  // `tis_view_mask` live at the door would join two things that move
+  // independently, which is entry I21's own objection and still correct; and
+  // a src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue (a bad pitch, a guard denial, a short burst), so its
+  // identity check would fire once and then be wrong forever. THE BUILD THIS
+  // WANTS is one more forwarded field on those three blocks, beside `flags`.
+  // Named here rather than adapted around.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
+  // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
+  // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
+  // and nothing may leave until that replacement lands. `zhao_terrain_jobissue`
+  // has no port for any of them and refuses them by name in its own header --
+  // inventing them in this composer is exactly the hidden-adapter failure
+  // entry I21 has warned against since it was written.
   input  logic [7:0]              terr_job_mat_a_i,
   input  logic [7:0]              terr_job_mat_b_i,
   input  logic [7:0]              terr_job_weight_i,
+  // `terr_sparse_fill_i` ALSO STAYS, and for the opposite reason to the three
+  // above: it is not a job field at all. `zhao_terrain_group_seq`'s own header
+  // calls it an OWNER KNOB -- legal only against a VALID_MODE = 0 shell, and
+  // "the composition that instantiates both is where the two must agree".
+  // This core carries the DENSE shell, so its correct value is low; freezing
+  // it to a localparam here would have been the easy move and would have taken
+  // the owner's control away in the name of closing a port (CLAUDE.md's sixth
+  // art rule, which is about knobs and not only about colours). It is now read
+  // by `zhao_terrain_jobissue` at the compose door instead of by the sequencer
+  // directly, so the whole draw context {src_id, view_mask, sparse_fill}
+  // travels as ONE record and cannot skew against the patch it describes.
   input  logic                    terr_sparse_fill_i,
 
   // TERRAIN.TESS's lattice and cell-state read ports USED TO BE HERE, as entry
@@ -1079,10 +1104,12 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [1:0]              terr_cc_cs_substance_i,
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
-  // "TESS is finished with the served patch", one patch per RISING EDGE.  The
-  // block that knows is the one that issued the subpatch jobs, and that is the
-  // absent owner entry I21 already names.
-  input  logic                    terr_cc_serve_release_i,
+  // THIS PORT LEFT THE LIST 2026-09-21 (packet TERRACOMP). "TESS is finished
+  // with the served patch", one patch per RISING EDGE.  The block that knows
+  // is the one that issued the subpatch jobs -- `zhao_terrain_jobissue`,
+  // composed below, which releases on `job_ready_i` returning high after the
+  // last job.  That is `zhao_terrain_group_seq`'s own exit proof and not a
+  // counter, a timeout or a policy invented in this composer.
 
   // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
   // Events, never cycles.  These are what say a PAGE became a LATTICE rather
@@ -2547,6 +2574,71 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  terr_lodfeed_lattices_dropped_o,
   output logic [31:0]  terr_lodfeed_dev_records_o,
   output logic [31:0]  terr_lodfeed_stray_samples_o,
+  // ==========================================================================
+  // THE SUBPATCH DECISION CHAIN'S EVIDENCE. Composed 2026-09-21 (TERRACOMP).
+  // ==========================================================================
+  // The five blocks that turn a resident page into TERRAIN.GROUP_SEQ's job
+  // stream -- DEVSTORE, SPDESC, LOD, JOBISSUE and the GOVERNOR above them --
+  // put their FAULT counters and their ratified counters here, for the reason
+  // the histogram's ports one screen up give: a counter nobody outside the
+  // module can read is not evidence about anything. The pure INSTRUMENTS
+  // (`*_wait_clocks_o`, `assemble_clocks_o`, `issue_clocks_o`, the `busy_o`
+  // levels) stay inside: they are durations, they are read by nothing and
+  // `zhao_terrain_spdesc`'s own directed test is where their flatness is
+  // asserted.
+  //
+  // THREE OF THESE WILL READ ZERO IN THE SMOKE AND THE REASON IS THE SAME ONE
+  // PRINTED ABOVE, inherited rather than re-measured: every page the bench
+  // plays fails its CRC, so no lattice is ever mipped, so TERRAIN.LODFEED
+  // writes no deviation record and TERRAIN.DEVSTORE is never written. A
+  // composition whose upstream never fires is not evidence that the
+  // composition works; the four blocks' own directed tests are.
+  output logic [31:0]  terr_ds_patches_read_o,
+  output logic [31:0]  terr_ds_read_unwritten_o,
+  output logic [31:0]  terr_ds_hist_step_bad_o,
+  output logic [31:0]  terr_sp_descriptors_o,
+  output logic [31:0]  terr_sp_door_refused_o,
+  output logic [31:0]  terr_sp_serve_no_door_o,
+  output logic [31:0]  terr_sp_door_src_mismatch_o,
+  output logic [31:0]  terr_sp_order_bad_o,
+  output logic [31:0]  terr_sp_patches_unfresh_o,
+  output logic [31:0]  terr_lod_rep_count0_o,
+  output logic [31:0]  terr_lod_rep_count1_o,
+  output logic [31:0]  terr_lod_rep_count2_o,
+  output logic [31:0]  terr_lod_rep_count3_o,
+  output logic [31:0]  terr_lod_triangles_emitted_o,
+  output logic [31:0]  terr_ji_jobs_issued_o,
+  output logic [31:0]  terr_ji_patches_dropped_o,
+  output logic [31:0]  terr_ji_ctx_refused_o,
+  output logic [31:0]  terr_ji_serve_no_ctx_o,
+  output logic [31:0]  terr_ji_ctx_src_mismatch_o,
+  output logic [31:0]  terr_ji_lod_src_mismatch_o,
+  // MEASURE.GOVERNOR's `lod_representation_counts` is a DIFFERENT catalog
+  // entry from TERRAIN.LOD's `terrain_lod_lod_representation_counts` --
+  // design/blocks.yml names both -- and they count different things: the
+  // governor's four lanes are the LEVELS IT TARGETED, TERRAIN.LOD's are the
+  // levels it actually PICKED after hysteresis, the hold and the neighbour
+  // clamp. Exposing only one of the pair would make the difference between a
+  // target and a decision unobservable, which is the whole quantity the
+  // governor exists to set.
+  output logic [31:0]  meas_gov_rep_count0_o,
+  output logic [31:0]  meas_gov_rep_count1_o,
+  output logic [31:0]  meas_gov_rep_count2_o,
+  output logic [31:0]  meas_gov_rep_count3_o,
+  output logic [31:0]  meas_starve_denials_o,
+  output logic [31:0]  meas_starve_frames0_o,
+  output logic [31:0]  meas_starve_frames1_o,
+  // VIEW.PROJSCALE's absolute-value saturation and VIEW.PROJQ88's Q8.8
+  // saturation. Both are the "the number did not fit" fault of a scale this
+  // console derives rather than receives, and an LOD budget computed from a
+  // saturated projection would be silently wrong in the FLATTERING direction
+  // (too coarse is cheap, and cheap looks healthy on every other counter).
+  output logic [31:0]  view_kx_saturated_o,
+  output logic [31:0]  view_proj_saturations_o,
+  // CMD.EXEC's refusal of an unlawful `SetPresentationContract.view_count`.
+  // CMD.SCHEDULER judges that record's `mode` and NOT this field, so without
+  // this port the verdict would have no owner and no reader.
+  output logic [31:0]  cmd_view_count_refused_o,
 
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.

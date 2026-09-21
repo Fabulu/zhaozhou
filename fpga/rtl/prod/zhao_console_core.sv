@@ -3469,6 +3469,114 @@
 //      job port's three material fields, the view-mask reconciliation, the
 //      neighbour edge levels and the compose-cache retirement. Read on.
 //
+//
+//      >> ============================================================ <<
+//      >> COMPOSED 2026-09-21 (packet TERRACOMP). THIRTEEN OF THE       <<
+//      >> SEVENTEEN JOB FIELDS AND THE RETIREMENT PULSE ARE NOW DRIVEN  <<
+//      >> INSIDE THIS MODULE. WHAT REMAINS OF THIS ENTRY IS FOUR        <<
+//      >> BOUNDARY SIGNALS AND ONE DECLARED TIE-OFF.                    <<
+//      >> ============================================================ <<
+//      >>
+//      >> NINE BLOCKS IN ONE COMMIT, and the count is why this worked when
+//      >> five previous lanes correctly refused. R75 forbids closing one gap
+//      >> by opening another, so a leaf wired alone is a producer with no
+//      >> consumer -- and R223/R241 hold `zhao_measure_governor` by name for
+//      >> exactly that. THE RESOLUTION IS NOT TO ARGUE WITH R75. It is to
+//      >> compose the GROUP, so every producer meets its consumer inside one
+//      >> edit. Composed together, at the end of this file:
+//      >>
+//      >>   `zhao_view_eye`          cfg 19/20/21 (R63) -> TERRAIN.LOD's eye
+//      >>   `zhao_view_projscale`    the cfg bus        -> PROJQ88
+//      >>   `zhao_view_projq88`      kx * vw / 512      -> the governor
+//      >>   `zhao_measure_starve`    MEASURE.TOKENS den -> the governor
+//      >>   `zhao_measure_governor`  six knobs          -> TERRAIN.LOD
+//      >>   `zhao_terrain_devstore`  LODFEED's records  -> SPDESC
+//      >>   `zhao_terrain_spdesc`    sixteen `sp_*`     -> TERRAIN.LOD
+//      >>   `zhao_terrain_lod`       the decision       -> JOBISSUE
+//      >>   `zhao_terrain_jobissue`  thirteen fields    -> TERRAIN.GROUP_SEQ
+//      >>
+//      >> AND CMD.EXEC GREW TWO DECODE ARMS in the same commit, which is the
+//      >> only genuinely new ABI-lowering work in the chain: `SetView.
+//      >> pixel_error` and `SetPresentationContract.view_count`, both already
+//      >> in the ratified `spec/commands.zidl`, both already generated as
+//      >> offsets, and neither ever decoded. `zhao_cmd_exec.sv`'s own line
+//      >> "NOT `pixel_error` -- MEASURE.GOVERNOR is not composed" had been
+//      >> read by three passes as "the field does not exist".
+//      >>
+//      >> WHAT REMAINS OF THIS ENTRY, exactly, and nothing is hidden:
+//      >>
+//      >>   (1) `terr_job_mat_a_i`, `terr_job_mat_b_i`, `terr_job_weight_i` --
+//      >>       BOUNDARY, and they must STAY until TESS gains a per-triangle
+//      >>       layer-E path. Ruling R13 rules them the WRONG CARRIER and
+//      >>       their honest closure is REMOVAL, not a producer. The issuer
+//      >>       has no port for any of them and refuses them by name in its
+//      >>       own header. Inventing them here is the hidden-adapter failure
+//      >>       this entry has warned about since it was written.
+//      >>   (2) `terr_job_view_mask_i` -- BOUNDARY, and this one WANTS a
+//      >>       producer that does not exist. NOTHING CARRIES A VIEW MASK
+//      >>       ALONGSIDE A PAGE: `zhao_terrain_seq` emits `is_view_mask_o` at
+//      >>       job issue, and `zhao_terrain_hdrread`, `zhao_terrain_psmux`
+//      >>       and `zhao_terrain_pagestream` forward `flags:u16`, `slot`,
+//      >>       `gen`, `epoch` and `src_id` between them -- and no mask. Two
+//      >>       shortcuts were considered and BOTH REFUSED:
+//      >>         * latching `tis_view_mask` live at the compose door joins
+//      >>           two things that move independently, which is this entry's
+//      >>           own objection and is still correct;
+//      >>         * a `src_id`-keyed side queue filled at job issue DESYNCS
+//      >>           PERMANENTLY the first time a page is refused after issue
+//      >>           (a bad pitch, a guard denial, a short burst), so its
+//      >>           identity check fires once and is wrong forever after.
+//      >>       THE BUILD THIS WANTS is one more forwarded field on those
+//      >>       three blocks, beside `flags`. It is small and it is named.
+//      >>       The mask now travels through the issuer's DRAW CONTEXT rather
+//      >>       than straight to the sequencer, so even while its source is
+//      >>       static it arrives joined to the patch it describes.
+//      >>   (3) `terr_sparse_fill_i` -- BOUNDARY, and NOT a gap. It is an
+//      >>       OWNER KNOB by `zhao_terrain_group_seq`'s own header, legal
+//      >>       only against a VALID_MODE = 0 shell. Freezing it to a
+//      >>       localparam would have closed a port by taking the owner's
+//      >>       control away.
+//      >>   (4) THE ONE DECLARED TIE-OFF (R159): TERRAIN.LOD's four `edge_*`
+//      >>       neighbour levels, driven from `TERR_EDGE_UNKNOWN_C = 8'h00`.
+//      >>       `design/contracts/MEASURE.GOVERNOR.md` refuses them in
+//      >>       writing -- "The camera POSITIONS, dual and `edge_*` are NOT
+//      >>       here" -- and their real producer is a CROSS-PATCH
+//      >>       RECONCILIATION PASS no block in this tree performs: it needs
+//      >>       every patch of a frame decided BEFORE any is tessellated, and
+//      >>       this console decides one patch at a time as the cache serves
+//      >>       it. THE CONSTANT IS THE SAFE ONE AND NOT THE CHEAP ONE: level
+//      >>       0 is the FINEST, so a neighbour reported as 0 makes
+//      >>       TERRAIN.LOD clamp its own edge to the finest it could need --
+//      >>       more triangles, and NO CRACK. The coarsest constant (3) would
+//      >>       have produced visible seams AND measured smaller, which is
+//      >>       the direction a resource-pressed campaign is biased to pick.
+//      >>
+//      >> THE THREE BLOCKERS THIS PACKET DID NOT INHERIT, because it
+//      >> ATTEMPTED the composition before writing any refusal (R237):
+//      >>   * the governor's `px_err`/`view_count` -- a BUILD, done above;
+//      >>   * the devstore's 185 M10K -- THE OWNER GRANTED IT, explicitly, as
+//      >>     ruling R234 D3, 2026-09-21,
+//      >>     `reports/OWNER-RULINGS-20260919-EVENING.md`: "GRANT THE 185 FOR
+//      >>     THE TERRAIN DEVIATION STORE", in a budget line that prices the
+//      >>     console at 541 of 553 M10K WITH it. Five passes treated a
+//      >>     granted cost as a blocker;
+//      >>   * the layer-E reader -- (1) above, and R13 already ruled it.
+//      >>
+//      >> WHAT THIS COST THE SMOKE BENCH, said here because a composition
+//      >> that quietly removes coverage is worse than one that declares it.
+//      >> `tests/prod/tb_zhao_console_core_smoke.sv` used to INJECT a subpatch
+//      >> job at this boundary, and that injection was its ONLY exercise of
+//      >> TERRAIN.TESS client B. There is no port to inject through now, and
+//      >> the internal producer cannot replace it IN THAT BENCH, because every
+//      >> terrain page the smoke plays fails its CRC -- so no lattice is
+//      >> mipped, TERRAIN.LODFEED writes no record, the devstore is never
+//      >> written and no patch is ever composed or served. THE INJECTION WAS A
+//      >> WORKAROUND FOR THAT UPSTREAM HOLE and removing it exposes the hole
+//      >> rather than creating it. Client B's real coverage is
+//      >> `terrain_group_seq_directed` and the terrain differential; the
+//      >> chain's is `terrain_lodpath_directed`, `terrain_spdesc_directed` and
+//      >> `terrain_jobissue_directed`. The smoke's green was never evidence
+//      >> about any of them and now does not look like it is.
 //      >> THE FIVE THAT REMAIN, EACH RE-SEARCHED 2026-09-20 (terrain7) RATHER
 //      >> THAN INHERITED. Four survived; the fifth did not, and it asserted an
 //      >> absence twice over.
@@ -7923,27 +8031,52 @@ module zhao_console_core
   input  logic                    proj_en_i,
 
   // ---- TERRAIN: the subpatch job that drives client B (I21) ---------------
-  // TERRAIN.GROUP_SEQ's own job port. TERRAIN.LOD exists and its header says
-  // its output is "EXACTLY zhao_terrain_tess's job port" -- but it emits no
-  // view mask and no material riders, and its own `sp_*` producer
-  // (TERRAIN.PATCH's patch_state) is not composed here. See entry I21.
-  input  logic                    terr_job_valid_i,
-  output logic                    terr_job_ready_o,
-  input  logic [5:0]              terr_job_ox_i,
-  input  logic [5:0]              terr_job_oz_i,
-  input  logic [1:0]              terr_job_level_i,
-  input  logic [1:0]              terr_job_lvl_nz_i,
-  input  logic [1:0]              terr_job_lvl_pz_i,
-  input  logic [1:0]              terr_job_lvl_nx_i,
-  input  logic [1:0]              terr_job_lvl_px_i,
-  input  logic [16:0]             terr_job_morph_i,
-  input  logic                    terr_job_surface_i,
-  input  logic                    terr_job_dual_i,
-  input  logic [15:0]             terr_job_src_id_i,
+  // THIRTEEN OF THE SEVENTEEN LEFT THIS LIST 2026-09-21 (packet TERRACOMP).
+  // The subpatch job's whole decision chain is composed below -- MEASURE.
+  // GOVERNOR, TERRAIN.DEVSTORE, TERRAIN.SPDESC, TERRAIN.LOD and
+  // TERRAIN.JOBISSUE, with the view chain that feeds the governor -- so
+  // `job_valid/ready` and the twelve DECISION fields are driven inside this
+  // module by the block that decides them rather than by a harness. Entry I21
+  // is narrowed accordingly.
+  //
+  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
+  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
+  // slot and source id, and carries it to the sequencer joined to the patch it
+  // describes -- which is strictly better than today, where it reached the
+  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
+  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
+  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
+  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
+  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
+  // `tis_view_mask` live at the door would join two things that move
+  // independently, which is entry I21's own objection and still correct; and
+  // a src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue (a bad pitch, a guard denial, a short burst), so its
+  // identity check would fire once and then be wrong forever. THE BUILD THIS
+  // WANTS is one more forwarded field on those three blocks, beside `flags`.
+  // Named here rather than adapted around.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
+  // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
+  // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
+  // and nothing may leave until that replacement lands. `zhao_terrain_jobissue`
+  // has no port for any of them and refuses them by name in its own header --
+  // inventing them in this composer is exactly the hidden-adapter failure
+  // entry I21 has warned against since it was written.
   input  logic [7:0]              terr_job_mat_a_i,
   input  logic [7:0]              terr_job_mat_b_i,
   input  logic [7:0]              terr_job_weight_i,
+  // `terr_sparse_fill_i` ALSO STAYS, and for the opposite reason to the three
+  // above: it is not a job field at all. `zhao_terrain_group_seq`'s own header
+  // calls it an OWNER KNOB -- legal only against a VALID_MODE = 0 shell, and
+  // "the composition that instantiates both is where the two must agree".
+  // This core carries the DENSE shell, so its correct value is low; freezing
+  // it to a localparam here would have been the easy move and would have taken
+  // the owner's control away in the name of closing a port (CLAUDE.md's sixth
+  // art rule, which is about knobs and not only about colours). It is now read
+  // by `zhao_terrain_jobissue` at the compose door instead of by the sequencer
+  // directly, so the whole draw context {src_id, view_mask, sparse_fill}
+  // travels as ONE record and cannot skew against the patch it describes.
   input  logic                    terr_sparse_fill_i,
 
   // TERRAIN.TESS's lattice and cell-state read ports USED TO BE HERE, as entry
@@ -8092,10 +8225,12 @@ module zhao_console_core
   input  logic [1:0]              terr_cc_cs_substance_i,
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
-  // "TESS is finished with the served patch", one patch per RISING EDGE.  The
-  // block that knows is the one that issued the subpatch jobs, and that is the
-  // absent owner entry I21 already names.
-  input  logic                    terr_cc_serve_release_i,
+  // THIS PORT LEFT THE LIST 2026-09-21 (packet TERRACOMP). "TESS is finished
+  // with the served patch", one patch per RISING EDGE.  The block that knows
+  // is the one that issued the subpatch jobs -- `zhao_terrain_jobissue`,
+  // composed below, which releases on `job_ready_i` returning high after the
+  // last job.  That is `zhao_terrain_group_seq`'s own exit proof and not a
+  // counter, a timeout or a policy invented in this composer.
 
   // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
   // Events, never cycles.  These are what say a PAGE became a LATTICE rather
@@ -9565,6 +9700,72 @@ module zhao_console_core
   output logic [31:0]  terr_lodfeed_lattices_dropped_o,
   output logic [31:0]  terr_lodfeed_dev_records_o,
   output logic [31:0]  terr_lodfeed_stray_samples_o,
+
+  // ==========================================================================
+  // THE SUBPATCH DECISION CHAIN'S EVIDENCE. Composed 2026-09-21 (TERRACOMP).
+  // ==========================================================================
+  // The five blocks that turn a resident page into TERRAIN.GROUP_SEQ's job
+  // stream -- DEVSTORE, SPDESC, LOD, JOBISSUE and the GOVERNOR above them --
+  // put their FAULT counters and their ratified counters here, for the reason
+  // the histogram's ports one screen up give: a counter nobody outside the
+  // module can read is not evidence about anything. The pure INSTRUMENTS
+  // (`*_wait_clocks_o`, `assemble_clocks_o`, `issue_clocks_o`, the `busy_o`
+  // levels) stay inside: they are durations, they are read by nothing and
+  // `zhao_terrain_spdesc`'s own directed test is where their flatness is
+  // asserted.
+  //
+  // THREE OF THESE WILL READ ZERO IN THE SMOKE AND THE REASON IS THE SAME ONE
+  // PRINTED ABOVE, inherited rather than re-measured: every page the bench
+  // plays fails its CRC, so no lattice is ever mipped, so TERRAIN.LODFEED
+  // writes no deviation record and TERRAIN.DEVSTORE is never written. A
+  // composition whose upstream never fires is not evidence that the
+  // composition works; the four blocks' own directed tests are.
+  output logic [31:0]  terr_ds_patches_read_o,
+  output logic [31:0]  terr_ds_read_unwritten_o,
+  output logic [31:0]  terr_ds_hist_step_bad_o,
+  output logic [31:0]  terr_sp_descriptors_o,
+  output logic [31:0]  terr_sp_door_refused_o,
+  output logic [31:0]  terr_sp_serve_no_door_o,
+  output logic [31:0]  terr_sp_door_src_mismatch_o,
+  output logic [31:0]  terr_sp_order_bad_o,
+  output logic [31:0]  terr_sp_patches_unfresh_o,
+  output logic [31:0]  terr_lod_rep_count0_o,
+  output logic [31:0]  terr_lod_rep_count1_o,
+  output logic [31:0]  terr_lod_rep_count2_o,
+  output logic [31:0]  terr_lod_rep_count3_o,
+  output logic [31:0]  terr_lod_triangles_emitted_o,
+  output logic [31:0]  terr_ji_jobs_issued_o,
+  output logic [31:0]  terr_ji_patches_dropped_o,
+  output logic [31:0]  terr_ji_ctx_refused_o,
+  output logic [31:0]  terr_ji_serve_no_ctx_o,
+  output logic [31:0]  terr_ji_ctx_src_mismatch_o,
+  output logic [31:0]  terr_ji_lod_src_mismatch_o,
+  // MEASURE.GOVERNOR's `lod_representation_counts` is a DIFFERENT catalog
+  // entry from TERRAIN.LOD's `terrain_lod_lod_representation_counts` --
+  // design/blocks.yml names both -- and they count different things: the
+  // governor's four lanes are the LEVELS IT TARGETED, TERRAIN.LOD's are the
+  // levels it actually PICKED after hysteresis, the hold and the neighbour
+  // clamp. Exposing only one of the pair would make the difference between a
+  // target and a decision unobservable, which is the whole quantity the
+  // governor exists to set.
+  output logic [31:0]  meas_gov_rep_count0_o,
+  output logic [31:0]  meas_gov_rep_count1_o,
+  output logic [31:0]  meas_gov_rep_count2_o,
+  output logic [31:0]  meas_gov_rep_count3_o,
+  output logic [31:0]  meas_starve_denials_o,
+  output logic [31:0]  meas_starve_frames0_o,
+  output logic [31:0]  meas_starve_frames1_o,
+  // VIEW.PROJSCALE's absolute-value saturation and VIEW.PROJQ88's Q8.8
+  // saturation. Both are the "the number did not fit" fault of a scale this
+  // console derives rather than receives, and an LOD budget computed from a
+  // saturated projection would be silently wrong in the FLATTERING direction
+  // (too coarse is cheap, and cheap looks healthy on every other counter).
+  output logic [31:0]  view_kx_saturated_o,
+  output logic [31:0]  view_proj_saturations_o,
+  // CMD.EXEC's refusal of an unlawful `SetPresentationContract.view_count`.
+  // CMD.SCHEDULER judges that record's `mode` and NOT this field, so without
+  // this port the verdict would have no owner and no reader.
+  output logic [31:0]  cmd_view_count_refused_o,
 
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
@@ -12337,18 +12538,20 @@ module zhao_console_core
   wire                    tlf_w_valid, tlf_w_ready;
   wire [23:0]             tlf_w_dev1, tlf_w_dev2, tlf_w_dev3;
   wire [15:0]             tlf_w_src_id;
-  /* verilator lint_off UNUSEDSIGNAL */
-  // EVERY FIELD OF THE WRITE PORT THAT THE HISTOGRAM DOES NOT READ, waived
-  // here in one place rather than one at a time, because the set is exactly
-  // "what `zhao_terrain_devstore` would take" and it should read as one
-  // absence and not five coincidences. The store keys on {slot, subpatch} and
-  // holds the centre height and the invalidation; MEASURE.HISTOGRAM keys on
-  // `src_id` and takes only the three magnitudes.
-  wire [TERR_MEMSLOT-1:0] tlf_w_slot;        // the devstore's key (absent, above)
+  // EVERY FIELD OF THE WRITE PORT THE HISTOGRAM DOES NOT READ. It used to be
+  // waived as one UNUSEDSIGNAL block whose comment said the set was exactly
+  // "what `zhao_terrain_devstore` would take". THE STORE IS COMPOSED AS OF
+  // 2026-09-21 (TERRACOMP) AND THE WAIVER IS GONE -- every one of these five
+  // now has a reader, and the waiver coming off is the check that the sentence
+  // was true. The store keys on {slot, subpatch} and holds the centre height
+  // and the invalidation; MEASURE.HISTOGRAM keys on `src_id` and takes only
+  // the three magnitudes. Both read the same stream.
+  wire [TERR_MEMSLOT-1:0] tlf_w_slot;        // the devstore's key
   wire [3:0]              tlf_w_sp;          // ... and its subpatch index
   wire signed [15:0]      tlf_w_cy;          // the devstore's centre height
   wire                    tlf_inv_valid;     // the devstore's invalidation strobe
   wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // ... and the slot it invalidates
+  /* verilator lint_off UNUSEDSIGNAL */
   wire                    tlf_busy;
   // Four of the block's ten counters stop here rather than at this module's
   // edge, and the choice is stated because "which counters get exported" is
@@ -12442,7 +12645,7 @@ module zhao_console_core
 
   // The invalidation: every event that can change what the compose cache
   // SERVES. See item 14's COHERENCE paragraph for why it errs wide.
-  assign ptt_inval_c = tcc_fill_start || terr_cc_fill_done_o || terr_cc_serve_release_i ||
+  assign ptt_inval_c = tcc_fill_start || terr_cc_fill_done_o || tji_serve_release ||
                        terr_cc_cs_we_i || tpc_pos_we;
   // THE PITCH THE SERVED LATTICE WAS PLACED AT -- HELD, NOT THE HEADER WIRE.
   //
@@ -12525,9 +12728,12 @@ module zhao_console_core
     .c_lat_vi_o      (htp_c_lat_vi),
     .c_lat_vj_o      (htp_c_lat_vj),
     .c_lat_surface_o (htp_c_lat_surface),
-    .c_lat_h_i       (tcc_lat_h),
-    .c_lat_wx_i      (tcc_lat_wx),
-    .c_lat_wz_i      (tcc_lat_wz),
+    // The tap's cache side now lands on TERRAIN.SPDESC's pass-through rather
+    // than on the cache directly.  The responses come BACK through the same
+    // splice, which is why these three move with the request above.
+    .c_lat_h_i       (spd_o_lat_h),
+    .c_lat_wx_i      (spd_o_lat_wx),
+    .c_lat_wz_i      (spd_o_lat_wz),
     .c_cs_req_o      (htp_c_cs_req),
     .c_cs_ci_o       (htp_c_cs_ci),
     .c_cs_cj_o       (htp_c_cs_cj),
@@ -12676,20 +12882,27 @@ module zhao_console_core
 
     // I21: the subpatch job. TERRAIN.LOD is the near-producer and cannot be
     // wired -- see the header entry.
-    .job_valid_i    (terr_job_valid_i),
-    .job_ready_o    (terr_job_ready_o),
-    .job_ox_i       (terr_job_ox_i),
-    .job_oz_i       (terr_job_oz_i),
-    .job_level_i    (terr_job_level_i),
-    .job_lvl_nz_i   (terr_job_lvl_nz_i),
-    .job_lvl_pz_i   (terr_job_lvl_pz_i),
-    .job_lvl_nx_i   (terr_job_lvl_nx_i),
-    .job_lvl_px_i   (terr_job_lvl_px_i),
-    .job_morph_i    (terr_job_morph_i),
-    .job_surface_i  (terr_job_surface_i),
-    .job_dual_i     (terr_job_dual_i),
-    .job_src_id_i   (terr_job_src_id_i),
-    .job_view_mask_i(terr_job_view_mask_i),
+    // REAL as of 2026-09-21 (TERRACOMP): THIRTEEN of these sixteen come from
+    // `zhao_terrain_jobissue`, composed at the end of this file at the head of
+    // the subpatch decision chain. Entry I21's boundary is now three material
+    // riders that ruling R13 says must NOT be produced here.
+    .job_valid_i    (tji_job_valid),
+    .job_ready_o    (tji_job_ready),
+    .job_ox_i       (tji_job_ox),
+    .job_oz_i       (tji_job_oz),
+    .job_level_i    (tji_job_level),
+    .job_lvl_nz_i   (tji_job_lvl_nz),
+    .job_lvl_pz_i   (tji_job_lvl_pz),
+    .job_lvl_nx_i   (tji_job_lvl_nx),
+    .job_lvl_px_i   (tji_job_lvl_px),
+    .job_morph_i    (tji_job_morph),
+    .job_surface_i  (tji_job_surface),
+    .job_dual_i     (tji_job_dual),
+    .job_src_id_i   (tji_job_src_id),
+    .job_view_mask_i(tji_job_view_mask),
+    // STILL THE BOUNDARY'S, under ruling R13 (entry I21). These three are the
+    // WRONG CARRIER and their honest closure is removal, so they are not
+    // invented here and not adapted from anything the issuer emits.
     .job_mat_a_i    (terr_job_mat_a_i),
     .job_mat_b_i    (terr_job_mat_b_i),
     .job_weight_i   (terr_job_weight_i),
@@ -12698,8 +12911,10 @@ module zhao_console_core
     // against a VALID_MODE = 0 shell and this block cannot see the shell's
     // mode, so the composition that holds both is where they must agree.
     // `zhao_proj_subsystem` here carries the dense shell, so the safe value is
-    // low and it is exposed rather than frozen.
-    .sparse_fill_i  (terr_sparse_fill_i),
+    // low and it is exposed rather than frozen. It reaches the sequencer
+    // THROUGH the issuer's draw context now, so the knob and the patch it
+    // applies to arrive as one record.
+    .sparse_fill_i  (tji_sparse_fill),
 
     // REAL: the tessellator, both modes.
     .t_job_valid_o  (tt_job_valid),
@@ -13886,11 +14101,24 @@ module zhao_console_core
   end
   // synthesis translate_on
 
-  // TERRAIN.LODFEED's write port is accepted when the histogram accepts. When
-  // entry I21 closes and `zhao_terrain_devstore` joins this stream, this
-  // becomes the AND of the two readies and NOTHING ELSE CHANGES -- which is
-  // why it is a named wire and not the port connection itself.
-  assign tlf_w_ready = hist_ev_ready_c;
+  // TERRAIN.LODFEED's write port is accepted when the histogram accepts AND
+  // when TERRAIN.DEVSTORE accepts. This file predicted this line, in these
+  // words -- "when entry I21 closes and `zhao_terrain_devstore` joins this
+  // stream, this becomes the AND of the two readies and NOTHING ELSE CHANGES
+  // -- which is why it is a named wire and not the port connection itself".
+  // 2026-09-21 (TERRACOMP): it did, and nothing else changed.
+  //
+  // AN AND OF TWO READIES IS A COMBINATIONAL JOIN AND IT IS THE RIGHT ONE
+  // HERE, for a property both consumers have rather than by convention: the
+  // producer presents `w_valid_o` as a LEVEL and neither consumer's ready
+  // depends on `tlf_w_valid` (MEASURE.HISTOGRAM's `ev_ready_o` is its own
+  // pipeline's room; the store's `w_ready_o` is its commit state). So there is
+  // no combinational loop, and neither consumer can see a beat the other
+  // refused -- which is the failure this AND exists to prevent and the reason
+  // a per-consumer skid would be wrong: two copies of one record, retired on
+  // different cycles, is exactly the metadata-swap shape this file's own
+  // chapter is about.
+  assign tlf_w_ready = hist_ev_ready_c && tds_w_ready;
 
   zhao_measure_histogram #(
     .EW       (HIST_EW),
@@ -17181,6 +17409,15 @@ module zhao_console_core
     .tok_vreq_geom_o    (cmd_tok_vreq_geom),
     .tok_vreq_frag_o    (cmd_tok_vreq_frag),
     .contracts_applied_o(cmd_exec_contracts_o),
+    // MEASURE.GOVERNOR's two ratified fields, lowered 2026-09-21 (TERRACOMP).
+    // `spec/commands.zidl` has declared `fx16 pixel_error` and `u8 view_count`
+    // since ratification; what was missing until today was the DECODE ARM, and
+    // three passes of this campaign read CMD.EXEC's own "MEASURE.GOVERNOR is
+    // not composed" as though it meant the fields did not exist.
+    .gov_view_count_o    (cx_gov_view_count_c),
+    .gov_px_err0_o       (cx_gov_px_err0_c),
+    .gov_px_err1_o       (cx_gov_px_err1_c),
+    .view_count_refused_o(cmd_view_count_refused_o),
     // R35/R36: SetPost / SetGradeTable -> POST.COMPOSITE's look and table, and
     // POST.ECHO's arm, through the door of an IDLE post lease.
     .post_idle_i       (!post_busy_o),
@@ -17814,18 +18051,24 @@ module zhao_console_core
 
     .fill_done_o(terr_cc_fill_done_o),
 
-    // I21, extended: the retirement pulse's owner is the subpatch issuer.
-    .serve_release_i(terr_cc_serve_release_i),
+    // I21, CLOSED on this port 2026-09-21: the retirement pulse's owner is the
+    // subpatch issuer, and the issuer is composed. It releases on `job_ready_i`
+    // returning high after the last job of the patch.
+    .serve_release_i(tji_serve_release),
     .serve_valid_o  (terr_cc_serve_valid_o),
     .serve_src_id_o (terr_cc_serve_src_id_o),
 
     // REAL: TERRAIN.TESS's lattice and cell-state read ports.  Entry I22.
     // Through TERRAIN.HEIGHTTAP from 2026-09-19 (item 14): TESS's request
     // when it makes one, the tap's borrowed read when it does not.
-    .lat_req_i    (htp_c_lat_req),
-    .lat_vi_i     (htp_c_lat_vi),
-    .lat_vj_i     (htp_c_lat_vj),
-    .lat_surface_i(htp_c_lat_surface),
+    // THROUGH TERRAIN.SPDESC from 2026-09-21: the chain is TESS ->
+    // HEIGHTTAP -> SPDESC -> here.  The assembler injects its centre-vertex
+    // reads only on cycles the upstream client leaves, because this port has
+    // NO READY and a request not forwarded on its own cycle is destroyed.
+    .lat_req_i    (spd_c_lat_req),
+    .lat_vi_i     (spd_c_lat_vi),
+    .lat_vj_i     (spd_c_lat_vj),
+    .lat_surface_i(spd_c_lat_surface),
     .lat_h_o      (tcc_lat_h),
     .lat_wx_o     (tcc_lat_wx),
     .lat_wz_o     (tcc_lat_wz),
@@ -19591,6 +19834,741 @@ module zhao_console_core
     .dev_vertices_o     (tlf_dev_vertices),
     .dev_lattice_reads_o(tlf_dev_lattice_reads),
     .busy_o             (tlf_busy)
+  );
+
+  // ==========================================================================
+  // THE SUBPATCH DECISION CHAIN -- entry I21, composed 2026-09-21 (TERRACOMP)
+  // ==========================================================================
+  // NINE BLOCKS IN ONE COMMIT, AND THE COUNT IS THE POINT. Every previous lane
+  // that looked at this correctly REFUSED to wire a leaf, because a leaf wired
+  // alone is a producer with no consumer or a new tie-off -- R75's close-one-
+  // gap-open-another, and R223/R241 hold `zhao_measure_governor` by name for
+  // exactly that reason. The resolution is not to argue with R75; it is to
+  // compose the GROUP, so that every producer in it meets its consumer inside
+  // the same edit:
+  //
+  //    CMD.EXEC.pixel_error/view_count ------------------\
+  //    VIEW.PROJSCALE -> VIEW.PROJQ88 ------------------> MEASURE.GOVERNOR
+  //    MEASURE.TOKENS.den_* -> MEASURE.STARVE ----------/        |
+  //                                                    six knobs |
+  //    VIEW.EYE (cfg 19/20/21, R63) ---- cam0/1_x/y/z -----------+
+  //                                                              v
+  //    TERRAIN.LODFEED -> TERRAIN.DEVSTORE --r_*--> TERRAIN.SPDESC
+  //                                                     | sp_*
+  //                                                     v
+  //                                                TERRAIN.LOD
+  //                                                     | out_*
+  //                                                     v
+  //                                              TERRAIN.JOBISSUE
+  //                                                     | job_* (13 fields)
+  //                                                     v
+  //                                          TERRAIN.GROUP_SEQ (composed)
+  //
+  // WHAT THIS DOES NOT DO, stated first because it is what R75 is about: it
+  // adds NO tie-off except the one declared in entry I21 (the four `edge_*`
+  // neighbour levels), and it leaves NO output of any composed block dangling
+  // that the chain itself does not consume or this module does not export.
+  //
+  // THE THREE ROTTED REFUSALS THIS BURIES. Every one had been re-quoted for
+  // days and every one dissolved on being ATTEMPTED rather than re-read (R237):
+  //   * "MEASURE.GOVERNOR's `px_err`/`view_count` have no producer." Both are
+  //     in the ratified ABI. What was missing was a DECODE ARM, landed in
+  //     `zhao_cmd_exec.sv` by this same packet as ruling R63's `eye[3]` shape.
+  //   * "`zhao_terrain_devstore` costs 185 M10K and that is a blocker." THE
+  //     OWNER GRANTED IT, explicitly, as ruling R234 D3 on 2026-09-21 --
+  //     `reports/OWNER-RULINGS-20260919-EVENING.md`, "GRANT THE 185 FOR THE
+  //     TERRAIN DEVIATION STORE", inside a budget line that prices M10K at
+  //     541 of 553 WITH it. It is a cost, it is recorded, and it is not a veto.
+  //   * "`sp_*` has no assembler." `zhao_terrain_spdesc` was built hours ago.
+  //
+  // AND THE TWO TRAPS FOR WHOEVER READS THIS NEXT, both found by measuring
+  // rather than by name-matching, and both preserved here because the names
+  // invite the mistake: `cam0/1_x/y/z_i` on TERRAIN.LOD are NOT MEASURE.
+  // GOVERNOR's -- the governor has no camera position output at all, and the
+  // eye is `zhao_view_eye`'s under ruling R63 -- and `dual_i` is NOT the
+  // governor's either; it is `tps_v_flags[TERR_FLAG_DUAL_BIT]`, the same net
+  // that already drives TERRAIN.PATCH and TERRAIN.COMPCACHE two screens up.
+
+  // ---- THE COMPOSE DOOR, captured ONCE for both queues ---------------------
+  // The pair {slot, src_id} that `zhao_terrain_spdesc` keys on and the draw
+  // context {src_id, view_mask, sparse_fill} that `zhao_terrain_jobissue`
+  // keys on are pushed on the SAME pulse, because they describe the same
+  // patch and a door that armed them separately would be two laws for one
+  // event. `tcc_fill_accept` is the cache's one-cycle ACCEPTANCE and not
+  // `tcc_fill_start`'s offer: a start the cache refused never becomes a served
+  // patch, so pushing the offer would leave an entry nothing ever pops.
+  //
+  // THE TWO QUEUES CANNOT DESYNC, and it is structural rather than lucky. Both
+  // are depth 4 (`DOORD` and `CTXD`, the same knob for the same reason), both
+  // are pushed by this one pulse and both pop on the cache's serve edge. Two
+  // queues of equal depth, pushed and popped by one event each, hold equal
+  // occupancy at every instant -- so either both accept a push or both refuse
+  // it, and `terr_sp_door_refused_o` and `terr_ji_ctx_refused_o` must move
+  // TOGETHER. A run in which one is non-zero and the other is zero is a defect
+  // in THIS composition, not in either block, and that is the reading to take
+  // if it is ever seen.
+  wire tdoor_push_c = tcc_fill_accept;
+
+  // THE NARROWING GUARD for the two slot ports below. `initial begin ... end`
+  // and not a module-scope `if`: Quartus 17.0 rejects the latter (CLAUDE.md,
+  // and this file already carries the same shape at MEASURE.HISTOGRAM). It
+  // refuses any parameterisation in which taking `[TERR_SLOTW-1:0]` off a
+  // TERR_MEMSLOT-wide wire could drop a bit a producer can set. Equality is
+  // legal and is what the slot-overflow mutant elaborates with
+  // (TERR_POOL_SLOTS = 512 makes TERR_MEMSLOT 10, the same as TERR_SLOTW).
+  // synthesis translate_off
+  initial begin
+    if (TERR_MEMSLOT < TERR_SLOTW)
+      $fatal(1, "zhao_console_core: TERR_MEMSLOT=%0d is narrower than TERR_SLOTW=%0d; the devstore slot narrowing would truncate a real handle", TERR_MEMSLOT, TERR_SLOTW);
+  end
+  // synthesis translate_on
+
+  // ---- CMD.EXEC -> MEASURE.GOVERNOR ---------------------------------------
+  wire [ 1:0] cx_gov_view_count_c;
+  wire [31:0] cx_gov_px_err0_c, cx_gov_px_err1_c;
+
+  // ---- VIEW.EYE (ruling R63) ----------------------------------------------
+  wire signed [31:0] veye0_x, veye0_y, veye0_z;
+  wire signed [31:0] veye1_x, veye1_y, veye1_z;
+
+  // ---- VIEW.PROJSCALE -> VIEW.PROJQ88 -------------------------------------
+  wire [31:0] vps_kx0, vps_kx1;
+  wire [11:0] vps_vw0, vps_vw1;
+  wire [19:0] vpq_proj0, vpq_proj1;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // Instruments, deliberately not exported: `busy_o` is a level nothing waits
+  // on (the governor samples the pair at its own frame edge) and the two pass
+  // counts describe the divider's INTERIOR, which is the block's own directed
+  // test's subject and not a console bench's. The SATURATION counts DO leave,
+  // because a saturated scale is a fault and not an interior.
+  wire        vpq_busy;
+  wire [31:0] vpq_passes0, vpq_passes1;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- MEASURE.STARVE ------------------------------------------------------
+  wire msv_starved0, msv_starved1;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // `starving_denials_o` and `reload_ignored_o` PARTITION `denials_seen_o` by
+  // construction -- the mask counts one and drops the other -- so exporting
+  // the total plus the two per-view starved-frame counts says everything the
+  // pair does. `frames_o` is `core_tick_c` counted, which this console has.
+  wire [31:0] msv_starving, msv_reload_ignored, msv_frames;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- MEASURE.GOVERNOR ----------------------------------------------------
+  wire [15:0] mgv_cam0_scale, mgv_cam1_scale;
+  wire        mgv_cam0_en, mgv_cam1_en;
+  wire [15:0] mgv_hyst;
+  wire [ 7:0] mgv_min_hold;
+  wire [16:0] mgv_morph_step;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // THE GOVERNOR'S OTHER OUTPUTS, AND WHY EACH STOPS HERE. This is the one
+  // place in this composition where something built is not read, so it is
+  // itemised rather than waved through:
+  //   * `cam0/1_thresh_q8_o` -- its reader is `zhao_geom_lodstate`, which
+  //     ruling R133 parks inside the FORGE.SHADOW subsystem and ruling R234 D2
+  //     commissions as its own packet. TERRAIN.LOD takes `cam*_scale_i` (an
+  //     error-per-distance BUDGET) and NOT a threshold: they are different
+  //     quantities and wiring one to the other by name would be the hidden
+  //     adapter this file exists to refuse. RULING R223 ITEM 4 PARKED THE
+  //     GOVERNOR TRANSITIVELY ON THIS EDGE, and what that ruling actually
+  //     protects is this PORT -- the rest of the block has a consumer here,
+  //     which is why the group composes and the leaf did not.
+  //   * `deg0/1_o` -- the degrade LEVEL, MEASURE's policy ladder. Its consumer
+  //     is the same parked subsystem.
+  //   * `src_id_o` -- the id the decision was made for, for the per-source
+  //     reader `source_ids: true` promises and this console has not composed.
+  //   * `targets_valid_o` / `busy_o` -- a pulse and a level. TERRAIN.LOD holds
+  //     the six knobs as LEVELS across a patch job by its own contract, so it
+  //     needs neither, and a composer that gated the knobs on the pulse would
+  //     be inventing a second arming law for a block that already has one.
+  wire signed [31:0] mgv_cam0_thresh, mgv_cam1_thresh;
+  wire        [ 1:0] mgv_deg0, mgv_deg1;
+  wire        [15:0] mgv_src_id;
+  wire               mgv_targets_valid, mgv_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TERRAIN.DEVSTORE <-> TERRAIN.SPDESC --------------------------------
+  wire        tds_w_ready;
+  wire        tds_r_start, tds_r_ready_o, tds_r_valid, tds_r_take, tds_r_fresh;
+  wire [TERR_SLOTW-1:0] tds_r_slot;
+  wire [ 3:0] tds_r_sp;
+  wire [23:0] tds_r_dev1, tds_r_dev2, tds_r_dev3;
+  wire signed [15:0] tds_r_cy;
+  wire [ 1:0] tds_r_prev_level;
+  wire [16:0] tds_r_prev_morph;
+  wire [ 7:0] tds_r_hold;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // `w_patch_done_o` is a pulse whose only possible reader wants to know a
+  // slot became valid; SPDESC learns the same fact from `r_fresh_o` on the
+  // patch it actually reads, which is the question that matters and is asked
+  // at the right time. `records_written_o`, `patches_committed_o` and
+  // `invalidations_o` are the WRITE side's census and
+  // `terrain_lodpath_directed` is where they are asserted; the READ side's
+  // three leave this module.
+  wire        tds_w_patch_done;
+  wire [31:0] tds_records_written, tds_patches_committed, tds_invalidations;
+  wire        tds_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TERRAIN.SPDESC's LATTICE SPLICE ------------------------------------
+  // It goes BETWEEN `zhao_terrain_heighttap`'s cache side and the compose
+  // cache, so the chain is now TESS -> HEIGHTTAP -> SPDESC -> COMPCACHE. THE
+  // ORDER IS FORCED AND NOT A PREFERENCE: `lat_req_i` HAS NO READY, so a
+  // request this block did not forward on its own cycle is DESTROYED rather
+  // than delayed, and TESS would read a stale datum with every counter
+  // agreeing. Both splices therefore obey the same law -- upstream first, this
+  // block's own read only on the cycles upstream leaves -- and
+  // `zhao_terrain_heighttap` is where that law is written down.
+  wire               spd_c_lat_req, spd_c_lat_surface;
+  wire [ 5:0]        spd_c_lat_vi, spd_c_lat_vj;
+  wire signed [31:0] spd_o_lat_h, spd_o_lat_wx, spd_o_lat_wz;
+
+  // ---- TERRAIN.SPDESC -> TERRAIN.LOD --------------------------------------
+  wire        spd_sp_valid, spd_sp_ready;
+  wire signed [31:0] spd_sp_cx, spd_sp_cy, spd_sp_cz;
+  wire [23:0] spd_sp_dev1, spd_sp_dev2, spd_sp_dev3;
+  wire [ 1:0] spd_sp_prev_level;
+  wire [16:0] spd_sp_prev_morph;
+  wire [ 7:0] spd_sp_hold;
+  wire [15:0] spd_sp_src_id;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0] spd_patches_assembled, spd_store_wait, spd_lat_wait, spd_assemble_clocks;
+  wire        spd_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TERRAIN.LOD -> TERRAIN.JOBISSUE ------------------------------------
+  wire        tld_out_valid, tld_out_ready;
+  wire [ 5:0] tld_out_ox, tld_out_oz;
+  wire [ 1:0] tld_out_level, tld_out_nz, tld_out_pz, tld_out_nx, tld_out_px;
+  wire [16:0] tld_out_morph;
+  wire        tld_out_surface, tld_out_dual;
+  wire [15:0] tld_out_src_id;
+  wire [ 7:0] tld_out_hold;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire        tld_idle;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TERRAIN.JOBISSUE ----------------------------------------------------
+  wire        tji_job_valid, tji_job_ready;
+  wire [ 5:0] tji_job_ox, tji_job_oz;
+  wire [ 1:0] tji_job_level, tji_job_lvl_nz, tji_job_lvl_pz;
+  wire [ 1:0] tji_job_lvl_nx, tji_job_lvl_px;
+  wire [16:0] tji_job_morph;
+  wire        tji_job_surface, tji_job_dual;
+  wire [15:0] tji_job_src_id;
+  wire [ 1:0] tji_job_view_mask;
+  wire        tji_sparse_fill;
+  wire        tji_serve_release;
+  wire        tji_ctx_ready, tji_lod_ready;
+  wire        tji_h_valid, tji_h_ready;
+  wire [ 1:0] tji_h_level;
+  wire [16:0] tji_h_morph;
+  wire [ 7:0] tji_h_hold;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0] tji_patches_retired, tji_decision_wait, tji_issue_clocks;
+  wire        tji_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- THE FOUR NEIGHBOUR EDGE LEVELS -- ENTRY I21's DECLARED TIE-OFF -----
+  // `design/contracts/MEASURE.GOVERNOR.md` refuses these in writing: "The
+  // camera POSITIONS, dual and `edge_*` are NOT here." They are the ADJACENT
+  // patches' chosen levels, four 2-bit lanes per side, and their producer is a
+  // cross-patch reconciliation pass no block in this tree performs: it needs
+  // every patch of a frame DECIDED before any is tessellated, and this console
+  // decides one patch at a time, as the compose cache serves it.
+  //
+  // IT IS DECLARED, NOT HIDDEN, AND THE CONSTANT IS ALSO THE SAFE ONE. Level 0
+  // is the FINEST level, so a neighbour reported as 0 makes `zhao_terrain_lod`
+  // clamp its own edge to the finest it could need -- MORE triangles than
+  // necessary, and NO CRACK. The failure this tie-off can cause is a cost, not
+  // a hole in the ground. The opposite constant (3, the coarsest) would have
+  // produced visible seams AND would have measured smaller, which is the
+  // direction a resource-pressed campaign is biased to pick.
+  //
+  // Declared in the INCOMPLETE block above under entry I21, same commit (R159).
+  //
+  // AND IT IS WRITTEN AS A LITERAL AT THE FOUR PORTS, NOT AS THE NAMED
+  // CONSTANT THIS COMMENT ORIGINALLY DECLARED. `tools/design/
+  // packet_h_tieoff_audit.py` counts LITERAL connections; a tie-off hidden
+  // behind a localparam is invisible to it and reads to a human as a KNOB
+  // somebody chose rather than as an absence somebody is owed. The audit
+  // reported "8 declared, 1 reasoned, 10 by group comment, 0 SILENT" with the
+  // constant in place -- four tie-offs it could not see, in the one commit
+  // whose whole subject is not hiding them.
+
+  // ---- VIEW.EYE: ruling R63's camera position -----------------------------
+  // It SNOOPS the same `proj_cfg_*_m` bus `u_proj_subsystem` and
+  // `zhao_geom_cull` already read, and answers only to cfg addresses 19/20/21
+  // -- which is the property that let the viewport rect, the depth profile and
+  // then this be lowered onto one bus without any of them seeing each other.
+  zhao_view_eye #(
+    .EYE_ADDR_X   (19),
+    .EYE_ADDR_Y   (20),
+    .EYE_ADDR_Z   (21),
+    .PROJ_TOP_ADDR(18)
+  ) u_view_eye (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .cfg_we_i  (proj_cfg_we_m),
+    .cfg_view_i(proj_cfg_view_m),
+    .cfg_addr_i(proj_cfg_addr_m),
+    .cfg_data_i(proj_cfg_data_m),
+    .eye0_x_o(veye0_x),
+    .eye0_y_o(veye0_y),
+    .eye0_z_o(veye0_z),
+    .eye1_x_o(veye1_x),
+    .eye1_y_o(veye1_y),
+    .eye1_z_o(veye1_z)
+  );
+
+  // ---- VIEW.PROJSCALE -> VIEW.PROJQ88: the projection scale ---------------
+  // The governor's `proj0/1_i` is "pixels per unit of world error at unit
+  // distance", Q12.8. PROJSCALE snoops the matrix bank's first row and the
+  // viewport rect off the SAME bus as the eye above; PROJQ88 turns
+  // `kx * viewport_w / 512` into the Q8.8 the governor takes. Neither
+  // recomputes the projection -- they read the bank the projector is
+  // configured from, so a console whose matrix moved cannot have a scale that
+  // did not.
+  zhao_view_projscale #(
+    .M00_ADDR    (0),
+    .M01_ADDR    (1),
+    .M02_ADDR    (2),
+    .RECT_WH_ADDR(17)
+  ) u_view_projscale (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .cfg_we_i  (proj_cfg_we_m),
+    .cfg_view_i(proj_cfg_view_m),
+    .cfg_addr_i(proj_cfg_addr_m),
+    .cfg_data_i(proj_cfg_data_m),
+    .kx0_o(vps_kx0),
+    .kx1_o(vps_kx1),
+    .vw0_o(vps_vw0),
+    .vw1_o(vps_vw1),
+    .abs_saturated_o(view_kx_saturated_o)
+  );
+
+  zhao_view_projq88 #(
+    .VWW  (12),
+    .PROJW(20)
+  ) u_view_projq88 (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .kx0_i(vps_kx0),
+    .kx1_i(vps_kx1),
+    .vw0_i(vps_vw0),
+    .vw1_i(vps_vw1),
+    .proj0_o(vpq_proj0),
+    .proj1_o(vpq_proj1),
+    .busy_o (vpq_busy),
+    .passes0_o    (vpq_passes0),
+    .passes1_o    (vpq_passes1),
+    .saturations_o(view_proj_saturations_o)
+  );
+
+  // ---- MEASURE.STARVE: "did this view run out of tokens?" -----------------
+  // It reads `u_measure_tokens`'s DENIAL stream directly -- the port is
+  // already out of this module as `tok_den_*_o`, so this costs no new wire on
+  // the token block and no second opinion about what a denial is. The mask is
+  // the block's default: reasons 0 and 1 are starvation, and a RELOAD denial
+  // is deliberately not counted, which is the one policy choice here and it
+  // lives in the parameter rather than in a condition.
+  zhao_measure_starve #(
+    .STARVE_REASON_MASK(4'b0011)
+  ) u_measure_starve (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .frame_i(core_tick_c),
+    .den_valid_i (tok_den_valid_o),
+    .den_view_i  (tok_den_view_o),
+    .den_reason_i(tok_den_reason_o),
+    .starved0_o(msv_starved0),
+    .starved1_o(msv_starved1),
+    .denials_seen_o    (meas_starve_denials_o),
+    .starving_denials_o(msv_starving),
+    .reload_ignored_o  (msv_reload_ignored),
+    .frames_o          (msv_frames),
+    .starved_frames0_o (meas_starve_frames0_o),
+    .starved_frames1_o (meas_starve_frames1_o)
+  );
+
+  // ---- MEASURE.GOVERNOR: the six knobs TERRAIN.LOD decides against --------
+  // EVERY ONE OF ITS EIGHT DATA INPUTS NOW HAS A NAMED PRODUCER IN THIS FILE,
+  // which is the sentence three passes of this campaign could not write:
+  //   frame_i        <- `core_tick_c`, already this console's frame boundary
+  //   view_count_i   <- CMD.EXEC's SetPresentationContract decode (new today)
+  //   px_err0/1_i    <- CMD.EXEC's SetView decode (new today)
+  //   proj0/1_i      <- VIEW.PROJQ88 above
+  //   starved0/1_i   <- MEASURE.STARVE above
+  //   src_id_i       <- the served patch's id, so the decision is attributed
+  //                     to the page it was made for (`source_ids: true`)
+  // The parameters are the block's own defaults and are KNOBS: hysteresis, the
+  // minimum hold and the morph step are picture decisions and belong in named
+  // constants somebody can move, not in a composer's literals.
+  zhao_measure_governor #(
+    .HYST_Q88  (320),
+    .MIN_HOLD  (6),
+    .MORPH_STEP(10923),
+    .DEG_HOLD  (12),
+    .DEG_MAX   (3),
+    .PROJW     (20)
+  ) u_measure_governor (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .frame_i      (core_tick_c),
+    .view_count_i (cx_gov_view_count_c),
+    .px_err0_i    (cx_gov_px_err0_c),
+    .px_err1_i    (cx_gov_px_err1_c),
+    .proj0_i      (vpq_proj0),
+    .proj1_i      (vpq_proj1),
+    .src_id_i     (terr_cc_serve_src_id_o),
+    .starved0_i   (msv_starved0),
+    .starved1_i   (msv_starved1),
+    .targets_valid_o (mgv_targets_valid),
+    .busy_o          (mgv_busy),
+    .cam0_scale_o    (mgv_cam0_scale),
+    .cam1_scale_o    (mgv_cam1_scale),
+    .cam0_thresh_q8_o(mgv_cam0_thresh),
+    .cam1_thresh_q8_o(mgv_cam1_thresh),
+    .cam0_en_o       (mgv_cam0_en),
+    .cam1_en_o       (mgv_cam1_en),
+    .hyst_o          (mgv_hyst),
+    .min_hold_o      (mgv_min_hold),
+    .morph_step_o    (mgv_morph_step),
+    .src_id_o        (mgv_src_id),
+    .deg0_o          (mgv_deg0),
+    .deg1_o          (mgv_deg1),
+    .lod_rep_count0_o(meas_gov_rep_count0_o),
+    .lod_rep_count1_o(meas_gov_rep_count1_o),
+    .lod_rep_count2_o(meas_gov_rep_count2_o),
+    .lod_rep_count3_o(meas_gov_rep_count3_o)
+  );
+
+  // ---- TERRAIN.DEVSTORE: the deviations, per resident page ----------------
+  // 185 M10K of 553, GRANTED BY THE OWNER as ruling R234 D3 (2026-09-21). Its
+  // write side is `u_terrain_lodfeed` above -- already composed, already
+  // emitting the sixteen records per page at load time under ruling R24 -- and
+  // its read side is the assembler below. The invalidation is the SAME block's
+  // `inv_*`, so a slot whose page was claimed or baked drops its records
+  // through the producer that knows, rather than through a rule invented here.
+  // THE KEY IS THE DIRECTORY'S HANDLE, NOT THE POOL'S SLOT, AND THE FIRST
+  // WRITING OF THIS INSTANCE GOT IT WRONG IN THE EXPENSIVE DIRECTION.
+  // `TERR_MEMSLOT` is `$clog2(TERR_POOL_SLOTS) + 1` = 11: ONE BIT WIDER than
+  // the pool, deliberately, so a computed 1,024 REFUSES instead of aliasing
+  // onto slot 0 (see `terr_pl_slot_overflow_o`'s note). Keying the store on it
+  // asks for 2,048 rows -- twice the 185 M10K the owner granted, for 1,024
+  // pages that exist. The block's own elaboration guard caught it:
+  //   "zhao_terrain_devstore: SLOTS must be 1 << SLOTW"
+  // fired in the plain console smoke, which is the first run that executes an
+  // `initial` block -- `--lint-only` does not, and had returned RC 0 on this
+  // exact arrangement. CLAUDE.md says that in as many words and it was still
+  // worth the 198 seconds to be shown it.
+  //
+  // THE NARROWING BELOW IS SOUND AND THE ARGUMENT IS VISIBLE, NOT ASSERTED.
+  // Every path that reaches this block's slot ports is a TERR_SLOTW producer
+  // ZERO-EXTENDED at a named port, in this file: `u_terrain_hdrread`'s
+  // `.j_slot_i({1'b0, tis_slot})` and `u_terrain_mipfeed`'s
+  // `.j_slot_i({1'b0, tmq_j_slot})`. So bit TERR_MEMSLOT-1 is structurally
+  // zero on both, and the elaboration guard below refuses the parameterisation
+  // in which the narrowing would become a real truncation.
+  zhao_terrain_devstore #(
+    .SLOTS (TERR_SETS * TERR_WAYS),
+    .SLOTW (TERR_SLOTW),
+    .DEVW  (24),
+    .MORPHW(17)
+  ) u_terrain_devstore (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .w_valid_i(tlf_w_valid),
+    .w_ready_o(tds_w_ready),
+    .w_slot_i (tlf_w_slot[TERR_SLOTW-1:0]),
+    .w_sp_i   (tlf_w_sp),
+    .w_dev1_i (tlf_w_dev1),
+    .w_dev2_i (tlf_w_dev2),
+    .w_dev3_i (tlf_w_dev3),
+    .w_cy_i   (tlf_w_cy),
+    .w_patch_done_o(tds_w_patch_done),
+
+    .inv_valid_i(tlf_inv_valid),
+    .inv_slot_i (tlf_inv_slot[TERR_SLOTW-1:0]),
+
+    .r_start_i(tds_r_start),
+    .r_slot_i (tds_r_slot),
+    .r_ready_o(tds_r_ready_o),
+    .r_valid_o(tds_r_valid),
+    .r_ready_i(tds_r_take),
+    .r_sp_o        (tds_r_sp),
+    .r_dev1_o      (tds_r_dev1),
+    .r_dev2_o      (tds_r_dev2),
+    .r_dev3_o      (tds_r_dev3),
+    .r_cy_o        (tds_r_cy),
+    .r_prev_level_o(tds_r_prev_level),
+    .r_prev_morph_o(tds_r_prev_morph),
+    .r_hold_o      (tds_r_hold),
+    .r_fresh_o     (tds_r_fresh),
+
+    // The history writeback is the ISSUER's, not the decider's, and that is
+    // deliberate: `zhao_terrain_lod` emits a decision, and the decision only
+    // becomes this page's history once the job carrying it has been ACCEPTED.
+    // Writing it back at decision time would record a level for a patch the
+    // sequencer then dropped.
+    .h_valid_i(tji_h_valid),
+    .h_ready_o(tji_h_ready),
+    .h_level_i(tji_h_level),
+    .h_morph_i(tji_h_morph),
+    .h_hold_i (tji_h_hold),
+
+    .records_written_o  (tds_records_written),
+    .patches_committed_o(tds_patches_committed),
+    .patches_read_o     (terr_ds_patches_read_o),
+    .read_unwritten_o   (terr_ds_read_unwritten_o),
+    .hist_step_bad_o    (terr_ds_hist_step_bad_o),
+    .invalidations_o    (tds_invalidations),
+    .busy_o             (tds_busy)
+  );
+
+  // ---- TERRAIN.SPDESC: the sixteen subpatch descriptors -------------------
+  // It reads the store with the slot it took at the compose door, takes the
+  // centre x and z from the compose cache's OWN lattice serve port (the
+  // placement TERRAIN.PLACE already computed, not a second implementation of
+  // it), and differences the popped source id against the id the cache is
+  // serving. THAT CHECK CAN FIRE, which is the property CLAUDE.md's
+  // metadata-swap chapter says to establish before quoting a zero: the popped
+  // id is written by the door's acceptance and the served id is combinational
+  // off the cache's SERVE PARITY, so the two move on different enables through
+  // different ports.
+  zhao_terrain_spdesc #(
+    .SLOTW     (TERR_SLOTW),
+    .DEVW      (24),
+    .MORPHW    (17),
+    .LAT_W     (33),
+    .LAT_H     (33),
+    .SUBPATCHES(16),
+    .SUB_EDGE  (8),
+    .CENTRE_OFF(4),
+    .DOORD     (4)
+  ) u_terrain_spdesc (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .door_valid_i (tdoor_push_c),
+    .door_ready_o (),
+    .door_slot_i  (tps_v_slot[TERR_SLOTW-1:0]),
+    .door_src_id_i(tps_v_src_id[15:0]),
+
+    .serve_valid_i (terr_cc_serve_valid_o),
+    .serve_src_id_i(terr_cc_serve_src_id_o),
+
+    .o_lat_req_i    (htp_c_lat_req),
+    .o_lat_vi_i     (htp_c_lat_vi),
+    .o_lat_vj_i     (htp_c_lat_vj),
+    .o_lat_surface_i(htp_c_lat_surface),
+    .o_lat_h_o      (spd_o_lat_h),
+    .o_lat_wx_o     (spd_o_lat_wx),
+    .o_lat_wz_o     (spd_o_lat_wz),
+    .c_lat_req_o    (spd_c_lat_req),
+    .c_lat_vi_o     (spd_c_lat_vi),
+    .c_lat_vj_o     (spd_c_lat_vj),
+    .c_lat_surface_o(spd_c_lat_surface),
+    .c_lat_h_i      (tcc_lat_h),
+    .c_lat_wx_i     (tcc_lat_wx),
+    .c_lat_wz_i     (tcc_lat_wz),
+
+    .r_start_o(tds_r_start),
+    .r_slot_o (tds_r_slot),
+    .r_ready_i(tds_r_ready_o),
+    .r_valid_i(tds_r_valid),
+    .r_ready_o(tds_r_take),
+    .r_sp_i        (tds_r_sp),
+    .r_dev1_i      (tds_r_dev1),
+    .r_dev2_i      (tds_r_dev2),
+    .r_dev3_i      (tds_r_dev3),
+    .r_cy_i        (tds_r_cy),
+    .r_prev_level_i(tds_r_prev_level),
+    .r_prev_morph_i(tds_r_prev_morph),
+    .r_hold_i      (tds_r_hold),
+    .r_fresh_i     (tds_r_fresh),
+
+    .sp_valid_o     (spd_sp_valid),
+    .sp_ready_i     (spd_sp_ready),
+    .sp_cx_o        (spd_sp_cx),
+    .sp_cy_o        (spd_sp_cy),
+    .sp_cz_o        (spd_sp_cz),
+    .sp_dev1_o      (spd_sp_dev1),
+    .sp_dev2_o      (spd_sp_dev2),
+    .sp_dev3_o      (spd_sp_dev3),
+    .sp_prev_level_o(spd_sp_prev_level),
+    .sp_prev_morph_o(spd_sp_prev_morph),
+    .sp_hold_o      (spd_sp_hold),
+    .sp_src_id_o    (spd_sp_src_id),
+
+    .patches_assembled_o  (spd_patches_assembled),
+    .descriptors_emitted_o(terr_sp_descriptors_o),
+    .door_refused_o       (terr_sp_door_refused_o),
+    .serve_no_door_o      (terr_sp_serve_no_door_o),
+    .door_src_mismatch_o  (terr_sp_door_src_mismatch_o),
+    .sp_order_bad_o       (terr_sp_order_bad_o),
+    .patches_unfresh_o    (terr_sp_patches_unfresh_o),
+    .store_wait_clocks_o  (spd_store_wait),
+    .lat_wait_clocks_o    (spd_lat_wait),
+    .assemble_clocks_o    (spd_assemble_clocks),
+    .busy_o               (spd_busy)
+  );
+
+  // ---- TERRAIN.LOD: the decision --------------------------------------
+  // The camera is `zhao_view_eye`'s, NOT the governor's, under ruling R63.
+  // `dual_i` is the page's own flag, the same net TERRAIN.PATCH and
+  // TERRAIN.COMPCACHE read. Only the six KNOBS come from MEASURE.GOVERNOR --
+  // which is the whole content of the "six knobs" blocker this closes.
+  zhao_terrain_lod u_terrain_lod (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cam0_x_i(veye0_x),
+    .cam0_y_i(veye0_y),
+    .cam0_z_i(veye0_z),
+    .cam0_scale_i(mgv_cam0_scale),
+    .cam0_en_i   (mgv_cam0_en),
+    .cam1_x_i(veye1_x),
+    .cam1_y_i(veye1_y),
+    .cam1_z_i(veye1_z),
+    .cam1_scale_i(mgv_cam1_scale),
+    .cam1_en_i   (mgv_cam1_en),
+    .hyst_i      (mgv_hyst),
+    .min_hold_i  (mgv_min_hold),
+    .morph_step_i(mgv_morph_step),
+    .dual_i      (tps_v_flags[TERR_FLAG_DUAL_BIT]),
+
+    // TIED OFF -- entry I21, declared. The four adjacent patches' chosen
+    // levels have no producer: a cross-patch reconciliation pass needs every
+    // patch of a frame decided before any is tessellated and this console
+    // decides one at a time. 0 is the FINEST level, so a neighbour read as 0
+    // makes this block clamp its own edge finer than it needs -- more
+    // triangles, and NO CRACK. The coarsest constant would have seamed the
+    // ground AND measured smaller.
+    .edge_nz_i(8'h00),
+    .edge_pz_i(8'h00),
+    .edge_nx_i(8'h00),
+    .edge_px_i(8'h00),
+
+    .sp_valid_i     (spd_sp_valid),
+    .sp_ready_o     (spd_sp_ready),
+    .sp_cx_i        (spd_sp_cx),
+    .sp_cy_i        (spd_sp_cy),
+    .sp_cz_i        (spd_sp_cz),
+    .sp_dev1_i      (spd_sp_dev1),
+    .sp_dev2_i      (spd_sp_dev2),
+    .sp_dev3_i      (spd_sp_dev3),
+    .sp_prev_level_i(spd_sp_prev_level),
+    .sp_prev_morph_i(spd_sp_prev_morph),
+    .sp_hold_i      (spd_sp_hold),
+    .sp_src_id_i    (spd_sp_src_id),
+
+    .out_valid_o (tld_out_valid),
+    .out_ready_i (tld_out_ready),
+    .out_ox_o    (tld_out_ox),
+    .out_oz_o    (tld_out_oz),
+    .out_level_o (tld_out_level),
+    .out_lvl_nz_o(tld_out_nz),
+    .out_lvl_pz_o(tld_out_pz),
+    .out_lvl_nx_o(tld_out_nx),
+    .out_lvl_px_o(tld_out_px),
+    .out_morph_o (tld_out_morph),
+    .out_surface_o(tld_out_surface),
+    .out_dual_o  (tld_out_dual),
+    .out_src_id_o(tld_out_src_id),
+    .out_hold_o  (tld_out_hold),
+
+    .lod_rep_count0_o(terr_lod_rep_count0_o),
+    .lod_rep_count1_o(terr_lod_rep_count1_o),
+    .lod_rep_count2_o(terr_lod_rep_count2_o),
+    .lod_rep_count3_o(terr_lod_rep_count3_o),
+    .terrain_triangles_emitted_o(terr_lod_triangles_emitted_o),
+    .idle_o(tld_idle)
+  );
+
+  // ---- TERRAIN.JOBISSUE: the decision becomes a job -----------------------
+  // THIRTEEN FIELDS, NOT SIXTEEN. Ruling R13 rules `mat_a`, `mat_b` and
+  // `weight` the wrong carrier; this block has no port for any of them and
+  // refuses them by name in its own header, so the three stay on this module's
+  // boundary where entry I21 can keep pointing at them.
+  //
+  // IT ALSO OWNS THE RETIREMENT. `serve_release_o` is what frees the compose
+  // cache's served patch, and its law is the sequencer's own exit proof --
+  // `job_ready_i` high again after the last job of the patch, by which point
+  // every reference has been accepted by the shell. Not a counter, not a
+  // timeout, and not a policy invented in a composer.
+  zhao_terrain_jobissue #(
+    .CTXD      (4),
+    .SUBPATCHES(16)
+  ) u_terrain_jobissue (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .ctx_valid_i      (tdoor_push_c),
+    .ctx_ready_o      (tji_ctx_ready),
+    .ctx_src_id_i     (tps_v_src_id[15:0]),
+    // STILL THE BOUNDARY'S, and the port comment at the top of this module
+    // says exactly what build would change that: one more forwarded field on
+    // HDRREAD / PSMUX / PAGESTREAM, beside `flags`. It travels through the
+    // context queue rather than straight to the sequencer, so it now arrives
+    // JOINED to the patch it describes even while its source is static.
+    .ctx_view_mask_i  (terr_job_view_mask_i),
+    .ctx_sparse_fill_i(terr_sparse_fill_i),
+
+    .serve_valid_i  (terr_cc_serve_valid_o),
+    .serve_src_id_i (terr_cc_serve_src_id_o),
+    .serve_release_o(tji_serve_release),
+
+    .lod_valid_i  (tld_out_valid),
+    .lod_ready_o  (tld_out_ready),
+    .lod_ox_i     (tld_out_ox),
+    .lod_oz_i     (tld_out_oz),
+    .lod_level_i  (tld_out_level),
+    .lod_lvl_nz_i (tld_out_nz),
+    .lod_lvl_pz_i (tld_out_pz),
+    .lod_lvl_nx_i (tld_out_nx),
+    .lod_lvl_px_i (tld_out_px),
+    .lod_morph_i  (tld_out_morph),
+    .lod_surface_i(tld_out_surface),
+    .lod_dual_i   (tld_out_dual),
+    .lod_src_id_i (tld_out_src_id),
+    .lod_hold_i   (tld_out_hold),
+
+    .job_valid_o    (tji_job_valid),
+    .job_ready_i    (tji_job_ready),
+    .job_ox_o       (tji_job_ox),
+    .job_oz_o       (tji_job_oz),
+    .job_level_o    (tji_job_level),
+    .job_lvl_nz_o   (tji_job_lvl_nz),
+    .job_lvl_pz_o   (tji_job_lvl_pz),
+    .job_lvl_nx_o   (tji_job_lvl_nx),
+    .job_lvl_px_o   (tji_job_lvl_px),
+    .job_morph_o    (tji_job_morph),
+    .job_surface_o  (tji_job_surface),
+    .job_dual_o     (tji_job_dual),
+    .job_src_id_o   (tji_job_src_id),
+    .job_view_mask_o(tji_job_view_mask),
+    .sparse_fill_o  (tji_sparse_fill),
+
+    .h_valid_o(tji_h_valid),
+    .h_ready_i(tji_h_ready),
+    .h_level_o(tji_h_level),
+    .h_morph_o(tji_h_morph),
+    .h_hold_o (tji_h_hold),
+
+    .jobs_issued_o         (terr_ji_jobs_issued_o),
+    .patches_retired_o     (tji_patches_retired),
+    .patches_dropped_o     (terr_ji_patches_dropped_o),
+    .ctx_refused_o         (terr_ji_ctx_refused_o),
+    .serve_no_ctx_o        (terr_ji_serve_no_ctx_o),
+    .ctx_src_mismatch_o    (terr_ji_ctx_src_mismatch_o),
+    .lod_src_mismatch_o    (terr_ji_lod_src_mismatch_o),
+    .decision_wait_clocks_o(tji_decision_wait),
+    .issue_clocks_o        (tji_issue_clocks),
+    .busy_o                (tji_busy)
   );
 
   // ==========================================================================
