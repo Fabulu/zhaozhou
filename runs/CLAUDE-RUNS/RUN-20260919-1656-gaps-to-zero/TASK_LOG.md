@@ -855,3 +855,48 @@ full composition come first. The standing rule he gave instead is larger than
 the correction: **when keeping a capability collides with a resource number,
 the capability wins** -- *"we already do not have enough resources"*. Cost is a
 fact to record, never a veto, and cost tradeoffs are no longer owner decisions.
+
+## 2026-09-21 — wave 8, and an OWNER CORRECTION to how this run is staffed
+
+**Landed and merged:** FORMIDX (`form_idx_q` is real but it is the requester's
+half, not the bank's — R239), CLIPDOOR (the GEOM.CLIP door BUILT; **all four of
+SETUPDOOR's blockers fell**, R197 had discharged the binding one and names
+particles in its own text), JOBISSUE (I21's subpatch job issuer BUILT;
+composition refused on a real absence — TERRAIN.LOD's `sp_*` has no assembler),
+BANDBUILD (the HUD band BUILT AND COMPOSED; `post_hud_*` and `twod_sc_*` gone
+from the core's edge, parity 1281 → 1280).
+
+**Register: 22 → 24, and it is honest.** +1 GEOM.CLIPDOOR row, +1
+TERRAIN.JOBISSUE row. The second was added by me: JOBISSUE built a block with a
+contract *and* silicon and skipped its ledger row citing R214, while CLIPDOOR
+cited the same R214 the same day as a mandate to add one. POSEPAGE's precedent
+decides it (contract-without-silicon is the wrong half), and the contract's own
+header already cited a row that did not exist. **An honest 24 beats a flattering
+23** — but nothing CLOSED today.
+
+**Owner rulings recorded:** R241 — `frame_tick` from `DrawProcedural`'s
+`pad[11]`; the per-instance ladder **pays the camera index bit**. The kind-8
+question he **answered himself**, pushing
+`reports/Zhaozhou_kind8_kind9_proposed_owner_ruling_2026-09-21.txt` — explicit
+form ownership in BODY and CLIP_BANK, BODY v2 / CLIP_BANK v2, headers stay 64
+bytes.
+
+**THE CORRECTION, and it governs the rest of this run.** After those three
+landed I wrote rulings, transcriptions and a ledger row **with zero lanes
+running**, and reported a register that had gone UP. Owner: *"Can we finally get
+onto reducing that 22 to zero and not verifying that grass is green"* and *"I'm
+at 86% weekly allowance used after you verified stuff and did nothing."*
+
+> **Concurrency is now ONE agent at a time.** *"you only get one agent at a
+> time. Let these three finish but after that you stop spending my money."*
+> The "refill a slot the moment one lands" rule is **REVOKED**. Spend an agent
+> only on work that CLOSES a register entry; coordinator bookkeeping is done by
+> me, briefly, and only when it changes what somebody does next.
+
+**In flight (the three authorised to finish):** FORMOWN (implements the owner's
+kind-8/kind-9 ruling; targets **I29**), WARPBUILD (GEOM.WARP — `DrawWarpedForm`
+0x0304 ratified 2026-09-20 and never picked up; see **R240**), TERRASSEM
+(TERRAIN's `sp_*` assembler — JOBISSUE priced it at **22 → 20**).
+
+**New goal, 2026-09-21:** gaps to zero → **the real full console fit** → damage
+control and optimisation.
