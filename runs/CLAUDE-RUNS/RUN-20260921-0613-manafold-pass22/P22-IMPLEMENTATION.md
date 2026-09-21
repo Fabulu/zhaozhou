@@ -317,14 +317,40 @@ None of the three asserts a bug. `--fail-knead-shape` switches the reaction off
 with its own shipping exact-off knob and the leg must notice, so it does not
 expire after a repair.
 
-### Full matrix
+### Full matrix — **179 / 179 PASS, 0 FAIL**
 
 `P22-RECEIPTS/gatematrix_p22.sh`, run in **one invocation**:
-`P22-RECEIPTS/gate-matrix.txt`. Tally in §8 below. No bound was relaxed
-anywhere; the two mask expectations that changed (`r-rear-frame` 0xB→0x3,
-`r-rear-joint` 0xA→0x2) were **stale copies from the pass-20 script** — pass 21's
-own receipts already record 0x3 and 0x2, because the rods rig stopped the
-legacy-root frame from tripping R4 STRAIN.
+`P22-RECEIPTS/gate-matrix.txt`.
+
+| family | legs | |
+|---|---|---|
+| normals | **14** | every gate binary, plus mrod and both mrear modes |
+| mrear mask controls | **10** | each with its exact declared mask, incl. the 3 new |
+| mrod | **7** | 4 controls fired + attributed, 3 retired names as hard errors |
+| mspan controls | **37** | |
+| msmooth controls | **16** | each firing only its own category |
+| protected legs | **27** | |
+| Wave-F mqa | **5** | |
+| selectors (RC 2) | **56** | the 49 carried forward plus 7 new |
+| identity + live history | **7** | incl. both pass-21 exact-off legs |
+
+**No bound was relaxed anywhere** — the source diff removes or changes **zero**
+`constexpr` lines across all five files (783 insertions, 10 deletions, the 10
+being the two renderer radius lines and one debug printf). The four `kGate*`
+constants added are all new and belong to the two new legs.
+
+Three script expectations were corrected along the way, each checked against
+pass 21's own receipts rather than rubber-stamped:
+
+* `r-rear-frame` 0xB→**0x3** and `r-rear-joint` 0xA→**0x2** — stale copies from
+  the pass-20 script. Pass 21's `mrear-ctl-fail-rear-frame.txt` already records
+  0x3: under the rods rig the legacy-root frame no longer trips R4 STRAIN.
+* The four mrod control legs asserted `rc=1`. **mrod returns 0 for a control
+  run by design** — a control is an instrument demonstration, not a gate
+  failure, and pass 21's `ctl-*.txt` record `RC=0` beside "the control FIRED".
+  Asserting `rc=0` alone would be worthless (a control that silently stopped
+  firing would then pass), so the leg now requires the gate's own two claims:
+  **"the control FIRED"** *and* **"-> ATTRIBUTED"**.
 
 ## 7. Open issues (non-blocking)
 

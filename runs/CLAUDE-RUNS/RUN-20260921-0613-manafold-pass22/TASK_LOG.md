@@ -129,3 +129,21 @@ The 7 failures themselves were all mine, not defects:
   (`mrear-ctl-fail-rear-frame.txt`) already record 0x3 and 0x2: under the rods
   rig the legacy-root frame no longer trips R4 STRAIN. Checked against pass
   21's receipts before changing the expectation, not rubber-stamped.
+
+### Final matrix: 179 / 179 PASS, 0 FAIL, one invocation
+
+`P22-RECEIPTS/gate-matrix.txt`, from the frozen copy, `MATRIX_RC=0`.
+14 normals, 10 mrear mask controls (each exact), 7 mrod, 37 mspan, 16 msmooth,
+27 protected, 5 Wave-F, 56 selectors, 7 identity/live-history.
+
+The three new pass-22 controls fired with their exact masks and nothing else:
+`--fail-dot-scale` 0x20 (dots shrunk at far 691,182 -> 0), `--fail-dot-flag`
+0x20 (dot population 691,182 -> 0), `--fail-knead-shape` 0x40 (rotation
+43.00 deg -> 0.00, form 239.5 -> 0.0).
+
+Identity: `e-identity-pass21` reproduced the pass-21 CRCs on all four witness
+clips, and its positive control `e-dots-live` matched its own expectation while
+differing from pass 21 on three of the four -- so the leg is live, not vacuous.
+
+Then: 2.5 GB of `.rgb` render intermediates purged (CLAUDE.md). Curated
+evidence committed is 1.8 MB, no raw frames.
