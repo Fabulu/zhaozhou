@@ -4682,3 +4682,103 @@ not under `reports/`.**
 per-vertex colour into this port.** Nothing does. Asking it now would freeze a
 convention ahead of its producer, which is the same error R199 refused from the
 other end.
+
+## R225 — I ALMOST TURNED A GATE RED ON THREE RUNNING PACKETS, AND THE MEASUREMENT THAT STOPPED ME COST TWO GREPS
+
+**2026-09-21, coordinator.** After the configure repair I swept the mutant
+directory for the same class of defect. **The sweep produced a dramatic,
+confident, wrong answer, and the only reason it is not in the tree is that I
+checked one case by hand before acting on it.**
+
+### What the sweep said
+
+`mutant_copy_drift` reports *"57 copies checked … 16 files matched no
+production module"*, and `wrapper_port_parity`'s `PAIRS` list holds **two**
+entries. Enumerating with the tools' own index and regex: **90 mutant files,
+57 copies checked, 14 wrappers, 16 unmatched.** So twelve wrappers looked
+uncovered by R220's gate.
+
+Running R220's own `ports()` against all fourteen pairs said **8 of 14 would be
+RED** — missing and stale ports across the texture subsystem.
+
+**Eight undetected port-list defects is exactly the finding this campaign has
+been rewarding**, and I was one edit from extending `PAIRS` and committing it.
+
+### What was actually true
+
+**Every single "MISSING" name contained `_valid_`.** That is too systematic to
+be drift, and it is the tell that stopped me — *a defect does not select for a
+substring*.
+
+Two greps settled it:
+
+```
+tests/mutants/zhao_texture_frag_expand_v2_mutant.sv:16
+    input logic frag_valid_i, output logic frag_ready_o,
+```
+
+**TWO PORTS ON ONE LINE.** `_PORT` anchors the captured name to end-of-line, so
+it sees `frag_ready_o` and never `frag_valid_i`. Every phantom "missing" port
+was the *first* of a pair sharing a line.
+
+And the second grep killed the premise outright: **that file contains no `.*`
+at all.** It binds explicitly — `.frag_valid_i(frag_valid_i)`. R220's tool
+exists for `.*` wrappers, where *"every port must exist by name in the
+wrapper's own header"*. **Applied to an explicit-map wrapper it is not a weak
+check, it is a check of the wrong proposition.**
+
+**So all eight reds were false, and committing them would have turned a gate red
+on three running packets over nothing** — the precise inverse of the failure
+this tree fears most, and worse in one way: a green that hides a defect is
+quiet, while a false red *burns three lanes' time and teaches them to skip the
+gate.*
+
+### And the gate it is actually installed on is sound — measured, not assumed
+
+```
+console core header, shared-line ports : 0
+zhao_console_core_untex_decl_mutant, uses of `.*` : 5
+```
+
+**Zero shared-line ports and a genuine `.*` binding**, so for its two pairs the
+parser's blind spot cannot fire and `1264` is the true count. **R220's gate is
+correctly built and correctly aimed. It is simply narrower than its filename
+suggests**, and that is a documentation fact, not a defect.
+
+The twelve others fail a different way and **fail LOUDLY**: an explicit map that
+misses a new production port is a `PINMISSING` at elaboration — *which is
+exactly what broke the configure tonight.* They do not need a text gate; they
+need to be elaborated, and they are.
+
+### The one GENUINE hole, and it is latent rather than live
+
+`tests/mutants/zhao_geom_group_seq_mutant.sv` declares its module as
+**`zhao_geom_group_seq` — production's exact name.** `mutant_copy_drift` matches
+`copy_module.startswith(production + "_")`, which **can never match a name that
+EQUALS production**, so the file is counted `unmatched` and **skipped silently.
+It is a copy — zero instantiations of the real module — with no drift check of
+any kind.**
+
+It is **not stale today**: both files were last committed at `1f5ac60a`, the
+same commit. **It is unwatched, which is a different and more patient problem.**
+
+It also breaks the convention that exists to prevent a second failure: every
+other mutant here is *"renamed so no source list can elaborate it by mistake"*.
+**A file under `tests/mutants/` declaring a production module name can shadow
+production in any source list that globs.**
+
+**I am not fixing either today.** Three packets are running and
+`mutant_copy_drift` is in all three gate lists; changing its matcher mid-wave is
+the live-tree hazard, and the rename touches a file POSEPAGE is working beside.
+**Recorded so it is scheduled rather than rediscovered** — and recorded with the
+false alarm above it, because the sweep that found the real hole is the same
+sweep that nearly committed eight fictional ones.
+
+### The rule this earns
+
+**A finding that is uniform is a finding about your instrument.** Eight
+independent defects do not all contain `_valid_`; eight parse failures do.
+`CLAUDE.md` already says *"check the heuristic against a case you can verify by
+hand before believing the total"* — this is the first time in this campaign that
+rule caught something on the way OUT rather than on the way in, and the cost of
+obeying it was two greps against a total I had already written down.
