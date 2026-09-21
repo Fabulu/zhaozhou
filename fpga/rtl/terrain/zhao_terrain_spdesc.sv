@@ -512,21 +512,28 @@ module zhao_terrain_spdesc #(
         end
 
         StStart: begin
-          if (r_ready_i) begin
-            if (!r_fresh_i && (patches_unfresh_o != 32'hFFFF_FFFF)) begin
-              // The store has no records for this slot, so it will answer with
-              // DEV_MAX -- full detail, its own declared behaviour, and its own
-              // `read_unwritten_o` fires beside this one.  Counted PER PATCH
-              // here because the store counts per READ, and "one page arrived
-              // late" and "sixteen reads missed" are different sentences.
-              patches_unfresh_o <= patches_unfresh_o + 32'd1;
-            end
-            st_q <= StRec;
-          end
+          if (r_ready_i) st_q <= StRec;
         end
 
         StRec: begin
           if (r_valid_i) begin
+            // `r_fresh_i` IS SAMPLED HERE AND NOT AT THE START, and the one
+            // cycle matters.  `zhao_terrain_devstore` loads `r_fresh_q` from
+            // `slot_valid_q[r_slot_i]` INSIDE its `R_IDLE: if (r_start_i)`
+            // arm, so on the cycle this block presents the start the port
+            // still carries the PREVIOUS patch's answer.  Reading it there
+            // would attribute page A's freshness to page B -- the join fault
+            // CLAUDE.md's metadata-swap chapter is about, one port along.
+            // Sampled on the FIRST record, when the store is in R_STREAM and
+            // the flag describes the slot being streamed.
+            //
+            // Counted PER PATCH.  The store's own `read_unwritten_o` counts
+            // per READ; "one page arrived late" and "sixteen reads missed" are
+            // different sentences and the budget wants the first one.
+            if ((act_count_q == 5'd0) && !r_fresh_i &&
+                (patches_unfresh_o != 32'hFFFF_FFFF)) begin
+              patches_unfresh_o <= patches_unfresh_o + 32'd1;
+            end
             // THE STORE'S ORDER IS FORWARDED, NOT ASSUMED.  The record's own
             // `sp` must be the one this walk is at; a store that re-ordered or
             // skipped would otherwise pair subpatch 3's deviations with
