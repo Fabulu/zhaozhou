@@ -490,6 +490,56 @@ one with a player-visible consequence, and the other three are cheap once it is
 written. Do not take 1–3 without it — an arrangement built around a miss policy
 nobody chose will have chosen one.
 
+---
+
+> ### ANSWERED AND BUILT, 2026-09-21 (sheetseam). Owner ruling **R221**.
+>
+> **The recommendation was taken as written.** R221 ruled decision 4 first:
+> *"fall back to the parametric disc, and COUNT the fallback"*, on the ground
+> that the disc is **the ratified v1 law** and not an invention — SEAMDIG
+> measured the sheet mode additive, `terrain_bake_v2_directed` passing 267/267
+> unchanged — while the other two options *"make an absence look like a
+> result"*. Decisions 1–3 are then `design/contracts/TERRAIN.SHEETSEAM.md`,
+> `fpga/rtl/terrain/zhao_terrain_sheetseam.sv` and
+> `fpga/rtl/surface/zhao_surface_sheetshare.sv`, with 81 checks in
+> `tests/terrain/sheetseam_rtl_directed.cpp`.
+>
+> **Three of the four items above came out different from this section's own
+> framing, and the differences are recorded here rather than only in the new
+> contract, because this is the page the next reader opens:**
+>
+> * **Item 1 has no answer because it has no question.** The bake reader
+>   issues `OP_READ` and **nothing else** — never `OP_ACQUIRE`, never
+>   `OP_RELEASE` — so it cannot leak a slot, because it never holds one. This
+>   is forced rather than frugal: `do_acquire_new` in `zhao_surface_sheet.sv`
+>   sets `dir_live`, runs the 4,096-cycle clear sweep and answers
+>   `ST_ALLOCATED`, i.e. it **allocates a blank sheet**. Serving a bake from
+>   that is R221's explicitly refused *"dig zero"* with a status code that says
+>   HIT, and it costs one of `Slots = 2` taken from the only block
+>   `terrain_rules` §7 allows to write layer F. `OP_READ` is the only opcode
+>   that reports residency without changing it.
+>
+> * **Item 2's second figure is 7.5× too large.** *"the 64×64 sheet, which is
+>   8,192 bytes and a second copy of layer F on chip"* — bake has **no tag
+>   port**, so half of that is a plane this consumer cannot see; and §9.3(b)'s
+>   address law `ti = (vi >= 32) ? 63 : 2*vi` means the 33×33 lattice can
+>   address only **1,089 of the 4,096 texels**. The prefetch is **1,089 bytes,
+>   one M10K**, not 65,536 bits and seven. It is not a second copy of layer F;
+>   it is layer F resampled onto the lattice. Measured at **1,091 cycles per
+>   record**, uncontended.
+>
+> * **Item 3's stated hazard is not an arbiter's to solve.** *"a bake that
+>   reads a half-applied stamp digs a shape the player did not make"* is a
+>   FRAME-ORDER question — bake runs in §9.2's bake window, after the stamp
+>   pass — and no arbiter priority changes it. What the arbiter must actually
+>   do is not starve either client, so the policy is `zhao_terrain_psmux`'s
+>   round robin, adopted rather than re-decided. Measured: the stamp waited
+>   **0 cycles** and the prefetch went 1,091 → 1,092.
+>
+> **What does NOT change:** §7bis's closing sentence and §8 below are both
+> still exactly right. I32 does not close, because `cmd_*` still has no
+> producer.
+
 **This is why entry I32 does not close on this block.** The *page* obstacle is
 removed; the *record* obstacle (`cmd_*` has no producer — `zhao_terrain_cmd`
 emits a patch-directory record, not a bake record) and this *sheet* obstacle

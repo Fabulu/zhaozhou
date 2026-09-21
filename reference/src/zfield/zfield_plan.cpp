@@ -23,12 +23,16 @@ constexpr uint8_t kNoVreg = 0xFF;
 // Vector groups per full 33x33 (1,089-vertex) Earth association.
 //
 // NOT ceil(1089 / 4) = 273. That is the ALIGNED FLAT packing, which is what
-// the accumulator's INIT and DRAIN phases cost (`zhao_probe_patch_acc.sv`
+// the accumulator's INIT and DRAIN phases cost (`zhao_terrain_patch_acc.sv`
 // is legitimately 273 for exactly that reason, and must not be "corrected").
 // The UPDATE path is row-major and A GROUP MAY NOT STRADDLE A ROW, so every
 // row costs ceil(33 / 4) = 9 groups and a full patch costs 9 * 33 = 297.
-// `fpga/rtl/synth/zhao_probe_walk_earth.sv` is the RTL law here and asserts
-// the row-boundedness rather than assuming it (`a_group_within_one_row`).
+// `fpga/rtl/terrain/zhao_terrain_field_walk.sv` is the RTL law here and
+// asserts the row-boundedness rather than assuming it
+// (`a_group_within_one_row`). BOTH PATHS IN THIS COMMENT WERE CORRECTED
+// 2026-09-21: the two files were promoted out of `fpga/rtl/synth/` and renamed
+// on 2026-09-20, so the oracle was citing its own RTL law by a path that no
+// longer resolves. The law, the assertion and the number 297 are unchanged.
 // Budgeting the executor at 273 under-provisions it by 8.8%.
 //
 // THIS CONSTANT IS A CLASSIFIER, NOT A REPORT -- owner ruling R156, and the

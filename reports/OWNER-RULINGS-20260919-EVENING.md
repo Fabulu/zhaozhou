@@ -4564,11 +4564,532 @@ restating as one of:
 
 * **fit at the floor** — every gap closed except the ones with a cited standing
   ruling, which is 17 and is a condition that can actually be met; or
-* **reverse R133 and/or R199** — the owner's call, not mine. R133 is the owner's
-  own instruction and only he can spend it; R199 is mine and I will reverse it
-  the moment the evaluators it waits on exist, which is the condition I wrote
-  into it.
+* **reverse R133 and/or R199** — ~~the owner's call, not mine. R133 is the
+  owner's own instruction and only he can spend it~~; R199 is mine and I will
+  reverse it the moment the evaluators it waits on exist, which is the
+  condition I wrote into it.
+
+  **CORRECTED 2026-09-21 by R226, and the struck sentence was wrong in the
+  direction that made this ruling sound more final than it is. R133 IS NOT THE
+  OWNER'S.** It is a `## R133` prose section, coordinator-authored on
+  2026-09-20 from packet FORGESHADOW, and its own first line says so — *"I
+  wrote R132 accepting ENGINE1's escalation."* Only **R1–R7** carry
+  `(owner, explicit)`. **So the quoted "leaving it costs 1 on the register" is
+  the coordinator's reasoning, not the owner pricing anything**, and *both*
+  rulings that put a floor under the gap count are coordinator-provisional and
+  revisable under the owner's standing delegation. See R226.
 
 **I recommend the first**, and I am not treating that as decided. What I am
 doing is refusing to schedule a fit against a number that cannot occur, and
 saying so now rather than at hour three of a Quartus run.
+
+## R224 — TAGPROD'S TWO DECISIONS ARE ONE, AND IT IS THE CMD EXECUTOR GAP AGAIN
+
+**2026-09-21, coordinator.** TAGPROD docked two owner decisions from its I20
+refusal: *allocate an effect-tag field in the ABI*, and *the vertex colour /
+stencil reference pair*. **Both were well found and neither is the decision it
+looks like.** Under R216's rule — *grep for the ruling, search the SUBJECT not
+the title, and search RTL headers and CONTRACTS, not only `reports/`* — the
+answer was already on disk in three places.
+
+### The structural fact that settles it
+
+`tri_continuation_tail_i` is 48 bits:
+
+```
+  vertex_rgb        [47:24]   24
+  vertex_alpha      [23:16]    8
+  effect_tag        [15:8]     8
+  stencil_reference [7:0]      8
+```
+
+`reference/include/zref/zref_fragment.hpp`'s `struct Frag` — *"one shaded
+candidate as RASTER.EARLYZ hands it over"* — carries `vr, vg, vb` (24),
+`va` (8), `tag` (8, commented **"the constant-tag source"**) and `sten_ref` (8,
+**"stencil reference AND REPLACE value"**). **Twenty-four, eight, eight, eight.**
+
+**The tail IS the reference model's per-triangle constant group, field for
+field and width for width.** That is not a coincidence and it is checkable in
+one read.
+
+**So the ABI concept is not missing — it is RATIFIED, in the reference model,
+for all four fields.** What has no producer is the hardware path that delivers
+these constants per draw. **That is one gap, not two, and it is not an ABI
+design question.**
+
+### Why "allocate a field in the ABI" is the wrong remedy, measured
+
+TAGPROD proposed `MaterialRecord.flags` bits 3-15, `raster_state[31:2]`, or
+`DrawForm.flags` bits 4-15 as reserved room. **The fragment state word has no
+room at all.** `State::pack()` allocates every one of its 32 bits:
+
+```
+[0] z_test_en   [1] z_write_dis  [2] z_force_far  [4:3] blend
+[5] shade_mod   [6] alpha_mod    [7] atest_en     [15:8] atest_ref
+[17:16] sten_func [19:18] sten_op [20] tag_write_dis
+[21] tag_from_texel  [23:22] tag_channel   [31:24] sten_mask
+```
+
+**`[31:24]` is `sten_mask`, not spare.** So the *"raster_state[31:2] has no v1
+consumer"* reading needs re-checking against this packing before anyone builds
+on it — either the RTL's `raster_state` is a different word from `zref`'s
+`State`, or the claim is about consumers rather than allocation. **I am flagging
+it rather than resolving it, because I did not measure the RTL side.**
+
+**And the selector is already built on both sides.** The contract
+(`RASTER.FRAGMENT.md`) lists `TAG_CHANNEL = GLOW` as part of `sun_additive`'s
+*state*, and TAGPROD found the RTL selecting on `tri_fragment_state_i[21]` and
+`[23:22]` — **exactly `tag_from_texel` and `tag_channel`.** The machinery that
+would *use* a constant tag exists. Only the value's delivery does not.
+
+### RULED
+
+**No new ABI bits are allocated today, and the question is re-docketed where it
+belongs: the per-draw constant path, which is the CMD executor gap that entries
+I14 and I30 already describe.**
+
+Three reasons, in order of weight:
+
+1. **The values are already ratified** — `Frag`'s four fields. Allocating a
+   *second* home for a quantity the reference model already defines is how this
+   tree got two projectors. **Before building a carrier, read the contract of
+   the block that consumes the same quantity** (`CLAUDE.md`, uncashed-cheque
+   check 3).
+2. **This is the inverse of R199 and must not be confused with it.** R199
+   deferred the forge page kind because *the consumer did not exist*. Here the
+   consumer **exists and is proven**: `zhao_post_gather` is composed, and
+   TAGPROD's `-GlowTag` form lit **1,062 fragments and 1,344 bloom cells against
+   0/0 plain**. So the case for building is stronger — **which is exactly why
+   it should be built once, in the right place, rather than twice.**
+3. **Two lanes would choose different bits.** CFGARM is measuring I14's executor
+   right now and I17's descriptor gap is *"the SAME gap I14 and I30 already
+   describe"*. A tag field allocated independently here is a third answer to a
+   question one lane is already holding.
+
+**What is NOT deferred:** `sun_additive` cannot bloom until this lands, and
+`RASTER.FRAGMENT.md` is explicit that its tag is *constant, not from a texel
+index* — *"the sun quad's texture is 64x64 ARGB4444, direct colour, with no CLUT
+index to read a strength from."* **That is a player-visible absence with a
+ratified cause**, and it is now attached to the executor that will fix it rather
+than floating as an unowned ABI question.
+
+### And the vertex colour half is ALREADY RULED, in a contract
+
+*"No provoking-vertex law exists anywhere"* is true as a search result and the
+wrong frame. **`design/contracts/FORGE.SHADOW.md` already records the
+disposition**, quoting the core back at itself: the vertex colour *"is left at
+its constants deliberately rather than invented"*, and building the tail from
+four constants would be *"moving a tie-off from a port into the core, which
+closes a gap on the register while changing nothing in the silicon."*
+
+**That is R48's pattern, already applied:** a named constant at a seam, held
+until a ratified format supplies the value. It is the fourth time in three days
+a decision has been found already spent — R165 (two of I34's three blockers),
+R190, DOSSIERCHECK's four, R216's T4 — and **the third found in a file that is
+not under `reports/`.**
+
+**The provoking-vertex question becomes real only when something produces
+per-vertex colour into this port.** Nothing does. Asking it now would freeze a
+convention ahead of its producer, which is the same error R199 refused from the
+other end.
+
+## R225 — I ALMOST TURNED A GATE RED ON THREE RUNNING PACKETS, AND THE MEASUREMENT THAT STOPPED ME COST TWO GREPS
+
+**2026-09-21, coordinator.** After the configure repair I swept the mutant
+directory for the same class of defect. **The sweep produced a dramatic,
+confident, wrong answer, and the only reason it is not in the tree is that I
+checked one case by hand before acting on it.**
+
+### What the sweep said
+
+`mutant_copy_drift` reports *"57 copies checked … 16 files matched no
+production module"*, and `wrapper_port_parity`'s `PAIRS` list holds **two**
+entries. Enumerating with the tools' own index and regex: **90 mutant files,
+57 copies checked, 14 wrappers, 16 unmatched.** So twelve wrappers looked
+uncovered by R220's gate.
+
+Running R220's own `ports()` against all fourteen pairs said **8 of 14 would be
+RED** — missing and stale ports across the texture subsystem.
+
+**Eight undetected port-list defects is exactly the finding this campaign has
+been rewarding**, and I was one edit from extending `PAIRS` and committing it.
+
+### What was actually true
+
+**Every single "MISSING" name contained `_valid_`.** That is too systematic to
+be drift, and it is the tell that stopped me — *a defect does not select for a
+substring*.
+
+Two greps settled it:
+
+```
+tests/mutants/zhao_texture_frag_expand_v2_mutant.sv:16
+    input logic frag_valid_i, output logic frag_ready_o,
+```
+
+**TWO PORTS ON ONE LINE.** `_PORT` anchors the captured name to end-of-line, so
+it sees `frag_ready_o` and never `frag_valid_i`. Every phantom "missing" port
+was the *first* of a pair sharing a line.
+
+And the second grep killed the premise outright: **that file contains no `.*`
+at all.** It binds explicitly — `.frag_valid_i(frag_valid_i)`. R220's tool
+exists for `.*` wrappers, where *"every port must exist by name in the
+wrapper's own header"*. **Applied to an explicit-map wrapper it is not a weak
+check, it is a check of the wrong proposition.**
+
+**So all eight reds were false, and committing them would have turned a gate red
+on three running packets over nothing** — the precise inverse of the failure
+this tree fears most, and worse in one way: a green that hides a defect is
+quiet, while a false red *burns three lanes' time and teaches them to skip the
+gate.*
+
+### And the gate it is actually installed on is sound — measured, not assumed
+
+```
+console core header, shared-line ports : 0
+zhao_console_core_untex_decl_mutant, uses of `.*` : 5
+```
+
+**Zero shared-line ports and a genuine `.*` binding**, so for its two pairs the
+parser's blind spot cannot fire and `1264` is the true count. **R220's gate is
+correctly built and correctly aimed. It is simply narrower than its filename
+suggests**, and that is a documentation fact, not a defect.
+
+The twelve others fail a different way and **fail LOUDLY**: an explicit map that
+misses a new production port is a `PINMISSING` at elaboration — *which is
+exactly what broke the configure tonight.* They do not need a text gate; they
+need to be elaborated, and they are.
+
+### The one GENUINE hole, and it is latent rather than live
+
+`tests/mutants/zhao_geom_group_seq_mutant.sv` declares its module as
+**`zhao_geom_group_seq` — production's exact name.** `mutant_copy_drift` matches
+`copy_module.startswith(production + "_")`, which **can never match a name that
+EQUALS production**, so the file is counted `unmatched` and **skipped silently.
+It is a copy — zero instantiations of the real module — with no drift check of
+any kind.**
+
+It is **not stale today**: both files were last committed at `1f5ac60a`, the
+same commit. **It is unwatched, which is a different and more patient problem.**
+
+It also breaks the convention that exists to prevent a second failure: every
+other mutant here is *"renamed so no source list can elaborate it by mistake"*.
+**A file under `tests/mutants/` declaring a production module name can shadow
+production in any source list that globs.**
+
+**I am not fixing either today.** Three packets are running and
+`mutant_copy_drift` is in all three gate lists; changing its matcher mid-wave is
+the live-tree hazard, and the rename touches a file POSEPAGE is working beside.
+**Recorded so it is scheduled rather than rediscovered** — and recorded with the
+false alarm above it, because the sweep that found the real hole is the same
+sweep that nearly committed eight fictional ones.
+
+### The rule this earns
+
+**A finding that is uniform is a finding about your instrument.** Eight
+independent defects do not all contain `_valid_`; eight parse failures do.
+`CLAUDE.md` already says *"check the heuristic against a case you can verify by
+hand before believing the total"* — this is the first time in this campaign that
+rule caught something on the way OUT rather than on the way in, and the cost of
+obeying it was two greps against a total I had already written down.
+
+## R226 — HUNDREDS OF SITES SAY "OWNER RULING" FOR A COORDINATOR ONE, AND I DID IT TO MY OWN R223 TWO HOURS AGO
+
+**2026-09-21. Found by CFGARM while checking its own citation of R28** — which
+is the detail that makes it worth a ruling: **the lane was verifying a claim it
+had itself written**, and found the defect underneath it.
+
+### The measurement, and it has grown tonight
+
+CFGARM reported **223 mis-attributed sites** across `fpga/`, `reference/` and
+`design/`, **62 in the console core.** At this head, split properly:
+
+```
+  "owner ruling R<n>" total          360
+  legitimately R1-R7                  67
+  MIS-ATTRIBUTED (R8 and up)         293
+```
+
+**The two figures measure different things and both are right.** CFGARM counted
+only the mis-attributed ones, at `aea45c4a`, several merges back; my first pass
+counted *all* citations including the 67 correct ones, which would have
+overstated the defect by a fifth. **The honest number is 293, and it went UP
+tonight — some of the increase is mine.**
+
+**CFGARM's own sweep is worth quoting on this, because it nearly shipped the
+opposite error:** its first tree-wide count returned **zero**, because a nested
+`-match` clobbered `$Matches` before the id was captured. It caught that *"only
+because a precise zero is a broken instrument until proven otherwise"* and
+re-ran with a positive control (81 coordinator ids, R1 correctly excluded).
+**A lane auditing citation hygiene nearly published a citation-hygiene number
+produced by a broken instrument.**
+
+**The boundary is exact and the file states it in its own preamble:**
+
+> *"Items marked **(owner, explicit)** were chosen by the owner directly. The
+> owner then said 'go with your recommended answers for now and don't stop to
+> quiz me', so items marked **(provisional, coordinator's recommendation)**
+> stand until the owner revises them."*
+
+**Seven rulings — R1 through R7 — are the owner's.** 9 lines carry the marker,
+37 carry `(provisional, coordinator)`, and there are 91 table rows plus some
+thirty prose sections. **Everything from R8 up is a coordinator recommendation
+standing under a delegation.**
+
+### AND R223 IS WRONG, IN THE DIRECTION THAT MADE IT SOUND FINAL
+
+Two hours ago I ruled that zero is unreachable, and wrote:
+
+> *"reverse R133 and/or R199 — the owner's call, not mine. **R133 is the owner's
+> own instruction and only he can spend it.**"*
+
+**R133 is not the owner's.** It is a `## R133` prose section dated 2026-09-20,
+written by the coordinator from packet FORGESHADOW's findings, and **its own
+first line says so**: *"I wrote R132 accepting ENGINE1's escalation."*
+
+So the sentence I built R223's conclusion on — *"Leaving it costs 1 on the
+register; composing it wrong costs a deadlock behind a closed gap"* — is **not
+the owner pricing a cost and accepting it.** It is the coordinator's reasoning,
+recorded in a file whose title says "Owner rulings". I read the title and not
+the preamble, and then told the owner that only he could lift it.
+
+**R223 is corrected in place rather than deleted**, because the correction is
+the useful artefact.
+
+### What this changes, and what it does not
+
+**CHANGES:** the floor under the gap count is **coordinator-made, not
+owner-made.** Both R133 and R199 are provisional recommendations standing under
+*"go with your recommended answers for now"*. **So zero is not blocked by the
+owner's instructions — it is blocked by two coordinator judgements, one of them
+mine, and both revisable by me under the same delegation that created them.**
+The fit gate is a question I can answer, not one I must escalate.
+
+**DOES NOT CHANGE:** whether those judgements are *right*. R133's engineering
+content is untouched by this — FORGE.SHADOW really is a subsystem (LODSTATE and
+SHADOW mutually blocked, composable only together, plus a client-A widening that
+re-authors a ratified law), and the cluster has gone **21 → 21 five times**.
+R199's content is untouched too. **I am correcting an authority claim, not
+overturning a decision**, and the distinction is the whole point: a provisional
+ruling can be *argued with on the merits*; an owner instruction can only be
+obeyed or escalated. **Mislabelling the first as the second removes the
+argument.**
+
+### This is VIEWMASK's finding one level up, and that is why it recurs
+
+Hours ago VIEWMASK found that entry I21's controlling premise traced to **the
+core's own commentary**, not to any ruling:
+
+> *"A caution invented in a comment and cited by its neighbours is
+> indistinguishable from a ruling. Six passes quoted the comment back as
+> ratified law"* — and it outranked ratified spec for five weeks.
+
+**Here the same disease has climbed a level: a coordinator ruling cited as an
+owner ruling is indistinguishable from one.** Both are citation-laundering, and
+both run in the direction that makes a claim harder to question. **Three hundred
+and sixty sites is not a slip; it is a convention nobody chose.**
+
+### What I am doing about it
+
+**Not a tree-wide rewrite.** 360 sites is a mechanical edit across files three
+packets are holding, and the phrase binds a packet identically either way.
+
+**What changes is the escalation path, and it goes in every brief from now:**
+*when an entry says "owner ruling R<n>", check that ruling's own row before
+treating it as unliftable — only R1–R7 are the owner's.* Two of tonight's briefs
+already carry it. **And I stop writing "owner ruling R<n>" for my own rulings**,
+which I did all evening for R220, R222, R223 and R225.
+
+The owner's file *"has already struck this twice as a one-lane slip"* (CFGARM).
+**It is not a slip and it is not one lane. Recording it as a convention defect
+is the only way it stops being restruck.**
+
+## R227 — SCALE THE GATE SET TO THE CHANGE. My brief was spending three hours to re-prove that comments do not simulate
+
+**2026-09-21, coordinator.** Two lanes reported comment-only work and then
+settled in to run **all eight smoke forms each**. With three lanes contending on
+one machine, FIELDLANE measured each form at **10-15 minutes** — so the pair was
+committed to roughly **three hours of machine time**, while slowing the third
+lane, to establish something a filter settles in one second.
+
+**The filter, run on both branches:**
+
+```
+git diff <base>..<branch> -- '*.sv' | non-comment, non-blank lines
+  gz/fieldlane   0      (zhao_cmd_exec, zhao_field_host, zhao_console_core)
+  gz/projout     0      (zhao_console_core, +212 lines, all comments)
+```
+
+**Verilator cannot produce a different simulation from a comment.** Eight forms
+were going to re-derive `raster pixels=2560` seven more times each.
+
+### This is my error and it has a name in my own memory
+
+*"Exhaustive validation is an AI failure mode; set a risk-based budget and stop
+when the acceptance question is answered."* The brief mandates eight forms
+**unconditionally**, which is precisely the default it warns about. **The cost
+was invisible while lanes ran alone and became visible only under contention** —
+so the defect had been in every brief for the whole campaign and nothing
+surfaced it until the machine was busy enough to notice.
+
+### The rule
+
+**A gate earns its runtime by being able to change its answer.** Ask what class
+the change is in, then run the gates whose SUBJECT that class can affect:
+
+* **Comment-only RTL** → the static gates, `packet_h_tieoff_audit`,
+  `completion_register.py`, and **`-LintOnly`**. Nothing else. **And those four
+  are not ceremonial here** — the tie-off audit's subject *is* comments, and
+  TAGPROD proved `completion_register.py` will register a **phantom gap** from a
+  wrapped line that merely begins with an entry number. A 212-line comment
+  insertion is exactly the shape that springs that trap.
+* **RTL behaviour changed** → the full eight, as before, with `%Fatal` grepped
+  from the logs rather than inferred from exit codes (R207).
+* **Ports changed** → add `gen_prod_top`, `gen_console_board`,
+  `wrapper_port_parity`, and both `gen_shell_paired_diff` forms. **Tonight
+  proved why:** seven `gth_*` ports were added and a mirroring mutant did not
+  follow, which aborted `cmake --preset` for every lane.
+* **A new block** → its directed bench must BUILD AND RUN (R60), and any counter
+  owes a fired positive control (R95).
+
+**Three caveats, because the shortcut has edges and each one is real:**
+
+1. **Uncommenting code is not a comment-only change**, and the filter catches it
+   — restored code appears as an added line that is not `//`.
+2. **A Verilator pragma lives in a comment.** `// verilator lint_off` changes
+   behaviour, which is why `-LintOnly` stays in the minimal set. And
+   `CLAUDE.md` records that `// synthesis translate_off` does **not** make
+   Verilator skip a block, so a guard in there is live in simulation.
+3. **The filter only strips `//` lines**, so an edit inside a `/* */` block
+   reads as non-comment and forces the full set. **That errs toward running
+   more, which is the safe direction for a shortcut to fail in.**
+
+### What this does NOT license
+
+**Not "skip the gates".** Both lanes' static gates, tie-off audit and register
+were run and green, and form 1 was run in full. **The claim is about the
+SEVENTH re-run of a form whose input did not move**, not about the first.
+
+And note the asymmetry that makes this worth writing down rather than just
+doing: **an over-run gate costs hours and looks like diligence**, so nobody
+audits it — the same blind spot as a green that hides a defect, wearing the
+opposite costume. `CLAUDE.md`'s broken-instrument law says *nobody audits good
+news*; this is its twin, **nobody audits thoroughness.**
+
+## R228 — A PER-VERTEX QUANTITY IS COMPUTED, CARRIED FOUR BLOCKS, AND DELIVERED AS A CONSTANT NOTHING DRIVES
+
+**2026-09-21, PROJOUT, entry I13. Register 22 → 22, comment-only, nothing
+built — and it is the most valuable lane of the campaign.**
+
+### The finding
+
+**GEOM.CLIP slots 3–6 have no reader anywhere in `fpga/rtl`.** ATTRPACK packs
+three planes; the shell has three plane ports; the tile pipe joins three lanes.
+And the chain behind that is worse than a spare slot:
+
+> **GEOM.LIGHT computes per-vertex colour, VATTR stores it, GEOM.CLIP carries it
+> in slots 3–5 — and ATTRPACK DROPS IT.** What reaches `frag_vert_rgb_i`, whose
+> own port comment reads *"interpolated, lit, tinted and already-fogged vertex
+> colour"*, is `post_earlyz.vertex_rgb` ← `job_meta_i[345:298]` ←
+> **`tri_continuation_tail_i`, a per-triangle CONSTANT with no producer.**
+
+**The consumer's port comment describes a quantity the console computes and
+never delivers.** A reader checking whether lit vertex colour exists finds the
+computation, finds the carrier, finds the port comment, and would reasonably
+conclude it works.
+
+**This is `CLAUDE.md`'s uncashed-cheque chapter in its purest form** — *"a thing
+BUILT is not a thing INSTALLED"* — except the deferral was never even written
+down. Nobody decided to drop it. **It is commissioned as packet ATTRLANE, and
+the two possible answers are opposites: either the computation is dead ALM to
+reclaim on a console 5,672 over its ceiling, or the delivery is severed and
+should be rejoined. The packet is forbidden from assuming which.**
+
+### And it corrects R197, which is mine
+
+R197 refused its option B partly because that option *"forces a terrain
+texture-coordinate law, which is art content and the owner's to author."*
+
+**The law exists and is frozen.** `reference/src/zrender/terrain.cpp` carries
+`u_top[k] = wx[i] >> top_shift` with its own comment *"pitch = 2^k metres → u =
+wx >> k"*, and `zhao_texture_mosaic.sv` cites `spec/terrain_rules.md` §6.2 as
+**FROZEN 2026-08-16, capture-exact.**
+
+**R197's MECHANISM is untouched** and still unblocks FORGE.SHADOW/PRIM. **Its
+premise was over-scoped**: there was no art law to author for terrain, because
+terrain's was authored five weeks earlier. **Recorded rather than quietly
+narrowed** — R197 stands as a mechanism and its stated reason is wrong for one
+of the two subsystems it covers.
+
+### The citation lesson, and it explains SIX passes of blindness
+
+Entry I13 claimed *"a terrain texture-coordinate law does not exist in this
+tree"*. **The search was honest. Its SCOPE was `fpga/rtl/terrain/**`, written
+one line above a claim about THE TREE** — and `reference/` is in the tree.
+
+> **A search that NAMES ITS SCOPE reads as more rigorous, not less.**
+
+That is the whole mechanism. A bare "I looked and it isn't there" invites
+challenge; "I searched `fpga/rtl/terrain/**` and it isn't there" reads as
+disciplined work and **nobody checks the gap between the scope and the
+conclusion.** Six passes read past it.
+
+**So: when you search for an ABSENCE, state the scope AND ask what is outside
+it.** This is the twin of R225 — there a uniform result exposed a broken
+instrument; here a *well-documented* instrument produced a conclusion wider than
+its own aperture.
+
+### Three more results, each measured
+
+* **I13 and I14 do NOT share a producer** — my premise, tested and rejected.
+  `u_geom_clip.tri_valid_i` is `cl_in_valid = mw_t_valid && !cl_in_refuse_c`.
+  One chain, no CMD record, no executor.
+* **The merge blocker STANDS and is LARGER than the entry claims.** *"A day's
+  work once (b) exists"* is false: `u_material_window` sits **in** the stream, so
+  a second producer owes three unwritten obligations — it must fire `d_enter_i`
+  or `occupancy_q` underflows, is clamped to zero, and **`drained_c` reads TRUE
+  with triangles in flight, so the interlock's own drain condition becomes a
+  lie**; it must carry `{material_set, material_id}`, which **terrain does not
+  have — zero hits in `fpga/rtl/terrain/`** because terrain textures through the
+  mosaic; and `err_unpublished_o`'s premise is falsified by any second door.
+  *"This is not an argument against R187 — it is the unpaid bill for it."*
+* **`invw24` stands; only its COSTING was wrong.** `zhao_geom_depthquant_stream`
+  is tag-through over `NSLOT = 16`, so a second client is an arbiter plus a
+  demux, **not** a second instance. Costing it as a copy would have repeated the
+  projector, and `TERRAIN.PROJECT.md` already holds that receipt.
+
+### And it corrected ITSELF twice, leaving both wrong versions in place
+
+It mis-cited the underflow control, and its **first owner recommendation was
+half wrong**: it nearly recommended terrain's colour on the flat `base_rgb`
+seam, then found `spec/terrain_rules.md` §6.5 — quoted inside
+`zhao_texture_aux.sv` — saying **"tint moved to vertices"**, with the oracle
+calling its per-cell tint *"the FLAT stand-in for the Gouraud tint."*
+
+> **Recommending the flat route would have ratified a stand-in that names itself
+> one.**
+
+**Both corrections sit BESIDE the wrong versions rather than replacing them**,
+which is the practice this ledger wants and rarely gets.
+
+**No mutant was owed and it checked before writing one:**
+`err_occupancy_underflow_o` is already fired by stimulus at
+`material_window_directed` case 7, asserted exactly 1, with its own cancellation
+control alongside.
+
+### The method note, which produced three of the four findings
+
+> **Every one came from asking "who READS this?" rather than "does this
+> EXIST?". The entry's own searches were all the second kind and all honest.
+> Reading a layout is not reading a reader — and it is the cheaper search, which
+> is presumably why it keeps being the one performed.**
+
+**That sentence is the campaign's most transferable result** and it is now in
+every brief.
+
+### One bound it could not settle, stated as a bound
+
+The mosaic's consumer is `zhao_texture_island_v3_top`'s `u_mosaic`, **which this
+core does not instantiate** — so *"terrain runs textured"* is **ratified intent,
+not composed fact.** Whoever builds the UV producer confirms the consumer's
+residency first.

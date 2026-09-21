@@ -244,8 +244,44 @@ param(
   # `tb_zhao_console_core_smoke.sv:2416: syntax error, unexpected localparam`
   # in one second. The file was restored in the same invocation; the control is
   # reproducible from this paragraph and leaves no copy to rot.
-  [switch]$LintOnly
+  [switch]$LintOnly,
+
+  # UNRECOGNISED ARGUMENTS ARE A HARD ERROR, and this catch-all is the whole
+  # reason the check below can exist. Added 2026-09-21 after FIELDLANE found
+  # `console_core_attrpack_control` -- a registered, labelled, GREEN ctest --
+  # measuring NOTHING since 2026-09-19. It passes `-BadAttribute`, which line
+  # 121 of this very file records as RETIRED that day.
+  #
+  # THE MECHANISM, measured rather than assumed:
+  #
+  #   powershell -NoProfile -File script.ps1 -TotallyUndeclared   ->  RC 0
+  #   powershell -NoProfile -File script.ps1 -Bogus 5             ->  RC 0
+  #
+  # `-File` BINDS NOTHING AND SAYS NOTHING. No error, no warning, no non-zero
+  # exit -- the script simply runs as though the flag had not been typed. So a
+  # retired flag, a typo, or a form that never existed all produce a PASSING
+  # PLAIN RUN that is indistinguishable, in a gate list, from a passing
+  # TARGETED run. That is the broken-instrument law with the toolchain holding
+  # the knife: the failure is silent and in the flattering direction.
+  #
+  # It is quieter than the trap it replaced. Passing a flag through a shell
+  # VARIABLE to `& .\script.ps1` at least binds positionally as $Repo and
+  # usually breaks loudly; an undeclared switch under `-File` is pure silence.
+  #
+  # Proven in both directions before being committed here: a declared switch,
+  # a positional $Repo and a named $Repo all still bind (RC 0), and
+  # `-BadAttribute` now exits 2 with the name printed.
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$Unrecognised
 )
+
+if ($Unrecognised) {
+  Write-Error ("UNRECOGNISED ARGUMENT(S): " + ($Unrecognised -join ', ') +
+               "`nThis script accepts only the switches in its param() block." +
+               "`nA retired or mistyped form used to run the PLAIN smoke and" +
+               " PASS. It no longer does. See the note above this check.")
+  exit 2
+}
 
 $ErrorActionPreference = 'Stop'
 

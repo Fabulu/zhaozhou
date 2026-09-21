@@ -428,6 +428,67 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+// ---------------------------------------------------------------------------
+// A RECORD ABOUT CITATIONS, NOT ABOUT A GAP -- "OWNER RULING R<n>" IS WRONG
+// FOR MOST OF THE RULINGS THIS FILE CITES. Added 2026-09-21 (gz/cfgarm).
+// ---------------------------------------------------------------------------
+// It sits HERE, in the prose before the first entry, for the reason the
+// placement note above gives: this region attaches to no entry, and a record
+// is not a gap. It changes nothing about the design and everything about how
+// hard a blocker is to move, which is why it is in the file rather than in a
+// findings document the harness refuses.
+//
+// MEASURED, with the instrument's own positive control stated because the
+// first run of it returned ZERO and that zero was a bug (a nested `-match`
+// clobbered `$Matches` before the id was captured -- the broken-instrument
+// law, reporting less than the truth, exactly as CLAUDE.md says it always
+// does). The corrected sweep sees 81 coordinator ids and correctly excludes
+// R1, which is an owner ruling.
+//
+//   `reports/OWNER-RULINGS-20260919-EVENING.md`'s decision table:
+//     81 of 91 rows are marked **(provisional, coordinator)**.
+//     SEVEN rows in the entire table say "(owner, explicit)": R1..R7.
+//   Citations of the form "owner ruling R<n>" where R<n> is one of those 81:
+//     223 across `fpga/`, `reference/` and `design/`
+//      62 in THIS FILE, over 26 distinct rulings
+//      27 in `design/prod_manifest.yml`, 16 in `zhao_console_board.sv`,
+//      10 in `design/console_inventory.yml`, 7 in `design/blocks.yml`,
+//      and the rest spread through RTL and the reference oracle.
+//   Of this file's 26, TWENTY-THREE have no prose section anywhere in
+//   `reports/` -- the coordinator-provisional table row is the only record
+//   there is, so no later owner upgrade is being missed by the count.
+//
+// THIS IS NOT A NEW CLASS OF ERROR, IT IS A KNOWN ONE AT SCALE. The owner's
+// own file has struck it twice: once on R65, and again on R133 --
+// "**R133's D-FORGESHADOW-B is the COORDINATOR's** ... Attributing a
+// coordinator ruling to the owner is the same mis-attribution this file
+// struck R65 for, **and here it is doing real work**: the whole 'wrong order'
+// argument rests on it." Both strikes treated it as a slip by one lane. It is
+// 223 citations.
+//
+// WHY IT DOES REAL WORK, in this entry block specifically. A packet that
+// reads "owner ruling R28 says every v1 material writes 0 there" believes it
+// is looking at a frozen owner decision and stops. A packet that reads
+// "provisional, coordinator" knows the decision can be re-asked for the cost
+// of asking. The two sentences are the same fact and a completely different
+// cost of moving it, and THIS FILE PRINTS THE FIRST ONE 62 TIMES. The
+// campaign's standing complaint is that blockers outlive their evidence; this
+// is the same disease in the evidence's ATTRIBUTION rather than in its
+// content, and it is larger.
+//
+// NOTHING IS RE-OPENED HERE. A coordinator's provisional ruling is a real
+// ruling and binds a packet exactly as before -- R133 and R199 still park
+// FORGE, R223 still closes it to packets, and this record does not license
+// anyone to reach past one. What changes is only WHO CAN LIFT IT, and that is
+// information every escalation needs and none of them has had. The repair is
+// mechanical (cite "R<n>" and let the table say whose it is, or say
+// "coordinator ruling R<n>"), it touches hundreds of comments across files
+// three live packets are editing, and it is therefore NOT done here: doing it
+// inside a packet would be a tree-wide rewrite nobody could review against
+// its own lane. It is written down so it can be scheduled once.
+//
+// ---------------------------------------------------------------------------
+//
 //  * I33 was PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`), six ports whose
 //    entry's whole argument was one sentence: "NO RATIFIED COMMAND CARRIES A
 //    SPECIES DESCRIPTOR ... Inventing one here would mean this file choosing
@@ -992,13 +1053,16 @@
 //   ONE THING THAT IS NOT A BLOCKER, named so it is not re-derived:
 //   `lane_covers_i` DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`,
 //   exported deliberately for it. And whoever takes the height lane should look
-//   at `fpga/rtl/synth/zhao_probe_walk_earth.sv` FIRST: it is the Earth lattice
-//   walker, differentially tested
-//   (`tests/differential/field_walk_earth_directed.cpp`), its own header names
-//   "ready/valid toward TERRAIN.PATCH's field-major reducer" as its downstream,
-//   and it is still in `synth/` under a probe name -- which is precisely the
-//   shape of the thing FIELD v3 was promoted out of earlier today. A file is not
-//   a probe because its name says so.
+//   at the Earth lattice walker FIRST. Its PATH CHANGED 2026-09-20 and this
+//   sentence used to send readers to `fpga/rtl/synth/zhao_probe_walk_earth.sv`,
+//   which NO LONGER EXISTS: the file was promoted and renamed to
+//   `fpga/rtl/terrain/zhao_terrain_field_walk.sv`, carried `not-yet-adopted` in
+//   `design/prod_manifest.yml`. It is differentially tested
+//   (`tests/differential/field_walk_earth_directed.cpp`, which kept its own
+//   name), and its header names "ready/valid toward TERRAIN.PATCH's field-major
+//   reducer" as its downstream. The point the old wording was making -- a file
+//   is not a probe because its name says so -- was RIGHT, and acting on it is
+//   what moved the file.
 //
 //   TERRAIN.LOD -- REFUSED; entry I21 carries the whole argument and was
 //   CORRECTED by both sweeps, because the blocker it named first (TERRAIN.PATCH
@@ -1222,6 +1286,230 @@
 //      is not mistaken for wiring". The difference matters for scheduling: the
 //      merge in (a) is a day's work once (b) exists, and (b) is not.
 //
+//      RE-MEASURED 2026-09-21 (gz/cfgarm) as I14's sibling, because that
+//      entry's hub packet was commissioned on the premise that the two share a
+//      producer. **THEY DO NOT, and (a) is unchanged at the RTL.**
+//      `u_geom_clip.tri_valid_i` is `cl_in_valid`, and `cl_in_valid` is
+//      `mw_t_valid && !cl_in_refuse_c` -- still ONE producer chain through
+//      `u_material_window`'s gate, still no merge. (b)'s lit r/g/b still points
+//      at I20. Nothing this entry needs is a CMD record or a CMD executor, so
+//      I14's remaining halves -- an owner decision on `proj_en_i` and a
+//      ruling-parked MEASURE.GOVERNOR -- would not move it if both closed
+//      tomorrow. The two entries share a PORT GROUP PREFIX and a subsystem,
+//      and nothing else.
+//
+//      RE-MEASURED 2026-09-21 (gz/projout), ALL FOUR SLOTS AND THE MERGE. Two
+//      of this entry's sentences are FALSE at the current tree and BOTH were
+//      wrong in the direction that makes the work look smaller than it is on
+//      one half and larger on the other. The entry does not close; its SHAPE
+//      changes, and the owner question it carries changes with it.
+//
+//      FALSE SENTENCE 1, and it is the load-bearing one: "a terrain triangle
+//      entering `tri_*` has to fill all of it" (the seven-slot packet).
+//      **SLOTS 3, 4, 5 AND 6 -- lit r, lit g, lit b, alpha -- HAVE NO READER
+//      ANYWHERE IN `fpga/rtl`.** Three independent structural confirmations,
+//      each read by hand rather than grepped:
+//        * `zhao_geom_attrpack` is the packet's ONLY consumer and packs THREE
+//          planes -- its own header, and `design/contracts/GEOM.CLIP.md`'s
+//          line about it being "the ONLY reader" of slots 1 and 2;
+//        * `zhao_shell_top_v2` declares exactly three 240-bit plane inputs,
+//          `tri_invw_plane_i`, `tri_u_over_w_plane_i`, `tri_v_over_w_plane_i`;
+//        * `zhao_raster_tile_pipe_v2` joins exactly three attribute lanes
+//          (`attr_join_q_q[0..2]`), and takes COLOUR from `base_rgb` off the
+//          298-bit FLAT request instead -- `flat_request_q[43:20]`.
+//      A fourth grep looked like a fourth consumer and was not: every other
+//      file matching `ATTRS` matches on the SUBSTRING inside `ATTRSETUP` and
+//      `ATTRSTEP`. That is R225's rule paying for itself in this entry -- the
+//      uniform-looking result was the instrument, and one file opened by hand
+//      settled it.
+//
+//      SO THE ATTRIBUTE PACKET COSTS TERRAIN ONE SLOT OUTRIGHT (`invw24`) AND
+//      ONE MORE THAN R197 LEFT IT, WHICH IS THE NEXT PARAGRAPH. Slot 6 is R48's
+//      named constant and slots 3..5 are carried by `zhao_geom_clip` and read by
+//      nothing; `zhao_geom_attrpack` does genuinely branch on `tri_untex_i`, so
+//      R197's MECHANISM is real and is not in question anywhere below.
+//
+//      BUT THIS ENTRY'S SEARCH FOR THE COORDINATE LAW WAS SCOPED TO THE RTL AND
+//      ITS CONCLUSION WAS WRITTEN ABOUT THE TREE. The sentence above says
+//      "Searched `fpga/rtl/terrain/**` ... A terrain texture-coordinate law does
+//      not exist in this tree." The search is honest, the scope is stated, and
+//      THE CONCLUSION DOES NOT FOLLOW FROM IT -- `reference/` is in this tree,
+//      and the law is there, in `reference/src/zrender/terrain.cpp`, gated by
+//      `if (textured)`:
+//
+//        top_shift from the cell pitch -- the source's own comment is
+//                  "pitch = 2^k metres -> u = wx >> k"
+//        u_top[k] = wx[i] >> top_shift;   v_top[k] = wz[j] >> top_shift;
+//        u_und/v_und = the same coordinates >> 3, for walls and the underside.
+//
+//      AND IT IS FROZEN, NOT DRAFT. `zhao_texture_mosaic.sv`'s header cites
+//      "spec/terrain_rules.md 6.2 (FROZEN 2026-08-16, capture-exact) -- both
+//      laws", and its `req_u_i`/`req_v_i` port comment already states the units
+//      a producer must hit: "Q16.16 TILE units, one tile period per cell on tops
+//      and per STRATA_M on walls/underside (terrain_rules 6.2/6.6)".
+//
+//      SO R197's REFUSAL OF ITS OPTION B RESTS ON A PREMISE THAT IS FALSE FOR
+//      TERRAIN. That ruling refused "every producer must synthesise u/v" partly
+//      because it "forces a terrain texture-coordinate law, which is ART CONTENT
+//      AND THE OWNER'S TO AUTHOR". For terrain's TOP SURFACE it is not art
+//      awaiting an author: it is frozen, capture-exact, implemented in the
+//      oracle, and already named by the consuming block's ports. The ruling's
+//      other two legs are untouched -- a flag beats a sentinel, and it genuinely
+//      unblocks FORGE.SHADOW and FORGE.PRIM, which have no coordinates BY LAW.
+//      What it does not do is close TERRAIN's half, because terrain's top
+//      surface is TEXTURED through the mosaic and R197's own law 3 REFUSES a
+//      declared-untextured primitive under a sampling material. Declaring
+//      `untex = 1` for terrain buys entry at the price of the mosaic -- which is
+//      the entire purpose of the `mat_a`/`mat_b`/`weight` triple the projector
+//      is already forwarding on `proj_out_*`.
+//
+//      THE HONEST BOUND ON THAT, because it is a composition question this lane
+//      did not settle: the mosaic's consumer is `zhao_texture_island_v3_top`'s
+//      `u_mosaic`, and THIS core does not instantiate that top. So "terrain runs
+//      textured" is the ratified intent and not yet a composed fact, and whoever
+//      builds the producer should confirm the consumer's residency first.
+//      What is settled is narrower and is enough to move this entry: the law
+//      terrain was said to lack EXISTS and is FROZEN, so the remaining work is
+//      ENGINEERING AGAINST A RATIFIED LAW rather than an absent art decision.
+//      That is a better position than this entry has been carrying and a harder
+//      one than R197 left it, and both halves of that are worth having.
+//
+//      AND THE MOVE THAT FINDING INVITES IS REFUSED IN ADVANCE, because it is
+//      the campaign's forbidden shape wearing an optimisation's clothes. "Four
+//      slots nobody reads" reads like 384 bits of carriage to delete by setting
+//      `GEOM_CLIP_ATTRS` to 3. **DO NOT.** The seven-slot packet is the ratified
+//      ruling-5 layout, `design/contracts/GEOM.CLIP.md` states it as ATTRS = 7,
+//      and lit r/g/b is not dead carriage -- it is the ARRIVAL POINT of a
+//      capability the console has not composed yet. Narrowing it would close the
+//      distance to a gap by deleting the place the answer lands, which is this
+//      file's first law. The slots are EMPTY, not SPARE -- and the oracle says
+//      where the answer comes from: owner ruling R7's `ProjectedVertex` record
+//      (`zref_geom.hpp`, GEOM.PARAMBUF's record layer) is screen x, screen y,
+//      invw24 plus status, u_over_w, v_over_w AND `rgba8` -- a per-vertex
+//      colour, ratified, in a block that is itself on the disconnected list.
+//      The carriage is waiting for its producer, which is the opposite of dead.
+//
+//      FALSE SENTENCE 2: "the merge in (a) is a day's work once (b) exists".
+//      `u_material_window` sits IN the stream between GEOM.REPLAY and GEOM.CLIP
+//      and its correctness argument is STRUCTURAL, so a second producer at
+//      GEOM.CLIP's input has three obligations this entry never named:
+//        1. it must fire `d_enter_i`. That port is `cl_in_valid && cl_in_ready`
+//           -- the window's OWN triangle. A merged triangle that entered
+//           without it would still depart on `d_leave_i`, so `occupancy_q`
+//           would be driven below zero, `err_occupancy_underflow_o` would fire
+//           and the counter would be CLAMPED AT ZERO -- which makes `drained_c`
+//           read TRUE while triangles are in flight. The interlock's drain
+//           condition becomes a lie, which is the exact fault that block's
+//           header says it exists to prevent.
+//        2. it must carry a `{material_set, material_id}` pair, because the
+//           window publishes ONE material for the whole span and shades every
+//           triangle in it with that. **TERRAIN HAS NEITHER FIELD: a search of
+//           `fpga/rtl/terrain/` for `material_set` and `material_id` returns
+//           ZERO hits.** Terrain textures through the MOSAIC path -- tileset
+//           plus the layer-E `{mat_a, mat_b, weight}` triple the projector
+//           forwards unselected -- which is a different mechanism with a
+//           different key, not a material record with a missing producer.
+//        3. `err_unpublished_o`'s stated premise -- "a triangle may only reach
+//           the door through this block" -- is falsified BY CONSTRUCTION by any
+//           second door, so it must be re-argued or the block restructured.
+//      None of the three is an argument against R187's ruling that the honest
+//      door is GEOM.CLIP's input. They are the bill for it, and it had not been
+//      added up. The good news in the same measurement: obligation 1's detector
+//      is NOT one of this repository's blind ones -- `err_occupancy_underflow_o`
+//      is fired by stimulus at `material_window_directed` case 7, checked to be
+//      exactly 1, and case 7 carries its OWN negative control in the next
+//      breath: an arrival and a departure on one clock cancel and the counter
+//      stays at 1. Case 1 asserts it silent across a legal twelve-triangle run.
+//      (This sentence first cited "case 5" and that was wrong -- corrected here
+//      by the lane that wrote it, before anybody inherited it. A citation is
+//      the cheapest thing in this file to get wrong and the most expensive to
+//      leave.)
+//
+//      `invw24` IS STILL ABSENT, and only its COSTING is corrected. It is not a
+//      second `zhao_geom_depthquant_stream` beside a second `zhao_raster_rcp24_v4`:
+//      that block is TAG-THROUGH (`v_tag_i` -> `d_tag_o`, `TAGW` wide) over a
+//      pool of `NSLOT = 16` contexts, so a second client is an arbiter on `v_*`
+//      and a demux on `d_*` keyed by a client bit in the tag. Costing it as a
+//      second instance would repeat the projector exactly -- `zhao_project_core`
+//      was extracted so the law lived once and then instantiated twice, and
+//      `design/contracts/TERRAIN.PROJECT.md` records the receipt in its own
+//      words: "it is also not a DSP saving: both shells hold their own core, so
+//      the pair is still 66, map-measured." WHETHER THE SHARED INSTANCE HAS THE
+//      HEADROOM IS UNMEASURED and is a Verilator question, not a fit question.
+//
+//      AND THE ART LAW IS NOT WHERE THIS ENTRY PUTS IT, which is the finding
+//      that should reach the owner. Re-pointing lit r/g/b at the base-colour
+//      seam was right; inheriting that seam's REFUSAL was not. The refusal
+//      there is written against the MESH path and says so: GEOM.VATTR holds a
+//      per-VERTEX rgb under R11, the flat request wants one colour for the
+//      triangle, and "picking one of the three corners would be an art decision
+//      made by a composer." **THAT OBJECTION DOES NOT APPLY TO TERRAIN.**
+//      `zref::render::shade_flat_tri` is flat PER TRIANGLE by construction and
+//      `terr_light_base_o` is one scalar for the same reason -- there is no
+//      corner to pick, so the composer is not being asked to make the art
+//      decision the seam refuses. What terrain needs is a COMPOSITION LAW, and
+//      the oracle already holds it in `reference/src/zrender/terrain.cpp`:
+//      `lit(base) = (base * shade + 32768) >> 16` on the untextured path, and
+//      `mod_of(shade, tint, sheet)` -- one rounding over the s128 product, with
+//      all-unity EXACT -- on the textured one. The open question is therefore
+//      NOT "what colour is terrain", which would be art; it is WHICH OF THE TWO
+//      RATIFIED PROFILES the console runs, and who produces `tint` (layer H)
+//      and `sheet` if it is the second. That is a smaller and more answerable
+//      question than the one this entry has been carrying.
+//
+//      AND THE PARAGRAPH ABOVE IS ITSELF HALF WRONG -- corrected here by the
+//      lane that wrote it, an hour later, because the correction is worth more
+//      than the tidiness of deleting it. "Terrain's colour is flat, so it fits
+//      the flat seam" is TRUE OF THE SHADE AND FALSE OF THE TINT, and the tint
+//      is the half with a ratified home:
+//
+//        * `spec/terrain_rules.md` 6.5, quoted verbatim inside
+//          `zhao_texture_aux.sv`: the aux budget holds "ONE aux consumer on
+//          terrain fragments, because TINT MOVED TO VERTICES." Layer-H tint is
+//          a PER-VERTEX quantity by ratified spec.
+//        * and the oracle says the same about itself. `terrain.cpp` introduces
+//          its per-cell tint as "the FLAT STAND-IN for the Gouraud tint -- the
+//          average of the four corner RGB565 values". **A stand-in that names
+//          itself one.** Recommending the flat route would have ratified the
+//          stand-in as the design, which is this file's own standing warning
+//          about composing the simplification that happens to exist.
+//
+//      SO THE SLOTS' EMPTINESS HAS A CAUSE, AND IT IS BIGGER THAN THIS ENTRY.
+//      The console computes per-vertex colour and then throws it away:
+//      GEOM.LIGHT produces lit r/g/b, GEOM.VATTR stores it per vertex under
+//      R11, it rides GEOM.CLIP in slots 3..5 winding-flipped with its corners
+//      -- and GEOM.ATTRPACK packs THREE planes, so it is dropped there. What
+//      actually reaches the fragment is `frag_vert_rgb_i`, whose own port
+//      comment reads "interpolated, lit, tinted, FOGGED", and it is driven
+//      from `returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb`
+//      -- the 48-bit CONTINUATION TAIL, `job_meta_i[345:298]`, which is
+//      `tri_continuation_tail_i`: a PER-TRIANGLE CONSTANT with no producer,
+//      entry I20. **A per-vertex quantity is computed, carried four blocks, and
+//      delivered as a per-triangle constant that nothing drives.**
+//
+//      THAT ALSO ANSWERS R224's "DERIVED FROM WHAT?", for terrain at least.
+//      That ruling searched `spec/*.zidl` and `spec/*.md` for `vertex_rgb`,
+//      `vertex_alpha`, `effect_tag` and `stencil_reference`, got ZERO, and
+//      concluded the tail is ABSENT DATA with nothing to derive from. The
+//      search was right and a LITERAL-TOKEN search cannot see terrain_rules
+//      6.5, because that sentence says "tint moved to vertices" and never
+//      writes the field's name. For terrain the derivation is: per-vertex
+//      layer-H tint, modulated by the flat shade `terr_light_base_o` already
+//      leaves this module with. **This does not overturn R224** -- the other
+//      three tail fields are untouched and terrain is one primitive class of
+//      several. It removes exactly one of that ruling's four "nothing to derive
+//      from" claims, and it is the one I13 depends on.
+//
+//      THE CORRECTED RECOMMENDATION, then, and it is a question rather than an
+//      answer because the answer is above this lane's pay grade: terrain's
+//      colour is PER-VERTEX by spec, its destination is either slots 3..5
+//      (which need ATTRPACK to grow from three planes to six, real silicon) or
+//      the continuation tail's `vertex_rgb` (which needs I20's producer). **If
+//      the flat stand-in is chosen anyway -- and it may well be the right call
+//      on the ALM budget -- it must be NAMED a stand-in in the RTL, with
+//      terrain_rules 6.5 cited beside it**, or the next reader inherits a
+//      Gouraud law silently implemented as a constant.
+//
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
 //      closed is named here so nobody re-solves it.
@@ -1250,6 +1538,124 @@
 //      which is why this entry does not close today. `proj_en_i` needs the
 //      OWNER (see FINDINGS-projinput.md D-1, re-measured and still open);
 //      `pixel_error` needs a block another packet owns.
+//
+//      RE-MEASURED 2026-09-21 (gz/cfgarm), BOTH ITEMS, AND THE SECOND ONE IS
+//      NOW HARDER THAN "ANOTHER PACKET OWNS IT". This entry was opened as a
+//      HUB -- three other entries name it as their blocker -- on the premise
+//      that ONE MISSING CMD EXECUTOR sits behind I14, I30, I17's descriptors
+//      and I21's blocker 5. **THAT PREMISE IS FALSE, measured four ways, and
+//      the four customers need four different kinds of thing:**
+//
+//        * `proj_en_i` -- an OWNER DECISION. No CMD record is involved at all;
+//          `zhao_project_core.sv` calls it "the rigid-pipeline enable, owned
+//          by the CALLER" and there is no caller left outside the subsystem.
+//          Unchanged, and it is the one item here a ruling could close today.
+//        * `pixel_error` -- NOT a missing executor either, and the executor
+//          arm is the SMALLEST part of it. MEASURE.GOVERNOR is PARKED, not
+//          merely uncomposed: R223 item 4 (2026-09-21) records that
+//          `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`, that lodstate is
+//          inside R133's parked FORGE.SHADOW subsystem ("LODSTATE and SHADOW
+//          mutually blocked and composable only together"), and that R133
+//          PRICED the register cost and took it. So building the two CMD.EXEC
+//          arms (`SetView.pixel_error`, `SetPresentationContract.view_count`)
+//          today would be an uncashed cheque written against a standing
+//          ruling -- the one shape this file has a chapter about.
+//        * I30 -- **DOES NOT EXIST.** It is in the CLOSED AND DELETED ledger
+//          above, closed 2026-09-19 under owner ruling R45. Every entry still
+//          citing "the same gap I14 and I30 describe" is citing a deleted
+//          entry; see I17 item 2, corrected there.
+//        * I21's blocker 5 -- its stated dependency ON THIS ENTRY HAS EXPIRED.
+//          See the correction at that blocker.
+//        * A FIFTH CUSTOMER was re-docketed onto this entry mid-packet by
+//          OWNER RULING R224 -- I20's PER-DRAW FRAGMENT CONSTANTS,
+//          `tri_continuation_tail_i` (48b) and `tri_fragment_state_i` (32b),
+//          on the reasoning that the tail IS `zref`'s per-triangle constant
+//          group field for field (24/8/8/8) and that "what has no producer is
+//          the per-draw constant delivery path -- the same missing executor
+//          I14 and I30 describe". **MEASURED HERE, AND IT IS NOT.** It makes
+//          the refusal five-for-five instead of four, and the two halves fail
+//          the hypothesis for two DIFFERENT reasons:
+//
+//            `tri_fragment_state_i` -- ITS DELIVERY PATH IS BUILT, RATIFIED
+//            AND LIVE. Owner ruling R28 ratified the word
+//            (`reference/include/zref/zref_raster_state.hpp`): `[1:0]`
+//            cull_mode from `DrawForm.flags[3:2]`, `[31:2]` the material's
+//            half from `MaterialRecord.raster_state[31:2]` "carried
+//            unchanged". CMD.EXEC lowers DrawForm whole; GEOM.DRAWJOB composes
+//            the word; it rides the 72-bit draw-state sideband
+//            (`GEOM_SIDE_W`, `zref::drawjob`'s packing under R28/R29) through
+//            MESHFETCH, ASSETFETCH and ASSEMBLE, and entry I39 CLOSED that
+//            carriage on 2026-09-20. `zhao_material_resolve` publishes the
+//            material's half as `rsp_raster_state_o` off the record's bytes
+//            20-23 and IS COMPOSED. No executor is missing anywhere on it.
+//
+//            `tri_continuation_tail_i` -- NOT a delivery gap either: it is
+//            ABSENT DATA. SEARCHED `spec/*.zidl` and `spec/*.md` for
+//            `effect_tag`, `stencil_reference`, `vertex_rgb`, `vertex_alpha`,
+//            `sten_ref`, `sten_mask`: **ZERO hits** (the one match,
+//            `cloud_vertex_alpha`, is a zref sky function). What holds the
+//            24/8/8/8 layout is `zref` -- the reference ORACLE -- which under
+//            ruling R73's distinction makes these DERIVED and not ABI fields.
+//            That supports R224's "no new ABI bits", and it moves the
+//            question: derived FROM WHAT ratified input? For the viewport rect
+//            the answer was `SetView.viewport_id`, an actual ABI field. Here
+//            NO ratified record carries a vertex colour, an alpha, an effect
+//            tag or a stencil reference, so there is nothing to derive from.
+//
+//          THE RECOMMENDATION, since R224 asks for it to be decided ONCE and
+//          this entry is where it was docketed. The ratified container with
+//          room is the MATERIAL_SET page (kind 11), whose record already
+//          reserves bytes 24-31 -- `zhao_material_resolve.sv`'s `OFF_RSV0` and
+//          `OFF_RSV1`, 64 bits against the tail's 48 -- and whose delivery is
+//          already composed end to end (PublishResource -> MEM.UPLOAD ->
+//          MATERIAL.RESOLVE -> `u_material_window`'s per-triangle join). That
+//          is R42/SPECIES_TABLE's pattern: owner-authored DATA in a page, not
+//          a new command. **IT DOES NOT COVER THE WHOLE TAIL, and the split is
+//          the owner's to take:** `effect_tag` and `stencil_reference` are
+//          material/primitive state and fit the page; `vertex_rgb` and
+//          `vertex_alpha` are contested, because ruling R11 makes base_rgb the
+//          VERTEX's colour and not the material's -- putting them in a
+//          material record contradicts R11, and that is I13's and I20's open
+//          art question, not a packaging choice. **No field is allocated
+//          here.**
+//
+//          AND THE ONE THING R224 FLAGGED AND DID NOT RESOLVE IS SETTLED, with
+//          the ruling in favour of the lane rather than the coordinator.
+//          TAGPROD's "`raster_state[31:2]` has no v1 consumer" is CORRECT --
+//          it is owner ruling R28's own sentence, quoted in
+//          `zref_drawjob.hpp`: *"no bit of it has a ratified consumer in v1,
+//          so a v1 material writes 0 there"*, with the named constant
+//          `kV1MaterialRaster` and R48's ALPHA_C as the stated precedent. The
+//          counter-citation (`zref`'s `State::pack()` allocating `[31:24]`)
+//          IS ABOUT A DIFFERENT WORD, which is the first of the two readings
+//          R224 offered and is the right one. **Two 32-bit words, two zref
+//          headers, both called "state":**
+//            `zref_raster_state.hpp`  R28's DRAW-state sideband word:
+//                                     [1:0] cull_mode, [31:2] material half.
+//                                     -> `u_geom_assemble.m_raster_state_i`.
+//            `zref_fragment.hpp`      `FragmentPipeline::State`, the FRAGMENT
+//                                     word: [0] z_test_en ... [31:24]
+//                                     sten_mask, matching
+//                                     `zhao_raster_fragment.sv` 228-235 and
+//                                     400-406 bit for bit, all 32 consumed.
+//                                     -> `tri_fragment_state_i`.
+//          So no correction is owed to that lane and no allocation is implied
+//          by that half. Recorded here because a collision between two
+//          identically-named ratified words is the kind of thing that gets
+//          re-derived every time somebody greps `raster_state`.
+//
+//      THE INPUT SIDE OF THE GOVERNOR IS NOW FULLY REACHABLE, which is worth
+//      writing down because the next lane will otherwise re-derive it and
+//      because it is what makes the parked OUTPUT side the whole of the
+//      blocker. `frame_i` <- `core_tick_c`; `starved0/1_i` <-
+//      `zhao_measure_starve` off the composed `zhao_measure_tokens`;
+//      `proj0/1_i` <- `zhao_view_projq88` <- `zhao_view_projscale`, whose `kx`
+//      comes from the merged cfg bus and whose `vw` comes from cfg 17 -- WHICH
+//      NOW HAS A CMD PRODUCER, so the sentence recorded at I18's governor note
+//      below ("that is I14's other half and it is a genuine hole") is spent;
+//      `px_err0/1_i` and `view_count_i` <- two new CMD.EXEC arms, both fields
+//      ratified. Every one of those is engineering. NONE of them helps while
+//      R133/R223 park the consumer.
 //
 //        * THE VIEWPORT RECT, cfg addresses 16 and 17 -- CLOSED 2026-09-20.
 //          SetView carries a `viewport_id` and NOT a rectangle.
@@ -1510,11 +1916,49 @@
 //           IT DOES NOT UNBLOCK I17 TODAY and is not offered as if it did. The
 //           gather half is still held by R37, so this entry cannot close
 //           whatever happens to the HUD. Recorded now because it is cheap now.
-//        2. `twod_pd_*` and `twod_sd_*` -- the DESCRIPTORS. These are the CMD
-//           seam and they are the SAME gap I14 and I30 already describe, not a
-//           new one: `zhao_cmd_decoder` emits record headers, and the executor
-//           that would turn a SetPlane record into a plane descriptor does not
-//           exist.
+//        2. `twod_pd_*` and `twod_sd_*` -- the DESCRIPTORS. This bullet used
+//           to read: "These are the CMD seam and they are the SAME gap I14 and
+//           I30 already describe, not a new one: `zhao_cmd_decoder` emits
+//           record headers, and the executor that would turn a SetPlane record
+//           into a plane descriptor does not exist."
+//
+//           BOTH OF ITS CITATIONS ARE WRONG, corrected 2026-09-21 (gz/cfgarm),
+//           and the correction makes this bullet BIGGER rather than smaller --
+//           which is why it is written out instead of quietly refreshed.
+//
+//             * "I30" HAS NOT EXISTED SINCE 2026-09-19. It is in the CLOSED
+//               AND DELETED ledger at the top of this block, closed under
+//               owner ruling R45. An entry that cites a deleted entry as
+//               corroboration is citing nothing, and this one was read as
+//               "three entries agree" by the packet that commissioned a hub
+//               against them.
+//             * "THE EXECUTOR DOES NOT EXIST" UNDERSTATES IT BY A WHOLE LEVEL:
+//               **THE RECORD DOES NOT EXIST.** `SetPlane` returns ZERO hits in
+//               `spec/commands.zidl` -- SEARCHED, with the search named:
+//               `spec/*.zidl` and `spec/*.md` for SetPlane, SetSprite,
+//               DrawSprite, SetOverlay, DrawHud, "2D plane" and twod, and the
+//               only ratified `plane` in the ABI is `SetPopulation`'s analytic
+//               COLLISION plane (`plane_c`, `plane_nx/ny/nz`), which is a
+//               particle surface and not a compositor layer. The cartridge's
+//               page kinds are 0..13 (`spec/cartridge.md` 3) and none is a 2D
+//               descriptor set, so the R42/I33 route -- descriptors travelling
+//               as a published page -- is not available either.
+//               `spec/qformats.md` 744-745 says the same from the other side,
+//               in the document that owns the number formats: the charter 16
+//               2D plane mode is "listed by the charter, OWNED BY NO SPEC
+//               YET".
+//
+//           SO THIS IS NOT A CMD-EXECUTOR GAP AND MUST NOT BE SCHEDULED AS
+//           ONE. It is an ABI or page-kind addition, which is an OWNER
+//           decision of the same size as R41/R42/R52 -- each of which ratified
+//           a new record before a lane could lower it. Whoever takes it should
+//           put the RECORD in front of the owner first; an executor for a
+//           record nobody has ratified is a file that cannot be written
+//           honestly, because this composer would be choosing what a 2D plane
+//           IS, which is owner DATA. (Note the shape of the old text: it named
+//           a record, `SetPlane`, that reads exactly like a ratified opcode and
+//           is not one. A plausible name is the most expensive kind of absent
+//           citation -- nobody greps for a thing they have just read.)
 //        3. `twod_ld_*` -- NOT A GAP. A texture page, a palette and a binding
 //           are generated assets, which is this entry's own classification for
 //           the grading curves, applied to a texture.
@@ -1577,6 +2021,18 @@
 //          should cost it as such. It is not done HERE because exposing it
 //          with no consumer would dangle a producer at this module's edge and
 //          put the register up by one, which is the trade R75 refused.
+//
+//          **DONE, AND THIS PARAGRAPH IS HISTORY -- checked 2026-09-21
+//          (gz/cfgarm) rather than assumed from the head of the entry.**
+//          `rp_fb_tag_unused` and `rp_fb_addr_unused` are GONE from
+//          `zhao_shell_top_v2.sv` (its own line 1131 says so); `fb_tag_o` now
+//          connects to `rpx_tag`, and the shell exports the whole `gth_*`
+//          group -- `gth_valid_o`, `gth_rgb565_o`, `gth_tag_o`, `gth_addr_o`,
+//          `gth_x_o`, `gth_y_o`, `gth_last_o`. The consumer arrived first
+//          (POST.GATHER composed, R218/R195), so the dangle this paragraph
+//          refused never had to happen. Marked HERE, at the refusal, because
+//          the closure is recorded 100 lines up at (c) and a reader who greps
+//          `rp_fb_tag_unused` lands on the stale sentence, not on the fix.
 //        * ITS OUTPUT IS A THIRD GAP. The block flushes sixteen cells per tile
 //          as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
 //          The store between a flush and a random access is the same shape of
@@ -2044,7 +2500,11 @@
 //          `cmd_exec_cfg_*_w` onto it and CMD.EXEC lowers SetView's
 //          `view_projection` onto cfg addresses 0..15. What is still absent is
 //          I14's OTHER half, the VIEWPORT RECT at cfg address 17, which is
-//          where `zhao_view_projq88`'s `vw` comes from. `px_err0/1_i` needs one
+//          where `zhao_view_projq88`'s `vw` comes from.
+//          (**NO LONGER ABSENT, 2026-09-21 (gz/cfgarm): the rect landed as
+//          steps 20/21 of the same walk on 2026-09-20. See the expiry note at
+//          `proj0/1_i` below, which carries the running evidence.**)
+//          `px_err0/1_i` needs one
 //          more arm on CMD.EXEC's existing SetView walk -- the field is
 //          ratified (`spec/commands.zidl:344`) and the walk is already
 //          TWENTY steps (`zhao_cmd_exec.sv:1555-1609`, `cw` runs 0..19 and
@@ -2116,6 +2576,16 @@
 //                              17, THE VIEWPORT RECT, which only the external
 //                              host port writes. That is I14's other half and
 //                              it is a genuine hole, not a wiring oversight.
+//                              **EXPIRED 2026-09-21 (gz/cfgarm).** cfg 16/17
+//                              gained their CMD producer the day AFTER this
+//                              was written -- `zhao_cmd_exec` steps 20/21,
+//                              2026-09-20 (projbound) -- so the host port is
+//                              an OVERRIDE now and not the only writer.
+//                              Measured, not read: `cmd_exec_directed` 762
+//                              checks at gz/cfgarm, cases 32-35 differenced
+//                              against `zref::render::viewports_of()` with
+//                              `viewport_range_refused_o` fired in case 33.
+//                              This input is REACHABLE today.
 //            `px_err0/1_i`,
 //            `view_count_i` -- two new CMD.EXEC arms, as corrected above.
 //          So the governor is blocked at BOTH ends, and the two ends need
@@ -2123,6 +2593,26 @@
 //          arms plus I14's viewport rect), the output side needs a RULING or a
 //          consumer somebody else composes. Whichever lands first, the other is
 //          still required -- this entry does not close on either alone.
+//
+//          **THE RULING ARRIVED AND IT WENT THE OTHER WAY, 2026-09-21
+//          (gz/cfgarm).** R223 item 4 records MEASURE.GOVERNOR as PARKED, not
+//          pending: its `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`,
+//          lodstate is inside R133's parked FORGE.SHADOW subsystem ("LODSTATE
+//          and SHADOW mutually blocked and composable only together"), and
+//          R133 priced the register cost in words and took it. R223 also
+//          closes FORGE to packets outright after five passes for 21 -> 21.
+//
+//          SO THE TWO ENDS ARE NOT SYMMETRIC ANY MORE, and the asymmetry
+//          matters for scheduling. THE INPUT SIDE IS NOW ENTIRELY REACHABLE:
+//          the viewport rect expired as a blocker the day after this paragraph
+//          was written (see `proj0/1_i` above), so every one of the five
+//          inputs is buildable engineering. THE OUTPUT SIDE IS PARKED BY A
+//          STANDING RULING. Building the input side first would therefore
+//          produce five new producers with no consumer -- the uncashed cheque,
+//          written deliberately, against a ruling that says the consumer is
+//          not coming. **The input work is correct and must NOT be done until
+//          R133/R199 move.** Recorded at this size so the next lane does not
+//          read "nearly clear" as "nearly worth doing".
 //
 //          RE-VERIFIED A THIRD TIME 2026-09-20 (postmeas), AND THE OUTPUT
 //          BLOCKER HOLDS -- with the instrument checked before its null was
@@ -2802,6 +3292,46 @@
 //      >>    cfg address 17 has no CMD producer)" -- projq88's `vw` comes from
 //      >>    that rect. So blocker 5 is now A COMPOSITION BEHIND ENTRY I14, not
 //      >>    a format defect, and it is stated at that size.
+//      >>
+//      >>    **AND THAT DEPENDENCY HAD ALREADY EXPIRED WHEN IT WAS WRITTEN,
+//      >>    2026-09-21 (gz/cfgarm). THE SAME DEFECT TWICE ON ONE BLOCKER, ONE
+//      >>    DAY APART, AND THE SECOND TIME IT WAS INHERITED FROM A REGISTRY
+//      >>    ROW RATHER THAN FROM THE ENTRY.** cfg addresses 16 and 17 HAVE a
+//      >>    CMD producer: `zhao_cmd_exec` parses `SetView.viewport_id` (ABI
+//      >>    byte 17), indexes video_rules 3.2 and writes the rect as steps
+//      >>    20/21 of the view walk, landed 2026-09-20 (projbound). I14's own
+//      >>    viewport bullet has read "THIS BULLET IS CLOSED" since that day,
+//      >>    ~1,300 lines above this one.
+//      >>
+//      >>    MEASURED RATHER THAN READ OFF THE RTL, because a comment is what
+//      >>    misled this blocker twice already. `test_cmd_exec_directed` built
+//      >>    and RAN at this commit: **762 checks passed, no `%Fatal`.** Cases
+//      >>    32-35 difference all four rectangles against the ORACLE
+//      >>    `zref::render::viewports_of()`; case 33 FIRES
+//      >>    `viewport_range_refused_o` by legal stimulus and asserts the
+//      >>    camera still lands (16 matrix words, `views_written_o` 1) while
+//      >>    the rectangle is refused; cases 34/35 are its negative controls
+//      >>    and prove the counter reads the MODE, not merely the id. And
+//      >>    `zhao_project_core.sv` 627/633/636 consumes addresses 16 and 17,
+//      >>    so the rect has a real reader as well as a real writer.
+//      >>
+//      >>    WHAT SURVIVES OF BLOCKER 5 AFTER THAT IS ONE SENTENCE, AND IT IS
+//      >>    A STANDING RULING RATHER THAN AN ABSENCE: both `zhao_view_projq88`
+//      >>    and `zhao_view_projscale` exist only to feed MEASURE.GOVERNOR, and
+//      >>    **R223 item 4 (2026-09-21) parks the governor transitively** --
+//      >>    `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`, lodstate is
+//      >>    inside R133's parked FORGE.SHADOW subsystem, and R133 priced the
+//      >>    register cost and took it. So composing the pair today dangles a
+//      >>    producer behind a parked consumer (the trade R75 endorsed
+//      >>    refusing), and the blocker is NOT "a composition behind entry
+//      >>    I14" any more: it is FORGE's park, reached through two hops
+//      >>    nobody had traced. The manifest rows now say so.
+//      >>
+//      >>    THE PATTERN, SINCE THIS IS THE THIRD TIME ON ONE BLOCKER: each
+//      >>    re-measurement moved the refusal to a SMALLER and TRUER statement
+//      >>    (format defect -> composition behind I14 -> standing ruling), and
+//      >>    each intermediate one outlived its evidence by about a day. The
+//      >>    blocker never stopped being real; every proof of it did.
 //
 //      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
 //      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
@@ -3541,6 +4071,59 @@
 //      >> already built twice here, not a subsystem. It is not what blocks
 //      >> this entry; `sc_*` and R65 are.
 //
+//      >> AND THAT BLOCK NOW EXISTS -- BOTH OF THEM. Built 2026-09-21
+//      >> (sheetseam) under OWNER RULING R221. Recorded here because this
+//      >> paragraph is where the next reader will look for the arbiter, and a
+//      >> precise specification for a block that already exists is how
+//      >> `zhao_vertex_arena` came to be built twice.
+//      >>   * `fpga/rtl/surface/zhao_surface_sheetshare.sv` -- the two-client
+//      >>     share this paragraph asks for, at the exact type it names.
+//      >>     Round robin, one `last_q` flip-flop, ADOPTED from
+//      >>     `zhao_terrain_psmux` rather than re-decided; both priority
+//      >>     orders are rejected in its header with their numbers.
+//      >>   * `fpga/rtl/terrain/zhao_terrain_sheetseam.sv` -- and this is the
+//      >>     part the paragraph above UNDERSTATES, which PAGEIO measured and
+//      >>     recorded as decision 5 in `design/contracts/TERRAIN.PAGEIO.md`:
+//      >>     the sheet port is a CONTROL-AND-READ port with a separate
+//      >>     response stream and a residency STATUS, while bake wants a
+//      >>     combinational lookup on the A/B/C beat. So an arbiter alone
+//      >>     serves nothing. This block prefetches the 1,089 texels the
+//      >>     33x33 lattice can address -- 1,089 of 4,096 because section
+//      >>     9.3(b) decimates, one byte of two because bake has no tag port
+//      >>     -- into ONE M10K, and answers the dig from it.
+//      >>
+//      >> THE MISS LAW IS OWNER RULING R221 AND IT IS ONE BIT.
+//      >> `bk_depth_sheet_o` goes LOW on any non-ST_HIT, so the record digs
+//      >> the RATIFIED parametric disc and the fallback is COUNTED. Note what
+//      >> that rules OUT, because it is a live hazard in this seam: an
+//      >> `OP_ACQUIRE` on a non-resident handle ALLOCATES A BLANK SHEET and
+//      >> answers ST_ALLOCATED, which is R221's refused "dig zero" wearing a
+//      >> status code that says HIT -- and steals one of `SURF_SLOTS` = 2 from
+//      >> the only block terrain_rules 7 allows to write layer F. The reader
+//      >> therefore issues `OP_READ` AND NOTHING ELSE, measured over the whole
+//      >> of `sheetseam_rtl_directed` rather than claimed in a header.
+//      >>
+//      >> THIS DOES NOT CLOSE THIS ENTRY, and the arithmetic of the refusal is
+//      >> unchanged by it: the sheet seam was never what blocked I32. Both new
+//      >> blocks are BUILT and NOT COMPOSED, because their consumer
+//      >> `zhao_terrain_bake_v2` is not composed and `cmd_*` still has no
+//      >> producer -- RE-VERIFIED IN THIS TREE 2026-09-21, `zhao_terrain_cmd`
+//      >> emits `rec_island_o`/`rec_ix_o`/`rec_iz_o`/`rec_hps_addr_o`/
+//      >> `rec_crc_o`/`rec_flags_o`, a patch DIRECTORY record, and nothing
+//      >> resembling {cx, cz, radius, depth_from, depth_to}. Composing the
+//      >> share alone would put an arbiter between SURFACE.STAMP and a dead
+//      >> second client, which is a tie-off wearing a block's clothes.
+//      >>
+//      >> ONE NEW THING FOR WHOEVER BUILDS THE RECORD PRODUCER, and it is
+//      >> cheap to get wrong: `zhao_terrain_sheetseam`'s `job_handle_i` is the
+//      >> patch's SHEET handle32 and it is an INPUT on purpose. It must NOT be
+//      >> synthesised from `cmd_patch_id_i`. `zhao_surface_sheet`'s own choice
+//      >> C4 is the reason -- "the handle is the identity the ABI carries
+//      >> (`commands.zidl` SurfaceStamp `handle32[patch] patch`); using
+//      >> anything else re-derives identity that was already stated" -- and a
+//      >> second identity law invented inside a bake-record producer is
+//      >> exactly the kind nobody would look for later.
+//
 //      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
 //      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
 //      ({base, scar, bottom, nobake}) with a layer-B writeback on `sc_*`, and
@@ -3691,6 +4274,150 @@
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).
 //
+//      =====================================================================
+//      READ THIS BLOCK FIRST. RE-MEASURED 2026-09-21 (gz/fieldlane) AND
+//      EVERY RECORDED BLOCKER BELOW IS SPENT. The prose after it is kept
+//      because its REASONING is still worth reading, but four of its
+//      factual assertions are false in today's tree and are struck inline
+//      where they appear. Owner ruling R165 found two of three spent on
+//      2026-09-19; the count today is higher, not lower, and the entry had
+//      re-asserted one of them AFTER R165 struck it (that recurrence is
+//      R190's own finding: "when a blocker is struck, the strike has to land
+//      in the ENTRY, not only in a ruling").
+//
+//      S1. "THE UNIFORMS HAVE NO PRODUCER" -- SPENT. The CMDFIELD packet
+//          built it at commit 33571772, "I34's build item (a)". CMD.EXEC now
+//          carries the whole TerrainField 0x0200 lowering:
+//          `tfld_valid_o`/`tfld_ready_i`, the four footprint fx16
+//          (`tfld_x0_o`/`_z0_o`/`_x1_o`/`_z1_o`), `tfld_handle_o`,
+//          `tfld_cmd_o`, and the three uniform carriers this entry said were
+//          absent -- `tfld_start_tick_o` (R2's origin), `tfld_duration_o`
+//          (R3's span) and `tfld_params_o` (256 bits, p0..p7 Q16.16 LE,
+//          R4..R11). Build items (a) AND (b) are done: CMD.EXEC emits the
+//          uniforms on the SAME handshake instead of a table with an
+//          undriven address port, and says why in its own header.
+//
+//      S2. "{handle -> program-hash} HAS NO PRODUCER, ZERO HITS" -- SPENT,
+//          and this is the assertion that came back after being struck. The
+//          sweep that produced the zero was `program_hash|prog_hash|
+//          programHash`, and `zhao_field_loader`'s `pub_prog_hash_o`
+//          MATCHES `prog_hash`. The search pattern was never wrong; the
+//          search was run before the producer landed. The publication port
+//          is `pub_ready_o`/`pub_pinned_o` (8 objects), `pub_sel_i` [2:0],
+//          `pub_handle_o`, `pub_prog_hash_o`, `pub_gen_o` -- composed in
+//          THIS FILE on `u_field_loader` and promoted to `fld_ldr_pub_*`.
+//          The loader's own comment says the indexed read "costs one mux the
+//          descriptor table needs anyway": it was built for this consumer.
+//          What remains is not a producer, it is `pub_sel_i`'s owner -- the
+//          core does not drive it, so resolving a handle needs the two-client
+//          share this entry already lists as build item (d).
+//
+//      S3. "PROMOTING THE PROBES OUT OF `synth/` IS THE FIELD LANE's ACT" --
+//          DONE, 2026-09-20. Both files were promoted and RENAMED.
+//          `fpga/rtl/synth/zhao_probe_walk_earth.sv` and
+//          `.../zhao_probe_patch_acc.sv` NO LONGER EXIST; a packet sent to
+//          read those paths finds nothing. They are now
+//          `fpga/rtl/terrain/zhao_terrain_field_walk.sv` and
+//          `fpga/rtl/terrain/zhao_terrain_patch_acc.sv`, both carried in
+//          `design/prod_manifest.yml` as `not-yet-adopted` with the adoption
+//          condition written out: "adopt when C1 composes the Earth
+//          datapath".
+//
+//      S4. THE OWNER DECISION BELOW IS DECIDED, AND DECIDED AGAINST THIS
+//          ENTRY's OWN RECOMMENDATION. The three-option paragraph at the end
+//          of this entry recommends option 3 (the front's "same program,
+//          same uniforms" fast path, 46 clocks to ~3). That recommendation is
+//          ruling R91, which is stamped "(provisional, coordinator)" -- it is
+//          NOT an owner ruling. The owner then ruled directly, in
+//          `reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt`
+//          section 13.1: "FH18 deliberately selects the field-major
+//          patch-working-set form, already represented by zhao_probe_patch_acc
+//          and the amended Earth contract. R91's goal is retained; its claim
+//          that a front-only three-clock transport change is the whole fix is
+//          not." That is OPTION 2, named and taken, and R91's option 3
+//          explicitly declined as insufficient. Section 13.1 closes with "Do
+//          not leave two opposite stream-order laws alive."
+//
+//      S5. A BLOCKER THIS ENTRY NEVER STATED, AND IT IS THE STRONGEST ONE.
+//          Found in `design/console_inventory.yml`'s own `why` text, not here:
+//          "closing I34 needs velocity/material/nav channels that
+//          zhao_terrain_patch.sv does not have, and section 20.8 forbids
+//          closing it by wiring only height." VERIFIED in the RTL rather than
+//          inherited: `zhao_terrain_patch` offers exactly ONE return lane --
+//          `fld_valid_i` / `fld_ready_o` / `fld_height_i` -- and there is no
+//          velocity, material or nav_cost input anywhere on the block. The
+//          Earth record declares FOUR output channels and the composed
+//          consumer can receive one. That is a CONSUMER-side gap, entirely
+//          independent of section 13.1's architecture ruling, and it would
+//          still forbid the one-wire join even if 13.2 had never been written.
+//          It belongs in this entry, and the fact that it lived only in a
+//          ledger's prose while this entry argued four other points is the
+//          same defect as the stale sweeps above, running the other way.
+//
+//      S6. THIS ENTRY IS THE DIRECTIVE's COMMIT G, AND NOTHING IN THE TREE
+//          SAID SO. Section 20.8 is titled "Commit G -- Earth production path
+//          and one reducer" and its scope sentence is this entry's remaining
+//          work exactly: "Implement the bounded command/association bridge,
+//          field-major scheduler and single patch-working-set accumulator.
+//          Reuse the existing probe's numerical reducers with real
+//          phase/backpressure/lifetime control. Preserve the rest of the
+//          terrain page/cache interface rather than treating a probe as a
+//          whole terrain subsystem." Three files already cite 20.8 and none of
+//          them says I34 IS that commit.
+//          AND 20.8 FORBIDS THIS ENTRY's SHORTCUT BY ENTRY NUMBER, which is
+//          the shortest form of S5 and the sentence to show a future packet
+//          first: "Route height, velocity, material and nav outputs from the
+//          same evaluation to their real owners. DO NOT CLOSE I34 BY WIRING
+//          ONLY HEIGHT while declaring the other three channels present
+//          because they have spare bus bits."
+//          Section 20.1 removes any reading of this entry as BLOCKED: "A
+//          missing producer already named and designed here is not such a
+//          contradiction: it is the work the packet was commissioned to do."
+//          It also says "Nobody patches the same host/engine interface
+//          independently without coordinating its exact schema" -- a second
+//          reason one lane does not join `tfld_*` to this intake alone.
+//
+//      SO WHAT REMAINS IS A BUILD, NOT AN ABSENCE, AND THE OWNER HAS SCOPED
+//      IT. Directive section 13.2 commissions "the production field-major
+//      implementation under the TERRAIN.PATCH capability (for example
+//      zhao_terrain_patch_v2), retaining the old implementation as a
+//      transaction/numeric oracle for paired tests", owning eight named
+//      responsibilities including "the bounded 16-entry field intake in
+//      command order". `zhao_terrain_patch_v2` DOES NOT EXIST in this tree.
+//      Sections 13.3 (exact semantic equivalence), 13.4 (the accumulator's
+//      missing ready/valid and phase exclusivity -- the manifest row declares
+//      that gap rather than hiding it), 13.5 (the serial-channel memory
+//      organisation, ~20 M10K, a packing candidate and not a fitted claim)
+//      and 13.6 (patch lifecycle) are the rest of it.
+//
+//      AND THAT IS WHY THIS LANE COMPOSED NOTHING, which is a REFUSAL WITH A
+//      REASON rather than a deferral. The tempting act is to join CMD.EXEC's
+//      `tfld_*` to `terr_pt_fld_add_*` inside this file: the producer exists,
+//      the destination is ratified, and it would delete eight boundary inputs
+//      without dangling anything. Section 13.2 forbids it in writing -- "the
+//      old fld_add_hash_i/fld_add_cmd_i fields are trace-only in the current
+//      RTL. Store the actual required association identity in the new list
+//      explicitly; do not pretend the existing block already retained a
+//      program binding" -- and the same section takes the old serial
+//      implementation out of the shipping datapath for the patch it owns. S5
+//      above forbids it a second time and from the other end: the consumer
+//      has one return channel of the four the record declares. A
+//      join into the block the owner has just made an ORACLE is composing the
+//      superseded arrangement, and `CLAUDE.md`'s rule about only ever
+//      composing the latest version is the general form of it. The join
+//      belongs to the Earth integration packet, into v2's intake, and it is
+//      ONE WIRE of that packet rather than a prerequisite for it.
+//
+//      SECTION 13.7's OTHER HALF IS ALSO STILL OWED and is NOT build item
+//      (a): "Add a positive composed mode such as -FieldActive using that
+//      software producer... The new active mode must require nonzero actual
+//      runs, correct complete output values, actual terrain consumption and
+//      successful recovery after a deliberately bad program/association."
+//      The smoke has eight forms and none of them is that one; the existing
+//      no-program form asserts ZERO completed FIELD runs and 13.7 says to
+//      keep it as the refusal control, not to read it as the positive gate.
+//      =====================================================================
+//
 //      THE REASON CHANGED 2026-09-19 AND IT IS NOW A SHARPER ONE. The old text
 //      said "THE ABSENT OWNER IS FIELD.SEQ.EARTH and it is not built", citing
 //      `tests/terrain/tb_terrain_compose.sv` and the fact that
@@ -3716,13 +4443,23 @@
 //
 //      SO CLOSING IT NEEDS A DESCRIPTOR TABLE keyed by `fld_add_cmd_i`, filled
 //      by CMD.EXEC's TerrainField arm, which is the same absent producer entry
-//      I42 names for the program store. That is one seam, not two. (The `I42`
+//      I42 names for the program store.  <-- STRUCK 2026-09-21, see S1 above:
+//      THAT ARM IS BUILT (CMD.EXEC `tfld_*`, commit 33571772) and it emits the
+//      uniforms on the handshake rather than into a table, deliberately,
+//      because a table's address port would have had no driver. The paragraph
+//      above is correct that ten zeroed uniform lanes would be a lie; the
+//      producer that prevents it now exists. That is one seam, not two. (The `I42`
 //      meant there is THE FIELD ENGINE'S PROGRAM LOADER, below. A second entry
 //      was written as I42 the same hour and has been renumbered I44; this
 //      citation was one of the two the collision made ambiguous.)
 //
 //      AND BEFORE BUILDING THE WALKER THAT FEEDS THIS LANE, READ
-//      `fpga/rtl/synth/zhao_probe_walk_earth.sv`. Added 2026-09-19 by the
+//      `fpga/rtl/synth/zhao_probe_walk_earth.sv`.  <-- STRUCK 2026-09-21, see
+//      S3 above: that PATH IS DEAD. The file was promoted and renamed to
+//      `fpga/rtl/terrain/zhao_terrain_field_walk.sv` on 2026-09-20, and
+//      `zhao_probe_patch_acc.sv` to `.../zhao_terrain_patch_acc.sv`. The
+//      paragraph's ARGUMENT survives the rename intact and is why it is kept.
+//      Added 2026-09-19 by the
 //      terrain sweep, because the file is exactly the shape this repository
 //      lost three weeks to once already -- a finished engine kept out of the
 //      machine because `probe` was in its filename. It is the Earth LATTICE
@@ -3818,6 +4555,13 @@
 //      (including `synth/`) -- ZERO hits; `programHashOfBytes` exists only in
 //      `reference/src/zfield/zfield_decode.cpp`. Nothing in hardware publishes
 //      {handle -> hash}.
+//      <-- STRUCK 2026-09-21, see S2 above. Re-running that exact sweep today
+//      returns 22 hits under `fpga/rtl`, and the decisive one is
+//      `pub_prog_hash_o` in `zhao_field_loader.sv`, which MATCHES the pattern
+//      `prog_hash`. The regex was never wrong: the sweep was a claim about a
+//      MOMENT and the producer landed after it was run. A zero-hit sweep needs
+//      a date, and it needs re-running before it is quoted rather than when it
+//      was written.
 //      RECOMMENDED, for the owner to confirm: SW.STREAM owns the mapping,
 //      because it is the only party that has both -- it names the program by
 //      handle in the plan and computes the hash with `zfield::programHashOfBytes`
@@ -3853,6 +4597,13 @@
 //      in as many words -- "Nothing inside the console loads a field program
 //      ... its owner is CMD.EXEC's TerrainField 0x0200 arm ... That arm is not
 //      built."
+//      <-- STRUCK 2026-09-21, BOTH HALVES, see S1 and S2 above. This is the
+//      re-assertion R190 recorded: R165 had ALREADY struck the hash blocker on
+//      2026-09-19 and it was written back into this entry on 2026-09-20 as
+//      "re-checked rather than inherited". The re-check was honest and it was
+//      the same stale sweep. The arm is now built (commit 33571772), so the
+//      field host's quoted sentence is stale too -- and it is stale IN THAT
+//      FILE as well, which is where the next reader will meet it.
 //
 //      ONE CORRECTION TO THE LIST ABOVE, and it makes (c) smaller: the hash's
 //      ONLY real consumer is the EARTH adapter. `zhao_terrain_patch.sv`:125-126
@@ -3900,6 +4651,18 @@
 //      calls for"), so one repair serves both.
 //
 //      THE OWNER DECISION, with three options and a recommendation:
+//      <-- DECIDED 2026-09-21, see S4 above, and the answer is OPTION 2. The
+//      "RECOMMENDED" stamp on option 3 below is ruling R91, which the rulings
+//      file marks "(provisional, coordinator)" and NOT an owner ruling. The
+//      owner then ruled directly, in the SHARED FIELD directive section 13.1:
+//      "FH18 deliberately selects the field-major patch-working-set form ...
+//      R91's goal is retained; its claim that a front-only three-clock
+//      transport change is the whole fix is not." Option 3's GOAL survives --
+//      the uniforms are still loaded once per association -- but it is not the
+//      whole fix and it is not the selected architecture. The three options
+//      are kept below because the MEASUREMENT under them is what the decision
+//      was made on, and because reading a decided question's alternatives is
+//      how the next reader avoids re-opening it.
 //
 //        1. ACCEPT IT for v1 -- field-driven terrain height exists and does not
 //           fit its budget. Honest, and it makes the allowance a lie.
@@ -4441,6 +5204,9 @@
 //       one.
 //     * a lattice-walking PAGE ISSUER: none. `fpga/rtl/synth/` was read file
 //       by file and `zhao_probe_walk_earth.sv` IS a real lattice walker --
+//       (that file is now `fpga/rtl/terrain/zhao_terrain_field_walk.sv`,
+//       promoted and renamed 2026-09-20; the near-miss below is unchanged by
+//       the move, only its path is)
 //       and the wrong one: it emits four-wide world (x,z) groups for the
 //       FIELD v3 executor over a 33x33 patch, with no page ci/cj, no cell
 //       extents, no solid bits and no vdist. A genuine near-miss, recorded so

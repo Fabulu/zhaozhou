@@ -579,3 +579,181 @@ gap I14 and I30 already describe"*. I14 is a hub, not a leaf.
 
 **Next step: attend whichever of the three lands first; re-run the seven smoke
 forms and `wrapper_port_parity` on the merged tree before believing the gates.**
+
+### Wave 6 continued — TAGPROD landed, R224, and a red gate cleared
+
+**Head `4101b385`. Register 21. Rulings 120.**
+Running: **SHEETSEAM**, **CFGARM** (I14), **POSEPAGE** (I29, new).
+
+**TAGPROD merged.** I20 **refused** — the third refusal, and FORGESHADOW was
+right — but now **field by field**, each blocker verified first-hand, and
+`stencil_reference` **named for the first time**: every prior pass said "four
+constants" without saying which.
+
+**R219's mandate delivered anyway:** `-GlowTag`, the eighth smoke form, green in
+both polarities — **1,062 lit and 1,344 bloom cells against 0/0 plain.** The
+glow is provable end to end without I20 closing, because the bench drives a
+boundary port, which is stimulus and not composition.
+
+**Its best moment was being wrong.** The assertion *"tag on every triangle ⇒ all
+2560 lit"* failed at 1062: `gather_fragments_o` is **not** the covered-fragment
+count — RESOLVE sweeps a touched tile whole. The shipped assertion is now a
+**cross-check between two instruments sharing no logic.**
+
+**A register defect found by causing it:** `completion_register.py` matches
+`^//\s*(I\d+)\.\s+` on **every line**, so a wrapped comment beginning with an
+entry number **registers a phantom gap** — 21 → 22 with no RTL change. It reads
+**HIGH**, the audited direction, and is **deliberately left alone** because
+twelve lanes gate on its number. Guard: entry ids are strictly monotonic.
+**Do not "fix" it by tightening the indent — `I9` is legitimately two-space-aligned.**
+
+**R224 — TAGPROD's two docked decisions are ONE, and it is CFGARM's gap.**
+`tri_continuation_tail_i` is 24/8/8/8; `zref_fragment.hpp`'s `struct Frag` is
+`vr,vg,vb` 24 + `va` 8 + `tag` 8 + `sten_ref` 8. **Field for field.** So the ABI
+is already ratified and what is missing is the **per-draw constant path** — the
+I14/I30 executor. Ruled **no new ABI bits**, precisely so two lanes do not
+allocate two homes. This is the **inverse of R199**: there the consumer did not
+exist; here it is composed and proven.
+
+**And the vertex-colour half was already ruled** — `FORGE.SHADOW.md` quotes the
+core: the colour *"is left at its constants deliberately rather than invented"*.
+**Fourth spent decision in three days, third found outside `reports/`.**
+
+**A red gate cleared with evidence, not silence.** `mutant_copy_drift` was RED on
+`zhao_geom_bonesrc_latefetch_mutant` — production committed twelve minutes
+later. The upstream diff is **comment-only** (an ALM row 829 → 830, the one
+flip-flop `started_q` added), verified by filtering to non-comment lines: zero.
+Body current, mutation intact, **the comparison recorded in the mutant's own
+header** — a refreshed copy with no record of what was compared is the
+stale-copy trap wearing a newer timestamp.
+
+**Citation drift for future briefs:** `// REAL:` is now **173**, not 163; there
+are **eight** smoke forms, not seven.
+
+**Next step: attend whichever of the three lands first. CFGARM has been told
+R224 widens its question and has been asked to check one thing I could not —
+whether the RTL's `raster_state` is the same word as `zref`'s `State`, whose
+`pack()` allocates all 32 bits with `[31:24] = sten_mask`.**
+
+### Wave 7 — CFGARM and SHEETSEAM merged, the configure repaired, and a ruling of mine corrected
+
+**Head `5b8c37f6`. Register 22. Rulings 122.**
+Running: **POSEPAGE** (I29), **FIELDLANE** (I34, new), **PROJOUT** (I13, new).
+
+**CFGARM killed my hub hypothesis by measurement.** I sent it to test whether one
+missing CMD executor sat behind I14, I30, I17's descriptors and I21's blocker 5.
+**Five customers, five different blockers, zero CMD executors.** Register 21 → 21.
+
+* **I30 DOES NOT EXIST** — deleted 2026-09-19 under R45. Entries citing it point
+  at a deleted entry.
+* **I17's descriptors:** the RECORD does not exist — `SetPlane` is zero hits in
+  `spec/commands.zidl`.
+* **I21's blocker 5 had ALREADY EXPIRED.** cfg 16/17 has a CMD producer, proven
+  by `test_cmd_exec_directed` at **762 checks, RC 0**, differencing against the
+  oracle `zref::render::viewports_of()` with a fired stimulus and two negative
+  controls.
+* **The rot was live in production RTL:** `zhao_cmd_exec.sv` justified its
+  handshake with *"no ratified command carries"* the viewport rect — **sixty
+  lines above the arms that carry it.** The manifest refused a composition in
+  those words and I21 inherited the refusal.
+
+**SHEETSEAM spent R221 and the register rose 21 → 22** — R214's pattern, from
+registering `TERRAIN.SHEETSEAM` in five places. 81 directed checks against the
+REAL `zhao_surface_sheet`; all seven smoke forms RC 0. **Two corrections to the
+brief I wrote it:** the latency price was **7.5x too large** (bake has no tag
+port and §9.3(b) decimates — 1,089 of 4,096 texels addressable, **one M10K**),
+and **the handle question dissolved** — `OP_ACQUIRE` on a non-resident handle
+*allocates a blank sheet*, which is R221's refused "dig zero" **wearing a status
+code that says HIT.** I32 and I27 did not move; `cmd_*` has no producer and
+`job_handle_i` must not be synthesised from `cmd_patch_id_i`.
+
+### The configure was broken for every lane, and my gate list is why it hid
+
+`zhao_shell_top_v2` gained seven `gth_*` ports; its paired-diff mutant did not
+follow; `verilate()` aborted the whole configure. **Measured before repair:**
+
+```
+  --check            RC 0   "fresh"
+  --check --mutant   RC 1   "STALE"
+```
+
+**My brief's gate list ran only the first form.** Every lane reported it green,
+truthfully, about the half that was fine. **CFGARM's fix is structural and beat
+mine** — the bare `--check` now covers both files, so an incomplete gate list
+cannot hide the class again. Taken whole at merge. `ctest -R packet_h_paired_diff`
+is now **2/2 PASS, Test #638** — the detector that could not be installed.
+
+**SHEETSEAM's framing of it is the durable one:** its `add_test` sits ten lines
+BELOW the `verilate()` that aborts, so *"the detector's installation is
+conditional on the absence of the fault it detects."*
+
+### R225 — I nearly turned a gate red on three running packets
+
+A mutant-directory sweep said **8 of 14 wrappers RED**. Every phantom name
+contained `_valid_`, because the parser anchors port names to end-of-line and
+those files put two ports on one line — and none of them uses `.*` at all, so
+R220's tool was **checking the wrong proposition**. Two greps killed it.
+**A finding that is UNIFORM is a finding about your instrument.**
+
+The gate as installed is sound, measured: the core header has **zero**
+shared-line ports and its wrapper uses `.*` five times.
+
+**One genuine latent hole, scheduled not fixed:**
+`tests/mutants/zhao_geom_group_seq_mutant.sv` declares its module as
+**production's exact name**, so `startswith(production + "_")` can never match
+it — **no drift check of any kind.** Not stale today; unwatched.
+
+### R226 — and it corrects R223, which I wrote two hours earlier
+
+CFGARM found it *while checking its own citation*. Only **R1–R7** are
+`(owner, explicit)`; the file's preamble says everything else is a coordinator
+recommendation standing under *"go with your recommended answers for now."*
+
+```
+  "owner ruling R<n>" total   360
+  legitimately R1-R7           67
+  MIS-ATTRIBUTED (R8+)        293
+```
+
+**R223 said "R133 is the owner's own instruction and only he can spend it."
+False.** R133 is coordinator-authored — its own first line reads *"I wrote
+R132…"*. So *"leaving it costs 1 on the register"* is the coordinator's
+reasoning, not the owner pricing a cost. **I read the file's title and not its
+preamble.** Corrected in place.
+
+**What it changes: the floor under the gap count is coordinator-made and
+revisable by me** — zero is not blocked by the owner. **What it does not change:
+whether those judgements are right.** R133's engineering content stands.
+
+**Next step: attend whichever of the three lands first. CFGARM has been told to
+stand down and kill its pass-2 monitor; its work is merged and re-verified on
+the merged tree.**
+
+### R133 re-measured by the coordinator — NO EXPIRY. Recorded because a negative result is a disposition
+
+**2026-09-21, read-only, no lane touched.** Every entry re-measured tonight has
+turned up a spent blocker (R165's two, VIEWMASK's two, CFGARM's one), so before
+weighing a FORGE.SHADOW subsystem packet I checked whether R133's five had gone
+the same way. **They have not.**
+
+```
+  zhao_geom_ladderbank   0 production instantiations
+  zhao_geom_lodstate     0
+  zhao_view_projscale    0
+  zhao_geom_projradius   1  <- but ONLY by zhao_geom_lodstate.sv, itself uncomposed
+  zhao_measure_governor  1  <- but ONLY by zhao_prod_top.sv, the GENERATED fit top
+  zhao_forge_shadow      1  <- likewise
+```
+
+**The raw count says three are now instantiated and that reading is false.** Two
+appear only in `zhao_prod_top.sv`, which is generated and names every production
+block **for fitting**, not for console composition; the third sits inside the
+parked subsystem itself. **R225's rule applied to my own sweep: check what a
+total is MADE OF before reporting it.** Stopping at the count would have had me
+announce three expiries that do not exist.
+
+**So FORGE.SHADOW remains a genuine subsystem build**, exactly as R133 says, and
+R133 stands on the merits rather than on the authority R223 wrongly gave it
+(corrected by R226). The open question is not whether it is blocked but whether
+to spend a wave on it, and that is the coordinator's call to make when a slot
+frees — not an escalation.

@@ -165,6 +165,19 @@
 // page, spec/cartridge.md 3 kind 0) with the software decoder and planner
 // beside it. That arm is not built.
 //
+// CORRECTED 2026-09-21 (gz/fieldlane). THAT ARM IS NOW BUILT: the CMDFIELD
+// packet landed it at commit 33571772 as `zhao_cmd_exec`'s `tfld_*` group --
+// footprint, `tfld_handle_o`, `tfld_cmd_o`, and the three uniform carriers
+// `tfld_start_tick_o` / `tfld_duration_o` / `tfld_params_o` (p0..p7). What is
+// still absent is narrower and is worth stating as its own sentence, because
+// the paragraph above is the one every reader of this file quotes: NOTHING
+// COMPOSES IT. `zhao_console_core` instantiates `zhao_cmd_exec` and does not
+// connect one `tfld_*` port, so `ld_*` still has no driver inside the console.
+// The join is the Earth integration packet's, into the field-major intake the
+// SHARED FIELD directive section 13.2 commissions, and console-core entry I34
+// carries the full re-measurement. An ABSENT PRODUCER became an UNCOMPOSED
+// one, which is a different repair with a different owner.
+//
 // ---------------------------------------------------------------------------
 // WHY IT IS A FRONT AND NOT AN ENGINE
 // ---------------------------------------------------------------------------
