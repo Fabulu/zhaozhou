@@ -3176,6 +3176,15 @@ inline bool apply_knead_dip_env() {
   // SHORT clip's knead presses, and therefore how deep it may go inside G9.
   if (!num("ZHAO_U02_KNEAD_DIP_RAMP_KEYS", 1, 60, g_u02_knead_dip_min_ramp_keys))
     return false;
+  // PASS 22: the fold's reaction authority and the lightning's own shape share
+  // of it. ⚠ `ZHAO_U02_FOLD_DIP_PM` was parsed in zhao_reel.cpp ALONE, which is
+  // the exact fault this function was written for -- pass 20's own identity leg
+  // had to be repaired because that knob was invisible to the gates. It is here
+  // now, so mrear's R7 leg and the reel read one value.
+  if (!num("ZHAO_U02_FOLD_DIP_PM", 0, 1000, g_u02_fold_dip_gain_pm))
+    return false;
+  if (!num("ZHAO_U02_FOLD_DIP_SHAPE_PM", 0, 3000, g_u02_fold_dip_shape_pm))
+    return false;
   return true;
 }
 

@@ -5243,6 +5243,99 @@ constexpr int32_t kFoldDipSquashPm = 430;  // vertical flatten at a full dip
 constexpr int32_t kFoldDipSpreadPm = 700;  // the sideways give that goes with it
 static_assert(kFoldDipSquashPm >= 0 && kFoldDipSquashPm < 1000,
               "the squash may flatten the mana body, never invert it");
+// ---- PASS 22 (Owner Direction 23 item 5): THE LIGHTNING'S OWN ANSWER --------
+//
+// Owner, 2026-09-21: *"When the to[p] nodule moves down, the lightning shape
+// should react more. Change form and or rotate around. That is the kneading."*
+//
+// Pass 20 gave the whole mana BODY a squeeze -- figure and cloud together, drop
+// + flatten + spread about the ring centre (kFoldDip{Drop,Squash,Spread} above).
+// That is a scale and a translation: the figure gets shorter and wider and rides
+// down, but it is still the same figure in the same attitude. What the owner is
+// asking for now is the part a scale cannot give: the shape TURNING and its FORM
+// changing while it is pressed.
+//
+// THREE TERMS, all of them geometry on the placed figure, all of them children
+// of the SAME authority pass 20 already established (`dip_pm`, read from B's sag
+// below the A/C midline -- the pose, never the dip's schedule):
+//   * ROLL   -- the figure turns in its own camera-facing plane. This is the
+//               "rotate around" read, and it is the term that survives at Drift
+//               distance, where a 30 px figure can show an attitude change and
+//               cannot show a subtle one.
+//   * TUMBLE -- a smaller turn in DEPTH, so the gesture is not flat. Kept well
+//               under the roll on purpose: the pass-15 review caught the slow
+//               all-axis knead turning a ring edge-on into white bars, and a
+//               large depth turn during the press would re-create exactly that.
+//   * SHEAR  -- lateral offset proportional to height, so the figure LEANS and
+//               curls over the press instead of merely squatting. This is the
+//               form change: a ring becomes a tilted ellipse, the bolt zigzag
+//               becomes italic, and no rotation or uniform scale can produce it
+//               (the R7 gate's form descriptor is rotation- and scale-invariant
+//               precisely so it measures this and not the roll).
+//
+// ⚠ WHY NOT PUSH `morph_pm`. The obvious way to "change form" is to advance the
+// figure's existing stencil morph during the press -- it is already a morph, it
+// already carries station identities, and it would be free. It is also wrong:
+// the morph would have to come BACK when the press releases, and msmooth's
+// `--fail-morph-reverse` leg exists because a reversing morph is the defect that
+// leg was written for. A gesture must not be bought by breaking the continuity
+// contract it sits inside. So the form change is geometric and the morph
+// scheduler is untouched, which is also what keeps "a form change must morph,
+// not switch" true by construction: there is no switch anywhere in this.
+//
+// ⚠ AND THE LIGHTNING'S SIZE IS NOT TOUCHED. Owner, same day: *"The lightning
+// must not change size ... from distance, at least not more than it already
+// does."* None of these three terms is a scale: a roll and a tumble are
+// rotations, and the shear is volume-preserving. The figure's extent changes
+// only as the shear tilts it, which is the form change the owner asked for, and
+// it is driven by the KNEAD, not by distance.
+//
+// ZHAO_U02_FOLD_DIP_SHAPE_PM=0 is the EXACT-OFF control for all three at once,
+// and `dip_pm <= 0` skips them without one arithmetic operation -- so away from
+// the beat the bytes are the pass-21 bytes, which is the other half of the
+// owner's constraint.
+// SELECTED BY EYE, pass 22: see the ladder in P22-IMPLEMENTATION.md.
+// ⚠ `dip_pm` NEVER REACHES 1000, AND THE FIRST VERSION OF THIS WAS TUNED AS IF
+// IT DID. Measured with U02_FOLD_DEBUG over ten clips of the shipping bank:
+//   trick 208 | hover 152 | inspect 152 | rest 147 | channel 111 | hasty 85
+//   pirouette 72 | drift 27 | blown 18 | taunt III 0 (its crown shuffle owns
+//   the rankings, so it hosts no dip -- kKneadDipClipPm[21] is 0)
+// The ceiling is structural: dip_pm is smoothstep(sag) * kFoldDipGainPm/1000
+// with the gain at 650, and the sag never approaches kFoldDipRefMm = 420 mm.
+// So a constant written "at a full dip" describes a state that does not occur,
+// and the honest form is a DECLARED reference. The first cut used 9000 a16 as
+// "~49 deg at a full dip"; at the dip that actually happens that was 7.5 deg,
+// and on the rendered strip it read as a wobble, not as the lightning
+// answering -- the crayon-grain fault one more time, present in the metric
+// (2177 changed pixels) and absent to the eye.
+//
+// These three are therefore the values AT kFoldDipShapeRefPm, which is what a
+// hosting clip's press actually shows on screen.
+constexpr int32_t kFoldDipShapeRefPm = 150;
+static_assert(kFoldDipShapeRefPm > 0 && kFoldDipShapeRefPm <= 1000,
+              "the shape reference is a fraction of the dip reaction authority");
+// ⚠ AND IT SATURATES THERE. Trick presses to 208, about 1.4x the reference, and
+// the response does NOT turn 1.4x further: Direction 18's law -- an attached
+// effect may express a carrier's gesture and must not amplify it -- applies to
+// a turn as much as to a jitter. Past the reference the figure has already
+// turned as far as the gesture asks, and a future clip that presses twice as
+// deep cannot spin the mana.
+constexpr int32_t kFoldDipRollA16 = 9000;    // ~49 deg of in-plane turn at the reference
+constexpr int32_t kFoldDipTumbleA16 = 3200;  // ~18 deg of depth tumble at the reference
+constexpr int32_t kFoldDipShearPm = 420;     // lateral curl per unit of height
+static_assert(kFoldDipTumbleA16 < kFoldDipRollA16,
+              "the depth tumble must stay under the in-plane roll, or the "
+              "figure goes edge-on during the press (pass-15 white bars)");
+static_assert(kFoldDipShearPm >= 0 && kFoldDipShearPm < 1000,
+              "the shear leans the figure; past 1000 it folds through itself");
+// ⚠ THE LADDER KNOB RANGES TO 3000, NOT 1000, and for the same reason
+// kKneadDentDepthPm does: the reaction is a PRODUCT. `dip_pm` is itself
+// smoothstep(sag) * kFoldDipGainPm/1000, and kFoldDipGainPm is 650, so even a
+// sag that reaches the full reference depth only ever asks for 650 per mille of
+// the authored turn. A knob capped at 1000 could not reach the rungs the eye
+// needed, which is the inert-control trap in another costume.
+constexpr int32_t kFoldDipShapePm = 1000;
+inline int32_t g_u02_fold_dip_shape_pm = kFoldDipShapePm;
 // ⚠ [SUPERSEDED AT THE PASS-20 CLOSE, kept for the record] "SLOT 20 (blown)
 // CARRIES 900 RATHER THAN 750. It is the one gameplay clip whose pose kept B
 // above the ranking at the shipping depth (-26 mm, R5)." That reading was taken

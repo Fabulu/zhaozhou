@@ -3164,6 +3164,36 @@ int cel_main_ink_width(int32_t radius_q8) {
   return kCelInkCloseWidthPx;
 }
 
+// ---- PASS 22: the dot law's mirror of the ink, checked HERE ----------------
+// `u02::mana_dot_*` has to evaluate the outline ink's own ramp without the
+// renderer (the gate binaries call it with no camera at all), so it carries its
+// own copy of the ink's three knots. This translation unit is the only one that
+// sees both sets, so this is where a drift between them is caught -- the
+// alternative is two numbers that agree today and a silent divergence later,
+// which is the stale-generated-file hazard in miniature.
+static_assert(u02::kManaDotFullRadiusPx * 256 == kCelInkCloseRadiusQ8,
+              "the dots' close reference must be the ink's close radius");
+static_assert(u02::kManaDotInkFarRadiusPx * 256 == kCelInkFarRadiusQ8,
+              "the dot ramp's far knot must be the ink's far radius");
+static_assert(u02::kManaDotInkMidRadiusPx * 256 == kCelInkMidRadiusQ8,
+              "the dot ramp's mid knot must be the ink's mid radius");
+static_assert(u02::kManaDotInkFarPm ==
+                  1000 * kCelInkFarWidthPx / kCelInkCloseWidthPx,
+              "the dot ramp's far value must be the ink's far width fraction");
+static_assert(u02::kManaDotInkMidPm ==
+                  1000 * kCelInkMidWidthPx / kCelInkCloseWidthPx,
+              "the dot ramp's mid value must be the ink's mid width fraction");
+
+/** The ONE place a splat's drawn radius is decided. Three exclusive routes:
+ *  a LINE takes pass 19's law, a DOT takes pass 22's ink ramp, and anything
+ *  else -- every lightning body, glow, bullet, boil and pulsar splat -- takes
+ *  its authored radius with no distance term whatever. */
+int32_t u02_splat_r_px(const u02::ManaSplat& ms, int32_t primary_radius_q8) {
+  if (ms.line) return u02::mana_line_r_px(ms.r_px, primary_radius_q8);
+  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, primary_radius_q8);
+  return ms.r_px;
+}
+
 void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                    uint32_t /*tick*/) {
   if (g_hide_creature) return;  // trajplot's creature-free background plate
@@ -3285,8 +3315,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       }
       // PASS 19: a mana LINE thins with the creature's projected size, on the
       // cel ink's own operand (0 outside celmain == the legacy width).
-      const int32_t r_px =
-          ms.line ? u02::mana_line_r_px(ms.r_px, primary_radius_q8) : ms.r_px;
+      // PASS 22: a fold-mote DOT shrinks on the INK's own ramp. Everything that
+      // is neither -- bodies, glows, bullets, the boil, the pulsar -- keeps its
+      // authored radius verbatim, which is what "the lightning must not change
+      // size from distance any more than it already does" means in code.
+      const int32_t r_px = u02_splat_r_px(ms, primary_radius_q8);
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
                       ms.soft, ms.opacity_pm);
@@ -3822,6 +3855,12 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       int gain_pm = ms.gain_pm;
       int opacity_pm = ms.opacity_pm;
       bool soft = ms.soft;
+      // PASS 22: decided BEFORE the surface fade, because the fade samples the
+      // disc's own FOOTPRINT. Reading it from `ms.r_px` while drawing at a
+      // distance-scaled radius would sample a footprint the splat does not
+      // cover -- the mote would fade on an antenna it no longer touches. Under
+      // the legacy dot law this is `ms.r_px` exactly, so the bytes cannot move.
+      const int32_t r_px = u02_splat_r_px(ms, primary_radius_q8);
       if (ms.surface_fade && u02::g_u02_mote_surface_fade && pm.s.d > 0 &&
           !u02_body_cover.empty() && pre_depth.size() == static_cast<size_t>(w) * h) {
         // Averaged over the disc's FOOTPRINT (kMoteSurfaceFadeTaps^2 samples
@@ -3836,8 +3875,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         int64_t f_sum = 0;
         for (int ty = 0; ty < kTaps; ++ty) {
           for (int tx = 0; tx < kTaps; ++tx) {
-            const int32_t sx = cx + (2 * tx - (kTaps - 1)) * ms.r_px / (kTaps - 1);
-            const int32_t sy = cy + (2 * ty - (kTaps - 1)) * ms.r_px / (kTaps - 1);
+            const int32_t sx = cx + (2 * tx - (kTaps - 1)) * r_px / (kTaps - 1);
+            const int32_t sy = cy + (2 * ty - (kTaps - 1)) * r_px / (kTaps - 1);
             int f = 1000;
             if (sx >= 0 && sy >= 0 && sx < static_cast<int32_t>(w) &&
                 sy < static_cast<int32_t>(h)) {
@@ -3874,8 +3913,6 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       }
       const u02::GlowFrame& gf2 = u02::glow_frame_cached(
           s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, gain_pm);
-      const int32_t r_px =
-          ms.line ? u02::mana_line_r_px(ms.r_px, primary_radius_q8) : ms.r_px;
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
                       soft, opacity_pm);
@@ -8015,6 +8052,16 @@ int main(int argc, char** argv) {
     if (!parse_strict_env_int("ZHAO_U02_MANA_LINE_FULL_PX", e, 40, 2000, v))
       return 2;
     u02::g_u02_mana_line_full_radius_px = v;
+  }
+  // PASS 22 item 1: the fold DOTS' own distance law. `legacy` is the exact-off
+  // control and reproduces the pass-21 bytes on every subject. Parsed through
+  // the SHARED parser so mrear's R6 census reads the same ladder rung the reel
+  // does (see u02::apply_mana_dot_env).
+  if (!u02::apply_mana_dot_env()) {
+    std::fprintf(stderr,
+                 "ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid "
+                 "(expected ink|distance|legacy, 40..2000, 0..1000)\n");
+    return 2;
   }
   if (const char* e = std::getenv("ZHAO_U02_REAR_SOCKET_FOLLOW_PM")) {
     int v = 0;

@@ -1128,6 +1128,316 @@ int line_flag_failures(const zc::CreatureType& T, bool verbose) {
   return fails;
 }
 
+// ---- PASS 22 R6: THE DOTS SHRINK WITH DISTANCE, AND NOTHING ELSE DOES ------
+//
+// Two halves, and the second is the one pass 19 had to be sent back for: a law
+// sweep proves the FORMULA, and only a census over real production splats
+// proves any of them is routed through it. This census also carries the owner's
+// other constraint -- *"The lightning must not change size ... from distance,
+// at least not more than it already does"* -- as a POSITIVE assertion rather
+// than as an argument from reading the code: every splat that is neither a
+// line nor a dot must draw at exactly its authored radius at every distance.
+//
+// ⚠ THE CENSUS WALKS THE WHOLE BANK. mrod was repaired at the pass-21 close for
+// sampling 6 slots of 24, and pass 19's own census sampled two. A far/near pair
+// of clips would be enough for the arithmetic and would not be enough to say
+// that no OTHER clip pushes a dot-flagged splat the renderer then mishandles.
+bool g_fail_dot_flag = false;
+// The two witness distances. FAR is Drift's own projected radius (constant
+// 127.7 px across that whole clip, measured off the reel's celmain telemetry);
+// NEAR is Inspect's MINIMUM (363.7 px), which is the number that makes "the
+// close-up read is byte-identical" a fact about a shipping clip rather than a
+// statement about the law.
+constexpr int32_t kGateDotNearRadiusPx = 364;
+// Below this authored radius the rounding can legitimately land back on the
+// authored value (a 2 px dot is already at kManaDotMinRPx), so "strictly
+// smaller" is asserted only where it is arithmetically required.
+constexpr int32_t kGateDotShrinkMinAuthoredPx = 4;
+
+/** The renderer's own three-way radius select, mirrored so the census measures
+ *  what is DRAWN. zhao_reel.cpp's `u02_splat_r_px` is the original; keeping the
+ *  copy here is what lets a gate binary with no camera ask the question. */
+int32_t gate_splat_r_px(const u02::ManaSplat& ms, int32_t radius_q8) {
+  if (ms.line) return u02::mana_line_r_px(ms.r_px, radius_q8);
+  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, radius_q8);
+  return ms.r_px;
+}
+
+int dot_law_failures(bool verbose) {
+  // Every authored dot radius that mana_fold can produce: the halo hash range
+  // and its 1600-per-mille core.
+  std::vector<int32_t> radii;
+  for (int32_t h = u02::kMoteHaloRPxMin; h <= u02::kMoteHaloRPxMax; ++h) {
+    radii.push_back(h);
+    radii.push_back(h * u02::kMoteCoreOfHaloPm / 1000);
+  }
+  int fails = 0;
+  bool far_thinner = false;
+  for (int32_t r : radii) {
+    int32_t prev = 0;
+    for (int32_t px = 1; px <= 2 * u02::g_u02_mana_dot_full_radius_px; ++px) {
+      const int32_t w = u02::mana_dot_r_px(r, px * 256);
+      if (w > r) ++fails;                                   // never larger
+      if (w < u02::kManaDotMinRPx && w != r) ++fails;        // never dust
+      if (w < prev) ++fails;                                 // monotone
+      if (px >= u02::g_u02_mana_dot_full_radius_px && w != r) ++fails;  // exact
+      prev = w;
+    }
+    const int32_t far = u02::mana_dot_r_px(r, kGateLineFarRadiusPx * 256);
+    if (r >= kGateDotShrinkMinAuthoredPx && far < r) far_thinner = true;
+    if (verbose)
+      std::printf("  dot r %2d px: far(%d px) -> %d px, near(%d px) -> %d px\n",
+                  r, kGateLineFarRadiusPx, far, kGateDotNearRadiusPx,
+                  u02::mana_dot_r_px(r, kGateDotNearRadiusPx * 256));
+  }
+  if (!far_thinner) ++fails;
+  return fails;
+}
+
+int dot_census_failures(const zc::CreatureType& T, bool verbose) {
+  int fails = 0;
+  size_t n_dot = 0, n_line = 0, n_plain = 0, n_both = 0;
+  size_t n_dot_shrunk = 0, n_dot_near_exact = 0;
+  size_t n_plain_moved = 0, n_dot_below_floor = 0, n_dot_near_moved = 0;
+  const int32_t far_q8 = kGateLineFarRadiusPx * 256;
+  const int32_t near_q8 = kGateDotNearRadiusPx * 256;
+  for (const zc::Clip& clip : T.bank.clips) {
+    u02::FoldState state{};
+    std::vector<u02::ManaSplat> splats;
+    const int samples = clip.frame_count * 2;
+    for (int pf = 0; pf < samples; ++pf) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+      zc::decode_pose(T, clip, static_cast<uint16_t>(pf / 2), pose, nullptr,
+                      static_cast<uint8_t>(pf & 1));
+      const u02::FxAnchors anchors = u02::fx_anchors_from_pose(T, pose);
+      splats.clear();
+      int32_t agit = 0;
+      u02::mana_fill(3, static_cast<uint32_t>(pf), clip.slot_id,
+                     clip.frame_count, anchors, state, 1000, splats, &agit);
+      u02::mana_lightning(static_cast<uint32_t>(pf), clip.slot_id,
+                          clip.frame_count, anchors, splats, 1000);
+      for (u02::ManaSplat& ms : splats) {
+        if (g_fail_dot_flag) ms.dot = false;
+        if (ms.line && ms.dot) {
+          ++n_both;
+          continue;
+        }
+        const int32_t far = gate_splat_r_px(ms, far_q8);
+        const int32_t near = gate_splat_r_px(ms, near_q8);
+        if (ms.dot) {
+          ++n_dot;
+          if (near != ms.r_px) ++n_dot_near_moved; else ++n_dot_near_exact;
+          if (far < u02::kManaDotMinRPx && far != ms.r_px) ++n_dot_below_floor;
+          if (ms.r_px >= kGateDotShrinkMinAuthoredPx && far < ms.r_px)
+            ++n_dot_shrunk;
+        } else if (ms.line) {
+          ++n_line;
+          // ⚠ THE LIGHTNING'S EXISTING BEHAVIOUR, PINNED. A line must still draw
+          // exactly what pass 19's law says -- no more distance dependence than
+          // it already had, which is the owner's words in code.
+          if (far != u02::mana_line_r_px(ms.r_px, far_q8)) ++n_plain_moved;
+          if (near != ms.r_px) ++n_plain_moved;  // pass 19 is exact at >= 360
+        } else {
+          ++n_plain;
+          // Bodies, glows, bullets, the boil, the pulsar: NO distance term.
+          if (far != ms.r_px || near != ms.r_px) ++n_plain_moved;
+        }
+      }
+    }
+  }
+  if (verbose)
+    std::printf(
+        "  dot census over %zu clips: %zu dot, %zu line, %zu plain splats; "
+        "dots exact at near %zu, shrunk at far %zu; violations: both-flags %zu, "
+        "dot moved near %zu, dot under floor %zu, non-dot gained distance %zu\n",
+        T.bank.clips.size(), n_dot, n_line, n_plain, n_dot_near_exact,
+        n_dot_shrunk, n_both, n_dot_near_moved, n_dot_below_floor,
+        n_plain_moved);
+  // Both populations must exist, or the census proved nothing about routing.
+  if (n_dot == 0) ++fails;
+  if (n_line == 0) ++fails;
+  if (n_plain == 0) ++fails;
+  if (n_both != 0) ++fails;
+  if (n_dot_near_moved != 0) ++fails;
+  if (n_dot_below_floor != 0) ++fails;
+  if (n_plain_moved != 0) ++fails;
+  // And real dots must actually shrink, not merely be eligible to.
+  if (n_dot_shrunk == 0) ++fails;
+  return fails;
+}
+
+// ---- PASS 22 R7: THE LIGHTNING'S FORM ANSWERS THE PRESS, AND ONLY THERE ----
+//
+// Owner: *"When the top nodule moves down, the lightning shape should react
+// more. Change form and or rotate around."* Plus the standing constraint that
+// away from the press the lightning keeps its current character.
+//
+// ⚠ THIS DOES NOT TRACE THE KNOB. `dip_roll_a16` is available in the trace and
+// reading it back would be the detector wired to its own operand -- it would
+// report the constant, not the figure. The leg measures the STATIONS, the real
+// 18 points the strands are drawn between, by running mana_fold twice over the
+// same frame with the response on and off and differencing the two clouds.
+//
+// TWO DESCRIPTORS, because they answer different halves of the owner's sentence
+// and one of them can be satisfied by the wrong thing:
+//   * `rot_deg`  -- the angle between (S0 - centroid) with the response on and
+//                   off. This is "rotate around".
+//   * `form_pm`  -- the largest change in a pairwise station distance after
+//                   normalising each cloud by its own RMS radius. That is
+//                   invariant to rotation AND to uniform scale, so a pure roll
+//                   scores ZERO on it: only a genuine change of FORM moves it.
+// And the window test, which is the "that is the kneading" half: both must be
+// EXACTLY ZERO on every frame the reaction is not running, so the gesture
+// cannot have leaked into a restyle.
+// Regression guards, set below the measured shipping worsts with margin. They
+// hold the reaction to being PRESENT and CONFINED; they do not choose its size
+// (that is kFoldDipRollA16 and its ladder, chosen by eye in P22-IMPLEMENTATION).
+constexpr double kGateKneadRotFloorDeg = 12.0;
+constexpr double kGateKneadFormFloorPm = 40.0;
+
+struct KneadShapeStats {
+  double rot_in = 0, form_in = 0;   // worst inside the press window
+  double rot_out = 0, form_out = 0; // worst outside it -- must be exactly 0
+  int frames_in = 0, frames_out = 0;
+};
+
+KneadShapeStats knead_shape_stats(const zc::CreatureType& T,
+                                  const zc::Clip& clip) {
+  KneadShapeStats s;
+  u02::FoldState st_on{}, st_off{};
+  std::vector<u02::ManaSplat> sp;
+  const int samples = clip.frame_count * 2;
+  const int32_t shape_was = u02::g_u02_fold_dip_shape_pm;
+  for (int pf = 0; pf < samples; ++pf) {
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+    zc::decode_pose(T, clip, static_cast<uint16_t>(pf / 2), pose, nullptr,
+                    static_cast<uint8_t>(pf & 1));
+    const u02::FxAnchors A = u02::fx_anchors_from_pose(T, pose);
+    u02::FxContinuityTrace on{}, off{};
+    int32_t agit = 0;
+    sp.clear();
+    u02::g_u02_fold_dip_shape_pm = shape_was;
+    u02::mana_fill(3, static_cast<uint32_t>(pf), clip.slot_id,
+                   clip.frame_count, A, st_on, 1000, sp, &agit, &on);
+    sp.clear();
+    u02::g_u02_fold_dip_shape_pm = 0;
+    u02::mana_fill(3, static_cast<uint32_t>(pf), clip.slot_id,
+                   clip.frame_count, A, st_off, 1000, sp, &agit, &off);
+    u02::g_u02_fold_dip_shape_pm = shape_was;
+    // centroids
+    double c_on[3] = {0, 0, 0}, c_off[3] = {0, 0, 0};
+    for (int i = 0; i < u02::kStencilPts; ++i)
+      for (int k = 0; k < 3; ++k) {
+        c_on[k] += on.fold_station[i][k];
+        c_off[k] += off.fold_station[i][k];
+      }
+    for (int k = 0; k < 3; ++k) {
+      c_on[k] /= u02::kStencilPts;
+      c_off[k] /= u02::kStencilPts;
+    }
+    double p_on[u02::kStencilPts][3], p_off[u02::kStencilPts][3];
+    double s_on = 0, s_off = 0;
+    for (int i = 0; i < u02::kStencilPts; ++i) {
+      for (int k = 0; k < 3; ++k) {
+        p_on[i][k] = on.fold_station[i][k] - c_on[k];
+        p_off[i][k] = off.fold_station[i][k] - c_off[k];
+      }
+      for (int k = 0; k < 3; ++k) {
+        s_on += p_on[i][k] * p_on[i][k];
+        s_off += p_off[i][k] * p_off[i][k];
+      }
+    }
+    s_on = std::sqrt(s_on / u02::kStencilPts);
+    s_off = std::sqrt(s_off / u02::kStencilPts);
+    double rot = 0, form = 0;
+    if (s_on > 0 && s_off > 0) {
+      // rotation: station 0's bearing from the centroid, on vs off
+      double d = 0, na = 0, nb = 0;
+      for (int k = 0; k < 3; ++k) {
+        d += p_on[0][k] * p_off[0][k];
+        na += p_on[0][k] * p_on[0][k];
+        nb += p_off[0][k] * p_off[0][k];
+      }
+      if (na > 0 && nb > 0) {
+        double c = d / std::sqrt(na * nb);
+        if (c > 1) c = 1;
+        if (c < -1) c = -1;
+        rot = std::acos(c) * 180.0 / 3.14159265358979;
+      }
+      // form: normalised pairwise distances (rotation- and scale-invariant)
+      for (int i = 0; i < u02::kStencilPts; ++i)
+        for (int j = i + 1; j < u02::kStencilPts; ++j) {
+          double da = 0, db = 0;
+          for (int k = 0; k < 3; ++k) {
+            const double ua = p_on[i][k] - p_on[j][k];
+            const double ub = p_off[i][k] - p_off[j][k];
+            da += ua * ua;
+            db += ub * ub;
+          }
+          da = std::sqrt(da) / s_on;
+          db = std::sqrt(db) / s_off;
+          if (db > 1e-9) {
+            const double rel = std::fabs(da - db) / db * 1000.0;
+            if (rel > form) form = rel;
+          }
+        }
+    }
+    // The window is the effect's OWN authority, taken from the trace, not a
+    // second copy of the dip schedule (pass 20's lesson, in the same file).
+    if (on.fold_dip_pm > 0) {
+      ++s.frames_in;
+      s.rot_in = std::max(s.rot_in, rot);
+      s.form_in = std::max(s.form_in, form);
+    } else {
+      ++s.frames_out;
+      s.rot_out = std::max(s.rot_out, rot);
+      s.form_out = std::max(s.form_out, form);
+    }
+  }
+  u02::g_u02_fold_dip_shape_pm = shape_was;
+  return s;
+}
+
+int knead_shape_failures(const zc::CreatureType& T, bool verbose) {
+  int fails = 0;
+  int hosting = 0;
+  double best_rot = 0, best_form = 0;
+  double worst_out_rot = 0, worst_out_form = 0;
+  int best_slot = -1;
+  for (const zc::Clip& clip : T.bank.clips) {
+    const int ssl = static_cast<int>(
+        u02::knead_schedule_slot(static_cast<uint16_t>(clip.slot_id)));
+    if (ssl >= u02::kKneadClipSlots || u02::kKneadDipClipPm[ssl] == 0) continue;
+    const KneadShapeStats s = knead_shape_stats(T, clip);
+    if (s.frames_in == 0) continue;  // this clip's pose never clears the onset
+    ++hosting;
+    if (s.rot_in > best_rot) {
+      best_rot = s.rot_in;
+      best_slot = clip.slot_id;
+    }
+    best_form = std::max(best_form, s.form_in);
+    worst_out_rot = std::max(worst_out_rot, s.rot_out);
+    worst_out_form = std::max(worst_out_form, s.form_out);
+    if (verbose)
+      std::printf(
+          "  knead slot %2d: in-window %d frames rot %5.2f deg form %6.1f pm | "
+          "out-of-window %d frames rot %.4f form %.4f\n",
+          clip.slot_id, s.frames_in, s.rot_in, s.form_in, s.frames_out,
+          s.rot_out, s.form_out);
+  }
+  std::printf(
+      "  knead shape: %d clips reach the press; best rot %.2f deg (slot %d, "
+      "floor %.1f), best form %.1f pm (floor %.1f); worst OUTSIDE the press "
+      "rot %.4f form %.4f (must be exactly 0)\n",
+      hosting, best_rot, best_slot, kGateKneadRotFloorDeg, best_form,
+      kGateKneadFormFloorPm, worst_out_rot, worst_out_form);
+  if (hosting == 0) ++fails;
+  if (best_rot < kGateKneadRotFloorDeg) ++fails;
+  if (best_form < kGateKneadFormFloorPm) ++fails;
+  if (worst_out_rot != 0.0 || worst_out_form != 0.0) ++fails;
+  return fails;
+}
+
 int main(int argc, char** argv) {
   std::vector<int> slots;
   bool csv = false;
@@ -1238,6 +1548,27 @@ int main(int argc, char** argv) {
       gate = true;
       u02::g_u02_mana_line_scale = u02::ManaLineScale::kLegacy;
       std::printf("MUTANT: --fail-line-scale (legacy constant-pixel lines)\n");
+    } else if (std::strcmp(argv[i], "--fail-dot-scale") == 0) {
+      gate = true;
+      // R6's law control: the pass-21 behaviour, dots at a constant screen size.
+      u02::g_u02_mana_dot_scale = u02::ManaDotScale::kLegacy;
+      std::printf("MUTANT: --fail-dot-scale (legacy constant-pixel dots)\n");
+    } else if (std::strcmp(argv[i], "--fail-dot-flag") == 0) {
+      gate = true;
+      // R6's ROUTING control, the half pass 19 had to be sent back for: the law
+      // is intact and no production splat is marked, so nothing reaches it.
+      g_fail_dot_flag = true;
+      std::printf("MUTANT: --fail-dot-flag (production dot flags stripped)\n");
+    } else if (std::strcmp(argv[i], "--fail-knead-shape") == 0) {
+      gate = true;
+      // R7's control. ⚠ It asserts the CORRECT behaviour's absence, not a bug:
+      // the reaction is switched off with its own shipping exact-off knob, and
+      // the leg must notice. After any repair there is still a reaction to
+      // remove, so this control does not expire (CLAUDE.md: do not write a test
+      // that asserts the bug).
+      u02::g_u02_fold_dip_shape_pm = 0;
+      std::printf("MUTANT: --fail-knead-shape (the lightning's answer to the "
+                  "press switched off)\n");
     } else if (argv[i][0] >= '0' && argv[i][0] <= '9') {
       slots.push_back(std::atoi(argv[i]));
     } else {
@@ -1289,6 +1620,11 @@ int main(int argc, char** argv) {
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_DEPTH_MM"))
     u02::g_u02_knead_dip_depth_mm = std::atoi(e);
   if (!u02::apply_knead_dip_env()) return 2;
+  // PASS 22: the dot knobs, through their own shared parser (they live in a
+  // header apply_knead_dip_env cannot see). A `--fail-dot-*` flag is parsed
+  // above; the matrix never sets both, and an explicitly exported env value
+  // wins, which is the same precedence every other knob here has.
+  if (!u02::apply_mana_dot_env()) return 2;
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_FOLD_PM"))
     u02::g_u02_knead_dip_fold_pm = std::atoi(e);
 
@@ -1306,6 +1642,15 @@ int main(int argc, char** argv) {
                   ? "distance"
                   : "legacy",
               u02::g_u02_mana_line_full_radius_px);
+  std::printf("dot law %s full %d px strength %d pm, lightning knead shape %d pm "
+              "(ref %d pm, roll %d a16)\n",
+              u02::g_u02_mana_dot_scale == u02::ManaDotScale::kInk ? "ink"
+              : u02::g_u02_mana_dot_scale == u02::ManaDotScale::kDistance
+                  ? "distance"
+                  : "legacy",
+              u02::g_u02_mana_dot_full_radius_px,
+              u02::g_u02_mana_dot_strength_pm, u02::g_u02_fold_dip_shape_pm,
+              u02::kFoldDipShapeRefPm, u02::kFoldDipRollA16);
   if (slots.empty()) {
     if (gate) {
       for (const zc::Clip& c : T.bank.clips) slots.push_back(c.slot_id);
@@ -1537,6 +1882,23 @@ int main(int argc, char** argv) {
         "THAT first: kNoduleAimFlipAxis, the dent's axis argument, and whether "
         "any aim path has gone back to composing z-then-x.\n",
         dip_clips, dip_clips - dip_missing);
+  }
+  // ---- R6 DOT (pass 22 item 1) --------------------------------------------
+  const int df = dot_law_failures(true) + dot_census_failures(T, true);
+  std::printf("R6 DOT: %d violations (law sweep + whole-bank splat census)\n",
+              df);
+  if (df != 0) {
+    mask |= 0x20;
+    std::printf("FAIL R6 DOT: the mana dots do not shrink with distance like "
+                "the ink, or something that is not a dot does\n");
+  }
+  // ---- R7 KNEAD SHAPE (pass 22 item 5) ------------------------------------
+  const int kf = knead_shape_failures(T, true);
+  std::printf("R7 KNEAD: %d violations\n", kf);
+  if (kf != 0) {
+    mask |= 0x40;
+    std::printf("FAIL R7 KNEAD: the lightning's form does not answer the press, "
+                "or it is not confined to it\n");
   }
   std::printf("rear gate mask 0x%X -> %s\n", mask, mask ? "RED" : "GREEN");
   return mask ? 1 : 0;

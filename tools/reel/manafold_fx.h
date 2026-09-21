@@ -732,6 +732,12 @@ struct FxContinuityTrace {
   int32_t lasso_mix_pm = 0;
   int32_t agitation_pm = 0;
   int32_t knead_pm = 0;
+  // PASS 22: the dip reaction's own authority and the lightning-shape share of
+  // it, so a gate can attribute a frame to the press window from the same
+  // number the effect used rather than re-deriving the schedule (the pass-20
+  // lesson: two copies of a schedule drift apart silently).
+  int32_t fold_dip_pm = 0;
+  int32_t fold_dip_shape_pm = 0;
   int32_t fold_station[kFxTraceStencilPts][3]{};
   int32_t coherence_pm = 0;
   int32_t edge_lit_pm = 0;
@@ -1839,6 +1845,15 @@ struct ManaSplat {
   // the creature's projected size (mana_line_r_px), the same operand the cel
   // outline ink uses. Motes, bodies and glows leave it false and keep size.
   bool line = false;
+  // PASS 22 (Owner Direction 23 item 1): this splat is a fold-mote DOT -- the
+  // green/blue halo or its opaque core, the two `mote_push` pushes at the end
+  // of mana_fold. The renderer scales a dot's radius by the SAME distance
+  // measure and the SAME reference point the lines use (mana_dot_r_px).
+  // Lightning, strands, bodies, glows, bullets and the boil leave it false and
+  // keep their authored size.
+  // ⚠ `line` and `dot` are mutually exclusive by construction; the R6 gate
+  // census refuses any splat that claims both.
+  bool dot = false;
 };
 
 // ---- PASS 19: MANA LINES THIN WITH DISTANCE, LIKE THE INK -----------------
@@ -1874,6 +1889,144 @@ inline int32_t mana_line_r_px(int32_t r_px, int32_t projected_radius_q8) {
   if (projected_radius_q8 >= full_q8) return r_px;
   int64_t r = (static_cast<int64_t>(r_px) * projected_radius_q8 + full_q8 / 2) / full_q8;
   if (r < kManaLineMinRPx) r = kManaLineMinRPx;
+  if (r > r_px) r = r_px;
+  return static_cast<int32_t>(r);
+}
+
+// ---- PASS 22: THE MANA DOTS SHRINK WITH DISTANCE TOO ----------------------
+// Owner, 2026-09-21 (Direction 23): "for things like drift or hasty with
+// creature farther away, the particles are too big. Not the lightning part, but
+// the green and blue dots. [...] They need to shrink with distance."
+//
+// BEFORE THIS PASS THE DOTS WERE NOT SCALED AT ALL. `mana_fold` picks a halo
+// radius of kMoteHaloRPxMin..Max = 7..10 SCREEN PIXELS by hash and an opaque
+// core of kMoteCoreOfHaloPm = 1600 of it (11..16 px), and the renderer took
+// `ms.r_px` verbatim for any splat that is not a line. So a 16 px core sat on a
+// creature whose whole projected radius is 128 px at Drift -- an eighth of the
+// animal per dot -- and exactly the same 16 px sat on the 475 px Inspect
+// figure. That is the read the owner is describing.
+//
+// ⚠ THE OWNER NAMED THE MODEL, AND IT IS THE INK, NOT THE LINES.
+// Clarification, same day: *"The particles must change size from distance kinda
+// like the black cel shading outlines"* -- and, in the same breath, *"The
+// lightning must not change size ... from distance, at least not more than it
+// already does. It is good now as it is."*
+//
+// So there are TWO separable things here and they must stay separable:
+//   * the LIGHTNING keeps exactly pass 19's line law, untouched. `ManaSplat::
+//     line` still routes to `mana_line_r_px` and nothing below can reach it.
+//   * the DOTS get their own law, modelled on the cel outline ink.
+// The renderer's three-way select is the split, and the R6 census proves it on
+// real splats: a splat that is neither line nor dot must draw at exactly its
+// authored radius at every distance.
+//
+// THE INK'S OWN CURVE, in per mille of its close-up weight. `cel_main_ink_width`
+// is a clamped piecewise-linear ramp on the SAME operand (`primary_radius_q8`)
+// through three named radii -- far 120 px, mid 200 px, close 360 px -- carrying
+// widths 1, 2 and 4 px. As a fraction of the close-up width that is 250, 500 and
+// 1000 per mille, and OUTSIDE those knots it is FLAT: the ink never goes below
+// 1 px however far away the creature is, and never above 4 px however near.
+//
+// ⚠ WHY PER MILLE AND NOT `cel_main_ink_width` ITSELF. The ink returns whole
+// pixels, so as a multiplier it has only four rungs (250/500/750/1000). Hover's
+// projected radius travels 284.7 -> 402.6 px inside one clip, which would cross
+// a rung and POP every dot by a third in a single frame. The integer is an
+// artefact of ink having to be drawn in whole pixels, not part of the law; the
+// law is the ramp, and this evaluates the same ramp continuously.
+//
+// ⚠ AND THE INK'S LAW IS NOT THE LINE'S LAW. `mana_line_r_px` is a straight
+// ratio to 360 px with no floor: at Drift's 127.7 px it gives 355 per mille,
+// while the ink's ramp gives 274 and never drops below 250. The ink is
+// therefore both STRONGER far away and FLOORED, which is the behaviour a dot
+// wants and a line does not care about. Following the owner's named model means
+// following the ink. `distance` keeps the line law selectable for the same-binary
+// A/B that chose between them.
+//
+// Then, over whichever curve is selected:
+//     g  = 1000 - strength * (1000 - curve) / 1000              (per mille)
+//     r' = round(r * g / 1000), clamped to [kManaDotMinRPx, r]
+// At or beyond the close radius the curve is exactly 1000 and r' == r with no
+// arithmetic at all, so every close-up subject is byte-identical BY
+// CONSTRUCTION -- Inspect's projected radius never drops below 363.7 px.
+//   ZHAO_U02_MANA_DOT_SCALE=ink|distance|legacy   legacy = the exact-off control
+//   ZHAO_U02_MANA_DOT_FULL_PX=<40..2000>          the close reference point
+//   ZHAO_U02_MANA_DOT_STRENGTH_PM=<0..1000>       the authoring ladder
+// SELECTED BY EYE, pass 22: see the ladder in P22-IMPLEMENTATION.md.
+enum class ManaDotScale : uint8_t { kInk, kDistance, kLegacy };
+inline ManaDotScale g_u02_mana_dot_scale = ManaDotScale::kInk;
+constexpr int32_t kManaDotFullRadiusPx = kManaLineFullRadiusPx;
+static_assert(kManaDotFullRadiusPx == kManaLineFullRadiusPx,
+              "the dots' close reference is the lines' / the ink's own 360 px");
+// The ink's three knots, mirrored here so the dot law can be evaluated without
+// the renderer. ⚠ zhao_reel.cpp carries static_asserts tying every one of these
+// to the `kCelInk*` constant it mirrors -- that file is the only one that sees
+// both, so a drift between the ink and the dots stops the build there.
+constexpr int32_t kManaDotInkFarRadiusPx = 120;
+constexpr int32_t kManaDotInkMidRadiusPx = 200;
+constexpr int32_t kManaDotInkFarPm = 250;   // ink 1 px of its close 4 px
+constexpr int32_t kManaDotInkMidPm = 500;   // ink 2 px of its close 4 px
+// ⚠ A DOT IS NOT ALLOWED TO BECOME A STRAY PIXEL. The ink's own 1 px floor is
+// what stops the outline vanishing; this is the same idea one level down. At
+// Drift the smallest halo lands at 7 * 0.274 = 1.9 -> the floor, and 2 px still
+// reads as a round dot at 384x240 where 1 px reads as dirt.
+constexpr int32_t kManaDotMinRPx = 2;
+// ⚠ 600, NOT 1000, AND THE REASON IS THE ART LAW, NOT A COMPROMISE.
+// The ink's curve at full strength WAS rendered and looked at (P22-LOOKS/01-02):
+// at Drift's 127.7 px it puts the halo at 2-3 px and the core at 3-4 px, and the
+// green/aqua pocket disappears. The owner's complaint is "too big", not "remove
+// them". An ink line and a mana dot have different vanishing points -- a 1 px
+// line is still a line, a 2 px dot beside a 3 px neighbour is dirt -- so the
+// ink's LAW is the right shape and its full depth is not the right amount.
+// From the ladder {350, 500, 600, 700, 1000} plus the pass-19 line law, read on
+// complete Drift and Hasty at 5x and 7x: 350 is not a change, 1000 and the line
+// law delete the effect, 700 squares off the outer wanderers, 500 is generous.
+// 600 puts Drift's dots at 564 per mille of their close-up radius -- 56% of the
+// radius and about a third of the area, unmistakable at 384x240 -- while they
+// still read as soft ROUND coloured dots and the lightning reads on top of them.
+constexpr int32_t kManaDotStrengthPm = 600;
+inline int32_t g_u02_mana_dot_full_radius_px = kManaDotFullRadiusPx;
+inline int32_t g_u02_mana_dot_strength_pm = kManaDotStrengthPm;
+/** The cel outline ink's own size ramp, in per mille of its close-up weight. */
+inline int32_t mana_dot_ink_pm(int32_t projected_radius_q8) {
+  const int64_t close_q8 =
+      static_cast<int64_t>(g_u02_mana_dot_full_radius_px) * 256;
+  const int64_t far_q8 = static_cast<int64_t>(kManaDotInkFarRadiusPx) * 256;
+  const int64_t mid_q8 = static_cast<int64_t>(kManaDotInkMidRadiusPx) * 256;
+  const auto ramp = [](int64_t x, int64_t x0, int64_t x1, int32_t y0,
+                       int32_t y1) {
+    if (x1 <= x0) return y1;
+    return y0 + static_cast<int32_t>(((x - x0) * (y1 - y0) + (x1 - x0) / 2) /
+                                     (x1 - x0));
+  };
+  if (projected_radius_q8 <= far_q8) return kManaDotInkFarPm;
+  if (projected_radius_q8 < mid_q8)
+    return ramp(projected_radius_q8, far_q8, mid_q8, kManaDotInkFarPm,
+                kManaDotInkMidPm);
+  if (projected_radius_q8 < close_q8)
+    return ramp(projected_radius_q8, mid_q8, close_q8, kManaDotInkMidPm, 1000);
+  return 1000;
+}
+inline int32_t mana_dot_r_px(int32_t r_px, int32_t projected_radius_q8) {
+  if (g_u02_mana_dot_scale == ManaDotScale::kLegacy || r_px <= 0 ||
+      projected_radius_q8 <= 0 || g_u02_mana_dot_strength_pm <= 0)
+    return r_px;
+  const int64_t close_q8 =
+      static_cast<int64_t>(g_u02_mana_dot_full_radius_px) * 256;
+  if (projected_radius_q8 >= close_q8) return r_px;  // exact legacy, close up
+  int32_t curve_pm;
+  if (g_u02_mana_dot_scale == ManaDotScale::kInk) {
+    curve_pm = mana_dot_ink_pm(projected_radius_q8);
+  } else {
+    // The pass-19 LINE law, kept selectable so the choice between the two was
+    // made from one binary. No floor, by definition -- it is the line's law.
+    curve_pm = static_cast<int32_t>(projected_radius_q8 * 1000 / close_q8);
+  }
+  const int32_t g_pm =
+      1000 - static_cast<int32_t>(
+                 (static_cast<int64_t>(g_u02_mana_dot_strength_pm) *
+                  (1000 - curve_pm)) / 1000);
+  int64_t r = (static_cast<int64_t>(r_px) * g_pm + 500) / 1000;
+  if (r < kManaDotMinRPx) r = kManaDotMinRPx;
   if (r > r_px) r = r_px;
   return static_cast<int32_t>(r);
 }
@@ -1915,6 +2068,59 @@ inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t
   out.push_back(ManaSplat{x, y, z, r_px, ramp, static_cast<int16_t>(gain_pm),
                           depth_test, opaque, pre, soft,
                           static_cast<int16_t>(opacity_pm), surface_fade});
+}
+
+/** PASS 22: ONE SHARED PARSER for the dot-size knobs, for exactly the reason
+ *  `apply_knead_dip_env` exists -- an env control is only a control in a binary
+ *  that READS it, and pass 20 lost a whole ladder to a knob the reel parsed and
+ *  the gates did not. The dot knobs live in this header rather than in
+ *  manafold_clips.h because that header is included BEFORE this one, so
+ *  `apply_knead_dip_env` cannot see these globals.
+ *
+ *  Returns false on a malformed value; callers return RC 2. */
+inline bool apply_mana_dot_env() {
+  if (const char* e = std::getenv("ZHAO_U02_MANA_DOT_SCALE")) {
+    if (std::strcmp(e, "ink") == 0)
+      g_u02_mana_dot_scale = ManaDotScale::kInk;
+    else if (std::strcmp(e, "distance") == 0)
+      g_u02_mana_dot_scale = ManaDotScale::kDistance;
+    else if (std::strcmp(e, "legacy") == 0)
+      g_u02_mana_dot_scale = ManaDotScale::kLegacy;
+    else
+      return false;
+  }
+  const auto num = [](const char* name, int lo, int hi, int32_t& dst) {
+    const char* e = std::getenv(name);
+    if (e == nullptr) return true;
+    if (*e == '\0') return false;
+    char* end = nullptr;
+    const long v = std::strtol(e, &end, 10);
+    if (end == nullptr || *end != '\0' || v < lo || v > hi) return false;
+    dst = static_cast<int32_t>(v);
+    return true;
+  };
+  if (!num("ZHAO_U02_MANA_DOT_FULL_PX", 40, 2000,
+           g_u02_mana_dot_full_radius_px))
+    return false;
+  if (!num("ZHAO_U02_MANA_DOT_STRENGTH_PM", 0, 1000,
+           g_u02_mana_dot_strength_pm))
+    return false;
+  return true;
+}
+
+/** PASS 22: a fold-mote DOT (see ManaSplat::dot). The one producer is
+ *  mana_fold's halo/core pair; keeping it a named wrapper rather than a bool on
+ *  mana_push is the same discipline lightning_push established -- a future
+ *  third mote layer cannot silently inherit or silently miss the flag. */
+inline void mote_push(std::vector<ManaSplat>& out, int32_t x, int32_t y,
+                      int32_t z, int32_t r_px, uint8_t ramp, int gain_pm,
+                      bool depth_test, bool pre, bool opaque = false,
+                      bool soft = false, int opacity_pm = 1000,
+                      bool surface_fade = false) {
+  const size_t n = out.size();
+  mana_push(out, x, y, z, r_px, ramp, gain_pm, depth_test, pre, opaque, soft,
+            opacity_pm, surface_fade);
+  if (out.size() > n) out.back().dot = true;
 }
 
 inline bool lightning_depth_test() {
@@ -3054,6 +3260,38 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   const int32_t dip_drop = fxu(kFoldDipDropMm) * dip_pm / 1000;
   const int32_t dip_squash_pm = kFoldDipSquashPm * dip_pm / 1000;
   const int32_t dip_spread_pm = kFoldDipSpreadPm * dip_pm / 1000;
+  // ---- PASS 22 item 5: THE LIGHTNING'S OWN FORM ANSWERS THE PRESS ----------
+  // See kFoldDipRollA16 in manafold_art.h. These three ride on the SAME
+  // authority as the squeeze above (`dip_pm`, read from the pose), so they
+  // arrive and leave with the beat, wrap at the loop seam with it, and are
+  // exactly absent when it is. They are applied in `place()` only -- the
+  // lightning figure's own transform -- so the particle cloud keeps the pass-20
+  // squeeze and nothing more.
+  // ⚠ REFERENCED AND SATURATED, not a raw share of dip_pm -- see
+  // kFoldDipShapeRefPm in manafold_art.h for the measured reason. `dip_pm` is
+  // still the one authority and the one window; this only says what fraction of
+  // it counts as a full gesture.
+  int32_t dip_shape_pm = 0;
+  if (dip_pm > 0) {
+    int32_t u = static_cast<int32_t>(
+        (static_cast<int64_t>(dip_pm) * 1000) / kFoldDipShapeRefPm);
+    if (u > 1000) u = 1000;
+    dip_shape_pm = static_cast<int32_t>(
+        (static_cast<int64_t>(u) * g_u02_fold_dip_shape_pm) / 1000);
+  }
+  const int32_t dip_roll_a16 =
+      static_cast<int32_t>((static_cast<int64_t>(kFoldDipRollA16) *
+                            dip_shape_pm) / 1000);
+  const int32_t dip_tumble_a16 =
+      static_cast<int32_t>((static_cast<int64_t>(kFoldDipTumbleA16) *
+                            dip_shape_pm) / 1000);
+  const int32_t dip_shear_pm =
+      static_cast<int32_t>((static_cast<int64_t>(kFoldDipShearPm) *
+                            dip_shape_pm) / 1000);
+  if (trace != nullptr) {
+    trace->fold_dip_pm = dip_pm;
+    trace->fold_dip_shape_pm = dip_shape_pm;
+  }
   // ⚠ ONE HELPER, so the figure and the motes cannot drift apart. `pivot` is
   // the ring centre on each axis; everything is measured from it.
   // It is SEPARABLE -- each axis depends only on itself -- so the same law can
@@ -3241,10 +3479,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (g_u02_fold_debug)
     std::fprintf(stderr,
                  "fold f=%u seg=%d amp=%d agit_env=%d morph=%d %d->%d turn=%d | "
-                 "area_pm=%d ema=%d coh=%d knead_mm=%d agit=%d\n",
+                 "area_pm=%d ema=%d coh=%d knead_mm=%d agit=%d dip_pm=%d "
+                 "dip_shape_pm=%d roll_a16=%d\n",
                  frame, static_cast<int>(ph.seg), ph.amp_pm, ph.agit_pm,
                  ph.morph_pm, ph.shape_from, ph.shape_to, ph.turn_a16,
-                 area_pm, stfx.area_ema_pm, coh, stfx.knead_smooth, agit);
+                 area_pm, stfx.area_ema_pm, coh, stfx.knead_smooth, agit,
+                 dip_pm, dip_shape_pm, dip_roll_a16);
   // ---- DIRECTION 7 S2: the shape is PLACED, then DRAWN AS AN EDGE --------
   //
   // `place()` is the one authority for the LIGHTNING FIGURE's offset,
@@ -3349,6 +3589,23 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // frame and the flatten is always vertical whatever the slow all-axis sway
     // has done. A.ring is the pivot the motes use too.
     dip_squeeze(P, A.ring);
+    // PASS 22 item 5: and THEN the figure's own answer -- it turns and leans
+    // while it is pressed. Applied about the SAME pivot and in the SAME upright
+    // frame as the squeeze, after it, so the flatten stays vertical and the
+    // roll is a roll of the already-squashed shape rather than of an upright one
+    // that is then flattened on a tilted axis (which reads as a wobble, not a
+    // turn). `dip_shape_pm == 0` skips every operation, so the exact-off control
+    // and every frame away from a press are byte-identical by construction.
+    if (dip_shape_pm > 0) {
+      int32_t d[3] = {P[0] - A.ring[0], P[1] - A.ring[1], P[2] - A.ring[2]};
+      turn(d[0], d[1], dip_roll_a16);    // in-plane: "rotate around"
+      turn(d[1], d[2], dip_tumble_a16);  // and a smaller turn in depth
+      // The FORM change: lateral offset proportional to height. Volume
+      // preserving, so it leans and curls the figure without resizing it.
+      d[0] += static_cast<int32_t>(
+          (static_cast<int64_t>(d[1]) * dip_shear_pm) / 1000);
+      for (int k = 0; k < 3; ++k) P[k] = A.ring[k] + d[k];
+    }
   };
 
   // Direction 18: THE EDGE NEVER DISAPPEARS TO BE REPLACED BY A NEW SHAPE.
@@ -3816,10 +4073,15 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                               ? static_cast<uint8_t>(kRampShimmer)
                               : ramp;
     const int32_t mote_opacity_pm = backing_opacity_pm;
-    mana_push(out, P[0], P[1], P[2], halo, mramp,
+    // PASS 22 item 1: these two ARE "the green and blue dots", and mote_push is
+    // what marks them so the renderer shrinks them with distance on the cel
+    // ink's own ramp. The authored radii here do not move: 7..10 px of halo and
+    // its 1600-per-mille core are still the CLOSE-UP sizes, exactly as before,
+    // and at or inside the ink's close radius they are what gets drawn.
+    mote_push(out, P[0], P[1], P[2], halo, mramp,
               kMoteHaloGainPm * visible_pm / 1000, true, false, false, false,
               1000, /*surface_fade=*/true);
-    mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
+    mote_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
               mana_core_ramp(mramp), visible_pm,
               true, false, /*opaque=*/true, /*soft=*/true, mote_opacity_pm,
               /*surface_fade=*/true);
