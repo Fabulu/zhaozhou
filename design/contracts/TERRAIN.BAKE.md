@@ -111,6 +111,47 @@ game. Recorded, not hidden — the SURFACE.SHEET discipline.~~
 > producer anywhere in the tree (`zhao_terrain_cmd` emits a patch *directory*
 > record; re-verified 2026-09-21). That is what keeps entry I32 open.
 
+> **AND THE PER-VERTEX DEPTH SOURCE CONTRADICTS THE PRODUCER'S OWN CONTRACT.**
+> Added 2026-09-21 (terrcmd), as decision **D-TERRCMD-A**, because this is the
+> one thing a lane sent to build the record producer would implement wrongly
+> without ever seeing a red gate.
+>
+> `design/contracts/SURFACE.STAMP.md` decision **S3** says this block needs the
+> **DELTA**: *"`stamp_results` carries `{texel, tag, strength_after,
+> strength_before}`. TERRAIN.BAKE turns stamps into layer-B height16 scars and
+> needs the DELTA, not just the new value; sending `before` costs eight wires
+> and saves BAKE a second read port onto the sheet."* Its *Rejected* line names
+> the alternative exactly — *"emitting only the new value and letting BAKE
+> re-read — a second reader on a store whose whole rate budget is one texel per
+> clock"* — and mutation 8 of that contract's table ("`stamp_results` loses the
+> pre-blend strength (the delta BAKE needs)") is a committed positive control
+> for it.
+>
+> What Option A built is the rejected branch. `zref::terrain::
+> stamp_depth_at_vertex(strength, vi, vj)` returns `stamp_depth(strength[…])` —
+> an **absolute** depth from one plane, no `before` in the signature —
+> `zhao_terrain_sheetseam` is that second reader, and this block does
+> `scar_sum = h_scar + delta16` with `delta16 = sd_depth_h16`.
+>
+> **The scar accumulates while the depth is absolute**, so a stamp re-issued at
+> the same place digs the full depth a second time (operation 0 REPLACES, so
+> `before == after` and the delta law would correctly dig nothing), and two
+> stamps overlapping inside one frame queue two records that both dig the
+> accumulated sheet over their intersection. No counter in the seam can see it:
+> `sheet_vertices_dug_o`, `fallbacks_o` and `prefetch_beats_o` all describe a
+> healthy read of a sheet that is telling the truth. The fault is in which
+> question is asked of it.
+>
+> **This is an OWNER decision and neither side may be picked inside a packet** —
+> S3 is ratified with a committed mutant, `stamp_depth_at_vertex` is the oracle
+> R194 named and §9.3(c) ratifies. *Recommendation: the DELTA*, because it is
+> the only one of the two that is idempotent under re-stamping, it is what
+> `surf_res_before_o` was built and mutation-tested to deliver, and it restores
+> §9.2's deferral identity (see **D-TERRCMD-C**: that identity is written in
+> `from`/`to` depths "and in nothing else", so a sheet-mode record currently has
+> no state-exactness argument under `BAKE_PATCH_BUDGET`'s carry-over FIFO at
+> all). Full measurement in `zhao_console_core.sv` entry I32.
+
 ## Clock and reset semantics
 
 Single `clk`, active-low async `rst_n` (negedge), `gpu` domain per the ledger.

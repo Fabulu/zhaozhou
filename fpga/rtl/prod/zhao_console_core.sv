@@ -3626,6 +3626,33 @@
 //          port with no caller is not a gap for lack of a block; it is waiting
 //          on the one consumer that makes the handle load-bearing.
 //
+//          RE-MEASURED 2026-09-21 (terrcmd) AND IT HAS **NOT** EXPIRED, which
+//          is recorded because the measurement was made expecting it to have.
+//          `zhao_terrain_devstore.sv` EXISTS (22,372 bytes, built and tested)
+//          and `grep zhao_terrain_devstore` in this file returns EIGHT hits --
+//          a count that reads exactly like a composition. ALL EIGHT ARE
+//          COMMENTS; there is no instantiation, and line 11404 above says so
+//          itself. The store is built and uncomposed, so "the moment that
+//          changes" has not arrived and this half stands unchanged. Six lanes
+//          in this run have been rewarded for finding rot, and a lane whose
+//          job is to find defects must report the clean measurement with the
+//          same weight as a dirty one (ruling R229).
+//
+//      AND THE TWO HALVES OF THIS ENTRY HAVE **DIFFERENT** ROOTS, which the
+//      text above lets a reader miss. Stated plainly 2026-09-21 (terrcmd),
+//      because a packet aimed at "I27 and I32" will otherwise close one and
+//      believe it closed both:
+//
+//        * `terr_dm_*` shares I32's root EXACTLY. Its writer `zhao_terrain_
+//          pageio` is built AND registered (the "unbuilt" sentences in I32 are
+//          struck there), so this half is waiting on COMPOSITION, which waits
+//          on `zhao_terrain_bake_v2`, which waits on a `cmd_*` producer. One
+//          root, and I32 now names the four fields that hold it.
+//        * `terr_chk_*` DOES NOT. It waits on `zhao_terrain_devstore`
+//          composing, which is entry I21's subsystem and is not blocked by
+//          `cmd_*` at all. A `cmd_*` producer would close NEITHER half on its
+//          own and would close this one NEVER.
+//
 //      NOT A GAP AND NAMED SO IT IS NOT RE-OPENED: `is_cslot_o` and
 //      `is_cslot_valid_o` are T6's 256-entry composed-height cache index, and
 //      `zhao_terrain_compcache_front` is a two-buffer FRONT rather than that
@@ -4045,9 +4072,23 @@
 //      >> `zhao_terrain_bake_v2.sv`'s own header: layer D has no reader
 //      >> anywhere in the machine (needed on TWO of bake's ports), `sc_*` --
 //      >> the layer-B scar writeback -- has no consumer anywhere, and nothing
-//      >> in this console writes a height layer back to a page at all. All
+//      >> in this console writes a height layer back to a page at all. ~~All
 //      >> three are ONE unbuilt block, TERRAIN.PAGEIO, which has a written
-//      >> contract and NO `design/blocks.yml` row.
+//      >> contract and NO `design/blocks.yml` row.~~
+//      >>
+//      >> STRUCK 2026-09-21 (terrcmd), RE-MEASURED IN THIS TREE. It is one
+//      >> block and that block is BUILT AND REGISTERED. `design/blocks.yml`
+//      >> carries `- id: TERRAIN.PAGEIO`; `fpga/rtl/terrain/zhao_terrain_pageio.sv`
+//      >> is 63,729 bytes; `completion_register.py` lists `zhao_terrain_pageio`
+//      >> under BUILT BUT NOT CONNECTED, which it could not do without both.
+//      >> And it consumes what the sentence above says has no consumer:
+//      >> `sc_valid_i`/`sc_scar_i` take the layer-B scar writeback, `cell_ci_i`/
+//      >> `cell_state_o` serve the layer-D read, and `vtx_nobake_i`'s producer
+//      >> is its corner-shadow scatter. So THREE of the four holds this
+//      >> paragraph lists are spent -- not closed, because pageio is not
+//      >> COMPOSED, but the thing they were waiting for is no longer missing.
+//      >> Two lanes have now read this sentence and inherited "TERRAIN.PAGEIO
+//      >> does not exist"; it stops here.
 //
 //      A THIRD ABSENCE, AND IT IS ARBITRATION: `zhao_surface_sheet` IS COMPOSED
 //      in this module (search for `u_surface_sheet`) and holds layer F, so the
@@ -4123,6 +4164,152 @@
 //      >> anything else re-derives identity that was already stated" -- and a
 //      >> second identity law invented inside a bake-record producer is
 //      >> exactly the kind nobody would look for later.
+//
+//      >> AND THE PRODUCER IT ASKS FOR IS ALREADY ON THIS MODULE'S WIRES.
+//      >> Measured 2026-09-21 (terrcmd): `zhao_cmd_exec`'s `stamp_patch_o` is
+//      >> the 32-bit `handle32[patch]` lifted off a validated SurfaceStamp
+//      >> packet, composed here as `cmd_exec_stamp_patch_w` and already muxed
+//      >> into `surf_cmd_handle_m`. Carrying THAT beside the record satisfies
+//      >> C4 exactly -- it is the ABI's own identity, not a synthesis from
+//      >> `cmd_patch_id_i` -- so the boundary the paragraph above sets is
+//      >> SATISFIABLE and does not need a new identity law. `job_handle_i`
+//      >> has no producer today only because no record producer exists to
+//      >> carry it; the VALUE is present, validated and 32 bits wide.
+//
+//      ------------------------------------------------------------------
+//      WHAT `cmd_*` ACTUALLY NEEDS, FIELD BY FIELD. Measured 2026-09-21
+//      (terrcmd), because three lanes have now reported "`cmd_*` has no
+//      producer" as though it were one absence, and it is THIRTEEN FIELDS OF
+//      WHICH MOST ARE LIVE IN THIS MODULE ALREADY.
+//      ------------------------------------------------------------------
+//      FIRST, TWO THINGS THAT ARE **NOT** MISSING, named because a lane sent
+//      to "add the record" would look for both and find them:
+//
+//        * THE COMMAND RECORD EXISTS. `spec/commands.zidl` SurfaceStamp
+//          0x0210 is `implemented`, and carries `handle32[patch] patch`,
+//          `transform2fx transform` (translation = centre), `fx16 radius`,
+//          `u16 strength`, `u8 tag`, `u8 operation`, `fx16 ring_width`. This
+//          is NOT I17's shape -- there `SetPlane` was zero hits in the ZIDL
+//          and the gap was a missing RECORD. Here the record is ratified.
+//        * THE EXECUTOR ARM EXISTS. `zhao_cmd_exec`'s EX_STAMP state drains
+//          the stamp ring and drives nine ports -- `stamp_patch_o`,
+//          `stamp_operation_o`, `stamp_tag_o`, `stamp_strength_o`,
+//          `stamp_tx_o`, `stamp_ty_o`, `stamp_radius_o`, `stamp_ring_width_o`,
+//          `stamp_src_id_o` -- off a CRC-validated packet. So this is not a
+//          missing arm either. Both halves of I30 already did that work.
+//
+//      WHAT IS MISSING IS A THIRD BLOCK BETWEEN THEM, and here is its intake
+//      measured against what this module can already hand it:
+//
+//        cmd_cx_i / cmd_cz_i    LIVE  `cmd_exec_stamp_tx_w` / `_ty_w`
+//        cmd_radius_i           LIVE  `cmd_exec_stamp_radius_w`
+//        cmd_env_x0/z0/x1/z1_i  LIVE  `u_surface_dispatch`'s `env_*_o`,
+//                                     port for port, ruling R45
+//        cmd_src_id_i           LIVE  `cmd_exec_stamp_src_id_w`
+//        job_handle_i           LIVE  `cmd_exec_stamp_patch_w` (above)
+//        cmd_dual_i             REACHABLE  `tps_v_flags[TERR_FLAG_DUAL_BIT]`
+//                                     is TERRAIN.PAGESTREAM's flag and is
+//                                     already read by two consumers here
+//        cmd_patch_id_i         REACHABLE  the dispatch's {patch_ix, patch_iz}
+//                                     key, which R45 put there for exactly
+//                                     "whoever keys on a patch"
+//        cmd_depth_from_i       ABSENT
+//        cmd_depth_to_i         ABSENT
+//        cmd_cells_i            ABSENT
+//        cmd_depth_sheet_i      ABSENT
+//
+//      SO THE REFUSAL IS NOW FOUR FIELDS, NOT A SUBSYSTEM, and each is a
+//      DECISION rather than a wire. They are written up as D-TERRCMD-A/B/C.
+//
+//      D-TERRCMD-A -- **THE DEPTH LAW IS ABSOLUTE IN ONE RATIFIED CONTRACT
+//      AND A DELTA IN THE OTHER, AND THE BUILT PATH TOOK THE ABSOLUTE ONE.**
+//      This is the finding that matters and it is not about a missing wire.
+//
+//        `design/contracts/SURFACE.STAMP.md` decision S3 is explicit:
+//        "`stamp_results` carries {texel, tag, strength_after,
+//        strength_before}. TERRAIN.BAKE turns stamps into layer-B height16
+//        scars and NEEDS THE DELTA, NOT JUST THE NEW VALUE; sending `before`
+//        costs eight wires and SAVES BAKE A SECOND READ PORT ONTO THE SHEET."
+//        Its *Rejected* line names the alternative by name: "emitting only
+//        the new value and letting BAKE re-read -- a second reader on a store
+//        whose whole rate budget is one texel per clock." That decision is
+//        load-bearing enough to carry a committed positive control: mutation
+//        8 of that contract's table is "`stamp_results` loses the pre-blend
+//        strength (the delta BAKE needs)", caught by the directed suite and
+//        both random lanes. `surf_res_before_o` -- THE PORT THIS ENTRY IS
+//        NAMED AFTER -- exists for this and nothing else.
+//
+//        What was built is the rejected branch. `zref::terrain::
+//        stamp_depth_at_vertex(strength, vi, vj)` takes ONE strength plane
+//        and returns `stamp_depth(strength[...])` -- an ABSOLUTE depth, no
+//        `before` anywhere in the signature. `zhao_terrain_stampdepth`
+//        implements that, `zhao_terrain_sheetseam` prefetches 1,089 CURRENT
+//        strengths through `zhao_surface_sheetshare` (which is precisely the
+//        "second reader" S3 rejected), and `zhao_terrain_bake_v2` selects
+//        `delta16 = c_sheet ? sd_depth_h16 : (g_from_c - g_to_c)` into
+//        `scar_sum = h_scar + delta16`. THE SCAR ACCUMULATES AND THE DEPTH IS
+//        ABSOLUTE.
+//
+//        The consequence, and it is not a corner case: **a stamp re-issued at
+//        the same place digs the full depth again.** Operation 0 (the only op
+//        L1 uses) REPLACES the texel, so `before == after` on a repeat and the
+//        delta law digs nothing, which is correct; the absolute law digs
+//        `table(strength)` a second time and the crater doubles. Two stamps
+//        overlapping within ONE frame queue two records and both dig the
+//        accumulated sheet over their intersection. No counter in the seam can
+//        see it -- `sheet_vertices_dug_o`, `fallbacks_o`, `miss_texels_o` and
+//        `prefetch_beats_o` all report a perfectly healthy read of a sheet
+//        that is telling the truth. The defect is in WHICH QUESTION IS ASKED
+//        of it, and every instrument here measures the answer.
+//
+//        NEITHER SIDE MAY BE PICKED INSIDE A PACKET. S3 is a ratified
+//        contract decision with a committed mutant; `stamp_depth_at_vertex`
+//        is the oracle owner ruling R194 named, and 9.3(c)'s closing line
+//        ratifies it as "the oracle TERRAIN.BAKE's per-vertex depth mode is
+//        written against". Two ratified statements, opposite shapes, and
+//        NEITHER NAMES THE OTHER -- which is this file's own "read the
+//        SIBLING contract" law, arriving for the third time in this subsystem.
+//        RECOMMENDED: the DELTA. It is the only one of the two that is
+//        idempotent under re-stamping, it is what `surf_res_before_o` was
+//        built and mutation-tested to deliver, and it costs the seam nothing
+//        that is not already spent. It is an OWNER decision because it changes
+//        a ruled oracle.
+//
+//      D-TERRCMD-B -- `cmd_depth_from_i`/`cmd_depth_to_i` HAVE NO SOURCE
+//      ANYWHERE, AND NEITHER DOES `cmd_cells_i`. SEARCHED: all of
+//      `fpga/rtl/**` for `depth_from|depth_to` -- every hit is either a
+//      COMMENT in this entry or `zhao_prod_top.sv`'s generated LFSR stimulus
+//      (`u61_src[42 +: 32]`), which is a fit harness and not a producer. The
+//      ABI has no depth field: SurfaceStamp carries `strength`, and 9.3(a)'s
+//      art table converts strength to depth PER TEXEL, which is sheet mode.
+//      So a stamp-derived DISC record cannot be formed at all, and the disc
+//      arm's real producer is a cast's progress -- the FIELD subsystem, and
+//      §9.2's "(to - from) x stencil so an interrupted cast un-applies".
+//      `cmd_cells_i` ("layer D present") has no flag bit anywhere; the only
+//      layer-presence bit in this module is `TERR_FLAG_DUAL_BIT = 3`. There
+//      is no CELLS sibling, in the flags word or out of it.
+//
+//      D-TERRCMD-C -- **§9.2's DEFERRAL LAW DOES NOT COVER THE ONLY RECORD
+//      SHAPE THE ABI CAN PRODUCE.** `design/contracts/TERRAIN.BAKE.md` says
+//      it in one sentence: "terrain_rules §9.2's deferral identity is written
+//      in `from`/`to` depths AND IN NOTHING ELSE." §9.2 item 3 is that
+//      identity -- "applying from->mid then mid->to == from->to, so a
+//      deferred patch takes one larger step at its next bake". A sheet-mode
+//      record has no `from` and no `to`, so a deferred one has no
+//      state-exactness argument at all, and BAKE_PATCH_BUDGET = 64 with a
+//      carry-over FIFO is exactly a deferral machine. §9.2 item 4 makes the
+//      constant replay-semantics-affecting, so this is not a detail that can
+//      be settled later by whoever composes. It is the same decision as
+//      D-TERRCMD-A seen from the queue's side: the delta law restores the
+//      identity (two deferred deltas over one sheet sum to the whole), and
+//      the absolute law does not.
+//
+//      WHY NO REGISTER ROW WAS ADDED FOR THE PRODUCER. It has a written
+//      contract -- TERRAIN.BAKE.md's `stamp_results` packet table plus §9.2's
+//      deferral law -- and NO SILICON. That is the wrong half of R214's test,
+//      the half POSEPAGE declined a rise for, so no row. The register is 22
+//      before this commit and 22 after it; this entry gained no gap and lost
+//      none, and the whole diff is comment.
 //
 //      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
 //      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
@@ -4207,8 +4394,10 @@
 //      >> BLOCK, because every one of them needs the same residency SLOT, the
 //      >> same GENERATION and the same guard socket on the page pool, and bake
 //      >> processes one record at a time with strictly sequential phases.
-//      >> `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, NOT BUILT,
-//      >> and deliberately with NO design/blocks.yml row -- a mandatory
+//      >> `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, ~~NOT BUILT,
+//      >> and deliberately with NO design/blocks.yml row~~ -- BUILT AND
+//      >> REGISTERED 2026-09-21 under ruling R210; struck by terrcmd, see the
+//      >> measurement above -- a mandatory
 //      >> capability that is not built is a gap, and this packet may not close
 //      >> one gap by opening another) specifies it: both faces port for port,
 //      >> what it must not own, the alignment argument, the
