@@ -327,9 +327,20 @@ Two assertions, and the second is the point:
    sweep confirms it: flipping the winding turns exactly 10,304 of these red.
 
 Not yet composed: `TERRAIN.PATCH` upstream (the composed-height cache that would
-sit between them does not exist), `TERRAIN.LOD` (does not exist), `FORGE.CLIFF`
-downstream. The Phase-6 gate captures — Duo island from two cameras with all
-stitch patterns crack-free, and the breach hole + rim capture — remain open.
+sit between them does not exist), `TERRAIN.LOD`, `FORGE.CLIFF` downstream. The
+Phase-6 gate captures — Duo island from two cameras with all stitch patterns
+crack-free, and the breach hole + rim capture — remain open.
+
+**CORRECTED 2026-09-21 (gz/terrassem).** This paragraph used to say
+`TERRAIN.LOD` **"(does not exist)"**. It has existed since phase 6 —
+`fpga/rtl/terrain/zhao_terrain_lod.sv`, built and tested — and what is true of
+it is the same thing that is true of the other two names here: it is not
+COMPOSED. Recorded as a correction rather than silently refreshed, because a
+citation that rots into a stronger claim than the truth is exactly what ruling
+R165 is about, and this one had been quoted onward. `TERRAIN.PATCH` is composed
+in `zhao_console_core.sv`; what does not exist is the composed-height cache
+BEHIND it, which is what the parenthesis in that first clause means and is worth
+not collapsing into "TERRAIN.PATCH does not exist" the same way.
 
 ## Notes
 
