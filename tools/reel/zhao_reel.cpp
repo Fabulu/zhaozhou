@@ -76,6 +76,7 @@ namespace {
 
 std::string g_out;
 bool g_write = true;  // --check: render + verify CRCs only, write nothing
+uint32_t g_last_seq_crc = 0;  // R230/GOURAUDLOOK: last render_scene sequence CRC
 
 // ---------------------------------------------------------------- output ----
 
@@ -2550,6 +2551,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
+  zc::shade_counters_reset();  // R230/GOURAUDLOOK: per-subject shading census
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, sub.bump_ext, 8);
   if (sub.island_flat) {  // keep the deep keel, drop the texture lane
@@ -3247,6 +3249,22 @@ int render_scene(const SceneSubject& sub) {
     fwrite(pl.data(), 1, pl.size(), f);
     fclose(f);
   }
+
+  // R230/GOURAUDLOOK shading census. Printed for every subject, in both the
+  // writing and the --check pass, so "how often does the Gouraud/flat choice
+  // arise at all" is answered from real content rather than asserted. The
+  // totals are the NATURAL predicate and so must agree across a paired render.
+  {
+    const uint64_t g = zc::g_shade_tri_gouraud, fl = zc::g_shade_tri_flat, tot = g + fl;
+    if (tot != 0)
+      std::printf("%s: shade-census drawn_tris=%llu gouraud=%llu (%.2f%%) flat=%llu (%.2f%%)\n",
+                  sub.name, static_cast<unsigned long long>(tot),
+                  static_cast<unsigned long long>(g), 100.0 * static_cast<double>(g) / static_cast<double>(tot),
+                  static_cast<unsigned long long>(fl),
+                  100.0 * static_cast<double>(fl) / static_cast<double>(tot));
+  }
+
+  g_last_seq_crc = seq_crc;  // R230/GOURAUDLOOK: read back by --shade-lane-check
 
   if (!g_write) {
     std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name, sub.frames,
@@ -5524,7 +5542,110 @@ constexpr LibraryEntry kLibrary[] = {
     {"star-s10-runaway", "Runaway", "High-velocity star, no flare capability", false},
     {nullptr, nullptr, nullptr, false}};
 
+// ---------------------------------------------------------------------------
+// R230 / packet GOURAUDLOOK -- POSITIVE CONTROL for the flat stand-in lane.
+//
+// CLAUDE.md: "A detector that has not been shown to FIRE has not been tested."
+// A KNOB owes the same proof. `ZIXX_SHADE=flat` is evidence about the look only
+// if it is known to CHANGE the look -- otherwise the comparison produces two
+// identical galleries and the comfortable conclusion that +24 DSP buys nothing.
+// That is the stale-binary trap's exact shape and it errs in the flattering
+// direction, which is the direction nobody audits.
+//
+// Three assertions, all on the CORRECT behaviour rather than on a defect
+// (CLAUDE.md: "do not write a test that asserts the bug"):
+//
+//   1. the shading census is NON-ZERO -- something was really drawn. A census
+//      of exactly zero is a broken instrument until proven otherwise.
+//   2. the census is IDENTICAL across both readings -- the pair drew the same
+//      content from the same camera on the same frames. The census counts the
+//      NATURAL `a.lit && b.lit && c.lit` predicate and never consults the knob,
+//      so this is a genuine cross-check and not a restatement of itself.
+//   3. the sequence CRCs DIFFER -- the knob reaches the framebuffer.
+//
+// It also REPORTS the Gouraud share, which is the answer to "how often does
+// this choice even arise", measured over real content rather than asserted.
+// ---------------------------------------------------------------------------
+int validate_shade_lane() {
+  struct Reading {
+    const char* label;
+    int knob;
+    uint32_t crc;
+    uint64_t gour, flat;
+  };
+  const char* kSubjects[] = {"zixxtrixx-still-front", "zixxtrixx-walk"};
+  const bool prev_write = g_write;
+  g_write = false;
+  int rc = 0;
+  for (const char* which : kSubjects) {
+    Reading r[5] = {{"gouraud", zc::kShadeGouraud, 0, 0, 0},
+                    {"flat-face", zc::kShadeFlatFace, 0, 0, 0},
+                    {"flat-pv-a", zc::kShadeFlatPvA, 0, 0, 0},
+                    {"flat-pv-b", zc::kShadeFlatPvB, 0, 0, 0},
+                    {"flat-pv-c", zc::kShadeFlatPvC, 0, 0, 0}};
+    for (Reading& x : r) {
+      zc::g_force_flat_shading = x.knob;
+      SceneSubject s = std::strcmp(which, "zixxtrixx-walk") == 0 ? subject_zixx_walk()
+                                                                 : subject_zixx_still_front();
+      // The flat reading has no pinned sequence CRC and must never be graded
+      // against the Gouraud one's -- that would assert the very difference
+      // this check exists to demonstrate.
+      s.expect_seq_crc = 0;
+      if (render_scene(s) != 0) {
+        std::fprintf(stderr, "shade-lane: %s/%s failed to render\n", which, x.label);
+        zc::g_force_flat_shading = 0;
+        g_write = prev_write;
+        return 2;
+      }
+      x.crc = g_last_seq_crc;
+      x.gour = zc::g_shade_tri_gouraud;
+      x.flat = zc::g_shade_tri_flat;
+    }
+    const uint64_t tot = r[0].gour + r[0].flat;
+    std::printf("shade-lane %-22s drawn_tris=%llu lit_corners=%llu (%.2f%%)\n", which,
+                static_cast<unsigned long long>(tot), static_cast<unsigned long long>(r[0].gour),
+                tot ? 100.0 * static_cast<double>(r[0].gour) / static_cast<double>(tot) : 0.0);
+    if (tot == 0) {
+      std::fprintf(stderr, "shade-lane: %s drew NO triangles -- the census is blind\n", which);
+      rc = 1;
+    }
+    for (const Reading& x : r) std::printf("    %-10s crc=0x%08X\n", x.label, x.crc);
+    for (int i = 1; i < 5; ++i) {
+      if (r[i].gour != r[0].gour || r[i].flat != r[0].flat) {
+        std::fprintf(stderr,
+                     "shade-lane: %s/%s census disagrees with gouraud (%llu/%llu vs %llu/%llu) -- "
+                     "the readings did not draw the same content, so no comparison built from "
+                     "them means anything\n",
+                     which, r[i].label, static_cast<unsigned long long>(r[i].gour),
+                     static_cast<unsigned long long>(r[i].flat),
+                     static_cast<unsigned long long>(r[0].gour),
+                     static_cast<unsigned long long>(r[0].flat));
+        rc = 1;
+      }
+    }
+    // Every reading must reach the framebuffer, and each must be its OWN
+    // reading -- two that collide are one picture wearing two labels.
+    for (int i = 0; i < 5; ++i)
+      for (int j = i + 1; j < 5; ++j)
+        if (r[i].crc == r[j].crc) {
+          std::fprintf(stderr,
+                       "shade-lane: %s -- %s and %s produced IDENTICAL output (0x%08X). Either "
+                       "ZIXX_SHADE does nothing for one of them, or a stale binary is running. "
+                       "Every picture built from this switch is worthless until that is "
+                       "resolved.\n",
+                       which, r[i].label, r[j].label, r[i].crc);
+          rc = 1;
+        }
+  }
+  zc::g_force_flat_shading = 0;
+  g_write = prev_write;
+  std::printf(rc == 0 ? "shade-lane: PASS (the flat stand-in knob fires and the pair matches)\n"
+                      : "shade-lane: FAILED\n");
+  return rc;
+}
+
 int main(int argc, char** argv) {
+  if (argc > 1 && std::strcmp(argv[1], "--shade-lane-check") == 0) return validate_shade_lane();
   if (argc > 1 && std::strcmp(argv[1], "--zixx-target-check") == 0)
     return validate_zixx_target_interactions();
   if (argc > 1 && std::strcmp(argv[1], "--zixx-limit-check") == 0)
@@ -5614,6 +5735,34 @@ int main(int argc, char** argv) {
     if (!e.empty())
       std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
   }
+  // R230 / packet GOURAUDLOOK. ZIXX_SHADE=flat renders the FLAT per-face
+  // stand-in for the console's lit per-vertex colour; unset (the normal case)
+  // leaves every render bit-identical. The point of the switch is that the two
+  // readings can be rendered from the SAME binary, same camera, same frames,
+  // and looked at side by side -- CLAUDE.md's first law forbids settling a
+  // visual question from the DSP column.
+  if (const char* shade = std::getenv("ZIXX_SHADE")) {
+    const std::string s = shade;
+    if (s == "gouraud")
+      zc::g_force_flat_shading = zc::kShadeGouraud;
+    else if (s == "flat" || s == "flat-face")
+      zc::g_force_flat_shading = zc::kShadeFlatFace;
+    else if (s == "flat-pv-a")
+      zc::g_force_flat_shading = zc::kShadeFlatPvA;
+    else if (s == "flat-pv-b")
+      zc::g_force_flat_shading = zc::kShadeFlatPvB;
+    else if (s == "flat-pv-c")
+      zc::g_force_flat_shading = zc::kShadeFlatPvC;
+    else {
+      std::fprintf(stderr,
+                   "unknown ZIXX_SHADE=%s (expected gouraud, flat-face (alias flat), "
+                   "flat-pv-a, flat-pv-b or flat-pv-c)\n",
+                   shade);
+      return 2;
+    }
+    std::fprintf(stderr, "ZIXX_SHADE=%s (R230 flat-stand-in comparison lane)\n", shade);
+  }
+
   // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is
   // absent. All alternatives share identical art and toon ramps. V12's ten

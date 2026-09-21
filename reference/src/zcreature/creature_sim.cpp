@@ -714,6 +714,15 @@ DebugShade g_debug_shade = DebugShade::kOff;
 int g_cel_bands = 0;
 int g_smooth_toon_bands = 0;
 
+// R230 / GOURAUDLOOK. See zref_creature.hpp for what these are for.
+int g_force_flat_shading = 0;
+uint64_t g_shade_tri_gouraud = 0;
+uint64_t g_shade_tri_flat = 0;
+void shade_counters_reset() {
+  g_shade_tri_gouraud = 0;
+  g_shade_tri_flat = 0;
+}
+
 bool projected_bound_radius_q8(const mat4fx& vp, int32_t world_x, int32_t world_y, int32_t world_z,
                                int32_t bound_radius, uint32_t viewport_w, int32_t& radius_q8,
                                SatLedger* L) {
@@ -911,9 +920,20 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // blend knob: 100% smooth erases the hand-cut read entirely) — and
         // the rig's per-channel gains ride the interpolated colour lanes.
         // A mesh with no normals takes the flat path bit-identically.
-        const bool gouraud = a.lit && b.lit && c.lit;
+        // R230/GOURAUDLOOK: count by the NATURAL predicate, before the
+        // stand-in knob is consulted, so a paired render reports identical
+        // totals on both sides and a mismatch means the two runs did not draw
+        // the same content.
+        const bool lit_corners = a.lit && b.lit && c.lit;
+        if (lit_corners)
+          ++g_shade_tri_gouraud;
+        else
+          ++g_shade_tri_flat;
+        const bool gouraud = lit_corners && g_force_flat_shading == kShadeGouraud;
         Shade3 shc[3];
-        if (gouraud) {
+        // The per-corner lights are needed by Gouraud AND by every
+        // provoking-vertex stand-in; only the face-Lambert stand-in skips them.
+        if (lit_corners && g_force_flat_shading != kShadeFlatFace) {
           const PV* corner[3] = {&a, &b, &c};
           for (int k = 0; k < 3; ++k) {
             const int32_t lk =
@@ -930,7 +950,14 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                 10);
             shc[k] = creature_light(rig, lk, lf, lp, point);
           }
-          tm.gouraud = true;
+          tm.gouraud = gouraud;
+          if (g_force_flat_shading >= kShadeFlatPvA) {
+            // PROVOKING VERTEX: hold one corner's light across the triangle.
+            // This is what the console's per-triangle `vertex_rgb` stand-in
+            // can carry without recovering a face normal.
+            const Shade3 pv = shc[g_force_flat_shading - kShadeFlatPvA];
+            shc[0] = shc[1] = shc[2] = pv;
+          }
         } else {
           shc[0] = shc[1] = shc[2] = creature_light(rig, lam_key, lam_fill, lam_point, point);
         }
