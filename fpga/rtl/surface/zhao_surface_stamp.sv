@@ -324,6 +324,19 @@ module zhao_surface_stamp #(
     output logic [ 7:0] res_tag_o,
     output logic [ 7:0] res_strength_o,  // layer F after the blend
     output logic [ 7:0] res_before_o,    // layer F before the blend
+    // WHICH SHEET THESE TEXELS BELONG TO -- added 2026-09-21 under OWNER
+    // RULING R231, because a result stream with no identity cannot be ROUTED
+    // to a patch, and `zhao_terrain_sheetseam` now consumes `res_before_o` to
+    // build TERRAIN.BAKE's delta.
+    //
+    // IT IS CARRIED, NOT DERIVED, and that is `zhao_surface_sheet`'s own
+    // choice C4: "the handle is the identity the ABI carries
+    // (`commands.zidl` SurfaceStamp `handle32[patch] patch`); using anything
+    // else re-derives identity that was already stated."  This is `st_handle`,
+    // the very word the command arrived with and the same one `req_handle_o`
+    // and `wr_handle_o` already present -- no new register and no second
+    // identity law.
+    output logic [31:0] res_handle_o,   // handle32, the ABI's own identity
     output logic [15:0] res_src_id_o,
 
     // -----------------------------------------------------------------------
@@ -597,6 +610,11 @@ module zhao_surface_stamp #(
   assign res_tag_o = s2_tag;
   assign res_strength_o = s2_after;
   assign res_before_o = s2_before;
+  // `st_handle` is HELD for the whole texel loop (it is loaded once at command
+  // accept), so it is already valid beside every beat of this stream -- the
+  // same register `req_handle_o` and `wr_handle_o` are driven from, presented
+  // a third time rather than copied into a fourth.
+  assign res_handle_o = st_handle;
   assign res_src_id_o = st_src_id;
 
   assign cmd_ready_o = (state == SIdle);

@@ -9246,6 +9246,36 @@ verilate(test_terrain_bake_v2_sheet_directed
 add_test(NAME terrain_bake_v2_sheet_directed COMMAND test_terrain_bake_v2_sheet_directed)
 set_tests_properties(terrain_bake_v2_sheet_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# OWNER RULING R231 -- THE DEPTH LAW IS A DELTA, AND THE SAME STAMP ISSUED
+# TWICE MUST DIG ONCE. Added 2026-09-21 (deltalaw).
+#
+# The target above holds the sheet mode against the ABSOLUTE oracle and must go
+# on passing unchanged -- that is the evidence the delta is a GENERALISATION
+# and not a rewrite, and it holds because `kStampDepthTable[0]` is 0, which is
+# now static_asserted in zref_terrain_page.hpp.
+#
+# This one is the instrument the defect proved was missing. Nine counters on
+# the seam and six on the bake all read correctly while the crater doubled,
+# because every one of them measures the ANSWER and the fault was in the
+# QUESTION. So it reads no counter to decide anything: it bakes, carries the
+# scar forward as the page would, bakes again, and DIFFERENCES against zref --
+# R215's shape, which caught three PAGEIO defects no counter could see.
+#
+# Its case 3 is the positive control and is not optional: it re-runs the second
+# bake with `before` forced to zero and REQUIRES the crater to double. A test
+# that passes on an inert machine looks exactly like one that passes on a
+# correct machine, and this is what separates them.
+add_executable(test_bake_delta_idempotence_directed terrain/bake_delta_idempotence_directed.cpp)
+target_link_libraries(test_bake_delta_idempotence_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_bake_delta_idempotence_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_bake_delta_idempotence_directed
+  PREFIX Vzhao_terrain_bake_v2
+  TOP_MODULE zhao_terrain_bake_v2
+  VERILATOR_ARGS -Wall
+  SOURCES ${ZHAO_TERRAIN_BAKE_V2_SV})
+add_test(NAME bake_delta_idempotence_directed COMMAND test_bake_delta_idempotence_directed)
+set_tests_properties(bake_delta_idempotence_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 # ---------------------------------------------------------------------------
 # THE POSITIVE CONTROL FOR V2'S MEETS-PLANE ROW WINDOW -- ruling R93.
 #

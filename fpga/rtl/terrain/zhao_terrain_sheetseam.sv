@@ -259,6 +259,11 @@ module zhao_terrain_sheetseam #(
     // -----------------------------------------------------------------------
     input  var logic [11:0] sheet_texel_i,      // <- zhao_terrain_bake_v2.sheet_texel_o
     output var logic [ 7:0] sheet_strength_o,   // -> zhao_terrain_bake_v2.sheet_strength_i
+    // OWNER RULING R231: bake ACCUMULATES, so what it adds must be a CHANGE.
+    // `sheet_before_o` is layer F as the scar already accounts for it, and the
+    // pair {before, after} is what SURFACE.STAMP's S3 has always said this
+    // seam owes its consumer.  See THE BEFORE PLANE below.
+    output var logic [ 7:0] sheet_before_o,     // -> zhao_terrain_bake_v2.sheet_before_i
     // AND this into bake's `vtx_valid_i`.  HIGH throughout a record that is
     // not on the sheet law, so a disc record is never slowed by this block.
     output var logic        str_valid_o,
@@ -281,6 +286,38 @@ module zhao_terrain_sheetseam #(
     input  var logic [ 7:0] pg_strength_i,
 
     // -----------------------------------------------------------------------
+    // THE `stamp_results` SINK -- OWNER RULING R231, and `surf_res_before_o`'s
+    // FIRST CONSUMER IN THIS TREE
+    // -----------------------------------------------------------------------
+    // `design/contracts/SURFACE.STAMP.md` S3 named this connection when the
+    // stamp was written: "`stamp_results` carries {texel, tag, strength_after,
+    // strength_before}.  TERRAIN.BAKE ... NEEDS THE DELTA, NOT JUST THE NEW
+    // VALUE."  Until now nothing consumed `res_before_o` -- the PAGEIO packet
+    // measured exactly that and wrote it down: "ZERO CONSUMERS of
+    // `res_texel_i` / `res_strength_i` / `res_before_i` in `fpga/` OR
+    // `tests/`".  This face is that consumer.
+    //
+    // `res_handle_o` IS CARRIED, NOT DERIVED.  A result stream with no
+    // identity cannot be routed to a patch, and `zhao_surface_sheet`'s choice
+    // C4 already settles where identity comes from: "the handle is the
+    // identity the ABI carries (`commands.zidl` SurfaceStamp
+    // `handle32[patch] patch`); using anything else re-derives identity that
+    // was already stated."  So `zhao_surface_stamp` publishes the handle it
+    // was given and this block compares it; nothing here invents one.
+    //
+    // `sr_ready_o` IS CONSTANT HIGH AND THAT IS A DECISION.  The stamp's whole
+    // rate budget is one texel per clock and it is the PLAYER'S OWN ACTION; a
+    // seam that backpressured it would drop frames to protect a bake.  So this
+    // face always accepts, and a result it cannot HOLD is DROPPED AND COUNTED
+    // (`sr_dropped_o`), which is `zhao_terrain_psmux`'s rule -- a counted
+    // anomaly is better evidence than a silent stall.
+    input  var logic        sr_valid_i,
+    output var logic        sr_ready_o,
+    input  var logic [31:0] sr_handle_i,   // handle32, the ABI's identity (C4)
+    input  var logic [11:0] sr_texel_i,    // <- zhao_surface_stamp.res_texel_o
+    input  var logic [ 7:0] sr_before_i,   // <- zhao_surface_stamp.res_before_o
+
+    // -----------------------------------------------------------------------
     // evidence (spec/counters.md S4: saturate, never wrap)
     // -----------------------------------------------------------------------
     output var logic [31:0] jobs_o,              // records admitted to bake
@@ -292,6 +329,10 @@ module zhao_terrain_sheetseam #(
     output var logic [31:0] dig_stall_cycles_o,  // bake was ready and we were not
     output var logic [31:0] bad_texels_o,        // an address no lattice vertex can produce
     output var logic [31:0] stray_done_o,        // bake_done with no record in flight
+    // ---- R231's three, and every one of them can DISCRIMINATE (R95) --------
+    output var logic [31:0] before_texels_o,     // stamp results absorbed into the plane
+    output var logic [31:0] sr_dropped_o,        // ... and results the plane could not hold
+    output var logic [31:0] before_torn_o,       // records refused because a drop preceded them
     output var logic        idle_o
 );
 
@@ -337,6 +378,64 @@ module zhao_terrain_sheetseam #(
   logic [7:0] rd_data_q;
   logic [11:0] rd_texel_q;
   logic rd_valid_q;
+
+  // =========================================================================
+  // THE BEFORE PLANE -- OWNER RULING R231, and it CLEARS ON CONSUME
+  // =========================================================================
+  // Nine bits per lattice vertex: {seen, before}.  `before` is the pre-blend
+  // strength `stamp_results` reported; `seen` says a stamp has touched this
+  // vertex SINCE THE LAST TIME THE DIG READ IT.
+  //
+  // THE INVARIANT, and everything else follows from it:
+  //
+  //     seen = 0  =>  this vertex has not been stamped since bake accounted
+  //                   for it, so it must contribute NOTHING.  `before` is
+  //                   served AS `after`, and the delta is exactly zero.
+  //     seen = 1  =>  a stamp moved it, and `before` is where it moved FROM.
+  //
+  // THE CLEAR IS FREE AND IT IS RACE-FREE.  The bit is cleared BY THE DIG'S
+  // OWN READ (`rd_issue_c` below) -- not by a sweep, and not by an epoch tag.
+  // Three properties come out of that, and each one killed a design that
+  // looked simpler first:
+  //
+  //   * NO SWEEP, so there is no 1,089-cycle window in which an arriving stamp
+  //     is silently wiped.  A clear-at-`bake_done` sweep has exactly that
+  //     window and it UNDER-digs, which is owner ruling R221's REFUSED "dig
+  //     zero: a visible no-op -- they acted, the ground did not move".
+  //   * NO EPOCH TAG, so there is no aliasing.  A one-bit toggle mistakes
+  //     epoch N-2 for epoch N, and widening the tag only moves the period.  An
+  //     entry that aliases reads as `seen` carrying a STALE `before` and
+  //     DOUBLE-DIGS -- the exact defect R231 repaired, reintroduced by the
+  //     instrument meant to prevent it.
+  //   * CONSUMPTION IS THE CORRECT BOUNDARY.  The dig visits each of the 1,089
+  //     vertices, so clearing on the read retires exactly the deltas the scar
+  //     has just absorbed.  A dig ABANDONED mid-lattice leaves the vertices it
+  //     never reached still `seen`, which is right -- they have not been dug.
+  //     A vertex visited twice contributes zero the second time, which is also
+  //     right, and is idempotence falling out of the STRUCTURE rather than
+  //     being asserted about it.
+  //
+  // AND THERE IS NO COLD-START HOLE, which is the question to ask of any
+  // scheme shaped like this.  A patch is only ever baked BECAUSE something
+  // stamped it, and those stamps arrive here first: on a fresh sheet they
+  // report `before = 0`, so the first bake digs `d(after) - d(0)` -- the full
+  // depth, bit for bit what the absolute law dug, because `kDepth00` is zero.
+  // A bake with no preceding stamp digs nothing, and that is not a hole; it is
+  // the property R231 was ruled for.
+  logic [8:0] bf_q[Texels];
+
+  // The handle whose `before` data the plane holds, and how many entries are
+  // still unconsumed.  `bf_live_q == 0` is an EMPTY plane, which any handle
+  // may re-key for free.
+  logic [31:0] bf_handle_q;
+  logic [IdxW-1:0] bf_live_q;
+  // A result was dropped, so the plane no longer describes the whole epoch.
+  // Records for that handle take ruling R221's RATIFIED fallback -- the
+  // parametric disc, counted -- rather than a half-populated delta.  R221
+  // already covers "this block cannot serve this record", and inventing a
+  // second answer here would be a third law in a seam that has two.
+  logic bf_torn_q;
+  logic [8:0] bf_rd_q;
 
   // ---- the record in flight ------------------------------------------------
   logic serve_q;  // bake is digging on the layer-F law
@@ -410,7 +509,36 @@ module zhao_terrain_sheetseam #(
   wire rd_held_c = rd_valid_q && (rd_texel_q == sheet_texel_i);
   wire rd_issue_c = serve_q && !rd_held_c;
 
+  // ---- THE SINK'S ADDRESS, the same inverse law as the read --------------
+  // A stamp may touch any of the 4,096 texels; only 1,089 are ever ASKED FOR
+  // (section 9.3(b) decimates).  A result on one of the other 3,007 can never
+  // be read by any vertex, so it is dropped with no consequence and WITHOUT
+  // counting -- `sr_dropped_o` is for results the plane could not HOLD, and
+  // conflating "nobody will ever ask for this" with "we lost this" would leave
+  // that counter unable to discriminate (R95).
+  wire [5:0] sr_ti = sr_texel_i[5:0];
+  wire [5:0] sr_tj = sr_texel_i[11:6];
+  wire [5:0] sr_vi = (sr_ti == TexelMax) ? LatMax : {1'b0, sr_ti[5:1]};
+  wire [5:0] sr_vj = (sr_tj == TexelMax) ? LatMax : {1'b0, sr_tj[5:1]};
+  wire sr_addressable = (sr_ti == TexelMax || sr_ti[0] == 1'b0) &&
+                        (sr_tj == TexelMax || sr_tj[0] == 1'b0);
+  wire [IdxW-1:0] sr_idx_c = {sr_vj, 5'b0} + {5'b0, sr_vj} + {5'b0, sr_vi};
+
+  // Always accept -- see the port comment.  The stamp is the player's action.
+  assign sr_ready_o = 1'b1;
+  wire sr_fire_c = sr_valid_i && sr_ready_o;
+  // The plane is re-keyable only while EMPTY.  Taking a result for another
+  // handle while entries are still live would put one patch's `before` under
+  // another patch's dig -- this file's own record-swap defect, arriving
+  // through the one door it did not previously have.
+  wire sr_keyed_c = (bf_live_q == '0) || (sr_handle_i == bf_handle_q);
+  wire sr_take_c = sr_fire_c && sr_addressable && sr_keyed_c;
+  wire sr_drop_c = sr_fire_c && sr_addressable && !sr_keyed_c;
+
   assign sheet_strength_o = serve_q ? rd_data_q : 8'd0;
+  // `seen` low serves `after`, so the delta is zero and the vertex is not dug
+  // a second time.  THIS IS THE WHOLE REPAIR, in one multiplexer.
+  assign sheet_before_o = serve_q ? (bf_rd_q[8] ? bf_rd_q[7:0] : rd_data_q) : 8'd0;
   // HIGH when this block is not serving, so a disc record -- or a record that
   // fell back under R221 -- runs at full speed with this AND in its valid.
   assign str_valid_o = serve_q ? rd_held_c : 1'b1;
@@ -459,8 +587,11 @@ module zhao_terrain_sheetseam #(
   assign bk_valid_o = job_valid_i && admit_c;
   assign job_ready_o = admit_c && bk_ready_i;
   // R221: the sheet law survives only if every one of the 1,089 reads hit.
-  assign bk_depth_sheet_o = job_match_c && !pf_missed_q;
-  assign bk_fallback_o = job_match_c && pf_missed_q;
+  // R231 adds ONE term to R221's existing law and no new law.  A torn plane is
+  // another way of saying "this block cannot serve this record", which is
+  // exactly what `bk_depth_sheet_o` going low already means.
+  assign bk_depth_sheet_o = job_match_c && !pf_missed_q && !bf_torn_q;
+  assign bk_fallback_o = job_match_c && (pf_missed_q || bf_torn_q);
 
   wire accept_c = bk_valid_o && bk_ready_i;
 
@@ -477,6 +608,19 @@ module zhao_terrain_sheetseam #(
     if (pg_fire_c && (pg_status_i == StHit) && (state_q == S_FILL))
       str_q[w_idx_q] <= pg_strength_i;
     if (rd_issue_c) rd_data_q <= str_q[rd_idx_c];
+
+    // ---- the before plane: write on the stamp, CLEAR ON THE DIG'S READ ----
+    // If both ports name the same index in the same cycle the CLEAR wins,
+    // because the dig has already taken that delta and re-arming the vertex
+    // behind it would dig it twice.  Written as one if/else so the priority is
+    // STRUCTURAL rather than a race between two statements a synthesiser is
+    // free to order.
+    if (rd_issue_c) begin
+      bf_rd_q <= bf_q[rd_idx_c];
+      bf_q[rd_idx_c][8] <= 1'b0;
+    end else if (sr_take_c) begin
+      bf_q[sr_idx_c] <= {1'b1, sr_before_i};
+    end
   end
 
   // =========================================================================
@@ -506,6 +650,12 @@ module zhao_terrain_sheetseam #(
       dig_stall_cycles_o <= 32'd0;
       bad_texels_o <= 32'd0;
       stray_done_o <= 32'd0;
+      bf_handle_q <= 32'd0;
+      bf_live_q <= '0;
+      bf_torn_q <= 1'b0;
+      before_texels_o <= 32'd0;
+      sr_dropped_o <= 32'd0;
+      before_torn_o <= 32'd0;
     end else begin
       // ---- the held read answer -----------------------------------------
       if (rd_issue_c) begin
@@ -541,6 +691,29 @@ module zhao_terrain_sheetseam #(
       // counted where it can be seen, on the share's `pg_orphan_o`.
       if (req_fire_c && !pg_fire_c) out_q <= out_q + 2'd1;
       else if (pg_fire_c && !req_fire_c && (out_q != 2'd0)) out_q <= out_q - 2'd1;
+
+      // ---- THE BEFORE PLANE'S BOOKKEEPING (R231) -------------------------
+      // Outside the case on purpose: the sink is live in EVERY state, because
+      // a stamp is the player's action and does not wait for a bake.  The
+      // plane's WRITE is in the store process above; this is only the
+      // accounting that says whose data it holds.
+      if (sr_take_c) begin
+        bf_handle_q <= sr_handle_i;
+        if (bf_live_q != IdxW'(Texels)) bf_live_q <= bf_live_q + IdxW'(1);
+        before_texels_o <= sat_inc(before_texels_o);
+      end
+      // A result this block could not HOLD.  The plane now describes part of
+      // an epoch, so the next record for it must not be served a half
+      // populated delta -- `bf_torn_q` routes it to ruling R221's ratified
+      // fallback.  `sr_dropped_o` and `before_torn_o` are deliberately two
+      // counters and not one: the first says a result was lost, the second
+      // says a RECORD was diverted because of it, and a design that loses a
+      // result for a patch nobody bakes moves only the first.  That is R95's
+      // discriminate-do-not-merely-move, applied before it was asked for.
+      if (sr_drop_c) begin
+        bf_torn_q <= 1'b1;
+        sr_dropped_o <= sat_inc(sr_dropped_o);
+      end
 
       case (state_q)
         // -----------------------------------------------------------------
@@ -625,7 +798,14 @@ module zhao_terrain_sheetseam #(
             jobs_o <= sat_inc(jobs_o);
             busy_sheet_q <= 1'b1;
             rd_valid_q <= 1'b0;
-            if (pf_missed_q) begin
+            // THE TWO FALLBACK CAUSES ARE COUNTED SEPARATELY.  Both drop
+            // `bk_depth_sheet_o` and both land on R221's parametric disc, so
+            // `fallbacks_o` alone cannot say WHICH, and a seam that tore its
+            // before plane would read as a residency problem -- a wrong
+            // diagnosis attached to a right alarm, which CLAUDE.md's broken
+            // instrument chapter calls out by name.
+            if (bf_torn_q && !pf_missed_q) before_torn_o <= sat_inc(before_torn_o);
+            if (pf_missed_q || bf_torn_q) begin
               // ***** OWNER RULING R221, IN ONE PLACE *****
               // The record goes to bake with `cmd_depth_sheet_i` LOW, which
               // is the ratified parametric disc, and the fallback is counted
@@ -653,6 +833,17 @@ module zhao_terrain_sheetseam #(
             rd_valid_q <= 1'b0;
             pf_missed_q <= 1'b0;
             state_q <= S_WATCH;
+            // THE PLANE IS EMPTY, AND THIS IS THE PROOF RATHER THAN A CLAIM.
+            // The dig traverses the whole lattice, and every read clears its
+            // own `seen` bit, so a COMPLETED sheet dig has retired all 1,089.
+            // Gated on `serve_q` because a FALLBACK record never read the
+            // plane: its deltas are still owed and must survive to the next
+            // sheet bake.  Conservative in the direction that cannot lose a
+            // player's dig.
+            if (serve_q) begin
+              bf_live_q <= sr_take_c ? IdxW'(1) : '0;
+              bf_torn_q <= 1'b0;
+            end
           end
         end
 

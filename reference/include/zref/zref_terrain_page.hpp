@@ -529,6 +529,23 @@ inline constexpr int32_t stamp_depth(uint8_t strength) {
   return a + static_cast<int32_t>(r);
 }
 
+// ENTRY 0 IS NOT AN ART CHOICE AND IS THE ONE ENTRY THAT IS PINNED.
+// Every other entry of `kStampDepthTable` is editable and explicitly
+// PROVISIONAL -- spec 9.3(a) says so, and CLAUDE.md rule 6 says it must stay
+// that way. Entry 0 is different in kind: strength 0 means NOT STAMPED, and a
+// texel nothing has stamped must dig nothing. Asserting it removes no owner
+// control, because there is no look decision to make about the depth of an
+// absent scar.
+//
+// It became load-bearing on 2026-09-21 under owner ruling R231. The delta law
+// below reduces to the absolute one EXACTLY when `stamp_depth(0) == 0`, and
+// that equality is the entire argument that the repair leaves a first bake
+// bit-identical -- so it is asserted here rather than relied on. It was found
+// undefended while checking that argument; nothing in the tree held it.
+static_assert(kStampDepthTable[0] == 0,
+              "strength 0 is NOT STAMPED and must dig nothing: R231's delta law "
+              "collapses to the absolute law only if stamp_depth(0) is exactly 0");
+
 // (b) 64x64 -> 33x33 IS NEAREST-TEXEL, AND THE SEAM ERROR IS DECLARED.
 //
 // Layer F is an AREA grid: texel i's centre sits at (2i+1)/128 of the patch
@@ -571,6 +588,67 @@ inline int32_t stamp_depth_at_vertex(const uint8_t* strength, uint32_t vi, uint3
   const uint32_t ti = sheet_texel_for_vertex(vi);
   const uint32_t tj = sheet_texel_for_vertex(vj);
   return stamp_depth(strength[tj * kSheetEdge + ti]);
+}
+
+// ---------------------------------------------------------------------------
+// (d) THE DELTA LAW -- OWNER RULING R231, 2026-09-21
+// ---------------------------------------------------------------------------
+// `stamp_depth_at_vertex` above is ABSOLUTE: one strength plane in, one depth
+// out. `zhao_terrain_bake_v2` ACCUMULATES (`scar_sum = h_scar + delta16`), so
+// feeding it an absolute depth DOUBLE-DIGS -- a stamp re-issued at the same
+// place digs the full depth a second time, and two stamps overlapping inside
+// one frame both dig the already-accumulated sheet. No counter in the seam can
+// see it: `sheet_vertices_dug_o`, `fallbacks_o` and `prefetch_beats_o` all
+// describe a perfectly healthy read of a sheet that is telling the truth. The
+// fault is in WHICH QUESTION IS ASKED, and every instrument measures the
+// answer. (`CLAUDE.md`'s metadata-bank law, in its purest form.)
+//
+// `design/contracts/SURFACE.STAMP.md` decision S3 had already ruled it, and
+// rejects the built branch BY NAME: "`stamp_results` carries {texel, tag,
+// strength_after, strength_before}. TERRAIN.BAKE ... NEEDS THE DELTA, NOT JUST
+// THE NEW VALUE ... *Rejected:* emitting only the new value and letting BAKE
+// re-read." Owner ruling R231 took the delta.
+//
+// THE ABSOLUTE FORM IS NOT DELETED. It is spec 9.3(c)'s composed law, it is
+// what `stamp_to_bake_laws_directed` holds, and the delta is EXPRESSED AS A
+// DIFFERENCE OF IT rather than as a second implementation of the art table --
+// so there is one ratified arithmetic here and not two.
+//
+// TWO PROPERTIES, both asserted by `tests/terrain/bake_delta_idempotence_directed`:
+//
+//   IDEMPOTENCE. Operation 0 REPLACES the texel, so a stamp re-issued at the
+//   same place leaves `before == after` and the delta is EXACTLY ZERO. The
+//   ground moves once however many times the command is sent.
+//
+//   THE DEFERRAL IDENTITY (spec 9.2 item 3). d(mid)-d(from) + d(to)-d(mid)
+//   telescopes to d(to)-d(from), so applying from->mid then mid->to is the
+//   same scar as from->to and a deferred patch takes one larger step at its
+//   next bake. The absolute law has no such identity -- that is what 9.2's
+//   "written in `from`/`to` depths AND IN NOTHING ELSE" was recording.
+//
+// COLD IS NOT A SPECIAL CASE. `kStampDepthTable[0]` is 0, so `stamp_depth(0)`
+// is 0 and a `before` plane of zeroes makes this function EQUAL to
+// `stamp_depth_at_vertex` byte for byte. The delta law is therefore a strict
+// GENERALISATION of the absolute one: a patch baked for the first time digs
+// exactly what it digs today, and only the RE-bake changes. That is why the
+// 6,548 checks of `terrain_bake_v2_sheet_directed` and the 267 of
+// `terrain_bake_v2_directed` are protected by construction rather than by
+// re-derivation, and the equality is asserted rather than asserted-about.
+// ONE NOTE FOR THE CONSUMER, BECAUSE IT CHANGES THE ANSWER BY AN LSB.
+// This returns the delta in FX16. `zhao_terrain_bake_v2` works in height16 and
+// differences two ALREADY-CONVERTED lookups
+// (`sd_delta_h16 = sd_depth_h16 - sd_before_h16`), so it rounds TWICE, once per
+// lookup -- not once on this difference. That is deliberate and it is what
+// makes the deferral identity EXACT: every intermediate term of
+// h(d(mid))-h(d(0)) + h(d(to))-h(d(mid)) cancels as an integer, for any table
+// and any rounding rule. Rounding this fx16 difference once instead would give
+// each deferred step its own rounding error, and 9.2 item 3 would hold only
+// approximately. A test comparing against the RTL must difference two
+// `rescale(.., 8)` results, not rescale this one.
+inline int32_t stamp_delta_at_vertex(const uint8_t* strength_after,
+                                     const uint8_t* strength_before, uint32_t vi, uint32_t vj) {
+  return stamp_depth_at_vertex(strength_after, vi, vj) -
+         stamp_depth_at_vertex(strength_before, vi, vj);
 }
 
 // ===========================================================================

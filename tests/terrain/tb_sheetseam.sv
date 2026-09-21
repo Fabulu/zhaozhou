@@ -107,9 +107,18 @@ module tb_sheetseam (
     // =======================================================================
     input  var logic [11:0] sheet_texel_i,
     output var logic [ 7:0] sheet_strength_o,
+    output var logic [ 7:0] sheet_before_o,
     output var logic        str_valid_o,
     input  var logic        dig_ready_i,
     input  var logic        bake_done_i,
+
+    // ---- the `stamp_results` sink, OWNER RULING R231 ----------------------
+    // Driven from C++ standing where `zhao_surface_stamp.res_*` stands.
+    input  var logic        sr_valid_i,
+    output var logic        sr_ready_o,
+    input  var logic [31:0] sr_handle_i,
+    input  var logic [11:0] sr_texel_i,
+    input  var logic [ 7:0] sr_before_i,
 
     // =======================================================================
     // EVIDENCE
@@ -123,6 +132,9 @@ module tb_sheetseam (
     output var logic [31:0] dig_stall_cycles_o,
     output var logic [31:0] bad_texels_o,
     output var logic [31:0] stray_done_o,
+    output var logic [31:0] before_texels_o,
+    output var logic [31:0] sr_dropped_o,
+    output var logic [31:0] before_torn_o,
     output var logic        seam_idle_o,
 
     output var logic        share_busy_o,
@@ -318,9 +330,16 @@ module tb_sheetseam (
 
       .sheet_texel_i(sheet_texel_i),
       .sheet_strength_o(sheet_strength_o),
+      .sheet_before_o(sheet_before_o),
       .str_valid_o(str_valid_o),
       .dig_ready_i(dig_ready_i),
       .bake_done_i(bake_done_i),
+
+      .sr_valid_i(sr_valid_i),
+      .sr_ready_o(sr_ready_o),
+      .sr_handle_i(sr_handle_i),
+      .sr_texel_i(sr_texel_i),
+      .sr_before_i(sr_before_i),
 
       .req_valid_o(b_req_valid),
       .req_ready_i(b_req_ready),
@@ -343,6 +362,9 @@ module tb_sheetseam (
       .dig_stall_cycles_o(dig_stall_cycles_o),
       .bad_texels_o(bad_texels_o),
       .stray_done_o(stray_done_o),
+      .before_texels_o(before_texels_o),
+      .sr_dropped_o(sr_dropped_o),
+      .before_torn_o(before_torn_o),
       .idle_o(seam_idle_o)
   );
 

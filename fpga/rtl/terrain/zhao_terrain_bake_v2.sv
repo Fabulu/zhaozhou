@@ -274,8 +274,44 @@ module zhao_terrain_bake_v2 (
     // contract, of the shape `zhao_terrain_psmux` and `zhao_mem_share_n`
     // already have twice — and a composer may not write an arbiter inline.
     // Entry I32 in `zhao_console_core.sv` carries this.
+    // OWNER RULING R231, 2026-09-21 -- THE DEPTH LAW IS A DELTA, NOT AN
+    // ABSOLUTE, AND `sheet_before_i` IS THE HALF THAT WAS MISSING.
+    //
+    // `design/contracts/SURFACE.STAMP.md` S3 has said so since the stamp was
+    // written: "`stamp_results` carries {texel, tag, strength_after,
+    // strength_before}. TERRAIN.BAKE ... NEEDS THE DELTA, NOT JUST THE NEW
+    // VALUE; sending `before` costs eight wires and SAVES BAKE A SECOND READ
+    // PORT ONTO THE SHEET." Its *Rejected* line names what was built here by
+    // name -- "emitting only the new value and letting BAKE re-read".
+    //
+    // WHY IT MATTERS, and it is not a corner case: `scar_sum = h_scar +
+    // delta16` ACCUMULATES. An absolute depth added to an accumulating scar
+    // DOUBLE-DIGS -- a stamp re-issued at the same place digs the full depth
+    // again, and two stamps overlapping inside one frame both dig the
+    // already-accumulated sheet. Under the delta law the same re-issue
+    // correctly digs NOTHING, because `before == after`.
+    //
+    // NO COUNTER COULD SEE IT. `sheet_vertices_dug_o` here, and `fallbacks_o`
+    // / `miss_texels_o` / `prefetch_beats_o` in the seam, all describe a
+    // perfectly healthy read of a sheet that is telling the truth. The fault
+    // is in WHICH QUESTION IS ASKED, and every instrument measures the answer.
+    // `tests/terrain/bake_delta_idempotence_directed.cpp` is the instrument
+    // that CAN see it: it differences two bakes against the oracle rather than
+    // reading a counter.
+    //
+    // SAMPLED WITH `vtx_valid_i`, exactly like `sheet_strength_i` -- the page
+    // server delivers all six together or the vertex is not ready.
+    //
+    // A `before` PLANE OF ZEROES IS TODAY'S BEHAVIOUR, BIT FOR BIT, because
+    // `kStampDepthTable[0]` is 0 (asserted in `zref_terrain_page.hpp`, and by
+    // `kDepth00` here). So the delta law is a strict GENERALISATION of the
+    // absolute one: a patch baked the first time digs exactly what it dug
+    // before this change, and only the RE-bake moves. That is why
+    // `terrain_bake_v2_directed`'s 267 checks and
+    // `terrain_bake_v2_sheet_directed`'s 6,548 are protected by construction.
     output logic        [11:0] sheet_texel_o,
-    input  logic        [ 7:0] sheet_strength_i,
+    input  logic        [ 7:0] sheet_strength_i,  // layer F AFTER the blend
+    input  logic        [ 7:0] sheet_before_i,    // layer F BEFORE it (R231)
 
     output logic               sc_valid_o,
     input  logic               sc_ready_i,
@@ -404,6 +440,7 @@ module zhao_terrain_bake_v2 (
   logic signed [15:0] h_base, h_scar, h_bottom;
   logic               h_nobake;
   logic        [ 7:0] h_strength;  // layer F at this vertex (sheet mode only)
+  logic        [ 7:0] h_before;    // ... as it was BEFORE the stamp (R231)
   logic               v_covered;  // d2 < r2, or (strength != 0) in sheet mode
 
   // ---- the stencil divider (v1, verbatim) ---------------------------------
@@ -613,6 +650,54 @@ module zhao_terrain_bake_v2 (
 
   assign sheet_texel_o = sd_texel;
 
+  // -------------------------------------------------------------------------
+  // THE SAME LAW, ASKED THE OTHER QUESTION -- OWNER RULING R231
+  // -------------------------------------------------------------------------
+  // A SECOND INSTANCE, NOT A SECOND IMPLEMENTATION. The art table is
+  // spec 9.3(a)'s named editable constant set and there must be exactly ONE of
+  // it in this tree -- `CLAUDE.md`'s "read the SIBLING contract" law is about
+  // precisely this, and the projector's two cores are what it cost last time.
+  // So `before` goes through `zhao_terrain_stampdepth` unchanged and the delta
+  // is the DIFFERENCE OF TWO LOOKUPS, exactly as
+  // `zref::terrain::stamp_delta_at_vertex` expresses it.
+  //
+  // ITS ADDRESS OUTPUT IS DELIBERATELY UNUSED. `texel_o` depends on
+  // `vi_i`/`vj_i` alone and both instances are given the SAME cursor, so the
+  // two addresses are identical by construction; wiring the second one
+  // anywhere would create a second opinion about where a vertex samples. The
+  // cost is an address generator's worth of logic (one compare, one shift, one
+  // clamp) and the saving is that no reader has to ask which address won.
+  logic signed [31:0] sd_before_h16;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic        [11:0] sd_before_texel;
+  logic signed [31:0] sd_before_fx16;
+  logic               sd_before_covered;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_stampdepth u_stampdepth_before (
+      .vi_i        (vi),
+      .vj_i        (vj),
+      .texel_o     (sd_before_texel),
+      .strength_i  (h_before),
+      .depth_fx16_o(sd_before_fx16),
+      .depth_h16_o (sd_before_h16),
+      .covered_o   (sd_before_covered)
+  );
+
+  // THE DELTA. `h_scar` ACCUMULATES, so what is added to it must be a CHANGE.
+  // Feeding it `sd_depth_h16` -- an absolute depth -- is the defect owner
+  // ruling R231 repaired: the same stamp sent twice dug twice.
+  //
+  // NO SATURATION IS NEEDED AND NONE IS ADDED. Both operands are height16
+  // words sign-extended into 32 bits (25 significant bits each by
+  // `zhao_terrain_stampdepth`'s own note), so their difference is 26 bits and
+  // cannot overflow 32. A runaway table entry is caught ONCE, below, by
+  // `rail_hi`/`rail_lo` where `scar_saturations_o` counts it -- not twice as a
+  // delta saturation it never had. That is the argument the sheet path already
+  // carried, and it survives the subtraction unchanged.
+  logic signed [31:0] sd_delta_h16;
+  assign sd_delta_h16 = sd_depth_h16 - sd_before_h16;
+
   // THE MUX IS THE WHOLE OF OPTION A. An uncovered vertex contributes zero on
   // BOTH paths, so the three-way select collapses to "which law computed the
   // delta", and the disc arm is v1's expression untouched — a record that
@@ -620,8 +705,13 @@ module zhao_terrain_bake_v2 (
   // has ever baked. That is what makes the mode ADDITIVE and independently
   // testable, and it is why `terrain_bake_v2_directed`'s 267 checks still hold
   // the disc law with nothing changed.
+  // R231 changed ONE operand of this mux: the sheet arm was `sd_depth_h16`
+  // (ABSOLUTE) and is now `sd_delta_h16` (the CHANGE). The disc arm is v1's
+  // expression untouched, and it was ALWAYS a delta -- `(g_from_c - g_to_c)`
+  // -- which is the whole defect in one line: two laws feeding one
+  // accumulator, and only one of them differencing.
   assign delta16 = !v_covered ? 32'sd0 :
-                   c_sheet    ? sd_depth_h16 : (g_from_c - g_to_c);
+                   c_sheet    ? sd_delta_h16 : (g_from_c - g_to_c);
 
   // The sheet path CANNOT saturate here and the disc path can. `delta_g`'s
   // fx16 saturate exists because `depth * stencil` is a 50-bit product; the
@@ -782,6 +872,7 @@ module zhao_terrain_bake_v2 (
       h_bottom <= '0;
       h_nobake <= 1'b0;
       h_strength <= '0;
+      h_before   <= '0;
       v_covered <= 1'b0;
       div_rem <= '0;
       div_dsh <= '0;
@@ -920,6 +1011,15 @@ module zhao_terrain_bake_v2 (
             // delivers all five or the vertex is not ready. Captured on every
             // record; read only on a sheet one.
             h_strength <= sheet_strength_i;
+            // R231: captured by the SAME enable, in the SAME beat, from the
+            // same `vtx_valid_i`. That is deliberate and it is the one case
+            // CLAUDE.md's lockstep law does NOT argue against: these two are
+            // two halves of ONE value (the stamp's before/after pair) and a
+            // delta whose halves came from different beats would be the
+            // defect, not the guard against it. The page server's own port
+            // comment states the contract -- all six together or the vertex
+            // is not ready.
+            h_before <= sheet_before_i;
             // Coverage, by whichever law digs this record. The sheet arm is
             // `zhao_terrain_stampdepth`'s `covered_o` law applied to this
             // beat's own strength — the reader instance sees the REGISTERED
