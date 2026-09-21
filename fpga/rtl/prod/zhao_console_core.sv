@@ -3396,6 +3396,25 @@
 //      >> is already live in this file as
 //      >> `tps_v_flags[TERR_FLAG_DUAL_BIT]`.
 //      >>
+//      >> AND THAT LAST SENTENCE IS WRONG, which was found by composing it.
+//      >> CORRECTED 2026-09-21. `tps_v_flags` is TERRAIN.PAGESTREAM's LIVE
+//      >> flag word -- the FILLING page's. It is right where it is already
+//      >> used (TERRAIN.PATCH and the compose cache's fill) and WRONG for
+//      >> TERRAIN.LOD, which decides the SERVED patch: with the cache holding
+//      >> one filling and one served THOSE ARE DIFFERENT PAGES, so wiring it
+//      >> live decides each patch with the NEXT patch's underside flag --
+//      >> missing or spurious undersides, with every counter agreeing.
+//      >> `zhao_terrain_spdesc` now carries it on the door queue that already
+//      >> holds {slot, src_id}, and emits it as `patch_dual_o`.
+//      >>
+//      >> NOTHING FLAGGED THIS. It was found reading TERRAIN.LOD's CONTRACT
+//      >> to answer a different question -- does the composer owe a HOLD? The
+//      >> contract says the governor's targets "are **not registered** ...
+//      >> they must be held stable across a patch job", `dual_i` among them.
+//      >> The STABILITY question is what exposed the IDENTITY one, and the
+//      >> hold it asked for is a real register in this file, enabled by
+//      >> `zhao_terrain_lod`'s own `idle_o`.
+//      >>
 //      >> AND (a) IS A BUILD, NOT AN ABSENCE -- THE THIRD ROTTED REFUSAL OF
 //      >> THIS FAMILY IN ONE SUBSYSTEM. `zhao_cmd_exec.sv` says "NOT
 //      >> `pixel_error` -- MEASURE.GOVERNOR is not composed", and this
@@ -3472,9 +3491,10 @@
 //
 //      >> ============================================================ <<
 //      >> COMPOSED 2026-09-21 (packet TERRACOMP). THIRTEEN OF THE       <<
-//      >> SEVENTEEN JOB FIELDS AND THE RETIREMENT PULSE ARE NOW DRIVEN  <<
-//      >> INSIDE THIS MODULE. WHAT REMAINS OF THIS ENTRY IS FOUR        <<
-//      >> BOUNDARY SIGNALS AND ONE DECLARED TIE-OFF.                    <<
+//      >> SEVENTEEN JOB FIELDS AND THE RETIREMENT PULSE NOW HAVE AN     <<
+//      >> INTERNAL PRODUCER. THE BOUNDARY REMAINS AS AN OVERRIDE, FOR   <<
+//      >> THE BENCH -- SEE (5). WHAT THIS ENTRY STILL OWES IS FOUR      <<
+//      >> SIGNALS AND ONE DECLARED TIE-OFF.                             <<
 //      >> ============================================================ <<
 //      >>
 //      >> NINE BLOCKS IN ONE COMMIT, and the count is why this worked when
@@ -3562,21 +3582,43 @@
 //      >>     granted cost as a blocker;
 //      >>   * the layer-E reader -- (1) above, and R13 already ruled it.
 //      >>
-//      >> WHAT THIS COST THE SMOKE BENCH, said here because a composition
-//      >> that quietly removes coverage is worse than one that declares it.
-//      >> `tests/prod/tb_zhao_console_core_smoke.sv` used to INJECT a subpatch
-//      >> job at this boundary, and that injection was its ONLY exercise of
-//      >> TERRAIN.TESS client B. There is no port to inject through now, and
-//      >> the internal producer cannot replace it IN THAT BENCH, because every
-//      >> terrain page the smoke plays fails its CRC -- so no lattice is
-//      >> mipped, TERRAIN.LODFEED writes no record, the devstore is never
-//      >> written and no patch is ever composed or served. THE INJECTION WAS A
-//      >> WORKAROUND FOR THAT UPSTREAM HOLE and removing it exposes the hole
-//      >> rather than creating it. Client B's real coverage is
-//      >> `terrain_group_seq_directed` and the terrain differential; the
-//      >> chain's is `terrain_lodpath_directed`, `terrain_spdesc_directed` and
-//      >> `terrain_jobissue_directed`. The smoke's green was never evidence
-//      >> about any of them and now does not look like it is.
+//      >> (5) WHY THE BOUNDARY IS STILL HERE, AND THE MISTAKE THAT PUT IT
+//      >> BACK. This packet's first commit DELETED the thirteen ports. It
+//      >> looked like the clean thing to do and it is recorded here because
+//      >> the reasoning is the one a composition packet is most likely to
+//      >> repeat.
+//      >>
+//      >> THE REGISTER MOVED BY EXACTLY THE SAME AMOUNT EITHER WAY. The four
+//      >> gaps that closed are MODULES becoming connected, and A PORT IS NOT A
+//      >> MODULE. What the deletion actually cost was EVIDENCE:
+//      >> `tests/prod/tb_zhao_console_core_smoke.sv` injects one subpatch job
+//      >> at this boundary and that injection is its ONLY exercise of
+//      >> TERRAIN.TESS client B -- SIX assertions stand on it, through
+//      >> GROUP_SEQ to the shared projector's SECOND CLIENT and the
+//      >> TERRAIN.NORMALS -> TERRAIN.SHADE lane behind it. All six went dead:
+//      >>   "TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job
+//      >>    port is dead"   (tess_vertices=0 tess_refs=0 b_grants=0)
+//      >>
+//      >> THE INTERNAL PRODUCER CANNOT REACH THEM IN THAT BENCH, and the
+//      >> reason is upstream of everything this packet built: every terrain
+//      >> page the smoke plays FAILS ITS CRC, so no page becomes resident,
+//      >> TERRAIN.SEQ issues no compose job, the cache never fills, never
+//      >> serves, and never opens the door TERRAIN.SPDESC and
+//      >> TERRAIN.JOBISSUE wait at.
+//      >>
+//      >> The tempting repair was to relax the six assertions. THAT IS
+//      >> REMOVING COVERAGE TO MAKE A NUMBER LOOK BETTER, and the number was
+//      >> not even affected. So the boundary is an OVERRIDE instead, on this
+//      >> file's own `proj_cfg_*_i` pattern: it wins the cycle when it offers
+//      >> and the issuer drives every cycle it does not. With it back the same
+//      >> bench reports tess_vertices=81, b_grants=81, lights=128.
+//      >>
+//      >> SO THE REAL HOLE IS THE SMOKE'S TERRAIN PAGES NOT LOADING, and the
+//      >> injection was hiding it. It is named HERE now instead, which is the
+//      >> whole difference between a workaround and a lie. Client B's real
+//      >> coverage is `terrain_group_seq_directed` and the terrain
+//      >> differential; the chain's is `terrain_lodpath_directed`,
+//      >> `terrain_spdesc_directed` and `terrain_jobissue_directed`.
 //      >> THE FIVE THAT REMAIN, EACH RE-SEARCHED 2026-09-20 (terrain7) RATHER
 //      >> THAN INHERITED. Four survived; the fifth did not, and it asserted an
 //      >> absence twice over.
@@ -20190,6 +20232,13 @@ module zhao_console_core
   wire        terr_job_m_dual    = terr_job_valid_i ? terr_job_dual_i   : tji_job_dual;
   wire [15:0] terr_job_m_src_id  = terr_job_valid_i ? terr_job_src_id_i : tji_job_src_id;
   wire        terr_job_m_ready;
+  // DECLARED, not implicit. `tji_job_ready` is the LHS of the assign below and
+  // was an implicit net until 2026-09-21: Verilator inferred the right 1-bit
+  // wire and said nothing, and this file's own note two thousand lines up says
+  // "a net used before it is declared is an error under `default_nettype
+  // none`". A net the tool guesses is a net `quartus_map` is entitled to guess
+  // differently, and this block has not been through it.
+  wire        tji_job_ready;
   assign terr_job_ready_o = terr_job_m_ready;
   assign tji_job_ready    = terr_job_m_ready && !terr_job_valid_i;
 
