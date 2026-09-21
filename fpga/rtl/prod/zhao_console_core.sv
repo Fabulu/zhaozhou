@@ -1615,20 +1615,65 @@
 //      it is evidence that the Gouraud path is INTENDED function that was
 //      deferred, not a feature being invented here.
 //
-//      There is no BLOCKER anywhere -- unlike FORGE.SHADOW, nothing is missing a
-//      producer -- but the SPAN is eleven files including a RAM bank's slice
-//      geometry, on a device measured at 47,582 ALM against a 41,910 ceiling
-//      with FIELD's ~13,700 still additive. **A subsystem by size, not by
-//      blockage.** That is the owner decision this entry now carries.
+//      There was no BLOCKER anywhere -- unlike FORGE.SHADOW, nothing was
+//      missing a producer -- but the SPAN was eleven files including a RAM
+//      bank's slice geometry, on a device measured at 47,582 ALM against a
+//      41,910 ceiling with FIELD's ~13,700 still additive. **A subsystem by
+//      size, not by blockage.** That was the owner decision this entry carried.
 //
-//      DISCHARGED MEANWHILE, because it was the half nobody had done: the flat
-//      stand-in is now NAMED AS ONE IN THE RTL, at both ends of the severance --
-//      `zhao_raster_tile_pipe_v2.sv` beside `continuation_w.post_earlyz`, and
-//      `zhao_geom_attrpack.sv` at the four-slot lint waiver, each citing
-//      terrain_rules 6.5, the oracle's Gouraud lanes, and the other end. No
-//      tie-off was created and none was removed; the register does not move.
-//      And `GEOM_CLIP_ATTRS` STAYS 7 -- this entry's refusal to narrow it is
-//      re-affirmed and is now load-bearing twice over: the slots are FULL.
+//      **IT IS RULED AND IT IS BUILT. OWNER DECISION R234 D1, 2026-09-21,
+//      `(owner, explicit)`: SHIP GOURAUD.** Fabian was shown rendered boards
+//      comparing the readings and took the price knowingly -- *"I took the
+//      expensive options. We just want the full capability."* The evidence he
+//      ruled against: the free stand-in is not face-Lambert but a
+//      PROVOKING-VERTEX PICK that crawls a herringbone sawtooth across the body
+//      -- *"noise, not style"* -- and 100.00% of 3,168,243 drawn triangles take
+//      the Gouraud path, so the stand-in differs on nearly every triangle of
+//      every frame.
+//
+//      WHAT WAS BUILT, and it is exactly the span costed above:
+//        * `zhao_geom_attrpack` 3 -> 6 lanes, `SLOT_R/G/B` as named parameters,
+//          three new 240-bit plane outputs. No new arithmetic -- the shared
+//          `zhao_geom_attrsetup` core is time-multiplexed, so the whole
+//          geometry-side cost is a 3:1 operand mux becoming 6:1 and 7 -> 13
+//          clocks per triangle against ~41 of budget.
+//        * this file: `GEOM_ATTR_SLOT_R/G/B`, three wires, and the fork/join
+//          untouched -- the lockstep assertion still differences two counters
+//          driven by two different enables in two different modules.
+//        * `zhao_shell_top_v2` and `zhao_geom_bin_pipe_v2`: +3 x 240-bit ports,
+//          `METAW` 1157 -> 1877, which is the binner's metadata bank going
+//          29 -> 47 forty-bit slices.
+//        * `zhao_raster_tile_pipe_v2`: SIX `zhao_raster_attrgrad_v2` lanes, and
+//          with them the join, the coordinate-agreement cone, `row_delivered_q`
+//          [2:0] -> [5:0], `start_delivered_q` [4:0] -> [7:0] and the `[2:0]`
+//          probe ports. **This is where the ~1,420 ALM and +24 DSP live**, and
+//          the file now says so in its header.
+//        * and `vertex_rgb` FELL OUT OF THE SAME PATH, exactly as ATTRLANE
+//          predicted: it is a field build off `attr_join_q_q[3..5]` through one
+//          saturating `lit_unit8` conversion, and NOTHING DOWNSTREAM OF THE
+//          TILE PIPE CHANGED. No new fragment port, no new continuation field.
+//
+//      R89 DID NOT TRANSFER AND WAS NOT ALLOWED TO. It refused a fourth
+//      attrpack plane for a value that *"does not vary across the primitive"*;
+//      varying across the primitive is what Gouraud IS, and R230 records the
+//      distinction. Alpha remains flat, per-primitive, and on
+//      `tri_continuation_tail_i` where R89 put it -- which is why this build
+//      adds THREE lanes and not four, and why slot 6 is still the one slot
+//      `zhao_geom_attrpack` deliberately does not read.
+//
+//      STILL OPEN AT THE FAR END, costed and left for the next lane:
+//      `zhao_raster_toon` and `zhao_raster_fog` are still instantiated by no
+//      composed top. They now have a real producer in front of them -- the
+//      conversion `lit_unit8` is a named function sitting exactly where they
+//      belong, and the lanes deliver the Q0.16 scale its authored thresholds
+//      {43000, 57000} are written against. Composing them is a separate job and
+//      was not done here.
+//
+//      DISCHARGED EARLIER, and kept because the sequence matters: the flat
+//      stand-in was first NAMED AS ONE IN THE RTL at both ends of the severance
+//      before it was removed. `GEOM_CLIP_ATTRS` STAYS 7 -- this entry's refusal
+//      to narrow it is re-affirmed a third time and is now load-bearing in the
+//      strongest possible way: SIX of the seven slots have a reader.
 //
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
@@ -6520,6 +6565,13 @@ module zhao_console_core
   parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
   parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
   parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
+  // THE GOURAUD SLOTS (owner decision R234 D1, 2026-09-21). GEOM.VATTR writes
+  // these three from `zhao_light_stream`; GEOM.CLIP winding-flips them with the
+  // corners; GEOM.ATTRPACK now turns them into three more interpolation planes
+  // instead of dropping them. See that block's `tri_attr_a_i` waiver.
+  parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
+  parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
+  parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -11207,6 +11259,7 @@ module zhao_console_core
   wire         st_tri_ready_w;
   wire         ap_tri_ready_w, ap_o_valid_w;
   wire [239:0] ap_invw_plane_w, ap_u_over_w_plane_w, ap_v_over_w_plane_w;
+  wire [239:0] ap_r_plane_w, ap_g_plane_w, ap_b_plane_w;
   wire [ 15:0] ap_src_id_w;
   wire [ 31:0] ap_triangles_w, ap_planes_w;
   wire         door_tri_valid_w, door_tri_ready_w;
@@ -11270,9 +11323,16 @@ module zhao_console_core
   // ruling-5 attribute packet -- invw24, u_over_w, v_over_w, lit r/g/b, alpha,
   // winding-flipped with their vertices -- left this module through
   // `geom_clip_attr_a_o` and was read by nothing, because the block that turns
-  // three of those slots into three interpolation planes did not exist. That
-  // is what `zhao_geom_attrpack` is, and its own header says why it holds ONE
-  // `zhao_geom_attrsetup` rather than three.
+  // those slots into interpolation planes did not exist. That is what
+  // `zhao_geom_attrpack` is, and its own header says why it holds ONE
+  // `zhao_geom_attrsetup` rather than six.
+  //
+  // IT ASKED FOR THREE OF THE SIX UNTIL 2026-09-21, and the lit colour stopped
+  // dead at its input port while every counter here read healthy. Owner
+  // decision R234 D1 bought the other three lanes; the GEOMETRY cost of that is
+  // six more clocks per triangle and nothing else, because the setup core is
+  // shared. The ~1,420 ALM and +24 DSP are all downstream, in
+  // `zhao_raster_tile_pipe_v2`, which interpolates per pixel.
   //
   // THE FORK AND THE JOIN, AND WHY THE PLANES CANNOT BELONG TO ANOTHER
   // TRIANGLE. This is the shape CLAUDE.md warns about most specifically: two
@@ -11291,13 +11351,14 @@ module zhao_console_core
   //     triangle out.
   //
   // WHAT IT COSTS, stated rather than discovered later. GEOM.SETUP alone
-  // accepted a triangle per clock. The pair accepts one about every EIGHT,
-  // because the shared attrsetup core runs three lanes at two clocks each and
+  // accepted a triangle per clock. The pair accepts one about every FOURTEEN,
+  // because the shared attrsetup core runs six lanes at two clocks each and
   // the fork holds SETUP back to its rate. At the owner-ruled 120,000
   // vertices/frame -- roughly 40,000 triangles at 60 Hz -- the budget is about
-  // 41 gpu clocks per triangle, so eight fits with room. Buying the clock back
-  // means three attrsetup cores or a two-deep pack, and both spend ALMs on a
-  // margin that is already there.
+  // 41 gpu clocks per triangle, so fourteen fits with room. Buying the clock
+  // back means six attrsetup cores or a two-deep pack, and both spend ALMs on
+  // a margin that is already there. (It was EIGHT with three lanes; the extra
+  // six clocks are what the Gouraud lanes cost this side of the shell.)
   //
   // THE IDENTITY RIDES ALONG (`ap_src_id_w`) so that a future consumer can
   // check it. It is deliberately NOT differenced against `st_src_id` here: on
@@ -11313,6 +11374,9 @@ module zhao_console_core
     .SLOT_INVW     (GEOM_ATTR_SLOT_INVW),
     .SLOT_U_OVER_W (GEOM_ATTR_SLOT_U_OVER_W),
     .SLOT_V_OVER_W (GEOM_ATTR_SLOT_V_OVER_W),
+    .SLOT_R        (GEOM_ATTR_SLOT_R),
+    .SLOT_G        (GEOM_ATTR_SLOT_G),
+    .SLOT_B        (GEOM_ATTR_SLOT_B),
     .IDW           (16)
   ) u_geom_attrpack (
     .clk   (gpu_clk),
@@ -11346,6 +11410,10 @@ module zhao_console_core
     .out_invw_plane_o     (ap_invw_plane_w),
     .out_u_over_w_plane_o (ap_u_over_w_plane_w),
     .out_v_over_w_plane_o (ap_v_over_w_plane_w),
+    // REAL: the Gouraud planes, R234 D1. Same shared core, lanes 3..5.
+    .out_r_plane_o        (ap_r_plane_w),
+    .out_g_plane_o        (ap_g_plane_w),
+    .out_b_plane_o        (ap_b_plane_w),
     .out_src_id_o         (ap_src_id_w),
 
     .triangles_o (ap_triangles_w),
@@ -13811,9 +13879,15 @@ module zhao_console_core
     // for what its absence did to the raster.
     .tri_area2_i               (st_area2[46:0]),
     // REAL: GEOM.ATTRPACK, one plane per lane of the shared attrsetup core.
+    // SIX since owner decision R234 D1: the three Packet-D attributes and the
+    // three Gouraud channels. They widen the shell's Packet-D metadata from
+    // 1,157 bits to 1,877.
     .tri_invw_plane_i          (ap_invw_plane_w),
     .tri_u_over_w_plane_i      (ap_u_over_w_plane_w),
     .tri_v_over_w_plane_i      (ap_v_over_w_plane_w),
+    .tri_r_plane_i             (ap_r_plane_w),
+    .tri_g_plane_i             (ap_g_plane_w),
+    .tri_b_plane_i             (ap_b_plane_w),
     // I49: the RESOLVED material, per triangle, from u_material_window.
     .tri_flat_request_i        (tri_flat_request_c),
     .tri_continuation_tail_i   (tri_continuation_tail_i),
@@ -18271,6 +18345,13 @@ module zhao_console_core
   // zero-extended (the tile pipe refuses anything above bit 23), and slots 1..6
   // are the store's, in its order. Field placement only -- no arithmetic, and
   // the slot index is the named `GEOM_ATTR_SLOT_INVW` the packer reads.
+  //
+  // SLOTS 3, 4 AND 5 ARE THE LIT COLOUR, and as of owner decision R234 D1 they
+  // reach the raster. `rp_st_*` is GEOM.VATTR's store output, whose [95:64],
+  // [127:96] and [159:128] are the Q0.16 channels `zhao_light_stream` produced,
+  // so the packet's slots 3..5 are those three fields unmoved. The only reason
+  // this line needs no edit for D1 is that the carriage was always correct; it
+  // was the READER that was missing.
   assign rp_attr_a = {rp_st_a, 8'd0, rp_invw_a};
   assign rp_attr_b = {rp_st_b, 8'd0, rp_invw_b};
   assign rp_attr_c = {rp_st_c, 8'd0, rp_invw_c};

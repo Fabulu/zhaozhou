@@ -43,6 +43,10 @@ module tb_geom_bin_pipe_v2 (
     input  logic       [239:0] tri_invw_plane_i,
     input  logic       [239:0] tri_u_over_w_plane_i,
     input  logic       [239:0] tri_v_over_w_plane_i,
+    // The Gouraud planes (owner decision R234 D1). Lanes 3..5.
+    input  logic       [239:0] tri_r_plane_i,
+    input  logic       [239:0] tri_g_plane_i,
+    input  logic       [239:0] tri_b_plane_i,
     input  logic       [297:0] tri_flat_request_i,
     input  logic        [47:0] tri_continuation_tail_i,
     input  logic        [31:0] tri_fragment_state_i,
@@ -188,9 +192,9 @@ module tb_geom_bin_pipe_v2 (
     output logic               fragment_error_o,
 
     output logic               coverage_hold_valid_o,
-    output logic        [2:0]  coverage_delivered_mask_o,
-    output logic        [4:0]  start_delivered_mask_o,
-    output logic        [2:0]  attribute_idle_o,
+    output logic        [5:0]  coverage_delivered_mask_o,
+    output logic        [7:0]  start_delivered_mask_o,
+    output logic        [5:0]  attribute_idle_o,
     output logic               earlyz_hold_valid_o,
     output logic        [1:0]  skid_level_o,
     output logic               stage_candidate_valid_o,
@@ -210,8 +214,8 @@ module tb_geom_bin_pipe_v2 (
     output logic        [7:0]  bin_mask_o,
     output logic        [23:0] z_floor_o,
 
-    input  logic        [4:0]  test_start_enable_i,
-    input  logic        [2:0]  test_attr_cov_enable_i,
+    input  logic        [7:0]  test_start_enable_i,
+    input  logic        [5:0]  test_attr_cov_enable_i,
     input  logic               test_stage_admit_enable_i
 );
 
@@ -251,6 +255,9 @@ module tb_geom_bin_pipe_v2 (
       .tri_invw_plane_i(tri_invw_plane_i),
       .tri_u_over_w_plane_i(tri_u_over_w_plane_i),
       .tri_v_over_w_plane_i(tri_v_over_w_plane_i),
+      .tri_r_plane_i(tri_r_plane_i),
+      .tri_g_plane_i(tri_g_plane_i),
+      .tri_b_plane_i(tri_b_plane_i),
       .tri_flat_request_i(tri_flat_request_i),
       .tri_continuation_tail_i(tri_continuation_tail_i),
       .tri_fragment_state_i(tri_fragment_state_i),

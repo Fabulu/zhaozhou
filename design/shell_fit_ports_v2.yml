@@ -233,6 +233,30 @@
     },
     {
       "ordinal": 29,
+      "name": "tri_r_plane_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "ordinal": 30,
+      "name": "tri_g_plane_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "ordinal": 31,
+      "name": "tri_b_plane_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "ordinal": 32,
       "name": "tri_flat_request_i",
       "direction": "input",
       "domain": "gpu",
@@ -241,7 +265,7 @@
       "dynamic_mask": "0x3ffffffe00000000000000000000000000000000000000000000000000000000fffffffffff"
     },
     {
-      "ordinal": 30,
+      "ordinal": 33,
       "name": "tri_continuation_tail_i",
       "direction": "input",
       "domain": "gpu",
@@ -249,7 +273,7 @@
       "dynamic_mask": "0xffffffffffff"
     },
     {
-      "ordinal": 31,
+      "ordinal": 34,
       "name": "tri_fragment_state_i",
       "direction": "input",
       "domain": "gpu",
@@ -257,7 +281,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 32,
+      "ordinal": 35,
       "name": "fill_req_ready_i",
       "direction": "input",
       "domain": "gpu",
@@ -265,7 +289,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 33,
+      "ordinal": 36,
       "name": "fill_req_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -273,7 +297,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 34,
+      "ordinal": 37,
       "name": "fill_req_addr_o",
       "direction": "output",
       "domain": "gpu",
@@ -281,7 +305,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 35,
+      "ordinal": 38,
       "name": "fill_data_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -289,7 +313,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 36,
+      "ordinal": 39,
       "name": "fill_data_i",
       "direction": "input",
       "domain": "gpu",
@@ -297,7 +321,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 37,
+      "ordinal": 40,
       "name": "fill_refused_i",
       "direction": "input",
       "domain": "gpu",
@@ -305,7 +329,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 38,
+      "ordinal": 41,
       "name": "frame_clear_word_i",
       "direction": "input",
       "domain": "gpu",
@@ -313,7 +337,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 39,
+      "ordinal": 42,
       "name": "sheet_req_ready_i",
       "direction": "input",
       "domain": "gpu",
@@ -321,7 +345,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 40,
+      "ordinal": 43,
       "name": "sheet_req_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -329,7 +353,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 41,
+      "ordinal": 44,
       "name": "sheet_req_op_o",
       "direction": "output",
       "domain": "gpu",
@@ -337,7 +361,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 42,
+      "ordinal": 45,
       "name": "sheet_req_handle_o",
       "direction": "output",
       "domain": "gpu",
@@ -345,7 +369,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 43,
+      "ordinal": 46,
       "name": "sheet_req_texel_o",
       "direction": "output",
       "domain": "gpu",
@@ -353,7 +377,7 @@
       "dynamic_mask": "0xfff"
     },
     {
-      "ordinal": 44,
+      "ordinal": 47,
       "name": "sheet_req_src_id_o",
       "direction": "output",
       "domain": "gpu",
@@ -361,7 +385,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 45,
+      "ordinal": 48,
       "name": "blank_cmd_i",
       "direction": "input",
       "domain": "video",
@@ -369,7 +393,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 46,
+      "ordinal": 49,
       "name": "scanout_ack_i",
       "direction": "input",
       "domain": "video",
@@ -377,7 +401,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 47,
+      "ordinal": 50,
       "name": "frame_swap_valid_i",
       "direction": "input",
       "domain": "video",
@@ -385,7 +409,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 48,
+      "ordinal": 51,
       "name": "frame_swap_slot_i",
       "direction": "input",
       "domain": "video",
@@ -393,7 +417,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 49,
+      "ordinal": 52,
       "name": "blank_ack_o",
       "direction": "output",
       "domain": "video",
@@ -401,7 +425,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 50,
+      "ordinal": 53,
       "name": "blank_active_o",
       "direction": "output",
       "domain": "video",
@@ -409,7 +433,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 51,
+      "ordinal": 54,
       "name": "lease_open_o",
       "direction": "output",
       "domain": "gpu",
@@ -417,7 +441,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 52,
+      "ordinal": 55,
       "name": "frame_slot_ready_o",
       "direction": "output",
       "domain": "video",
@@ -425,7 +449,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 53,
+      "ordinal": 56,
       "name": "v2_requests_accepted_o",
       "direction": "output",
       "domain": "gpu",
@@ -433,7 +457,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 54,
+      "ordinal": 57,
       "name": "v2_responses_accepted_o",
       "direction": "output",
       "domain": "gpu",
@@ -441,7 +465,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 55,
+      "ordinal": 58,
       "name": "v2_leases_granted_o",
       "direction": "output",
       "domain": "gpu",
@@ -449,7 +473,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 56,
+      "ordinal": 59,
       "name": "v2_leases_refused_o",
       "direction": "output",
       "domain": "gpu",
@@ -457,7 +481,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 57,
+      "ordinal": 60,
       "name": "v2_faults_latched_o",
       "direction": "output",
       "domain": "gpu",
@@ -465,7 +489,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 58,
+      "ordinal": 61,
       "name": "v2_publications_o",
       "direction": "output",
       "domain": "gpu",
@@ -473,7 +497,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 59,
+      "ordinal": 62,
       "name": "v2_releases_o",
       "direction": "output",
       "domain": "gpu",
@@ -481,7 +505,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 60,
+      "ordinal": 63,
       "name": "v2_ready_events_o",
       "direction": "output",
       "domain": "gpu",
@@ -489,7 +513,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 61,
+      "ordinal": 64,
       "name": "v2_swaps_o",
       "direction": "output",
       "domain": "gpu",
@@ -497,7 +521,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 62,
+      "ordinal": 65,
       "name": "v2_contentions_o",
       "direction": "output",
       "domain": "gpu",
@@ -505,7 +529,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 63,
+      "ordinal": 66,
       "name": "v2_clear_handshakes_o",
       "direction": "output",
       "domain": "gpu",
@@ -513,7 +537,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 64,
+      "ordinal": 67,
       "name": "v2_frames_admitted_o",
       "direction": "output",
       "domain": "gpu",
@@ -521,7 +545,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 65,
+      "ordinal": 68,
       "name": "v2_blit_leases_acquired_o",
       "direction": "output",
       "domain": "gpu",
@@ -529,7 +553,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 66,
+      "ordinal": 69,
       "name": "v2_blit_leases_refused_o",
       "direction": "output",
       "domain": "gpu",
@@ -537,7 +561,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 67,
+      "ordinal": 70,
       "name": "hps_state_i",
       "direction": "input",
       "domain": "gpu",
@@ -545,7 +569,7 @@
       "dynamic_mask": "0x3f"
     },
     {
-      "ordinal": 68,
+      "ordinal": 71,
       "name": "hps_byte_len_i",
       "direction": "input",
       "domain": "gpu",
@@ -554,7 +578,7 @@
       "constant_reason": "All three slots hold the committed 168-byte packet or zero; bits outside the exact 0-to-168 transition remain constant."
     },
     {
-      "ordinal": 69,
+      "ordinal": 72,
       "name": "ring_wr_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -562,7 +586,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 70,
+      "ordinal": 73,
       "name": "ring_wr_slot_o",
       "direction": "output",
       "domain": "gpu",
@@ -570,7 +594,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 71,
+      "ordinal": 74,
       "name": "ring_wr_state_o",
       "direction": "output",
       "domain": "gpu",
@@ -578,7 +602,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 72,
+      "ordinal": 75,
       "name": "ring_wr_ready_i",
       "direction": "input",
       "domain": "gpu",
@@ -586,7 +610,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 73,
+      "ordinal": 76,
       "name": "hps_req_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -594,7 +618,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 74,
+      "ordinal": 77,
       "name": "hps_req_write_o",
       "direction": "output",
       "domain": "gpu",
@@ -603,7 +627,7 @@
       "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-request direction remains quiescent."
     },
     {
-      "ordinal": 75,
+      "ordinal": 78,
       "name": "hps_req_addr_o",
       "direction": "output",
       "domain": "gpu",
@@ -612,7 +636,7 @@
       "constant_reason": "Only the committed packet records and deterministic blit-source window are read; invariant address bits stay constant."
     },
     {
-      "ordinal": 76,
+      "ordinal": 79,
       "name": "hps_req_len_o",
       "direction": "output",
       "domain": "gpu",
@@ -621,7 +645,7 @@
       "constant_reason": "Only the bounded packet-record and blit-source burst lengths are requested; invariant length bits stay constant."
     },
     {
-      "ordinal": 77,
+      "ordinal": 80,
       "name": "hps_req_grant_i",
       "direction": "input",
       "domain": "gpu",
@@ -629,7 +653,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 78,
+      "ordinal": 81,
       "name": "hps_wr_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -638,7 +662,7 @@
       "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data direction remains quiescent."
     },
     {
-      "ordinal": 79,
+      "ordinal": 82,
       "name": "hps_wr_data_o",
       "direction": "output",
       "domain": "gpu",
@@ -647,7 +671,7 @@
       "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data bus remains constant."
     },
     {
-      "ordinal": 80,
+      "ordinal": 83,
       "name": "hps_wr_last_o",
       "direction": "output",
       "domain": "gpu",
@@ -656,7 +680,7 @@
       "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data direction remains quiescent."
     },
     {
-      "ordinal": 81,
+      "ordinal": 84,
       "name": "hps_rd_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -664,7 +688,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 82,
+      "ordinal": 85,
       "name": "hps_rd_data_i",
       "direction": "input",
       "domain": "gpu",
@@ -672,7 +696,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 83,
+      "ordinal": 86,
       "name": "hps_rd_last_i",
       "direction": "input",
       "domain": "gpu",
@@ -680,7 +704,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 84,
+      "ordinal": 87,
       "name": "pad_present_i",
       "direction": "input",
       "domain": "gpu",
@@ -688,7 +712,7 @@
       "dynamic_mask": "0xf"
     },
     {
-      "ordinal": 85,
+      "ordinal": 88,
       "name": "pad_buttons_i",
       "direction": "input",
       "domain": "gpu",
@@ -696,7 +720,7 @@
       "dynamic_mask": "0xffffffffffffffffffffffffffffffff"
     },
     {
-      "ordinal": 86,
+      "ordinal": 89,
       "name": "pad_lx_i",
       "direction": "input",
       "domain": "gpu",
@@ -704,7 +728,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 87,
+      "ordinal": 90,
       "name": "pad_ly_i",
       "direction": "input",
       "domain": "gpu",
@@ -712,7 +736,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 88,
+      "ordinal": 91,
       "name": "pad_rx_i",
       "direction": "input",
       "domain": "gpu",
@@ -720,7 +744,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 89,
+      "ordinal": 92,
       "name": "pad_ry_i",
       "direction": "input",
       "domain": "gpu",
@@ -728,7 +752,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 90,
+      "ordinal": 93,
       "name": "aud_wr_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -736,7 +760,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 91,
+      "ordinal": 94,
       "name": "aud_wr_l_i",
       "direction": "input",
       "domain": "gpu",
@@ -744,7 +768,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 92,
+      "ordinal": 95,
       "name": "aud_wr_r_i",
       "direction": "input",
       "domain": "gpu",
@@ -752,7 +776,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 93,
+      "ordinal": 96,
       "name": "aud_wr_ready_o",
       "direction": "output",
       "domain": "gpu",
@@ -761,7 +785,7 @@
       "constant_reason": "The bounded producer never fills the FIFO to its backpressure threshold, so ready remains asserted."
     },
     {
-      "ordinal": 94,
+      "ordinal": 97,
       "name": "aud_refill_req_o",
       "direction": "output",
       "domain": "gpu",
@@ -770,7 +794,7 @@
       "constant_reason": "The directed refill cadence keeps this GPU-domain request at one invariant logic level."
     },
     {
-      "ordinal": 95,
+      "ordinal": 98,
       "name": "aud_occupancy_o",
       "direction": "output",
       "domain": "gpu",
@@ -779,7 +803,7 @@
       "constant_reason": "Eight-sample bursts followed by bounded drain pauses use only the listed low occupancy bits."
     },
     {
-      "ordinal": 96,
+      "ordinal": 99,
       "name": "pcm_valid_o",
       "direction": "output",
       "domain": "audio",
@@ -787,7 +811,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 97,
+      "ordinal": 100,
       "name": "pcm_l_o",
       "direction": "output",
       "domain": "audio",
@@ -795,7 +819,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 98,
+      "ordinal": 101,
       "name": "pcm_r_o",
       "direction": "output",
       "domain": "audio",
@@ -803,7 +827,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 99,
+      "ordinal": 102,
       "name": "underrun_status_o",
       "direction": "output",
       "domain": "audio",
@@ -811,7 +835,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 100,
+      "ordinal": 103,
       "name": "audio_underruns_o",
       "direction": "output",
       "domain": "audio",
@@ -820,7 +844,7 @@
       "constant_reason": "Intentional bounded producer pauses exercise underrun recovery; the finite run reaches only the listed count bits."
     },
     {
-      "ordinal": 101,
+      "ordinal": 104,
       "name": "px_valid_o",
       "direction": "output",
       "domain": "video",
@@ -828,7 +852,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 102,
+      "ordinal": 105,
       "name": "px_rgb_o",
       "direction": "output",
       "domain": "video",
@@ -837,7 +861,7 @@
       "constant_reason": "The deterministic scanout pattern toggles only the listed RGB bits; its invariant colour bits stay constant."
     },
     {
-      "ordinal": 103,
+      "ordinal": 106,
       "name": "px_x_o",
       "direction": "output",
       "domain": "video",
@@ -846,7 +870,7 @@
       "constant_reason": "The bounded baseline observation interval does not reach the coordinate range that toggles bit 9."
     },
     {
-      "ordinal": 104,
+      "ordinal": 107,
       "name": "px_y_o",
       "direction": "output",
       "domain": "video",
@@ -854,7 +878,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 105,
+      "ordinal": 108,
       "name": "px_hsync_o",
       "direction": "output",
       "domain": "video",
@@ -862,7 +886,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 106,
+      "ordinal": 109,
       "name": "px_vsync_o",
       "direction": "output",
       "domain": "video",
@@ -870,7 +894,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 107,
+      "ordinal": 110,
       "name": "px_hblank_o",
       "direction": "output",
       "domain": "video",
@@ -878,7 +902,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 108,
+      "ordinal": 111,
       "name": "px_vblank_o",
       "direction": "output",
       "domain": "video",
@@ -886,7 +910,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 109,
+      "ordinal": 112,
       "name": "scaler_violation_o",
       "direction": "output",
       "domain": "video",
@@ -895,7 +919,7 @@
       "constant_reason": "The legal directed mode and coordinates keep the scaler-violation detector clear."
     },
     {
-      "ordinal": 110,
+      "ordinal": 113,
       "name": "crc_frame_o",
       "direction": "output",
       "domain": "gpu",
@@ -904,7 +928,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 111,
+      "ordinal": 114,
       "name": "crc_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -912,7 +936,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 112,
+      "ordinal": 115,
       "name": "crc_bytes_o",
       "direction": "output",
       "domain": "gpu",
@@ -921,7 +945,7 @@
       "constant_reason": "The fixed frame dimensions yield a bounded byte-count sequence; all other count bits stay constant."
     },
     {
-      "ordinal": 113,
+      "ordinal": 116,
       "name": "crc_size_err_o",
       "direction": "output",
       "domain": "gpu",
@@ -930,7 +954,7 @@
       "constant_reason": "The directed frame dimensions are legal, so the CRC size-error output stays clear."
     },
     {
-      "ordinal": 114,
+      "ordinal": 117,
       "name": "gpu_tick_o",
       "direction": "output",
       "domain": "gpu",
@@ -938,7 +962,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 115,
+      "ordinal": 118,
       "name": "gpu_tick_frame_id_o",
       "direction": "output",
       "domain": "gpu",
@@ -947,7 +971,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 116,
+      "ordinal": 119,
       "name": "gpu_tick_repeated_o",
       "direction": "output",
       "domain": "gpu",
@@ -955,7 +979,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 117,
+      "ordinal": 120,
       "name": "gpu_complete_slot_o",
       "direction": "output",
       "domain": "gpu",
@@ -964,7 +988,7 @@
       "constant_reason": "The directed completion uses slot 0, so the one-bit slot selector remains constant."
     },
     {
-      "ordinal": 118,
+      "ordinal": 121,
       "name": "deadline_faults_o",
       "direction": "output",
       "domain": "video",
@@ -973,7 +997,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 119,
+      "ordinal": 122,
       "name": "frame_cycles_o",
       "direction": "output",
       "domain": "video",
@@ -982,7 +1006,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 120,
+      "ordinal": 123,
       "name": "slot_state_o",
       "direction": "output",
       "domain": "gpu",
@@ -990,7 +1014,7 @@
       "dynamic_mask": "0x1ff"
     },
     {
-      "ordinal": 121,
+      "ordinal": 124,
       "name": "fence_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -998,7 +1022,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 122,
+      "ordinal": 125,
       "name": "fence_slot_o",
       "direction": "output",
       "domain": "gpu",
@@ -1006,7 +1030,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 123,
+      "ordinal": 126,
       "name": "fence_ok_o",
       "direction": "output",
       "domain": "gpu",
@@ -1015,7 +1039,7 @@
       "constant_reason": "The bounded profile keeps the fence result low throughout the observation horizon."
     },
     {
-      "ordinal": 124,
+      "ordinal": 127,
       "name": "fence_status_o",
       "direction": "output",
       "domain": "gpu",
@@ -1024,7 +1048,7 @@
       "constant_reason": "The characterized fence visits only its deterministic bounded status values; invariant status bits stay constant."
     },
     {
-      "ordinal": 125,
+      "ordinal": 128,
       "name": "mode_act_o",
       "direction": "output",
       "domain": "gpu",
@@ -1033,7 +1057,7 @@
       "constant_reason": "The characterization holds the selected video mode constant."
     },
     {
-      "ordinal": 126,
+      "ordinal": 129,
       "name": "dma_done_o",
       "direction": "output",
       "domain": "gpu",
@@ -1041,7 +1065,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 127,
+      "ordinal": 130,
       "name": "dma_status_o",
       "direction": "output",
       "domain": "gpu",
@@ -1050,7 +1074,7 @@
       "constant_reason": "The bounded debug blit visits only status bit 0; every other DMA status bit remains invariant."
     },
     {
-      "ordinal": 128,
+      "ordinal": 131,
       "name": "blit_done_o",
       "direction": "output",
       "domain": "gpu",
@@ -1058,7 +1082,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 129,
+      "ordinal": 132,
       "name": "blit_status_o",
       "direction": "output",
       "domain": "gpu",
@@ -1067,7 +1091,7 @@
       "constant_reason": "The full-address responder and valid lease produce only successful debug blits, so status remains zero."
     },
     {
-      "ordinal": 130,
+      "ordinal": 133,
       "name": "pad_frame_flat_o",
       "direction": "output",
       "domain": "gpu",
@@ -1076,7 +1100,7 @@
       "constant_reason": "The four center, minimum, maximum, and directed pad phases intentionally constrain invariant packed-frame bits."
     },
     {
-      "ordinal": 131,
+      "ordinal": 134,
       "name": "pad_sequence_o",
       "direction": "output",
       "domain": "gpu",
@@ -1085,7 +1109,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 132,
+      "ordinal": 135,
       "name": "input_gaps_o",
       "direction": "output",
       "domain": "gpu",
@@ -1094,7 +1118,7 @@
       "constant_reason": "The periodic pad producer does not miss a required snapshot interval, so the gap counters remain zero."
     },
     {
-      "ordinal": 133,
+      "ordinal": 136,
       "name": "rumble_duty_o",
       "direction": "output",
       "domain": "gpu",
@@ -1103,7 +1127,7 @@
       "constant_reason": "No rumble command is present in the sealed characterization packet, so duty remains zero."
     },
     {
-      "ordinal": 134,
+      "ordinal": 137,
       "name": "rumble_active_o",
       "direction": "output",
       "domain": "gpu",
@@ -1112,7 +1136,7 @@
       "constant_reason": "No rumble command is present in the sealed characterization packet, so active flags remain clear."
     },
     {
-      "ordinal": 135,
+      "ordinal": 138,
       "name": "rumble_pwm_o",
       "direction": "output",
       "domain": "gpu",
@@ -1121,7 +1145,7 @@
       "constant_reason": "No rumble command is present in the sealed characterization packet, so PWM outputs remain clear."
     },
     {
-      "ordinal": 136,
+      "ordinal": 139,
       "name": "rumble_drops_o",
       "direction": "output",
       "domain": "gpu",
@@ -1130,7 +1154,7 @@
       "constant_reason": "No rumble command is offered, so no rumble command can be dropped."
     },
     {
-      "ordinal": 137,
+      "ordinal": 140,
       "name": "cnt_snap_ready_i",
       "direction": "input",
       "domain": "gpu",
@@ -1138,7 +1162,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 138,
+      "ordinal": 141,
       "name": "cnt_snap_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -1146,7 +1170,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 139,
+      "ordinal": 142,
       "name": "cnt_snap_id_o",
       "direction": "output",
       "domain": "gpu",
@@ -1155,7 +1179,7 @@
       "constant_reason": "The complete exact provider window covers IDs 0 through 39, so identifier bits above bit 5 remain constant."
     },
     {
-      "ordinal": 140,
+      "ordinal": 143,
       "name": "cnt_snap_value_o",
       "direction": "output",
       "domain": "gpu",
@@ -1164,7 +1188,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 141,
+      "ordinal": 144,
       "name": "cnt_window_open_o",
       "direction": "output",
       "domain": "gpu",
@@ -1172,7 +1196,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 142,
+      "ordinal": 145,
       "name": "cnt_cat_violation_o",
       "direction": "output",
       "domain": "gpu",
@@ -1181,7 +1205,7 @@
       "constant_reason": "The exact 0-through-39 counter window is consumed in order, so category violation stays clear."
     },
     {
-      "ordinal": 143,
+      "ordinal": 146,
       "name": "guard_violations_o",
       "direction": "output",
       "domain": "gpu",
@@ -1190,7 +1214,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 144,
+      "ordinal": 147,
       "name": "starvation_o",
       "direction": "output",
       "domain": "gpu",
@@ -1199,7 +1223,7 @@
       "constant_reason": "The compact command-aware SDR model permits bounded scanout starvation; the finite run reaches only the listed count bits."
     },
     {
-      "ordinal": 145,
+      "ordinal": 148,
       "name": "init_done_o",
       "direction": "output",
       "domain": "gpu",
@@ -1207,7 +1231,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 146,
+      "ordinal": 149,
       "name": "refresh_stalls_o",
       "direction": "output",
       "domain": "gpu",
@@ -1216,7 +1240,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 147,
+      "ordinal": 150,
       "name": "bank_conflicts_o",
       "direction": "output",
       "domain": "gpu",
@@ -1225,7 +1249,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 148,
+      "ordinal": 151,
       "name": "scanout_preempted_o",
       "direction": "output",
       "domain": "gpu",
@@ -1234,7 +1258,7 @@
       "constant_reason": "The bounded SDR traffic schedule does not preempt scanout, so this counter remains zero."
     },
     {
-      "ordinal": 149,
+      "ordinal": 152,
       "name": "hps_err_count_o",
       "direction": "output",
       "domain": "gpu",
@@ -1243,7 +1267,7 @@
       "constant_reason": "The registered HPS responder completes accepted reads without errors, so this counter remains zero."
     },
     {
-      "ordinal": 150,
+      "ordinal": 153,
       "name": "shell_err_wfifo_o",
       "direction": "output",
       "domain": "gpu",
@@ -1252,7 +1276,7 @@
       "constant_reason": "Legal directed traffic keeps the shell write-FIFO error detector clear."
     },
     {
-      "ordinal": 151,
+      "ordinal": 154,
       "name": "shell_err_route_o",
       "direction": "output",
       "domain": "gpu",
@@ -1261,7 +1285,7 @@
       "constant_reason": "The renderer-to-blit lease handoff keeps every granted burst on its legal client, so the sticky route tripwire stays clear."
     },
     {
-      "ordinal": 152,
+      "ordinal": 155,
       "name": "shell_err_cdc_o",
       "direction": "output",
       "domain": "gpu",
@@ -1270,7 +1294,7 @@
       "constant_reason": "Legal directed traffic keeps the shell CDC error detector clear."
     },
     {
-      "ordinal": 153,
+      "ordinal": 156,
       "name": "shell_err_framer_o",
       "direction": "output",
       "domain": "gpu",
@@ -1279,7 +1303,7 @@
       "constant_reason": "The sealed packet keeps the shell framing error detector clear."
     },
     {
-      "ordinal": 154,
+      "ordinal": 157,
       "name": "render_frame_begin_i",
       "direction": "input",
       "domain": "gpu",
@@ -1287,7 +1311,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 155,
+      "ordinal": 158,
       "name": "render_frame_end_i",
       "direction": "input",
       "domain": "gpu",
@@ -1295,7 +1319,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 156,
+      "ordinal": 159,
       "name": "render_grid_w_i",
       "direction": "input",
       "domain": "gpu",
@@ -1304,7 +1328,7 @@
       "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
     },
     {
-      "ordinal": 157,
+      "ordinal": 160,
       "name": "render_grid_h_i",
       "direction": "input",
       "domain": "gpu",
@@ -1313,7 +1337,7 @@
       "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
     },
     {
-      "ordinal": 158,
+      "ordinal": 161,
       "name": "render_tri_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1321,7 +1345,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 159,
+      "ordinal": 162,
       "name": "render_tri_ready_o",
       "direction": "output",
       "domain": "gpu",
@@ -1329,7 +1353,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 160,
+      "ordinal": 163,
       "name": "geom_guard_req_i",
       "direction": "input",
       "domain": "gpu",
@@ -1338,7 +1362,7 @@
       "constant_reason": "Address bits [5:0] are intentionally zero so every legal and denied guard request remains 64-byte aligned."
     },
     {
-      "ordinal": 161,
+      "ordinal": 164,
       "name": "geom_guard_rsp_o",
       "direction": "output",
       "domain": "gpu",
@@ -1346,7 +1370,7 @@
       "dynamic_mask": "0x7"
     },
     {
-      "ordinal": 162,
+      "ordinal": 165,
       "name": "geom_beat_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -1354,7 +1378,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 163,
+      "ordinal": 166,
       "name": "geom_beat_data_o",
       "direction": "output",
       "domain": "gpu",
@@ -1363,7 +1387,7 @@
       "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
     },
     {
-      "ordinal": 164,
+      "ordinal": 167,
       "name": "geom_beat_last_o",
       "direction": "output",
       "domain": "gpu",
@@ -1371,7 +1395,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 165,
+      "ordinal": 168,
       "name": "build_guard_req_i",
       "direction": "input",
       "domain": "gpu",
@@ -1379,7 +1403,7 @@
       "dynamic_mask": "0x7fffffffffffffffffffffffff"
     },
     {
-      "ordinal": 166,
+      "ordinal": 169,
       "name": "build_guard_rsp_o",
       "direction": "output",
       "domain": "gpu",
@@ -1387,7 +1411,7 @@
       "dynamic_mask": "0x7"
     },
     {
-      "ordinal": 167,
+      "ordinal": 170,
       "name": "build_wdata_i",
       "direction": "input",
       "domain": "gpu",
@@ -1395,7 +1419,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 168,
+      "ordinal": 171,
       "name": "build_wvalid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1403,7 +1427,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 169,
+      "ordinal": 172,
       "name": "build_wready_o",
       "direction": "output",
       "domain": "gpu",
@@ -1411,7 +1435,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 170,
+      "ordinal": 173,
       "name": "build_wlast_i",
       "direction": "input",
       "domain": "gpu",
@@ -1419,7 +1443,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 171,
+      "ordinal": 174,
       "name": "build_retire_words_o",
       "direction": "output",
       "domain": "gpu",
@@ -1427,7 +1451,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 172,
+      "ordinal": 175,
       "name": "build_beat_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -1435,7 +1459,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 173,
+      "ordinal": 176,
       "name": "build_beat_data_o",
       "direction": "output",
       "domain": "gpu",
@@ -1443,7 +1467,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 174,
+      "ordinal": 177,
       "name": "build_beat_last_o",
       "direction": "output",
       "domain": "gpu",
@@ -1451,7 +1475,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 175,
+      "ordinal": 178,
       "name": "build_hps_req_i",
       "direction": "input",
       "domain": "gpu",
@@ -1459,7 +1483,7 @@
       "dynamic_mask": "0xfffffffffff"
     },
     {
-      "ordinal": 176,
+      "ordinal": 179,
       "name": "build_hps_grant_o",
       "direction": "output",
       "domain": "gpu",
@@ -1467,7 +1491,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 177,
+      "ordinal": 180,
       "name": "build_hps_rsp_o",
       "direction": "output",
       "domain": "gpu",
@@ -1475,7 +1499,7 @@
       "dynamic_mask": "0x7ffffffffffffffff"
     },
     {
-      "ordinal": 178,
+      "ordinal": 181,
       "name": "build_hps_wait_o",
       "direction": "output",
       "domain": "gpu",
@@ -1483,7 +1507,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 179,
+      "ordinal": 182,
       "name": "build_hps_wr_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1491,7 +1515,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 180,
+      "ordinal": 183,
       "name": "build_hps_wr_data_i",
       "direction": "input",
       "domain": "gpu",
@@ -1499,7 +1523,7 @@
       "dynamic_mask": "0xffffffffffffffff"
     },
     {
-      "ordinal": 181,
+      "ordinal": 184,
       "name": "build_hps_wr_last_i",
       "direction": "input",
       "domain": "gpu",
@@ -1507,7 +1531,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 182,
+      "ordinal": 185,
       "name": "build_hps_wr_ready_o",
       "direction": "output",
       "domain": "gpu",
@@ -1515,7 +1539,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 183,
+      "ordinal": 186,
       "name": "build_res_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1523,7 +1547,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 184,
+      "ordinal": 187,
       "name": "build_res_base_i",
       "direction": "input",
       "domain": "gpu",
@@ -1531,7 +1555,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 185,
+      "ordinal": 188,
       "name": "build_res_span_i",
       "direction": "input",
       "domain": "gpu",
@@ -1539,7 +1563,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 186,
+      "ordinal": 189,
       "name": "render_kx0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1548,7 +1572,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 187,
+      "ordinal": 190,
       "name": "render_ky0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1557,7 +1581,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 188,
+      "ordinal": 191,
       "name": "render_kc0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1566,7 +1590,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 189,
+      "ordinal": 192,
       "name": "render_kx1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1575,7 +1599,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 190,
+      "ordinal": 193,
       "name": "render_ky1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1584,7 +1608,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 191,
+      "ordinal": 194,
       "name": "render_kc1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1593,7 +1617,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 192,
+      "ordinal": 195,
       "name": "render_kx2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1602,7 +1626,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 193,
+      "ordinal": 196,
       "name": "render_ky2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1611,7 +1635,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 194,
+      "ordinal": 197,
       "name": "render_kc2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1620,7 +1644,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 195,
+      "ordinal": 198,
       "name": "render_tl_i",
       "direction": "input",
       "domain": "gpu",
@@ -1628,7 +1652,7 @@
       "dynamic_mask": "0x7"
     },
     {
-      "ordinal": 196,
+      "ordinal": 199,
       "name": "render_ax_i",
       "direction": "input",
       "domain": "gpu",
@@ -1637,7 +1661,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 197,
+      "ordinal": 200,
       "name": "render_ay_i",
       "direction": "input",
       "domain": "gpu",
@@ -1646,7 +1670,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 198,
+      "ordinal": 201,
       "name": "render_bx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1655,7 +1679,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 199,
+      "ordinal": 202,
       "name": "render_by_i",
       "direction": "input",
       "domain": "gpu",
@@ -1664,7 +1688,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 200,
+      "ordinal": 203,
       "name": "render_cx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1673,7 +1697,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 201,
+      "ordinal": 204,
       "name": "render_cy_i",
       "direction": "input",
       "domain": "gpu",
@@ -1682,7 +1706,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 202,
+      "ordinal": 205,
       "name": "render_min_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -1691,7 +1715,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 203,
+      "ordinal": 206,
       "name": "render_max_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -1700,7 +1724,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 204,
+      "ordinal": 207,
       "name": "render_min_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -1709,7 +1733,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 205,
+      "ordinal": 208,
       "name": "render_max_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -1718,7 +1742,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 206,
+      "ordinal": 209,
       "name": "render_src_id_i",
       "direction": "input",
       "domain": "gpu",
@@ -1727,7 +1751,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 207,
+      "ordinal": 210,
       "name": "render_fill_word_i",
       "direction": "input",
       "domain": "gpu",
@@ -1736,7 +1760,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 208,
+      "ordinal": 211,
       "name": "render_clear_word_i",
       "direction": "input",
       "domain": "gpu",
@@ -1745,7 +1769,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 209,
+      "ordinal": 212,
       "name": "render_state_i",
       "direction": "input",
       "domain": "gpu",
@@ -1754,7 +1778,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 210,
+      "ordinal": 213,
       "name": "render_src_a_i",
       "direction": "input",
       "domain": "gpu",
@@ -1762,7 +1786,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 211,
+      "ordinal": 214,
       "name": "render_texel_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -1771,7 +1795,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 212,
+      "ordinal": 215,
       "name": "render_texel_a_i",
       "direction": "input",
       "domain": "gpu",
@@ -1779,7 +1803,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 213,
+      "ordinal": 216,
       "name": "render_texel_idx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1787,7 +1811,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 214,
+      "ordinal": 217,
       "name": "render_fb_base_i",
       "direction": "input",
       "domain": "gpu",
@@ -1796,7 +1820,7 @@
       "constant_reason": "The one-shot directed render intentionally uses framebuffer base zero, so every base-address bit remains constant."
     },
     {
-      "ordinal": 215,
+      "ordinal": 218,
       "name": "render_fb_stride_i",
       "direction": "input",
       "domain": "gpu",
@@ -1805,7 +1829,7 @@
       "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
     },
     {
-      "ordinal": 216,
+      "ordinal": 219,
       "name": "fb_writer_i",
       "direction": "input",
       "domain": "gpu",
@@ -1813,7 +1837,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 217,
+      "ordinal": 220,
       "name": "render_drain_done_o",
       "direction": "output",
       "domain": "gpu",
@@ -1821,7 +1845,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 218,
+      "ordinal": 221,
       "name": "render_busy_o",
       "direction": "output",
       "domain": "gpu",
@@ -1829,7 +1853,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 219,
+      "ordinal": 222,
       "name": "render_pixels_o",
       "direction": "output",
       "domain": "gpu",
@@ -1838,7 +1862,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 220,
+      "ordinal": 223,
       "name": "render_bursts_o",
       "direction": "output",
       "domain": "gpu",
@@ -1847,7 +1871,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 221,
+      "ordinal": 224,
       "name": "render_stream_error_o",
       "direction": "output",
       "domain": "gpu",
@@ -1856,7 +1880,7 @@
       "constant_reason": "The one-shot directed render keeps the stream error detector clear."
     },
     {
-      "ordinal": 222,
+      "ordinal": 225,
       "name": "render_drained_o",
       "direction": "output",
       "domain": "gpu",
@@ -1864,7 +1888,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 223,
+      "ordinal": 226,
       "name": "render_fatal_o",
       "direction": "output",
       "domain": "gpu",
@@ -1873,7 +1897,7 @@
       "constant_reason": "Accepted renderer work retires under its valid lease without guard denial or stream failure, so fatal stays clear."
     },
     {
-      "ordinal": 224,
+      "ordinal": 227,
       "name": "render_issued_words_o",
       "direction": "output",
       "domain": "gpu",
@@ -1882,7 +1906,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 225,
+      "ordinal": 228,
       "name": "render_retired_words_o",
       "direction": "output",
       "domain": "gpu",
@@ -1891,7 +1915,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 226,
+      "ordinal": 229,
       "name": "render_overflow_o",
       "direction": "output",
       "domain": "gpu",
@@ -1900,7 +1924,7 @@
       "constant_reason": "The one-shot directed render remains within queue capacity, so overflow stays clear."
     },
     {
-      "ordinal": 227,
+      "ordinal": 230,
       "name": "render_fragment_error_o",
       "direction": "output",
       "domain": "gpu",
@@ -1909,96 +1933,72 @@
       "constant_reason": "The legal directed triangle keeps the fragment error detector clear."
     },
     {
-      "ordinal": 228,
-      "name": "post_frame_w_i",
-      "direction": "input",
-      "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1ff"
-    },
-    {
-      "ordinal": 229,
-      "name": "post_frame_h_i",
-      "direction": "input",
-      "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0xff"
-    },
-    {
-      "ordinal": 230,
-      "name": "post_duo_i",
-      "direction": "input",
-      "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1"
-    },
-    {
       "ordinal": 231,
-      "name": "post_echo_arm_i",
-      "direction": "input",
+      "name": "render_texture_fragments_o",
+      "direction": "output",
       "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 232,
-      "name": "post_look_hold_i",
-      "direction": "input",
+      "name": "render_texture_cache_hits_o",
+      "direction": "output",
       "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 233,
-      "name": "post_pass_start_o",
+      "name": "render_texture_cache_misses_o",
       "direction": "output",
       "domain": "gpu",
       "sink": "gpu_capture",
-      "dynamic_mask": "0x1"
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 234,
-      "name": "post_view_o",
+      "name": "render_texture_palette_lookups_o",
       "direction": "output",
       "domain": "gpu",
       "sink": "gpu_capture",
-      "dynamic_mask": "0x1"
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 235,
-      "name": "post_src_valid_o",
+      "name": "render_texture_plan_accepted_o",
       "direction": "output",
       "domain": "gpu",
       "sink": "gpu_capture",
-      "dynamic_mask": "0x1"
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 236,
-      "name": "post_src_ready_i",
-      "direction": "input",
-      "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1"
-    },
-    {
-      "ordinal": 237,
-      "name": "post_src_rgb_o",
+      "name": "render_texture_dispatch_accepted_o",
       "direction": "output",
       "domain": "gpu",
       "sink": "gpu_capture",
-      "dynamic_mask": "0xffff"
+      "dynamic_mask": "0xffffffff"
+    },
+    {
+      "ordinal": 237,
+      "name": "render_texture_combine_refused_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 238,
-      "name": "post_out_valid_i",
-      "direction": "input",
+      "name": "render_texture_samples_o",
+      "direction": "output",
       "domain": "gpu",
-      "driver": "post_compositor",
-      "dynamic_mask": "0x1"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 239,
-      "name": "post_out_ready_o",
+      "name": "gth_valid_o",
       "direction": "output",
       "domain": "gpu",
       "sink": "gpu_capture",
@@ -2006,6 +2006,150 @@
     },
     {
       "ordinal": 240,
+      "name": "gth_rgb565_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 241,
+      "name": "gth_tag_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 242,
+      "name": "gth_addr_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 243,
+      "name": "gth_x_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfff"
+    },
+    {
+      "ordinal": 244,
+      "name": "gth_y_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfff"
+    },
+    {
+      "ordinal": 245,
+      "name": "gth_last_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 246,
+      "name": "post_frame_w_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1ff"
+    },
+    {
+      "ordinal": 247,
+      "name": "post_frame_h_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 248,
+      "name": "post_duo_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 249,
+      "name": "post_echo_arm_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 250,
+      "name": "post_look_hold_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 251,
+      "name": "post_pass_start_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 252,
+      "name": "post_view_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 253,
+      "name": "post_src_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 254,
+      "name": "post_src_ready_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 255,
+      "name": "post_src_rgb_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 256,
+      "name": "post_out_valid_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 257,
+      "name": "post_out_ready_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 258,
       "name": "post_out_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -2013,7 +2157,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 241,
+      "ordinal": 259,
       "name": "post_out_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -2021,7 +2165,7 @@
       "dynamic_mask": "0x1ff"
     },
     {
-      "ordinal": 242,
+      "ordinal": 260,
       "name": "post_out_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -2029,7 +2173,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 243,
+      "ordinal": 261,
       "name": "post_out_last_i",
       "direction": "input",
       "domain": "gpu",
@@ -2037,7 +2181,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 244,
+      "ordinal": 262,
       "name": "post_echo_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -2045,7 +2189,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 245,
+      "ordinal": 263,
       "name": "post_echo_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -2053,7 +2197,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 246,
+      "ordinal": 264,
       "name": "post_busy_o",
       "direction": "output",
       "domain": "gpu",
@@ -2061,7 +2205,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 247,
+      "ordinal": 265,
       "name": "post_passes_o",
       "direction": "output",
       "domain": "gpu",
@@ -2069,7 +2213,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 248,
+      "ordinal": 266,
       "name": "post_frames_o",
       "direction": "output",
       "domain": "gpu",
@@ -2077,7 +2221,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 249,
+      "ordinal": 267,
       "name": "post_fault_o",
       "direction": "output",
       "domain": "gpu",
@@ -2085,7 +2229,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 250,
+      "ordinal": 268,
       "name": "post_src_reads_o",
       "direction": "output",
       "domain": "gpu",
@@ -2093,7 +2237,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 251,
+      "ordinal": 269,
       "name": "post_src_pixels_o",
       "direction": "output",
       "domain": "gpu",
@@ -2101,7 +2245,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 252,
+      "ordinal": 270,
       "name": "post_retire_unowned_o",
       "direction": "output",
       "domain": "gpu",
@@ -2109,7 +2253,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 253,
+      "ordinal": 271,
       "name": "post_share_contention_o",
       "direction": "output",
       "domain": "gpu",
@@ -2117,7 +2261,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 254,
+      "ordinal": 272,
       "name": "echo_passes_complete_o",
       "direction": "output",
       "domain": "gpu",
@@ -2125,7 +2269,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 255,
+      "ordinal": 273,
       "name": "echo_passes_torn_o",
       "direction": "output",
       "domain": "gpu",
@@ -2133,7 +2277,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 256,
+      "ordinal": 274,
       "name": "echo_pixels_written_o",
       "direction": "output",
       "domain": "gpu",
@@ -2141,7 +2285,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 257,
+      "ordinal": 275,
       "name": "echo_pixels_dropped_o",
       "direction": "output",
       "domain": "gpu",
@@ -2149,7 +2293,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 258,
+      "ordinal": 276,
       "name": "echo_fault_o",
       "direction": "output",
       "domain": "gpu",
@@ -2157,7 +2301,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 259,
+      "ordinal": 277,
       "name": "phy_cs_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2166,7 +2310,7 @@
       "constant_reason": "The sampled capture sequence keeps chip-select at one invariant logic level."
     },
     {
-      "ordinal": 260,
+      "ordinal": 278,
       "name": "phy_ras_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2174,7 +2318,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 261,
+      "ordinal": 279,
       "name": "phy_cas_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2182,7 +2326,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 262,
+      "ordinal": 280,
       "name": "phy_we_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2190,7 +2334,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 263,
+      "ordinal": 281,
       "name": "phy_a_o",
       "direction": "output",
       "domain": "gpu",
@@ -2199,7 +2343,7 @@
       "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
     },
     {
-      "ordinal": 264,
+      "ordinal": 282,
       "name": "phy_ba_o",
       "direction": "output",
       "domain": "gpu",
@@ -2207,7 +2351,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 265,
+      "ordinal": 283,
       "name": "phy_dq_o",
       "direction": "output",
       "domain": "gpu",
@@ -2215,7 +2359,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 266,
+      "ordinal": 284,
       "name": "phy_dq_oe_o",
       "direction": "output",
       "domain": "gpu",
@@ -2223,7 +2367,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 267,
+      "ordinal": 285,
       "name": "phy_dqm_o",
       "direction": "output",
       "domain": "gpu",
@@ -2232,7 +2376,7 @@
       "constant_reason": "All characterized SDR transfers use full-word masks, so both DQM bits remain constant."
     },
     {
-      "ordinal": 268,
+      "ordinal": 286,
       "name": "phy_dq_i",
       "direction": "input",
       "domain": "gpu",
@@ -2240,7 +2384,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 269,
+      "ordinal": 287,
       "name": "cmd_pkt_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -2248,7 +2392,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 270,
+      "ordinal": 288,
       "name": "cmd_pkt_byte_o",
       "direction": "output",
       "domain": "gpu",
@@ -2256,7 +2400,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 271,
+      "ordinal": 289,
       "name": "cmd_pkt_len_o",
       "direction": "output",
       "domain": "gpu",
@@ -2264,7 +2408,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 272,
+      "ordinal": 290,
       "name": "cmd_pkt_ready_i",
       "direction": "input",
       "domain": "gpu",

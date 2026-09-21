@@ -1,10 +1,20 @@
 // zhao_raster_tile_pipe_v2.sv -- Packet-D attribute/texture raster composition.
 //
-// One accepted binner record starts EDGEWALK and exactly three current-oracle
+// One accepted binner record starts EDGEWALK and exactly SIX current-oracle
 // attribute-gradient lanes.  Coverage rows are captured once and delivered to
 // every lane through an explicit per-lane mask.  Joined {invw,U/W,V/W} values
-// form the typed 490-bit Packet-C request; no Packet-B field is reconstructed by
-// a numeric slice after the frozen 1,157-bit metadata boundary is unpacked.
+// form the typed 490-bit Packet-C request, and the joined {R,G,B} values become
+// the continuation tail's per-fragment `vertex_rgb`; no Packet-B field is
+// reconstructed by a numeric slice after the frozen 1,877-bit metadata boundary
+// is unpacked.
+//
+// IT HAD THREE LANES UNTIL 2026-09-21. Owner decision R234 D1 ((owner,
+// explicit)) bought the other three, reconnecting the lit per-vertex colour
+// that `zhao_light_stream` computes and `zhao_geom_attrpack` had been dropping.
+// THIS FILE IS WHERE THE DECISION'S PRICE LIVES: ~1,420 ALM and +24 DSP, three
+// whole `zhao_raster_attrgrad_v2` lanes, because a plane must be evaluated per
+// PIXEL and therefore cannot be time-multiplexed the way GEOM.ATTRPACK's shared
+// setup core is.
 //
 // Recoverable local attribute/profile faults and Packet-C sequence faults are
 // terminating for the current frame.  Producers and already-admitted owners are
@@ -52,7 +62,7 @@ module zhao_raster_tile_pipe_v2 #(
     input  logic signed [11:0]  job_tile_y_i,
     input  logic         [15:0] job_tile_index_i,
     input  logic         [15:0] job_src_id_i,
-    input  logic       [1156:0] job_meta_i,
+    input  logic       [1876:0] job_meta_i,
 
     // THE PROFILE VERDICTS, ALREADY DECIDED. bit 0 aux bad, bit 1 area bad.
     //
@@ -195,9 +205,9 @@ module zhao_raster_tile_pipe_v2 #(
 
     // Focused structural probes used by the committed Packet-D gate.
     output logic                coverage_hold_valid_o,
-    output logic          [2:0] coverage_delivered_mask_o,
-    output logic          [4:0] start_delivered_mask_o,
-    output logic          [2:0] attribute_idle_o,
+    output logic          [5:0] coverage_delivered_mask_o,
+    output logic          [7:0] start_delivered_mask_o,
+    output logic          [5:0] attribute_idle_o,
     output logic                earlyz_hold_valid_o,
     output logic          [1:0] skid_level_o,
     output logic                stage_candidate_valid_o,
@@ -214,8 +224,8 @@ module zhao_raster_tile_pipe_v2 #(
     output logic                texture_quiet_o,
     output logic                fragment_idle_o
 `ifdef ZHAO_PACKET_D_TEST_HOOKS
-    , input logic         [4:0] test_start_enable_i
-    , input logic         [2:0] test_attr_cov_enable_i
+    , input logic         [7:0] test_start_enable_i
+    , input logic         [5:0] test_attr_cov_enable_i
     , input logic               test_stage_admit_enable_i
 `endif
 );
@@ -230,8 +240,38 @@ module zhao_raster_tile_pipe_v2 #(
   // is reset and jobs offered by a draining binner are accepted into the sink.
   logic [1:0] rs_state_q;
 
+  // -------------------------------------------------------------------------
+  // THE LANE COUNT AND THE DESTINATION MAP, as named constants rather than the
+  // literals that used to be scattered through this file. Six lanes, eight
+  // start destinations (EDGEWALK, six attribute lanes, the tilestore clear).
+  //
+  // `ATTR_LANES` is the one number to change; every array bound, loop limit,
+  // mask width, reset constant and elaboration check below reads it. When this
+  // block carried the three-lane literals, adding the Gouraud lanes meant
+  // finding nineteen separate `3`s and two `5`s.
+  localparam int unsigned ATTR_LANES  = 6;
+  localparam int unsigned START_CLEAR = ATTR_LANES + 1;  // the tilestore clear
+  localparam int unsigned START_N     = ATTR_LANES + 2;  // + EDGEWALK at 0
+
+  // LANE -> ATTRIBUTE. 0 invw24, 1 u/w, 2 v/w, 3 R, 4 G, 5 B, matching
+  // `zhao_geom_attrpack`'s own lane order and therefore the plane order
+  // `zhao_geom_bin_pipe_v2` concatenates. Lanes 3..5 are the Gouraud lanes.
+  localparam int unsigned LANE_INVW = 0;
+  localparam int unsigned LANE_UOW  = 1;
+  localparam int unsigned LANE_VOW  = 2;
+  localparam int unsigned LANE_R    = 3;
+  localparam int unsigned LANE_G    = 4;
+  localparam int unsigned LANE_B    = 5;
+
+  // -------------------------------------------------------------------------
+  // Frozen 1,877-bit metadata boundary.  These are the only raw Packet-D job
+  // slices in this module; all downstream packet handling is through types.
+  localparam int unsigned META_PLANE_W  = 240;
+  localparam int unsigned META_PLANE_LO = 437;
+  localparam int unsigned META_W = META_PLANE_LO + ATTR_LANES * META_PLANE_W;
+
   initial begin : p_packet_d_contract
-    if (($bits(job_meta_i) != 1157) ||
+    if (($bits(job_meta_i) != META_W) ||
         ($bits(zhao_texture_v3_request_v2_t) != 362) ||
         ($bits(zhao_raster_continuation_v2_t) != 128) ||
         ($bits(zhao_raster_earlyz_payload_v2_t) != 410) ||
@@ -239,17 +279,21 @@ module zhao_raster_tile_pipe_v2 #(
       $fatal(1, "zhao_raster_tile_pipe_v2: Packet-D width contract changed");
   end
 
-  // -------------------------------------------------------------------------
-  // Frozen 1,157-bit metadata boundary.  These are the only raw Packet-D job
-  // slices in this module; all downstream packet handling is through types.
+  // The 1877 is asserted against the composed number as well as against the
+  // arithmetic, so a lane count and a port width cannot drift apart silently.
+  initial begin : p_packet_d_meta_width
+    if (META_W != 1877)
+      $fatal(1, "zhao_raster_tile_pipe_v2: METAW is not the ratified 1877");
+  end
+
   logic        [297:0] flat_request_q;
   logic         [47:0] continuation_tail_bits_q;
   logic         [31:0] fragment_state_q;
   logic         [46:0] area2_q;
   logic signed  [11:0] min_x_q;
-  logic signed  [95:0] plane_n0_q   [0:2];
-  logic signed  [71:0] plane_dndx_q [0:2];
-  logic signed  [71:0] plane_dndy_q [0:2];
+  logic signed  [95:0] plane_n0_q   [0:ATTR_LANES-1];
+  logic signed  [71:0] plane_dndx_q [0:ATTR_LANES-1];
+  logic signed  [71:0] plane_dndy_q [0:ATTR_LANES-1];
 
   // One and only one raw unpack of the frozen metadata ABI.  Pre-admission
   // profile checks and accepted registers both consume these named values.
@@ -258,24 +302,31 @@ module zhao_raster_tile_pipe_v2 #(
   logic         [31:0] incoming_fragment_state_w;
   logic         [46:0] incoming_area2_w;
   logic signed  [11:0] incoming_min_x_w;
-  logic signed  [95:0] incoming_plane_n0_w   [0:2];
-  logic signed  [71:0] incoming_plane_dndx_w [0:2];
-  logic signed  [71:0] incoming_plane_dndy_w [0:2];
+  logic signed  [95:0] incoming_plane_n0_w   [0:ATTR_LANES-1];
+  logic signed  [71:0] incoming_plane_dndx_w [0:ATTR_LANES-1];
+  logic signed  [71:0] incoming_plane_dndy_w [0:ATTR_LANES-1];
 
   assign incoming_flat_request_w = job_meta_i[297:0];
   assign incoming_continuation_tail_w = job_meta_i[345:298];
   assign incoming_fragment_state_w = job_meta_i[377:346];
   assign incoming_area2_w = job_meta_i[424:378];
   assign incoming_min_x_w = $signed(job_meta_i[436:425]);
-  assign incoming_plane_dndy_w[0] = $signed(job_meta_i[508:437]);
-  assign incoming_plane_dndx_w[0] = $signed(job_meta_i[580:509]);
-  assign incoming_plane_n0_w[0] = $signed(job_meta_i[676:581]);
-  assign incoming_plane_dndy_w[1] = $signed(job_meta_i[748:677]);
-  assign incoming_plane_dndx_w[1] = $signed(job_meta_i[820:749]);
-  assign incoming_plane_n0_w[1] = $signed(job_meta_i[916:821]);
-  assign incoming_plane_dndy_w[2] = $signed(job_meta_i[988:917]);
-  assign incoming_plane_dndx_w[2] = $signed(job_meta_i[1060:989]);
-  assign incoming_plane_n0_w[2] = $signed(job_meta_i[1156:1061]);
+  // Plane k is dndy, dndx, n0 ascending from `META_PLANE_LO + 240*k`. Written
+  // as a loop rather than eighteen hand-written ranges: the three-lane version
+  // listed nine, and three more sets of hand-arithmetic is exactly where an
+  // off-by-72 hides. Lane 0's slices are bit-identical to the ranges this
+  // replaced -- [508:437], [580:509], [676:581].
+  genvar gp;
+  generate
+    for (gp = 0; gp < ATTR_LANES; gp = gp + 1) begin : g_meta_plane
+      assign incoming_plane_dndy_w[gp] =
+          $signed(job_meta_i[META_PLANE_LO + META_PLANE_W*gp +   0 +: 72]);
+      assign incoming_plane_dndx_w[gp] =
+          $signed(job_meta_i[META_PLANE_LO + META_PLANE_W*gp +  72 +: 72]);
+      assign incoming_plane_n0_w[gp] =
+          $signed(job_meta_i[META_PLANE_LO + META_PLANE_W*gp + 144 +: 96]);
+    end
+  endgenerate
 
   // Accepted old geometric fields and tile lifecycle.
   logic signed [20:0] ax_q, ay_q, bx_q, by_q, cx_q, cy_q;
@@ -337,25 +388,25 @@ module zhao_raster_tile_pipe_v2 #(
   logic [3:0] row_hold_row_q;
   logic [15:0] row_hold_mask_q;
   logic row_hold_last_q;
-  logic [2:0] row_delivered_q;
-  logic [2:0] row_lane_fire_w;
-  logic [2:0] row_delivered_next_w;
+  logic [ATTR_LANES-1:0] row_delivered_q;
+  logic [ATTR_LANES-1:0] row_lane_fire_w;
+  logic [ATTR_LANES-1:0] row_delivered_next_w;
   logic row_retire_w;
   logic saw_coverage_q;
   logic ew_done_q;
   logic [8:0] ew_count_q;
   logic ew_degenerate_q;
 
-  logic [4:0] start_gate_w;
-  logic [2:0] attr_cov_gate_w;
+  logic [START_N-1:0] start_gate_w;
+  logic [ATTR_LANES-1:0] attr_cov_gate_w;
   logic stage_admit_gate_w;
 `ifdef ZHAO_PACKET_D_TEST_HOOKS
   assign start_gate_w = test_start_enable_i;
   assign attr_cov_gate_w = test_attr_cov_enable_i;
   assign stage_admit_gate_w = test_stage_admit_enable_i;
 `else
-  assign start_gate_w = 5'b11111;
-  assign attr_cov_gate_w = 3'b111;
+  assign start_gate_w = {START_N{1'b1}};
+  assign attr_cov_gate_w = {ATTR_LANES{1'b1}};
   assign stage_admit_gate_w = 1'b1;
 `endif
 
@@ -363,53 +414,53 @@ module zhao_raster_tile_pipe_v2 #(
   assign coverage_delivered_mask_o = row_delivered_q;
 
   // -------------------------------------------------------------------------
-  // Exactly three frozen attribute-gradient lanes.
-  logic [2:0] attr_job_ready_w;
-  logic [2:0] attr_cov_ready_w;
-  logic [2:0] attr_q_valid_w;
-  logic [2:0] attr_q_ready_w;
-  logic signed [31:0] attr_q_w [0:2];
-  logic [3:0] attr_row_w [0:2];
-  logic [3:0] attr_col_w [0:2];
-  logic [2:0] attr_last_w;
-  logic [2:0] attr_sat_w, attr_error_w;
-  logic [2:0] attr_idle_w;
-  logic [31:0] attr_pixels_w [0:2];
-  logic [31:0] attr_divides_w [0:2];
-  logic [31:0] attr_saturations_w [0:2];
-  logic [31:0] attr_divide_errors_w [0:2];
+  // Exactly SIX frozen attribute-gradient lanes.
+  logic [ATTR_LANES-1:0] attr_job_ready_w;
+  logic [ATTR_LANES-1:0] attr_cov_ready_w;
+  logic [ATTR_LANES-1:0] attr_q_valid_w;
+  logic [ATTR_LANES-1:0] attr_q_ready_w;
+  logic signed [31:0] attr_q_w [0:ATTR_LANES-1];
+  logic [3:0] attr_row_w [0:ATTR_LANES-1];
+  logic [3:0] attr_col_w [0:ATTR_LANES-1];
+  logic [ATTR_LANES-1:0] attr_last_w;
+  logic [ATTR_LANES-1:0] attr_sat_w, attr_error_w;
+  logic [ATTR_LANES-1:0] attr_idle_w;
+  logic [31:0] attr_pixels_w [0:ATTR_LANES-1];
+  logic [31:0] attr_divides_w [0:ATTR_LANES-1];
+  logic [31:0] attr_saturations_w [0:ATTR_LANES-1];
+  logic [31:0] attr_divide_errors_w [0:ATTR_LANES-1];
 
   assign attribute_idle_o = attr_idle_w;
 
   // Held coordinated job-start fanout.  The accepted job record is already in
   // registers; each destination sees valid until its one acceptance.  No valid
   // is a function of that destination's ready.
-  logic [4:0] start_delivered_q;
-  logic [4:0] start_valid_w, start_fire_w, start_delivered_next_w;
+  logic [START_N-1:0] start_delivered_q;
+  logic [START_N-1:0] start_valid_w, start_fire_w, start_delivered_next_w;
   logic start_complete_w;
   assign start_delivered_mask_o = start_delivered_q;
   assign start_valid_w[0] = (rs_state_q == RS_START) &&
                             !start_delivered_q[0] && start_gate_w[0];
-  assign start_valid_w[1] = (rs_state_q == RS_START) &&
-                            !start_delivered_q[1] && start_gate_w[1];
-  assign start_valid_w[2] = (rs_state_q == RS_START) &&
-                            !start_delivered_q[2] && start_gate_w[2];
-  assign start_valid_w[3] = (rs_state_q == RS_START) &&
-                            !start_delivered_q[3] && start_gate_w[3];
-  assign start_valid_w[4] = (rs_state_q == RS_START) && first_q &&
-                            !start_delivered_q[4] && start_gate_w[4];
   assign start_fire_w[0] = start_valid_w[0] && ew_job_ready_w;
-  assign start_fire_w[1] = start_valid_w[1] && attr_job_ready_w[0];
-  assign start_fire_w[2] = start_valid_w[2] && attr_job_ready_w[1];
-  assign start_fire_w[3] = start_valid_w[3] && attr_job_ready_w[2];
-  assign start_fire_w[4] = start_valid_w[4] && ts_clear_ready_w;
+  // Destinations 1..ATTR_LANES are the attribute lanes; their valid/fire pair
+  // is driven inside `g_attr` beside the lane it belongs to, so a seventh lane
+  // cannot be instantiated without its start strobe.
+  assign start_valid_w[START_CLEAR] = (rs_state_q == RS_START) && first_q &&
+                            !start_delivered_q[START_CLEAR] &&
+                            start_gate_w[START_CLEAR];
+  assign start_fire_w[START_CLEAR] = start_valid_w[START_CLEAR] &&
+                                     ts_clear_ready_w;
   assign start_delivered_next_w = start_delivered_q | start_fire_w;
   assign start_complete_w = &start_delivered_next_w;
   assign ew_job_valid_w = start_valid_w[0];
 
   genvar ga;
   generate
-    for (ga = 0; ga < 3; ga = ga + 1) begin : g_attr
+    for (ga = 0; ga < ATTR_LANES; ga = ga + 1) begin : g_attr
+      assign start_valid_w[ga+1] = (rs_state_q == RS_START) &&
+                                   !start_delivered_q[ga+1] &&
+                                   start_gate_w[ga+1];
+      assign start_fire_w[ga+1] = start_valid_w[ga+1] && attr_job_ready_w[ga];
       if (ATTR_DSP3) begin : g_dsp3
         zhao_raster_attrgrad_dsp3 u_attrgrad (
             .clk(clk),
@@ -535,11 +586,11 @@ module zhao_raster_tile_pipe_v2 #(
   logic attr_coordinate_bad_q, attr_range_bad_q;
   logic attr_join_room_w, attr_join_capture_w, attr_join_consume_w;
   logic earlyz_frag_valid_w, earlyz_frag_ready_w;
-  logic signed [31:0] attr_join_q_q [0:2];
-  logic [3:0] attr_join_row_q [0:2];
-  logic [3:0] attr_join_col_q [0:2];
-  logic [2:0] attr_join_last_q;
-  logic [2:0] attr_join_sat_q, attr_join_error_q;
+  logic signed [31:0] attr_join_q_q [0:ATTR_LANES-1];
+  logic [3:0] attr_join_row_q [0:ATTR_LANES-1];
+  logic [3:0] attr_join_col_q [0:ATTR_LANES-1];
+  logic [ATTR_LANES-1:0] attr_join_last_q;
+  logic [ATTR_LANES-1:0] attr_join_sat_q, attr_join_error_q;
   logic [3:0] lane1_col_checked_w;
 
   assign attr_source_valid_w = &attr_q_valid_w;
@@ -564,15 +615,38 @@ module zhao_raster_tile_pipe_v2 #(
   // from the same sources, and on a hold both sides hold. What changes is only
   // where the comparison sits relative to the register.
   wire [3:0] incoming_lane1_col_c = `ZHAO_PACKET_D_LANE1_COL(attr_col_w[1]);
-  wire incoming_coordinate_bad_c =
-      (attr_row_w[0] != attr_row_w[1]) ||
-      (attr_row_w[0] != attr_row_w[2]) ||
-      (attr_col_w[0] != incoming_lane1_col_c) ||
-      (attr_col_w[0] != attr_col_w[2]) ||
-      (attr_last_w[0] != attr_last_w[1]) ||
-      (attr_last_w[0] != attr_last_w[2]);
-  wire incoming_range_bad_c = (|attr_error_w) || attr_q_w[0][31] ||
-                              (attr_q_w[0][31:24] != 8'd0);
+  // EVERY lane must agree with lane 0 about which pixel it is describing, and
+  // the loop is over ATTR_LANES rather than a hand-written list so the three
+  // Gouraud lanes are checked exactly as strictly as the three that were here
+  // before. Lane 1 keeps its inverse-control indirection; that macro is how E1's
+  // committed coordinate mutant reaches this comparison, and it must stay on
+  // lane 1 specifically.
+  //
+  // The loop variable is declared INSIDE the block. A module-scope `int` driven
+  // from an `always_comb` under a conditional is a latch Quartus 17.0 refuses
+  // the whole design for, while Verilator lints it clean
+  // (`tools/quartus/check_quartus17_syntax.py` FORM 7).
+  logic incoming_coordinate_bad_c;
+  always_comb begin : p_attr_incoming_coord
+    logic [3:0] lane_col_c;
+    incoming_coordinate_bad_c = 1'b0;
+    for (int lane = 1; lane < ATTR_LANES; lane++) begin
+      lane_col_c = (lane == LANE_UOW) ? incoming_lane1_col_c
+                                      : attr_col_w[lane];
+      if ((attr_row_w[0] != attr_row_w[lane]) ||
+          (attr_col_w[0] != lane_col_c) ||
+          (attr_last_w[0] != attr_last_w[lane]))
+        incoming_coordinate_bad_c = 1'b1;
+    end
+  end
+  // THE RANGE TEST IS LANE 0's AND STAYS LANE 0's. It asserts the depth lane's
+  // quotient fits invw24, which is a property of THAT attribute; u/w, v/w and
+  // the three colour channels have no such 24-bit law and never did. A colour
+  // lane whose interpolant leaves [0,1] is handled where it is consumed, by the
+  // saturating `lit_unit8` conversion at `vertex_rgb`, because a frame-
+  // terminating fault for an over-bright pixel would be worse than the pixel.
+  wire incoming_range_bad_c = (|attr_error_w) || attr_q_w[LANE_INVW][31] ||
+                              (attr_q_w[LANE_INVW][31:24] != 8'd0);
 
   // Retained so the join registers still read as the authority they are: these
   // are what the captured verdicts were computed from, and the assertion below
@@ -589,8 +663,8 @@ module zhao_raster_tile_pipe_v2 #(
   assign attr_join_room_w = !attr_bundle_valid_w || attr_join_consume_w;
   assign attr_join_capture_w = attr_source_valid_w && attr_join_room_w;
 
-  always_comb begin
-    attr_q_ready_w = {3{attr_join_capture_w}};
+  always_comb begin : p_attr_q_ready
+    attr_q_ready_w = {ATTR_LANES{attr_join_capture_w}};
   end
 
   always_ff @(posedge clk or negedge rst_n) begin : p_attr_join
@@ -598,7 +672,7 @@ module zhao_raster_tile_pipe_v2 #(
       attr_join_valid_q <= 1'b0;
       attr_coordinate_bad_q <= 1'b0;
       attr_range_bad_q <= 1'b0;
-      for (int lane = 0; lane < 3; lane++) begin
+      for (int lane = 0; lane < ATTR_LANES; lane++) begin
         attr_join_q_q[lane] <= 32'sd0;
         attr_join_row_q[lane] <= 4'd0;
         attr_join_col_q[lane] <= 4'd0;
@@ -613,7 +687,7 @@ module zhao_raster_tile_pipe_v2 #(
         // D2: the verdicts ride the same enable as the payload they describe.
         attr_coordinate_bad_q <= incoming_coordinate_bad_c;
         attr_range_bad_q      <= incoming_range_bad_c;
-        for (int lane = 0; lane < 3; lane++) begin
+        for (int lane = 0; lane < ATTR_LANES; lane++) begin
           attr_join_q_q[lane] <= attr_q_w[lane];
           attr_join_row_q[lane] <= attr_row_w[lane];
           attr_join_col_q[lane] <= attr_col_w[lane];
@@ -624,6 +698,43 @@ module zhao_raster_tile_pipe_v2 #(
       end
     end
   end
+
+  // ---------------------------------------------------------------------------
+  // THE ONE CONVERSION THE GOURAUD LANES NEED, AND WHERE ITS SCALES COME FROM.
+  //
+  // A lane carries the interpolated light in the scale GEOM.LIGHT emits:
+  // Q0.16 with `NDL_ONE = 17'h1_0000` as 1.0, asserted in range at
+  // `zhao_light_stream`'s own output. `zhao_raster_fragment` wants unit8 --
+  // `frag_vert_rgb_i` is {r[23:16], g[15:8], b[7:0]} and 255 is full -- because
+  // it feeds `unit_mul(texel, vertex)` when the fragment is textured and is
+  // taken as the source colour directly when it is not. That matches the
+  // oracle's own account of the lanes exactly
+  // (`reference/src/zrender/internal.hpp`: "per-channel light GAIN, unity =
+  // 1<<16" textured; "pre-lit COLOUR on the 255 scale" untextured, which this
+  // console produces as `unit_mul(base_rgb, gain)` because ruling R11 already
+  // makes `base_rgb` the VERTEX's colour).
+  //
+  // SATURATING, NOT FAULTING. 1.0 maps to 255 and anything above it clamps.
+  // An out-of-range colour is a bright pixel; making it a frame-terminating
+  // range fault -- which is what lane 0's invw24 test does -- would trade a
+  // slightly wrong pixel for a lost frame. Negative clamps to 0 for the same
+  // reason: an unlit lane may legitimately carry a negative interpolant, which
+  // `zhao_raster_toon`'s header says outright.
+  //
+  // IT IS A FUNCTION, ON ITS OWN, BECAUSE RASTER.TOON GOES IN FRONT OF IT.
+  // `zhao_raster_toon` takes `r_i`/`g_i`/`b_i` as `signed [31:0]` -- exactly
+  // `attr_join_q_q[]`'s shape, in exactly this Q0.16 scale, which is why its
+  // authored thresholds read {43000, 57000} against a 65536 unity. When that
+  // block and `zhao_raster_fog` are composed they belong BETWEEN the join and
+  // this conversion, and nothing else here moves. Neither is instantiated by
+  // any composed top today; `design/prod_manifest.yml` says so.
+  function automatic logic [7:0] lit_unit8(input logic signed [31:0] v);
+    begin
+      if (v <= 32'sd0)            lit_unit8 = 8'd0;
+      else if (v >= 32'sd65536)   lit_unit8 = 8'd255;
+      else                        lit_unit8 = v[15:8];
+    end
+  endfunction
 
   zhao_texture_v3_request_v2_t request_w;
   zhao_raster_continuation_v2_t continuation_w;
@@ -646,12 +757,13 @@ module zhao_raster_tile_pipe_v2 #(
     request_w.lod_q4_4              = flat_request_q[287:280];
     request_w.base_binding_selector = flat_request_q[295:288];
     request_w.sample_count          = flat_request_q[297:296];
-    request_w.u_over_w              = attr_join_q_q[1];
-    request_w.v_over_w              = attr_join_q_q[2];
+    request_w.u_over_w              = attr_join_q_q[LANE_UOW];
+    request_w.v_over_w              = attr_join_q_q[LANE_VOW];
 
     continuation_w = '0;
-    continuation_w.earlyz.in_tile_addr = {attr_join_row_q[0], attr_join_col_q[0]};
-    continuation_w.earlyz.invw24 = attr_join_q_q[0][23:0];
+    continuation_w.earlyz.in_tile_addr = {attr_join_row_q[LANE_INVW],
+                                          attr_join_col_q[LANE_INVW]};
+    continuation_w.earlyz.invw24 = attr_join_q_q[LANE_INVW][23:0];
     continuation_w.earlyz.fragment_state = fragment_state_q;
     continuation_w.earlyz.source_id = source_id_q;
     // THE FLAT STAND-IN FOR THE GOURAUD TINT, NAMED AS ONE (gz/attrlane,
@@ -660,42 +772,44 @@ module zhao_raster_tile_pipe_v2 #(
     // 6.5 cited beside it, or the next reader inherits a Gouraud law silently
     // implemented as a constant").
     //
-    // READ THE FOUR ASSIGNMENTS ABOVE TOGETHER. `invw24`, `u_over_w` and
-    // `v_over_w` come from `attr_join_q_q[0..2]` -- PER FRAGMENT, this pixel's
-    // own interpolated value off its attribute lane. `post_earlyz` comes from
+    // READ THE ASSIGNMENTS ABOVE TOGETHER. `invw24`, `u_over_w` and `v_over_w`
+    // come from `attr_join_q_q[0..2]` -- PER FRAGMENT, this pixel's own
+    // interpolated value off its attribute lane. `post_earlyz` comes from
     // `continuation_tail_bits_q`, loaded ONCE PER TRIANGLE from
-    // `job_meta_i[345:298]`. It is the one field in this block that is
-    // per-primitive while its neighbours are per-pixel, and nothing about the
-    // surrounding code says so.
+    // `job_meta_i[345:298]`, so its fields are per-primitive while their
+    // neighbours are per-pixel. That asymmetry used to be silent and is now
+    // stated here, because it is the whole reason `vertex_rgb` was wrong.
     //
-    // THAT MATTERS BECAUSE ITS `vertex_rgb` IS NOT SUPPOSED TO BE FLAT. It is
-    // delivered to `zhao_raster_fragment.frag_vert_rgb_i`, whose port comment
-    // reads "interpolated, lit, tinted, FOGGED" -- and under this arrangement it
-    // is none of those. `spec/terrain_rules.md` 6.5 says "tint moved to
-    // vertices"; the reference oracle interpolates it for real
-    // (`reference/src/zrender/rast.cpp`, the `m.gouraud` lanes `cr`/`cg`/`cb`,
-    // full barycentric re-evaluation per row, with
-    // `reference/src/zrender/internal.hpp` calling it "the ordinary Gouraud
-    // path"). A per-triangle constant is the Phase-3 stand-in for that, and it
-    // is a stand-in, not the design.
+    // AND `vertex_rgb` IS NO LONGER ONE OF THEM, as of owner decision R234 D1.
+    // The tail still arrives per triangle and still supplies `vertex_alpha`,
+    // `effect_tag` and `stencil_reference` -- those three ARE per-primitive
+    // (R89, R48) -- but the colour is overwritten below from lanes 3..5, which
+    // are this pixel's own interpolated light. The two statements are ordered
+    // deliberately: the cast first, then the one field that has a better
+    // producer than the tail's constant.
     //
-    // AND THE VALUE IT STANDS IN FOR IS ALREADY COMPUTED AND ALREADY THROWN
-    // AWAY. `zhao_light_stream` produces lit per-vertex r/g/b,
-    // `zhao_geom_vattr` stores it, `zhao_geom_clip` carries it winding-flipped
-    // in packet slots 3..5 -- and `zhao_geom_attrpack` packs THREE planes, so it
-    // stops at that block's input port. See that file's waiver comment for the
-    // other end of the same severance.
+    // THE CHAIN IT COMPLETES. `zhao_light_stream` produces lit per-vertex
+    // r/g/b, `zhao_geom_vattr` stores it, `zhao_geom_clip` carries it
+    // winding-flipped in packet slots 3..5, `zhao_geom_attrpack` turns those
+    // three slots into three planes, `zhao_geom_bin_pipe_v2` carries them in
+    // metadata bits [1876:1157], and the three lanes above evaluate them per
+    // pixel. See `zhao_geom_attrpack.sv`'s waiver comment for the other end.
     //
-    // WHAT WOULD FIX IT IS THREE MORE ATTRIBUTE LANES, END TO END -- not a new
-    // fragment port. The carrier below is already 24 bits, already per-fragment
-    // assembled, and already traverses Early-Z, the texture round trip and the
-    // fragment leaf. With lanes 3..5 present this line becomes a field build
-    // off `attr_join_q_q[3..5]` and NOTHING DOWNSTREAM CHANGES. The cost is
-    // priced in `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/
-    // FINDINGS-attrlane.md`; it is a subsystem, not a wiring job, and it is the
-    // owner's call.
+    // `spec/terrain_rules.md` 6.5 says "tint moved to vertices"; the reference
+    // oracle interpolates it for real (`reference/src/zrender/rast.cpp`, the
+    // `m.gouraud` lanes `cr`/`cg`/`cb`, full barycentric re-evaluation per row,
+    // with `reference/src/zrender/internal.hpp` calling it "the ordinary
+    // Gouraud path"). This is now that, in silicon.
+    //
+    // NOTHING DOWNSTREAM OF THIS MODULE CHANGED to make it happen, which is
+    // what ATTRLANE predicted and what held: the carrier was already 24 bits,
+    // already per-fragment assembled, and already traverses Early-Z, the
+    // texture round trip and the fragment leaf.
     continuation_w.post_earlyz =
         zhao_raster_continuation_tail_v2_t'(continuation_tail_bits_q);
+    continuation_w.post_earlyz.vertex_rgb = {lit_unit8(attr_join_q_q[LANE_R]),
+                                             lit_unit8(attr_join_q_q[LANE_G]),
+                                             lit_unit8(attr_join_q_q[LANE_B])};
 
     pretex_w = make_raster_pretex(continuation_w, request_w);
     earlyz_payload_in_w = pack_earlyz_payload(pretex_w.payload);
@@ -719,7 +833,7 @@ module zhao_raster_tile_pipe_v2 #(
   zhao_raster_earlyz #(.PAYLOAD_W(410)) u_earlyz (
       .clk(clk),
       .rst_n(rst_n),
-      .tile_begin_i(start_fire_w[4]),
+      .tile_begin_i(start_fire_w[START_CLEAR]),
       .tile_clear_depth_i(clear_word_q[31:8]),
       .frag_valid_i(earlyz_frag_valid_w),
       .frag_ready_o(earlyz_frag_ready_w),
@@ -1093,7 +1207,7 @@ module zhao_raster_tile_pipe_v2 #(
   assign tile_cov_count_o = resolve_coverage_q;
   assign tile_degenerate_o = resolve_degenerate_q;
 
-  assign ts_clear_w = start_valid_w[4];
+  assign ts_clear_w = start_valid_w[START_CLEAR];
 
   // -------------------------------------------------------------------------
   // Complete drain law, fault/clear policy and lifecycle.
@@ -1202,7 +1316,7 @@ module zhao_raster_tile_pipe_v2 #(
   always_ff @(posedge clk or negedge rst_n) begin : p_packet_d_state
     if (!rst_n) begin
       rs_state_q <= RS_IDLE;
-      start_delivered_q <= 5'b11111;
+      start_delivered_q <= {START_N{1'b1}};
       ax_q <= 21'sd0; ay_q <= 21'sd0;
       bx_q <= 21'sd0; by_q <= 21'sd0;
       cx_q <= 21'sd0; cy_q <= 21'sd0;
@@ -1215,7 +1329,7 @@ module zhao_raster_tile_pipe_v2 #(
       fragment_state_q <= 32'd0;
       area2_q <= 47'd0;
       min_x_q <= 12'sd0;
-      for (int lane = 0; lane < 3; lane++) begin
+      for (int lane = 0; lane < ATTR_LANES; lane++) begin
         plane_n0_q[lane] <= 96'sd0;
         plane_dndx_q[lane] <= 72'sd0;
         plane_dndy_q[lane] <= 72'sd0;
@@ -1225,7 +1339,7 @@ module zhao_raster_tile_pipe_v2 #(
       row_hold_row_q <= 4'd0;
       row_hold_mask_q <= 16'd0;
       row_hold_last_q <= 1'b0;
-      row_delivered_q <= 3'b000;
+      row_delivered_q <= '0;
       saw_coverage_q <= 1'b0;
       ew_done_q <= 1'b1;
       ew_count_q <= 9'd0;
@@ -1251,7 +1365,7 @@ module zhao_raster_tile_pipe_v2 #(
       if (row_hold_valid_q) begin
         if (row_retire_w) begin
           row_hold_valid_q <= 1'b0;
-          row_delivered_q <= 3'b000;
+          row_delivered_q <= '0;
         end else begin
           row_delivered_q <= row_delivered_next_w;
         end
@@ -1260,16 +1374,16 @@ module zhao_raster_tile_pipe_v2 #(
         row_hold_row_q <= ew_cov_row_w;
         row_hold_mask_q <= ew_cov_mask_w;
         row_hold_last_q <= ew_cov_last_w;
-        row_delivered_q <= 3'b000;
+        row_delivered_q <= '0;
         saw_coverage_q <= 1'b1;
       end else if (ew_done_w && !saw_coverage_q) begin
         // Empty/degenerate walks have no EDGEWALK beat.  A terminal zero-mask row
-        // retires all three frozen attr jobs without producing a candidate.
+        // retires all six frozen attr jobs without producing a candidate.
         row_hold_valid_q <= 1'b1;
         row_hold_row_q <= 4'd0;
         row_hold_mask_q <= 16'd0;
         row_hold_last_q <= 1'b1;
-        row_delivered_q <= 3'b000;
+        row_delivered_q <= '0;
       end
 
       if (ew_done_w) begin
@@ -1296,7 +1410,7 @@ module zhao_raster_tile_pipe_v2 #(
         fragment_state_q <= incoming_fragment_state_w;
         area2_q <= incoming_area2_w;
         min_x_q <= incoming_min_x_w;
-        for (int lane = 0; lane < 3; lane++) begin
+        for (int lane = 0; lane < ATTR_LANES; lane++) begin
           plane_dndy_q[lane] <= incoming_plane_dndy_w[lane];
           plane_dndx_q[lane] <= incoming_plane_dndx_w[lane];
           plane_n0_q[lane] <= incoming_plane_n0_w[lane];
@@ -1308,8 +1422,12 @@ module zhao_raster_tile_pipe_v2 #(
           jobs_sunk_o <= jobs_sunk_o + 32'd1;
       end else if (job_accept_w) begin
         row_hold_valid_q <= 1'b0;
-        row_delivered_q <= 3'b000;
-        start_delivered_q <= job_first_i ? 5'b00000 : 5'b10000;
+        row_delivered_q <= '0;
+        // A non-first job pre-marks ONLY the tilestore-clear destination as
+        // delivered: the clear is issued once per tile, not once per job.
+        start_delivered_q <= job_first_i
+            ? {START_N{1'b0}}
+            : (START_N'(1) << START_CLEAR);
         saw_coverage_q <= 1'b0;
         ew_count_q <= 9'd0;
         ew_degenerate_q <= 1'b0;
@@ -1381,34 +1499,53 @@ module zhao_raster_tile_pipe_v2 #(
   logic held_row_q;
   logic [20:0] held_row_payload_q;
   logic held_attr_source_q;
-  logic [128:0] held_attr_source_payload_q;
+  logic [ATTR_LANES*43-1:0] held_attr_source_payload_q;
   logic held_attr_bundle_q;
-  logic [128:0] held_attr_bundle_payload_q;
+  logic [ATTR_LANES*43-1:0] held_attr_bundle_payload_q;
   logic held_earlyz_q;
   logic [489:0] held_earlyz_payload_q;
   logic held_stage_fragment_q;
   logic [175:0] held_stage_fragment_payload_q;
   logic held_tile_write_q;
   logic [71:0] held_tile_write_payload_q;
-  logic [128:0] attr_source_payload_w;
-  logic [128:0] attr_bundle_payload_w;
+  // 43 bits a lane: {q[31:0], row[3:0], col[3:0], last, sat, error}.
+  logic [ATTR_LANES*43-1:0] attr_source_payload_w;
+  logic [ATTR_LANES*43-1:0] attr_bundle_payload_w;
   logic [489:0] earlyz_hold_payload_w;
   logic [175:0] stage_fragment_payload_w;
 
-  assign attr_source_payload_w = {
-      attr_q_w[0], attr_row_w[0], attr_col_w[0], attr_last_w[0],
-      attr_sat_w[0], attr_error_w[0],
-      attr_q_w[1], attr_row_w[1], attr_col_w[1], attr_last_w[1],
-      attr_sat_w[1], attr_error_w[1],
-      attr_q_w[2], attr_row_w[2], attr_col_w[2], attr_last_w[2],
-      attr_sat_w[2], attr_error_w[2]};
-  assign attr_bundle_payload_w = {
-      attr_join_q_q[0], attr_join_row_q[0], attr_join_col_q[0],
-      attr_join_last_q[0], attr_join_sat_q[0], attr_join_error_q[0],
-      attr_join_q_q[1], attr_join_row_q[1], attr_join_col_q[1],
-      attr_join_last_q[1], attr_join_sat_q[1], attr_join_error_q[1],
-      attr_join_q_q[2], attr_join_row_q[2], attr_join_col_q[2],
-      attr_join_last_q[2], attr_join_sat_q[2], attr_join_error_q[2]};
+  // The registered restatement of `incoming_coordinate_bad_c`, over the join
+  // registers rather than the incoming lanes. It exists only so the D2 refactor
+  // guard below can difference the two; keeping it as one loop rather than
+  // fifteen hand-written comparisons is what stops it drifting from the
+  // expression it is supposed to mirror.
+  logic joined_coordinate_bad_c;
+  always_comb begin : p_attr_joined_coord
+    logic [3:0] lane_col_c;
+    joined_coordinate_bad_c = 1'b0;
+    for (int lane = 1; lane < ATTR_LANES; lane++) begin
+      lane_col_c = (lane == LANE_UOW) ? lane1_col_checked_w
+                                      : attr_join_col_q[lane];
+      if ((attr_join_row_q[0] != attr_join_row_q[lane]) ||
+          (attr_join_col_q[0] != lane_col_c) ||
+          (attr_join_last_q[0] != attr_join_last_q[lane]))
+        joined_coordinate_bad_c = 1'b1;
+    end
+  end
+
+  always_comb begin : p_attr_hold_payloads
+    attr_source_payload_w = '0;
+    attr_bundle_payload_w = '0;
+    for (int lane = 0; lane < ATTR_LANES; lane++) begin
+      attr_source_payload_w[43*(ATTR_LANES-1-lane) +: 43] = {
+          attr_q_w[lane], attr_row_w[lane], attr_col_w[lane],
+          attr_last_w[lane], attr_sat_w[lane], attr_error_w[lane]};
+      attr_bundle_payload_w[43*(ATTR_LANES-1-lane) +: 43] = {
+          attr_join_q_q[lane], attr_join_row_q[lane], attr_join_col_q[lane],
+          attr_join_last_q[lane], attr_join_sat_q[lane],
+          attr_join_error_q[lane]};
+    end
+  end
   assign earlyz_hold_payload_w = {
       earlyz_cand_addr_w, earlyz_cand_depth_w, earlyz_cand_state_w,
       earlyz_cand_source_w, earlyz_cand_payload_w};
@@ -1425,9 +1562,9 @@ module zhao_raster_tile_pipe_v2 #(
       held_row_q <= 1'b0;
       held_row_payload_q <= 21'd0;
       held_attr_source_q <= 1'b0;
-      held_attr_source_payload_q <= 129'd0;
+      held_attr_source_payload_q <= '0;
       held_attr_bundle_q <= 1'b0;
-      held_attr_bundle_payload_q <= 129'd0;
+      held_attr_bundle_payload_q <= '0;
       held_earlyz_q <= 1'b0;
       held_earlyz_payload_q <= 490'd0;
       held_stage_fragment_q <= 1'b0;
@@ -1452,16 +1589,10 @@ module zhao_raster_tile_pipe_v2 #(
       // own enable, or moves one of these loads, the registered verdict stops
       // describing the payload beside it and this says so on the first bundle.
       if (attr_bundle_valid_w &&
-          ((attr_coordinate_bad_q !=
-            ((attr_join_row_q[0] != attr_join_row_q[1]) ||
-             (attr_join_row_q[0] != attr_join_row_q[2]) ||
-             (attr_join_col_q[0] != lane1_col_checked_w) ||
-             (attr_join_col_q[0] != attr_join_col_q[2]) ||
-             (attr_join_last_q[0] != attr_join_last_q[1]) ||
-             (attr_join_last_q[0] != attr_join_last_q[2]))) ||
+          ((attr_coordinate_bad_q != joined_coordinate_bad_c) ||
            (attr_range_bad_q !=
-            ((|attr_join_error_q) || attr_join_q_q[0][31] ||
-             (attr_join_q_q[0][31:24] != 8'd0)))))
+            ((|attr_join_error_q) || attr_join_q_q[LANE_INVW][31] ||
+             (attr_join_q_q[LANE_INVW][31:24] != 8'd0)))))
         $fatal(1, "Packet-D captured attribute verdict disagrees with the join it describes");
       if (held_earlyz_q && (!earlyz_cand_valid_w ||
           (earlyz_hold_payload_w != held_earlyz_payload_q)))
@@ -1474,7 +1605,7 @@ module zhao_raster_tile_pipe_v2 #(
         $fatal(1, "Packet-D tile write changed under backpressure");
       if (|(start_fire_w & start_delivered_q))
         $fatal(1, "Packet-D job-start destination accepted twice");
-      if (start_fire_w[4] && !first_q)
+      if (start_fire_w[START_CLEAR] && !first_q)
         $fatal(1, "Packet-D issued clear for a non-first tile job");
       if (skid_cancel_fire_w && !abort_now_w)
         $fatal(1, "Packet-D counted a non-abort skid transfer as cancellation");
@@ -1508,12 +1639,18 @@ module zhao_raster_tile_pipe_v2 #(
   // Explicit sink for diagnostic-only leaf outputs.  Their durable selected
   // counters are promoted above; this reduction has no datapath authority.
   logic unused_ok;
+  logic unused_lane_ok;
+  always_comb begin : p_unused_lane_counters
+    unused_lane_ok = 1'b0;
+    for (int lane = 0; lane < ATTR_LANES; lane++)
+      unused_lane_ok = unused_lane_ok ^ ^{attr_pixels_w[lane],
+                                          attr_divides_w[lane],
+                                          attr_saturations_w[lane],
+                                          attr_divide_errors_w[lane]};
+  end
   always_comb begin
     unused_ok = ^{1'b0, ew_cov_source_w, attr_sat_w, attr_join_sat_q,
-                  attr_pixels_w[0], attr_pixels_w[1], attr_pixels_w[2],
-                  attr_divides_w[0], attr_divides_w[1], attr_divides_w[2],
-                  attr_saturations_w[0], attr_saturations_w[1], attr_saturations_w[2],
-                  attr_divide_errors_w[0], attr_divide_errors_w[1], attr_divide_errors_w[2],
+                  unused_lane_ok,
                   earlyz_cand_bin_w, earlyz_reject_w, earlyz_reject_addr_w,
                   ts_clear_ready_w, ts_wr_ready_w, ts_rd_ready_w, ts_rd_source_w,
                   ts_swap_ready_w, unused_err_fragrob_wq_overflow,

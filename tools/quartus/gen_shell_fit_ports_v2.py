@@ -296,7 +296,16 @@ DRIVERS = {
     ),
     'render_producer': (
         'tri_area2_i', 'tri_invw_plane_i', 'tri_u_over_w_plane_i',
-        'tri_v_over_w_plane_i', 'tri_flat_request_i',
+        'tri_v_over_w_plane_i',
+        # The Gouraud planes (owner decision R234 D1, 2026-09-21). Same
+        # producer, same shape, same full-span dynamic mask as the three above:
+        # `zhao_geom_bin_pipe_v2` concatenates all six into the metadata word
+        # without decoding any of them, so for the binner they are opaque and
+        # only their toggling matters. They belong to `render_producer` because
+        # GEOM.ATTRPACK emits all six from one shared setup core -- splitting
+        # them off would invent a second producer for one block's output.
+        'tri_r_plane_i', 'tri_g_plane_i', 'tri_b_plane_i',
+        'tri_flat_request_i',
         'tri_continuation_tail_i', 'tri_fragment_state_i',
         'frame_clear_word_i',
     ),

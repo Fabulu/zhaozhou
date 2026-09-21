@@ -231,6 +231,11 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
         "tri_invw_plane_i",
         "tri_u_over_w_plane_i",
         "tri_v_over_w_plane_i",
+        # 2026-09-21 (owner decision R234 D1): the Gouraud planes. Same
+        # producer -- GEOM.ATTRPACK emits all six from one shared setup core.
+        "tri_r_plane_i",
+        "tri_g_plane_i",
+        "tri_b_plane_i",
         "tri_flat_request_i",
         "tri_continuation_tail_i",
         "tri_fragment_state_i",
@@ -652,7 +657,7 @@ def _render_triangle_values(
     # smoke harness still blesses the run because the declared mask matches what
     # toggled. That is this instrument's whole failure mode.
     #
-    # Everything else the unpacker reads -- all three planes, the continuation
+    # Everything else the unpacker reads -- all SIX planes, the continuation
     # tail, the fragment state, min_x -- is stored with no test whatever. So the
     # two fields that CAN refuse get legal values, and the rest are derived from
     # the same vertices, which makes the two triangles differ field by field
@@ -662,21 +667,38 @@ def _render_triangle_values(
     values["tri_area2_i"] = f"47'h{area2:012x}"
 
     # Each plane is {n0[95:0], dndx[71:0], dndy[71:0]} = 240 bits, read straight
-    # off the unpacker's own field map. Edge i feeds plane i, so the three
-    # planes differ from each other as well as between triangles.
+    # off the unpacker's own field map. Edge i feeds plane i, so the planes
+    # differ from each other as well as between triangles.
+    #
+    # SIX PLANES since owner decision R234 D1 (2026-09-21). There are only
+    # three edges, so the Gouraud lanes reuse them with the coefficient roles
+    # ROTATED -- lane 3 is edge 0 read as (kc, kx, ky) rather than (kx, ky, kc).
+    # That is deliberate and it is stimulus, not arithmetic: the requirement on
+    # these bits is that they TOGGLE and that they differ lane to lane, and a
+    # rotation guarantees both without inventing a number that would read as a
+    # colour law. Driving them from the same triple as lanes 0..2 would make
+    # three lanes bit-identical to three others and let the fitter share logic
+    # between them, which reports area LOW -- the direction nobody audits.
     plane_ports = (
         "tri_invw_plane_i",
         "tri_u_over_w_plane_i",
         "tri_v_over_w_plane_i",
+        "tri_r_plane_i",
+        "tri_g_plane_i",
+        "tri_b_plane_i",
     )
     for index, port_name in enumerate(plane_ports):
         # Taken from the coefficients themselves, not parsed back out of the
         # literals rendered above -- a formatter and its own reader is two
         # implementations of one encoding.
-        kx, ky, kc = edge_coefficients[index]
-        dndy = ky & ((1 << 72) - 1)
-        dndx = kx & ((1 << 72) - 1)
-        n0 = kc & ((1 << 96) - 1)
+        kx, ky, kc = edge_coefficients[index % 3]
+        if index < 3:
+            dndy_src, dndx_src, n0_src = ky, kx, kc
+        else:
+            dndy_src, dndx_src, n0_src = kc, ky, kx
+        dndy = dndy_src & ((1 << 72) - 1)
+        dndx = dndx_src & ((1 << 72) - 1)
+        n0 = n0_src & ((1 << 96) - 1)
         plane = (n0 << 144) | (dndx << 72) | dndy
         values[port_name] = f"240'h{plane:060x}"
 
@@ -779,6 +801,9 @@ def _render_stimulus(
             "tri_invw_plane_i",
             "tri_u_over_w_plane_i",
             "tri_v_over_w_plane_i",
+            "tri_r_plane_i",
+            "tri_g_plane_i",
+            "tri_b_plane_i",
             "tri_flat_request_i",
             "tri_continuation_tail_i",
             "tri_fragment_state_i",

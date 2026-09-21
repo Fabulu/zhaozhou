@@ -6546,8 +6546,8 @@ module tb_zhao_console_core_smoke
     if (geom_attrpack_triangles_o != geom_setup_triangles_submitted_o)
       $fatal(1, "SMOKE: GEOM.ATTRPACK counted %0d triangle(s) and GEOM.SETUP counted %0d -- the fork off GEOM.CLIP is no longer handing both of them one ready",
              geom_attrpack_triangles_o, geom_setup_triangles_submitted_o);
-    if (geom_attrpack_planes_o != 3 * geom_attrpack_triangles_o)
-      $fatal(1, "SMOKE: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) and three lanes per triangle is the contract -- a lane stopped asking and its plane is the PREVIOUS triangle's",
+    if (geom_attrpack_planes_o != 6 * geom_attrpack_triangles_o)
+      $fatal(1, "SMOKE: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) and SIX lanes per triangle is the contract (owner decision R234 D1 added the three Gouraud lanes) -- a lane stopped asking and its plane is the PREVIOUS triangle's",
              geom_attrpack_planes_o, geom_attrpack_triangles_o);
     // ---- TEXTURE EVIDENCE (entry I49, 2026-09-20) -------------------------
     // MEASURED, NOT READ OFF THE SOURCE. Until this commit the composed

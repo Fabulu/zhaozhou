@@ -369,8 +369,11 @@ class Harness {
     dut->pg_strength_i = 0;
     dut->pg_src_id_i = 0;
     dut->fb_ready_i = 1;
-    dut->test_start_enable_i = 31;
-    dut->test_attr_cov_enable_i = 7;
+    // All eight start destinations and all six coverage lanes enabled. They
+    // were 31 and 7 for five destinations and three lanes; owner decision
+    // R234 D1 added the three Gouraud attribute lanes (2026-09-21).
+    dut->test_start_enable_i = 0xff;
+    dut->test_attr_cov_enable_i = 0x3f;
     dut->test_stage_admit_enable_i = 1;
     clear_wide(dut->tri_invw_plane_i);
     clear_wide(dut->tri_u_over_w_plane_i);
@@ -1046,33 +1049,33 @@ void run_flat_old_v2_differential(Harness& h) {
   h.submit(jb);
   h.end_frame();
 
+  // EIGHT start destinations since owner decision R234 D1 -- EDGEWALK, six
+  // attribute lanes, the tilestore clear. The skew walk is written as a loop
+  // over the destination count rather than four hand-written arms, so the next
+  // lane count change does not need this test rewritten; with three lanes it
+  // walked 01/03/07/0f and stopped, which is what it does here at 0x7f.
+  static constexpr unsigned kStartDests = 8;
   h.dut->test_start_enable_i = 1;
-  bool saw_01 = false, saw_03 = false, saw_07 = false, saw_0f = false;
+  bool saw_step[kStartDests] = {false};
   const uint32_t drain_base = h.drain_done_events;
   const uint32_t old_drain_base = h.old_drain_done_events;
   for (unsigned guard = 0; guard < 3000000; ++guard) {
     h.step();
-    const uint8_t delivered = h.dut->start_delivered_mask_o;
-    if (delivered == 0x01) {
-      saw_01 = true;
-      h.dut->test_start_enable_i = 3;
-    } else if (delivered == 0x03) {
-      saw_03 = true;
-      h.dut->test_start_enable_i = 7;
-    } else if (delivered == 0x07) {
-      saw_07 = true;
-      h.dut->test_start_enable_i = 15;
-    } else if (delivered == 0x0f) {
-      saw_0f = true;
-      h.dut->test_start_enable_i = 31;
+    const uint32_t delivered = h.dut->start_delivered_mask_o;
+    for (unsigned k = 1; k < kStartDests; ++k) {
+      const uint32_t mask = (1u << k) - 1u;
+      if (delivered == mask) {
+        saw_step[k] = true;
+        h.dut->test_start_enable_i = static_cast<uint32_t>((1u << (k + 1)) - 1u);
+      }
     }
     if (h.captured_v2_done && h.captured_old_done && h.drain_done_events == drain_base + 1 &&
         h.old_drain_done_events == old_drain_base + 1)
       break;
   }
   h.wait_quiet();
-  require(saw_01 && saw_03 && saw_07 && saw_0f,
-          "held start fanout did not expose 01/03/07/0f skew sequence");
+  for (unsigned k = 1; k < kStartDests; ++k)
+    require(saw_step[k], "held start fanout did not expose every one-destination skew state");
   require(h.captured_v2_done && h.captured_old_done && h.captured_v2_count == 256 &&
               h.captured_old_count == 256,
           "old/V2 differential did not complete one 256-beat tile each");
@@ -1143,23 +1146,29 @@ void run_healthy_scene(Harness& h) {
   h.submit(jb);
   h.end_frame();
 
-  // Hold lane 1 and lane 2 off for the first real row, then release one at a
-  // time.  The held row may retire only after masks 001 -> 011 -> 111.
+  // Hold lanes 1..5 off for the first real row, then release one at a time.
+  // The held row may retire only after masks 000001 -> 000011 -> ... -> 111111.
+  // SIX lanes since owner decision R234 D1; the walk is a loop for the same
+  // reason the start-fanout walk above is.
+  static constexpr unsigned kAttrLanes = 6;
   h.dut->test_attr_cov_enable_i = 1;
-  bool saw_001 = false, saw_011 = false;
+  bool saw_cov[kAttrLanes] = {false};
   for (unsigned guard = 0; guard < 3000000 && h.drain_done_events == drain_base; ++guard) {
     h.step();
-    if (h.dut->coverage_hold_valid_o && h.dut->coverage_delivered_mask_o == 1) {
-      saw_001 = true;
-      h.dut->test_attr_cov_enable_i = 3;
-    } else if (h.dut->coverage_hold_valid_o && h.dut->coverage_delivered_mask_o == 3) {
-      saw_011 = true;
-      h.dut->test_attr_cov_enable_i = 7;
+    if (!h.dut->coverage_hold_valid_o) continue;
+    const uint32_t delivered = h.dut->coverage_delivered_mask_o;
+    for (unsigned k = 1; k < kAttrLanes; ++k) {
+      const uint32_t mask = (1u << k) - 1u;
+      if (delivered == mask) {
+        saw_cov[k] = true;
+        h.dut->test_attr_cov_enable_i = static_cast<uint32_t>((1u << (k + 1)) - 1u);
+      }
     }
   }
   require(h.drain_done_events == drain_base + 1, "healthy frame did not drain");
   h.wait_quiet();
-  require(saw_001 && saw_011, "coverage delivered mask did not expose exact skewed 001/011 states");
+  for (unsigned k = 1; k < kAttrLanes; ++k)
+    require(saw_cov[k], "coverage delivered mask did not expose every exact skewed state");
   require(h.expected_candidates.empty() && h.expected_fragments.empty(),
           "healthy frame left candidate/fragment expectations unconsumed");
   if (!h.expected_tiles.empty()) {
@@ -1370,7 +1379,7 @@ void run_healthy() {
   run_varying_depth_earlyz_scene(*h);
   run_overlap_scene(*h);
   run_local_faults(*h);
-  require(h->dut->quiet_o && h->dut->attribute_idle_o == 7 && h->dut->skid_level_o == 0 &&
+  require(h->dut->quiet_o && h->dut->attribute_idle_o == 0x3f && h->dut->skid_level_o == 0 &&
               h->dut->texture_quiet_o && h->dut->fragment_idle_o,
           "healthy gate ended without complete structural quiet");
 }
@@ -1404,7 +1413,7 @@ void run_coordinate_mutant() {
               h->tile_done_events == 0 && h->dut->resolved_tiles_o == 0 &&
               h->dut->tilestore_references_o == 0 &&
               static_cast<bool>(h->dut->front_bank_o) == front_base &&
-              h->dut->attribute_idle_o == 7 && !h->dut->sequence_abort_o &&
+              h->dut->attribute_idle_o == 0x3f && !h->dut->sequence_abort_o &&
               h->dut->sequence_drop_count_o == 0 && !h->dut->fragment_error_o,
           "coordinate mutant leaked work or changed an unrelated detector");
   std::printf("Packet-D coordinate mutant FIRED\n");
@@ -1586,7 +1595,7 @@ void run_sequence_mutant(bool old_ready, bool skip_cancel) {
           "identity accounting violated S=F+SD");
   require(h->fragment_fires == fragments_at_mismatch && h->tile_done_events == tile_base &&
               static_cast<bool>(h->dut->front_bank_o) == front_base &&
-              h->dut->attribute_idle_o == 7 && h->dut->texture_quiet_o && h->dut->fragment_idle_o &&
+              h->dut->attribute_idle_o == 0x3f && h->dut->texture_quiet_o && h->dut->fragment_idle_o &&
               h->dut->local_drop_count_o != 0,
           "identity abort leaked later work or lacked full producer drain");
   require_sequence_unrelated_clean(*h);
