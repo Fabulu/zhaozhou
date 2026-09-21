@@ -1320,10 +1320,56 @@
 //      uniform-looking result was the instrument, and one file opened by hand
 //      settled it.
 //
-//      SO THE ATTRIBUTE PACKET COSTS TERRAIN EXACTLY ONE SLOT: `invw24`.
-//      Slots 1 and 2 are excused by DECLARATION (R197, and `zhao_geom_attrpack`
-//      genuinely branches on `tri_untex_i`), slot 6 is R48's named constant,
-//      and slots 3..5 are carried by `zhao_geom_clip` and read by nothing.
+//      SO THE ATTRIBUTE PACKET COSTS TERRAIN ONE SLOT OUTRIGHT (`invw24`) AND
+//      ONE MORE THAN R197 LEFT IT, WHICH IS THE NEXT PARAGRAPH. Slot 6 is R48's
+//      named constant and slots 3..5 are carried by `zhao_geom_clip` and read by
+//      nothing; `zhao_geom_attrpack` does genuinely branch on `tri_untex_i`, so
+//      R197's MECHANISM is real and is not in question anywhere below.
+//
+//      BUT THIS ENTRY'S SEARCH FOR THE COORDINATE LAW WAS SCOPED TO THE RTL AND
+//      ITS CONCLUSION WAS WRITTEN ABOUT THE TREE. The sentence above says
+//      "Searched `fpga/rtl/terrain/**` ... A terrain texture-coordinate law does
+//      not exist in this tree." The search is honest, the scope is stated, and
+//      THE CONCLUSION DOES NOT FOLLOW FROM IT -- `reference/` is in this tree,
+//      and the law is there, in `reference/src/zrender/terrain.cpp`, gated by
+//      `if (textured)`:
+//
+//        top_shift from the cell pitch -- the source's own comment is
+//                  "pitch = 2^k metres -> u = wx >> k"
+//        u_top[k] = wx[i] >> top_shift;   v_top[k] = wz[j] >> top_shift;
+//        u_und/v_und = the same coordinates >> 3, for walls and the underside.
+//
+//      AND IT IS FROZEN, NOT DRAFT. `zhao_texture_mosaic.sv`'s header cites
+//      "spec/terrain_rules.md 6.2 (FROZEN 2026-08-16, capture-exact) -- both
+//      laws", and its `req_u_i`/`req_v_i` port comment already states the units
+//      a producer must hit: "Q16.16 TILE units, one tile period per cell on tops
+//      and per STRATA_M on walls/underside (terrain_rules 6.2/6.6)".
+//
+//      SO R197's REFUSAL OF ITS OPTION B RESTS ON A PREMISE THAT IS FALSE FOR
+//      TERRAIN. That ruling refused "every producer must synthesise u/v" partly
+//      because it "forces a terrain texture-coordinate law, which is ART CONTENT
+//      AND THE OWNER'S TO AUTHOR". For terrain's TOP SURFACE it is not art
+//      awaiting an author: it is frozen, capture-exact, implemented in the
+//      oracle, and already named by the consuming block's ports. The ruling's
+//      other two legs are untouched -- a flag beats a sentinel, and it genuinely
+//      unblocks FORGE.SHADOW and FORGE.PRIM, which have no coordinates BY LAW.
+//      What it does not do is close TERRAIN's half, because terrain's top
+//      surface is TEXTURED through the mosaic and R197's own law 3 REFUSES a
+//      declared-untextured primitive under a sampling material. Declaring
+//      `untex = 1` for terrain buys entry at the price of the mosaic -- which is
+//      the entire purpose of the `mat_a`/`mat_b`/`weight` triple the projector
+//      is already forwarding on `proj_out_*`.
+//
+//      THE HONEST BOUND ON THAT, because it is a composition question this lane
+//      did not settle: the mosaic's consumer is `zhao_texture_island_v3_top`'s
+//      `u_mosaic`, and THIS core does not instantiate that top. So "terrain runs
+//      textured" is the ratified intent and not yet a composed fact, and whoever
+//      builds the producer should confirm the consumer's residency first.
+//      What is settled is narrower and is enough to move this entry: the law
+//      terrain was said to lack EXISTS and is FROZEN, so the remaining work is
+//      ENGINEERING AGAINST A RATIFIED LAW rather than an absent art decision.
+//      That is a better position than this entry has been carrying and a harder
+//      one than R197 left it, and both halves of that are worth having.
 //
 //      AND THE MOVE THAT FINDING INVITES IS REFUSED IN ADVANCE, because it is
 //      the campaign's forbidden shape wearing an optimisation's clothes. "Four
