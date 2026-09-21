@@ -554,11 +554,27 @@ module zhao_terrain_sheetseam #(
   // Always accept -- see the port comment.  The stamp is the player's action.
   assign sr_ready_o = 1'b1;
   wire sr_fire_c = sr_valid_i && sr_ready_o;
+  // EMPTY MEANS THE SKID TOO, and that is a correctness property rather than
+  // tidiness.  A parked entry has been COUNTED in `bf_live_q` and NOT yet
+  // written, so a `bf_live_q` that has since been cleared would declare the
+  // plane empty while a `seen` bit is still on its way in.  Another handle
+  // could then re-key, and that late write would become ITS `before` -- one
+  // patch's pre-blend strength under another patch's dig.
+  //
+  // It is very nearly unreachable: the skid drains on any cycle the dig is not
+  // reading, and `bake_done_i` arrives several cycles after the last read, so
+  // in practice `sk_valid_q` is low by then.  IN PRACTICE IS THE PROBLEM.
+  // That is a two-block timing argument holding a correctness property, which
+  // is exactly what this file refuses elsewhere (see the S_WATCH drain, which
+  // was made structural for the same reason and with the same wording).  One
+  // term makes it structural instead, and it costs a single AND gate.
+  wire bf_empty_c = (bf_live_q == '0) && !sk_valid_q;
+
   // The plane is re-keyable only while EMPTY.  Taking a result for another
   // handle while entries are still live would put one patch's `before` under
   // another patch's dig -- this file's own record-swap defect, arriving
   // through the one door it did not previously have.
-  wire sr_keyed_c = (bf_live_q == '0) || (sr_handle_i == bf_handle_q);
+  wire sr_keyed_c = bf_empty_c || (sr_handle_i == bf_handle_q);
   // A result is TAKEN if the plane will accept it: either the write port is
   // free this cycle, or the skid is (a skid that DRAINS this cycle is free,
   // because it hands its entry to the port and can take the new one).
@@ -639,7 +655,7 @@ module zhao_terrain_sheetseam #(
   // `bf_live_q == 0` is safe and is not a special case: an empty plane has
   // every `seen` bit clear, so `before` is served AS `after`, the delta is zero
   // and a patch with no stamps outstanding correctly digs nothing.
-  wire bf_ok_c = (bf_live_q == '0) || (job_handle_i == bf_handle_q);
+  wire bf_ok_c = bf_empty_c || (job_handle_i == bf_handle_q);
 
   // R231 adds TWO terms to R221's existing law and no new law.  Both are ways
   // of saying "this block cannot serve this record", which is exactly what
