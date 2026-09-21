@@ -4025,6 +4025,29 @@
 //          ledger's prose while this entry argued four other points is the
 //          same defect as the stale sweeps above, running the other way.
 //
+//      S6. THIS ENTRY IS THE DIRECTIVE's COMMIT G, AND NOTHING IN THE TREE
+//          SAID SO. Section 20.8 is titled "Commit G -- Earth production path
+//          and one reducer" and its scope sentence is this entry's remaining
+//          work exactly: "Implement the bounded command/association bridge,
+//          field-major scheduler and single patch-working-set accumulator.
+//          Reuse the existing probe's numerical reducers with real
+//          phase/backpressure/lifetime control. Preserve the rest of the
+//          terrain page/cache interface rather than treating a probe as a
+//          whole terrain subsystem." Three files already cite 20.8 and none of
+//          them says I34 IS that commit.
+//          AND 20.8 FORBIDS THIS ENTRY's SHORTCUT BY ENTRY NUMBER, which is
+//          the shortest form of S5 and the sentence to show a future packet
+//          first: "Route height, velocity, material and nav outputs from the
+//          same evaluation to their real owners. DO NOT CLOSE I34 BY WIRING
+//          ONLY HEIGHT while declaring the other three channels present
+//          because they have spare bus bits."
+//          Section 20.1 removes any reading of this entry as BLOCKED: "A
+//          missing producer already named and designed here is not such a
+//          contradiction: it is the work the packet was commissioned to do."
+//          It also says "Nobody patches the same host/engine interface
+//          independently without coordinating its exact schema" -- a second
+//          reason one lane does not join `tfld_*` to this intake alone.
+//
 //      SO WHAT REMAINS IS A BUILD, NOT AN ABSENCE, AND THE OWNER HAS SCOPED
 //      IT. Directive section 13.2 commissions "the production field-major
 //      implementation under the TERRAIN.PATCH capability (for example
