@@ -1063,6 +1063,93 @@ int main(int argc, char** argv) {
     retire(w);
   }
 
+  // =========================================================================
+  // 16 -- BACK-TO-BACK RESULTS ACROSS A COLLISION: THE SKID MUST REFILL AS IT
+  //       DRAINS
+  // =========================================================================
+  // Case 15 injects one result per collision and never two in consecutive
+  // cycles, so it cannot see the skid's OWN version of the same defect -- and
+  // the first version of the skid had it.
+  //
+  // The shape: result A collides with a dig read and parks. On the NEXT cycle
+  // the port is free, so the skid drains A... and result B arrives in that
+  // same cycle. The port is carrying A, not B. If B is written "directly" it
+  // goes nowhere, and if the skid only clears instead of refilling, B is lost
+  // SILENTLY while `sr_take_c` counts it. Identical to the defect this whole
+  // packet repairs, two layers down.
+  //
+  // So: park and drain in the SAME cycle -- the skid empties and refills at
+  // once. This case drives exactly that and checks BOTH values are served.
+  {
+    w.reset();
+    ckv(w.req_a(kOpAcquire, kHandleA, 0) == kStAllocated, "16 ACQUIRE A", kStAllocated, -1);
+    w.stamp_sheet(kHandleA, 0);
+
+    const Admit a = offer(w, kHandleA, true);
+    ckv(a.depth_sheet == 1, "16 served on the layer-F law", 1, a.depth_sheet);
+
+    const int tgt_a = 4, tgt_b = 5;             // both on row 0, both passed early
+    const uint8_t val_a = 241, val_b = 242;
+    const long bt0 = long(d.before_texels_o);
+    const long dr0 = long(d.sr_dropped_o);
+
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        const bool here = (vj == 7) && (vi == 12);
+        // A lands on the collision cycle (`rd_issue_c` fires as the texel
+        // changes) and parks; B lands on the very next, while A drains.
+        if (here) w.sink_arm(kHandleA, w.law_texel(tgt_a, 0), val_a);
+        w.tick();  // StVxM -- A parks
+        if (here) w.sink_arm(kHandleA, w.law_texel(tgt_b, 0), val_b);
+        w.tick();  // StVxC -- A drains to the plane, B must take its place
+        if (here) w.sink_disarm();
+        w.tick();  // StDxM
+        d.dig_ready_i = 1;
+        d.eval();
+        w.tick();
+      }
+    }
+    d.dig_ready_i = 0;
+    w.idle(4);
+
+    ckv(long(d.before_texels_o) - bt0 == 2, "16 both results were counted as taken", 2,
+        long(d.before_texels_o) - bt0);
+    ckv(long(d.sr_dropped_o) - dr0 == 0, "16 and neither was dropped", 0,
+        long(d.sr_dropped_o) - dr0);
+    retire(w);
+
+    // The counter says two. This is the check of it.
+    const Admit a2 = offer(w, kHandleA, true);
+    ckv(a2.depth_sheet == 1, "16 the next record is served", 1, a2.depth_sheet);
+    int wrong = 0, seen_a = 0, seen_b = 0;
+    for (int vj = 0; vj < kLat; ++vj) {
+      for (int vi = 0; vi < kLat; ++vi) {
+        d.dig_ready_i = 0;
+        d.sheet_texel_i = uint16_t(w.law_texel(vi, vj));
+        w.tick();
+        w.tick();
+        w.tick();
+        d.dig_ready_i = 1;
+        d.eval();
+        int want = int(d.sheet_strength_o);
+        if (vj == 0 && vi == tgt_a) { want = val_a; ++seen_a; }
+        if (vj == 0 && vi == tgt_b) { want = val_b; ++seen_b; }
+        if (int(d.sheet_before_o) != want) ++wrong;
+        w.tick();
+      }
+    }
+    d.dig_ready_i = 0;
+    ckv(seen_a == 1 && seen_b == 1, "16 both target vertices were visited", 1,
+        (seen_a == 1 && seen_b == 1) ? 1 : 0);
+    ckv(wrong == 0,
+        "16 THE SKID REFILLED AS IT DRAINED: both back-to-back results were "
+        "stored and served, and every other vertex serves `after`",
+        0, wrong);
+    retire(w);
+  }
+
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
   std::fflush(stdout);
 

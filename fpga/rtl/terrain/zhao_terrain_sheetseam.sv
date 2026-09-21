@@ -560,8 +560,16 @@ module zhao_terrain_sheetseam #(
   // through the one door it did not previously have.
   wire sr_keyed_c = (bf_live_q == '0) || (sr_handle_i == bf_handle_q);
   // A result is TAKEN if the plane will accept it: either the write port is
-  // free this cycle, or the skid is.
+  // free this cycle, or the skid is (a skid that DRAINS this cycle is free,
+  // because it hands its entry to the port and can take the new one).
   wire sr_room_c = !rd_issue_c || !sk_valid_q;
+  // ... and it goes STRAIGHT to the plane only when nothing is ahead of it.
+  // Anything else must PARK, including the case where the skid is draining --
+  // the port is carrying the skid's OLDER entry this cycle, not this one.
+  // Getting this wrong loses the arriving result silently while `sr_take_c`
+  // still counts it: the same defect as the collision itself, one layer out,
+  // and the first version of this skid had it.
+  wire sr_direct_c = !rd_issue_c && !sk_valid_q;
   wire sr_take_c = sr_fire_c && sr_addressable && sr_keyed_c && sr_room_c;
   // DROPPED for either reason, and both are counted on the same port because
   // both mean the same thing to the record: the plane no longer describes a
@@ -758,7 +766,11 @@ module zhao_terrain_sheetseam #(
       // The skid: park a result the write port could not take, drain it the
       // moment the port is free. Both in one if/else so a drain and a park in
       // the same cycle cannot both claim the register.
-      if (sr_take_c && rd_issue_c) begin
+      if (sr_take_c && !sr_direct_c) begin
+        // Park. This covers BOTH shapes: the port busy with the dig, and the
+        // port busy draining the skid's older entry -- in which case the skid
+        // empties and refills in the same cycle, which is correct and is why
+        // the drain arm below must not also run.
         sk_valid_q  <= 1'b1;
         sk_idx_q    <= sr_idx_c;
         sk_before_q <= sr_before_i;
