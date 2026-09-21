@@ -166,10 +166,26 @@ module zhao_forge_pagebank
     input  var logic [31:0]  d_program_i,
     /* verilator lint_on UNUSEDSIGNAL */
     input  var logic [ 7:0]  d_kind_i,        // forge_kind -- the ROTATED numbering
-    input  var logic [15:0]  d_material_i,    // the draw's material id
+    // The draw's `handle32[material]`, WHOLE. The low 16 bits go to
+    // `zhao_forge_prim` as the per-triangle material id it already carries; the
+    // whole handle goes out on `p_material_set_o` for the window's request.
+    // Narrowing it here would throw away the half the window is keyed by.
+    input  var logic [31:0]  d_material_i,
     input  var logic [15:0]  d_frame_tick_i,  // R241 D-TICK-A, from pad[11]
     input  var logic [ 1:0]  d_view_mask_i,
     input  var logic [15:0]  d_src_id_i,
+
+    // ---- the assembler's interlock -----------------------------------------
+    // High while a forge primitive is in flight downstream. THIS BLOCK HOLDS
+    // ITS NEXT DRAW AGAINST IT, and the reason is specific rather than
+    // cautious: the material SET is a 32-bit per-primitive value and
+    // `zhao_forge_prim`'s material port is 16 bits wide, so the set cannot
+    // travel on the triangle stream and must be a LEVEL. A level that changed
+    // while the assembler still held the previous primitive would put draw B's
+    // material under draw A's triangles with every counter in the chain
+    // balancing -- CLAUDE.md's metadata-swap fault exactly, and invisible to
+    // any count because no count looks at the field that moved.
+    input  var logic         asm_busy_i,
 
     // ---- the TOPOLOGY job -> zhao_forge_prim -------------------------------
     output var logic         p_valid_o,
@@ -180,6 +196,16 @@ module zhao_forge_pagebank
     output var logic [15:0]  p_material_o,
     output var logic [ 1:0]  p_view_mask_o,
     output var logic [15:0]  p_src_id_o,
+
+    // ---- the primitive's material SET, a held level ------------------------
+    // `DrawProcedural` carries `handle32[material] material` and
+    // `zhao_material_window` is keyed by (set handle32, id u16). The mapping
+    // between the two is NOT STATED ANYWHERE IN THE TREE -- `handle32[material]`
+    // occurs exactly once in all of `spec/commands.zidl`, on DrawProcedural's
+    // own line. This block therefore CARRIES the draw's handle unchanged and
+    // lets `zhao_forge_assemble`'s parameters decide how it is presented, so
+    // the interpretation lives in one named place and a ruling moves two lines.
+    output var logic [31:0]  p_material_set_o,
 
     // ---- the POSITIONS job, RIBBON -> zhao_forge_prim_eval -----------------
     output var logic         e_valid_o,
@@ -339,6 +365,7 @@ module zhao_forge_pagebank
   logic [23:0]  d_index_q;
   logic [ 7:0]  d_kind_q;
   logic [15:0]  d_material_q;
+  logic [31:0]  d_mset_q;
   logic [15:0]  d_tick_q;
   logic [ 1:0]  d_vmask_q;
   logic [15:0]  d_src_q;
@@ -357,7 +384,7 @@ module zhao_forge_pagebank
   logic         p_done_q, x_done_q;
 
   assign busy_o   = (state_q != S_IDLE);
-  assign d_ready_o = (state_q == S_IDLE);
+  assign d_ready_o = (state_q == S_IDLE) && !asm_busy_i;
 
   // ==========================================================================
   // THE READ REQUEST
@@ -544,6 +571,7 @@ module zhao_forge_pagebank
   assign p_material_o  = d_material_q;
   assign p_view_mask_o = r0_vmask_c & d_vmask_q;
   assign p_src_id_o    = d_src_q;
+  assign p_material_set_o = d_mset_q;
 
   // THE LIVE PHASE IS base + frame_tick (R241 D-TICK-A), and the add WRAPS.
   // A phase is an angle16 whose whole turn is the WIDTH of the field, so a
@@ -633,6 +661,7 @@ module zhao_forge_pagebank
       d_index_q        <= 24'd0;
       d_kind_q         <= 8'd0;
       d_material_q     <= 16'd0;
+      d_mset_q         <= 32'd0;
       d_tick_q         <= 16'd0;
       d_vmask_q        <= 2'd0;
       d_src_q          <= 16'd0;
@@ -689,7 +718,8 @@ module zhao_forge_pagebank
             end else if (d_valid_i) begin
               d_index_q    <= d_program_i[31:8];
               d_kind_q     <= d_kind_i;
-              d_material_q <= d_material_i;
+              d_material_q <= d_material_i[15:0];
+              d_mset_q     <= d_material_i;
               d_tick_q     <= d_frame_tick_i;
               d_vmask_q    <= d_view_mask_i;
               d_src_q      <= d_src_id_i;
