@@ -532,14 +532,40 @@ module zhao_terrain_sheetseam #(
       // counter that no legal input can move is a counter that owes a
       // committed mutant, and the honest instrument for a structural
       // invariant is an assertion that fires in simulation.
+      //
+      // THE `out_q != 0` ON THE DECREMENT IS NOT DEFENSIVE PADDING. Without
+      // it an orphan response underflows a two-bit counter to 3, `fill_done_c`
+      // (which requires `out_next_c == 0`) can then never be true, and the
+      // block WEDGES -- a silent stall, which this file's own psmux citation
+      // calls worse evidence than a counted anomaly. The orphan itself is
+      // counted where it can be seen, on the share's `pg_orphan_o`.
       if (req_fire_c && !pg_fire_c) out_q <= out_q + 2'd1;
-      else if (pg_fire_c && !req_fire_c) out_q <= out_q - 2'd1;
+      else if (pg_fire_c && !req_fire_c && (out_q != 2'd0)) out_q <= out_q - 2'd1;
 
       case (state_q)
         // -----------------------------------------------------------------
         S_WATCH: begin
           serve_q <= 1'b0;
-          if (job_valid_i && job_want_sheet_i) begin
+          // DRAIN BEFORE RESTARTING, AND THIS CONDITION REPLACES A TIMING
+          // ARGUMENT WITH A STRUCTURE. A fill abandoned by the abort arm
+          // below can leave ONE request outstanding, and if the producer
+          // immediately offers a different patch, that response belongs to
+          // the OLD handle while `w_idx_q` has been reset for the NEW one --
+          // one patch's strength byte written into another patch's slot 0,
+          // with every handshake legal and every counter balanced. That is
+          // this file's own record-swap defect, arriving through the back
+          // door.
+          //
+          // It is ALREADY unreachable, because the `str_q` write is gated on
+          // `state_q == S_FILL` and the store answers exactly one cycle after
+          // its request fires, so the stale response always lands in the
+          // S_WATCH cycle between the two fills. But that is a two-block
+          // timing argument holding a correctness property, and
+          // `zhao_surface_sheet`'s latency is documented as VARIABLE. So the
+          // property is made structural instead: no fill starts while
+          // anything is in flight. It costs one cycle on a refetch and
+          // nothing at all otherwise.
+          if (job_valid_i && job_want_sheet_i && (out_q == 2'd0)) begin
             pf_handle_q <= job_handle_i;
             pf_src_id_q <= job_src_id_i;
             pf_missed_q <= 1'b0;
