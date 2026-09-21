@@ -5887,3 +5887,126 @@ repair, may close I32), SHADOWSUB (FORGE.SHADOW under D2), GOURAUDBUILD (D1).
 **And the queue's next items are now unambiguous:** FORGE.PRIM / FORGE.PRIM_EVAL
 (unblocked by D2's reversal of R199), the `form -> clip bank` law, the HUD band,
 I29's consumer, FORGE.CLIFF. **Cost is not a reason to defer any of them.**
+
+## R237 — A BLOCKER THAT INFLATES THE WORK HAS NO IMMUNE RESPONSE, and that is how FORGE.SHADOW got five passes of zero movement
+
+**2026-09-21, SHADOWSUB's follow-up. Register 22 → 22.** The lane built the
+arbiter it had found missing, **and then withdrew its own blocker** — the one I
+had written a ruling around.
+
+### The observation, which is new and is the most useful thing in this packet
+
+> **"Both my errors this packet ran in the direction that made the work look
+> BIGGER. That is the inverse of the failure `CLAUDE.md` warns about and has
+> none of the immune response — a diagnosis that ABSOLVES the design gets
+> challenged; a blocker that DEFERS work gets believed and re-quoted. Which is
+> how this cluster got five passes of zero movement."**
+
+**`CLAUDE.md`'s law is about diagnoses landing SOFT:** *"the comfortable
+explanation arrives first and explains almost all of the evidence… when a
+diagnosis means the design is fine, spend the extra five minutes."* **That law
+has produced an immune response here — this campaign challenges soft diagnoses
+reflexively.**
+
+**There is no such reflex for the opposite.** A blocker that makes work look
+larger reads as *conservative*, *rigorous*, *safely pessimistic* — and so it is
+**believed, re-quoted, and inherited**. It defers work rather than licensing it,
+which feels like the careful direction. **It is not: it is the same failure with
+better manners, and it costs whole passes.**
+
+**The evidence is the cluster's own history.** FORGE.SHADOW went **21 → 21 five
+times**. Every pass re-verified the blockers and every pass believed them. **The
+one lane that tried to build against them found two were wrong, one was a
+checkmark over an absence, and one it had authored itself.**
+
+**This joins R229 as the second inverted-flattering-direction law**, and the
+pair is now general: *ask which way your error would have to run to be
+comfortable, and check that direction hardest — for a builder that is "smaller",
+for an auditor it is "I found something", and for a blocker it is "this is
+bigger than you thought".*
+
+### What it withdrew, and what that costs me
+
+The lane had reported that **an arena-fill path on client A's RESULT port would
+re-author a ratified law**, and **I ruled it out of scope on that word.**
+
+**It is not needed.** `zhao_part_project` takes particle results straight out on
+`q_*` as `signed [20:0]` canvas coordinates **with no arena anywhere on that
+path**. A client-A client owes **a rider and a demux arm**, not an arena — and
+**particles prove it in composed silicon.** The widths already agree:
+`q_x_o` is `signed [20:0]` and `zhao_geom_clip.tri_ax_i` is `signed [20:0]`,
+R188's headroom finding landing where it is needed.
+
+> **So nothing in this subsystem re-authors a ratified law, and my out-of-scope
+> ruling guards nothing.**
+
+**That is now the SECOND time R133's "this needs an owner decision" has
+dissolved under measurement** — the first being R3, which already names
+FORGE.SHADOW's instance-centre 1/w as one of the three sharers. **Neither of
+this subsystem's two supposed law questions was real.**
+
+### What was built, and the defect its own test caught
+
+**`zhao_terrain_tapshare`** — the arbiter the `tap_*` checkmark was hiding.
+**The hard part was not arbitration:** the tap's response carries **no tag and
+no rider**, so unlike every other shared service here **routing cannot be by
+rider and the block must hold the owner itself**. One register rather than a
+queue, **licensed by a measured fact** (`req_ready_o = (st_q == S_IDLE)`),
+recorded as `SINGLE_FLIGHT_ONLY` and **`$fatal`-guarded so a future pipelined
+tap fails to ELABORATE rather than quietly needing a queue.** Response data is
+**broadcast, not muxed N ways** — eighteen 32-bit buses × N of ALM for a value
+only one client can want.
+
+**Its own directed test found a real defect in its first version:** it could not
+grant on the cycle an owner retired, so **every height tap cost a dead cycle —
+~8% of the tap's thirteen-state walk, on every tap the console will ever make.**
+
+> **It linted clean with `-Wall`, passed the Quartus-17 gate, and was
+> functionally correct. No gate in this tree could have seen it.** Only the
+> *"granted on the retiring cycle"* check did.
+
+**That is R60's argument in one incident** — a directed test must BUILD AND RUN,
+because the thing it catches is not a lint class.
+
+**97 checks**, grants alternating exactly over 20 contended rounds with the
+N−1 bound **exercised rather than asserted**, the discriminating case being an
+owner held across a six-cycle walk while the *other* client asserts valid. Plus
+an **inverted-polarity positive control** where `stray_rsp_o` fires and the
+answer provably reaches nobody. **Silent on legal stimulus, fires on the fault**
+— R95 satisfied. The mutant is a copy and was **regenerated after the repair.**
+
+**And both ledger gates correctly REFUSED the file** until it had a disposition
+(`G4 UNCLASSIFIED`, `UNACCOUNTED`) — **R210 working as designed.**
+
+### Why the composition did not land, and why that is structural rather than shy
+
+**Adding ports to `zhao_part_project` obliges the core to connect them.** With
+no LODSTATE to connect them to, **the only legal connection is a tie-off —
+closing no gap and opening one**, which R75 endorses refusing. **There is no
+SystemVerilog port default Quartus honours, so there is no third option.**
+LODSTATE in turn needs forge_shadow. **One commit or none**, and the lane
+declined to land a terminal build at lower quality than the arbiter got.
+
+**R3's proof cannot land yet either, and the lane declined to fake it:**
+`tb_part_project` verilates the block **standalone**, so composed multi-client
+throughput has never been measured. Quoting the service header's
+398,784/1,666,666 *"would be comparing a current design to an old claim"* —
+which is `CLAUDE.md`'s "never compare a current file to an old measurement",
+refused unprompted.
+
+### Two things for the next lane, and one bears on a DIFFERENT open question
+
+* **The terminal build is ordinary engineering, no law:** fan assembler +
+  GEOM.CLIP-door arbiter + material span. **The arbiter is done and waiting.**
+* **`zhao_geom_drawjob`'s form index is EXPOSABLE, NOT INVENTABLE — drawjob
+  already holds `form_idx_q`.** *That bears directly on POSEREAD's open
+  `form -> clip bank` question*, where the concern was that wiring a draw
+  through would serve **a correct palette for the wrong animal**. **If the form
+  index already exists one block upstream, the cheapest of POSEREAD's three
+  options may be cheaper still.** **To be verified by whoever takes it, not
+  assumed from here.**
+
+**Still open and genuinely the owner's:** the per-instance ladder's view
+selector at `mask == 2'b11` — the lane recommends **paying the index bit**.
+**Still mine:** whether to compose the governor with its TERRAIN.LOD group
+dangling. **R75 and R223 say hold, and the lane did not overturn that.**
