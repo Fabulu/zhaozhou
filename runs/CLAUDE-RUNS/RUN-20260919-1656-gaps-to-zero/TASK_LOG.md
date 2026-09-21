@@ -900,3 +900,43 @@ kind-8/kind-9 ruling; targets **I29**), WARPBUILD (GEOM.WARP — `DrawWarpedForm
 
 **New goal, 2026-09-21:** gaps to zero → **the real full console fit** → damage
 control and optimisation.
+
+## 2026-09-21 — wave 9: all four merged, combined smoke CLEAN, one lane running
+
+**Merged:** TERRASSEM (`zhao_terrain_spdesc`, 1,035 checks — dissolved two of
+JOBISSUE's three `sp_*` absences and found a defect in its own
+`patches_unfresh_o`), FORMOWN (**the owner's kind-8/kind-9 ruling implemented** —
+both headers still 64 bytes, VERSION split into three rather than bumped, the
+golden's owner deliberately the ladder's SECOND row so "read the owner word" and
+"read row zero" are separable; clipread 443 → 762 checks), WARPBUILD
+(**`DrawWarpedForm 0x0304` exists**, CMD.EXEC decodes it, cmd_exec 850 → 961).
+
+**One conflict, in `tb_zhao_console_core_smoke.sv`:** both lanes ADDED port
+declarations. Kept BOTH — the bench binds with `.*`, so an undeclared port is a
+verilation failure, not an unchecked port.
+
+**COMBINED SMOKE SWEEP, all ten forms, on the merged tree:**
+`plain/Mutant/UntexMutant/BadVertex/NoEchoArm/BadTraceArm/GlowTag` rc=0 fatals=0;
+**`NoTableLoad` and `BadDescriptor` rc=0 fatals=1 (INVERTED, correct)**;
+`LintOnly` 24 s. **Every real form ran 240–267 s**, so none is a disguised
+one-second verilation failure. All four generated artifacts FRESH, parity clean,
+q17 RC 0, tie-off audit 0 SILENT.
+
+**Register 25** (9 tie-offs + 16 disconnected). **Nothing closed.**
+
+> **THE STRUCTURAL FACT, and it now governs the queue: the count has gone
+> 22 → 25 across five lanes, and every rise is R214 working — a lane builds a
+> genuinely missing capability, contract+silicon owes a ledger row, and the
+> number goes UP until the thing is COMPOSED. We do not reach zero by building.
+> We reach it by composing.**
+
+**Two real defects found and honestly NOT repaired, both outside their lane's
+file set — pick these up:**
+* `zhao_field_loader`'s `st_idx` is written only on the INSTALL path, so a
+  successful `K_BIND` replies with **the last install's slot and generation**.
+* `zhao_cmd_exec.sv` lacks a **decode arm** for `pixel_error` and `view_count`.
+  Both fields ARE in the ratified ABI; the comment saying otherwise has been
+  read campaign-wide as "the field is unavailable". R63's `eye[3]` shape.
+
+**Running (ONE lane, per the owner's cap):** TERRACOMP — compose the TERRAIN
+group, seven of the sixteen disconnected modules. Not another build.
