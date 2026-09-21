@@ -3942,6 +3942,109 @@
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).
 //
+//      =====================================================================
+//      READ THIS BLOCK FIRST. RE-MEASURED 2026-09-21 (gz/fieldlane) AND
+//      EVERY RECORDED BLOCKER BELOW IS SPENT. The prose after it is kept
+//      because its REASONING is still worth reading, but four of its
+//      factual assertions are false in today's tree and are struck inline
+//      where they appear. Owner ruling R165 found two of three spent on
+//      2026-09-19; the count today is higher, not lower, and the entry had
+//      re-asserted one of them AFTER R165 struck it (that recurrence is
+//      R190's own finding: "when a blocker is struck, the strike has to land
+//      in the ENTRY, not only in a ruling").
+//
+//      S1. "THE UNIFORMS HAVE NO PRODUCER" -- SPENT. The CMDFIELD packet
+//          built it at commit 33571772, "I34's build item (a)". CMD.EXEC now
+//          carries the whole TerrainField 0x0200 lowering:
+//          `tfld_valid_o`/`tfld_ready_i`, the four footprint fx16
+//          (`tfld_x0_o`/`_z0_o`/`_x1_o`/`_z1_o`), `tfld_handle_o`,
+//          `tfld_cmd_o`, and the three uniform carriers this entry said were
+//          absent -- `tfld_start_tick_o` (R2's origin), `tfld_duration_o`
+//          (R3's span) and `tfld_params_o` (256 bits, p0..p7 Q16.16 LE,
+//          R4..R11). Build items (a) AND (b) are done: CMD.EXEC emits the
+//          uniforms on the SAME handshake instead of a table with an
+//          undriven address port, and says why in its own header.
+//
+//      S2. "{handle -> program-hash} HAS NO PRODUCER, ZERO HITS" -- SPENT,
+//          and this is the assertion that came back after being struck. The
+//          sweep that produced the zero was `program_hash|prog_hash|
+//          programHash`, and `zhao_field_loader`'s `pub_prog_hash_o`
+//          MATCHES `prog_hash`. The search pattern was never wrong; the
+//          search was run before the producer landed. The publication port
+//          is `pub_ready_o`/`pub_pinned_o` (8 objects), `pub_sel_i` [2:0],
+//          `pub_handle_o`, `pub_prog_hash_o`, `pub_gen_o` -- composed in
+//          THIS FILE on `u_field_loader` and promoted to `fld_ldr_pub_*`.
+//          The loader's own comment says the indexed read "costs one mux the
+//          descriptor table needs anyway": it was built for this consumer.
+//          What remains is not a producer, it is `pub_sel_i`'s owner -- the
+//          core does not drive it, so resolving a handle needs the two-client
+//          share this entry already lists as build item (d).
+//
+//      S3. "PROMOTING THE PROBES OUT OF `synth/` IS THE FIELD LANE's ACT" --
+//          DONE, 2026-09-20. Both files were promoted and RENAMED.
+//          `fpga/rtl/synth/zhao_probe_walk_earth.sv` and
+//          `.../zhao_probe_patch_acc.sv` NO LONGER EXIST; a packet sent to
+//          read those paths finds nothing. They are now
+//          `fpga/rtl/terrain/zhao_terrain_field_walk.sv` and
+//          `fpga/rtl/terrain/zhao_terrain_patch_acc.sv`, both carried in
+//          `design/prod_manifest.yml` as `not-yet-adopted` with the adoption
+//          condition written out: "adopt when C1 composes the Earth
+//          datapath".
+//
+//      S4. THE OWNER DECISION BELOW IS DECIDED, AND DECIDED AGAINST THIS
+//          ENTRY's OWN RECOMMENDATION. The three-option paragraph at the end
+//          of this entry recommends option 3 (the front's "same program,
+//          same uniforms" fast path, 46 clocks to ~3). That recommendation is
+//          ruling R91, which is stamped "(provisional, coordinator)" -- it is
+//          NOT an owner ruling. The owner then ruled directly, in
+//          `reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt`
+//          section 13.1: "FH18 deliberately selects the field-major
+//          patch-working-set form, already represented by zhao_probe_patch_acc
+//          and the amended Earth contract. R91's goal is retained; its claim
+//          that a front-only three-clock transport change is the whole fix is
+//          not." That is OPTION 2, named and taken, and R91's option 3
+//          explicitly declined as insufficient. Section 13.1 closes with "Do
+//          not leave two opposite stream-order laws alive."
+//
+//      SO WHAT REMAINS IS A BUILD, NOT AN ABSENCE, AND THE OWNER HAS SCOPED
+//      IT. Directive section 13.2 commissions "the production field-major
+//      implementation under the TERRAIN.PATCH capability (for example
+//      zhao_terrain_patch_v2), retaining the old implementation as a
+//      transaction/numeric oracle for paired tests", owning eight named
+//      responsibilities including "the bounded 16-entry field intake in
+//      command order". `zhao_terrain_patch_v2` DOES NOT EXIST in this tree.
+//      Sections 13.3 (exact semantic equivalence), 13.4 (the accumulator's
+//      missing ready/valid and phase exclusivity -- the manifest row declares
+//      that gap rather than hiding it), 13.5 (the serial-channel memory
+//      organisation, ~20 M10K, a packing candidate and not a fitted claim)
+//      and 13.6 (patch lifecycle) are the rest of it.
+//
+//      AND THAT IS WHY THIS LANE COMPOSED NOTHING, which is a REFUSAL WITH A
+//      REASON rather than a deferral. The tempting act is to join CMD.EXEC's
+//      `tfld_*` to `terr_pt_fld_add_*` inside this file: the producer exists,
+//      the destination is ratified, and it would delete eight boundary inputs
+//      without dangling anything. Section 13.2 forbids it in writing -- "the
+//      old fld_add_hash_i/fld_add_cmd_i fields are trace-only in the current
+//      RTL. Store the actual required association identity in the new list
+//      explicitly; do not pretend the existing block already retained a
+//      program binding" -- and the same section takes the old serial
+//      implementation out of the shipping datapath for the patch it owns. A
+//      join into the block the owner has just made an ORACLE is composing the
+//      superseded arrangement, and `CLAUDE.md`'s rule about only ever
+//      composing the latest version is the general form of it. The join
+//      belongs to the Earth integration packet, into v2's intake, and it is
+//      ONE WIRE of that packet rather than a prerequisite for it.
+//
+//      SECTION 13.7's OTHER HALF IS ALSO STILL OWED and is NOT build item
+//      (a): "Add a positive composed mode such as -FieldActive using that
+//      software producer... The new active mode must require nonzero actual
+//      runs, correct complete output values, actual terrain consumption and
+//      successful recovery after a deliberately bad program/association."
+//      The smoke has eight forms and none of them is that one; the existing
+//      no-program form asserts ZERO completed FIELD runs and 13.7 says to
+//      keep it as the refusal control, not to read it as the positive gate.
+//      =====================================================================
+//
 //      THE REASON CHANGED 2026-09-19 AND IT IS NOW A SHARPER ONE. The old text
 //      said "THE ABSENT OWNER IS FIELD.SEQ.EARTH and it is not built", citing
 //      `tests/terrain/tb_terrain_compose.sv` and the fact that
@@ -3967,13 +4070,23 @@
 //
 //      SO CLOSING IT NEEDS A DESCRIPTOR TABLE keyed by `fld_add_cmd_i`, filled
 //      by CMD.EXEC's TerrainField arm, which is the same absent producer entry
-//      I42 names for the program store. That is one seam, not two. (The `I42`
+//      I42 names for the program store.  <-- STRUCK 2026-09-21, see S1 above:
+//      THAT ARM IS BUILT (CMD.EXEC `tfld_*`, commit 33571772) and it emits the
+//      uniforms on the handshake rather than into a table, deliberately,
+//      because a table's address port would have had no driver. The paragraph
+//      above is correct that ten zeroed uniform lanes would be a lie; the
+//      producer that prevents it now exists. That is one seam, not two. (The `I42`
 //      meant there is THE FIELD ENGINE'S PROGRAM LOADER, below. A second entry
 //      was written as I42 the same hour and has been renumbered I44; this
 //      citation was one of the two the collision made ambiguous.)
 //
 //      AND BEFORE BUILDING THE WALKER THAT FEEDS THIS LANE, READ
-//      `fpga/rtl/synth/zhao_probe_walk_earth.sv`. Added 2026-09-19 by the
+//      `fpga/rtl/synth/zhao_probe_walk_earth.sv`.  <-- STRUCK 2026-09-21, see
+//      S3 above: that PATH IS DEAD. The file was promoted and renamed to
+//      `fpga/rtl/terrain/zhao_terrain_field_walk.sv` on 2026-09-20, and
+//      `zhao_probe_patch_acc.sv` to `.../zhao_terrain_patch_acc.sv`. The
+//      paragraph's ARGUMENT survives the rename intact and is why it is kept.
+//      Added 2026-09-19 by the
 //      terrain sweep, because the file is exactly the shape this repository
 //      lost three weeks to once already -- a finished engine kept out of the
 //      machine because `probe` was in its filename. It is the Earth LATTICE
@@ -4069,6 +4182,13 @@
 //      (including `synth/`) -- ZERO hits; `programHashOfBytes` exists only in
 //      `reference/src/zfield/zfield_decode.cpp`. Nothing in hardware publishes
 //      {handle -> hash}.
+//      <-- STRUCK 2026-09-21, see S2 above. Re-running that exact sweep today
+//      returns 22 hits under `fpga/rtl`, and the decisive one is
+//      `pub_prog_hash_o` in `zhao_field_loader.sv`, which MATCHES the pattern
+//      `prog_hash`. The regex was never wrong: the sweep was a claim about a
+//      MOMENT and the producer landed after it was run. A zero-hit sweep needs
+//      a date, and it needs re-running before it is quoted rather than when it
+//      was written.
 //      RECOMMENDED, for the owner to confirm: SW.STREAM owns the mapping,
 //      because it is the only party that has both -- it names the program by
 //      handle in the plan and computes the hash with `zfield::programHashOfBytes`
@@ -4104,6 +4224,13 @@
 //      in as many words -- "Nothing inside the console loads a field program
 //      ... its owner is CMD.EXEC's TerrainField 0x0200 arm ... That arm is not
 //      built."
+//      <-- STRUCK 2026-09-21, BOTH HALVES, see S1 and S2 above. This is the
+//      re-assertion R190 recorded: R165 had ALREADY struck the hash blocker on
+//      2026-09-19 and it was written back into this entry on 2026-09-20 as
+//      "re-checked rather than inherited". The re-check was honest and it was
+//      the same stale sweep. The arm is now built (commit 33571772), so the
+//      field host's quoted sentence is stale too -- and it is stale IN THAT
+//      FILE as well, which is where the next reader will meet it.
 //
 //      ONE CORRECTION TO THE LIST ABOVE, and it makes (c) smaller: the hash's
 //      ONLY real consumer is the EARTH adapter. `zhao_terrain_patch.sv`:125-126
@@ -4151,6 +4278,18 @@
 //      calls for"), so one repair serves both.
 //
 //      THE OWNER DECISION, with three options and a recommendation:
+//      <-- DECIDED 2026-09-21, see S4 above, and the answer is OPTION 2. The
+//      "RECOMMENDED" stamp on option 3 below is ruling R91, which the rulings
+//      file marks "(provisional, coordinator)" and NOT an owner ruling. The
+//      owner then ruled directly, in the SHARED FIELD directive section 13.1:
+//      "FH18 deliberately selects the field-major patch-working-set form ...
+//      R91's goal is retained; its claim that a front-only three-clock
+//      transport change is the whole fix is not." Option 3's GOAL survives --
+//      the uniforms are still loaded once per association -- but it is not the
+//      whole fix and it is not the selected architecture. The three options
+//      are kept below because the MEASUREMENT under them is what the decision
+//      was made on, and because reading a decided question's alternatives is
+//      how the next reader avoids re-opening it.
 //
 //        1. ACCEPT IT for v1 -- field-driven terrain height exists and does not
 //           fit its budget. Honest, and it makes the allowance a lie.
