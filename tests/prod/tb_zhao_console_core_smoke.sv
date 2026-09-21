@@ -1386,6 +1386,7 @@ module tb_zhao_console_core_smoke
   logic        [ 7:0] surf_res_tag_o;
   logic        [ 7:0] surf_res_strength_o;
   logic        [ 7:0] surf_res_before_o;
+  logic        [31:0] surf_res_handle_o;   // OWNER RULING R231
   logic        [15:0] surf_res_src_id_o;
   logic        [ 1:0] surf_pg_op_o;
   logic        [ 7:0] surf_pg_tag_o;

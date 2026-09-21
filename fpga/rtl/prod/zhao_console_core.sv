@@ -4376,7 +4376,11 @@
 //        cmd_depth_from_i       ABSENT
 //        cmd_depth_to_i         ABSENT
 //        cmd_cells_i            ABSENT
-//        cmd_depth_sheet_i      ABSENT
+//        cmd_depth_sheet_i      LIVE  `zhao_terrain_sheetseam.bk_depth_sheet_o`
+//                                     (R221's fallback law in one bit, and
+//                                     R231's torn/foreign-plane refusals on
+//                                     the same wire). Was ABSENT until
+//                                     2026-09-21.
 //
 //      SO THE REFUSAL IS NOW FOUR FIELDS, NOT A SUBSYSTEM, and each is a
 //      DECISION rather than a wire. They are written up as D-TERRCMD-A/B/C.
@@ -4422,7 +4426,67 @@
 //        that is telling the truth. The defect is in WHICH QUESTION IS ASKED
 //        of it, and every instrument here measures the answer.
 //
-//        NEITHER SIDE MAY BE PICKED INSIDE A PACKET. S3 is a ratified
+//        >> RULED 2026-09-21. **OWNER RULING R231: TAKE THE DELTA**, and it
+//        >> was never an owner decision -- "S3 is RATIFIED and decided it
+//        >> already, including rejecting the built branch by name". BUILT the
+//        >> same day (deltalaw); what follows is left standing because a
+//        >> question asked and closed must not read as a question never asked.
+//        >>
+//        >> `zref::terrain::stamp_delta_at_vertex` is the law, expressed as a
+//        >> DIFFERENCE OF the ratified absolute one rather than a second art
+//        >> table. `zhao_terrain_bake_v2` gained `sheet_before_i` and a SECOND
+//        >> `zhao_terrain_stampdepth` INSTANCE; its sheet arm is now
+//        >> `sd_delta_h16 = sd_depth_h16 - sd_before_h16`. The disc arm never
+//        >> moved -- and it was ALWAYS a delta, `(g_from_c - g_to_c)`, which
+//        >> is this whole defect in one line: two laws feeding one
+//        >> accumulator and only one of them differencing.
+//        >>
+//        >> `zhao_terrain_sheetseam` gained `sheet_before_o` and a 1,089x9-bit
+//        >> plane fed from a `stamp_results` SINK, and `zhao_surface_stamp`
+//        >> gained `res_handle_o` so that stream can be ROUTED to a patch --
+//        >> `st_handle` CARRIED, not derived, which is SURFACE.SHEET's C4
+//        >> satisfied the way the paragraph below says it can be.
+//        >> **`surf_res_before_o` -- the port this entry is NAMED after -- now
+//        >> has its first consumer in the tree.** PAGEIO had measured "ZERO
+//        >> CONSUMERS of `res_texel_i` / `res_strength_i` / `res_before_i` in
+//        >> `fpga/` OR `tests/`"; that sentence is no longer true.
+//        >>
+//        >> THE COLD CASE IS NOT A SPECIAL CASE. `kStampDepthTable[0]` is 0
+//        >> (now `static_assert`ed -- it was undefended by any gate), so a
+//        >> `before` plane of zeroes makes the delta law EQUAL the absolute
+//        >> one bit for bit. `terrain_bake_v2_sheet_directed`'s 6,548 checks
+//        >> and `terrain_bake_v2_directed`'s 267 pass UNCHANGED, measured.
+//        >>
+//        >> EVIDENCE: `tests/terrain/bake_delta_idempotence_directed.cpp`,
+//        >> 5,952 checks, 0 failures. A DIFFERENTIAL against the oracle across
+//        >> two bakes, because no counter can see this class of fault -- R215's
+//        >> shape. Its case 3 is the positive control and REQUIRES the crater
+//        >> to double when `before` is forced to zero, because a test that
+//        >> passes on an inert machine looks like one that passes on a correct
+//        >> machine. `sheetseam_rtl_directed` went 81 -> 103 checks with the
+//        >> three new counters asserted silent and then fired.
+//        >>
+//        >> TWO CORRECTIONS TO THE PARAGRAPH BELOW, both found by checking it:
+//        >>   * "Operation 0 (the only op L1 uses) REPLACES the texel" is
+//        >>     WRONG. ABI operation 0 is `max(dst, src)`
+//        >>     (`zref::surface::blend_of_abi_operation`, SURFACE.STAMP S1);
+//        >>     REPLACE is `kBlendReplace = 5`, reachable only through
+//        >>     `cmd_blend_en_i`. Idempotence holds anyway -- under max, an
+//        >>     identical re-stamp leaves `after == before` -- so the ruling is
+//        >>     right for a reason nobody had checked.
+//        >>   * "a committed mutant (mutation 8)" is a row in SURFACE.STAMP's
+//        >>     table headed "Before the rearchitecture (2026-08-21), kept for
+//        >>     the record". It is a HISTORICAL sweep, not a live control.
+//        >>
+//        >> AND THIS ENTRY STILL DOES NOT CLOSE. `cmd_depth_sheet_i` now HAS a
+//        >> producer -- the seam's `bk_depth_sheet_o` -- so the four absent
+//        >> fields below are THREE: `cmd_depth_from_i`, `cmd_depth_to_i` and
+//        >> `cmd_cells_i`. Re-verified in this tree: every `depth_from` /
+//        >> `depth_to` hit under `fpga/rtl` is bake's own port, its internal
+//        >> `c_from`/`c_to`, or `zhao_terrain_bake_delta`'s. D-TERRCMD-B
+//        >> stands, and with it the refusal.
+//
+//        ~~NEITHER SIDE MAY BE PICKED INSIDE A PACKET.~~ S3 is a ratified
 //        contract decision with a committed mutant; `stamp_depth_at_vertex`
 //        is the oracle owner ruling R194 named, and 9.3(c)'s closing line
 //        ratifies it as "the oracle TERRAIN.BAKE's per-vertex depth mode is
@@ -8323,6 +8387,12 @@ module zhao_console_core
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
   output logic [ 7:0] surf_res_before_o,
+  // WHICH SHEET THOSE TEXELS BELONG TO. Added 2026-09-21 under OWNER RULING
+  // R231: `zhao_terrain_sheetseam` now consumes `res_before_o` to build
+  // TERRAIN.BAKE's delta, and a result stream with no identity cannot be
+  // ROUTED to a patch. It is `zhao_surface_stamp`'s own held `st_handle` --
+  // the ABI's `handle32[patch]`, CARRIED and not derived (SURFACE.SHEET C4).
+  output logic [31:0] surf_res_handle_o,
   output logic [15:0] surf_res_src_id_o,
 
   // SURFACE.SHEET's spare response fields. NOT a gap: SURFACE.STAMP consumes
@@ -13482,6 +13552,7 @@ module zhao_console_core
     .res_tag_o     (surf_res_tag_o),
     .res_strength_o(surf_res_strength_o),
     .res_before_o  (surf_res_before_o),
+    .res_handle_o  (surf_res_handle_o),
     .res_src_id_o  (surf_res_src_id_o),
 
     .stamp_done_o            (surf_stamp_done_o),

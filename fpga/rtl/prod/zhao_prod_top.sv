@@ -4858,6 +4858,7 @@ module zhao_prod_top (
   logic [8-1:0] u60_res_tag_o;
   logic [8-1:0] u60_res_strength_o;
   logic [8-1:0] u60_res_before_o;
+  logic [32-1:0] u60_res_handle_o;
   logic [16-1:0] u60_res_src_id_o;
   logic [1-1:0] u60_stamp_done_o;
   logic [1-1:0] u60_stamp_rejected_o;
@@ -4915,6 +4916,7 @@ module zhao_prod_top (
       .res_tag_o(u60_res_tag_o),
       .res_strength_o(u60_res_strength_o),
       .res_before_o(u60_res_before_o),
+      .res_handle_o(u60_res_handle_o),
       .res_src_id_o(u60_res_src_id_o),
       .stamp_done_o(u60_stamp_done_o),
       .stamp_rejected_o(u60_stamp_rejected_o),
@@ -4925,7 +4927,7 @@ module zhao_prod_top (
   logic u60_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u60_fold_q <= 1'b0;
-    else u60_fold_q <= u60_fold_q ^ (((^u60_cmd_ready_o)) & u60_src[0]) ^ (((^u60_fld_ready_o)) & u60_src[1]) ^ (((^u60_req_valid_o)) & u60_src[2]) ^ (((^u60_req_op_o)) & u60_src[3]) ^ (((^u60_req_handle_o)) & u60_src[4]) ^ (((^u60_req_texel_o)) & u60_src[5]) ^ (((^u60_req_src_id_o)) & u60_src[6]) ^ (((^u60_pg_ready_o)) & u60_src[7]) ^ (((^u60_wr_valid_o)) & u60_src[8]) ^ (((^u60_wr_handle_o)) & u60_src[9]) ^ (((^u60_wr_texel_o)) & u60_src[10]) ^ (((^u60_wr_tag_o)) & u60_src[11]) ^ (((^u60_wr_strength_o)) & u60_src[12]) ^ (((^u60_wr_we_tag_o)) & u60_src[13]) ^ (((^u60_wr_we_strength_o)) & u60_src[14]) ^ (((^u60_wr_src_id_o)) & u60_src[15]) ^ (((^u60_res_valid_o)) & u60_src[16]) ^ (((^u60_res_texel_o)) & u60_src[17]) ^ (((^u60_res_tag_o)) & u60_src[18]) ^ (((^u60_res_strength_o)) & u60_src[19]) ^ (((^u60_res_before_o)) & u60_src[20]) ^ (((^u60_res_src_id_o)) & u60_src[21]) ^ (((^u60_stamp_done_o)) & u60_src[22]) ^ (((^u60_stamp_rejected_o)) & u60_src[23]) ^ (((^u60_surface_stamps_o)) & u60_src[24]) ^ (((^u60_surface_texels_touched_o)) & u60_src[25]) ^ (((^u60_idle_o)) & u60_src[26]);
+    else u60_fold_q <= u60_fold_q ^ (((^u60_cmd_ready_o)) & u60_src[0]) ^ (((^u60_fld_ready_o)) & u60_src[1]) ^ (((^u60_req_valid_o)) & u60_src[2]) ^ (((^u60_req_op_o)) & u60_src[3]) ^ (((^u60_req_handle_o)) & u60_src[4]) ^ (((^u60_req_texel_o)) & u60_src[5]) ^ (((^u60_req_src_id_o)) & u60_src[6]) ^ (((^u60_pg_ready_o)) & u60_src[7]) ^ (((^u60_wr_valid_o)) & u60_src[8]) ^ (((^u60_wr_handle_o)) & u60_src[9]) ^ (((^u60_wr_texel_o)) & u60_src[10]) ^ (((^u60_wr_tag_o)) & u60_src[11]) ^ (((^u60_wr_strength_o)) & u60_src[12]) ^ (((^u60_wr_we_tag_o)) & u60_src[13]) ^ (((^u60_wr_we_strength_o)) & u60_src[14]) ^ (((^u60_wr_src_id_o)) & u60_src[15]) ^ (((^u60_res_valid_o)) & u60_src[16]) ^ (((^u60_res_texel_o)) & u60_src[17]) ^ (((^u60_res_tag_o)) & u60_src[18]) ^ (((^u60_res_strength_o)) & u60_src[19]) ^ (((^u60_res_before_o)) & u60_src[20]) ^ (((^u60_res_handle_o)) & u60_src[21]) ^ (((^u60_res_src_id_o)) & u60_src[22]) ^ (((^u60_stamp_done_o)) & u60_src[23]) ^ (((^u60_stamp_rejected_o)) & u60_src[24]) ^ (((^u60_surface_stamps_o)) & u60_src[25]) ^ (((^u60_surface_texels_touched_o)) & u60_src[26]) ^ (((^u60_idle_o)) & u60_src[27]);
 
   // ---- zhao_terrain_bake_v2 ----
   logic [63:0] u61_lfsr_q;
@@ -5003,8 +5005,9 @@ module zhao_prod_top (
       .vtx_nobake_i(u61_src[140 +: 1]),
       .sheet_texel_o(u61_sheet_texel_o),
       .sheet_strength_i(u61_src[147 +: 8]),
+      .sheet_before_i(u61_src[154 +: 8]),
       .sc_valid_o(u61_sc_valid_o),
-      .sc_ready_i(u61_src[154 +: 1]),
+      .sc_ready_i(u61_src[161 +: 1]),
       .sc_scar_o(u61_sc_scar_o),
       .sc_vi_o(u61_sc_vi_o),
       .sc_vj_o(u61_sc_vj_o),
@@ -5014,11 +5017,11 @@ module zhao_prod_top (
       .sc_src_id_o(u61_sc_src_id_o),
       .cell_ci_o(u61_cell_ci_o),
       .cell_cj_o(u61_cell_cj_o),
-      .cell_valid_i(u61_src[161 +: 1]),
+      .cell_valid_i(u61_src[168 +: 1]),
       .cell_ready_o(u61_cell_ready_o),
-      .cell_state_i(u61_src[168 +: 8]),
+      .cell_state_i(u61_src[175 +: 8]),
       .cs_valid_o(u61_cs_valid_o),
-      .cs_ready_i(u61_src[175 +: 1]),
+      .cs_ready_i(u61_src[182 +: 1]),
       .cs_state_o(u61_cs_state_o),
       .cs_ci_o(u61_cs_ci_o),
       .cs_cj_o(u61_cs_cj_o),

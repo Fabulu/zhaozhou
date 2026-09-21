@@ -134,23 +134,84 @@ game. Recorded, not hidden — the SURFACE.SHEET discipline.~~
 > `scar_sum = h_scar + delta16` with `delta16 = sd_depth_h16`.
 >
 > **The scar accumulates while the depth is absolute**, so a stamp re-issued at
-> the same place digs the full depth a second time (operation 0 REPLACES, so
-> `before == after` and the delta law would correctly dig nothing), and two
+> the same place digs the full depth a second time (operation 0 is
+> `max(dst, src)`, so a repeat of an identical stamp leaves `before == after`
+> and the delta law would correctly dig nothing), and two
 > stamps overlapping inside one frame queue two records that both dig the
 > accumulated sheet over their intersection. No counter in the seam can see it:
 > `sheet_vertices_dug_o`, `fallbacks_o` and `prefetch_beats_o` all describe a
 > healthy read of a sheet that is telling the truth. The fault is in which
 > question is asked of it.
 >
-> **This is an OWNER decision and neither side may be picked inside a packet** —
-> S3 is ratified with a committed mutant, `stamp_depth_at_vertex` is the oracle
-> R194 named and §9.3(c) ratifies. *Recommendation: the DELTA*, because it is
-> the only one of the two that is idempotent under re-stamping, it is what
-> `surf_res_before_o` was built and mutation-tested to deliver, and it restores
-> §9.2's deferral identity (see **D-TERRCMD-C**: that identity is written in
-> `from`/`to` depths "and in nothing else", so a sheet-mode record currently has
-> no state-exactness argument under `BAKE_PATCH_BUDGET`'s carry-over FIFO at
-> all). Full measurement in `zhao_console_core.sv` entry I32.
+> ~~**This is an OWNER decision and neither side may be picked inside a
+> packet**~~ — *Recommendation: the DELTA*, because it is the only one of the
+> two that is idempotent under re-stamping, it is what `surf_res_before_o` was
+> built to deliver, and it restores §9.2's deferral identity (see
+> **D-TERRCMD-C**: that identity is written in `from`/`to` depths "and in
+> nothing else", so a sheet-mode record had no state-exactness argument under
+> `BAKE_PATCH_BUDGET`'s carry-over FIFO at all).
+
+> **SPENT 2026-09-21. OWNER RULING R231: TAKE THE DELTA — and it was never an
+> owner decision, because the contract had already ruled it.** The owner's own
+> words: *"I am not taking it as a decision, because S3 is RATIFIED and decided
+> it already — including rejecting the built branch by name."* The paragraph
+> above is struck rather than deleted, because a refusal that has expired is
+> the shape this file keeps having to catch, and the next reader needs to see
+> that the question was asked and closed rather than never asked.
+>
+> **BUILT (deltalaw):**
+> * `zref::terrain::stamp_delta_at_vertex` — the delta expressed as a
+>   DIFFERENCE OF the ratified absolute law, not a second art table. The
+>   absolute form stands: it is §9.3(c)'s composed law and
+>   `stamp_to_bake_laws_directed` still holds it, 306 checks unchanged.
+> * `zhao_terrain_bake_v2` gains `sheet_before_i` and a SECOND
+>   `zhao_terrain_stampdepth` INSTANCE. `delta16`'s sheet arm is now
+>   `sd_delta_h16 = sd_depth_h16 - sd_before_h16`. The disc arm did not move —
+>   and it was ALWAYS a delta, `(g_from_c - g_to_c)`, which is the whole defect
+>   in one line: two laws feeding one accumulator, only one differencing.
+> * `zhao_terrain_sheetseam` gains `sheet_before_o` and a 1,089×9-bit plane fed
+>   from a `stamp_results` SINK — the connection S3 named, and
+>   `surf_res_before_o`'s first consumer in this tree.
+>
+> **THE COLD CASE IS NOT A SPECIAL CASE.** `kStampDepthTable[0]` is 0 (now
+> `static_assert`ed — it was undefended), so a `before` plane of zeroes makes
+> the delta law EQUAL the absolute one bit for bit. The delta is a strict
+> GENERALISATION: a first bake digs exactly what it always dug and only the
+> RE-bake moves. That is why `terrain_bake_v2_sheet_directed`'s 6,548 checks
+> and `terrain_bake_v2_directed`'s 267 pass UNCHANGED — measured, not argued.
+>
+> **THE ROUNDING IS PER LOOKUP AND THAT IS LOAD-BEARING.** The block converts
+> each depth to height16 separately and then subtracts, so it rounds twice.
+> That is what makes §9.2's deferral identity EXACT: every intermediate term of
+> h(d(mid))−h(d(0)) + h(d(to))−h(d(mid)) cancels as an integer, for any table
+> and any rounding rule. Rounding an fx16 difference once instead would give
+> each deferred step its own error and the identity would hold only
+> approximately. A test comparing against this block must difference two
+> `rescale(·,8)` results, not rescale the oracle's fx16 delta.
+>
+> **EVIDENCE:** `tests/terrain/bake_delta_idempotence_directed.cpp` — 5,952
+> checks, 0 failures, built and run. Six cases; case 3 is the positive control
+> and re-runs the second bake with `before` forced to zero, REQUIRING the
+> crater to double, because a test that passes on an inert machine looks
+> exactly like one that passes on a correct machine.
+>
+> **ONE CORRECTION TO THE REASONING, kept because the conclusion survives it
+> and the reason did not.** Every statement of this decision — R231,
+> the paragraph above as first written, and `zhao_console_core.sv` entry I32 —
+> said *"operation 0 REPLACES the texel"*. It does not. ABI operation 0 is
+> `max(dst, src)` (`zref::surface::blend_of_abi_operation`, SURFACE.STAMP's S1,
+> and that contract's formal-properties section, which names REPLACE as the
+> separate `kBlendReplace = 5` reachable only through `cmd_blend_en_i`).
+> Idempotence holds exactly anyway — under max, re-issuing an identical stamp
+> leaves `after == before` — so the ruling is right for a reason nobody had
+> checked. CLAUDE.md: the confident one-line summary is where the error lives.
+>
+> **WHAT THIS STILL DOES NOT CLOSE.** Entry I32 stays open. `cmd_depth_sheet_i`
+> now HAS a producer (the seam's `bk_depth_sheet_o`), but `cmd_depth_from_i`,
+> `cmd_depth_to_i` and `cmd_cells_i` still have no source anywhere —
+> re-verified in this tree: every `depth_from`/`depth_to` hit under `fpga/rtl`
+> is this block's own port, its internal `c_from`/`c_to`, or
+> `zhao_terrain_bake_delta`'s. See **D-TERRCMD-B**.
 
 ## Clock and reset semantics
 

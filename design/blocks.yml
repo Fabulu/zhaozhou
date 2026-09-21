@@ -231,6 +231,9 @@ counter_catalog:
   - sheetseam_dig_stall_cycles
   - sheetseam_bad_texels
   - sheetseam_stray_done
+  - sheetseam_before_texels
+  - sheetseam_sr_dropped
+  - sheetseam_before_torn
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -3371,7 +3374,7 @@ blocks:
     kind: rtl
     subsystem: terrain
     clock_domain: gpu
-    purpose: "Serves zhao_terrain_bake_v2's sheet_texel_o / sheet_strength_i -- the per-vertex depth mode owner ruling R194 added -- out of SURFACE.SHEET's resident layer F, and carries owner ruling R221's ST_MISS law. zhao_surface_sheet's req_* is a CONTROL-AND-READ port with a separate response stream and a residency status, while bake wants a combinational lookup on the same beat as layers A/B/C, so the two do not meet without an adapter. It prefetches the 1,089 texels the 33x33 lattice can address -- 1,089 and not 4,096, because section 9.3(b) decimates, and one byte and not two, because bake has no tag port -- into a single M10K, then answers the dig from it. It issues OP_READ and NOTHING ELSE: an OP_ACQUIRE on a non-resident handle allocates a BLANK sheet, which is R221's refused 'dig zero' with a status code that says HIT, and steals one of Slots = 2 from the only block terrain_rules 7 allows to write layer F."
+    purpose: "Serves zhao_terrain_bake_v2's sheet_texel_o / sheet_strength_i -- the per-vertex depth mode owner ruling R194 added -- out of SURFACE.SHEET's resident layer F, and carries owner ruling R221's ST_MISS law. zhao_surface_sheet's req_* is a CONTROL-AND-READ port with a separate response stream and a residency status, while bake wants a combinational lookup on the same beat as layers A/B/C, so the two do not meet without an adapter. It prefetches the 1,089 texels the 33x33 lattice can address -- 1,089 and not 4,096, because section 9.3(b) decimates, and one byte and not two, because bake has no tag port -- into a single M10K, then answers the dig from it. It issues OP_READ and NOTHING ELSE: an OP_ACQUIRE on a non-resident handle allocates a BLANK sheet, which is R221's refused 'dig zero' with a status code that says HIT, and steals one of Slots = 2 from the only block terrain_rules 7 allows to write layer F. OWNER RULING R231, 2026-09-21: it also serves sheet_before_o, the pre-blend strength, because TERRAIN.BAKE ACCUMULATES and what is added to an accumulator must be a CHANGE -- an absolute depth double-digs, so the same stamp sent twice dug twice. SURFACE.STAMP's decision S3 had said so since the stamp was written and rejects the absolute branch by name. The before plane is 1,089 x 9 bits ({seen, before}) fed from a stamp_results SINK, which gives surf_res_before_o its first consumer in the tree, and zhao_surface_stamp gained res_handle_o so the stream can be routed to a patch (st_handle CARRIED, not derived -- SURFACE.SHEET choice C4). The seen bit is cleared BY THE DIG'S OWN READ, so a vertex not stamped since the last bake serves before == after and contributes nothing: idempotence is structural rather than asserted. A clear-at-bake_done sweep was rejected (a 1,089-cycle window in which a stamp is wiped, which under-digs -- R221's refused 'dig zero') and so was an epoch tag (it aliases, and an aliased entry double-digs -- the defect reintroduced by the instrument meant to prevent it)."
     contract: design/contracts/TERRAIN.SHEETSEAM.md
     phase: 7
     owner_issue: ZH-129
@@ -3385,8 +3388,11 @@ blocks:
     tests:
       directed: tests/terrain/sheetseam_rtl_directed.cpp
       random: tests/terrain/sheetseam_rtl_directed.cpp
-    counters: [sheetseam_jobs, sheetseam_sheet_served, sheetseam_fallbacks, sheetseam_miss_texels, sheetseam_prefetch_beats, sheetseam_refetches, sheetseam_dig_stall_cycles, sheetseam_bad_texels, sheetseam_stray_done]
+    counters: [sheetseam_jobs, sheetseam_sheet_served, sheetseam_fallbacks, sheetseam_miss_texels, sheetseam_prefetch_beats, sheetseam_refetches, sheetseam_dig_stall_cycles, sheetseam_bad_texels, sheetseam_stray_done, sheetseam_before_texels, sheetseam_sr_dropped, sheetseam_before_torn]
     counter_ports:
+      sheetseam_before_texels: before_texels_o
+      sheetseam_sr_dropped: sr_dropped_o
+      sheetseam_before_torn: before_torn_o
       sheetseam_jobs: jobs_o
       sheetseam_sheet_served: sheet_served_o
       sheetseam_fallbacks: fallbacks_o

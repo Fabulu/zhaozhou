@@ -112,6 +112,54 @@ read port onto the sheet.
 *Rejected:* emitting only the new value and letting BAKE re-read — a second
 reader on a store whose whole rate budget is one texel per clock.
 
+> **S3 WAS RIGHT AND WAS NOT FOLLOWED, FOR THREE WEEKS. OWNER RULING R231,
+> 2026-09-21.** `zhao_terrain_stampdepth`, `zhao_terrain_sheetseam` and
+> `zhao_terrain_bake_v2`'s per-vertex mode were all built on the ABSOLUTE
+> branch — the one the *Rejected* line above names — and
+> `zhao_terrain_sheetseam` is precisely the second reader it refuses. Because
+> bake ACCUMULATES (`scar_sum = h_scar + delta16`), an absolute depth
+> DOUBLE-DIGS: the same stamp sent twice dug twice.
+>
+> **Nothing measured it, and nothing could.** Nine counters on the seam and six
+> on the bake all read correctly throughout, because every one of them measures
+> the ANSWER and the fault was in the QUESTION. R231: *"the decision was
+> already spent, in a file nobody opened."*
+>
+> **`res_before_o` NOW HAS A CONSUMER.** `zhao_terrain_sheetseam`'s `sr_*` sink
+> builds bake's `before` plane from this stream. It is the first one in the
+> tree: the PAGEIO packet had measured *"ZERO CONSUMERS of `res_texel_i` /
+> `res_strength_i` / `res_before_i` in `fpga/` OR `tests/`"*.
+>
+> **AND THE STREAM GAINED `res_handle_o` TO MAKE THAT POSSIBLE.** A result
+> stream with no identity cannot be ROUTED to a patch, and a seam that guessed
+> would be inventing a second identity law in the one place nobody would look.
+> It is `st_handle` — held for the whole texel loop, already driving
+> `req_handle_o` and `wr_handle_o` — presented a third time. CARRIED, not
+> derived, which is `SURFACE.SHEET`'s choice C4 exactly.
+>
+> **A CORRECTION TO HOW THIS GETS EXPLAINED.** R231, `TERRAIN.BAKE.md` and
+> `zhao_console_core.sv` entry I32 all say *"operation 0 REPLACES the texel,
+> so `before == after` on a repeat"*. **Operation 0 is `max(dst, src)`** — S1
+> below, `zref::surface::blend_of_abi_operation`, and the formal-properties
+> section of this file, which names REPLACE as the separate `kBlendReplace = 5`
+> reachable only through `cmd_blend_en_i`. The conclusion survives by a
+> different route: under max, re-issuing an IDENTICAL stamp also leaves
+> `after == before`, so the delta is zero and the ground moves once. The ruling
+> is right; the reason given for it was not.
+>
+> **AND MUTATION 8 IS NOT THE LIVE CONTROL IT IS CITED AS.** R231 calls it *"a
+> committed mutant standing guard"*. The row *"`stamp_results` loses the
+> pre-blend strength (the delta BAKE needs)"* sits in the table headed
+> *"Before the rearchitecture (2026-08-21), kept for the record"* — a
+> historical sweep, not the current one. The decision it guards is sound and
+> was the right call; the guard cited for it is a table entry from a machine
+> that has since been rearchitected. Checked because R231 leaned on it.
+>
+> **EVIDENCE:** `tests/terrain/bake_delta_idempotence_directed.cpp`, 5,952
+> checks, 0 failures — a DIFFERENTIAL against the oracle across two bakes,
+> because no counter can see this class of fault. Case 3 is its positive
+> control and requires the crater to double when `before` is forced to zero.
+
 **S4 — an ACQUIRE that overflows aborts the whole stamp before any write.** The
 SURFACE.SHEET ledger note is "overflow rejects the stamp, never partial-writes";
 this block enforces it **structurally** — the texel loop cannot start until the
@@ -193,7 +241,9 @@ texel, outside its if/else, even for a blend that leaves strength at 0.
 ### `stamp_results` (out, ready/valid) — S3
 
 `res_texel_o` (12), `res_tag_o` (8), `res_strength_o` (8, after the blend),
-`res_before_o` (8, before), `res_src_id_o` (16).
+`res_before_o` (8, before), `res_src_id_o` (16), `res_handle_o` (32, the
+sheet's `handle32` — added 2026-09-21 under R231 so the stream can be routed to
+a patch; it is `st_handle`, CARRIED and not derived, per SURFACE.SHEET C4).
 
 ### status
 

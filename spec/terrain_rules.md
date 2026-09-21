@@ -801,6 +801,74 @@ each end, is the entire case for 65×65.
 `zref::terrain::stamp_depth_at_vertex` is both laws in one call and is the
 oracle TERRAIN.BAKE's per-vertex depth mode is written against.
 
+### 9.3(d) THE DEPTH THAT IS DUG IS A **DELTA** — owner ruling R231, 2026-09-21
+
+(a) and (b) give the depth a strength *stands for*. They do not say what the
+bake ADDS, and for three weeks the answer was wrong.
+
+**TERRAIN.BAKE accumulates**: `scar_sum = h_scar + delta16`. An ABSOLUTE depth
+added to an accumulating scar **double-digs** — a stamp re-issued at the same
+place digs the full depth again, and two stamps overlapping inside one frame
+both dig the already-accumulated sheet. The law is therefore
+
+```
+delta(v) = rescale(stamp_depth(after[texel(v)]), 8)
+         - rescale(stamp_depth(before[texel(v)]), 8)
+```
+
+with `before` the pre-blend strength `SURFACE.STAMP`'s `stamp_results` reports
+and `after` the post-blend one. `zref::terrain::stamp_delta_at_vertex` states
+it, as a **difference of (c)'s composed law** and not as a second art table.
+
+**This was already decided, in another contract.**
+`design/contracts/SURFACE.STAMP.md` decision S3 has said since the stamp was
+written that BAKE *"needs the DELTA, not just the new value"* and rejects the
+absolute branch by name. R231: *"the decision was already spent, in a file
+nobody opened."* Recorded HERE as well, because §9.3 is where the next person
+implementing a dig will look.
+
+**FOUR PROPERTIES, and each is the reason for the one before it:**
+
+1. **IDEMPOTENCE.** ABI operation 0 is `max(dst, src)`, so re-issuing an
+   identical stamp leaves `before == after` and the delta is exactly zero. The
+   ground moves once however many times the command is sent.
+2. **§9.2 ITEM 3's DEFERRAL IDENTITY IS RESTORED.** `d(mid)−d(from) +
+   d(to)−d(mid)` telescopes to `d(to)−d(from)`, so a deferred sheet-mode bake
+   takes one larger step and loses nothing. The absolute law has **no such
+   identity**, which is what §9.2's "written in `from`/`to` depths and in
+   nothing else" was recording — under `BAKE_PATCH_BUDGET = 64` and a
+   carry-over FIFO, a sheet record previously had no state-exactness argument
+   at all.
+3. **THE CONVERSION IS PER LOOKUP.** Each depth is rescaled to height16
+   *separately* and the height16 values are subtracted — **two roundings, not
+   one on an fx16 difference**. This is what makes property 2 EXACT: every
+   intermediate term cancels as an integer, for any table and any rounding
+   rule. Rounding once on the difference would give each deferred step its own
+   error and the identity would hold only approximately. Anything differencing
+   against this must rescale twice.
+4. **COLD IS NOT A SPECIAL CASE.** `kStampDepthTable[0]` is **0** — strength 0
+   means NOT STAMPED, and a texel nothing has stamped must dig nothing. So a
+   `before` plane of zeroes makes this law identical to (c), and the delta is a
+   strict **generalisation**: a first bake digs exactly what the absolute law
+   dug, and only the RE-bake changes. Entry 0 is the one entry of (a)'s table
+   that is **pinned** (`static_assert` in `zref_terrain_page.hpp`); every other
+   entry stays editable and provisional, because there is no look decision to
+   make about the depth of an absent scar.
+
+**WHO SERVES `before`.** `TERRAIN.SHEETSEAM` keeps a 1,089×9-bit plane fed from
+`stamp_results`, one `{seen, before}` word per lattice vertex, **cleared by the
+dig's own read** so a vertex not stamped since the last bake serves
+`before == after` and contributes nothing. `SURFACE.STAMP` carries
+`res_handle_o` so the stream can be routed to a patch (the ABI's
+`handle32[patch]`, carried and not derived — `SURFACE.SHEET` choice C4).
+
+**EVIDENCE**, and note that it is not a counter: every counter on the seam and
+the bake read correctly throughout the defect's life, because they measure the
+ANSWER and the fault was in the QUESTION.
+`tests/terrain/bake_delta_idempotence_directed.cpp` differences two bakes
+against the oracle — 5,952 checks — with a positive control that forces
+`before` to zero and requires the crater to double.
+
 ## 10. Test plan (obligations for Phase 6/7 owners)
 
 1. `physics_equals_pixels`: random columns; `zref::terrain::column_query` ==
