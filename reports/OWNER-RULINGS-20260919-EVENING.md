@@ -6010,3 +6010,94 @@ refused unprompted.
 selector at `mask == 2'b11` — the lane recommends **paying the index bit**.
 **Still mine:** whether to compose the governor with its TERRAIN.LOD group
 dangling. **R75 and R223 say hold, and the lane did not overturn that.**
+
+## R238 — A RECEIPT FROM A WRAPPER FIT PRICES THE WRAPPER'S CONSTANTS, and my Gouraud headline was ~900 ALM short
+
+**2026-09-21, GOURAUDBUILD's two corrections to my own brief.** Both were owed
+a ruling and had only a commit message. Register 22 → 22; **D1 is BUILT, and
+the decision it costs is the owner's R234 "ship Gouraud".**
+
+### Correction 1: the number I quoted was honest, measured, and priced the wrong machine
+
+I briefed **"~1,420 ALM and +24 DSP for three lanes"**. The lane **confirmed it
+against the receipt rather than against my brief** —
+`reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt`,
+*Fitter Resource Utilization by Entity*, three `zhao_raster_attrgrad_v2`
+instances summing **1,419.5 ALM and 24 DSP**, `rtlCleanAtHead: true`, truth
+device 5CSEBA6U23I7. **The number is real and the tree it came from was clean.**
+
+**It prices the three lanes and nothing that carries their operands.**
+
+> **The G8A wrapper drives `job_meta_w` FROM CONSTANTS.** So in that fit the
+> tile pipe's own plane registers **fold away**, and its `u_tile` row shows
+> **357.7 ALM / 665 registers** for three lanes' worth of glue — against
+> **3 × 240 = 720 plane flip-flops alone**. That row is measuring a
+> constant-folded machine.
+
+**No existing receipt can price the carriage**, because every receipt that
+exists was taken through that wrapper. Counted by hand from the RTL, outside
+the three lanes: `plane_{n0,dndx,dndy}_q` 720, `attr_join_*` 129, attrpack
+`va/vb/vc_q` 288, attrpack `n0/dndx/dndy_q` 720, binner `meta_q` + `d_meta_r`
+1,440 — **≈ 3,297 flip-flops**, a **~825 ALM floor** at four per ALM and an
+honest **~1,000–1,300 ALM** once register-only packing is allowed for.
+
+> **The whole decision is ~2,300–2,700 ALM, +24 DSP, +18 M10K — roughly 900 ALM
+> more than the headline I gave the owner when he ruled.** Estimated by hand;
+> **Quartus was not run, because `PACKET-PROTOCOL.md` forbids it and the lane
+> correctly held that the protocol outranks my brief.**
+
+**The generalisation, and it is new here.** This tree already knows *"never
+compare a current file to an old measurement"*. This is a different lie from
+the same family: **the receipt is current, the tree was clean, and the
+provenance is perfect — and the entity it prices is not the entity that
+ships**, because a fit harness that ties a port to a constant hands Quartus
+permission to delete the logic behind it. **A wrapper fit measures the wrapper's
+assumptions.**
+
+And note **which way it runs**: constant-folding can only make the row
+**smaller**. That is R229 and R237's axis again — the comfortable direction,
+with a clean digest and a real device stamped on it, which is precisely why
+nobody audits it. **Before quoting an entity row, ask what the harness ties
+off.** If the answer is "the thing whose registers I am counting", the row is
+evidence about the harness.
+
+The M10K half is **not** an estimate and does not share the defect: the bank is
+`META_SLICES` independent 40-bit × `TRI_CAP` RAMs, `TRI_CAP = 128` in the
+composed shell, **29 → 47 slices = +18 M10K**, arithmetic that no fit is needed
+to check. And **per-triangle bank time does not change** — the slices are
+written and read in parallel off one `tri_we` / `meta_ra`, so widening the
+record costs RAMs, not clocks. That retires ATTRLANE's throughput flag.
+
+### Correction 2: D1 broke a committed positive control, and it was INVERTED, not deleted
+
+**`-GlowTag` is a committed control** that proves a tag on one boundary port
+reaches the framebuffer. **D1 breaks it by construction**, because D1 delivers
+colour through `tri_continuation_tail_i`'s `vertex_rgb` — **the very field
+`-GlowTag` overwrites with `0xb5aab5`**. The form failed exactly as a real
+regression does:
+
+```
+%Fatal: -GlowTag put 0xb5aab5 on the continuation tail and NOT ONE framebuffer
+```
+
+**The lane's repair is the one this tree requires and the one that is easiest
+not to make.** Deleting the assertion removes a control; weakening it keeps a
+green that measures nothing. It **inverted** it, so the form now asserts the
+end-to-end path it can still see:
+
+```
+SMOKE: -GlowTag  END TO END: tag 0x7f on one boundary port -> 1062 covered
+                 pixel(s) of 2560 resolved -> 1062 LIT by R195's law
+```
+
+**And the new number has independent corroboration**: `gouraud 1062 of 2560
+drawn word(s) carry a COLOUR` against a **committed baseline of zero**, agreeing
+with `gather_frag_lit_o = 1062` from an instrument that **shares no logic with
+it**. Two counters, one answer, different silicon — which is what this tree
+means by a counter that discriminates.
+
+**This is also the ten-form sweep earning its cost.** The plain form passed
+throughout; **only `-GlowTag` could see it**, and my own brief had once carried
+an eight-form list. **A control a change invalidates is not a failing test —
+it is a test whose question changed**, and the repair is to ask the new
+question, out loud, in the assertion.
