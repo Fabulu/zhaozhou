@@ -5477,3 +5477,80 @@ confirmations its flag had bound: the verdict line is `-LintOnly`-specific, the
 plain run's markers (`raster pixels=2560`, `frames_admitted=1`) are **absent**,
 and RC was 0 rather than the **2** the repaired script now returns for an
 unknown argument.
+
+## R232 — I29's BLOCKER (b) IS DISCHARGED, and a fifth fact turned a policy into a mechanism
+
+**2026-09-21, POSECMD. Register 22 → 22** — it had already moved before the lane
+started, and the lane said so rather than claiming it.
+
+**All four of R229's facts held.** And a **fifth, which the ruling did not
+state, decided the design**: `DrawPosedForm`'s first sixteen payload bytes can
+be made **byte-identical to `DrawForm`'s**, so CMD.EXEC reads **six of nine
+fields through the EXISTING `OFF_DF_*` constants**, pinned by eight per-field
+elaboration guards.
+
+**That turns "DrawForm keeps meaning bind pose" from a POLICY I asserted into a
+MECHANISM the layout enforces.** My ruling reached the right answer for weaker
+reasons than the ones available.
+
+**Built:** 48 bytes, appended per R171 — **zero of the 24 existing goldens
+changed, measured not assumed.** `zhao_cmd_decoder` needed **no hand edit**
+because it reads the generated size table, **and the test proves it**: a 0x0305
+packet returning `ZH_ABI_OK` is impossible if the opcode were unknown. Directed
+test **850 checks, RC 0** (from 762); `abi:check` clean across 34 outputs.
+
+**The design point is the one this campaign has been circling.** The pose rides
+the **same `draw_valid_o` beat in the same `dq` entry — one enable, so
+`CLAUDE.md`'s metadata-swap skew is not REPRESENTABLE.** And **R13's clause
+SELECTS this shape rather than forbidding it**: it forbids widening a job port
+for a *uniform* value, and pose is per-draw. A refused `clip_id` **degrades to
+bind pose rather than dropping the draw**, because refusing the record whole
+would make a creature vanish.
+
+**Fire test B reproduced the metadata bank exactly: draw 0 came out wearing
+draw 3's key under stall.** The defect `CLAUDE.md` opens with, produced on
+demand in a new block.
+
+**Wrapper parity 1270 = 1270** — six names added and BOTH mutants updated. R220
+handled without being reminded.
+
+### And a FOURTH brief defect: two of the three generators live elsewhere
+
+> *"Your brief's path for `gen_shell_paired_diff.py` is wrong — it's
+> `tools/design/`, not `tools/quartus/`. At the brief's path it returns RC 2
+> 'No such file'; **a lane reading exit codes records a failing gate that was
+> never run.**"*
+
+Verified: `tools/design/gen_shell_paired_diff.py`, but
+`tools/quartus/gen_prod_top.py` and `tools/quartus/gen_console_board.py`. **I
+listed all three together by bare name in the ports clause, which invites
+inferring one directory for three.** This is the Wave-4 defect returning — *a
+gate that cannot be found exits non-zero, and that is NOT a failing gate.*
+
+**And the `%Fatal` correction I sent two lanes was short by one.**
+**`-NoTableLoad` is inverted too** — it and `-BadDescriptor` **both pass WITH
+one `%Fatal`.** I named only one of them.
+
+### Three instrument findings
+
+1. **The stale-binary trap fired on a RESTORE.** Content verified, `git status`
+   clean, and `ninja: no work to do` served mutant B's nine failures **as a
+   false red**. Exactly `CLAUDE.md`'s `Copy-Item` timestamp warning, met live.
+2. **The smoke bench could not verilate — all ten forms RC 1 in ONE SECOND.**
+   *The duration gave it away before the exit code did.*
+3. **The two console-core mutant wrappers have DIFFERENT LINE ENDINGS**, one
+   CRLF and one LF, **so a scripted patch silently misses one.** A live hazard
+   for exactly the R220 repair every port-changing lane now performs.
+
+### What remains, stated honestly
+
+**I29's consumer is untouched and that was correct** — the page reader, the
+sixth mem-adapter requester, `form → type_id` resolution, the instance walk,
+and `zhao_geom_ladderbank` still uncomposed. **§4.2's resident-handle layer has
+no ruling and the next lane meets it immediately.**
+
+**And the lane declared its own unpaid bill:** this block **has not been through
+`quartus_map` on this branch.** Lint is 0 and the Quartus-17 syntax gate passes,
+**which settles one tool's opinion** (R212). A fit is owed at the next subsystem
+boundary, and its question is named: **the ALM cost of `DRAW_W` 144 → 185 across
+`DRAW_Q` entries, plus four core ports.**
