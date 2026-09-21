@@ -81,6 +81,12 @@ package zhao_abi_pkg;
     FOG_LINEAR = 8'd1
   } zhao_fog_mode_e;
 
+  // enum warp_attribute_mode: u8 on the wire (capture_format.md 3.2 step 7)
+  typedef enum logic [7:0] {
+    WARP_ATTR_INLINE4 = 8'd0,
+    WARP_ATTR_STREAM4 = 8'd1
+  } zhao_warp_attribute_mode_e;
+
   // opcodes
   localparam logic [15:0] ZHAO_OP_NOP = 16'h0000;
   localparam logic [15:0] ZHAO_OP_BEGIN_FRAME = 16'h0001;
@@ -106,6 +112,7 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_SET_POPULATION = 16'h0303;
   localparam logic [15:0] ZHAO_OP_DEBUG_TRACE_ARM = 16'hF003;
   localparam logic [15:0] ZHAO_OP_DRAW_POSED_FORM = 16'h0305;
+  localparam logic [15:0] ZHAO_OP_DRAW_WARPED_FORM = 16'h0304;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1450,6 +1457,73 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_FRAME_NO = 34;
   localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_SUB = 36;
   localparam int unsigned ZHAO_DRAW_POSED_FORM_OFF_PAD = 37;
+
+  // DrawWarpedForm 0x0304: 96-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] pad_1;  // 4 zero byte(s) @92
+    logic [31:0] displacement_bound_2;  // fx16 = Q16.16 in 32 bits (qformats.md) @88
+    logic [31:0] displacement_bound_1;  // fx16 = Q16.16 in 32 bits (qformats.md) @84
+    logic [31:0] displacement_bound_0;  // fx16 = Q16.16 in 32 bits (qformats.md) @80
+    logic [15:0] pad;  // 2 zero byte(s) @78
+    logic [7:0] warp_flags;  // u8 @77
+    logic [7:0] attribute_mode;  // warp_attribute_mode @76
+    logic [31:0] warp_attributes;  // handle32 @72  // handle32 {index:24, generation:8}
+    logic [31:0] attributes_3;  // fx16 = Q16.16 in 32 bits (qformats.md) @68
+    logic [31:0] attributes_2;  // fx16 = Q16.16 in 32 bits (qformats.md) @64
+    logic [31:0] attributes_1;  // fx16 = Q16.16 in 32 bits (qformats.md) @60
+    logic [31:0] attributes_0;  // fx16 = Q16.16 in 32 bits (qformats.md) @56
+    logic [31:0] params_3;  // fx16 = Q16.16 in 32 bits (qformats.md) @52
+    logic [31:0] params_2;  // fx16 = Q16.16 in 32 bits (qformats.md) @48
+    logic [31:0] params_1;  // fx16 = Q16.16 in 32 bits (qformats.md) @44
+    logic [31:0] params_0;  // fx16 = Q16.16 in 32 bits (qformats.md) @40
+    logic [31:0] time_f;  // u32 @36
+    logic [31:0] warp_program;  // handle32 @32  // handle32 {index:24, generation:8}
+    logic [15:0] flags;  // u16 @30
+    logic [7:0] semantic_weight;  // u8 @29
+    logic [7:0] viewport_mask;  // u8 @28
+    logic [31:0] transform;  // handle32 @24  // handle32 {index:24, generation:8}
+    logic [31:0] material_set;  // handle32 @20  // handle32 {index:24, generation:8}
+    logic [31:0] form;  // handle32 @16  // handle32 {index:24, generation:8}
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_draw_warped_form_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_BYTES = 96;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_FORM = 16;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_MATERIAL_SET = 20;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_TRANSFORM = 24;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_VIEWPORT_MASK = 28;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_SEMANTIC_WEIGHT = 29;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_FLAGS = 30;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_WARP_PROGRAM = 32;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_TIME = 36;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_0 = 40;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_1 = 44;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_2 = 48;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_3 = 52;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_0 = 56;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_1 = 60;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_2 = 64;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_3 = 68;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_WARP_ATTRIBUTES = 72;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTE_MODE = 76;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_WARP_FLAGS = 77;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PAD = 78;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_0 = 80;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_1 = 84;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_2 = 88;
+  localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PAD_1 = 92;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -2913,6 +2987,78 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [767:0] zhao_pack_draw_warped_form(input zhao_rec_draw_warped_form_t c);
+    logic [767:0] v;
+    begin
+      v[ZHAO_DRAW_WARPED_FORM_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_FORM*8 +: 32] = c.form;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_MATERIAL_SET*8 +: 32] = c.material_set;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_TRANSFORM*8 +: 32] = c.transform;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_VIEWPORT_MASK*8 +: 8] = c.viewport_mask;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_SEMANTIC_WEIGHT*8 +: 8] = c.semantic_weight;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_FLAGS*8 +: 16] = c.flags;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_PROGRAM*8 +: 32] = c.warp_program;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_TIME*8 +: 32] = c.time_f;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_0*8 +: 32] = c.params_0;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_1*8 +: 32] = c.params_1;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_2*8 +: 32] = c.params_2;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_3*8 +: 32] = c.params_3;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_0*8 +: 32] = c.attributes_0;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_1*8 +: 32] = c.attributes_1;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_2*8 +: 32] = c.attributes_2;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_3*8 +: 32] = c.attributes_3;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_ATTRIBUTES*8 +: 32] = c.warp_attributes;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTE_MODE*8 +: 8] = c.attribute_mode;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_FLAGS*8 +: 8] = c.warp_flags;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PAD*8 +: 16] = c.pad;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_0*8 +: 32] = c.displacement_bound_0;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_1*8 +: 32] = c.displacement_bound_1;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_2*8 +: 32] = c.displacement_bound_2;
+      v[ZHAO_DRAW_WARPED_FORM_OFF_PAD_1*8 +: 32] = c.pad_1;
+      zhao_pack_draw_warped_form = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_draw_warped_form_t zhao_unpack_draw_warped_form(input logic [767:0] v);
+    zhao_rec_draw_warped_form_t c;
+    begin
+      c.h_opcode = v[ZHAO_DRAW_WARPED_FORM_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DRAW_WARPED_FORM_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DRAW_WARPED_FORM_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DRAW_WARPED_FORM_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DRAW_WARPED_FORM_OFF_H_RESERVED0*8 +: 32];
+      c.form = v[ZHAO_DRAW_WARPED_FORM_OFF_FORM*8 +: 32];
+      c.material_set = v[ZHAO_DRAW_WARPED_FORM_OFF_MATERIAL_SET*8 +: 32];
+      c.transform = v[ZHAO_DRAW_WARPED_FORM_OFF_TRANSFORM*8 +: 32];
+      c.viewport_mask = v[ZHAO_DRAW_WARPED_FORM_OFF_VIEWPORT_MASK*8 +: 8];
+      c.semantic_weight = v[ZHAO_DRAW_WARPED_FORM_OFF_SEMANTIC_WEIGHT*8 +: 8];
+      c.flags = v[ZHAO_DRAW_WARPED_FORM_OFF_FLAGS*8 +: 16];
+      c.warp_program = v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_PROGRAM*8 +: 32];
+      c.time_f = v[ZHAO_DRAW_WARPED_FORM_OFF_TIME*8 +: 32];
+      c.params_0 = v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_0*8 +: 32];
+      c.params_1 = v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_1*8 +: 32];
+      c.params_2 = v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_2*8 +: 32];
+      c.params_3 = v[ZHAO_DRAW_WARPED_FORM_OFF_PARAMS_3*8 +: 32];
+      c.attributes_0 = v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_0*8 +: 32];
+      c.attributes_1 = v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_1*8 +: 32];
+      c.attributes_2 = v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_2*8 +: 32];
+      c.attributes_3 = v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTES_3*8 +: 32];
+      c.warp_attributes = v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_ATTRIBUTES*8 +: 32];
+      c.attribute_mode = v[ZHAO_DRAW_WARPED_FORM_OFF_ATTRIBUTE_MODE*8 +: 8];
+      c.warp_flags = v[ZHAO_DRAW_WARPED_FORM_OFF_WARP_FLAGS*8 +: 8];
+      c.pad = v[ZHAO_DRAW_WARPED_FORM_OFF_PAD*8 +: 16];
+      c.displacement_bound_0 = v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_0*8 +: 32];
+      c.displacement_bound_1 = v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_1*8 +: 32];
+      c.displacement_bound_2 = v[ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_2*8 +: 32];
+      c.pad_1 = v[ZHAO_DRAW_WARPED_FORM_OFF_PAD_1*8 +: 32];
+      zhao_unpack_draw_warped_form = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -2941,6 +3087,7 @@ package zhao_abi_pkg;
         ZHAO_OP_SET_POPULATION: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DEBUG_TRACE_ARM: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_POSED_FORM: zhao_opcode_record_bytes = 48;
+        ZHAO_OP_DRAW_WARPED_FORM: zhao_opcode_record_bytes = 96;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -3023,6 +3170,10 @@ package zhao_abi_pkg;
         ZHAO_OP_DRAW_POSED_FORM: begin
           if (zhao_bytes_nonzero(p, base, 37, 11)) zhao_record_pad_nonzero = 1'b1;
         end
+        ZHAO_OP_DRAW_WARPED_FORM: begin
+          if (zhao_bytes_nonzero(p, base, 78, 2)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 92, 4)) zhao_record_pad_nonzero = 1'b1;
+        end
         default: zhao_record_pad_nonzero = 1'b0;
       endcase
     end
@@ -3056,6 +3207,10 @@ package zhao_abi_pkg;
         ZHAO_OP_DEBUG_FRAME_BLIT: begin
           v = {24'b0, p[base+16+1]};  // mode: video_mode
           if (!(v == 32'd0 || v == 32'd1 || v == 32'd2)) zhao_record_enum_bad = 1'b1;
+        end
+        ZHAO_OP_DRAW_WARPED_FORM: begin
+          v = {24'b0, p[base+16+60]};  // attribute_mode: warp_attribute_mode
+          if (!(v == 32'd0 || v == 32'd1)) zhao_record_enum_bad = 1'b1;
         end
         default: zhao_record_enum_bad = 1'b0;
       endcase
@@ -3143,6 +3298,7 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_set_population_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_trace_arm_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_posed_form_t) != 8*48) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_draw_warped_form_t) != 8*96) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;
