@@ -4083,6 +4083,55 @@ verilate(test_forge_prim_eval_overrun_control
 add_test(NAME forge_prim_eval_overrun_control COMMAND test_forge_prim_eval_overrun_control)
 set_tests_properties(forge_prim_eval_overrun_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# ---- the FORGE_PROGRAM page, spec/cartridge.md 4d (owner decision R234 D2) --
+# There are THREE statements of that layout -- the spec section,
+# `zref::forge_page` and `tools/pack/mkforgeprogram.py` -- and ONE artefact,
+# tests/golden/forge_program/forge_page_v1.bin. This test pins the model to the
+# artefact and the packer's `--check` pins the packer to it, so a layout edit
+# that misses one of the three goes red. No RTL yet: the page READER is named as
+# remaining work in design/contracts/FORGE.PRIM.md, and a test that waited for
+# it would leave the frozen format unpinned in the meantime.
+add_executable(test_forge_page_directed forge/forge_page_directed.cpp)
+target_link_libraries(test_forge_page_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_forge_page_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME forge_page_directed COMMAND test_forge_page_directed)
+set_tests_properties(forge_page_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
+# The packer's own staleness gate, the same shape as `pack:check` and
+# `abi:check`: rebuild the committed golden from the packer and compare byte for
+# byte. It is a separate test from the one above BECAUSE they approach the same
+# artefact from different sides -- a single test that built both halves from one
+# source would be a comparator wired to two operands that move together.
+add_test(NAME forge_page_packer_check
+         COMMAND "${Python3_EXECUTABLE}" ${CMAKE_SOURCE_DIR}/tools/pack/mkforgeprogram.py --check)
+set_tests_properties(forge_page_packer_check PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
+# ---- the ring/sheet position evaluator, FORGE.PRIM.EVAL's other four --------
+# `zhao_forge_prim_eval` is the LIGHTNING evaluator and serves the RIBBON family
+# alone; owner decision R234 D2 bought the rest. This block is fan, tube, shell
+# and billboard -- the (rings x ring vertices) grid `zhao_forge_prim` walks,
+# placed. Differenced against zref::forge_ring::eval_job entirely, including the
+# determinism properties (byte-identical streams under stall patterns) that a
+# capture CRC depends on.
+add_executable(test_forge_ring_eval_directed forge/forge_ring_eval_directed.cpp)
+target_link_libraries(test_forge_ring_eval_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_forge_ring_eval_directed
+  PREFIX Vzhao_forge_ring_eval
+  TOP_MODULE zhao_forge_ring_eval
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_ring_eval.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME forge_ring_eval_directed COMMAND test_forge_ring_eval_directed)
+set_tests_properties(forge_ring_eval_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_forge_ring_eval
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_ring_eval
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_ring_eval.sv)
+set_tests_properties(lint_zhao_forge_ring_eval PROPERTIES LABELS "lint;fast")
+
 # GEOM.PARAMBUF -- the external geometry arena's record layer (ruling R7). The
 # interesting field is frame_generation: a chunk from LAST frame is valid in
 # every other respect -- sane count, in-range next pointer, real triangle ids --

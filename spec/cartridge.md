@@ -66,6 +66,7 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x000F | MATERIAL_SET | generic immutable material table indexed by `material_id` (§4a) |
 | 0x0010 | MESH_STREAM | generic meshlet descriptors + vertex + local-index streams (§4a) |
 | 0x0011 | SPECIES_TABLE | particle species descriptor table (§4b; owner ruling R42, 2026-09-19) |
+| 0x0012 | FORGE_PROGRAM | Primitive Forge program table (§4d; owner decision R234 D2, 2026-09-21) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -104,9 +105,10 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 11 | material set | MATERIAL_SET | immutable table indexed by `material_id`: 0–3 sample bindings, page handles, TMU state, combiner recipe/weight, raster state, cel/ink participation, fog exemption, AUX use (§4a) |
 | 12 | mesh stream | MESH_STREAM | immutable geometry: meshlet descriptors, vertex stream, local-index stream, offsets/counts, format + generation metadata (§4a) |
 | 13 | species table | SPECIES_TABLE | the particle species descriptor table: a header then PART.TABLE load words, one per entry (§4b; owner ruling R42, 2026-09-19) |
+| 14 | forge program | FORGE_PROGRAM | the Primitive Forge program table: a header then one 192-byte record per program — family, subdivision and the anchors/axes/radii its evaluator places vertices from (§4d; owner decision R234 D2, 2026-09-21) |
 
 ~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ ~~Kinds 10-255 reserved~~
-~~Kinds 13-255 reserved~~ Kinds 14-255 reserved
+~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ Kinds 15-255 reserved
 (world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
 that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
@@ -335,6 +337,187 @@ Model: `reference/include/zref/zref_creature_page.hpp` (`build`, `decode`,
 `fpga/rtl/geometry/zhao_geom_ladderbank.sv`, differenced against the model and
 required to read that same golden in
 `tests/geometry/geom_ladderbank_directed.cpp`.
+
+## §4d — FORGE_PROGRAM (owner decision R234 D2, 2026-09-21)
+
+**The Primitive Forge's program page, and the reversal of a deferral.**
+
+R199 deferred this format, and its reason was good: *"four of the six forge
+families have no evaluator at all … a page ruling buys one of six"*, and a
+format frozen ahead of its consumers is a format frozen on guesses. **Owner
+decision R234 D2 reverses it** — *"the owner has chosen to pay for the
+evaluators rather than accept the deferral. The page kind is to be frozen and
+FORGE.PRIM / FORGE.PRIM_EVAL built."* The evaluators are being built in the same
+pass, so this layout is frozen against consumers that exist.
+
+`DrawProcedural 0x0302` carries `handle32[forge_program] program` and states
+that *"forge parameters do NOT travel inline"*. Until this section,
+`forge_program` named a resource type occurring in exactly **two** places in the
+whole tree — that command and its generated ABI table. This is the format the
+handle points at.
+
+### What a program is, and why it is ONE record
+
+A forge program is one primitive: its **topology** (which family, how finely
+subdivided) and its **positions** (the anchors, axes and radii the evaluator
+places vertices from). `zhao_forge_prim` owns the first and the evaluators own
+the second; they are the two halves of one meshlet, joined only by the
+ring-major ordering convention. Splitting them across two pages would create a
+second mapping law between them and buy nothing.
+
+**The key is the `handle32` index**, bits 31:8 of `DrawProcedural.program`, and
+nothing else — the same decision R26 took for the ladder table's `form_index`
+and R45 took for the stamp's patch. No second id space, so nothing can disagree.
+
+### The family is in the page, and the command's `kind` must AGREE
+
+A ribbon's parameters and a tube's parameters are not the same parameters, so a
+reader cannot interpret a record without knowing its family: **the family
+belongs in the page**. `DrawProcedural.kind` declares it a second time, and the
+two are authored in different places — the page by the packer, the command by
+the game's own draw — so comparing them is a real check rather than two
+operands moving together.
+
+**RULED: the page's `family` governs. A `kind` that disagrees REFUSES the draw
+and is counted** — FORGE.PRIM's own "refuse, never substitute a similar one",
+applied to a disagreement about a known family.
+
+**And the comparison is a ROTATION.** `spec/commands.zidl` says in capitals that
+`forge_kind` is *not* `zhao_forge_prim`'s `j_family_i` encoding, because member 0
+there is frozen by the v2 pad-byte precedent:
+
+    forge_kind = (family + 1) mod 6
+
+*"A straight-through assignment is silently wrong for all six values."*
+`zref::forge_page::kind_of_family` / `family_of_kind` are the **one** place that
+conversion is written; `tests/forge/forge_page_directed.cpp` walks all six both
+ways. Nobody writes the arithmetic a second time.
+
+### Layout
+
+Everything is 64-byte shaped for the reason §4b and §4c give: `MEM.GUARD`'s read
+is at most 64 bytes and its shape rule requires the byte mask to match the
+length, so a reader that asks for whole lines is the simplest one that can be
+correct. Those two pages chose a 32-byte record so **two** fit a line. A forge
+program does not fit in 32 bytes and no packing will make it — the ribbon alone
+needs five fx16 three-vectors, four fx16 scalars, a seed, a phase and two branch
+descriptors. So a record is **192 bytes = THREE whole lines**. The property that
+matters is not "two per line", it is **no record ever straddles a read**, and
+every multiple of 64 has it.
+
+```
+HEADER - 64 bytes, one line, at the page's base
+  u32 magic      'ZFPG'  (0x4746505A little-endian on the wire)
+  u16 version    1
+  u16 records    how many program records follow
+  u8  rsv[56]    zero
+
+PROGRAM RECORD - 192 bytes, THREE lines, starting at byte 64
+
+  LINE 0 - identity, topology and the common frame
+  bytes   0..3   u32 program_index  handle32 index, bits 23:0;
+                                    bits 31:24 MUST be zero
+  byte    4      u8  family         the SILICON encoding, 0..5
+                                    (zhao_forge_prim's FAM_*, NOT forge_kind)
+  byte    5      u8  sweep          0 LINEAR, 1 DOME (DOME on FAM_SHELL only)
+  byte    6      u8  segments       1..64 (1..24 on FAM_RIBBON)
+  byte    7      u8  sides          1..8; MUST be 1 on an open family
+  byte    8      u8  view_mask      bits 1:0, nonzero; bits 7:2 MUST be zero
+  byte    9      u8  branch_count   0..2; MUST be 0 off FAM_RIBBON
+  bytes  10..11  u16 src_id
+  bytes  12..15  rsv[4]             zero
+  bytes  16..27  i32 anchor0[3]     fx16 — the centre of ring 0
+  bytes  28..39  i32 anchor1[3]     fx16 — the centre of ring N
+  bytes  40..51  i32 axis_u[3]      fx16 — ring U axis / ribbon width axis
+  bytes  52..63  i32 axis_v[3]      fx16 — ring V axis / ribbon jitter axis 1
+
+  LINE 1 - radii, and the ribbon's jitter law
+  bytes  64..67  i32 radius0        fx16, >= 0 — R(0), or the ribbon half width
+  bytes  68..71  i32 radius1        fx16, >= 0 — R(N); MUST equal radius0
+                                    on FAM_RIBBON
+  bytes  72..75  i32 amp            fx16 — ribbon jitter amplitude
+  bytes  76..79  i32 branch_amp     fx16
+  bytes  80..83  i32 branch_radius  fx16 — branch half width
+  bytes  84..87  u32 seed
+  bytes  88..89  u16 tick_phase_base
+  bytes  90..91  rsv[2]             zero
+  bytes  92..103 i32 axis_w[3]      fx16 — ribbon jitter axis 2; zero elsewhere
+  bytes 104..127 rsv[24]            zero
+
+  LINE 2 - the ribbon's branches
+  byte  128      u8  br0_attach     0..segments
+  byte  129      u8  br0_segments   1..8 when branch_count > 0
+  bytes 130..131 rsv[2]             zero
+  bytes 132..143 i32 br0_end[3]     fx16
+  byte  144      u8  br1_attach
+  byte  145      u8  br1_segments
+  bytes 146..147 rsv[2]             zero
+  bytes 148..159 i32 br1_end[3]     fx16
+  bytes 160..191 rsv[32]            zero
+```
+
+**The three axes are a FRAME, used as supplied.** FORGE.PRIM.EVAL rules that
+deriving a unit frame in hardware *"needs a square root and a divider this block
+has no business owning"*, and the CPU computes it once per effect anyway. The
+ring families use `axis_u` and `axis_v`; the ribbon uses all three — `axis_u` as
+its width axis, `axis_v` and `axis_w` as its two jitter axes. That is one frame,
+not an overload of two.
+
+**`sweep` is the law between the anchors**, and it exists so the radial shell can
+be a dome as well as a cone without a seventh family:
+
+* `LINEAR` — centre and radius both lerp. Tubes, cones, fans, sheets, ribbons.
+* `DOME` — centre and radius follow the frozen `SIN_Q16` quarter wave, a dome or
+  bowl. **Legal on `FAM_SHELL` only**; allowing it elsewhere would make `sweep`
+  a second, silent family selector.
+
+### A page is REFUSED WHOLE
+
+On a wrong magic, a wrong version, a nonzero reserved byte, a `records` count
+that runs past the length the publication declared, a count larger than the
+reader's row capacity, two records sharing a `program_index`, or **any illegal
+record** — a nonzero high byte in `program_index`, a family above 5, a sweep
+above 1 or a DOME off the shell, a subdivision of zero or past its family's cap,
+`sides != 1` on an open family, a zero or over-wide `view_mask`, a negative
+radius, a branch descriptor outside its caps, or a ribbon-only field set on a
+family that has no ribbon law.
+
+It is never partially loaded. `zref::species_page`'s sentence is true here for
+the same reason: a bank holding three programs of one author's effect and the
+rest of another's reads as a tuning problem and is not one.
+
+### Two declared holes, named so they are not read as oversights
+
+1. **A ribbon's two radii MUST be equal.** `zhao_forge_prim_eval`'s job carries
+   one `half_width`, so a tapering ribbon is a capability the evaluator does not
+   have. The page **refuses** `radius0 != radius1` on `FAM_RIBBON` rather than
+   carrying a number nothing reads. When a tapering ribbon is built the refusal
+   lifts and not one byte moves — the same "declared hole" discipline as §4c's
+   `body_off`.
+
+2. **`tick_phase_base` is a BASE, not the live phase.** A cartridge page is
+   immutable and uploaded once; a bolt animates per frame. The evaluator's
+   `tick_phase` is `tick_phase_base + frame_tick`, and **`frame_tick` is sourced
+   at DISPATCH, not from here.** Where the dispatch gets it is an **open owner
+   question** — `DrawProcedural`'s `pad[11]` could carry it under the same
+   mandatory-zero reinterpretation `forge_kind` itself used, or the console
+   could broadcast its frame sequence. **This section does not decide it**, and
+   with `frame_tick == 0` a page alone is a complete, deterministic, static
+   primitive.
+
+Model: `reference/include/zref/zref_forge_page.hpp` (`build`, `decode`,
+`record_legal`, `lookup`, `kind_of_family`, `family_of_kind`). Packer:
+`tools/pack/mkforgeprogram.py`, whose `--check` rebuilds the committed golden
+`tests/golden/forge_program/forge_page_v1.bin`. The golden is also read by
+`tests/forge/forge_page_directed.cpp`, so packer, model and that one artefact
+are pinned to each other rather than to good intentions — a layout edit that
+misses one of them goes red.
+
+**No hardware reads this page yet, and that is stated rather than implied.** The
+staging path is the terrain pattern (`zhao_terrain_pageloader` moves a body,
+`zhao_terrain_hdrread` turns its header into registers) and it is named as
+remaining work in `design/contracts/FORGE.PRIM.md`. Freezing the format is what
+R234 D2 authorised; building its reader is the next packet.
 
 ## 5. Packing discipline (tools/pack, W3.6)
 
