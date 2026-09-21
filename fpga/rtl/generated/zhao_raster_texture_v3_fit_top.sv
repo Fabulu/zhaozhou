@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: 2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291
-// template-sha256: 0c55988a68f0d4adb0f0350008c9b587b180ebe600bd2c6cd1a26e7d8a514a07
+// template-sha256: ae5eb48b27498c565904d2d7f22e4e36efdeae9c9b4dd891ed22015c56a84054
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.
@@ -225,11 +225,17 @@ logic [31:0] texture_samples_w;
       6'd44: signature_word_c = palette_commands_q;
       6'd45: signature_word_c = {active_page_generation_w, tile_crc_index_w,
                                          tile_cov_count_w[7:0]};
-      6'd46: signature_word_c = {
+      // THE THREE PER-LANE MASKS MOVED TO WORD 54 on 2026-09-21. They were
+      // 3 + 5 + 3 = 11 bits here and owner decision R234 D1's six attribute
+      // lanes make them 6 + 8 + 6 = 20, which no longer fits beside the
+      // twenty-one structural flags. Splitting them out keeps BOTH observable
+      // at full width -- truncating the concatenation instead would have
+      // silently stopped witnessing the lanes the decision added, which is the
+      // flattering direction.
+      6'd46: signature_word_c = {11'd0,
           setup_fault_q, frame_fault_w, fragment_error_w, raster_abort_w,
           local_attribute_abort_w, sequence_abort_w, sequence_mismatch_w,
           quiet_w, texture_quiet_w, fragment_idle_w, coverage_hold_valid_w,
-          coverage_delivered_mask_w, start_delivered_mask_w, attribute_idle_w,
           earlyz_hold_valid_w, skid_level_w, stage_candidate_valid_w,
           stage_fragment_valid_w, tile_done_w, tile_degenerate_w, front_bank_w,
           local_fault_pulse_w,
@@ -245,7 +251,10 @@ logic [31:0] texture_samples_w;
       6'd51: signature_word_c = sheet_req_handle_w;
       6'd52: signature_word_c = {16'd0, sheet_req_src_w};
       6'd53: signature_word_c = {23'd0, tile_cov_count_w};
-      6'd54: signature_word_c = {24'd0, start_delivered_mask_w};
+      // All three per-lane masks, full width: 12 + 6 + 6 + 8 = 32.
+      6'd54: signature_word_c = {12'd0, attribute_idle_w,
+                                 coverage_delivered_mask_w,
+                                 start_delivered_mask_w};
       6'd55: signature_word_c = {24'd0, bin_mask_w};
       6'd56: signature_word_c = job_meta_w[31:0];
       6'd57: signature_word_c = job_meta_w[329:298];

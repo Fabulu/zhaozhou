@@ -1,5 +1,10 @@
-// geom_attrpack_directed.cpp -- does the three-plane front end put the RIGHT
-// attribute on the RIGHT plane, three times, from one shared core?
+// geom_attrpack_directed.cpp -- does the six-plane front end put the RIGHT
+// attribute on the RIGHT plane, six times, from one shared core?
+//
+// It was THREE until 2026-09-21. Owner decision R234 D1 ((owner, explicit))
+// added the three Gouraud lanes, and every property below applies to them
+// unchanged -- which is the point: the risks are routing, sequencing and
+// carry-over, and doubling the lane count doubles all three.
 //
 // ---------------------------------------------------------------------------
 // WHAT IS ACTUALLY AT RISK, AND WHAT IS NOT
@@ -12,16 +17,16 @@
 //
 // What IS at risk is everything `zhao_geom_attrpack` adds on top:
 //
-//   * ROUTING. Three lanes share one core through an operand mux. A mux that
-//     selects slot 1 for lane 2 produces three perfectly well-formed planes
+//   * ROUTING. Six lanes share one core through an operand mux. A mux that
+//     selects slot 1 for lane 2 produces six perfectly well-formed planes
 //     carrying the wrong attributes -- and every handshake, every counter and
 //     every width check still passes. A textured surface would simply have its
 //     U and V exchanged, which is a picture bug with no alarm.
 //   * SEQUENCING. The core is time-multiplexed, so lane k's answer has to be
 //     captured into plane k and not into k-1 or k+1. Off by one in either
-//     direction still emits 240 x 3 valid-looking bits.
+//     direction still emits 240 x 6 valid-looking bits.
 //   * CARRY-OVER. A second triangle must not inherit any part of the first.
-//     The block holds nine latched attribute words and three captured planes;
+//     The block holds eighteen latched attribute words and six captured planes;
 //     a lane that stopped asking would keep the previous triangle's plane and
 //     look completely healthy.
 //
@@ -38,9 +43,11 @@
 // the three risks above. A lane/plane exchange fails it because plane 1
 // evaluated at vertex A would return slot 2's value.
 //
-// The four slots Packet-D does not carry are given values that would be
-// unmistakable if they leaked -- 0x5A5A_5A5A and friends -- so "the mux picked
-// slot 4" is a loud failure rather than a plausible number.
+// The ONE slot the block does not carry -- slot 6, alpha, which R89 keeps flat
+// and per-primitive -- is given a value that would be unmistakable if it leaked
+// (0x5A5A_5A5A), so "the mux picked slot 6" is a loud failure rather than a
+// plausible number. It used to be four such slots; three of them are now real
+// lanes and are checked as such.
 
 #include <cstdint>
 #include <cstdio>
@@ -54,9 +61,18 @@
 namespace {
 
 constexpr int kAttrs = 7;   // invw24, u_over_w, v_over_w, r, g, b, a
+constexpr int kLanes = 6;   // every slot but alpha
 constexpr int kSlotInvw = 0;
 constexpr int kSlotU = 1;
 constexpr int kSlotV = 2;
+constexpr int kSlotR = 3;
+constexpr int kSlotG = 4;
+constexpr int kSlotB = 5;
+constexpr int kSlotAlpha = 6;
+// Lane k reads this slot -- the block's own SLOT_OF, restated here because a
+// test that derived it from the RTL would agree with a wrong RTL.
+constexpr int kLaneSlot[kLanes] = {kSlotInvw, kSlotU, kSlotV,
+                                   kSlotR, kSlotG, kSlotB};
 
 int fails = 0;
 
@@ -114,7 +130,7 @@ void put_attr(uint32_t* w, const int32_t* a) {
 
 struct Result {
   bool got;
-  Plane plane[3];
+  Plane plane[kLanes];
   uint32_t src_id;
   uint32_t triangles, planes;
   int clocks;
@@ -158,11 +174,12 @@ Result run_one(Vzhao_geom_attrpack& t, const Vtx& A, const Vtx& B, const Vtx& C,
         continue;
       }
       r.got = true;
-      for (int k = 0; k < 3; ++k) {
-        const uint32_t* w = (k == 0)   ? t.out_invw_plane_o.data()
-                            : (k == 1) ? t.out_u_over_w_plane_o.data()
-                                       : t.out_v_over_w_plane_o.data();
-        r.plane[k] = unpack(w);
+      {
+        const uint32_t* lane_word[kLanes] = {
+            t.out_invw_plane_o.data(), t.out_u_over_w_plane_o.data(),
+            t.out_v_over_w_plane_o.data(), t.out_r_plane_o.data(),
+            t.out_g_plane_o.data(), t.out_b_plane_o.data()};
+        for (int k = 0; k < kLanes; ++k) r.plane[k] = unpack(lane_word[k]);
       }
       r.src_id = t.out_src_id_o;
       r.triangles = t.triangles_o;
@@ -201,19 +218,27 @@ int main(int argc, char** argv) {
 
   auto px = [](int p) { return static_cast<int32_t>(p * 256); };
 
-  // The four slots Packet-D never carries. If the operand mux reaches one of
-  // them the failure is unmistakable rather than plausible.
-  const int32_t kLoud[4] = {0x5A5A5A5A, 0x3C3C3C3C, static_cast<int32_t>(0xDEADBEEF),
-                            0x0BADF00D};
+  // THE ONE SLOT THE BLOCK NEVER CARRIES. If the operand mux reaches it the
+  // failure is unmistakable rather than plausible. Slot 6 is alpha, which R89
+  // keeps flat and per-primitive on the continuation tail.
+  const int32_t kLoudAlpha = 0x5A5A5A5A;
 
-  auto mk = [&](int xpix, int ypix, int32_t invw, int32_t u, int32_t v) {
+  // The Gouraud channels are Q0.16 with 0x1_0000 as 1.0, the scale
+  // `zhao_light_stream` emits and `zhao_raster_toon`'s authored thresholds are
+  // written against. Real values rather than loud ones: these lanes are
+  // CHECKED now, not merely watched for leakage.
+  auto mk = [&](int xpix, int ypix, int32_t invw, int32_t u, int32_t v,
+                int32_t r, int32_t g, int32_t b) {
     Vtx t{};
     t.x = px(xpix);
     t.y = px(ypix);
     t.attr[kSlotInvw] = invw;
     t.attr[kSlotU] = u;
     t.attr[kSlotV] = v;
-    for (int i = 0; i < 4; ++i) t.attr[3 + i] = kLoud[i];
+    t.attr[kSlotR] = r;
+    t.attr[kSlotG] = g;
+    t.attr[kSlotB] = b;
+    t.attr[kSlotAlpha] = kLoudAlpha;
     return t;
   };
 
@@ -228,21 +253,28 @@ int main(int argc, char** argv) {
   // which is what GEOM.CLIP guarantees its consumers. All three slots differ at
   // all three vertices, so an exchange of any two cannot pass by coincidence.
   const Case cases[] = {
-      {mk(0, 0, 0x100000, 1 << 20, -(1 << 20)),
-       mk(64, 0, 0x200000, -(1 << 19), 3 << 18),
-       mk(0, 48, 0x300000, 7 << 17, 5 << 16), 0x00B2, 0, "right triangle"},
-      {mk(3, 5, 0x0F0F0F, 12345, -98765),
-       mk(90, 7, 0x010203, -4242424, 777777),
-       mk(11, 60, 0x7F0000, 31337, -1), 0x1234, 3, "oblique, held under backpressure"},
-      {mk(-8, -4, 0x000001, 1 << 28, -(1 << 28)),
-       mk(70, 1, 0xFFFFFF, -(1 << 27), 1 << 26),
-       mk(2, 50, 0x800000, 7, -7), 0xFFFF, 0, "off-canvas apex, extreme attributes"},
+      {mk(0, 0, 0x100000, 1 << 20, -(1 << 20), 0x10000, 0x08000, 0x00000),
+       mk(64, 0, 0x200000, -(1 << 19), 3 << 18, 0x00000, 0x10000, 0x04000),
+       mk(0, 48, 0x300000, 7 << 17, 5 << 16, 0x0C000, 0x00000, 0x10000),
+       0x00B2, 0, "right triangle"},
+      {mk(3, 5, 0x0F0F0F, 12345, -98765, 0x0A5A5, 0x03C3C, 0x0F0F0),
+       mk(90, 7, 0x010203, -4242424, 777777, 0x00123, 0x0BEEF, 0x05555),
+       mk(11, 60, 0x7F0000, 31337, -1, 0x0FFFF, 0x00001, 0x09ABC),
+       0x1234, 3, "oblique, held under backpressure"},
+      // The colour lanes go out of their nominal [0, 1] range here on purpose:
+      // the plane arithmetic is signed and must not clamp, and the SATURATION
+      // belongs downstream at `lit_unit8` in the tile pipe, not here.
+      {mk(-8, -4, 0x000001, 1 << 28, -(1 << 28), -(1 << 20), 1 << 20, 0),
+       mk(70, 1, 0xFFFFFF, -(1 << 27), 1 << 26, 1 << 24, -(1 << 24), 0x10000),
+       mk(2, 50, 0x800000, 7, -7, 7, -7, 0x08000),
+       0xFFFF, 0, "off-canvas apex, extreme attributes"},
       // A constant attribute makes both gradients exactly zero. A block that
       // captured the WRONG lane would still show zero gradients here, which is
       // why this case is last and never alone.
-      {mk(0, 0, 0x123456, 99, -99),
-       mk(120, 1, 0x123456, 99, -99),
-       mk(1, 96, 0x123456, 99, -99), 0x0001, 7, "constant attribute, long hold"},
+      {mk(0, 0, 0x123456, 99, -99, 0x04321, 0x04321, 0x04321),
+       mk(120, 1, 0x123456, 99, -99, 0x04321, 0x04321, 0x04321),
+       mk(1, 96, 0x123456, 99, -99, 0x04321, 0x04321, 0x04321),
+       0x0001, 7, "constant attribute, long hold"},
   };
 
   top.rst_n = 0;
@@ -274,30 +306,27 @@ int main(int argc, char** argv) {
       continue;
     }
 
-    const int slots[3] = {kSlotInvw, kSlotU, kSlotV};
     const Vtx* vs[3] = {&cs.a, &cs.b, &cs.c};
-    for (int lane = 0; lane < 3; ++lane) {
+    for (int lane = 0; lane < kLanes; ++lane) {
       for (int k = 0; k < 3; ++k) {
         char msg[192];
         std::snprintf(msg, sizeof(msg),
                       "case '%s': plane %d evaluated at vertex %c returns that vertex's slot %d",
-                      cs.what, lane, "ABC"[k], slots[lane]);
-        check(plane_holds_at(r.plane[lane], area, *vs[k], slots[lane]), msg);
+                      cs.what, lane, "ABC"[k], kLaneSlot[lane]);
+        check(plane_holds_at(r.plane[lane], area, *vs[k], kLaneSlot[lane]), msg);
       }
     }
 
-    // The loud slots must not appear anywhere in the emitted planes' constant
+    // The loud slot must not appear anywhere in the emitted planes' constant
     // terms. This is a second, cruder net under the property above: it catches
-    // a mux that reached slot 3..6 even in the degenerate cases where the
-    // property could be satisfied by accident.
-    for (int lane = 0; lane < 3; ++lane) {
-      for (int i = 0; i < 4; ++i) {
-        const __int128 leaked = (__int128)kLoud[i] * (__int128)area;
-        char msg[160];
-        std::snprintf(msg, sizeof(msg), "case '%s': plane %d did not sample the unused slot %d",
-                      cs.what, lane, 3 + i);
-        check(r.plane[lane].n0 != leaked, msg);
-      }
+    // a mux that reached slot 6 even in the degenerate cases where the property
+    // could be satisfied by accident.
+    for (int lane = 0; lane < kLanes; ++lane) {
+      const __int128 leaked = (__int128)kLoudAlpha * (__int128)area;
+      char msg[160];
+      std::snprintf(msg, sizeof(msg), "case '%s': plane %d did not sample the unused slot %d",
+                    cs.what, lane, kSlotAlpha);
+      check(r.plane[lane].n0 != leaked, msg);
     }
 
     char msg[160];
@@ -309,22 +338,25 @@ int main(int argc, char** argv) {
     std::snprintf(msg, sizeof(msg), "case '%s': exactly one triangle was counted", cs.what);
     check(r.triangles - prev_tris == 1, msg);
     std::snprintf(msg, sizeof(msg),
-                  "case '%s': exactly THREE planes were asked for -- one core, three lanes",
+                  "case '%s': exactly SIX planes were asked for -- one core, six lanes",
                   cs.what);
-    check(r.planes - prev_planes == 3, msg);
+    check(r.planes - prev_planes == kLanes, msg);
     prev_tris = r.triangles;
     prev_planes = r.planes;
 
     // The shared core costs clocks, and the budget argument in the header is
-    // "seven against forty-one". A regression that silently tripled the cost
-    // would otherwise be invisible until a frame-rate measurement.
-    std::snprintf(msg, sizeof(msg), "case '%s': the pack took under 16 clocks plus its hold",
+    // "thirteen against forty-one" (it was seven for three lanes). A regression
+    // that silently doubled the cost again would otherwise be invisible until a
+    // frame-rate measurement. The bound is the argument's, not the measurement's
+    // -- it must stay under the ~41 gpu clocks a triangle has at the owner-ruled
+    // 120,000 vertices/frame.
+    std::snprintf(msg, sizeof(msg), "case '%s': the pack took under 28 clocks plus its hold",
                   cs.what);
-    check(r.clocks <= 16 + cs.hold, msg);
+    check(r.clocks <= 28 + cs.hold, msg);
   }
 
-  check(top.planes_o == 3 * top.triangles_o,
-        "at rest, planes is exactly three times triangles -- no lane stopped asking");
+  check(top.planes_o == static_cast<uint32_t>(kLanes) * top.triangles_o,
+        "at rest, planes is exactly six times triangles -- no lane stopped asking");
   check(top.triangles_o == static_cast<uint32_t>(ncase), "every case was counted once");
 
   // -------------------------------------------------------------- case 5 --
@@ -343,9 +375,12 @@ int main(int argc, char** argv) {
   //     (no carry-over of the branch, no carry-over of the null plane).
   {
     ++ncase;
-    Vtx a = mk(0, 0, 0x100000, 0x5A5A5A5A, static_cast<int32_t>(0xDEADBEEF));
-    Vtx b = mk(64, 0, 0x200000, 0x3C3C3C3C, 0x0BADF00D);
-    Vtx c = mk(0, 48, 0x300000, static_cast<int32_t>(0xCAFEBABE), 0x7FFFFFFF);
+    Vtx a = mk(0, 0, 0x100000, 0x5A5A5A5A, static_cast<int32_t>(0xDEADBEEF),
+               0x10000, 0x08000, 0x00000);
+    Vtx b = mk(64, 0, 0x200000, 0x3C3C3C3C, 0x0BADF00D,
+               0x00000, 0x10000, 0x04000);
+    Vtx c = mk(0, 48, 0x300000, static_cast<int32_t>(0xCAFEBABE), 0x7FFFFFFF,
+               0x0C000, 0x00000, 0x10000);
     const int64_t area = orient(a.x, a.y, b.x, b.y, c.x, c.y);
     const Result r = run_one(top, a, b, c, 0x0197, 2, /*untex=*/true);
     check(r.got, "case 'untex': the pack was emitted");
@@ -359,33 +394,49 @@ int main(int argc, char** argv) {
             "case 'untex': the u/w plane is the NULL plane -- slot 1 was not read");
       check(r.plane[2].n0 == 0 && r.plane[2].dndx == 0 && r.plane[2].dndy == 0,
             "case 'untex': the v/w plane is the NULL plane -- slot 2 was not read");
+      // AND THE GOURAUD LANES ARE UNTOUCHED BY THE DECLARATION. This is the
+      // property that says R197 governs TEXTURE COORDINATES and not lighting:
+      // an untextured primitive is still lit, and in the reference oracle it is
+      // the untextured case that carries pre-lit colour on these very lanes.
+      // A block that folded the Gouraud lanes into the untex branch would make
+      // every untextured surface black, and only this check would see it.
+      for (int lane = kSlotR; lane <= kSlotB; ++lane) {
+        const Vtx* vs[3] = {&a, &b, &c};
+        for (int k = 0; k < 3; ++k) {
+          char msg[192];
+          std::snprintf(msg, sizeof(msg),
+                        "case 'untex': the Gouraud plane %d still reads slot %d -- "
+                        "the declaration is about texture coordinates, not light",
+                        lane, kLaneSlot[lane]);
+          check(plane_holds_at(r.plane[lane], area, *vs[k], kLaneSlot[lane]), msg);
+        }
+      }
       check(r.src_id == 0x0197, "case 'untex': the identity travelled with the planes");
-      check(r.triangles - prev_tris == 1 && r.planes - prev_planes == 3,
-            "case 'untex': one triangle, three lanes -- the schedule is unchanged");
+      check(r.triangles - prev_tris == 1 && r.planes - prev_planes == kLanes,
+            "case 'untex': one triangle, six lanes -- the schedule is unchanged");
       prev_tris = r.triangles;
       prev_planes = r.planes;
     }
 
     // The bit cleared again on the very next triangle: every slot read.
     ++ncase;
-    Vtx a2 = mk(0, 0, 0x100000, 1 << 20, -(1 << 20));
-    Vtx b2 = mk(64, 0, 0x200000, -(1 << 19), 3 << 18);
-    Vtx c2 = mk(0, 48, 0x300000, 7 << 17, 5 << 16);
+    Vtx a2 = mk(0, 0, 0x100000, 1 << 20, -(1 << 20), 0x0A5A5, 0x03C3C, 0x0F0F0);
+    Vtx b2 = mk(64, 0, 0x200000, -(1 << 19), 3 << 18, 0x00123, 0x0BEEF, 0x05555);
+    Vtx c2 = mk(0, 48, 0x300000, 7 << 17, 5 << 16, 0x0FFFF, 0x00001, 0x09ABC);
     const int64_t area2 = orient(a2.x, a2.y, b2.x, b2.y, c2.x, c2.y);
     const Result r2 = run_one(top, a2, b2, c2, 0x0198, 0, /*untex=*/false);
     check(r2.got, "case 'untex cleared': the pack was emitted");
     if (r2.got) {
-      const int slots[3] = {kSlotInvw, kSlotU, kSlotV};
       const Vtx* vs[3] = {&a2, &b2, &c2};
-      for (int lane = 0; lane < 3; ++lane)
+      for (int lane = 0; lane < kLanes; ++lane)
         for (int k = 0; k < 3; ++k)
-          check(plane_holds_at(r2.plane[lane], area2, *vs[k], slots[lane]),
+          check(plane_holds_at(r2.plane[lane], area2, *vs[k], kLaneSlot[lane]),
                 "case 'untex cleared': every plane reads its slot again -- no carry-over");
       prev_tris = r2.triangles;
       prev_planes = r2.planes;
     }
-    check(top.planes_o == 3 * top.triangles_o,
-          "after the untex cases, planes is still exactly three times triangles");
+    check(top.planes_o == static_cast<uint32_t>(kLanes) * top.triangles_o,
+          "after the untex cases, planes is still exactly six times triangles");
     check(top.triangles_o == static_cast<uint32_t>(ncase), "the untex cases were counted");
   }
 
