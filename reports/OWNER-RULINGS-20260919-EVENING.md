@@ -5093,3 +5093,115 @@ The mosaic's consumer is `zhao_texture_island_v3_top`'s `u_mosaic`, **which this
 core does not instantiate** — so *"terrain runs textured"* is **ratified intent,
 not composed fact.** Whoever builds the UV producer confirms the consumer's
 residency first.
+
+## R229 — A RE-MEASUREMENT LANE'S FLATTERING DIRECTION IS INVERTED, and POSEPAGE caught itself in it
+
+**2026-09-21, POSEPAGE, entry I29. Register 21 → 21.** Five commits, one of them
+an empty commit whose message *is* the findings document.
+
+### The self-catch, and it is a new shape
+
+Six lanes tonight were sent to re-measure inherited blockers, and five found
+expiries. POSEPAGE found none — and nearly reported one anyway:
+
+> **"I nearly filed a rot that does not exist.** My first count gave 198 against
+> the entry's 219 — the instrument was `Measure-Object -Line`, which is not a
+> line count. **A re-measurement lane's flattering direction is *finding* rot,
+> not missing it.** Caught before writing."
+
+**`CLAUDE.md`'s broken-instrument law says the defect always makes the answer
+look better, smaller or simpler, because nobody audits good news. That is true
+of a BUILDING lane. For an AUDITING lane it is exactly backwards:** its good
+news is a *discovery*, its flattering error is a **false positive**, and the
+campaign has spent all night rewarding exactly that discovery. **I have been
+paying a bounty on found rot for six lanes.**
+
+So the rule needs its mirror stated: **when your job is to find defects, a
+found defect is the claim to check hardest.** `zhao_sdram_model.sv` is **219
+lines, exactly as cited**, instantiated four times. Nothing had rotted, and that
+is a real result.
+
+### What POSEPAGE established about I29
+
+**The entry's own plan would not have closed it.** A page reader plus a sixth
+requester gives I29 real bytes **and still no statement of which frame.**
+
+**Blocker (a) — REMOVED, by authoring the half nobody had reached.** The claim
+in `zref_creature_page.hpp` that *"a kind-9 frame reader has a layout to read
+and needs no lift"* is **true of a FRAME and false of a PAGE**: `creature_rules`
+§2.1 freezes frame *contents*, while §5 sketches the container in one clause
+with **no magic, version, offsets or alignment**. *A reader cannot read a frozen
+frame it cannot locate.* Authored under **R90 item 1's own unreached half** —
+`zref_clip_page.hpp`, `tools/pack/mkclipbank.py`, a 704-byte golden, and two
+gates **both FIRED** (byte 200 incremented → 2 FAILED, RC 1, naming that byte;
+restored, both green). Frame bytes unmoved. **The golden is
+`geom_bonesrc_directed`'s own six-bone fixture, so both goldens describe one
+creature** — which is how a format freeze avoids becoming a second source of
+truth.
+
+**Blocker (b) — `pose_requests` has no carrier, and that is the whole remaining
+gap.** `DrawForm 0x0300` carries no animation state; `clip_id`, `frame_no` and
+`type_id` have **zero occurrences** under `fpga/rtl/geometry/`; there is no
+pose or clip command at any opcode.
+
+### And the deferral was named EIGHTEEN DAYS before the entry was written
+
+`ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md` — **owner-ratified
+2026-09-03**, scope *"the GEOM.POSE memory seam"* — rules the reader's shape in
+§10.1, explains in §6 why it must fill whole, and in **§4.2 says in terms that
+"the exact command-record representation is deferred."**
+
+**That deferral IS blocker (b).** I29 has never cited the document. Found by
+R216's rule — *search the SUBJECT, not the title* — and it is now the **fifth**
+decision this week found already answered somewhere nobody opened.
+
+## RULED — D-POSEPAGE-A: take `DrawPosedForm` at 0x0305
+
+**Ratified as recommended**, and it spends §4.2's deferral rather than inventing
+anything.
+
+**The four facts were checked rather than assumed, which is why this is
+rulable:** 0x0304 **is** spoken for by W04 and not yet in the zidl; the **abi
+version does NOT bump** — the "new opcode bumps" reading is superseded five
+times over (PublishResource, SetPost and others); **the bytes already reach
+VRAM**, since `PublishResource` carries `u8 kind`, **which narrows this decision
+to "which frame" alone**; and **`sub` is not padding** — the pose cache's own
+header says omitting it returns the wrong palette.
+
+**Why the per-draw form over the `SetPose` state alternative**, which was raised
+fairly on SetPopulation's precedent: **pose varies per creature.** R13's clause
+is the governing analogy — *"the job port is not widened to carry a
+subpatch-uniform value that is not true"* — and a pose placed in STATE is that
+same error, a per-draw quantity in a carrier that says it is uniform. A
+`SetPose` before every `DrawForm` is the same byte count with an ordering hazard
+added. **And `DrawForm` keeping its meaning as bind pose is a clean split that
+breaks no existing content.**
+
+**Why this is not R199's trap.** R199 deferred the forge page kind because *the
+consumer did not exist* — four of six families had no evaluator. **Here both
+ends exist**: `zhao_geom_bonesrc` and `zhao_geom_pose_decode` are built and
+tested, and the clip page format is now frozen with a golden and two fired
+gates. **The command is the only missing link, which is the R224 situation, not
+the R199 one.**
+
+**What this does NOT settle, stated so nobody over-reads it:** §4.2's
+request-side representation — *a validated resident handle with generation and
+epoch, not a naked slot and frame* — is a **different layer** and remains
+undetermined. **Ratifying the command does not by itself enable the RTL
+reader**, and POSEPAGE was right to build no reader: a second uncomposed block
+beside `zhao_geom_bonesrc` is *"BUILT, INSTALLED NOWHERE"*.
+
+### Two process findings worth keeping
+
+**`RC=-1` with a log that stops mid-sentence is a KILL, not a result.**
+`-UntexMutant` returned `RC=-1` from a background task, truncated right after
+*"--- smoke run ---"*, with no error text and no process alive — R81's
+external-kill signature. Re-run in the foreground it passed with
+`geom_untex_refused_o` firing 16 times. **Read a truncated log as a kill before
+reading it as a failure.**
+
+**And the paired-diff repair is confirmed installed by an independent lane:**
+POSEPAGE verified `packet_h_paired_diff_mutant_fresh` **is now registered in
+`build/tests/CTestTestfile.cmake`**, and noted that its own two new ctests are
+model-only `add_test`s with **no `verilate()` above them**, so neither can be
+silently skipped the way that one was.
