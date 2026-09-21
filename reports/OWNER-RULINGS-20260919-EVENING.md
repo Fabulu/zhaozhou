@@ -4469,3 +4469,106 @@ band is priced and comes back worse than it looks, the frame store returns as a
 live candidate **with a real occupancy measurement beside it** and the owner can
 be asked properly. The refusal is of *an unmeasured spend justified by a
 misquoted ruling*, not of the structure forever.
+
+## R223 — ZERO IS UNREACHABLE WHILE TWO STANDING RULINGS STAND, AND ONE OF THEM IS MINE
+
+**2026-09-21, coordinator.** The goal is *"drive the mandatory gap count from 61
+to ZERO, then freeze that design and run the honest Quartus fit."* **The count
+has a floor above zero, put there by owner rulings, and nobody has said so.**
+
+This is not a proposal to lower the target. It is the arithmetic the target
+implies, produced before a fit is scheduled against a condition that cannot
+occur.
+
+### The floor, item by item, with the ruling that creates it
+
+**1. FORGE.SHADOW — owner-parked, and the register cost was ACCEPTED IN WORDS.**
+R133's D-FORGESHADOW-B is a standing instruction: *"schedule no further
+FORGE.SHADOW wiring packet."* Its reasoning is explicit about the consequence:
+
+> *"Leaving it costs 1 on the register; composing it wrong costs a deadlock
+> behind a closed gap."*
+
+**The owner priced the register cost and took it.** That single sentence makes
+the goal's zero unreachable, and it predates the goal.
+
+**2 and 3. FORGE.PRIM and FORGE.PRIM_EVAL — deferred by R199, WHICH IS MINE.**
+I ruled the forge program page kind deferred five hours ago, on reasoning I
+still hold: four of the six forge families have no evaluator, so *"a page ruling
+buys one of six"*, and freezing a format ahead of its consumers freezes it on
+guesses. **I did not state the consequence at the time, and I should have: both
+blocks are on the disconnected list and neither can close while R199 stands.**
+A ruling that parks a blocker parks everything behind it, and the packet-facing
+half of that was left for somebody else to discover.
+
+**4. `zhao_measure_governor` — transitively parked by R133.** Verified in the
+core's own text rather than inferred: its `cam0/1_scale_o` goes to TERRAIN.LOD
+and `cam0/1_thresh_q8_o` to `zhao_geom_lodstate`, **and lodstate is inside
+R133's parked subsystem** — that ruling names *"LODSTATE and SHADOW mutually
+blocked and composable only together."* The core adds the trade plainly:
+composing the governor today *"would move MEASURE.GOVERNOR out of the
+disconnected list and dangle two output groups at this module's edge — the
+register unchanged at best, and a gap closed by opening one."*
+
+**So at least 4 of the 21 cannot close under current rulings.** The honest
+statement of where this campaign can land is **17, not 0.**
+
+### What I am deliberately NOT doing about it
+
+`completion_register.py` has a `deferred_or_blocked` bucket that is **excluded
+from the total** — line 1499 sums gaps, disconnected, unbuilt, uncited and
+unresolvable, and not that one. **So I could move these four into it and report
+17, or 0 with a little more of the same.** That mechanism exists and it is one
+edit away.
+
+**I am not going to, and the reason is R133's own sentence.** The owner wrote
+*"leaving it costs 1 ON THE REGISTER."* He was not merely declining to wire a
+block; **he was electing to keep paying for it in the visible number.**
+Reclassifying it would overturn the accounting decision while quoting the ruling
+that made it.
+
+And it is the exact move this campaign has spent two days refusing. R214 put it
+best — all day the hazard has been *"a packet making the number fall by hiding
+something"*, and the answer there was a packet that made the number **rise** by
+declaring what nobody had declared. **A reclassification dressed as compliance
+is the same defect with better paperwork.** The number stays 21.
+
+### The FORGE cluster has now been measured FIVE times for no movement
+
+FORGE.SHADOW, FORGE.PRIM, FORGE.PRIM_EVAL and FORGE.CLIFF were *"refused
+together"* and re-argued on 2026-09-19, re-measured by the forge4 packet on
+2026-09-20 (**"ALL FOUR REFUSALS SURVIVE. Register 21 -> 21"**), and the
+setupdoor packet was then commissioned to build the door the entry asked for and
+found **"the arbiter is the SMALLEST of four blockers and closes none of the
+other three"** — again 21 -> 21.
+
+**Five passes, zero movement, and the fourth and fifth were commissioned by this
+coordinator.** The refusals are not stale; they have been re-verified at the
+current commit each time. **A sixth forge packet is waste, and I am recording
+that here so the next slot does not get filled with one** — which, having read
+the entry and seen "four disconnected blocks in one subsystem", is precisely
+what I was about to do.
+
+**FORGE.CLIFF is the one exception and it is engineering, not a ruling:** the
+rivalry is decided (R142, adopt `zhao_forge_cliff_ram`, 5,698 ALM) and the
+capability is still absent — no page issuer, no solid-window producer, no vdist
+master, *"all three re-searched at this commit and all three still absent."*
+That is a real build, and a large one.
+
+### What this changes about the fit
+
+**Nothing about whether it runs — everything about what triggers it.** *"Fit at
+completion only"* (R200) is a standing owner instruction and holds. But
+completion cannot mean zero while R133 and R199 stand, so the fit gate needs
+restating as one of:
+
+* **fit at the floor** — every gap closed except the ones with a cited standing
+  ruling, which is 17 and is a condition that can actually be met; or
+* **reverse R133 and/or R199** — the owner's call, not mine. R133 is the owner's
+  own instruction and only he can spend it; R199 is mine and I will reverse it
+  the moment the evaluators it waits on exist, which is the condition I wrote
+  into it.
+
+**I recommend the first**, and I am not treating that as decided. What I am
+doing is refusing to schedule a fit against a number that cannot occur, and
+saying so now rather than at hour three of a Quartus run.
