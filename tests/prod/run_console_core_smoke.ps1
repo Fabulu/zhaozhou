@@ -168,6 +168,50 @@ param(
   [switch]$NoEchoArm,
   [switch]$BadTraceArm,
   # ---------------------------------------------------------------------------
+  # -GlowTag: THE FIRST LIT FRAGMENT THE COMPOSED CONSOLE HAS EVER CARRIED
+  # ---------------------------------------------------------------------------
+  # Added 2026-09-21 (tagprod), and it is the form POSTGATHER costed and could
+  # not build. That packet composed POST.GATHER and its smoke read
+  # `frags=2560 [untagged=2560 below_knee=0 lit=0 reserved=0]` -- CORRECT, and
+  # for a reason outside POST.GATHER: the effect tag is
+  # `tri_continuation_tail_i[15:8]`, core entry I20's open boundary, and this
+  # bench drives it `'0`. So owner ruling R195's law was verified EXHAUSTIVELY
+  # at block level (2^24 tag/colour pairs) and the SEAM was verified in the
+  # console, and NOTHING IN THIS TREE DID BOTH AT ONCE.
+  #
+  # With -GlowTag the bench sets TWO FIELDS of that one port and nothing else:
+  # `effect_tag` = 0x7F (the frozen `tag = (channel << 6) | strength` of
+  # spec/stars_and_flares.md 1: GLOW = 0b01, strength 63, so R195's ramp gives
+  # gain 68) and `vertex_rgb` = 0xB5AAB5. The colour is necessary, not
+  # decorative: the glow BORROWS the fragment's own colour, and with the tail at
+  # zero the fragments are BLACK, so the tag alone would move a counter and
+  # light nothing. The bench's header explains why that exact value -- it
+  # survives the ordered dither on every Bayer phase, it can never collide with
+  # the odd frame sentinel, and it does not saturate the bloom away.
+  #
+  # Its polarity is DIRECT, and it INVERTS ONE ASSERTION rather than removing
+  # it: in every other form the post pass is an IDENTITY and `fb_bad` must be 0;
+  # here the plane is lit and the pass must CHANGE pixels. The plain run is the
+  # negative control and asserts `untagged == fragments`,
+  # `bloom_cells_contributing == 0` and that NO pixel carries the tail colour.
+  #
+  # MEASURED 2026-09-21. -GlowTag: `frags=2560 [untagged=1498 below_knee=0
+  # lit=1062 reserved=0]`, 1,062 pixels at 0xB556, 1,344 bloom cells, 1,344
+  # framebuffer words changed. Plain: `[untagged=2560 ... lit=0]`, 0 pixels at
+  # 0xB556, 0 bloom cells, 0 words changed. BOTH HALVES ARE REQUIRED before
+  # either number may be quoted.
+  #
+  # AND NOT EVERY RESOLVED FRAGMENT IS LIT, WHICH IS CORRECT. RASTER.RESOLVE
+  # sweeps a touched TILE WHOLE, so `gather_fragments_o` counts all 256 pixels
+  # of each of the ten tiles this fixture enters; only 1,062 are covered and the
+  # rest carry the tile clear, tag 0. The first version of the bench assertion
+  # demanded all 2,560 and failed -- the assertion was wrong, not the console,
+  # and the bench now says so where the next reader will find it.
+  #
+  # It also settles a question no identity pass could answer -- whether
+  # POST.ECHO taps the compositor's SOURCE or its OUTPUT. See the bench.
+  [switch]$GlowTag,
+  # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
   # ---------------------------------------------------------------------------
   # Added 2026-09-20. Three merges in one run swallowed a closing construct --
@@ -236,6 +280,9 @@ if (-not $BuildIn) {
          # other's link. Found 2026-09-20 by reading the running process's
          # PATH, not by a failure. EVERY NEW SWITCH NEEDS A TAG HERE.
          elseif ($BadTraceArm) { 'zhao_console_core_smoke_badarm' }
+         # EVERY NEW SWITCH NEEDS A TAG HERE -- see the paragraph above, which
+         # is about exactly this line being forgotten once already.
+         elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
@@ -307,6 +354,10 @@ if ($BadVertex) {
 if ($NoEchoArm) {
   $defs += '+define+ZHAO_SMOKE_NO_ECHO_ARM'
   Write-Host 'NEGATIVE CONTROL: the SetPost leaves POST.ECHO DISARMED (R35); the bench asserts no capture happens'
+}
+if ($GlowTag) {
+  $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
+  Write-Host 'R195 END-TO-END: tri_continuation_tail_i carries a GLOW tag (0x7F) and a non-black vertex colour, DIRECT polarity (passes when gather_frag_lit_o EQUALS the framebuffer pixels carrying the tail colour, the bloom stage finds cells, and the post pass CHANGES the frame)'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'

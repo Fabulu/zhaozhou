@@ -3342,7 +3342,71 @@ module tb_zhao_console_core_smoke
   localparam int unsigned POST_TB_H = 240;
   localparam int unsigned POST_TB_WORDS = POST_TB_W * POST_TB_H;
   localparam int unsigned POST_ECHO_WBASE = 32'h05C0_0000 >> 1;
+  // ==========================================================================
+  // -GlowTag: THE FIRST LIT FRAGMENT THE COMPOSED CONSOLE HAS EVER CARRIED
+  // ==========================================================================
+  // Added 2026-09-21 (tagprod). POSTGATHER composed POST.GATHER and its smoke
+  // read `frags=2560 [untagged=2560 below_knee=0 lit=0 reserved=0]` -- CORRECT,
+  // because the effect tag is `tri_continuation_tail_i[15:8]` and that port is
+  // entry I20's open boundary, driven `'0` by this bench. So R195's law was
+  // verified EXHAUSTIVELY at block level (2^24 pairs) and the SEAM was verified
+  // in the console, and NO TEST IN THIS TREE DID BOTH AT ONCE. A green smoke on
+  // an untagged stream is not evidence about bloom.
+  //
+  // This form is that evidence. It changes TWO FIELDS OF ONE BOUNDARY PORT and
+  // nothing else in the whole bench -- which is the point: if the console were
+  // not really carrying the tail, changing it could not change the picture.
+  //
+  // WHY A BENCH MAY DRIVE THIS AND THE COMPOSER MAY NOT. Driving a boundary
+  // port from a testbench is STIMULUS; driving it from `zhao_console_core.sv`
+  // would be a TIE-OFF moved inward. Entry I20 says so and packet FORGESHADOW
+  // refused exactly that on 2026-09-20. Nothing here closes I20; it makes the
+  // gap's CONSEQUENCE measurable, so the day a producer exists the evidence
+  // path is already in place.
+  //
+  // ---- the tag, and why 8'h7F is not a plausible number --------------------
+  // `spec/stars_and_flares.md` 1, FROZEN: `tag = (channel << 6) | strength`,
+  // GLOW = 2'b01. R195: `kGlowKnee` 24, `kGlowSlope` 0x1C. Strength 63 is the
+  // largest the field holds, so `glow_gain(63) = ((63-24)*28)>>4 = 68` is the
+  // law's own MAXIMUM gain -- the value furthest from the knee, which is what a
+  // control wants. 8'h7F = {2'b01, 6'd63}.
+  localparam logic [7:0] SMK_GLOW_TAG_C = 8'h7F;
+  // ---- the colour, and why it is NOT white ---------------------------------
+  // The glow BORROWS the fragment's own resolved colour (R195 decision 1), so a
+  // BLACK fragment has a black halo and lights nothing. The bench's raster
+  // pixels are black only because this same port's `vertex_rgb` field is zero:
+  // with FRAGMENT STATE 0, `zhao_raster_fragment.sv`'s SHADE_MOD is off and
+  // `s1_src_rgb_r <= s0_vrgb_r` -- the vertex colour IS the pixel. So the tag
+  // alone would have produced `lit=2560` and a plane of zeros, which is a
+  // counter moving and a picture that cannot change. Both halves are set.
+  //
+  // THREE CONSTRAINTS PICKED THIS VALUE, and each one would have produced a
+  // flaky or blind test on its own:
+  //  1. IT SHOULD SURVIVE THE ORDERED DITHER. `resolve.cpp`'s law is
+  //     `r5 = min(31, (r*31 + (B*16+8))/255)` over sixteen Bayer phases, and
+  //     181*31 mod 255 = 1, 170*63 mod 255 = 0 -- both floor to the same index
+  //     at every phase on paper (r5=22, g6=42, b5=22, i.e. 0xB556).
+  //     MEASURED, and the arithmetic holds: exactly 1,062 snapshot words are
+  //     0xB556 and every one of the other 1,498 drawn words is 0x0000. What
+  //     was wrong was the SENTINEL-OVERWRITE count's use of it -- see below --
+  //     not the value.
+  //  2. IT MUST NOT COLLIDE WITH THE SENTINEL. The frame is pre-filled with
+  //     `16'((w*40503) ^ 32'h5A3C) | 16'h0001`, which is ALWAYS ODD, and every
+  //     channel of this colour lands on an even 565 word -- so a drawn pixel
+  //     can never be mistaken for an undrawn one.
+  //  3. IT MUST NOT SATURATE. White would have made the bloom invisible -- add
+  //     anything to 0xFFFF and it is still 0xFFFF -- which is the crayon-grain
+  //     failure from CLAUDE.md's art chapter: mathematically present, visually
+  //     nothing, and it would have read as "the glow does not reach the frame".
+  localparam logic [23:0] SMK_GLOW_RGB_C   = 24'hB5_AA_B5;   // (181,170,181)
+  localparam logic [15:0] SMK_GLOW_PX565_C = 16'hB556;       // its dithered resolve
   logic [15:0] post_fb_snap [0:POST_TB_WORDS-1];
+  // How many words of the RASTER's frame carry the -GlowTag colour. Counted in
+  // the post block and read by the gather block much later, so it lives here.
+  // It is the bench's OWN, independent count of how many pixels the
+  // continuation tail reached, and the whole point is that it is arrived at by
+  // walking memory rather than by reading a counter the DUT maintains.
+  int unsigned smk_glow_px_q;
   bit          post_snap_taken_q;
   // The pass's duration: every cycle the post lease is busy (armed at the
   // raster's frame_end, done when the last written-back word has retired).
@@ -3762,6 +3826,17 @@ module tb_zhao_console_core_smoke
     pal_load_crc_ok_i = '0;
     tri_area2_i = '0;
     tri_continuation_tail_i = '0;
+`ifdef ZHAO_SMOKE_GLOW_TAG
+    // -GlowTag (see SMK_GLOW_TAG_C above). The two fields are addressed through
+    // `zhao_render_texture_pkg`'s OWN span constants rather than literal bit
+    // numbers, so a bench that placed the tag where the package does not keep
+    // it cannot compile into a green run. The package self-tests those spans
+    // one-hot at its `:tail.effect_tag` case.
+    tri_continuation_tail_i[zhao_render_texture_pkg::CONT_TAIL_EFFECT_TAG_LO +: 8]
+        = SMK_GLOW_TAG_C;
+    tri_continuation_tail_i[zhao_render_texture_pkg::CONT_TAIL_VERTEX_RGB_LO +: 24]
+        = SMK_GLOW_RGB_C;
+`endif
     tri_fragment_state_i = '0;
     frame_clear_word_i = '0;
     sheet_req_ready_i = '0;
@@ -4929,6 +5004,8 @@ module tb_zhao_console_core_smoke
     begin
       automatic int unsigned fb_bad = 0, cap_bad = 0, drawn = 0;
       automatic int unsigned first_fb = 0, first_cap = 0;
+      automatic logic [15:0] sentinel_c = '0;
+      automatic logic [15:0] first_drawn_px = '0;
       for (int unsigned w = 0; w < POST_TB_WORDS; w++) begin
         if (u_geom_sdram.mem[w] !== post_fb_snap[w]) begin
           if (fb_bad == 0) first_fb = w;
@@ -4938,7 +5015,20 @@ module tb_zhao_console_core_smoke
           if (cap_bad == 0) first_cap = w;
           cap_bad++;
         end
-        if (post_fb_snap[w] == 16'h0000) drawn++;   // the raster's (black) pixels
+        // THE RASTER'S OWN PIXELS, counted as "this word is no longer the
+        // sentinel" rather than "this word equals <colour>". It used to be
+        // `== 16'h0000`, which is the same thing only while the fragments are
+        // black -- and they are black only because `tri_continuation_tail_i`'s
+        // `vertex_rgb` is at its boundary zero (entry I20). The first -GlowTag
+        // run gave 1,062 against 2,560 with a predicted constant, so the
+        // predicted constant was the defect: this form asks the question the
+        // check is actually about and is right for any raster colour.
+        sentinel_c = 16'((w * 40503) ^ 32'h5A3C) | 16'h0001;
+        if (post_fb_snap[w] !== sentinel_c) begin
+          if (drawn == 0) first_drawn_px = post_fb_snap[w];
+          drawn++;
+        end
+        if (post_fb_snap[w] === SMK_GLOW_PX565_C) smk_glow_px_q++;
       end
       $display("SMOKE: post       frames=%0d passes=%0d src_reads=%0d src_px=%0d line_fill=%0d out=%0d fault=%0d unowned=%0d share_waits=%0d waited=%0d",
                post_frames_o, post_passes_o, post_src_reads_o, post_src_pixels_o,
@@ -4954,8 +5044,8 @@ module tb_zhao_console_core_smoke
       $display("SMOKE: echo       complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
                echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
                echo_pixels_dropped_o, echo_fault_o);
-      $display("SMOKE: post       raster-overwritten=%0d | framebuffer after post differs in %0d word(s) | capture differs in %0d word(s)",
-               drawn, fb_bad, cap_bad);
+      $display("SMOKE: post       raster-overwritten=%0d (first drawn pixel 0x%04h) | framebuffer after post differs in %0d word(s) | capture differs in %0d word(s)",
+               drawn, first_drawn_px, fb_bad, cap_bad);
       if (post_frames_o != 1 || post_passes_o != 1)
         $fatal(1, "SMOKE: POST.COMPOSITE's lease completed %0d frame(s) / %0d pass(es) after %0d cycles, not 1/1 -- busy=%0d fault=%0d src_px=%0d out=%0d",
                post_frames_o, post_passes_o, guard, post_busy_o, post_fault_o,
@@ -4974,9 +5064,29 @@ module tb_zhao_console_core_smoke
       if (drawn != render_pixels_o)
         $fatal(1, "SMOKE: %0d word(s) of the sentinel were overwritten by the raster, but it wrote %0d pixel(s) -- the snapshot is not the raster's frame",
                drawn, render_pixels_o);
+`ifdef ZHAO_SMOKE_GLOW_TAG
+      // -GlowTag INVERTS THIS ONE CHECK, and does not remove it. In every other
+      // form the post pass IS the identity and `fb_bad` must be 0; here the
+      // glow plane is lit, `bloom_gain` is 0x5A, and stage 4 must therefore
+      // CHANGE pixels. A zero here would mean the tag reached POST.GATHER's
+      // counters and never reached the PICTURE -- a counter moving with nothing
+      // behind it, which is the one outcome this form exists to exclude.
+      //
+      // The bound is the argument. A lit cell is quarter-res, so it can only
+      // touch output pixels inside the 4x4 block it covers, and the raster drew
+      // 2,560 pixels into 160 cells -- so a change wider than the cells those
+      // pixels occupy would mean the plane is being sampled at the wrong
+      // coordinate, not that the bloom is working.
+      if (fb_bad == 0)
+        $fatal(1, "SMOKE: -GlowTag lit %0d fragment(s) and the framebuffer after the post pass is IDENTICAL to the raster's frame. R195's law moved its counters and no bloom reached the picture -- the glow plane, its flush, or POST.COMPOSITE's stage 4 is not carrying.",
+               gather_frag_lit_o);
+      $display("SMOKE: -GlowTag  the post pass CHANGED %0d word(s), first at word %0d (the identity assertion is deliberately inverted in this form)",
+               fb_bad, first_fb);
+`else
       if (fb_bad != 0)
         $fatal(1, "SMOKE: the framebuffer after the IDENTITY post pass differs from the raster's frame in %0d word(s), first at word %0d -- the read-back or the write-back moved or changed pixels",
                fb_bad, first_fb);
+`endif
 `ifdef ZHAO_SMOKE_NO_ECHO_ARM
       // THE NEGATIVE CONTROL (R35): the same stimulus with the SetPost's arm
       // OFF must capture NOTHING -- no pass opened, no pixel written. If it did,
@@ -4993,9 +5103,43 @@ module tb_zhao_console_core_smoke
         $fatal(1, "SMOKE: POST.ECHO did not capture the pass whole: complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
                echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
                echo_pixels_dropped_o, echo_fault_o);
+`ifdef ZHAO_SMOKE_GLOW_TAG
+      // POST.ECHO taps the COMPOSITOR'S OUTPUT (`zhao_post_composite`'s
+      // `echo_valid_o` sits beside `o_valid_o`), not its source. Under every
+      // other form the pass is the identity so output == source and `cap_bad`
+      // is 0 either way -- which means the existing check could never tell the
+      // two taps apart. Here they differ, and the capture must follow the
+      // OUTPUT. `echo_vs_fb` below is the assertion that actually says so, and
+      // it holds in BOTH forms; this one is its companion, inverted.
+      if (cap_bad == 0)
+        $fatal(1, "SMOKE: -GlowTag changed %0d framebuffer word(s) and POST.ECHO's capture still equals the PRE-pass frame. The echo is tapping the compositor's SOURCE, not its output.",
+               fb_bad);
+`else
       if (cap_bad != 0)
         $fatal(1, "SMOKE: POST.ECHO's capture differs from the frame in %0d word(s), first at word %0d",
                cap_bad, first_cap);
+`endif
+      // WHICH FRAME THE ECHO HOLDS. Added 2026-09-21 with -GlowTag, and it sits
+      // inside the ARMED branch because a DISARMED echo writes nothing at all,
+      // so comparing its window to anything would be comparing zeros.
+      //
+      // Until a pass changed a pixel this question had NO OBSERVABLE ANSWER:
+      // with an identity pass the compositor's source and its output are the
+      // same pixels, so `cap_bad == 0` above was equally consistent with the
+      // echo tapping either one. It is not a new rule -- ruling R7 always said
+      // the echo carries the RETIRED frame -- it is the first stimulus under
+      // which the rule can fail, which is why it was worth writing down.
+      begin
+        automatic int unsigned echo_vs_fb = 0, first_evf = 0;
+        for (int unsigned w = 0; w < POST_TB_WORDS; w++)
+          if (u_geom_sdram.mem[POST_ECHO_WBASE + w] !== u_geom_sdram.mem[w]) begin
+            if (echo_vs_fb == 0) first_evf = w;
+            echo_vs_fb++;
+          end
+        if (echo_vs_fb != 0)
+          $fatal(1, "SMOKE: POST.ECHO's capture differs from the WRITTEN-BACK framebuffer in %0d word(s), first at word %0d -- the tap and the write-back saw different pixels",
+                 echo_vs_fb, first_evf);
+      end
 `endif
       if (render_retired_words_o != render_issued_words_o)
         $fatal(1, "SMOKE: after the post pass RASTER.FBWRITE issued %0d words and retired %0d",
@@ -6440,6 +6584,84 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the tag law's four counters do not partition the stream: %0d + %0d + %0d + %0d != %0d. A fragment was counted twice or not at all.",
              gather_frag_untagged_o, gather_frag_below_knee_o,
              gather_frag_lit_o, gather_reserved_channel_o, gather_fragments_o);
+    // ----------------------------------------------------------------------
+    // THE TAG ITSELF, both polarities (tagprod, 2026-09-21)
+    // ----------------------------------------------------------------------
+    // POST.COMPOSITE's `bloom_cells_contributing_o` was connected in the core
+    // and read by NOTHING -- an unwatched counter, which is the shape
+    // CLAUDE.md's uncashed-cheque chapter is about. It is the bloom stage's own
+    // account of how many quarter-res cells had anything in them, so it
+    // separates "the plane was lit" from "the plane was lit and the compositor
+    // looked at it", and the two forms below are its negative and positive
+    // control.
+    $display("SMOKE: bloom    cells_contributing=%0d disp_edge_clamps=%0d",
+             post_bloom_cells_contributing_o, post_displacement_edge_clamps_o);
+`ifdef ZHAO_SMOKE_GLOW_TAG
+    // POSITIVE, AND THE EQUALITY IS NOT THE ONE IT LOOKS LIKE IT SHOULD BE.
+    // The obvious assertion -- "the tag was on every triangle, so all
+    // `gather_fragments_o` must be LIT" -- was written first and FAILED at
+    // 1,062 of 2,560. It was wrong, and what it taught is worth more than the
+    // assertion was:
+    //
+    //   `gather_fragments_o` IS NOT THE COVERED-FRAGMENT COUNT. RASTER.RESOLVE
+    //   sweeps a touched TILE WHOLE, so the gather sees all 256 pixels of every
+    //   tile a triangle entered, covered or not. This bench touches 10 tiles
+    //   (cells_flushed=160, sixteen cells per tile) = 2,560 pixels, of which
+    //   1,062 are actually covered. The other 1,498 carry the TILE CLEAR --
+    //   colour 0x0000 and tag 0x00 -- so UNTAGGED is the correct answer for
+    //   them and an all-lit frame would have been the wrong one.
+    //
+    // Three independent counters agree on that reading and none of them is
+    // this block's: RASTER.FBWRITE issued 94,720 words = 92,160 post + 2,560
+    // raster; 160 bursts x 16 = 2,560; and the texture island shaded 1,190
+    // fragments into 1,062 distinct addresses, the difference being overdraw
+    // (state 0 is REPLACE with the depth test OFF).
+    //
+    // SO THE ASSERTION IS A CROSS-CHECK BETWEEN TWO INSTRUMENTS THAT SHARE NO
+    // LOGIC: `gather_frag_lit_o` is a counter inside R195's law, and
+    // `smk_glow_px_q` is this bench walking the framebuffer for the tail's own
+    // colour. Every pixel that received the tail's COLOUR must also have
+    // received its TAG, and no other pixel may be lit. A tail that reached only
+    // some fragments, or a tag leaking onto the tile clear, breaks it -- and a
+    // `> 0` test would have passed through both.
+    if (smk_glow_px_q == 0)
+      $fatal(1, "SMOKE: -GlowTag put 0x%06h on the continuation tail and NOT ONE framebuffer word came out 0x%04h. The tail's vertex colour is not reaching the fragment shader, so nothing downstream of it is being tested.",
+             SMK_GLOW_RGB_C, SMK_GLOW_PX565_C);
+    if (gather_frag_lit_o != smk_glow_px_q)
+      $fatal(1, "SMOKE: %0d pixel(s) carry the tail's COLOUR and %0d fragment(s) came out LIT. The same 48-bit word feeds both fields, so they must agree exactly -- [untagged=%0d below_knee=%0d reserved=%0d] of %0d resolved.",
+             smk_glow_px_q, gather_frag_lit_o, gather_frag_untagged_o,
+             gather_frag_below_knee_o, gather_reserved_channel_o, gather_fragments_o);
+    if (gather_frag_below_knee_o != 0 || gather_reserved_channel_o != 0)
+      $fatal(1, "SMOKE: tag 0x%02h is channel GLOW at strength 63, whose ramp gain is 68 -- it is neither below the knee (%0d) nor a reserved channel (%0d). R195's classifier is decoding the tag differently from the frozen `(channel << 6) | strength`.",
+             SMK_GLOW_TAG_C, gather_frag_below_knee_o, gather_reserved_channel_o);
+    if (post_bloom_cells_contributing_o == 0)
+      $fatal(1, "SMOKE: %0d LIT fragment(s) reached R195's law and POST.COMPOSITE's bloom stage found NO cell contributing. The gather's plane flush and the compositor's plane read disagree about where the cells are.",
+             gather_frag_lit_o);
+    $display("SMOKE: -GlowTag  END TO END: tag 0x%02h on one boundary port -> %0d covered pixel(s) of %0d resolved -> %0d LIT by R195's law -> %0d bloom cell(s) -> the frame. The composed console has carried a lit fragment.",
+             SMK_GLOW_TAG_C, smk_glow_px_q, gather_fragments_o,
+             gather_frag_lit_o, post_bloom_cells_contributing_o);
+`else
+    // NEGATIVE, and it is the half that makes the positive mean anything. With
+    // `tri_continuation_tail_i` at its boundary value every fragment carries
+    // tag 0, so the law must classify all of them UNTAGGED and the bloom stage
+    // must find nothing. If this were not exactly zero, the positive form above
+    // would be measuring something other than the tag.
+    if (gather_frag_untagged_o != gather_fragments_o)
+      $fatal(1, "SMOKE: entry I20 leaves `tri_continuation_tail_i` a boundary at '0, so every fragment's tag is 0 and all %0d must be UNTAGGED -- %0d were [below_knee=%0d lit=%0d reserved=%0d]. Something is putting a tag on the stream.",
+             gather_fragments_o, gather_frag_untagged_o, gather_frag_below_knee_o,
+             gather_frag_lit_o, gather_reserved_channel_o);
+    if (post_bloom_cells_contributing_o != 0)
+      $fatal(1, "SMOKE: no fragment was tagged and POST.COMPOSITE's bloom stage still found %0d contributing cell(s) -- the plane is not being cleared between frames, or the read is off the flush's coordinate",
+             post_bloom_cells_contributing_o);
+    // The other half of -GlowTag's cross-check, in the direction that says the
+    // COLOUR is coming from the tail too: with the port at its boundary zero no
+    // pixel may carry that colour. If one did, 0xB556 would be arriving from
+    // somewhere other than `tri_continuation_tail_i` and the positive form
+    // would be counting the wrong thing.
+    if (smk_glow_px_q != 0)
+      $fatal(1, "SMOKE: `tri_continuation_tail_i` is '0, so no fragment has a vertex colour -- and %0d framebuffer word(s) came out 0x%04h anyway.",
+             smk_glow_px_q, SMK_GLOW_PX565_C);
+`endif
     // Every tile writes all SIXTEEN cells including zeros -- that is R5's
     // reason there is no giant reset loop -- so a flush that is not a
     // multiple of sixteen means a burst was cut short.
