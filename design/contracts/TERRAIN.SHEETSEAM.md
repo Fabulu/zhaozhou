@@ -254,6 +254,34 @@ handle32 beside them; it must not be synthesised from `cmd_patch_id_i` (§2).
 > `seen`, which is right — they have not been dug. **Idempotence is a
 > structural property of this block, not an assertion about it.**
 >
+> **AND IT COSTS A ONE-DEEP SKID, WHICH IS THE PRICE OF CLEARING ON THE READ.**
+> `bf_q` has ONE write port — 1,089 × 9 bits belongs in a memory, not in 9,801
+> flip-flops — and the dig's read must now also WRITE. So a `stamp_results`
+> beat landing in the same cycle as a dig read has nowhere to go, and
+> `rd_issue_c` runs about one cycle in four through a dig, so this is not a
+> corner. Without the skid the result is **lost silently while the counter
+> says it arrived** — the seen bit never set, the vertex serving
+> `before == after`, digging nothing. An UNDER-dig, and R231's own defect one
+> level down.
+>
+> One entry suffices *structurally*, not statistically: the dig issues at most
+> one read per vertex with three states between, so `rd_issue_c` is never high
+> on consecutive cycles and the skid always drains on the next one. A result
+> arriving while the skid DRAINS must **park, not write** — the port is
+> carrying the older entry that cycle — which is why `sr_direct_c` exists and
+> is narrower than "there is room". Both shapes are held by
+> `sheetseam_rtl_directed` cases 15 and 16, and **both were fired against the
+> unrepaired RTL before they were fixed**: exactly one failure each, with the
+> `before_texels_o` check PASSING beside it. That two-line signature — the
+> counter says N arrived, the plane holds N−1 — is the same one R231 repaired.
+>
+> **`bf_empty_c` INCLUDES THE SKID**, and that is correctness rather than
+> tidiness: a parked entry is counted in `bf_live_q` and not yet written, so a
+> `bf_live_q` cleared at `bake_done_i` with the skid still occupied would let
+> another handle re-key while a `seen` bit was on its way in. Very nearly
+> unreachable — which is the reason to make it structural rather than the
+> reason not to, exactly as §6's drain condition was.
+>
 > **NO COLD-START HOLE.** A patch is only baked BECAUSE something stamped it,
 > and those stamps arrive here first reporting `before = 0` on a fresh sheet.
 > `kStampDepthTable[0]` is 0, so the first bake digs the full depth exactly as
