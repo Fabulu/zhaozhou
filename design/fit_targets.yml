@@ -1782,6 +1782,34 @@ targets:
     sources:
       - fpga/rtl/surface/zhao_surface_sheet.sv
 
+  # F-SHEETSEAM1 -- THE PREFETCH STORE'S ACCEPTANCE QUESTION, NAMED BEFORE THE
+  # FIT RUNS. `str_q` is 1,089 x 8 = 8,712 bits, and the whole latency argument
+  # in design/contracts/TERRAIN.SHEETSEAM.md rests on it being ONE M10K rather
+  # than the ~7 a full 64x64 copy of layer F would cost. So `min_m10k: 1` is
+  # the interesting half, exactly as on the zhao_terrain_pageio row above: a
+  # fit that reports ZERO memory has put 8,712 bits in flops, which is eight
+  # times the flop budget the design refused, and a `max_m10k` alone cannot see
+  # it. Written BEFORE the fit, so the first receipt is measured against a
+  # number chosen without sight of it.
+  - top: zhao_terrain_sheetseam
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_stampdepth.sv
+      - fpga/rtl/terrain/zhao_terrain_sheetseam.sv
+    rules:
+      min_m10k: 1
+      max_m10k: 3
+      max_dsp: 0
+      max_registers: 400
+
+  # The share is three flip-flops and two mux trees; it is here so the closure
+  # exists, not because anyone expects a number worth reading on its own.
+  - top: zhao_surface_sheetshare
+    sources:
+      - fpga/rtl/surface/zhao_surface_sheetshare.sv
+    rules:
+      max_dsp: 0
+      max_m10k: 0
+
   - top: zhao_surface_stamp
     sources:
       - fpga/rtl/surface/zhao_surface_stamp.sv

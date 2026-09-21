@@ -3739,6 +3739,59 @@
 //      >> already built twice here, not a subsystem. It is not what blocks
 //      >> this entry; `sc_*` and R65 are.
 //
+//      >> AND THAT BLOCK NOW EXISTS -- BOTH OF THEM. Built 2026-09-21
+//      >> (sheetseam) under OWNER RULING R221. Recorded here because this
+//      >> paragraph is where the next reader will look for the arbiter, and a
+//      >> precise specification for a block that already exists is how
+//      >> `zhao_vertex_arena` came to be built twice.
+//      >>   * `fpga/rtl/surface/zhao_surface_sheetshare.sv` -- the two-client
+//      >>     share this paragraph asks for, at the exact type it names.
+//      >>     Round robin, one `last_q` flip-flop, ADOPTED from
+//      >>     `zhao_terrain_psmux` rather than re-decided; both priority
+//      >>     orders are rejected in its header with their numbers.
+//      >>   * `fpga/rtl/terrain/zhao_terrain_sheetseam.sv` -- and this is the
+//      >>     part the paragraph above UNDERSTATES, which PAGEIO measured and
+//      >>     recorded as decision 5 in `design/contracts/TERRAIN.PAGEIO.md`:
+//      >>     the sheet port is a CONTROL-AND-READ port with a separate
+//      >>     response stream and a residency STATUS, while bake wants a
+//      >>     combinational lookup on the A/B/C beat. So an arbiter alone
+//      >>     serves nothing. This block prefetches the 1,089 texels the
+//      >>     33x33 lattice can address -- 1,089 of 4,096 because section
+//      >>     9.3(b) decimates, one byte of two because bake has no tag port
+//      >>     -- into ONE M10K, and answers the dig from it.
+//      >>
+//      >> THE MISS LAW IS OWNER RULING R221 AND IT IS ONE BIT.
+//      >> `bk_depth_sheet_o` goes LOW on any non-ST_HIT, so the record digs
+//      >> the RATIFIED parametric disc and the fallback is COUNTED. Note what
+//      >> that rules OUT, because it is a live hazard in this seam: an
+//      >> `OP_ACQUIRE` on a non-resident handle ALLOCATES A BLANK SHEET and
+//      >> answers ST_ALLOCATED, which is R221's refused "dig zero" wearing a
+//      >> status code that says HIT -- and steals one of `SURF_SLOTS` = 2 from
+//      >> the only block terrain_rules 7 allows to write layer F. The reader
+//      >> therefore issues `OP_READ` AND NOTHING ELSE, measured over the whole
+//      >> of `sheetseam_rtl_directed` rather than claimed in a header.
+//      >>
+//      >> THIS DOES NOT CLOSE THIS ENTRY, and the arithmetic of the refusal is
+//      >> unchanged by it: the sheet seam was never what blocked I32. Both new
+//      >> blocks are BUILT and NOT COMPOSED, because their consumer
+//      >> `zhao_terrain_bake_v2` is not composed and `cmd_*` still has no
+//      >> producer -- RE-VERIFIED IN THIS TREE 2026-09-21, `zhao_terrain_cmd`
+//      >> emits `rec_island_o`/`rec_ix_o`/`rec_iz_o`/`rec_hps_addr_o`/
+//      >> `rec_crc_o`/`rec_flags_o`, a patch DIRECTORY record, and nothing
+//      >> resembling {cx, cz, radius, depth_from, depth_to}. Composing the
+//      >> share alone would put an arbiter between SURFACE.STAMP and a dead
+//      >> second client, which is a tie-off wearing a block's clothes.
+//      >>
+//      >> ONE NEW THING FOR WHOEVER BUILDS THE RECORD PRODUCER, and it is
+//      >> cheap to get wrong: `zhao_terrain_sheetseam`'s `job_handle_i` is the
+//      >> patch's SHEET handle32 and it is an INPUT on purpose. It must NOT be
+//      >> synthesised from `cmd_patch_id_i`. `zhao_surface_sheet`'s own choice
+//      >> C4 is the reason -- "the handle is the identity the ABI carries
+//      >> (`commands.zidl` SurfaceStamp `handle32[patch] patch`); using
+//      >> anything else re-derives identity that was already stated" -- and a
+//      >> second identity law invented inside a bake-record producer is
+//      >> exactly the kind nobody would look for later.
+//
 //      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
 //      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
 //      ({base, scar, bottom, nobake}) with a layer-B writeback on `sc_*`, and

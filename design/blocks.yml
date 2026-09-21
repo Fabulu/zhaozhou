@@ -218,6 +218,19 @@ counter_catalog:
   - pageio_stale_gen
   - pageio_marks_emitted
   - pageio_jobs_refused
+  # TERRAIN.SHEETSEAM (the layer-F read path; design/contracts/TERRAIN.SHEETSEAM.md).
+  # Named apart from the surface_* family because they measure the BAKE side of
+  # layer F: surface_texels_touched counts what SURFACE.STAMP wrote, these count
+  # what a bake managed to read back and what it did when it could not.
+  - sheetseam_jobs
+  - sheetseam_sheet_served
+  - sheetseam_fallbacks
+  - sheetseam_miss_texels
+  - sheetseam_prefetch_beats
+  - sheetseam_refetches
+  - sheetseam_dig_stall_cycles
+  - sheetseam_bad_texels
+  - sheetseam_stray_done
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -3352,6 +3365,87 @@ blocks:
       fit's question and is untouched.
 
   # ===========================================================================
+
+  - id: TERRAIN.SHEETSEAM
+    name: Bake's layer-F read path
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Serves zhao_terrain_bake_v2's sheet_texel_o / sheet_strength_i -- the per-vertex depth mode owner ruling R194 added -- out of SURFACE.SHEET's resident layer F, and carries owner ruling R221's ST_MISS law. zhao_surface_sheet's req_* is a CONTROL-AND-READ port with a separate response stream and a residency status, while bake wants a combinational lookup on the same beat as layers A/B/C, so the two do not meet without an adapter. It prefetches the 1,089 texels the 33x33 lattice can address -- 1,089 and not 4,096, because section 9.3(b) decimates, and one byte and not two, because bake has no tag port -- into a single M10K, then answers the dig from it. It issues OP_READ and NOTHING ELSE: an OP_ACQUIRE on a non-resident handle allocates a BLANK sheet, which is R221's refused 'dig zero' with a status code that says HIT, and steals one of Slots = 2 from the only block terrain_rules 7 allows to write layer F."
+    contract: design/contracts/TERRAIN.SHEETSEAM.md
+    phase: 7
+    owner_issue: ZH-129
+    inputs: [bake_sheet_jobs, sheet_pages]
+    outputs: [bake_depth_mode, sheet_requests]
+    upstream: [TERRAIN.BAKE, SURFACE.SHEET]
+    downstream: [TERRAIN.BAKE, SURFACE.SHEET]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one 1,089-texel prefetch per sheet record, one texel per clock on the shared request port; MEASURED at 1,091 cycles uncontended and 1,092 with SURFACE.STAMP interleaving, in sheetseam_rtl_directed. A disc record prefetches nothing."
+    tests:
+      directed: tests/terrain/sheetseam_rtl_directed.cpp
+      random: tests/terrain/sheetseam_rtl_directed.cpp
+    counters: [sheetseam_jobs, sheetseam_sheet_served, sheetseam_fallbacks, sheetseam_miss_texels, sheetseam_prefetch_beats, sheetseam_refetches, sheetseam_dig_stall_cycles, sheetseam_bad_texels, sheetseam_stray_done]
+    counter_ports:
+      sheetseam_jobs: jobs_o
+      sheetseam_sheet_served: sheet_served_o
+      sheetseam_fallbacks: fallbacks_o
+      sheetseam_miss_texels: miss_texels_o
+      sheetseam_prefetch_beats: prefetch_beats_o
+      sheetseam_refetches: refetches_o
+      sheetseam_dig_stall_cycles: dig_stall_cycles_o
+      sheetseam_bad_texels: bad_texels_o
+      sheetseam_stray_done: stray_done_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-21"
+        commit: "6aaa0797"
+        evidence: design/contracts/TERRAIN.SHEETSEAM.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-21"
+        commit: "6aaa0797"
+        evidence: tests/terrain/sheetseam_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      NO `reference_model:`, DELIBERATELY, AND THE ABSENCE IS THE CLAIM. The
+      arithmetic law this seam feeds is section 9.3's, whose oracle is
+      `zref::terrain::stamp_depth_at_vertex` -- and that name is already
+      declared on the TERRAIN.BAKE row. Declaring it here too is exactly what
+      `tools/budget/uncashed_cheques.py` check 3 exists to catch: two rows
+      naming one reference model is two implementations of one law, which is
+      how `zref::render::project_vertex` came to be claimed by both
+      GEOM.PROJECT and TERRAIN.PROJECT. This block implements NO arithmetic.
+      It is a residency and latency adapter, and the reference renderer has no
+      counterpart for it at all -- `zref::render::sheet_for` "creates on first
+      use", so the miss this block exists to handle cannot happen in software.
+
+      THE MISS LAW IS OWNER RULING R221, taken 2026-09-21: fall back to the
+      parametric disc, and COUNT the fallback. `fallbacks_o` is that count and
+      it is not decoration -- an uncounted fallback is a console quietly
+      serving the wrong crater shape with no way to know how often. The
+      fallback itself is ONE BIT (`bk_depth_sheet_o` low), which reaches
+      behaviour SEAMDIG already measured as additive:
+      `terrain_bake_v2_directed` passes 267/267 unchanged with the sheet arm
+      present, so a fallback record is bit-identical to the same record with
+      `cmd_depth_sheet_i` low and that equivalence is 267 existing checks.
+
+      THE ARBITER IS A SECOND FILE, `zhao_surface_sheetshare.sv`, and has no
+      row of its own -- `zhao_terrain_psmux` is the precedent, for the same
+      reason: it owns no capability, it shares a port. Its policy is psmux's
+      round robin, ADOPTED rather than re-decided.
+
+      BUILT AND NOT COMPOSED, and the blocker is not this block's. Its consumer
+      `zhao_terrain_bake_v2` is not composed, and bake's `cmd_*` record port
+      still has no producer anywhere -- `zhao_terrain_cmd` emits a patch
+      DIRECTORY record, re-verified in this tree 2026-09-21. `job_handle_i` has
+      no producer for the same reason and it is the same gap: whatever block
+      emits bake records must emit the patch's sheet handle32 beside them.
+
   # SURFACE — Scar Scribe (fpga/rtl/surface)
   # ===========================================================================
 

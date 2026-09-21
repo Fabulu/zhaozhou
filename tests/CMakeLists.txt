@@ -8304,6 +8304,37 @@ add_test(NAME packet_h_paired_diff_fresh
 set_tests_properties(packet_h_paired_diff_fresh PROPERTIES
   LABELS "fast;lint;packet-h" TIMEOUT 120)
 
+# THE OTHER HALF OF THIS CHECK -- `--check --mutant`, over
+# `tests/mutants/zhao_shell_paired_diff_mutant.sv` -- IS ALREADY REGISTERED,
+# as `packet_h_paired_diff_mutant_fresh`, about eighty lines below, next to
+# the mutant control it guards.
+#
+# This comment exists because on 2026-09-21 that gate was RED and nobody could
+# have known. `zhao_shell_top_v2` gained the seven `gth_*` gather outputs; the
+# generated harness above picked them up and the committed mutant did not, so
+# its `u_v2` instantiation was short seven pins and
+# `verilate(test_shell_paired_diff_mutant)` failed with 7 PINMISSING promoted
+# to an error -- **which stops `cmake --preset windows-native` BEFORE it
+# reaches the `add_test` that registers the detector.**
+#
+# So the gate was not missing and was not skipped. It was UNREGISTERABLE, by
+# the very defect it exists to report, from a target twenty lines above it.
+# CLAUDE.md's "a gate that cannot reach the state is not evidence about the
+# state" has a second form: a gate that cannot be INSTALLED is not evidence
+# either, and the two are indistinguishable from a green gate list -- because
+# a test that was never registered cannot fail.
+#
+# Every static gate was green throughout. `mutant_copy_drift.py` skipped the
+# file entirely (it compares COMMIT ORDER against a PRODUCTION module, and
+# this copy's subject is a GENERATED harness, so it is one of that tool's own
+# "16 files matched no production module"); `wrapper_port_parity.py` covers
+# the two `zhao_console_core` wrappers and compares PORT LISTS, while this
+# fault is in an INSTANTIATION's PIN LIST; `mutant_drivers.py` asks whether
+# something BUILDS the mutant, and something does.
+#
+# Repaired by regeneration: `python tools/design/gen_shell_paired_diff.py
+# --mutant`. R220's shape, in a third mirror file.
+
 add_executable(test_shell_paired_diff_directed
   shell/shell_paired_diff_directed.cpp)
 target_link_libraries(test_shell_paired_diff_directed PRIVATE zhao_harness)
@@ -10525,6 +10556,54 @@ verilate(test_pageio_rtl_directed
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_pageio.sv)
 add_test(NAME pageio_rtl_directed COMMAND test_pageio_rtl_directed)
 set_tests_properties(pageio_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# TERRAIN.SHEETSEAM -- the layer-F read path, against the REAL SURFACE.SHEET.
+#
+# Owner ruling R221: when a bake asks zhao_surface_sheet for a layer-F page and
+# gets ST_MISS, the record falls back to the RATIFIED parametric disc and the
+# fallback is COUNTED. This suite is where that law is held.
+#
+# THE STORE IS REAL AND SO IS THE SHARE. `tb_sheetseam.sv` puts
+# zhao_surface_sheet, zhao_surface_sheetshare and zhao_terrain_sheetseam in one
+# chain, so ST_HIT and ST_MISS come out of the block that DEFINES them rather
+# than from a played model -- which is what makes the seam's mirrored `StHit`
+# localparam a checked claim instead of a copy agreeing with itself. The
+# address law is real too: the bench carries a zhao_terrain_stampdepth instance
+# and the C++ asks IT for every texel instead of writing `2*v`.
+#
+# It also fires all nine of the seam's counters plus both of the share's, and
+# measures the two numbers the design was chosen on: 1,089 addressable texels
+# of 4,096, and 1,091 prefetch cycles per record.
+add_test(NAME lint_terrain_sheetseam
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_sheetseam
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_stampdepth.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_sheetseam.sv)
+set_tests_properties(lint_terrain_sheetseam PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_surface_sheetshare
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_sheetshare
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheetshare.sv)
+set_tests_properties(lint_surface_sheetshare PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_sheetseam_rtl_directed terrain/sheetseam_rtl_directed.cpp)
+target_link_libraries(test_sheetseam_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_sheetseam_rtl_directed
+  PREFIX Vtb_sheetseam
+  TOP_MODULE tb_sheetseam
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheetshare.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_stampdepth.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_sheetseam.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_sheetseam.sv)
+add_test(NAME sheetseam_rtl_directed COMMAND test_sheetseam_rtl_directed)
+set_tests_properties(sheetseam_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
 # TERRAIN.LOADQ -- the load queue, against its reference model.

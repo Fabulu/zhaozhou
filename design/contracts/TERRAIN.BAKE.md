@@ -64,21 +64,52 @@ the hardware image of — takes `{DigStamp, depth_from, depth_to}` and nothing
 else, and terrain_rules §9.2's deferral identity is written in `from`/`to`
 depths and in nothing else.
 
-**What closing the other seam needs, so the next increment negotiates it
-instead of discovering it:** two laws that do not exist anywhere in this tree.
+~~**What closing the other seam needs, so the next increment negotiates it
+instead of discovering it:** two laws that do not exist anywhere in this tree.~~
 
-1. A **strength(u8) → depth(fx16) mapping**. `SURFACE.STAMP`'s strength byte is
+1. ~~A **strength(u8) → depth(fx16) mapping**. `SURFACE.STAMP`'s strength byte is
    an appearance value with no metric meaning; nothing anywhere converts it to
-   metres.
-2. A **64×64 → 33×33 resample**. Layer F texels are cell-centred over the
+   metres.~~
+2. ~~A **64×64 → 33×33 resample**. Layer F texels are cell-centred over the
    envelope (`stamp_surface`'s `(2i+1)/128` rule) and layer B is per-vertex;
    the two grids share no sample point at all. A nearest-texel rule, a
    four-texel average and a bilinear tap all give different craters and the
-   choice is a look decision, not an arithmetic one.
+   choice is a look decision, not an arithmetic one.~~
 
-Both are the kind of law `spec/terrain_rules.md` §11 exists to hold, and
+~~Both are the kind of law `spec/terrain_rules.md` §11 exists to hold, and
 inventing them here would put a fabrication under every permanent wound in the
-game. Recorded, not hidden — the SURFACE.SHEET discipline.
+game. Recorded, not hidden — the SURFACE.SHEET discipline.~~
+
+> **STRUCK 2026-09-21 (sheetseam). BOTH LAWS EXIST AND THE SEAM IS BUILT.**
+> The paragraph is struck through rather than deleted because the reasoning was
+> right and the next reader should see a careful refusal expiring, which is the
+> shape this subsystem keeps producing: `zhao_console_core.sv`'s entry I32 has
+> now had **six** refusals corrected for quoting a cause that had lapsed, and
+> each one sent somebody to re-derive something that was already decided.
+>
+> * Law 1 is `spec/terrain_rules.md` §9.3(a) and
+>   `zref::terrain::kStampDepthTable` — sixteen editable fx16 metres indexed
+>   `strength >> 4`, in RTL as `zhao_terrain_stampdepth`'s art table.
+> * Law 2 is §9.3(b) and `zref::terrain::sheet_texel_for_vertex` —
+>   **nearest-texel**, tie broken downward, with the seam error measured and
+>   declared. The "look decision" this section correctly refused to invent was
+>   taken **by looking**: **owner ruling R194**, *"Shipped is fine. Slightly
+>   different but not off."* The page format is frozen at 64×64.
+> * The consumer's shape was **owner decision OPTION A**: bake KEEPS its
+>   parametric disc and GAINS a second, per-vertex depth mode on
+>   `cmd_depth_sheet_i`. The mode is additive — `terrain_bake_v2_directed`
+>   passes 267/267 unchanged with the sheet arm present.
+> * Who SERVES the read is `design/contracts/TERRAIN.SHEETSEAM.md`
+>   (`zhao_terrain_sheetseam` + `zhao_surface_sheetshare`), and what happens on
+>   a residency miss is **owner ruling R221**: fall back to this block's own
+>   parametric disc — `cmd_depth_sheet_i` simply goes low — and COUNT it.
+>
+> **The `inputs: [stamp_results]` ambiguity in the table above is NOT resolved
+> by any of this, and the table still stands.** This block still takes the
+> stamp RECORD. What R194 and R221 settled is the per-vertex DEPTH source
+> inside a record, not who produces the records — and `cmd_*` still has no
+> producer anywhere in the tree (`zhao_terrain_cmd` emits a patch *directory*
+> record; re-verified 2026-09-21). That is what keeps entry I32 open.
 
 ## Clock and reset semantics
 
