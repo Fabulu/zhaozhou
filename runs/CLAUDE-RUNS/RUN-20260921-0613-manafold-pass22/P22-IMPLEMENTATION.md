@@ -132,9 +132,22 @@ neighbour is dirt. So the ink's **law** is right and its full **depth** is not,
 and 600 is the eye's number.
 
 At 600 the dots are 56% of their close-up radius at Drift, about a third of the
-area. **This is not an invisible change:** every one of Drift's 300 frames
-differs, and the clip's unique-colour count falls 13,654 → 9,554. (Pass 20's
-*rejected* first reaction moved 12 frames of 600.)
+area.
+
+**Is it honest? Yes — measured at the SHIPPING rung, not at the ladder's
+extreme.** At strength 600, against pass 21:
+
+| clip | frames changed | mean changed px (of 92,160) | worst frame | unique colours |
+|---|---|---|---|---|
+| Drift | **300 / 300** | 1,886 (2.05%) | 2,310 | 13,654 → 13,356 |
+| Hasty | **240 / 240** | 1,965 (2.13%) | 2,145 | 13,946 → 13,444 |
+
+Every frame moves, by about 2% of the whole picture and much more of the mana
+pocket itself. For scale, pass 20's *rejected* first reaction moved 12 frames of
+600 and 72 pixels. And the small colour-count drop is the point of choosing 600
+over 1000: at 1000 Drift's unique colours collapse 13,654 → **9,554** because the
+field is being deleted; at 600 the mana keeps its variety and only the dots get
+smaller.
 
 Plates: `P22-LOOKS/01`–`04`, `08`. Notes written after each look:
 `P22-NOTES/FINDINGS-02-dot-ladder.md`.
@@ -226,11 +239,30 @@ Plates `P22-LOOKS/05`–`07`; notes `P22-NOTES/FINDINGS-03-knead-ladder.md`.
 * **Inspect is byte-identical with the dots ON**, by construction: its projected
   radius never drops below 363.7 px. That is the near-read proof the direction
   asked for, at the shipping strength.
-* **The lightning gained no distance dependence.** Proved on real splats, not by
-  reading the code: R6's census over all 24 clips saw **11,561,258 line splats
-  and 164,900 plain splats and zero of them moved** at either witness distance.
-  Line splats still draw exactly `mana_line_r_px`; plain splats still draw their
-  authored radius.
+* **The lightning gained no distance dependence.** The coordinator asked for a
+  byte test on a far and a near clip; what is below is stronger, because a
+  two-clip byte test cannot separate "the lightning did not move" from "the dots
+  happened to cover it", and it samples 2 clips of 24.
+
+  **(a) Exhaustive, on real splats.** R6's census over **all 24 clips** at both
+  witness distances saw **11,561,258 line splats and 164,900 plain splats, and
+  zero of them moved.** Line splats still draw exactly `mana_line_r_px` (pass
+  19's law, unchanged); plain splats still draw their authored radius.
+
+  **(b) Structural — the flag cannot reach anything else.** In the whole
+  production path `ManaSplat::dot` is declared once, **written in exactly one
+  place** (`mote_push`, which only the two fold-mote pushes call) and **read in
+  exactly one place**:
+
+  ```
+  zhao_reel.cpp:3193:  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, primary_radius_q8);
+  ```
+
+  So the only quantity the dot mechanism can change is the drawn radius of a
+  splat `mote_push` produced. No lightning, strand, body, glow, bullet, boil or
+  pulsar splat is ever marked, and `u02_splat_r_px` returns on `ms.line` before
+  it ever asks about `ms.dot`. There is no path by which a distance term can
+  reach the lightning's size.
 * Untouched entirely: the pass-21 rods rig and its ball joints, the knead/dent
   solver, every rear-chain path, the palettes, the mote count, roles and
   visibility, the shell/fog, the eye lane, the live-history contract and the
@@ -296,23 +328,42 @@ legacy-root frame from tripping R4 STRAIN.
 
 ## 7. Open issues (non-blocking)
 
-1. **`dip_pm` runs at a sixth of its declared range, bank-wide.** Pass 22 works
+1. **The knead reaction is strong on deep-pressing clips and faint on shallow
+   ones — declared, not hidden.** R7 prints every hosting clip, and the spread
+   is real:
+
+   | rotation at the press | slots |
+   |---|---|
+   | 35–43° (reads plainly) | 5, 3, 10, 23, 22, 0 |
+   | 14–28° (reads) | 2, 11, 12, 6, 8, 4, 9, 19 |
+   | **1.7–7.1° (barely perceptible at native)** | **18, 20, 14, 17, 1** |
+
+   That is `dip_pm` being proportional to how deep each clip actually presses,
+   and it is the honest behaviour — a clip whose middle nodule barely dips
+   should not have its lightning spin. But on slots 18 and 20 the owner will
+   likely not see a reaction at all, and calling those "done" would be the
+   invisible-change fault. If he wants the beat everywhere, the lever is that
+   clip's own `kKneadDipClipPm` share or the dip depth, **not** a bigger roll
+   constant — raising the roll would over-drive the clips that already read.
+
+2. **`dip_pm` runs at a sixth of its declared range, bank-wide.** Pass 22 works
    around it with a declared reference. The underlying question is whether
    `kFoldDipRefMm = 420 mm` is the right reference for the *pose* at all — no
    clip sags past ~90 mm over the onset. If the owner ever wants the pass-20
-   squeeze stronger, that is the constant to look at, not the gains.
-2. **Hover is not a byte-exact near clip** and should not be quoted as one; its
+   squeeze stronger, that is the constant to look at, not the gains. Item 1
+   above is the same constant seen from the other end.
+3. **Hover is not a byte-exact near clip** and should not be quoted as one; its
    radius dips to 284.7 px so 473 of its 600 frames take some dot scaling. The
    byte-exact near proof is Inspect.
-3. **The dot strength is one number for all four dot sizes.** A halo and its
+4. **The dot strength is one number for all four dot sizes.** A halo and its
    1.6× core shrink by the same factor, so their *ratio* is preserved but the
    halo hits the 2 px floor first at extreme distance. No clip in the bank is
    far enough for that to bite.
-4. **The R7 form descriptor is a maximum over pairs**, so it reports the single
+5. **The R7 form descriptor is a maximum over pairs**, so it reports the single
    most-changed chord rather than a whole-figure energy. That is the right
    sensitivity for a gate and a poor summary statistic; do not quote 239.5 pm as
    "the figure changed by 24%".
-5. **Not rendered here:** the 22-subject bank, the encode, the merge and the
+6. **Not rendered here:** the 22-subject bank, the encode, the merge and the
    deploy, by instruction.
 
 ## 8. Evidence

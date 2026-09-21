@@ -1,0 +1,28 @@
+# PASS 22: the lightning's size gains NO distance dependence -- structural proof.
+# Every declaration, write and read of ManaSplat::dot in the production path,
+# and every call of mana_dot_r_px. Generated 2026-09-21 from commit 379bd8bc.
+
+$ grep -n '\.dot|->dot|dot =' zhao_reel.cpp manafold_fx.h
+zhao_reel.cpp:3193:  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, primary_radius_q8);
+manafold_fx.h:1856:  bool dot = false;
+manafold_fx.h:2123:  if (out.size() > n) out.back().dot = true;
+manafold_fx.h:2834:      const int64_t dot = dx[i] * dx[j] + dy[i] * dy[j];
+
+$ grep -rn 'mana_dot_r_px(' zhao_reel.cpp manafold_fx.h manafold_rear_audit.cpp
+zhao_reel.cpp:3193:  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, primary_radius_q8);
+manafold_fx.h:2009:inline int32_t mana_dot_r_px(int32_t r_px, int32_t projected_radius_q8) {
+manafold_rear_audit.cpp:1162:  if (ms.dot) return u02::mana_dot_r_px(ms.r_px, radius_q8);
+manafold_rear_audit.cpp:1179:      const int32_t w = u02::mana_dot_r_px(r, px * 256);
+manafold_rear_audit.cpp:1186:    const int32_t far = u02::mana_dot_r_px(r, kGateLineFarRadiusPx * 256);
+manafold_rear_audit.cpp:1191:                  u02::mana_dot_r_px(r, kGateDotNearRadiusPx * 256));
+
+# manafold_fx.h:1856 declares it; :2123 is mote_push, the ONLY write, reached
+#   only by mana_fold's two mote pushes; :2834 is an unrelated local dot product.
+# zhao_reel.cpp:3193 is the ONLY read in the renderer, inside u02_splat_r_px,
+#   which returns on ms.line BEFORE it asks about ms.dot.
+# => the dot mechanism can change exactly one quantity: the drawn radius of a
+#    splat mote_push produced. No lightning/strand splat is ever marked.
+
+# And the exhaustive half, from the R6 census over ALL 24 clips:
+#   11,561,258 line splats + 164,900 plain splats, ZERO moved at either
+#   witness distance (127.7 px far / 364 px near).
