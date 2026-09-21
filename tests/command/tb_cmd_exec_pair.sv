@@ -238,6 +238,21 @@ module tb_cmd_exec_pair #(
     output logic [31:0] trace_arms_applied_o,
     output logic [31:0] trace_arm_refused_o,
 
+    // DrawProcedural 0x0302's arm, added 2026-09-21 (FORGECOMP). The bench
+    // carries every one of them out rather than tying any off: an executor arm
+    // whose fields a bench cannot see is an arm nothing can test, and the
+    // record was landing on `unsupported_o` until this arm existed -- so
+    // `unsupported_o` staying PUT on a DrawProcedural is itself a check.
+    output logic        forge_valid_o,
+    output logic [31:0] forge_program_o,
+    output logic [31:0] forge_material_o,
+    output logic [ 7:0] forge_kind_o,
+    output logic [15:0] forge_frame_tick_o,
+    output logic [15:0] forge_src_id_o,
+    output logic [31:0] forges_issued_o,
+    output logic [31:0] forge_overflow_o,
+    output logic [31:0] forge_src_truncated_o,
+
     output logic [31:0] unsupported_o
 );
 
@@ -443,6 +458,19 @@ module tb_cmd_exec_pair #(
       .dbg_trace_clear_o    (dbg_trace_clear_o),
       .trace_arms_applied_o (trace_arms_applied_o),
       .trace_arm_refused_o  (trace_arm_refused_o),
+
+      .forge_valid_o     (forge_valid_o),
+      // ALWAYS READY, so the queue's head advances and `forges_issued_o`
+      // counts on the way OUT, which is where the arm counts it.
+      .forge_ready_i     (1'b1),
+      .forge_program_o   (forge_program_o),
+      .forge_material_o  (forge_material_o),
+      .forge_kind_o      (forge_kind_o),
+      .forge_frame_tick_o(forge_frame_tick_o),
+      .forge_src_id_o    (forge_src_id_o),
+      .forges_issued_o       (forges_issued_o),
+      .forge_overflow_o      (forge_overflow_o),
+      .forge_src_truncated_o (forge_src_truncated_o),
 
       .unsupported_o        (unsupported_o)
   );

@@ -85,8 +85,11 @@ constexpr int kOwnerW = 2;
 constexpr int kOwnerLo = kPayW - kOwnerW;  // 15
 constexpr uint32_t kOwnerGeom = 0u;
 constexpr uint32_t kOwnerPart = 1u;
-constexpr uint32_t kOwnerLod = 2u;  // reserved; nothing mints it yet
-constexpr uint32_t kOwnerSpare = 3u;
+// OWNER 2 WAS CLAIMED 2026-09-21 (packet FORGECOMP) -- by FORGE.PRIM's vertex
+// stream, not by GEOM.LOD, which is the block the reservation was written for.
+// The name follows the CLAIMANT because that is what a reader has to trace.
+constexpr uint32_t kOwnerForge = 2u;
+constexpr uint32_t kOwnerSpare = 3u;  // the last UNCLAIMED encoding
 
 // Put `owner` in the field of `rider`, leaving the low bits alone.
 static inline uint32_t with_owner(uint32_t rider, uint32_t owner) {
@@ -869,7 +872,15 @@ int main() {
   // when GEOM.LOD claims owner 2 and makes it routable; at that point this
   // control moves to owner 3 and the law is unchanged.
   // =========================================================================
-  for (const uint32_t spare : {kOwnerLod, kOwnerSpare}) {
+  // ONE SPARE, NOT TWO, SINCE 2026-09-21. The loop above ran over owners 2 and
+  // 3; FORGE.PRIM now mints owner 2 and `zhao_part_project` routes it on its
+  // third demux arm, so a result carrying it is DELIVERED rather than dropped.
+  // This block's own comment anticipated exactly that -- "at that point this
+  // control moves to owner 3 and the law is unchanged" -- and it is carried
+  // out here rather than argued. The detector is unchanged and still fires;
+  // what changed is which encodings are unroutable, and that is a fact about
+  // the console rather than about this test.
+  for (const uint32_t spare : {kOwnerSpare}) {
     b.reset();
     b.geom_seen.clear();
     b.clear_offers();
@@ -894,6 +905,48 @@ int main() {
           "unroutable control: the INGRESS detector stayed quiet (it is a "
           "different fault, on a different port)",
           0, top.geom_tag_collision_o);
+  }
+
+  // =========================================================================
+  // G2b. OWNER 2 IS ROUTED NOW, AND THAT IS THE OTHER HALF OF G2.
+  //
+  // Removing owner 2 from the loop above is only honest if owner 2 is actually
+  // DELIVERED rather than merely stopped being counted. A demux arm that was
+  // added to the detector's exclusion list and nowhere else would pass G2 and
+  // drop every forge vertex silently -- the counter reading zero about a path
+  // that does not work, which is the mirror of the fault the counter exists
+  // for. So: force owner 2, and require BOTH that the detector stays put AND
+  // that the forge arm fires.
+  // =========================================================================
+  {
+    b.reset();
+    b.geom_seen.clear();
+    b.clear_offers();
+    b.force_a_owner = static_cast<int>(kOwnerForge);
+    b.load_geometry(0x2000, 0x1000, 0x30, with_owner(0x0041u, kOwnerGeom));
+    top.g_valid_i = 1;
+    b.pre();
+    b.step();
+
+    bool forge_arm_fired = false;
+    for (int i = 0; i < 60; ++i) {
+      if (top.rf_valid_o) forge_arm_fired = true;
+      b.idle(1);
+    }
+    b.force_a_owner = -1;
+
+    check(forge_arm_fired,
+          "owner 2 REACHES the forge demux arm -- it is routed, not merely "
+          "excluded from the detector",
+          1, forge_arm_fired);
+    check(top.owner_unroutable_o == 0,
+          "and the unroutable detector stays PUT on a routed owner", 0,
+          top.owner_unroutable_o);
+    check(b.geom_seen.empty(),
+          "owner 2 was NOT also delivered as geometry", 0, b.geom_seen.size());
+    check(top.particles_projected_o == 0,
+          "owner 2 was NOT also delivered as a particle", 0,
+          top.particles_projected_o);
   }
 
   // The negative control for the detector above: with the owner left exactly

@@ -392,3 +392,90 @@ its closure are both recorded because the hole is the more instructive half.
 ## Notes
 
 Skirt depth from terrain LOD delta, not a tunable. World-identity wave: also owns island rim walls and the breach silhouette (spec/terrain_rules.md §5 — 2,112-edge structural bound, clamped emission with span-merge). Deep-keel wave: `zref::forge::rim_plan` reference-complete with the frozen degrade order; the TIGHT checkerboard worst case is 2,048 rim edges (2,112 counts all adjacency edges, 64 with void owners); directed + random tests green; terrain-orbit/terrain-breach render the strata walls.
+
+
+## THE BLOCKER LIST, RE-SEARCHED 2026-09-21 (packet FORGECOMP)
+
+The 2026-09-20 entry reported three absences -- **no page issuer, no
+solid-window producer, no vdist master**. Owner ruling R240 says that when a
+stated blocker turns out to have expired, that is evidence the entry stopped
+being maintained rather than that the path is clear, so all three were searched
+again from scratch rather than re-quoted.
+
+**None has expired. But two are SMALLER than the words suggest, and there is a
+FOURTH that no pass had written down.**
+
+1. **PAGE ISSUER -- REAL, UNAMENDED.** `cmd_page_ci_i`/`cmd_page_cj_i` occur in
+   `fpga/rtl/` in exactly three files: the two rival cliff modules and the
+   generated pricing top. Nothing drives them. The port needs an ABSOLUTE cell
+   origin, a page extent in cells, and `cmd_lat_w_i` -- the vdist address
+   stride -- so the issuer must know the VERTEX-LATTICE geometry and not just
+   the cell grid. The candidate walkers were read, not grepped:
+   `zhao_terrain_jobissue` is a real composed patch walker but emits 6-bit
+   SUBPATCH-LOCAL origins with no absolute cell index, no extent and no stride;
+   `zhao_terrain_group_seq` carries the same record onward; and
+   `zhao_terrain_field_walk` walks a lattice for FIELD ASSOCIATIONS and emits
+   four-lane vertex groups. The ledger's `upstream: [TERRAIN.TESS]` is not a
+   lead -- `design/blocks.yml`'s own GEOM.SETUP row names this row as one of
+   three places where `upstream:` is design intent and not a wiring claim
+   (owner ruling R180).
+
+2. **SOLID WINDOW -- TRUE IN LETTER, AN ADAPTER IN FACT. RE-GRADE IT.**
+   `output .*solid\w*_o` returns zero hits tree-wide, so the sentence stands.
+   But `zhao_terrain_compcache_front` carries a per-cell SUBSTANCE query --
+   `cs_req_i`, `cs_ci_i`, `cs_cj_i`, `cs_substance_o`, `cs_oob_o` -- and it is
+   **already composed and live**: the console routes `cs_substance_o` through
+   `zhao_terrain_heighttap`'s pass-through into `zhao_terrain_tess`. Substance 0
+   is SOLID (`terrain_rules` 3.3). So the console owns an authoritative,
+   composed solidity oracle and what is missing is a WALKER that sweeps the
+   window, maps substance to one bit and drives `ld_valid_i`/`ld_solid_i` in
+   row-major order. `cs_ci_i`/`cs_cj_i` are 5 bits -- a 32x32 plane -- so the
+   halo ring of the 34x34 window is outside the addressable index, which is
+   exactly this contract's own "off-lattice loads as 0" case. **The halo is
+   free, not a problem.** This is an adapter-shaped gap, not a capability-shaped
+   one, and calling it a missing PRODUCER sends the next reader to build a
+   second oracle beside a working one.
+
+3. **VDIST MASTER -- REAL, BUT THE PROSE OVERSTATES IT.** `vdist` occurs in
+   `fpga/rtl/` in four files: the two cliff modules (the consumer end), the
+   pricing top, and `zhao_console_core.sv`'s own gap prose. So no master
+   exists. But "nothing produces a vdist field" is too strong and sends the
+   reader to build arithmetic that is already ratified: `zhao_terrain_project`
+   computes `s6_invw`, a Q16.16 quotient per projected vertex, and
+   `zhao_terrain_wcache`'s 106-bit payload documents field `[73:42] invw,
+   Q16.16` -- **that is the same number vdist is**. What does not exist is an
+   ADDRESS-READABLE TABLE: the wcache is an arena keyed by
+   arena/index/generation that replays TRIANGLES, not a `vd_addr -> vd_data`
+   RAM indexed by `cj * lat_w + ci`. The work is a store and an address map,
+   not a projector.
+
+4. **NEW, AND NO PASS HAD LISTED IT: THERE IS NO RIM-EDGE CONSUMER.**
+   `zhao_forge_cliff_ram` emits **one RIM EDGE per beat** -- `edge_valid_o`,
+   `edge_ci_o`/`edge_cj_o` (absolute cell), `edge_side_o`, `edge_span_o`,
+   `edge_src_id_o` -- which is `zref::forge::RimEdge`, semantically one wall
+   quad. `edge_ci_i`, `edge_side_i`, `edge_span_i` and `rim_edge` have **ZERO
+   hits anywhere in `fpga/rtl/`**. The nominal `downstream: GEOM.SETUP` cannot
+   take it and the ledger says so at its own GEOM.SETUP row, which enumerates
+   that FORGE.PRIM emits index triples, FORGE.PRIM_EVAL emits world fx16 and
+   FORGE.CLIFF emits a rim edge, and that "not one of the three is the shape
+   this port takes". This contract's own Notes already said "the emission stage
+   that turns an edge into a quad is not written" -- so the fact was recorded
+   and the BLOCKER LIST never picked it up, which is this repo's most repeated
+   shape.
+
+   **Feeding this block fully would therefore still close nothing**, and that
+   is the sentence a future packet needs before it starts on the issuer.
+
+**The rivalry itself is settled and stays settled.** R142 adopts
+`zhao_forge_cliff_ram` (976 ALM / 939 regs against the golden's 6,674 / 4,025,
+one extra RAM block, DSP unchanged). All four ledgers agree and were checked:
+`blocks.yml` names it in `implementation:`, `console_inventory.yml` marks the
+golden `superseded` and the RAM `pending_compose`, `fit_targets.yml` gives each
+a standalone row, `prod_manifest.yml` counts the RAM as a top. **Adoption is not
+composition and FORGE.CLIFF remains a gap.**
+
+**`zhao_prod_top`'s instantiation is a mirage and should stop being read as
+one.** `u08_i` connects every port including `walk_fault_o`, and every input
+comes from `{16{u08_lfsr_q}}` while every output is XOR-folded into one bit.
+That is the generated area census (`gen_prod_top.py`), one identical stanza per
+top. It produces nothing and consumes nothing.

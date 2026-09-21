@@ -122,10 +122,19 @@ module tb_geom_mem_adapter
       // B behave exactly as they did before each widening.
       .e_req_i('0), .e_rsp_o(), .e_beat_valid_o(), .e_beat_data_o(),
       .e_beat_last_o(),
+      // Requester F, FORGE.PRIM's program-page bank, added 2026-09-21
+      // (FORGECOMP). HELD IDLE here for the same reason C, D and E are: this
+      // bench's properties are A's and B's ownership ones, and the share's
+      // N-1 round-robin bound at SIX is proved by `mem_share_n`'s own directed
+      // test rather than re-derived here. The port must still be NAMED -- an
+      // unconnected input is a PINMISSING the next configure discovers, which
+      // is how this bench found the widening in the first place.
+      .f_req_i('0), .f_rsp_o(), .f_beat_valid_o(), .f_beat_data_o(),
+      .f_beat_last_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(),
       .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)

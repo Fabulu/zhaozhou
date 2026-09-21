@@ -314,3 +314,96 @@ is immutable, so the ribbon's animating phase cannot come from it: §4d freezes
 console frame-sequence broadcast is an ABI decision and is left open
 deliberately. With `frame_tick == 0` the page alone is complete and
 deterministic, so nothing is blocked on the answer.
+
+
+## COMPOSED 2026-09-21 (packet FORGECOMP) -- what happened to the six blockers
+
+**FORGE.PRIM and FORGE.PRIM.EVAL are CONNECTED.** The completion register went
+17 -> 14 and the three modules that moved are `zhao_forge_prim`,
+`zhao_forge_prim_eval` and `zhao_geom_clipdoor`. No tie-off was created,
+narrowed or relocated.
+
+**THE BLOCKER THAT MATTERED WAS NOT ON THE LIST.** Six were recorded above and
+five passes before this one re-verified them. The thing actually missing was a
+**VERTEX STORE**: this block emits WORLD POSITIONS and `zhao_forge_prim` emits
+INDEX TRIPLES, joined only by the ring-major ORDERING CONVENTION that
+`zref_forge_page.hpp` names, and nothing in the tree held the vertices an index
+could look up. `zhao_forge_assemble` is that store. Once it exists the rest is
+wiring -- which is the reverse of what the list implied, and worth saying
+plainly because the list was honest and still sent five packets to the wrong
+question.
+
+Blocker by blocker, at the composed head:
+
+1. **CMD.EXEC's missing arm for 0x0302 -- CLOSED.** `zhao_cmd_exec` gained it,
+   built to the TerrainField arm's shape. Owner ruling R241 D-TICK-A is
+   executed: `frame_tick` is two bytes of `pad[11]`, little-endian, and the
+   live phase is `tick_phase_base + frame_tick` with a WRAPPING add, because a
+   phase is an angle16 whose whole turn is the WIDTH of the field.
+   **`screen_error` is deliberately NOT decoded** and the arm says why: the
+   page authors `segments` and `sides`, `zhao_forge_prim` refuses out-of-range
+   values on its own port, and no screen-error LOD clamp exists anywhere. A
+   register nothing reads is the uncashed-cheque shape.
+
+2. **No bank stages a forge page -- CLOSED.** `zhao_forge_pagebank` reads the
+   header once at PUBLICATION and performs a BOUNDED linear scan of record line
+   0 per draw, worst case count+2 line reads. It holds ONE resident record
+   rather than the whole page, because 192 bytes times sixteen rows is ~15,000
+   flops on a device where ALMs are the binding constraint. **The reader and
+   the dispatch are ONE BLOCK**, for the reason this contract's own scoping
+   gave: the reader's request side has exactly one asker and the dispatch's
+   answer has exactly one use.
+
+3. **GEOM.SETUP's single arm -- SIDESTEPPED, exactly as ruling R187 says to.**
+   Nothing enters at GEOM.SETUP. `zhao_geom_clipdoor` is at GEOM.CLIP's INPUT
+   with two clients, which feeds all three tines of the ordered join through
+   the existing fork and bypasses none.
+
+4. **The three-way ordered join -- UNTOUCHED, and that is the point.**
+
+5. **"No free projector arm" -- TRUE OF THE SERVICE, FALSE OF THE PATH, and
+   this is the one that had been read too pessimistically.** `zhao_part_project`
+   is a FRONT MUX on client A, not the service, and its encoding has RESERVED
+   `OWNER_FORGE = 2'd2` since R68 sub-build 4 with its header commissioning the
+   arm in writing. A third CLIENT is not a third PORT. **Owner ruling R3 is not
+   touched** -- it withholds a third port and NAMES the time multiplex as the
+   thing to keep.
+
+6. **"THE BINDING ONE: GEOM_CLIP_ATTRS = 7" -- NOT BINDING, and it had already
+   stopped being so before this packet started.** Owner ruling R197 discharged
+   the u/w and v/w half on the day it was written, and `zhao_geom_attrpack`
+   branches on `tri_untex_i` and substitutes the zero operand. Owner ruling
+   R234 D1 settled the other half: the Gouraud lanes are NOT branched on
+   `tri_untex_i`, deliberately, because "an untextured primitive is still lit"
+   and in the reference oracle it is the UNTEXTURED case that carries pre-lit
+   colour there. So the packet has a ratified home for every slot. What is
+   AUTHORED rather than ratified is the colour's VALUE, and that is a knob.
+
+### WHAT IS OWED AND NOT DISCHARGED
+
+* **R3'S WRITTEN SCHEDULE PROOF.** The arm exists, so the FAIRNESS half is
+  measurable for the first time -- before it, `tb_part_project` drove the block
+  STANDALONE and composed multi-client throughput had never been measured from
+  any bench in this tree. The RATE half needs a per-client per-frame demand
+  figure this composition does not produce. **Neither half is claimed here.**
+* **THE AREA QUESTION.** No Quartus was run. The two vertex stores are 520 x 43
+  and 520 x 24 bits and whether they infer M10K or land in flops is a fit
+  question, not an argument; depth rather than bit count is the risk, as
+  TERRAIN.SHEETSEAM's row already records for a 1,089-word plane.
+* **THE MATERIAL MAPPING, an OWNER DECISION.** `zhao_material_window` is keyed
+  by (material_set handle32, material_id u16). Every draw in the ABI carries
+  `handle32[material_set]` -- except `DrawProcedural`, which carries
+  `handle32[material]`, and **`handle32[material]` occurs EXACTLY ONCE in all
+  of `spec/commands.zidl`, on that line.** Nothing states the mapping.
+  `zhao_forge_assemble` presents the draw's handle as the SET and
+  `FORGE_MATERIAL_ID` (0) as the entry, both as PARAMETERS, so a ruling moves
+  two lines and NOT ONE ABI BYTE. Like `forge_kind` (R108) and `frame_tick`
+  (R241) this is an interpretation of an existing field, and both of those were
+  owner rulings.
+* **THE COLOUR HAS NOT BEEN LOOKED AT.** `FORGE_LIT_R/G/B` and `FORGE_ALPHA` are
+  named `zhao_console_core` parameters chosen BY REASONING, and CLAUDE.md is
+  explicit that measurement cannot choose a value and that the read at final
+  resolution against what it sits on is the thing. Nothing has been rendered.
+  Expect to move them. DECLARED: the colour is per PRIMITIVE, so a forge
+  triangle's Gouraud plane is FLAT -- a per-corner colour is three inputs
+  instead of one, the day the page carries one.
