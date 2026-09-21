@@ -3185,6 +3185,43 @@ inline bool apply_knead_dip_env() {
     return false;
   if (!num("ZHAO_U02_FOLD_DIP_SHAPE_PM", 0, 3000, g_u02_fold_dip_shape_pm))
     return false;
+  // PASS 23: the PER-CLIP press-depth ladder, `<slot>:<pm>[,<slot>:<pm>...]`.
+  // Direction 24 item 1 names this table as the lever for the five clips whose
+  // lightning barely answers the knead, and it had no knob at all -- every
+  // rung meant a relink, so the ladder that should be run by eye was expensive
+  // enough not to be run. Strict in both directions, like every selector here.
+  //
+  // ⚠ IT REFUSES TO MAKE A NON-HOSTING CLIP HOST A DIP. A slot whose shipped
+  // entry is 0 declares that its clip never calls antenna_knead/swallow_nodules
+  // at all (15, 16), or that another authority already owns its carriers (7, 13,
+  // 21). Pass 20 had to repair exactly that: a nonzero entry told R5 those clips
+  // HOSTED a dip and produced a permanently red, structurally unreachable leg.
+  // A knob that could reintroduce it would be the same defect with a new door.
+  // Setting a hosting slot DOWN to 0 is allowed, and is R7's per-clip control.
+  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_CLIP_PM")) {
+    if (*e == '\0') return false;
+    const char* p = e;
+    while (*p != '\0') {
+      char* end = nullptr;
+      const long slot = std::strtol(p, &end, 10);
+      if (end == p || *end != ':') return false;
+      p = end + 1;
+      const long pm = std::strtol(p, &end, 10);
+      if (end == p) return false;
+      p = end;
+      if (slot < 0 || slot >= kKneadClipSlots) return false;
+      if (pm < 0 || pm > 1000) return false;
+      if (pm != 0 && kKneadDipClipPm[slot] == 0) return false;
+      g_u02_knead_dip_clip_pm[static_cast<size_t>(slot)] =
+          static_cast<int32_t>(pm);
+      if (*p == ',') {
+        ++p;
+        if (*p == '\0') return false;  // a trailing comma is a typo, not a list
+      } else if (*p != '\0') {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -3445,10 +3482,9 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     // that is exactly the pass-5 orphaned-index fault. knead_schedule_slot
     // names the mapping once; see its comment in manafold_art.h.
     const uint32_t dip_slot = knead_schedule_slot(static_cast<uint16_t>(slot));
-    const int32_t dip_base =
-        dip_slot < static_cast<uint32_t>(kKneadClipSlots)
-            ? kKneadDipClipPm[dip_slot]
-            : 750;
+    // PASS 23: through knead_dip_clip_pm, the ONE read of a clip's press depth,
+    // so the ZHAO_U02_KNEAD_DIP_CLIP_PM ladder is live here and in every gate.
+    const int32_t dip_base = knead_dip_clip_pm(dip_slot);
     const int32_t dip_gain = static_cast<int32_t>(
         (static_cast<int64_t>(dip_base) * motion_pm / 1000) *
         g_u02_knead_dip_gain_pm / 1000);

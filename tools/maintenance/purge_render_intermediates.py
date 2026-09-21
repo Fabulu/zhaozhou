@@ -54,6 +54,38 @@ import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+def zencrifice_root(start):
+    """The zencrifice root, found by NAME rather than by counting `..`.
+
+    PASS 23, 2026-09-21. The default used to be `os.path.dirname(REPO)` with a
+    help string promising "the zencrifice root". That is only true when the
+    checkout sits directly under it. Run from the `manafold-p16` working copy
+    -- `zencrifice/manafold-p16/zhaozhou` -- it resolved to `manafold-p16`, and
+    a bare invocation printed
+
+        candidates : 0 files, 0.00 B ... nothing to do.
+
+    while 5.66 GB of stale `.rgb` sat in the real root, 2.83 GB of it the very
+    directory Direction 24 item 5 was asking about. That is this file's own
+    lesson wearing a new coat: the tool that was written because nothing was
+    looking at the waste had been pointed one level away from it and reported
+    a clean bill of health. A wrong default that prints "nothing to do" is
+    worse than no default, because it answers the question.
+
+    Walks up looking for a directory named `zencrifice`; falls back to the old
+    behaviour when there is none, so a checkout outside that tree is unchanged.
+    Nothing here deletes: the tool is still dry-run until `--apply`.
+    """
+    p = os.path.abspath(start)
+    while True:
+        if os.path.basename(p).lower() == "zencrifice":
+            return p
+        parent = os.path.dirname(p)
+        if parent == p:
+            return os.path.dirname(os.path.abspath(start))
+        p = parent
+
 # Extensions that are pure intermediates: reproducible by re-running the
 # pipeline, and never the evidence for anything.
 PURGE_EXT = (".rgb",)
@@ -128,9 +160,10 @@ def scan(root, keep_seconds, keep_newest):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", default=os.path.dirname(REPO),
-                    help="tree to sweep (default: the zencrifice root, so sibling "
-                         "creature working directories are covered -- 15 of the "
+    ap.add_argument("--root", default=zencrifice_root(REPO),
+                    help="tree to sweep (default: the zencrifice root, FOUND BY "
+                         "NAME -- see zencrifice_root(); sibling creature "
+                         "working directories are covered, 15 of the original "
                          "33 GB sat OUTSIDE zhaozhou)")
     ap.add_argument("--apply", action="store_true",
                     help="actually delete; without this nothing is touched")

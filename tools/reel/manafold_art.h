@@ -24,6 +24,7 @@
 #ifndef ZHAO_REEL_MANAFOLD_ART_H
 #define ZHAO_REEL_MANAFOLD_ART_H
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 
@@ -5361,12 +5362,77 @@ inline int32_t g_u02_fold_dip_shape_pm = kFoldDipShapePm;
 // cannot reach the state" trap. They now declare what is true, and they join
 // 7 (Still, a two-frame diagnostic), 13 (Trick, whose plant contact is pinned)
 // and 21 (Taunt III, whose crown shuffle already owns the rankings).
-constexpr int kKneadDipClipPm[23] = { 715, 730, 680, 730, 650, 770, 730,
-                                     0,    770, 950, 820, 815, 650, 0,   635,
-                                     0,    0,   635, 590, 645, 815, 0, 800};
+// ⚠ PASS 23 (Direction 24 item 1): FOUR ENTRIES RAISED, ONE DELIBERATELY NOT.
+// Pass 22's open issue 1 named five slots whose lightning answered the knead at
+// only 1.7-7.1 deg. Four of them simply press too shallowly and the fix is this
+// table; each new value was picked from a rendered ladder at native and 4x
+// through the dip, NOT from the R7 number, and the R7 number is quoted only as
+// the comparison. See P23-NOTES/FINDINGS-01-press-ladder.md and P23-LOOKS/03-06.
+//
+//   slot  1 drift        730 -> 900   7.10 -> 28.18 deg   (950 narrows the loop
+//                                     to a sliver at Drift's 128 px)
+//   slot 14 damage       635 -> 780   4.49 -> 27.82 deg   (840 flattens the loop
+//                                     into a plate and adds nothing)
+//   slot 17 death-drop   635 -> 740   4.76 -> 22.31 deg   (790 steepens the
+//                                     blade until it reads detached from the arm)
+//   slot 18 death-gutter 590 -> 720   1.70 -> 38.77 deg   (760 folds the antenna
+//                                     arm into a collapse, not a knead)
+//
+// ⚠ SLOT 20 (BLOWN) IS LEFT AT 815, AND THAT IS THE INTERESTING ONE. On Blown
+// the lever is INVERTED -- a deeper press gives a SMALLER reaction -- confirmed
+// both by R7 (815 -> 3.70 deg, 1000 -> 0.65, 400 -> 28.26) and, independently,
+// by peak `dip_pm` read off the reel's own U02_FOLD_DEBUG trace (815 -> 18,
+// 1000 -> 3, 400 -> 102). The reaction rides on sag = mid_y(A,C) - B_y, and
+// Blown's ambient pose already carries B below the A/C line; the dent's ambient
+// duck (kKneadDentAmbientDuckPm) then scales that existing sag away faster than
+// the dent adds one. Going the other way reaches a readable reaction only at
+// 500 pm, where R5's B-strictly-lowest margin is -132 mm against a +20 mm floor
+// -- a 152 mm breach of the bound Direction 21 item 2 exists to hold. NOT
+// FORCED. The lever that would work is the duck, which is bank-wide and would
+// move all 19 hosting clips: an owner decision, not a slip-in.
+constexpr int kKneadDipClipPm[23] = { 715, 900, 680, 730, 650, 770, 730,
+                                     0,    770, 950, 820, 815, 650, 0,   780,
+                                     0,    0,   740, 720, 645, 815, 0, 800};
 static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
                               sizeof(kKneadDipClipPm[0])) == kKneadClipSlots,
               "the dip gain table must stay in step with kKneadClipPm");
+// ⚠ PASS 23: THE PER-CLIP PRESS DEPTH IS NOW AN AUTHORING LADDER, because it is
+// the lever the owner's Direction 24 item 1 names and it had no knob at all.
+//
+// Pass 22 shipped the lightning's form change and it read plainly on the clips
+// that press deeply and at 1.7-7.1 deg on five that do not. The chain is
+//   kKneadDipClipPm[slot] -> dent depth -> posed SAG (mid_y(A,C) - B_y)
+//     -> dip_pm = smoothstep((sag - kFoldDipOnsetMm)/(kFoldDipRefMm - onset))
+//                 * kFoldDipGainPm/1000
+//     -> dip_shape_pm = min(1000, dip_pm * 1000 / kFoldDipShapeRefPm)
+//     -> the roll / tumble / shear.
+// so raising this entry is the only way to make a shallow clip's lightning
+// answer without over-driving the clips that already read -- which raising
+// kFoldDipRollA16 would do, and which is why the roll is NOT the lever.
+//
+// This mirror exists so that ladder can be run in ONE build (the gate answers
+// in under a second, so a five-clip ladder is minutes rather than an hour of
+// relinking), and so R7's new PER-CLIP floor gets a control driven by a
+// PRODUCTION knob instead of a gate-local mutation of the instrument's own
+// arithmetic. The shipped values stay in the constexpr table above: this is a
+// copy of them, never a second source of truth.
+//   ZHAO_U02_KNEAD_DIP_CLIP_PM=<slot>:<pm>[,<slot>:<pm>...]   0..1000 each
+inline std::array<int32_t, kKneadClipSlots> make_knead_dip_clip_pm() {
+  std::array<int32_t, kKneadClipSlots> a{};
+  for (int i = 0; i < kKneadClipSlots; ++i)
+    a[i] = static_cast<int32_t>(kKneadDipClipPm[i]);
+  return a;
+}
+inline std::array<int32_t, kKneadClipSlots> g_u02_knead_dip_clip_pm =
+    make_knead_dip_clip_pm();
+/** The one production read of a clip's press depth. Everything -- the solver,
+ *  R5, R7 -- goes through this, so a ladder run cannot be live in the renderer
+ *  and inert in a gate (the fault apply_knead_dip_env was written for). */
+inline int32_t knead_dip_clip_pm(uint32_t dip_slot) {
+  return dip_slot < static_cast<uint32_t>(kKneadClipSlots)
+             ? g_u02_knead_dip_clip_pm[dip_slot]
+             : 750;  // the named fallback, unchanged; see knead_schedule_slot
+}
 // THE DIP SHIPS ON, at 1000, and the route there is worth recording.
 //
 // In pass 20's first packet it shipped OFF: enabling it turned three mspan legs

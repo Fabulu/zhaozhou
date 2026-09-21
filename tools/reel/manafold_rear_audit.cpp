@@ -1039,9 +1039,10 @@ void print_stats(int slot, const ClipStats& s) {
   // renderer never used. This line printed 750 for a clip running on 715.
   const int ssl = static_cast<int>(
       u02::knead_schedule_slot(static_cast<uint16_t>(slot < 0 ? 0 : slot)));
-  const int32_t share = slot >= 0 && ssl < u02::kKneadClipSlots
-                            ? u02::kKneadDipClipPm[ssl]
-                            : 750;
+  // PASS 23: knead_dip_clip_pm, so a ZHAO_U02_KNEAD_DIP_CLIP_PM ladder run is
+  // reported at the depth it actually used.
+  const int32_t share =
+      slot >= 0 ? u02::knead_dip_clip_pm(static_cast<uint32_t>(ssl)) : 750;
   std::printf(
       "  R5 DIP: B lowest margin %+.0f mm (need >= %.0f), returns to %+.0f mm "
       "above (need >= %.0f), B travel %.0f mm, dip share %d pm\n",
@@ -1154,11 +1155,73 @@ constexpr int32_t kGateDotNearRadiusPx = 364;
 // smaller" is asserted only where it is arithmetically required.
 constexpr int32_t kGateDotShrinkMinAuthoredPx = 4;
 
+// ---- PASS 23 (Direction 24 item 2): THE LINE FAR-LEG, RE-EXPRESSED ---------
+//
+// ⚠ WHAT WAS HERE COULD NOT FIRE. The pass-22 census asserted
+//
+//     if (far != u02::mana_line_r_px(ms.r_px, far_q8)) ++n_plain_moved;
+//
+// where `far` IS `gate_splat_r_px(ms, far_q8)`, which for a line returns
+// exactly `u02::mana_line_r_px(ms.r_px, far_q8)`. The two sides of the
+// comparison were the SAME EXPRESSION, so the leg was structurally blind: it
+// is CLAUDE.md's "detector wired to two operands that move together", and
+// "11,561,258 line splats and zero moved" was being quoted as though its far
+// half were evidence. The pass-22 review recorded it as F1.
+//
+// What the leg was FOR is the owner's constraint, and it is a real claim about
+// real splats: *the LINE width really does shrink at distance.* It is now
+// asserted against two operands neither of which is that expression:
+//
+//  (a) **A STORED EXPECTATION.** kGateLineFarWidthPx below is pass 19's law,
+//      evaluated once at the gate's far witness and WRITTEN DOWN as integers.
+//      It is not a call, so a change to mana_line_r_px's rounding, to its full
+//      radius, or to the renderer's routing all disagree with it and the leg
+//      fires. It is indexed by the AUTHORED radius, so it pins the LAW and not
+//      any art value -- every radius 0..48 is covered and an authored radius
+//      may move freely inside that range. A line splat whose radius falls
+//      outside the table is itself a failure, because then the table's
+//      coverage claim is false and the number needs re-deriving.
+//
+//  (b) **THE NEAR EVALUATION.** The near leg pins `near == ms.r_px` at
+//      >= 360 px; the far value must then be STRICTLY smaller wherever the
+//      arithmetic requires it. A line law that lost its distance term makes
+//      far == near and fires this immediately.
+//
+// ⚠ REGENERATE THE TABLE IF EITHER WITNESS MOVES. It is pass 19's law at
+// kGateLineFarRadiusPx (128 px) under kManaLineFullRadiusPx (360 px), and the
+// static_asserts below refuse to compile if either constant changes under it:
+//   python -c "F=360;X=128;print([max(1,min(r,(r*X*256+F*256//2)//(F*256))) if r else 0 for r in range(49)])"
+static_assert(u02::kManaLineFullRadiusPx == 360,
+              "kGateLineFarWidthPx is pass 19's law tabulated at full radius "
+              "360; regenerate it (see the one-liner above) if that moves");
+static_assert(kGateLineFarRadiusPx == 128,
+              "kGateLineFarWidthPx is tabulated at the 128 px far witness; "
+              "regenerate it (see the one-liner above) if that moves");
+constexpr int32_t kGateLineFarWidthPx[] = {
+     0,  1,  1,  1,  1,  2,  2,  2,  3,  3,  4,  4,
+     4,  5,  5,  5,  6,  6,  6,  7,  7,  7,  8,  8,
+     9,  9,  9, 10, 10, 10, 11, 11, 11, 12, 12, 12,
+    13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17,
+    17};
+constexpr int32_t kGateLineFarWidthCount =
+    static_cast<int32_t>(sizeof(kGateLineFarWidthPx) /
+                         sizeof(kGateLineFarWidthPx[0]));
+// The authored radius at or above which pass 19's law MUST produce a strictly
+// smaller width at the far witness. Same threshold R3's own sweep uses; below
+// it the 1 px floor can legitimately land back on the authored value.
+constexpr int32_t kGateLineShrinkMinAuthoredPx = 4;
+/** R6's control for the far-leg: the renderer stops scaling LINE splats with
+ *  distance while the law itself is untouched, which is the defect the leg
+ *  protects against and which R3's law sweep cannot see. Declared as a control
+ *  on the instrument's own mirror, exactly as --fail-dot-flag is. */
+bool g_fail_line_far = false;
+
 /** The renderer's own three-way radius select, mirrored so the census measures
  *  what is DRAWN. zhao_reel.cpp's `u02_splat_r_px` is the original; keeping the
  *  copy here is what lets a gate binary with no camera ask the question. */
 int32_t gate_splat_r_px(const u02::ManaSplat& ms, int32_t radius_q8) {
-  if (ms.line) return u02::mana_line_r_px(ms.r_px, radius_q8);
+  if (ms.line) return g_fail_line_far ? ms.r_px
+                                      : u02::mana_line_r_px(ms.r_px, radius_q8);
   if (ms.dot) return u02::mana_dot_r_px(ms.r_px, radius_q8);
   return ms.r_px;
 }
@@ -1199,6 +1262,9 @@ int dot_census_failures(const zc::CreatureType& T, bool verbose) {
   size_t n_dot = 0, n_line = 0, n_plain = 0, n_both = 0;
   size_t n_dot_shrunk = 0, n_dot_near_exact = 0;
   size_t n_plain_moved = 0, n_dot_below_floor = 0, n_dot_near_moved = 0;
+  // PASS 23: the three counters that replace the tautological far leg.
+  size_t n_line_far_off_law = 0, n_line_far_not_thinner = 0;
+  size_t n_line_shrink_eligible = 0, n_line_untabulated = 0;
   const int32_t far_q8 = kGateLineFarRadiusPx * 256;
   const int32_t near_q8 = kGateDotNearRadiusPx * 256;
   for (const zc::Clip& clip : T.bank.clips) {
@@ -1232,11 +1298,23 @@ int dot_census_failures(const zc::CreatureType& T, bool verbose) {
             ++n_dot_shrunk;
         } else if (ms.line) {
           ++n_line;
-          // ⚠ THE LIGHTNING'S EXISTING BEHAVIOUR, PINNED. A line must still draw
-          // exactly what pass 19's law says -- no more distance dependence than
-          // it already had, which is the owner's words in code.
-          if (far != u02::mana_line_r_px(ms.r_px, far_q8)) ++n_plain_moved;
+          // ⚠ THE LIGHTNING'S EXISTING BEHAVIOUR, PINNED -- pass 23, against
+          // operands that are not the expression under test. See
+          // kGateLineFarWidthPx. The pass-22 form of the far leg compared
+          // gate_splat_r_px's own return against a second call of the same
+          // function and could never fire.
           if (near != ms.r_px) ++n_plain_moved;  // pass 19 is exact at >= 360
+          if (ms.r_px < 0 || ms.r_px >= kGateLineFarWidthCount) {
+            // Out of the stored table's range: the table no longer covers
+            // production, so its silence would mean nothing. Loud, on purpose.
+            ++n_line_untabulated;
+          } else if (far != kGateLineFarWidthPx[ms.r_px]) {
+            ++n_line_far_off_law;
+          }
+          if (ms.r_px >= kGateLineShrinkMinAuthoredPx) {
+            ++n_line_shrink_eligible;
+            if (far >= near) ++n_line_far_not_thinner;
+          }
         } else {
           ++n_plain;
           // Bodies, glows, bullets, the boil, the pulsar: NO distance term.
@@ -1253,6 +1331,15 @@ int dot_census_failures(const zc::CreatureType& T, bool verbose) {
         T.bank.clips.size(), n_dot, n_line, n_plain, n_dot_near_exact,
         n_dot_shrunk, n_both, n_dot_near_moved, n_dot_below_floor,
         n_plain_moved);
+  if (verbose)
+    std::printf(
+        "  line far leg (pass 23, stored pass-19 law + the near evaluation): "
+        "%zu of %zu line splats eligible to shrink, thinner at far %zu; "
+        "violations: off the stored law %zu, not thinner %zu, untabulated "
+        "radius %zu\n",
+        n_line_shrink_eligible, n_line,
+        n_line_shrink_eligible - n_line_far_not_thinner, n_line_far_off_law,
+        n_line_far_not_thinner, n_line_untabulated);
   // Both populations must exist, or the census proved nothing about routing.
   if (n_dot == 0) ++fails;
   if (n_line == 0) ++fails;
@@ -1263,6 +1350,12 @@ int dot_census_failures(const zc::CreatureType& T, bool verbose) {
   if (n_plain_moved != 0) ++fails;
   // And real dots must actually shrink, not merely be eligible to.
   if (n_dot_shrunk == 0) ++fails;
+  // PASS 23 far leg. The eligible population must EXIST, or "0 violations"
+  // would be the empty-set pass that made the old leg look green.
+  if (n_line_shrink_eligible == 0) ++fails;
+  if (n_line_untabulated != 0) ++fails;
+  if (n_line_far_off_law != 0) ++fails;
+  if (n_line_far_not_thinner != 0) ++fails;
   return fails;
 }
 
@@ -1294,6 +1387,76 @@ int dot_census_failures(const zc::CreatureType& T, bool verbose) {
 // (that is kFoldDipRollA16 and its ladder, chosen by eye in P22-IMPLEMENTATION).
 constexpr double kGateKneadRotFloorDeg = 12.0;
 constexpr double kGateKneadFormFloorPm = 40.0;
+// ---- PASS 23 (Direction 24 item 3): THE FLOOR IS NOW PER CLIP --------------
+//
+// ⚠ THE TWO ABOVE ARE BANK MAXIMA, and that is the whole defect. They are
+// compared against `best_rot`/`best_form`, the best over all 19 hosting clips,
+// so a clip that does nothing hides behind the loudest one: if 18 clips
+// regressed to zero and slot 5 held at 43 deg, R7 stayed green. The pass-22
+// review recorded it as F2, and pass 22's own open issue 1 already documented a
+// 25x spread across the bank -- the gate could not see the spread it was sitting
+// next to. The bank legs are KEPT (they are not wrong, only insufficient) and
+// every hosting clip is now floored on its own.
+//
+// Regression guards, set below the measured shipping worst NON-EXEMPT clip with
+// margin -- slot 19 (lasso) at 12.44 deg / 68.2 pm -- exactly as the bank floors
+// were. They hold every clip's reaction to being PRESENT; they choose nobody's
+// size, which is kFoldDipRollA16 and each clip's kKneadDipClipPm, both by eye.
+constexpr double kGateKneadClipRotFloorDeg = 10.0;
+constexpr double kGateKneadClipFormFloorPm = 50.0;
+// ⚠ AND ONE DECLARED EXEMPTION, because the alternative was lowering the floor
+// to the weakest clip and calling that a gate.
+//
+// Slot 20 (BLOWN) reacts at 3.70 deg / 24.7 pm and pass 23 could not raise it:
+// on that clip the press-depth lever is INVERTED (deeper press -> smaller sag ->
+// smaller reaction, confirmed by R7 and independently by peak `dip_pm` off the
+// reel's own trace), and the only settings that would make it read breach R5's
+// B-strictly-lowest floor by up to 152 mm. See kKneadDipClipPm in
+// manafold_art.h and P23-NOTES/FINDINGS-01-press-ladder.md.
+//
+// The exemption does NOT mean unchecked. An exempt clip is still floored, at a
+// level below its own measured worst with margin, so it cannot quietly fall to
+// zero -- what it is excused from is the readable-reaction floor, not from
+// reacting. Adding a slot here is a deliberate, named act with a reason beside
+// it, which is the opposite of moving a number until the red goes away.
+constexpr int kGateKneadExemptSlots[] = {20};
+constexpr int kGateKneadExemptCount =
+    static_cast<int>(sizeof(kGateKneadExemptSlots) /
+                     sizeof(kGateKneadExemptSlots[0]));
+constexpr double kGateKneadExemptRotFloorDeg = 2.0;
+constexpr double kGateKneadExemptFormFloorPm = 12.0;
+inline bool knead_clip_exempt(int slot_id) {
+  for (int i = 0; i < kGateKneadExemptCount; ++i)
+    if (kGateKneadExemptSlots[i] == slot_id) return true;
+  return false;
+}
+// ⚠ AND THE HOSTING COUNT ITSELF, because the per-clip floor has a hole the
+// same shape as the one it closes: a clip that drops OUT of hosting is not
+// floored at all. R7 skips any clip whose press depth is zero or whose pose
+// never clears the onset, so driving a clip's depth to zero silently takes it
+// off the list and every remaining leg stays green. This is the number
+// Direction 21 item 2 delivered and R5 prints beside it.
+constexpr int kGateKneadHostingClips = 19;
+/** R7's PER-CLIP control: ONE hosting clip's press depth put back to what pass
+ *  22 shipped, through the PRODUCTION knob (`g_u02_knead_dip_clip_pm`, the
+ *  ZHAO_U02_KNEAD_DIP_CLIP_PM ladder) -- so that clip's reaction collapses to
+ *  1.70 deg while every other clip, the bank maxima and the hosting count are
+ *  untouched.
+ *
+ *  ⚠ THIS IS THE CONFIGURATION THE PASS-22 GATE CALLED GREEN. Slot 18 at 590 pm
+ *  is exactly what shipped, and R7's bank-max legs read 43.00 deg / 239.5 pm
+ *  from slot 5 right beside it. So the control does not argue that the old gate
+ *  was blind; it reproduces the blindness and watches the new leg catch it.
+ *  It does not assert a bug and does not expire: there is always a depth to
+ *  lower, and if slot 18 is ever re-tuned so that 590 is no longer faint, the
+ *  matrix leg goes red asking for the control's value to be re-picked. */
+constexpr int kGateKneadClipControlSlot = 18;
+constexpr int kGateKneadClipControlPm = 590;  // what pass 22 shipped on slot 18
+/** R7's HOSTING-COUNT control: the loudest clip's depth driven to zero, which
+ *  removes it from the list entirely. The bank maxima stay green (the next clip
+ *  is 40.89 deg) and every surviving clip still clears its own floor, so the
+ *  count leg is the only thing that can fire. */
+constexpr int kGateKneadDropControlSlot = 5;
 
 struct KneadShapeStats {
   double rot_in = 0, form_in = 0;   // worst inside the press window
@@ -1404,10 +1567,13 @@ int knead_shape_failures(const zc::CreatureType& T, bool verbose) {
   double best_rot = 0, best_form = 0;
   double worst_out_rot = 0, worst_out_form = 0;
   int best_slot = -1;
+  int clips_under_floor = 0;
   for (const zc::Clip& clip : T.bank.clips) {
     const int ssl = static_cast<int>(
         u02::knead_schedule_slot(static_cast<uint16_t>(clip.slot_id)));
-    if (ssl >= u02::kKneadClipSlots || u02::kKneadDipClipPm[ssl] == 0) continue;
+    if (ssl >= u02::kKneadClipSlots ||
+        u02::knead_dip_clip_pm(static_cast<uint32_t>(ssl)) == 0)
+      continue;
     const KneadShapeStats s = knead_shape_stats(T, clip);
     if (s.frames_in == 0) continue;  // this clip's pose never clears the onset
     ++hosting;
@@ -1418,19 +1584,43 @@ int knead_shape_failures(const zc::CreatureType& T, bool verbose) {
     best_form = std::max(best_form, s.form_in);
     worst_out_rot = std::max(worst_out_rot, s.rot_out);
     worst_out_form = std::max(worst_out_form, s.form_out);
+    // ---- PASS 23: THE PER-CLIP FLOOR ------------------------------------
+    // Applied to THIS clip's own numbers. Nothing in it reads best_rot or
+    // best_form, so no clip can pass on another clip's back.
+    const bool exempt = knead_clip_exempt(clip.slot_id);
+    const double rot_floor =
+        exempt ? kGateKneadExemptRotFloorDeg : kGateKneadClipRotFloorDeg;
+    const double form_floor =
+        exempt ? kGateKneadExemptFormFloorPm : kGateKneadClipFormFloorPm;
+    const bool clip_red = s.rot_in < rot_floor || s.form_in < form_floor;
+    if (clip_red) {
+      ++fails;
+      ++clips_under_floor;
+    }
     if (verbose)
       std::printf(
           "  knead slot %2d: in-window %d frames rot %5.2f deg form %6.1f pm | "
-          "out-of-window %d frames rot %.4f form %.4f\n",
+          "out-of-window %d frames rot %.4f form %.4f | clip floor %.1f/%.1f%s "
+          "%s\n",
           clip.slot_id, s.frames_in, s.rot_in, s.form_in, s.frames_out,
-          s.rot_out, s.form_out);
+          s.rot_out, s.form_out, rot_floor, form_floor,
+          exempt ? " DECLARED-EXEMPT" : "", clip_red ? "UNDER" : "ok");
   }
   std::printf(
       "  knead shape: %d clips reach the press; best rot %.2f deg (slot %d, "
-      "floor %.1f), best form %.1f pm (floor %.1f); worst OUTSIDE the press "
-      "rot %.4f form %.4f (must be exactly 0)\n",
+      "bank floor %.1f), best form %.1f pm (bank floor %.1f); worst OUTSIDE the "
+      "press rot %.4f form %.4f (must be exactly 0); PER-CLIP floor %.1f deg / "
+      "%.1f pm -- %d clip(s) UNDER it\n",
       hosting, best_rot, best_slot, kGateKneadRotFloorDeg, best_form,
-      kGateKneadFormFloorPm, worst_out_rot, worst_out_form);
+      kGateKneadFormFloorPm, worst_out_rot, worst_out_form,
+      kGateKneadClipRotFloorDeg, kGateKneadClipFormFloorPm, clips_under_floor);
+  if (hosting != kGateKneadHostingClips) {
+    ++fails;
+    std::printf(
+        "  FAIL R7 HOSTING: %d clips reach the press, expected %d -- a clip has "
+        "dropped off the list, where no per-clip floor can see it\n",
+        hosting, kGateKneadHostingClips);
+  }
   if (hosting == 0) ++fails;
   if (best_rot < kGateKneadRotFloorDeg) ++fails;
   if (best_form < kGateKneadFormFloorPm) ++fails;
@@ -1569,6 +1759,43 @@ int main(int argc, char** argv) {
       u02::g_u02_fold_dip_shape_pm = 0;
       std::printf("MUTANT: --fail-knead-shape (the lightning's answer to the "
                   "press switched off)\n");
+    } else if (std::strcmp(argv[i], "--fail-line-far") == 0) {
+      gate = true;
+      // PASS 23, Direction 24 item 2: R6's LINE FAR-LEG control. The renderer
+      // stops scaling line splats with distance while pass 19's LAW is left
+      // untouched -- so R3's law sweep, which only ever asks the law, stays
+      // green and this is the leg that has to notice. It is the control the
+      // tautological far leg could not have: with the old comparison, both
+      // sides moved together and the mutant produced 0 violations.
+      g_fail_line_far = true;
+      std::printf("MUTANT: --fail-line-far (LINE splats drawn at their "
+                  "authored radius at every distance; pass 19's law itself "
+                  "untouched)\n");
+    } else if (std::strcmp(argv[i], "--fail-knead-clip") == 0) {
+      gate = true;
+      // PASS 23, Direction 24 item 3: R7's PER-CLIP control. One hosting clip's
+      // press depth put back to its pass-22 value through the PRODUCTION knob,
+      // not through the instrument's own arithmetic. See
+      // kGateKneadClipControlSlot for why that clip and that number.
+      u02::g_u02_knead_dip_clip_pm[static_cast<size_t>(
+          u02::knead_schedule_slot(
+              static_cast<uint16_t>(kGateKneadClipControlSlot)))] =
+          kGateKneadClipControlPm;
+      std::printf("MUTANT: --fail-knead-clip (slot %d back to its pass-22 "
+                  "press depth of %d pm -- the bank maxima and the hosting "
+                  "count must stay green and the PER-CLIP floor must go red)\n",
+                  kGateKneadClipControlSlot, kGateKneadClipControlPm);
+    } else if (std::strcmp(argv[i], "--fail-knead-drop") == 0) {
+      gate = true;
+      // PASS 23: R7's HOSTING-COUNT control. The loudest clip removed from the
+      // list entirely, which every other leg is structurally unable to see.
+      u02::g_u02_knead_dip_clip_pm[static_cast<size_t>(
+          u02::knead_schedule_slot(
+              static_cast<uint16_t>(kGateKneadDropControlSlot)))] = 0;
+      std::printf("MUTANT: --fail-knead-drop (slot %d pressed to ZERO depth, so "
+                  "it leaves the hosting list -- the bank maxima and every "
+                  "surviving clip's floor must stay green)\n",
+                  kGateKneadDropControlSlot);
     } else if (argv[i][0] >= '0' && argv[i][0] <= '9') {
       slots.push_back(std::atoi(argv[i]));
     } else {
@@ -1716,7 +1943,7 @@ int main(int argc, char** argv) {
     const int wsl = static_cast<int>(
         u02::knead_schedule_slot(static_cast<uint16_t>(want < 0 ? 0 : want)));
     const int32_t dip_want =
-        want >= 0 && wsl < u02::kKneadClipSlots ? u02::kKneadDipClipPm[wsl] : 750;
+        want >= 0 ? u02::knead_dip_clip_pm(static_cast<uint32_t>(wsl)) : 750;
     if (dip_want > 0 && u02::g_u02_knead_dip_gain_pm > 0) {
       ++dip_clips;
       if (st.dip_margin_mm < kGateDipMarginMm) {
