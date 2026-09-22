@@ -1288,6 +1288,85 @@
 //      one would over-report it. The successor gap was I29, one level up --
 //      itself CLOSED 2026-09-22, so this chain is complete.)
 //
+//  * I14 was PROJ_SUBSYSTEM's MATRIX BANK (`proj_cfg_*`, `proj_en_i`).
+//    CLOSED AND DELETED 2026-09-22 (gz/projclose). It closed in four pieces
+//    over four days, and THREE OF THEM WERE ALREADY SPENT WHEN THIS PACKET
+//    OPENED -- which is the fact worth keeping, because the entry went on
+//    being quoted as a blocker by four other entries while it was true of
+//    none of them.
+//
+//    THE CAMERA and THE DEPTH PROFILE closed 2026-09-19: `zhao_cmd_exec`
+//    lowers `SetView 0x0010`'s `mat4fx view_projection` onto cfg 0..15 and
+//    `flags[1:0]` onto cfg 18, under one dirty bit, so a view's camera and
+//    its profile cannot land in different frames. THE VIEWPORT RECT closed
+//    2026-09-20 (projbound) at cfg 16/17, indexed through
+//    `spec/video_rules.md` 3.2 -- a table that bullet had refused on the
+//    grounds that it did not exist, while `zref::render::viewports_of()` had
+//    held it since 2026-08-15. An id that names no viewport in the current
+//    mode is REFUSED and counted, never aliased, and the camera in the same
+//    record still lands.
+//
+//    `pixel_error` -> MEASURE.GOVERNOR: THE BLOCKER EXPIRED BEFORE THIS
+//    PACKET OPENED. The entry read "THIS ENTRY CANNOT CLOSE UNTIL IT
+//    COMPOSES", resting on R223 item 4 parking the governor transitively
+//    behind R133's FORGE.SHADOW. `u_measure_governor` is composed in this
+//    file, and its `px_err0/1_i` and `view_count_i` come from `u_cmd_exec`'s
+//    `gov_px_err0/1_o` and `gov_view_count_o` -- checked to the SOURCE and
+//    not to the port name: `gov_px_err0_o` is loaded from `sv_pxerr[0]`,
+//    assembled byte by byte out of the SetView packet. And R234 D2 declared
+//    R133 SPENT in the same breath that commissioned FORGE.SHADOW as its own
+//    packet, so the ruling the refusal leaned on had been lifted too.
+//
+//    `proj_en_i` WAS THE ONE ITEM STILL TRUE, and it is what this packet
+//    built. `zhao_proj_cfgvalid` (`u_proj_cfgvalid` above) is the producer,
+//    and it is reading (b) of FINDINGS-projinput.md decision D-1: hold the
+//    projector off until a view's matrix bank has been written, so nothing is
+//    projected through an unwritten bank. Reading (a), delete the port, was
+//    refused -- a port is neither a module nor a tie-off entry, and under (b)
+//    the port carries real function, which is the condition R27's precedent
+//    requires before it applies. `proj_en_i` stays as a declared HOST
+//    OVERRIDE, on the same law as the configuration port beside it.
+//
+//    THE EVIDENCE IS THE PIXEL COUNT, not a claim beside one. The console
+//    smoke used to drive `proj_en_i = 1'b1`, and THAT LITERAL WAS THE ENTRY'S
+//    OWN CITATION for the port having no producer. It now drives 0, so
+//    `geom_write_camera()` is the only thing that can enable the projector --
+//    and `raster pixels=2560` is unmoved, over 160 bursts from 14 triangles,
+//    with `SMOKE: projector arm=1` beside it from an instrument that shares
+//    no logic with the raster's counters. A wrong producer reads as 0 pixels.
+//
+//    WHAT THE DEPTH-PROFILE BULLET LEFT BEHIND, re-pointed rather than
+//    dropped: it carried a "WHAT IS NOT CLOSED BY IT" clause saying
+//    `proj_a_profile_o` and `proj_fill_profile_o` leave this module for an
+//    uncomposed GEOM.DEPTHQUANT. `proj_a_profile_o` now has TWO consumers in
+//    this file -- `u_geom_vattr`'s `fl_profile_i` (VATTR holds the depthquant
+//    stream) and FORGE.ASSEMBLE's `rs_profile_i`. `proj_fill_profile_o`,
+//    terrain's per-vertex half, still has none, and it is worth nothing until
+//    terrain's TRIANGLE has a consumer -- which is entry I13, where it is now
+//    recorded. It is not a residue of this entry.
+//
+//    AND THE HUB PREMISE THIS ENTRY WAS OPENED ON STAYS REFUTED, because the
+//    refutation is what stops it being re-opened. It was opened as a hub on
+//    the premise that ONE missing CMD executor sat behind I14, I30, I17's
+//    descriptors and I21's blocker 5; gz/cfgarm measured all four and found
+//    four different kinds of thing, I30 already deleted, and I21's dependency
+//    already expired. A FIFTH customer was docketed onto it by R224 -- I20's
+//    per-draw fragment constants -- and refused for two further different
+//    reasons. Two records survive that refutation and get re-derived every
+//    time somebody greps `raster_state`:
+//      `zref_raster_state.hpp`  R28's DRAW-state sideband word: [1:0]
+//                               cull_mode, [31:2] the material's half carried
+//                               unchanged -> `u_geom_assemble.m_raster_state_i`.
+//      `zref_fragment.hpp`      `FragmentPipeline::State`, the FRAGMENT word:
+//                               [0] z_test_en ... [31:24] sten_mask, all 32
+//                               consumed -> `tri_fragment_state_i`.
+//    Two 32-bit words, two zref headers, both called "state", and they are
+//    not the same word. The ratified container with room for R224's tail is
+//    still the MATERIAL_SET page's reserved bytes 24-31 (`OFF_RSV0` and
+//    `OFF_RSV1`, 64 bits against the tail's 48) for `effect_tag` and
+//    `stencil_reference`; `vertex_rgb` and `vertex_alpha` are contested under
+//    R11 and belong to I20. NO FIELD IS ALLOCATED, here or there.
+//
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
 //      is closed -- GEOM.REPLAY feeds GEOM.CLIP, which feeds GEOM.SETUP -- so
@@ -1782,298 +1861,75 @@
 //      to narrow it is re-affirmed a third time and is now load-bearing in the
 //      strongest possible way: SIX of the seven slots have a reader.
 //
-// I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
-//      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
-//      closed is named here so nobody re-solves it.
+//      RE-MEASURED 2026-09-22 (gz/projclose), AFTER OWNER DECISION R234 D1
+//      LANDED. THE ENTRY HOLDS. Its two blockers were re-measured against the
+//      current tree and BOTH STAND; D1 touched neither. What D1 changed is
+//      real and it is narrower than it looks from outside, and it cuts BOTH
+//      WAYS -- which is why it closes nothing.
 //
-//      CLOSED: THE CAMERA. This entry used to read "the camera matrices are
-//      host/CMD state and CMD.SCHEDULER has no projection-config path". That
-//      sentence was wrong about the block as well as about the path --
-//      CMD.SCHEDULER is composed, as `u_sched` inside `u_shell`, and entry I36
-//      carries the evidence and the correction for all four entries that said
-//      "absent". They
-//      have a path now, and it is not CMD.SCHEDULER: `zhao_cmd_exec` (section 7c)
-//      lowers `SetView 0x0010`'s `mat4fx view_projection` straight onto cfg
-//      addresses 0..15, one word per clock, out of a packet CMD.DECODER has
-//      already ratified. `cmd_exec_views_o` counts it.
+//      WHAT D1 CHANGED, AND THE FIRST HALF IS THAT THIS ENTRY WAS ALREADY
+//      CURRENT. The premise R228 recorded -- "a per-vertex quantity is
+//      computed, carried four blocks, and delivered as a constant nothing
+//      drives" -- no longer describes the tree, and the paragraphs above
+//      already say so: GOURAUDBUILD updated this entry when it landed the
+//      work. `zhao_geom_attrpack` is `LANES = 6` with `SLOT_R/G/B` as named
+//      parameters, and the closing line above already reads "SIX of the seven
+//      slots have a reader". There was no stale premise left here to find.
 //
-//      STILL OPEN, and it is TWO things as of 2026-09-20 (projbound): the
-//      `proj_en_i` OWNER DECISION and `pixel_error`'s uncomposed
-//      MEASURE.GOVERNOR. It said THREE, and before that two, and both of
-//      those earlier sentences were wrong when re-read on 2026-09-20
-//      (projinput). The viewport bullet is now CLOSED and is KEPT rather than
-//      deleted, because the reasoning in it is what the next reader needs --
-//      and a stale CLOSED entry under-reports progress exactly as deleting an
-//      open one would over-report it (entry I4's rule).
+//      THE SECOND HALF IS THAT TERRAIN'S OBLIGATION WENT UP, NOT DOWN, and
+//      this is the sentence a reader is most likely to get backwards.
+//      `zhao_geom_attrpack`'s Gouraud lanes are DELIBERATELY NOT BRANCHED ON
+//      `tri_untex_i` -- its own comment says "an untextured primitive is still
+//      lit". So R197's untex declaration buys a terrain triangle past u/w and
+//      v/w and DOES NOT buy it past lit r/g/b. Before D1 those three slots had
+//      no reader at all, so what a terrain triangle put there was moot; now
+//      they are read and delivered to the fragment, so terrain must produce
+//      them. Terrain has `terr_light_base_o`: ONE signed 32-bit scalar shade.
+//      And `spec/terrain_rules.md` 6.5 makes layer-H tint PER-VERTEX by
+//      ratified spec, so the flat route is the stand-in this entry already
+//      refused to ratify.
 //
-//      NEITHER REMAINING ITEM IS WIRING AND NEITHER IS THIS LANE'S TO DECIDE,
-//      which is why this entry does not close today. `proj_en_i` needs the
-//      OWNER (see FINDINGS-projinput.md D-1, re-measured and still open);
-//      `pixel_error` needs a block another packet owns.
+//      SO THE HONEST NARROWING IS: the landing place stopped being the
+//      problem and terrain's own PER-VERTEX PRODUCER is now the whole of (b)'s
+//      colour half. That is a better-posed question than this entry has been
+//      carrying -- the destination is live, proven end to end by D1's own
+//      receipts -- and it is not a closure.
 //
-//      RE-MEASURED 2026-09-21 (gz/cfgarm), BOTH ITEMS, AND THE SECOND ONE IS
-//      NOW HARDER THAN "ANOTHER PACKET OWNS IT". This entry was opened as a
-//      HUB -- three other entries name it as their blocker -- on the premise
-//      that ONE MISSING CMD EXECUTOR sits behind I14, I30, I17's descriptors
-//      and I21's blocker 5. **THAT PREMISE IS FALSE, measured four ways, and
-//      the four customers need four different kinds of thing:**
+//      BOTH BLOCKERS, RE-MEASURED RATHER THAN QUOTED (R165):
+//        (a) the merge   -- `u_geom_clip.tri_valid_i` is `cl_in_valid`. One
+//                           producer chain through `u_material_window`'s gate.
+//                           No merge. UNCHANGED.
+//            obligation 2 -- a search of `fpga/rtl/terrain/` for
+//                           `material_set` and `material_id` returns ZERO hits
+//                           TODAY, not on the day it was first written.
+//                           Terrain textures through the mosaic. UNCHANGED.
+//        (b) `invw24`    -- no terrain client of `zhao_geom_depthquant_stream`
+//                           anywhere. `proj_out_aw_o` still leaves this module
+//                           and lands nowhere. UNCHANGED.
 //
-//        * `proj_en_i` -- an OWNER DECISION. No CMD record is involved at all;
-//          `zhao_project_core.sv` calls it "the rigid-pipeline enable, owned
-//          by the CALLER" and there is no caller left outside the subsystem.
-//          Unchanged, and it is the one item here a ruling could close today.
-//        * `pixel_error` -- NOT a missing executor either, and the executor
-//          arm is the SMALLEST part of it. MEASURE.GOVERNOR is PARKED, not
-//          merely uncomposed: R223 item 4 (2026-09-21) records that
-//          `cam0/1_thresh_q8_o` goes to `zhao_geom_lodstate`, that lodstate is
-//          inside R133's parked FORGE.SHADOW subsystem ("LODSTATE and SHADOW
-//          mutually blocked and composable only together"), and that R133
-//          PRICED the register cost and took it. So building the two CMD.EXEC
-//          arms (`SetView.pixel_error`, `SetPresentationContract.view_count`)
-//          today would be an uncashed cheque written against a standing
-//          ruling -- the one shape this file has a chapter about.
-//        * I30 -- **DOES NOT EXIST.** It is in the CLOSED AND DELETED ledger
-//          above, closed 2026-09-19 under owner ruling R45. Every entry still
-//          citing "the same gap I14 and I30 describe" is citing a deleted
-//          entry; see I17 item 2, corrected there.
-//        * I21's blocker 5 -- its stated dependency ON THIS ENTRY HAS EXPIRED.
-//          See the correction at that blocker.
-//        * A FIFTH CUSTOMER was re-docketed onto this entry mid-packet by
-//          OWNER RULING R224 -- I20's PER-DRAW FRAGMENT CONSTANTS,
-//          `tri_continuation_tail_i` (48b) and `tri_fragment_state_i` (32b),
-//          on the reasoning that the tail IS `zref`'s per-triangle constant
-//          group field for field (24/8/8/8) and that "what has no producer is
-//          the per-draw constant delivery path -- the same missing executor
-//          I14 and I30 describe". **MEASURED HERE, AND IT IS NOT.** It makes
-//          the refusal five-for-five instead of four, and the two halves fail
-//          the hypothesis for two DIFFERENT reasons:
+//      ONE CORRECTION TO THIS ENTRY'S COSTING, recorded neutrally because it
+//      cuts against the entry's own recommendation. The paragraph above argues
+//      that a second `invw24` client should be "an arbiter on `v_*` and a
+//      demux on `d_*`" and NOT a second instance, citing TERRAIN.PROJECT's
+//      receipt. **`zhao_forge_assemble` ALREADY INSTANTIATES ITS OWN
+//      `zhao_geom_depthquant_stream`**, and that block is composed in this
+//      file -- so this console holds TWO of them today, one inside GEOM.VATTR
+//      and one inside FORGE.ASSEMBLE. That does not make the second-instance
+//      route right, and the DSP argument above is untouched by it. It is
+//      recorded because the entry reads as though the option had never been
+//      exercised in this tree, and it has been.
 //
-//            `tri_fragment_state_i` -- ITS DELIVERY PATH IS BUILT, RATIFIED
-//            AND LIVE. Owner ruling R28 ratified the word
-//            (`reference/include/zref/zref_raster_state.hpp`): `[1:0]`
-//            cull_mode from `DrawForm.flags[3:2]`, `[31:2]` the material's
-//            half from `MaterialRecord.raster_state[31:2]` "carried
-//            unchanged". CMD.EXEC lowers DrawForm whole; GEOM.DRAWJOB composes
-//            the word; it rides the 72-bit draw-state sideband
-//            (`GEOM_SIDE_W`, `zref::drawjob`'s packing under R28/R29) through
-//            MESHFETCH, ASSETFETCH and ASSEMBLE, and entry I39 CLOSED that
-//            carriage on 2026-09-20. `zhao_material_resolve` publishes the
-//            material's half as `rsp_raster_state_o` off the record's bytes
-//            20-23 and IS COMPOSED. No executor is missing anywhere on it.
-//
-//            `tri_continuation_tail_i` -- NOT a delivery gap either: it is
-//            ABSENT DATA. SEARCHED `spec/*.zidl` and `spec/*.md` for
-//            `effect_tag`, `stencil_reference`, `vertex_rgb`, `vertex_alpha`,
-//            `sten_ref`, `sten_mask`: **ZERO hits** (the one match,
-//            `cloud_vertex_alpha`, is a zref sky function). What holds the
-//            24/8/8/8 layout is `zref` -- the reference ORACLE -- which under
-//            ruling R73's distinction makes these DERIVED and not ABI fields.
-//            That supports R224's "no new ABI bits", and it moves the
-//            question: derived FROM WHAT ratified input? For the viewport rect
-//            the answer was `SetView.viewport_id`, an actual ABI field. Here
-//            NO ratified record carries a vertex colour, an alpha, an effect
-//            tag or a stencil reference, so there is nothing to derive from.
-//
-//          THE RECOMMENDATION, since R224 asks for it to be decided ONCE and
-//          this entry is where it was docketed. The ratified container with
-//          room is the MATERIAL_SET page (kind 11), whose record already
-//          reserves bytes 24-31 -- `zhao_material_resolve.sv`'s `OFF_RSV0` and
-//          `OFF_RSV1`, 64 bits against the tail's 48 -- and whose delivery is
-//          already composed end to end (PublishResource -> MEM.UPLOAD ->
-//          MATERIAL.RESOLVE -> `u_material_window`'s per-triangle join). That
-//          is R42/SPECIES_TABLE's pattern: owner-authored DATA in a page, not
-//          a new command. **IT DOES NOT COVER THE WHOLE TAIL, and the split is
-//          the owner's to take:** `effect_tag` and `stencil_reference` are
-//          material/primitive state and fit the page; `vertex_rgb` and
-//          `vertex_alpha` are contested, because ruling R11 makes base_rgb the
-//          VERTEX's colour and not the material's -- putting them in a
-//          material record contradicts R11, and that is I13's and I20's open
-//          art question, not a packaging choice. **No field is allocated
-//          here.**
-//
-//          AND THE ONE THING R224 FLAGGED AND DID NOT RESOLVE IS SETTLED, with
-//          the ruling in favour of the lane rather than the coordinator.
-//          TAGPROD's "`raster_state[31:2]` has no v1 consumer" is CORRECT --
-//          it is owner ruling R28's own sentence, quoted in
-//          `zref_drawjob.hpp`: *"no bit of it has a ratified consumer in v1,
-//          so a v1 material writes 0 there"*, with the named constant
-//          `kV1MaterialRaster` and R48's ALPHA_C as the stated precedent. The
-//          counter-citation (`zref`'s `State::pack()` allocating `[31:24]`)
-//          IS ABOUT A DIFFERENT WORD, which is the first of the two readings
-//          R224 offered and is the right one. **Two 32-bit words, two zref
-//          headers, both called "state":**
-//            `zref_raster_state.hpp`  R28's DRAW-state sideband word:
-//                                     [1:0] cull_mode, [31:2] material half.
-//                                     -> `u_geom_assemble.m_raster_state_i`.
-//            `zref_fragment.hpp`      `FragmentPipeline::State`, the FRAGMENT
-//                                     word: [0] z_test_en ... [31:24]
-//                                     sten_mask, matching
-//                                     `zhao_raster_fragment.sv` 228-235 and
-//                                     400-406 bit for bit, all 32 consumed.
-//                                     -> `tri_fragment_state_i`.
-//          So no correction is owed to that lane and no allocation is implied
-//          by that half. Recorded here because a collision between two
-//          identically-named ratified words is the kind of thing that gets
-//          re-derived every time somebody greps `raster_state`.
-//
-//      THE INPUT SIDE OF THE GOVERNOR IS NOW FULLY REACHABLE, which is worth
-//      writing down because the next lane will otherwise re-derive it and
-//      because it is what makes the parked OUTPUT side the whole of the
-//      blocker. `frame_i` <- `core_tick_c`; `starved0/1_i` <-
-//      `zhao_measure_starve` off the composed `zhao_measure_tokens`;
-//      `proj0/1_i` <- `zhao_view_projq88` <- `zhao_view_projscale`, whose `kx`
-//      comes from the merged cfg bus and whose `vw` comes from cfg 17 -- WHICH
-//      NOW HAS A CMD PRODUCER, so the sentence recorded at I18's governor note
-//      below ("that is I14's other half and it is a genuine hole") is spent;
-//      `px_err0/1_i` and `view_count_i` <- two new CMD.EXEC arms, both fields
-//      ratified. Every one of those is engineering. NONE of them helps while
-//      R133/R223 park the consumer.
-//
-//        * THE VIEWPORT RECT, cfg addresses 16 and 17 -- CLOSED 2026-09-20.
-//          SetView carries a `viewport_id` and NOT a rectangle.
-//
-//          THE REST OF WHAT THIS BULLET USED TO SAY WAS FALSE, and it is the
-//          expensive kind of false -- it asserted a PRESENCE and then refused
-//          on it. It read: "the id-to-rectangle table is
-//          `spec/video_rules.md`'s -- it is not in the ABI at all. Deriving one
-//          here would be this file inventing a layout, which is the thing the
-//          whole ledger exists to refuse."
-//
-//          THERE WAS NO SUCH TABLE IN `video_rules.md`. A case-insensitive
-//          search of `spec/*.md` and `spec/*.zidl` for "viewport" returns five
-//          hits: four `viewport_mask` fields on DrawSky/DrawForm, and the
-//          `SetView.viewport_id` declaration. The same sentence is in
-//          `zhao_cmd_exec.sv` and in owner ruling R30, which says to MOVE a
-//          table that does not exist.
-//
-//          AND DERIVING IT WOULD INVENT NOTHING, which is the half that cost
-//          the month: `zref::render::viewports_of()`
-//          (`reference/src/zrender/internal.hpp:41`) has held the table since
-//          the 2026-08-15 ratification -- Duo to {0,0,256,192} and
-//          {0,192,256,192} returning 2, every other mode to the full canvas
-//          returning 1 -- and the reference oracle is the thing RTL is
-//          verified AGAINST. Two other sites had derived the same rectangles
-//          independently (`terrain_project_directed.cpp:462`,
-//          `GEOM.BINNER.md:25`).
-//
-//          The table is now WRITTEN, in `spec/video_rules.md` section 3.2,
-//          citing all three. It is DERIVED and not an ABI field (owner ruling
-//          R73's distinction), so the lowering costs no zidl change and no
-//          capture regeneration.
-//
-//          THIS BULLET IS CLOSED, 2026-09-20 (projbound). The lowering exists:
-//          `zhao_cmd_exec` parses `SetView.viewport_id` (ABI byte 17, a
-//          SEPARATE field from `view_id` at byte 16 -- it had parsed NEITHER),
-//          indexes the 3.2 table, and writes cfg 16 and 17 as steps 20 and 21
-//          of its view walk, under the SAME dirty bit as the matrix. So a
-//          view's camera and its rectangle cannot land in different frames,
-//          which is the property the profile's step 16 already had.
-//
-//          An id that names no viewport in the current mode is REFUSED, never
-//          aliased: the walk ends at step 19, the bank keeps its previous
-//          rectangle, and `cmd_exec_viewport_refused_o` counts it. THE CAMERA
-//          IN THE SAME RECORD STILL LANDS -- refusing a rectangle must not
-//          refuse a view. `tests/command/cmd_exec_directed.cpp` cases 32-35
-//          differential all four rectangles against
-//          `zref::render::viewports_of()` (the ORACLE, not a retyped table),
-//          fire the counter by stimulus in Z60, and prove the same id is
-//          accepted in Duo -- so the counter is seen to read the MODE and not
-//          merely the id.
-//
-//          THE DECISION 3.2 RECORDED AS OPEN IS TAKEN, and it is recorded
-//          there as taken rather than left for the next reader. Section 1.1
-//          latches the mode at frame start while a SetView commits
-//          immediately, so "the mode on screen" and "the mode the contract
-//          set" are different registers -- `zhao_cmd_scheduler` holds both, as
-//          `mode_act` and `mode_pend`. THE CONTRACT'S MODE is taken, which is
-//          what 3.2 and FINDINGS-projinput.md D-2 both recommended, for their
-//          reason plus one neither could see: this bank rectangle is LATCHED
-//          by the walk and never recomputed per frame, so indexing with the
-//          OUTGOING mode writes a rectangle that is wrong from the instant the
-//          mode flips and stays wrong until the next SetView -- and on a
-//          Z60 -> Duo switch it makes viewport 1 out of range, so the second
-//          view would be refused outright and keep its RESET rectangle. That
-//          is not the one-frame blemish 3.2 described; it is worse, and it
-//          settles the choice on evidence rather than on taste. Cheap to
-//          reverse: `pc_mode` is one register with its reason beside it.
-//
-//          STILL OWED, and NOT this bullet: R67's fixture move to Duo. The
-//          smoke's geometry fixture is Z60 and the lowering does not change
-//          it, so `raster pixels=2560` is unmoved.
-//
-//        * `proj_en_i`. THIS BULLET USED TO SAY "and `SetView`'s OTHER FOUR
-//          FIELDS ... `geometry_tokens`/`fragment_tokens` want MEASURE.TOKENS,
-//          none of which is composed". TWO OF THE FOUR ARE NOT OPEN, and have
-//          not been since the CMD.EXEC packet landed R18/R33: MEASURE.TOKENS
-//          IS composed, as `u_measure_tokens` in this file, and both token
-//          fields traverse -- `sv_gtok`/`sv_ftok` in `zhao_cmd_exec.sv` (lines
-//          1203/1205) onto `tok_vreq_geom_o`/`tok_vreq_frag_o` (1529/1530) and
-//          into the guard's `vreq_*_i`. The smoke prints it
-//          (`SMOKE: tokens contracts=1 views=1 ... clamped=1`). The entry was
-//          simply never re-read afterwards.
-//
-//          `proj_en_i` itself is still a tie-off and still has NO producer
-//          anywhere: every instantiation of `zhao_proj_subsystem` (this file
-//          and `zhao_terrain_pipe`) and of `zhao_project_service` passes `en_i`
-//          straight through from its own port, and the smoke bench drives it
-//          with a literal 1. It is an OWNER DECISION and not wiring, because
-//          `zhao_project_core.sv:53` calls it "the rigid-pipeline enable,
-//          owned by the CALLER", and BOTH callers are now internal to the
-//          subsystem -- there is no caller left outside to own it. See
-//          FINDINGS-projinput.md decision D-1: the recommendation is to give
-//          it the CONFIG-VALID meaning the smoke bench is already faking with
-//          `geom_camera_ready_q` (hold the projector off until a view's matrix
-//          bank has been written), rather than R27's remove-the-dead-port
-//          route, because under that reading the port does carry function.
-//
-//        * `pixel_error` -> MEASURE.GOVERNOR. `zhao_measure_governor` is BUILT
-//          and NOT COMPOSED; its `px_err0_i`/`px_err1_i` are exactly this
-//          field. That block is another lane's (the packet queue gives it to
-//          POST3/MEASURE, and R68 gives its `thresh_q8` half to GEOM.LOD), so
-//          THIS ENTRY CANNOT CLOSE UNTIL IT COMPOSES, whatever is done to the
-//          viewport.
-//
-//          NARROWED 2026-09-20 (post3): "none of which is composed" HAS
-//          EXPIRED for two of the three fields. MEASURE.TOKENS IS composed
-//          (section 11b of this file) and CMD.EXEC already lifts each
-//          SetView's two token COUNTS in phase EX_TOK under rulings R18/R33 --
-//          the I18 entry records that landing. So `geometry_tokens` and
-//          `fragment_tokens` have their port and their producer, and what is
-//          left of this bullet is `pixel_error` (which wants MEASURE.GOVERNOR,
-//          still uncomposed for its OUTPUT side -- see I18) and `proj_en_i`.
-//          Left as a narrowing rather than a deletion because the bullet's
-//          closing sentence is still the law.
-//
-//      CLOSED 2026-09-19: THE DEPTH PROFILE. This entry used to read
-//      "`flags[1:0]` is the depth profile of the frozen 2026-08-31 ruling and
-//      `zhao_project_core` has no port to put it on". It has one now, and NO
-//      PORT ON THIS MODULE'S CFG BUS HAD TO MOVE FOR IT: `cfg_addr_i` has been
-//      five bits since the viewport words landed, so address 18 was already
-//      reachable, and `zhao_geom_cull` -- which shares the bus -- ignores
-//      addr >= 16 on purpose, so the word reaches the projector and nobody
-//      else. CMD.EXEC's view walk is SEVENTEEN steps instead of sixteen, and
-//      step 16 carries `flags[1:0]` to cfg address 18 under the SAME dirty bit
-//      as the matrix, so a view's camera and its profile cannot land in
-//      different frames.
-//
-//      ZERO KEEPS ITS MEANING (`spec/commands.zidl:301`). 2'd0 is WORLD_LONG,
-//      it is the bank's reset value, and no existing capture decodes
-//      differently -- which is the whole reason the ruling chose `flags` over a
-//      new opcode. The reserved value 2'd3 is REFUSED by the bank (the register
-//      keeps its previous profile) because `zhao_geom_depthquant` indexes
-//      THREE-entry tables with this two-bit field, and one past the end is X
-//      rather than a diagnosis.
-//
-//      WHAT IS NOT CLOSED BY IT, said plainly, because a carried field with no
-//      reader is the uncashed cheque this file has a chapter about.
-//      `proj_a_profile_o` and `proj_fill_profile_o` LEAVE this module. Their
-//      consumer is GEOM.DEPTHQUANT, whose `v_profile_i` is exactly this width
-//      and meaning and whose own header opens with the audit finding this port
-//      answers -- "no `depth_profile` port exists anywhere in fpga/rtl" -- and
-//      that block is not composed. Terrain's per-TRIANGLE profile is owed
-//      besides: the replay arena carries no profile field, so
-//      `zhao_vertex_arena`'s payload would have to widen, and that is a change
-//      to that block rather than to a composer.
+//      AND ONE ITEM ARRIVES HERE FROM I14, which closed the same day.
+//      `proj_fill_profile_o` -- terrain's PER-VERTEX depth profile -- leaves
+//      this module with no consumer. I14's depth-profile bullet used to carry
+//      it beside `proj_a_profile_o`, and that half is spent (`u_geom_vattr`'s
+//      `fl_profile_i` and FORGE.ASSEMBLE's `rs_profile_i` both take it). The
+//      terrain half is worth nothing until terrain's TRIANGLE has a consumer,
+//      which is this entry, so it is recorded here rather than left in a
+//      closed entry where nobody would read it. Terrain's per-TRIANGLE profile
+//      is owed besides: the replay arena carries no profile field, so
+//      `zhao_vertex_arena`'s payload would have to widen -- a change to that
+//      block, not to a composer.
 //
 // I17. TWOD's DESCRIPTOR RECORD (`twod_pd_*`, `twod_sd_*`) -- BOUNDARY, and it
 //      is an ABI DECISION, NOT A COMPOSITION. FOUR OF THE FIVE HALVES THIS
