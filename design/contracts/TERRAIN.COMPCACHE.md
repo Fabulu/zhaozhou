@@ -121,8 +121,12 @@ default) and **the counter is the alarm**, not the value.
 
 Added 2026-09-22 (packet LAYERE). A third plane beside the lattice and the
 substance: `mat_m[2*CELLS]`, 24 bits per cell, `{matA, matB, weight}` as ONE
-word because they are never read apart. 2 × 1,024 × 24 b = **49,152 bit ≈ 5
-M10K** — ALM traded for M10K, the direction this device has slack in.
+word because they are never read apart. 2 × 1,024 × 24 b = **49,152 bit = 6
+M10K**, which is 2,048 deep in the 2048x4 mode and therefore six of them side
+by side to make 24 bits wide — not the 49,152/10,240 = 4.8 a bit count alone
+suggests, because an M10K's depth and width trade against each other and 2,048
+deep costs the narrow mode. ALM traded for M10K, the direction this device has
+slack in.
 
 **Why it is here and not in a block of its own — the ARMING LAW, not the
 storage.** A material plane must be double-buffered by the same parity as the
