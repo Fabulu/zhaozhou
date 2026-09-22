@@ -213,6 +213,66 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_TERRAIN_PAGE_POOL_BASE = 32'h0400_0000;
   localparam logic [31:0] ZHAO_TERRAIN_PAGE_POOL_SPAN = 32'h014E_0000; // 1024 * 21,376
 
+  // ---------------------------------------------------------------------
+  // TERRAIN.DEVSTORE -- the per-resident-page DEVIATION AND HISTORY store
+  // (owner ruling R242, 2026-09-22; spec/memory_rules.md 5b)
+  //
+  // WHY IT EXISTS: `zhao_terrain_devstore` held these records in M10K because
+  // ruling R24 said "stored alongside the page in M10K (the owner prefers M10K
+  // over ALMs)". R242 supersedes that ONE clause -- "Move deviation store to
+  // SDRAM, ignore stale info" -- because R87 ended M10K's slack. Everything
+  // else R24 decided stands: the records are computed AT PAGE LOAD, the key is
+  // the RESIDENCY PAGE SLOT (a compose slot would let a stranger inherit the
+  // hysteresis history) and BAKE re-triggers the recompute. ONLY THE MEDIUM
+  // CHANGES. The block's own header had already priced the move and left it as
+  // an owner decision; this is that decision enacted.
+  //
+  // WHY BANK 2's TAIL: banks come from byte-address bits [26:25]. These are
+  // terrain records for terrain pages, read by the terrain LOD pass and
+  // written by the terrain mip pass, so they belong beside TERRAIN.PAGE_POOL
+  // and under ruling T3's background priority -- not in a framebuffer bank
+  // that scanout reads every frame (W2.7 measured ~82 of 192 Duo lines starved
+  // when two streams shared a bank). 0x0586_0000..0x05FF_FFFF is T2's reserved
+  // tail "until traces justify"; POST.ECHO took 0x05C0_0000 and this takes the
+  // FIRST 320 KiB, so the two do not touch and 0x058B_0000..0x05C0_0000 stays
+  // reserved.
+  //
+  // THE SPAN IS DERIVED FROM THE RECORD SHAPE, TERM BY TERM, because this
+  // block's whole sizing section was once wrong in the flattering direction
+  // (116 M10K published against a real 141) by quoting prose instead of
+  // parameters:
+  //
+  //   a record   = 3 x DEVW(24) + 16 = 88 bits, PADDED TO 128 (16 B).
+  //                The padding is not waste bought for nothing: at 16 B a
+  //                64-byte burst is EXACTLY four records, so no record ever
+  //                straddles a burst and the staging register is 512 bits
+  //                instead of the 1,408 a packed 176-byte block would need.
+  //                ALMs are the binding constraint; SDRAM here is not.
+  //   deviations = 1,024 slots x 16 subpatches x 16 B = 262,144 B = 0x4_0000
+  //   history    = 2 + MORPHW(17) + 8 = 27 bits x 16 = 432 bits = 54 B,
+  //                padded to ONE 64-byte burst per slot.
+  //              = 1,024 x 64 B = 65,536 B = 0x1_0000
+  //   SPAN       = 0x5_0000 = 327,680 B (320 KiB)
+  //
+  // BASE + SPAN = 0x058B_0000, an elaboration-time constant far below the
+  // 27-bit top 0x0800_0000, so the sum cannot wrap 32 bits -- the defect the
+  // blit clamp exists for. No map input reaches this window: it is NOT
+  // frame-scoped and cannot be moved by a grant.
+  //
+  // THE DEVIATIONS COME FIRST AND THE HISTORY SECOND, and the split is the
+  // BLOCK's (`zhao_terrain_devstore`'s DEV_BASE / HIST_BASE), not the guard's.
+  // MEM.GUARD sees ONE region with TWO arms, exactly as TERRAIN.PAGE_POOL does
+  // -- a guard that had to decode which sub-pool an address lands in would put
+  // a divide-free-but-not-free decode on the verdict path of the block whose
+  // counter enable was already the largest negative-slack family in the shell.
+  //
+  // IT IS A KNOB. Both constants are editable and the store can move to any
+  // unmapped range; `zhao_terrain_devstore`'s REGION_BASE parameter takes this
+  // value at the composition site and its elaboration guard refuses a
+  // parameterisation whose derived footprint exceeds REGION_SPAN.
+  localparam logic [31:0] ZHAO_TERRAIN_DEVSTORE_BASE = 32'h0586_0000;
+  localparam logic [31:0] ZHAO_TERRAIN_DEVSTORE_SPAN = 32'h0005_0000; // 1024 * (256 + 64)
+
   // Duo canvas map (spec/video_rules.md §3.1): two 256x192 views vertically
   // centered at x offsets 0 / 256, y offset 24; border rows are black and
   // part of the displayed stream.

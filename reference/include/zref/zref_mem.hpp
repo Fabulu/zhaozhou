@@ -698,6 +698,14 @@ constexpr uint32_t kTerrainPagePoolSpan = 0x014E0000u;
 // WRITE-only, lease-gated, bank 2's reserved tail.
 constexpr uint32_t kPostEchoBase = 0x05C00000u;
 constexpr uint32_t kPostEchoSpan = 0x0003C000u;
+// TERRAIN.DEVSTORE is TERRAIN.BUILD's, BOTH DIRECTIONS (owner ruling R242,
+// 2026-09-22): the per-resident-page deviation and history records that used
+// to cost 185 M10K of flip-flop-backed block RAM. 1,024 slots x (256 B of
+// sixteen 16-byte records + 64 B of history) = 0x5_0000, so the store ends at
+// 0x058B_0000 and does not touch POST.ECHO at 0x05C0_0000. zhao_pkg
+// ZHAO_TERRAIN_DEVSTORE_*; the derivation is written out there term by term.
+constexpr uint32_t kTerrainDevStoreBase = 0x05860000u;
+constexpr uint32_t kTerrainDevStoreSpan = 0x00050000u;
 
 struct MemoryGuard {
   // client ids (zhao_client_e)
@@ -787,7 +795,18 @@ struct MemoryGuard {
         const bool res_in_pool = m.res_valid && m.res_base >= kRenderAssetBase &&
                                  res_end <= uint64_t(kRenderAssetBase) + kRenderAssetSpan;
         const bool res_ok = r.write && res_in_pool && r.addr >= m.res_base && end <= res_end;
-        return wr_ok || rd_ok || res_ok;
+        // R242's FOURTH arm: TERRAIN.DEVSTORE, both directions, constant
+        // bounds. A SEPARATE region from the page pool and not a widening of
+        // it -- the two are 0x38_0000 apart, so a request that begins in one
+        // and ends in the other satisfies NEITHER `in_pool` nor `in_dev`.
+        // Lying in the union of two permitted ranges is not permission, and
+        // that is a property of writing the two tests over their own constants
+        // rather than over a merged min/max.
+        const bool in_dev = r.addr >= kTerrainDevStoreBase &&
+                            end <= uint64_t(kTerrainDevStoreBase) + kTerrainDevStoreSpan;
+        const bool dev_wr_ok = r.write && in_dev;   // records and history in
+        const bool dev_rd_ok = !r.write && in_dev;  // the LOD pass's fetch
+        return wr_ok || rd_ok || res_ok || dev_wr_ok || dev_rd_ok;
       }
       default:
         return false;  // DEBUG owns nothing, and neither does the unspent 5

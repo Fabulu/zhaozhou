@@ -76,6 +76,26 @@ CLIENTS = [
     # request/verdict pairs (the page header, then each sheet chunk), so it has
     # two places to make this exact mistake instead of one.
     "fpga/rtl/terrain/zhao_terrain_writeback.sv",
+    # TERRAIN.DEVSTORE -- owner ruling R242, 2026-09-22. Added WITH the change
+    # that made it a guard client, which is the only way this audit stays
+    # exact. It has ONE request/verdict pair for four kinds of op (record
+    # burst out, history row out, history row in, record burst in), because
+    # one memory engine serves the write FSM and the read FSM in turn -- so
+    # there is exactly one place to make this mistake and it is `M_REQ` /
+    # `M_VERD`, split for the reason this file exists.
+    #
+    # NOTE ON THE REDS BESIDE IT, so this entry is not read as a clean bill:
+    # seven other files consume a verdict and are NOT in this list at base
+    # (zhao_forge_pagebank, zhao_geom_clipread, zhao_geom_drawjob,
+    # zhao_geom_ladderbank, zhao_mem_share_wr, zhao_part_table_loader and
+    # zhao_terrain_pageio -- the last despite zhao_mem_guard.sv's own header
+    # claiming it is registered here), and two are listed but no longer
+    # consume one. That debt is not this packet's and is not silently
+    # inherited: it is named here, and in the DEVSDRAM packet's findings, which
+    # are the commit message of the empty commit on `gz/devsdram` titled
+    # "DEVSDRAM FINDINGS" -- the harness refuses to let a packet write its own
+    # findings FILE, so a citation to one would be a promise nothing keeps.
+    "fpga/rtl/terrain/zhao_terrain_devstore.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
     # Pass-through wrapper: it routes the port down to zhao_scanout_fetch and

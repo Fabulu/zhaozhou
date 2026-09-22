@@ -130,8 +130,16 @@ module formal_mem_guard
   // names, which a -D does reach (CLAUDE.md: a function-like define does not).
   // tests/formal/mem_guard_resbound_mutant.sby defines it and EXPECTS FAIL; the
   // production proof leaves it undefined, which is the negative control.
+// A SECOND SEAM (R242), spelled the same way. `ZHAO_GUARD_DEVBOUND_MUT`
+// selects the copy whose TERRAIN.DEVSTORE upper bound has been removed;
+// tests/formal/mem_guard_devbound_mutant.sby defines it and EXPECTS FAIL.
+// The two are mutually exclusive by construction -- an `elsif chain, not two
+// independent `ifdefs -- so a run that defined both would silently measure
+// only the first rather than something neither file describes.
 `ifdef ZHAO_GUARD_RESBOUND_MUT
   zhao_mem_guard_resbound_mutant u_guard (
+`elsif ZHAO_GUARD_DEVBOUND_MUT
+  zhao_mem_guard_devbound_mutant u_guard (
 `else
   zhao_mem_guard u_guard (
 `endif
@@ -183,6 +191,14 @@ module formal_mem_guard
   wire fwd_in_terrain = (fwd_addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
                      && (fwd_end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
                                        + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+  // TERRAIN.DEVSTORE (ruling R242, spec/memory_rules.md 5b): constant bounds,
+  // TERRAIN.BUILD's alone, BOTH DIRECTIONS -- the second window in the map
+  // that carries traffic each way, and like the page pool its directions are
+  // stated PER DIRECTION below rather than folded into a1_region and trusted
+  // to the spelling of pass_ok.
+  wire fwd_in_devstore = (fwd_addr32 >= ZHAO_TERRAIN_DEVSTORE_BASE)
+                      && (fwd_end32  <= ZHAO_TERRAIN_DEVSTORE_BASE
+                                        + ZHAO_TERRAIN_DEVSTORE_SPAN);
   // POST.ECHO's capture buffer (ruling R7, spec/memory_rules.md 5g): constant
   // bounds, ENGINE0's alone, WRITE-only, lease-gated.
   wire fwd_in_echo = (fwd_addr32 >= ZHAO_POST_ECHO_BASE)
@@ -257,7 +273,17 @@ module formal_mem_guard
         // inside the published-resource region -- which itself must lie
         // inside the pool. It is a WRITE arm only: no read term is added.
         || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD && arb_req.write
-            && fwd_in_resource));
+            && fwd_in_resource)
+        // R242: the SEVENTH law. TERRAIN_BUILD owns TERRAIN.DEVSTORE in BOTH
+        // DIRECTIONS -- the deviation and history records the LOD pass reads
+        // every frame and the mip pass writes at page load. Like the page pool
+        // the load-bearing term here is the CLIENT plus CONSTANT BOUNDS, and
+        // like the page pool the direction is stated as a theorem twice, at
+        // a1_devstore_wr_owner / a1_devstore_rd_owner below. It is a SEPARATE
+        // window from the page pool and not a widening of it: the two are
+        // disjoint, asserted at a1_devstore_not_page.
+        || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+            && fwd_in_devstore));
 
       // DEBUG still owns nothing and must never be forwarded, and neither
       // does the client id ruling T3 leaves unspent
@@ -274,7 +300,7 @@ module formal_mem_guard
       // and exempting the new client from it, keeps a proof green by removing
       // the new region from its scope.
       a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_render_asset
-                   || fwd_in_terrain || fwd_in_echo);
+                   || fwd_in_terrain || fwd_in_echo || fwd_in_devstore);
 
       // The echo capture is WRITE-ONLY and has exactly one owner, and the
       // owner holds the render lease. Each is implied by a1_region; each is
@@ -343,6 +369,31 @@ module formal_mem_guard
                                      && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
       a1_terrain_owner: assert (!(fwd_in_terrain
                                   && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
+
+      // TERRAIN.DEVSTORE (ruling R242), stated with the page pool's discipline
+      // because it has the page pool's shape: one client, two directions,
+      // constant bounds. Three theorems where one would do, for the reason the
+      // paragraph above gives -- a regression names the half that broke, and a
+      // stray READ and a stray WRITE from another client are different faults.
+      a1_devstore_wr_owner: assert (!(fwd_in_devstore && arb_req.write
+                                      && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
+      a1_devstore_rd_owner: assert (!(fwd_in_devstore && !arb_req.write
+                                      && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
+      a1_devstore_owner: assert (!(fwd_in_devstore
+                                   && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
+      // THE TWO TERRAIN WINDOWS ARE DISJOINT, stated as a theorem rather than
+      // trusted to the constants. This is the line that makes "a request
+      // crossing a boundary is not allowed merely because both endpoints lie
+      // in the union of permitted ranges" a proved property of the map and not
+      // an argument in a comment: if a forward could ever be inside BOTH, then
+      // a range that spans the gap would be admitted by one arm while
+      // describing bytes governed by the other.
+      a1_devstore_not_page: assert (!(fwd_in_devstore && fwd_in_terrain));
+      // And it is not a framebuffer, an asset or the echo capture either.
+      a1_devstore_not_fb: assert (!(fwd_in_devstore
+                                    && (fwd_in_slot0 || fwd_in_slot1)));
+      a1_devstore_not_echo: assert (!(fwd_in_devstore && fwd_in_echo));
+      a1_devstore_not_asset: assert (!(fwd_in_devstore && fwd_in_render_asset));
     end
 
     // A3: the forwarding stage powers up empty
@@ -422,6 +473,19 @@ module formal_mem_guard
       c_forward_resource_wr: cover (arb_req.valid
                                     && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
                                     && arb_req.write && fwd_in_render_asset);
+      // R242's TWO arms, one cover each, for the reason spelled out at
+      // c_forward_terrain above: with both directions legal, a single cover is
+      // discharged by either one and keeps reading green while a whole arm of
+      // the DUT is dead logic. `a1_devstore_rd_owner`, `a1_devstore_wr_owner`
+      // and the new a1_region arm ALL hold trivially if nothing ever reaches
+      // the window, so reaching each direction is what makes the pass mean
+      // anything about the deviation store at all.
+      c_forward_devstore_wr: cover (arb_req.valid
+                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+                                    && arb_req.write && fwd_in_devstore);
+      c_forward_devstore_rd: cover (arb_req.valid
+                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+                                    && !arb_req.write && fwd_in_devstore);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
       c_client5_denied: cover (client5_accept_q && rsp.violation &&

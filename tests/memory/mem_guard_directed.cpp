@@ -17,6 +17,10 @@
 //   * owner ruling R32: TERRAIN_BUILD WRITES the published-resource region
 //     inside RENDER.ASSET_POOL, and nothing else there -- not a read, not a
 //     byte outside the region, not a region straddling the pool's edge
+//   * owner ruling R242: TERRAIN_BUILD READS AND WRITES TERRAIN.DEVSTORE, the
+//     SDRAM home of the deviation and history records, and nothing else does;
+//     both edges are exact, a burst straddling either edge is refused WHOLE,
+//     and the unmapped gap between the store and TERRAIN.PAGE_POOL stays shut
 
 #include "Vtb_zhao_mem_guard.h"
 #include "verilated.h"
@@ -407,6 +411,82 @@ int main(int argc, char** argv) {
     pp.res_base = kTerrainPagePoolBase;
     pp.res_span = 0x1000u;
     h.request(MemoryGuard::Req{true, false, TB, kTerrainPagePoolBase, 64, full_be(64)}, pp);
+  }
+
+  // ---- R242: TERRAIN.DEVSTORE, both directions ---------------------------------
+  // The owner moved the 185 M10K deviation/history store into SDRAM
+  // (2026-09-22). This is the window that made it possible, and it is tested
+  // the way the page pool's arms are: both directions land, every edge is
+  // exact, every other client is refused, and a request that STRADDLES an edge
+  // is refused whole rather than clamped into something legal-looking.
+  {
+    constexpr uint32_t db = kTerrainDevStoreBase;
+    constexpr uint32_t de = kTerrainDevStoreBase + kTerrainDevStoreSpan;  // 0x058B_0000
+    const unsigned TB = MemoryGuard::TERRAIN_BUILD;
+    const GuardMap dev_eng{true, 0, 0x0003C000, GuardMap::WRITER_ENGINE0};
+    auto pat = [](uint32_t w) { return uint16_t(((w * 2654435761u) >> 13) & 0xFFFF); };
+
+    // the block's own two sub-pools, at their first and last burst: the
+    // deviations at db, the history row of slot 1,023 at de-64.
+    h.request(MemoryGuard::Req{true, true, TB, db, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, true, TB, de - 64, 64, full_be(64)}, map);
+    chk(h.peek(db >> 1) == pat(db >> 1) && h.peek((de - 64) >> 1) == pat((de - 64) >> 1),
+        "R242: writes at both ends of TERRAIN.DEVSTORE land");
+    h.request(MemoryGuard::Req{true, false, TB, db, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, false, TB, de - 64, 64, full_be(64)}, map);
+
+    // THE EDGES ARE EXACT AND A STRADDLE IS REFUSED WHOLE. One byte past the
+    // top; one burst below the base; and the two requests that lie half in and
+    // half out, which are the cases the packet names -- both endpoints being
+    // somewhere in the union of permitted ranges is not permission.
+    h.request(MemoryGuard::Req{true, true, TB, de - 63, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, false, TB, de - 63, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, true, TB, db - 64, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, true, TB, db - 32, 64, full_be(64)}, map);
+    h.request(MemoryGuard::Req{true, false, TB, db - 32, 64, full_be(64)}, map);
+    chk(h.peek((db - 64) >> 1) == 0 && h.peek((db - 32) >> 1) == 0,
+        "R242: a write straddling the store's lower edge leaves memory untouched");
+    // de-32 is INSIDE the legal last burst written above, so the word that
+    // separates "refused" from "clamped" here is the one just ABOVE the store.
+    chk(h.peek(de >> 1) == 0,
+        "R242: a write straddling the store's upper edge leaves memory untouched");
+
+    // THE STORE IS NOT THE PAGE POOL. A burst at the page pool's own top edge
+    // is refused by the pool's arm and gains nothing from the store's, and the
+    // gap between them (0x054E_0000..0x0586_0000) is unmapped for everybody.
+    h.request(MemoryGuard::Req{true, true, TB, kTerrainPagePoolBase + kTerrainPagePoolSpan - 32, 64,
+                               full_be(64)},
+              map);
+    h.request(MemoryGuard::Req{true, true, TB, kTerrainPagePoolBase + kTerrainPagePoolSpan, 64,
+                               full_be(64)},
+              map);
+    h.request(MemoryGuard::Req{true, false, TB, db - 0x10000u, 64, full_be(64)}, map);
+    chk(h.peek((kTerrainPagePoolBase + kTerrainPagePoolSpan) >> 1) == 0,
+        "R242: the gap between the page pool and the store is unmapped");
+
+    // NO OTHER CLIENT REACHES IT, IN EITHER DIRECTION. Client 5 is included
+    // because it is the unspent reservation and this window did not spend it.
+    for (unsigned c : {unsigned(MemoryGuard::SCANOUT), unsigned(MemoryGuard::BLIT_DMA),
+                       unsigned(MemoryGuard::ENGINE0), unsigned(MemoryGuard::ENGINE1),
+                       unsigned(MemoryGuard::DEBUG), 5u}) {
+      h.request(MemoryGuard::Req{true, true, c, db, 64, full_be(64)}, map);
+      h.request(MemoryGuard::Req{true, false, c, db, 64, full_be(64)}, map);
+      // and under the OTHER framebuffer lease, so ENGINE0 is refused whether
+      // or not it holds it -- the store is not a lease-gated window.
+      h.request(MemoryGuard::Req{true, true, c, db, 64, full_be(64)}, dev_eng);
+    }
+    chk(h.peek((db + 64) >> 1) == 0, "R242: no other client writes the store");
+
+    // R32's resource region cannot be pointed at the store to widen it: the
+    // region must lie wholly inside RENDER.ASSET_POOL, and this one does not,
+    // so the arm is closed and ENGINE1 still has no write anywhere.
+    GuardMap over = map;
+    over.res_valid = true;
+    over.res_base = db;
+    over.res_span = 0x1000u;
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE1, db + 128, 64, full_be(64)}, over);
+    chk(h.peek((db + 128) >> 1) == 0,
+        "R242: a resource region aimed at the store opens nothing for ENGINE1");
   }
 
   // ---- byte_enable holes rejected ---------------------------------------------

@@ -755,7 +755,15 @@ if(ZHAO_SBY_BIN)
   # no-escape proof FAILS on tests/mutants/zhao_mem_guard_resbound_mutant.sv
   # (pool containment removed). Its wrapper message says "bmc + cover"; it
   # carries bmc only.
-  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant)
+  # mem_guard_devbound_mutant is the SECOND inverted control (`expect fail`),
+  # for owner ruling R242's TERRAIN.DEVSTORE bound. It passes only when the
+  # no-escape proof FAILS on tests/mutants/zhao_mem_guard_devbound_mutant.sv
+  # (the store's UPPER bound removed). Measured 2026-09-22: production PASSES
+  # with both c_forward_devstore_wr and c_forward_devstore_rd reached, and this
+  # copy fails at a1_resource_bounded -- the pair that shows the `ifdef seam
+  # engaged rather than silently compiling production twice.
+  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant
+                            mem_guard_devbound_mutant)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
@@ -10518,9 +10526,15 @@ set_tests_properties(terrain_stampdepth_directed PROPERTIES LABELS "fast;nightly
 # tests/terrain/tb_terrain_lodpath.sv is a WRAPPER, not a model: both blocks
 # are the production files and every wire is port to port.
 # ---------------------------------------------------------------------------
+# The store imports zhao_pkg as of owner ruling R242 (2026-09-22): it holds
+# its records in SDRAM through a MEM.GUARD socket, so it needs
+# zhao_guard_req_t / zhao_client_e and the region constants. It inferred two
+# memories before that change and infers none now.
 add_test(NAME lint_terrain_devstore
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_devstore
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
 set_tests_properties(lint_terrain_devstore PROPERTIES
   LABELS "lint;fast"
@@ -10536,16 +10550,78 @@ set_tests_properties(lint_terrain_lodfeed PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 add_executable(test_terrain_lodpath_directed terrain/terrain_lodpath_directed.cpp)
 target_link_libraries(test_terrain_lodpath_directed PRIVATE zhao_harness zhao_zref)
+# Owner ruling R242 put the store's records in SDRAM, so this bench now carries
+# a PLAYED fabric and a REAL `zhao_mem_guard` as an observer: the value
+# traversal it exists to prove now runs through the memory system, and whether
+# the requests are legal is answered by the block that owns that question.
 verilate(test_terrain_lodpath_directed
   PREFIX Vtb_terrain_lodpath
   TOP_MODULE tb_terrain_lodpath
-  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodpath.sv
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  # THE PACKAGES COME FIRST.  Verilator parses this list in order and a
+  # `zhao_guard_req_t` in the wrapper is "referenced before declaration" if the
+  # wrapper is read before zhao_pkg -- which is what a list that grew a package
+  # at its end does.
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+          ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
 add_test(NAME terrain_lodpath_directed COMMAND test_terrain_lodpath_directed)
 set_tests_properties(terrain_lodpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
+# `slot_addr_bad_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL (ruling R242).
+# The counter is unreachable with legal stimulus -- the engine's held address
+# and the read FSM's required address are equal by construction while the block
+# is correct -- so it needs a COMMITTED MUTANT, and the mutant needs a run
+# against UNMUTATED production beside it or a seam that never engaged would
+# compile production twice and both runs would agree.
+# ONE source, TWO executables, opposite expectations.
+# ---------------------------------------------------------------------------
+foreach(mut_variant fires silent)
+  set(mut_target test_terrain_devstore_addrmut_${mut_variant})
+  add_executable(${mut_target} terrain/terrain_devstore_addrmut.cpp)
+  target_link_libraries(${mut_target} PRIVATE zhao_harness zhao_zref)
+  set(mut_sources ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+                  ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodpath.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
+  if(mut_variant STREQUAL "fires")
+    # The macro reaches BOTH the RTL seam and the C++ expectation, so the two
+    # cannot drift apart into a driver that expects one block and measures the
+    # other.
+    target_compile_definitions(${mut_target} PRIVATE ZHAO_DEVSTORE_ADDRLATCH_MUT)
+    set(mut_vargs -DZHAO_DEVSTORE_ADDRLATCH_MUT)
+    list(APPEND mut_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_devstore_addrlatch_mutant.sv)
+  else()
+    set(mut_vargs "")
+    list(APPEND mut_sources
+         ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
+  endif()
+  verilate(${mut_target}
+    PREFIX Vtb_terrain_lodpath
+    TOP_MODULE tb_terrain_lodpath
+    VERILATOR_ARGS ${mut_vargs}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+    SOURCES ${mut_sources})
+  add_test(NAME terrain_devstore_addrmut_${mut_variant} COMMAND ${mut_target})
+  set_tests_properties(terrain_devstore_addrmut_${mut_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
 
 # ---------------------------------------------------------------------------
 # THE SAME PRODUCER INTO THE OTHER CONSUMER -- core entry I18, ruling R70:

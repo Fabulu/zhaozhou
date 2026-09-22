@@ -437,6 +437,29 @@ counter_catalog:
   - forge_prim_refused_family
   - forge_prim_refused_limit
   - forge_prim_skipped_view
+  # TERRAIN.DEVSTORE (owner ruling R242, 2026-09-22): the deviation and history
+  # store moved out of 185 M10K and into a guarded SDRAM region, so it acquired
+  # a memory face and the census of that face. The first six are the block's
+  # own bookkeeping; the last eight are its SDRAM traffic and its fault
+  # detectors, and terrain_lodpath_directed fires EVERY one of them with a
+  # negative control beside it -- except devstore_slot_addr_bad, which no legal
+  # stimulus can reach and which therefore owes the committed mutant
+  # tests/mutants/zhao_terrain_devstore_addrlatch_mutant.sv (40 fires against
+  # 0 for unmutated production).
+  - devstore_records_written
+  - devstore_patches_committed
+  - devstore_patches_read
+  - devstore_read_unwritten
+  - devstore_hist_step_bad
+  - devstore_invalidations
+  - devstore_hist_unwritten
+  - devstore_guard_denied
+  - devstore_short_burst
+  - devstore_stray_beat
+  - devstore_slot_addr_bad
+  - devstore_bursts_read
+  - devstore_bursts_written
+  - devstore_rd_wait_clocks
 blocks:
 
   # ===========================================================================
@@ -2475,6 +2498,114 @@ blocks:
       above stands as written -- it was about TERRAIN.PAGEIO and it was right.)
       I28 is already closed (rulings R14 and R4) and merely has never seen a
       beat, because nothing in the machine can dirty a page.
+
+  - id: TERRAIN.DEVSTORE
+    name: Per-resident-page deviation and history store
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Holds the six things zhao_terrain_lod deliberately does not keep -- three stored coarse-level deviations and the previous frame's {level, morph, hold} -- between the page-load pass that computes them (zhao_terrain_loddev under ruling R8, fed by zhao_terrain_lodfeed) and the per-frame read that consumes them (zhao_terrain_spdesc). TERRAIN.LOD law 5 rejects an internal history RAM in as many words, so something has to be the caller that stores it. Recomputing per frame is not an alternative and the number is measured rather than argued: zhao_terrain_loddev spends ~13,700 clocks on one patch's one surface, and spec/terrain_rules.md 4.2's 256 live patches make the visible set ~3.5M clocks against a 1.67M-clock frame -- twice the frame before anything is drawn. Ruling R24 fixes WHEN (at page load) and WHAT THE KEY IS (the residency page slot, because a compose slot is reused by a different patch from one frame to the next and the hysteresis history would be inherited by a stranger), and BAKE re-triggers the recompute for the pages it dirties. OWNER RULING R242 (2026-09-22) changed the MEDIUM and only the medium: the records left 185 M10K of block RAM for a 320 KiB guarded region in local SDRAM bank 2."
+    contract: design/contracts/TERRAIN.DEVSTORE.md
+    phase: 6
+    owner_issue: ZH-128
+    inputs: [page_deviation_records, lod_history_writeback]
+    outputs: [subpatch_descriptors]
+    upstream: [TERRAIN.LODFEED, TERRAIN.LOD, MEM.GUARD]
+    downstream: [TERRAIN.SPDESC, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one patch read per compose-door patch: ONE 64-byte history burst plus FOUR record bursts in, plus one history burst out when the LOD pass emitted a decision; one patch write per page load: FOUR record bursts. Derived from the record shape (16 records x 16 B + one 64-byte history row per slot) and MEASURED in terrain_lodpath_directed case 8, not merely derived."
+    reference_model: zref::terrain::lod_deviation
+    tests:
+      directed: tests/terrain/terrain_lodpath_directed.cpp
+      random: tests/terrain/terrain_lodpath_directed.cpp
+    counters: [devstore_records_written, devstore_patches_committed, devstore_patches_read, devstore_read_unwritten, devstore_hist_unwritten, devstore_hist_step_bad, devstore_invalidations, devstore_guard_denied, devstore_short_burst, devstore_stray_beat, devstore_slot_addr_bad, devstore_bursts_read, devstore_bursts_written, devstore_rd_wait_clocks]
+    counter_ports:
+      devstore_records_written: records_written_o
+      devstore_patches_committed: patches_committed_o
+      devstore_patches_read: patches_read_o
+      devstore_read_unwritten: read_unwritten_o
+      devstore_hist_unwritten: hist_unwritten_o
+      devstore_hist_step_bad: hist_step_bad_o
+      devstore_invalidations: invalidations_o
+      devstore_guard_denied: guard_denied_o
+      devstore_short_burst: short_burst_o
+      devstore_stray_beat: stray_beat_o
+      devstore_slot_addr_bad: slot_addr_bad_o
+      devstore_bursts_read: bursts_read_o
+      devstore_bursts_written: bursts_written_o
+      devstore_rd_wait_clocks: rd_wait_clocks_o
+    source_ids: false
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-22"
+        commit: "861b8ba1"
+        evidence: design/contracts/TERRAIN.DEVSTORE.md
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THE ROW ARRIVES YEARS AFTER THE SILICON, and that is the thing it is
+      here to fix. This block has been built since 2026-09-20 and composed in
+      zhao_console_core since 2026-09-21, and it had no ledger row and no
+      contract the whole time -- so tools/budget/completion_register.py, which
+      walks this file, was answering a question that did not contain it. The
+      register's total was never wrong; it was smaller than its readers
+      assumed. R214 says a block with a contract AND silicon owes a row and
+      that the register going UP for that reason is correct. It goes up here.
+
+      WHAT OWNER RULING R242 CHANGED, AND WHAT IT DID NOT. Fabian, 2026-09-22
+      "Move deviation store to SDRAM, ignore stale info." The stale info is
+      ruling R24's STORAGE CLAUSE -- "stored alongside the page in M10K (the
+      owner prefers M10K over ALMs)" -- and R87 is why it went stale "against
+      306 of 553 already used, one block wanting 185 is not a rounding error.
+      Price M10K explicitly in the fit plan; it is no longer the free
+      currency." Ruling R234 D3's explicit GRANT of those 185 M10K is spent
+      differently as a result and is superseded with the clause. Everything
+      else R24 decided stands and is still what the block does. Only the
+      medium changed.
+
+      THE M10K DELTA IS -185, DERIVED FROM THE PARAMETERS AND NOT FROM PROSE,
+      because every number in this block's own sizing section was once wrong
+      in the flattering direction. dev_mem was ROWS x ROWW = (2*SLOTS) x
+      (HALF*RECW) = 2,048 x 704; at 2,048 deep an M10K runs 2,048 x 5, so
+      ceil(704/5) = 141. hist_mem was SLOTS x HROWW = 1,024 x 432; at 1,024
+      deep an M10K runs 1,024 x 10, so ceil(432/10) = 44. 141 + 44 = 185 of
+      553, 33% of the device. The block now infers NO memory at all
+      (tools/design/check_array_storage.py agrees: it declares no array).
+
+      WHAT IT COSTS INSTEAD, HAND-COUNTED AND UNFITTED. +1,552 flops, of which
+      1,024 are hist_valid_q -- a REPAIR rather than the move -- 256 are the
+      eight new counters, and 272 are the memory engine NET of the 896 flops
+      the old M10K shape needed and this one does not. In ALMs that is +388 if
+      registers pack four to an ALM and +776 IF THEY PACK TWO, and the second
+      number is the one to budget against. The owner's instruction for this
+      campaign is not to fit, so none of this is a Quartus number.
+
+      THE REPAIR THE MOVE FORCED, named because it is a real defect and not a
+      consequence. hist_mem had no reset and inv_valid_i cleared only the
+      RECORD valid bits, so a residency slot reclaimed by a DIFFERENT page
+      served the previous page's prev_level, prev_morph and hold -- the
+      stranger-inherits-the-hysteresis failure ruling R24's key exists to
+      prevent, one level down. M10K in Verilator is zero and hid it; SDRAM is
+      whatever the device held. hist_valid_q closes it, and
+      terrain_lodpath_directed case 13 proves all three directions: it fires,
+      it is SILENT once a history exists, and it fires again when a stranger
+      claims the slot.
+
+      THE 67-BIT PACKING STAYS REFUSED and R242 keeps the refusal. A further
+      33 M10K was available while these records were in block RAM, because
+      every lattice height reaching zhao_terrain_loddev today is height16 << 8
+      so every deviation's low seven bits are provably zero. The invariant is
+      upstream, unenforced and invisible: the moment a composed height carries
+      a FIELD delta (core entry I34's lane) the low bits stop being zero and
+      every deviation silently quantises to 128ths with no counter able to see
+      it. A packing that is exact only while somebody else keeps a promise
+      they never made is the broken-instrument shape. The SDRAM record is
+      padded UP, 88 bits to 128, which cannot fail that way and buys 896 flops
+      of staging by making a 64-byte burst exactly four records.
 
   - id: TERRAIN.WRITEBACK
     name: Dirty-page evacuation (F sheet to the journal)

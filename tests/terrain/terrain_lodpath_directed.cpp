@@ -172,9 +172,17 @@ void answer_check(Dut& t, bool stale, int delay = 5) {
 
 // Let the walk finish.  Bounded: a patch is ~13,700 clocks at the mesh reading,
 // so 200,000 is a guard and not a schedule.
+// IT WAITS FOR THE STORE TOO, as of owner ruling R242.  Before the move a
+// record was committed in the cycle it arrived, so "the feed is idle" and "the
+// records are in the store" were the same instant.  They are not any more: the
+// last burst of a patch is still crossing the fabric when the walk ends, and a
+// check taken at the old instant reads `patches_committed_o == 0` and every
+// deviation as DEV_MAX -- which looks exactly like the move having broken the
+// arithmetic, and is the bench measuring too early.  Measured here, in this
+// packet, before it was reasoned about.
 long long settle(Dut& t) {
   long long n = 0;
-  while (t.feed_busy_o && n < 200000) {
+  while ((t.feed_busy_o || t.store_busy_o) && n < 200000) {
     zhao::tick(t);
     t.eval();
     ++n;
@@ -186,6 +194,18 @@ long long settle(Dut& t) {
 // Read one patch's sixteen descriptors out of the store.
 std::vector<Got> read_patch(Dut& t, int slot, bool stall) {
   std::vector<Got> out;
+  // WAIT FOR THE READY BEFORE ASSERTING THE START.  Under owner ruling R242
+  // the store's read is several SDRAM bursts and the history writeback that
+  // closes a patch is one more, so `r_ready_o` is genuinely low for a while
+  // after a read drains.  Before R242 it was low for one cycle and the
+  // handshake could be skipped without noticing -- which is a test that
+  // depended on a latency rather than on a contract.
+  long long rdy = 0;
+  while (!t.r_ready_o && rdy < 5000) {
+    zhao::tick(t);
+    t.eval();
+    ++rdy;
+  }
   t.r_start_i = 1;
   t.r_slot_i = static_cast<uint8_t>(slot);
   t.eval();
@@ -244,6 +264,20 @@ int main(int argc, char** argv) {
   t.h_level_i = 0;
   t.h_morph_i = 0;
   t.h_hold_i = 0;
+  // THE PLAYED FABRIC (owner ruling R242).  A zero-latency always-granting
+  // memory, which is the case every pre-R242 assertion in this file was
+  // written against; the latency and fault knobs are turned on per case.
+  t.cfg_region_ok_i = 1;
+  t.cfg_deny_mode_i = 0;
+  t.cfg_deny_idx_i = 0;
+  t.cfg_rd_latency_i = 0;
+  t.cfg_rd_gap_i = 0;
+  t.cfg_wr_latency_i = 0;
+  t.cfg_grant_hold_i = 0;
+  t.cfg_short_mode_i = 0;
+  t.cfg_short_idx_i = 0;
+  t.cfg_short_beat_i = 0;
+  t.cfg_stray_beat_i = 0;
   t.eval();
   for (int i = 0; i < 4; ++i) zhao::tick(t);
   t.rst_n = 1;
@@ -524,6 +558,256 @@ int main(int argc, char** argv) {
     cke(0, t.chk_stray_o, "no answer arrived without a request");
     std::printf("[7] handles_stale_o fires on a fault it should catch, and the records"
                 " are withdrawn\n");
+  }
+
+  // ------------------------------------------------------------------ 8 ----
+  // OWNER RULING R242: THE RECORDS ARE IN SDRAM, AND THE TRAFFIC IS EXACT.
+  // Every case above already ran through the played fabric -- that is the
+  // point, and it is why they were not given a separate "SDRAM" case.  What
+  // this one adds is the traffic COUNT, because a test that checks WHAT came
+  // out cannot see HOW MANY TIMES the machine did it, and the bandwidth
+  // budget is written against the second number.
+  {
+    const uint32_t rd0 = t.bursts_read_o, wr0 = t.bursts_written_o;
+    const uint32_t greq0 = t.greqs_seen_o;
+
+    const auto p11 = make_page(0x2B2B2Bu);
+    start_page(t, 11, 0xB11B);
+    stream_surface(t, p11);
+    settle(t);
+    answer_check(t, false);
+    cke(wr0 + 4, t.bursts_written_o,
+        "a patch's sixteen records are FOUR 64-byte bursts, not seventeen and not one");
+    cke(rd0, t.bursts_read_o, "writing a patch reads nothing");
+
+    const uint32_t rd1 = t.bursts_read_o, wr1 = t.bursts_written_o;
+    const auto g11 = read_patch(t, 11, false);
+    ctrue(g11[0].fresh, "the patch written to SDRAM reads back fresh");
+    cke(rd1 + 5, t.bursts_read_o,
+        "a patch read is ONE history burst plus FOUR record bursts");
+    cke(wr1, t.bursts_written_o,
+        "a read with no history writeback writes nothing -- the row would be"
+        " byte-identical and the bandwidth is the point");
+    ctrue(t.greqs_seen_o > greq0, "the played fabric actually saw the requests");
+    ctrue(t.rd_wait_clocks_o > 0, "the read spent measurable clocks on memory");
+    std::printf("[8] R242: %u bursts read, %u written, %u guard requests;"
+                " a patch read cost %u clocks of memory wait in total\n",
+                t.bursts_read_o, t.bursts_written_o, t.greqs_seen_o,
+                t.rd_wait_clocks_o);
+  }
+
+  // ------------------------------------------------------------------ 9 ----
+  // THE REAL GUARD SAW EVERY REQUEST AND REFUSED NONE.  `shadow_viol_o == 0`
+  // is a claim, so the claim to check hardest -- and what makes it mean
+  // something is `shadow_req_o`, which says the instrument was ASKED.  A
+  // silent guard and an unused guard read identically from the zero.
+  //
+  // The guard's own positive control is NOT here and is not owed here: it is
+  // `mem_guard_directed`'s eleven R242 cases and the committed mutant
+  // `tests/mutants/zhao_mem_guard_devbound_mutant.sv`, which makes
+  // `mem_guard_no_escape` FAIL.  What this bench can honestly say is that the
+  // STORE never constructed an illegal request, and that is what it says.
+  {
+    ctrue(t.shadow_req_o > 0, "the real guard was asked about the store's requests");
+    cke(0, t.shadow_viol_o, "the real guard refused none of them");
+    cke(t.shadow_req_o, t.shadow_fwd_o,
+        "every request the store made was forwarded, so none was silently dropped");
+    cke(0, t.slot_addr_bad_o,
+        "the address round trip never disagreed -- see the committed mutant for"
+        " the proof that it can");
+    cke(0, t.stray_beat_o, "no beat arrived with no read in flight, yet");
+    cke(0, t.short_burst_o, "no burst was short, yet");
+    cke(0, t.guard_denied_o, "the guard denied nothing, yet");
+    std::printf("[9] %u requests, %u forwarded, 0 refused by the REAL guard\n",
+                t.shadow_req_o, t.shadow_fwd_o);
+  }
+
+  // ----------------------------------------------------------------- 10 ----
+  // A GUARD DENIAL IS COUNTED AND DEGRADES TO "NO RECORDS", NOT TO A HANG.
+  // This is the case the header calls a decision rather than a fallthrough: a
+  // consumer is waiting on `r_valid_o`, so abandoning the stream would present
+  // a memory fault as a hang in `zhao_terrain_spdesc`.
+  {
+    const uint32_t denied_before = t.guard_denied_o;
+    t.cfg_region_ok_i = 0;      // the played guard refuses everything
+    t.eval();
+    const auto g = read_patch(t, 11, false);
+    t.cfg_region_ok_i = 1;
+    t.eval();
+    ctrue(t.guard_denied_o > denied_before, "guard_denied_o FIRES on a refused request");
+    ctrue(!g[0].fresh, "a refused read degrades to 'no records'");
+    cke(0xFFFFFFu, g[0].d1, "and answers DEV_MAX, the fail-safe direction");
+    cke(16, static_cast<uint32_t>(g.size()),
+        "sixteen descriptors were still offered -- the stream shape is unchanged");
+    std::printf("[10] guard_denied_o fires; the stream degrades to full detail"
+                " rather than stopping\n");
+  }
+
+  // ----------------------------------------------------------------- 11 ----
+  // A SHORT BURST IS COUNTED AND TAKES THE SAME EXIT.  `beat_last` on beat 3
+  // of a burst the DUT asked for eight beats of: the payload is incomplete and
+  // must not be served as though it were whole.
+  {
+    const uint32_t short_before = t.short_burst_o;
+    // The next request this fabric sees is the one to truncate.
+    t.cfg_short_mode_i = 1;
+    t.cfg_short_idx_i = static_cast<uint16_t>(t.greqs_seen_o);
+    t.cfg_short_beat_i = 3;
+    t.eval();
+    const auto g = read_patch(t, 11, false);
+    t.cfg_short_mode_i = 0;
+    t.eval();
+    cke(short_before + 1, t.short_burst_o, "short_burst_o FIRES on a truncated burst");
+    cke(16, static_cast<uint32_t>(g.size()), "sixteen descriptors were still offered");
+    std::printf("[11] short_burst_o fires on a fault it should catch\n");
+  }
+
+  // ----------------------------------------------------------------- 12 ----
+  // A BEAT WITH NO READ IN FLIGHT IS COUNTED.  The share BROADCASTS beat data
+  // to every requester and demuxes only `beat_valid`, so a wrong demux
+  // delivers another client's bytes into this block's buffer.  The address
+  // round trip CANNOT see that -- it compares two of this block's own
+  // registers -- and the beat count is what can.  Injected with the store
+  // idle, so nothing else can be counting.
+  {
+    const uint32_t stray_before = t.stray_beat_o;
+    ctrue(!t.store_busy_o, "the store is idle before the stray beat is injected");
+    t.cfg_stray_beat_i = 1;
+    t.eval();
+    zhao::tick(t);
+    t.cfg_stray_beat_i = 0;
+    t.eval();
+    cke(stray_before + 1, t.stray_beat_o, "stray_beat_o FIRES on a beat with no read");
+    std::printf("[12] stray_beat_o fires on the wrong-demux fault\n");
+  }
+
+  // ----------------------------------------------------------------- 13 ----
+  // THE HISTORY'S OWN VALID BIT, WHICH CLOSES A REAL HOLE.  Before R242 the
+  // history array had no reset and `inv_valid_i` cleared only the RECORD valid
+  // bits, so a residency slot reclaimed by a DIFFERENT page served the
+  // previous page's `prev_level`, `prev_morph` and `hold` -- the
+  // stranger-inherits-the-hysteresis failure ruling R24's key exists to
+  // prevent, one level down.  In SDRAM it is worse still, because the bytes
+  // are whatever the device held.
+  //
+  // BOTH DIRECTIONS ARE CHECKED.  A counter that fires on every read is not a
+  // detector, so the negative control -- silence once a history has been
+  // written back -- is the half that makes the fire mean something.
+  {
+    const auto p12 = make_page(0x3C3C3Cu);
+    start_page(t, 12, 0xC12C);
+    stream_surface(t, p12);
+    settle(t);
+    answer_check(t, false);
+
+    const uint32_t hu0 = t.hist_unwritten_o;
+    // Read once with a full writeback, so the slot acquires a history.
+    t.r_start_i = 1;
+    t.r_slot_i = 12;
+    t.eval();
+    zhao::tick(t);
+    t.r_start_i = 0;
+    t.eval();
+    int taken = 0;
+    long long guard = 0;
+    while (taken < 16 && guard < 5000) {
+      t.r_ready_i = 1;
+      t.h_valid_i = t.r_valid_o;
+      t.h_level_i = 2;
+      t.h_morph_i = 1234;
+      t.h_hold_i = 42;
+      t.eval();
+      if (t.r_valid_o && t.r_ready_i) {
+        if (taken == 0) {
+          cke(0, t.r_prev_level_o, "an unwritten history answers the neutral level");
+          cke(0, t.r_prev_morph_o, "an unwritten history answers the neutral morph");
+          cke(0, t.r_hold_o, "an unwritten history answers the neutral hold");
+        }
+        ++taken;
+      }
+      zhao::tick(t);
+      t.eval();
+      ++guard;
+    }
+    t.r_ready_i = 0;
+    t.h_valid_i = 0;
+    t.eval();
+    cke(hu0 + 1, t.hist_unwritten_o, "hist_unwritten_o FIRES on a slot with no history");
+
+    const uint32_t wr_before = t.bursts_written_o;
+    guard = 0;
+    while (t.store_busy_o && guard < 5000) { zhao::tick(t); t.eval(); ++guard; }
+    cke(wr_before + 1, t.bursts_written_o, "the history row is written back as ONE burst");
+
+    // NEGATIVE CONTROL: the same slot, read again, is silent.
+    const uint32_t hu1 = t.hist_unwritten_o;
+    t.r_start_i = 1;
+    t.r_slot_i = 12;
+    t.eval();
+    // `read_patch` would drive the start itself; this one is driven here so the
+    // history fields can be sampled on the first descriptor.
+    zhao::tick(t);
+    t.r_start_i = 0;
+    t.eval();
+    taken = 0;
+    guard = 0;
+    while (taken < 16 && guard < 5000) {
+      t.r_ready_i = 1;
+      t.eval();
+      if (t.r_valid_o && t.r_ready_i) {
+        if (taken == 0) {
+          cke(2, t.r_prev_level_o, "the written history comes back: level");
+          cke(1234, t.r_prev_morph_o, "the written history comes back: morph");
+          cke(42, t.r_hold_o, "the written history comes back: hold");
+        }
+        ++taken;
+      }
+      zhao::tick(t);
+      t.eval();
+      ++guard;
+    }
+    t.r_ready_i = 0;
+    t.eval();
+    cke(hu1, t.hist_unwritten_o,
+        "hist_unwritten_o is SILENT once the slot has a history -- the negative control");
+
+    // AND AN INVALIDATION DROPS IT AGAIN, which is the stranger case itself.
+    guard = 0;
+    while (t.store_busy_o && guard < 5000) { zhao::tick(t); t.eval(); ++guard; }
+    const uint32_t hu2 = t.hist_unwritten_o;
+    start_page(t, 12, 0xDEAD);     // a DIFFERENT page claims the same slot
+    zhao::tick(t);
+    t.eval();
+    guard = 0;
+    while (t.store_busy_o && guard < 5000) { zhao::tick(t); t.eval(); ++guard; }
+    t.r_start_i = 1;
+    t.r_slot_i = 12;
+    t.eval();
+    zhao::tick(t);
+    t.r_start_i = 0;
+    t.eval();
+    taken = 0;
+    guard = 0;
+    while (taken < 16 && guard < 5000) {
+      t.r_ready_i = 1;
+      t.eval();
+      if (t.r_valid_o && t.r_ready_i) {
+        if (taken == 0) {
+          cke(0, t.r_prev_level_o, "a reclaimed slot does NOT inherit the level");
+          cke(0, t.r_prev_morph_o, "a reclaimed slot does NOT inherit the morph");
+          cke(0, t.r_hold_o, "a reclaimed slot does NOT inherit the hold");
+        }
+        ++taken;
+      }
+      zhao::tick(t);
+      t.eval();
+      ++guard;
+    }
+    t.r_ready_i = 0;
+    t.eval();
+    cke(hu2 + 1, t.hist_unwritten_o, "and the reclaimed slot counts as unwritten");
+    std::printf("[13] the history's valid bit fires, is silent when it should be,"
+                " and is dropped when a stranger takes the slot\n");
   }
 
   std::printf("terrain_lodpath_directed: %d checks, %d failures\n", g_checks, g_fail);

@@ -535,12 +535,29 @@ module tb_zhao_console_core_smoke
   // STILL DRIVES THEM, and that is deliberate rather than left over.
   //
   // WHY THIS BENCH CANNOT USE THE INTERNAL PRODUCER, and it is upstream of
-  // everything the composition did: every terrain page this bench plays FAILS
-  // ITS CRC -- the directory reports `crc_fail=3` -- so no page becomes
-  // resident, TERRAIN.SEQ issues no compose job, the compose cache never
-  // fills, never serves, and never opens the door the assembler and the issuer
-  // wait at. The injection below is therefore the ONLY thing here that makes
-  // TERRAIN.TESS run, and SIX assertions stand on it.
+  // everything the composition did: no compose job is issued here, so the
+  // compose cache never fills, never serves, and never opens the door the
+  // assembler and the issuer wait at. The injection below is therefore the
+  // ONLY thing here that makes TERRAIN.TESS run, and SIX assertions stand on
+  // it.
+  //
+  // >> THE REASON GIVEN HERE WAS STALE AND IS CORRECTED, 2026-09-22
+  // >> (gz/devsdram).  It said "every terrain page this bench plays FAILS ITS
+  // >> CRC -- the directory reports `crc_fail=3`".  IT DOES NOT, and this
+  // >> bench's own output says so: `pl loaded=3 faulted=0 crc_fails=0`.  The
+  // >> page-header loop that fixed it landed 2026-09-20 (terrain9) and is a
+  // >> few thousand lines below, where its own note ALSO records that the
+  // >> faults were `hdr_ident`, not CRC, even while they existed -- "a stated
+  // >> cause that the machine's own counters refute is the shape CLAUDE.md
+  // >> keeps finding".  The sentence here survived both corrections.
+  // >>
+  // >> IT MATTERS BECAUSE IT IS QUOTED.  This sentence is what
+  // >> tests/CMakeLists.txt cites for "the console smoke cannot show it", and
+  // >> the DEVSDRAM packet nearly wrote it into an owner-facing report as the
+  // >> reason owner ruling R242's SDRAM store is unexercised here.  THREE
+  // >> PAGES LOAD AND 48 DEVIATION RECORDS REACH THE STORE: the WRITE path is
+  // >> exercised by real console stimulus.  What is genuinely absent is the
+  // >> COMPOSE job, and that -- not a CRC -- is why the READ path is not.
   //
   // Deleting it was tried and reverted inside this packet. It cost exactly
   // those six assertions and bought nothing: the completion register moves on
@@ -6175,6 +6192,33 @@ module tb_zhao_console_core_smoke
              terr_lodfeed_lattices_walked_o, terr_lodfeed_lattices_dropped_o,
              terr_lodfeed_dev_records_o, terr_lodfeed_stray_samples_o,
              hist_events_o, hist_updates_o, hist_stall_cycles_o);
+    // ---- THE SUBPATCH DECISION CHAIN, ACTUALLY PRINTED --------------------
+    // Added 2026-09-22 (gz/devsdram). The declaration of these eight counters
+    // has said since 2026-09-21 that "the bench prints them on the `lod` line
+    // so the zero is visible and explained instead of absent" -- AND IT DID
+    // NOT. Eight counters were wired out of the core and dropped on the floor
+    // under a comment asserting they were read. Found while looking for a
+    // witness that owner ruling R242's SDRAM deviation store is exercised
+    // here; the answer was sitting in a counter nothing displayed.
+    //
+    // WHAT THE ZEROES MEAN, so they are explained rather than merely visible.
+    // `ds_reads` is the store's per-patch READ, which only happens when the
+    // compose door opens -- and no compose job is issued in this fixture, so
+    // it reads ZERO and every `sp` counter with it. The store's WRITE side is
+    // exercised: the `lodfd` line above reports 48 deviation records, which is
+    // twelve 64-byte MEM.GUARD write bursts into TERRAIN.DEVSTORE through the
+    // real guard on the five-requester TERRAIN.BUILD socket.
+    //
+    // NOT ASSERTED, deliberately. A zero here is a statement about the
+    // FIXTURE, not about these blocks, and asserting it would pin the fixture
+    // in place: the day a compose job is issued these become nonzero and the
+    // assertion would read as a regression in the wrong five blocks.
+    $display("SMOKE:   lodch ds_reads=%0d ds_unwritten=%0d ds_histstep=%0d | sp descriptors=%0d door_refused=%0d serve_no_door=%0d src_mismatch=%0d order_bad=%0d unfresh=%0d | lod reps=%0d/%0d/%0d/%0d",
+             terr_ds_patches_read_o, terr_ds_read_unwritten_o, terr_ds_hist_step_bad_o,
+             terr_sp_descriptors_o, terr_sp_door_refused_o, terr_sp_serve_no_door_o,
+             terr_sp_door_src_mismatch_o, terr_sp_order_bad_o, terr_sp_patches_unfresh_o,
+             terr_lod_rep_count0_o, terr_lod_rep_count1_o,
+             terr_lod_rep_count2_o, terr_lod_rep_count3_o);
     // ---- `stray_samples_o` IS A KNOWN-MISLABELLED COUNTER. READ THIS -------
     // REWRITTEN 2026-09-20 (terrain9), on the first run in which this stream
     // ever moved. What stood here asserted `stray_samples_o == 0` and called a

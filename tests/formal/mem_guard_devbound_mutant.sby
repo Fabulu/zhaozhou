@@ -1,0 +1,39 @@
+# mem_guard_devbound_mutant.sby -- the POSITIVE CONTROL for owner ruling
+# R242's TERRAIN.DEVSTORE bound. INVERTED POLARITY: `expect fail`. It runs the
+# SAME harness as mem_guard_no_escape.sby against
+# tests/mutants/zhao_mem_guard_devbound_mutant.sv, a copy of the guard with the
+# deviation store's UPPER bound removed, and it PASSES only when the no-escape
+# proof FAILS on that copy.
+#
+# R242 authorised a new guarded region as "a smaller instance of the
+# 2026-09-22 item 4 act", which requires mem_guard_no_escape to be EXTENDED,
+# never bypassed, WITH a deliberate fault that makes the proof fail. This file
+# is that fault. Without it, `a1_map`, `a1_region`'s new arm and the three
+# `a1_devstore_*` theorems would all be assertions nobody had watched fire.
+#
+# The seam is a plain `ifdef selecting the module name in formal_mem_guard.sv
+# (ZHAO_GUARD_DEVBOUND_MUT). The production proof leaves it undefined; that run
+# passing while this one fails is the pair that shows the selector engaged --
+# CLAUDE.md's negative control for a macro-selected mutant, and the reason the
+# seam is an object-like `ifdef rather than a function-like `define a -D
+# cannot reach.
+# Run with cwd = tests/formal.
+
+[options]
+mode bmc
+depth 30
+expect fail
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang -D ZHAO_GUARD_DEVBOUND_MUT --top formal_mem_guard zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_mem_guard_devbound_mutant.sv formal_mem_guard.sv
+prep -top formal_mem_guard
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../tests/mutants/zhao_mem_guard_devbound_mutant.sv
+formal_mem_guard.sv

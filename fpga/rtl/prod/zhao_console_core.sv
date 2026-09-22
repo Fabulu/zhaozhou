@@ -15300,6 +15300,10 @@ module zhao_console_core
         HIST_EW'(tlf_w_dev2),                            // lane 1
         HIST_EW'(tlf_w_dev1) };                          // lane 0
   wire                    hist_ev_ready_c;
+  // THE PER-SINK JOINED VALIDS (see the fork note below).  Declared beside
+  // the ready they are the other half of, so a reader cannot find one
+  // without the other.
+  wire                    hist_ev_valid_c, tds_w_valid_c;
 
   // THE ADAPTATION ABOVE IS ONLY TRUE AT THESE WIDTHS, so it is GUARDED rather
   // than commented. A LANES of anything but 4 makes `4'b0111` name the wrong
@@ -15329,13 +15333,45 @@ module zhao_console_core
   // HERE, for a property both consumers have rather than by convention: the
   // producer presents `w_valid_o` as a LEVEL and neither consumer's ready
   // depends on `tlf_w_valid` (MEASURE.HISTOGRAM's `ev_ready_o` is its own
-  // pipeline's room; the store's `w_ready_o` is its commit state). So there is
-  // no combinational loop, and neither consumer can see a beat the other
-  // refused -- which is the failure this AND exists to prevent and the reason
-  // a per-consumer skid would be wrong: two copies of one record, retired on
+  // pipeline's room -- `!init_q && !snap_req_q && (pend_next_c == '0)`; the
+  // store's `w_ready_o` is its commit state, a register). So there is no
+  // combinational loop, and neither consumer can see a beat the other refused
+  // -- which is the failure this AND exists to prevent and the reason a
+  // per-consumer skid would be wrong: two copies of one record, retired on
   // different cycles, is exactly the metadata-swap shape this file's own
   // chapter is about.
-  assign tlf_w_ready = hist_ev_ready_c && tds_w_ready;
+  //
+  // >> AND THE AND OF THE READIES WAS ONLY HALF OF IT.  Corrected 2026-09-22
+  // >> (gz/devsdram), found by the console smoke's own assertion firing on a
+  // >> REAL fault -- "TERRAIN.LODFEED emitted 48 deviation record(s), so
+  // >> MEASURE.HISTOGRAM should have accepted 144 event(s) ... and it accepted
+  // >> 12390".
+  // >>
+  // >> Each consumer was handed the RAW `tlf_w_valid`, so each accepted on its
+  // >> OWN handshake.  `zhao_measure_histogram` computes
+  // >> `accept_c = ev_valid_i && ev_ready_o` and knows nothing about the
+  // >> store; the store's `W_IDLE: if (w_valid_i)` knows nothing about the
+  // >> histogram.  A fork needs the joined READY *and* a per-sink joined
+  // >> VALID, and only the first was here.
+  // >>
+  // >> IT COULD NOT BE WRONG UNTIL TODAY, WHICH IS THE WHOLE LESSON.  While
+  // >> `zhao_terrain_devstore`'s `w_ready_o` was tied to 1'b1,
+  // >> `tlf_w_ready` REDUCED to `hist_ev_ready_c`, so the histogram's own
+  // >> handshake and the joint handshake were the same expression and the
+  // >> paragraph above was true by arithmetic rather than by construction.
+  // >> Owner ruling R242 gave the store an SDRAM burst to write and therefore
+  // >> a ready that falls, and the second the second operand could move, the
+  // >> histogram began counting ONE record 86 times over.  CLAUDE.md, in as
+  // >> many words: "a gate that cannot reach the state is not evidence about
+  // >> the state", and this comment asserting the property was the evidence
+  // >> everybody had.
+  // >>
+  // >> The repair is the standard fork and nothing more: sink k sees the valid
+  // >> only when every OTHER sink is ready.  No skid, no buffer, no second
+  // >> copy of a record.
+  assign tlf_w_ready     = hist_ev_ready_c && tds_w_ready;
+  assign hist_ev_valid_c = tlf_w_valid && tds_w_ready;
+  assign tds_w_valid_c   = tlf_w_valid && hist_ev_ready_c;
 
   zhao_measure_histogram #(
     .EW       (HIST_EW),
@@ -15347,7 +15383,7 @@ module zhao_console_core
     .rst_n (rst_n),
 
     // REAL: TERRAIN.LODFEED's deviation records, one event per subpatch.
-    .ev_valid_i     (tlf_w_valid),
+    .ev_valid_i     (hist_ev_valid_c),
     .ev_lane_valid_i(4'b0111),
     .ev_err_i       (hist_ev_err_c),
     .ev_src_id_i    (tlf_w_src_id),
@@ -15942,25 +15978,56 @@ module zhao_console_core
   logic                    pio_g_beat_valid, pio_g_beat_last;
   logic [63:0]             pio_g_beat_data;
 
-  zhao_guard_req_t [3:0]       bs_req;
-  zhao_guard_rsp_t [3:0]       bs_rsp;
+  // REQUESTER 4 IS TERRAIN.DEVSTORE, added 2026-09-22 under OWNER RULING R242
+  // -- "Move deviation store to SDRAM, ignore stale info."  It is the SECOND
+  // requester on this share that both READS and WRITES.
+  //
+  // MEM.GUARD DID NEED A CHANGE FOR THIS ONE, unlike TERRAIN.PAGEIO, and the
+  // difference is worth stating rather than glossing: PAGEIO reaches
+  // TERRAIN.PAGE_POOL, which `terrain_ok`/`terrain_rd_ok` already admitted in
+  // both directions.  The deviation records are NOT in the page pool and must
+  // not be -- they are DERIVED data, and putting them inside the pool would
+  // make every record write a legal page write.  So R242's region is its own
+  // window (`devstore_wr_ok` / `devstore_rd_ok`, zhao_pkg
+  // ZHAO_TERRAIN_DEVSTORE_BASE/_SPAN) with its own theorems in
+  // tests/formal/mem_guard_no_escape.sby and its own committed mutant.  No new
+  // CLIENT ID: ruling T3 keeps 5 unspent and R242 authorised a region, not an
+  // ABI act.
+  //
+  // THE PRIORITY RESIDUAL, SAID OUT LOUD. This requester's READ is
+  // frame-critical -- `u_terrain_spdesc` blocks on it -- while client 6 is T3's
+  // BACKGROUND class, below every guaranteed client, and the share's rotation
+  // bound is now N-1 = 4. A frame whose page loads saturate the socket delays
+  // LOD decisions rather than corrupting them, and `terr_ds_rd_wait_clocks`
+  // inside the block is where that becomes a number instead of a worry.
+  // The block is composed ~700 lines below; these wires are declared here
+  // because the share is.
+  zhao_guard_req_t         tds_g_req;
+  zhao_guard_rsp_t         tds_g_rsp;
+  logic [63:0]             tds_g_wdata;
+  logic                    tds_g_wvalid, tds_g_wlast, tds_g_wready;
+  logic                    tds_g_beat_valid, tds_g_beat_last;
+  logic [63:0]             tds_g_beat_data;
+
+  zhao_guard_req_t [4:0]       bs_req;
+  zhao_guard_rsp_t [4:0]       bs_rsp;
   logic            [63:0]      bs_beat_data;
-  logic            [3:0][63:0] bs_wdata;
-  logic            [3:0]       bs_wvalid, bs_wlast;
+  logic            [4:0][63:0] bs_wdata;
+  logic            [4:0]       bs_wvalid, bs_wlast;
   /* verilator lint_off UNUSEDSIGNAL */
   // Beats for requesters 0 and 1 (the two writers never read, so the share
   // never routes them one), requester 2's write ready (the read share never
   // writes), and the two retirement streams nobody consumes -- see below.
-  logic            [3:0]       bs_beat_valid, bs_beat_last;
-  logic            [3:0]       bs_wready;
-  logic            [3:0][7:0]  bs_retire;
+  logic            [4:0]       bs_beat_valid, bs_beat_last;
+  logic            [4:0]       bs_wready;
+  logic            [4:0][7:0]  bs_retire;
   // Per-requester job counts, the share's own denial/short/long/unowned and
   // ledger counters, and the retirement streams of the two requesters that do
   // not consume one: TERRAIN.PAGELOADER publishes on its last beat's
   // acceptance (the pool is read back through the SAME client, so the
   // arbiter's per-slot order already puts its reads after its writes), and a
   // read's retirement means nothing to a reader. All sunk here, named.
-  logic            [3:0][31:0] bs_jobs;
+  logic            [4:0][31:0] bs_jobs;
   logic [31:0]                 bs_denied, bs_short, bs_long, bs_unowned, bs_ledger_full;
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -15968,29 +16035,39 @@ module zhao_console_core
   assign bs_req[1]      = tpl_g_req;
   assign bs_req[2]      = trs_m_req;
   assign bs_req[3]      = pio_g_req;
+  assign bs_req[4]      = tds_g_req;
   assign upl_guard_rsp  = bs_rsp[0];
   assign tpl_g_rsp      = bs_rsp[1];
   assign trs_m_rsp      = bs_rsp[2];
   assign pio_g_rsp      = bs_rsp[3];
-  assign bs_wdata       = {pio_g_wdata, 64'd0, tpl_g_wdata, upl_wdata};
-  assign bs_wvalid      = {pio_g_wvalid, 1'b0, tpl_g_wvalid, upl_wvalid};
-  assign bs_wlast       = {pio_g_wlast, 1'b0, tpl_g_wlast, upl_wlast};
+  assign tds_g_rsp      = bs_rsp[4];
+  assign bs_wdata       = {tds_g_wdata, pio_g_wdata, 64'd0, tpl_g_wdata, upl_wdata};
+  assign bs_wvalid      = {tds_g_wvalid, pio_g_wvalid, 1'b0, tpl_g_wvalid, upl_wvalid};
+  assign bs_wlast       = {tds_g_wlast, pio_g_wlast, 1'b0, tpl_g_wlast, upl_wlast};
   assign upl_wready     = bs_wready[0];
   assign tpl_g_wready   = bs_wready[1];
   assign pio_g_wready   = bs_wready[3];
+  assign tds_g_wready   = bs_wready[4];
   assign upl_retire_words = bs_retire[0];
   assign trs_m_beat_valid = bs_beat_valid[2];
   assign trs_m_beat_last  = bs_beat_last[2];
   assign trs_m_beat_data  = bs_beat_data;
   // The beat DATA is broadcast by the share and the HANDSHAKE is demuxed, the
-  // same law the read share and the streamer already work under -- so both
-  // readers take `bs_beat_data` and only their own `bs_beat_valid` bit.
+  // same law the read share and the streamer already work under -- so all
+  // three readers take `bs_beat_data` and only their own `bs_beat_valid` bit.
+  // THAT BROADCAST IS WHY `zhao_terrain_devstore` CARRIES `stray_beat_o`: a
+  // wrong demux here delivers another requester's bytes into its buffer with
+  // every request/response counter still balancing, and beat COUNT is the only
+  // thing that can see it.
   assign pio_g_beat_valid = bs_beat_valid[3];
   assign pio_g_beat_last  = bs_beat_last[3];
   assign pio_g_beat_data  = bs_beat_data;
+  assign tds_g_beat_valid = bs_beat_valid[4];
+  assign tds_g_beat_last  = bs_beat_last[4];
+  assign tds_g_beat_data  = bs_beat_data;
 
   zhao_mem_share_wr #(
-    .N         (4),
+    .N         (5),
     .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
     .RQ        (4)
   ) u_build_share (
@@ -22692,6 +22769,20 @@ module zhao_console_core
   wire        tds_w_patch_done;
   wire [31:0] tds_records_written, tds_patches_committed, tds_invalidations;
   wire        tds_busy;
+  // OWNER RULING R242's SEVEN NEW COUNTERS, sunk here for the reason the three
+  // above are sunk and not for a different one: they are the block's own
+  // census of its SDRAM traffic and its own fault detectors, and
+  // `terrain_lodpath_directed` is where each is FIRED and shown silent beside
+  // the fire -- cases 8 through 13, with `slot_addr_bad_o`'s positive control
+  // in the committed mutant pair `terrain_devstore_addrmut_fires` /
+  // `_silent`. THIS IS A DECLARED RESIDUAL AND NOT A CLOSURE: a counter with
+  // no reader at the console boundary cannot be read from a board, and the
+  // honest closure is MEASURE.GOVERNOR's catalog taking them, which is a
+  // register-widening act this packet did not have authority for. Naming them
+  // here is what stops it becoming an uncashed cheque nobody wrote down.
+  wire [31:0] tds_hist_unwritten, tds_guard_denied, tds_short_burst;
+  wire [31:0] tds_stray_beat, tds_slot_addr_bad;
+  wire [31:0] tds_bursts_read, tds_bursts_written, tds_rd_wait_clocks;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ---- TERRAIN.SPDESC's LATTICE SPLICE ------------------------------------
@@ -23072,16 +23163,49 @@ module zhao_console_core
   // `.j_slot_i({1'b0, tmq_j_slot})`. So bit TERR_MEMSLOT-1 is structurally
   // zero on both, and the elaboration guard below refuses the parameterisation
   // in which the narrowing would become a real truncation.
+  //
+  // OWNER RULING R242, 2026-09-22: "Move deviation store to SDRAM, ignore
+  // stale info."  THE 185 M10K ABOVE ARE GONE.  R24's storage clause -- the
+  // "in M10K" half -- is the stale information the owner named; R87 ended
+  // M10K's slack ("one block wanting 185 is not a rounding error"), and R234
+  // D3's grant of those 185 is superseded with it.  EVERYTHING ELSE R24 AND
+  // R234 DECIDED IS UNCHANGED AND IS STILL WHAT THIS INSTANCE DOES: the
+  // records are computed AT PAGE LOAD by `u_terrain_lodfeed`, the key is the
+  // RESIDENCY PAGE SLOT (`TERR_SLOTW`, narrowed exactly as before and for the
+  // same reason), and the invalidation is still the producer's `inv_*`.
+  //
+  // WHAT IS NEW AT THIS SITE IS ONE SOCKET: requester 4 on `u_build_share`,
+  // into MEM.GUARD's TERRAIN.DEVSTORE window.  `REGION_BASE` is passed
+  // EXPLICITLY rather than left to the block's default so this file and
+  // zhao_pkg cannot drift into two address authorities -- the block's
+  // elaboration guard then refuses any parameterisation whose footprint leaves
+  // the guarded span.
   zhao_terrain_devstore #(
     .SLOTS (TERR_SETS * TERR_WAYS),
     .SLOTW (TERR_SLOTW),
     .DEVW  (24),
-    .MORPHW(17)
+    .MORPHW(17),
+    .REGION_BASE(ZHAO_TERRAIN_DEVSTORE_BASE[26:0])
   ) u_terrain_devstore (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    .w_valid_i(tlf_w_valid),
+    // The share stamps TERRAIN_BUILD's privilege on every request it forwards,
+    // so this names the identity the block CLAIMS and the share is what makes
+    // it trusted.  Both agree here, deliberately and visibly.
+    .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+
+    .guard_req_o   (tds_g_req),
+    .guard_rsp_i   (tds_g_rsp),
+    .beat_valid_i  (tds_g_beat_valid),
+    .beat_data_i   (tds_g_beat_data),
+    .beat_last_i   (tds_g_beat_last),
+    .guard_wdata_o (tds_g_wdata),
+    .guard_wvalid_o(tds_g_wvalid),
+    .guard_wready_i(tds_g_wready),
+    .guard_wlast_o (tds_g_wlast),
+
+    .w_valid_i(tds_w_valid_c),
     .w_ready_o(tds_w_ready),
     .w_slot_i (tlf_w_slot[TERR_SLOTW-1:0]),
     .w_sp_i   (tlf_w_sp),
@@ -23124,8 +23248,16 @@ module zhao_console_core
     .patches_committed_o(tds_patches_committed),
     .patches_read_o     (terr_ds_patches_read_o),
     .read_unwritten_o   (terr_ds_read_unwritten_o),
+    .hist_unwritten_o   (tds_hist_unwritten),
     .hist_step_bad_o    (terr_ds_hist_step_bad_o),
     .invalidations_o    (tds_invalidations),
+    .guard_denied_o     (tds_guard_denied),
+    .short_burst_o      (tds_short_burst),
+    .stray_beat_o       (tds_stray_beat),
+    .slot_addr_bad_o    (tds_slot_addr_bad),
+    .bursts_read_o      (tds_bursts_read),
+    .bursts_written_o   (tds_bursts_written),
+    .rd_wait_clocks_o   (tds_rd_wait_clocks),
     .busy_o             (tds_busy)
   );
 

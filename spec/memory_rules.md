@@ -302,7 +302,117 @@ ruled rather than proposed.
 | `0x056F_0000` .. `0x0577_FFFF` | `TERRAIN.COMPOSED_VELOCITY` | 256 × 2,304 B |
 | `0x0578_0000` .. `0x057F_FFFF` | `TERRAIN.WRITEBACK_STAGING` / journal | 64 × 8 KiB |
 | `0x0580_0000` .. `0x0585_FFFF` | `TERRAIN.COMPOSED_MIP_POOL` | 256 × 1,536 B |
-| `0x0586_0000` .. `0x05FF_FFFF` | reserved / unmapped | until traces justify |
+| `0x0586_0000` .. `0x058A_FFFF` | `TERRAIN.DEVSTORE` | 1,024 × 320 B (ruling R242) |
+| `0x058B_0000` .. `0x05FF_FFFF` | reserved / unmapped | until traces justify |
+
+> **TERRAIN.DEVSTORE — owner ruling R242, 2026-09-22.**
+> **Fabian: *"Move deviation store to SDRAM, ignore stale info."***
+>
+> The per-resident-page deviation and history records used to live in **185
+> M10K**, 33% of the target device, because ruling **R24** said *"At PAGE LOAD,
+> stored alongside the page in M10K (the owner prefers M10K over ALMs)"*.
+> **That clause is the stale information**, and **R87** is why: *"against 306 of
+> 553 already used, one block wanting 185 is not a rounding error… Price M10K
+> explicitly in the fit plan; it is no longer the free currency."* Ruling
+> **R234 D3**'s explicit grant of those 185 M10K is spent differently as a
+> result and is superseded with the clause.
+>
+> **Everything else R24 decided stands.** The records are computed **at page
+> load**, the key is the **residency page slot** (a compose slot is reused by a
+> different patch from one frame to the next, so the hysteresis history would
+> be inherited by a stranger), and **BAKE re-triggers the recompute** for the
+> pages it dirties. **Only the medium changed.**
+>
+> **This is the region §5b's own prose predicted.** The block's header had
+> already priced the move and left it as an owner decision: *"These 185 M10K
+> are per-page DERIVED data, which is exactly what §5b gives an SDRAM home to
+> for the coarse-height mips… It is not taken here because ruling R24 says M10K
+> in as many words and because it needs a new guarded region, which is an ABI
+> act."* Both blockers are gone.
+>
+> **THE SHAPE, DERIVED FROM THE RECORD AND NOT FROM A ROUND NUMBER.** A record
+> is `3*DEVW + 16` = 88 bits, **padded to 128** so a 64-byte burst is exactly
+> four records and none ever straddles a boundary — 896 flops of staging bought
+> for 80 KiB of a reserved region, which is the right way round on a device
+> where ALMs bind. One slot owns 320 B in two sub-pools, both with power-of-two
+> strides so every address is a shift:
+>
+> | offset | sub-pool | shape |
+> |---|---|---|
+> | `BASE + slot*256` | deviations | 4 bursts, 16 records × 16 B |
+> | `BASE + 0x4_0000 + slot*64` | history | 1 burst, 16 × 27 bits = 54 B padded |
+>
+> **The sub-pool split is the BLOCK's, not the guard's.** MEM.GUARD sees ONE
+> region with TWO arms, exactly as `TERRAIN.PAGE_POOL` does; a guard that had
+> to decode which sub-pool an address lands in would put that decode on the
+> verdict path of the block whose counter enable was already the largest
+> negative-slack family in the composed shell.
+>
+> **Bandwidth, stated at the shipped visible set and not at a best case.** 256
+> live patches per frame × (5 bursts read + up to 1 written) × 64 B ≈ **80 KB
+> per frame, ~4.8 MB/s at 60 Hz**. R242's own estimate of *"44 KB/frame"*
+> counted the record read alone; the history round trip is the other half, and
+> the larger number is the one to budget against.
+>
+> **The 67-bit packing stays REFUSED** — see the block header and R242. It is
+> exact only while every lattice height remains `height16 << 8`, an invariant
+> that is upstream, unenforced and invisible, and entry I34's field lane is
+> live work.
+
+**ENACTED, 2026-09-22.** `TERRAIN.DEVSTORE` is in `MEM.GUARD` as of the same
+packet that needed it — a window opened WITH its block, never ahead of it.
+
+| Range | Region | Owner | Access |
+|---|---|---|---|
+| `0x0586_0000` .. `0x058B_0000` | `TERRAIN.DEVSTORE` | `TERRAIN_BUILD` (client 6) | **read + write** |
+
+`zhao_pkg` carries it as `ZHAO_TERRAIN_DEVSTORE_BASE` / `_SPAN`
+(`0x0586_0000` / `0x0005_0000`); 1,024 × 320 = 327,680 = `0x0005_0000`, so the
+half-open end `0x058B_0000` and the table's inclusive `0x058A_FFFF` agree to
+the byte. Both are elaboration-time constants: no map input reaches this
+window, so it is **not frame-scoped**, and `BASE + SPAN` cannot wrap 32 bits.
+
+**TWO ARMS OVER THE SAME CONSTANTS, for the page pool's reason.** `devstore_wr_ok`
+requires `req.write` (the mip pass depositing a page's sixteen records, and the
+LOD pass writing a patch's history row back); `devstore_rd_ok` requires
+`!req.write` (the LOD pass reading them). They are separate assigns because the
+**proof** states them separately — `a1_devstore_wr_owner` and
+`a1_devstore_rd_owner`, each with its own non-vacuity cover, so a regression
+names which direction broke and a merged arm cannot satisfy both covers while
+proving neither.
+
+**IT IS A SEPARATE WINDOW FROM `TERRAIN.PAGE_POOL` AND NOT A WIDENING OF IT.**
+The two are disjoint and `0x38_0000` apart, asserted as a theorem
+(`a1_devstore_not_page`) rather than trusted to the constants. Folding them
+into one comparison would have been one gate cheaper and would have made every
+deviation write a legal **page** write — and these records are DERIVED data,
+which must not be able to reach a page's canonical bytes. A request straddling
+either edge is refused **whole**: lying in the union of two permitted ranges is
+not permission.
+
+**No new client id.** Ruling T3 forbids spending client 5 pre-emptively and
+R242 authorised a REGION, not an ABI act.
+
+**THE RESIDUAL THIS CREATES, stated like the page pool's two.** The record
+READ is frame-critical — `zhao_terrain_spdesc` blocks on it — while client 6 is
+T3's **background** class, below every guaranteed client, and the terrain
+socket's rotation bound is now N−1 = 4. A frame whose page loads saturate the
+socket therefore **delays** LOD decisions rather than corrupting them. That is
+a priority question for the arbiter, not a containment question for MEM.GUARD,
+and `zhao_terrain_devstore`'s `rd_wait_clocks_o` is where it becomes a number.
+The window is also spatially the WHOLE store rather than the one slot a job
+owns — the same state-awareness gap, for the same reason — so a faulty store
+could write another resident page's records. It cannot reach a framebuffer, the
+asset pool, the page pool, the echo capture or anything outside the map, and
+`slot_addr_bad_o` watches it from inside the block, where the slot a read was
+STARTED for and the address a burst was ISSUED at are two registers loaded by
+two different enables.
+
+**Proof:** `tests/formal/mem_guard_no_escape.sby` PASSES with
+`c_forward_devstore_wr` and `c_forward_devstore_rd` both reached, and
+`tests/formal/mem_guard_devbound_mutant.sby` — the store's upper bound removed
+— makes it FAIL, which is the deliberate fault the 2026-09-22 item 4 pattern
+requires.
 
 **There are no separate permanent E/F/H pools** — those layers live *inside* the
 21,376-byte page. The two mip pools are **derived caches, not canonical
