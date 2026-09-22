@@ -1503,6 +1503,12 @@ module zhao_console_board
   output logic [31:0] forge_asm_dq_refused_o,
   output logic [31:0] forge_asm_dq_stray_o,
   output logic [31:0] forge_asm_proj_stray_o,
+  // THE CARRIAGE DETECTOR of owner completion ruling 2 (2026-09-22): a forge
+  // triangle whose carried material id disagrees with its job's latched one.
+  // It reads zero in a correct console AND THAT IS A CLAIM, so it is fired
+  // deliberately at the block's own ports in `forge_assemble_directed` rather
+  // than quoted silent here.
+  output logic [31:0] forge_asm_mat_skew_o,
   // CMD.EXEC's own half of the dispatch.
   output logic [31:0] cmd_exec_forges_o,
   output logic [31:0] cmd_exec_forge_overflow_o,
@@ -4313,6 +4319,7 @@ module zhao_console_board
       .forge_asm_dq_refused_o             (forge_asm_dq_refused_o),
       .forge_asm_dq_stray_o               (forge_asm_dq_stray_o),
       .forge_asm_proj_stray_o             (forge_asm_proj_stray_o),
+      .forge_asm_mat_skew_o               (forge_asm_mat_skew_o),
       .cmd_exec_forges_o                  (cmd_exec_forges_o),
       .cmd_exec_forge_overflow_o          (cmd_exec_forge_overflow_o),
       .cmd_exec_forge_src_truncated_o     (cmd_exec_forge_src_truncated_o),
