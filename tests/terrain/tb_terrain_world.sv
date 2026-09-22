@@ -1346,6 +1346,9 @@ module tb_terrain_world
   logic [3:0]        ps_d_verdict;
   logic [31:0]       ps_vertices, ps_guard_denied, ps_incomplete;
   logic [15:0]       ps_v_flags;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [ 7:0]       ps_v_view_mask;   // entry I21's forwarded field
+  /* verilator lint_on UNUSEDSIGNAL */
   logic              ps_idle, mf_idle, mg_busy;
   logic [SLOTW-1:0]  mg_done_slot;
   logic [GENW-1:0]   mg_done_gen;
@@ -1382,6 +1385,7 @@ module tb_terrain_world
       // a passthrough nobody reads would be worse than this zero, which says
       // plainly that nothing on this path wants them.
       .j_flags_i (16'd0),
+      .j_view_mask_i(8'd0),
 
       .guard_req_o (psg_req),
       .guard_rsp_i (psg_rsp),
@@ -1403,6 +1407,7 @@ module tb_terrain_world
       .v_epoch_o (ps_v_epoch),
       .v_src_id_o(ps_v_src),
       .v_flags_o (ps_v_flags),
+      .v_view_mask_o(ps_v_view_mask),
 
       .done_valid_o  (ps_d_valid),
       .done_ready_i  (ps_d_ready),

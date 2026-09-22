@@ -1602,23 +1602,38 @@ module zhao_console_board
   input  logic                    terr_job_dual_i,
   input  logic [15:0]             terr_job_src_id_i,
   //
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
-  // slot and source id, and carries it to the sequencer joined to the patch it
-  // describes -- which is strictly better than today, where it reached the
-  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
-  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
-  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
-  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
-  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
-  // `tis_view_mask` live at the door would join two things that move
-  // independently, which is entry I21's own objection and still correct; and
-  // a src_id-keyed side queue desyncs permanently the first time a page is
-  // refused after issue (a bad pitch, a guard denial, a short burst), so its
-  // identity check would fire once and then be wrong forever. THE BUILD THIS
-  // WANTS is one more forwarded field on those three blocks, beside `flags`.
-  // Named here rather than adapted around.
+  // THE VIEW MASK IS NO LONGER A REMAINDER. **THE BUILD LANDED 2026-09-22
+  // (gz/terrclose)** and it is the build entry I21 named rather than a way
+  // around it: `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+  // `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE `flags:u16`,
+  // so the mask arrives on the vertex beat, off the same held job as the slot,
+  // the source id and the flags. `u_terrain_jobissue` takes it from there.
+  //
+  // THE TWO SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED, and the build is
+  // neither of them. Latching `tis_view_mask` live at the door would pair page
+  // N's mask with page M's lattice -- the header reader accepts a job, spends
+  // a burst, and only then forwards it, so the two move independently. A
+  // src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue. Carrying the field makes the question not arise.
+  //
+  // THIS PORT REMAINS AS AN OVERRIDE, on the same footing as the twelve job
+  // fields beside it and for the reason entry I21 item (5) records: the smoke
+  // bench injects one subpatch job here and SIX assertions stand on that
+  // injection, because every terrain page the smoke plays fails its CRC and
+  // the internal producer therefore never opens. Deleting the port would move
+  // the register by nothing and cost all six. It is a boundary the composition
+  // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE NARROWING'S COUNTER, decided in this commit because entry I21 said
+  // whoever composed the consumer had to decide it here: the record's mask is
+  // EIGHT bits, the sequencer's is TWO, and bits [7:2] have no ratified
+  // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
+  // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
+  // two view bits and tests `== 0x3`. They are IGNORED rather than refused,
+  // because refusing a patch over an absence would drop legal content; and
+  // they are COUNTED, because the day a third view is ratified this narrowing
+  // becomes a silent discard. See `tdoor_view_mask_c`.
+  output logic [31:0]             terr_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -4285,6 +4300,7 @@ module zhao_console_board
       .terr_job_dual_i                    (terr_job_dual_i),
       .terr_job_src_id_i                  (terr_job_src_id_i),
       .terr_job_view_mask_i               (terr_job_view_mask_i),
+      .terr_view_mask_high_o              (terr_view_mask_high_o),
       .terr_job_mat_a_i                   (terr_job_mat_a_i),
       .terr_job_mat_b_i                   (terr_job_mat_b_i),
       .terr_job_weight_i                  (terr_job_weight_i),

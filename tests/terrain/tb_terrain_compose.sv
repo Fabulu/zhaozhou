@@ -105,6 +105,7 @@ module tb_terrain_compose
     // compose lane reads bit 3. A bench that tied `dual_i` directly would test
     // TERRAIN.PATCH's clamp and nothing about whether the flag ever arrives.
     input var logic [15:0] j_flags,
+    input var logic [ 7:0] j_view_mask,
 
     // The lattice's placement, which is the island directory's business and not
     // the streamer's. `wx = x0 + vi * step`, `wz = z0 + vj * step`, all fx16 --
@@ -273,6 +274,11 @@ module tb_terrain_compose
   logic [31:0]        ps_v_src;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [15:0]        ps_v_flags;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // Entry I21's forwarded field.  This bench's subject is the composed
+  // lattice, which the mask does not touch; named rather than left empty.
+  logic [ 7:0]        ps_v_view_mask;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // kFlagDual is bit 3 of T5's record flags -- `zref::swstream::kFlagDual`,
   // `1u << 3`. Named here rather than written as a bare index, because a bare
@@ -305,6 +311,7 @@ module tb_terrain_compose
       .j_epoch_i (j_epoch),
       .j_src_id_i(j_src_id),
       .j_flags_i (j_flags),
+      .j_view_mask_i(j_view_mask),
 
       .guard_req_o (psg_req),
       .guard_rsp_i (psg_rsp),
@@ -326,6 +333,7 @@ module tb_terrain_compose
       .v_epoch_o (ps_v_epoch),
       .v_src_id_o(ps_v_src),
       .v_flags_o (ps_v_flags),
+      .v_view_mask_o(ps_v_view_mask),
 
       .done_valid_o  (ps_done_valid),
       .done_ready_i  (ps_done_ready),

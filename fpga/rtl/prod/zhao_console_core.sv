@@ -7518,23 +7518,38 @@ module zhao_console_core
   input  logic                    terr_job_dual_i,
   input  logic [15:0]             terr_job_src_id_i,
   //
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
-  // slot and source id, and carries it to the sequencer joined to the patch it
-  // describes -- which is strictly better than today, where it reached the
-  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
-  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
-  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
-  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
-  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
-  // `tis_view_mask` live at the door would join two things that move
-  // independently, which is entry I21's own objection and still correct; and
-  // a src_id-keyed side queue desyncs permanently the first time a page is
-  // refused after issue (a bad pitch, a guard denial, a short burst), so its
-  // identity check would fire once and then be wrong forever. THE BUILD THIS
-  // WANTS is one more forwarded field on those three blocks, beside `flags`.
-  // Named here rather than adapted around.
+  // THE VIEW MASK IS NO LONGER A REMAINDER. **THE BUILD LANDED 2026-09-22
+  // (gz/terrclose)** and it is the build entry I21 named rather than a way
+  // around it: `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+  // `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE `flags:u16`,
+  // so the mask arrives on the vertex beat, off the same held job as the slot,
+  // the source id and the flags. `u_terrain_jobissue` takes it from there.
+  //
+  // THE TWO SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED, and the build is
+  // neither of them. Latching `tis_view_mask` live at the door would pair page
+  // N's mask with page M's lattice -- the header reader accepts a job, spends
+  // a burst, and only then forwards it, so the two move independently. A
+  // src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue. Carrying the field makes the question not arise.
+  //
+  // THIS PORT REMAINS AS AN OVERRIDE, on the same footing as the twelve job
+  // fields beside it and for the reason entry I21 item (5) records: the smoke
+  // bench injects one subpatch job here and SIX assertions stand on that
+  // injection, because every terrain page the smoke plays fails its CRC and
+  // the internal producer therefore never opens. Deleting the port would move
+  // the register by nothing and cost all six. It is a boundary the composition
+  // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE NARROWING'S COUNTER, decided in this commit because entry I21 said
+  // whoever composed the consumer had to decide it here: the record's mask is
+  // EIGHT bits, the sequencer's is TWO, and bits [7:2] have no ratified
+  // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
+  // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
+  // two view bits and tests `== 0x3`. They are IGNORED rather than refused,
+  // because refusing a patch over an absence would drop legal content; and
+  // they are COUNTED, because the day a third view is ratified this narrowing
+  // becomes a silent discard. See `tdoor_view_mask_c`.
+  output logic [31:0]             terr_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -13008,14 +13023,21 @@ module zhao_console_core
   // `is_island_o` identifies the island and the streamer addresses by POOL SLOT;
   // `is_cslot_*` indexes T6's 256-entry composed-height cache and
   // `zhao_terrain_compcache_front` is a two-buffer FRONT, not that store;
-  // `is_view_mask_o` and `is_priority_o` belong to the subpatch job TERRAIN.LOD
-  // would build, which is entry I21's boundary.
+  // `is_priority_o` belongs to the subpatch job TERRAIN.LOD would build, which
+  // is entry I21's boundary.
+  //
+  // `is_view_mask_o` DOES NOT, ANY MORE. It is consumed as of 2026-09-22: it
+  // is handed to `u_terrain_hdrread` as the compose job's own view mask and
+  // rides the forward path to the vertex beat, which is the build entry I21
+  // named -- "one more forwarded field on those three blocks, beside `flags`".
+  // The waiver coming off it is the check that the sentence is true.
   /* verilator lint_off UNUSEDSIGNAL */
   wire [31:0]                    tis_island;
   wire                           tis_cslot_valid;
   wire [$clog2(TERR_CSLOTS)-1:0] tis_cslot;
-  wire [7:0]                     tis_view_mask, tis_priority;
+  wire [7:0]                     tis_priority;
   /* verilator lint_on UNUSEDSIGNAL */
+  wire [7:0]                     tis_view_mask;
 
   // TERRAIN.PAGESTREAM.  `tps_*` is the COMPOSE DOOR'S side of the streamer
   // and has not changed meaning; `tpsx_*` below is the STREAMER'S side, which
@@ -13027,6 +13049,10 @@ module zhao_console_core
   wire [5:0]              tps_v_vi, tps_v_vj;
   wire                    tps_v_first;
   wire [15:0]             tps_v_flags;
+  // ENTRY I21's VIEW MASK, ON THE VERTEX BEAT. Eight bits, uninterpreted, as
+  // the page's own record carries it; the narrowing to the sequencer's two is
+  // made ONCE, at the compose door, and counted. See `tdoor_view_mask_c`.
+  wire [7:0]              tps_v_view_mask;
   // TWO DELIBERATE NARROWINGS, WAIVED AT THE DECLARATION AND NOWHERE ELSE.
   // `tps_v_src_id` is T5's 32-bit record id against TERRAIN.PATCH's 16-bit
   // trace field; `tps_done_slot` is the POOL index against the directory's
@@ -13070,6 +13096,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    thr_f_gen;
   wire [31:0]             thr_f_epoch, thr_f_src_id;
   wire [15:0]             thr_f_flags;
+  wire [7:0]              thr_f_view_mask;   // entry I21's forwarded field
 
   // THE ONE GUARD READ CLIENT, and the two readers behind it.  `trs_*` is the
   // share's downstream side; the two upstream sides are the blocks' own ports.
@@ -13091,6 +13118,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    tpsx_j_gen;
   wire [31:0]             tpsx_j_epoch, tpsx_j_src_id;
   wire [15:0]             tpsx_j_flags;
+  wire [7:0]              tpsx_j_view_mask;
   wire                    tpsx_v_valid, tpsx_v_ready;
   wire                    tpsx_done_valid, tpsx_done_ready;
 
@@ -13537,7 +13565,7 @@ module zhao_console_core
     .job_surface_i  (terr_job_m_surface),
     .job_dual_i     (terr_job_m_dual),
     .job_src_id_i   (terr_job_m_src_id),
-    .job_view_mask_i(terr_job_view_mask_i),
+    .job_view_mask_i(terr_job_m_view_mask),
     // STILL THE BOUNDARY'S, under ruling R13 (entry I21). These three are the
     // WRONG CARRIER and their honest closure is removal, so they are not
     // invented here and not adapted from anything the issuer emits.
@@ -18706,6 +18734,11 @@ module zhao_console_core
     .j_epoch_i (tis_epoch),
     .j_src_id_i(tis_src_id),
     .j_flags_i (tis_flags),
+    // ENTRY I21's FORWARDED FIELD, and the join is the same one `tis_flags`
+    // makes one line up: both are fields of the T5 record this job was built
+    // from, taken on the cycle the header reader ACCEPTS the job. From here
+    // they travel together and can no longer be paired with the wrong page.
+    .j_view_mask_i(tis_view_mask),
     // REAL: the record's own identity, which the header restates.  This is the
     // only consumer of `tis_island` in this module and it is what turns the
     // format's redundancy into a check instead of a comment.
@@ -18743,6 +18776,7 @@ module zhao_console_core
     .f_epoch_o (thr_f_epoch),
     .f_src_id_o(thr_f_src_id),
     .f_flags_o (thr_f_flags),
+    .f_view_mask_o(thr_f_view_mask),
 
     .headers_read_o   (terr_hr_headers_o),
     .headers_refused_o(terr_hr_refused_o),
@@ -18870,6 +18904,7 @@ module zhao_console_core
     .j_epoch_i (tpsx_j_epoch),
     .j_src_id_i(tpsx_j_src_id),
     .j_flags_i (tpsx_j_flags),
+    .j_view_mask_i(tpsx_j_view_mask),
 
     // I26, extended: requester B of the one guard read client.  This used to
     // reach the module edge directly; from 2026-09-19 it reaches it through
@@ -18899,6 +18934,7 @@ module zhao_console_core
     .v_epoch_o (tps_v_epoch),
     .v_src_id_o(tps_v_src_id),
     .v_flags_o (tps_v_flags),
+    .v_view_mask_o(tps_v_view_mask),
 
     // REAL: one job, one completion, and the completion is the UNPIN.
     .done_valid_o  (tpsx_done_valid),
@@ -20945,6 +20981,7 @@ module zhao_console_core
     .a_j_epoch_i (thr_f_epoch),
     .a_j_src_id_i(thr_f_src_id),
     .a_j_flags_i (thr_f_flags),
+    .a_j_view_mask_i(thr_f_view_mask),
     .a_v_valid_o (tps_v_valid),
     .a_v_ready_i (tps_v_ready),
     // The compose pass's completion IS the unpin -- entry I27's closed half.
@@ -20970,6 +21007,7 @@ module zhao_console_core
     .b_j_epoch_i (ps2_p_j_epoch),
     .b_j_src_id_i(ps2_p_j_src_id),
     .b_j_flags_i (ps2_p_j_flags),
+    .b_j_view_mask_i(ps2_p_j_view_mask),
     .b_v_valid_o (ps2_p_v_valid),
     .b_v_ready_i (ps2_p_v_ready),
     .b_done_valid_o(ps2_p_done_valid),
@@ -20983,6 +21021,7 @@ module zhao_console_core
     .p_j_epoch_o (tpsx_j_epoch),
     .p_j_src_id_o(tpsx_j_src_id),
     .p_j_flags_o (tpsx_j_flags),
+    .p_j_view_mask_o(tpsx_j_view_mask),
     .p_v_valid_i (tpsx_v_valid),
     .p_v_ready_o (tpsx_v_ready),
     .p_done_valid_i(tpsx_done_valid),
@@ -21014,6 +21053,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]  ps2_p_j_gen;
   wire [31:0]           ps2_p_j_epoch, ps2_p_j_src_id;
   wire [15:0]           ps2_p_j_flags;
+  wire [7:0]            ps2_p_j_view_mask;
   wire                  ps2_p_v_valid, ps2_p_v_ready;
   wire                  ps2_p_done_valid, ps2_p_done_ready;
   /* verilator lint_off UNUSEDSIGNAL */
@@ -21040,6 +21080,11 @@ module zhao_console_core
     // dual-surface page, so `kFlagDual` has to survive the share. The flags
     // come from TERRAIN.HDRREAD's forwarded job, carried by TERRAIN.BAKEREC.
     .a_j_flags_i (ps2_a_j_flags),
+    // TIED, AND NOT FOR THE FLAGS' REASON. The bake's lattice pass reads a
+    // page to DIG it; it never reaches the compose door, so no consumer of
+    // this mask is downstream of this client. A passthrough would be carrying
+    // a value to a place it cannot arrive.
+    .a_j_view_mask_i(8'd0),
     .a_v_valid_o (ps2_a_v_valid),
     .a_v_ready_i (ps2_a_v_ready),
     .a_done_valid_o(ps2_a_done_valid),
@@ -21059,6 +21104,10 @@ module zhao_console_core
     // worse than this zero, which says plainly that nothing on this path wants
     // them.
     .b_j_flags_i (16'd0),
+    // TIED, same argument, and here it is the block's own: MIPGEN decimates
+    // heights, TERRAIN.MIPFEED has no view-mask port, and the mip pass never
+    // opens the compose door either.
+    .b_j_view_mask_i(8'd0),
     .b_v_valid_o (tmf_v_valid),
     .b_v_ready_i (tmf_v_ready),
     .b_done_valid_o(tmf_done_valid),
@@ -21072,6 +21121,7 @@ module zhao_console_core
     .p_j_epoch_o (ps2_p_j_epoch),
     .p_j_src_id_o(ps2_p_j_src_id),
     .p_j_flags_o (ps2_p_j_flags),
+    .p_j_view_mask_o(ps2_p_j_view_mask),
     .p_v_valid_i (ps2_p_v_valid),
     .p_v_ready_o (ps2_p_v_ready),
     .p_done_valid_i(ps2_p_done_valid),
@@ -21439,6 +21489,41 @@ module zhao_console_core
   // if it is ever seen.
   wire tdoor_push_c = tcc_fill_accept;
 
+  // ---- THE VIEW MASK'S 8 -> 2 NARROWING, MADE ONCE AND COUNTED ------------
+  // Entry I21 left this decision to "whoever composes the consumer", in these
+  // words: "the six high bits have no declared meaning ... Whoever composes
+  // the consumer decides must-be-zero / refuse / ignore IN THAT COMMIT and
+  // counts the refusal."  This is that commit, and the decision is IGNORE AND
+  // COUNT.
+  //
+  // WHY IGNORE RATHER THAN REFUSE. The two quantities are the SAME quantity --
+  // `spec/commands.zidl`'s `SubmitTerrainSet.view_mask:u8`, ruling T5's
+  // `view_mask:u8`, and `spec/video_rules.md` 3.1's View 0 = P1 / View 1 = P2.
+  // The golden model accumulates `e.view_mask |= view_bit` over two views and
+  // tests `== 0x3`, and `zhao_geom_group_seq` `$fatal`s unless NVIEWS == 2. So
+  // bits [7:2] are not a wider mask this console is truncating; they are bits
+  // no ratified document gives a meaning to. REFUSING a terrain patch over
+  // them would drop legal content from a legal stream on the strength of an
+  // absence.
+  //
+  // AND WHY IT IS STILL COUNTED. The day a third view is ratified, this
+  // narrowing becomes a silent discard of content the stream meant. The
+  // counter is what makes that visible on the machine instead of in a review:
+  // `terr_view_mask_high_o` is the number of patches whose record set a bit
+  // this console has no view for. It is expected to read ZERO, which is
+  // exactly why it is a port and not an assertion -- a zero nobody can read is
+  // not evidence, and this one has a positive control in the console smoke.
+  wire [1:0] tdoor_view_mask_c = tps_v_view_mask[1:0];
+  wire       tdoor_view_high_c = tdoor_push_c && (tps_v_view_mask[7:2] != 6'd0);
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      terr_view_mask_high_o <= 32'd0;
+    end else if (tdoor_view_high_c && (terr_view_mask_high_o != 32'hFFFF_FFFF)) begin
+      terr_view_mask_high_o <= terr_view_mask_high_o + 32'd1;
+    end
+  end
+
   // THE NARROWING GUARD for the two slot ports below. `initial begin ... end`
   // and not a module-scope `if`: Quartus 17.0 rejects the latter (CLAUDE.md,
   // and this file already carries the same shape at MEASURE.HISTOGRAM). It
@@ -21669,6 +21754,13 @@ module zhao_console_core
   wire        terr_job_m_surface = terr_job_valid_i ? terr_job_surface_i: tji_job_surface;
   wire        terr_job_m_dual    = terr_job_valid_i ? terr_job_dual_i   : tji_job_dual;
   wire [15:0] terr_job_m_src_id  = terr_job_valid_i ? terr_job_src_id_i : tji_job_src_id;
+  // JOINS THE OVERRIDE 2026-09-22. It used to reach the sequencer straight
+  // from the boundary, because the issuer had nothing to put there; now the
+  // issuer carries the page's own mask and the boundary is an override like
+  // the other twelve. The smoke bench's injected job still wins the cycle, so
+  // the six assertions standing on that injection are untouched.
+  wire [ 1:0] terr_job_m_view_mask =
+      terr_job_valid_i ? terr_job_view_mask_i : tji_job_view_mask;
   wire        terr_job_m_ready;
   // DECLARED, not implicit. `tji_job_ready` is the LHS of the assign below and
   // was an implicit net until 2026-09-21: Verilator inferred the right 1-bit
@@ -22160,12 +22252,15 @@ module zhao_console_core
     .ctx_valid_i      (tdoor_push_c),
     .ctx_ready_o      (tji_ctx_ready),
     .ctx_src_id_i     (tps_v_src_id[15:0]),
-    // STILL THE BOUNDARY'S, and the port comment at the top of this module
-    // says exactly what build would change that: one more forwarded field on
-    // HDRREAD / PSMUX / PAGESTREAM, beside `flags`. It travels through the
-    // context queue rather than straight to the sequencer, so it now arrives
-    // JOINED to the patch it describes even while its source is static.
-    .ctx_view_mask_i  (terr_job_view_mask_i),
+    // THE BUILD LANDED 2026-09-22. This is no longer the boundary's: it is the
+    // PAGE's own view mask, off the vertex beat, narrowed once above. The
+    // three blocks entry I21 named -- HDRREAD, PSMUX, PAGESTREAM -- now carry
+    // `view_mask:u8` beside `flags:u16`, so the mask reaching this queue is a
+    // field of the record this patch was made from rather than whatever
+    // TERRAIN.SEQ happens to be presenting. It is captured on the SAME pulse
+    // as `ctx_src_id_i`, off the same held job, which is what makes the pair a
+    // join and not two wires that agree.
+    .ctx_view_mask_i  (tdoor_view_mask_c),
     .ctx_sparse_fill_i(terr_sparse_fill_i),
 
     .serve_valid_i  (terr_cc_serve_valid_o),

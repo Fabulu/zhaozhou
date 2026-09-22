@@ -28,6 +28,7 @@ module tb_terrain_hdrread
     input  var logic [31:0] j_epoch,
     input  var logic [31:0] j_src_id,
     input  var logic [15:0] j_flags,
+    input  var logic [ 7:0] j_view_mask,
     input  var logic [31:0] j_island,
     input  var logic [15:0] j_ix,
     input  var logic [15:0] j_iz,
@@ -65,6 +66,7 @@ module tb_terrain_hdrread
     output var logic [31:0] f_epoch,
     output var logic [31:0] f_src_id,
     output var logic [15:0] f_flags,
+    output var logic [ 7:0] f_view_mask,
 
     // ---- counters ---------------------------------------------------------
     output var logic [31:0] headers_read,
@@ -122,6 +124,7 @@ module tb_terrain_hdrread
     .j_epoch_i (j_epoch),
     .j_src_id_i(j_src_id),
     .j_flags_i (j_flags),
+    .j_view_mask_i(j_view_mask),
     .j_island_i(j_island),
     .j_ix_i    (signed'(j_ix)),
     .j_iz_i    (signed'(j_iz)),
@@ -150,6 +153,7 @@ module tb_terrain_hdrread
     .f_epoch_o (f_epoch),
     .f_src_id_o(f_src_id),
     .f_flags_o (f_flags),
+    .f_view_mask_o(f_view_mask),
 
     .headers_read_o   (headers_read),
     .headers_refused_o(headers_refused),

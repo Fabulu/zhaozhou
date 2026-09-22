@@ -78,6 +78,7 @@ module tb_pagestream
     input  var logic [31:0] j_epoch,
     input  var logic [31:0] j_src_id,
     input  var logic [15:0] j_flags,
+    input  var logic [ 7:0] j_view_mask,
 
     // ---- the lattice out --------------------------------------------------
     output var logic        v_valid,
@@ -94,6 +95,7 @@ module tb_pagestream
     output var logic [31:0] v_epoch,
     output var logic [31:0] v_src_id,
     output var logic [15:0] v_flags,
+    output var logic [ 7:0] v_view_mask,
 
     // ---- completion -------------------------------------------------------
     output var logic        done_valid,
@@ -178,6 +180,7 @@ module tb_pagestream
       .j_epoch_i (j_epoch),
       .j_src_id_i(j_src_id),
       .j_flags_i (j_flags),
+      .j_view_mask_i(j_view_mask),
 
       .guard_req_o (guard_req),
       .guard_rsp_i (guard_rsp),
@@ -199,6 +202,7 @@ module tb_pagestream
       .v_epoch_o (v_epoch),
       .v_src_id_o(v_src_id),
       .v_flags_o (v_flags),
+      .v_view_mask_o(v_view_mask),
 
       .done_valid_o  (done_valid),
       .done_ready_i  (done_ready),
