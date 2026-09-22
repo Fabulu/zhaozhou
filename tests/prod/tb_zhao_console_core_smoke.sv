@@ -445,29 +445,63 @@ module tb_zhao_console_core_smoke
   // the assertion.
   localparam logic signed [63:0] SN_EXPECT_NX = 64'sd532676608;
 
-  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
-  // GEOM.SKIN's two matrix arrays USED TO BE HERE and the bench drove them with
-  // an identity. They are gone because zhao_geom_pose_palette is composed in
-  // the core and drives them from a real store -- which is what closing entry
-  // I10 means. What this bench can reach is one level up: the DECODER's source.
-  logic                    geom_pose_start_i;
-  logic [5:0]              geom_pose_bone_count_i;
-  logic signed [31:0]      geom_pose_root_dx_i;
-  logic signed [31:0]      geom_pose_root_dy_i;
-  logic signed [31:0]      geom_pose_root_dz_i;
+  // ---- I29 IS CLOSED: GEOM.POSE's clip page and skeleton bake --------------
+  // GEOM.SKIN's two matrix arrays used to be here and the bench drove them with
+  // an identity; they went when `zhao_geom_pose_palette` was composed (I10).
+  // THE DECODER'S SOURCE WENT THE SAME WAY 2026-09-22. Fourteen inputs are
+  // gone from this bench -- start, bone count, root displacement, parent, the
+  // three rest translations, the four quaternion lanes and the twelve-element
+  // inverse-rest matrix -- because `zhao_geom_clipread` and
+  // `zhao_geom_bonesrc` are composed in the core and fill them from real
+  // memory through requester G.
+  //
+  // SO THIS BENCH NO LONGER DRIVES A SYNTHETIC SKELETON, AND THAT IS A GAIN
+  // RATHER THAN A LOSS OF COVERAGE. The note that stood here said driving one
+  // "would be this bench inventing an asset"; it no longer can, and what it
+  // reads instead is the reader's own refusal counters. With no creature page
+  // published, `geom_cr_not_resident_o` is what a posed draw produces and the
+  // palette still substitutes the identity bind pose per bone, exactly as
+  // before -- so the skinned counts below do not move, and the reason they do
+  // not has moved one step further from a harness constant.
   logic [4:0]              geom_pose_bone_idx_o;
-  logic [4:0]              geom_pose_bone_parent_i;
-  logic signed [31:0]      geom_pose_bone_tx_i;
-  logic signed [31:0]      geom_pose_bone_ty_i;
-  logic signed [31:0]      geom_pose_bone_tz_i;
-  logic signed [15:0]      geom_pose_quat_w_i;
-  logic signed [15:0]      geom_pose_quat_x_i;
-  logic signed [15:0]      geom_pose_quat_y_i;
-  logic signed [15:0]      geom_pose_quat_z_i;
-  logic signed [31:0]      geom_pose_inv_rest_i [0:11];
   logic                    geom_pose_busy_o;
   logic                    geom_pose_done_o;
   logic [31:0]             geom_pose_palettes_decoded_o;
+  // The instance walk: posed draws captured, and cycles a posed draw waited
+  // for the reader's one request slot.
+  logic [31:0]             geom_pose_requests_o;
+  logic [31:0]             geom_pose_walk_holds_o;
+  // The page reader's resource and form identities (the ownership ruling's
+  // section 5), its census and its seventeen refusals.
+  logic [23:0]             geom_cr_body_index_o;
+  logic [15:0]             geom_cr_body_gen_o;
+  logic [23:0]             geom_cr_clip_index_o;
+  logic [15:0]             geom_cr_clip_gen_o;
+  logic [23:0]             geom_cr_body_owner_o;
+  logic [23:0]             geom_cr_clip_owner_o;
+  logic [31:0]             geom_cr_bodies_o;
+  logic [31:0]             geom_cr_clips_o;
+  logic [31:0]             geom_cr_frames_o;
+  logic [31:0]             geom_cr_pages_dropped_o;
+  logic [31:0]             geom_cr_bad_magic_o;
+  logic [31:0]             geom_cr_truncated_o;
+  logic [31:0]             geom_cr_misaligned_o;
+  logic [31:0]             geom_cr_bad_bone_count_o;
+  logic [31:0]             geom_cr_bone_mismatch_o;
+  logic [31:0]             geom_cr_overflow_o;
+  logic [31:0]             geom_cr_not_rigid_o;
+  logic [31:0]             geom_cr_reserved_nz_o;
+  logic [31:0]             geom_cr_denied_o;
+  logic [31:0]             geom_cr_clip_miss_o;
+  logic [31:0]             geom_cr_frame_oob_o;
+  logic [31:0]             geom_cr_not_resident_o;
+  logic [31:0]             geom_cr_owner_mismatch_o;
+  logic                    geom_cr_busy_o;
+  // The store.
+  logic [31:0]             geom_bs_prefetch_late_o;
+  logic [31:0]             geom_bs_rest_nonrigid_o;
+  logic [31:0]             geom_bs_reserved_nz_o;
+  logic [31:0]             geom_bs_fills_o;
   logic [31:0]             geom_pal_vertices_served_o;
   logic [31:0]             geom_pal_bones_written_o;
   logic [31:0]             geom_pal_bone_oob_o;
@@ -1287,6 +1321,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_forge_overflow_o;
   logic [31:0] cmd_exec_forge_src_truncated_o;
   logic [31:0] geom_ma_jobs_f_o;
+  logic [31:0] geom_ma_jobs_g_o;
   logic [31:0] geom_clipdoor_switches_o;
   logic [31:0] geom_clipdoor_idle_offered_o;
   logic [31:0] geom_clipdoor_err_hold_broken_o;
@@ -4001,20 +4036,9 @@ module tb_zhao_console_core_smoke
     // R21: always take the terrain light (see its declaration).
     terr_light_ready_i = 1'b1;
     render_frame_open_q = 1'b0;
-    geom_pose_start_i = 1'b0;
-    geom_pose_bone_count_i = '0;
-    geom_pose_root_dx_i = '0;
-    geom_pose_root_dy_i = '0;
-    geom_pose_root_dz_i = '0;
-    geom_pose_bone_parent_i = '0;
-    geom_pose_bone_tx_i = '0;
-    geom_pose_bone_ty_i = '0;
-    geom_pose_bone_tz_i = '0;
-    geom_pose_quat_w_i = '0;
-    geom_pose_quat_x_i = '0;
-    geom_pose_quat_y_i = '0;
-    geom_pose_quat_z_i = '0;
-    geom_pose_inv_rest_i = '{default: '0};
+    // The fourteen `geom_pose_*_i` initialisers that stood here are gone with
+    // the ports: I29 closed and the decoder's source is `zhao_geom_bonesrc`,
+    // filled by `zhao_geom_clipread` out of the asset pool.
     proj_cfg_we_i = '0;
     proj_cfg_view_i = '0;
     proj_cfg_addr_i = '0;
@@ -4226,16 +4250,16 @@ module tb_zhao_console_core_smoke
     // unchanged, and the reason they are unchanged has moved from a harness
     // constant to a stated, counted behaviour of the design.
     //
-    // WHAT THIS BENCH THEREFORE DOES NOT EXERCISE: a real decoded palette. The
-    // decoder's source is entry I29 and has no producer in this tree; driving a
-    // synthetic skeleton here would be this bench inventing an asset. The
-    // palette PATH is checked below; the palette CONTENT is
-    // geom_pose_palette_directed's job, against thirty-two distinct matrices.
-    geom_pose_quat_w_i = 16'sd16384;      // quat16 is S1.0.14: this is 1.0
-    for (int i = 0; i < 12; i++) geom_pose_inv_rest_i[i] = '0;
-    geom_pose_inv_rest_i[0]  = FX16_ONE;  // row-major 3x4, the identity
-    geom_pose_inv_rest_i[5]  = FX16_ONE;
-    geom_pose_inv_rest_i[10] = FX16_ONE;
+    // AND SINCE 2026-09-22 IT NO LONGER HANDS THE DECODER A SYNTHETIC
+    // SKELETON EITHER. The five assignments that stood here -- an identity
+    // quaternion and an identity inverse-rest matrix -- went with entry I29's
+    // fourteen inputs. `zhao_geom_clipread` reads a real kind-8 BODY and a
+    // real kind-9 CLIP FRAME through requester G; this bench publishes
+    // neither, so the reader is NOT RESIDENT and refuses, which is a counted
+    // behaviour of the design rather than a harness constant. The palette
+    // CONTENT is still geom_pose_palette_directed's job against thirty-two
+    // distinct matrices, and the reader's own layout handling is
+    // geom_clipread_directed's against two committed goldens.
 
     // ---- PACKET P-TERRAIN: lay out the HPS arena BEFORE reset lifts -------
     // The memory is the board's, not the frame's: it exists before the console
