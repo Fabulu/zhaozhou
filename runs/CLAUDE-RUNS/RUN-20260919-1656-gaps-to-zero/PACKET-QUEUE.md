@@ -419,3 +419,44 @@ no-caveat full-capability fit.**"*
 Particles first because the path is mapped and something is being *dropped*
 today; TWOD next because the hardware exists and is idle; PARAMBUF and the
 neighbour-edge scheduler last because both are genuine subsystems.
+
+---
+
+## PRIORITY ITEM — DEVSTORE TO SDRAM (owner ruling **R242**, 2026-09-22)
+
+**Take the next free slot with this.** It returns more resource than anything
+else in the queue and the decision is already made.
+
+**The owner:** *"Move deviation store to SDRAM, ignore stale info."*
+
+**R242 supersedes R24's storage clause only.** Deviations are still computed
+**at page load**, still keyed by the **residency page slot** (a compose slot
+would let a stranger inherit the hysteresis history), and **BAKE still
+re-triggers the recompute for pages it dirties.** **Only the medium changes.**
+
+**Read `zhao_terrain_devstore.sv`'s own header first** — it priced this, named
+the pattern to follow and left it as an owner decision. `spec/memory_rules.md`
+§5b already gives per-page derived data an SDRAM home (TERRAIN.RESIDENT_MIP_POOL,
+1,024 × 1,536 B). **176 B per patch, 176 KB total, 44 KB/frame ≈ 2.6 MB/s.**
+
+**The guarded region is AUTHORIZED** as a smaller instance of the 2026-09-22
+item 4 act: **extend `mem_guard_no_escape`, never bypass it, and include a
+deliberate fault that makes the proof FAIL.** **Terrain's region is its own —
+item 4's ENGINE1 ranges are NOT a licence for this client.**
+
+**Worth ~185 M10K** (141 deviations + 44 history): the console's summed hand
+counts go **~587 → ~402** against a 553 target. **That is a sum of estimates,
+not a fit.**
+
+**DO NOT ALSO TAKE THE 67-BIT PACKING.** A further 33 M10K is available because
+every deviation's low seven bits are provably zero today — **and the block
+refuses it for cause:** the invariant is upstream and unenforced, so the moment
+a composed height carries a FIELD delta (entry I34's live lane) every deviation
+**silently quantises to 128ths with no counter able to see it.** That is the
+broken-instrument shape, not a saving.
+
+**Watch the direction of your own errors here.** Every number in that block's
+sizing section was wrong until 2026-09-20 and **wrong in the flattering
+direction** — 116 M10K published against a real 141, and R59's premise used a
+16-bit deviation where `DEVW` is 24 while counting no history at all. **Re-derive
+the sizes from the parameters, not from the prose.**

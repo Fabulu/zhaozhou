@@ -6386,3 +6386,90 @@ it as the substance asks him to do the engineering and then ratify it.
 
 **It is re-put to him in those terms.** The decision is recorded here as **OPEN**,
 and `zhao_geom_clipread`'s wrong-animal blocker stays live until it lands.
+
+## R242 — THE DEVIATION STORE MOVES TO SDRAM. **(owner, explicit, 2026-09-22)**
+
+**Fabian, 2026-09-22:** *"Move deviation store to SDRAM, ignore stale info."*
+
+**This supersedes ruling R24's storage clause** — *"At PAGE LOAD, stored
+alongside the page in M10K (the owner prefers M10K over ALMs; deviations change
+only when the page changes or is baked)"* — **and R24's "M10K" is the stale
+information the owner is instructing us to ignore.** R24's preference was
+correct when it was made: M10K was the resource with slack and ALMs were the
+binding constraint. **R87 ended that** — *"against 306 of 553 already used, one
+block wanting 185 is not a rounding error… Price M10K explicitly in the fit
+plan; it is no longer the free currency."*
+
+**Everything else R24 decided stands**: deviations are computed **at page load**,
+the key is the **residency page slot** (a compose slot would let a stranger
+inherit the hysteresis history), and **BAKE re-triggers the recompute for the
+pages it dirties.** **Only the storage MEDIUM changes.**
+
+### The block had already worked this out and left it for the owner
+
+`zhao_terrain_devstore.sv`, under its own heading *"AND A THIRD FORM IS AN OWNER
+DECISION, NOT TAKEN HERE"*:
+
+> *"These 185 M10K are per-page **DERIVED** data, which is exactly what
+> `spec/memory_rules.md` §5b gives an SDRAM home to for the coarse-height mips
+> (TERRAIN.RESIDENT_MIP_POOL, 1,024 × 1,536 B). **176 B per patch of deviations
+> (16 × 88 bits) would fit the same pattern at 176 KB of SDRAM and 44 KB/frame
+> of read bandwidth, and cost no M10K at all.** It is not taken here because
+> ruling R24 says M10K in as many words and because it needs a new guarded
+> region, which is an ABI act. Recorded so the owner can spend the 185 M10K
+> deliberately or move it — **and at 33% rather than the 14% the ruling was
+> given, that choice is materially different from the one R59 was actually
+> asked.**"*
+
+**Both of its stated blockers are now gone.** R24's clause is superseded above,
+and the guarded-region act is **authorized** — it is a smaller instance of the
+2026-09-22 item 4 authorization, which granted ENGINE1 a narrow read/write
+window including a *shared prefetch/chunk scratch* and required
+`mem_guard_no_escape` to be **extended, not bypassed, with a deliberate fault
+that makes the proof fail.** **Follow that pattern exactly.** Terrain's region
+is its own; item 4's ENGINE1 ranges are **not** a licence for this client.
+
+### What it is worth, and why the bandwidth is not a close call
+
+**185 M10K returned** — 141 for the deviations plus 44 for the history. On the
+coordinator's summed hand counts that takes the console from **~587 to ~402
+M10K** against the target's 553, and to about a third of the sizing device's
+1,220. **176 KB of SDRAM; 44 KB/frame is ~2.6 MB/s at 60 Hz.**
+
+**That estimate is a sum of six lanes' hand counts, not a fit.** It is the right
+order of magnitude and wrong in detail.
+
+### THE SECOND LEVER IS REFUSED AND STAYS REFUSED
+
+There is a further 33 M10K available by packing records at 67 bits instead of
+88, because every lattice height reaching `zhao_terrain_loddev` today is
+`height16 << 8`, so **every deviation's low seven bits are provably zero.**
+
+**The block refused it and the refusal is right:**
+
+> *"the invariant is upstream, unenforced and invisible: the moment a composed
+> height carries a FIELD delta (entry I34's lane) the low bits stop being zero
+> and every deviation silently quantises to 128ths **with no counter able to see
+> it**. A packing that is exact only while somebody else keeps a promise they
+> never made is the broken-instrument shape."*
+
+**Do not take it as part of this move.** It is a correctness hazard dressed as a
+saving, and I34's field lane is live work.
+
+### And note which way the error ran, because it is this campaign's pattern
+
+**Every number in that block's own sizing section was wrong until 2026-09-20,
+and wrong in the flattering direction** — a record gained a 16-bit field, two
+derived localparams kept their old comments (`ROWW` said 576 against 704), and
+the published figure was **116 M10K against a real 141**. **R59's premise was
+the same error one step further back:** it priced the store at *"~786 kbit =
+~77 M10K (14%)"* using a **16-bit** deviation where `DEVW` is 24, and counting
+**no history at all**. The real figure is **2.4× the ruling it was decided
+against**, and *"14% is affordable and 33% is an argument, which is exactly why
+nobody audited it."*
+
+**R59 had asked for the smaller form and to take it if bit-identical. One
+smaller form was taken** (the underside's records are never read — TERRAIN.LOD
+law 7 gives the underside the top's level, so a second surface can be computed
+and thrown away with no effect on one output bit: 326 → 185). **The third form,
+the one that actually removes the cost, needed an owner and now has one.**
