@@ -202,6 +202,21 @@ module zhao_twod_band #(
     input  var logic [$clog2(MAX_H +1)-1:0] view_split_i,
 
     // ---- the display list in (the CMD seam; today the core's twod_sd_*) -----
+    // THE SCAN WILL NOT OPEN A BAND WHILE THIS IS HIGH, and that is the
+    // sealed-list law made STRUCTURAL rather than promised. Added 2026-09-22
+    // (packet TWODCMD) after the composed chain found the race it prevents.
+    //
+    // `restart_o` clears the list; the producer then REPLAYS the frame's sealed
+    // descriptors into it, which takes clocks. Without this gate the scan opens
+    // its first four bands (the FIFO slack) immediately at the restart, reads
+    // `count_q` = 0, and closes them -- so every sprite in the top sixteen rows
+    // silently draws NOTHING, with `descriptors_o` reading one and every other
+    // counter at zero. Measured, not reasoned: at MAX_DESC = 16 the descriptor
+    // landed at clock ~10 and bands 0 and 1 had already been scanned empty.
+    //
+    // Tied LOW it is exactly the old behaviour, which is what makes it safe for
+    // any other producer.
+    input  var logic                    list_busy_i,
     input  var logic                    d_valid_i,
     output var logic                    d_ready_o,
     input  var logic signed [15:0]      d_x_i,
@@ -494,15 +509,55 @@ module zhao_twod_band #(
   logic            rd_ok_c;
   assign rd_ok_c = rd_req_v_i && (rd_band_c < fill_band_q);
 
-  logic            rd_v_q, rd_ok_q, rd_first_q;
+  logic            rd_v_q, rd_ok_q;
   logic [GENW-1:0] rd_gen_q;
   logic [AW-1:0]   rd_addr_q;
   logic [AW-1:0]   rd_count_q;       // the INSTRUMENT, never the address
-  logic            rd_hold_v_q;
-  logic [15:0]     rd_hold_rgb_q;
 
-  assign rd_valid_o = rd_hold_v_q;
-  assign rd_rgb_o   = rd_hold_rgb_q;
+  // ==========================================================================
+  // ONE CYCLE, NOT TWO -- AND THE SECOND ONE WAS A REAL DEFECT
+  // ==========================================================================
+  // CORRECTED 2026-09-22 (packet TWODCMD), and it is recorded rather than
+  // quietly fixed because of HOW it survived.
+  //
+  // This block used to capture the response into `rd_hold_v_q`/`rd_hold_rgb_q`
+  // one cycle AFTER the memory answered, so an address presented in cycle N was
+  // answered in cycle N+2. POST.COMPOSITE consumes the HUD in cycle N+1 --
+  // `hud_req_x_o` is `x_l_q`, `x9_q <= x_l_q` on the same edge, and
+  // `o_rgb_o <= hud_valid_i ? hud_rgb_i : c10_q` reads the port one edge later.
+  // SO THE WHOLE HUD WAS ONE PIXEL TO THE RIGHT in the composed console.
+  //
+  // THIS FILE'S OWN HEADER STATES THE CORRECT CONVENTION and quotes
+  // POST.COMPOSITE for it -- "EVERY 1-CYCLE-LATENCY RESPONSE MUST BE HELD
+  // THROUGH A STALL ... a synchronous memory does this for free" -- so the
+  // prose was right and the implementation was one register wider than the
+  // prose. `zhao_twod_sampler`'s `atm_valid_o` is one register and agrees.
+  //
+  // IT SURVIVED BECAUSE THE BLOCK BENCH MODELLED ITS OWN LATENCY. `sweep()` in
+  // `tests/compositor/twod_band_directed.cpp` read `rd_valid_o` into `fb[i-1]`
+  // and its comment said "exactly as POST.COMPOSITE does" -- which it did not.
+  // A bench that drives both sides of a seam cannot disagree with itself, and
+  // 39 directed checks passed over a one-pixel shift. It was found by
+  // `tests/compositor/twod_cmd_chain_directed.cpp`, which composes the real
+  // POST.COMPOSITE and looks at the pixels: the glyph landed at x = 17..24
+  // having been asked for at 16..23, with every counter in the chain at zero.
+  //
+  // THE HOLD PROPERTY IS UNCHANGED AND IS NOW STRUCTURAL. While the address
+  // holds, `br_addr_c` does not move, so the memory re-reads the same word and
+  // `rd_v_q`/`rd_ok_q`/`rd_gen_q` re-load the same values -- the output is a
+  // function of registers that are all stable, which is what "a synchronous
+  // memory does this for free" means. The captured-hold registers were the
+  // thing that made it cost a cycle.
+  //
+  // AND `rd_first_q` GOES WITH THEM. It existed because the hold register
+  // never latched the first pixel of a sweep -- the compositor's raster pointer
+  // sits at (0, 0) while idle, so the sweep's own first address was not "new".
+  // With no latch there is no first-latch to miss; the defect class is gone
+  // rather than guarded.
+  assign rd_valid_o = rd_v_q && rd_ok_q
+                   && (br_data_q[DW-1 -: GENW] == rd_gen_q)
+                   && (rd_gen_q != GENW'(0));
+  assign rd_rgb_o   = br_data_q[15:0];
 
   // ==========================================================================
   // THE BAND SCHEDULE
@@ -518,7 +573,8 @@ module zhao_twod_band #(
   assign fill_lead_c = 32'(fill_band_q) - 32'(rd_band_q);
 
   logic can_open_c;
-  assign can_open_c = (fill_band_q < KW'(BANDS)) && (fill_lead_c < 32'(SLOTS));
+  assign can_open_c = (fill_band_q < KW'(BANDS)) && (fill_lead_c < 32'(SLOTS))
+                   && !list_busy_i;
 
   // The view of the band being FILLED, published to the walker.
   logic [1:0] fill_view_c;
@@ -785,12 +841,9 @@ module zhao_twod_band #(
       mul_busy_q      <= 1'b0;
       rd_v_q          <= 1'b0;
       rd_ok_q         <= 1'b0;
-      rd_first_q      <= 1'b0;
       rd_gen_q        <= '0;
       rd_addr_q       <= '0;
       rd_count_q      <= '0;
-      rd_hold_v_q     <= 1'b0;
-      rd_hold_rgb_q   <= '0;
       sweeping_q      <= 1'b0;
       armed_q         <= 1'b0;
       for (ri = 0; ri < L; ri = ri + 1) gen_q[ri] <= GENW'(0);
@@ -815,13 +868,13 @@ module zhao_twod_band #(
       rd_ok_q    <= rd_ok_c;
       rd_gen_q   <= gen_q[rd_slot_c];
       rd_addr_q  <= br_addr_c;
-      // "FIRST" MEANS FIRST FOR THIS REQUEST, NOT MERELY A NEW ADDRESS. The
-      // compositor's raster pointer sits at (0, 0) while it is idle, so the
-      // first pixel of a sweep offers the address that was ALREADY on the port
-      // -- and an address-change test alone never captures it. Found by the
-      // directed bench: pixel (0, 0) read back dark with every counter at zero,
-      // because nothing counts a response that was never latched.
-      rd_first_q <= rd_req_v_i && ((br_addr_c != rd_addr_q) || !rd_v_q);
+      // THE FIRST PIXEL OF A SWEEP used to need a special case here, because
+      // the captured-hold register never latched it: the compositor's raster
+      // pointer sits at (0, 0) while idle, so the sweep's own first address was
+      // not "new" and pixel (0, 0) read back dark with every counter at zero.
+      // The combinational response above removes the latch and with it the
+      // case. Preserved as a note because the defect class -- "nothing counts a
+      // response that was never latched" -- is general.
       if (rd_req_v_i) begin
         rd_band_q <= rd_band_c;
         // THE INSTRUMENT. A counter that tracks the sweep it was PROMISED,
@@ -847,14 +900,6 @@ module zhao_twod_band #(
         end
         if (!rd_ok_c) band_underrun_o <= band_underrun_o + 32'd1;
       end
-      // The response is captured ONCE, when the address first appears. Holding
-      // it here is what makes a compositor stall safe without a handshake.
-      if (rd_first_q) begin
-        rd_hold_v_q   <= rd_v_q && rd_ok_q && (br_data_q[DW-1 -: GENW] == rd_gen_q)
-                                 && (rd_gen_q != GENW'(0));
-        rd_hold_rgb_q <= br_data_q[15:0];
-      end
-
       // ---- intake ---------------------------------------------------------
       if (d_valid_i) begin
         // THE SEALED-LIST LAW, MEASURED RATHER THAN ASSERTED. A descriptor
@@ -938,7 +983,6 @@ module zhao_twod_band #(
         e_valid_q     <= 1'b0;
         rate_q        <= '0;
         burst_q       <= NEEDW'(BURST_PX);
-        rd_hold_v_q   <= 1'b0;
         mul_busy_q    <= 1'b0;
       end else begin
         case (st_q)
@@ -954,6 +998,20 @@ module zhao_twod_band #(
             band_top_q  <= (YW+1)'(32'(fill_band_q) << BB);
             band_open_q <= 1'b1;
             idx_q       <= '0;
+            // THE ORDER LAW IS PER BAND, AND SO IS ITS INSTRUMENT. Corrected
+            // 2026-09-22 (packet TWODCMD). The list is re-walked in `order` for
+            // EVERY band, so the first sprite of band k+1 legitimately carries a
+            // lower `order` than the last sprite of band k -- and
+            // `order_inversion_o` counted that as an inversion. A HUD whose
+            // sprites have different `order` values therefore fired it once per
+            // band boundary, in a console that asserts it at ZERO. Found by
+            // `twod_cmd_chain_directed`'s overlapping-sprite case: two sprites,
+            // orders 1 and 9, two bands, two "inversions" and a correct picture.
+            //
+            // Clearing it HERE is safe because `S_CLOSE` waits for
+            // `outstanding_q == 0`, so every colour of band k has landed before
+            // band k+1 opens -- there is no slice in flight to be cut in half.
+            last_src_v_q <= 1'b0;
             for (ri = 0; ri < B; ri = ri + 1) begin
               ft_row = LB'(32'(fill_band_q << BB) + ri);
               gen_q[ft_row] <= (gen_q[ft_row] == GENW'(GEN_MAX))
@@ -1070,11 +1128,36 @@ module zhao_twod_band #(
 
           // case9: hand the slice to the walker. It is held until accepted and
           // never withdrawn.
+          //
+          // A ZERO-WIDTH SLICE IS NOT CHARGED TO `outstanding_q`, AND THAT IS A
+          // LIVENESS FIX, NOT AN OPTIMISATION. Corrected 2026-09-22 (packet
+          // TWODCMD). `outstanding_q` counts slices whose LAST PIXEL has not
+          // arrived, and `S_CLOSE` waits for it to reach zero before opening the
+          // next band. `zhao_twod_sprite` REFUSES a descriptor of zero extent --
+          // `TWOD.SPRITE.md`'s own table, and a rule the completion ruling
+          // requires be retained -- so it emits no samples and no `s_last_o`,
+          // and the count never came back down. THE WHOLE HUD FROZE FROM THAT
+          // BAND ON, for the rest of the frame, because one descriptor in the
+          // list had `w = 0`.
+          //
+          // It was found by `twod_cmd_chain_directed`'s malformed-descriptor
+          // case, which puts a zero-width sprite beside a legal one and looks at
+          // the pixels: the legal sprite drew NOTHING, `sprites_admitted_o` read
+          // one, `pixels_written_o` read zero and `band_underrun_o` read 1,792.
+          // A block bench cannot see it, because it models the walker and a
+          // model that answers every slice is a model of a walker that does not
+          // refuse.
+          //
+          // The slice is still EMITTED, so the walker still refuses it and still
+          // counts it -- the refusal stays where the contract puts it. What
+          // changes is only that the band does not wait for a pixel that by
+          // contract will never come. `h` needs no such guard: a zero-height
+          // sprite never survives `clip_bot_c <= clip_top_c`.
           S_EMIT: begin
             if (e_ready_i) begin
               e_valid_q        <= 1'b0;
               slices_emitted_o <= slices_emitted_o + 32'd1;
-              outstanding_q    <= outstanding_q + KW'(1);
+              if (cd_w_c != 16'd0) outstanding_q <= outstanding_q + KW'(1);
               adv_q            <= 3'(rows_band_q);
               st_q             <= S_ADV;
             end

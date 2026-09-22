@@ -254,6 +254,19 @@ module zhao_twod_cmd #(
     output var logic [3:0]                      ld_bind_lstride_o,
     output var logic [3:0]                      ld_bind_lheight_o,
 
+    // ---- the publish walk, to zhao_twod_band.list_busy_i --------------------
+    // HIGH FROM THE SEAL UNTIL THE LAST DESCRIPTOR HAS LANDED. The band clears
+    // its list on the same cycle it publishes `list_restart_o`, and replaying
+    // the frame's descriptors into it takes clocks; without this the band's
+    // scan opens its first bands against an EMPTY list and every sprite in the
+    // top rows draws nothing, silently, with `descriptors_o` reading the right
+    // number. It is the sealed-list law made structural: the consumer cannot
+    // read a list that is still being written.
+    //
+    // `seal_i` is folded in because `st_q` is still W_IDLE on the seal cycle
+    // itself -- a one-cycle gap there is one band the scan could open.
+    output var logic                    publishing_o,
+
     // ---- per-frame plane state the sampler reads continuously ---------------
     // `atm_slot_o` is the slot whose sealed role is ATMOSPHERE; slot 1 wins if
     // both claim it, because the contract's tie rule for the same role is
@@ -514,6 +527,8 @@ module zhao_twod_cmd #(
 
   logic rd_is_plane_c;
   assign rd_is_plane_c = rd_data_q[E_TAG];
+
+  assign publishing_o = (st_q != W_IDLE) || seal_i;
 
   // ==========================================================================
   // BINDING SHADOW -- what `bind_conflict_o` differences

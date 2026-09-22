@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
   auto program = [&](int slot, int role, int blend, int fmt, int w, int h, int wrap_u, int wrap_v,
                      int32_t a, int32_t b, int32_t c, int32_t d, int32_t u0, int32_t v0, int mask) {
     top.d_valid_i = 1;
+    top.d_enable_i = 1;
     top.d_slot_i = slot;
     top.d_role_i = role;
     top.d_blend_i = blend;
@@ -233,10 +234,70 @@ int main(int argc, char** argv) {
                 1, (s.u == 0 && s.v == 0) ? 1 : 0);
   }
 
+  // ---- 9: DISABLE IS AN INTENT, NOT A FAULT ----------------------------
+  // `TWOD.PLANE.md`'s descriptor carries an `enable` field, and until packet
+  // TWODCMD it was the one member with no wire -- a slot could only be turned
+  // off by programming it with something the block would refuse, which counts
+  // a refusal and reads in the evidence as a malformed frame. The ruling
+  // requires "explicit plane disable behavior", so the field is now a port.
+  //
+  // The two halves that make this a DISCRIMINATING check rather than a
+  // reassuring one: an enabled slot at the same coordinates emits, and the
+  // disabled one lands on `disabled_o` while BOTH refusal counters stay put.
+  {
+    const uint32_t role_before  = top.refused_role_o;
+    const uint32_t blend_before = top.refused_blend_o;
+    const uint32_t skip_before  = top.skipped_view_o;
+    const uint32_t dis_before   = top.disabled_o;
+
+    program(1, 0, 0, 1, 64, 64, 0, 0, fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
+    const S on = pixel(1, 3, 4, 0, 1);
+    zhao::check(on.valid && on.u == 3 && on.v == 4,
+                "an ENABLED slot emits at (3, 4) -- the control half of the "
+                "disable check",
+                1, (on.valid && on.u == 3 && on.v == 4) ? 1 : 0);
+
+    top.d_valid_i   = 1;
+    top.d_enable_i  = 0;   // the ONLY field that differs from the program above
+    top.d_slot_i    = 1;
+    zhao::tick(top);
+    top.d_valid_i   = 0;
+
+    const S off = pixel(1, 3, 4, 0, 1);
+    zhao::check(!off.valid, "a DISABLED slot emits nothing", 0, off.valid ? 1 : 0);
+    zhao::check(top.disabled_o == dis_before + 1,
+                "and it lands on `disabled_o`", 1,
+                static_cast<int>(top.disabled_o - dis_before));
+    zhao::check(top.refused_role_o == role_before &&
+                    top.refused_blend_o == blend_before,
+                "while NEITHER REFUSAL COUNTER MOVED -- a frame that turns a "
+                "plane off is not a frame with a malformed descriptor in it, "
+                "which is why the enable is tested before the role and the "
+                "blend rather than after them",
+                1,
+                (top.refused_role_o == role_before &&
+                 top.refused_blend_o == blend_before)
+                    ? 1
+                    : 0);
+    // `skipped_view_o` DOES move, by exactly the one pixel that was offered,
+    // and that is worth stating rather than passing over: `drawable_c` is
+    // `en_q && view mask`, so the counter named for the view mask also
+    // absorbs every pixel offered to a disabled slot. It is not a defect --
+    // no pixel is lost and no refusal is manufactured -- but a reader
+    // diagnosing a black plane from the counters alone should know that a
+    // non-zero `skipped_view_o` has two causes, and that `disabled_o`
+    // separates them.
+    zhao::check(top.skipped_view_o == skip_before + 1,
+                "the pixel offered to the disabled slot is skipped, on the "
+                "view counter, exactly once",
+                1, static_cast<int>(top.skipped_view_o - skip_before));
+  }
+
   std::printf(
       "  %u pixels, %u role-refused, %u blend-refused, %u view-skipped, "
-      "%u wrap failures\n",
-      top.pixels_o, top.refused_role_o, top.refused_blend_o, top.skipped_view_o, top.wrap_fail_o);
+      "%u wrap failures, %u disabled\n",
+      top.pixels_o, top.refused_role_o, top.refused_blend_o, top.skipped_view_o, top.wrap_fail_o,
+      top.disabled_o);
 
   return zhao::report_and_exit("twod_plane_directed");
 }

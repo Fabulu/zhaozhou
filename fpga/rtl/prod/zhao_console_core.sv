@@ -17656,6 +17656,7 @@ module zhao_console_core
   logic [15:0]             ta_page_data_c, ta_pal_data_c;
 
   logic                    twod_seal_c;
+  logic                    twod_list_busy_c;
 
   // The two consumers' `d_ready_o`. They are constant high today -- programming
   // a plane slot never waits on a pixel, and the band's intake always completes
@@ -17799,6 +17800,7 @@ module zhao_console_core
     // requirement on the record: `zhao_twod_cmd`'s `s_*` is this group field
     // for field, and the ratified DrawSprite 0x0307 is that group plus the
     // three fields the sampler's binding needs.
+    .list_busy_i  (twod_list_busy_c),
     .d_valid_i    (tc_s_valid_c),
     .d_ready_o    (twod_sd_ready_c),
     .d_x_i        (tc_s_x_c),
@@ -18186,6 +18188,9 @@ module zhao_console_core
     .ld_bind_lstride_o (tc_bind_lstride_c),
     .ld_bind_lheight_o (tc_bind_lheight_c),
 
+    // REAL: the band must not open a band against a list this block is still
+    // writing. See `zhao_twod_band.list_busy_i`.
+    .publishing_o  (twod_list_busy_c),
     .atm_slot_o    (tc_atm_slot_c),
     .line_scroll_o (tc_line_scroll_c),
 
