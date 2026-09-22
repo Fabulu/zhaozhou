@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <set>
+#include <utility>
 #include <vector>
 
 #include "verilated.h"
@@ -685,6 +686,140 @@ int main(int argc, char** argv) {
         "terrain_tess_directed: level 0, morph 0.5 — %llu cycles for %u triangles "
         "(%.2f cycles/triangle)\n",
         static_cast<unsigned long long>(drv.cycles()), static_cast<uint32_t>(tm.size()), cyc_m);
+  }
+
+  // =========================================================================
+  // 11. RULING R13 -- THE PER-TRIANGLE LAYER-E PATH
+  // =========================================================================
+  // The material the console used to take from `job_mat_a_i`/`job_mat_b_i`/
+  // `job_weight_i` -- one value for a whole 8x8-cell subpatch -- is now read
+  // here, per triangle, at the triangle's own cell, and leaves on the ModeRef
+  // triple. R13: "Join PER TRIANGLE, by the triangle's cell."
+  //
+  // THE EXPECTATION IS DERIVED FROM THE TRIPLE THE BLOCK ITSELF EMITTED, not
+  // from a separate walk of the enumerator. `ia`/`ib`/`ic` are window indices,
+  // so the cell is the per-axis minimum of the three corners -- and that is
+  // exactly the law the RTL implements, which means this check is asking "does
+  // the material agree with the triangle it is riding with", which is the
+  // question, rather than "do two copies of the same walk agree", which is not.
+  {
+    auto cell_of = [](const tess_test::EmitRef& r, int ox, int oz) {
+      const int vi[3] = {r.ia % 9, r.ib % 9, r.ic % 9};
+      const int vj[3] = {r.ia / 9, r.ib / 9, r.ic / 9};
+      int mi = vi[0], mj = vj[0];
+      for (int k = 1; k < 3; ++k) {
+        if (vi[k] < mi) mi = vi[k];
+        if (vj[k] < mj) mj = vj[k];
+      }
+      return std::pair<int, int>(ox + mi, oz + mj);
+    };
+
+    // ---- 11a: armed, over every level and a stitched case ----------------
+    int checked = 0, bad_mat = 0, bad_cell = 0;
+    uint32_t unarmed_before = 0;
+    drv.set_mode(2);
+    drv.set_mat_armed(true);
+    for (int level = 0; level <= 3; ++level) {
+      for (int stitch = 0; stitch <= 1; ++stitch) {
+        zt::SubpatchJob job;
+        job.ox = 8;
+        job.oz = 16;
+        job.level = level;
+        for (int k = 0; k < 4; ++k) job.nlevel[k] = level;
+        // A coarser NEIGHBOUR is what takes the annulus path, whose ring fans
+        // are NOT aligned to run-cells -- the one place the cell law is a
+        // declared choice rather than an identity, so it has to be exercised.
+        if (stitch && level < 3) job.nlevel[zt::kSidePosX] = level + 1;
+        if (stitch && level == 3) continue;
+        bool rej = false;
+        (void)drv.run(lat, job, &rej, 0x2222u);
+        if (rej) continue;
+        for (const tess_test::EmitRef& r : drv.refs) {
+          const std::pair<int, int> c = cell_of(r, job.ox, job.oz);
+          if (c.first < 0 || c.first > 31 || c.second < 0 || c.second > 31) {
+            ++bad_cell;
+            continue;
+          }
+          if (r.mat_a != tess_test::mat_a_at(c.first, c.second) ||
+              r.mat_b != tess_test::mat_b_at(c.first, c.second) ||
+              r.weight != tess_test::weight_at(c.first, c.second)) {
+            if (bad_mat < 4)
+              std::printf(
+                  "   R13 triple (%u,%u,%u) cell (%d,%d): got {%u,%u,%u} want {%u,%u,%u}\n", r.ia,
+                  r.ib, r.ic, c.first, c.second, r.mat_a, r.mat_b, r.weight,
+                  tess_test::mat_a_at(c.first, c.second), tess_test::mat_b_at(c.first, c.second),
+                  tess_test::weight_at(c.first, c.second));
+            ++bad_mat;
+          }
+          ++checked;
+        }
+      }
+    }
+    check(checked > 200, "R13 the layer-E sweep emitted triples to check", 200u,
+          static_cast<uint32_t>(checked));
+    check(bad_cell == 0, "R13 every triangle's cell is inside the patch", 0u,
+          static_cast<uint32_t>(bad_cell));
+    check(bad_mat == 0,
+          "R13 every ModeRef triple carries the material of ITS OWN cell, under backpressure", 0u,
+          static_cast<uint32_t>(bad_mat));
+
+    // THE MATERIAL IS NOT SUBPATCH-UNIFORM, which is the whole point of R13
+    // and the one thing a passing per-triangle comparison could still hide: if
+    // the block emitted one cell's material for every triangle, and the test
+    // compared against that same cell, it would pass. So: the triples of ONE
+    // job must carry MORE THAN ONE distinct material.
+    {
+      zt::SubpatchJob job;
+      job.ox = 8;
+      job.oz = 16;
+      job.level = 0;
+      for (int k = 0; k < 4; ++k) job.nlevel[k] = 0;
+      bool rej = false;
+      (void)drv.run(lat, job, &rej);
+      std::vector<uint32_t> seen;
+      for (const tess_test::EmitRef& r : drv.refs) {
+        const uint32_t key = (uint32_t(r.mat_a) << 16) | (uint32_t(r.mat_b) << 8) | r.weight;
+        bool found = false;
+        for (uint32_t k : seen)
+          if (k == key) found = true;
+        if (!found) seen.push_back(key);
+      }
+      check(seen.size() >= 32,
+            "R13 one subpatch's triples carry MANY materials -- the job port could carry one",
+            32u, static_cast<uint32_t>(seen.size()));
+      unarmed_before = dut.mat_unarmed_o;
+    }
+
+    // ---- 11b: THE NEGATIVE CONTROL, then FIRE the counter ----------------
+    // CLAUDE.md: a detector reading zero is a claim, and it is the claim to
+    // check hardest. So the zero above is recorded as a control and the
+    // counter is then made to move on the fault it exists to catch.
+    check(unarmed_before == 0,
+          "R13 negative control: with the plane armed, mat_unarmed_o never moved", 0u,
+          unarmed_before);
+
+    drv.set_mat_armed(false);
+    zt::SubpatchJob job;
+    job.ox = 8;
+    job.oz = 16;
+    job.level = 0;
+    for (int k = 0; k < 4; ++k) job.nlevel[k] = 0;
+    bool rej = false;
+    (void)drv.run(lat, job, &rej);
+    const uint32_t fired = dut.mat_unarmed_o - unarmed_before;
+    check(fired == static_cast<uint32_t>(drv.refs.size()),
+          "R13 mat_unarmed_o FIRES, once per triple, when the plane is not armed",
+          static_cast<uint32_t>(drv.refs.size()), fired);
+
+    int not_declared = 0;
+    for (const tess_test::EmitRef& r : drv.refs)
+      if (r.mat_a != 0 || r.mat_b != 0 || r.weight != 0) ++not_declared;
+    check(not_declared == 0,
+          "R13 and an unanswered cell emits the DECLARED {0,0,0}, not the poisoned wires", 0u,
+          static_cast<uint32_t>(not_declared));
+
+    drv.set_mat_armed(true);
+    drv.set_mode(0);
   }
 
   return zhao::report_and_exit("terrain_tess_directed");

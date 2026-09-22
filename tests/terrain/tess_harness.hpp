@@ -35,7 +35,24 @@ struct EmitRef {
   uint8_t ia = 0, ib = 0, ic = 0;
   bool surface = false;
   uint16_t src = 0;
+  // Ruling R13's per-triangle material, read from layer E at the triangle's
+  // own cell and carried out on this beat.
+  uint8_t mat_a = 0, mat_b = 0, weight = 0;
 };
+
+/**
+ * The played layer-E plane: three DIFFERENT functions of the cell, so a
+ * wrong-cell read and a swapped-field read fail differently rather than both
+ * producing "some material". Coefficients are odd, so adjacent cells differ in
+ * every field.
+ *
+ * It lives here rather than in a test because the EXPECTATION and the MODEL
+ * must be one function -- two copies of a fixture drift, and a fixture that
+ * drifts toward the RTL is the one bug a self-consistent test cannot see.
+ */
+inline uint8_t mat_a_at(int ci, int cj) { return static_cast<uint8_t>(5 * ci + 11 * cj + 0x21); }
+inline uint8_t mat_b_at(int ci, int cj) { return static_cast<uint8_t>(13 * ci + 3 * cj + 0x8E); }
+inline uint8_t weight_at(int ci, int cj) { return static_cast<uint8_t>(7 * ci + 9 * cj + 0x40); }
 
 /**
  * Drives one subpatch job through the DUT and collects the emitted mesh.
@@ -60,6 +77,10 @@ class Driver {
     dut_.lat_wx_i = 0;
     dut_.lat_wz_i = 0;
     dut_.cs_substance_i = 0;
+    dut_.mat_a_i = 0;
+    dut_.mat_b_i = 0;
+    dut_.mat_w_i = 0;
+    dut_.mat_valid_i = 0;
     dut_.eval();
     for (int i = 0; i < 2; ++i) zhao::tick(dut_);
     dut_.rst_n = 1;
@@ -67,7 +88,17 @@ class Driver {
     zhao::tick(dut_);
     lat_pend_ = false;
     cs_pend_ = false;
+    mat_pend_ = false;
   }
+
+  /**
+   * Arm or disarm the played layer-E plane. DISARMED IS NOT "RETURN ZERO": the
+   * model lowers `mat_valid_i`, which is what the compose cache does when the
+   * request lands with no patch served or off the plane, and it is the only
+   * stimulus that can move `mat_unarmed_o`. It exists so the counter can be
+   * FIRED rather than quoted silent.
+   */
+  void set_mat_armed(bool armed) { mat_armed_ = armed; }
 
   void set_mode(int mode) { mode_ = mode; }
   int mode() const { return mode_; }
@@ -127,6 +158,21 @@ class Driver {
       } else {
         dut_.cs_substance_i = 3;  // "reserved", never SOLID
       }
+      if (mat_pend_ && mat_armed_) {
+        dut_.mat_a_i = mat_a_at(static_cast<int>(mat_ci_), static_cast<int>(mat_cj_));
+        dut_.mat_b_i = mat_b_at(static_cast<int>(mat_ci_), static_cast<int>(mat_cj_));
+        dut_.mat_w_i = weight_at(static_cast<int>(mat_ci_), static_cast<int>(mat_cj_));
+        dut_.mat_valid_i = 1;
+      } else {
+        // Deliberate poison on the DATA while `mat_valid_i` is low: the block
+        // declares {0,0,0} for an unanswered cell, so a block that passed the
+        // wires through instead would emit 0xA5 and be caught, rather than
+        // emitting zeros that look exactly like the declared behaviour.
+        dut_.mat_a_i = 0xA5;
+        dut_.mat_b_i = 0xA5;
+        dut_.mat_w_i = 0xA5;
+        dut_.mat_valid_i = 0;
+      }
       dut_.tri_ready_i = stall_mask == 0 ? 1 : (((stall_mask >> (cycle & 31)) & 1u) ^ 1u);
       dut_.vtx_ready_i = dut_.tri_ready_i;
       dut_.ref_ready_i = dut_.tri_ready_i;
@@ -138,6 +184,8 @@ class Driver {
       const bool nsurf = dut_.lat_surface_o != 0;
       const bool cs_req = dut_.cs_req_o != 0;
       const uint8_t nci = dut_.cs_ci_o, ncj = dut_.cs_cj_o;
+      const bool mat_req = dut_.mat_req_o != 0;
+      const uint8_t nmci = dut_.mat_ci_o, nmcj = dut_.mat_cj_o;
 
       if (dut_.tri_valid_o && dut_.tri_ready_i) {
         zt::MeshTri t;
@@ -174,6 +222,9 @@ class Driver {
         r.ic = dut_.ref_ic_o;
         r.surface = dut_.ref_surface_o != 0;
         r.src = dut_.ref_src_id_o;
+        r.mat_a = dut_.ref_mat_a_o;
+        r.mat_b = dut_.ref_mat_b_o;
+        r.weight = dut_.ref_weight_o;
         refs.push_back(r);
         ++transfers_;
       }
@@ -189,6 +240,9 @@ class Driver {
       cs_pend_ = cs_req;
       cs_ci_ = nci;
       cs_cj_ = ncj;
+      mat_pend_ = mat_req;
+      mat_ci_ = nmci;
+      mat_cj_ = nmcj;
       ++cycles_;
       if (done) {
         if (++idle_run >= 2) break;
@@ -216,6 +270,9 @@ class Driver {
   bool lat_surf_ = false;
   bool cs_pend_ = false;
   uint8_t cs_ci_ = 0, cs_cj_ = 0;
+  bool mat_pend_ = false;
+  bool mat_armed_ = true;
+  uint8_t mat_ci_ = 0, mat_cj_ = 0;
   uint16_t src_id_ = 0x1234;
   uint16_t last_src_ = 0;
   int mode_ = 0;
