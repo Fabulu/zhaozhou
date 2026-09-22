@@ -3152,6 +3152,13 @@ targets:
       # NOT a memory client.
       - fpga/rtl/terrain/zhao_terrain_hdrread.sv
       - fpga/rtl/terrain/zhao_terrain_pagestream.sv
+      # TERRAIN.FIELDLIST, 2026-09-22 (FIELDARM): the sealed per-frame
+      # TerrainField list that refills TERRAIN.PATCH's section 9.1 intake
+      # once per patch job. In this closure because zhao_console_core
+      # instantiates it; a file the console elaborates and the source list
+      # omits kills the fit at elaboration, which is the whole point of
+      # check_console_inventory's G2.
+      - fpga/rtl/terrain/zhao_terrain_fieldlist.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
       # TERRAIN.HEIGHTTAP, 2026-09-19 (item 14): the pass-through tap in front
