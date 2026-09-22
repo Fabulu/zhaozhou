@@ -1002,3 +1002,114 @@ not merged.** Its lead: `zhao_cmd_exec` declares a full TerrainField arm — 29
 Disconnected: `terrain_normalmap`, `terrain_velocity`, `geom_parambuf`,
 `forge_shadow`, `forge_cliff_ram`. **The tie-offs are now the majority and they
 do not close by wiring — each needs its producer built.**
+
+## 2026-09-22 — waves 15-19: 13 → 10, THE OWNER'S SIX ARRIVE, and R242
+
+**Concurrency: ONE agent (owner, 86% weekly), raised to TWO on 2026-09-22.**
+
+| lane | result |
+|---|---|
+| **FIELDARM** | 13 → 13. **I34 narrowed**; a SHIPPED defect repaired — `tfld_ready_i` unconnected, so CMD.EXEC's TerrainField queue could never drain, with `tfld_overflow_o` unconnected beside it. |
+| **GEOMCLOSE** | 13 → 12. **I29 CLOSED.** |
+| **PROJCLOSE** | 12 → 11. **I14 CLOSED.** |
+| **TERRCLOSE** | 11 → 10. **I27 CLOSED.** |
+| **LAYERE** | 10 → 10. R13's layer-E path BUILT; **the three material riders REMOVED, replacement first.** |
+| **PARTMAT** | 10 → 11. Owner item 1: particles reach the raster path; **+1 declared as entry I51.** |
+| **TWODCMD** | 11 → 10. Owner item 3: `SetPlane 0x0306`, `DrawSprite 0x0307`. **I17 CLOSED.** |
+
+**Four tie-offs closed in a day** (I32 earlier, then I29, I14, I27), and I17.
+
+### The finding that repeats, now eleven times (R237/R240)
+
+**A blocker survives re-reading and dies on first contact.** I29's *"sixth
+requester"* **was already the seventh** — the entry's arithmetic described a tree
+that had moved. I14's refusal leaned on **a ruling the owner had declared spent**.
+**I27's precondition was met by the very commit that denied it** — a sentence
+true of a block, offered as a statement about the console. And I34's real first
+obstacle was a **cadence mismatch between two already-composed blocks**, named by
+no citation: `cmd_exec` publishes once per **command packet**, `terrain_patch`
+clears once per **patch job**.
+
+**R240's corollary paid off directly:** two expired blockers sent PROJCLOSE to
+re-read the whole entry, and a clause **stamped CLOSED carried a live residual**.
+
+### THE OWNER'S SIX, ratified 2026-09-22
+
+`reports/OWNER-RATIFICATION-20260922-COMPLETION.md` +
+`reports/Zhaozhou_proposed_completion_rulings_2026-09-22.txt`. **The general
+authorization retires an escalation habit:** *"a missing implementation already
+commissioned here is work, not an unresolved policy decision."*
+
+**It corrected the coordinator three times:** the material handle cannot be split
+into `(set, id)` (24 index + 8 generation bits, so a **residency event repaints
+geometry**); `SetPlane` alone does not make the HUD usable (the sprite path is a
+**different consumer**); and **24 M10K is the pixel band, not an all-in HUD cost.**
+
+### R242 — the deviation store moves to SDRAM **(owner, explicit)**
+
+*"Move deviation store to SDRAM, ignore stale info."* **Supersedes R24's storage
+clause only** — page-load timing, the residency-slot key and BAKE's retrigger all
+stand. **The block had already priced this and left it as an owner decision.**
+Worth **~185 M10K**; 176 KB SDRAM, 44 KB/frame. **The 67-bit packing stays
+REFUSED** — the invariant is upstream and unenforced, so a FIELD delta would make
+every deviation quantise to 128ths with no counter able to see it.
+
+### Defects found in ALREADY-COMPOSED RTL
+
+* **The HUD sat ONE PIXEL RIGHT with every counter at zero** — the band answered
+  at N+2, POST.COMPOSITE consumes at N+1, **and the band's own reference encoded
+  the same wrong latency under a comment claiming it matched.** 39 block checks
+  passed over it. *Two errors cancelling inside a checker.*
+* **One zero-width descriptor froze the HUD for the rest of the frame.**
+* **`tfld_ready_i` unconnected** — a queue that could never drain, overflow
+  counter unconnected beside it.
+* **Both console mutant wrappers had drifted** from the "VERBATIM" their own
+  headers claim, into changelogs of past refreshes (missing=33 stale=51).
+
+### A FIFTH, then SIXTH generated artifact
+
+`raster_texture_v3_fit_top_generated_freshness` was **red at base** and two lanes
+correctly refused to touch it. Cause: its manifest records **a sha256 per source
+for FIT PROVENANCE**, and one source is the **generated ABI package** — so
+`DrawPosedForm`, `DrawWarpedForm` and `SetPlane`/`DrawSprite` each moved its hash
+while the manifest recorded the old one. **A fit taken against it would record
+provenance for sources it was not built from.**
+
+### The smoke sweep has now lied SEVEN distinct ways
+
+RC 1 in ~1 s (verilation failure) · `$LASTEXITCODE` after a PowerShell **script**
+is the last **native** command's code · a `-$f` flag binds **positionally**
+against the coordinator's checkout · `Write-Host` 24× defeats `| Out-String` ·
+a `*.txt` glob quotes another lane's **pre-change** sweep · a script grepped
+`fatals=\d+`, **a string the smoke never prints** · switches stringified through
+`powershell -File` killed nine forms in 0 s reporting clean. **THE DURATION IS
+THE TELL, every time.**
+
+### Coordinator errors this wave
+
+* **I stopped LAYERE to save polling tokens and killed its smoke sweep**, having
+  just told the owner its work was safe. Its *commits* were safe; the sweep was
+  not. Re-ran it myself.
+* **I read a gate's status through a pipeline and got RC 0 where it was RC 1** —
+  the trap I had put in every brief that day.
+* **I recommended the destructive material packing**, corrected by the owner.
+
+### THE RESOURCE PICTURE, stated early rather than at the fit
+
+**M10K crossed the ceiling.** R234 D3's grant line read `306 + 38 + 185 + 12 =
+541 / 553 (98%)`. The HUD's `12` measured **34**; Gouraud added **18**; layer-E
+**6** → **~587 / 553**. **R242 returns ~185 → ~402.** *A sum of hand counts, not
+a fit.*
+
+**The only whole-console measurement remains R80's first light: 47,582 ALM
+(113% of the target's 41,910), 151 DSP (135% of 112), `gpu_clk` 18.5 MHz at
+−44 ns.** On the **sizing** device 5CEBA9F31C7 that was **42% of 113,560 ALM,
+25% of 1,220 M10K, 44% of 342 DSP** — so the sizing part still has room, and it
+is the **largest Cyclone V installed**; going bigger means another family.
+
+**Owner's plan:** fit for a measurement, optimise, re-fit, and expect the console
+as architected to remain impossible — **then use it as the oracle for Zhaozhou
+V2.** Item 6 binds here: a first fit in conservative edge mode is **a labelled
+diagnostic profile, not the no-caveat full-capability fit.**
+
+**Running:** DEVSDRAM (R242) and PROCMAT (item 2). **Queued:** items 4, 5, 6.
