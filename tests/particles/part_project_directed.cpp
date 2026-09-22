@@ -165,6 +165,11 @@ int32_t res_x(int32_t vx) { return (vx >> 6) + 11; }
 int32_t res_y(int32_t vy) { return (vy >> 6) - 7; }
 int32_t res_d(int32_t vz) { return vz; }
 uint32_t res_w(int32_t vx) { return static_cast<uint32_t>((vx & 0x7FFF) + 3); }
+// The depth profile this result was projected under. A FUNCTION OF THE RESULT,
+// so the expectation below is this particle's own rather than a constant -- a
+// model that returned one value could not tell a carried profile from a
+// stuck one. (owner ruling 1, 2026-09-22)
+uint8_t res_profile(int32_t vx) { return static_cast<uint8_t>((vx >> 3) & 3); }
 bool res_behind(int32_t vz) { return vz == 0; }
 
 struct ProjModel {
@@ -218,6 +223,11 @@ struct Emitted {
   bool in = false;
   int64_t x = 0, y = 0;
   int32_t d = 0;
+  // THE CANONICAL-DEPTH CARRIAGE (owner ruling 1, 2026-09-22). Until this
+  // packet `w` was DROPPED at the ladder queue and never reached PART.EXPAND,
+  // which is why a polygon particle had no canonical depth at all.
+  uint32_t w = 0;
+  uint8_t profile = 0;
   uint8_t size8 = 0;
   uint16_t size16 = 0;
   uint8_t r = 0, g = 0, b = 0;
@@ -346,6 +356,7 @@ struct Bench {
     v->a_y_i = static_cast<uint32_t>(res_y(o.vy)) & 0x1FFFFFu;
     v->a_d_i = static_cast<uint32_t>(res_d(o.vz));
     v->a_w_i = res_w(o.vx) & 0x7FFFFFFFu;
+    v->a_profile_i = res_profile(o.vx);
     v->a_behind_i = res_behind(o.vz) ? 1 : 0;
     v->a_payload_i = (force_a_owner < 0)
                          ? o.payload
@@ -403,6 +414,8 @@ struct Bench {
       e.x = sx(v->q_x_o, 21);
       e.y = sx(v->q_y_o, 21);
       e.d = static_cast<int32_t>(v->q_d_o);
+      e.w = v->q_w_o;
+      e.profile = v->q_profile_o;
       e.size8 = v->q_size_o;
       e.size16 = v->q_size16_o;
       e.r = v->q_r_o;
@@ -587,7 +600,7 @@ int main() {
           top.ladder_unexpected_o);
 
     bool id_order_ok = true, size_ok = true, rung_ok = true, colour_ok = true, coord_ok = true;
-    bool in_ok = true, ladder_attrs_ok = true;
+    bool in_ok = true, ladder_attrs_ok = true, carry_ok = true;
     std::vector<uint16_t> seen_size;
     for (size_t i = 0; i < b.emitted.size() && i < parts.size(); ++i) {
       const Part& p = parts[i];
@@ -605,6 +618,12 @@ int main() {
       if (e.x != sx(static_cast<uint32_t>(res_x(p.rec.pos[0] << 8)) & 0x1FFFFFu, 21))
         coord_ok = false;
       if (e.d != d) coord_ok = false;
+      // `w` AND ITS PROFILE SURVIVED THE SLOT STORE AND THE LADDER QUEUE, and
+      // they are checked against the values driven for THIS PARTICLE'S OWN
+      // result rather than against a constant. Both are functions of `vx`, so
+      // a queue that handed particle i particle j's w fails here.
+      if (e.w != (res_w(p.rec.pos[0] << 8) & 0x7FFFFFFFu)) carry_ok = false;
+      if (e.profile != res_profile(p.rec.pos[0] << 8)) carry_ok = false;
       if (e.in != !res_behind(d)) in_ok = false;
       seen_size.push_back(e.size16);
 
@@ -623,6 +642,9 @@ int main() {
     check(coord_ok, "particles alone: screen x and 1/w are the projector's, untouched", 1,
           coord_ok);
     check(in_ok, "particles alone: the in-front verdict is the projector's", 1, in_ok);
+    check(carry_ok,
+          "particles alone: w and its depth profile rode the slot store and the "
+          "ladder queue, each particle carrying its OWN", 1, carry_ok);
     check(ladder_attrs_ok, "particles alone: every ladder input rode with its particle", 1,
           ladder_attrs_ok);
 

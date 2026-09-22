@@ -15729,6 +15729,31 @@ set_tests_properties(lint_zhao_geom_loomfeed PROPERTIES
 # departure with no arrival is a legal thing to present, and neither guard
 # owes a committed mutant.
 # ---------------------------------------------------------------------------
+# THE ACCEPTANCE TEST OWNER RULING 1 NAMES (2026-09-22)
+# ---------------------------------------------------------------------------
+# "Interleave textured mesh A, a particle batch, and textured mesh B, with
+#  different material sets and forced backpressure ... The particles draw with
+#  their own state and cause no missing-material faults; both meshes preserve
+#  their state; a deliberately incompatible untextured mesh is still refused and
+#  counted."
+#
+# A SUBSYSTEM bench over the PRODUCTION modules in the composer's arrangement --
+# zhao_geom_clipdoor -> zhao_material_window -> R197's gate. It is NOT a
+# rendered-pixel comparison, and the driver's header says so in terms rather
+# than letting a green tick imply one.
+add_executable(test_partmat_acceptance prod/partmat_acceptance.cpp)
+target_link_libraries(test_partmat_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_partmat_acceptance
+  PREFIX Vtb_partmat_acceptance
+  TOP_MODULE tb_partmat_acceptance
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv
+          ${CMAKE_SOURCE_DIR}/tests/prod/tb_partmat_acceptance.sv)
+add_test(NAME partmat_acceptance COMMAND test_partmat_acceptance)
+set_tests_properties(partmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
 # PART.CLIPFEED -- the particle arm of GEOM.CLIPDOOR (owner ruling 1, 2026-09-22)
 # ---------------------------------------------------------------------------
 # The depth ARITHMETIC is geom_depthquant_directed's and is not re-derived here;
