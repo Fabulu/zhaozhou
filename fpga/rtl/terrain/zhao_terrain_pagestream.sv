@@ -480,10 +480,22 @@ module zhao_terrain_pagestream
   always_comb begin
     refill_c   = 2'd0;
     any_need_c = 1'b0;
+    // THE ADDRESS IS CHOSEN IN THE SAME ARM AS THE PLANE, and that is not a
+    // tidy-up. The obvious spelling is one line at the bottom --
+    //     refill_addr_c = (refill_c == P_E) ? wantalE_c : wantal_c[refill_c];
+    // -- and it indexes a THREE-entry array with a value that is FOUR when
+    // layer E wins, which is an out-of-bounds read whose value the language
+    // does not define. `verilator --lint-only -Wall` passed it in silence,
+    // which is this tree's own law about gates: lint clean is one tool's
+    // opinion, not a statement that the code is right. Assigning inside the
+    // arm means the index cannot be out of range because the case that would
+    // make it so never performs an index.
+    refill_addr_c = 32'd0;
     for (int unsigned p = 0; p < NPLANE; p++) begin
       if (!any_need_c && need_c[p]) begin
-        refill_c   = 2'(p);
-        any_need_c = 1'b1;
+        refill_c      = 2'(p);
+        refill_addr_c = wantal_c[p];
+        any_need_c    = 1'b1;
       end
     end
     // LAYER E GOES LAST, so the three heights' order is exactly what it was
@@ -491,10 +503,10 @@ module zhao_terrain_pagestream
     // Priority is a matter of which goes first, never of correctness -- the
     // machine returns to S_CHECK after every refill and asks again.
     if (!any_need_c && needE_c) begin
-      refill_c   = P_E;
-      any_need_c = 1'b1;
+      refill_c      = P_E;
+      refill_addr_c = wantalE_c;
+      any_need_c    = 1'b1;
     end
-    refill_addr_c = (refill_c == P_E) ? wantalE_c : wantal_c[refill_c];
   end
 
   // ---- extraction ----------------------------------------------------------
