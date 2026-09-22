@@ -86,6 +86,12 @@ struct InFlight {
   uint8_t weight;
   uint8_t binding;
   uint8_t response_class;
+  // ADDED 2026-09-22 (owner ruling 1). Without this field the in-flight
+  // comparison below would be structurally unable to see a mode that changed
+  // under a triangle -- which is the fault the ruling's "in-flight triangles
+  // retain their own profile" clause is about. A checker that cannot see the
+  // field that moved is this repository's own worst defect.
+  uint8_t material_mode;
 };
 
 class Bench {
@@ -96,6 +102,7 @@ class Bench {
     top_.t_valid_i = 0;
     top_.t_material_set_i = 0;
     top_.t_material_id_i = 0;
+    top_.t_material_mode_i = 0;   // MATMODE_BACKED
     top_.t_quality_tier_i = 0;
     top_.t_ready_i = 1;
     top_.d_enter_i = 0;
@@ -143,6 +150,7 @@ class Bench {
       carried.weight = top_.pub_recipe_weight_o;
       carried.binding = top_.pub_base_binding_o;
       carried.response_class = top_.pub_response_class_o;
+      carried.material_mode = top_.pub_material_mode_o;
       // A triangle emitted with nothing published is the fault this whole
       // block exists to make impossible; record it so the summary is loud.
       if (!top_.pub_valid_o) ++emitted_unpublished_;
@@ -165,7 +173,8 @@ class Bench {
           t.recipe != top_.pub_material_recipe_o ||
           t.weight != top_.pub_recipe_weight_o ||
           t.binding != top_.pub_base_binding_o ||
-          t.response_class != top_.pub_response_class_o) {
+          t.response_class != top_.pub_response_class_o ||
+          t.material_mode != top_.pub_material_mode_o) {
         ++mismatches_;
       }
       ++disposed_;
@@ -218,9 +227,11 @@ class Bench {
   }
 
   // Offer `n` triangles of one material and run until they are all accepted.
-  int offer(uint32_t set, uint16_t id, uint8_t tier, int n, int budget = 4000) {
+  int offer(uint32_t set, uint16_t id, uint8_t tier, int n, int budget = 4000,
+            uint8_t mode = 0) {
     top_.t_material_set_i = set;
     top_.t_material_id_i = id;
+    top_.t_material_mode_i = mode;
     top_.t_quality_tier_i = tier;
     top_.t_valid_i = 1;
     int taken = 0;
@@ -232,6 +243,32 @@ class Bench {
       ++spent;
     }
     top_.t_valid_i = 0;
+    tick();
+    return taken;
+  }
+
+  // Offer `n` beats that the window is expected to REFUSE. `offer()` above
+  // counts `t_valid_o && t_ready_i` -- what PASSED -- and a refused beat never
+  // raises `t_valid_o`, so it would spin its whole budget. This counts what was
+  // CONSUMED (`t_valid_i && t_ready_o`) instead, which is the handshake a
+  // refusal actually completes.
+  int offer_refused(uint32_t set, uint16_t id, uint8_t mode, int n,
+                    int budget = 400) {
+    top_.t_material_set_i = set;
+    top_.t_material_id_i = id;
+    top_.t_material_mode_i = mode;
+    top_.t_quality_tier_i = 0;
+    top_.t_valid_i = 1;
+    int taken = 0;
+    int spent = 0;
+    while (taken < n && spent < budget) {
+      top_.eval();
+      if (top_.t_ready_o) ++taken;
+      tick();
+      ++spent;
+    }
+    top_.t_valid_i = 0;
+    top_.t_material_mode_i = 0;
     tick();
     return taken;
   }
@@ -447,6 +484,183 @@ int main(int argc, char** argv) {
     b.top().eval();
     check(b.top().err_occupancy_underflow_o == 1,
           "case7: an arrival and a departure on one clock cancel -- no false underflow"); ++checks;
+  }
+
+
+  // ==========================================================================
+  // CASE 8 -- NO_MATERIAL IS A LAWFUL MODE (owner ruling 1, 2026-09-22).
+  //
+  // The ruling's three requirements, each asserted as its own check:
+  //   * "select a defined no-sampling profile"       -> sample_count 0 and the
+  //                                                     mode published as NONE;
+  //   * "issue no material/texture/palette
+  //      resolution request"                          -> `resolves_o` DOES NOT
+  //                                                     MOVE;
+  //   * "increment no missing-material fault counter" -> `no_record_o` DOES NOT
+  //                                                     MOVE.
+  //
+  // The last two are the ones worth having, and they are NOT restatements of
+  // the first: `resolves_o` counts a handshake with MATERIAL.RESOLVE and
+  // `no_record_o` counts a response, so both are driven by enables the
+  // no-material arm never reaches. Three independent quantities, not one said
+  // three ways -- which is the whole of CLAUDE.md's checker law.
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    a.sample_count = 2; a.recipe = 3; a.weight = 0x77; a.binding = 4;
+    a.modes = 0x02;
+    b.set_answer(a);
+
+    const int mesh = b.offer(0x1111'0000u, 5, 0x10, 6);
+    b.drain();
+    const uint32_t resolves_after_mesh = b.top().resolves_o;
+    check(mesh == 6, "case8: the textured mesh drew"); ++checks;
+    check(resolves_after_mesh == 1, "case8: the mesh cost exactly one resolve"); ++checks;
+
+    // The particle batch. Set and id are ZERO, which is what the mode REQUIRES.
+    const int parts = b.offer(0, 0, 0, 9, 4000, 1 /* MATMODE_NONE */);
+    b.drain();
+
+    check(parts == 9, "case8: every polygon particle DREW -- the whole point"); ++checks;
+    check(b.top().no_material_spans_o == 1,
+          "case8: one NO_MATERIAL span was published for the batch"); ++checks;
+    check(b.top().pub_material_mode_o == 1,
+          "case8: the published mode is NO_MATERIAL"); ++checks;
+    check(b.top().pub_sample_count_o == 0,
+          "case8: the no-sampling profile takes zero texture samples"); ++checks;
+    check(b.top().pub_base_binding_o == 0,
+          "case8: the no-sampling profile binds nothing"); ++checks;
+    check(b.top().pub_response_class_o == 0,
+          "case8: the no-sampling profile has no response class"); ++checks;
+    check(b.top().resolves_o == resolves_after_mesh,
+          "case8: NO resolve was issued for the particle batch"); ++checks;
+    check(b.top().no_record_o == 0,
+          "case8: NO missing-material fault was counted -- the ruling's own sentence"); ++checks;
+    check(b.top().mode_refused_o == 0,
+          "case8: a well-formed NO_MATERIAL declaration is not a refusal"); ++checks;
+    check(b.top().err_unpublished_o == 0,
+          "case8: nothing left the span unpublished"); ++checks;
+  }
+
+  // ==========================================================================
+  // CASE 9 -- BACKED -> NONE -> BACKED, THROUGH THE EXISTING DRAIN.
+  //
+  // The ruling: "Material mode is part of the span's identity. Changing
+  // MATERIAL_BACKED -> NO_MATERIAL -> MATERIAL_BACKED must honor the existing
+  // drain/ordering mechanism so that in-flight triangles retain their own
+  // profile."
+  //
+  // `mismatches()` is the assertion. The driver models the span and compares
+  // what each triangle CARRIED against what is published when it retires, and
+  // `InFlight` now carries the MODE -- so a mode that moved under an in-flight
+  // triangle is visible to the comparison rather than invisible to it.
+  //
+  // This is deliberately the CORRECT-BEHAVIOUR assertion ("the record holds"),
+  // not "a detector fired". It keeps its value after the defect is gone.
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    a.sample_count = 1; a.recipe = 1; a.weight = 0x11; a.binding = 1;
+    a.modes = 0x01;
+    b.set_answer(a);
+
+    const int meshA = b.offer(0xAAAA'0000u, 1, 0x10, 5);
+
+    Answer bmat = a;
+    bmat.sample_count = 2; bmat.recipe = 4; bmat.weight = 0x99; bmat.binding = 7;
+    bmat.modes = 0x02;
+
+    const int parts = b.offer(0, 0, 0, 5, 4000, 1);
+    b.set_answer(bmat);
+    const int meshB = b.offer(0xBBBB'0000u, 2, 0x10, 5);
+    b.drain();
+
+    check(meshA == 5, "case9: mesh A drew"); ++checks;
+    check(parts == 5, "case9: the particle batch drew between the two meshes"); ++checks;
+    check(meshB == 5, "case9: mesh B drew"); ++checks;
+    check(b.mismatches() == 0,
+          "case9: EVERY in-flight triangle retired under the profile it carried, "
+          "across both mode changes"); ++checks;
+    check(b.disposed() == 15, "case9: all fifteen triangles were disposed of"); ++checks;
+    check(b.top().switches_o == 3,
+          "case9: three switches -- A, the batch, B -- and not one more"); ++checks;
+    // TWO resolves for THREE spans. That difference is the measurement: the
+    // particle span asked MATERIAL.RESOLVE nothing at all.
+    check(b.top().resolves_o == 2,
+          "case9: two resolves for three spans -- the particle span issued none"); ++checks;
+    check(b.top().no_material_spans_o == 1, "case9: exactly one no-material span"); ++checks;
+    check(b.top().no_record_o == 0, "case9: no missing-material fault across the whole run"); ++checks;
+    check(b.top().pub_material_mode_o == 0,
+          "case9: the run ends back in MATERIAL_BACKED"); ++checks;
+    check(b.top().pub_base_binding_o == 7,
+          "case9: mesh B's own record is published at the end, not mesh A's"); ++checks;
+    check(b.emitted_unpublished() == 0, "case9: nothing was emitted unpublished"); ++checks;
+  }
+
+  // ==========================================================================
+  // CASE 10 -- CONTRADICTORY DECLARATIONS ARE REFUSED, NOT REPAIRED.
+  //
+  // The ruling: "Reject internally contradictory declarations rather than
+  // silently repairing them." Two shapes, both refused and counted, and the
+  // NEGATIVE CONTROL beside them -- the same block, the same clock budget, a
+  // well-formed declaration, counter still zero. A counter that fires is only
+  // an instrument if it is also silent on legal stimulus (R95).
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    b.set_answer(a);
+
+    // Legal traffic first, so the negative control is measured on a live block
+    // rather than on one that has never run.
+    const int mesh = b.offer(0x2222'0000u, 3, 0, 4);
+    b.drain();
+    check(mesh == 4, "case10: legal mesh traffic passed"); ++checks;
+    check(b.top().mode_refused_o == 0,
+          "case10: NEGATIVE CONTROL -- a MATERIAL_BACKED beat is not refused"); ++checks;
+
+    const int legal_parts = b.offer(0, 0, 0, 3, 4000, 1);
+    b.drain();
+    check(legal_parts == 3, "case10: a well-formed NO_MATERIAL batch passed"); ++checks;
+    check(b.top().mode_refused_o == 0,
+          "case10: NEGATIVE CONTROL -- a well-formed NO_MATERIAL beat is not refused"); ++checks;
+
+    // FAULT 1: NO_MATERIAL with a material identity it expects resolved.
+    const int contra = b.offer_refused(0xDEAD'BEEFu, 9, 1, 4);
+    check(contra == 4, "case10: the contradictory beats were CONSUMED, not stalled"); ++checks;
+    check(b.top().mode_refused_o == 4,
+          "case10: mode_refused_o FIRED once per contradictory beat"); ++checks;
+
+    const uint32_t after_contra = b.top().mode_refused_o;
+    const uint32_t resolves_before = b.top().resolves_o;
+    const uint32_t spans_before = b.top().no_material_spans_o;
+
+    // FAULT 2: an undefined mode encoding. 2'd2 and 2'd3 are reserved.
+    const int undef2 = b.offer_refused(0, 0, 2, 3);
+    const int undef3 = b.offer_refused(0, 0, 3, 3);
+    check(undef2 == 3 && undef3 == 3,
+          "case10: undefined mode encodings were consumed"); ++checks;
+    check(b.top().mode_refused_o == after_contra + 6,
+          "case10: both reserved encodings are refused and counted"); ++checks;
+
+    // AND THE REFUSALS DID NOTHING ELSE. A refused beat must not resolve, must
+    // not publish and must not enter the span -- so the three quantities that
+    // would have moved if it had are checked to have stood still.
+    check(b.top().resolves_o == resolves_before,
+          "case10: a refused beat issued no resolve"); ++checks;
+    check(b.top().no_material_spans_o == spans_before,
+          "case10: a refused beat published no span"); ++checks;
+    check(b.top().err_unpublished_o == 0,
+          "case10: a refused beat never entered the span"); ++checks;
+    check(b.top().err_occupancy_underflow_o == 0,
+          "case10: the drain accounting never saw a refused beat"); ++checks;
+
+    // And legal traffic still flows afterwards -- a refusal is not a wedge.
+    const int after = b.offer(0x3333'0000u, 1, 0, 3);
+    b.drain();
+    check(after == 3, "case10: the stream runs again after the refusals"); ++checks;
   }
 
   std::printf("material_window_directed: %d check(s), %d failure(s)\n", checks, fails);

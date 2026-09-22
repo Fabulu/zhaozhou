@@ -42,6 +42,8 @@ module tb_geom_clipdoor #(
     input  var logic        [31:0] c0_attr_witness_i,
     input  var logic        [31:0] c0_material_set_i,
     input  var logic        [15:0] c0_material_id_i,
+    // The producer's MATERIAL-MODE declaration (owner ruling 1, 2026-09-22).
+    input  var logic        [ 1:0] c0_material_mode_i,
     input  var logic        [ 7:0] c0_quality_tier_i,
 
     // ---- client 1 -----------------------------------------------------------
@@ -60,6 +62,7 @@ module tb_geom_clipdoor #(
     input  var logic        [31:0] c1_attr_witness_i,
     input  var logic        [31:0] c1_material_set_i,
     input  var logic        [15:0] c1_material_id_i,
+    input  var logic        [ 1:0] c1_material_mode_i,
     input  var logic        [ 7:0] c1_quality_tier_i,
 
     // ---- the door -----------------------------------------------------------
@@ -82,6 +85,7 @@ module tb_geom_clipdoor #(
     output var logic        [31:0] o_attr_c_lo_o,
     output var logic        [31:0] o_material_set_o,
     output var logic        [15:0] o_material_id_o,
+    output var logic        [ 1:0] o_material_mode_o,
     output var logic        [ 7:0] o_quality_tier_o,
     output var logic        [ 1:0] o_owner_o,
 
@@ -103,6 +107,7 @@ module tb_geom_clipdoor #(
   logic [2*AW-1:0]   c_attr_a_c, c_attr_b_c, c_attr_c_c;
   logic [2*32-1:0]   c_mset_c;
   logic [2*16-1:0]   c_mid_c;
+  logic [2*2-1:0]    c_mmode_c;
   logic [2*8-1:0]    c_tier_c;
   logic [2*32-1:0]   granted_c;
   // The middle slots are DELIBERATELY unread: the witness is replicated across
@@ -138,6 +143,7 @@ module tb_geom_clipdoor #(
     c_cull_c   = {c1_cull_mode_i, c0_cull_mode_i};
     c_mset_c   = {c1_material_set_i, c0_material_set_i};
     c_mid_c    = {c1_material_id_i, c0_material_id_i};
+    c_mmode_c  = {c1_material_mode_i, c0_material_mode_i};
     c_tier_c   = {c1_quality_tier_i, c0_quality_tier_i};
 
     c_attr_a_c = {c1_pack_c, c0_pack_c};
@@ -181,6 +187,7 @@ module tb_geom_clipdoor #(
       .c_attr_c_i       (c_attr_c_c),
       .c_material_set_i (c_mset_c),
       .c_material_id_i  (c_mid_c),
+      .c_material_mode_i(c_mmode_c),
       .c_quality_tier_i (c_tier_c),
 
       .o_valid_o        (o_valid_o),
@@ -200,6 +207,7 @@ module tb_geom_clipdoor #(
       .o_attr_c_o       (o_attr_c_c),
       .o_material_set_o (o_material_set_o),
       .o_material_id_o  (o_material_id_o),
+      .o_material_mode_o(o_material_mode_o),
       .o_quality_tier_o (o_quality_tier_o),
       .o_owner_o        (o_owner_o),
 
