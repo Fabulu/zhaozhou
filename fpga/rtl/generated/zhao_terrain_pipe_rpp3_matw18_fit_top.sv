@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py
 // generator-sha256: 94d063ca6dc16903939cef5103c0579b07f1dbd2eeb0e1d2e9d06f613bf4bd83
-// template-sha256: 4fabfa6c4817670d00da7a4f5e449af79a93b4c28a3b279378cc62c892399cc8
+// template-sha256: 96429365687d979d4751ac41507225c08daae3d54df35cce3bb78a2271d20e0b
 // manifest: fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.manifest.json
 // Parameter witness: u_terrain_pipe sets ROWS_PER_PASS=3 and MATW=18
 // as LITERALS. The G8B target must not inherit either from a module
@@ -310,6 +310,8 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
   logic [31:0] jobs_accepted_w, jobs_no_view_w, jobs_rejected_w, jobs_empty_w;
   logic [31:0] groups_opened_w, groups_released_w;
   logic [31:0] fills_forwarded_w, fills_dropped_w, refs_forwarded_w;
+  // ITEM 5 (owner ruling 2026-09-22): the sparse-fill refusal counter.
+  logic [31:0] sparse_refused_w;
   logic [31:0] release_unsafe_w;
   logic [31:0] tess_vertices_w, tess_refs_w, tess_rejected_w;
   logic [31:0] tess_lod_clamped_w, tess_mode_invalid_w;
@@ -479,6 +481,11 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       6'd46: signature_word_c = {26'd0, masks_seen_q, saw_dense_output_q,
                                  job_view_mask_c};
       6'd47: signature_word_c = stimulus_lfsr_q[31:0];
+      // ITEM 5. Folded into the MISR so the fitter cannot optimise the
+      // refusal path away; slot 48 was covered by the default arm, and no
+      // test pins a signature VALUE (terrain_pipe_rpp3_matw18_fit_top_directed
+      // asserts only that it MOVES and that the low 32 sources are visited).
+      6'd48: signature_word_c = sparse_refused_w;
       default: signature_word_c = stimulus_lfsr_q[63:32];
     endcase
   end
@@ -545,6 +552,7 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       .groups_released_o(groups_released_w),
       .fills_forwarded_o(fills_forwarded_w),
       .fills_dropped_o(fills_dropped_w),
+      .sparse_refused_o(sparse_refused_w),
       .refs_forwarded_o(refs_forwarded_w),
       .release_unsafe_o(release_unsafe_w),
       .tess_vertices_o(tess_vertices_w), .tess_refs_o(tess_refs_w),

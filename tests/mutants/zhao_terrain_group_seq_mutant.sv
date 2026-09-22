@@ -1,9 +1,14 @@
 // zhao_terrain_group_seq_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
-// RE-VERIFIED AGAINST PRODUCTION 2026-09-16 (commit 3a7b166f).
-// zhao_terrain_group_seq.sv gained an ENFORCED-BY comment and nothing else.
-// Ignoring comments and whitespace, this body differs from current production
-// by exactly its one mutation: (st == StRef) && t_done_c -> t_ref_valid_i.
+// REGENERATED FROM PRODUCTION 2026-09-22 (packet EDGERECON), after owner ruling
+// item 5 gave the sequencer a VALID_MODE parameter, a latched `j_sparse` and
+// `sparse_refused_o`. Verified by diffing the two bodies comment- and
+// whitespace-insensitively: this copy differs from current production by
+// exactly its one mutation, (st == StRef) && t_done_c -> t_ref_valid_i.
+//
+// IT CARRIES THE ITEM 5 GUARD UNCHANGED, deliberately. The mutation under test
+// is the RELEASE rule, not the sparse gate; a mutant that also weakened the
+// guard would be two experiments in one file and neither would be evidence.
 //
 // This exists only to prove `release_unsafe_o` can fire. The production
 // sequencer releases a group after the tess job returns idle, which means its
@@ -20,7 +25,7 @@
 // lives under tests/ so it cannot enter a production closure by accident.
 // Regenerate this copy whenever the production sequencer changes shape.
 
-// zhao_terrain_group_seq.sv — the terrain GROUP sequencer: one subpatch job in,
+// zhao_terrain_group_seq_mutant.sv — the terrain GROUP sequencer: one subpatch job in,
 // one arena GROUP per view out -- allocated, opened, filled through the shared
 // projector, sealed, replayed, released -- with the tessellator presented the
 // job once in ModeVtx and once in ModeRef.
@@ -70,7 +75,8 @@
 // ModeRef and every triple is fanned out to the V arenas with each slot's
 // {arena, gen, view} -- two shell clocks per triangle for a dual-view job,
 // which is exactly the shell's output rate (one triangle per clock) at two
-// views. The riders `src_id`, `mat_a/b`, `weight` are the job's; `view` is
+// views. The rider `src_id` is the job's; `mat_a/b` and `weight` are the
+// TRIANGLE's, forwarded off the ModeRef beat under ruling R13; `view` is
 // the slot's.
 //
 // ---------------------------------------------------------------------------
@@ -130,13 +136,53 @@
 // ---------------------------------------------------------------------------
 // `sparse_fill_i` = 1 drops every vertex the tess flags `vtx_stride_o = 0` (a
 // filler no triangle of the job references, law 6) instead of projecting it:
-// 81/25/9/4 fills per level instead of 81. LEGAL ONLY WITH A VALID_MODE = 0
-// (bitmap) SHELL: a dense shell refuses the seal as short, sticky, and the
-// group's replay is then refused -- counted, never silent, and the positive
-// control in the differential does exactly that on purpose. This block
-// cannot see the shell's mode; the composition that instantiates both is
-// where the two must agree (zhao_terrain_pipe ties the knob to its own
-// VALID_MODE unless told otherwise).
+// 81/25/9/4 fills per level instead of 81.
+//
+// MODE-SAFE SINCE 2026-09-22, owner ruling item 5. The paragraph this replaces
+// said: "LEGAL ONLY WITH A VALID_MODE = 0 (bitmap) SHELL ... This block cannot
+// see the shell's mode; the composition that instantiates both is where the
+// two must agree." The first half is still the law. The second half was a
+// statement about this module's PARAMETERS, not about physics, and the ruling
+// closed it:
+//
+//     "Make the normal configuration explicit and derived from the actual
+//      arena validity mode ... Retain the documented owner/debug
+//      configurability, but REFUSE AN UNSAFE COMBINATION and HOLD THE CHOSEN
+//      SETTING STABLE FOR A WHOLE JOB. Enabling sparse fill with a dense seal
+//      is not a permissible configuration."
+//
+// So the block sees the mode now, as the `VALID_MODE` parameter -- the SAME
+// number `zhao_vertex_arena` and `zhao_terrain_wcache` take, threaded from one
+// named constant by whoever composes them, so the two cannot drift.
+//
+//   VALID_MODE == 0 (bitmap-valid) : `sparse_fill_i` is honoured. This is the
+//                                    ruling's "enabled by default" -- the knob
+//                                    is the owner's, and the safe answer is
+//                                    the one the mode already implies.
+//   VALID_MODE != 0 (dense seal)   : `sparse_fill_i` is REFUSED and counted on
+//                                    `sparse_refused_o`. The job runs with a
+//                                    FULL fill and its rendered output is
+//                                    identical to a legally configured one.
+//
+// AND IT IS LATCHED ON THE JOB ACCEPT, which is the "stable for a whole job"
+// half and is not decoration: `skip_c` is read on every one of a job's 81
+// vertex beats, so a knob that moved mid-fill would project some of a job's
+// fillers and drop the rest -- an arena short by an amount nothing records,
+// with the seal then refused for a reason no counter names. The latch makes
+// the question not arise.
+//
+// WHAT THIS CHANGES DOWNSTREAM, stated because a positive control moved. The
+// old arrangement let the illegal pairing through and caught it at the shell:
+// seal short, sticky, replay refused, corner refusals -- and
+// `terrain_pipe_differential`'s fault control fired all three on purpose. With
+// the pairing refused here those three can no longer be reached from this
+// composition. **They keep their positive controls at their own blocks** --
+// `arena_seal_short_o` in `vertex_arena_dense_seal_control` and
+// `vertex_arena_dense_directed`, `replay_refused_o` and `corner_refusals_o` in
+// `terrain_wcache_differential` and `tb_terrain_wcache` -- so nothing is left
+// asserted-zero and unfireable, and no committed mutant is owed. The
+// differential's fault control now asserts the REFUSAL and the identical
+// render instead, which is the correct behaviour rather than the defect.
 //
 // ---------------------------------------------------------------------------
 // WHAT IS NOT HERE, named
@@ -162,6 +208,12 @@ module zhao_terrain_group_seq_mutant #(
     parameter int unsigned ARENAS  = 4,
     parameter int unsigned DEPTH   = 81,
     parameter int unsigned GEN_W   = 8,
+    // The SHELL's validity mode, and it must be the same number
+    // `zhao_vertex_arena` / `zhao_terrain_wcache` are given. 0 = bitmap-valid
+    // (a sparse fill can seal); anything else = dense seal (it cannot). The
+    // default matches those blocks' own default, so an instantiation that does
+    // not pass it behaves exactly as it did before this parameter existed.
+    parameter int unsigned VALID_MODE = 1,
     parameter int unsigned IDX_W   = 7,                   // the tess's window index width
     parameter int unsigned INDEX_W = $clog2(DEPTH) + 1,   // the shell's (carries a refusal bit)
     parameter int unsigned ARENA_W = $clog2(ARENAS) + 1
@@ -185,7 +237,10 @@ module zhao_terrain_group_seq_mutant #(
     input  wire [15:0] job_src_id_i,
     input  wire [ 1:0] job_view_mask_i,   // bit v = project into view v
 
-    input  wire        sparse_fill_i,     // drop fillers (VALID_MODE = 0 shells only)
+    // The owner/debug knob. Honoured at VALID_MODE = 0, REFUSED and counted
+    // otherwise, and LATCHED on the job accept so it is stable for the whole
+    // job. Owner ruling 2026-09-22 item 5.
+    input  wire        sparse_fill_i,
 
     // ---- the tessellator's job port -------------------------------------------
     output wire        t_job_valid_o,
@@ -219,6 +274,10 @@ module zhao_terrain_group_seq_mutant #(
     input  wire [IDX_W-1:0]   t_ref_ia_i,
     input  wire [IDX_W-1:0]   t_ref_ib_i,
     input  wire [IDX_W-1:0]   t_ref_ic_i,
+    // R13's material, PER TRIANGLE, read by TERRAIN.TESS from layer E at the
+    // triangle's own cell. It arrives on the SAME beat as the three indices
+    // and is forwarded on the same beat, so it is not a second thing to join
+    // -- it is a wider version of the thing already being joined.
     input  wire [ 7:0]        t_ref_mat_a_i,
     input  wire [ 7:0]        t_ref_mat_b_i,
     input  wire [ 7:0]        t_ref_weight_i,
@@ -267,6 +326,10 @@ module zhao_terrain_group_seq_mutant #(
     output logic [31:0]       groups_released_o,// arenas released
     output logic [31:0]       fills_forwarded_o,// vertices accepted by client B
     output logic [31:0]       fills_dropped_o,  // fillers dropped under sparse_fill_i
+    // Jobs accepted with `sparse_fill_i` high against a shell that cannot seal
+    // a sparse arena. The job runs with a FULL fill; this is the refusal, not
+    // a failure. Owner ruling 2026-09-22 item 5.
+    output logic [31:0]       sparse_refused_o,
     output logic [31:0]       refs_forwarded_o,// references accepted by the shell
     output logic [31:0]       release_unsafe_o // release while fill replay or ModeRef work remains
 );
@@ -281,13 +344,13 @@ module zhao_terrain_group_seq_mutant #(
   // run them (CLAUDE.md, 2026-09-09).
   initial begin
     if (ARENAS < 2)
-      $fatal(1, "zhao_terrain_group_seq: ARENAS (%0d) must be >= 2 -- a dual-view job holds two arenas at once",
+      $fatal(1, "zhao_terrain_group_seq_mutant: ARENAS (%0d) must be >= 2 -- a dual-view job holds two arenas at once",
              ARENAS);
     if (DEPTH != 81)
-      $fatal(1, "zhao_terrain_group_seq: DEPTH (%0d) must be the tess's 9x9 window (81) for a dense seal to close",
+      $fatal(1, "zhao_terrain_group_seq_mutant: DEPTH (%0d) must be the tess's 9x9 window (81) for a dense seal to close",
              DEPTH);
     if (INDEX_W < IDX_W)
-      $fatal(1, "zhao_terrain_group_seq: INDEX_W (%0d) cannot carry the tess's IDX_W (%0d) index", INDEX_W, IDX_W);
+      $fatal(1, "zhao_terrain_group_seq_mutant: INDEX_W (%0d) cannot carry the tess's IDX_W (%0d) index", INDEX_W, IDX_W);
   end
 
   // ---- state ---------------------------------------------------------------------
@@ -305,6 +368,14 @@ module zhao_terrain_group_seq_mutant #(
   logic [16:0] j_morph;
   logic        j_surface, j_dual;
   logic [15:0] j_src;
+  // ITEM 5: the sparse setting this job runs under, decided once on the accept
+  // and constant for its 81 vertex beats.
+  logic        j_sparse;
+
+  // The mode gate. `SPARSE_LEGAL` is an elaboration-time fact about the shell
+  // this sequencer is composed with, so the refusal costs one AND gate and
+  // optimises away entirely in the configuration where it is a no-op.
+  localparam bit SPARSE_LEGAL = (VALID_MODE == 0);
 
   // the slots: slot 0 is the lowest view in the mask, slot 1 the other
   logic               nslots2_q;          // 1 = two slots
@@ -364,7 +435,9 @@ module zhao_terrain_group_seq_mutant #(
 
   // ---- the vertex fan-out (StFill) --------------------------------------------------------
   wire last_slot_c = (vs_q == nslots2_q);
-  wire skip_c      = sparse_fill_i && !t_vtx_stride_i;
+  // ITEM 5: the LATCHED, mode-checked setting -- not the live knob. See the
+  // SPARSE FILL section of the header for why both halves are load-bearing.
+  wire skip_c      = j_sparse && !t_vtx_stride_i;
   wire vtx_here_c  = (st == StFill) && t_vtx_valid_i;
 
   assign b_valid_o = vtx_here_c && !skip_c;
@@ -389,6 +462,20 @@ module zhao_terrain_group_seq_mutant #(
   assign r_ic_o     = INDEX_W'(t_ref_ic_i);
   assign r_src_id_o = j_src;
   assign r_view_o   = slot_view_q[vs_q];
+  // THE FUNCTION MOVED; IT DID NOT LEAVE. These three used to read the held
+  // job's `j_mat_*`, captured from `job_mat_a_i`/`job_mat_b_i`/`job_weight_i`
+  // at the console boundary -- one material for a whole 8x8-cell subpatch.
+  // Ruling R13 calls that the WRONG CARRIER, because layer E is per CELL, and
+  // names the replacement: read at tessellation, by the triangle's cell,
+  // travelling with the triangle. That is what now arrives here.
+  //
+  // THE JOIN IS THE ONE THAT WAS ALREADY BEING MADE. `r_ia_o` is combinational
+  // off `t_ref_ia_i` on the accepted beat; so are these. The material is not a
+  // second stream to reconcile with the indices -- it is three more fields of
+  // the same handshake, which is exactly what keeps this out of the class of
+  // fault I39 and FIELDARM record. A side channel keyed by src_id, or a
+  // register latched when the job was accepted, would both have been that
+  // fault.
   assign r_mat_a_o  = t_ref_mat_a_i;
   assign r_mat_b_o  = t_ref_mat_b_i;
   assign r_weight_o = t_ref_weight_i;
@@ -473,12 +560,23 @@ module zhao_terrain_group_seq_mutant #(
       groups_released_o <= '0;
       fills_forwarded_o <= '0;
       fills_dropped_o   <= '0;
+      sparse_refused_o  <= '0;
+      j_sparse          <= 1'b0;
       refs_forwarded_o  <= '0;
       release_unsafe_o  <= '0;
     end else begin
       // ---- landings, every cycle, whichever state -------------------------------
       // A landing for an arena being OPENED this cycle cannot happen (a free
       // arena has no fill in flight), so the open's clear below wins safely.
+      // ENFORCED-BY: tests/terrain/terrain_pipe_differential.cpp
+      // -- and the enforcement is INDIRECT, which is worth saying plainly
+      // rather than letting the tag imply otherwise: this block has no directed
+      // test and no assertion of its own. That differential pins the
+      // CONSEQUENCE -- a landing colliding with an open would leave the cleared
+      // arena replaying a vertex the oracle does not have, and the run is
+      // compared packet for packet with arena_overflow_o and arena_seal_short_o
+      // required zero. A targeted assertion here would be better evidence than
+      // a caught symptom, and is not yet written.
       // Compare the complete carries-refusal arena field. An invalid code must
       // never alias a legal arena merely because their AW low bits match.
       if (fill_landed_i) begin
@@ -522,6 +620,13 @@ module zhao_terrain_group_seq_mutant #(
             j_surface <= job_surface_i;
             j_dual    <= job_dual_i;
             j_src     <= job_src_id_i;
+            // ITEM 5: hold the chosen setting stable for a whole job, and
+            // refuse the unsafe combination here rather than letting the
+            // shell discover it as a short seal.
+            j_sparse  <= sparse_fill_i && SPARSE_LEGAL;
+            if (sparse_fill_i && !SPARSE_LEGAL) begin
+              sparse_refused_o <= sat_inc(sparse_refused_o);
+            end
             // slot 0 = the lowest view present; slot 1 = view 1 when both
             nslots2_q      <= (job_view_mask_i == 2'b11);
             slot_view_q[0] <= (job_view_mask_i == 2'b10);
