@@ -399,11 +399,47 @@ module zhao_geom_paramarena
   assign scr_grant_o        = scr_walker_q;
 
   // THE LEASE IS OPEN WHILE THERE IS A FRAME TO SERVE. It covers the build
-  // frame AND the published one, because the walker reads the published view
-  // through this same lease. It falls out of reset and whenever neither
-  // exists, which is what makes `pb_lease_valid` a real deny-all rather than a
-  // constant one.
-  assign pb_lease_valid_o = frame_open_q || pub_valid_q;
+  // frame, the frame that has ENDED BUT NOT YET PUBLISHED, and the published
+  // one -- the walker reads the published view through this same lease. It
+  // falls out of reset and whenever none of the three exists, which is what
+  // makes `pb_lease_valid` a real deny-all rather than a constant one.
+  //
+  // `pub_pending_q` WAS MISSING FROM THIS TERM AND THE BLOCK COULD NOT PUBLISH
+  // A SINGLE FRAME. Found 2026-09-22 by geom_paramarena_directed case 1, which
+  // is the acceptance test for the round trip, and it is worth the paragraph
+  // because every gate the packet had run to that point was GREEN:
+  //
+  //   * the directory write is issued from the PUBLICATION arm, which is
+  //     reachable only AFTER `frame_end_i` has cleared `frame_open_q`;
+  //   * on the first frame `pub_valid_q` is still 0, so at the exact cycle the
+  //     block asked the guard to write the directory the lease was LOW;
+  //   * every PARAMBUF arm of `zhao_mem_guard` requires `pb_lease_valid`, so
+  //     the guard REFUSED IT -- correctly. Measured: guard_violations = 1,
+  //     `guard_denied_o` = 1, the refused request `addr 0x0680_0000 len 64
+  //     write 1`, which is exactly SCRATCH_BASE.
+  //   * the denial sets `frame_fault_q`, the publication arm then drops
+  //     `pub_pending_q` without touching `pub_valid_q`, and the fallback
+  //     contract does exactly what it promises -- keeps naming the prior
+  //     complete frame. There is no prior complete frame. `frames_published_o`
+  //     stays 0 forever and the walker, gated on `pub_valid_i`, never runs.
+  //
+  // A SECOND INSTANCE OF THE SAME ROOT CAUSE, measured in the same bench: if
+  // `frame_end_i` arrives while the last record's write is still in flight --
+  // the natural behaviour of a live producer -- the lease drops under THAT
+  // write instead, and the guard refuses a perfectly legal chunk write inside
+  // the view the lease had just been naming.
+  //
+  // THE TELL, AND WHY NOTHING ELSE CAUGHT IT. Lint was clean, the formal proof
+  // passed, mem_guard_directed passed with twelve new item-4 cases, and the
+  // composed console linted. Not one of them can see this, because it is not a
+  // fault in the GUARD or in the ARENA separately -- it is the arena asking the
+  // guard for something at a moment when the arena itself has said no. Only a
+  // bench with both blocks and a real memory between them has the state to
+  // reach it, which is the whole argument for building one.
+  //
+  // A FRAME THAT HAS ENDED AND NOT PUBLISHED STILL OWNS THE ARENA. That is
+  // what `pub_pending_q` means, and it belongs in the lease.
+  assign pb_lease_valid_o = frame_open_q || pub_pending_q || pub_valid_q;
 
   // -------------------------------------------------------- record packing --
   // R7's layouts, byte offset by byte offset. These are the INVERSE of
@@ -770,6 +806,20 @@ module zhao_geom_paramarena
       if (pub_pending_q && (mstate_q == M_IDLE)) begin
         if (frame_fault_q) begin
           pub_pending_q <= 1'b0;
+          // AND THE SCRATCH IS RELEASED, which the first version did not do.
+          // `scr_mine_q` is raised when the directory write is issued and was
+          // cleared ONLY in the successful-publish arm below -- so a frame
+          // that faulted after taking the scratch held it FOREVER, and
+          // `pb_scratch_valid_o` stayed high with no owner doing anything.
+          // The walker could then never be granted it, because the grant
+          // requires `!scr_mine_q`.
+          //
+          // Item 4: "Shared scratch has explicit ownership and release rather
+          // than being unowned temporary memory." A release that only happens
+          // on the success path is not a release, it is a leak with a good
+          // day. Measured alongside the lease defect above:
+          // `pb_scratch_valid_o` held high for the rest of the run.
+          scr_mine_q <= 1'b0;
         end else if (wr_words_q != '0) begin
           // EVERY CLOCK THE RETIRE GATE HOLDS IS COUNTED. Without this the
           // gate is a term in an expression that nobody can show ever did
