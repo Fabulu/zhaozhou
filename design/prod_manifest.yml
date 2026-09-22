@@ -416,9 +416,14 @@ top:
   # completes on the merged configuration bus, so no vertex is projected
   # through an unwritten camera. Counted because `zhao_console_core`
   # instantiates it and the enable seam closes through it -- not intent.
-  # Two 32-bit coverage masks, one latch, two counters: no multiplier, no
-  # memory, order 70 flops COUNTED BY HAND and not fitted (R236: the cost is
-  # recorded, it is not a veto). 67 checks in proj_cfgvalid_directed, both
+  # Two 32-bit coverage masks, one latch, two 32-bit counters: no multiplier,
+  # no memory. 129 FLOPS COUNTED BY HAND -- 2 x 32 mask + 1 arm + 2 x 32
+  # counters -- and not fitted (R236: the cost is recorded, it is not a veto).
+  # THIS ROW FIRST SAID "order 70" AND THAT WAS WRONG IN THE FLATTERING
+  # DIRECTION, from counting the masks at MAT_WORDS = 16 when they are MASKW =
+  # 1 << ADDRW = 32 bits wide. Corrected by re-counting in the unflattering
+  # direction before quoting, which is the one direction a cost estimate is
+  # ever checked in. 67 checks in proj_cfgvalid_directed, both
   # counters fired by legal stimulus with negative controls beside them, and
   # the elaboration guard fired by proj_cfgvalid_addrw_guard with its own
   # wrapper control.

@@ -2895,8 +2895,8 @@ targets:
       - fpga/rtl/common/zhao_proj_subsystem.sv
       # Added 2026-09-22 closing header entry I14's remaining half: the
       # projector's CONFIG-VALID ARM, which is the producer `proj_en_i` never
-      # had. Two 32-bit masks, one latch and two counters -- no arithmetic, no
-      # memory, no multiplier.
+      # had. Two 32-bit masks, one latch and two 32-bit counters -- 129 flops
+      # counted by hand, no arithmetic, no memory, no multiplier.
       - fpga/rtl/common/zhao_proj_cfgvalid.sv
       # Added 2026-09-19 closing header entry I13: the shared projector's
       # CLIENT B. These two are the real producer for it, so this row is the
