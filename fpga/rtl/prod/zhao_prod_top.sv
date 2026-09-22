@@ -1216,10 +1216,10 @@ module zhao_prod_top (
     else u12_lfsr_q <= {u12_lfsr_q[62:0], (^(u12_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u12_m_ready_o;
   zhao_client_e u12_m_client_i;
-  assign u12_m_client_i = zhao_client_e'(u12_src[63 +: $bits(zhao_client_e)]);
+  assign u12_m_client_i = zhao_client_e'(u12_src[70 +: $bits(zhao_client_e)]);
   zhao_guard_req_t u12_guard_req_o;
   zhao_guard_rsp_t u12_guard_rsp_i;
-  assign u12_guard_rsp_i = zhao_guard_rsp_t'(u12_src[70 +: $bits(zhao_guard_rsp_t)]);
+  assign u12_guard_rsp_i = zhao_guard_rsp_t'(u12_src[77 +: $bits(zhao_guard_rsp_t)]);
   logic [1-1:0] u12_s_valid_o;
   logic [8-1:0] u12_s_vertex_count_o;
   logic [8-1:0] u12_s_triangle_count_o;
@@ -1234,6 +1234,7 @@ module zhao_prod_top (
   logic [1-1:0] u12_v_valid_o;
   logic [256-1:0] u12_v_bytes_o;
   logic [16-1:0] u12_v_src_id_o;
+  logic [6-1:0] u12_v_warp_cookie_o;
   logic [32-1:0] u12_meshlets_fetched_o;
   logic [32-1:0] u12_beats_read_o;
   logic [32-1:0] u12_guard_denied_o;
@@ -1255,31 +1256,33 @@ module zhao_prod_top (
       .m_visible_mask_i(u12_src[42 +: 2]),
       .m_material_id_i(u12_src[49 +: 16]),
       .m_side_i(u12_src[56 +: 72]),
+      .m_warp_cookie_i(u12_src[63 +: 6]),
       .m_client_i(u12_m_client_i),
       .guard_req_o(u12_guard_req_o),
       .guard_rsp_i(u12_guard_rsp_i),
-      .beat_valid_i(u12_src[77 +: 1]),
-      .beat_data_i(u12_src[84 +: 64]),
-      .beat_last_i(u12_src[91 +: 1]),
+      .beat_valid_i(u12_src[84 +: 1]),
+      .beat_data_i(u12_src[91 +: 64]),
+      .beat_last_i(u12_src[98 +: 1]),
       .s_valid_o(u12_s_valid_o),
-      .s_ready_i(u12_src[98 +: 1]),
+      .s_ready_i(u12_src[105 +: 1]),
       .s_vertex_count_o(u12_s_vertex_count_o),
       .s_triangle_count_o(u12_s_triangle_count_o),
       .s_src_id_o(u12_s_src_id_o),
       .s_visible_mask_o(u12_s_visible_mask_o),
       .s_material_id_o(u12_s_material_id_o),
       .s_side_o(u12_s_side_o),
-      .release_i(u12_src[105 +: 1]),
-      .ix_req_i(u12_src[112 +: 1]),
-      .ix_index_i(u12_src[119 +: 9]),
+      .release_i(u12_src[112 +: 1]),
+      .ix_req_i(u12_src[119 +: 1]),
+      .ix_index_i(u12_src[126 +: 9]),
       .ix_valid_o(u12_ix_valid_o),
       .ix_a_o(u12_ix_a_o),
       .ix_b_o(u12_ix_b_o),
       .ix_c_o(u12_ix_c_o),
       .v_valid_o(u12_v_valid_o),
-      .v_ready_i(u12_src[126 +: 1]),
+      .v_ready_i(u12_src[133 +: 1]),
       .v_bytes_o(u12_v_bytes_o),
       .v_src_id_o(u12_v_src_id_o),
+      .v_warp_cookie_o(u12_v_warp_cookie_o),
       .meshlets_fetched_o(u12_meshlets_fetched_o),
       .beats_read_o(u12_beats_read_o),
       .guard_denied_o(u12_guard_denied_o),
@@ -1292,7 +1295,7 @@ module zhao_prod_top (
   logic u12_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u12_fold_q <= 1'b0;
-    else u12_fold_q <= u12_fold_q ^ (((^u12_m_ready_o)) & u12_src[0]) ^ (((^u12_guard_req_o)) & u12_src[1]) ^ (((^u12_s_valid_o)) & u12_src[2]) ^ (((^u12_s_vertex_count_o)) & u12_src[3]) ^ (((^u12_s_triangle_count_o)) & u12_src[4]) ^ (((^u12_s_src_id_o)) & u12_src[5]) ^ (((^u12_s_visible_mask_o)) & u12_src[6]) ^ (((^u12_s_material_id_o)) & u12_src[7]) ^ (((^u12_s_side_o)) & u12_src[8]) ^ (((^u12_ix_valid_o)) & u12_src[9]) ^ (((^u12_ix_a_o)) & u12_src[10]) ^ (((^u12_ix_b_o)) & u12_src[11]) ^ (((^u12_ix_c_o)) & u12_src[12]) ^ (((^u12_v_valid_o)) & u12_src[13]) ^ (((^u12_v_bytes_o)) & u12_src[14]) ^ (((^u12_v_src_id_o)) & u12_src[15]) ^ (((^u12_meshlets_fetched_o)) & u12_src[16]) ^ (((^u12_beats_read_o)) & u12_src[17]) ^ (((^u12_guard_denied_o)) & u12_src[18]) ^ (((^u12_refused_footprint_o)) & u12_src[19]) ^ (((^u12_prefetch_stall_o)) & u12_src[20]) ^ (((^u12_err_beat_truncated_o)) & u12_src[21]) ^ (((^u12_err_beat_overrun_o)) & u12_src[22]) ^ (((^u12_err_beat_unowned_o)) & u12_src[23]);
+    else u12_fold_q <= u12_fold_q ^ (((^u12_m_ready_o)) & u12_src[0]) ^ (((^u12_guard_req_o)) & u12_src[1]) ^ (((^u12_s_valid_o)) & u12_src[2]) ^ (((^u12_s_vertex_count_o)) & u12_src[3]) ^ (((^u12_s_triangle_count_o)) & u12_src[4]) ^ (((^u12_s_src_id_o)) & u12_src[5]) ^ (((^u12_s_visible_mask_o)) & u12_src[6]) ^ (((^u12_s_material_id_o)) & u12_src[7]) ^ (((^u12_s_side_o)) & u12_src[8]) ^ (((^u12_ix_valid_o)) & u12_src[9]) ^ (((^u12_ix_a_o)) & u12_src[10]) ^ (((^u12_ix_b_o)) & u12_src[11]) ^ (((^u12_ix_c_o)) & u12_src[12]) ^ (((^u12_v_valid_o)) & u12_src[13]) ^ (((^u12_v_bytes_o)) & u12_src[14]) ^ (((^u12_v_src_id_o)) & u12_src[15]) ^ (((^u12_v_warp_cookie_o)) & u12_src[16]) ^ (((^u12_meshlets_fetched_o)) & u12_src[17]) ^ (((^u12_beats_read_o)) & u12_src[18]) ^ (((^u12_guard_denied_o)) & u12_src[19]) ^ (((^u12_refused_footprint_o)) & u12_src[20]) ^ (((^u12_prefetch_stall_o)) & u12_src[21]) ^ (((^u12_err_beat_truncated_o)) & u12_src[22]) ^ (((^u12_err_beat_overrun_o)) & u12_src[23]) ^ (((^u12_err_beat_unowned_o)) & u12_src[24]);
 
   // ---- zhao_geom_attrsetup ----
   logic [63:0] u13_lfsr_q;
@@ -1485,24 +1488,24 @@ module zhao_prod_top (
   logic [1-1:0] u17_d_ready_o;
   logic signed [32-1:0] u17_px_m_i [12];
   always_comb begin
-    u17_px_m_i[0] = u17_src[112 +: 32] ^ (32)'(0);
-    u17_px_m_i[1] = u17_src[112 +: 32] ^ (32)'(1);
-    u17_px_m_i[2] = u17_src[112 +: 32] ^ (32)'(2);
-    u17_px_m_i[3] = u17_src[112 +: 32] ^ (32)'(3);
-    u17_px_m_i[4] = u17_src[112 +: 32] ^ (32)'(4);
-    u17_px_m_i[5] = u17_src[112 +: 32] ^ (32)'(5);
-    u17_px_m_i[6] = u17_src[112 +: 32] ^ (32)'(6);
-    u17_px_m_i[7] = u17_src[112 +: 32] ^ (32)'(7);
-    u17_px_m_i[8] = u17_src[112 +: 32] ^ (32)'(8);
-    u17_px_m_i[9] = u17_src[112 +: 32] ^ (32)'(9);
-    u17_px_m_i[10] = u17_src[112 +: 32] ^ (32)'(10);
-    u17_px_m_i[11] = u17_src[112 +: 32] ^ (32)'(11);
+    u17_px_m_i[0] = u17_src[119 +: 32] ^ (32)'(0);
+    u17_px_m_i[1] = u17_src[119 +: 32] ^ (32)'(1);
+    u17_px_m_i[2] = u17_src[119 +: 32] ^ (32)'(2);
+    u17_px_m_i[3] = u17_src[119 +: 32] ^ (32)'(3);
+    u17_px_m_i[4] = u17_src[119 +: 32] ^ (32)'(4);
+    u17_px_m_i[5] = u17_src[119 +: 32] ^ (32)'(5);
+    u17_px_m_i[6] = u17_src[119 +: 32] ^ (32)'(6);
+    u17_px_m_i[7] = u17_src[119 +: 32] ^ (32)'(7);
+    u17_px_m_i[8] = u17_src[119 +: 32] ^ (32)'(8);
+    u17_px_m_i[9] = u17_src[119 +: 32] ^ (32)'(9);
+    u17_px_m_i[10] = u17_src[119 +: 32] ^ (32)'(10);
+    u17_px_m_i[11] = u17_src[119 +: 32] ^ (32)'(11);
   end
   zhao_client_e u17_client_i;
-  assign u17_client_i = zhao_client_e'(u17_src[119 +: $bits(zhao_client_e)]);
+  assign u17_client_i = zhao_client_e'(u17_src[126 +: $bits(zhao_client_e)]);
   zhao_guard_req_t u17_guard_req_o;
   zhao_guard_rsp_t u17_guard_rsp_i;
-  assign u17_guard_rsp_i = zhao_guard_rsp_t'(u17_src[126 +: $bits(zhao_guard_rsp_t)]);
+  assign u17_guard_rsp_i = zhao_guard_rsp_t'(u17_src[133 +: $bits(zhao_guard_rsp_t)]);
   logic [1-1:0] u17_j_valid_o;
   logic [16-1:0] u17_j_instance_id_o;
   logic [27-1:0] u17_j_desc_addr_o;
@@ -1529,6 +1532,7 @@ module zhao_prod_top (
   logic [32-1:0] u17_j_stream_base_o;
   logic [72-1:0] u17_j_side_o;
   logic [24-1:0] u17_j_form_idx_o;
+  logic [6-1:0] u17_j_warp_cookie_o;
   logic [32-1:0] u17_draws_o;
   logic [32-1:0] u17_jobs_o;
   logic [32-1:0] u17_masked_o;
@@ -1561,24 +1565,25 @@ module zhao_prod_top (
       .d_semantic_weight_i(u17_src[35 +: 8]),
       .d_flags_i(u17_src[42 +: 16]),
       .d_src_id_i(u17_src[49 +: 16]),
-      .dir_we_i(u17_src[56 +: 1]),
-      .dir_entry_i(u17_src[63 +: 8]),
-      .dir_index_i(u17_src[70 +: 24]),
-      .dir_generation_i(u17_src[77 +: 16]),
-      .dir_base_i(u17_src[84 +: 32]),
-      .dir_extent_i(u17_src[91 +: 32]),
-      .px_valid_i(u17_src[98 +: 1]),
-      .px_index_i(u17_src[105 +: 10]),
+      .d_warp_cookie_i(u17_src[56 +: 6]),
+      .dir_we_i(u17_src[63 +: 1]),
+      .dir_entry_i(u17_src[70 +: 8]),
+      .dir_index_i(u17_src[77 +: 24]),
+      .dir_generation_i(u17_src[84 +: 16]),
+      .dir_base_i(u17_src[91 +: 32]),
+      .dir_extent_i(u17_src[98 +: 32]),
+      .px_valid_i(u17_src[105 +: 1]),
+      .px_index_i(u17_src[112 +: 10]),
       .px_m_i(u17_px_m_i),
       .client_i(u17_client_i),
       .guard_req_o(u17_guard_req_o),
       .guard_rsp_i(u17_guard_rsp_i),
-      .beat_valid_i(u17_src[133 +: 1]),
-      .beat_data_i(u17_src[140 +: 64]),
-      .beat_last_i(u17_src[147 +: 1]),
-      .crc_ok_i(u17_src[154 +: 1]),
+      .beat_valid_i(u17_src[140 +: 1]),
+      .beat_data_i(u17_src[147 +: 64]),
+      .beat_last_i(u17_src[154 +: 1]),
+      .crc_ok_i(u17_src[161 +: 1]),
       .j_valid_o(u17_j_valid_o),
-      .j_ready_i(u17_src[161 +: 1]),
+      .j_ready_i(u17_src[168 +: 1]),
       .j_instance_id_o(u17_j_instance_id_o),
       .j_desc_addr_o(u17_j_desc_addr_o),
       .j_format_o(u17_j_format_o),
@@ -1588,6 +1593,7 @@ module zhao_prod_top (
       .j_stream_base_o(u17_j_stream_base_o),
       .j_side_o(u17_j_side_o),
       .j_form_idx_o(u17_j_form_idx_o),
+      .j_warp_cookie_o(u17_j_warp_cookie_o),
       .draws_o(u17_draws_o),
       .jobs_o(u17_jobs_o),
       .masked_o(u17_masked_o),
@@ -1599,7 +1605,7 @@ module zhao_prod_top (
   logic u17_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_fold_q <= 1'b0;
-    else u17_fold_q <= u17_fold_q ^ (((^u17_d_ready_o)) & u17_src[0]) ^ (((^u17_guard_req_o)) & u17_src[1]) ^ (((^u17_j_valid_o)) & u17_src[2]) ^ (((^u17_j_instance_id_o)) & u17_src[3]) ^ (((^u17_j_desc_addr_o)) & u17_src[4]) ^ (((^u17_j_format_o)) & u17_src[5]) ^ (((^u17_j_generation_o)) & u17_src[6]) ^ (((^u17_j_active_mask_o)) & u17_src[7]) ^ ((u17_j_xform_o_fold) & u17_src[8]) ^ (((^u17_j_stream_base_o)) & u17_src[9]) ^ (((^u17_j_side_o)) & u17_src[10]) ^ (((^u17_j_form_idx_o)) & u17_src[11]) ^ (((^u17_draws_o)) & u17_src[12]) ^ (((^u17_jobs_o)) & u17_src[13]) ^ (((^u17_masked_o)) & u17_src[14]) ^ (((^u17_empty_o)) & u17_src[15]) ^ (((^u17_pal_writes_o)) & u17_src[16]) ^ (((^u17_pal_dropped_o)) & u17_src[17]) ^ ((u17_refused_o_fold) & u17_src[18]);
+    else u17_fold_q <= u17_fold_q ^ (((^u17_d_ready_o)) & u17_src[0]) ^ (((^u17_guard_req_o)) & u17_src[1]) ^ (((^u17_j_valid_o)) & u17_src[2]) ^ (((^u17_j_instance_id_o)) & u17_src[3]) ^ (((^u17_j_desc_addr_o)) & u17_src[4]) ^ (((^u17_j_format_o)) & u17_src[5]) ^ (((^u17_j_generation_o)) & u17_src[6]) ^ (((^u17_j_active_mask_o)) & u17_src[7]) ^ ((u17_j_xform_o_fold) & u17_src[8]) ^ (((^u17_j_stream_base_o)) & u17_src[9]) ^ (((^u17_j_side_o)) & u17_src[10]) ^ (((^u17_j_form_idx_o)) & u17_src[11]) ^ (((^u17_j_warp_cookie_o)) & u17_src[12]) ^ (((^u17_draws_o)) & u17_src[13]) ^ (((^u17_jobs_o)) & u17_src[14]) ^ (((^u17_masked_o)) & u17_src[15]) ^ (((^u17_empty_o)) & u17_src[16]) ^ (((^u17_pal_writes_o)) & u17_src[17]) ^ (((^u17_pal_dropped_o)) & u17_src[18]) ^ ((u17_refused_o_fold) & u17_src[19]);
 
   // ---- zhao_geom_fogfactor ----
   logic [63:0] u18_lfsr_q;
@@ -2068,10 +2074,10 @@ module zhao_prod_top (
     u23_j_xform_i[11] = u23_src[42 +: 32] ^ (32)'(11);
   end
   zhao_client_e u23_j_client_i;
-  assign u23_j_client_i = zhao_client_e'(u23_src[63 +: $bits(zhao_client_e)]);
+  assign u23_j_client_i = zhao_client_e'(u23_src[70 +: $bits(zhao_client_e)]);
   zhao_guard_req_t u23_guard_req_o;
   zhao_guard_rsp_t u23_guard_rsp_i;
-  assign u23_guard_rsp_i = zhao_guard_rsp_t'(u23_src[70 +: $bits(zhao_guard_rsp_t)]);
+  assign u23_guard_rsp_i = zhao_guard_rsp_t'(u23_src[77 +: $bits(zhao_guard_rsp_t)]);
   logic [1-1:0] u23_cull_tick_o;
   logic [2-1:0] u23_cull_active_o;
   logic signed [32-1:0] u23_cull_cx_o;
@@ -2088,6 +2094,7 @@ module zhao_prod_top (
   logic [16-1:0] u23_r_material_id_o;
   logic [8-1:0] u23_r_flags_o;
   logic [72-1:0] u23_r_side_o;
+  logic [6-1:0] u23_r_warp_cookie_o;
   logic [32-1:0] u23_meshlets_considered_o;
   logic [32-1:0] u23_culled_all_cameras_o;
   logic [32-1:0] u23_descriptors_fetched_o;
@@ -2117,25 +2124,26 @@ module zhao_prod_top (
       .j_xform_i(u23_j_xform_i),
       .j_stream_base_i(u23_src[49 +: 32]),
       .j_side_i(u23_src[56 +: 72]),
+      .j_warp_cookie_i(u23_src[63 +: 6]),
       .j_client_i(u23_j_client_i),
       .guard_req_o(u23_guard_req_o),
       .guard_rsp_i(u23_guard_rsp_i),
-      .beat_valid_i(u23_src[77 +: 1]),
-      .beat_data_i(u23_src[84 +: 64]),
-      .beat_last_i(u23_src[91 +: 1]),
-      .crc_ok_i(u23_src[98 +: 1]),
+      .beat_valid_i(u23_src[84 +: 1]),
+      .beat_data_i(u23_src[91 +: 64]),
+      .beat_last_i(u23_src[98 +: 1]),
+      .crc_ok_i(u23_src[105 +: 1]),
       .cull_tick_o(u23_cull_tick_o),
       .cull_active_o(u23_cull_active_o),
       .cull_cx_o(u23_cull_cx_o),
       .cull_cy_o(u23_cull_cy_o),
       .cull_cz_o(u23_cull_cz_o),
       .cull_radius_o(u23_cull_radius_o),
-      .cull_ready_i(u23_src[105 +: 1]),
-      .cull_valid_i(u23_src[112 +: 1]),
-      .cull_vis_i(u23_src[119 +: 2]),
-      .cull_reject_i(u23_src[126 +: 1]),
+      .cull_ready_i(u23_src[112 +: 1]),
+      .cull_valid_i(u23_src[119 +: 1]),
+      .cull_vis_i(u23_src[126 +: 2]),
+      .cull_reject_i(u23_src[133 +: 1]),
       .r_valid_o(u23_r_valid_o),
-      .r_ready_i(u23_src[133 +: 1]),
+      .r_ready_i(u23_src[140 +: 1]),
       .r_instance_id_o(u23_r_instance_id_o),
       .r_visible_mask_o(u23_r_visible_mask_o),
       .r_vertex_offset_o(u23_r_vertex_offset_o),
@@ -2145,6 +2153,7 @@ module zhao_prod_top (
       .r_material_id_o(u23_r_material_id_o),
       .r_flags_o(u23_r_flags_o),
       .r_side_o(u23_r_side_o),
+      .r_warp_cookie_o(u23_r_warp_cookie_o),
       .meshlets_considered_o(u23_meshlets_considered_o),
       .culled_all_cameras_o(u23_culled_all_cameras_o),
       .descriptors_fetched_o(u23_descriptors_fetched_o),
@@ -2154,7 +2163,7 @@ module zhao_prod_top (
   logic u23_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u23_fold_q <= 1'b0;
-    else u23_fold_q <= u23_fold_q ^ (((^u23_j_ready_o)) & u23_src[0]) ^ (((^u23_guard_req_o)) & u23_src[1]) ^ (((^u23_cull_tick_o)) & u23_src[2]) ^ (((^u23_cull_active_o)) & u23_src[3]) ^ (((^u23_cull_cx_o)) & u23_src[4]) ^ (((^u23_cull_cy_o)) & u23_src[5]) ^ (((^u23_cull_cz_o)) & u23_src[6]) ^ (((^u23_cull_radius_o)) & u23_src[7]) ^ (((^u23_r_valid_o)) & u23_src[8]) ^ (((^u23_r_instance_id_o)) & u23_src[9]) ^ (((^u23_r_visible_mask_o)) & u23_src[10]) ^ (((^u23_r_vertex_offset_o)) & u23_src[11]) ^ (((^u23_r_index_offset_o)) & u23_src[12]) ^ (((^u23_r_vertex_count_o)) & u23_src[13]) ^ (((^u23_r_triangle_count_o)) & u23_src[14]) ^ (((^u23_r_material_id_o)) & u23_src[15]) ^ (((^u23_r_flags_o)) & u23_src[16]) ^ (((^u23_r_side_o)) & u23_src[17]) ^ (((^u23_meshlets_considered_o)) & u23_src[18]) ^ (((^u23_culled_all_cameras_o)) & u23_src[19]) ^ (((^u23_descriptors_fetched_o)) & u23_src[20]) ^ (((^u23_guard_denied_o)) & u23_src[21]) ^ ((u23_refused_o_fold) & u23_src[22]);
+    else u23_fold_q <= u23_fold_q ^ (((^u23_j_ready_o)) & u23_src[0]) ^ (((^u23_guard_req_o)) & u23_src[1]) ^ (((^u23_cull_tick_o)) & u23_src[2]) ^ (((^u23_cull_active_o)) & u23_src[3]) ^ (((^u23_cull_cx_o)) & u23_src[4]) ^ (((^u23_cull_cy_o)) & u23_src[5]) ^ (((^u23_cull_cz_o)) & u23_src[6]) ^ (((^u23_cull_radius_o)) & u23_src[7]) ^ (((^u23_r_valid_o)) & u23_src[8]) ^ (((^u23_r_instance_id_o)) & u23_src[9]) ^ (((^u23_r_visible_mask_o)) & u23_src[10]) ^ (((^u23_r_vertex_offset_o)) & u23_src[11]) ^ (((^u23_r_index_offset_o)) & u23_src[12]) ^ (((^u23_r_vertex_count_o)) & u23_src[13]) ^ (((^u23_r_triangle_count_o)) & u23_src[14]) ^ (((^u23_r_material_id_o)) & u23_src[15]) ^ (((^u23_r_flags_o)) & u23_src[16]) ^ (((^u23_r_side_o)) & u23_src[17]) ^ (((^u23_r_warp_cookie_o)) & u23_src[18]) ^ (((^u23_meshlets_considered_o)) & u23_src[19]) ^ (((^u23_culled_all_cameras_o)) & u23_src[20]) ^ (((^u23_descriptors_fetched_o)) & u23_src[21]) ^ (((^u23_guard_denied_o)) & u23_src[22]) ^ ((u23_refused_o_fold) & u23_src[23]);
 
   // ---- zhao_geom_parambuf ----
   logic [63:0] u24_lfsr_q;
@@ -2626,39 +2635,40 @@ module zhao_prod_top (
   logic [1-1:0] u30_v_ready_o;
   logic signed [32-1:0] u30_a_m_i [12];
   always_comb begin
-    u30_a_m_i[0] = u30_src[49 +: 32] ^ (32)'(0);
-    u30_a_m_i[1] = u30_src[49 +: 32] ^ (32)'(1);
-    u30_a_m_i[2] = u30_src[49 +: 32] ^ (32)'(2);
-    u30_a_m_i[3] = u30_src[49 +: 32] ^ (32)'(3);
-    u30_a_m_i[4] = u30_src[49 +: 32] ^ (32)'(4);
-    u30_a_m_i[5] = u30_src[49 +: 32] ^ (32)'(5);
-    u30_a_m_i[6] = u30_src[49 +: 32] ^ (32)'(6);
-    u30_a_m_i[7] = u30_src[49 +: 32] ^ (32)'(7);
-    u30_a_m_i[8] = u30_src[49 +: 32] ^ (32)'(8);
-    u30_a_m_i[9] = u30_src[49 +: 32] ^ (32)'(9);
-    u30_a_m_i[10] = u30_src[49 +: 32] ^ (32)'(10);
-    u30_a_m_i[11] = u30_src[49 +: 32] ^ (32)'(11);
+    u30_a_m_i[0] = u30_src[56 +: 32] ^ (32)'(0);
+    u30_a_m_i[1] = u30_src[56 +: 32] ^ (32)'(1);
+    u30_a_m_i[2] = u30_src[56 +: 32] ^ (32)'(2);
+    u30_a_m_i[3] = u30_src[56 +: 32] ^ (32)'(3);
+    u30_a_m_i[4] = u30_src[56 +: 32] ^ (32)'(4);
+    u30_a_m_i[5] = u30_src[56 +: 32] ^ (32)'(5);
+    u30_a_m_i[6] = u30_src[56 +: 32] ^ (32)'(6);
+    u30_a_m_i[7] = u30_src[56 +: 32] ^ (32)'(7);
+    u30_a_m_i[8] = u30_src[56 +: 32] ^ (32)'(8);
+    u30_a_m_i[9] = u30_src[56 +: 32] ^ (32)'(9);
+    u30_a_m_i[10] = u30_src[56 +: 32] ^ (32)'(10);
+    u30_a_m_i[11] = u30_src[56 +: 32] ^ (32)'(11);
   end
   logic signed [32-1:0] u30_b_m_i [12];
   always_comb begin
-    u30_b_m_i[0] = u30_src[56 +: 32] ^ (32)'(0);
-    u30_b_m_i[1] = u30_src[56 +: 32] ^ (32)'(1);
-    u30_b_m_i[2] = u30_src[56 +: 32] ^ (32)'(2);
-    u30_b_m_i[3] = u30_src[56 +: 32] ^ (32)'(3);
-    u30_b_m_i[4] = u30_src[56 +: 32] ^ (32)'(4);
-    u30_b_m_i[5] = u30_src[56 +: 32] ^ (32)'(5);
-    u30_b_m_i[6] = u30_src[56 +: 32] ^ (32)'(6);
-    u30_b_m_i[7] = u30_src[56 +: 32] ^ (32)'(7);
-    u30_b_m_i[8] = u30_src[56 +: 32] ^ (32)'(8);
-    u30_b_m_i[9] = u30_src[56 +: 32] ^ (32)'(9);
-    u30_b_m_i[10] = u30_src[56 +: 32] ^ (32)'(10);
-    u30_b_m_i[11] = u30_src[56 +: 32] ^ (32)'(11);
+    u30_b_m_i[0] = u30_src[63 +: 32] ^ (32)'(0);
+    u30_b_m_i[1] = u30_src[63 +: 32] ^ (32)'(1);
+    u30_b_m_i[2] = u30_src[63 +: 32] ^ (32)'(2);
+    u30_b_m_i[3] = u30_src[63 +: 32] ^ (32)'(3);
+    u30_b_m_i[4] = u30_src[63 +: 32] ^ (32)'(4);
+    u30_b_m_i[5] = u30_src[63 +: 32] ^ (32)'(5);
+    u30_b_m_i[6] = u30_src[63 +: 32] ^ (32)'(6);
+    u30_b_m_i[7] = u30_src[63 +: 32] ^ (32)'(7);
+    u30_b_m_i[8] = u30_src[63 +: 32] ^ (32)'(8);
+    u30_b_m_i[9] = u30_src[63 +: 32] ^ (32)'(9);
+    u30_b_m_i[10] = u30_src[63 +: 32] ^ (32)'(10);
+    u30_b_m_i[11] = u30_src[63 +: 32] ^ (32)'(11);
   end
   logic [1-1:0] u30_o_valid_o;
   logic signed [32-1:0] u30_o_x_o;
   logic signed [32-1:0] u30_o_y_o;
   logic signed [32-1:0] u30_o_z_o;
   logic [16-1:0] u30_o_src_id_o;
+  logic [6-1:0] u30_o_warp_cookie_o;
   logic [32-1:0] u30_vertices_transformed_o;
   zhao_geom_skin u30_i (
       .clk(clk),
@@ -2671,20 +2681,22 @@ module zhao_prod_top (
       .v_w0_i(u30_src[28 +: 7]),
       .v_rigid_i(u30_src[35 +: 1]),
       .v_src_id_i(u30_src[42 +: 16]),
+      .v_warp_cookie_i(u30_src[49 +: 6]),
       .a_m_i(u30_a_m_i),
       .b_m_i(u30_b_m_i),
       .o_valid_o(u30_o_valid_o),
-      .o_ready_i(u30_src[63 +: 1]),
+      .o_ready_i(u30_src[70 +: 1]),
       .o_x_o(u30_o_x_o),
       .o_y_o(u30_o_y_o),
       .o_z_o(u30_o_z_o),
       .o_src_id_o(u30_o_src_id_o),
+      .o_warp_cookie_o(u30_o_warp_cookie_o),
       .vertices_transformed_o(u30_vertices_transformed_o)
   );
   logic u30_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u30_fold_q <= 1'b0;
-    else u30_fold_q <= u30_fold_q ^ (((^u30_v_ready_o)) & u30_src[0]) ^ (((^u30_o_valid_o)) & u30_src[1]) ^ (((^u30_o_x_o)) & u30_src[2]) ^ (((^u30_o_y_o)) & u30_src[3]) ^ (((^u30_o_z_o)) & u30_src[4]) ^ (((^u30_o_src_id_o)) & u30_src[5]) ^ (((^u30_vertices_transformed_o)) & u30_src[6]);
+    else u30_fold_q <= u30_fold_q ^ (((^u30_v_ready_o)) & u30_src[0]) ^ (((^u30_o_valid_o)) & u30_src[1]) ^ (((^u30_o_x_o)) & u30_src[2]) ^ (((^u30_o_y_o)) & u30_src[3]) ^ (((^u30_o_z_o)) & u30_src[4]) ^ (((^u30_o_src_id_o)) & u30_src[5]) ^ (((^u30_o_warp_cookie_o)) & u30_src[6]) ^ (((^u30_vertices_transformed_o)) & u30_src[7]);
 
   // ---- zhao_geom_skin_norm ----
   logic [63:0] u31_lfsr_q;
@@ -2854,6 +2866,7 @@ module zhao_prod_top (
   logic [16-1:0] u33_d_bone0_o;
   logic [16-1:0] u33_d_bone1_o;
   logic [16-1:0] u33_d_src_id_o;
+  logic [6-1:0] u33_d_warp_cookie_o;
   logic [1-1:0] u33_d_refused_o;
   logic [1-1:0] u33_d_reserved_nz_o;
   logic [1-1:0] u33_d_w0_illegal_o;
@@ -2870,8 +2883,9 @@ module zhao_prod_top (
       .v_bytes_i(u33_src[7 +: 256]),
       .v_format_i(u33_src[14 +: 3]),
       .v_src_id_i(u33_src[21 +: 16]),
+      .v_warp_cookie_i(u33_src[28 +: 6]),
       .d_valid_o(u33_d_valid_o),
-      .d_ready_i(u33_src[28 +: 1]),
+      .d_ready_i(u33_src[35 +: 1]),
       .d_x_o(u33_d_x_o),
       .d_y_o(u33_d_y_o),
       .d_z_o(u33_d_z_o),
@@ -2885,6 +2899,7 @@ module zhao_prod_top (
       .d_bone0_o(u33_d_bone0_o),
       .d_bone1_o(u33_d_bone1_o),
       .d_src_id_o(u33_d_src_id_o),
+      .d_warp_cookie_o(u33_d_warp_cookie_o),
       .d_refused_o(u33_d_refused_o),
       .d_reserved_nz_o(u33_d_reserved_nz_o),
       .d_w0_illegal_o(u33_d_w0_illegal_o),
@@ -2897,7 +2912,7 @@ module zhao_prod_top (
   logic u33_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u33_fold_q <= 1'b0;
-    else u33_fold_q <= u33_fold_q ^ (((^u33_v_ready_o)) & u33_src[0]) ^ (((^u33_d_valid_o)) & u33_src[1]) ^ (((^u33_d_x_o)) & u33_src[2]) ^ (((^u33_d_y_o)) & u33_src[3]) ^ (((^u33_d_z_o)) & u33_src[4]) ^ (((^u33_d_nx_o)) & u33_src[5]) ^ (((^u33_d_ny_o)) & u33_src[6]) ^ (((^u33_d_nz_o)) & u33_src[7]) ^ (((^u33_d_w0_o)) & u33_src[8]) ^ (((^u33_d_rigid_o)) & u33_src[9]) ^ (((^u33_d_u_o)) & u33_src[10]) ^ (((^u33_d_v_o)) & u33_src[11]) ^ (((^u33_d_bone0_o)) & u33_src[12]) ^ (((^u33_d_bone1_o)) & u33_src[13]) ^ (((^u33_d_src_id_o)) & u33_src[14]) ^ (((^u33_d_refused_o)) & u33_src[15]) ^ (((^u33_d_reserved_nz_o)) & u33_src[16]) ^ (((^u33_d_w0_illegal_o)) & u33_src[17]) ^ (((^u33_d_format_bad_o)) & u33_src[18]) ^ (((^u33_vertices_o)) & u33_src[19]) ^ (((^u33_reserved_nz_o)) & u33_src[20]) ^ (((^u33_w0_illegal_o)) & u33_src[21]) ^ (((^u33_format_bad_o)) & u33_src[22]);
+    else u33_fold_q <= u33_fold_q ^ (((^u33_v_ready_o)) & u33_src[0]) ^ (((^u33_d_valid_o)) & u33_src[1]) ^ (((^u33_d_x_o)) & u33_src[2]) ^ (((^u33_d_y_o)) & u33_src[3]) ^ (((^u33_d_z_o)) & u33_src[4]) ^ (((^u33_d_nx_o)) & u33_src[5]) ^ (((^u33_d_ny_o)) & u33_src[6]) ^ (((^u33_d_nz_o)) & u33_src[7]) ^ (((^u33_d_w0_o)) & u33_src[8]) ^ (((^u33_d_rigid_o)) & u33_src[9]) ^ (((^u33_d_u_o)) & u33_src[10]) ^ (((^u33_d_v_o)) & u33_src[11]) ^ (((^u33_d_bone0_o)) & u33_src[12]) ^ (((^u33_d_bone1_o)) & u33_src[13]) ^ (((^u33_d_src_id_o)) & u33_src[14]) ^ (((^u33_d_warp_cookie_o)) & u33_src[15]) ^ (((^u33_d_refused_o)) & u33_src[16]) ^ (((^u33_d_reserved_nz_o)) & u33_src[17]) ^ (((^u33_d_w0_illegal_o)) & u33_src[18]) ^ (((^u33_d_format_bad_o)) & u33_src[19]) ^ (((^u33_vertices_o)) & u33_src[20]) ^ (((^u33_reserved_nz_o)) & u33_src[21]) ^ (((^u33_w0_illegal_o)) & u33_src[22]) ^ (((^u33_format_bad_o)) & u33_src[23]);
 
   // ---- zhao_host_reg_hist ----
   logic [63:0] u34_lfsr_q;

@@ -96,6 +96,13 @@ module tb_assetfetch
   zhao_geom_assetfetch u_dut (
       .clk   (clk),
       .rst_n (rst_n),
+      // 0x0304's descriptor cookie. This bench issues no warped draw, so the
+      // cookie is the ZERO one -- `en` clear, which `zhao_geom_warpbook`
+      // answers as "no warp". Connected rather than left empty: a pin bound
+      // by omission is a PINMISSING warning, and a warning nobody reads is
+      // how a real mis-wiring gets through.
+      .m_warp_cookie_i (6'd0),
+      .v_warp_cookie_o (),
 
       .m_valid_i          (m_valid),
       .m_ready_o          (m_ready),

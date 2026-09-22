@@ -75,7 +75,9 @@ module zhao_geom_meshfetch
     // core entry I39 refuses by name: two live wires paired by their timing,
     // which mislabels meshlet N with draw M's state the first time anything
     // stalls.
-    parameter int unsigned SIDEW = 72
+    parameter int unsigned SIDEW = 72,
+    // DrawWarpedForm 0x0304's descriptor cookie, {en, stamp[4:0]}.
+    parameter int unsigned WCKW = 6
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -100,6 +102,10 @@ module zhao_geom_meshfetch
     // reproduces this block's behaviour before R29 exactly.
     input  var logic [31:0]       j_stream_base_i,
     input  var logic [SIDEW-1:0]  j_side_i,
+    // R29's sideband, one field along: 0x0304's descriptor cookie, carried
+    // in the SAME latch as `j_side_i` so a meshlet cannot be paired with
+    // another draw's deformation. Entry I39's argument, unchanged.
+    input  var logic [WCKW-1:0]   j_warp_cookie_i,
     // Logical memory-client identity, captured with the job. Production routes
     // this leaf through zhao_geom_mem_adapter, which substitutes ENGINE1.
     input  var zhao_client_e      j_client_i,
@@ -145,6 +151,7 @@ module zhao_geom_meshfetch
     output var logic [7:0]        r_flags_o,
     // The draw's state, in the SAME handshake as the meshlet it describes.
     output var logic [SIDEW-1:0]  r_side_o,
+    output var logic [WCKW-1:0]   r_warp_cookie_o,
 
     // ---- evidence -------------------------------------------------------------
     output var logic [31:0]       meshlets_considered_o,
@@ -228,6 +235,7 @@ module zhao_geom_meshfetch
   logic [26:0]    desc_addr_q;
   logic [31:0]      sbase_q;      // R29: the page's pool-relative base
   logic [SIDEW-1:0] side_q;       // R29: the draw's state, carried
+  logic [WCKW-1:0]  wck_q;        // 0x0304's cookie, the same carriage
 
   logic [63:0] d_q [8];
   logic [2:0]  beat_q;
@@ -367,6 +375,7 @@ module zhao_geom_meshfetch
   assign r_vertex_offset_o  = rebase(dw(24));
   assign r_index_offset_o   = rebase(dw(28));
   assign r_side_o           = side_q;
+  assign r_warp_cookie_o    = wck_q;
   assign r_vertex_count_o   = db(2);
   assign r_triangle_count_o = db(3);
   assign r_material_id_o    = dh(4);
@@ -393,6 +402,7 @@ module zhao_geom_meshfetch
             desc_addr_q <= j_desc_addr_i;
             sbase_q     <= j_stream_base_i;
             side_q      <= j_side_i;
+            wck_q       <= j_warp_cookie_i;
             fmt_q  <= j_format_i;
             gen_q  <= j_generation_i;
             act_q  <= j_active_mask_i;

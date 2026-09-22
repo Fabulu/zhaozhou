@@ -70,7 +70,9 @@
 `default_nettype none
 
 module zhao_geom_vdecode #(
-    parameter int unsigned SRCW = 16
+    parameter int unsigned SRCW = 16,
+    // DrawWarpedForm 0x0304's descriptor cookie, {en, stamp[4:0]}.
+    parameter int unsigned WCKW = 6
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -81,6 +83,13 @@ module zhao_geom_vdecode #(
     input  var logic [255:0]         v_bytes_i,     // little-endian, off 0 at bit 0
     input  var logic [2:0]           v_format_i,    // must be 0
     input  var logic [SRCW-1:0]      v_src_id_i,
+    // 0x0304's descriptor cookie, carried EXACTLY where `src_id` is carried
+    // -- the same register, the same enable, the same cycle. That is the
+    // whole reason it rides in band rather than in a sideband FIFO: this
+    // block DROPS a malformed record (`d_refused_o`, no output handshake),
+    // so any parallel structure keyed on vertex ORDER would desynchronise
+    // on exactly the records nobody tests with.
+    input  var logic [WCKW-1:0]      v_warp_cookie_i,
 
     // ---- the decoded vertex --------------------------------------------------
     output var logic                 d_valid_o,
@@ -98,6 +107,7 @@ module zhao_geom_vdecode #(
     output var logic [15:0]          d_bone0_o,
     output var logic [15:0]          d_bone1_o,
     output var logic [SRCW-1:0]      d_src_id_o,
+    output var logic [WCKW-1:0]      d_warp_cookie_o,
     // The refusal, raised INSTEAD of `d_valid_o` on the same clock, so a caller
     // that can see WHICH record was refused can name the asset. Exactly one of
     // the two is high for each accepted record.
@@ -182,6 +192,7 @@ module zhao_geom_vdecode #(
           d_bone1_o <= b1_c;
           d_rigid_o <= (b1_c == b0_c);
           d_src_id_o<= v_src_id_i;
+          d_warp_cookie_o <= v_warp_cookie_i;
 
           d_reserved_nz_o <= resv_nz_c;
           d_w0_illegal_o  <= w0_bad_c;

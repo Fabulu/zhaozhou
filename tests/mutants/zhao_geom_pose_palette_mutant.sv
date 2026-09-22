@@ -187,7 +187,12 @@ module zhao_geom_pose_palette_mutant #(
     // which is why there is no write-out-of-range counter. An unfireable
     // counter is worse than no counter (CLAUDE.md).
     parameter int BONES = 32,
-    parameter int SRCW  = 16
+    parameter int SRCW  = 16,
+    // DrawWarpedForm 0x0304's descriptor cookie, {en, stamp[4:0]}.
+    // CARRIED FORWARD 2026-09-22 (WARPCOMP): production gained this
+    // pass-through and a copy of an old version is a positive control
+    // for a block that no longer exists.
+    parameter int WCKW  = 6
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -219,6 +224,7 @@ module zhao_geom_pose_palette_mutant #(
     input  logic        [15:0]       v_bone0_i,
     input  logic        [15:0]       v_bone1_i,
     input  logic [SRCW-1:0]          v_src_id_i,
+    input  logic [WCKW-1:0]          v_warp_cookie_i,
     // The PACKED BIND-SPACE NORMAL, carried through beside the vertex and
     // NOT interpreted here. Added 2026-09-19 for GEOM.SKIN.NORM, which needs
     // {normal, w0} AND the same two bone matrices the vertex was skinned
@@ -247,6 +253,7 @@ module zhao_geom_pose_palette_mutant #(
     output logic        [ 6:0]       o_w0_o,
     output logic                     o_rigid_o,
     output logic [SRCW-1:0]          o_src_id_o,
+    output logic [WCKW-1:0]          o_warp_cookie_o,
     // The same packed normal, beside the matrices that answer for it.
     // `zhao_geom_skin` does not take it and does not have to: it is a payload
     // this block carries, exactly as `o_rigid_o` is.
@@ -428,6 +435,7 @@ module zhao_geom_pose_palette_mutant #(
       o_w0_o            <= '0;
       o_rigid_o         <= 1'b0;
       o_src_id_o        <= '0;
+      o_warp_cookie_o   <= '0;
       o_nx_o            <= '0;
       o_ny_o            <= '0;
       o_nz_o            <= '0;
@@ -468,6 +476,7 @@ module zhao_geom_pose_palette_mutant #(
             o_w0_o     <= v_w0_i;
             o_rigid_o  <= v_rigid_i;
             o_src_id_o <= v_src_id_i;
+            o_warp_cookie_o <= v_warp_cookie_i;
             // Same enable, same cycle as the bone indices below. That is the
             // whole guarantee the port comment claims.
             o_nx_o     <= v_nx_i;

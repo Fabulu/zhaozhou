@@ -583,6 +583,26 @@ module zhao_field_loader
         end
 
         L_ACCEPT: begin
+          // ---- THE REPLY NAMES *THIS* REQUEST'S OBJECT --------------------
+          // `st_idx` is what `L_RETURN` puts on `fh2_resp_slot_o` and what it
+          // builds `fh2_resp_handle_o` from. Until 2026-09-22 it was written
+          // at EXACTLY ONE SITE -- `L_RESERVE`, on the INSTALL path -- so a
+          // BIND or a CONTROL verb replied with the slot and the generation of
+          // whatever object the LAST INSTALL reserved. It survived testing
+          // because the natural stimulus is install-then-bind-what-you-just-
+          // installed, where `st_idx` is right BY ACCIDENT; it diverges on
+          // install(A), install(B), bind(A), and on any bind after reset.
+          //
+          // Found and written down by packet WARPBUILD, repaired here. It is
+          // load-bearing for GEOM.WARP: `zhao_geom_warp.d_slot_i` is resolved
+          // from a BIND reply, so a wrong slot in the reply is a draw
+          // deforming against the wrong resident program with every counter
+          // reading clean.
+          //
+          // `rq_bind_handle` / `rq_bind_prog` are latched in `L_IDLE` when the
+          // post is taken, one state earlier, so both hold THIS request here.
+          // INSTALL is untouched: it has no named object yet, and `L_RESERVE`
+          // writes `st_idx` with the slot the allocator chose.
           case (rq_kind)
             K_INSTALL: lstate <= L_ENVELOPE;
             K_BIND: begin
@@ -591,12 +611,27 @@ module zhao_field_loader
               // comes from the MATCHED OBJECT, never reconstructed from a
               // physical slot, and BIND never chooses the first matching
               // canonical hash -- directive 10.2.
+              //
+              // The reply names the object the REQUEST named, whether or not
+              // the six-way conjunction in `L_CHECK` holds. A refusal that
+              // reported a different object's slot would send the caller to
+              // re-examine an object it never asked about.
+              st_idx <= rq_bind_handle[OBJW-1:0];
               lstate <= L_CHECK;
             end
-            K_CONTROL: lstate <= L_CHECK;
+            K_CONTROL: begin
+              // The control verbs address their object through `rq_bind_prog`
+              // (`ctrl_handle_ok` and every arm of `L_CHECK`'s K_CONTROL case
+              // index by it), so that is the object this reply is about.
+              st_idx <= rq_bind_prog[OBJW-1:0];
+              lstate <= L_CHECK;
+            end
             default: begin
               // Kind 3 is RESERVED. Answered BAD_OPERATION, counted, and no
               // byte is read and no object touched -- FT060's second half.
+              // The reply names NO object: zero rather than the last install's
+              // slot, because a reserved kind identified nothing to name.
+              st_idx <= '0;
               st_verdict <= V_BAD_OPERATION;
               st_fail <= 1'b1;
               lstate <= L_FAIL;

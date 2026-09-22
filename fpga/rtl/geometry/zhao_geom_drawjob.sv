@@ -65,7 +65,10 @@ module zhao_geom_drawjob
     // GEOM.LOOM's node-index width on its emit port.
     parameter int unsigned LOOM_IDXW = 10,
     // {semantic_weight[7:0], material_set[31:0], raster_state[31:0]}
-    parameter int unsigned SIDEW = 72
+    parameter int unsigned SIDEW = 72,
+    // DrawWarpedForm 0x0304's descriptor cookie -- {en, stamp[4:0]}, directive
+    // 7.1's "compact descriptor cookie". See `d_warp_cookie_i` below.
+    parameter int unsigned WCKW = 6
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -92,6 +95,22 @@ module zhao_geom_drawjob
     input  var logic [7:0]   d_semantic_weight_i,
     input  var logic [15:0]  d_flags_i,
     input  var logic [15:0]  d_src_id_i,
+
+    // ---- DrawWarpedForm 0x0304's DESCRIPTOR COOKIE -------------------------
+    // Directive 7.1: "the common draw item holds `warp_enabled` plus a compact
+    // descriptor cookie, not an 80-byte Warp record copied through every
+    // geometry stage." This is that cookie. `zhao_geom_warpbook` allocates it
+    // ON THIS SAME HANDSHAKE -- its `w_fire_i` is `d_valid_i && d_ready_o` --
+    // so the cookie and the draw are latched by one edge and there is no
+    // second path for either to arrive on. That is composer entry I39's
+    // argument for the raster sideband, one field along.
+    //
+    // IT IS NOT KEYED ON `d_src_id_i`, and that was measured rather than
+    // assumed. `src_id` is capture_format.md 5's `index` alone -- a compiler
+    // source-registry ordinal naming an emit SITE, shared by every draw from
+    // that statement -- and decision W08 says the same from the other side:
+    // "source_id remains attribution, not identity."
+    input  var logic [WCKW-1:0] d_warp_cookie_i,
 
     // ---- the MESH_STREAM residency directory (MEM.UPLOAD's publication) ----
     input  var logic         dir_we_i,
@@ -150,6 +169,17 @@ module zhao_geom_drawjob
     // zero otherwise. Zero is not a sentinel (index 0 is a legal form); the
     // QUALIFIER is `j_valid_o`, exactly as it is for every other `j_*` field.
     output var logic [23:0]           j_form_idx_o,
+
+    // THE COOKIE, ON THE JOB THAT WAS ACCEPTED. Gated by state exactly as
+    // `j_form_idx_o` above is, and for the identical reason: `d_ready_o` is
+    // `(st_q == S_IDLE)`, so in S_IDLE the register still holds the PREVIOUS
+    // draw's cookie and a consumer reading it there would hand this draw's
+    // vertices the last draw's deformation. It is driven from the register
+    // ONLY while `j_valid_o` is high, and zero otherwise -- and zero here is a
+    // cookie with its `en` bit CLEAR, which `zhao_geom_warpbook` answers as
+    // "no warp" rather than as entry 0. Unlike `j_form_idx_o`'s zero, that is
+    // a sentinel and is safe to be one.
+    output var logic [WCKW-1:0]       j_warp_cookie_o,
 
     // ---- evidence -----------------------------------------------------------
     output var logic [31:0] draws_o,          // DrawForms accepted
@@ -220,6 +250,7 @@ module zhao_geom_drawjob
   logic [15:0]  flags_q;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [15:0]  src_q;
+  logic [WCKW-1:0] wck_q;   // 0x0304's descriptor cookie, latched with the draw
   logic [31:0]  base_q, ext_q;
 
   // ---- the header, as eight beats -----------------------------------------
@@ -339,6 +370,7 @@ module zhao_geom_drawjob
   assign j_stream_base_o = sbase_q;
   assign j_side_o        = {weight_q, mset_q, raster_q};
   assign j_form_idx_o    = (st_q == S_EMIT) ? form_idx_q : 24'd0;
+  assign j_warp_cookie_o = (st_q == S_EMIT) ? wck_q : '0;
 
   always_comb begin
     for (int unsigned k = 0; k < 12; k++)
@@ -408,6 +440,7 @@ module zhao_geom_drawjob
             weight_q   <= d_semantic_weight_i;
             flags_q    <= d_flags_i;
             src_q      <= d_src_id_i;
+            wck_q      <= d_warp_cookie_i;
             draws_o    <= draws_o + 32'd1;
             // A zero mask draws nothing and reads nothing -- but a RESERVED
             // cull mode is malformed either way, so it is still refused.

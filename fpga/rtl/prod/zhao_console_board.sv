@@ -1030,6 +1030,53 @@ module zhao_console_board
   output logic [31:0]              cmd_exec_warp_draws_o,
   output logic [31:0]              cmd_exec_warp_draw_refused_o,
 
+  // ---- GEOM.WARP's EVIDENCE, composed 2026-09-22 (packet WARPCOMP) --------
+  // Every counter the block and its adapter declare, exported. The reason is
+  // the one the pose lane's note gives four screens up and it is a FIT reason,
+  // not a tidiness one: an output nobody reads lets synthesis delete the
+  // logic behind it, and the fit then prices the whole lane at zero.
+  output logic [31:0] geom_warp_vertices_transformed_o,
+  output logic [31:0] geom_warp_bypassed_o,
+  output logic [31:0] geom_warp_app_saturations_o,
+  output logic [31:0] geom_warp_normal_reduced_o,
+  output logic [31:0] geom_warp_degenerate_o,
+  output logic [31:0] geom_warp_bound_violations_o,
+  output logic [31:0] geom_warp_negative_bounds_o,
+  output logic [31:0] geom_warp_normal_width_faults_o,
+  output logic [31:0] geom_warp_profile_mismatches_o,
+  output logic [31:0] geom_warp_field_faults_o,
+  // TWO accept counters, not one shared one -- the block's own contract §10:
+  // a single counter could not see the output fork accepting twice on one
+  // side, which is the exact fault its §11.6 records.
+  output logic [31:0] geom_warp_p_accepts_o,
+  output logic [31:0] geom_warp_n_accepts_o,
+  // W10's poison, whole. The offending vertex index AND the returned
+  // displacement, because §5.6 diagnoses the violation from what the program
+  // returned and discarding it would discard the evidence.
+  output logic        geom_warp_poison_valid_o,
+  output logic [15:0] geom_warp_poison_src_id_o,
+  output logic [ 2:0] geom_warp_poison_cause_o,
+  output logic signed [31:0] geom_warp_poison_dx_o,
+  output logic signed [31:0] geom_warp_poison_dy_o,
+  output logic signed [31:0] geom_warp_poison_dz_o,
+  // THE DESCRIPTOR BOOK. `geom_warp_desc_stale_o` is the one to read: it is
+  // the ring-overwrite detector, and its two operands are clocked by
+  // different things -- the stored stamp by the DRAW handshake inside
+  // `zhao_geom_warpbook`, the offered stamp by the VERTEX registers that
+  // carried it through the whole geometry front.
+  output logic [31:0] geom_warp_desc_allocated_o,
+  output logic [31:0] geom_warp_desc_hits_o,
+  output logic [31:0] geom_warp_desc_stale_o,
+  output logic [31:0] fld_warp_vertices_o,
+  output logic [31:0] fld_warp_identities_o,
+  output logic [31:0] fld_warp_bypassed_o,
+  output logic [31:0] fld_warp_noprog_o,
+  output logic [31:0] fld_warp_sig_refused_o,
+  output logic [31:0] fld_warp_faults_o,
+  output logic [31:0] fld_warp_absent_outputs_o,
+  output logic [31:0] fld_warp_stall_cycles_o,
+  output logic [31:0] fld_warp_vtx_changed_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order
@@ -3320,6 +3367,43 @@ module zhao_console_board
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
 
+  // ---- GEOM.WARP's FIELD BINDING -- the SAME shape as the two above -------
+  // `zhao_geom_warp` is composed as of this commit and `zhao_field_warp_adapter`
+  // is the engine's third client. Which RESIDENT SLOT holds the deformation
+  // arrives HERE, at the edge, exactly as it does for the FLOW and the STAMP
+  // profiles ten and twenty lines up -- and for a reason that is stated rather
+  // than inherited, because this case differs from theirs in one way.
+  //
+  // For FLOW and STAMP the reason is "no ratified opcode carries it". For WARP
+  // ONE DOES: `DrawWarpedForm 0x0304`'s `warp_program` is a `handle32[program]`
+  // and `spec/commands.zidl` says it "is resolved by the ONE shared
+  // program-binding authority". So the gap here is not the ABI's -- it is that
+  // the authority's MIDDLE LINK does not exist.
+  //
+  // GEOM.WARP prerequisite P8, measured by packet WARPBUILD and RE-MEASURED
+  // here against `fpga/rtl/field/`: handle -> canonical program is PRESENT
+  // (`zhao_field_loader`'s `pub_handle_o` / `pub_prog_hash_o`), resident slot
+  // -> prepared plan is PRESENT (`zhao_field_host_v2`'s `hdr_assoc_gen`,
+  // `prep_gen`, `hdr_ipok`), and CANONICAL PROGRAM -> RESIDENT SLOT IS ABSENT:
+  // `zhao_field_progcache`'s hash-to-slot directory answers only the doorbell's
+  // `post_op = 2` LOOKUP, the loader never issues one, and nothing in this tree
+  // stores "the slot this binding object currently occupies". So §9's
+  // `PROGRAM_NOT_RESIDENT` and `STALE_BINDING` have no hardware that can
+  // compute them, and a resolver composed here would be this console inventing
+  // the authority W07 assigns to `fpga/rtl/field/`.
+  //
+  // WHAT THAT MEANS FOR WHAT SHIPPED, said plainly: this is a COMPOSED Warp,
+  // not a WORKING one. The lane is reachable -- a 0x0304 naming a program arms
+  // it, `d_warp_en_i` is driven by a decoded record field through a real
+  // carrier and not by a constant -- and with `fld_warp_slot_valid_i` low the
+  // adapter answers `req_noprog_o` and the block takes W09's bypass, which is
+  // a console with no warp program bound rather than a warp of zero.
+  input  logic [ 2:0]  fld_warp_slot_i,
+  input  logic         fld_warp_slot_valid_i,
+  // FH27: the resident program's profile id, from the program directory. A
+  // slot holding a non-Warp program is refused before a request is issued.
+  input  logic [ 7:0]  fld_warp_prog_profile_i,
+
   // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is
   //  CLOSED 2026-09-20: entry I42 said it "is the seam the FLOW and EARTH
   //  adapters take over when I5 and I34 close", and the FLOW adapter has taken
@@ -3780,6 +3864,36 @@ module zhao_console_board
       .cmd_draw_warp_bz_o                 (cmd_draw_warp_bz_o),
       .cmd_exec_warp_draws_o              (cmd_exec_warp_draws_o),
       .cmd_exec_warp_draw_refused_o       (cmd_exec_warp_draw_refused_o),
+      .geom_warp_vertices_transformed_o   (geom_warp_vertices_transformed_o),
+      .geom_warp_bypassed_o               (geom_warp_bypassed_o),
+      .geom_warp_app_saturations_o        (geom_warp_app_saturations_o),
+      .geom_warp_normal_reduced_o         (geom_warp_normal_reduced_o),
+      .geom_warp_degenerate_o             (geom_warp_degenerate_o),
+      .geom_warp_bound_violations_o       (geom_warp_bound_violations_o),
+      .geom_warp_negative_bounds_o        (geom_warp_negative_bounds_o),
+      .geom_warp_normal_width_faults_o    (geom_warp_normal_width_faults_o),
+      .geom_warp_profile_mismatches_o     (geom_warp_profile_mismatches_o),
+      .geom_warp_field_faults_o           (geom_warp_field_faults_o),
+      .geom_warp_p_accepts_o              (geom_warp_p_accepts_o),
+      .geom_warp_n_accepts_o              (geom_warp_n_accepts_o),
+      .geom_warp_poison_valid_o           (geom_warp_poison_valid_o),
+      .geom_warp_poison_src_id_o          (geom_warp_poison_src_id_o),
+      .geom_warp_poison_cause_o           (geom_warp_poison_cause_o),
+      .geom_warp_poison_dx_o              (geom_warp_poison_dx_o),
+      .geom_warp_poison_dy_o              (geom_warp_poison_dy_o),
+      .geom_warp_poison_dz_o              (geom_warp_poison_dz_o),
+      .geom_warp_desc_allocated_o         (geom_warp_desc_allocated_o),
+      .geom_warp_desc_hits_o              (geom_warp_desc_hits_o),
+      .geom_warp_desc_stale_o             (geom_warp_desc_stale_o),
+      .fld_warp_vertices_o                (fld_warp_vertices_o),
+      .fld_warp_identities_o              (fld_warp_identities_o),
+      .fld_warp_bypassed_o                (fld_warp_bypassed_o),
+      .fld_warp_noprog_o                  (fld_warp_noprog_o),
+      .fld_warp_sig_refused_o             (fld_warp_sig_refused_o),
+      .fld_warp_faults_o                  (fld_warp_faults_o),
+      .fld_warp_absent_outputs_o          (fld_warp_absent_outputs_o),
+      .fld_warp_stall_cycles_o            (fld_warp_stall_cycles_o),
+      .fld_warp_vtx_changed_o             (fld_warp_vtx_changed_o),
       .geom_mf_meshlets_considered_o      (geom_mf_meshlets_considered_o),
       .geom_mf_culled_all_cameras_o       (geom_mf_culled_all_cameras_o),
       .geom_mf_descriptors_fetched_o      (geom_mf_descriptors_fetched_o),
@@ -4932,6 +5046,9 @@ module zhao_console_board
       .fld_ldr_load_bytes_o               (fld_ldr_load_bytes_o),
       .fld_stamp_slot_i                   (fld_stamp_slot_i),
       .fld_stamp_slot_valid_i             (fld_stamp_slot_valid_i),
+      .fld_warp_slot_i                    (fld_warp_slot_i),
+      .fld_warp_slot_valid_i              (fld_warp_slot_valid_i),
+      .fld_warp_prog_profile_i            (fld_warp_prog_profile_i),
       .fld_runs_o                         (fld_runs_o),
       .fld_run_faults_o                   (fld_run_faults_o),
       .fld_noprog_o                       (fld_noprog_o),

@@ -46,7 +46,9 @@ module zhao_geom_assetfetch
     // The DRAW'S OWN STATE, carried beside the meshlet exactly as the visible
     // mask and material id already are (owner rulings R28/R29, packed by
     // zref::drawjob). This block reads no bit of it.
-    parameter int unsigned SIDEW         = 72
+    parameter int unsigned SIDEW         = 72,
+    // DrawWarpedForm 0x0304's descriptor cookie, {en, stamp[4:0]}.
+    parameter int unsigned WCKW = 6
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -68,6 +70,11 @@ module zhao_geom_assetfetch
     input  var logic [1:0]        m_visible_mask_i,
     input  var logic [15:0]       m_material_id_i,
     input  var logic [SIDEW-1:0]  m_side_i,
+    // 0x0304's descriptor cookie, captured in the same S_IDLE arm as
+    // `m_side_i` and `m_src_id_i` and stable for the whole of this
+    // meshlet's vertex service -- `m_ready_o` is `(st_q == S_IDLE)`, so
+    // nothing can write it again while `v_*` is streaming.
+    input  var logic [WCKW-1:0]   m_warp_cookie_i,
     // The memory-client identity, an input for the same reason MESHFETCH takes
     // one: no block invents which client it is.
     input  var zhao_client_e      m_client_i,
@@ -107,6 +114,13 @@ module zhao_geom_assetfetch
     input  var logic              v_ready_i,
     output var logic [255:0]      v_bytes_o,
     output var logic [SRCW-1:0]   v_src_id_o,
+    // THE COOKIE, PER VERTEX. `src_q` already proves this fanout: one
+    // register written in S_IDLE, read by every vertex of the meshlet, and
+    // exported twice (`s_src_id_o` and `v_src_id_o`). This is the same
+    // register shape for 0x0304's descriptor cookie, and it is what lets
+    // GEOM.WARP be armed per DRAW without any stage between here and the
+    // skinner carrying the 456-bit record directive 7.1 refuses.
+    output var logic [WCKW-1:0]   v_warp_cookie_o,
 
     // ---- counters (design/blocks.yml counter_catalog) ----------------------
     output var logic [31:0]       meshlets_fetched_o,
@@ -199,6 +213,7 @@ module zhao_geom_assetfetch
   logic [1:0]      vis_q;    // carried: see m_visible_mask_i
   logic [15:0]     mat_q;    // carried: see m_material_id_i
   logic [SIDEW-1:0] side_q;  // carried: the draw's state, see m_side_i
+  logic [WCKW-1:0] wck_q;    // carried: 0x0304's cookie, see m_warp_cookie_i
   zhao_client_e    client_q;
 
   // Absolute LINE-ALIGNED bases, and the byte each stream starts at inside its
@@ -445,6 +460,7 @@ module zhao_geom_assetfetch
   assign v_valid_o = v_full_q;
   assign v_bytes_o = v_acc_q;
   assign v_src_id_o = src_q;
+  assign v_warp_cookie_o = wck_q;
 
   // ------------------------------------------------------- the handshake ---
   assign m_ready_o          = (st_q == S_IDLE);
@@ -481,6 +497,7 @@ module zhao_geom_assetfetch
       vis_q     <= '0;
       mat_q     <= '0;
       side_q    <= '0;
+      wck_q     <= '0;
       client_q  <= zhao_client_e'(0);
       ix_line0_q  <= '0;
       vx_line0_q  <= '0;
@@ -545,6 +562,7 @@ module zhao_geom_assetfetch
           vis_q  <= m_visible_mask_i;
           mat_q  <= m_material_id_i;
       side_q <= m_side_i;
+      wck_q  <= m_warp_cookie_i;
           client_q <= m_client_i;
 
           if (refuse_c) begin

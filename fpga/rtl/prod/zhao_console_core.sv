@@ -7336,6 +7336,53 @@ module zhao_console_core
   output logic [31:0]              cmd_exec_warp_draws_o,
   output logic [31:0]              cmd_exec_warp_draw_refused_o,
 
+  // ---- GEOM.WARP's EVIDENCE, composed 2026-09-22 (packet WARPCOMP) --------
+  // Every counter the block and its adapter declare, exported. The reason is
+  // the one the pose lane's note gives four screens up and it is a FIT reason,
+  // not a tidiness one: an output nobody reads lets synthesis delete the
+  // logic behind it, and the fit then prices the whole lane at zero.
+  output logic [31:0] geom_warp_vertices_transformed_o,
+  output logic [31:0] geom_warp_bypassed_o,
+  output logic [31:0] geom_warp_app_saturations_o,
+  output logic [31:0] geom_warp_normal_reduced_o,
+  output logic [31:0] geom_warp_degenerate_o,
+  output logic [31:0] geom_warp_bound_violations_o,
+  output logic [31:0] geom_warp_negative_bounds_o,
+  output logic [31:0] geom_warp_normal_width_faults_o,
+  output logic [31:0] geom_warp_profile_mismatches_o,
+  output logic [31:0] geom_warp_field_faults_o,
+  // TWO accept counters, not one shared one -- the block's own contract §10:
+  // a single counter could not see the output fork accepting twice on one
+  // side, which is the exact fault its §11.6 records.
+  output logic [31:0] geom_warp_p_accepts_o,
+  output logic [31:0] geom_warp_n_accepts_o,
+  // W10's poison, whole. The offending vertex index AND the returned
+  // displacement, because §5.6 diagnoses the violation from what the program
+  // returned and discarding it would discard the evidence.
+  output logic        geom_warp_poison_valid_o,
+  output logic [15:0] geom_warp_poison_src_id_o,
+  output logic [ 2:0] geom_warp_poison_cause_o,
+  output logic signed [31:0] geom_warp_poison_dx_o,
+  output logic signed [31:0] geom_warp_poison_dy_o,
+  output logic signed [31:0] geom_warp_poison_dz_o,
+  // THE DESCRIPTOR BOOK. `geom_warp_desc_stale_o` is the one to read: it is
+  // the ring-overwrite detector, and its two operands are clocked by
+  // different things -- the stored stamp by the DRAW handshake inside
+  // `zhao_geom_warpbook`, the offered stamp by the VERTEX registers that
+  // carried it through the whole geometry front.
+  output logic [31:0] geom_warp_desc_allocated_o,
+  output logic [31:0] geom_warp_desc_hits_o,
+  output logic [31:0] geom_warp_desc_stale_o,
+  output logic [31:0] fld_warp_vertices_o,
+  output logic [31:0] fld_warp_identities_o,
+  output logic [31:0] fld_warp_bypassed_o,
+  output logic [31:0] fld_warp_noprog_o,
+  output logic [31:0] fld_warp_sig_refused_o,
+  output logic [31:0] fld_warp_faults_o,
+  output logic [31:0] fld_warp_absent_outputs_o,
+  output logic [31:0] fld_warp_stall_cycles_o,
+  output logic [31:0] fld_warp_vtx_changed_o,
+
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
   // as the block's `refused_o [7]`, in the block's own documented order
@@ -9629,6 +9676,43 @@ module zhao_console_core
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
 
+  // ---- GEOM.WARP's FIELD BINDING -- the SAME shape as the two above -------
+  // `zhao_geom_warp` is composed as of this commit and `zhao_field_warp_adapter`
+  // is the engine's third client. Which RESIDENT SLOT holds the deformation
+  // arrives HERE, at the edge, exactly as it does for the FLOW and the STAMP
+  // profiles ten and twenty lines up -- and for a reason that is stated rather
+  // than inherited, because this case differs from theirs in one way.
+  //
+  // For FLOW and STAMP the reason is "no ratified opcode carries it". For WARP
+  // ONE DOES: `DrawWarpedForm 0x0304`'s `warp_program` is a `handle32[program]`
+  // and `spec/commands.zidl` says it "is resolved by the ONE shared
+  // program-binding authority". So the gap here is not the ABI's -- it is that
+  // the authority's MIDDLE LINK does not exist.
+  //
+  // GEOM.WARP prerequisite P8, measured by packet WARPBUILD and RE-MEASURED
+  // here against `fpga/rtl/field/`: handle -> canonical program is PRESENT
+  // (`zhao_field_loader`'s `pub_handle_o` / `pub_prog_hash_o`), resident slot
+  // -> prepared plan is PRESENT (`zhao_field_host_v2`'s `hdr_assoc_gen`,
+  // `prep_gen`, `hdr_ipok`), and CANONICAL PROGRAM -> RESIDENT SLOT IS ABSENT:
+  // `zhao_field_progcache`'s hash-to-slot directory answers only the doorbell's
+  // `post_op = 2` LOOKUP, the loader never issues one, and nothing in this tree
+  // stores "the slot this binding object currently occupies". So §9's
+  // `PROGRAM_NOT_RESIDENT` and `STALE_BINDING` have no hardware that can
+  // compute them, and a resolver composed here would be this console inventing
+  // the authority W07 assigns to `fpga/rtl/field/`.
+  //
+  // WHAT THAT MEANS FOR WHAT SHIPPED, said plainly: this is a COMPOSED Warp,
+  // not a WORKING one. The lane is reachable -- a 0x0304 naming a program arms
+  // it, `d_warp_en_i` is driven by a decoded record field through a real
+  // carrier and not by a constant -- and with `fld_warp_slot_valid_i` low the
+  // adapter answers `req_noprog_o` and the block takes W09's bypass, which is
+  // a console with no warp program bound rather than a warp of zero.
+  input  logic [ 2:0]  fld_warp_slot_i,
+  input  logic         fld_warp_slot_valid_i,
+  // FH27: the resident program's profile id, from the program directory. A
+  // slot holding a non-Warp program is refused before a request is issued.
+  input  logic [ 7:0]  fld_warp_prog_profile_i,
+
   // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is
   //  CLOSED 2026-09-20: entry I42 said it "is the seam the FLOW and EARTH
   //  adapters take over when I5 and I34 close", and the FLOW adapter has taken
@@ -10831,6 +10915,31 @@ module zhao_console_core
   wire                    gs_v_valid, gs_v_ready;
   wire signed [31:0]      gs_v_x, gs_v_y, gs_v_z;
 
+  // ---- DrawWarpedForm 0x0304's DESCRIPTOR COOKIE, end to end --------------
+  // Directive 7.1's "compact descriptor cookie", six bits: {en, stamp[4:0]}.
+  // It is allocated on the DRAW handshake by `u_geom_warpbook` and rides the
+  // geometry front IN THE PER-VERTEX REGISTERS, beside `src_id`, through
+  // GEOM.DRAWJOB -> MESHFETCH -> ASSETFETCH -> VDECODE -> POSE_PALETTE ->
+  // SKIN, arriving at GEOM.WARP with the vertex it belongs to.
+  //
+  // IN BAND AND NOT IN A SIDEBAND FIFO, and the reason is measured:
+  // `zhao_geom_vdecode` DROPS a malformed record -- `d_refused_o` is a status
+  // pulse with no output handshake, and the composer already reads that net as
+  // GEOM.GROUP_SEQ's `hole_i`. A parallel structure keyed on vertex ORDER
+  // would therefore desynchronise on exactly the records nobody tests with,
+  // and would do it silently: every accepted/emitted counter would still
+  // balance, because no counter looks at the field that moved. Riding in the
+  // same register as the vertex makes that state unreachable rather than
+  // detected.
+  localparam int unsigned GEOM_WCK_W = 6;
+  wire [GEOM_WCK_W-1:0] wb_w_cookie;        // allocated at the draw
+  wire [GEOM_WCK_W-1:0] dj_j_warp_cookie;   // on the job
+  wire [GEOM_WCK_W-1:0] mf_r_warp_cookie;   // on the meshlet
+  wire [GEOM_WCK_W-1:0] af_v_warp_cookie;   // on the vertex record
+  wire [GEOM_WCK_W-1:0] vd_d_warp_cookie;   // on the decoded vertex
+  wire [GEOM_WCK_W-1:0] pal_o_warp_cookie;  // on the posed vertex
+  wire [GEOM_WCK_W-1:0] gs_v_warp_cookie;   // on the skinned vertex
+
   wire                    gs_a_valid, gs_a_ready;
   wire signed [31:0]      gs_a_vx, gs_a_vy, gs_a_vz;
   wire                    gs_a_view;
@@ -10988,6 +11097,11 @@ module zhao_console_core
   // is read by GEOM.SKIN.NORM just below, so it is declared here.
   wire        la_s_ready;
 
+  // GEOM.WARP's join takes the normal now, so SKIN.NORM's `n_ready_i` is the
+  // join's and not the light adapter's. Declared here for the same reason
+  // `la_s_ready` is: its reader is above its driver in this file.
+  wire        sn_n_ready_c;
+
   zhao_geom_vdecode #(
     .SRCW (16)
   ) u_geom_vdecode (
@@ -11003,6 +11117,7 @@ module zhao_console_core
     .v_bytes_i  (af_v_bytes),
     .v_format_i (GEOM_VERTEX_FORMAT_C),   // I25: assigned here, not tied off
     .v_src_id_i (af_v_src_id),
+    .v_warp_cookie_i (af_v_warp_cookie),
 
     // REAL: the decoded vertex into GEOM.SKIN.
     .d_valid_o  (vd_d_valid),
@@ -11013,6 +11128,7 @@ module zhao_console_core
     .d_w0_o     (vd_d_w0),
     .d_rigid_o  (vd_d_rigid),
     .d_src_id_o (vd_d_src_id),
+    .d_warp_cookie_o (vd_d_warp_cookie),
 
     // REAL: the two palette addresses, into the store. This was I10's
     // remaining half. The attribute path below still leaves at the edge.
@@ -11115,6 +11231,7 @@ module zhao_console_core
     .v_bone0_i  (vd_d_bone0),
     .v_bone1_i  (vd_d_bone1),
     .v_src_id_i (vd_d_src_id),
+    .v_warp_cookie_i (vd_d_warp_cookie),
 
     // REAL: the packed bind-space normal, from the SAME GEOM.VDECODE beat as
     // the position and the two bone indices above. This is the port added
@@ -11132,6 +11249,7 @@ module zhao_console_core
     .o_w0_o     (pal_o_w0),
     .o_rigid_o  (pal_o_rigid),
     .o_src_id_o (pal_o_src_id),
+    .o_warp_cookie_o (pal_o_warp_cookie),
     .o_nx_o     (pal_o_nx),
     .o_ny_o     (pal_o_ny),
     .o_nz_o     (pal_o_nz),
@@ -11162,6 +11280,7 @@ module zhao_console_core
     .v_w0_i    (pal_o_w0),
     .v_rigid_i (pal_o_rigid),
     .v_src_id_i(pal_o_src_id),
+    .v_warp_cookie_i(pal_o_warp_cookie),
     .a_m_i     (pal_a_m),
     .b_m_i     (pal_b_m),
 
@@ -11172,6 +11291,7 @@ module zhao_console_core
     .o_y_o     (gs_v_y),
     .o_z_o     (gs_v_z),
     .o_src_id_o(geom_skin_src_id_o),
+    .o_warp_cookie_o(gs_v_warp_cookie),
 
     .vertices_transformed_o (geom_skin_vertices_transformed_o)
   );
@@ -11216,7 +11336,7 @@ module zhao_console_core
     // I43: the world normal leaves the module. Its consumer is GEOM.LIGHT and
     // that seam is refused for reasons of its own -- see the lighting section.
     .n_valid_o      (geom_sn_n_valid_o),
-    .n_ready_i      (la_s_ready),
+    .n_ready_i      (sn_n_ready_c),
     .n_x_o          (geom_sn_n_x_o),
     .n_y_o          (geom_sn_n_y_o),
     .n_z_o          (geom_sn_n_z_o),
@@ -11226,6 +11346,317 @@ module zhao_console_core
     .vertices_o   (geom_sn_vertices_o),
     .degenerate_o (geom_sn_degenerate_o),
     .reduced_o    (geom_sn_reduced_o)
+  );
+
+
+  // ==========================================================================
+  // GEOM.WARP -- composed 2026-09-22 (packet WARPCOMP). The register's
+  // "BUILT BUT NOT CONNECTED" list is one shorter for this.
+  // ==========================================================================
+  //
+  //   GEOM.SKIN      --{position s32}--\
+  //                                     >-- zhao_geom_warp --> GROUP_SEQ
+  //   GEOM.SKIN.NORM --{normal   s64}--/        |    ^            + LIGHT
+  //                                             v    |
+  //                                   zhao_field_warp_adapter
+  //                                             |    ^
+  //                                             v    |
+  //                                      zhao_field_host_v2 client 2
+  //
+  // WHY THIS IS ONE ACT AND NOT THREE. The host's `.CLIENTS` moves from 2 to 3
+  // in this same commit, and so does the descriptor carrier. A third client
+  // whose `req_valid_i` is a constant zero is a TIE-OFF; a Warp wired in
+  // without a carrier is present and STRUCTURALLY UNREACHABLE, sitting in W09's
+  // bypass forever with every counter reading a plausible zero. Either one
+  // alone moves a number without moving the machine, which is the failure this
+  // whole campaign is named after. The producer, the carrier and the consumer
+  // land together or not at all.
+  //
+  // ---- THE JOIN, AND WHY IT CANNOT DEADLOCK ------------------------------
+  // `zhao_geom_warp` takes the position and the normal on ONE handshake. They
+  // arrive from two blocks, and that is safe for a reason that was checked
+  // rather than assumed:
+  //
+  //   * the two are ALREADY THE SAME VERTEX. The AND-fork at the pose palette
+  //     (`pal_o_ready = skin_v_ready && sn_v_ready`) accepts into both blocks
+  //     in the SAME CYCLE, which is entry I43's whole argument, and both
+  //     blocks are single-outstanding. So the join pairs beat k with beat k;
+  //     it does not have to decide which beats belong together.
+  //   * no ready here is a function of a valid, and no valid is a function of
+  //     a ready. `zhao_geom_skin.o_valid_o`, `zhao_geom_skin_norm.n_valid_o`
+  //     (`st_q == S_EMIT`) and `zhao_geom_warp.v_ready_o` (`st_q == S_IDLE`)
+  //     are all state. `zhao_geom_warp`'s own header records that its
+  //     `v_ready_o` is deliberately not a function of any downstream ready
+  //     "or the fork's no-deadlock argument stops being true".
+  //   * the downstream FORK is the block's own, with two independently
+  //     retired registered valids (`hold_p_q` / `hold_n_q`) and two accept
+  //     counters, not one shared one.
+  //
+  // ---- WHAT IS NOT HERE --------------------------------------------------
+  // The W06 STREAM4 attribute path. `v_attr_i` is fed from the record's
+  // INLINE4 words, which is what `attribute_mode` 0 means; a STREAM4 record
+  // names a resource (`cmd_draw_warp_attr_res_o`) and this console has no
+  // reader for it. Said here rather than discovered later: the four words a
+  // STREAM4 draw would get are its INLINE4 field, which the ABI leaves zero.
+  // --------------------------------------------------------------------------
+
+  // The join's three nets. `gs_v_ready` was GEOM.GROUP_SEQ's `v_ready_o` and
+  // is now an expression; `gsq_v_ready` is that port's new home.
+  wire gsq_v_ready;
+  wire gw_v_ready;
+  assign gs_v_ready  = gw_v_ready && geom_sn_n_valid_o;
+  assign sn_n_ready_c = gw_v_ready && gs_v_valid;
+  wire gw_v_valid_c  = gs_v_valid && geom_sn_n_valid_o;
+  wire gw_v_fire_c   = gw_v_valid_c && gw_v_ready;
+
+  // GEOM.WARP's published vertex, two consumers, exactly once each.
+  wire               gw_o_p_valid, gw_o_n_valid, gw_o_n_degenerate;
+  wire signed [31:0] gw_o_px, gw_o_py, gw_o_pz;
+  wire signed [31:0] gw_o_nx, gw_o_ny, gw_o_nz;
+  wire [15:0]        gw_o_p_src_id, gw_o_n_src_id;
+
+  // The logical Warp client, between the block and its adapter.
+  wire               gw_f_vtx_valid, gw_f_vtx_take, gw_f_slot_valid;
+  wire signed [31:0] gw_f_px, gw_f_py, gw_f_pz, gw_f_nx, gw_f_ny, gw_f_nz;
+  wire [127:0]       gw_f_attr, gw_f_par;
+  wire [31:0]        gw_f_time;
+  wire [2:0]         gw_f_slot;
+  wire [7:0]         gw_f_profile;
+  wire               wfa_ans_valid, wfa_warp_valid;
+  wire signed [31:0] wfa_dx, wfa_dy, wfa_dz, wfa_onx, wfa_ony, wfa_onz;
+
+  // The engine's THIRD client port.
+  wire        wfa_req_valid, wfa_req_ready, wfa_req_noprog;
+  wire [2:0]  wfa_req_slot;
+  wire [479:0] wfa_req_in;       // IN_LANES(15) * 32
+  wire        wfa_resp_valid, wfa_resp_ready;
+
+  // `o_p_src_id_o` is not read: GEOM.GROUP_SEQ takes its source id from the
+  // JOB (`dsp_job_src`), not from the vertex, and a second copy arriving on a
+  // different path is the pairing entry I39 refuses by name. The NORMAL side
+  // IS read, because `zhao_light_skin_adapter` carries it through to the lit
+  // colour and there is no job-side alternative there.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [15:0] gw_o_p_src_id_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign gw_o_p_src_id = gw_o_p_src_id_unused;
+
+  // ---- THE DESCRIPTOR BOOK ------------------------------------------------
+  // Written on the DRAW handshake `u_geom_drawjob` takes, read by the cookie
+  // that travelled with this vertex. `r_fire_i` is the warp's own vertex
+  // accept, so the counters measure vertices and not stall cycles.
+  wire               wb_r_en;
+  wire [31:0]        wb_r_time;
+  wire [127:0]       wb_r_par, wb_r_attr;
+  wire [7:0]         wb_r_attr_mode;
+  wire signed [31:0] wb_r_bx, wb_r_by, wb_r_bz;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The record's attribute MODE and its STREAM4 resource handle are decoded,
+  // carried and stored, and this console reads neither: see "WHAT IS NOT
+  // HERE" above. They are held rather than dropped so the reader that
+  // eventually wants them finds the storage already correct per draw.
+  wire [7:0] wb_r_attr_mode_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign wb_r_attr_mode_unused = wb_r_attr_mode;
+
+  zhao_geom_warpbook #(
+    .ENTRIES(4),
+    .IDXW   (2),
+    .STAMPW (5),
+    .CKW    (GEOM_WCK_W)
+  ) u_geom_warpbook (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // REAL: `zhao_cmd_exec`'s decoded 0x0304 snapshot, on the SAME handshake
+    // and out of the SAME queue entry as the draw it belongs to (W05).
+    .w_fire_i     (cmd_draw_valid_w && cmd_draw_ready_w),
+    .w_en_i       (cmd_draw_warp_en_o),
+    .w_time_i     (cmd_draw_warp_time_o),
+    .w_par_i      (cmd_draw_warp_par_o),
+    .w_attr_i     (cmd_draw_warp_attr_o),
+    .w_attr_mode_i(cmd_draw_warp_attr_mode_o),
+    .w_bx_i       (cmd_draw_warp_bx_o),
+    .w_by_i       (cmd_draw_warp_by_o),
+    .w_bz_i       (cmd_draw_warp_bz_o),
+    .w_cookie_o   (wb_w_cookie),
+
+    .r_cookie_i   (gs_v_warp_cookie),
+    .r_fire_i     (gw_v_fire_c),
+    .r_en_o       (wb_r_en),
+    .r_time_o     (wb_r_time),
+    .r_par_o      (wb_r_par),
+    .r_attr_o     (wb_r_attr),
+    .r_attr_mode_o(wb_r_attr_mode),
+    .r_bx_o       (wb_r_bx),
+    .r_by_o       (wb_r_by),
+    .r_bz_o       (wb_r_bz),
+
+    .allocated_o(geom_warp_desc_allocated_o),
+    .hits_o     (geom_warp_desc_hits_o),
+    .stale_o    (geom_warp_desc_stale_o)
+  );
+
+  zhao_geom_warp #(
+    .SRCW (16),
+    .SLOTW(3)
+  ) u_geom_warp (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // REAL: the joined post-skin vertex.
+    .v_valid_i       (gw_v_valid_c),
+    .v_ready_o       (gw_v_ready),
+    .v_px_i          (gs_v_x),
+    .v_py_i          (gs_v_y),
+    .v_pz_i          (gs_v_z),
+    .v_nx_i          (geom_sn_n_x_o),
+    .v_ny_i          (geom_sn_n_y_o),
+    .v_nz_i          (geom_sn_n_z_o),
+    .v_n_degenerate_i(geom_sn_n_degenerate_o),
+    .v_attr_i        (wb_r_attr),
+    // The POSITION side's source id. Both sides carry the same one -- the
+    // AND-fork accepted them together -- and taking it from one place means
+    // there is no second copy to disagree.
+    .v_src_id_i      (geom_skin_src_id_o),
+
+    // REAL: the per-draw descriptor, out of the book, by the cookie that
+    // travelled with THIS vertex. W05's "snapshot every draw", carried.
+    .d_warp_en_i    (wb_r_en),
+    .d_slot_i       (fld_warp_slot_i),
+    .d_slot_valid_i (fld_warp_slot_valid_i),
+    .d_profile_i    (fld_warp_prog_profile_i),
+    .d_time_i       (wb_r_time),
+    .d_par_i        (wb_r_par),
+    .d_bx_i         (wb_r_bx),
+    .d_by_i         (wb_r_by),
+    .d_bz_i         (wb_r_bz),
+
+    // REAL: the logical Warp client -> `u_field_warp_adapter` below.
+    .f_vtx_valid_o (gw_f_vtx_valid),
+    .f_px_o        (gw_f_px),
+    .f_py_o        (gw_f_py),
+    .f_pz_o        (gw_f_pz),
+    .f_nx_o        (gw_f_nx),
+    .f_ny_o        (gw_f_ny),
+    .f_nz_o        (gw_f_nz),
+    .f_attr_o      (gw_f_attr),
+    .f_vtx_take_o  (gw_f_vtx_take),
+    .f_time_o      (gw_f_time),
+    .f_par_o       (gw_f_par),
+    .f_slot_o      (gw_f_slot),
+    .f_slot_valid_o(gw_f_slot_valid),
+    .f_profile_o   (gw_f_profile),
+    .f_ans_valid_i (wfa_ans_valid),
+    .f_warp_valid_i(wfa_warp_valid),
+    .f_dx_i        (wfa_dx),
+    .f_dy_i        (wfa_dy),
+    .f_dz_i        (wfa_dz),
+    .f_onx_i       (wfa_onx),
+    .f_ony_i       (wfa_ony),
+    .f_onz_i       (wfa_onz),
+
+    // REAL: the published vertex, two consumers.
+    .o_p_valid_o  (gw_o_p_valid),
+    .o_p_ready_i  (gsq_v_ready),
+    .o_px_o       (gw_o_px),
+    .o_py_o       (gw_o_py),
+    .o_pz_o       (gw_o_pz),
+    .o_p_src_id_o (gw_o_p_src_id_unused),
+
+    .o_n_valid_o    (gw_o_n_valid),
+    .o_n_ready_i    (la_s_ready),
+    .o_nx_o         (gw_o_nx),
+    .o_ny_o         (gw_o_ny),
+    .o_nz_o         (gw_o_nz),
+    .o_n_degenerate_o(gw_o_n_degenerate),
+    .o_n_src_id_o   (gw_o_n_src_id),
+
+    .poison_valid_o (geom_warp_poison_valid_o),
+    .poison_src_id_o(geom_warp_poison_src_id_o),
+    .poison_cause_o (geom_warp_poison_cause_o),
+    .poison_dx_o    (geom_warp_poison_dx_o),
+    .poison_dy_o    (geom_warp_poison_dy_o),
+    .poison_dz_o    (geom_warp_poison_dz_o),
+
+    .vertices_transformed_o(geom_warp_vertices_transformed_o),
+    .bypassed_o            (geom_warp_bypassed_o),
+    .app_saturations_o     (geom_warp_app_saturations_o),
+    .normal_reduced_o      (geom_warp_normal_reduced_o),
+    .degenerate_o          (geom_warp_degenerate_o),
+    .bound_violations_o    (geom_warp_bound_violations_o),
+    .negative_bounds_o     (geom_warp_negative_bounds_o),
+    .normal_width_faults_o (geom_warp_normal_width_faults_o),
+    .profile_mismatches_o  (geom_warp_profile_mismatches_o),
+    .field_faults_o        (geom_warp_field_faults_o),
+    .p_accepts_o           (geom_warp_p_accepts_o),
+    .n_accepts_o           (geom_warp_n_accepts_o)
+  );
+
+  // The W profile's stream adapter -- the engine's THIRD client, and the one
+  // that forced the shared pair to 15/7 (prerequisite P1, packet C1).
+  zhao_field_warp_adapter #(
+    .SLOTW    (3),
+    .IN_LANES (15),
+    .OUT_LANES(7)
+  ) u_field_warp_adapter (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .vtx_valid_i(gw_f_vtx_valid),
+    .px_i       (gw_f_px),
+    .py_i       (gw_f_py),
+    .pz_i       (gw_f_pz),
+    .nx_i       (gw_f_nx),
+    .ny_i       (gw_f_ny),
+    .nz_i       (gw_f_nz),
+    .attr_i     (gw_f_attr),
+    .vtx_take_i (gw_f_vtx_take),
+    .time_i     (gw_f_time),
+    .par_i      (gw_f_par),
+
+    .slot_i        (gw_f_slot),
+    .slot_valid_i  (gw_f_slot_valid),
+    // FH27's check, taken from the block that already forwarded it on the
+    // same handshake rather than read a second time from the boundary. One
+    // source, so the two cannot disagree about which draw they describe.
+    .prog_profile_i(gw_f_profile),
+
+    .req_valid_o  (wfa_req_valid),
+    .req_ready_i  (wfa_req_ready),
+    .req_slot_o   (wfa_req_slot),
+    .req_noprog_o (wfa_req_noprog),
+    .req_in_o     (wfa_req_in),
+    .resp_valid_i (wfa_resp_valid),
+    .resp_ready_o (wfa_resp_ready),
+    .resp_out_i   (fld_resp_out_c),
+    // R168/W10's structural half. The old `zhao_field_host` has no such port,
+    // so wiring this adapter to it can no longer be a silent success -- it is
+    // a PINMISSING. `fld_resp_present_c` was DECLARED AND NAMED by the
+    // composer before any adapter read it, with a paragraph saying why; this
+    // is the packet that gives it a reader.
+    .resp_present_i(fld_resp_present_c),
+    .resp_status_i (fld_resp_status_c),
+
+    .ans_valid_o (wfa_ans_valid),
+    .warp_valid_o(wfa_warp_valid),
+    .dx_o        (wfa_dx),
+    .dy_o        (wfa_dy),
+    .dz_o        (wfa_dz),
+    .nx_o        (wfa_onx),
+    .ny_o        (wfa_ony),
+    .nz_o        (wfa_onz),
+
+    .vertices_o       (fld_warp_vertices_o),
+    .identities_o     (fld_warp_identities_o),
+    .bypassed_o       (fld_warp_bypassed_o),
+    .noprog_o         (fld_warp_noprog_o),
+    .sig_refused_o    (fld_warp_sig_refused_o),
+    .faults_o         (fld_warp_faults_o),
+    .absent_outputs_o (fld_warp_absent_outputs_o),
+    .stall_cycles_o   (fld_warp_stall_cycles_o),
+    .vtx_changed_o    (fld_warp_vtx_changed_o)
   );
 
 
@@ -11328,16 +11759,27 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // REAL: GEOM.SKIN.NORM's world normal. Entry I43, CLOSED.
-    .s_valid_i      (geom_sn_n_valid_o),
+    // REAL: GEOM.WARP's world normal -- GEOM.SKIN.NORM's, passed through
+    // unchanged on a bypass and deformation-corrected on an active Warp.
+    // Entry I43 stays CLOSED; the producer moved one block down the lane.
+    //
+    // THE WIDTH IS SIGN-EXTENDED, NOT NARROWED. This adapter takes s64
+    // because GEOM.SKIN.NORM emits s64, and it NARROWS BY ASSERTION -- it
+    // refuses and counts a tuple outside the producer's range reduction
+    // (`geom_light_adapter_refused_o`). GEOM.WARP publishes s32, so the check
+    // can no longer fail from this producer. It is KEPT anyway, unmodified:
+    // the day anything else feeds this port the assertion is what catches it,
+    // and deleting a guard because today's upstream cannot trip it is how a
+    // console loses the instrument before it loses the property.
+    .s_valid_i      (gw_o_n_valid),
     .s_ready_o      (la_s_ready),
-    .s_nx_i         (geom_sn_n_x_o),
-    .s_ny_i         (geom_sn_n_y_o),
-    .s_nz_i         (geom_sn_n_z_o),
-    .s_degenerate_i (geom_sn_n_degenerate_o),
+    .s_nx_i         ({{32{gw_o_nx[31]}}, gw_o_nx}),
+    .s_ny_i         ({{32{gw_o_ny[31]}}, gw_o_ny}),
+    .s_nz_i         ({{32{gw_o_nz[31]}}, gw_o_nz}),
+    .s_degenerate_i (gw_o_n_degenerate),
     // How many lights the published set holds: GEOM.LIGHT.ENV's, with the set.
     .s_nlights_i    (le_nlights),
-    .s_src_id_i     (geom_sn_n_src_id_o),
+    .s_src_id_i     (gw_o_n_src_id),
 
     .p_valid_o      (la_p_valid),
     .p_ready_i      (la_p_ready),
@@ -11527,12 +11969,15 @@ module zhao_console_core
     .job_view_mask_i (dsp_job_mask),
     .job_src_id_i    (dsp_job_src),
 
-    // REAL: from GEOM.SKIN.
-    .v_valid_i (gs_v_valid),
-    .v_ready_o (gs_v_ready),
-    .v_x_i     (gs_v_x),
-    .v_y_i     (gs_v_y),
-    .v_z_i     (gs_v_z),
+    // REAL: from GEOM.WARP, which sits between GEOM.SKIN and this block as
+    // of 2026-09-22. On a draw that names no Warp program the block is W09's
+    // BYPASS -- the same vertex, one handshake later -- so what arrives here
+    // is bit-identical to what `gs_v_*` carried before the splice.
+    .v_valid_i (gw_o_p_valid),
+    .v_ready_o (gsq_v_ready),
+    .v_x_i     (gw_o_px),
+    .v_y_i     (gw_o_py),
+    .v_z_i     (gw_o_pz),
     // REAL: GEOM.VDECODE's refusal pulse, one per record it refused -- the
     // HOLE a batch must account for or wait for ever (owner ruling R31). The
     // same net leaves the module as `geom_vd_refused_o` for evidence.
@@ -18999,6 +19444,7 @@ module zhao_console_core
     .d_semantic_weight_i(cmd_draw_semantic_weight_w),
     .d_flags_i          (cmd_draw_flags_w),
     .d_src_id_i         (cmd_draw_src_id_w),
+    .d_warp_cookie_i    (wb_w_cookie),
 
     // REAL: MEM.UPLOAD's own publication, the 5f.1 row, for MESH_STREAM pages.
     // The same publication drives MATERIAL.RESOLVE's directory for kind 11:
@@ -19040,6 +19486,7 @@ module zhao_console_core
     .j_side_o       (dj_j_side),
     // I29, the 2026-09-21 ownership ruling's section 3: exposed, not invented.
     .j_form_idx_o   (dj_j_form_idx),
+    .j_warp_cookie_o(dj_j_warp_cookie),
 
     .draws_o      (geom_dj_draws_o),
     .jobs_o       (geom_dj_jobs_o),
@@ -19137,6 +19584,7 @@ module zhao_console_core
     // PAGE-relative offsets once, here; and the draw's own state, carried.
     .j_stream_base_i(dj_j_stream_base),
     .j_side_i       (dj_j_side),
+    .j_warp_cookie_i(dj_j_warp_cookie),
     .j_client_i     (GEOM_ASSET_CLIENT_C),   // I40: assigned here
 
     // REAL: requester A of the shared ENGINE1 client.
@@ -19178,6 +19626,7 @@ module zhao_console_core
     .r_flags_o         (mf_r_flags),
     // R29: the draw's state, out in the SAME handshake as the meshlet.
     .r_side_o          (mf_r_side),
+    .r_warp_cookie_o   (mf_r_warp_cookie),
 
     .meshlets_considered_o(geom_mf_meshlets_considered_o),
     .culled_all_cameras_o (geom_mf_culled_all_cameras_o),
@@ -19472,6 +19921,7 @@ module zhao_console_core
     // R29: the draw's raster word, material set and weight, in the same
     // handshake as the counts -- the meshlet and its draw cannot separate.
     .m_side_i          (mf_r_side),
+    .m_warp_cookie_i   (mf_r_warp_cookie),
     .m_client_i        (GEOM_ASSET_CLIENT_C),
 
     // REAL: requester B of the shared ENGINE1 client.
@@ -19508,6 +19958,7 @@ module zhao_console_core
     .v_ready_i (af_v_ready),
     .v_bytes_o (af_v_bytes),
     .v_src_id_o(af_v_src_id),
+    .v_warp_cookie_o(af_v_warp_cookie),
 
     .meshlets_fetched_o  (geom_af_meshlets_fetched_o),
     .beats_read_o        (geom_af_beats_read_o),
@@ -22114,9 +22565,18 @@ module zhao_console_core
     // front -- directive 7.1's descriptor cookie riding the job handshake --
     // and the note on those boundary ports says why it is not built here.
     //
-    // So: this line stays at 2 for ONE remaining reason, and it is no longer
-    // "the block does not exist".
-    .CLIENTS  (2),
+    // THREE AS OF 2026-09-22 (packet WARPCOMP), and the reason this line spent
+    // so long at 2 is worth keeping rather than deleting: the rule is that a
+    // third client whose `req_valid_i` is a constant zero is a TIE-OFF, so the
+    // widening had to land in the SAME ACT that composes the adapter. It has.
+    // `u_field_warp_adapter` is client 2 and `u_geom_warp` drives it from a
+    // real vertex stream through a real descriptor carrier.
+    //
+    // The narrative above is preserved because the SHAPE of its error is the
+    // thing worth inheriting: the sentence that stood here named the wrong
+    // blocker, and a wrong blocker is worse than a stale fact -- everyone who
+    // read it went looking for a block to build instead of a carrier to lay.
+    .CLIENTS  (3),
     // PROGS is one number wearing three hats: the directory's ENTRIES, the
     // executor's CONTEXT count and the front's slot space. The v3 uop store is
     // indexed by context, so a program IS a context.
@@ -22130,7 +22590,37 @@ module zhao_console_core
     // the gathering front, not ahead of it.
     .PROGS    (8),
     // The executor's PLAN depth, not a memory this file owns.
-    .INSTR_N  (32),
+    //
+    // FORTY-EIGHT AS OF 2026-09-22. That is decision W14's ceiling and it is
+    // GEOM.WARP prerequisite P7, which was ABSENT at 32 -- measured by packet
+    // WARPBUILD out of the Verilator AST (`check_prod_manifest.py` printed
+    // `INSTR_N=32'd32`, the value the console ELABORATES rather than one a
+    // line of source claims), and re-measured here.
+    //
+    // WHAT IT COSTS, arithmetic and not a fit. `PCW = $clog2(INSTR_N)` goes
+    // 5 -> 6 and `LDADDRW = max(PCW, TSELW+TIDXW) = max(6, 7)` STAYS 7, so no
+    // port width at the host's edge moves. The uop store grows by 16 x 64-bit
+    // words PER CONTEXT at PROGS = 8: 8,192 bits. THAT IS A CAPACITY NUMBER,
+    // NOT AN ALM NUMBER -- whether it infers as M10K or as registers is what
+    // a fit answers and what arithmetic cannot. No Quartus was run here.
+    .INSTR_N  (48),
+    // SIX, AND IT IS NOT DERIVED. `PCW` is a SEPARATE parameter of this host,
+    // not `$clog2(INSTR_N)` computed in the module -- the block keeps them
+    // apart deliberately and $fatals at elaboration when they disagree. Moving
+    // INSTR_N to 48 without this line is exactly that disagreement.
+    //
+    // IT COST 205 SECONDS TO FIND, AND THE 205 SECONDS ARE THE POINT.
+    // `--lint-only` DOES NOT RUN `initial` BLOCKS, so `run_console_core_smoke
+    // -LintOnly` returned RC 0 in 25 s over the broken parameterisation and
+    // said nothing. The guard that caught it is inside an `initial begin`
+    // (`zhao_field_host_v2.sv:559`) and only the real smoke reaches it:
+    //   %Fatal: zhao_field_host_v2: PCW=5 disagrees with clog2(INSTR_N=48)
+    // A clean lint is not evidence about an elaboration check (CLAUDE.md).
+    //
+    // LDADDRW is UNCHANGED at 7: it is max(PCW, TSELW+TIDXW) = max(6, 7), so
+    // no port width at the host's edge moves and `u_field_doorbell`'s
+    // `.LDADDRW(7)` below still agrees with this host.
+    .PCW      (6),
     // The shipped REGS is 64, and 64 is also the uop encoding's native size --
     // the 64-bit word packs four SIX-bit register fields, so at 32 the top bit
     // of each is wasted (`zhao_field_host.sv` guards REGW > 6 for the other
@@ -22294,19 +22784,22 @@ module zhao_console_core
     .pc_evictions_o    (fld_pc_evictions_o),
     .pc_occupancy_o    (fld_pc_occupancy_o),
 
-    // BOTH CLIENTS ARE REAL AS OF 2026-09-20. Client 0 is the S-profile stamp
-    // adapter below; client 1 is the F-profile FLOW adapter, which is what
-    // entry I5 called "its own stream adapter" and what entry I42 said would
-    // take the edge seam. Two live profiles is also what makes
-    // `fld_contended_grants_o` reachable with legal stimulus -- the reason the
-    // edge client existed at all.
-    .req_valid_i ({pfa_req_valid, sfa_req_valid}),
-    .req_ready_o ({pfa_req_ready, sfa_req_ready}),
-    .req_slot_i  ({pfa_req_slot, sfa_req_slot}),
-    .req_noprog_i({pfa_req_noprog, sfa_req_noprog}),
-    .req_in_i    ({pfa_req_in, sfa_req_in}),
-    .resp_valid_o({pfa_resp_valid, sfa_resp_valid}),
-    .resp_ready_i({pfa_resp_ready, sfa_resp_ready}),
+    // ALL THREE CLIENTS ARE REAL AS OF 2026-09-22. Client 0 is the S-profile
+    // stamp adapter below; client 1 is the F-profile FLOW adapter, which is
+    // what entry I5 called "its own stream adapter" and what entry I42 said
+    // would take the edge seam; client 2 is the W-profile WARP adapter,
+    // composed with `zhao_geom_warp` in the same act. Two live profiles was
+    // already what made `fld_contended_grants_o` reachable with legal
+    // stimulus; three makes the arbiter's contention reachable from the
+    // GEOMETRY clock domain's own traffic rather than only from the particle
+    // and surface paths.
+    .req_valid_i ({wfa_req_valid, pfa_req_valid, sfa_req_valid}),
+    .req_ready_o ({wfa_req_ready, pfa_req_ready, sfa_req_ready}),
+    .req_slot_i  ({wfa_req_slot, pfa_req_slot, sfa_req_slot}),
+    .req_noprog_i({wfa_req_noprog, pfa_req_noprog, sfa_req_noprog}),
+    .req_in_i    ({wfa_req_in, pfa_req_in, sfa_req_in}),
+    .resp_valid_o({wfa_resp_valid, pfa_resp_valid, sfa_resp_valid}),
+    .resp_ready_i({wfa_resp_ready, pfa_resp_ready, sfa_resp_ready}),
     .resp_out_o  (fld_resp_out_c),
     // FH05's other two thirds. THE CONSOLE DOES NOT FORWARD THESE, and that is
     // a decision rather than an omission.

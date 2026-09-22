@@ -4006,10 +4006,20 @@ blocks:
       BUILT 2026-09-19 as fpga/rtl/geometry/zhao_geom_loom.sv. Composed into
       zhao_console_core NOWHERE, deliberately: the producer of the node stream
       is CMD.SCHEDULER, the absent owner core entries I14/I30/I33/I36 already
-      name, and the consumer GEOM.WARP has no RTL and no contract. Every port
-      would be a boundary, so the composition would connect nothing and open
-      four new tie-off entries. It is a production fit top instead, so that it
-      gets PRICED.
+      name. Every port would be a boundary, so the composition would connect
+      nothing and open four new tie-off entries. It is a production fit top
+      instead, so that it gets PRICED.
+
+      CORRECTED 2026-09-22 (WARPCOMP). This paragraph also said "and the
+      consumer GEOM.WARP has no RTL and no contract". BOTH HALVES ARE FALSE
+      and the second was false when it was written --
+      design/contracts/GEOM.WARP.md has existed since 2026-09-20 and
+      fpga/rtl/geometry/zhao_geom_warp.sv since the same day; the block is
+      COMPOSED in zhao_console_core as of 2026-09-22. It is struck rather
+      than deleted because the reason GEOM.LOOM is uncomposed does not
+      depend on it: CMD.SCHEDULER is still absent, and that half stands.
+      A stale clause propping up a live conclusion is the shape that cost
+      packet WARPBUILD a pass at the console boundary.
 
       COUNTER RENAMED. `vertices_transformed` became `nodes_transformed`,
       which is what the contract asked for in its own counters section --
