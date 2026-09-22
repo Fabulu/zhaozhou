@@ -340,6 +340,13 @@ module zhao_part_project #(
     input  var logic signed [20:0] a_y_i,
     input  var logic signed [31:0] a_d_i,
     input  var logic        [30:0] a_w_i,
+    // THE DEPTH PROFILE THIS RESULT WAS PROJECTED UNDER. It is
+    // `zhao_project_service.a_profile_o`, valid on the same cycle as the result
+    // it describes, so it CANNOT SKEW from it -- the same wiring and the same
+    // reason `zhao_forge_assemble.rs_profile_i` takes it. It is captured into
+    // the slot store beside `a_w_i` on the same enable, so a particle's w and
+    // the profile its conversion must use are one record, never two live wires.
+    input  var logic        [ 1:0] a_profile_i,
     input  var logic               a_behind_i,
     input  var logic [PAY_W-1:0]   a_payload_i,
 
@@ -397,6 +404,16 @@ module zhao_part_project #(
     output var logic        [ 7:0] q_g_o,
     output var logic        [ 7:0] q_b_o,
     output var logic        [15:0] q_src_id_o,
+    // ---- THE CANONICAL-DEPTH CARRIAGE (owner ruling 1, 2026-09-22) ---------
+    // `q_d_o` above is Q16.16 1/w and GEOM.CLIP's attribute slot 0 is invw24.
+    // Owner ruling D-4 forbids a consumer converting between them, and the
+    // conversion CONSUMES w, not 1/w. `w` reached this block on the result port
+    // as `a_w_i` and was DROPPED HERE -- the ladder queue carried no w field --
+    // which is why a polygon particle had no canonical depth and could not
+    // enter the geometry path at all. These two ports are that carriage. They
+    // convert nothing: `zhao_part_clipfeed` holds the one law's instance.
+    output var logic        [30:0] q_w_o,
+    output var logic        [ 1:0] q_profile_o,
     output var logic        [ 2:0] q_rung_o,     // PART.LADDER's verdict
     output var logic        [ 3:0] q_hold_new_o, // ... and the hold state to store
     output var logic               q_changed_o,
@@ -550,7 +567,10 @@ module zhao_part_project #(
   // SLOTS and is what makes a result always have somewhere to land.
   // ==========================================================================
   localparam int unsigned ATTR_W = 16 + 1 + 1 + 3 + 3 + 4 + 1 + 24 + 16;  // 69
-  localparam int unsigned PROJ_W = 1 + 21 + 21 + 32 + 8 + 16;             // 99
+  // 2026-09-22 (PARTMAT): + 31 bits of `w` and 2 of depth profile, appended at
+  // the LOW end so every field above keeps its offset-from-the-top and only the
+  // one reader that indexed from the BOTTOM (`lad_size_o`) changes.
+  localparam int unsigned PROJ_W = 1 + 21 + 21 + 32 + 8 + 16 + 31 + 2;    // 132
 
   logic signed [31:0] m_rad [SLOTS];  // written at wp, read at dp
   logic [ATTR_W-1:0] m_attr [SLOTS];  // written at wp, read at rp
@@ -767,7 +787,8 @@ module zhao_part_project #(
   end
 
   logic [PROJ_W-1:0] proj_wr_c;
-  assign proj_wr_c = {!a_behind_i, a_x_i, a_y_i, a_d_i, size8_c, size16_c};
+  assign proj_wr_c = {!a_behind_i, a_x_i, a_y_i, a_d_i, size8_c, size16_c,
+                      a_w_i, a_profile_i};
 
   // ==========================================================================
   // THE DRAIN AND THE LADDER LOOP.
@@ -811,7 +832,11 @@ module zhao_part_project #(
   assign lq_empty_c = (lq_wp_q == lq_rp_q);
 
   assign lad_valid_o     = landed_c && !lq_full_c;
-  assign lad_size_o      = proj_rd_c[15:0];
+  // INDEXED FROM THE TOP, as `q_size16_o` already is. It read `[15:0]` while
+  // `size16_c` was the last field of the word; appending `w` and the profile
+  // moved it, and an offset-from-the-bottom is exactly the shape that goes
+  // silently wrong when a layout grows.
+  assign lad_size_o      = proj_rd_c[PROJ_W-84 -: 16];
   assign lad_trail_o     = at_trail_c;
   assign lad_narrow_o    = at_narrow_c;
   assign lad_protected_o = at_prot_c;
@@ -837,6 +862,8 @@ module zhao_part_project #(
   assign q_d_o        = $signed(lq_rd_c[LQ_W-44 -: 32]);
   assign q_size_o     = lq_rd_c[LQ_W-76 -: 8];
   assign q_size16_o   = lq_rd_c[LQ_W-84 -: 16];
+  assign q_w_o        = lq_rd_c[LQ_W-100 -: 31];
+  assign q_profile_o  = lq_rd_c[LQ_W-131 -: 2];
   assign q_r_o        = lq_rd_c[39:32];
   assign q_g_o        = lq_rd_c[31:24];
   assign q_b_o        = lq_rd_c[23:16];
