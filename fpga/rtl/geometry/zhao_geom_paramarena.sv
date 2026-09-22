@@ -805,21 +805,11 @@ module zhao_geom_paramarena
       // prior complete frame" -- no copy, no republish, nothing to get wrong.
       if (pub_pending_q && (mstate_q == M_IDLE)) begin
         if (frame_fault_q) begin
+          // The scratch is NOT released here. See the ONE release statement
+          // below the publication block: a per-exit-path release is what this
+          // block got wrong the first time, and a SECOND per-exit-path
+          // release would have been the same mistake with better manners.
           pub_pending_q <= 1'b0;
-          // AND THE SCRATCH IS RELEASED, which the first version did not do.
-          // `scr_mine_q` is raised when the directory write is issued and was
-          // cleared ONLY in the successful-publish arm below -- so a frame
-          // that faulted after taking the scratch held it FOREVER, and
-          // `pb_scratch_valid_o` stayed high with no owner doing anything.
-          // The walker could then never be granted it, because the grant
-          // requires `!scr_mine_q`.
-          //
-          // Item 4: "Shared scratch has explicit ownership and release rather
-          // than being unowned temporary memory." A release that only happens
-          // on the success path is not a release, it is a leak with a good
-          // day. Measured alongside the lease defect above:
-          // `pb_scratch_valid_o` held high for the rest of the run.
-          scr_mine_q <= 1'b0;
         end else if (wr_words_q != '0) begin
           // EVERY CLOCK THE RETIRE GATE HOLDS IS COUNTED. Without this the
           // gate is a term in an expression that nobody can show ever did
@@ -846,10 +836,36 @@ module zhao_geom_paramarena
           pub_tris_q    <= n_tris_q;
           pub_chunks_q  <= n_chunks_q;
           pub_pending_q <= 1'b0;
-          scr_mine_q    <= 1'b0;
           frames_published_o <= frames_published_o + 32'd1;
         end
       end
+
+      // ---- the scratch is released by ONE statement --------------------------
+      // AND THE FACT THAT IT IS ONE IS THE POINT, not tidiness. The first
+      // version released the scratch only on the SUCCESSFUL publish, so a
+      // frame that faulted after taking it held it forever --
+      // `pb_scratch_valid_o` high with no owner doing anything, and the walker
+      // unable to be granted it because the grant requires `!scr_mine_q`.
+      // Item 4 asks for explicit ownership AND RELEASE, and a release that
+      // only happens on the success path is not a release, it is a leak with
+      // a good day.
+      //
+      // THE OBVIOUS REPAIR WAS A SECOND COPY OF THE RELEASE IN THE FAULT ARM,
+      // AND IT WAS THE WRONG ONE. It was written, it was correct, and the
+      // acceptance test then showed it was UNREACHABLE: `frame_fault_q` can
+      // only be set after the directory write issues by a guard denial of
+      // that write, and the lease repair in the same change made exactly that
+      // unreachable. So it would have been a branch asserted safe and never
+      // seen to move -- CLAUDE.md's "a guard you cannot reach with legal
+      // stimulus needs a committed mutant", authored on purpose, for a
+      // defensive copy of a statement that already existed.
+      //
+      // ONE statement instead, keyed on the publication attempt being OVER
+      // rather than on HOW it ended. It runs on every frame the block
+      // publishes, so the release path is exercised continuously rather than
+      // only by a fault nobody can produce -- and the faulted frame takes the
+      // identical path. `scr_contend_o` is what watches the other side.
+      if (!pub_pending_q) scr_mine_q <= 1'b0;
 
       // ---- the memory engine -----------------------------------------------
       case (mstate_q)
