@@ -21,6 +21,12 @@
 //     SDRAM home of the deviation and history records, and nothing else does;
 //     both edges are exact, a burst straddling either edge is refused WHOLE,
 //     and the unmapped gap between the store and TERRAIN.PAGE_POOL stays shut
+//   * owner completion ruling ITEM 4 (GEOM.PARAMBUF): ENGINE1 READS either
+//     view and WRITES only the view its lease NAMES; the shared scratch takes
+//     both directions and only while it is ACQUIRED; all three seams refuse a
+//     straddling burst WHOLE; with the lease low ENGINE1's permissions are
+//     byte-for-byte what they were before the ruling, and RENDER.ASSET_POOL
+//     stays READ-ONLY to it either way
 
 #include "Vtb_zhao_mem_guard.h"
 #include "verilated.h"
@@ -109,6 +115,15 @@ struct GuardHarness {
     top.res_valid = m.res_valid;
     top.res_base = m.res_base;
     top.res_span = m.res_span;
+    // GEOM.PARAMBUF's frame lease (owner completion ruling ITEM 4). Driven on
+    // EVERY request, not only inside the PARAMARENA block, so that the ~2,000
+    // fuzz requests below differential the three new arms against the oracle
+    // at whatever lease state they happen to draw -- and so that every case
+    // written before this ruling keeps asserting the lease-low behaviour it
+    // was written against rather than silently acquiring a new permission.
+    top.pb_lease_valid = m.pb_lease_valid;
+    top.pb_wr_view = m.pb_wr_view;
+    top.pb_scratch_valid = m.pb_scratch_valid;
     top.g_valid = 1;
     top.g_write = r.write;
     top.g_client = r.client;
@@ -489,6 +504,277 @@ int main(int argc, char** argv) {
         "R242: a resource region aimed at the store opens nothing for ENGINE1");
   }
 
+  // ---- ITEM 4: GEOM.PARAMBUF, the leased geometry arena -------------------------
+  // The owner's completion ruling of 2026-09-22 opened a THREE-REGION window for
+  // ENGINE1 -- two disjoint views and a shared scratch -- and the three arms it
+  // needs are the first in this block that are gated on something other than an
+  // address. So this section is organised around the two things an address-only
+  // test cannot see: WHICH view the lease names, and WHETHER the scratch was
+  // acquired.
+  //
+  // ORDERING IS LOAD-BEARING HERE AND IS NOT AN ACCIDENT. The three regions TILE,
+  // so a seam-straddling burst overlaps the legal last burst of the region below
+  // it and the legal first burst of the region above it. "Nothing was written" can
+  // therefore only be proven against words that are still pristine -- which means
+  // every REFUSAL and its shadow-memory evidence runs BEFORE any legal write lands
+  // in the arena. Reads first (they move no memory), then refusals, then the
+  // writes that must land. Re-order these and the evidence quietly starts
+  // measuring the previous case's legal write instead of this case's refusal,
+  // which would still pass and would prove nothing.
+  {
+    constexpr uint32_t V0 = kParamBufView0Base;                        // 0x0600_0000
+    constexpr uint32_t V0E = kParamBufView0Base + kParamBufViewSpan;   // 0x0640_0000
+    constexpr uint32_t V1 = kParamBufView1Base;                        // 0x0640_0000
+    constexpr uint32_t V1E = kParamBufView1Base + kParamBufViewSpan;   // 0x0680_0000
+    constexpr uint32_t SC = kParamBufScratchBase;                      // 0x0680_0000
+    constexpr uint32_t SCE = kParamBufScratchBase + kParamBufScratchSpan;  // 0x06A0_0000
+    static_assert(V0E == V1 && V1E == SC && SCE == kRenderAssetBase,
+                  "the three PARAMBUF regions must tile and end at RENDER.ASSET_POOL");
+    const unsigned E1 = MemoryGuard::ENGINE1;
+    auto pat = [](uint32_t w) { return uint16_t(((w * 2654435761u) >> 13) & 0xFFFF); };
+
+    // The lease states, built from the ordinary blit map so that NOTHING about
+    // the framebuffer lease is being varied at the same time. The PARAMBUF arms
+    // read neither `map_valid` nor `fb_writer`, and leaving those alone is what
+    // makes a failure here attributable to the arm under test.
+    GuardMap pb0 = map;                                 // lease held, view 0 writable
+    pb0.pb_lease_valid = true;
+    GuardMap pb1 = pb0;                                 // lease held, view 1 writable
+    pb1.pb_wr_view = 1;
+    GuardMap pb0s = pb0;                                // ...and the scratch acquired
+    pb0s.pb_scratch_valid = true;
+    GuardMap pb1s = pb1;
+    pb1s.pb_scratch_valid = true;
+    GuardMap nolease = map;                             // the pre-ruling ENGINE1
+    GuardMap scr_only = map;                            // acquire with no lease
+    scr_only.pb_scratch_valid = true;
+
+    // Polarity is ASSERTED against the oracle, not merely differenced. A case
+    // the RTL and the oracle both wrongly refuse agrees perfectly, and an arm
+    // that never passes anything is the cheapest way to satisfy a refusal suite.
+    auto want = [&](const MemoryGuard::Req& r, const GuardMap& m, bool pass, const char* what) {
+      if (MemoryGuard::verdict(m, r) != pass) {
+        std::printf("  ORACLE POLARITY: %s expected %s\n", what, pass ? "PASS" : "DENY");
+        h.mismatches++;
+      }
+      h.request(r, m);
+    };
+
+    // -- PHASE 1: READS TAKE EITHER VIEW, AND THE WRITE SELECTOR DOES NOT GATE THEM
+    // The walker reads the PUBLISHED view while the producer builds the other, so
+    // a read arm that honoured `pb_wr_view` would refuse exactly the traffic the
+    // window exists for. Both views are therefore read under BOTH selector
+    // polarities: four passes where a copy-pasted `pb_wr_view ? ... : ...` in the
+    // read arm would give two.
+    for (const GuardMap* m : {&pb0, &pb1}) {
+      want(MemoryGuard::Req{true, false, E1, V0, 64, full_be(64)}, *m, true,
+           "ENGINE1 read at view 0's base");
+      want(MemoryGuard::Req{true, false, E1, V0E - 64, 64, full_be(64)}, *m, true,
+           "ENGINE1 read at view 0's last burst");
+      want(MemoryGuard::Req{true, false, E1, V1, 64, full_be(64)}, *m, true,
+           "ENGINE1 read at view 1's base");
+      want(MemoryGuard::Req{true, false, E1, V1E - 64, 64, full_be(64)}, *m, true,
+           "ENGINE1 read at view 1's last burst");
+    }
+
+    // -- PHASE 2a: THE WRITE GOES TO THE VIEW THE LEASE NAMES, AND ONLY THAT ONE
+    // THE HEADLINE PROTECTION. Both of these writes are squarely contained in a
+    // PARAMBUF view, under a valid lease, from the right client -- so every
+    // address-shaped check in the block passes them. What refuses them is the mux
+    // on `pb_wr_view`, and nothing else does. This is the producer being stopped
+    // from scribbling on the frame the renderer is walking, which is the entire
+    // reason there are two views rather than one.
+    want(MemoryGuard::Req{true, true, E1, V1 + 0x1000u, 64, full_be(64)}, pb0, false,
+         "ENGINE1 write into view 1 while the lease names view 0");
+    want(MemoryGuard::Req{true, true, E1, V0 + 0x1000u, 64, full_be(64)}, pb1, false,
+         "ENGINE1 write into view 0 while the lease names view 1");
+    chk(h.peek((V1 + 0x1000u) >> 1) == 0 && h.peek((V0 + 0x1000u) >> 1) == 0,
+        "ITEM 4: a write to the view the lease does not name leaves memory untouched");
+
+    // -- PHASE 2b: EVERY SEAM REFUSES A STRADDLING BURST, WHOLE
+    // Item 4: "A request crossing a per-view or scratch boundary is not allowed
+    // merely because both endpoints lie somewhere in the union of permitted
+    // ranges." These three bursts are exactly that request. Each starts 32 bytes
+    // below a seam and ends 32 bytes above it, so every byte it touches is inside
+    // SOME permitted region -- and a single [VIEW0_BASE, SCRATCH_END) comparison
+    // would admit all three while being indistinguishable from the correct
+    // arrangement on every request that does not cross a seam. Both directions,
+    // because the read arm's `in_view0 || in_view1` is the one place a union could
+    // be reintroduced without anyone noticing.
+    want(MemoryGuard::Req{true, true, E1, V0E - 32, 64, full_be(64)}, pb0, false,
+         "a WRITE straddling the view0/view1 seam");
+    want(MemoryGuard::Req{true, true, E1, V0E - 32, 64, full_be(64)}, pb1, false,
+         "a WRITE straddling the view0/view1 seam, other selector");
+    want(MemoryGuard::Req{true, false, E1, V0E - 32, 64, full_be(64)}, pb0, false,
+         "a READ straddling the view0/view1 seam");
+    want(MemoryGuard::Req{true, true, E1, V1E - 32, 64, full_be(64)}, pb1s, false,
+         "a WRITE straddling the view1/scratch seam");
+    want(MemoryGuard::Req{true, false, E1, V1E - 32, 64, full_be(64)}, pb0s, false,
+         "a READ straddling the view1/scratch seam");
+    want(MemoryGuard::Req{true, true, E1, SCE - 32, 64, full_be(64)}, pb0s, false,
+         "a WRITE straddling the scratch/asset-pool seam");
+    // The scratch/asset read is the seam worth naming twice: the scratch is
+    // readable and the asset pool is readable, so their UNION would pass this
+    // request, and the only thing refusing it is that neither region contains it
+    // whole. It is also the request that would silently widen ENGINE1's asset-pool
+    // access by half a burst.
+    want(MemoryGuard::Req{true, false, E1, SCE - 32, 64, full_be(64)}, pb0s, false,
+         "a READ straddling the scratch/asset-pool seam");
+    // A 16-byte straddle of the view1/scratch seam, because a 64-byte burst is the
+    // only size the cases above use and the containment arithmetic is length-
+    // sensitive at exactly one place (`end`).
+    want(MemoryGuard::Req{true, true, E1, SC - 1, 16, full_be(16)}, pb0s, false,
+         "a short WRITE straddling the view1/scratch seam");
+    chk(h.peek(V0E >> 1) == 0 && h.peek((V0E - 32) >> 1) == 0,
+        "ITEM 4: a burst straddling the view0/view1 seam writes nothing on either side");
+    chk(h.peek(V1E >> 1) == 0 && h.peek((V1E - 32) >> 1) == 0,
+        "ITEM 4: a burst straddling the view1/scratch seam writes nothing on either side");
+    chk(h.peek(SCE >> 1) == 0 && h.peek((SCE - 32) >> 1) == 0,
+        "ITEM 4: a burst straddling the scratch/asset-pool seam writes nothing on either side");
+
+    // -- PHASE 2c: THE EDGES ARE EXACT, ONE BYTE EITHER WAY
+    // The refused halves live here; the passing halves are in phase 3, where they
+    // can be shown to LAND. A region whose top bound was written `<` instead of
+    // `<=`, or whose base used `>`, passes every case above and fails exactly one
+    // of these four.
+    want(MemoryGuard::Req{true, true, E1, V0E - 63, 64, full_be(64)}, pb0, false,
+         "a view-0 write one byte past the view's end");
+    want(MemoryGuard::Req{true, false, E1, V0 - 1, 16, full_be(16)}, pb0, false,
+         "a read one byte below view 0's base");
+    want(MemoryGuard::Req{true, true, E1, SCE - 63, 64, full_be(64)}, pb0s, false,
+         "a scratch write one byte past the scratch's end");
+    want(MemoryGuard::Req{true, false, E1, SCE - 63, 64, full_be(64)}, pb0s, false,
+         "a scratch read one byte past the scratch's end");
+
+    // -- PHASE 2d: THE SCRATCH IS UNMAPPED UNTIL IT IS ACQUIRED
+    // Item 4: "Shared scratch has explicit ownership and release rather than being
+    // unowned temporary memory." Release is deasserting `pb_scratch_valid`, so a
+    // released scratch must be as closed as an address outside the map -- in BOTH
+    // directions, because the fetcher writes it and the walker reads it and a
+    // direction-gated arm would leave one of them open after release.
+    want(MemoryGuard::Req{true, true, E1, SC + 0x1000u, 64, full_be(64)}, pb0, false,
+         "a scratch WRITE with the scratch not acquired");
+    want(MemoryGuard::Req{true, false, E1, SC + 0x1000u, 64, full_be(64)}, pb1, false,
+         "a scratch READ with the scratch not acquired");
+    chk(h.peek((SC + 0x1000u) >> 1) == 0,
+        "ITEM 4: a write to an unacquired scratch leaves memory untouched");
+
+    // -- PHASE 2e: NO BLANKET BANK-3 PERMISSION
+    // With the lease low, ENGINE1's permissions must be BYTE-FOR-BYTE what they
+    // were before this ruling. That is the property the whole three-port design
+    // exists to make checkable, and it is checked positively AND negatively here:
+    // everything 5c opened is shut, and the one thing ENGINE1 already had --
+    // reading RENDER.ASSET_POOL -- still works. A regression that tied the lease
+    // high internally would pass every other case in this section.
+    want(MemoryGuard::Req{true, false, E1, V0, 64, full_be(64)}, nolease, false,
+         "a view-0 read with no lease");
+    want(MemoryGuard::Req{true, false, E1, V1, 64, full_be(64)}, nolease, false,
+         "a view-1 read with no lease");
+    want(MemoryGuard::Req{true, true, E1, V0 + 0x2000u, 64, full_be(64)}, nolease, false,
+         "a view-0 write with no lease");
+    want(MemoryGuard::Req{true, true, E1, V1 + 0x2000u, 64, full_be(64)}, nolease, false,
+         "a view-1 write with no lease");
+    // An acquired scratch is not a lease. `pb_scratch_valid` alone opens nothing:
+    // the scratch arm carries BOTH terms, so releasing the frame closes the
+    // scratch even if nobody remembered to deassert its own bit.
+    want(MemoryGuard::Req{true, true, E1, SC + 0x2000u, 64, full_be(64)}, scr_only, false,
+         "a scratch write with the scratch acquired but no lease");
+    want(MemoryGuard::Req{true, false, E1, SC + 0x2000u, 64, full_be(64)}, scr_only, false,
+         "a scratch read with the scratch acquired but no lease");
+    want(MemoryGuard::Req{true, false, E1, kRenderAssetBase, 64, full_be(64)}, nolease, true,
+         "the pre-ruling asset-pool read, with no lease");
+    chk(h.peek((V0 + 0x2000u) >> 1) == 0 && h.peek((V1 + 0x2000u) >> 1) == 0 &&
+            h.peek((SC + 0x2000u) >> 1) == 0,
+        "ITEM 4: with the lease low, nothing in the arena is writable");
+
+    // -- PHASE 2f: RENDER.ASSET_POOL IS STILL READ-ONLY TO ENGINE1
+    // Named explicitly by the owner. The pool sits immediately above the scratch,
+    // so the arrangement that would break this is not exotic: one span constant
+    // off by 0x0020_0000, or the scratch arm written over the union of its own
+    // region and the pool. Refused with the lease held (both selectors, scratch
+    // acquired) and with it not held, because "the lease bought a write" and "bank
+    // 3 was always writable" are two different defects and this distinguishes them.
+    want(MemoryGuard::Req{true, true, E1, kRenderAssetBase, 64, full_be(64)}, pb0s, false,
+         "an ENGINE1 WRITE into RENDER.ASSET_POOL with the lease held, view 0");
+    want(MemoryGuard::Req{true, true, E1, kRenderAssetBase, 64, full_be(64)}, pb1s, false,
+         "an ENGINE1 WRITE into RENDER.ASSET_POOL with the lease held, view 1");
+    want(MemoryGuard::Req{true, true, E1, kRenderAssetBase, 64, full_be(64)}, nolease, false,
+         "an ENGINE1 WRITE into RENDER.ASSET_POOL with no lease");
+    want(MemoryGuard::Req{true, false, E1, kRenderAssetBase, 64, full_be(64)}, pb0s, true,
+         "the asset-pool READ, unchanged by the ruling");
+    chk(h.peek(kRenderAssetBase >> 1) == 0,
+        "ITEM 4: ENGINE1 cannot write RENDER.ASSET_POOL, leased or not");
+
+    // -- PHASE 2g: ONE CLIENT
+    // Item 4: "No other client acquires PARAMBUF access through this ruling. NO
+    // blanket bank-3 permission." Every other client id, both directions, all
+    // three regions, under the MOST permissive lease state there is -- so a
+    // verdict that leaked out of the ENGINE1 case arm has nowhere to hide. Client
+    // 5 is included because it is ruling T3's unspent reservation and this window
+    // did not spend it; TERRAIN_BUILD because its four arms are evaluated over
+    // TERRAIN's constants and must admit nothing here.
+    for (unsigned c : {unsigned(MemoryGuard::SCANOUT), unsigned(MemoryGuard::BLIT_DMA),
+                       unsigned(MemoryGuard::ENGINE0), unsigned(MemoryGuard::DEBUG), 5u,
+                       unsigned(MemoryGuard::TERRAIN_BUILD)}) {
+      for (uint32_t base : {V0, V1, SC}) {
+        want(MemoryGuard::Req{true, true, c, base + 0x3000u, 64, full_be(64)}, pb0s, false,
+             "a PARAMBUF write from a client that is not ENGINE1");
+        want(MemoryGuard::Req{true, false, c, base + 0x3000u, 64, full_be(64)}, pb0s, false,
+             "a PARAMBUF read from a client that is not ENGINE1");
+      }
+    }
+    chk(h.peek((V0 + 0x3000u) >> 1) == 0 && h.peek((V1 + 0x3000u) >> 1) == 0 &&
+            h.peek((SC + 0x3000u) >> 1) == 0,
+        "ITEM 4: no client but ENGINE1 writes the arena");
+
+    // -- PHASE 2h: shape_ok STILL GATES
+    // A malformed request inside a perfectly legal range. `pass_ok` is
+    // `shape_ok && (...)` for ENGINE1 exactly as it is for every other client, and
+    // the new arms are on the right-hand side of that AND -- this is the case that
+    // says so, rather than leaving it to be read off the case statement.
+    want(MemoryGuard::Req{true, true, E1, V0 + 0x4000u, 64, full_be(64) & ~0xFull}, pb0, false,
+         "a legally addressed view-0 write with a hole in the byte mask");
+    want(MemoryGuard::Req{true, false, E1, V1 + 0x4000u, 32, full_be(16)}, pb1, false,
+         "a legally addressed view-1 read whose mask is the wrong width for its len");
+    want(MemoryGuard::Req{true, true, E1, SC + 0x4000u, 65, full_be(64)}, pb0s, false,
+         "a legally addressed scratch write of an illegal length");
+    chk(h.peek((V0 + 0x4000u) >> 1) == 0 && h.peek((SC + 0x4000u) >> 1) == 0,
+        "ITEM 4: a shape violation inside a legal range writes nothing");
+
+    // -- PHASE 3: THE LEGAL WRITES, AND THEY LAND
+    // Everything above is a refusal, and a window that refuses everything refuses
+    // all of them. These are the passes, proven against the real memory through
+    // the model's peek port: both ends of the leased view under each selector
+    // polarity, and both ends of the acquired scratch. The view-0 burst at V0E-64
+    // ends EXACTLY at 0x0640_0000 and is the passing half of phase 2c's first
+    // case; the scratch burst at SCE-64 ends exactly at RENDER.ASSET_POOL's base
+    // and is the passing half of its third.
+    want(MemoryGuard::Req{true, true, E1, V0, 64, full_be(64)}, pb0, true,
+         "ENGINE1 write at view 0's base under view 0's lease");
+    want(MemoryGuard::Req{true, true, E1, V0E - 64, 64, full_be(64)}, pb0, true,
+         "ENGINE1 write ending EXACTLY at view 0's top edge");
+    want(MemoryGuard::Req{true, true, E1, V1, 64, full_be(64)}, pb1, true,
+         "ENGINE1 write at view 1's base under view 1's lease");
+    want(MemoryGuard::Req{true, true, E1, V1E - 64, 64, full_be(64)}, pb1, true,
+         "ENGINE1 write ending EXACTLY at view 1's top edge");
+    chk(h.peek(V0 >> 1) == pat(V0 >> 1) && h.peek((V0E - 64) >> 1) == pat((V0E - 64) >> 1) &&
+            h.peek(V1 >> 1) == pat(V1 >> 1) && h.peek((V1E - 64) >> 1) == pat((V1E - 64) >> 1),
+        "ITEM 4: writes at both ends of each leased view land");
+    // The scratch takes both directions and ignores `pb_wr_view` -- it is ONE
+    // region with one owner, not a third view -- so its write is exercised under
+    // both selector polarities and must pass under each.
+    want(MemoryGuard::Req{true, true, E1, SC, 64, full_be(64)}, pb0s, true,
+         "scratch write with the scratch acquired, selector 0");
+    want(MemoryGuard::Req{true, true, E1, SCE - 64, 64, full_be(64)}, pb1s, true,
+         "scratch write ending EXACTLY at RENDER.ASSET_POOL's base, selector 1");
+    want(MemoryGuard::Req{true, false, E1, SC, 64, full_be(64)}, pb0s, true,
+         "scratch read with the scratch acquired");
+    want(MemoryGuard::Req{true, false, E1, SCE - 64, 64, full_be(64)}, pb1s, true,
+         "scratch read at the scratch's last burst");
+    chk(h.peek(SC >> 1) == pat(SC >> 1) && h.peek((SCE - 64) >> 1) == pat((SCE - 64) >> 1),
+        "ITEM 4: writes at both ends of the acquired scratch land");
+  }
+
   // ---- byte_enable holes rejected ---------------------------------------------
   {
     h.request(
@@ -511,9 +797,17 @@ int main(int argc, char** argv) {
     zref::Pcg32 pcg(0x5EEDF00Du);
     // addresses concentrated near the region boundaries (0, span ends,
     // slot bases, the unmapped tail) plus wild addresses
+    // The PARAMBUF seams are anchored here too (item 4). The lesson written at
+    // the ENGINE1 arm of zref::MemoryGuard is that this fuzz found nothing about
+    // RENDER.ASSET_POOL for weeks because its anchors were all in framebuffer
+    // space -- a divergence at addresses the test never generates does not exist
+    // as far as the test is concerned. The three seams are where a union bug
+    // lives, so they are where the jitter is aimed.
     const uint32_t anchors[] = {0x00000000, 0x0003BFC0, 0x0003C000, 0x00077FC0, 0x00078000,
                                 0x0007FFFF, 0x01FFFFC0, 0x02000000, 0x0203BFC0, 0x0203C000,
-                                0x069FFFF0, 0x06A00000, 0x07FFFFC0, 0x08000000};
+                                0x05FFFFC0, 0x06000000, 0x063FFFC0, 0x06400000, 0x067FFFC0,
+                                0x06800000, 0x069FFFC0, 0x069FFFF0, 0x06A00000, 0x07FFFFC0,
+                                0x08000000};
     constexpr unsigned NANCHORS = sizeof(anchors) / sizeof(anchors[0]);
     const unsigned NFUZZ = 2000;
     for (unsigned i = 0; i < NFUZZ; i++) {
@@ -527,6 +821,14 @@ int main(int argc, char** argv) {
       m.res_valid = pcg.range(2) != 0;
       m.res_base = anchors[pcg.range(NANCHORS)] + pcg.range(0x200) - 0x100;
       m.res_span = pcg.range(4) == 0 ? pcg.next() : 0x40u * (1 + pcg.range(0x80));
+      // Item 4's three lease inputs, drawn independently, because the interesting
+      // combinations are the incoherent ones: a scratch acquired without a lease,
+      // a selector naming a view the request is not in. The directed cases above
+      // pick those deliberately; this picks them 2,000 times without being told
+      // which ones matter.
+      m.pb_lease_valid = pcg.range(4) != 0;
+      m.pb_wr_view = pcg.range(2);
+      m.pb_scratch_valid = pcg.range(2) != 0;
       MemoryGuard::Req r;
       r.valid = true;
       r.write = pcg.range(2) == 0;
