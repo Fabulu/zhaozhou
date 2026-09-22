@@ -7952,21 +7952,46 @@ module zhao_console_core
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
+  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
+  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
+  //      this module by `zhao_terrain_fieldlist`, whose own intake is
+  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
+  //      footprint and a program hash RESOLVED against FIELD.LOADER's
+  //      publication port rather than forwarded as a handle.
+  //
+  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
+  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
+  //      declaring the other three channels present because they have spare bus
+  //      bits." The Earth record declares four channels and this consumer can
+  //      receive one, so the lane stays a boundary until
+  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
+  //      3.4 with an empty program list -- an absent input, not a faked one.
   input  logic                    terr_pt_fld_valid_i,
   output logic                    terr_pt_fld_ready_o,
   input  logic signed [31:0]      terr_pt_fld_height_i,
-  input  logic                    terr_pt_fld_add_valid_i,
-  output logic                    terr_pt_fld_add_ready_o,
-  input  logic signed [31:0]      terr_pt_fld_add_x0_i,
-  input  logic signed [31:0]      terr_pt_fld_add_z0_i,
-  input  logic signed [31:0]      terr_pt_fld_add_x1_i,
-  input  logic signed [31:0]      terr_pt_fld_add_z1_i,
-  input  logic [31:0]             terr_pt_fld_add_hash_i,
-  input  logic [15:0]             terr_pt_fld_add_cmd_i,
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
+  // TERRAIN.FIELDLIST's evidence. `tfl_open_at_patch_o` is the counter that
+  // watches the cadence fault this block exists to prevent: a patch job that
+  // met a list the command stream had not finished delivering.
+  output logic [31:0]             terr_fl_records_sealed_o,
+  output logic [31:0]             terr_fl_tail_rejected_o,
+  output logic [31:0]             terr_fl_unresolved_o,
+  output logic [31:0]             terr_fl_replays_o,
+  output logic [31:0]             terr_fl_entries_replayed_o,
+  output logic [31:0]             terr_fl_open_at_patch_o,
+  output logic [4:0]              terr_fl_records_o,
+  output logic                    terr_fl_sealed_o,
+  output logic                    terr_fl_idle_o,
+  // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
+  // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
+  // queue could never drain and `tfld_overflow_o` could not be read. A refusal
+  // counter nobody can see is the shape this repository calls a blind
+  // instrument.
+  output logic [31:0]             cmd_exec_tflds_o,
+  output logic [31:0]             cmd_exec_tfld_overflow_o,
+  output logic [31:0]             cmd_exec_tfld_src_truncated_o,
   output logic [4:0]              terr_pt_fields_active_o,
   output logic [15:0]             terr_pt_trace_patch_id_o,
   output logic [31:0]             terr_pt_trace_hash_o,
@@ -9644,7 +9669,13 @@ module zhao_console_core
   // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
   output logic [ 7:0]  fld_ldr_pub_ready_o,
   output logic [ 7:0]  fld_ldr_pub_pinned_o,
-  input  logic [ 2:0]  fld_ldr_pub_sel_i,
+  // `pub_sel_i` HAS AN OWNER AS OF 2026-09-22 (FIELDARM) and has left this
+  // edge. It is driven by `u_terrain_fieldlist`, which sweeps the eight
+  // publication objects to turn a TerrainField record's `handle32[program]`
+  // into the canonical program hash the section 9.1 list carries. Entry I34's
+  // S2 recorded this producer as having landed and NOTHING as reading it; this
+  // is the reader. There is no second client, so no share was needed -- I34
+  // build item (d)'s `pub_sel` half is spent, and its `pc_lu_*` half is not.
   output logic [31:0]  fld_ldr_pub_handle_o,
   output logic [31:0]  fld_ldr_pub_prog_hash_o,
   output logic [ 7:0]  fld_ldr_pub_gen_o,
@@ -18282,6 +18313,18 @@ module zhao_console_core
   // every abandon -- so it needs no change when the decoder learns to re-arm.
   // That change belongs to CMD.DECODER, whose verdict 19 committed goldens
   // pin, and it is not smuggled in here.
+  // FIELDARM 2026-09-22: CMD.EXEC's TerrainField 0x0200 carriers. THE UNIFORMS
+  // ARE DELIBERATELY ABSENT FROM THIS LIST. `tfld_start_tick_o`,
+  // `tfld_duration_o` and `tfld_params_o` are the EARTH stream adapter's
+  // descriptor (entry I34 build item (c)) and that block does not exist, so
+  // they stay unconnected outputs rather than becoming a stored word nothing
+  // reads or a table with an address port nothing drives. An honestly
+  // unconnected output on the producer is the smallest of the three.
+  wire        cmd_tfld_valid_w, cmd_tfld_ready_w, cmd_tfld_last_w;
+  wire signed [31:0] cmd_tfld_x0_w, cmd_tfld_z0_w, cmd_tfld_x1_w, cmd_tfld_z1_w;
+  wire [31:0] cmd_tfld_handle_w;
+  wire [15:0] cmd_tfld_cmd_w;
+
   // R18/R33: CMD.EXEC's token outputs, declared ahead of both instances.
   logic        cmd_tok_budget_valid, cmd_tok_vreq_valid, cmd_tok_vreq_view;
   logic [31:0] cmd_tok_budget_geom0, cmd_tok_budget_geom1;
@@ -18471,6 +18514,33 @@ module zhao_console_core
     .forge_overflow_o      (cmd_exec_forge_overflow_o),
     .forge_src_truncated_o (cmd_exec_forge_src_truncated_o),
 
+    // TerrainField 0x0200 -> TERRAIN.FIELDLIST. COMPOSED 2026-09-22 (FIELDARM).
+    // Before this commit NOT ONE of these thirteen ports was connected, which
+    // packet WARPCOMP found by grep and by Verilator PINMISSING independently.
+    // `tfld_ready_i` was the load-bearing one: an unconnected input reads low,
+    // so the staged records could never leave the queue, and `tfld_overflow_o`
+    // -- the counter that would have said so -- was unconnected too. A refusal
+    // counter nobody can read is a blind instrument by construction.
+    .tfld_valid_o     (cmd_tfld_valid_w),
+    .tfld_ready_i     (cmd_tfld_ready_w),
+    .tfld_x0_o        (cmd_tfld_x0_w),
+    .tfld_z0_o        (cmd_tfld_z0_w),
+    .tfld_x1_o        (cmd_tfld_x1_w),
+    .tfld_z1_o        (cmd_tfld_z1_w),
+    .tfld_handle_o    (cmd_tfld_handle_w),
+    .tfld_cmd_o       (cmd_tfld_cmd_w),
+    // THE UNIFORMS ARE LEFT UNCONNECTED, ON PURPOSE AND WITH AN OWNER. Their
+    // only reader is the EARTH stream adapter (I34 build item (c)); directive
+    // 20.8 forbids declaring a channel present because its bits exist, and the
+    // same sentence forbids inventing a consumer for one.
+    .tfld_start_tick_o(),
+    .tfld_duration_o  (),
+    .tfld_params_o    (),
+    .tfld_last_o      (cmd_tfld_last_w),
+    .tflds_issued_o        (cmd_exec_tflds_o),
+    .tfld_overflow_o       (cmd_exec_tfld_overflow_o),
+    .tfld_src_truncated_o  (cmd_exec_tfld_src_truncated_o),
+
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 
@@ -18653,8 +18723,19 @@ module zhao_console_core
   // changed, the hazard did not.)
   assign tce_job_take  = tps_j_valid && tps_j_ready;
 
-  assign tpt_vtx_valid  = tps_v_valid && tpc_placed;
-  assign tps_v_ready    = tpc_placed ? tpt_vtx_ready : 1'b1;
+  // THE REPLAY INTERLOCK (FIELDARM, 2026-09-22).  A patch may not begin
+  // composing before its section 9.1 list is present, and the two are no longer
+  // the same event: `tce_job_take` CLEARS the list and `u_terrain_fieldlist`
+  // then refills it over at most MAX_FIELDS clocks.  Holding the vertex lane is
+  // the structural form of that; a comment asserting the page burst is long
+  // enough would be the unverified promise directive 13.4 names.
+  //
+  // WITH NO TerrainField EVER RECEIVED the stall is two clocks per patch job
+  // and the list is empty, which is byte-for-byte the console's behaviour
+  // before this block existed.  That case is every existing smoke form, which
+  // is exactly why it is stated rather than assumed.
+  assign tpt_vtx_valid  = tps_v_valid && tpc_placed && !tfl_patch_stall;
+  assign tps_v_ready    = tpc_placed ? (tpt_vtx_ready && !tfl_patch_stall) : 1'b1;
   assign tcc_fill_start = tps_v_valid && tps_v_ready && tps_v_first && tpc_placed;
 
   assign terr_cc_fill_busy_o  = tcc_fill_busy;
@@ -18950,6 +19031,92 @@ module zhao_console_core
     .idle_o             (terr_ps_idle_o)
   );
 
+  // ---- TERRAIN.FIELDLIST ---------------------------------------------------
+  // NEW 2026-09-22 (FIELDARM). The producer entry I34's section 9.1 list
+  // intake was waiting for, and it is NOT the one wire the entry warned about.
+  //
+  // THE CADENCE IS WHY THIS BLOCK EXISTS, and it is a hardware fact neither
+  // I34 nor FIELDLANE had measured. `zhao_cmd_exec` publishes TerrainField
+  // records ONCE PER COMMAND PACKET -- one frame -- and drains them exactly
+  // once. `zhao_terrain_patch`'s `list_clear_i` is `tce_job_take`, ONE PULSE
+  // PER PATCH JOB, and it empties the list. A frame has many patch jobs, so
+  // joining the two directly would fill the list for the FIRST patch and leave
+  // every later patch of that frame composing against an empty one -- silently,
+  // with `fields_active_o` reading 0 and every counter on both blocks
+  // balancing. Nothing in either block looks at the field that moved.
+  //
+  // So the list is SEALED per frame here and REPLAYED per patch, which is
+  // directive 13.6's "seal its accepted command-ordered association list" and
+  // 13.2's responsibilities 1 and 3. `zhao_terrain_patch_v2` instantiates this
+  // block rather than growing a third copy of the same list.
+  //
+  // THE VERTEX LANE IS HELD while the replay runs (`tfl_patch_stall`). A
+  // sixteen-clock refill would comfortably beat the page burst that follows a
+  // job take, and "comfortably" is exactly the unverified promise directive
+  // 13.4 forbids leaving in a comment. This is the interlock instead.
+  wire        tfl_patch_stall;
+  wire        tfl_add_valid;
+  wire        tfl_add_ready;
+  wire signed [31:0] tfl_add_x0, tfl_add_z0, tfl_add_x1, tfl_add_z1;
+  wire [31:0] tfl_add_hash;
+  wire [15:0] tfl_add_cmd;
+  wire [2:0]  tfl_pub_sel;
+
+  zhao_terrain_fieldlist #(
+    .MAX_FIELDS(16),   // terrain_rules section 9.1, the consumer's own bound
+    .OBJECTS   (8),    // zhao_field_loader's OBJECTS
+    .OBJW      (3)
+  ) u_terrain_fieldlist (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // REAL: CMD.EXEC's TerrainField 0x0200 arm. Until this commit not one of
+    // its thirteen ports was connected -- including `tfld_ready_i`, so the
+    // staged records had no way out at all.
+    .cmd_valid_i (cmd_tfld_valid_w),
+    .cmd_ready_o (cmd_tfld_ready_w),
+    .cmd_x0_i    (cmd_tfld_x0_w),
+    .cmd_z0_i    (cmd_tfld_z0_w),
+    .cmd_x1_i    (cmd_tfld_x1_w),
+    .cmd_z1_i    (cmd_tfld_z1_w),
+    .cmd_handle_i(cmd_tfld_handle_w),
+    .cmd_cmd_i   (cmd_tfld_cmd_w),
+    .cmd_last_i  (cmd_tfld_last_w),
+
+    // REAL: FIELD.LOADER's publication port. The handle becomes the CANONICAL
+    // PROGRAM HASH here, by sweep, rather than being forwarded into a field
+    // called hash -- which `zhao_cmd_exec`'s own header calls "a lie that
+    // costs nothing today and an afternoon later".
+    .pub_sel_o      (tfl_pub_sel),
+    .pub_ready_i    (fld_ldr_pub_ready_o),
+    .pub_handle_i   (fld_ldr_pub_handle_o),
+    .pub_prog_hash_i(fld_ldr_pub_prog_hash_o),
+
+    // REAL: the consumer's OWN `list_clear_i` pulse, so the clear and the
+    // refill cannot disagree about which patch they belong to.
+    .patch_open_i  (tce_job_take),
+    .patch_stall_o (tfl_patch_stall),
+
+    .add_valid_o(tfl_add_valid),
+    .add_ready_i(tfl_add_ready),
+    .add_x0_o   (tfl_add_x0),
+    .add_z0_o   (tfl_add_z0),
+    .add_x1_o   (tfl_add_x1),
+    .add_z1_o   (tfl_add_z1),
+    .add_hash_o (tfl_add_hash),
+    .add_cmd_o  (tfl_add_cmd),
+
+    .records_sealed_o  (terr_fl_records_sealed_o),
+    .tail_rejected_o   (terr_fl_tail_rejected_o),
+    .unresolved_o      (terr_fl_unresolved_o),
+    .replays_o         (terr_fl_replays_o),
+    .entries_replayed_o(terr_fl_entries_replayed_o),
+    .open_at_patch_o   (terr_fl_open_at_patch_o),
+    .records_o         (terr_fl_records_o),
+    .sealed_o          (terr_fl_sealed_o),
+    .idle_o            (terr_fl_idle_o)
+  );
+
   // ---- TERRAIN.PATCH -------------------------------------------------------
   // NO GLUE ON THE HEIGHT PATH: base/scar/bottom and the two lattice indices go
   // straight across, which is why the streamer emits three planes on one beat.
@@ -18963,15 +19130,19 @@ module zhao_console_core
     .list_clear_i(tce_job_take),
     .patch_id_i  (tis_src_id[15:0]),
 
-    // I34: the section 9.1 live-field list intake.  FIELD.SEQ.EARTH is not built.
-    .fld_add_valid_i(terr_pt_fld_add_valid_i),
-    .fld_add_ready_o(terr_pt_fld_add_ready_o),
-    .fld_add_x0_i   (terr_pt_fld_add_x0_i),
-    .fld_add_z0_i   (terr_pt_fld_add_z0_i),
-    .fld_add_x1_i   (terr_pt_fld_add_x1_i),
-    .fld_add_z1_i   (terr_pt_fld_add_z1_i),
-    .fld_add_hash_i (terr_pt_fld_add_hash_i),
-    .fld_add_cmd_i  (terr_pt_fld_add_cmd_i),
+    // REAL FROM 2026-09-22 (FIELDARM): the section 9.1 live-field list intake
+    // is `zhao_terrain_fieldlist`'s per-patch replay of the frame's sealed
+    // TerrainField list.  The footprint is the ABI's `rectfx`, unconverted;
+    // the hash is RESOLVED against FIELD.LOADER; the cmd index is the record's
+    // own `source_id`, narrowed in CMD.EXEC with a counter on the dropped half.
+    .fld_add_valid_i(tfl_add_valid),
+    .fld_add_ready_o(tfl_add_ready),
+    .fld_add_x0_i   (tfl_add_x0),
+    .fld_add_z0_i   (tfl_add_z0),
+    .fld_add_x1_i   (tfl_add_x1),
+    .fld_add_z1_i   (tfl_add_z1),
+    .fld_add_hash_i (tfl_add_hash),
+    .fld_add_cmd_i  (tfl_add_cmd),
 
     .fld_add_accept_o(terr_pt_fld_add_accept_o),
     .fld_add_reject_o(terr_pt_fld_add_reject_o),
@@ -23052,7 +23223,7 @@ module zhao_console_core
 
     .pub_ready_o    (fld_ldr_pub_ready_o),
     .pub_pinned_o   (fld_ldr_pub_pinned_o),
-    .pub_sel_i      (fld_ldr_pub_sel_i),
+    .pub_sel_i      (tfl_pub_sel),
     .pub_handle_o   (fld_ldr_pub_handle_o),
     .pub_prog_hash_o(fld_ldr_pub_prog_hash_o),
     .pub_gen_o      (fld_ldr_pub_gen_o),
