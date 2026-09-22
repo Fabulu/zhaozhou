@@ -9345,6 +9345,17 @@ module zhao_console_core
   output logic [31:0]  meas_gov_rep_count1_o,
   output logic [31:0]  meas_gov_rep_count2_o,
   output logic [31:0]  meas_gov_rep_count3_o,
+  // PROJ.CFGVALID, entry I14's closing half. `proj_cfg_armed_o` is the ARM's
+  // positive control -- it reads 1 once a view's matrix bank is complete and
+  // never moves again -- and a console that drew pixels while it read 0 would
+  // be one whose projector was enabled by the host override instead. That
+  // distinction is invisible from the outside without this port, and it is the
+  // difference between a producer and a literal.
+  // `proj_en_held_offers_o` is the clocks on which a client had a vertex
+  // WITHHELD by the gate, which is the only evidence the gate does something
+  // rather than merely exists.
+  output logic [31:0]  proj_cfg_armed_o,
+  output logic [31:0]  proj_en_held_offers_o,
   output logic [31:0]  meas_starve_denials_o,
   output logic [31:0]  meas_starve_frames0_o,
   output logic [31:0]  meas_starve_frames1_o,
@@ -13728,6 +13739,61 @@ module zhao_console_core
   assign proj_cfg_addr_m      = proj_cfg_we_i ? proj_cfg_addr_i : cmd_exec_cfg_addr_w;
   assign proj_cfg_data_m      = proj_cfg_we_i ? proj_cfg_data_i : cmd_exec_cfg_data_w;
 
+  // ---- I14: THE RIGID-PIPELINE ENABLE NOW HAS A PRODUCER -------------------
+  // This is entry I14's remaining half, closed here. That entry read, for
+  // three passes: "`proj_en_i` itself is still a tie-off and still has NO
+  // producer anywhere ... and the smoke bench drives it with a literal 1."
+  //
+  // `zhao_proj_cfgvalid` is that producer, and it is the reading
+  // FINDINGS-projinput.md decision D-1 recommended of the three it put up:
+  // a CONFIG-VALID gate that holds the projector off until a view's matrix
+  // bank has been written, so nothing is projected through an unwritten bank.
+  // The bench's own `geom_camera_ready_q` is the evidence the semantic was
+  // NEEDED rather than invented -- it gates the meshlet draw "so no descriptor
+  // can be culled against an unwritten bank", which is the same sentence about
+  // a different consumer of the same bank.
+  //
+  // READING (a), "delete the port", WAS REFUSED, and not on taste. Removing a
+  // port removes function and moves no number -- a port is neither a module
+  // nor a tie-off entry -- and under D-1's reading the port carries real
+  // function, which is the one condition R27's precedent requires before it
+  // applies.
+  //
+  // IT TAPS THE MERGED BUS, NOT THE HOST PORT. `proj_cfg_*_m` is what the
+  // subsystem is actually given, host writes and CMD.EXEC's view walk alike
+  // after the priority mux directly above, so the arm sees exactly the writes
+  // the bank sees. Tapping `proj_cfg_*_i` instead would have watched the host
+  // port only and never armed on a real command packet -- the same-name,
+  // different-quantity mistake this file has a chapter about.
+  //
+  // `proj_en_i` STAYS, AS A HOST OVERRIDE, and it is the same law as the
+  // configuration port immediately above: a host may force the projector on
+  // for bring-up, before any camera has been lowered. It is an OR and not a
+  // priority mux because an enable has no data to lose -- there is nothing for
+  // a dropped cycle to be.
+  //
+  // THE OFFER LINE IS INSTRUMENTATION AND NOTHING ELSE. `held_offers_o` counts
+  // the clocks on which a client actually had a vertex withheld, which is the
+  // only evidence that the gate did something rather than merely existing. No
+  // output of the block depends on it.
+  wire proj_cfgvalid_en_c;
+  wire proj_en_m = proj_cfgvalid_en_c || proj_en_i;
+
+  zhao_proj_cfgvalid #(
+    .MAT_WORDS (16),
+    .ADDRW     (5)
+  ) u_proj_cfgvalid (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .cfg_we_i     (proj_cfg_we_m),
+    .cfg_view_i   (proj_cfg_view_m),
+    .cfg_addr_i   (proj_cfg_addr_m),
+    .offer_i      (pa_a_valid || ts_b_valid),
+    .en_o         (proj_cfgvalid_en_c),
+    .arm_events_o (proj_cfg_armed_o),
+    .held_offers_o(proj_en_held_offers_o)
+  );
+
   zhao_proj_subsystem #(
     .PAYLOAD_A_W (GEOM_PAY_A_W),
     .ARENAS      (PROJ_T_ARENAS),
@@ -13744,7 +13810,9 @@ module zhao_console_core
     .cfg_view_i(proj_cfg_view_m),
     .cfg_addr_i(proj_cfg_addr_m),
     .cfg_data_i(proj_cfg_data_m),
-    .en_i      (proj_en_i),
+    // I14 CLOSED: the rigid-pipeline enable comes from `u_proj_cfgvalid`
+    // above, ORed with the host override `proj_en_i`. See the note there.
+    .en_i      (proj_en_m),
 
     // REAL: client A in, from GEOM.GROUP_SEQ -- THROUGH PART.PROJECT, which
     // time-multiplexes this one port between geometry and the particle draw

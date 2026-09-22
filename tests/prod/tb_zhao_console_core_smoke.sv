@@ -1024,6 +1024,11 @@ module tb_zhao_console_core_smoke
   logic [31:0]             meas_gov_rep_count1_o;
   logic [31:0]             meas_gov_rep_count2_o;
   logic [31:0]             meas_gov_rep_count3_o;
+  // PROJ.CFGVALID (entry I14's closing half). `proj_cfg_armed_o` is the ARM's
+  // positive control and `proj_en_held_offers_o` the vertices the gate
+  // withheld; both are asserted where the tokens are, below.
+  logic [31:0]             proj_cfg_armed_o;
+  logic [31:0]             proj_en_held_offers_o;
   logic [31:0]             meas_starve_denials_o;
   logic [31:0]             meas_starve_frames0_o;
   logic [31:0]             meas_starve_frames1_o;
@@ -4231,7 +4236,20 @@ module tb_zhao_console_core_smoke
     //  y = PART_TER_H, so the acceptance value further down did not move.)
     // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
     //  after reset lifts -- see the load sequence below.)
-    proj_en_i               = 1'b1;
+    // THE LITERAL 1 IS GONE, 2026-09-22 (PROJCLOSE), AND THAT IS THE POINT.
+    // This line used to read `proj_en_i = 1'b1;` and entry I14 cited it, three
+    // passes running, as the evidence that the shared projector's
+    // rigid-pipeline enable had no producer: "the smoke bench drives it with a
+    // literal 1". It has one now -- `u_proj_cfgvalid` inside the core arms the
+    // projector when a view's matrix bank completes -- so this bench holds the
+    // HOST OVERRIDE at zero and lets the console's own producer do it.
+    //
+    // THIS IS THE END-TO-END PROOF AND IT IS FALSIFIABLE. `geom_write_camera()`
+    // below is the only thing that can now enable the projector. If the
+    // producer were wrong, the projector would never run and `raster pixels`
+    // would be 0 instead of 2,560 -- so the unchanged pixel count IS the
+    // evidence, rather than a separate claim beside it.
+    proj_en_i               = 1'b0;
     // THE MATRIX BANK IS WRITTEN NOW, and it was not before. GEOM.CULL takes
     // the same sixteen words at the same addresses as the projector -- its
     // own port comment says so -- so leaving the bank at zero would have made
@@ -7407,6 +7425,24 @@ module tb_zhao_console_core_smoke
     if (tok_avail_geom1_o != TOK_G1_C || tok_avail_frag1_o != TOK_REQ_F1_C || tok_vreq_clamped_o != 32'd1)
       $fatal(1, "SMOKE: view 1's request did not clamp: geom %0d (want the ceiling %0d), frag %0d (want the request %0d), clamps %0d (want 1)",
              tok_avail_geom1_o, TOK_G1_C, tok_avail_frag1_o, TOK_REQ_F1_C, tok_vreq_clamped_o);
+    // ---- PROJ.CFGVALID (entry I14's closing half) --------------------------
+    // THE PROJECTOR'S ENABLE HAS A PRODUCER, AND THIS IS THE POSITIVE CONTROL
+    // FOR IT. `proj_en_i` is held at 0 by this bench (see the note where it is
+    // driven), so the only thing that can have enabled the shared projector is
+    // `u_proj_cfgvalid` arming on `geom_write_camera()`'s sixteen matrix
+    // words. The 2,560 raster pixels above are the end-to-end evidence; this
+    // is the instrument saying the same thing from a structure that shares no
+    // logic with the raster's counters.
+    //
+    // A ZERO HERE ON A CONSOLE THAT DREW PIXELS WOULD BE THE INTERESTING
+    // READING, and it is why the check is `!= 1` rather than `== 0`: it would
+    // mean the projector was enabled by something this bench does not know
+    // about, which is exactly the fake-stimulus shape entry I14 was carrying.
+    $display("SMOKE: projector arm=%0d held_offers=%0d",
+             proj_cfg_armed_o, proj_en_held_offers_o);
+    if (proj_cfg_armed_o != 32'd1)
+      $fatal(1, "SMOKE: PROJ.CFGVALID armed %0d time(s), expected exactly 1 -- the projector's enable did not come from its producer",
+             proj_cfg_armed_o);
     if (upl_refused_o != '0)
       $fatal(1, "SMOKE: MEM.UPLOAD's refusal census moved (%032x) on a legal upload", upl_refused_o);
     if (shell_err_wfifo_o || shell_err_route_o)
