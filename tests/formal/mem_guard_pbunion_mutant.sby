@@ -1,0 +1,42 @@
+# mem_guard_pbunion_mutant.sby -- a POSITIVE CONTROL for the owner's completion
+# ruling of 2026-09-22, ITEM 4 (GEOM.PARAMBUF). INVERTED POLARITY:
+# `expect fail`. It runs the SAME harness as mem_guard_no_escape.sby against
+# tests/mutants/zhao_mem_guard_pbunion_mutant.sv -- a copy of the guard with
+# the three region containment tests collapsed into their UNION, so a burst spanning the view0/view1 seam or running off a view into the shared scratch is admitted --
+# and it PASSES only when the no-escape proof FAILS on that copy.
+#
+# Item 4: "Extend mem_guard_no_escape to the new authorized map; do not remove
+# assertions or add assumptions that prevent illegal requests from being
+# tested... Include a deliberate fault that defeats a required protection and
+# makes the test/proof fail." This file is one of the two faults. Without
+# them the new a1_pb_* theorems and the widened a1_region arm would be
+# assertions nobody had watched fire, and a detector that has not been seen to
+# fire is a claim, not an instrument.
+#
+# The seam is a plain `ifdef selecting the module name in formal_mem_guard.sv
+# (ZHAO_GUARD_PBUNION_MUT), on the SAME `elsif chain as the other three so no run
+# can define two and silently measure only the first. The production proof
+# leaves it undefined; that run passing while this one fails is the pair that
+# shows the selector engaged -- CLAUDE.md's negative control for a
+# macro-selected mutant, and the reason the seam is an object-like `ifdef and
+# not a function-like `define a -D cannot reach.
+# Run with cwd = tests/formal.
+
+[options]
+mode bmc
+depth 30
+expect fail
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang -D ZHAO_GUARD_PBUNION_MUT --top formal_mem_guard zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_mem_guard_pbunion_mutant.sv formal_mem_guard.sv
+prep -top formal_mem_guard
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../tests/mutants/zhao_mem_guard_pbunion_mutant.sv
+formal_mem_guard.sv

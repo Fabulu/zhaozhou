@@ -762,8 +762,24 @@ if(ZHAO_SBY_BIN)
   # with both c_forward_devstore_wr and c_forward_devstore_rd reached, and this
   # copy fails at a1_resource_bounded -- the pair that shows the `ifdef seam
   # engaged rather than silently compiling production twice.
+  # mem_guard_pbview_mutant and mem_guard_pbunion_mutant are the THIRD and
+  # FOURTH inverted controls (`expect fail`), for the owner's completion ruling
+  # of 2026-09-22 item 4 (GEOM.PARAMBUF). pbview removes the WRITE arm's view
+  # SELECTION so the producer may overwrite the view the walker is reading;
+  # pbunion collapses the three region containment tests into their union, so a
+  # burst spanning the view0/view1 seam is admitted -- item 4's forbidden
+  # reading written as RTL, and the subtler of the two, since every request
+  # that stays inside one region behaves identically to production.
+  # Measured 2026-09-22: production PASSES with all five c_forward_pb_* covers
+  # reached (rd_v0, rd_v1, wr_v0, wr_v1, scr) at step 4, and BOTH copies fail
+  # at a1_pb_wr_view0. The same run moved the OTHER two controls' reported
+  # theorems -- resbound a1_region -> a1_map, devbound a1_resource_bounded ->
+  # a1_region -- because bmc reports the first assertion it violates and the
+  # theorem set grew. Nothing about those two faults changed; their headers say
+  # so rather than being quietly re-edited.
   foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant
-                            mem_guard_devbound_mutant)
+                            mem_guard_devbound_mutant mem_guard_pbview_mutant
+                            mem_guard_pbunion_mutant)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

@@ -19,17 +19,23 @@
 // nothing checks. A detector that has not been seen to fire is a claim, not an
 // instrument.
 //
-// WHICH THEOREM ACTUALLY FIRES, MEASURED RATHER THAN PREDICTED. The first
-// draft of this header said "`a1_map` is the theorem that must catch it".
-// IT IS NOT THE ONE THAT DOES. Run on 2026-09-22 the proof fails at
-// `a1_resource_bounded`, because the shortest counterexample the engine finds
-// is a TERRAIN_BUILD write that lands inside RENDER.ASSET_POOL -- legal to the
-// mutated arm, and a write into the asset pool outside any published-resource
-// region. `a1_map` catches the escape PAST THE TOP OF THE MAP, which is a
-// longer reach for the solver; bmc reports the first assertion it violates and
-// stops. The fault is caught either way, and the difference is recorded
-// because a header that names the wrong theorem is the kind of confident
-// one-line summary this repository's own rules say to check.
+// WHICH THEOREM ACTUALLY FIRES, MEASURED RATHER THAN PREDICTED, AND IT HAS
+// MOVED TWICE. The first draft of this header said `a1_map`. On 2026-09-22
+// (DEVSDRAM) the measured answer was `a1_resource_bounded`: the shortest
+// counterexample was a TERRAIN_BUILD write landing inside RENDER.ASSET_POOL,
+// legal to the mutated arm and outside any published-resource region. On
+// 2026-09-22 (PARAMARENA), after item 4 added fourteen `a1_pb_*` theorems to
+// the same harness, it is `a1_region`.
+//
+// NOTHING ABOUT THE FAULT CHANGED. bmc reports the FIRST assertion it
+// violates and stops, so which name appears is a fact about the solver's
+// search order and the set of theorems present, not about the mutation. That
+// is worth writing down rather than quietly re-editing, because "the proof
+// fails at X" reads like a property of the defect and is not one: the
+// stable claim is that the proof FAILS, and the theorem name is evidence
+// about the run. A header that names a theorem the run no longer produces is
+// exactly the confident one-line summary this repository's rules say to
+// check.
 //
 // WHY THE UPPER BOUND AND NOT THE CLIENT TERM: removing the client term would
 // be caught by `a1_client` and `a1_devstore_owner`, which are cheap theorems
@@ -69,6 +75,16 @@
 //                       and the patch's history row) and READ (the LOD
 //                       pass's per-frame fetch) -- ONE window, TWO arms,
 //                       TWO theorems (ruling R242, §5b)
+//   GEOM.PARAMBUF     : [0x0600_0000, 0x0640_0000) view 0, 4 MiB
+//                       [0x0640_0000, 0x0680_0000) view 1, 4 MiB
+//                       [0x0680_0000, 0x06A0_0000) shared scratch, 2 MiB
+//                       ENGINE1, READ (either view), WRITE (the LEASED view
+//                       only) and BOTH directions in the ACQUIRED scratch --
+//                       THREE regions, THREE arms, and a request must lie
+//                       wholly inside ONE of them (owner completion ruling
+//                       ITEM 4, §5c). RENDER.ASSET_POOL above stays
+//                       READ-ONLY to ENGINE1 and this ruling does not widen
+//                       it: a1_pb_asset_still_ro.
 //
 // Ownership law:
 //   * SCANOUT owns BOTH slots, READ-ONLY (a write is a violation).
@@ -142,6 +158,51 @@ module zhao_mem_guard_devbound_mutant
   input  logic        res_valid,
   input  logic [31:0] res_base,
   input  logic [31:0] res_span,
+
+  // GEOM.PARAMBUF'S FRAME LEASE (owner completion ruling ITEM 4, 2026-09-22;
+  // spec/memory_rules.md 5c). THREE ports, and each one is a REFUSAL rather
+  // than a convenience -- with all three low, ENGINE1's permissions are
+  // byte-for-byte what they were before this ruling, which is the property
+  // that makes "no blanket bank-3 permission" checkable rather than claimed.
+  //
+  //   pb_lease_valid   ENGINE1 holds the arena this frame at all. Deny-all
+  //                    below, exactly like `map_valid`: a guard instance
+  //                    whose client is never ENGINE1 ties it low and the
+  //                    whole of 5c stays closed.
+  //   pb_wr_view       0/1 -- WHICH view ENGINE1 may WRITE. The two views are
+  //                    disjoint "for the same reason the two FB slots are"
+  //                    (5c): one is being BUILT while the other is being
+  //                    READ, so a write arm that did not name a view would
+  //                    let the producer overwrite the frame the renderer is
+  //                    walking. This is `fb_writer`'s shape, for `fb_writer`'s
+  //                    reason.
+  //   pb_scratch_valid the shared prefetch/chunk scratch is ACQUIRED. Item 4:
+  //                    "Shared scratch has explicit ownership and release
+  //                    rather than being unowned temporary memory." Release
+  //                    is deasserting it, and while it is low the scratch is
+  //                    unmapped for everybody.
+  //
+  // THE RESIDUAL THIS CREATES IS STATED HERE RATHER THAN LEFT TO BE FOUND,
+  // because it is the defect class this repository lost a week to. Item 4
+  // says "Carry request identity WITH the request; do not validate a queued
+  // request against a later global view selector." `pb_wr_view` IS a global
+  // selector, and this block is combinational over the request it is being
+  // OFFERED -- so a request queued under view 0 and still unaccepted when the
+  // lease flips to view 1 would be judged by the NEW selector. MEM.GUARD
+  // cannot close that on its own: `zhao_guard_req_t` has no view field and
+  // widening it would change every client's ABI.
+  //
+  // It is closed at the PRODUCER, where the identity actually lives.
+  // `zhao_geom_paramarena` latches the view at frame seal, derives every
+  // address from the LATCHED base, and refuses to flip the lease while
+  // `wr_outstanding_o != 0` -- so no request ever outlives the selector that
+  // admitted it. That drain precondition is the protection, it is counted by
+  // `view_flip_blocked_o`, and `tests/mutants/zhao_geom_paramarena_drain_mutant.sv`
+  // is the committed fault that removes it and makes the directed test FAIL.
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_pb_*
+  input  logic        pb_lease_valid,
+  input  logic        pb_wr_view,
+  input  logic        pb_scratch_valid,
 
   // forwarded side (guard -> MEM.VRAM.ARBITER), ready/valid
   output zhao_arb_req_t arb_req,
@@ -395,6 +456,126 @@ module zhao_mem_guard_devbound_mutant
   assign devstore_rd_ok = !req.write
                         && (addr32 >= ZHAO_TERRAIN_DEVSTORE_BASE);
 
+  // GEOM.PARAMBUF: the external geometry arena, owner completion ruling
+  // ITEM 4 (2026-09-22) over spec/memory_rules.md 5c and ruling R7. The
+  // EIGHTH window by the running count in this block's header, and the first
+  // one that is THREE disjoint regions rather than one.
+  //
+  // WHY THREE COMPARISONS AND NOT ONE. Item 4 is explicit: "A request
+  // crossing a per-view or scratch boundary is not allowed merely because
+  // both endpoints lie somewhere in the union of permitted ranges." The three
+  // regions TILE -- view0 ends exactly where view1 begins, view1 ends exactly
+  // where the scratch begins, the scratch ends exactly at
+  // ZHAO_RENDER_ASSET_BASE -- so a single [VIEW0_BASE, SCRATCH_END)
+  // comparison would be arithmetically identical for every request that lies
+  // inside any ONE of them, and would ADDITIONALLY admit every request that
+  // spans a seam. That is not a corner: the two views exist precisely because
+  // one is being written while the other is being read, so a burst from the
+  // end of view 0 into the start of view 1 is the producer scribbling on the
+  // frame the walker is following. `pb_in_view0`, `pb_in_view1` and
+  // `pb_in_scratch` are therefore three separate containment tests and a
+  // request must satisfy ONE of them WHOLE.
+  // `tests/mutants/zhao_geom_parambuf_union_mutant.sv` is the committed fault
+  // that replaces them with the union and makes the extended proof FAIL.
+  //
+  //   * ONE CLIENT. ZHAO_CLIENT_ENGINE1, and only through the arms below --
+  //     item 4: "No other client acquires PARAMBUF access through this
+  //     ruling. NO blanket bank-3 permission." Client 5 stays unspent (T3);
+  //     TERRAIN_BUILD's four arms are evaluated over TERRAIN's own constants
+  //     and admit nothing here.
+  //   * THREE ARMS OVER THREE REGIONS, stated separately for the page pool's
+  //     reason: a merged arm satisfies every non-vacuity cover while half the
+  //     logic is dead, and a regression has to name WHICH half broke.
+  //     `pb_rd_ok` REQUIRES `!req.write` and admits EITHER view (the walker
+  //     reads the published view; a diagnostic read of the view being built
+  //     is still a read and cannot corrupt anything). `pb_wr_ok` REQUIRES
+  //     `req.write` AND names the view through `pb_wr_view` -- the only
+  //     non-constant bound this window has, and it gets the blit lease's
+  //     discipline. `pb_scr_ok` takes BOTH directions inside the scratch,
+  //     because a prefetch buffer is written by the fetcher and read by the
+  //     walker, and gates on the explicit acquire.
+  //   * CONSTANT BOUNDS, HALF-OPEN, OVERFLOW-SAFE. Every BASE + SPAN here is
+  //     computed at elaboration and the largest is 0x06A0_0000; `end32` is a
+  //     32-bit sum of a 27-bit address and a 7-bit length and cannot wrap.
+  //   * ENGINE1'S ASSET-POOL PERMISSION IS UNCHANGED. `render_asset_ok`
+  //     still requires `!req.write`, and none of the three arms can be true
+  //     inside [0x06A0_0000, 0x0800_0000) because all three regions end at or
+  //     below its base. So "RENDER.ASSET_POOL stays READ-ONLY to ENGINE1"
+  //     survives this ruling structurally, not by inspection --
+  //     a1_pb_asset_still_ro.
+  //   * DENY-ALL WHEN THE LEASE IS LOW. All three arms require
+  //     `pb_lease_valid`. Tie it low and this window does not exist, which is
+  //     what every guard instance outside the console core does.
+  //
+  // WHAT THIS WINDOW DOES **NOT** DO, said out loud like the page pool's. It
+  // is spatially the WHOLE of a view, not the one allocation a job owns
+  // inside it -- the guard has one muxed request port and no allocation
+  // context. The residual: a faulty ENGINE1 could write another live
+  // allocation's records inside the view it already holds. It cannot reach
+  // the OTHER view, the scratch it has not acquired, the asset pool, a
+  // framebuffer, the terrain regions, the echo capture or anything outside
+  // the map, so the no-escape theorem is unchanged. Allocation-level
+  // containment is `zhao_geom_paramarena`'s, where the chunk free-list and
+  // the reader-ownership bits live, and `arena_overrun_o` watches it from
+  // inside the block.
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
+  // mutants tests/mutants/zhao_mem_guard_pbview_mutant.sv (the write arm's
+  // view selection removed) and zhao_mem_guard_pbunion_mutant.sv (the three
+  // containment tests collapsed to their union), each of which makes that
+  // proof FAIL.
+  logic pb_in_view0, pb_in_view1, pb_in_scratch;
+  logic pb_rd_ok, pb_wr_ok, pb_scr_ok;
+
+  // THE THREE REGIONS TILE, AND THE PACKAGE CANNOT SAY SO ITSELF. A
+  // SystemVerilog package holds no `initial` block, and R212 measured that
+  // Quartus 17.0 rejects a bare module-scope elaboration `if`, so the guard
+  // for 5c's constants lives HERE, in the block that reads them, inside
+  // `initial begin ... end` -- the form R212 says Quartus accepts.
+  //
+  // It is a real check and not decoration: if someone moves VIEW1_BASE
+  // without moving VIEW_SPAN, the three containment tests above go on
+  // compiling, go on passing lint, and leave an UNMAPPED HOLE or an OVERLAP
+  // between two regions whose whole purpose is to be disjoint. The hole is
+  // harmless and the overlap is the fault this window was written to refuse,
+  // and neither is visible in a waveform.
+  //
+  // CLAUDE.md: `--lint-only` does NOT run `initial` blocks, so a clean lint
+  // says nothing whatever about these three lines. They are exercised by
+  // elaboration in every Verilator TEST BINARY and by `quartus_map`.
+  // synthesis translate_off
+  initial begin
+    if (ZHAO_PARAMBUF_VIEW0_BASE + ZHAO_PARAMBUF_VIEW_SPAN
+        != ZHAO_PARAMBUF_VIEW1_BASE)
+      $fatal(1, "zhao_mem_guard: PARAMBUF view 0 does not end where view 1 begins");
+    if (ZHAO_PARAMBUF_VIEW1_BASE + ZHAO_PARAMBUF_VIEW_SPAN
+        != ZHAO_PARAMBUF_SCRATCH_BASE)
+      $fatal(1, "zhao_mem_guard: PARAMBUF view 1 does not end where the scratch begins");
+    if (ZHAO_PARAMBUF_SCRATCH_BASE + ZHAO_PARAMBUF_SCRATCH_SPAN
+        != ZHAO_RENDER_ASSET_BASE)
+      $fatal(1, "zhao_mem_guard: PARAMBUF scratch does not end at RENDER.ASSET_POOL");
+  end
+  // synthesis translate_on
+
+  assign pb_in_view0   = (addr32 >= ZHAO_PARAMBUF_VIEW0_BASE)
+                       && (end32  <= ZHAO_PARAMBUF_VIEW0_BASE
+                                     + ZHAO_PARAMBUF_VIEW_SPAN);
+  assign pb_in_view1   = (addr32 >= ZHAO_PARAMBUF_VIEW1_BASE)
+                       && (end32  <= ZHAO_PARAMBUF_VIEW1_BASE
+                                     + ZHAO_PARAMBUF_VIEW_SPAN);
+  assign pb_in_scratch = (addr32 >= ZHAO_PARAMBUF_SCRATCH_BASE)
+                       && (end32  <= ZHAO_PARAMBUF_SCRATCH_BASE
+                                     + ZHAO_PARAMBUF_SCRATCH_SPAN);
+
+  assign pb_rd_ok  = !req.write && pb_lease_valid
+                   && (pb_in_view0 || pb_in_view1);
+  // THE VIEW IS NAMED, not inferred from the address. `pb_wr_view ?
+  // pb_in_view1 : pb_in_view0` refuses a write to the view the lease does not
+  // name even though that write is perfectly contained -- which is the whole
+  // point, and is why this is a mux and not an `||`.
+  assign pb_wr_ok  = req.write && pb_lease_valid
+                   && (pb_wr_view ? pb_in_view1 : pb_in_view0);
+  assign pb_scr_ok = pb_lease_valid && pb_scratch_valid && pb_in_scratch;
+
   // THE FIFTH WINDOW (R32): a WRITE arm into RENDER.ASSET_POOL for
   // TERRAIN_BUILD, bounded to the published-resource region. Stated as its own
   // window for the reasons the terrain arm gives: one client, one direction,
@@ -457,7 +638,10 @@ module zhao_mem_guard_devbound_mutant
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && (blit_ok || fb_read_ok || echo_ok)
                                       && (fb_writer == 1'b1);
-      ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;
+      ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && (render_asset_ok
+                                                   || pb_rd_ok
+                                                   || pb_wr_ok
+                                                   || pb_scr_ok);
       ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok
                                                         || resource_wr_ok
                                                         || devstore_wr_ok

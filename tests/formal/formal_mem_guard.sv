@@ -68,7 +68,22 @@ module formal_mem_guard
   // must refuse a region that does not, and that refusal is what is proved.
   input logic        env_res_valid_i,
   input logic [31:0] env_res_base_i,
-  input logic [31:0] env_res_span_i
+  input logic [31:0] env_res_span_i,
+  // GEOM.PARAMBUF's frame lease (owner completion ruling ITEM 4). Free, and
+  // held constant for the trace like the rest of the map, for the SAME reason
+  // `env_fb_writer_i` is: a lease that moved mid-frame is a different property
+  // from the one this file proves, and it is proved somewhere else -- at
+  // `zhao_geom_paramarena`'s drain precondition, whose committed mutant is
+  // tests/mutants/zhao_geom_paramarena_drain_mutant.sv. Saying that here
+  // rather than leaving the gap silent is the point: this harness proves
+  // CONTAINMENT under a stable lease, and the LIFETIME of the lease is not in
+  // its scope. A proof that quietly covered neither would read identically.
+  //
+  // NOT constrained to be asserted. The DUT must refuse the whole region when
+  // the lease is low, and that refusal is what a1_pb_lease proves.
+  input logic        env_pb_lease_i,
+  input logic        env_pb_wr_view_i,
+  input logic        env_pb_scratch_i
 );
 
   // ------------------------------------------------------- reset discipline
@@ -96,8 +111,12 @@ module formal_mem_guard
   logic        env_fb_writer;
   logic        env_res_valid;
   logic [31:0] env_res_base, env_res_span;
+  logic        env_pb_lease, env_pb_wr_view, env_pb_scratch;
   always_ff @(posedge clk) begin
     if (cyc == 4'd0) begin
+      env_pb_lease   <= env_pb_lease_i;
+      env_pb_wr_view <= env_pb_wr_view_i;
+      env_pb_scratch <= env_pb_scratch_i;
       env_res_valid <= env_res_valid_i;
       env_res_base  <= env_res_base_i;
       env_res_span  <= env_res_span_i;
@@ -136,10 +155,24 @@ module formal_mem_guard
 // The two are mutually exclusive by construction -- an `elsif chain, not two
 // independent `ifdefs -- so a run that defined both would silently measure
 // only the first rather than something neither file describes.
+// A THIRD AND FOURTH SEAM (owner completion ruling ITEM 4), on the same
+// `elsif chain so no run can define two and silently measure only the first.
+// `ZHAO_GUARD_PBVIEW_MUT` selects the copy whose PARAMBUF WRITE arm no longer
+// names a view -- the protection item 4 asks for a deliberate fault against,
+// since with it gone the producer may overwrite the view the walker is
+// reading. `ZHAO_GUARD_PBUNION_MUT` selects the copy whose three containment
+// tests are collapsed into one [VIEW0_BASE, SCRATCH_END) comparison, which is
+// exactly "both endpoints lie somewhere in the union of permitted ranges"
+// implemented. tests/formal/mem_guard_pbview_mutant.sby and
+// mem_guard_pbunion_mutant.sby define them and EXPECT FAIL.
 `ifdef ZHAO_GUARD_RESBOUND_MUT
   zhao_mem_guard_resbound_mutant u_guard (
 `elsif ZHAO_GUARD_DEVBOUND_MUT
   zhao_mem_guard_devbound_mutant u_guard (
+`elsif ZHAO_GUARD_PBVIEW_MUT
+  zhao_mem_guard_pbview_mutant u_guard (
+`elsif ZHAO_GUARD_PBUNION_MUT
+  zhao_mem_guard_pbunion_mutant u_guard (
 `else
   zhao_mem_guard u_guard (
 `endif
@@ -148,6 +181,8 @@ module formal_mem_guard
     .map_valid (env_map_valid), .blit_slot (env_blit_slot),
     .blit_span (env_blit_span), .fb_writer (env_fb_writer),
     .res_valid (env_res_valid), .res_base (env_res_base), .res_span (env_res_span),
+    .pb_lease_valid (env_pb_lease), .pb_wr_view (env_pb_wr_view),
+    .pb_scratch_valid (env_pb_scratch),
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations, .guard_violation_req
   );
@@ -199,6 +234,22 @@ module formal_mem_guard
   wire fwd_in_devstore = (fwd_addr32 >= ZHAO_TERRAIN_DEVSTORE_BASE)
                       && (fwd_end32  <= ZHAO_TERRAIN_DEVSTORE_BASE
                                         + ZHAO_TERRAIN_DEVSTORE_SPAN);
+  // GEOM.PARAMBUF (owner completion ruling ITEM 4, spec/memory_rules.md 5c):
+  // THREE regions, and they are spelled as THREE wires here for the same
+  // reason the DUT spells them as three comparisons. A single
+  // `fwd_in_parambuf` covering [VIEW0_BASE, SCRATCH_END) would make
+  // a1_pb_views_disjoint unstatable and would let the union mutant PASS --
+  // the harness would have been rewritten into agreement with the fault.
+  wire fwd_in_pb_view0 = (fwd_addr32 >= ZHAO_PARAMBUF_VIEW0_BASE)
+                      && (fwd_end32  <= ZHAO_PARAMBUF_VIEW0_BASE
+                                        + ZHAO_PARAMBUF_VIEW_SPAN);
+  wire fwd_in_pb_view1 = (fwd_addr32 >= ZHAO_PARAMBUF_VIEW1_BASE)
+                      && (fwd_end32  <= ZHAO_PARAMBUF_VIEW1_BASE
+                                        + ZHAO_PARAMBUF_VIEW_SPAN);
+  wire fwd_in_pb_scr   = (fwd_addr32 >= ZHAO_PARAMBUF_SCRATCH_BASE)
+                      && (fwd_end32  <= ZHAO_PARAMBUF_SCRATCH_BASE
+                                        + ZHAO_PARAMBUF_SCRATCH_SPAN);
+  wire fwd_in_pb_any   = fwd_in_pb_view0 || fwd_in_pb_view1 || fwd_in_pb_scr;
   // POST.ECHO's capture buffer (ruling R7, spec/memory_rules.md 5g): constant
   // bounds, ENGINE0's alone, WRITE-only, lease-gated.
   wire fwd_in_echo = (fwd_addr32 >= ZHAO_POST_ECHO_BASE)
@@ -283,7 +334,32 @@ module formal_mem_guard
         // window from the page pool and not a widening of it: the two are
         // disjoint, asserted at a1_devstore_not_page.
         || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
-            && fwd_in_devstore));
+            && fwd_in_devstore)
+        // OWNER COMPLETION RULING ITEM 4: the EIGHTH law, and the first with
+        // THREE regions under one lease. ENGINE1 owns GEOM.PARAMBUF. The arms
+        // are written out in full here rather than folded into one
+        // `fwd_in_pb_any` term, because folding them is EXACTLY the fault
+        // `zhao_mem_guard_pbunion_mutant` implements -- a harness that wrote
+        // the union would prove the mutant correct.
+        //
+        //   READ: either view, lease held. A read cannot alter anything, so
+        //         the view is not named on this arm.
+        //   WRITE: the LEASED view ONLY. `env_pb_wr_view ? view1 : view0` is
+        //         the load-bearing term -- item 4's "correct view/region
+        //         selection", and the one thing standing between the producer
+        //         and the frame the walker is reading.
+        //   SCRATCH: both directions, and ONLY while the scratch is
+        //         ACQUIRED. Item 4: shared scratch has explicit ownership and
+        //         release rather than being unowned temporary memory.
+        //
+        // EVERY arm carries `env_pb_lease`, so with the lease low this whole
+        // region is unmapped for everybody -- a1_pb_lease states that as its
+        // own theorem so a regression names it.
+        || (arb_req.client == ZHAO_CLIENT_ENGINE1 && env_pb_lease
+            && ((!arb_req.write && (fwd_in_pb_view0 || fwd_in_pb_view1))
+                || (arb_req.write
+                    && (env_pb_wr_view ? fwd_in_pb_view1 : fwd_in_pb_view0))
+                || (env_pb_scratch && fwd_in_pb_scr))));
 
       // DEBUG still owns nothing and must never be forwarded, and neither
       // does the client id ruling T3 leaves unspent
@@ -300,7 +376,8 @@ module formal_mem_guard
       // and exempting the new client from it, keeps a proof green by removing
       // the new region from its scope.
       a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_render_asset
-                   || fwd_in_terrain || fwd_in_echo || fwd_in_devstore);
+                   || fwd_in_terrain || fwd_in_echo || fwd_in_devstore
+                   || fwd_in_pb_any);
 
       // The echo capture is WRITE-ONLY and has exactly one owner, and the
       // owner holds the render lease. Each is implied by a1_region; each is
@@ -394,6 +471,88 @@ module formal_mem_guard
                                     && (fwd_in_slot0 || fwd_in_slot1)));
       a1_devstore_not_echo: assert (!(fwd_in_devstore && fwd_in_echo));
       a1_devstore_not_asset: assert (!(fwd_in_devstore && fwd_in_render_asset));
+
+      // ---------------------------------------------------------------------
+      // GEOM.PARAMBUF (owner completion ruling ITEM 4). Item 4 names five
+      // things to prove and each one gets its own theorem below, because a
+      // regression has to say WHICH protection went: "Prove valid reads and
+      // writes can pass, unauthorized clients/views cannot escape, ENGINE1
+      // asset-pool writes still fail, and boundary-crossing, wrapping and
+      // stale-lifetime cases are refused."
+      //
+      // The first of those five is a COVER, not an assert -- c_forward_pb_*
+      // below -- and that is deliberate. Every assertion here holds trivially
+      // if nothing ever reaches the window, so the covers are what make the
+      // pass mean anything about PARAMBUF at all. Five of them, one per arm.
+      // ---------------------------------------------------------------------
+
+      // UNAUTHORIZED CLIENTS. Item 4: "No other client acquires PARAMBUF
+      // access through this ruling." Stated over the whole region and then
+      // per region, so a stray SCANOUT read of a view and a stray
+      // TERRAIN_BUILD write of the scratch are different failures.
+      a1_pb_owner: assert (!(fwd_in_pb_any
+                             && arb_req.client != ZHAO_CLIENT_ENGINE1));
+      a1_pb_view0_owner: assert (!(fwd_in_pb_view0
+                                   && arb_req.client != ZHAO_CLIENT_ENGINE1));
+      a1_pb_view1_owner: assert (!(fwd_in_pb_view1
+                                   && arb_req.client != ZHAO_CLIENT_ENGINE1));
+      a1_pb_scr_owner: assert (!(fwd_in_pb_scr
+                                 && arb_req.client != ZHAO_CLIENT_ENGINE1));
+
+      // UNAUTHORIZED VIEWS -- the protection this window exists for. A
+      // forwarded WRITE lands only in the view the lease NAMES. Two theorems
+      // and not one: a producer that ignores the selector fails BOTH, and a
+      // producer whose selector is inverted fails exactly one, which is the
+      // difference between "the term is missing" and "the term is backwards".
+      // `zhao_mem_guard_pbview_mutant` removes the selection and is the
+      // committed demonstration that these can fail.
+      a1_pb_wr_view0: assert (!(arb_req.write && fwd_in_pb_view0
+                                && env_pb_wr_view));
+      a1_pb_wr_view1: assert (!(arb_req.write && fwd_in_pb_view1
+                                && !env_pb_wr_view));
+
+      // THE LEASE IS THE DENY-ALL. With it low the region is unmapped for
+      // everybody, which is what makes "no blanket bank-3 permission" a
+      // property of the map rather than a sentence in a comment.
+      a1_pb_lease: assert (!(fwd_in_pb_any && !env_pb_lease));
+
+      // SHARED SCRATCH HAS EXPLICIT OWNERSHIP. Not "temporary memory anyone
+      // may touch": acquired or unmapped, with release being the deassert.
+      a1_pb_scr_owned: assert (!(fwd_in_pb_scr && !env_pb_scratch));
+
+      // ENGINE1'S ASSET-POOL WRITES STILL FAIL -- item 4 in as many words.
+      // This is implied by a1_region, and it is stated anyway because it is
+      // the one thing this ruling was most likely to break by accident: the
+      // asset pool sits immediately above the scratch and a widened upper
+      // bound would swallow it. R32's TERRAIN_BUILD write arm is untouched
+      // and is not what this says anything about.
+      a1_pb_asset_still_ro: assert (!(arb_req.client == ZHAO_CLIENT_ENGINE1
+                                      && arb_req.write && fwd_in_render_asset));
+
+      // BOUNDARY CROSSING. Item 4: "A request crossing a per-view or scratch
+      // boundary is not allowed merely because both endpoints lie somewhere
+      // in the union of permitted ranges." These four lines are what make
+      // that a PROVED property and not an argument: the three regions are
+      // pairwise disjoint, so a forward that is inside one is inside no
+      // other, and a1_region has already established every forward is inside
+      // one. A request spanning the view0/view1 seam is therefore inside
+      // NEITHER and is refused whole. Wrapping is structural and stated at
+      // a2_len plus the DUT's 32-bit `end32` over a 27-bit address and a
+      // 7-bit length; STALE LIFETIME is the producer's and is proved at
+      // tests/geometry/geom_paramarena_directed.cpp, not here.
+      a1_pb_views_disjoint: assert (!(fwd_in_pb_view0 && fwd_in_pb_view1));
+      a1_pb_scr_not_view: assert (!(fwd_in_pb_scr
+                                    && (fwd_in_pb_view0 || fwd_in_pb_view1)));
+      // And PARAMBUF is not any other window. The scratch's upper edge and
+      // the asset pool's base are the SAME constant, so this is the line that
+      // catches an off-by-one there -- the direction in which a mistake would
+      // hand ENGINE1 a write into the pool it is only allowed to read.
+      a1_pb_scratch_not_asset: assert (!(fwd_in_pb_scr && fwd_in_render_asset));
+      a1_pb_not_asset: assert (!(fwd_in_pb_any && fwd_in_render_asset));
+      a1_pb_not_fb: assert (!(fwd_in_pb_any && (fwd_in_slot0 || fwd_in_slot1)));
+      a1_pb_not_terrain: assert (!(fwd_in_pb_any && fwd_in_terrain));
+      a1_pb_not_devstore: assert (!(fwd_in_pb_any && fwd_in_devstore));
+      a1_pb_not_echo: assert (!(fwd_in_pb_any && fwd_in_echo));
     end
 
     // A3: the forwarding stage powers up empty
@@ -486,6 +645,34 @@ module formal_mem_guard
       c_forward_devstore_rd: cover (arb_req.valid
                                     && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
                                     && !arb_req.write && fwd_in_devstore);
+      // OWNER COMPLETION RULING ITEM 4's FIRST REQUIREMENT -- "prove valid
+      // reads and writes can PASS" -- is discharged HERE and not by any
+      // assertion above, every one of which holds trivially on a model that
+      // never reaches the window. FIVE covers, one per arm and one per view,
+      // for the reason c_forward_terrain and c_forward_devstore_* give: a
+      // single `fwd_in_pb_any` cover is discharged by whichever arm happens
+      // to be alive and reads GREEN while the other four are dead logic.
+      //
+      // The two WRITE covers are the ones that matter most, because they are
+      // the only evidence that `pb_wr_view` selects rather than merely
+      // gating: reaching view 1 with the lease naming view 1 AND reaching
+      // view 0 with the lease naming view 0 cannot both happen if the mux is
+      // stuck.
+      c_forward_pb_rd_v0: cover (arb_req.valid
+                                 && arb_req.client == ZHAO_CLIENT_ENGINE1
+                                 && !arb_req.write && fwd_in_pb_view0);
+      c_forward_pb_rd_v1: cover (arb_req.valid
+                                 && arb_req.client == ZHAO_CLIENT_ENGINE1
+                                 && !arb_req.write && fwd_in_pb_view1);
+      c_forward_pb_wr_v0: cover (arb_req.valid
+                                 && arb_req.client == ZHAO_CLIENT_ENGINE1
+                                 && arb_req.write && fwd_in_pb_view0);
+      c_forward_pb_wr_v1: cover (arb_req.valid
+                                 && arb_req.client == ZHAO_CLIENT_ENGINE1
+                                 && arb_req.write && fwd_in_pb_view1);
+      c_forward_pb_scr: cover (arb_req.valid
+                               && arb_req.client == ZHAO_CLIENT_ENGINE1
+                               && fwd_in_pb_scr);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
       c_client5_denied: cover (client5_accept_q && rsp.violation &&
