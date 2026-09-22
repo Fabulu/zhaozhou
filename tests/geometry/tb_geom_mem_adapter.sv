@@ -131,10 +131,16 @@ module tb_geom_mem_adapter
       // is how this bench found the widening in the first place.
       .f_req_i('0), .f_rsp_o(), .f_beat_valid_o(), .f_beat_data_o(),
       .f_beat_last_o(),
+      // Requester G, GEOM.POSE's kind-8/kind-9 page reader, added 2026-09-22
+      // (GEOMCLOSE). HELD IDLE for the reason C..F are, and NAMED for the
+      // reason F is: an unconnected input is a PINMISSING the next configure
+      // discovers. G has no `beat_last` port at all -- the reader counts its
+      // own eight beats a line -- so there is nothing to leave open here.
+      .g_req_i('0), .g_rsp_o(), .g_beat_valid_o(), .g_beat_data_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(), .jobs_g_o(),
       .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)
