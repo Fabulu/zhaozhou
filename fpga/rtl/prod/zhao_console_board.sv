@@ -3342,6 +3342,17 @@ module zhao_console_board
   output logic [31:0]  meas_gov_rep_count1_o,
   output logic [31:0]  meas_gov_rep_count2_o,
   output logic [31:0]  meas_gov_rep_count3_o,
+  // PROJ.CFGVALID, entry I14's closing half. `proj_cfg_armed_o` is the ARM's
+  // positive control -- it reads 1 once a view's matrix bank is complete and
+  // never moves again -- and a console that drew pixels while it read 0 would
+  // be one whose projector was enabled by the host override instead. That
+  // distinction is invisible from the outside without this port, and it is the
+  // difference between a producer and a literal.
+  // `proj_en_held_offers_o` is the clocks on which a client had a vertex
+  // WITHHELD by the gate, which is the only evidence the gate does something
+  // rather than merely exists.
+  output logic [31:0]  proj_cfg_armed_o,
+  output logic [31:0]  proj_en_held_offers_o,
   output logic [31:0]  meas_starve_denials_o,
   output logic [31:0]  meas_starve_frames0_o,
   output logic [31:0]  meas_starve_frames1_o,
@@ -5146,6 +5157,8 @@ module zhao_console_board
       .meas_gov_rep_count1_o              (meas_gov_rep_count1_o),
       .meas_gov_rep_count2_o              (meas_gov_rep_count2_o),
       .meas_gov_rep_count3_o              (meas_gov_rep_count3_o),
+      .proj_cfg_armed_o                   (proj_cfg_armed_o),
+      .proj_en_held_offers_o              (proj_en_held_offers_o),
       .meas_starve_denials_o              (meas_starve_denials_o),
       .meas_starve_frames0_o              (meas_starve_frames0_o),
       .meas_starve_frames1_o              (meas_starve_frames1_o),

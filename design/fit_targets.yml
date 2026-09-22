@@ -2388,6 +2388,9 @@ targets:
       # standalone fit targets above, their directed tests and their receipts.
       - fpga/rtl/common/zhao_proj_subsystem.sv
       - fpga/rtl/common/zhao_project_service.sv
+      # PROJ.CFGVALID, 2026-09-22 (PROJCLOSE), core entry I14's closing half:
+      # the producer the projector's rigid-pipeline enable never had.
+      - fpga/rtl/common/zhao_proj_cfgvalid.sv
       - fpga/rtl/geometry/zhao_geom_proj_lane.sv
       - fpga/rtl/geometry/zhao_geom_quat2mat.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
@@ -2890,6 +2893,11 @@ targets:
       - fpga/rtl/common/zhao_project_service.sv
       - fpga/rtl/terrain/zhao_terrain_wcache.sv
       - fpga/rtl/common/zhao_proj_subsystem.sv
+      # Added 2026-09-22 closing header entry I14's remaining half: the
+      # projector's CONFIG-VALID ARM, which is the producer `proj_en_i` never
+      # had. Two 32-bit masks, one latch and two 32-bit counters -- 129 flops
+      # counted by hand, no arithmetic, no memory, no multiplier.
+      - fpga/rtl/common/zhao_proj_cfgvalid.sv
       # Added 2026-09-19 closing header entry I13: the shared projector's
       # CLIENT B. These two are the real producer for it, so this row is the
       # first that measures the projector with BOTH clients live.

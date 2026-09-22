@@ -2778,6 +2778,11 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  meas_gov_rep_count1_o,
   output logic [31:0]  meas_gov_rep_count2_o,
   output logic [31:0]  meas_gov_rep_count3_o,
+  // PROJ.CFGVALID (core entry I14's closing half, 2026-09-22). Carried here
+  // because this wrapper binds the real core with `.*` and a port it does not
+  // declare will not elaborate -- R220: fix the wrapper, never the module.
+  output logic [31:0]  proj_cfg_armed_o,
+  output logic [31:0]  proj_en_held_offers_o,
   output logic [31:0]  meas_starve_denials_o,
   output logic [31:0]  meas_starve_frames0_o,
   output logic [31:0]  meas_starve_frames1_o,
