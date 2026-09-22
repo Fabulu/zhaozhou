@@ -4843,9 +4843,16 @@
 //      of the three, and it is the one 20.8's sentence about spare bus bits
 //      points at.
 //
-//      A DEFECT THIS ALSO REPAIRS, found by packet WARPCOMP in passing and by
-//      Verilator `PINMISSING` independently: the console connected ZERO of the
-//      `tfld_*` arm. `tfld_ready_i` among them -- an unconnected input reads
+//      A DEFECT THIS ALSO REPAIRS, found by packet WARPCOMP in passing and
+//      independently by a `PINMISSING` from the linter: the console connected
+//      ZERO of the `tfld_*` arm.
+//      (A COMMENT LINE MAY NOT BEGIN WITH THAT LINTER'S NAME, and this entry
+//      learned it the expensive way. A `//` line whose first word is
+//      `verilator` is a METACOMMENT, not prose: the smoke's verilate step
+//      refused the whole closure with `%Error-BADVLTPRAGMA: Unknown verilator
+//      comment`, quoting the sentence back as a pragma. The block had linted
+//      RC 0 an hour earlier -- before this paragraph existed -- which is the
+//      point: a clean lint is evidence about the tree it read.) `tfld_ready_i` among them -- an unconnected input reads
 //      low, so CMD.EXEC's TerrainField queue could never drain at all, and
 //      `tfld_overflow_o`, the counter that would have said so, was unconnected
 //      too. A refusal counter nobody can read is a blind instrument by
