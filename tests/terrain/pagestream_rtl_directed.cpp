@@ -453,8 +453,22 @@ int main(int argc, char** argv) {
     // per distinct value of `(P + 2k) >> 6` over k in 0..1088. That is
     // floor((P + 2176) / 64) - floor(P / 64) + 1.
     auto bursts_for = [](uint32_t off) { return (off + 2176u) / 64u - off / 64u + 1u; };
+    // LAYER E IS DERIVED THE SAME WAY, and its arithmetic is its own because
+    // its element is not the height planes'. Cell c sits at E_OFF + 3c and the
+    // buffer is aligned on the cell's LAST byte, so the block needs one burst
+    // per distinct value of `(E_OFF + 3c + 2) >> 6` over c in 0..1023.
+    //
+    // THE COST IS RECORDED RATHER THAN HIDDEN: 105 bursts became 154, which is
+    // +47% of this block's read bandwidth for the page. That is what a layer
+    // nobody read costs to start reading, it is the price of ruling R13's
+    // per-cell material, and the number belongs in the test that would
+    // otherwise silently absorb it.
+    auto e_bursts_for = [](uint32_t off, uint32_t cells) {
+      return (off + 3u * (cells - 1u) + 2u) / 64u - (off + 2u) / 64u + 1u;
+    };
     const uint32_t expect_bursts =
-        bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) + bursts_for(tp::kLayerCOff);
+        bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) + bursts_for(tp::kLayerCOff) +
+        e_bursts_for(tp::kLayerEOff, kCells);
     ck(d.c_bursts == expect_bursts,
        "A it read exactly the bursts the layout requires -- no re-reads, no prefetch",
        long(expect_bursts), long(d.c_bursts));
