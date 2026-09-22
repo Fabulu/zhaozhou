@@ -220,6 +220,14 @@ module zhao_forge_assemble #(
     input  var logic               t_last_i,
 
     // ---- the job's per-primitive sideband, from zhao_forge_pagebank --------
+    // HANDSHAKED, and that is the repair `mat_skew_o` bought on its first run.
+    // See the header: as a pure level, latched at this block's first vertex,
+    // the pair could be replaced by the NEXT draw in the window where this
+    // block is not yet busy. `j_valid_i` rises with the bank's topology and
+    // position jobs and the bank does not retire the job until this half is
+    // taken too, so the capture is an event that belongs to the primitive.
+    input  var logic               j_valid_i,
+    output var logic               j_ready_o,
     // A LEVEL held for the whole primitive, and the reason the bank holds its
     // next draw until `busy_o` falls. It is latched here at the job's FIRST
     // vertex; carrying it on the triangle stream instead would need 32 bits
@@ -351,8 +359,12 @@ module zhao_forge_assemble #(
   typedef enum logic [1:0] { A_COLLECT, A_DRAIN, A_TRIS, A_RETIRE } astate_e;
   astate_e st_q;
 
-  logic [31:0] mset_q;          // the job's material set, latched at vertex 0
-  logic [15:0] mid_q;           // ... and its material id, latched at triple 0
+  logic [31:0] mset_q;          // the job's material set, in flight
+  logic [15:0] mid_q;           // ... and its material id, the SAME latch
+  // The captured sideband, held between the JOB'S ISSUE and its first vertex.
+  logic [31:0] jset_q;
+  logic [15:0] jid_q;
+  logic        jfull_q;
   logic [IDW-1:0] src_q;
 
   // ==========================================================================
@@ -535,7 +547,17 @@ module zhao_forge_assemble #(
                 || (32'(t_i1_i) >= 32'(vcount_q))
                 || (32'(t_i2_i) >= 32'(vcount_q));
 
-  assign t_ready_o = (st_q == A_TRIS) && (tst_q == T_IDLE);
+  // `&& !tlast_q` IS A REPAIR, AND `mat_skew_o` IS WHAT FOUND IT. The walk
+  // leaves A_TRIS on the cycle AFTER the last triple retires, so without this
+  // term there is a one-cycle window in which the job's last triangle has
+  // already been taken and `t_ready_o` is STILL HIGH. The page bank may have
+  // issued the next job by then -- it is allowed to, this block is busy -- so
+  // FORGE.PRIM offers the NEXT primitive's first triple into that window and
+  // this block reads it against THE PREVIOUS JOB'S VERTEX STORE, under the
+  // previous job's material. Two such triangles per five-draw run, measured by
+  // `procmat_acceptance`; every handshake balanced, because a stolen triple is
+  // a perfectly well-formed beat.
+  assign t_ready_o = (st_q == A_TRIS) && (tst_q == T_IDLE) && !tlast_q;
 
   assign o_valid_o = (tst_q == T_OFFER);
   assign o_ax_o = ax_q;
@@ -582,6 +604,18 @@ module zhao_forge_assemble #(
 
   assign busy_o = (st_q != A_COLLECT) || (32'(issued_q) != 32'd0);
 
+  // THE SIDEBAND'S READY. Two terms, and the second is what keeps a
+  // VIEW-SKIPPED job from wedging the bank: such a job produces no vertices at
+  // all, so its captured pair is never consumed, and a strict `!jfull_q` would
+  // refuse every sideband after it forever. While this block is NOT BUSY the
+  // held pair belongs to no primitive and may simply be replaced.
+  //
+  // AND THE DANGEROUS CASE CANNOT ARISE: the bank reaches its next S_ISSUE only
+  // when BOTH evaluators are ready, and an evaluator is ready only once it has
+  // emitted the previous job's last vertex -- by which time this block has
+  // accepted vertex 0, is busy, and has already consumed the pair.
+  assign j_ready_o = !jfull_q || !busy_o;
+
   wire o_take_c = o_valid_o && o_ready_i;
 
   // ==========================================================================
@@ -620,6 +654,9 @@ module zhao_forge_assemble #(
       slot_pressure_o <= 32'd0;
       proj_stray_o    <= 32'd0;
       mat_skew_o      <= 32'd0;
+      jset_q          <= 32'd0;
+      jid_q           <= 16'd0;
+      jfull_q         <= 1'b0;
       for (k = 0; k < MAX_VERTS; k = k + 1) begin
         pos_q[k] <= '0;
         inv_q[k] <= 24'd0;
@@ -680,10 +717,12 @@ module zhao_forge_assemble #(
             if (32'(issued_q) == 32'd0) begin
               // THE JOB'S SIDEBAND IS LATCHED HERE, at the first vertex, and
               // `busy_o` rises with it so the bank cannot replace it underneath.
-              // ONE ENABLE, BOTH HALVES. See the header: latching the set
-              // and the id on different events is the fault, not the fix.
-              mset_q <= j_material_set_i;
-              mid_q  <= j_material_id_i;
+              // ONE ENABLE, BOTH HALVES, AND BOTH FROM THE CAPTURED
+              // SIDEBAND -- not from the bank's live ports, which by now may
+              // already describe the next draw. See the header.
+              mset_q  <= jset_q;
+              mid_q   <= jid_q;
+              jfull_q <= 1'b0;
             end
             if (v_last_i) begin
               vcount_q <= issued_q + {{VW{1'b0}}, 1'b1};
@@ -789,6 +828,19 @@ module zhao_forge_assemble #(
 
         default: tst_q <= T_IDLE;
       endcase
+
+      // ---- the job sideband's capture ---------------------------------------
+      // LAST in the block on purpose. If a capture and a vertex-0 consumption
+      // ever landed on one edge, the consumption must see the OLD pair (it
+      // does -- non-blocking) and the register must end holding the NEW one.
+      // The ordering argument above says they cannot coincide; this makes the
+      // block correct even if that argument is ever broken by a faster
+      // evaluator, rather than merely unlikely to be wrong.
+      if (j_valid_i && j_ready_o) begin
+        jset_q  <= j_material_set_i;
+        jid_q   <= j_material_id_i;
+        jfull_q <= 1'b1;
+      end
     end
   end
 

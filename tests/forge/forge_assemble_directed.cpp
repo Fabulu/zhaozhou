@@ -123,6 +123,7 @@ void hard_reset(Vtb_forge_assemble& d) {
   d.art_cull_mode_i = 0;
   d.j_material_set_i = 0;
   d.j_material_id_i = 0;
+  d.j_valid_i = 0;
   for (int i = 0; i < 8; ++i) tick(d);
   d.rst_n = 1;
   for (int i = 0; i < 4; ++i) tick(d);
@@ -170,16 +171,36 @@ int offer_without_last(Vtb_forge_assemble& d, int n, int* refused) {
 // Drive `n` vertices in, honouring the DUT's ready. Returns the max number of
 // cycles it stalled, which the caller uses to prove the throttle ENGAGED --
 // a test that never saw a stall has not exercised the bound it asserts.
+// THE SIDEBAND'S HANDSHAKE, which is the JOB'S ISSUE. In the console it is the
+// page bank's `a_valid_o` rising with the topology and position jobs; here the
+// driver performs it, once, before the job's vertices.
+//
+// IT IS A HANDSHAKE AND NOT A LEVEL FOR A MEASURED REASON. As a level latched
+// at this block's first vertex, the pair could be replaced by the NEXT draw in
+// the window where this block is not yet busy -- `mat_skew_o` caught exactly
+// that in the composed chain on its first run. So the driver hands the pair
+// over ONCE, and section 5d below then CHANGES THE PORTS UNDERNEATH to prove
+// the captured value is what ships.
+void presentJob(Vtb_forge_assemble& d, uint32_t mset, uint16_t mid) {
+  d.j_material_set_i = mset;
+  d.j_material_id_i = mid;
+  d.j_valid_i = 1;
+  for (int guard = 0; guard < 1000; ++guard) {
+    d.eval();
+    const bool taken = d.j_ready_o != 0;
+    tick(d);
+    if (taken) break;
+  }
+  d.j_valid_i = 0;
+  d.eval();
+}
+
 int feed_vertices(Vtb_forge_assemble& d, int n, uint32_t mset, uint16_t mid,
                   int* stalls) {
   int sent = 0;
   int guard = 0;
   *stalls = 0;
-  // BOTH HALVES OF THE SIDEBAND, presented together exactly as
-  // `zhao_forge_pagebank` presents them -- two held registers loaded by one
-  // enable. A bench that drove only the set would be testing half the pair.
-  d.j_material_set_i = mset;
-  d.j_material_id_i = mid;
+  presentJob(d, mset, mid);
   while (sent < n && guard++ < 200000) {
     d.v_valid_i = 1;
     d.v_x_i = wx(sent);
@@ -503,6 +524,59 @@ int main() {
   check(d.mat_skew_o == skew_before + 2,
         "mat_skew_o FIRED once per disagreeing triple", skew_before + 2,
         d.mat_skew_o);
+
+  // ==========================================================================
+  // 5d. THE CAPTURE IS THE JOB'S, NOT THE PORT'S -- the repair itself.
+  //
+  //     The sideband is handed over ONCE, at the job's issue. This case then
+  //     drives `j_material_set_i` / `j_material_id_i` to a DIFFERENT pair
+  //     while the primitive is in flight, exactly as the page bank did when it
+  //     accepted the next draw in the window before this block was busy, and
+  //     requires the SHIPPED pair to be the captured one.
+  //
+  //     Before the repair this assertion fails: the block latched the LIVE
+  //     PORTS at its first vertex, so the second pair would have shipped on the
+  //     first job's triangles with every counter in the chain balancing.
+  // ==========================================================================
+  const int kN7 = 4;
+  presentJob(d, 0xC0FFEE01u, 0x0321);
+  {
+    int sent7 = 0;
+    int guard7 = 0;
+    while (sent7 < kN7 && guard7++ < 200000) {
+      // THE PORTS MOVE, from the cycle after the handover.
+      d.j_material_set_i = 0xBADBAD22u;
+      d.j_material_id_i = 0x0999;
+      d.v_valid_i = 1;
+      d.v_x_i = wx(sent7);
+      d.v_y_i = wy(sent7);
+      d.v_z_i = wz(sent7);
+      d.v_last_i = (sent7 == kN7 - 1) ? 1 : 0;
+      d.eval();
+      const bool taken = d.v_ready_o != 0;
+      tick(d);
+      if (taken) ++sent7;
+    }
+    d.v_valid_i = 0;
+    d.v_last_i = 0;
+    d.eval();
+    check(sent7 == kN7, "the capture job's vertices were accepted", kN7, sent7);
+  }
+  uint32_t skew_before_cap = d.mat_skew_o;
+  std::vector<Tri> tris7 = {{0, 1, 2}};
+  auto got7 = run_triples(d, tris7, 0x0321, 0x4242);
+  check(got7.size() == 1, "the capture job produced its triangle", 1, got7.size());
+  if (!got7.empty()) {
+    check(got7[0].material_set == 0xC0FFEE01u,
+          "THE CAPTURED SET SHIPS, not the one the ports moved to", 0xC0FFEE01u,
+          got7[0].material_set);
+    check(got7[0].material_id == 0x0321,
+          "THE CAPTURED ID SHIPS, not the one the ports moved to", 0x0321,
+          got7[0].material_id);
+  }
+  check(d.mat_skew_o == skew_before_cap,
+        "and mat_skew_o is PUT -- the triangle agreed with the CAPTURED id",
+        skew_before_cap, d.mat_skew_o);
 
   // ==========================================================================
   // 5c. THE DISCRIMINATION (R95), and it is the awkward case on purpose.

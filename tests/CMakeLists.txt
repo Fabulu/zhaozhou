@@ -15809,6 +15809,88 @@ add_test(NAME partmat_acceptance COMMAND test_partmat_acceptance)
 set_tests_properties(partmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
+# PROCMAT -- the acceptance test owner completion ruling 2 (2026-09-22) names
+# ---------------------------------------------------------------------------
+# COMMAND BYTES TO GEOM.CLIP'S INPUT, over nine production modules: the real
+# decoder and executor, the real page bank reading a real forge page through its
+# own MEM.GUARD port, both position evaluators, the assembler, the clip door and
+# the material window. Nothing is injected at a downstream boundary -- every
+# draw is a packed DrawProcedural record and every forge record is bytes in a
+# memory image the bank reads for itself.
+#
+# THE QUESTION IT ANSWERS is the ruling's own: does the (set handle, record id)
+# pair the game declared reach the raster path -- including when the set's
+# GENERATION changes, which under the reading this packet removed would have
+# selected a DIFFERENT material record. The driver's header says what it is
+# not: it is not a rendered-pixel comparison, and the console smoke drives no
+# procedural draw at all, so a green smoke says nothing about this path.
+add_executable(test_procmat_acceptance prod/procmat_acceptance.cpp)
+target_link_libraries(test_procmat_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_procmat_acceptance
+  PREFIX Vtb_procmat_acceptance
+  TOP_MODULE tb_procmat_acceptance
+  VERILATOR_ARGS --assert
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/raster
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/field
+               ${CMAKE_CURRENT_SOURCE_DIR}/compositor
+  SOURCES
+    ${ZHAO_ABI_PKG}
+    ${ZHAO_ZHAO_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_exec.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_pagebank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jitter_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim_eval.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_ring_eval.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_assemble.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv
+    ${CMAKE_SOURCE_DIR}/tests/prod/tb_procmat_acceptance.sv)
+add_test(NAME procmat_acceptance COMMAND test_procmat_acceptance)
+set_tests_properties(procmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_tb_procmat_acceptance
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module tb_procmat_acceptance
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/common
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/geometry
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/raster
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/field
+    -I${CMAKE_CURRENT_SOURCE_DIR}/compositor
+    ${ZHAO_ABI_PKG}
+    ${ZHAO_ZHAO_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_exec.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_pagebank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jitter_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim_eval.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_ring_eval.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_assemble.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv
+    ${CMAKE_SOURCE_DIR}/tests/prod/tb_procmat_acceptance.sv)
+set_tests_properties(lint_tb_procmat_acceptance PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # PART.CLIPFEED -- the particle arm of GEOM.CLIPDOOR (owner ruling 1, 2026-09-22)
 # ---------------------------------------------------------------------------
 # The depth ARITHMETIC is geom_depthquant_directed's and is not re-derived here;

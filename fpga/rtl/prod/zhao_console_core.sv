@@ -12375,6 +12375,11 @@ module zhao_console_core
   // (2026-09-22): `DrawProcedural` carries a real (set handle, record id) pair
   // and both halves come off ONE register load in the bank.
   wire [15:0]  fpb_material_id;
+  // The sideband's own handshake. It rises with the topology and position jobs
+  // and the bank does not retire the draw until all THREE have been taken --
+  // the repair the new `mat_skew_o` detector bought on its first run, when it
+  // caught the bank replacing an in-flight primitive's material.
+  wire         fpb_a_valid, fpb_a_ready;
 
   wire         fpb_e_valid, fpb_e_ready;
   wire signed [31:0] fpb_e_sx, fpb_e_sy, fpb_e_sz, fpb_e_ex, fpb_e_ey, fpb_e_ez;
@@ -12537,6 +12542,8 @@ module zhao_console_core
     .p_src_id_o   (fpb_p_src_id),
     .p_material_set_o(fpb_material_set),
     .p_material_id_o (fpb_material_id),
+    .a_valid_o       (fpb_a_valid),
+    .a_ready_i       (fpb_a_ready),
 
     .e_valid_o (fpb_e_valid),
     .e_ready_i (fpb_e_ready),
@@ -12760,6 +12767,8 @@ module zhao_console_core
     // and latched here by ONE enable at the job's first vertex.
     .j_material_set_i(fpb_material_set),
     .j_material_id_i (fpb_material_id),
+    .j_valid_i       (fpb_a_valid),
+    .j_ready_o       (fpb_a_ready),
 
     // AUTHORED, at the named seams. See the parameters' comments; these are the
     // owner's knobs and they must not become derived.

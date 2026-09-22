@@ -70,6 +70,12 @@ module tb_forge_assemble #(
     // is real, with no mutant needed.
     input  var logic [31:0]        j_material_set_i,
     input  var logic [15:0]        j_material_id_i,
+    // THE SIDEBAND'S HANDSHAKE, on this bench's own ports. In the console it
+    // is the page bank's job issue; here the driver performs it, which is what
+    // lets a test present a pair and THEN change the ports underneath -- the
+    // exact fault `mat_skew_o` exists to catch.
+    input  var logic               j_valid_i,
+    output var logic               j_ready_o,
 
     input  var logic signed [31:0] art_r_i,
     input  var logic signed [31:0] art_g_i,
@@ -261,6 +267,8 @@ module tb_forge_assemble #(
 
       .j_material_set_i(j_material_set_i),
       .j_material_id_i (j_material_id_i),
+      .j_valid_i       (j_valid_i),
+      .j_ready_o       (j_ready_o),
 
       .art_r_i           (art_r_i),
       .art_g_i           (art_g_i),

@@ -249,7 +249,26 @@ module zhao_forge_pagebank
     output var logic [ 1:0]  p_view_mask_o,
     output var logic [15:0]  p_src_id_o,
 
-    // ---- the primitive's material PAIR, one held level ---------------------
+    // ---- the primitive's material PAIR, HANDSHAKED ------------------------
+    // `a_valid_o` rises with `p_valid_o` and `e_valid_o`/`r_valid_o` and the
+    // job is not retired until ALL THREE have been taken. That is this block's
+    // own "both halves of one primitive leave on ONE acceptance" law extended
+    // to three, and it exists because A LEVEL WAS NOT ENOUGH.
+    //
+    // THE DEFECT IT REPAIRS, found by `mat_skew_o` on its first run: the pair
+    // used to be a pure LEVEL that `zhao_forge_assemble` latched at ITS FIRST
+    // VERTEX, and `d_ready_o` released the next draw as soon as `asm_busy_i`
+    // was low. Between a job's issue and its first vertex the assembler is NOT
+    // busy, so the bank accepted the NEXT draw and the level moved -- putting
+    // draw B's material on draw A's primitive, with every counter in the chain
+    // balancing because no count looks at the field that moved. CLAUDE.md's
+    // metadata-swap chapter, in this block, reached by ordinary stimulus.
+    //
+    // With the handshake the assembler captures the pair AT THE ISSUE, which
+    // is an event that belongs to the job, and what the bank does with its
+    // registers afterwards cannot reach the primitive in flight.
+    output var logic         a_valid_o,
+    input  var logic         a_ready_i,
     // `zhao_material_window` is keyed by (set handle32, id u16) and
     // `DrawProcedural` now carries exactly that pair: the complete handle in
     // `material_set` and the record index in `material_id`. BOTH HALVES ARE
@@ -436,7 +455,7 @@ module zhao_forge_pagebank
   /* verilator lint_on UNUSEDSIGNAL */
 
   // The fork's two halves, retired independently and issued together.
-  logic         p_done_q, x_done_q;
+  logic         p_done_q, x_done_q, a_done_q;
 
   assign busy_o   = (state_q != S_IDLE);
   assign d_ready_o = (state_q == S_IDLE) && !asm_busy_i;
@@ -616,6 +635,7 @@ module zhao_forge_pagebank
   // ==========================================================================
   // THE TWO JOB PORTS. Both halves of one primitive, issued as ONE acceptance.
   // ==========================================================================
+  assign a_valid_o = (state_q == S_ISSUE) && !a_done_q;
   assign p_valid_o = (state_q == S_ISSUE) && !p_done_q;
   assign e_valid_o = (state_q == S_ISSUE) && !x_done_q &&  is_ribbon_c;
   assign r_valid_o = (state_q == S_ISSUE) && !x_done_q && !is_ribbon_c;
@@ -701,8 +721,10 @@ module zhao_forge_pagebank
 
   wire p_take_c = p_valid_o && p_ready_i;
   wire x_take_c = (e_valid_o && e_ready_i) || (r_valid_o && r_ready_i);
+  wire a_take_c = a_valid_o && a_ready_i;
   wire p_held_c = p_done_q || p_take_c;
   wire x_held_c = x_done_q || x_take_c;
+  wire a_held_c = a_done_q || a_take_c;
 
   // ==========================================================================
   // THE MACHINE
@@ -729,6 +751,7 @@ module zhao_forge_pagebank
       rec2_q           <= '0;
       p_done_q         <= 1'b0;
       x_done_q         <= 1'b0;
+      a_done_q         <= 1'b0;
       pages_o          <= 32'd0;
       draws_o          <= 32'd0;
       bad_magic_o      <= 32'd0;
@@ -758,6 +781,7 @@ module zhao_forge_pagebank
           S_IDLE: begin
             p_done_q <= 1'b0;
             x_done_q <= 1'b0;
+            a_done_q <= 1'b0;
             beat_q   <= 3'd0;
             if (pub_match_c) begin
               // A PUBLICATION OUTRANKS A DRAW on the same cycle, and the draw
@@ -773,7 +797,16 @@ module zhao_forge_pagebank
               end else begin
                 state_q <= S_HREQ;
               end
-            end else if (d_valid_i) begin
+            end else if (d_valid_i && d_ready_o) begin
+              // `&& d_ready_o` IS THE REPAIR, AND WITHOUT IT THIS BLOCK
+              // CONSUMED A DRAW IT HAD NOT ACCEPTED. `d_ready_o` is low while
+              // `asm_busy_i` is high, so CMD.EXEC does NOT advance its queue
+              // head -- but this arm used to start the scan anyway, issue the
+              // primitive, return here and find THE SAME RECORD STILL OFFERED.
+              // The result was the same procedural draw executed over and over:
+              // 472 issues from two commands, measured by
+              // `procmat_acceptance`. Every handshake in the chain balanced,
+              // because the duplicate is a whole legitimate job.
               d_index_q    <= d_program_i[31:8];
               d_kind_q     <= d_kind_i;
               // ONE ENABLE, TWO FIELDS. The pair is captured on the draw's
@@ -923,10 +956,12 @@ module zhao_forge_pagebank
           S_ISSUE: begin
             p_done_q <= p_held_c;
             x_done_q <= x_held_c;
-            if (p_held_c && x_held_c) begin
+            a_done_q <= a_held_c;
+            if (p_held_c && x_held_c && a_held_c) begin
               draws_o  <= draws_o + 32'd1;
               p_done_q <= 1'b0;
               x_done_q <= 1'b0;
+              a_done_q <= 1'b0;
               state_q  <= S_IDLE;
             end
           end
