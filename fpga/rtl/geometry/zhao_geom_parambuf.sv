@@ -45,6 +45,85 @@
 // Clamping it would place a triangle somewhere plausible; refusing it says the
 // producer is wrong.
 // ---------------------------------------------------------------------------
+// WHY THIS BLOCK IS NOT COMPOSED, MEASURED 2026-09-22 (packet GEOMCLOSE)
+// ---------------------------------------------------------------------------
+// THE RECORDED BLOCKER IS TRUE AND IT IS NOT THE FIRST OBSTACLE, and the
+// correction runs in the UNFLATTERING direction, which is why it is written
+// down rather than assumed. Packet WARPBUILD recorded: "its blocker is an
+// arena WRITER; every geometry memory client is hard-coded read-only with a
+// formal assertion." Every clause of that is accurate. What it understates is
+// that a READ of this arena is refused too, so a read-only composition -- the
+// obvious cheap first step, and the one a lane would reach for -- is refused
+// by construction as well.
+//
+// MEASURED ON THE CONSTANTS, not read off a comment:
+//
+//   `spec/memory_rules.md` 5c RULES THE REGION. Bank 3 holds PARAMBUF view 0
+//   at [0x0600_0000, 0x0640_0000), view 1 at [0x0640_0000, 0x0680_0000) and
+//   the shared prefetch/chunk scratch at [0x0680_0000, 0x06A0_0000), all
+//   owned by ENGINE1. So the memory map is not the gap; it is ruled and it is
+//   in `zhao_pkg`'s own bank-3 note.
+//
+//   `zhao_mem_guard` HAS NO WINDOW FOR ANY OF IT. Its `unique case` gives
+//   ENGINE1 exactly one arm --
+//
+//       ZHAO_CLIENT_ENGINE1: pass_ok = shape_ok && render_asset_ok;
+//
+//   -- and `render_asset_ok` is `!req.write && addr32 >= ZHAO_RENDER_ASSET_BASE
+//   && end32 <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN`, which is
+//   0x06A0_0000 + 0x0160_0000 = [0x06A0_0000, 0x0800_0000). THE WHOLE PARAMBUF
+//   REGION LIES STRICTLY BELOW THAT WINDOW. Not a direction bit short of
+//   legal: outside the bounds, in both directions, for the only client that
+//   owns it.
+//
+// SO THE FIRST THING THIS BLOCK NEEDS IS A MEM.GUARD WINDOW, WHICH IS A RULING
+// ABOUT THE MEMORY LAW AND NOT A BUILD. The guard's own header calls the asset
+// pool "A THIRD WINDOW ... stated plainly rather than folded in", and says
+// what keeps the no-escape guarantee intact there: the window is READ-ONLY and
+// its bounds are CONSTANTS. A PARAMBUF window is a write arm on a frame-scoped
+// arena, which is the harder case, and it is covered by a committed formal
+// proof -- `tests/formal/mem_guard_no_escape.sby`, with
+// `tests/mutants/zhao_mem_guard_resbound_mutant.sv` already demonstrating that
+// removing a containment term makes that proof FAIL.
+//
+// **THAT ASSERTION IS NOT TO BE WEAKENED TO MAKE A COMPOSITION FIT.** It is
+// the statement that nothing escapes the map, it has a positive control, and
+// an arena that needs it relaxed is an owner decision about what the console
+// is allowed to overwrite. The shape of the decision, stated so it can be
+// taken rather than rediscovered:
+//
+//   * a FIFTH ENGINE1-reachable window over 5c's ranges, or a single window
+//     with two arms in the terrain pool's shape (`terrain_ok` requires
+//     `req.write`, `terrain_rd_ok` requires `!req.write`, same two constant
+//     bounds) -- the precedent is in the guard already;
+//   * the two PARAMBUF VIEWS are disjoint "for the same reason the two FB
+//     slots are" (5c), so whatever admits a write has to say WHICH view, and
+//     that is frame-scoped state like `fb_writer`, not a constant;
+//   * `mem_guard_no_escape.sby` extended to cover it, and a committed mutant
+//     that makes the extended proof fail.
+//
+// ONLY THEN IS THE ARENA WRITER THE BLOCKER, and it is a subsystem rather than
+// a nodule: a packer that serialises 24-byte ProjectedVertex and 16-byte
+// TriangleDescriptor records, a 64-byte chunk allocator with the frame
+// generation stamped per chunk, a write-capable ENGINE1 client
+// (`zhao_mem_share_wr` already exists and is composed as `u_build_share` for
+// TERRAIN_BUILD, so the share is not the missing part), and a chunk walker
+// that reads them back. The console today runs this path ON CHIP through
+// `zhao_geom_binner_v2`'s bounded chunk arena (CHUNKS = 256, CHUNK_REFS = 4),
+// which is what this contract's "active chunk tails" permits and what R7's
+// external arena is meant to stop being grown.
+//
+// WHAT THIS BLOCK IS, FOR THE AVOIDANCE OF THE OTHER MISREADING: pure
+// combinational DECODE, bytes in and fields out, with the legality rules. It
+// has no memory port and never will. It cannot be composed against the
+// existing geometry path by wiring, because nothing in this console holds a
+// byte vector in any of these three layouts -- `zhao_geom_assemble` already
+// emits a triangle as FIELDS "exactly GEOM.PARAMBUF's layout", which is the
+// INVERSE of this block, not a producer for it. Packing fields into bytes here
+// so a decoder could unpack them again would be a composition that produces a
+// picture and proves nothing.
+//
+// ---------------------------------------------------------------------------
 `default_nettype none
 
 module zhao_geom_parambuf #(
