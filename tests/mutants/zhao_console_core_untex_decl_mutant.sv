@@ -1782,6 +1782,11 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_groups_released_o,
   output logic [31:0]             terr_fills_forwarded_o,
   output logic [31:0]             terr_fills_dropped_o,
+  // ITEM 5 (owner ruling 2026-09-22, packet EDGERECON): jobs whose
+  // sparse-fill request was refused because this composition carries a
+  // dense-seal shell. Added to this WRAPPER because the real module gained
+  // it -- R220: fix the wrapper, never the module.
+  output logic [31:0]             terr_sparse_refused_o,
   output logic [31:0]             terr_refs_forwarded_o,
   output logic [31:0]             terr_release_unsafe_o,
   output logic [31:0]             terr_tess_vertices_o,
