@@ -7630,27 +7630,84 @@ module zhao_console_core
   output logic [31:0]             geom_light_nlights_clamped_o,
   output logic [31:0]             geom_light_adapter_refused_o,
 
-  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
-  // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
-  // decoder's own SOURCE is what is now missing, and this is it. See I29.
-  input  logic                    geom_pose_start_i,
-  input  logic [5:0]              geom_pose_bone_count_i,
-  input  logic signed [31:0]      geom_pose_root_dx_i,
-  input  logic signed [31:0]      geom_pose_root_dy_i,
-  input  logic signed [31:0]      geom_pose_root_dz_i,
+  // ---- I29 IS CLOSED 2026-09-22: the clip page and the skeleton bake -------
+  // FOURTEEN INPUTS LEFT THIS LIST RATHER THAN BEING DRIVEN. They were the
+  // decoder's own per-bone source -- `geom_pose_start_i`, the bone count, the
+  // root displacement, the parent, the three rest translations, the four
+  // quaternion lanes and the twelve-element inverse-rest matrix -- and the
+  // producer they were waiting for is now composed: `zhao_geom_clipread` reads
+  // a kind-8 BODY and a kind-9 CLIP FRAME through requester G of
+  // `u_geom_mem_adapter`, fills `zhao_geom_bonesrc`, and the store answers the
+  // decoder combinationally. See the composition beside `u_geom_drawjob` and
+  // the closed ledger entry in the header.
+  //
+  // `geom_pose_bone_idx_o` STAYS. It is the decoder's index into the store and
+  // it is read INSIDE now, so this port is observation, not the thing keeping
+  // the register alive.
   output logic [4:0]              geom_pose_bone_idx_o,
-  input  logic [4:0]              geom_pose_bone_parent_i,
-  input  logic signed [31:0]      geom_pose_bone_tx_i,
-  input  logic signed [31:0]      geom_pose_bone_ty_i,
-  input  logic signed [31:0]      geom_pose_bone_tz_i,
-  input  logic signed [15:0]      geom_pose_quat_w_i,
-  input  logic signed [15:0]      geom_pose_quat_x_i,
-  input  logic signed [15:0]      geom_pose_quat_y_i,
-  input  logic signed [15:0]      geom_pose_quat_z_i,
-  input  logic signed [31:0]      geom_pose_inv_rest_i [0:11],
   output logic                    geom_pose_busy_o,
   output logic                    geom_pose_done_o,
   output logic [31:0]             geom_pose_palettes_decoded_o,
+
+  // ---- I29's INSTANCE WALK: what it accepted, and what it cost ------------
+  // `geom_pose_requests_o` counts POSED draws whose {form, clip_id, frame_no}
+  // were captured off one command packet on one enable. `geom_pose_walk_holds_o`
+  // counts the cycles a posed draw waited for the reader's one request slot --
+  // the throughput price of refusing to drop a pose key, stated as a number
+  // rather than as a claim that it is small.
+  output logic [31:0]             geom_pose_requests_o,
+  output logic [31:0]             geom_pose_walk_holds_o,
+
+  // ---- I29's PAGE READER (`zhao_geom_clipread`) ---------------------------
+  // WHICH RESOURCE ANSWERED and WHICH FORM each resident section claims. The
+  // 2026-09-21 ownership ruling keeps three identities apart and its section 5
+  // says to "record the selected resource identities"; `geom_cr_*_index_o` /
+  // `geom_cr_*_gen_o` are RESOURCE identity (which publication) and
+  // `geom_cr_*_owner_o` is FORM identity (which creature the page NAMES).
+  // They are not derived from one another and a body and its clip bank are
+  // published under two independent resource indices while naming one form.
+  output logic [23:0]             geom_cr_body_index_o,
+  output logic [15:0]             geom_cr_body_gen_o,
+  output logic [23:0]             geom_cr_clip_index_o,
+  output logic [15:0]             geom_cr_clip_gen_o,
+  output logic [23:0]             geom_cr_body_owner_o,
+  output logic [23:0]             geom_cr_clip_owner_o,
+  // The census.
+  output logic [31:0]             geom_cr_bodies_o,
+  output logic [31:0]             geom_cr_clips_o,
+  output logic [31:0]             geom_cr_frames_o,
+  // The faults. `geom_cr_owner_mismatch_o` is the one to watch: it is the
+  // refusal of a request whose form is not the form BOTH resident sections
+  // name, and it is deliberately neither a miss nor a residency failure. It
+  // discriminates under legal stimulus at IDENTICAL bone counts, with
+  // `geom_cr_bone_mismatch_o` silent beside it -- which is exactly the
+  // blindness a bone-count check has and this one does not.
+  output logic [31:0]             geom_cr_pages_dropped_o,
+  output logic [31:0]             geom_cr_bad_magic_o,
+  output logic [31:0]             geom_cr_truncated_o,
+  output logic [31:0]             geom_cr_misaligned_o,
+  output logic [31:0]             geom_cr_bad_bone_count_o,
+  output logic [31:0]             geom_cr_bone_mismatch_o,
+  output logic [31:0]             geom_cr_overflow_o,
+  output logic [31:0]             geom_cr_not_rigid_o,
+  output logic [31:0]             geom_cr_reserved_nz_o,
+  output logic [31:0]             geom_cr_denied_o,
+  output logic [31:0]             geom_cr_clip_miss_o,
+  output logic [31:0]             geom_cr_frame_oob_o,
+  output logic [31:0]             geom_cr_not_resident_o,
+  output logic [31:0]             geom_cr_owner_mismatch_o,
+  output logic                    geom_cr_busy_o,
+
+  // ---- I29's STORE (`zhao_geom_bonesrc`) ----------------------------------
+  // `geom_bs_prefetch_late_o` is the one that says the arrangement holds: the
+  // store buys the decoder's one missing cycle with a two-deep prefetch given
+  // ~115 cycles of notice, and this counter is what fires if that notice ever
+  // stops being true. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` is
+  // its positive control.
+  output logic [31:0]             geom_bs_prefetch_late_o,
+  output logic [31:0]             geom_bs_rest_nonrigid_o,
+  output logic [31:0]             geom_bs_reserved_nz_o,
+  output logic [31:0]             geom_bs_fills_o,
 
   // ---- GEOM.POSE's palette store: its evidence ----------------------------
   // `geom_pal_bone_unset_o` is the one to watch. It is the store's own report
@@ -7796,6 +7853,9 @@ module zhao_console_core
   // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
   // from the other five so the scan's cost is a NUMBER rather than an argument.
   output logic [31:0] geom_ma_jobs_f_o,
+  // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
+  // 2026-09-22). Its traffic is per creature publication and per POSED draw.
+  output logic [31:0] geom_ma_jobs_g_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
@@ -11296,6 +11356,33 @@ module zhao_console_core
   );
 
   // --------------------------------------------------------------------------
+  // I29's SOURCE SIDE, DECLARED HERE AND DRIVEN BELOW.
+  //
+  // `u_geom_bonesrc` and `u_geom_clipread` are instantiated down in the
+  // geometry-memory region, beside `u_geom_drawjob` and `u_geom_mem_adapter`,
+  // because that is where the publication row, the draw handshake and the
+  // asset-window requester all already are. The decoder is up HERE, so the
+  // wires between them are declared at this end and connected at that one --
+  // an ordering, not two owners.
+  //
+  // WHAT EACH ONE IS, so that "it has the right name and the right width" is
+  // never the argument. `bs_*` are `zhao_geom_bonesrc`'s COMBINATIONAL answers
+  // for the bone the decoder is currently naming on `bone_idx_o`; they are
+  // valid in the SAME cycle as that index, which is the decoder's own contract
+  // (`zhao_geom_pose_decode.sv`, its fetch section). `cr_root_d*` are the
+  // FRAME's root displacement, held by the reader from the fill until the next
+  // frame replaces it, so it is stable across the whole decode it belongs to.
+  // --------------------------------------------------------------------------
+  wire                     bs_start_c;
+  wire [4:0]               bs_bone_idx_c;      // the decoder's index, into the store
+  wire [4:0]               bs_bone_parent_c;
+  wire signed [31:0]       bs_bone_tx_c, bs_bone_ty_c, bs_bone_tz_c;
+  wire signed [15:0]       bs_quat_w_c, bs_quat_x_c, bs_quat_y_c, bs_quat_z_c;
+  wire signed [31:0]       bs_inv_rest_c [0:11];
+  wire [5:0]               cr_src_bone_count_c;
+  wire signed [31:0]       cr_root_dx_c, cr_root_dy_c, cr_root_dz_c;
+
+  // --------------------------------------------------------------------------
   // GEOM.POSE's decoder. Its palette output now has a consumer, which is the
   // whole reason it is composed here: an instantiation with nothing reading it
   // would be a disconnected implementation with extra steps.
@@ -11311,23 +11398,41 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I29: the clip page and the skeleton bake have no producer in this tree.
-    .start_i       (geom_pose_start_i),
+    // I29 CLOSED 2026-09-22. The source is `zhao_geom_bonesrc`, filled by
+    // `zhao_geom_clipread` out of a kind-8 BODY and a kind-9 CLIP FRAME.
+    //
+    // `start_i` IS THE STORE'S OWN `start_o`, NOT THE READER'S HANDOVER, and
+    // the difference is the whole reason the store has that port: bone 0 must
+    // be on these wires before the decoder begins, so the store answers the
+    // request one cycle late, when its prefetch has landed. Wiring the
+    // reader's `src_req_o` straight here would start a decode against the
+    // PREVIOUS frame's bone 0 -- the fault `bone_prefetch_late_o` counts and
+    // `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` exists to model.
+    //
+    // `bone_count_i` is the READER's count, not a second opinion about it: it
+    // is the same register the reader handed the store on the same handshake,
+    // and it is the count both resident sections agreed on -- the reader's
+    // `bone_mismatch_o` refuses the pair when they do not.
+    .start_i       (bs_start_c),
     .busy_o        (geom_pose_busy_o),
-    .bone_count_i  (geom_pose_bone_count_i),
-    .root_dx_i     (geom_pose_root_dx_i),
-    .root_dy_i     (geom_pose_root_dy_i),
-    .root_dz_i     (geom_pose_root_dz_i),
-    .bone_idx_o    (geom_pose_bone_idx_o),
-    .bone_parent_i (geom_pose_bone_parent_i),
-    .bone_tx_i     (geom_pose_bone_tx_i),
-    .bone_ty_i     (geom_pose_bone_ty_i),
-    .bone_tz_i     (geom_pose_bone_tz_i),
-    .quat_w_i      (geom_pose_quat_w_i),
-    .quat_x_i      (geom_pose_quat_x_i),
-    .quat_y_i      (geom_pose_quat_y_i),
-    .quat_z_i      (geom_pose_quat_z_i),
-    .inv_rest_i    (geom_pose_inv_rest_i),
+    .bone_count_i  (cr_src_bone_count_c),
+    .root_dx_i     (cr_root_dx_c),
+    .root_dy_i     (cr_root_dy_c),
+    .root_dz_i     (cr_root_dz_c),
+    // COMBINATIONAL BY CONTRACT: the index leaves here and the answers come
+    // back in the SAME cycle. That is why the source is a STORE and not a
+    // stream, and it is why `zhao_geom_bonesrc` holds a two-deep prefetch
+    // rather than an asynchronous array -- 830 ALM against 14,056.
+    .bone_idx_o    (bs_bone_idx_c),
+    .bone_parent_i (bs_bone_parent_c),
+    .bone_tx_i     (bs_bone_tx_c),
+    .bone_ty_i     (bs_bone_ty_c),
+    .bone_tz_i     (bs_bone_tz_c),
+    .quat_w_i      (bs_quat_w_c),
+    .quat_x_i      (bs_quat_x_c),
+    .quat_y_i      (bs_quat_y_c),
+    .quat_z_i      (bs_quat_z_c),
+    .inv_rest_i    (bs_inv_rest_c),
 
     // REAL: one bone per beat, into the palette store.
     .out_valid_o (pd_out_valid),
@@ -11355,7 +11460,12 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    .pal_begin_i (geom_pose_start_i),
+    // I29 CLOSED: the store's `start_o`, which is what `u_geom_pose_decode`
+    // takes on `start_i`. Still one pulse and not a copy of one -- the whole
+    // argument below is that the pulse beginning a decode is exactly the pulse
+    // making the previous pose unreadable, and that is as true of the store's
+    // start as it was of the boundary's.
+    .pal_begin_i (bs_start_c),
 
     // REAL: from GEOM.POSE's decoder.
     .wr_valid_i (pd_out_valid),
@@ -19803,9 +19913,56 @@ module zhao_console_core
     .framing_err_o(geom_dj_hdr_framing_o)
   );
 
+  // ---- I29's declarations, ahead of their first use -----------------------
+  // `pw_pend_q` is read by `cmd_draw_ready_w` immediately below and driven by
+  // the instance walk further down; `cr_p_ready_c` is read by that walk and
+  // driven by `u_geom_clipread` below it. Declared here, once, so nothing in
+  // this file refers forward.
+  logic            pw_pend_q;
+  logic [23:0]     pw_form_q;
+  logic [15:0]     pw_clip_q;
+  logic [15:0]     pw_frame_q;
+  zhao_guard_req_t cr_guard_req;
+  zhao_guard_rsp_t cr_guard_rsp;
+  wire             cr_beat_valid;
+  wire [63:0]      cr_beat_data;
+  wire             cr_p_ready_c;
+  wire             cr_fill_we_c, cr_fill_sel_c;
+  wire [4:0]       cr_fill_bone_c;
+  wire [3:0]       cr_fill_word_c;
+  wire [63:0]      cr_fill_data_c;
+  wire             cr_src_req_c;
+  wire             cr_src_ready_c;
+
   // The draw stream's ready carries the same hold as its valid, so a held
   // draw is not accepted by one side of the handshake and refused by the other.
-  assign cmd_draw_ready_w = dj_d_ready && !publication_in_flight_c;
+  //
+  // AND SINCE I29 CLOSED, A THIRD TERM, WHICH APPLIES TO POSED DRAWS ONLY.
+  // `pw_pend_q` is the instance walk's one pose-request slot. A `DrawPosedForm`
+  // is not admitted while that slot is full, because the alternative is to drop
+  // the pose key and let the draw stream on -- and a dropped pose does not
+  // produce a missing creature, it produces a creature wearing the PREVIOUS
+  // pose's palette, with every handshake intact and every counter balancing.
+  // That is this repository's named worst case and it is not worth a cycle of
+  // throughput.
+  //
+  // `DrawForm` 0x0300 IS UNAFFECTED, and that is owner ruling W09's
+  // "preserve the ordinary path" read literally: `cmd_draw_posed_o` is LOW for
+  // every bind-pose draw, so the term is a constant 1 for them and the
+  // unposed path's cadence does not move by one cycle.
+  //
+  // IT CANNOT DEADLOCK ON THE COMMAND STREAM, which is the question to ask of
+  // any new backpressure and the one a name-match would not have raised.
+  // `zhao_geom_clipread.p_ready_o` is `(st_q == S_IDLE) && !pub_any_c`, and a
+  // request this reader cannot serve is CONSUMED IN S_IDLE and counted
+  // (`not_resident_o`, `owner_mismatch_o`, `clip_miss_o`, `frame_oob_o`) --
+  // it does not leave S_IDLE. So the slot drains in one cycle whenever nothing
+  // is resident, which is exactly the state a console that has published no
+  // creature page is in. What can hold it is a walk in progress, and that walk
+  // is bounded by MEM.GUARD beats on requester G and depends on nothing this
+  // command stream has to do first.
+  assign cmd_draw_ready_w = dj_d_ready && !publication_in_flight_c
+                          && (!cmd_draw_posed_o || !pw_pend_q);
 
   assign geom_dj_refused_cull_o     = dj_refused[0];
   assign geom_dj_refused_resident_o = dj_refused[1];
@@ -19855,6 +20012,241 @@ module zhao_console_core
   // I29's producer half, at the edge. See the port declaration.
   assign geom_job_valid_o    = dj_j_valid;
   assign geom_job_form_idx_o = dj_j_form_idx;
+
+  // ==========================================================================
+  // I29 CLOSED: GEOM.POSE's CLIP PAGE AND SKELETON BAKE.
+  //
+  // Three things land here and they are in dependency order: THE INSTANCE WALK
+  // (which turns an accepted draw into a pose request), THE PAGE READER
+  // (`zhao_geom_clipread`, which fetches the kind-8 body and the kind-9 frame),
+  // and THE STORE (`zhao_geom_bonesrc`, which answers the decoder's
+  // combinational per-bone fetch). The decoder and the palette are composed
+  // hundreds of lines above; only the wires between them are declared there.
+  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // THE INSTANCE WALK.
+  //
+  // `design/contracts/GEOM.POSE.md` names the input as "{type_id, clip_id,
+  // frame_no, bone_count}" from GEOM.MESHFETCH's instance walk, and entry I29
+  // recorded that walk as the last missing piece. This is it, and it is
+  // FIFTEEN REGISTERS, because the hard part was never the arithmetic -- it
+  // was deciding WHICH form index and WHEN.
+  //
+  // ONE ENTRY, ONE ENABLE, AND THAT IS THE WHOLE ARGUMENT. Every field taken
+  // here is a field of the SAME accepted command packet, read at the SAME
+  // instant, from the SAME `dq` head: `cmd_draw_form_w` is `draw_form_o`,
+  // `cmd_draw_posed_o` is `dq_head[DQ_POSED_LO]`, and the clip id and frame
+  // number are the adjacent slices of that one register. `zhao_cmd_exec`'s
+  // 0x0305 arm emits the key in the same `dq` entry as the draw precisely so
+  // that no stall can separate a pose from the draw it belongs to (R229).
+  //
+  // SO THE FORM COMES FROM `cmd_draw_form_w[31:8]` AND **NOT** FROM
+  // `dj_j_form_idx`, and the difference is the entire failure this subsystem
+  // punishes. `dj_j_form_idx` is the same 24 bits by the same expression -- but
+  // it is offered a STAGE LATER, qualified by `dj_j_valid`, and in
+  // `zhao_geom_drawjob`'s own S_IDLE it holds the PREVIOUS draw. Pairing it
+  // with a clip id captured at the draw handshake would be entry I39's fault
+  // exactly: two live wires, agreeing in name and width, describing two
+  // different draws. Taking the form off the SAME handshake that carries the
+  // clip id makes the join structural rather than temporal, and there is then
+  // no cadence to get wrong. `geom_job_form_idx_o` stays at the edge as the
+  // ruling's exposed identity; it is not what this walk reads.
+  //
+  // THE SLOT IS ONE DEEP AND THE DRAW WAITS FOR IT. See `cmd_draw_ready_w`
+  // above for why a drop was refused. `geom_pose_walk_holds_o` counts the
+  // cycles a posed draw spent waiting, so "the pose path costs throughput" is
+  // a measurement rather than an argument -- and on a console drawing bind
+  // poses it reads zero for a structural reason, not a lucky one.
+  //
+  // `sub` IS DELIBERATELY NOT CARRIED. `cmd_draw_sub_o` is the pose cache's
+  // key discriminator for the 60 Hz midpoint; this reader fetches an AUTHORED
+  // frame and `zhao_geom_clipread` has no port for it. Carrying it here would
+  // be a second copy of a field whose owner is elsewhere.
+  // --------------------------------------------------------------------------
+  wire pw_fire_c = cmd_draw_valid_w && cmd_draw_ready_w && cmd_draw_posed_o;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pw_pend_q              <= 1'b0;
+      pw_form_q              <= 24'd0;
+      pw_clip_q              <= 16'd0;
+      pw_frame_q             <= 16'd0;
+      geom_pose_requests_o   <= 32'd0;
+      geom_pose_walk_holds_o <= 32'd0;
+    end else begin
+      // The hold is counted BEFORE the accept, so a cycle in which the draw
+      // was offered and refused is a cycle counted. A posed draw admitted with
+      // the slot already empty costs nothing and counts nothing.
+      if (cmd_draw_valid_w && cmd_draw_posed_o && pw_pend_q)
+        geom_pose_walk_holds_o <= geom_pose_walk_holds_o + 32'd1;
+
+      if (pw_fire_c) begin
+        pw_pend_q            <= 1'b1;
+        pw_form_q            <= cmd_draw_form_w[31:8];
+        pw_clip_q            <= cmd_draw_clip_id_o;
+        pw_frame_q           <= cmd_draw_frame_no_o;
+        geom_pose_requests_o <= geom_pose_requests_o + 32'd1;
+      end else if (pw_pend_q && cr_p_ready_c) begin
+        pw_pend_q <= 1'b0;
+      end
+    end
+  end
+
+  // --------------------------------------------------------------------------
+  // THE PAGE READER. Requester G of `u_geom_mem_adapter`.
+  //
+  // THE PARAMETERS ARE LEFT AT THE BLOCK'S OWN DEFAULTS. CLIP_ROWS = 16,
+  // MAX_BONES = 32, BODY_KIND = 8, CLIP_KIND = 9 and CLIENT = ENGINE1 are all
+  // stated in that file against `spec/creature_rules.md` and
+  // `spec/cartridge.md` 4; restating them here would put a second copy of a
+  // frozen layout in a composer, which is the shape this file keeps striking.
+  // The share forces the client anyway (11.2), so the parameter is the
+  // truthful value rather than the load-bearing one.
+  //
+  // THE PUBLICATION IS MEM.UPLOAD's OWN 5f.1 ROW, unfiltered by kind at this
+  // seam and filtered INSIDE the reader against its own two parameters. That
+  // is deliberate and it is the opposite of what `u_geom_drawjob` and
+  // `u_material_resolve` do above, each of which compares the tag here. Those
+  // two consume ONE kind each; this block consumes TWO and must tell them
+  // apart to know which store to fill, so a tag test in the composer would be
+  // a first opinion the block then has to repeat. One owner of that decode.
+  // --------------------------------------------------------------------------
+  zhao_geom_clipread u_geom_clipread (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: MEM.UPLOAD's publication, the same 5f.1 row `u_geom_drawjob` and
+    // `u_material_resolve` read, whole.
+    .pub_valid_i     (upl_publish_valid_o),
+    .pub_tag_i       (upl_publish_tag_o),
+    .pub_index_i     (upl_publish_index_o),
+    .pub_generation_i(upl_publish_generation_o),
+    .pub_base_i      (upl_publish_base_o),
+    .pub_extent_i    (upl_publish_extent_o),
+
+    // REAL: the instance walk's one held request. Form, clip and frame all
+    // came out of ONE command packet on ONE enable -- see the walk above.
+    .p_valid_i   (pw_pend_q),
+    .p_ready_o   (cr_p_ready_c),
+    .p_form_idx_i(pw_form_q),
+    .p_clip_id_i (pw_clip_q),
+    .p_frame_no_i(pw_frame_q),
+
+    // REAL: requester G of the shared ENGINE1 client. No `beat_last`: the
+    // reader counts its own eight beats a line.
+    .g_req_o       (cr_guard_req),
+    .g_rsp_i       (cr_guard_rsp),
+    .g_beat_valid_i(cr_beat_valid),
+    .g_beat_data_i (cr_beat_data),
+
+    // REAL: the fill into the store, and the handover after it.
+    .fill_we_o       (cr_fill_we_c),
+    .fill_sel_o      (cr_fill_sel_c),
+    .fill_bone_o     (cr_fill_bone_c),
+    .fill_word_o     (cr_fill_word_c),
+    .fill_data_o     (cr_fill_data_c),
+    .src_req_o       (cr_src_req_c),
+    .src_bone_count_o(cr_src_bone_count_c),
+    .src_ready_i     (cr_src_ready_c),
+
+    // REAL: the frame's root displacement, straight to the decoder.
+    .root_dx_o(cr_root_dx_c),
+    .root_dy_o(cr_root_dy_c),
+    .root_dz_o(cr_root_dz_c),
+
+    // WHICH RESOURCE ANSWERED and WHICH FORM each section claims. The owner
+    // ruling's section 5 says in terms to "record the selected resource
+    // identities"; these six ports are that record, and they are at the edge
+    // for the reason `geom_job_form_idx_o` is -- an identity nothing reads is
+    // an identity synthesis deletes, and the next fit then prices the lane at
+    // zero.
+    .res_body_index_o(geom_cr_body_index_o),
+    .res_body_gen_o  (geom_cr_body_gen_o),
+    .res_clip_index_o(geom_cr_clip_index_o),
+    .res_clip_gen_o  (geom_cr_clip_gen_o),
+    .res_body_owner_o(geom_cr_body_owner_o),
+    .res_clip_owner_o(geom_cr_clip_owner_o),
+
+    .bodies_o        (geom_cr_bodies_o),
+    .clips_o         (geom_cr_clips_o),
+    .frames_o        (geom_cr_frames_o),
+    .pages_dropped_o (geom_cr_pages_dropped_o),
+    .bad_magic_o     (geom_cr_bad_magic_o),
+    .truncated_o     (geom_cr_truncated_o),
+    .misaligned_o    (geom_cr_misaligned_o),
+    .bad_bone_count_o(geom_cr_bad_bone_count_o),
+    .bone_mismatch_o (geom_cr_bone_mismatch_o),
+    .overflow_o      (geom_cr_overflow_o),
+    .not_rigid_o     (geom_cr_not_rigid_o),
+    .reserved_nz_o   (geom_cr_reserved_nz_o),
+    .denied_o        (geom_cr_denied_o),
+    .clip_miss_o     (geom_cr_clip_miss_o),
+    .frame_oob_o     (geom_cr_frame_oob_o),
+    .not_resident_o  (geom_cr_not_resident_o),
+    .owner_mismatch_o(geom_cr_owner_mismatch_o),
+    .busy_o          (geom_cr_busy_o)
+  );
+
+  // --------------------------------------------------------------------------
+  // THE STORE. SRC_STYLE IS LEFT AT ITS DEFAULT AND THAT DEFAULT IS A PRICE.
+  //
+  // `zhao_geom_bonesrc` carries three Quartus-mapped arrangements of one
+  // source: SYNC_M10K at 830 ALM with 10,240 block-memory bits, ASYNC_DERIVED
+  // at 6,440, and ASYNC_FLAT -- owner ruling R90's literal reading -- at
+  // 14,056 ALM, one third of the 41,910 ceiling. Style 0 ships. Naming the
+  // parameter here would copy a measured frontier into a composer; the number
+  // that matters is in that file's header with the rows that produced it.
+  //
+  // `start_o` AND `ready_o` ARE TWO DIFFERENT ANSWERS AND BOTH ARE USED.
+  // `ready_o` tells the READER the store can take a new handover; `start_o`
+  // tells the DECODER bone 0 is on the wires. They are one cycle apart and
+  // wiring either to the other's consumer is the late-fetch fault.
+  // --------------------------------------------------------------------------
+  zhao_geom_bonesrc #(
+    .MAX_BONES (GEOM_POSE_BONES_C)
+  ) u_geom_bonesrc (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the reader's fill, word by word, into whichever of the two stores
+    // `fill_sel` names -- 0 the kind-8 skeleton, 1 the kind-9 quaternions.
+    .fill_we_i  (cr_fill_we_c),
+    .fill_sel_i (cr_fill_sel_c),
+    .fill_bone_i(cr_fill_bone_c),
+    .fill_word_i(cr_fill_word_c),
+    .fill_data_i(cr_fill_data_c),
+
+    // REAL: the handover. The reader raises `src_req_o` only once BOTH stores
+    // hold whole, consistent data -- its own "fill whole, then ask" law -- so
+    // nothing here has to check that a page arrived in one piece.
+    .req_i       (cr_src_req_c),
+    .bone_count_i(cr_src_bone_count_c),
+    .start_o     (bs_start_c),
+    .ready_o     (cr_src_ready_c),
+
+    // REAL: the decoder's combinational per-bone fetch.
+    .bone_idx_i   (bs_bone_idx_c),
+    .bone_parent_o(bs_bone_parent_c),
+    .bone_tx_o    (bs_bone_tx_c),
+    .bone_ty_o    (bs_bone_ty_c),
+    .bone_tz_o    (bs_bone_tz_c),
+    .quat_w_o     (bs_quat_w_c),
+    .quat_x_o     (bs_quat_x_c),
+    .quat_y_o     (bs_quat_y_c),
+    .quat_z_o     (bs_quat_z_c),
+    .inv_rest_o   (bs_inv_rest_c),
+
+    .bone_prefetch_late_o(geom_bs_prefetch_late_o),
+    .bone_rest_nonrigid_o(geom_bs_rest_nonrigid_o),
+    .bone_reserved_nz_o  (geom_bs_reserved_nz_o),
+    .bone_fills_o        (geom_bs_fills_o)
+  );
+
+  // The decoder's index, kept at the edge. It is READ inside (the store is its
+  // consumer), so this is observation rather than the thing that keeps the
+  // register alive.
+  assign geom_pose_bone_idx_o = bs_bone_idx_c;
 
   zhao_geom_meshfetch u_geom_meshfetch (
     .clk   (gpu_clk),
@@ -20164,6 +20556,17 @@ module zhao_console_core
     // wired to a net nothing reads.
     .f_beat_last_o (),
 
+    // REAL: requester G, GEOM.POSE's kind-8 BODY and kind-9 CLIP FRAME page
+    // reader (I29). One adoption per creature publication and six 64-byte
+    // lines per POSED draw at 32 bones -- heavier than E and F, lighter than
+    // A, and on the same pool, client and direction, which is 5f's condition
+    // for joining here. The reader takes no `last`; the adapter has no such
+    // port for G, so there is nothing to leave open.
+    .g_req_i       (cr_guard_req),
+    .g_rsp_o       (cr_guard_rsp),
+    .g_beat_valid_o(cr_beat_valid),
+    .g_beat_data_o (cr_beat_data),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -20177,6 +20580,7 @@ module zhao_console_core
     .jobs_d_o     (geom_ma_jobs_d_o),
     .jobs_e_o     (geom_ma_jobs_e_o),
     .jobs_f_o     (geom_ma_jobs_f_o),
+    .jobs_g_o     (geom_ma_jobs_g_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),

@@ -3040,11 +3040,28 @@ targets:
       # CLAUDE.md has a chapter about.
       #
       # `zhao_geom_mat3x4_mul` and `zhao_geom_quat2mat` come with the decoder:
-      # they are its two engines, not separate compositions. The decoder's own
-      # SOURCE (clip page + skeleton bake) is now header entry I29 and is a
-      # boundary, so this row measures the palette PATH and not the fetch.
+      # they are its two engines, not separate compositions.
+      #
+      # CORRECTED 2026-09-22 (packet GEOMCLOSE). The paragraph above used to
+      # end "The decoder's own SOURCE (clip page + skeleton bake) is now
+      # header entry I29 and is a boundary, so this row measures the palette
+      # PATH and not the fetch." ENTRY I29 IS CLOSED and the source is in this
+      # closure now, so that sentence describes a row this file no longer
+      # produces -- and a stale reason beside a landed change is the failure
+      # the paragraph above it has a chapter about.
+      #
+      # `zhao_geom_bonesrc` is the per-bone STORE the decoder fetches from
+      # combinationally, at SRC_STYLE 0 -- 830 ALM and 10,240 block-memory
+      # bits, against 14,056 ALM for the asynchronous arrangement owner ruling
+      # R90 priced. `zhao_geom_clipread` is the kind-8 BODY and kind-9 CLIP
+      # FRAME page reader that fills it, on requester G of
+      # `zhao_geom_mem_adapter` (already in this list, above). Both enter this
+      # closure together because a store with no producer is a disconnected
+      # implementation and a producer with no store has nothing to fill.
       - fpga/rtl/geometry/zhao_geom_pose_palette.sv
       - fpga/rtl/geometry/zhao_geom_pose_decode.sv
+      - fpga/rtl/geometry/zhao_geom_bonesrc.sv
+      - fpga/rtl/geometry/zhao_geom_clipread.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_quat2mat.sv
       # GEOM.WARP, composed 2026-09-22 (packet WARPCOMP). Three files: the
