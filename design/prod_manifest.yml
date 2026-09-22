@@ -368,6 +368,12 @@ top:
   # has decided not to ship.
   - zhao_forge_cliff_ram    # over zhao_forge_cliff (owner ruling R142)
   - zhao_part_expand
+  # PART.CLIPFEED, NEW 2026-09-22 (owner ruling 1, packet PARTMAT). A top for
+  # the same reason zhao_part_expand is one: the production fit instantiates
+  # the particle lane's blocks flat, and this one carries a depthquant/rcp24
+  # pair whose area belongs in the census beside its siblings rather than
+  # folded into a parent nobody fits alone.
+  - zhao_part_clipfeed
   - zhao_part_ladder
   # zhao_part_record WAS A TOP HERE UNTIL 2026-09-20 and is not any more, under
   # this file own rule that a module its parent instantiates is not a top. It

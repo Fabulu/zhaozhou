@@ -2409,6 +2409,9 @@ targets:
       - fpga/rtl/memory/zhao_sdram_ctrl.sv
       - fpga/rtl/memory/zhao_vram_arbiter.sv
       - fpga/rtl/particles/zhao_part_expand.sv
+      # PART.CLIPFEED, new 2026-09-22 (owner ruling 1). zhao_prod_top
+      # instantiates it flat beside PART.EXPAND, so it owes a source row here.
+      - fpga/rtl/particles/zhao_part_clipfeed.sv
       - fpga/rtl/particles/zhao_part_ladder.sv
       - fpga/rtl/particles/zhao_part_record.sv
       - fpga/rtl/particles/zhao_part_soft.sv
@@ -2883,6 +2886,10 @@ targets:
       - fpga/rtl/particles/zhao_part_project.sv
       - fpga/rtl/particles/zhao_part_ladder.sv
       - fpga/rtl/particles/zhao_part_expand.sv
+      # PART.CLIPFEED, composed 2026-09-22 (owner ruling 1). It carries the
+      # D-4 depth pair, so the delta it brings is ONE depthquant stream plus
+      # ONE rcp24_v4 at NCTX 8, not a projector.
+      - fpga/rtl/particles/zhao_part_clipfeed.sv
       - fpga/rtl/particles/zhao_part_soft.sv
       - fpga/rtl/geometry/zhao_geom_skin.sv
       - fpga/rtl/geometry/zhao_geom_group_seq.sv

@@ -1495,7 +1495,9 @@ module zhao_console_board
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
   // `granted_o` is flattened 32 bits each, least significant slice client 0.
-  output logic [63:0] geom_clipdoor_granted_o,
+  // PARTMAT 2026-09-22 (owner ruling 1): the door gained a THIRD client,
+  // PART.CLIPFEED's polygon particles, so `granted_o` widened 64 -> 96.
+  output logic [95:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -2102,6 +2104,8 @@ module zhao_console_board
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
+  output logic [31:0]             mat_win_no_material_spans_o,
+  output logic [31:0]             mat_win_mode_refused_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -2955,6 +2959,12 @@ module zhao_console_board
   output logic [31:0] part_lad_held_o,
   output logic [31:0] part_lad_gov_forced_o,
   output logic [31:0] part_exp_polygons_o,
+  output logic [31:0] part_cf_particles_o,
+  output logic [31:0] part_cf_triangles_o,
+  output logic [31:0] part_cf_range_refused_o,
+  output logic [31:0] part_cf_stall_full_o,
+  output logic [31:0] part_cf_dq_refused_o,
+  output logic [31:0] part_cf_dq_stray_o,
   output logic [31:0] part_sft_sprites_o,
 
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
@@ -4539,6 +4549,8 @@ module zhao_console_board
       .mat_win_clut_unowned_o             (mat_win_clut_unowned_o),
       .mat_win_err_unpublished_o          (mat_win_err_unpublished_o),
       .mat_win_err_underflow_o            (mat_win_err_underflow_o),
+      .mat_win_no_material_spans_o        (mat_win_no_material_spans_o),
+      .mat_win_mode_refused_o             (mat_win_mode_refused_o),
       .geom_ma_jobs_c_o                   (geom_ma_jobs_c_o),
       .geom_ma_jobs_d_o                   (geom_ma_jobs_d_o),
       .geom_ma_jobs_e_o                   (geom_ma_jobs_e_o),
@@ -4961,6 +4973,12 @@ module zhao_console_board
       .part_lad_held_o                    (part_lad_held_o),
       .part_lad_gov_forced_o              (part_lad_gov_forced_o),
       .part_exp_polygons_o                (part_exp_polygons_o),
+      .part_cf_particles_o                (part_cf_particles_o),
+      .part_cf_triangles_o                (part_cf_triangles_o),
+      .part_cf_range_refused_o            (part_cf_range_refused_o),
+      .part_cf_stall_full_o               (part_cf_stall_full_o),
+      .part_cf_dq_refused_o               (part_cf_dq_refused_o),
+      .part_cf_dq_stray_o                 (part_cf_dq_stray_o),
       .part_sft_sprites_o                 (part_sft_sprites_o),
       .phy_cs_n_o                         (phy_cs_n_o),
       .phy_ras_n_o                        (phy_ras_n_o),

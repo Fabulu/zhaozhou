@@ -956,7 +956,9 @@ module zhao_console_core_slot_overflow_mutant
   // that says so before a build does, and it said 49 missing when the forge
   // chain composed. That is R162's shape and the reason the gate exists.
   output logic        forge_pb_busy_o,
-  output logic [63:0] geom_clipdoor_granted_o,
+  // PARTMAT 2026-09-22 (owner ruling 1): the door gained a THIRD client,
+  // PART.CLIPFEED's polygon particles, so `granted_o` widened 64 -> 96.
+  output logic [95:0] geom_clipdoor_granted_o,
   output logic [31:0] forge_pb_pages_o,
   output logic [31:0] forge_pb_draws_o,
   output logic [31:0] forge_pb_bad_magic_o,
@@ -1521,6 +1523,8 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
+  output logic [31:0]             mat_win_no_material_spans_o,
+  output logic [31:0]             mat_win_mode_refused_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -2366,6 +2370,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] part_lad_held_o,
   output logic [31:0] part_lad_gov_forced_o,
   output logic [31:0] part_exp_polygons_o,
+  output logic [31:0] part_cf_particles_o,
+  output logic [31:0] part_cf_triangles_o,
+  output logic [31:0] part_cf_range_refused_o,
+  output logic [31:0] part_cf_stall_full_o,
+  output logic [31:0] part_cf_dq_refused_o,
+  output logic [31:0] part_cf_dq_stray_o,
   output logic [31:0] part_sft_sprites_o,
 
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------

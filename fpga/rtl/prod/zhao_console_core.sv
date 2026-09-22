@@ -6572,6 +6572,21 @@ module zhao_console_core
   parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
 
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
+  // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
+  // `zhao_material_window`'s MATMODE_BACKED_C is 2'd0 and MATMODE_NONE_C is
+  // 2'd1. These two are R48-shaped NAMED SEAMS in the same sense
+  // `GEOM_REPLAY_UNTEX_DECL` is: MATERIAL_BACKED is the TRUE value for both
+  // producers, not a default that happened to be right. Every mesh triangle
+  // carries `{rp_o_material_set, rp_o_material}` from its own meshlet and
+  // every forge primitive carries `{fa_o_material_set, fa_o_material_id}` from
+  // its own page, and both expect resolution.
+  //
+  // PART.CLIPFEED's declaration is deliberately NOT here. A producer's mode is
+  // the producer's, and a third constant at this composer would be the
+  // inferred mode owner ruling 1 forbids -- so it comes off
+  // `pcf_o_material_mode`, which the block itself drives.
+  parameter logic [1:0] GEOM_REPLAY_MATERIAL_MODE = 2'd0,
+  parameter logic [1:0] FORGE_MATERIAL_MODE       = 2'd0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -6596,6 +6611,13 @@ module zhao_console_core
   // 6 is ALPHA and always was. Naming it is not a change; it is the end of a
   // reader having to derive it.
   parameter int unsigned GEOM_ATTR_SLOT_ALPHA    = 6,
+  // A POLYGON PARTICLE'S ALPHA (owner ruling 1, 2026-09-22). AN ART VALUE, so
+  // it is a named editable constant and not a derived quantity (CLAUDE.md
+  // rule 6). `draw_population`'s tris branch calls `raster_tri` with three
+  // colour bytes and no alpha at all, so opaque is the reference's own
+  // behaviour; the day particles want to fade, this is the line that changes.
+  // Q16.16, matching FORGE_ALPHA's convention.
+  parameter int signed PART_ALPHA = 32'sd65536,   // 1.0, opaque
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -7569,9 +7591,11 @@ module zhao_console_core
   output logic [31:0] geom_ma_jobs_g_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
-  // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
-  // `granted_o` is flattened 32 bits each, least significant slice client 0.
-  output logic [63:0] geom_clipdoor_granted_o,
+  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
+  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
+  // (2). `granted_o` is flattened 32 bits each, least significant slice
+  // client 0, so the port widened 64 -> 96 with the third arm.
+  output logic [95:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -8178,6 +8202,14 @@ module zhao_console_core
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
+  // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
+  // CENSUS: spans published in the lawful no-material mode. The claim it
+  // supports is made by the counters it must NOT move beside --
+  // `mat_win_resolves_o` and `mat_win_no_record_o` -- which are three
+  // independent quantities rather than one restated.
+  output logic [31:0]             mat_win_no_material_spans_o,
+  // A FAULT: an internally contradictory material declaration, refused.
+  output logic [31:0]             mat_win_mode_refused_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -9034,6 +9066,16 @@ module zhao_console_core
   output logic [31:0] part_lad_held_o,
   output logic [31:0] part_lad_gov_forced_o,
   output logic [31:0] part_exp_polygons_o,
+  // ---- PART.CLIPFEED's evidence (owner ruling 1, 2026-09-22) --------------
+  // `part_cf_particles_o` against `part_cf_triangles_o` is the census pair
+  // that discriminates: a ring that stopped draining, or a converter that
+  // stopped answering, shows the first climbing while the second stands still.
+  output logic [31:0] part_cf_particles_o,
+  output logic [31:0] part_cf_triangles_o,
+  output logic [31:0] part_cf_range_refused_o,
+  output logic [31:0] part_cf_stall_full_o,
+  output logic [31:0] part_cf_dq_refused_o,
+  output logic [31:0] part_cf_dq_stray_o,
   output logic [31:0] part_sft_sprites_o,
 
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
@@ -11933,6 +11975,16 @@ module zhao_console_core
   wire [ 7:0]             mw_pub_recipe_weight;
   wire [ 7:0]             mw_pub_base_binding;
   wire [ 1:0]             mw_pub_response_class;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // THE PUBLISHED SPAN'S MATERIAL MODE (owner ruling 1, 2026-09-22). It is
+  // EXPORTED rather than read here, and that is the deliberate choice: R197's
+  // gate below measures `mw_pub_sample_count`, the resolved record's own
+  // answer to the sampling question, and reading the declaration there instead
+  // would let a producer talk its geometry past the gate. The mode's job at
+  // this composer is to be VISIBLE -- a waveform and a bench can say which of
+  // the two spans they are looking at without inferring it from a zero.
+  wire [ 1:0]             mw_pub_material_mode;
+  /* verilator lint_on UNUSEDSIGNAL */
   wire signed [20:0]      rp_o_ax, rp_o_ay, rp_o_bx, rp_o_by, rp_o_cx, rp_o_cy;
   wire [2:0]              rp_o_behind;
   wire [15:0]             rp_o_src_id;
@@ -12628,20 +12680,62 @@ module zhao_console_core
   wire [GEOM_CLIP_ATTRW-1:0] cd_o_attr_a, cd_o_attr_b, cd_o_attr_c;
   wire [31:0]        cd_o_material_set;
   wire [15:0]        cd_o_material_id;
+  wire [ 1:0]        cd_o_material_mode;
   wire [ 7:0]        cd_o_quality_tier;
   /* verilator lint_off UNUSEDSIGNAL */
   // Which client the beat belongs to. The door publishes it so a composer or a
   // bench can SAY so out loud rather than infer it; nothing downstream routes
   // on it, because a triangle that has entered is a triangle.
-  wire [1:0]         cd_o_owner;
+  wire [2:0]         cd_o_owner;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // GEOM.REPLAY's untextured declaration -- the R48-shaped named seam, now
   // presented at the door beside its triangle rather than at the gate below.
   wire rp_untex_c = (GEOM_REPLAY_UNTEX_DECL != 0);
 
+  // PART.CLIPFEED's door-client beat. Declared here, beside the door it feeds;
+  // the block itself is instantiated down in the PARTICLES cluster, next to the
+  // PART.EXPAND whose fan it takes.
+  wire               pcf_o_valid, pcf_o_ready;
+  wire signed [20:0] pcf_o_ax, pcf_o_ay, pcf_o_bx, pcf_o_by, pcf_o_cx, pcf_o_cy;
+  wire [ 2:0]        pcf_o_behind;
+  wire [15:0]        pcf_o_src_id;
+  wire               pcf_o_untex;
+  wire [ 1:0]        pcf_o_cull_mode;
+  wire [GEOM_CLIP_ATTRW-1:0] pcf_o_attr_a, pcf_o_attr_b, pcf_o_attr_c;
+  wire [31:0]        pcf_o_material_set;
+  wire [15:0]        pcf_o_material_id;
+  wire [ 1:0]        pcf_o_material_mode;
+  wire [ 7:0]        pcf_o_quality_tier;
+  wire               pcf_p_ready;
+
+  // ==========================================================================
+  // THE THIRD ARM -- polygon particles, owner ruling 1 of 2026-09-22 (PARTMAT)
+  // ==========================================================================
+  // GEOM.CLIPDOOR.md's closing section measured exactly two things the particle
+  // arm still owed, and neither was the seven-slot attribute packet that five
+  // FORGE passes believed was the wall:
+  //
+  //   (a) A CANONICAL DEPTH. Now built -- `u_part_clipfeed` holds a second
+  //       INSTANCE of ruling D-4's law (`zhao_geom_depthquant_stream` beside
+  //       `zhao_raster_rcp24_v4`), fed by a `w` that this packet carried
+  //       through `zhao_part_project`'s ladder queue and `zhao_part_expand`.
+  //   (b) A MATERIAL LAW FOR NON-MESH PRODUCERS. It was R197's unruled sibling
+  //       and it is ruled now: NO_MATERIAL is a LAWFUL MODE, declared by the
+  //       producer, never inferred. `u_material_window` implements it and the
+  //       door carries the declaration on the beat it belongs to.
+  //
+  // WHY THE MESH AND FORGE NUMBERS DO NOT MOVE. The arbitration is RUN-LENGTH
+  // FAIR: the grant is held while its owner keeps offering and may move only on
+  // a clock where the owner is not. A third idle client changes nothing about
+  // the other two, and `granted_o` is the measurement that says so rather than
+  // this sentence.
+  //
+  // AND THE ORDER OF THE SLICES IS THE ROUND-ROBIN ORDER. Particles are client
+  // 2, after the forge, so a busy mesh stream and a busy forge cannot starve
+  // them: the search for the next owner starts one PAST the current grant.
   zhao_geom_clipdoor #(
-    .NCLIENT (2),
+    .NCLIENT (3),
     .ATTRS   (GEOM_CLIP_ATTRS),
     .IDW     (16)
   ) u_geom_clipdoor (
@@ -12650,24 +12744,33 @@ module zhao_console_core
 
     // Flattened, least significant slice is client 0. Quartus 17.0 will not
     // take an unpacked array port.
-    .c_valid_i       ({fa_o_valid,        rp_o_valid}),
-    .c_ready_o       ({fa_o_ready,        rp_o_ready}),
-    .c_ax_i          ({fa_o_ax,           rp_o_ax}),
-    .c_ay_i          ({fa_o_ay,           rp_o_ay}),
-    .c_bx_i          ({fa_o_bx,           rp_o_bx}),
-    .c_by_i          ({fa_o_by,           rp_o_by}),
-    .c_cx_i          ({fa_o_cx,           rp_o_cx}),
-    .c_cy_i          ({fa_o_cy,           rp_o_cy}),
-    .c_behind_i      ({fa_o_behind,       rp_o_behind}),
-    .c_src_id_i      ({fa_o_src_id,       rp_o_src_id}),
-    .c_untex_i       ({fa_o_untex,        rp_untex_c}),
-    .c_cull_mode_i   ({fa_o_cull_mode,    rp_o_raster[1:0]}),
-    .c_attr_a_i      ({fa_o_attr_a,       rp_attr_a}),
-    .c_attr_b_i      ({fa_o_attr_b,       rp_attr_b}),
-    .c_attr_c_i      ({fa_o_attr_c,       rp_attr_c}),
-    .c_material_set_i({fa_o_material_set, rp_o_material_set}),
-    .c_material_id_i ({fa_o_material_id,  rp_o_material}),
-    .c_quality_tier_i({fa_o_quality_tier, rp_o_quality_tier}),
+    // Slice 2 is PART.CLIPFEED, slice 1 the forge, slice 0 GEOM.REPLAY.
+    .c_valid_i       ({pcf_o_valid,        fa_o_valid,        rp_o_valid}),
+    .c_ready_o       ({pcf_o_ready,        fa_o_ready,        rp_o_ready}),
+    .c_ax_i          ({pcf_o_ax,           fa_o_ax,           rp_o_ax}),
+    .c_ay_i          ({pcf_o_ay,           fa_o_ay,           rp_o_ay}),
+    .c_bx_i          ({pcf_o_bx,           fa_o_bx,           rp_o_bx}),
+    .c_by_i          ({pcf_o_by,           fa_o_by,           rp_o_by}),
+    .c_cx_i          ({pcf_o_cx,           fa_o_cx,           rp_o_cx}),
+    .c_cy_i          ({pcf_o_cy,           fa_o_cy,           rp_o_cy}),
+    .c_behind_i      ({pcf_o_behind,       fa_o_behind,       rp_o_behind}),
+    .c_src_id_i      ({pcf_o_src_id,       fa_o_src_id,       rp_o_src_id}),
+    .c_untex_i       ({pcf_o_untex,        fa_o_untex,        rp_untex_c}),
+    .c_cull_mode_i   ({pcf_o_cull_mode,    fa_o_cull_mode,    rp_o_raster[1:0]}),
+    .c_attr_a_i      ({pcf_o_attr_a,       fa_o_attr_a,       rp_attr_a}),
+    .c_attr_b_i      ({pcf_o_attr_b,       fa_o_attr_b,       rp_attr_b}),
+    .c_attr_c_i      ({pcf_o_attr_c,       fa_o_attr_c,       rp_attr_c}),
+    .c_material_set_i({pcf_o_material_set, fa_o_material_set, rp_o_material_set}),
+    .c_material_id_i ({pcf_o_material_id,  fa_o_material_id,  rp_o_material}),
+    // THE MATERIAL-MODE DECLARATION, per client (owner ruling 1). Particles
+    // declare NO_MATERIAL from `u_part_clipfeed`'s OWN PORT -- never a constant
+    // chosen here, because a mode chosen at a composer is the "inferred" mode
+    // the ruling forbids wearing a composer's clothes. The mesh and forge arms
+    // declare MATERIAL_BACKED through the named constants below, which is the
+    // true value for both: every mesh triangle and every forge primitive
+    // carries a real {set, id} and expects it resolved.
+    .c_material_mode_i({pcf_o_material_mode, FORGE_MATERIAL_MODE, GEOM_REPLAY_MATERIAL_MODE}),
+    .c_quality_tier_i({pcf_o_quality_tier, fa_o_quality_tier, rp_o_quality_tier}),
 
     .o_valid_o       (cd_o_valid),
     .o_ready_i       (cd_o_ready),
@@ -12686,6 +12789,7 @@ module zhao_console_core
     .o_attr_c_o      (cd_o_attr_c),
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
+    .o_material_mode_o(cd_o_material_mode),
     .o_quality_tier_o(cd_o_quality_tier),
     .o_owner_o       (cd_o_owner),
 
@@ -12746,6 +12850,25 @@ module zhao_console_core
   // as `rp_o_src_id` is". `u_geom_clipdoor` performs that mux, so the bit
   // arrives with the beat it describes rather than being a console constant
   // that happened to be right while there was one producer.
+  // R197 SURVIVES UNCHANGED FOR MATERIAL_BACKED PRIMITIVES, which is what
+  // owner ruling 1 requires in terms: "an untextured mesh with a valid
+  // non-sampling material remains legal; an untextured mesh with a sampling
+  // material does not become legal merely because particles now work."
+  //
+  // The test below is still `sample_count != 0` and NOT the published mode, and
+  // that is deliberate. `sample_count` is the actual sampling question -- how
+  // many texture samples this surface's material takes -- and it is what R197
+  // was written against. Reading `mw_pub_material_mode` here instead would make
+  // the gate believe a DECLARATION where it currently measures a RESOLVED
+  // RECORD, and a producer that declared NO_MATERIAL while its geometry needed
+  // sampling would then pass.
+  //
+  // A NO_MATERIAL span reaches this gate with `mw_pub_sample_count == 2'd0`,
+  // because the window publishes its DEFINED no-sampling profile for it -- so a
+  // particle passes on the gate's own terms rather than by an exemption. That
+  // it does so is not asserted here from the two halves of one register: the
+  // acceptance test measures `geom_untex_refused_o` NOT MOVING across a
+  // particle batch, which is an independent quantity.
   wire cl_in_untex_c  = cd_o_untex;
   wire cl_in_refuse_c = cl_in_untex_c && (mw_pub_sample_count != 2'd0);
   assign cl_in_valid = mw_t_valid && !cl_in_refuse_c;
@@ -18018,6 +18141,12 @@ module zhao_console_core
   wire        [ 2:0] pq_rung;
   wire        [ 3:0] pq_hold;
   wire               pq_changed;
+  // THE CANONICAL-DEPTH CARRIAGE (owner ruling 1, 2026-09-22). `pq_d` above is
+  // Q16.16 1/w and GEOM.CLIP's slot 0 is invw24; these two are what the D-4
+  // conversion actually consumes, and until this packet they did not survive
+  // `zhao_part_project`'s ladder queue at all.
+  wire        [30:0] pq_w;
+  wire        [ 1:0] pq_profile;
 
   // The U 8.8 form of the same half-extent. PART.LADDER has already consumed it
   // on `pp_lad_size` and neither endpoint takes that width, so it is named and
@@ -18107,6 +18236,13 @@ module zhao_console_core
     .a_y_i      (sv_a_y),
     .a_d_i      (sv_a_d),
     .a_w_i      (sv_a_w),
+    // REAL, and taken from the SUBSYSTEM rather than through the front mux,
+    // for the same reason and from the same port `zhao_forge_assemble`'s
+    // `rs_profile_i` takes it: `proj_a_profile_o` is the shared projector's own
+    // `a_profile_o`, valid on the same cycle as the result it describes, so it
+    // cannot skew from it. This block captures it into the slot store beside
+    // `a_w_i` on that one enable, which is what makes the pair one record.
+    .a_profile_i(proj_a_profile_o),
     .a_behind_i (sv_a_behind),
     .a_payload_i(sv_a_payload),
 
@@ -18156,6 +18292,8 @@ module zhao_console_core
     .q_d_o       (pq_d),
     .q_size_o    (pq_size),
     .q_size16_o  (pq_size16),
+    .q_w_o       (pq_w),
+    .q_profile_o (pq_profile),
     .q_r_o       (pq_r),
     .q_g_o       (pq_g),
     .q_b_o       (pq_b),
@@ -18262,6 +18400,12 @@ module zhao_console_core
     .p_x_i     (pq_x),
     .p_y_i     (pq_y),
     .p_d_i     (pq_d),
+    // REAL: the projector's own `w` and profile for THIS particle, carried
+    // through the slot store and the ladder queue on the same record as its
+    // screen position. PART.EXPAND converts neither; `u_part_clipfeed` holds
+    // the one law's instance.
+    .p_w_i      (pq_w),
+    .p_profile_i(pq_profile),
     .p_size_i  (pq_size),
     .p_r_i     (pq_r),
     .p_g_i     (pq_g),
@@ -18311,8 +18455,24 @@ module zhao_console_core
     //   (b) A MATERIAL LAW FOR NON-MESH PRODUCERS. R197's unruled sibling, and
     //       an owner decision. See the entry above and the contract.
     // Neither is a wiring job and neither is an attribute count.
+    // THE FAN NOW HAS TWO CONSUMERS AND RETIRES WHEN BOTH TAKE IT. The
+    // boundary port group stays -- a PORT is neither a module nor a tie-off,
+    // and `tb_zhao_console_core_smoke` and `zhao_console_board` both carry it
+    // -- and `u_part_clipfeed` is the second arm. This is the plain AND-fork
+    // GLUE 6 above uses, written the same way: each consumer's valid is gated
+    // by the OTHER's ready, so neither can take a beat the other refused and
+    // nothing is presented twice.
+    //
+    // NO CONSUMER'S READY READS ITS OWN VALID. `part_exp_ready_i` is a
+    // boundary input; `zhao_part_clipfeed.p_ready_o` is a function of offered
+    // DATA (its range check), of registered ring pointers and of the depth
+    // converter's own occupancy. So nothing below closes a combinational loop.
+    //
+    // THE COST, NAMED: a boundary consumer that holds `part_exp_ready_i` low
+    // stalls particles into the door. That is what an AND-fork means and it is
+    // the same cost GLUE 6 accepted; the smoke drives it constant 1.
     .t_valid_o      (part_exp_valid_o),
-    .t_ready_i      (part_exp_ready_i),
+    .t_ready_i      (part_exp_ready_i && pcf_p_ready),
     .t_ax_o         (part_exp_ax_o),
     .t_ay_o         (part_exp_ay_o),
     .t_bx_o         (part_exp_bx_o),
@@ -18320,6 +18480,13 @@ module zhao_console_core
     .t_cx_o         (part_exp_cx_o),
     .t_cy_o         (part_exp_cy_o),
     .t_d_o          (part_exp_d_o),
+    // THE CANONICAL-DEPTH CARRIAGE (owner ruling 1). `t_d_o` above stays what
+    // it always was -- Q16.16 1/w, the reference's `ScreenV::d` -- and these
+    // two are the quantities the conversion actually consumes. They are NOT a
+    // replacement for it: PART.SOFT's sprite path and every boundary reader of
+    // `part_exp_d_o` are untouched.
+    .t_w_o          (pcf_p_w),
+    .t_profile_o    (pcf_p_profile),
     .t_r_o          (part_exp_r_o),
     .t_g_o          (part_exp_g_o),
     .t_b_o          (part_exp_b_o),
@@ -18328,6 +18495,93 @@ module zhao_console_core
     .t_src_id_o     (part_exp_src_id_o),
 
     .polygon_particles_o(part_exp_polygons_o)
+  );
+
+  // ==========================================================================
+  // PART.CLIPFEED -- the particle arm of GEOM.CLIPDOOR (owner ruling 1)
+  // ==========================================================================
+  // The port-group comment above used to end "so this stays a boundary,
+  // deliberately, and the next packet to look at it should start at GEOM.CLIP's
+  // input rather than GEOM.SETUP's". The clipdoor packet started there and
+  // measured the two remaining blockers; owner ruling 1 of 2026-09-22 ruled the
+  // second and authorised building the first. Both are now RTL:
+  //
+  //   (a) the canonical depth -- `u_part_clipfeed` holds the D-4 pair, fed by a
+  //       `w` carried through `zhao_part_project`'s ladder queue (PROJ_W
+  //       99 -> 132) and `zhao_part_expand`;
+  //   (b) the material law -- NO_MATERIAL, declared by this block at its own
+  //       port, carried by the door on the beat, honoured by the window.
+  //
+  // WHAT IT IS FED WITH, and every one of them is REAL:
+  //   the fan          `zhao_part_expand`'s six 22-bit corners, through the
+  //                    AND-fork above;
+  //   `w` and profile  the shared projector's own, from the result cycle that
+  //                    produced this particle's screen position -- one record
+  //                    through the slot store and the ladder queue, never two
+  //                    live wires (entry I39);
+  //   the colour       the particle record's own r/g/b, from PART.LADDER's
+  //                    verdict beat.
+  wire [30:0] pcf_p_w;
+  wire [ 1:0] pcf_p_profile;
+
+  zhao_part_clipfeed #(
+    .ATTRS      (GEOM_CLIP_ATTRS),
+    .IDW        (16),
+    .SLOT_INVW  (GEOM_ATTR_SLOT_INVW),
+    .SLOT_UOW   (GEOM_ATTR_SLOT_U_OVER_W),
+    .SLOT_VOW   (GEOM_ATTR_SLOT_V_OVER_W),
+    .SLOT_R     (GEOM_ATTR_SLOT_R),
+    .SLOT_G     (GEOM_ATTR_SLOT_G),
+    .SLOT_B     (GEOM_ATTR_SLOT_B),
+    .SLOT_ALPHA (GEOM_ATTR_SLOT_ALPHA),
+    .PART_ALPHA (PART_ALPHA)
+  ) u_part_clipfeed (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: PART.EXPAND's fan, on the AND-fork's second arm.
+    .p_valid_i  (part_exp_valid_o && part_exp_ready_i),
+    .p_ready_o  (pcf_p_ready),
+    .p_ax_i     (part_exp_ax_o),
+    .p_ay_i     (part_exp_ay_o),
+    .p_bx_i     (part_exp_bx_o),
+    .p_by_i     (part_exp_by_o),
+    .p_cx_i     (part_exp_cx_o),
+    .p_cy_i     (part_exp_cy_o),
+    .p_w_i      (pcf_p_w),
+    .p_profile_i(pcf_p_profile),
+    .p_r_i      (part_exp_r_o),
+    .p_g_i      (part_exp_g_o),
+    .p_b_i      (part_exp_b_o),
+    .p_src_id_i (part_exp_src_id_o),
+
+    // REAL: client 2 of GEOM.CLIP's door.
+    .o_valid_o        (pcf_o_valid),
+    .o_ready_i        (pcf_o_ready),
+    .o_ax_o           (pcf_o_ax),
+    .o_ay_o           (pcf_o_ay),
+    .o_bx_o           (pcf_o_bx),
+    .o_by_o           (pcf_o_by),
+    .o_cx_o           (pcf_o_cx),
+    .o_cy_o           (pcf_o_cy),
+    .o_behind_o       (pcf_o_behind),
+    .o_src_id_o       (pcf_o_src_id),
+    .o_untex_o        (pcf_o_untex),
+    .o_cull_mode_o    (pcf_o_cull_mode),
+    .o_attr_a_o       (pcf_o_attr_a),
+    .o_attr_b_o       (pcf_o_attr_b),
+    .o_attr_c_o       (pcf_o_attr_c),
+    .o_material_set_o (pcf_o_material_set),
+    .o_material_id_o  (pcf_o_material_id),
+    .o_material_mode_o(pcf_o_material_mode),
+    .o_quality_tier_o (pcf_o_quality_tier),
+
+    .particles_o    (part_cf_particles_o),
+    .triangles_o    (part_cf_triangles_o),
+    .range_refused_o(part_cf_range_refused_o),
+    .stall_full_o   (part_cf_stall_full_o),
+    .dq_refused_o   (part_cf_dq_refused_o),
+    .dq_stray_o     (part_cf_dq_stray_o)
   );
 
   zhao_part_soft u_part_soft (
@@ -20937,6 +21191,11 @@ module zhao_console_core
     .t_ready_o        (cd_o_ready),
     .t_material_set_i (cd_o_material_set),
     .t_material_id_i  (cd_o_material_id),
+    // REAL: the granted beat's OWN material-mode declaration, selected by the
+    // same grant, on the same clock, as the pair above. That is the property
+    // that makes the mode part of the span's identity rather than a second
+    // stream running beside it.
+    .t_material_mode_i(cd_o_material_mode),
     .t_quality_tier_i (cd_o_quality_tier),
 
     // REAL: into GEOM.CLIP, gated.
@@ -20976,6 +21235,7 @@ module zhao_console_core
     .pub_recipe_weight_o   (mw_pub_recipe_weight),
     .pub_base_binding_o    (mw_pub_base_binding),
     .pub_response_class_o  (mw_pub_response_class),
+    .pub_material_mode_o   (mw_pub_material_mode),
 
     .resolves_o                (mat_win_resolves_o),
     .switches_o                (mat_win_switches_o),
@@ -20985,6 +21245,8 @@ module zhao_console_core
     .no_record_o               (mat_win_no_record_o),
     .selector_overflow_o       (mat_win_selector_overflow_o),
     .clut_unowned_o            (mat_win_clut_unowned_o),
+    .no_material_spans_o       (mat_win_no_material_spans_o),
+    .mode_refused_o            (mat_win_mode_refused_o),
     .err_unpublished_o         (mat_win_err_unpublished_o),
     .err_occupancy_underflow_o (mat_win_err_underflow_o)
   );

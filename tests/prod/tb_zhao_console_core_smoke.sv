@@ -841,6 +841,8 @@ module tb_zhao_console_core_smoke
   logic [31:0]  mat_win_drain_stall_o, mat_win_answer_stall_o;
   logic [31:0]  mat_win_occupancy_max_o, mat_win_no_record_o;
   logic [31:0]  mat_win_selector_overflow_o, mat_win_clut_unowned_o;
+  // Owner ruling 1, 2026-09-22: the NO_MATERIAL mode's census and its fault.
+  logic [31:0]  mat_win_no_material_spans_o, mat_win_mode_refused_o;
   logic [31:0]  mat_win_err_unpublished_o, mat_win_err_underflow_o;
   logic [ 2:0]  mat_rsp_status_o;
   logic         mat_rsp_has_record_o;
@@ -1314,7 +1316,8 @@ module tb_zhao_console_core_smoke
   // good failure: a port that appeared and was never declared would otherwise
   // be a silently unread output.
   logic        forge_pb_busy_o;
-  logic [63:0] geom_clipdoor_granted_o;
+  // PARTMAT 2026-09-22: three clients now (mesh 0, forge 1, particles 2).
+  logic [95:0] geom_clipdoor_granted_o;
   logic [31:0] forge_pb_pages_o;
   logic [31:0] forge_pb_draws_o;
   logic [31:0] forge_pb_bad_magic_o;
@@ -1870,6 +1873,10 @@ module tb_zhao_console_core_smoke
   logic [31:0] part_lad_held_o;
   logic [31:0] part_lad_gov_forced_o;
   logic [31:0] part_exp_polygons_o;
+  // PART.CLIPFEED's evidence (owner ruling 1, 2026-09-22).
+  logic [31:0] part_cf_particles_o, part_cf_triangles_o;
+  logic [31:0] part_cf_range_refused_o, part_cf_stall_full_o;
+  logic [31:0] part_cf_dq_refused_o, part_cf_dq_stray_o;
   logic [31:0] part_sft_sprites_o;
 
 
