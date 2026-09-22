@@ -148,6 +148,31 @@ module zhao_terrain_compcache_front #(
     input logic [4:0] cs_w_cj_i,
     input logic [1:0] cs_w_substance_i,
 
+    // -----------------------------------------------------------------------
+    // Layer E, the (LAT_W-1) x (LAT_H-1) BASE MATERIAL plane -- {matA, matB,
+    // weight} per cell, terrain_rules sec 2 and sec 6.2. Owner ruling R13.
+    // -----------------------------------------------------------------------
+    // IT LIVES HERE AND NOT IN A BLOCK OF ITS OWN, and the reason is the
+    // arming law rather than the storage. A material plane needs to be
+    // double-buffered by exactly the same parity as the heights and the
+    // substance, released by exactly the same pulse, and armed on exactly the
+    // same cycle -- and `zhao_terrain_spdesc`'s header already records this
+    // tree's rule that two blocks arming off one event must not have two laws.
+    // A separate plane would have had to COPY `fill_par_q`, `serve_par_q` and
+    // `serve_valid_q`'s handover branch, and a copy of an arming law diverges
+    // in the direction nobody looks: the material of patch N under the
+    // heights of patch N+1, which RENDERS.
+    //
+    // The write face is `cs_we_i`'s, verbatim: fire and forget, no ready, the
+    // producer owning the handshake. See the note at the cell write below for
+    // why that is correct rather than a shortcut.
+    input logic       mat_we_i,
+    input logic [4:0] mat_w_ci_i,
+    input logic [4:0] mat_w_cj_i,
+    input logic [7:0] mat_w_a_i,
+    input logic [7:0] mat_w_b_i,
+    input logic [7:0] mat_w_weight_i,
+
     input logic dual_i,  // 0 = legacy single-surface page: bottom == top
 
     // -----------------------------------------------------------------------
@@ -185,6 +210,19 @@ module zhao_terrain_compcache_front #(
     input  logic [4:0] cs_cj_i,
     output logic [1:0] cs_substance_o,
 
+    // R13's layer-E query, port for port into `zhao_terrain_tess`'s `mat_*`.
+    // `mat_valid_o` is this port's `cs_substance_o == 2'd3`: a material triple
+    // has no spare encoding (0,0,0 is a legal cell -- tile 0 everywhere), so
+    // the "I did not answer this" signal has to be a bit of its own rather
+    // than a poison value the consumer has to recognise.
+    input  logic       mat_req_i,
+    input  logic [4:0] mat_ci_i,
+    input  logic [4:0] mat_cj_i,
+    output logic [7:0] mat_a_o,
+    output logic [7:0] mat_b_o,
+    output logic [7:0] mat_weight_o,
+    output logic       mat_valid_o,
+
     // -----------------------------------------------------------------------
     // Counters
     // -----------------------------------------------------------------------
@@ -193,7 +231,9 @@ module zhao_terrain_compcache_front #(
     output logic [31:0] patches_served_o,
     output logic [31:0] fill_overrun_o,     // records past LAT_W*LAT_H: refused
     output logic [31:0] lat_oob_o,          // lattice requests outside the grid
-    output logic [31:0] cs_oob_o            // cell requests outside the plane
+    output logic [31:0] cs_oob_o,           // cell requests outside the plane
+    output logic [31:0] mat_oob_o,          // layer-E requests outside the plane
+    output logic [31:0] mat_cells_o         // layer-E cells taken into a fill
 );
 
   localparam int unsigned VERTS = LAT_W * LAT_H;           // 1,089
@@ -223,6 +263,21 @@ module zhao_terrain_compcache_front #(
 
   logic signed [31:0] lat_m [LAT_N];
   logic        [ 1:0] sub_m [2*CELLS];
+  // Layer E, both parities, ONE array and ONE word: {matA, matB, weight}
+  // always travel together and are never read apart, so three arrays would
+  // give the fitter three narrow memories instead of one and would not change
+  // the bit count. 2 x 1,024 x 24 b = 49,152 bit ~ 5 M10K. That is ALM traded
+  // for M10K, which is the direction this device has slack in.
+  //
+  // THE ADDRESS IS `CW` WIDE, WHICH IS THE WHOLE ARRAY AND NOT ONE HALF. That
+  // is not a style choice: the paragraph at `CW` records that taking
+  // $clog2(CELLS) here truncated 1,024 to zero and aliased both parities onto
+  // the same 1,024 cells, so the substance plane was single-buffered while the
+  // heights were double-buffered. A material plane that aliased the same way
+  // would put patch N+1's tile ids under a tessellator still reading patch N,
+  // and unlike a wrong height a wrong tile id does not move anything -- it
+  // just renders the wrong ground, which no geometric check would catch.
+  logic        [23:0] mat_m [2*CELLS];
   logic signed [31:0] wx_m  [2*LAT_W];
   logic signed [31:0] wz_m  [2*LAT_H];
 
@@ -429,6 +484,31 @@ module zhao_terrain_compcache_front #(
     sub_rd_q <= sub_m[cs_rd_addr_c];
   end
 
+  // ---- layer E: the same two addresses, the same two parities -------------
+  // Written out rather than shared with the block above because the two planes
+  // have DIFFERENT PRODUCERS on different walks -- substance arrives from
+  // TERRAIN.BAKE's cell stream, material from TERRAIN.PAGESTREAM's vertex
+  // beat -- so a single write enable driving both is the lockstep this file's
+  // own `cs_wr_addr_c` paragraph warns about, one level up.
+  wire mat_w_in_range_c = ({1'b0, mat_w_ci_i} < 6'(LAT_W - 1)) &&
+                          ({1'b0, mat_w_cj_i} < 6'(LAT_H - 1));
+  wire [CW-1:0] mat_wr_addr_c =
+      CW'( (fill_par_q ? CELLS : 0) +
+           (mat_w_in_range_c ? (int'(mat_w_cj_i) * (LAT_W - 1) + int'(mat_w_ci_i)) : 0) );
+
+  wire mat_rd_in_range_c = ({1'b0, mat_ci_i} < 6'(LAT_W - 1)) &&
+                           ({1'b0, mat_cj_i} < 6'(LAT_H - 1));
+  wire [CW-1:0] mat_rd_addr_c =
+      CW'( (serve_par_q ? CELLS : 0) +
+           (mat_rd_in_range_c ? (int'(mat_cj_i) * (LAT_W - 1) + int'(mat_ci_i)) : 0) );
+
+  logic [23:0] mat_rd_q;
+  always_ff @(posedge clk) begin
+    if (mat_we_i && mat_w_in_range_c)
+      mat_m[mat_wr_addr_c] <= {mat_w_a_i, mat_w_b_i, mat_w_weight_i};
+    mat_rd_q <= mat_m[mat_rd_addr_c];
+  end
+
   // Position planes: 33 words each, far too small for an M10K and correctly
   // left as MLAB/registers.
   wire [5:0] wx_wr_c = pos_idx_i;
@@ -451,14 +531,24 @@ module zhao_terrain_compcache_front #(
   // value it has been able to recognise since before this block existed.
   localparam logic signed [31:0] POISON = 32'sh5BADF00D;
 
-  logic req_ok_q, cs_req_ok_q;
+  logic req_ok_q, cs_req_ok_q, mat_req_ok_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      req_ok_q    <= 1'b0;
-      cs_req_ok_q <= 1'b0;
+      req_ok_q     <= 1'b0;
+      cs_req_ok_q  <= 1'b0;
+      mat_req_ok_q <= 1'b0;
     end else begin
-      req_ok_q    <= lat_req_i && lat_in_range_c && serve_valid_q;
-      cs_req_ok_q <= cs_req_i && cs_rd_in_range_c && serve_valid_q;
+      req_ok_q     <= lat_req_i && lat_in_range_c && serve_valid_q;
+      cs_req_ok_q  <= cs_req_i && cs_rd_in_range_c && serve_valid_q;
+      // A SEPARATE FLOP, not a share of `cs_req_ok_q`. The two queries come
+      // from different ports of the same consumer on different cycles -- TESS
+      // scans substance once per JOB and reads material once per TRIANGLE --
+      // so one accept flop serving both would make `mat_valid_o` a statement
+      // about whether a CELL-STATE request was in range. That is the
+      // two-operands-one-enable fault exactly: the flag would read true on
+      // every cycle the other port was busy and the material plane would be
+      // trusted for cells nobody asked it about.
+      mat_req_ok_q <= mat_req_i && mat_rd_in_range_c && serve_valid_q;
     end
   end
 
@@ -471,9 +561,21 @@ module zhao_terrain_compcache_front #(
   // dangerous default. The COUNTER is the alarm here, not the value.
   assign cs_substance_o = cs_req_ok_q ? sub_rd_q : 2'd3;
 
+  // A MATERIAL TRIPLE HAS NO SPARE ENCODING. {0, 0, 0} is a perfectly legal
+  // cell -- terrain_rules sec 6.2 makes weight 0 "matB everywhere", so it means
+  // tile 0 -- and every one of the 2^24 words is reachable from a legal page.
+  // So the not-answered signal is a BIT and not a value, and the consumer is
+  // the one that decides what to emit when it is low. TESS declares {0,0,0}
+  // and counts; nothing has to recognise a poison pattern.
+  assign mat_a_o      = mat_req_ok_q ? mat_rd_q[23:16] : 8'd0;
+  assign mat_b_o      = mat_req_ok_q ? mat_rd_q[15: 8] : 8'd0;
+  assign mat_weight_o = mat_req_ok_q ? mat_rd_q[ 7: 0] : 8'd0;
+  assign mat_valid_o  = mat_req_ok_q;
+
   // ---- control ------------------------------------------------------------
   logic [31:0] patches_filled_q, patches_served_q, fill_overrun_q;
   logic [31:0] lat_oob_q, cs_oob_q;
+  logic [31:0] mat_oob_q, mat_cells_q;
 
   assign fill_records_o   = {{(32 - CURW){1'b0}}, wcur_q};
   assign patches_filled_o = patches_filled_q;
@@ -481,6 +583,13 @@ module zhao_terrain_compcache_front #(
   assign fill_overrun_o   = fill_overrun_q;
   assign lat_oob_o        = lat_oob_q;
   assign cs_oob_o         = cs_oob_q;
+  assign mat_oob_o        = mat_oob_q;
+  // `mat_cells_o` is NOT a tautology of the write enable and is the one number
+  // that says the layer-E fill is COMPLETE rather than merely happening: a
+  // patch owes exactly (LAT_W-1)*(LAT_H-1) = 1,024 cells, and a producer whose
+  // walk skips the last row -- the shape a 33-vertex walk reused for 32 cells
+  // fails in -- lands 992 and every other counter in this block still balances.
+  assign mat_cells_o      = mat_cells_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -501,6 +610,8 @@ module zhao_terrain_compcache_front #(
       fill_overrun_q   <= '0;
       lat_oob_q        <= '0;
       cs_oob_q         <= '0;
+      mat_oob_q        <= '0;
+      mat_cells_q      <= '0;
     end else begin
       serve_release_q <= serve_release_i;
 
@@ -508,6 +619,11 @@ module zhao_terrain_compcache_front #(
       if (fill_go_c) begin
         fill_active_q <= 1'b1;
         wcur_q        <= '0;
+        // The layer-E cell count is PER FILL, cleared with the write cursor it
+        // has to be compared against. A free-running total would answer "how
+        // many cells has this block ever taken", which is not the question --
+        // the question is whether THIS patch got all 1,024 of them.
+        mat_cells_q   <= '0;
         wphase_q      <= 1'b0;
         dual_q        <= dual_i;
         // Take the buffer that is NOT being served. When nothing is served
@@ -579,6 +695,21 @@ module zhao_terrain_compcache_front #(
       // ---- refusals -----------------------------------------------------
       if (lat_req_i && !lat_in_range_c) lat_oob_q <= lat_oob_q + 1'b1;
       if (cs_req_i && !cs_rd_in_range_c) cs_oob_q <= cs_oob_q + 1'b1;
+      if (mat_req_i && !mat_rd_in_range_c) mat_oob_q <= mat_oob_q + 1'b1;
+      // COUNTED ON THE ACCEPTED WRITE, AND `!fill_go_c` IS NOT A DETAIL. The
+      // clear above and this increment are in one always_ff, so without the
+      // term the increment would be the later assignment and would overwrite
+      // the clear -- a fill that began on a cycle a cell also landed would
+      // start its count at one and read 1,025 at the end, the one value that
+      // looks like an overrun rather than like an off-by-one.
+      //
+      // It counts what LANDED, not what was offered: an out-of-range write is
+      // dropped by the guard above and would otherwise leave no trace at all.
+      // Offered-minus-landed is then visible against the producer's own count,
+      // and 1,024 is the number both of them owe.
+      if (mat_we_i && mat_w_in_range_c && !fill_go_c &&
+          (mat_cells_q != 32'hFFFF_FFFF))
+        mat_cells_q <= mat_cells_q + 32'd1;
     end
   end
 
