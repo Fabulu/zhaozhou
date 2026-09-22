@@ -126,6 +126,69 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_FB_SLOT_SPAN       = 32'h0003_C000; // 245,760
 
   // ---------------------------------------------------------------------
+  // GEOM.PARAMBUF -- the external geometry arena (ruling R7,
+  // spec/memory_rules.md 5c; owner completion ruling ITEM 4, 2026-09-22)
+  //
+  // WHY IT EXISTS AS CONSTANTS AT ALL, which is the correction this packet
+  // carries: 5c has RULED this region since 2026-09-02 and `zhao_pkg` never
+  // spelled it. `zhao_geom_parambuf`'s header (packet GEOMCLOSE, 2026-09-22)
+  // measured the consequence -- MEM.GUARD's ENGINE1 arm is
+  // `render_asset_ok` alone, whose window starts at 0x06A0_0000, and the
+  // WHOLE of 5c lies strictly BELOW it. Not a direction bit short of legal:
+  // outside the bounds, in both directions, for the only client that owns
+  // it. So even a READ-ONLY composition was refused by construction, and the
+  // recorded blocker ("it needs an arena writer") was true and was the
+  // SECOND obstacle.
+  //
+  // THE BOUNDS ARE THE RULING'S, EXACTLY. Item 4 writes them half-open:
+  //   [0x0600_0000, 0x0640_0000)  view 0, 4 MiB
+  //   [0x0640_0000, 0x0680_0000)  view 1, 4 MiB
+  //   [0x0680_0000, 0x06A0_0000)  shared prefetch/chunk scratch, 2 MiB
+  // and 5c's inclusive spelling (..0x063F_FFFF, ..0x067F_FFFF, ..0x069F_FFFF)
+  // agrees to the byte. There is no rounding to argue about and no slack to
+  // take. SCRATCH_BASE + SCRATCH_SPAN = 0x06A0_0000 is exactly
+  // ZHAO_RENDER_ASSET_BASE, so the three regions tile bank 3 up to the asset
+  // pool with no gap and no overlap -- asserted, not assumed, at
+  // tests/formal/formal_mem_guard.sv:a1_pb_scratch_not_asset and at
+  // `zhao_mem_guard`'s own elaboration guard. It is NOT checked here: a
+  // SystemVerilog package cannot hold an `initial` block, and R212 measured
+  // that Quartus 17.0 rejects a bare module-scope elaboration `if` -- so a
+  // guard written here would either not compile or not exist, and a guard
+  // that does not exist reads exactly like one that passes.
+  //
+  // THREE REGIONS, NOT ONE 10 MiB WINDOW, and that is the load-bearing
+  // choice. Item 4: "A request crossing a per-view or scratch boundary is
+  // not allowed merely because both endpoints lie somewhere in the union of
+  // permitted ranges." A single [0x0600_0000, 0x06A0_0000) comparison would
+  // have been two gates cheaper and would have made a burst that starts in
+  // view 0 and ends in view 1 -- the exact fault the two views exist to
+  // prevent, since one is being BUILT while the other is being READ -- a
+  // legal request. MEM.GUARD therefore contains each request wholly inside
+  // ONE of the three, and `zhao_mem_guard_pbview_mutant` is the committed
+  // proof that collapsing them to the union makes the extended no-escape
+  // proof FAIL.
+  //
+  // IT IS A KNOB. `zhao_geom_paramarena` and `zhao_geom_paramwalk` take
+  // these at their composition sites as VIEW0_BASE / VIEW1_BASE /
+  // VIEW_SPAN / SCRATCH_BASE / SCRATCH_SPAN parameters and each has an
+  // elaboration guard refusing a parameterisation whose derived footprint
+  // exceeds the span it was given.
+  localparam logic [31:0] ZHAO_PARAMBUF_VIEW0_BASE   = 32'h0600_0000;
+  localparam logic [31:0] ZHAO_PARAMBUF_VIEW1_BASE   = 32'h0640_0000;
+  localparam logic [31:0] ZHAO_PARAMBUF_VIEW_SPAN    = 32'h0040_0000;
+  localparam logic [31:0] ZHAO_PARAMBUF_SCRATCH_BASE = 32'h0680_0000;
+  localparam logic [31:0] ZHAO_PARAMBUF_SCRATCH_SPAN = 32'h0020_0000;
+
+  // The three record sizes R7 ruled, in BYTES, in one place so the arena
+  // producer, the chunk walker and the reference model cannot disagree about
+  // them. `zhao_geom_parambuf` decodes 192 / 128 / 512 BITS respectively;
+  // these are the same three numbers in the unit an ADDRESS is counted in,
+  // which is the unit the allocator needs and the decoder does not have.
+  localparam int unsigned ZHAO_PARAMBUF_PV_BYTES = 24;
+  localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 16;
+  localparam int unsigned ZHAO_PARAMBUF_CK_BYTES = 64;
+
+  // ---------------------------------------------------------------------
   // RENDER asset pool -- the Phase-3/Packet-E shared ENGINE1 region
   // (spec/memory_rules.md 5f, 2026-09-04/2026-09-14)
   //
