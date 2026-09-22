@@ -1102,9 +1102,14 @@ int main() {
     } else if (opcode == zhao_abi::ZHAO_OP_DRAW_PROCEDURAL) {
       zhao_abi::ZhRecordDrawProcedural r{};
       if (!zhao_abi::zhao_unpack_draw_procedural(reader, r) || r.payload.program != 0x01000003u ||
-          r.payload.material != r.payload.program || r.payload.transform.tx != 0x4000 ||
+          r.payload.material_set != r.payload.program || r.payload.transform.tx != 0x4000 ||
           r.payload.transform.ty != 0x10000 || r.payload.transform.r00 != 0x10000 ||
           r.payload.transform.r11 != 0x10000 || r.payload.screen_error != 0x8000 ||
+          // Owner completion ruling 2 (2026-09-22): the record ID is its OWN
+          // u16 and L1 chooses record 0 of the set. Zero is a VALID index here,
+          // so this asserts the CHOSEN value rather than tolerating a default.
+          r.payload.material_id != 0u ||
+          r.payload.frame_tick[0] != 0u || r.payload.frame_tick[1] != 0u ||
           r.payload.kind != zhao_abi::FORGE_HEIGHTFIELD_PATCH) return 36;
       seen |= 4u;
     } else if (opcode == zhao_abi::ZHAO_OP_SURFACE_STAMP) {

@@ -626,13 +626,72 @@ command DrawPopulation 0x0301 implemented {
 // patch extents, and `transform`/`screen_error` carry placement + the
 // pixels-per-error policy. forge_kind reuses a mandatory-zero v2 pad byte
 // (same-bytes reinterpretation, capture_format.md 1.3 [w3]).
+//
+// [2026-09-22, OWNER COMPLETION RULING ITEM 2 — THE (SET HANDLE, RECORD ID)
+// PAIR] The material reference is now stated, and it is TWO values:
+//
+//     material_set : the COMPLETE handle32[material_set] (this field)
+//     material_id  : an independent u16 index within that set
+//
+// THE FIELD WAS `handle32[material] material` AND THE RESOURCE KIND WAS AN
+// ORPHAN -- `handle32[material]` occurred exactly ONCE in this whole file, on
+// this line, and nothing anywhere stated how it became `zhao_material_window`'s
+// (set, id) key. The ruling settles it: "Keep the existing 32-bit material word
+// intact and define it as the material-set handle." So the field is renamed to
+// `material_set` and its kind to `material_set`, which is the SAME KIND AND THE
+// SAME OFFSET AND WIDTH every other draw command already uses (DrawForm 0x0300,
+// DrawPosedForm 0x0305, DrawWarpedForm 0x0304). NO WIRE BYTE MOVES.
+//
+// WHY THE OBVIOUS PACKING IS FORBIDDEN, in the owner's own mechanism: a handle32
+// is {index[31:8], generation[7:0]}, so reading this word's low sixteen bits as
+// the record ID makes a RESIDENCY EVENT -- a generation bump -- silently select
+// a different material and repaint geometry. "Do not read the existing word both
+// as the complete set handle and as its low-16-bit material ID."
+//
+// THE TWO PAD ALLOCATIONS, now EXPLICIT (the ruling: "Make both allocations
+// explicit in commands.zidl and regenerate ... from that source"):
+//
+//   payload 37..38  frame_tick    R241 D-TICK-A, PRESERVED EXACTLY. Two bytes,
+//                                 little-endian, at the offset `zhao_cmd_exec`
+//                                 already decodes (ZHAO_DRAW_PROCEDURAL_OFF_PAD)
+//                                 and `zhao_forge_pagebank` already adds to the
+//                                 page's `tick_phase_base`. It is declared
+//                                 `u8[2]` rather than `u16` for ONE reason: this
+//                                 file's layout law (capture_format.md 1.1
+//                                 rule 2) aligns a u16 to 2 and offset 37 is
+//                                 ODD, so a `u16` here is an ELABORATION ERROR
+//                                 in the generator and a `u16` at 38 would MOVE
+//                                 a field the ruling says to preserve.
+//                                 AND DECLARING IT FIXES A REAL DEFECT: while
+//                                 these were pads, the generated validator's
+//                                 mandatory-zero pad list contained 37 and 38,
+//                                 so a DrawProcedural carrying a NONZERO
+//                                 frame_tick was REFUSED -- R241's field could
+//                                 not legally be transmitted. See
+//                                 ZHAO_PADS_DRAW_PROCEDURAL before and after.
+//   payload 39      pad[1]        alignment for the u16 below; mandatory zero.
+//   payload 40..41  material_id   NEW. u16 index within `material_set`, 4-byte
+//                                 aligned (record offset 56). ZERO IS A VALID
+//                                 INDEX, not a sentinel: "zero-filled legacy
+//                                 material_id bytes select record 0 of the named
+//                                 set."
+//   payload 42..47  pad[6]        mandatory zero, still unallocated.
+//
+// VERSION: UNCHANGED at 3. Both allocations are same-bytes reinterpretations of
+// mandatory-zero pads at unchanged offsets and sizes -- the precedent this file
+// already set twice, for `forge_kind` (R108) and for the v2 `u8 mode` ->
+// `video_mode` conversion. The opcode, the record size and every pre-existing
+// field offset are untouched, which is this file's own additive law.
 command DrawProcedural 0x0302 implemented {
   handle32[forge_program] program;
-  handle32[material] material;
+  handle32[material_set] material_set;   // the COMPLETE set handle (ruling 2)
   transform2fx transform;
   fx16 screen_error;
   forge_kind kind;     // [w3] forge family (see enum above)
-  pad[11];
+  u8 frame_tick[2];    // R241 D-TICK-A, little-endian; payload 37..38
+  pad[1];              // payload 39 -- alignment for material_id
+  u16 material_id;     // index within material_set; 0 is a VALID record
+  pad[6];              // payload 42..47
 }
 
 // Sky pass (spec/sky_and_beams.md 4 — the W4 post-patch ABI reservation).

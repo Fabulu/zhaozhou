@@ -1268,7 +1268,22 @@ class CppEmitter {
         begin('DrawProcedural', 'DRAW_PROCEDURAL', 64);
         const patchId = this.authoredExpressionId(emit, 'patch');
         o.line(`${pad}  record.payload.program = ${this.authoredHandle(patchId, 'procedural_patch_page')}u;`);
-        o.line(`${pad}  record.payload.material = record.payload.program;`);
+        // OWNER COMPLETION RULING 2 (2026-09-22): the material reference is a
+        // PAIR. The 32-bit word is the COMPLETE material-set handle and the
+        // record ID is an independent u16 in its own bytes -- never the set
+        // handle's low half, because a handle32 is {index:24, generation:8} and
+        // reading the generation as the record ID makes a residency event
+        // repaint the geometry.
+        //
+        // L1 has no surface for either half yet: `emit draw_procedural` names a
+        // patch, a transform and a screen error (checker.ts `draw_procedural`),
+        // so the set stays the page's own handle -- the L1 convention since w3
+        // -- and the record is 0, WHICH IS A VALID INDEX under this ruling and
+        // not a "missing" marker. `material_id` is written explicitly rather
+        // than left to the zero-initialised record so that a reader of the
+        // generated presentation can see which record was chosen.
+        o.line(`${pad}  record.payload.material_set = record.payload.program;`);
+        o.line(`${pad}  record.payload.material_id = 0u;  // record 0 of that set (ruling 2)`);
         transform2(value('transform'));
         o.line(`${pad}  record.payload.screen_error = static_cast<i32>(${value('screen_error')});`);
         o.line(`${pad}  record.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;`);

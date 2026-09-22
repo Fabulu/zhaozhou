@@ -793,11 +793,15 @@ package zhao_abi_pkg;
   // DrawProcedural 0x0302: 64-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
-    logic [87:0] pad;  // 11 zero byte(s) @53
+    logic [47:0] pad_1;  // 6 zero byte(s) @58
+    logic [15:0] material_id;  // u16 @56
+    logic [7:0] pad;  // 1 zero byte(s) @55
+    logic [7:0] frame_tick_1;  // u8 @54
+    logic [7:0] frame_tick_0;  // u8 @53
     logic [7:0] kind;  // forge_kind @52
     logic [31:0] screen_error;  // fx16 = Q16.16 in 32 bits (qformats.md) @48
     zhao_transform2fx_t transform;  // 24 B @24
-    logic [31:0] material;  // handle32 @20  // handle32 {index:24, generation:8}
+    logic [31:0] material_set;  // handle32 @20  // handle32 {index:24, generation:8}
     logic [31:0] program_f;  // handle32 @16  // handle32 {index:24, generation:8}
     logic [15:0] h_opcode;  // u16 @0
     logic [15:0] h_record_bytes;  // u16 @2
@@ -815,11 +819,15 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_H_FLAGS = 8;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_H_RESERVED0 = 12;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PROGRAM = 16;
-  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL = 20;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_SET = 20;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM = 24;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR = 48;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_KIND = 52;
-  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD = 53;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_0 = 53;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_1 = 54;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD = 55;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_ID = 56;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD_1 = 58;
 
   // DrawSky 0x0310: 176-B record (reserved).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -2389,11 +2397,15 @@ package zhao_abi_pkg;
       v[ZHAO_DRAW_PROCEDURAL_OFF_H_FLAGS*8 +: 32] = c.h_flags;
       v[ZHAO_DRAW_PROCEDURAL_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
       v[ZHAO_DRAW_PROCEDURAL_OFF_PROGRAM*8 +: 32] = c.program_f;
-      v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL*8 +: 32] = c.material;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_SET*8 +: 32] = c.material_set;
       v[ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM*8 +: 192] = c.transform;
       v[ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR*8 +: 32] = c.screen_error;
       v[ZHAO_DRAW_PROCEDURAL_OFF_KIND*8 +: 8] = c.kind;
-      v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 88] = c.pad;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_0*8 +: 8] = c.frame_tick_0;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_1*8 +: 8] = c.frame_tick_1;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 8] = c.pad;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_ID*8 +: 16] = c.material_id;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_PAD_1*8 +: 48] = c.pad_1;
       zhao_pack_draw_procedural = v;
     end
   endfunction
@@ -2407,11 +2419,15 @@ package zhao_abi_pkg;
       c.h_flags = v[ZHAO_DRAW_PROCEDURAL_OFF_H_FLAGS*8 +: 32];
       c.h_reserved0 = v[ZHAO_DRAW_PROCEDURAL_OFF_H_RESERVED0*8 +: 32];
       c.program_f = v[ZHAO_DRAW_PROCEDURAL_OFF_PROGRAM*8 +: 32];
-      c.material = v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL*8 +: 32];
+      c.material_set = v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_SET*8 +: 32];
       c.transform = v[ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM*8 +: 192];
       c.screen_error = v[ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR*8 +: 32];
       c.kind = v[ZHAO_DRAW_PROCEDURAL_OFF_KIND*8 +: 8];
-      c.pad = v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 88];
+      c.frame_tick_0 = v[ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_0*8 +: 8];
+      c.frame_tick_1 = v[ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_1*8 +: 8];
+      c.pad = v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 8];
+      c.material_id = v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_ID*8 +: 16];
+      c.pad_1 = v[ZHAO_DRAW_PROCEDURAL_OFF_PAD_1*8 +: 48];
       zhao_unpack_draw_procedural = c;
     end
   endfunction
@@ -3405,7 +3421,8 @@ package zhao_abi_pkg;
           if (zhao_bytes_nonzero(p, base, 24, 8)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DRAW_PROCEDURAL: begin
-          if (zhao_bytes_nonzero(p, base, 53, 11)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 55, 1)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 58, 6)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DRAW_SKY: begin
           if (zhao_bytes_nonzero(p, base, 162, 14)) zhao_record_pad_nonzero = 1'b1;
