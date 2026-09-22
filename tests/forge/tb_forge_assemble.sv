@@ -64,7 +64,12 @@ module tb_forge_assemble #(
     input  var logic [15:0]        t_src_id_i,
     input  var logic               t_last_i,
 
+    // THE JOB'S MATERIAL PAIR, both halves on this bench's own ports so the
+    // carriage detector below can be FIRED WITH LEGAL STIMULUS AT THESE PORTS
+    // -- drive `t_material_i` differently from `j_material_id_i` and the skew
+    // is real, with no mutant needed.
     input  var logic [31:0]        j_material_set_i,
+    input  var logic [15:0]        j_material_id_i,
 
     input  var logic signed [31:0] art_r_i,
     input  var logic signed [31:0] art_g_i,
@@ -113,6 +118,7 @@ module tb_forge_assemble #(
     output var logic [31:0] dq_refused_o,
     output var logic [31:0] dq_stray_o,
     output var logic [31:0] proj_stray_o,
+    output var logic [31:0] mat_skew_o,
 
     // ---- the fake projector's own evidence ----------------------------------
     // MAX IN FLIGHT EVER, which is the throttle's measurement. It must never
@@ -254,6 +260,7 @@ module tb_forge_assemble #(
       .t_last_i    (t_last_i),
 
       .j_material_set_i(j_material_set_i),
+      .j_material_id_i (j_material_id_i),
 
       .art_r_i           (art_r_i),
       .art_g_i           (art_g_i),
@@ -308,7 +315,8 @@ module tb_forge_assemble #(
       .slot_pressure_o(slot_pressure_o),
       .dq_refused_o   (dq_refused_o),
       .dq_stray_o     (dq_stray_o),
-      .proj_stray_o   (proj_stray_o)
+      .proj_stray_o   (proj_stray_o),
+      .mat_skew_o     (mat_skew_o)
   );
 
   /* verilator lint_off UNUSEDSIGNAL */

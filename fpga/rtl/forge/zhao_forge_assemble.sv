@@ -128,23 +128,39 @@
 // carries `handle32[material_set] material_set` and gets its id per meshlet
 // from the mesh data -- except one.
 //
-// **`DrawProcedural` carries `handle32[material] material`, and
-// `handle32[material]` occurs EXACTLY ONCE in the whole of
-// `spec/commands.zidl` -- on that line.** No other command names that resource
-// kind, `tools/pack` writes no material page keyed that way, and NOTHING IN THE
-// TREE STATES HOW A handle32[material] BECOMES A (material_set, material_id)
-// PAIR. That is not a gap in this block; it is a gap in the ABI's own
-// interpretation, and it was found by trying to wire it.
+// **THE OWNER RULED IT, 2026-09-22 (completion ruling 2), AND THE DOCKET IS
+// CLOSED.** `DrawProcedural` now carries the pair for real: `material_set` is
+// the COMPLETE handle32 and `material_id` is an independent u16 in its own
+// record bytes. So this block no longer INTERPRETS anything -- it receives both
+// halves from `zhao_forge_pagebank` as one held sideband and carries them to
+// the door.
 //
-// WHAT THIS BLOCK DOES, AND WHY IT IS SAFE TO REVERSE: the draw's handle is
-// presented as the SET and `FORGE_MATERIAL_ID` (default 0) as the entry -- "a
-// set of one, entry zero", which is the only reading available that keeps the
-// GAME in control of which material a procedural draw uses. Both halves are
-// PARAMETERS at this module's edge, so a ruling that says otherwise is two
-// lines here and NOT ONE BYTE of the command, the page or any other block.
-// NO ABI BYTES MOVE UNDER EITHER READING -- this is an interpretation of an
-// existing field, exactly like `forge_kind`'s (R108) and `frame_tick`'s (R241),
-// and both of those were owner rulings. **DOCKED FOR THE OWNER.**
+// WHAT WAS HERE BEFORE, because the ruling requires the difference disclosed
+// rather than quietly replaced: the draw's 32-bit word was presented as the set
+// AND its low sixteen bits travelled the triangle stream as the id, with a
+// `FORGE_MATERIAL_ID` parameter substituted when those bits happened to be
+// zero. That parameter is GONE, and its removal is the docket being paid rather
+// than a knob being taken away: a handle32 is {index[31:8], generation[7:0]},
+// so the id it produced was partly the GENERATION, and the owner forbade the
+// reading outright. Where a draw's set handle has a nonzero generation or
+// nonzero index bits 8..15, this block now selects a DIFFERENT record than it
+// used to -- and for a legacy record whose new `material_id` bytes are zero, it
+// selects RECORD 0, which the ruling makes a valid index and not a sentinel.
+//
+// THE PAIR IS LATCHED BY ONE ENABLE. `mset_q` and `mid_q` are both loaded at
+// the job's FIRST VERTEX, from the bank's held level, and `busy_o` rises with
+// them so the bank cannot replace either underneath. Latching the two on
+// different events is the metadata-swap fault this repository has a chapter
+// about, and it is what this block used to do -- the set at vertex 0, the id at
+// triple 0, off two different streams.
+//
+// AND `t_material_i` IS NOW A CHECK RATHER THAN A SOURCE. `zhao_forge_prim`
+// still carries the id per triangle, and it arrives here THROUGH A DIFFERENT
+// PATH AND A DIFFERENT CADENCE than the held sideband -- which is exactly what
+// makes comparing them a real detector and not two operands moving together.
+// A disagreement means a primitive's material moved while its triangles were in
+// flight; `mat_skew_o` counts it and THE JOB'S OWN ID WINS, because "a later
+// draw must not replace an earlier primitive's material".
 //
 // AND THE R197 DOOR STILL JUDGES IT. `zhao_console_core`'s `cl_in_refuse_c`
 // refuses a declared-untextured primitive whenever the published material's
@@ -167,10 +183,6 @@ module zhao_forge_assemble #(
     parameter int unsigned INFLIGHT  = 64,
     parameter int unsigned DQ_SLOTS  = 16,
     parameter int unsigned RCP_NCTX  = 8,
-    // THE ABI INTERPRETATION ABOVE, as a knob. Entry within the set the draw's
-    // handle names. A ruling that reads DrawProcedural.material differently
-    // changes this and the `o_material_set_o` assign, and nothing else.
-    parameter logic [15:0] FORGE_MATERIAL_ID = 16'd0,
     // The attribute slot map, restated from `zhao_console_core`'s own
     // parameters rather than assumed, and checked against ATTRS at elaboration.
     parameter int unsigned SLOT_INVW  = 0,
@@ -213,6 +225,11 @@ module zhao_forge_assemble #(
     // vertex; carrying it on the triangle stream instead would need 32 bits
     // through `zhao_forge_prim`, which has a 16-bit material port and no room.
     input  var logic [31:0]        j_material_set_i,
+    // The second half of the SAME sideband, from the same held registers in
+    // `zhao_forge_pagebank`, latched here by the SAME enable. Owner completion
+    // ruling 2 (2026-09-22): `material_id` is an independent u16 record index,
+    // never a slice of the set handle.
+    input  var logic [15:0]        j_material_id_i,
 
     // ---- the authored art values (see the header) --------------------------
     input  var logic signed [31:0] art_r_i,
@@ -278,7 +295,16 @@ module zhao_forge_assemble #(
     output var logic [31:0] slot_pressure_o,  // a vertex offered and refused for room
     output var logic [31:0] dq_refused_o,     // the depth converter refused a w
     output var logic [31:0] dq_stray_o,       // a depth token nothing was waiting for
-    output var logic [31:0] proj_stray_o      // a projector result for a slot not in flight
+    output var logic [31:0] proj_stray_o,     // a projector result for a slot not in flight
+    // THE CARRIAGE DETECTOR (owner completion ruling 2, 2026-09-22). A
+    // triangle whose carried material id disagrees with the JOB'S latched
+    // id -- i.e. a primitive's material moved while its triangles were in
+    // flight. The two operands reach this block by DIFFERENT PATHS at
+    // DIFFERENT CADENCES (the held sideband from the bank, the per-triangle
+    // copy through FORGE.PRIM's pipeline), which is what makes the
+    // comparison able to fire at all -- CLAUDE.md: a detector whose two
+    // operands are loaded by one enable is structurally blind.
+    output var logic [31:0] mat_skew_o
 );
 
   localparam int unsigned VW  = (MAX_VERTS <= 2) ? 1 : $clog2(MAX_VERTS);
@@ -593,6 +619,7 @@ module zhao_forge_assemble #(
       vtx_overflow_o  <= 32'd0;
       slot_pressure_o <= 32'd0;
       proj_stray_o    <= 32'd0;
+      mat_skew_o      <= 32'd0;
       for (k = 0; k < MAX_VERTS; k = k + 1) begin
         pos_q[k] <= '0;
         inv_q[k] <= 24'd0;
@@ -653,7 +680,10 @@ module zhao_forge_assemble #(
             if (32'(issued_q) == 32'd0) begin
               // THE JOB'S SIDEBAND IS LATCHED HERE, at the first vertex, and
               // `busy_o` rises with it so the bank cannot replace it underneath.
+              // ONE ENABLE, BOTH HALVES. See the header: latching the set
+              // and the id on different events is the fault, not the fix.
               mset_q <= j_material_set_i;
+              mid_q  <= j_material_id_i;
             end
             if (v_last_i) begin
               vcount_q <= issued_q + {{VW{1'b0}}, 1'b1};
@@ -695,7 +725,18 @@ module zhao_forge_assemble #(
       unique case (tst_q)
         T_IDLE: begin
           if (t_valid_i && t_ready_o) begin
-            mid_q   <= (t_material_i == 16'd0) ? FORGE_MATERIAL_ID : t_material_i;
+            // THE DETECTOR, NOT THE SOURCE. `mid_q` is the job's own id and
+            // is NOT written here -- the triangle stream's copy travelled a
+            // different path with a different cadence, so a disagreement is a
+            // real skew and the job's value is the one that wins.
+            //
+            // R95, discrimination: this counter moves ONLY on a mismatch, and
+            // `forge_assemble_directed` asserts it stays PUT across a job whose
+            // ids agree, INCLUDING a job whose id is zero -- zero is a valid
+            // record under ruling 2 and must not read as "unset".
+            if (t_material_i != mid_q) begin
+              if (mat_skew_o != 32'hffff_ffff) mat_skew_o <= mat_skew_o + 32'd1;
+            end
             src_q   <= t_src_id_i;
             tlast_q <= t_last_i;
             if (idx_bad_c) begin

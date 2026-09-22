@@ -98,6 +98,7 @@
   logic forge_ready_i;
   logic [31:0] forge_program_o;
   logic [31:0] forge_material_o;
+  logic [15:0] forge_material_id_o;
   logic [ 7:0] forge_kind_o;
   logic [15:0] forge_frame_tick_o;
   logic [15:0] forge_src_id_o;
