@@ -1,0 +1,107 @@
+Q1 THE CORPSE ACROSS ALL 5 DEFORM LANES (the shipped gate reads lane 0 only)
+  slot 17 death-drop    eternal rest keys 117..224, both subs:
+    lane 0:   216 non-zero, worst 39600, spread  21780..21780 ,    0 key-to-key changes  HELD at the authored sag (kDeathCorpseFlatPm) -- still
+    lane 1:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 2:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 3:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 4:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 0 authored corpse sag: 39600 (flatten), gate wants it HELD
+    deform_ex track present: yes (900 samples, want 900)
+  slot 18 death-gutter  eternal rest keys 191..294, both subs:
+    lane 0:   208 non-zero, worst 39600, spread  21780..21780 ,    0 key-to-key changes  HELD at the authored sag (kDeathCorpseFlatPm) -- still
+    lane 1:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 2:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 3:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 4:     0 non-zero, worst     0, spread      0..0     ,    0 key-to-key changes  bit-zero
+    lane 0 authored corpse sag: 39600 (flatten), gate wants it HELD
+    deform_ex track present: yes (1180 samples, want 1180)
+
+Q2 THE EYE TRAVEL CHANNEL -- posed travel of the eye carrier, per clip
+   (kEyeTravelMaxDeg = 45, so full travel is 8192 a16 on kBEyeTravelL/R)
+   SELF-CHECK: apply_eye_travel(rig, 1000) reads 45.00 deg (want 45) -- the reader CAN see travel
+   slot  0  300 keys   travel  72.13 deg   worst relative step  3.70 deg at key   62
+   slot  1  150 keys   travel  70.97 deg   worst relative step  5.99 deg at key   46
+   slot  2  210 keys   travel  71.19 deg   worst relative step  4.98 deg at key  108
+   slot  3   90 keys   travel  70.46 deg   worst relative step  6.12 deg at key   68
+   slot  4   80 keys   travel  71.23 deg   worst relative step  5.72 deg at key   78
+   slot  5  200 keys   travel  71.02 deg   worst relative step  5.13 deg at key   30
+   slot  6  120 keys   travel  70.56 deg   worst relative step  6.17 deg at key   45
+   slot  7    2 keys   travel   0.00 deg   worst relative step  0.00 deg at key   -1   <-- NO TRAVEL
+   slot  8  120 keys   travel  70.74 deg   worst relative step  6.12 deg at key  111
+   slot  9  170 keys   travel  70.69 deg   worst relative step  6.12 deg at key  169
+   slot 10   70 keys   travel  71.19 deg   worst relative step  5.81 deg at key   31
+   slot 11  140 keys   travel  70.56 deg   worst relative step  6.17 deg at key   76
+   slot 12  120 keys   travel  70.97 deg   worst relative step  5.99 deg at key   76
+   slot 13  200 keys   travel  71.19 deg   worst relative step  4.99 deg at key  167
+   slot 14  232 keys   travel  70.46 deg   worst relative step  5.17 deg at key   10
+   slot 15  720 keys   travel   0.00 deg   worst relative step  0.00 deg at key   -1   <-- NO TRAVEL
+   slot 16  432 keys   travel   0.00 deg   worst relative step  0.00 deg at key   -1   <-- NO TRAVEL
+   slot 17  225 keys   travel  35.46 deg   worst relative step  1.89 deg at key   22
+   slot 18  295 keys   travel  58.01 deg   worst relative step  2.57 deg at key    2
+   slot 19  168 keys   travel  70.79 deg   worst relative step  5.72 deg at key   18
+   slot 20  146 keys   travel  70.74 deg   worst relative step  6.12 deg at key   47
+   slot 21  184 keys   travel  71.23 deg   worst relative step  5.39 deg at key   96
+   slot 22  176 keys   travel  70.61 deg   worst relative step  5.90 deg at key  129
+   slot 23  300 keys   travel  70.52 deg   worst relative step  3.95 deg at key   27
+   BANK: 21 of 24 clips drive the eye travel; bank max 72.13 deg of 45
+
+Q3 ROOT CONTINUITY -- largest single-key INTERIOR root step per clip, BOUNDED
+   Default ceiling 135 mm; five clips declare their own (table in the source).
+   THE WRAP COLUMN IS THE LOOP SEAM (last key -> key 0), reported not gated. The
+   site loops every clip, so the seam is a frame the owner watches; a TRAVELLING
+   clip's seam is authored, and its presentation half is wrapseam.py.
+   slot  0  worst step    17.8 mm at key 25 -> 26  (ceiling   135)  |  WRAP    17.4 mm
+   slot  1  worst step    94.1 mm at key 105 -> 106  (ceiling   135)  |  WRAP  6854.4 mm  <-- SEAM POP
+   slot  2  worst step    12.1 mm at key 21 -> 22  (ceiling   135)  |  WRAP    10.8 mm
+   slot  3  worst step    21.8 mm at key 14 -> 15  (ceiling   135)  |  WRAP    19.9 mm
+   slot  4  worst step   217.6 mm at key 8 -> 9  (ceiling   260)  |  WRAP     7.5 mm
+   slot  5  worst step     9.7 mm at key 79 -> 80  (ceiling   135)  |  WRAP     8.8 mm
+   slot  6  worst step    33.5 mm at key 12 -> 13  (ceiling   135)  |  WRAP    29.2 mm
+   slot  7  worst step     0.0 mm at key -1 -> 0  (ceiling   135)  |  WRAP     0.0 mm
+   slot  8  worst step    69.9 mm at key 96 -> 97  (ceiling   135)  |  WRAP    62.5 mm
+   slot  9  worst step    55.3 mm at key 129 -> 130  (ceiling   135)  |  WRAP  3599.9 mm  <-- SEAM POP
+   slot 10  worst step    86.2 mm at key 12 -> 13  (ceiling   135)  |  WRAP     8.9 mm
+   slot 11  worst step    96.7 mm at key 7 -> 8  (ceiling   135)  |  WRAP    91.4 mm
+   slot 12  worst step    76.4 mm at key 24 -> 25  (ceiling   135)  |  WRAP    71.0 mm
+   slot 13  worst step   172.7 mm at key 111 -> 112  (ceiling   240)  |  WRAP     1.0 mm
+   slot 14  worst step   119.0 mm at key 16 -> 17  (ceiling   210)  |  WRAP    23.7 mm
+   slot 15  worst step    32.5 mm at key 119 -> 120  (ceiling   135)  |  WRAP    22.7 mm
+   slot 16  worst step     0.0 mm at key -1 -> 0  (ceiling   135)  |  WRAP     0.0 mm
+   slot 17  worst step   134.0 mm at key 37 -> 38  (ceiling   165)  |  WRAP   593.2 mm  <-- SEAM POP
+   slot 18  worst step   102.6 mm at key 157 -> 158  (ceiling   135)  |  WRAP   547.0 mm  <-- SEAM POP
+   slot 19  worst step    73.9 mm at key 108 -> 109  (ceiling   135)  |  WRAP    36.6 mm
+   slot 20  worst step   215.0 mm at key 22 -> 23  (ceiling   300)  |  WRAP     0.0 mm
+   slot 21  worst step    75.9 mm at key 181 -> 182  (ceiling   135)  |  WRAP    76.1 mm  <-- SEAM POP
+   slot 22  worst step    86.4 mm at key 83 -> 84  (ceiling   135)  |  WRAP    77.5 mm
+   slot 23  worst step    17.8 mm at key 25 -> 26  (ceiling   135)  |  WRAP    17.4 mm
+
+Q4 THE LOOP SEAM -- does the corpse hold, or blend back toward key 0?
+   (posed vertices, last key sub 0 vs sub 1, through decode_pose)
+   slot 17 death-drop    hold_last=yes worst posed vertex move      0.0 mm  held
+   slot 18 death-gutter  hold_last=yes worst posed vertex move      0.0 mm  held
+
+Q5 FALL ONE-SHOT -- f338 key 169 vs f339 held presentation partner
+   flags interpolate=yes hold_last=yes wrap_root_delta=no  one-shot
+   root xyz                 held exactly
+   all bone quaternions     held exactly
+   local translations       held exactly
+   uniform bone scale       held exactly
+   primary deform lane      held exactly
+   extra deform lanes       held exactly
+
+Q6 TRICK PLANTED 360 -- extracted from the shipped root vs the no-spin control
+   Q6a pause keys 78..100 | turn to key 128 peak 1039.98 pm (overshoot 39.98, declared 40)
+       corrected by key 140 to 1000.00 pm | reversals 1 | worst step 69.42 pm/key | off-axis 0.00004
+   Q6b motion start    key 100  progress accel ratio 0.057  root-XZ ratio 0.009 (segment peak 82.00 mm/key^2)  C2
+   Q6b overshoot peak  key 128  progress accel ratio 0.080  root-XZ ratio 0.017 (segment peak 82.00 mm/key^2)  C2
+   Q6b correction end  key 140  progress accel ratio 0.124  root-XZ ratio 0.109 (segment peak 2.52 mm/key^2)  C2
+   Q6c carrier-B contact-patch drift vs no-spin: worst 11.70 mm at key 115 (allowed 24)  planted
+       reported only: whole-swell centroid 34.88 mm; the NO-SPIN contact itself is gated by Q6d below
+   Q6d no-spin contact patch vs touchdown, keys 78..147: worst 7.95 mm at key 116 (allowed 24)  planted
+       reported: SHIPPED contact vs its touchdown worst 9.71 mm (<= Q6c + Q6d bounds 48)
+
+Q7 FLIGHT ONE CLOCK -- slot 22 root height: cycles, amplitude, seam
+   maxima 2 (declared 2) | amplitude 800.0 mm (declared 800) | root x max 0.0 mm
+   seam step/accel/jerk 77.47/4.776/1.0681 vs interior max 86.43/9.445/1.4496 mm  closes
+
+PASS: 0 failure(s)

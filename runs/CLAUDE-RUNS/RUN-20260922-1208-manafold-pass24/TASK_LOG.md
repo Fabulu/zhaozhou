@@ -140,3 +140,43 @@ recorded first).
 
 **Not done, by instruction:** the 22-subject bank for publication, the encode,
 the merge, the deploy. The coordinator sends the review/publish packet.
+
+### 2026-09-22 ~18:40 - INDEPENDENT REVIEW: PASS
+
+`P24-REVIEW.md`. Built 17 binaries myself (`build-direct.sh --clean`, g++ 16.1.0),
+ran two complete 22-subject banks plus six isolated single-layer renders, fired
+every control, and looked at eight A/B plates.
+
+**THE MECHANISM QUESTION IS SETTLED AND THERE WAS NO CONTRADICTION.** The two
+implementer statements are about TWO DIFFERENT SELECTORS: item 1 is per CLIP SLOT
+(hover and inspect share slot 0, so it cannot tell them apart), item 2 is per
+SUBJECT (`SceneSubject::u02_bolt_avoid_rods` / `::u02_bolt_split_n`), which can.
+Shipped: crackle avoid, hover avoid, inspect split-4, 19 others off -- exactly
+what Direction 25 asked. The owner's comparison is real. **A third subject,
+CRACKLE, also takes item 1** (`knead_schedule_slot(23) -> 0`); disclosed in the
+byte-identity table, understated in the prose, and it goes in the site copy.
+
+**Measurement re-run and confirmed to the digit:** 503,304 segments, 54,595
+intersections (10.85%), crackle 5,685/13.4% on 561 frames, death-drop 16.6%,
+drift 15.3%; **free strands contribute 0 on all 22** (I summed the column).
+
+**Avoidance works and cannot restyle** -- `bolt_avoid_rods` takes only the point
+array, so the signature enforces Direction 23. msmooth clean. **Splitting changes
+nothing**, confirmed isolated at 7x: same place, same shape, still crossing.
+
+**ITEM 1 IS HALF-DELIVERED AND THE COPY MUST SAY SO.** Front: delivered (11,758 px
+worst frame, reads plainly). Rear: NOT delivered -- 178 px worst frame in a 20x16
+box; six consecutive frames at 10x are indistinguishable. Then I laddered the
+knob repaired this pass: `CALM_PM=300` moves **9,352 px**, byte-neutral at 1000
+(CRC `0x8EDC6DE3` both ways). **~52x the lever the direction named.** Pass 25.
+
+**Byte identity on MY build:** all-off = pass 23 22/22; my shipping bank =
+implementer's `crcs-ship.txt` 22/22; scope exactly 19, with curious/startle/
+taunt3 untouched.
+
+**Controls:** all three fire for their own reason. Added the positive control the
+brief asked for -- `ZHAO_U02_BOLT_AVOID=off` with no --fail flag returns **RC 1**,
+so B1's zero is a claim that has now been checked. One non-blocking finding:
+mbolt's per-subject selector table is an UNBOUND MIRROR of the renderer's.
+
+Proceeding to publish.

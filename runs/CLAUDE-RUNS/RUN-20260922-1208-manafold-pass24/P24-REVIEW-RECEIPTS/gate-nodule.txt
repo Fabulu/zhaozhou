@@ -1,0 +1,23 @@
+identity: local pose == committed slot 16, 11664 quats + 34992 translations
+
+FIVE-JOINT INDEPENDENCE, carried-marker travel from rest (mm), through decode_pose + skin_vertex
+  segment             Front       A       B       C     End   verdict
+  0 Front alone        29     193     261     232      23   ok
+  1 A alone             0     202     279     261      26   ok
+  2 B alone             0       2     204     415      30   ok
+  3 C alone             0       2       4     205      21   ok
+  4 End alone           0       0       0       0      28   ok
+  5 mid down            0     115     133     196      11   ok
+
+  OPPOSING VERTICALS -- "the middle goes DOWN while the other swings UP":
+    frame 378:  A +79   B -70 (down)   C +118 (up)   separation 188 mm
+    ok -- middle down and rear up IN ONE POSE, not a phase offset of one curve
+
+  VERTICAL REACH per nodule (200 mm requested, solo, DECLARED GAP -- reported, not gated):
+    ball A    -201 ..   +199 mm
+    ball B    -204 ..   +197 mm
+    ball C    -205 ..   +196 mm
+
+  REAR SURFACE SOCKET: 108 influenced vertices; authored rho 1.043; actual rho 1.035..1.045; worst target deviation 1.7 mm (slot 13 frame 78 sub 1; actual -388,428,-1 expected -389,429,0 stored -389,429,0) -- OK
+
+PASS: 0 failure(s)

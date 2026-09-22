@@ -1,0 +1,9 @@
+mbolt: rods rig=rods  rod radii mm = 74 46 48 58  balls = 101 85 101 106
+mbolt: clearance 46 mm, split N default 4, split gap bound 46 mm
+mbolt: screen leg is ORTHOGRAPHIC along the production view direction (ps 0.25882 pc 0.96608); the gate does not rest on it
+FAIL B1 CLEAR manafold-hover: 4705 of 38152 bolt segments intersect the antenna (worst 88.8 mm at frame 339)
+FAIL B1 CLEAR manafold-crackle: 5685 of 42364 bolt segments intersect the antenna (worst 98.9 mm at frame 123)
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 6.65 mm against 26.59
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 155 of 155 depth-straddling segments are drawn partly occluded at N=4, and 155 of 155 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+INFO B3 CONTROL GROUP: 39500 intersections remain on the 19 untouched subjects that still have them -- that is the measured size of the rollout the owner is deciding about
+mbolt: LEGS RED

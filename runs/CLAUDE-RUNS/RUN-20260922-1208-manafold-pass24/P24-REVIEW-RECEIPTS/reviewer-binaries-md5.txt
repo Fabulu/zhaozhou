@@ -1,0 +1,17 @@
+ad4c5f360d29e2aee283fef12ad36cdb *.tmp/p24rev/bin/manafold-boltgate.exe
+9293e7d74f3ca153c89c7a24fda75ba0 *.tmp/p24rev/bin/manafold-eyesize.exe
+db838b6c0a0c78271422ca5a0632baab *.tmp/p24rev/bin/manafold-meshcheck.exe
+8286d2dbb985ffc453aacddf91fe3554 *.tmp/p24rev/bin/manafold-motiongate.exe
+c106b00765afcfc915113fd2eb79acce *.tmp/p24rev/bin/manafold-nodule.exe
+17e81c4ae2b6679e8321b542b0ed7eb0 *.tmp/p24rev/bin/manafold-outlinegate.exe
+f392c34b3bad9443287b0d260f7d9940 *.tmp/p24rev/bin/manafold-probe.exe
+585bbd6b3ea7fc40f2309e61c627c573 *.tmp/p24rev/bin/manafold-public-jointgate.exe
+ba360858b44fd07dd7487eab6947295a *.tmp/p24rev/bin/manafold-qa-p12.exe
+a073ef2432820712386d0d02e1c7bb86 *.tmp/p24rev/bin/manafold-rear-audit.exe
+f1e810df27a7ce5e988e7a4ef9267cbb *.tmp/p24rev/bin/manafold-rodgate.exe
+e728892fd81b42cc86bf8ddf189c3f9e *.tmp/p24rev/bin/manafold-shellgate.exe
+1c5282b29f7f46dd12a38678517ca413 *.tmp/p24rev/bin/manafold-spangate.exe
+e90af7c043cd9670054eeb256abd5e95 *.tmp/p24rev/bin/zhao-reel-cel.exe
+232905c8cddb19bb5511820c12969b05 *.tmp/p24rev/bin/zhao-reel.exe
+0519f0e025f89d2a55a08dc00d455ff8 *.tmp/p24rev/bin/zixx-meshcheck.exe
+9f3ce44169580bf168fad418957d7669 *.tmp/p24rev/bin/zixx-probe.exe

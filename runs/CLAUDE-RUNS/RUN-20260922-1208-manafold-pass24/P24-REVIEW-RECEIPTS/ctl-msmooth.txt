@@ -1,0 +1,81 @@
+MANAFOLD DIRECTION-18 EFFECT CONTINUITY GATE
+  STAR<->HEART station shift 15 (reversed)
+G0 fold MVC invariants: range failures 0, sum failures 0
+G1 persistent lightning clocks: short 0, chain breaks 0, bad starts 0
+G2 folded-figure morph duration: 50 completed, min 16 frames, short 0
+G3 persistent mote noise step/accel/jerk: 14.457 / 1.736 / 0.258 mm
+G4 living figure edge: 0 non-death blackouts
+   lab 0 control-channel    station 24.36@f452/id7 jerk 7.57@f690/id0 (0->4 m259; prev 0->4 m252) mote 69.97@f697/id5 jerk 73.98@f552/id1 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 1 breadth-more       station 25.49@f30/id7 jerk 7.95@f690/id0 (0->0 m0; prev 0->0 m0) mote 70.48@f697/id5 jerk 74.38@f552/id1 free 1275.28 surge 1172.09 seam 1043.14 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 2 past-the-wall      station 26.17@f32/id7 jerk 8.06@f690/id0 (0->0 m0; prev 0->0 m0) mote 73.61@f697/id68 jerk 74.48@f552/id1 free 1331.13 surge 1172.09 seam 1043.14 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 3 three-stones       station 24.28@f793/id9 jerk 6.98@f977/id9 (2->1 m695; prev 2->1 m688) mote 64.18@f697/id3 jerk 72.77@f552/id1 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 4 edge-strands       station 25.49@f30/id7 jerk 7.95@f690/id0 (0->0 m0; prev 0->0 m0) mote 68.98@f697/id3 jerk 73.67@f552/id1 free 1273.84 surge 1172.09 seam 945.29 edge 10/3/6 stamps 4/4/8 energy 4/4/8 count/role 0/0
+   lab 5 held-still         station 68.23@f612/id4 jerk 122.57@f613/id4 (4->4 m0; prev 0->4 m1000) mote 126.46@f892/id25 jerk 270.09@f613/id26 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 6 snap-states        station 25.49@f30/id7 jerk 7.95@f690/id0 (0->0 m0; prev 0->0 m0) mote 110.93@f784/id10 jerk 53.23@f694/id5 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 8 two-shapes-long    station 28.32@f452/id7 jerk 8.85@f507/id6 (0->4 m15; prev 0->4 m14) mote 69.90@f697/id5 jerk 70.22@f552/id1 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+   lab 9 edge-snap-held     station 73.79@f1089/id0 jerk 120.12@f1090/id4 (0->4 m1000; prev 0->4 m999) mote 119.38@f1116/id9 jerk 261.73@f1117/id8 free 1273.84 surge 1172.09 seam 945.29 edge 0/0/0 stamps 0/0/0 energy 0/0/0 count/role 0/0
+G5 lab production continuity:
+   stations step/accel/jerk 73.79 / 68.26 / 122.57 mm
+   motes    step/accel/jerk 126.46 / 138.35 / 270.09 mm
+   strands  step/accel/jerk 1331.13 / 1329.21 / 2657.89 mm
+   surge    step/accel/jerk 1172.09 / 1240.39 / 2410.96 mm
+   visibility fold 0/0/0 pm; surge 0/0/0 pm
+   seam 1043.14 mm; edge presence 10/3/6 pm; stamps 4/4/8; energy 4/4/8 pm; count/role 0/0 surge 0/0 blackouts 0
+  FAIL: a lab effect entity teleports between presentation frames
+  FAIL: a lab effect entity exceeds the visually accepted acceleration/jerk band
+   candidate 1 body 28.08/17.09/17.42 seam 28.08 radius 7.00/3.00/4.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 2 body 41.43/17.68/17.41 seam 30.86 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 5 body 30.81/16.64/17.36 seam 29.75 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 7 body 38.62/17.43/17.51 seam 30.42 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 8 body 28.08/17.09/17.42 seam 28.08 radius 7.00/3.00/4.00 gain 0.00/0.00/0.00 count/role 0/0
+G6 shipping mana-body continuity: position 41.43/17.68/17.51 seam 30.86; radius 7.00/3.00/4.00; gain 0.00/0.00/0.00; count/role 0/0
+G7 Boil palette continuity: 600 frames; entry 72.28/23.49/14.73 seam 3.46 @f15/p1/i2; energy 45.95/15.93/12.75; integer-phase mismatches 0/126
+G8 death backing slot 17 opacity step/accel/jerk 11.00/2.00/3.00 pm @f135
+G8 death backing slot 18 opacity step/accel/jerk 10.00/3.00/6.00 pm @f100
+   slot 0: free 1097.02@f360/id0 fold 44.89@f587/id0 (prev seg4 2->0 morph534 turn0; now seg4 2->0 morph602 turn0 lasso0 life1000 agit52 knead7) mote 53.40@f456/id35 chain 0 black 0
+   slot 1: free 1161.49@f140/id0 fold 53.68@f87/id2 (prev seg1 5->1 morph0 turn0; now seg1 5->1 morph0 turn0 lasso0 life1000 agit478 knead181) mote 86.73@f85/id36 chain 0 black 0
+   slot 2: free 1104.79@f240/id0 fold 102.84@f177/id17 (prev seg2 8->10 morph0 turn-29097; now seg2 8->10 morph0 turn-31522 lasso0 life1000 agit52 knead19) mote 36.03@f124/id35 chain 0 black 0
+   slot 3: free 1005.68@f100/id0 fold 59.17@f50/id17 (prev seg3 3->6 morph590 turn0; now seg3 3->6 morph682 turn0 lasso0 life1000 agit479 knead182) mote 62.79@f50/id32 chain 0 black 0
+   slot 4: free 869.95@f120/id16 fold 55.32@f51/id14 (prev seg3 3->9 morph682 turn0; now seg3 3->9 morph765 turn0 lasso0 life1000 agit258 knead98) mote 38.85@f54/id32 chain 0 black 0
+   slot 5: free 847.45@f20/id0 fold 43.25@f197/id6 (prev seg2 9->6 morph0 turn0; now seg2 9->6 morph0 turn0 lasso0 life1000 agit63 knead23) mote 66.22@f230/id9 chain 0 black 0
+   slot 6: free 968.25@f100/id0 fold 55.61@f51/id6 (prev seg3 7->0 morph682 turn0; now seg3 7->0 morph765 turn0 lasso0 life1000 agit17 knead6) mote 38.60@f52/id33 chain 0 black 0
+   slot 8: free 1102.69@f160/id0 fold 54.87@f49/id0 (prev seg3 2->4 morph500 turn0; now seg3 2->4 morph590 turn0 lasso0 life1000 agit456 knead173) mote 71.33@f19/id34 chain 0 black 0
+   slot 9: free 1050.72@f40/id16 fold 81.75@f249/id1 (prev seg3 7->3 morph280 turn0; now seg3 7->3 morph298 turn0 lasso0 life1000 agit1000 knead380) mote 96.66@f249/id33 chain 0 black 0
+   slot 10: free 1157.75@f140/id16 fold 66.06@f49/id5 (prev seg3 1->4 morph500 turn0; now seg3 1->4 morph590 turn0 lasso0 life1000 agit321 knead121) mote 49.33@f46/id33 chain 0 black 0
+   slot 11: free 1095.33@f40/id0 fold 55.72@f46/id7 (prev seg3 4->7 morph230 turn0; now seg3 4->7 morph315 turn0 lasso0 life1000 agit462 knead175) mote 51.54@f52/id32 chain 0 black 0
+   slot 12: free 1092.14@f200/id0 fold 311.13@f64/id9 (prev seg2 5->5 morph0 turn0; now seg2 5->5 morph0 turn0 lasso0 life1000 agit141 knead53) mote 94.57@f207/id29 chain 0 black 0
+   slot 13: free 1160.97@f260/id0 fold 199.52@f156/id17 (prev seg2 1->11 morph0 turn33619; now seg2 1->11 morph0 turn35586 lasso0 life1000 agit574 knead218) mote 257.16@f301/id36 chain 0 black 0
+   slot 14: free 1137.56@f303/id0 fold 41.32@f450/id4 (prev seg4 7->9 morph464 turn0; now seg4 7->9 morph534 turn0 lasso0 life1000 agit1 knead0) mote 34.59@f240/id35 chain 0 black 0
+   slot 15: free 1273.84@f1300/id16 fold 110.72@f164/id15 (prev seg2 3->5 morph0 turn-26673; now seg2 3->5 morph0 turn-29097 lasso0 life1000 agit0 knead0) mote 50.99@f702/id34 chain 0 black 0
+   slot 16: free 1074.97@f844/id0 fold 27.53@f325/id9 (prev seg0 8->8 morph0 turn0; now seg0 8->8 morph0 turn0 lasso0 life1000 agit0 knead0) mote 45.73@f220/id32 chain 0 black 0
+   slot 17: free 999.40@f389/id0 fold 35.87@f1/id6 (prev seg0 10->10 morph0 turn0; now seg0 10->10 morph0 turn0 lasso0 life1000 agit97 knead36) mote 37.40@f74/id24 chain 0 black 0
+   slot 18: free 999.56@f428/id16 fold 31.34@f105/id10 (prev seg1 11->7 morph0 turn0; now seg1 11->7 morph0 turn0 lasso0 life560 agit104 knead39) mote 21.67@f101/id26 chain 0 black 0
+   slot 19: free 960.13@f252/id16 fold 343.30@f292/id6 (prev seg2 10->10 morph0 turn0; now seg2 10->10 morph0 turn0 lasso0 life1000 agit14 knead5) mote 70.76@f250/id22 chain 0 black 0
+   slot 20: free 1218.36@f272/id16 fold 79.19@f51/id8 (prev seg3 8->0 morph682 turn0; now seg3 8->0 morph765 turn0 lasso0 life1000 agit451 knead171) mote 97.06@f54/id15 chain 0 black 0
+   slot 21: free 1054.20@f246/id0 fold 73.72@f40/id1 (prev seg0 3->3 morph0 turn0; now seg0 3->3 morph0 turn0 lasso0 life1000 agit768 knead291) mote 109.69@f40/id33 chain 0 black 0
+   slot 22: free 1139.22@f63/id0 fold 32.64@f339/id9 (prev seg4 8->6 morph534 turn0; now seg4 8->6 morph602 turn0 lasso0 life1000 agit0 knead0) mote 44.53@f107/id19 chain 0 black 0
+   slot 23: free 1188.89@f380/id16 fold 39.20@f277/id12 (prev seg0 10->10 morph0 turn0; now seg0 10->10 morph0 turn0 lasso0 life1000 agit22 knead8) mote 53.40@f456/id35 chain 0 black 0
+G6 full-bank 60 Hz FX traces (including loop seams):
+   free lightning step/accel/jerk 1273.84 / 1270.10 / 2540.18 mm
+   fold stations  step/accel/jerk 343.30 / 353.72 / 700.14 mm
+   fold particles step/accel/jerk 257.16 / 131.08 / 130.94 mm
+   surge motes    step/accel/jerk 1172.09 / 1240.39 / 2410.96 mm
+   mote visibility fold 8/3/6 pm; surge 0/0/0 pm
+   edge presence  step/accel/jerk 166.00 / 81.00 / 85.00 pm
+   per-stamp gain step/accel/jerk 166.00 / 81.00 / 85.00 pm
+   fold stamps    step/accel/jerk 24.00 / 24.00 / 48.00
+   fold energy    step/accel/jerk 21.00 / 21.00 / 39.00 pm
+   free stamps    step/accel/jerk 0.00 / 0.00 / 0.00
+   free energy    step/accel/jerk 4.00 / 4.00 / 8.00 pm
+   seam max 1157.75 mm across 1560 entity samples; held-tail samples 9
+   blackouts 0 fold role/count 0/0 surge role/count 0/0 shape-chain breaks 0 morph reversals 0
+   maxima: free accel s15/f1300/id16 jerk s15/f1301/id16; fold accel s19/f293/id6 jerk s19/f89/id9
+           fold-mote accel s13/f333/id6 jerk s13/f298/id5; surge accel s15/f660/id1 jerk s15/f661/id1
+  FAIL: a production effect entity snaps across the loop seam
+  FAIL: a free-lightning point teleports between presentation frames
+  FAIL: a persistent surge mote teleports between presentation frames
+  FAIL: free-lightning acceleration/jerk exceeds the reviewed structural band
+  FAIL: surge-mote acceleration/jerk exceeds the reviewed structural band
+MUTANT lightning-switch: attributed detector fired categories=0x4c20 expected=0x800 allowed=0x4c20
+
+FAIL: 7 failure(s)

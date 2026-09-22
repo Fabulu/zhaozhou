@@ -1,0 +1,53 @@
+mbolt: rods rig=rods  rod radii mm = 74 46 48 58  balls = 101 85 101 106
+mbolt: clearance 46 mm, split N default 4, split gap bound 46 mm
+mbolt: screen leg is ORTHOGRAPHIC along the production view direction (ps 0.25882 pc 0.96608); the gate does not rest on it
+
+CENSUS -- per live subject, every key and midpoint
+subject                  slot     segs    hit3d worst_mm nearmiss   xfront xbehind frames_hit   gap_mm
+manafold-hover              0    38152     4705     88.8     8033    10011    6039       530     26.6
+manafold-inspect            0    38152     4705     88.8     8033    10011    6039       530      6.6
+manafold-channel            2    28560     3316     77.1     6680     9414    1203       374     26.6
+manafold-trick             13    24168     2819     92.7     4866     7386    1231       342     20.5
+manafold-damage            14    32848     3882     99.0     5720    13793    1698       440     21.5
+manafold-hasty              8    16928     1845     92.4     4685     6155    1464       204     31.8
+manafold-flight            22    23680     1492     73.8     3798     7051    2020       165     22.0
+manafold-fall               9    23120     2698     93.3     5990     6942    2355       299     24.4
+manafold-hit               10     9024      616     60.4     1536     2791     529        77     18.8
+manafold-taunt             11    19368     2025     90.2     4558     6495    1066       250     24.9
+manafold-taunt2            12    17240      668     93.8     1208     2419     514       112     19.2
+manafold-death-drop        17    16344     2715     95.9     2213     5708     660       227     13.7
+manafold-death-gutter      18    15492     2030     96.2     2253     6082     642       195     14.2
+manafold-lasso             19    23448     2221     98.6     2783     3229     223       170     27.4
+manafold-blown             20    20672     2633     92.8     4423     5314     652       266     22.4
+manafold-taunt3            21    25024     1502     73.9     3001     8221    1819       229     25.1
+manafold-drift              1    19640     3008     80.7     4120     7074    1138       298     20.6
+manafold-curious            3    12240      205     71.9     1084     4500    1151        42      9.3
+manafold-startle            4    11344      880     71.6     1618     4264     766       119     21.0
+manafold-rest               5    28392     2938     97.4     5261    10159    2071       274     25.0
+manafold-pirouette          6    17104     2007     89.5     3922     5614    1670       211     20.7
+manafold-crackle           23    42364     5685     98.9     8925    14621    1839       561     22.7
+
+BREAKDOWN of the intersections -- which primitive, which obstacle, and whether the segment touches an anchor point
+subject                      edge     free   anchored   interior      rod     ball   worstlen
+manafold-hover               4705        0       2336       2369     2751     1954      159.1
+manafold-inspect             4705        0       2336       2369     2751     1954      159.1
+manafold-channel             3316        0       1626       1690     2170     1146      157.9
+manafold-trick               2819        0       1367       1452      802     2017      121.4
+manafold-damage              3882        0       1902       1980     2310     1572      128.2
+manafold-hasty               1845        0        952        893      977      868      141.3
+manafold-flight              1492        0        744        748     1182      310      132.2
+manafold-fall                2698        0       1344       1354     1551     1147      139.2
+manafold-hit                  616        0        309        307      353      263       96.4
+manafold-taunt               2025        0        944       1081      964     1061      149.3
+manafold-taunt2               668        0        299        369      289      379      106.7
+manafold-death-drop          2715        0       1319       1396     1172     1543       78.0
+manafold-death-gutter        2030        0       1012       1018     1194      836       85.1
+manafold-lasso               2221        0       1120       1101     1010     1211      164.4
+manafold-blown               2633        0       1270       1363     1428     1205      106.2
+manafold-taunt3              1502        0        810        692      908      594      150.6
+manafold-drift               3008        0       1459       1549     1691     1317      122.9
+manafold-curious              205        0        108         97      182       23       48.6
+manafold-startle              880        0        462        418      658      222      125.9
+manafold-rest                2938        0       1445       1493     1759     1179       79.7
+manafold-pirouette           2007        0       1005       1002     1246      761      124.3
+manafold-crackle             5685        0       2790       2895     3439     2246      136.1
