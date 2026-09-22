@@ -460,7 +460,19 @@ module zhao_geom_paramwalk
           wstate_q  <= W_DIR_REQ;
         end
 
-        W_DIR_REQ: if (guard_rsp_i.ready) wstate_q <= W_DIR_VERD;
+        // begin/end rather than a bare statement, and the reason is the
+        // GATE: tools/rtl/check_guard_verdict.py walks the body of the
+        // `if (ready)` arm looking for a `.ok` tested inside it, and on the
+        // bare-statement form with the next state arm on the IMMEDIATELY
+        // following line it walks past the statement and finds W_DIR_VERD's
+        // `.ok`. The verdict IS in its own state and always was -- this is
+        // the gate's shape, not a repair -- so the file adopts the shape the
+        // gate's own _GOOD self-test uses. Recorded rather than silently
+        // reformatted, so the next person does not read this as a fix.
+        W_DIR_REQ: if (guard_rsp_i.ready) begin
+          wstate_q <= W_DIR_VERD;
+        end
+
         W_DIR_VERD: begin
           if (guard_rsp_i.violation) begin
             guard_denied_o <= guard_denied_o + 32'd1;
@@ -504,7 +516,19 @@ module zhao_geom_paramwalk
         end
 
         // ---- a chunk -----------------------------------------------------
-        W_CK_REQ: if (guard_rsp_i.ready) wstate_q <= W_CK_VERD;
+        // begin/end rather than a bare statement, and the reason is the
+        // GATE: tools/rtl/check_guard_verdict.py walks the body of the
+        // `if (ready)` arm looking for a `.ok` tested inside it, and on the
+        // bare-statement form with the next state arm on the IMMEDIATELY
+        // following line it walks past the statement and finds W_CK_VERD's
+        // `.ok`. The verdict IS in its own state and always was -- this is
+        // the gate's shape, not a repair -- so the file adopts the shape the
+        // gate's own _GOOD self-test uses. Recorded rather than silently
+        // reformatted, so the next person does not read this as a fix.
+        W_CK_REQ: if (guard_rsp_i.ready) begin
+          wstate_q <= W_CK_VERD;
+        end
+
         W_CK_VERD: begin
           if (guard_rsp_i.violation) begin
             guard_denied_o <= guard_denied_o + 32'd1;
@@ -577,7 +601,19 @@ module zhao_geom_paramwalk
         end
 
         // ---- a triangle descriptor ---------------------------------------
-        W_TD_REQ: if (guard_rsp_i.ready) wstate_q <= W_TD_VERD;
+        // begin/end rather than a bare statement, and the reason is the
+        // GATE: tools/rtl/check_guard_verdict.py walks the body of the
+        // `if (ready)` arm looking for a `.ok` tested inside it, and on the
+        // bare-statement form with the next state arm on the IMMEDIATELY
+        // following line it walks past the statement and finds W_TD_VERD's
+        // `.ok`. The verdict IS in its own state and always was -- this is
+        // the gate's shape, not a repair -- so the file adopts the shape the
+        // gate's own _GOOD self-test uses. Recorded rather than silently
+        // reformatted, so the next person does not read this as a fix.
+        W_TD_REQ: if (guard_rsp_i.ready) begin
+          wstate_q <= W_TD_VERD;
+        end
+
         W_TD_VERD: begin
           if (guard_rsp_i.violation) begin
             guard_denied_o <= guard_denied_o + 32'd1;
