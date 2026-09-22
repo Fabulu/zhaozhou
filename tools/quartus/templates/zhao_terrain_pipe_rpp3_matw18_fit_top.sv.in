@@ -151,7 +151,6 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
   logic [16:0] job_morph_q;
   logic        job_surface_q, job_dual_q;
   logic [15:0] job_src_id_q;
-  logic [7:0]  job_mat_a_q, job_mat_b_q, job_weight_q;
 
   // THE SUBPATCH GEOMETRY IS A ROM OF LEGAL JOBS, NOT RANDOM BITS.
   //
@@ -228,12 +227,28 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
   logic [4:0]  cs_ci_w, cs_cj_w;
   logic [1:0]  cs_substance_q;
 
+  // R13's layer-E plane, played the same way the cell-state plane is: a
+  // DETERMINISTIC function of the requested cell, so a replay of the same cell
+  // answers the same way. A random answer would make the MISR signature depend
+  // on request timing rather than on the circuit, which is the whole reason
+  // the height field above is a function and not an LFSR.
+  //
+  // THE THREE FIELDS ARE DIFFERENT FUNCTIONS OF THE SAME CELL, so a wrong-cell
+  // read and a swapped-field read produce different signatures rather than
+  // both producing "some material".
+  logic        mat_req_w;
+  logic [4:0]  mat_ci_w, mat_cj_w;
+  logic [7:0]  mat_a_q, mat_b_q, mat_w_q;
+  logic        mat_valid_q;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       lat_h_q  <= '0;
       lat_wx_q <= '0;
       lat_wz_q <= '0;
       cs_substance_q <= 2'd0;
+      mat_a_q <= 8'd0; mat_b_q <= 8'd0; mat_w_q <= 8'd0;
+      mat_valid_q <= 1'b0;
     end else begin
       // A deterministic height field of the requested coordinate, so a replay
       // of the same lattice point answers the same way -- the pipe's three-copy
@@ -242,6 +257,14 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       lat_wx_q <= $signed({{26{1'b0}}, lat_vi_w});
       lat_wz_q <= $signed({{26{1'b0}}, lat_vj_w});
       cs_substance_q <= cs_ci_w[1:0] ^ cs_cj_w[1:0];
+      mat_a_q <= {3'd0, mat_ci_w} ^ 8'hA5;
+      mat_b_q <= {3'd0, mat_cj_w} ^ 8'h5A;
+      mat_w_q <= {2'd0, mat_ci_w, 1'b0} + {3'd0, mat_cj_w};
+      // Held HIGH: the plane is always armed here, so the measured circuit is
+      // the mux that ships rather than its constant-folded half. The unarmed
+      // path is `zhao_terrain_tess`'s `mat_unarmed_o` and it is tested where a
+      // test can watch a counter, not in a signature run.
+      mat_valid_q <= mat_req_w;
     end
   end
 
@@ -311,8 +334,7 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       saw_dense_output_q <= 1'b0;
       job_ox_q <= 6'd0; job_oz_q <= 6'd0; job_level_q <= 2'd0;
       job_morph_q <= 17'd0; job_surface_q <= 1'b0; job_dual_q <= 1'b0;
-      job_src_id_q <= 16'd0; job_mat_a_q <= 8'd0; job_mat_b_q <= 8'd0;
-      job_weight_q <= 8'd0; job_rotor_q <= 3'd0;
+      job_src_id_q <= 16'd0; job_rotor_q <= 3'd0;
       a_valid_q <= 1'b0; a_vx_q <= '0; a_vy_q <= '0; a_vz_q <= '0;
       a_view_q <= 1'b0; a_payload_q <= '0;
     end else begin
@@ -357,12 +379,17 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
             job_morph_q   <= job_rom_morph_c;
             job_surface_q <= job_rom_surface_c;
             job_dual_q    <= job_rom_dual_c;
-            // Identity and material vary freely: nothing downstream constrains
-            // them, and varying them keeps the payload paths in the circuit.
+            // Identity varies freely: nothing downstream constrains it, and
+            // varying it keeps the payload path in the circuit.
+            //
+            // THE MATERIAL NO LONGER ENTERS HERE. Ruling R13 removed
+            // `job_mat_a_i`/`job_mat_b_i`/`job_weight_i` from the pipe: the
+            // material is read per TRIANGLE from layer E at the triangle's own
+            // cell, so the stimulus for it is the played layer-E plane below,
+            // not a job field. The payload path is still exercised -- the
+            // riders still reach `out_mat_a_o` -- and it is now exercised
+            // through the circuit that ships.
             job_src_id_q  <= stimulus_lfsr_q[48:33];
-            job_mat_a_q   <= stimulus_lfsr_q[7:0];
-            job_mat_b_q   <= stimulus_lfsr_q[15:8];
-            job_weight_q  <= stimulus_lfsr_q[23:16];
           end
 
           // Stream A: hold the vertex until it is accepted, then offer another.
@@ -476,8 +503,7 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       .job_morph_i(job_morph_q), .job_surface_i(job_surface_q),
       .job_dual_i(job_dual_q), .job_src_id_i(job_src_id_q),
       .job_view_mask_i(job_view_mask_c),
-      .job_mat_a_i(job_mat_a_q), .job_mat_b_i(job_mat_b_q),
-      .job_weight_i(job_weight_q), .sparse_fill_i(sparse_fill_c),
+      .sparse_fill_i(sparse_fill_c),
 
       .lat_req_o(lat_req_w), .lat_vi_o(lat_vi_w), .lat_vj_o(lat_vj_w),
       .lat_surface_o(lat_surface_w),
@@ -485,6 +511,10 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
 
       .cs_req_o(cs_req_w), .cs_ci_o(cs_ci_w), .cs_cj_o(cs_cj_w),
       .cs_substance_i(cs_substance_q),
+
+      .mat_req_o(mat_req_w), .mat_ci_o(mat_ci_w), .mat_cj_o(mat_cj_w),
+      .mat_a_i(mat_a_q), .mat_b_i(mat_b_q), .mat_w_i(mat_w_q),
+      .mat_valid_i(mat_valid_q),
 
       .out_valid_o(out_valid_w), .out_ready_i(out_ready_w),
       .out_ax_o(out_ax_w), .out_ay_o(out_ay_w),

@@ -254,6 +254,24 @@ module tb_terrain_compose
   logic [63:0]     psg_beat_data;
 
   logic               ps_v_valid, ps_v_ready;
+  // ---- R13's LAYER-E CHAIN, WIRED FOR REAL IN THIS BENCH ------------------
+  // PAGESTREAM's cell beat -> COMPCACHE's material plane -> TESS's per-cell
+  // read -> the ModeRef triple's riders. Every link is the production one; the
+  // bench invents no adapter. That is the point of doing it here rather than
+  // in three component benches: a material plane written from the wrong beat,
+  // or read from the wrong parity, is invisible from either end alone and is
+  // exactly what `zhao_console_core` now depends on.
+  logic               ps_v_cell;
+  logic [7:0]         ps_v_mat_a, ps_v_mat_b, ps_v_weight;
+  logic [31:0]        ps_cells;
+  wire                ps_cell_fire_c = ps_v_valid && ps_v_ready && ps_v_cell;
+  logic [7:0]         cc_mat_a, cc_mat_b, cc_mat_weight;
+  logic               cc_mat_valid;
+  logic [31:0]        cc_mat_oob, cc_mat_cells;
+  logic               ts_mat_req;
+  logic [4:0]         ts_mat_ci, ts_mat_cj;
+  logic [7:0]         ts_ref_mat_a, ts_ref_mat_b, ts_ref_weight;
+  logic [31:0]        ts_mat_unarmed;
   logic signed [15:0] ps_base, ps_scar, ps_bottom;
   logic [5:0]         ps_vi, ps_vj;
   logic               ps_last;
@@ -335,6 +353,11 @@ module tb_terrain_compose
       .v_flags_o (ps_v_flags),
       .v_view_mask_o(ps_v_view_mask),
 
+      .v_cell_o  (ps_v_cell),
+      .v_mat_a_o (ps_v_mat_a),
+      .v_mat_b_o (ps_v_mat_b),
+      .v_weight_o(ps_v_weight),
+
       .done_valid_o  (ps_done_valid),
       .done_ready_i  (ps_done_ready),
       .done_slot_o   (ps_d_slot),
@@ -350,6 +373,7 @@ module tb_terrain_compose
       .bursts_read_o      (ps_bursts),
       .guard_denied_o     (ps_denied),
       .incomplete_o       (ps_incomplete),
+      .cells_streamed_o   (ps_cells),
       .idle_o             (ps_idle)
   );
 
@@ -485,6 +509,16 @@ module tb_terrain_compose
       .pos_idx_i (pos_idx),
       .pos_val_i (pos_val),
 
+      // THE MATERIAL RIDES THE ACCEPTED VERTEX BEAT, which is the same beat
+      // `cc_fill_start` is taken from a few lines above and the same beat
+      // TERRAIN.PATCH composes on. One walk, one parity, nothing to reconcile.
+      .mat_we_i      (ps_cell_fire_c),
+      .mat_w_ci_i    (ps_vi[4:0]),
+      .mat_w_cj_i    (ps_vj[4:0]),
+      .mat_w_a_i     (ps_v_mat_a),
+      .mat_w_b_i     (ps_v_mat_b),
+      .mat_w_weight_i(ps_v_weight),
+
       .cs_we_i         (1'b0),
       .cs_w_ci_i       (5'd0),
       .cs_w_cj_i       (5'd0),
@@ -511,12 +545,22 @@ module tb_terrain_compose
       .cs_cj_i       (ts_cs_cj),
       .cs_substance_o(cc_cs_substance),
 
+      .mat_req_i   (cfg_tess_i && ts_mat_req),
+      .mat_ci_i    (ts_mat_ci),
+      .mat_cj_i    (ts_mat_cj),
+      .mat_a_o     (cc_mat_a),
+      .mat_b_o     (cc_mat_b),
+      .mat_weight_o(cc_mat_weight),
+      .mat_valid_o (cc_mat_valid),
+
       .fill_records_o  (cc_fill_records),
       .patches_filled_o(cc_patches_filled),
       .patches_served_o(cc_patches_served),
       .fill_overrun_o  (cc_fill_overrun),
       .lat_oob_o       (cc_lat_oob),
-      .cs_oob_o        (cc_cs_oob)
+      .cs_oob_o        (cc_cs_oob),
+      .mat_oob_o       (cc_mat_oob),
+      .mat_cells_o     (cc_mat_cells)
   );
 
   /* verilator lint_off UNUSEDSIGNAL */
@@ -587,6 +631,14 @@ module tb_terrain_compose
       .cs_cj_o       (ts_cs_cj),
       .cs_substance_i(cc_cs_substance),
 
+      .mat_req_o  (ts_mat_req),
+      .mat_ci_o   (ts_mat_ci),
+      .mat_cj_o   (ts_mat_cj),
+      .mat_a_i    (cc_mat_a),
+      .mat_b_i    (cc_mat_b),
+      .mat_w_i    (cc_mat_weight),
+      .mat_valid_i(cc_mat_valid),
+
       .tri_valid_o(ts_tri_valid),
       // THE TRIANGLE STREAM GOES TO TERRAIN.NORMALS, and `ts_tri_ready` is the
       // bench's only so a phase can stall it independently. Both readies are
@@ -607,6 +659,8 @@ module tb_terrain_compose
       .ref_valid_o(ts_ref_valid), .ref_ready_i(1'b1),
       .ref_ia_o(ts_ref_ia), .ref_ib_o(ts_ref_ib), .ref_ic_o(ts_ref_ic),
       .ref_surface_o(ts_ref_surface), .ref_src_id_o(ts_ref_src),
+      .ref_mat_a_o(ts_ref_mat_a), .ref_mat_b_o(ts_ref_mat_b),
+      .ref_weight_o(ts_ref_weight),
 
       .terrain_triangles_emitted_o(ts_tris),
       .terrain_vertices_emitted_o (ts_vertices),
@@ -614,6 +668,7 @@ module tb_terrain_compose
       .mode_invalid_o             (ts_mode_invalid),
       .subpatch_rejected_o        (ts_rejected),
       .lod_clamped_o              (ts_clamped),
+      .mat_unarmed_o              (ts_mat_unarmed),
       .job_reject_o               (ts_job_reject),
       .idle_o                     (ts_idle)
   );

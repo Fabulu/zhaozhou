@@ -82,6 +82,14 @@ constexpr uint32_t kPageWords = kPageBytes / 8;  // 2,672
 constexpr uint32_t kSlots = 4;
 constexpr uint32_t kPoolBase = 0x04000000u;  // ruling T2
 constexpr int kVerts = tp::kLatticeVerts;    // 1,089
+constexpr uint32_t kCellEdge = uint32_t(tp::kLatticeEdge) - 1u;  // 32
+constexpr uint32_t kCells = kCellEdge * kCellEdge;               // 1,024
+
+// Layer E's fixture, as functions rather than a table, so the expectation and
+// the page image cannot drift apart: both call these.
+uint8_t mat_a_of(uint32_t c, int salt) { return uint8_t(5u * c + uint32_t(salt) * 3u); }
+uint8_t mat_b_of(uint32_t c, int salt) { return uint8_t(7u * c + 0x40u + uint32_t(salt) * 5u); }
+uint8_t weight_of(uint32_t c, int salt) { return uint8_t(11u * c + 0x80u + uint32_t(salt) * 7u); }
 
 // ---------------------------------------------------------------------------
 // THE PAGE IMAGE
@@ -111,6 +119,26 @@ void fill_page(Pool& p, uint32_t slot, int salt) {
   for (uint32_t off = tp::kLayerDOff; off + 1 < kPageBytes; off += 2)
     p.put16(slot, off, int16_t(0x7EEE));
   for (uint32_t off = 0; off + 1 < tp::kLayerAOff; off += 2) p.put16(slot, off, int16_t(0x7DDD));
+
+  // ---- LAYER E, written LAST so it overwrites the loud filler above -------
+  // Three bytes per cell, each from a DIFFERENT injective-modulo-256 function
+  // of the cell index, with disjoint low bits so the three cannot be confused:
+  //
+  //     matA   = 5c  + salt        matB = 7c + 0x40 + salt
+  //     weight = 11c + 0x80 + salt
+  //
+  // and the coefficients are coprime with 256 so consecutive cells differ in
+  // all three. WHAT THIS CATCHES THAT A CONSTANT CANNOT: the element is THREE
+  // BYTES at an offset that is odd on two cells in three, so it straddles a
+  // 64-byte burst on about 48 of the 1,024 -- and a carry that reached into
+  // the wrong burst would return a byte from a cell 21 places away, which a
+  // uniform fill renders invisible and this one names.
+  for (uint32_t c = 0; c < kCells; ++c) {
+    const uint32_t a = slot * kPageBytes + tp::kLayerEOff + 3u * c;
+    p.b[a + 0] = mat_a_of(c, salt);
+    p.b[a + 1] = mat_b_of(c, salt);
+    p.b[a + 2] = weight_of(c, salt);
+  }
 }
 
 struct World {
@@ -166,8 +194,17 @@ struct World {
   }
 };
 
+// One layer-E cell beat as the block offered it. `vi`/`vj` are carried so the
+// ORDER can be checked against the walk rather than assumed -- a producer that
+// emitted 1,024 correct triples in the wrong order would satisfy every count.
+struct CellBeat {
+  int vi = 0, vj = 0;
+  uint8_t a = 0, b = 0, w = 0;
+};
+
 struct Run {
   std::vector<tp::LatticeVertex> got;
+  std::vector<CellBeat> cells;
   bool done = false;
   bool ok = false;
   int verdict = -1;
@@ -240,6 +277,15 @@ Run stream(World& w, uint32_t slot, uint32_t gen, uint32_t epoch, uint32_t src, 
       // pass a check that only looked at vertex 0.
       if (d.v_slot != slot || d.v_gen != gen || d.v_epoch != epoch || d.v_src_id != src)
         ++r.ident_bad;
+      if (d.v_cell) {
+        CellBeat cb;
+        cb.vi = int(d.v_vi);
+        cb.vj = int(d.v_vj);
+        cb.a = uint8_t(d.v_mat_a);
+        cb.b = uint8_t(d.v_mat_b);
+        cb.w = uint8_t(d.v_weight);
+        r.cells.push_back(cb);
+      }
     }
     if (d.done_valid && d.done_ready) {
       r.done = true;
@@ -280,6 +326,35 @@ int compare(const char* tag, const std::vector<tp::LatticeVertex>& got,
       if (got[i].vi != want[i].vi || got[i].vj != want[i].vj)
         std::printf("      index  got (%d,%d) want (%d,%d)\n", got[i].vi, got[i].vj, want[i].vi,
                     want[i].vj);
+    }
+  }
+  return bad;
+}
+
+// Layer E, cell by cell, byte by byte, with the FIRST divergence named and the
+// straddle called out -- because the interesting failures here all look like a
+// neighbouring cell's byte and none of them changes a count.
+int compare_cells(const char* tag, const std::vector<CellBeat>& got, int salt) {
+  int bad = 0, printed = 0;
+  for (std::size_t i = 0; i < got.size(); ++i) {
+    const uint32_t c = uint32_t(i);
+    const int want_vi = int(c % kCellEdge), want_vj = int(c / kCellEdge);
+    const uint8_t wa = mat_a_of(c, salt), wb = mat_b_of(c, salt), ww = weight_of(c, salt);
+    if (got[i].vi == want_vi && got[i].vj == want_vj && got[i].a == wa && got[i].b == wb &&
+        got[i].w == ww)
+      continue;
+    ++bad;
+    if (printed < 4) {
+      ++printed;
+      const uint32_t off = tp::kLayerEOff + 3u * c;
+      std::printf("   %s cell %u (vi=%d vj=%d, page byte %u, lane %u%s):\n", tag, c, want_vi,
+                  want_vj, off, off % 64u, (off % 64u) >= 62u ? ", STRADDLES" : "");
+      std::printf("      matA   got %3u want %3u\n", got[i].a, wa);
+      std::printf("      matB   got %3u want %3u\n", got[i].b, wb);
+      std::printf("      weight got %3u want %3u\n", got[i].w, ww);
+      if (got[i].vi != want_vi || got[i].vj != want_vj)
+        std::printf("      index  got (%d,%d) want (%d,%d)\n", got[i].vi, got[i].vj, want_vi,
+                    want_vj);
     }
   }
   return bad;
@@ -330,11 +405,29 @@ int main(int argc, char** argv) {
     ck(d.c_lattices == 1, "A one lattice counted", 1, long(d.c_lattices));
     ck(int(d.c_vertices) == kVerts, "A and 1,089 vertices", kVerts, long(d.c_vertices));
 
+    // ---- LAYER E, R13's per-cell material -------------------------------
+    // 1,024 and not 1,089: the last lattice column and row are shared with the
+    // neighbouring patch and own no cell of this one. A producer that emitted
+    // a cell on every vertex would read 1,089 here, and a producer that reused
+    // the vertex walk's bound without shrinking it would read 992.
+    ck(int(r.cells.size()) == int(kCells), "A one material triple per cell, and no more",
+       int(kCells), int(r.cells.size()));
+    ck(int(d.c_cells) == int(kCells), "A and the block counted them", int(kCells),
+       long(d.c_cells));
+    const int badc = compare_cells("A", r.cells, 1 + 1);
+    ck(badc == 0, "A every layer-E cell matches the page image, byte for byte, in cell order", 0,
+       badc);
+
     // THE READS ARE INSIDE THE SLOT IT WAS TOLD TO READ. A block that ignored
     // `j_slot_i` would pass everything above if the fixture used slot 0, which
     // is why it does not.
     const uint32_t lo = kPoolBase + 1 * kPageBytes;
-    const uint32_t hi = lo + tp::kLayerCOff + tp::kLayerCBytes;
+    // LAYER E IS NOW IN THE WINDOW, so the bound moves from the end of plane C
+    // to the end of layer E -- and it is the END OF THE BURST holding E's last
+    // byte, because reads are burst-aligned and the last one legitimately
+    // reaches past the layer into the 64-byte burst that contains its tail.
+    const uint32_t e_end = tp::kLayerEOff + tp::kLayerEBytes;  // 10,694
+    const uint32_t hi = lo + ((e_end + 63u) & ~63u);
     ck(d.first_rd_addr >= lo, "A the lowest read address is inside slot 1", long(lo),
        long(d.first_rd_addr));
     ck(d.last_rd_addr < hi,
@@ -360,8 +453,22 @@ int main(int argc, char** argv) {
     // per distinct value of `(P + 2k) >> 6` over k in 0..1088. That is
     // floor((P + 2176) / 64) - floor(P / 64) + 1.
     auto bursts_for = [](uint32_t off) { return (off + 2176u) / 64u - off / 64u + 1u; };
+    // LAYER E IS DERIVED THE SAME WAY, and its arithmetic is its own because
+    // its element is not the height planes'. Cell c sits at E_OFF + 3c and the
+    // buffer is aligned on the cell's LAST byte, so the block needs one burst
+    // per distinct value of `(E_OFF + 3c + 2) >> 6` over c in 0..1023.
+    //
+    // THE COST IS RECORDED RATHER THAN HIDDEN: 105 bursts became 154, which is
+    // +47% of this block's read bandwidth for the page. That is what a layer
+    // nobody read costs to start reading, it is the price of ruling R13's
+    // per-cell material, and the number belongs in the test that would
+    // otherwise silently absorb it.
+    auto e_bursts_for = [](uint32_t off, uint32_t cells) {
+      return (off + 3u * (cells - 1u) + 2u) / 64u - (off + 2u) / 64u + 1u;
+    };
     const uint32_t expect_bursts =
-        bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) + bursts_for(tp::kLayerCOff);
+        bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) + bursts_for(tp::kLayerCOff) +
+        e_bursts_for(tp::kLayerEOff, kCells);
     ck(d.c_bursts == expect_bursts,
        "A it read exactly the bursts the layout requires -- no re-reads, no prefetch",
        long(expect_bursts), long(d.c_bursts));

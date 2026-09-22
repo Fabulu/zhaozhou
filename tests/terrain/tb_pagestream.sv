@@ -97,6 +97,12 @@ module tb_pagestream
     output var logic [15:0] v_flags,
     output var logic [ 7:0] v_view_mask,
 
+    // ---- layer E, R13's per-cell material, on the same beat ---------------
+    output var logic        v_cell,
+    output var logic [ 7:0] v_mat_a,
+    output var logic [ 7:0] v_mat_b,
+    output var logic [ 7:0] v_weight,
+
     // ---- completion -------------------------------------------------------
     output var logic        done_valid,
     input  var logic        done_ready,
@@ -114,6 +120,7 @@ module tb_pagestream
     output var logic [31:0] c_bursts,
     output var logic [31:0] c_guard_denied,
     output var logic [31:0] c_incomplete,
+    output var logic [31:0] c_cells,
     output var logic        c_idle,
 
     // ---- what the BENCH saw -------------------------------------------------
@@ -204,6 +211,11 @@ module tb_pagestream
       .v_flags_o (v_flags),
       .v_view_mask_o(v_view_mask),
 
+      .v_cell_o  (v_cell),
+      .v_mat_a_o (v_mat_a),
+      .v_mat_b_o (v_mat_b),
+      .v_weight_o(v_weight),
+
       .done_valid_o  (done_valid),
       .done_ready_i  (done_ready),
       .done_slot_o   (d_done_slot),
@@ -219,6 +231,7 @@ module tb_pagestream
       .bursts_read_o      (c_bursts),
       .guard_denied_o     (c_guard_denied),
       .incomplete_o       (c_incomplete),
+      .cells_streamed_o   (c_cells),
       .idle_o             (c_idle)
   );
 

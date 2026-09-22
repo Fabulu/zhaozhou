@@ -114,6 +114,14 @@ constexpr uint32_t kFTop = 1, kFBot = 2, kFWx = 3, kFWz = 4;
 inline uint32_t word(uint32_t field, uint32_t patch, uint32_t idx) {
   return (field << 28) | (patch << 24) | idx;
 }
+// Ruling R13's layer-E material, three different functions of the cell so an
+// off-by-one cell and a swapped field fail differently. Same shape as
+// `subst()` above and for the same reason: the fixture is a FUNCTION, so the
+// write side and the readback expectation cannot drift apart.
+inline uint8_t mat_a_of(int ci, int cj) { return static_cast<uint8_t>(5 * ci + 11 * cj + 0x21); }
+inline uint8_t mat_b_of(int ci, int cj) { return static_cast<uint8_t>(13 * ci + 3 * cj + 0x8E); }
+inline uint8_t mat_w_of(int ci, int cj) { return static_cast<uint8_t>(7 * ci + 9 * cj + 0x40); }
+
 inline uint8_t subst(uint32_t patch, int ci, int cj) {
   return static_cast<uint8_t>((static_cast<uint32_t>(ci) + 2u * static_cast<uint32_t>(cj) + patch) &
                               3u);
@@ -1324,6 +1332,15 @@ int main(int argc, char** argv) {
   d.s_st_src_id = 0;
   d.s_dual = 0;
   d.s_cs_we = 0;
+  d.s_mat_we = 0;
+  d.s_mat_w_ci = 0;
+  d.s_mat_w_cj = 0;
+  d.s_mat_w_a = 0;
+  d.s_mat_w_b = 0;
+  d.s_mat_w_weight = 0;
+  d.s_mat_req = 0;
+  d.s_mat_ci = 0;
+  d.s_mat_cj = 0;
   d.s_cs_w_ci = 0;
   d.s_cs_w_cj = 0;
   d.s_cs_w_substance = 0;
@@ -1908,7 +1925,6 @@ int main(int argc, char** argv) {
     d.s_fill_start = 1;
     zhao::tick(d);
     d.s_fill_start = 0;
-
     int sn = 0, scn = 0, takes = 0, ready_phase1 = 0;
     bool prev_take = false;
     for (int cyc = 0; cyc < 4000 && (sn < kSVerts || scn < 64); ++cyc) {
@@ -1921,8 +1937,30 @@ int main(int argc, char** argv) {
         d.s_cs_w_ci = static_cast<uint8_t>(scn % 8);
         d.s_cs_w_cj = static_cast<uint8_t>(scn / 8);
         d.s_cs_w_substance = subst(2, scn % 8, scn / 8);
+        // R13's layer E, written on the SAME 64-cell walk. In the console the
+        // two planes have different producers on different walks, which is why
+        // the module keeps their write enables apart; here one loop drives
+        // both, and that is the bench's convenience, not the module's law.
+        d.s_mat_we = 1;
+        d.s_mat_w_ci = static_cast<uint8_t>(scn % 8);
+        d.s_mat_w_cj = static_cast<uint8_t>(scn / 8);
+        d.s_mat_w_a = mat_a_of(scn % 8, scn / 8);
+        d.s_mat_w_b = mat_b_of(scn % 8, scn / 8);
+        d.s_mat_w_weight = mat_w_of(scn % 8, scn / 8);
       } else {
+        // BOTH write enables, and the second one is why this comment exists.
+        // The first draft cleared `s_cs_we` alone -- copied from the line
+        // above, which is correct for it -- and left `s_mat_we` high. The
+        // address registers keep their LAST value, so the plane went on being
+        // written at cell (7,7) for the ~97 cycles the 81 vertex records still
+        // needed, and `mat_cells_o` read 161 instead of 64.
+        //
+        // Note which way that failed: the counter read HIGH, so the bench said
+        // "too many cells" when the RTL was fine. A bench bug that reads LOW
+        // would have looked like the missing-row fault the counter exists to
+        // catch, and been chased in the module.
         d.s_cs_we = 0;
+        d.s_mat_we = 0;
       }
       d.eval();
       if (prev_take && d.s_st_ready) ++ready_phase1;
@@ -1937,6 +1975,7 @@ int main(int argc, char** argv) {
     }
     d.s_st_valid = 0;
     d.s_cs_we = 0;
+    d.s_mat_we = 0;
     // A FILL IS NOT FINISHED WHEN ITS LAST RECORD IS TAKEN. The acceptance is
     // the TOP write; the bottom lands on the next clock, the cursor reaches
     // capacity at the end of that one, and the handover is the clock after
@@ -2017,6 +2056,67 @@ int main(int argc, char** argv) {
        "and cs_oob_o counts every one of them: the alarm that cannot be made to sound at "
        "33 x 33 is shown to sound here",
        n_oob, static_cast<long long>(d.s_cs_oob - coob0));
+
+    // =====================================================================
+    // RULING R13's LAYER-E PLANE, on the instance small enough to fault
+    // =====================================================================
+    // `mat_oob_o` is STRUCTURALLY UNREACHABLE at the production 33 x 33: TESS
+    // clamps its cell to 0..31 and every value a 5-bit port can carry is in
+    // range. That is exactly the situation `cs_oob_o` is in two blocks above,
+    // and it is why this instance exists -- a counter that cannot be made to
+    // sound is a counter nobody has tested, whatever it reads.
+    ck(d.s_mat_cells == 64,
+       "R13 the 9 x 9 instance took all 64 layer-E cells of its fill -- mat_cells_o is cleared "
+       "PER FILL, so it answers 'did THIS patch get its cells' rather than a running total",
+       64, static_cast<long long>(d.s_mat_cells));
+
+    const uint32_t moob0 = d.s_mat_oob;
+    int mbad = 0, mvbad = 0;
+    for (int cj = 0; cj < 8; ++cj)
+      for (int ci = 0; ci < 8; ++ci) {
+        d.s_mat_req = 1;
+        d.s_mat_ci = static_cast<uint8_t>(ci);
+        d.s_mat_cj = static_cast<uint8_t>(cj);
+        zhao::tick(d);
+        d.s_mat_req = 0;
+        d.eval();
+        if (d.s_mat_a != mat_a_of(ci, cj) || d.s_mat_b != mat_b_of(ci, cj) ||
+            d.s_mat_weight != mat_w_of(ci, cj))
+          ++mbad;
+        if (!d.s_mat_valid) ++mvbad;
+        zhao::tick(d);
+      }
+    ck(mbad == 0, "R13 all 64 cells of the layer-E plane read back byte for byte", 0, mbad);
+    ck(mvbad == 0, "R13 with mat_valid_o high on every one of them", 0, mvbad);
+    ck(d.s_mat_oob == moob0,
+       "R13 and none of those in-range reads counted out of bounds", 0,
+       static_cast<long long>(d.s_mat_oob - moob0));
+
+    int mpoison_bad = 0, m_noob = 0;
+    for (int ci = 8; ci < 32; ++ci) {
+      d.s_mat_req = 1;
+      d.s_mat_ci = static_cast<uint8_t>(ci);
+      d.s_mat_cj = 3;
+      zhao::tick(d);
+      d.s_mat_req = 0;
+      d.eval();
+      // A MATERIAL TRIPLE HAS NO SPARE ENCODING -- {0,0,0} is a legal cell
+      // (terrain_rules SS6.2 makes weight 0 'matB everywhere') -- so unlike the
+      // substance port's 2'd3 the not-answered signal is a BIT, and the bit is
+      // what this checks. The zeros beside it are the module's declared value,
+      // not a poison a consumer has to recognise.
+      if (d.s_mat_valid) ++mpoison_bad;
+      if (d.s_mat_a != 0 || d.s_mat_b != 0 || d.s_mat_weight != 0) ++mpoison_bad;
+      ++m_noob;
+      zhao::tick(d);
+    }
+    ck(mpoison_bad == 0,
+       "R13 a layer-E request outside the plane lowers mat_valid_o and returns {0,0,0}", 0,
+       mpoison_bad);
+    ck(d.s_mat_oob - moob0 == static_cast<uint32_t>(m_noob),
+       "R13 and mat_oob_o FIRES on every one of them: the alarm that cannot be made to sound "
+       "at 33 x 33 is shown to sound here",
+       m_noob, static_cast<long long>(d.s_mat_oob - moob0));
 
     const uint32_t loob0 = d.s_lat_oob;
     int lpoison_bad = 0;

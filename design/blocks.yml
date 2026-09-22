@@ -2099,17 +2099,17 @@ blocks:
     phase: 6
     owner_issue: ZH-126
     inputs: [page_lattice_jobs]
-    outputs: [page_lattice_stream]
+    outputs: [page_lattice_stream, page_cell_material]
     upstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPFEED]
     downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH, TERRAIN.MIPFEED]
     backpressure: ready_valid
     latency: variable
-    target_throughput: "one 33x33 lattice per 3,544 gpu clocks measured on the played fabric at 2-cycle read latency; 105 bursts, derived from the layout rather than observed"
+    target_throughput: "one 33x33 lattice per 4,181 gpu clocks measured on the played fabric at 2-cycle read latency; 154 bursts, derived from the layout rather than observed. WAS 105 bursts / 3,544 clocks before ruling R13's layer E joined the read window on 2026-09-22 -- +49 bursts and +47% of this block's read bandwidth for the page, which is what a layer nobody read costs to start reading. Recorded, not absorbed."
     reference_model: zref::terrain::page_lattice
     tests:
       directed: tests/terrain/pagestream_rtl_directed.cpp
       random: tests/terrain/pagestream_rtl_directed.cpp
-    counters: [pagestream_lattices, pagestream_refused, pagestream_vertices, pagestream_bursts, pagestream_guard_denied, pagestream_incomplete]
+    counters: [pagestream_lattices, pagestream_refused, pagestream_vertices, pagestream_bursts, pagestream_guard_denied, pagestream_incomplete, pagestream_cells]
     counter_ports:
       pagestream_lattices: lattices_streamed_o
       pagestream_refused: lattices_refused_o
@@ -2117,6 +2117,7 @@ blocks:
       pagestream_bursts: bursts_read_o
       pagestream_guard_denied: guard_denied_o
       pagestream_incomplete: incomplete_o
+      pagestream_cells: cells_streamed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2671,10 +2672,10 @@ blocks:
     contract: design/contracts/TERRAIN.TESS.md
     phase: 6
     owner_issue: ZH-034
-    inputs: [patch_state, lod_target]
-    outputs: [terrain_mesh]
+    inputs: [patch_state, lod_target, cell_material]
+    outputs: [terrain_mesh, triangle_material]
     upstream: [TERRAIN.PATCH, TERRAIN.COMPCACHE]
-    downstream: [TERRAIN.NORMALS, FORGE.CLIFF]
+    downstream: [TERRAIN.NORMALS, FORGE.CLIFF, TERRAIN.GROUP_SEQ]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 emitted vertex per clock
@@ -2682,7 +2683,14 @@ blocks:
     tests:
       directed: tests/terrain/terrain_tess_directed.cpp
       random: tests/terrain/terrain_tess_random.cpp
-    counters: [terrain_triangles_emitted]
+    counters: [terrain_triangles_emitted, mat_unarmed]
+    # R110: a counter is NAMED or it is not checkable. The map was absent
+    # before `mat_unarmed` joined, which is how `check_counters` came to list
+    # this block among the unnamed; adding an eighth counter to an unnamed set
+    # would have made the report one line worse and said nothing.
+    counter_ports:
+      terrain_triangles_emitted: terrain_triangles_emitted_o
+      mat_unarmed: mat_unarmed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2699,7 +2707,22 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Crack-safety is a formal candidate (stitch invariants).
+    notes: >-
+      Crack-safety is a formal candidate (stitch invariants).
+
+      RULING R13'S LAYER-E READER LIVES HERE, added 2026-09-22 (LAYERE). The
+      per-cell base material {matA, matB, weight} is read at tessellation, by
+      the TRIANGLE's own cell, and leaves on the ModeRef triple. The cell is
+      the per-axis MINIMUM lattice corner, which on the unstitched path is an
+      identity rather than a choice: SS4.3's pair puts both triangles of a cell
+      inside {i0, i0+s} x {j0, j0+s}, so the minimum IS the run-cell origin,
+      and at level 0 the run-cell is the patch cell. At stride > 1 and on a
+      ring fan it is a declared choice with its rejected alternatives recorded
+      in the RTL.
+
+      This REPLACED `job_mat_a`/`job_mat_b`/`job_weight` on TERRAIN.GROUP_SEQ's
+      job port, which R13 ruled the wrong carrier and which are now removed
+      from the console boundary entirely.
 
   - id: TERRAIN.COMPCACHE
     name: Composed-lattice patch front
@@ -2710,8 +2733,8 @@ blocks:
     contract: design/contracts/TERRAIN.COMPCACHE.md
     phase: 6
     owner_issue: ZH-125
-    inputs: [patch_state, lattice_placement, cell_state]
-    outputs: [lattice_reads, cell_reads]
+    inputs: [patch_state, lattice_placement, cell_state, cell_material]
+    outputs: [lattice_reads, cell_reads, material_reads]
     upstream: [TERRAIN.PATCH, TERRAIN.SEQ]
     downstream: [TERRAIN.TESS]
     backpressure: ready_valid
@@ -2721,7 +2744,16 @@ blocks:
     tests:
       directed: tests/terrain/compcache_front_rtl_directed.cpp
       random: tests/terrain/compcache_front_rtl_directed.cpp
-    counters: [compcache_fill_records, compcache_patches_filled, compcache_patches_served, compcache_fill_overrun, compcache_lat_oob, compcache_cs_oob]
+    counters: [compcache_fill_records, compcache_patches_filled, compcache_patches_served, compcache_fill_overrun, compcache_lat_oob, compcache_cs_oob, compcache_mat_oob, compcache_mat_cells]
+    counter_ports:
+      compcache_fill_records: fill_records_o
+      compcache_patches_filled: patches_filled_o
+      compcache_patches_served: patches_served_o
+      compcache_fill_overrun: fill_overrun_o
+      compcache_lat_oob: lat_oob_o
+      compcache_cs_oob: cs_oob_o
+      compcache_mat_oob: mat_oob_o
+      compcache_mat_cells: mat_cells_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED

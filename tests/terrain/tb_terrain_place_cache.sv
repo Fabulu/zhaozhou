@@ -197,6 +197,15 @@ module tb_terrain_place_cache (
   logic [31:0] cs_oob_w;
   /* verilator lint_on UNUSEDSIGNAL */
 
+  // Layer E is not exercised by this bench -- it is about TERRAIN.PLACE's
+  // burst landing in the right buffer parity -- so the port is named and
+  // grounded rather than left to a PINMISSING somebody discovers in a fit.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [7:0]  mat_a_w, mat_b_w, mat_weight_w;
+  wire        mat_valid_w;
+  wire [31:0] mat_oob_w, mat_cells_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   zhao_terrain_compcache_front #(
       .LAT_W(33),
       .LAT_H(33)
@@ -220,6 +229,13 @@ module tb_terrain_place_cache (
       .pos_idx_i (pos_idx_w),
       .pos_val_i (pos_val_w),
 
+      .mat_we_i      (1'b0),
+      .mat_w_ci_i    (5'd0),
+      .mat_w_cj_i    (5'd0),
+      .mat_w_a_i     (8'd0),
+      .mat_w_b_i     (8'd0),
+      .mat_w_weight_i(8'd0),
+
       .cs_we_i         (1'b0),
       .cs_w_ci_i       (5'd0),
       .cs_w_cj_i       (5'd0),
@@ -241,6 +257,14 @@ module tb_terrain_place_cache (
       .lat_wx_o     (lat_wx),
       .lat_wz_o     (lat_wz),
 
+      .mat_req_i   (1'b0),
+      .mat_ci_i    (5'd0),
+      .mat_cj_i    (5'd0),
+      .mat_a_o     (mat_a_w),
+      .mat_b_o     (mat_b_w),
+      .mat_weight_o(mat_weight_w),
+      .mat_valid_o (mat_valid_w),
+
       .cs_req_i      (1'b0),
       .cs_ci_i       (5'd0),
       .cs_cj_i       (5'd0),
@@ -251,7 +275,9 @@ module tb_terrain_place_cache (
       .patches_served_o(patches_served),
       .fill_overrun_o  (fill_overrun),
       .lat_oob_o       (lat_oob),
-      .cs_oob_o        (cs_oob_w)
+      .cs_oob_o        (cs_oob_w),
+      .mat_oob_o       (mat_oob_w),
+      .mat_cells_o     (mat_cells_w)
   );
 
 endmodule

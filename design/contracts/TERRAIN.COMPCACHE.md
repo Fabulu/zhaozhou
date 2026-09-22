@@ -117,6 +117,50 @@ Substance has no spare encoding in two bits and inventing one would change
 TESS's port, so it returns 3 (§3.3 gives 0 = SOLID, so 3 is not the dangerous
 default) and **the counter is the alarm**, not the value.
 
+## The layer-E material plane (ruling R13)
+
+Added 2026-09-22 (packet LAYERE). A third plane beside the lattice and the
+substance: `mat_m[2*CELLS]`, 24 bits per cell, `{matA, matB, weight}` as ONE
+word because they are never read apart. 2 × 1,024 × 24 b = **49,152 bit = 6
+M10K**, which is 2,048 deep in the 2048x4 mode and therefore six of them side
+by side to make 24 bits wide — not the 49,152/10,240 = 4.8 a bit count alone
+suggests, because an M10K's depth and width trade against each other and 2,048
+deep costs the narrow mode. ALM traded for M10K, the direction this device has
+slack in.
+
+**Why it is here and not in a block of its own — the ARMING LAW, not the
+storage.** A material plane must be double-buffered by the same parity as the
+heights and the substance, released by the same pulse, and armed on the same
+cycle. A separate block would have had to COPY `fill_par_q`, `serve_par_q` and
+the handover branch, and `zhao_terrain_spdesc`'s header already records this
+tree's rule that two blocks arming off one event must not have two laws. A copy
+of an arming law diverges in the direction nobody looks: patch N's material
+under patch N+1's heights, which **renders**.
+
+**The address is `CW` wide — the WHOLE array.** This is the mistake the `CW`
+paragraph above records: `$clog2(CELLS)` truncated 1,024 to zero and aliased
+both parities onto the same cells. A material plane aliasing that way is worse
+than a height one, because a wrong tile id moves nothing and no geometric check
+would catch it.
+
+**The write face is `cs_we_i`'s, fire and forget** — but written out separately
+rather than shared, because the two planes have DIFFERENT PRODUCERS on
+different walks: substance arrives from TERRAIN.BAKE's cell stream, material
+from TERRAIN.PAGESTREAM's vertex beat. One enable driving both is the lockstep
+this file warns about one level up.
+
+**`mat_req_ok_q` is a separate flop from `cs_req_ok_q`**, and that is load
+bearing: TESS scans substance once per JOB and reads material once per
+TRIANGLE, so one accept flop serving both would make `mat_valid_o` a statement
+about whether a CELL-STATE request was in range — true on every cycle the other
+port was busy.
+
+**A material triple has NO SPARE ENCODING.** `{0,0,0}` is a legal cell
+(terrain_rules §6.2: weight 0 means "matB everywhere", so it is tile 0), and
+every one of the 2²⁴ words is reachable from a legal page. So unlike the
+lattice's `0x5BADF00D` the not-answered signal is a BIT, `mat_valid_o`, and the
+consumer declares what it emits.
+
 ## Counters
 
 `fill_records` (records into the current fill), `patches_filled`,

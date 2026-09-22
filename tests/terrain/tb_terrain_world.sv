@@ -1346,9 +1346,17 @@ module tb_terrain_world
   logic [3:0]        ps_d_verdict;
   logic [31:0]       ps_vertices, ps_guard_denied, ps_incomplete;
   logic [15:0]       ps_v_flags;
-  /* verilator lint_off UNUSEDSIGNAL */
+  // `lint_off`/`lint_on` DO NOT NEST, and this pair used to prove it. An
+  // inner `lint_on` here -- added with entry I21's forwarded field, inside a
+  // region that was ALREADY suppressing UNUSEDSIGNAL -- re-enabled the warning
+  // for everything after it, so the fifteen deliberately-unread signals below
+  // were exposed and `lint_terrain_world` was RED. The outer `lint_on` twelve
+  // lines down had nothing left to close.
+  //
+  // Verified pre-existing rather than assumed: the identical fifteen warnings
+  // reproduce on the merge base's own copy of this file, linted against the
+  // merge base's `zhao_terrain_pagestream`.
   logic [ 7:0]       ps_v_view_mask;   // entry I21's forwarded field
-  /* verilator lint_on UNUSEDSIGNAL */
   logic              ps_idle, mf_idle, mg_busy;
   logic [SLOTW-1:0]  mg_done_slot;
   logic [GENW-1:0]   mg_done_gen;
@@ -1358,6 +1366,12 @@ module tb_terrain_world
   logic [6:0]        mg_m9_addr;
   logic              mg_m17_surf, mg_m9_surf;
   logic [15:0]       mg_m17_h, mg_m9_h;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire       ps_v_cell;
+  wire [7:0] ps_v_mat_a, ps_v_mat_b, ps_v_weight;
+  wire [31:0] ps_cells;
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_terrain_pagestream #(
@@ -1409,6 +1423,14 @@ module tb_terrain_world
       .v_flags_o (ps_v_flags),
       .v_view_mask_o(ps_v_view_mask),
 
+      // Layer E is streamed but not consumed here: this bench is about
+      // residency and the height lattice, and naming the ports is how a
+      // PINMISSING stays impossible rather than a matter of remembering.
+      .v_cell_o  (ps_v_cell),
+      .v_mat_a_o (ps_v_mat_a),
+      .v_mat_b_o (ps_v_mat_b),
+      .v_weight_o(ps_v_weight),
+
       .done_valid_o  (ps_d_valid),
       .done_ready_i  (ps_d_ready),
       .done_slot_o   (ps_d_slot),
@@ -1424,6 +1446,7 @@ module tb_terrain_world
       .bursts_read_o      (ps_bursts),
       .guard_denied_o     (ps_guard_denied),
       .incomplete_o       (ps_incomplete),
+      .cells_streamed_o   (ps_cells),
       .idle_o             (ps_idle)
   );
 

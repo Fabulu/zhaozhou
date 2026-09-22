@@ -1099,9 +1099,6 @@ module zhao_console_core_slot_overflow_mutant
   // has no port for any of them and refuses them by name in its own header --
   // inventing them in this composer is exactly the hidden-adapter failure
   // entry I21 has warned against since it was written.
-  input  logic [7:0]              terr_job_mat_a_i,
-  input  logic [7:0]              terr_job_mat_b_i,
-  input  logic [7:0]              terr_job_weight_i,
   // `terr_sparse_fill_i` ALSO STAYS, and for the opposite reason to the three
   // above: it is not a job field at all. `zhao_terrain_group_seq`'s own header
   // calls it an OWNER KNOB -- legal only against a VALID_MODE = 0 shell, and
@@ -1270,6 +1267,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_ps_bursts_o,
   output logic [31:0]             terr_ps_guard_denied_o,
   output logic [31:0]             terr_ps_incomplete_o,
+  output logic [31:0]             terr_ps_cells_o,
   output logic                    terr_ps_idle_o,
   // A TAP on the streamer's completion, not a handshake: the READY belongs to
   // TERRAIN.RESIDENCY's unpin port inside this module.  Exported so a refusal
@@ -1333,6 +1331,8 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_cc_fill_overrun_o,
   output logic [31:0]             terr_cc_lat_oob_o,
   output logic [31:0]             terr_cc_cs_oob_o,
+  output logic [31:0]             terr_cc_mat_oob_o,
+  output logic [31:0]             terr_cc_mat_cells_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
@@ -1542,6 +1542,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_tess_refs_o,
   output logic [31:0]             terr_tess_rejected_o,
   output logic [31:0]             terr_tess_lod_clamped_o,
+  output logic [31:0]             terr_tess_mat_unarmed_o,
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 

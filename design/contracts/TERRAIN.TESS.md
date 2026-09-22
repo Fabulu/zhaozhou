@@ -79,6 +79,77 @@ Plus `terrain_triangles_emitted_o`, `subpatch_rejected_o`, `lod_clamped_o`
 (spec/counters.md §4 — the three older counters wrap and were left as they
 are). `terrain_triangles_emitted_o` counts mode-0 triangles only.
 
+## Ruling R13 — the per-triangle layer-E path
+
+Added 2026-09-22 (packet LAYERE). This block owns the LAYER-E READER, and the
+ruling puts it here rather than in the composer or on a second reader of the
+store:
+
+> R13: *"Join PER TRIANGLE, by the triangle's cell. The per-cell layer-E value
+> is read at tessellation, where the triangle's cell is known, and travels with
+> the triangle. The job port is not widened to carry a subpatch-uniform value
+> that is not true."*
+
+**The read port.** `mat_req_o` / `mat_ci_o` / `mat_cj_o` →
+`mat_a_i` / `mat_b_i` / `mat_w_i` / `mat_valid_i`. Registered, one cycle,
+**the same shape as `cs_*`** so the two queries live on the same kind of plane
+and neither needs a walk of its own. The responder is
+`zhao_terrain_compcache_front`'s material plane, armed by the same
+`serve_valid_q` as the heights.
+
+**The cell is the per-axis MINIMUM lattice corner of the triangle.** On the
+unstitched path that is an identity, not a choice: §4.3's pair is
+`(i00, i11, i10)` then `(i00, i01, i11)`, so both triangles of a run-cell have
+their three corners inside `{i0, i0+s} × {j0, j0+s}` and the per-axis minimum is
+exactly `(i0, j0)` — the run-cell origin, which at level 0 IS the patch cell.
+
+Two places a choice **is** made, and both are declared rather than discovered:
+
+| case | law | rejected alternative |
+|---|---|---|
+| stride > 1 | the run-cell's ORIGIN cell | the centre cell (no more correct, one adder per axis); a per-run-cell majority vote (up to 64 reads to pick a tile id) |
+| a ring fan | the min corner of its footprint | nothing cheaper exists — the annulus walk is not aligned to run-cells at all |
+
+Coarsening already erases detail (§4.4 keeps moved ground fine), and a material
+that changes when the LOD changes is the same class of artefact as a height
+that does. The cost is stated rather than hidden.
+
+**The clamp on the cell index cannot fire and is still written.** A lattice
+coordinate runs 0..32 and a cell index 0..31, so an unclamped 5-bit truncation
+of 32 would wrap to cell 0 — the exact fault
+`zhao_terrain_compcache_front` records at its own write port. The minimum of a
+non-degenerate triangle's three corners is at most 31, because its maximum is
+strictly greater and at most 32. So the clamp is unreachable, and **it gets no
+counter for precisely that reason**: a counter nothing can move is a
+reassurance, not an instrument.
+
+**ModeRef carries it; ModeTri does not.** ModeRef is the stream that reaches
+`zhao_project_core`'s `ref_mat_*_i` — the very port the console's three
+subpatch-uniform riders used to terminate in. ModeTri's consumer is
+TERRAIN.NORMALS, which wants no material, and a port nobody waits on is a
+manufactured rise.
+
+**The ModeRef output is a two-deep credit-gated queue, and that is the price of
+the read.** ModeRef performed no read before, so the triple and its identity
+were registered in one cycle. A registered layer-E read puts ONE item in
+flight, so driving `ref_mat_a_o` from the live `mat_a_i` beside an `r_valid`
+set a cycle earlier is the I39 fault in one line: the response register has
+already moved on the moment the shell stalls, and the triple ships under the
+NEXT triangle's material with every counter balancing. The triple therefore
+rides a pend register to its landing, for the same reason `pend_idx` exists —
+by the time the material lands the enumerator has ADVANCED. Depth 2 with one
+item in flight keeps the old rate: steady state `1 + 1 − 1 = 1 ≤ 1`, one
+triangle per clock. Latency grows by one cycle; the initiation rate does not.
+
+**`mat_unarmed_o`.** A read answered unarmed or out of range. Its two operands
+are clocked by **different enables in different modules** — the responder's
+arming register against this block's enumerator — which is the condition to
+establish before a detector is trusted. It is reachable with legal stimulus and
+`terrain_tess_directed` §11b FIRES it, once per triple, with the armed run's
+zero recorded as a negative control first. On an unarmed read this block emits
+the **declared** `{0, 0, 0}`, which terrain_rules §6.2 makes "matB everywhere"
+— one defined appearance, not whatever the responder's memory held.
+
 ## Backpressure rules
 
 Ready/valid on the job port and the mesh port. A stalled consumer stalls the

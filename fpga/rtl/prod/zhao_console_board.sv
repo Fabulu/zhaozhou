@@ -1642,9 +1642,6 @@ module zhao_console_board
   // has no port for any of them and refuses them by name in its own header --
   // inventing them in this composer is exactly the hidden-adapter failure
   // entry I21 has warned against since it was written.
-  input  logic [7:0]              terr_job_mat_a_i,
-  input  logic [7:0]              terr_job_mat_b_i,
-  input  logic [7:0]              terr_job_weight_i,
   // `terr_sparse_fill_i` ALSO STAYS, and for the opposite reason to the three
   // above: it is not a job field at all. `zhao_terrain_group_seq`'s own header
   // calls it an OWNER KNOB -- legal only against a VALID_MODE = 0 shell, and
@@ -1847,6 +1844,11 @@ module zhao_console_board
   output logic [31:0]             terr_ps_bursts_o,
   output logic [31:0]             terr_ps_guard_denied_o,
   output logic [31:0]             terr_ps_incomplete_o,
+  // Layer E, R13. Cell beats TERRAIN.PAGESTREAM offered and had taken; 1,024
+  // per page. Paired with `terr_cc_mat_cells_o`, which is the same quantity
+  // counted at the OTHER end by a different enable in a different module, so
+  // the two disagreeing is a real signal rather than a tautology.
+  output logic [31:0]             terr_ps_cells_o,
   output logic                    terr_ps_idle_o,
   // A TAP on the streamer's completion, not a handshake: the READY belongs to
   // TERRAIN.RESIDENCY's unpin port inside this module.  Exported so a refusal
@@ -1910,6 +1912,8 @@ module zhao_console_board
   output logic [31:0]             terr_cc_fill_overrun_o,
   output logic [31:0]             terr_cc_lat_oob_o,
   output logic [31:0]             terr_cc_cs_oob_o,
+  output logic [31:0]             terr_cc_mat_oob_o,
+  output logic [31:0]             terr_cc_mat_cells_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
@@ -2119,6 +2123,9 @@ module zhao_console_board
   output logic [31:0]             terr_tess_refs_o,
   output logic [31:0]             terr_tess_rejected_o,
   output logic [31:0]             terr_tess_lod_clamped_o,
+  // A layer-E read answered UNARMED or out of range. See the port's own note
+  // in zhao_terrain_tess.sv for why its two operands are not in lockstep.
+  output logic [31:0]             terr_tess_mat_unarmed_o,
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 
@@ -4302,9 +4309,6 @@ module zhao_console_board
       .terr_job_src_id_i                  (terr_job_src_id_i),
       .terr_job_view_mask_i               (terr_job_view_mask_i),
       .terr_ji_view_mask_high_o           (terr_ji_view_mask_high_o),
-      .terr_job_mat_a_i                   (terr_job_mat_a_i),
-      .terr_job_mat_b_i                   (terr_job_mat_b_i),
-      .terr_job_weight_i                  (terr_job_weight_i),
       .terr_sparse_fill_i                 (terr_sparse_fill_i),
       .terr_cmd_valid_i                   (terr_cmd_valid_i),
       .terr_cmd_ready_o                   (terr_cmd_ready_o),
@@ -4384,6 +4388,7 @@ module zhao_console_board
       .terr_ps_bursts_o                   (terr_ps_bursts_o),
       .terr_ps_guard_denied_o             (terr_ps_guard_denied_o),
       .terr_ps_incomplete_o               (terr_ps_incomplete_o),
+      .terr_ps_cells_o                    (terr_ps_cells_o),
       .terr_ps_idle_o                     (terr_ps_idle_o),
       .terr_ps_done_valid_o               (terr_ps_done_valid_o),
       .terr_ps_done_ok_o                  (terr_ps_done_ok_o),
@@ -4421,6 +4426,8 @@ module zhao_console_board
       .terr_cc_fill_overrun_o             (terr_cc_fill_overrun_o),
       .terr_cc_lat_oob_o                  (terr_cc_lat_oob_o),
       .terr_cc_cs_oob_o                   (terr_cc_cs_oob_o),
+      .terr_cc_mat_oob_o                  (terr_cc_mat_oob_o),
+      .terr_cc_mat_cells_o                (terr_cc_mat_cells_o),
       .terr_cmd_sets_accepted_o           (terr_cmd_sets_accepted_o),
       .terr_cmd_sets_refused_o            (terr_cmd_sets_refused_o),
       .terr_cmd_records_emitted_o         (terr_cmd_records_emitted_o),
@@ -4551,6 +4558,7 @@ module zhao_console_board
       .terr_tess_refs_o                   (terr_tess_refs_o),
       .terr_tess_rejected_o               (terr_tess_rejected_o),
       .terr_tess_lod_clamped_o            (terr_tess_lod_clamped_o),
+      .terr_tess_mat_unarmed_o            (terr_tess_mat_unarmed_o),
       .terr_tess_mode_invalid_o           (terr_tess_mode_invalid_o),
       .terr_tess_idle_o                   (terr_tess_idle_o),
       .proj_out_valid_o                   (proj_out_valid_o),

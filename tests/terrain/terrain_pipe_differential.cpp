@@ -21,6 +21,7 @@
 #include "Vzhao_terrain_pipe.h"
 #include "Vzhao_terrain_project.h"
 #include "project_dev.hpp"
+#include "layere_fixture.hpp"
 #include "zhao_sim.hpp"
 #include "zref/zref_terrain.hpp"
 #include "zref/zref_terrain_tess.hpp"
@@ -41,7 +42,6 @@ struct Spec {
   bool dual = true;
   uint8_t views = 1;
   uint16_t src = 0;
-  uint8_t mat_a = 0, mat_b = 0, weight = 0;
   bool sparse = false;
 };
 struct PipePacket {
@@ -110,10 +110,11 @@ class PipeDriver {
     d_.job_dual_i = 0;
     d_.job_src_id_i = 0;
     d_.job_view_mask_i = 0;
-    d_.job_mat_a_i = 0;
-    d_.job_mat_b_i = 0;
-    d_.job_weight_i = 0;
     d_.sparse_fill_i = 0;
+    d_.mat_a_i = 0;
+    d_.mat_b_i = 0;
+    d_.mat_w_i = 0;
+    d_.mat_valid_i = 0;
     d_.lat_h_i = kPoison;
     d_.lat_wx_i = kPoison;
     d_.lat_wz_i = kPoison;
@@ -127,6 +128,7 @@ class PipeDriver {
     zhao::tick(d_);
     lat_pend_ = false;
     cs_pend_ = false;
+    mat_pend_ = false;
   }
   void configure(int view, const zref::mat4fx& m, const zref::render::Viewport& vp) {
     for (int r = 0; r < 4; ++r)
@@ -208,7 +210,9 @@ class PipeDriver {
         output_held = false;
       const bool geo_take = gi < geometry.size() && d_.a_valid_i && d_.a_ready_o;
       const bool lreq = d_.lat_req_o != 0, creq = d_.cs_req_o != 0;
+      const bool mreq = d_.mat_req_o != 0;
       const uint8_t nvi = d_.lat_vi_o, nvj = d_.lat_vj_o, nci = d_.cs_ci_o, ncj = d_.cs_cj_o;
+      const uint8_t nmci = d_.mat_ci_o, nmcj = d_.mat_cj_o;
       const bool nsurf = d_.lat_surface_o != 0;
       if (d_.out_valid_o && out_ready) r.terrain.push_back(sample_terrain());
       if (d_.a_valid_o) {
@@ -232,6 +236,9 @@ class PipeDriver {
       cs_pend_ = creq;
       cs_ci_ = nci;
       cs_cj_ = ncj;
+      mat_pend_ = mreq;
+      mat_ci_ = nmci;
+      mat_cj_ = nmcj;
       if (hold > 0) --hold;
       r.cycles = cycle + 1;
       if (ji == jobs.size() && gi == geometry.size() && d_.idle_o) {
@@ -248,8 +255,8 @@ class PipeDriver {
 
  private:
   Vzhao_terrain_pipe& d_;
-  bool lat_pend_ = false, lat_surf_ = false, cs_pend_ = false;
-  uint8_t lat_vi_ = 0, lat_vj_ = 0, cs_ci_ = 0, cs_cj_ = 0;
+  bool lat_pend_ = false, lat_surf_ = false, cs_pend_ = false, mat_pend_ = false;
+  uint8_t lat_vi_ = 0, lat_vj_ = 0, cs_ci_ = 0, cs_cj_ = 0, mat_ci_ = 0, mat_cj_ = 0;
   PipePacket sample_terrain() const {
     PipePacket o;
     o.p.x[0] = project_test::sx21(d_.out_ax_o);
@@ -297,6 +304,21 @@ class PipeDriver {
     }
     d_.cs_substance_i =
         (cs_pend_ && cs_ci_ < lat.w - 1 && cs_cj_ < lat.h - 1) ? lat.substance(cs_ci_, cs_cj_) : 3;
+    // RULING R13's layer-E plane, answered one cycle after the request exactly
+    // as the compose cache does. Poison on the data while `mat_valid_i` is
+    // low, so a block that passed the wires through instead of emitting its
+    // declared {0,0,0} is caught rather than looking correct.
+    if (mat_pend_) {
+      d_.mat_a_i = tess_test::mat_a_at(mat_ci_, mat_cj_);
+      d_.mat_b_i = tess_test::mat_b_at(mat_ci_, mat_cj_);
+      d_.mat_w_i = tess_test::weight_at(mat_ci_, mat_cj_);
+      d_.mat_valid_i = 1;
+    } else {
+      d_.mat_a_i = 0xA5;
+      d_.mat_b_i = 0xA5;
+      d_.mat_w_i = 0xA5;
+      d_.mat_valid_i = 0;
+    }
   }
   void drive_job(const Spec* s) {
     d_.job_valid_i = s != nullptr;
@@ -313,9 +335,6 @@ class PipeDriver {
     d_.job_dual_i = s->dual;
     d_.job_src_id_i = s->src;
     d_.job_view_mask_i = s->views;
-    d_.job_mat_a_i = s->mat_a;
-    d_.job_mat_b_i = s->mat_b;
-    d_.job_weight_i = s->weight;
     d_.sparse_fill_i = s->sparse;
   }
   void drive_geometry(const GeoIn* g) {
@@ -328,6 +347,23 @@ class PipeDriver {
     d_.a_payload_i = g->payload;
   }
 };
+
+// The lattice column (or row) the per-axis MINIMUM of a triangle's three world
+// corners sits on, clamped to the cell grid. `w` is monotone with a constant
+// step, so this is an exact inverse of the placement and not a search: it maps
+// the oracle's world triangle back to the cell TERRAIN.TESS read its material
+// at. Clamped to 0..31 because vertex 32 is a lattice line with no cell, which
+// only a degenerate triangle could minimise onto.
+int cell_index(const std::vector<int32_t>& w, int32_t a, int32_t b, int32_t c) {
+  int32_t m = a;
+  if (b < m) m = b;
+  if (c < m) m = c;
+  const int32_t step = w[1] - w[0];
+  int idx = static_cast<int>((static_cast<int64_t>(m) - w[0]) / step);
+  if (idx < 0) idx = 0;
+  if (idx > static_cast<int>(w.size()) - 2) idx = static_cast<int>(w.size()) - 2;
+  return idx;
+}
 
 zt::ComposedLattice make_lattice() {
   zt::ComposedLattice lat;
@@ -373,9 +409,6 @@ std::vector<Spec> make_specs(bool sparse) {
     s.dual = dual;
     s.views = views;
     s.src = src;
-    s.mat_a = static_cast<uint8_t>(src ^ 0xA5u);
-    s.mat_b = static_cast<uint8_t>((src >> 1) ^ 0x3Cu);
-    s.weight = static_cast<uint8_t>((src * 13u) & 0xFFu);
     s.sparse = sparse;
     v.push_back(s);
   };
@@ -457,9 +490,21 @@ Expected make_expected(const zt::ComposedLattice& dual_lat, const std::vector<Sp
         in.cz = t.cz;
         in.src_id = s.src;
         in.view = static_cast<uint8_t>(view);
-        in.mat_a = s.mat_a;
-        in.mat_b = s.mat_b;
-        in.weight = s.weight;
+        // RULING R13: THE MATERIAL IS THE TRIANGLE'S, NOT THE JOB'S. It was
+        // `s.mat_a` -- one value carried on the job port for a whole 8x8-cell
+        // subpatch -- and the job port no longer has it. The expectation is
+        // now the played plane at the TRIANGLE's own cell.
+        //
+        // THE CELL IS DERIVED FROM THE ORACLE'S TRIANGLE, NOT FROM THE RTL'S
+        // ENUMERATOR, which is what keeps this a differential. `lat.wx` is
+        // monotone with a constant step, so the per-axis minimum world corner
+        // maps back to the per-axis minimum LATTICE corner exactly, and the
+        // geomorph moves y alone and cannot disturb it.
+        const int ci = cell_index(lat.wx, t.ax, t.bx, t.cx);
+        const int cj = cell_index(lat.wz, t.az, t.bz, t.cz);
+        in.mat_a = tess_test::mat_a_at(ci, cj);
+        in.mat_b = tess_test::mat_b_at(ci, cj);
+        in.weight = tess_test::weight_at(ci, cj);
         e.inputs.push_back(in);
       }
   }
