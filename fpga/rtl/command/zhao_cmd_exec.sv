@@ -1530,15 +1530,15 @@ module zhao_cmd_exec
   // the payload and its draw one enable means no stall can separate them. A
   // checker is not needed for a skew that cannot occur; what would need one is
   // a second, independently clocked path, which is precisely what is refused.
-  localparam int unsigned WD_PROG_LO  = 0;    // 32
+  localparam int unsigned WD_PROG_LO  = 0;    // w=32
   localparam int unsigned WD_TIME_LO  = 32;   // 32
   localparam int unsigned WD_PAR_LO   = 64;   // 128, p0 in the low word
   localparam int unsigned WD_ATTR_LO  = 192;  // 128, a0 in the low word
-  localparam int unsigned WD_ARES_LO  = 320;  // 32
-  localparam int unsigned WD_AMODE_LO = 352;  // 8
-  localparam int unsigned WD_BX_LO    = 360;  // 32
-  localparam int unsigned WD_BY_LO    = 392;  // 32
-  localparam int unsigned WD_BZ_LO    = 424;  // 32
+  localparam int unsigned WD_ARES_LO  = 320;  // w=32
+  localparam int unsigned WD_AMODE_LO = 352;  // w=8
+  localparam int unsigned WD_BX_LO    = 360;  // w=32
+  localparam int unsigned WD_BY_LO    = 392;  // w=32
+  localparam int unsigned WD_BZ_LO    = 424;  // w=32
   localparam int unsigned WARP_W      = 456;
 
   logic [31:0] df_form, df_mset, df_xform;
