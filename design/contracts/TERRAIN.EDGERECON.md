@@ -200,9 +200,21 @@ accept, five sequential bank reads (own, −z, +z, −x, +x), publish.
 |---|---|---|
 | `edge_real_o` | 4 | bit 0 = −z, 1 = +z, 2 = −x, 3 = +x. HIGH = a real neighbour decision; LOW = the conservative fallback |
 
-The answer is **registered and held** until the next query completes, which is
-`TERRAIN.LOD.md`'s *"must be held stable across a patch job"*. Case 9 holds it
-for 900 clocks — longer than a patch job — and asserts it does not move.
+The answer is **registered and held until the next walk PUBLISHES** — not until
+the next query is accepted — which is `TERRAIN.LOD.md`'s *"must be held stable
+across a patch job"*. The walk accumulates into a separate set of registers
+(`w_*`) and the published set (`q_*`) moves on one edge, the same edge as
+`q_done_o`.
+
+**That split is a repair, and the way it was missed is the point.** The first
+version had one set of registers, cleared on the query ACCEPT, so `edge_*`
+dropped to `8'h00` for the seven clocks of the walk. **All eleven directed
+cases passed**, because each queries and then reads — none of them looks at the
+port while a walk is in flight. A caller that started patch N+1's query while
+TERRAIN.LOD was still emitting patch N's descriptors would have fed that block
+the fallback **mid-patch**: a crack whose cause is a handshake, with every
+counter agreeing. Case 9 holds the answer BETWEEN queries; **case 12 holds it
+DURING the next one**, which is the different claim and the one that was wrong.
 
 ### The border-row packing
 
@@ -329,8 +341,8 @@ with `tess_edge()` — three lines reproducing `zhao_terrain_tess`'s own
 
 ## Directed tests
 
-`tests/terrain/terrain_edgerecon_directed.cpp` — **1,041 checks**, eleven
-cases:
+`tests/terrain/terrain_edgerecon_directed.cpp` — **1,057 checks**, twelve
+cases plus a generator self-check:
 
 1. **The border rows come back**, with every subpatch of both patches at a
    different level so a transposed lookup cannot be accidentally right.
@@ -355,6 +367,20 @@ cases:
 10. **The underside replay is consumed, not filed** — thirty-two beats, sixteen
     decisions, and the record still completes.
 11. **The counter invariant**, over a mixed set.
+12. **The published answer is HELD FOR THE WHOLE NEXT WALK**, walked cycle by
+    cycle against a second query whose answer differs in every field, with a
+    control asserting the two answers really do differ.
+
+**And case 0, the generator self-check, earned its place immediately.** The
+level grid was `n * 7 + …`; `n` steps by 4 between rows and 7 × 4 = 28 is 0 mod
+4, so **every COLUMN of every patch came out uniform** — `col_i0()` and
+`col_i3()` were four copies of one level. Every case still passed, because they
+compare exact values, but a transposed or reversed COLUMN lookup would have
+been accidentally right, which is the one defect case 1 exists to catch. It was
+found by case 12's control failing because one of the two answers it compares
+was all zeroes. The grid is now `i + 3j + …`, which walks 0,3,2,1 down a column
+and 0,1,2,3 along a row, and the self-check asserts that rather than trusting
+the comment.
 
 **R95: all nine counters are fired on purpose from the block's own boundary
 with legal stimulus, each with a control beside it, so no committed mutant is

@@ -353,6 +353,22 @@ module zhao_terrain_edgerecon #(
   logic [2:0]  qs_q;
   logic [15:0] q_ix_q, q_iz_q;
   logic        q_own_ok_q;
+
+  // TWO SETS OF REGISTERS, AND THE SPLIT IS THE CONTRACT'S 'HELD' CLAUSE.
+  // `w_*` accumulate during the five-record walk; `q_*` are what the block
+  // PUBLISHES, and they move only on the walk's last cycle.
+  //
+  // The first version had one set, cleared on the query ACCEPT. Every
+  // directed case still passed, because each queries and then reads. But it
+  // means the published answer drops to the fallback for the seven clocks of
+  // the walk -- so a caller that starts patch N+1's query while TERRAIN.LOD
+  // is still emitting patch N's descriptors would feed that block 8'h00
+  // mid-patch, and TERRAIN.LOD.md requires these inputs HELD STABLE ACROSS A
+  // PATCH JOB. That is a crack whose cause is a handshake, with every counter
+  // agreeing -- this subsystem's own recurring defect. The split makes the
+  // question not arise rather than leaving it to a usage note.
+  logic [ 7:0] w_nz_q, w_pz_q, w_nx_q, w_px_q;
+  logic [ 3:0] w_real_q;
   logic [ 7:0] q_nz_q, q_pz_q, q_nx_q, q_px_q;
   logic [ 3:0] q_real_q;
 
@@ -508,6 +524,11 @@ module zhao_terrain_edgerecon #(
       q_ix_q             <= '0;
       q_iz_q             <= '0;
       q_own_ok_q         <= 1'b0;
+      w_nz_q             <= 8'h00;
+      w_pz_q             <= 8'h00;
+      w_nx_q             <= 8'h00;
+      w_px_q             <= 8'h00;
+      w_real_q           <= 4'h0;
       q_nz_q             <= 8'h00;
       q_pz_q             <= 8'h00;
       q_nx_q             <= 8'h00;
@@ -605,11 +626,13 @@ module zhao_terrain_edgerecon #(
             if ((phase_q == PhEmit) && q_valid_i) begin
               q_ix_q   <= q_ix_i;
               q_iz_q   <= q_iz_i;
-              q_real_q <= 4'h0;
-              q_nz_q   <= 8'h00;
-              q_pz_q   <= 8'h00;
-              q_nx_q   <= 8'h00;
-              q_px_q   <= 8'h00;
+              // the WALK set only -- the published answer stands until this
+              // walk finishes.
+              w_real_q <= 4'h0;
+              w_nz_q   <= 8'h00;
+              w_pz_q   <= 8'h00;
+              w_nx_q   <= 8'h00;
+              w_px_q   <= 8'h00;
               qs_q     <= QsOwn;
             end
           end
@@ -621,32 +644,32 @@ module zhao_terrain_edgerecon #(
 
           QsNz: begin
             if (q_own_ok_q && rec_ok_c) begin
-              q_nz_q      <= row_j3_c;
-              q_real_q[0] <= 1'b1;
+              w_nz_q      <= row_j3_c;
+              w_real_q[0] <= 1'b1;
             end
             qs_q <= QsPz;
           end
 
           QsPz: begin
             if (q_own_ok_q && rec_ok_c) begin
-              q_pz_q      <= row_j0_c;
-              q_real_q[1] <= 1'b1;
+              w_pz_q      <= row_j0_c;
+              w_real_q[1] <= 1'b1;
             end
             qs_q <= QsNx;
           end
 
           QsNx: begin
             if (q_own_ok_q && rec_ok_c) begin
-              q_nx_q      <= col_i3_c;
-              q_real_q[2] <= 1'b1;
+              w_nx_q      <= col_i3_c;
+              w_real_q[2] <= 1'b1;
             end
             qs_q <= QsPx;
           end
 
           QsPx: begin
             if (q_own_ok_q && rec_ok_c) begin
-              q_px_q      <= col_i0_c;
-              q_real_q[3] <= 1'b1;
+              w_px_q      <= col_i0_c;
+              w_real_q[3] <= 1'b1;
             end
             qs_q <= QsDone;
           end
@@ -654,6 +677,13 @@ module zhao_terrain_edgerecon #(
           default: begin  // QsDone -- publish, and count what was answered
             q_done_o <= 1'b1;
             qs_q     <= QsIdle;
+            // PUBLISH. The four words and their flags become visible on
+            // the same edge as `q_done_o`, together, and not before.
+            q_nz_q   <= w_nz_q;
+            q_pz_q   <= w_pz_q;
+            q_nx_q   <= w_nx_q;
+            q_px_q   <= w_px_q;
+            q_real_q <= w_real_q;
             if (queries_o != 32'hFFFF_FFFF) queries_o <= queries_o + 32'd1;
             if (!q_own_ok_q && (query_own_missing_o != 32'hFFFF_FFFF)) begin
               query_own_missing_o <= query_own_missing_o + 32'd1;
@@ -668,13 +698,13 @@ module zhao_terrain_edgerecon #(
             // to do.
             if (edges_real_o <= (32'hFFFF_FFFF - 32'd4)) begin
               edges_real_o <= edges_real_o
-                            + {31'd0, q_real_q[0]} + {31'd0, q_real_q[1]}
-                            + {31'd0, q_real_q[2]} + {31'd0, q_real_q[3]};
+                            + {31'd0, w_real_q[0]} + {31'd0, w_real_q[1]}
+                            + {31'd0, w_real_q[2]} + {31'd0, w_real_q[3]};
             end
             if (edges_fallback_o <= (32'hFFFF_FFFF - 32'd4)) begin
               edges_fallback_o <= edges_fallback_o
-                                + {31'd0, ~q_real_q[0]} + {31'd0, ~q_real_q[1]}
-                                + {31'd0, ~q_real_q[2]} + {31'd0, ~q_real_q[3]};
+                                + {31'd0, ~w_real_q[0]} + {31'd0, ~w_real_q[1]}
+                                + {31'd0, ~w_real_q[2]} + {31'd0, ~w_real_q[3]};
             end
           end
         endcase

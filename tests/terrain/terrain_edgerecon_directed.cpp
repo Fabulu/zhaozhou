@@ -40,6 +40,13 @@
 //   file_out_of_phase_o   case 8  a file beat offered during EMIT
 //   query_out_of_phase_o  case 8  a query offered during PREPARE
 //
+// AND CASE 12 IS THE ONE THE OTHER ELEVEN COULD NOT SEE. They all query and
+// then read, so none of them looks at `edge_*` while a walk is in flight --
+// and the block's first version cleared the published registers on the query
+// ACCEPT, dropping the port to 8'h00 for seven clocks. Every case passed.
+// Case 12 walks the second query cycle by cycle and requires the FIRST
+// answer to stand until `q_done_o`.
+//
 // AND THE INVARIANT THAT MAKES THE TWO EDGE COUNTERS WORTH READING:
 // `edges_real_o + edges_fallback_o == 4 * queries_o`. The two are incremented
 // on one event from complementary predicates over four bits written by four
@@ -273,17 +280,51 @@ class Rig {
   }
 };
 
-// A deterministic level grid that gives every subpatch of every patch a
-// DIFFERENT value from its neighbours in both axes, so a lookup that reads the
-// wrong cell cannot accidentally be right.
+// A deterministic level grid whose ROWS and COLUMNS each take all four levels,
+// so a lookup that reads the wrong cell cannot accidentally be right.
+//
+// THE FIRST VERSION WAS `n * 7 + ...`, AND IT WAS QUIETLY WEAKER THAN ITS OWN
+// COMMENT CLAIMED. `n` steps by 4 between rows and 7 x 4 = 28 is 0 mod 4, so
+// every COLUMN of every patch came out UNIFORM: `col_i0()` and `col_i3()` were
+// four copies of one level. Every case still passed -- they compare exact
+// values -- but a transposed or reversed COLUMN lookup would have been
+// accidentally right, which is the one defect case 1 exists to catch.
+//
+// It was found by a CONTROL in case 12 asserting that two answers it was
+// comparing actually differ; the control failed because one of them was all
+// zeroes. A coverage assertion earning its keep, exactly as the LOD suite's
+// three zero-on-first-run counters did.
+//
+// `i + 3j` walks 0,3,2,1 down a column and 0,1,2,3 along a row, so BOTH axes
+// take all four levels.
 Patch make_patch(uint32_t ix, uint32_t iz, uint32_t salt) {
   Patch p;
   p.ix = ix;
   p.iz = iz;
   for (uint32_t n = 0; n < 16; ++n) {
-    p.lvl[n] = (n * 7u + ix * 5u + iz * 11u + salt * 3u) & 3u;
+    const uint32_t i = n & 3u;
+    const uint32_t j = n >> 2;
+    p.lvl[n] = (i + 3u * j + ix * 5u + iz * 11u + salt * 3u) & 3u;
   }
   return p;
+}
+
+// And the claim above is ASSERTED rather than trusted: a generator that
+// silently went uniform again would make several cases vacuous.
+void check_generator() {
+  const Patch p = make_patch(7, 5, 2);
+  bool rows_full = true, cols_full = true;
+  for (uint32_t k = 0; k < 4; ++k) {
+    uint32_t seen_row = 0, seen_col = 0;
+    for (uint32_t m = 0; m < 4; ++m) {
+      seen_row |= 1u << p.at(m, k);
+      seen_col |= 1u << p.at(k, m);
+    }
+    rows_full = rows_full && (seen_row == 0xFu);
+    cols_full = cols_full && (seen_col == 0xFu);
+  }
+  check_true(rows_full, "0 every ROW of the test grid takes all four levels");
+  check_true(cols_full, "0 every COLUMN of the test grid takes all four levels");
 }
 
 // TERRAIN.TESS's own arithmetic for the level a shared edge is tessellated at.
@@ -783,11 +824,92 @@ void case11() {
            "11 the incomplete patch and the unfiled one both reported a missing own record");
 }
 
+
+// ===========================================================================
+// 12. THE PUBLISHED ANSWER DOES NOT MOVE UNTIL THE NEXT WALK FINISHES
+// ===========================================================================
+// Case 9 holds the answer BETWEEN queries. This one holds it DURING the next
+// one, which is a different claim and the one that was wrong.
+//
+// The block's first version accumulated into the published registers and
+// cleared them on the query ACCEPT, so `edge_*` dropped to 8'h00 for the seven
+// clocks of the walk. ALL ELEVEN CASES ABOVE PASSED, because each queries and
+// then reads -- none of them looks at the port while a walk is in flight. A
+// caller that started patch N+1's query while TERRAIN.LOD was still emitting
+// patch N's descriptors would have fed that block the fallback MID-PATCH,
+// against TERRAIN.LOD.md's 'must be held stable across a patch job'. That is a
+// crack whose cause is a handshake, with every counter agreeing.
+//
+// This asserts the CORRECT behaviour -- the answer holds -- rather than the
+// defect. The walk registers are separate now and the publish is one edge.
+void case12() {
+  Rig r;
+  r.reset();
+
+  Patch a = make_patch(12, 3, 1);
+  Patch b = make_patch(13, 3, 2);   // A's +x neighbour
+  Patch c = make_patch(2, 14, 3);   // isolated, so its answer is all fallback
+
+  r.frame_begin();
+  r.file_patch(a);
+  r.file_patch(b);
+  r.file_patch(c);
+  r.prepare_done();
+
+  const Answer first = r.query(12, 3);
+  check_eq(first.px, b.col_i0(), "12 the first answer is real");
+  check_eq(first.real, 0x8, "12 ... on exactly the +x edge");
+
+  // Now start a query for the ISOLATED patch, whose answer is all fallback and
+  // therefore differs from the held one in every field. Walk it cycle by cycle
+  // and require the port to carry the FIRST answer until `q_done_o`.
+  r.quiet();
+  r.t.q_valid_i = 1;
+  r.t.q_ix_i = 2;
+  r.t.q_iz_i = 14;
+  r.t.eval();
+  check_eq(r.t.q_ready_o, 1, "12 the second query is accepted");
+  zhao::tick(r.t);
+  r.t.eval();
+
+  int held_cycles = 0;
+  bool done_seen = false;
+  for (int i = 0; i < 32 && !done_seen; ++i) {
+    r.quiet();
+    r.t.eval();
+    // BEFORE the edge that publishes, the port must still read the first
+    // answer. This is what a downstream TERRAIN.LOD would sample.
+    check_true(r.t.edge_px_o == first.px && r.t.edge_nz_o == first.nz &&
+                   r.t.edge_pz_o == first.pz && r.t.edge_nx_o == first.nx &&
+                   r.t.edge_real_o == first.real,
+               "12 the published answer is HELD for the whole next walk");
+    ++held_cycles;
+    if (failures) break;
+    zhao::tick(r.t);
+    r.t.eval();
+    if (r.t.q_done_o) done_seen = true;
+  }
+  check_true(done_seen, "12 the second walk completed");
+  // ... and it really was a WALK, not a one-cycle answer: if the port had been
+  // held for zero or one cycle the check above would have been vacuous.
+  check_true(held_cycles >= 5,
+             "12 the hold was measured across the whole five-record walk");
+
+  // And once it publishes, it publishes the NEW answer -- the hold is a hold,
+  // not a freeze.
+  check_eq(r.t.edge_real_o, 0, "12 the new answer lands, all four fallback");
+  check_eq(r.t.edge_px_o, 0, "12 ... and the +x word with it");
+  check_true(first.px != 0,
+             "12 CONTROL: the two answers really do differ, so the hold was "
+             "testable at all");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 
+  check_generator();
   case1();
   case2();
   case3();
@@ -799,6 +921,7 @@ int main(int argc, char** argv) {
   case9();
   case10();
   case11();
+  case12();
 
   std::printf("terrain_edgerecon_directed: %d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
