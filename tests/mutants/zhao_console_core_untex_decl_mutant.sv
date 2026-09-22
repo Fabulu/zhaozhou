@@ -1160,6 +1160,7 @@ module zhao_console_core_untex_decl_mutant
 
   output logic [31:0]             terr_lodfeed_handles_checked_o,
   output logic [31:0]             terr_lodfeed_handles_stale_o,
+  output logic [31:0]             terr_ji_view_mask_high_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ

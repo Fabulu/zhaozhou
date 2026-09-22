@@ -706,6 +706,12 @@ module tb_zhao_console_core_smoke
   // quoting the silence of an instrument that was never switched on.
   logic [31:0]             terr_lodfeed_handles_checked_o;
   logic [31:0]             terr_lodfeed_handles_stale_o;
+  // Core entry I21's view-mask narrowing.  It is EXPECTED ZERO here and that
+  // is not evidence of anything: every terrain page this bench plays fails its
+  // CRC, so the compose door never opens and the counter cannot move.  Its
+  // real control is `terrain_jobissue_directed` case 12, which fires it and
+  // shows it flat beside the firing.  Declared so the `.*` binding is total.
+  logic [31:0]             terr_ji_view_mask_high_o;
 
   // SW.STREAM's journal doorbell (owner ruling R14): the HPS's own words.
   logic [31:0]             terr_cfg_journal_base_i;

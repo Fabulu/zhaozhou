@@ -1624,16 +1624,17 @@ module zhao_console_board
   // the register by nothing and cost all six. It is a boundary the composition
   // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
-  // THE NARROWING'S COUNTER, decided in this commit because entry I21 said
-  // whoever composed the consumer had to decide it here: the record's mask is
-  // EIGHT bits, the sequencer's is TWO, and bits [7:2] have no ratified
+  // THE NARROWING'S COUNTER, from `zhao_terrain_jobissue`. The record's mask
+  // is EIGHT bits and the sequencer's is TWO, and bits [7:2] have no ratified
   // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
   // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
-  // two view bits and tests `== 0x3`. They are IGNORED rather than refused,
-  // because refusing a patch over an absence would drop legal content; and
-  // they are COUNTED, because the day a third view is ratified this narrowing
-  // becomes a silent discard. See `tdoor_view_mask_c`.
-  output logic [31:0]             terr_view_mask_high_o,
+  // two view bits and tests `== 0x3`. Entry I21 left the decision to whoever
+  // composed the consumer: they are IGNORED rather than refused, because
+  // refusing a patch over an absence would drop legal content, and they are
+  // COUNTED, because the day a third view is ratified the discard stops being
+  // harmless. The count is taken inside the block rather than in this composer
+  // so that a directed test can FIRE it; see that block's port comment.
+  output logic [31:0]             terr_ji_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -4300,7 +4301,7 @@ module zhao_console_board
       .terr_job_dual_i                    (terr_job_dual_i),
       .terr_job_src_id_i                  (terr_job_src_id_i),
       .terr_job_view_mask_i               (terr_job_view_mask_i),
-      .terr_view_mask_high_o              (terr_view_mask_high_o),
+      .terr_ji_view_mask_high_o           (terr_ji_view_mask_high_o),
       .terr_job_mat_a_i                   (terr_job_mat_a_i),
       .terr_job_mat_b_i                   (terr_job_mat_b_i),
       .terr_job_weight_i                  (terr_job_weight_i),

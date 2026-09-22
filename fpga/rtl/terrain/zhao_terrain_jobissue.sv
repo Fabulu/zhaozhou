@@ -157,14 +157,40 @@ module zhao_terrain_jobissue #(
     input  var logic rst_n,
 
     // ---- the patch DRAW CONTEXT, captured at the compose door ---------------
-    // `view_mask` is T5's `SubmitTerrainSet.view_mask` narrowed to the two
-    // ratified views (video_rules §3.1). The narrowing is performed by the
-    // COMPOSER, at the door, with its refusal counted there -- not here, where
-    // the field has already lost its high bits.
+    // `view_mask` is T5's `SubmitTerrainSet.view_mask`, ALL EIGHT BITS, as the
+    // page's own record carries it.
+    //
+    // THE NARROWING MOVED HERE 2026-09-22 (gz/terrclose), and the sentence it
+    // replaces is kept because the reason it was written is the reason it had
+    // to move. It read: "The narrowing is performed by the COMPOSER, at the
+    // door, with its refusal counted there -- not here, where the field has
+    // already lost its high bits." That was correct while no producer carried
+    // the mask: the composer was the only place eight bits existed. Now
+    // `zhao_terrain_pagestream` forwards `view_mask:u8` beside `flags:u16`
+    // (core entry I21), so eight bits arrive HERE, and the block that consumes
+    // the value is the block that should own the discard.
+    //
+    // AND THE DECIDING ARGUMENT IS NOT TIDINESS, IT IS THAT A COUNTER IN THE
+    // COMPOSER CANNOT BE FIRED. The console smoke fails the CRC of every
+    // terrain page it plays, so the compose door never opens in it and no
+    // legal stimulus reaches a counter placed there; it would read zero for
+    // ever and the zero would mean nothing. `terrain_jobissue_directed` drives
+    // this port directly and fires `view_mask_high_o` on a record that sets a
+    // bit this console has no view for, with a negative control beside it.
+    //
+    // THE DISCARD IS IGNORE, NOT REFUSE, and that is a decision entry I21
+    // explicitly left to whoever composed the consumer. Bits [7:2] are not a
+    // wider mask being truncated: `spec/commands.zidl`, ruling T5 and
+    // `spec/video_rules.md` 3.1 all describe TWO views, `zref_sw_stream.hpp`
+    // accumulates two bits and tests `== 0x3`, and `zhao_geom_group_seq`
+    // $fatals unless NVIEWS == 2. Refusing a patch over bits no ratified
+    // document gives a meaning to would drop legal content from a legal
+    // stream. They are dropped and counted instead, so that the day a third
+    // view is ratified the machine says so rather than a reviewer noticing.
     input  var logic        ctx_valid_i,
     output var logic        ctx_ready_o,
     input  var logic [15:0] ctx_src_id_i,
-    input  var logic [ 1:0] ctx_view_mask_i,
+    input  var logic [ 7:0] ctx_view_mask_i,
     input  var logic        ctx_sparse_fill_i,
 
     // ---- TERRAIN.COMPCACHE's serve side -------------------------------------
@@ -220,6 +246,11 @@ module zhao_terrain_jobissue #(
     output var logic [31:0] serve_no_ctx_o,
     output var logic [31:0] ctx_src_mismatch_o,
     output var logic [31:0] lod_src_mismatch_o,
+    // Contexts whose record set a view bit this console cannot project into.
+    // Expected zero on ratified content; see the port comment above for why it
+    // is a counter rather than a refusal, and `terrain_jobissue_directed` for
+    // the stimulus that fires it.
+    output var logic [31:0] view_mask_high_o,
     output var logic [31:0] decision_wait_clocks_o,
     output var logic [31:0] issue_clocks_o,
     output var logic        busy_o
@@ -362,6 +393,7 @@ module zhao_terrain_jobissue #(
       serve_no_ctx_o     <= '0;
       ctx_src_mismatch_o <= '0;
       lod_src_mismatch_o <= '0;
+      view_mask_high_o   <= '0;
       decision_wait_clocks_o <= '0;
       issue_clocks_o     <= '0;
     end else begin
@@ -370,7 +402,10 @@ module zhao_terrain_jobissue #(
       // ---- the context queue, accounted in ONE place --------------------
       if (cq_push_c) begin
         cq_src[cq_wr_q]    <= ctx_src_id_i;
-        cq_mask[cq_wr_q]   <= ctx_view_mask_i;
+        cq_mask[cq_wr_q]   <= ctx_view_mask_i[1:0];
+        if ((ctx_view_mask_i[7:2] != 6'd0) &&
+            (view_mask_high_o != 32'hFFFF_FFFF))
+          view_mask_high_o <= view_mask_high_o + 32'd1;
         cq_sparse[cq_wr_q] <= ctx_sparse_fill_i;
         cq_wr_q            <= (cq_wr_q == IDXW'(CTXD - 1)) ? '0 : cq_wr_q + IDXW'(1);
       end

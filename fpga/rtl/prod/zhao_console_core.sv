@@ -3234,7 +3234,102 @@
 //      the register does not move; what moves is that the day a producer is
 //      ruled, the evidence path is already built and fired.
 //
-// I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
+// I21. NARROWED 2026-09-22 (gz/terrclose): FOUR SIGNALS BECAME THREE, AND THE
+//      ONE THAT LEFT IS THE ONLY ONE THAT WANTED A BUILD.
+//
+//      THIS ENTRY'S OWN TALLY, WORKED THROUGH ONE SIGNAL AT A TIME RATHER THAN
+//      INHERITED. TERRACOMP left four signals and a declared tie-off. Each was
+//      ATTEMPTED before anything was written about it (R237), and the result
+//      is one discharge, two confirmations and one that had already been
+//      settled and is restated because the entry kept re-litigating it:
+//
+//      (2) `terr_job_view_mask_i` -- **DISCHARGED. THE BUILD LANDED.**
+//          `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+//          `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE
+//          `flags:u16`, which is word for word the work order this entry
+//          wrote: "THE BUILD THIS WANTS is one more forwarded field on those
+//          three blocks, beside `flags`. It is small and it is named." The
+//          mask now reaches `u_terrain_jobissue`'s draw context off the VERTEX
+//          BEAT -- the same held job as the slot, the source id and the flags,
+//          captured on the same door pulse as `ctx_src_id_i`.
+//          BOTH SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED and the build
+//          is neither: latching `tis_view_mask` live at the door pairs page
+//          N's mask with page M's lattice, and a src_id-keyed side queue
+//          desyncs permanently on the first refused page. Carrying the field
+//          makes the question not arise.
+//          THE 8 -> 2 NARROWING IS DECIDED, as this entry required: IGNORE AND
+//          COUNT, inside `zhao_terrain_jobissue`, counted on
+//          `view_mask_high_o` and FIRED by `terrain_jobissue_directed` case 12
+//          with a negative control beside it. Bits [7:2] are not a wider mask
+//          being truncated -- no ratified document gives them a meaning -- so
+//          refusing a patch over them would drop legal content. The count is
+//          in the BLOCK and not in this composer because a counter here could
+//          not be fired: the smoke fails the CRC of every terrain page it
+//          plays, so `tdoor_push_c` never rises in it.
+//          The PORT stays as an override, with the twelve beside it, for item
+//          (5)'s reason: six smoke assertions stand on that injection and a
+//          port is not a module.
+//
+//      (3) `terr_sparse_fill_i` -- **CONFIRMED NOT A GAP, and the confirmation
+//          was measured rather than quoted.** `zhao_terrain_group_seq.sv`'s own
+//          header calls it an owner knob and the block reads it only under
+//          `VALID_MODE == 0`; `zhao_terrain_jobissue` carries it on the draw
+//          context beside the mask and emits it unchanged. Freezing it to a
+//          localparam would close a port by taking the owner's control away,
+//          which is the art law's rule 6 applied to RTL. **No producer is owed
+//          for a knob** and none will be built.
+//
+//      (1) `terr_job_mat_a/_b/_weight` -- **CONFIRMED HELD, AND THE
+//          REPLACEMENT WAS CHECKED FOR RATHER THAN ASSUMED ABSENT.** Ruling
+//          R13 rules them the WRONG CARRIER and their closure is REMOVAL once
+//          a per-triangle layer-E path exists inside TESS. Re-measured
+//          2026-09-22: `zhao_terrain_tess.sv` has no layer-E port, no material
+//          output and no cell-keyed read of any kind, and the only blocks that
+//          touch layer E's bytes are `zhao_terrain_pageio` -- which names its
+//          head as a FOREIGN-BYTE boundary of layer D's burst window and
+//          writes those bytes back unchanged, with `pageio_rtl_directed`
+//          asserting they are byte-identical after a bake -- and nothing else.
+//          `zhao_terrain_pagestream` still reads `'{A_OFF, B_OFF, C_OFF}`.
+//          So the replacement does not exist, and **NOTHING LEAVES UNTIL IT
+//          DOES**: removing the riders now would take the function out of the
+//          console and call it a closure.
+//
+//      (4) THE DECLARED `edge_*` TIE-OFF -- **HELD, AND A PRODUCER WAS LOOKED
+//          FOR BEFORE THIS WAS WRITTEN.** The four neighbour levels are driven
+//          from `TERR_EDGE_UNKNOWN_C = 8'h00`, declared under R159 at the
+//          instance. `design/contracts/MEASURE.GOVERNOR.md` still refuses
+//          ownership in writing -- "The camera POSITIONS, `dual` and `edge_*`
+//          are NOT here ... none of them can come from a block that sees one
+//          number per frame per camera" -- and the search for another owner
+//          ends the same way it did: the value is a CROSS-PATCH
+//          RECONCILIATION, needing every patch of a frame DECIDED before any
+//          is tessellated, and this console decides one patch at a time as the
+//          cache serves it. `zhao_terrain_lod` self-supplies the twelve
+//          INTERIOR neighbours from its own `lvl[]`; the four `edge_*` are
+//          exactly the inter-patch cases it cannot. A producer is a FRAME-WIDE
+//          DECISION PASS -- a new block with a new store, holding sixteen
+//          levels per live patch across the whole visible set -- and building
+//          one to retire a tie-off whose constant is already the SAFE choice
+//          is the wrong trade at this point in the budget.
+//          THE CONSTANT IS THE SAFE ONE AND NOT THE CHEAP ONE, which is the
+//          part a later reader must not re-derive: level 0 is the FINEST, so a
+//          neighbour reported as 0 makes TERRAIN.LOD clamp its own edge to the
+//          finest it could need -- more triangles and NO CRACK. The coarsest
+//          constant (3) would have seamed the ground AND measured smaller,
+//          which is the direction a resource-pressed campaign is biased to
+//          pick.
+//
+//      AND THE LAYER-E READER IS THE SAME ABSENCE AS (1), not a fifth item.
+//      R13 puts it inside TESS. One absence, one ruled destination.
+//
+//      SO WHAT CLOSES I21 IS NOW EXACTLY ONE BUILD: the per-triangle layer-E
+//      path in TERRAIN.TESS. With it, the three riders are REMOVED under R13
+//      and the job port's boundary is the override alone. That is a smaller
+//      and truer statement of this entry's remainder than anything above it.
+//
+//      THE ORIGINAL HEAD, KEPT BECAUSE THE ARGUMENT UNDER IT IS THE RECORD
+//      OF HOW EACH SIGNAL WAS IDENTIFIED: TERRAIN.GROUP_SEQ's subpatch job
+//      port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
 //      that is NOT wired, which is worth stating precisely so nobody wires it
 //      by name-matching. `fpga/rtl/terrain/zhao_terrain_lod.sv` exists and its
@@ -7540,16 +7635,17 @@ module zhao_console_core
   // the register by nothing and cost all six. It is a boundary the composition
   // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
-  // THE NARROWING'S COUNTER, decided in this commit because entry I21 said
-  // whoever composed the consumer had to decide it here: the record's mask is
-  // EIGHT bits, the sequencer's is TWO, and bits [7:2] have no ratified
+  // THE NARROWING'S COUNTER, from `zhao_terrain_jobissue`. The record's mask
+  // is EIGHT bits and the sequencer's is TWO, and bits [7:2] have no ratified
   // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
   // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
-  // two view bits and tests `== 0x3`. They are IGNORED rather than refused,
-  // because refusing a patch over an absence would drop legal content; and
-  // they are COUNTED, because the day a third view is ratified this narrowing
-  // becomes a silent discard. See `tdoor_view_mask_c`.
-  output logic [31:0]             terr_view_mask_high_o,
+  // two view bits and tests `== 0x3`. Entry I21 left the decision to whoever
+  // composed the consumer: they are IGNORED rather than refused, because
+  // refusing a patch over an absence would drop legal content, and they are
+  // COUNTED, because the day a third view is ratified the discard stops being
+  // harmless. The count is taken inside the block rather than in this composer
+  // so that a directed test can FIRE it; see that block's port comment.
+  output logic [31:0]             terr_ji_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -21489,40 +21585,17 @@ module zhao_console_core
   // if it is ever seen.
   wire tdoor_push_c = tcc_fill_accept;
 
-  // ---- THE VIEW MASK'S 8 -> 2 NARROWING, MADE ONCE AND COUNTED ------------
-  // Entry I21 left this decision to "whoever composes the consumer", in these
-  // words: "the six high bits have no declared meaning ... Whoever composes
-  // the consumer decides must-be-zero / refuse / ignore IN THAT COMMIT and
-  // counts the refusal."  This is that commit, and the decision is IGNORE AND
-  // COUNT.
-  //
-  // WHY IGNORE RATHER THAN REFUSE. The two quantities are the SAME quantity --
-  // `spec/commands.zidl`'s `SubmitTerrainSet.view_mask:u8`, ruling T5's
-  // `view_mask:u8`, and `spec/video_rules.md` 3.1's View 0 = P1 / View 1 = P2.
-  // The golden model accumulates `e.view_mask |= view_bit` over two views and
-  // tests `== 0x3`, and `zhao_geom_group_seq` `$fatal`s unless NVIEWS == 2. So
-  // bits [7:2] are not a wider mask this console is truncating; they are bits
-  // no ratified document gives a meaning to. REFUSING a terrain patch over
-  // them would drop legal content from a legal stream on the strength of an
-  // absence.
-  //
-  // AND WHY IT IS STILL COUNTED. The day a third view is ratified, this
-  // narrowing becomes a silent discard of content the stream meant. The
-  // counter is what makes that visible on the machine instead of in a review:
-  // `terr_view_mask_high_o` is the number of patches whose record set a bit
-  // this console has no view for. It is expected to read ZERO, which is
-  // exactly why it is a port and not an assertion -- a zero nobody can read is
-  // not evidence, and this one has a positive control in the console smoke.
-  wire [1:0] tdoor_view_mask_c = tps_v_view_mask[1:0];
-  wire       tdoor_view_high_c = tdoor_push_c && (tps_v_view_mask[7:2] != 6'd0);
-
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      terr_view_mask_high_o <= 32'd0;
-    end else if (tdoor_view_high_c && (terr_view_mask_high_o != 32'hFFFF_FFFF)) begin
-      terr_view_mask_high_o <= terr_view_mask_high_o + 32'd1;
-    end
-  end
+  // ---- THE VIEW MASK IS NOT NARROWED HERE, AND THAT IS THE POINT ----------
+  // `zhao_terrain_jobissue` takes all EIGHT bits of the page's record and
+  // discards [7:2] itself, counting on `view_mask_high_o`. The first writing
+  // of this composition did the narrowing here instead, on the reasoning the
+  // block's own port comment used to give -- and it was wrong for a reason
+  // worth keeping: THE COUNTER COULD NOT BE FIRED. Every terrain page the
+  // console smoke plays fails its CRC, so `tdoor_push_c` never rises in it and
+  // no legal stimulus in this module's own bench can reach a counter placed
+  // here. It would have read zero for ever, and a zero nobody can move is not
+  // evidence about anything. `terrain_jobissue_directed` fires it, with a
+  // negative control.
 
   // THE NARROWING GUARD for the two slot ports below. `initial begin ... end`
   // and not a module-scope `if`: Quartus 17.0 rejects the latter (CLAUDE.md,
@@ -22260,7 +22333,7 @@ module zhao_console_core
     // TERRAIN.SEQ happens to be presenting. It is captured on the SAME pulse
     // as `ctx_src_id_i`, off the same held job, which is what makes the pair a
     // join and not two wires that agree.
-    .ctx_view_mask_i  (tdoor_view_mask_c),
+    .ctx_view_mask_i  (tps_v_view_mask),
     .ctx_sparse_fill_i(terr_sparse_fill_i),
 
     .serve_valid_i  (terr_cc_serve_valid_o),
@@ -22311,6 +22384,7 @@ module zhao_console_core
     .serve_no_ctx_o        (terr_ji_serve_no_ctx_o),
     .ctx_src_mismatch_o    (terr_ji_ctx_src_mismatch_o),
     .lod_src_mismatch_o    (terr_ji_lod_src_mismatch_o),
+    .view_mask_high_o      (terr_ji_view_mask_high_o),
     .decision_wait_clocks_o(tji_decision_wait),
     .issue_clocks_o        (tji_issue_clocks),
     .busy_o                (tji_busy)
