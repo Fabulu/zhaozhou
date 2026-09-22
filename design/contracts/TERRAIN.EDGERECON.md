@@ -404,8 +404,8 @@ sequencing gate; it does not enumerate the frame's patches or drive the ladder
 over them. Composing it in the console needs a driver that, at the frame
 boundary:
 
-1. enumerates the admitted patch set — `zhao_terrain_visible` exists and is
-   **not composed**;
+1. enumerates the admitted patch set — **this exists and is composed**; see
+   the correction below, which replaces the claim this line first made;
 2. for each, assembles `sp_*` from `zhao_terrain_devstore` (deviations, centre
    height, history) and `zhao_terrain_place` (the centre's x and z), both of
    which **are** composed, keyed by the page slot — which needs `(ix,iz) →
@@ -422,7 +422,58 @@ block banks in PREPARE are the levels TESS receives in EMIT. **A deformation
 bake landing between the two passes would break it**, and the driver owes the
 interlock.
 
-Until that driver exists the console remains in **conservative edge mode** and
+### CORRECTED 2026-09-22, in this packet, before the claim was left standing
+
+The four steps above were written from `zhao_terrain_jobissue`'s and
+`zhao_terrain_spdesc`'s accounts of what terrain lacks. **Two of the three
+obstacles they name do not exist**, and the difference was found by reading
+`zhao_terrain_seq`'s port list rather than the entries about it — R237/R240,
+a stated blocker that dies on first contact.
+
+* **The admitted-set enumerator EXISTS AND IS COMPOSED.** It is not
+  `zhao_terrain_visible` — that block is **superseded by owner ruling R16**,
+  because ruling T5 puts the visibility walk on the HPS and the hardware
+  consumes a **sealed list**. The list arrives as `SubmitTerrainSet @ 0x0230`
+  through TERRAIN.CMD and `zhao_terrain_seq` pumps it. `u_terrain_seq`'s
+  **issue port** is live in `zhao_console_core.sv` right now:
+  `is_valid_o`/`is_ready_i` with `is_slot_o`, `is_ix_o`, `is_iz_o`, `is_gen_o`,
+  `is_cslot_o`, `is_flags_o`, `is_view_mask_o` and `is_src_id_o` — **one beat
+  per admitted patch, in T5's canonical order.**
+* **The `slot → (ix,iz)` direction is NOT the residency's to provide**, and the
+  walker does not need one. **The pair is in hand at the issue port**, on the
+  same beat, exactly as `{slot, src_id}` is in hand at the compose door for
+  `zhao_terrain_spdesc`. That is this subsystem's established answer to
+  "two keyings, no map", and it applies unchanged here.
+* **`zhao_terrain_devstore` is composed and is keyed by that slot**, and it
+  already returns the three deviations, the centre height and the history.
+
+**SO THE REMAINDER IS ONE THING, AND IT IS SMALLER AND SHARPER THAN "NO
+PRODUCER".** The prepare pass needs `sp_cx`/`sp_cz` — the subpatch centre's
+world x and z — **for a patch that is not the one currently being placed or
+composed**:
+
+* `zhao_terrain_spdesc` gets them from `zhao_terrain_compcache_front`'s
+  `lat_wx_o`/`lat_wz_o`, which describes **the patch the cache is serving**.
+* `zhao_terrain_place` has a random-access `vtx_vi_i`/`vtx_vj_i →
+  vtx_wx_o`/`vtx_wz_o` port, but it answers for **the patch whose header it
+  last took**, and the fill path owns that.
+* Recomputing placement from an origin and a pitch is the available shortcut
+  and `zhao_terrain_spdesc` refuses it by name — it would be a second
+  implementation of TERRAIN.PLACE's ratified law.
+
+**Whoever builds the walker owes that one decision**, and the three candidates
+are: a second `zhao_terrain_place` instance fed from the issue stream (small —
+shifts and an adder, no multiplier — but a duplicate provider, which R16 is the
+precedent against); a `cx`/`cz` column added to `zhao_terrain_devstore`, filled
+by `zhao_terrain_lodfeed` at page load when the placement is already in hand;
+or time-multiplexing the existing PLACE query port against the fill path. **The
+second is the one this contract recommends**, because the deviations are
+already written at that moment and by that block, and it adds no provider.
+
+Plus the interlock named above: the PREPARE pass must **discard `out_hold_o`**,
+and a deformation bake landing between the two passes breaks their determinism.
+
+Until that walker exists the console remains in **conservative edge mode** and
 `u_terrain_lod`'s `edge_*` still read the literal `8'h00`.
 
 ## Notes
