@@ -285,7 +285,35 @@ module zhao_twod_band #(
     // stores: a port with no consumer is a tie-off, and an UNCHECKED law is a
     // sentence.
     output var logic [31:0]             order_inversion_o,
-    output var logic [31:0]             bands_o
+    output var logic [31:0]             bands_o,
+
+    // ---- the SEAL edge, added 2026-09-22 (completion ruling item 3) ---------
+    // THE CYCLE THIS BLOCK DISCARDS THE PREVIOUS FRAME'S DISPLAY LIST. It is
+    // `restart_c`, exported rather than re-derived, and exporting it is the
+    // whole point: the producer must write the frame's sealed list into a list
+    // that has just been cleared, and `frame_start_i` is NOT that cycle. A tick
+    // arriving while a pass is running is IGNORED here (see FRAME AND SWEEP
+    // below, and the 582,261 underruns that taught it), so a producer watching
+    // `frame_start_i` would append the new frame's descriptors to the old
+    // frame's list -- silently, with every counter balancing, which is exactly
+    // I39's "two live wires are not a producer".
+    //
+    // One signal, one meaning, one consumer. There is no second opinion to
+    // disagree with.
+    output var logic                    list_restart_o,
+
+    // THE SEALED-LIST LAW, MEASURED. The ruling: "Neither a later packet nor
+    // the next frame may mutate the list being consumed." A descriptor arriving
+    // while the reader's sweep is in progress IS that mutation, so it is
+    // counted here rather than argued about.
+    //
+    // ITS TWO OPERANDS ARE NOT DRIVEN BY ONE ENABLE, which is the check
+    // CLAUDE.md's metadata-bank defect demands before any detector is trusted:
+    // `d_valid_i` comes from the producer's replay walk and `sweeping_q` from
+    // POST.COMPOSITE's raster read. Nothing clocks both. It reads zero in
+    // correct operation and `tests/compositor/twod_band_directed.cpp` fires it
+    // deliberately.
+    output var logic [31:0]             desc_mid_sweep_o
 );
 
   // ==========================================================================
@@ -445,6 +473,11 @@ module zhao_twod_band #(
   // landing mid-pass sends the filler to band 0 while the reader is at row 200,
   // which is the defect the composed console reported as 582,261 underruns.
   assign restart_c = (frame_start_i && !sweeping_q) || (sweep_sync_c && !armed_q);
+
+  // The seal edge, exported. See the port's own comment: this is the cycle the
+  // list is discarded, and a producer that watches anything else is watching a
+  // signal that does not mean what it needs.
+  assign list_restart_o = restart_c;
 
   // ==========================================================================
   // THE READ SIDE
@@ -763,6 +796,7 @@ module zhao_twod_band #(
       for (ri = 0; ri < L; ri = ri + 1) gen_q[ri] <= GENW'(0);
       descriptors_o            <= '0;
       desc_overflow_o          <= '0;
+      desc_mid_sweep_o         <= '0;
       sprites_admitted_o       <= '0;
       sprites_refused_budget_o <= '0;
       slices_emitted_o         <= '0;
@@ -823,6 +857,12 @@ module zhao_twod_band #(
 
       // ---- intake ---------------------------------------------------------
       if (d_valid_i) begin
+        // THE SEALED-LIST LAW, MEASURED RATHER THAN ASSERTED. A descriptor
+        // arriving while the reader is mid-pass mutates the list being
+        // consumed, which the completion ruling forbids. Counted here, at the
+        // door, against `sweeping_q` -- a register this block advances from
+        // POST.COMPOSITE's read sweep and which no producer touches.
+        if (sweeping_q) desc_mid_sweep_o <= desc_mid_sweep_o + 32'd1;
         if (!list_full_c) begin
           count_q       <= count_q + (IW+1)'(1);
           descriptors_o <= descriptors_o + 32'd1;
