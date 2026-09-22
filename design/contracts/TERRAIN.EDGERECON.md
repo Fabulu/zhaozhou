@@ -409,7 +409,7 @@ by hand, in the unflattering direction:
 | | estimate |
 | --- | ---: |
 | bank | 256 × 82 = 20,992 bits → **3 M10K** (quantised: 3 × 256 × 32-ish slices = 24,576 bits) |
-| flops | ~170: the two walkers' state (2 + 3), the file latches (16+16+4+2+8), the query latches (16+16+1+32+4), the sweep index (8), the frame counter (16), nine 32-bit counters (288) — **~460 with the counters, ~170 without** |
+| flops | the two walkers' state (2 + 3), the file latches (16+16+4+2+8), the query latches (16+16+1), the WALK answer (32+4) and the PUBLISHED answer (32+4), the sweep index (8), the frame counter (16), nine 32-bit counters (288) — **~496 with the counters, ~208 without**. The 36 that hold the published answer through the walk were added by the case-12 repair and are counted here rather than left in the earlier ~170. |
 | ALMs | **~400–550**, dominated by the nine saturating 32-bit counters and the read-modify-write's variable part-select |
 | DSP | **0** |
 
