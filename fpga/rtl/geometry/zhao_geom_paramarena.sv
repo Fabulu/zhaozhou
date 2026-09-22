@@ -168,7 +168,16 @@ module zhao_geom_paramarena
     // references divided by the fourteen a chunk holds, rounded UP and then to
     // a power of two -- 131072/14 = 9363, so 16,384 chunks, which also leaves
     // the giant's 32,768 reserved references expressible (2,341 chunks).
-    parameter int unsigned MAX_VERTS  = 65536,
+    // 65,535 AND NOT 65,536, AND THE ONE VERTEX IS A DECLARED LOSS.
+    // R7's preferred tier says 65,536 projected vertices. A `vertex_id` is
+    // u16 and `zhao_geom_parambuf`'s `td_sealed_vertices_i` is u16 with it, so
+    // the SEAL 65,536 is not expressible in the port the legality rule is
+    // tested against -- it would arrive as 0 and refuse every triangle. The
+    // choices were to widen a frozen record layout, to special-case the
+    // maximum, or to lose one vertex of 65,536. This takes the vertex, says so
+    // here, and leaves the number a knob. It is a REAL divergence from R7's
+    // tier table and is reported rather than absorbed.
+    parameter int unsigned MAX_VERTS  = 65535,
     parameter int unsigned MAX_TRIS   = 16384,
     parameter int unsigned MAX_CHUNKS = 16384,
     parameter int unsigned CHUNK_IDS  = 14
