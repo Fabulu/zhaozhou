@@ -461,14 +461,45 @@ composed**:
   and `zhao_terrain_spdesc` refuses it by name — it would be a second
   implementation of TERRAIN.PLACE's ratified law.
 
-**Whoever builds the walker owes that one decision**, and the three candidates
-are: a second `zhao_terrain_place` instance fed from the issue stream (small —
-shifts and an adder, no multiplier — but a duplicate provider, which R16 is the
-precedent against); a `cx`/`cz` column added to `zhao_terrain_devstore`, filled
-by `zhao_terrain_lodfeed` at page load when the placement is already in hand;
-or time-multiplexing the existing PLACE query port against the fill path. **The
-second is the one this contract recommends**, because the deviations are
-already written at that moment and by that block, and it adds no provider.
+**Whoever builds the walker owes that one decision.** Three candidates, and
+**this contract deliberately does not pick one**, because picking one was
+attempted here and the reason offered for it turned out to be wrong — see the
+correction below the list.
+
+1. **A second `zhao_terrain_place` instance** fed from the issue stream. Small
+   — TERRAIN.PLACE is shifts and an adder, no multiplier — but it is a
+   **duplicate provider**, and R16 (which retired `zhao_terrain_visible` for
+   exactly that) is the precedent against them.
+2. **A `cx`/`cz` column on `zhao_terrain_devstore`**, written at page load
+   beside the deviations.
+3. **Time-multiplexing the existing PLACE query port** against the fill path,
+   the way `zhao_terrain_spdesc` splices into the compose cache's lattice chain
+   and injects only on cycles the upstream client leaves.
+
+**CORRECTION, made before this recommendation was left standing.** This section
+first named (2) as the recommendation, *"because the deviations are already
+written at that moment and by that block"*. **The second half of that sentence
+is false.** `zhao_terrain_lodfeed` observes the **mip pass** — `f_start_i`,
+`f_slot_i`, `f_gen_i`, `f_epoch_i`, `f_src_id_i` and `f_h_i`, which are
+`mg_fine_*` heights. **It never sees a placement and never sees a patch
+coordinate.** Option (2) therefore needs the placed x/z routed to it as well,
+which is most of option (1) or (3) wearing option (2)'s clothes.
+
+What *is* measured, and is what the next packet should start from:
+
+* **The patch coordinate is available at both ends of the page's life.**
+  `zhao_terrain_hdrread` publishes `h_patch_ix_o`/`h_patch_iz_o` at page load
+  (spec 2.1 +8/+10, checked against the record TERRAIN.SEQ issued the job
+  from), and `zhao_terrain_seq` publishes `is_ix_o`/`is_iz_o` per admitted
+  patch. **Naming the patch is not the problem.**
+* **Getting its PLACED world x/z is**, because `zhao_terrain_place` answers for
+  the patch whose header it last took and the compose cache holds only the
+  patch it is serving.
+
+**Recomputing `wx = (patch_ix·32 + i) << (16 + pitch_log2)` inside the walker is
+the available shortcut and it is the one to refuse** — TERRAIN.PLACE exists
+precisely because I27 refused to inline that arithmetic into a composer, and
+`zhao_terrain_spdesc` refuses it again by name.
 
 Plus the interlock named above: the PREPARE pass must **discard `out_hold_o`**,
 and a deformation bake landing between the two passes breaks their determinism.
