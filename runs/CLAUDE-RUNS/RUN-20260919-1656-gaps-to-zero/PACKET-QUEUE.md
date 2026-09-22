@@ -271,3 +271,151 @@ file an expiry and did not"* is a real result.**
   mutant **aborted `cmake --preset` for every lane.**
 * **Scale the gate set to the change (R227).** Comment-only RTL owes the static
   gates, the tie-off audit, the register and `-LintOnly` — *nothing else.*
+
+---
+
+# THE QUEUE IS NOW THE OWNER'S SIX, ratified 2026-09-22
+
+**`reports/OWNER-RATIFICATION-20260922-COMPLETION.md` and the source document
+`reports/Zhaozhou_proposed_completion_rulings_2026-09-22.txt`. READ THE SOURCE,
+not a summary.** Reviewed commit `9a8b329a`.
+
+**THE GENERAL AUTHORIZATION GOVERNS EVERY ITEM BELOW:**
+
+> *"The coordinator owns their implementation details, generated layouts,
+> adapters, arbitration and validation. **Do not repeatedly escalate the same
+> decision because its implementation needs another field, decoder arm or
+> bounded helper.** … **A missing implementation already commissioned here is
+> work, not an unresolved policy decision.**"*
+
+**Escalate ONLY** a concrete contradiction with a still-binding owner
+requirement, a new externally visible behaviour not covered, or a genuinely
+broader permission request — **naming the conflicting clauses and recommending a
+resolution.**
+
+**Every packet reports in the owner's format, per item:** policy adopted ·
+producer implemented · **production consumer connected** · **real
+command-to-output behaviour exercised** · failure cases tested · area/timing
+**estimated or measured, kept separate**.
+
+> *"An otherwise green smoke whose upstream fixture never reaches the new path
+> does not prove the path."* — **This tree's smoke fails every terrain page's
+> CRC, so terrain's composed door never opens. A counter placed past it CANNOT
+> BE FIRED, and one lane had to move one mid-packet for exactly that reason.**
+
+**EXPECT THE REGISTER TO RISE.** Five of six commission capability that does not
+exist; R214 says contract+silicon owes a ledger row. 22 to 25 preceded 25 to 10.
+
+---
+
+## 1. PARTICLES — explicit `NO_MATERIAL` mode  *(closes a live drop)*
+
+**Particles are currently DROPPED at the clip door.** R197 refuses untextured
+geometry that would be sampled; a polygon particle has no material at all, so it
+is refused — **every counter healthy, particles simply absent.**
+
+`NO_MATERIAL` is **a lawful mode, never inferred** from a failed lookup, a
+sentinel handle, the previous span's material, or the untextured bit. No
+resolution request, no fault counter. **R197 stays for `MATERIAL_BACKED`.**
+**Material mode is part of the span's IDENTITY** — mode changes honour the
+existing drain/ordering so in-flight triangles keep their own profile; **no
+independently advancing metadata queue** (that is this repo's own swap defect).
+
+**Covers the WHOLE particle-to-raster path including canonical depth
+conversion** — *"not permission to close the task after changing only the
+material gate."* CLIPDOOR already located that blocker: `t_d_o` is Q16.16 1/w,
+slot 0 is invw24, D-4 forbids a consumer converting, and **`w` exists at
+`zhao_part_project` and is dropped at the ladder queue.**
+
+## 2. PROCEDURAL MATERIAL — a real (set handle, record ID) pair
+
+`material_set` = **complete** `handle32[material_set]`; `material_id` = an
+**independent u16**. **Reserved `DrawProcedural` payload bytes are authorized**
+for the ID; `frame_tick`'s allocation is preserved; both explicit in
+`commands.zidl` and **regenerated** into C++/TS/SV bindings and validators.
+
+**WHY NOT THE OBVIOUS PACKING — the coordinator got this wrong and the owner
+caught it:** the handle is **24 index + 8 generation bits**, so reading its low
+16 as the record ID means **a residency event silently repaints geometry.**
+
+Zero-filled legacy ID bytes select **record 0, a valid index**. **Where an
+earlier implementation guessed differently, DISCLOSE the rendering difference —
+do not silently overwrite goldens.** An additive opcode is the authorized
+fallback **with no further owner round-trip**. Capture the pair on the draw's
+**own accepted handshake** and keep it attached through lookup, evaluation,
+assembly and clip-door admission.
+
+## 3. TWOD — BOTH `SetPlane` **0x0306** and `DrawSprite` **0x0307**
+
+**VERIFIED FREE 2026-09-22:** 0x0300–0x0305 taken, 0x0310–0x031F sky-reserved.
+
+**The band is built, composed and permanently idle without this.** `SetPlane` is
+the restricted backdrop/atmosphere descriptor — **not** a depth-tested plane or
+a second unrestricted texture unit. `DrawSprite` is the HUD path; **text stays
+glyph sprites authored by software — no font engine, no private sampler.**
+
+**Descriptors are FRAME-SCOPED:** staged, validated, **published as a SEALED
+list** at the boundary owning that frame; **neither a later packet nor the next
+frame may mutate a list being consumed**, and an empty frame **must not retain
+yesterday's HUD.** **Includes the real asset/palette producer** — *"an opcode
+plus descriptors referring to data that only the testbench can inject is not
+completion."* **R235 preserved: refuse the whole sprite and COUNT it.**
+
+**Budget correction from the owner:** the 24 M10K is the **pixel band**;
+display-list storage is additional. **Do not quote 24 as an all-in HUD cost.**
+
+## 4. GEOM.PARAMBUF — a NARROW ENGINE1 window
+
+`[0x06000000,0x06400000)` view 0 · `[0x06400000,0x06800000)` view 1 ·
+`[0x06800000,0x06A00000)` shared scratch. **Half-open.** The asset pool at
+`[0x06A00000,0x08000000)` stays **read-only to ENGINE1**; no other client gains
+access. **No blanket bank-3 permission.**
+
+Overflow-safe extent checks; **a request crossing a boundary is NOT allowed
+merely because both endpoints lie in the union.** **Request identity travels
+with the request** — *"do not validate a queued request against a later global
+view selector"* (this repo's metadata-swap law). **Extend
+`mem_guard_no_escape`, never bypass it, and include a DELIBERATE FAULT that
+makes the proof FAIL.**
+
+**Covers the arena producer, allocation, chunk management, write route, readers
+and consumers** — the existing decoder *"is not the whole subsystem"*, and
+*"do not pack fields into a byte vector merely to unpack them again and count
+that as external-memory integration."*
+
+## 5. `sparse_fill` — configuration, not a producer
+
+On for `VALID_MODE == 0` (bitmap-valid), **off** for dense-seal. **Refuse the
+unsafe combination**, hold the setting **stable for a whole job**, keep the
+documented override. **No new command producer.** Demonstrate **identical
+rendered output** across LOD levels, both views and backpressure.
+
+## 6. NEIGHBOUR EDGES — build the real producer
+
+**`8'h00` is RETAINED as the conservative fallback until the real producer is
+validated, and must NOT be changed to a cheaper constant.** *(The bare literal
+is deliberate: a named localparam was removed because `packet_h_tieoff_audit`
+counts literals and the name HID FOUR TIE-OFFS from it. Do not reintroduce it.)*
+
+Bounded **prepare/reconcile/emit** sequencing over the frame's admitted terrain
+set is authorized; it **may buffer decisions and adjacency metadata**; it does
+**not** authorize a second terrain engine or a duplicate world store. Test mixed
+adjacent LODs, job-order permutations, deformation, morph transitions, both
+views and backpressure.
+
+> *"This is an explicit authorization to build the missing scheduling
+> functionality, not a claim that it is already cheap or complete."*
+
+**AND IT CHANGES THE ENDGAME:** *"If a first diagnostic fit uses conservative
+edge mode before adaptive reconciliation is complete, label that profile and its
+remaining functional/performance limitation; **it is not the requested final
+no-caveat full-capability fit.**"*
+
+---
+
+## SUGGESTED ORDER (coordinator's, not the owner's)
+
+**1 → 3 → 2 → 4 → 6**, with **5** folded into whichever terrain lane is open.
+Particles first because the path is mapped and something is being *dropped*
+today; TWOD next because the hardware exists and is idle; PARAMBUF and the
+neighbour-edge scheduler last because both are genuine subsystems.
