@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
     const int32_t v0 = static_cast<int32_t>(rnd(&s) % 4000000u) - 2000000;
 
     top.d_valid_i = 1;
+    top.d_enable_i = 1;
     top.d_slot_i = slot;
     top.d_role_i = role;
     top.d_blend_i = blend;

@@ -6289,7 +6289,13 @@ blocks:
     tests:
       directed: tests/compositor/twod_plane_directed.cpp
       random: tests/compositor/twod_plane_random.cpp
-    counters: [twod_plane_blended_fragments]
+    # `twod_plane_disabled` NAMED 2026-09-22 (packet TWODCMD) with the port it
+    # lives on. The other five 32-bit outputs on this block predate the packet
+    # and are left on `check_counters`' R110 list, where the tool can go on
+    # reporting them, rather than swept up in a change about something else.
+    counters: [twod_plane_blended_fragments, twod_plane_disabled]
+    counter_ports:
+      twod_plane_disabled: disabled_o
     source_ids: true
     budget_group: twod_post
     maturity: REFERENCE_COMPLETE
@@ -6382,15 +6388,21 @@ blocks:
       # when `band_underrun_o` FIRES with a perfectly healthy sampler. It is a
       # WRAPPER, so it cannot drift in its body.
       mutant: tests/mutants/twod_band_burst_mutant_driver.cpp
+    # `twod_band_desc_mid_sweep` NAMED 2026-09-22 (packet TWODCMD) with the
+    # port it lives on: a descriptor arriving while the band is already
+    # sweeping is the fault `list_busy_i` exists to prevent, so the counter
+    # that watches it has to be in the ledger and not only in the RTL.
     counters:
       [twod_band_sprites_admitted, twod_band_sprites_refused_budget,
-       twod_band_desc_overflow, twod_band_underrun, twod_band_pixels_written]
+       twod_band_desc_overflow, twod_band_underrun, twod_band_pixels_written,
+       twod_band_desc_mid_sweep]
     counter_ports:
       twod_band_sprites_admitted: sprites_admitted_o
       twod_band_sprites_refused_budget: sprites_refused_budget_o
       twod_band_desc_overflow: desc_overflow_o
       twod_band_underrun: band_underrun_o
       twod_band_pixels_written: pixels_written_o
+      twod_band_desc_mid_sweep: desc_mid_sweep_o
     source_ids: true
     budget_group: twod_post
     maturity: RTL_VERIFIED
@@ -6422,6 +6434,179 @@ blocks:
       gap (zhao_twod_sampler's tint_unapplied_o), made measurable, not a new
       one. The descriptor RECORD (twod_sd_*) remains an OWNER decision and the
       band imposes no new requirement on it.
+
+  # TWOD.CMD and TWOD.ASSET, 2026-09-22 (packet TWODCMD). The owner's
+  # completion ruling of that date, item 3, authorized BOTH descriptor records
+  # -- SetPlane 0x0306 and DrawSprite 0x0307 -- and their asset path, because
+  # "adding only a plane command does not establish a producer for HUD sprite
+  # descriptors" and "an opcode plus descriptors referring to data that only
+  # the testbench can inject is not completion".
+  #
+  # THE CONTRACTS WERE WRITTEN BEFORE THESE ROWS, per R214. The ruling's own
+  # ratification note says to expect the register to RISE for exactly this
+  # reason: "five of these six commission capability that does not exist yet
+  # ... building them makes the count go UP until each is composed. That is the
+  # instrument working."
+  #
+  # No `_vN` suffix (R179), no `implementation:` key, and `upstream:` /
+  # `downstream:` are design intent (R180).
+  - id: TWOD.CMD
+    name: TWOD descriptor producer
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: "Stage SetPlane 0x0306 and DrawSprite 0x0307 records with packet atomicity, then publish a SEALED per-frame descriptor list to TWOD.PLANE and TWOD.BAND at the band's own list-clear edge, with the frame-scoped plane disable and the empty-frame path the ruling requires."
+    contract: design/contracts/TWOD.CMD.md
+    phase: 11
+    owner_issue: ZH-070
+    inputs: [dispatch]
+    outputs: [dispatch]
+    upstream: [CMD.EXEC, TWOD.BAND]
+    downstream: [TWOD.PLANE, TWOD.BAND, TWOD.SAMPLER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 record staged per clock, 1 descriptor published per 2 clocks
+    # NO `reference_model:` IS DECLARED, DELIBERATELY, and the argument is
+    # TWOD.BAND's verbatim: what this block owns is a SCHEDULE -- a ring, a
+    # commit pointer and a seal window -- not an arithmetic law, and a scalar
+    # oracle for it would be the same author's second implementation of the same
+    # schedule. `refmodel_liveness.py` already names six blocks whose declared
+    # symbol exists nowhere; a seventh would be a cheque nobody intends to cash.
+    # The stronger check is used instead: the chain bench drives REAL PACKET
+    # BYTES to composited pixels, which no scalar oracle can stand in for.
+    tests:
+      directed: tests/compositor/twod_cmd_directed.cpp
+    # ALL THIRTEEN ARE NAMED (owner ruling R110). The first version of this
+    # row named five, which is how a ledger missing half its counters reads as
+    # a clean one -- `tools/design/check_counters.py` reports the other
+    # direction and does NOT gate, so nothing would ever have failed.
+    counters:
+      [twod_cmd_planes_staged, twod_cmd_sprites_staged,
+       twod_cmd_planes_published, twod_cmd_sprites_published,
+       twod_cmd_plane_refused, twod_cmd_sprite_refused,
+       twod_cmd_list_overflow, twod_cmd_slots_auto_disabled,
+       twod_cmd_bind_conflict, twod_cmd_packets_committed,
+       twod_cmd_packets_abandoned, twod_cmd_frames_sealed,
+       twod_cmd_seal_overrun]
+    counter_ports:
+      twod_cmd_planes_staged: planes_staged_o
+      twod_cmd_sprites_staged: sprites_staged_o
+      twod_cmd_planes_published: planes_published_o
+      twod_cmd_sprites_published: sprites_published_o
+      twod_cmd_plane_refused: plane_refused_o
+      twod_cmd_sprite_refused: sprite_refused_o
+      twod_cmd_list_overflow: list_overflow_o
+      twod_cmd_slots_auto_disabled: slots_auto_disabled_o
+      twod_cmd_bind_conflict: bind_conflict_o
+      twod_cmd_packets_committed: packets_committed_o
+      twod_cmd_packets_abandoned: packets_abandoned_o
+      twod_cmd_frames_sealed: frames_sealed_o
+      twod_cmd_seal_overrun: seal_overrun_o
+    source_ids: true
+    budget_group: twod_post
+    maturity: RTL_VERIFIED
+    maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-09-22"
+        commit: "gz/twodcmd"
+        evidence: >-
+          fpga/rtl/compositor/zhao_twod_cmd.sv, composed in zhao_console_core as
+          u_twod_cmd (owner completion ruling 2026-09-22 item 3, core entry
+          I17). tests/compositor/twod_cmd_directed.cpp fires every counter with
+          legal stimulus at the block's own ports, and
+          tests/compositor/twod_cmd_chain_directed.cpp drives REAL PACKET BYTES
+          through zhao_cmd_decoder and zhao_cmd_exec to composited pixels out of
+          zhao_post_composite, with the texels read from an HPS arena model by
+          TWOD.ASSET -- no descriptor and no texel injected at a downstream
+          boundary. NOT YET FITTED -- R236 forbids Quartus until the register
+          reads zero. The 9 M10K and ~950 ALM are ARITHMETIC; a leaf row in
+          design/fit_targets.yml asks exactly that question.
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THE SEAL EDGE IS zhao_twod_band.list_restart_o AND NOT THE FRAME TICK. The
+      band ignores a tick that lands mid-pass -- ignoring it is what fixed the
+      composed console's 582,261 underruns -- so a producer sealing on the tick
+      would append a new frame's descriptors to the old frame's list on exactly
+      those frames, silently, with every counter balancing (entry I39, "two live
+      wires are not a producer"). The band's desc_mid_sweep_o is the independent
+      check and its two operands are clocked by different things. THE 9 M10K IS
+      DISPLAY-LIST STORAGE AND IS NOT PART OF TWOD.BAND's 24 -- the owner's own
+      correction: "do not treat 24 M10K as an established all-in HUD cost".
+
+  - id: TWOD.ASSET
+    name: TWOD page and palette loader
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: "Read a TWOD_PAGE resource out of the HPS arena a PublishResource names and write it into TWOD.SAMPLER's on-chip page or palette store, under the existing CRC-32C, length, address and epoch laws, zeroing what it wrote on a CRC failure."
+    contract: design/contracts/TWOD.ASSET.md
+    phase: 11
+    owner_issue: ZH-071
+    inputs: [hps_arena]
+    outputs: [texture_pages]
+    upstream: [CMD.EXEC, MEM.HPS]
+    downstream: [TWOD.SAMPLER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 texel word written per clock
+    reference_model: zref::twod::asset_verdict
+    tests:
+      directed: tests/compositor/twod_asset_directed.cpp
+    # ALL TWELVE ARE NAMED (owner ruling R110). The four REFUSAL counters are
+    # separate on purpose and the order is the record's own -- destination,
+    # extent, source, epoch -- so a rejected page says WHICH clause rejected it
+    # rather than only that one did.
+    counters:
+      [twod_asset_loads_started, twod_asset_loads_done,
+       twod_asset_words_written, twod_asset_slot_refused,
+       twod_asset_len_refused, twod_asset_addr_refused,
+       twod_asset_epoch_refused, twod_asset_crc_fails,
+       twod_asset_regions_zeroed, twod_asset_bridge_errs,
+       twod_asset_loads_during_pass, twod_asset_bursts]
+    counter_ports:
+      twod_asset_loads_started: loads_started_o
+      twod_asset_loads_done: loads_done_o
+      twod_asset_words_written: words_written_o
+      twod_asset_slot_refused: slot_refused_o
+      twod_asset_len_refused: len_refused_o
+      twod_asset_addr_refused: addr_refused_o
+      twod_asset_epoch_refused: epoch_refused_o
+      twod_asset_crc_fails: crc_fails_o
+      twod_asset_regions_zeroed: regions_zeroed_o
+      twod_asset_bridge_errs: bridge_errs_o
+      twod_asset_loads_during_pass: loads_during_pass_o
+      twod_asset_bursts: bursts_o
+    source_ids: false
+    budget_group: twod_post
+    maturity: RTL_VERIFIED
+    maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-09-22"
+        commit: "gz/twodcmd"
+        evidence: >-
+          fpga/rtl/compositor/zhao_twod_asset.sv, composed in zhao_console_core
+          as u_twod_asset and as client 6 of u_terr_hps_arb (owner completion
+          ruling 2026-09-22 item 3, asset clause).
+          tests/compositor/twod_asset_directed.cpp fires every refusal clause on
+          its own counter and proves the CRC failure zeroes exactly what it
+          wrote; tests/compositor/twod_cmd_chain_directed.cpp reads its bytes
+          out of an HPS arena model driven by a real PublishResource of
+          cartridge kind 15. NOT YET FITTED -- R236.
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      A BURST IS COLLECTED WHOLE AND THEN DRAINED. The bridge delivers one beat
+      per cycle once granted; a store write takes four cycles per beat, so
+      draining while the beats land would drop three beats in four with every
+      counter balancing. A FAILED CRC ZEROES WHAT IT WROTE rather than
+      publishing half a page (which makes a corrupt transfer look like art,
+      R221) or leaving the previous one (which draws last level's HUD while a
+      counter says the new one failed). DECLARED, NOT DISCOVERED: the write is
+      not frame-gated, so a descriptor sampling a region mid-load sees a mix;
+      loads_during_pass_o measures the exposure.
 
   # ===========================================================================
   # POST — Mirror Gate (fpga/rtl/compositor)

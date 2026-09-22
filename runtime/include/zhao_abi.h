@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8ba03b43686282a3c4bd70b7826cfbc736228f3dc3bca37432a004c717aa17e3
-//   zidl_sha256         = 54abc34d6b67f51675a93b8c79976bd9ff1a226aec87e4dcbce52002bc730bcd
+//   abi_identity_sha256 = df61db8f05d25df1fe5786a426467579749a9d2f27693eed6a0e84c9bd862398
+//   zidl_sha256         = cf3b82f860e2227f3205856557fe08686fa5d6949e1a2d04d23aeabe8d0a8e0a
 #pragma once
 
 #include <cstdint>
@@ -16,6 +16,7 @@ constexpr uint16_t ZHAO_COMMAND_ALIGNMENT = 16;
 constexpr uint16_t ZHAO_OPCODE_WIDTH      = 2; // u16
 constexpr uint32_t FRAME_SLOT_BYTES = 1048576u;
 constexpr uint16_t QFMT_VERSION = 3u;
+constexpr uint8_t RESOURCE_KIND_TWOD_PAGE = 15u;
 
 enum zhao_abi_error : uint32_t {
   ZH_ABI_OK = 0,
@@ -89,6 +90,8 @@ constexpr uint16_t ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_POSED_FORM = 0x0305; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_WARPED_FORM = 0x0304; // 96 B, implemented
+constexpr uint16_t ZHAO_OP_SET_PLANE = 0x0306; // 64 B, implemented
+constexpr uint16_t ZHAO_OP_DRAW_SPRITE = 0x0307; // 64 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -983,6 +986,116 @@ struct ZhRecordDrawWarpedForm {
 };
 static_assert(sizeof(ZhRecordDrawWarpedForm) == 96, "layout drift: DrawWarpedForm record");
 
+// SetPlane 0x0306: 64-byte record (implemented)
+struct ZhCmdSetPlane {
+  uint8_t slot;
+  uint8_t role;
+  uint8_t blend;
+  uint8_t opacity;
+  uint8_t format;
+  uint8_t wrap;
+  uint8_t view_mask;
+  uint8_t palette_id;
+  uint16_t width;
+  uint16_t height;
+  uint16_t flags;
+  uint16_t base;
+  uint8_t lstride;
+  uint8_t lheight;
+  uint8_t pad[2];
+  int32_t a;
+  int32_t b;
+  int32_t c;
+  int32_t d;
+  int32_t u0;
+  int32_t v0;
+  int32_t line_scroll;
+};
+static_assert(offsetof(ZhCmdSetPlane, slot) == 0, "layout drift: SetPlane.slot");
+static_assert(offsetof(ZhCmdSetPlane, role) == 1, "layout drift: SetPlane.role");
+static_assert(offsetof(ZhCmdSetPlane, blend) == 2, "layout drift: SetPlane.blend");
+static_assert(offsetof(ZhCmdSetPlane, opacity) == 3, "layout drift: SetPlane.opacity");
+static_assert(offsetof(ZhCmdSetPlane, format) == 4, "layout drift: SetPlane.format");
+static_assert(offsetof(ZhCmdSetPlane, wrap) == 5, "layout drift: SetPlane.wrap");
+static_assert(offsetof(ZhCmdSetPlane, view_mask) == 6, "layout drift: SetPlane.view_mask");
+static_assert(offsetof(ZhCmdSetPlane, palette_id) == 7, "layout drift: SetPlane.palette_id");
+static_assert(offsetof(ZhCmdSetPlane, width) == 8, "layout drift: SetPlane.width");
+static_assert(offsetof(ZhCmdSetPlane, height) == 10, "layout drift: SetPlane.height");
+static_assert(offsetof(ZhCmdSetPlane, flags) == 12, "layout drift: SetPlane.flags");
+static_assert(offsetof(ZhCmdSetPlane, base) == 14, "layout drift: SetPlane.base");
+static_assert(offsetof(ZhCmdSetPlane, lstride) == 16, "layout drift: SetPlane.lstride");
+static_assert(offsetof(ZhCmdSetPlane, lheight) == 17, "layout drift: SetPlane.lheight");
+static_assert(offsetof(ZhCmdSetPlane, pad[0]) == 18, "layout drift: SetPlane.pad");
+static_assert(offsetof(ZhCmdSetPlane, a) == 20, "layout drift: SetPlane.a");
+static_assert(offsetof(ZhCmdSetPlane, b) == 24, "layout drift: SetPlane.b");
+static_assert(offsetof(ZhCmdSetPlane, c) == 28, "layout drift: SetPlane.c");
+static_assert(offsetof(ZhCmdSetPlane, d) == 32, "layout drift: SetPlane.d");
+static_assert(offsetof(ZhCmdSetPlane, u0) == 36, "layout drift: SetPlane.u0");
+static_assert(offsetof(ZhCmdSetPlane, v0) == 40, "layout drift: SetPlane.v0");
+static_assert(offsetof(ZhCmdSetPlane, line_scroll) == 44, "layout drift: SetPlane.line_scroll");
+static_assert(sizeof(ZhCmdSetPlane) == 48, "layout drift: SetPlane payload");
+
+struct ZhRecordSetPlane {
+  ZhCmdHeader hdr;
+  ZhCmdSetPlane payload;
+};
+static_assert(sizeof(ZhRecordSetPlane) == 64, "layout drift: SetPlane record");
+
+// DrawSprite 0x0307: 64-byte record (implemented)
+struct ZhCmdDrawSprite {
+  int16_t x;
+  int16_t y;
+  uint16_t w;
+  uint16_t h;
+  uint16_t base;
+  uint8_t lstride;
+  uint8_t lheight;
+  uint8_t format;
+  uint8_t palette_id;
+  uint8_t blend;
+  uint8_t view_mask;
+  ZhRgb565 tint;
+  uint8_t order;
+  uint8_t flags;
+  uint16_t src_id;
+  uint8_t pad[2];
+  int32_t u;
+  int32_t v;
+  int32_t a00;
+  int32_t a01;
+  int32_t a10;
+  int32_t a11;
+};
+static_assert(offsetof(ZhCmdDrawSprite, x) == 0, "layout drift: DrawSprite.x");
+static_assert(offsetof(ZhCmdDrawSprite, y) == 2, "layout drift: DrawSprite.y");
+static_assert(offsetof(ZhCmdDrawSprite, w) == 4, "layout drift: DrawSprite.w");
+static_assert(offsetof(ZhCmdDrawSprite, h) == 6, "layout drift: DrawSprite.h");
+static_assert(offsetof(ZhCmdDrawSprite, base) == 8, "layout drift: DrawSprite.base");
+static_assert(offsetof(ZhCmdDrawSprite, lstride) == 10, "layout drift: DrawSprite.lstride");
+static_assert(offsetof(ZhCmdDrawSprite, lheight) == 11, "layout drift: DrawSprite.lheight");
+static_assert(offsetof(ZhCmdDrawSprite, format) == 12, "layout drift: DrawSprite.format");
+static_assert(offsetof(ZhCmdDrawSprite, palette_id) == 13, "layout drift: DrawSprite.palette_id");
+static_assert(offsetof(ZhCmdDrawSprite, blend) == 14, "layout drift: DrawSprite.blend");
+static_assert(offsetof(ZhCmdDrawSprite, view_mask) == 15, "layout drift: DrawSprite.view_mask");
+static_assert(offsetof(ZhCmdDrawSprite, tint) == 16, "layout drift: DrawSprite.tint");
+static_assert(offsetof(ZhCmdDrawSprite, order) == 18, "layout drift: DrawSprite.order");
+static_assert(offsetof(ZhCmdDrawSprite, flags) == 19, "layout drift: DrawSprite.flags");
+static_assert(offsetof(ZhCmdDrawSprite, src_id) == 20, "layout drift: DrawSprite.src_id");
+static_assert(offsetof(ZhCmdDrawSprite, pad[0]) == 22, "layout drift: DrawSprite.pad");
+static_assert(offsetof(ZhCmdDrawSprite, u) == 24, "layout drift: DrawSprite.u");
+static_assert(offsetof(ZhCmdDrawSprite, v) == 28, "layout drift: DrawSprite.v");
+static_assert(offsetof(ZhCmdDrawSprite, a00) == 32, "layout drift: DrawSprite.a00");
+static_assert(offsetof(ZhCmdDrawSprite, a01) == 36, "layout drift: DrawSprite.a01");
+static_assert(offsetof(ZhCmdDrawSprite, a10) == 40, "layout drift: DrawSprite.a10");
+static_assert(offsetof(ZhCmdDrawSprite, a11) == 44, "layout drift: DrawSprite.a11");
+static_assert(sizeof(ZhCmdDrawSprite) == 48, "layout drift: DrawSprite payload");
+
+struct ZhRecordDrawSprite {
+  ZhCmdHeader hdr;
+  ZhCmdDrawSprite payload;
+};
+static_assert(sizeof(ZhRecordDrawSprite) == 64, "layout drift: DrawSprite record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1628,6 +1741,68 @@ inline ZhRecordDrawWarpedForm zhao_sample_draw_warped_form() {
   return r;
 }
 
+inline ZhRecordSetPlane zhao_sample_set_plane() {
+  ZhRecordSetPlane r{};
+  r.hdr.opcode       = ZHAO_OP_SET_PLANE;
+  r.hdr.record_bytes = 64;
+  r.hdr.source_id    = 1342242841u; // kind 5, module 1, index 25
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.slot = 125u;
+  r.payload.role = 253u;
+  r.payload.blend = 33u;
+  r.payload.opacity = 245u;
+  r.payload.format = 141u;
+  r.payload.wrap = 129u;
+  r.payload.view_mask = 125u;
+  r.payload.palette_id = 157u;
+  r.payload.width = 9545u;
+  r.payload.height = 22272u;
+  r.payload.flags = 15507u;
+  r.payload.base = 7226u;
+  r.payload.lstride = 253u;
+  r.payload.lheight = 217u;
+  r.payload.a = 88599;
+  r.payload.b = 154135;
+  r.payload.c = 219671;
+  r.payload.d = 285207;
+  r.payload.u0 = 350743;
+  r.payload.v0 = 416279;
+  r.payload.line_scroll = 481815;
+  return r;
+}
+
+inline ZhRecordDrawSprite zhao_sample_draw_sprite() {
+  ZhRecordDrawSprite r{};
+  r.hdr.opcode       = ZHAO_OP_DRAW_SPRITE;
+  r.hdr.record_bytes = 64;
+  r.hdr.source_id    = 1342242842u; // kind 5, module 1, index 26
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.x = 10553;
+  r.payload.y = 10616;
+  r.payload.w = 31735u;
+  r.payload.h = 28502u;
+  r.payload.base = 35129u;
+  r.payload.lstride = 240u;
+  r.payload.lheight = 90u;
+  r.payload.format = 56u;
+  r.payload.palette_id = 102u;
+  r.payload.blend = 180u;
+  r.payload.view_mask = 2u;
+  r.payload.tint = zhao_sample_rgb565();
+  r.payload.order = 13u;
+  r.payload.flags = 231u;
+  r.payload.src_id = 25795u;
+  r.payload.u = 154135;
+  r.payload.v = 219671;
+  r.payload.a00 = 285207;
+  r.payload.a01 = 350743;
+  r.payload.a10 = 416279;
+  r.payload.a11 = 481815;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1991,6 +2166,62 @@ inline void zhao_pack_draw_warped_form(const ZhRecordDrawWarpedForm& r, std::vec
   for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
   for (int i = 0; i < 3; ++i) { w.u32(r.payload.displacement_bound[i]); }
   for (int i = 0; i < 4; ++i) w.u8(r.payload.pad_1[i]);
+}
+
+inline void zhao_pack_set_plane(const ZhRecordSetPlane& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.slot);
+  w.u8(r.payload.role);
+  w.u8(r.payload.blend);
+  w.u8(r.payload.opacity);
+  w.u8(r.payload.format);
+  w.u8(r.payload.wrap);
+  w.u8(r.payload.view_mask);
+  w.u8(r.payload.palette_id);
+  w.u16(r.payload.width);
+  w.u16(r.payload.height);
+  w.u16(r.payload.flags);
+  w.u16(r.payload.base);
+  w.u8(r.payload.lstride);
+  w.u8(r.payload.lheight);
+  for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
+  w.u32(r.payload.a);
+  w.u32(r.payload.b);
+  w.u32(r.payload.c);
+  w.u32(r.payload.d);
+  w.u32(r.payload.u0);
+  w.u32(r.payload.v0);
+  w.u32(r.payload.line_scroll);
+}
+
+inline void zhao_pack_draw_sprite(const ZhRecordDrawSprite& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u16(r.payload.x);
+  w.u16(r.payload.y);
+  w.u16(r.payload.w);
+  w.u16(r.payload.h);
+  w.u16(r.payload.base);
+  w.u8(r.payload.lstride);
+  w.u8(r.payload.lheight);
+  w.u8(r.payload.format);
+  w.u8(r.payload.palette_id);
+  w.u8(r.payload.blend);
+  w.u8(r.payload.view_mask);
+  zhao_pack_rgb565(r.payload.tint, w);
+  w.u8(r.payload.order);
+  w.u8(r.payload.flags);
+  w.u16(r.payload.src_id);
+  for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
+  w.u32(r.payload.u);
+  w.u32(r.payload.v);
+  w.u32(r.payload.a00);
+  w.u32(r.payload.a01);
+  w.u32(r.payload.a10);
+  w.u32(r.payload.a11);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -2609,6 +2840,66 @@ inline bool zhao_unpack_draw_warped_form(ZhReader& r, ZhRecordDrawWarpedForm& ou
   return true;
 }
 
+inline bool zhao_unpack_set_plane(ZhReader& r, ZhRecordSetPlane& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.slot = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.role = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.blend = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.opacity = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.format = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.wrap = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.view_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.palette_id = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.width = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.height = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.flags = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.base = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.lstride = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.lheight = t; }
+  if (!r.skip(2)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.a = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.b = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.c = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.d = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.u0 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.v0 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.line_scroll = t; }
+  return true;
+}
+
+inline bool zhao_unpack_draw_sprite(ZhReader& r, ZhRecordDrawSprite& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.x = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.y = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.w = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.h = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.base = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.lstride = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.lheight = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.format = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.palette_id = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.blend = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.view_mask = t; }
+  if (!zhao_unpack_rgb565(r, out.payload.tint)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.order = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.src_id = t; }
+  if (!r.skip(2)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.u = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.v = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.a00 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.a01 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.a10 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.a11 = t; }
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -2634,6 +2925,8 @@ constexpr uint16_t ZHAO_PADS_SET_GRADE_TABLE[] = {3, 76, 77, 78, 79};
 constexpr uint16_t ZHAO_PADS_DEBUG_TRACE_ARM[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_DRAW_POSED_FORM[] = {21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DRAW_WARPED_FORM[] = {62, 63, 76, 77, 78, 79};
+constexpr uint16_t ZHAO_PADS_SET_PLANE[] = {18, 19};
+constexpr uint16_t ZHAO_PADS_DRAW_SPRITE[] = {22, 23};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -2660,8 +2953,10 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DebugTraceArm", 0xF003, 32, true, ZHAO_PADS_DEBUG_TRACE_ARM, 14},
   {"DrawPosedForm", 0x0305, 48, true, ZHAO_PADS_DRAW_POSED_FORM, 11},
   {"DrawWarpedForm", 0x0304, 96, true, ZHAO_PADS_DRAW_WARPED_FORM, 6},
+  {"SetPlane", 0x0306, 64, true, ZHAO_PADS_SET_PLANE, 2},
+  {"DrawSprite", 0x0307, 64, true, ZHAO_PADS_DRAW_SPRITE, 2},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 25;
+constexpr size_t ZHAO_COMMAND_COUNT = 27;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2701,8 +2996,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x8B, 0xA0, 0x3B, 0x43, 0x68, 0x62, 0x82, 0xA3, 0xC4, 0xBD, 0x70, 0xB7, 0x82, 0x6C, 0xFB, 0xC7, 0x36, 0x22, 0x8F, 0x3D, 0xC3, 0xBC, 0xA3, 0x74, 0x32, 0xA0, 0x04, 0xC7, 0x17, 0xAA, 0x17, 0xE3};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x54, 0xAB, 0xC3, 0x4D, 0x6B, 0x67, 0xF5, 0x16, 0x75, 0xA9, 0x3B, 0x8C, 0x79, 0x97, 0x6B, 0xD9, 0xFF, 0x1A, 0x22, 0x6A, 0xEC, 0x87, 0xE4, 0xDC, 0xBC, 0xE5, 0x20, 0x02, 0xBC, 0x73, 0x0B, 0xCD};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xDF, 0x61, 0xDB, 0x8F, 0x05, 0xD2, 0x5D, 0xF1, 0xFE, 0x57, 0x86, 0xA4, 0x26, 0x46, 0x75, 0x79, 0x74, 0x9A, 0x9D, 0x2F, 0x27, 0x69, 0x3E, 0xED, 0x6A, 0x0E, 0x84, 0xC9, 0xBD, 0x86, 0x23, 0x98};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xCF, 0x3B, 0x82, 0xF8, 0x60, 0xE2, 0x22, 0x7F, 0x32, 0x05, 0x85, 0x65, 0x57, 0xFE, 0x08, 0x68, 0x6F, 0xA5, 0xD6, 0x94, 0x9E, 0x1A, 0x2D, 0x04, 0xD2, 0x3A, 0xEA, 0xBE, 0x8D, 0x0A, 0x8E, 0x0A};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

@@ -17,6 +17,7 @@ package zhao_abi_pkg;
   /* verilator lint_off UNUSEDPARAM */
   localparam logic [31:0] FRAME_SLOT_BYTES = 32'd1048576;
   localparam logic [31:0] QFMT_VERSION = 32'd3;
+  localparam logic [31:0] RESOURCE_KIND_TWOD_PAGE = 32'd15;
   /* verilator lint_on UNUSEDPARAM */
 
   // frame packet (capture_format.md 3)
@@ -113,6 +114,8 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_DEBUG_TRACE_ARM = 16'hF003;
   localparam logic [15:0] ZHAO_OP_DRAW_POSED_FORM = 16'h0305;
   localparam logic [15:0] ZHAO_OP_DRAW_WARPED_FORM = 16'h0304;
+  localparam logic [15:0] ZHAO_OP_SET_PLANE = 16'h0306;
+  localparam logic [15:0] ZHAO_OP_DRAW_SPRITE = 16'h0307;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1524,6 +1527,132 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_1 = 84;
   localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_DISPLACEMENT_BOUND_2 = 88;
   localparam int unsigned ZHAO_DRAW_WARPED_FORM_OFF_PAD_1 = 92;
+
+  // SetPlane 0x0306: 64-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] line_scroll;  // fx16 = Q16.16 in 32 bits (qformats.md) @60
+    logic [31:0] v0;  // fx16 = Q16.16 in 32 bits (qformats.md) @56
+    logic [31:0] u0;  // fx16 = Q16.16 in 32 bits (qformats.md) @52
+    logic [31:0] d;  // fx16 = Q16.16 in 32 bits (qformats.md) @48
+    logic [31:0] c;  // fx16 = Q16.16 in 32 bits (qformats.md) @44
+    logic [31:0] b;  // fx16 = Q16.16 in 32 bits (qformats.md) @40
+    logic [31:0] a;  // fx16 = Q16.16 in 32 bits (qformats.md) @36
+    logic [15:0] pad;  // 2 zero byte(s) @34
+    logic [7:0] lheight;  // u8 @33
+    logic [7:0] lstride;  // u8 @32
+    logic [15:0] base;  // u16 @30
+    logic [15:0] flags;  // u16 @28
+    logic [15:0] height;  // u16 @26
+    logic [15:0] width;  // u16 @24
+    logic [7:0] palette_id;  // u8 @23
+    logic [7:0] view_mask;  // u8 @22
+    logic [7:0] wrap;  // u8 @21
+    logic [7:0] format;  // u8 @20
+    logic [7:0] opacity;  // u8 @19
+    logic [7:0] blend;  // u8 @18
+    logic [7:0] role;  // u8 @17
+    logic [7:0] slot;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_set_plane_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_PLANE_BYTES = 64;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_PLANE_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_SLOT = 16;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_ROLE = 17;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_BLEND = 18;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_OPACITY = 19;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_FORMAT = 20;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_WRAP = 21;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_VIEW_MASK = 22;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_PALETTE_ID = 23;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_WIDTH = 24;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_HEIGHT = 26;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_FLAGS = 28;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_BASE = 30;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_LSTRIDE = 32;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_LHEIGHT = 33;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_PAD = 34;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_A = 36;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_B = 40;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_C = 44;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_D = 48;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_U0 = 52;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_V0 = 56;
+  localparam int unsigned ZHAO_SET_PLANE_OFF_LINE_SCROLL = 60;
+
+  // DrawSprite 0x0307: 64-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] a11;  // fx16 = Q16.16 in 32 bits (qformats.md) @60
+    logic [31:0] a10;  // fx16 = Q16.16 in 32 bits (qformats.md) @56
+    logic [31:0] a01;  // fx16 = Q16.16 in 32 bits (qformats.md) @52
+    logic [31:0] a00;  // fx16 = Q16.16 in 32 bits (qformats.md) @48
+    logic [31:0] v;  // fx16 = Q16.16 in 32 bits (qformats.md) @44
+    logic [31:0] u;  // fx16 = Q16.16 in 32 bits (qformats.md) @40
+    logic [15:0] pad;  // 2 zero byte(s) @38
+    logic [15:0] src_id;  // u16 @36
+    logic [7:0] flags;  // u8 @35
+    logic [7:0] order;  // u8 @34
+    zhao_rgb565_t tint;  // 2 B @32
+    logic [7:0] view_mask;  // u8 @31
+    logic [7:0] blend;  // u8 @30
+    logic [7:0] palette_id;  // u8 @29
+    logic [7:0] format;  // u8 @28
+    logic [7:0] lheight;  // u8 @27
+    logic [7:0] lstride;  // u8 @26
+    logic [15:0] base;  // u16 @24
+    logic [15:0] h;  // u16 @22
+    logic [15:0] w;  // u16 @20
+    logic [15:0] y;  // i16 @18
+    logic [15:0] x;  // i16 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_draw_sprite_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_SPRITE_BYTES = 64;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_X = 16;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_Y = 18;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_W = 20;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_H = 22;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_BASE = 24;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_LSTRIDE = 26;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_LHEIGHT = 27;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_FORMAT = 28;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_PALETTE_ID = 29;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_BLEND = 30;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_VIEW_MASK = 31;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_TINT = 32;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_ORDER = 34;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_FLAGS = 35;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_SRC_ID = 36;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_PAD = 38;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_U = 40;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_V = 44;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_A00 = 48;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_A01 = 52;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_A10 = 56;
+  localparam int unsigned ZHAO_DRAW_SPRITE_OFF_A11 = 60;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -3059,6 +3188,142 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [511:0] zhao_pack_set_plane(input zhao_rec_set_plane_t c);
+    logic [511:0] v;
+    begin
+      v[ZHAO_SET_PLANE_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SET_PLANE_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SET_PLANE_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SET_PLANE_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SET_PLANE_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SET_PLANE_OFF_SLOT*8 +: 8] = c.slot;
+      v[ZHAO_SET_PLANE_OFF_ROLE*8 +: 8] = c.role;
+      v[ZHAO_SET_PLANE_OFF_BLEND*8 +: 8] = c.blend;
+      v[ZHAO_SET_PLANE_OFF_OPACITY*8 +: 8] = c.opacity;
+      v[ZHAO_SET_PLANE_OFF_FORMAT*8 +: 8] = c.format;
+      v[ZHAO_SET_PLANE_OFF_WRAP*8 +: 8] = c.wrap;
+      v[ZHAO_SET_PLANE_OFF_VIEW_MASK*8 +: 8] = c.view_mask;
+      v[ZHAO_SET_PLANE_OFF_PALETTE_ID*8 +: 8] = c.palette_id;
+      v[ZHAO_SET_PLANE_OFF_WIDTH*8 +: 16] = c.width;
+      v[ZHAO_SET_PLANE_OFF_HEIGHT*8 +: 16] = c.height;
+      v[ZHAO_SET_PLANE_OFF_FLAGS*8 +: 16] = c.flags;
+      v[ZHAO_SET_PLANE_OFF_BASE*8 +: 16] = c.base;
+      v[ZHAO_SET_PLANE_OFF_LSTRIDE*8 +: 8] = c.lstride;
+      v[ZHAO_SET_PLANE_OFF_LHEIGHT*8 +: 8] = c.lheight;
+      v[ZHAO_SET_PLANE_OFF_PAD*8 +: 16] = c.pad;
+      v[ZHAO_SET_PLANE_OFF_A*8 +: 32] = c.a;
+      v[ZHAO_SET_PLANE_OFF_B*8 +: 32] = c.b;
+      v[ZHAO_SET_PLANE_OFF_C*8 +: 32] = c.c;
+      v[ZHAO_SET_PLANE_OFF_D*8 +: 32] = c.d;
+      v[ZHAO_SET_PLANE_OFF_U0*8 +: 32] = c.u0;
+      v[ZHAO_SET_PLANE_OFF_V0*8 +: 32] = c.v0;
+      v[ZHAO_SET_PLANE_OFF_LINE_SCROLL*8 +: 32] = c.line_scroll;
+      zhao_pack_set_plane = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_set_plane_t zhao_unpack_set_plane(input logic [511:0] v);
+    zhao_rec_set_plane_t c;
+    begin
+      c.h_opcode = v[ZHAO_SET_PLANE_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SET_PLANE_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SET_PLANE_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SET_PLANE_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SET_PLANE_OFF_H_RESERVED0*8 +: 32];
+      c.slot = v[ZHAO_SET_PLANE_OFF_SLOT*8 +: 8];
+      c.role = v[ZHAO_SET_PLANE_OFF_ROLE*8 +: 8];
+      c.blend = v[ZHAO_SET_PLANE_OFF_BLEND*8 +: 8];
+      c.opacity = v[ZHAO_SET_PLANE_OFF_OPACITY*8 +: 8];
+      c.format = v[ZHAO_SET_PLANE_OFF_FORMAT*8 +: 8];
+      c.wrap = v[ZHAO_SET_PLANE_OFF_WRAP*8 +: 8];
+      c.view_mask = v[ZHAO_SET_PLANE_OFF_VIEW_MASK*8 +: 8];
+      c.palette_id = v[ZHAO_SET_PLANE_OFF_PALETTE_ID*8 +: 8];
+      c.width = v[ZHAO_SET_PLANE_OFF_WIDTH*8 +: 16];
+      c.height = v[ZHAO_SET_PLANE_OFF_HEIGHT*8 +: 16];
+      c.flags = v[ZHAO_SET_PLANE_OFF_FLAGS*8 +: 16];
+      c.base = v[ZHAO_SET_PLANE_OFF_BASE*8 +: 16];
+      c.lstride = v[ZHAO_SET_PLANE_OFF_LSTRIDE*8 +: 8];
+      c.lheight = v[ZHAO_SET_PLANE_OFF_LHEIGHT*8 +: 8];
+      c.pad = v[ZHAO_SET_PLANE_OFF_PAD*8 +: 16];
+      c.a = v[ZHAO_SET_PLANE_OFF_A*8 +: 32];
+      c.b = v[ZHAO_SET_PLANE_OFF_B*8 +: 32];
+      c.c = v[ZHAO_SET_PLANE_OFF_C*8 +: 32];
+      c.d = v[ZHAO_SET_PLANE_OFF_D*8 +: 32];
+      c.u0 = v[ZHAO_SET_PLANE_OFF_U0*8 +: 32];
+      c.v0 = v[ZHAO_SET_PLANE_OFF_V0*8 +: 32];
+      c.line_scroll = v[ZHAO_SET_PLANE_OFF_LINE_SCROLL*8 +: 32];
+      zhao_unpack_set_plane = c;
+    end
+  endfunction
+
+  function automatic logic [511:0] zhao_pack_draw_sprite(input zhao_rec_draw_sprite_t c);
+    logic [511:0] v;
+    begin
+      v[ZHAO_DRAW_SPRITE_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DRAW_SPRITE_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DRAW_SPRITE_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DRAW_SPRITE_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DRAW_SPRITE_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DRAW_SPRITE_OFF_X*8 +: 16] = c.x;
+      v[ZHAO_DRAW_SPRITE_OFF_Y*8 +: 16] = c.y;
+      v[ZHAO_DRAW_SPRITE_OFF_W*8 +: 16] = c.w;
+      v[ZHAO_DRAW_SPRITE_OFF_H*8 +: 16] = c.h;
+      v[ZHAO_DRAW_SPRITE_OFF_BASE*8 +: 16] = c.base;
+      v[ZHAO_DRAW_SPRITE_OFF_LSTRIDE*8 +: 8] = c.lstride;
+      v[ZHAO_DRAW_SPRITE_OFF_LHEIGHT*8 +: 8] = c.lheight;
+      v[ZHAO_DRAW_SPRITE_OFF_FORMAT*8 +: 8] = c.format;
+      v[ZHAO_DRAW_SPRITE_OFF_PALETTE_ID*8 +: 8] = c.palette_id;
+      v[ZHAO_DRAW_SPRITE_OFF_BLEND*8 +: 8] = c.blend;
+      v[ZHAO_DRAW_SPRITE_OFF_VIEW_MASK*8 +: 8] = c.view_mask;
+      v[ZHAO_DRAW_SPRITE_OFF_TINT*8 +: 16] = c.tint;
+      v[ZHAO_DRAW_SPRITE_OFF_ORDER*8 +: 8] = c.order;
+      v[ZHAO_DRAW_SPRITE_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_DRAW_SPRITE_OFF_SRC_ID*8 +: 16] = c.src_id;
+      v[ZHAO_DRAW_SPRITE_OFF_PAD*8 +: 16] = c.pad;
+      v[ZHAO_DRAW_SPRITE_OFF_U*8 +: 32] = c.u;
+      v[ZHAO_DRAW_SPRITE_OFF_V*8 +: 32] = c.v;
+      v[ZHAO_DRAW_SPRITE_OFF_A00*8 +: 32] = c.a00;
+      v[ZHAO_DRAW_SPRITE_OFF_A01*8 +: 32] = c.a01;
+      v[ZHAO_DRAW_SPRITE_OFF_A10*8 +: 32] = c.a10;
+      v[ZHAO_DRAW_SPRITE_OFF_A11*8 +: 32] = c.a11;
+      zhao_pack_draw_sprite = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_draw_sprite_t zhao_unpack_draw_sprite(input logic [511:0] v);
+    zhao_rec_draw_sprite_t c;
+    begin
+      c.h_opcode = v[ZHAO_DRAW_SPRITE_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DRAW_SPRITE_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DRAW_SPRITE_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DRAW_SPRITE_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DRAW_SPRITE_OFF_H_RESERVED0*8 +: 32];
+      c.x = v[ZHAO_DRAW_SPRITE_OFF_X*8 +: 16];
+      c.y = v[ZHAO_DRAW_SPRITE_OFF_Y*8 +: 16];
+      c.w = v[ZHAO_DRAW_SPRITE_OFF_W*8 +: 16];
+      c.h = v[ZHAO_DRAW_SPRITE_OFF_H*8 +: 16];
+      c.base = v[ZHAO_DRAW_SPRITE_OFF_BASE*8 +: 16];
+      c.lstride = v[ZHAO_DRAW_SPRITE_OFF_LSTRIDE*8 +: 8];
+      c.lheight = v[ZHAO_DRAW_SPRITE_OFF_LHEIGHT*8 +: 8];
+      c.format = v[ZHAO_DRAW_SPRITE_OFF_FORMAT*8 +: 8];
+      c.palette_id = v[ZHAO_DRAW_SPRITE_OFF_PALETTE_ID*8 +: 8];
+      c.blend = v[ZHAO_DRAW_SPRITE_OFF_BLEND*8 +: 8];
+      c.view_mask = v[ZHAO_DRAW_SPRITE_OFF_VIEW_MASK*8 +: 8];
+      c.tint = v[ZHAO_DRAW_SPRITE_OFF_TINT*8 +: 16];
+      c.order = v[ZHAO_DRAW_SPRITE_OFF_ORDER*8 +: 8];
+      c.flags = v[ZHAO_DRAW_SPRITE_OFF_FLAGS*8 +: 8];
+      c.src_id = v[ZHAO_DRAW_SPRITE_OFF_SRC_ID*8 +: 16];
+      c.pad = v[ZHAO_DRAW_SPRITE_OFF_PAD*8 +: 16];
+      c.u = v[ZHAO_DRAW_SPRITE_OFF_U*8 +: 32];
+      c.v = v[ZHAO_DRAW_SPRITE_OFF_V*8 +: 32];
+      c.a00 = v[ZHAO_DRAW_SPRITE_OFF_A00*8 +: 32];
+      c.a01 = v[ZHAO_DRAW_SPRITE_OFF_A01*8 +: 32];
+      c.a10 = v[ZHAO_DRAW_SPRITE_OFF_A10*8 +: 32];
+      c.a11 = v[ZHAO_DRAW_SPRITE_OFF_A11*8 +: 32];
+      zhao_unpack_draw_sprite = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -3088,6 +3353,8 @@ package zhao_abi_pkg;
         ZHAO_OP_DEBUG_TRACE_ARM: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_POSED_FORM: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DRAW_WARPED_FORM: zhao_opcode_record_bytes = 96;
+        ZHAO_OP_SET_PLANE: zhao_opcode_record_bytes = 64;
+        ZHAO_OP_DRAW_SPRITE: zhao_opcode_record_bytes = 64;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -3173,6 +3440,12 @@ package zhao_abi_pkg;
         ZHAO_OP_DRAW_WARPED_FORM: begin
           if (zhao_bytes_nonzero(p, base, 78, 2)) zhao_record_pad_nonzero = 1'b1;
           if (zhao_bytes_nonzero(p, base, 92, 4)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_SET_PLANE: begin
+          if (zhao_bytes_nonzero(p, base, 34, 2)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_DRAW_SPRITE: begin
+          if (zhao_bytes_nonzero(p, base, 38, 2)) zhao_record_pad_nonzero = 1'b1;
         end
         default: zhao_record_pad_nonzero = 1'b0;
       endcase
@@ -3299,6 +3572,8 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_debug_trace_arm_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_posed_form_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_warped_form_t) != 8*96) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_set_plane_t) != 8*64) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_draw_sprite_t) != 8*64) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;

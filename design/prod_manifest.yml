@@ -402,6 +402,13 @@ top:
   # is closed through it. It is not inside any other block's closure -- it
   # instantiates nothing and FEEDS `zhao_twod_sprite` rather than containing it.
   - zhao_twod_band
+  # TWOD.CMD and TWOD.ASSET (owner completion ruling 2026-09-22 item 3). Tops
+  # for the same reason the four above are: each instantiates nothing of the
+  # others and sits BESIDE them in the core's series, `zhao_twod_cmd` feeding
+  # the plane and the band their sealed frame and `zhao_twod_asset` feeding the
+  # sampler its texels.
+  - zhao_twod_cmd
+  - zhao_twod_asset
   # TWOD.SAMPLER, built 2026-09-19. The texel-request-to-colour block between
   # the two above and POST.COMPOSITE. It is counted because the console does not
   # merely intend to have it -- it is instantiated in zhao_console_core and the

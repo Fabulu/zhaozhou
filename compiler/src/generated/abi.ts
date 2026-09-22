@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8ba03b43686282a3c4bd70b7826cfbc736228f3dc3bca37432a004c717aa17e3
-//   zidl_sha256         = 54abc34d6b67f51675a93b8c79976bd9ff1a226aec87e4dcbce52002bc730bcd
+//   abi_identity_sha256 = df61db8f05d25df1fe5786a426467579749a9d2f27693eed6a0e84c9bd862398
+//   zidl_sha256         = cf3b82f860e2227f3205856557fe08686fa5d6949e1a2d04d23aeabe8d0a8e0a
 
 // ---------------------------------------------------------------- abi ---
 
@@ -10,6 +10,7 @@ export const ZHAO_ABI_VERSION = 3 as const;
 export const ZHAO_COMMAND_ALIGNMENT = 16 as const;
 export const FRAME_SLOT_BYTES = 1048576 as const;
 export const QFMT_VERSION = 3 as const;
+export const RESOURCE_KIND_TWOD_PAGE = 15 as const;
 
 // error codes — shared verbatim across C++/TS/SV (zhao_abi.h / zhao_abi_pkg.sv)
 export const ZH_ABI_OK = 0 as const;
@@ -96,6 +97,8 @@ export const ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 export const ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
 export const ZHAO_OP_DRAW_POSED_FORM = 0x0305; // 48 B, implemented
 export const ZHAO_OP_DRAW_WARPED_FORM = 0x0304; // 96 B, implemented
+export const ZHAO_OP_SET_PLANE = 0x0306; // 64 B, implemented
+export const ZHAO_OP_DRAW_SPRITE = 0x0307; // 64 B, implemented
 
 // frame packet (capture_format.md 3)
 export const ZHAO_FRAME_MAGIC = 0x314b505a; // 'Z','P','K','1' LE
@@ -489,6 +492,58 @@ export interface ZhRecordDrawWarpedForm {
   displacement_bound: number[]; // fx16 (Q16.16, int32), @64
 }
 
+/** SetPlane 0x0306: 64-byte record (implemented) */
+export interface ZhRecordSetPlane {
+  hdr: ZhCmdHeader;
+  slot: number; // u8, @0
+  role: number; // u8, @1
+  blend: number; // u8, @2
+  opacity: number; // u8, @3
+  format: number; // u8, @4
+  wrap: number; // u8, @5
+  view_mask: number; // u8, @6
+  palette_id: number; // u8, @7
+  width: number; // u16, @8
+  height: number; // u16, @10
+  flags: number; // u16, @12
+  base: number; // u16, @14
+  lstride: number; // u8, @16
+  lheight: number; // u8, @17
+  a: number; // fx16 (Q16.16, int32), @20
+  b: number; // fx16 (Q16.16, int32), @24
+  c: number; // fx16 (Q16.16, int32), @28
+  d: number; // fx16 (Q16.16, int32), @32
+  u0: number; // fx16 (Q16.16, int32), @36
+  v0: number; // fx16 (Q16.16, int32), @40
+  line_scroll: number; // fx16 (Q16.16, int32), @44
+}
+
+/** DrawSprite 0x0307: 64-byte record (implemented) */
+export interface ZhRecordDrawSprite {
+  hdr: ZhCmdHeader;
+  x: number; // i16, @0
+  y: number; // i16, @2
+  w: number; // u16, @4
+  h: number; // u16, @6
+  base: number; // u16, @8
+  lstride: number; // u8, @10
+  lheight: number; // u8, @11
+  format: number; // u8, @12
+  palette_id: number; // u8, @13
+  blend: number; // u8, @14
+  view_mask: number; // u8, @15
+  tint: ZhRgb565; // @16
+  order: number; // u8, @18
+  flags: number; // u8, @19
+  src_id: number; // u16, @20
+  u: number; // fx16 (Q16.16, int32), @24
+  v: number; // fx16 (Q16.16, int32), @28
+  a00: number; // fx16 (Q16.16, int32), @32
+  a01: number; // fx16 (Q16.16, int32), @36
+  a10: number; // fx16 (Q16.16, int32), @40
+  a11: number; // fx16 (Q16.16, int32), @44
+}
+
 export interface ZhCommandInfo {
   name: string;
   opcode: number;
@@ -525,8 +580,10 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'DebugTraceArm', opcode: 0xF003, recordBytes: 32, implemented: true, padOffsets: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
   { name: 'DrawPosedForm', opcode: 0x0305, recordBytes: 48, implemented: true, padOffsets: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [] },
   { name: 'DrawWarpedForm', opcode: 0x0304, recordBytes: 96, implemented: true, padOffsets: [62, 63, 76, 77, 78, 79], enumChecks: [{ offset: 60, size: 1, values: [0, 1] }] },
+  { name: 'SetPlane', opcode: 0x0306, recordBytes: 64, implemented: true, padOffsets: [18, 19], enumChecks: [] },
+  { name: 'DrawSprite', opcode: 0x0307, recordBytes: 64, implemented: true, padOffsets: [22, 23], enumChecks: [] },
 ];
-export const ZHAO_COMMAND_COUNT = 25 as const;
+export const ZHAO_COMMAND_COUNT = 27 as const;
 export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
@@ -1118,6 +1175,70 @@ export function zhaoSampleDrawWarpedForm(): ZhRecordDrawWarpedForm {
   };
 }
 
+export function zhaoSampleSetPlane(): ZhRecordSetPlane {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_SET_PLANE,
+      recordBytes: 64,
+      sourceId: 1342242841, // kind 5, module 1, index 25
+      flags: 0,
+    },
+    slot: 125,
+    role: 253,
+    blend: 33,
+    opacity: 245,
+    format: 141,
+    wrap: 129,
+    view_mask: 125,
+    palette_id: 157,
+    width: 9545,
+    height: 22272,
+    flags: 15507,
+    base: 7226,
+    lstride: 253,
+    lheight: 217,
+    a: 88599,
+    b: 154135,
+    c: 219671,
+    d: 285207,
+    u0: 350743,
+    v0: 416279,
+    line_scroll: 481815,
+  };
+}
+
+export function zhaoSampleDrawSprite(): ZhRecordDrawSprite {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_DRAW_SPRITE,
+      recordBytes: 64,
+      sourceId: 1342242842, // kind 5, module 1, index 26
+      flags: 0,
+    },
+    x: 10553,
+    y: 10616,
+    w: 31735,
+    h: 28502,
+    base: 35129,
+    lstride: 240,
+    lheight: 90,
+    format: 56,
+    palette_id: 102,
+    blend: 180,
+    view_mask: 2,
+    tint: zhaoSampleRgb565(),
+    order: 13,
+    flags: 231,
+    src_id: 25795,
+    u: 154135,
+    v: 219671,
+    a00: 285207,
+    a01: 350743,
+    a10: 416279,
+    a11: 481815,
+  };
+}
+
 export function zhaoPackMat4fx(v: ZhMat4fx, w: ZhByteWriter): void {
   w.fx16(v.m00);
   w.fx16(v.m01);
@@ -1458,8 +1579,62 @@ export function zhaoPackDrawWarpedForm(r: ZhRecordDrawWarpedForm, w: ZhByteWrite
   w.zeros(4); // pad_1
 }
 
+export function zhaoPackSetPlane(r: ZhRecordSetPlane, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.slot);
+  w.u8(r.role);
+  w.u8(r.blend);
+  w.u8(r.opacity);
+  w.u8(r.format);
+  w.u8(r.wrap);
+  w.u8(r.view_mask);
+  w.u8(r.palette_id);
+  w.u16(r.width);
+  w.u16(r.height);
+  w.u16(r.flags);
+  w.u16(r.base);
+  w.u8(r.lstride);
+  w.u8(r.lheight);
+  w.zeros(2); // pad
+  w.fx16(r.a);
+  w.fx16(r.b);
+  w.fx16(r.c);
+  w.fx16(r.d);
+  w.fx16(r.u0);
+  w.fx16(r.v0);
+  w.fx16(r.line_scroll);
+}
+
+export function zhaoPackDrawSprite(r: ZhRecordDrawSprite, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.i16(r.x);
+  w.i16(r.y);
+  w.u16(r.w);
+  w.u16(r.h);
+  w.u16(r.base);
+  w.u8(r.lstride);
+  w.u8(r.lheight);
+  w.u8(r.format);
+  w.u8(r.palette_id);
+  w.u8(r.blend);
+  w.u8(r.view_mask);
+  zhaoPackRgb565(r.tint, w);
+  w.u8(r.order);
+  w.u8(r.flags);
+  w.u16(r.src_id);
+  w.zeros(2); // pad
+  w.fx16(r.u);
+  w.fx16(r.v);
+  w.fx16(r.a00);
+  w.fx16(r.a01);
+  w.fx16(r.a10);
+  w.fx16(r.a11);
+}
+
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x8B, 0xA0, 0x3B, 0x43, 0x68, 0x62, 0x82, 0xA3, 0xC4, 0xBD, 0x70, 0xB7, 0x82, 0x6C, 0xFB, 0xC7, 0x36, 0x22, 0x8F, 0x3D, 0xC3, 0xBC, 0xA3, 0x74, 0x32, 0xA0, 0x04, 0xC7, 0x17, 0xAA, 0x17, 0xE3];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x54, 0xAB, 0xC3, 0x4D, 0x6B, 0x67, 0xF5, 0x16, 0x75, 0xA9, 0x3B, 0x8C, 0x79, 0x97, 0x6B, 0xD9, 0xFF, 0x1A, 0x22, 0x6A, 0xEC, 0x87, 0xE4, 0xDC, 0xBC, 0xE5, 0x20, 0x02, 0xBC, 0x73, 0x0B, 0xCD];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xDF, 0x61, 0xDB, 0x8F, 0x05, 0xD2, 0x5D, 0xF1, 0xFE, 0x57, 0x86, 0xA4, 0x26, 0x46, 0x75, 0x79, 0x74, 0x9A, 0x9D, 0x2F, 0x27, 0x69, 0x3E, 0xED, 0x6A, 0x0E, 0x84, 0xC9, 0xBD, 0x86, 0x23, 0x98];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0xCF, 0x3B, 0x82, 0xF8, 0x60, 0xE2, 0x22, 0x7F, 0x32, 0x05, 0x85, 0x65, 0x57, 0xFE, 0x08, 0x68, 0x6F, 0xA5, 0xD6, 0x94, 0x9E, 0x1A, 0x2D, 0x04, 0xD2, 0x3A, 0xEA, 0xBE, 0x8D, 0x0A, 0x8E, 0x0A];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

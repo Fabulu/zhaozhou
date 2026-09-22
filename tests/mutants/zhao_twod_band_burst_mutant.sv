@@ -84,6 +84,7 @@ module zhao_twod_band_burst_mutant #(
     input  var logic [$clog2(MAX_H +1)-1:0] view_split_i,
 
     // ---- the display list in (the CMD seam; today the core's twod_sd_*) -----
+    input  var logic                    list_busy_i,
     input  var logic                    d_valid_i,
     output var logic                    d_ready_o,
     input  var logic signed [15:0]      d_x_i,
@@ -167,7 +168,14 @@ module zhao_twod_band_burst_mutant #(
     // stores: a port with no consumer is a tie-off, and an UNCHECKED law is a
     // sentence.
     output var logic [31:0]             order_inversion_o,
-    output var logic [31:0]             bands_o
+    output var logic [31:0]             bands_o,
+    // Added 2026-09-22 with the production ports. THIS WRAPPER CANNOT DRIFT IN
+    // ITS BODY -- it instantiates production with `.*` -- but it CAN go stale
+    // in its PORT LIST, and `.*` turns that into an elaboration error rather
+    // than a silent tie-off. `tools/design/wrapper_port_parity.py` checks the
+    // half `.*` cannot.
+    output var logic                    list_restart_o,
+    output var logic [31:0]             desc_mid_sweep_o
 );
 
   zhao_twod_band #(

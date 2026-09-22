@@ -105,5 +105,79 @@ inline uint16_t plane_wrap(int32_t t, uint16_t size, bool clamp_mode, bool* fail
   return static_cast<uint16_t>(r);
 }
 
+// ---------------------------------------------------------------------------
+// TWOD.ASSET's verdict (owner completion ruling 2026-09-22, item 3)
+// ---------------------------------------------------------------------------
+// The four clauses `zhao_twod_asset` judges a PublishResource of cartridge kind
+// 15 by, and the destination map of `spec/cartridge.md` 4f. Every clause is an
+// EXISTING PublishResource law; what this adds is where the bytes land.
+//
+// THE ORDER IS FAIL-SAFE AND IT IS THE RECORD'S OWN -- destination, extent,
+// source, epoch -- so a refusal reads back to the FIELD that caused it rather
+// than to "the loader said no". The RTL evaluates the same clauses in the same
+// order and each increments one counter; a differential test that only asked
+// "was it refused" could not see the two swapping.
+enum class AssetVerdict : uint8_t {
+  kAccept = 0,
+  kSlotRefused,     // dst_slot outside the map
+  kLenRefused,      // zero, not a multiple of 64, or past the slot
+  kAddrRefused,     // above 4 GiB, or not 64-byte aligned
+  kEpochRefused,    // a closed epoch
+};
+
+struct AssetDest {
+  bool     is_palette = false;
+  uint32_t first_word = 0;   // in the page store, or in the palette array
+  uint32_t capacity   = 0;   // words the destination region holds
+};
+
+// `page_words` and `pal_slots` are the SAMPLER's parameters, and `page_slots`
+// the map's. Give them the same numbers the RTL is elaborated with or the two
+// describe different machines.
+inline AssetDest asset_dest(uint8_t dst_slot, uint32_t page_words,
+                            uint32_t pal_slots, uint32_t page_slots) {
+  AssetDest d;
+  if (dst_slot >= 16) {
+    d.is_palette = true;
+    const uint32_t idx = static_cast<uint32_t>(dst_slot) - 16u;
+    d.capacity   = (idx < pal_slots) ? 256u : 0u;
+    d.first_word = idx * 256u;
+  } else {
+    const uint32_t per = page_words / page_slots;
+    d.capacity   = (dst_slot < page_slots) ? per : 0u;
+    d.first_word = static_cast<uint32_t>(dst_slot) * per;
+  }
+  return d;
+}
+
+inline AssetVerdict asset_verdict(uint8_t dst_slot, uint32_t length_bytes,
+                                  uint64_t hps_addr, uint16_t epoch,
+                                  uint16_t open_epoch, uint32_t page_words,
+                                  uint32_t pal_slots, uint32_t page_slots) {
+  const bool is_pal = (dst_slot >= 16);
+  const uint32_t idx = is_pal ? (static_cast<uint32_t>(dst_slot) - 16u)
+                              : static_cast<uint32_t>(dst_slot);
+  const bool dst_ok = is_pal ? (idx < pal_slots) : (idx < page_slots);
+  if (!dst_ok) return AssetVerdict::kSlotRefused;
+
+  const AssetDest d = asset_dest(dst_slot, page_words, pal_slots, page_slots);
+  const uint32_t words = length_bytes >> 1;
+  // A multiple of 64 is a REFUSAL, never a pad -- PublishResource's own law.
+  // The capacity test is `<=` because a transfer exactly filling its slot is
+  // legal and one word more is not; that boundary is where an off-by-one
+  // would put the next slot's first word under this transfer's control.
+  if (length_bytes == 0u || (length_bytes & 63u) != 0u || words > d.capacity)
+    return AssetVerdict::kLenRefused;
+
+  // MEM.UPLOAD's kUploadSourceUnreachable: a source above 4 GiB is REFUSED
+  // rather than narrowed, because narrowing it on the wire is what the 64-bit
+  // field exists to prevent. The 64-byte alignment is the bridge's burst.
+  if ((hps_addr >> 32) != 0u || (hps_addr & 63u) != 0u)
+    return AssetVerdict::kAddrRefused;
+
+  if (epoch != open_epoch) return AssetVerdict::kEpochRefused;
+  return AssetVerdict::kAccept;
+}
+
 }  // namespace twod
 }  // namespace zref

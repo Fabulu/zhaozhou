@@ -4260,6 +4260,61 @@ verilate(test_twod_band_directed
 add_test(NAME twod_band_directed COMMAND test_twod_band_directed)
 set_tests_properties(twod_band_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# TWOD.CMD -- the frame-scoped descriptor producer (owner completion ruling
+# 2026-09-22 item 3). It drives the block's OWN ports, so the states the
+# composed console cannot reach -- a stalled consumer, two seals in consecutive
+# cycles, a sixty-fifth descriptor -- are ordinary stimulus and every counter
+# fires. THE RULING'S ACCEPTANCE TEST IS `twod_cmd_chain_directed` BELOW, which
+# drives real packet bytes to composited pixels; this one deliberately injects
+# descriptors at a downstream boundary, because that is the only way to reach a
+# refusal.
+add_executable(test_twod_cmd_directed compositor/twod_cmd_directed.cpp)
+target_link_libraries(test_twod_cmd_directed PRIVATE zhao_harness)
+verilate(test_twod_cmd_directed
+  PREFIX Vzhao_twod_cmd
+  TOP_MODULE zhao_twod_cmd
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_cmd.sv)
+add_test(NAME twod_cmd_directed COMMAND test_twod_cmd_directed)
+set_tests_properties(twod_cmd_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# THE OWNER'S ACCEPTANCE TEST for the completion ruling's item 3, and it is a
+# CHAIN rather than a block bench: zhao_cmd_decoder and zhao_cmd_exec on one
+# forked byte stream, zhao_twod_cmd's sealed list, zhao_twod_asset reading an
+# HPS arena, the plane, the band, the walker, the sampler and
+# zhao_post_composite. The driver touches THREE things -- the packet bytes, the
+# bridge and the composited pixels -- and no descriptor, texel, binding or HUD
+# colour is written at a downstream boundary.
+#
+# "An otherwise green smoke whose upstream fixture never reaches the new path
+#  does not prove the path." This is the fixture that reaches it.
+add_executable(test_twod_cmd_chain_directed compositor/twod_cmd_chain_directed.cpp)
+target_link_libraries(test_twod_cmd_chain_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_cmd_chain_directed
+  PREFIX Vtb_zhao_twod_chain
+  TOP_MODULE tb_zhao_twod_chain
+  VERILATOR_ARGS -I${CMAKE_SOURCE_DIR}/tests/compositor
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_cmd.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_asset.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_plane.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_band.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_sprite.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_sampler.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_composite.sv
+          ${CMAKE_SOURCE_DIR}/tests/compositor/tb_zhao_twod_chain.sv)
+# The GENERATED packers live in runtime/include/zhao_abi.h and the driver packs
+# every record with them -- a record typed by hand in a bench is a second
+# opinion about the ABI, and the two would disagree the first time a field
+# moved.
+target_include_directories(test_twod_cmd_chain_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME twod_cmd_chain_directed COMMAND test_twod_cmd_chain_directed)
+set_tests_properties(twod_cmd_chain_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 # The positive control for the LAW rather than for a counter: `BURST_PX` raised
 # past the FIFO slack is "admit everything", and the driver passes when
 # `band_underrun_o` FIRES and `sprites_refused_budget_o` stays ZERO. It is a

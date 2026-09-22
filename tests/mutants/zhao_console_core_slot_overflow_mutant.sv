@@ -594,29 +594,148 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
-  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
-  // Added to the WRAPPER because the real module gained them, never the other
-  // way round (owner ruling R220). `.*` cannot bind a port the wrapper does
-  // not declare, so without these six lines this control would not elaborate.
+  // ---- R229: DrawPosedForm 0x0305's animation key -------------------------
+  // NO LONGER A BOUNDARY FOR THREE OF THE FOUR. Corrected 2026-09-22 with
+  // I29's closure. The paragraph here used to read "The consumer is
+  // GEOM.MESHFETCH's instance walk, WHICH DOES NOT EXIST -- that is entry I29
+  // blocker (b)". The walk exists: it is the fifteen registers beside
+  // `u_geom_drawjob`, and `cmd_draw_posed_o`, `cmd_draw_clip_id_o` and
+  // `cmd_draw_frame_no_o` are READ IN THIS FILE now -- the first gates the
+  // draw admit, all three are captured on the accept.
+  //
+  // `cmd_draw_sub_o` IS STILL UNCONSUMED, and that is deliberate rather than
+  // an omission: it is the POSE CACHE's key discriminator for the 60 Hz
+  // midpoint, and `zhao_geom_clipread` has no port for it because that block
+  // fetches an AUTHORED frame. Carrying it into the walk would be a second
+  // copy of a field whose owner is elsewhere.
+  //
+  // THEY STAY AT THE EDGE ANYWAY, and the reason is unchanged and still good:
+  // an output nobody reads lets synthesis delete the logic BEHIND it, and a
+  // fit would then report the pose lane's capture registers as free. The
+  // tie-off block warns about a constant on a wide INPUT for exactly this
+  // reason; an unread output is the same lie in the other direction. Having
+  // an in-core consumer as well does not make the observation redundant --
+  // it makes the two agree.
+  //
+  // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
+  // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
+  // meaningful only while it is high.
   output logic                     cmd_draw_posed_o,
   output logic [15:0]              cmd_draw_clip_id_o,
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
 
-  // I29's producer half (owner ruling 2026-09-21 section 3): the ACCEPTED
-  // job's 24-bit form index and its lifetime. Kept in step with the real
-  // module's port list -- `tools/design/wrapper_port_parity.py` compares them.
+  // ---- the ACCEPTED JOB's FORM INDEX -- entry I29, CLOSED ------------------
+  // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
+  // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
+  // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
+  // existing `form_idx_q` rather than re-derived from an unrelated live
+  // register later.
+  //
+  // THIS IS THE RESOLVED JOB, NOT THE COMMAND. `cmd_draw_*` above leaves the
+  // module unresolved by design; this pair leaves it AFTER GEOM.DRAWJOB has
+  // validated the handle against real residency, which is the only form index
+  // an ownership comparison may legitimately use. Reading `cmd_draw_form_w`
+  // instead would be precisely the "unrelated live register" the ruling names.
+  //
+  // `geom_job_valid_o` IS the lifetime. `geom_job_form_idx_o` is driven from
+  // the register only while the job is emitting and is zero otherwise, but
+  // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
+  // is the valid, exactly as for every other job field.
+  //
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: it used to be because
+  // the consumer was not composed. `zhao_geom_clipread` IS composed since
+  // 2026-09-22, so the reason is now the plain one -- this is the ownership
+  // ruling's EXPOSED IDENTITY, and an output nobody reads lets synthesis
+  // delete the logic behind it.
+  //
+  // **AND IT IS NOT WHAT THE INSTANCE WALK READS.** Stated here because the
+  // paragraph above says "Reading `cmd_draw_form_w` instead would be
+  // precisely the 'unrelated live register' the ruling names", and the walk
+  // reads exactly that -- so the apparent contradiction is resolved in the
+  // file rather than left for the next reader to trip over.
+  //
+  // The ruling forbids a form index "RE-DERIVED FROM AN UNRELATED LIVE
+  // REGISTER LATER". The walk's capture is neither later nor unrelated: it
+  // takes `cmd_draw_form_w[31:8]` on the SAME handshake and by the SAME
+  // expression that loads `zhao_geom_drawjob`'s `form_idx_q`, out of the same
+  // `dq` entry that carries the clip id. One enable, one entry, no drift --
+  // which is the property the ruling's sentence exists to secure. Taking
+  // `dj_j_form_idx` instead and pairing it with a clip id captured a stage
+  // earlier would REINTRODUCE the drift, because that is two registers loaded
+  // by two enables: entry I39's fault exactly.
+  //
+  // WHAT THE WALK GIVES UP BY CAPTURING EARLY, declared rather than
+  // discovered. `zhao_geom_drawjob` validates the handle against real
+  // residency AFTER the command accept and can refuse the draw nine ways
+  // (`dj_refused_*`). A pose request captured at the accept is therefore
+  // issued for a draw that may never become geometry. Two consequences, both
+  // bounded and neither a wrong-animal palette -- a refused draw's pose is
+  // its OWN creature's pose, correctly labelled, and `owner_mismatch_o`
+  // compares against the resident page either way:
+  //
+  //   1. a wasted frame fetch on requester G, counted by `geom_cr_frames_o`
+  //      against `geom_dj_draws_o`;
+  //   2. THE PALETTE CAN OUTLIVE ITS DRAW. `pal_begin_i` is the store's
+  //      `start_o`, so a BIND-POSE draw raises nothing and skins against
+  //      whatever pose was decoded last. Today that is unreachable -- nothing
+  //      in this tree issues a 0x0305 into the console, so no decode ever
+  //      starts and every bone reads unset and substitutes the identity, which
+  //      is what `geom_pal_bone_unset_o` reports. It becomes reachable the
+  //      moment a posed draw is issued.
+  //
+  // THE REPAIR IS ONE LINE AND IS DELIBERATELY NOT MADE HERE: raise
+  // `pal_begin_i` on a bind-pose draw accept as well, so `DrawForm` 0x0300
+  // makes the previous pose unreadable exactly as a new decode does -- which
+  // is what R229 means by "DrawForm keeps its meaning as BIND POSE". It is a
+  // BEHAVIOURAL change and this packet measured the tree without it; shipping
+  // an unmeasured behaviour change beside a measured composition is how a
+  // clean smoke stops describing the thing that ships.
   output logic                     geom_job_valid_o,
   output logic [23:0]              geom_job_form_idx_o,
+  // Evidence, not a boundary -- the same standing as the three counters above.
   output logic [31:0]              cmd_exec_posed_draws_o,
   output logic [31:0]              cmd_exec_pose_clip_refused_o,
 
-  // ---- W04: DrawWarpedForm 0x0304's per-draw Warp snapshot ----------------
-  // Wrapper parity only (owner ruling R220: fix the WRAPPER, never the
-  // module). `.*` cannot bind a port the wrapper does not declare, so without
-  // these twelve lines this positive control stops elaborating -- which is the
-  // failure mode that matters, because a control that does not run is a
-  // control that cannot fail.
+  // ---- W04: DrawWarpedForm 0x0304's per-draw Warp snapshot -- BOUNDARY -----
+  // Same standing as the pose lane directly above, same argument, and one
+  // difference worth stating because it decides what the NEXT packet does.
+  //
+  // The pose lane's consumer DID NOT EXIST when this was written; it does
+  // since 2026-09-22 (I29 closed), so the difference below is no longer a
+  // difference -- both lanes have in-core consumers now. THIS ONE DOES:
+  // `fpga/rtl/geometry/zhao_geom_warp.sv` is BUILT and TESTED (2,468 directed
+  // checks) and its `d_warp_en_i` / `d_slot_i` / `d_time_i` / `d_par_i` /
+  // `d_bx_i` port group is this bus, field for field. What is missing is not
+  // the producer and not the consumer -- it is the CARRIER BETWEEN THEM.
+  //
+  // WHY THE CARRIER IS NOT BUILT HERE, stated so the gap is a decision and not
+  // an omission. `zhao_geom_warp` sits POST-SKIN, and a draw's snapshot has to
+  // arrive there in phase with that draw's vertices. The geometry front is
+  // pipelined, so draw N's tail vertices overlap draw N+1's head: a single held
+  // register at the skin stage would hand vertex B's position to descriptor A,
+  // which is CLAUDE.md's metadata-swap defect exactly, and every counter would
+  // balance while it happened. Directive 7.1 names the correct shape -- the
+  // draw item carries "`warp_enabled` plus a compact descriptor cookie", and
+  // the cookie rides the job handshake the way `j_side_o` already carries a
+  // draw's raster word (composer entry I39: "a meshlet cannot then be paired
+  // with another draw's state, because there is no second path for it to
+  // arrive on"). That ride passes through `zhao_geom_drawjob`'s `SIDEW` bundle
+  // and needs a `v_side_o` beside `zhao_geom_assetfetch`'s per-vertex port.
+  // `zhao_geom_drawjob.sv` is a LIVE LANE at this commit, and two agents
+  // editing one file is the hazard CLAUDE.md gives a chapter to.
+  //
+  // So the snapshot leaves HERE, at the edge, for the reason the pose block
+  // gives: an output nobody reads lets synthesis delete the capture registers
+  // behind it, and a fit would then price this lane at zero. It is DRIVEN --
+  // by `zhao_cmd_exec`'s decoded record fields and by nothing constant -- so
+  // it is not a tie-off and it is not in the INCOMPLETE block.
+  //
+  // `cmd_draw_warp_en_o` LOW is an ORDINARY DRAW: every 0x0300, every 0x0305,
+  // and every 0x0304 naming no program. W09 requires that path to perform zero
+  // Warp lookups and evaluations, so the ENABLE is what a consumer switches
+  // on, never the data -- an identity Warp returns all zeroes and must not be
+  // readable as "no warp".
   output logic                     cmd_draw_warp_en_o,
   output logic [31:0]              cmd_draw_warp_program_o,
   output logic [31:0]              cmd_draw_warp_time_o,
@@ -627,15 +746,15 @@ module zhao_console_core_slot_overflow_mutant
   output logic signed [31:0]       cmd_draw_warp_bx_o,
   output logic signed [31:0]       cmd_draw_warp_by_o,
   output logic signed [31:0]       cmd_draw_warp_bz_o,
+  // Evidence, not a boundary.
   output logic [31:0]              cmd_exec_warp_draws_o,
   output logic [31:0]              cmd_exec_warp_draw_refused_o,
 
-  // ---- GEOM.WARP, composed into the core 2026-09-22 (packet WARPCOMP) ----
-  // A WRAPPER, NOT A COPY: `u_dut (.*)` binds by name, so every port the core
-  // gains must be declared here or the bind fails. Owner ruling R220 -- fix
-  // the wrapper, never the module. `tools/design/wrapper_port_parity.py`
-  // FIRED on all 33 of these before they were added, which is the instrument
-  // working rather than its silence being quoted.
+  // ---- GEOM.WARP's EVIDENCE, composed 2026-09-22 (packet WARPCOMP) --------
+  // Every counter the block and its adapter declare, exported. The reason is
+  // the one the pose lane's note gives four screens up and it is a FIT reason,
+  // not a tidiness one: an output nobody reads lets synthesis delete the
+  // logic behind it, and the fit then prices the whole lane at zero.
   output logic [31:0] geom_warp_vertices_transformed_o,
   output logic [31:0] geom_warp_bypassed_o,
   output logic [31:0] geom_warp_app_saturations_o,
@@ -646,14 +765,25 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_warp_normal_width_faults_o,
   output logic [31:0] geom_warp_profile_mismatches_o,
   output logic [31:0] geom_warp_field_faults_o,
+  // TWO accept counters, not one shared one -- the block's own contract §10:
+  // a single counter could not see the output fork accepting twice on one
+  // side, which is the exact fault its §11.6 records.
   output logic [31:0] geom_warp_p_accepts_o,
   output logic [31:0] geom_warp_n_accepts_o,
+  // W10's poison, whole. The offending vertex index AND the returned
+  // displacement, because §5.6 diagnoses the violation from what the program
+  // returned and discarding it would discard the evidence.
   output logic        geom_warp_poison_valid_o,
   output logic [15:0] geom_warp_poison_src_id_o,
   output logic [ 2:0] geom_warp_poison_cause_o,
   output logic signed [31:0] geom_warp_poison_dx_o,
   output logic signed [31:0] geom_warp_poison_dy_o,
   output logic signed [31:0] geom_warp_poison_dz_o,
+  // THE DESCRIPTOR BOOK. `geom_warp_desc_stale_o` is the one to read: it is
+  // the ring-overwrite detector, and its two operands are clocked by
+  // different things -- the stored stamp by the DRAW handshake inside
+  // `zhao_geom_warpbook`, the offered stamp by the VERTEX registers that
+  // carried it through the whole geometry front.
   output logic [31:0] geom_warp_desc_allocated_o,
   output logic [31:0] geom_warp_desc_hits_o,
   output logic [31:0] geom_warp_desc_stale_o,
@@ -803,26 +933,57 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_light_adapter_refused_o,
 
   // ---- I29 IS CLOSED 2026-09-22: the clip page and the skeleton bake -------
-  // Fourteen inputs left this list with the core's. `u_dut (.*)` binds by
-  // name, so a wrapper still declaring a port the core dropped breaks the bind
-  // just as hard as one missing a port the core gained -- and it breaks it in
-  // the shape that reads as "the core is broken" (R220). This list tracks the
-  // core exactly; `tools/design/wrapper_port_parity.py` is what says so.
+  // FOURTEEN INPUTS LEFT THIS LIST RATHER THAN BEING DRIVEN. They were the
+  // decoder's own per-bone source -- `geom_pose_start_i`, the bone count, the
+  // root displacement, the parent, the three rest translations, the four
+  // quaternion lanes and the twelve-element inverse-rest matrix -- and the
+  // producer they were waiting for is now composed: `zhao_geom_clipread` reads
+  // a kind-8 BODY and a kind-9 CLIP FRAME through requester G of
+  // `u_geom_mem_adapter`, fills `zhao_geom_bonesrc`, and the store answers the
+  // decoder combinationally. See the composition beside `u_geom_drawjob` and
+  // the closed ledger entry in the header.
+  //
+  // `geom_pose_bone_idx_o` STAYS. It is the decoder's index into the store and
+  // it is read INSIDE now, so this port is observation, not the thing keeping
+  // the register alive.
   output logic [4:0]              geom_pose_bone_idx_o,
   output logic                    geom_pose_busy_o,
   output logic                    geom_pose_done_o,
   output logic [31:0]             geom_pose_palettes_decoded_o,
+
+  // ---- I29's INSTANCE WALK: what it accepted, and what it cost ------------
+  // `geom_pose_requests_o` counts POSED draws whose {form, clip_id, frame_no}
+  // were captured off one command packet on one enable. `geom_pose_walk_holds_o`
+  // counts the cycles a posed draw waited for the reader's one request slot --
+  // the throughput price of refusing to drop a pose key, stated as a number
+  // rather than as a claim that it is small.
   output logic [31:0]             geom_pose_requests_o,
   output logic [31:0]             geom_pose_walk_holds_o,
+
+  // ---- I29's PAGE READER (`zhao_geom_clipread`) ---------------------------
+  // WHICH RESOURCE ANSWERED and WHICH FORM each resident section claims. The
+  // 2026-09-21 ownership ruling keeps three identities apart and its section 5
+  // says to "record the selected resource identities"; `geom_cr_*_index_o` /
+  // `geom_cr_*_gen_o` are RESOURCE identity (which publication) and
+  // `geom_cr_*_owner_o` is FORM identity (which creature the page NAMES).
+  // They are not derived from one another and a body and its clip bank are
+  // published under two independent resource indices while naming one form.
   output logic [23:0]             geom_cr_body_index_o,
   output logic [15:0]             geom_cr_body_gen_o,
   output logic [23:0]             geom_cr_clip_index_o,
   output logic [15:0]             geom_cr_clip_gen_o,
   output logic [23:0]             geom_cr_body_owner_o,
   output logic [23:0]             geom_cr_clip_owner_o,
+  // The census.
   output logic [31:0]             geom_cr_bodies_o,
   output logic [31:0]             geom_cr_clips_o,
   output logic [31:0]             geom_cr_frames_o,
+  // The faults. `geom_cr_owner_mismatch_o` is the one to watch: it is the
+  // refusal of a request whose form is not the form BOTH resident sections
+  // name, and it is deliberately neither a miss nor a residency failure. It
+  // discriminates under legal stimulus at IDENTICAL bone counts, with
+  // `geom_cr_bone_mismatch_o` silent beside it -- which is exactly the
+  // blindness a bone-count check has and this one does not.
   output logic [31:0]             geom_cr_pages_dropped_o,
   output logic [31:0]             geom_cr_bad_magic_o,
   output logic [31:0]             geom_cr_truncated_o,
@@ -838,6 +999,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_cr_not_resident_o,
   output logic [31:0]             geom_cr_owner_mismatch_o,
   output logic                    geom_cr_busy_o,
+
+  // ---- I29's STORE (`zhao_geom_bonesrc`) ----------------------------------
+  // `geom_bs_prefetch_late_o` is the one that says the arrangement holds: the
+  // store buys the decoder's one missing cycle with a two-deep prefetch given
+  // ~115 cycles of notice, and this counter is what fires if that notice ever
+  // stops being true. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` is
+  // its positive control.
   output logic [31:0]             geom_bs_prefetch_late_o,
   output logic [31:0]             geom_bs_rest_nonrigid_o,
   output logic [31:0]             geom_bs_reserved_nz_o,
@@ -933,32 +1101,12 @@ module zhao_console_core_slot_overflow_mutant
   // queue's sizing assumption (twice MAX_TRIANGLES) still holds.
   output logic [31:0]             geom_rp_triq_stall_o,
 
-  // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
-  // The attributes and the flip leave the module for the same reason I23's
-  // side-channels do: GEOM.ATTRSETUP is not composed, and dropping the swapped
-  // packets here would lose the one thing GEOM.CLIP does to them.
-  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o,
-  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_o,
-  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_o,
-  output logic                    geom_clip_flip_o,
-  output logic                    geom_clip_ret_valid_o,
-  output logic [2:0]              geom_clip_ret_verdict_o,
-  output logic [31:0]             geom_clip_submitted_o,
-  output logic [31:0]             geom_clip_clipped_o,
-  output logic [31:0]             geom_clip_culled_o,
-  output logic signed [47:0]      geom_setup_area2_o,
-  output logic [31:0]             geom_setup_triangles_submitted_o,
-  output logic [31:0]             geom_untex_refused_o,
-  // ---- THE FORGE CHAIN's evidence (composed 2026-09-21, FORGECOMP) --------
-  // A WRAPPER CANNOT DRIFT, but it CAN go SHORT: `u_dut (.*)` binds by name,
-  // so a core port this list does not declare simply fails to bind and the
-  // mutant stops building. `tools/design/wrapper_port_parity.py` is the gate
-  // that says so before a build does, and it said 49 missing when the forge
-  // chain composed. That is R162's shape and the reason the gate exists.
-  output logic        forge_pb_busy_o,
-  // PARTMAT 2026-09-22 (owner ruling 1): the door gained a THIRD client,
-  // PART.CLIPFEED's polygon particles, so `granted_o` widened 64 -> 96.
-  output logic [95:0] geom_clipdoor_granted_o,
+  // ---- THE FORGE CHAIN's evidence (composed 2026-09-21) --------------------
+  // DrawProcedural 0x0302 -> the program page -> topology and positions ->
+  // the projector's third owner -> GEOM.CLIP's door. Every counter below is
+  // fired by legal stimulus at its own block's ports except
+  // `forge_asm_vtx_overflow_o`, which is unreachable while the evaluators'
+  // bounds and FORGE_MAX_VERTS agree and therefore owes a committed mutant.
   output logic [31:0] forge_pb_pages_o,
   output logic [31:0] forge_pb_draws_o,
   output logic [31:0] forge_pb_bad_magic_o,
@@ -970,6 +1118,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] forge_pb_bad_record_o,
   output logic [31:0] forge_pb_refused_nopage_o,
   output logic [31:0] forge_pb_denied_o,
+  output logic        forge_pb_busy_o,
   output logic [31:0] forge_prim_jobs_o,
   output logic [31:0] forge_prim_triangles_o,
   output logic [31:0] forge_prim_refused_family_o,
@@ -999,14 +1148,59 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] forge_asm_dq_refused_o,
   output logic [31:0] forge_asm_dq_stray_o,
   output logic [31:0] forge_asm_proj_stray_o,
+  // CMD.EXEC's own half of the dispatch.
   output logic [31:0] cmd_exec_forges_o,
   output logic [31:0] cmd_exec_forge_overflow_o,
   output logic [31:0] cmd_exec_forge_src_truncated_o,
+  // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
+  // from the other five so the scan's cost is a NUMBER rather than an argument.
   output logic [31:0] geom_ma_jobs_f_o,
+  // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
+  // 2026-09-22). Its traffic is per creature publication and per POSED draw.
   output logic [31:0] geom_ma_jobs_g_o,
+
+  // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
+  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
+  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
+  // (2). `granted_o` is flattened 32 bits each, least significant slice
+  // client 0, so the port widened 64 -> 96 with the third arm.
+  output logic [95:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
+
+  // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
+  // The attributes and the flip leave the module for the same reason I23's
+  // side-channels do: GEOM.ATTRSETUP is not composed, and dropping the swapped
+  // packets here would lose the one thing GEOM.CLIP does to them.
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o,
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_o,
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_o,
+  output logic                    geom_clip_flip_o,
+  output logic                    geom_clip_ret_valid_o,
+  output logic [2:0]              geom_clip_ret_verdict_o,
+  output logic [31:0]             geom_clip_submitted_o,
+  output logic [31:0]             geom_clip_clipped_o,
+  output logic [31:0]             geom_clip_culled_o,
+  output logic signed [47:0]      geom_setup_area2_o,
+  output logic [31:0]             geom_setup_triangles_submitted_o,
+  // THE UNTEXTURED DOOR'S REFUSAL (owner ruling R197, law 3): a primitive
+  // offered at GEOM.CLIP's input DECLARING it has no texture coordinates,
+  // while the material the window has published for it takes one or more
+  // samples. It is consumed at the door, never entered, and counted here --
+  // never silently sampled, because with u/w and v/w undefined a sample is a
+  // sample of texel (0,0) on every pixel. EXPECTED ZERO in this arrangement:
+  // the only composed producer (GEOM.REPLAY, format 0) declares TEXTURED by
+  // `GEOM_REPLAY_UNTEX_DECL`, so the state is unreachable by legal stimulus.
+  // Its zero is a measurement and not an argument because the committed
+  // wrapper `tests/mutants/zhao_console_core_untex_decl_mutant.sv` flips that
+  // declaration and `run_console_core_smoke.ps1 -UntexMutant` asserts this
+  // counter reaches the reference's replayed count with the raster untouched
+  // (INVERTED polarity). The two halves the door relies on are fired by
+  // stimulus at block level: the bit's carriage through GEOM.CLIP
+  // (`geom_clip_directed` case 12) and GEOM.ATTRPACK's branch on it
+  // (`geom_attrpack_directed` case 5).
+  output logic [31:0]             geom_untex_refused_o,
   // GEOM.ATTRPACK's two counters, out of the module for the same reason every
   // other block's are: a counter nobody can read is not evidence. Their RATIO
   // is the thing worth asserting -- `planes` must be exactly three times
@@ -1076,24 +1270,40 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    terr_job_surface_i,
   input  logic                    terr_job_dual_i,
   input  logic [15:0]             terr_job_src_id_i,
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
-  // slot and source id, and carries it to the sequencer joined to the patch it
-  // describes -- which is strictly better than today, where it reached the
-  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
-  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
-  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
-  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
-  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
-  // `tis_view_mask` live at the door would join two things that move
-  // independently, which is entry I21's own objection and still correct; and
-  // a src_id-keyed side queue desyncs permanently the first time a page is
-  // refused after issue (a bad pitch, a guard denial, a short burst), so its
-  // identity check would fire once and then be wrong forever. THE BUILD THIS
-  // WANTS is one more forwarded field on those three blocks, beside `flags`.
-  // Named here rather than adapted around.
+  //
+  // THE VIEW MASK IS NO LONGER A REMAINDER. **THE BUILD LANDED 2026-09-22
+  // (gz/terrclose)** and it is the build entry I21 named rather than a way
+  // around it: `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+  // `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE `flags:u16`,
+  // so the mask arrives on the vertex beat, off the same held job as the slot,
+  // the source id and the flags. `u_terrain_jobissue` takes it from there.
+  //
+  // THE TWO SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED, and the build is
+  // neither of them. Latching `tis_view_mask` live at the door would pair page
+  // N's mask with page M's lattice -- the header reader accepts a job, spends
+  // a burst, and only then forwards it, so the two move independently. A
+  // src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue. Carrying the field makes the question not arise.
+  //
+  // THIS PORT REMAINS AS AN OVERRIDE, on the same footing as the twelve job
+  // fields beside it and for the reason entry I21 item (5) records: the smoke
+  // bench injects one subpatch job here and SIX assertions stand on that
+  // injection, because every terrain page the smoke plays fails its CRC and
+  // the internal producer therefore never opens. Deleting the port would move
+  // the register by nothing and cost all six. It is a boundary the composition
+  // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE NARROWING'S COUNTER, from `zhao_terrain_jobissue`. The record's mask
+  // is EIGHT bits and the sequencer's is TWO, and bits [7:2] have no ratified
+  // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
+  // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
+  // two view bits and tests `== 0x3`. Entry I21 left the decision to whoever
+  // composed the consumer: they are IGNORED rather than refused, because
+  // refusing a patch over an absence would drop legal content, and they are
+  // COUNTED, because the day a third view is ratified the discard stops being
+  // harmless. The count is taken inside the block rather than in this composer
+  // so that a directed test can FIRE it; see that block's port comment.
+  output logic [31:0]             terr_ji_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -1167,17 +1377,28 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_bsock_retire_unowned_o,
   output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
-  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  // ---- I27 IS CLOSED. Both halves, and they closed a day apart -------------
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
   //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
   //      and TERRAIN.PLACE inside this module, and the streamer's own completion
-  //      is what unpins the page.  What is left here is the deformation mark,
-  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
-  //      caller is the same absent subpatch issuer as entry I21.
-
+  //      is what unpins the page.
+  //      The DEFORMATION MARK left it on 2026-09-21 -- `u_terrain_pageio` holds
+  //      the slot, generation and epoch the patch was served under and drives
+  //      the directory directly; eight ports went with it.
+  //      THE HANDLE CHECK (`terr_chk_*`) LEFT IT 2026-09-22, and its caller is
+  //      the one entry I27 named in advance: `u_terrain_lodfeed`, now that
+  //      `u_terrain_devstore` is composed beneath it. Six more ports are gone.
+  //      What crosses this edge instead is the check's EVIDENCE, below.
+  //
+  //      THE CHECK IS NOT A NAME MATCH AND THE TWO SIDES ARE NOT IN LOCKSTEP,
+  //      which is the property this file requires of a detector before quoting
+  //      it: the request carries the handle `u_terrain_lodfeed` held across its
+  //      own ~9,700-clock walk, and the answer is read out of
+  //      `u_terrain_residency_v2`'s key RAM, written by the directory's
+  //      claim/evict FSM. No enable drives both, so a slot that is evicted and
+  //      reused mid-walk moves ONE of them and the difference is visible.
   output logic [31:0]             terr_lodfeed_handles_checked_o,
   output logic [31:0]             terr_lodfeed_handles_stale_o,
-  output logic [31:0]             terr_ji_view_mask_high_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
@@ -1221,13 +1442,29 @@ module zhao_console_core_slot_overflow_mutant
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
+  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
+  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
+  //      this module by `zhao_terrain_fieldlist`, whose own intake is
+  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
+  //      footprint and a program hash RESOLVED against FIELD.LOADER's
+  //      publication port rather than forwarded as a handle.
+  //
+  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
+  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
+  //      declaring the other three channels present because they have spare bus
+  //      bits." The Earth record declares four channels and this consumer can
+  //      receive one, so the lane stays a boundary until
+  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
+  //      3.4 with an empty program list -- an absent input, not a faked one.
   input  logic                    terr_pt_fld_valid_i,
   output logic                    terr_pt_fld_ready_o,
   input  logic signed [31:0]      terr_pt_fld_height_i,
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
+  // TERRAIN.FIELDLIST's evidence. `tfl_open_at_patch_o` is the counter that
+  // watches the cadence fault this block exists to prevent: a patch job that
+  // met a list the command stream had not finished delivering.
   output logic [31:0]             terr_fl_records_sealed_o,
   output logic [31:0]             terr_fl_tail_rejected_o,
   output logic [31:0]             terr_fl_unresolved_o,
@@ -1237,6 +1474,11 @@ module zhao_console_core_slot_overflow_mutant
   output logic [4:0]              terr_fl_records_o,
   output logic                    terr_fl_sealed_o,
   output logic                    terr_fl_idle_o,
+  // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
+  // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
+  // queue could never drain and `tfld_overflow_o` could not be read. A refusal
+  // counter nobody can see is the shape this repository calls a blind
+  // instrument.
   output logic [31:0]             cmd_exec_tflds_o,
   output logic [31:0]             cmd_exec_tfld_overflow_o,
   output logic [31:0]             cmd_exec_tfld_src_truncated_o,
@@ -1246,7 +1488,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [15:0]             terr_pt_trace_cmd_o,
   output logic [31:0]             terr_pt_programs_rejected_o,
 
-  // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
+  // ---- I32 (extended), CLOSED 2026-09-21: TERRAIN.COMPCACHE's layer-D
+  // cell-state write is driven by TERRAIN.BAKE inside this module. The four
+  // ports are GONE from this edge rather than driven from it.
 
   // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
   // ITS OWNER IS NOW INTERNAL (2026-09-21): `zhao_terrain_jobissue` releases on
@@ -1269,6 +1513,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_ps_bursts_o,
   output logic [31:0]             terr_ps_guard_denied_o,
   output logic [31:0]             terr_ps_incomplete_o,
+  // Layer E, R13. Cell beats TERRAIN.PAGESTREAM offered and had taken; 1,024
+  // per page. Paired with `terr_cc_mat_cells_o`, which is the same quantity
+  // counted at the OTHER end by a different enable in a different module, so
+  // the two disagreeing is a real signal rather than a tautology.
   output logic [31:0]             terr_ps_cells_o,
   output logic                    terr_ps_idle_o,
   // A TAP on the streamer's completion, not a handshake: the READY belongs to
@@ -1423,6 +1671,8 @@ module zhao_console_core_slot_overflow_mutant
   // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
   output logic [31:0]             terr_hps_c5_bursts_o,
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
+  output logic [31:0]             terr_hps_c6_bursts_o,
+  output logic [31:0]             terr_hps_c6_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -1430,7 +1680,7 @@ module zhao_console_core_slot_overflow_mutant
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [5:0]              terr_hps_pend_dropped_mask_o,
+  output logic [6:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -1523,7 +1773,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
+  // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
+  // CENSUS: spans published in the lawful no-material mode. The claim it
+  // supports is made by the counters it must NOT move beside --
+  // `mat_win_resolves_o` and `mat_win_no_record_o` -- which are three
+  // independent quantities rather than one restated.
   output logic [31:0]             mat_win_no_material_spans_o,
+  // A FAULT: an internally contradictory material declaration, refused.
   output logic [31:0]             mat_win_mode_refused_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
@@ -1546,6 +1802,8 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_tess_refs_o,
   output logic [31:0]             terr_tess_rejected_o,
   output logic [31:0]             terr_tess_lod_clamped_o,
+  // A layer-E read answered UNARMED or out of range. See the port's own note
+  // in zhao_terrain_tess.sv for why its two operands are not in lockstep.
   output logic [31:0]             terr_tess_mat_unarmed_o,
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
@@ -2159,13 +2417,22 @@ module zhao_console_core_slot_overflow_mutant
   // rather than driven from it, which is the difference between a seam that
   // closed and a seam that acquired a producer.
 
-  // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
+  // I32 CLOSED 2026-09-21: `stamp_results` -> TERRAIN.SHEETSEAM -> TERRAIN.BAKE,
+  // all three composed at the end of this module. `surf_res_ready_i` is GONE
+  // from this edge rather than driven from it -- the difference between a seam
+  // that closed and a seam that acquired a producer -- and `surf_res_taken_o`
+  // replaces it so the accept stays observable from outside.
   output logic        surf_res_valid_o,
   output logic        surf_res_taken_o,
   output logic [11:0] surf_res_texel_o,
   output logic [ 7:0] surf_res_tag_o,
   output logic [ 7:0] surf_res_strength_o,
   output logic [ 7:0] surf_res_before_o,
+  // WHICH SHEET THOSE TEXELS BELONG TO. Added 2026-09-21 under OWNER RULING
+  // R231: `zhao_terrain_sheetseam` now consumes `res_before_o` to build
+  // TERRAIN.BAKE's delta, and a result stream with no identity cannot be
+  // ROUTED to a patch. It is `zhao_surface_stamp`'s own held `st_handle` --
+  // the ABI's `handle32[patch]`, CARRIED and not derived (SURFACE.SHEET C4).
   output logic [31:0] surf_res_handle_o,
   output logic [15:0] surf_res_src_id_o,
 
@@ -2370,6 +2637,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] part_lad_held_o,
   output logic [31:0] part_lad_gov_forced_o,
   output logic [31:0] part_exp_polygons_o,
+  // ---- PART.CLIPFEED's evidence (owner ruling 1, 2026-09-22) --------------
+  // `part_cf_particles_o` against `part_cf_triangles_o` is the census pair
+  // that discriminates: a ring that stopped draining, or a converter that
+  // stopped answering, shows the first climbing while the second stands still.
   output logic [31:0] part_cf_particles_o,
   output logic [31:0] part_cf_triangles_o,
   output logic [31:0] part_cf_range_refused_o,
@@ -2391,78 +2662,73 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [15:0] phy_dq_i,
 
   // --------------------------------------------------------------------------
-  // TWOD: the plane descriptors, the sprite descriptors, the sampler's assets
-  // and the sprite colour stream.  Added 2026-09-19 with TWOD.SAMPLER.
+  // TWOD: all five descriptor and asset groups LEFT THIS EDGE on 2026-09-22,
+  // under the owner's completion ruling of that date, item 3.
   // --------------------------------------------------------------------------
-  // WHAT IS AND IS NOT A GAP HERE, because the group is large and it would be
-  // easy to read all of it as one:
-  //   * the two DESCRIPTOR groups are the CMD seam. SetPlane and the sprite
-  //     display list are commands, `zhao_cmd_decoder` emits record headers and
-  //     not decoded descriptors, and the executor that would turn one into the
-  //     other is the same absent path entries I14 and I30 describe. GAP, and
-  //     it is the SAME gap those two already name rather than a new one.
-  //   * the three LOAD groups are ASSETS. Entry I17's own sentence about the
-  //     grading curves -- "generated ASSETS by design, so their load port is
-  //     legitimately external" -- covers a texture page, a palette and a
-  //     binding exactly. NOT a gap.
-  //   * `twod_sc_*` WAS the sprite colour with no consumer here, because
-  //     POST.COMPOSITE's `hud_*` port is a raster-order sweep and TWOD.SPRITE
-  //     walks in descriptor order. CLOSED 2026-09-21 (owner rulings R233/R235):
-  //     `zhao_twod_band` is that bridge, it is composed at the end of this
-  //     module, and BOTH groups are now internal. Entry I17 item 1.
-  input  logic                    twod_pd_valid_i,
-  output logic                    twod_pd_ready_o,
-  input  logic                    twod_pd_slot_i,
-  input  logic [1:0]              twod_pd_role_i,
-  input  logic [1:0]              twod_pd_blend_i,
-  input  logic [7:0]              twod_pd_opacity_i,
-  input  logic                    twod_pd_format_i,
-  input  logic [15:0]             twod_pd_width_i,
-  input  logic [15:0]             twod_pd_height_i,
-  input  logic                    twod_pd_wrap_u_i,
-  input  logic                    twod_pd_wrap_v_i,
-  input  logic signed [31:0]      twod_pd_a_i,
-  input  logic signed [31:0]      twod_pd_b_i,
-  input  logic signed [31:0]      twod_pd_c_i,
-  input  logic signed [31:0]      twod_pd_d_i,
-  input  logic signed [31:0]      twod_pd_u0_i,
-  input  logic signed [31:0]      twod_pd_v0_i,
-  input  logic [1:0]              twod_pd_view_mask_i,
-  input  logic [7:0]              twod_pd_palette_i,
+  // WHAT USED TO BE HERE, and what closed it:
+  //   * `twod_pd_*` (19 ports) and `twod_sd_*` (20) were THE DESCRIPTORS, and
+  //     entry I17 was right that they were not a CMD-executor gap: the RECORD
+  //     did not exist. `SetPlane` returned zero hits in `spec/commands.zidl`.
+  //     The owner ratified BOTH records on 2026-09-22 -- SetPlane 0x0306 and
+  //     DrawSprite 0x0307, because "adding only a plane command does not
+  //     establish a producer for HUD sprite descriptors" -- and their producer
+  //     is `zhao_cmd_exec`'s two new arms feeding `u_twod_cmd`, composed at the
+  //     end of this module.
+  //   * `twod_ld_*` (11 ports) were the sampler's ASSETS, which this entry
+  //     classified as "NOT a gap" by analogy with the grading curves. THE
+  //     RULING OVERRULES THAT, in one sentence: "an opcode plus descriptors
+  //     referring to data that ONLY THE TESTBENCH CAN INJECT is not
+  //     completion." The page and palette halves are now written by
+  //     `u_twod_asset`, which reads the HPS arena a `PublishResource` of kind
+  //     15 names; the binding half is written by `u_twod_cmd`, because WHICH
+  //     page region a descriptor samples is part of the descriptor.
+  //   * `twod_atm_slot_i` and `twod_line_scroll_i` were per-frame PLANE state
+  //     and are now derived from the sealed plane pair -- the slot whose role
+  //     is ATMOSPHERE, and that record's own `line_scroll` field.
+  //   * `twod_sc_*` and `post_hud_*` left on 2026-09-21 under R233/R235.
+  //
+  // FIFTY PORTS OUT, and the evidence groups below are what replaced them.
 
-  input  logic                    twod_sd_valid_i,
-  output logic                    twod_sd_ready_o,
-  input  logic signed [15:0]      twod_sd_x_i,
-  input  logic signed [15:0]      twod_sd_y_i,
-  input  logic [15:0]             twod_sd_w_i,
-  input  logic [15:0]             twod_sd_h_i,
-  input  logic signed [31:0]      twod_sd_u_i,
-  input  logic signed [31:0]      twod_sd_v_i,
-  input  logic signed [31:0]      twod_sd_a00_i,
-  input  logic signed [31:0]      twod_sd_a01_i,
-  input  logic signed [31:0]      twod_sd_a10_i,
-  input  logic signed [31:0]      twod_sd_a11_i,
-  input  logic [2:0]              twod_sd_format_i,
-  input  logic [7:0]              twod_sd_palette_i,
-  input  logic [15:0]             twod_sd_tint_i,
-  input  logic [1:0]              twod_sd_blend_i,
-  input  logic [1:0]              twod_sd_view_mask_i,
-  input  logic [7:0]              twod_sd_order_i,
-  input  logic [15:0]             twod_sd_src_id_i,
+  // ---- TWOD.CMD evidence (completion ruling 2026-09-22, item 3) ------------
+  // `desc_mid_sweep_o` on the band, below, is the LAW's own instrument: the
+  // ruling says "neither a later packet nor the next frame may mutate the list
+  // being consumed", and that counter is what says it did not. Its two
+  // operands -- `u_twod_cmd`'s replay walk and POST.COMPOSITE's raster sweep --
+  // are clocked by different things, which is the property CLAUDE.md's
+  // metadata-bank defect requires be checked before a zero is quoted.
+  output logic [31:0]             twod_cmd_planes_staged_o,
+  output logic [31:0]             twod_cmd_sprites_staged_o,
+  output logic [31:0]             twod_cmd_plane_refused_o,
+  output logic [31:0]             twod_cmd_sprite_refused_o,
+  output logic [31:0]             twod_cmd_list_overflow_o,
+  output logic [31:0]             twod_cmd_packets_committed_o,
+  output logic [31:0]             twod_cmd_packets_abandoned_o,
+  output logic [31:0]             twod_cmd_frames_sealed_o,
+  output logic [31:0]             twod_cmd_planes_published_o,
+  output logic [31:0]             twod_cmd_sprites_published_o,
+  output logic [31:0]             twod_cmd_slots_auto_disabled_o,
+  output logic [31:0]             twod_cmd_bind_conflict_o,
+  output logic [31:0]             twod_cmd_seal_overrun_o,
 
-  input  logic                    twod_ld_page_we_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_page_addr_i,
-  input  logic [15:0]             twod_ld_page_data_i,
-  input  logic                    twod_ld_pal_we_i,
-  input  logic [TWOD_PALAW-1:0]   twod_ld_pal_addr_i,
-  input  logic [15:0]             twod_ld_pal_data_i,
-  input  logic                    twod_ld_bind_we_i,
-  input  logic [TWOD_BSW-1:0]     twod_ld_bind_sel_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_bind_base_i,
-  input  logic [3:0]              twod_ld_bind_lstride_i,
-  input  logic [3:0]              twod_ld_bind_lheight_i,
-  input  logic                    twod_atm_slot_i,
-  input  logic signed [31:0]      twod_line_scroll_i,
+  // ---- TWOD.ASSET evidence --------------------------------------------------
+  output logic [31:0]             twod_asset_loads_started_o,
+  output logic [31:0]             twod_asset_loads_done_o,
+  output logic [31:0]             twod_asset_words_written_o,
+  output logic [31:0]             twod_asset_slot_refused_o,
+  output logic [31:0]             twod_asset_len_refused_o,
+  output logic [31:0]             twod_asset_addr_refused_o,
+  output logic [31:0]             twod_asset_epoch_refused_o,
+  output logic [31:0]             twod_asset_crc_fails_o,
+  output logic [31:0]             twod_asset_regions_zeroed_o,
+  output logic [31:0]             twod_asset_bridge_errs_o,
+  output logic [31:0]             twod_asset_loads_during_pass_o,
+  output logic [31:0]             twod_asset_bursts_o,
+
+  // ---- CMD.EXEC's TWOD evidence ---------------------------------------------
+  output logic [31:0]             cmd_exec_twod_planes_staged_o,
+  output logic [31:0]             cmd_exec_twod_sprites_staged_o,
+  output logic [31:0]             cmd_exec_twod_dropped_o,
+  output logic [31:0]             cmd_exec_twod_loads_issued_o,
 
   // ---- TWOD.BAND evidence (owner rulings R233, R235) -----------------------
   // `sprites_refused_budget_o` is R235's counter and the console asserts it at
@@ -2483,6 +2749,8 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             twod_band_blend_dropped_o,
   output logic [31:0]             twod_band_order_inversion_o,
   output logic [31:0]             twod_band_bands_o,
+  // The sealed-list law, MEASURED. See `zhao_twod_band.desc_mid_sweep_o`.
+  output logic [31:0]             twod_band_desc_mid_sweep_o,
 
   // ---- TWOD evidence -------------------------------------------------------
   output logic [31:0]             twod_plane_pixels_o,
@@ -2490,6 +2758,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             twod_plane_refused_blend_o,
   output logic [31:0]             twod_plane_skipped_view_o,
   output logic [31:0]             twod_plane_wrap_fail_o,
+  // A LAWFUL disable, counted apart from the two refusals so a frame's own
+  // intent can never be read as a malformed descriptor.
+  output logic [31:0]             twod_plane_disabled_o,
   output logic [31:0]             twod_sprite_descriptors_o,
   output logic [31:0]             twod_sprite_skipped_view_o,
   output logic [31:0]             twod_sprite_refused_o,
@@ -2735,6 +3006,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  terr_lodfeed_lattices_dropped_o,
   output logic [31:0]  terr_lodfeed_dev_records_o,
   output logic [31:0]  terr_lodfeed_stray_samples_o,
+
   // ==========================================================================
   // THE SUBPATCH DECISION CHAIN'S EVIDENCE. Composed 2026-09-21 (TERRACOMP).
   // ==========================================================================
@@ -2786,9 +3058,15 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  meas_gov_rep_count1_o,
   output logic [31:0]  meas_gov_rep_count2_o,
   output logic [31:0]  meas_gov_rep_count3_o,
-  // PROJ.CFGVALID (core entry I14's closing half, 2026-09-22). Carried here
-  // because this wrapper binds the real core with `.*` and a port it does not
-  // declare will not elaborate -- R220: fix the wrapper, never the module.
+  // PROJ.CFGVALID, entry I14's closing half. `proj_cfg_armed_o` is the ARM's
+  // positive control -- it reads 1 once a view's matrix bank is complete and
+  // never moves again -- and a console that drew pixels while it read 0 would
+  // be one whose projector was enabled by the host override instead. That
+  // distinction is invisible from the outside without this port, and it is the
+  // difference between a producer and a literal.
+  // `proj_en_held_offers_o` is the clocks on which a client had a vertex
+  // WITHHELD by the gate, which is the only evidence the gate does something
+  // rather than merely exists.
   output logic [31:0]  proj_cfg_armed_o,
   output logic [31:0]  proj_en_held_offers_o,
   output logic [31:0]  meas_starve_denials_o,
@@ -2922,6 +3200,13 @@ module zhao_console_core_slot_overflow_mutant
   // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
   output logic [ 7:0]  fld_ldr_pub_ready_o,
   output logic [ 7:0]  fld_ldr_pub_pinned_o,
+  // `pub_sel_i` HAS AN OWNER AS OF 2026-09-22 (FIELDARM) and has left this
+  // edge. It is driven by `u_terrain_fieldlist`, which sweeps the eight
+  // publication objects to turn a TerrainField record's `handle32[program]`
+  // into the canonical program hash the section 9.1 list carries. Entry I34's
+  // S2 recorded this producer as having landed and NOTHING as reading it; this
+  // is the reader. There is no second client, so no share was needed -- I34
+  // build item (d)'s `pub_sel` half is spent, and its `pc_lu_*` half is not.
   output logic [31:0]  fld_ldr_pub_handle_o,
   output logic [31:0]  fld_ldr_pub_prog_hash_o,
   output logic [ 7:0]  fld_ldr_pub_gen_o,
@@ -2952,8 +3237,42 @@ module zhao_console_core_slot_overflow_mutant
   // contain.
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
+
+  // ---- GEOM.WARP's FIELD BINDING -- the SAME shape as the two above -------
+  // `zhao_geom_warp` is composed as of this commit and `zhao_field_warp_adapter`
+  // is the engine's third client. Which RESIDENT SLOT holds the deformation
+  // arrives HERE, at the edge, exactly as it does for the FLOW and the STAMP
+  // profiles ten and twenty lines up -- and for a reason that is stated rather
+  // than inherited, because this case differs from theirs in one way.
+  //
+  // For FLOW and STAMP the reason is "no ratified opcode carries it". For WARP
+  // ONE DOES: `DrawWarpedForm 0x0304`'s `warp_program` is a `handle32[program]`
+  // and `spec/commands.zidl` says it "is resolved by the ONE shared
+  // program-binding authority". So the gap here is not the ABI's -- it is that
+  // the authority's MIDDLE LINK does not exist.
+  //
+  // GEOM.WARP prerequisite P8, measured by packet WARPBUILD and RE-MEASURED
+  // here against `fpga/rtl/field/`: handle -> canonical program is PRESENT
+  // (`zhao_field_loader`'s `pub_handle_o` / `pub_prog_hash_o`), resident slot
+  // -> prepared plan is PRESENT (`zhao_field_host_v2`'s `hdr_assoc_gen`,
+  // `prep_gen`, `hdr_ipok`), and CANONICAL PROGRAM -> RESIDENT SLOT IS ABSENT:
+  // `zhao_field_progcache`'s hash-to-slot directory answers only the doorbell's
+  // `post_op = 2` LOOKUP, the loader never issues one, and nothing in this tree
+  // stores "the slot this binding object currently occupies". So §9's
+  // `PROGRAM_NOT_RESIDENT` and `STALE_BINDING` have no hardware that can
+  // compute them, and a resolver composed here would be this console inventing
+  // the authority W07 assigns to `fpga/rtl/field/`.
+  //
+  // WHAT THAT MEANS FOR WHAT SHIPPED, said plainly: this is a COMPOSED Warp,
+  // not a WORKING one. The lane is reachable -- a 0x0304 naming a program arms
+  // it, `d_warp_en_i` is driven by a decoded record field through a real
+  // carrier and not by a constant -- and with `fld_warp_slot_valid_i` low the
+  // adapter answers `req_noprog_o` and the block takes W09's bypass, which is
+  // a console with no warp program bound rather than a warp of zero.
   input  logic [ 2:0]  fld_warp_slot_i,
   input  logic         fld_warp_slot_valid_i,
+  // FH27: the resident program's profile id, from the program directory. A
+  // slot holding a non-Warp program is refused before a request is issued.
   input  logic [ 7:0]  fld_warp_prog_profile_i,
 
   // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is

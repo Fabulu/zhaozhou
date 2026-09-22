@@ -2026,6 +2026,8 @@ module zhao_console_board
   // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
   output logic [31:0]             terr_hps_c5_bursts_o,
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
+  output logic [31:0]             terr_hps_c6_bursts_o,
+  output logic [31:0]             terr_hps_c6_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -2033,7 +2035,7 @@ module zhao_console_board
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [5:0]              terr_hps_pend_dropped_mask_o,
+  output logic [6:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -3012,78 +3014,73 @@ module zhao_console_board
   input  logic [15:0] phy_dq_i,
 
   // --------------------------------------------------------------------------
-  // TWOD: the plane descriptors, the sprite descriptors, the sampler's assets
-  // and the sprite colour stream.  Added 2026-09-19 with TWOD.SAMPLER.
+  // TWOD: all five descriptor and asset groups LEFT THIS EDGE on 2026-09-22,
+  // under the owner's completion ruling of that date, item 3.
   // --------------------------------------------------------------------------
-  // WHAT IS AND IS NOT A GAP HERE, because the group is large and it would be
-  // easy to read all of it as one:
-  //   * the two DESCRIPTOR groups are the CMD seam. SetPlane and the sprite
-  //     display list are commands, `zhao_cmd_decoder` emits record headers and
-  //     not decoded descriptors, and the executor that would turn one into the
-  //     other is the same absent path entries I14 and I30 describe. GAP, and
-  //     it is the SAME gap those two already name rather than a new one.
-  //   * the three LOAD groups are ASSETS. Entry I17's own sentence about the
-  //     grading curves -- "generated ASSETS by design, so their load port is
-  //     legitimately external" -- covers a texture page, a palette and a
-  //     binding exactly. NOT a gap.
-  //   * `twod_sc_*` WAS the sprite colour with no consumer here, because
-  //     POST.COMPOSITE's `hud_*` port is a raster-order sweep and TWOD.SPRITE
-  //     walks in descriptor order. CLOSED 2026-09-21 (owner rulings R233/R235):
-  //     `zhao_twod_band` is that bridge, it is composed at the end of this
-  //     module, and BOTH groups are now internal. Entry I17 item 1.
-  input  logic                    twod_pd_valid_i,
-  output logic                    twod_pd_ready_o,
-  input  logic                    twod_pd_slot_i,
-  input  logic [1:0]              twod_pd_role_i,
-  input  logic [1:0]              twod_pd_blend_i,
-  input  logic [7:0]              twod_pd_opacity_i,
-  input  logic                    twod_pd_format_i,
-  input  logic [15:0]             twod_pd_width_i,
-  input  logic [15:0]             twod_pd_height_i,
-  input  logic                    twod_pd_wrap_u_i,
-  input  logic                    twod_pd_wrap_v_i,
-  input  logic signed [31:0]      twod_pd_a_i,
-  input  logic signed [31:0]      twod_pd_b_i,
-  input  logic signed [31:0]      twod_pd_c_i,
-  input  logic signed [31:0]      twod_pd_d_i,
-  input  logic signed [31:0]      twod_pd_u0_i,
-  input  logic signed [31:0]      twod_pd_v0_i,
-  input  logic [1:0]              twod_pd_view_mask_i,
-  input  logic [7:0]              twod_pd_palette_i,
+  // WHAT USED TO BE HERE, and what closed it:
+  //   * `twod_pd_*` (19 ports) and `twod_sd_*` (20) were THE DESCRIPTORS, and
+  //     entry I17 was right that they were not a CMD-executor gap: the RECORD
+  //     did not exist. `SetPlane` returned zero hits in `spec/commands.zidl`.
+  //     The owner ratified BOTH records on 2026-09-22 -- SetPlane 0x0306 and
+  //     DrawSprite 0x0307, because "adding only a plane command does not
+  //     establish a producer for HUD sprite descriptors" -- and their producer
+  //     is `zhao_cmd_exec`'s two new arms feeding `u_twod_cmd`, composed at the
+  //     end of this module.
+  //   * `twod_ld_*` (11 ports) were the sampler's ASSETS, which this entry
+  //     classified as "NOT a gap" by analogy with the grading curves. THE
+  //     RULING OVERRULES THAT, in one sentence: "an opcode plus descriptors
+  //     referring to data that ONLY THE TESTBENCH CAN INJECT is not
+  //     completion." The page and palette halves are now written by
+  //     `u_twod_asset`, which reads the HPS arena a `PublishResource` of kind
+  //     15 names; the binding half is written by `u_twod_cmd`, because WHICH
+  //     page region a descriptor samples is part of the descriptor.
+  //   * `twod_atm_slot_i` and `twod_line_scroll_i` were per-frame PLANE state
+  //     and are now derived from the sealed plane pair -- the slot whose role
+  //     is ATMOSPHERE, and that record's own `line_scroll` field.
+  //   * `twod_sc_*` and `post_hud_*` left on 2026-09-21 under R233/R235.
+  //
+  // FIFTY PORTS OUT, and the evidence groups below are what replaced them.
 
-  input  logic                    twod_sd_valid_i,
-  output logic                    twod_sd_ready_o,
-  input  logic signed [15:0]      twod_sd_x_i,
-  input  logic signed [15:0]      twod_sd_y_i,
-  input  logic [15:0]             twod_sd_w_i,
-  input  logic [15:0]             twod_sd_h_i,
-  input  logic signed [31:0]      twod_sd_u_i,
-  input  logic signed [31:0]      twod_sd_v_i,
-  input  logic signed [31:0]      twod_sd_a00_i,
-  input  logic signed [31:0]      twod_sd_a01_i,
-  input  logic signed [31:0]      twod_sd_a10_i,
-  input  logic signed [31:0]      twod_sd_a11_i,
-  input  logic [2:0]              twod_sd_format_i,
-  input  logic [7:0]              twod_sd_palette_i,
-  input  logic [15:0]             twod_sd_tint_i,
-  input  logic [1:0]              twod_sd_blend_i,
-  input  logic [1:0]              twod_sd_view_mask_i,
-  input  logic [7:0]              twod_sd_order_i,
-  input  logic [15:0]             twod_sd_src_id_i,
+  // ---- TWOD.CMD evidence (completion ruling 2026-09-22, item 3) ------------
+  // `desc_mid_sweep_o` on the band, below, is the LAW's own instrument: the
+  // ruling says "neither a later packet nor the next frame may mutate the list
+  // being consumed", and that counter is what says it did not. Its two
+  // operands -- `u_twod_cmd`'s replay walk and POST.COMPOSITE's raster sweep --
+  // are clocked by different things, which is the property CLAUDE.md's
+  // metadata-bank defect requires be checked before a zero is quoted.
+  output logic [31:0]             twod_cmd_planes_staged_o,
+  output logic [31:0]             twod_cmd_sprites_staged_o,
+  output logic [31:0]             twod_cmd_plane_refused_o,
+  output logic [31:0]             twod_cmd_sprite_refused_o,
+  output logic [31:0]             twod_cmd_list_overflow_o,
+  output logic [31:0]             twod_cmd_packets_committed_o,
+  output logic [31:0]             twod_cmd_packets_abandoned_o,
+  output logic [31:0]             twod_cmd_frames_sealed_o,
+  output logic [31:0]             twod_cmd_planes_published_o,
+  output logic [31:0]             twod_cmd_sprites_published_o,
+  output logic [31:0]             twod_cmd_slots_auto_disabled_o,
+  output logic [31:0]             twod_cmd_bind_conflict_o,
+  output logic [31:0]             twod_cmd_seal_overrun_o,
 
-  input  logic                    twod_ld_page_we_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_page_addr_i,
-  input  logic [15:0]             twod_ld_page_data_i,
-  input  logic                    twod_ld_pal_we_i,
-  input  logic [TWOD_PALAW-1:0]   twod_ld_pal_addr_i,
-  input  logic [15:0]             twod_ld_pal_data_i,
-  input  logic                    twod_ld_bind_we_i,
-  input  logic [TWOD_BSW-1:0]     twod_ld_bind_sel_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_bind_base_i,
-  input  logic [3:0]              twod_ld_bind_lstride_i,
-  input  logic [3:0]              twod_ld_bind_lheight_i,
-  input  logic                    twod_atm_slot_i,
-  input  logic signed [31:0]      twod_line_scroll_i,
+  // ---- TWOD.ASSET evidence --------------------------------------------------
+  output logic [31:0]             twod_asset_loads_started_o,
+  output logic [31:0]             twod_asset_loads_done_o,
+  output logic [31:0]             twod_asset_words_written_o,
+  output logic [31:0]             twod_asset_slot_refused_o,
+  output logic [31:0]             twod_asset_len_refused_o,
+  output logic [31:0]             twod_asset_addr_refused_o,
+  output logic [31:0]             twod_asset_epoch_refused_o,
+  output logic [31:0]             twod_asset_crc_fails_o,
+  output logic [31:0]             twod_asset_regions_zeroed_o,
+  output logic [31:0]             twod_asset_bridge_errs_o,
+  output logic [31:0]             twod_asset_loads_during_pass_o,
+  output logic [31:0]             twod_asset_bursts_o,
+
+  // ---- CMD.EXEC's TWOD evidence ---------------------------------------------
+  output logic [31:0]             cmd_exec_twod_planes_staged_o,
+  output logic [31:0]             cmd_exec_twod_sprites_staged_o,
+  output logic [31:0]             cmd_exec_twod_dropped_o,
+  output logic [31:0]             cmd_exec_twod_loads_issued_o,
 
   // ---- TWOD.BAND evidence (owner rulings R233, R235) -----------------------
   // `sprites_refused_budget_o` is R235's counter and the console asserts it at
@@ -3104,6 +3101,8 @@ module zhao_console_board
   output logic [31:0]             twod_band_blend_dropped_o,
   output logic [31:0]             twod_band_order_inversion_o,
   output logic [31:0]             twod_band_bands_o,
+  // The sealed-list law, MEASURED. See `zhao_twod_band.desc_mid_sweep_o`.
+  output logic [31:0]             twod_band_desc_mid_sweep_o,
 
   // ---- TWOD evidence -------------------------------------------------------
   output logic [31:0]             twod_plane_pixels_o,
@@ -3111,6 +3110,9 @@ module zhao_console_board
   output logic [31:0]             twod_plane_refused_blend_o,
   output logic [31:0]             twod_plane_skipped_view_o,
   output logic [31:0]             twod_plane_wrap_fail_o,
+  // A LAWFUL disable, counted apart from the two refusals so a frame's own
+  // intent can never be read as a malformed descriptor.
+  output logic [31:0]             twod_plane_disabled_o,
   output logic [31:0]             twod_sprite_descriptors_o,
   output logic [31:0]             twod_sprite_skipped_view_o,
   output logic [31:0]             twod_sprite_refused_o,
@@ -4524,6 +4526,8 @@ module zhao_console_board
       .terr_hps_c4_wait_cycles_o          (terr_hps_c4_wait_cycles_o),
       .terr_hps_c5_bursts_o               (terr_hps_c5_bursts_o),
       .terr_hps_c5_wait_cycles_o          (terr_hps_c5_wait_cycles_o),
+      .terr_hps_c6_bursts_o               (terr_hps_c6_bursts_o),
+      .terr_hps_c6_wait_cycles_o          (terr_hps_c6_wait_cycles_o),
       .terr_hps_pend_dropped_o            (terr_hps_pend_dropped_o),
       .terr_hps_pend_dropped_mask_o       (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                 (cmd_exec_uploads_o),
@@ -5025,57 +5029,35 @@ module zhao_console_board
       .phy_dq_oe_o                        (phy_dq_oe_o),
       .phy_dqm_o                          (phy_dqm_o),
       .phy_dq_i                           (phy_dq_i),
-      .twod_pd_valid_i                    (twod_pd_valid_i),
-      .twod_pd_ready_o                    (twod_pd_ready_o),
-      .twod_pd_slot_i                     (twod_pd_slot_i),
-      .twod_pd_role_i                     (twod_pd_role_i),
-      .twod_pd_blend_i                    (twod_pd_blend_i),
-      .twod_pd_opacity_i                  (twod_pd_opacity_i),
-      .twod_pd_format_i                   (twod_pd_format_i),
-      .twod_pd_width_i                    (twod_pd_width_i),
-      .twod_pd_height_i                   (twod_pd_height_i),
-      .twod_pd_wrap_u_i                   (twod_pd_wrap_u_i),
-      .twod_pd_wrap_v_i                   (twod_pd_wrap_v_i),
-      .twod_pd_a_i                        (twod_pd_a_i),
-      .twod_pd_b_i                        (twod_pd_b_i),
-      .twod_pd_c_i                        (twod_pd_c_i),
-      .twod_pd_d_i                        (twod_pd_d_i),
-      .twod_pd_u0_i                       (twod_pd_u0_i),
-      .twod_pd_v0_i                       (twod_pd_v0_i),
-      .twod_pd_view_mask_i                (twod_pd_view_mask_i),
-      .twod_pd_palette_i                  (twod_pd_palette_i),
-      .twod_sd_valid_i                    (twod_sd_valid_i),
-      .twod_sd_ready_o                    (twod_sd_ready_o),
-      .twod_sd_x_i                        (twod_sd_x_i),
-      .twod_sd_y_i                        (twod_sd_y_i),
-      .twod_sd_w_i                        (twod_sd_w_i),
-      .twod_sd_h_i                        (twod_sd_h_i),
-      .twod_sd_u_i                        (twod_sd_u_i),
-      .twod_sd_v_i                        (twod_sd_v_i),
-      .twod_sd_a00_i                      (twod_sd_a00_i),
-      .twod_sd_a01_i                      (twod_sd_a01_i),
-      .twod_sd_a10_i                      (twod_sd_a10_i),
-      .twod_sd_a11_i                      (twod_sd_a11_i),
-      .twod_sd_format_i                   (twod_sd_format_i),
-      .twod_sd_palette_i                  (twod_sd_palette_i),
-      .twod_sd_tint_i                     (twod_sd_tint_i),
-      .twod_sd_blend_i                    (twod_sd_blend_i),
-      .twod_sd_view_mask_i                (twod_sd_view_mask_i),
-      .twod_sd_order_i                    (twod_sd_order_i),
-      .twod_sd_src_id_i                   (twod_sd_src_id_i),
-      .twod_ld_page_we_i                  (twod_ld_page_we_i),
-      .twod_ld_page_addr_i                (twod_ld_page_addr_i),
-      .twod_ld_page_data_i                (twod_ld_page_data_i),
-      .twod_ld_pal_we_i                   (twod_ld_pal_we_i),
-      .twod_ld_pal_addr_i                 (twod_ld_pal_addr_i),
-      .twod_ld_pal_data_i                 (twod_ld_pal_data_i),
-      .twod_ld_bind_we_i                  (twod_ld_bind_we_i),
-      .twod_ld_bind_sel_i                 (twod_ld_bind_sel_i),
-      .twod_ld_bind_base_i                (twod_ld_bind_base_i),
-      .twod_ld_bind_lstride_i             (twod_ld_bind_lstride_i),
-      .twod_ld_bind_lheight_i             (twod_ld_bind_lheight_i),
-      .twod_atm_slot_i                    (twod_atm_slot_i),
-      .twod_line_scroll_i                 (twod_line_scroll_i),
+      .twod_cmd_planes_staged_o           (twod_cmd_planes_staged_o),
+      .twod_cmd_sprites_staged_o          (twod_cmd_sprites_staged_o),
+      .twod_cmd_plane_refused_o           (twod_cmd_plane_refused_o),
+      .twod_cmd_sprite_refused_o          (twod_cmd_sprite_refused_o),
+      .twod_cmd_list_overflow_o           (twod_cmd_list_overflow_o),
+      .twod_cmd_packets_committed_o       (twod_cmd_packets_committed_o),
+      .twod_cmd_packets_abandoned_o       (twod_cmd_packets_abandoned_o),
+      .twod_cmd_frames_sealed_o           (twod_cmd_frames_sealed_o),
+      .twod_cmd_planes_published_o        (twod_cmd_planes_published_o),
+      .twod_cmd_sprites_published_o       (twod_cmd_sprites_published_o),
+      .twod_cmd_slots_auto_disabled_o     (twod_cmd_slots_auto_disabled_o),
+      .twod_cmd_bind_conflict_o           (twod_cmd_bind_conflict_o),
+      .twod_cmd_seal_overrun_o            (twod_cmd_seal_overrun_o),
+      .twod_asset_loads_started_o         (twod_asset_loads_started_o),
+      .twod_asset_loads_done_o            (twod_asset_loads_done_o),
+      .twod_asset_words_written_o         (twod_asset_words_written_o),
+      .twod_asset_slot_refused_o          (twod_asset_slot_refused_o),
+      .twod_asset_len_refused_o           (twod_asset_len_refused_o),
+      .twod_asset_addr_refused_o          (twod_asset_addr_refused_o),
+      .twod_asset_epoch_refused_o         (twod_asset_epoch_refused_o),
+      .twod_asset_crc_fails_o             (twod_asset_crc_fails_o),
+      .twod_asset_regions_zeroed_o        (twod_asset_regions_zeroed_o),
+      .twod_asset_bridge_errs_o           (twod_asset_bridge_errs_o),
+      .twod_asset_loads_during_pass_o     (twod_asset_loads_during_pass_o),
+      .twod_asset_bursts_o                (twod_asset_bursts_o),
+      .cmd_exec_twod_planes_staged_o      (cmd_exec_twod_planes_staged_o),
+      .cmd_exec_twod_sprites_staged_o     (cmd_exec_twod_sprites_staged_o),
+      .cmd_exec_twod_dropped_o            (cmd_exec_twod_dropped_o),
+      .cmd_exec_twod_loads_issued_o       (cmd_exec_twod_loads_issued_o),
       .twod_band_descriptors_o            (twod_band_descriptors_o),
       .twod_band_desc_overflow_o          (twod_band_desc_overflow_o),
       .twod_band_sprites_admitted_o       (twod_band_sprites_admitted_o),
@@ -5090,11 +5072,13 @@ module zhao_console_board
       .twod_band_blend_dropped_o          (twod_band_blend_dropped_o),
       .twod_band_order_inversion_o        (twod_band_order_inversion_o),
       .twod_band_bands_o                  (twod_band_bands_o),
+      .twod_band_desc_mid_sweep_o         (twod_band_desc_mid_sweep_o),
       .twod_plane_pixels_o                (twod_plane_pixels_o),
       .twod_plane_refused_role_o          (twod_plane_refused_role_o),
       .twod_plane_refused_blend_o         (twod_plane_refused_blend_o),
       .twod_plane_skipped_view_o          (twod_plane_skipped_view_o),
       .twod_plane_wrap_fail_o             (twod_plane_wrap_fail_o),
+      .twod_plane_disabled_o              (twod_plane_disabled_o),
       .twod_sprite_descriptors_o          (twod_sprite_descriptors_o),
       .twod_sprite_skipped_view_o         (twod_sprite_skipped_view_o),
       .twod_sprite_refused_o              (twod_sprite_refused_o),

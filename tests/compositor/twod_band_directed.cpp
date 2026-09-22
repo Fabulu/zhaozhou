@@ -231,19 +231,29 @@ void leadIn(int cycles = 200000) {
 
 // Sweep the read port exactly as POST.COMPOSITE does, one pixel per clock in
 // raster order, while the filler keeps working.
+//
+// CORRECTED 2026-09-22 (packet TWODCMD), AND THE OLD VERSION IS WHY A DEFECT
+// SHIPPED. It read `rd_valid_o` into `fb[i - 1]` -- a TWO-cycle model -- while
+// its comment claimed to sweep "exactly as POST.COMPOSITE does", which consumes
+// the HUD ONE cycle after the request (`hud_req_x_o` is `x_l_q`, `x9_q <=
+// x_l_q` on the same edge, `o_rgb_o <= hud_valid_i ? ...` one edge later). The
+// block answered at N+2 and every one of these 39 checks passed, because a
+// bench that drives both sides of a seam cannot disagree with itself. The
+// composed console drew its whole HUD ONE PIXEL TO THE RIGHT, and
+// `tests/compositor/twod_cmd_chain_directed.cpp` -- which composes the real
+// POST.COMPOSITE and looks at the pixels -- is what found it.
+//
+// So this now models N+1, and it is the MODEL that had to change as well as the
+// RTL: the two are one claim.
 std::vector<int> sweep() {
   std::vector<int> fb(static_cast<size_t>(kW) * kH, -1);
   const int n = kW * kH;
-  for (int i = 0; i <= n; ++i) {
-    if (i < n) {
-      top->rd_req_v_i = 1;
-      top->rd_x_i = i % kW;
-      top->rd_y_i = i / kW;
-    } else {
-      top->rd_req_v_i = 0;
-    }
+  for (int i = 0; i < n; ++i) {
+    top->rd_req_v_i = 1;
+    top->rd_x_i = i % kW;
+    top->rd_y_i = i / kW;
     cyc();
-    if (i >= 1) fb[static_cast<size_t>(i - 1)] = top->rd_valid_o ? static_cast<int>(top->rd_rgb_o) : -1;
+    fb[static_cast<size_t>(i)] = top->rd_valid_o ? static_cast<int>(top->rd_rgb_o) : -1;
   }
   top->rd_req_v_i = 0;
   return fb;

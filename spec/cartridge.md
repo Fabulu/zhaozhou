@@ -67,6 +67,7 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x0010 | MESH_STREAM | generic meshlet descriptors + vertex + local-index streams (§4a) |
 | 0x0011 | SPECIES_TABLE | particle species descriptor table (§4b; owner ruling R42, 2026-09-19) |
 | 0x0012 | FORGE_PROGRAM | Primitive Forge program table (§4d; owner decision R234 D2, 2026-09-21) |
+| 0x0013 | TWOD_PAGE | compositor 2D page: texels or palette entries for the TWOD sampler's on-chip store (§4f; owner ruling 2026-09-22 item 3) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -106,9 +107,10 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 12 | mesh stream | MESH_STREAM | immutable geometry: meshlet descriptors, vertex stream, local-index stream, offsets/counts, format + generation metadata (§4a) |
 | 13 | species table | SPECIES_TABLE | the particle species descriptor table: a header then PART.TABLE load words, one per entry (§4b; owner ruling R42, 2026-09-19) |
 | 14 | forge program | FORGE_PROGRAM | the Primitive Forge program table: a header then one 192-byte record per program — family, subdivision and the anchors/axes/radii its evaluator places vertices from (§4d; owner decision R234 D2, 2026-09-21) |
+| 15 | twod page | TWOD_PAGE | compositor 2D page: a raw run of little-endian 16-bit words, either CLUT8/RGB565 texels or RGB565 palette entries, loaded into the TWOD sampler's on-chip store. `dst_slot` names the destination region (§4f; owner ruling 2026-09-22 item 3) |
 
 ~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ ~~Kinds 10-255 reserved~~
-~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ Kinds 15-255 reserved
+~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ ~~Kinds 15-255 reserved~~ Kinds 16-255 reserved
 (world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
 that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
@@ -657,3 +659,70 @@ one-body/one-directory staging tier is unchanged and is still the measured one.
   built against a different `version` refuses the cartridge
   (`ZH_ABI_BAD_ABI_VERSION` semantics at cartridge level) rather than
   guessing (capture_format §4.3-2 law).
+
+## §4f — TWOD_PAGE (owner ruling 2026-09-22, item 3)
+
+**Ruled by the completion ruling's asset clause**, quoted because it is what
+makes this section part of item 3 rather than a new decision:
+
+> *"This includes any required legitimate asset/palette loading producer. **An
+> opcode plus descriptors referring to data that only the testbench can inject
+> is not completion.** Reuse `PublishResource` and the existing validated
+> resource mechanisms wherever applicable."*
+
+`SetPlane` and `DrawSprite` name a region of the **TWOD sampler's on-chip page
+store** (`fpga/rtl/compositor/zhao_twod_sampler.sv`) by `base`, `lstride` and
+`lheight`. Something has to put bytes there, and before this kind existed the
+only writer was a testbench hanging on `twod_ld_*` at the console's edge.
+
+### The body is a raw run of 16-bit words, and that is deliberate
+
+A TWOD_PAGE body is `length` bytes of **little-endian `u16` words** and nothing
+else — no header, no magic, no dimension fields.
+
+**The page carries no geometry because the DESCRIPTOR already does.** Width,
+height, stride and format are `SetPlane`/`DrawSprite` fields, judged by the
+consumer that owns the refusal. A header repeating them would be a second
+opinion about the same facts, and `spec/cartridge.md` §4d already records what
+that costs — *"the page's `family` governs; a `kind` that disagrees REFUSES the
+draw"*. There is nothing here to disagree.
+
+### `dst_slot` names the destination region
+
+`PublishResource.dst_slot` selects where the words land. The map is the
+sampler's own store, divided at its existing boundaries:
+
+| `dst_slot` | destination | words |
+|---|---|---|
+| 0..7 | page-store slot *s*, first word `s * (PAGE_WORDS/8)` | `PAGE_WORDS/8` |
+| 16..19 | palette slot 0..3 | 256 |
+| anything else | **refused and counted** (`slot_refused_o`) | — |
+
+At the shipped `PAGE_WORDS = 8192` a page slot is 1,024 words (2 KiB) and a
+palette slot is 256 RGB565 entries. **A transfer longer than its slot is
+refused whole and counted** (`len_refused_o`) rather than being allowed to walk
+into the neighbouring slot — the same fail-safe direction as every other
+bound-check in this file.
+
+### Every other `PublishResource` law is unchanged
+
+`length` is a multiple of 64 (a refusal, never a pad), `crc32c` is
+`zhao_crc32c_fold`'s law over the staged bytes, `epoch` is checked against the
+open resource epoch, and `hps_addr_lo/hi` above 4 GiB is refused rather than
+narrowed. **TWOD_PAGE adds no new integrity mechanism**; it adds a destination.
+
+**A page whose CRC fails is not published.** `TWOD.ASSET`'s loader ZEROES the
+destination region it had begun writing and counts the failure, so a bad
+transfer leaves a defined region rather than a partial one. See
+`design/contracts/TWOD.ASSET.md`.
+
+### It does NOT travel to VRAM
+
+Kinds 0..14 are staged into local SDRAM by `MEM.UPLOAD`. Kind 15 is read
+straight out of the HPS arena into on-chip memory by `TWOD.ASSET`, because the
+sampler's store is on-chip and *"there is no texel page store in the tree that a
+(u, v) can walk into without a VRAM fill agent"* — the wall
+`zhao_console_core.sv` entry I17 names, and the reason that block carries a
+page store of its own rather than a memory client. `CMD.EXEC` forks the upload
+request by `kind`: 15 goes to `TWOD.ASSET`, everything else to `MEM.UPLOAD`,
+and no existing kind changes route.

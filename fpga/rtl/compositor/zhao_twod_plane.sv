@@ -70,6 +70,21 @@ module zhao_twod_plane #(
     input  var logic                  d_valid_i,
     output var logic                  d_ready_o,
     input  var logic                  d_slot_i,        // 0 or 1: TWO slots
+    // ENABLE, added 2026-09-22 under the completion ruling's item 3: "provide
+    // EXPLICIT PLANE DISABLE BEHAVIOR and an empty-frame path that cannot
+    // retain old HUD contents."
+    //
+    // IT IS THE CONTRACT'S OWN FIELD, not a new one. `TWOD.PLANE.md`'s
+    // descriptor reads `{ slot, ENABLE, format, base, ... }` and this port was
+    // the one member of it with no wire. Before it existed the only way to turn
+    // a plane off was to send a MALFORMED descriptor and let the refusal path
+    // clear `en_q` -- a disable that counts as a fault, which is exactly the
+    // "an absence looks like a result" shape R221 forbids.
+    //
+    // A descriptor with `d_enable_i` LOW is LAWFUL: the slot is cleared, the
+    // rest of the record is not latched, no refusal counter moves, and
+    // `disabled_o` says it happened.
+    input  var logic                  d_enable_i,
     input  var logic [1:0]            d_role_i,        // R4: 0 BACKDROP, 1 ATMOSPHERE
     input  var logic [1:0]            d_blend_i,       // 0 REPLACE, 1 ALPHA, 2 ADD
     input  var logic [7:0]            d_opacity_i,     // unit8, value = raw/256
@@ -114,7 +129,11 @@ module zhao_twod_plane #(
     output var logic [31:0]           refused_role_o,     // role 2 or 3
     output var logic [31:0]           refused_blend_o,    // BACKDROP not REPLACE
     output var logic [31:0]           skipped_view_o,
-    output var logic [31:0]           wrap_fail_o         // one correction was not enough
+    output var logic [31:0]           wrap_fail_o,        // one correction was not enough
+    // A LAWFUL disable, counted separately from the two refusals so the two
+    // cannot be read as each other. `refused_role_o` says a descriptor was
+    // WRONG; this says a frame asked for the slot to be OFF.
+    output var logic [31:0]           disabled_o
 );
 
   localparam logic [1:0] ROLE_BACKDROP   = 2'd0;
@@ -224,11 +243,21 @@ module zhao_twod_plane #(
       refused_blend_o <= '0;
       skipped_view_o  <= '0;
       wrap_fail_o     <= '0;
+      disabled_o      <= '0;
       for (int i = 0; i < 2; i++) en_q[i] <= 1'b0;
     end else begin
       // ---- program a slot -------------------------------------------------
       if (d_valid_i) begin
-        if (role_bad_c) begin
+        if (!d_enable_i) begin
+          // THE LAWFUL DISABLE, AND IT IS TESTED BEFORE THE REFUSALS ON
+          // PURPOSE. A frame that turns a slot off is not making a claim about
+          // the rest of the record, so a disable carrying a reserved role must
+          // not be counted as a malformed descriptor -- that would report a
+          // frame's own intent as a fault, and `refused_role_o` would then be
+          // an instrument nobody could read.
+          en_q[d_slot_i] <= 1'b0;
+          disabled_o     <= disabled_o + 32'd1;
+        end else if (role_bad_c) begin
           // Roles 2 and 3 are reserved; the descriptor is refused, and the
           // slot is DISABLED rather than left holding its previous contents --
           // a refused program that quietly kept drawing the old plane would be
