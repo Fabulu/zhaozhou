@@ -4413,6 +4413,54 @@
 //      the same chain around a played HPS, rather than by the smoke bench.)
 //
 //
+// I51. THE PER-PRIMITIVE RASTER STATE (`render_state_i`) -- DISCONNECTED, and
+//      NOT PARTICLE-SPECIFIC. NEW 2026-09-22 (PARTMAT), declared under R159 in
+//      the same commit as the work that found it.
+//
+//      WHAT IS MISSING. `zhao_part_expand` produces the pass-7 law per
+//      particle -- `t_depth_test_o` = 1 and `t_depth_write_o` = 0, from
+//      `draw_population`'s own "pass-7 law: test only, no write" -- and both
+//      leave this module as boundary outputs with NO INTERNAL CONSUMER. They
+//      cannot have one, because the geometry path has no per-primitive carrier
+//      for a depth mode.
+//
+//      WHY IT IS NOT A PARTICLE PROBLEM, which is the part worth writing down.
+//      The raster state word is `render_state_i`, a BOUNDARY INPUT of this
+//      module, sampled once per tile job at
+//      `zhao_raster_tile_pipe.job_state_i` and held in `state_r`. NO producer
+//      in this console supplies it per primitive -- not GEOM.REPLAY, not the
+//      forge, not terrain. GEOM.CLIP carries `cull_mode` and CONSUMES it
+//      internally; nothing downstream of GEOM.SETUP takes a depth mode from a
+//      triangle at all. So a mesh and a particle in the same frame are drawn
+//      under the same externally-supplied state, and that was true before this
+//      entry existed.
+//
+//      WHY NOTHING WAS ADDED TO CLOSE IT HERE. A per-primitive route is a
+//      field through GEOM.CLIPDOOR, GEOM.CLIP, GEOM.SETUP, GEOM.BINNER and the
+//      shell's triangle door -- a subsystem, on blocks that sit on the critical
+//      path of every triangle the console draws, and "a port on a leaf costs
+//      its WHOLE instantiation chain plus every bench". A port added at
+//      `zhao_part_clipfeed` alone would have nowhere to go: a tie-off wearing
+//      a port's clothes, which is this campaign's first prohibition.
+//
+//      WHAT OWNER RULING 1 SAYS ABOUT IT, read carefully rather than
+//      conveniently. It requires that particle state be "supplied according to
+//      the applicable existing producer/reference laws, NEVER INHERITED from
+//      the mesh that happened to run previously". In this console the
+//      applicable existing law IS the frame-scoped boundary word, for every
+//      producer equally -- so there is no previous mesh's state to inherit,
+//      because no per-primitive state exists to be inherited. That is a
+//      truthful reading and it is also an uncomfortable one, which is why it is
+//      declared as a GAP here instead of being argued as compliance.
+//
+//      WHAT WOULD CLOSE IT: a `depth_test`/`depth_write` pair (and, the day
+//      blending is per primitive, the rest of the state word) carried from the
+//      door to the shell's triangle door, with `render_state_i` becoming the
+//      FRAME DEFAULT that a primitive overrides rather than the only answer.
+//      PART.EXPAND's two outputs are the producer for the particle arm and are
+//      already correct; the mesh arm's producer is GEOM.REPLAY's raster word,
+//      of which only bits [1:0] are carried today.
+//
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).

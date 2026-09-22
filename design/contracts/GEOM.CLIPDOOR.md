@@ -79,7 +79,41 @@ produce **zero** switches.
 
 ---
 
-## WHAT THE SECOND ARM STILL OWES — MEASURED 2026-09-21 (packet CLIPDOOR)
+## BOTH REMAINDERS ARE DISCHARGED — 2026-09-22 (packet PARTMAT)
+
+**The section below is the 2026-09-21 measurement and it is kept verbatim,
+because it is what made the work cheap.** Read it as a record of what was owed,
+not as a statement of what is missing. Both items are now RTL and the door is
+composed with THREE clients: GEOM.REPLAY (0), FORGE.ASSEMBLE (1) and
+PART.CLIPFEED (2).
+
+* **The canonical depth.** `w` and its depth profile now survive
+  `zhao_part_project`'s slot store and ladder queue (`PROJ_W` 99 → 132) and
+  `zhao_part_expand`. `zhao_part_clipfeed` converts them with the D-4 pair —
+  `zhao_geom_depthquant_stream` beside `zhao_raster_rcp24_v4` — and reorders the
+  converter's completion-order answers back into offer order.
+  See `design/contracts/PART.CLIPFEED.md`.
+* **The material law.** Ruled by the owner on 2026-09-22, ruling 1, and the
+  recommendation this contract recorded is what was adopted: a producer declares
+  it carries no material, and the window publishes a **defined no-sampling
+  profile** for it **without a resolve and without counting a fault**.
+  `NO_MATERIAL` is a **lawful mode**, never inferred — not from a failed lookup,
+  a sentinel handle, the previous span's material, or the untextured bit. It is
+  a third field of this door's MATERIAL half, selected by the same grant on the
+  same beat as the `{set, id}` it qualifies.
+
+**And the run-length-fair law is what made three producers affordable.** The
+composed acceptance run costs **two resolves for three spans** — measured in
+`tests/prod/partmat_acceptance.cpp` section 1, not argued.
+
+**The register prediction below was correct**: composing the second arm did not
+move it. What DID move it was declaring, honestly, a gap this work found —
+entry **I51**, the per-primitive raster state, which no producer in this console
+has. 10 → 11, and that rise is the instrument working.
+
+---
+
+## WHAT THE SECOND ARM STILL OWED — MEASURED 2026-09-21 (packet CLIPDOOR)
 
 The door is built and unit-verified. It is **not yet composed**, and the reason
 is two named, measured items. **Neither of them is the seven-slot attribute
@@ -154,7 +188,12 @@ is the legal 'this surface takes no texture sample' profile) and counts it on
 that deliberately does not resolve would make `no_record_o` fire on every
 particle batch and stop meaning anything.
 
-**This is the sibling of R197 and it has not been ruled.** R197 settled the
+**RULED 2026-09-22, owner ruling 1, exactly as recommended below.** The
+paragraph that follows was written as a recommendation *"recorded rather than
+taken"*; the owner took it. It is kept because a recommendation that was adopted
+is evidence about how the decision was reached.
+
+**This was the sibling of R197 and it had not been ruled.** R197 settled the
 *attribute* law for non-mesh producers; the *material* law for the same producers
 is open. The recommendation, recorded rather than taken: a per-producer
 **declaration** in the same shape as R197's — a producer may declare it carries
