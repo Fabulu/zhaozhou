@@ -4519,13 +4519,26 @@ blocks:
     #     fit decides. THIS IS THE NUMBER TO CHECK FIRST in the next fit, and
     #     the question is whether the console can afford three instances of one
     #     reciprocal or wants a shared service.
-    #   * THE BLOCK'S OWN STATE is small by comparison: a 16 x 166-bit triangle
-    #     ring (2,656 bits), a 16 x 24-bit depth store (384 bits), 16 landed
-    #     bits, two 5-bit pointers and six 32-bit counters -- about 3,300 flops
-    #     if nothing infers as memory. The triangle ring is single-write,
-    #     single-read and synchronous-read, so it MAY infer as M10K and MAY NOT
-    #     at that depth; assume flops until a fit says otherwise, because that
-    #     is the direction that cannot flatter.
+    #   * THE BLOCK'S OWN STATE: a 16 x 166-bit triangle ring (2,656 bits), a
+    #     16 x 24-bit depth store (384 bits), 16 landed bits, two 5-bit
+    #     pointers and six 32-bit counters -- about 3,300 flops.
+    #
+    #     CORRECTED BY REVIEW BEFORE THIS ROW SHIPPED. The first draft said the
+    #     ring "MAY infer as M10K"; it will NOT. Both arrays are read
+    #     ASYNCHRONOUSLY at the head pointer (`tri_q[head_c]`, `inv_q[head_c]`
+    #     feed the output combinationally), and an async read is the one thing
+    #     that rules an M10K out. So it is 3,040 bits of FLOPS plus a 16-way
+    #     166-bit mux, and the mux is the part to look at -- roughly 2,656 LUT
+    #     inputs of selection on the binding constraint.
+    #
+    #     THE OBVIOUS TRADE IS NAMED HERE RATHER THAN TAKEN: making the ring a
+    #     SYNCHRONOUS read would let it infer as M10K, which is the standing
+    #     owner direction (ALMs are the constraint, memory is the slack). It
+    #     costs a pipeline stage between the head select and the door beat, and
+    #     the door must never gain a skid between the material half and the
+    #     triangle half -- so the stage would have to sit BEFORE the door's
+    #     input, not inside it. That is a real design question and it belongs
+    #     in a packet that can test it, not in this one's last hour.
     #   * Combinational: one 7-slot attribute pack replicated three times (pure
     #     field placement from one depth and three colour bytes), a six-way
     #     21-bit select and a twelve-term range comparison. No DSP.

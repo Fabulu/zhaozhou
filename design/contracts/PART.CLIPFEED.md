@@ -151,6 +151,27 @@ for that reason, which is the instrument working.
 
 ---
 
+## THE RING IS ASYNCHRONOUS-READ, AND THAT IS THE ALM QUESTION
+
+**Corrected by review before this contract shipped.** A first draft of the
+ledger row said the triangle ring *"may infer as M10K"*. It will not: both
+arrays are read **asynchronously** at the head pointer — `tri_q[head_c]` and
+`inv_q[head_c]` feed the output combinationally — and an async read is the one
+thing that rules an M10K out.
+
+So the block is ~3,040 bits of **flops** plus a **16-way 166-bit mux**, and the
+mux is the part to look at, on the binding constraint.
+
+**The trade is named here rather than taken.** Making the ring a *synchronous*
+read would let it infer as M10K, which is the standing owner direction — ALMs
+are the constraint, memory is the slack. It costs a pipeline stage between the
+head select and the door beat, and **the door must never gain a skid** between
+the material half and the triangle half, so the stage would have to sit
+*before* the door's input rather than inside it. That is a real design question
+and it belongs in a packet that can test it.
+
+---
+
 ## WHAT THE COMPOSED PATH IS, END TO END
 
 ```
