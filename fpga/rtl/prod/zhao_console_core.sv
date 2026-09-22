@@ -5406,6 +5406,101 @@
 //      one thing that got BETTER rather than merely connected, because
 //      `refuse_valid_o` used to be a pulse under an UNUSEDSIGNAL waiver with
 //      no consumer at all.
+//
+// I53. GEOM.PARAMBUF's PROJECTED-VERTEX INTAKE (`u_geom_paramarena.pv_*`)
+//      -- TIED TO ZERO, and it is the arena's one record type with no
+//      producer PORT rather than no producer BLOCK.
+//
+//      Opened 2026-09-22 by the owner's completion ruling, item 4. The arena
+//      writes all three of R7's record types and is tested on all three; what
+//      is missing is a wire. GEOM.PROJECT's output reaches this file as
+//      `proj_out_*`, which is a TRIANGLE -- three screen positions, three
+//      depths, one source id -- and the arena's intake is a VERTEX. Turning
+//      one into the other is not plumbing: it needs a vertex-identity scheme,
+//      because a TriangleDescriptor names vertices by u16 INDEX and two
+//      triangles that share an edge must name the SAME index, or the arena
+//      stores every vertex two or three times and the 65,535-vertex seal buys
+//      a third of what R7's tier promises.
+//
+//      THAT IS A DESIGN DECISION AND NOT AN IMPLEMENTATION DETAIL, which is
+//      why it is declared here rather than decided. `zhao_geom_wcache` is the
+//      block that already holds projected vertices BY IDENTITY and is the
+//      obvious owner of the answer; naming it is as far as this packet's
+//      authority goes.
+//
+//      WHAT IS AND IS NOT AFFECTED: the descriptors the arena DOES write
+//      carry vertex ids, and `zhao_geom_parambuf`'s `td_illegal_o` refuses
+//      any id at or past the seal -- so a walk over a frame with no vertex
+//      records reports every triangle illegal rather than silently reading
+//      zeros. The refusal is visible, which is the safe direction.
+//
+// I54. GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
+//      (`u_geom_paramarena.ck_*`) -- TIED TO ZERO, the same standing as I53
+//      and a different missing thing.
+//
+//      `zhao_geom_binner_v2` builds exactly these chunks -- 64 bytes, a
+//      `next` pointer, a count and fourteen triangle ids -- in an ON-CHIP
+//      arena (CHUNKS = 256, CHUNK_REFS = 4) that R7's external arena exists to
+//      stop growing. It exposes `arena_full_o`, `arena_used_o`, `overflow_o`
+//      and `tile_references_o`, and NOTHING THAT LETS A READER SEE A CHUNK:
+//      `ref_ram` and `next_ram` are internal, and `job_*` is a DRAINED
+//      stream, not the chunk layout.
+//
+//      So the missing piece is three or four ports on that block -- the chunk
+//      index and slot at each ref write, the chain link, and the per-tile
+//      head -- and it is a change to a live block in another subsystem's fit
+//      closure. Declared rather than made.
+//
+//      THE CONSEQUENCE, STATED SO NOBODY HAS TO MEASURE IT: with no chunks
+//      written, a walk started from any head reads a chunk of zeros, whose
+//      generation is 0 and therefore never this frame's, so `chunks_stale_o`
+//      counts it and the walk stops. The arena is correct and EMPTY, not
+//      correct-looking and wrong.
+//
+// I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
+//      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
+//      CONSUMER that item 4 names.
+//
+//      The walker is composed, reaches real memory through the real guard,
+//      and its round-trip evidence (`dir_mismatch_o`) is live. What is tied
+//      is WHO ASKS IT TO WALK and WHO TAKES THE TRIANGLES. Today the console
+//      rasterises from `zhao_geom_binner_v2`'s on-chip chunk arena through
+//      `zhao_geom_bin_pipe_v2`'s `job_*` stream, and swapping that for the
+//      external walk is the step that makes the external arena the LIVE path
+//      rather than a second one beside it.
+//
+//      IT IS DELIBERATELY NOT DONE HERE. The swap removes the on-chip arena
+//      from the raster path, which is an area and throughput change to the
+//      block the fit budget is tightest on, and it needs I54 first -- a walk
+//      over an arena nothing fills is a walk over nothing. Doing it half-way,
+//      with the walker's triangles ORed into the live stream, would produce a
+//      picture and prove nothing.
+//
+// I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
+//      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
+//
+//      THE QUOTA is the arena's own capacity, because the Measure has nowhere
+//      to publish one yet. Sealing at capacity is the NEUTRAL choice: it
+//      enforces the arena's real bound and reserves nothing. R7's giant quota
+//      -- 32,768 tile references reserved before ordinary kMesh allocation --
+//      is therefore NOT IN FORCE, and that is said here rather than left to
+//      be discovered, because a reservation that silently is not happening
+//      looks exactly like one that is.
+//
+//      THE FRAME GENERATION is a counter in this file that advances on every
+//      accepted seal, so no two consecutive frames share a stamp -- which is
+//      all the staleness gate needs. It is not a console-wide frame identity
+//      and does not claim to be one.
+//
+//      THE FRAME END is `render_frame_begin_i` arriving while the arena
+//      cannot accept a seal. The console has no "the geometry producer has
+//      finished this frame" signal, and inventing one upstream is outside
+//      this packet's authority. The consequence: a frame is published one
+//      frame edge after it is built, so `publish_*` describes the PREVIOUS
+//      frame for the whole of the current one. For a two-view arena that is
+//      the intended shape -- the walker reads the view the producer is not
+//      writing -- but it is a consequence of a missing signal rather than a
+//      decision, and the difference matters to whoever supplies one.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -21599,9 +21694,9 @@ module zhao_console_core
   // it -- `asm_t_ready` is now GEOM.REPLAY's ready ANDed with the arena's, so
   // no triangle is lost and the existing consumer is unchanged.
   //
-  // THE OTHER TWO INTAKES ARE TIED AND DECLARED IN THE INCOMPLETE BLOCK. They
-  // are not "not built": they are built and have no producer port to connect
-  // to yet, which is a different fact and the entries say which.
+  // THE OTHER TWO INTAKES ARE TIED AND DECLARED IN THE INCOMPLETE BLOCK at
+  // entries I53 and I54. They are not "not built": they are built and have no
+  // producer PORT to connect to yet, which is a different fact.
   //
   // THE DEADLOCK THIS COULD HAVE BEEN. ANDing a new block's `ready` into a
   // live stream is how a composition stalls a pipeline that used to run. The
@@ -21613,7 +21708,7 @@ module zhao_console_core
   // silently geometry-free.
   // THE SEALED QUOTA THIS COMPOSITION USES, and it is the arena's own
   // capacity rather than a Measure-computed number, because nothing upstream
-  // publishes one yet (I-PARAMBUF-SEAL). R7's giant reservation -- 32,768 tile
+  // publishes one yet (entry I56). R7's giant reservation -- 32,768 tile
   // references before ordinary kMesh allocation -- is a decision made by
   // whoever computes these, so sealing at capacity is the NEUTRAL choice: it
   // enforces the arena's real bound and reserves nothing, which is visible
@@ -21759,7 +21854,7 @@ module zhao_console_core
       .pb_wr_view_o       (pa_wr_view),
       .pb_scratch_valid_o (pa_scratch),
 
-      // ---- ProjectedVertex: TIED, and declared at I-PARAMBUF-PV -------------
+      // ---- ProjectedVertex: TIED, and declared at entry I53 ----------------
       .pv_valid_i  (1'b0),
       .pv_ready_o  (),
       .pv_x_i      (32'sd0),
@@ -21780,7 +21875,7 @@ module zhao_console_core
       .td_raster_i   (asm_t_raster),
       .td_source_i   ({16'd0, asm_t_src_id}),
 
-      // ---- tile-reference chunk: TIED, declared at I-PARAMBUF-CK -----------
+      // ---- tile-reference chunk: TIED, declared at entry I54 ---------------
       .ck_valid_i  (1'b0),
       .ck_ready_o  (),
       .ck_next_i   (32'd0),
@@ -21844,14 +21939,14 @@ module zhao_console_core
       .scr_req_o   (pw_scr_req),
       .scr_grant_i (pa_scr_grant),
 
-      // ---- the walk request: TIED, declared at I-PARAMBUF-WALK -------------
+      // ---- the walk request: TIED, declared at entry I55 -------------------
       .walk_valid_i  (1'b0),
       .walk_ready_o  (),
       .walk_head_i   (32'd0),
       .walk_done_o   (),
       .walk_failed_o (),
 
-      // ---- the decoded triangles: TIED, declared at I-PARAMBUF-WALK --------
+      // ---- the decoded triangles: TIED, declared at entry I55 --------------
       .t_valid_o    (),
       .t_ready_i    (1'b1),
       .t_v0_o       (),
@@ -21890,7 +21985,7 @@ module zhao_console_core
   // closes the frame one cycle after the NEXT frame edge arrives -- the
   // console has no "the producer has finished" signal today, and inventing one
   // upstream is outside this packet's authority. The consequence is stated at
-  // I-PARAMBUF-SEAL rather than left for somebody to measure.
+  // entry I56 rather than left for somebody to measure.
   logic [15:0] geom_pa_gen_q;
   logic        geom_pa_frame_end_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
