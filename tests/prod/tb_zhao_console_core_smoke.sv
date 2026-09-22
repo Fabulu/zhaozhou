@@ -906,6 +906,22 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_groups_released_o;
   logic [31:0]             terr_fills_forwarded_o;
   logic [31:0]             terr_fills_dropped_o;
+  // ITEM 5 (owner ruling 2026-09-22, packet EDGERECON): jobs whose
+  // sparse-fill request was refused because this composition carries a
+  // dense-seal shell. Declared here because `dut (.*)` cannot bind a port
+  // the bench has no signal for -- a new core output makes THIS FILE fail
+  // to verilate, which is how this one was found: the smoke died in ~1 s
+  // with "Can't find" at the instantiation, the RC-1-in-one-second tell.
+  //
+  // IT STAYS ZERO HERE AND THAT IS NOT EVIDENCE ABOUT THE GUARD. This
+  // bench drives `terr_sparse_fill_i` LOW (see the terrain job below), so
+  // no job ever asks for sparse fill, so nothing can be refused -- and the
+  // compose door never opens in this smoke anyway, because every terrain
+  // page fails its CRC. The counter is FIRED where legal stimulus reaches
+  // it: terrain_pipe_differential, which runs the same sequencer against
+  // a dense shell with the request set and asserts the refusal, the
+  // absence of a short seal, and an IDENTICAL RENDER (R95).
+  logic [31:0]             terr_sparse_refused_o;
   logic [31:0]             terr_refs_forwarded_o;
   logic [31:0]             terr_release_unsafe_o;
   logic [31:0]             terr_tess_vertices_o;
