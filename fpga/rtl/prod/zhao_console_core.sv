@@ -3371,11 +3371,85 @@
 //
 //      WHAT I21 STILL HOLDS, and it is one item, not three:
 //        * the four `edge_*` neighbour levels, DECLARED at literal 8'h00.
-//          Item (4) below is unchanged and its argument still stands: the
-//          producer is a FRAME-WIDE reconciliation this console's
-//          one-patch-at-a-time serve order cannot supply,
-//          `MEASURE.GOVERNOR.md` refuses ownership in writing, and the literal
-//          must not be tidied into a named constant.
+//
+//      NARROWED 2026-09-22 (gz/edgerecon) AND CORRECTED ON THE POINT THAT
+//      MATTERS MOST. Owner ruling 2026-09-22 item 6 commissioned the real
+//      producer -- 'This is an explicit authorization to build the missing
+//      scheduling functionality, not a claim that it is already cheap or
+//      complete' -- and it is built:
+//      `fpga/rtl/terrain/zhao_terrain_edgerecon.sv`, TERRAIN.EDGERECON, with
+//      `design/contracts/TERRAIN.EDGERECON.md`, a `design/blocks.yml` row and
+//      1,041 checks in `terrain_edgerecon_directed`.
+//
+//      (a) ITEM (4)'s ARGUMENT WAS RIGHT ABOUT THE SHAPE AND WRONG ABOUT THE
+//          COST. It says a producer is 'a new block with a new store, holding
+//          sixteen levels per live patch across the whole visible set'. That
+//          is exactly what was built, and the store is 256 x 82 bits -- about
+//          THREE M10K. Thirty-two bits of decision per patch is not a world
+//          store, and 'the wrong trade at this point in the budget' was an
+//          estimate nobody had costed. The area is hand-counted at ~400-550
+//          ALM, more than half of it the nine saturating counters, and it has
+//          NOT been fitted.
+//
+//      (b) THE STRUCTURAL FACT THAT MADE IT CHEAP, measured in
+//          `zhao_terrain_lod.sv` rather than assumed: `edge_*` reaches
+//          `out_lvl_nz/pz/nx/px` and NOTHING ELSE. `out_level_o` is `lvl[]`,
+//          the ladder's answer from `sp_*` and the governor alone. A patch's
+//          own sixteen levels DO NOT DEPEND ON ITS NEIGHBOURS, so the
+//          reconciliation has no fixpoint to iterate -- one pass decides, a
+//          pure lookup fills the borders.
+//
+//      (c) AND A SERVE-ORDER STREAMING PRODUCER IS NOT AN OPTION, which is
+//          the finding that justifies the ruling's prepare/emit sequencing
+//          rather than merely permitting it. TESS tessellates a seam at
+//          max(neighbour, own). Serve P (level 1) before Q (level 2): P is
+//          answered the fallback and emits max(0,1)=1; Q is answered P's
+//          truth and emits max(1,2)=2. THE SAME SEAM, TWO DENSITIES -- a
+//          crack, with every counter balancing. Making the second side fall
+//          back too keeps the pair symmetric and makes EVERY edge fall back,
+//          because the first-served patch of any pair never has its
+//          neighbour. There is no partial answer.
+//
+//      (d) SO THIS ENTRY'S CLAIM ABOUT THE RETAINED CONSTANT IS CORRECTED.
+//          Item (4) says 8'h00 gives 'more triangles and NO CRACK'.
+//          `max(0, own) == own`, so the seam is not stitched at all and two
+//          adjacent patches at different levels emit different vertex counts
+//          along it. THE CONSTANT IS CONSERVATIVE IN TRIANGLES, NOT IN
+//          CRACKS. `terrain_edgerecon_directed` case 2's positive control
+//          measures it: 24 of 48 x-seam lanes disagree over a 3 x 3 block.
+//          The ruling's instruction to RETAIN it stands -- the coarsest
+//          constant would be watertight, would seam the ground visibly
+//          everywhere and would measure smaller, and the ruling forbids that
+//          move by name. 8'h00 is the LEAST BAD constant, not a safe one.
+//
+//      (e) WHAT I21 NOW HOLDS IS ONE BUILD, AND IT IS NOT THIS ONE. The
+//          ADMITTED-SET PREPARE WALKER: enumerate the frame's admitted
+//          patches (`zhao_terrain_visible` exists, is NOT composed, and this
+//          file's own completion register lists TERRAIN.VISIBLE as superseded
+//          by a ruling -- read that before building); assemble `sp_*` from
+//          `zhao_terrain_devstore` and `zhao_terrain_place`, both composed,
+//          keyed by page slot, which needs a slot -> (ix,iz) direction
+//          `zhao_terrain_residency_v2` has no port for; run `u_terrain_lod`
+//          over them with its output routed to TERRAIN.EDGERECON and
+//          `out_hold_o` DISCARDED, so the prepare pass does not advance the
+//          history the emit pass reads; then pulse `prepare_done_i`. The two
+//          passes agree by determinism -- identical `sp_*` and identical
+//          governor targets give identical `lvl[]` -- and a deformation bake
+//          landing between them would break that, so the walker owes the
+//          interlock.
+//
+//      (f) UNTIL THAT WALKER LANDS THE CONSOLE IS IN CONSERVATIVE EDGE MODE
+//          and `edge_*` still read the literal `8'h00`. The ruling is
+//          explicit about what that means for the endgame: 'If a first
+//          diagnostic fit uses conservative edge mode before adaptive
+//          reconciliation is complete, LABEL THAT PROFILE and its remaining
+//          functional/performance limitation; it is not the requested final
+//          no-caveat full-capability fit.'
+//
+//      MEASURE.GOVERNOR.md's refusal is still correct and is no longer the
+//      whole story: it says the value 'cannot come from a block that sees one
+//      number per frame per camera', which is true and is why the producer is
+//      a STORE over the frame's decisions rather than a governor output.
 //      `terr_sparse_fill_i` remains a CONFIRMED OWNER KNOB (item 3), which is
 //      not a gap and never was.
 //
@@ -23440,12 +23514,51 @@ module zhao_console_core
     .dual_i      (spd_patch_dual),
 
     // TIED OFF -- entry I21, declared. The four adjacent patches' chosen
-    // levels have no producer: a cross-patch reconciliation pass needs every
-    // patch of a frame decided before any is tessellated and this console
-    // decides one at a time. 0 is the FINEST level, so a neighbour read as 0
-    // makes this block clamp its own edge finer than it needs -- more
-    // triangles, and NO CRACK. The coarsest constant would have seamed the
-    // ground AND measured smaller.
+    // levels reach this console from nowhere: a cross-patch reconciliation
+    // pass needs every patch of a frame decided before any is tessellated,
+    // and this console decides one at a time as the cache serves it.
+    //
+    // THE PRODUCER NOW EXISTS AND IS NOT WIRED HERE, WHICH IS A DIFFERENT
+    // STATEMENT FROM THE ONE THIS COMMENT USED TO MAKE.
+    // `fpga/rtl/terrain/zhao_terrain_edgerecon.sv` (TERRAIN.EDGERECON, owner
+    // ruling 2026-09-22 item 6) is the bounded prepare/reconcile/emit store
+    // and law, with 1,041 directed checks. What it still needs is the
+    // ADMITTED-SET PREPARE WALKER that drives its file port -- named in four
+    // numbered steps in `design/contracts/TERRAIN.EDGERECON.md`. Wiring the
+    // block here without that walker would dangle its `f_*` port and its two
+    // phase pulses at this module's boundary and change nothing a frame can
+    // see: the trade R75 endorses refusing.
+    //
+    // AND THE SENTENCE THIS COMMENT USED TO END WITH WAS WRONG, which matters
+    // because `tools/design/packet_h_tieoff_audit.py` prints it to whoever
+    // reads the audit. It said: '0 is the FINEST level, so a neighbour read
+    // as 0 makes this block clamp its own edge finer than it needs -- more
+    // triangles, and NO CRACK.' The first clause is right. The last three
+    // words are not. `zhao_terrain_tess` tessellates a shared edge at
+    //
+    //     lv_px = (job_lvl_px_i > job_level_i) ? job_lvl_px_i : job_level_i;
+    //
+    // i.e. MAX(neighbour, own). `max(0, own) == own`, so a neighbour reported
+    // as 0 selects the patch's OWN level and `stitch_new` is false: the seam
+    // is not stitched at all. Two ADJACENT PATCHES AT DIFFERENT LEVELS then
+    // emit different vertex counts along it. **The constant is conservative
+    // in TRIANGLES, not in CRACKS.** `terrain_edgerecon_directed` case 2's
+    // positive control measures the gap: over a 3 x 3 block of patches, 24 of
+    // 48 x-seam lanes disagree under this tie-off.
+    //
+    // IT IS RETAINED ANYWAY, AND THE RULING SAYS SO IN WORDS: 'Retain 8'h00 as
+    // the existing conservative fallback until the real producer is validated.
+    // It must not be changed to a cheaper/coarser constant merely to improve
+    // triangle counts or resource results.' The coarsest constant (3) WOULD be
+    // watertight -- max(3, own) == 3 from both sides -- and would seam the
+    // ground visibly at every patch border AND measure smaller, which is the
+    // direction a resource-pressed campaign is biased to pick. 8'h00 is the
+    // LEAST BAD CONSTANT, not a safe one, and the difference is the whole
+    // argument for building the producer.
+    //
+    // THE LITERAL MUST NOT BE TIDIED INTO A NAMED CONSTANT. A
+    // `TERR_EDGE_UNKNOWN_C` localparam was removed once because the audit
+    // counts LITERAL connections and the named version hid all four from it.
     .edge_nz_i(8'h00),
     .edge_pz_i(8'h00),
     .edge_nx_i(8'h00),
