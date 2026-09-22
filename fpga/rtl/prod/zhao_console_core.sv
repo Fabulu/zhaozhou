@@ -15189,6 +15189,10 @@ module zhao_console_core
         HIST_EW'(tlf_w_dev2),                            // lane 1
         HIST_EW'(tlf_w_dev1) };                          // lane 0
   wire                    hist_ev_ready_c;
+  // THE PER-SINK JOINED VALIDS (see the fork note below).  Declared beside
+  // the ready they are the other half of, so a reader cannot find one
+  // without the other.
+  wire                    hist_ev_valid_c, tds_w_valid_c;
 
   // THE ADAPTATION ABOVE IS ONLY TRUE AT THESE WIDTHS, so it is GUARDED rather
   // than commented. A LANES of anything but 4 makes `4'b0111` name the wrong
@@ -15218,13 +15222,45 @@ module zhao_console_core
   // HERE, for a property both consumers have rather than by convention: the
   // producer presents `w_valid_o` as a LEVEL and neither consumer's ready
   // depends on `tlf_w_valid` (MEASURE.HISTOGRAM's `ev_ready_o` is its own
-  // pipeline's room; the store's `w_ready_o` is its commit state). So there is
-  // no combinational loop, and neither consumer can see a beat the other
-  // refused -- which is the failure this AND exists to prevent and the reason
-  // a per-consumer skid would be wrong: two copies of one record, retired on
+  // pipeline's room -- `!init_q && !snap_req_q && (pend_next_c == '0)`; the
+  // store's `w_ready_o` is its commit state, a register). So there is no
+  // combinational loop, and neither consumer can see a beat the other refused
+  // -- which is the failure this AND exists to prevent and the reason a
+  // per-consumer skid would be wrong: two copies of one record, retired on
   // different cycles, is exactly the metadata-swap shape this file's own
   // chapter is about.
-  assign tlf_w_ready = hist_ev_ready_c && tds_w_ready;
+  //
+  // >> AND THE AND OF THE READIES WAS ONLY HALF OF IT.  Corrected 2026-09-22
+  // >> (gz/devsdram), found by the console smoke's own assertion firing on a
+  // >> REAL fault -- "TERRAIN.LODFEED emitted 48 deviation record(s), so
+  // >> MEASURE.HISTOGRAM should have accepted 144 event(s) ... and it accepted
+  // >> 12390".
+  // >>
+  // >> Each consumer was handed the RAW `tlf_w_valid`, so each accepted on its
+  // >> OWN handshake.  `zhao_measure_histogram` computes
+  // >> `accept_c = ev_valid_i && ev_ready_o` and knows nothing about the
+  // >> store; the store's `W_IDLE: if (w_valid_i)` knows nothing about the
+  // >> histogram.  A fork needs the joined READY *and* a per-sink joined
+  // >> VALID, and only the first was here.
+  // >>
+  // >> IT COULD NOT BE WRONG UNTIL TODAY, WHICH IS THE WHOLE LESSON.  While
+  // >> `zhao_terrain_devstore`'s `w_ready_o` was tied to 1'b1,
+  // >> `tlf_w_ready` REDUCED to `hist_ev_ready_c`, so the histogram's own
+  // >> handshake and the joint handshake were the same expression and the
+  // >> paragraph above was true by arithmetic rather than by construction.
+  // >> Owner ruling R242 gave the store an SDRAM burst to write and therefore
+  // >> a ready that falls, and the second the second operand could move, the
+  // >> histogram began counting ONE record 86 times over.  CLAUDE.md, in as
+  // >> many words: "a gate that cannot reach the state is not evidence about
+  // >> the state", and this comment asserting the property was the evidence
+  // >> everybody had.
+  // >>
+  // >> The repair is the standard fork and nothing more: sink k sees the valid
+  // >> only when every OTHER sink is ready.  No skid, no buffer, no second
+  // >> copy of a record.
+  assign tlf_w_ready     = hist_ev_ready_c && tds_w_ready;
+  assign hist_ev_valid_c = tlf_w_valid && tds_w_ready;
+  assign tds_w_valid_c   = tlf_w_valid && hist_ev_ready_c;
 
   zhao_measure_histogram #(
     .EW       (HIST_EW),
@@ -15236,7 +15272,7 @@ module zhao_console_core
     .rst_n (rst_n),
 
     // REAL: TERRAIN.LODFEED's deviation records, one event per subpatch.
-    .ev_valid_i     (tlf_w_valid),
+    .ev_valid_i     (hist_ev_valid_c),
     .ev_lane_valid_i(4'b0111),
     .ev_err_i       (hist_ev_err_c),
     .ev_src_id_i    (tlf_w_src_id),
@@ -22650,7 +22686,7 @@ module zhao_console_core
     .guard_wready_i(tds_g_wready),
     .guard_wlast_o (tds_g_wlast),
 
-    .w_valid_i(tlf_w_valid),
+    .w_valid_i(tds_w_valid_c),
     .w_ready_o(tds_w_ready),
     .w_slot_i (tlf_w_slot[TERR_SLOTW-1:0]),
     .w_sp_i   (tlf_w_sp),
