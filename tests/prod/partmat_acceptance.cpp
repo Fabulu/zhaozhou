@@ -22,7 +22,10 @@
 // this bench proves the picture would be the "otherwise green smoke whose
 // upstream fixture never reaches the new path" the same ruling warns about, so
 // it is said here instead of implied. What the PIXELS still owe is recorded in
-// FINDINGS-partmat.md.
+// the PARTMAT findings, which the session harness refused to write as a file --
+// so they are the MESSAGE of an empty commit on `gz/partmat`, the fallback the
+// packet brief names for exactly this case. `git log --grep="PARTMAT FINDINGS"`
+// finds it.
 //
 // THE REFERENCE IS PRESENT AS THE MATERIAL MODEL. The driver plays
 // MATERIAL.RESOLVE, holding each set's true record, and every published field
