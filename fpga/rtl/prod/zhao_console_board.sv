@@ -927,20 +927,28 @@ module zhao_console_board
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
-  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
-  // These leave the module ON PURPOSE, and the purpose is measurement rather
-  // than routing. The consumer is GEOM.MESHFETCH's instance walk, which does
-  // not exist -- that is entry I29 blocker (b), and supplying this carrier is
-  // what ruling R229 ratified. R229 is equally explicit that ratifying the
-  // command "does not by itself enable the RTL reader", so none is built here.
+  // ---- R229: DrawPosedForm 0x0305's animation key -------------------------
+  // NO LONGER A BOUNDARY FOR THREE OF THE FOUR. Corrected 2026-09-22 with
+  // I29's closure. The paragraph here used to read "The consumer is
+  // GEOM.MESHFETCH's instance walk, WHICH DOES NOT EXIST -- that is entry I29
+  // blocker (b)". The walk exists: it is the fifteen registers beside
+  // `u_geom_drawjob`, and `cmd_draw_posed_o`, `cmd_draw_clip_id_o` and
+  // `cmd_draw_frame_no_o` are READ IN THIS FILE now -- the first gates the
+  // draw admit, all three are captured on the accept.
   //
-  // WHY NOT LEAVE THEM AS UNCONSUMED INTERNAL WIRES. Because an output nobody
-  // reads lets synthesis delete the logic BEHIND it, and this block's own
-  // header states the consequence: a fit would then report the pose lane's
-  // registers as free. The tie-off block warns about a constant on a wide
-  // INPUT for exactly this reason; an unread output is the same lie in the
-  // other direction. At the edge, the capture registers survive and the next
-  // fit prices them honestly.
+  // `cmd_draw_sub_o` IS STILL UNCONSUMED, and that is deliberate rather than
+  // an omission: it is the POSE CACHE's key discriminator for the 60 Hz
+  // midpoint, and `zhao_geom_clipread` has no port for it because that block
+  // fetches an AUTHORED frame. Carrying it into the walk would be a second
+  // copy of a field whose owner is elsewhere.
+  //
+  // THEY STAY AT THE EDGE ANYWAY, and the reason is unchanged and still good:
+  // an output nobody reads lets synthesis delete the logic BEHIND it, and a
+  // fit would then report the pose lane's capture registers as free. The
+  // tie-off block warns about a constant on a wide INPUT for exactly this
+  // reason; an unread output is the same lie in the other direction. Having
+  // an in-core consumer as well does not make the observation redundant --
+  // it makes the two agree.
   //
   // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
   // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
@@ -950,7 +958,7 @@ module zhao_console_board
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
 
-  // ---- the ACCEPTED JOB's FORM INDEX -- BOUNDARY, entry I29 ----------------
+  // ---- the ACCEPTED JOB's FORM INDEX -- entry I29, CLOSED ------------------
   // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
   // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
   // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
@@ -968,11 +976,54 @@ module zhao_console_board
   // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
   // is the valid, exactly as for every other job field.
   //
-  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: the consumer
-  // (`zhao_geom_clipread.p_form_idx_i`, built and differenced in this same
-  // commit) is not composed, and this file's own R229 paragraph gives the
-  // rule for that case -- an output nobody reads lets synthesis delete the
-  // logic behind it and a fit then reports the lane's registers as free.
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: it used to be because
+  // the consumer was not composed. `zhao_geom_clipread` IS composed since
+  // 2026-09-22, so the reason is now the plain one -- this is the ownership
+  // ruling's EXPOSED IDENTITY, and an output nobody reads lets synthesis
+  // delete the logic behind it.
+  //
+  // **AND IT IS NOT WHAT THE INSTANCE WALK READS.** Stated here because the
+  // paragraph above says "Reading `cmd_draw_form_w` instead would be
+  // precisely the 'unrelated live register' the ruling names", and the walk
+  // reads exactly that -- so the apparent contradiction is resolved in the
+  // file rather than left for the next reader to trip over.
+  //
+  // The ruling forbids a form index "RE-DERIVED FROM AN UNRELATED LIVE
+  // REGISTER LATER". The walk's capture is neither later nor unrelated: it
+  // takes `cmd_draw_form_w[31:8]` on the SAME handshake and by the SAME
+  // expression that loads `zhao_geom_drawjob`'s `form_idx_q`, out of the same
+  // `dq` entry that carries the clip id. One enable, one entry, no drift --
+  // which is the property the ruling's sentence exists to secure. Taking
+  // `dj_j_form_idx` instead and pairing it with a clip id captured a stage
+  // earlier would REINTRODUCE the drift, because that is two registers loaded
+  // by two enables: entry I39's fault exactly.
+  //
+  // WHAT THE WALK GIVES UP BY CAPTURING EARLY, declared rather than
+  // discovered. `zhao_geom_drawjob` validates the handle against real
+  // residency AFTER the command accept and can refuse the draw nine ways
+  // (`dj_refused_*`). A pose request captured at the accept is therefore
+  // issued for a draw that may never become geometry. Two consequences, both
+  // bounded and neither a wrong-animal palette -- a refused draw's pose is
+  // its OWN creature's pose, correctly labelled, and `owner_mismatch_o`
+  // compares against the resident page either way:
+  //
+  //   1. a wasted frame fetch on requester G, counted by `geom_cr_frames_o`
+  //      against `geom_dj_draws_o`;
+  //   2. THE PALETTE CAN OUTLIVE ITS DRAW. `pal_begin_i` is the store's
+  //      `start_o`, so a BIND-POSE draw raises nothing and skins against
+  //      whatever pose was decoded last. Today that is unreachable -- nothing
+  //      in this tree issues a 0x0305 into the console, so no decode ever
+  //      starts and every bone reads unset and substitutes the identity, which
+  //      is what `geom_pal_bone_unset_o` reports. It becomes reachable the
+  //      moment a posed draw is issued.
+  //
+  // THE REPAIR IS ONE LINE AND IS DELIBERATELY NOT MADE HERE: raise
+  // `pal_begin_i` on a bind-pose draw accept as well, so `DrawForm` 0x0300
+  // makes the previous pose unreadable exactly as a new decode does -- which
+  // is what R229 means by "DrawForm keeps its meaning as BIND POSE". It is a
+  // BEHAVIOURAL change and this packet measured the tree without it; shipping
+  // an unmeasured behaviour change beside a measured composition is how a
+  // clean smoke stops describing the thing that ships.
   output logic                     geom_job_valid_o,
   output logic [23:0]              geom_job_form_idx_o,
   // Evidence, not a boundary -- the same standing as the three counters above.
@@ -983,7 +1034,9 @@ module zhao_console_board
   // Same standing as the pose lane directly above, same argument, and one
   // difference worth stating because it decides what the NEXT packet does.
   //
-  // The pose lane's consumer does not exist. THIS ONE DOES:
+  // The pose lane's consumer DID NOT EXIST when this was written; it does
+  // since 2026-09-22 (I29 closed), so the difference below is no longer a
+  // difference -- both lanes have in-core consumers now. THIS ONE DOES:
   // `fpga/rtl/geometry/zhao_geom_warp.sv` is BUILT and TESTED (2,468 directed
   // checks) and its `d_warp_en_i` / `d_slot_i` / `d_time_i` / `d_par_i` /
   // `d_bx_i` port group is this bus, field for field. What is missing is not
@@ -1212,27 +1265,84 @@ module zhao_console_board
   output logic [31:0]             geom_light_nlights_clamped_o,
   output logic [31:0]             geom_light_adapter_refused_o,
 
-  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
-  // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
-  // decoder's own SOURCE is what is now missing, and this is it. See I29.
-  input  logic                    geom_pose_start_i,
-  input  logic [5:0]              geom_pose_bone_count_i,
-  input  logic signed [31:0]      geom_pose_root_dx_i,
-  input  logic signed [31:0]      geom_pose_root_dy_i,
-  input  logic signed [31:0]      geom_pose_root_dz_i,
+  // ---- I29 IS CLOSED 2026-09-22: the clip page and the skeleton bake -------
+  // FOURTEEN INPUTS LEFT THIS LIST RATHER THAN BEING DRIVEN. They were the
+  // decoder's own per-bone source -- `geom_pose_start_i`, the bone count, the
+  // root displacement, the parent, the three rest translations, the four
+  // quaternion lanes and the twelve-element inverse-rest matrix -- and the
+  // producer they were waiting for is now composed: `zhao_geom_clipread` reads
+  // a kind-8 BODY and a kind-9 CLIP FRAME through requester G of
+  // `u_geom_mem_adapter`, fills `zhao_geom_bonesrc`, and the store answers the
+  // decoder combinationally. See the composition beside `u_geom_drawjob` and
+  // the closed ledger entry in the header.
+  //
+  // `geom_pose_bone_idx_o` STAYS. It is the decoder's index into the store and
+  // it is read INSIDE now, so this port is observation, not the thing keeping
+  // the register alive.
   output logic [4:0]              geom_pose_bone_idx_o,
-  input  logic [4:0]              geom_pose_bone_parent_i,
-  input  logic signed [31:0]      geom_pose_bone_tx_i,
-  input  logic signed [31:0]      geom_pose_bone_ty_i,
-  input  logic signed [31:0]      geom_pose_bone_tz_i,
-  input  logic signed [15:0]      geom_pose_quat_w_i,
-  input  logic signed [15:0]      geom_pose_quat_x_i,
-  input  logic signed [15:0]      geom_pose_quat_y_i,
-  input  logic signed [15:0]      geom_pose_quat_z_i,
-  input  logic signed [31:0]      geom_pose_inv_rest_i [0:11],
   output logic                    geom_pose_busy_o,
   output logic                    geom_pose_done_o,
   output logic [31:0]             geom_pose_palettes_decoded_o,
+
+  // ---- I29's INSTANCE WALK: what it accepted, and what it cost ------------
+  // `geom_pose_requests_o` counts POSED draws whose {form, clip_id, frame_no}
+  // were captured off one command packet on one enable. `geom_pose_walk_holds_o`
+  // counts the cycles a posed draw waited for the reader's one request slot --
+  // the throughput price of refusing to drop a pose key, stated as a number
+  // rather than as a claim that it is small.
+  output logic [31:0]             geom_pose_requests_o,
+  output logic [31:0]             geom_pose_walk_holds_o,
+
+  // ---- I29's PAGE READER (`zhao_geom_clipread`) ---------------------------
+  // WHICH RESOURCE ANSWERED and WHICH FORM each resident section claims. The
+  // 2026-09-21 ownership ruling keeps three identities apart and its section 5
+  // says to "record the selected resource identities"; `geom_cr_*_index_o` /
+  // `geom_cr_*_gen_o` are RESOURCE identity (which publication) and
+  // `geom_cr_*_owner_o` is FORM identity (which creature the page NAMES).
+  // They are not derived from one another and a body and its clip bank are
+  // published under two independent resource indices while naming one form.
+  output logic [23:0]             geom_cr_body_index_o,
+  output logic [15:0]             geom_cr_body_gen_o,
+  output logic [23:0]             geom_cr_clip_index_o,
+  output logic [15:0]             geom_cr_clip_gen_o,
+  output logic [23:0]             geom_cr_body_owner_o,
+  output logic [23:0]             geom_cr_clip_owner_o,
+  // The census.
+  output logic [31:0]             geom_cr_bodies_o,
+  output logic [31:0]             geom_cr_clips_o,
+  output logic [31:0]             geom_cr_frames_o,
+  // The faults. `geom_cr_owner_mismatch_o` is the one to watch: it is the
+  // refusal of a request whose form is not the form BOTH resident sections
+  // name, and it is deliberately neither a miss nor a residency failure. It
+  // discriminates under legal stimulus at IDENTICAL bone counts, with
+  // `geom_cr_bone_mismatch_o` silent beside it -- which is exactly the
+  // blindness a bone-count check has and this one does not.
+  output logic [31:0]             geom_cr_pages_dropped_o,
+  output logic [31:0]             geom_cr_bad_magic_o,
+  output logic [31:0]             geom_cr_truncated_o,
+  output logic [31:0]             geom_cr_misaligned_o,
+  output logic [31:0]             geom_cr_bad_bone_count_o,
+  output logic [31:0]             geom_cr_bone_mismatch_o,
+  output logic [31:0]             geom_cr_overflow_o,
+  output logic [31:0]             geom_cr_not_rigid_o,
+  output logic [31:0]             geom_cr_reserved_nz_o,
+  output logic [31:0]             geom_cr_denied_o,
+  output logic [31:0]             geom_cr_clip_miss_o,
+  output logic [31:0]             geom_cr_frame_oob_o,
+  output logic [31:0]             geom_cr_not_resident_o,
+  output logic [31:0]             geom_cr_owner_mismatch_o,
+  output logic                    geom_cr_busy_o,
+
+  // ---- I29's STORE (`zhao_geom_bonesrc`) ----------------------------------
+  // `geom_bs_prefetch_late_o` is the one that says the arrangement holds: the
+  // store buys the decoder's one missing cycle with a two-deep prefetch given
+  // ~115 cycles of notice, and this counter is what fires if that notice ever
+  // stops being true. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` is
+  // its positive control.
+  output logic [31:0]             geom_bs_prefetch_late_o,
+  output logic [31:0]             geom_bs_rest_nonrigid_o,
+  output logic [31:0]             geom_bs_reserved_nz_o,
+  output logic [31:0]             geom_bs_fills_o,
 
   // ---- GEOM.POSE's palette store: its evidence ----------------------------
   // `geom_pal_bone_unset_o` is the one to watch. It is the store's own report
@@ -1378,6 +1488,9 @@ module zhao_console_board
   // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
   // from the other five so the scan's cost is a NUMBER rather than an argument.
   output logic [31:0] geom_ma_jobs_f_o,
+  // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
+  // 2026-09-22). Its traffic is per creature publication and per POSED draw.
+  output logic [31:0] geom_ma_jobs_g_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
@@ -4001,24 +4114,40 @@ module zhao_console_board
       .geom_light_rgb_sat_o               (geom_light_rgb_sat_o),
       .geom_light_nlights_clamped_o       (geom_light_nlights_clamped_o),
       .geom_light_adapter_refused_o       (geom_light_adapter_refused_o),
-      .geom_pose_start_i                  (geom_pose_start_i),
-      .geom_pose_bone_count_i             (geom_pose_bone_count_i),
-      .geom_pose_root_dx_i                (geom_pose_root_dx_i),
-      .geom_pose_root_dy_i                (geom_pose_root_dy_i),
-      .geom_pose_root_dz_i                (geom_pose_root_dz_i),
       .geom_pose_bone_idx_o               (geom_pose_bone_idx_o),
-      .geom_pose_bone_parent_i            (geom_pose_bone_parent_i),
-      .geom_pose_bone_tx_i                (geom_pose_bone_tx_i),
-      .geom_pose_bone_ty_i                (geom_pose_bone_ty_i),
-      .geom_pose_bone_tz_i                (geom_pose_bone_tz_i),
-      .geom_pose_quat_w_i                 (geom_pose_quat_w_i),
-      .geom_pose_quat_x_i                 (geom_pose_quat_x_i),
-      .geom_pose_quat_y_i                 (geom_pose_quat_y_i),
-      .geom_pose_quat_z_i                 (geom_pose_quat_z_i),
-      .geom_pose_inv_rest_i               (geom_pose_inv_rest_i),
       .geom_pose_busy_o                   (geom_pose_busy_o),
       .geom_pose_done_o                   (geom_pose_done_o),
       .geom_pose_palettes_decoded_o       (geom_pose_palettes_decoded_o),
+      .geom_pose_requests_o               (geom_pose_requests_o),
+      .geom_pose_walk_holds_o             (geom_pose_walk_holds_o),
+      .geom_cr_body_index_o               (geom_cr_body_index_o),
+      .geom_cr_body_gen_o                 (geom_cr_body_gen_o),
+      .geom_cr_clip_index_o               (geom_cr_clip_index_o),
+      .geom_cr_clip_gen_o                 (geom_cr_clip_gen_o),
+      .geom_cr_body_owner_o               (geom_cr_body_owner_o),
+      .geom_cr_clip_owner_o               (geom_cr_clip_owner_o),
+      .geom_cr_bodies_o                   (geom_cr_bodies_o),
+      .geom_cr_clips_o                    (geom_cr_clips_o),
+      .geom_cr_frames_o                   (geom_cr_frames_o),
+      .geom_cr_pages_dropped_o            (geom_cr_pages_dropped_o),
+      .geom_cr_bad_magic_o                (geom_cr_bad_magic_o),
+      .geom_cr_truncated_o                (geom_cr_truncated_o),
+      .geom_cr_misaligned_o               (geom_cr_misaligned_o),
+      .geom_cr_bad_bone_count_o           (geom_cr_bad_bone_count_o),
+      .geom_cr_bone_mismatch_o            (geom_cr_bone_mismatch_o),
+      .geom_cr_overflow_o                 (geom_cr_overflow_o),
+      .geom_cr_not_rigid_o                (geom_cr_not_rigid_o),
+      .geom_cr_reserved_nz_o              (geom_cr_reserved_nz_o),
+      .geom_cr_denied_o                   (geom_cr_denied_o),
+      .geom_cr_clip_miss_o                (geom_cr_clip_miss_o),
+      .geom_cr_frame_oob_o                (geom_cr_frame_oob_o),
+      .geom_cr_not_resident_o             (geom_cr_not_resident_o),
+      .geom_cr_owner_mismatch_o           (geom_cr_owner_mismatch_o),
+      .geom_cr_busy_o                     (geom_cr_busy_o),
+      .geom_bs_prefetch_late_o            (geom_bs_prefetch_late_o),
+      .geom_bs_rest_nonrigid_o            (geom_bs_rest_nonrigid_o),
+      .geom_bs_reserved_nz_o              (geom_bs_reserved_nz_o),
+      .geom_bs_fills_o                    (geom_bs_fills_o),
       .geom_pal_vertices_served_o         (geom_pal_vertices_served_o),
       .geom_pal_bones_written_o           (geom_pal_bones_written_o),
       .geom_pal_bone_oob_o                (geom_pal_bone_oob_o),
@@ -4106,6 +4235,7 @@ module zhao_console_board
       .cmd_exec_forge_overflow_o          (cmd_exec_forge_overflow_o),
       .cmd_exec_forge_src_truncated_o     (cmd_exec_forge_src_truncated_o),
       .geom_ma_jobs_f_o                   (geom_ma_jobs_f_o),
+      .geom_ma_jobs_g_o                   (geom_ma_jobs_g_o),
       .geom_clipdoor_granted_o            (geom_clipdoor_granted_o),
       .geom_clipdoor_switches_o           (geom_clipdoor_switches_o),
       .geom_clipdoor_idle_offered_o       (geom_clipdoor_idle_offered_o),

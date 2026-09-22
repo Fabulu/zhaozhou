@@ -802,27 +802,46 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_light_nlights_clamped_o,
   output logic [31:0]             geom_light_adapter_refused_o,
 
-  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
-  // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
-  // decoder's own SOURCE is what is now missing, and this is it. See I29.
-  input  logic                    geom_pose_start_i,
-  input  logic [5:0]              geom_pose_bone_count_i,
-  input  logic signed [31:0]      geom_pose_root_dx_i,
-  input  logic signed [31:0]      geom_pose_root_dy_i,
-  input  logic signed [31:0]      geom_pose_root_dz_i,
+  // ---- I29 IS CLOSED 2026-09-22: the clip page and the skeleton bake -------
+  // Fourteen inputs left this list with the core's. `u_dut (.*)` binds by
+  // name, so a wrapper still declaring a port the core dropped breaks the bind
+  // just as hard as one missing a port the core gained -- and it breaks it in
+  // the shape that reads as "the core is broken" (R220). This list tracks the
+  // core exactly; `tools/design/wrapper_port_parity.py` is what says so.
   output logic [4:0]              geom_pose_bone_idx_o,
-  input  logic [4:0]              geom_pose_bone_parent_i,
-  input  logic signed [31:0]      geom_pose_bone_tx_i,
-  input  logic signed [31:0]      geom_pose_bone_ty_i,
-  input  logic signed [31:0]      geom_pose_bone_tz_i,
-  input  logic signed [15:0]      geom_pose_quat_w_i,
-  input  logic signed [15:0]      geom_pose_quat_x_i,
-  input  logic signed [15:0]      geom_pose_quat_y_i,
-  input  logic signed [15:0]      geom_pose_quat_z_i,
-  input  logic signed [31:0]      geom_pose_inv_rest_i [0:11],
   output logic                    geom_pose_busy_o,
   output logic                    geom_pose_done_o,
   output logic [31:0]             geom_pose_palettes_decoded_o,
+  output logic [31:0]             geom_pose_requests_o,
+  output logic [31:0]             geom_pose_walk_holds_o,
+  output logic [23:0]             geom_cr_body_index_o,
+  output logic [15:0]             geom_cr_body_gen_o,
+  output logic [23:0]             geom_cr_clip_index_o,
+  output logic [15:0]             geom_cr_clip_gen_o,
+  output logic [23:0]             geom_cr_body_owner_o,
+  output logic [23:0]             geom_cr_clip_owner_o,
+  output logic [31:0]             geom_cr_bodies_o,
+  output logic [31:0]             geom_cr_clips_o,
+  output logic [31:0]             geom_cr_frames_o,
+  output logic [31:0]             geom_cr_pages_dropped_o,
+  output logic [31:0]             geom_cr_bad_magic_o,
+  output logic [31:0]             geom_cr_truncated_o,
+  output logic [31:0]             geom_cr_misaligned_o,
+  output logic [31:0]             geom_cr_bad_bone_count_o,
+  output logic [31:0]             geom_cr_bone_mismatch_o,
+  output logic [31:0]             geom_cr_overflow_o,
+  output logic [31:0]             geom_cr_not_rigid_o,
+  output logic [31:0]             geom_cr_reserved_nz_o,
+  output logic [31:0]             geom_cr_denied_o,
+  output logic [31:0]             geom_cr_clip_miss_o,
+  output logic [31:0]             geom_cr_frame_oob_o,
+  output logic [31:0]             geom_cr_not_resident_o,
+  output logic [31:0]             geom_cr_owner_mismatch_o,
+  output logic                    geom_cr_busy_o,
+  output logic [31:0]             geom_bs_prefetch_late_o,
+  output logic [31:0]             geom_bs_rest_nonrigid_o,
+  output logic [31:0]             geom_bs_reserved_nz_o,
+  output logic [31:0]             geom_bs_fills_o,
 
   // ---- GEOM.POSE's palette store: its evidence ----------------------------
   // `geom_pal_bone_unset_o` is the one to watch. It is the store's own report
@@ -982,6 +1001,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] cmd_exec_forge_overflow_o,
   output logic [31:0] cmd_exec_forge_src_truncated_o,
   output logic [31:0] geom_ma_jobs_f_o,
+  output logic [31:0] geom_ma_jobs_g_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,

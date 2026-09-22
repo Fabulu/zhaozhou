@@ -1,4 +1,4 @@
-// zhao_geom_mem_adapter.sv -- four logical ENGINE1 readers, one ENGINE1 client.
+// zhao_geom_mem_adapter.sv -- SEVEN logical ENGINE1 readers, one ENGINE1 client.
 //
 // Law: reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt 12
 //      spec/memory_rules.md 5f (the asset pool window, ENGINE1, read-only)
@@ -120,6 +120,33 @@ module zhao_geom_mem_adapter
     output var logic [63:0]     f_beat_data_o,
     output var logic            f_beat_last_o,
 
+    // Requester G, GEOM.POSE's kind-8 BODY and kind-9 CLIP FRAME page reader
+    // (`zhao_geom_clipread`, core entry I29). 64-byte lines out of the SAME
+    // asset pool under the SAME client in the SAME direction as the six above,
+    // which is spec/memory_rules.md 5f's condition for joining here.
+    //
+    // ITS TRAFFIC IS PER PUBLICATION AND PER POSED DRAW, not per meshlet and
+    // not per vertex: a kind-8 adoption is 2 + bone_count lines, a kind-9
+    // adoption is 1 + ceil(clip_count/2) lines, and a FRAME is 1 + ceil(
+    // bone_count/8) lines -- at 32 bones, six lines for the frame every posed
+    // draw. That is heavier than E and F and lighter than A, and it is the
+    // number any decision to give the pose path its own window has to beat.
+    //
+    // THE ROUND ROBIN'S BOUND IS N-1 TURNS AND IT IS RE-PROVED AT SEVEN RATHER
+    // THAN ASSUMED, the same way it was re-proved at six: `zhao_mem_share_n`'s
+    // own directed test carries the proof of the law and
+    // `geom_mem_adapter_directed` runs against the widened adapter.
+    //
+    // `g_beat_last_o` IS NOT BROUGHT OUT. The reader counts its own eight
+    // beats per 64-byte line and judges completeness from that count, exactly
+    // as F's bank does, so a `last` it never reads would be a port nothing
+    // drives a decision from. The share still produces it internally; what is
+    // absent is the wire, not the signal.
+    input  var zhao_guard_req_t g_req_i,
+    output var zhao_guard_rsp_t g_rsp_o,
+    output var logic            g_beat_valid_o,
+    output var logic [63:0]     g_beat_data_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -134,6 +161,7 @@ module zhao_geom_mem_adapter
     output var logic [31:0]     jobs_d_o,          // ...and D
     output var logic [31:0]     jobs_e_o,          // ...and E
     output var logic [31:0]     jobs_f_o,          // ...and F
+    output var logic [31:0]     jobs_g_o,          // ...and G
     output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
@@ -145,16 +173,22 @@ module zhao_geom_mem_adapter
   // share: a leaf test's generic client input must never be able to reach the
   // production guard through this path.
   //
-  // THE N-REQUESTER CORE (902949ea), at N=6 since requester F landed 2026-09-21. Its
+  // THE N-REQUESTER CORE (902949ea), at N=7 since requester G landed 2026-09-22
+  // for GEOM.POSE's page reader (F landed 2026-09-21, C on 2026-09-19). Its
   // round robin is bounded at N-1 turns, so C's addition lengthens A's and B's
   // worst-case wait by at most one 32-byte record -- and it is the SAME core the
   // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
   // two-cycle verdict law is re-derived here.
-  zhao_guard_req_t [5:0] s_req;
-  zhao_guard_rsp_t [5:0] s_rsp;
-  logic            [5:0] s_bv, s_bl;
+  zhao_guard_req_t [6:0] s_req;
+  zhao_guard_rsp_t [6:0] s_rsp;
+  logic            [6:0] s_bv;
+  // G takes no `last`, so bit 6 of this vector is driven by the share and read
+  // by nothing. Named UNUSED here rather than left for the linter to find.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic            [6:0] s_bl;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic           [63:0] s_bd;
-  logic      [5:0][31:0] s_jobs;
+  logic      [6:0][31:0] s_jobs;
 
   assign s_req[0] = a_req_i;
   assign s_req[1] = b_req_i;
@@ -162,18 +196,21 @@ module zhao_geom_mem_adapter
   assign s_req[3] = d_req_i;
   assign s_req[4] = e_req_i;
   assign s_req[5] = f_req_i;
+  assign s_req[6] = g_req_i;
   assign a_rsp_o = s_rsp[0];
   assign b_rsp_o = s_rsp[1];
   assign c_rsp_o = s_rsp[2];
   assign d_rsp_o = s_rsp[3];
   assign e_rsp_o = s_rsp[4];
   assign f_rsp_o = s_rsp[5];
+  assign g_rsp_o = s_rsp[6];
   assign a_beat_valid_o = s_bv[0];
   assign b_beat_valid_o = s_bv[1];
   assign c_beat_valid_o = s_bv[2];
   assign d_beat_valid_o = s_bv[3];
   assign e_beat_valid_o = s_bv[4];
   assign f_beat_valid_o = s_bv[5];
+  assign g_beat_valid_o = s_bv[6];
   assign a_beat_last_o  = s_bl[0];
   assign b_beat_last_o  = s_bl[1];
   assign c_beat_last_o  = s_bl[2];
@@ -186,15 +223,17 @@ module zhao_geom_mem_adapter
   assign d_beat_data_o  = s_bd;
   assign e_beat_data_o  = s_bd;
   assign f_beat_data_o  = s_bd;
+  assign g_beat_data_o  = s_bd;
   assign jobs_a_o = s_jobs[0];
   assign jobs_b_o = s_jobs[1];
   assign jobs_c_o = s_jobs[2];
   assign jobs_d_o = s_jobs[3];
   assign jobs_e_o = s_jobs[4];
   assign jobs_f_o = s_jobs[5];
+  assign jobs_g_o = s_jobs[6];
 
   zhao_mem_share_n #(
-    .N         (6),
+    .N         (7),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (

@@ -1983,15 +1983,21 @@ module zhao_prod_top (
   logic [1-1:0] u22_f_beat_valid_o;
   logic [64-1:0] u22_f_beat_data_o;
   logic [1-1:0] u22_f_beat_last_o;
+  zhao_guard_req_t u22_g_req_i;
+  assign u22_g_req_i = zhao_guard_req_t'(u22_src[42 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u22_g_rsp_o;
+  logic [1-1:0] u22_g_beat_valid_o;
+  logic [64-1:0] u22_g_beat_data_o;
   zhao_guard_req_t u22_m_req_o;
   zhao_guard_rsp_t u22_m_rsp_i;
-  assign u22_m_rsp_i = zhao_guard_rsp_t'(u22_src[42 +: $bits(zhao_guard_rsp_t)]);
+  assign u22_m_rsp_i = zhao_guard_rsp_t'(u22_src[49 +: $bits(zhao_guard_rsp_t)]);
   logic [32-1:0] u22_jobs_a_o;
   logic [32-1:0] u22_jobs_b_o;
   logic [32-1:0] u22_jobs_c_o;
   logic [32-1:0] u22_jobs_d_o;
   logic [32-1:0] u22_jobs_e_o;
   logic [32-1:0] u22_jobs_f_o;
+  logic [32-1:0] u22_jobs_g_o;
   logic [32-1:0] u22_denied_o;
   logic [32-1:0] u22_contention_o;
   logic [32-1:0] u22_err_short_o;
@@ -2030,17 +2036,22 @@ module zhao_prod_top (
       .f_beat_valid_o(u22_f_beat_valid_o),
       .f_beat_data_o(u22_f_beat_data_o),
       .f_beat_last_o(u22_f_beat_last_o),
+      .g_req_i(u22_g_req_i),
+      .g_rsp_o(u22_g_rsp_o),
+      .g_beat_valid_o(u22_g_beat_valid_o),
+      .g_beat_data_o(u22_g_beat_data_o),
       .m_req_o(u22_m_req_o),
       .m_rsp_i(u22_m_rsp_i),
-      .m_beat_valid_i(u22_src[49 +: 1]),
-      .m_beat_data_i(u22_src[56 +: 64]),
-      .m_beat_last_i(u22_src[63 +: 1]),
+      .m_beat_valid_i(u22_src[56 +: 1]),
+      .m_beat_data_i(u22_src[63 +: 64]),
+      .m_beat_last_i(u22_src[70 +: 1]),
       .jobs_a_o(u22_jobs_a_o),
       .jobs_b_o(u22_jobs_b_o),
       .jobs_c_o(u22_jobs_c_o),
       .jobs_d_o(u22_jobs_d_o),
       .jobs_e_o(u22_jobs_e_o),
       .jobs_f_o(u22_jobs_f_o),
+      .jobs_g_o(u22_jobs_g_o),
       .denied_o(u22_denied_o),
       .contention_o(u22_contention_o),
       .err_short_o(u22_err_short_o),
@@ -2050,7 +2061,7 @@ module zhao_prod_top (
   logic u22_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u22_fold_q <= 1'b0;
-    else u22_fold_q <= u22_fold_q ^ (((^u22_a_rsp_o)) & u22_src[0]) ^ (((^u22_a_beat_valid_o)) & u22_src[1]) ^ (((^u22_a_beat_data_o)) & u22_src[2]) ^ (((^u22_a_beat_last_o)) & u22_src[3]) ^ (((^u22_b_rsp_o)) & u22_src[4]) ^ (((^u22_b_beat_valid_o)) & u22_src[5]) ^ (((^u22_b_beat_data_o)) & u22_src[6]) ^ (((^u22_b_beat_last_o)) & u22_src[7]) ^ (((^u22_c_rsp_o)) & u22_src[8]) ^ (((^u22_c_beat_valid_o)) & u22_src[9]) ^ (((^u22_c_beat_data_o)) & u22_src[10]) ^ (((^u22_c_beat_last_o)) & u22_src[11]) ^ (((^u22_d_rsp_o)) & u22_src[12]) ^ (((^u22_d_beat_valid_o)) & u22_src[13]) ^ (((^u22_d_beat_data_o)) & u22_src[14]) ^ (((^u22_d_beat_last_o)) & u22_src[15]) ^ (((^u22_e_rsp_o)) & u22_src[16]) ^ (((^u22_e_beat_valid_o)) & u22_src[17]) ^ (((^u22_e_beat_data_o)) & u22_src[18]) ^ (((^u22_e_beat_last_o)) & u22_src[19]) ^ (((^u22_f_rsp_o)) & u22_src[20]) ^ (((^u22_f_beat_valid_o)) & u22_src[21]) ^ (((^u22_f_beat_data_o)) & u22_src[22]) ^ (((^u22_f_beat_last_o)) & u22_src[23]) ^ (((^u22_m_req_o)) & u22_src[24]) ^ (((^u22_jobs_a_o)) & u22_src[25]) ^ (((^u22_jobs_b_o)) & u22_src[26]) ^ (((^u22_jobs_c_o)) & u22_src[27]) ^ (((^u22_jobs_d_o)) & u22_src[28]) ^ (((^u22_jobs_e_o)) & u22_src[29]) ^ (((^u22_jobs_f_o)) & u22_src[30]) ^ (((^u22_denied_o)) & u22_src[31]) ^ (((^u22_contention_o)) & u22_src[32]) ^ (((^u22_err_short_o)) & u22_src[33]) ^ (((^u22_err_long_o)) & u22_src[34]) ^ (((^u22_err_unowned_o)) & u22_src[35]);
+    else u22_fold_q <= u22_fold_q ^ (((^u22_a_rsp_o)) & u22_src[0]) ^ (((^u22_a_beat_valid_o)) & u22_src[1]) ^ (((^u22_a_beat_data_o)) & u22_src[2]) ^ (((^u22_a_beat_last_o)) & u22_src[3]) ^ (((^u22_b_rsp_o)) & u22_src[4]) ^ (((^u22_b_beat_valid_o)) & u22_src[5]) ^ (((^u22_b_beat_data_o)) & u22_src[6]) ^ (((^u22_b_beat_last_o)) & u22_src[7]) ^ (((^u22_c_rsp_o)) & u22_src[8]) ^ (((^u22_c_beat_valid_o)) & u22_src[9]) ^ (((^u22_c_beat_data_o)) & u22_src[10]) ^ (((^u22_c_beat_last_o)) & u22_src[11]) ^ (((^u22_d_rsp_o)) & u22_src[12]) ^ (((^u22_d_beat_valid_o)) & u22_src[13]) ^ (((^u22_d_beat_data_o)) & u22_src[14]) ^ (((^u22_d_beat_last_o)) & u22_src[15]) ^ (((^u22_e_rsp_o)) & u22_src[16]) ^ (((^u22_e_beat_valid_o)) & u22_src[17]) ^ (((^u22_e_beat_data_o)) & u22_src[18]) ^ (((^u22_e_beat_last_o)) & u22_src[19]) ^ (((^u22_f_rsp_o)) & u22_src[20]) ^ (((^u22_f_beat_valid_o)) & u22_src[21]) ^ (((^u22_f_beat_data_o)) & u22_src[22]) ^ (((^u22_f_beat_last_o)) & u22_src[23]) ^ (((^u22_g_rsp_o)) & u22_src[24]) ^ (((^u22_g_beat_valid_o)) & u22_src[25]) ^ (((^u22_g_beat_data_o)) & u22_src[26]) ^ (((^u22_m_req_o)) & u22_src[27]) ^ (((^u22_jobs_a_o)) & u22_src[28]) ^ (((^u22_jobs_b_o)) & u22_src[29]) ^ (((^u22_jobs_c_o)) & u22_src[30]) ^ (((^u22_jobs_d_o)) & u22_src[31]) ^ (((^u22_jobs_e_o)) & u22_src[32]) ^ (((^u22_jobs_f_o)) & u22_src[33]) ^ (((^u22_jobs_g_o)) & u22_src[34]) ^ (((^u22_denied_o)) & u22_src[35]) ^ (((^u22_contention_o)) & u22_src[36]) ^ (((^u22_err_short_o)) & u22_src[37]) ^ (((^u22_err_long_o)) & u22_src[38]) ^ (((^u22_err_unowned_o)) & u22_src[39]);
 
   // ---- zhao_geom_meshfetch ----
   logic [63:0] u23_lfsr_q;

@@ -489,6 +489,112 @@
 //
 // ---------------------------------------------------------------------------
 //
+//  * I29 was GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
+//    `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
+//    `geom_pose_root_d*`), fourteen inputs feeding `zhao_geom_pose_decode`'s
+//    COMBINATIONAL per-bone fetch. CLOSED 2026-09-22 (gz/geomclose). It was
+//    I10's successor and it outlived four separate stated causes, each of which
+//    was retired by a different packet; the ledger of those is in the git
+//    history of this entry and is worth reading before quoting any blocker in
+//    this file. The last two were named exactly and they are what closed:
+//
+//      THE SIXTH `u_geom_mem_adapter` REQUESTER. It was the SEVENTH. The entry
+//      said "`zhao_mem_share_n` N = 5 -> 6" and the adapter was already at N = 6
+//      with A..F driven -- F is FORGE.PRIM's program-page bank (R234 D2), landed
+//      2026-09-21, AFTER that sentence was written. R240 in one line: a stated
+//      blocker whose arithmetic has expired is evidence the entry stopped being
+//      maintained, not that the path is clear. The substance was untouched --
+//      the reader needed an asset-window requester -- and it is G, on the same
+//      pool, client and direction, which is `spec/memory_rules.md` 5f's stated
+//      condition for joining rather than taking a second ENGINE1 path.
+//
+//      THE INSTANCE WALK. Fifteen registers beside `u_geom_drawjob`, because
+//      the hard part was never arithmetic -- it was WHICH form index and WHEN.
+//      Every field is taken off the SAME accepted command packet at the SAME
+//      instant out of the SAME `dq` head: `cmd_draw_form_w[31:8]`,
+//      `cmd_draw_posed_o`, `cmd_draw_clip_id_o`, `cmd_draw_frame_no_o`.
+//      `zhao_cmd_exec`'s 0x0305 arm emits the pose key in the same queue entry
+//      as the draw under one enable (R229), so the join is STRUCTURAL and there
+//      is no cadence to get wrong.
+//
+//      **THE FORM IS NOT `dj_j_form_idx` AND THAT IS THE WHOLE POINT.** It is
+//      the same 24 bits by the same expression -- and it is offered A STAGE
+//      LATER, qualified by `dj_j_valid`, with drawjob's own S_IDLE still
+//      holding the PREVIOUS draw. Pairing it with a clip id captured at the
+//      draw handshake is entry I39's fault exactly: two live wires agreeing in
+//      name, width and type, describing two different draws. This entry's own
+//      text warned that it "must be qualified by state, not offered bare";
+//      the walk does not read it at all. `geom_job_form_idx_o` stays at the
+//      edge as the ownership ruling's exposed identity and nothing more.
+//
+//    THE POSED DRAW WAITS FOR THE REQUEST SLOT AND IS NEVER DROPPED.
+//    `cmd_draw_ready_w` gained `(!cmd_draw_posed_o || !pw_pend_q)`. A dropped
+//    pose key does not produce a missing creature; it produces a creature
+//    wearing the PREVIOUS pose's palette with every handshake intact and every
+//    counter balancing, which is this file's named worst case.
+//    `geom_pose_walk_holds_o` prices the hold instead of asserting it is small,
+//    and `DrawForm` 0x0300 is untouched (W09): `cmd_draw_posed_o` is low for
+//    every bind pose, so the term is a constant 1 on the ordinary path.
+//
+//    IT CANNOT DEADLOCK THE COMMAND STREAM, which is the question new
+//    backpressure onto a memory client owes. `zhao_geom_clipread.p_ready_o` is
+//    `(st_q == S_IDLE) && !pub_any_c`, and a request the reader cannot serve is
+//    CONSUMED IN S_IDLE and counted (`not_resident_o`, `owner_mismatch_o`,
+//    `clip_miss_o`, `frame_oob_o`) without leaving that state. So on a console
+//    that has published no creature page -- the smoke bench's state exactly --
+//    the slot drains in one cycle. What can hold it is a walk in progress,
+//    bounded by MEM.GUARD beats on requester G.
+//
+//    THE STORE'S `start_o` IS WHAT STARTS THE DECODE, not the reader's
+//    `src_req_o`, and both the decoder's `start_i` and the palette's
+//    `pal_begin_i` take it. They are one cycle apart on purpose: bone 0 must be
+//    on the wires before the decoder begins, so the store answers when its
+//    prefetch has landed. Wiring the handover straight through would decode
+//    against the PREVIOUS frame's bone 0 -- the fault `bone_prefetch_late_o`
+//    counts and `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` models.
+//
+//    WHAT THE OWNER'S SECTION 5 ASKED FOR, AND WHY THIS IS NOT CLOSING EARLY.
+//    `reports/Zhaozhou_kind8_kind9_proposed_owner_ruling_2026-09-21.txt` 5 says
+//    "do not call I29 closed merely because these fields exist". It forbids
+//    closing ON THE OWNER FIELDS ALONE; the producer, the walk and the
+//    composition are what closed it, and its three positive requirements are
+//    met rather than argued around:
+//      - "Keep the current publication-triggered one-body/one-directory staging
+//        behavior as its actual measured tier" -- UNCHANGED. Not a narrowing,
+//        not a tier this packet chose, and explicitly the tier the ruling says
+//        to keep.
+//      - "Record the selected resource identities" -- `geom_cr_body_index_o`,
+//        `geom_cr_body_gen_o`, `geom_cr_clip_index_o`, `geom_cr_clip_gen_o` at
+//        the edge, beside the FORM identities `geom_cr_*_owner_o`. Three
+//        identities, kept apart, as section 3 requires.
+//      - "test the transition between forms" -- `geom_clipread_directed` loads
+//        one creature under two different resource indices and fires
+//        `owner_mismatch_o` five times under legal stimulus at IDENTICAL bone
+//        counts with `bone_mismatch_o` silent beside it, with
+//        `tests/mutants/zhao_geom_clipread_ownerblind_mutant.sv` as the
+//        positive control.
+//
+//    AND THE CLAUSE THAT REMAINS VISIBLE, stated here rather than left out.
+//    Section 5 also says "where the wider runtime needs a directory or
+//    scheduling logic, that work remains visible". A scene holding several
+//    creature TYPES at once needs one, and this console holds ONE resident
+//    creature. That is NOT a new tie-off and it is not entered as one: no
+//    boundary port waits for it -- the whole pose path is internal now -- and
+//    the owner ruled in the same paragraph that the one-body tier is what to
+//    KEEP. A tier the owner ruled to keep is a scope, not a gap. It is
+//    recorded here so that reading this entry tells the next person what the
+//    console does and does not do, which is the only thing a closed entry owes.
+//
+//    FOURTEEN INPUTS LEFT THE EDGE rather than being driven, and the count is
+//    stated so it can be checked: `geom_pose_start_i`, `geom_pose_bone_count_i`,
+//    the three `geom_pose_root_d*_i`, `geom_pose_bone_parent_i`, the three
+//    `geom_pose_bone_t*_i`, the four `geom_pose_quat_*_i` and
+//    `geom_pose_inv_rest_i[0:11]`. `geom_pose_bone_idx_o` STAYS -- it is read
+//    inside now, so the port is observation rather than what keeps the register
+//    alive. Thirty-one outputs arrived: the reader's census and its seventeen
+//    refusals, the six identities, the store's four, the walk's two and
+//    `geom_ma_jobs_g_o`.
+//
 //  * I33 was PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`), six ports whose
 //    entry's whole argument was one sentence: "NO RATIFIED COMMAND CARRIES A
 //    SPECIES DESCRIPTOR ... Inventing one here would mean this file choosing
@@ -1179,7 +1285,8 @@
 //      `geom_vd_bone1_o` went with them because they now have a consumer.
 //      Deleted rather than marked closed, for the reason I4 gives above: a
 //      stale closed entry under-reports progress exactly as deleting an open
-//      one would over-report it. The successor gap is I29, one level up.)
+//      one would over-report it. The successor gap was I29, one level up --
+//      itself CLOSED 2026-09-22, so this chain is complete.)
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
@@ -4229,531 +4336,6 @@
 //      exercised by `tests/terrain/world_composed_directed.cpp`, which composes
 //      the same chain around a played HPS, rather than by the smoke bench.)
 //
-// I29. GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
-//      `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
-//      `geom_pose_root_d*`, and since 2026-09-21 `geom_job_valid_o` /
-//      `geom_job_form_idx_o`) -- BOUNDARY. NEW 2026-09-19, and it is I10's
-//      SUCCESSOR rather than a new discovery: closing I10 composed
-//      `zhao_geom_pose_decode`, and a composed block's inputs become this
-//      module's edge until their own producer arrives.
-//
-//      The decoder's source fetch is COMBINATIONAL BY CONTRACT -- it drives
-//      `bone_idx_o` and the caller must present that bone's parent, rest
-//      translation, quaternion and inverse-rest matrix in the SAME cycle. So
-//      this is not a stream that could be tied off plausibly; it is a memory
-//      the caller owns, and the block's own header says it "owns none of them
-//      and holds no cache".
-//
-//      THE OWNER IS GEOM.MESHFETCH plus the clip-bank pages behind MEM.GUARD.
-//
-//      ITS STATED CAUSE EXPIRED BEFORE IT WAS WRITTEN, and it is the
-//      SIXTEENTH false-absence claim in this tree. Corrected 2026-09-20 by
-//      the forge packet. The sentence was: "it is the same obstacle as I23,
-//      one asset kind over: the pages come back through MEM.VRAM.ARBITER and
-//      `zhao_sdram_ctrl`, and THERE IS NO BEHAVIOURAL SDRAM MODEL IN THIS
-//      TREE. A composition onto that socket would elaborate, lint and never
-//      see a beat."
-//
-//      It was right to name I23 and wrong about what I23 says. The I23 record
-//      some fourteen hundred lines ABOVE THIS ONE, in this same file, is the
-//      correction of that exact sentence: `sim/models/zhao_sdram_model.sv` is
-//      219 lines, cycle-true against `zhao_sdram_params_pkg`, carries a POKE
-//      BACKDOOR written for this case, and is already instantiated against
-//      `zhao_shell_top_v2` by `tests/shell/tb_zhao_shell.sv` in `realmem_mode`.
-//      SEARCHED 2026-09-20 and the file is still there. So this entry inherited
-//      a cause that the paragraph above it had already retired -- the same
-//      refusal outliving its own cause, in one file, twice.
-//
-//      THE REAL BLOCKER IS A RULING, NOT AN ABSENCE, and it is the one
-//      FORGE.SHADOW's ladder constants had until owner ruling R26.
-//      `spec/cartridge.md` 4 puts the skeleton in KIND 8 (creature form:
-//      "parts->meshlet ids, BONE HIERARCHY, attachments, hitboxes") and the
-//      animation clips in KIND 9 (clip bank), and freezes both: "Byte-exact
-//      layouts freeze with SW.TOOLS.ASSET at Phase-12 entry (creature_rules
-//      9); until then the packer refuses to emit them (deterministic refusal,
-//      never a guessed layout)."
-//
-//      R26 LIFTED THAT FREEZE ONLY PARTLY, and 4c says exactly how far in its
-//      own words: "What is frozen here is the HEADER and the LADDER TABLE.
-//      Nothing else. Parts, meshlet ids, THE BONE HIERARCHY, attachments and
-//      hitboxes remain frozen until SW.TOOLS.ASSET at Phase-12 entry, exactly
-//      as 4 says." Kind 9 was not touched at all. `geom_pose_bone_parent_i`,
-//      `geom_pose_bone_t*_i` and `geom_pose_inv_rest_i` ARE the bone
-//      hierarchy; `geom_pose_quat_*_i` and `geom_pose_root_d*_i` are a kind-9
-//      clip frame. Building a reader for either is the guessed layout that
-//      sentence exists to forbid.
-//
-//      SO THE MEMORY PATH IS NOT THE OBSTACLE AND NOBODY SHOULD BUILD ONE FOR
-//      IT. What this gap needs is an OWNER DECISION of exactly R26's shape --
-//      a second partial lift, for the bone hierarchy and a clip frame -- and
-//      4c's own `body_off` mechanism was designed to make one cheap: the
-//      header "names the byte offset at which that body will begin, so the
-//      unfrozen half can be appended later without moving a byte of the frozen
-//      half".
-//
-//      OWNER RULING R90 GRANTED THAT LIFT, AND THE LIFT IS NOT THE WHOLE
-//      OBSTACLE. Two things were checked on 2026-09-20 by the geomseam packet
-//      and both are recorded on R90's own row in
-//      `reports/OWNER-RULINGS-20260919-EVENING.md` -- a durable home, unlike
-//      the run folder the previous sentence pointed at:
-//
-//        * NOTHING ANYWHERE DEFINES THE BYTES. `zref_creature.hpp` holds C++
-//          structs whose members are `std::vector` (no wire layout at all),
-//          `spec/creature_rules.md:58-60` holds a size in prose, and
-//          `zref_creature_page.hpp:23-28` explicitly disclaims freezing them.
-//          `zref_creature.hpp:43-46` calls the quaternion lane format
-//          "PROPOSED, NOT FROZEN". So the lift does not UNBLOCK a layout;
-//          somebody must AUTHOR one, and that is an ABI freeze.
-//
-//          AUTHORED AND FROZEN 2026-09-21 (POSEABI), and HALF OF THAT
-//          CITATION WAS STALE. Two of the four places checked in-tree:
-//          `spec/creature_rules.md` 2.1 is headed "Storage (FROZEN; the Q
-//          formats are frozen -- qformats 7.6, C1)" and gives the kind-9
-//          bytes outright (12 B root displacement then bone_count x 8 B,
-//          <= 268 B/frame at 32 bones), and `spec/qformats.md` 7.6 ratifies
-//          the `quat16` lane format under AMENDMENT C1 -- four s16 lanes,
-//          S 1.0.14, hemisphere-canonical -- which is the very change
-//          control `zref_creature.hpp`'s note flags. That note was stale and
-//          is corrected there. **THE KIND-9 CLIP FRAME WAS ALREADY FROZEN,** 
-//          bytes and lane semantics both; what it lacks is a PRODUCER.
-//
-//          Only the kind-8 BODY needed authoring, and it now exists: a
-//          64-byte body header at `body_off` then one 32-byte bone record
-//          each, stated in `tools/pack/mkcreatureladder.py`, the
-//          `zref::creature_page::body` namespace and `zhao_geom_bonesrc.sv`,
-//          and pinned by ONE artefact -- the second golden,
-//          `ladder_page_body_v1.bin`. `inv_rest` is THREE numbers rather
-//          than a 3x4 matrix because `bake_skeleton` builds every one as
-//          identity rotation plus negated world-rest translation and
-//          `zref::creature::Bone` carries no rest rotation at all, so nine
-//          of twelve elements are the constants 65536 and 0.
-//
-//          THE APPEND COST NOTHING, structurally: `ladder_page_v1.bin` is
-//          BYTE-IDENTICAL (absent from the freeze commit's diff), and
-//          owner ruling R108's five-golden-capture fare does not apply
-//          because `spec/commands.zidl` carries no creature-page layout.
-//        * THE PRODUCER IS ~17,568 BITS OF ASYNCHRONOUS-READ STORE. PRICED
-//          2026-09-21 (POSEABI), AND THE PRICE INVERTED THE ARRANGEMENT
-//          RATHER THAN THE PACKET. quartus_map 17.0.2 on the TARGET device,
-//          standalone leaf, three arrangements from one parameterised source
-//          (`zhao_geom_bonesrc.sv`, SRC_STYLE): the asynchronous store
-//          described below costs **14,056 ALM, 33.5% of the 41,910 ceiling**,
-//          with ZERO block memory and NO MLAB inference -- Quartus puts every
-//          stored bit in registers and the 32-deep multiplexer over 549 bits
-//          costs MORE than the storage does (21,617 ALUTs against 17,665
-//          registers). The bit count below is EXACTLY RIGHT; what was
-//          unpriced was what those bits cost.
-//
-//          IT IS ALSO NOT REQUIRED, and that is the finding that matters.
-//          `bone_idx_o` is a REGISTER that moves in exactly two places
-//          (S_IDLE on start, S_EMIT on the accepted last beat) with a
-//          measured 115.4 cycles between them, so a synchronous read is
-//          short by ONE CYCLE and no more. A 2-deep prefetch buys that
-//          cycle with ~115 cycles of notice for a fetch needing seven, and
-//          the arrangement built costs **829 ALM (2.0%) plus 10,240 block
-//          memory bits** -- 17.0x cheaper, with THE DECODER UNCHANGED, not
-//          one port. So D-GEOMSEAM-A's fallback (move the decoder's
-//          combinational contract) is NOT needed and that owner decision
-//          can be closed on the cheap side.
-//
-//          WHAT REMAINS OF I29 IS THE PRODUCER, NOT THE STORE. Nothing
-//          FILLS `zhao_geom_bonesrc` yet: the kind-8/kind-9 page reader and
-//          the sixth `u_geom_mem_adapter` requester are R90's item 3 and
-//          were not reached. Composing a store with no producer would MOVE
-//          this entry rather than close it, so it was deliberately not
-//          composed and this entry stands. THE BYTES ARE NO LONGER THE GAP.
-//          `zhao_geom_pose_decode.sv:89-92` makes the fetch COMBINATIONAL BY
-//          CONTRACT and `:146` drives `bone_idx_o` combinationally, so per bone
-//          the caller owes 5 + 3*32 + 4*16 + 12*32 = 549 bits, held stable for
-//          every cycle the block sits in S_FETCH -- 549 * 32 bones. A
-//          synchronous M10K cannot serve it. The same file's own header
-//          (:56-69) spends THIRTEEN CYCLES of latency to keep 12,288 registers
-//          out of ALMs for its ancestor store, and says a combinational read
-//          "pushes Quartus into logic cells and the block stops fitting". On a
-//          device at ~113% of its ALM ceiling that is an owner-visible
-//          decision, not a packaging step: see D-GEOMSEAM-A.
-//
-//      RE-MEASURED 2026-09-21 (POSEPAGE), every recorded blocker re-read in
-//      the tree rather than inherited. THREE ARE RETIRED AND THE RECORD OF
-//      THEM IS EXACT -- unusually, nothing above this line has rotted:
-//
-//        * the kind-8 body freeze: `tests/golden/creature_ladder/
-//          ladder_page_body_v1.bin` is present at 448 bytes, the
-//          `zref::creature_page::body` namespace is at
-//          `zref_creature_page.hpp:272`, and `mkcreatureladder.py --check`
-//          reproduces both goldens. RETIRED, as recorded.
-//        * the behavioural SDRAM model: `sim/models/zhao_sdram_model.sv` is
-//          219 lines EXACTLY as this entry says, its POKE backdoor is at
-//          `:56`, and it is instantiated FOUR times -- `tb_zhao_shell.sv:1527`,
-//          `tb_zhao_mem_chain.sv:158`, `tb_zhao_mem_guard.sv:139` and, most
-//          usefully here, `tb_zhao_console_core_smoke.sv:3482` as
-//          `u_geom_sdram`. So a composed pose reader has a bench that already
-//          holds real memory behind the real core.
-//        * the store: `zhao_geom_bonesrc.sv` exists, is parameterised by
-//          SRC_STYLE, and carries the three measured map rows. RETIRED.
-//
-//      AND THE FOURTH STANDS: `u_geom_mem_adapter` is `zhao_mem_share_n` at
-//      N = 5 with requesters A..E all driven, so a sixth is an in-core edit
-//      and no boundary port; `zhao_geom_ladderbank` is still uncomposed (five
-//      hits in this file, all of them comments).
-//
-//      TWO BLOCKERS THIS ENTRY DOES NOT RECORD, and the second decides it.
-//
-//        (a) THE KIND-9 PAGE CONTAINER WAS NEVER FROZEN -- only the FRAME.
-//            `zref_creature_page.hpp` says above its `body` namespace that "a
-//            kind-9 frame reader therefore has a layout to read and needs no
-//            lift; what it needs is a producer". That is TRUE OF A FRAME AND
-//            FALSE OF A PAGE. `spec/creature_rules.md` 2.1 freezes what one
-//            frame CONTAINS; 5 sketches the page in one clause -- "clip
-//            directory {slot_id u16, frame_count u16, event_count u16} +
-//            frames + event tags" -- under a heading reading "layouts freeze
-//            with SW.TOOLS.ASSET at Phase 12 entry". No magic, no version, no
-//            field order, no offsets, no alignment, and no statement of where
-//            frame `f` of clip `c` begins. A reader cannot read a frozen frame
-//            IT CANNOT LOCATE.
-//
-//            AUTHORED AND FROZEN 2026-09-21 (POSEPAGE), under R90's own
-//            recommendation item 1 -- "author/freeze the body section AND A
-//            MINIMAL KIND-9 FRAME WITH A ZREF MODEL", whose kind-9 half was
-//            not reached. `reference/include/zref/zref_clip_page.hpp`,
-//            `tools/pack/mkclipbank.py` and the golden
-//            `tests/golden/creature_clip/clip_page_v1.bin`, pinned the way the
-//            ladder table is pinned. THIS BLOCKER IS GONE.
-//
-//        (b) `pose_requests` HAS NO CARRIER, and this is the one that keeps
-//            the entry open. `design/contracts/GEOM.POSE.md` names the input
-//            as "{type_id, clip_id, frame_no, bone_count}" from GEOM.MESHFETCH's
-//            instance walk; `reports/DOCKET.md` triages `MESHFETCH.dispatch`
-//            as "external -- the caller's instance walk"; and the caller's
-//            command, `DrawForm 0x0300`, carries form, material_set,
-//            transform, viewport_mask, semantic_weight and flags -- NO
-//            ANIMATION STATE AT ALL. Searched 2026-09-21: `clip_id`,
-//            `clip_slot`, `frame_no` and `type_id` appear in ZERO files under
-//            `fpga/rtl/geometry/`, and `spec/commands.zidl` has no pose, clip
-//            or animation command of any opcode.
-//
-//            CARRIER RATIFIED AND BUILT 2026-09-21 (POSECMD), owner ruling
-//            R229 / D-POSEPAGE-A: `DrawPosedForm` 0x0305 carries
-//            {clip_id, frame_no, sub}, `DrawForm` 0x0300 keeps its meaning as
-//            BIND POSE, and `abi version` stays 3. `spec/commands.zidl` has
-//            the record and its reasoning; `zhao_cmd_exec` has the arm, which
-//            shares DrawForm's first sixteen payload bytes under per-field
-//            elaboration guards and emits the key IN THE SAME `dq` ENTRY as
-//            the draw -- one enable, so no stall can separate a pose from the
-//            draw it belongs to. THIS BLOCKER IS GONE; `clip_id`, `frame_no`
-//            and `sub` are no longer absent from the command surface.
-//
-//            WHAT REMAINS OF (b) IS THE CONSUMER, AND IT IS THIS ENTRY'S
-//            BOUNDARY RATHER THAN A NEW ONE. `cmd_draw_posed_o`,
-//            `cmd_draw_clip_id_o`, `cmd_draw_frame_no_o` and `cmd_draw_sub_o`
-//            leave this module beside `geom_pose_*`, waiting on the SAME
-//            missing owner -- GEOM.MESHFETCH's instance walk, which
-//            `design/contracts/GEOM.POSE.md` names as the source of
-//            "{type_id, clip_id, frame_no, bone_count}". A separate entry for
-//            them would be a register row for a gap this one already counts,
-//            and R229 is explicit that ratifying the command "does not by
-//            itself enable the RTL reader", so no reader was built.
-//
-//            `type_id` IS DELIBERATELY NOT ON THE WIRE, and its absence is
-//            not a fourth blocker. The pose cache keys on the CREATURE TYPE;
-//            the draw already names the creature through `form`, whose 24-bit
-//            index is `spec/memory_rules.md` 5f.1's directory key. Whoever
-//            resolves form -> type owes that mapping a directed check and owes
-//            it in ONE place; carrying a second identity beside the first is
-//            the two-sources-of-truth shape this file keeps striking.
-//
-//            SO THE REMAINING WORK ON I29, STATED PLAINLY: the kind-8/kind-9
-//            page reader, the sixth `u_geom_mem_adapter` requester (an
-//            in-core edit at `zhao_mem_share_n` N = 5 -> 6, no boundary port),
-//            the form -> type resolution, and the instance walk that turns an
-//            accepted draw into a `pose_requests` beat. The BYTES, the PAGE
-//            CONTAINER, the STORE and now the COMMAND are all present.
-//
-//        (c) form -> RESIDENT PAGE IS UNRULED ON BOTH PAGE KINDS, AND THAT IS
-//            WHAT "the form -> type resolution" ABOVE ACTUALLY COSTS. Surfaced
-//            by POSEREAD for kind 9; MEASURED 2026-09-21 (FORMIDX) and found to
-//            cover kind 8 as well.
-//
-//            THE REQUESTER'S HALF IS NOT MISSING AND MUST NOT BE RE-DERIVED.
-//            `zhao_geom_drawjob` already holds `form_idx_q [23:0]` =
-//            `d_form_i[31:8]`, and `zref_creature_page.hpp`'s own header names
-//            that exact expression as the hardware key ("THE KEY IS THE
-//            MESH_STREAM HANDLE INDEX, NOT AN INVENTED TYPE ID"). It is VALID
-//            FOR THE WHOLE DRAW: `d_ready_o` is `(st_q == S_IDLE)`, so the FSM
-//            cannot admit a second draw while the first is in S_CHECK..S_EMIT,
-//            and the register that holds it is loaded by the SAME enable that
-//            admits the draw. It is therefore NOT entry I39's failure -- there
-//            is no second pipeline stage for it to move on ahead of. In S_IDLE
-//            it holds the PREVIOUS draw, so any exposure must be qualified by
-//            state, not offered bare. It is EXPOSABLE, NOT INVENTABLE.
-//
-//            WHAT IS MISSING IS THE BANK'S HALF, on both kinds, and a
-//            comparison with one operand is not a comparison:
-//              - kind 9: `zref::clip_page`'s header is {magic, version,
-//                bone_count, clip_count, dir_off, frames_off} -- no form index,
-//                no type key, no handle.
-//              - kind 8: the LADDER TABLE keys every record by `form_index`,
-//                but the BODY -- the half `zhao_geom_clipread` reads -- does
-//                not. MEASURED on the committed golden
-//                `ladder_page_body_v1.bin`: THREE ladder records (form_index
-//                256, 257, 40983) and `body_off` 192 naming ONE 6-bone body.
-//                `mkcreatureladder.py:build` makes that the FORMAT, taking a
-//                LIST of records beside a SINGLE bone list.
-//
-//            SO ONE KIND-8 PAGE IS AN N-FORM TABLE PLUS A 1-CREATURE SKELETON,
-//            and `spec/creature_rules.md` 5 reads kind 8 as ONE creature while
-//            `zhao_geom_ladderbank` reads it as a ROWS=16 bank. THAT CARDINALITY
-//            CONFLICT IS THE DECISION, and it is larger than the one field
-//            POSEREAD costed: a ruling that keys only the kind-9 header leaves
-//            the skeleton unattributed, and a well-formed palette for the wrong
-//            animal is reachable through the BODY exactly as through the bank,
-//            with `bone_mismatch_o` blind to both when the bone counts agree.
-//            DECIDED 2026-09-21 AND IMPLEMENTED (packet FORMOWN). The owner
-//            ruling is `reports/Zhaozhou_kind8_kind9_proposed_owner_ruling_
-//            2026-09-21.txt`, pushed by the owner with the commit message
-//            "Agent please read - The ruling you wanted". BLOCKER (c) IS GONE;
-//            what it asked for now exists in bytes, in the reference, in both
-//            packers, in the RTL and in tests. In the ruling's own terms:
-//
-//              * THREE IDENTITIES, KEPT APART. FORM identity is the 24-bit
-//                MESH_STREAM index a page NAMES. RESOURCE identity is the
-//                publication's own index plus its full 16-bit generation.
-//                INSTANCE identity is the draw. "Bone count, loader order,
-//                first ladder row, physical slot, and equality of publication
-//                indices are NOT proofs of form ownership." `zhao_geom_clipread`
-//                reports form identity on `res_body_owner_o`/`res_clip_owner_o`
-//                BESIDE resource identity on `res_*_index_o`/`res_*_gen_o`, and
-//                the directed test loads one creature under two different
-//                resource indices so the two cannot be confused for one number.
-//
-//              * THE BYTES. One aligned little-endian u32 per semantic u24:
-//                bits 23:0 the owner form index, bits 31:24 MUST be zero and
-//                are REFUSED rather than masked. BODY header (TCB8) bytes
-//                16..19; CLIP_BANK header (ZCLP) bytes 20..23. Both headers
-//                stay 64 bytes -- the words went into EXISTING padding, so the
-//                clip golden is still 704 bytes and no bone record, clip
-//                record, frame stride or `body_off` semantic moved. Index zero
-//                is NOT a sentinel; a page owned by form 0 is an ordinary page
-//                and is served.
-//
-//              * THE VERSIONS ARE SPLIT, NOT BUMPED. BODY v2 and CLIP_BANK v2;
-//                this page kind's OUTER ZCFM header and the ladder format stay
-//                v1. `zhao_geom_clipread` had ONE `VERSION` constant and now
-//                has FORM_VERSION / BODY_VERSION / CLIP_VERSION, for the
-//                ruling's stated reason: "merely changing that single constant
-//                to 2 would reject the still-v1 outer header." A BODYLESS
-//                outer-v1 ladder page stays legal and the bench asserts it
-//                raises no fault counter.
-//
-//              * THE CARDINALITY CONFLICT IS RESOLVED BY KEEPING BOTH HALVES.
-//                Kind 8 stays an N-FORM LADDER TABLE plus at most ONE
-//                explicitly named skeleton. The body does NOT become the
-//                skeleton for every row; the other records stay independently
-//                owned metadata. A body-bearing page must carry a LADDER RECORD
-//                for its body's owner, and the committed golden's body is owned
-//                by its SECOND row on purpose so "read the owner word" and
-//                "read row zero" are separable measurements.
-//
-//              * THE PRODUCER IS EXPOSED, NOT INVENTED, AND LANDED WITH ITS
-//                CONSUMER. `zhao_geom_drawjob.j_form_idx_o` is `form_idx_q`
-//                itself, all 24 bits, driven from the register ONLY while
-//                `j_valid_o` is high -- because in that block's S_IDLE it still
-//                holds the PREVIOUS draw, which is why this entry said it must
-//                be qualified by state and never offered bare. It reaches this
-//                module's edge as `geom_job_valid_o` / `geom_job_form_idx_o`,
-//                for the same reason the R229 pose key is at the edge: an
-//                output nobody reads lets synthesis delete the registers behind
-//                it and the next fit prices the lane at zero. The CONSUMER,
-//                `zhao_geom_clipread.p_form_idx_i`, landed in the same commit
-//                and refuses any request whose form is not the form BOTH
-//                resident sections name, counting it on `owner_mismatch_o` --
-//                which is deliberately neither `clip_miss_o` (a miss is a
-//                question this bank could have answered) nor `not_resident_o`
-//                (something IS loaded; it belongs to somebody else).
-//
-//              * THE COMPARISON IS NOT BLIND, which is this tree's own hardest
-//                law. Three operands with three independent loads:
-//                `p_form_idx_i` arrives combinationally from the draw,
-//                `body_owner_q` is written in S_BR_FILL out of a kind-8
-//                publication, `clip_owner_q` in S_CD_ROW out of a kind-9 one.
-//                No single register enable moves two sides of it. And the owner
-//                read out of a header is STAGED, committed only beside
-//                `body_v_q`/`clip_v_q` -- adopting it at the header would leave
-//                a read DENIED mid-walk with the previous skeleton resident
-//                wearing the new page's identity.
-//
-//              * IT DISCRIMINATES, AND THE PROOF IS A COMMITTED MUTANT.
-//                `owner_mismatch_o` fires five times under legal stimulus with
-//                the matched triple silent beside it (R95). Draw A/body A/clips
-//                B, draw A/body B/clips A and draw B/body A/clips A are all
-//                refused AT IDENTICAL BONE COUNTS, clip ids, frame counts and
-//                frame numbers, with `bone_mismatch_o` asserted SILENT
-//                throughout -- 6 bones under 6 bones agrees perfectly, which is
-//                exactly the blindness this entry predicted. The two forms
-//                differ ONLY in bits 23:16, so every refusal would be a HIT on
-//                a 16-bit key. `tests/mutants/zhao_geom_clipread_ownerblind_
-//                mutant.sv` removes the one expression and the block then
-//                serves draw A from creature B's bank -- six quaternion words
-//                of a foreign palette into the store with every counter green.
-//
-//              * THE POSE CACHE'S TWO OBLIGATIONS (ruling section 4), which the
-//                header change alone does not satisfy, are done too.
-//                `zhao_geom_pose_cache.acq_type_i` and its stored tag were 16
-//                bits against a 24-bit form index, so 0x000100 and 0x010100
-//                were one key; TYPE_W now parameterises it at 24 in production
-//                with an elaboration guard FIRED at -GTYPE_W=8, and the alias
-//                is asserted distinct on the hit path as well as the miss path.
-//                And `acq_body_idx_i` / `acq_body_gen_i` / `acq_clip_idx_i`
-//                join the clip generation so a BODY-ONLY republication cannot
-//                hit a stale palette -- no field is compared to another field
-//                anywhere in that file, because the two generations belong to
-//                independent publications.
-//
-//            WHAT (c) DID NOT BUY, stated because the ruling says so in terms:
-//            "Ownership is not resource discovery. Two owner fields make the
-//            association VERIFIABLE. They do not tell a loader which of several
-//            nonresident resource pages to fetch ... do not call I29 closed
-//            merely because these fields exist." The one-body/one-directory
-//            staging tier is unchanged and is still the measured tier.
-//
-//            SO WHAT REMAINS OF I29 IS THE COMPOSITION AND THE WALK: the sixth
-//            `u_geom_mem_adapter` requester (an in-core edit at
-//            `zhao_mem_share_n` N = 5 -> 6, no boundary port), and the instance
-//            walk that turns an accepted draw into a `pose_requests` beat --
-//            which is what `geom_job_valid_o`/`geom_job_form_idx_o` now carry
-//            the identity half of. Composing `zhao_geom_clipread` with
-//            `zhao_geom_bonesrc` is a SUBSYSTEM boundary and owes one fit.
-//            See FINDINGS-formown.md; FINDINGS-formidx's re-costed options are
-//            superseded by the ruling.
-//
-//            [the original 2026-09-21 text of blocker (b), kept because the
-//             reasoning that produced D-POSEPAGE-A is the record of why the
-//             opcode exists:]
-//            So building the page reader and the sixth requester gives this
-//            entry REAL BYTES and still no statement of WHICH FRAME. That is
-//            an ABI addition and therefore an owner decision, filed as
-//            D-POSEPAGE-A. The precedent is in this tree: ruling W04 appended
-//            `DrawWarpedForm` at 0x0304 rather than widening `DrawForm`, and
-//            appended it at the END precisely so nine goldens are not rewritten.
-//            W09 gives the companion rule -- "PRESERVE THE ORDINARY PATH" --
-//            which here means `DrawForm` keeps meaning BIND POSE and does not
-//            move a byte.
-//
-//            THREE FACTS FOR WHOEVER DRAFTS IT, each checked rather than
-//            assumed, because the confident one-line version of this is where
-//            the error would live:
-//              - 0x0304 IS SPOKEN FOR. W04 allocates it and it is not yet in
-//                `spec/commands.zidl` at this commit (its lane is live), so the
-//                next free draw opcode is 0x0305, not 0x0304.
-//              - `abi version` DOES NOT BUMP. The obvious reading -- "a new
-//                opcode is a wire change, so 3 -> 4" -- is the SetEnvironment
-//                0x0311 precedent and it has been superseded four times since:
-//                TerrainEpoch, SubmitTerrainSet, PublishResource 0x0030, SetPost
-//                and SetGradeTable all added opcodes and all "STAY 3", because
-//                an additive opcode moves no existing opcode, field set or size
-//                and a older decoder answers ZH_ABI_UNKNOWN_OPCODE, which is a
-//                clean refusal. Declare it LAST so no golden's sample values
-//                shift.
-//              - THE BYTES ALREADY REACH VRAM. `PublishResource 0x0030` carries
-//                a `u8 kind`, so a CLIP_BANK page publishes today exactly as a
-//                CREATURE_FORM one does. What is missing is only WHICH FRAME to
-//                decode, never how the page arrives.
-//              - `sub` IS NOT PADDING. `zhao_geom_pose_cache`'s own header
-//                records that without it "a key and its 60 Hz midpoint alias
-//                and the cache returns the wrong palette", and the 2026-09-03
-//                ruling permits baked 60 Hz for EVERY creature.
-//
-//      AND THE RULING THAT GOVERNS THE PRODUCER'S SHAPE, which this entry has
-//      never cited: `reports/ZHAOZHOU_ANIMATION_HPS_RESIDENCY_ARCHITECTURE.md`,
-//      OWNER-RATIFIED 2026-09-03, whose scope line is "creature clip-bank
-//      storage ... and the GEOM.POSE memory seam". Its 10.1 rules that the
-//      decision "requires no new animation-specific arithmetic block and no
-//      direct GEOM.POSE connection to MEM.HPS.BRIDGE"; its 6 makes FRAME
-//      SEALING conditional on residency so GEOM.POSE never waits on a page;
-//      and its 4.2 freezes "frame packets refer to validated resident
-//      animation resources, never naked long-lived local-SDRAM addresses"
-//      while saying in terms that "the exact command-record representation is
-//      deferred". THAT DEFERRAL IS BLOCKER (b), named by the owner eighteen
-//      days before this entry was written and never read back into it.
-//
-//      ONE CONSEQUENCE FOR WHOEVER BUILDS THE READER, from this subsystem's
-//      own committed mutant. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv`
-//      models "a page read that misses can easily exceed 115 cycles" against
-//      the decoder's measured 115.4 cycles per bone. So the reader must fill
-//      BOTH stores WHOLE before it raises `req_i`, exactly as
-//      `zhao_geom_ladderbank` adopts a page before it answers a lookup -- never
-//      per-bone behind the decode. A reader that fetched on demand would turn
-//      `bone_prefetch_late_o` from a dead counter into a live fault, which is
-//      the one thing that mutant exists to say.
-//
-//      Until those are settled this stays a gap, and the reason is now ONE
-//      thing rather than three: an absent CARRIER for the clip and frame.
-//      The freeze is lifted, the bytes are authored on both page kinds, the
-//      store is built and priced, and the memory model was never missing.
-//
-//      WHAT IS NOT PART OF THIS GAP, because the distinction is the whole
-//      point of closing I10: the palette STORE is present and internal. A
-//      decoded palette written by the block above is read by GEOM.SKIN through
-//      `zhao_geom_pose_palette` with nothing external in between, and the
-//      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
-//      before its pose did. The missing thing is the BYTES, not the path.
-//
-// (I32 CLOSED 2026-09-21 (gz/terrabake). SURFACE.STAMP's `stamp_results`
-//      (`surf_res_*`) has its named consumer: TERRAIN.BAKE is COMPOSED in this
-//      module, `zhao_terrain_sheetseam` takes `res_before_o` into the plane the
-//      dig differences against, and `surf_res_ready_i` has LEFT this module's
-//      port list rather than being driven from it. The entry is DELETED rather
-//      than marked, for the reason the I4 note above gives -- a stale closed
-//      entry under-reports progress exactly as deleting an open one would
-//      over-report it -- and what follows is the closure against its own text,
-//      because eight lanes refused this seam and each was owed an answer.
-//
-//      THE ENTRY's FINAL FORM LISTED FOUR HOLDS. Every one is now spent:
-//
-//        * THE LAYER-F READER. Built 2026-09-20 (seamdig) under owner ruling
-//          R194 and amended to a DELTA 2026-09-21 (deltalaw) under R231.
-//        * THE ARBITER. `zhao_surface_sheetshare`, composed above as
-//          `u_surface_sheetshare` -- the two-client round robin this entry
-//          specified BY TYPE, with SURFACE.STAMP client A and the seam client
-//          B, OP_READ and nothing else on the second port.
-//        * THE PAGE PORTS. "LAYER D HAS NO READER ANYWHERE IN THE MACHINE"
-//          and "`sc_*` HAS NO CONSUMER ANYWHERE IN THIS TREE" were both true
-//          and are both false now: `u_terrain_pageio` reads layer D for the
-//          corner shadow and the breach phase, and writes layers B and D back
-//          through requester 3 of `u_build_share`. The A/B/C push-to-pull join
-//          the entry asked for is `tbk_vtx_valid_c` at the bake instance: an
-//          AND of two valids with the cursor equality ASSERTED, because both
-//          walkers run vi-fast from (0,0) and that agreement is checked rather
-//          than assumed.
-//        * THE `cmd_*` RECORD. `zhao_terrain_bakerec` is the "THIRD BLOCK
-//          BETWEEN THEM" this entry commissioned. `cmd_cells_i` is now a
-//          statement about the composition (pageio serves layer D);
-//          `cmd_dual_i` is TERRAIN.PAGESTREAM's own `kFlagDual`, carried from
-//          the header reader's forwarded job; and `cmd_depth_from_i` /
-//          `cmd_depth_to_i` are ZERO ON PURPOSE with the whole argument in
-//          that block's header -- a record from a stamp is a SHEET record, the
-//          disc arm belongs to a different producer (a cast's progress), and
-//          on an R221 fallback the record digs nothing and is RE-QUEUED rather
-//          than digging an absolute depth into an accumulating scar, which is
-//          the defect R231 had just repaired. The seam does not consume its
-//          before-plane on a fallback -- `bf_live_q` is cleared only
-//          `if (serve_q)` -- so the deferral is exact, which is D-TERRCMD-C's
-//          own test and the reason the delta law passes it where the absolute
-//          law could not.
-//
-//      WHAT WAS LEFT STANDING AND IS NOW SOMEBODY ELSE's: the entry's
-//      D-TERRCMD-B observed that a DISC record cannot be formed from the ABI
-//      at all, and that remains true. It is no longer a blocker here because
-//      nothing in this console needs one: the disc arm is the FIELD
-//      subsystem's, for section 9.2's "(to - from) x stencil so an interrupted
-//      cast un-applies", and it will arrive with the cast producer.
-//
-//      AND THE PORT DELETIONS, listed so the next reader can check them: eight
-//      `terr_dm_*`, four `terr_cc_cs_*` and `surf_res_ready_i` left the edge.
-//      `surf_res_taken_o` was ADDED in the last one's place so the accept
-//      stays observable -- the smoke's `records == texels_touched` assertion
-//      measures an accept, and an assertion that silently began measuring the
-//      OFFER would have been a gate quietly losing its meaning.)
 //
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
@@ -7345,20 +6927,28 @@ module zhao_console_core
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
-  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
-  // These leave the module ON PURPOSE, and the purpose is measurement rather
-  // than routing. The consumer is GEOM.MESHFETCH's instance walk, which does
-  // not exist -- that is entry I29 blocker (b), and supplying this carrier is
-  // what ruling R229 ratified. R229 is equally explicit that ratifying the
-  // command "does not by itself enable the RTL reader", so none is built here.
+  // ---- R229: DrawPosedForm 0x0305's animation key -------------------------
+  // NO LONGER A BOUNDARY FOR THREE OF THE FOUR. Corrected 2026-09-22 with
+  // I29's closure. The paragraph here used to read "The consumer is
+  // GEOM.MESHFETCH's instance walk, WHICH DOES NOT EXIST -- that is entry I29
+  // blocker (b)". The walk exists: it is the fifteen registers beside
+  // `u_geom_drawjob`, and `cmd_draw_posed_o`, `cmd_draw_clip_id_o` and
+  // `cmd_draw_frame_no_o` are READ IN THIS FILE now -- the first gates the
+  // draw admit, all three are captured on the accept.
   //
-  // WHY NOT LEAVE THEM AS UNCONSUMED INTERNAL WIRES. Because an output nobody
-  // reads lets synthesis delete the logic BEHIND it, and this block's own
-  // header states the consequence: a fit would then report the pose lane's
-  // registers as free. The tie-off block warns about a constant on a wide
-  // INPUT for exactly this reason; an unread output is the same lie in the
-  // other direction. At the edge, the capture registers survive and the next
-  // fit prices them honestly.
+  // `cmd_draw_sub_o` IS STILL UNCONSUMED, and that is deliberate rather than
+  // an omission: it is the POSE CACHE's key discriminator for the 60 Hz
+  // midpoint, and `zhao_geom_clipread` has no port for it because that block
+  // fetches an AUTHORED frame. Carrying it into the walk would be a second
+  // copy of a field whose owner is elsewhere.
+  //
+  // THEY STAY AT THE EDGE ANYWAY, and the reason is unchanged and still good:
+  // an output nobody reads lets synthesis delete the logic BEHIND it, and a
+  // fit would then report the pose lane's capture registers as free. The
+  // tie-off block warns about a constant on a wide INPUT for exactly this
+  // reason; an unread output is the same lie in the other direction. Having
+  // an in-core consumer as well does not make the observation redundant --
+  // it makes the two agree.
   //
   // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
   // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
@@ -7368,7 +6958,7 @@ module zhao_console_core
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
 
-  // ---- the ACCEPTED JOB's FORM INDEX -- BOUNDARY, entry I29 ----------------
+  // ---- the ACCEPTED JOB's FORM INDEX -- entry I29, CLOSED ------------------
   // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
   // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
   // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
@@ -7386,11 +6976,54 @@ module zhao_console_core
   // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
   // is the valid, exactly as for every other job field.
   //
-  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: the consumer
-  // (`zhao_geom_clipread.p_form_idx_i`, built and differenced in this same
-  // commit) is not composed, and this file's own R229 paragraph gives the
-  // rule for that case -- an output nobody reads lets synthesis delete the
-  // logic behind it and a fit then reports the lane's registers as free.
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: it used to be because
+  // the consumer was not composed. `zhao_geom_clipread` IS composed since
+  // 2026-09-22, so the reason is now the plain one -- this is the ownership
+  // ruling's EXPOSED IDENTITY, and an output nobody reads lets synthesis
+  // delete the logic behind it.
+  //
+  // **AND IT IS NOT WHAT THE INSTANCE WALK READS.** Stated here because the
+  // paragraph above says "Reading `cmd_draw_form_w` instead would be
+  // precisely the 'unrelated live register' the ruling names", and the walk
+  // reads exactly that -- so the apparent contradiction is resolved in the
+  // file rather than left for the next reader to trip over.
+  //
+  // The ruling forbids a form index "RE-DERIVED FROM AN UNRELATED LIVE
+  // REGISTER LATER". The walk's capture is neither later nor unrelated: it
+  // takes `cmd_draw_form_w[31:8]` on the SAME handshake and by the SAME
+  // expression that loads `zhao_geom_drawjob`'s `form_idx_q`, out of the same
+  // `dq` entry that carries the clip id. One enable, one entry, no drift --
+  // which is the property the ruling's sentence exists to secure. Taking
+  // `dj_j_form_idx` instead and pairing it with a clip id captured a stage
+  // earlier would REINTRODUCE the drift, because that is two registers loaded
+  // by two enables: entry I39's fault exactly.
+  //
+  // WHAT THE WALK GIVES UP BY CAPTURING EARLY, declared rather than
+  // discovered. `zhao_geom_drawjob` validates the handle against real
+  // residency AFTER the command accept and can refuse the draw nine ways
+  // (`dj_refused_*`). A pose request captured at the accept is therefore
+  // issued for a draw that may never become geometry. Two consequences, both
+  // bounded and neither a wrong-animal palette -- a refused draw's pose is
+  // its OWN creature's pose, correctly labelled, and `owner_mismatch_o`
+  // compares against the resident page either way:
+  //
+  //   1. a wasted frame fetch on requester G, counted by `geom_cr_frames_o`
+  //      against `geom_dj_draws_o`;
+  //   2. THE PALETTE CAN OUTLIVE ITS DRAW. `pal_begin_i` is the store's
+  //      `start_o`, so a BIND-POSE draw raises nothing and skins against
+  //      whatever pose was decoded last. Today that is unreachable -- nothing
+  //      in this tree issues a 0x0305 into the console, so no decode ever
+  //      starts and every bone reads unset and substitutes the identity, which
+  //      is what `geom_pal_bone_unset_o` reports. It becomes reachable the
+  //      moment a posed draw is issued.
+  //
+  // THE REPAIR IS ONE LINE AND IS DELIBERATELY NOT MADE HERE: raise
+  // `pal_begin_i` on a bind-pose draw accept as well, so `DrawForm` 0x0300
+  // makes the previous pose unreadable exactly as a new decode does -- which
+  // is what R229 means by "DrawForm keeps its meaning as BIND POSE". It is a
+  // BEHAVIOURAL change and this packet measured the tree without it; shipping
+  // an unmeasured behaviour change beside a measured composition is how a
+  // clean smoke stops describing the thing that ships.
   output logic                     geom_job_valid_o,
   output logic [23:0]              geom_job_form_idx_o,
   // Evidence, not a boundary -- the same standing as the three counters above.
@@ -7401,7 +7034,9 @@ module zhao_console_core
   // Same standing as the pose lane directly above, same argument, and one
   // difference worth stating because it decides what the NEXT packet does.
   //
-  // The pose lane's consumer does not exist. THIS ONE DOES:
+  // The pose lane's consumer DID NOT EXIST when this was written; it does
+  // since 2026-09-22 (I29 closed), so the difference below is no longer a
+  // difference -- both lanes have in-core consumers now. THIS ONE DOES:
   // `fpga/rtl/geometry/zhao_geom_warp.sv` is BUILT and TESTED (2,468 directed
   // checks) and its `d_warp_en_i` / `d_slot_i` / `d_time_i` / `d_par_i` /
   // `d_bx_i` port group is this bus, field for field. What is missing is not
@@ -7630,27 +7265,84 @@ module zhao_console_core
   output logic [31:0]             geom_light_nlights_clamped_o,
   output logic [31:0]             geom_light_adapter_refused_o,
 
-  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
-  // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
-  // decoder's own SOURCE is what is now missing, and this is it. See I29.
-  input  logic                    geom_pose_start_i,
-  input  logic [5:0]              geom_pose_bone_count_i,
-  input  logic signed [31:0]      geom_pose_root_dx_i,
-  input  logic signed [31:0]      geom_pose_root_dy_i,
-  input  logic signed [31:0]      geom_pose_root_dz_i,
+  // ---- I29 IS CLOSED 2026-09-22: the clip page and the skeleton bake -------
+  // FOURTEEN INPUTS LEFT THIS LIST RATHER THAN BEING DRIVEN. They were the
+  // decoder's own per-bone source -- `geom_pose_start_i`, the bone count, the
+  // root displacement, the parent, the three rest translations, the four
+  // quaternion lanes and the twelve-element inverse-rest matrix -- and the
+  // producer they were waiting for is now composed: `zhao_geom_clipread` reads
+  // a kind-8 BODY and a kind-9 CLIP FRAME through requester G of
+  // `u_geom_mem_adapter`, fills `zhao_geom_bonesrc`, and the store answers the
+  // decoder combinationally. See the composition beside `u_geom_drawjob` and
+  // the closed ledger entry in the header.
+  //
+  // `geom_pose_bone_idx_o` STAYS. It is the decoder's index into the store and
+  // it is read INSIDE now, so this port is observation, not the thing keeping
+  // the register alive.
   output logic [4:0]              geom_pose_bone_idx_o,
-  input  logic [4:0]              geom_pose_bone_parent_i,
-  input  logic signed [31:0]      geom_pose_bone_tx_i,
-  input  logic signed [31:0]      geom_pose_bone_ty_i,
-  input  logic signed [31:0]      geom_pose_bone_tz_i,
-  input  logic signed [15:0]      geom_pose_quat_w_i,
-  input  logic signed [15:0]      geom_pose_quat_x_i,
-  input  logic signed [15:0]      geom_pose_quat_y_i,
-  input  logic signed [15:0]      geom_pose_quat_z_i,
-  input  logic signed [31:0]      geom_pose_inv_rest_i [0:11],
   output logic                    geom_pose_busy_o,
   output logic                    geom_pose_done_o,
   output logic [31:0]             geom_pose_palettes_decoded_o,
+
+  // ---- I29's INSTANCE WALK: what it accepted, and what it cost ------------
+  // `geom_pose_requests_o` counts POSED draws whose {form, clip_id, frame_no}
+  // were captured off one command packet on one enable. `geom_pose_walk_holds_o`
+  // counts the cycles a posed draw waited for the reader's one request slot --
+  // the throughput price of refusing to drop a pose key, stated as a number
+  // rather than as a claim that it is small.
+  output logic [31:0]             geom_pose_requests_o,
+  output logic [31:0]             geom_pose_walk_holds_o,
+
+  // ---- I29's PAGE READER (`zhao_geom_clipread`) ---------------------------
+  // WHICH RESOURCE ANSWERED and WHICH FORM each resident section claims. The
+  // 2026-09-21 ownership ruling keeps three identities apart and its section 5
+  // says to "record the selected resource identities"; `geom_cr_*_index_o` /
+  // `geom_cr_*_gen_o` are RESOURCE identity (which publication) and
+  // `geom_cr_*_owner_o` is FORM identity (which creature the page NAMES).
+  // They are not derived from one another and a body and its clip bank are
+  // published under two independent resource indices while naming one form.
+  output logic [23:0]             geom_cr_body_index_o,
+  output logic [15:0]             geom_cr_body_gen_o,
+  output logic [23:0]             geom_cr_clip_index_o,
+  output logic [15:0]             geom_cr_clip_gen_o,
+  output logic [23:0]             geom_cr_body_owner_o,
+  output logic [23:0]             geom_cr_clip_owner_o,
+  // The census.
+  output logic [31:0]             geom_cr_bodies_o,
+  output logic [31:0]             geom_cr_clips_o,
+  output logic [31:0]             geom_cr_frames_o,
+  // The faults. `geom_cr_owner_mismatch_o` is the one to watch: it is the
+  // refusal of a request whose form is not the form BOTH resident sections
+  // name, and it is deliberately neither a miss nor a residency failure. It
+  // discriminates under legal stimulus at IDENTICAL bone counts, with
+  // `geom_cr_bone_mismatch_o` silent beside it -- which is exactly the
+  // blindness a bone-count check has and this one does not.
+  output logic [31:0]             geom_cr_pages_dropped_o,
+  output logic [31:0]             geom_cr_bad_magic_o,
+  output logic [31:0]             geom_cr_truncated_o,
+  output logic [31:0]             geom_cr_misaligned_o,
+  output logic [31:0]             geom_cr_bad_bone_count_o,
+  output logic [31:0]             geom_cr_bone_mismatch_o,
+  output logic [31:0]             geom_cr_overflow_o,
+  output logic [31:0]             geom_cr_not_rigid_o,
+  output logic [31:0]             geom_cr_reserved_nz_o,
+  output logic [31:0]             geom_cr_denied_o,
+  output logic [31:0]             geom_cr_clip_miss_o,
+  output logic [31:0]             geom_cr_frame_oob_o,
+  output logic [31:0]             geom_cr_not_resident_o,
+  output logic [31:0]             geom_cr_owner_mismatch_o,
+  output logic                    geom_cr_busy_o,
+
+  // ---- I29's STORE (`zhao_geom_bonesrc`) ----------------------------------
+  // `geom_bs_prefetch_late_o` is the one that says the arrangement holds: the
+  // store buys the decoder's one missing cycle with a two-deep prefetch given
+  // ~115 cycles of notice, and this counter is what fires if that notice ever
+  // stops being true. `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` is
+  // its positive control.
+  output logic [31:0]             geom_bs_prefetch_late_o,
+  output logic [31:0]             geom_bs_rest_nonrigid_o,
+  output logic [31:0]             geom_bs_reserved_nz_o,
+  output logic [31:0]             geom_bs_fills_o,
 
   // ---- GEOM.POSE's palette store: its evidence ----------------------------
   // `geom_pal_bone_unset_o` is the one to watch. It is the store's own report
@@ -7796,6 +7488,9 @@ module zhao_console_core
   // Requester F of the ENGINE1 share -- the page bank's own traffic, separable
   // from the other five so the scan's cost is a NUMBER rather than an argument.
   output logic [31:0] geom_ma_jobs_f_o,
+  // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
+  // 2026-09-22). Its traffic is per creature publication and per POSED draw.
+  output logic [31:0] geom_ma_jobs_g_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
@@ -11161,9 +10856,12 @@ module zhao_console_core
   // never contain would have been the palette memory written inline here, and
   // it is a named, tested, separately-linted block instead.
   //
-  // WHAT IS STILL MISSING IS ONE LEVEL UP: the decoder's own source -- the clip
-  // page and the skeleton bake -- has no producer in this tree. That is entry
-  // I29, and it is a smaller and more precisely named gap than I10 was.
+  // WHAT WAS STILL MISSING ONE LEVEL UP -- the decoder's own source, the clip
+  // page and the skeleton bake -- WAS ENTRY I29, AND IT CLOSED 2026-09-22.
+  // The source is `zhao_geom_bonesrc`, filled by `zhao_geom_clipread` through
+  // requester G of `u_geom_mem_adapter`; both are composed beside
+  // `u_geom_drawjob`. This sentence is corrected rather than deleted because
+  // it is the one a reader lands on when asking what feeds the palette.
   //
   // THE REFUSAL PATH IS FORWARDED, NOT DROPPED. `d_refused_o` is raised
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
@@ -11296,6 +10994,33 @@ module zhao_console_core
   );
 
   // --------------------------------------------------------------------------
+  // I29's SOURCE SIDE, DECLARED HERE AND DRIVEN BELOW.
+  //
+  // `u_geom_bonesrc` and `u_geom_clipread` are instantiated down in the
+  // geometry-memory region, beside `u_geom_drawjob` and `u_geom_mem_adapter`,
+  // because that is where the publication row, the draw handshake and the
+  // asset-window requester all already are. The decoder is up HERE, so the
+  // wires between them are declared at this end and connected at that one --
+  // an ordering, not two owners.
+  //
+  // WHAT EACH ONE IS, so that "it has the right name and the right width" is
+  // never the argument. `bs_*` are `zhao_geom_bonesrc`'s COMBINATIONAL answers
+  // for the bone the decoder is currently naming on `bone_idx_o`; they are
+  // valid in the SAME cycle as that index, which is the decoder's own contract
+  // (`zhao_geom_pose_decode.sv`, its fetch section). `cr_root_d*` are the
+  // FRAME's root displacement, held by the reader from the fill until the next
+  // frame replaces it, so it is stable across the whole decode it belongs to.
+  // --------------------------------------------------------------------------
+  wire                     bs_start_c;
+  wire [4:0]               bs_bone_idx_c;      // the decoder's index, into the store
+  wire [4:0]               bs_bone_parent_c;
+  wire signed [31:0]       bs_bone_tx_c, bs_bone_ty_c, bs_bone_tz_c;
+  wire signed [15:0]       bs_quat_w_c, bs_quat_x_c, bs_quat_y_c, bs_quat_z_c;
+  wire signed [31:0]       bs_inv_rest_c [0:11];
+  wire [5:0]               cr_src_bone_count_c;
+  wire signed [31:0]       cr_root_dx_c, cr_root_dy_c, cr_root_dz_c;
+
+  // --------------------------------------------------------------------------
   // GEOM.POSE's decoder. Its palette output now has a consumer, which is the
   // whole reason it is composed here: an instantiation with nothing reading it
   // would be a disconnected implementation with extra steps.
@@ -11311,23 +11036,41 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I29: the clip page and the skeleton bake have no producer in this tree.
-    .start_i       (geom_pose_start_i),
+    // I29 CLOSED 2026-09-22. The source is `zhao_geom_bonesrc`, filled by
+    // `zhao_geom_clipread` out of a kind-8 BODY and a kind-9 CLIP FRAME.
+    //
+    // `start_i` IS THE STORE'S OWN `start_o`, NOT THE READER'S HANDOVER, and
+    // the difference is the whole reason the store has that port: bone 0 must
+    // be on these wires before the decoder begins, so the store answers the
+    // request one cycle late, when its prefetch has landed. Wiring the
+    // reader's `src_req_o` straight here would start a decode against the
+    // PREVIOUS frame's bone 0 -- the fault `bone_prefetch_late_o` counts and
+    // `tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv` exists to model.
+    //
+    // `bone_count_i` is the READER's count, not a second opinion about it: it
+    // is the same register the reader handed the store on the same handshake,
+    // and it is the count both resident sections agreed on -- the reader's
+    // `bone_mismatch_o` refuses the pair when they do not.
+    .start_i       (bs_start_c),
     .busy_o        (geom_pose_busy_o),
-    .bone_count_i  (geom_pose_bone_count_i),
-    .root_dx_i     (geom_pose_root_dx_i),
-    .root_dy_i     (geom_pose_root_dy_i),
-    .root_dz_i     (geom_pose_root_dz_i),
-    .bone_idx_o    (geom_pose_bone_idx_o),
-    .bone_parent_i (geom_pose_bone_parent_i),
-    .bone_tx_i     (geom_pose_bone_tx_i),
-    .bone_ty_i     (geom_pose_bone_ty_i),
-    .bone_tz_i     (geom_pose_bone_tz_i),
-    .quat_w_i      (geom_pose_quat_w_i),
-    .quat_x_i      (geom_pose_quat_x_i),
-    .quat_y_i      (geom_pose_quat_y_i),
-    .quat_z_i      (geom_pose_quat_z_i),
-    .inv_rest_i    (geom_pose_inv_rest_i),
+    .bone_count_i  (cr_src_bone_count_c),
+    .root_dx_i     (cr_root_dx_c),
+    .root_dy_i     (cr_root_dy_c),
+    .root_dz_i     (cr_root_dz_c),
+    // COMBINATIONAL BY CONTRACT: the index leaves here and the answers come
+    // back in the SAME cycle. That is why the source is a STORE and not a
+    // stream, and it is why `zhao_geom_bonesrc` holds a two-deep prefetch
+    // rather than an asynchronous array -- 830 ALM against 14,056.
+    .bone_idx_o    (bs_bone_idx_c),
+    .bone_parent_i (bs_bone_parent_c),
+    .bone_tx_i     (bs_bone_tx_c),
+    .bone_ty_i     (bs_bone_ty_c),
+    .bone_tz_i     (bs_bone_tz_c),
+    .quat_w_i      (bs_quat_w_c),
+    .quat_x_i      (bs_quat_x_c),
+    .quat_y_i      (bs_quat_y_c),
+    .quat_z_i      (bs_quat_z_c),
+    .inv_rest_i    (bs_inv_rest_c),
 
     // REAL: one bone per beat, into the palette store.
     .out_valid_o (pd_out_valid),
@@ -11355,7 +11098,12 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    .pal_begin_i (geom_pose_start_i),
+    // I29 CLOSED: the store's `start_o`, which is what `u_geom_pose_decode`
+    // takes on `start_i`. Still one pulse and not a copy of one -- the whole
+    // argument below is that the pulse beginning a decode is exactly the pulse
+    // making the previous pose unreadable, and that is as true of the store's
+    // start as it was of the boundary's.
+    .pal_begin_i (bs_start_c),
 
     // REAL: from GEOM.POSE's decoder.
     .wr_valid_i (pd_out_valid),
@@ -19803,9 +19551,56 @@ module zhao_console_core
     .framing_err_o(geom_dj_hdr_framing_o)
   );
 
+  // ---- I29's declarations, ahead of their first use -----------------------
+  // `pw_pend_q` is read by `cmd_draw_ready_w` immediately below and driven by
+  // the instance walk further down; `cr_p_ready_c` is read by that walk and
+  // driven by `u_geom_clipread` below it. Declared here, once, so nothing in
+  // this file refers forward.
+  logic            pw_pend_q;
+  logic [23:0]     pw_form_q;
+  logic [15:0]     pw_clip_q;
+  logic [15:0]     pw_frame_q;
+  zhao_guard_req_t cr_guard_req;
+  zhao_guard_rsp_t cr_guard_rsp;
+  wire             cr_beat_valid;
+  wire [63:0]      cr_beat_data;
+  wire             cr_p_ready_c;
+  wire             cr_fill_we_c, cr_fill_sel_c;
+  wire [4:0]       cr_fill_bone_c;
+  wire [3:0]       cr_fill_word_c;
+  wire [63:0]      cr_fill_data_c;
+  wire             cr_src_req_c;
+  wire             cr_src_ready_c;
+
   // The draw stream's ready carries the same hold as its valid, so a held
   // draw is not accepted by one side of the handshake and refused by the other.
-  assign cmd_draw_ready_w = dj_d_ready && !publication_in_flight_c;
+  //
+  // AND SINCE I29 CLOSED, A THIRD TERM, WHICH APPLIES TO POSED DRAWS ONLY.
+  // `pw_pend_q` is the instance walk's one pose-request slot. A `DrawPosedForm`
+  // is not admitted while that slot is full, because the alternative is to drop
+  // the pose key and let the draw stream on -- and a dropped pose does not
+  // produce a missing creature, it produces a creature wearing the PREVIOUS
+  // pose's palette, with every handshake intact and every counter balancing.
+  // That is this repository's named worst case and it is not worth a cycle of
+  // throughput.
+  //
+  // `DrawForm` 0x0300 IS UNAFFECTED, and that is owner ruling W09's
+  // "preserve the ordinary path" read literally: `cmd_draw_posed_o` is LOW for
+  // every bind-pose draw, so the term is a constant 1 for them and the
+  // unposed path's cadence does not move by one cycle.
+  //
+  // IT CANNOT DEADLOCK ON THE COMMAND STREAM, which is the question to ask of
+  // any new backpressure and the one a name-match would not have raised.
+  // `zhao_geom_clipread.p_ready_o` is `(st_q == S_IDLE) && !pub_any_c`, and a
+  // request this reader cannot serve is CONSUMED IN S_IDLE and counted
+  // (`not_resident_o`, `owner_mismatch_o`, `clip_miss_o`, `frame_oob_o`) --
+  // it does not leave S_IDLE. So the slot drains in one cycle whenever nothing
+  // is resident, which is exactly the state a console that has published no
+  // creature page is in. What can hold it is a walk in progress, and that walk
+  // is bounded by MEM.GUARD beats on requester G and depends on nothing this
+  // command stream has to do first.
+  assign cmd_draw_ready_w = dj_d_ready && !publication_in_flight_c
+                          && (!cmd_draw_posed_o || !pw_pend_q);
 
   assign geom_dj_refused_cull_o     = dj_refused[0];
   assign geom_dj_refused_resident_o = dj_refused[1];
@@ -19855,6 +19650,241 @@ module zhao_console_core
   // I29's producer half, at the edge. See the port declaration.
   assign geom_job_valid_o    = dj_j_valid;
   assign geom_job_form_idx_o = dj_j_form_idx;
+
+  // ==========================================================================
+  // I29 CLOSED: GEOM.POSE's CLIP PAGE AND SKELETON BAKE.
+  //
+  // Three things land here and they are in dependency order: THE INSTANCE WALK
+  // (which turns an accepted draw into a pose request), THE PAGE READER
+  // (`zhao_geom_clipread`, which fetches the kind-8 body and the kind-9 frame),
+  // and THE STORE (`zhao_geom_bonesrc`, which answers the decoder's
+  // combinational per-bone fetch). The decoder and the palette are composed
+  // hundreds of lines above; only the wires between them are declared there.
+  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // THE INSTANCE WALK.
+  //
+  // `design/contracts/GEOM.POSE.md` names the input as "{type_id, clip_id,
+  // frame_no, bone_count}" from GEOM.MESHFETCH's instance walk, and entry I29
+  // recorded that walk as the last missing piece. This is it, and it is
+  // FIFTEEN REGISTERS, because the hard part was never the arithmetic -- it
+  // was deciding WHICH form index and WHEN.
+  //
+  // ONE ENTRY, ONE ENABLE, AND THAT IS THE WHOLE ARGUMENT. Every field taken
+  // here is a field of the SAME accepted command packet, read at the SAME
+  // instant, from the SAME `dq` head: `cmd_draw_form_w` is `draw_form_o`,
+  // `cmd_draw_posed_o` is `dq_head[DQ_POSED_LO]`, and the clip id and frame
+  // number are the adjacent slices of that one register. `zhao_cmd_exec`'s
+  // 0x0305 arm emits the key in the same `dq` entry as the draw precisely so
+  // that no stall can separate a pose from the draw it belongs to (R229).
+  //
+  // SO THE FORM COMES FROM `cmd_draw_form_w[31:8]` AND **NOT** FROM
+  // `dj_j_form_idx`, and the difference is the entire failure this subsystem
+  // punishes. `dj_j_form_idx` is the same 24 bits by the same expression -- but
+  // it is offered a STAGE LATER, qualified by `dj_j_valid`, and in
+  // `zhao_geom_drawjob`'s own S_IDLE it holds the PREVIOUS draw. Pairing it
+  // with a clip id captured at the draw handshake would be entry I39's fault
+  // exactly: two live wires, agreeing in name and width, describing two
+  // different draws. Taking the form off the SAME handshake that carries the
+  // clip id makes the join structural rather than temporal, and there is then
+  // no cadence to get wrong. `geom_job_form_idx_o` stays at the edge as the
+  // ruling's exposed identity; it is not what this walk reads.
+  //
+  // THE SLOT IS ONE DEEP AND THE DRAW WAITS FOR IT. See `cmd_draw_ready_w`
+  // above for why a drop was refused. `geom_pose_walk_holds_o` counts the
+  // cycles a posed draw spent waiting, so "the pose path costs throughput" is
+  // a measurement rather than an argument -- and on a console drawing bind
+  // poses it reads zero for a structural reason, not a lucky one.
+  //
+  // `sub` IS DELIBERATELY NOT CARRIED. `cmd_draw_sub_o` is the pose cache's
+  // key discriminator for the 60 Hz midpoint; this reader fetches an AUTHORED
+  // frame and `zhao_geom_clipread` has no port for it. Carrying it here would
+  // be a second copy of a field whose owner is elsewhere.
+  // --------------------------------------------------------------------------
+  wire pw_fire_c = cmd_draw_valid_w && cmd_draw_ready_w && cmd_draw_posed_o;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pw_pend_q              <= 1'b0;
+      pw_form_q              <= 24'd0;
+      pw_clip_q              <= 16'd0;
+      pw_frame_q             <= 16'd0;
+      geom_pose_requests_o   <= 32'd0;
+      geom_pose_walk_holds_o <= 32'd0;
+    end else begin
+      // The hold is counted BEFORE the accept, so a cycle in which the draw
+      // was offered and refused is a cycle counted. A posed draw admitted with
+      // the slot already empty costs nothing and counts nothing.
+      if (cmd_draw_valid_w && cmd_draw_posed_o && pw_pend_q)
+        geom_pose_walk_holds_o <= geom_pose_walk_holds_o + 32'd1;
+
+      if (pw_fire_c) begin
+        pw_pend_q            <= 1'b1;
+        pw_form_q            <= cmd_draw_form_w[31:8];
+        pw_clip_q            <= cmd_draw_clip_id_o;
+        pw_frame_q           <= cmd_draw_frame_no_o;
+        geom_pose_requests_o <= geom_pose_requests_o + 32'd1;
+      end else if (pw_pend_q && cr_p_ready_c) begin
+        pw_pend_q <= 1'b0;
+      end
+    end
+  end
+
+  // --------------------------------------------------------------------------
+  // THE PAGE READER. Requester G of `u_geom_mem_adapter`.
+  //
+  // THE PARAMETERS ARE LEFT AT THE BLOCK'S OWN DEFAULTS. CLIP_ROWS = 16,
+  // MAX_BONES = 32, BODY_KIND = 8, CLIP_KIND = 9 and CLIENT = ENGINE1 are all
+  // stated in that file against `spec/creature_rules.md` and
+  // `spec/cartridge.md` 4; restating them here would put a second copy of a
+  // frozen layout in a composer, which is the shape this file keeps striking.
+  // The share forces the client anyway (11.2), so the parameter is the
+  // truthful value rather than the load-bearing one.
+  //
+  // THE PUBLICATION IS MEM.UPLOAD's OWN 5f.1 ROW, unfiltered by kind at this
+  // seam and filtered INSIDE the reader against its own two parameters. That
+  // is deliberate and it is the opposite of what `u_geom_drawjob` and
+  // `u_material_resolve` do above, each of which compares the tag here. Those
+  // two consume ONE kind each; this block consumes TWO and must tell them
+  // apart to know which store to fill, so a tag test in the composer would be
+  // a first opinion the block then has to repeat. One owner of that decode.
+  // --------------------------------------------------------------------------
+  zhao_geom_clipread u_geom_clipread (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: MEM.UPLOAD's publication, the same 5f.1 row `u_geom_drawjob` and
+    // `u_material_resolve` read, whole.
+    .pub_valid_i     (upl_publish_valid_o),
+    .pub_tag_i       (upl_publish_tag_o),
+    .pub_index_i     (upl_publish_index_o),
+    .pub_generation_i(upl_publish_generation_o),
+    .pub_base_i      (upl_publish_base_o),
+    .pub_extent_i    (upl_publish_extent_o),
+
+    // REAL: the instance walk's one held request. Form, clip and frame all
+    // came out of ONE command packet on ONE enable -- see the walk above.
+    .p_valid_i   (pw_pend_q),
+    .p_ready_o   (cr_p_ready_c),
+    .p_form_idx_i(pw_form_q),
+    .p_clip_id_i (pw_clip_q),
+    .p_frame_no_i(pw_frame_q),
+
+    // REAL: requester G of the shared ENGINE1 client. No `beat_last`: the
+    // reader counts its own eight beats a line.
+    .g_req_o       (cr_guard_req),
+    .g_rsp_i       (cr_guard_rsp),
+    .g_beat_valid_i(cr_beat_valid),
+    .g_beat_data_i (cr_beat_data),
+
+    // REAL: the fill into the store, and the handover after it.
+    .fill_we_o       (cr_fill_we_c),
+    .fill_sel_o      (cr_fill_sel_c),
+    .fill_bone_o     (cr_fill_bone_c),
+    .fill_word_o     (cr_fill_word_c),
+    .fill_data_o     (cr_fill_data_c),
+    .src_req_o       (cr_src_req_c),
+    .src_bone_count_o(cr_src_bone_count_c),
+    .src_ready_i     (cr_src_ready_c),
+
+    // REAL: the frame's root displacement, straight to the decoder.
+    .root_dx_o(cr_root_dx_c),
+    .root_dy_o(cr_root_dy_c),
+    .root_dz_o(cr_root_dz_c),
+
+    // WHICH RESOURCE ANSWERED and WHICH FORM each section claims. The owner
+    // ruling's section 5 says in terms to "record the selected resource
+    // identities"; these six ports are that record, and they are at the edge
+    // for the reason `geom_job_form_idx_o` is -- an identity nothing reads is
+    // an identity synthesis deletes, and the next fit then prices the lane at
+    // zero.
+    .res_body_index_o(geom_cr_body_index_o),
+    .res_body_gen_o  (geom_cr_body_gen_o),
+    .res_clip_index_o(geom_cr_clip_index_o),
+    .res_clip_gen_o  (geom_cr_clip_gen_o),
+    .res_body_owner_o(geom_cr_body_owner_o),
+    .res_clip_owner_o(geom_cr_clip_owner_o),
+
+    .bodies_o        (geom_cr_bodies_o),
+    .clips_o         (geom_cr_clips_o),
+    .frames_o        (geom_cr_frames_o),
+    .pages_dropped_o (geom_cr_pages_dropped_o),
+    .bad_magic_o     (geom_cr_bad_magic_o),
+    .truncated_o     (geom_cr_truncated_o),
+    .misaligned_o    (geom_cr_misaligned_o),
+    .bad_bone_count_o(geom_cr_bad_bone_count_o),
+    .bone_mismatch_o (geom_cr_bone_mismatch_o),
+    .overflow_o      (geom_cr_overflow_o),
+    .not_rigid_o     (geom_cr_not_rigid_o),
+    .reserved_nz_o   (geom_cr_reserved_nz_o),
+    .denied_o        (geom_cr_denied_o),
+    .clip_miss_o     (geom_cr_clip_miss_o),
+    .frame_oob_o     (geom_cr_frame_oob_o),
+    .not_resident_o  (geom_cr_not_resident_o),
+    .owner_mismatch_o(geom_cr_owner_mismatch_o),
+    .busy_o          (geom_cr_busy_o)
+  );
+
+  // --------------------------------------------------------------------------
+  // THE STORE. SRC_STYLE IS LEFT AT ITS DEFAULT AND THAT DEFAULT IS A PRICE.
+  //
+  // `zhao_geom_bonesrc` carries three Quartus-mapped arrangements of one
+  // source: SYNC_M10K at 830 ALM with 10,240 block-memory bits, ASYNC_DERIVED
+  // at 6,440, and ASYNC_FLAT -- owner ruling R90's literal reading -- at
+  // 14,056 ALM, one third of the 41,910 ceiling. Style 0 ships. Naming the
+  // parameter here would copy a measured frontier into a composer; the number
+  // that matters is in that file's header with the rows that produced it.
+  //
+  // `start_o` AND `ready_o` ARE TWO DIFFERENT ANSWERS AND BOTH ARE USED.
+  // `ready_o` tells the READER the store can take a new handover; `start_o`
+  // tells the DECODER bone 0 is on the wires. They are one cycle apart and
+  // wiring either to the other's consumer is the late-fetch fault.
+  // --------------------------------------------------------------------------
+  zhao_geom_bonesrc #(
+    .MAX_BONES (GEOM_POSE_BONES_C)
+  ) u_geom_bonesrc (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the reader's fill, word by word, into whichever of the two stores
+    // `fill_sel` names -- 0 the kind-8 skeleton, 1 the kind-9 quaternions.
+    .fill_we_i  (cr_fill_we_c),
+    .fill_sel_i (cr_fill_sel_c),
+    .fill_bone_i(cr_fill_bone_c),
+    .fill_word_i(cr_fill_word_c),
+    .fill_data_i(cr_fill_data_c),
+
+    // REAL: the handover. The reader raises `src_req_o` only once BOTH stores
+    // hold whole, consistent data -- its own "fill whole, then ask" law -- so
+    // nothing here has to check that a page arrived in one piece.
+    .req_i       (cr_src_req_c),
+    .bone_count_i(cr_src_bone_count_c),
+    .start_o     (bs_start_c),
+    .ready_o     (cr_src_ready_c),
+
+    // REAL: the decoder's combinational per-bone fetch.
+    .bone_idx_i   (bs_bone_idx_c),
+    .bone_parent_o(bs_bone_parent_c),
+    .bone_tx_o    (bs_bone_tx_c),
+    .bone_ty_o    (bs_bone_ty_c),
+    .bone_tz_o    (bs_bone_tz_c),
+    .quat_w_o     (bs_quat_w_c),
+    .quat_x_o     (bs_quat_x_c),
+    .quat_y_o     (bs_quat_y_c),
+    .quat_z_o     (bs_quat_z_c),
+    .inv_rest_o   (bs_inv_rest_c),
+
+    .bone_prefetch_late_o(geom_bs_prefetch_late_o),
+    .bone_rest_nonrigid_o(geom_bs_rest_nonrigid_o),
+    .bone_reserved_nz_o  (geom_bs_reserved_nz_o),
+    .bone_fills_o        (geom_bs_fills_o)
+  );
+
+  // The decoder's index, kept at the edge. It is READ inside (the store is its
+  // consumer), so this is observation rather than the thing that keeps the
+  // register alive.
+  assign geom_pose_bone_idx_o = bs_bone_idx_c;
 
   zhao_geom_meshfetch u_geom_meshfetch (
     .clk   (gpu_clk),
@@ -20164,6 +20194,17 @@ module zhao_console_core
     // wired to a net nothing reads.
     .f_beat_last_o (),
 
+    // REAL: requester G, GEOM.POSE's kind-8 BODY and kind-9 CLIP FRAME page
+    // reader (I29). One adoption per creature publication and six 64-byte
+    // lines per POSED draw at 32 bones -- heavier than E and F, lighter than
+    // A, and on the same pool, client and direction, which is 5f's condition
+    // for joining here. The reader takes no `last`; the adapter has no such
+    // port for G, so there is nothing to leave open.
+    .g_req_i       (cr_guard_req),
+    .g_rsp_o       (cr_guard_rsp),
+    .g_beat_valid_o(cr_beat_valid),
+    .g_beat_data_o (cr_beat_data),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -20177,6 +20218,7 @@ module zhao_console_core
     .jobs_d_o     (geom_ma_jobs_d_o),
     .jobs_e_o     (geom_ma_jobs_e_o),
     .jobs_f_o     (geom_ma_jobs_f_o),
+    .jobs_g_o     (geom_ma_jobs_g_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
