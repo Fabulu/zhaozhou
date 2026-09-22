@@ -619,11 +619,6 @@ module zhao_terrain_compcache_front #(
       if (fill_go_c) begin
         fill_active_q <= 1'b1;
         wcur_q        <= '0;
-        // The layer-E cell count is PER FILL, cleared with the write cursor it
-        // has to be compared against. A free-running total would answer "how
-        // many cells has this block ever taken", which is not the question --
-        // the question is whether THIS patch got all 1,024 of them.
-        mat_cells_q   <= '0;
         wphase_q      <= 1'b0;
         dual_q        <= dual_i;
         // Take the buffer that is NOT being served. When nothing is served
@@ -696,19 +691,30 @@ module zhao_terrain_compcache_front #(
       if (lat_req_i && !lat_in_range_c) lat_oob_q <= lat_oob_q + 1'b1;
       if (cs_req_i && !cs_rd_in_range_c) cs_oob_q <= cs_oob_q + 1'b1;
       if (mat_req_i && !mat_rd_in_range_c) mat_oob_q <= mat_oob_q + 1'b1;
-      // COUNTED ON THE ACCEPTED WRITE, AND `!fill_go_c` IS NOT A DETAIL. The
-      // clear above and this increment are in one always_ff, so without the
-      // term the increment would be the later assignment and would overwrite
-      // the clear -- a fill that began on a cycle a cell also landed would
-      // start its count at one and read 1,025 at the end, the one value that
-      // looks like an overrun rather than like an off-by-one.
+      // THE LAYER-E CELL COUNT IS PER FILL, AND THE START CYCLE COUNTS.
       //
-      // It counts what LANDED, not what was offered: an out-of-range write is
-      // dropped by the guard above and would otherwise leave no trace at all.
-      // Offered-minus-landed is then visible against the producer's own count,
-      // and 1,024 is the number both of them owe.
-      if (mat_we_i && mat_w_in_range_c && !fill_go_c &&
-          (mat_cells_q != 32'hFFFF_FFFF))
+      // The clear and the increment are in one always_ff, so they must be ONE
+      // decision rather than two assignments racing to be last. Writing them
+      // as two -- a clear in the `fill_go_c` arm above and a guarded increment
+      // here -- is what the first draft did, and it is WRONG IN THE CONSOLE
+      // AND NOWHERE ELSE, which is the kind that ships:
+      //
+      //   `zhao_console_core`'s `tcc_fill_start` is
+      //       tps_v_valid && tps_v_ready && tps_v_first && tpc_placed
+      //   -- the FIRST accepted vertex beat, which is vertex (0,0), which IS
+      //   a cell origin. So the start and the first cell land on the SAME
+      //   CLOCK on every page.
+      //
+      // With a `!fill_go_c` guard cell 0 is never counted and this reads 1,023
+      // forever -- a counter permanently announcing the exact fault it was
+      // built to detect, and the one value that makes an operator distrust a
+      // plane that is fine. With no guard at all the increment wins and the
+      // clear is lost, so the count runs on from the previous patch.
+      //
+      // One decision, both cases named:
+      if (fill_go_c)
+        mat_cells_q <= (mat_we_i && mat_w_in_range_c) ? 32'd1 : 32'd0;
+      else if (mat_we_i && mat_w_in_range_c && (mat_cells_q != 32'hFFFF_FFFF))
         mat_cells_q <= mat_cells_q + 32'd1;
     end
   end
