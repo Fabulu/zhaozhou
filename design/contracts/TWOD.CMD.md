@@ -272,3 +272,41 @@ all-in HUD cost."*
 `MAX_DESC` must equal `zhao_twod_band`'s: it is the same budget, and the band's
 `desc_overflow_o` would otherwise fire on a list this block believed it had
 already capped.
+
+## KNOWN AND DECLARED: the publish window leaks into row 0
+
+**Measured, not estimated.** `tests/compositor/twod_cmd_chain_directed.cpp` case
+4 reports *"plane leak into the empty frame: 3 pixels, all on row 0, window 36,
+screen 1024 pixels"*.
+
+The cause is structural rather than a bug in a state: this block reprograms
+TWOD.PLANE's slot by walking the sealed list, and `zhao_twod_band` is already
+scanning against that same list when the walk begins. For the 36 clocks the
+walk takes, the plane slot can still hold the **previous** frame's descriptor,
+so a frame that DISABLES a sheet can show a few pixels of it on the top row.
+
+It is not fixed here, and the reason is worth stating rather than deferring
+silently: the repair is either a double-buffered plane slot (two more copies of
+a 300-bit descriptor) or a band that will not open band 0 until the plane walk
+has finished as well as the list. The first costs area on a block whose ceiling
+is already hand-counted and unfitted; the second serialises two things the
+console currently overlaps for free. **Choosing between them is a cost question
+and belongs with a fit**, not with a packet that cannot run one.
+
+`list_busy_i` already covers the SPRITE half of exactly this race — the band
+does not open a band against a list still being written — so the mechanism for
+the plane half exists and only its trigger is missing.
+
+## KNOWN AND DECLARED: the HUD lands one pixel late when the output stalls
+
+Not this block's defect, recorded here because this is where the reader of the
+frame path arrives. `zhao_post_composite` drives `hud_req_x_o` from `x_l_q`,
+which advances on `step_c`; `zhao_twod_band` answers a **held** address at N+1.
+While the compositor's output is accepted every cycle the two agree. Throttle
+`o_ready_i` and the request address moves under the answer, so the HUD lands one
+pixel late.
+
+The chain bench runs unthrottled and says so, rather than asserting a pixel
+position that would only hold in the unstalled case. The repair is a request
+address that is registered alongside the response, which is a change to
+POST.COMPOSITE's HUD stage.
