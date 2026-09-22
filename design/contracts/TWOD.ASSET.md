@@ -227,6 +227,39 @@ tree — which is the only thing here that could surprise, and is what
 `design/fit_targets.yml`'s `zhao_twod_asset` leaf row asks. **Ceiling: 700 ALM
 beyond the fold, 0 DSP, 0 M10K.**
 
+### THE HAND COUNT BREACHES THAT CEILING BY ~225 ALM, AND IT IS DECLARED RATHER THAN RESOLVED
+
+Written out because the two numbers above are one line apart and a reader who
+subtracts them is doing work the contract should have done. **~925 against 700
+is a 32% overrun on an estimate, and the estimate was made in the unflattering
+direction on purpose**, so the true figure could land either side of it. What
+is not honest is leaving a ceiling in place that the block's own hand count
+already fails and calling the row complete.
+
+It is stated and not fixed for the reason this repository gives for every such
+deferral: **the ceiling is an aspiration and the fit is the thing that knows.**
+Moving the ceiling to 950 so the row passes would be changing a number to make
+a check succeed, which is the one edit that is never allowed here. Moving the
+DESIGN before a fit has measured it would be optimising against an estimate.
+
+**The levers, so whoever runs the fit is not starting from nothing:**
+
+* **The landing buffer is 512 of the 1,090 flops, and it exists for a timing
+  reason rather than a functional one.** The bridge delivers one 64-bit beat
+  per cycle once granted; a store write takes four cycles per beat. Draining
+  while beats land would drop three in four, so the buffer holds a whole
+  8-beat burst. A narrower store port, or a second write port, removes most of
+  it — and both are changes to TWOD.SAMPLER, not to this block.
+* **The twelve evidence counters are 384 flops.** They are not negotiable as a
+  group — each one is a refusal clause the ratification requires be
+  distinguishable — but a console-wide counter width below 32 bits would take
+  a third of them back everywhere at once, which is a budget decision and not
+  this contract's to make.
+
+Neither is attempted here. **`design/fit_targets.yml`'s `zhao_twod_asset` leaf
+row is where this question gets an answer**, and until it runs, the number
+above is an ESTIMATE and is marked as one everywhere it appears.
+
 ## Integration capture cases
 * **a published glyph sheet drawn as text** — the whole path from
   `PublishResource` to composited pixels, with no texel injected anywhere.
