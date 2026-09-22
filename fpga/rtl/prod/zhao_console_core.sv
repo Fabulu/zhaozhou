@@ -1367,571 +1367,115 @@
 //    `stencil_reference`; `vertex_rgb` and `vertex_alpha` are contested under
 //    R11 and belong to I20. NO FIELD IS ALLOCATED, here or there.
 //
-// I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
-//      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
-//      is closed -- GEOM.REPLAY feeds GEOM.CLIP, which feeds GEOM.SETUP -- so
-//      what remains is TERRAIN's replayed triangles only. Their customer is
-//      the same GEOM.CLIP, which now has a producer, and joining terrain there
-//      needs a two-producer triangle merge AND terrain's own attribute packet
-//      (invw24 from GEOM.DEPTHQUANT for terrain w, and TERRAIN.SHADE's light):
-//      terrain-lane work, named here so it is not mistaken for wiring.
+// ===========================================================================
+// I17 IS CLOSED AND DELETED, 2026-09-22 (packet TWODCMD), and the whole entry
+// is preserved below rather than deleted, because two of its three corrections
+// are about HOW A REFUSAL GOES WRONG and that is worth more than the ports it
+// was tracking.
+// ===========================================================================
+// IT IS HERE, IN THE PROSE BEFORE THE FIRST ENTRY, FOR THE REASON THE
+// PLACEMENT NOTE ABOVE GIVES. `tools/budget/completion_register.py` attaches
+// every comment line to the preceding `// I<n>.` head, so nine hundred lines
+// of closed-entry text left where the entry used to be would be read as I13's
+// body -- and this text contains the words "tied to zero", "BOUNDARY" and
+// "NOT a tie-off", the last of which is a HARD FAILURE in a body. Prose before
+// the first entry attaches to nothing. I49 and I50 sit after the last live
+// entry instead; that works only because they are short and I40 is already
+// classified the way their keywords would classify it, which is luck rather
+// than design.
 //
-//      HALF OF THAT IS DONE, 2026-09-19 (owner ruling R21), and the entry is
-//      narrowed rather than closed. `TERRAIN.SHADE's light` in the sentence
-//      above is no longer missing: `u_terrain_lightlane` computes it here --
-//      the world vertex stored on the projector's own fill beat, the ratified
-//      face normal, the ratified flat shade, the sun from SetEnvironment -- and
-//      it leaves on `terr_light_*`, tagged with the same `src_id` the
-//      triangle carries. What is STILL absent is (a) the two-producer triangle
-//      merge into GEOM.CLIP and (b) terrain's `invw24` from GEOM.DEPTHQUANT.
-//      The light's ports are part of THIS entry's packet and not a new
-//      boundary: the same absent consumer takes both, and a light exported
-//      beside a triangle it belongs to is the shape that consumer will want.
-//      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
-//      and `zhao_terrain_tess` are composed below and drive both, so the
-//      shared projector is measured here with BOTH of its clients live and
-//      `proj_contended_o` can move.
+// WHAT CLOSED IT: THE RECORD EXISTS NOW. The entry's whole remaining argument
+// was that `SetPlane` returned ZERO hits in `spec/commands.zidl`, so no
+// executor for it could be written honestly, and that it "must go to the owner
+// as an ABI or page-kind addition ... and NOT be scheduled as a CMD-executor
+// gap". That was right, it was put to the owner, and the owner ratified it:
+// `reports/OWNER-RATIFICATION-20260922-COMPLETION.md` item 3, "TWOD COMMANDS:
+// BOTH PLANE DESCRIPTORS AND HUD SPRITE DESCRIPTORS".
 //
-//      CORRECTED 2026-09-20 (terrain pass 4): this entry said "the replayed
-//      triangle's customer is GEOM.SETUP, which is not composed". THAT CLAUSE
-//      IS FALSE. `zhao_geom_setup u_geom_setup` is instantiated in this file,
-//      takes GEOM.CLIP's packet and drives the shell's triangle door with real
-//      edge functions -- it landed with the geometry pass that closed the draw
-//      chain, and this entry was not re-read afterwards. The smoke's
-//      `raster pixels=2560` from 14 triangles is that path running.
+//   `SetPlane`   0x0306, 48-byte payload, 64-byte record
+//   `DrawSprite` 0x0307, 48-byte payload, 64-byte record
+//   `RESOURCE_KIND_TWOD_PAGE` = 15, so a texel page, a palette and a binding
+//   arrive through `PublishResource` and the existing validated resource
+//   mechanisms rather than through a second loader.
 //
-//      WHAT ACTUALLY REMAINS, which the stale clause was hiding: GEOM.CLIP has
-//      exactly ONE triangle producer, `rp_o_valid` from GEOM.REPLAY, and there
-//      is NO TWO-PRODUCER MERGE.
+// Both were APPENDED to `spec/commands.zidl` so no existing opcode or sample
+// renumbered, and the abi version did not move -- an additive change, which is
+// what the ratification's ABI policy requires.
 //
-//      RE-MEASURED 2026-09-20 (projbound) AND STILL TRUE, but the CITATION had
-//      rotted and the new one looks like the opposite: GEOM.CLIP's
-//      `tri_valid_i` is no longer `rp_o_valid` but `mw_t_valid`. That is NOT a
-//      merge appearing. `u_material_window` (I49's closing half) is a GATE in
-//      series on the one producer -- it holds a triangle until its material is
-//      published and passes GEOM.REPLAY's own unbuffered data wires beneath.
-//      One producer in, one out. Anybody grepping for `rp_o_valid` at
-//      `u_geom_clip` will not find it and must not read that as progress.
+// WHAT LEFT THIS MODULE'S EDGE, which is the half the register counts: FIFTY
+// PORTS. `twod_pd_*` (19), `twod_sd_*` (20), `twod_ld_*` (11), plus
+// `twod_atm_slot_i` and `twod_line_scroll_i`. Every one of them was a
+// descriptor or a texel that only a testbench could inject, and the
+// ratification is explicit that "an opcode plus descriptors referring to data
+// that only the testbench can inject is not completion". There is now no TWOD,
+// HUD or atmosphere INPUT on this module at all; what replaced them is 34
+// outputs, all of them evidence.
 //
-//      Terrain's projected corners leave this module
-//      on `proj_out_*` and its lit colour on `terr_light_*`, and both land
-//      nowhere. So the missing pieces are (a) the merge into GEOM.CLIP and
-//      (b) terrain's attribute packet. Wiring the corners into a port that
-//      wants edge functions would still be the hidden adapter this file must
-//      not contain; that part of the old text stands.
+// WHAT DRIVES THEM: `fpga/rtl/compositor/zhao_twod_cmd.sv` (TWOD.CMD), the
+// frame-scoped descriptor producer, and `zhao_twod_asset.sv` (TWOD.ASSET),
+// which reads a TWOD_PAGE out of the HPS arena on arbiter client 6, folds
+// CRC-32C over it and writes the sampler's page and palette store. Both are
+// composed at the end of this file; both carry a contract and a
+// `design/blocks.yml` row.
 //
-//      (b) WAS UNDERSTATED AND IS CORRECTED HERE, 2026-09-20 (projinput). It
-//      used to read "terrain's `invw24` -- GEOM.DEPTHQUANT lives inside
-//      GEOM.VATTR and serves the geometry lane only". That is ONE slot of
-//      SEVEN. `GEOM_CLIP_ATTRS = 7`: GEOM.CLIP's ratified per-corner packet is
-//      invw24, u/w, v/w, lit r, g, b, alpha, and a terrain triangle entering
-//      `tri_*` has to fill all of it. Terrain today has:
+// AND THE SEALED LIST IS THE PART TO UNDERSTAND BEFORE CHANGING ANY OF IT.
+// The ratification's own words: "Stage and validate the frame's descriptors,
+// then publish a sealed list at the boundary that owns that frame, before its
+// TWOD pass. Neither a later packet nor the next frame may mutate the list
+// being consumed." TWOD.CMD is one tagged ring of 2 * MAX_DESC entries with a
+// sealed window inside it, so the frame being CONSUMED and the frame being
+// STAGED never share an entry. A commit landing on the seal cycle belongs to
+// the closing frame (`cp_now_c`), ties are broken by command order, and a
+// frame naming no plane publishes an explicit DISABLE for the slot rather
+// than leaving the previous frame's sheet on screen -- which is the entry's
+// "empty-frame path that cannot retain old HUD contents" in one state.
 //
-//        invw24    -- needs a DEPTHQUANT on `proj_out_aw/bw/cw`; the composed
-//                     one (`zhao_geom_depthquant_stream`) is inside GEOM.VATTR
-//                     on the geometry lane's tagged schedule. As the old text
-//                     said.
-//        u/w, v/w  -- NO PRODUCER ANYWHERE. Searched `fpga/rtl/terrain/**` for
-//                     `u_over_w`, `v_over_w`, `out_u_o` and `tex_u`: ZERO hits.
-//                     The projector carries terrain's `mat_a`/`mat_b`/`weight`,
-//                     which is the Mosaic layer-E triple -- it names WHICH
-//                     materials blend, not WHERE on them to sample. A terrain
-//                     texture-coordinate law does not exist in this tree.
+// WHAT IS STILL OWED, declared here because R159 requires a tie-off be
+// declared and because the entry it used to live in is closing. NONE of these
+// is a port on this module; each is a debt inside a block that has a contract:
 //
-//                     RECLASSIFIED 2026-09-20 under OWNER RULING R197 (untex
-//                     packet): this half is no longer a missing PRODUCER, it
-//                     is a DECLARATION. A primitive may enter GEOM.CLIP with
-//                     u/w and v/w undefined provided it presents `untex = 1`
-//                     at the door (`cl_in_untex_c`, see `u_geom_clip`); the
-//                     door refuses it only under a material that samples,
-//                     and GEOM.ATTRPACK never reads the two slots. A terrain
-//                     triangle would declare 1 here and need NO coordinate
-//                     law to enter. What remains of (b) is the lit r/g/b
-//                     line below, which R197 explicitly does NOT take
-//                     (dossier decision 5: terrain art content).
-//        lit r/g/b -- `terr_light_base_o` is ONE signed 32-bit SCALAR shade,
-//                     not three channels. Turning it into lit rgb needs the
-//                     material's COLOUR.
+//   * TWOD.SPRITE's `tint` and `blend` are CARRIED AND NOT APPLIED. The
+//     descriptor's fields reach the walker and the sampler returns an
+//     unmodified texel; `zhao_twod_band`'s `tint_dropped_o` and
+//     `blend_dropped_o` count every descriptor that asked for one, so the
+//     absence is instrumented rather than silent. Ratifying a HUD blend law
+//     is an owner decision of the same size as R37's.
+//   * THE PLANE'S PUBLISH WINDOW LEAKS at most a few pixels of the previous
+//     frame's sheet into the top row of a frame that disables it. Measured,
+//     not estimated: 3 pixels of 1,024, all on row 0, inside a 36-clock
+//     window, by `tests/compositor/twod_cmd_chain_directed.cpp` case 4. The
+//     cause is that TWOD.PLANE's slot is reprogrammed by the same publish
+//     walk the band is already scanning against.
+//   * POST.COMPOSITE ADVANCES ITS HUD REQUEST ADDRESS WHILE THE BAND HOLDS
+//     ITS RESPONSE, so when the compositor's output stalls the HUD lands one
+//     pixel late. `zhao_post_composite` drives `hud_req_x_o` from `x_l_q`,
+//     which moves on `step_c`, while `zhao_twod_band` answers a held address
+//     at N+1. Found by throttling `o_ready_i` in the chain bench; the bench
+//     runs unthrottled and the seam is recorded rather than papered over.
+//   * THE MID-SWEEP REFILL IS UNTESTED AND SAYS SO. `zhao_twod_sampler` has
+//     ONE sample pipe serving the plane walk and the sprite, and the chain
+//     bench's frame is exactly the band store's own height so the whole frame
+//     fills in the tick-to-pass gap. The console's pass spends about nine
+//     clocks per output pixel and has the slack; a bench driving one pixel
+//     per clock and also demanding a refill would measure a console nobody
+//     has. Stated in `tests/compositor/tb_zhao_twod_chain.sv`'s parameter
+//     comment, where the person changing the number will read it.
 //
-//                     THIS POINTED AT I49 AND I49 NO LONGER EXISTS. Corrected
-//                     2026-09-20 (projbound): the texmat2 packet CLOSED and
-//                     DELETED I49 the same day this clause was written, so the
-//                     blocker outlived its citation by hours. `MATERIAL.RESOLVE`
-//                     is composed, `tri_flat_request_i` is retired, and it is
-//                     built inside this file from the published answer.
-//                     WHAT IS STILL MISSING MOVED TO I20: `base_rgb` is the
-//                     VERTEX's colour and not the material's (ruling R11), and
-//                     picking a corner for a FLAT field is an art decision a
-//                     composer must not make. Re-point at I20, not I49 -- the
-//                     blocker is real, the entry it named is gone.
-//        alpha     -- owner ruling R48's named constant. NOT a gap.
+// THE POST.GATHER HALF OF THE ENTRY IS HISTORY, AND CHECKED RATHER THAN
+// ASSUMED: `zhao_post_gather` is instantiated in this file as `u_post_gather`,
+// its `f_*` group driven by `gtag_*` from the resolved stream, its `c_*` group
+// read by the plane store below it. The three refusals below are preserved
+// because two of them reasoned from a port the block does not have and one
+// retracted itself in the session that wrote it -- the reusable part is the
+// mechanism, not the verdict.
 //
-//      So this entry is blocked on TWO ABSENT LAWS and not on one absent wire,
-//      and both of them are TERRAIN-lane laws with art content -- which is what
-//      the sentence above already meant by "terrain-lane work, named here so it
-//      is not mistaken for wiring". The difference matters for scheduling: the
-//      merge in (a) is a day's work once (b) exists, and (b) is not.
-//
-//      RE-MEASURED 2026-09-21 (gz/cfgarm) as I14's sibling, because that
-//      entry's hub packet was commissioned on the premise that the two share a
-//      producer. **THEY DO NOT, and (a) is unchanged at the RTL.**
-//      `u_geom_clip.tri_valid_i` is `cl_in_valid`, and `cl_in_valid` is
-//      `mw_t_valid && !cl_in_refuse_c` -- still ONE producer chain through
-//      `u_material_window`'s gate, still no merge. (b)'s lit r/g/b still points
-//      at I20. Nothing this entry needs is a CMD record or a CMD executor, so
-//      I14's remaining halves -- an owner decision on `proj_en_i` and a
-//      ruling-parked MEASURE.GOVERNOR -- would not move it if both closed
-//      tomorrow. The two entries share a PORT GROUP PREFIX and a subsystem,
-//      and nothing else.
-//
-//      RE-MEASURED 2026-09-21 (gz/projout), ALL FOUR SLOTS AND THE MERGE. Two
-//      of this entry's sentences are FALSE at the current tree and BOTH were
-//      wrong in the direction that makes the work look smaller than it is on
-//      one half and larger on the other. The entry does not close; its SHAPE
-//      changes, and the owner question it carries changes with it.
-//
-//      FALSE SENTENCE 1, and it is the load-bearing one: "a terrain triangle
-//      entering `tri_*` has to fill all of it" (the seven-slot packet).
-//      **SLOTS 3, 4, 5 AND 6 -- lit r, lit g, lit b, alpha -- HAVE NO READER
-//      ANYWHERE IN `fpga/rtl`.** Three independent structural confirmations,
-//      each read by hand rather than grepped:
-//        * `zhao_geom_attrpack` is the packet's ONLY consumer and packs THREE
-//          planes -- its own header, and `design/contracts/GEOM.CLIP.md`'s
-//          line about it being "the ONLY reader" of slots 1 and 2;
-//        * `zhao_shell_top_v2` declares exactly three 240-bit plane inputs,
-//          `tri_invw_plane_i`, `tri_u_over_w_plane_i`, `tri_v_over_w_plane_i`;
-//        * `zhao_raster_tile_pipe_v2` joins exactly three attribute lanes
-//          (`attr_join_q_q[0..2]`), and takes COLOUR from `base_rgb` off the
-//          298-bit FLAT request instead -- `flat_request_q[43:20]`.
-//      A fourth grep looked like a fourth consumer and was not: every other
-//      file matching `ATTRS` matches on the SUBSTRING inside `ATTRSETUP` and
-//      `ATTRSTEP`. That is R225's rule paying for itself in this entry -- the
-//      uniform-looking result was the instrument, and one file opened by hand
-//      settled it.
-//
-//      SO THE ATTRIBUTE PACKET COSTS TERRAIN ONE SLOT OUTRIGHT (`invw24`) AND
-//      ONE MORE THAN R197 LEFT IT, WHICH IS THE NEXT PARAGRAPH. Slot 6 is R48's
-//      named constant and slots 3..5 are carried by `zhao_geom_clip` and read by
-//      nothing; `zhao_geom_attrpack` does genuinely branch on `tri_untex_i`, so
-//      R197's MECHANISM is real and is not in question anywhere below.
-//
-//      BUT THIS ENTRY'S SEARCH FOR THE COORDINATE LAW WAS SCOPED TO THE RTL AND
-//      ITS CONCLUSION WAS WRITTEN ABOUT THE TREE. The sentence above says
-//      "Searched `fpga/rtl/terrain/**` ... A terrain texture-coordinate law does
-//      not exist in this tree." The search is honest, the scope is stated, and
-//      THE CONCLUSION DOES NOT FOLLOW FROM IT -- `reference/` is in this tree,
-//      and the law is there, in `reference/src/zrender/terrain.cpp`, gated by
-//      `if (textured)`:
-//
-//        top_shift from the cell pitch -- the source's own comment is
-//                  "pitch = 2^k metres -> u = wx >> k"
-//        u_top[k] = wx[i] >> top_shift;   v_top[k] = wz[j] >> top_shift;
-//        u_und/v_und = the same coordinates >> 3, for walls and the underside.
-//
-//      AND IT IS FROZEN, NOT DRAFT. `zhao_texture_mosaic.sv`'s header cites
-//      "spec/terrain_rules.md 6.2 (FROZEN 2026-08-16, capture-exact) -- both
-//      laws", and its `req_u_i`/`req_v_i` port comment already states the units
-//      a producer must hit: "Q16.16 TILE units, one tile period per cell on tops
-//      and per STRATA_M on walls/underside (terrain_rules 6.2/6.6)".
-//
-//      SO R197's REFUSAL OF ITS OPTION B RESTS ON A PREMISE THAT IS FALSE FOR
-//      TERRAIN. That ruling refused "every producer must synthesise u/v" partly
-//      because it "forces a terrain texture-coordinate law, which is ART CONTENT
-//      AND THE OWNER'S TO AUTHOR". For terrain's TOP SURFACE it is not art
-//      awaiting an author: it is frozen, capture-exact, implemented in the
-//      oracle, and already named by the consuming block's ports. The ruling's
-//      other two legs are untouched -- a flag beats a sentinel, and it genuinely
-//      unblocks FORGE.SHADOW and FORGE.PRIM, which have no coordinates BY LAW.
-//      What it does not do is close TERRAIN's half, because terrain's top
-//      surface is TEXTURED through the mosaic and R197's own law 3 REFUSES a
-//      declared-untextured primitive under a sampling material. Declaring
-//      `untex = 1` for terrain buys entry at the price of the mosaic -- which is
-//      the entire purpose of the `mat_a`/`mat_b`/`weight` triple the projector
-//      is already forwarding on `proj_out_*`.
-//
-//      THE HONEST BOUND ON THAT, because it is a composition question this lane
-//      did not settle: the mosaic's consumer is `zhao_texture_island_v3_top`'s
-//      `u_mosaic`, and THIS core does not instantiate that top. So "terrain runs
-//      textured" is the ratified intent and not yet a composed fact, and whoever
-//      builds the producer should confirm the consumer's residency first.
-//      What is settled is narrower and is enough to move this entry: the law
-//      terrain was said to lack EXISTS and is FROZEN, so the remaining work is
-//      ENGINEERING AGAINST A RATIFIED LAW rather than an absent art decision.
-//      That is a better position than this entry has been carrying and a harder
-//      one than R197 left it, and both halves of that are worth having.
-//
-//      AND THE MOVE THAT FINDING INVITES IS REFUSED IN ADVANCE, because it is
-//      the campaign's forbidden shape wearing an optimisation's clothes. "Four
-//      slots nobody reads" reads like 384 bits of carriage to delete by setting
-//      `GEOM_CLIP_ATTRS` to 3. **DO NOT.** The seven-slot packet is the ratified
-//      ruling-5 layout, `design/contracts/GEOM.CLIP.md` states it as ATTRS = 7,
-//      and lit r/g/b is not dead carriage -- it is the ARRIVAL POINT of a
-//      capability the console has not composed yet. Narrowing it would close the
-//      distance to a gap by deleting the place the answer lands, which is this
-//      file's first law. The slots are EMPTY, not SPARE -- and the oracle says
-//      where the answer comes from: owner ruling R7's `ProjectedVertex` record
-//      (`zref_geom.hpp`, GEOM.PARAMBUF's record layer) is screen x, screen y,
-//      invw24 plus status, u_over_w, v_over_w AND `rgba8` -- a per-vertex
-//      colour, ratified, in a block that is itself on the disconnected list.
-//      The carriage is waiting for its producer, which is the opposite of dead.
-//
-//      FALSE SENTENCE 2: "the merge in (a) is a day's work once (b) exists".
-//      `u_material_window` sits IN the stream between GEOM.REPLAY and GEOM.CLIP
-//      and its correctness argument is STRUCTURAL, so a second producer at
-//      GEOM.CLIP's input has three obligations this entry never named:
-//        1. it must fire `d_enter_i`. That port is `cl_in_valid && cl_in_ready`
-//           -- the window's OWN triangle. A merged triangle that entered
-//           without it would still depart on `d_leave_i`, so `occupancy_q`
-//           would be driven below zero, `err_occupancy_underflow_o` would fire
-//           and the counter would be CLAMPED AT ZERO -- which makes `drained_c`
-//           read TRUE while triangles are in flight. The interlock's drain
-//           condition becomes a lie, which is the exact fault that block's
-//           header says it exists to prevent.
-//        2. it must carry a `{material_set, material_id}` pair, because the
-//           window publishes ONE material for the whole span and shades every
-//           triangle in it with that. **TERRAIN HAS NEITHER FIELD: a search of
-//           `fpga/rtl/terrain/` for `material_set` and `material_id` returns
-//           ZERO hits.** Terrain textures through the MOSAIC path -- tileset
-//           plus the layer-E `{mat_a, mat_b, weight}` triple the projector
-//           forwards unselected -- which is a different mechanism with a
-//           different key, not a material record with a missing producer.
-//        3. `err_unpublished_o`'s stated premise -- "a triangle may only reach
-//           the door through this block" -- is falsified BY CONSTRUCTION by any
-//           second door, so it must be re-argued or the block restructured.
-//      None of the three is an argument against R187's ruling that the honest
-//      door is GEOM.CLIP's input. They are the bill for it, and it had not been
-//      added up. The good news in the same measurement: obligation 1's detector
-//      is NOT one of this repository's blind ones -- `err_occupancy_underflow_o`
-//      is fired by stimulus at `material_window_directed` case 7, checked to be
-//      exactly 1, and case 7 carries its OWN negative control in the next
-//      breath: an arrival and a departure on one clock cancel and the counter
-//      stays at 1. Case 1 asserts it silent across a legal twelve-triangle run.
-//      (This sentence first cited "case 5" and that was wrong -- corrected here
-//      by the lane that wrote it, before anybody inherited it. A citation is
-//      the cheapest thing in this file to get wrong and the most expensive to
-//      leave.)
-//
-//      `invw24` IS STILL ABSENT, and only its COSTING is corrected. It is not a
-//      second `zhao_geom_depthquant_stream` beside a second `zhao_raster_rcp24_v4`:
-//      that block is TAG-THROUGH (`v_tag_i` -> `d_tag_o`, `TAGW` wide) over a
-//      pool of `NSLOT = 16` contexts, so a second client is an arbiter on `v_*`
-//      and a demux on `d_*` keyed by a client bit in the tag. Costing it as a
-//      second instance would repeat the projector exactly -- `zhao_project_core`
-//      was extracted so the law lived once and then instantiated twice, and
-//      `design/contracts/TERRAIN.PROJECT.md` records the receipt in its own
-//      words: "it is also not a DSP saving: both shells hold their own core, so
-//      the pair is still 66, map-measured." WHETHER THE SHARED INSTANCE HAS THE
-//      HEADROOM IS UNMEASURED and is a Verilator question, not a fit question.
-//
-//      AND THE ART LAW IS NOT WHERE THIS ENTRY PUTS IT, which is the finding
-//      that should reach the owner. Re-pointing lit r/g/b at the base-colour
-//      seam was right; inheriting that seam's REFUSAL was not. The refusal
-//      there is written against the MESH path and says so: GEOM.VATTR holds a
-//      per-VERTEX rgb under R11, the flat request wants one colour for the
-//      triangle, and "picking one of the three corners would be an art decision
-//      made by a composer." **THAT OBJECTION DOES NOT APPLY TO TERRAIN.**
-//      `zref::render::shade_flat_tri` is flat PER TRIANGLE by construction and
-//      `terr_light_base_o` is one scalar for the same reason -- there is no
-//      corner to pick, so the composer is not being asked to make the art
-//      decision the seam refuses. What terrain needs is a COMPOSITION LAW, and
-//      the oracle already holds it in `reference/src/zrender/terrain.cpp`:
-//      `lit(base) = (base * shade + 32768) >> 16` on the untextured path, and
-//      `mod_of(shade, tint, sheet)` -- one rounding over the s128 product, with
-//      all-unity EXACT -- on the textured one. The open question is therefore
-//      NOT "what colour is terrain", which would be art; it is WHICH OF THE TWO
-//      RATIFIED PROFILES the console runs, and who produces `tint` (layer H)
-//      and `sheet` if it is the second. That is a smaller and more answerable
-//      question than the one this entry has been carrying.
-//
-//      AND THE PARAGRAPH ABOVE IS ITSELF HALF WRONG -- corrected here by the
-//      lane that wrote it, an hour later, because the correction is worth more
-//      than the tidiness of deleting it. "Terrain's colour is flat, so it fits
-//      the flat seam" is TRUE OF THE SHADE AND FALSE OF THE TINT, and the tint
-//      is the half with a ratified home:
-//
-//        * `spec/terrain_rules.md` 6.5, quoted verbatim inside
-//          `zhao_texture_aux.sv`: the aux budget holds "ONE aux consumer on
-//          terrain fragments, because TINT MOVED TO VERTICES." Layer-H tint is
-//          a PER-VERTEX quantity by ratified spec.
-//        * and the oracle says the same about itself. `terrain.cpp` introduces
-//          its per-cell tint as "the FLAT STAND-IN for the Gouraud tint -- the
-//          average of the four corner RGB565 values". **A stand-in that names
-//          itself one.** Recommending the flat route would have ratified the
-//          stand-in as the design, which is this file's own standing warning
-//          about composing the simplification that happens to exist.
-//
-//      SO THE SLOTS' EMPTINESS HAS A CAUSE, AND IT IS BIGGER THAN THIS ENTRY.
-//      The console computes per-vertex colour and then throws it away:
-//      GEOM.LIGHT produces lit r/g/b, GEOM.VATTR stores it per vertex under
-//      R11, it rides GEOM.CLIP in slots 3..5 winding-flipped with its corners
-//      -- and GEOM.ATTRPACK packs THREE planes, so it is dropped there. What
-//      actually reaches the fragment is `frag_vert_rgb_i`, whose own port
-//      comment reads "interpolated, lit, tinted, FOGGED", and it is driven
-//      from `returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb`
-//      -- the 48-bit CONTINUATION TAIL, `job_meta_i[345:298]`, which is
-//      `tri_continuation_tail_i`: a PER-TRIANGLE CONSTANT with no producer,
-//      entry I20. **A per-vertex quantity is computed, carried four blocks, and
-//      delivered as a per-triangle constant that nothing drives.**
-//
-//      THAT ALSO ANSWERS R224's "DERIVED FROM WHAT?", for terrain at least.
-//      That ruling searched `spec/*.zidl` and `spec/*.md` for `vertex_rgb`,
-//      `vertex_alpha`, `effect_tag` and `stencil_reference`, got ZERO, and
-//      concluded the tail is ABSENT DATA with nothing to derive from. The
-//      search was right and a LITERAL-TOKEN search cannot see terrain_rules
-//      6.5, because that sentence says "tint moved to vertices" and never
-//      writes the field's name. For terrain the derivation is: per-vertex
-//      layer-H tint, modulated by the flat shade `terr_light_base_o` already
-//      leaves this module with. **This does not overturn R224** -- the other
-//      three tail fields are untouched and terrain is one primitive class of
-//      several. It removes exactly one of that ruling's four "nothing to derive
-//      from" claims, and it is the one I13 depends on.
-//
-//      THE CORRECTED RECOMMENDATION, then, and it is a question rather than an
-//      answer because the answer is above this lane's pay grade: terrain's
-//      colour is PER-VERTEX by spec, its destination is either slots 3..5
-//      (which need ATTRPACK to grow from three planes to six, real silicon) or
-//      the continuation tail's `vertex_rgb` (which needs I20's producer). **If
-//      the flat stand-in is chosen anyway -- and it may well be the right call
-//      on the ALM budget -- it must be NAMED a stand-in in the RTL, with
-//      terrain_rules 6.5 cited beside it**, or the next reader inherits a
-//      Gouraud law silently implemented as a constant.
-//
-//      RE-MEASURED 2026-09-21 (gz/attrlane), WHICH EXISTED TO ANSWER THAT
-//      QUESTION. The finding above HOLDS in every particular and the SEVERANCE
-//      IS REAL -- but the recommendation's "EITHER ... OR" IS FALSE, and it is
-//      false in the direction that makes the work look like two jobs when it is
-//      one. **Slots 3..5 and the continuation tail's `vertex_rgb` ARE THE SAME
-//      PATH, and `zhao_raster_tile_pipe_v2` is where they meet.** Read its
-//      attribute `always_comb` as a block:
-//
-//          request_w.u_over_w           = attr_join_q_q[1];   PER FRAGMENT
-//          request_w.v_over_w           = attr_join_q_q[2];   PER FRAGMENT
-//          continuation_w.earlyz.invw24 = attr_join_q_q[0];   PER FRAGMENT
-//          continuation_w.post_earlyz   = continuation_tail_bits_q;  per TRIANGLE
-//
-//      The tail is assembled PER FRAGMENT, three lines under the per-pixel
-//      lanes, from a register loaded once per triangle at job-metadata capture.
-//      So `vertex_rgb` does not need "I20's producer" as a separate build: with
-//      lanes 3..5 present that line becomes a field build off
-//      `attr_join_q_q[3..5]` and **nothing downstream of the tile pipe changes
-//      at all** -- not Early-Z, not the texture round trip, not
-//      `zhao_raster_fragment`, whose 24-bit `frag_vert_rgb_i` is already the
-//      right width and already fed from this field. One job, not two.
-//
-//      DEAD COMPUTATION OR SEVERED DELIVERY? **SEVERED DELIVERY**, settled by
-//      walking the chain rather than the layout. Every hop from
-//      `zhao_light_stream` to `zhao_geom_attrpack`'s input port is composed,
-//      live and counted -- `colours_written_o` in GEOM.VATTR moves on the
-//      stored colour, and GEOM.CLIP performs a winding swap on slots 3..5 that
-//      exists for no other purpose. The lighting is NOT dead silicon and must
-//      not be reclaimed; the delivery is three attribute lanes short.
-//
-//      DOES R89 TRANSFER? **ITS REASON DOES NOT; ITS CONCLUSION DOES, FOR A
-//      DIFFERENT REASON, AND THE DIFFERENCE MUST BE KEPT.** R89 refused a
-//      fourth plane because shadow alpha "does not vary across the primitive"
-//      -- true of `zhao_forge_shadow`'s per-caster `strength_q`, and FALSE of
-//      lit vertex colour, which varies by construction (`rast.cpp`'s `m.gouraud`
-//      lanes interpolate `cr`/`cg`/`cb` with a full barycentric re-evaluation
-//      per row; `internal.hpp` calls it "the ordinary Gouraud path"). Citing
-//      R89's SENTENCE here would be citing a fact that is not true of this
-//      quantity. R133 draws the sharper line: of alpha it said "the plumbing is
-//      finished, only the faucet is missing", and the faucet could not be built
-//      because `cast_strength_i` has no producer ANYWHERE. For `vertex_rgb` the
-//      plumbing is equally finished AND THE WATER IS ALREADY IN THE BUILDING --
-//      it is at ATTRPACK's input port. This is refused on COST, not on absence,
-//      and the next lane must not be told otherwise.
-//
-//      THE COST, AND IT IS MEASURED, NOT ESTIMATED. No LEAF row for
-//      `zhao_raster_attrgrad_v2` exists in `reports/synthesis/zhao_block_fit.json`
-//      -- which is where this lane looked first and wrongly concluded "unpriced".
-//      The number is in the G8A characterization fit's section 17, *Fitter
-//      Resource Utilization by Entity*, on the truth device 5CSEBA6U23I7 with
-//      `rtlCleanAtHead: true`:
-//      `reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt`
-//
-//        zhao_raster_attrgrad_v2:g_attr[0].u_attrgrad   488.1 ALM   8 DSP
-//          `- zhao_raster_attrdiv_v2:u_div              298.1 ALM   0 DSP
-//        zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad   463.6 ALM   8 DSP
-//        zhao_raster_attrgrad_v2:g_attr[2].u_attrgrad   467.8 ALM   8 DSP
-//
-//      **One attribute lane is ~470 ALM and 8 DSP. Three -- an r/g/b triad --
-//      is ~1,420 ALM and +24 DSP**, and the divider is roughly two thirds of the
-//      ALM because the plane is unnormalised and every lane divides by 2A.
-//
-//      THE DSP NUMBER IS PROBABLY THE ONE THAT DECIDES THIS, and this entry got
-//      it wrong once before correcting it, in the flattering direction: the
-//      `ATTR_DSP3 = 1` variant costs only 3 DSP per lane and it is **G8A
-//      characterization only** -- the composed console runs `ATTR_DSP3 = 0`.
-//      Quoting 9 instead of 24 would have understated it by a factor of nearly
-//      three. **+24 DSP is 21% of the device's entire 112-DSP budget**, against
-//      a raster/texture top already measuring 49.
-//
-//      The rest, priced structurally:
-//        * ATTRPACK 3 -> 6 lanes is the CHEAP end -- the attrsetup core is
-//          already time-multiplexed, so no new arithmetic: +9 latched 32-bit
-//          words, 7 -> 13 clocks per triangle against ~41 of budget, and the
-//          composer's invariant becomes `planes_o == 6 * triangles_o`;
-//        * the tile pipe's `for (ga = 0; ga < 3; ...)` becomes 6, and with it
-//          the join (`attr_source_valid_w = &attr_q_valid_w` is all-or-nothing
-//          across the lanes), `row_delivered_q[2:0]`, `start_delivered_q[4:0]`,
-//          the `incoming_coordinate_bad_c` agreement cone -- the very cone
-//          TIMING4 D2 moved behind a register -- and the `[2:0]` ports
-//          `attribute_idle_o` and `coverage_delivered_mask_o`;
-//        * and the one that is easy to miss: **`METAW` 1157 -> 1877**. The plane
-//          words ride `job_meta` through `zhao_geom_binner_v2`'s metadata bank,
-//          which stores them as META_SLICES x 40 bits -- **29 slices -> 47**.
-//          That is M10K *and per-triangle bank write/read time*, a throughput
-//          change in the binner, not merely area. It drags `zhao_geom_bin_pipe_v2`,
-//          `zhao_shell_top_v2` (+3 x 240-bit ports), this file,
-//          `zhao_console_board`, `zhao_prod_top`, `gen_shell_fit_top.py` and both
-//          committed core mutants with it.
-//      AND THE CONSUMERS AT THE FAR END ARE ALREADY BUILT AND UNINSTALLED,
-//      which is the fact that settles "subsystem" rather than "wiring job".
-//      `zhao_raster_toon` takes `r_i`/`g_i`/`b_i` as `signed [31:0]` -- exactly
-//      the shape `attr_join_q_q[3..5]` would produce -- and its header says it
-//      "quantises the INTERPOLATED light". `zhao_raster_fog` sits behind it and
-//      its own header places it "AFTER `zhao_raster_toon`". NEITHER IS
-//      INSTANTIATED BY ANY COMPOSED TOP: both appear only in `zhao_prod_top.sv`,
-//      the pricing census, and `design/prod_manifest.yml` says so in as many
-//      words -- "production hardware on the per-pixel path ... even though no
-//      composed top instantiates it yet". So a whole per-pixel colour stage
-//      (interpolate -> toon-quantise -> fog-mix) is authored and waiting, and
-//      the three attribute lanes are its missing front end. This is the
-//      uncashed-cheque shape CLAUDE.md names -- BUILT, INSTALLED NOWHERE -- and
-//      it is evidence that the Gouraud path is INTENDED function that was
-//      deferred, not a feature being invented here.
-//
-//      There was no BLOCKER anywhere -- unlike FORGE.SHADOW, nothing was
-//      missing a producer -- but the SPAN was eleven files including a RAM
-//      bank's slice geometry, on a device measured at 47,582 ALM against a
-//      41,910 ceiling with FIELD's ~13,700 still additive. **A subsystem by
-//      size, not by blockage.** That was the owner decision this entry carried.
-//
-//      **IT IS RULED AND IT IS BUILT. OWNER DECISION R234 D1, 2026-09-21,
-//      `(owner, explicit)`: SHIP GOURAUD.** Fabian was shown rendered boards
-//      comparing the readings and took the price knowingly -- *"I took the
-//      expensive options. We just want the full capability."* The evidence he
-//      ruled against: the free stand-in is not face-Lambert but a
-//      PROVOKING-VERTEX PICK that crawls a herringbone sawtooth across the body
-//      -- *"noise, not style"* -- and 100.00% of 3,168,243 drawn triangles take
-//      the Gouraud path, so the stand-in differs on nearly every triangle of
-//      every frame.
-//
-//      WHAT WAS BUILT, and it is exactly the span costed above:
-//        * `zhao_geom_attrpack` 3 -> 6 lanes, `SLOT_R/G/B` as named parameters,
-//          three new 240-bit plane outputs. No new arithmetic -- the shared
-//          `zhao_geom_attrsetup` core is time-multiplexed, so the whole
-//          geometry-side cost is a 3:1 operand mux becoming 6:1 and 7 -> 13
-//          clocks per triangle against ~41 of budget.
-//        * this file: `GEOM_ATTR_SLOT_R/G/B`, three wires, and the fork/join
-//          untouched -- the lockstep assertion still differences two counters
-//          driven by two different enables in two different modules.
-//        * `zhao_shell_top_v2` and `zhao_geom_bin_pipe_v2`: +3 x 240-bit ports,
-//          `METAW` 1157 -> 1877, which is the binner's metadata bank going
-//          29 -> 47 forty-bit slices.
-//        * `zhao_raster_tile_pipe_v2`: SIX `zhao_raster_attrgrad_v2` lanes, and
-//          with them the join, the coordinate-agreement cone, `row_delivered_q`
-//          [2:0] -> [5:0], `start_delivered_q` [4:0] -> [7:0] and the `[2:0]`
-//          probe ports. **This is where the ~1,420 ALM and +24 DSP live**, and
-//          the file now says so in its header.
-//        * and `vertex_rgb` FELL OUT OF THE SAME PATH, exactly as ATTRLANE
-//          predicted: it is a field build off `attr_join_q_q[3..5]` through one
-//          saturating `lit_unit8` conversion, and NOTHING DOWNSTREAM OF THE
-//          TILE PIPE CHANGED. No new fragment port, no new continuation field.
-//
-//      R89 DID NOT TRANSFER AND WAS NOT ALLOWED TO. It refused a fourth
-//      attrpack plane for a value that *"does not vary across the primitive"*;
-//      varying across the primitive is what Gouraud IS, and R230 records the
-//      distinction. Alpha remains flat, per-primitive, and on
-//      `tri_continuation_tail_i` where R89 put it -- which is why this build
-//      adds THREE lanes and not four, and why slot 6 is still the one slot
-//      `zhao_geom_attrpack` deliberately does not read.
-//
-//      STILL OPEN AT THE FAR END, costed and left for the next lane:
-//      `zhao_raster_toon` and `zhao_raster_fog` are still instantiated by no
-//      composed top. They now have a real producer in front of them -- the
-//      conversion `lit_unit8` is a named function sitting exactly where they
-//      belong, and the lanes deliver the Q0.16 scale its authored thresholds
-//      {43000, 57000} are written against. Composing them is a separate job and
-//      was not done here.
-//
-//      DISCHARGED EARLIER, and kept because the sequence matters: the flat
-//      stand-in was first NAMED AS ONE IN THE RTL at both ends of the severance
-//      before it was removed. `GEOM_CLIP_ATTRS` STAYS 7 -- this entry's refusal
-//      to narrow it is re-affirmed a third time and is now load-bearing in the
-//      strongest possible way: SIX of the seven slots have a reader.
-//
-//      RE-MEASURED 2026-09-22 (gz/projclose), AFTER OWNER DECISION R234 D1
-//      LANDED. THE ENTRY HOLDS. Its two blockers were re-measured against the
-//      current tree and BOTH STAND; D1 touched neither. What D1 changed is
-//      real and it is narrower than it looks from outside, and it cuts BOTH
-//      WAYS -- which is why it closes nothing.
-//
-//      WHAT D1 CHANGED, AND THE FIRST HALF IS THAT THIS ENTRY WAS ALREADY
-//      CURRENT. The premise R228 recorded -- "a per-vertex quantity is
-//      computed, carried four blocks, and delivered as a constant nothing
-//      drives" -- no longer describes the tree, and the paragraphs above
-//      already say so: GOURAUDBUILD updated this entry when it landed the
-//      work. `zhao_geom_attrpack` is `LANES = 6` with `SLOT_R/G/B` as named
-//      parameters, and the closing line above already reads "SIX of the seven
-//      slots have a reader". There was no stale premise left here to find.
-//
-//      THE SECOND HALF IS THAT TERRAIN'S OBLIGATION WENT UP, NOT DOWN, and
-//      this is the sentence a reader is most likely to get backwards.
-//      `zhao_geom_attrpack`'s Gouraud lanes are DELIBERATELY NOT BRANCHED ON
-//      `tri_untex_i` -- its own comment says "an untextured primitive is still
-//      lit". So R197's untex declaration buys a terrain triangle past u/w and
-//      v/w and DOES NOT buy it past lit r/g/b. Before D1 those three slots had
-//      no reader at all, so what a terrain triangle put there was moot; now
-//      they are read and delivered to the fragment, so terrain must produce
-//      them. Terrain has `terr_light_base_o`: ONE signed 32-bit scalar shade.
-//      And `spec/terrain_rules.md` 6.5 makes layer-H tint PER-VERTEX by
-//      ratified spec, so the flat route is the stand-in this entry already
-//      refused to ratify.
-//
-//      SO THE HONEST NARROWING IS: the landing place stopped being the
-//      problem and terrain's own PER-VERTEX PRODUCER is now the whole of (b)'s
-//      colour half. That is a better-posed question than this entry has been
-//      carrying -- the destination is live, proven end to end by D1's own
-//      receipts -- and it is not a closure.
-//
-//      BOTH BLOCKERS, RE-MEASURED RATHER THAN QUOTED (R165):
-//        (a) the merge   -- `u_geom_clip.tri_valid_i` is `cl_in_valid`. One
-//                           producer chain through `u_material_window`'s gate.
-//                           No merge. UNCHANGED.
-//            obligation 2 -- a search of `fpga/rtl/terrain/` for
-//                           `material_set` and `material_id` returns ZERO hits
-//                           TODAY, not on the day it was first written.
-//                           Terrain textures through the mosaic. UNCHANGED.
-//        (b) `invw24`    -- no terrain client of `zhao_geom_depthquant_stream`
-//                           anywhere. `proj_out_aw_o` still leaves this module
-//                           and lands nowhere. UNCHANGED.
-//
-//      ONE CORRECTION TO THIS ENTRY'S COSTING, recorded neutrally because it
-//      cuts against the entry's own recommendation. The paragraph above argues
-//      that a second `invw24` client should be "an arbiter on `v_*` and a
-//      demux on `d_*`" and NOT a second instance, citing TERRAIN.PROJECT's
-//      receipt. **`zhao_forge_assemble` ALREADY INSTANTIATES ITS OWN
-//      `zhao_geom_depthquant_stream`**, and that block is composed in this
-//      file -- so this console holds TWO of them today, one inside GEOM.VATTR
-//      and one inside FORGE.ASSEMBLE. That does not make the second-instance
-//      route right, and the DSP argument above is untouched by it. It is
-//      recorded because the entry reads as though the option had never been
-//      exercised in this tree, and it has been.
-//
-//      AND ONE ITEM ARRIVES HERE FROM I14, which closed the same day.
-//      `proj_fill_profile_o` -- terrain's PER-VERTEX depth profile -- leaves
-//      this module with no consumer. I14's depth-profile bullet used to carry
-//      it beside `proj_a_profile_o`, and that half is spent (`u_geom_vattr`'s
-//      `fl_profile_i` and FORGE.ASSEMBLE's `rs_profile_i` both take it). The
-//      terrain half is worth nothing until terrain's TRIANGLE has a consumer,
-//      which is this entry, so it is recorded here rather than left in a
-//      closed entry where nobody would read it. Terrain's per-TRIANGLE profile
-//      is owed besides: the replay arena carries no profile field, so
-//      `zhao_vertex_arena`'s payload would have to widen -- a change to that
-//      block, not to a composer.
-//
-// I17. TWOD's DESCRIPTOR RECORD (`twod_pd_*`, `twod_sd_*`) -- BOUNDARY, and it
+// ---------------------------------------------------------------------------
+// THE ENTRY AS IT STOOD, verbatim but for its head line, which had to lose its
+// period: `tools/budget/completion_register.py` matches `// I<n>.` ANYWHERE
+// after the block marker, so a preserved entry that kept its head would go on
+// being counted as a live gap from inside the closed ledger.
+// ---------------------------------------------------------------------------
+// I17 (CLOSED) TWOD's DESCRIPTOR RECORD (`twod_pd_*`, `twod_sd_*`) -- BOUNDARY, and it
 //      is an ABI DECISION, NOT A COMPOSITION. FOUR OF THE FIVE HALVES THIS
 //      ENTRY ONCE HELD ARE CLOSED, including the HUD: `post_hud_*` and
 //      `twod_sc_*` left this edge on 2026-09-21 under owner rulings R233 and
@@ -2912,6 +2456,571 @@
 //      has no reference, and the two fields that would need one are the two a
 //      decoder-stage event does not carry. The other six charter 20.6 stages
 //      have no producer here; entry I45 records that as the remaining half.
+//
+//
+// I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+//      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
+//      is closed -- GEOM.REPLAY feeds GEOM.CLIP, which feeds GEOM.SETUP -- so
+//      what remains is TERRAIN's replayed triangles only. Their customer is
+//      the same GEOM.CLIP, which now has a producer, and joining terrain there
+//      needs a two-producer triangle merge AND terrain's own attribute packet
+//      (invw24 from GEOM.DEPTHQUANT for terrain w, and TERRAIN.SHADE's light):
+//      terrain-lane work, named here so it is not mistaken for wiring.
+//
+//      HALF OF THAT IS DONE, 2026-09-19 (owner ruling R21), and the entry is
+//      narrowed rather than closed. `TERRAIN.SHADE's light` in the sentence
+//      above is no longer missing: `u_terrain_lightlane` computes it here --
+//      the world vertex stored on the projector's own fill beat, the ratified
+//      face normal, the ratified flat shade, the sun from SetEnvironment -- and
+//      it leaves on `terr_light_*`, tagged with the same `src_id` the
+//      triangle carries. What is STILL absent is (a) the two-producer triangle
+//      merge into GEOM.CLIP and (b) terrain's `invw24` from GEOM.DEPTHQUANT.
+//      The light's ports are part of THIS entry's packet and not a new
+//      boundary: the same absent consumer takes both, and a light exported
+//      beside a triangle it belongs to is the shape that consumer will want.
+//      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
+//      and `zhao_terrain_tess` are composed below and drive both, so the
+//      shared projector is measured here with BOTH of its clients live and
+//      `proj_contended_o` can move.
+//
+//      CORRECTED 2026-09-20 (terrain pass 4): this entry said "the replayed
+//      triangle's customer is GEOM.SETUP, which is not composed". THAT CLAUSE
+//      IS FALSE. `zhao_geom_setup u_geom_setup` is instantiated in this file,
+//      takes GEOM.CLIP's packet and drives the shell's triangle door with real
+//      edge functions -- it landed with the geometry pass that closed the draw
+//      chain, and this entry was not re-read afterwards. The smoke's
+//      `raster pixels=2560` from 14 triangles is that path running.
+//
+//      WHAT ACTUALLY REMAINS, which the stale clause was hiding: GEOM.CLIP has
+//      exactly ONE triangle producer, `rp_o_valid` from GEOM.REPLAY, and there
+//      is NO TWO-PRODUCER MERGE.
+//
+//      RE-MEASURED 2026-09-20 (projbound) AND STILL TRUE, but the CITATION had
+//      rotted and the new one looks like the opposite: GEOM.CLIP's
+//      `tri_valid_i` is no longer `rp_o_valid` but `mw_t_valid`. That is NOT a
+//      merge appearing. `u_material_window` (I49's closing half) is a GATE in
+//      series on the one producer -- it holds a triangle until its material is
+//      published and passes GEOM.REPLAY's own unbuffered data wires beneath.
+//      One producer in, one out. Anybody grepping for `rp_o_valid` at
+//      `u_geom_clip` will not find it and must not read that as progress.
+//
+//      Terrain's projected corners leave this module
+//      on `proj_out_*` and its lit colour on `terr_light_*`, and both land
+//      nowhere. So the missing pieces are (a) the merge into GEOM.CLIP and
+//      (b) terrain's attribute packet. Wiring the corners into a port that
+//      wants edge functions would still be the hidden adapter this file must
+//      not contain; that part of the old text stands.
+//
+//      (b) WAS UNDERSTATED AND IS CORRECTED HERE, 2026-09-20 (projinput). It
+//      used to read "terrain's `invw24` -- GEOM.DEPTHQUANT lives inside
+//      GEOM.VATTR and serves the geometry lane only". That is ONE slot of
+//      SEVEN. `GEOM_CLIP_ATTRS = 7`: GEOM.CLIP's ratified per-corner packet is
+//      invw24, u/w, v/w, lit r, g, b, alpha, and a terrain triangle entering
+//      `tri_*` has to fill all of it. Terrain today has:
+//
+//        invw24    -- needs a DEPTHQUANT on `proj_out_aw/bw/cw`; the composed
+//                     one (`zhao_geom_depthquant_stream`) is inside GEOM.VATTR
+//                     on the geometry lane's tagged schedule. As the old text
+//                     said.
+//        u/w, v/w  -- NO PRODUCER ANYWHERE. Searched `fpga/rtl/terrain/**` for
+//                     `u_over_w`, `v_over_w`, `out_u_o` and `tex_u`: ZERO hits.
+//                     The projector carries terrain's `mat_a`/`mat_b`/`weight`,
+//                     which is the Mosaic layer-E triple -- it names WHICH
+//                     materials blend, not WHERE on them to sample. A terrain
+//                     texture-coordinate law does not exist in this tree.
+//
+//                     RECLASSIFIED 2026-09-20 under OWNER RULING R197 (untex
+//                     packet): this half is no longer a missing PRODUCER, it
+//                     is a DECLARATION. A primitive may enter GEOM.CLIP with
+//                     u/w and v/w undefined provided it presents `untex = 1`
+//                     at the door (`cl_in_untex_c`, see `u_geom_clip`); the
+//                     door refuses it only under a material that samples,
+//                     and GEOM.ATTRPACK never reads the two slots. A terrain
+//                     triangle would declare 1 here and need NO coordinate
+//                     law to enter. What remains of (b) is the lit r/g/b
+//                     line below, which R197 explicitly does NOT take
+//                     (dossier decision 5: terrain art content).
+//        lit r/g/b -- `terr_light_base_o` is ONE signed 32-bit SCALAR shade,
+//                     not three channels. Turning it into lit rgb needs the
+//                     material's COLOUR.
+//
+//                     THIS POINTED AT I49 AND I49 NO LONGER EXISTS. Corrected
+//                     2026-09-20 (projbound): the texmat2 packet CLOSED and
+//                     DELETED I49 the same day this clause was written, so the
+//                     blocker outlived its citation by hours. `MATERIAL.RESOLVE`
+//                     is composed, `tri_flat_request_i` is retired, and it is
+//                     built inside this file from the published answer.
+//                     WHAT IS STILL MISSING MOVED TO I20: `base_rgb` is the
+//                     VERTEX's colour and not the material's (ruling R11), and
+//                     picking a corner for a FLAT field is an art decision a
+//                     composer must not make. Re-point at I20, not I49 -- the
+//                     blocker is real, the entry it named is gone.
+//        alpha     -- owner ruling R48's named constant. NOT a gap.
+//
+//      So this entry is blocked on TWO ABSENT LAWS and not on one absent wire,
+//      and both of them are TERRAIN-lane laws with art content -- which is what
+//      the sentence above already meant by "terrain-lane work, named here so it
+//      is not mistaken for wiring". The difference matters for scheduling: the
+//      merge in (a) is a day's work once (b) exists, and (b) is not.
+//
+//      RE-MEASURED 2026-09-21 (gz/cfgarm) as I14's sibling, because that
+//      entry's hub packet was commissioned on the premise that the two share a
+//      producer. **THEY DO NOT, and (a) is unchanged at the RTL.**
+//      `u_geom_clip.tri_valid_i` is `cl_in_valid`, and `cl_in_valid` is
+//      `mw_t_valid && !cl_in_refuse_c` -- still ONE producer chain through
+//      `u_material_window`'s gate, still no merge. (b)'s lit r/g/b still points
+//      at I20. Nothing this entry needs is a CMD record or a CMD executor, so
+//      I14's remaining halves -- an owner decision on `proj_en_i` and a
+//      ruling-parked MEASURE.GOVERNOR -- would not move it if both closed
+//      tomorrow. The two entries share a PORT GROUP PREFIX and a subsystem,
+//      and nothing else.
+//
+//      RE-MEASURED 2026-09-21 (gz/projout), ALL FOUR SLOTS AND THE MERGE. Two
+//      of this entry's sentences are FALSE at the current tree and BOTH were
+//      wrong in the direction that makes the work look smaller than it is on
+//      one half and larger on the other. The entry does not close; its SHAPE
+//      changes, and the owner question it carries changes with it.
+//
+//      FALSE SENTENCE 1, and it is the load-bearing one: "a terrain triangle
+//      entering `tri_*` has to fill all of it" (the seven-slot packet).
+//      **SLOTS 3, 4, 5 AND 6 -- lit r, lit g, lit b, alpha -- HAVE NO READER
+//      ANYWHERE IN `fpga/rtl`.** Three independent structural confirmations,
+//      each read by hand rather than grepped:
+//        * `zhao_geom_attrpack` is the packet's ONLY consumer and packs THREE
+//          planes -- its own header, and `design/contracts/GEOM.CLIP.md`'s
+//          line about it being "the ONLY reader" of slots 1 and 2;
+//        * `zhao_shell_top_v2` declares exactly three 240-bit plane inputs,
+//          `tri_invw_plane_i`, `tri_u_over_w_plane_i`, `tri_v_over_w_plane_i`;
+//        * `zhao_raster_tile_pipe_v2` joins exactly three attribute lanes
+//          (`attr_join_q_q[0..2]`), and takes COLOUR from `base_rgb` off the
+//          298-bit FLAT request instead -- `flat_request_q[43:20]`.
+//      A fourth grep looked like a fourth consumer and was not: every other
+//      file matching `ATTRS` matches on the SUBSTRING inside `ATTRSETUP` and
+//      `ATTRSTEP`. That is R225's rule paying for itself in this entry -- the
+//      uniform-looking result was the instrument, and one file opened by hand
+//      settled it.
+//
+//      SO THE ATTRIBUTE PACKET COSTS TERRAIN ONE SLOT OUTRIGHT (`invw24`) AND
+//      ONE MORE THAN R197 LEFT IT, WHICH IS THE NEXT PARAGRAPH. Slot 6 is R48's
+//      named constant and slots 3..5 are carried by `zhao_geom_clip` and read by
+//      nothing; `zhao_geom_attrpack` does genuinely branch on `tri_untex_i`, so
+//      R197's MECHANISM is real and is not in question anywhere below.
+//
+//      BUT THIS ENTRY'S SEARCH FOR THE COORDINATE LAW WAS SCOPED TO THE RTL AND
+//      ITS CONCLUSION WAS WRITTEN ABOUT THE TREE. The sentence above says
+//      "Searched `fpga/rtl/terrain/**` ... A terrain texture-coordinate law does
+//      not exist in this tree." The search is honest, the scope is stated, and
+//      THE CONCLUSION DOES NOT FOLLOW FROM IT -- `reference/` is in this tree,
+//      and the law is there, in `reference/src/zrender/terrain.cpp`, gated by
+//      `if (textured)`:
+//
+//        top_shift from the cell pitch -- the source's own comment is
+//                  "pitch = 2^k metres -> u = wx >> k"
+//        u_top[k] = wx[i] >> top_shift;   v_top[k] = wz[j] >> top_shift;
+//        u_und/v_und = the same coordinates >> 3, for walls and the underside.
+//
+//      AND IT IS FROZEN, NOT DRAFT. `zhao_texture_mosaic.sv`'s header cites
+//      "spec/terrain_rules.md 6.2 (FROZEN 2026-08-16, capture-exact) -- both
+//      laws", and its `req_u_i`/`req_v_i` port comment already states the units
+//      a producer must hit: "Q16.16 TILE units, one tile period per cell on tops
+//      and per STRATA_M on walls/underside (terrain_rules 6.2/6.6)".
+//
+//      SO R197's REFUSAL OF ITS OPTION B RESTS ON A PREMISE THAT IS FALSE FOR
+//      TERRAIN. That ruling refused "every producer must synthesise u/v" partly
+//      because it "forces a terrain texture-coordinate law, which is ART CONTENT
+//      AND THE OWNER'S TO AUTHOR". For terrain's TOP SURFACE it is not art
+//      awaiting an author: it is frozen, capture-exact, implemented in the
+//      oracle, and already named by the consuming block's ports. The ruling's
+//      other two legs are untouched -- a flag beats a sentinel, and it genuinely
+//      unblocks FORGE.SHADOW and FORGE.PRIM, which have no coordinates BY LAW.
+//      What it does not do is close TERRAIN's half, because terrain's top
+//      surface is TEXTURED through the mosaic and R197's own law 3 REFUSES a
+//      declared-untextured primitive under a sampling material. Declaring
+//      `untex = 1` for terrain buys entry at the price of the mosaic -- which is
+//      the entire purpose of the `mat_a`/`mat_b`/`weight` triple the projector
+//      is already forwarding on `proj_out_*`.
+//
+//      THE HONEST BOUND ON THAT, because it is a composition question this lane
+//      did not settle: the mosaic's consumer is `zhao_texture_island_v3_top`'s
+//      `u_mosaic`, and THIS core does not instantiate that top. So "terrain runs
+//      textured" is the ratified intent and not yet a composed fact, and whoever
+//      builds the producer should confirm the consumer's residency first.
+//      What is settled is narrower and is enough to move this entry: the law
+//      terrain was said to lack EXISTS and is FROZEN, so the remaining work is
+//      ENGINEERING AGAINST A RATIFIED LAW rather than an absent art decision.
+//      That is a better position than this entry has been carrying and a harder
+//      one than R197 left it, and both halves of that are worth having.
+//
+//      AND THE MOVE THAT FINDING INVITES IS REFUSED IN ADVANCE, because it is
+//      the campaign's forbidden shape wearing an optimisation's clothes. "Four
+//      slots nobody reads" reads like 384 bits of carriage to delete by setting
+//      `GEOM_CLIP_ATTRS` to 3. **DO NOT.** The seven-slot packet is the ratified
+//      ruling-5 layout, `design/contracts/GEOM.CLIP.md` states it as ATTRS = 7,
+//      and lit r/g/b is not dead carriage -- it is the ARRIVAL POINT of a
+//      capability the console has not composed yet. Narrowing it would close the
+//      distance to a gap by deleting the place the answer lands, which is this
+//      file's first law. The slots are EMPTY, not SPARE -- and the oracle says
+//      where the answer comes from: owner ruling R7's `ProjectedVertex` record
+//      (`zref_geom.hpp`, GEOM.PARAMBUF's record layer) is screen x, screen y,
+//      invw24 plus status, u_over_w, v_over_w AND `rgba8` -- a per-vertex
+//      colour, ratified, in a block that is itself on the disconnected list.
+//      The carriage is waiting for its producer, which is the opposite of dead.
+//
+//      FALSE SENTENCE 2: "the merge in (a) is a day's work once (b) exists".
+//      `u_material_window` sits IN the stream between GEOM.REPLAY and GEOM.CLIP
+//      and its correctness argument is STRUCTURAL, so a second producer at
+//      GEOM.CLIP's input has three obligations this entry never named:
+//        1. it must fire `d_enter_i`. That port is `cl_in_valid && cl_in_ready`
+//           -- the window's OWN triangle. A merged triangle that entered
+//           without it would still depart on `d_leave_i`, so `occupancy_q`
+//           would be driven below zero, `err_occupancy_underflow_o` would fire
+//           and the counter would be CLAMPED AT ZERO -- which makes `drained_c`
+//           read TRUE while triangles are in flight. The interlock's drain
+//           condition becomes a lie, which is the exact fault that block's
+//           header says it exists to prevent.
+//        2. it must carry a `{material_set, material_id}` pair, because the
+//           window publishes ONE material for the whole span and shades every
+//           triangle in it with that. **TERRAIN HAS NEITHER FIELD: a search of
+//           `fpga/rtl/terrain/` for `material_set` and `material_id` returns
+//           ZERO hits.** Terrain textures through the MOSAIC path -- tileset
+//           plus the layer-E `{mat_a, mat_b, weight}` triple the projector
+//           forwards unselected -- which is a different mechanism with a
+//           different key, not a material record with a missing producer.
+//        3. `err_unpublished_o`'s stated premise -- "a triangle may only reach
+//           the door through this block" -- is falsified BY CONSTRUCTION by any
+//           second door, so it must be re-argued or the block restructured.
+//      None of the three is an argument against R187's ruling that the honest
+//      door is GEOM.CLIP's input. They are the bill for it, and it had not been
+//      added up. The good news in the same measurement: obligation 1's detector
+//      is NOT one of this repository's blind ones -- `err_occupancy_underflow_o`
+//      is fired by stimulus at `material_window_directed` case 7, checked to be
+//      exactly 1, and case 7 carries its OWN negative control in the next
+//      breath: an arrival and a departure on one clock cancel and the counter
+//      stays at 1. Case 1 asserts it silent across a legal twelve-triangle run.
+//      (This sentence first cited "case 5" and that was wrong -- corrected here
+//      by the lane that wrote it, before anybody inherited it. A citation is
+//      the cheapest thing in this file to get wrong and the most expensive to
+//      leave.)
+//
+//      `invw24` IS STILL ABSENT, and only its COSTING is corrected. It is not a
+//      second `zhao_geom_depthquant_stream` beside a second `zhao_raster_rcp24_v4`:
+//      that block is TAG-THROUGH (`v_tag_i` -> `d_tag_o`, `TAGW` wide) over a
+//      pool of `NSLOT = 16` contexts, so a second client is an arbiter on `v_*`
+//      and a demux on `d_*` keyed by a client bit in the tag. Costing it as a
+//      second instance would repeat the projector exactly -- `zhao_project_core`
+//      was extracted so the law lived once and then instantiated twice, and
+//      `design/contracts/TERRAIN.PROJECT.md` records the receipt in its own
+//      words: "it is also not a DSP saving: both shells hold their own core, so
+//      the pair is still 66, map-measured." WHETHER THE SHARED INSTANCE HAS THE
+//      HEADROOM IS UNMEASURED and is a Verilator question, not a fit question.
+//
+//      AND THE ART LAW IS NOT WHERE THIS ENTRY PUTS IT, which is the finding
+//      that should reach the owner. Re-pointing lit r/g/b at the base-colour
+//      seam was right; inheriting that seam's REFUSAL was not. The refusal
+//      there is written against the MESH path and says so: GEOM.VATTR holds a
+//      per-VERTEX rgb under R11, the flat request wants one colour for the
+//      triangle, and "picking one of the three corners would be an art decision
+//      made by a composer." **THAT OBJECTION DOES NOT APPLY TO TERRAIN.**
+//      `zref::render::shade_flat_tri` is flat PER TRIANGLE by construction and
+//      `terr_light_base_o` is one scalar for the same reason -- there is no
+//      corner to pick, so the composer is not being asked to make the art
+//      decision the seam refuses. What terrain needs is a COMPOSITION LAW, and
+//      the oracle already holds it in `reference/src/zrender/terrain.cpp`:
+//      `lit(base) = (base * shade + 32768) >> 16` on the untextured path, and
+//      `mod_of(shade, tint, sheet)` -- one rounding over the s128 product, with
+//      all-unity EXACT -- on the textured one. The open question is therefore
+//      NOT "what colour is terrain", which would be art; it is WHICH OF THE TWO
+//      RATIFIED PROFILES the console runs, and who produces `tint` (layer H)
+//      and `sheet` if it is the second. That is a smaller and more answerable
+//      question than the one this entry has been carrying.
+//
+//      AND THE PARAGRAPH ABOVE IS ITSELF HALF WRONG -- corrected here by the
+//      lane that wrote it, an hour later, because the correction is worth more
+//      than the tidiness of deleting it. "Terrain's colour is flat, so it fits
+//      the flat seam" is TRUE OF THE SHADE AND FALSE OF THE TINT, and the tint
+//      is the half with a ratified home:
+//
+//        * `spec/terrain_rules.md` 6.5, quoted verbatim inside
+//          `zhao_texture_aux.sv`: the aux budget holds "ONE aux consumer on
+//          terrain fragments, because TINT MOVED TO VERTICES." Layer-H tint is
+//          a PER-VERTEX quantity by ratified spec.
+//        * and the oracle says the same about itself. `terrain.cpp` introduces
+//          its per-cell tint as "the FLAT STAND-IN for the Gouraud tint -- the
+//          average of the four corner RGB565 values". **A stand-in that names
+//          itself one.** Recommending the flat route would have ratified the
+//          stand-in as the design, which is this file's own standing warning
+//          about composing the simplification that happens to exist.
+//
+//      SO THE SLOTS' EMPTINESS HAS A CAUSE, AND IT IS BIGGER THAN THIS ENTRY.
+//      The console computes per-vertex colour and then throws it away:
+//      GEOM.LIGHT produces lit r/g/b, GEOM.VATTR stores it per vertex under
+//      R11, it rides GEOM.CLIP in slots 3..5 winding-flipped with its corners
+//      -- and GEOM.ATTRPACK packs THREE planes, so it is dropped there. What
+//      actually reaches the fragment is `frag_vert_rgb_i`, whose own port
+//      comment reads "interpolated, lit, tinted, FOGGED", and it is driven
+//      from `returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb`
+//      -- the 48-bit CONTINUATION TAIL, `job_meta_i[345:298]`, which is
+//      `tri_continuation_tail_i`: a PER-TRIANGLE CONSTANT with no producer,
+//      entry I20. **A per-vertex quantity is computed, carried four blocks, and
+//      delivered as a per-triangle constant that nothing drives.**
+//
+//      THAT ALSO ANSWERS R224's "DERIVED FROM WHAT?", for terrain at least.
+//      That ruling searched `spec/*.zidl` and `spec/*.md` for `vertex_rgb`,
+//      `vertex_alpha`, `effect_tag` and `stencil_reference`, got ZERO, and
+//      concluded the tail is ABSENT DATA with nothing to derive from. The
+//      search was right and a LITERAL-TOKEN search cannot see terrain_rules
+//      6.5, because that sentence says "tint moved to vertices" and never
+//      writes the field's name. For terrain the derivation is: per-vertex
+//      layer-H tint, modulated by the flat shade `terr_light_base_o` already
+//      leaves this module with. **This does not overturn R224** -- the other
+//      three tail fields are untouched and terrain is one primitive class of
+//      several. It removes exactly one of that ruling's four "nothing to derive
+//      from" claims, and it is the one I13 depends on.
+//
+//      THE CORRECTED RECOMMENDATION, then, and it is a question rather than an
+//      answer because the answer is above this lane's pay grade: terrain's
+//      colour is PER-VERTEX by spec, its destination is either slots 3..5
+//      (which need ATTRPACK to grow from three planes to six, real silicon) or
+//      the continuation tail's `vertex_rgb` (which needs I20's producer). **If
+//      the flat stand-in is chosen anyway -- and it may well be the right call
+//      on the ALM budget -- it must be NAMED a stand-in in the RTL, with
+//      terrain_rules 6.5 cited beside it**, or the next reader inherits a
+//      Gouraud law silently implemented as a constant.
+//
+//      RE-MEASURED 2026-09-21 (gz/attrlane), WHICH EXISTED TO ANSWER THAT
+//      QUESTION. The finding above HOLDS in every particular and the SEVERANCE
+//      IS REAL -- but the recommendation's "EITHER ... OR" IS FALSE, and it is
+//      false in the direction that makes the work look like two jobs when it is
+//      one. **Slots 3..5 and the continuation tail's `vertex_rgb` ARE THE SAME
+//      PATH, and `zhao_raster_tile_pipe_v2` is where they meet.** Read its
+//      attribute `always_comb` as a block:
+//
+//          request_w.u_over_w           = attr_join_q_q[1];   PER FRAGMENT
+//          request_w.v_over_w           = attr_join_q_q[2];   PER FRAGMENT
+//          continuation_w.earlyz.invw24 = attr_join_q_q[0];   PER FRAGMENT
+//          continuation_w.post_earlyz   = continuation_tail_bits_q;  per TRIANGLE
+//
+//      The tail is assembled PER FRAGMENT, three lines under the per-pixel
+//      lanes, from a register loaded once per triangle at job-metadata capture.
+//      So `vertex_rgb` does not need "I20's producer" as a separate build: with
+//      lanes 3..5 present that line becomes a field build off
+//      `attr_join_q_q[3..5]` and **nothing downstream of the tile pipe changes
+//      at all** -- not Early-Z, not the texture round trip, not
+//      `zhao_raster_fragment`, whose 24-bit `frag_vert_rgb_i` is already the
+//      right width and already fed from this field. One job, not two.
+//
+//      DEAD COMPUTATION OR SEVERED DELIVERY? **SEVERED DELIVERY**, settled by
+//      walking the chain rather than the layout. Every hop from
+//      `zhao_light_stream` to `zhao_geom_attrpack`'s input port is composed,
+//      live and counted -- `colours_written_o` in GEOM.VATTR moves on the
+//      stored colour, and GEOM.CLIP performs a winding swap on slots 3..5 that
+//      exists for no other purpose. The lighting is NOT dead silicon and must
+//      not be reclaimed; the delivery is three attribute lanes short.
+//
+//      DOES R89 TRANSFER? **ITS REASON DOES NOT; ITS CONCLUSION DOES, FOR A
+//      DIFFERENT REASON, AND THE DIFFERENCE MUST BE KEPT.** R89 refused a
+//      fourth plane because shadow alpha "does not vary across the primitive"
+//      -- true of `zhao_forge_shadow`'s per-caster `strength_q`, and FALSE of
+//      lit vertex colour, which varies by construction (`rast.cpp`'s `m.gouraud`
+//      lanes interpolate `cr`/`cg`/`cb` with a full barycentric re-evaluation
+//      per row; `internal.hpp` calls it "the ordinary Gouraud path"). Citing
+//      R89's SENTENCE here would be citing a fact that is not true of this
+//      quantity. R133 draws the sharper line: of alpha it said "the plumbing is
+//      finished, only the faucet is missing", and the faucet could not be built
+//      because `cast_strength_i` has no producer ANYWHERE. For `vertex_rgb` the
+//      plumbing is equally finished AND THE WATER IS ALREADY IN THE BUILDING --
+//      it is at ATTRPACK's input port. This is refused on COST, not on absence,
+//      and the next lane must not be told otherwise.
+//
+//      THE COST, AND IT IS MEASURED, NOT ESTIMATED. No LEAF row for
+//      `zhao_raster_attrgrad_v2` exists in `reports/synthesis/zhao_block_fit.json`
+//      -- which is where this lane looked first and wrongly concluded "unpriced".
+//      The number is in the G8A characterization fit's section 17, *Fitter
+//      Resource Utilization by Entity*, on the truth device 5CSEBA6U23I7 with
+//      `rtlCleanAtHead: true`:
+//      `reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt`
+//
+//        zhao_raster_attrgrad_v2:g_attr[0].u_attrgrad   488.1 ALM   8 DSP
+//          `- zhao_raster_attrdiv_v2:u_div              298.1 ALM   0 DSP
+//        zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad   463.6 ALM   8 DSP
+//        zhao_raster_attrgrad_v2:g_attr[2].u_attrgrad   467.8 ALM   8 DSP
+//
+//      **One attribute lane is ~470 ALM and 8 DSP. Three -- an r/g/b triad --
+//      is ~1,420 ALM and +24 DSP**, and the divider is roughly two thirds of the
+//      ALM because the plane is unnormalised and every lane divides by 2A.
+//
+//      THE DSP NUMBER IS PROBABLY THE ONE THAT DECIDES THIS, and this entry got
+//      it wrong once before correcting it, in the flattering direction: the
+//      `ATTR_DSP3 = 1` variant costs only 3 DSP per lane and it is **G8A
+//      characterization only** -- the composed console runs `ATTR_DSP3 = 0`.
+//      Quoting 9 instead of 24 would have understated it by a factor of nearly
+//      three. **+24 DSP is 21% of the device's entire 112-DSP budget**, against
+//      a raster/texture top already measuring 49.
+//
+//      The rest, priced structurally:
+//        * ATTRPACK 3 -> 6 lanes is the CHEAP end -- the attrsetup core is
+//          already time-multiplexed, so no new arithmetic: +9 latched 32-bit
+//          words, 7 -> 13 clocks per triangle against ~41 of budget, and the
+//          composer's invariant becomes `planes_o == 6 * triangles_o`;
+//        * the tile pipe's `for (ga = 0; ga < 3; ...)` becomes 6, and with it
+//          the join (`attr_source_valid_w = &attr_q_valid_w` is all-or-nothing
+//          across the lanes), `row_delivered_q[2:0]`, `start_delivered_q[4:0]`,
+//          the `incoming_coordinate_bad_c` agreement cone -- the very cone
+//          TIMING4 D2 moved behind a register -- and the `[2:0]` ports
+//          `attribute_idle_o` and `coverage_delivered_mask_o`;
+//        * and the one that is easy to miss: **`METAW` 1157 -> 1877**. The plane
+//          words ride `job_meta` through `zhao_geom_binner_v2`'s metadata bank,
+//          which stores them as META_SLICES x 40 bits -- **29 slices -> 47**.
+//          That is M10K *and per-triangle bank write/read time*, a throughput
+//          change in the binner, not merely area. It drags `zhao_geom_bin_pipe_v2`,
+//          `zhao_shell_top_v2` (+3 x 240-bit ports), this file,
+//          `zhao_console_board`, `zhao_prod_top`, `gen_shell_fit_top.py` and both
+//          committed core mutants with it.
+//      AND THE CONSUMERS AT THE FAR END ARE ALREADY BUILT AND UNINSTALLED,
+//      which is the fact that settles "subsystem" rather than "wiring job".
+//      `zhao_raster_toon` takes `r_i`/`g_i`/`b_i` as `signed [31:0]` -- exactly
+//      the shape `attr_join_q_q[3..5]` would produce -- and its header says it
+//      "quantises the INTERPOLATED light". `zhao_raster_fog` sits behind it and
+//      its own header places it "AFTER `zhao_raster_toon`". NEITHER IS
+//      INSTANTIATED BY ANY COMPOSED TOP: both appear only in `zhao_prod_top.sv`,
+//      the pricing census, and `design/prod_manifest.yml` says so in as many
+//      words -- "production hardware on the per-pixel path ... even though no
+//      composed top instantiates it yet". So a whole per-pixel colour stage
+//      (interpolate -> toon-quantise -> fog-mix) is authored and waiting, and
+//      the three attribute lanes are its missing front end. This is the
+//      uncashed-cheque shape CLAUDE.md names -- BUILT, INSTALLED NOWHERE -- and
+//      it is evidence that the Gouraud path is INTENDED function that was
+//      deferred, not a feature being invented here.
+//
+//      There was no BLOCKER anywhere -- unlike FORGE.SHADOW, nothing was
+//      missing a producer -- but the SPAN was eleven files including a RAM
+//      bank's slice geometry, on a device measured at 47,582 ALM against a
+//      41,910 ceiling with FIELD's ~13,700 still additive. **A subsystem by
+//      size, not by blockage.** That was the owner decision this entry carried.
+//
+//      **IT IS RULED AND IT IS BUILT. OWNER DECISION R234 D1, 2026-09-21,
+//      `(owner, explicit)`: SHIP GOURAUD.** Fabian was shown rendered boards
+//      comparing the readings and took the price knowingly -- *"I took the
+//      expensive options. We just want the full capability."* The evidence he
+//      ruled against: the free stand-in is not face-Lambert but a
+//      PROVOKING-VERTEX PICK that crawls a herringbone sawtooth across the body
+//      -- *"noise, not style"* -- and 100.00% of 3,168,243 drawn triangles take
+//      the Gouraud path, so the stand-in differs on nearly every triangle of
+//      every frame.
+//
+//      WHAT WAS BUILT, and it is exactly the span costed above:
+//        * `zhao_geom_attrpack` 3 -> 6 lanes, `SLOT_R/G/B` as named parameters,
+//          three new 240-bit plane outputs. No new arithmetic -- the shared
+//          `zhao_geom_attrsetup` core is time-multiplexed, so the whole
+//          geometry-side cost is a 3:1 operand mux becoming 6:1 and 7 -> 13
+//          clocks per triangle against ~41 of budget.
+//        * this file: `GEOM_ATTR_SLOT_R/G/B`, three wires, and the fork/join
+//          untouched -- the lockstep assertion still differences two counters
+//          driven by two different enables in two different modules.
+//        * `zhao_shell_top_v2` and `zhao_geom_bin_pipe_v2`: +3 x 240-bit ports,
+//          `METAW` 1157 -> 1877, which is the binner's metadata bank going
+//          29 -> 47 forty-bit slices.
+//        * `zhao_raster_tile_pipe_v2`: SIX `zhao_raster_attrgrad_v2` lanes, and
+//          with them the join, the coordinate-agreement cone, `row_delivered_q`
+//          [2:0] -> [5:0], `start_delivered_q` [4:0] -> [7:0] and the `[2:0]`
+//          probe ports. **This is where the ~1,420 ALM and +24 DSP live**, and
+//          the file now says so in its header.
+//        * and `vertex_rgb` FELL OUT OF THE SAME PATH, exactly as ATTRLANE
+//          predicted: it is a field build off `attr_join_q_q[3..5]` through one
+//          saturating `lit_unit8` conversion, and NOTHING DOWNSTREAM OF THE
+//          TILE PIPE CHANGED. No new fragment port, no new continuation field.
+//
+//      R89 DID NOT TRANSFER AND WAS NOT ALLOWED TO. It refused a fourth
+//      attrpack plane for a value that *"does not vary across the primitive"*;
+//      varying across the primitive is what Gouraud IS, and R230 records the
+//      distinction. Alpha remains flat, per-primitive, and on
+//      `tri_continuation_tail_i` where R89 put it -- which is why this build
+//      adds THREE lanes and not four, and why slot 6 is still the one slot
+//      `zhao_geom_attrpack` deliberately does not read.
+//
+//      STILL OPEN AT THE FAR END, costed and left for the next lane:
+//      `zhao_raster_toon` and `zhao_raster_fog` are still instantiated by no
+//      composed top. They now have a real producer in front of them -- the
+//      conversion `lit_unit8` is a named function sitting exactly where they
+//      belong, and the lanes deliver the Q0.16 scale its authored thresholds
+//      {43000, 57000} are written against. Composing them is a separate job and
+//      was not done here.
+//
+//      DISCHARGED EARLIER, and kept because the sequence matters: the flat
+//      stand-in was first NAMED AS ONE IN THE RTL at both ends of the severance
+//      before it was removed. `GEOM_CLIP_ATTRS` STAYS 7 -- this entry's refusal
+//      to narrow it is re-affirmed a third time and is now load-bearing in the
+//      strongest possible way: SIX of the seven slots have a reader.
+//
+//      RE-MEASURED 2026-09-22 (gz/projclose), AFTER OWNER DECISION R234 D1
+//      LANDED. THE ENTRY HOLDS. Its two blockers were re-measured against the
+//      current tree and BOTH STAND; D1 touched neither. What D1 changed is
+//      real and it is narrower than it looks from outside, and it cuts BOTH
+//      WAYS -- which is why it closes nothing.
+//
+//      WHAT D1 CHANGED, AND THE FIRST HALF IS THAT THIS ENTRY WAS ALREADY
+//      CURRENT. The premise R228 recorded -- "a per-vertex quantity is
+//      computed, carried four blocks, and delivered as a constant nothing
+//      drives" -- no longer describes the tree, and the paragraphs above
+//      already say so: GOURAUDBUILD updated this entry when it landed the
+//      work. `zhao_geom_attrpack` is `LANES = 6` with `SLOT_R/G/B` as named
+//      parameters, and the closing line above already reads "SIX of the seven
+//      slots have a reader". There was no stale premise left here to find.
+//
+//      THE SECOND HALF IS THAT TERRAIN'S OBLIGATION WENT UP, NOT DOWN, and
+//      this is the sentence a reader is most likely to get backwards.
+//      `zhao_geom_attrpack`'s Gouraud lanes are DELIBERATELY NOT BRANCHED ON
+//      `tri_untex_i` -- its own comment says "an untextured primitive is still
+//      lit". So R197's untex declaration buys a terrain triangle past u/w and
+//      v/w and DOES NOT buy it past lit r/g/b. Before D1 those three slots had
+//      no reader at all, so what a terrain triangle put there was moot; now
+//      they are read and delivered to the fragment, so terrain must produce
+//      them. Terrain has `terr_light_base_o`: ONE signed 32-bit scalar shade.
+//      And `spec/terrain_rules.md` 6.5 makes layer-H tint PER-VERTEX by
+//      ratified spec, so the flat route is the stand-in this entry already
+//      refused to ratify.
+//
+//      SO THE HONEST NARROWING IS: the landing place stopped being the
+//      problem and terrain's own PER-VERTEX PRODUCER is now the whole of (b)'s
+//      colour half. That is a better-posed question than this entry has been
+//      carrying -- the destination is live, proven end to end by D1's own
+//      receipts -- and it is not a closure.
+//
+//      BOTH BLOCKERS, RE-MEASURED RATHER THAN QUOTED (R165):
+//        (a) the merge   -- `u_geom_clip.tri_valid_i` is `cl_in_valid`. One
+//                           producer chain through `u_material_window`'s gate.
+//                           No merge. UNCHANGED.
+//            obligation 2 -- a search of `fpga/rtl/terrain/` for
+//                           `material_set` and `material_id` returns ZERO hits
+//                           TODAY, not on the day it was first written.
+//                           Terrain textures through the mosaic. UNCHANGED.
+//        (b) `invw24`    -- no terrain client of `zhao_geom_depthquant_stream`
+//                           anywhere. `proj_out_aw_o` still leaves this module
+//                           and lands nowhere. UNCHANGED.
+//
+//      ONE CORRECTION TO THIS ENTRY'S COSTING, recorded neutrally because it
+//      cuts against the entry's own recommendation. The paragraph above argues
+//      that a second `invw24` client should be "an arbiter on `v_*` and a
+//      demux on `d_*`" and NOT a second instance, citing TERRAIN.PROJECT's
+//      receipt. **`zhao_forge_assemble` ALREADY INSTANTIATES ITS OWN
+//      `zhao_geom_depthquant_stream`**, and that block is composed in this
+//      file -- so this console holds TWO of them today, one inside GEOM.VATTR
+//      and one inside FORGE.ASSEMBLE. That does not make the second-instance
+//      route right, and the DSP argument above is untouched by it. It is
+//      recorded because the entry reads as though the option had never been
+//      exercised in this tree, and it has been.
+//
+//      AND ONE ITEM ARRIVES HERE FROM I14, which closed the same day.
+//      `proj_fill_profile_o` -- terrain's PER-VERTEX depth profile -- leaves
+//      this module with no consumer. I14's depth-profile bullet used to carry
+//      it beside `proj_a_profile_o`, and that half is spent (`u_geom_vattr`'s
+//      `fl_profile_i` and FORGE.ASSEMBLE's `rs_profile_i` both take it). The
+//      terrain half is worth nothing until terrain's TRIANGLE has a consumer,
+//      which is this entry, so it is recorded here rather than left in a
+//      closed entry where nobody would read it. Terrain's per-TRIANGLE profile
+//      is owed besides: the replay arena carries no profile field, so
+//      `zhao_vertex_arena`'s payload would have to widen -- a change to that
+//      block, not to a composer.
 //
 // I20. Everything `zhao_shell_top_v2` already declares provisional at its own
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
