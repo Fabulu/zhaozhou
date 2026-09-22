@@ -81,3 +81,62 @@ mean view depth instead of its depth beside the point; a sphere's surface instea
 of a cylinder's).
 
 Exact-off byte identity re-verified on 5 subjects after all fx surgery.
+
+### 2026-09-22 ~15:30 - values chosen by eye, and two process findings
+
+**Chosen by ladder, each at the frame the knob changes most (framediff, committed):**
+bolt clearance 46 mm (80 restyles, 60 is the rung below, 46 reads best and is
+gate-clean); Hover Front gain 1350 (1700 changes the performance); eye ambient
+600 (800 is the first rung that draws attention); Hover rear ambient 170.
+
+**FINDING 1 -- an existing knob that only a gate could read.**
+`ZHAO_U02_REAR_CARRIER_CALM_PM` has existed since pass 20 as the lever for
+carrier C's always-on rotation and was parsed in `manafold_rear_audit.cpp`
+ALONE. Three complete renders at 1000 / 500 / 250 came back byte-identical on
+all 600 frames -- the signature of a knob the reel cannot see. It moved mrear's
+reading of the creature and nothing that ships. Moved into the shared
+`apply_knead_dip_env`; 1000 is the authored value so the repair is byte-neutral,
+proven by a 22-subject re-render after the rebuild.
+
+**FINDING 2 -- DO NOT EDIT A SHELL SCRIPT THAT BASH IS EXECUTING.**
+I appended two selector legs to `gatematrix_p24.sh` while the matrix was running
+it. Bash reads a script incrementally BY BYTE OFFSET, so the insertion shifted
+everything after it and bash resumed at the wrong place: the identity leg
+`e-item2` ran and reported TWICE, and there is no way to know what else the
+shift skipped. The run was discarded, every process killed after being
+identified by command line, and the matrix re-run from a FROZEN COPY of the
+script in `.tmp/` so no later edit can reach the file being executed. This is
+the live-tree trap (`QUARTUS_GOTCHAS` SS11) in a shell rather than in Quartus,
+and the tell was a duplicated PASS line -- something a tally alone would have
+counted as one more green.
+
+**Rebuild verified byte-neutral:** all 14 binaries rebuilt after the last source
+edit, and the 22-subject shipping bank re-rendered to 22/22 identical CRCs.
+
+### 2026-09-22 ~17:20 - CLOSED
+
+**Matrix 224 / 224 PASS, 0 FAIL**, one invocation, from a FROZEN copy of the
+script so no edit can reach the file bash is executing.
+
+It took three runs and each failure was the instrument rather than the creature:
+1. the script edited mid-run (byte-offset shift; a leg ran twice);
+2. the expected CRC files carrying a `unique colours` column the comparator
+   stripped from only one side;
+3. e-item3 red on nothing but SORT ORDER -- the shell's collation put
+   manafold-taunt2 before manafold-taunt in one invocation and after it in
+   another. Every sort in the matrix is `LC_ALL=C` now. A gate whose verdict
+   depends on the locale goes red on someone else's machine for a reason nobody
+   can see in the creature.
+
+**Byte identity, all 22 live subjects, per item:** everything off = 22/22
+identical to pass 23; item 1 alone and item 2 alone each move exactly
+crackle/hover/inspect (19/22 identical); item 3 alone moves 19 and leaves
+**curious, startle and taunt III byte-identical** -- the proof that the authored
+expression beats were not given a floor.
+
+**Purged** 10,992 stale `.rgb` files, 2.83 GB, from a sibling creature working
+directory via `tools/maintenance/purge_render_intermediates.py` (dry run
+recorded first).
+
+**Not done, by instruction:** the 22-subject bank for publication, the encode,
+the merge, the deploy. The coordinator sends the review/publish packet.

@@ -1,0 +1,14 @@
+purge_render_intermediates: C:\programmieren\zencrifice
+  candidates : 10992 files, 2.83 GB
+  spared     : 22587 modified within 48 h, plus the 3 newest run folders
+  largest holders:
+     158.21 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-crackle
+     158.21 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-hover
+     158.21 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-inspect
+     155.57 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-death-gutter
+     122.35 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-damage
+     118.66 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-death-drop
+     110.75 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-antenna-fixed
+     110.75 MB  zixxtrixx-wholebody-s-spring-20260901\Upheaval\website\scratch-reel\manafold-antenna-quarter
+
+  deleted 10992 files, reclaimed 2.83 GB
