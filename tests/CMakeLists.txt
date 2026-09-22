@@ -755,7 +755,15 @@ if(ZHAO_SBY_BIN)
   # no-escape proof FAILS on tests/mutants/zhao_mem_guard_resbound_mutant.sv
   # (pool containment removed). Its wrapper message says "bmc + cover"; it
   # carries bmc only.
-  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant)
+  # mem_guard_devbound_mutant is the SECOND inverted control (`expect fail`),
+  # for owner ruling R242's TERRAIN.DEVSTORE bound. It passes only when the
+  # no-escape proof FAILS on tests/mutants/zhao_mem_guard_devbound_mutant.sv
+  # (the store's UPPER bound removed). Measured 2026-09-22: production PASSES
+  # with both c_forward_devstore_wr and c_forward_devstore_rd reached, and this
+  # copy fails at a1_resource_bounded -- the pair that shows the `ifdef seam
+  # engaged rather than silently compiling production twice.
+  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant
+                            mem_guard_devbound_mutant)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
