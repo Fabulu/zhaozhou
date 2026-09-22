@@ -2684,6 +2684,13 @@ blocks:
       directed: tests/terrain/terrain_tess_directed.cpp
       random: tests/terrain/terrain_tess_random.cpp
     counters: [terrain_triangles_emitted, mat_unarmed]
+    # R110: a counter is NAMED or it is not checkable. The map was absent
+    # before `mat_unarmed` joined, which is how `check_counters` came to list
+    # this block among the unnamed; adding an eighth counter to an unnamed set
+    # would have made the report one line worse and said nothing.
+    counter_ports:
+      terrain_triangles_emitted: terrain_triangles_emitted_o
+      mat_unarmed: mat_unarmed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2738,6 +2745,15 @@ blocks:
       directed: tests/terrain/compcache_front_rtl_directed.cpp
       random: tests/terrain/compcache_front_rtl_directed.cpp
     counters: [compcache_fill_records, compcache_patches_filled, compcache_patches_served, compcache_fill_overrun, compcache_lat_oob, compcache_cs_oob, compcache_mat_oob, compcache_mat_cells]
+    counter_ports:
+      compcache_fill_records: fill_records_o
+      compcache_patches_filled: patches_filled_o
+      compcache_patches_served: patches_served_o
+      compcache_fill_overrun: fill_overrun_o
+      compcache_lat_oob: lat_oob_o
+      compcache_cs_oob: cs_oob_o
+      compcache_mat_oob: mat_oob_o
+      compcache_mat_cells: mat_cells_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
