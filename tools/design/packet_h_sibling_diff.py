@@ -108,6 +108,18 @@ DECLARED = [
      'its video-domain half'),
     ('endmodule : zhao_shell_top_v2',
      'the module rename, closing'),
+    # ---- DECLARED 2026-09-22, coordinator ------------------------------------
+    # Both of these were flagged UNDECLARED by packet GEOMCLOSE, which correctly
+    # said they were not its work and did not touch them. They are not drift:
+    # both are TERRAIN.BUILD socket work that V2 has and V1 never had, and each
+    # was traced to its commit rather than assumed -- which is the whole point
+    # of declaring rather than silencing.
+    ("slot 6's read beats, with",
+     "the TERRAIN.BUILD socket read beats, c2647778 -- MEM.UPLOAD composed as "
+     "the socket's first client (R4, R17). V1 has no socket"),
+    ('assign build_hps_wr_ready_o = hb_wr_ready;',
+     'the TERRAIN.BUILD socket write-ready, ae7e8d37. The commit is labelled '
+     'WIP/BLOCKED and this one line is what survived of it; V1 has no socket'),
     # ---- DECLARED 2026-09-19 with owner ruling R39 ----------------------------
     # This table stopped being checked when the V1 seed hash went stale: the
     # tool fails on the hash BEFORE it looks at the diff, so every V2 change

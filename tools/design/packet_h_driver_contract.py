@@ -143,7 +143,15 @@ def stem(p):
 # What actually caught it was a THIRD party with a different job: a generated
 # port map for a test harness, which failed to elaborate with PINNOTFOUND on the
 # three guarded ports. Independent evidence is evidence; a restatement is not.
-for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 165),
+# 165 -> 169, 2026-09-22: packet GOURAUD (owner decision R234 D1, six
+# attribute lanes end to end) added FOUR unconditional ports at commit
+# 0c15181d. Verified the way this comment's own story says to -- NOT by
+# adding four to the old number, which would be the restatement that
+# certified the error last time. An independent walk of the header,
+# tracking `ifdef depth separately from this file's parser, counts
+# 169 unconditional and 3 guarded (172 total). The guarded three are
+# still excluded, so the 168-counts-test-hooks trap has not returned.
+for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 169),
                ('zhao_video_slotmgr', 22), ('zhao_video_slotmgr_v2', 74)):
     _got = len(ports(_m))
     assert _got == _n, 'port count for %s: expected %d, parsed %d' % (_m, _n, _got)
