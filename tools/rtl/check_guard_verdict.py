@@ -91,7 +91,10 @@ CLIENTS = [
     # zhao_terrain_pageio -- the last despite zhao_mem_guard.sv's own header
     # claiming it is registered here), and two are listed but no longer
     # consume one. That debt is not this packet's and is not silently
-    # inherited: it is named here and in FINDINGS-devsdram.
+    # inherited: it is named here, and in the DEVSDRAM packet's findings, which
+    # are the commit message of the empty commit on `gz/devsdram` titled
+    # "DEVSDRAM FINDINGS" -- the harness refuses to let a packet write its own
+    # findings FILE, so a citation to one would be a promise nothing keeps.
     "fpga/rtl/terrain/zhao_terrain_devstore.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
