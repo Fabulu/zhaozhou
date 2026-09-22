@@ -21830,7 +21830,20 @@ module zhao_console_core
   assign gs_wlast  = {1'b0, pa_wlast,  1'b0};
   assign pa_retire = gs_retire[1];
 
-  zhao_geom_paramarena u_geom_paramarena (
+  // THE THREE CAPACITIES ARE PASSED EXPLICITLY TO BOTH BLOCKS, and the reason
+  // is a drift risk rather than a style preference. `zhao_geom_paramarena`'s
+  // MAX_CHUNKS and `zhao_geom_paramwalk`'s ARENA_CHUNKS are two independent
+  // parameter defaults that happen to agree; the walker hands ARENA_CHUNKS
+  // straight to `zhao_geom_parambuf`, whose `ck_illegal_o` refuses a
+  // `next_chunk` at or above it. If they ever disagreed, the decoder would
+  // refuse chunks the allocator legitimately wrote, or follow pointers past
+  // the arena -- and NOTHING would say which default had moved. Named once
+  // here, spent twice.
+  zhao_geom_paramarena #(
+      .MAX_VERTS  (GEOM_PA_MAX_VERTS),
+      .MAX_TRIS   (GEOM_PA_MAX_TRIS),
+      .MAX_CHUNKS (GEOM_PA_MAX_CHUNKS)
+  ) u_geom_paramarena (
       .clk   (gpu_clk),
       .rst_n (rst_n),
       .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
@@ -21922,7 +21935,9 @@ module zhao_console_core
       .busy_o              (geom_pa_busy_o)
   );
 
-  zhao_geom_paramwalk u_geom_paramwalk (
+  zhao_geom_paramwalk #(
+      .ARENA_CHUNKS (GEOM_PA_MAX_CHUNKS)
+  ) u_geom_paramwalk (
       .clk   (gpu_clk),
       .rst_n (rst_n),
       .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
