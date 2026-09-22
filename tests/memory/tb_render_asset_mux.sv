@@ -193,6 +193,9 @@ module tb_render_asset_mux
       .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .pb_lease_valid   (1'b0),  // TIE: this ENGINE1 path READS the asset pool only; the PARAMBUF window is a separate region this bench does not exercise
+      .pb_wr_view       (1'b0),  // TIE: this ENGINE1 path READS the asset pool only; the PARAMBUF window is a separate region this bench does not exercise
+      .pb_scratch_valid (1'b0),  // TIE: this ENGINE1 path READS the asset pool only; the PARAMBUF window is a separate region this bench does not exercise
       .arb_req,
       .arb_rsp,
       .guard_violation(guard_violation_pulse),

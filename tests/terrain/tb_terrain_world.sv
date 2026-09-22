@@ -2593,7 +2593,11 @@ module tb_terrain_world
   zhao_mem_guard u_obs_wr (
       .clk(clk), .rst_n(rst_n),
       .req(obs_wr_req), .rsp(obs_wr_rsp),
-      .map_valid(1'b0), .blit_slot(1'b0), .blit_span(32'd0), .fb_writer(1'b0), .res_valid(1'b0), .res_base(32'd0), .res_span(32'd0), // TIE: an observer of TERRAIN.BUILD's page traffic; no MEM.UPLOAD resource region here
+      .map_valid(1'b0), .blit_slot(1'b0), .blit_span(32'd0), .fb_writer(1'b0), .res_valid(1'b0), .res_base(32'd0), .res_span(32'd0),
+      // TIE: an observer of TERRAIN.BUILD's page traffic; no MEM.UPLOAD
+      // resource region here, and item 4's PARAMBUF window names ENGINE1
+      // alone so it stays shut for this client in either direction
+      .pb_lease_valid(1'b0), .pb_wr_view(1'b0), .pb_scratch_valid(1'b0),
       .arb_req(obs_wr_areq), .arb_rsp(obs_arsp),
       .guard_violation(obs_wr_viol_pulse),
       .guard_violations(obs_wr_viol_tot),
@@ -2603,7 +2607,11 @@ module tb_terrain_world
   zhao_mem_guard u_obs_rd (
       .clk(clk), .rst_n(rst_n),
       .req(obs_rd_req), .rsp(obs_rd_rsp),
-      .map_valid(1'b0), .blit_slot(1'b0), .blit_span(32'd0), .fb_writer(1'b0), .res_valid(1'b0), .res_base(32'd0), .res_span(32'd0), // TIE: an observer of TERRAIN.BUILD's page traffic; no MEM.UPLOAD resource region here
+      .map_valid(1'b0), .blit_slot(1'b0), .blit_span(32'd0), .fb_writer(1'b0), .res_valid(1'b0), .res_base(32'd0), .res_span(32'd0),
+      // TIE: an observer of TERRAIN.BUILD's page traffic; no MEM.UPLOAD
+      // resource region here, and item 4's PARAMBUF window names ENGINE1
+      // alone so it stays shut for this client in either direction
+      .pb_lease_valid(1'b0), .pb_wr_view(1'b0), .pb_scratch_valid(1'b0),
       .arb_req(obs_rd_areq), .arb_rsp(obs_arsp),
       .guard_violation(obs_rd_viol_pulse),
       .guard_violations(obs_rd_viol_tot),

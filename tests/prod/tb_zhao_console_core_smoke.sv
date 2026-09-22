@@ -389,6 +389,49 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_ma_err_short_o;
   logic [31:0] geom_ma_err_long_o;
   logic [31:0] geom_ma_err_unowned_o;
+  // ---- GEOM.PARAMBUF (owner completion ruling ITEM 4, 2026-09-22) ---------
+  // The bench connects the core with `.*`, so a core port with no net here is
+  // a VERILATION FAILURE, not a warning -- RC 1 in about a second, which is
+  // the tell the packet brief names and which this sweep hit on its first run.
+  logic [31:0] geom_pa_verts_o;
+  logic [31:0] geom_pa_tris_o;
+  logic [31:0] geom_pa_chunks_o;
+  logic [31:0] geom_pa_frames_o;
+  logic [31:0] geom_pa_denied_o;
+  logic [31:0] geom_pa_overflow_o;
+  logic [31:0] geom_pa_discarded_o;
+  logic [31:0] geom_pa_unsealed_o;
+  logic [31:0] geom_pa_overrun_o;
+  logic [31:0] geom_pa_flipblock_o;
+  logic [31:0] geom_pa_pubblock_o;
+  logic [31:0] geom_pa_addrbad_o;
+  logic [31:0] geom_pa_scrcontend_o;
+  logic [31:0] geom_pa_retireunder_o;
+  logic [15:0] geom_pa_fault_src_o;
+  logic        geom_pa_fault_o;
+  logic        geom_pa_busy_o;
+  logic        geom_pa_seal_ready_o;
+  logic [31:0] geom_pw_dirs_o;
+  logic [31:0] geom_pw_dirmiss_o;
+  logic [31:0] geom_pw_chunks_o;
+  logic [31:0] geom_pw_stale_o;
+  logic [31:0] geom_pw_illegal_o;
+  logic [31:0] geom_pw_tris_o;
+  logic [31:0] geom_pw_trisbad_o;
+  logic [31:0] geom_pw_cut_o;
+  logic [31:0] geom_pw_denied_o;
+  logic [31:0] geom_pw_short_o;
+  logic [31:0] geom_pw_stray_o;
+  logic [31:0] geom_pw_genrace_o;
+  logic [15:0] geom_pw_depth_o;
+  logic [31:0] geom_ws_denied_o;
+  logic [31:0] geom_ws_contention_o;
+  logic [31:0] geom_ws_short_o;
+  logic [31:0] geom_ws_long_o;
+  logic [31:0] geom_ws_unowned_o;
+  logic [31:0] geom_ws_retire_unowned_o;
+  logic [31:0] geom_ws_wbeat_unowned_o;
+  logic [31:0] geom_ws_ledger_full_o;
   logic [31:0] geom_af_meshlets_fetched_o;
   logic [31:0] geom_af_beats_read_o;
   logic [31:0] geom_af_guard_denied_o;
@@ -5654,6 +5697,42 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: assemble   meshlets=%0d triangles=%0d refused[limits/index]=[%0d %0d]",
              geom_asm_meshlets_o, geom_asm_triangles_o,
              geom_asm_refused_limits_o, geom_asm_refused_index_o);
+    // GEOM.PARAMBUF, and EVERY counter is printed rather than a chosen few.
+    // DEVSDRAM's own finding, two days ago: "the smoke declared eight counters
+    // and printed none of them" -- a counter a bench declares and never shows
+    // is a counter nobody can read a zero off, and a zero nobody reads is the
+    // most comfortable number in the repository.
+    //
+    // WHAT THE NUMBERS BELOW ACTUALLY MEAN IN THIS COMPOSITION, so nobody
+    // reads a zero as a pass. Console entries I53/I54 tie the vertex and chunk
+    // intakes, and I55 ties the walk request. So in THIS bench:
+    //   verts/chunks  are EXPECTED ZERO -- no producer port exists yet
+    //   dirs/walk/*   are EXPECTED ZERO -- nothing asks for a walk
+    //   tris          is the LIVE one: GEOM.ASSEMBLE's descriptors, tapped
+    // The detectors below them -- overrun, addrbad, retireunder, dirmiss,
+    // genrace, stray, ws_unowned -- are the ones that must be zero for a
+    // reason rather than for lack of traffic, and `tris` non-zero beside
+    // them is what makes their zero worth anything at all.
+    $display("SMOKE: paramarena verts=%0d tris=%0d chunks=%0d frames=%0d unsealed=%0d",
+             geom_pa_verts_o, geom_pa_tris_o, geom_pa_chunks_o,
+             geom_pa_frames_o, geom_pa_unsealed_o);
+    $display("SMOKE: paramarena denied=%0d overflow=%0d discarded=%0d overrun=%0d fault=%0d src=%0d",
+             geom_pa_denied_o, geom_pa_overflow_o, geom_pa_discarded_o,
+             geom_pa_overrun_o, geom_pa_fault_o, geom_pa_fault_src_o);
+    $display("SMOKE: paramarena flipblock=%0d pubblock=%0d addrbad=%0d scrcontend=%0d retireunder=%0d",
+             geom_pa_flipblock_o, geom_pa_pubblock_o, geom_pa_addrbad_o,
+             geom_pa_scrcontend_o, geom_pa_retireunder_o);
+    $display("SMOKE: paramwalk  dirs=%0d dirmiss=%0d chunks=%0d stale=%0d illegal=%0d depth=%0d",
+             geom_pw_dirs_o, geom_pw_dirmiss_o, geom_pw_chunks_o,
+             geom_pw_stale_o, geom_pw_illegal_o, geom_pw_depth_o);
+    $display("SMOKE: paramwalk  tris=%0d trisbad=%0d cut=%0d denied=%0d short=%0d stray=%0d genrace=%0d",
+             geom_pw_tris_o, geom_pw_trisbad_o, geom_pw_cut_o,
+             geom_pw_denied_o, geom_pw_short_o, geom_pw_stray_o,
+             geom_pw_genrace_o);
+    $display("SMOKE: geomwshare denied=%0d contention=%0d err[short/long/unowned]=[%0d %0d %0d] retireunowned=%0d wbeatunowned=%0d ledgerfull=%0d",
+             geom_ws_denied_o, geom_ws_contention_o, geom_ws_short_o,
+             geom_ws_long_o, geom_ws_unowned_o, geom_ws_retire_unowned_o,
+             geom_ws_wbeat_unowned_o, geom_ws_ledger_full_o);
     $display("SMOKE: sdram      model_error=%0d kinds[trcd/trp/trc/refresh/protocol/mrs]=%b",
              geom_model_error, geom_model_err);
     $display("SMOKE: vdecode    records_expected=%0d decoded=%0d refused[reserved/w0/format]=[%0d %0d %0d]",

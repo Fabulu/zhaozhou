@@ -676,6 +676,17 @@ struct GuardMap {
   bool res_valid = false;
   uint32_t res_base = 0;
   uint32_t res_span = 0;
+  // GEOM.PARAMBUF's FRAME LEASE (owner completion ruling ITEM 4, 2026-09-22;
+  // spec/memory_rules.md 5c). The RTL's `pb_lease_valid/pb_wr_view/
+  // pb_scratch_valid`, and like them each one is a REFUSAL rather than a
+  // convenience: all three default OFF, so a GuardMap written before this
+  // ruling gives ENGINE1 byte-for-byte the permissions it had before it.
+  // That default IS the "no blanket bank-3 permission" property, expressed
+  // where every existing caller of verdict() already exercises it.
+  bool pb_lease_valid = false;  // ENGINE1 holds the arena this frame at all
+  unsigned pb_wr_view = 0;      // 0/1 -- WHICH view it may WRITE (a mux, not
+                                // an OR: the unnamed view is read-only)
+  bool pb_scratch_valid = false;  // the shared scratch is ACQUIRED
 };
 
 constexpr uint32_t kFbSlot0Base = 0x00000000u;
@@ -706,6 +717,26 @@ constexpr uint32_t kPostEchoSpan = 0x0003C000u;
 // ZHAO_TERRAIN_DEVSTORE_*; the derivation is written out there term by term.
 constexpr uint32_t kTerrainDevStoreBase = 0x05860000u;
 constexpr uint32_t kTerrainDevStoreSpan = 0x00050000u;
+// GEOM.PARAMBUF -- the external geometry arena, ENGINE1's, lease-gated (owner
+// completion ruling ITEM 4, 2026-09-22; spec/memory_rules.md 5c and ruling R7).
+// zhao_pkg ZHAO_PARAMBUF_*. THREE regions, not one, and they TILE: view 0 ends
+// exactly where view 1 begins, view 1 ends exactly where the scratch begins,
+// and the scratch ends exactly at kRenderAssetBase. Written as three separate
+// base/span pairs for the reason the RTL gives at `pb_in_view0` -- a single
+// [VIEW0_BASE, SCRATCH_END) range is arithmetically identical for every request
+// contained in any ONE of them and ADDITIONALLY admits every request that spans
+// a seam, which is the producer scribbling on the frame the walker is reading.
+constexpr uint32_t kParamBufView0Base = 0x06000000u;
+constexpr uint32_t kParamBufView1Base = 0x06400000u;
+constexpr uint32_t kParamBufViewSpan = 0x00400000u;  // 4 MiB per view
+constexpr uint32_t kParamBufScratchBase = 0x06800000u;
+constexpr uint32_t kParamBufScratchSpan = 0x00200000u;  // 2 MiB, shared
+static_assert(kParamBufView0Base + kParamBufViewSpan == kParamBufView1Base,
+              "PARAMBUF view 0 does not end where view 1 begins");
+static_assert(kParamBufView1Base + kParamBufViewSpan == kParamBufScratchBase,
+              "PARAMBUF view 1 does not end where the scratch begins");
+static_assert(kParamBufScratchBase + kParamBufScratchSpan == kRenderAssetBase,
+              "PARAMBUF scratch does not end at RENDER.ASSET_POOL");
 
 struct MemoryGuard {
   // client ids (zhao_client_e)
@@ -759,7 +790,7 @@ struct MemoryGuard {
         if (r.client == BLIT_DMA) return r.write && in_lease;
         return in_lease;
       }
-      case ENGINE1:
+      case ENGINE1: {
         // RENDER.ASSET_POOL, ENGINE1 READ-only (spec/memory_rules.md 5f).
         // MISSING from the oracle while the RTL had it, so the model and the
         // block disagreed about every meshlet descriptor read. Nothing caught
@@ -768,7 +799,48 @@ struct MemoryGuard {
         // at addresses the test never generates. Added with the terrain arm
         // rather than left, because a reference that is right about the region
         // being added and wrong about the one beside it is not a reference.
-        return !r.write && r.addr >= kRenderAssetBase && end <= kRenderAssetBase + kRenderAssetSpan;
+        const bool render_asset_ok =
+            !r.write && r.addr >= kRenderAssetBase && end <= kRenderAssetBase + kRenderAssetSpan;
+        // GEOM.PARAMBUF's THREE ARMS (owner completion ruling ITEM 4,
+        // spec/memory_rules.md 5c). The RTL's `pb_rd_ok / pb_wr_ok /
+        // pb_scr_ok`, term for term, because this oracle is what the directed
+        // test differences the block against -- a "tidier" merged arm here
+        // would agree with a merged arm there and neither would be checked.
+        //
+        // THREE CONTAINMENT TESTS OVER THEIR OWN CONSTANTS, for the reason
+        // R242's devstore arm gives one paragraph down: lying in the union of
+        // two permitted ranges is not permission. These three regions TILE,
+        // so the union is a contiguous 10 MiB and a merged test would admit
+        // every seam-crossing burst while looking identical on every request
+        // that does not cross one. The static_asserts above are what keep
+        // "they tile" a checked fact rather than a comment.
+        const uint64_t e64 = end;
+        const bool in_view0 = r.addr >= kParamBufView0Base &&
+                              e64 <= uint64_t(kParamBufView0Base) + kParamBufViewSpan;
+        const bool in_view1 = r.addr >= kParamBufView1Base &&
+                              e64 <= uint64_t(kParamBufView1Base) + kParamBufViewSpan;
+        const bool in_scratch = r.addr >= kParamBufScratchBase &&
+                                e64 <= uint64_t(kParamBufScratchBase) + kParamBufScratchSpan;
+        // READ takes EITHER view: the walker reads the published view, and a
+        // diagnostic read of the view being built cannot corrupt anything.
+        const bool pb_rd_ok = !r.write && m.pb_lease_valid && (in_view0 || in_view1);
+        // WRITE NAMES THE VIEW. `pb_wr_view ? in_view1 : in_view0` is a MUX and
+        // not an `||`, so a perfectly contained write to the view the lease
+        // does not name is REFUSED -- which is the whole protection, since the
+        // unnamed view is the frame the renderer is currently walking.
+        const bool pb_wr_ok = r.write && m.pb_lease_valid && (m.pb_wr_view ? in_view1 : in_view0);
+        // The scratch takes BOTH directions (the fetcher writes it, the walker
+        // reads it) and gates on the EXPLICIT acquire: item 4's "shared scratch
+        // has explicit ownership and release rather than being unowned
+        // temporary memory". Release is deasserting `pb_scratch_valid`.
+        const bool pb_scr_ok = m.pb_lease_valid && m.pb_scratch_valid && in_scratch;
+        // ENGINE1'S ASSET-POOL PERMISSION IS UNCHANGED BY THIS RULING, and
+        // structurally so rather than by inspection: all three regions end at
+        // or below kRenderAssetBase, so no PARAMBUF arm can be true inside the
+        // pool, and `render_asset_ok` still requires !r.write. A WRITE into
+        // RENDER.ASSET_POOL is refused whether or not the lease is held.
+        return render_asset_ok || pb_rd_ok || pb_wr_ok || pb_scr_ok;
+      }
       case TERRAIN_BUILD: {
         // TERRAIN.PAGE_POOL, TERRAIN.BUILD's in BOTH DIRECTIONS (rulings T2 /
         // T3 / T4, spec/memory_rules.md 5b). Constant bounds: no map input

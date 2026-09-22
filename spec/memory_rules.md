@@ -541,6 +541,47 @@ separate, ruled work and it needs the residency→guard interface first.
 See `design/contracts/GEOM.PARAMBUF.md`. ENGINE1 owns the render-geometry
 region; the two views are disjoint for the same reason the two FB slots are.
 
+### The guard window (owner completion ruling ITEM 4, 2026-09-22)
+
+**This map was ruled on 2026-09-02 and `MEM.GUARD` had no window for any of it
+for twenty days.** ENGINE1's only arm was `render_asset_ok` over §5f's pool at
+`[0x06A0_0000, 0x0800_0000)`, and the whole of this section lies **strictly
+below** it -- so even a read-only composition was refused by construction, and
+`zhao_geom_parambuf`'s recorded blocker ("it needs an arena writer") was true
+and was the *second* obstacle.
+
+| arm | direction | region | gated on |
+|---|---|---|---|
+| `pb_rd_ok` | read | either view | `pb_lease_valid` |
+| `pb_wr_ok` | write | **the view `pb_wr_view` NAMES** | `pb_lease_valid` |
+| `pb_scr_ok` | both | the shared scratch | `pb_lease_valid` **and** `pb_scratch_valid` |
+
+`ENGINE1` and no other client; client 5 stays unspent (T3); **no blanket bank-3
+permission** -- with the lease low, ENGINE1's permissions are byte-for-byte
+what they were before this ruling.
+
+**Three containment tests, not one, and that is the load-bearing choice.** The
+three regions tile exactly and end at `ZHAO_RENDER_ASSET_BASE`, so a single
+union comparison would be identical for every request inside one region and
+would additionally admit every request that **spans a seam** -- the producer
+writing the view the walker is reading. Item 4: *"A request crossing a per-view
+or scratch boundary is not allowed merely because both endpoints lie somewhere
+in the union of permitted ranges."*
+
+`RENDER.ASSET_POOL` remains **read-only to ENGINE1**: `render_asset_ok` still
+requires `!req.write` and all three regions end at or below its base
+(`a1_pb_asset_still_ro`).
+
+The shared scratch has an **owner**, not merely a region: `GEOM.PARAMARENA`
+grants it to itself or to `GEOM.PARAMWALK`, and `pb_scratch_valid` is LOW
+between uses, so it is unmapped for everybody rather than standing open.
+
+`tests/formal/mem_guard_no_escape.sby` carries fourteen `a1_pb_*` theorems and
+five `c_forward_pb_*` covers. Two committed mutants make it fail:
+`zhao_mem_guard_pbview_mutant.sv` (the write arm stops naming a view) and
+`zhao_mem_guard_pbunion_mutant.sv` (the three containment tests collapse into
+their union).
+
 ## 5f. The shared render asset pool — Phase 3 / Packet E
 
 §5 promised that "later phases extend the map (texture/terrain/particle pools

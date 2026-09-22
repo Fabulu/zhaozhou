@@ -226,7 +226,17 @@ top:
   # that lane under this file's own rule. The census total does not change; it
   # stops being a separate standalone instance beside a lane that contains one.
   - zhao_geom_attrsetup
-  - zhao_geom_parambuf
+  # zhao_geom_parambuf WAS A TOP HERE UNTIL 2026-09-22 (owner completion ruling
+  # ITEM 4) and is not any more: zhao_geom_paramwalk instantiates it, so it is
+  # counted INSIDE the walker under this file's own rule -- the same move
+  # zhao_geom_wcache made on 2026-09-20.
+  #
+  # It is worth saying WHY it was ever a standalone top, because the answer is
+  # this packet's whole subject: nothing instantiated it. It is pure decode,
+  # bytes in and fields out, and the console held no byte vector in any of R7's
+  # three layouts, so for nineteen days the record layer was counted as its own
+  # instance because there was nothing to count it inside of. The census total
+  # does not change; what changed is that it is now part of a machine.
   # Both built 2026-09-03/04 from BORING_3D_FUNDAMENTALS_AUDIT. ASSEMBLE is R1,
   # the index walk that turns a meshlet into triangles -- the arrow that was
   # missing between MESHFETCH and SETUP, previously driven only by a harness.
@@ -273,6 +283,17 @@ top:
   # that a second geometry fetcher has no client identity the guard admits and
   # the arbiter carries, so this is the only route MESHFETCH has to real memory.
   - zhao_geom_mem_adapter
+  # GEOM.PARAMBUF's subsystem (owner completion ruling ITEM 4, 2026-09-22).
+  # The record layer has existed since 2026-09-03 and was in NO production fit,
+  # because nothing instantiated it -- pure decode with no producer. The arena
+  # producer writes R7's three record types into bank 3 through the ENGINE1
+  # guard; the walker reads them back and instantiates the decoder. All three
+  # are counted with zhao_console_core, which elaborates them. The record
+  # layer itself is already listed above and is NOT repeated here -- what
+  # changed for it is not its manifest line but its CLOSURE: it is now in the
+  # console fit's source list because something finally instantiates it.
+  - zhao_geom_paramarena
+  - zhao_geom_paramwalk
   # GEOM.MESHFETCH's descriptor CRC walker (core entry I37, closed 2026-09-19):
   # two constant-count zhao_crc32c_fold trees and a beat counter, composed
   # beside the fetcher on its own beat nets, so it is a census top of its own.

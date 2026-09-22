@@ -140,7 +140,14 @@ module zhao_shell_top_v2
   // A composer that needs a second background reader raises this; it does not
   // build a second socket.
   parameter int unsigned BUILD_HPS_N = 1,
-  parameter int unsigned BUILD_WQ_W  = 64 // slot-6 write-data queue, 16-bit words
+  parameter int unsigned BUILD_WQ_W  = 64, // slot-6 write-data queue, 16-bit words
+  // Slot 3's write-data queue, in 16-bit words. GEOM.PARAMBUF's largest
+  // record is a 64-byte chunk = 32 words, so 64 words holds two in flight
+  // while the third is being offered. Sized like BUILD_WQ_W and for the same
+  // reason: the room gate below is EXACT, so a queue too small does not
+  // corrupt anything, it throttles -- which is a throughput question and not
+  // a correctness one.
+  parameter int unsigned GEOM_WQ_W   = 64
 ) (
   // ---- clocks + reset (harness-driven, frozen ratios: vid = gpu/2,
   // ---- audio = gpu/4, fixed phase — plan R1) -----------------------------
@@ -394,6 +401,34 @@ module zhao_shell_top_v2
   output var logic            geom_beat_valid_o,
   output var logic [63:0]     geom_beat_data_o,
   output var logic            geom_beat_last_o,
+  // THE WRITE CHANNEL, opened by the owner's completion ruling of 2026-09-22,
+  // item 4. Slot 3 has been READ-ONLY since D22 tread 10 and the comment below
+  // it still says the geometry fetchers "READ the Phase-3 asset pool and never
+  // write" -- which remains true OF THE ASSET POOL. It is no longer true of
+  // the client: GEOM.PARAMBUF's arena producer writes the view the lease
+  // names, and RENDER.ASSET_POOL stays read-only to ENGINE1 because
+  // `render_asset_ok` still requires `!req.write`, not because nothing here
+  // can write.
+  //
+  // Shaped exactly like slot 6's, because slot 6 already solved this problem:
+  // the controller pops a word per `wr_beat` from the moment of grant, so the
+  // arbiter must not accept a write whose words are not all in the queue and
+  // not already owed to an accepted request. That gate is EXACT, not a race.
+  input  var logic [63:0]     geom_wdata_i,
+  input  var logic            geom_wvalid_i,
+  output var logic            geom_wready_o,
+  input  var logic            geom_wlast_i,
+  // The VRAM arbiter's credit stream for slot 3, in 16-bit words. The ONLY
+  // thing that means "the write landed" -- which is what item 4's "data must
+  // not be published before its writes retire" is measured against upstream.
+  output var logic [ 7:0]     geom_retire_words_o,
+  // GEOM.PARAMBUF's frame lease (item 4). Driven by the arena producer, which
+  // latches the view at frame seal and refuses to flip it while anything is in
+  // flight. These are PASSED THROUGH to the guard and not interpreted here:
+  // the shell is not where the lifetime argument lives.
+  input  var logic            geom_pb_lease_i,
+  input  var logic            geom_pb_wr_view_i,
+  input  var logic            geom_pb_scratch_i,
 
   // ---- THE TERRAIN.BUILD SOCKET (VRAM slot 6 + HPS clients 2..) ------------
   // Added 2026-09-19 (cmdmem packet) so that MEM.UPLOAD and the terrain
@@ -1033,6 +1068,11 @@ module zhao_shell_top_v2
     .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    // TIE: this guard's client is never ENGINE1, so item 4's PARAMBUF window is
+    // shut here in both directions
+    .pb_lease_valid   (1'b0),
+    .pb_wr_view       (1'b0),
+    .pb_scratch_valid (1'b0),
     .arb_req    (scan_arb_req),
     .arb_rsp    (client_rsp[0]),
     .guard_violation     (scan_gv),
@@ -1059,6 +1099,11 @@ module zhao_shell_top_v2
     .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    // TIE: this guard's client is never ENGINE1, so item 4's PARAMBUF window is
+    // shut here in both directions
+    .pb_lease_valid   (1'b0),
+    .pb_wr_view       (1'b0),
+    .pb_scratch_valid (1'b0),
     .arb_req    (blit_arb_req),
     .arb_rsp    (client_rsp[1]),
     .guard_violation     (blit_gv),
@@ -1517,6 +1562,11 @@ module zhao_shell_top_v2
     .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    // TIE: this guard's client is never ENGINE1, so item 4's PARAMBUF window is
+    // shut here in both directions
+    .pb_lease_valid   (1'b0),
+    .pb_wr_view       (1'b0),
+    .pb_scratch_valid (1'b0),
     .arb_req    (render_arb_req),
     .arb_rsp    (client_rsp[2]),
     .guard_violation     (render_gv),
@@ -1544,7 +1594,13 @@ module zhao_shell_top_v2
     else wf_owed <= wf_owed
          + ((client_rsp[2].grant && render_arb_req.write)
               ? ($bits(wf_owed))'(build_words_of(render_arb_req.len)) : '0)
-         - ((wr_beat_ctrl && !wr_sel_build && (wf_owed != '0))
+         // A THIRD OWNER HAS TO BE EXCLUDED HERE TOO. `!wr_sel_build` alone
+         // would count slot 3's beats as framebuffer pops and walk this
+         // counter down under a write it has nothing to do with -- which
+         // shows up as the framebuffer gate opening early, not as a geometry
+         // fault. The two faults are in different blocks and only one of them
+         // is where the change was made.
+         - ((wr_beat_ctrl && !wr_sel_build && !wr_sel_geom && (wf_owed != '0))
               ? ($bits(wf_owed))'(1) : '0);
   end
   always_comb begin
@@ -1590,6 +1646,12 @@ module zhao_shell_top_v2
     .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    // ITEM 4's lease, straight from GEOM.PARAMBUF's arena producer. NOT tied:
+    // this is the one guard instance in the console whose client is ENGINE1,
+    // so it is the one place the window can be open at all.
+    .pb_lease_valid   (geom_pb_lease_i),
+    .pb_wr_view       (geom_pb_wr_view_i),
+    .pb_scratch_valid (geom_pb_scratch_i),
     .arb_req    (geom_arb_req),
     .arb_rsp    (client_rsp[3]),
     .guard_violation     (geom_gv),
@@ -1597,7 +1659,23 @@ module zhao_shell_top_v2
     .guard_violation_req (geom_gv_req)
   );
 
-  assign client_req[3] = geom_arb_req;
+  // SLOT 3'S WRITE GATE (item 4), slot 6's discipline exactly. `gq_free` is
+  // the queue's words NOT YET OWED to a request the arbiter has already
+  // accepted, so a write is offered only when every one of its words is
+  // already here. The controller raises `wr_beat` in the grant cycle itself on
+  // a row hit, so a queue that was merely "going to be filled" hands the SDRAM
+  // garbage.
+  logic [$clog2(GEOM_WQ_W):0] gq_occ;
+  logic [$clog2(GEOM_WQ_W):0] gq_owed;
+  logic                       gq_room_for_req;
+  assign gq_room_for_req =
+      ({1'b0, gq_occ} - {1'b0, gq_owed}) >= ($bits(gq_occ)+1)'(build_words_of(geom_arb_req.len));
+  always_comb begin
+    client_req[3]       = geom_arb_req;
+    client_req[3].valid = geom_arb_req.valid
+                       && (!geom_arb_req.write || gq_room_for_req);
+  end
+  assign geom_retire_words_o = client_rsp[3].credits;
   // Slot 4 stays tied off: it is DEBUG by position, and DEBUG owns nothing.
   assign client_req[4] = '0;
   // Slot 5 is the client id ruling T3 reserves and forbids spending; the
@@ -1639,6 +1717,11 @@ module zhao_shell_top_v2
     .res_valid  (build_res_valid_i),
     .res_base   (build_res_base_i),
     .res_span   (build_res_span_i),
+    // TIE: this guard's client is never ENGINE1, so item 4's PARAMBUF window is
+    // shut here in both directions
+    .pb_lease_valid   (1'b0),
+    .pb_wr_view       (1'b0),
+    .pb_scratch_valid (1'b0),
     .arb_req    (build_arb_req),
     .arb_rsp    (client_rsp[6]),
     .guard_violation     (build_gv),
@@ -1713,13 +1796,64 @@ module zhao_shell_top_v2
                         ? (ctrl_req.client == ZHAO_CLIENT_TERRAIN_BUILD)
                         : wr_owner_build_r;
 
+  // SLOT 3'S WRITE-DATA QUEUE. A third owner on one controller word, and the
+  // owner is read the same way slot 6's is: straight off `ctrl_req` during the
+  // grant cycle (where `wr_beat` can already be high on a row hit) and from a
+  // register for the burst's remaining beats.
+  logic wr_owner_geom_r;
+  logic wr_sel_geom;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) wr_owner_geom_r <= 1'b0;
+    else if (ctrl_rsp.grant && ctrl_req.write)
+      wr_owner_geom_r <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
+  end
+  assign wr_sel_geom = (ctrl_rsp.grant && ctrl_req.write)
+                       ? (ctrl_req.client == ZHAO_CLIENT_ENGINE1)
+                       : wr_owner_geom_r;
+
+  logic [15:0] gq [0:GEOM_WQ_W-1];
+  logic [$clog2(GEOM_WQ_W):0] gq_wp, gq_rp;
+  logic gq_err;
+  assign gq_occ        = gq_wp - gq_rp;
+  assign geom_wready_o = (gq_occ <= ($bits(gq_occ))'(GEOM_WQ_W - 4));
+
+  wire gq_pop     = wr_beat_ctrl && wr_sel_geom;
+  wire gq_promise = client_rsp[3].grant && geom_arb_req.write;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      gq_wp <= '0; gq_rp <= '0; gq_owed <= '0; gq_err <= 1'b0;
+    end else begin
+      if (geom_wvalid_i && geom_wready_o) begin
+        for (int j = 0; j < 4; j++)
+          gq[($clog2(GEOM_WQ_W))'(gq_wp + ($bits(gq_wp))'(j))] <= geom_wdata_i[16*j +: 16];
+        gq_wp <= gq_wp + ($bits(gq_wp))'(4);
+      end
+      if (gq_pop) begin
+        // A pop from an empty queue is a garbage word written to VRAM. The
+        // write gate makes it unreachable; this is the tripwire that says so.
+        if (gq_occ == '0) gq_err <= 1'b1;
+        else gq_rp <= gq_rp + ($bits(gq_rp))'(1);
+      end
+      gq_owed <= gq_owed
+               + (gq_promise ? ($bits(gq_owed))'(build_words_of(geom_arb_req.len)) : '0)
+               - (gq_pop && (gq_owed != '0) ? ($bits(gq_owed))'(1) : '0);
+    end
+  end
+
   logic [15:0] bq [0:BUILD_WQ_W-1];
   logic [$clog2(BUILD_WQ_W):0] bq_wp, bq_rp;
   logic bq_err;
   assign bq_occ         = bq_wp - bq_rp;
   assign build_wready_o = (bq_occ <= ($bits(bq_occ))'(BUILD_WQ_W - 4));
 
+  // THREE OWNERS, AND THE SELECTORS ARE MUTUALLY EXCLUSIVE BY CONSTRUCTION,
+  // not by priority: each is `ctrl_req.client == <one enum value>` over the
+  // same grant, and a request carries one client. The `if/else` order is
+  // therefore readability and not arbitration -- which is worth saying,
+  // because a priority mux that could pick the wrong source would need two
+  // ACTIVE sources, and the arbiter grants one client at a time.
   assign wdata_ctrl = wr_sel_build ? bq[bq_rp[$clog2(BUILD_WQ_W)-1:0]]
+                    : wr_sel_geom  ? gq[gq_rp[$clog2(GEOM_WQ_W)-1:0]]
                                    : wfifo[wf_rp[$clog2(WFIFO_W)-1:0]];
 
   // the words the arbiter has been promised: + a request's words when it is
@@ -1782,7 +1916,7 @@ module zhao_shell_top_v2
           wf_wp <= wf_wp + ($bits(wf_wp))'(4);
         end
       end
-      if (wr_beat_ctrl && !wr_sel_build) begin
+      if (wr_beat_ctrl && !wr_sel_build && !wr_sel_geom) begin
         if (wf_occ == '0) wf_err <= 1'b1;      // underflow: garbage word
         else wf_rp <= wf_rp + ($bits(wf_rp))'(1);
       end
@@ -1798,7 +1932,10 @@ module zhao_shell_top_v2
   assign render_wready = fbw_wready;
   // BOTH write queues' tripwires: a word written from an empty queue is a
   // garbage word in VRAM whichever queue it came from.
-  assign shell_err_wfifo_o = wf_err || bq_err;
+  // THREE QUEUES, ONE TRIPWIRE. `gq_err` joins it rather than getting its own
+  // port: the smoke asserts this stays 0, and a new queue whose underflow was
+  // invisible to that assertion would be a queue nothing watches.
+  assign shell_err_wfifo_o = wf_err || bq_err || gq_err;
 
   // read-beat packer (glue 2): 4 rdata words -> one 64-bit beat
   //
@@ -2019,8 +2156,26 @@ module zhao_shell_top_v2
       // learns it in the same edit the guard's client arm was connected --
       // the mistake this block's own comment records twice was learning one
       // and not the other.
+      //
+      // AND A THIRD TIME, 2026-09-22 (owner completion ruling ITEM 4).
+      // ENGINE1 is now a legal WRITER -- GEOM.PARAMBUF's arena producer --
+      // and this arm did not know it, so EVERY arena write raised the shell's
+      // own corruption alarm. The paragraph above records the same mistake
+      // twice and I made it a third time in the same file, which is worth
+      // leaving on the record: the comment is not the mechanism. What finally
+      // caught it was the console smoke asserting the tripwire stays 0, one
+      // form and one assertion, after lint, the formal proof, four mutants and
+      // a 316-check acceptance bench had all passed.
+      //
+      // Widened DELIBERATELY and no further, on the TERRAIN_BUILD precedent:
+      // ENGINE1 is not under the framebuffer lease, and MEM.GUARD confines its
+      // writes to the view the PARAMBUF lease NAMES -- disjoint from both FB
+      // slots, from TERRAIN's regions, from POST.ECHO and from
+      // RENDER.ASSET_POOL, which stays read-only to it. So this arm admits an
+      // identity the guard has already bounded; it does not open a region.
       if (ctrl_req.write  && (ctrl_req.client != expected_writer)
-                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD))
+                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD)
+                          && (ctrl_req.client != ZHAO_CLIENT_ENGINE1))
         route_err <= 1'b1;
       // TREAD 10: reads may now be SCANOUT'S OR ENGINE1'S. This is the same
       // mistake the write side already made once and is documented above --

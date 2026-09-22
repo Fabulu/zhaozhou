@@ -1754,6 +1754,21 @@ targets:
     sources:
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
 
+  # PARAMARENA, owner completion ruling ITEM 4 (2026-09-22). TWO leaf targets
+  # and not one, and not folded into the record layer's: a leaf fit answers
+  # "what does this block cost", and three blocks in one target answer a
+  # question nobody asked. The walker's target carries the record layer,
+  # because the walker INSTANTIATES it -- which is exactly why the decoder
+  # stopped being a census top of its own in design/prod_manifest.yml.
+  - top: zhao_geom_paramarena
+    sources:
+      - fpga/rtl/geometry/zhao_geom_paramarena.sv
+
+  - top: zhao_geom_paramwalk
+    sources:
+      - fpga/rtl/geometry/zhao_geom_parambuf.sv
+      - fpga/rtl/geometry/zhao_geom_paramwalk.sv
+
   - top: zhao_geom_vdecode
     sources:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
@@ -2207,6 +2222,13 @@ targets:
 
   - top: zhao_prod_top
     sources:
+      # PARAMARENA, owner completion ruling ITEM 4 (2026-09-22): the arena
+      # producer and the chunk walker. The RECORD LAYER is already in this
+      # list -- it has been a counted top since 2026-09-03 -- but it is one
+      # no longer, because the walker instantiates it. What this adds is the
+      # two blocks that give it a producer and a consumer.
+      - fpga/rtl/geometry/zhao_geom_paramarena.sv
+      - fpga/rtl/geometry/zhao_geom_paramwalk.sv
       - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --
@@ -3039,6 +3061,16 @@ targets:
       - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/memory/zhao_mem_share_wr.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
+      # Added 2026-09-22 (PARAMARENA, owner completion ruling ITEM 4):
+      # GEOM.PARAMBUF's arena producer, its chunk walker, and -- for the first
+      # time -- the RECORD LAYER itself. zhao_geom_parambuf.sv has existed
+      # since 2026-09-03 and was in no console fit, because nothing
+      # instantiated it: it is pure decode and the console held no byte vector
+      # in any of R7's three layouts. The walker instantiates it, so the
+      # decoder is now in the machine rather than beside it.
+      - fpga/rtl/geometry/zhao_geom_parambuf.sv
+      - fpga/rtl/geometry/zhao_geom_paramarena.sv
+      - fpga/rtl/geometry/zhao_geom_paramwalk.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv

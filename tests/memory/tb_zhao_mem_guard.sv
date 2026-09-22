@@ -34,6 +34,16 @@ module tb_zhao_mem_guard
   input logic        res_valid,
   input logic [31:0] res_base,
   input logic [31:0] res_span,
+  // GEOM.PARAMBUF's frame lease (owner completion ruling ITEM 4, 2026-09-22).
+  // DRIVEN by the harness and not tied, because the cases item 4 names --
+  // "a write to the view the lease does not name", "the scratch that was
+  // never acquired", "with the lease low, ENGINE1's permissions are what they
+  // were before this ruling" -- are cases the directed test cannot BUILD
+  // against a tie. A wrapper that tied them would have gone on compiling and
+  // the test would have measured one lease state forever.
+  input logic        pb_lease_valid,
+  input logic        pb_wr_view,
+  input logic        pb_scratch_valid,
 
   // ---- guard events --------------------------------------------------------
   output logic        guard_violation,
@@ -87,6 +97,7 @@ module tb_zhao_mem_guard
     .req (g_req), .rsp (g_rsp),
     .map_valid, .blit_slot, .blit_span, .fb_writer,
     .res_valid, .res_base, .res_span,
+    .pb_lease_valid, .pb_wr_view, .pb_scratch_valid,
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations,
     .guard_violation_req (viol_req)

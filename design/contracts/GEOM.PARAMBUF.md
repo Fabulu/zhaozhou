@@ -1,7 +1,9 @@
 # Contract — GEOM.PARAMBUF (External geometry parameter buffer)
 
 > Ledger: `design/blocks.yml` · gpu clock · ENGINE1 · maturity REFERENCE_COMPLETE
-> RTL: `fpga/rtl/geometry/zhao_geom_parambuf.sv` (the RECORD LAYER only)
+> RTL: `fpga/rtl/geometry/zhao_geom_parambuf.sv` (the RECORD LAYER),
+> `zhao_geom_paramarena.sv` (the ARENA PRODUCER, `GEOM.PARAMARENA`),
+> `zhao_geom_paramwalk.sv` (the RECORD READER, `GEOM.PARAMWALK`)
 > Reference: `zref::geom::parambuf_chunk_follow` and neighbours
 
 ## Purpose and exclusions
@@ -114,6 +116,125 @@ client traffic and takes that arbiter's backpressure.
 ENGINE1 owns the render-geometry region. Bank 2 is terrain (T2) and is not this
 block's.
 
+### The guard window — owner completion ruling ITEM 4, 2026-09-22
+
+**The map above was ruled on 2026-09-02 and `MEM.GUARD` had no window for any
+of it until 2026-09-22.** Packet GEOMCLOSE measured the consequence and it runs
+in the unflattering direction, which is why it is recorded rather than
+paraphrased: ENGINE1's only arm was `render_asset_ok`, whose window is
+`[0x06A0_0000, 0x0800_0000)`, and **the whole of §5c lies strictly below it**.
+Not a direction bit short of legal — outside the bounds, in both directions,
+for the only client that owns it. So even a READ-ONLY composition was refused
+by construction, and the recorded blocker ("it needs an arena writer") was true
+and was the SECOND obstacle.
+
+Item 4 opened it, narrowly:
+
+| arm | direction | region | gated on |
+|---|---|---|---|
+| `pb_rd_ok` | read | either view | the frame lease |
+| `pb_wr_ok` | write | **the view the lease NAMES** | the frame lease |
+| `pb_scr_ok` | both | the shared scratch | the lease **and** an explicit acquire |
+
+**THREE containment tests, not one.** The three regions tile exactly — view 0
+ends where view 1 begins, view 1 where the scratch begins, the scratch exactly
+at `ZHAO_RENDER_ASSET_BASE` — so a single `[VIEW0_BASE, SCRATCH_END)`
+comparison would be arithmetically identical for every request inside any ONE
+of them and would additionally admit every request that **spans a seam**. That
+is not a corner: the two views exist because one is written while the other is
+read. Item 4 says so in as many words, and
+`tests/mutants/zhao_mem_guard_pbunion_mutant.sv` is the committed fault that
+implements the forbidden reading and makes `mem_guard_no_escape` FAIL.
+
+**`RENDER.ASSET_POOL` stays READ-ONLY to `ENGINE1`** and survives this ruling
+structurally, not by inspection: `render_asset_ok` still requires `!req.write`,
+and all three new regions end at or below its base. Theorem
+`a1_pb_asset_still_ro`.
+
+**With the lease low, ENGINE1's permissions are byte-for-byte what they were
+before this ruling.** That is what makes "no blanket bank-3 permission" a
+checkable property rather than a sentence.
+
+### The residual the guard cannot close, and where it IS closed
+
+Item 4: *"Carry request identity WITH the request; do not validate a queued
+request against a later global view selector."* `pb_wr_view` **is** a global
+selector and `MEM.GUARD` is combinational over the request it is being
+*offered*, so a request queued under view 0 and still unaccepted when the lease
+flips would be judged by the new selector. `zhao_guard_req_t` has no view field
+and widening it would change every client's ABI.
+
+It is closed at `GEOM.PARAMARENA`, where the identity lives:
+
+* `view_q` is latched at frame seal and `pb_wr_view_o` is driven from it and
+  nothing else — one write to that register in the whole block;
+* `m_addr_q` is latched at op start and is the only source of
+  `guard_req_o.addr`;
+* **a seal is HELD PENDING while any write is outstanding or the walker still
+  owns the target view.** `view_flip_blocked_o` counts every clock it waits,
+  because a precondition nobody can show ever delayed anything is a term and
+  not a protection.
+
+`addr_view_bad_o` differences the view the held address lies in against the
+view the lease names, and **its two operands load on different enables** —
+`m_addr_q` by the engine, `view_q` by the seal — so it is not the
+lockstep-blind kind of checker. It is unreachable with legal stimulus while the
+drain is correct, so it owes a committed mutant:
+`tests/mutants/zhao_geom_paramarena_drain_mutant.sv`.
+
+## The subsystem, and which part owns what
+
+Item 4: *"Authorization includes the arena producer, allocation/chunk
+management, write-capable route, record readers and actual rendering
+consumers. GEOM.PARAMBUF's existing record decoder is not the whole
+subsystem."*
+
+| block | owns |
+|---|---|
+| `GEOM.PARAMBUF` | the three layouts, the two legality rules, the staleness gate. Pure decode, no memory port, and **instantiated by the walker** rather than reimplemented there |
+| `GEOM.PARAMARENA` | allocation, the per-chunk generation stamp, the quota seal, the overflow and prior-complete-frame fallback, the two-view lease and its drain, the shared scratch's ownership, and the write-capable guard socket |
+| `GEOM.PARAMWALK` | the frame-directory read, the chunk-chain walk, the descriptor fetch, and the round-trip evidence |
+
+**The write-capable route.** `zhao_geom_mem_adapter` is
+`zhao_mem_share_n #(.FORCE_READ(1'b1))` and that parameter is how §5f's "same
+client, same direction, same bounds, same arbiter slot" is *enforced*. An arena
+writer changes the direction, so it cannot join that adapter without removing
+the property the adapter exists to hold. Instead the read adapter's merged
+output becomes one leg of a `zhao_mem_share_wr #(.N(3), .CLIENT_ID(3))`, which
+also carries the producer and the walker. Client 3 is still **one** client at
+the arbiter; client 5 stays unspent (T3).
+
+**The shared scratch holds the FRAME DIRECTORY** — one 64-byte record naming
+the published view, its generation, the three region bases and the three
+counts. It is the only thing the producer and the walker must agree on, it is
+not per-view, and the producer arbitrates it between itself and the walker with
+an explicit acquire and release: `pb_scratch_valid` is LOW between uses, so the
+region is unmapped for everybody rather than standing permanently open.
+
+### The round trip is the evidence, and `dir_mismatch` is where it lands
+
+Item 4: *"Do not pack fields into a byte vector merely to unpack them again and
+count that as external-memory integration."*
+
+So the deliverable is not that a decoder decodes. The frame directory reaches
+the walker **twice by two independent paths** — once as `pub_*_i`,
+combinationally from the arena's registers, and once as 64 bytes that went out
+through the guard, the arbiter, the controller and the SDRAM and came back. If
+they disagree, the bytes did not survive the round trip, and **nothing else in
+the system would say so**: a walk over corrupt records still produces
+triangles. All eight fields are compared; a check that compared only the
+generation would pass while every base was wrong, and the bases are what a bad
+address or a wrong beat demux corrupts.
+
+### One declared divergence from the tier table above
+
+`GEOM.PARAMARENA`'s `MAX_VERTS` defaults to **65,535**, not the 65,536 the
+preferred tier states. A `vertex_id` is u16 and `td_sealed_vertices_i` is u16
+with it, so the *seal* 65,536 is not expressible in the port the legality rule
+is tested against — it would arrive as 0 and refuse every triangle. The choices
+were to widen a frozen record layout, to special-case the maximum, or to lose
+one vertex of 65,536. This takes the vertex, and the number stays a knob.
+
 ### Capacity tiers
 
 | tier | projected vertices | triangles | tile references |
@@ -194,9 +315,16 @@ stale-handle.
   ending the list without being malformed. 15 checks.
 * The rest below are **planned and not written**, and are named without paths
   for that reason — see `reports/PHANTOM-CITATIONS-AUDIT.md`.
+* **`tests/geometry/geom_paramarena_directed.cpp` — WRITTEN 2026-09-22.** The
+  producer and the walker against the REAL guard, arbiter, controller and SDRAM
+  model: the field-for-field round trip, the quota-overflow fault with the
+  prior-complete-frame fallback proved by reading `publish_*` after it, the
+  view alternation and the drain that holds a seal, the retire gate delaying a
+  publish, a stale chunk refused, an illegal chunk refused, and
+  `guard_violations` at zero across every legal case.
 * overflow — a frame that exceeds the sealed quota faults,
   drains, repeats the prior frame and reports source IDs; **no partial frame is
-  published**.
+  published**. Covered by the directed test above.
 * frame generation across a whole walk — a chunk carried over from the previous
   frame is rejected, not followed.
 * stale handle — a handle to a reallocated chunk is reported
@@ -213,13 +341,49 @@ the same chunk chains — the determinism the console's replay story depends on.
 
 ## Integration capture cases
 
-None on hardware. **RTL exists for the RECORD LAYER only** —
-`zhao_geom_parambuf.sv` owns the three layouts, the two legality rules and the
-staleness gate. The arena allocator, the quota seal and the frame-fault path
-are not built. No board, no programmed device. The
-guard map, the tiers and the throughput target above are all specification, and
-the capacity numbers are provisional until measured tile-reference cost says
-otherwise.
+None on hardware. No board, no programmed device.
+
+**UPDATED 2026-09-22 (owner completion ruling ITEM 4).** The paragraph that
+stood here said "RTL exists for the RECORD LAYER only ... the arena allocator,
+the quota seal and the frame-fault path are not built". All three are built now
+and composed in `zhao_console_core`, behind the real `zhao_mem_guard`, the real
+`zhao_vram_arbiter` and the real `zhao_sdram_ctrl`.
+
+**WHAT REACHES THE ARENA IN THE COMPOSED CONSOLE, AND WHAT DOES NOT.** Said
+plainly, because "composed" and "exercised" are different claims:
+
+* **TriangleDescriptor — REAL.** `zhao_geom_assemble`'s live output, the stream
+  this repository's own comments call "exactly GEOM.PARAMBUF's layout", already
+  feeding GEOM.REPLAY. The arena taps it losslessly: `asm_t_ready` is
+  GEOM.REPLAY's ready ANDed with the arena's.
+* **ProjectedVertex — TIED**, console entry I53. Not "not built": the record
+  path is built and tested, and what is missing is a producer PORT. GEOM.PROJECT
+  emits *triangles* (`proj_out_*`) and the arena's intake is a *vertex*, and
+  bridging them needs a vertex-identity scheme, because a descriptor names
+  vertices by u16 index and two triangles sharing an edge must name the same
+  one. `zhao_geom_wcache` already holds projected vertices by identity and is
+  the obvious owner of that decision.
+* **Tile-reference chunk — TIED**, console entry I54. `zhao_geom_binner_v2`
+  builds exactly these chunks in an on-chip arena and exposes no way to see
+  one: `ref_ram` and `next_ram` are internal and `job_*` is a drained stream,
+  not the chunk layout. Three or four ports on that block are the missing
+  piece.
+* **The rendering consumer — TIED**, console entry I55. The walker is composed
+  and reaches real memory; what is tied is who asks it to walk and who takes
+  its triangles. Swapping the raster path off `zhao_geom_binner_v2`'s on-chip
+  arena is the step that makes the external arena the LIVE path, and it needs
+  I54 first — a walk over an arena nothing fills is a walk over nothing.
+
+**R7's GIANT QUOTA IS NOT IN FORCE**, console entry I56. The composed seal is
+the arena's own capacity, because the Measure has nowhere to publish a quota
+yet. Sealing at capacity is the neutral choice — it enforces the real bound and
+reserves nothing — but it means the 32,768 tile references reserved for one
+giant before ordinary kMesh allocation are *not* being reserved, and a
+reservation that silently is not happening looks exactly like one that is.
+
+The guard map is now RTL and formally proved. The tiers and the throughput
+target above remain specification, and the capacity numbers stay provisional
+until measured tile-reference cost says otherwise.
 
 ## Notes
 

@@ -1,0 +1,900 @@
+// tb_zhao_geom_paramarena.sv -- GEOM.PARAMBUF's ARENA, END TO END, THROUGH REAL
+// MEMORY.
+//
+// ===========================================================================
+// WHAT THIS COMPOSES, AND WHY EVERY PIECE OF IT IS THE PRODUCTION FILE
+// ===========================================================================
+//
+//   zhao_geom_paramarena  (the PRODUCER, writes) -+
+//                                                 +-> zhao_mem_share_wr
+//   zhao_geom_paramwalk   (the READER,  reads)  -+     #(.N(2),.CLIENT_ID(3),.RQ(4))
+//                                                         |
+//                                                         v
+//                                                   zhao_mem_guard   (REAL)
+//                                                         |
+//                                                         v
+//                                                   zhao_vram_arbiter (REAL)
+//                                                         |
+//                                                         v
+//                                                   zhao_sdram_ctrl   (REAL)
+//                                                         |
+//                                                         v
+//                                                   zhao_sdram_model  (sim)
+//
+// THERE IS NO PLAYED FABRIC HERE, and that is the whole point of the file.
+// `tb_terrain_lodpath.sv` plays the guard's accept/beat engine because it has
+// to construct a DENIAL, a SHORT BURST and a STRAY BEAT -- faults a correct
+// fabric never produces.  This bench asks the opposite question: the owner's
+// completion ruling of 2026-09-22 item 4 says "do not pack fields into a byte
+// vector merely to unpack them again and count that as external-memory
+// integration".  A stub memory here would be exactly that.  So the bytes go
+// out through the real guard's verdict, the real arbiter's credit law, the
+// real controller's SDRAM burst and a behavioural DRAM, and come back the same
+// way.  If any of those refuses, mis-addresses or mis-routes, this bench sees
+// it as wrong FIELD VALUES and as a counter moving -- not as a picture.
+//
+// ===========================================================================
+// THE GLUE IS TRANSCRIBED FROM `zhao_shell_top_v2.sv`, NOT INVENTED
+// ===========================================================================
+// Three pieces of the shell's slot-3 (ENGINE1) socket are reproduced here, each
+// because the fabric does not work without it and the bench must not be a
+// second, kinder design:
+//
+//   * THE WRITE-DATA QUEUE (`wq`, the shell's `gq`).  `zhao_sdram_ctrl` raises
+//     `wr_beat` in S_RW -- the GRANT CYCLE ITSELF on a row hit -- so a queue
+//     that was merely "going to be filled" hands the DRAM garbage.
+//   * THE WRITE GATE (`wq_room_for_req`, the shell's `gq_room_for_req`).  The
+//     arbiter must not accept a write whose words are not ALL already queued.
+//     Without it this bench writes garbage and the round trip fails for a
+//     reason that has nothing to do with the blocks under test.
+//   * THE WRITE-OWNER MUX (`wr_owner_geom_r` / `wr_sel_geom`).  Only one write
+//     client exists here, so this could have been a constant -- it is written
+//     out in the shell's shape anyway, because a bench whose glue is SIMPLER
+//     than the composition it stands for is measuring a machine nobody ships.
+//
+//   * THE READ-BEAT PACKER and its per-request `last`.  Four 16-bit controller
+//     words become one 64-bit beat; `last` marks the end of the GUARD REQUEST
+//     (len >> 3 beats), never the end of an arbiter burst -- a 64-byte read is
+//     four bursts and the walker must not see four `last` pulses.
+//
+// ===========================================================================
+// NO KNOBS.  THE LEASE IS THE ARENA'S OWN OUTPUT AND NOTHING ELSE
+// ===========================================================================
+// The guard's `pb_lease_valid`, `pb_wr_view` and `pb_scratch_valid` are driven
+// from `zhao_geom_paramarena`'s three output ports, directly, with no bench
+// term ORed in anywhere.  That is deliberate and it is load-bearing.
+//
+// This file briefly carried a `cfg_lease_fix_i` knob that ORed the arena's
+// `busy_o` into the lease, because the first composition measured here COULD
+// NOT PUBLISH A SINGLE FRAME: `pb_lease_valid_o` was
+// `frame_open_q || pub_valid_q`, and the directory write is issued from the
+// publication arm, which is reachable only after `frame_end_i` has cleared
+// `frame_open_q`.  The guard refused it -- correctly -- at exactly
+// SCRATCH_BASE.  Production was repaired (`|| pub_pending_q`, plus releasing
+// `scr_mine_q` on the fault path) and THE KNOB WAS DELETED IN THE SAME PASS.
+//
+// It was deleted rather than left at zero because `busy_o` is a STRICT
+// SUPERSET of the real lease: a knob that can widen the permission under test
+// is a knob that can hide the next defect in it, and a workaround port nobody
+// sets is a knob for a bug that no longer exists which the next person has to
+// work out is dead.  If the lease term ever regresses,
+// `geom_paramarena_directed` case 1a goes red on the first frame and names the
+// file, the line and the repair.
+// ===========================================================================
+`default_nettype none
+
+module tb_zhao_geom_paramarena
+  import zhao_pkg::*;
+#(
+    // The slot-3 write-data queue, in 16-bit words.  A 64-byte chunk is 32 of
+    // them, so 64 holds one whole record with room for the four-word push
+    // granularity.  Power of two: the pointer's low bits ARE the index.
+    parameter int unsigned WQ_W = 64,
+    // The arena's own capacity parameters, exposed so a test can shrink the
+    // arena without editing this file.  DEFAULTED TO PRODUCTION'S VALUES so
+    // the directed test measures the shipping configuration.
+    parameter int unsigned MAX_VERTS    = 65535,
+    parameter int unsigned MAX_TRIS     = 16384,
+    parameter int unsigned MAX_CHUNKS   = 16384,
+    parameter int unsigned CHUNK_IDS    = 14,
+    parameter int unsigned WALK_MAX     = 4096
+) (
+    input  var logic clk,
+    input  var logic rst_n,
+
+    // ---- the arena's frame control ----------------------------------------
+    input  var logic        seal_valid_i,
+    output var logic        seal_ready_o,
+    input  var logic [17:0] seal_verts_i,
+    input  var logic [17:0] seal_tris_i,
+    input  var logic [17:0] seal_chunks_i,
+    input  var logic [15:0] frame_gen_i,
+    input  var logic        frame_end_i,
+
+    // ---- the three record intakes, AS FIELDS -------------------------------
+    input  var logic               pv_valid_i,
+    output var logic               pv_ready_o,
+    input  var logic signed [31:0] pv_x_i,
+    input  var logic signed [31:0] pv_y_i,
+    input  var logic [23:0]        pv_invw_i,
+    input  var logic [7:0]         pv_status_i,
+    input  var logic signed [31:0] pv_uow_i,
+    input  var logic signed [31:0] pv_vow_i,
+    input  var logic [31:0]        pv_rgba_i,
+
+    input  var logic        td_valid_i,
+    output var logic        td_ready_o,
+    input  var logic [15:0] td_v0_i,
+    input  var logic [15:0] td_v1_i,
+    input  var logic [15:0] td_v2_i,
+    input  var logic [15:0] td_material_i,
+    input  var logic [31:0] td_raster_i,
+    input  var logic [31:0] td_source_i,
+
+    input  var logic        ck_valid_i,
+    output var logic        ck_ready_o,
+    input  var logic [31:0] ck_next_i,
+    input  var logic [15:0] ck_count_i,
+    // Fourteen u32 triangle ids.  Verilator presents this as a word array, so
+    // `ck_ids_i[k]` in the driver IS id k -- no packing arithmetic in C++.
+    input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
+
+    // ---- the guard lease the arena OWNS ------------------------------------
+    output var logic pb_lease_valid_o,
+    output var logic pb_wr_view_o,
+    output var logic pb_scratch_valid_o,
+    output var logic scr_grant_o,
+
+    // ---- the published frame ------------------------------------------------
+    output var logic        publish_valid_o,
+    output var logic        publish_view_o,
+    output var logic [15:0] publish_gen_o,
+    output var logic [26:0] publish_vert_base_o,
+    output var logic [26:0] publish_tri_base_o,
+    output var logic [26:0] publish_chunk_base_o,
+    output var logic [17:0] publish_verts_o,
+    output var logic [17:0] publish_tris_o,
+    output var logic [17:0] publish_chunks_o,
+
+    // ---- the arena's evidence ----------------------------------------------
+    output var logic [31:0] verts_written_o,
+    output var logic [31:0] tris_written_o,
+    output var logic [31:0] chunks_written_o,
+    output var logic [31:0] frames_published_o,
+    output var logic [31:0] arena_guard_denied_o,
+    output var logic [31:0] quota_overflow_o,
+    output var logic [31:0] records_discarded_o,
+    output var logic [31:0] records_unsealed_o,
+    output var logic [31:0] arena_overrun_o,
+    output var logic [31:0] view_flip_blocked_o,
+    output var logic [31:0] publish_blocked_o,
+    output var logic [31:0] addr_view_bad_o,
+    output var logic [31:0] scr_contend_o,
+    output var logic [31:0] retire_underflow_o,
+    output var logic [15:0] fault_source_o,
+    output var logic        frame_fault_o,
+    output var logic        arena_busy_o,
+
+    // ---- the walk ------------------------------------------------------------
+    input  var logic        walk_valid_i,
+    output var logic        walk_ready_o,
+    input  var logic [31:0] walk_head_i,
+    output var logic        walk_done_o,
+    output var logic        walk_failed_o,
+
+    output var logic        t_valid_o,
+    input  var logic        t_ready_i,
+    output var logic [15:0] t_v0_o,
+    output var logic [15:0] t_v1_o,
+    output var logic [15:0] t_v2_o,
+    output var logic [15:0] t_material_o,
+    output var logic [31:0] t_raster_o,
+    output var logic [31:0] t_source_o,
+    output var logic        t_illegal_o,
+
+    // ---- the walker's evidence ----------------------------------------------
+    output var logic [31:0] dirs_read_o,
+    output var logic [31:0] dir_mismatch_o,
+    output var logic [31:0] chunks_walked_o,
+    output var logic [31:0] chunks_stale_o,
+    output var logic [31:0] chunks_illegal_o,
+    output var logic [31:0] tris_emitted_o,
+    output var logic [31:0] tris_illegal_o,
+    output var logic [31:0] walk_cut_o,
+    output var logic [31:0] walk_guard_denied_o,
+    output var logic [31:0] short_burst_o,
+    output var logic [31:0] stray_beat_o,
+    output var logic [31:0] gen_race_o,
+    output var logic [15:0] walk_depth_max_o,
+    output var logic        walk_busy_o,
+
+    // ---- what the REAL guard said -------------------------------------------
+    output var logic [31:0] guard_violations_o,
+    // The last refused request, so a violation names an ADDRESS rather than
+    // only a count.  A denial with no address sends the next person guessing.
+    output var logic [26:0] guard_viol_addr_o,
+    output var logic        guard_viol_write_o,
+    output var logic [6:0]  guard_viol_len_o,
+
+    // ---- the share's evidence ------------------------------------------------
+    output var logic [31:0] share_denied_o,
+    output var logic [31:0] share_err_short_o,
+    output var logic [31:0] share_err_long_o,
+    output var logic [31:0] share_err_unowned_o,
+    output var logic [31:0] share_retire_unowned_o,
+    output var logic [31:0] share_wbeat_unowned_o,
+    output var logic [31:0] share_ledger_full_o,
+
+    // ---- the bench's own observations ----------------------------------------
+    // WHERE THE ARENA'S WRITES WENT, counted ONE PER REQUEST at the share's
+    // accept (not one per stalled cycle).  Case 5 asks that every write of
+    // frame N land in view N's range; this answers it without reading a single
+    // memory word, and the memory peek beside it is the independent second
+    // opinion.
+    output var logic [31:0] wr_in_view0_o,
+    output var logic [31:0] wr_in_view1_o,
+    output var logic [31:0] wr_in_scratch_o,
+    output var logic [31:0] wr_elsewhere_o,
+    // Cycles in which the walker held the scratch WHILE the arena's directory
+    // write was in flight.  The scratch has one owner (item 4); this is the
+    // bench's independent witness to that, built from ports alone.
+    output var logic [31:0] scr_overlap_o,
+    // Cycles `pb_scratch_valid_o` was high at all.  Release is an ACT: a
+    // scratch that never falls is a region standing permanently open.
+    output var logic [31:0] scratch_open_clocks_o,
+    // GUARD REQUESTS WHOSE START IS NOT 16-BYTE (8-WORD) ALIGNED.
+    // `zhao_sdram_ctrl` issues a JEDEC BL8 burst at `req.addr[26:1]` as the
+    // COLUMN, and a real SDR SDRAM's BL8 SEQUENTIAL burst wraps within its
+    // eight-column block -- so a burst whose start column is not a multiple of
+    // eight comes back ROTATED on hardware.  `sim/models/zhao_sdram_model.sv`
+    // walks `rd_col + rd_beat` LINEARLY and therefore cannot see it, which is
+    // exactly why this is counted here rather than left to the model.  It is a
+    // MEASUREMENT and not an assertion: spec/memory_rules.md states no
+    // alignment rule for the local SDRAM client ports, so the number is
+    // reported and the ruling is the owner's.
+    output var logic [31:0] req_unaligned_o,
+
+    // ---- the write queue's tripwire ------------------------------------------
+    output var logic wq_err_o,
+
+    // ---- the DRAM, for placing and reading fixtures --------------------------
+    input  var logic        peek_en_i,
+    input  var logic [25:0] peek_waddr_i,
+    output var logic [15:0] peek_data_o,
+    input  var logic        poke_en_i,
+    input  var logic [25:0] poke_waddr_i,
+    input  var logic [15:0] poke_data_i,
+    output var logic        model_error_o,
+    output var logic        init_done_o
+);
+
+  // ==========================================================================
+  // THE TWO BLOCKS UNDER TEST
+  // ==========================================================================
+  zhao_guard_req_t arena_req, walk_req;
+  zhao_guard_rsp_t arena_rsp, walk_rsp;
+  logic [63:0]     arena_wdata;
+  logic            arena_wvalid, arena_wlast, arena_wready;
+  logic [7:0]      arena_retire;
+
+  logic            walk_beat_valid, walk_beat_last;
+  logic [63:0]     share_beat_data;
+
+  logic            scr_req_w;
+
+  logic pb_lease_arena, pb_wr_view_w, pb_scratch_w;
+
+  // THE MUTANT SEAM.  A plain `ifdef selecting the MODULE NAME -- which a
+  // command-line -D does reach.  CLAUDE.md records that `-D` cannot override a
+  // FUNCTION-LIKE `define and says nothing when it fails to, so the seam is a
+  // bare `ifdef and `geom_paramarena_drainmut.cpp` is built BOTH ways from one
+  // source: with the macro it requires `addr_view_bad_o` to FIRE, without it it
+  // requires SILENCE.  That pair is the negative control that shows the
+  // selector engaged rather than compiling production twice.
+`ifdef ZHAO_PARAMARENA_DRAIN_MUT
+  zhao_geom_paramarena_drain_mutant #(
+`else
+  zhao_geom_paramarena #(
+`endif
+      .MAX_VERTS  (MAX_VERTS),
+      .MAX_TRIS   (MAX_TRIS),
+      .MAX_CHUNKS (MAX_CHUNKS),
+      .CHUNK_IDS  (CHUNK_IDS)
+  ) u_arena (
+      .clk              (clk),
+      .rst_n            (rst_n),
+      .cfg_vram_client_i(ZHAO_CLIENT_ENGINE1),
+
+      .seal_valid_i  (seal_valid_i),
+      .seal_ready_o  (seal_ready_o),
+      .seal_verts_i  (seal_verts_i),
+      .seal_tris_i   (seal_tris_i),
+      .seal_chunks_i (seal_chunks_i),
+      .frame_gen_i   (frame_gen_i),
+      .frame_end_i   (frame_end_i),
+      // THE READER'S OWN BUSY, not a bench input.  The drain precondition is
+      // "no reader owns the view this seal is about to make the build target",
+      // and the only thing that knows is the walker.
+      .reader_busy_i (walk_busy_o),
+
+      .pb_lease_valid_o  (pb_lease_arena),
+      .pb_wr_view_o      (pb_wr_view_w),
+      .pb_scratch_valid_o(pb_scratch_w),
+
+      .pv_valid_i (pv_valid_i),
+      .pv_ready_o (pv_ready_o),
+      .pv_x_i     (pv_x_i),
+      .pv_y_i     (pv_y_i),
+      .pv_invw_i  (pv_invw_i),
+      .pv_status_i(pv_status_i),
+      .pv_uow_i   (pv_uow_i),
+      .pv_vow_i   (pv_vow_i),
+      .pv_rgba_i  (pv_rgba_i),
+
+      .td_valid_i   (td_valid_i),
+      .td_ready_o   (td_ready_o),
+      .td_v0_i      (td_v0_i),
+      .td_v1_i      (td_v1_i),
+      .td_v2_i      (td_v2_i),
+      .td_material_i(td_material_i),
+      .td_raster_i  (td_raster_i),
+      .td_source_i  (td_source_i),
+
+      .ck_valid_i(ck_valid_i),
+      .ck_ready_o(ck_ready_o),
+      .ck_next_i (ck_next_i),
+      .ck_count_i(ck_count_i),
+      .ck_ids_i  (ck_ids_i),
+
+      .scr_req_i  (scr_req_w),
+      .scr_grant_o(scr_grant_o),
+
+      .publish_valid_o     (publish_valid_o),
+      .publish_view_o      (publish_view_o),
+      .publish_gen_o       (publish_gen_o),
+      .publish_vert_base_o (publish_vert_base_o),
+      .publish_tri_base_o  (publish_tri_base_o),
+      .publish_chunk_base_o(publish_chunk_base_o),
+      .publish_verts_o     (publish_verts_o),
+      .publish_tris_o      (publish_tris_o),
+      .publish_chunks_o    (publish_chunks_o),
+
+      .guard_req_o    (arena_req),
+      .guard_rsp_i    (arena_rsp),
+      .guard_wdata_o  (arena_wdata),
+      .guard_wvalid_o (arena_wvalid),
+      .guard_wready_i (arena_wready),
+      .guard_wlast_o  (arena_wlast),
+      .retire_words_i (arena_retire),
+
+      .verts_written_o    (verts_written_o),
+      .tris_written_o     (tris_written_o),
+      .chunks_written_o   (chunks_written_o),
+      .frames_published_o (frames_published_o),
+      .guard_denied_o     (arena_guard_denied_o),
+      .quota_overflow_o   (quota_overflow_o),
+      .records_discarded_o(records_discarded_o),
+      .records_unsealed_o (records_unsealed_o),
+      .arena_overrun_o    (arena_overrun_o),
+      .view_flip_blocked_o(view_flip_blocked_o),
+      .publish_blocked_o  (publish_blocked_o),
+      .addr_view_bad_o    (addr_view_bad_o),
+      .scr_contend_o      (scr_contend_o),
+      .retire_underflow_o (retire_underflow_o),
+      .fault_source_o     (fault_source_o),
+      .frame_fault_o      (frame_fault_o),
+      .busy_o             (arena_busy_o)
+  );
+
+  assign pb_wr_view_o       = pb_wr_view_w;
+  assign pb_scratch_valid_o = pb_scratch_w;
+  assign pb_lease_valid_o   = pb_lease_arena;
+
+  zhao_geom_paramwalk #(
+      .MAX_WALK     (WALK_MAX),
+      .CHUNK_IDS    (CHUNK_IDS),
+      .ARENA_CHUNKS (MAX_CHUNKS)
+  ) u_walk (
+      .clk  (clk),
+      .rst_n(rst_n),
+      .cfg_vram_client_i(ZHAO_CLIENT_ENGINE1),
+
+      // THE PUBLISHED FRAME, STRAIGHT FROM THE ARENA'S REGISTERS.  This is one
+      // of the two independent paths `dir_mismatch_o` differences; the other is
+      // 64 bytes that went out to DRAM and came back.
+      .pub_valid_i     (publish_valid_o),
+      .pub_gen_i       (publish_gen_o),
+      .pub_vert_base_i (publish_vert_base_o),
+      .pub_tri_base_i  (publish_tri_base_o),
+      .pub_chunk_base_i(publish_chunk_base_o),
+      .pub_verts_i     (publish_verts_o),
+      .pub_tris_i      (publish_tris_o),
+      .pub_chunks_i    (publish_chunks_o),
+
+      .scr_req_o  (scr_req_w),
+      .scr_grant_i(scr_grant_o),
+
+      .walk_valid_i (walk_valid_i),
+      .walk_ready_o (walk_ready_o),
+      .walk_head_i  (walk_head_i),
+      .walk_done_o  (walk_done_o),
+      .walk_failed_o(walk_failed_o),
+
+      .t_valid_o   (t_valid_o),
+      .t_ready_i   (t_ready_i),
+      .t_v0_o      (t_v0_o),
+      .t_v1_o      (t_v1_o),
+      .t_v2_o      (t_v2_o),
+      .t_material_o(t_material_o),
+      .t_raster_o  (t_raster_o),
+      .t_source_o  (t_source_o),
+      .t_illegal_o (t_illegal_o),
+
+      .guard_req_o  (walk_req),
+      .guard_rsp_i  (walk_rsp),
+      .beat_valid_i (walk_beat_valid),
+      .beat_data_i  (share_beat_data),
+      .beat_last_i  (walk_beat_last),
+
+      .dirs_read_o     (dirs_read_o),
+      .dir_mismatch_o  (dir_mismatch_o),
+      .chunks_walked_o (chunks_walked_o),
+      .chunks_stale_o  (chunks_stale_o),
+      .chunks_illegal_o(chunks_illegal_o),
+      .tris_emitted_o  (tris_emitted_o),
+      .tris_illegal_o  (tris_illegal_o),
+      .walk_cut_o      (walk_cut_o),
+      .guard_denied_o  (walk_guard_denied_o),
+      .short_burst_o   (short_burst_o),
+      .stray_beat_o    (stray_beat_o),
+      .gen_race_o      (gen_race_o),
+      .walk_depth_max_o(walk_depth_max_o),
+      .busy_o          (walk_busy_o)
+  );
+
+  // ==========================================================================
+  // THE SHARE: TWO REQUESTERS, ONE ENGINE1 CLIENT
+  // ==========================================================================
+  // Requester 0 is the arena (the only WRITER), requester 1 the walker.  This
+  // is `zhao_mem_share_wr` and not `zhao_mem_share2` because a socket with a
+  // writer on it needs the two things the read share does not have: write-data
+  // ORDER (nothing else may be taken between a write's accept and its last data
+  // beat) and retirement ATTRIBUTION (the arena's `retire_words_i` must be ITS
+  // credits, not the walker's).  Getting the second wrong is exactly how "data
+  // must not be published before its writes retire" turns into publishing
+  // early, which is the flattering direction.
+  zhao_guard_req_t [1:0]       sh_req;
+  zhao_guard_rsp_t [1:0]       sh_rsp;
+  logic            [1:0]       sh_beat_valid;
+  logic            [1:0]       sh_beat_last;
+  logic            [1:0][63:0] sh_wdata;
+  logic            [1:0]       sh_wvalid, sh_wlast, sh_wready;
+  logic            [1:0][7:0]  sh_retire;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic            [1:0][31:0] sh_jobs;
+  logic            [31:0]      sh_contention;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign sh_req[0] = arena_req;
+  assign sh_req[1] = walk_req;
+  assign arena_rsp = sh_rsp[0];
+  assign walk_rsp  = sh_rsp[1];
+  assign arena_retire = sh_retire[0];
+  // The arena never reads, so its beat ports are unconnected by construction;
+  // the walker never writes, so its write channel is tied off at the share.
+  assign sh_wdata[0]  = arena_wdata;
+  assign sh_wvalid[0] = arena_wvalid;
+  assign sh_wlast[0]  = arena_wlast;
+  assign arena_wready = sh_wready[0];
+  assign sh_wdata[1]  = 64'd0;   // TIE: the walker has no write channel
+  assign sh_wvalid[1] = 1'b0;    // TIE: the walker has no write channel
+  assign sh_wlast[1]  = 1'b0;    // TIE: the walker has no write channel
+
+  assign walk_beat_valid = sh_beat_valid[1];
+  assign walk_beat_last  = sh_beat_last[1];
+
+  // The arena's beat ports: it issues no reads, so a beat routed to it is a
+  // fault in the share and there is nothing downstream to see it.  Counted
+  // here rather than left dangling.
+  logic [31:0] arena_beat_stray_q;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic unused_arena_beats;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign unused_arena_beats = sh_beat_last[0];
+
+  zhao_guard_req_t g_req;
+  zhao_guard_rsp_t g_rsp;
+  logic [63:0]     g_wdata;
+  logic            g_wvalid, g_wlast, g_wready;
+  logic            g_beat_valid, g_beat_last;
+  logic [63:0]     g_beat_data;
+  logic [7:0]      g_credits;
+
+  zhao_mem_share_wr #(
+      .N        (2),
+      .CLIENT_ID(3),          // ZHAO_CLIENT_ENGINE1
+      .RQ       (4)
+  ) u_share (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .req_i       (sh_req),
+      .rsp_o       (sh_rsp),
+      .beat_valid_o(sh_beat_valid),
+      .beat_data_o (share_beat_data),
+      .beat_last_o (sh_beat_last),
+      .wdata_i     (sh_wdata),
+      .wvalid_i    (sh_wvalid),
+      .wlast_i     (sh_wlast),
+      .wready_o    (sh_wready),
+      .retire_o    (sh_retire),
+
+      .m_req_o       (g_req),
+      .m_rsp_i       (g_rsp),
+      .m_beat_valid_i(g_beat_valid),
+      .m_beat_data_i (g_beat_data),
+      .m_beat_last_i (g_beat_last),
+      .m_wdata_o     (g_wdata),
+      .m_wvalid_o    (g_wvalid),
+      .m_wlast_o     (g_wlast),
+      .m_wready_i    (g_wready),
+      .m_credits_i   (g_credits),
+
+      .jobs_o          (sh_jobs),
+      .denied_o        (share_denied_o),
+      .contention_o    (sh_contention),
+      .err_short_o     (share_err_short_o),
+      .err_long_o      (share_err_long_o),
+      .err_unowned_o   (share_err_unowned_o),
+      .retire_unowned_o(share_retire_unowned_o),
+      .wbeat_unowned_o (share_wbeat_unowned_o),
+      .ledger_full_o   (share_ledger_full_o)
+  );
+
+  // ==========================================================================
+  // THE REAL GUARD -- IN THE PATH, NOT AS AN OBSERVER
+  // ==========================================================================
+  // `tb_terrain_lodpath.sv` instantiates a guard that answers nobody, because
+  // its fabric is played.  This one IS the fabric: a refused request is refused
+  // for the blocks under test, not merely noted.  That is what makes case 9
+  // ("the arena never generates a request the guard refuses") a statement about
+  // the composition and not about a shadow.
+  zhao_arb_req_t   geom_arb_req;
+  logic            g_viol_pulse;
+  zhao_guard_req_t g_viol_req;
+  zhao_arb_rsp_t   [6:0] client_rsp;
+  zhao_arb_req_t   [6:0] client_req;
+
+  zhao_mem_guard u_guard (
+      .clk   (clk),
+      .rst_n (rst_n),
+      .req   (g_req),
+      .rsp   (g_rsp),
+      // TIE: ENGINE1 holds no framebuffer lease; the guard's blit/fb arms never
+      // name it, and leaving them live would let a framebuffer map admit a
+      // geometry write.
+      .map_valid(1'b0),
+      .blit_slot(1'b0),
+      .blit_span(32'd0),
+      .fb_writer(1'b0),
+      // TIE: this client is not MEM.UPLOAD; R32's resource-write arm names
+      // TERRAIN_BUILD alone.
+      .res_valid(1'b0),
+      .res_base (32'd0),
+      .res_span (32'd0),
+      // ITEM 4'S LEASE, FROM THE ARENA'S OWN OUTPUTS.  This is the one guard
+      // instance in the console whose client is ENGINE1, so it is the one place
+      // 5c can be open at all.
+      .pb_lease_valid  (pb_lease_arena),
+      .pb_wr_view      (pb_wr_view_w),
+      .pb_scratch_valid(pb_scratch_w),
+      .arb_req (geom_arb_req),
+      .arb_rsp (client_rsp[3]),
+      .guard_violation    (g_viol_pulse),
+      .guard_violations   (guard_violations_o),
+      .guard_violation_req(g_viol_req)
+  );
+
+  assign guard_viol_addr_o  = g_viol_req.addr;
+  assign guard_viol_write_o = g_viol_req.write;
+  assign guard_viol_len_o   = g_viol_req.len;
+
+  // ==========================================================================
+  // SLOT 3'S WRITE-DATA QUEUE AND ITS GATE -- `zhao_shell_top_v2.sv`'s `gq`
+  // ==========================================================================
+  // words a request of `len` bytes occupies: the arbiter's own rounding, the
+  // same function `zhao_mem_share_wr` and the shell both use, so the gate owes
+  // exactly what the arbiter will credit.
+  function automatic logic [6:0] words_of(input logic [6:0] len_b);
+    words_of = 7'((len_b + 7'd1) >> 1);
+  endfunction
+
+  localparam int unsigned QPW = $clog2(WQ_W);
+
+  logic [15:0]   wq [0:WQ_W-1];
+  logic [QPW:0]  wq_wp, wq_rp, wq_owed;
+  logic [QPW:0]  wq_occ;
+  logic          wq_room_for_req;
+  logic          wr_beat_ctrl;
+  logic [15:0]   wdata_ctrl;
+
+  assign wq_occ  = wq_wp - wq_rp;
+  // One 64-bit beat becomes four 16-bit words, so the queue is ready exactly
+  // when four fit.
+  assign g_wready = (wq_occ <= (QPW+1)'(WQ_W - 4));
+
+  // THE GATE.  `wq_free` is the queue's words NOT YET OWED to a request the
+  // arbiter has already accepted, so a write is offered only when every one of
+  // its words is already here.  Exact, not a race.
+  assign wq_room_for_req =
+      ({1'b0, wq_occ} - {1'b0, wq_owed}) >= (QPW+2)'(words_of(geom_arb_req.len));
+
+  always_comb begin
+    for (int k = 0; k < 7; k++) client_req[k] = '0;
+    client_req[3]       = geom_arb_req;
+    client_req[3].valid = geom_arb_req.valid
+                       && (!geom_arb_req.write || wq_room_for_req);
+  end
+
+  zhao_arb_req_t ctrl_req;
+  zhao_arb_rsp_t ctrl_rsp;
+  logic          hold_refresh;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [6:0][31:0] vram_bytes, vram_bytes_shadow;
+  logic [31:0]      scanout_preempted;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_vram_arbiter u_arb (
+      .clk              (clk),
+      .rst_n            (rst_n),
+      .client_req       (client_req),
+      .client_rsp       (client_rsp),
+      .ctrl_req         (ctrl_req),
+      .hold_refresh     (hold_refresh),
+      .ctrl_rsp         (ctrl_rsp),
+      .frame_tick       (1'b0),
+      .vram_bytes       (vram_bytes),
+      .vram_bytes_shadow(vram_bytes_shadow),
+      .scanout_preempted(scanout_preempted)
+  );
+
+  assign g_credits = client_rsp[3].credits;
+
+  // THE WRITE-OWNER MUX, in the shell's shape.  The owner is known at GRANT and
+  // word 0 can be needed IN THE GRANT CYCLE (`zhao_sdram_ctrl` raises `wr_beat`
+  // in S_RW, which is cycle G itself on a row hit), so during G it is read
+  // straight off `ctrl_req` and registered for the burst's remaining beats.
+  logic wr_owner_geom_r;
+  logic wr_sel_geom;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) wr_owner_geom_r <= 1'b0;
+    else if (ctrl_rsp.grant && ctrl_req.write)
+      wr_owner_geom_r <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
+  end
+  assign wr_sel_geom = (ctrl_rsp.grant && ctrl_req.write)
+                       ? (ctrl_req.client == ZHAO_CLIENT_ENGINE1)
+                       : wr_owner_geom_r;
+
+  assign wdata_ctrl = wq[wq_rp[QPW-1:0]];
+
+  wire wq_pop     = wr_beat_ctrl && wr_sel_geom;
+  wire wq_promise = client_rsp[3].grant && geom_arb_req.write;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      wq_wp    <= '0;
+      wq_rp    <= '0;
+      wq_owed  <= '0;
+      wq_err_o <= 1'b0;
+    end else begin
+      if (g_wvalid && g_wready) begin
+        for (int j = 0; j < 4; j++)
+          wq[QPW'(wq_wp + (QPW+1)'(j))] <= g_wdata[16*j +: 16];
+        wq_wp <= wq_wp + (QPW+1)'(4);
+      end
+      if (wq_pop) begin
+        // A pop from an empty queue is a garbage word written to DRAM.  The
+        // write gate makes it unreachable; this is the tripwire that says so,
+        // and the directed test asserts it stays low.
+        if (wq_occ == '0) wq_err_o <= 1'b1;
+        else wq_rp <= wq_rp + (QPW+1)'(1);
+      end
+      wq_owed <= wq_owed
+               + (wq_promise ? (QPW+1)'(words_of(geom_arb_req.len)) : '0)
+               - ((wq_pop && (wq_owed != '0)) ? (QPW+1)'(1) : '0);
+    end
+  end
+
+  // ==========================================================================
+  // THE CONTROLLER AND THE DRAM
+  // ==========================================================================
+  logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
+  logic [12:0] phy_a;
+  logic [1:0]  phy_ba, phy_dqm;
+  logic [15:0] phy_dq_o, phy_dq_i;
+  logic [15:0] ctrl_rdata;
+  logic        ctrl_rdata_valid;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] refresh_stalls, bank_conflicts;
+  logic        refresh_pulse;
+  logic [5:0]  model_err_kind;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_sdram_ctrl u_ctrl (
+      .clk         (clk),
+      .rst_n       (rst_n),
+      .req         (ctrl_req),
+      .rsp         (ctrl_rsp),
+      .hold_refresh(hold_refresh),
+      .wdata       (wdata_ctrl),
+      .wr_beat     (wr_beat_ctrl),
+      .rdata       (ctrl_rdata),
+      .rdata_valid (ctrl_rdata_valid),
+      .phy_cs_n    (phy_cs_n),
+      .phy_ras_n   (phy_ras_n),
+      .phy_cas_n   (phy_cas_n),
+      .phy_we_n    (phy_we_n),
+      .phy_a       (phy_a),
+      .phy_ba      (phy_ba),
+      .phy_dq_o    (phy_dq_o),
+      .phy_dq_oe   (phy_dq_oe),
+      .phy_dqm     (phy_dqm),
+      .phy_dq_i    (phy_dq_i),
+      .init_done      (init_done_o),
+      .refresh_stalls (refresh_stalls),
+      .bank_conflicts (bank_conflicts),
+      .refresh_pulse  (refresh_pulse)
+  );
+
+  zhao_sdram_model u_model (
+      .clk       (clk),
+      .phy_cs_n  (phy_cs_n),
+      .phy_ras_n (phy_ras_n),
+      .phy_cas_n (phy_cas_n),
+      .phy_we_n  (phy_we_n),
+      .phy_a     (phy_a),
+      .phy_ba    (phy_ba),
+      .phy_dq_o  (phy_dq_o),
+      .phy_dq_oe (phy_dq_oe),
+      .phy_dqm   (phy_dqm),
+      .phy_dq_i  (phy_dq_i),
+      .peek_en   (peek_en_i),
+      .peek_waddr(peek_waddr_i),
+      .peek_data (peek_data_o),
+      // THE BACKDOOR.  Case 2's negative half needs the frame directory
+      // corrupted BEHIND THE BLOCK'S BACK -- a fault no legal request can
+      // produce, and the only way to show `dir_mismatch_o` is an instrument
+      // rather than a claim.
+      .poke_en   (poke_en_i),
+      .poke_waddr(poke_waddr_i),
+      .poke_data (poke_data_i),
+      .err_trcd            (model_err_kind[0]),
+      .err_trp             (model_err_kind[1]),
+      .err_trc             (model_err_kind[2]),
+      .err_refresh_interval(model_err_kind[3]),
+      .err_protocol        (model_err_kind[4]),
+      .err_mrs             (model_err_kind[5]),
+      .model_error         (model_error_o)
+  );
+
+  // ==========================================================================
+  // THE READ-BEAT PACKER, AND `last` FROM THE REQUEST'S OWN LENGTH
+  // ==========================================================================
+  // Four 16-bit controller words become one 64-bit beat.  `last` marks the end
+  // of the GUARD REQUEST, not of an arbiter burst: a 64-byte read is four
+  // 8-word bursts and the walker's beat counter must not see four `last`
+  // pulses.  The count comes from the accepted request's own `len >> 3`, never
+  // from a constant -- the walker issues BOTH 64-byte (chunk, directory) and
+  // 16-byte (descriptor) reads, so a constant eight would never fire `last` on
+  // a descriptor and would carry the count into the next request.
+  logic [47:0] pack_lo;
+  logic [1:0]  pack_cnt;
+  logic [3:0]  rd_expect_r, rd_beat_cnt_r;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) rd_beat_cnt_r <= 4'd0;
+    // The reset is the guard HANDSHAKE (`valid && ready`), not `ready && ok`.
+    // Those two never coincide: `rsp.ready` is the LEVEL `!fwd_active` and
+    // `rsp.ok` pulses one cycle AFTER the accept, by which time ready has
+    // already dropped.  A condition that cannot be true is a reset that never
+    // happens.
+    else if (g_req.valid && g_rsp.ready) rd_beat_cnt_r <= 4'd0;
+    else if (g_beat_valid)               rd_beat_cnt_r <= rd_beat_cnt_r + 4'd1;
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) rd_expect_r <= 4'd8;
+    else if (g_req.valid && g_rsp.ready) rd_expect_r <= 4'(g_req.len >> 3);
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pack_lo      <= '0;
+      pack_cnt     <= 2'd0;
+      g_beat_valid <= 1'b0;
+      g_beat_data  <= '0;
+    end else begin
+      g_beat_valid <= 1'b0;
+      if (ctrl_rdata_valid) begin
+        if (pack_cnt == 2'd3) begin
+          g_beat_data  <= {ctrl_rdata, pack_lo};
+          g_beat_valid <= 1'b1;
+          pack_cnt     <= 2'd0;
+        end else begin
+          pack_lo[16*pack_cnt +: 16] <= ctrl_rdata;
+          pack_cnt                   <= pack_cnt + 2'd1;
+        end
+      end
+    end
+  end
+
+  assign g_beat_last = g_beat_valid && (rd_beat_cnt_r + 4'd1 == rd_expect_r);
+
+  // ==========================================================================
+  // THE BENCH'S OWN WITNESSES
+  // ==========================================================================
+  // ONE OBSERVATION PER REQUEST, at the share's accept, not one per stalled
+  // cycle -- the arena holds `valid` until the share picks it, which under a
+  // busy socket is many cycles, and a per-cycle count would report the stall
+  // rather than the traffic.
+  wire        arena_take_c  = arena_req.valid && arena_rsp.ready;
+  wire [31:0] arena_addr32_c = {5'b0, arena_req.addr};
+  wire arena_in_v0_c =
+      (arena_addr32_c >= ZHAO_PARAMBUF_VIEW0_BASE)
+   && (arena_addr32_c <  ZHAO_PARAMBUF_VIEW0_BASE + ZHAO_PARAMBUF_VIEW_SPAN);
+  wire arena_in_v1_c =
+      (arena_addr32_c >= ZHAO_PARAMBUF_VIEW1_BASE)
+   && (arena_addr32_c <  ZHAO_PARAMBUF_VIEW1_BASE + ZHAO_PARAMBUF_VIEW_SPAN);
+  wire arena_in_scr_c =
+      (arena_addr32_c >= ZHAO_PARAMBUF_SCRATCH_BASE)
+   && (arena_addr32_c <  ZHAO_PARAMBUF_SCRATCH_BASE + ZHAO_PARAMBUF_SCRATCH_SPAN);
+
+  // THE DIRECTORY WRITE, TRACKED FROM PORTS ALONE.  No hierarchical reference
+  // into the DUT: a witness that reaches inside the block it is watching stops
+  // being independent of it.  It opens at the scratch-addressed write request
+  // and closes at that write's last data beat.
+  logic dirw_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) dirw_q <= 1'b0;
+    else if (arena_take_c && arena_req.write && arena_in_scr_c) dirw_q <= 1'b1;
+    else if (arena_wvalid && arena_wready && arena_wlast)       dirw_q <= 1'b0;
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      req_unaligned_o       <= 32'd0;
+      wr_in_view0_o         <= 32'd0;
+      wr_in_view1_o         <= 32'd0;
+      wr_in_scratch_o       <= 32'd0;
+      wr_elsewhere_o        <= 32'd0;
+      scr_overlap_o         <= 32'd0;
+      scratch_open_clocks_o <= 32'd0;
+      arena_beat_stray_q    <= 32'd0;
+    end else begin
+      // ONE OBSERVATION PER REQUEST, at the guard's accept, covering BOTH
+      // requesters -- the walker's 16-byte descriptor reads are as exposed to
+      // this as the arena's 24-byte vertex writes.
+      if (g_req.valid && g_rsp.ready && (g_req.addr[3:0] != 4'd0))
+        req_unaligned_o <= req_unaligned_o + 32'd1;
+      if (arena_take_c) begin
+        if      (arena_in_v0_c)  wr_in_view0_o   <= wr_in_view0_o + 32'd1;
+        else if (arena_in_v1_c)  wr_in_view1_o   <= wr_in_view1_o + 32'd1;
+        else if (arena_in_scr_c) wr_in_scratch_o <= wr_in_scratch_o + 32'd1;
+        else                     wr_elsewhere_o  <= wr_elsewhere_o + 32'd1;
+      end
+      // TWO OWNERS, ONE AT A TIME.  If this ever moves, the walker was reading
+      // the directory while the producer was writing it.
+      if (dirw_q && scr_grant_o) scr_overlap_o <= scr_overlap_o + 32'd1;
+      if (pb_scratch_w) scratch_open_clocks_o <= scratch_open_clocks_o + 32'd1;
+      if (sh_beat_valid[0]) arena_beat_stray_q <= arena_beat_stray_q + 32'd1;
+    end
+  end
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] unused_arena_beat_stray;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign unused_arena_beat_stray = arena_beat_stray_q;
+
+endmodule
+
+`default_nettype wire

@@ -5480,6 +5480,101 @@
 //      one thing that got BETTER rather than merely connected, because
 //      `refuse_valid_o` used to be a pulse under an UNUSEDSIGNAL waiver with
 //      no consumer at all.
+//
+// I53. GEOM.PARAMBUF's PROJECTED-VERTEX INTAKE (`u_geom_paramarena.pv_*`)
+//      -- TIED TO ZERO, and it is the arena's one record type with no
+//      producer PORT rather than no producer BLOCK.
+//
+//      Opened 2026-09-22 by the owner's completion ruling, item 4. The arena
+//      writes all three of R7's record types and is tested on all three; what
+//      is missing is a wire. GEOM.PROJECT's output reaches this file as
+//      `proj_out_*`, which is a TRIANGLE -- three screen positions, three
+//      depths, one source id -- and the arena's intake is a VERTEX. Turning
+//      one into the other is not plumbing: it needs a vertex-identity scheme,
+//      because a TriangleDescriptor names vertices by u16 INDEX and two
+//      triangles that share an edge must name the SAME index, or the arena
+//      stores every vertex two or three times and the 65,535-vertex seal buys
+//      a third of what R7's tier promises.
+//
+//      THAT IS A DESIGN DECISION AND NOT AN IMPLEMENTATION DETAIL, which is
+//      why it is declared here rather than decided. `zhao_geom_wcache` is the
+//      block that already holds projected vertices BY IDENTITY and is the
+//      obvious owner of the answer; naming it is as far as this packet's
+//      authority goes.
+//
+//      WHAT IS AND IS NOT AFFECTED: the descriptors the arena DOES write
+//      carry vertex ids, and `zhao_geom_parambuf`'s `td_illegal_o` refuses
+//      any id at or past the seal -- so a walk over a frame with no vertex
+//      records reports every triangle illegal rather than silently reading
+//      zeros. The refusal is visible, which is the safe direction.
+//
+// I54. GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
+//      (`u_geom_paramarena.ck_*`) -- TIED TO ZERO, the same standing as I53
+//      and a different missing thing.
+//
+//      `zhao_geom_binner_v2` builds exactly these chunks -- 64 bytes, a
+//      `next` pointer, a count and fourteen triangle ids -- in an ON-CHIP
+//      arena (CHUNKS = 256, CHUNK_REFS = 4) that R7's external arena exists to
+//      stop growing. It exposes `arena_full_o`, `arena_used_o`, `overflow_o`
+//      and `tile_references_o`, and NOTHING THAT LETS A READER SEE A CHUNK:
+//      `ref_ram` and `next_ram` are internal, and `job_*` is a DRAINED
+//      stream, not the chunk layout.
+//
+//      So the missing piece is three or four ports on that block -- the chunk
+//      index and slot at each ref write, the chain link, and the per-tile
+//      head -- and it is a change to a live block in another subsystem's fit
+//      closure. Declared rather than made.
+//
+//      THE CONSEQUENCE, STATED SO NOBODY HAS TO MEASURE IT: with no chunks
+//      written, a walk started from any head reads a chunk of zeros, whose
+//      generation is 0 and therefore never this frame's, so `chunks_stale_o`
+//      counts it and the walk stops. The arena is correct and EMPTY, not
+//      correct-looking and wrong.
+//
+// I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
+//      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
+//      CONSUMER that item 4 names.
+//
+//      The walker is composed, reaches real memory through the real guard,
+//      and its round-trip evidence (`dir_mismatch_o`) is live. What is tied
+//      is WHO ASKS IT TO WALK and WHO TAKES THE TRIANGLES. Today the console
+//      rasterises from `zhao_geom_binner_v2`'s on-chip chunk arena through
+//      `zhao_geom_bin_pipe_v2`'s `job_*` stream, and swapping that for the
+//      external walk is the step that makes the external arena the LIVE path
+//      rather than a second one beside it.
+//
+//      IT IS DELIBERATELY NOT DONE HERE. The swap removes the on-chip arena
+//      from the raster path, which is an area and throughput change to the
+//      block the fit budget is tightest on, and it needs I54 first -- a walk
+//      over an arena nothing fills is a walk over nothing. Doing it half-way,
+//      with the walker's triangles ORed into the live stream, would produce a
+//      picture and prove nothing.
+//
+// I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
+//      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
+//
+//      THE QUOTA is the arena's own capacity, because the Measure has nowhere
+//      to publish one yet. Sealing at capacity is the NEUTRAL choice: it
+//      enforces the arena's real bound and reserves nothing. R7's giant quota
+//      -- 32,768 tile references reserved before ordinary kMesh allocation --
+//      is therefore NOT IN FORCE, and that is said here rather than left to
+//      be discovered, because a reservation that silently is not happening
+//      looks exactly like one that is.
+//
+//      THE FRAME GENERATION is a counter in this file that advances on every
+//      accepted seal, so no two consecutive frames share a stamp -- which is
+//      all the staleness gate needs. It is not a console-wide frame identity
+//      and does not claim to be one.
+//
+//      THE FRAME END is `render_frame_begin_i` arriving while the arena
+//      cannot accept a seal. The console has no "the geometry producer has
+//      finished this frame" signal, and inventing one upstream is outside
+//      this packet's authority. The consequence: a frame is published one
+//      frame edge after it is built, so `publish_*` describes the PREVIOUS
+//      frame for the whole of the current one. For a two-view arena that is
+//      the intended shape -- the walker reads the view the producer is not
+//      writing -- but it is a consequence of a missing signal rather than a
+//      decision, and the difference matters to whoever supplies one.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -7497,6 +7592,77 @@ module zhao_console_core
   output logic [31:0] geom_ma_err_short_o,
   output logic [31:0] geom_ma_err_long_o,
   output logic [31:0] geom_ma_err_unowned_o,
+
+  // ---- GEOM.PARAMBUF (owner completion ruling ITEM 4, 2026-09-22) ---------
+  // The arena's evidence leaves the core, all of it, and R110 says to name
+  // every counter the packet added rather than the ones that come to mind.
+  // Four of these are DEFECT-CLASS DETECTORS rather than work counters and
+  // are grouped so nobody has to work out which is which:
+  //
+  //   geom_pa_addrbad_o      a request whose held address is not in the view
+  //                          the lease names -- the queued-request fault item
+  //                          4 names. Its two operands load on DIFFERENT
+  //                          enables, so it is not the lockstep-blind kind.
+  //   geom_pa_retireunder_o  the socket retired more words than the arena
+  //                          ever owed it: the share's ledger has attributed
+  //                          somebody else's write here, which would make
+  //                          every publish decision EARLY.
+  //   geom_pw_dirmiss_o      the frame directory that came back from SDRAM is
+  //                          not the one the arena published. The round trip
+  //                          failed, and nothing else in the system would say
+  //                          so -- a walk over corrupt records still produces
+  //                          triangles.
+  //   geom_pw_genrace_o      the published frame moved under a live walk.
+  //   geom_pw_stray_o        a read beat arrived with no read in flight: the
+  //                          share BROADCASTS beat data and demuxes only
+  //                          `beat_valid`, so this is what sees a wrong demux
+  //                          delivering another client's bytes.
+  //
+  // Each of these is asserted ZERO by the smoke, and a counter asserted zero
+  // is a claim. The ones reachable with legal stimulus are fired by
+  // tests/geometry/geom_paramarena_directed.cpp; the ones that are not owe a
+  // committed mutant, which is what tests/mutants/
+  // zhao_geom_paramarena_drain_mutant.sv is.
+  output logic [31:0] geom_pa_verts_o,
+  output logic [31:0] geom_pa_tris_o,
+  output logic [31:0] geom_pa_chunks_o,
+  output logic [31:0] geom_pa_frames_o,
+  output logic [31:0] geom_pa_denied_o,
+  output logic [31:0] geom_pa_overflow_o,
+  output logic [31:0] geom_pa_discarded_o,
+  output logic [31:0] geom_pa_unsealed_o,
+  output logic [31:0] geom_pa_overrun_o,
+  output logic [31:0] geom_pa_flipblock_o,
+  output logic [31:0] geom_pa_pubblock_o,
+  output logic [31:0] geom_pa_addrbad_o,
+  output logic [31:0] geom_pa_scrcontend_o,
+  output logic [31:0] geom_pa_retireunder_o,
+  output logic [15:0] geom_pa_fault_src_o,
+  output logic        geom_pa_fault_o,
+  output logic        geom_pa_busy_o,
+  output logic        geom_pa_seal_ready_o,
+  output logic [31:0] geom_pw_dirs_o,
+  output logic [31:0] geom_pw_dirmiss_o,
+  output logic [31:0] geom_pw_chunks_o,
+  output logic [31:0] geom_pw_stale_o,
+  output logic [31:0] geom_pw_illegal_o,
+  output logic [31:0] geom_pw_tris_o,
+  output logic [31:0] geom_pw_trisbad_o,
+  output logic [31:0] geom_pw_cut_o,
+  output logic [31:0] geom_pw_denied_o,
+  output logic [31:0] geom_pw_short_o,
+  output logic [31:0] geom_pw_stray_o,
+  output logic [31:0] geom_pw_genrace_o,
+  output logic [15:0] geom_pw_depth_o,
+  // The write-capable ENGINE1 share that now sits in front of the guard.
+  output logic [31:0] geom_ws_denied_o,
+  output logic [31:0] geom_ws_contention_o,
+  output logic [31:0] geom_ws_short_o,
+  output logic [31:0] geom_ws_long_o,
+  output logic [31:0] geom_ws_unowned_o,
+  output logic [31:0] geom_ws_retire_unowned_o,
+  output logic [31:0] geom_ws_wbeat_unowned_o,
+  output logic [31:0] geom_ws_ledger_full_o,
 
   output logic [31:0] geom_af_meshlets_fetched_o,
   output logic [31:0] geom_af_beats_read_o,
@@ -16489,11 +16655,26 @@ module zhao_console_core
     // and fabricated the beats); they are internal wires now and the traffic
     // on them is two real fetchers against the real MEM.GUARD, MEM.VRAM
     // .ARBITER and `zhao_sdram_ctrl` this shell already instantiates.
-    .geom_guard_req_i          (ma_m_req),
-    .geom_guard_rsp_o          (ma_m_rsp),
-    .geom_beat_valid_o         (ma_m_beat_valid),
-    .geom_beat_data_o          (ma_m_beat_data),
-    .geom_beat_last_o          (ma_m_beat_last),
+    // ITEM 4: the socket now takes the WRITE-CAPABLE share's output. The
+    // seven read-only fetchers are still behind `u_geom_mem_adapter` and
+    // still FORCE_READ; `u_geom_wshare` merges them with the arena writer and
+    // the chunk walker and presents ONE client-3 request, so the arbiter slot,
+    // the guard and the client id are all unchanged.
+    .geom_guard_req_i          (gs_m_req),
+    .geom_guard_rsp_o          (gs_m_rsp),
+    .geom_beat_valid_o         (gs_m_beat_valid),
+    .geom_beat_data_o          (gs_m_beat_data),
+    .geom_beat_last_o          (gs_m_beat_last),
+    .geom_wdata_i              (gs_m_wdata),
+    .geom_wvalid_i             (gs_m_wvalid),
+    .geom_wready_o             (gs_m_wready),
+    .geom_wlast_i              (gs_m_wlast),
+    .geom_retire_words_o       (gs_m_credits),
+    // The lease, straight from the arena producer, which is the only block
+    // that knows which view is being built and whether anything is in flight.
+    .geom_pb_lease_i           (pa_lease),
+    .geom_pb_wr_view_i         (pa_wr_view),
+    .geom_pb_scratch_i         (pa_scratch),
     // THE TERRAIN.BUILD SOCKET (slot 6 + HPS clients 2 and 3). Since entry I26
     // closed its guard client is `u_build_share` (MEM.UPLOAD, TERRAIN.PAGELOADER
     // and the terrain read share), and its HPS client 1 is `u_terr_hps_arb`.
@@ -21573,6 +21754,365 @@ module zhao_console_core
     .err_unowned_o(geom_ma_err_unowned_o)
   );
 
+  // ==========================================================================
+  // GEOM.PARAMBUF -- the external geometry arena (owner completion ruling
+  // ITEM 4, 2026-09-22, over ruling R7 and spec/memory_rules.md 5c)
+  // ==========================================================================
+  //
+  // WHAT CHANGED, STATED AGAINST THE ENTRY THAT SAID IT COULD NOT. This file
+  // carried a three-times-re-verified refusal: "nothing in fpga/rtl writes one
+  // of these records into memory -- six geometry clients, all hard-coded
+  // read-only." That was accurate and it is no longer true. `u_geom_paramarena`
+  // writes ProjectedVertex, TriangleDescriptor and tile-reference chunk records
+  // into local SDRAM, and `u_geom_paramwalk` reads them back and hands the
+  // bytes to `zhao_geom_parambuf` to decode.
+  //
+  // THE ROUTE, AND WHY IT IS A SECOND SHARE RATHER THAN AN EIGHTH REQUESTER.
+  // `u_geom_mem_adapter` is `zhao_mem_share_n #(.FORCE_READ(1'b1))`, and that
+  // parameter is not decoration -- it is how spec 5f's "same client, same
+  // direction, same bounds, same arbiter slot" is enforced for every geometry
+  // fetcher. An arena WRITER changes the direction, so it cannot join that
+  // adapter without removing the property the adapter exists to hold. Instead
+  // the read adapter's merged output becomes ONE LEG of a write-capable share:
+  //
+  //     seven readers -> u_geom_mem_adapter (share_n, FORCE_READ) -+
+  //                                            u_geom_paramarena  -+-> u_geom_wshare
+  //                                            u_geom_paramwalk   -+     (share_wr,
+  //                                                                       CLIENT_ID 3)
+  //                                                                  -> u_shell's
+  //                                                                     geom socket
+  //                                                                  -> u_guard_geom
+  //
+  // Client 3 is still ONE client at the arbiter, still one guard, and the seven
+  // existing readers keep FORCE_READ. Client 5 stays unspent (ruling T3).
+  //
+  // WHAT STIMULUS ACTUALLY REACHES IT, SAID PLAINLY RATHER THAN IMPLIED.
+  // The TriangleDescriptor stream is REAL: `asm_t_*` is `zhao_geom_assemble`'s
+  // live output, the one this file's own comment calls "exactly
+  // GEOM.PARAMBUF's layout", and it already feeds GEOM.REPLAY. The arena TAPS
+  // it -- `asm_t_ready` is now GEOM.REPLAY's ready ANDed with the arena's, so
+  // no triangle is lost and the existing consumer is unchanged.
+  //
+  // THE OTHER TWO INTAKES ARE TIED AND DECLARED IN THE INCOMPLETE BLOCK at
+  // entries I53 and I54. They are not "not built": they are built and have no
+  // producer PORT to connect to yet, which is a different fact.
+  //
+  // THE DEADLOCK THIS COULD HAVE BEEN. ANDing a new block's `ready` into a
+  // live stream is how a composition stalls a pipeline that used to run. The
+  // arena's intake is a FREE SINK whenever there is no sealed frame or the
+  // frame has already faulted, so `pa_td_ready` cannot sit low waiting for
+  // something that never comes; it only ever throttles by the one op the
+  // engine is issuing. `records_unsealed_o` counts what passes through while
+  // nobody has sealed, so a console that never seals is VISIBLE rather than
+  // silently geometry-free.
+  // THE SEALED QUOTA THIS COMPOSITION USES, and it is the arena's own
+  // capacity rather than a Measure-computed number, because nothing upstream
+  // publishes one yet (entry I56). R7's giant reservation -- 32,768 tile
+  // references before ordinary kMesh allocation -- is a decision made by
+  // whoever computes these, so sealing at capacity is the NEUTRAL choice: it
+  // enforces the arena's real bound and reserves nothing, which is visible
+  // rather than being a wrong reservation that looks like a right one.
+  localparam int unsigned GEOM_PA_MAX_VERTS  = 65535;
+  localparam int unsigned GEOM_PA_MAX_TRIS   = 16384;
+  localparam int unsigned GEOM_PA_MAX_CHUNKS = 16384;
+
+  zhao_guard_req_t pa_req, pw_req, gs_m_req;
+  zhao_guard_rsp_t pa_rsp, pw_rsp, gs_m_rsp;
+  wire             gs_m_beat_valid, gs_m_beat_last;
+  wire [63:0]      gs_m_beat_data;
+  wire [63:0]      gs_m_wdata;
+  wire             gs_m_wvalid, gs_m_wlast, gs_m_wready;
+  wire [7:0]       gs_m_credits;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [2:0]       gs_beat_valid, gs_beat_last;
+  wire [2:0]       gs_wready;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire [63:0]      gs_beat_data;
+  wire [2:0]       gs_wvalid, gs_wlast;
+  wire             pa_wvalid, pa_wlast;
+  wire [7:0]       pa_retire;
+  wire             pa_lease, pa_wr_view, pa_scratch;
+  wire             pa_scr_grant, pw_scr_req;
+  wire             pw_busy;
+  wire             pa_td_ready;
+  // `pub_view` is NOT taken by the walker, and that is the design rather than
+  // an omission: the walker addresses through `pub_*_base_i`, which already
+  // carry the published view in their high bits. A second copy of the same
+  // fact, arriving on a different wire, is how a reader ends up deciding which
+  // of two disagreeing answers to trust.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire             pub_view;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire             pub_valid;
+  wire [15:0]      pub_gen;
+  wire [26:0]      pub_vert_base, pub_tri_base, pub_chunk_base;
+  wire [17:0]      pub_verts, pub_tris, pub_chunks;
+
+  zhao_guard_req_t [2:0] gs_req;
+  zhao_guard_rsp_t [2:0] gs_rsp;
+  logic [2:0][63:0]      gs_wdata;
+  // THE SHARE'S LEGS THAT THIS COMPOSITION DOES NOT USE, waived by name and
+  // not by a blanket lint-off, so the next person can see WHICH ones and why:
+  //   gs_beat_valid[1]/gs_beat_last[1]  the arena never READS
+  //   gs_wready[0], gs_wready[2]        the read adapter and the walker never
+  //                                     WRITE -- which is the property that
+  //                                     keeps spec 5f's FORCE_READ meaningful
+  //   gs_retire[0], gs_retire[2]        only a writer is owed credits
+  //   gs_jobs                           the per-requester job counts; the
+  //                                     adapter already publishes its own
+  //                                     seven at geom_ma_jobs_*_o, and the
+  //                                     arena and walker publish theirs as
+  //                                     work counters, so a third copy would
+  //                                     be a number with no reader
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [2:0][31:0]      gs_jobs;
+  logic [2:0][7:0]       gs_retire;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // [0] the seven existing readers, already merged and still FORCE_READ by
+  //     their own adapter; [1] the arena WRITER; [2] the chunk walker's reads.
+  assign gs_req[0]   = ma_m_req;
+  assign gs_req[1]   = pa_req;
+  assign gs_req[2]   = pw_req;
+  assign ma_m_rsp    = gs_rsp[0];
+  assign pa_rsp      = gs_rsp[1];
+  assign pw_rsp      = gs_rsp[2];
+  assign ma_m_beat_valid = gs_beat_valid[0];
+  assign ma_m_beat_data  = gs_beat_data;
+  assign ma_m_beat_last  = gs_beat_last[0];
+  // Slots 0 and 2 never write, so their write-data legs are tied. Declared
+  // rather than left blank: a tie on a write port of a read-only requester is
+  // the statement that it is read-only, and `err_unowned_o` on the share is
+  // what catches it being wrong.
+  assign gs_wdata[0] = 64'd0;
+  assign gs_wdata[2] = 64'd0;
+
+  zhao_mem_share_wr #(
+      .N         (3),
+      .CLIENT_ID (3),      // ENGINE1, positionally slot 3 at the arbiter
+      .RQ        (4)
+  ) u_geom_wshare (
+      .clk    (gpu_clk),
+      .rst_n  (rst_n),
+      .req_i  (gs_req),
+      .rsp_o  (gs_rsp),
+      .beat_valid_o (gs_beat_valid),
+      .beat_data_o  (gs_beat_data),
+      .beat_last_o  (gs_beat_last),
+      .wdata_i  (gs_wdata),
+      .wvalid_i (gs_wvalid),
+      .wlast_i  (gs_wlast),
+      .wready_o (gs_wready),
+      .retire_o (gs_retire),
+      .m_req_o        (gs_m_req),
+      .m_rsp_i        (gs_m_rsp),
+      .m_beat_valid_i (gs_m_beat_valid),
+      .m_beat_data_i  (gs_m_beat_data),
+      .m_beat_last_i  (gs_m_beat_last),
+      .m_wdata_o      (gs_m_wdata),
+      .m_wvalid_o     (gs_m_wvalid),
+      .m_wlast_o      (gs_m_wlast),
+      .m_wready_i     (gs_m_wready),
+      .m_credits_i    (gs_m_credits),
+      .jobs_o         (gs_jobs),
+      .denied_o       (geom_ws_denied_o),
+      .contention_o   (geom_ws_contention_o),
+      .err_short_o    (geom_ws_short_o),
+      .err_long_o     (geom_ws_long_o),
+      .err_unowned_o  (geom_ws_unowned_o),
+      .retire_unowned_o (geom_ws_retire_unowned_o),
+      .wbeat_unowned_o  (geom_ws_wbeat_unowned_o),
+      .ledger_full_o    (geom_ws_ledger_full_o)
+  );
+
+  assign gs_wvalid = {1'b0, pa_wvalid, 1'b0};
+  assign gs_wlast  = {1'b0, pa_wlast,  1'b0};
+  assign pa_retire = gs_retire[1];
+
+  // THE THREE CAPACITIES ARE PASSED EXPLICITLY TO BOTH BLOCKS, and the reason
+  // is a drift risk rather than a style preference. `zhao_geom_paramarena`'s
+  // MAX_CHUNKS and `zhao_geom_paramwalk`'s ARENA_CHUNKS are two independent
+  // parameter defaults that happen to agree; the walker hands ARENA_CHUNKS
+  // straight to `zhao_geom_parambuf`, whose `ck_illegal_o` refuses a
+  // `next_chunk` at or above it. If they ever disagreed, the decoder would
+  // refuse chunks the allocator legitimately wrote, or follow pointers past
+  // the arena -- and NOTHING would say which default had moved. Named once
+  // here, spent twice.
+  zhao_geom_paramarena #(
+      .MAX_VERTS  (GEOM_PA_MAX_VERTS),
+      .MAX_TRIS   (GEOM_PA_MAX_TRIS),
+      .MAX_CHUNKS (GEOM_PA_MAX_CHUNKS)
+  ) u_geom_paramarena (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+      .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
+
+      // The frame's seal. `render_frame_begin_i` is the console's frame edge
+      // and `geom_pa_gen_q` is the generation stamped into every chunk -- a
+      // free-running counter here, because nothing upstream yet owns a frame
+      // generation and inventing an owner for it would be a decision this
+      // packet is not authorised to make. The QUOTA is the arena's own
+      // capacity until the Measure has somewhere to publish one (I-entry).
+      .seal_valid_i  (render_frame_begin_i),
+      .seal_ready_o  (geom_pa_seal_ready_o),
+      .seal_verts_i  (18'(GEOM_PA_MAX_VERTS)),
+      .seal_tris_i   (18'(GEOM_PA_MAX_TRIS)),
+      .seal_chunks_i (18'(GEOM_PA_MAX_CHUNKS)),
+      .frame_gen_i   (geom_pa_gen_q),
+      .frame_end_i   (geom_pa_frame_end_q),
+      .reader_busy_i (pw_busy),
+
+      .pb_lease_valid_o   (pa_lease),
+      .pb_wr_view_o       (pa_wr_view),
+      .pb_scratch_valid_o (pa_scratch),
+
+      // ---- ProjectedVertex: TIED, and declared at entry I53 ----------------
+      .pv_valid_i  (1'b0),
+      .pv_ready_o  (),
+      .pv_x_i      (32'sd0),
+      .pv_y_i      (32'sd0),
+      .pv_invw_i   (24'd0),
+      .pv_status_i (8'd0),
+      .pv_uow_i    (32'sd0),
+      .pv_vow_i    (32'sd0),
+      .pv_rgba_i   (32'd0),
+
+      // ---- TriangleDescriptor: REAL, GEOM.ASSEMBLE's live output -----------
+      .td_valid_i    (pa_t_valid),
+      .td_ready_o    (pa_td_ready),
+      .td_v0_i       (16'(asm_t_v0)),
+      .td_v1_i       (16'(asm_t_v1)),
+      .td_v2_i       (16'(asm_t_v2)),
+      .td_material_i (asm_t_material),
+      .td_raster_i   (asm_t_raster),
+      .td_source_i   ({16'd0, asm_t_src_id}),
+
+      // ---- tile-reference chunk: TIED, declared at entry I54 ---------------
+      .ck_valid_i  (1'b0),
+      .ck_ready_o  (),
+      .ck_next_i   (32'd0),
+      .ck_count_i  (16'd0),
+      .ck_ids_i    ('0),
+
+      .scr_req_i   (pw_scr_req),
+      .scr_grant_o (pa_scr_grant),
+
+      .publish_valid_o      (pub_valid),
+      .publish_view_o       (pub_view),
+      .publish_gen_o        (pub_gen),
+      .publish_vert_base_o  (pub_vert_base),
+      .publish_tri_base_o   (pub_tri_base),
+      .publish_chunk_base_o (pub_chunk_base),
+      .publish_verts_o      (pub_verts),
+      .publish_tris_o       (pub_tris),
+      .publish_chunks_o     (pub_chunks),
+
+      .guard_req_o    (pa_req),
+      .guard_rsp_i    (pa_rsp),
+      .guard_wdata_o  (gs_wdata[1]),
+      .guard_wvalid_o (pa_wvalid),
+      .guard_wready_i (gs_wready[1]),
+      .guard_wlast_o  (pa_wlast),
+      .retire_words_i (pa_retire),
+
+      .verts_written_o     (geom_pa_verts_o),
+      .tris_written_o      (geom_pa_tris_o),
+      .chunks_written_o    (geom_pa_chunks_o),
+      .frames_published_o  (geom_pa_frames_o),
+      .guard_denied_o      (geom_pa_denied_o),
+      .quota_overflow_o    (geom_pa_overflow_o),
+      .records_discarded_o (geom_pa_discarded_o),
+      .records_unsealed_o  (geom_pa_unsealed_o),
+      .arena_overrun_o     (geom_pa_overrun_o),
+      .view_flip_blocked_o (geom_pa_flipblock_o),
+      .publish_blocked_o   (geom_pa_pubblock_o),
+      .addr_view_bad_o     (geom_pa_addrbad_o),
+      .scr_contend_o       (geom_pa_scrcontend_o),
+      .retire_underflow_o  (geom_pa_retireunder_o),
+      .fault_source_o      (geom_pa_fault_src_o),
+      .frame_fault_o       (geom_pa_fault_o),
+      .busy_o              (geom_pa_busy_o)
+  );
+
+  zhao_geom_paramwalk #(
+      .ARENA_CHUNKS (GEOM_PA_MAX_CHUNKS)
+  ) u_geom_paramwalk (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+      .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
+
+      .pub_valid_i      (pub_valid),
+      .pub_gen_i        (pub_gen),
+      .pub_vert_base_i  (pub_vert_base),
+      .pub_tri_base_i   (pub_tri_base),
+      .pub_chunk_base_i (pub_chunk_base),
+      .pub_verts_i      (pub_verts),
+      .pub_tris_i       (pub_tris),
+      .pub_chunks_i     (pub_chunks),
+
+      .scr_req_o   (pw_scr_req),
+      .scr_grant_i (pa_scr_grant),
+
+      // ---- the walk request: TIED, declared at entry I55 -------------------
+      .walk_valid_i  (1'b0),
+      .walk_ready_o  (),
+      .walk_head_i   (32'd0),
+      .walk_done_o   (),
+      .walk_failed_o (),
+
+      // ---- the decoded triangles: TIED, declared at entry I55 --------------
+      .t_valid_o    (),
+      .t_ready_i    (1'b1),
+      .t_v0_o       (),
+      .t_v1_o       (),
+      .t_v2_o       (),
+      .t_material_o (),
+      .t_raster_o   (),
+      .t_source_o   (),
+      .t_illegal_o  (),
+
+      .guard_req_o  (pw_req),
+      .guard_rsp_i  (pw_rsp),
+      .beat_valid_i (gs_beat_valid[2]),
+      .beat_data_i  (gs_beat_data),
+      .beat_last_i  (gs_beat_last[2]),
+
+      .dirs_read_o      (geom_pw_dirs_o),
+      .dir_mismatch_o   (geom_pw_dirmiss_o),
+      .chunks_walked_o  (geom_pw_chunks_o),
+      .chunks_stale_o   (geom_pw_stale_o),
+      .chunks_illegal_o (geom_pw_illegal_o),
+      .tris_emitted_o   (geom_pw_tris_o),
+      .tris_illegal_o   (geom_pw_trisbad_o),
+      .walk_cut_o       (geom_pw_cut_o),
+      .guard_denied_o   (geom_pw_denied_o),
+      .short_burst_o    (geom_pw_short_o),
+      .stray_beat_o     (geom_pw_stray_o),
+      .gen_race_o       (geom_pw_genrace_o),
+      .walk_depth_max_o (geom_pw_depth_o),
+      .busy_o           (pw_busy)
+  );
+
+  // THE FRAME GENERATION AND THE FRAME END. Both are this composition's, and
+  // both are declared as such: `geom_pa_gen_q` advances on every accepted
+  // seal so no two consecutive frames share a stamp, and `geom_pa_frame_end_q`
+  // closes the frame one cycle after the NEXT frame edge arrives -- the
+  // console has no "the producer has finished" signal today, and inventing one
+  // upstream is outside this packet's authority. The consequence is stated at
+  // entry I56 rather than left for somebody to measure.
+  logic [15:0] geom_pa_gen_q;
+  logic        geom_pa_frame_end_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      geom_pa_gen_q       <= 16'd1;
+      geom_pa_frame_end_q <= 1'b0;
+    end else begin
+      geom_pa_frame_end_q <= render_frame_begin_i && !geom_pa_seal_ready_o;
+      if (render_frame_begin_i && geom_pa_seal_ready_o)
+        geom_pa_gen_q <= geom_pa_gen_q + 16'd1;
+    end
+  end
+
   zhao_geom_assetfetch #(
     .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
     .MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
@@ -21658,6 +22198,47 @@ module zhao_console_core
 
   wire                     asm_m_valid, asm_m_ready, rp_mt_ready;
   wire                     asm_t_valid, asm_t_ready, asm_m_done;
+  // ------------------------------------------------------------------------
+  // THE TRIANGLE STREAM NOW HAS TWO CONSUMERS, AND IT IS A FORK, NOT AN AND.
+  // ------------------------------------------------------------------------
+  // GEOM.REPLAY consumed this stream alone until GEOM.PARAMBUF's arena
+  // producer began mirroring it into SDRAM. The first version ANDed the two
+  // readys into `asm_t_ready` and left each consumer looking at the RAW
+  // `asm_t_valid`, which is a real defect and the console smoke caught it:
+  //
+  //     GEOM.REPLAY meshlets=3 handles=6 tri_in=23 tri_out=46
+  //                                 -- the reference wants 3 / 6 / 8 / 16
+  //
+  // EIGHT TRIANGLES BECAME TWENTY-THREE. GEOM.REPLAY counts a triangle when
+  // it sees `t_valid_i && t_ready_o`, so on every cycle where REPLAY was
+  // ready and the ARENA was not, REPLAY consumed a triangle that
+  // GEOM.ASSEMBLE had not advanced past -- the SAME triangle, again, until
+  // the arena caught up. This is CLAUDE.md's "counters see what pictures
+  // cannot" exactly: the shell bench that re-submitted one meshlet fifteen
+  // times because `m_valid_i` was driven from a level held for the whole
+  // offer window. Every triangle was still CORRECT; there were simply three
+  // times as many of them, and no framebuffer comparison could have said so.
+  //
+  // THE FORK. A valid/ready stream with two consumers needs each consumer's
+  // VALID gated by the OTHER's ready, not just a shared ready:
+  //
+  //   asm_t_ready              = both are ready
+  //   REPLAY's t_valid_i       = valid AND the arena can take it
+  //   the arena's td_valid_i   = valid AND REPLAY can take it
+  //
+  // so a transfer is seen by exactly one party at a time when it is seen by
+  // both, and by neither otherwise.
+  //
+  // AND IT DOES NOT CLOSE A COMBINATIONAL LOOP, which is the thing to check
+  // before writing a fork like this. `pa_td_ready` is
+  // `(!frame_open_q || frame_fault_q) || (mstate_q == M_IDLE)` with
+  // `pv_valid_i` tied low -- REGISTERS ONLY, no dependence on `td_valid_i`.
+  // So `rpl_t_ready` may depend on REPLAY's valid as freely as it likes: the
+  // path ends at the arena's valid and never returns.
+  wire                     rpl_t_ready;
+  wire                     rpl_t_valid = asm_t_valid && pa_td_ready;
+  wire                     pa_t_valid  = asm_t_valid && rpl_t_ready;
+  assign asm_t_ready = rpl_t_ready && pa_td_ready;
   // `t_last_o` is not read: it rides an EMITTED triangle, so a refused last
   // triplet or an empty meshlet ends the walk without one. GEOM.REPLAY ends a
   // meshlet on `m_done_o`, which fires on every ending.
@@ -21832,8 +22413,13 @@ module zhao_console_core
 
 
     // REAL: GEOM.ASSEMBLE's triangles and the end of its walk.
-    .t_valid_i    (asm_t_valid),
-    .t_ready_o    (asm_t_ready),
+    // `asm_t_ready` is no longer this block's ready alone: GEOM.PARAMBUF's
+    // arena producer taps the same stream and its ready is ANDed in, so a
+    // triangle is offered only when BOTH consumers can take it and neither
+    // loses one. GEOM.REPLAY's own behaviour is unchanged -- it still sees a
+    // valid/ready handshake and still drives the ready that gates it.
+    .t_valid_i    (rpl_t_valid),
+    .t_ready_o    (rpl_t_ready),
     .t_v0_i       (asm_t_v0),
     .t_v1_i       (asm_t_v1),
     .t_v2_i       (asm_t_v2),

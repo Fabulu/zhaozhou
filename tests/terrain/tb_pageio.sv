@@ -456,6 +456,9 @@ module tb_pageio
       .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .pb_lease_valid   (1'b0),  // TIE: this client is never ENGINE1; item 4's PARAMBUF window names ENGINE1 alone and stays shut here
+      .pb_wr_view       (1'b0),  // TIE: this client is never ENGINE1; item 4's PARAMBUF window names ENGINE1 alone and stays shut here
+      .pb_scratch_valid (1'b0),  // TIE: this client is never ENGINE1; item 4's PARAMBUF window names ENGINE1 alone and stays shut here
       .arb_req            (obs_arb_req),
       .arb_rsp            (obs_arb_rsp),
       .guard_violation    (obs_viol_pulse),
