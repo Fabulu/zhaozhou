@@ -206,10 +206,11 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_ticks_faulted_o;
   logic [31:0]             part_hps_records_discarded_o;
   logic [31:0]             terr_hps_pend_dropped_o;
-  logic [5:0]              terr_hps_pend_dropped_mask_o;
+  logic [6:0]              terr_hps_pend_dropped_mask_o;
   logic [31:0]             terr_hps_c3_bursts_o;
   logic [31:0]             terr_hps_c4_bursts_o, terr_hps_c4_wait_cycles_o;
   logic [31:0]             terr_hps_c5_bursts_o, terr_hps_c5_wait_cycles_o;
+  logic [31:0]             terr_hps_c6_bursts_o, terr_hps_c6_wait_cycles_o;
   logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
   // PORTS THAT USED TO BE DECLARED HERE ARE GONE: the core instantiates
@@ -1893,57 +1894,42 @@ module tb_zhao_console_core_smoke
   //
   // Generated from the core`s own port list rather than typed, so a width
   // here cannot disagree with the port it binds.
-  logic                                twod_pd_valid_i;
-  logic                                twod_pd_ready_o;
-  logic                                twod_pd_slot_i;
-  logic         [1:0]                  twod_pd_role_i;
-  logic         [1:0]                  twod_pd_blend_i;
-  logic         [7:0]                  twod_pd_opacity_i;
-  logic                                twod_pd_format_i;
-  logic         [15:0]                 twod_pd_width_i;
-  logic         [15:0]                 twod_pd_height_i;
-  logic                                twod_pd_wrap_u_i;
-  logic                                twod_pd_wrap_v_i;
-  logic signed  [31:0]                 twod_pd_a_i;
-  logic signed  [31:0]                 twod_pd_b_i;
-  logic signed  [31:0]                 twod_pd_c_i;
-  logic signed  [31:0]                 twod_pd_d_i;
-  logic signed  [31:0]                 twod_pd_u0_i;
-  logic signed  [31:0]                 twod_pd_v0_i;
-  logic         [1:0]                  twod_pd_view_mask_i;
-  logic         [7:0]                  twod_pd_palette_i;
-  logic                                twod_sd_valid_i;
-  logic                                twod_sd_ready_o;
-  logic signed  [15:0]                 twod_sd_x_i;
-  logic signed  [15:0]                 twod_sd_y_i;
-  logic         [15:0]                 twod_sd_w_i;
-  logic         [15:0]                 twod_sd_h_i;
-  logic signed  [31:0]                 twod_sd_u_i;
-  logic signed  [31:0]                 twod_sd_v_i;
-  logic signed  [31:0]                 twod_sd_a00_i;
-  logic signed  [31:0]                 twod_sd_a01_i;
-  logic signed  [31:0]                 twod_sd_a10_i;
-  logic signed  [31:0]                 twod_sd_a11_i;
-  logic         [2:0]                  twod_sd_format_i;
-  logic         [7:0]                  twod_sd_palette_i;
-  logic         [15:0]                 twod_sd_tint_i;
-  logic         [1:0]                  twod_sd_blend_i;
-  logic         [1:0]                  twod_sd_view_mask_i;
-  logic         [7:0]                  twod_sd_order_i;
-  logic         [15:0]                 twod_sd_src_id_i;
-  logic                                twod_ld_page_we_i;
-  logic         [TWOD_PAW-1:0]         twod_ld_page_addr_i;
-  logic         [15:0]                 twod_ld_page_data_i;
-  logic                                twod_ld_pal_we_i;
-  logic         [TWOD_PALAW-1:0]       twod_ld_pal_addr_i;
-  logic         [15:0]                 twod_ld_pal_data_i;
-  logic                                twod_ld_bind_we_i;
-  logic         [TWOD_BSW-1:0]         twod_ld_bind_sel_i;
-  logic         [TWOD_PAW-1:0]         twod_ld_bind_base_i;
-  logic         [3:0]                  twod_ld_bind_lstride_i;
-  logic         [3:0]                  twod_ld_bind_lheight_i;
-  logic                                twod_atm_slot_i;
-  logic signed  [31:0]                 twod_line_scroll_i;
+  // ALL FIFTY OF THEM LEFT THE CORE'S EDGE on 2026-09-22. The paragraph
+  // above is preserved because its warning outlived the ports: a green smoke
+  // run STILL does not prove the 2D path, and now the reason is different --
+  // the descriptors have a producer, but this bench's command stream does
+  // not carry a SetPlane or a DrawSprite. The path that does is
+  // `tests/compositor/twod_cmd_chain_directed.cpp`, which drives real packet
+  // bytes through CMD.DECODER/CMD.EXEC to composited pixels.
+  logic         [31:0]                 twod_cmd_planes_staged_o;
+  logic         [31:0]                 twod_cmd_sprites_staged_o;
+  logic         [31:0]                 twod_cmd_plane_refused_o;
+  logic         [31:0]                 twod_cmd_sprite_refused_o;
+  logic         [31:0]                 twod_cmd_list_overflow_o;
+  logic         [31:0]                 twod_cmd_packets_committed_o;
+  logic         [31:0]                 twod_cmd_packets_abandoned_o;
+  logic         [31:0]                 twod_cmd_frames_sealed_o;
+  logic         [31:0]                 twod_cmd_planes_published_o;
+  logic         [31:0]                 twod_cmd_sprites_published_o;
+  logic         [31:0]                 twod_cmd_slots_auto_disabled_o;
+  logic         [31:0]                 twod_cmd_bind_conflict_o;
+  logic         [31:0]                 twod_cmd_seal_overrun_o;
+  logic         [31:0]                 twod_asset_loads_started_o;
+  logic         [31:0]                 twod_asset_loads_done_o;
+  logic         [31:0]                 twod_asset_words_written_o;
+  logic         [31:0]                 twod_asset_slot_refused_o;
+  logic         [31:0]                 twod_asset_len_refused_o;
+  logic         [31:0]                 twod_asset_addr_refused_o;
+  logic         [31:0]                 twod_asset_epoch_refused_o;
+  logic         [31:0]                 twod_asset_crc_fails_o;
+  logic         [31:0]                 twod_asset_regions_zeroed_o;
+  logic         [31:0]                 twod_asset_bridge_errs_o;
+  logic         [31:0]                 twod_asset_loads_during_pass_o;
+  logic         [31:0]                 twod_asset_bursts_o;
+  logic         [31:0]                 cmd_exec_twod_planes_staged_o;
+  logic         [31:0]                 cmd_exec_twod_sprites_staged_o;
+  logic         [31:0]                 cmd_exec_twod_dropped_o;
+  logic         [31:0]                 cmd_exec_twod_loads_issued_o;
   // `twod_sc_*` IS GONE FROM THE CORE'S EDGE (2026-09-21): the sprite colour
   // now has a consumer inside the core, which is what closed entry I17 item 1.
   logic         [31:0]                 twod_band_descriptors_o;
@@ -1960,11 +1946,13 @@ module tb_zhao_console_core_smoke
   logic         [31:0]                 twod_band_blend_dropped_o;
   logic         [31:0]                 twod_band_order_inversion_o;
   logic         [31:0]                 twod_band_bands_o;
+  logic         [31:0]                 twod_band_desc_mid_sweep_o;
   logic         [31:0]                 twod_plane_pixels_o;
   logic         [31:0]                 twod_plane_refused_role_o;
   logic         [31:0]                 twod_plane_refused_blend_o;
   logic         [31:0]                 twod_plane_skipped_view_o;
   logic         [31:0]                 twod_plane_wrap_fail_o;
+  logic         [31:0]                 twod_plane_disabled_o;
   logic         [31:0]                 twod_sprite_descriptors_o;
   logic         [31:0]                 twod_sprite_skipped_view_o;
   logic         [31:0]                 twod_sprite_refused_o;
@@ -5740,7 +5728,7 @@ module tb_zhao_console_core_smoke
         (part_hps_records_discarded_o != 0))
       $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
              part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
-    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 6'd0))
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 7'd0))
       $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
              terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is

@@ -8078,6 +8078,8 @@ module zhao_console_core
   // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
   output logic [31:0]             terr_hps_c5_bursts_o,
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
+  output logic [31:0]             terr_hps_c6_bursts_o,
+  output logic [31:0]             terr_hps_c6_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -8085,7 +8087,7 @@ module zhao_console_core
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [5:0]              terr_hps_pend_dropped_mask_o,
+  output logic [6:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -9049,78 +9051,73 @@ module zhao_console_core
   input  logic [15:0] phy_dq_i,
 
   // --------------------------------------------------------------------------
-  // TWOD: the plane descriptors, the sprite descriptors, the sampler's assets
-  // and the sprite colour stream.  Added 2026-09-19 with TWOD.SAMPLER.
+  // TWOD: all five descriptor and asset groups LEFT THIS EDGE on 2026-09-22,
+  // under the owner's completion ruling of that date, item 3.
   // --------------------------------------------------------------------------
-  // WHAT IS AND IS NOT A GAP HERE, because the group is large and it would be
-  // easy to read all of it as one:
-  //   * the two DESCRIPTOR groups are the CMD seam. SetPlane and the sprite
-  //     display list are commands, `zhao_cmd_decoder` emits record headers and
-  //     not decoded descriptors, and the executor that would turn one into the
-  //     other is the same absent path entries I14 and I30 describe. GAP, and
-  //     it is the SAME gap those two already name rather than a new one.
-  //   * the three LOAD groups are ASSETS. Entry I17's own sentence about the
-  //     grading curves -- "generated ASSETS by design, so their load port is
-  //     legitimately external" -- covers a texture page, a palette and a
-  //     binding exactly. NOT a gap.
-  //   * `twod_sc_*` WAS the sprite colour with no consumer here, because
-  //     POST.COMPOSITE's `hud_*` port is a raster-order sweep and TWOD.SPRITE
-  //     walks in descriptor order. CLOSED 2026-09-21 (owner rulings R233/R235):
-  //     `zhao_twod_band` is that bridge, it is composed at the end of this
-  //     module, and BOTH groups are now internal. Entry I17 item 1.
-  input  logic                    twod_pd_valid_i,
-  output logic                    twod_pd_ready_o,
-  input  logic                    twod_pd_slot_i,
-  input  logic [1:0]              twod_pd_role_i,
-  input  logic [1:0]              twod_pd_blend_i,
-  input  logic [7:0]              twod_pd_opacity_i,
-  input  logic                    twod_pd_format_i,
-  input  logic [15:0]             twod_pd_width_i,
-  input  logic [15:0]             twod_pd_height_i,
-  input  logic                    twod_pd_wrap_u_i,
-  input  logic                    twod_pd_wrap_v_i,
-  input  logic signed [31:0]      twod_pd_a_i,
-  input  logic signed [31:0]      twod_pd_b_i,
-  input  logic signed [31:0]      twod_pd_c_i,
-  input  logic signed [31:0]      twod_pd_d_i,
-  input  logic signed [31:0]      twod_pd_u0_i,
-  input  logic signed [31:0]      twod_pd_v0_i,
-  input  logic [1:0]              twod_pd_view_mask_i,
-  input  logic [7:0]              twod_pd_palette_i,
+  // WHAT USED TO BE HERE, and what closed it:
+  //   * `twod_pd_*` (19 ports) and `twod_sd_*` (20) were THE DESCRIPTORS, and
+  //     entry I17 was right that they were not a CMD-executor gap: the RECORD
+  //     did not exist. `SetPlane` returned zero hits in `spec/commands.zidl`.
+  //     The owner ratified BOTH records on 2026-09-22 -- SetPlane 0x0306 and
+  //     DrawSprite 0x0307, because "adding only a plane command does not
+  //     establish a producer for HUD sprite descriptors" -- and their producer
+  //     is `zhao_cmd_exec`'s two new arms feeding `u_twod_cmd`, composed at the
+  //     end of this module.
+  //   * `twod_ld_*` (11 ports) were the sampler's ASSETS, which this entry
+  //     classified as "NOT a gap" by analogy with the grading curves. THE
+  //     RULING OVERRULES THAT, in one sentence: "an opcode plus descriptors
+  //     referring to data that ONLY THE TESTBENCH CAN INJECT is not
+  //     completion." The page and palette halves are now written by
+  //     `u_twod_asset`, which reads the HPS arena a `PublishResource` of kind
+  //     15 names; the binding half is written by `u_twod_cmd`, because WHICH
+  //     page region a descriptor samples is part of the descriptor.
+  //   * `twod_atm_slot_i` and `twod_line_scroll_i` were per-frame PLANE state
+  //     and are now derived from the sealed plane pair -- the slot whose role
+  //     is ATMOSPHERE, and that record's own `line_scroll` field.
+  //   * `twod_sc_*` and `post_hud_*` left on 2026-09-21 under R233/R235.
+  //
+  // FIFTY PORTS OUT, and the evidence groups below are what replaced them.
 
-  input  logic                    twod_sd_valid_i,
-  output logic                    twod_sd_ready_o,
-  input  logic signed [15:0]      twod_sd_x_i,
-  input  logic signed [15:0]      twod_sd_y_i,
-  input  logic [15:0]             twod_sd_w_i,
-  input  logic [15:0]             twod_sd_h_i,
-  input  logic signed [31:0]      twod_sd_u_i,
-  input  logic signed [31:0]      twod_sd_v_i,
-  input  logic signed [31:0]      twod_sd_a00_i,
-  input  logic signed [31:0]      twod_sd_a01_i,
-  input  logic signed [31:0]      twod_sd_a10_i,
-  input  logic signed [31:0]      twod_sd_a11_i,
-  input  logic [2:0]              twod_sd_format_i,
-  input  logic [7:0]              twod_sd_palette_i,
-  input  logic [15:0]             twod_sd_tint_i,
-  input  logic [1:0]              twod_sd_blend_i,
-  input  logic [1:0]              twod_sd_view_mask_i,
-  input  logic [7:0]              twod_sd_order_i,
-  input  logic [15:0]             twod_sd_src_id_i,
+  // ---- TWOD.CMD evidence (completion ruling 2026-09-22, item 3) ------------
+  // `desc_mid_sweep_o` on the band, below, is the LAW's own instrument: the
+  // ruling says "neither a later packet nor the next frame may mutate the list
+  // being consumed", and that counter is what says it did not. Its two
+  // operands -- `u_twod_cmd`'s replay walk and POST.COMPOSITE's raster sweep --
+  // are clocked by different things, which is the property CLAUDE.md's
+  // metadata-bank defect requires be checked before a zero is quoted.
+  output logic [31:0]             twod_cmd_planes_staged_o,
+  output logic [31:0]             twod_cmd_sprites_staged_o,
+  output logic [31:0]             twod_cmd_plane_refused_o,
+  output logic [31:0]             twod_cmd_sprite_refused_o,
+  output logic [31:0]             twod_cmd_list_overflow_o,
+  output logic [31:0]             twod_cmd_packets_committed_o,
+  output logic [31:0]             twod_cmd_packets_abandoned_o,
+  output logic [31:0]             twod_cmd_frames_sealed_o,
+  output logic [31:0]             twod_cmd_planes_published_o,
+  output logic [31:0]             twod_cmd_sprites_published_o,
+  output logic [31:0]             twod_cmd_slots_auto_disabled_o,
+  output logic [31:0]             twod_cmd_bind_conflict_o,
+  output logic [31:0]             twod_cmd_seal_overrun_o,
 
-  input  logic                    twod_ld_page_we_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_page_addr_i,
-  input  logic [15:0]             twod_ld_page_data_i,
-  input  logic                    twod_ld_pal_we_i,
-  input  logic [TWOD_PALAW-1:0]   twod_ld_pal_addr_i,
-  input  logic [15:0]             twod_ld_pal_data_i,
-  input  logic                    twod_ld_bind_we_i,
-  input  logic [TWOD_BSW-1:0]     twod_ld_bind_sel_i,
-  input  logic [TWOD_PAW-1:0]     twod_ld_bind_base_i,
-  input  logic [3:0]              twod_ld_bind_lstride_i,
-  input  logic [3:0]              twod_ld_bind_lheight_i,
-  input  logic                    twod_atm_slot_i,
-  input  logic signed [31:0]      twod_line_scroll_i,
+  // ---- TWOD.ASSET evidence --------------------------------------------------
+  output logic [31:0]             twod_asset_loads_started_o,
+  output logic [31:0]             twod_asset_loads_done_o,
+  output logic [31:0]             twod_asset_words_written_o,
+  output logic [31:0]             twod_asset_slot_refused_o,
+  output logic [31:0]             twod_asset_len_refused_o,
+  output logic [31:0]             twod_asset_addr_refused_o,
+  output logic [31:0]             twod_asset_epoch_refused_o,
+  output logic [31:0]             twod_asset_crc_fails_o,
+  output logic [31:0]             twod_asset_regions_zeroed_o,
+  output logic [31:0]             twod_asset_bridge_errs_o,
+  output logic [31:0]             twod_asset_loads_during_pass_o,
+  output logic [31:0]             twod_asset_bursts_o,
+
+  // ---- CMD.EXEC's TWOD evidence ---------------------------------------------
+  output logic [31:0]             cmd_exec_twod_planes_staged_o,
+  output logic [31:0]             cmd_exec_twod_sprites_staged_o,
+  output logic [31:0]             cmd_exec_twod_dropped_o,
+  output logic [31:0]             cmd_exec_twod_loads_issued_o,
 
   // ---- TWOD.BAND evidence (owner rulings R233, R235) -----------------------
   // `sprites_refused_budget_o` is R235's counter and the console asserts it at
@@ -9141,6 +9138,8 @@ module zhao_console_core
   output logic [31:0]             twod_band_blend_dropped_o,
   output logic [31:0]             twod_band_order_inversion_o,
   output logic [31:0]             twod_band_bands_o,
+  // The sealed-list law, MEASURED. See `zhao_twod_band.desc_mid_sweep_o`.
+  output logic [31:0]             twod_band_desc_mid_sweep_o,
 
   // ---- TWOD evidence -------------------------------------------------------
   output logic [31:0]             twod_plane_pixels_o,
@@ -9148,6 +9147,9 @@ module zhao_console_core
   output logic [31:0]             twod_plane_refused_blend_o,
   output logic [31:0]             twod_plane_skipped_view_o,
   output logic [31:0]             twod_plane_wrap_fail_o,
+  // A LAWFUL disable, counted apart from the two refusals so a frame's own
+  // intent can never be read as a malformed descriptor.
+  output logic [31:0]             twod_plane_disabled_o,
   output logic [31:0]             twod_sprite_descriptors_o,
   output logic [31:0]             twod_sprite_skipped_view_o,
   output logic [31:0]             twod_sprite_refused_o,
@@ -16569,13 +16571,32 @@ module zhao_console_core
   //
   // It is a READ-ONLY client: the loader never writes DDR, so its write arm is
   // zero exactly as clients 0, 1 and 4 already are.
-  zhao_hps_burst_req_t [5:0]       thps_req;
-  logic                [5:0]       thps_grant;
-  logic                [5:0]       thps_wr_valid, thps_wr_last;
-  logic                [5:0][63:0] thps_wr_data;
-  zhao_hps_burst_rsp_t [5:0]       thps_rsp;
-  logic                [5:0][31:0] thps_bursts;
-  logic                [5:1][31:0] thps_wait;
+  // SEVEN CLIENTS SINCE 2026-09-22 (completion ruling item 3). TWOD.ASSET
+  // takes index 6, the LOWEST, and the placement is the statement clients 2..5
+  // each make in turn: the arbiter's law is that a continuously-asking lower
+  // index starves every higher one, so a burst of page loads makes a HUD page
+  // install wait, visibly, in `c6_wait_cycles`.
+  //
+  // IT CANNOT DEADLOCK, and the reason is POSITION IN TIME rather than a
+  // dependency argument -- the same one client 5 makes. A TWOD page is staged
+  // by the game before the frame that draws with it; no terrain, particle,
+  // node or field client waits on a HUD texel, and an install that waits
+  // delays a page becoming resident and nothing else. Indices 0-5 keep their
+  // meaning, so `c0..c5` read exactly what they read before.
+  //
+  // It is a READ-ONLY client: the loader never writes DDR, so its write arm is
+  // zero exactly as clients 0, 1, 4 and 5 already are.
+  zhao_hps_burst_req_t [6:0]       thps_req;
+  logic                [6:0]       thps_grant;
+  logic                [6:0]       thps_wr_valid, thps_wr_last;
+  logic                [6:0][63:0] thps_wr_data;
+  zhao_hps_burst_rsp_t [6:0]       thps_rsp;
+  logic                [6:0][31:0] thps_bursts;
+  logic                [6:1][31:0] thps_wait;
+
+  zhao_hps_burst_req_t tas_hps_req;
+  logic                tas_hps_grant;
+  zhao_hps_burst_rsp_t tas_hps_rsp;
 
   zhao_hps_burst_req_t glf_hps_req;
   logic                glf_hps_grant;
@@ -16585,37 +16606,41 @@ module zhao_console_core
   logic                fldr_hps_grant;
   zhao_hps_burst_rsp_t fldr_hps_rsp;
 
-  assign thps_req      = {fldr_hps_req, glf_hps_req, ptb_hps_req, twb_hps_req,
-                          tpl_hps_req, tcm_hps_req};
-  assign thps_wr_valid = {1'b0, 1'b0, ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
-  assign thps_wr_last  = {1'b0, 1'b0, ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
-  assign thps_wr_data  = {64'd0, 64'd0, ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
+  assign thps_req      = {tas_hps_req, fldr_hps_req, glf_hps_req, ptb_hps_req,
+                          twb_hps_req, tpl_hps_req, tcm_hps_req};
+  assign thps_wr_valid = {1'b0, 1'b0, 1'b0, ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
+  assign thps_wr_last  = {1'b0, 1'b0, 1'b0, ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
+  assign thps_wr_data  = {64'd0, 64'd0, 64'd0, ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
   assign tcm_hps_grant  = thps_grant[0];
   assign tpl_hps_grant  = thps_grant[1];
   assign twb_hps_grant  = thps_grant[2];
   assign ptb_hps_grant  = thps_grant[3];
   assign glf_hps_grant  = thps_grant[4];
   assign fldr_hps_grant = thps_grant[5];
+  assign tas_hps_grant  = thps_grant[6];
   assign tcm_hps_rsp   = thps_rsp[0];
   assign tpl_hps_rsp   = thps_rsp[1];
   assign twb_hps_rsp   = thps_rsp[2];
   assign ptb_hps_rsp   = thps_rsp[3];
   assign glf_hps_rsp   = thps_rsp[4];
   assign fldr_hps_rsp  = thps_rsp[5];
+  assign tas_hps_rsp   = thps_rsp[6];
   assign terr_hps_c0_bursts_o      = thps_bursts[0];
   assign terr_hps_c1_bursts_o      = thps_bursts[1];
   assign terr_hps_c2_bursts_o      = thps_bursts[2];
   assign terr_hps_c3_bursts_o      = thps_bursts[3];
   assign terr_hps_c4_bursts_o      = thps_bursts[4];
   assign terr_hps_c5_bursts_o      = thps_bursts[5];
+  assign terr_hps_c6_bursts_o      = thps_bursts[6];
   assign terr_hps_c1_wait_cycles_o = thps_wait[1];
   assign terr_hps_c2_wait_cycles_o = thps_wait[2];
   assign terr_hps_c3_wait_cycles_o = thps_wait[3];
   assign terr_hps_c4_wait_cycles_o = thps_wait[4];
   assign terr_hps_c5_wait_cycles_o = thps_wait[5];
+  assign terr_hps_c6_wait_cycles_o = thps_wait[6];
 
   zhao_hps_arbiter_n #(
-    .N(6)
+    .N(7)
   ) u_terr_hps_arb (
     .clk          (gpu_clk),
     .rst_n        (rst_n),
@@ -16641,6 +16666,13 @@ module zhao_console_core
     // on the transition INTO B_REQ and never while B_REQ holds, and a refusal
     // takes the request down to B_IDLE before any re-offer) -- so this reads
     // zero, and it reads zero rather than being argued to.
+    //
+    // THE SEVENTH, `u_twod_asset`, is the same shape for a reason that is
+    // visible in one line of it: `addr_q` is written on the transition INTO
+    // S_REQ (at accept, and at the end of a drained burst) and never while
+    // S_REQ holds, so the request it offers cannot change underneath a pending
+    // slot. A refusal takes the request down to S_REQ's own re-offer on the
+    // next cycle with the SAME address.
     //
     // THE SIXTH, `u_field_loader`, is the same shape and it is worth saying
     // WHY rather than asserting it: its request fields come from `rq_addr` and
@@ -17595,32 +17627,71 @@ module zhao_console_core
   logic [15:0]         sp_tint_c, sp_srcid_c;
   logic [1:0]          sp_blend_c;
 
+  logic                tc_d_valid_c, tc_d_slot_c, tc_d_enable_c, tc_d_format_c;
+  logic                tc_d_wrap_u_c, tc_d_wrap_v_c;
+  logic [1:0]          tc_d_role_c, tc_d_blend_c, tc_d_vm_c;
+  logic [7:0]          tc_d_opacity_c, tc_d_pal_c;
+  logic [15:0]         tc_d_width_c, tc_d_height_c;
+  logic signed [31:0]  tc_d_a_c, tc_d_b_c, tc_d_c_c, tc_d_d_c, tc_d_u0_c, tc_d_v0_c;
+
+  logic                tc_s_valid_c;
+  logic signed [15:0]  tc_s_x_c, tc_s_y_c;
+  logic [15:0]         tc_s_w_c, tc_s_h_c, tc_s_tint_c, tc_s_src_c;
+  logic signed [31:0]  tc_s_u_c, tc_s_v_c, tc_s_a00_c, tc_s_a01_c, tc_s_a10_c, tc_s_a11_c;
+  logic [2:0]          tc_s_fmt_c;
+  logic [7:0]          tc_s_pal_c, tc_s_ord_c;
+  logic [1:0]          tc_s_blend_c, tc_s_vm_c;
+
+  logic                    tc_bind_we_c;
+  logic [TWOD_BSW-1:0]     tc_bind_sel_c;
+  logic [TWOD_PAW-1:0]     tc_bind_base_c;
+  logic [3:0]              tc_bind_lstride_c, tc_bind_lheight_c;
+
+  logic                    tc_atm_slot_c;
+  logic signed [31:0]      tc_line_scroll_c;
+
+  logic                    ta_page_we_c, ta_pal_we_c;
+  logic [TWOD_PAW-1:0]     ta_page_addr_c;
+  logic [TWOD_PALAW-1:0]   ta_pal_addr_c;
+  logic [15:0]             ta_page_data_c, ta_pal_data_c;
+
+  logic                    twod_seal_c;
+
+  // The two consumers' `d_ready_o`. They are constant high today -- programming
+  // a plane slot never waits on a pixel, and the band's intake always completes
+  // so a HUD overflow cannot backpressure the command stream -- and the
+  // producer honours them anyway. A producer that assumes a constant is a
+  // producer that breaks when the constant stops being one.
+  logic                    twod_pd_ready_c, twod_sd_ready_c;
+
   zhao_twod_plane #(
     .CW (32)
   ) u_twod_plane (
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // The descriptor is the CMD seam, unchanged by this packet.
-    .d_valid_i    (twod_pd_valid_i),
-    .d_ready_o    (twod_pd_ready_o),
-    .d_slot_i     (twod_pd_slot_i),
-    .d_role_i     (twod_pd_role_i),
-    .d_blend_i    (twod_pd_blend_i),
-    .d_opacity_i  (twod_pd_opacity_i),
-    .d_format_i   (twod_pd_format_i),
-    .d_width_i    (twod_pd_width_i),
-    .d_height_i   (twod_pd_height_i),
-    .d_wrap_u_i   (twod_pd_wrap_u_i),
-    .d_wrap_v_i   (twod_pd_wrap_v_i),
-    .d_a_i        (twod_pd_a_i),
-    .d_b_i        (twod_pd_b_i),
-    .d_c_i        (twod_pd_c_i),
-    .d_d_i        (twod_pd_d_i),
-    .d_u0_i       (twod_pd_u0_i),
-    .d_v0_i       (twod_pd_v0_i),
-    .d_view_mask_i(twod_pd_view_mask_i),
-    .d_palette_i  (twod_pd_palette_i),
+    // REAL: the SEALED plane pair from `u_twod_cmd`, published once per frame
+    // before the TWOD pass. This was the CMD seam until 2026-09-22.
+    .d_valid_i    (tc_d_valid_c),
+    .d_ready_o    (twod_pd_ready_c),
+    .d_slot_i     (tc_d_slot_c),
+    .d_enable_i   (tc_d_enable_c),
+    .d_role_i     (tc_d_role_c),
+    .d_blend_i    (tc_d_blend_c),
+    .d_opacity_i  (tc_d_opacity_c),
+    .d_format_i   (tc_d_format_c),
+    .d_width_i    (tc_d_width_c),
+    .d_height_i   (tc_d_height_c),
+    .d_wrap_u_i   (tc_d_wrap_u_c),
+    .d_wrap_v_i   (tc_d_wrap_v_c),
+    .d_a_i        (tc_d_a_c),
+    .d_b_i        (tc_d_b_c),
+    .d_c_i        (tc_d_c_c),
+    .d_d_i        (tc_d_d_c),
+    .d_u0_i       (tc_d_u0_c),
+    .d_v0_i       (tc_d_v0_c),
+    .d_view_mask_i(tc_d_vm_c),
+    .d_palette_i  (tc_d_pal_c),
 
     // REAL: the walk comes from the sampler, which is the block that knows
     // which ring line is free.
@@ -17650,7 +17721,8 @@ module zhao_console_core
     .refused_role_o  (twod_plane_refused_role_o),
     .refused_blend_o (twod_plane_refused_blend_o),
     .skipped_view_o  (twod_plane_skipped_view_o),
-    .wrap_fail_o     (twod_plane_wrap_fail_o)
+    .wrap_fail_o     (twod_plane_wrap_fail_o),
+    .disabled_o      (twod_plane_disabled_o)
   );
 
   // ==========================================================================
@@ -17721,27 +17793,31 @@ module zhao_console_core
     .frame_h_i    (post_frame_h_c),
     .view_split_i (twod_view_split_c),
 
-    // The descriptor is the CMD seam, unchanged by this packet -- the band
-    // imposes NO new requirement on the record (R233, HUDBAND).
-    .d_valid_i    (twod_sd_valid_i),
-    .d_ready_o    (twod_sd_ready_o),
-    .d_x_i        (twod_sd_x_i),
-    .d_y_i        (twod_sd_y_i),
-    .d_w_i        (twod_sd_w_i),
-    .d_h_i        (twod_sd_h_i),
-    .d_u_i        (twod_sd_u_i),
-    .d_v_i        (twod_sd_v_i),
-    .d_a00_i      (twod_sd_a00_i),
-    .d_a01_i      (twod_sd_a01_i),
-    .d_a10_i      (twod_sd_a10_i),
-    .d_a11_i      (twod_sd_a11_i),
-    .d_format_i   (twod_sd_format_i),
-    .d_palette_i  (twod_sd_palette_i),
-    .d_tint_i     (twod_sd_tint_i),
-    .d_blend_i    (twod_sd_blend_i),
-    .d_view_mask_i(twod_sd_view_mask_i),
-    .d_order_i    (twod_sd_order_i),
-    .d_src_id_i   (twod_sd_src_id_i),
+    // REAL: the SEALED sprite list from `u_twod_cmd`, replayed in command
+    // order into a list this block cleared on the same cycle it published
+    // `list_restart_o`. HUDBAND was right that the band imposes NO new
+    // requirement on the record: `zhao_twod_cmd`'s `s_*` is this group field
+    // for field, and the ratified DrawSprite 0x0307 is that group plus the
+    // three fields the sampler's binding needs.
+    .d_valid_i    (tc_s_valid_c),
+    .d_ready_o    (twod_sd_ready_c),
+    .d_x_i        (tc_s_x_c),
+    .d_y_i        (tc_s_y_c),
+    .d_w_i        (tc_s_w_c),
+    .d_h_i        (tc_s_h_c),
+    .d_u_i        (tc_s_u_c),
+    .d_v_i        (tc_s_v_c),
+    .d_a00_i      (tc_s_a00_c),
+    .d_a01_i      (tc_s_a01_c),
+    .d_a10_i      (tc_s_a10_c),
+    .d_a11_i      (tc_s_a11_c),
+    .d_format_i   (tc_s_fmt_c),
+    .d_palette_i  (tc_s_pal_c),
+    .d_tint_i     (tc_s_tint_c),
+    .d_blend_i    (tc_s_blend_c),
+    .d_view_mask_i(tc_s_vm_c),
+    .d_order_i    (tc_s_ord_c),
+    .d_src_id_i   (tc_s_src_c),
 
     // REAL: the band-clipped slice goes to the EXISTING walker.
     .e_valid_o    (bd_valid_c),
@@ -17797,7 +17873,12 @@ module zhao_console_core
     .tint_dropped_o           (twod_band_tint_dropped_o),
     .blend_dropped_o          (twod_band_blend_dropped_o),
     .order_inversion_o        (twod_band_order_inversion_o),
-    .bands_o                  (twod_band_bands_o)
+    .bands_o                  (twod_band_bands_o),
+
+    // REAL: the cycle this block discards the previous frame's list. It is the
+    // producer's SEAL, and it is not `core_tick_c` -- see `u_twod_cmd`.
+    .list_restart_o           (twod_seal_c),
+    .desc_mid_sweep_o         (twod_band_desc_mid_sweep_o)
   );
 
   zhao_twod_sprite #(
@@ -17870,20 +17951,28 @@ module zhao_console_core
 
     // The page, the palette and the bindings are ASSETS -- I17's own
     // classification for the grading curves, applied to a texture.
-    .ld_page_we_i     (twod_ld_page_we_i),
-    .ld_page_addr_i   (twod_ld_page_addr_i),
-    .ld_page_data_i   (twod_ld_page_data_i),
-    .ld_pal_we_i      (twod_ld_pal_we_i),
-    .ld_pal_addr_i    (twod_ld_pal_addr_i),
-    .ld_pal_data_i    (twod_ld_pal_data_i),
-    .ld_bind_we_i     (twod_ld_bind_we_i),
-    .ld_bind_sel_i    (twod_ld_bind_sel_i),
-    .ld_bind_base_i   (twod_ld_bind_base_i),
-    .ld_bind_lstride_i(twod_ld_bind_lstride_i),
-    .ld_bind_lheight_i(twod_ld_bind_lheight_i),
+    // REAL, and the split is the sampler's own. The TEXELS come from
+    // `u_twod_asset`, which reads the arena a PublishResource of kind 15 names;
+    // the BINDING comes from `u_twod_cmd`, because which page region a
+    // descriptor samples is part of the descriptor and not part of the asset.
+    // The ruling: "an opcode plus descriptors referring to data that only the
+    // testbench can inject is not completion."
+    .ld_page_we_i     (ta_page_we_c),
+    .ld_page_addr_i   (ta_page_addr_c),
+    .ld_page_data_i   (ta_page_data_c),
+    .ld_pal_we_i      (ta_pal_we_c),
+    .ld_pal_addr_i    (ta_pal_addr_c),
+    .ld_pal_data_i    (ta_pal_data_c),
+    .ld_bind_we_i     (tc_bind_we_c),
+    .ld_bind_sel_i    (tc_bind_sel_c),
+    .ld_bind_base_i   (tc_bind_base_c),
+    .ld_bind_lstride_i(tc_bind_lstride_c),
+    .ld_bind_lheight_i(tc_bind_lheight_c),
 
-    .atm_slot_i   (twod_atm_slot_i),
-    .line_scroll_i(twod_line_scroll_i),
+    // REAL: the sealed plane pair's ATMOSPHERE slot and that record's own
+    // line_scroll field.
+    .atm_slot_i   (tc_atm_slot_c),
+    .line_scroll_i(tc_line_scroll_c),
 
     .pw_valid_o      (pw_valid_c),
     .pw_ready_i      (pw_ready_c),
@@ -17955,6 +18044,216 @@ module zhao_console_core
     .sprite_stalls_o  (twod_sprite_stalls_o),
     .tint_unapplied_o (twod_tint_unapplied_o),
     .pair_lost_o      (twod_pair_lost_o)
+  );
+
+  // ==========================================================================
+  // TWOD.CMD and TWOD.ASSET -- the producer and the asset path.  Added
+  // 2026-09-22, and together they close the DESCRIPTOR half of entry I17.
+  // ==========================================================================
+  // THE BAND WAS BUILT, COMPOSED AND PERMANENTLY IDLE. Packet BANDBUILD landed
+  // `zhao_twod_band` with 39 directed checks and a burst mutant that proves its
+  // plant before it fires -- and nothing in the chip could tell it what to
+  // draw, because `SetPlane` returned ZERO HITS in `spec/commands.zidl`. The
+  // owner ratified both records on 2026-09-22 and this is their lowering.
+  //
+  // NOTHING IS ADAPTED HERE. `u_twod_cmd.d_*` is `u_twod_plane.d_*` field for
+  // field; `u_twod_cmd.s_*` is `u_twod_band.d_*` field for field;
+  // `u_twod_asset.ld_page_*`/`ld_pal_*` and `u_twod_cmd.ld_bind_*` are
+  // `u_twod_sampler.ld_*` split at the seam the sampler itself already draws
+  // between texels and bindings. No widening, no field invented, no arithmetic.
+  //
+  // THE SEAL COMES FROM THE BAND, NOT FROM `core_tick_c`, and that is the one
+  // connection in this block worth reading twice. The band ignores a frame tick
+  // that lands mid-pass -- ignoring it is what fixed the 582,261 underruns --
+  // so `frame_start_i` is NOT the cycle its list is cleared. `list_restart_o`
+  // IS that cycle, and driving the producer's seal from anything else would
+  // append a new frame's descriptors to the old frame's list on exactly the
+  // frames where the tick was ignored, with every counter balancing. That is
+  // I39's "two live wires are not a producer", and the band's
+  // `desc_mid_sweep_o` is the independent instrument that says it did not
+  // happen.
+
+  zhao_twod_cmd #(
+    .MAX_DESC   (64),
+    .UVW        (32),
+    .PAGE_WORDS (TWOD_PAGE_WORDS),
+    .BIND_SLOTS (TWOD_BIND_SLOTS)
+  ) u_twod_cmd (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: CMD.EXEC's two new staging arms, one record at a time.
+    .pl_valid_i       (cmd_tpl_valid_w),
+    .pl_ready_o       (cmd_tpl_ready_w),
+    .pl_slot_i        (cmd_tpl_slot_w),
+    .pl_role_i        (cmd_tpl_role_w),
+    .pl_blend_i       (cmd_tpl_blend_w),
+    .pl_opacity_i     (cmd_tpl_opacity_w),
+    .pl_format_i      (cmd_tpl_format_w),
+    .pl_wrap_i        (cmd_tpl_wrap_w),
+    .pl_view_mask_i   (cmd_tpl_view_mask_w),
+    .pl_palette_i     (cmd_tpl_palette_w),
+    .pl_width_i       (cmd_tpl_width_w),
+    .pl_height_i      (cmd_tpl_height_w),
+    .pl_flags_i       (cmd_tpl_flags_w),
+    .pl_base_i        (cmd_tpl_base_w),
+    .pl_lstride_i     (cmd_tpl_lstride_w),
+    .pl_lheight_i     (cmd_tpl_lheight_w),
+    .pl_a_i           (cmd_tpl_a_w),
+    .pl_b_i           (cmd_tpl_b_w),
+    .pl_c_i           (cmd_tpl_c_w),
+    .pl_d_i           (cmd_tpl_d_w),
+    .pl_u0_i          (cmd_tpl_u0_w),
+    .pl_v0_i          (cmd_tpl_v0_w),
+    .pl_line_scroll_i (cmd_tpl_line_scroll_w),
+
+    .sp_valid_i     (cmd_tsp_valid_w),
+    .sp_ready_o     (cmd_tsp_ready_w),
+    .sp_x_i         (cmd_tsp_x_w),
+    .sp_y_i         (cmd_tsp_y_w),
+    .sp_w_i         (cmd_tsp_w_w),
+    .sp_h_i         (cmd_tsp_h_w),
+    .sp_base_i      (cmd_tsp_base_w),
+    .sp_lstride_i   (cmd_tsp_lstride_w),
+    .sp_lheight_i   (cmd_tsp_lheight_w),
+    .sp_format_i    (cmd_tsp_format_w),
+    .sp_palette_i   (cmd_tsp_palette_w),
+    .sp_blend_i     (cmd_tsp_blend_w),
+    .sp_view_mask_i (cmd_tsp_view_mask_w),
+    .sp_tint_i      (cmd_tsp_tint_w),
+    .sp_order_i     (cmd_tsp_order_w),
+    .sp_flags_i     (cmd_tsp_flags_w),
+    .sp_src_id_i    (cmd_tsp_src_id_w),
+    .sp_u_i         (cmd_tsp_u_w),
+    .sp_v_i         (cmd_tsp_v_w),
+    .sp_a00_i       (cmd_tsp_a00_w),
+    .sp_a01_i       (cmd_tsp_a01_w),
+    .sp_a10_i       (cmd_tsp_a10_w),
+    .sp_a11_i       (cmd_tsp_a11_w),
+
+    // REAL: the packet's verdict, so an abandoned packet's descriptors never
+    // reach a frame. Same atomicity as every other CMD.EXEC arm.
+    .pkt_commit_i  (cmd_twod_commit_w),
+    .pkt_abandon_i (cmd_twod_abandon_w),
+
+    // REAL: the band's own list-clear cycle. See the comment above.
+    .seal_i (twod_seal_c),
+
+    .d_valid_o     (tc_d_valid_c),
+    .d_ready_i     (twod_pd_ready_c),
+    .d_slot_o      (tc_d_slot_c),
+    .d_enable_o    (tc_d_enable_c),
+    .d_role_o      (tc_d_role_c),
+    .d_blend_o     (tc_d_blend_c),
+    .d_opacity_o   (tc_d_opacity_c),
+    .d_format_o    (tc_d_format_c),
+    .d_width_o     (tc_d_width_c),
+    .d_height_o    (tc_d_height_c),
+    .d_wrap_u_o    (tc_d_wrap_u_c),
+    .d_wrap_v_o    (tc_d_wrap_v_c),
+    .d_a_o         (tc_d_a_c),
+    .d_b_o         (tc_d_b_c),
+    .d_c_o         (tc_d_c_c),
+    .d_d_o         (tc_d_d_c),
+    .d_u0_o        (tc_d_u0_c),
+    .d_v0_o        (tc_d_v0_c),
+    .d_view_mask_o (tc_d_vm_c),
+    .d_palette_o   (tc_d_pal_c),
+
+    .s_valid_o     (tc_s_valid_c),
+    .s_ready_i     (twod_sd_ready_c),
+    .s_x_o         (tc_s_x_c),
+    .s_y_o         (tc_s_y_c),
+    .s_w_o         (tc_s_w_c),
+    .s_h_o         (tc_s_h_c),
+    .s_u_o         (tc_s_u_c),
+    .s_v_o         (tc_s_v_c),
+    .s_a00_o       (tc_s_a00_c),
+    .s_a01_o       (tc_s_a01_c),
+    .s_a10_o       (tc_s_a10_c),
+    .s_a11_o       (tc_s_a11_c),
+    .s_format_o    (tc_s_fmt_c),
+    .s_palette_o   (tc_s_pal_c),
+    .s_tint_o      (tc_s_tint_c),
+    .s_blend_o     (tc_s_blend_c),
+    .s_view_mask_o (tc_s_vm_c),
+    .s_order_o     (tc_s_ord_c),
+    .s_src_id_o    (tc_s_src_c),
+
+    .ld_bind_we_o      (tc_bind_we_c),
+    .ld_bind_sel_o     (tc_bind_sel_c),
+    .ld_bind_base_o    (tc_bind_base_c),
+    .ld_bind_lstride_o (tc_bind_lstride_c),
+    .ld_bind_lheight_o (tc_bind_lheight_c),
+
+    .atm_slot_o    (tc_atm_slot_c),
+    .line_scroll_o (tc_line_scroll_c),
+
+    .planes_staged_o       (twod_cmd_planes_staged_o),
+    .sprites_staged_o      (twod_cmd_sprites_staged_o),
+    .plane_refused_o       (twod_cmd_plane_refused_o),
+    .sprite_refused_o      (twod_cmd_sprite_refused_o),
+    .list_overflow_o       (twod_cmd_list_overflow_o),
+    .packets_committed_o   (twod_cmd_packets_committed_o),
+    .packets_abandoned_o   (twod_cmd_packets_abandoned_o),
+    .frames_sealed_o       (twod_cmd_frames_sealed_o),
+    .planes_published_o    (twod_cmd_planes_published_o),
+    .sprites_published_o   (twod_cmd_sprites_published_o),
+    .slots_auto_disabled_o (twod_cmd_slots_auto_disabled_o),
+    .bind_conflict_o       (twod_cmd_bind_conflict_o),
+    .seal_overrun_o        (twod_cmd_seal_overrun_o)
+  );
+
+  // ---- TWOD.ASSET: the page and palette bytes, from the arena -------------
+  // `pass_active_i` IS THE COMPOSITOR'S OWN HUD REQUEST, not a frame flag: the
+  // instrument this block feeds asks whether a load overlapped a LIVE PASS, and
+  // `hud_req_v_c` is the pass, asserted by POST.COMPOSITE while it is walking.
+  // A frame-level signal would have answered a different question and read the
+  // same in the smoke.
+  zhao_twod_asset #(
+    .PAGE_WORDS (TWOD_PAGE_WORDS),
+    .PAL_SLOTS  (TWOD_PAL_SLOTS),
+    .PAGE_SLOTS (8)
+  ) u_twod_asset (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .cfg_epoch_i (terr_cfg_epoch_i[15:0]),
+
+    .j_valid_i    (cmd_tld_valid_w),
+    .j_ready_o    (cmd_tld_ready_w),
+    .j_index_i    (cmd_tld_index_w),
+    .j_hps_addr_i (cmd_tld_hps_addr_w),
+    .j_len_i      (cmd_tld_len_w),
+    .j_crc_i      (cmd_tld_crc_w),
+    .j_epoch_i    (cmd_tld_epoch_w),
+    .j_dst_slot_i (cmd_tld_dst_slot_w),
+
+    .hps_req_o    (tas_hps_req),
+    .hps_grant_i  (tas_hps_grant),
+    .hps_rsp_i    (tas_hps_rsp),
+
+    .ld_page_we_o   (ta_page_we_c),
+    .ld_page_addr_o (ta_page_addr_c),
+    .ld_page_data_o (ta_page_data_c),
+    .ld_pal_we_o    (ta_pal_we_c),
+    .ld_pal_addr_o  (ta_pal_addr_c),
+    .ld_pal_data_o  (ta_pal_data_c),
+
+    .pass_active_i (hud_req_v_c),
+
+    .loads_started_o     (twod_asset_loads_started_o),
+    .loads_done_o        (twod_asset_loads_done_o),
+    .words_written_o     (twod_asset_words_written_o),
+    .slot_refused_o      (twod_asset_slot_refused_o),
+    .len_refused_o       (twod_asset_len_refused_o),
+    .addr_refused_o      (twod_asset_addr_refused_o),
+    .epoch_refused_o     (twod_asset_epoch_refused_o),
+    .crc_fails_o         (twod_asset_crc_fails_o),
+    .regions_zeroed_o    (twod_asset_regions_zeroed_o),
+    .bridge_errs_o       (twod_asset_bridge_errs_o),
+    .loads_during_pass_o (twod_asset_loads_during_pass_o),
+    .bursts_o            (twod_asset_bursts_o)
   );
 
   // ==========================================================================
@@ -18451,6 +18750,40 @@ module zhao_console_core
   logic [31:0] cmd_tok_budget_geom0, cmd_tok_budget_geom1;
   logic [31:0] cmd_tok_budget_frag0, cmd_tok_budget_frag1, cmd_tok_budget_shared;
   logic [31:0] cmd_tok_vreq_geom, cmd_tok_vreq_frag;
+  // ---- TWOD: the two descriptor arms and the kind-15 asset fork -----------
+  // Owner completion ruling 2026-09-22 item 3. These are `zhao_cmd_exec`'s
+  // lowering of SetPlane 0x0306 and DrawSprite 0x0307, and the fork of a
+  // PublishResource of cartridge kind 15 away from MEM.UPLOAD and into the
+  // TWOD page store. Consumers are `u_twod_cmd` and `u_twod_asset`, composed
+  // at the end of this module.
+  wire               cmd_tpl_valid_w, cmd_tpl_ready_w;
+  wire [7:0]         cmd_tpl_slot_w, cmd_tpl_role_w, cmd_tpl_blend_w;
+  wire [7:0]         cmd_tpl_opacity_w, cmd_tpl_format_w, cmd_tpl_wrap_w;
+  wire [7:0]         cmd_tpl_view_mask_w, cmd_tpl_palette_w;
+  wire [15:0]        cmd_tpl_width_w, cmd_tpl_height_w, cmd_tpl_flags_w, cmd_tpl_base_w;
+  wire [7:0]         cmd_tpl_lstride_w, cmd_tpl_lheight_w;
+  wire signed [31:0] cmd_tpl_a_w, cmd_tpl_b_w, cmd_tpl_c_w, cmd_tpl_d_w;
+  wire signed [31:0] cmd_tpl_u0_w, cmd_tpl_v0_w, cmd_tpl_line_scroll_w;
+
+  wire               cmd_tsp_valid_w, cmd_tsp_ready_w;
+  wire signed [15:0] cmd_tsp_x_w, cmd_tsp_y_w;
+  wire [15:0]        cmd_tsp_w_w, cmd_tsp_h_w, cmd_tsp_base_w, cmd_tsp_tint_w;
+  wire [15:0]        cmd_tsp_src_id_w;
+  wire [7:0]         cmd_tsp_lstride_w, cmd_tsp_lheight_w, cmd_tsp_format_w;
+  wire [7:0]         cmd_tsp_palette_w, cmd_tsp_blend_w, cmd_tsp_view_mask_w;
+  wire [7:0]         cmd_tsp_order_w, cmd_tsp_flags_w;
+  wire signed [31:0] cmd_tsp_u_w, cmd_tsp_v_w;
+  wire signed [31:0] cmd_tsp_a00_w, cmd_tsp_a01_w, cmd_tsp_a10_w, cmd_tsp_a11_w;
+
+  wire               cmd_twod_commit_w, cmd_twod_abandon_w;
+
+  wire               cmd_tld_valid_w, cmd_tld_ready_w;
+  wire [23:0]        cmd_tld_index_w;
+  wire [63:0]        cmd_tld_hps_addr_w;
+  wire [31:0]        cmd_tld_len_w, cmd_tld_crc_w;
+  wire [15:0]        cmd_tld_epoch_w;
+  wire [7:0]         cmd_tld_dst_slot_w;
+
   zhao_cmd_exec #(
     .STAMP_Q (CMD_EXEC_STAMP_Q)
   ) u_cmd_exec (
@@ -18661,6 +18994,78 @@ module zhao_console_core
     .tflds_issued_o        (cmd_exec_tflds_o),
     .tfld_overflow_o       (cmd_exec_tfld_overflow_o),
     .tfld_src_truncated_o  (cmd_exec_tfld_src_truncated_o),
+
+    // ---- TWOD (completion ruling 2026-09-22, item 3) ---------------------
+    // REAL: SetPlane 0x0306 and DrawSprite 0x0307, lowered into `u_twod_cmd`,
+    // with the packet's verdict so an abandoned packet's descriptors never
+    // reach a frame.
+    .tpl_valid_o       (cmd_tpl_valid_w),
+    .tpl_ready_i       (cmd_tpl_ready_w),
+    .tpl_slot_o        (cmd_tpl_slot_w),
+    .tpl_role_o        (cmd_tpl_role_w),
+    .tpl_blend_o       (cmd_tpl_blend_w),
+    .tpl_opacity_o     (cmd_tpl_opacity_w),
+    .tpl_format_o      (cmd_tpl_format_w),
+    .tpl_wrap_o        (cmd_tpl_wrap_w),
+    .tpl_view_mask_o   (cmd_tpl_view_mask_w),
+    .tpl_palette_o     (cmd_tpl_palette_w),
+    .tpl_width_o       (cmd_tpl_width_w),
+    .tpl_height_o      (cmd_tpl_height_w),
+    .tpl_flags_o       (cmd_tpl_flags_w),
+    .tpl_base_o        (cmd_tpl_base_w),
+    .tpl_lstride_o     (cmd_tpl_lstride_w),
+    .tpl_lheight_o     (cmd_tpl_lheight_w),
+    .tpl_a_o           (cmd_tpl_a_w),
+    .tpl_b_o           (cmd_tpl_b_w),
+    .tpl_c_o           (cmd_tpl_c_w),
+    .tpl_d_o           (cmd_tpl_d_w),
+    .tpl_u0_o          (cmd_tpl_u0_w),
+    .tpl_v0_o          (cmd_tpl_v0_w),
+    .tpl_line_scroll_o (cmd_tpl_line_scroll_w),
+
+    .tsp_valid_o     (cmd_tsp_valid_w),
+    .tsp_ready_i     (cmd_tsp_ready_w),
+    .tsp_x_o         (cmd_tsp_x_w),
+    .tsp_y_o         (cmd_tsp_y_w),
+    .tsp_w_o         (cmd_tsp_w_w),
+    .tsp_h_o         (cmd_tsp_h_w),
+    .tsp_base_o      (cmd_tsp_base_w),
+    .tsp_lstride_o   (cmd_tsp_lstride_w),
+    .tsp_lheight_o   (cmd_tsp_lheight_w),
+    .tsp_format_o    (cmd_tsp_format_w),
+    .tsp_palette_o   (cmd_tsp_palette_w),
+    .tsp_blend_o     (cmd_tsp_blend_w),
+    .tsp_view_mask_o (cmd_tsp_view_mask_w),
+    .tsp_tint_o      (cmd_tsp_tint_w),
+    .tsp_order_o     (cmd_tsp_order_w),
+    .tsp_flags_o     (cmd_tsp_flags_w),
+    .tsp_src_id_o    (cmd_tsp_src_id_w),
+    .tsp_u_o         (cmd_tsp_u_w),
+    .tsp_v_o         (cmd_tsp_v_w),
+    .tsp_a00_o       (cmd_tsp_a00_w),
+    .tsp_a01_o       (cmd_tsp_a01_w),
+    .tsp_a10_o       (cmd_tsp_a10_w),
+    .tsp_a11_o       (cmd_tsp_a11_w),
+
+    .twod_pkt_commit_o  (cmd_twod_commit_w),
+    .twod_pkt_abandon_o (cmd_twod_abandon_w),
+
+    // REAL: a PublishResource of cartridge kind 15 goes to the TWOD page store
+    // instead of to VRAM. Forked at the pending queue's DRAIN, so nothing about
+    // PublishResource's staging, capacity or atomicity moves.
+    .tld_valid_o    (cmd_tld_valid_w),
+    .tld_ready_i    (cmd_tld_ready_w),
+    .tld_index_o    (cmd_tld_index_w),
+    .tld_hps_addr_o (cmd_tld_hps_addr_w),
+    .tld_len_o      (cmd_tld_len_w),
+    .tld_crc_o      (cmd_tld_crc_w),
+    .tld_epoch_o    (cmd_tld_epoch_w),
+    .tld_dst_slot_o (cmd_tld_dst_slot_w),
+
+    .twod_planes_staged_o  (cmd_exec_twod_planes_staged_o),
+    .twod_sprites_staged_o (cmd_exec_twod_sprites_staged_o),
+    .twod_dropped_o        (cmd_exec_twod_dropped_o),
+    .twod_loads_issued_o   (cmd_exec_twod_loads_issued_o),
 
     .unsupported_o        (cmd_exec_unsupported_o)
   );

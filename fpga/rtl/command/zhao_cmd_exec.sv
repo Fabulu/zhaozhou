@@ -884,6 +884,105 @@ module zhao_cmd_exec
     // different refusals, and one counter for both would attribute a bad
     // rectangle to a bad bank.
     output logic [31:0] viewport_range_refused_o,
+
+    // ---- TWOD: SetPlane 0x0306 and DrawSprite 0x0307 ------------------------
+    // Owner completion ruling 2026-09-22 item 3. Consumer: `zhao_twod_cmd`,
+    // which owns the frame-scoped ring and the rollback; this block stages the
+    // FIELDS and hands over the packet's verdict.
+    //
+    // WHY THESE PRESENT PER RECORD AND NOT PER PACKET, which is the one
+    // structural difference from every other arm here. `SetEnvironment` and
+    // `SetPopulation` are state and collapse to the last one; `SurfaceStamp`,
+    // `DrawForm` and `DrawProcedural` are events and queue HERE. A TWOD frame
+    // carries up to sixty-four descriptors at about 335 bits each, and queueing
+    // those in this block's flip-flops would cost more than twenty thousand
+    // registers for a list the consumer already has to hold in a memory. So the
+    // ring lives THERE, in M10K, and its `pkt_commit_o`/`pkt_abandon_o` give it
+    // exactly the atomicity the forge arm's `fq_wp`/`fq_cp` give this one --
+    // the same two pointers, in the block that owns the storage.
+    //
+    // THE PRESENTATION IS ONE CYCLE LATE ON PURPOSE. Both records' last field
+    // ends at byte 63 of a 64-byte record, so the final byte's capture and
+    // `rec_done` land on the SAME edge; presenting at `rec_done` would offer
+    // the shadow with its last field one record stale. `*_pend` is set by
+    // `rec_done` and the offer is loaded from the shadow on the NEXT cycle,
+    // when every byte has settled. The elaboration guards below pin the two
+    // assumptions that makes.
+    output logic                tpl_valid_o,
+    input  logic                tpl_ready_i,
+    output logic [ 7:0]         tpl_slot_o,
+    output logic [ 7:0]         tpl_role_o,
+    output logic [ 7:0]         tpl_blend_o,
+    output logic [ 7:0]         tpl_opacity_o,
+    output logic [ 7:0]         tpl_format_o,
+    output logic [ 7:0]         tpl_wrap_o,
+    output logic [ 7:0]         tpl_view_mask_o,
+    output logic [ 7:0]         tpl_palette_o,
+    output logic [15:0]         tpl_width_o,
+    output logic [15:0]         tpl_height_o,
+    output logic [15:0]         tpl_flags_o,
+    output logic [15:0]         tpl_base_o,
+    output logic [ 7:0]         tpl_lstride_o,
+    output logic [ 7:0]         tpl_lheight_o,
+    output logic signed [31:0]  tpl_a_o,
+    output logic signed [31:0]  tpl_b_o,
+    output logic signed [31:0]  tpl_c_o,
+    output logic signed [31:0]  tpl_d_o,
+    output logic signed [31:0]  tpl_u0_o,
+    output logic signed [31:0]  tpl_v0_o,
+    output logic signed [31:0]  tpl_line_scroll_o,
+
+    output logic                tsp_valid_o,
+    input  logic                tsp_ready_i,
+    output logic signed [15:0]  tsp_x_o,
+    output logic signed [15:0]  tsp_y_o,
+    output logic [15:0]         tsp_w_o,
+    output logic [15:0]         tsp_h_o,
+    output logic [15:0]         tsp_base_o,
+    output logic [ 7:0]         tsp_lstride_o,
+    output logic [ 7:0]         tsp_lheight_o,
+    output logic [ 7:0]         tsp_format_o,
+    output logic [ 7:0]         tsp_palette_o,
+    output logic [ 7:0]         tsp_blend_o,
+    output logic [ 7:0]         tsp_view_mask_o,
+    output logic [15:0]         tsp_tint_o,
+    output logic [ 7:0]         tsp_order_o,
+    output logic [ 7:0]         tsp_flags_o,
+    output logic [15:0]         tsp_src_id_o,
+    output logic signed [31:0]  tsp_u_o,
+    output logic signed [31:0]  tsp_v_o,
+    output logic signed [31:0]  tsp_a00_o,
+    output logic signed [31:0]  tsp_a01_o,
+    output logic signed [31:0]  tsp_a10_o,
+    output logic signed [31:0]  tsp_a11_o,
+
+    // The packet's verdict, forwarded to the block that holds the ring. Exactly
+    // one of these pulses per packet this block walked to a verdict.
+    output logic                twod_pkt_commit_o,
+    output logic                twod_pkt_abandon_o,
+
+    // ---- TWOD_PAGE (cartridge kind 15) -> zhao_twod_asset -------------------
+    // The SAME pending-upload queue entry `upl_*` carries, forked at the DRAIN
+    // by `kind`. Nothing about PublishResource's staging, capacity, overflow or
+    // atomicity changes; one head, two destinations, one pop.
+    output logic                tld_valid_o,
+    input  logic                tld_ready_i,
+    output logic [23:0]         tld_index_o,
+    output logic [63:0]         tld_hps_addr_o,
+    output logic [31:0]         tld_len_o,
+    output logic [31:0]         tld_crc_o,
+    output logic [15:0]         tld_epoch_o,
+    output logic [ 7:0]         tld_dst_slot_o,
+
+    output logic [31:0]         twod_planes_staged_o,
+    output logic [31:0]         twod_sprites_staged_o,
+    // A record whose offer was still waiting when the NEXT one ended. Records
+    // are at least sixty-four bytes apart and `zhao_twod_cmd` holds both
+    // readies high permanently, so this reads zero in the console -- and it is
+    // reachable with legal stimulus in `tb_cmd_exec_pair` by holding a ready
+    // low, which is why it is a counter rather than a comment.
+    output logic [31:0]         twod_dropped_o,
+    output logic [31:0]         twod_loads_issued_o,
     output logic [31:0] unsupported_o
 );
 
@@ -1603,7 +1702,21 @@ module zhao_cmd_exec
 
   logic [UPL_W-1:0] pq_head;
   assign pq_head         = pq[pq_rp[PQW-1:0]];
-  assign upl_valid_o     = (pq_occ != '0);
+  // THE KIND-15 FORK (completion ruling 2026-09-22 item 3). A TWOD_PAGE's
+  // bytes go to `zhao_twod_asset`'s on-chip page store, not to VRAM; every
+  // other kind is MEM.UPLOAD's exactly as before. The fork is at the DRAIN and
+  // not in the staging, so PublishResource's capacity, overflow, atomicity and
+  // field offsets are untouched -- one head, two destinations, one pop.
+  logic pq_is_twod_c;
+  assign pq_is_twod_c    = (pq_head[UQ_KIND_LO +: 8] == 8'(RESOURCE_KIND_TWOD_PAGE));
+  assign upl_valid_o     = (pq_occ != '0) && !pq_is_twod_c;
+  assign tld_valid_o     = (pq_occ != '0) &&  pq_is_twod_c;
+  assign tld_index_o     = pq_head[UQ_RES_LO + 8 +: 24];
+  assign tld_hps_addr_o  = {pq_head[UQ_HHI_LO +: 32], pq_head[UQ_HLO_LO +: 32]};
+  assign tld_len_o       = pq_head[UQ_LEN_LO   +: 32];
+  assign tld_crc_o       = pq_head[UQ_CRC_LO   +: 32];
+  assign tld_epoch_o     = pq_head[UQ_EPOCH_LO +: 16];
+  assign tld_dst_slot_o  = pq_head[UQ_SLOT_LO  +: 8];
   // handle32 is {index:24, generation:8} with the INDEX HIGH -- [31:8] -- the
   // packing zcon::detail::handle32, zref::material::Resolver::find and
   // zhao_material_resolve's req_set_index_c all use. The first version of
@@ -1876,6 +1989,7 @@ module zhao_cmd_exec
       pr_slot <= 8'd0; pr_kind <= 8'd0;
       uq_wp <= '0; uq_rp <= '0; pq_wp <= '0; pq_rp <= '0;
       uploads_issued_o <= 32'd0; upload_overflow_o <= 32'd0;
+      twod_loads_issued_o <= 32'd0;
       sp_gain <= 8'd0; sp_flags <= 8'd0; sp_amt <= 8'd0;
       sp_br <= 16'd0; sp_bg <= 16'd0; sp_bb <= 16'd0; sp_flash <= 16'd0; sp_ink <= 16'd0;
       st_post_v <= 1'b0; st_gain <= 8'd0; st_flags <= 2'd0; st_amt <= 8'd0;
@@ -1926,6 +2040,12 @@ module zhao_cmd_exec
       if (upl_valid_o && upl_ready_i) begin
         pq_rp <= pq_rp + (PQW+1)'(1);
         `ZHAO_EXEC_INC(uploads_issued_o);
+      end else if (tld_valid_o && tld_ready_i) begin
+        // The same pop, the other destination. `upl_valid_o` and `tld_valid_o`
+        // are mutually exclusive by construction (one head, one kind), so the
+        // `else` is belt and braces rather than arbitration.
+        pq_rp <= pq_rp + (PQW+1)'(1);
+        `ZHAO_EXEC_INC(twod_loads_issued_o);
       end
 
       unique case (st)
@@ -3282,6 +3402,295 @@ module zhao_cmd_exec
         if (fq_ovf) `ZHAO_EXEC_INC(forge_overflow_o);
         fq_ovf       <= 1'b0;
         fg_src_hi_nz <= 1'b0;
+      end
+    end
+  end
+
+  // ==========================================================================
+  // TWOD: SetPlane 0x0306 and DrawSprite 0x0307 (completion ruling 2026-09-22)
+  // ==========================================================================
+  // SELF-CONTAINED, for the reason the environment, population, terrain-field
+  // and forge arms below/above are: it reads the packet walk and the verdict
+  // and touches nothing the state machine owns, so every other arm of CMD.EXEC
+  // is unchanged by it.
+  //
+  // THE STORAGE IS NOT HERE AND THE ATOMICITY STILL IS. `zhao_twod_cmd` holds
+  // the frame's ring in M10K; this block gives it the packet boundary, and the
+  // two pointers on the far side do exactly what `fq_wp`/`fq_cp` do on this
+  // one. An abandoned packet's descriptors never reach a frame.
+  // ==========================================================================
+  localparam int unsigned OFF_TP_SLOT = ZHAO_SET_PLANE_OFF_SLOT;
+  localparam int unsigned OFF_TP_ROLE = ZHAO_SET_PLANE_OFF_ROLE;
+  localparam int unsigned OFF_TP_BLND = ZHAO_SET_PLANE_OFF_BLEND;
+  localparam int unsigned OFF_TP_OPAC = ZHAO_SET_PLANE_OFF_OPACITY;
+  localparam int unsigned OFF_TP_FMT  = ZHAO_SET_PLANE_OFF_FORMAT;
+  localparam int unsigned OFF_TP_WRAP = ZHAO_SET_PLANE_OFF_WRAP;
+  localparam int unsigned OFF_TP_VM   = ZHAO_SET_PLANE_OFF_VIEW_MASK;
+  localparam int unsigned OFF_TP_PAL  = ZHAO_SET_PLANE_OFF_PALETTE_ID;
+  localparam int unsigned OFF_TP_W    = ZHAO_SET_PLANE_OFF_WIDTH;
+  localparam int unsigned OFF_TP_H    = ZHAO_SET_PLANE_OFF_HEIGHT;
+  localparam int unsigned OFF_TP_FLG  = ZHAO_SET_PLANE_OFF_FLAGS;
+  localparam int unsigned OFF_TP_BASE = ZHAO_SET_PLANE_OFF_BASE;
+  localparam int unsigned OFF_TP_LSTR = ZHAO_SET_PLANE_OFF_LSTRIDE;
+  localparam int unsigned OFF_TP_LHGT = ZHAO_SET_PLANE_OFF_LHEIGHT;
+  localparam int unsigned OFF_TP_A    = ZHAO_SET_PLANE_OFF_A;
+  localparam int unsigned OFF_TP_B    = ZHAO_SET_PLANE_OFF_B;
+  localparam int unsigned OFF_TP_C    = ZHAO_SET_PLANE_OFF_C;
+  localparam int unsigned OFF_TP_D    = ZHAO_SET_PLANE_OFF_D;
+  localparam int unsigned OFF_TP_U0   = ZHAO_SET_PLANE_OFF_U0;
+  localparam int unsigned OFF_TP_V0   = ZHAO_SET_PLANE_OFF_V0;
+  localparam int unsigned OFF_TP_LS   = ZHAO_SET_PLANE_OFF_LINE_SCROLL;
+
+  localparam int unsigned OFF_TS_X    = ZHAO_DRAW_SPRITE_OFF_X;
+  localparam int unsigned OFF_TS_Y    = ZHAO_DRAW_SPRITE_OFF_Y;
+  localparam int unsigned OFF_TS_W    = ZHAO_DRAW_SPRITE_OFF_W;
+  localparam int unsigned OFF_TS_H    = ZHAO_DRAW_SPRITE_OFF_H;
+  localparam int unsigned OFF_TS_BASE = ZHAO_DRAW_SPRITE_OFF_BASE;
+  localparam int unsigned OFF_TS_LSTR = ZHAO_DRAW_SPRITE_OFF_LSTRIDE;
+  localparam int unsigned OFF_TS_LHGT = ZHAO_DRAW_SPRITE_OFF_LHEIGHT;
+  localparam int unsigned OFF_TS_FMT  = ZHAO_DRAW_SPRITE_OFF_FORMAT;
+  localparam int unsigned OFF_TS_PAL  = ZHAO_DRAW_SPRITE_OFF_PALETTE_ID;
+  localparam int unsigned OFF_TS_BLND = ZHAO_DRAW_SPRITE_OFF_BLEND;
+  localparam int unsigned OFF_TS_VM   = ZHAO_DRAW_SPRITE_OFF_VIEW_MASK;
+  localparam int unsigned OFF_TS_TINT = ZHAO_DRAW_SPRITE_OFF_TINT;
+  localparam int unsigned OFF_TS_ORD  = ZHAO_DRAW_SPRITE_OFF_ORDER;
+  localparam int unsigned OFF_TS_FLG  = ZHAO_DRAW_SPRITE_OFF_FLAGS;
+  localparam int unsigned OFF_TS_SRC  = ZHAO_DRAW_SPRITE_OFF_SRC_ID;
+  localparam int unsigned OFF_TS_U    = ZHAO_DRAW_SPRITE_OFF_U;
+  localparam int unsigned OFF_TS_V    = ZHAO_DRAW_SPRITE_OFF_V;
+  localparam int unsigned OFF_TS_A00  = ZHAO_DRAW_SPRITE_OFF_A00;
+  localparam int unsigned OFF_TS_A01  = ZHAO_DRAW_SPRITE_OFF_A01;
+  localparam int unsigned OFF_TS_A10  = ZHAO_DRAW_SPRITE_OFF_A10;
+  localparam int unsigned OFF_TS_A11  = ZHAO_DRAW_SPRITE_OFF_A11;
+
+  // Quartus 17.0 requires an elaboration check inside `initial begin`; and
+  // `--lint-only` does not run one, so a clean lint is NOT evidence about any
+  // of these. They pin the two facts the one-cycle-late presentation rests on.
+  // synthesis translate_off
+  initial begin
+    if ((OFF_TP_LS + 4) != ZHAO_SET_PLANE_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetPlane's last field is no longer its last byte; re-check the late presentation");
+    if ((OFF_TS_A11 + 4) != ZHAO_DRAW_SPRITE_BYTES)
+      $fatal(1, "zhao_cmd_exec: DrawSprite's last field is no longer its last byte; re-check the late presentation");
+  end
+  // synthesis translate_on
+
+  logic [ 7:0] tp_slot, tp_role, tp_blend, tp_opac, tp_fmt, tp_wrap, tp_vm, tp_pal;
+  logic [15:0] tp_w, tp_h, tp_flags, tp_base;
+  logic [ 7:0] tp_lstr, tp_lhgt;
+  logic [31:0] tp_a, tp_b, tp_c, tp_d, tp_u0, tp_v0, tp_ls;
+  logic        tp_pend;
+
+  logic [15:0] ts_x, ts_y, ts_w, ts_h, ts_base, ts_tint, ts_src;
+  logic [ 7:0] ts_lstr, ts_lhgt, ts_fmt, ts_pal, ts_blend, ts_vm, ts_ord, ts_flg;
+  logic [31:0] ts_u, ts_v, ts_a00, ts_a01, ts_a10, ts_a11;
+  logic        ts_pend;
+
+  wire tp_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_SET_PLANE);
+  wire ts_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_DRAW_SPRITE);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tp_slot <= 8'd0; tp_role <= 8'd0; tp_blend <= 8'd0; tp_opac <= 8'd0;
+      tp_fmt <= 8'd0; tp_wrap <= 8'd0; tp_vm <= 8'd0; tp_pal <= 8'd0;
+      tp_w <= 16'd0; tp_h <= 16'd0; tp_flags <= 16'd0; tp_base <= 16'd0;
+      tp_lstr <= 8'd0; tp_lhgt <= 8'd0;
+      tp_a <= 32'd0; tp_b <= 32'd0; tp_c <= 32'd0; tp_d <= 32'd0;
+      tp_u0 <= 32'd0; tp_v0 <= 32'd0; tp_ls <= 32'd0;
+      tp_pend <= 1'b0;
+      ts_x <= 16'd0; ts_y <= 16'd0; ts_w <= 16'd0; ts_h <= 16'd0;
+      ts_base <= 16'd0; ts_tint <= 16'd0; ts_src <= 16'd0;
+      ts_lstr <= 8'd0; ts_lhgt <= 8'd0; ts_fmt <= 8'd0; ts_pal <= 8'd0;
+      ts_blend <= 8'd0; ts_vm <= 8'd0; ts_ord <= 8'd0; ts_flg <= 8'd0;
+      ts_u <= 32'd0; ts_v <= 32'd0;
+      ts_a00 <= 32'd0; ts_a01 <= 32'd0; ts_a10 <= 32'd0; ts_a11 <= 32'd0;
+      ts_pend <= 1'b0;
+      tpl_valid_o <= 1'b0; tsp_valid_o <= 1'b0;
+      tpl_slot_o <= 8'd0; tpl_role_o <= 8'd0; tpl_blend_o <= 8'd0;
+      tpl_opacity_o <= 8'd0; tpl_format_o <= 8'd0; tpl_wrap_o <= 8'd0;
+      tpl_view_mask_o <= 8'd0; tpl_palette_o <= 8'd0;
+      tpl_width_o <= 16'd0; tpl_height_o <= 16'd0; tpl_flags_o <= 16'd0;
+      tpl_base_o <= 16'd0; tpl_lstride_o <= 8'd0; tpl_lheight_o <= 8'd0;
+      tpl_a_o <= 32'd0; tpl_b_o <= 32'd0; tpl_c_o <= 32'd0; tpl_d_o <= 32'd0;
+      tpl_u0_o <= 32'd0; tpl_v0_o <= 32'd0; tpl_line_scroll_o <= 32'd0;
+      tsp_x_o <= 16'd0; tsp_y_o <= 16'd0; tsp_w_o <= 16'd0; tsp_h_o <= 16'd0;
+      tsp_base_o <= 16'd0; tsp_lstride_o <= 8'd0; tsp_lheight_o <= 8'd0;
+      tsp_format_o <= 8'd0; tsp_palette_o <= 8'd0; tsp_blend_o <= 8'd0;
+      tsp_view_mask_o <= 8'd0; tsp_tint_o <= 16'd0; tsp_order_o <= 8'd0;
+      tsp_flags_o <= 8'd0; tsp_src_id_o <= 16'd0;
+      tsp_u_o <= 32'd0; tsp_v_o <= 32'd0;
+      tsp_a00_o <= 32'd0; tsp_a01_o <= 32'd0; tsp_a10_o <= 32'd0; tsp_a11_o <= 32'd0;
+      twod_pkt_commit_o <= 1'b0; twod_pkt_abandon_o <= 1'b0;
+      twod_planes_staged_o <= 32'd0; twod_sprites_staged_o <= 32'd0;
+      twod_dropped_o <= 32'd0;
+    end else begin
+      twod_pkt_commit_o  <= 1'b0;
+      twod_pkt_abandon_o <= 1'b0;
+
+      // ---- SetPlane's bytes -------------------------------------------------
+      if (tp_byte_c) begin
+        // Little-endian on the wire: every multi-byte field shifts DOWN and the
+        // new byte enters at the top, the assembly every other arm here uses.
+        if (rpos == 16'(OFF_TP_SLOT)) tp_slot  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_ROLE)) tp_role  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_BLND)) tp_blend <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_OPAC)) tp_opac  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_FMT))  tp_fmt   <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_WRAP)) tp_wrap  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_VM))   tp_vm    <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_PAL))  tp_pal   <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_LSTR)) tp_lstr  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TP_LHGT)) tp_lhgt  <= pkt_byte_i;
+        if ((rpos >= 16'(OFF_TP_W))    && (rpos < 16'(OFF_TP_W + 2)))
+          tp_w     <= {pkt_byte_i, tp_w[15:8]};
+        if ((rpos >= 16'(OFF_TP_H))    && (rpos < 16'(OFF_TP_H + 2)))
+          tp_h     <= {pkt_byte_i, tp_h[15:8]};
+        if ((rpos >= 16'(OFF_TP_FLG))  && (rpos < 16'(OFF_TP_FLG + 2)))
+          tp_flags <= {pkt_byte_i, tp_flags[15:8]};
+        if ((rpos >= 16'(OFF_TP_BASE)) && (rpos < 16'(OFF_TP_BASE + 2)))
+          tp_base  <= {pkt_byte_i, tp_base[15:8]};
+        if ((rpos >= 16'(OFF_TP_A))    && (rpos < 16'(OFF_TP_A  + 4)))
+          tp_a  <= {pkt_byte_i, tp_a[31:8]};
+        if ((rpos >= 16'(OFF_TP_B))    && (rpos < 16'(OFF_TP_B  + 4)))
+          tp_b  <= {pkt_byte_i, tp_b[31:8]};
+        if ((rpos >= 16'(OFF_TP_C))    && (rpos < 16'(OFF_TP_C  + 4)))
+          tp_c  <= {pkt_byte_i, tp_c[31:8]};
+        if ((rpos >= 16'(OFF_TP_D))    && (rpos < 16'(OFF_TP_D  + 4)))
+          tp_d  <= {pkt_byte_i, tp_d[31:8]};
+        if ((rpos >= 16'(OFF_TP_U0))   && (rpos < 16'(OFF_TP_U0 + 4)))
+          tp_u0 <= {pkt_byte_i, tp_u0[31:8]};
+        if ((rpos >= 16'(OFF_TP_V0))   && (rpos < 16'(OFF_TP_V0 + 4)))
+          tp_v0 <= {pkt_byte_i, tp_v0[31:8]};
+        if ((rpos >= 16'(OFF_TP_LS))   && (rpos < 16'(OFF_TP_LS + 4)))
+          tp_ls <= {pkt_byte_i, tp_ls[31:8]};
+        if (rec_done) begin
+          if (tp_pend) `ZHAO_EXEC_INC(twod_dropped_o);
+          tp_pend <= 1'b1;
+        end
+      end
+
+      // ---- DrawSprite's bytes ------------------------------------------------
+      if (ts_byte_c) begin
+        if (rpos == 16'(OFF_TS_LSTR)) ts_lstr  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_LHGT)) ts_lhgt  <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_FMT))  ts_fmt   <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_PAL))  ts_pal   <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_BLND)) ts_blend <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_VM))   ts_vm    <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_ORD))  ts_ord   <= pkt_byte_i;
+        if (rpos == 16'(OFF_TS_FLG))  ts_flg   <= pkt_byte_i;
+        if ((rpos >= 16'(OFF_TS_X))    && (rpos < 16'(OFF_TS_X + 2)))
+          ts_x    <= {pkt_byte_i, ts_x[15:8]};
+        if ((rpos >= 16'(OFF_TS_Y))    && (rpos < 16'(OFF_TS_Y + 2)))
+          ts_y    <= {pkt_byte_i, ts_y[15:8]};
+        if ((rpos >= 16'(OFF_TS_W))    && (rpos < 16'(OFF_TS_W + 2)))
+          ts_w    <= {pkt_byte_i, ts_w[15:8]};
+        if ((rpos >= 16'(OFF_TS_H))    && (rpos < 16'(OFF_TS_H + 2)))
+          ts_h    <= {pkt_byte_i, ts_h[15:8]};
+        if ((rpos >= 16'(OFF_TS_BASE)) && (rpos < 16'(OFF_TS_BASE + 2)))
+          ts_base <= {pkt_byte_i, ts_base[15:8]};
+        if ((rpos >= 16'(OFF_TS_TINT)) && (rpos < 16'(OFF_TS_TINT + 2)))
+          ts_tint <= {pkt_byte_i, ts_tint[15:8]};
+        if ((rpos >= 16'(OFF_TS_SRC))  && (rpos < 16'(OFF_TS_SRC + 2)))
+          ts_src  <= {pkt_byte_i, ts_src[15:8]};
+        if ((rpos >= 16'(OFF_TS_U))    && (rpos < 16'(OFF_TS_U   + 4)))
+          ts_u   <= {pkt_byte_i, ts_u[31:8]};
+        if ((rpos >= 16'(OFF_TS_V))    && (rpos < 16'(OFF_TS_V   + 4)))
+          ts_v   <= {pkt_byte_i, ts_v[31:8]};
+        if ((rpos >= 16'(OFF_TS_A00))  && (rpos < 16'(OFF_TS_A00 + 4)))
+          ts_a00 <= {pkt_byte_i, ts_a00[31:8]};
+        if ((rpos >= 16'(OFF_TS_A01))  && (rpos < 16'(OFF_TS_A01 + 4)))
+          ts_a01 <= {pkt_byte_i, ts_a01[31:8]};
+        if ((rpos >= 16'(OFF_TS_A10))  && (rpos < 16'(OFF_TS_A10 + 4)))
+          ts_a10 <= {pkt_byte_i, ts_a10[31:8]};
+        if ((rpos >= 16'(OFF_TS_A11))  && (rpos < 16'(OFF_TS_A11 + 4)))
+          ts_a11 <= {pkt_byte_i, ts_a11[31:8]};
+        if (rec_done) begin
+          if (ts_pend) `ZHAO_EXEC_INC(twod_dropped_o);
+          ts_pend <= 1'b1;
+        end
+      end
+
+      // ---- the offers, one cycle after the record's last byte ---------------
+      if (tpl_valid_o && tpl_ready_i) tpl_valid_o <= 1'b0;
+      if (tsp_valid_o && tsp_ready_i) tsp_valid_o <= 1'b0;
+
+      if (tp_pend && (!tpl_valid_o || tpl_ready_i)) begin
+        tpl_valid_o       <= 1'b1;
+        tpl_slot_o        <= tp_slot;
+        tpl_role_o        <= tp_role;
+        tpl_blend_o       <= tp_blend;
+        tpl_opacity_o     <= tp_opac;
+        tpl_format_o      <= tp_fmt;
+        tpl_wrap_o        <= tp_wrap;
+        tpl_view_mask_o   <= tp_vm;
+        tpl_palette_o     <= tp_pal;
+        tpl_width_o       <= tp_w;
+        tpl_height_o      <= tp_h;
+        tpl_flags_o       <= tp_flags;
+        tpl_base_o        <= tp_base;
+        tpl_lstride_o     <= tp_lstr;
+        tpl_lheight_o     <= tp_lhgt;
+        tpl_a_o           <= signed'(tp_a);
+        tpl_b_o           <= signed'(tp_b);
+        tpl_c_o           <= signed'(tp_c);
+        tpl_d_o           <= signed'(tp_d);
+        tpl_u0_o          <= signed'(tp_u0);
+        tpl_v0_o          <= signed'(tp_v0);
+        tpl_line_scroll_o <= signed'(tp_ls);
+        tp_pend           <= 1'b0;
+        `ZHAO_EXEC_INC(twod_planes_staged_o);
+      end
+
+      if (ts_pend && (!tsp_valid_o || tsp_ready_i)) begin
+        tsp_valid_o     <= 1'b1;
+        tsp_x_o         <= signed'(ts_x);
+        tsp_y_o         <= signed'(ts_y);
+        tsp_w_o         <= ts_w;
+        tsp_h_o         <= ts_h;
+        tsp_base_o      <= ts_base;
+        tsp_lstride_o   <= ts_lstr;
+        tsp_lheight_o   <= ts_lhgt;
+        tsp_format_o    <= ts_fmt;
+        tsp_palette_o   <= ts_pal;
+        tsp_blend_o     <= ts_blend;
+        tsp_view_mask_o <= ts_vm;
+        tsp_tint_o      <= ts_tint;
+        tsp_order_o     <= ts_ord;
+        tsp_flags_o     <= ts_flg;
+        tsp_src_id_o    <= ts_src;
+        tsp_u_o         <= signed'(ts_u);
+        tsp_v_o         <= signed'(ts_v);
+        tsp_a00_o       <= signed'(ts_a00);
+        tsp_a01_o       <= signed'(ts_a01);
+        tsp_a10_o       <= signed'(ts_a10);
+        tsp_a11_o       <= signed'(ts_a11);
+        ts_pend         <= 1'b0;
+        `ZHAO_EXEC_INC(twod_sprites_staged_o);
+      end
+
+      // ---- the packet's verdict, forwarded --------------------------------
+      // Exactly one pulse per packet this block walked, whether or not it
+      // carried a TWOD record: the consumer's commit pointer must follow every
+      // packet, or a later abandon would rewind past a frame that has already
+      // been sealed.
+      if ((st == EX_STAGE) && verdict_valid_i) begin
+        if ((verdict_error_i == ZH_ABI_OK) && !poisoned) twod_pkt_commit_o  <= 1'b1;
+        else                                             twod_pkt_abandon_o <= 1'b1;
+        // A record whose last byte landed in the same cycle as the verdict has
+        // not been offered yet; it is offered on the next cycle, AFTER the
+        // verdict pulse, so `zhao_twod_cmd` would commit it into the wrong
+        // frame. It cannot happen -- `rec_done` is the record's last byte and
+        // `verdict_valid_i` is `decode_done_o`, one cycle after the PACKET's
+        // last byte, so there is always at least the packet's four trailing
+        // bytes between them -- and the pending flags are cleared here so a
+        // malformed length that broke that spacing drops the record instead of
+        // mis-filing it.
+        if (tp_pend || ts_pend) `ZHAO_EXEC_INC(twod_dropped_o);
+        tp_pend <= 1'b0;
+        ts_pend <= 1'b0;
       end
     end
   end

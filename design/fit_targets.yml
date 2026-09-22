@@ -1902,6 +1902,29 @@ targets:
     sources:
       - fpga/rtl/compositor/zhao_twod_band.sv
 
+  # TWOD.CMD, built 2026-09-22 (owner completion ruling item 3). THE QUESTION
+  # THIS LEAF ANSWERS: the sealed display list is a 333-bit word over 128
+  # entries, which is WIDTH-BOUND at the 256 x 40 shape -- 9 M10K by arithmetic,
+  # using 128 of 256 depth, so the double buffering is free and the ping-pong
+  # costs nothing. WHETHER QUARTUS INFERS IT AS M10K OR SPENDS 42,624 REGISTERS
+  # IS EXACTLY WHAT A LEAF FIT ANSWERS AND LINT CANNOT, and the difference
+  # between those two answers is the whole packet's area. The binding shadow is
+  # deliberately small (8 x 21 bits) and expected in logic.
+  # Ceiling: 1,200 ALM, 0 DSP, <= 10 M10K.
+  - top: zhao_twod_cmd
+    sources:
+      - fpga/rtl/compositor/zhao_twod_cmd.sv
+
+  # TWOD.ASSET, built 2026-09-22 (same ruling, its asset clause). THE QUESTION:
+  # the 512-bit landing buffer and the CRC fold. `zhao_crc32c_fold` is a
+  # combinational GF(2) matrix eight bytes wide and is the only thing here that
+  # could surprise; everything else is a short FSM over a 64-byte burst.
+  # Ceiling: 700 ALM, 0 DSP, 0 M10K.
+  - top: zhao_twod_asset
+    sources:
+      - fpga/rtl/compositor/zhao_twod_asset.sv
+      - fpga/rtl/common/zhao_crc32c_fold.sv
+
   # ==========================================================================
   # FOURTEEN MORE, and several already have a NUMBER but no way to reproduce it
   # ==========================================================================
@@ -2273,6 +2296,12 @@ targets:
       # in the ledger, the manifest and THIS list are three different acts --
       # CLAUDE.md's build chapter -- and this is the third.
       - fpga/rtl/compositor/zhao_twod_band.sv
+      # TWOD.CMD and TWOD.ASSET (owner completion ruling 2026-09-22 item 3).
+      # The producer and the asset path: with these two the console's TWOD
+      # descriptors and texels come from COMMANDS rather than from the
+      # testbench. Ledger, manifest and this list are three different acts.
+      - fpga/rtl/compositor/zhao_twod_cmd.sv
+      - fpga/rtl/compositor/zhao_twod_asset.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
@@ -3203,6 +3232,12 @@ targets:
       # the walker above stays exactly as it was and this is a fourth sibling
       # the core wires in series, not a closure.
       - fpga/rtl/compositor/zhao_twod_band.sv
+      # TWOD.CMD and TWOD.ASSET, composed 2026-09-22 (entry I17 item 2, owner
+      # completion ruling of that date). The producer for both ratified
+      # descriptor records and the page/palette loader that makes the texels
+      # they name reachable without a testbench.
+      - fpga/rtl/compositor/zhao_twod_cmd.sv
+      - fpga/rtl/compositor/zhao_twod_asset.sv
       # POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195).
       # Three files because the gap was three separate things: the ART LAW
       # (`_tag`, R195's coefficients, every one a parameter), R5's tile-local

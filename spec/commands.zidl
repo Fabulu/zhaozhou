@@ -86,6 +86,17 @@ const u32 FRAME_SLOT_BYTES = 1048576;
 // not move: no opcode, field set or size changed.
 const u16 QFMT_VERSION = 3;
 
+// The .zpak resource kind whose bytes belong to the TWOD sampler's on-chip page
+// store rather than to local SDRAM (spec/cartridge.md 3 and 4f, allocated under
+// the completion ruling of 2026-09-22 item 3 from the registry's own reserved
+// range). It lives HERE, in the ABI, because THREE things have to agree about
+// it and they are generated from three different templates: the packer that
+// stamps `kind` into a PublishResource, `zhao_cmd_exec`'s fork at the pending
+// upload queue's drain, and the reference model. A number written out three
+// times is a number that can disagree with itself, which is exactly what the
+// QFMT_VERSION 2/3 skew above was.
+const u8 RESOURCE_KIND_TWOD_PAGE = 15;
+
 // Error codes — generated verbatim into C++/TS/SV and shared by the frame
 // validator (spec/capture_format.md 4.2), the .zcap tools, and the stub RTL.
 // Order matters: it is the fail-safe validation order of capture_format.md.
