@@ -126,13 +126,47 @@ void stream_surface(Dut& t, const std::vector<int16_t>& h) {
   t.eval();
 }
 
-void start_page(Dut& t, int slot, uint16_t src) {
+void start_page(Dut& t, int slot, uint16_t src, uint8_t gen = 0, uint32_t epoch = 0) {
   t.f_start_i = 1;
   t.f_slot_i = static_cast<uint8_t>(slot);
+  t.f_gen_i = gen;
+  t.f_epoch_i = epoch;
   t.f_src_id_i = src;
   t.eval();
   zhao::tick(t);
   t.f_start_i = 0;
+  t.eval();
+}
+
+// THE DIRECTORY'S SIDE OF THE HANDLE CHECK, played by the bench.
+//
+// It deliberately does NOT answer on the cycle the request appears.  The real
+// directory shares one address port between a mutation, a lookup and a check,
+// and a check that loses is simply not answered that clock -- so a request
+// that was a PULSE would be lost, and this waits a few clocks precisely to
+// show that it is a LEVEL.
+void answer_check(Dut& t, bool stale, int delay = 5) {
+  long long guard = 0;
+  while (!t.chk_valid_o && guard < 40000) {
+    zhao::tick(t);
+    t.eval();
+    ++guard;
+  }
+  ctrue(t.chk_valid_o != 0, "the feed asks the directory once the records commit");
+  for (int i = 0; i < delay; ++i) {
+    zhao::tick(t);
+    t.eval();
+    ctrue(t.chk_valid_o != 0, "the request is HELD while the directory is busy");
+  }
+  t.chk_valid_i = 1;
+  t.chk_stale_i = stale ? 1 : 0;
+  t.eval();
+  zhao::tick(t);
+  t.chk_valid_i = 0;
+  t.chk_stale_i = 0;
+  t.eval();
+  // The invalidation a stale verdict raises is registered; give it its cycle.
+  zhao::tick(t);
   t.eval();
 }
 
@@ -197,8 +231,12 @@ int main(int argc, char** argv) {
   t.rst_n = 0;
   t.f_start_i = t.f_valid_i = 0;
   t.f_slot_i = 0;
+  t.f_gen_i = 0;
+  t.f_epoch_i = 0;
   t.f_src_id_i = 0;
   t.f_h_i = 0;
+  t.chk_valid_i = 0;
+  t.chk_stale_i = 0;
   t.r_start_i = 0;
   t.r_slot_i = 0;
   t.r_ready_i = 0;
@@ -238,6 +276,7 @@ int main(int argc, char** argv) {
     stream_surface(t, page);            // surface 0: buffered
     stream_surface(t, page);            // surface 1: counted and dropped (law 7)
     const long long clocks = settle(t);
+    answer_check(t, false);             // the handle held: nothing is withdrawn
 
     cke(1, t.lattices_walked_o, "one lattice was walked");
     cke(16, t.dev_records_o, "sixteen records were emitted");
@@ -290,6 +329,7 @@ int main(int argc, char** argv) {
     start_page(t, 7, 0x3333);
     cke(dropped_before + 1, t.lattices_dropped_o, "lattices_dropped_o fires on a start while busy");
     settle(t);
+    answer_check(t, false);
     // Slot 6's records landed; slot 7's never existed and reads DEV_MAX.
     const uint32_t unwritten_before = t.read_unwritten_o;
     const auto g6 = read_patch(t, 6, false);
@@ -406,6 +446,79 @@ int main(int argc, char** argv) {
     }
     t.r_ready_i = 0;
     t.eval();
+  }
+
+  // ------------------------------------------------------------------ 6 ----
+  // THE HANDLE CHECK ASKS WITH THE HANDLE THE WALK RAN UNDER, and a LIVE
+  // verdict withdraws nothing.  This is the NEGATIVE CONTROL for case 7, and
+  // it is the half a wire-it-and-ship pass would never write: a checker that
+  // invalidated on every answer would also "fire", and would pass case 7
+  // alone.
+  {
+    const uint32_t checked_before = t.handles_checked_o;
+    const uint32_t stale_before   = t.handles_stale_o;
+    const uint32_t inv_before     = t.invalidations_o;
+    const uint32_t waited_before  = t.chk_unanswered_clocks_o;
+
+    const auto p9 = make_page(0x515151u);
+    start_page(t, 9, 0x9999, 3, 0xABCD1234u);
+    stream_surface(t, p9);
+    settle(t);
+
+    // The request is up and it carries the WALK's handle -- not the last one
+    // offered, which is what a live read of `slot_q` would have given.
+    ctrue(t.chk_valid_o != 0, "a committed patch raises the handle check");
+    cke(9, t.chk_slot_o, "the check carries the walk's slot");
+    cke(3, t.chk_gen_o, "the check carries the walk's generation");
+    cke(0xABCD1234u, t.chk_epoch_o, "the check carries the walk's epoch");
+
+    answer_check(t, false);
+    cke(checked_before + 1, t.handles_checked_o, "the check was answered and counted");
+    cke(stale_before, t.handles_stale_o, "a LIVE handle does not count as stale");
+    cke(inv_before, t.invalidations_o, "a LIVE handle withdraws nothing");
+    ctrue(t.chk_unanswered_clocks_o > waited_before,
+          "the request waited, so it is a level and not a pulse");
+    cke(0, t.chk_overrun_o, "no commit landed on an outstanding check");
+    cke(0, t.chk_stray_o, "no answer arrived without a request");
+
+    const auto g9 = read_patch(t, 9, false);
+    ctrue(g9[0].fresh, "the records survive a live handle");
+    std::printf("[6] the check carries the walk's own {slot, gen, epoch}; a live handle"
+                " withdraws nothing\n");
+  }
+
+  // ------------------------------------------------------------------ 7 ----
+  // A STALE HANDLE WITHDRAWS THE RECORDS -- core entry I27's whole reason.
+  // Without it the store holds page A's deviations under the handle of the
+  // page that replaced it, `r_fresh_o` reads high, and TERRAIN.LOD decides the
+  // new page's tessellation from the old page's terrain with every counter in
+  // the chain balancing.
+  {
+    const uint32_t checked_before = t.handles_checked_o;
+    const uint32_t stale_before   = t.handles_stale_o;
+    const uint32_t inv_before     = t.invalidations_o;
+    const uint32_t unwritten_before = t.read_unwritten_o;
+
+    const auto p10 = make_page(0x7A7A7Au);
+    start_page(t, 10, 0xAAAA, 4, 0x00C0FFEEu);
+    stream_surface(t, p10);
+    settle(t);
+    cke(10, t.chk_slot_o, "the check carries slot 10");
+    cke(4, t.chk_gen_o, "the check carries generation 4");
+
+    answer_check(t, true);
+    cke(checked_before + 1, t.handles_checked_o, "the stale check was answered and counted");
+    cke(stale_before + 1, t.handles_stale_o, "handles_stale_o FIRES on a moved handle");
+    cke(inv_before + 1, t.invalidations_o, "a stale handle invalidates the slot");
+
+    const auto g10 = read_patch(t, 10, false);
+    ctrue(!g10[0].fresh, "the withdrawn slot is no longer fresh");
+    cke(0xFFFFFFu, g10[0].d1, "the withdrawn slot answers DEV_MAX");
+    cke(unwritten_before + 1, t.read_unwritten_o, "the withdrawn slot reads unwritten");
+    cke(0, t.chk_overrun_o, "no commit landed on an outstanding check");
+    cke(0, t.chk_stray_o, "no answer arrived without a request");
+    std::printf("[7] handles_stale_o fires on a fault it should catch, and the records"
+                " are withdrawn\n");
   }
 
   std::printf("terrain_lodpath_directed: %d checks, %d failures\n", g_checks, g_fail);

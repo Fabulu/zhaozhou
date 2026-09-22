@@ -91,6 +91,28 @@
 // the number every run rather than pinning it, because a pinned clock count
 // goes stale silently.
 //
+// ===========================================================================
+// THE RESIDENCY HANDLE, AND WHY THIS BLOCK CHECKS IT -- core entry I27
+// ===========================================================================
+// ADDED 2026-09-22.  `zhao_console_core.sv` entry I27 has said since 2026-09-20
+// that the directory's handle check (`terr_chk_*`) has no honest caller until
+// `zhao_terrain_devstore` composes, and that "whoever composes the store owes
+// this check in the same commit".  The store composed on 2026-09-21 with the
+// subpatch decision chain and the check did not come with it.  This block is
+// the caller the entry named, and it is the caller because it is the only
+// thing in the console that holds a page's residency slot across time while
+// something else writes that slot's records.
+//
+// WHAT IT DOES, in one sentence: it remembers the {slot, generation, epoch}
+// the walk was started with, asks the directory at the moment the store
+// commits the sixteenth record whether that handle is still the page it was,
+// and INVALIDATES the slot's records if it is not.
+//
+// WHAT IT DOES NOT DO: stall.  The answer arrives after the records are
+// already filed, so the check can only withdraw them.  An unanswered check
+// costs an invalidation, never a beat of the paging spine, and the wait is
+// counted rather than bounded by a promise in this comment.
+//
 // Conservative SystemVerilog subset (charter 2); no package dependencies.
 // Lint gate: lint_terrain_lodfeed.
 `default_nettype none
@@ -98,6 +120,8 @@
 module zhao_terrain_lodfeed #(
     parameter int unsigned SLOTW = 10,
     parameter int unsigned EDGE  = 33,
+    // The directory's generation width.  Only the handle check below uses it.
+    parameter int unsigned GENW  = 8,
     // Owner ruling R22: the MESH reading.  Passed to `zhao_terrain_loddev`,
     // whose software twin is `zref::terrain::kLodDevIncludeBoundary`.
     parameter bit DEV_INCLUDE_BOUNDARY = 1'b1
@@ -108,6 +132,14 @@ module zhao_terrain_lodfeed #(
     // ---- the mip pass, OBSERVED (see the header) --------------------------
     input  var logic             f_start_i,     // TERRAIN.MIPFEED's `mg_start_o`
     input  var logic [SLOTW-1:0] f_slot_i,      // ... and its `mg_job_slot_o`
+    // THE REST OF THE RESIDENCY HANDLE, ON THE SAME PULSE AS THE SLOT.  These
+    // are TERRAIN.MIPFEED's `mg_job_gen_o` and `mg_job_epoch_o`, published by
+    // the same block on the same cycle as `mg_job_slot_o`, so the three arrive
+    // as ONE fact and not as three wires that happen to agree.  They exist for
+    // the handle check below and for nothing else: this block does not read a
+    // generation and never compares one itself.
+    input  var logic [GENW-1:0]  f_gen_i,
+    input  var logic [31:0]      f_epoch_i,
     input  var logic [15:0]      f_src_id_i,
     input  var logic             f_valid_i,     // `mg_fine_valid && mg_fine_ready`
     input  var logic signed [15:0] f_h_i,       // `mg_fine_h`, height16
@@ -148,8 +180,54 @@ module zhao_terrain_lodfeed #(
     // ---- the store's invalidation: this slot's records are now stale ------
     // Raised on the START of a lattice, not its end: from that moment the
     // records in the store describe a page that is being replaced.
+    //
+    // IT HAS A SECOND SOURCE SINCE 2026-09-22 -- the stale verdict of the
+    // handle check below -- and the two are ARBITRATED HERE rather than ORed
+    // outside.  An OR would silently drop one of them on the cycle they
+    // coincide, and the one it dropped would be invisible: both are "clear a
+    // slot", and nothing downstream can tell a slot that was cleared once from
+    // a slot that should have been cleared twice.
     output var logic             inv_valid_o,
     output var logic [SLOTW-1:0] inv_slot_o,
+
+    // ---- THE DIRECTORY'S HANDLE CHECK -- core entry I27 --------------------
+    // WHY THIS BLOCK IS THE CALLER, in the words `zhao_console_core.sv` entry
+    // I27 used before the caller existed: "this port's first honest caller is
+    // lodfeed-with-the-store, not the subpatch issuer, and whoever composes
+    // the store owes this check in the same commit."  The store composed on
+    // 2026-09-21 and the check did not come with it; this is that debt.
+    //
+    // THE HAZARD, STATED AS A SEQUENCE RATHER THAN AS A RISK.  This block
+    // holds `slot_q` across a ~9,700-clock walk and `zhao_terrain_devstore`
+    // files the sixteen records BY SLOT.  If the page in that slot is evicted
+    // and the slot reloaded while the walk runs, the new page's own start is
+    // DROPPED here (`lattices_dropped_o`) but its `inv` still clears the slot
+    // -- and this walk then re-fills it with the OLD page's deviations, under
+    // the NEW page's handle.  Every counter balances: the records are real,
+    // the count is right, and `r_fresh_o` reads high.  TERRAIN.LOD would then
+    // decide the new page's tessellation from the old page's terrain.
+    //
+    // AND THE CHECK IS NOT BLIND, which is the property CLAUDE.md's
+    // metadata-swap chapter says to establish before a detector is trusted.
+    // The two sides of the comparison are clocked by DIFFERENT THINGS: the
+    // held handle is this block's register, enabled by an accepted start; the
+    // answer is `zhao_terrain_residency_v2`'s key RAM, written by the
+    // directory's own claim/evict FSM.  No enable drives both, so a swap
+    // cannot move them together.
+    //
+    // IT IS A QUERY AND MAY GO UNANSWERED.  The directory's address port is
+    // shared between a mutation, a lookup and a check, and a check that loses
+    // is simply not answered that clock.  So `chk_valid_o` is a LEVEL held
+    // until `chk_valid_i` arrives, not a pulse, and `chk_unanswered_clocks_o`
+    // says how long it waited.  Nothing waits on the answer -- the records are
+    // already committed -- so a slow directory costs accuracy of an
+    // invalidation, never a stall.
+    output var logic             chk_valid_o,
+    output var logic [SLOTW-1:0] chk_slot_o,
+    output var logic [GENW-1:0]  chk_gen_o,
+    output var logic [31:0]      chk_epoch_o,
+    input  var logic             chk_valid_i,
+    input  var logic             chk_stale_i,
 
     // ---- evidence ---------------------------------------------------------
     output var logic [31:0] lattices_seen_o,
@@ -162,6 +240,26 @@ module zhao_terrain_lodfeed #(
     output var logic [31:0] dev_clipped_o,
     output var logic [31:0] dev_vertices_o,
     output var logic [31:0] dev_lattice_reads_o,
+    // ---- the handle check's evidence --------------------------------------
+    // `handles_checked_o` is the POSITIVE CONTROL for `handles_stale_o`: a
+    // stale counter reading zero means nothing unless the checks that produced
+    // it happened at all.  `terrain_lodpath_directed` fires BOTH -- a live
+    // handle that must not invalidate and a stale one that must -- because a
+    // detector's silence is a claim and this file will not let one be quoted
+    // unexamined.
+    output var logic [31:0] handles_checked_o,
+    output var logic [31:0] handles_stale_o,
+    output var logic [31:0] chk_unanswered_clocks_o,
+    // A commit arriving while a check is still outstanding.  It cannot happen
+    // at one walk per ~9,700 clocks against a directory that answers in two,
+    // and it is counted rather than asserted so that the day the walk gets
+    // faster or the directory gets busier, the console says so instead of
+    // quietly checking the wrong handle.
+    output var logic [31:0] chk_overrun_o,
+    // An answer with no outstanding request.  The request is a LEVEL and the
+    // directory is pipelined, so a held request can be accepted more than once
+    // and answered more than once; the extra answers land here.
+    output var logic [31:0] chk_stray_o,
     output var logic        busy_o
 );
 
@@ -187,6 +285,12 @@ module zhao_terrain_lodfeed #(
   logic               fill_active_q; // a lattice is being buffered
   logic               surf1_q;       // surface 0 is done; the rest is dropped
   logic [SLOTW-1:0]   slot_q;
+  // The rest of the walk's residency handle, loaded by the SAME enable as
+  // `slot_q`.  That is deliberate and it is not the lockstep trap: these three
+  // are ONE fact about ONE page, and the thing they are compared against lives
+  // in the directory, not here.
+  logic [GENW-1:0]    gen_q;
+  logic [31:0]        epoch_q;
   logic [15:0]        src_q;
   logic               have_q;        // the buffer holds a complete surface 0
   // The fill cursor's (vi, vj), kept explicitly rather than divided out of
@@ -292,6 +396,40 @@ module zhao_terrain_lodfeed #(
   assign w_cy_o     = cy_q[w_sp_o];
   assign w_src_id_o = dv_src_echo;
   assign busy_o   = dv_busy || fill_active_q || dv_start_v || have_q;
+
+  // ---- THE ACCEPT LAW, WRITTEN ONCE ---------------------------------------
+  // The drop guard below and the invalidation arbitration both need to know
+  // whether a start was TAKEN.  Deriving it twice is how two laws for one
+  // event get into a file; `busy_o` is NOT it (it also carries `fill_active_q`,
+  // which a start is allowed to interrupt), so the test is named here and
+  // referred to.
+  wire start_accept_c = f_start_i && !(dv_busy || dv_start_v || have_q);
+
+  // ---- the handle check ---------------------------------------------------
+  // THE COMMIT IS THE LAST RECORD'S ACCEPTANCE, not the walk's `done`.  The
+  // store commits the row on subpatch 15 (`w_patch_done_o`), so that is the
+  // instant the records become readable under this slot and the instant the
+  // handle they were filed under has to be confirmed.
+  wire commit_c = w_valid_o && w_ready_i && (w_sp_o == 4'd15);
+
+  logic             ck_v_q;
+  logic [SLOTW-1:0] ck_slot_q;
+  logic [GENW-1:0]  ck_gen_q;
+  logic [31:0]      ck_epoch_q;
+  // The handle is COPIED at the commit rather than read live off `slot_q`,
+  // because a new lattice may be accepted while the answer is in flight and
+  // would carry `slot_q` away with it.  Checking a handle the walk no longer
+  // owns is the defect this port exists to catch, performed by the checker.
+  assign chk_valid_o = ck_v_q;
+  assign chk_slot_o  = ck_slot_q;
+  assign chk_gen_o   = ck_gen_q;
+  assign chk_epoch_o = ck_epoch_q;
+
+  wire stale_fire_c = ck_v_q && chk_valid_i && chk_stale_i;
+
+  // The one-deep hold for the cycle both invalidation sources fire together.
+  logic             pend_v_q;
+  logic [SLOTW-1:0] pend_slot_q;
   // BUSY IS EVERY STATE A NEW PAGE WOULD DISTURB, not just the walk.  The
   // handover window -- a surface complete (have_q), the start presented and
   // not yet taken (dv_start_v) -- is exactly where the drop guard above
@@ -306,12 +444,25 @@ module zhao_terrain_lodfeed #(
       fill_active_q <= 1'b0;
       surf1_q       <= 1'b0;
       slot_q        <= '0;
+      gen_q         <= '0;
+      epoch_q       <= '0;
       src_q         <= '0;
       have_q        <= 1'b0;
       lat_h_q       <= '0;
       dv_start_v    <= 1'b0;
       inv_valid_o   <= 1'b0;
       inv_slot_o    <= '0;
+      ck_v_q        <= 1'b0;
+      ck_slot_q     <= '0;
+      ck_gen_q      <= '0;
+      ck_epoch_q    <= '0;
+      pend_v_q      <= 1'b0;
+      pend_slot_q   <= '0;
+      handles_checked_o       <= '0;
+      handles_stale_o         <= '0;
+      chk_unanswered_clocks_o <= '0;
+      chk_overrun_o           <= '0;
+      chk_stray_o             <= '0;
       lattices_seen_o    <= '0;
       lattices_walked_o  <= '0;
       lattices_dropped_o <= '0;
@@ -338,9 +489,14 @@ module zhao_terrain_lodfeed #(
         // records were then committed UNDER THE NEW PAGE'S SLOT -- with every
         // counter still balancing, because the records were real and the count
         // was right.  Exactly the record-swap shape CLAUDE.md records.
-        if (dv_busy || dv_start_v || have_q) begin
+        if (!start_accept_c) begin
           // The previous page's walk has not finished.  Drop this lattice
           // rather than stall the paging spine; the store answers DEV_MAX.
+          //
+          // AND THIS IS THE DROP THE HANDLE CHECK EXISTS FOR.  The lattice is
+          // dropped, but the page behind it is real and the directory has
+          // already reassigned the slot; the walk in progress will finish and
+          // file its records under a handle that has moved.
           lattices_dropped_o <= lattices_dropped_o + 32'd1;
           fill_active_q <= 1'b0;
         end else begin
@@ -351,10 +507,54 @@ module zhao_terrain_lodfeed #(
           surf1_q       <= 1'b0;
           have_q        <= 1'b0;
           slot_q        <= f_slot_i;
+          gen_q         <= f_gen_i;
+          epoch_q       <= f_epoch_i;
           src_q         <= f_src_id_i;
-          // The records for this slot describe the page being replaced.
-          inv_valid_o <= 1'b1;
-          inv_slot_o  <= f_slot_i;
+        end
+      end
+
+      // ---- the handle check, and the invalidation it can raise ------------
+      // ARBITRATION FIRST, so there is exactly one place `inv_valid_o` is
+      // written and the precedence is visible.  An accepted start wins the
+      // cycle, because its invalidation is about a page ALREADY being
+      // replaced and delaying it would let the new walk's first records land
+      // beside the old page's; the stale verdict is about records already
+      // committed and loses nothing by waiting a clock.
+      if (start_accept_c) begin
+        inv_valid_o <= 1'b1;
+        inv_slot_o  <= f_slot_i;
+        if (stale_fire_c) begin
+          pend_v_q    <= 1'b1;
+          pend_slot_q <= ck_slot_q;
+        end
+      end else if (stale_fire_c) begin
+        inv_valid_o <= 1'b1;
+        inv_slot_o  <= ck_slot_q;
+      end else if (pend_v_q) begin
+        inv_valid_o <= 1'b1;
+        inv_slot_o  <= pend_slot_q;
+        pend_v_q    <= 1'b0;
+      end
+
+      if (!ck_v_q) begin
+        if (commit_c) begin
+          ck_v_q     <= 1'b1;
+          ck_slot_q  <= slot_q;
+          ck_gen_q   <= gen_q;
+          ck_epoch_q <= epoch_q;
+        end
+        // An answer nobody is waiting for: a repeat of an already-taken
+        // request, which the level-held query makes possible.  Counted, not
+        // acted on.
+        if (chk_valid_i) chk_stray_o <= chk_stray_o + 32'd1;
+      end else begin
+        if (commit_c) chk_overrun_o <= chk_overrun_o + 32'd1;
+        if (chk_valid_i) begin
+          ck_v_q            <= 1'b0;
+          handles_checked_o <= handles_checked_o + 32'd1;
+          if (chk_stale_i) handles_stale_o <= handles_stale_o + 32'd1;
+        end else begin
+          chk_unanswered_clocks_o <= chk_unanswered_clocks_o + 32'd1;
         end
       end
 

@@ -4023,7 +4023,63 @@
 //      pending-slot repair (ruling R55); this composition waited for it rather
 //      than working around it.)
 //
-// I27. THE DIRECTORY's HANDLE CHECK (`terr_chk_*`) -- BOUNDARY. NARROWED
+// (I27 CLOSED 2026-09-22 (gz/terrclose). THE DIRECTORY's HANDLE CHECK
+//      (`terr_chk_*`) has a caller, and it is the caller this entry NAMED two
+//      days before one existed: `u_terrain_lodfeed`, once `u_terrain_devstore`
+//      composed beneath it. Six ports left this module's edge.
+//
+//      THE BLOCKER HAD EXPIRED AND THE ENTRY DID NOT KNOW, which is ruling
+//      R165's shape and the reason this closure was available at all. The
+//      surviving sentence read "this port's first honest caller is
+//      lodfeed-with-the-store, not the subpatch issuer, and whoever composes
+//      the store owes this check in the same commit", with a 2026-09-21
+//      re-measurement (terrcmd) confirming the store was built and uncomposed.
+//      **TERRACOMP COMPOSED THE STORE LATER THAT SAME DAY AND DID NOT PAY THE
+//      DEBT** -- its own note at the bake chain says "the lodfeed does not key
+//      on the store yet", which was true of the lodfeed and no longer true of
+//      the console: the store's write port IS the lodfeed's, keyed by slot, as
+//      of that commit. The condition this entry set was met by the packet that
+//      wrote the sentence denying it.
+//
+//      WHAT THE CHECK ACTUALLY PREVENTS, stated as a sequence because "a
+//      staleness check" is not a reason: `u_terrain_lodfeed` holds a page's
+//      slot across a ~9,700-clock walk and the store files the sixteen records
+//      BY SLOT. Evict that page mid-walk and reload the slot, and the new
+//      page's own start is DROPPED by the feed's busy guard
+//      (`lattices_dropped_o`) while its `inv` clears the slot -- and the
+//      running walk then re-fills it with the OLD page's deviations under the
+//      NEW page's handle. Every counter balances, `r_fresh_o` reads high, and
+//      TERRAIN.LOD decides the new page's tessellation from the old page's
+//      terrain. That is this file's record-swap chapter with a different
+//      payload.
+//
+//      AND THE DETECTOR IS NOT BLIND, established before it was wired rather
+//      than after. The two sides are clocked by different things: the held
+//      handle is the feed's register, enabled by an accepted start; the answer
+//      is `zhao_terrain_residency_v2`'s key RAM, written by the directory's
+//      claim/evict FSM. `terrain_lodpath_directed` cases 6 and 7 are the
+//      positive AND negative control -- a live handle that must withdraw
+//      nothing and a stale one that must -- because a checker that invalidated
+//      on every answer would pass a stale-only test.
+//
+//      THE THREE THINGS THE CHECK IS NOT ALLOWED TO BE, and each is refused in
+//      the RTL rather than in this paragraph:
+//        * it is not a STALL. The answer arrives after the records are filed,
+//          so it can only withdraw them; an unanswered check costs an
+//          invalidation and never a beat of the paging spine.
+//        * it is not a PULSE. The directory shares one address port between a
+//          mutation, a lookup and a check, and a check that loses is simply not
+//          answered that clock. `chk_valid_o` is a held level and the bench
+//          delays its answer deliberately to prove it.
+//        * it is not an OR onto the store's invalidation port. The feed
+//          arbitrates its two invalidation sources internally, because an OR
+//          drops one of them on the cycle they coincide and nothing downstream
+//          can tell a slot cleared once from a slot that owed two clears.
+//
+//      The entry's whole argument is kept below, unedited, because it is the
+//      record of how the caller was identified before it existed.)
+//
+// ~~I27. THE DIRECTORY's HANDLE CHECK (`terr_chk_*`) -- BOUNDARY. NARROWED
 //      THREE TIMES; the halves that left are recorded here rather than deleted
 //      with them, because this entry is where the next reader will look:
 //
@@ -4139,6 +4195,10 @@
 //          composes the store owes this check in the same commit. A staleness
 //          port with no caller is not a gap for lack of a block; it is waiting
 //          on the one consumer that makes the handle load-bearing.
+//
+//          ^^ STRUCK 2026-09-22: "the moment that changes" ARRIVED, hours
+//          after the re-measurement below was written. See the closure at the
+//          head of this entry.
 //
 //          RE-MEASURED 2026-09-21 (terrcmd) AND IT HAS **NOT** EXPIRED, which
 //          is recorded because the measurement was made expecting it to have.
@@ -7551,27 +7611,28 @@ module zhao_console_core
   output logic [31:0]             terr_bsock_retire_unowned_o,
   output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
-  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  // ---- I27 IS CLOSED. Both halves, and they closed a day apart -------------
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
   //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
   //      and TERRAIN.PLACE inside this module, and the streamer's own completion
-  //      is what unpins the page.  What is left here is the deformation mark,
-  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
-  //      caller is the same absent subpatch issuer as entry I21.
-  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
-  // the slot, the generation and the epoch the patch was served under, learns
-  // from `bake_done_i` that the record retired, and drives the directory
-  // directly. The eight ports are GONE from this edge rather than driven from
-  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
-  // by this: its first honest caller is lodfeed-with-the-devstore, and the
-  // devstore is composed but the lodfeed does not key on it yet.
-
-  input  logic                    terr_chk_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_chk_gen_i,
-  input  logic [31:0]             terr_chk_epoch_i,
-  output logic                    terr_chk_valid_o,
-  output logic                    terr_chk_stale_o,
+  //      is what unpins the page.
+  //      The DEFORMATION MARK left it on 2026-09-21 -- `u_terrain_pageio` holds
+  //      the slot, generation and epoch the patch was served under and drives
+  //      the directory directly; eight ports went with it.
+  //      THE HANDLE CHECK (`terr_chk_*`) LEFT IT 2026-09-22, and its caller is
+  //      the one entry I27 named in advance: `u_terrain_lodfeed`, now that
+  //      `u_terrain_devstore` is composed beneath it. Six more ports are gone.
+  //      What crosses this edge instead is the check's EVIDENCE, below.
+  //
+  //      THE CHECK IS NOT A NAME MATCH AND THE TWO SIDES ARE NOT IN LOCKSTEP,
+  //      which is the property this file requires of a detector before quoting
+  //      it: the request carries the handle `u_terrain_lodfeed` held across its
+  //      own ~9,700-clock walk, and the answer is read out of
+  //      `u_terrain_residency_v2`'s key RAM, written by the directory's
+  //      claim/evict FSM. No enable drives both, so a slot that is evicted and
+  //      reused mid-walk moves ONE of them and the difference is visible.
+  output logic [31:0]             terr_lodfeed_handles_checked_o,
+  output logic [31:0]             terr_lodfeed_handles_stale_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
@@ -13103,6 +13164,19 @@ module zhao_console_core
   wire signed [15:0]      tlf_w_cy;          // the devstore's centre height
   wire                    tlf_inv_valid;     // the devstore's invalidation strobe
   wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // ... and the slot it invalidates
+  // ---- THE DIRECTORY'S HANDLE CHECK -- entry I27's second half ------------
+  // DECLARED HERE AND CONSUMED ~3,500 LINES ABOVE, at `u_terrain_residency_v2`.
+  // The direction is worth reading twice: `tlf_chk_*` without a suffix is the
+  // REQUEST this block makes, and `tlf_chk_ans_*` is the directory's answer
+  // coming back. They are named apart because "chk_valid" appears on both ends
+  // of this exchange with opposite meanings, and a file this long will
+  // eventually have someone match them by name.
+  wire                    tlf_chk_valid;     // the feed ASKS (a held level)
+  wire [TERR_MEMSLOT-1:0] tlf_chk_slot;
+  wire [TERR_GENW-1:0]    tlf_chk_gen;
+  wire [31:0]             tlf_chk_epoch;
+  wire                    tlf_chk_ans_valid; // the directory ANSWERS
+  wire                    tlf_chk_ans_stale;
   /* verilator lint_off UNUSEDSIGNAL */
   wire                    tlf_busy;
   // Four of the block's ten counters stop here rather than at this module's
@@ -13118,6 +13192,17 @@ module zhao_console_core
   wire [31:0]             tlf_lattices_seen, tlf_surface1_samples;
   wire [31:0]             tlf_walk_clocks, tlf_dev_clipped;
   wire [31:0]             tlf_dev_vertices, tlf_dev_lattice_reads;
+  // THE CHECK'S THREE INTERIOR COUNTERS. `handles_checked` and `handles_stale`
+  // leave this module (they are the pair a reader needs: a stale count means
+  // nothing without the checked count beside it). These three are about the
+  // EXCHANGE rather than the verdict -- how long the directory made the query
+  // wait, a commit landing while a query was still outstanding, and an answer
+  // with no query behind it. All three are structurally zero at one walk per
+  // ~9,700 clocks against a directory that answers in two, so exporting them
+  // would put three permanent zeroes on this edge; `terrain_lodpath_directed`
+  // is where they are read, and it asserts them zero against stimulus that
+  // would move them.
+  wire [31:0]             tlf_chk_unanswered_clocks, tlf_chk_overrun, tlf_chk_stray;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // The share's owner bit and the block idles: real outputs with no consumer
@@ -16835,12 +16920,24 @@ module zhao_console_core
     .wb_gen_i  (twb_rel_gen),
     .wb_epoch_i(twb_rel_epoch),
 
-    .chk_valid_i(terr_chk_valid_i),
-    .chk_slot_i (terr_chk_slot_i),
-    .chk_gen_i  (terr_chk_gen_i),
-    .chk_epoch_i(terr_chk_epoch_i),
-    .chk_valid_o(terr_chk_valid_o),
-    .chk_stale_o(terr_chk_stale_o),
+    // I27's SECOND HALF, CLOSED 2026-09-22. The caller is `u_terrain_lodfeed`
+    // -- the block entry I27 named as this port's "first honest caller" back
+    // when it had none, on the condition that `u_terrain_devstore` composed.
+    // The store composed on 2026-09-21 with the subpatch decision chain and
+    // the check did not come with it; this is that debt paid.
+    //
+    // THE SLOT NARROWS, and the argument is the same structural one the pin
+    // and unpin paths above make rather than a repetition of their conclusion:
+    // the feed's slot is whatever `u_terrain_mipfeed` published as
+    // `mg_job_slot_o`, which is the directory's own TERR_SLOTW handle
+    // zero-extended at `u_terrain_mipreq` (see its "THE SLOT NARROWS" note).
+    // Bit TERR_MEMSLOT-1 is structurally zero on that path.
+    .chk_valid_i(tlf_chk_valid),
+    .chk_slot_i (tlf_chk_slot[TERR_SLOTW-1:0]),
+    .chk_gen_i  (tlf_chk_gen),
+    .chk_epoch_i(tlf_chk_epoch),
+    .chk_valid_o(tlf_chk_ans_valid),
+    .chk_stale_o(tlf_chk_ans_stale),
 
     .hits_o              (terr_res_hits_o),
     .misses_o            (terr_res_misses_o),
@@ -21203,6 +21300,7 @@ module zhao_console_core
   zhao_terrain_lodfeed #(
     .SLOTW               (TERR_MEMSLOT),
     .EDGE                (33),
+    .GENW                (TERR_GENW),
     .DEV_INCLUDE_BOUNDARY(1'b1)          // owner ruling R22: the MESH reading
   ) u_terrain_lodfeed (
     .clk  (gpu_clk),
@@ -21210,6 +21308,17 @@ module zhao_console_core
 
     .f_start_i (tmg_start),
     .f_slot_i  (tmg_job_slot),
+    // THE OTHER TWO THIRDS OF THE HANDLE, AND THEY ARE ONE FACT WITH THE SLOT
+    // RATHER THAN THREE WIRES THAT HAPPEN TO AGREE. `u_terrain_mipfeed`
+    // publishes `mg_job_slot_o`, `mg_job_gen_o` and `mg_job_epoch_o` together
+    // on the cycle it raises `mg_start_o`, and `u_terrain_mipgen` above takes
+    // all three off that same pulse. Taking the slot from there and the
+    // generation from anywhere else -- the directory's live record, the
+    // loader's completion -- would be the two-unsynchronised-walkers join this
+    // file keeps paying for, and the handle check would then be differencing
+    // the wrong pair.
+    .f_gen_i   (tmg_job_gen),
+    .f_epoch_i (tmg_job_epoch),
     .f_src_id_i(tmf_ps_src_id[15:0]),
     .f_valid_i (tmg_fine_valid && tmg_fine_ready),
     .f_h_i     (tmg_fine_h),
@@ -21226,6 +21335,23 @@ module zhao_console_core
 
     .inv_valid_o(tlf_inv_valid),
     .inv_slot_o (tlf_inv_slot),
+
+    // ---- ENTRY I27's SECOND HALF, CLOSED HERE ----------------------------
+    // The request goes UP the file to `u_terrain_residency_v2`; the answer
+    // comes back down. See the wire declarations for why the two directions
+    // are named apart.
+    .chk_valid_o(tlf_chk_valid),
+    .chk_slot_o (tlf_chk_slot),
+    .chk_gen_o  (tlf_chk_gen),
+    .chk_epoch_o(tlf_chk_epoch),
+    .chk_valid_i(tlf_chk_ans_valid),
+    .chk_stale_i(tlf_chk_ans_stale),
+
+    .handles_checked_o      (terr_lodfeed_handles_checked_o),
+    .handles_stale_o        (terr_lodfeed_handles_stale_o),
+    .chk_unanswered_clocks_o(tlf_chk_unanswered_clocks),
+    .chk_overrun_o          (tlf_chk_overrun),
+    .chk_stray_o            (tlf_chk_stray),
 
     .lattices_seen_o    (tlf_lattices_seen),
     .lattices_walked_o  (terr_lodfeed_lattices_walked_o),
@@ -22132,6 +22258,17 @@ module zhao_console_core
   // `terr_chk_*`, is untouched. Its first honest caller is
   // lodfeed-with-the-devstore and the lodfeed does not key on the store yet.
   // The two halves of I27 have different roots and only one of them is here.
+  //
+  // ^^ THE LAST TWO SENTENCES WERE ALREADY FALSE WHEN THEY WERE WRITTEN, and
+  // the correction is kept beside them rather than replacing them because the
+  // mistake is the instructive part. The devstore's WRITE PORT IS THE
+  // LODFEED'S, keyed by slot, composed by the very packet whose note this is
+  // (`u_terrain_devstore.w_slot_i` is `tlf_w_slot`, a few hundred lines below).
+  // "The lodfeed does not key on the store" was a statement about the BLOCK --
+  // true, it holds no reference to the store -- offered as a statement about
+  // the CONSOLE, where the join had just been made. I27's condition was met by
+  // the commit that denied it, and the entry then sat open for a day.
+  // CLOSED 2026-09-22 (gz/terrclose); see the closure at the head of I27.
   // ==========================================================================
 
   // ---- the record producer's wires ----------------------------------------

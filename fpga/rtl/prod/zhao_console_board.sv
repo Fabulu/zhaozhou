@@ -1695,27 +1695,28 @@ module zhao_console_board
   output logic [31:0]             terr_bsock_retire_unowned_o,
   output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
-  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  // ---- I27 IS CLOSED. Both halves, and they closed a day apart -------------
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
   //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
   //      and TERRAIN.PLACE inside this module, and the streamer's own completion
-  //      is what unpins the page.  What is left here is the deformation mark,
-  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
-  //      caller is the same absent subpatch issuer as entry I21.
-  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
-  // the slot, the generation and the epoch the patch was served under, learns
-  // from `bake_done_i` that the record retired, and drives the directory
-  // directly. The eight ports are GONE from this edge rather than driven from
-  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
-  // by this: its first honest caller is lodfeed-with-the-devstore, and the
-  // devstore is composed but the lodfeed does not key on it yet.
-
-  input  logic                    terr_chk_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_chk_gen_i,
-  input  logic [31:0]             terr_chk_epoch_i,
-  output logic                    terr_chk_valid_o,
-  output logic                    terr_chk_stale_o,
+  //      is what unpins the page.
+  //      The DEFORMATION MARK left it on 2026-09-21 -- `u_terrain_pageio` holds
+  //      the slot, generation and epoch the patch was served under and drives
+  //      the directory directly; eight ports went with it.
+  //      THE HANDLE CHECK (`terr_chk_*`) LEFT IT 2026-09-22, and its caller is
+  //      the one entry I27 named in advance: `u_terrain_lodfeed`, now that
+  //      `u_terrain_devstore` is composed beneath it. Six more ports are gone.
+  //      What crosses this edge instead is the check's EVIDENCE, below.
+  //
+  //      THE CHECK IS NOT A NAME MATCH AND THE TWO SIDES ARE NOT IN LOCKSTEP,
+  //      which is the property this file requires of a detector before quoting
+  //      it: the request carries the handle `u_terrain_lodfeed` held across its
+  //      own ~9,700-clock walk, and the answer is read out of
+  //      `u_terrain_residency_v2`'s key RAM, written by the directory's
+  //      claim/evict FSM. No enable drives both, so a slot that is evicted and
+  //      reused mid-walk moves ONE of them and the difference is visible.
+  output logic [31:0]             terr_lodfeed_handles_checked_o,
+  output logic [31:0]             terr_lodfeed_handles_stale_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
@@ -4310,12 +4311,8 @@ module zhao_console_board
       .terr_bsock_contention_o            (terr_bsock_contention_o),
       .terr_bsock_retire_unowned_o        (terr_bsock_retire_unowned_o),
       .terr_bsock_wbeat_unowned_o         (terr_bsock_wbeat_unowned_o),
-      .terr_chk_valid_i                   (terr_chk_valid_i),
-      .terr_chk_slot_i                    (terr_chk_slot_i),
-      .terr_chk_gen_i                     (terr_chk_gen_i),
-      .terr_chk_epoch_i                   (terr_chk_epoch_i),
-      .terr_chk_valid_o                   (terr_chk_valid_o),
-      .terr_chk_stale_o                   (terr_chk_stale_o),
+      .terr_lodfeed_handles_checked_o     (terr_lodfeed_handles_checked_o),
+      .terr_lodfeed_handles_stale_o       (terr_lodfeed_handles_stale_o),
       .terr_cfg_journal_base_i            (terr_cfg_journal_base_i),
       .terr_cfg_journal_bytes_i           (terr_cfg_journal_bytes_i),
       .terr_jdb_post_valid_i              (terr_jdb_post_valid_i),
