@@ -209,10 +209,26 @@ module zhao_proj_cfgvalid #(
   // made once, here, so the two users below cannot drift apart.
   wire matrix_write_c = cfg_we_i && ({{(32-ADDRW){1'b0}}, cfg_addr_i} < 32'(MAT_WORDS));
 
+  // THE COMPLETION IS TESTED ON THE NEXT MASK, NOT THE HELD ONE, AND THE FIRST
+  // VERSION OF THIS BLOCK GOT IT WRONG -- the directed lane caught it, which is
+  // what the lane is for. Reading `seen_q` would arm the projector ONE CLOCK
+  // AFTER the write that completed the bank, so there would be a dead cycle in
+  // which the bank is demonstrably full and the enable is still low. Nothing
+  // downstream would have failed -- a freeze is lossless -- which is exactly
+  // why it would have stayed: an off-by-one with no symptom, in a block whose
+  // whole job is to say WHEN the camera exists.
+  logic [MAT_WORDS-1:0] seen_n [0:1];
+  always_comb begin
+    seen_n[0] = seen_q[0];
+    seen_n[1] = seen_q[1];
+    if (matrix_write_c)
+      seen_n[cfg_view_i][cfg_addr_i[$clog2(MAT_WORDS)-1:0]] = 1'b1;
+  end
+
   // The bank of EITHER view being complete arms the pipeline. See the header
   // for why this is a disjunction and not a conjunction; the conjunction hangs
   // a single-view contract.
-  wire complete_c = (&seen_q[0]) || (&seen_q[1]);
+  wire complete_c = (&seen_n[0]) || (&seen_n[1]);
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -222,8 +238,8 @@ module zhao_proj_cfgvalid #(
       arm_events_q  <= '0;
       held_offers_q <= '0;
     end else begin
-      if (matrix_write_c)
-        seen_q[cfg_view_i][cfg_addr_i[$clog2(MAT_WORDS)-1:0]] <= 1'b1;
+      seen_q[0] <= seen_n[0];
+      seen_q[1] <= seen_n[1];
 
       // THE ARM LATCHES AND NEVER FALLS. A bank that has been written once is
       // written for good: the next view walk overwrites words in place, and a
