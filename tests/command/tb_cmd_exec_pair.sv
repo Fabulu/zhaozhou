@@ -164,6 +164,9 @@ module tb_cmd_exec_pair #(
   output logic        [31:0] tfld_start_tick_o,
   output logic        [31:0] tfld_duration_o,
   output logic       [255:0] tfld_params_o,
+  // FIELDARM 2026-09-22: the set boundary. High on the LAST record of the
+  // set the verdict published, so a consumer can SEAL a per-frame list.
+  output logic               tfld_last_o,
   output logic        [31:0] tflds_issued_o,
   output logic        [31:0] tfld_overflow_o,
   output logic        [31:0] tfld_src_truncated_o,
@@ -391,6 +394,7 @@ module tb_cmd_exec_pair #(
       .tfld_x1_o           (tfld_x1_o),
       .tfld_z1_o           (tfld_z1_o),
       .tfld_handle_o       (tfld_handle_o),
+      .tfld_last_o         (tfld_last_o),
       .tfld_cmd_o          (tfld_cmd_o),
       .tfld_start_tick_o   (tfld_start_tick_o),
       .tfld_duration_o     (tfld_duration_o),
