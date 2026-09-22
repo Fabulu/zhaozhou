@@ -50,8 +50,61 @@
 // array exists any more; this block now infers NO MEMORY AT ALL.
 //
 // WHAT IT COSTS: 320 KiB of local SDRAM in bank 2's reserved tail, and the
-// flops for one 64-byte burst in each direction.  The flop delta is counted in
-// THE PRICE OF THE MOVE below, in the unflattering direction.
+// flops below.
+//
+// ===========================================================================
+// THE PRICE OF THE MOVE, HAND-COUNTED AND IN THE UNFLATTERING DIRECTION
+// ===========================================================================
+// NOT FITTED.  The owner's instruction for this campaign is not to fit, so
+// every number here is a hand count from the declarations in this file and
+// should be read as one.  Counted at the shipped parameterisation
+// (SLOTS 1,024, SLOTW 10, DEVW 24, MORPHW 17).
+//
+//   BEFORE                                          AFTER
+//     w_acc_q        616                              w_acc_q        384
+//     r_row_q        704                              w_rec3_q       128
+//     r_hist_q       432                              m_wsh_q        512
+//     h_acc_q        432                              r_row_q        512
+//     slot_valid_q 1,024                              r_hist_q       432
+//     state/ptrs/flags 24                             h_acc_q        432
+//     6 counters x 32 192                             slot_valid_q 1,024
+//                  -----                              hist_valid_q 1,024
+//                  3,424 flops                        m_addr_q        27
+//                                                     state/ptrs/flags 53
+//                                                     14 counters x 32 448
+//                                                                  -----
+//                                                                  4,976 flops
+//
+//   DELTA  +1,552 flops, and it is worth saying WHERE they go because the
+//          memory engine is NOT most of them:
+//            +1,024  `hist_valid_q` -- the REPAIR, not the move (see below)
+//              +256  the eight new counters, at 32 bits each
+//              +272  the engine, its staging and its address register, NET of
+//                    the 896 flops the old M10K shape needed and this one
+//                    does not (`w_acc_q` 616 -> 384, `r_row_q` 704 -> 512)
+//
+//   IN ALMs, stated as a RANGE because packing is the fitter's to decide and
+//   nothing here has been fitted: a Cyclone V ALM holds four registers, and
+//   register-only packing in this tree has run between two and four per ALM.
+//   So +388 ALM if it packs well and +776 ALM IF IT DOES NOT, and the second
+//   number is the one to budget against.
+//
+//   AGAINST -185 M10K.  That is the trade the owner ordered, and both halves
+//   are written here so the next pass can read the price without re-deriving
+//   it.  Combinational area is comparable and is NOT counted: the record mux
+//   went from 8:1 x 88 bits to 4:1 x 128, the history mux is unchanged at
+//   16:1 x 27, and the two address adders are new.
+//
+//   TWO STAGING REGISTERS THAT LOOK NECESSARY AND ARE NOT were removed after
+//   the first working version, and the reasons are at their declarations: a
+//   separate read landing buffer (every read belongs to the read FSM, so beats
+//   land in `r_row_q` directly) and a 512-bit assembled write burst (the
+//   engine concatenates `w_rec3_q` and `w_acc_q` when it takes the op).  That
+//   is 896 flops the obvious shape spends on holding the same bits twice.
+//   `r_hist_q` and `h_acc_q` DO stay separate, 432 flops that could be merged:
+//   the read source must not be mutated by the writeback, and spending them on
+//   not creating a read-after-write hazard inside a patch is the conservative
+//   direction.
 //
 // ===========================================================================
 // THE LAYOUT, DERIVED FROM THE PARAMETERS AND NEVER FROM PROSE
@@ -439,7 +492,13 @@ module zhao_terrain_devstore
   logic [26:0]      m_addr_q;
   logic             m_write_q;
   logic             m_owner_rd_q;     // the op belongs to the READ FSM
-  logic [BURST_W-1:0] m_rbuf_q;
+  // THERE IS NO SEPARATE READ LANDING BUFFER, and that is a deliberate 512
+  // flops rather than an omission.  Every read this engine performs belongs to
+  // the READ FSM -- the write FSM never reads -- so beats land directly in
+  // `r_row_q`, and the history read takes its 432 bits out of the same
+  // register before the first record burst overwrites it.  A separate
+  // `m_rbuf_q` copied into `r_row_q` one cycle later would be the same bits in
+  // two places.
   logic [BURST_W-1:0] m_wsh_q;
   logic [2:0]       m_beat_q;
   logic             m_done_q;         // pulse: op finished cleanly
@@ -465,7 +524,14 @@ module zhao_terrain_devstore
   typedef enum logic [1:0] { W_IDLE, W_REQ, W_WAIT } wstate_e;
   wstate_e            wstate_q;
   logic [ACCW-1:0]    w_acc_q;
-  logic [BURST_W-1:0] w_out_q;
+  // THE BURST IS NOT ASSEMBLED TWICE.  `w_acc_q` holds the three records
+  // before the one that completes a burst and `w_rec3_q` holds that fourth
+  // one; the engine concatenates them when it takes the op.  A 512-bit
+  // `w_out_q` staged between the two would hold exactly these bits, one cycle
+  // later, for 384 flops.  What makes it safe is that `w_ready_o` is low from
+  // W_REQ until the burst retires, so no later record can disturb either half
+  // while the engine is still reading them.
+  logic [REC_BITS-1:0] w_rec3_q;
   logic [SLOTW-1:0]   w_slot_q;
   logic [1:0]         w_burst_q;
   logic               w_last_q;       // this burst completes the patch
@@ -603,7 +669,6 @@ module zhao_terrain_devstore
       m_addr_q       <= 27'd0;
       m_write_q      <= 1'b0;
       m_owner_rd_q   <= 1'b0;
-      m_rbuf_q       <= '0;
       m_wsh_q        <= '0;
       m_beat_q       <= 3'd0;
       m_done_q       <= 1'b0;
@@ -623,7 +688,7 @@ module zhao_terrain_devstore
 
       wstate_q       <= W_IDLE;
       w_acc_q        <= '0;
-      w_out_q        <= '0;
+      w_rec3_q       <= '0;
       w_slot_q       <= '0;
       w_burst_q      <= 2'd0;
       w_last_q       <= 1'b0;
@@ -680,9 +745,8 @@ module zhao_terrain_devstore
           m_owner_rd_q <= mo_rd_c;
           m_write_q    <= mo_rd_c ? rq_w_c : 1'b1;
           m_addr_q     <= mo_rd_c ? rq_a_c : wq_a_c;
-          m_wsh_q      <= mo_rd_c ? rq_d_c : w_out_q;
+          m_wsh_q      <= mo_rd_c ? rq_d_c : {w_rec3_q, w_acc_q};
           m_beat_q     <= 3'd0;
-          m_rbuf_q     <= '0;
           mstate_q     <= M_REQ;
         end
 
@@ -705,7 +769,8 @@ module zhao_terrain_devstore
         M_RBEAT: if (beat_valid_i) begin
           // Little-endian word order: beat 0 ends in bits [63:0] after the
           // eighth shift, so byte 0 of the burst is bit 0 of the buffer.
-          m_rbuf_q <= {beat_data_i, m_rbuf_q[BURST_W-1:64]};
+          // It lands in `r_row_q` because every read belongs to the read FSM.
+          r_row_q  <= {beat_data_i, r_row_q[BURST_W-1:64]};
           m_beat_q <= m_beat_q + 3'd1;
           if (beat_last_i) begin
             if (m_beat_q != 3'(BEATS - 1)) begin
@@ -763,9 +828,11 @@ module zhao_terrain_devstore
         R_HWAIT: begin
           if (rd_ack_c) begin
             // A slot with no committed history answers the NEUTRAL triple, not
-            // whatever SDRAM held -- see the header.
-            r_hist_q <= r_hfresh_q ? m_rbuf_q[HROWW-1:0] : '0;
-            h_acc_q  <= r_hfresh_q ? m_rbuf_q[HROWW-1:0] : '0;
+            // whatever SDRAM held -- see the header.  The row is taken out of
+            // `r_row_q`, where the beats landed, one state before the first
+            // record burst overwrites it.
+            r_hist_q <= r_hfresh_q ? r_row_q[HROWW-1:0] : '0;
+            h_acc_q  <= r_hfresh_q ? r_row_q[HROWW-1:0] : '0;
             rstate_q <= R_DREQ;
           end else if (rd_fail_c) begin
             r_hist_q <= '0;
@@ -778,7 +845,7 @@ module zhao_terrain_devstore
 
         R_DWAIT: begin
           if (rd_ack_c) begin
-            r_row_q  <= m_rbuf_q;
+            // The beats are already in `r_row_q`; there is nothing to copy.
             rstate_q <= R_STREAM;
           end else if (rd_fail_c) begin
             // Degrade to "no records", never abandon the stream: the consumer
@@ -855,7 +922,7 @@ module zhao_terrain_devstore
           if (w_sp_i[1:0] != 2'd3)
             w_acc_q[({4'd0, w_sp_i[1:0]} * REC_BITS) +: REC_BITS] <= w_rec_c;
           else begin
-            w_out_q   <= {w_rec_c, w_acc_q};
+            w_rec3_q  <= w_rec_c;
             w_slot_q  <= w_slot_i;
             w_burst_q <= w_sp_i[3:2];
             w_last_q  <= (w_sp_i[3:2] == 2'd3);
