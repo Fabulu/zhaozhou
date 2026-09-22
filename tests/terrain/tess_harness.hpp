@@ -14,6 +14,7 @@
 
 #include "Vzhao_terrain_tess.h"
 
+#include "layere_fixture.hpp"
 #include "zhao_sim.hpp"
 #include "zref/zref_terrain_tess.hpp"
 
@@ -40,19 +41,6 @@ struct EmitRef {
   uint8_t mat_a = 0, mat_b = 0, weight = 0;
 };
 
-/**
- * The played layer-E plane: three DIFFERENT functions of the cell, so a
- * wrong-cell read and a swapped-field read fail differently rather than both
- * producing "some material". Coefficients are odd, so adjacent cells differ in
- * every field.
- *
- * It lives here rather than in a test because the EXPECTATION and the MODEL
- * must be one function -- two copies of a fixture drift, and a fixture that
- * drifts toward the RTL is the one bug a self-consistent test cannot see.
- */
-inline uint8_t mat_a_at(int ci, int cj) { return static_cast<uint8_t>(5 * ci + 11 * cj + 0x21); }
-inline uint8_t mat_b_at(int ci, int cj) { return static_cast<uint8_t>(13 * ci + 3 * cj + 0x8E); }
-inline uint8_t weight_at(int ci, int cj) { return static_cast<uint8_t>(7 * ci + 9 * cj + 0x40); }
 
 /**
  * Drives one subpatch job through the DUT and collects the emitted mesh.

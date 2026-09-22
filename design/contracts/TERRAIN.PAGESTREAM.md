@@ -112,6 +112,57 @@ one. **It is not done pre-emptively**, because a per-block fit puts every port
 on a virtual pin and that distorts timing in ways a composed fit does not; a
 change made on this number alone would be tuning against an artefact.
 
+## Layer E, and why it rides the VERTEX beat (ruling R13)
+
+Added 2026-09-22 (packet LAYERE). This block now also reads **layer E**, the
+32×32 base-material plane — `{matA u8, matB u8, weight unit8}` per cell, 3,072 B
+at page byte 7,622 (`zref::terrain::kLayerEOff`, the one place the layer column
+is summed with a `static_assert` on every running total).
+
+**It rides the vertex beat, and that is an identity rather than a convenience.**
+A 33×33 lattice walked in scan order visits every one of the 32×32 **cell
+origins** exactly once, in cell order, because cell *(ci, cj)* **is** vertex
+*(ci, cj)* for *ci, cj* < 32. So 1,024 of the 1,089 beats carry a cell and 65 do
+not, and the consumer is told which by `v_cell_o`. A stream of its own would
+have been **a second walk** over the same page — two cursors, one patch,
+reconciled by nothing, which is the join shape this console keeps getting wrong.
+On one beat the material and the heights are the same patch by construction.
+
+**Layer E is a fourth CURSOR and deliberately not a fourth PLANE.** The three
+height planes obey one law — 2-byte element, even offset, indexed by vertex,
+never straddling. Layer E obeys a different one on every count: a 3-byte element
+at an offset that is even only every other cell, indexed by CELL over a 32×32
+grid, and it **does** straddle a burst. Folding it into the plane loop would
+mean four special cases inside a function whose whole value is having none.
+
+**The no-straddle proof above does NOT extend to it, and the answer is a
+TWO-BYTE CARRY.** A cell whose first byte lands at buffer lane 62 or 63 has its
+tail in the next burst. The buffer is therefore aligned on the cell's **last**
+byte, and the outgoing buffer's top two bytes are latched as it is replaced.
+That is sound because the cursor is monotone and advances by **3** — strictly
+less than a burst — so consecutive refills are exactly one burst apart and no
+burst is ever skipped. Sixteen flops against 512 for a second buffer, and the
+elaboration check on the stride is what makes it sound rather than lucky.
+`a_carry_is_adjacent` refuses a carry that is not the preceding burst rather
+than returning a byte from elsewhere in the page.
+
+Verified over all 1,024 cells: **49 bursts, 0 stale-carry uses**, and the first
+cell sits at lane 6 so it never needs a carry at all.
+
+**THE COST, RECORDED RATHER THAN ABSORBED.** The page read goes from **105
+bursts to 154** — +47% of this block's read bandwidth — and one lattice from
+~3,544 to 4,181 gpu clocks on the played fabric. That is what a layer nobody
+read costs to start reading. `pagestream_rtl_directed` derives 49 from the
+layout independently of the RTL, so the number is an expectation and not an
+observation.
+
+**`cells_streamed_o`** counts cell beats accepted. It is the producer-side half
+of a pair whose other end is `zhao_terrain_compcache_front`'s `mat_cells_o` —
+what was offered against what landed after the plane's own range guard, written
+by different enables in different modules, both owing 1,024 per page. A walk
+that skipped the last cell row shows 992 here while every burst and vertex count
+in this block still balances.
+
 ## Exclusions
 
 **It does not compose.** `spec/terrain_rules.md` §3.4 —

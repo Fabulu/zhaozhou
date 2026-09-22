@@ -3234,7 +3234,52 @@
 //      the register does not move; what moves is that the day a producer is
 //      ruled, the evidence path is already built and fired.
 //
-// I21. NARROWED 2026-09-22 (gz/terrclose): FOUR SIGNALS BECAME THREE, AND THE
+// I21. NARROWED AGAIN 2026-09-22 (gz/layere): THE ONE BUILD LANDED, THREE
+//      SIGNALS LEFT THE BOUNDARY, AND THE ENTRY IS DOWN TO ONE HELD TIE-OFF.
+//
+//      TERRCLOSE's remainder sentence was "what closes I21 is now exactly one
+//      build: the per-triangle layer-E path in TERRAIN.TESS". That build is in
+//      the tree:
+//
+//        `zhao_terrain_pagestream` reads layer E and emits {matA, matB,
+//          weight} per cell ON THE VERTEX BEAT -- 1,024 of its 1,089 beats
+//          carry a cell, because cell (ci,cj) IS vertex (ci,cj) for ci,cj < 32.
+//        `zhao_terrain_compcache_front` files it in a material plane under the
+//          SAME parity and the SAME arming law as the heights.
+//        `zhao_terrain_tess` reads it at the TRIANGLE's own cell -- the
+//          per-axis minimum lattice corner, which on the unstitched path is
+//          the run-cell origin by identity -- and hands it out on ModeRef.
+//        `zhao_terrain_group_seq` forwards it to `r_mat_*_o` off that beat.
+//        `zhao_project_core` takes it on `ref_mat_*_i`, exactly as before.
+//
+//      SO ITEM (1) IS DISCHARGED BY REMOVAL, WHICH IS THE RULED CLOSURE AND
+//      NOT A NARROWING. `terr_job_mat_a_i`, `terr_job_mat_b_i` and
+//      `terr_job_weight_i` are GONE from this module's port list and from the
+//      board's. R13 called them the WRONG CARRIER and named removal as their
+//      honest end ONCE a replacement existed; it exists, the consumer at the
+//      far end never changed, and the function is strictly MORE true than it
+//      was -- one material per triangle where there was one per subpatch.
+//
+//      WHAT I21 STILL HOLDS, and it is one item, not three:
+//        * the four `edge_*` neighbour levels, DECLARED at literal 8'h00.
+//          Item (4) below is unchanged and its argument still stands: the
+//          producer is a FRAME-WIDE reconciliation this console's
+//          one-patch-at-a-time serve order cannot supply,
+//          `MEASURE.GOVERNOR.md` refuses ownership in writing, and the literal
+//          must not be tidied into a named constant.
+//      `terr_sparse_fill_i` remains a CONFIRMED OWNER KNOB (item 3), which is
+//      not a gap and never was.
+//
+//      THE COST IS RECORDED AND IS NOT SMALL. Layer E adds 49 bursts to every
+//      page read -- 105 to 154, +47% of TERRAIN.PAGESTREAM's read bandwidth --
+//      and ~5 M10K to the compose cache for the 2 x 1,024 x 24-bit plane. Both
+//      are in the blocks.yml rows and the contracts. Cost is recorded, never a
+//      veto.
+//
+//      ---- TERRCLOSE's tally, kept because its per-signal argument is the
+//      ---- record of how each was identified ------------------------------
+//
+//      NARROWED 2026-09-22 (gz/terrclose): FOUR SIGNALS BECAME THREE, AND THE
 //      ONE THAT LEFT IS THE ONLY ONE THAT WANTED A BUILD.
 //
 //      THIS ENTRY'S OWN TALLY, WORKED THROUGH ONE SIGNAL AT A TIME RATHER THAN
@@ -3279,8 +3324,15 @@
 //          which is the art law's rule 6 applied to RTL. **No producer is owed
 //          for a knob** and none will be built.
 //
-//      (1) `terr_job_mat_a/_b/_weight` -- **CONFIRMED HELD, AND THE
-//          REPLACEMENT WAS CHECKED FOR RATHER THAN ASSUMED ABSENT.** Ruling
+//      (1) `terr_job_mat_a/_b/_weight` -- **DISCHARGED BY REMOVAL 2026-09-22
+//          (gz/layere). THE REPLACEMENT LANDED AND THEY ARE GONE.** The
+//          paragraph below is TERRCLOSE's, left standing because its
+//          measurement was correct on the day and is the record of what was
+//          missing; every absence it names has since been built. One
+//          correction to it, found by building the thing: it says TESS has
+//          "no cell-keyed read of any kind", and TESS has had `cs_req_o`/
+//          `cs_ci_o`/`cs_cj_o` since it was written. The layer-E port was
+//          modelled on it. Ruling
 //          R13 rules them the WRONG CARRIER and their closure is REMOVAL once
 //          a per-triangle layer-E path exists inside TESS. Re-measured
 //          2026-09-22: `zhao_terrain_tess.sv` has no layer-E port, no material
@@ -3594,12 +3646,15 @@
 //      >> WHAT REMAINS OF THIS ENTRY, exactly, and nothing is hidden:
 //      >>
 //      >>   (1) `terr_job_mat_a_i`, `terr_job_mat_b_i`, `terr_job_weight_i` --
-//      >>       BOUNDARY, and they must STAY until TESS gains a per-triangle
-//      >>       layer-E path. Ruling R13 rules them the WRONG CARRIER and
-//      >>       their honest closure is REMOVAL, not a producer. The issuer
-//      >>       has no port for any of them and refuses them by name in its
-//      >>       own header. Inventing them here is the hidden-adapter failure
-//      >>       this entry has warned about since it was written.
+//      >>       **REMOVED 2026-09-22 (gz/layere).** They must STAY, this
+//      >>       paragraph said, "until TESS gains a per-triangle layer-E
+//      >>       path". It has one. R13 ruled them the WRONG CARRIER and named
+//      >>       REMOVAL as their honest closure rather than a producer, and
+//      >>       that is what happened: the material is now read per triangle
+//      >>       at the triangle's cell and rides the ModeRef beat into the
+//      >>       same `ref_mat_*_i` port it always terminated in. The issuer
+//      >>       still has no port for any of them and still refuses them by
+//      >>       name, which is now simply correct rather than a deferral.
 //      >>   (2) `terr_job_view_mask_i` -- BOUNDARY, and this one WANTS a
 //      >>       producer that does not exist. NOTHING CARRIES A VIEW MASK
 //      >>       ALONGSIDE A PAGE: `zhao_terrain_seq` emits `is_view_mask_o` at
