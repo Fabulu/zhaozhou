@@ -6184,7 +6184,13 @@ blocks:
     tests:
       directed: tests/compositor/twod_plane_directed.cpp
       random: tests/compositor/twod_plane_random.cpp
-    counters: [twod_plane_blended_fragments]
+    # `twod_plane_disabled` NAMED 2026-09-22 (packet TWODCMD) with the port it
+    # lives on. The other five 32-bit outputs on this block predate the packet
+    # and are left on `check_counters`' R110 list, where the tool can go on
+    # reporting them, rather than swept up in a change about something else.
+    counters: [twod_plane_blended_fragments, twod_plane_disabled]
+    counter_ports:
+      twod_plane_disabled: disabled_o
     source_ids: true
     budget_group: twod_post
     maturity: REFERENCE_COMPLETE
@@ -6277,15 +6283,21 @@ blocks:
       # when `band_underrun_o` FIRES with a perfectly healthy sampler. It is a
       # WRAPPER, so it cannot drift in its body.
       mutant: tests/mutants/twod_band_burst_mutant_driver.cpp
+    # `twod_band_desc_mid_sweep` NAMED 2026-09-22 (packet TWODCMD) with the
+    # port it lives on: a descriptor arriving while the band is already
+    # sweeping is the fault `list_busy_i` exists to prevent, so the counter
+    # that watches it has to be in the ledger and not only in the RTL.
     counters:
       [twod_band_sprites_admitted, twod_band_sprites_refused_budget,
-       twod_band_desc_overflow, twod_band_underrun, twod_band_pixels_written]
+       twod_band_desc_overflow, twod_band_underrun, twod_band_pixels_written,
+       twod_band_desc_mid_sweep]
     counter_ports:
       twod_band_sprites_admitted: sprites_admitted_o
       twod_band_sprites_refused_budget: sprites_refused_budget_o
       twod_band_desc_overflow: desc_overflow_o
       twod_band_underrun: band_underrun_o
       twod_band_pixels_written: pixels_written_o
+      twod_band_desc_mid_sweep: desc_mid_sweep_o
     source_ids: true
     budget_group: twod_post
     maturity: RTL_VERIFIED
@@ -6359,16 +6371,32 @@ blocks:
     # BYTES to composited pixels, which no scalar oracle can stand in for.
     tests:
       directed: tests/compositor/twod_cmd_directed.cpp
+    # ALL THIRTEEN ARE NAMED (owner ruling R110). The first version of this
+    # row named five, which is how a ledger missing half its counters reads as
+    # a clean one -- `tools/design/check_counters.py` reports the other
+    # direction and does NOT gate, so nothing would ever have failed.
     counters:
-      [twod_cmd_sprites_staged, twod_cmd_sprites_published,
+      [twod_cmd_planes_staged, twod_cmd_sprites_staged,
+       twod_cmd_planes_published, twod_cmd_sprites_published,
+       twod_cmd_plane_refused, twod_cmd_sprite_refused,
        twod_cmd_list_overflow, twod_cmd_slots_auto_disabled,
-       twod_cmd_bind_conflict]
+       twod_cmd_bind_conflict, twod_cmd_packets_committed,
+       twod_cmd_packets_abandoned, twod_cmd_frames_sealed,
+       twod_cmd_seal_overrun]
     counter_ports:
+      twod_cmd_planes_staged: planes_staged_o
       twod_cmd_sprites_staged: sprites_staged_o
+      twod_cmd_planes_published: planes_published_o
       twod_cmd_sprites_published: sprites_published_o
+      twod_cmd_plane_refused: plane_refused_o
+      twod_cmd_sprite_refused: sprite_refused_o
       twod_cmd_list_overflow: list_overflow_o
       twod_cmd_slots_auto_disabled: slots_auto_disabled_o
       twod_cmd_bind_conflict: bind_conflict_o
+      twod_cmd_packets_committed: packets_committed_o
+      twod_cmd_packets_abandoned: packets_abandoned_o
+      twod_cmd_frames_sealed: frames_sealed_o
+      twod_cmd_seal_overrun: seal_overrun_o
     source_ids: true
     budget_group: twod_post
     maturity: RTL_VERIFIED
@@ -6421,16 +6449,30 @@ blocks:
     reference_model: zref::twod::asset_verdict
     tests:
       directed: tests/compositor/twod_asset_directed.cpp
+    # ALL TWELVE ARE NAMED (owner ruling R110). The four REFUSAL counters are
+    # separate on purpose and the order is the record's own -- destination,
+    # extent, source, epoch -- so a rejected page says WHICH clause rejected it
+    # rather than only that one did.
     counters:
-      [twod_asset_loads_done, twod_asset_words_written,
-       twod_asset_slot_refused, twod_asset_len_refused,
-       twod_asset_crc_fails]
+      [twod_asset_loads_started, twod_asset_loads_done,
+       twod_asset_words_written, twod_asset_slot_refused,
+       twod_asset_len_refused, twod_asset_addr_refused,
+       twod_asset_epoch_refused, twod_asset_crc_fails,
+       twod_asset_regions_zeroed, twod_asset_bridge_errs,
+       twod_asset_loads_during_pass, twod_asset_bursts]
     counter_ports:
+      twod_asset_loads_started: loads_started_o
       twod_asset_loads_done: loads_done_o
       twod_asset_words_written: words_written_o
       twod_asset_slot_refused: slot_refused_o
       twod_asset_len_refused: len_refused_o
+      twod_asset_addr_refused: addr_refused_o
+      twod_asset_epoch_refused: epoch_refused_o
       twod_asset_crc_fails: crc_fails_o
+      twod_asset_regions_zeroed: regions_zeroed_o
+      twod_asset_bridge_errs: bridge_errs_o
+      twod_asset_loads_during_pass: loads_during_pass_o
+      twod_asset_bursts: bursts_o
     source_ids: false
     budget_group: twod_post
     maturity: RTL_VERIFIED
