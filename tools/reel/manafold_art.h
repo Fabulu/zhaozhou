@@ -1220,12 +1220,6 @@ constexpr int kBoltAvoidSweeps = 12;
 // rod can slip between two samples. Raising it costs only probe/render time;
 // lowering it is how a chord gets missed.
 constexpr int kBoltSegSamples = 8;
-// The cap on the one-pinned-end lever compensation, as a fraction. 3/1 lets a
-// sample a third of the way along fully compensate and holds everything nearer
-// the pin to three times the deficit, so a graze beside a station cannot throw
-// the free vertex across the pocket.
-constexpr int kBoltLeverMaxNum = 8;
-constexpr int kBoltLeverMaxDen = 1;
 // The last-resort slide's scan resolution (see bolt_avoid_rods). 16 steps puts
 // the worst residual slide within 1/16 of the segment's own length of the
 // largest one that still clears -- finer than the jag it is adjusting.
@@ -1371,6 +1365,14 @@ constexpr int32_t kEyeAmbientClipPm[kEyeAmbientClipSlots] = {
 constexpr int kEyeAmbientTrickMuteFromKey = 70;
 constexpr int kEyeAmbientTrickMuteToKey = 160;
 constexpr int kEyeAmbientTrickMuteRampKeys = 10;
+// ⚠ AND THE WINDOW IS CHECKED AGAINST THE PLANT, NOT ASSUMED TO COVER IT. The
+// three numbers above are authored, and kTrickPlantKey / kTrickLiftKey are
+// authored elsewhere; a hard-coded window that silently stopped covering the
+// plant when one of those moved is 10-GATE-CHECKLIST item 24 exactly. The
+// assertion lives further down this file, where the Trick keys are declared --
+// it cannot be written here because they are not in scope yet, and that is
+// stated rather than left as a puzzle.
+
 inline std::array<int32_t, kEyeAmbientClipSlots> make_eye_ambient_clip_pm() {
   std::array<int32_t, kEyeAmbientClipSlots> a{};
   for (int i = 0; i < kEyeAmbientClipSlots; ++i) a[i] = kEyeAmbientClipPm[i];
@@ -3963,6 +3965,16 @@ constexpr int32_t kTrickPlantDepthMm = 25;    // DECLARED penetration at plant
 constexpr int kTrickFlipStartKey = 42;        // the pitch-over begins
 constexpr int kTrickPlantKey = 78;            // contact window opens
 constexpr int kTrickLiftKey = 148;            // held plant ends; righting begins
+// PASS 24 (Direction 25 item 3, "none inside Trick's planted window"): the
+// ambient eye layer's mute must contain the whole plant with its ramps OUTSIDE
+// it, and the ramps must fit inside the clip. Checked here because this is the
+// first point at which both sets of constants are in scope.
+static_assert(kEyeAmbientTrickMuteFromKey <= kTrickPlantKey &&
+                  kEyeAmbientTrickMuteToKey >= kTrickLiftKey &&
+                  kEyeAmbientTrickMuteFromKey - kEyeAmbientTrickMuteRampKeys >= 0 &&
+                  kEyeAmbientTrickMuteToKey + kEyeAmbientTrickMuteRampKeys < kTrickKeys,
+              "the ambient eye mute must cover Trick's plant, with its C2 ramps "
+              "entirely outside the plant and inside the clip");
 constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot

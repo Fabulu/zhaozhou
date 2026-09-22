@@ -2412,20 +2412,20 @@ inline void bolt_avoid_rods(int32_t pts[][3], int n, int lo, int hi) {
         // the deficit moves the sample by only u of it, so a sample close to
         // the pinned end converges eight times too slowly and a handful of
         // grazes survive every sweep count (2 of 38,152 at twelve sweeps,
-        // measured). Dividing by the lever restores the intended step. It is
-        // capped at kBoltLeverMaxNum/Den so a sample right beside the pin
-        // cannot demand an arbitrarily large swing of the jag.
+        // measured). Dividing by the lever restores the intended step.
+        //
+        // ⚠ THERE WAS A CAP ON THIS AND IT WAS REMOVED BECAUSE IT WAS INERT.
+        // `kBoltLeverMaxNum/Den` was written as a guard against a sample right
+        // beside the pin demanding an arbitrarily large swing of the jag, and
+        // at the shipping sample count it binds at v * 8 -- which is exactly
+        // the uncapped value for the nearest sample, so it could never fire.
+        // An inert knob is worse than no knob: it reads as a bound and is not
+        // one. The compensation is now the exact lever arm, and what limits the
+        // swing is the sweep's own convergence.
         const auto lever = [&](int32_t v, int weight) {
-          int64_t q = (static_cast<int64_t>(v) * kBoltSegSamples) /
-                      (weight > 0 ? weight : 1);
-          const int64_t cap = static_cast<int64_t>(v) * kBoltLeverMaxNum /
-                              kBoltLeverMaxDen;
-          if (v >= 0) {
-            if (q > cap) q = cap;
-          } else {
-            if (q < cap) q = cap;
-          }
-          return static_cast<int32_t>(q);
+          return static_cast<int32_t>(
+              (static_cast<int64_t>(v) * kBoltSegSamples) /
+              (weight > 0 ? weight : 1));
         };
         for (int c = 0; c < 3; ++c) {
           if (mov_a)

@@ -3355,6 +3355,18 @@ inline bool apply_knead_dip_env() {
   }
   if (!num("ZHAO_U02_EYE_AMBIENT_PM", 0, 1000, g_u02_eye_ambient_master_pm))
     return false;
+  // ⚠ NOT A PASS-24 KNOB. `ZHAO_U02_REAR_CARRIER_CALM_PM` has existed since
+  // pass 20 as the lever for carrier C's always-on rotation, and it was parsed
+  // in manafold_rear_audit.cpp ALONE -- so it moved the gate's reading of the
+  // creature and NOTHING IN THE RENDERER. Found by accident while laddering the
+  // rear for item 1: three complete renders at 1000, 500 and 250 came back
+  // byte-identical on all 600 frames, which is the signature of a knob the reel
+  // cannot see. It is the exact fault this function was written for, one lane
+  // over -- live in a gate, inert in production, the mirror image of pass 20's
+  // ladder. 1000 is the authored value and changes nothing, so adding it here
+  // is byte-neutral and makes mrear's reading true of the thing that ships.
+  if (!num("ZHAO_U02_REAR_CARRIER_CALM_PM", 0, 1000, g_u02_rear_carrier_calm_pm))
+    return false;
   return true;
 }
 
