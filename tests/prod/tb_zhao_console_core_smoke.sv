@@ -560,9 +560,17 @@ module tb_zhao_console_core_smoke
   logic                    terr_job_dual_i;
   logic [15:0]             terr_job_src_id_i;
   logic [1:0]              terr_job_view_mask_i;
-  logic [7:0]              terr_job_mat_a_i;
-  logic [7:0]              terr_job_mat_b_i;
-  logic [7:0]              terr_job_weight_i;
+  // `terr_job_mat_a_i`, `terr_job_mat_b_i` and `terr_job_weight_i` WERE HERE
+  // and are gone with the core ports, 2026-09-22 (LAYERE). Ruling R13 ruled
+  // them the wrong carrier; the material is now read per triangle from layer E
+  // inside TERRAIN.TESS and rides the ModeRef beat.
+  //
+  // THE DECLARATIONS HAD TO GO, not just the drives. `.*` binds by NAME, so a
+  // net whose port no longer exists is silently not bound -- and the three
+  // assignments below it would have gone on being written, by a bench, into
+  // nothing, forever. That is exactly the `-BadAttribute` failure this
+  // script's own param block records: a stimulus that binds nothing, says
+  // nothing, and leaves a green run indistinguishable from a targeted one.
   logic                    terr_sparse_fill_i;
   // TERRAIN.TESS's lattice and cell-state ports are GONE from the DUT, and the
   // flat-lattice memory model this bench used to play with them went with them
@@ -670,6 +678,13 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_ps_bursts_o;
   logic [31:0]             terr_ps_guard_denied_o;
   logic [31:0]             terr_ps_incomplete_o;
+  // R13's layer E. DECLARED AND NOT CHECKED, and the honest reason is in the
+  // bench's own note about the terrain path: every terrain page this bench
+  // plays FAILS ITS CRC, so no page becomes resident, TERRAIN.PAGESTREAM is
+  // never given a job, and this counter cannot move here however correct the
+  // block is. It is fired where a test can watch it -- `pagestream_rtl_
+  // directed` -- which is R95 applied rather than quoted.
+  logic [31:0]             terr_ps_cells_o;
   logic                    terr_ps_idle_o;
   logic                    terr_ps_done_valid_o;
   logic                    terr_ps_done_ok_o;
@@ -693,6 +708,10 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_cc_fill_overrun_o;
   logic [31:0]             terr_cc_lat_oob_o;
   logic [31:0]             terr_cc_cs_oob_o;
+  // Same: the compose cache never fills here, so neither of these can move.
+  // `compcache_front_rtl_directed` fires both on its 9 x 9 instance.
+  logic [31:0]             terr_cc_mat_oob_o;
+  logic [31:0]             terr_cc_mat_cells_o;
 
   // (`terr_dm_*` LEFT THE CORE's EDGE 2026-09-21, core entry I27's first half:
   // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
@@ -873,6 +892,12 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_tess_refs_o;
   logic [31:0]             terr_tess_rejected_o;
   logic [31:0]             terr_tess_lod_clamped_o;
+  // THIS ONE THE BENCH COULD ALMOST REACH, and it is worth being exact about
+  // why it does not. The injected subpatch job DOES make TERRAIN.TESS run --
+  // six assertions stand on that -- but only in ModeTri, and the layer-E read
+  // is issued on ModeRef beats alone. `terrain_tess_directed` fires it, with
+  // its negative control.
+  logic [31:0]             terr_tess_mat_unarmed_o;
   logic [31:0]             terr_tess_mode_invalid_o;
   logic                    terr_tess_idle_o;
   logic                    proj_out_valid_o;
@@ -4054,9 +4079,6 @@ module tb_zhao_console_core_smoke
     proj_cfg_data_i = '0;
     proj_en_i = '0;
     terr_job_view_mask_i = '0;
-    terr_job_mat_a_i = '0;
-    terr_job_mat_b_i = '0;
-    terr_job_weight_i = '0;
     terr_sparse_fill_i = '0;
     proj_out_ready_i = '0;
     post_atm_en_i = '0;
@@ -5254,9 +5276,6 @@ module tb_zhao_console_core_smoke
     terr_job_dual_i      <= 1'b0;
     terr_job_src_id_i    <= 16'h5678;
     terr_job_view_mask_i <= 2'b01;
-    terr_job_mat_a_i     <= 8'h11;
-    terr_job_mat_b_i     <= 8'h22;
-    terr_job_weight_i    <= 8'hFF;
     terr_job_valid_i     <= 1'b1;
     guard = 0;
     while (!(terr_job_valid_i && terr_job_ready_o) && (guard < 1000)) begin

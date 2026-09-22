@@ -1346,9 +1346,17 @@ module tb_terrain_world
   logic [3:0]        ps_d_verdict;
   logic [31:0]       ps_vertices, ps_guard_denied, ps_incomplete;
   logic [15:0]       ps_v_flags;
-  /* verilator lint_off UNUSEDSIGNAL */
+  // `lint_off`/`lint_on` DO NOT NEST, and this pair used to prove it. An
+  // inner `lint_on` here -- added with entry I21's forwarded field, inside a
+  // region that was ALREADY suppressing UNUSEDSIGNAL -- re-enabled the warning
+  // for everything after it, so the fifteen deliberately-unread signals below
+  // were exposed and `lint_terrain_world` was RED. The outer `lint_on` twelve
+  // lines down had nothing left to close.
+  //
+  // Verified pre-existing rather than assumed: the identical fifteen warnings
+  // reproduce on the merge base's own copy of this file, linted against the
+  // merge base's `zhao_terrain_pagestream`.
   logic [ 7:0]       ps_v_view_mask;   // entry I21's forwarded field
-  /* verilator lint_on UNUSEDSIGNAL */
   logic              ps_idle, mf_idle, mg_busy;
   logic [SLOTW-1:0]  mg_done_slot;
   logic [GENW-1:0]   mg_done_gen;
