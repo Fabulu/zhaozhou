@@ -155,6 +155,9 @@ module zhao_pair_pagestream_patch
   logic [31:0]        ps_done_epoch, ps_done_src;
   logic [3:0]         ps_done_verdict;
   logic [31:0]        ps_lat_str, ps_lat_ref, ps_vtx_str, ps_bursts, ps_denied, ps_incomplete;
+  logic               ps_cell;
+  logic [ 7:0]        ps_mat_a, ps_mat_b, ps_weight;
+  logic [31:0]        ps_cells;
 
   zhao_terrain_pagestream #(
       .SLOTW(SLOTW),
@@ -194,6 +197,14 @@ module zhao_pair_pagestream_patch
       .v_src_id_o       (ps_src_id),
       .v_flags_o        (ps_flags),
       .v_view_mask_o    (ps_view_mask),
+      // Layer E rides the same beat. TERRAIN.PATCH composes heights and takes
+      // no material, so the pair names the ports and consumes nothing: the
+      // question this pair answers is the compose lane's, and the layer-E
+      // cursor's cost is measured where it lives, in the block's own row.
+      .v_cell_o         (ps_cell),
+      .v_mat_a_o        (ps_mat_a),
+      .v_mat_b_o        (ps_mat_b),
+      .v_weight_o       (ps_weight),
       .done_valid_o     (ps_done_valid),
       .done_ready_i     (1'b1),
       .done_slot_o      (ps_done_slot),
@@ -208,6 +219,7 @@ module zhao_pair_pagestream_patch
       .bursts_read_o      (ps_bursts),
       .guard_denied_o     (ps_denied),
       .incomplete_o       (ps_incomplete),
+      .cells_streamed_o   (ps_cells),
       .idle_o             (ps_idle)
   );
 

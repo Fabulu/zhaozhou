@@ -76,6 +76,8 @@ module zhao_pair_tess_normals (
   logic               lat_surface;
   logic               cs_req;
   logic        [ 4:0] cs_ci, cs_cj;
+  logic               mat_req;
+  logic        [ 4:0] mat_ci, mat_cj;
 
   always_ff @(posedge clk) begin
     lat_h_q  <= lat_mem[lat_vi];
@@ -106,6 +108,14 @@ module zhao_pair_tess_normals (
   logic               vtx_surface_unused, ref_surface_unused;
   logic [15:0]        vtx_src_unused, ref_src_unused;
   logic [31:0]        tess_vertices_unused, tess_refs_unused, tess_mode_invalid_unused;
+  // R13's per-triangle material. This pair measures TESS against
+  // TERRAIN.NORMALS, and NORMALS takes no material, so the layer-E port is
+  // driven with a constant plane and its output is named-unused: the pair's
+  // question is the ModeTri arithmetic's area and Fmax, which the read does
+  // not enter. `mat_valid_i` is held HIGH rather than low so the pair measures
+  // the mux that ships rather than its constant-folded half.
+  logic [7:0]         ref_mat_a_unused, ref_mat_b_unused, ref_weight_unused;
+  logic [31:0]        tess_mat_unarmed_unused;
 
   zhao_terrain_tess u_tess (
       .clk(clk), .rst_n(rst_n),
@@ -123,6 +133,8 @@ module zhao_pair_tess_normals (
       .lat_h_i(lat_h_q), .lat_wx_i(lat_wx_q), .lat_wz_i(lat_wz_q),
       .cs_req_o(cs_req), .cs_ci_o(cs_ci), .cs_cj_o(cs_cj),
       .cs_substance_i(cs_sub_q),
+      .mat_req_o(mat_req), .mat_ci_o(mat_ci), .mat_cj_o(mat_cj),
+      .mat_a_i(8'd7), .mat_b_i(8'd9), .mat_w_i(8'd128), .mat_valid_i(1'b1),
       .tri_valid_o(tri_valid), .tri_ready_i(tri_ready),
       .ax_o(ax), .ay_o(ay), .az_o(az),
       .bx_o(bx), .by_o(by), .bz_o(bz),
@@ -135,12 +147,15 @@ module zhao_pair_tess_normals (
       .ref_valid_o(ref_valid_unused), .ref_ready_i(1'b1),
       .ref_ia_o(ref_ia_unused), .ref_ib_o(ref_ib_unused), .ref_ic_o(ref_ic_unused),
       .ref_surface_o(ref_surface_unused), .ref_src_id_o(ref_src_unused),
+      .ref_mat_a_o(ref_mat_a_unused), .ref_mat_b_o(ref_mat_b_unused),
+      .ref_weight_o(ref_weight_unused),
       .terrain_triangles_emitted_o(tess_emitted),
       .terrain_vertices_emitted_o(tess_vertices_unused),
       .terrain_refs_emitted_o(tess_refs_unused),
       .mode_invalid_o(tess_mode_invalid_unused),
       .subpatch_rejected_o(tess_rejected),
       .lod_clamped_o(tess_clamped),
+      .mat_unarmed_o(tess_mat_unarmed_unused),
       .job_reject_o(tess_reject), .idle_o(tess_idle)
   );
 

@@ -107,9 +107,6 @@ module zhao_terrain_pipe #(
     input  wire        job_dual_i,
     input  wire [15:0] job_src_id_i,
     input  wire [ 1:0] job_view_mask_i,
-    input  wire [ 7:0] job_mat_a_i,
-    input  wire [ 7:0] job_mat_b_i,
-    input  wire [ 7:0] job_weight_i,
     input  wire        sparse_fill_i,
 
     // ---- the tess's memory ports, up to the composition --------------------------
@@ -124,6 +121,17 @@ module zhao_terrain_pipe #(
     output wire        [ 4:0] cs_ci_o,
     output wire        [ 4:0] cs_cj_o,
     input  wire        [ 1:0] cs_substance_i,
+    // R13's layer-E read, TERRAIN.TESS's, surfaced at this wrapper's edge
+    // exactly as the cell-state read above is. It REPLACES `job_mat_a_i`,
+    // `job_mat_b_i` and `job_weight_i`: the material no longer enters as a
+    // subpatch-uniform job field, it is fetched per triangle at the cell.
+    output wire               mat_req_o,
+    output wire        [ 4:0] mat_ci_o,
+    output wire        [ 4:0] mat_cj_o,
+    input  wire        [ 7:0] mat_a_i,
+    input  wire        [ 7:0] mat_b_i,
+    input  wire        [ 7:0] mat_w_i,
+    input  wire               mat_valid_i,
 
     // ---- projected triangles: zhao_terrain_project's packet + w x3 ---------------
     output wire                     out_valid_o,
@@ -208,6 +216,10 @@ module zhao_terrain_pipe #(
   wire [GEN_W-1:0]   open_gen, r_gen;
   wire [15:0]        r_src;
   wire [7:0]         r_mat_a, r_mat_b, r_weight;
+  wire [7:0]         t_ref_mat_a, t_ref_mat_b, t_ref_weight;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0]        tess_mat_unarmed_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
   // tess outputs this composition does not consume (ModeTri never runs here)
   wire               tri_valid_unused, tri_surface_unused;
   wire signed [31:0] tri_ax_unused, tri_ay_unused, tri_az_unused, tri_bx_unused, tri_by_unused,
@@ -245,6 +257,13 @@ module zhao_terrain_pipe #(
       .cs_ci_o        (cs_ci_o),
       .cs_cj_o        (cs_cj_o),
       .cs_substance_i (cs_substance_i),
+      .mat_req_o      (mat_req_o),
+      .mat_ci_o       (mat_ci_o),
+      .mat_cj_o       (mat_cj_o),
+      .mat_a_i        (mat_a_i),
+      .mat_b_i        (mat_b_i),
+      .mat_w_i        (mat_w_i),
+      .mat_valid_i    (mat_valid_i),
       // ModeTri is never presented; the port is tied ready so nothing can
       // ever hold the block, and its outputs are named unused.
       .tri_valid_o    (tri_valid_unused),
@@ -276,12 +295,16 @@ module zhao_terrain_pipe #(
       .ref_ic_o       (t_ref_ic),
       .ref_surface_o  (ref_surface_unused),
       .ref_src_id_o   (ref_src_unused),
+      .ref_mat_a_o    (t_ref_mat_a),
+      .ref_mat_b_o    (t_ref_mat_b),
+      .ref_weight_o   (t_ref_weight),
       .terrain_triangles_emitted_o(tess_tris_unused),
       .terrain_vertices_emitted_o (tess_vertices_o),
       .terrain_refs_emitted_o     (tess_refs_o),
       .mode_invalid_o             (tess_mode_invalid_o),
       .subpatch_rejected_o        (tess_rejected_o),
       .lod_clamped_o              (tess_lod_clamped_o),
+      .mat_unarmed_o              (tess_mat_unarmed_unused),
       .job_reject_o   (t_job_reject),
       .idle_o         (tess_idle)
   );
@@ -318,9 +341,6 @@ module zhao_terrain_pipe #(
       .job_dual_i       (job_dual_i),
       .job_src_id_i     (job_src_id_i),
       .job_view_mask_i  (job_view_mask_i),
-      .job_mat_a_i      (job_mat_a_i),
-      .job_mat_b_i      (job_mat_b_i),
-      .job_weight_i     (job_weight_i),
       .sparse_fill_i    (sparse_fill_i),
       .t_job_valid_o    (t_job_valid),
       .t_job_ready_i    (t_job_ready),
@@ -349,6 +369,9 @@ module zhao_terrain_pipe #(
       .t_ref_ia_i       (t_ref_ia),
       .t_ref_ib_i       (t_ref_ib),
       .t_ref_ic_i       (t_ref_ic),
+      .t_ref_mat_a_i    (t_ref_mat_a),
+      .t_ref_mat_b_i    (t_ref_mat_b),
+      .t_ref_weight_i   (t_ref_weight),
       .b_valid_o        (b_valid),
       .b_ready_i        (b_ready),
       .b_vx_o           (b_vx),

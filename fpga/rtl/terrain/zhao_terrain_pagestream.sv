@@ -115,6 +115,13 @@ module zhao_terrain_pagestream
     parameter int unsigned C_OFF = 4420,
     parameter int unsigned EDGE  = 33,
 
+    // Layer E, base material: 32x32 cells of {matA u8, matB u8, weight unit8},
+    // 3,072 B at page byte 7,622. The value is `zref::kLayerEOff`, which is
+    // the ONE place the layer column is summed with a static_assert on every
+    // running total -- read from the spec's own table via that header, never
+    // inferred from a consumer. Owner ruling R13.
+    parameter int unsigned E_OFF = 7622,
+
     parameter logic [ZHAO_VRAM_ADDR_BITS-1:0] REGION_BASE  = 27'h400_0000,
     parameter int unsigned                    REGION_SLOTS = 1024,
 
@@ -234,6 +241,24 @@ module zhao_terrain_pagestream
     // handshake, off one held job.
     output var logic [7:0]          v_view_mask_o,
 
+    // ---- layer E, R13's per-cell material, ON THE SAME BEAT ---------------
+    // It rides the vertex beat rather than a stream of its own, and the reason
+    // is an identity rather than a convenience: a 33x33 lattice walked in scan
+    // order visits every one of the 32x32 CELL ORIGINS exactly once, in cell
+    // order, because cell (ci, cj) IS vertex (ci, cj) for ci, cj < 32. So
+    // 1,024 of the 1,089 beats carry a cell and 65 do not, and the consumer is
+    // told which by `v_cell_o`.
+    //
+    // A SEPARATE STREAM WOULD HAVE BEEN A SECOND WALK, and a second walk over
+    // the same page is the join this console keeps getting wrong: two streams
+    // for one patch, each with its own notion of where it is, reconciled by
+    // nothing. On one beat the material and the heights are the same patch by
+    // construction and there is nothing left to reconcile.
+    output var logic                v_cell_o,      // this vertex is a cell origin
+    output var logic [7:0]          v_mat_a_o,     // layer E matA  (tile id)
+    output var logic [7:0]          v_mat_b_o,     // layer E matB  (tile id)
+    output var logic [7:0]          v_weight_o,    // layer E weight, unit8
+
     // ---- completion -----------------------------------------------------------
     // ONE JOB, ONE COMPLETION, ALWAYS -- the rule TERRAIN.PAGELOADER's contract
     // states and for the same reason. A refusal that produced silence would
@@ -255,6 +280,13 @@ module zhao_terrain_pagestream
     output var logic [31:0] bursts_read_o,
     output var logic [31:0] guard_denied_o,
     output var logic [31:0] incomplete_o,
+    // Cell beats ACCEPTED by the consumer. The producer-side half of the pair
+    // `zhao_terrain_compcache_front`'s `mat_cells_o` completes: this one counts
+    // what was offered and taken, that one what landed after the plane's own
+    // range guard. They are written by different enables in different modules,
+    // and both owe 1,024 per page. A walk that skipped the last cell row would
+    // show 992 here while every burst and vertex count in this block balanced.
+    output var logic [31:0] cells_streamed_o,
     output var logic        idle_o
 );
 
@@ -269,6 +301,26 @@ module zhao_terrain_pagestream
   // them to drift apart.
   localparam int unsigned NPLANE = 3;
   localparam int unsigned PLANE_OFF [NPLANE] = '{A_OFF, B_OFF, C_OFF};
+
+  // ---- layer E is a FOURTH cursor and deliberately NOT a fourth PLANE ------
+  // The comment above says three copies of the cursor logic is three places
+  // for them to drift, and that is right about the three HEIGHT planes,
+  // because they obey one law: 2-byte element, even offset, indexed by vertex,
+  // never straddling anything. Layer E obeys a different one on every count --
+  // a 3-byte element at an offset that is even only every other cell, indexed
+  // by CELL over a 32x32 grid rather than by vertex over 33x33, and it DOES
+  // straddle a burst. Folding it into the loop would mean four special cases
+  // inside a function whose whole value is having none. So it is its own
+  // cursor, with the shared machinery (the guard request, the beat counter,
+  // the S_CHECK/S_REQ/S_WAIT round trip) reused exactly as it stands.
+  //
+  // E IS PLANE INDEX 3 IN THE ARBITRATION ONLY. `refill_c` and `fill_p_q` are
+  // two bits already, so the value costs nothing; `buf_q` is never indexed
+  // with it.
+  localparam logic [1:0] P_E = 2'd3;
+  localparam int unsigned CELL_EDGE = EDGE - 1;                    // 32
+  localparam int unsigned CELLS     = CELL_EDGE * CELL_EDGE;       // 1,024
+  localparam int unsigned E_BYTES   = CELLS * 3;                   // 3,072
 
   localparam logic [3:0] V_OK        = 4'd0;
   localparam logic [3:0] V_SLOT_OOR  = 4'd1;   // slot >= REGION_SLOTS
@@ -289,6 +341,21 @@ module zhao_terrain_pagestream
       $fatal(1, "pagestream: the planes overlap");
     if ((C_OFF + PLANE_BYTES) > PAGE_BYTES)
       $fatal(1, "pagestream: plane C runs past the page");
+    // Layer D sits BETWEEN C and E, so this is not `C_OFF + PLANE_BYTES ==
+    // E_OFF` and must not be tightened into one: 6,598 + 1,024 = 7,622 is
+    // layer D's whole extent and it is not this block's business.
+    if ((C_OFF + PLANE_BYTES) > E_OFF)
+      $fatal(1, "pagestream: plane C runs into layer E (C_OFF %0d, E_OFF %0d)", C_OFF, E_OFF);
+    if ((E_OFF + E_BYTES) > PAGE_BYTES)
+      $fatal(1, "pagestream: layer E runs past the page (E_OFF %0d, %0d bytes)", E_OFF, E_BYTES);
+    // THE CARRY ARGUMENT, ENFORCED. A cell's three bytes are assembled from
+    // the covering burst plus at most the previous burst's last two bytes, and
+    // that is sound only because the cell cursor advances by 3 -- strictly
+    // less than a burst -- so consecutive refills are exactly one burst apart
+    // and no burst is ever skipped. A stride at or above BURST_BYTES breaks it
+    // silently, returning two bytes of one cell beside one byte of another.
+    if (3 >= BURST_BYTES)
+      $fatal(1, "pagestream: the layer-E carry needs a cell stride below BURST_BYTES (%0d)", BURST_BYTES);
     if ((BURST_BYTES % 8) != 0)
       $fatal(1, "pagestream: BURST_BYTES must be whole 64-bit beats");
   end
@@ -332,6 +399,26 @@ module zhao_terrain_pagestream
   logic [5:0]       vi_q;           // COLUMN, the fast axis
   logic [5:0]       vj_q;           // ROW
 
+  // ---- layer E's staging buffer, and the TWO-BYTE CARRY -------------------
+  // A cell's three bytes sit at E_OFF + 3c, and 3c is odd on two cells in
+  // three, so the no-straddle arithmetic the header proves for the height
+  // planes DOES NOT HOLD HERE and must not be assumed to. A cell whose first
+  // byte lands at buffer lane 62 or 63 has its tail in the NEXT burst.
+  //
+  // THE FIX IS A CARRY, NOT A SECOND BUFFER. The cursor is monotone and
+  // advances by 3, strictly less than a burst, so consecutive refills are
+  // exactly one burst apart and the bytes that fall off the front of the
+  // window are always the two the next cell might still want. So the buffer is
+  // aligned on the cell's LAST byte and the outgoing buffer's top two bytes
+  // are latched as it is replaced. Sixteen flops, against 512 for a second
+  // buffer, and it is the elaboration check on the stride that makes it sound
+  // rather than lucky.
+  logic [(BURST_BYTES*8)-1:0] bufE_q;
+  logic [31:0]                covE_q;   // page-relative, burst-aligned
+  logic                       covvE_q;
+  logic [15:0]                tailE_q;  // page bytes covE-2 and covE-1
+  logic                       tailvE_q;
+
   // What page byte plane p's sample for the current vertex lives at, and the
   // burst that contains it.
   function automatic logic [31:0] want_byte(input logic [1:0] p, input logic [VIDXW-1:0] k);
@@ -361,6 +448,23 @@ module zhao_terrain_pagestream
     end
   end
 
+  // ---- layer E's own want / need ------------------------------------------
+  // Only 1,024 of the 1,089 vertices are a cell origin. The last lattice
+  // COLUMN and the last lattice ROW are shared with the neighbouring patch and
+  // own no cell of this one, so they carry no material and demand no burst --
+  // which is also what keeps the cursor inside the layer.
+  wire have_cell_c = (vi_q < 6'(CELL_EDGE)) && (vj_q < 6'(CELL_EDGE));
+  wire [31:0] cell_idx_c = have_cell_c
+      ? (32'(vj_q) * 32'(CELL_EDGE) + 32'(vi_q))
+      : 32'd0;
+  // 3c as a shift and an add: (c << 1) + c. No multiplier, the same habit as
+  // `slot_scaled` above.
+  wire [31:0] wantE_c = 32'(E_OFF) + (cell_idx_c << 1) + cell_idx_c;
+  // ALIGNED ON THE LAST BYTE. `wantE_c + 2` is what has to be in the buffer;
+  // the first one or two may come from the carry.
+  wire [31:0] wantalE_c = (wantE_c + 32'd2) & (~(32'(BURST_BYTES - 1)));
+  wire needE_c = have_cell_c && (!covvE_q || (covE_q != wantalE_c));
+
   // The plane that must be refilled next, lowest index first.
   //
   // FIXED PRIORITY IS NOT A CLAIM THAT ONLY ONE PLANE IS EVER SHORT. The
@@ -372,6 +476,7 @@ module zhao_terrain_pagestream
   // ENFORCED-BY: fpga/rtl/terrain/zhao_terrain_pagestream.sv:a_emit_has_all_planes
   logic [1:0] refill_c;
   logic       any_need_c;
+  logic [31:0] refill_addr_c;
   always_comb begin
     refill_c   = 2'd0;
     any_need_c = 1'b0;
@@ -381,6 +486,15 @@ module zhao_terrain_pagestream
         any_need_c = 1'b1;
       end
     end
+    // LAYER E GOES LAST, so the three heights' order is exactly what it was
+    // and a page whose material is cold cannot delay a height that is not.
+    // Priority is a matter of which goes first, never of correctness -- the
+    // machine returns to S_CHECK after every refill and asks again.
+    if (!any_need_c && needE_c) begin
+      refill_c   = P_E;
+      any_need_c = 1'b1;
+    end
+    refill_addr_c = (refill_c == P_E) ? wantalE_c : wantal_c[refill_c];
   end
 
   // ---- extraction ----------------------------------------------------------
@@ -394,6 +508,39 @@ module zhao_terrain_pagestream
       sample_of = signed'(buf_q[p][({{(32-LANEW){1'b0}}, lane} * 8) +: 16]);
     end
   endfunction
+
+  // ---- layer E extraction, across the carry --------------------------------
+  // `eoff_c` is where the cell's first byte sits RELATIVE to the buffer, in
+  // -2 .. BURST_BYTES-3. Negative means the byte is in the carry, and the
+  // carry holds exactly page bytes covE-2 (low) and covE-1 (high).
+  wire signed [31:0] eoff_c = $signed(wantE_c) - $signed(covE_q);
+
+  function automatic logic [7:0] e_byte(input int unsigned d);
+    logic signed [31:0] rel;
+    logic [LANEW-1:0]   lane;
+    begin
+      rel = eoff_c + $signed(32'(d));
+      if (rel >= 0) begin
+        lane   = LANEW'(rel);
+        e_byte = bufE_q[({{(32-LANEW){1'b0}}, lane} * 8) +: 8];
+      end else if (rel == -32'sd1) begin
+        e_byte = tailE_q[15:8];
+      end else begin
+        e_byte = tailE_q[7:0];
+      end
+    end
+  endfunction
+
+  // THE BYTE ORDER IS THE SPEC'S TABLE ORDER, not a little-endian word: layer
+  // E's element is three separate bytes, {matA, matB, weight}, so d = 0 is
+  // matA. Reading it as a 24-bit little-endian value would silently swap matA
+  // and weight -- two fields that are both u8, both legal at every value, and
+  // whose swap renders as the wrong tile at the wrong blend rather than as an
+  // error.
+  assign v_cell_o   = have_cell_c;
+  assign v_mat_a_o  = have_cell_c ? e_byte(0) : 8'd0;
+  assign v_mat_b_o  = have_cell_c ? e_byte(1) : 8'd0;
+  assign v_weight_o = have_cell_c ? e_byte(2) : 8'd0;
 
   // ---- the machine ---------------------------------------------------------
   typedef enum logic [2:0] {
@@ -481,6 +628,12 @@ module zhao_terrain_pagestream
       bursts_read_o       <= 32'd0;
       guard_denied_o      <= 32'd0;
       incomplete_o        <= 32'd0;
+      cells_streamed_o    <= 32'd0;
+      bufE_q              <= '0;
+      covE_q              <= 32'd0;
+      covvE_q             <= 1'b0;
+      tailE_q             <= 16'd0;
+      tailvE_q            <= 1'b0;
       for (int unsigned p = 0; p < NPLANE; p++) begin
         buf_q[p]  <= '0;
         cov_q[p]  <= 32'd0;
@@ -507,6 +660,13 @@ module zhao_terrain_pagestream
             // is one comparison this block would then have to get right on
             // every path. The cost of always refilling is three bursts.
             for (int unsigned p = 0; p < NPLANE; p++) covv_q[p] <= 1'b0;
+            // Layer E's buffer AND its carry. Invalidating the buffer without
+            // the carry would leave the previous page's last two bytes live
+            // for the first cell of this one -- and the first cell of a page
+            // never needs them (E_OFF's own burst covers it), so the fault
+            // would be invisible until a layout revision moved E_OFF.
+            covvE_q  <= 1'b0;
+            tailvE_q <= 1'b0;
             if (pre_slot_bad_c) begin
               verdict_q          <= V_SLOT_OOR;
               lattices_refused_o <= lattices_refused_o + 32'd1;
@@ -525,7 +685,7 @@ module zhao_terrain_pagestream
         S_CHECK: begin
           if (any_need_c) begin
             fill_p_q    <= refill_c;
-            fill_addr_q <= wantal_c[refill_c];
+            fill_addr_q <= refill_addr_c;
             beat_q      <= '0;
             state_q     <= S_REQ;
           end else begin
@@ -568,7 +728,10 @@ module zhao_terrain_pagestream
             verdict_q      <= V_GUARD;
             state_q        <= S_DONE;
           end else if (beat_valid_i) begin
-            buf_q[fill_p_q][({{(32-$clog2(BEATS+1)){1'b0}}, beat_q} * 64) +: 64] <= beat_data_i;
+            if (fill_p_q == P_E)
+              bufE_q[({{(32-$clog2(BEATS+1)){1'b0}}, beat_q} * 64) +: 64] <= beat_data_i;
+            else
+              buf_q[fill_p_q][({{(32-$clog2(BEATS+1)){1'b0}}, beat_q} * 64) +: 64] <= beat_data_i;
             if (beat_last_i) begin
               // A BURST THAT ENDED EARLY IS NOT A BURST. `beat_last_i` before
               // the eighth beat means the fabric gave up mid-transfer, and the
@@ -580,8 +743,27 @@ module zhao_terrain_pagestream
                 verdict_q    <= V_INCOMPLETE;
                 state_q      <= S_DONE;
               end else begin
-                cov_q[fill_p_q]  <= fill_addr_q;
-                covv_q[fill_p_q] <= 1'b1;
+                if (fill_p_q == P_E) begin
+                  // THE CARRY IS LATCHED FROM THE OUTGOING BUFFER, on the same
+                  // edge the incoming one replaces it. `bufE_q` here is still
+                  // the OLD burst -- the write above is nonblocking -- so this
+                  // reads what is being retired, which is the whole point and
+                  // is the one ordering that makes the carry work.
+                  //
+                  // `tailvE_q` records whether the retired burst was the
+                  // IMMEDIATELY PRECEDING one. Anything else (a cold buffer,
+                  // or a skip) makes the carry meaningless, and the assertion
+                  // below refuses to use it rather than quietly returning a
+                  // byte from somewhere else in the page.
+                  tailE_q  <= bufE_q[(BURST_BYTES*8)-1 -: 16];
+                  tailvE_q <= covvE_q &&
+                              ((covE_q + 32'(BURST_BYTES)) == fill_addr_q);
+                  covE_q   <= fill_addr_q;
+                  covvE_q  <= 1'b1;
+                end else begin
+                  cov_q[fill_p_q]  <= fill_addr_q;
+                  covv_q[fill_p_q] <= 1'b1;
+                end
                 bursts_read_o    <= bursts_read_o + 32'd1;
                 state_q          <= S_CHECK;
               end
@@ -594,6 +776,7 @@ module zhao_terrain_pagestream
         S_EMIT: begin
           if (v_ready_i) begin
             vertices_streamed_o <= vertices_streamed_o + 32'd1;
+            if (have_cell_c) cells_streamed_o <= cells_streamed_o + 32'd1;
             if (vidx_q == VIDXW'(VERTS - 1)) begin
               lattices_streamed_o <= lattices_streamed_o + 32'd1;
               state_q             <= S_DONE;
@@ -632,6 +815,21 @@ module zhao_terrain_pagestream
       a_emit_has_all_planes :
       assert (!(state_q == S_EMIT) || (covv_q[0] && covv_q[1] && covv_q[2]))
       else $error("pagestream: emitted a vertex with a cold plane buffer");
+
+      // The layer-E half of the same claim, separate because it is conditional
+      // on the vertex OWNING a cell -- the last row and column legitimately
+      // emit with a cold E buffer and must not be caught by the line above.
+      a_emit_has_material :
+      assert (!((state_q == S_EMIT) && have_cell_c) || covvE_q)
+      else $error("pagestream: emitted a cell with a cold layer-E buffer");
+
+      // THE CARRY IS NEVER USED UNLESS IT IS THE PRECEDING BURST. This is the
+      // assertion that makes `e_byte`'s negative arm sound rather than hopeful:
+      // it fires the moment a cell reaches back into a carry that describes
+      // some other part of the page.
+      a_carry_is_adjacent :
+      assert (!((state_q == S_EMIT) && have_cell_c && (eoff_c < 0)) || tailvE_q)
+      else $error("pagestream: layer-E cell at offset %0d reached into a stale carry", eoff_c);
 
       a_vidx_bounded :
       assert (vidx_q < VIDXW'(VERTS))

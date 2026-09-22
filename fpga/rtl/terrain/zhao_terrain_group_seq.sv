@@ -48,7 +48,8 @@
 // ModeRef and every triple is fanned out to the V arenas with each slot's
 // {arena, gen, view} -- two shell clocks per triangle for a dual-view job,
 // which is exactly the shell's output rate (one triangle per clock) at two
-// views. The riders `src_id`, `mat_a/b`, `weight` are the job's; `view` is
+// views. The rider `src_id` is the job's; `mat_a/b` and `weight` are the
+// TRIANGLE's, forwarded off the ModeRef beat under ruling R13; `view` is
 // the slot's.
 //
 // ---------------------------------------------------------------------------
@@ -162,9 +163,6 @@ module zhao_terrain_group_seq #(
     input  wire        job_dual_i,
     input  wire [15:0] job_src_id_i,
     input  wire [ 1:0] job_view_mask_i,   // bit v = project into view v
-    input  wire [ 7:0] job_mat_a_i,
-    input  wire [ 7:0] job_mat_b_i,
-    input  wire [ 7:0] job_weight_i,
 
     input  wire        sparse_fill_i,     // drop fillers (VALID_MODE = 0 shells only)
 
@@ -200,6 +198,13 @@ module zhao_terrain_group_seq #(
     input  wire [IDX_W-1:0]   t_ref_ia_i,
     input  wire [IDX_W-1:0]   t_ref_ib_i,
     input  wire [IDX_W-1:0]   t_ref_ic_i,
+    // R13's material, PER TRIANGLE, read by TERRAIN.TESS from layer E at the
+    // triangle's own cell. It arrives on the SAME beat as the three indices
+    // and is forwarded on the same beat, so it is not a second thing to join
+    // -- it is a wider version of the thing already being joined.
+    input  wire [ 7:0]        t_ref_mat_a_i,
+    input  wire [ 7:0]        t_ref_mat_b_i,
+    input  wire [ 7:0]        t_ref_weight_i,
 
     // ---- client B of the projection service -------------------------------------
     output wire               b_valid_o,
@@ -283,7 +288,6 @@ module zhao_terrain_group_seq #(
   logic [16:0] j_morph;
   logic        j_surface, j_dual;
   logic [15:0] j_src;
-  logic [ 7:0] j_mat_a, j_mat_b, j_weight;
 
   // the slots: slot 0 is the lowest view in the mask, slot 1 the other
   logic               nslots2_q;          // 1 = two slots
@@ -368,9 +372,23 @@ module zhao_terrain_group_seq #(
   assign r_ic_o     = INDEX_W'(t_ref_ic_i);
   assign r_src_id_o = j_src;
   assign r_view_o   = slot_view_q[vs_q];
-  assign r_mat_a_o  = j_mat_a;
-  assign r_mat_b_o  = j_mat_b;
-  assign r_weight_o = j_weight;
+  // THE FUNCTION MOVED; IT DID NOT LEAVE. These three used to read the held
+  // job's `j_mat_*`, captured from `job_mat_a_i`/`job_mat_b_i`/`job_weight_i`
+  // at the console boundary -- one material for a whole 8x8-cell subpatch.
+  // Ruling R13 calls that the WRONG CARRIER, because layer E is per CELL, and
+  // names the replacement: read at tessellation, by the triangle's cell,
+  // travelling with the triangle. That is what now arrives here.
+  //
+  // THE JOIN IS THE ONE THAT WAS ALREADY BEING MADE. `r_ia_o` is combinational
+  // off `t_ref_ia_i` on the accepted beat; so are these. The material is not a
+  // second stream to reconcile with the indices -- it is three more fields of
+  // the same handshake, which is exactly what keeps this out of the class of
+  // fault I39 and FIELDARM record. A side channel keyed by src_id, or a
+  // register latched when the job was accepted, would both have been that
+  // fault.
+  assign r_mat_a_o  = t_ref_mat_a_i;
+  assign r_mat_b_o  = t_ref_mat_b_i;
+  assign r_weight_o = t_ref_weight_i;
 
   wire ref_take_c = r_valid_o && r_ready_i;
   assign t_ref_ready_o = ref_take_c && last_slot_c;
@@ -425,9 +443,6 @@ module zhao_terrain_group_seq #(
       j_surface    <= 1'b0;
       j_dual       <= 1'b0;
       j_src        <= '0;
-      j_mat_a      <= '0;
-      j_mat_b      <= '0;
-      j_weight     <= '0;
       nslots2_q    <= 1'b0;
       slot_view_q[0]  <= 1'b0;
       slot_view_q[1]  <= 1'b0;
@@ -513,9 +528,6 @@ module zhao_terrain_group_seq #(
             j_surface <= job_surface_i;
             j_dual    <= job_dual_i;
             j_src     <= job_src_id_i;
-            j_mat_a   <= job_mat_a_i;
-            j_mat_b   <= job_mat_b_i;
-            j_weight  <= job_weight_i;
             // slot 0 = the lowest view present; slot 1 = view 1 when both
             nslots2_q      <= (job_view_mask_i == 2'b11);
             slot_view_q[0] <= (job_view_mask_i == 2'b10);

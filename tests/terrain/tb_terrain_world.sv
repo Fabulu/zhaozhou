@@ -1360,6 +1360,12 @@ module tb_terrain_world
   logic [15:0]       mg_m17_h, mg_m9_h;
   /* verilator lint_on UNUSEDSIGNAL */
 
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire       ps_v_cell;
+  wire [7:0] ps_v_mat_a, ps_v_mat_b, ps_v_weight;
+  wire [31:0] ps_cells;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   zhao_terrain_pagestream #(
       .REGION_BASE (POOL_BASE),
       .REGION_SLOTS(POOL_SLOTS),
@@ -1409,6 +1415,14 @@ module tb_terrain_world
       .v_flags_o (ps_v_flags),
       .v_view_mask_o(ps_v_view_mask),
 
+      // Layer E is streamed but not consumed here: this bench is about
+      // residency and the height lattice, and naming the ports is how a
+      // PINMISSING stays impossible rather than a matter of remembering.
+      .v_cell_o  (ps_v_cell),
+      .v_mat_a_o (ps_v_mat_a),
+      .v_mat_b_o (ps_v_mat_b),
+      .v_weight_o(ps_v_weight),
+
       .done_valid_o  (ps_d_valid),
       .done_ready_i  (ps_d_ready),
       .done_slot_o   (ps_d_slot),
@@ -1424,6 +1438,7 @@ module tb_terrain_world
       .bursts_read_o      (ps_bursts),
       .guard_denied_o     (ps_guard_denied),
       .incomplete_o       (ps_incomplete),
+      .cells_streamed_o   (ps_cells),
       .idle_o             (ps_idle)
   );
 

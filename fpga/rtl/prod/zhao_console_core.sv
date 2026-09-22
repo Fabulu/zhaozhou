@@ -7663,9 +7663,6 @@ module zhao_console_core
   // has no port for any of them and refuses them by name in its own header --
   // inventing them in this composer is exactly the hidden-adapter failure
   // entry I21 has warned against since it was written.
-  input  logic [7:0]              terr_job_mat_a_i,
-  input  logic [7:0]              terr_job_mat_b_i,
-  input  logic [7:0]              terr_job_weight_i,
   // `terr_sparse_fill_i` ALSO STAYS, and for the opposite reason to the three
   // above: it is not a job field at all. `zhao_terrain_group_seq`'s own header
   // calls it an OWNER KNOB -- legal only against a VALID_MODE = 0 shell, and
@@ -7868,6 +7865,11 @@ module zhao_console_core
   output logic [31:0]             terr_ps_bursts_o,
   output logic [31:0]             terr_ps_guard_denied_o,
   output logic [31:0]             terr_ps_incomplete_o,
+  // Layer E, R13. Cell beats TERRAIN.PAGESTREAM offered and had taken; 1,024
+  // per page. Paired with `terr_cc_mat_cells_o`, which is the same quantity
+  // counted at the OTHER end by a different enable in a different module, so
+  // the two disagreeing is a real signal rather than a tautology.
+  output logic [31:0]             terr_ps_cells_o,
   output logic                    terr_ps_idle_o,
   // A TAP on the streamer's completion, not a handshake: the READY belongs to
   // TERRAIN.RESIDENCY's unpin port inside this module.  Exported so a refusal
@@ -7931,6 +7933,8 @@ module zhao_console_core
   output logic [31:0]             terr_cc_fill_overrun_o,
   output logic [31:0]             terr_cc_lat_oob_o,
   output logic [31:0]             terr_cc_cs_oob_o,
+  output logic [31:0]             terr_cc_mat_oob_o,
+  output logic [31:0]             terr_cc_mat_cells_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
@@ -8140,6 +8144,9 @@ module zhao_console_core
   output logic [31:0]             terr_tess_refs_o,
   output logic [31:0]             terr_tess_rejected_o,
   output logic [31:0]             terr_tess_lod_clamped_o,
+  // A layer-E read answered UNARMED or out of range. See the port's own note
+  // in zhao_terrain_tess.sv for why its two operands are not in lockstep.
+  output logic [31:0]             terr_tess_mat_unarmed_o,
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 
@@ -13104,6 +13111,10 @@ module zhao_console_core
   wire [PROJ_T_IDX_W-1:0]   tt_vtx_index;
   wire                      tt_ref_valid, tt_ref_ready;
   wire [PROJ_T_IDX_W-1:0]   tt_ref_ia, tt_ref_ib, tt_ref_ic;
+  // R13's material, per triangle, off the SAME ModeRef beat as the three
+  // indices above. It replaces `terr_job_mat_a_i`/`_b_i`/`_weight_i`, which
+  // have left this module's port list entirely.
+  wire [7:0]                tt_ref_mat_a, tt_ref_mat_b, tt_ref_weight;
 
   // ==========================================================================
   // THE TERRAIN COMPOSE ENGINE'S NETS.  Added 2026-09-19 (connected item 10).
@@ -13159,6 +13170,16 @@ module zhao_console_core
   // the page's own record carries it; the narrowing to the sequencer's two is
   // made ONCE, at the compose door, and counted. See `tdoor_view_mask_c`.
   wire [7:0]              tps_v_view_mask;
+  // R13's LAYER E, ON THE SAME VERTEX BEAT. `tps_v_cell` is high for the 1,024
+  // beats whose vertex is a cell origin -- the last lattice column and row are
+  // shared with the neighbouring patch and own no cell of this one.
+  wire                    tps_v_cell;
+  wire [7:0]              tps_v_mat_a, tps_v_mat_b, tps_v_weight;
+  // THE ACCEPTED CELL BEAT. `tpsx_v_valid`/`tpsx_v_ready` is the demuxed
+  // handshake the stream is actually taken on, so this is the fire the
+  // material plane's fire-and-forget write port wants -- the same shape and
+  // the same reasoning as `tbk_cs_fire_c` two thousand lines below.
+  wire                    tps_v_cell_fire_c;
   // TWO DELIBERATE NARROWINGS, WAIVED AT THE DECLARATION AND NOWHERE ELSE.
   // `tps_v_src_id` is T5's 32-bit record id against TERRAIN.PATCH's 16-bit
   // trace field; `tps_done_slot` is the POOL index against the directory's
@@ -13402,6 +13423,17 @@ module zhao_console_core
   wire [5:0]          tt_lat_vi, tt_lat_vj;
   wire                tt_cs_req;
   wire [4:0]          tt_cs_ci, tt_cs_cj;
+  // TERRAIN.TESS's layer-E read. IT DOES NOT GO THROUGH THE HEIGHTTAP, and
+  // that is a decision rather than an oversight: the heighttap exists to
+  // ARBITRATE two requesters onto the compose cache's single lattice and cell
+  // ports. The material plane has exactly ONE requester -- this one -- so an
+  // arbiter in front of it would be a stage to get right for no contention.
+  // If a second requester ever appears it gets the heighttap's treatment and
+  // this comment is where to start.
+  wire                tt_mat_req;
+  wire [4:0]          tt_mat_ci, tt_mat_cj;
+  wire [7:0]          tcc_mat_a, tcc_mat_b, tcc_mat_weight;
+  wire                tcc_mat_valid;
 
   // ---- item 14, second half: TERRAIN.HEIGHTTAP in front of the cache ------
   // TESS's read ports now pass THROUGH the tap (`htp_o_*`, its side) to the
@@ -13596,6 +13628,15 @@ module zhao_console_core
     .cs_cj_o       (tt_cs_cj),
     .cs_substance_i(htp_o_cs_substance),
 
+    // R13's layer-E read, straight to the compose cache's material plane.
+    .mat_req_o  (tt_mat_req),
+    .mat_ci_o   (tt_mat_ci),
+    .mat_cj_o   (tt_mat_cj),
+    .mat_a_i    (tcc_mat_a),
+    .mat_b_i    (tcc_mat_b),
+    .mat_w_i    (tcc_mat_weight),
+    .mat_valid_i(tcc_mat_valid),
+
     // ModeTri: never presented; see the declaration above.
     .tri_valid_o(tt_tri_valid),
     .tri_ready_i(1'b1),
@@ -13630,6 +13671,9 @@ module zhao_console_core
     .ref_ic_o     (tt_ref_ic),
     .ref_surface_o(tt_ref_surface),
     .ref_src_id_o (tt_ref_src_id),
+    .ref_mat_a_o  (tt_ref_mat_a),
+    .ref_mat_b_o  (tt_ref_mat_b),
+    .ref_weight_o (tt_ref_weight),
 
     .terrain_triangles_emitted_o(tt_tri_emitted),
     .terrain_vertices_emitted_o (terr_tess_vertices_o),
@@ -13637,6 +13681,7 @@ module zhao_console_core
     .mode_invalid_o             (terr_tess_mode_invalid_o),
     .subpatch_rejected_o        (terr_tess_rejected_o),
     .lod_clamped_o              (terr_tess_lod_clamped_o),
+    .mat_unarmed_o              (terr_tess_mat_unarmed_o),
     .job_reject_o               (tt_job_reject),
     .idle_o                     (terr_tess_idle_o)
   );
@@ -13672,12 +13717,15 @@ module zhao_console_core
     .job_dual_i     (terr_job_m_dual),
     .job_src_id_i   (terr_job_m_src_id),
     .job_view_mask_i(terr_job_m_view_mask),
-    // STILL THE BOUNDARY'S, under ruling R13 (entry I21). These three are the
-    // WRONG CARRIER and their honest closure is removal, so they are not
-    // invented here and not adapted from anything the issuer emits.
-    .job_mat_a_i    (terr_job_mat_a_i),
-    .job_mat_b_i    (terr_job_mat_b_i),
-    .job_weight_i   (terr_job_weight_i),
+    // THE THREE MATERIAL RIDERS ARE GONE, and this is the ruled closure
+    // rather than a narrowing. R13 called `job_mat_a`/`job_mat_b`/
+    // `job_weight` the WRONG CARRIER -- layer E is per CELL, the job port is
+    // per SUBPATCH -- and named REMOVAL as their honest end ONCE a
+    // per-triangle layer-E path existed to replace them. It exists as of this
+    // commit: TERRAIN.TESS reads layer E at the triangle's own cell and the
+    // material leaves on the ModeRef beat, so the sequencer forwards a
+    // TRIANGLE's material instead of holding a subpatch's. The function moved;
+    // nothing was narrowed away.
 
     // The sparse-fill knob is an OWNER KNOB, not a tie-off: it is legal only
     // against a VALID_MODE = 0 shell and this block cannot see the shell's
@@ -13716,6 +13764,9 @@ module zhao_console_core
     .t_ref_ia_i     (tt_ref_ia),
     .t_ref_ib_i     (tt_ref_ib),
     .t_ref_ic_i     (tt_ref_ic),
+    .t_ref_mat_a_i  (tt_ref_mat_a),
+    .t_ref_mat_b_i  (tt_ref_mat_b),
+    .t_ref_weight_i (tt_ref_weight),
 
     // REAL: CLIENT B of the shared projection service.
     .b_valid_o    (ts_b_valid),
@@ -19042,6 +19093,13 @@ module zhao_console_core
     .v_flags_o (tps_v_flags),
     .v_view_mask_o(tps_v_view_mask),
 
+    // R13's layer-E cell stream, on the SAME beat as the heights. See the
+    // material plane's write below for why that identity is the whole point.
+    .v_cell_o  (tps_v_cell),
+    .v_mat_a_o (tps_v_mat_a),
+    .v_mat_b_o (tps_v_mat_b),
+    .v_weight_o(tps_v_weight),
+
     // REAL: one job, one completion, and the completion is the UNPIN.
     .done_valid_o  (tpsx_done_valid),
     .done_ready_i  (tpsx_done_ready),
@@ -19058,8 +19116,19 @@ module zhao_console_core
     .bursts_read_o      (terr_ps_bursts_o),
     .guard_denied_o     (terr_ps_guard_denied_o),
     .incomplete_o       (terr_ps_incomplete_o),
+    .cells_streamed_o   (terr_ps_cells_o),
     .idle_o             (terr_ps_idle_o)
   );
+
+  // THE ACCEPTED CELL BEAT, DECLARED WHERE THE HANDSHAKE IS. `tpsx_v_*` is the
+  // demuxed pair the vertex stream is actually taken on -- `tps_v_*` are the
+  // broadcast data wires and carry no handshake of their own, so writing the
+  // material plane off `tps_v_cell` alone would write on every cycle the beat
+  // was OFFERED, including every cycle the consumer stalled. That is a
+  // duplicate write of a correct value, which corrupts nothing and makes
+  // `mat_cells_o` read several thousand instead of 1,024 -- a counter saying
+  // something alarming about a plane that is fine, which is worse than silence.
+  assign tps_v_cell_fire_c = tpsx_v_valid && tpsx_v_ready && tps_v_cell;
 
   // ---- TERRAIN.FIELDLIST ---------------------------------------------------
   // NEW 2026-09-22 (FIELDARM). The producer entry I34's section 9.1 list
@@ -19270,6 +19339,25 @@ module zhao_console_core
     // out: bake's cursor runs 0..CELLS-1 = 0..31 over a 32x32 plane, so bit 5
     // is structurally zero on this path, and the cache's own `cs_oob_o` counts
     // anything that arrives out of range.
+    // R13's LAYER-E FILL, AND THE BEAT IT RIDES IS THE ARGUMENT. This is the
+    // accepted pagestream vertex beat -- the same handshake that carries the
+    // three height planes into TERRAIN.PATCH's compose lane, on the same
+    // clock, for the same page, out of the same slot's burst window. So the
+    // material and the heights land in ONE buffer parity by construction and
+    // there is no second walk to reconcile. That matters here specifically:
+    // the hazard TERRCLOSE named is a feed holding a slot across a long walk
+    // while a store files by slot, and a material stream with its own cursor
+    // would have been exactly that shape again.
+    //
+    // 1,024 of the 1,089 beats carry a cell; `tps_v_cell` says which, and the
+    // last lattice column and row correctly write nothing.
+    .mat_we_i      (tps_v_cell_fire_c),
+    .mat_w_ci_i    (tps_v_vi[4:0]),
+    .mat_w_cj_i    (tps_v_vj[4:0]),
+    .mat_w_a_i     (tps_v_mat_a),
+    .mat_w_b_i     (tps_v_mat_b),
+    .mat_w_weight_i(tps_v_weight),
+
     .cs_we_i         (tbk_cs_fire_c),
     .cs_w_ci_i       (tbk_cs_ci[4:0]),
     .cs_w_cj_i       (tbk_cs_cj[4:0]),
@@ -19306,12 +19394,25 @@ module zhao_console_core
     .cs_cj_i       (htp_c_cs_cj),
     .cs_substance_o(tcc_cs_substance),
 
+    // R13's query, DIRECT from TERRAIN.TESS -- one requester, no arbiter. See
+    // the declaration of `tt_mat_req` for why the heighttap is not in this
+    // path when it is in the cell-state one.
+    .mat_req_i   (tt_mat_req),
+    .mat_ci_i    (tt_mat_ci),
+    .mat_cj_i    (tt_mat_cj),
+    .mat_a_o     (tcc_mat_a),
+    .mat_b_o     (tcc_mat_b),
+    .mat_weight_o(tcc_mat_weight),
+    .mat_valid_o (tcc_mat_valid),
+
     .fill_records_o  (terr_cc_fill_records_o),
     .patches_filled_o(terr_cc_patches_filled_o),
     .patches_served_o(terr_cc_patches_served_o),
     .fill_overrun_o  (terr_cc_fill_overrun_o),
     .lat_oob_o       (terr_cc_lat_oob_o),
-    .cs_oob_o        (terr_cc_cs_oob_o)
+    .cs_oob_o        (terr_cc_cs_oob_o),
+    .mat_oob_o       (terr_cc_mat_oob_o),
+    .mat_cells_o     (terr_cc_mat_cells_o)
   );
 
   // ==========================================================================

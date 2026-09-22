@@ -5704,6 +5704,9 @@ module zhao_prod_top (
   logic [1-1:0] u70_cs_req_o;
   logic [5-1:0] u70_cs_ci_o;
   logic [5-1:0] u70_cs_cj_o;
+  logic [1-1:0] u70_mat_req_o;
+  logic [5-1:0] u70_mat_ci_o;
+  logic [5-1:0] u70_mat_cj_o;
   logic [1-1:0] u70_tri_valid_o;
   logic signed [32-1:0] u70_ax_o;
   logic signed [32-1:0] u70_ay_o;
@@ -5730,9 +5733,13 @@ module zhao_prod_top (
   logic [7-1:0] u70_ref_ic_o;
   logic [1-1:0] u70_ref_surface_o;
   logic [16-1:0] u70_ref_src_id_o;
+  logic [8-1:0] u70_ref_mat_a_o;
+  logic [8-1:0] u70_ref_mat_b_o;
+  logic [8-1:0] u70_ref_weight_o;
   logic [32-1:0] u70_terrain_triangles_emitted_o;
   logic [32-1:0] u70_terrain_vertices_emitted_o;
   logic [32-1:0] u70_terrain_refs_emitted_o;
+  logic [32-1:0] u70_mat_unarmed_o;
   logic [32-1:0] u70_mode_invalid_o;
   logic [32-1:0] u70_subpatch_rejected_o;
   logic [32-1:0] u70_lod_clamped_o;
@@ -5766,8 +5773,15 @@ module zhao_prod_top (
       .cs_ci_o(u70_cs_ci_o),
       .cs_cj_o(u70_cs_cj_o),
       .cs_substance_i(u70_src[112 +: 2]),
+      .mat_req_o(u70_mat_req_o),
+      .mat_ci_o(u70_mat_ci_o),
+      .mat_cj_o(u70_mat_cj_o),
+      .mat_a_i(u70_src[119 +: 8]),
+      .mat_b_i(u70_src[126 +: 8]),
+      .mat_w_i(u70_src[133 +: 8]),
+      .mat_valid_i(u70_src[140 +: 1]),
       .tri_valid_o(u70_tri_valid_o),
-      .tri_ready_i(u70_src[119 +: 1]),
+      .tri_ready_i(u70_src[147 +: 1]),
       .ax_o(u70_ax_o),
       .ay_o(u70_ay_o),
       .az_o(u70_az_o),
@@ -5780,7 +5794,7 @@ module zhao_prod_top (
       .surface_o(u70_surface_o),
       .src_id_o(u70_src_id_o),
       .vtx_valid_o(u70_vtx_valid_o),
-      .vtx_ready_i(u70_src[126 +: 1]),
+      .vtx_ready_i(u70_src[154 +: 1]),
       .vtx_x_o(u70_vtx_x_o),
       .vtx_y_o(u70_vtx_y_o),
       .vtx_z_o(u70_vtx_z_o),
@@ -5789,15 +5803,19 @@ module zhao_prod_top (
       .vtx_surface_o(u70_vtx_surface_o),
       .vtx_src_id_o(u70_vtx_src_id_o),
       .ref_valid_o(u70_ref_valid_o),
-      .ref_ready_i(u70_src[133 +: 1]),
+      .ref_ready_i(u70_src[161 +: 1]),
       .ref_ia_o(u70_ref_ia_o),
       .ref_ib_o(u70_ref_ib_o),
       .ref_ic_o(u70_ref_ic_o),
       .ref_surface_o(u70_ref_surface_o),
       .ref_src_id_o(u70_ref_src_id_o),
+      .ref_mat_a_o(u70_ref_mat_a_o),
+      .ref_mat_b_o(u70_ref_mat_b_o),
+      .ref_weight_o(u70_ref_weight_o),
       .terrain_triangles_emitted_o(u70_terrain_triangles_emitted_o),
       .terrain_vertices_emitted_o(u70_terrain_vertices_emitted_o),
       .terrain_refs_emitted_o(u70_terrain_refs_emitted_o),
+      .mat_unarmed_o(u70_mat_unarmed_o),
       .mode_invalid_o(u70_mode_invalid_o),
       .subpatch_rejected_o(u70_subpatch_rejected_o),
       .lod_clamped_o(u70_lod_clamped_o),
@@ -5807,7 +5825,7 @@ module zhao_prod_top (
   logic u70_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u70_fold_q <= 1'b0;
-    else u70_fold_q <= u70_fold_q ^ (((^u70_job_ready_o)) & u70_src[0]) ^ (((^u70_lat_req_o)) & u70_src[1]) ^ (((^u70_lat_vi_o)) & u70_src[2]) ^ (((^u70_lat_vj_o)) & u70_src[3]) ^ (((^u70_lat_surface_o)) & u70_src[4]) ^ (((^u70_cs_req_o)) & u70_src[5]) ^ (((^u70_cs_ci_o)) & u70_src[6]) ^ (((^u70_cs_cj_o)) & u70_src[7]) ^ (((^u70_tri_valid_o)) & u70_src[8]) ^ (((^u70_ax_o)) & u70_src[9]) ^ (((^u70_ay_o)) & u70_src[10]) ^ (((^u70_az_o)) & u70_src[11]) ^ (((^u70_bx_o)) & u70_src[12]) ^ (((^u70_by_o)) & u70_src[13]) ^ (((^u70_bz_o)) & u70_src[14]) ^ (((^u70_cx_o)) & u70_src[15]) ^ (((^u70_cy_o)) & u70_src[16]) ^ (((^u70_cz_o)) & u70_src[17]) ^ (((^u70_surface_o)) & u70_src[18]) ^ (((^u70_src_id_o)) & u70_src[19]) ^ (((^u70_vtx_valid_o)) & u70_src[20]) ^ (((^u70_vtx_x_o)) & u70_src[21]) ^ (((^u70_vtx_y_o)) & u70_src[22]) ^ (((^u70_vtx_z_o)) & u70_src[23]) ^ (((^u70_vtx_index_o)) & u70_src[24]) ^ (((^u70_vtx_stride_o)) & u70_src[25]) ^ (((^u70_vtx_surface_o)) & u70_src[26]) ^ (((^u70_vtx_src_id_o)) & u70_src[27]) ^ (((^u70_ref_valid_o)) & u70_src[28]) ^ (((^u70_ref_ia_o)) & u70_src[29]) ^ (((^u70_ref_ib_o)) & u70_src[30]) ^ (((^u70_ref_ic_o)) & u70_src[31]) ^ (((^u70_ref_surface_o)) & u70_src[32]) ^ (((^u70_ref_src_id_o)) & u70_src[33]) ^ (((^u70_terrain_triangles_emitted_o)) & u70_src[34]) ^ (((^u70_terrain_vertices_emitted_o)) & u70_src[35]) ^ (((^u70_terrain_refs_emitted_o)) & u70_src[36]) ^ (((^u70_mode_invalid_o)) & u70_src[37]) ^ (((^u70_subpatch_rejected_o)) & u70_src[38]) ^ (((^u70_lod_clamped_o)) & u70_src[39]) ^ (((^u70_job_reject_o)) & u70_src[40]) ^ (((^u70_idle_o)) & u70_src[41]);
+    else u70_fold_q <= u70_fold_q ^ (((^u70_job_ready_o)) & u70_src[0]) ^ (((^u70_lat_req_o)) & u70_src[1]) ^ (((^u70_lat_vi_o)) & u70_src[2]) ^ (((^u70_lat_vj_o)) & u70_src[3]) ^ (((^u70_lat_surface_o)) & u70_src[4]) ^ (((^u70_cs_req_o)) & u70_src[5]) ^ (((^u70_cs_ci_o)) & u70_src[6]) ^ (((^u70_cs_cj_o)) & u70_src[7]) ^ (((^u70_mat_req_o)) & u70_src[8]) ^ (((^u70_mat_ci_o)) & u70_src[9]) ^ (((^u70_mat_cj_o)) & u70_src[10]) ^ (((^u70_tri_valid_o)) & u70_src[11]) ^ (((^u70_ax_o)) & u70_src[12]) ^ (((^u70_ay_o)) & u70_src[13]) ^ (((^u70_az_o)) & u70_src[14]) ^ (((^u70_bx_o)) & u70_src[15]) ^ (((^u70_by_o)) & u70_src[16]) ^ (((^u70_bz_o)) & u70_src[17]) ^ (((^u70_cx_o)) & u70_src[18]) ^ (((^u70_cy_o)) & u70_src[19]) ^ (((^u70_cz_o)) & u70_src[20]) ^ (((^u70_surface_o)) & u70_src[21]) ^ (((^u70_src_id_o)) & u70_src[22]) ^ (((^u70_vtx_valid_o)) & u70_src[23]) ^ (((^u70_vtx_x_o)) & u70_src[24]) ^ (((^u70_vtx_y_o)) & u70_src[25]) ^ (((^u70_vtx_z_o)) & u70_src[26]) ^ (((^u70_vtx_index_o)) & u70_src[27]) ^ (((^u70_vtx_stride_o)) & u70_src[28]) ^ (((^u70_vtx_surface_o)) & u70_src[29]) ^ (((^u70_vtx_src_id_o)) & u70_src[30]) ^ (((^u70_ref_valid_o)) & u70_src[31]) ^ (((^u70_ref_ia_o)) & u70_src[32]) ^ (((^u70_ref_ib_o)) & u70_src[33]) ^ (((^u70_ref_ic_o)) & u70_src[34]) ^ (((^u70_ref_surface_o)) & u70_src[35]) ^ (((^u70_ref_src_id_o)) & u70_src[36]) ^ (((^u70_ref_mat_a_o)) & u70_src[37]) ^ (((^u70_ref_mat_b_o)) & u70_src[38]) ^ (((^u70_ref_weight_o)) & u70_src[39]) ^ (((^u70_terrain_triangles_emitted_o)) & u70_src[40]) ^ (((^u70_terrain_vertices_emitted_o)) & u70_src[41]) ^ (((^u70_terrain_refs_emitted_o)) & u70_src[42]) ^ (((^u70_mat_unarmed_o)) & u70_src[43]) ^ (((^u70_mode_invalid_o)) & u70_src[44]) ^ (((^u70_subpatch_rejected_o)) & u70_src[45]) ^ (((^u70_lod_clamped_o)) & u70_src[46]) ^ (((^u70_job_reject_o)) & u70_src[47]) ^ (((^u70_idle_o)) & u70_src[48]);
 
   // ---- zhao_terrain_velocity ----
   logic [63:0] u71_lfsr_q;

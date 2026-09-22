@@ -40,6 +40,13 @@ module tb_compcache_front (
     input  logic [ 4:0] cs_w_ci,
     input  logic [ 4:0] cs_w_cj,
     input  logic [ 1:0] cs_w_substance,
+
+    input  logic        mat_we,
+    input  logic [ 4:0] mat_w_ci,
+    input  logic [ 4:0] mat_w_cj,
+    input  logic [ 7:0] mat_w_a,
+    input  logic [ 7:0] mat_w_b,
+    input  logic [ 7:0] mat_w_weight,
     input  logic        dual,
 
     // ---- production instance: swap -----------------------------------------
@@ -61,6 +68,14 @@ module tb_compcache_front (
     input  logic [ 4:0] cs_cj,
     output logic [ 1:0] cs_substance,
 
+    input  logic        mat_req,
+    input  logic [ 4:0] mat_ci,
+    input  logic [ 4:0] mat_cj,
+    output logic [ 7:0] mat_a,
+    output logic [ 7:0] mat_b,
+    output logic [ 7:0] mat_weight,
+    output logic        mat_valid,
+
     // ---- production instance: counters -------------------------------------
     output logic [31:0] fill_records,
     output logic [31:0] patches_filled,
@@ -68,6 +83,8 @@ module tb_compcache_front (
     output logic [31:0] fill_overrun,
     output logic [31:0] lat_oob,
     output logic [31:0] cs_oob,
+    output logic [31:0] mat_oob,
+    output logic [31:0] mat_cells,
 
     // ---- the 9 x 9 instance ------------------------------------------------
     input  logic        s_fill_start,
@@ -81,6 +98,13 @@ module tb_compcache_front (
     input  logic [ 4:0] s_cs_w_ci,
     input  logic [ 4:0] s_cs_w_cj,
     input  logic [ 1:0] s_cs_w_substance,
+
+    input  logic        s_mat_we,
+    input  logic [ 4:0] s_mat_w_ci,
+    input  logic [ 4:0] s_mat_w_cj,
+    input  logic [ 7:0] s_mat_w_a,
+    input  logic [ 7:0] s_mat_w_b,
+    input  logic [ 7:0] s_mat_w_weight,
     input  logic        s_serve_release,
     output logic        s_serve_valid,
     output logic [15:0] s_serve_src_id,
@@ -93,9 +117,19 @@ module tb_compcache_front (
     input  logic [ 4:0] s_cs_ci,
     input  logic [ 4:0] s_cs_cj,
     output logic [ 1:0] s_cs_substance,
+
+    input  logic        s_mat_req,
+    input  logic [ 4:0] s_mat_ci,
+    input  logic [ 4:0] s_mat_cj,
+    output logic [ 7:0] s_mat_a,
+    output logic [ 7:0] s_mat_b,
+    output logic [ 7:0] s_mat_weight,
+    output logic        s_mat_valid,
     output logic [31:0] s_fill_records,
     output logic [31:0] s_lat_oob,
-    output logic [31:0] s_cs_oob
+    output logic [31:0] s_cs_oob,
+    output logic [31:0] s_mat_oob,
+    output logic [31:0] s_mat_cells
 );
 
   zhao_terrain_compcache_front #(
@@ -125,6 +159,13 @@ module tb_compcache_front (
       .cs_w_cj_i       (cs_w_cj),
       .cs_w_substance_i(cs_w_substance),
 
+      .mat_we_i      (mat_we),
+      .mat_w_ci_i    (mat_w_ci),
+      .mat_w_cj_i    (mat_w_cj),
+      .mat_w_a_i     (mat_w_a),
+      .mat_w_b_i     (mat_w_b),
+      .mat_w_weight_i(mat_w_weight),
+
       .dual_i(dual),
 
       .fill_done_o    (fill_done),
@@ -145,12 +186,22 @@ module tb_compcache_front (
       .cs_cj_i       (cs_cj),
       .cs_substance_o(cs_substance),
 
+      .mat_req_i   (mat_req),
+      .mat_ci_i    (mat_ci),
+      .mat_cj_i    (mat_cj),
+      .mat_a_o     (mat_a),
+      .mat_b_o     (mat_b),
+      .mat_weight_o(mat_weight),
+      .mat_valid_o (mat_valid),
+
       .fill_records_o  (fill_records),
       .patches_filled_o(patches_filled),
       .patches_served_o(patches_served),
       .fill_overrun_o  (fill_overrun),
       .lat_oob_o       (lat_oob),
-      .cs_oob_o        (cs_oob)
+      .cs_oob_o        (cs_oob),
+      .mat_oob_o       (mat_oob),
+      .mat_cells_o     (mat_cells)
   );
 
   // The 9 x 9 instance. Ports the C++ side does not need land on named dangling
@@ -190,6 +241,13 @@ module tb_compcache_front (
       .cs_w_cj_i       (s_cs_w_cj),
       .cs_w_substance_i(s_cs_w_substance),
 
+      .mat_we_i      (s_mat_we),
+      .mat_w_ci_i    (s_mat_w_ci),
+      .mat_w_cj_i    (s_mat_w_cj),
+      .mat_w_a_i     (s_mat_w_a),
+      .mat_w_b_i     (s_mat_w_b),
+      .mat_w_weight_i(s_mat_w_weight),
+
       .dual_i(s_dual),
 
       .fill_done_o    (s_nc_fill_done),
@@ -210,12 +268,22 @@ module tb_compcache_front (
       .cs_cj_i       (s_cs_cj),
       .cs_substance_o(s_cs_substance),
 
+      .mat_req_i   (s_mat_req),
+      .mat_ci_i    (s_mat_ci),
+      .mat_cj_i    (s_mat_cj),
+      .mat_a_o     (s_mat_a),
+      .mat_b_o     (s_mat_b),
+      .mat_weight_o(s_mat_weight),
+      .mat_valid_o (s_mat_valid),
+
       .fill_records_o  (s_fill_records),
       .patches_filled_o(s_nc_patches_filled),
       .patches_served_o(s_nc_patches_served),
       .fill_overrun_o  (s_nc_fill_overrun),
       .lat_oob_o       (s_lat_oob),
-      .cs_oob_o        (s_cs_oob)
+      .cs_oob_o        (s_cs_oob),
+      .mat_oob_o       (s_mat_oob),
+      .mat_cells_o     (s_mat_cells)
   );
 
 endmodule
