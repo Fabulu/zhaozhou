@@ -1,0 +1,33 @@
+# Pass 24 scope proof: the SHIPPING bank vs the SAME renderer with every
+# pass-24 knob at its pass-23 value (BOLT_AVOID=off, BOLT_SPLIT_N=1,
+# REAR_AMBIENT_CLIP_PM=0:400,23:400, FRONT_FLEX_CLIP_PM=0:1000,23:1000,
+# EYE_AMBIENT_PM=0). Compared frame by frame, not by CRC alone.
+#
+# EXPECTED: exactly 19 subjects move. The three that must NOT are the
+# authored expression beats the owner called already right --
+# curious, startle and taunt III. Named, not merely counted.
+# moved=19 unchanged=3
+# unchanged: manafold-curious manafold-startle manafold-taunt3
+# subject	frames	changed	worst_px	worst_frame
+manafold-blown	292	278	93	0108
+manafold-channel	420	420	320	0285
+manafold-crackle	600	600	9521	0540
+manafold-curious	180	0	0	
+manafold-damage	464	464	368	0302
+manafold-death-drop	450	232	90	0062
+manafold-death-gutter	590	381	98	0083
+manafold-drift	300	300	106	0298
+manafold-fall	340	223	101	0073
+manafold-flight	352	352	138	0188
+manafold-hasty	240	240	51	0098
+manafold-hit	140	140	344	0120
+manafold-hover	600	600	11751	0402
+manafold-inspect	600	600	15939	0467
+manafold-lasso	336	336	372	0297
+manafold-pirouette	240	177	433	0166
+manafold-rest	400	400	280	0266
+manafold-startle	160	0	0	
+manafold-taunt	280	280	6759	0171
+manafold-taunt2	240	240	352	0125
+manafold-taunt3	368	0	0	
+manafold-trick	400	219	304	0355
