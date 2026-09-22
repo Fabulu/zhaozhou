@@ -1181,6 +1181,77 @@ module zhao_console_board
   output logic [31:0] geom_ma_err_long_o,
   output logic [31:0] geom_ma_err_unowned_o,
 
+  // ---- GEOM.PARAMBUF (owner completion ruling ITEM 4, 2026-09-22) ---------
+  // The arena's evidence leaves the core, all of it, and R110 says to name
+  // every counter the packet added rather than the ones that come to mind.
+  // Four of these are DEFECT-CLASS DETECTORS rather than work counters and
+  // are grouped so nobody has to work out which is which:
+  //
+  //   geom_pa_addrbad_o      a request whose held address is not in the view
+  //                          the lease names -- the queued-request fault item
+  //                          4 names. Its two operands load on DIFFERENT
+  //                          enables, so it is not the lockstep-blind kind.
+  //   geom_pa_retireunder_o  the socket retired more words than the arena
+  //                          ever owed it: the share's ledger has attributed
+  //                          somebody else's write here, which would make
+  //                          every publish decision EARLY.
+  //   geom_pw_dirmiss_o      the frame directory that came back from SDRAM is
+  //                          not the one the arena published. The round trip
+  //                          failed, and nothing else in the system would say
+  //                          so -- a walk over corrupt records still produces
+  //                          triangles.
+  //   geom_pw_genrace_o      the published frame moved under a live walk.
+  //   geom_pw_stray_o        a read beat arrived with no read in flight: the
+  //                          share BROADCASTS beat data and demuxes only
+  //                          `beat_valid`, so this is what sees a wrong demux
+  //                          delivering another client's bytes.
+  //
+  // Each of these is asserted ZERO by the smoke, and a counter asserted zero
+  // is a claim. The ones reachable with legal stimulus are fired by
+  // tests/geometry/geom_paramarena_directed.cpp; the ones that are not owe a
+  // committed mutant, which is what tests/mutants/
+  // zhao_geom_paramarena_drain_mutant.sv is.
+  output logic [31:0] geom_pa_verts_o,
+  output logic [31:0] geom_pa_tris_o,
+  output logic [31:0] geom_pa_chunks_o,
+  output logic [31:0] geom_pa_frames_o,
+  output logic [31:0] geom_pa_denied_o,
+  output logic [31:0] geom_pa_overflow_o,
+  output logic [31:0] geom_pa_discarded_o,
+  output logic [31:0] geom_pa_unsealed_o,
+  output logic [31:0] geom_pa_overrun_o,
+  output logic [31:0] geom_pa_flipblock_o,
+  output logic [31:0] geom_pa_pubblock_o,
+  output logic [31:0] geom_pa_addrbad_o,
+  output logic [31:0] geom_pa_scrcontend_o,
+  output logic [31:0] geom_pa_retireunder_o,
+  output logic [15:0] geom_pa_fault_src_o,
+  output logic        geom_pa_fault_o,
+  output logic        geom_pa_busy_o,
+  output logic        geom_pa_seal_ready_o,
+  output logic [31:0] geom_pw_dirs_o,
+  output logic [31:0] geom_pw_dirmiss_o,
+  output logic [31:0] geom_pw_chunks_o,
+  output logic [31:0] geom_pw_stale_o,
+  output logic [31:0] geom_pw_illegal_o,
+  output logic [31:0] geom_pw_tris_o,
+  output logic [31:0] geom_pw_trisbad_o,
+  output logic [31:0] geom_pw_cut_o,
+  output logic [31:0] geom_pw_denied_o,
+  output logic [31:0] geom_pw_short_o,
+  output logic [31:0] geom_pw_stray_o,
+  output logic [31:0] geom_pw_genrace_o,
+  output logic [15:0] geom_pw_depth_o,
+  // The write-capable ENGINE1 share that now sits in front of the guard.
+  output logic [31:0] geom_ws_denied_o,
+  output logic [31:0] geom_ws_contention_o,
+  output logic [31:0] geom_ws_short_o,
+  output logic [31:0] geom_ws_long_o,
+  output logic [31:0] geom_ws_unowned_o,
+  output logic [31:0] geom_ws_retire_unowned_o,
+  output logic [31:0] geom_ws_wbeat_unowned_o,
+  output logic        geom_ws_ledger_full_o,
+
   output logic [31:0] geom_af_meshlets_fetched_o,
   output logic [31:0] geom_af_beats_read_o,
   output logic [31:0] geom_af_guard_denied_o,
@@ -4144,6 +4215,45 @@ module zhao_console_board
       .geom_ma_err_short_o                (geom_ma_err_short_o),
       .geom_ma_err_long_o                 (geom_ma_err_long_o),
       .geom_ma_err_unowned_o              (geom_ma_err_unowned_o),
+      .geom_pa_verts_o                    (geom_pa_verts_o),
+      .geom_pa_tris_o                     (geom_pa_tris_o),
+      .geom_pa_chunks_o                   (geom_pa_chunks_o),
+      .geom_pa_frames_o                   (geom_pa_frames_o),
+      .geom_pa_denied_o                   (geom_pa_denied_o),
+      .geom_pa_overflow_o                 (geom_pa_overflow_o),
+      .geom_pa_discarded_o                (geom_pa_discarded_o),
+      .geom_pa_unsealed_o                 (geom_pa_unsealed_o),
+      .geom_pa_overrun_o                  (geom_pa_overrun_o),
+      .geom_pa_flipblock_o                (geom_pa_flipblock_o),
+      .geom_pa_pubblock_o                 (geom_pa_pubblock_o),
+      .geom_pa_addrbad_o                  (geom_pa_addrbad_o),
+      .geom_pa_scrcontend_o               (geom_pa_scrcontend_o),
+      .geom_pa_retireunder_o              (geom_pa_retireunder_o),
+      .geom_pa_fault_src_o                (geom_pa_fault_src_o),
+      .geom_pa_fault_o                    (geom_pa_fault_o),
+      .geom_pa_busy_o                     (geom_pa_busy_o),
+      .geom_pa_seal_ready_o               (geom_pa_seal_ready_o),
+      .geom_pw_dirs_o                     (geom_pw_dirs_o),
+      .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
+      .geom_pw_chunks_o                   (geom_pw_chunks_o),
+      .geom_pw_stale_o                    (geom_pw_stale_o),
+      .geom_pw_illegal_o                  (geom_pw_illegal_o),
+      .geom_pw_tris_o                     (geom_pw_tris_o),
+      .geom_pw_trisbad_o                  (geom_pw_trisbad_o),
+      .geom_pw_cut_o                      (geom_pw_cut_o),
+      .geom_pw_denied_o                   (geom_pw_denied_o),
+      .geom_pw_short_o                    (geom_pw_short_o),
+      .geom_pw_stray_o                    (geom_pw_stray_o),
+      .geom_pw_genrace_o                  (geom_pw_genrace_o),
+      .geom_pw_depth_o                    (geom_pw_depth_o),
+      .geom_ws_denied_o                   (geom_ws_denied_o),
+      .geom_ws_contention_o               (geom_ws_contention_o),
+      .geom_ws_short_o                    (geom_ws_short_o),
+      .geom_ws_long_o                     (geom_ws_long_o),
+      .geom_ws_unowned_o                  (geom_ws_unowned_o),
+      .geom_ws_retire_unowned_o           (geom_ws_retire_unowned_o),
+      .geom_ws_wbeat_unowned_o            (geom_ws_wbeat_unowned_o),
+      .geom_ws_ledger_full_o              (geom_ws_ledger_full_o),
       .geom_af_meshlets_fetched_o         (geom_af_meshlets_fetched_o),
       .geom_af_beats_read_o               (geom_af_beats_read_o),
       .geom_af_guard_denied_o             (geom_af_guard_denied_o),

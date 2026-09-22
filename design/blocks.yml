@@ -89,6 +89,49 @@ counter_catalog:
   - parambuf_chunks_allocated
   - parambuf_stale_handles
   - parambuf_overflow_frames
+  # GEOM.PARAMARENA -- the arena PRODUCER (owner completion ruling ITEM 4,
+  # 2026-09-22). Five of these are DEFECT-CLASS DETECTORS rather than work
+  # counters and the list is grouped so nobody has to work out which:
+  # paramarena_addr_view_bad is the queued-request fault item 4 names, and its
+  # two operands load on DIFFERENT enables so it is not the lockstep-blind
+  # kind; paramarena_retire_underflow says the share's ledger attributed
+  # somebody else's write here, which would make every publish EARLY;
+  # paramarena_arena_overrun says an allocation left the view;
+  # paramarena_view_flip_blocked and paramarena_publish_blocked are the two
+  # that say the drain and retire GATES EVER DID ANYTHING, without which they
+  # are terms in an expression rather than protections.
+  - paramarena_verts_written
+  - paramarena_tris_written
+  - paramarena_chunks_written
+  - paramarena_frames_published
+  - paramarena_guard_denied
+  - paramarena_quota_overflow
+  - paramarena_records_discarded
+  - paramarena_records_unsealed
+  - paramarena_arena_overrun
+  - paramarena_view_flip_blocked
+  - paramarena_publish_blocked
+  - paramarena_addr_view_bad
+  - paramarena_scratch_contend
+  - paramarena_retire_underflow
+  # GEOM.PARAMWALK -- the record READER. paramwalk_dir_mismatch is the one
+  # this block exists to produce: the frame directory reaches it twice, once
+  # from the arena's registers and once as bytes that went through SDRAM, and
+  # nothing else in the system would notice them disagreeing because a walk
+  # over corrupt records still produces triangles. paramwalk_stray_beat is
+  # what sees a wrong beat demux, which an address round trip cannot.
+  - paramwalk_dirs_read
+  - paramwalk_dir_mismatch
+  - paramwalk_chunks_walked
+  - paramwalk_chunks_stale
+  - paramwalk_chunks_illegal
+  - paramwalk_tris_emitted
+  - paramwalk_tris_illegal
+  - paramwalk_walk_cut
+  - paramwalk_guard_denied
+  - paramwalk_short_burst
+  - paramwalk_stray_beat
+  - paramwalk_gen_race
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -4423,6 +4466,111 @@ blocks:
         commit: "ff71b75e"
         evidence: fpga/rtl/geometry/zhao_geom_parambuf.sv
 
+    deferred: false
+    superseded_by: null
+
+  - id: GEOM.PARAMARENA
+    name: Geometry arena producer
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: >-
+      Writes GEOM.PARAMBUF's three record types into local SDRAM bank 3 through
+      the ENGINE1 guard socket -- allocation, the per-chunk frame-generation
+      stamp, the quota seal, the two-view lease and the shared scratch's
+      ownership. It is what makes the record layer composable: nothing in the
+      console held a byte vector in any of R7's layouts, so the decoder had no
+      producer. Owner completion ruling ITEM 4, 2026-09-22.
+    contract: design/contracts/GEOM.PARAMBUF.md
+    phase: 8
+    owner_issue: ZH-121
+    inputs: [view_vertices, triangle_descriptors, tile_lists]
+    outputs: [parambuf_records]
+    upstream: [GEOM.PROJECT, GEOM.BINNER, GEOM.ASSEMBLE]
+    downstream: [GEOM.PARAMWALK]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one record per guard round trip; the socket is the bound
+    reference_model: zref::geom::parambuf_chunk_follow
+    tests:
+      directed: tests/geometry/geom_paramarena_directed.cpp
+      random: tests/geometry/geom_paramarena_directed.cpp
+    counters: [paramarena_verts_written, paramarena_tris_written, paramarena_chunks_written, paramarena_frames_published, paramarena_guard_denied, paramarena_quota_overflow, paramarena_records_discarded, paramarena_records_unsealed, paramarena_arena_overrun, paramarena_view_flip_blocked, paramarena_publish_blocked, paramarena_addr_view_bad, paramarena_scratch_contend, paramarena_retire_underflow]
+    counter_ports:
+      paramarena_verts_written: verts_written_o
+      paramarena_tris_written: tris_written_o
+      paramarena_chunks_written: chunks_written_o
+      paramarena_frames_published: frames_published_o
+      paramarena_guard_denied: guard_denied_o
+      paramarena_quota_overflow: quota_overflow_o
+      paramarena_records_discarded: records_discarded_o
+      paramarena_records_unsealed: records_unsealed_o
+      paramarena_arena_overrun: arena_overrun_o
+      paramarena_view_flip_blocked: view_flip_blocked_o
+      paramarena_publish_blocked: publish_blocked_o
+      paramarena_addr_view_bad: addr_view_bad_o
+      paramarena_scratch_contend: scr_contend_o
+      paramarena_retire_underflow: retire_underflow_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: BUILT
+    maturity_log:
+      - state: BUILT
+        date: "2026-09-22"
+        commit: "PARAMARENA"
+        evidence: fpga/rtl/geometry/zhao_geom_paramarena.sv
+    deferred: false
+    superseded_by: null
+
+  - id: GEOM.PARAMWALK
+    name: Geometry arena chunk walker
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: >-
+      Reads GEOM.PARAMBUF's records back out of SDRAM -- the frame directory
+      from the shared scratch, a tile's chunk chain from the published view,
+      and each triangle descriptor the chain names -- and decodes them with
+      GEOM.PARAMBUF's record layer, which it instantiates rather than
+      reimplementing. Its `dir_mismatch` counter is the round-trip evidence
+      item 4 asks for, since a walk over corrupt records still produces
+      triangles.
+    contract: design/contracts/GEOM.PARAMBUF.md
+    phase: 8
+    owner_issue: ZH-121
+    inputs: [parambuf_records]
+    outputs: [triangle_descriptors]
+    upstream: [GEOM.PARAMARENA]
+    downstream: [GEOM.BINNER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one record per guard round trip; the socket is the bound
+    reference_model: zref::geom::parambuf_chunk_follow
+    tests:
+      directed: tests/geometry/geom_paramarena_directed.cpp
+      random: tests/geometry/geom_paramarena_directed.cpp
+    counters: [paramwalk_dirs_read, paramwalk_dir_mismatch, paramwalk_chunks_walked, paramwalk_chunks_stale, paramwalk_chunks_illegal, paramwalk_tris_emitted, paramwalk_tris_illegal, paramwalk_walk_cut, paramwalk_guard_denied, paramwalk_short_burst, paramwalk_stray_beat, paramwalk_gen_race]
+    counter_ports:
+      paramwalk_dirs_read: dirs_read_o
+      paramwalk_dir_mismatch: dir_mismatch_o
+      paramwalk_chunks_walked: chunks_walked_o
+      paramwalk_chunks_stale: chunks_stale_o
+      paramwalk_chunks_illegal: chunks_illegal_o
+      paramwalk_tris_emitted: tris_emitted_o
+      paramwalk_tris_illegal: tris_illegal_o
+      paramwalk_walk_cut: walk_cut_o
+      paramwalk_guard_denied: guard_denied_o
+      paramwalk_short_burst: short_burst_o
+      paramwalk_stray_beat: stray_beat_o
+      paramwalk_gen_race: gen_race_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: BUILT
+    maturity_log:
+      - state: BUILT
+        date: "2026-09-22"
+        commit: "PARAMARENA"
+        evidence: fpga/rtl/geometry/zhao_geom_paramwalk.sv
     deferred: false
     superseded_by: null
 

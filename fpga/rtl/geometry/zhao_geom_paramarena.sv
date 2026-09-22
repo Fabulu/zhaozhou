@@ -271,6 +271,7 @@ module zhao_geom_paramarena
     output var logic [31:0] guard_denied_o,
     output var logic [31:0] quota_overflow_o,
     output var logic [31:0] records_discarded_o,
+    output var logic [31:0] records_unsealed_o,
     output var logic [31:0] arena_overrun_o,
     output var logic [31:0] view_flip_blocked_o,
     output var logic [31:0] publish_blocked_o,
@@ -502,12 +503,26 @@ module zhao_geom_paramarena
 
   // ---------------------------------------------------------- intake gate --
   wire engine_free_c = (mstate_q == M_IDLE);
-  wire taking_c      = frame_open_q && engine_free_c;
 
-  // A FAULTED FRAME STILL ACCEPTS. Ready stays high so GEOM.PROJECT does not
-  // stall behind a frame that is already being thrown away; the records are
-  // counted at records_discarded_o and never written. A producer that dropped
-  // ready here would turn an arena overflow into a pipeline deadlock.
+  // THE INTAKE IS A FREE SINK WHENEVER THERE IS NOTHING TO WRITE, and that is
+  // a composition requirement rather than a convenience. This block taps a
+  // LIVE production stream -- `zhao_geom_assemble`'s triangle output, which
+  // already feeds GEOM.REPLAY -- and the core ANDs this `ready` into that
+  // stream's so no record is lost while a frame is sealed. If `ready` were
+  // simply `frame_open_q && engine_free_c`, then between frames, before the
+  // first seal, and forever on a console that never seals, it would be LOW --
+  // and the whole assembly path would stall behind a block that has nothing
+  // to do. That is not a throughput regression, it is a deadlock, and it
+  // would look exactly like a defect in GEOM.ASSEMBLE.
+  //
+  // So: with no frame open, or with the frame already faulted, records are
+  // CONSUMED AND NOT WRITTEN, at full rate, and counted -- `records_unsealed_o`
+  // for "there was no frame to put it in" and `records_discarded_o` for "the
+  // frame is already being thrown away". Two counters and not one, because
+  // those are different facts about the console: the first says nobody sealed
+  // a frame, the second says a sealed frame overran.
+  wire sink_c   = !frame_open_q || frame_fault_q;
+  wire taking_c = sink_c || engine_free_c;
   assign pv_ready_o = taking_c;
   assign td_ready_o = taking_c && !pv_valid_i;
   assign ck_ready_o = taking_c && !pv_valid_i && !td_valid_i;
@@ -607,6 +622,7 @@ module zhao_geom_paramarena
       guard_denied_o      <= '0;
       quota_overflow_o    <= '0;
       records_discarded_o <= '0;
+      records_unsealed_o  <= '0;
       arena_overrun_o     <= '0;
       view_flip_blocked_o <= '0;
       publish_blocked_o   <= '0;
@@ -671,7 +687,12 @@ module zhao_geom_paramarena
 
       // ---- intake ----------------------------------------------------------
       if (pv_fire_c || td_fire_c || ck_fire_c) begin
-        if (frame_fault_q) begin
+        if (!frame_open_q) begin
+          // Nobody has sealed a frame. The record has nowhere to go and is
+          // consumed so the producer does not stall; counted so a console
+          // that never seals is VISIBLE rather than silently geometry-free.
+          records_unsealed_o <= records_unsealed_o + 32'd1;
+        end else if (frame_fault_q) begin
           // Accepted and thrown away. Never written, never counted as work.
           records_discarded_o <= records_discarded_o + 32'd1;
         end else if (pv_fire_c) begin
