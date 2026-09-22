@@ -1285,7 +1285,8 @@
 //      `geom_vd_bone1_o` went with them because they now have a consumer.
 //      Deleted rather than marked closed, for the reason I4 gives above: a
 //      stale closed entry under-reports progress exactly as deleting an open
-//      one would over-report it. The successor gap is I29, one level up.)
+//      one would over-report it. The successor gap was I29, one level up --
+//      itself CLOSED 2026-09-22, so this chain is complete.)
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
@@ -6926,20 +6927,28 @@ module zhao_console_core
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
-  // ---- R229: DrawPosedForm 0x0305's animation key -- BOUNDARY, see I29 ----
-  // These leave the module ON PURPOSE, and the purpose is measurement rather
-  // than routing. The consumer is GEOM.MESHFETCH's instance walk, which does
-  // not exist -- that is entry I29 blocker (b), and supplying this carrier is
-  // what ruling R229 ratified. R229 is equally explicit that ratifying the
-  // command "does not by itself enable the RTL reader", so none is built here.
+  // ---- R229: DrawPosedForm 0x0305's animation key -------------------------
+  // NO LONGER A BOUNDARY FOR THREE OF THE FOUR. Corrected 2026-09-22 with
+  // I29's closure. The paragraph here used to read "The consumer is
+  // GEOM.MESHFETCH's instance walk, WHICH DOES NOT EXIST -- that is entry I29
+  // blocker (b)". The walk exists: it is the fifteen registers beside
+  // `u_geom_drawjob`, and `cmd_draw_posed_o`, `cmd_draw_clip_id_o` and
+  // `cmd_draw_frame_no_o` are READ IN THIS FILE now -- the first gates the
+  // draw admit, all three are captured on the accept.
   //
-  // WHY NOT LEAVE THEM AS UNCONSUMED INTERNAL WIRES. Because an output nobody
-  // reads lets synthesis delete the logic BEHIND it, and this block's own
-  // header states the consequence: a fit would then report the pose lane's
-  // registers as free. The tie-off block warns about a constant on a wide
-  // INPUT for exactly this reason; an unread output is the same lie in the
-  // other direction. At the edge, the capture registers survive and the next
-  // fit prices them honestly.
+  // `cmd_draw_sub_o` IS STILL UNCONSUMED, and that is deliberate rather than
+  // an omission: it is the POSE CACHE's key discriminator for the 60 Hz
+  // midpoint, and `zhao_geom_clipread` has no port for it because that block
+  // fetches an AUTHORED frame. Carrying it into the walk would be a second
+  // copy of a field whose owner is elsewhere.
+  //
+  // THEY STAY AT THE EDGE ANYWAY, and the reason is unchanged and still good:
+  // an output nobody reads lets synthesis delete the logic BEHIND it, and a
+  // fit would then report the pose lane's capture registers as free. The
+  // tie-off block warns about a constant on a wide INPUT for exactly this
+  // reason; an unread output is the same lie in the other direction. Having
+  // an in-core consumer as well does not make the observation redundant --
+  // it makes the two agree.
   //
   // `cmd_draw_posed_o` LOW is the BIND POSE -- every `DrawForm` 0x0300, and
   // every `DrawPosedForm` whose clip_id the ABI refuses. The other three are
@@ -6949,7 +6958,7 @@ module zhao_console_core
   output logic [15:0]              cmd_draw_frame_no_o,
   output logic [ 7:0]              cmd_draw_sub_o,
 
-  // ---- the ACCEPTED JOB's FORM INDEX -- BOUNDARY, entry I29 ----------------
+  // ---- the ACCEPTED JOB's FORM INDEX -- entry I29, CLOSED ------------------
   // Owner ruling of 2026-09-21 (kind-8 / kind-9 ownership), section 3: the
   // pose request must carry the DRAW'S OWN form index, "all 24 bits and with
   // the request's lifetime/handshake", taken from `zhao_geom_drawjob`'s
@@ -6967,11 +6976,54 @@ module zhao_console_core
   // zero is NOT a sentinel -- index zero is a legal form -- so the qualifier
   // is the valid, exactly as for every other job field.
   //
-  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: the consumer
-  // (`zhao_geom_clipread.p_form_idx_i`, built and differenced in this same
-  // commit) is not composed, and this file's own R229 paragraph gives the
-  // rule for that case -- an output nobody reads lets synthesis delete the
-  // logic behind it and a fit then reports the lane's registers as free.
+  // WHY AT THE EDGE RATHER THAN AS AN INTERNAL WIRE: it used to be because
+  // the consumer was not composed. `zhao_geom_clipread` IS composed since
+  // 2026-09-22, so the reason is now the plain one -- this is the ownership
+  // ruling's EXPOSED IDENTITY, and an output nobody reads lets synthesis
+  // delete the logic behind it.
+  //
+  // **AND IT IS NOT WHAT THE INSTANCE WALK READS.** Stated here because the
+  // paragraph above says "Reading `cmd_draw_form_w` instead would be
+  // precisely the 'unrelated live register' the ruling names", and the walk
+  // reads exactly that -- so the apparent contradiction is resolved in the
+  // file rather than left for the next reader to trip over.
+  //
+  // The ruling forbids a form index "RE-DERIVED FROM AN UNRELATED LIVE
+  // REGISTER LATER". The walk's capture is neither later nor unrelated: it
+  // takes `cmd_draw_form_w[31:8]` on the SAME handshake and by the SAME
+  // expression that loads `zhao_geom_drawjob`'s `form_idx_q`, out of the same
+  // `dq` entry that carries the clip id. One enable, one entry, no drift --
+  // which is the property the ruling's sentence exists to secure. Taking
+  // `dj_j_form_idx` instead and pairing it with a clip id captured a stage
+  // earlier would REINTRODUCE the drift, because that is two registers loaded
+  // by two enables: entry I39's fault exactly.
+  //
+  // WHAT THE WALK GIVES UP BY CAPTURING EARLY, declared rather than
+  // discovered. `zhao_geom_drawjob` validates the handle against real
+  // residency AFTER the command accept and can refuse the draw nine ways
+  // (`dj_refused_*`). A pose request captured at the accept is therefore
+  // issued for a draw that may never become geometry. Two consequences, both
+  // bounded and neither a wrong-animal palette -- a refused draw's pose is
+  // its OWN creature's pose, correctly labelled, and `owner_mismatch_o`
+  // compares against the resident page either way:
+  //
+  //   1. a wasted frame fetch on requester G, counted by `geom_cr_frames_o`
+  //      against `geom_dj_draws_o`;
+  //   2. THE PALETTE CAN OUTLIVE ITS DRAW. `pal_begin_i` is the store's
+  //      `start_o`, so a BIND-POSE draw raises nothing and skins against
+  //      whatever pose was decoded last. Today that is unreachable -- nothing
+  //      in this tree issues a 0x0305 into the console, so no decode ever
+  //      starts and every bone reads unset and substitutes the identity, which
+  //      is what `geom_pal_bone_unset_o` reports. It becomes reachable the
+  //      moment a posed draw is issued.
+  //
+  // THE REPAIR IS ONE LINE AND IS DELIBERATELY NOT MADE HERE: raise
+  // `pal_begin_i` on a bind-pose draw accept as well, so `DrawForm` 0x0300
+  // makes the previous pose unreadable exactly as a new decode does -- which
+  // is what R229 means by "DrawForm keeps its meaning as BIND POSE". It is a
+  // BEHAVIOURAL change and this packet measured the tree without it; shipping
+  // an unmeasured behaviour change beside a measured composition is how a
+  // clean smoke stops describing the thing that ships.
   output logic                     geom_job_valid_o,
   output logic [23:0]              geom_job_form_idx_o,
   // Evidence, not a boundary -- the same standing as the three counters above.
@@ -6982,7 +7034,9 @@ module zhao_console_core
   // Same standing as the pose lane directly above, same argument, and one
   // difference worth stating because it decides what the NEXT packet does.
   //
-  // The pose lane's consumer does not exist. THIS ONE DOES:
+  // The pose lane's consumer DID NOT EXIST when this was written; it does
+  // since 2026-09-22 (I29 closed), so the difference below is no longer a
+  // difference -- both lanes have in-core consumers now. THIS ONE DOES:
   // `fpga/rtl/geometry/zhao_geom_warp.sv` is BUILT and TESTED (2,468 directed
   // checks) and its `d_warp_en_i` / `d_slot_i` / `d_time_i` / `d_par_i` /
   // `d_bx_i` port group is this bus, field for field. What is missing is not
@@ -10802,9 +10856,12 @@ module zhao_console_core
   // never contain would have been the palette memory written inline here, and
   // it is a named, tested, separately-linted block instead.
   //
-  // WHAT IS STILL MISSING IS ONE LEVEL UP: the decoder's own source -- the clip
-  // page and the skeleton bake -- has no producer in this tree. That is entry
-  // I29, and it is a smaller and more precisely named gap than I10 was.
+  // WHAT WAS STILL MISSING ONE LEVEL UP -- the decoder's own source, the clip
+  // page and the skeleton bake -- WAS ENTRY I29, AND IT CLOSED 2026-09-22.
+  // The source is `zhao_geom_bonesrc`, filled by `zhao_geom_clipread` through
+  // requester G of `u_geom_mem_adapter`; both are composed beside
+  // `u_geom_drawjob`. This sentence is corrected rather than deleted because
+  // it is the one a reader lands on when asking what feeds the palette.
   //
   // THE REFUSAL PATH IS FORWARDED, NOT DROPPED. `d_refused_o` is raised
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
