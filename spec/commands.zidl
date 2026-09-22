@@ -1258,3 +1258,181 @@ command DrawWarpedForm 0x0304 implemented {
   fx16 displacement_bound[3];       // W11, each >= 0, world-space componentwise
   pad[4];                           // rsv -- 80-B payload, 96-B record (W04)
 }
+
+// ---- TWOD: the two descriptor producers (owner ruling 2026-09-22, item 3) ----
+//
+// RATIFIED: `reports/Zhaozhou_proposed_completion_rulings_2026-09-22.txt`
+// section 3, adopted by Fabian on 2026-09-22 and recorded in
+// `reports/OWNER-RATIFICATION-20260922-COMPLETION.md`.
+//
+//   "Authorize command-side control for BOTH existing TWOD descriptor paths,
+//    not merely an opcode named SetPlane."
+//
+// THE TWO PATHS HAVE DIFFERENT CONSUMERS and that is why there are two records
+// rather than one. `SetPlane` programs the restricted BACKDROP/ATMOSPHERE
+// engine (`fpga/rtl/compositor/zhao_twod_plane.sv`); `DrawSprite` supplies the
+// HUD sprite descriptor the walker and the band consume
+// (`zhao_twod_sprite.sv`, `zhao_twod_band.sv`). The ruling: "Adding only a
+// plane command does not establish a producer for HUD sprite descriptors."
+//
+// OPCODES 0x0306 AND 0x0307 WERE VERIFIED FREE against this file before they
+// were taken: 0x0300..0x0305 are DrawForm / DrawPopulation / DrawProcedural /
+// SetPopulation / DrawWarpedForm / DrawPosedForm, and 0x0310..0x031F are
+// sky-reserved. The ruling's own words: "Do not reuse 0x0303-0x0305 or the
+// sky-reserved range."
+//
+// VERSION DECISION: `abi version` STAYS 3 -- the precedent is now seven deep
+// (PublishResource 0x0030, TerrainEpoch 0x0220, SubmitTerrainSet 0x0230,
+// SetPost 0x0040, SetPopulation 0x0303, DebugTraceArm 0xF003,
+// DrawPosedForm 0x0305, DrawWarpedForm 0x0304). No opcode, field set, size or
+// offset of an existing command moves, so every committed capture stays valid
+// and a decoder built before this line reports ZH_ABI_UNKNOWN_OPCODE -- a clean
+// refusal.
+//
+// APPENDED AT THE END OF THE FILE, under owner ruling R171 and the ruling's own
+// "Append declarations so unrelated generated samples are not renumbered".
+//
+// WHY THESE FIELDS ARE PLAIN u8 AND NOT ENUMS, which is a deliberate refusal
+// rather than laziness. An `enum` here would make an out-of-range `role` a
+// ZH_ABI_BAD_VALUE and FAIL THE WHOLE FRAME at validation. `TWOD.PLANE.md`'s
+// table says a role of 2 or 3 REFUSES THE DESCRIPTOR AND COUNTS, and the frame
+// completes; `TWOD.SPRITE.md` says the same of an unknown format and of a zero
+// extent. The ruling requires "Retain existing malformed-descriptor refusal
+// rules", so the malformed value must reach the consumer that owns the
+// refusal. The generated validator therefore checks STRUCTURE -- length,
+// alignment, mandatory-zero pads -- and the CONSUMER judges the VALUE.
+//
+// 0x0308..0x030F remain free after these two.
+
+// SetPlane: ONE restricted plane slot, programmed whole.
+//
+// Field for field it is `zhao_twod_plane`'s `d_*` group plus the three the
+// sampler needs to find the texels (base, lstride, lheight -- its `ld_bind_*`)
+// and the atmosphere sheet's line_scroll. NOTHING IS INVENTED: there is no
+// depth field, no second texture unit, no bilinear selector and no role beyond
+// the two `TWOD.PLANE.md` declares -- the ruling's "It does not invent a
+// depth-tested HUD plane or a second unrestricted texture unit."
+//
+//   slot        0 or 1. The two-slot limit is REAL (owner 2026-08-31 3.1).
+//   role        0 BACKDROP, 1 ATMOSPHERE. 2 and 3 are reserved and the
+//               CONSUMER refuses them (refused_role_o).
+//   blend       0 REPLACE, 1 ALPHA, 2 ADD. A BACKDROP asking for anything but
+//               REPLACE is refused by the consumer (refused_blend_o).
+//   opacity     unit8 (qformats 2): value = raw/256.
+//   format      0 CLUT8, 1 RGB565. There is no third.
+//   wrap        b0 wrap_u, b1 wrap_v; 0 = repeat, 1 = clamp. b7:2 MUST be 0.
+//   view_mask   b1:0, one bit per Duo view. b7:2 MUST be 0.
+//   palette_id  CLUT8 palette slot.
+//   width       texels across the plane's page region.
+//   height      texels down it.
+//   flags       b0 ENABLE. 0 DISABLES the slot for this frame and is a LAWFUL
+//               record, not a refusal -- the ruling's "explicit plane disable
+//               behavior". b15:1 MUST be 0.
+//   base        first 16-bit word of the region inside the TWOD page store.
+//   lstride     log2 of the words per row of that region.
+//   lheight     log2 of the rows.
+//   a,b,c,d     du/dx, du/dy, dv/dx, dv/dy -- the affine, fx16.
+//   u0,v0       u and v at screen (0,0), fx16.
+//   line_scroll the per-line u offset applied to the ATMOSPHERE sheet, fx16.
+//
+// A SLOT THE FRAME NEVER NAMES IS DISABLED FOR THAT FRAME. `TWOD.PLANE.md`:
+// "no descriptor state survives a reset, because descriptors are RE-SENT PER
+// FRAME". That is what makes the plane frame-scoped in the same sense the
+// sprite list is, and it is what gives the ruling's empty frame a defined
+// answer instead of the previous frame's sky.
+command SetPlane 0x0306 implemented {
+  u8   slot;
+  u8   role;
+  u8   blend;
+  u8   opacity;       // unit8
+  u8   format;
+  u8   wrap;          // b0 wrap_u, b1 wrap_v; b7:2 = 0
+  u8   view_mask;     // b1:0; b7:2 = 0
+  u8   palette_id;
+  u16  width;
+  u16  height;
+  u16  flags;         // b0 ENABLE; b15:1 = 0
+  u16  base;          // page-store word address of the plane's texels
+  u8   lstride;       // log2 words per row
+  u8   lheight;       // log2 rows
+  pad[2];
+  fx16 a;             // du/dx
+  fx16 b;             // du/dy
+  fx16 c;             // dv/dx
+  fx16 d;             // dv/dy
+  fx16 u0;
+  fx16 v0;
+  fx16 line_scroll;   // ATMOSPHERE sheet's per-line u offset
+}
+
+// DrawSprite: ONE HUD sprite descriptor.
+//
+// Field for field it is `zhao_twod_sprite`'s `d_*` group -- which is also
+// `zhao_twod_band`'s, because the band hands the walker its own record
+// band-clipped -- plus the three the sampler needs to find the texels.
+//
+// TEXT IS GLYPH SPRITES. The ruling: "no new font engine, text-layout engine
+// or private general sampler. Text remains glyph sprites authored by
+// software." A line of text is N of these records, and the console contains
+// nothing that knows what a glyph is.
+//
+//   x, y        top-left in screen pixels, SIGNED so a sprite may hang off the
+//               left or top edge and be clipped rather than refused.
+//   w, h        extent in pixels. Zero in either is REFUSED by the consumer
+//               (zhao_twod_sprite.refused_o), never by the frame validator.
+//   base        first 16-bit word of this sprite's region in the page store.
+//   lstride     log2 words per row of that region.
+//   lheight     log2 rows.
+//   format      0 CLUT8, 1 RGB565; anything else the SAMPLER refuses
+//               (fmt_refused_o).
+//   palette_id  CLUT8 palette slot.
+//   blend       carried to the band and COUNTED THERE AS UNAPPLIED
+//               (twod_band_blend_dropped_o). POST.COMPOSITE's HUD stage is a
+//               REPLACE, so a HUD blend against the world cannot be computed in
+//               a store; the gap is a NUMBER rather than a sentence, and it was
+//               declared before this command existed.
+//   view_mask   b1:0. Both player HUD regions are addressed by this and by `y`
+//               -- the Duo seam is a ROW, and the band derives the view from
+//               the row it is filling.
+//   tint        rgb565 modulation, carried and counted unapplied for the same
+//               reason (twod_band_tint_dropped_o, twod_tint_unapplied_o).
+//   order       composition order. TWOD.SPRITE.md's drop rule and the band's
+//               last-write composition both key on it. TIES ARE BROKEN BY
+//               COMMAND ORDER, which the ruling requires and which the list's
+//               append-only construction gives for free.
+//   flags       reserved, MUST be 0.
+//   src_id      the sprite's identity: the sampler's binding slot is
+//               4 + src_id[1:0], and the band's order_inversion_o uses the
+//               change of this field to know one sprite has ended.
+//   u, v        fx16 S15.16 UV at the top-left pixel.
+//   a00..a11    du/dx, du/dy, dv/dx, dv/dy -- the optional affine. The
+//               identity is {1,0,0,1} in fx16.
+//
+// WHOLE-SPRITE REFUSAL IS PRESERVED (R235). A sprite the band's leaky bucket
+// cannot admit is refused BEFORE ONE PIXEL IS RASTERISED and counted on
+// twod_band_sprites_refused_budget_o; a list longer than the frame budget drops
+// its TAIL and counts on desc_overflow_o. Neither faults the frame.
+command DrawSprite 0x0307 implemented {
+  i16  x;
+  i16  y;
+  u16  w;
+  u16  h;
+  u16  base;          // page-store word address of this sprite's texels
+  u8   lstride;       // log2 words per row
+  u8   lheight;       // log2 rows
+  u8   format;
+  u8   palette_id;
+  u8   blend;
+  u8   view_mask;
+  rgb565 tint;
+  u8   order;
+  u8   flags;         // reserved, must be 0
+  u16  src_id;
+  pad[2];
+  fx16 u;
+  fx16 v;
+  fx16 a00;           // du/dx
+  fx16 a01;           // du/dy
+  fx16 a10;           // dv/dx
+  fx16 a11;           // dv/dy
+}

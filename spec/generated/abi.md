@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 8ba03b43686282a3c4bd70b7826cfbc736228f3dc3bca37432a004c717aa17e3
-zidl_sha256         = 54abc34d6b67f51675a93b8c79976bd9ff1a226aec87e4dcbce52002bc730bcd
+abi_identity_sha256 = fa13d479c3a067194101149eccd42f144571744dc66e166681e381ba889f2f6e
+zidl_sha256         = 4c580cd006c50df266de32cb979c1865834f3788c3b494084dd3f7fa7ed9b9df
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-25 commands (21 implemented).
+27 commands (23 implemented).
 
 ## Commands
 
@@ -42,6 +42,8 @@ ABI version **3**, little-endian, command alignment
 | `DebugTraceArm` | `0xF003` | 32 | implemented |
 | `DrawPosedForm` | `0x0305` | 48 | implemented |
 | `DrawWarpedForm` | `0x0304` | 96 | implemented |
+| `SetPlane` | `0x0306` | 64 | implemented |
+| `DrawSprite` | `0x0307` | 64 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -648,6 +650,80 @@ Golden sample: `tests/abi/golden/cmd_draw_warped_form.bin` (C++ packer
 TS `zhaoPackDrawWarpedForm(zhaoSampleDrawWarpedForm(), ...)`, SV round-trips it via
 `zhao_unpack_draw_warped_form`/`zhao_pack_draw_warped_form`).
 
+### SetPlane — 0x0306 (64 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `slot` | u8 |
+| 1 | 1 | `role` | u8 |
+| 2 | 1 | `blend` | u8 |
+| 3 | 1 | `opacity` | u8 |
+| 4 | 1 | `format` | u8 |
+| 5 | 1 | `wrap` | u8 |
+| 6 | 1 | `view_mask` | u8 |
+| 7 | 1 | `palette_id` | u8 |
+| 8 | 2 | `width` | u16 |
+| 10 | 2 | `height` | u16 |
+| 12 | 2 | `flags` | u16 |
+| 14 | 2 | `base` | u16 |
+| 16 | 1 | `lstride` | u8 |
+| 17 | 1 | `lheight` | u8 |
+| 18 | 2 | `pad` | pad (zero) ×2 |
+| 20 | 4 | `a` | fx16 |
+| 24 | 4 | `b` | fx16 |
+| 28 | 4 | `c` | fx16 |
+| 32 | 4 | `d` | fx16 |
+| 36 | 4 | `u0` | fx16 |
+| 40 | 4 | `v0` | fx16 |
+| 44 | 4 | `line_scroll` | fx16 |
+
+Golden sample: `tests/abi/golden/cmd_set_plane.bin` (C++ packer
+`zhao_abi::zhao_pack_set_plane(zhao_abi::zhao_sample_set_plane(), ...)`,
+TS `zhaoPackSetPlane(zhaoSampleSetPlane(), ...)`, SV round-trips it via
+`zhao_unpack_set_plane`/`zhao_pack_set_plane`).
+
+### DrawSprite — 0x0307 (64 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 2 | `x` | i16 |
+| 2 | 2 | `y` | i16 |
+| 4 | 2 | `w` | u16 |
+| 6 | 2 | `h` | u16 |
+| 8 | 2 | `base` | u16 |
+| 10 | 1 | `lstride` | u8 |
+| 11 | 1 | `lheight` | u8 |
+| 12 | 1 | `format` | u8 |
+| 13 | 1 | `palette_id` | u8 |
+| 14 | 1 | `blend` | u8 |
+| 15 | 1 | `view_mask` | u8 |
+| 16 | 2 | `tint` | rgb565 |
+| 18 | 1 | `order` | u8 |
+| 19 | 1 | `flags` | u8 |
+| 20 | 2 | `src_id` | u16 |
+| 22 | 2 | `pad` | pad (zero) ×2 |
+| 24 | 4 | `u` | fx16 |
+| 28 | 4 | `v` | fx16 |
+| 32 | 4 | `a00` | fx16 |
+| 36 | 4 | `a01` | fx16 |
+| 40 | 4 | `a10` | fx16 |
+| 44 | 4 | `a11` | fx16 |
+
+`tint` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 32 | 2 | `tint.bits` | u16 |
+
+Golden sample: `tests/abi/golden/cmd_draw_sprite.bin` (C++ packer
+`zhao_abi::zhao_pack_draw_sprite(zhao_abi::zhao_sample_draw_sprite(), ...)`,
+TS `zhaoPackDrawSprite(zhaoSampleDrawSprite(), ...)`, SV round-trips it via
+`zhao_unpack_draw_sprite`/`zhao_pack_draw_sprite`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -824,6 +900,8 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_debug_trace_arm.bin` | canonical DebugTraceArm sample record |
 | `tests/abi/golden/cmd_draw_posed_form.bin` | canonical DrawPosedForm sample record |
 | `tests/abi/golden/cmd_draw_warped_form.bin` | canonical DrawWarpedForm sample record |
+| `tests/abi/golden/cmd_set_plane.bin` | canonical SetPlane sample record |
+| `tests/abi/golden/cmd_draw_sprite.bin` | canonical DrawSprite sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |
