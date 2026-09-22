@@ -3296,8 +3296,18 @@
 //
 //      (4) THE DECLARED `edge_*` TIE-OFF -- **HELD, AND A PRODUCER WAS LOOKED
 //          FOR BEFORE THIS WAS WRITTEN.** The four neighbour levels are driven
-//          from `TERR_EDGE_UNKNOWN_C = 8'h00`, declared under R159 at the
-//          instance. `design/contracts/MEASURE.GOVERNOR.md` still refuses
+//          from the LITERAL `8'h00`, declared under R159 at the instance.
+//          THE LITERAL IS DELIBERATE AND MUST NOT BE "TIDIED" INTO A NAMED
+//          CONSTANT: this paragraph said `TERR_EDGE_UNKNOWN_C` on its first
+//          writing, was checked against the instance, and was wrong.
+//          TERRACOMP used a localparam first and removed it, because
+//          `tools/design/packet_h_tieoff_audit.py` counts LITERAL connections
+//          -- the named version reported "10 by group comment, 0 SILENT" with
+//          FOUR TIE-OFFS THE AUDIT COULD NOT SEE, in the one commit whose
+//          whole subject was not hiding them. A named constant also reads to a
+//          human as a knob somebody CHOSE rather than an absence somebody is
+//          OWED. The audit reports 14 now, and the four are in it.
+//          `design/contracts/MEASURE.GOVERNOR.md` still refuses
 //          ownership in writing -- "The camera POSITIONS, `dual` and `edge_*`
 //          are NOT here ... none of them can come from a block that sees one
 //          number per frame per camera" -- and the search for another owner
