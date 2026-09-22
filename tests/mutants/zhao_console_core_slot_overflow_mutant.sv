@@ -1148,6 +1148,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] forge_asm_dq_refused_o,
   output logic [31:0] forge_asm_dq_stray_o,
   output logic [31:0] forge_asm_proj_stray_o,
+  // The carriage detector of owner completion ruling 2 (2026-09-22). A
+  // WRAPPER port, added so `.*` can still bind: R220 says fix the wrapper,
+  // never the module.
+  output logic [31:0] forge_asm_mat_skew_o,
   // CMD.EXEC's own half of the dispatch.
   output logic [31:0] cmd_exec_forges_o,
   output logic [31:0] cmd_exec_forge_overflow_o,
