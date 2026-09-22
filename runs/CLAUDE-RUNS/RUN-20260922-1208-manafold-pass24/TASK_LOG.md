@@ -1,7 +1,7 @@
 # Task Log: RUN-20260922-1208 - [Describe objective here]
 
 **Created:** 2026-09-22 12:08 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260922-1208-manafold-pass24/
 
 ---
@@ -180,3 +180,41 @@ so B1's zero is a claim that has now been checked. One non-blocking finding:
 mbolt's per-subject selector table is an UNBOUND MIRROR of the renderer's.
 
 Proceeding to publish.
+
+### 2026-09-22 ~19:30 - PUBLISHED AND PRODUCTION-VERIFIED. Status: Complete.
+
+**Live:** https://upheaval.pages.dev (noindex, unlisted) via
+https://b7e1fe29.upheaval.pages.dev. `deploy.ps1 -Project upheaval -Branch main`,
+exit 0 -- branch given, so this is production and not a preview.
+
+**66 / 66 verified on BOTH hosts, 0 mismatches, 0 retries** (index + 44 live
+media + 21 archive spot checks, three from each of seven locked generations),
+cache-bypassed, byte length and SHA-256 per file, 19 index content checks all
+True. The verifier was selftested first: **14 index negatives fire**, four of
+them new this pass, plus corrupted / truncated / non-200 media.
+
+**Archive:** pass 23 locked BEFORE the encode overwrote it -- 44/44 re-hashed
+from the copies, 43,681,362 bytes, one new generation declaring 22 clips once
+each, note EIGHTEEN -> NINETEEN. checkarchive's selftest grew to **33 red legs**.
+
+**Bank:** one invocation, 22 subjects, 7,992 frames, production ink, no override.
+Renderer MD5 `e90af7c043cd9670054eeb256abd5e95`, manifest SHA-256
+`f9128e0821004dc49b19a280651db864e4556947b20d9267fbb84d5b9e58703b`, source
+`8e5a3ee3`. Scope proved frame by frame -- 19 moved, 3 untouched -- and
+corroborated independently by the lossless posters, which are byte-identical for
+exactly those same three clips.
+
+**Local gates, real exit codes:** assemble 0, checkfresh 0 (22 fresh / 0 stale),
+checkarchive 0, checkarchive --selftest 0, checkplayback 0, checkmedia 0
+(**1,684 declared files, 1,684 decoded**, no skips).
+
+**The card does not overclaim.** It states plainly that Hover's back ball barely
+moved, gives the 178-vs-11,758 pixel comparison, and names the ~52x lever found
+this pass for the owner to try next.
+
+**Cleanup:** raw frame roots, isolated renders, scratch-reel and the full-res
+sheets deleted -- about 8 GB. **Zero `.rgb` left anywhere in either repo.**
+
+**Open for pass 25:** ladder `kRearCarrierCalmPm` by eye; bind mbolt's selector
+table to the renderer's; decide the avoidance rollout (death-drop 16.6% and
+drift 15.3% are the worst and are not in the experiment).

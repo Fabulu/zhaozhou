@@ -1,0 +1,1118 @@
+{
+ "hosts": {
+  "https://upheaval.pages.dev": {
+   "verified": 66,
+   "of": 66,
+   "bytes": 95368335,
+   "retries": 0,
+   "rows": [
+    {
+     "path": "index.html",
+     "status": 200,
+     "bytes": 487385,
+     "sha256": "d77d0a8bb5d2369f406ea79d91d562341598f6b780c0c110eca64aa8de73798e",
+     "ok": true,
+     "attempt": 1,
+     "checks": {
+      "robots_exactly_one_noindex_nofollow": true,
+      "card_pass_24": true,
+      "scope_nineteen_moved": true,
+      "mechanisms_named": true,
+      "measurement_stated": true,
+      "renderer_md5": true,
+      "manifest_sha256": true,
+      "source_8e5a3ee3": true,
+      "22_subjects_7992_frames": true,
+      "all_44_live_declared": true,
+      "v18_archive_22_declared": true,
+      "p19_archive_22_declared": true,
+      "p20_archive_22_declared": true,
+      "p21_archive_22_declared": true,
+      "p22_archive_22_declared": true,
+      "p23_archive_22_declared": true,
+      "archive_19_generations": true,
+      "fall_no_autoplay_no_loop": true,
+      "hover_autoplay_loop": true
+     }
+    },
+    {
+     "path": "renders/manafold-blown.webm",
+     "status": 200,
+     "bytes": 824695,
+     "sha256": "e6d960ae21d04aed99dde14968a8d3424a118ec07c979e20cc10f57eac64bb90",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-blown.png",
+     "status": 200,
+     "bytes": 27568,
+     "sha256": "1842a1e4f2be35e348d1c2d8560dea4b33434e5bc6beff32d289c7baacac82c7",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-channel.webm",
+     "status": 200,
+     "bytes": 2665860,
+     "sha256": "1e41c62a6d5f044aab496612ecdfa491bd4fb5f5e5646e8ddf83919487c76e09",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-channel.png",
+     "status": 200,
+     "bytes": 82335,
+     "sha256": "9fecba9c717d041cc5d7684855e4541e2403e01b9635cc17d8a9d4ba98d21f8d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-crackle.webm",
+     "status": 200,
+     "bytes": 4128518,
+     "sha256": "9ad92e119021d9870dc080aeb7373d108d69d23d1b3a1743a2bff8a676d6719b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-crackle.png",
+     "status": 200,
+     "bytes": 51896,
+     "sha256": "ab929e6a218e8b3878145ea31dc8d2c1ed4454cce8a7caca87c14bf64336fc74",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-curious.webm",
+     "status": 200,
+     "bytes": 1195130,
+     "sha256": "979d33b4a29f5c92177d0bde5b85f1823c81edd0d434b8210b48823cb73dd42b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-curious.png",
+     "status": 200,
+     "bytes": 46794,
+     "sha256": "00570397857c003e112a3f39828c0f3532489757b8d2e6be5913362447c5850e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-damage.webm",
+     "status": 200,
+     "bytes": 3095275,
+     "sha256": "40e5c070f79304220065dec9f8196811770d847026a9c7bd3f3146cf06654c1d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-damage.png",
+     "status": 200,
+     "bytes": 48349,
+     "sha256": "b3591102faf77dd1eebad9921a06d7a609504411e836adc9b77b96bd98da0640",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-drop.webm",
+     "status": 200,
+     "bytes": 746374,
+     "sha256": "93c99f3fae1d6f6d3837006f85b247a962dedd58a445c6327844fdd8b3133906",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-drop.png",
+     "status": 200,
+     "bytes": 29414,
+     "sha256": "c1cd00d6e8a6dddf0c6dc01c05db1158b361d32389fca8ade4bdedef36312994",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-gutter.webm",
+     "status": 200,
+     "bytes": 853747,
+     "sha256": "9065e1a8898e426df7f368a2ffc617b64c95e33bc7273df8be737e9a70cd1f76",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-gutter.png",
+     "status": 200,
+     "bytes": 31111,
+     "sha256": "c089249cb7b9c19834859e5211296586d354a43ad5a2f6dfce52de032e24119d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-drift.webm",
+     "status": 200,
+     "bytes": 672147,
+     "sha256": "2492cae392f3c68c43bd59904c6eec304b99ec5334f01437d0d3a3f187180ec1",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-drift.png",
+     "status": 200,
+     "bytes": 21543,
+     "sha256": "d1524bc6f5beebf3917c140a72ebf0ba5c0472b9c1341a6f1c658e50220243eb",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-fall.webm",
+     "status": 200,
+     "bytes": 742053,
+     "sha256": "8b054c1a936795f9f962d789bae765a068d3b0692404aec231b8a20bf6c54f1c",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-fall.png",
+     "status": 200,
+     "bytes": 28151,
+     "sha256": "c8e0df31e6cbdc963b74bae75295d010750fef7ead8eee1fe2e6ec8712862acf",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-flight.webm",
+     "status": 200,
+     "bytes": 1242280,
+     "sha256": "5a11cc02eb19354b7d4ad04fb8e35cf0b9a389d600ec5a9fe2403c2ec32b59f4",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-flight.png",
+     "status": 200,
+     "bytes": 30606,
+     "sha256": "6607ace66aafab3613fb7bee8c61b04ba4ff6097f04aaa6dbb038c4c40fd1d73",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hasty.webm",
+     "status": 200,
+     "bytes": 548171,
+     "sha256": "7902afa9e0bca7613efdd608a55c7433ddbaa8490aa05448b1a5626569ca90ee",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hasty.png",
+     "status": 200,
+     "bytes": 22318,
+     "sha256": "684c5874eec4145629ee63db05e65c6b76a3513707acfb141bc8b65c6b3c07f2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hit.webm",
+     "status": 200,
+     "bytes": 957763,
+     "sha256": "69b9c9d85a8f777e27b5d8df9410c376da7091250b3db99487c2a078441610d8",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hit.png",
+     "status": 200,
+     "bytes": 49244,
+     "sha256": "9b9812f9a8602583b8f28e2b081861fe781dbbc149f71e8f99eba44ebc88fd11",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hover.webm",
+     "status": 200,
+     "bytes": 3908123,
+     "sha256": "7121e60024c7918fe94baf9550d616f7322ed03edf057e5c676a486bf18d0da3",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hover.png",
+     "status": 200,
+     "bytes": 47780,
+     "sha256": "e050030c64d783d85437c2cdcdfadf50896e238cddf997ab856557aa4e2f074b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4731273,
+     "sha256": "869f38cc84f550989afab22f7f181fd82a4289f385bddaa9be596e060e5d466f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-inspect.png",
+     "status": 200,
+     "bytes": 60680,
+     "sha256": "6f05cf59b613ebdcc3d837ae2f14f8a868f0857ea5f6b8b3403da4f48080c4d5",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-lasso.webm",
+     "status": 200,
+     "bytes": 2407817,
+     "sha256": "56694b8b54e42c21f8722e7a624d3303aee57054c4f58d11f0a5a89f53c2411f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-lasso.png",
+     "status": 200,
+     "bytes": 57944,
+     "sha256": "a5d7be72aa5c791fdbbc94d0271e0fee25ded92a2f427c5f117166534026bb74",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-pirouette.webm",
+     "status": 200,
+     "bytes": 1569462,
+     "sha256": "57196dbfa7af3c03b7c94dc17f5f7cf7c85d9a849bae28899147f2caea91418e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-pirouette.png",
+     "status": 200,
+     "bytes": 48753,
+     "sha256": "f1aadd993ff20cc5261469642b4ae6294cf4235e91da9daeb83adcf7ce26b56f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-rest.webm",
+     "status": 200,
+     "bytes": 2489417,
+     "sha256": "7f6c14329827959c37704ab5c6be00e6cb067c32651ce8d9be99a6da3ad518c2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-rest.png",
+     "status": 200,
+     "bytes": 48835,
+     "sha256": "2bcc01b3e67e85641391ad332966922b7d981f4fcc3c24d7609e06e7ddca183e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-startle.webm",
+     "status": 200,
+     "bytes": 1148804,
+     "sha256": "22f1f4da58a2acfc3ae15cb71453b4b7e64b6d3a943f4f66d4bc05c3eb91f058",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-startle.png",
+     "status": 200,
+     "bytes": 50626,
+     "sha256": "52c79ae42a215a63ef4632b09b12d39371d40cc0dd5af31268a94f8f19e644ad",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt.webm",
+     "status": 200,
+     "bytes": 2112460,
+     "sha256": "3cbea3724902d7a5e7f13945519a354c963133c8cf675e6cf6dbc61afb09c09b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt.png",
+     "status": 200,
+     "bytes": 49967,
+     "sha256": "dd92fdc341b08f5adcfde1f879caa1d1cd72bf12b745c2f742bc987a4143d4a5",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt2.webm",
+     "status": 200,
+     "bytes": 1874127,
+     "sha256": "93cb0dfbd0cef22847460508f88438af689108a02cb6385aed76ccafa090bed2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt2.png",
+     "status": 200,
+     "bytes": 59074,
+     "sha256": "f7c55dd592349c6550a0f0499981daf6ddd8a1d234dbfd9339fe86cf63e05419",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt3.webm",
+     "status": 200,
+     "bytes": 2315283,
+     "sha256": "dcb6cc1690d74e10fe53cbc9a792ec37f7521aebc22127ee2f74690b6ce609ef",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt3.png",
+     "status": 200,
+     "bytes": 53291,
+     "sha256": "0c6ed0cc4b91aa5c990f8fd4ed3963a2b6165f355b687973af3fd6760b892c08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548037,
+     "sha256": "6db8541c69de980303ac9997704a7824c489c5d70f7a6ccb617caff5a86c90ea",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-trick.png",
+     "status": 200,
+     "bytes": 45788,
+     "sha256": "044687bd03998126f0b3c3772563a9d69ea55dfc791ba237ef7868d0f2561124",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-hover.png",
+     "status": 200,
+     "bytes": 48554,
+     "sha256": "50f4ca141fdf2af9e65bab28629849c22e007538de97ba1e64148eb96666faef",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-mana-boil.webm",
+     "status": 200,
+     "bytes": 3706678,
+     "sha256": "b9dacc43ce5edefa9c44aaa7114aeee717a2e37bce6618c768282cb98fd9713f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2807107,
+     "sha256": "eeefa3ea1406216fd0c567c5515148cddb695e7f71e682f07d3d37829cc74a84",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-hover.png",
+     "status": 200,
+     "bytes": 47783,
+     "sha256": "04c9f33f080dfc1b5185dad69210c643a7caf7beda50c7d53866f97574a3fe4a",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4847897,
+     "sha256": "b15104d9ac7f4dc13bf02df36fca66b99de2daa6bc546e98da396612de6b74d7",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2596010,
+     "sha256": "0bd1a80f691cf47cff304d547edd907d11feb3ec5799cba260003a6fc416c762",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-hover.png",
+     "status": 200,
+     "bytes": 47714,
+     "sha256": "e5be3aaa94870835b6f7725b8dfc1ffaca73c9d40d0216e4abcacceec0e4de24",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4806830,
+     "sha256": "f6839a4932b2f114ab151b96901980aeccf7861784d2c2414ced63c6f75d249f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2571196,
+     "sha256": "0f14dbffde4198f6139c020b6f42d083049d26fa85639bd6ac922070e756cb08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-hover.png",
+     "status": 200,
+     "bytes": 47603,
+     "sha256": "23a6a3536cf3b85657a88cbe7001bc02f249d9fefaff048522480aa005c4ba3f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4879709,
+     "sha256": "8ecf9478c7198d407240adec09dc8b474478161d2ad865af1df3d457416e6e08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2593278,
+     "sha256": "be7923c3f71a96bd2b7e0080f3b215190c13b9955ac1c48139c7bc5f5673c1c0",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4763982,
+     "sha256": "b00387b21cfde2531f95e3aeb03b85125d72da21d56878dcc52274263416f570",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2568255,
+     "sha256": "8602e4848844513d4a18f4751265707c0afbd1884b87416f262c4e60452eea4e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4770164,
+     "sha256": "e91cf793cc641ba2bae4adc88973c336e290212fab7c7b2b8b5ac6a7d9dd93bb",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548326,
+     "sha256": "fc64758e5f2c2feb940516c77043d1fd179868cace8e3635dfbde62c253d3302",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4770164,
+     "sha256": "df4a53c984f2f5b67459d8a42b1f55a89fd1c944b3a41584d9dbc62c263d0566",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548326,
+     "sha256": "fbfc0e99f30ccb5f1dd1eb5052341299b3dce219118f542daea844ed8f651802",
+     "ok": true,
+     "attempt": 1
+    }
+   ]
+  },
+  "https://b7e1fe29.upheaval.pages.dev": {
+   "verified": 66,
+   "of": 66,
+   "bytes": 95368335,
+   "retries": 0,
+   "rows": [
+    {
+     "path": "index.html",
+     "status": 200,
+     "bytes": 487385,
+     "sha256": "d77d0a8bb5d2369f406ea79d91d562341598f6b780c0c110eca64aa8de73798e",
+     "ok": true,
+     "attempt": 1,
+     "checks": {
+      "robots_exactly_one_noindex_nofollow": true,
+      "card_pass_24": true,
+      "scope_nineteen_moved": true,
+      "mechanisms_named": true,
+      "measurement_stated": true,
+      "renderer_md5": true,
+      "manifest_sha256": true,
+      "source_8e5a3ee3": true,
+      "22_subjects_7992_frames": true,
+      "all_44_live_declared": true,
+      "v18_archive_22_declared": true,
+      "p19_archive_22_declared": true,
+      "p20_archive_22_declared": true,
+      "p21_archive_22_declared": true,
+      "p22_archive_22_declared": true,
+      "p23_archive_22_declared": true,
+      "archive_19_generations": true,
+      "fall_no_autoplay_no_loop": true,
+      "hover_autoplay_loop": true
+     }
+    },
+    {
+     "path": "renders/manafold-blown.webm",
+     "status": 200,
+     "bytes": 824695,
+     "sha256": "e6d960ae21d04aed99dde14968a8d3424a118ec07c979e20cc10f57eac64bb90",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-blown.png",
+     "status": 200,
+     "bytes": 27568,
+     "sha256": "1842a1e4f2be35e348d1c2d8560dea4b33434e5bc6beff32d289c7baacac82c7",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-channel.webm",
+     "status": 200,
+     "bytes": 2665860,
+     "sha256": "1e41c62a6d5f044aab496612ecdfa491bd4fb5f5e5646e8ddf83919487c76e09",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-channel.png",
+     "status": 200,
+     "bytes": 82335,
+     "sha256": "9fecba9c717d041cc5d7684855e4541e2403e01b9635cc17d8a9d4ba98d21f8d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-crackle.webm",
+     "status": 200,
+     "bytes": 4128518,
+     "sha256": "9ad92e119021d9870dc080aeb7373d108d69d23d1b3a1743a2bff8a676d6719b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-crackle.png",
+     "status": 200,
+     "bytes": 51896,
+     "sha256": "ab929e6a218e8b3878145ea31dc8d2c1ed4454cce8a7caca87c14bf64336fc74",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-curious.webm",
+     "status": 200,
+     "bytes": 1195130,
+     "sha256": "979d33b4a29f5c92177d0bde5b85f1823c81edd0d434b8210b48823cb73dd42b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-curious.png",
+     "status": 200,
+     "bytes": 46794,
+     "sha256": "00570397857c003e112a3f39828c0f3532489757b8d2e6be5913362447c5850e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-damage.webm",
+     "status": 200,
+     "bytes": 3095275,
+     "sha256": "40e5c070f79304220065dec9f8196811770d847026a9c7bd3f3146cf06654c1d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-damage.png",
+     "status": 200,
+     "bytes": 48349,
+     "sha256": "b3591102faf77dd1eebad9921a06d7a609504411e836adc9b77b96bd98da0640",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-drop.webm",
+     "status": 200,
+     "bytes": 746374,
+     "sha256": "93c99f3fae1d6f6d3837006f85b247a962dedd58a445c6327844fdd8b3133906",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-drop.png",
+     "status": 200,
+     "bytes": 29414,
+     "sha256": "c1cd00d6e8a6dddf0c6dc01c05db1158b361d32389fca8ade4bdedef36312994",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-gutter.webm",
+     "status": 200,
+     "bytes": 853747,
+     "sha256": "9065e1a8898e426df7f368a2ffc617b64c95e33bc7273df8be737e9a70cd1f76",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-death-gutter.png",
+     "status": 200,
+     "bytes": 31111,
+     "sha256": "c089249cb7b9c19834859e5211296586d354a43ad5a2f6dfce52de032e24119d",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-drift.webm",
+     "status": 200,
+     "bytes": 672147,
+     "sha256": "2492cae392f3c68c43bd59904c6eec304b99ec5334f01437d0d3a3f187180ec1",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-drift.png",
+     "status": 200,
+     "bytes": 21543,
+     "sha256": "d1524bc6f5beebf3917c140a72ebf0ba5c0472b9c1341a6f1c658e50220243eb",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-fall.webm",
+     "status": 200,
+     "bytes": 742053,
+     "sha256": "8b054c1a936795f9f962d789bae765a068d3b0692404aec231b8a20bf6c54f1c",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-fall.png",
+     "status": 200,
+     "bytes": 28151,
+     "sha256": "c8e0df31e6cbdc963b74bae75295d010750fef7ead8eee1fe2e6ec8712862acf",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-flight.webm",
+     "status": 200,
+     "bytes": 1242280,
+     "sha256": "5a11cc02eb19354b7d4ad04fb8e35cf0b9a389d600ec5a9fe2403c2ec32b59f4",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-flight.png",
+     "status": 200,
+     "bytes": 30606,
+     "sha256": "6607ace66aafab3613fb7bee8c61b04ba4ff6097f04aaa6dbb038c4c40fd1d73",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hasty.webm",
+     "status": 200,
+     "bytes": 548171,
+     "sha256": "7902afa9e0bca7613efdd608a55c7433ddbaa8490aa05448b1a5626569ca90ee",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hasty.png",
+     "status": 200,
+     "bytes": 22318,
+     "sha256": "684c5874eec4145629ee63db05e65c6b76a3513707acfb141bc8b65c6b3c07f2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hit.webm",
+     "status": 200,
+     "bytes": 957763,
+     "sha256": "69b9c9d85a8f777e27b5d8df9410c376da7091250b3db99487c2a078441610d8",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hit.png",
+     "status": 200,
+     "bytes": 49244,
+     "sha256": "9b9812f9a8602583b8f28e2b081861fe781dbbc149f71e8f99eba44ebc88fd11",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hover.webm",
+     "status": 200,
+     "bytes": 3908123,
+     "sha256": "7121e60024c7918fe94baf9550d616f7322ed03edf057e5c676a486bf18d0da3",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-hover.png",
+     "status": 200,
+     "bytes": 47780,
+     "sha256": "e050030c64d783d85437c2cdcdfadf50896e238cddf997ab856557aa4e2f074b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4731273,
+     "sha256": "869f38cc84f550989afab22f7f181fd82a4289f385bddaa9be596e060e5d466f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-inspect.png",
+     "status": 200,
+     "bytes": 60680,
+     "sha256": "6f05cf59b613ebdcc3d837ae2f14f8a868f0857ea5f6b8b3403da4f48080c4d5",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-lasso.webm",
+     "status": 200,
+     "bytes": 2407817,
+     "sha256": "56694b8b54e42c21f8722e7a624d3303aee57054c4f58d11f0a5a89f53c2411f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-lasso.png",
+     "status": 200,
+     "bytes": 57944,
+     "sha256": "a5d7be72aa5c791fdbbc94d0271e0fee25ded92a2f427c5f117166534026bb74",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-pirouette.webm",
+     "status": 200,
+     "bytes": 1569462,
+     "sha256": "57196dbfa7af3c03b7c94dc17f5f7cf7c85d9a849bae28899147f2caea91418e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-pirouette.png",
+     "status": 200,
+     "bytes": 48753,
+     "sha256": "f1aadd993ff20cc5261469642b4ae6294cf4235e91da9daeb83adcf7ce26b56f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-rest.webm",
+     "status": 200,
+     "bytes": 2489417,
+     "sha256": "7f6c14329827959c37704ab5c6be00e6cb067c32651ce8d9be99a6da3ad518c2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-rest.png",
+     "status": 200,
+     "bytes": 48835,
+     "sha256": "2bcc01b3e67e85641391ad332966922b7d981f4fcc3c24d7609e06e7ddca183e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-startle.webm",
+     "status": 200,
+     "bytes": 1148804,
+     "sha256": "22f1f4da58a2acfc3ae15cb71453b4b7e64b6d3a943f4f66d4bc05c3eb91f058",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-startle.png",
+     "status": 200,
+     "bytes": 50626,
+     "sha256": "52c79ae42a215a63ef4632b09b12d39371d40cc0dd5af31268a94f8f19e644ad",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt.webm",
+     "status": 200,
+     "bytes": 2112460,
+     "sha256": "3cbea3724902d7a5e7f13945519a354c963133c8cf675e6cf6dbc61afb09c09b",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt.png",
+     "status": 200,
+     "bytes": 49967,
+     "sha256": "dd92fdc341b08f5adcfde1f879caa1d1cd72bf12b745c2f742bc987a4143d4a5",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt2.webm",
+     "status": 200,
+     "bytes": 1874127,
+     "sha256": "93cb0dfbd0cef22847460508f88438af689108a02cb6385aed76ccafa090bed2",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt2.png",
+     "status": 200,
+     "bytes": 59074,
+     "sha256": "f7c55dd592349c6550a0f0499981daf6ddd8a1d234dbfd9339fe86cf63e05419",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt3.webm",
+     "status": 200,
+     "bytes": 2315283,
+     "sha256": "dcb6cc1690d74e10fe53cbc9a792ec37f7521aebc22127ee2f74690b6ce609ef",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-taunt3.png",
+     "status": 200,
+     "bytes": 53291,
+     "sha256": "0c6ed0cc4b91aa5c990f8fd4ed3963a2b6165f355b687973af3fd6760b892c08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548037,
+     "sha256": "6db8541c69de980303ac9997704a7824c489c5d70f7a6ccb617caff5a86c90ea",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/manafold-trick.png",
+     "status": 200,
+     "bytes": 45788,
+     "sha256": "044687bd03998126f0b3c3772563a9d69ea55dfc791ba237ef7868d0f2561124",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-hover.png",
+     "status": 200,
+     "bytes": 48554,
+     "sha256": "50f4ca141fdf2af9e65bab28629849c22e007538de97ba1e64148eb96666faef",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-mana-boil.webm",
+     "status": 200,
+     "bytes": 3706678,
+     "sha256": "b9dacc43ce5edefa9c44aaa7114aeee717a2e37bce6618c768282cb98fd9713f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v17-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2807107,
+     "sha256": "eeefa3ea1406216fd0c567c5515148cddb695e7f71e682f07d3d37829cc74a84",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-hover.png",
+     "status": 200,
+     "bytes": 47783,
+     "sha256": "04c9f33f080dfc1b5185dad69210c643a7caf7beda50c7d53866f97574a3fe4a",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4847897,
+     "sha256": "b15104d9ac7f4dc13bf02df36fca66b99de2daa6bc546e98da396612de6b74d7",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-v18-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2596010,
+     "sha256": "0bd1a80f691cf47cff304d547edd907d11feb3ec5799cba260003a6fc416c762",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-hover.png",
+     "status": 200,
+     "bytes": 47714,
+     "sha256": "e5be3aaa94870835b6f7725b8dfc1ffaca73c9d40d0216e4abcacceec0e4de24",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4806830,
+     "sha256": "f6839a4932b2f114ab151b96901980aeccf7861784d2c2414ced63c6f75d249f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p19-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2571196,
+     "sha256": "0f14dbffde4198f6139c020b6f42d083049d26fa85639bd6ac922070e756cb08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-hover.png",
+     "status": 200,
+     "bytes": 47603,
+     "sha256": "23a6a3536cf3b85657a88cbe7001bc02f249d9fefaff048522480aa005c4ba3f",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4879709,
+     "sha256": "8ecf9478c7198d407240adec09dc8b474478161d2ad865af1df3d457416e6e08",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p20-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2593278,
+     "sha256": "be7923c3f71a96bd2b7e0080f3b215190c13b9955ac1c48139c7bc5f5673c1c0",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4763982,
+     "sha256": "b00387b21cfde2531f95e3aeb03b85125d72da21d56878dcc52274263416f570",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p21-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2568255,
+     "sha256": "8602e4848844513d4a18f4751265707c0afbd1884b87416f262c4e60452eea4e",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4770164,
+     "sha256": "e91cf793cc641ba2bae4adc88973c336e290212fab7c7b2b8b5ac6a7d9dd93bb",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p22-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548326,
+     "sha256": "fc64758e5f2c2feb940516c77043d1fd179868cace8e3635dfbde62c253d3302",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-hover.png",
+     "status": 200,
+     "bytes": 47497,
+     "sha256": "cf125a3526dcd208cab0745d50bddb2ef9fbbffe30edc85fc381abe7a516b970",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-inspect.webm",
+     "status": 200,
+     "bytes": 4770164,
+     "sha256": "df4a53c984f2f5b67459d8a42b1f55a89fd1c944b3a41584d9dbc62c263d0566",
+     "ok": true,
+     "attempt": 1
+    },
+    {
+     "path": "renders/archive-p23-manafold-trick.webm",
+     "status": 200,
+     "bytes": 2548326,
+     "sha256": "fbfc0e99f30ccb5f1dd1eb5052341299b3dce219118f542daea844ed8f651802",
+     "ok": true,
+     "attempt": 1
+    }
+   ]
+  }
+ }
+}
