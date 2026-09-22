@@ -4455,17 +4455,122 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    # NOT YET COMPOSED, and the reason is a NAMED, MEASURED remainder rather
-    # than a deferral: see design/contracts/GEOM.CLIPDOOR.md "WHAT THE SECOND
-    # ARM STILL OWES". Two things, neither of them the attribute packet that
-    # five passes believed was the wall:
-    #   1. PART.EXPAND emits Q16.16 1/w and slot 0 of GEOM.CLIP's packet is
-    #      canonical invw24 (owner ruling D-4: "no consumer performs its own
-    #      profile conversion"). `w` exists at zhao_part_project's a_w_i and is
-    #      dropped at the ladder queue.
-    #   2. A particle has no material identity, and zhao_material_window
-    #      publishes one material per span.
-    notes: not-yet-composed -- built, unit-verified and waiting on the particle depth lane and a non-mesh material law (both named in the contract).
+    # COMPOSED 2026-09-21 (FORGECOMP, clients 0 and 1) and 2026-09-22
+    # (PARTMAT, client 2). Both of the two named, measured remainders the
+    # CLIPDOOR packet docked here are DISCHARGED, and neither was the attribute
+    # packet five passes believed was the wall:
+    #   1. THE PARTICLE DEPTH LANE. `w` and its depth profile now survive
+    #      zhao_part_project's slot store and ladder queue (PROJ_W 99 -> 132)
+    #      and zhao_part_expand, and PART.CLIPFEED converts them with a second
+    #      INSTANCE of ruling D-4's law -- zhao_geom_depthquant_stream beside
+    #      zhao_raster_rcp24_v4, the pair GEOM.VATTR and FORGE.ASSEMBLE also
+    #      hold.
+    #   2. THE NON-MESH MATERIAL LAW. Ruled by the owner on 2026-09-22,
+    #      ruling 1: NO_MATERIAL is a LAWFUL MODE, declared by the producer and
+    #      never inferred. It is a third field of this door's MATERIAL half, so
+    #      it is selected by the same grant on the same beat as the {set, id}
+    #      it qualifies.
+    # The RUN-LENGTH-FAIR law is what makes three producers affordable: the
+    # composed acceptance run costs TWO resolves for THREE spans, measured, not
+    # argued (tests/prod/partmat_acceptance.cpp section 1).
+    notes: composed -- three clients (GEOM.REPLAY 0, FORGE.ASSEMBLE 1, PART.CLIPFEED 2); err_hold_broken_o has a committed mutant control that FIRES.
+
+  - id: PART.CLIPFEED
+    name: The particle clip-door feed
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Turns PART.EXPAND's polygon-particle fan into a GEOM.CLIPDOOR client -- the canonical invw24 and the seven-slot attribute packet, in offer order.
+    contract: design/contracts/PART.CLIPFEED.md
+    phase: 5
+    owner_issue: ZH-056
+    inputs: [screen_triangles]
+    outputs: [clipped_triangles]
+    # WHY IT EXISTS. Owner ruling 1 of 2026-09-22 authorises "the complete
+    # particle-to-raster connection, including the canonical depth conversion
+    # and any carrier still required by the current producer", and says it "is
+    # not permission to close the task after changing only the material gate".
+    # GEOM.CLIPDOOR.md had already MEASURED the two things owed; this block is
+    # exactly those two and nothing else.
+    #
+    # IT CONTAINS NO ARITHMETIC. No shift, no product, no rounding, no
+    # saturation. The depth conversion is zhao_geom_depthquant_stream beside
+    # zhao_raster_rcp24_v4, wired as zhao_geom_vattr and zhao_forge_assemble
+    # wire them -- a second INSTANCE of ruling D-4's law, which the
+    # zhao_field_isqrt precedent settles is not a second law.
+    #
+    # THE RING IS AN IN-ORDER QUEUE IN FRONT OF AN OUT-OF-ORDER ENGINE. The
+    # converter answers in the reciprocal's COMPLETION order with the caller's
+    # tag; particles are depth-TESTED and never depth-WRITTEN, so two that
+    # overlap are resolved by DRAW ORDER alone. The tag IS the ring slot, one
+    # record at one index written by one enable -- NOT the "independently
+    # advancing metadata queue" ruling 1 forbids, and the material half does
+    # not travel through it at all.
+    #
+    # COST, HAND-COUNTED AND NOT FITTED (R236 -- cost is recorded, never a
+    # veto), deliberately in the UNFLATTERING direction because four lanes
+    # under-reported theirs:
+    #   * THE CONVERTER PAIR DOMINATES and is the honest headline. One
+    #     zhao_geom_depthquant_stream at NSLOT 16 plus one zhao_raster_rcp24_v4
+    #     at NCTX 8 -- a SECOND COPY of what zhao_geom_vattr's row prices, and a
+    #     THIRD in the console counting zhao_forge_assemble's. Expect it to be
+    #     the same order as those, not a rounding error beside them; the rcp24
+    #     carries a table ROM and a multiplier whose implementation style the
+    #     fit decides. THIS IS THE NUMBER TO CHECK FIRST in the next fit, and
+    #     the question is whether the console can afford three instances of one
+    #     reciprocal or wants a shared service.
+    #   * THE BLOCK'S OWN STATE: a 16 x 166-bit triangle ring (2,656 bits), a
+    #     16 x 24-bit depth store (384 bits), 16 landed bits, two 5-bit
+    #     pointers and six 32-bit counters -- about 3,300 flops.
+    #
+    #     CORRECTED BY REVIEW BEFORE THIS ROW SHIPPED. The first draft said the
+    #     ring "MAY infer as M10K"; it will NOT. Both arrays are read
+    #     ASYNCHRONOUSLY at the head pointer (`tri_q[head_c]`, `inv_q[head_c]`
+    #     feed the output combinationally), and an async read is the one thing
+    #     that rules an M10K out. So it is 3,040 bits of FLOPS plus a 16-way
+    #     166-bit mux, and the mux is the part to look at -- roughly 2,656 LUT
+    #     inputs of selection on the binding constraint.
+    #
+    #     THE OBVIOUS TRADE IS NAMED HERE RATHER THAN TAKEN: making the ring a
+    #     SYNCHRONOUS read would let it infer as M10K, which is the standing
+    #     owner direction (ALMs are the constraint, memory is the slack). It
+    #     costs a pipeline stage between the head select and the door beat, and
+    #     the door must never gain a skid between the material half and the
+    #     triangle half -- so the stage would have to sit BEFORE the door's
+    #     input, not inside it. That is a real design question and it belongs
+    #     in a packet that can test it, not in this one's last hour.
+    #   * Combinational: one 7-slot attribute pack replicated three times (pure
+    #     field placement from one depth and three colour bytes), a six-way
+    #     21-bit select and a twelve-term range comparison. No DSP.
+    upstream: [PART.EXPAND]
+    downstream: [GEOM.CLIPDOOR]
+    backpressure: ready_valid
+    latency: the depth converter's, plus head-of-line in the ring
+    target_throughput: 1 beat per clock out; in, the converter's rate
+    reference_model: null
+    tests:
+      directed: tests/particles/part_clipfeed_directed.cpp
+      random: null
+    counters: [particles, triangles, range_refused, stall_full, dq_refused, dq_stray]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: COMPOSED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-22"
+        evidence: tests/particles/part_clipfeed_directed.cpp
+      - state: COMPOSED
+        date: "2026-09-22"
+        evidence: tests/prod/partmat_acceptance.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    # `range_refused_o` is reachable with LEGAL STIMULUS AT THIS BLOCK'S OWN
+    # PORTS -- the vertex ports are 22 bits and a bench drives them -- so it is
+    # the `t_ack_i` shape and owes no committed mutant. It is FIRED in section 4
+    # of the directed test, with the negative control (the largest vertex the
+    # clamp permits, 528368) beside it.
+    notes: composed -- client 2 of GEOM.CLIPDOOR; carries no per-primitive depth mode, declared as zhao_console_core entry I51.
 
   - id: GEOM.SETUP
     name: Triangle setup

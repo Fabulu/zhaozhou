@@ -92,6 +92,11 @@ void drive_client0(Vtb_geom_clipdoor& d) {
   d.c0_material_set_i = kSet0;
   d.c0_material_id_i = kId0;
   d.c0_quality_tier_i = 0x11;
+  // THE MATERIAL-MODE DECLARATION (owner ruling 1, 2026-09-22). Two different
+  // values, so the check below is a SELECTION test and not a coincidence: if
+  // the door carried a constant, or carried the other client's, the assertion
+  // would read the wrong one. MATMODE_BACKED for client 0, the mesh producer.
+  d.c0_material_mode_i = 0;
 }
 
 void drive_client1(Vtb_geom_clipdoor& d) {
@@ -109,6 +114,8 @@ void drive_client1(Vtb_geom_clipdoor& d) {
   d.c1_material_set_i = kSet1;
   d.c1_material_id_i = kId1;
   d.c1_quality_tier_i = 0x22;
+  // MATMODE_NONE for client 1, which is what a polygon particle declares.
+  d.c1_material_mode_i = 1;
 }
 
 void hard_reset(Vtb_geom_clipdoor& d) {
@@ -196,6 +203,12 @@ int main(int argc, char** argv) {
         d.o_material_id_o);
   check(d.o_quality_tier_o == 0x11, "and client 0's quality tier", 0x11,
         d.o_quality_tier_o);
+  // AND ITS MATERIAL-MODE DECLARATION (owner ruling 1, 2026-09-22). The two
+  // clients declare DIFFERENT modes, so this is a selection test: a door that
+  // carried a constant, or the other client's, fails here.
+  check(d.o_material_mode_o == 0,
+        "client 0 declares MATERIAL_BACKED and that is what the door carries",
+        0, d.o_material_mode_o);
   check(d.c0_ready_o == 1, "client 0 sees ready on the granted cycle", 1,
         d.c0_ready_o);
   check(d.c1_ready_o == 0, "client 1 does not see ready", 0, d.c1_ready_o);
@@ -296,6 +309,9 @@ int main(int argc, char** argv) {
         d.o_material_set_o);
   check(d.o_material_id_o == kId1, "client 1's material id", kId1,
         d.o_material_id_o);
+  check(d.o_material_mode_o == 1,
+        "client 1 declares NO_MATERIAL and the door carries THAT, not client 0's",
+        1, d.o_material_mode_o);
   check(d.o_quality_tier_o == 0x22, "client 1's quality tier", 0x22,
         d.o_quality_tier_o);
   check(d.switches_o == sw_base + 1, "exactly one switch was recorded",

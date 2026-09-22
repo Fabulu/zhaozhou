@@ -79,6 +79,7 @@ module zhao_geom_clipdoor_mutant #(
     // the material half -- what `zhao_material_window`'s input takes
     input  var logic [NCLIENT*32-1:0]           c_material_set_i,
     input  var logic [NCLIENT*16-1:0]           c_material_id_i,
+    input  var logic [NCLIENT*2-1:0]            c_material_mode_i,
     input  var logic [NCLIENT*8-1:0]            c_quality_tier_i,
 
     // ---- the door -----------------------------------------------------------
@@ -99,6 +100,7 @@ module zhao_geom_clipdoor_mutant #(
     output var logic [ATTRS*32-1:0]  o_attr_c_o,
     output var logic [31:0]          o_material_set_o,
     output var logic [15:0]          o_material_id_o,
+    output var logic [1:0]           o_material_mode_o,
     output var logic [7:0]           o_quality_tier_o,
     // Which client this beat belongs to, so a composer or a bench can say so
     // out loud rather than inferring it.  It is valid only while `o_valid_o`.
@@ -237,6 +239,7 @@ module zhao_geom_clipdoor_mutant #(
     o_attr_c_o       = '0;
     o_material_set_o = '0;
     o_material_id_o  = '0;
+    o_material_mode_o = '0;
     o_quality_tier_o = '0;
     for (i = 0; i < NCLIENT; i = i + 1) begin
       if (grant_q[i]) begin
@@ -255,6 +258,7 @@ module zhao_geom_clipdoor_mutant #(
         o_attr_c_o       = c_attr_c_i[i*AW +: AW];
         o_material_set_o = c_material_set_i[i*32 +: 32];
         o_material_id_o  = c_material_id_i[i*16 +: 16];
+        o_material_mode_o = c_material_mode_i[i*2 +: 2];
         o_quality_tier_o = c_quality_tier_i[i*8 +: 8];
       end
     end

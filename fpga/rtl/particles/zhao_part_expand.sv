@@ -144,6 +144,14 @@ module zhao_part_expand (
     input  logic signed [20:0] p_x_i,       // S 12.8 canvas
     input  logic signed [20:0] p_y_i,
     input  logic signed [31:0] p_d_i,       // Q16.16 1/w
+    // THE PROJECTOR'S OWN `w` AND THE PROFILE IT WAS PROJECTED UNDER, carried
+    // from `zhao_part_project.q_w_o`/`q_profile_o` (owner ruling 1,
+    // 2026-09-22). This block CONVERTS NEITHER. It carries them beside the fan
+    // exactly as it carries `p_d_i`, because the canonical-depth law is
+    // GEOM.DEPTHQUANT's (ruling D-4: "no consumer performs its own profile
+    // conversion") and its instance lives in `zhao_part_clipfeed`.
+    input  logic        [30:0] p_w_i,
+    input  logic        [ 1:0] p_profile_i,
     input  logic        [ 7:0] p_size_i,    // U 0.4.4 px
     input  logic        [ 7:0] p_r_i,
     input  logic        [ 7:0] p_g_i,
@@ -160,6 +168,8 @@ module zhao_part_expand (
     output logic signed [21:0] t_cx_o,
     output logic signed [21:0] t_cy_o,
     output logic signed [31:0] t_d_o,        // all three vertices share it
+    output logic        [30:0] t_w_o,        // ... and so do these two
+    output logic        [ 1:0] t_profile_o,
     output logic        [ 7:0] t_r_o,
     output logic        [ 7:0] t_g_o,
     output logic        [ 7:0] t_b_o,
@@ -218,6 +228,8 @@ module zhao_part_expand (
       t_valid_o <= 1'b0;
       t_ax_o <= '0; t_ay_o <= '0; t_bx_o <= '0; t_by_o <= '0; t_cx_o <= '0; t_cy_o <= '0;
       t_d_o <= '0;
+      t_w_o <= '0;
+      t_profile_o <= '0;
       t_r_o <= '0; t_g_o <= '0; t_b_o <= '0;
       t_depth_test_o <= 1'b1;
       t_depth_write_o <= 1'b0;
@@ -230,6 +242,8 @@ module zhao_part_expand (
         t_bx_o <= ex_bx; t_by_o <= ex_by;
         t_cx_o <= ex_cx; t_cy_o <= ex_cy;
         t_d_o <= p_d_i;
+        t_w_o <= p_w_i;
+        t_profile_o <= p_profile_i;
         t_r_o <= p_r_i; t_g_o <= p_g_i; t_b_o <= p_b_i;
         // Constants, and carried on the packet on purpose: the pass-7 law is a
         // property of a PARTICLE, and a downstream stage that had to remember it

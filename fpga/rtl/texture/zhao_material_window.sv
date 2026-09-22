@@ -109,6 +109,85 @@
 // `no_record_o`.  The stream never stops; the fault is visible; nothing is
 // invented to cover it.
 //
+// ---------------------------------------------------------------------------
+// `NO_MATERIAL` IS A LAWFUL MODE -- owner ruling 1, 2026-09-22 (PARTMAT)
+// ---------------------------------------------------------------------------
+// The ruling's own words: *"Introduce an explicit material mode distinguishing
+// a material-backed primitive from a primitive intentionally carrying no
+// material. Do not infer no-material from a failed lookup, an arbitrary
+// sentinel handle, the previous span's material, or merely the untextured
+// attribute bit."*
+//
+// So `t_material_mode_i` is a DECLARATION the producer makes, beside its
+// `{set, id}` on the same beat, and it is the ONLY thing this block reads to
+// decide which of the two modes a span is in.  Each of the four inferences the
+// ruling forbids is refused by construction here and it is worth writing down
+// which line does it:
+//
+//   * a failed lookup       -> `no_record_o`'s arm is reached only from
+//                              ST_WAIT, and a NO_MATERIAL span never enters
+//                              ST_REQ, so it cannot arrive there;
+//   * a sentinel handle     -> nothing compares `{set, id}` against a magic
+//                              value anywhere in this file;
+//   * the previous span's   -> the mode is part of `match_c`, so a mode change
+//     material                 DRAINS exactly as a `{set, id}` change does;
+//   * the untextured bit    -> this block has no `untex` port.  R197's gate is
+//                              downstream and stays there, and the two
+//                              questions stay separate: "no texture
+//                              coordinates" is a statement about the PRIMITIVE,
+//                              "no material" is a statement about the PRODUCER.
+//
+// WHAT THE MODE DOES.  In `MATMODE_NONE` the window publishes the DEFINED
+// NO-SAMPLING PROFILE below, issues NO resolve (so MATERIAL.RESOLVE never sees
+// a request, and no texture or palette residency is touched), and moves NO
+// fault counter.  `no_material_spans_o` counts the spans, and it is CENSUS, not
+// a fault -- the ruling is explicit that this "is a lawful mode, not the
+// missing-material fallback disguised as success".
+//
+// THE PROFILE IS DEFINED HERE AND IS NOT R20's FAULT MATERIAL.  The two happen
+// to carry the same field values -- there is only one way to say "this surface
+// takes no texture sample" in a 298-bit flat request -- and they are
+// deliberately written as two separate named constants reached by two separate
+// arms, because they mean opposite things and only one of them is a fault.
+// Collapsing them into one assignment is precisely the "fallback disguised as
+// success" the ruling refuses.
+//
+// MODE IS PART OF THE SPAN'S IDENTITY, AND THERE IS NO SECOND QUEUE.  The
+// ruling: *"Changing MATERIAL_BACKED -> NO_MATERIAL -> MATERIAL_BACKED must
+// honor the existing drain/ordering mechanism so that in-flight triangles
+// retain their own profile.  Do not add an independently advancing metadata
+// queue."*  That last sentence is this repository's own worst defect and
+// CLAUDE.md has a chapter about it.  The mode is therefore carried in
+// `pub_mode_q`, ONE MORE FIELD OF THE SAME PUBLISHED RECORD, loaded by the same
+// enable in the same state as `pub_count_q` -- so the interlock argument above
+// covers it word for word and no new ordering claim is made.  A mode change is
+// a `match_c` miss, which is a drain, which is the mechanism that already
+// exists.
+//
+// AND CONTRADICTORY DECLARATIONS ARE REFUSED, NOT REPAIRED.  The ruling:
+// *"Reject internally contradictory declarations rather than silently repairing
+// them."*  Two declarations are contradictory at this port:
+//
+//   * an UNDEFINED mode encoding (2'd2, 2'd3 -- reserved, no producer may use
+//     them); and
+//   * `MATMODE_NONE` presented with a non-zero `{set, id}`.  A producer that
+//     says "I carry no material" while handing over a material identity it
+//     expects to be resolved has said two incompatible things on one beat.
+//     Publishing the no-sampling profile for it would be silently repairing
+//     the declaration; resolving the pair would be ignoring it.
+//
+// A refused beat is CONSUMED and COUNTED on `mode_refused_o` and never enters
+// the span -- the same shape as R197's untextured door, which consumes a
+// refused triangle before `d_enter_i` can fire, so the drain accounting is
+// untouched.  `mode_refused_o` is reachable with legal stimulus AT THIS BLOCK'S
+// OWN PORTS (drive the mode input), so it is the `t_ack_i` shape and owes no
+// committed mutant.
+//
+// `t_quality_tier_i` is deliberately NOT part of the contradiction test.  The
+// resolver ECHOES the tier and reads it nowhere, so it is a label travelling
+// with a request that a NO_MATERIAL span does not make; requiring it to be zero
+// would be inventing a rule the ruling does not state.
+//
 // Conservative SystemVerilog subset only; Quartus 17.0 syntax rules apply
 // (elaboration checks inside `initial begin ... end`, explicit generate, no
 // inline `for (genvar ...)`).
@@ -135,6 +214,11 @@ module zhao_material_window #(
     output wire                     t_ready_o,
     input  wire        [31:0]       t_material_set_i,
     input  wire        [15:0]       t_material_id_i,
+    // THE PRODUCER'S MATERIAL-MODE DECLARATION (owner ruling 1, 2026-09-22).
+    // `MATMODE_BACKED_C` or `MATMODE_NONE_C`; anything else is refused. It
+    // travels on the SAME beat as the pair it qualifies, which is what stops it
+    // being a second live wire (entry I39).
+    input  wire        [ 1:0]       t_material_mode_i,
     // The draw's semantic weight, carried as the resolve's quality tier.  The
     // resolver ECHOES it (`tier_q`) and reads it nowhere, so this is a label
     // travelling with its request, not a policy this block invents.
@@ -175,6 +259,12 @@ module zhao_material_window #(
     output logic       [ 7:0]       pub_recipe_weight_o,
     output logic       [ 7:0]       pub_base_binding_o,
     output logic       [ 1:0]       pub_response_class_o,
+    // The published span's MODE, beside the published record it qualifies.
+    // A consumer that needs to know whether the surface it is shading has a
+    // material at all reads this rather than inferring it from
+    // `pub_sample_count_o == 0`, which is true of a legal non-sampling MATERIAL
+    // too (the `page == 255` creature).
+    output logic       [ 1:0]       pub_material_mode_o,
 
     // ---- evidence ---------------------------------------------------------
     output logic       [31:0]       resolves_o,
@@ -185,6 +275,14 @@ module zhao_material_window #(
     output logic       [31:0]       no_record_o,
     output logic       [31:0]       selector_overflow_o,
     output logic       [31:0]       clut_unowned_o,
+    // CENSUS, NOT A FAULT: spans published in `MATMODE_NONE`. The ruling names
+    // this mode lawful, so the number that matters beside it is `resolves_o`
+    // and `no_record_o` NOT moving for those spans -- three independent
+    // quantities, which is what makes the claim checkable.
+    output logic       [31:0]       no_material_spans_o,
+    // A FAULT: an undefined mode encoding, or `MATMODE_NONE` presented with a
+    // non-zero `{set, id}`. Refused, consumed, never entered.
+    output logic       [31:0]       mode_refused_o,
     // THE TWO STRUCTURAL GUARDS.  Both are zero in any correct composition and
     // both are reachable with LEGAL STIMULUS AT THIS BLOCK'S OWN PORTS -- the
     // disposal events are inputs, so a directed test fires them by pulsing a
@@ -198,6 +296,22 @@ module zhao_material_window #(
   // parameter's default is readable.  It is NOT a second definition: nothing
   // below compares against these names, they name the parameter's nibbles.
   localparam logic [1:0] CLS_CLUT_C = 2'd0;
+
+  // ---- THE TWO LAWFUL MATERIAL MODES (owner ruling 1, 2026-09-22) ---------
+  // 2'd2 and 2'd3 are RESERVED and refused. They are not "don't care": a
+  // producer presenting one has made a declaration this block does not
+  // understand, and the ruling says to reject rather than repair.
+  localparam logic [1:0] MATMODE_BACKED_C = 2'd0;
+  localparam logic [1:0] MATMODE_NONE_C   = 2'd1;
+
+  // THE DEFINED NO-SAMPLING PROFILE. Written as five named constants reached by
+  // the NO_MATERIAL arm alone. R20's fault material below carries the same
+  // field values and is a DIFFERENT statement; see the header.
+  localparam logic [1:0] NOMAT_SAMPLE_COUNT_C = 2'd0;
+  localparam logic [2:0] NOMAT_RECIPE_C       = 3'd0;
+  localparam logic [7:0] NOMAT_WEIGHT_C       = 8'd0;
+  localparam logic [7:0] NOMAT_BINDING_C      = 8'd0;
+  localparam logic [1:0] NOMAT_CLASS_C        = 2'd0;
 
   localparam logic [2:0] ST_RUN    = 3'd0;   // pass triangles of the published material
   localparam logic [2:0] ST_DRAIN  = 3'd1;   // hold, waiting for the span to empty
@@ -213,6 +327,7 @@ module zhao_material_window #(
   logic [7:0]  pub_weight_q;
   logic [7:0]  pub_binding_q;
   logic [1:0]  pub_class_q;
+  logic [1:0]  pub_mode_q;
 
   // The pending request, captured from the triangle that asked for it.  It is
   // captured ONCE, on the transition out of ST_RUN, while that triangle is
@@ -221,6 +336,7 @@ module zhao_material_window #(
   logic [31:0] ask_set_q;
   logic [15:0] ask_id_q;
   logic [7:0]  ask_tier_q;
+  logic [1:0]  ask_mode_q;
 
   logic [OCCW-1:0] occupancy_q;
 
@@ -228,13 +344,31 @@ module zhao_material_window #(
   // `match_c` is a function of the OFFERED data and of registered state, never
   // of `t_valid_i`, so the ready handed upstream is not a function of the valid
   // handed downstream and the pair cannot lock.
+  //
+  // `refuse_c` is the contradictory-declaration test and it obeys the same
+  // rule: a function of the OFFERED declaration only, never of `t_valid_i` and
+  // never of `t_ready_i`, so the ready handed upstream still does not depend on
+  // the valid handed downstream.
+  wire mode_defined_c = (t_material_mode_i == MATMODE_BACKED_C) ||
+                        (t_material_mode_i == MATMODE_NONE_C);
+  wire mode_contra_c  = (t_material_mode_i == MATMODE_NONE_C) &&
+                        ((t_material_set_i != 32'd0) || (t_material_id_i != 16'd0));
+  wire refuse_c       = !mode_defined_c || mode_contra_c;
+
+  // THE MODE IS PART OF THE IDENTITY. This one added term is what makes
+  // BACKED -> NONE -> BACKED honour the drain: a mode change is a `match_c`
+  // miss, and a `match_c` miss is the existing mechanism.
   wire match_c = pub_valid_q &&
-                 (t_material_set_i == pub_set_q) &&
-                 (t_material_id_i  == pub_id_q);
-  wire pass_c  = (st_q == ST_RUN) && match_c;
+                 (t_material_mode_i == pub_mode_q) &&
+                 (t_material_set_i  == pub_set_q) &&
+                 (t_material_id_i   == pub_id_q);
+  wire pass_c  = (st_q == ST_RUN) && match_c && !refuse_c;
 
   assign t_valid_o = t_valid_i && pass_c;
-  assign t_ready_o = t_ready_i && pass_c;
+  // A refused beat is CONSUMED without being passed -- R197's door in this
+  // block's own port list. It never enters the span, so `d_enter_i` cannot fire
+  // for it and the drain accounting does not see it at all.
+  assign t_ready_o = refuse_c || (t_ready_i && pass_c);
 
   wire drained_c = (occupancy_q == {OCCW{1'b0}});
 
@@ -245,6 +379,7 @@ module zhao_material_window #(
   assign pub_recipe_weight_o   = pub_weight_q;
   assign pub_base_binding_o    = pub_binding_q;
   assign pub_response_class_o  = pub_class_q;
+  assign pub_material_mode_o   = pub_mode_q;
 
   // ---- the request --------------------------------------------------------
   assign req_valid_o        = (st_q == ST_REQ);
@@ -312,9 +447,13 @@ module zhao_material_window #(
       pub_weight_q          <= 8'd0;
       pub_binding_q         <= 8'd0;
       pub_class_q           <= 2'd0;
+      pub_mode_q            <= MATMODE_BACKED_C;
       ask_set_q             <= 32'd0;
       ask_id_q              <= 16'd0;
       ask_tier_q            <= 8'd0;
+      ask_mode_q            <= MATMODE_BACKED_C;
+      no_material_spans_o   <= 32'd0;
+      mode_refused_o        <= 32'd0;
       resolves_o            <= 32'd0;
       switches_o            <= 32'd0;
       drain_stall_cycles_o  <= 32'd0;
@@ -323,12 +462,22 @@ module zhao_material_window #(
       selector_overflow_o   <= 32'd0;
       clut_unowned_o        <= 32'd0;
     end else begin
+      // THE CONTRADICTORY DECLARATION, COUNTED. The ready is high on this
+      // clock (`t_ready_o` is `refuse_c || ...`), so this is one count per
+      // refused beat and not one per stalled cycle. It is written OUTSIDE the
+      // case because a refusal is not a state transition -- the beat is
+      // consumed and the window's span accounting never learns of it, in
+      // whatever state the window happens to be.
+      if (t_valid_i && refuse_c && (mode_refused_o != 32'hffff_ffff))
+        mode_refused_o <= mode_refused_o + 32'd1;
+
       case (st_q)
         ST_RUN: begin
-          if (t_valid_i && !match_c) begin
+          if (t_valid_i && !refuse_c && !match_c) begin
             ask_set_q  <= t_material_set_i;
             ask_id_q   <= t_material_id_i;
             ask_tier_q <= t_quality_tier_i;
+            ask_mode_q <= t_material_mode_i;
             switches_o <= switches_o + 32'd1;
             st_q       <= ST_DRAIN;
           end
@@ -340,7 +489,36 @@ module zhao_material_window #(
           // for the unavoidable state transition would report a permanent
           // floor and hide the moment the drain starts to matter.
           if (!drained_c) drain_stall_cycles_o <= drain_stall_cycles_o + 32'd1;
-          if (drained_c) st_q <= ST_REQ;
+          if (drained_c) begin
+            if (ask_mode_q == MATMODE_NONE_C) begin
+              // THE LAWFUL NO-MATERIAL ARM. It publishes the DEFINED
+              // no-sampling profile and goes straight back to ST_RUN: ST_REQ
+              // and ST_WAIT are never entered, so `req_valid_o` -- which is
+              // literally `(st_q == ST_REQ)` -- cannot assert and
+              // MATERIAL.RESOLVE never sees a request. `no_record_o`'s only
+              // assignment lives in ST_WAIT, so it cannot move either. That is
+              // the ruling's "issue no material/texture/palette resolution
+              // request, and increment no missing-material fault counter", as
+              // a property of the state graph rather than a promise.
+              //
+              // The drain still happened. That is what keeps an in-flight
+              // MATERIAL_BACKED triangle on its own profile across the switch.
+              pub_valid_q <= 1'b1;
+              pub_mode_q  <= MATMODE_NONE_C;
+              pub_set_q   <= ask_set_q;   // zero, enforced by `mode_contra_c`
+              pub_id_q    <= ask_id_q;    // zero, enforced by `mode_contra_c`
+              pub_count_q   <= NOMAT_SAMPLE_COUNT_C;
+              pub_recipe_q  <= NOMAT_RECIPE_C;
+              pub_weight_q  <= NOMAT_WEIGHT_C;
+              pub_binding_q <= NOMAT_BINDING_C;
+              pub_class_q   <= NOMAT_CLASS_C;
+              if (no_material_spans_o != 32'hffff_ffff)
+                no_material_spans_o <= no_material_spans_o + 32'd1;
+              st_q <= ST_RUN;
+            end else begin
+              st_q <= ST_REQ;
+            end
+          end
         end
 
         ST_REQ: begin
@@ -355,6 +533,12 @@ module zhao_material_window #(
           answer_stall_cycles_o <= answer_stall_cycles_o + 32'd1;
           if (rsp_valid_i) begin
             pub_valid_q <= 1'b1;
+            // Only a MATERIAL_BACKED span reaches this state, so the mode
+            // published here is that one. It is loaded by the SAME enable as
+            // the record beside it -- one more field of one published record,
+            // which is the whole of "do not add an independently advancing
+            // metadata queue".
+            pub_mode_q  <= MATMODE_BACKED_C;
             pub_set_q   <= ask_set_q;
             pub_id_q    <= ask_id_q;
             if (rsp_has_record_i) begin
@@ -369,6 +553,16 @@ module zhao_material_window #(
               // R20's defined fault material: a surface that takes no sample.
               // It is published, so the stream runs; it is counted, so the
               // fault is not a silent black triangle.
+              //
+              // THE FIELD VALUES MATCH `NOMAT_*` ABOVE AND THE TWO ARE NOT THE
+              // SAME STATEMENT. This arm means "a MATERIAL_BACKED primitive
+              // asked for a record and there was none" and it is a FAULT; that
+              // arm means "a producer declared it has no material" and it is
+              // LAWFUL. There is only one way to spell "takes no sample" in the
+              // flat request, so the values coincide; writing them once and
+              // sharing the arm is exactly the "fallback disguised as success"
+              // owner ruling 1 refuses, and `pub_mode_q` is what tells the two
+              // apart downstream.
               pub_count_q   <= 2'd0;
               pub_recipe_q  <= 3'd0;
               pub_weight_q  <= 8'd0;

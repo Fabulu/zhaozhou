@@ -15728,6 +15728,64 @@ set_tests_properties(lint_zhao_geom_loomfeed PROPERTIES
 # legal stimulus at its own ports -- the disposal events are inputs, so a
 # departure with no arrival is a legal thing to present, and neither guard
 # owes a committed mutant.
+# ---------------------------------------------------------------------------
+# THE ACCEPTANCE TEST OWNER RULING 1 NAMES (2026-09-22)
+# ---------------------------------------------------------------------------
+# "Interleave textured mesh A, a particle batch, and textured mesh B, with
+#  different material sets and forced backpressure ... The particles draw with
+#  their own state and cause no missing-material faults; both meshes preserve
+#  their state; a deliberately incompatible untextured mesh is still refused and
+#  counted."
+#
+# A SUBSYSTEM bench over the PRODUCTION modules in the composer's arrangement --
+# zhao_geom_clipdoor -> zhao_material_window -> R197's gate. It is NOT a
+# rendered-pixel comparison, and the driver's header says so in terms rather
+# than letting a green tick imply one.
+add_executable(test_partmat_acceptance prod/partmat_acceptance.cpp)
+target_link_libraries(test_partmat_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_partmat_acceptance
+  PREFIX Vtb_partmat_acceptance
+  TOP_MODULE tb_partmat_acceptance
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clipdoor.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv
+          ${CMAKE_SOURCE_DIR}/tests/prod/tb_partmat_acceptance.sv)
+add_test(NAME partmat_acceptance COMMAND test_partmat_acceptance)
+set_tests_properties(partmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
+# PART.CLIPFEED -- the particle arm of GEOM.CLIPDOOR (owner ruling 1, 2026-09-22)
+# ---------------------------------------------------------------------------
+# The depth ARITHMETIC is geom_depthquant_directed's and is not re-derived here;
+# this block holds a second INSTANCE of that law and no arithmetic of its own.
+# What this driver tests is everything around the instance: that each triangle
+# carries ITS OWN particle's canonical depth (the converter answers in
+# COMPLETION order, so a block pairing by arrival order would swap them with
+# every count still balancing), that beats leave in OFFER order (particles are
+# depth-tested and never written, so overlap is resolved by draw order alone),
+# and that the 22 -> 21 narrowing refuses a vertex that breaks the clamp premise
+# rather than wrapping it. Sections 3 and 5 force backpressure, which is the
+# only condition under which the pairing can go wrong at all.
+# The converter's own closure is the SAME LIST GEOM.VATTR uses, which is the
+# point: a second INSTANCE of one law elaborates the same files.
+set(ZHAO_PART_CLIPFEED_SOURCES
+  ${ZHAO_GEOM_VATTR_SOURCES}
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_clipfeed.sv)
+add_executable(test_part_clipfeed_directed particles/part_clipfeed_directed.cpp)
+target_link_libraries(test_part_clipfeed_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_clipfeed_directed
+  PREFIX Vzhao_part_clipfeed
+  TOP_MODULE zhao_part_clipfeed
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_PART_CLIPFEED_SOURCES})
+add_test(NAME part_clipfeed_directed COMMAND test_part_clipfeed_directed)
+set_tests_properties(part_clipfeed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_test(NAME lint_part_clipfeed
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_part_clipfeed ${ZHAO_PART_CLIPFEED_SOURCES})
+set_tests_properties(lint_part_clipfeed PROPERTIES
+  LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_executable(test_material_window_directed texture/material_window_directed.cpp)
 target_link_libraries(test_material_window_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_material_window_directed

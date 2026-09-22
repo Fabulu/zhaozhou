@@ -38,9 +38,11 @@ int main(int argc, char** argv) {
   d.o_ready_i = 0;
   d.c0_ax_i = 0x0000'AAA;
   d.c0_material_id_i = 0x1234;
+  d.c0_material_mode_i = 0;
   d.c0_attr_witness_i = 0x1111'2222u;
   d.c1_ax_i = 0x0000'555;
   d.c1_material_id_i = 0x5678;
+  d.c1_material_mode_i = 1;
   d.c1_attr_witness_i = 0x9999'8888u;
   d.eval();
   for (int i = 0; i < 3; ++i) tick(d);

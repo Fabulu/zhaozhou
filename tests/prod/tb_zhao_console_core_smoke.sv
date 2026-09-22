@@ -841,6 +841,8 @@ module tb_zhao_console_core_smoke
   logic [31:0]  mat_win_drain_stall_o, mat_win_answer_stall_o;
   logic [31:0]  mat_win_occupancy_max_o, mat_win_no_record_o;
   logic [31:0]  mat_win_selector_overflow_o, mat_win_clut_unowned_o;
+  // Owner ruling 1, 2026-09-22: the NO_MATERIAL mode's census and its fault.
+  logic [31:0]  mat_win_no_material_spans_o, mat_win_mode_refused_o;
   logic [31:0]  mat_win_err_unpublished_o, mat_win_err_underflow_o;
   logic [ 2:0]  mat_rsp_status_o;
   logic         mat_rsp_has_record_o;
@@ -1314,7 +1316,8 @@ module tb_zhao_console_core_smoke
   // good failure: a port that appeared and was never declared would otherwise
   // be a silently unread output.
   logic        forge_pb_busy_o;
-  logic [63:0] geom_clipdoor_granted_o;
+  // PARTMAT 2026-09-22: three clients now (mesh 0, forge 1, particles 2).
+  logic [95:0] geom_clipdoor_granted_o;
   logic [31:0] forge_pb_pages_o;
   logic [31:0] forge_pb_draws_o;
   logic [31:0] forge_pb_bad_magic_o;
@@ -1870,6 +1873,10 @@ module tb_zhao_console_core_smoke
   logic [31:0] part_lad_held_o;
   logic [31:0] part_lad_gov_forced_o;
   logic [31:0] part_exp_polygons_o;
+  // PART.CLIPFEED's evidence (owner ruling 1, 2026-09-22).
+  logic [31:0] part_cf_particles_o, part_cf_triangles_o;
+  logic [31:0] part_cf_range_refused_o, part_cf_stall_full_o;
+  logic [31:0] part_cf_dq_refused_o, part_cf_dq_stray_o;
   logic [31:0] part_sft_sprites_o;
 
 
@@ -5540,6 +5547,57 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: particles  read=%0d written=%0d survivors=%0d updated=%0d",
              part_hps_records_read_o, part_records_written_q,
              part_survivors_o, part_updated_o);
+
+    // ======================================================================
+    // THE PARTICLE PATH TO THE RASTER -- owner ruling 1, 2026-09-22 (PARTMAT)
+    // ======================================================================
+    // The ruling's closing sentence is aimed at exactly this bench: "an
+    // otherwise green smoke whose upstream fixture never reaches the new path
+    // does not prove the path."
+    //
+    // So the chain is PRINTED END TO END, and what follows it is an
+    // IMPLICATION rather than a demand: it fires only if this fixture DOES
+    // reach PART.EXPAND and the new path then drops the beat.
+    //
+    // A DISPLAY WITH NO ASSERTION WOULD BE THE FLATTERING SHAPE -- a number
+    // nobody has to justify. A DEMAND WITH NO REACHABILITY would be a red
+    // smoke on a fixture that was never asked to spawn a polygon particle.
+    // The implication is the honest instrument, and the NOTE on the other
+    // branch is the disclosure TERRABAKE made unprompted about its own work:
+    // it says IN THE OUTPUT that this smoke is not evidence about that path,
+    // so nobody can quote the green.
+    $display("SMOKE: particle->raster  projected=%0d behind=%0d ladder=%0d expanded=%0d | clipfeed particles=%0d triangles=%0d refused_range=%0d stall_full=%0d dq[refused/stray]=[%0d %0d] | window no_material_spans=%0d mode_refused=%0d no_record=%0d | untex_refused=%0d",
+             part_prj_projected_o, part_prj_behind_o, part_lad_decisions_o,
+             part_exp_polygons_o,
+             part_cf_particles_o, part_cf_triangles_o, part_cf_range_refused_o,
+             part_cf_stall_full_o, part_cf_dq_refused_o, part_cf_dq_stray_o,
+             mat_win_no_material_spans_o, mat_win_mode_refused_o,
+             mat_win_no_record_o, geom_untex_refused_o);
+
+    if (part_exp_polygons_o != 32'd0) begin
+      // THE PATH IS REACHED BY THIS FIXTURE, so it must carry.
+      if (part_cf_particles_o == 32'd0)
+        $fatal(1, "SMOKE: PART.EXPAND emitted %0d polygon particle(s) and PART.CLIPFEED took NONE -- the AND-fork at part_exp_ready_i is not carrying",
+               part_exp_polygons_o);
+      if (part_cf_triangles_o == 32'd0)
+        $fatal(1, "SMOKE: PART.CLIPFEED took %0d particle(s) and emitted NO triangle -- the depth converter or the ring's head-of-line rule is stuck",
+               part_cf_particles_o);
+      if (mat_win_no_material_spans_o == 32'd0)
+        $fatal(1, "SMOKE: particles reached the door and NO NO_MATERIAL span was published -- owner ruling 1's lawful mode was not selected");
+      if (part_cf_range_refused_o != 32'd0)
+        $fatal(1, "SMOKE: %0d particle fan(s) refused for range -- to_screen_xy's clamp premise is broken upstream of PART.CLIPFEED",
+               part_cf_range_refused_o);
+      if (mat_win_mode_refused_o != 32'd0)
+        $fatal(1, "SMOKE: %0d contradictory material declaration(s) -- a producer is declaring NO_MATERIAL with a live {set, id}",
+               mat_win_mode_refused_o);
+      $display("SMOKE: NOTE the particle-to-raster path IS EXERCISED by this fixture -- %0d particle(s) expanded, %0d triangle(s) offered at GEOM.CLIP's door, %0d NO_MATERIAL span(s) published, %0d missing-material fault(s), %0d untextured refusal(s).",
+               part_exp_polygons_o, part_cf_triangles_o,
+               mat_win_no_material_spans_o, mat_win_no_record_o,
+               geom_untex_refused_o);
+    end else begin
+      $display("SMOKE: NOTE the particle-to-raster path is QUIESCENT in this fixture: PART.PROJECT projected %0d, PART.LADDER made %0d decision(s), and PART.EXPAND emitted NO polygon particle -- so PART.CLIPFEED, the NO_MATERIAL span and GEOM.CLIPDOOR's third client were NEVER REACHED. THIS SMOKE IS NOT EVIDENCE ABOUT THAT PATH. tests/prod/partmat_acceptance.cpp and tests/particles/part_clipfeed_directed.cpp are.",
+               part_prj_projected_o, part_lad_decisions_o);
+    end
     $display("SMOKE: assetpath  considered=%0d fetched=%0d culled=%0d refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]",
              geom_mf_meshlets_considered_o, geom_mf_descriptors_fetched_o,
              geom_mf_culled_all_cameras_o,

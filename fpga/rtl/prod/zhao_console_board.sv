@@ -404,6 +404,21 @@ module zhao_console_board
   parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
 
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
+  // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
+  // `zhao_material_window`'s MATMODE_BACKED_C is 2'd0 and MATMODE_NONE_C is
+  // 2'd1. These two are R48-shaped NAMED SEAMS in the same sense
+  // `GEOM_REPLAY_UNTEX_DECL` is: MATERIAL_BACKED is the TRUE value for both
+  // producers, not a default that happened to be right. Every mesh triangle
+  // carries `{rp_o_material_set, rp_o_material}` from its own meshlet and
+  // every forge primitive carries `{fa_o_material_set, fa_o_material_id}` from
+  // its own page, and both expect resolution.
+  //
+  // PART.CLIPFEED's declaration is deliberately NOT here. A producer's mode is
+  // the producer's, and a third constant at this composer would be the
+  // inferred mode owner ruling 1 forbids -- so it comes off
+  // `pcf_o_material_mode`, which the block itself drives.
+  parameter logic [1:0] GEOM_REPLAY_MATERIAL_MODE = 2'd0,
+  parameter logic [1:0] FORGE_MATERIAL_MODE       = 2'd0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -428,6 +443,13 @@ module zhao_console_board
   // 6 is ALPHA and always was. Naming it is not a change; it is the end of a
   // reader having to derive it.
   parameter int unsigned GEOM_ATTR_SLOT_ALPHA    = 6,
+  // A POLYGON PARTICLE'S ALPHA (owner ruling 1, 2026-09-22). AN ART VALUE, so
+  // it is a named editable constant and not a derived quantity (CLAUDE.md
+  // rule 6). `draw_population`'s tris branch calls `raster_tri` with three
+  // colour bytes and no alpha at all, so opaque is the reference's own
+  // behaviour; the day particles want to fade, this is the line that changes.
+  // Q16.16, matching FORGE_ALPHA's convention.
+  parameter int signed PART_ALPHA = 32'sd65536,   // 1.0, opaque
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -1493,9 +1515,11 @@ module zhao_console_board
   output logic [31:0] geom_ma_jobs_g_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
-  // Two clients today: GEOM.REPLAY's mesh triangles (0) and the forge (1).
-  // `granted_o` is flattened 32 bits each, least significant slice client 0.
-  output logic [63:0] geom_clipdoor_granted_o,
+  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
+  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
+  // (2). `granted_o` is flattened 32 bits each, least significant slice
+  // client 0, so the port widened 64 -> 96 with the third arm.
+  output logic [95:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -2102,6 +2126,14 @@ module zhao_console_board
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
+  // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
+  // CENSUS: spans published in the lawful no-material mode. The claim it
+  // supports is made by the counters it must NOT move beside --
+  // `mat_win_resolves_o` and `mat_win_no_record_o` -- which are three
+  // independent quantities rather than one restated.
+  output logic [31:0]             mat_win_no_material_spans_o,
+  // A FAULT: an internally contradictory material declaration, refused.
+  output logic [31:0]             mat_win_mode_refused_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -2955,6 +2987,16 @@ module zhao_console_board
   output logic [31:0] part_lad_held_o,
   output logic [31:0] part_lad_gov_forced_o,
   output logic [31:0] part_exp_polygons_o,
+  // ---- PART.CLIPFEED's evidence (owner ruling 1, 2026-09-22) --------------
+  // `part_cf_particles_o` against `part_cf_triangles_o` is the census pair
+  // that discriminates: a ring that stopped draining, or a converter that
+  // stopped answering, shows the first climbing while the second stands still.
+  output logic [31:0] part_cf_particles_o,
+  output logic [31:0] part_cf_triangles_o,
+  output logic [31:0] part_cf_range_refused_o,
+  output logic [31:0] part_cf_stall_full_o,
+  output logic [31:0] part_cf_dq_refused_o,
+  output logic [31:0] part_cf_dq_stray_o,
   output logic [31:0] part_sft_sprites_o,
 
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
@@ -3780,93 +3822,96 @@ module zhao_console_board
   // which is a port that appeared in the core after this file was written.
   // ===========================================================================
   zhao_console_core #(
-      .FRAMER_Q                 (FRAMER_Q),
-      .WFIFO_W                  (WFIFO_W),
-      .SNAC_PORTS               (SNAC_PORTS),
-      .CMD_EXEC_STAMP_Q         (CMD_EXEC_STAMP_Q),
-      .PART_REC_W               (PART_REC_W),
-      .PART_CAPACITY            (PART_CAPACITY),
-      .PART_CHILD_D             (PART_CHILD_D),
-      .PART_SPECIES_N           (PART_SPECIES_N),
-      .PART_AGE_W               (PART_AGE_W),
-      .PART_POS_W               (PART_POS_W),
-      .PART_VEL_W               (PART_VEL_W),
-      .PART_NRM_W               (PART_NRM_W),
-      .PART_FX_W                (PART_FX_W),
-      .PART_PID_W               (PART_PID_W),
-      .PART_TICK_W              (PART_TICK_W),
-      .PART_TBL_LD_W            (PART_TBL_LD_W),
-      .GEOM_ARENAS              (GEOM_ARENAS),
-      .GEOM_DEPTH               (GEOM_DEPTH),
-      .GEOM_NVIEWS              (GEOM_NVIEWS),
-      .GEOM_GEN_W               (GEOM_GEN_W),
-      .GEOM_PAY_A_W             (GEOM_PAY_A_W),
-      .GEOM_PAYLOAD_W           (GEOM_PAYLOAD_W),
-      .GEOM_INDEX_W             (GEOM_INDEX_W),
-      .GEOM_ARENA_W             (GEOM_ARENA_W),
-      .GEOM_MUL_LANES           (GEOM_MUL_LANES),
-      .GEOM_ASSET_MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
-      .GEOM_ASSET_MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
-      .GEOM_ASM_VIDW            (GEOM_ASM_VIDW),
-      .GEOM_CLIP_ATTRS          (GEOM_CLIP_ATTRS),
-      .GEOM_CLIP_ATTRW          (GEOM_CLIP_ATTRW),
-      .GEOM_ATTR_STORE_W        (GEOM_ATTR_STORE_W),
-      .FORGE_MAX_VERTS          (FORGE_MAX_VERTS),
-      .FORGE_INFLIGHT           (FORGE_INFLIGHT),
-      .FORGE_MAX_SCAN           (FORGE_MAX_SCAN),
-      .FORGE_LIT_R              (FORGE_LIT_R),
-      .FORGE_LIT_G              (FORGE_LIT_G),
-      .FORGE_LIT_B              (FORGE_LIT_B),
-      .FORGE_ALPHA              (FORGE_ALPHA),
-      .FORGE_QUALITY_TIER       (FORGE_QUALITY_TIER),
-      .FORGE_CULL_MODE          (FORGE_CULL_MODE),
-      .FORGE_CMD_VIEW_MASK      (FORGE_CMD_VIEW_MASK),
-      .GEOM_REPLAY_UNTEX_DECL   (GEOM_REPLAY_UNTEX_DECL),
-      .GEOM_ATTR_SLOT_INVW      (GEOM_ATTR_SLOT_INVW),
-      .GEOM_ATTR_SLOT_U_OVER_W  (GEOM_ATTR_SLOT_U_OVER_W),
-      .GEOM_ATTR_SLOT_V_OVER_W  (GEOM_ATTR_SLOT_V_OVER_W),
-      .GEOM_ATTR_SLOT_R         (GEOM_ATTR_SLOT_R),
-      .GEOM_ATTR_SLOT_G         (GEOM_ATTR_SLOT_G),
-      .GEOM_ATTR_SLOT_B         (GEOM_ATTR_SLOT_B),
-      .GEOM_ATTR_SLOT_ALPHA     (GEOM_ATTR_SLOT_ALPHA),
-      .PROJ_T_ARENAS            (PROJ_T_ARENAS),
-      .PROJ_T_DEPTH             (PROJ_T_DEPTH),
-      .PROJ_T_INDEX_W           (PROJ_T_INDEX_W),
-      .PROJ_T_ARENA_W           (PROJ_T_ARENA_W),
-      .PROJ_T_IDX_W             (PROJ_T_IDX_W),
-      .POST_LINE_W              (POST_LINE_W),
-      .POST_MAX_H               (POST_MAX_H),
-      .POST_NLINE               (POST_NLINE),
-      .POST_LAG_LINES           (POST_LAG_LINES),
-      .POST_LAG_PX              (POST_LAG_PX),
-      .POST_XW                  (POST_XW),
-      .POST_YW                  (POST_YW),
-      .TWOD_PAGE_WORDS          (TWOD_PAGE_WORDS),
-      .TWOD_PAL_SLOTS           (TWOD_PAL_SLOTS),
-      .TWOD_BIND_SLOTS          (TWOD_BIND_SLOTS),
-      .TWOD_ATM_LINES           (TWOD_ATM_LINES),
-      .TWOD_PAW                 (TWOD_PAW),
-      .TWOD_PALAW               (TWOD_PALAW),
-      .TWOD_BSW                 (TWOD_BSW),
-      .HIST_EW                  (HIST_EW),
-      .HIST_SUB_BITS            (HIST_SUB_BITS),
-      .HIST_LANES               (HIST_LANES),
-      .HIST_CW                  (HIST_CW),
-      .HIST_BINW                (HIST_BINW),
-      .SURF_SLOTS               (SURF_SLOTS),
-      .SURF_SQ_RADIX            (SURF_SQ_RADIX),
-      .TERR_SETS                (TERR_SETS),
-      .TERR_WAYS                (TERR_WAYS),
-      .TERR_SLOTW               (TERR_SLOTW),
-      .TERR_GENW                (TERR_GENW),
-      .TERR_SEQW                (TERR_SEQW),
-      .TERR_PINW                (TERR_PINW),
-      .TERR_CSLOTS              (TERR_CSLOTS),
-      .TERR_LOADQ_D             (TERR_LOADQ_D),
-      .TERR_POOL_BASE           (TERR_POOL_BASE),
-      .TERR_POOL_SLOTS          (TERR_POOL_SLOTS),
-      .TERR_MEMSLOT             (TERR_MEMSLOT),
-      .TERR_PAGE_BYTES          (TERR_PAGE_BYTES)
+      .FRAMER_Q                  (FRAMER_Q),
+      .WFIFO_W                   (WFIFO_W),
+      .SNAC_PORTS                (SNAC_PORTS),
+      .CMD_EXEC_STAMP_Q          (CMD_EXEC_STAMP_Q),
+      .PART_REC_W                (PART_REC_W),
+      .PART_CAPACITY             (PART_CAPACITY),
+      .PART_CHILD_D              (PART_CHILD_D),
+      .PART_SPECIES_N            (PART_SPECIES_N),
+      .PART_AGE_W                (PART_AGE_W),
+      .PART_POS_W                (PART_POS_W),
+      .PART_VEL_W                (PART_VEL_W),
+      .PART_NRM_W                (PART_NRM_W),
+      .PART_FX_W                 (PART_FX_W),
+      .PART_PID_W                (PART_PID_W),
+      .PART_TICK_W               (PART_TICK_W),
+      .PART_TBL_LD_W             (PART_TBL_LD_W),
+      .GEOM_ARENAS               (GEOM_ARENAS),
+      .GEOM_DEPTH                (GEOM_DEPTH),
+      .GEOM_NVIEWS               (GEOM_NVIEWS),
+      .GEOM_GEN_W                (GEOM_GEN_W),
+      .GEOM_PAY_A_W              (GEOM_PAY_A_W),
+      .GEOM_PAYLOAD_W            (GEOM_PAYLOAD_W),
+      .GEOM_INDEX_W              (GEOM_INDEX_W),
+      .GEOM_ARENA_W              (GEOM_ARENA_W),
+      .GEOM_MUL_LANES            (GEOM_MUL_LANES),
+      .GEOM_ASSET_MAX_VERTICES   (GEOM_ASSET_MAX_VERTICES),
+      .GEOM_ASSET_MAX_TRIANGLES  (GEOM_ASSET_MAX_TRIANGLES),
+      .GEOM_ASM_VIDW             (GEOM_ASM_VIDW),
+      .GEOM_CLIP_ATTRS           (GEOM_CLIP_ATTRS),
+      .GEOM_CLIP_ATTRW           (GEOM_CLIP_ATTRW),
+      .GEOM_ATTR_STORE_W         (GEOM_ATTR_STORE_W),
+      .FORGE_MAX_VERTS           (FORGE_MAX_VERTS),
+      .FORGE_INFLIGHT            (FORGE_INFLIGHT),
+      .FORGE_MAX_SCAN            (FORGE_MAX_SCAN),
+      .FORGE_LIT_R               (FORGE_LIT_R),
+      .FORGE_LIT_G               (FORGE_LIT_G),
+      .FORGE_LIT_B               (FORGE_LIT_B),
+      .FORGE_ALPHA               (FORGE_ALPHA),
+      .FORGE_QUALITY_TIER        (FORGE_QUALITY_TIER),
+      .FORGE_CULL_MODE           (FORGE_CULL_MODE),
+      .FORGE_CMD_VIEW_MASK       (FORGE_CMD_VIEW_MASK),
+      .GEOM_REPLAY_UNTEX_DECL    (GEOM_REPLAY_UNTEX_DECL),
+      .GEOM_REPLAY_MATERIAL_MODE (GEOM_REPLAY_MATERIAL_MODE),
+      .FORGE_MATERIAL_MODE       (FORGE_MATERIAL_MODE),
+      .GEOM_ATTR_SLOT_INVW       (GEOM_ATTR_SLOT_INVW),
+      .GEOM_ATTR_SLOT_U_OVER_W   (GEOM_ATTR_SLOT_U_OVER_W),
+      .GEOM_ATTR_SLOT_V_OVER_W   (GEOM_ATTR_SLOT_V_OVER_W),
+      .GEOM_ATTR_SLOT_R          (GEOM_ATTR_SLOT_R),
+      .GEOM_ATTR_SLOT_G          (GEOM_ATTR_SLOT_G),
+      .GEOM_ATTR_SLOT_B          (GEOM_ATTR_SLOT_B),
+      .GEOM_ATTR_SLOT_ALPHA      (GEOM_ATTR_SLOT_ALPHA),
+      .PART_ALPHA                (PART_ALPHA),
+      .PROJ_T_ARENAS             (PROJ_T_ARENAS),
+      .PROJ_T_DEPTH              (PROJ_T_DEPTH),
+      .PROJ_T_INDEX_W            (PROJ_T_INDEX_W),
+      .PROJ_T_ARENA_W            (PROJ_T_ARENA_W),
+      .PROJ_T_IDX_W              (PROJ_T_IDX_W),
+      .POST_LINE_W               (POST_LINE_W),
+      .POST_MAX_H                (POST_MAX_H),
+      .POST_NLINE                (POST_NLINE),
+      .POST_LAG_LINES            (POST_LAG_LINES),
+      .POST_LAG_PX               (POST_LAG_PX),
+      .POST_XW                   (POST_XW),
+      .POST_YW                   (POST_YW),
+      .TWOD_PAGE_WORDS           (TWOD_PAGE_WORDS),
+      .TWOD_PAL_SLOTS            (TWOD_PAL_SLOTS),
+      .TWOD_BIND_SLOTS           (TWOD_BIND_SLOTS),
+      .TWOD_ATM_LINES            (TWOD_ATM_LINES),
+      .TWOD_PAW                  (TWOD_PAW),
+      .TWOD_PALAW                (TWOD_PALAW),
+      .TWOD_BSW                  (TWOD_BSW),
+      .HIST_EW                   (HIST_EW),
+      .HIST_SUB_BITS             (HIST_SUB_BITS),
+      .HIST_LANES                (HIST_LANES),
+      .HIST_CW                   (HIST_CW),
+      .HIST_BINW                 (HIST_BINW),
+      .SURF_SLOTS                (SURF_SLOTS),
+      .SURF_SQ_RADIX             (SURF_SQ_RADIX),
+      .TERR_SETS                 (TERR_SETS),
+      .TERR_WAYS                 (TERR_WAYS),
+      .TERR_SLOTW                (TERR_SLOTW),
+      .TERR_GENW                 (TERR_GENW),
+      .TERR_SEQW                 (TERR_SEQW),
+      .TERR_PINW                 (TERR_PINW),
+      .TERR_CSLOTS               (TERR_CSLOTS),
+      .TERR_LOADQ_D              (TERR_LOADQ_D),
+      .TERR_POOL_BASE            (TERR_POOL_BASE),
+      .TERR_POOL_SLOTS           (TERR_POOL_SLOTS),
+      .TERR_MEMSLOT              (TERR_MEMSLOT),
+      .TERR_PAGE_BYTES           (TERR_PAGE_BYTES)
   ) u_core (
       .part_cfg_base0_i                   (part_cfg_base0_i),
       .part_cfg_base1_i                   (part_cfg_base1_i),
@@ -4539,6 +4584,8 @@ module zhao_console_board
       .mat_win_clut_unowned_o             (mat_win_clut_unowned_o),
       .mat_win_err_unpublished_o          (mat_win_err_unpublished_o),
       .mat_win_err_underflow_o            (mat_win_err_underflow_o),
+      .mat_win_no_material_spans_o        (mat_win_no_material_spans_o),
+      .mat_win_mode_refused_o             (mat_win_mode_refused_o),
       .geom_ma_jobs_c_o                   (geom_ma_jobs_c_o),
       .geom_ma_jobs_d_o                   (geom_ma_jobs_d_o),
       .geom_ma_jobs_e_o                   (geom_ma_jobs_e_o),
@@ -4961,6 +5008,12 @@ module zhao_console_board
       .part_lad_held_o                    (part_lad_held_o),
       .part_lad_gov_forced_o              (part_lad_gov_forced_o),
       .part_exp_polygons_o                (part_exp_polygons_o),
+      .part_cf_particles_o                (part_cf_particles_o),
+      .part_cf_triangles_o                (part_cf_triangles_o),
+      .part_cf_range_refused_o            (part_cf_range_refused_o),
+      .part_cf_stall_full_o               (part_cf_stall_full_o),
+      .part_cf_dq_refused_o               (part_cf_dq_refused_o),
+      .part_cf_dq_stray_o                 (part_cf_dq_stray_o),
       .part_sft_sprites_o                 (part_sft_sprites_o),
       .phy_cs_n_o                         (phy_cs_n_o),
       .phy_ras_n_o                        (phy_ras_n_o),
