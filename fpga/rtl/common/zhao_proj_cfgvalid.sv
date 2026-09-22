@@ -184,26 +184,38 @@ module zhao_proj_cfgvalid #(
   initial begin
     if (MAT_WORDS == 0)
       $fatal(1, "zhao_proj_cfgvalid: MAT_WORDS is 0; the bank would arm before any write");
+    // THE ONE PARAMETERISATION THAT HANGS THE CONSOLE. A bank wider than the
+    // address bus has addresses nobody can write, so its mask can never fill,
+    // so the projector never arms and no frame is ever drawn. Reported here
+    // rather than debugged on a dark console.
+    //
+    // THIS GUARD REPLACED A WRONG ONE, and the wrong one is worth recording
+    // because it FIRED CLEANLY and said something false. It claimed MAT_WORDS
+    // had to be a power of two, "or mask bits above N would be unreachable".
+    // It was fired on purpose with MAT_WORDS = 12 and it duly refused the
+    // build -- but 12 is perfectly sound here: `$clog2(12)` is 4, the index
+    // reaches 0..15, and `matrix_write_c` admits only 0..11, so every bit of a
+    // twelve-bit mask is written by the address that owns it. **A guard firing
+    // is evidence that it fires, and no evidence whatever that what it asserts
+    // is true.** The fire test did its job; reading it as validation of the
+    // claim would have been the broken instrument's flattering direction.
     if (MAT_WORDS > (1 << ADDRW))
-      $fatal(1, "zhao_proj_cfgvalid: MAT_WORDS %0d does not fit ADDRW %0d; bank addresses are unreachable and the arm can never complete",
-             MAT_WORDS, ADDRW);
-    // The mask index below is `cfg_addr_i[$clog2(MAT_WORDS)-1:0]`, which
-    // addresses every bit of the mask ONLY when MAT_WORDS is a power of two.
-    // At any other value the top bits of the mask would be unreachable and the
-    // arm could never complete -- a hang, reported here rather than debugged
-    // on a dark console.
-    if ((1 << $clog2(MAT_WORDS)) != MAT_WORDS)
-      $fatal(1, "zhao_proj_cfgvalid: MAT_WORDS %0d is not a power of two; mask bits above %0d would be unreachable and the bank could never arm",
-             MAT_WORDS, (1 << $clog2(MAT_WORDS)) - 1);
+      $fatal(1, "zhao_proj_cfgvalid: MAT_WORDS %0d does not fit ADDRW %0d; bank addresses above %0d can never be written and the arm can never complete",
+             MAT_WORDS, ADDRW, (1 << ADDRW) - 1);
   end
 
   // ---------------------------------------------------------------------------
   // THE PER-VIEW COVERAGE MASKS
   // ---------------------------------------------------------------------------
-  logic [MAT_WORDS-1:0] seen_q [0:1];
-  logic                 armed_q;
-  logic [31:0]          arm_events_q;
-  logic [31:0]          held_offers_q;
+  // ONE BIT PER ADDRESS THE BUS CAN CARRY, not one per matrix word, so the
+  // index is `cfg_addr_i` ITSELF and there is no derived-width slice to get
+  // wrong for some future MAT_WORDS. Completion reads the low MAT_WORDS bits.
+  localparam int unsigned MASKW = 1 << ADDRW;
+
+  logic [MASKW-1:0] seen_q [0:1];
+  logic             armed_q;
+  logic [31:0]      arm_events_q;
+  logic [31:0]      held_offers_q;
 
   // A matrix write is one to an address BELOW `MAT_WORDS`. The comparison is
   // made once, here, so the two users below cannot drift apart.
@@ -217,18 +229,33 @@ module zhao_proj_cfgvalid #(
   // downstream would have failed -- a freeze is lossless -- which is exactly
   // why it would have stayed: an off-by-one with no symptom, in a block whose
   // whole job is to say WHEN the camera exists.
-  logic [MAT_WORDS-1:0] seen_n [0:1];
+  logic [MASKW-1:0] seen_n [0:1];
   always_comb begin
     seen_n[0] = seen_q[0];
     seen_n[1] = seen_q[1];
     if (matrix_write_c)
-      seen_n[cfg_view_i][cfg_addr_i[$clog2(MAT_WORDS)-1:0]] = 1'b1;
+      seen_n[cfg_view_i][cfg_addr_i] = 1'b1;
   end
 
   // The bank of EITHER view being complete arms the pipeline. See the header
   // for why this is a disjunction and not a conjunction; the conjunction hangs
   // a single-view contract.
-  wire complete_c = (&seen_n[0]) || (&seen_n[1]);
+  //
+  // The reduction walks the MASK's width and tests membership inside the loop,
+  // so there is never a part-select whose bounds depend on a parameter -- the
+  // shape that turns a bad parameterisation into an elaboration error the
+  // guard above never gets to explain.
+  logic complete_c;
+  always_comb begin
+    complete_c = 1'b0;
+    for (int unsigned v = 0; v < 2; v++) begin
+      logic full;
+      full = 1'b1;
+      for (int unsigned k = 0; k < MASKW; k++)
+        if (k < MAT_WORDS) full = full && seen_n[v][k];
+      complete_c = complete_c || full;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

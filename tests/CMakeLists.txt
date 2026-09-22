@@ -10596,37 +10596,41 @@ set_tests_properties(proj_cfgvalid_directed PROPERTIES LABELS "fast;nightly" TIM
 
 # The elaboration guard, FIRED. `--lint-only` does not run `initial` blocks
 # (CLAUDE.md), so a clean lint says nothing whatever about this check. The
-# parameterisation broken here is the one the mask index silently assumes: a
-# MAT_WORDS that is not a power of two leaves mask bits unreachable, so the
-# bank could never arm and the console would draw nothing -- a hang, which is
-# the most expensive way to find out.
-add_executable(test_proj_cfgvalid_pow2_guard common/proj_cfgvalid_directed.cpp)
-target_link_libraries(test_proj_cfgvalid_pow2_guard PRIVATE zhao_harness)
-verilate(test_proj_cfgvalid_pow2_guard
+# parameterisation broken here is the one that HANGS the console: a bank wider
+# than the address bus has addresses nobody can write, so the mask never fills,
+# so the projector never arms and no frame is ever drawn.
+#
+# THE FIRST VERSION OF THIS FIRE TEST BROKE A DIFFERENT GUARD, and it fired
+# cleanly while the guard asserted something FALSE -- see the block's own note.
+# A guard firing is evidence that it fires and no evidence that its claim is
+# true, which is the broken-instrument law inside a positive control.
+add_executable(test_proj_cfgvalid_addrw_guard common/proj_cfgvalid_directed.cpp)
+target_link_libraries(test_proj_cfgvalid_addrw_guard PRIVATE zhao_harness)
+verilate(test_proj_cfgvalid_addrw_guard
   PREFIX Vzhao_proj_cfgvalid
   TOP_MODULE zhao_proj_cfgvalid
   SOURCES ${ZHAO_PROJ_CFGVALID_SV}
-  VERILATOR_ARGS -GMAT_WORDS=12)
-add_test(NAME proj_cfgvalid_pow2_guard
+  VERILATOR_ARGS -GMAT_WORDS=64)
+add_test(NAME proj_cfgvalid_addrw_guard
   COMMAND ${CMAKE_COMMAND}
-    -DEXE=$<TARGET_FILE:test_proj_cfgvalid_pow2_guard>
-    -DEXPECT=is\ not\ a\ power\ of\ two
+    -DEXE=$<TARGET_FILE:test_proj_cfgvalid_addrw_guard>
+    -DEXPECT=can\ never\ be\ written
     -DRUN_TIMEOUT=10
     -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
-set_tests_properties(proj_cfgvalid_pow2_guard PROPERTIES
+set_tests_properties(proj_cfgvalid_addrw_guard PROPERTIES
   LABELS "fast;nightly" TIMEOUT 120)
 
 # The wrapper's own negative control, exactly as measure_starve does it: the
 # wrapper reports a pass on a process that never exits, so the branch that must
 # be shown to work is the one where the diagnostic is ABSENT. Pointed at the
 # healthy build, which runs the same module with a legal MAT_WORDS.
-add_test(NAME proj_cfgvalid_pow2_guard_wrapper_control
+add_test(NAME proj_cfgvalid_addrw_guard_wrapper_control
   COMMAND ${CMAKE_COMMAND}
     -DEXE=$<TARGET_FILE:test_proj_cfgvalid_directed>
-    -DEXPECT=is\ not\ a\ power\ of\ two
+    -DEXPECT=can\ never\ be\ written
     -DRUN_TIMEOUT=60
     -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
-set_tests_properties(proj_cfgvalid_pow2_guard_wrapper_control PROPERTIES
+set_tests_properties(proj_cfgvalid_addrw_guard_wrapper_control PROPERTIES
   LABELS "fast;nightly" TIMEOUT 120 WILL_FAIL TRUE)
 # R8's side-by-side render of both deviation readings (a tool, not a test):
 # tools/terrain/lod_readings_sheet.py builds it, runs it and assembles the PNG.
