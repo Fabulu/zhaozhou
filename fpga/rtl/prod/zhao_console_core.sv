@@ -21879,7 +21879,7 @@ module zhao_console_core
       .pv_rgba_i   (32'd0),
 
       // ---- TriangleDescriptor: REAL, GEOM.ASSEMBLE's live output -----------
-      .td_valid_i    (asm_t_valid),
+      .td_valid_i    (pa_t_valid),
       .td_ready_o    (pa_td_ready),
       .td_v0_i       (16'(asm_t_v0)),
       .td_v1_i       (16'(asm_t_v1)),
@@ -22099,10 +22099,46 @@ module zhao_console_core
 
   wire                     asm_m_valid, asm_m_ready, rp_mt_ready;
   wire                     asm_t_valid, asm_t_ready, asm_m_done;
-  // GEOM.REPLAY's ready, and the arena's, and the AND that keeps the tap
-  // lossless. Written as its own wire rather than inline so the two consumers
-  // are visible at the point the stream is defined.
+  // ------------------------------------------------------------------------
+  // THE TRIANGLE STREAM NOW HAS TWO CONSUMERS, AND IT IS A FORK, NOT AN AND.
+  // ------------------------------------------------------------------------
+  // GEOM.REPLAY consumed this stream alone until GEOM.PARAMBUF's arena
+  // producer began mirroring it into SDRAM. The first version ANDed the two
+  // readys into `asm_t_ready` and left each consumer looking at the RAW
+  // `asm_t_valid`, which is a real defect and the console smoke caught it:
+  //
+  //     GEOM.REPLAY meshlets=3 handles=6 tri_in=23 tri_out=46
+  //                                 -- the reference wants 3 / 6 / 8 / 16
+  //
+  // EIGHT TRIANGLES BECAME TWENTY-THREE. GEOM.REPLAY counts a triangle when
+  // it sees `t_valid_i && t_ready_o`, so on every cycle where REPLAY was
+  // ready and the ARENA was not, REPLAY consumed a triangle that
+  // GEOM.ASSEMBLE had not advanced past -- the SAME triangle, again, until
+  // the arena caught up. This is CLAUDE.md's "counters see what pictures
+  // cannot" exactly: the shell bench that re-submitted one meshlet fifteen
+  // times because `m_valid_i` was driven from a level held for the whole
+  // offer window. Every triangle was still CORRECT; there were simply three
+  // times as many of them, and no framebuffer comparison could have said so.
+  //
+  // THE FORK. A valid/ready stream with two consumers needs each consumer's
+  // VALID gated by the OTHER's ready, not just a shared ready:
+  //
+  //   asm_t_ready              = both are ready
+  //   REPLAY's t_valid_i       = valid AND the arena can take it
+  //   the arena's td_valid_i   = valid AND REPLAY can take it
+  //
+  // so a transfer is seen by exactly one party at a time when it is seen by
+  // both, and by neither otherwise.
+  //
+  // AND IT DOES NOT CLOSE A COMBINATIONAL LOOP, which is the thing to check
+  // before writing a fork like this. `pa_td_ready` is
+  // `(!frame_open_q || frame_fault_q) || (mstate_q == M_IDLE)` with
+  // `pv_valid_i` tied low -- REGISTERS ONLY, no dependence on `td_valid_i`.
+  // So `rpl_t_ready` may depend on REPLAY's valid as freely as it likes: the
+  // path ends at the arena's valid and never returns.
   wire                     rpl_t_ready;
+  wire                     rpl_t_valid = asm_t_valid && pa_td_ready;
+  wire                     pa_t_valid  = asm_t_valid && rpl_t_ready;
   assign asm_t_ready = rpl_t_ready && pa_td_ready;
   // `t_last_o` is not read: it rides an EMITTED triangle, so a refused last
   // triplet or an empty meshlet ends the walk without one. GEOM.REPLAY ends a
@@ -22283,7 +22319,7 @@ module zhao_console_core
     // triangle is offered only when BOTH consumers can take it and neither
     // loses one. GEOM.REPLAY's own behaviour is unchanged -- it still sees a
     // valid/ready handshake and still drives the ready that gates it.
-    .t_valid_i    (asm_t_valid),
+    .t_valid_i    (rpl_t_valid),
     .t_ready_o    (rpl_t_ready),
     .t_v0_i       (asm_t_v0),
     .t_v1_i       (asm_t_v1),
