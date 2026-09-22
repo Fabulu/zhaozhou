@@ -1376,6 +1376,11 @@ module tb_zhao_console_core_smoke
   logic [31:0] forge_asm_dq_refused_o;
   logic [31:0] forge_asm_dq_stray_o;
   logic [31:0] forge_asm_proj_stray_o;
+  // The carriage detector of owner completion ruling 2 (2026-09-22). This
+  // smoke DRIVES NO PROCEDURAL DRAW, so it reads zero here for the dullest
+  // possible reason -- the forge chain is quiescent in it. Its positive
+  // control is `forge_assemble_directed` case 5b, at the block's own ports.
+  logic [31:0] forge_asm_mat_skew_o;
   logic [31:0] cmd_exec_forges_o;
   logic [31:0] cmd_exec_forge_overflow_o;
   logic [31:0] cmd_exec_forge_src_truncated_o;

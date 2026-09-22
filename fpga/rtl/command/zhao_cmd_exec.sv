@@ -691,9 +691,16 @@ module zhao_cmd_exec
     output logic               forge_valid_o,
     input  logic               forge_ready_i,
     output logic        [31:0] forge_program_o,    // handle32[forge_program]
-    output logic        [31:0] forge_material_o,   // handle32[material]
+    // THE MATERIAL REFERENCE IS A PAIR, and both halves leave on ONE
+    // acceptance -- owner completion ruling 2 (2026-09-22). `forge_material_o`
+    // is the COMPLETE handle32[material_set]; `forge_material_id_o` is the
+    // independent u16 record index from the record's own bytes. They are two
+    // fields of ONE queue entry below, so no arrangement of backpressure can
+    // present one draw's set beside another draw's id.
+    output logic        [31:0] forge_material_o,   // handle32[material_set], WHOLE
+    output logic        [15:0] forge_material_id_o,// u16 record index in that set
     output logic        [ 7:0] forge_kind_o,       // forge_kind, the ROTATED numbering
-    output logic        [15:0] forge_frame_tick_o, // R241 D-TICK-A, from pad[11]
+    output logic        [15:0] forge_frame_tick_o, // R241 D-TICK-A, from frame_tick[2]
     output logic        [15:0] forge_src_id_o,     // record source_id, low 16
     output logic        [31:0] forges_issued_o,
     output logic        [31:0] forge_overflow_o,      // packets refused: > FORGE_Q
@@ -3284,17 +3291,29 @@ module zhao_cmd_exec
   // whoever builds the clamp adds four lines here and a port beside
   // `forge_kind_o`, and nothing else moves.
   //
-  // `frame_tick` IS TWO BYTES OF `pad[11]` (offset 53), little-endian, which is
-  // R241 D-TICK-A executed. The ruling names the field and not the width; two
-  // bytes is what `zhao_forge_prim_eval`'s `j_tick_phase_i` is, and the
-  // remaining nine pad bytes stay mandatory-zero and unread -- the same
-  // discipline `forge_kind` itself was promoted under (R108).
+  // `frame_tick` IS A DECLARED FIELD NOW, not a pad reinterpretation. R241
+  // D-TICK-A put it in `pad[11]`'s first two bytes; owner completion ruling 2
+  // (2026-09-22) required both pad allocations to be made explicit in
+  // `spec/commands.zidl`, so `ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_0` is now a
+  // generated offset and the bytes are THE SAME TWO (payload 37..38, record
+  // 53..54). Nothing about the decode below moved; what moved is that a nonzero
+  // frame_tick is no longer a mandatory-zero pad violation at validation.
+  //
+  // `material_id` IS THE SECOND HALF OF THE MATERIAL REFERENCE (record 56..57,
+  // u16 little-endian) and `material_set` is the WHOLE 32-bit word at record
+  // 20..23. This arm reads them as two independent fields and joins them in one
+  // queue entry; it does not interpret either, and it must not: the (set, id)
+  // key belongs to `zhao_material_window` and the residency law to the handle
+  // law, and an executor with a second opinion about them is the fault the
+  // ruling names -- "do not read the existing word both as the complete set
+  // handle and as its low-16-bit material ID."
   // ==========================================================================
   localparam int unsigned OFF_FG_SRC   = ZHAO_DRAW_PROCEDURAL_OFF_H_SOURCE_ID;
   localparam int unsigned OFF_FG_PROG  = ZHAO_DRAW_PROCEDURAL_OFF_PROGRAM;
-  localparam int unsigned OFF_FG_MAT   = ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL;
+  localparam int unsigned OFF_FG_MAT   = ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_SET;
   localparam int unsigned OFF_FG_KIND  = ZHAO_DRAW_PROCEDURAL_OFF_KIND;
-  localparam int unsigned OFF_FG_PAD   = ZHAO_DRAW_PROCEDURAL_OFF_PAD;
+  localparam int unsigned OFF_FG_TICK  = ZHAO_DRAW_PROCEDURAL_OFF_FRAME_TICK_0;
+  localparam int unsigned OFF_FG_MID   = ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL_ID;
 
   // Quartus 17.0 requires an elaboration check inside `initial begin`; and
   // `--lint-only` does not run one, so this is not evidence a clean lint gives.
@@ -3302,12 +3321,21 @@ module zhao_cmd_exec
   initial begin
     if (FORGE_Q < 2)
       $fatal(1, "zhao_cmd_exec: FORGE_Q must be >= 2 (the pointers need a bit)");
-    // The frame_tick reinterpretation lives INSIDE the pad, or it is reading a
-    // field that belongs to something else.
-    if ((OFF_FG_PAD + 2) > ZHAO_DRAW_PROCEDURAL_BYTES)
+    // Both two-byte fields must lie INSIDE the record, or this arm is reading
+    // bytes that belong to something else.
+    if ((OFF_FG_TICK + 2) > ZHAO_DRAW_PROCEDURAL_BYTES)
       $fatal(1, "zhao_cmd_exec: frame_tick's two bytes run past the DrawProcedural record");
-    if (OFF_FG_KIND >= OFF_FG_PAD)
-      $fatal(1, "zhao_cmd_exec: forge_kind and the pad have moved relative to each other");
+    if ((OFF_FG_MID + 2) > ZHAO_DRAW_PROCEDURAL_BYTES)
+      $fatal(1, "zhao_cmd_exec: material_id's two bytes run past the DrawProcedural record");
+    if (OFF_FG_KIND >= OFF_FG_TICK)
+      $fatal(1, "zhao_cmd_exec: forge_kind and frame_tick have moved relative to each other");
+    // THE TWO HALVES OF THE MATERIAL REFERENCE MUST NOT OVERLAP. This is the
+    // ruling's own prohibition expressed as an elaboration check: if a future
+    // layout ever put `material_id` inside the set handle's four bytes, the
+    // word would be read twice -- as the complete handle AND as its low half --
+    // which is exactly the reading the owner forbade.
+    if ((OFF_FG_MID < (OFF_FG_MAT + 4)) && ((OFF_FG_MID + 2) > OFF_FG_MAT))
+      $fatal(1, "zhao_cmd_exec: material_id overlaps material_set -- the forbidden double read");
   end
   // synthesis translate_on
 
@@ -3317,12 +3345,16 @@ module zhao_cmd_exec
   localparam int unsigned FQ_TICK_LO = 72;
   localparam int unsigned FQ_SRC_LO  = 88;
   localparam int unsigned FQ_TRN_LO  = 104;   // source_id did not fit 16 bits
-  localparam int unsigned FORGE_W    = 105;
+  // The record index rides the SAME ENTRY as the set handle. That is the whole
+  // carriage argument in one line: a queue entry is written by one assignment
+  // and read by one pointer, so the pair cannot skew under any backpressure.
+  localparam int unsigned FQ_MID_LO  = 105;
+  localparam int unsigned FORGE_W    = 121;
   localparam int unsigned FQW        = $clog2(FORGE_Q);
 
   logic [31:0] fg_prog, fg_mat;
   logic [ 7:0] fg_kind;
-  logic [15:0] fg_tick, fg_src;
+  logic [15:0] fg_tick, fg_src, fg_mid;
   logic        fg_src_hi_nz;
 
   logic [FORGE_W-1:0] fq [0:FORGE_Q-1];
@@ -3335,6 +3367,7 @@ module zhao_cmd_exec
   assign forge_valid_o      = (fq_rp != fq_cp);
   assign forge_program_o    = fq_head[FQ_PROG_LO +: 32];
   assign forge_material_o   = fq_head[FQ_MAT_LO  +: 32];
+  assign forge_material_id_o= fq_head[FQ_MID_LO  +: 16];
   assign forge_kind_o       = fq_head[FQ_KIND_LO +:  8];
   assign forge_frame_tick_o = fq_head[FQ_TICK_LO +: 16];
   assign forge_src_id_o     = fq_head[FQ_SRC_LO  +: 16];
@@ -3344,7 +3377,7 @@ module zhao_cmd_exec
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      fg_prog <= 32'd0; fg_mat <= 32'd0;
+      fg_prog <= 32'd0; fg_mat <= 32'd0; fg_mid <= 16'd0;
       fg_kind <= 8'd0;  fg_tick <= 16'd0; fg_src <= 16'd0;
       fg_src_hi_nz <= 1'b0;
       fq_wp <= '0; fq_rp <= '0; fq_cp <= '0;
@@ -3362,8 +3395,11 @@ module zhao_cmd_exec
           fg_mat  <= {pkt_byte_i, fg_mat[31:8]};
         if (rpos == 16'(OFF_FG_KIND))
           fg_kind <= pkt_byte_i;
-        if ((rpos >= 16'(OFF_FG_PAD))  && (rpos < 16'(OFF_FG_PAD + 2)))
+        if ((rpos >= 16'(OFF_FG_TICK)) && (rpos < 16'(OFF_FG_TICK + 2)))
           fg_tick <= {pkt_byte_i, fg_tick[15:8]};
+        // The record index, little-endian like every other field on this walk.
+        if ((rpos >= 16'(OFF_FG_MID))  && (rpos < 16'(OFF_FG_MID + 2)))
+          fg_mid  <= {pkt_byte_i, fg_mid[15:8]};
         // source_id is u32 on the wire and every consumer's src id is 16 bits.
         // NARROWED like the stamp, draw and terrain-field arms, and the dropped
         // half COUNTED rather than discarded quietly.
@@ -3377,7 +3413,13 @@ module zhao_cmd_exec
           if (fq_full) begin
             fq_ovf <= 1'b1;
           end else begin
-            fq[fq_wp[FQW-1:0]] <= {fg_src_hi_nz, fg_src, fg_tick,
+            // ONE ASSIGNMENT, so the set handle and the record index are the
+            // SAME draw's by construction. This is the structural join the
+            // ruling's carriage clause asks for -- "capture the pair on the
+            // draw's own accepted handshake" -- and it is why no mismatch
+            // detector is needed at this seam: there are not two cadences here
+            // for one to differ from.
+            fq[fq_wp[FQW-1:0]] <= {fg_mid, fg_src_hi_nz, fg_src, fg_tick,
                                    fg_kind, fg_mat, fg_prog};
             fq_wp <= fq_wp + 1'b1;
           end

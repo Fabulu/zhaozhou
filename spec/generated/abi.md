@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = df61db8f05d25df1fe5786a426467579749a9d2f27693eed6a0e84c9bd862398
-zidl_sha256         = cf3b82f860e2227f3205856557fe08686fa5d6949e1a2d04d23aeabe8d0a8e0a
+abi_identity_sha256 = ad14c103b016eedf3dae60948a4e236f8f03563e046bfc1d4aaa058eacf37366
+zidl_sha256         = a70d78a2a2947ec4a5c23c8f153c1ebb457de7a44e7fa56b10a69f724cdc57b3
 ```
 
 ABI version **3**, little-endian, command alignment
@@ -302,11 +302,14 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 | Offset | Size | Field | Type |
 |---|---|---|---|
 | 0 | 4 | `program` | handle32 [forge_program] |
-| 4 | 4 | `material` | handle32 [material] |
+| 4 | 4 | `material_set` | handle32 [material_set] |
 | 8 | 24 | `transform` | transform2fx |
 | 32 | 4 | `screen_error` | fx16 |
 | 36 | 1 | `kind` | forge_kind |
-| 37 | 11 | `pad` | pad (zero) ×11 |
+| 37 | 2 | `frame_tick` | u8 ×2 |
+| 39 | 1 | `pad` | pad (zero) |
+| 40 | 2 | `material_id` | u16 |
+| 42 | 6 | `pad_1` | pad (zero) ×6 |
 
 `transform` (transform2fx) leaves:
 

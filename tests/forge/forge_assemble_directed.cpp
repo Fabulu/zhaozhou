@@ -57,6 +57,20 @@
 //      that is stated rather than hidden: `proj_stray_o` needs a rider the DUT
 //      never issued, which only a broken demux can produce.
 //
+//   8. THE MATERIAL PAIR COMES FROM THE JOB, NOT FROM THE TRIANGLE STREAM --
+//      owner completion ruling 2, 2026-09-22. `o_material_set_o` and
+//      `o_material_id_o` are BOTH latched at the job's first vertex from the
+//      bank's held sideband, so a triangle stream carrying a different id
+//      cannot repaint the primitive. Case 6 below drives the two ports APART
+//      on purpose: the job's id must WIN and `mat_skew_o` must MOVE.
+//
+//   9. AND `mat_skew_o` MUST DISCRIMINATE (R95). Case 7 is its negative
+//      control and it is deliberately the awkward one -- a job whose id is
+//      ZERO, with triangles carrying zero. Under the ruling zero is a VALID
+//      record index and not an "unset" marker, so the counter must stay PUT.
+//      A detector that fired on zero would be reading the old
+//      `(t_material_i == 0) ? FORGE_MATERIAL_ID : t_material_i` law back in.
+//
 // THE ATTRIBUTE PACKET IS CHECKED FOR CONTENT, NOT SHAPE: slot 0 must carry a
 // NON-ZERO canonical invw24 per corner (the depth converter ran), slot 1 must
 // be ZERO (R197's declared-untextured profile) and slots 3..6 must carry the
@@ -108,6 +122,8 @@ void hard_reset(Vtb_forge_assemble& d) {
   d.art_quality_tier_i = 128;
   d.art_cull_mode_i = 0;
   d.j_material_set_i = 0;
+  d.j_material_id_i = 0;
+  d.j_valid_i = 0;
   for (int i = 0; i < 8; ++i) tick(d);
   d.rst_n = 1;
   for (int i = 0; i < 4; ++i) tick(d);
@@ -155,11 +171,36 @@ int offer_without_last(Vtb_forge_assemble& d, int n, int* refused) {
 // Drive `n` vertices in, honouring the DUT's ready. Returns the max number of
 // cycles it stalled, which the caller uses to prove the throttle ENGAGED --
 // a test that never saw a stall has not exercised the bound it asserts.
-int feed_vertices(Vtb_forge_assemble& d, int n, uint32_t mset, int* stalls) {
+// THE SIDEBAND'S HANDSHAKE, which is the JOB'S ISSUE. In the console it is the
+// page bank's `a_valid_o` rising with the topology and position jobs; here the
+// driver performs it, once, before the job's vertices.
+//
+// IT IS A HANDSHAKE AND NOT A LEVEL FOR A MEASURED REASON. As a level latched
+// at this block's first vertex, the pair could be replaced by the NEXT draw in
+// the window where this block is not yet busy -- `mat_skew_o` caught exactly
+// that in the composed chain on its first run. So the driver hands the pair
+// over ONCE, and section 5d below then CHANGES THE PORTS UNDERNEATH to prove
+// the captured value is what ships.
+void presentJob(Vtb_forge_assemble& d, uint32_t mset, uint16_t mid) {
+  d.j_material_set_i = mset;
+  d.j_material_id_i = mid;
+  d.j_valid_i = 1;
+  for (int guard = 0; guard < 1000; ++guard) {
+    d.eval();
+    const bool taken = d.j_ready_o != 0;
+    tick(d);
+    if (taken) break;
+  }
+  d.j_valid_i = 0;
+  d.eval();
+}
+
+int feed_vertices(Vtb_forge_assemble& d, int n, uint32_t mset, uint16_t mid,
+                  int* stalls) {
   int sent = 0;
   int guard = 0;
   *stalls = 0;
-  d.j_material_set_i = mset;
+  presentJob(d, mset, mid);
   while (sent < n && guard++ < 200000) {
     d.v_valid_i = 1;
     d.v_x_i = wx(sent);
@@ -243,7 +284,7 @@ int main() {
 
   int stalls = 0;
   const int kN = 24;
-  int sent = feed_vertices(d, kN, 0xDEADBEEFu, &stalls);
+  int sent = feed_vertices(d, kN, 0xDEADBEEFu, 0x00A5, &stalls);
   check(sent == kN, "every offered vertex was accepted", kN, sent);
   check(d.busy_o == 1, "busy RISES with the primitive", 1, d.busy_o);
 
@@ -303,7 +344,12 @@ int main() {
     check(g.untex == 1, "the primitive DECLARES untextured (R197)", 1, g.untex);
     check(g.cull == 0, "the authored cull mode arrives", 0, g.cull);
     check(g.tier == 128, "the authored quality tier arrives", 128, g.tier);
-    check(g.material_id == 0x00A5, "the material id rides the triangle", 0x00A5,
+    // OWNER COMPLETION RULING 2: both halves come from the JOB, latched at
+    // vertex zero by ONE enable. Here the triangle stream agrees with the job,
+    // so this case cannot distinguish the two sources -- case 6 does, and it
+    // exists for exactly that reason.
+    check(g.material_id == 0x00A5,
+          "the material ID is the one latched at vertex zero", 0x00A5,
           g.material_id);
     check(g.material_set == 0xDEADBEEFu,
           "the material SET is the one latched at vertex zero", 0xDEADBEEFu,
@@ -325,6 +371,9 @@ int main() {
   check(d.dq_stray_o == 0, "NEGATIVE CONTROL: no stray depth token", 0,
         d.dq_stray_o);
   check(d.dq_refused_o == 0, "the converter refused nothing", 0, d.dq_refused_o);
+  check(d.mat_skew_o == 0,
+        "mat_skew_o is PUT while the job's id and the triangles' agree", 0,
+        d.mat_skew_o);
 
   // ==========================================================================
   // 2. THE IN-FLIGHT BOUND -- measured at the fake, not asserted at the DUT
@@ -346,7 +395,7 @@ int main() {
   // ==========================================================================
   const int kN2 = 6;
   uint32_t v_before = d.vertices_o;
-  sent = feed_vertices(d, kN2, 0x0BADF00Du, &stalls);
+  sent = feed_vertices(d, kN2, 0x0BADF00Du, 0x0042, &stalls);
   check(sent == kN2, "the second primitive's vertices were accepted", kN2, sent);
 
   std::vector<Tri> tris2 = {{5, 0, 3}};
@@ -368,7 +417,7 @@ int main() {
   // 4. AN OUT-OF-RANGE INDEX IS REFUSED, NOT WRAPPED
   // ==========================================================================
   const int kN3 = 8;
-  sent = feed_vertices(d, kN3, 0x11112222u, &stalls);
+  sent = feed_vertices(d, kN3, 0x11112222u, 0x0007, &stalls);
   check(sent == kN3, "the third primitive's vertices were accepted", kN3, sent);
 
   uint32_t tri_before = d.triangles_o;
@@ -391,7 +440,7 @@ int main() {
   // 5. THE LONG JOB -- the throttle ENGAGES and is seen to
   // ==========================================================================
   uint32_t sp_before = d.slot_pressure_o;
-  sent = feed_vertices(d, kMaxVerts, 0x33334444u, &stalls);
+  sent = feed_vertices(d, kMaxVerts, 0x33334444u, 0x0055, &stalls);
   check(sent == kMaxVerts, "a full store's worth of vertices was accepted",
         kMaxVerts, sent);
   check(stalls > 0, "the vertex stream STALLED -- the throttle engaged", 1,
@@ -404,7 +453,11 @@ int main() {
         d.fake_max_inflight_o <= static_cast<uint32_t>(kInflight));
 
   std::vector<Tri> tris4 = {{63, 0, 32}, {1, 62, 31}};
-  auto got4 = run_triples(d, tris4, 0x00FF, 0xABCD);
+  // The material id AGREES with the job's (0x0055). It used to be an
+  // arbitrary 0x00FF, which under the new law is a SKEW -- and a section
+  // that fires the detector by accident makes its positive control below
+  // unreadable.
+  auto got4 = run_triples(d, tris4, 0x0055, 0xABCD);
   check(got4.size() == 2, "both triples of the full job came out", 2,
         got4.size());
   if (got4.size() == 2) {
@@ -425,6 +478,134 @@ int main() {
         d.proj_stray_o);
   check(d.dq_stray_o == 0, "NEGATIVE CONTROL held throughout", 0, d.dq_stray_o);
   check(d.jobs_o == 4, "four primitives retired in total", 4, d.jobs_o);
+  check(d.mat_skew_o == 0,
+        "mat_skew_o still PUT after four agreeing primitives", 0, d.mat_skew_o);
+
+  // ==========================================================================
+  // 5b. THE CARRIAGE LAW -- owner completion ruling 2, 2026-09-22.
+  //
+  //     "Capture the pair on the draw's own accepted handshake and keep it
+  //      attached through page lookup, evaluation, assembly and clip-door
+  //      admission. A LATER DRAW MUST NOT REPLACE AN EARLIER PRIMITIVE'S
+  //      MATERIAL."
+  //
+  //     The two ports are driven APART on purpose: the job declares id A at
+  //     its first vertex and the triangle stream then carries id B. In the
+  //     composed console `asm_busy_i` makes that unreachable -- which is
+  //     exactly why it is driven here, at this block's own ports, where it is
+  //     LEGAL STIMULUS. A detector that can only be argued about is not a
+  //     detector (CLAUDE.md: fire it deliberately before quoting its silence).
+  //
+  //     TWO THINGS ARE ASSERTED AND THEY ARE DIFFERENT CLAIMS:
+  //       * the OUTPUT carries the JOB'S id -- the correct behaviour, which is
+  //         what must still be true after any future repair;
+  //       * the COUNTER MOVED -- evidence about the instrument, kept separate.
+  // ==========================================================================
+  const int kN5 = 6;
+  sent = feed_vertices(d, kN5, 0x5EED0001u, 0x0123, &stalls);
+  check(sent == kN5, "the skew job's vertices were accepted", kN5, sent);
+
+  uint32_t skew_before = d.mat_skew_o;
+  std::vector<Tri> tris5 = {{0, 1, 2}, {3, 4, 5}};
+  auto got5 = run_triples(d, tris5, 0x0456, 0x7777);   // 0x0456 != 0x0123
+  check(got5.size() == 2, "both skewed triples still produced triangles", 2,
+        got5.size());
+  if (got5.size() == 2) {
+    check(got5[0].material_id == 0x0123,
+          "THE JOB'S id wins -- a later id does not repaint the primitive",
+          0x0123, got5[0].material_id);
+    check(got5[1].material_id == 0x0123,
+          "and it wins for every triangle of the job, not just the first",
+          0x0123, got5[1].material_id);
+    check(got5[0].material_set == 0x5EED0001u,
+          "the set is the job's too -- both halves off ONE latch", 0x5EED0001u,
+          got5[0].material_set);
+  }
+  check(d.mat_skew_o == skew_before + 2,
+        "mat_skew_o FIRED once per disagreeing triple", skew_before + 2,
+        d.mat_skew_o);
+
+  // ==========================================================================
+  // 5d. THE CAPTURE IS THE JOB'S, NOT THE PORT'S -- the repair itself.
+  //
+  //     The sideband is handed over ONCE, at the job's issue. This case then
+  //     drives `j_material_set_i` / `j_material_id_i` to a DIFFERENT pair
+  //     while the primitive is in flight, exactly as the page bank did when it
+  //     accepted the next draw in the window before this block was busy, and
+  //     requires the SHIPPED pair to be the captured one.
+  //
+  //     Before the repair this assertion fails: the block latched the LIVE
+  //     PORTS at its first vertex, so the second pair would have shipped on the
+  //     first job's triangles with every counter in the chain balancing.
+  // ==========================================================================
+  const int kN7 = 4;
+  presentJob(d, 0xC0FFEE01u, 0x0321);
+  {
+    int sent7 = 0;
+    int guard7 = 0;
+    while (sent7 < kN7 && guard7++ < 200000) {
+      // THE PORTS MOVE, from the cycle after the handover.
+      d.j_material_set_i = 0xBADBAD22u;
+      d.j_material_id_i = 0x0999;
+      d.v_valid_i = 1;
+      d.v_x_i = wx(sent7);
+      d.v_y_i = wy(sent7);
+      d.v_z_i = wz(sent7);
+      d.v_last_i = (sent7 == kN7 - 1) ? 1 : 0;
+      d.eval();
+      const bool taken = d.v_ready_o != 0;
+      tick(d);
+      if (taken) ++sent7;
+    }
+    d.v_valid_i = 0;
+    d.v_last_i = 0;
+    d.eval();
+    check(sent7 == kN7, "the capture job's vertices were accepted", kN7, sent7);
+  }
+  uint32_t skew_before_cap = d.mat_skew_o;
+  std::vector<Tri> tris7 = {{0, 1, 2}};
+  auto got7 = run_triples(d, tris7, 0x0321, 0x4242);
+  check(got7.size() == 1, "the capture job produced its triangle", 1, got7.size());
+  if (!got7.empty()) {
+    check(got7[0].material_set == 0xC0FFEE01u,
+          "THE CAPTURED SET SHIPS, not the one the ports moved to", 0xC0FFEE01u,
+          got7[0].material_set);
+    check(got7[0].material_id == 0x0321,
+          "THE CAPTURED ID SHIPS, not the one the ports moved to", 0x0321,
+          got7[0].material_id);
+  }
+  check(d.mat_skew_o == skew_before_cap,
+        "and mat_skew_o is PUT -- the triangle agreed with the CAPTURED id",
+        skew_before_cap, d.mat_skew_o);
+
+  // ==========================================================================
+  // 5c. THE DISCRIMINATION (R95), and it is the awkward case on purpose.
+  //
+  //     A job whose material id is ZERO, with triangles carrying zero. Under
+  //     ruling 2 zero is a VALID record index -- "zero-filled legacy
+  //     material_id bytes select record 0 of the named set; zero is a valid
+  //     index, not an error sentinel" -- so this must be silent.
+  //
+  //     The old law here was `(t_material_i == 0) ? FORGE_MATERIAL_ID :
+  //     t_material_i`, which treated zero as "unset". A detector that fired on
+  //     this case would be that law reading itself back in.
+  // ==========================================================================
+  uint32_t skew_at_zero = d.mat_skew_o;
+  const int kN6 = 3;
+  sent = feed_vertices(d, kN6, 0x00000000u, 0x0000, &stalls);
+  check(sent == kN6, "the record-zero job's vertices were accepted", kN6, sent);
+  std::vector<Tri> tris6 = {{0, 1, 2}};
+  auto got6 = run_triples(d, tris6, 0x0000, 0x0001);
+  check(got6.size() == 1, "the record-zero job produced its triangle", 1,
+        got6.size());
+  if (!got6.empty()) {
+    check(got6[0].material_id == 0x0000,
+          "RECORD 0 IS A VALID SELECTION and reaches the door as zero", 0,
+          got6[0].material_id);
+  }
+  check(d.mat_skew_o == skew_at_zero,
+        "mat_skew_o stayed PUT on record zero -- it DISCRIMINATES (R95)",
+        skew_at_zero, d.mat_skew_o);
 
   // ==========================================================================
   // 6. vtx_overflow_o FIRES -- and it is reachable by LEGAL STIMULUS, so it
@@ -447,6 +628,7 @@ int main() {
   // ==========================================================================
   hard_reset(d);
   check(d.vtx_overflow_o == 0, "reset clears the counter", 0, d.vtx_overflow_o);
+  check(d.mat_skew_o == 0, "reset clears mat_skew_o too", 0, d.mat_skew_o);
 
   int refused = 0;
   sent = offer_without_last(d, kMaxVerts, &refused);

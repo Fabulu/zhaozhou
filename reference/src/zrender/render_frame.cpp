@@ -340,7 +340,27 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           break;
         }
         const TerrainPatch* patch = res.terrain_patch(c.payload.program);
-        const Material* mat = res.material(c.payload.material);
+        // OWNER COMPLETION RULING 2 (2026-09-22): the material reference is a
+        // PAIR -- the complete handle32[material_set] in `material_set`, and an
+        // independent u16 `material_id` INDEX WITHIN THAT SET.
+        //
+        // THIS RENDERER'S Phase-3 material model is a SET OF ONE. `materials`
+        // is keyed by the set handle alone and holds one flat base colour per
+        // entry (zref_render.hpp: "DrawProcedural material page (Phase-3
+        // subset: a flat base colour)"), so the only record it can describe is
+        // RECORD 0 -- which the ruling makes a VALID index, not a sentinel:
+        // "zero-filled legacy material_id bytes select record 0 of the named
+        // set."
+        //
+        // A NONZERO id therefore names a record this reference HAS NO DATA FOR,
+        // and the ruling forbids the tempting repair: "Do not silently
+        // substitute an unrelated set or record when resolution fails." So it
+        // is a counted resource miss, exactly like an unknown set handle, and
+        // the patch is skipped rather than drawn under record 0's colour. The
+        // day this reference grows real per-set records, this branch is where
+        // the second key goes.
+        const Material* mat =
+            (c.payload.material_id == 0) ? res.material(c.payload.material_set) : nullptr;
         if (patch == nullptr || mat == nullptr) {
           rr.resource_misses += (patch == nullptr) + (mat == nullptr);
           break;

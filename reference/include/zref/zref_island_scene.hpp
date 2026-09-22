@@ -263,10 +263,21 @@ class Scene {
       }
       zhao_abi::ZhRecordDrawProcedural dp = zhao_abi::zhao_sample_draw_procedural();
       dp.payload.program = p.page_handle;  // THE DIRECTORY'S handle
-      dp.payload.material = material_handle_;
+      dp.payload.material_set = material_handle_;
       dp.payload.transform = identity_xform();
       dp.payload.screen_error = 1 << 16;
       dp.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;
+      // EVERY FIELD THE SAMPLE FILLS AND THIS SCENE DOES NOT MEAN IS RESET
+      // HERE, and that is not tidiness -- `zhao_sample_draw_procedural()`
+      // returns the GENERATOR'S canonical sample, so the two fields owner
+      // ruling 2 (2026-09-22) made explicit arrive with the generator's
+      // arbitrary values (frame_tick 0x9dd7, material_id 0xf456) unless this
+      // line exists. Leaving them would have animated the island's phase and
+      // pointed every patch at a material record that does not exist -- a
+      // rendering change smuggled in by a regenerated sample.
+      dp.payload.frame_tick[0] = 0;   // static island: tick_phase == the page's base
+      dp.payload.frame_tick[1] = 0;
+      dp.payload.material_id = 0;     // record 0 of the set -- a VALID index
       std::vector<uint8_t> bytes;
       zhao_abi::zhao_pack_draw_procedural(dp, bytes);
       b.append_record(bytes);

@@ -390,16 +390,27 @@ Blocker by blocker, at the composed head:
   and 520 x 24 bits and whether they infer M10K or land in flops is a fit
   question, not an argument; depth rather than bit count is the risk, as
   TERRAIN.SHEETSEAM's row already records for a 1,089-word plane.
-* **THE MATERIAL MAPPING, an OWNER DECISION.** `zhao_material_window` is keyed
-  by (material_set handle32, material_id u16). Every draw in the ABI carries
-  `handle32[material_set]` -- except `DrawProcedural`, which carries
-  `handle32[material]`, and **`handle32[material]` occurs EXACTLY ONCE in all
-  of `spec/commands.zidl`, on that line.** Nothing states the mapping.
-  `zhao_forge_assemble` presents the draw's handle as the SET and
-  `FORGE_MATERIAL_ID` (0) as the entry, both as PARAMETERS, so a ruling moves
-  two lines and NOT ONE ABI BYTE. Like `forge_kind` (R108) and `frame_tick`
-  (R241) this is an interpretation of an existing field, and both of those were
-  owner rulings.
+* **THE MATERIAL MAPPING -- RULED, 2026-09-22, AND THE DOCKET IS CLOSED.**
+  Owner completion ruling 2: `material_set` is the **complete**
+  `handle32[material_set]` and `material_id` is an **independent u16** carried
+  in `DrawProcedural`'s own reserved payload bytes (40..41). The field that was
+  `handle32[material] material` is now `handle32[material_set] material_set` at
+  the same offset and width, and the orphan resource kind is gone.
+  `FORGE_MATERIAL_ID`, the interpretation parameter this section used to
+  describe, is **removed**: the docket it held open has been paid.
+
+  **THE OWNER CAUGHT THE MECHANISM, and it is worth keeping written down.** A
+  handle32 is `{index[31:8], generation[7:0]}`, so reading the word's low
+  sixteen bits as the record id made a **residency event** -- an ordinary
+  generation bump -- silently select a different material and repaint the
+  geometry. "Do not read the existing word both as the complete set handle and
+  as its low-16-bit material ID."
+
+  The rendering difference is disclosed rather than absorbed: a draw whose set
+  handle has a nonzero generation or nonzero index bits 8..15 now selects a
+  **different record** than it used to, and a legacy record with zero
+  `material_id` bytes selects **record 0, a valid index**. Acceptance:
+  `tests/prod/procmat_acceptance.cpp`, command bytes to GEOM.CLIP's input.
 * **THE COLOUR HAS NOT BEEN LOOKED AT.** `FORGE_LIT_R/G/B` and `FORGE_ALPHA` are
   named `zhao_console_core` parameters chosen BY REASONING, and CLAUDE.md is
   explicit that measurement cannot choose a value and that the read at final

@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = df61db8f05d25df1fe5786a426467579749a9d2f27693eed6a0e84c9bd862398
-//   zidl_sha256         = cf3b82f860e2227f3205856557fe08686fa5d6949e1a2d04d23aeabe8d0a8e0a
+//   abi_identity_sha256 = ad14c103b016eedf3dae60948a4e236f8f03563e046bfc1d4aaa058eacf37366
+//   zidl_sha256         = a70d78a2a2947ec4a5c23c8f153c1ebb457de7a44e7fa56b10a69f724cdc57b3
 #pragma once
 
 #include <cstdint>
@@ -617,18 +617,24 @@ static_assert(sizeof(ZhRecordDrawPopulation) == 32, "layout drift: DrawPopulatio
 // DrawProcedural 0x0302: 64-byte record (implemented)
 struct ZhCmdDrawProcedural {
   uint32_t program;  // handle32 {index:24, generation:8} kind=forge_program
-  uint32_t material;  // handle32 {index:24, generation:8} kind=material
+  uint32_t material_set;  // handle32 {index:24, generation:8} kind=material_set
   ZhTransform2fx transform;
   int32_t screen_error;
   forge_kind kind;  // enum, 1 B
-  uint8_t pad[11];
+  uint8_t frame_tick[2];
+  uint8_t pad;
+  uint16_t material_id;
+  uint8_t pad_1[6];
 };
 static_assert(offsetof(ZhCmdDrawProcedural, program) == 0, "layout drift: DrawProcedural.program");
-static_assert(offsetof(ZhCmdDrawProcedural, material) == 4, "layout drift: DrawProcedural.material");
+static_assert(offsetof(ZhCmdDrawProcedural, material_set) == 4, "layout drift: DrawProcedural.material_set");
 static_assert(offsetof(ZhCmdDrawProcedural, transform) == 8, "layout drift: DrawProcedural.transform");
 static_assert(offsetof(ZhCmdDrawProcedural, screen_error) == 32, "layout drift: DrawProcedural.screen_error");
 static_assert(offsetof(ZhCmdDrawProcedural, kind) == 36, "layout drift: DrawProcedural.kind");
-static_assert(offsetof(ZhCmdDrawProcedural, pad[0]) == 37, "layout drift: DrawProcedural.pad");
+static_assert(offsetof(ZhCmdDrawProcedural, frame_tick[0]) == 37, "layout drift: DrawProcedural.frame_tick");
+static_assert(offsetof(ZhCmdDrawProcedural, pad) == 39, "layout drift: DrawProcedural.pad");
+static_assert(offsetof(ZhCmdDrawProcedural, material_id) == 40, "layout drift: DrawProcedural.material_id");
+static_assert(offsetof(ZhCmdDrawProcedural, pad_1[0]) == 42, "layout drift: DrawProcedural.pad_1");
 static_assert(sizeof(ZhCmdDrawProcedural) == 48, "layout drift: DrawProcedural payload");
 
 struct ZhRecordDrawProcedural {
@@ -1388,10 +1394,13 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.program = 704643073u;
-  r.payload.material = 704643074u;
+  r.payload.material_set = 704643074u;
   r.payload.transform = zhao_sample_transform2fx();
   r.payload.screen_error = 88599;
   r.payload.kind = static_cast<forge_kind>(3u);
+  r.payload.frame_tick[0] = 215u;
+  r.payload.frame_tick[1] = 157u;
+  r.payload.material_id = 62550u;
   return r;
 }
 
@@ -1979,11 +1988,14 @@ inline void zhao_pack_draw_procedural(const ZhRecordDrawProcedural& r, std::vect
   w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
   w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
   w.u32(r.payload.program);
-  w.u32(r.payload.material);
+  w.u32(r.payload.material_set);
   zhao_pack_transform2fx(r.payload.transform, w);
   w.u32(r.payload.screen_error);
   w.u8(r.payload.kind);
-  for (int i = 0; i < 11; ++i) w.u8(r.payload.pad[i]);
+  for (int i = 0; i < 2; ++i) { w.u8(r.payload.frame_tick[i]); }
+  for (int i = 0; i < 1; ++i) w.u8(r.payload.pad);
+  w.u16(r.payload.material_id);
+  for (int i = 0; i < 6; ++i) w.u8(r.payload.pad_1[i]);
 }
 
 inline void zhao_pack_draw_sky(const ZhRecordDrawSky& r, std::vector<uint8_t>& out) {
@@ -2498,11 +2510,15 @@ inline bool zhao_unpack_draw_procedural(ZhReader& r, ZhRecordDrawProcedural& out
       !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
       !r.take32(out.hdr.reserved0)) return false;
   { uint32_t t; if (!r.take32(t)) return false; out.payload.program = t; }
-  { uint32_t t; if (!r.take32(t)) return false; out.payload.material = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.material_set = t; }
   if (!zhao_unpack_transform2fx(r, out.payload.transform)) return false;
   { uint32_t t; if (!r.take32(t)) return false; out.payload.screen_error = t; }
   { uint8_t t; if (!r.take8(t)) return false; out.payload.kind = static_cast<forge_kind>(t); }
-  if (!r.skip(11)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.frame_tick[0] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.frame_tick[1] = t; }
+  if (!r.skip(1)) return false;
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.material_id = t; }
+  if (!r.skip(6)) return false;
   return true;
 }
 
@@ -2914,7 +2930,7 @@ constexpr uint16_t ZHAO_PADS_SET_PRESENTATION_CONTRACT[] = {24, 25, 26, 27, 28, 
 constexpr uint16_t ZHAO_PADS_TERRAIN_FIELD[] = {92, 93, 94, 95};
 constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_POPULATION[] = {8, 9, 10, 11, 12, 13, 14, 15};
-constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
+constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {39, 42, 43, 44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159};
 constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
@@ -2939,7 +2955,7 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"SubmitTerrainSet", 0x0230, 48, false, nullptr, 0},
   {"DrawForm", 0x0300, 32, true, nullptr, 0},
   {"DrawPopulation", 0x0301, 32, true, ZHAO_PADS_DRAW_POPULATION, 8},
-  {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 11},
+  {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 7},
   {"DrawSky", 0x0310, 176, false, ZHAO_PADS_DRAW_SKY, 14},
   {"SetEnvironment", 0x0311, 48, true, ZHAO_PADS_SET_ENVIRONMENT, 12},
   {"EmitAudioEvent", 0x0400, 32, true, nullptr, 0},
@@ -2996,8 +3012,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xDF, 0x61, 0xDB, 0x8F, 0x05, 0xD2, 0x5D, 0xF1, 0xFE, 0x57, 0x86, 0xA4, 0x26, 0x46, 0x75, 0x79, 0x74, 0x9A, 0x9D, 0x2F, 0x27, 0x69, 0x3E, 0xED, 0x6A, 0x0E, 0x84, 0xC9, 0xBD, 0x86, 0x23, 0x98};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xCF, 0x3B, 0x82, 0xF8, 0x60, 0xE2, 0x22, 0x7F, 0x32, 0x05, 0x85, 0x65, 0x57, 0xFE, 0x08, 0x68, 0x6F, 0xA5, 0xD6, 0x94, 0x9E, 0x1A, 0x2D, 0x04, 0xD2, 0x3A, 0xEA, 0xBE, 0x8D, 0x0A, 0x8E, 0x0A};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xAD, 0x14, 0xC1, 0x03, 0xB0, 0x16, 0xEE, 0xDF, 0x3D, 0xAE, 0x60, 0x94, 0x8A, 0x4E, 0x23, 0x6F, 0x8F, 0x03, 0x56, 0x3E, 0x04, 0x6B, 0xFC, 0x1D, 0x4A, 0xAA, 0x05, 0x8E, 0xAC, 0xF3, 0x73, 0x66};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xA7, 0x0D, 0x78, 0xA2, 0xA2, 0x94, 0x7E, 0xC4, 0xA5, 0xC2, 0x3C, 0x8F, 0x15, 0x3C, 0x1E, 0xBB, 0x45, 0x7D, 0xE7, 0xA4, 0x4E, 0x7F, 0xA5, 0x6B, 0x10, 0xA6, 0x9F, 0x72, 0x4C, 0xDC, 0x57, 0xB3};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

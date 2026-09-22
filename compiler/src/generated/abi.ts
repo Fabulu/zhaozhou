@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = df61db8f05d25df1fe5786a426467579749a9d2f27693eed6a0e84c9bd862398
-//   zidl_sha256         = cf3b82f860e2227f3205856557fe08686fa5d6949e1a2d04d23aeabe8d0a8e0a
+//   abi_identity_sha256 = ad14c103b016eedf3dae60948a4e236f8f03563e046bfc1d4aaa058eacf37366
+//   zidl_sha256         = a70d78a2a2947ec4a5c23c8f153c1ebb457de7a44e7fa56b10a69f724cdc57b3
 
 // ---------------------------------------------------------------- abi ---
 
@@ -332,10 +332,12 @@ export interface ZhRecordDrawPopulation {
 export interface ZhRecordDrawProcedural {
   hdr: ZhCmdHeader;
   program: number; // handle32, @0
-  material: number; // handle32, @4
+  material_set: number; // handle32, @4
   transform: ZhTransform2fx; // @8
   screen_error: number; // fx16 (Q16.16, int32), @32
   kind: number; // forge_kind (u8), @36
+  frame_tick: number[]; // u8, @37
+  material_id: number; // u16, @40
 }
 
 /** DrawSky 0x0310: 176-byte record (reserved) */
@@ -566,7 +568,7 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'SubmitTerrainSet', opcode: 0x0230, recordBytes: 48, implemented: false, padOffsets: [], enumChecks: [] },
   { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: true, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
-  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0, 1, 2, 3, 4, 5] }] },
+  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [39, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0, 1, 2, 3, 4, 5] }] },
   { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
   { name: 'SetEnvironment', opcode: 0x0311, recordBytes: 48, implemented: true, padOffsets: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 11, size: 1, values: [0, 1] }] },
   { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
@@ -936,10 +938,12 @@ export function zhaoSampleDrawProcedural(): ZhRecordDrawProcedural {
       flags: 0,
     },
     program: 704643073,
-    material: 704643074,
+    material_set: 704643074,
     transform: zhaoSampleTransform2fx(),
     screen_error: 88599,
     kind: 3,
+    frame_tick: [215, 157],
+    material_id: 62550,
   };
 }
 
@@ -1403,11 +1407,14 @@ export function zhaoPackDrawProcedural(r: ZhRecordDrawProcedural, w: ZhByteWrite
   w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
   w.u32(r.hdr.flags); w.zeros(4); // reserved0
   w.u32(r.program);
-  w.u32(r.material);
+  w.u32(r.material_set);
   zhaoPackTransform2fx(r.transform, w);
   w.fx16(r.screen_error);
   w.u8(r.kind);
-  w.zeros(11); // pad
+  for (let i = 0; i < 2; i++) w.u8(r.frame_tick[i]!);
+  w.zeros(1); // pad
+  w.u16(r.material_id);
+  w.zeros(6); // pad_1
 }
 
 export function zhaoPackDrawSky(r: ZhRecordDrawSky, w: ZhByteWriter): void {
@@ -1635,6 +1642,6 @@ export function zhaoPackDrawSprite(r: ZhRecordDrawSprite, w: ZhByteWriter): void
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xDF, 0x61, 0xDB, 0x8F, 0x05, 0xD2, 0x5D, 0xF1, 0xFE, 0x57, 0x86, 0xA4, 0x26, 0x46, 0x75, 0x79, 0x74, 0x9A, 0x9D, 0x2F, 0x27, 0x69, 0x3E, 0xED, 0x6A, 0x0E, 0x84, 0xC9, 0xBD, 0x86, 0x23, 0x98];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0xCF, 0x3B, 0x82, 0xF8, 0x60, 0xE2, 0x22, 0x7F, 0x32, 0x05, 0x85, 0x65, 0x57, 0xFE, 0x08, 0x68, 0x6F, 0xA5, 0xD6, 0x94, 0x9E, 0x1A, 0x2D, 0x04, 0xD2, 0x3A, 0xEA, 0xBE, 0x8D, 0x0A, 0x8E, 0x0A];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xAD, 0x14, 0xC1, 0x03, 0xB0, 0x16, 0xEE, 0xDF, 0x3D, 0xAE, 0x60, 0x94, 0x8A, 0x4E, 0x23, 0x6F, 0x8F, 0x03, 0x56, 0x3E, 0x04, 0x6B, 0xFC, 0x1D, 0x4A, 0xAA, 0x05, 0x8E, 0xAC, 0xF3, 0x73, 0x66];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0xA7, 0x0D, 0x78, 0xA2, 0xA2, 0x94, 0x7E, 0xC4, 0xA5, 0xC2, 0x3C, 0x8F, 0x15, 0x3C, 0x1E, 0xBB, 0x45, 0x7D, 0xE7, 0xA4, 0x4E, 0x7F, 0xA5, 0x6B, 0x10, 0xA6, 0x9F, 0x72, 0x4C, 0xDC, 0x57, 0xB3];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

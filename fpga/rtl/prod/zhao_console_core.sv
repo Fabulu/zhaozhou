@@ -7736,6 +7736,12 @@ module zhao_console_core
   output logic [31:0] forge_asm_dq_refused_o,
   output logic [31:0] forge_asm_dq_stray_o,
   output logic [31:0] forge_asm_proj_stray_o,
+  // THE CARRIAGE DETECTOR of owner completion ruling 2 (2026-09-22): a forge
+  // triangle whose carried material id disagrees with its job's latched one.
+  // It reads zero in a correct console AND THAT IS A CLAIM, so it is fired
+  // deliberately at the block's own ports in `forge_assemble_directed` rather
+  // than quoted silent here.
+  output logic [31:0] forge_asm_mat_skew_o,
   // CMD.EXEC's own half of the dispatch.
   output logic [31:0] cmd_exec_forges_o,
   output logic [31:0] cmd_exec_forge_overflow_o,
@@ -12365,6 +12371,15 @@ module zhao_console_core
   wire [ 1:0]  fpb_p_view_mask;
   wire [15:0]  fpb_p_src_id;
   wire [31:0]  fpb_material_set;
+  // The OTHER half of the same held sideband. Owner completion ruling 2
+  // (2026-09-22): `DrawProcedural` carries a real (set handle, record id) pair
+  // and both halves come off ONE register load in the bank.
+  wire [15:0]  fpb_material_id;
+  // The sideband's own handshake. It rises with the topology and position jobs
+  // and the bank does not retire the draw until all THREE have been taken --
+  // the repair the new `mat_skew_o` detector bought on its first run, when it
+  // caught the bank replacing an in-flight primitive's material.
+  wire         fpb_a_valid, fpb_a_ready;
 
   wire         fpb_e_valid, fpb_e_ready;
   wire signed [31:0] fpb_e_sx, fpb_e_sy, fpb_e_sz, fpb_e_ex, fpb_e_ey, fpb_e_ez;
@@ -12473,6 +12488,7 @@ module zhao_console_core
   // upload and terrain-field seams already use.
   wire        cmd_forge_valid_w, cmd_forge_ready_w;
   wire [31:0] cmd_forge_program_w, cmd_forge_material_w;
+  wire [15:0] cmd_forge_material_id_w;
   wire [ 7:0] cmd_forge_kind_w;
   wire [15:0] cmd_forge_frame_tick_w, cmd_forge_src_id_w;
 
@@ -12502,6 +12518,9 @@ module zhao_console_core
     .d_program_i   (cmd_forge_program_w),
     .d_kind_i      (cmd_forge_kind_w),
     .d_material_i  (cmd_forge_material_w),
+    // REAL, and it is the SECOND HALF OF THE SAME QUEUE ENTRY in CMD.EXEC --
+    // not a second port that could be offered a cycle apart.
+    .d_material_id_i(cmd_forge_material_id_w),
     .d_frame_tick_i(cmd_forge_frame_tick_w),
     // REAL, and a NAMED SEAM rather than a tie-off: DrawProcedural carries no
     // viewport_mask, so the command asserts both views and the PAGE's own mask
@@ -12522,6 +12541,9 @@ module zhao_console_core
     .p_view_mask_o(fpb_p_view_mask),
     .p_src_id_o   (fpb_p_src_id),
     .p_material_set_o(fpb_material_set),
+    .p_material_id_o (fpb_material_id),
+    .a_valid_o       (fpb_a_valid),
+    .a_ready_i       (fpb_a_ready),
 
     .e_valid_o (fpb_e_valid),
     .e_ready_i (fpb_e_ready),
@@ -12741,8 +12763,12 @@ module zhao_console_core
     .t_src_id_i  (fp_t_src_id),
     .t_last_i    (fp_t_last),
 
-    // REAL: the primitive's material set, held by the bank against `busy_o`.
+    // REAL: the primitive's material PAIR, held by the bank against `busy_o`
+    // and latched here by ONE enable at the job's first vertex.
     .j_material_set_i(fpb_material_set),
+    .j_material_id_i (fpb_material_id),
+    .j_valid_i       (fpb_a_valid),
+    .j_ready_o       (fpb_a_ready),
 
     // AUTHORED, at the named seams. See the parameters' comments; these are the
     // owner's knobs and they must not become derived.
@@ -12805,7 +12831,8 @@ module zhao_console_core
     .slot_pressure_o (forge_asm_slot_pressure_o),
     .dq_refused_o    (forge_asm_dq_refused_o),
     .dq_stray_o      (forge_asm_dq_stray_o),
-    .proj_stray_o    (forge_asm_proj_stray_o)
+    .proj_stray_o    (forge_asm_proj_stray_o),
+    .mat_skew_o      (forge_asm_mat_skew_o)
   );
 
   // ==========================================================================
@@ -19454,6 +19481,10 @@ module zhao_console_core
     .forge_ready_i     (cmd_forge_ready_w),
     .forge_program_o   (cmd_forge_program_w),
     .forge_material_o  (cmd_forge_material_w),
+    // Owner completion ruling 2 (2026-09-22): the record index, decoded from
+    // DrawProcedural's own `material_id` bytes and riding the SAME queue entry
+    // as the set handle.
+    .forge_material_id_o(cmd_forge_material_id_w),
     .forge_kind_o      (cmd_forge_kind_w),
     .forge_frame_tick_o(cmd_forge_frame_tick_w),
     .forge_src_id_o    (cmd_forge_src_id_w),
