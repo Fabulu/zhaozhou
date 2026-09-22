@@ -10640,6 +10640,92 @@ foreach(mut_variant fires silent)
 endforeach()
 
 # ---------------------------------------------------------------------------
+# GEOM.PARAMBUF's ACCEPTANCE TEST (owner completion ruling ITEM 4, 2026-09-22)
+# ---------------------------------------------------------------------------
+# The arena PRODUCER and the chunk WALKER against a REAL memory path -- the
+# real zhao_mem_guard, the real zhao_vram_arbiter, the real zhao_sdram_ctrl and
+# the SDRAM model. No played fabric anywhere, and that is the whole point: the
+# two defects this test found on its first run (the lease low under the
+# directory write, and the scratch never released on a faulted frame) are
+# invisible to every per-block gate, because neither is a fault in the guard or
+# in the arena SEPARATELY. It is the arena asking the guard for something at a
+# moment when the arena itself has said no, and only a bench holding both with
+# a real memory between them has the state to reach it.
+#
+# The bench also transcribes the shell's slot-3 write glue -- the `gq` queue,
+# the exact room gate, the owner mux -- rather than inventing one, so what it
+# exercises is the arrangement the console actually composes.
+set(ZHAO_PARAMARENA_SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share_wr.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_vram_arbiter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_ctrl.sv
+    ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_parambuf.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramwalk.sv)
+
+add_executable(test_geom_paramarena_directed geometry/geom_paramarena_directed.cpp)
+target_link_libraries(test_geom_paramarena_directed PRIVATE zhao_harness)
+verilate(test_geom_paramarena_directed
+  PREFIX Vtb_zhao_geom_paramarena
+  TOP_MODULE tb_zhao_geom_paramarena
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_PARAMARENA_SOURCES}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
+          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+add_test(NAME geom_paramarena_directed COMMAND test_geom_paramarena_directed)
+set_tests_properties(geom_paramarena_directed
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# `addr_view_bad_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL (item 4).
+# The counter watches for a request whose held address is not in the view the
+# lease names -- the queued-request fault item 4 names by hand -- and it is
+# UNREACHABLE with legal stimulus while the drain precondition is correct, so
+# it needs a COMMITTED MUTANT. The mutant needs a run against UNMUTATED
+# production beside it, or a seam that never engaged would compile production
+# twice and both runs would agree: CLAUDE.md's negative control.
+# ONE source, TWO executables, opposite expectations.
+# ---------------------------------------------------------------------------
+foreach(pa_variant fires silent)
+  set(pa_target test_geom_paramarena_drainmut_${pa_variant})
+  add_executable(${pa_target} geometry/geom_paramarena_drainmut.cpp)
+  target_link_libraries(${pa_target} PRIVATE zhao_harness)
+  set(pa_sources ${ZHAO_PARAMARENA_SOURCES})
+  if(pa_variant STREQUAL "fires")
+    # The macro reaches BOTH the RTL seam and the C++ expectation, so the two
+    # cannot drift into a driver that expects one block and measures the other.
+    target_compile_definitions(${pa_target} PRIVATE ZHAO_PARAMARENA_DRAIN_MUT)
+    set(pa_vargs -DZHAO_PARAMARENA_DRAIN_MUT)
+    list(APPEND pa_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_paramarena_drain_mutant.sv)
+  else()
+    set(pa_vargs "")
+    list(APPEND pa_sources
+         ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv)
+  endif()
+  list(APPEND pa_sources
+       ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+  verilate(${pa_target}
+    PREFIX Vtb_zhao_geom_paramarena
+    TOP_MODULE tb_zhao_geom_paramarena
+    VERILATOR_ARGS ${pa_vargs}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+    SOURCES ${pa_sources})
+  add_test(NAME geom_paramarena_drainmut_${pa_variant} COMMAND ${pa_target})
+  set_tests_properties(geom_paramarena_drainmut_${pa_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
+
+# ---------------------------------------------------------------------------
 # THE SAME PRODUCER INTO THE OTHER CONSUMER -- core entry I18, ruling R70:
 #   zhao_terrain_lodfeed -> the 24 -> 32 widening -> zhao_measure_histogram
 # The path above ends at the STORE and proves the deviation is CORRECT; this
