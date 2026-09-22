@@ -457,13 +457,18 @@ int main(int argc, char** argv) {
   {
     const uint32_t checked_before = t.handles_checked_o;
     const uint32_t stale_before   = t.handles_stale_o;
-    const uint32_t inv_before     = t.invalidations_o;
     const uint32_t waited_before  = t.chk_unanswered_clocks_o;
 
     const auto p9 = make_page(0x515151u);
     start_page(t, 9, 0x9999, 3, 0xABCD1234u);
     stream_surface(t, p9);
     settle(t);
+    // SAMPLED AFTER THE START, NOT BEFORE IT.  An accepted start raises an
+    // invalidation of its own -- the slot's previous records describe the page
+    // being replaced -- so a count taken before the page was even offered
+    // would fold that into the verdict's and read as though a live handle had
+    // withdrawn something.  What is under test is what the ANSWER does.
+    const uint32_t inv_before = t.invalidations_o;
 
     // The request is up and it carries the WALK's handle -- not the last one
     // offered, which is what a live read of `slot_q` would have given.
@@ -496,13 +501,13 @@ int main(int argc, char** argv) {
   {
     const uint32_t checked_before = t.handles_checked_o;
     const uint32_t stale_before   = t.handles_stale_o;
-    const uint32_t inv_before     = t.invalidations_o;
     const uint32_t unwritten_before = t.read_unwritten_o;
 
     const auto p10 = make_page(0x7A7A7Au);
     start_page(t, 10, 0xAAAA, 4, 0x00C0FFEEu);
     stream_surface(t, p10);
     settle(t);
+    const uint32_t inv_before = t.invalidations_o;   // after the start's own
     cke(10, t.chk_slot_o, "the check carries slot 10");
     cke(4, t.chk_gen_o, "the check carries generation 4");
 

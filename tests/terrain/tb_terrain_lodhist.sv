@@ -108,9 +108,22 @@ module tb_terrain_lodhist #(
   wire [31:0]         dev_vertices_w, dev_lattice_reads_w;
   /* verilator lint_on UNUSEDSIGNAL */
 
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The handle check's request and its five counters.  Named rather than left
+  // as empty pins: an empty pin says nothing about whether the value is right,
+  // and this bench deliberately leaves the query unanswered (see below).
+  logic             chk_valid_w;
+  logic [SLOTW-1:0] chk_slot_w;
+  logic [7:0]       chk_gen_w;
+  logic [31:0]      chk_epoch_w;
+  logic [31:0]      handles_checked_w, handles_stale_w;
+  logic [31:0]      chk_unanswered_clocks_w, chk_overrun_w, chk_stray_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   zhao_terrain_lodfeed #(
     .SLOTW               (SLOTW),
     .EDGE                (33),
+    .GENW                (8),
     .DEV_INCLUDE_BOUNDARY(DEV_INCLUDE_BOUNDARY)
   ) u_feed (
     .clk  (clk),
@@ -118,6 +131,11 @@ module tb_terrain_lodhist #(
 
     .f_start_i (f_start_i),
     .f_slot_i  (f_slot_i),
+    // The bench plays no directory, so the handle it offers is a constant.
+    // That is legal here for the reason the check port comment below gives:
+    // nothing in this arrangement reads a generation.
+    .f_gen_i   (8'd0),
+    .f_epoch_i (32'd0),
     .f_src_id_i(f_src_id_i),
     .f_valid_i (f_valid_i),
     .f_h_i     (f_h_i),
@@ -134,6 +152,30 @@ module tb_terrain_lodhist #(
 
     .inv_valid_o(inv_valid_w),
     .inv_slot_o (inv_slot_w),
+
+    // ---- THE HANDLE CHECK, TIED OFF HERE AND SAID SO ----------------------
+    // This bench's subject is the DEVIATION ARRIVING IN THE HISTOGRAM, and the
+    // histogram keys on `src_id`, not on the slot -- which is exactly why core
+    // entry I27 said this bench's arrangement did not need the check.  So the
+    // directory is answered NEVER: `chk_valid_i` is tied low, the feed holds
+    // its request for ever, and nothing it does depends on the answer.  That
+    // is the arrangement under test rather than a convenience, and it is a
+    // second piece of evidence for the check being non-blocking: if a held,
+    // unanswered query could stall the walk, THIS bench would hang.
+    //
+    // Its live counterpart is `terrain_lodpath_directed` cases 6 and 7.
+    .chk_valid_o(chk_valid_w),
+    .chk_slot_o (chk_slot_w),
+    .chk_gen_o  (chk_gen_w),
+    .chk_epoch_o(chk_epoch_w),
+    .chk_valid_i(1'b0),
+    .chk_stale_i(1'b0),
+
+    .handles_checked_o      (handles_checked_w),
+    .handles_stale_o        (handles_stale_w),
+    .chk_unanswered_clocks_o(chk_unanswered_clocks_w),
+    .chk_overrun_o          (chk_overrun_w),
+    .chk_stray_o            (chk_stray_w),
 
     .lattices_seen_o    (lattices_seen_o),
     .lattices_walked_o  (lattices_walked_o),
