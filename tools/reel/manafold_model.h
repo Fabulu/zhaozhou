@@ -221,17 +221,15 @@ inline zc::RingPart make_loop() {
   // nothing would have reported. See kLoopTaperStationMm. The values there are
   // the ones this expression used to compute, written out, so the accepted band
   // is preserved rather than re-derived.
-  const int32_t* stKey = kLoopTaperStationMm;
-  const auto taper = [&](const int32_t* k, int32_t s) {
-    for (int j = 0; j + 1 < 7; ++j) {
-      if (s <= stKey[j + 1]) {
-        const int32_t span = stKey[j + 1] - stKey[j];
-        if (span <= 0) return k[j + 1];
-        return k[j] + static_cast<int32_t>(
-            (static_cast<int64_t>(k[j + 1] - k[j]) * (s - stKey[j])) / span);
-      }
-    }
-    return k[6];
+  //
+  // PASS 24: the body of this lambda moved to `u02::loop_blade_taper_mm` in
+  // manafold_art.h, VERBATIM, because the bolt-avoidance rod radii
+  // (kBoltRodRadiusMm) are derived from the very same taper and a second copy
+  // of it would be the "a DERIVED constant is invalidated when its input moves"
+  // hazard with two readers instead of one. The lambda stays as a name so this
+  // function reads the same; the arithmetic is now in one place.
+  const auto taper = [](const int32_t* k, int32_t s) {
+    return loop_blade_taper_mm(k, s);
   };
   for (int i = 0; i < kLoopRings; ++i) {
     // PASS 21: the station comes from loop_ring_station_at, which is the exact

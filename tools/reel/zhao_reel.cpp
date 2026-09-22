@@ -1087,6 +1087,22 @@ struct SceneSubject {
   // D9 s7/s14: the translucent outer shell. Defaults ON: it is part of the
   // creature's material, not a per-clip choice.
   bool u02_shell = true;
+  // ---- PASS 24 (Owner Direction 25 item 2): THE LIGHTNING EXPERIMENT ------
+  //
+  // Two mechanisms, three subjects, and the selector lives on the SUBJECT
+  // rather than on the clip slot because the bank cannot express it otherwise:
+  // `manafold-hover` and `manafold-inspect` play the SAME clip (slot 0,
+  // manafold.h -- inspect differs by cam_k alone), and the direction asks for
+  // 3D avoidance on one and depth-splitting on the other. The lightning is
+  // built at render time from the posed anchors, so a per-subject switch is
+  // available here; a per-clip one would have to pick one of the two.
+  //
+  // Everything else in the bank leaves both at their defaults and is
+  // byte-identical to pass 23 -- which is the experiment's control group.
+  // (plain bool/int: this struct is declared before manafold.h is included, so
+  // the u02 enum is not in scope here; render_scene maps them at the one call.)
+  bool u02_bolt_avoid_rods = false;
+  int u02_bolt_split_n = 1;
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
@@ -4074,6 +4090,13 @@ int render_scene(const SceneSubject& sub) {
   const Species species = sub.species != Species::kAuto
                               ? sub.species
                               : (sub.creature >= 3 ? Species::kZixxtrixx : Species::kWatchdog);
+  // PASS 24: install this subject's lightning configuration. It is set for
+  // EVERY subject, not only the three in the experiment, so a previous
+  // subject's setting can never leak into the next one in a multi-subject run
+  // -- a stale global is how "it worked when I rendered it alone" happens.
+  u02::bolt_set_subject(
+      sub.u02_bolt_avoid_rods ? u02::BoltAvoid::kRods : u02::BoltAvoid::kOff,
+      sub.u02_bolt_split_n);
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, sub.bump_ext, 8);
   if (sub.island_flat) {  // keep the deep keel, drop the texture lane
@@ -9036,7 +9059,14 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
-  if (wanted("manafold-hover")) rc |= render_scene(subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true, &kU02SunHover));
+  if (wanted("manafold-hover")) {
+    SceneSubject s = subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true,
+                                      &kU02SunHover);
+    // PASS 24, Direction 25 item 2: the owner asked for 3D avoidance on
+    // Crackle and *"Upgrade Hover to that."*
+    s.u02_bolt_avoid_rods = true;
+    rc |= render_scene(s);
+  }
   if (wanted("manafold-inspect")) {
     // ⚠ THIS CLIP WAS A PIXEL-PERFECT DUPLICATE OF manafold-hover, and the
     //  page was showing the owner 36 clips of which 35 were distinct (pass-12
@@ -9062,6 +9092,12 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(0, "manafold-inspect", u02::kIdleKeys, true, nullptr);
     s.creature_moving_light = true;
     s.cam_k = 460000;
+    // PASS 24, Direction 25 item 2: *"for comparison let's do option 1 on
+    // inspect"* -- the OTHER mechanism, depth-splitting, on the same animation
+    // Hover plays, so the two can be compared without a pose difference
+    // between them. This subject is the closest camera in the bank, which is
+    // also where a crossing is easiest to judge.
+    s.u02_bolt_split_n = u02::kBoltDepthSplitN;
     rc |= render_scene(s);
   }
   if (wanted("manafold-drift")) rc |= render_scene(subject_u02_clip(1, "manafold-drift", u02::kDriftKeys, false, &kU02SunDrift));
@@ -9437,6 +9473,9 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle",
                                      u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_smear = 0;  // Direction 12: no active Manafold subject carries smear
+    // PASS 24, Direction 25 item 2: *"Crackle has lightning pass antennae a lot
+    // right now."* -- the clip the owner named as the worst offender.
+    s.u02_bolt_avoid_rods = true;
     s.note = "the crackle idle under the normal shipping mana (candidate 9, day sky)";
     rc |= render_scene(s);
   }

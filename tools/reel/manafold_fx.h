@@ -68,6 +68,21 @@ struct FxAnchors {
   int32_t hinge_a[3];
   int32_t hinge_b[3];
   int32_t hinge_c[3];
+  // PASS 24 (Owner Direction 25 item 2): THE ANTENNA'S OWN VOLUME, posed.
+  //
+  // `joint[e]` is the posed centre of ball e -- F, A, B, C, End -- in the same
+  // world fx16 frame as every other anchor here, instance offset included. The
+  // pass-21 rig makes the band four STRAIGHT rods between these five points, so
+  // (joint[e], joint[e+1], kBoltRodRadiusMm[e]) is a capsule that IS the rod,
+  // not a model of one; kBoltBallRadiusMm[e] is the sphere at each joint.
+  //
+  // ⚠ IT IS READ OFF THE SKIN'S OWN BIND STATIONS, not off the bone origins. A
+  // bone's origin is where the RIG put the joint; a ball's centre is where the
+  // ring table put the ring. They agree today and there is no reason they must:
+  // skinning the bind point (0, y0 + kRodsPivotMm[e], 0) on the ball's own bone
+  // asks the question the mesh answers.
+  int32_t joint[5][3];
+  bool joints_valid = false;
   int32_t ring[3];    // the ring-pocket centre. PASS 3 (R8/Direction 3 §6c
                       // "they sit at the edge of the circle"): the pass-2
                       // A/B/C centroid sat ~120 mm from ball B — near the
@@ -101,6 +116,26 @@ inline FxAnchors fx_anchors_from_pose(
   anchor(kBHingeA, out.hinge_a);
   anchor(kBHingeB, out.hinge_b);
   anchor(kBHingeC, out.hinge_c);
+  // PASS 24: the five ball centres, from the ring table's own bind stations.
+  // Only meaningful under the rods rig -- under `pass20` there are no balls,
+  // the band is a blended tube, and a capsule model of it would be a confident
+  // wrong number. `joints_valid` says so rather than leaving the caller to
+  // guess, and the avoidance refuses to run when it is false.
+  {
+    static constexpr uint8_t kJointBone[5] = {kBNeck, kBHingeA, kBHingeB,
+                                              kBHingeC, kBRearSocket};
+    const int32_t y0 = kLoopNeckExitYMm - kLoopBuryMm;
+    for (int e = 0; e < 5; ++e) {
+      zc::SkinVertex jv{0, fxu(y0 + kRodsPivotMm[e]), 0, kJointBone[e],
+                        kJointBone[e], 64, 0, 0};
+      int32_t x = 0, y = 0, z = 0;
+      zc::skin_vertex(pose.data(), jv, x, y, z, nullptr);
+      out.joint[e][0] = instance_x + x;
+      out.joint[e][1] = instance_y + y;
+      out.joint[e][2] = instance_z + z;
+    }
+    out.joints_valid = rig_rods();
+  }
   out.crown[0] = out.body[0];
   out.crown[1] = out.body[1] + fxu(vmm(kBodyRadiusMm));
   out.crown[2] = out.body[2];
@@ -2165,6 +2200,255 @@ inline int32_t lerp32(int32_t a, int32_t b, int32_t num, int32_t den) {
   return a + static_cast<int32_t>((static_cast<int64_t>(b - a) * num) / den);
 }
 
+// ---- PASS 24: KEEPING THE BOLT OUT OF THE ROD, IN 3D ----------------------
+//
+// Owner Direction 25 item 2. The rods rig hands this problem its own solution:
+// the antenna is four capsules and four spheres, so "is this point inside the
+// antenna" is one clamped dot product and one integer square root per obstacle,
+// and "push it out" is the same vector scaled to the surface.
+//
+// WHAT IT MAY AND MAY NOT DO. It moves a bolt's PATH. It does not touch the
+// bolt's radius, colour, gain, stamp density, morph clock, station identities
+// or topology -- Direction 23's *"It is good now as it is"* governs all of
+// those, and none of them is reachable from here. Every point of a path is
+// pushed by the same position-only function, so two links that share a station
+// still agree at it and the figure stays closed; and because the push depends
+// on nothing but the point and the posed antenna, both of which are continuous
+// in time and periodic over the clip, the pushed path is too.
+//
+// ⚠ THE DEGENERATE CASE IS AUTHORED, NOT LEFT TO THE ARITHMETIC. A point
+// exactly on a rod's centreline has no outward direction. Falling back to
+// "leave it" would silently admit the very intersections this exists to
+// remove, and picking an axis-aligned nudge would make the figure twitch when a
+// point crossed the axis. The fallback is the rod's own perpendicular toward
+// the LOOP POCKET's centre -- a direction that exists for every rod, varies
+// smoothly, and points where the lightning already lives.
+struct BoltRods {
+  int32_t joint[5][3]{};   // world fx16, F A B C End
+  int32_t pocket[3]{};     // the ring-pocket centre: the degenerate fallback
+  bool valid = false;
+};
+inline BoltRods g_u02_bolt_rods;
+
+inline void bolt_rods_from_anchors(const FxAnchors& A) {
+  g_u02_bolt_rods.valid = A.joints_valid;
+  for (int e = 0; e < 5; ++e)
+    for (int k = 0; k < 3; ++k) g_u02_bolt_rods.joint[e][k] = A.joint[e][k];
+  for (int k = 0; k < 3; ++k) g_u02_bolt_rods.pocket[k] = A.ring[k];
+}
+
+inline int64_t bolt_len_fx(const int64_t v[3]) {
+  const uint64_t d2 = static_cast<uint64_t>(v[0] * v[0] + v[1] * v[1] +
+                                            v[2] * v[2]);
+  return static_cast<int64_t>(zref::isqrt_u64(d2));
+}
+
+/** Push `p` to the surface of a capsule it is inside, plus the clearance.
+ *  A zero-length axis degenerates to the sphere case, which is correct. */
+inline void bolt_push_out_capsule(int32_t p[3], const int32_t a[3],
+                                  const int32_t b[3], int32_t radius_mm,
+                                  const int32_t pocket[3],
+                                  const int32_t* bias = nullptr) {
+  const int32_t R = fxu(radius_mm + g_u02_bolt_clearance_mm);
+  if (R <= 0) return;
+  int64_t ab[3], ap[3];
+  for (int k = 0; k < 3; ++k) {
+    ab[k] = static_cast<int64_t>(b[k]) - a[k];
+    ap[k] = static_cast<int64_t>(p[k]) - a[k];
+  }
+  const int64_t den = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+  int64_t t_q16 = 0;
+  if (den > 0) {
+    const int64_t num = ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2];
+    t_q16 = (num << 16) / den;
+    if (t_q16 < 0) t_q16 = 0;
+    if (t_q16 > 65536) t_q16 = 65536;
+  }
+  int64_t d[3];
+  for (int k = 0; k < 3; ++k) d[k] = ap[k] - ((ab[k] * t_q16) >> 16);
+  int64_t len = bolt_len_fx(d);
+  if (len >= R && bias == nullptr)
+    return;  // already outside: nothing to do, and no bytes move
+  // ⚠ THE BIASED PUSH, and it is the answer to a chord.
+  //
+  // With a bias point given, the outward direction is the BIAS's side of this
+  // rod, not the point's own. That matters for exactly one situation and it is
+  // the one the measurement found: a segment pinned at a fold station, whose
+  // two vertices sit honestly outside the rod on OPPOSITE sides, with the line
+  // between them straight through it. Pushing the free vertex along its own
+  // outward direction drives it further out on its own side, which it already
+  // is, so the relaxation converges to a configuration that still cuts.
+  // Pushing it toward the PINNED vertex's side moves the whole segment to one
+  // side of the rod, which is the move a chord actually needs, and it is
+  // continuous because the pinned vertex is strictly outside and so always has
+  // a well-defined side.
+  if (bias != nullptr) {
+    int64_t bd[3];
+    int64_t bp[3];
+    for (int k = 0; k < 3; ++k) bp[k] = static_cast<int64_t>(bias[k]) - a[k];
+    int64_t bt = 0;
+    if (den > 0) {
+      const int64_t bn = bp[0] * ab[0] + bp[1] * ab[1] + bp[2] * ab[2];
+      bt = (bn << 16) / den;
+      if (bt < 0) bt = 0;
+      if (bt > 65536) bt = 65536;
+    }
+    for (int k = 0; k < 3; ++k) bd[k] = bp[k] - ((ab[k] * bt) >> 16);
+    const int64_t bl = bolt_len_fx(bd);
+    if (bl > 0) {
+      // the point's own signed extent along the bias direction
+      const int64_t along = (d[0] * bd[0] + d[1] * bd[1] + d[2] * bd[2]) / bl;
+      if (along >= R) return;  // already clear ON THE BIAS SIDE
+      for (int k = 0; k < 3; ++k)
+        p[k] = static_cast<int32_t>(p[k] + (bd[k] * (R - along)) / bl);
+      return;
+    }
+    if (len >= R) return;
+  }
+  if (len <= 0) {
+    // On the axis. Use the rod's perpendicular toward the pocket centre.
+    int64_t q[3];
+    for (int k = 0; k < 3; ++k)
+      q[k] = static_cast<int64_t>(pocket[k]) - a[k];
+    if (den > 0) {
+      const int64_t qd = q[0] * ab[0] + q[1] * ab[1] + q[2] * ab[2];
+      const int64_t s_q16 = (qd << 16) / den;
+      for (int k = 0; k < 3; ++k) q[k] -= (ab[k] * s_q16) >> 16;
+    }
+    const int64_t ql = bolt_len_fx(q);
+    if (ql <= 0) return;  // pocket ON the axis: no direction exists at all
+    for (int k = 0; k < 3; ++k)
+      p[k] = static_cast<int32_t>(a[k] + ((ab[k] * t_q16) >> 16) +
+                                  (q[k] * R) / ql);
+    return;
+  }
+  for (int k = 0; k < 3; ++k)
+    p[k] = static_cast<int32_t>(p[k] + (d[k] * (R - len)) / len);
+}
+
+inline void bolt_push_out_sphere(int32_t p[3], const int32_t c[3],
+                                 int32_t radius_mm, const int32_t pocket[3],
+                                 const int32_t* bias = nullptr) {
+  if (radius_mm <= 0) return;
+  bolt_push_out_capsule(p, c, c, radius_mm, pocket, bias);
+}
+
+/** Push one point clear of every obstacle. A pure function of the point and the
+ *  posed antenna -- which is what lets two links that share a station agree
+ *  about where that station went, and therefore what keeps the figure closed. */
+inline void bolt_push_point(int32_t p[3], const int32_t* bias = nullptr) {
+  const BoltRods& R = g_u02_bolt_rods;
+  for (int e = 0; e < 4; ++e)
+    bolt_push_out_capsule(p, R.joint[e], R.joint[e + 1], kBoltRodRadiusMm[e],
+                          R.pocket, bias);
+  for (int e = 1; e < 5; ++e)
+    bolt_push_out_sphere(p, R.joint[e], kBoltBallRadiusMm[e], R.pocket, bias);
+}
+
+/** Hold one whole path outside the antenna.
+ *
+ *  ⚠ PUSHING THE VERTICES IS NOT ENOUGH, AND THE MEASUREMENT IS WHAT SAID SO.
+ *  The first version pushed points only and took Crackle from 5,685 intersecting
+ *  segments to 352 -- a 94% cut that looked like success until the probe's
+ *  breakdown named the remainder: every one of them a FOLD-FIGURE LINK, none of
+ *  them a free strand, the worst 282 mm long. A segment whose two ends are both
+ *  outside a 46 mm rod can still run straight through it, and no push applied to
+ *  the ends alone can know that. So the sweep also walks kBoltSegSamples
+ *  interior SAMPLES of each segment and distributes each sample's push back onto
+ *  the two ends by lever arm -- move an end by (1-u) of the push and the other
+ *  by u, and the sample itself moves by the whole of it.
+ *
+ *  ⚠ AND THE SAMPLE STAGE MAY ONLY MOVE INTERIOR VERTICES. A link's first and
+ *  last points ARE the fold figure's shared stations, reached from both sides;
+ *  the point stage may move them because it is pure in the position, but a
+ *  sample-driven push depends on the whole SEGMENT, and the two links meeting at
+ *  a station see different segments. Letting it move a station would tear the
+ *  figure open at that station -- silently, and only on the frames where a
+ *  station is near a rod. `lo`/`hi` bound what the sample stage may touch; the
+ *  free strands have no shared points and pass their whole range.
+ *
+ *  `kBoltAvoidSweeps` passes, because clearing one rod can land a point inside
+ *  its neighbour. A fixed count, not a convergence loop, so cost and result are
+ *  both deterministic. */
+inline void bolt_avoid_rods(int32_t pts[][3], int n, int lo, int hi) {
+  if (g_u02_bolt_avoid != BoltAvoid::kRods || !g_u02_bolt_rods.valid || n <= 0)
+    return;
+  for (int it = 0; it < kBoltAvoidSweeps; ++it) {
+    for (int i = 0; i < n; ++i) bolt_push_point(pts[i]);
+    for (int i = 0; i + 1 < n; ++i) {
+      const bool mov_a = i >= lo && i <= hi;
+      const bool mov_b = (i + 1) >= lo && (i + 1) <= hi;
+      if (!mov_a && !mov_b) continue;
+      for (int k = 1; k < kBoltSegSamples; ++k) {
+        int32_t x[3];
+        for (int c = 0; c < 3; ++c)
+          x[c] = lerp32(pts[i][c], pts[i + 1][c], k, kBoltSegSamples);
+        int32_t y[3] = {x[0], x[1], x[2]};
+        // EVERY sample is pushed toward ONE declared side of the rod, and that
+        // is what makes a chord resolvable at all. Unbiased, the samples on one
+        // side of a chord push one way and those on the other push back, and
+        // the two cancel: measured, as a segment that survived every sweep
+        // count and every lever cap. The side is the PINNED end's when one end
+        // is pinned (the free end must come to it), and the segment's first
+        // vertex otherwise. For the ordinary case -- both vertices already on
+        // the same side -- the biased direction IS the outward one, so nothing
+        // changes for the segments that were never in difficulty.
+        // ⚠ AND ONLY WHEN ONE END IS PINNED. Biasing a BOTH-FREE segment to one
+        // of its own vertices was tried and is worse -- 8 and 15 residuals
+        // against 0 and 1 -- because a free segment's proper move is to
+        // translate bodily along its own outward direction, and forcing it
+        // toward one end's side fights that on every ordinary segment to fix a
+        // chord case the lever already handles.
+        bolt_push_point(y, (mov_a && mov_b) ? nullptr
+                                            : (mov_a ? pts[i + 1] : pts[i]));
+        const int32_t d[3] = {y[0] - x[0], y[1] - x[1], y[2] - x[2]};
+        if (d[0] == 0 && d[1] == 0 && d[2] == 0) continue;
+        // u = k / kBoltSegSamples, in the same integer ratio throughout.
+        const int ua = kBoltSegSamples - k, ub = k;
+        // ⚠ THE LEVER ARM IS COMPENSATED WHEN ONLY ONE END MAY MOVE, and the
+        // measurement is what asked for it. With both ends free, (1-u) and u
+        // move the sample by exactly the deficit. With one end PINNED -- which
+        // is every segment touching a fold station -- moving the free end by
+        // the deficit moves the sample by only u of it, so a sample close to
+        // the pinned end converges eight times too slowly and a handful of
+        // grazes survive every sweep count (2 of 38,152 at twelve sweeps,
+        // measured). Dividing by the lever restores the intended step. It is
+        // capped at kBoltLeverMaxNum/Den so a sample right beside the pin
+        // cannot demand an arbitrarily large swing of the jag.
+        const auto lever = [&](int32_t v, int weight) {
+          int64_t q = (static_cast<int64_t>(v) * kBoltSegSamples) /
+                      (weight > 0 ? weight : 1);
+          const int64_t cap = static_cast<int64_t>(v) * kBoltLeverMaxNum /
+                              kBoltLeverMaxDen;
+          if (v >= 0) {
+            if (q > cap) q = cap;
+          } else {
+            if (q < cap) q = cap;
+          }
+          return static_cast<int32_t>(q);
+        };
+        for (int c = 0; c < 3; ++c) {
+          if (mov_a)
+            pts[i][c] += mov_b ? static_cast<int32_t>(
+                                     (static_cast<int64_t>(d[c]) * ua) /
+                                     kBoltSegSamples)
+                               : lever(d[c], ua);
+          if (mov_b)
+            pts[i + 1][c] += mov_a ? static_cast<int32_t>(
+                                         (static_cast<int64_t>(d[c]) * ub) /
+                                         kBoltSegSamples)
+                                   : lever(d[c], ub);
+        }
+      }
+    }
+  }
+  // One last pure pass, so every VERTEX is outside whatever the sample stage
+  // did to it. The stations end where the position-only function says, which is
+  // the property the two links meeting there depend on.
+  for (int i = 0; i < n; ++i) bolt_push_point(pts[i]);
+
+}
+
 /** The FX.LIGHTNING path evaluator (the ADDLIGHTNING recurrence, verbatim):
  *  deterministic jagged polyline start->end for one strike phase. Fills
  *  `pts` with segs+1 world positions. This authoring migrates unchanged
@@ -2253,6 +2537,14 @@ inline void bolt_path_morph(const int32_t s[3], const int32_t e[3], int segs,
   for (int i = 0; i <= segs; ++i)
     for (int k = 0; k < 3; ++k)
       pts[i][k] = lerp32(a[i][k], b[i][k], ph.morph_pm, 1000);
+  // PASS 24: AFTER the morph, never before. Avoiding the two endpoint paths and
+  // then interpolating between them would put the interpolant back inside the
+  // rod on every frame between two phases -- the mechanism would measure clear
+  // at the keys and cut through everywhere else, which is the shape of fault
+  // this creature keeps finding. The DRAWN path is what is held clear.
+  // The link's two END points are the fold figure's shared stations: the sample
+  // stage must not move them (see bolt_avoid_rods), so its range is 1..segs-1.
+  bolt_avoid_rods(pts, segs + 1, 1, segs - 1);
 }
 
 struct FreeLightningPath {
@@ -2301,6 +2593,10 @@ inline FreeLightningPath free_lightning_path(uint32_t frame, uint32_t slot,
   for (int p = 0; p <= kBoltSegs; ++p)
     for (int k = 0; k < 3; ++k)
       out.pts[p][k] = lerp32(from[p][k], to[p][k], ph.morph_pm, 1000);
+  // PASS 24: the free strand's drawn path, held outside the antenna after the
+  // morph (see bolt_path_morph for why it is after).
+  // A free strand shares no point with anything, so every vertex is movable.
+  bolt_avoid_rods(out.pts, kBoltSegs + 1, 0, kBoltSegs);
   for (int k = 0; k < 3; ++k) {
     out.start[k] = lerp32(sf[k], st[k], ph.morph_pm, 1000);
     out.end[k] = lerp32(ef[k], et[k], ph.morph_pm, 1000);
@@ -2358,8 +2654,15 @@ inline int32_t stamp_energy_pm(int count, int gain_pm, int32_t radius_px,
  *  crackle read as disconnected triangles). */
 inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int segs,
                        int gain_core_pm, int gain_halo_pm) {
+  // PASS 24 item 2b: the depth split. N == 1 runs the shipped arithmetic
+  // untouched (the multiply by 1 and the divide by 1 are both identities on
+  // these integers), so the off path cannot move a byte.
+  const int split = bolt_split_n();
+  gain_core_pm = static_cast<int>(bolt_split_gain(gain_core_pm));
+  gain_halo_pm = static_cast<int>(bolt_split_gain(gain_halo_pm));
   for (int i = 0; i < segs; ++i) {
-    const int n = path_segment_stamp_count(pts[i], pts[i + 1], kBoltStampMm, 24);
+    const int n =
+        path_segment_stamp_count(pts[i], pts[i + 1], kBoltStampMm, 24) * split;
     for (int t = 0; t < n; ++t) {
       const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
       const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
@@ -3722,6 +4025,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                                                     stamp_mm, cap_n);
         if (nst < 1) nst = 1;
         if (nst > cap_n) nst = cap_n;
+        // PASS 24 item 2b: the depth split, applied AFTER the authored cap so
+        // the cap keeps meaning what it meant (a bound on the authored
+        // subdivision) instead of silently becoming N times looser.
+        nst *= bolt_split_n();
         if (g_u02_fx_continuity_fault == FxContinuityFault::kStampCountPop &&
             i == 0 && sgi == 0 && (frame & 1u) == 0u)
           nst = cap_n;
@@ -3763,10 +4070,16 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // is grounded, it is not energy shining through the animal.
               // It rides `lit` like everything else, so a figure that is not
               // gripping does not stamp a dark bruise on the sky.
+              // PASS 24: the split's brightness compensation. N shorter
+              // sprites on one path must weigh what one long chain of them
+              // weighed, or the split would restyle the bolt (Direction 23).
+              // The navy backing is a BLEND, so its compensation is on the
+              // opacity; the two additive layers take it on the gain.
               line_push(out, x, y, z, dark_r, kRampStorm,
                              dark_gain * lit / 1000 * edge_pm / 1000, false,
                              /*opaque=*/true, /*soft=*/true,
-                             backing_opacity_pm);
+                             static_cast<int>(
+                                 bolt_split_gain(backing_opacity_pm)));
             } else if (pass == 1) {
               // LAYER 2: THE BLUE SHIMMER (D11) -- the layer this creature has
               // never had. ADDITIVE, because it is light and light adds;
@@ -3799,7 +4112,8 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                                     kFoldEdgeSegs * cap_n, 1200, shim_r);
               }
               line_push(out, x, y, z, shim_r, kRampShimmer,
-                             shimmer_gain_pm, false);
+                             static_cast<int>(bolt_split_gain(shimmer_gain_pm)),
+                             false);
             } else {
               // LAYER 3: THE WHITE LINE, over the finished navy AND its
               // shimmer -- the hot centre of the bolt. Additive and depth-
@@ -3808,7 +4122,9 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // outline -- and, per the plate above, between a line and a
               // string of pale blobs.
               line_push(out, x, y, z, core_r, kRampWhite,
-                             core_gain * lit / 1000 * edge_pm / 1000, false);
+                             static_cast<int>(bolt_split_gain(
+                                 core_gain * lit / 1000 * edge_pm / 1000)),
+                             false);
             }
           } else {
             line_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
@@ -4113,6 +4429,12 @@ inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
                       const FxAnchors& A, FoldState& stfx, int crowd_pm,
                       std::vector<ManaSplat>& out, int32_t* agit_out = nullptr,
                       FxContinuityTrace* trace = nullptr) {
+  // PASS 24: the posed antenna, published for the bolt avoidance, from the
+  // anchors this call was already given. It lands HERE rather than at each
+  // caller so no binary can build a bolt against a stale or absent antenna --
+  // the reel, the probe and every gate go through this one door. It is a plain
+  // copy when the avoidance is off and reaches nothing.
+  bolt_rods_from_anchors(A);
   switch (cand) {
     case 1: {  // the caged pulsar — now with a FILLED heart
       const uint32_t breath_phase =

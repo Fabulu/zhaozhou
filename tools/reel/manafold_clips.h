@@ -542,6 +542,25 @@ struct Rig {
    *  ordering problem for the nodules; this is that pattern, reused.
    */
   int32_t eye_lean = 0;
+  /** PASS 24 (Owner Direction 25 item 3) -- THE AMBIENT EYE LAYER's carry.
+   *
+   *  Written by antenna_knead (the one layer every PERFORMING clip calls, and
+   *  the first thing each of them calls), read by apply_gaze / apply_gaze_lr
+   *  and by write(). It rides the Rig for the SAME ordering reason eye_lean
+   *  does, and for one more besides: apply_gaze CLAMPS its inputs against the
+   *  star-on-lens containment limits, so an ambient that arrives as an angle
+   *  BEFORE the clamp can never walk the star off the eye, while one composed
+   *  onto the finished quat could. The committed extremes gate exists because
+   *  that has been got wrong before.
+   *
+   *  side/lift are angle16 ADDENDS to the gaze; size_l/size_r are per-mille
+   *  MULTIPLIERS on whatever eye scale the clip has already authored (1000 =
+   *  no change, and no arithmetic runs at 1000 -- the off path is byte-exact).
+   */
+  int32_t eye_amb_side_a16 = 0;
+  int32_t eye_amb_lift_a16 = 0;
+  int32_t eye_amb_size_l_pm = 1000;
+  int32_t eye_amb_size_r_pm = 1000;
   void reset() {
     for (int b = 0; b < kBoneCount; ++b) {
       q[b] = zc::quat16_identity();
@@ -553,6 +572,10 @@ struct Rig {
     dent_pm = 0;
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
     eye_lean = 0;
+    eye_amb_side_a16 = 0;
+    eye_amb_lift_a16 = 0;
+    eye_amb_size_l_pm = 1000;
+    eye_amb_size_r_pm = 1000;
   }
   bool set_eye_scale_pm(int32_t left_pm, int32_t right_pm) {
     if (left_pm <= 0 || left_pm >= 2000 || right_pm <= 0 || right_pm >= 2000)
@@ -592,7 +615,22 @@ struct Rig {
       }
       if (c.uniform_scale_q15.size() ==
           static_cast<size_t>(c.frame_count) * kBoneCount) {
-        c.uniform_scale_q15[static_cast<size_t>(f) * kBoneCount + b] = scale_q15[b];
+        // PASS 24: the ambient eye SIZE multiplies whatever the clip authored.
+        // It lands here, on the way out, because most clips never call
+        // set_eye_scale_pm at all -- a layer applied only there would reach the
+        // handful of clips that already act with their eyes and miss exactly
+        // the "normal animations" the direction is about. The mute controls are
+        // honoured (meyesize's --fail-mute must still fire), and at 1000 no
+        // arithmetic runs, so the off path is byte-identical.
+        uint16_t s15 = scale_q15[b];
+        if (b == kBEyeL && eye_amb_size_l_pm != 1000 && !eye_size_muted(true))
+          s15 = static_cast<uint16_t>(
+              (static_cast<int64_t>(s15) * eye_amb_size_l_pm + 500) / 1000);
+        else if (b == kBEyeR && eye_amb_size_r_pm != 1000 &&
+                 !eye_size_muted(false))
+          s15 = static_cast<uint16_t>(
+              (static_cast<int64_t>(s15) * eye_amb_size_r_pm + 500) / 1000);
+        c.uniform_scale_q15[static_cast<size_t>(f) * kBoneCount + b] = s15;
       }
     }
     write_span_lanes(c, f);
@@ -2125,6 +2163,10 @@ inline void apply_eye_roll(Rig& g, int32_t left_pm, int32_t right_pm) {
 /** One apparent gaze on both pupil pivots: +side sweeps the stars toward the
  *  creature's left (+z), +lift sweeps them up. The pivot radius is the bulge. */
 inline void apply_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
+  // PASS 24: the ambient layer enters HERE, as an addend to the angle, so the
+  // containment clamps below bound the SUM. See Rig::eye_amb_side_a16.
+  side_a16 += g.eye_amb_side_a16;
+  lift_a16 += g.eye_amb_lift_a16;
   const int32_t side = side_a16 < -kGazeMaxA16   ? -kGazeMaxA16
                        : side_a16 > kGazeMaxA16  ? kGazeMaxA16
                                                  : side_a16;
@@ -2156,6 +2198,12 @@ inline void apply_gaze_lr(Rig& g, int32_t l_side_a16, int32_t l_lift_a16,
     return v < -kGazeLiftMaxA16 ? -kGazeLiftMaxA16
            : v > kGazeLiftMaxA16 ? kGazeLiftMaxA16 : v;
   };
+  // PASS 24: same addend, same clamp, so an asymmetric authored gaze takes the
+  // ambient on both eyes exactly as a symmetric one does.
+  l_side_a16 += g.eye_amb_side_a16;
+  r_side_a16 += g.eye_amb_side_a16;
+  l_lift_a16 += g.eye_amb_lift_a16;
+  r_lift_a16 += g.eye_amb_lift_a16;
   g.q[kBPupilL] = quat_mul(quat_y(-cs(l_side_a16)), quat_z(cl(l_lift_a16)));
   g.q[kBPupilR] = quat_mul(quat_y(-cs(r_side_a16)), quat_z(cl(r_lift_a16)));
 }
@@ -2292,7 +2340,7 @@ inline int32_t hover_at(int f, int keys, int32_t base_mm, int32_t amp_a_mm,
  *
  *  Deterministic and closed-form: no state, no hash, no per-clip table. Same
  *  frame in, same pose out. */
-inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
+inline void hinge_play(HingePlay& hp, uint32_t slot, int f, int keys, int cyc) {
   if (cyc < 1) cyc = 1;
   // PASS 12 (D4): the rates are PERIODS IN KEYS now, not multipliers of the
   // caller's cycle count. `cyc` is still taken -- it keeps the signature and
@@ -2331,7 +2379,7 @@ inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   }
   // PASS 19: the End station is one of the two AMBIENT End authorities; its
   // share is the named kRearSocketAmbientGainPm (exactly 1000 under legacy-root).
-  const int32_t amb = rear_ambient_gain_pm();
+  const int32_t amb = rear_ambient_clip_gain_pm(slot);
   hp.tilt_end = amb == 1000 ? t[4] : static_cast<int32_t>(
       (static_cast<int64_t>(t[4]) * amb) / 1000);
   hp.yaw_end = amb == 1000 ? y[4] : static_cast<int32_t>(
@@ -2347,8 +2395,8 @@ inline void merge_front_play(HingePlay& hp, const HingePlay* front) {
 /** The antenna's living sway: per-hinge fold-scale modulation with cumulative
  *  phase lag (the front leads, the rear follows) + slow out-of-plane tilt +
  *  the sympathetic compression coupling (one amplitude knob: kCompressAmpPm). */
-inline void loop_alive(Rig& g, int f, int keys, int cyc, int32_t amp_pm,
-                       int32_t compress_amp, int comp_cyc,
+inline void loop_alive(Rig& g, uint32_t slot, int f, int keys, int cyc,
+                       int32_t amp_pm, int32_t compress_amp, int comp_cyc,
                        const HingePlay* front = nullptr) {
   if (cyc < 1) cyc = 1;
   if (comp_cyc < 1) comp_cyc = 1;
@@ -2367,7 +2415,7 @@ inline void loop_alive(Rig& g, int f, int keys, int cyc, int32_t amp_pm,
       (static_cast<int64_t>(kAntennaTiltA16) * sinp(f, keys, cyc / 2 > 0 ? cyc / 2 : 1, 0x5000)) >>
       16);
   HingePlay hp;
-  hinge_play(hp, f, keys, cyc);  // DIRECTION 7 §1
+  hinge_play(hp, slot, f, keys, cyc);  // DIRECTION 7 §1
   merge_front_play(hp, front);
   loop_pose(g, 1000 + couple, 1000 + sa, 1000 + sb, 1000 + sc, tilt, 0, 0, 0, &hp);
 }
@@ -2381,7 +2429,7 @@ inline void loop_alive(Rig& g, int f, int keys, int cyc, int32_t amp_pm,
  *  angling — Direction 3 §4) rides the slow wave. The caller's compression
  *  phase supplies the squash half of "lean-plus-squash" (same lag knob).
  *  REPLACES loop_alive where the whole creature should carry the wave. */
-inline void whole_wobble(Rig& g, int f, int K, int amp_pm,
+inline void whole_wobble(Rig& g, uint32_t slot, int f, int K, int amp_pm,
                          const HingePlay* front = nullptr) {
   const int cycA = K / kWobblePerAKeys > 0 ? K / kWobblePerAKeys : 1;
   const int cycB = K / kWobblePerBKeys > 0 ? K / kWobblePerBKeys : 1;
@@ -2394,7 +2442,7 @@ inline void whole_wobble(Rig& g, int f, int K, int amp_pm,
   const int32_t tilt = static_cast<int32_t>(
       (static_cast<int64_t>(kAntennaTiltA16) * sinp(f, K, cycB, 0x5000)) >> 16);
   HingePlay hp;
-  hinge_play(hp, f, K, cycA);  // DIRECTION 7 §1
+  hinge_play(hp, slot, f, K, cycA);  // DIRECTION 7 §1
   merge_front_play(hp, front);
   loop_pose(g, 1000 + wave(2), 1000 + wave(1), 1000 + wave(0), 1000 + wave(1), tilt,
             0, 0, 0, &hp);
@@ -2589,10 +2637,20 @@ inline HingePlay front_flex_play(uint32_t slot, int f, int keys) {
   HingePlay hp;
   if (g_u02_front_flex_mute) return hp;
   const FrontFlexPose p = front_flex_authored(slot, f, keys);
+  // PASS 24: the bank-wide version-18 gain, then the per-clip lift. A clip at
+  // 1000 does the SAME integer arithmetic it always did (x*1000/1000 == x for
+  // every value this can carry), so every untouched clip is byte-exact.
+  const int32_t clip_pm = front_flex_clip_pm(slot);
   hp.tilt_front = static_cast<int32_t>(
       (static_cast<int64_t>(p.tilt_a16) * g_u02_front_flex_gain_pm) / 1000);
   hp.yaw_front = static_cast<int32_t>(
       (static_cast<int64_t>(p.yaw_a16) * g_u02_front_flex_gain_pm) / 1000);
+  if (clip_pm != 1000) {
+    hp.tilt_front = static_cast<int32_t>(
+        (static_cast<int64_t>(hp.tilt_front) * clip_pm) / 1000);
+    hp.yaw_front = static_cast<int32_t>(
+        (static_cast<int64_t>(hp.yaw_front) * clip_pm) / 1000);
+  }
   return hp;
 }
 
@@ -3222,6 +3280,81 @@ inline bool apply_knead_dip_env() {
       }
     }
   }
+  // ---- PASS 24 -----------------------------------------------------------
+  // All four of these are here, in the SHARED parser, for the reason the
+  // function's own header gives: an env control is only a control in a binary
+  // that reads it. The bolt knobs in particular are read by the reel AND by
+  // manafold-boltgate, and the boltgate's whole job is to say whether the
+  // avoidance worked -- a gate that could not be put into the configuration it
+  // is judging would be judging its own default.
+  if (const char* e = std::getenv("ZHAO_U02_BOLT_AVOID")) {
+    if (std::strcmp(e, "rods") == 0)
+      g_u02_bolt_avoid_env_value = BoltAvoid::kRods;
+    else if (std::strcmp(e, "off") == 0)
+      g_u02_bolt_avoid_env_value = BoltAvoid::kOff;
+    else
+      return false;
+    g_u02_bolt_avoid_env = true;
+    g_u02_bolt_avoid = g_u02_bolt_avoid_env_value;
+  }
+  {
+    int32_t v = g_u02_bolt_clearance_mm;
+    if (!num("ZHAO_U02_BOLT_CLEARANCE_MM", 0, 400, v)) return false;
+    g_u02_bolt_clearance_mm = v;
+    int32_t n = static_cast<int32_t>(g_u02_bolt_split_n);
+    const char* had = std::getenv("ZHAO_U02_BOLT_SPLIT_N");
+    if (!num("ZHAO_U02_BOLT_SPLIT_N", 1, kBoltDepthSplitMaxN, n)) return false;
+    if (had != nullptr) {
+      g_u02_bolt_split_env = true;
+      g_u02_bolt_split_env_value = static_cast<int>(n);
+      g_u02_bolt_split_n = static_cast<int>(n);
+    }
+    int32_t comp = g_u02_bolt_split_compensate ? 1 : 0;
+    if (!num("ZHAO_U02_BOLT_SPLIT_COMPENSATE", 0, 1, comp)) return false;
+    g_u02_bolt_split_compensate = comp != 0;
+  }
+  // The three per-clip ladders. One parser shape, spelled out per table rather
+  // than through a macro, because each one has its own slot count and its own
+  // legal range and a shared helper would hide exactly that.
+  {
+    const auto per_clip = [](const char* name, int slots, int lo, int hi,
+                             int32_t* dst) {
+      const char* e = std::getenv(name);
+      if (e == nullptr) return true;
+      if (*e == '\0') return false;
+      const char* p = e;
+      while (*p != '\0') {
+        char* end = nullptr;
+        const long slot = std::strtol(p, &end, 10);
+        if (end == p || *end != ':') return false;
+        p = end + 1;
+        const long pm = std::strtol(p, &end, 10);
+        if (end == p) return false;
+        p = end;
+        if (slot < 0 || slot >= slots) return false;
+        if (pm < lo || pm > hi) return false;
+        dst[slot] = static_cast<int32_t>(pm);
+        if (*p == ',') {
+          ++p;
+          if (*p == '\0') return false;  // a trailing comma is a typo
+        } else if (*p != '\0') {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!per_clip("ZHAO_U02_REAR_AMBIENT_CLIP_PM", kRearAmbientClipSlots, 0,
+                  1000, g_u02_rear_ambient_clip_pm.data()))
+      return false;
+    if (!per_clip("ZHAO_U02_FRONT_FLEX_CLIP_PM", kFrontFlexClipSlots, 0, 3000,
+                  g_u02_front_flex_clip_pm.data()))
+      return false;
+    if (!per_clip("ZHAO_U02_EYE_AMBIENT_CLIP_PM", kEyeAmbientClipSlots, 0, 1000,
+                  g_u02_eye_ambient_clip_pm.data()))
+      return false;
+  }
+  if (!num("ZHAO_U02_EYE_AMBIENT_PM", 0, 1000, g_u02_eye_ambient_master_pm))
+    return false;
   return true;
 }
 
@@ -3430,8 +3563,73 @@ inline void apply_eye_schedule(Rig& g, uint32_t slot, EyeCam cam, int keys, int 
  *  base on seven fixed-camera subjects (manafold_art.h, kIdleFixedSlot). It
  *  is a separate parameter so a new clip has to SAY which camera it is baked
  *  for, and u02::clip_cam_orbits is the one place that answers. */
+/** PASS 24 (Owner Direction 25 item 3) -- THE AMBIENT EYE LAYER.
+ *
+ *  *"Normal animations should get a bit of that, but not so much so it becomes
+ *  overdone."* Three channels on three mutually prime integer cycle counts --
+ *  a side drift, a lift drift and a size breath -- so the face is never doing
+ *  one readable periodic thing; a per-clip gain decides how much of it a clip
+ *  takes, and the authored expression beats take none.
+ *
+ *  ⚠ THE SEAM IS EXACT BY CONSTRUCTION, not by arithmetic luck: sinp's phase is
+ *  `f * cycles * 65536 / keys`, so at f == keys it is `cycles * 65536`, which
+ *  is 0 mod 65536 for an INTEGER cycle count. Every count here is a literal
+ *  integer, never `keys / period`, which is the form that can land on a
+ *  fraction and step at the wrap.
+ *
+ *  It writes ONLY the Rig's four ambient carry fields. Nothing here touches a
+ *  bone, so it cannot compete with any authored channel -- the composition
+ *  happens later, inside apply_gaze's clamp and Rig::write's scale. */
+inline void eye_ambient_layer(Rig& g, uint32_t slot, int keys, int f) {
+  if (keys <= 1) return;
+  int32_t amt = eye_ambient_clip_pm(slot);
+  if (amt <= 0) return;
+  // Direction 25: "none inside Trick's planted window."
+  if (slot == 13) {
+    const int lo = kEyeAmbientTrickMuteFromKey;
+    const int hi = kEyeAmbientTrickMuteToKey;
+    const int r = kEyeAmbientTrickMuteRampKeys;
+    int32_t w = 1000;
+    if (f >= lo && f <= hi) w = 0;
+    else if (f > lo - r && f < lo)
+      w = 1000 - motion_c2_ease((f - (lo - r)) * 1000 / r);
+    else if (f > hi && f < hi + r)
+      w = motion_c2_ease((f - hi) * 1000 / r);
+    amt = static_cast<int32_t>((static_cast<int64_t>(amt) * w) / 1000);
+    if (amt <= 0) return;
+  }
+  const auto ch = [&](int32_t full_a16, int32_t share_pm, int cycles,
+                      int32_t phase) {
+    const int64_t amp = static_cast<int64_t>(full_a16) * share_pm / 1000 * amt / 1000;
+    return static_cast<int32_t>((amp * sinp(f, keys, cycles, phase)) >> 16);
+  };
+  g.eye_amb_side_a16 =
+      ch(kGazeMaxA16, kEyeAmbientSidePm, kEyeAmbientSideCycles, 0);
+  g.eye_amb_lift_a16 =
+      ch(kGazeLiftMaxA16, kEyeAmbientLiftPm, kEyeAmbientLiftCycles, 0x3000);
+  const int32_t sz_amp =
+      static_cast<int32_t>(static_cast<int64_t>(kEyeAmbientSizePm) * amt / 1000);
+  g.eye_amb_size_l_pm =
+      1000 + static_cast<int32_t>(
+                 (static_cast<int64_t>(sz_amp) *
+                  sinp(f, keys, kEyeAmbientSizeCycles, 0x1800)) >> 16);
+  g.eye_amb_size_r_pm =
+      1000 + static_cast<int32_t>(
+                 (static_cast<int64_t>(sz_amp) *
+                  sinp(f, keys, kEyeAmbientSizeCycles,
+                       0x1800 + kEyeAmbientEyeSkewA16)) >> 16);
+}
+
 inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
                           int32_t eye_pm = 1000, int32_t motion_pm = 1000) {
+  // PASS 24: the ambient eye layer rides here for the SAME reason the eye
+  // travel does -- this is the one layer every performing clip calls, and it
+  // is the FIRST thing each of them calls, so the carry fields are set before
+  // any apply_gaze/apply_squint/g.write can read them. The two diagnostics
+  // (build_still, build_nodule_solo) do not call this function at all, which is
+  // the structural half of "none on the diagnostics"; their zero entries in
+  // kEyeAmbientClipPm are the declared half.
+  eye_ambient_layer(g, slot, keys, f);
   // The eye travel rides here because this is the one layer every PERFORMING
   // clip calls (build_still and build_nodule_solo deliberately do not). It
   // writes the carrier bones, which nothing else in this function touches.
@@ -3662,7 +3860,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
         g.q[kBRearSocket],
         quat_z(-static_cast<int32_t>(
             (static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) *
-             rear_ambient_gain_pm() / 1000 * w2) >> 16)));
+             rear_ambient_clip_gain_pm(slot) / 1000 * w2) >> 16)));
   }
 }
 
@@ -3714,7 +3912,7 @@ inline zc::Clip build_hover_idle(uint16_t slot) {
     // body follows); the squash below lags by the same station clock. Version
     // 18 Front X/Y enters through HingePlay's appended Front fields here.
     const HingePlay front = front_flex_play(slot, f, K);
-    whole_wobble(g, f, K, kWobbleAmpPm, &front);
+    whole_wobble(g, kIdleOrbitSlot, f, K, kWobbleAmpPm, &front);
     swallow_body(g, swal, kIdleSwallowMm, kIdleSwallowRollA16);
     face_rest(g);
     apply_gaze(g,
@@ -3788,7 +3986,7 @@ inline zc::Clip build_drift() {
     // The established wind trail and the new performance share one Front
     // authority; loop_pose owns the fold -> tilt -> yaw composition order.
     front.tilt_front -= kDriftTrailA16;
-    whole_wobble(g, f, K, kWobbleAmpPm * 3 / 4, &front);
+    whole_wobble(g, 1, f, K, kWobbleAmpPm * 3 / 4, &front);
     face_rest(g);
     // eyes INTO the travel, one glance back at the second correction
     apply_gaze(g, f >= 104 && f < 122 ? -kGazeMaxA16 / 2 : kGazeMaxA16 / 2,
@@ -4039,7 +4237,7 @@ inline zc::Clip build_rest() {
     g.reset();
     antenna_knead(g, 5, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const HingePlay front = front_flex_play(5, f, K);
-    whole_wobble(g, f, K, kWobbleAmpPm / 2, &front);  // pass 3: slower, whole-body
+    whole_wobble(g, 5, f, K, kWobbleAmpPm / 2, &front);  // pass 3: slower, whole-body
     face_rest(g);
     apply_squint(g, kRestSquintPm + blink_at(f, 77));
     apply_gaze(g,
@@ -4120,7 +4318,7 @@ inline zc::Clip build_hasty() {
                           sinp(f, K, kHastyFishtailCycles)) >> 16)));
     // the antenna drags: stronger sway, and the whole loop blown back a bit
     const HingePlay front = front_flex_play(8, f, K);
-    loop_alive(g, f, K, K / 15, kAntennaSwayPm * 3, kCompressAmpPm,
+    loop_alive(g, 8, f, K, K / 15, kAntennaSwayPm * 3, kCompressAmpPm,
                K / 15, &front);
     face_rest(g);
     // eyes ahead-up; one panic glance sideways mid-flight
@@ -6275,7 +6473,7 @@ inline zc::Clip build_flight() {
       g.nod.cz += ty[2] / 3;
     }
     const HingePlay front = front_flex_play(kFlightSlot, f, K);
-    loop_alive(g, f, K, cyc, kFlightSwayPm, breath, cyc, &front);
+    loop_alive(g, kFlightSlot, f, K, cyc, kFlightSwayPm, breath, cyc, &front);
     face_rest(g);
     // the eyes look where it is going, and lift with the climb
     apply_gaze(g, kGazeMaxA16 / 3,

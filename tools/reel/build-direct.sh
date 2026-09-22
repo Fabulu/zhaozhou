@@ -48,6 +48,10 @@ Targets:
   mrod       manafold-rodgate.exe (pass 21: THE POSED-SURFACE BAND GATE,
              Direction 22 -- rod straightness, joint-on-ball, joint smoothness,
              uniform stretch and ball rigidity, each with a fired control)
+  mbolt      manafold-boltgate.exe (pass 24: THE LIGHTNING/ANTENNA CLEARANCE
+             probe and gate, Direction 25 item 2 -- bolt-segment vs rod-capsule
+             intersection in 3D, the orthographic screen-crossing diagnosis,
+             and the depth-split resolution bound, each with a fired control)
   mrear      manafold-rear-audit.exe (pass 19: the committed REAR-CHAIN audit,
              Direction 20 items 1+2 -- arm/End relative rotation, rear
              centreline bend and End/last-segment motion energy per sample)
@@ -76,7 +80,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mrear|mrod|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mrear|mrod|mbolt|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -293,6 +297,12 @@ build_mrear() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_rear_audit.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-rear-audit.exe"
 }
 
+build_mbolt() {
+  printf '%s
+' "LD manafold-boltgate"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_boltgate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-boltgate.exe"
+}
+
 build_mrod() {
   printf '%s
 ' "LD manafold-rodgate"
@@ -315,6 +325,7 @@ case "$TARGET" in
   mhinge) build_mhinge ;;
   mrear) build_mrear ;;
   mrod) build_mrod ;;
+  mbolt) build_mbolt ;;
   mnodule) build_mnodule ;;
   mjointpub) build_mjointpub ;;
   mqa) build_mqa ;;

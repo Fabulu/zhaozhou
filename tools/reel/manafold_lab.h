@@ -1110,7 +1110,7 @@ inline zc::Clip build_manalab() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     lab_antenna_knead(g, VB, f);
-    loop_alive(g, f, K, K / 22, kAntennaSwayPm, kCompressAmpPm, K / 26);
+    loop_alive(g, 15u, f, K, K / 22, kAntennaSwayPm, kCompressAmpPm, K / 26);
     face_rest(g);
     apply_gaze(g, 0, kGazeLiftMaxA16 / 4);
     apply_squint(g, blink_at(f, 7));

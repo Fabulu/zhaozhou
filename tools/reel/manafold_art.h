@@ -651,6 +651,31 @@ static_assert(kLoopTaperStationMm[1] > 0 && kLoopTaperStationMm[2] > 0 &&
               "a taper station past the first is never 0 — a zero here is the "
               "silent zero-fill of a short list, not an authored value");
 
+/** PASS 24: THE BAND'S OWN TAPER, as one named function.
+ *
+ *  This was a lambda inside make_loop() for fifteen passes, which was fine
+ *  while the skin was the only reader. Pass 24's bolt avoidance needs the rod's
+ *  RADIUS -- and a second transcription of a piecewise ramp is exactly the
+ *  10-GATE-CHECKLIST item 24 hazard (a derived constant invalidated when its
+ *  input moves) with the extra twist that the copy would live in a different
+ *  file. So the arithmetic moved here, verbatim, and make_loop calls it. The
+ *  bolt radii below call it too, so "how wide is the rod" has one answer.
+ *
+ *  Byte-neutral by construction: the loop bound, the `<=` comparison, the
+ *  zero-span early return and the integer division are unchanged. */
+constexpr int32_t loop_blade_taper_mm(const int32_t* k, int32_t s) {
+  for (int j = 0; j + 1 < 7; ++j) {
+    if (s <= kLoopTaperStationMm[j + 1]) {
+      const int32_t span = kLoopTaperStationMm[j + 1] - kLoopTaperStationMm[j];
+      if (span <= 0) return k[j + 1];
+      return k[j] + static_cast<int32_t>(
+          (static_cast<int64_t>(k[j + 1] - k[j]) * (s - kLoopTaperStationMm[j])) /
+          span);
+    }
+  }
+  return k[6];
+}
+
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it
 // belongs where the antenna meets the creature at the BACK. Add one where
@@ -1122,6 +1147,250 @@ inline int32_t loop_ring_station_at(int ring) {
   return rig_rods() ? rods_ring(ring).station_mm : loop_ring_station_mm(ring);
 }
 
+// ===========================================================================
+// PASS 24 (Owner Direction 25 item 2): THE LIGHTNING AND THE ANTENNA
+//
+// Owner, 2026-09-22: *"Sometimes the Lightning shape goes through the antennae,
+// I wish we could fix that somehow."* and, after the options were put to him,
+// *"let's go with keeping the bolt out of the rod in 3d. Do it for one
+// animation as an experiment first ... Crackle has lightning pass antennae a
+// lot right now. Let's do a second one too. Upgrade Hover to that. And for
+// comparison let's go option 1 on inspect."*
+//
+// THE ANTENNA'S VOLUME, as the bolt sees it. Under the pass-21 rods rig the
+// band is four STRAIGHT rods between five ball joints, which is the whole
+// reason a 3D clearance test is tractable at all: a rod is a capsule (segment +
+// radius) and a ball is a sphere, and a bolt point's distance to either is a
+// closed-form integer expression. Nothing here decides how the lightning LOOKS;
+// it decides where the antenna IS.
+//
+// ⚠ THE RADII ARE DERIVED FROM THE BAND'S OWN TAPER, NOT TRANSCRIBED. Each rod
+// takes the widest blade rx over its own station span, so re-authoring
+// kLoopBladeRxMm moves the clearance with it. The probe (manafold-boltgate)
+// checks these against the POSED MESH's own worst vertex distance and prints
+// both -- measurement on the comparison side, per CLAUDE.md, and the number is
+// still an editable knob because the CLEARANCE beside it is the art value.
+constexpr int32_t bolt_rod_radius_mm(int e) {
+  // The taper is piecewise linear, so its maximum over a rod's span is at one
+  // of the span's ENDS or at a taper KEY inside it. Sampling both ends and
+  // every key in range is therefore exact, not an approximation.
+  if (e < 0 || e > 3) return 0;
+  const int32_t a = kRodsPivotMm[e], b = kRodsPivotMm[e + 1];
+  int32_t best = loop_blade_taper_mm(kLoopBladeRxMm, a);
+  const int32_t rb = loop_blade_taper_mm(kLoopBladeRxMm, b);
+  if (rb > best) best = rb;
+  for (int j = 0; j < 7; ++j) {
+    const int32_t s = kLoopTaperStationMm[j];
+    if (s < a || s > b) continue;
+    const int32_t r = loop_blade_taper_mm(kLoopBladeRxMm, s);
+    if (r > best) best = r;
+  }
+  return best;
+}
+constexpr int32_t kBoltRodRadiusMm[4] = {
+    bolt_rod_radius_mm(0), bolt_rod_radius_mm(1), bolt_rod_radius_mm(2),
+    bolt_rod_radius_mm(3)};
+static_assert(kBoltRodRadiusMm[0] == 74 && kBoltRodRadiusMm[1] == 46 &&
+                  kBoltRodRadiusMm[2] == 48 && kBoltRodRadiusMm[3] == 58,
+              "the rod capsule radii must be the blade taper's own rx maxima "
+              "-- if this fires the taper was re-authored and the recorded "
+              "numbers in P24-IMPLEMENTATION.md no longer describe the band");
+// The four BALLS are obstacles too, and they are the WIDER ones: a bolt through
+// ball C reads exactly as "the lightning goes through the antenna", and leaving
+// them out would have produced an avoidance that visibly still cut the
+// knuckles. Radii are the ball ellipse's broad axis (kBallRxMm), which is the
+// silhouette half-width the eye actually sees. The F joint has no ball of its
+// own -- the BODY is its ball (P21 §3.1) -- and the body is not in this test,
+// so entry 0 is the F pivot and carries no sphere.
+constexpr int32_t kBoltBallRadiusMm[5] = {0, kBallRxMm[0], kBallRxMm[1],
+                                          kBallRxMm[2], kBallRxMm[3]};
+// THE ART KNOB: how far OUTSIDE the antenna's surface a bolt point is held.
+// Zero would put the bolt exactly tangent, which at a 6 px band and a 3 px hot
+// core still reads as touching. CHOSEN BY EYE -- see P24-IMPLEMENTATION.md.
+constexpr int32_t kBoltRodClearanceMm = 46;
+inline int32_t g_u02_bolt_clearance_mm = kBoltRodClearanceMm;
+// A push out of rod 1 can land a point inside rod 2. Three sweeps is enough for
+// this geometry (the rods meet at obtuse joints and a point can be inside at
+// most two capsules plus a ball); it is a fixed count, not a convergence loop,
+// so the result is deterministic and the cost is bounded.
+constexpr int kBoltAvoidSweeps = 12;
+// How finely each segment is walked when the sweep asks "does the LINE between
+// these two vertices cut a rod". 8 samples on the bank's longest fold link
+// (282 mm, measured) is one every 35 mm against a 46 mm thinnest rod, so no
+// rod can slip between two samples. Raising it costs only probe/render time;
+// lowering it is how a chord gets missed.
+constexpr int kBoltSegSamples = 8;
+// The cap on the one-pinned-end lever compensation, as a fraction. 3/1 lets a
+// sample a third of the way along fully compensate and holds everything nearer
+// the pin to three times the deficit, so a graze beside a station cannot throw
+// the free vertex across the pocket.
+constexpr int kBoltLeverMaxNum = 8;
+constexpr int kBoltLeverMaxDen = 1;
+// The last-resort slide's scan resolution (see bolt_avoid_rods). 16 steps puts
+// the worst residual slide within 1/16 of the segment's own length of the
+// largest one that still clears -- finer than the jag it is adjusting.
+constexpr int kBoltSlideSteps = 16;
+// THE SELECTOR. `off` is exact pass-23 bytes; `rods` is the experiment. It is
+// per SUBJECT rather than per clip slot, and that is forced by the bank: slots
+// 0 and 23 are each played by more than one subject (hover AND inspect share
+// slot 0), and Direction 25 asks for two different mechanisms on those two.
+// The lightning is built at RENDER time, so a per-subject switch is available
+// here where a per-clip one would not be.
+enum class BoltAvoid : uint8_t { kOff, kRods };
+inline BoltAvoid g_u02_bolt_avoid = BoltAvoid::kOff;
+// ⚠ THE ENV OVERRIDE WINS OVER THE PER-SUBJECT TABLE, AND IT HAS TO.
+// The shipping configuration is chosen per subject in zhao_reel.cpp; a ladder
+// or a control that could be silently overwritten by that table on the next
+// subject would be a knob that does nothing on three clips of twenty-two --
+// which is exactly the "a knob only one binary reads" fault, wearing the other
+// hat. So `bolt_set_subject` consults these first and the forced value stands
+// for the whole run.
+inline bool g_u02_bolt_avoid_env = false;
+inline BoltAvoid g_u02_bolt_avoid_env_value = BoltAvoid::kOff;
+inline bool g_u02_bolt_split_env = false;
+inline int g_u02_bolt_split_env_value = 1;
+// PASS 24 item 2b: DEPTH SPLITTING (the comparison mechanism, Inspect).
+//
+// "Draw each bolt segment as several shorter sprites, each with its own depth,
+// so a segment can be partly occluded by a rod." Every bolt stamp ALREADY
+// carries its own depth and glow_splat already depth-tests per pixel against
+// it -- what a split buys is RESOLUTION: the point along a segment at which the
+// drawing changes from over the rod to behind it is quantised to one stamp, so
+// a segment that crosses a 46 mm rod in three stamps can only cut in thirds.
+// N multiplies every bolt path's stamp count.
+//
+// ⚠ AND IT MUST NOT RESTYLE THE LINE (Direction 23: "It is good now as it is").
+// N times as many ADDITIVE stamps on the same path is N times the light, which
+// would thicken and brighten the bolt -- a restyle by the back door. So the
+// additive layers' gain and the navy backing's opacity are divided by N. The
+// compensation is a named knob of its own so the split can be looked at with it
+// off, which is how one tells a resolution change from a brightness change.
+constexpr int kBoltDepthSplitN = 4;
+constexpr int kBoltDepthSplitMaxN = 16;
+inline int g_u02_bolt_split_n = 1;  // 1 = off, exact pass-23 bytes
+inline bool g_u02_bolt_split_compensate = true;
+inline int bolt_split_n() {
+  return g_u02_bolt_split_n < 1 ? 1
+         : g_u02_bolt_split_n > kBoltDepthSplitMaxN ? kBoltDepthSplitMaxN
+                                                    : g_u02_bolt_split_n;
+}
+/** The gain a bolt layer draws at under the split. Exactly the authored gain
+ *  when N == 1 or the compensation is off, so the off path is byte-identical
+ *  with no arithmetic at all. */
+inline int32_t bolt_split_gain(int32_t gain_pm) {
+  const int n = bolt_split_n();
+  if (n <= 1 || !g_u02_bolt_split_compensate) return gain_pm;
+  return static_cast<int32_t>(gain_pm / n);
+}
+/** The one place a SUBJECT's lightning configuration is installed. The env
+ *  override, if present, outranks it (see the flags above). */
+inline void bolt_set_subject(BoltAvoid avoid, int split_n) {
+  g_u02_bolt_avoid = g_u02_bolt_avoid_env ? g_u02_bolt_avoid_env_value : avoid;
+  g_u02_bolt_split_n = g_u02_bolt_split_env ? g_u02_bolt_split_env_value
+                                            : (split_n < 1 ? 1 : split_n);
+}
+
+// ===========================================================================
+// PASS 24 (Owner Direction 25 item 3): THE AMBIENT EYE LAYER
+//
+// Owner, 2026-09-22: *"some characterful eye movement (Both in directions and
+// changing eye size) would be good, but don't overdo it. The animations that do
+// it look really cool, like startle or curious. Normal animations should get a
+// bit of that, but not so much so it becomes overdone."*
+//
+// ONE shared layer on the machinery that already exists -- the pass-13 gaze
+// schedule's own clamped side/lift channel and the pass-17 per-eye SCALE -- with
+// a per-clip gain that is LOW by default. The authored expression beats
+// (Startle, Curious, the taunts, Trick's plant) keep their acting untouched:
+// they are the loud ones and this layer is deliberately quieter than all of
+// them.
+//
+// ⚠ IT ENTERS THROUGH apply_gaze's CLAMP, not after it. Adding a rotation to a
+// pupil quat that apply_gaze has already clamped would walk the star off the
+// lens, which the committed extremes gate exists to catch; adding to the ANGLE
+// before the clamp cannot. The route is the Rig's own named carry field, the
+// same pattern `eye_lean` established for an ordering problem of this exact
+// shape.
+//
+// ⚠ EVERY PERIOD IS AN INTEGER CYCLE COUNT OVER THE CLIP, so key 0 and the wrap
+// carry the identical value and the loop seam is exact by construction rather
+// than by arithmetic luck.
+constexpr int kEyeAmbientSideCycles = 2;  // three mutually prime counts so the
+constexpr int kEyeAmbientLiftCycles = 3;  // three channels never metronome
+constexpr int kEyeAmbientSizeCycles = 5;  // together
+// Amplitudes at gain 1000, as a share of the channel's own clamp. The gain
+// table below is what is actually chosen by eye; these set what "1000" means.
+constexpr int32_t kEyeAmbientSidePm = 260;   // of kGazeMaxA16
+constexpr int32_t kEyeAmbientLiftPm = 300;   // of kGazeLiftMaxA16
+constexpr int32_t kEyeAmbientSizePm = 60;    // +-6% of eye scale at gain 1000
+// The per-eye phase skew: the two eyes must not breathe in lockstep or the
+// pair reads as one mechanism pulsing rather than two eyes living.
+constexpr int32_t kEyeAmbientEyeSkewA16 = 0x2800;
+// PER-CLIP GAIN. 0 means the clip takes none of this layer at all.
+//   7  still            -- a FORM DIAGNOSTIC. A diagnostic whose eyes move is
+//   15 mana lab            not a diagnostic (Direction 25: "none on the
+//   16 nodule solo         diagnostics").
+//   3  curious, 4 startle, 21 taunt III -- the authored expression beats the
+//                          owner named as already right. They stay exactly as
+//                          they are; adding a floor under them would be the
+//                          "overdone" he warned about.
+//   13 trick            -- carries the layer, but see kEyeAmbientTrickMuteKey*:
+//                          nothing runs inside the planted window.
+constexpr int kEyeAmbientClipSlots = 24;
+constexpr int32_t kEyeAmbientClipPm[kEyeAmbientClipSlots] = {
+    600,  // 0  hover / inspect
+    600,  // 1  drift
+    600,  // 2  channel
+    0,    // 3  curious      (authored beat)
+    0,    // 4  startle      (authored beat)
+    600,  // 5  rest
+    600,  // 6  pirouette
+    0,    // 7  still        (diagnostic)
+    600,  // 8  hasty
+    600,  // 9  fall
+    600,  // 10 hit
+    600,  // 11 taunt
+    600,  // 12 taunt2
+    600,  // 13 trick        (muted inside the plant, below)
+    600,  // 14 damage
+    0,    // 15 mana lab     (diagnostic lane)
+    0,    // 16 nodule solo  (diagnostic)
+    600,  // 17 death drop
+    600,  // 18 death gutter
+    600,  // 19 lasso
+    600,  // 20 blown
+    0,    // 21 taunt III    (authored beat)
+    600,  // 22 flight
+    600,  // 23 crackle idle
+};
+// Direction 25: "none inside Trick's planted window." The plant is the
+// creature's seventy-key headstand and its face is doing one deliberate thing;
+// an ambient drift across it is the overdone read. The window is the authored
+// plant keys with the same margin build_trick uses for its own beats, and the
+// mute ramps C2 in and out so there is no step at either edge.
+constexpr int kEyeAmbientTrickMuteFromKey = 70;
+constexpr int kEyeAmbientTrickMuteToKey = 160;
+constexpr int kEyeAmbientTrickMuteRampKeys = 10;
+inline std::array<int32_t, kEyeAmbientClipSlots> make_eye_ambient_clip_pm() {
+  std::array<int32_t, kEyeAmbientClipSlots> a{};
+  for (int i = 0; i < kEyeAmbientClipSlots; ++i) a[i] = kEyeAmbientClipPm[i];
+  return a;
+}
+inline std::array<int32_t, kEyeAmbientClipSlots> g_u02_eye_ambient_clip_pm =
+    make_eye_ambient_clip_pm();
+// The bank-wide master, for the ladder and for the exact-off control:
+//   ZHAO_U02_EYE_AMBIENT_PM=<0..1000>            scales every clip's gain
+//   ZHAO_U02_EYE_AMBIENT_CLIP_PM=<slot>:<pm>,... per clip
+// 0 is exact pass-23 bytes.
+constexpr int32_t kEyeAmbientMasterPm = 1000;
+inline int32_t g_u02_eye_ambient_master_pm = kEyeAmbientMasterPm;
+inline int32_t eye_ambient_clip_pm(uint32_t slot) {
+  if (slot >= static_cast<uint32_t>(kEyeAmbientClipSlots)) return 0;
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(g_u02_eye_ambient_clip_pm[slot]) *
+       g_u02_eye_ambient_master_pm) / 1000);
+}
+
 inline bool g_u02_root_authority_legacy_split = false;
 inline int32_t g_u02_swell_pm = 1000;
 // PASS 19 (Owner Direction 20 items 1+2: the back ball "looks like it's almost
@@ -1171,6 +1440,84 @@ inline int32_t rear_ambient_gain_pm() {
              ? 1000
              : g_u02_rear_ambient_gain_pm;
 }
+
+// ===========================================================================
+// PASS 24 (Owner Direction 25 item 1): THE REAR AMBIENT, PER CLIP
+//
+// Owner, 2026-09-22: *"The ball at the back is too finicky and moves too much.
+// The one at the front could move a little more. But the hover animation seems
+// to be the only one with that problem, others are gucchi."*
+//
+// Pass 19 chose 400 for the whole bank by eye (kRearSocketAmbientGainPm, and
+// its ladder note still stands for every other clip). This makes it per clip so
+// the one animation the owner named can be calmed without touching the twenty
+// others he called right.
+//
+// ⚠ SLOT 0 IS PLAYED BY TWO LIVE SUBJECTS -- `manafold-hover` AND
+// `manafold-inspect` -- and that is structural, not an oversight: manafold.h
+// compiles ONE CLIP PER SLOT and inspect differs from hover only by cam_k
+// (zhao_reel.cpp, the pass-12 duplicate repair). So "lower it for Hover" lowers
+// it for Inspect too, because they are the same animation. Direction 25's own
+// words are "make that scale PER CLIP", and this is what per clip means here.
+// The alternative -- a slot 24 that is build_hover_idle a third time -- would
+// give hover its own bytes at the cost of another camera/schedule join of
+// exactly the kind that broke in pass 15, and is left as the cheap reversal if
+// the owner wants Inspect's rear left alone.
+constexpr int kRearAmbientClipSlots = 24;
+constexpr int32_t kRearAmbientClipPm[kRearAmbientClipSlots] = {
+    //  0 hover/inspect -- THE ONE THE OWNER NAMED. Chosen by eye at native on
+    //     Hover; see P24-IMPLEMENTATION.md for the ladder.
+    170,
+    //  1..22: the bank's accepted pass-19 value, untouched.
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm, kRearSocketAmbientGainPm, kRearSocketAmbientGainPm,
+    kRearSocketAmbientGainPm,
+    // 23 crackle's fixed-camera idle: the SAME choreography as slot 0, so it
+    //    takes the same rear value -- if it did not, `crackle` and `hover`
+    //    would show two different back balls doing one animation.
+    //    ⚠ AND IT IS REACHED THROUGH SLOT 0, NOT THROUGH 23. build_hover_idle
+    //    hands kIdleOrbitSlot to every SCHEDULED layer whichever bake it is
+    //    building (knead_schedule_slot says so), so this entry is what slot 23
+    //    WOULD take if it were ever read directly. It is set equal to slot 0's
+    //    deliberately: a different number here would be a value nothing uses,
+    //    which is worse than no entry at all.
+    170,
+};
+// The authoring ladder, and the exact-off control in one knob:
+//   ZHAO_U02_REAR_AMBIENT_CLIP_PM=<slot>:<pm>[,<slot>:<pm>...]
+// Set slots 0 and 23 back to 400 and the pose is pass-23 exact.
+inline std::array<int32_t, kRearAmbientClipSlots> make_rear_ambient_clip_pm() {
+  std::array<int32_t, kRearAmbientClipSlots> a{};
+  for (int i = 0; i < kRearAmbientClipSlots; ++i) a[i] = kRearAmbientClipPm[i];
+  return a;
+}
+inline std::array<int32_t, kRearAmbientClipSlots> g_u02_rear_ambient_clip_pm =
+    make_rear_ambient_clip_pm();
+/** THE ONE PRODUCTION READ of a clip's rear ambient share. The solver and every
+ *  gate go through this, so a ladder run cannot be live in the clip builders
+ *  and inert in mrear (the fault apply_knead_dip_env was written for).
+ *
+ *  ⚠ `g_u02_rear_ambient_gain_pm` STILL OVERRIDES IT, and deliberately: it is
+ *  mrear's `--fail-rear-joint` control (3x the shipping gain) and pass 19's
+ *  bank-wide ladder knob. A control that could be silently out-voted by a new
+ *  per-clip table would be a dead control, which is the thing this project
+ *  keeps shipping. So the rule is: the per-clip table decides unless the
+ *  bank-wide knob has been moved off its compiled default, in which case the
+ *  knob wins everywhere -- stated here rather than discovered. */
+inline int32_t rear_ambient_clip_gain_pm(uint32_t slot) {
+  if (g_u02_rear_socket_frame == RearSocketFrame::kLegacyRoot) return 1000;
+  if (g_u02_rear_ambient_gain_pm != kRearSocketAmbientGainPm)
+    return g_u02_rear_ambient_gain_pm;
+  return slot < static_cast<uint32_t>(kRearAmbientClipSlots)
+             ? g_u02_rear_ambient_clip_pm[slot]
+             : kRearSocketAmbientGainPm;
+}
+
 // Pass 16 carrier locations relative to the C/D shared pivot. Keep these
 // derived from authored semantic stations so the mesh swell and skeleton
 // carrier cannot silently drift apart again.
@@ -1311,6 +1658,39 @@ inline bool g_u02_swell_legacy = false;
 inline bool g_u02_terminal_cap_control = false;
 inline bool g_u02_front_flex_mute = false;
 inline int32_t g_u02_front_flex_gain_pm = 1500;  // v18 by-eye selected public gain
+// PASS 24 (Owner Direction 25 item 1, second half): *"The one at the front
+// could move a little more."* -- and, in the same breath, *"the hover animation
+// seems to be the only one with that problem, others are gucchi."* So the
+// version-18 public gain above stays exactly where the owner accepted it for
+// twenty-one clips, and ONE clip's Front performance is lifted on top of it.
+//
+// It is a GAIN on the authored curve, not a re-authoring of kHover's keys: the
+// shape, the timing and the loop seam (both ends are 0, so a gain cannot move
+// them) are the accepted performance, and only its amplitude changes. A
+// re-authored key table would have been a second, silently different Hover
+// curve to keep in step with the first.
+constexpr int kFrontFlexClipSlots = 24;
+constexpr int32_t kFrontFlexClipPm[kFrontFlexClipSlots] = {
+    1350,                                              // 0  hover / inspect
+    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,    // 1..8
+    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,    // 9..16
+    1000, 1000, 1000, 1000, 1000, 1000,                // 17..22
+    1350,                                              // 23 crackle idle
+};
+inline std::array<int32_t, kFrontFlexClipSlots> make_front_flex_clip_pm() {
+  std::array<int32_t, kFrontFlexClipSlots> a{};
+  for (int i = 0; i < kFrontFlexClipSlots; ++i) a[i] = kFrontFlexClipPm[i];
+  return a;
+}
+inline std::array<int32_t, kFrontFlexClipSlots> g_u02_front_flex_clip_pm =
+    make_front_flex_clip_pm();
+/** The one production read. 1000 everywhere is exact pass-23 bytes, so the
+ *  exact-off control is `ZHAO_U02_FRONT_FLEX_CLIP_PM=0:1000,23:1000`. */
+inline int32_t front_flex_clip_pm(uint32_t slot) {
+  return slot < static_cast<uint32_t>(kFrontFlexClipSlots)
+             ? g_u02_front_flex_clip_pm[slot]
+             : 1000;
+}
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
