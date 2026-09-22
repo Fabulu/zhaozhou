@@ -402,6 +402,13 @@ int main(int argc, char** argv) {
     check_eq(b.top().particles_o, (uint32_t)n, "2: the census counts every particle");
     check_eq(b.top().triangles_o, (uint32_t)n, "2: and every triangle");
     check_eq(b.top().range_refused_o, 0, "2: nothing was refused");
+    // R95's OTHER HALF for `stall_full_o`: it FIRES in sections 3 and 5, and it
+    // must be SILENT here. A throughput counter that reads non-zero on an
+    // unstalled run is measuring something other than the stall it names.
+    check_eq(b.top().stall_full_o, 0,
+             "2: stall_full_o is SILENT with the sink always ready");
+    check_eq(b.top().dq_refused_o, 0, "2: the converter refused nothing");
+    check_eq(b.top().dq_stray_o, 0, "2: and answered no question it was not asked");
   }
 
   // ==========================================================================
@@ -526,6 +533,8 @@ int main(int argc, char** argv) {
              "5: IN OFFER ORDER, each with its own depth, out of a full ring");
     check_eq(b.mismatch_geom(), 0, "5: and its own geometry");
     check_eq(b.outstanding(), 0u, "5: nothing was left behind");
+    check_eq(b.top().dq_refused_o, 0, "5: the converter refused nothing under a full ring");
+    check_eq(b.top().dq_stray_o, 0, "5: and answered no question it was not asked");
   }
 
   std::printf("part_clipfeed_directed: %d check(s), %d failure(s)\n", checks, fails);

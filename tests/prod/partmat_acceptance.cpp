@@ -386,6 +386,16 @@ int main(int argc, char** argv) {
           "of the acceptance test was never exercised");
     check(b.top().cd_switches_o >= 3,
           "1: the door actually rotated between the three producers");
+    // AN INDEPENDENT CENSUS OF THE SAME CLAIM. `drawn_by` counts what reached
+    // GEOM.CLIP's input; `granted_o[2]` counts what the DOOR handed over. The
+    // two are different registers on different sides of the material window
+    // and R197's gate, so agreeing is evidence and disagreeing would name
+    // exactly where the beats were lost.
+    check_eq(b.top().cd_granted_o[2], 10,
+             "1: the door granted the particle client exactly the ten beats "
+             "that reached GEOM.CLIP -- two independent counts, one answer");
+    check_eq(b.top().cd_granted_o[0], 12, "1: and twelve to mesh A");
+    check_eq(b.top().cd_granted_o[1], 12, "1: and twelve to mesh B");
     check_eq(b.top().cd_err_hold_broken_o, 0, "1: the door's hold law held");
     check_eq(b.top().mw_err_unpublished_o, 0, "1: the window's interlock held");
     check_eq(b.top().mw_err_underflow_o, 0, "1: the drain accounting balanced");
