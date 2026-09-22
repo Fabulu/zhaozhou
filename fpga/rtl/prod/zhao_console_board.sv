@@ -1646,21 +1646,46 @@ module zhao_console_board
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
+  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
+  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
+  //      this module by `zhao_terrain_fieldlist`, whose own intake is
+  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
+  //      footprint and a program hash RESOLVED against FIELD.LOADER's
+  //      publication port rather than forwarded as a handle.
+  //
+  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
+  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
+  //      declaring the other three channels present because they have spare bus
+  //      bits." The Earth record declares four channels and this consumer can
+  //      receive one, so the lane stays a boundary until
+  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
+  //      3.4 with an empty program list -- an absent input, not a faked one.
   input  logic                    terr_pt_fld_valid_i,
   output logic                    terr_pt_fld_ready_o,
   input  logic signed [31:0]      terr_pt_fld_height_i,
-  input  logic                    terr_pt_fld_add_valid_i,
-  output logic                    terr_pt_fld_add_ready_o,
-  input  logic signed [31:0]      terr_pt_fld_add_x0_i,
-  input  logic signed [31:0]      terr_pt_fld_add_z0_i,
-  input  logic signed [31:0]      terr_pt_fld_add_x1_i,
-  input  logic signed [31:0]      terr_pt_fld_add_z1_i,
-  input  logic [31:0]             terr_pt_fld_add_hash_i,
-  input  logic [15:0]             terr_pt_fld_add_cmd_i,
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
+  // TERRAIN.FIELDLIST's evidence. `tfl_open_at_patch_o` is the counter that
+  // watches the cadence fault this block exists to prevent: a patch job that
+  // met a list the command stream had not finished delivering.
+  output logic [31:0]             terr_fl_records_sealed_o,
+  output logic [31:0]             terr_fl_tail_rejected_o,
+  output logic [31:0]             terr_fl_unresolved_o,
+  output logic [31:0]             terr_fl_replays_o,
+  output logic [31:0]             terr_fl_entries_replayed_o,
+  output logic [31:0]             terr_fl_open_at_patch_o,
+  output logic [4:0]              terr_fl_records_o,
+  output logic                    terr_fl_sealed_o,
+  output logic                    terr_fl_idle_o,
+  // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
+  // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
+  // queue could never drain and `tfld_overflow_o` could not be read. A refusal
+  // counter nobody can see is the shape this repository calls a blind
+  // instrument.
+  output logic [31:0]             cmd_exec_tflds_o,
+  output logic [31:0]             cmd_exec_tfld_overflow_o,
+  output logic [31:0]             cmd_exec_tfld_src_truncated_o,
   output logic [4:0]              terr_pt_fields_active_o,
   output logic [15:0]             terr_pt_trace_patch_id_o,
   output logic [31:0]             terr_pt_trace_hash_o,
@@ -3335,7 +3360,13 @@ module zhao_console_board
   // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
   output logic [ 7:0]  fld_ldr_pub_ready_o,
   output logic [ 7:0]  fld_ldr_pub_pinned_o,
-  input  logic [ 2:0]  fld_ldr_pub_sel_i,
+  // `pub_sel_i` HAS AN OWNER AS OF 2026-09-22 (FIELDARM) and has left this
+  // edge. It is driven by `u_terrain_fieldlist`, which sweeps the eight
+  // publication objects to turn a TerrainField record's `handle32[program]`
+  // into the canonical program hash the section 9.1 list carries. Entry I34's
+  // S2 recorded this producer as having landed and NOTHING as reading it; this
+  // is the reader. There is no second client, so no share was needed -- I34
+  // build item (d)'s `pub_sel` half is spent, and its `pc_lu_*` half is not.
   output logic [31:0]  fld_ldr_pub_handle_o,
   output logic [31:0]  fld_ldr_pub_prog_hash_o,
   output logic [ 7:0]  fld_ldr_pub_gen_o,
@@ -4171,17 +4202,21 @@ module zhao_console_board
       .terr_pt_fld_valid_i                (terr_pt_fld_valid_i),
       .terr_pt_fld_ready_o                (terr_pt_fld_ready_o),
       .terr_pt_fld_height_i               (terr_pt_fld_height_i),
-      .terr_pt_fld_add_valid_i            (terr_pt_fld_add_valid_i),
-      .terr_pt_fld_add_ready_o            (terr_pt_fld_add_ready_o),
-      .terr_pt_fld_add_x0_i               (terr_pt_fld_add_x0_i),
-      .terr_pt_fld_add_z0_i               (terr_pt_fld_add_z0_i),
-      .terr_pt_fld_add_x1_i               (terr_pt_fld_add_x1_i),
-      .terr_pt_fld_add_z1_i               (terr_pt_fld_add_z1_i),
-      .terr_pt_fld_add_hash_i             (terr_pt_fld_add_hash_i),
-      .terr_pt_fld_add_cmd_i              (terr_pt_fld_add_cmd_i),
       .terr_pt_fld_add_accept_o           (terr_pt_fld_add_accept_o),
       .terr_pt_fld_add_reject_o           (terr_pt_fld_add_reject_o),
       .terr_pt_fld_covers_o               (terr_pt_fld_covers_o),
+      .terr_fl_records_sealed_o           (terr_fl_records_sealed_o),
+      .terr_fl_tail_rejected_o            (terr_fl_tail_rejected_o),
+      .terr_fl_unresolved_o               (terr_fl_unresolved_o),
+      .terr_fl_replays_o                  (terr_fl_replays_o),
+      .terr_fl_entries_replayed_o         (terr_fl_entries_replayed_o),
+      .terr_fl_open_at_patch_o            (terr_fl_open_at_patch_o),
+      .terr_fl_records_o                  (terr_fl_records_o),
+      .terr_fl_sealed_o                   (terr_fl_sealed_o),
+      .terr_fl_idle_o                     (terr_fl_idle_o),
+      .cmd_exec_tflds_o                   (cmd_exec_tflds_o),
+      .cmd_exec_tfld_overflow_o           (cmd_exec_tfld_overflow_o),
+      .cmd_exec_tfld_src_truncated_o      (cmd_exec_tfld_src_truncated_o),
       .terr_pt_fields_active_o            (terr_pt_fields_active_o),
       .terr_pt_trace_patch_id_o           (terr_pt_trace_patch_id_o),
       .terr_pt_trace_hash_o               (terr_pt_trace_hash_o),
@@ -5024,7 +5059,6 @@ module zhao_console_board
       .fld_ldr_stage_bytes_i              (fld_ldr_stage_bytes_i),
       .fld_ldr_pub_ready_o                (fld_ldr_pub_ready_o),
       .fld_ldr_pub_pinned_o               (fld_ldr_pub_pinned_o),
-      .fld_ldr_pub_sel_i                  (fld_ldr_pub_sel_i),
       .fld_ldr_pub_handle_o               (fld_ldr_pub_handle_o),
       .fld_ldr_pub_prog_hash_o            (fld_ldr_pub_prog_hash_o),
       .fld_ldr_pub_gen_o                  (fld_ldr_pub_gen_o),

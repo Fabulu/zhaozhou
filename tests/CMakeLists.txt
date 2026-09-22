@@ -16631,6 +16631,26 @@ verilate(test_terrain_tapshare_directed
 add_test(NAME terrain_tapshare_directed COMMAND test_terrain_tapshare_directed)
 set_tests_properties(terrain_tapshare_directed PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
 
+# ===========================================================================
+# TERRAIN.FIELDLIST -- zhao_terrain_fieldlist
+# ===========================================================================
+# The sealed per-FRAME TerrainField association list and its per-PATCH replay,
+# composed 2026-09-22 (FIELDARM) to close the section 9.1 half of core entry
+# I34. What this test is FOR, in one line: zhao_cmd_exec publishes TerrainField
+# records once per command PACKET and zhao_terrain_patch clears its list once
+# per patch JOB, so the fault a pass-through would ship is "the first patch of
+# the frame gets the list and no other one does" -- silently, with every
+# counter on both blocks balancing. Every replay case here therefore pulses
+# patch_open_i more than once and requires the same records both times.
+add_executable(test_terrain_fieldlist_directed terrain/terrain_fieldlist_directed.cpp)
+target_link_libraries(test_terrain_fieldlist_directed PRIVATE zhao_harness)
+verilate(test_terrain_fieldlist_directed
+  PREFIX Vzhao_terrain_fieldlist
+  TOP_MODULE zhao_terrain_fieldlist
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_fieldlist.sv)
+add_test(NAME terrain_fieldlist_directed COMMAND test_terrain_fieldlist_directed)
+set_tests_properties(terrain_fieldlist_directed PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
+
 # ==========================================================================
 # THE FORGE CHAIN, composed 2026-09-21 (packet FORGECOMP)
 # ==========================================================================

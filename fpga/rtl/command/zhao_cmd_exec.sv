@@ -655,6 +655,25 @@ module zhao_cmd_exec
     output logic        [31:0] tfld_start_tick_o,  // R2 age uniform's origin
     output logic        [31:0] tfld_duration_o,    // R3 phase uniform's span
     output logic       [255:0] tfld_params_o,      // p0..p7, Q16.16 LE, R4..R11
+    // THE SET BOUNDARY, added 2026-09-22 (FIELDARM). High on the LAST record
+    // of the set the verdict published, and it is a STORED PER-RECORD BIT
+    // rather than `(tq_rp + 1 == tq_cp)`.
+    //
+    // The pointer comparison would have been one wire and it is subtly wrong:
+    // `tq_cp` moves at every commit, so a packet that published while the
+    // previous packet's records were still draining would MERGE two frames'
+    // sets into one -- and the consumer's whole reason for wanting this bit is
+    // that a field list belongs to exactly one frame. The merge is not
+    // reachable in today's console (staging a packet is thousands of clocks
+    // and a drain is a handful), which is precisely why it would have been an
+    // unverified promise in a header rather than a property.
+    //
+    // `zhao_terrain_fieldlist` is the consumer, and what it does with the bit
+    // is SEAL its list: a section 9.1 list is per frame, the patch list it
+    // refills is per patch job, and nothing else in this console knows where
+    // one set ends. That is this block's fact because `tq_cp` is this block's
+    // register.
+    output logic               tfld_last_o,
     output logic        [31:0] tflds_issued_o,     // records handed downstream
     // ---- DrawProcedural 0x0302, the PRIMITIVE FORGE dispatch ---------------
     // NEW 2026-09-21 (FORGECOMP), under owner rulings R234 D2 (the page kind
@@ -3001,6 +3020,11 @@ module zhao_cmd_exec
   logic        tf_src_hi_nz;   // the dropped half of source_id was not zero
 
   logic [TFLD_W-1:0] tq [0:TFLD_Q-1];
+  // One bit per queue slot: "this record ends the set the verdict published".
+  // Cleared on push, set on the publish that makes the record visible.
+  logic [TFLD_Q-1:0] tq_last;
+  // The slot the publish must mark: one behind the write pointer, modulo
+  // the queue, so the subtraction and the truncation cannot disagree.
   // THREE pointers, not two. `tq_wp` is where staging writes, `tq_cp` is what
   // the VERDICT has published, and `tq_rp` is what the consumer has taken.
   // Nothing between `tq_cp` and `tq_wp` is visible downstream, which is how a
@@ -3012,6 +3036,7 @@ module zhao_cmd_exec
   wire  [TQW:0] tq_occ  = tq_wp - tq_rp;
   wire          tq_full = (tq_occ >= (TQW+1)'(TFLD_Q));
 
+  wire [TQW-1:0]    tq_wp_m1_c = tq_wp[TQW-1:0] - 1'b1;
   wire [TFLD_W-1:0] tq_head = tq[tq_rp[TQW-1:0]];
   assign tfld_valid_o     = (tq_rp != tq_cp);
   assign tfld_x0_o        = $signed(tq_head[TQ_X0_LO  +: 32]);
@@ -3023,6 +3048,7 @@ module zhao_cmd_exec
   assign tfld_start_tick_o= tq_head[TQ_ST_LO  +: 32];
   assign tfld_duration_o  = tq_head[TQ_DUR_LO +: 32];
   assign tfld_params_o    = tq_head[TQ_P_LO   +: 256];
+  assign tfld_last_o      = tq_last[tq_rp[TQW-1:0]];
 
   wire tf_byte_c = (st == EX_STAGE) && take && in_rec_region
                 && (r_op == ZHAO_OP_TERRAIN_FIELD);
@@ -3034,6 +3060,7 @@ module zhao_cmd_exec
       tf_src_hi_nz <= 1'b0;
       for (int k = 0; k < TF_LANES; k++) tf_p[k] <= 32'd0;
       tq_wp <= '0; tq_rp <= '0; tq_cp <= '0;
+      tq_last <= '0;
       tq_ovf <= 1'b0;
       tflds_issued_o <= 32'd0;
       tfld_overflow_o <= 32'd0;
@@ -3080,6 +3107,7 @@ module zhao_cmd_exec
                                    tf_p[3], tf_p[2], tf_p[1], tf_p[0],
                                    tf_dur, tf_st, tf_cmd, tf_hdl,
                                    tf_z1, tf_x1, tf_z0, tf_x0};
+            tq_last[tq_wp[TQW-1:0]] <= 1'b0;
             tq_wp <= tq_wp + 1'b1;
           end
           tf_src_hi_nz <= 1'b0;
@@ -3103,6 +3131,11 @@ module zhao_cmd_exec
         // terrain, which is the failure this file exists to refuse.
         if ((verdict_error_i == ZH_ABI_OK) && !poisoned && !tq_ovf) begin
           tq_cp <= tq_wp;
+          // Mark the set's last record. Written AFTER the push above, so a
+          // record staged and published in the same cycle is marked rather
+          // than cleared -- it is the set's last record, and the ordering of
+          // these two statements is what says so.
+          if (tq_wp != tq_cp) tq_last[tq_wp_m1_c] <= 1'b1;
         end else begin
           tq_wp <= tq_cp;
         end

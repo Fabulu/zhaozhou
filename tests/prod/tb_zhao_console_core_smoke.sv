@@ -593,20 +593,30 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_rdshare_err_long_o;
   logic [31:0]             terr_rdshare_err_unowned_o;
 
+  // I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 list intake's eight
+  // ports LEFT the core's edge -- `zhao_terrain_fieldlist` drives them from
+  // CMD.EXEC's TerrainField arm inside the module. Only the HEIGHT return lane
+  // is still a boundary, which is the half directive 20.8 forbids faking.
   logic                    terr_pt_fld_valid_i;
   logic                    terr_pt_fld_ready_o;
   logic signed [31:0]      terr_pt_fld_height_i;
-  logic                    terr_pt_fld_add_valid_i;
-  logic                    terr_pt_fld_add_ready_o;
-  logic signed [31:0]      terr_pt_fld_add_x0_i;
-  logic signed [31:0]      terr_pt_fld_add_z0_i;
-  logic signed [31:0]      terr_pt_fld_add_x1_i;
-  logic signed [31:0]      terr_pt_fld_add_z1_i;
-  logic [31:0]             terr_pt_fld_add_hash_i;
-  logic [15:0]             terr_pt_fld_add_cmd_i;
   logic                    terr_pt_fld_add_accept_o;
   logic                    terr_pt_fld_add_reject_o;
   logic                    terr_pt_fld_covers_o;
+  // TERRAIN.FIELDLIST's evidence, and CMD.EXEC's TerrainField arm's, which was
+  // wholly unconnected until the same commit.
+  logic [31:0]             terr_fl_records_sealed_o;
+  logic [31:0]             terr_fl_tail_rejected_o;
+  logic [31:0]             terr_fl_unresolved_o;
+  logic [31:0]             terr_fl_replays_o;
+  logic [31:0]             terr_fl_entries_replayed_o;
+  logic [31:0]             terr_fl_open_at_patch_o;
+  logic [4:0]              terr_fl_records_o;
+  logic                    terr_fl_sealed_o;
+  logic                    terr_fl_idle_o;
+  logic [31:0]             cmd_exec_tflds_o;
+  logic [31:0]             cmd_exec_tfld_overflow_o;
+  logic [31:0]             cmd_exec_tfld_src_truncated_o;
   logic [4:0]              terr_pt_fields_active_o;
   logic [15:0]             terr_pt_trace_patch_id_o;
   logic [31:0]             terr_pt_trace_hash_o;
@@ -1411,7 +1421,6 @@ module tb_zhao_console_core_smoke
   // correct state before any capsule is offered.
   logic        [31:0] fld_ldr_stage_base_i;
   logic        [31:0] fld_ldr_stage_bytes_i;
-  logic        [ 2:0] fld_ldr_pub_sel_i;
   logic        [ 7:0] fld_ldr_pub_ready_o;
   logic        [ 7:0] fld_ldr_pub_pinned_o;
   logic        [31:0] fld_ldr_pub_handle_o;
@@ -2035,7 +2044,6 @@ module tb_zhao_console_core_smoke
   // composed loader comes out of reset publishing NOTHING.
   assign fld_ldr_stage_base_i   = 32'h1000_0000;
   assign fld_ldr_stage_bytes_i  = 32'h0010_0000;
-  assign fld_ldr_pub_sel_i      = 3'd0;
   assign fld_db_post_data_i     = 96'd0;
 
   // ---- THE F PROFILE IS ARMED AT A SLOT NOTHING WAS LOADED INTO ------------
@@ -3897,7 +3905,6 @@ module tb_zhao_console_core_smoke
     // height. Absent and faked are different things.
     terr_pt_fld_valid_i = '0;
     terr_pt_fld_height_i = '0;
-    terr_pt_fld_add_valid_i = '0;
     terr_job_valid_i = '0;
     terr_job_ox_i = '0;
     terr_job_oz_i = '0;
@@ -3911,12 +3918,6 @@ module tb_zhao_console_core_smoke
     terr_job_dual_i = '0;
     terr_job_src_id_i = '0;
     terr_cc_serve_release_i = '0;
-    terr_pt_fld_add_x0_i = '0;
-    terr_pt_fld_add_z0_i = '0;
-    terr_pt_fld_add_x1_i = '0;
-    terr_pt_fld_add_z1_i = '0;
-    terr_pt_fld_add_hash_i = '0;
-    terr_pt_fld_add_cmd_i = '0;
     // (I32: layer D's writer and I27's deformation mark are both INSIDE the
     // core from 2026-09-21, so there is nothing here to hold at zero. The
     // plane still reads SOLID through this run for a different reason: no
