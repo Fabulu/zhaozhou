@@ -186,7 +186,18 @@ zref::render::RenderResult render_textured(const zr::TerrainPatch& patch, zr::Ti
     b.append_record(v1);
     auto dp = zhao_abi::zhao_sample_draw_procedural();
     dp.payload.program = 44;
-    dp.payload.material = 45;
+    dp.payload.material_set = 45;
+    // OWNER COMPLETION RULING 2 (2026-09-22): DrawProcedural now carries an
+    // independent u16 material_id and a declared frame_tick, and
+    // zhao_sample_draw_procedural() fills BOTH with the generator's
+    // arbitrary sample values. Leaving them would change what this record
+    // means -- a nonzero material_id names a record the reference's
+    // set-of-one material model does not have, so the patch would be
+    // SKIPPED and the picture would move. Zeroed explicitly so this
+    // caller's behaviour is UNCHANGED, which is the point.
+    dp.payload.material_id = 0;
+    dp.payload.frame_tick[0] = 0;
+    dp.payload.frame_tick[1] = 0;
     dp.payload.transform = rtest::xform_identity();
     dp.payload.screen_error = 1 << 16;
     dp.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;
