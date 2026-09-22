@@ -119,6 +119,25 @@ CLIENTS = [
     # to stop the hand list rotting was itself dead, which is the
     # broken-instrument law with the crash standing in for the silent zero.
     #
+    # GEOM.PARAMARENA and GEOM.PARAMWALK -- owner completion ruling ITEM 4,
+    # 2026-09-22. Added WITH the change that made them guard clients, which is
+    # the only way this audit stays exact. Each has ONE request/verdict pair:
+    # the arena's M_REQ / M_VERD serves every write, and the walker's
+    # W_*_REQ / W_*_VERD triples serve the directory, the chunk and the
+    # descriptor. They are the FIRST ENGINE1 clients in the tree that WRITE.
+    #
+    # NOTE ON THE REDS BESIDE THEM, so this entry is not read as a clean bill
+    # of health for the file. This gate was ALREADY RED at commit 5e9565f2,
+    # with SEVEN clients missing from this list -- zhao_forge_pagebank,
+    # zhao_geom_clipread, zhao_geom_drawjob, zhao_geom_ladderbank,
+    # zhao_mem_share_wr, zhao_part_table_loader and zhao_terrain_pageio -- plus
+    # two entries (zhao_console_core, zhao_console_board) that are listed and
+    # no longer match the pattern. Measured at the base commit and at HEAD, so
+    # this is not an inference. None of the nine is PARAMARENA's, none is
+    # repaired here, and saying so is the point: an entry added quietly beside
+    # nine unexplained reds reads as though the file were clean.
+    "fpga/rtl/geometry/zhao_geom_paramarena.sv",
+    "fpga/rtl/geometry/zhao_geom_paramwalk.sv",
     # Three are REAL CLIENTS that test a verdict themselves:
     "fpga/rtl/terrain/zhao_terrain_pagestream.sv",
     "fpga/rtl/mem/zhao_mem_upload.sv",

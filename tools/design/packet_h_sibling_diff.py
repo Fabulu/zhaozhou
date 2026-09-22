@@ -49,7 +49,23 @@ V2_NAME = 'zhao_shell_top_v2.sv'
 #   .res_valid (1'b0) / .res_base (32'd0) / .res_span (32'd0)   // TIE: ...
 # (the R32 write arm names TERRAIN_BUILD alone; V1 has no such client).
 # No behaviour moves. Previous pin: 00fdd2387ffea985...
-V1_SHA = '9ab87fd9ceeb5efb1333c2023cc4cf9a565b6f4d75633facfa33c9f6640b91cc'
+#
+# RE-PINNED AGAIN under the owner's completion ruling of 2026-09-22, ITEM 4,
+# and it is the SAME SHAPE AS R32's, which is why it is allowed rather than
+# argued: the only change to the protected V1 shell is a tie-off of
+# MEM.GUARD's three new PARAMBUF lease inputs,
+#   3 lines x 4 zhao_mem_guard instances = 12 lines, each
+#   .pb_lease_valid (1'b0) / .pb_wr_view (1'b0) / .pb_scratch_valid (1'b0)
+# with the reason beside them (item 4's window names ENGINE1 alone, and V1's
+# geometry guard is not reached by an ENGINE1 writer -- V1 has no arena).
+# NO BEHAVIOUR MOVES: with all three low the guard's verdict for every V1
+# client is bit-for-bit what it was. Previous pin: 9ab87fd9ceeb5efb...
+#
+# A re-pin is the one operation that can make this gate stop meaning anything,
+# so the standard it is held to is the one R39 set: the diff against the
+# previous pin must be EXACTLY the mechanical tie-off and nothing else, and
+# the reason must be a ruling, not a convenience.
+V1_SHA = 'cf69eebf4a5aa3a4d9e41b5c015fe697ec2af39241ec968adc1dfcec5636a5b9'
 
 # The controls cannot fire this by editing production RTL -- that is the
 # live-tree hazard, and it would leave no evidence behind either. So the
@@ -70,6 +86,32 @@ V1_SHA = '9ab87fd9ceeb5efb1333c2023cc4cf9a565b6f4d75633facfa33c9f6640b91cc'
 # ATTRIB_WINDOW lines above it or just after it. Wide enough to cover one
 # instantiation; far too tight to reach a change in a different instance.
 DECLARED = [
+    # GEOM.PARAMBUF's write channel on VRAM slot 3 (owner completion ruling
+    # ITEM 4, 2026-09-22). V1 has no arena and no ENGINE1 writer, so the whole
+    # queue is V2-only -- but TWO of its lines are edits to code V1 SHARES, and
+    # those are what the gate caught and what these markers declare:
+    #
+    #   * the wfifo pop and `wf_owed`'s decrement gain `&& !wr_sel_geom`. A
+    #     third write owner has to be excluded from BOTH, or slot 3's beats
+    #     count as framebuffer pops and walk that counter down under a write it
+    #     has nothing to do with -- which surfaces as the FRAMEBUFFER gate
+    #     opening early, in a different block from the one that changed.
+    #   * `shell_err_wfifo_o` gains `|| gq_err`. A new queue whose underflow
+    #     was invisible to the assertion the smoke makes would be a queue
+    #     nothing watches.
+    #
+    # Declared rather than excepted: V1 has two write queues and V2 now has
+    # three, and that is a real structural divergence between the siblings.
+    ('THREE QUEUES, ONE TRIPWIRE',
+     'slot 3 joins the write-queue tripwire (item 4)'),
+    ('A THIRD OWNER HAS TO BE EXCLUDED HERE TOO',
+     "slot 3 excluded from the framebuffer queue's owed count (item 4)"),
+    ("SLOT 3'S WRITE GATE",
+     "slot 3's write-data queue and its exact room gate (item 4)"),
+    ('THREE OWNERS, AND THE SELECTORS ARE MUTUALLY EXCLUSIVE',
+     'the controller word gains a third owner (item 4)'),
+    ("SLOT 3'S WRITE-DATA QUEUE",
+     'the slot-3 queue and its owner mux (item 4)'),
     ('zhao_shell_top_v2.sv -- the Packet-H sibling shell',
      'the new header'),
     ('module zhao_shell_top_v2',
