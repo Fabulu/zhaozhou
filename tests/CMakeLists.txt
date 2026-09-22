@@ -16962,10 +16962,18 @@ add_test(NAME lint_zhao_forge_assemble
 set_tests_properties(lint_zhao_forge_assemble PROPERTIES
   LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ${ZHAO_ABI_PKG} IS REQUIRED AND WAS MISSING. `zhao_pkg.sv` line 35 is
+# `import zhao_abi_pkg::*;`, so without it this gate has failed with "Import
+# package not found" SINCE THE DAY IT WAS REGISTERED -- a lint target that has
+# never once passed, which is a broken instrument rather than a gate. Found by
+# running it (PROCMAT, 2026-09-22); reproduced at the base commit before being
+# called pre-existing.
 add_test(NAME lint_zhao_forge_pagebank
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
     --top-module zhao_forge_pagebank
     -I${CMAKE_SOURCE_DIR}/fpga/rtl/common
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+    ${ZHAO_ABI_PKG}
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_pagebank.sv)
 set_tests_properties(lint_zhao_forge_pagebank PROPERTIES
