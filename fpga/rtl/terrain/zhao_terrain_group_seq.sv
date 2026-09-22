@@ -109,13 +109,53 @@
 // ---------------------------------------------------------------------------
 // `sparse_fill_i` = 1 drops every vertex the tess flags `vtx_stride_o = 0` (a
 // filler no triangle of the job references, law 6) instead of projecting it:
-// 81/25/9/4 fills per level instead of 81. LEGAL ONLY WITH A VALID_MODE = 0
-// (bitmap) SHELL: a dense shell refuses the seal as short, sticky, and the
-// group's replay is then refused -- counted, never silent, and the positive
-// control in the differential does exactly that on purpose. This block
-// cannot see the shell's mode; the composition that instantiates both is
-// where the two must agree (zhao_terrain_pipe ties the knob to its own
-// VALID_MODE unless told otherwise).
+// 81/25/9/4 fills per level instead of 81.
+//
+// MODE-SAFE SINCE 2026-09-22, owner ruling item 5. The paragraph this replaces
+// said: "LEGAL ONLY WITH A VALID_MODE = 0 (bitmap) SHELL ... This block cannot
+// see the shell's mode; the composition that instantiates both is where the
+// two must agree." The first half is still the law. The second half was a
+// statement about this module's PARAMETERS, not about physics, and the ruling
+// closed it:
+//
+//     "Make the normal configuration explicit and derived from the actual
+//      arena validity mode ... Retain the documented owner/debug
+//      configurability, but REFUSE AN UNSAFE COMBINATION and HOLD THE CHOSEN
+//      SETTING STABLE FOR A WHOLE JOB. Enabling sparse fill with a dense seal
+//      is not a permissible configuration."
+//
+// So the block sees the mode now, as the `VALID_MODE` parameter -- the SAME
+// number `zhao_vertex_arena` and `zhao_terrain_wcache` take, threaded from one
+// named constant by whoever composes them, so the two cannot drift.
+//
+//   VALID_MODE == 0 (bitmap-valid) : `sparse_fill_i` is honoured. This is the
+//                                    ruling's "enabled by default" -- the knob
+//                                    is the owner's, and the safe answer is
+//                                    the one the mode already implies.
+//   VALID_MODE != 0 (dense seal)   : `sparse_fill_i` is REFUSED and counted on
+//                                    `sparse_refused_o`. The job runs with a
+//                                    FULL fill and its rendered output is
+//                                    identical to a legally configured one.
+//
+// AND IT IS LATCHED ON THE JOB ACCEPT, which is the "stable for a whole job"
+// half and is not decoration: `skip_c` is read on every one of a job's 81
+// vertex beats, so a knob that moved mid-fill would project some of a job's
+// fillers and drop the rest -- an arena short by an amount nothing records,
+// with the seal then refused for a reason no counter names. The latch makes
+// the question not arise.
+//
+// WHAT THIS CHANGES DOWNSTREAM, stated because a positive control moved. The
+// old arrangement let the illegal pairing through and caught it at the shell:
+// seal short, sticky, replay refused, corner refusals -- and
+// `terrain_pipe_differential`'s fault control fired all three on purpose. With
+// the pairing refused here those three can no longer be reached from this
+// composition. **They keep their positive controls at their own blocks** --
+// `arena_seal_short_o` in `vertex_arena_dense_seal_control` and
+// `vertex_arena_dense_directed`, `replay_refused_o` and `corner_refusals_o` in
+// `terrain_wcache_differential` and `tb_terrain_wcache` -- so nothing is left
+// asserted-zero and unfireable, and no committed mutant is owed. The
+// differential's fault control now asserts the REFUSAL and the identical
+// render instead, which is the correct behaviour rather than the defect.
 //
 // ---------------------------------------------------------------------------
 // WHAT IS NOT HERE, named
@@ -141,6 +181,12 @@ module zhao_terrain_group_seq #(
     parameter int unsigned ARENAS  = 4,
     parameter int unsigned DEPTH   = 81,
     parameter int unsigned GEN_W   = 8,
+    // The SHELL's validity mode, and it must be the same number
+    // `zhao_vertex_arena` / `zhao_terrain_wcache` are given. 0 = bitmap-valid
+    // (a sparse fill can seal); anything else = dense seal (it cannot). The
+    // default matches those blocks' own default, so an instantiation that does
+    // not pass it behaves exactly as it did before this parameter existed.
+    parameter int unsigned VALID_MODE = 1,
     parameter int unsigned IDX_W   = 7,                   // the tess's window index width
     parameter int unsigned INDEX_W = $clog2(DEPTH) + 1,   // the shell's (carries a refusal bit)
     parameter int unsigned ARENA_W = $clog2(ARENAS) + 1
@@ -164,7 +210,10 @@ module zhao_terrain_group_seq #(
     input  wire [15:0] job_src_id_i,
     input  wire [ 1:0] job_view_mask_i,   // bit v = project into view v
 
-    input  wire        sparse_fill_i,     // drop fillers (VALID_MODE = 0 shells only)
+    // The owner/debug knob. Honoured at VALID_MODE = 0, REFUSED and counted
+    // otherwise, and LATCHED on the job accept so it is stable for the whole
+    // job. Owner ruling 2026-09-22 item 5.
+    input  wire        sparse_fill_i,
 
     // ---- the tessellator's job port -------------------------------------------
     output wire        t_job_valid_o,
@@ -250,6 +299,10 @@ module zhao_terrain_group_seq #(
     output logic [31:0]       groups_released_o,// arenas released
     output logic [31:0]       fills_forwarded_o,// vertices accepted by client B
     output logic [31:0]       fills_dropped_o,  // fillers dropped under sparse_fill_i
+    // Jobs accepted with `sparse_fill_i` high against a shell that cannot seal
+    // a sparse arena. The job runs with a FULL fill; this is the refusal, not
+    // a failure. Owner ruling 2026-09-22 item 5.
+    output logic [31:0]       sparse_refused_o,
     output logic [31:0]       refs_forwarded_o,// references accepted by the shell
     output logic [31:0]       release_unsafe_o // release while fill replay or ModeRef work remains
 );
@@ -288,6 +341,14 @@ module zhao_terrain_group_seq #(
   logic [16:0] j_morph;
   logic        j_surface, j_dual;
   logic [15:0] j_src;
+  // ITEM 5: the sparse setting this job runs under, decided once on the accept
+  // and constant for its 81 vertex beats.
+  logic        j_sparse;
+
+  // The mode gate. `SPARSE_LEGAL` is an elaboration-time fact about the shell
+  // this sequencer is composed with, so the refusal costs one AND gate and
+  // optimises away entirely in the configuration where it is a no-op.
+  localparam bit SPARSE_LEGAL = (VALID_MODE == 0);
 
   // the slots: slot 0 is the lowest view in the mask, slot 1 the other
   logic               nslots2_q;          // 1 = two slots
@@ -347,7 +408,9 @@ module zhao_terrain_group_seq #(
 
   // ---- the vertex fan-out (StFill) --------------------------------------------------------
   wire last_slot_c = (vs_q == nslots2_q);
-  wire skip_c      = sparse_fill_i && !t_vtx_stride_i;
+  // ITEM 5: the LATCHED, mode-checked setting -- not the live knob. See the
+  // SPARSE FILL section of the header for why both halves are load-bearing.
+  wire skip_c      = j_sparse && !t_vtx_stride_i;
   wire vtx_here_c  = (st == StFill) && t_vtx_valid_i;
 
   assign b_valid_o = vtx_here_c && !skip_c;
@@ -470,6 +533,8 @@ module zhao_terrain_group_seq #(
       groups_released_o <= '0;
       fills_forwarded_o <= '0;
       fills_dropped_o   <= '0;
+      sparse_refused_o  <= '0;
+      j_sparse          <= 1'b0;
       refs_forwarded_o  <= '0;
       release_unsafe_o  <= '0;
     end else begin
@@ -528,6 +593,13 @@ module zhao_terrain_group_seq #(
             j_surface <= job_surface_i;
             j_dual    <= job_dual_i;
             j_src     <= job_src_id_i;
+            // ITEM 5: hold the chosen setting stable for a whole job, and
+            // refuse the unsafe combination here rather than letting the
+            // shell discover it as a short seal.
+            j_sparse  <= sparse_fill_i && SPARSE_LEGAL;
+            if (sparse_fill_i && !SPARSE_LEGAL) begin
+              sparse_refused_o <= sat_inc(sparse_refused_o);
+            end
             // slot 0 = the lowest view present; slot 1 = view 1 when both
             nslots2_q      <= (job_view_mask_i == 2'b11);
             slot_view_q[0] <= (job_view_mask_i == 2'b10);

@@ -10462,6 +10462,38 @@ verilate(test_terrain_spdesc_directed
 add_test(NAME terrain_spdesc_directed COMMAND test_terrain_spdesc_directed)
 set_tests_properties(terrain_spdesc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.EDGERECON -- the NEIGHBOUR-EDGE LEVEL PRODUCER, owner ruling
+# 2026-09-22 item 6. It buffers the frame's decided subpatch levels and hands
+# `zhao_terrain_lod` the four `edge_*` words that instance has driven from the
+# literal 8'h00 since entry I21 was written.
+#
+# The directed suite's case 2 is the reason the block exists: the SYMMETRY
+# THEOREM checked by exhaustion over a 3 x 3 patch block, with the equality
+# computed the way `zhao_terrain_tess` computes it (max(neighbour, own)), so a
+# failure IS a crack rather than a proxy for one. Its positive control shows
+# the same comparison DISAGREEING under the retained 8'h00 tie-off, which is
+# the measured statement that the conservative constant is not crack-free
+# across a patch border.
+#
+# No mutant is registered here and that is a measured claim, not an omission:
+# all nine counters are reachable from the block's own boundary with legal
+# stimulus, and terrain_edgerecon_directed fires each with a control beside it.
+add_test(NAME lint_terrain_edgerecon
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_edgerecon
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_edgerecon.sv)
+set_tests_properties(lint_terrain_edgerecon PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_edgerecon_directed terrain/terrain_edgerecon_directed.cpp)
+target_link_libraries(test_terrain_edgerecon_directed PRIVATE zhao_harness)
+verilate(test_terrain_edgerecon_directed
+  PREFIX Vzhao_terrain_edgerecon
+  TOP_MODULE zhao_terrain_edgerecon
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_edgerecon.sv)
+add_test(NAME terrain_edgerecon_directed COMMAND test_terrain_edgerecon_directed)
+set_tests_properties(terrain_edgerecon_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TERRAIN.LOD's three deviations (owner ruling R8), zhao_terrain_loddev.
 # Differential against zref::terrain::lod_deviation, built TWICE from one
 # source: at the block's DEFAULT selector (which must equal

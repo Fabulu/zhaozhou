@@ -459,6 +459,16 @@ module zhao_console_board
   // TERRAIN.TESS's own window index: 81 vertices need 7 bits. The sequencer
   // widens it to PROJ_T_INDEX_W, which carries a refusal bit beside it.
   parameter int unsigned PROJ_T_IDX_W  = 7,
+  // THE SHELL'S VALIDITY MODE, AND IT IS ONE NUMBER WITH TWO CONSUMERS.
+  // Owner ruling 2026-09-22 item 5: "Make the normal configuration explicit
+  // and derived from the actual arena validity mode." It reaches
+  // `zhao_proj_subsystem` (which hands it to the arenas and the shell) AND
+  // `zhao_terrain_group_seq` (which decides whether the sparse-fill knob is
+  // honoured or refused). Before this parameter existed both took the value 1
+  // from their OWN defaults and neither knew the other's -- two constants that
+  // agreed by coincidence. 1 = dense seal, so sparse fill is REFUSED and
+  // counted in this composition, which is the ruling's answer for it.
+  parameter int unsigned PROJ_T_VALID_MODE = 1,
 
   // ---- COMPOSITOR ----------------------------------------------------------
   parameter int unsigned POST_LINE_W   = 384,     // Z60 is the widest view
@@ -2157,6 +2167,14 @@ module zhao_console_board
   output logic [31:0]             terr_groups_released_o,
   output logic [31:0]             terr_fills_forwarded_o,
   output logic [31:0]             terr_fills_dropped_o,
+  // ITEM 5 (owner ruling 2026-09-22): jobs whose sparse-fill request was
+  // refused because this composition carries a dense-seal shell. The job runs
+  // with a FULL fill and renders identically; this is the refusal, not a
+  // failure. FIRED by terrain_pipe_differential's fault control, which is the
+  // deliberately illegal combination the ruling says to retain -- it cannot be
+  // fired by the console smoke, which fails every terrain page's CRC so the
+  // compose door never opens (R95).
+  output logic [31:0]             terr_sparse_refused_o,
   output logic [31:0]             terr_refs_forwarded_o,
   output logic [31:0]             terr_release_unsafe_o,
   output logic [31:0]             terr_tess_vertices_o,
@@ -3887,6 +3905,7 @@ module zhao_console_board
       .PROJ_T_INDEX_W            (PROJ_T_INDEX_W),
       .PROJ_T_ARENA_W            (PROJ_T_ARENA_W),
       .PROJ_T_IDX_W              (PROJ_T_IDX_W),
+      .PROJ_T_VALID_MODE         (PROJ_T_VALID_MODE),
       .POST_LINE_W               (POST_LINE_W),
       .POST_MAX_H                (POST_MAX_H),
       .POST_NLINE                (POST_NLINE),
@@ -4610,6 +4629,7 @@ module zhao_console_board
       .terr_groups_released_o             (terr_groups_released_o),
       .terr_fills_forwarded_o             (terr_fills_forwarded_o),
       .terr_fills_dropped_o               (terr_fills_dropped_o),
+      .terr_sparse_refused_o              (terr_sparse_refused_o),
       .terr_refs_forwarded_o              (terr_refs_forwarded_o),
       .terr_release_unsafe_o              (terr_release_unsafe_o),
       .terr_tess_vertices_o               (terr_tess_vertices_o),

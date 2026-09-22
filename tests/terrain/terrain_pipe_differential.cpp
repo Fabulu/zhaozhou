@@ -712,25 +712,92 @@ int main(int argc, char** argv) {
       got.terrain.size(), got.geometry.size(), got.cycles, kSparse ? "bitmap+sparse" : "dense",
       got.accepted_with_pending_output, got.opens_with_stalled_output);
   if (!kSparse) {
-    pd.reset();
-    pd.configure(0, matrices[0], viewports[0]);
-    pd.configure(1, matrices[1], viewports[1]);
+    // THE DELIBERATELY ILLEGAL COMBINATION -- RETAINED, WITH ITS EXPECTATION
+    // TURNED THE RIGHT WAY UP. Owner ruling 2026-09-22 item 5:
+    //
+    //   "Enabling sparse fill with a dense seal is not a permissible
+    //    configuration ... refuse an unsafe combination and hold the chosen
+    //    setting stable for a whole job ... Demonstrate identical rendered
+    //    output and no unfilled reference ... retain the deliberately
+    //    illegal-combination test."
+    //
+    // This case used to assert the DEFECT: the pairing was let through and
+    // caught downstream as a short seal, a refused replay and corner
+    // refusals, and the checks read "SEEN TO FIRE". That is a test that
+    // passes only while the hole exists. zhao_terrain_group_seq now carries
+    // VALID_MODE and REFUSES the pairing at the job accept, so the assertions
+    // below are the correct behaviour instead: the request is refused and
+    // counted, the shell never sees a short arena, and the job renders
+    // BYTE-IDENTICALLY to the same job configured legally.
+    //
+    // The three downstream counters keep their positive controls at their own
+    // blocks -- arena_seal_short_o in vertex_arena_dense_seal_control and
+    // vertex_arena_dense_directed, replay_refused_o and corner_refusals_o in
+    // terrain_wcache_differential and tb_terrain_wcache -- so none is left
+    // asserted-zero and unfireable by this change, and no committed mutant is
+    // owed for it.
     Spec fault;
     fault.job = job(8, 8, 2, 0x2000);
     fault.views = 3;
     fault.dual = true;
     fault.src = 0x5EAD;
+
+    // (a) the same job configured LEGALLY (sparse off) -- the reference render.
+    pd.reset();
+    pd.configure(0, matrices[0], viewports[0]);
+    pd.configure(1, matrices[1], viewports[1]);
+    Spec legal = fault;
+    legal.sparse = false;
+    const RunResult lr = pd.run(lat, {legal}, {});
+    check(lr.cycles < 200000, "legal reference job drains", 1, lr.cycles < 200000 ? 1 : 0);
+    check(pipe.sparse_refused_o == 0,
+          "CONTROL: a job that did not ask for sparse fill is not counted as refused", 0,
+          pipe.sparse_refused_o);
+    const std::vector<PipePacket> legal_out = lr.terrain;
+
+    // (b) the same job with the ILLEGAL request.
+    pd.reset();
+    pd.configure(0, matrices[0], viewports[0]);
+    pd.configure(1, matrices[1], viewports[1]);
     fault.sparse = true;
     const RunResult fr = pd.run(lat, {fault}, {});
-    check(fr.cycles < 200000, "dense sparse-fill fault control drains", 1,
+    check(fr.cycles < 200000, "dense sparse-fill request drains", 1,
           fr.cycles < 200000 ? 1 : 0);
-    check(pipe.arena_seal_short_o == 1, "SEEN TO FIRE: dense arena seal-short", 1,
+    check(pipe.sparse_refused_o == 1,
+          "SEEN TO FIRE: sparse fill refused against a dense-seal shell", 1,
+          pipe.sparse_refused_o);
+    check(pipe.fills_dropped_o == 0,
+          "the refused job filled every vertex -- no filler was skipped", 0,
+          pipe.fills_dropped_o);
+    check(pipe.arena_seal_short_o == 0,
+          "the shell never sees a short arena, because the pairing never reaches it", 0,
           pipe.arena_seal_short_o);
-    check(pipe.replay_refused_o > 0 && pipe.corner_refusals_o > 0,
-          "SEEN TO FIRE: dense sparse-fill replay and corner refusal counters", 1,
-          pipe.replay_refused_o > 0 && pipe.corner_refusals_o > 0 ? 1 : 0);
-    check(pipe.release_unsafe_o == 0, "fault control still releases after reference acceptance", 0,
-          pipe.release_unsafe_o);
+    check(pipe.replay_refused_o == 0 && pipe.corner_refusals_o == 0,
+          "no replay or corner refusal follows a refused sparse request", 0,
+          pipe.replay_refused_o + pipe.corner_refusals_o);
+    check(pipe.release_unsafe_o == 0, "the refused job still releases after reference acceptance",
+          0, pipe.release_unsafe_o);
+
+    // (c) IDENTICAL RENDERED OUTPUT -- "reduced redundant work, not reduced
+    // visual capability", and the half no counter above can show.
+    bool same = legal_out.size() == fr.terrain.size() && !legal_out.empty();
+    for (size_t k = 0; same && k < legal_out.size(); ++k) {
+      const PipePacket& a = legal_out[k];
+      const PipePacket& b = fr.terrain[k];
+      same = a.refused == b.refused && a.missed == b.missed && a.p.behind == b.p.behind &&
+             a.p.src_id == b.p.src_id && a.p.view == b.p.view && a.p.mat_a == b.p.mat_a &&
+             a.p.mat_b == b.p.mat_b && a.p.weight == b.p.weight;
+      for (int v = 0; v < 3 && same; ++v) {
+        same = same && a.p.x[v] == b.p.x[v] && a.p.y[v] == b.p.y[v] && a.p.d[v] == b.p.d[v] &&
+               a.w[v] == b.w[v];
+      }
+    }
+    check(same,
+          "IDENTICAL RENDER: the refused job emits exactly what the legal one does", 1,
+          same ? 1 : 0);
+    std::printf("  item 5: %zu packets legal, %zu refused, sparse_refused_o=%u\n",
+                legal_out.size(), fr.terrain.size(),
+                static_cast<unsigned>(pipe.sparse_refused_o));
   }
   return zhao::report_and_exit(kSparse ? "terrain_pipe_differential_bitmap"
                                        : "terrain_pipe_differential");

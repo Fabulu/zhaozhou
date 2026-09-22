@@ -3473,6 +3473,58 @@ blocks:
     # IS mandatory -- TERRAIN.LOD cannot decide a level without it -- and a gap nobody
     # counts is a gap nobody closes.
 
+  - id: TERRAIN.EDGERECON
+    name: The neighbour-edge level producer
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: >-
+      The producer for TERRAIN.LOD's four edge_* inputs, which zhao_console_core.sv
+      entry I21 has driven from the literal 8'h00 since it was written. Owner ruling
+      2026-09-22 item 6 authorises it. Bounded prepare/reconcile/emit sequencing: a
+      direct-mapped bank of one 32-bit record per live patch, filed from TERRAIN.LOD's
+      own emit stream during a PREPARE phase, frozen at prepare_done, and read five
+      records at a time to answer one patch's four border words. It never decides a
+      level -- it stores the ones TERRAIN.LOD decided. THE SYMMETRY LAW is what makes it
+      crack-free: an edge is answered from a decision iff ok(P) AND ok(N), a predicate
+      symmetric in the two patches and evaluated against a frozen store, so the two
+      sides of a seam cannot disagree. frame_begin_i sweeps every valid bit, which is
+      the ruling's 'no unvalidated previous-frame shortcut' enforced structurally.
+    contract: design/contracts/TERRAIN.EDGERECON.md
+    phase: 6
+    owner_issue: ZH-050
+    inputs: [lod_decisions]
+    outputs: [lod_targets]
+    upstream: [TERRAIN.LOD]
+    downstream: [TERRAIN.LOD]
+    backpressure: ready_valid
+    latency: fixed
+    target_throughput: 1 query per patch per frame
+    tests:
+      directed: tests/terrain/terrain_edgerecon_directed.cpp
+    counters: [terrain_edgerecon_collisions, terrain_edgerecon_edges_fallback]
+    counter_ports:
+      terrain_edgerecon_collisions: collisions_o
+      terrain_edgerecon_edges_fallback: edges_fallback_o
+    source_ids: false
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    # REGISTERED BY THE PACKET THAT BUILT IT, 2026-09-22 (EDGERECON), and it RAISES
+    # the register by one ON PURPOSE. R214: a block with a contract AND silicon owes a
+    # row, and the ratification of the six completion rulings says so in advance --
+    # "five of these six commission capability that does not exist yet ... building them
+    # makes the count go UP until each is composed. That is the instrument working."
+    #
+    # IT IS NOT COMPOSED, and the reason is measured in the contract's "What still has
+    # no producer": the block owns the store, the law and the sequencing gate, and the
+    # admitted-set PREPARE walker that drives it does not exist. Composing it alone
+    # would dangle f_* and the phase pulses at the core boundary and put the register
+    # UP by one while changing nothing a frame can see -- the trade R75 endorses
+    # refusing. The console therefore remains in CONSERVATIVE EDGE MODE and
+    # u_terrain_lod's edge_* still read the literal 8'h00.
+    #
+    # DELETE THE PARAGRAPH ABOVE when the walker lands and the core queries this block.
+
   - id: TERRAIN.JOBISSUE
     name: The subpatch job issuer
     kind: rtl

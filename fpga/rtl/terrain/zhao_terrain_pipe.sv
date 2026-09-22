@@ -37,11 +37,19 @@
 //     lattice is TERRAIN.PATCH's composed slot, not this block's.
 //
 // `sparse_fill_i` is exposed rather than tied: with VALID_MODE = 0 it is the
-// §3 remedy (81/25/9/4 fills per level); with VALID_MODE = 1 it is a fault
-// the differential fires on purpose (seal short, sticky). The composition
-// that owns both knobs decides. Because sparse fill is a runtime input, an
-// elaboration guard cannot reject that pairing; the shell's seal/refusal
-// counters make the misuse explicit instead.
+// §3 remedy (81/25/9/4 fills per level); with VALID_MODE = 1 it is REFUSED.
+//
+// REWRITTEN 2026-09-22, owner ruling item 5. This paragraph used to end "with
+// VALID_MODE = 1 it is a fault the differential fires on purpose (seal short,
+// sticky) ... Because sparse fill is a runtime input, an elaboration guard
+// cannot reject that pairing; the shell's seal/refusal counters make the
+// misuse explicit instead." The last sentence was true of an ELABORATION
+// guard and was read as though it said no guard was possible. A RUNTIME guard
+// against an ELABORATION-TIME mode is exactly what the ruling asks for, and
+// `zhao_terrain_group_seq` now carries VALID_MODE and refuses the pairing at
+// the job accept, counting it on `sparse_refused_o`. The job then runs with a
+// full fill and renders identically -- "reduced redundant work, not reduced
+// visual capability".
 //
 // Conservative SystemVerilog subset only (charter §2).
 `default_nettype none
@@ -169,6 +177,9 @@ module zhao_terrain_pipe #(
     output wire        [31:0]       groups_released_o,
     output wire        [31:0]       fills_forwarded_o,
     output wire        [31:0]       fills_dropped_o,
+    // ITEM 5 (owner ruling 2026-09-22): jobs whose sparse-fill request was
+    // refused because VALID_MODE != 0. The job runs with a FULL fill.
+    output wire        [31:0]       sparse_refused_o,
     output wire        [31:0]       refs_forwarded_o,
     output wire        [31:0]       release_unsafe_o,
     // the tess's
@@ -321,6 +332,12 @@ module zhao_terrain_pipe #(
       .ARENAS (ARENAS),
       .DEPTH  (DEPTH),
       .GEN_W  (GEN_W),
+      // ITEM 5: the sequencer's sparse-fill gate takes the SAME validity
+      // mode the shell below does, so the knob and the seal rule cannot
+      // disagree. Without this line the sequencer would default to 1 while
+      // a VALID_MODE=0 shell sat under it, and sparse fill -- the whole
+      // point of that configuration -- would be silently refused.
+      .VALID_MODE(VALID_MODE),
       .IDX_W  (IDX_W),
       .INDEX_W(INDEX_W),
       .ARENA_W(ARENA_W)
@@ -409,6 +426,7 @@ module zhao_terrain_pipe #(
       .groups_released_o(groups_released_o),
       .fills_forwarded_o(fills_forwarded_o),
       .fills_dropped_o  (fills_dropped_o),
+      .sparse_refused_o (sparse_refused_o),
       .refs_forwarded_o (refs_forwarded_o),
       .release_unsafe_o (release_unsafe_o)
   );
