@@ -353,21 +353,21 @@ module zhao_twod_band #(
   // against the port list without counting bits.
   localparam int unsigned F_X    = 0;                       // 16 signed
   localparam int unsigned F_Y    = F_X   + 16;              // 16 signed
-  localparam int unsigned F_W    = F_Y   + 16;              // 16
-  localparam int unsigned F_H    = F_W   + 16;              // 16
+  localparam int unsigned F_W    = F_Y   + 16;              // w=16
+  localparam int unsigned F_H    = F_W   + 16;              // w=16
   localparam int unsigned F_U    = F_H   + 16;              // UVW
   localparam int unsigned F_V    = F_U   + UVW;             // UVW
   localparam int unsigned F_A00  = F_V   + UVW;             // UVW
   localparam int unsigned F_A01  = F_A00 + UVW;             // UVW
   localparam int unsigned F_A10  = F_A01 + UVW;             // UVW
   localparam int unsigned F_A11  = F_A10 + UVW;             // UVW
-  localparam int unsigned F_FMT  = F_A11 + UVW;             // 3
-  localparam int unsigned F_PAL  = F_FMT + 3;               // 8
-  localparam int unsigned F_TINT = F_PAL + 8;               // 16
-  localparam int unsigned F_BLND = F_TINT + 16;             // 2
-  localparam int unsigned F_VM   = F_BLND + 2;              // 2
-  localparam int unsigned F_ORD  = F_VM  + 2;               // 8
-  localparam int unsigned F_SRC  = F_ORD + 8;               // 16
+  localparam int unsigned F_FMT  = F_A11 + UVW;             // w=3
+  localparam int unsigned F_PAL  = F_FMT + 3;               // w=8
+  localparam int unsigned F_TINT = F_PAL + 8;               // w=16
+  localparam int unsigned F_BLND = F_TINT + 16;             // w=2
+  localparam int unsigned F_VM   = F_BLND + 2;              // w=2
+  localparam int unsigned F_ORD  = F_VM  + 2;               // w=8
+  localparam int unsigned F_SRC  = F_ORD + 8;               // w=16
   // the mutable half
   localparam int unsigned F_CU   = F_SRC + 16;              // UVW  cursor u
   localparam int unsigned F_CV   = F_CU  + UVW;             // UVW  cursor v
