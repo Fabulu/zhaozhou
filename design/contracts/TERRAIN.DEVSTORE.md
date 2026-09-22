@@ -153,6 +153,39 @@ request/response counter still balancing. Beat COUNT is the only witness.
 * `tests/memory/mem_guard_directed.cpp` — the window's edges, straddles and
   wrong clients, cross-checked against `zref::MemoryGuard`.
 
+### What the CONSOLE SMOKE witnesses, and what it does not
+
+Said precisely, because "an otherwise green smoke whose upstream fixture never
+reaches the new path does not prove the path."
+
+**The WRITE path IS exercised by real console stimulus.** Measured in the
+plain form, 2026-09-22:
+
+```
+pl    loaded=3 faulted=0 crc_fails=0 guard_denied=0
+mip   mipfeed pages_mipped=3 samples_sent=6534
+lodfd lattices_walked=3 dev_records=48 -> hist events=144 updates=48
+      probe ... socket contention=10 retire_unowned=0 wbeat_unowned=0
+```
+
+Three pages load, three lattices are walked, and **48 deviation records reach
+this block's write port** — twelve 64-byte guard write bursts into
+`TERRAIN.DEVSTORE` through the **real** `zhao_mem_guard` in the composed
+console, on a five-requester `zhao_mem_share_wr`. `wbeat_unowned = 0` is a live
+`$fatal` in that bench, so a write beat from a requester that did not own the
+channel would stop the run.
+
+**A stale claim, corrected here rather than inherited.**
+`tb_zhao_console_core_smoke.sv` still says *"every terrain page this bench
+plays FAILS ITS CRC"*. It does not: `loaded=3 faulted=0 crc_fails=0`. The page
+header loop landed 2026-09-20 and the sentence was never updated — and it was
+wrong about the cause even when it was true (the faults were `hdr_ident`, not
+CRC, as that file's own later note records).
+
+**The READ path is NOT exercised there.** No compose job is issued in this
+fixture, so `r_start_i` never rises and no record is ever read back. That half
+rests on `terrain_lodpath_directed` and on the formal proof, not on the smoke.
+
 ## 8. Open, and stated rather than left to be found
 
 * **The counters are sunk at the console boundary.** `zhao_console_core`
