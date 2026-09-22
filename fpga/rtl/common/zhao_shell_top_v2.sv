@@ -2156,8 +2156,26 @@ module zhao_shell_top_v2
       // learns it in the same edit the guard's client arm was connected --
       // the mistake this block's own comment records twice was learning one
       // and not the other.
+      //
+      // AND A THIRD TIME, 2026-09-22 (owner completion ruling ITEM 4).
+      // ENGINE1 is now a legal WRITER -- GEOM.PARAMBUF's arena producer --
+      // and this arm did not know it, so EVERY arena write raised the shell's
+      // own corruption alarm. The paragraph above records the same mistake
+      // twice and I made it a third time in the same file, which is worth
+      // leaving on the record: the comment is not the mechanism. What finally
+      // caught it was the console smoke asserting the tripwire stays 0, one
+      // form and one assertion, after lint, the formal proof, four mutants and
+      // a 316-check acceptance bench had all passed.
+      //
+      // Widened DELIBERATELY and no further, on the TERRAIN_BUILD precedent:
+      // ENGINE1 is not under the framebuffer lease, and MEM.GUARD confines its
+      // writes to the view the PARAMBUF lease NAMES -- disjoint from both FB
+      // slots, from TERRAIN's regions, from POST.ECHO and from
+      // RENDER.ASSET_POOL, which stays read-only to it. So this arm admits an
+      // identity the guard has already bounded; it does not open a region.
       if (ctrl_req.write  && (ctrl_req.client != expected_writer)
-                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD))
+                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD)
+                          && (ctrl_req.client != ZHAO_CLIENT_ENGINE1))
         route_err <= 1'b1;
       // TREAD 10: reads may now be SCANOUT'S OR ENGINE1'S. This is the same
       // mistake the write side already made once and is documented above --
