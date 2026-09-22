@@ -698,12 +698,20 @@ module tb_zhao_console_core_smoke
   // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
   // served under and marks the directory itself.)
 
-  logic                    terr_chk_valid_i;
-  logic [TERR_SLOTW_C-1:0] terr_chk_slot_i;
-  logic [TERR_GENW_C-1:0]  terr_chk_gen_i;
-  logic [31:0]             terr_chk_epoch_i;
-  logic                    terr_chk_valid_o;
-  logic                    terr_chk_stale_o;
+  // I27's handle check left this edge on 2026-09-22: `u_terrain_lodfeed` is
+  // its caller now and the exchange is internal.  What crosses is the pair of
+  // counters, and they are declared TOGETHER because the stale count means
+  // nothing without the checked count beside it -- a lane reading
+  // `handles_stale_o == 0` off a bench that never loaded a page would be
+  // quoting the silence of an instrument that was never switched on.
+  logic [31:0]             terr_lodfeed_handles_checked_o;
+  logic [31:0]             terr_lodfeed_handles_stale_o;
+  // Core entry I21's view-mask narrowing.  It is EXPECTED ZERO here and that
+  // is not evidence of anything: every terrain page this bench plays fails its
+  // CRC, so the compose door never opens and the counter cannot move.  Its
+  // real control is `terrain_jobissue_directed` case 12, which fires it and
+  // shows it flat beside the firing.  Declared so the `.*` binding is total.
+  logic [31:0]             terr_ji_view_mask_high_o;
 
   // SW.STREAM's journal doorbell (owner ruling R14): the HPS's own words.
   logic [31:0]             terr_cfg_journal_base_i;
@@ -3963,10 +3971,6 @@ module tb_zhao_console_core_smoke
     // plane still reads SOLID through this run for a different reason: no
     // page this bench loads passes the header identity check, so no bake
     // record ever gets a page identity and none is ever issued.)
-    terr_chk_valid_i = '0;
-    terr_chk_slot_i = '0;
-    terr_chk_gen_i = '0;
-    terr_chk_epoch_i = '0;
     // TERRAIN.WRITEBACK IS COMPOSED (entry I28 closed) and this bench STILL
     // CANNOT REACH IT, for a reason that CHANGED on 2026-09-21 and is worth
     // stating rather than inheriting: the mark is no longer a harness input

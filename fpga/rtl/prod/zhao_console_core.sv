@@ -3234,7 +3234,112 @@
 //      the register does not move; what moves is that the day a producer is
 //      ruled, the evidence path is already built and fired.
 //
-// I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
+// I21. NARROWED 2026-09-22 (gz/terrclose): FOUR SIGNALS BECAME THREE, AND THE
+//      ONE THAT LEFT IS THE ONLY ONE THAT WANTED A BUILD.
+//
+//      THIS ENTRY'S OWN TALLY, WORKED THROUGH ONE SIGNAL AT A TIME RATHER THAN
+//      INHERITED. TERRACOMP left four signals and a declared tie-off. Each was
+//      ATTEMPTED before anything was written about it (R237), and the result
+//      is one discharge, two confirmations and one that had already been
+//      settled and is restated because the entry kept re-litigating it:
+//
+//      (2) `terr_job_view_mask_i` -- **DISCHARGED. THE BUILD LANDED.**
+//          `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+//          `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE
+//          `flags:u16`, which is word for word the work order this entry
+//          wrote: "THE BUILD THIS WANTS is one more forwarded field on those
+//          three blocks, beside `flags`. It is small and it is named." The
+//          mask now reaches `u_terrain_jobissue`'s draw context off the VERTEX
+//          BEAT -- the same held job as the slot, the source id and the flags,
+//          captured on the same door pulse as `ctx_src_id_i`.
+//          BOTH SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED and the build
+//          is neither: latching `tis_view_mask` live at the door pairs page
+//          N's mask with page M's lattice, and a src_id-keyed side queue
+//          desyncs permanently on the first refused page. Carrying the field
+//          makes the question not arise.
+//          THE 8 -> 2 NARROWING IS DECIDED, as this entry required: IGNORE AND
+//          COUNT, inside `zhao_terrain_jobissue`, counted on
+//          `view_mask_high_o` and FIRED by `terrain_jobissue_directed` case 12
+//          with a negative control beside it. Bits [7:2] are not a wider mask
+//          being truncated -- no ratified document gives them a meaning -- so
+//          refusing a patch over them would drop legal content. The count is
+//          in the BLOCK and not in this composer because a counter here could
+//          not be fired: the smoke fails the CRC of every terrain page it
+//          plays, so `tdoor_push_c` never rises in it.
+//          The PORT stays as an override, with the twelve beside it, for item
+//          (5)'s reason: six smoke assertions stand on that injection and a
+//          port is not a module.
+//
+//      (3) `terr_sparse_fill_i` -- **CONFIRMED NOT A GAP, and the confirmation
+//          was measured rather than quoted.** `zhao_terrain_group_seq.sv`'s own
+//          header calls it an owner knob and the block reads it only under
+//          `VALID_MODE == 0`; `zhao_terrain_jobissue` carries it on the draw
+//          context beside the mask and emits it unchanged. Freezing it to a
+//          localparam would close a port by taking the owner's control away,
+//          which is the art law's rule 6 applied to RTL. **No producer is owed
+//          for a knob** and none will be built.
+//
+//      (1) `terr_job_mat_a/_b/_weight` -- **CONFIRMED HELD, AND THE
+//          REPLACEMENT WAS CHECKED FOR RATHER THAN ASSUMED ABSENT.** Ruling
+//          R13 rules them the WRONG CARRIER and their closure is REMOVAL once
+//          a per-triangle layer-E path exists inside TESS. Re-measured
+//          2026-09-22: `zhao_terrain_tess.sv` has no layer-E port, no material
+//          output and no cell-keyed read of any kind, and the only blocks that
+//          touch layer E's bytes are `zhao_terrain_pageio` -- which names its
+//          head as a FOREIGN-BYTE boundary of layer D's burst window and
+//          writes those bytes back unchanged, with `pageio_rtl_directed`
+//          asserting they are byte-identical after a bake -- and nothing else.
+//          `zhao_terrain_pagestream` still reads `'{A_OFF, B_OFF, C_OFF}`.
+//          So the replacement does not exist, and **NOTHING LEAVES UNTIL IT
+//          DOES**: removing the riders now would take the function out of the
+//          console and call it a closure.
+//
+//      (4) THE DECLARED `edge_*` TIE-OFF -- **HELD, AND A PRODUCER WAS LOOKED
+//          FOR BEFORE THIS WAS WRITTEN.** The four neighbour levels are driven
+//          from the LITERAL `8'h00`, declared under R159 at the instance.
+//          THE LITERAL IS DELIBERATE AND MUST NOT BE "TIDIED" INTO A NAMED
+//          CONSTANT: this paragraph said `TERR_EDGE_UNKNOWN_C` on its first
+//          writing, was checked against the instance, and was wrong.
+//          TERRACOMP used a localparam first and removed it, because
+//          `tools/design/packet_h_tieoff_audit.py` counts LITERAL connections
+//          -- the named version reported "10 by group comment, 0 SILENT" with
+//          FOUR TIE-OFFS THE AUDIT COULD NOT SEE, in the one commit whose
+//          whole subject was not hiding them. A named constant also reads to a
+//          human as a knob somebody CHOSE rather than an absence somebody is
+//          OWED. The audit reports 14 now, and the four are in it.
+//          `design/contracts/MEASURE.GOVERNOR.md` still refuses
+//          ownership in writing -- "The camera POSITIONS, `dual` and `edge_*`
+//          are NOT here ... none of them can come from a block that sees one
+//          number per frame per camera" -- and the search for another owner
+//          ends the same way it did: the value is a CROSS-PATCH
+//          RECONCILIATION, needing every patch of a frame DECIDED before any
+//          is tessellated, and this console decides one patch at a time as the
+//          cache serves it. `zhao_terrain_lod` self-supplies the twelve
+//          INTERIOR neighbours from its own `lvl[]`; the four `edge_*` are
+//          exactly the inter-patch cases it cannot. A producer is a FRAME-WIDE
+//          DECISION PASS -- a new block with a new store, holding sixteen
+//          levels per live patch across the whole visible set -- and building
+//          one to retire a tie-off whose constant is already the SAFE choice
+//          is the wrong trade at this point in the budget.
+//          THE CONSTANT IS THE SAFE ONE AND NOT THE CHEAP ONE, which is the
+//          part a later reader must not re-derive: level 0 is the FINEST, so a
+//          neighbour reported as 0 makes TERRAIN.LOD clamp its own edge to the
+//          finest it could need -- more triangles and NO CRACK. The coarsest
+//          constant (3) would have seamed the ground AND measured smaller,
+//          which is the direction a resource-pressed campaign is biased to
+//          pick.
+//
+//      AND THE LAYER-E READER IS THE SAME ABSENCE AS (1), not a fifth item.
+//      R13 puts it inside TESS. One absence, one ruled destination.
+//
+//      SO WHAT CLOSES I21 IS NOW EXACTLY ONE BUILD: the per-triangle layer-E
+//      path in TERRAIN.TESS. With it, the three riders are REMOVED under R13
+//      and the job port's boundary is the override alone. That is a smaller
+//      and truer statement of this entry's remainder than anything above it.
+//
+//      THE ORIGINAL HEAD, KEPT BECAUSE THE ARGUMENT UNDER IT IS THE RECORD
+//      OF HOW EACH SIGNAL WAS IDENTIFIED: TERRAIN.GROUP_SEQ's subpatch job
+//      port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
 //      that is NOT wired, which is worth stating precisely so nobody wires it
 //      by name-matching. `fpga/rtl/terrain/zhao_terrain_lod.sv` exists and its
@@ -4023,7 +4128,63 @@
 //      pending-slot repair (ruling R55); this composition waited for it rather
 //      than working around it.)
 //
-// I27. THE DIRECTORY's HANDLE CHECK (`terr_chk_*`) -- BOUNDARY. NARROWED
+// (I27 CLOSED 2026-09-22 (gz/terrclose). THE DIRECTORY's HANDLE CHECK
+//      (`terr_chk_*`) has a caller, and it is the caller this entry NAMED two
+//      days before one existed: `u_terrain_lodfeed`, once `u_terrain_devstore`
+//      composed beneath it. Six ports left this module's edge.
+//
+//      THE BLOCKER HAD EXPIRED AND THE ENTRY DID NOT KNOW, which is ruling
+//      R165's shape and the reason this closure was available at all. The
+//      surviving sentence read "this port's first honest caller is
+//      lodfeed-with-the-store, not the subpatch issuer, and whoever composes
+//      the store owes this check in the same commit", with a 2026-09-21
+//      re-measurement (terrcmd) confirming the store was built and uncomposed.
+//      **TERRACOMP COMPOSED THE STORE LATER THAT SAME DAY AND DID NOT PAY THE
+//      DEBT** -- its own note at the bake chain says "the lodfeed does not key
+//      on the store yet", which was true of the lodfeed and no longer true of
+//      the console: the store's write port IS the lodfeed's, keyed by slot, as
+//      of that commit. The condition this entry set was met by the packet that
+//      wrote the sentence denying it.
+//
+//      WHAT THE CHECK ACTUALLY PREVENTS, stated as a sequence because "a
+//      staleness check" is not a reason: `u_terrain_lodfeed` holds a page's
+//      slot across a ~9,700-clock walk and the store files the sixteen records
+//      BY SLOT. Evict that page mid-walk and reload the slot, and the new
+//      page's own start is DROPPED by the feed's busy guard
+//      (`lattices_dropped_o`) while its `inv` clears the slot -- and the
+//      running walk then re-fills it with the OLD page's deviations under the
+//      NEW page's handle. Every counter balances, `r_fresh_o` reads high, and
+//      TERRAIN.LOD decides the new page's tessellation from the old page's
+//      terrain. That is this file's record-swap chapter with a different
+//      payload.
+//
+//      AND THE DETECTOR IS NOT BLIND, established before it was wired rather
+//      than after. The two sides are clocked by different things: the held
+//      handle is the feed's register, enabled by an accepted start; the answer
+//      is `zhao_terrain_residency_v2`'s key RAM, written by the directory's
+//      claim/evict FSM. `terrain_lodpath_directed` cases 6 and 7 are the
+//      positive AND negative control -- a live handle that must withdraw
+//      nothing and a stale one that must -- because a checker that invalidated
+//      on every answer would pass a stale-only test.
+//
+//      THE THREE THINGS THE CHECK IS NOT ALLOWED TO BE, and each is refused in
+//      the RTL rather than in this paragraph:
+//        * it is not a STALL. The answer arrives after the records are filed,
+//          so it can only withdraw them; an unanswered check costs an
+//          invalidation and never a beat of the paging spine.
+//        * it is not a PULSE. The directory shares one address port between a
+//          mutation, a lookup and a check, and a check that loses is simply not
+//          answered that clock. `chk_valid_o` is a held level and the bench
+//          delays its answer deliberately to prove it.
+//        * it is not an OR onto the store's invalidation port. The feed
+//          arbitrates its two invalidation sources internally, because an OR
+//          drops one of them on the cycle they coincide and nothing downstream
+//          can tell a slot cleared once from a slot that owed two clears.
+//
+//      The entry's whole argument is kept below, unedited, because it is the
+//      record of how the caller was identified before it existed.)
+//
+// ~~I27. THE DIRECTORY's HANDLE CHECK (`terr_chk_*`) -- BOUNDARY. NARROWED
 //      THREE TIMES; the halves that left are recorded here rather than deleted
 //      with them, because this entry is where the next reader will look:
 //
@@ -4139,6 +4300,10 @@
 //          composes the store owes this check in the same commit. A staleness
 //          port with no caller is not a gap for lack of a block; it is waiting
 //          on the one consumer that makes the handle load-bearing.
+//
+//          ^^ STRUCK 2026-09-22: "the moment that changes" ARRIVED, hours
+//          after the re-measurement below was written. See the closure at the
+//          head of this entry.
 //
 //          RE-MEASURED 2026-09-21 (terrcmd) AND IT HAS **NOT** EXPIRED, which
 //          is recorded because the measurement was made expecting it to have.
@@ -7458,23 +7623,39 @@ module zhao_console_core
   input  logic                    terr_job_dual_i,
   input  logic [15:0]             terr_job_src_id_i,
   //
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
-  // slot and source id, and carries it to the sequencer joined to the patch it
-  // describes -- which is strictly better than today, where it reached the
-  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
-  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
-  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
-  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
-  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
-  // `tis_view_mask` live at the door would join two things that move
-  // independently, which is entry I21's own objection and still correct; and
-  // a src_id-keyed side queue desyncs permanently the first time a page is
-  // refused after issue (a bad pitch, a guard denial, a short burst), so its
-  // identity check would fire once and then be wrong forever. THE BUILD THIS
-  // WANTS is one more forwarded field on those three blocks, beside `flags`.
-  // Named here rather than adapted around.
+  // THE VIEW MASK IS NO LONGER A REMAINDER. **THE BUILD LANDED 2026-09-22
+  // (gz/terrclose)** and it is the build entry I21 named rather than a way
+  // around it: `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+  // `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE `flags:u16`,
+  // so the mask arrives on the vertex beat, off the same held job as the slot,
+  // the source id and the flags. `u_terrain_jobissue` takes it from there.
+  //
+  // THE TWO SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED, and the build is
+  // neither of them. Latching `tis_view_mask` live at the door would pair page
+  // N's mask with page M's lattice -- the header reader accepts a job, spends
+  // a burst, and only then forwards it, so the two move independently. A
+  // src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue. Carrying the field makes the question not arise.
+  //
+  // THIS PORT REMAINS AS AN OVERRIDE, on the same footing as the twelve job
+  // fields beside it and for the reason entry I21 item (5) records: the smoke
+  // bench injects one subpatch job here and SIX assertions stand on that
+  // injection, because every terrain page the smoke plays fails its CRC and
+  // the internal producer therefore never opens. Deleting the port would move
+  // the register by nothing and cost all six. It is a boundary the composition
+  // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE NARROWING'S COUNTER, from `zhao_terrain_jobissue`. The record's mask
+  // is EIGHT bits and the sequencer's is TWO, and bits [7:2] have no ratified
+  // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
+  // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
+  // two view bits and tests `== 0x3`. Entry I21 left the decision to whoever
+  // composed the consumer: they are IGNORED rather than refused, because
+  // refusing a patch over an absence would drop legal content, and they are
+  // COUNTED, because the day a third view is ratified the discard stops being
+  // harmless. The count is taken inside the block rather than in this composer
+  // so that a directed test can FIRE it; see that block's port comment.
+  output logic [31:0]             terr_ji_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -7551,27 +7732,28 @@ module zhao_console_core
   output logic [31:0]             terr_bsock_retire_unowned_o,
   output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
-  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  // ---- I27 IS CLOSED. Both halves, and they closed a day apart -------------
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
   //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
   //      and TERRAIN.PLACE inside this module, and the streamer's own completion
-  //      is what unpins the page.  What is left here is the deformation mark,
-  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
-  //      caller is the same absent subpatch issuer as entry I21.
-  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
-  // the slot, the generation and the epoch the patch was served under, learns
-  // from `bake_done_i` that the record retired, and drives the directory
-  // directly. The eight ports are GONE from this edge rather than driven from
-  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
-  // by this: its first honest caller is lodfeed-with-the-devstore, and the
-  // devstore is composed but the lodfeed does not key on it yet.
-
-  input  logic                    terr_chk_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_chk_gen_i,
-  input  logic [31:0]             terr_chk_epoch_i,
-  output logic                    terr_chk_valid_o,
-  output logic                    terr_chk_stale_o,
+  //      is what unpins the page.
+  //      The DEFORMATION MARK left it on 2026-09-21 -- `u_terrain_pageio` holds
+  //      the slot, generation and epoch the patch was served under and drives
+  //      the directory directly; eight ports went with it.
+  //      THE HANDLE CHECK (`terr_chk_*`) LEFT IT 2026-09-22, and its caller is
+  //      the one entry I27 named in advance: `u_terrain_lodfeed`, now that
+  //      `u_terrain_devstore` is composed beneath it. Six more ports are gone.
+  //      What crosses this edge instead is the check's EVIDENCE, below.
+  //
+  //      THE CHECK IS NOT A NAME MATCH AND THE TWO SIDES ARE NOT IN LOCKSTEP,
+  //      which is the property this file requires of a detector before quoting
+  //      it: the request carries the handle `u_terrain_lodfeed` held across its
+  //      own ~9,700-clock walk, and the answer is read out of
+  //      `u_terrain_residency_v2`'s key RAM, written by the directory's
+  //      claim/evict FSM. No enable drives both, so a slot that is evicted and
+  //      reused mid-walk moves ONE of them and the difference is visible.
+  output logic [31:0]             terr_lodfeed_handles_checked_o,
+  output logic [31:0]             terr_lodfeed_handles_stale_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
@@ -12947,14 +13129,21 @@ module zhao_console_core
   // `is_island_o` identifies the island and the streamer addresses by POOL SLOT;
   // `is_cslot_*` indexes T6's 256-entry composed-height cache and
   // `zhao_terrain_compcache_front` is a two-buffer FRONT, not that store;
-  // `is_view_mask_o` and `is_priority_o` belong to the subpatch job TERRAIN.LOD
-  // would build, which is entry I21's boundary.
+  // `is_priority_o` belongs to the subpatch job TERRAIN.LOD would build, which
+  // is entry I21's boundary.
+  //
+  // `is_view_mask_o` DOES NOT, ANY MORE. It is consumed as of 2026-09-22: it
+  // is handed to `u_terrain_hdrread` as the compose job's own view mask and
+  // rides the forward path to the vertex beat, which is the build entry I21
+  // named -- "one more forwarded field on those three blocks, beside `flags`".
+  // The waiver coming off it is the check that the sentence is true.
   /* verilator lint_off UNUSEDSIGNAL */
   wire [31:0]                    tis_island;
   wire                           tis_cslot_valid;
   wire [$clog2(TERR_CSLOTS)-1:0] tis_cslot;
-  wire [7:0]                     tis_view_mask, tis_priority;
+  wire [7:0]                     tis_priority;
   /* verilator lint_on UNUSEDSIGNAL */
+  wire [7:0]                     tis_view_mask;
 
   // TERRAIN.PAGESTREAM.  `tps_*` is the COMPOSE DOOR'S side of the streamer
   // and has not changed meaning; `tpsx_*` below is the STREAMER'S side, which
@@ -12966,6 +13155,10 @@ module zhao_console_core
   wire [5:0]              tps_v_vi, tps_v_vj;
   wire                    tps_v_first;
   wire [15:0]             tps_v_flags;
+  // ENTRY I21's VIEW MASK, ON THE VERTEX BEAT. Eight bits, uninterpreted, as
+  // the page's own record carries it; the narrowing to the sequencer's two is
+  // made ONCE, at the compose door, and counted. See `tdoor_view_mask_c`.
+  wire [7:0]              tps_v_view_mask;
   // TWO DELIBERATE NARROWINGS, WAIVED AT THE DECLARATION AND NOWHERE ELSE.
   // `tps_v_src_id` is T5's 32-bit record id against TERRAIN.PATCH's 16-bit
   // trace field; `tps_done_slot` is the POOL index against the directory's
@@ -13009,6 +13202,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    thr_f_gen;
   wire [31:0]             thr_f_epoch, thr_f_src_id;
   wire [15:0]             thr_f_flags;
+  wire [7:0]              thr_f_view_mask;   // entry I21's forwarded field
 
   // THE ONE GUARD READ CLIENT, and the two readers behind it.  `trs_*` is the
   // share's downstream side; the two upstream sides are the blocks' own ports.
@@ -13030,6 +13224,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    tpsx_j_gen;
   wire [31:0]             tpsx_j_epoch, tpsx_j_src_id;
   wire [15:0]             tpsx_j_flags;
+  wire [7:0]              tpsx_j_view_mask;
   wire                    tpsx_v_valid, tpsx_v_ready;
   wire                    tpsx_done_valid, tpsx_done_ready;
 
@@ -13103,6 +13298,19 @@ module zhao_console_core
   wire signed [15:0]      tlf_w_cy;          // the devstore's centre height
   wire                    tlf_inv_valid;     // the devstore's invalidation strobe
   wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // ... and the slot it invalidates
+  // ---- THE DIRECTORY'S HANDLE CHECK -- entry I27's second half ------------
+  // DECLARED HERE AND CONSUMED ~3,500 LINES ABOVE, at `u_terrain_residency_v2`.
+  // The direction is worth reading twice: `tlf_chk_*` without a suffix is the
+  // REQUEST this block makes, and `tlf_chk_ans_*` is the directory's answer
+  // coming back. They are named apart because "chk_valid" appears on both ends
+  // of this exchange with opposite meanings, and a file this long will
+  // eventually have someone match them by name.
+  wire                    tlf_chk_valid;     // the feed ASKS (a held level)
+  wire [TERR_MEMSLOT-1:0] tlf_chk_slot;
+  wire [TERR_GENW-1:0]    tlf_chk_gen;
+  wire [31:0]             tlf_chk_epoch;
+  wire                    tlf_chk_ans_valid; // the directory ANSWERS
+  wire                    tlf_chk_ans_stale;
   /* verilator lint_off UNUSEDSIGNAL */
   wire                    tlf_busy;
   // Four of the block's ten counters stop here rather than at this module's
@@ -13118,6 +13326,17 @@ module zhao_console_core
   wire [31:0]             tlf_lattices_seen, tlf_surface1_samples;
   wire [31:0]             tlf_walk_clocks, tlf_dev_clipped;
   wire [31:0]             tlf_dev_vertices, tlf_dev_lattice_reads;
+  // THE CHECK'S THREE INTERIOR COUNTERS. `handles_checked` and `handles_stale`
+  // leave this module (they are the pair a reader needs: a stale count means
+  // nothing without the checked count beside it). These three are about the
+  // EXCHANGE rather than the verdict -- how long the directory made the query
+  // wait, a commit landing while a query was still outstanding, and an answer
+  // with no query behind it. All three are structurally zero at one walk per
+  // ~9,700 clocks against a directory that answers in two, so exporting them
+  // would put three permanent zeroes on this edge; `terrain_lodpath_directed`
+  // is where they are read, and it asserts them zero against stimulus that
+  // would move them.
+  wire [31:0]             tlf_chk_unanswered_clocks, tlf_chk_overrun, tlf_chk_stray;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // The share's owner bit and the block idles: real outputs with no consumer
@@ -13452,7 +13671,7 @@ module zhao_console_core
     .job_surface_i  (terr_job_m_surface),
     .job_dual_i     (terr_job_m_dual),
     .job_src_id_i   (terr_job_m_src_id),
-    .job_view_mask_i(terr_job_view_mask_i),
+    .job_view_mask_i(terr_job_m_view_mask),
     // STILL THE BOUNDARY'S, under ruling R13 (entry I21). These three are the
     // WRONG CARRIER and their honest closure is removal, so they are not
     // invented here and not adapted from anything the issuer emits.
@@ -16835,12 +17054,24 @@ module zhao_console_core
     .wb_gen_i  (twb_rel_gen),
     .wb_epoch_i(twb_rel_epoch),
 
-    .chk_valid_i(terr_chk_valid_i),
-    .chk_slot_i (terr_chk_slot_i),
-    .chk_gen_i  (terr_chk_gen_i),
-    .chk_epoch_i(terr_chk_epoch_i),
-    .chk_valid_o(terr_chk_valid_o),
-    .chk_stale_o(terr_chk_stale_o),
+    // I27's SECOND HALF, CLOSED 2026-09-22. The caller is `u_terrain_lodfeed`
+    // -- the block entry I27 named as this port's "first honest caller" back
+    // when it had none, on the condition that `u_terrain_devstore` composed.
+    // The store composed on 2026-09-21 with the subpatch decision chain and
+    // the check did not come with it; this is that debt paid.
+    //
+    // THE SLOT NARROWS, and the argument is the same structural one the pin
+    // and unpin paths above make rather than a repetition of their conclusion:
+    // the feed's slot is whatever `u_terrain_mipfeed` published as
+    // `mg_job_slot_o`, which is the directory's own TERR_SLOTW handle
+    // zero-extended at `u_terrain_mipreq` (see its "THE SLOT NARROWS" note).
+    // Bit TERR_MEMSLOT-1 is structurally zero on that path.
+    .chk_valid_i(tlf_chk_valid),
+    .chk_slot_i (tlf_chk_slot[TERR_SLOTW-1:0]),
+    .chk_gen_i  (tlf_chk_gen),
+    .chk_epoch_i(tlf_chk_epoch),
+    .chk_valid_o(tlf_chk_ans_valid),
+    .chk_stale_o(tlf_chk_ans_stale),
 
     .hits_o              (terr_res_hits_o),
     .misses_o            (terr_res_misses_o),
@@ -18609,6 +18840,11 @@ module zhao_console_core
     .j_epoch_i (tis_epoch),
     .j_src_id_i(tis_src_id),
     .j_flags_i (tis_flags),
+    // ENTRY I21's FORWARDED FIELD, and the join is the same one `tis_flags`
+    // makes one line up: both are fields of the T5 record this job was built
+    // from, taken on the cycle the header reader ACCEPTS the job. From here
+    // they travel together and can no longer be paired with the wrong page.
+    .j_view_mask_i(tis_view_mask),
     // REAL: the record's own identity, which the header restates.  This is the
     // only consumer of `tis_island` in this module and it is what turns the
     // format's redundancy into a check instead of a comment.
@@ -18646,6 +18882,7 @@ module zhao_console_core
     .f_epoch_o (thr_f_epoch),
     .f_src_id_o(thr_f_src_id),
     .f_flags_o (thr_f_flags),
+    .f_view_mask_o(thr_f_view_mask),
 
     .headers_read_o   (terr_hr_headers_o),
     .headers_refused_o(terr_hr_refused_o),
@@ -18773,6 +19010,7 @@ module zhao_console_core
     .j_epoch_i (tpsx_j_epoch),
     .j_src_id_i(tpsx_j_src_id),
     .j_flags_i (tpsx_j_flags),
+    .j_view_mask_i(tpsx_j_view_mask),
 
     // I26, extended: requester B of the one guard read client.  This used to
     // reach the module edge directly; from 2026-09-19 it reaches it through
@@ -18802,6 +19040,7 @@ module zhao_console_core
     .v_epoch_o (tps_v_epoch),
     .v_src_id_o(tps_v_src_id),
     .v_flags_o (tps_v_flags),
+    .v_view_mask_o(tps_v_view_mask),
 
     // REAL: one job, one completion, and the completion is the UNPIN.
     .done_valid_o  (tpsx_done_valid),
@@ -20848,6 +21087,7 @@ module zhao_console_core
     .a_j_epoch_i (thr_f_epoch),
     .a_j_src_id_i(thr_f_src_id),
     .a_j_flags_i (thr_f_flags),
+    .a_j_view_mask_i(thr_f_view_mask),
     .a_v_valid_o (tps_v_valid),
     .a_v_ready_i (tps_v_ready),
     // The compose pass's completion IS the unpin -- entry I27's closed half.
@@ -20873,6 +21113,7 @@ module zhao_console_core
     .b_j_epoch_i (ps2_p_j_epoch),
     .b_j_src_id_i(ps2_p_j_src_id),
     .b_j_flags_i (ps2_p_j_flags),
+    .b_j_view_mask_i(ps2_p_j_view_mask),
     .b_v_valid_o (ps2_p_v_valid),
     .b_v_ready_i (ps2_p_v_ready),
     .b_done_valid_o(ps2_p_done_valid),
@@ -20886,6 +21127,7 @@ module zhao_console_core
     .p_j_epoch_o (tpsx_j_epoch),
     .p_j_src_id_o(tpsx_j_src_id),
     .p_j_flags_o (tpsx_j_flags),
+    .p_j_view_mask_o(tpsx_j_view_mask),
     .p_v_valid_i (tpsx_v_valid),
     .p_v_ready_o (tpsx_v_ready),
     .p_done_valid_i(tpsx_done_valid),
@@ -20917,6 +21159,7 @@ module zhao_console_core
   wire [TERR_GENW-1:0]  ps2_p_j_gen;
   wire [31:0]           ps2_p_j_epoch, ps2_p_j_src_id;
   wire [15:0]           ps2_p_j_flags;
+  wire [7:0]            ps2_p_j_view_mask;
   wire                  ps2_p_v_valid, ps2_p_v_ready;
   wire                  ps2_p_done_valid, ps2_p_done_ready;
   /* verilator lint_off UNUSEDSIGNAL */
@@ -20943,6 +21186,11 @@ module zhao_console_core
     // dual-surface page, so `kFlagDual` has to survive the share. The flags
     // come from TERRAIN.HDRREAD's forwarded job, carried by TERRAIN.BAKEREC.
     .a_j_flags_i (ps2_a_j_flags),
+    // TIED, AND NOT FOR THE FLAGS' REASON. The bake's lattice pass reads a
+    // page to DIG it; it never reaches the compose door, so no consumer of
+    // this mask is downstream of this client. A passthrough would be carrying
+    // a value to a place it cannot arrive.
+    .a_j_view_mask_i(8'd0),
     .a_v_valid_o (ps2_a_v_valid),
     .a_v_ready_i (ps2_a_v_ready),
     .a_done_valid_o(ps2_a_done_valid),
@@ -20962,6 +21210,10 @@ module zhao_console_core
     // worse than this zero, which says plainly that nothing on this path wants
     // them.
     .b_j_flags_i (16'd0),
+    // TIED, same argument, and here it is the block's own: MIPGEN decimates
+    // heights, TERRAIN.MIPFEED has no view-mask port, and the mip pass never
+    // opens the compose door either.
+    .b_j_view_mask_i(8'd0),
     .b_v_valid_o (tmf_v_valid),
     .b_v_ready_i (tmf_v_ready),
     .b_done_valid_o(tmf_done_valid),
@@ -20975,6 +21227,7 @@ module zhao_console_core
     .p_j_epoch_o (ps2_p_j_epoch),
     .p_j_src_id_o(ps2_p_j_src_id),
     .p_j_flags_o (ps2_p_j_flags),
+    .p_j_view_mask_o(ps2_p_j_view_mask),
     .p_v_valid_i (ps2_p_v_valid),
     .p_v_ready_o (ps2_p_v_ready),
     .p_done_valid_i(ps2_p_done_valid),
@@ -21203,6 +21456,7 @@ module zhao_console_core
   zhao_terrain_lodfeed #(
     .SLOTW               (TERR_MEMSLOT),
     .EDGE                (33),
+    .GENW                (TERR_GENW),
     .DEV_INCLUDE_BOUNDARY(1'b1)          // owner ruling R22: the MESH reading
   ) u_terrain_lodfeed (
     .clk  (gpu_clk),
@@ -21210,6 +21464,17 @@ module zhao_console_core
 
     .f_start_i (tmg_start),
     .f_slot_i  (tmg_job_slot),
+    // THE OTHER TWO THIRDS OF THE HANDLE, AND THEY ARE ONE FACT WITH THE SLOT
+    // RATHER THAN THREE WIRES THAT HAPPEN TO AGREE. `u_terrain_mipfeed`
+    // publishes `mg_job_slot_o`, `mg_job_gen_o` and `mg_job_epoch_o` together
+    // on the cycle it raises `mg_start_o`, and `u_terrain_mipgen` above takes
+    // all three off that same pulse. Taking the slot from there and the
+    // generation from anywhere else -- the directory's live record, the
+    // loader's completion -- would be the two-unsynchronised-walkers join this
+    // file keeps paying for, and the handle check would then be differencing
+    // the wrong pair.
+    .f_gen_i   (tmg_job_gen),
+    .f_epoch_i (tmg_job_epoch),
     .f_src_id_i(tmf_ps_src_id[15:0]),
     .f_valid_i (tmg_fine_valid && tmg_fine_ready),
     .f_h_i     (tmg_fine_h),
@@ -21226,6 +21491,23 @@ module zhao_console_core
 
     .inv_valid_o(tlf_inv_valid),
     .inv_slot_o (tlf_inv_slot),
+
+    // ---- ENTRY I27's SECOND HALF, CLOSED HERE ----------------------------
+    // The request goes UP the file to `u_terrain_residency_v2`; the answer
+    // comes back down. See the wire declarations for why the two directions
+    // are named apart.
+    .chk_valid_o(tlf_chk_valid),
+    .chk_slot_o (tlf_chk_slot),
+    .chk_gen_o  (tlf_chk_gen),
+    .chk_epoch_o(tlf_chk_epoch),
+    .chk_valid_i(tlf_chk_ans_valid),
+    .chk_stale_i(tlf_chk_ans_stale),
+
+    .handles_checked_o      (terr_lodfeed_handles_checked_o),
+    .handles_stale_o        (terr_lodfeed_handles_stale_o),
+    .chk_unanswered_clocks_o(tlf_chk_unanswered_clocks),
+    .chk_overrun_o          (tlf_chk_overrun),
+    .chk_stray_o            (tlf_chk_stray),
 
     .lattices_seen_o    (tlf_lattices_seen),
     .lattices_walked_o  (terr_lodfeed_lattices_walked_o),
@@ -21312,6 +21594,18 @@ module zhao_console_core
   // in THIS composition, not in either block, and that is the reading to take
   // if it is ever seen.
   wire tdoor_push_c = tcc_fill_accept;
+
+  // ---- THE VIEW MASK IS NOT NARROWED HERE, AND THAT IS THE POINT ----------
+  // `zhao_terrain_jobissue` takes all EIGHT bits of the page's record and
+  // discards [7:2] itself, counting on `view_mask_high_o`. The first writing
+  // of this composition did the narrowing here instead, on the reasoning the
+  // block's own port comment used to give -- and it was wrong for a reason
+  // worth keeping: THE COUNTER COULD NOT BE FIRED. Every terrain page the
+  // console smoke plays fails its CRC, so `tdoor_push_c` never rises in it and
+  // no legal stimulus in this module's own bench can reach a counter placed
+  // here. It would have read zero for ever, and a zero nobody can move is not
+  // evidence about anything. `terrain_jobissue_directed` fires it, with a
+  // negative control.
 
   // THE NARROWING GUARD for the two slot ports below. `initial begin ... end`
   // and not a module-scope `if`: Quartus 17.0 rejects the latter (CLAUDE.md,
@@ -21543,6 +21837,13 @@ module zhao_console_core
   wire        terr_job_m_surface = terr_job_valid_i ? terr_job_surface_i: tji_job_surface;
   wire        terr_job_m_dual    = terr_job_valid_i ? terr_job_dual_i   : tji_job_dual;
   wire [15:0] terr_job_m_src_id  = terr_job_valid_i ? terr_job_src_id_i : tji_job_src_id;
+  // JOINS THE OVERRIDE 2026-09-22. It used to reach the sequencer straight
+  // from the boundary, because the issuer had nothing to put there; now the
+  // issuer carries the page's own mask and the boundary is an override like
+  // the other twelve. The smoke bench's injected job still wins the cycle, so
+  // the six assertions standing on that injection are untouched.
+  wire [ 1:0] terr_job_m_view_mask =
+      terr_job_valid_i ? terr_job_view_mask_i : tji_job_view_mask;
   wire        terr_job_m_ready;
   // DECLARED, not implicit. `tji_job_ready` is the LHS of the assign below and
   // was an implicit net until 2026-09-21: Verilator inferred the right 1-bit
@@ -22034,12 +22335,15 @@ module zhao_console_core
     .ctx_valid_i      (tdoor_push_c),
     .ctx_ready_o      (tji_ctx_ready),
     .ctx_src_id_i     (tps_v_src_id[15:0]),
-    // STILL THE BOUNDARY'S, and the port comment at the top of this module
-    // says exactly what build would change that: one more forwarded field on
-    // HDRREAD / PSMUX / PAGESTREAM, beside `flags`. It travels through the
-    // context queue rather than straight to the sequencer, so it now arrives
-    // JOINED to the patch it describes even while its source is static.
-    .ctx_view_mask_i  (terr_job_view_mask_i),
+    // THE BUILD LANDED 2026-09-22. This is no longer the boundary's: it is the
+    // PAGE's own view mask, off the vertex beat, narrowed once above. The
+    // three blocks entry I21 named -- HDRREAD, PSMUX, PAGESTREAM -- now carry
+    // `view_mask:u8` beside `flags:u16`, so the mask reaching this queue is a
+    // field of the record this patch was made from rather than whatever
+    // TERRAIN.SEQ happens to be presenting. It is captured on the SAME pulse
+    // as `ctx_src_id_i`, off the same held job, which is what makes the pair a
+    // join and not two wires that agree.
+    .ctx_view_mask_i  (tps_v_view_mask),
     .ctx_sparse_fill_i(terr_sparse_fill_i),
 
     .serve_valid_i  (terr_cc_serve_valid_o),
@@ -22090,6 +22394,7 @@ module zhao_console_core
     .serve_no_ctx_o        (terr_ji_serve_no_ctx_o),
     .ctx_src_mismatch_o    (terr_ji_ctx_src_mismatch_o),
     .lod_src_mismatch_o    (terr_ji_lod_src_mismatch_o),
+    .view_mask_high_o      (terr_ji_view_mask_high_o),
     .decision_wait_clocks_o(tji_decision_wait),
     .issue_clocks_o        (tji_issue_clocks),
     .busy_o                (tji_busy)
@@ -22132,6 +22437,17 @@ module zhao_console_core
   // `terr_chk_*`, is untouched. Its first honest caller is
   // lodfeed-with-the-devstore and the lodfeed does not key on the store yet.
   // The two halves of I27 have different roots and only one of them is here.
+  //
+  // ^^ THE LAST TWO SENTENCES WERE ALREADY FALSE WHEN THEY WERE WRITTEN, and
+  // the correction is kept beside them rather than replacing them because the
+  // mistake is the instructive part. The devstore's WRITE PORT IS THE
+  // LODFEED'S, keyed by slot, composed by the very packet whose note this is
+  // (`u_terrain_devstore.w_slot_i` is `tlf_w_slot`, a few hundred lines below).
+  // "The lodfeed does not key on the store" was a statement about the BLOCK --
+  // true, it holds no reference to the store -- offered as a statement about
+  // the CONSOLE, where the join had just been made. I27's condition was met by
+  // the commit that denied it, and the entry then sat open for a day.
+  // CLOSED 2026-09-22 (gz/terrclose); see the closure at the head of I27.
   // ==========================================================================
 
   // ---- the record producer's wires ----------------------------------------

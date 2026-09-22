@@ -1602,23 +1602,39 @@ module zhao_console_board
   input  logic                    terr_job_dual_i,
   input  logic [15:0]             terr_job_src_id_i,
   //
-  // THE VIEW MASK STAYS, AND IT IS THE ONE HONEST REMAINDER OF THE JOB PORT.
-  // `zhao_terrain_jobissue` takes it at the COMPOSE DOOR, beside the page's
-  // slot and source id, and carries it to the sequencer joined to the patch it
-  // describes -- which is strictly better than today, where it reached the
-  // sequencer on its own. What it still is NOT is per-patch, because NOTHING
-  // CARRIES A VIEW MASK ALONGSIDE A PAGE: `zhao_terrain_seq` emits
-  // `is_view_mask_o` at job issue, and `zhao_terrain_hdrread`,
-  // `zhao_terrain_psmux` and `zhao_terrain_pagestream` forward `flags:u16`,
-  // `slot`, `gen`, `epoch` and `src_id` between them and no mask. Latching
-  // `tis_view_mask` live at the door would join two things that move
-  // independently, which is entry I21's own objection and still correct; and
-  // a src_id-keyed side queue desyncs permanently the first time a page is
-  // refused after issue (a bad pitch, a guard denial, a short burst), so its
-  // identity check would fire once and then be wrong forever. THE BUILD THIS
-  // WANTS is one more forwarded field on those three blocks, beside `flags`.
-  // Named here rather than adapted around.
+  // THE VIEW MASK IS NO LONGER A REMAINDER. **THE BUILD LANDED 2026-09-22
+  // (gz/terrclose)** and it is the build entry I21 named rather than a way
+  // around it: `zhao_terrain_hdrread`, `zhao_terrain_psmux` and
+  // `zhao_terrain_pagestream` now forward `view_mask:u8` BESIDE `flags:u16`,
+  // so the mask arrives on the vertex beat, off the same held job as the slot,
+  // the source id and the flags. `u_terrain_jobissue` takes it from there.
+  //
+  // THE TWO SHORTCUTS THIS ENTRY REFUSED ARE STILL REFUSED, and the build is
+  // neither of them. Latching `tis_view_mask` live at the door would pair page
+  // N's mask with page M's lattice -- the header reader accepts a job, spends
+  // a burst, and only then forwards it, so the two move independently. A
+  // src_id-keyed side queue desyncs permanently the first time a page is
+  // refused after issue. Carrying the field makes the question not arise.
+  //
+  // THIS PORT REMAINS AS AN OVERRIDE, on the same footing as the twelve job
+  // fields beside it and for the reason entry I21 item (5) records: the smoke
+  // bench injects one subpatch job here and SIX assertions stand on that
+  // injection, because every terrain page the smoke plays fails its CRC and
+  // the internal producer therefore never opens. Deleting the port would move
+  // the register by nothing and cost all six. It is a boundary the composition
+  // WINS when it is idle, which is every configuration but a bench.
   input  logic [1:0]              terr_job_view_mask_i,
+  // THE NARROWING'S COUNTER, from `zhao_terrain_jobissue`. The record's mask
+  // is EIGHT bits and the sequencer's is TWO, and bits [7:2] have no ratified
+  // meaning anywhere -- not in `spec/commands.zidl`, not in ruling T5, not in
+  // `spec/video_rules.md` 3.1, and not in the golden model, which accumulates
+  // two view bits and tests `== 0x3`. Entry I21 left the decision to whoever
+  // composed the consumer: they are IGNORED rather than refused, because
+  // refusing a patch over an absence would drop legal content, and they are
+  // COUNTED, because the day a third view is ratified the discard stops being
+  // harmless. The count is taken inside the block rather than in this composer
+  // so that a directed test can FIRE it; see that block's port comment.
+  output logic [31:0]             terr_ji_view_mask_high_o,
   // THE THREE THAT STAY ARE NOT AN OVERSIGHT AND MUST NOT BE WIRED. Ruling
   // R13 rules `mat_a`, `mat_b` and `weight` the WRONG CARRIER: their honest
   // closure is REMOVAL once a per-triangle layer-E path exists inside TESS,
@@ -1695,27 +1711,28 @@ module zhao_console_board
   output logic [31:0]             terr_bsock_retire_unowned_o,
   output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
-  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  // ---- I27 IS CLOSED. Both halves, and they closed a day apart -------------
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
   //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
   //      and TERRAIN.PLACE inside this module, and the streamer's own completion
-  //      is what unpins the page.  What is left here is the deformation mark,
-  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
-  //      caller is the same absent subpatch issuer as entry I21.
-  // I27's DEFORMATION-MARK HALF CLOSED 2026-09-21: `u_terrain_pageio` holds
-  // the slot, the generation and the epoch the patch was served under, learns
-  // from `bake_done_i` that the record retired, and drives the directory
-  // directly. The eight ports are GONE from this edge rather than driven from
-  // it. THE HANDLE CHECK (`terr_chk_*`) BELOW IS UNCHANGED and is NOT closed
-  // by this: its first honest caller is lodfeed-with-the-devstore, and the
-  // devstore is composed but the lodfeed does not key on it yet.
-
-  input  logic                    terr_chk_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_chk_gen_i,
-  input  logic [31:0]             terr_chk_epoch_i,
-  output logic                    terr_chk_valid_o,
-  output logic                    terr_chk_stale_o,
+  //      is what unpins the page.
+  //      The DEFORMATION MARK left it on 2026-09-21 -- `u_terrain_pageio` holds
+  //      the slot, generation and epoch the patch was served under and drives
+  //      the directory directly; eight ports went with it.
+  //      THE HANDLE CHECK (`terr_chk_*`) LEFT IT 2026-09-22, and its caller is
+  //      the one entry I27 named in advance: `u_terrain_lodfeed`, now that
+  //      `u_terrain_devstore` is composed beneath it. Six more ports are gone.
+  //      What crosses this edge instead is the check's EVIDENCE, below.
+  //
+  //      THE CHECK IS NOT A NAME MATCH AND THE TWO SIDES ARE NOT IN LOCKSTEP,
+  //      which is the property this file requires of a detector before quoting
+  //      it: the request carries the handle `u_terrain_lodfeed` held across its
+  //      own ~9,700-clock walk, and the answer is read out of
+  //      `u_terrain_residency_v2`'s key RAM, written by the directory's
+  //      claim/evict FSM. No enable drives both, so a slot that is evicted and
+  //      reused mid-walk moves ONE of them and the difference is visible.
+  output logic [31:0]             terr_lodfeed_handles_checked_o,
+  output logic [31:0]             terr_lodfeed_handles_stale_o,
 
   // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
   // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
@@ -4284,6 +4301,7 @@ module zhao_console_board
       .terr_job_dual_i                    (terr_job_dual_i),
       .terr_job_src_id_i                  (terr_job_src_id_i),
       .terr_job_view_mask_i               (terr_job_view_mask_i),
+      .terr_ji_view_mask_high_o           (terr_ji_view_mask_high_o),
       .terr_job_mat_a_i                   (terr_job_mat_a_i),
       .terr_job_mat_b_i                   (terr_job_mat_b_i),
       .terr_job_weight_i                  (terr_job_weight_i),
@@ -4310,12 +4328,8 @@ module zhao_console_board
       .terr_bsock_contention_o            (terr_bsock_contention_o),
       .terr_bsock_retire_unowned_o        (terr_bsock_retire_unowned_o),
       .terr_bsock_wbeat_unowned_o         (terr_bsock_wbeat_unowned_o),
-      .terr_chk_valid_i                   (terr_chk_valid_i),
-      .terr_chk_slot_i                    (terr_chk_slot_i),
-      .terr_chk_gen_i                     (terr_chk_gen_i),
-      .terr_chk_epoch_i                   (terr_chk_epoch_i),
-      .terr_chk_valid_o                   (terr_chk_valid_o),
-      .terr_chk_stale_o                   (terr_chk_stale_o),
+      .terr_lodfeed_handles_checked_o     (terr_lodfeed_handles_checked_o),
+      .terr_lodfeed_handles_stale_o       (terr_lodfeed_handles_stale_o),
       .terr_cfg_journal_base_i            (terr_cfg_journal_base_i),
       .terr_cfg_journal_bytes_i           (terr_cfg_journal_bytes_i),
       .terr_jdb_post_valid_i              (terr_jdb_post_valid_i),

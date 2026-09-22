@@ -2467,6 +2467,11 @@ blocks:
       TERRAIN.PAGESTREAM's push to its pull, and the stamp_results to cmd_*
       record seam that entry I32 is actually about. I27 gains a writer for
       terr_dm_*, which is its first half; the terr_chk_* half is untouched.
+      (I27's terr_chk_* half CLOSED 2026-09-22 (gz/terrclose), by a different
+      caller entirely: zhao_terrain_lodfeed, which holds a page's residency
+      handle across its ~9,700-clock deviation walk while zhao_terrain_devstore
+      files that walk's records BY SLOT. Nothing about this block. The sentence
+      above stands as written -- it was about TERRAIN.PAGEIO and it was right.)
       I28 is already closed (rulings R14 and R4) and merely has never seen a
       beat, because nothing in the machine can dirty a page.
 

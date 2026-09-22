@@ -657,10 +657,62 @@ int main(int argc, char** argv) {
     check_eq(r.t.busy_o, 0u, "11 busy_o low once the queue drains");
   }
 
+  // ========================================================================
+  // 12. THE 8 -> 2 VIEW-MASK NARROWING, AND ITS COUNTER FIRED
+  //
+  //     `zhao_terrain_pagestream` forwards T5's `view_mask:u8` whole (core
+  //     entry I21), so this port sees eight bits and discards [7:2].  Entry
+  //     I21 left the disposition of those bits to whoever composed the
+  //     consumer and required the discard to be COUNTED.
+  //
+  //     BOTH DIRECTIONS ARE ASSERTED, because a counter that fired on every
+  //     context would also "fire": a ratified two-bit mask must leave it
+  //     FLAT, and a mask with a high bit must move it by exactly one.  And the
+  //     job must still be ISSUED with the low two bits -- the bits are
+  //     ignored, not refused, which is the decision and not an accident.
+  //
+  //     This counter is here and not in `zhao_console_core` for a stated
+  //     reason: the console smoke fails the CRC of every terrain page it
+  //     plays, so the compose door never opens in it and a counter placed
+  //     there could not be fired by any legal stimulus.  It would have read
+  //     zero for ever.
+  // ========================================================================
+  {
+    Rig r;
+    r.reset();
+
+    // -- the negative control: a ratified mask moves nothing --------------
+    r.push_ctx(0xC0DEu, 0x3u, 0u);
+    r.serve(0xC0DEu);
+    for (const Dec& d : patch_decisions(0xC0DEu, false)) r.offer(d);
+    r.idle(4);
+    check_eq(r.t.view_mask_high_o, 0u, "12 a ratified two-bit mask leaves the counter FLAT");
+    const uint32_t jobs_a = static_cast<uint32_t>(r.jobs.size());
+    check_true(jobs_a > 0, "12 the ratified patch issued");
+    check_eq(r.jobs[jobs_a - 1].view_mask, 0x3u, "12 ... carrying both views");
+    r.unserve();
+    r.idle(4);
+
+    // -- the positive control: a bit this console has no view for ---------
+    // 0xF1 is views {0} plus four bits no ratified document gives a meaning.
+    r.push_ctx(0xC0DFu, 0xF1u, 0u);
+    check_eq(r.t.view_mask_high_o, 1u, "12 view_mask_high_o FIRES on an unratified view bit");
+    r.serve(0xC0DFu);
+    for (const Dec& d : patch_decisions(0xC0DFu, false)) r.offer(d);
+    r.idle(4);
+    const uint32_t jobs_b = static_cast<uint32_t>(r.jobs.size());
+    check_true(jobs_b > jobs_a, "12 the patch is ISSUED anyway -- ignored, not refused");
+    check_eq(r.jobs[jobs_b - 1].view_mask, 0x1u, "12 ... with the low two bits only");
+    check_eq(r.t.view_mask_high_o, 1u, "12 the counter counts CONTEXTS, not jobs");
+    r.unserve();
+    r.idle(4);
+  }
+
   if (failures == 0) {
     std::printf(
         "PASS terrain_jobissue_directed -- %d checks: the thirteen-field job, the view mask "
-        "riding it, the both-sinks fork, the late release, five fault counters each FIRED "
+        "riding it, the 8 -> 2 narrowing with its counter fired AND shown flat, the "
+        "both-sinks fork, the late release, six fault counters each FIRED "
         "and each shown silent beside it, and two clock instruments\n",
         checks);
     zhao::exit_hard(0);

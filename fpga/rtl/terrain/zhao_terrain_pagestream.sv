@@ -164,6 +164,21 @@ module zhao_terrain_pagestream
     // has no opinion about what any of them mean; a streamer that decided which
     // flags mattered would be a second place the record's meaning lives.
     input  var logic [15:0]      j_flags_i,
+    // ---- THE PATCH'S VIEW MASK, RIDING THE JOB -- core entry I21 -----------
+    // T5's `SubmitTerrainSet.view_mask:u8`, carried BESIDE `flags` and for the
+    // same reason `flags` is carried: it is a field of the record this job was
+    // made from, it describes THIS page, and the block that will consume it is
+    // downstream of the streamer.  This block INTERPRETS NO BIT OF IT, exactly
+    // as it interprets no bit of `flags`.
+    //
+    // WHY IT RIDES AT ALL, since a mask that is static per frame looks like it
+    // could be read live at the far end.  Entry I21 refused that in writing:
+    // the compose door's own `is_view_mask_o` and the patch the cache serves
+    // "move independently", because the header reader accepts a job, spends a
+    // burst, and only then forwards it -- by which time TERRAIN.SEQ may be
+    // presenting the next patch.  A live read would pair page N's mask with
+    // page M's lattice, with every handshake and every counter agreeing.
+    input  var logic [7:0]       j_view_mask_i,
 
     // ---- MEM.GUARD read client ------------------------------------------------
     output var zhao_guard_req_t guard_req_o,
@@ -213,6 +228,11 @@ module zhao_terrain_pagestream
     output var logic [31:0]         v_epoch_o,
     output var logic [31:0]         v_src_id_o,
     output var logic [15:0]         v_flags_o,
+    // The job's view mask, on the SAME vertex beat as `v_flags_o`, `v_slot_o`
+    // and `v_src_id_o`.  That is what makes it a JOIN rather than a
+    // coincidence: whoever captures the compose door captures all four on one
+    // handshake, off one held job.
+    output var logic [7:0]          v_view_mask_o,
 
     // ---- completion -----------------------------------------------------------
     // ONE JOB, ONE COMPLETION, ALWAYS -- the rule TERRAIN.PAGELOADER's contract
@@ -297,6 +317,7 @@ module zhao_terrain_pagestream
   logic [GENW-1:0]  job_gen_q;
   logic [31:0]      job_epoch_q, job_src_q;
   logic [15:0]      job_flags_q;
+  logic [7:0]       job_view_mask_q;
   logic [31:0]      page_base_q;   // byte address of the slot's page
 
   // ---- the three cursors ---------------------------------------------------
@@ -408,6 +429,7 @@ module zhao_terrain_pagestream
   assign v_epoch_o  = job_epoch_q;
   assign v_src_id_o = job_src_q;
   assign v_flags_o  = job_flags_q;
+  assign v_view_mask_o = job_view_mask_q;
 
   assign done_valid_o   = (state_q == S_DONE);
   assign done_slot_o    = job_slot_q;
@@ -444,6 +466,7 @@ module zhao_terrain_pagestream
       job_epoch_q         <= 32'd0;
       job_src_q           <= 32'd0;
       job_flags_q         <= 16'd0;
+      job_view_mask_q     <= 8'd0;
       page_base_q         <= 32'd0;
       vidx_q              <= '0;
       vi_q                <= 6'd0;
@@ -473,6 +496,7 @@ module zhao_terrain_pagestream
             job_epoch_q <= j_epoch_i;
             job_src_q   <= j_src_id_i;
             job_flags_q <= j_flags_i;
+            job_view_mask_q <= j_view_mask_i;
             page_base_q <= 32'(REGION_BASE) + slot_scaled(j_slot_i);
             vidx_q      <= '0;
             vi_q        <= 6'd0;

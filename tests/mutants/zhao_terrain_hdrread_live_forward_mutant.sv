@@ -71,6 +71,7 @@ module zhao_terrain_hdrread_live_forward_mutant
     input  var logic [31:0]      j_epoch_i,
     input  var logic [31:0]      j_src_id_i,
     input  var logic [15:0]      j_flags_i,
+    input  var logic [7:0]       j_view_mask_i,
     // The record's own identity, for the header's corruption check. These are
     // what the header is compared AGAINST; they are never forwarded in place of
     // what the page says.
@@ -108,6 +109,7 @@ module zhao_terrain_hdrread_live_forward_mutant
     output var logic [31:0]      f_epoch_o,
     output var logic [31:0]      f_src_id_o,
     output var logic [15:0]      f_flags_o,
+    output var logic [7:0]       f_view_mask_o,
 
     // ---- counters -------------------------------------------------------------
     output var logic [31:0] headers_read_o,      // a header returned and passed
@@ -177,6 +179,7 @@ module zhao_terrain_hdrread_live_forward_mutant
   logic [GENW-1:0]  job_gen_q;
   logic [31:0]      job_epoch_q, job_src_q;
   logic [15:0]      job_flags_q;
+  logic [7:0]       job_view_mask_q;
   logic [31:0]      job_island_q;
   logic signed [15:0] job_ix_q, job_iz_q;
   logic [ZHAO_VRAM_ADDR_BITS-1:0] page_base_q;
@@ -241,6 +244,11 @@ module zhao_terrain_hdrread_live_forward_mutant
   assign f_epoch_o  = j_epoch_i;   // MUTATION
   assign f_src_id_o = j_src_id_i;  // MUTATION
   assign f_flags_o  = j_flags_i;   // MUTATION
+  // NOT MUTATED. The mutation is the five fields this file's header names, and
+  // widening it to a sixth would make the control measure something bigger
+  // than the defect it is the control for. The view mask is latched here
+  // exactly as production latches it.
+  assign f_view_mask_o = job_view_mask_q;
 
   wire pre_slot_bad_c  = (32'({{(32-SLOTW){1'b0}}, j_slot_i}) >= 32'(REGION_SLOTS));
   wire pre_epoch_bad_c = (j_epoch_i != cfg_epoch_i);
@@ -258,6 +266,7 @@ module zhao_terrain_hdrread_live_forward_mutant
       job_epoch_q       <= 32'd0;
       job_src_q         <= 32'd0;
       job_flags_q       <= 16'd0;
+      job_view_mask_q   <= 8'd0;
       job_island_q      <= 32'd0;
       job_ix_q          <= 16'sd0;
       job_iz_q          <= 16'sd0;
@@ -286,6 +295,7 @@ module zhao_terrain_hdrread_live_forward_mutant
             job_epoch_q  <= j_epoch_i;
             job_src_q    <= j_src_id_i;
             job_flags_q  <= j_flags_i;
+            job_view_mask_q <= j_view_mask_i;
             job_island_q <= j_island_i;
             job_ix_q     <= j_ix_i;
             job_iz_q     <= j_iz_i;

@@ -12,6 +12,7 @@
 
 module tb_terrain_lodpath #(
     parameter int unsigned SLOTW = 4,          // 16 slots is plenty for a bench
+    parameter int unsigned GENW  = 8,
     parameter bit DEV_INCLUDE_BOUNDARY = 1'b1  // owner ruling R22
 ) (
     input  var logic clk,
@@ -20,9 +21,30 @@ module tb_terrain_lodpath #(
     // ---- the mip pass, played by the bench --------------------------------
     input  var logic               f_start_i,
     input  var logic [SLOTW-1:0]   f_slot_i,
+    input  var logic [GENW-1:0]    f_gen_i,
+    input  var logic [31:0]        f_epoch_i,
     input  var logic [15:0]        f_src_id_i,
     input  var logic               f_valid_i,
     input  var logic signed [15:0] f_h_i,
+
+    // ---- THE DIRECTORY, PLAYED BY THE BENCH -------------------------------
+    // `zhao_terrain_residency_v2` is not instantiated here on purpose.  What
+    // has to be shown is that the FEED asks with the handle it walked under
+    // and acts on the verdict; a real directory would make the verdict an
+    // outcome of a page-eviction sequence and bury the thing under test.  The
+    // directory's own answer is proved by `terrain_residency_directed`.
+    output var logic               chk_valid_o,
+    output var logic [SLOTW-1:0]   chk_slot_o,
+    output var logic [GENW-1:0]    chk_gen_o,
+    output var logic [31:0]        chk_epoch_o,
+    input  var logic               chk_valid_i,
+    input  var logic               chk_stale_i,
+
+    output var logic [31:0] handles_checked_o,
+    output var logic [31:0] handles_stale_o,
+    output var logic [31:0] chk_unanswered_clocks_o,
+    output var logic [31:0] chk_overrun_o,
+    output var logic [31:0] chk_stray_o,
 
     // ---- the store's read side, driven by the bench -----------------------
     input  var logic             r_start_i,
@@ -91,6 +113,7 @@ module tb_terrain_lodpath #(
   zhao_terrain_lodfeed #(
     .SLOTW               (SLOTW),
     .EDGE                (33),
+    .GENW                (GENW),
     .DEV_INCLUDE_BOUNDARY(DEV_INCLUDE_BOUNDARY)
   ) u_feed (
     .clk  (clk),
@@ -98,6 +121,8 @@ module tb_terrain_lodpath #(
 
     .f_start_i (f_start_i),
     .f_slot_i  (f_slot_i),
+    .f_gen_i   (f_gen_i),
+    .f_epoch_i (f_epoch_i),
     .f_src_id_i(f_src_id_i),
     .f_valid_i (f_valid_i),
     .f_h_i     (f_h_i),
@@ -114,6 +139,19 @@ module tb_terrain_lodpath #(
 
     .inv_valid_o(inv_valid),
     .inv_slot_o (inv_slot),
+
+    .chk_valid_o(chk_valid_o),
+    .chk_slot_o (chk_slot_o),
+    .chk_gen_o  (chk_gen_o),
+    .chk_epoch_o(chk_epoch_o),
+    .chk_valid_i(chk_valid_i),
+    .chk_stale_i(chk_stale_i),
+
+    .handles_checked_o      (handles_checked_o),
+    .handles_stale_o        (handles_stale_o),
+    .chk_unanswered_clocks_o(chk_unanswered_clocks_o),
+    .chk_overrun_o          (chk_overrun_o),
+    .chk_stray_o            (chk_stray_o),
 
     .lattices_seen_o    (lattices_seen_o),
     .lattices_walked_o  (lattices_walked_o),

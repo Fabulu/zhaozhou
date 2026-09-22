@@ -147,6 +147,7 @@ module zhao_pair_pagestream_patch
   logic [GENW-1:0]    ps_gen;
   logic [31:0]        ps_epoch, ps_src_id;
   logic [15:0]        ps_flags;
+  logic [ 7:0]        ps_view_mask;
   logic               ps_j_ready, ps_idle;
   logic               ps_done_valid, ps_done_ok;
   logic [SLOTW-1:0]   ps_done_slot;
@@ -169,6 +170,10 @@ module zhao_pair_pagestream_patch
       .j_epoch_i        (stim_q),
       .j_src_id_i       (stim_q),
       .j_flags_i        (stim_q[15:0]),
+      // Entry I21's forwarded field.  Driven from the stimulus register like
+      // every other job field of this pair, so the added flops are real in the
+      // fit rather than constant-folded away.
+      .j_view_mask_i    (stim_q[23:16]),
       .guard_req_o      (guard_req_w),
       .guard_rsp_i      (guard_rsp_q),
       .beat_valid_i     (beat_valid_q),
@@ -188,6 +193,7 @@ module zhao_pair_pagestream_patch
       .v_epoch_o        (ps_epoch),
       .v_src_id_o       (ps_src_id),
       .v_flags_o        (ps_flags),
+      .v_view_mask_o    (ps_view_mask),
       .done_valid_o     (ps_done_valid),
       .done_ready_i     (1'b1),
       .done_slot_o      (ps_done_slot),
@@ -301,6 +307,7 @@ module zhao_pair_pagestream_patch
               ^ {21'd0, ps_done_slot}    ^ {24'd0, ps_done_gen}
               ^ {21'd0, ps_slot}         ^ {24'd0, ps_gen}
               ^ {26'd0, ps_vi}           ^ {26'd0, ps_vj}
+              ^ {24'd0, ps_view_mask}
               ^ {16'd0, ps_flags}
               ^ ps_epoch ^ ps_src_id ^ ps_done_epoch ^ ps_done_src
               ^ ps_lat_str ^ ps_lat_ref ^ ps_vtx_str ^ ps_bursts

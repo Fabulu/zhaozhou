@@ -105,6 +105,21 @@ module zhao_terrain_psmux #(
     input  var logic [31:0]      a_j_epoch_i,
     input  var logic [31:0]      a_j_src_id_i,
     input  var logic [15:0]      a_j_flags_i,
+    // ---- THE PATCH'S VIEW MASK, RIDING THE JOB -- core entry I21 -----------
+    // T5's `SubmitTerrainSet.view_mask:u8`, carried BESIDE `flags` and for the
+    // same reason `flags` is carried: it is a field of the record this job was
+    // made from, it describes THIS page, and the block that will consume it is
+    // downstream of the streamer.  This block INTERPRETS NO BIT OF IT, exactly
+    // as it interprets no bit of `flags`.
+    //
+    // WHY IT RIDES AT ALL, since a mask that is static per frame looks like it
+    // could be read live at the far end.  Entry I21 refused that in writing:
+    // the compose door's own `is_view_mask_o` and the patch the cache serves
+    // "move independently", because the header reader accepts a job, spends a
+    // burst, and only then forwards it -- by which time TERRAIN.SEQ may be
+    // presenting the next patch.  A live read would pair page N's mask with
+    // page M's lattice, with every handshake and every counter agreeing.
+    input  var logic [7:0]       a_j_view_mask_i,
 
     output var logic             a_v_valid_o,
     input  var logic             a_v_ready_i,
@@ -121,6 +136,7 @@ module zhao_terrain_psmux #(
     input  var logic [31:0]      b_j_epoch_i,
     input  var logic [31:0]      b_j_src_id_i,
     input  var logic [15:0]      b_j_flags_i,
+    input  var logic [7:0]       b_j_view_mask_i,
 
     output var logic             b_v_valid_o,
     input  var logic             b_v_ready_i,
@@ -137,6 +153,7 @@ module zhao_terrain_psmux #(
     output var logic [31:0]      p_j_epoch_o,
     output var logic [31:0]      p_j_src_id_o,
     output var logic [15:0]      p_j_flags_o,
+    output var logic [7:0]       p_j_view_mask_o,
 
     input  var logic             p_v_valid_i,
     output var logic             p_v_ready_o,
@@ -181,6 +198,7 @@ module zhao_terrain_psmux #(
   assign p_j_epoch_o  = sel_b_c ? b_j_epoch_i  : a_j_epoch_i;
   assign p_j_src_id_o = sel_b_c ? b_j_src_id_i : a_j_src_id_i;
   assign p_j_flags_o  = sel_b_c ? b_j_flags_i  : a_j_flags_i;
+  assign p_j_view_mask_o = sel_b_c ? b_j_view_mask_i : a_j_view_mask_i;
 
   assign a_j_ready_o = grant_c && !sel_b_c && p_j_ready_i;
   assign b_j_ready_o = grant_c &&  sel_b_c && p_j_ready_i;
