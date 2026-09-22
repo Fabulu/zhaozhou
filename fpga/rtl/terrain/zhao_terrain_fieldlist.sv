@@ -231,6 +231,15 @@ module zhao_terrain_fieldlist #(
   logic            sw_hit;
   logic [31:0]     sw_hash;
   logic            sw_reject;   // the held record is beyond MAX_FIELDS
+  // THE HELD RECORD'S `cmd_last_i`, AND IT IS A REGISTER FOR A MEASURED
+  // REASON. The first version of this block cleared `list_open` at the TAKE.
+  // That is eight clocks -- the whole publication sweep -- BEFORE the record
+  // reaches the array, so `sealed_o` went high while the set's last entry was
+  // still in flight and a pending replay could start against a list one short.
+  // `terrain_fieldlist_directed` caught it on every case at once: three
+  // records offered, two replayed. The seal is a statement about the STORED
+  // list, so it is made where the store happens.
+  logic            sw_last;
 
   logic signed [31:0] h_x0, h_z0, h_x1, h_z1;
   logic        [31:0] h_handle;
@@ -305,6 +314,7 @@ module zhao_terrain_fieldlist #(
       sw_hit             <= 1'b0;
       sw_hash            <= 32'd0;
       sw_reject          <= 1'b0;
+      sw_last            <= 1'b0;
       h_x0               <= 32'sd0;
       h_z0               <= 32'sd0;
       h_x1               <= 32'sd0;
@@ -331,7 +341,8 @@ module zhao_terrain_fieldlist #(
             // the SAME cycle as the take, so a set of one record leaves a
             // list of exactly one.
             if (reopening) n_rec <= 5'd0;
-            list_open <= ~cmd_last_i;
+            list_open <= 1'b1;
+            sw_last   <= cmd_last_i;
 
             h_x0      <= cmd_x0_i;
             h_z0      <= cmd_z0_i;
@@ -375,6 +386,8 @@ module zhao_terrain_fieldlist #(
               records_sealed_o <= records_sealed_o + 32'd1;
               if (sw_unresolved) unresolved_o <= unresolved_o + 32'd1;
             end
+            // THE SEAL LANDS HERE, with the record, and not at the take.
+            if (sw_last) list_open <= 1'b0;
             in_st <= S_TAKE;
           end else begin
             sw_sel <= sw_sel + {{(OBJW-1){1'b0}}, 1'b1};

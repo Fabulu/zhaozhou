@@ -147,17 +147,26 @@ bool offer(Vzhao_terrain_fieldlist& d, const Rec& r, bool last, int budget = 400
   d.cmd_handle_i = r.handle;
   d.cmd_cmd_i = r.cmd;
   d.cmd_last_i = last ? 1 : 0;
+  // The record RETIRES at the end of the publication sweep, not at the
+  // handshake -- so a bench that read `records_o` the cycle after the take
+  // would read it OBJECTS clocks early and see the list one short. Waiting on
+  // the retirement COUNTERS is exact and needs no knowledge of the sweep's
+  // length; waiting a fixed number of clocks would encode one.
+  const uint32_t retired_before = d.records_sealed_o + d.tail_rejected_o;
+  bool taken_once = false;
   for (int i = 0; i < budget; ++i) {
     d.eval();
     drive_pub(d);
     d.eval();
-    const bool taken = d.cmd_ready_o != 0;
+    const bool taken = !taken_once && (d.cmd_ready_o != 0);
     step(d);
     if (taken) {
+      taken_once = true;
       d.cmd_valid_i = 0;
       d.cmd_last_i = 0;
-      return true;
     }
+    if (taken_once && (d.records_sealed_o + d.tail_rejected_o) != retired_before)
+      return true;
   }
   d.cmd_valid_i = 0;
   d.cmd_last_i = 0;
