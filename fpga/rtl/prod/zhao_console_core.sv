@@ -4760,6 +4760,111 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      NARROWED 2026-09-22 (FIELDARM). THE SECTION 9.1 LIST INTAKE IS CLOSED,
+//      BY A PRODUCER, AND THE HEIGHT RETURN LANE IS ALL THAT IS LEFT HERE.
+//
+//      Eight ports have LEFT this module's edge -- `terr_pt_fld_add_valid_i`,
+//      the four footprint fx16, `_hash_i`, `_cmd_i` and `_add_ready_o` -- plus
+//      `fld_ldr_pub_sel_i`, which had no owner. They are driven inside this
+//      file by `zhao_terrain_fieldlist` (`u_terrain_fieldlist`), whose intake
+//      is `zhao_cmd_exec`'s TerrainField 0x0200 arm. All thirteen `tfld_*`
+//      ports of that arm are connected; three are deliberately left open and
+//      named below.
+//
+//      WHAT REMAINS IS THE HEIGHT RETURN LANE -- `terr_pt_fld_valid_i`,
+//      `_ready_o`, `_height_i` -- and it stays a boundary for S5's reason and
+//      20.8's, unchanged: the Earth record declares FOUR channels and
+//      `zhao_terrain_patch` can receive ONE. "DO NOT CLOSE I34 BY WIRING ONLY
+//      HEIGHT while declaring the other three channels present because they
+//      have spare bus bits." Nothing here declares them present. With
+//      `fld_valid_i` low, section 3.4 collapses to `compose_top`, which is the
+//      law with an empty program list -- an absent input and not a faked one.
+//
+//      AND THE REASON THE ONE-WIRE JOIN WAS WRONG IS NOT THE REASON THIS ENTRY
+//      AND FIELDLANE GAVE. Both refused it by CITATION -- 13.2 moves the intake
+//      to an unbuilt `zhao_terrain_patch_v2`, 20.8 forbids a height-only close
+//      -- and both citations are correct. THE FIRST REASON IS A CADENCE
+//      MISMATCH between two blocks this console already composes, and it was
+//      on nobody's list:
+//
+//        * `zhao_cmd_exec` publishes TerrainField records ONCE PER COMMAND
+//          PACKET. `tfld_valid_o` is `(tq_rp != tq_cp)`: staged records become
+//          visible at the verdict and drain exactly once, contiguously, and
+//          are never re-offered.
+//        * `list_clear_i` on `u_terrain_patch` is `tce_job_take`, which is
+//          `tps_j_valid && tps_j_ready` -- ONE PULSE PER PATCH JOB -- and it
+//          sets `n_fields <= 0`.
+//
+//      One command packet is one FRAME; one frame has MANY patch jobs. A
+//      direct join therefore fills the section 9.1 list for the FIRST patch
+//      and leaves every later patch of that frame composing against an EMPTY
+//      one -- silently, with `fields_active_o` reading 0, `terrain_samples_
+//      evaluated` reading correctly and every counter on both blocks
+//      balancing, because nothing in either block looks at the field that
+//      moved. That is this file's own two-operands-in-lockstep shape, and it
+//      would have survived `zhao_terrain_patch_v2` landing tomorrow, because
+//      it is about WHEN the two ports are valid and not about which file owns
+//      them.
+//
+//      SO THE PRODUCER SEALS AND REPLAYS, which is 13.6's "seal its accepted
+//      command-ordered association list" in hardware. The frame's list is
+//      bounded at 16 in command order with the section 9.1 tail-reject, sealed
+//      by `zhao_cmd_exec`'s new `tfld_last_o` (a STORED per-record bit, not
+//      `tq_rp + 1 == tq_cp`, which would merge two frames' sets), and replayed
+//      into the patch's list on every job take with the VERTEX LANE HELD until
+//      it is there. The hold is structural rather than a comment asserting the
+//      page burst is long enough -- 13.4 forbids leaving that kind of promise
+//      in a header. With no TerrainField ever received the stall is two clocks
+//      per patch job and the list is empty, which is byte-for-byte this
+//      console's behaviour before the block existed; that case is every
+//      existing smoke form, which is why it is stated rather than assumed.
+//
+//      S2's PRODUCER NOW HAS A READER, and that is what closed the hash.
+//      `zhao_terrain_fieldlist` drives `pub_sel_o` across FIELD.LOADER's eight
+//      publication objects and stores `pub_prog_hash_o` for the first READY
+//      object whose `pub_handle_o` matches, so `fld_add_hash_i` carries a
+//      CANONICAL PROGRAM HASH and not a handle. `zhao_cmd_exec`'s header is
+//      right that forwarding the handle into a field called hash is "a lie
+//      that costs nothing today and an afternoon later"; this is the other
+//      option it names. A handle that resolves to nothing still becomes an
+//      entry -- the ASSOCIATION is real and the footprint is what the consumer
+//      keys on -- with `hash = 0` and `terr_fl_unresolved_o` counting it;
+//      residency is section 9's `PROGRAM_NOT_RESIDENT` and belongs to the
+//      Earth adapter. Build item (d)'s `pub_sel` half is SPENT and needed no
+//      two-client share, because there is no second client; its `pc_lu_*`
+//      half is untouched.
+//
+//      THE UNIFORMS ARE STILL UNOWNED AND ARE LEFT THAT WAY ON PURPOSE.
+//      `tfld_start_tick_o`, `tfld_duration_o` and `tfld_params_o` are
+//      connected to nothing, because their only reader is the EARTH stream
+//      adapter (build item (c)). Storing them here would be a word nothing
+//      reads; exposing a descriptor read port would be an address input
+//      nothing drives. An honestly open output on the producer is the smallest
+//      of the three, and it is the one 20.8's sentence about spare bus bits
+//      points at.
+//
+//      A DEFECT THIS ALSO REPAIRS, found by packet WARPCOMP in passing and by
+//      Verilator `PINMISSING` independently: the console connected ZERO of the
+//      `tfld_*` arm. `tfld_ready_i` among them -- an unconnected input reads
+//      low, so CMD.EXEC's TerrainField queue could never drain at all, and
+//      `tfld_overflow_o`, the counter that would have said so, was unconnected
+//      too. A refusal counter nobody can read is a blind instrument by
+//      construction. All three of that arm's counters are now promoted
+//      (`cmd_exec_tflds_o`, `cmd_exec_tfld_overflow_o`,
+//      `cmd_exec_tfld_src_truncated_o`).
+//
+//      WHAT CLOSING THE REST NEEDS, unchanged and still directive 20.8's
+//      Commit G: `zhao_terrain_patch_v2` owning all four Earth channels
+//      (13.2), the EARTH stream adapter that consumes the uniforms and returns
+//      them (build item (c)), the accumulator's ready/valid and phase
+//      exclusivity (13.4), and 13.7's `-FieldActive` positive smoke mode.
+//      `zhao_terrain_fieldlist` is a piece of that build and not a detour
+//      around it: 13.2 gives the v2 owner "the bounded 16-entry field intake
+//      in command order", and v2 instantiates this block rather than growing a
+//      third copy of the same list.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST. RE-MEASURED 2026-09-21 (gz/fieldlane) AND
 //      EVERY RECORDED BLOCKER BELOW IS SPENT. The prose after it is kept
 //      because its REASONING is still worth reading, but four of its
@@ -18674,11 +18779,18 @@ module zhao_console_core
   //       streamed to completion and still unpinned, because a refusal that
   //       stalled the page path would take the whole spine down with it.
   //
-  //   (d) THE FIELD LANE IS A BOUNDARY AND IS NOT FAKED.  See entry I34.
+  //   (d) THE FIELD HEIGHT LANE IS A BOUNDARY AND IS NOT FAKED.  See entry I34.
   //       `fld_valid_i` low means section 3.4's `live_top` collapses to
   //       `compose_top`, which is that law with an empty program list and is
   //       exactly the half this composition can honestly carry.  Tying a HEIGHT
   //       here would be the fake stimulus the completion plan names by name.
+  //
+  //       THE LIST INTAKE BESIDE IT IS NO LONGER A BOUNDARY (2026-09-22,
+  //       FIELDARM).  `u_terrain_fieldlist` refills it from CMD.EXEC's
+  //       TerrainField arm once per patch job, and the vertex lane above is
+  //       HELD while it does -- see the interlock beside `tpt_vtx_valid`.  The
+  //       two halves of I34 now have different answers and the entry says which
+  //       is which.
   //
   //   (e) THE PATCH HEADER IS NOW READ, AND IT IS READ BY A BLOCK.  Added
   //       2026-09-19 with TERRAIN.HDRREAD (composed item 13).  The chain above
