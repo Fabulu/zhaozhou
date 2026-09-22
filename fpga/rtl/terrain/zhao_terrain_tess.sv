@@ -243,6 +243,28 @@ module zhao_terrain_tess #(
     input  logic [1:0] cs_substance_i,  // 0 = SOLID (terrain_rules §3.3)
 
     // -----------------------------------------------------------------------
+    // layer-E read port: registered, one cycle, the per-CELL material triple.
+    // Ruling R13 puts this reader INSIDE TESS -- "the per-cell layer-E value is
+    // read at tessellation, where the triangle's cell is known, and travels
+    // with the triangle" -- and the same ruling refuses the job port as a
+    // carrier, because a subpatch-uniform material is not true.
+    //
+    // SAME SHAPE AS `cs_*` ON PURPOSE. Both are cell-keyed single queries with
+    // a one-cycle registered response, so the two live on the same kind of
+    // plane and neither needs a walk of its own. `mat_valid_i` is this port's
+    // `cs_substance_i == 2'd3`: the responder says whether it was armed and in
+    // range, and this block declares what it emits when it was not, rather
+    // than shipping whatever the plane's reset value happens to be.
+    // -----------------------------------------------------------------------
+    output logic       mat_req_o,
+    output logic [4:0] mat_ci_o,
+    output logic [4:0] mat_cj_o,
+    input  logic [7:0] mat_a_i,
+    input  logic [7:0] mat_b_i,
+    input  logic [7:0] mat_w_i,
+    input  logic       mat_valid_i,  // 1 = armed, in range, and this is the cell asked for
+
+    // -----------------------------------------------------------------------
     // terrain_mesh out — exactly TERRAIN.NORMALS' input packet
     // -----------------------------------------------------------------------
     output logic               tri_valid_o,
@@ -284,10 +306,25 @@ module zhao_terrain_tess #(
     output logic [IDX_W-1:0]   ref_ic_o,
     output logic               ref_surface_o,
     output logic        [15:0] ref_src_id_o,
+    // R13's riders, PER TRIANGLE, read from layer E at the triangle's own cell
+    // and travelling with the triangle to the very port that used to take them
+    // subpatch-uniform from the console boundary.
+    output logic        [ 7:0] ref_mat_a_o,
+    output logic        [ 7:0] ref_mat_b_o,
+    output logic        [ 7:0] ref_weight_o,
 
     output logic [31:0] terrain_triangles_emitted_o,
     output logic [31:0] terrain_vertices_emitted_o,  // ModeVtx vertices landed (saturating)
     output logic [31:0] terrain_refs_emitted_o,      // ModeRef triples loaded (saturating)
+    // A layer-E read that came back UNARMED or out of range. Not a tautology
+    // and not blind: `mat_valid_i` is written by the responder's own arming
+    // register and the request by this block's enumerator, so the two operands
+    // are clocked by different enables in different modules -- the condition
+    // CLAUDE.md's metadata-swap chapter says to check before trusting a
+    // detector. It is reachable with legal stimulus (present a ModeRef job
+    // before the plane has been filled) and `terrain_tess_directed` fires it
+    // with a negative control beside it, rather than quoting its silence.
+    output logic [31:0] mat_unarmed_o,               // (saturating)
     output logic [31:0] mode_invalid_o,              // job_mode_i == 3 presented (saturating)
     output logic [31:0] subpatch_rejected_o,
     output logic [31:0] lod_clamped_o,
@@ -563,9 +600,46 @@ module zhao_terrain_tess #(
     for (int k = 0; k < VQ_DEPTH; k++) vocc = vocc + {2'b0, vq_valid[k]};
   end
 
-  // ---- ModeRef output: one registered triple ------------------------------
-  logic r_valid;
-  logic [IDX_W-1:0] r_ia, r_ib, r_ic;
+  // ---- ModeRef output: a credit-gated TWO-deep queue ----------------------
+  //
+  // IT WAS ONE REGISTERED TRIPLE, and it could be, because ModeRef performed no
+  // read at all: the three window indices are combinational on the enumerator,
+  // so the triple was decided and registered in the same cycle.
+  //
+  // R13'S LAYER-E READ PUTS ONE ITEM IN FLIGHT and that is the whole reason for
+  // the change. The material is a REGISTERED read: the address is presented on
+  // the cycle the triangle is chosen and the data arrives on the NEXT one. So
+  // the triple and its material can never be registered together, and the
+  // shortcut -- drive `ref_mat_a_o` straight from `mat_a_i` beside a `r_valid`
+  // that was set a cycle earlier -- is this file's own I39 fault: the response
+  // register has already moved on the moment the consumer stalls, and the
+  // triple then ships under the NEXT triangle's material with every counter
+  // balancing. Two live wires are not a producer.
+  //
+  // So the same law the other two outputs already obey: THE BUFFER MUST BE
+  // DEEPER THAN WHAT IS IN FLIGHT. Exactly one item is in flight (the read
+  // issued this cycle), so two slots are enough, and the steady state with the
+  // consumer always ready is 1 + 1 - 1 = 1 <= 1 -- one triangle per clock,
+  // which is the rate the single register had. Latency grows by one cycle; the
+  // initiation rate does not.
+  localparam int RQ_DEPTH = 2;
+  logic             rq_valid [RQ_DEPTH];
+  logic [IDX_W-1:0] rq_ia [RQ_DEPTH], rq_ib [RQ_DEPTH], rq_ic [RQ_DEPTH];
+  logic [7:0]       rq_ma [RQ_DEPTH], rq_mb [RQ_DEPTH], rq_mw [RQ_DEPTH];
+
+  logic [1:0] rocc;
+  always_comb begin
+    rocc = 2'd0;
+    for (int k = 0; k < RQ_DEPTH; k++) rocc = rocc + {1'b0, rq_valid[k]};
+  end
+
+  // The read in flight, and the triple it belongs to. THE TRIPLE RIDES THIS
+  // REGISTER rather than being recomputed at the landing, for the reason the
+  // ModeVtx `pend_idx` comment gives one screen up: by the time the material
+  // lands the enumerator has ADVANCED, so a landing that re-read `t_idx0`
+  // would pair triangle N's material with triangle N+1's corners.
+  logic             rp_v_q;
+  logic [IDX_W-1:0] rp_ia_q, rp_ib_q, rp_ic_q;
 
   // =========================================================================
   // combinational geometry
@@ -1066,9 +1140,28 @@ module zhao_terrain_tess #(
   wire want_issue = (st == StTri) && !done && !cell_skip && !j_ref;
   wire do_issue = want_issue && !(iss_last && last_blocked);
 
-  // ---- ModeRef: load the triple register when it is free or draining ------
-  wire ref_can_load = !r_valid || ref_ready_i;
-  wire ref_emit = (st == StTri) && !done && !cell_skip && j_ref && ref_can_load;
+  // ---- ModeRef credit: may a triangle's LAYER-E READ be issued now? -------
+  // Same shape as the two credits above, one stage shallower because the read
+  // is one cycle and not four.
+  wire rland = rp_v_q;                          // lands this cycle
+  wire rpop  = rq_valid[0] && ref_ready_i;      // the shell drains one
+  wire [2:0] rnxt = {1'b0, rocc} + {2'b0, rland} - {2'b0, rpop};
+  wire ref_room = (rnxt <= 3'(RQ_DEPTH - 1));
+  wire [1:0] rland_slot = rpop ? (rocc - 2'd1) : rocc;
+  // RQ_DEPTH is 2, so the index is ONE bit and the narrowing is the same one
+  // `tland_idx` performs: legal only because the credit above is what bounds
+  // `rland_slot`, which is why the assertion sits on the slot and not here.
+  wire       rland_idx  = rland_slot[0];
+`ifndef SYNTHESIS
+  always_ff @(posedge clk) begin
+    if (rland && rland_slot > 2'(RQ_DEPTH - 1))
+      $fatal(1, "zhao_terrain_tess: ref landing at slot %0d with depth %0d -- the ref_room credit is wrong",
+             rland_slot, RQ_DEPTH);
+  end
+`endif
+
+  // ---- ModeRef: choose a triangle and issue its layer-E read --------------
+  wire ref_emit = (st == StTri) && !done && !cell_skip && j_ref && ref_room;
 
   // ---- window indices: (vj - oz) * 9 + (vi - ox), a constant multiply -----
   function automatic logic [IDX_W-1:0] win_idx(input logic [5:0] vi, input logic [5:0] vj);
@@ -1082,6 +1175,43 @@ module zhao_terrain_tess #(
 
   // ModeVtx: the vertex being fetched is slot 0 = (ea, eb) at stride 1
   wire [IDX_W-1:0] v_idx = IDX_W'({eb, 3'b0}) + IDX_W'(eb) + IDX_W'(ea);
+  // ---- R13's JOIN: WHICH CELL IS THE TRIANGLE'S ---------------------------
+  //
+  // The cell is the MINIMUM lattice corner of the triangle, per axis. That is
+  // not a heuristic on the unstitched path and it is worth saying why: §4.3's
+  // pair is (i00, i11, i10) and (i00, i01, i11), so both triangles of a cell
+  // have their three corners inside {i0, i0+s} x {j0, j0+s} and the per-axis
+  // minimum is EXACTLY (i0, j0) -- the run-cell's own origin. At level 0 the
+  // run-cell IS the patch cell, so at level 0 this is the cell the triangle
+  // covers, bit for bit, with no choice made at all.
+  //
+  // THE TWO PLACES A CHOICE IS MADE, both declared rather than discovered:
+  //   * AT STRIDE > 1 a run-cell covers s x s patch cells with up to s^2
+  //     different materials, and one triangle can carry one. The origin cell
+  //     is taken. REJECTED ALTERNATIVE: the centre cell, which is no more
+  //     correct and costs an adder per axis; and a per-run-cell majority vote,
+  //     which is up to 64 reads to pick a tile id. Coarsening already erases
+  //     detail -- terrain_rules §4.4 keeps moved ground fine -- and a material
+  //     that changes when the LOD changes is the same class of artefact as a
+  //     height that does.
+  //   * A RING FAN spans whatever the annulus walk gives it, and its minimum
+  //     corner is the min corner of its footprint. The ring is one run-cell
+  //     deep at the subpatch border, which is where LOD is coarsest and where
+  //     §4.3's own geometry is already an approximation of the fine surface.
+  //
+  // THE CLAMP CANNOT FIRE AND IS STILL WRITTEN. A lattice coordinate runs
+  // 0..32 and a cell index 0..31, so an unclamped 5-bit truncation of 32 would
+  // wrap to cell 0 -- the exact `cs_w_ci_i < 0` truncation fault
+  // zhao_terrain_compcache_front records at its own write port. The minimum of
+  // a non-degenerate triangle's three corners is at most 31, because its
+  // maximum is strictly greater and at most 32; so the clamp is unreachable,
+  // and it gets NO counter for precisely that reason -- a counter nothing can
+  // move is a reassurance, not an instrument (CLAUDE.md, the detector chapter).
+  wire [5:0] tc_i01 = (tv_i[0] < tv_i[1]) ? tv_i[0] : tv_i[1];
+  wire [5:0] tc_vi  = (tc_i01 < tv_i[2]) ? tc_i01 : tv_i[2];
+  wire [5:0] tc_j01 = (tv_j[0] < tv_j[1]) ? tv_j[0] : tv_j[1];
+  wire [5:0] tc_vj  = (tc_j01 < tv_j[2]) ? tc_j01 : tv_j[2];
+
   // ModeRef: the three corners of the current triangle, TOP order
   wire [IDX_W-1:0] t_idx0 = win_idx(tv_i[0], tv_j[0]);
   wire [IDX_W-1:0] t_idx1 = win_idx(tv_i[1], tv_j[1]);
@@ -1091,6 +1221,14 @@ module zhao_terrain_tess #(
   assign lat_vi_o = rd_vi;
   assign lat_vj_o = rd_vj;
   assign lat_surface_o = j_surface;
+
+  // The layer-E read is issued on EXACTLY the cycles a ModeRef triangle is
+  // chosen: no read for a skipped void run-cell, none in ModeTri or ModeVtx,
+  // and none while the credit is withheld. So the responder sees one request
+  // per emitted triangle and the two streams cannot drift apart by a count.
+  assign mat_req_o = ref_emit;
+  assign mat_ci_o  = (tc_vi > 6'd31) ? 5'd31 : tc_vi[4:0];
+  assign mat_cj_o  = (tc_vj > 6'd31) ? 5'd31 : tc_vj[4:0];
 
   // ---- the geomorph blend, evaluated on the parent-B capture --------------
   // hc is §4.3's interpolation of the coarse cell at this vertex, which at
@@ -1361,10 +1499,20 @@ module zhao_terrain_tess #(
         vq_idx[k]    <= '0;
         vq_stride[k] <= 1'b0;
       end
-      r_valid <= 1'b0;
-      r_ia <= '0;
-      r_ib <= '0;
-      r_ic <= '0;
+      rp_v_q <= 1'b0;
+      rp_ia_q <= '0;
+      rp_ib_q <= '0;
+      rp_ic_q <= '0;
+      for (int k = 0; k < RQ_DEPTH; k++) begin
+        rq_valid[k] <= 1'b0;
+        rq_ia[k] <= '0;
+        rq_ib[k] <= '0;
+        rq_ic[k] <= '0;
+        rq_ma[k] <= '0;
+        rq_mb[k] <= '0;
+        rq_mw[k] <= '0;
+      end
+      mat_unarmed_o <= '0;
       terrain_vertices_emitted_o <= '0;
       terrain_refs_emitted_o <= '0;
       mode_invalid_o <= '0;
@@ -1444,15 +1592,50 @@ module zhao_terrain_tess #(
       if (vland && terrain_vertices_emitted_o != 32'hFFFF_FFFF)
         terrain_vertices_emitted_o <= terrain_vertices_emitted_o + 32'd1;
 
-      // ---- ModeRef triple register --------------------------------------------
-      if (r_valid && ref_ready_i) r_valid <= 1'b0;
+      // ---- ModeRef: the pend stage, then the queue -----------------------------
+      //
+      // THE POP SHIFT FIRST, THE LANDING SECOND, exactly as the ModeVtx queue
+      // below: entries stay contiguous from index 0, so `rocc` is both the
+      // occupancy and the next free index once the shift is accounted for.
+      if (rpop) begin
+        for (int k = 0; k < RQ_DEPTH; k++) begin
+          if (k + 1 < RQ_DEPTH) begin
+            rq_valid[k] <= rq_valid[k+1];
+            rq_ia[k] <= rq_ia[k+1];
+            rq_ib[k] <= rq_ib[k+1];
+            rq_ic[k] <= rq_ic[k+1];
+            rq_ma[k] <= rq_ma[k+1];
+            rq_mb[k] <= rq_mb[k+1];
+            rq_mw[k] <= rq_mw[k+1];
+          end else begin
+            rq_valid[k] <= 1'b0;
+          end
+        end
+      end
+      if (rland) begin
+        rq_valid[rland_idx] <= 1'b1;
+        rq_ia[rland_idx] <= rp_ia_q;
+        rq_ib[rland_idx] <= rp_ib_q;
+        rq_ic[rland_idx] <= rp_ic_q;
+        // THE UNARMED VALUE IS THIS BLOCK'S, NOT THE PLANE'S RESET STATE.
+        // {0, 0, 0} is not a neutral filler: terrain_rules §6.2 gives weight 0
+        // the meaning "matB everywhere", so an unanswered cell renders as tile
+        // 0 uniformly -- one declared appearance rather than whatever the
+        // responder's memory happened to hold, and `mat_unarmed_o` says how
+        // often it was taken.
+        rq_ma[rland_idx] <= mat_valid_i ? mat_a_i : 8'd0;
+        rq_mb[rland_idx] <= mat_valid_i ? mat_b_i : 8'd0;
+        rq_mw[rland_idx] <= mat_valid_i ? mat_w_i : 8'd0;
+        if (!mat_valid_i && mat_unarmed_o != 32'hFFFF_FFFF)
+          mat_unarmed_o <= mat_unarmed_o + 32'd1;
+      end
+      rp_v_q <= ref_emit;
       if (ref_emit) begin
         // The underside is the top's pair with b and c swapped — the same ONE
         // mux as the world-coordinate path below, on indices.
-        r_valid <= 1'b1;
-        r_ia <= t_idx0;
-        r_ib <= j_surface ? t_idx2 : t_idx1;
-        r_ic <= j_surface ? t_idx1 : t_idx2;
+        rp_ia_q <= t_idx0;
+        rp_ib_q <= j_surface ? t_idx2 : t_idx1;
+        rp_ic_q <= j_surface ? t_idx1 : t_idx2;
         if (terrain_refs_emitted_o != 32'hFFFF_FFFF)
           terrain_refs_emitted_o <= terrain_refs_emitted_o + 32'd1;
       end
@@ -1865,8 +2048,14 @@ module zhao_terrain_tess #(
           // the drain makes the block declare a job finished while it still holds
           // a vertex, which is the same class of omission as leaving one out of
           // `busy_o` in zhao_project_core.
+          // `rp_v_q` and `rocc` REPLACE the single `!r_valid` term, and the
+          // replacement is not cosmetic: a layer-E read already issued cannot
+          // be told to wait, so leaving StTri while it is in flight would
+          // strand a triangle the shell never sees -- the same omission class
+          // as leaving a blend stage out of this reduction.
           if (done && !pend_v && !lnd_v_q && !ln2_v_q && !ln3_v_q &&
-              (tocc == 2'd0) && (vocc == 3'd0) && !r_valid) st <= StIdle;
+              (tocc == 2'd0) && (vocc == 3'd0) && !rp_v_q && (rocc == 2'd0))
+            st <= StIdle;
         end
 
         default: st <= StIdle;
@@ -1885,12 +2074,19 @@ module zhao_terrain_tess #(
   assign vtx_surface_o = j_surface;
   assign vtx_src_id_o = j_src;
 
-  assign ref_valid_o = r_valid;
-  assign ref_ia_o = r_ia;
-  assign ref_ib_o = r_ib;
-  assign ref_ic_o = r_ic;
+  assign ref_valid_o = rq_valid[0];
+  assign ref_ia_o = rq_ia[0];
+  assign ref_ib_o = rq_ib[0];
+  assign ref_ic_o = rq_ic[0];
   assign ref_surface_o = j_surface;
   assign ref_src_id_o = j_src;
+  // R13's riders leave from the QUEUE ENTRY, never from `mat_a_i`. The wire is
+  // valid for exactly one cycle after its read; the triple it belongs to may
+  // sit at the head of this queue for as long as the shell stalls. Driving the
+  // output from the live response is the I39 fault in one line.
+  assign ref_mat_a_o = rq_ma[0];
+  assign ref_mat_b_o = rq_mb[0];
+  assign ref_weight_o = rq_mw[0];
   assign ax_o = tq_ax[0];
   assign ay_o = tq_ay[0];
   assign az_o = tq_az[0];
@@ -1908,7 +2104,11 @@ module zhao_terrain_tess #(
   // defect -- and it is not theoretical here: the dense sparse-fill fault
   // control drives a job that faults mid-flight, and with the blend stage
   // uncounted the drain never completed.
+  // The layer-E read is a stage exactly like the blend's, so it joins here for
+  // the same reason `ln3_v_q` did: a triangle whose material is still in the
+  // responder cannot be reported as no longer being work.
   assign idle_o = (st == StIdle) && (tocc == 2'd0) && (vocc == 3'd0) &&
-                  !r_valid && !pend_v && !lnd_v_q && !ln2_v_q && !ln3_v_q;
+                  !rp_v_q && (rocc == 2'd0) &&
+                  !pend_v && !lnd_v_q && !ln2_v_q && !ln3_v_q;
 
 endmodule : zhao_terrain_tess
