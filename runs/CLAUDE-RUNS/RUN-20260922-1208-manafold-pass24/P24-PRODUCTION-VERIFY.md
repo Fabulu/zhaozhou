@@ -4,7 +4,7 @@
 **Deployed:** `website/deploy.ps1 -Project upheaval -Branch main`, exit **0**
 **Deployment:** https://b7e1fe29.upheaval.pages.dev
 **Live:** https://upheaval.pages.dev (noindex, unlisted — for the owner)
-**Heads:** Zhaozhou `86eb703f`, Upheaval `30119c9` — both branches and both
+**Heads:** Zhaozhou `7338e775`, Upheaval `8e45d38` — both branches and both
 mains, all four agreeing.
 
 ---
@@ -131,3 +131,22 @@ hides: **none committed, none left behind**.
 3. **The rollout.** Avoidance won the comparison. The two worst clips by rate are
    **not** in the experiment — death-drop 16.6 % and drift 15.3 % — and 39,500
    intersections remain on the 19 untouched subjects.
+
+## One provenance gap found and closed after the deploy
+
+`deploy.ps1` re-runs `assemble.py` before uploading, so the page it shipped
+carried a build stamp six minutes later than the `index.html` committed just
+before it. The verification compared the served bytes against the **working
+tree**, which is the deployed file, so production was correct throughout and it
+was the **repo** that was out of step — but a later reader diffing the committed
+page against the live one would have found a difference with no record of where
+it came from. The served `index.html` and the deploy record are now committed,
+and the verification was **re-run against that committed state**:
+
+```
+https://upheaval.pages.dev          66/66, 95,368,335 bytes, mismatches 0, retries 0
+https://b7e1fe29.upheaval.pages.dev 66/66, 95,368,335 bytes, mismatches 0, retries 0
+```
+
+Content is identical apart from the timestamp; the point is that the repo now
+holds exactly what is served.
