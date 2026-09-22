@@ -1,0 +1,126 @@
+ZHAOZHOU — PROPOSED OWNER RULINGS FOR COMPLETION
+Date: 2026-09-22
+Review reference: claude/ceiling-architecture-20260912
+Reviewed commit: 9a8b329ae4b539a62f7c5ec7d86b6b0131091b2a
+
+This is a proposed ruling for Fabian to adopt and send to the implementation agent. It is not an already-ratified repository document. No repository changes, builds or physical fits were performed to produce this draft.
+
+GENERAL AUTHORIZATION
+
+Complete the mandatory console without silently cutting features or substituting testbench stimulus for production producers. The behavioral and permission choices below are authorized upon my adoption of this text. The coordinator owns their implementation details, generated layouts, adapters, arbitration and validation. Do not repeatedly escalate the same decision because its implementation needs another field, decoder arm or bounded helper.
+
+Escalate only a concrete contradiction with a still-binding owner requirement, a new externally visible behavior choice not covered below, or a genuinely broader permission request. Name the conflicting clauses and recommend a resolution. A missing implementation already commissioned here is work, not an unresolved policy decision.
+
+Existing staffing and fit-at-completion instructions remain unchanged. Keep reporting measured costs separately from estimates. An estimate is not a reason to remove commissioned functionality, and a zero structural gap count is not evidence that every path has executed.
+
+1. PARTICLES: EXPLICIT NO-MATERIAL MODE
+
+Choose option (a). Introduce an explicit material mode distinguishing a material-backed primitive from a primitive intentionally carrying no material. Do not infer no-material from a failed lookup, an arbitrary sentinel handle, the previous span's material, or merely the untextured attribute bit.
+
+Polygon particles may select NO_MATERIAL. In that mode the material window must select a defined no-sampling profile, issue no material/texture/palette resolution request, and increment no missing-material fault counter. This is a lawful mode, not the missing-material fallback disguised as success.
+
+Preserve the particle reference behavior: colour, alpha, blending, depth, stencil and tags are supplied according to the applicable existing producer/reference laws, never inherited from the mesh that happened to run previously. This ruling does not add new particle blend modes or alter the numeric colour law.
+
+Keep R197 for MATERIAL_BACKED primitives: a primitive declaring no texture coordinates must still be refused and counted if its resolved material requires texture sampling. An untextured mesh with a valid non-sampling material remains legal; an untextured mesh with a sampling material does not become legal merely because particles now work.
+
+Material mode is part of the span's identity. Changing MATERIAL_BACKED -> NO_MATERIAL -> MATERIAL_BACKED must honor the existing drain/ordering mechanism so that in-flight triangles retain their own profile. Do not add an independently advancing metadata queue. Reject internally contradictory declarations rather than silently repairing them.
+
+This authorization covers the complete particle-to-raster connection, including the canonical depth conversion and any carrier still required by the current producer. It is not permission to close the task after changing only the material gate.
+
+Acceptance: interleave textured mesh A, a particle batch, and textured mesh B, with different material sets and forced backpressure. Compare rendered output against the reference. The particles draw with their own state and cause no missing-material faults; both meshes preserve their state; a deliberately incompatible untextured mesh is still refused and counted.
+
+2. PROCEDURAL MATERIAL: A REAL (SET HANDLE, RECORD ID) REFERENCE
+
+The semantic reference for DrawProcedural is:
+
+    material_set : complete handle32[material_set]
+    material_id  : u16 index within that material set
+
+No translation table is required. Do not compress a full 32-bit set handle plus a 16-bit record ID into 32 bits by silently discarding handle index or generation bits. Do not read the existing word both as the complete set handle and as its low-16-bit material ID.
+
+Authorize a documented same-size use of DrawProcedural's still-unused reserved payload bytes for material_id. Keep the existing 32-bit material word intact and define it as the material-set handle. Preserve the already allocated per-draw frame_tick bytes and its behavior. Make both allocations explicit in commands.zidl and regenerate the C++/TypeScript/SystemVerilog bindings and validators from that source. The coordinator owns exact offsets and alignment.
+
+Zero-filled legacy material_id bytes select record 0 of the named set; zero is a valid index, not an error sentinel. Existing records retain their opcode, size and original field offsets. Preserve every existing, genuinely ratified material interpretation. Where an earlier implementation guessed a different interpretation of this previously unresolved field, disclose the rendering difference and provide an explicit compatibility treatment; do not silently overwrite goldens and claim unchanged behavior. If a documented existing allocation makes the reserved-byte representation incompatible, an additive procedural-draw opcode carrying the same full pair is authorized instead. This does not need another owner decision.
+
+Capture the pair on the draw's own accepted handshake and keep it attached through page lookup, evaluation, assembly and clip-door admission. A later draw must not replace an earlier primitive's material. Resolve it through the same material-residency and refusal machinery as other material-backed geometry. Do not silently substitute an unrelated set or record when resolution fails.
+
+Acceptance: two records in one set, the same record ID in two sets, upper handle-index bits, generation/residency cases governed by the existing handle law, backpressure and alternating procedural draws. Compare against the reference and assert that the correct material actually reaches the raster path.
+
+3. TWOD COMMANDS: BOTH PLANE DESCRIPTORS AND HUD SPRITE DESCRIPTORS
+
+Authorize command-side control for both existing TWOD descriptor paths, not merely an opcode named SetPlane.
+
+Proposed allocations, to be checked against the live reservation registry before landing:
+
+    SetPlane   0x0306
+    DrawSprite 0x0307
+
+If either has since been allocated, the coordinator may choose the next genuinely free opcode in the permitted range and record it without another owner round-trip. Do not reuse 0x0303-0x0305 or the sky-reserved range. Append declarations so unrelated generated samples are not renumbered. Follow the established additive ABI compatibility policy; do not renumber existing opcodes or change existing record layouts.
+
+SetPlane carries the existing restricted plane descriptor and preserves its two slots, one time-multiplexed engine, BACKDROP/ATMOSPHERE roles, formats, transforms, line-scroll, wrap/clamp, view mask, blend/opacity rules and exclusions. It does not invent a depth-tested HUD plane or a second unrestricted texture unit.
+
+DrawSprite supplies the existing HUD sprite descriptor path. Preserve position/size, texture coordinates, the existing affine/tint/blend semantics, resource/palette references where required, ordering and both player HUD regions. Use the existing sampler/resource architecture; no new font engine, text-layout engine or private general sampler. Text remains glyph sprites authored by software.
+
+Descriptors are frame-scoped. Stage and validate the frame's descriptors, then publish a sealed list at the boundary that owns that frame, before its TWOD pass. Neither a later packet nor the next frame may mutate the list being consumed. Preserve deterministic order, define ties by command order, and provide explicit plane disable behavior and an empty-frame path that cannot retain old HUD contents.
+
+This includes any required legitimate asset/palette loading producer. An opcode plus descriptors referring to data that only the testbench can inject is not completion. Reuse PublishResource and the existing validated resource mechanisms wherever applicable.
+
+Preserve R235: budget refusal rejects the entire sprite and counts it; no partial sprite and no frame failure solely from HUD overflow. Retain existing malformed-descriptor refusal rules. Generated decoding, CMD.EXEC, the reference renderer and production consumers must agree.
+
+Acceptance: a command-fed two-player HUD, text/glyph sprites, overlapping ordered sprites, legal planes, a disabled/empty next frame, malformed descriptors and whole-sprite overflow. Exercise actual asset reads and final composited pixels without descriptor or texel injection at a downstream boundary.
+
+4. GEOM.PARAMBUF: NARROW ENGINE1 READ/WRITE AUTHORIZATION
+
+Authorize implementing the ENGINE1 parameter-buffer accesses already contemplated by memory_rules section 5c:
+
+    [0x06000000, 0x06400000)  PARAMBUF view 0, 4 MiB
+    [0x06400000, 0x06800000)  PARAMBUF view 1, 4 MiB
+    [0x06800000, 0x06A00000)  shared prefetch/chunk scratch, 2 MiB
+
+These are half-open ranges. ENGINE1 may read and write its owned live allocations within these regions. The separate RENDER.ASSET_POOL at [0x06A00000, 0x08000000) remains read-only to ENGINE1. Other clients do not acquire PARAMBUF access through this ruling.
+
+No blanket bank-3 read/write permission. Check the complete request extent with overflow-safe arithmetic, existing burst/alignment constraints, correct view/region selection and the actual request's ownership context. A request crossing a per-view or scratch boundary is not allowed merely because both endpoints lie somewhere in the union of permitted ranges.
+
+Preserve frame-generation and allocation lifetimes. A chunk must not be reused while a previous reader or outstanding transaction still owns it, and data must not be published before its writes retire. Carry request identity with the request; do not validate a queued request against a later global view selector. Shared scratch has explicit ownership and release rather than being unowned temporary memory.
+
+Extend mem_guard_no_escape to the new authorized map; do not remove assertions or add assumptions that prevent illegal requests from being tested. Prove valid reads and writes can pass, unauthorized clients/views cannot escape, ENGINE1 asset-pool writes still fail, and boundary-crossing, wrapping and stale-lifetime cases are refused. Include a deliberate fault that defeats a required protection and makes the test/proof fail.
+
+Authorization includes the arena producer, allocation/chunk management, write-capable route, record readers and actual rendering consumers. GEOM.PARAMBUF's existing record decoder is not the whole subsystem. Preserve the existing quota, overflow, stale-chunk and prior-complete-frame fallback contracts. Do not pack fields into a byte vector merely to unpack them again and count that as external-memory integration.
+
+5. SPARSE_FILL: MODE-SAFE CONFIGURATION, NOT A NEW PRODUCER
+
+Make the normal configuration explicit and derived from the actual arena validity mode:
+
+    VALID_MODE == 0 (bitmap-valid): sparse_fill enabled by default.
+    Dense-seal/other modes:         sparse_fill disabled.
+
+Retain the documented owner/debug configurability, but refuse an unsafe combination and hold the chosen setting stable for a whole job. Enabling sparse fill with a dense seal is not a permissible configuration. No new command-producing subsystem is required merely to supply this value.
+
+The optimization skips only vertices the producer proves no emitted triangle references. Demonstrate identical rendered output and no unfilled reference across all LOD levels, both views and backpressure; retain the deliberately illegal-combination test. This is reduced redundant work, not reduced visual capability.
+
+6. NEIGHBOR EDGE LEVELS: FULL CAPABILITY, WITH THE SAFE FALLBACK RETAINED
+
+For the full-capability target, authorize implementing the real neighbor-edge level producer. Do not treat the current finest-level constants as though they were measured neighbor decisions, and do not silently retire the requirement to make the register reach zero.
+
+Retain 8'h00 as the existing conservative fallback until the real producer is validated. It must not be changed to a cheaper/coarser constant merely to improve triangle counts or resource results.
+
+The coordinator may introduce bounded prepare/reconcile/emit sequencing over the admitted terrain set for the frame, with the neighbor identities, view-related LOD law, stability/geomorph rules and existing crack-free requirements preserved. This may buffer decisions and adjacency metadata; it does not authorize a second full terrain engine or a duplicate world/geometry payload store. Reuse the existing bounded stores and the contract's exact numerical rules.
+
+Use actual neighbor border decisions where available and the conservative fallback only for cases explicitly requiring it. Demonstrate adjacent patches across mixed LOD, job-order permutations, deformation, morph transitions, both views and backpressure, including the frame's triangle/work budget. Do not replace current-frame ownership with an unvalidated previous-frame shortcut.
+
+This is an explicit authorization to build the missing scheduling functionality, not a claim that it is already cheap or complete. If a first diagnostic fit uses conservative edge mode before adaptive reconciliation is complete, label that profile and its remaining functional/performance limitation; it is not the requested final no-caveat full-capability fit.
+
+COMPLETION REPORT
+
+For each item, report separately: policy adopted; producer implemented; production consumer connected; real command-to-output behavior exercised; relevant failure cases tested; area/timing estimated or measured. Preserve the distinction between a reduced register and demonstrated runtime functionality. In particular, an otherwise green smoke whose upstream fixture never reaches the new path does not prove the path.
+
+Reviewed source anchors (all at the commit above):
+- spec/commands.zidl
+- spec/memory_rules.md sections 5c and 5f
+- design/contracts/GEOM.CLIPDOOR.md
+- fpga/rtl/forge/zhao_forge_pagebank.sv
+- design/contracts/TWOD.PLANE.md, TWOD.SPRITE.md, TWOD.BAND.md
+- fpga/rtl/geometry/zhao_geom_parambuf.sv
+- design/contracts/GEOM.PARAMBUF.md
+- fpga/rtl/terrain/zhao_terrain_group_seq.sv
+- design/contracts/TERRAIN.LOD.md
