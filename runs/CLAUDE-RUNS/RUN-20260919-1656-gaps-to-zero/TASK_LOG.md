@@ -940,3 +940,65 @@ file set — pick these up:**
 
 **Running (ONE lane, per the owner's cap):** TERRACOMP — compose the TERRAIN
 group, seven of the sixteen disconnected modules. Not another build.
+
+## 2026-09-21/22 — waves 10-14: THE REGISTER FALLS, 25 -> 13
+
+**One lane at a time from here** (owner, at 86% of the weekly allowance).
+
+| lane | result |
+|---|---|
+| **TERRACOMP** | **25 → 21.** Nine blocks in ONE commit. |
+| **TERRABAKE** | **21 → 17.** Five blocks; **tie-off I32 CLOSED**, I27 narrowed. |
+| **FORGECOMP** | **17 → 14.** Six blocks; no tie-off created, narrowed or moved. |
+| **WARPCOMP** | **14 → 13.** `zhao_geom_warp` COMPOSED; P2 and P7 closed in the same act. |
+
+**THE METHOD, and it is the run's main finding:**
+
+> **R75 was never the obstacle — THE LEAF WAS.** A leaf wired in alone is a
+> producer with no consumer, or forces a tie-off, so five earlier lanes
+> correctly refused. **Composing the whole chain in ONE commit gives every
+> producer its consumer.** It also dissolved my own R223 hold on
+> `zhao_measure_governor`, which had stood since 2026-09-19.
+
+**Blockers that dissolved on first contact — the R237 pattern, five more times:**
+`GEOM_CLIP_ATTRS = 7`, called *"THE BINDING BLOCKER"* by three lanes, **already
+spent** (R197 + R234 D1). The devstore's 185 M10K, **granted by the owner**
+(R234 D3), quoted as a veto by five passes. `pixel_error`/`view_count`, **always
+in the ratified ABI**, read by three passes as *"the field does not exist"*.
+And FORGE's actual missing piece — **a vertex store** — was **on nobody's list**
+while every recorded blocker was true and irrelevant.
+
+**Instrument findings worth keeping:**
+* **`--lint-only` does not run `initial` blocks — THREE lanes caught by it in one
+  day**, the last a `.INSTR_N(48)` missing its `.PCW(6)`: `-LintOnly` RC 0 in
+  25 s, elaboration guard fired **205 s into the real smoke**.
+* **A smoke sweep lied three ways:** RC 1 in ~1 s is a VERILATION failure;
+  `$LASTEXITCODE` after a PowerShell *script* is the last *native* command's
+  code (ten forms read `rc=0`, nine were not evidence); a positionally-bound
+  string flag resolved its path against the coordinator's checkout. **The tell
+  every time was the DURATION.**
+* **The LINT caught a silent decode bug nothing else could** — a field read one
+  32-bit word low out of a reserved slot. `UNUSEDSIGNAL` on a record decoder IS
+  the check.
+* **A lane's own area count was low by 30%** (1,320 claimed, 1,735 actual) and
+  it corrected the findings rather than rewriting history.
+
+**A merge trap that produced TWO false successes:** a lane worked in the
+COORDINATOR'S CHECKOUT instead of its own worktree, leaving it on that lane's
+branch. The merge then merged the branch into itself — *"Already up to date"* —
+and the push sent an unmoved local ref — *"Everything up-to-date."* **Caught by
+comparing HEAD against `ls-remote`, not by trusting either message.** Every
+brief since opens with the instruction.
+
+**FIELDARM (tie-off I34) is BLOCKED ON AN ANTHROPIC OUTAGE**, not on the work:
+terminated three times by server-side 529/529/500. Its work is safe — I
+committed its uncommitted tree myself after the second kill (an uncommitted
+worktree being the one state this repo cannot recover from), and its own
+checkpoint is pushed at **`gz/fieldarm` = `d5b8cddf`**. **Unreviewed, ungated,
+not merged.** Its lead: `zhao_cmd_exec` declares a full TerrainField arm — 29
+`tfld_*` ports — and the console connects **zero**.
+
+**Standing at 13 = 8 tie-offs + 5 disconnected**, shared branch `46c592af`.
+Disconnected: `terrain_normalmap`, `terrain_velocity`, `geom_parambuf`,
+`forge_shadow`, `forge_cliff_ram`. **The tie-offs are now the majority and they
+do not close by wiring — each needs its producer built.**
