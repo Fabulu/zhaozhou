@@ -183,7 +183,19 @@ module zhao_forge_cliff_ram (
   localparam int unsigned PrimeLen = 4;       // 3 reads; data lands a cycle later, rotates on 1..3
   localparam int unsigned WalkFW   = 8;       // walk_fault_o width (saturating)
 
-  localparam logic [31:0] CntMax = 32'hFFFF_FFFF;
+  // R117 condition 2, as amended by R142 (NOT an adoption blocker -- the
+  // golden carries the identical latch in identical quantity -- but a latch
+  // cell is real area, so it is discharged here).  The map reported
+  // `Info (10041): Inferred latch for "triangles_submitted_o[0]"`.  It was
+  // never a missing combinational branch: C3 advanced the counter by
+  // `+ 32'd2` because it counts triangles in PAIRS, so bit 0 is provably
+  // constant zero for all time, and THAT constant bit is what Quartus
+  // latched.  The remedy R142 named is taken verbatim -- count PAIRS in 31
+  // bits and shift at the port -- so the LSB becomes a literal `1'b0` the
+  // fitter ties off instead of a latched constant.  Every emitted value is
+  // bit-identical, the saturation point is unmoved, and the PORT is untouched
+  // in name, width and direction, so no generated top needs regenerating.
+  localparam logic [30:0] PairMax = 31'h7FFF_FFFF;  // pairs*2 < 32'hFFFF_FFFE
 
   localparam logic [3:0] StIdle      = 4'd0;
   localparam logic [3:0] StLoad      = 4'd1;
@@ -230,6 +242,10 @@ module zhao_forge_cliff_ram (
   logic [ 16:0]   run_mem_r   [0:MaxRuns-1];   // {start[10:0], len[5:0]}
   logic [EIW-1:0] cnt_r;
   logic [RIW-1:0] runs_r;
+
+  // C3's pair counter -- see PairMax above.  `triangles_submitted_o` is driven
+  // continuously from it, so its bit 0 is a constant and not a register bit.
+  logic [30:0]    tri_pairs_r;
 
   logic [5:0]     sc_ci_r, sc_cj_r;
   logic [1:0]     sc_side_r;
@@ -512,6 +528,8 @@ module zhao_forge_cliff_ram (
   // ===========================================================================
   assign cmd_ready_o    = (st_r == StIdle);
   assign ld_ready_o     = (st_r == StLoad);
+  assign triangles_submitted_o = {tri_pairs_r, 1'b0};
+
   assign idle_o         = (st_r == StIdle);
   assign edge_valid_o   = (st_r == StEmit) && emit_live_r;
   assign edge_ci_o      = pg_ci_r + {11'd0, emit_e_r[12:8]};
@@ -578,7 +596,7 @@ module zhao_forge_cliff_ram (
       emit_e_r    <= 18'd0;
       emit_live_r <= 1'b0;
       page_done_r <= 1'b0;
-      triangles_submitted_o <= 32'd0;
+      tri_pairs_r           <= 31'd0;
       walk_fault_o <= {WalkFW{1'b0}};
     end else begin
       page_done_r <= 1'b0;
@@ -878,8 +896,8 @@ module zhao_forge_cliff_ram (
           if (emit_live_r) begin
             if (edge_ready_i) begin
               emit_live_r <= 1'b0;
-              if (triangles_submitted_o < (CntMax - 32'd1)) begin
-                triangles_submitted_o <= triangles_submitted_o + 32'd2;  // C3
+              if (tri_pairs_r < PairMax) begin
+                tri_pairs_r <= tri_pairs_r + 31'd1;  // C3 -- ONE PAIR = 2 tris
               end
               idx_r <= idx_r + step_c;
             end
