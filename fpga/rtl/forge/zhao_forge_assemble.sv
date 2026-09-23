@@ -238,6 +238,36 @@ module zhao_forge_assemble #(
     // ruling 2 (2026-09-22): `material_id` is an independent u16 record index,
     // never a slice of the set handle.
     input  var logic [15:0]        j_material_id_i,
+    // ---- THE PER-JOB DECLARATION, added 2026-09-23 (SHADOWRIDE) -----------
+    // These three were COMPOSER CONSTANTS until this block gained a second
+    // producer.  `zhao_console_core` states the rule they obey and it is the
+    // reason they are ports and not parameters: "never a constant chosen here,
+    // because a mode chosen at a composer is the inferred mode the ruling
+    // forbids" (`:13519-13525`).  With FORGE.PRIM and FORGE.SHADOW sharing this
+    // block, one constant cannot be true of both: a forge primitive carries a
+    // real {set, id} and expects it resolved (MATERIAL_BACKED), and a shadow
+    // hull carries a ZERO pair under MATMODE_NONE, which
+    // `zhao_material_window.sv:354` REFUSES to pair with a non-zero one.
+    //
+    // They are latched by the SAME ENABLE as the material pair and move to the
+    // in-flight registers on the SAME first-vertex enable, so a job cannot take
+    // its material from one draw and its declaration from another.
+    input  var logic [ 1:0]        j_material_mode_i,
+    // R89's FLAT PER-PRIMITIVE ALPHA, unit8, bound for
+    // `tri_continuation_tail_i`'s `vertex_alpha` field and from there to
+    // `zhao_raster_blend_prod.a_i`.  `zhao_forge_shadow.sv:295` latches
+    // `vtx_alpha_o = strength_q` PER CASTER, so this is per-primitive by the
+    // producer's own construction and not by a convention invented here.
+    input  var logic [ 7:0]        j_vertex_alpha_i,
+    // THE RASTER STATE WORD, `zhao_raster_fragment.sv:213-236`'s layout, bound
+    // for `tri_fragment_state_i`.  IT IS LOAD-BEARING FOR THE ALPHA AND THAT IS
+    // NOT OBVIOUS: `zhao_raster_blend_fin`'s BL_REPLACE arm reads `src_i` and
+    // THROWS THE PRODUCT AWAY, so a flat alpha delivered to `a_i` under the
+    // default state changes not one pixel.  A shadow needs BLEND=ALPHA in
+    // `[4:3]`, and it needs Z_WRITE_DIS in `[1]` because a transparent hull
+    // must not write depth.  Zero is the plain opaque write and is what every
+    // other producer declares.
+    input  var logic [31:0]        j_frag_state_i,
 
     // ---- the authored art values (see the header) --------------------------
     input  var logic signed [31:0] art_r_i,
@@ -285,6 +315,11 @@ module zhao_forge_assemble #(
     output var logic [ATTRS*32-1:0] o_attr_c_o,
     output var logic [31:0]        o_material_set_o,
     output var logic [15:0]        o_material_id_o,
+    // The job's declaration, out on the same beat as the triangle it belongs
+    // to, so `zhao_geom_clipdoor` can grant them as ONE record.
+    output var logic [ 1:0]        o_material_mode_o,
+    output var logic [ 7:0]        o_vertex_alpha_o,
+    output var logic [31:0]        o_frag_state_o,
     output var logic [ 7:0]        o_quality_tier_o,
 
     // ---- the bank's interlock ----------------------------------------------
@@ -361,9 +396,15 @@ module zhao_forge_assemble #(
 
   logic [31:0] mset_q;          // the job's material set, in flight
   logic [15:0] mid_q;           // ... and its material id, the SAME latch
+  logic [ 1:0] mmode_q;         // ... its material-mode declaration
+  logic [ 7:0] mvalpha_q;       // ... its flat per-primitive alpha
+  logic [31:0] mstate_q;        // ... and its raster state word
   // The captured sideband, held between the JOB'S ISSUE and its first vertex.
   logic [31:0] jset_q;
   logic [15:0] jid_q;
+  logic [ 1:0] jmode_q;
+  logic [ 7:0] jvalpha_q;
+  logic [31:0] jstate_q;
   logic        jfull_q;
   logic [IDW-1:0] src_q;
 
@@ -576,9 +617,12 @@ module zhao_forge_assemble #(
   assign o_untex_o     = 1'b1;
   assign o_cull_mode_o = art_cull_mode_i;
 
-  assign o_material_set_o = mset_q;
-  assign o_material_id_o  = mid_q;
-  assign o_quality_tier_o = art_quality_tier_i;
+  assign o_material_set_o  = mset_q;
+  assign o_material_id_o   = mid_q;
+  assign o_material_mode_o = mmode_q;
+  assign o_vertex_alpha_o  = mvalpha_q;
+  assign o_frag_state_o    = mstate_q;
+  assign o_quality_tier_o  = art_quality_tier_i;
 
   // The ruling-5 packet, per corner. Slot 0 in the LOW 32 bits, which is the
   // order `zhao_console_core` builds GEOM.REPLAY's packet in and asserts with
@@ -634,6 +678,9 @@ module zhao_forge_assemble #(
       dqf_rp_q        <= '0;
       mset_q          <= 32'd0;
       mid_q           <= 16'd0;
+      mmode_q         <= 2'd0;
+      mvalpha_q       <= 8'd0;
+      mstate_q        <= 32'd0;
       src_q           <= '0;
       ax_q <= 21'sd0; ay_q <= 21'sd0;
       bx_q <= 21'sd0; by_q <= 21'sd0;
@@ -656,6 +703,9 @@ module zhao_forge_assemble #(
       mat_skew_o      <= 32'd0;
       jset_q          <= 32'd0;
       jid_q           <= 16'd0;
+      jmode_q         <= 2'd0;
+      jvalpha_q       <= 8'd0;
+      jstate_q        <= 32'd0;
       jfull_q         <= 1'b0;
       for (k = 0; k < MAX_VERTS; k = k + 1) begin
         pos_q[k] <= '0;
@@ -720,9 +770,12 @@ module zhao_forge_assemble #(
               // ONE ENABLE, BOTH HALVES, AND BOTH FROM THE CAPTURED
               // SIDEBAND -- not from the bank's live ports, which by now may
               // already describe the next draw. See the header.
-              mset_q  <= jset_q;
-              mid_q   <= jid_q;
-              jfull_q <= 1'b0;
+              mset_q    <= jset_q;
+              mid_q     <= jid_q;
+              mmode_q   <= jmode_q;
+              mvalpha_q <= jvalpha_q;
+              mstate_q  <= jstate_q;
+              jfull_q   <= 1'b0;
             end
             if (v_last_i) begin
               vcount_q <= issued_q + {{VW{1'b0}}, 1'b1};
@@ -837,9 +890,12 @@ module zhao_forge_assemble #(
       // block correct even if that argument is ever broken by a faster
       // evaluator, rather than merely unlikely to be wrong.
       if (j_valid_i && j_ready_o) begin
-        jset_q  <= j_material_set_i;
-        jid_q   <= j_material_id_i;
-        jfull_q <= 1'b1;
+        jset_q    <= j_material_set_i;
+        jid_q     <= j_material_id_i;
+        jmode_q   <= j_material_mode_i;
+        jvalpha_q <= j_vertex_alpha_i;
+        jstate_q  <= j_frag_state_i;
+        jfull_q   <= 1'b1;
       end
     end
   end

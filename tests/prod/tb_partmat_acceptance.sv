@@ -132,6 +132,11 @@ module tb_partmat_acceptance #(
   logic [NC*3-1:0]      c_behind_c;
   logic [NC*IDW-1:0]    c_src_id_c;
   logic [NC*2-1:0]      c_cull_c, c_mmode_c;
+  // The per-primitive RASTER declaration (SHADOWRIDE, 2026-09-23). Every
+  // client here declares the OPAQUE profile, which is what the whole
+  // existing suite runs under and what it must keep running under.
+  logic [NC*8-1:0]      c_valpha_c;
+  logic [NC*32-1:0]     c_fstate_c;
   logic [NC*AW-1:0]     c_attr_a_c, c_attr_b_c, c_attr_c_c;
   logic [NC*32-1:0]     c_mset_c;
   logic [NC*16-1:0]     c_mid_c;
@@ -144,6 +149,8 @@ module tb_partmat_acceptance #(
     c_mset_c   = {c2_material_set_i, c1_material_set_i, c0_material_set_i};
     c_mid_c    = {c2_material_id_i, c1_material_id_i, c0_material_id_i};
     c_mmode_c  = {c2_material_mode_i, c1_material_mode_i, c0_material_mode_i};
+    c_valpha_c = {NC{8'hFF}};
+    c_fstate_c = {NC{32'd0}};
     c_tier_c   = {8'h33, 8'h22, 8'h11};
     c_cull_c   = 6'd0;
     c_behind_c = 9'd0;
@@ -168,6 +175,15 @@ module tb_partmat_acceptance #(
   logic [31:0]        cd_o_material_set;
   logic [15:0]        cd_o_material_id;
   logic [ 1:0]        cd_o_material_mode;
+  logic [ 7:0] cd_o_vertex_alpha;
+  logic [31:0] cd_o_frag_state;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The window republishes the span's declaration; this bench asserts
+  // against the MODE and does not need the other two, which the console
+  // reads into entry I20's two ports.
+  logic [ 7:0] pub_vertex_alpha_w;
+  logic [31:0] pub_frag_state_w;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic [ 7:0]        cd_o_quality_tier;
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [20:0] cd_o_ax, cd_o_ay, cd_o_bx, cd_o_by, cd_o_cx, cd_o_cy;
@@ -202,6 +218,8 @@ module tb_partmat_acceptance #(
     .c_material_set_i (c_mset_c),
     .c_material_id_i  (c_mid_c),
     .c_material_mode_i(c_mmode_c),
+    .c_vertex_alpha_i (c_valpha_c),
+    .c_frag_state_i   (c_fstate_c),
     .c_quality_tier_i (c_tier_c),
 
     .o_valid_o        (cd_o_valid),
@@ -222,6 +240,8 @@ module tb_partmat_acceptance #(
     .o_material_set_o (cd_o_material_set),
     .o_material_id_o  (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),
+    .o_vertex_alpha_o (cd_o_vertex_alpha),
+    .o_frag_state_o   (cd_o_frag_state),
     .o_quality_tier_o (cd_o_quality_tier),
     .o_owner_o        (owner_o),
 
@@ -248,6 +268,8 @@ module tb_partmat_acceptance #(
     .t_material_set_i (cd_o_material_set),
     .t_material_id_i  (cd_o_material_id),
     .t_material_mode_i(cd_o_material_mode),
+    .t_vertex_alpha_i (cd_o_vertex_alpha),
+    .t_frag_state_i   (cd_o_frag_state),
     .t_quality_tier_i (cd_o_quality_tier),
     .t_valid_o        (mw_t_valid),
     .t_ready_i        (mw_t_ready),
@@ -284,6 +306,8 @@ module tb_partmat_acceptance #(
     .pub_base_binding_o    (pub_base_binding_o),
     .pub_response_class_o  (pub_response_class_o),
     .pub_material_mode_o   (pub_material_mode_o),
+    .pub_vertex_alpha_o    (pub_vertex_alpha_w),
+    .pub_frag_state_o      (pub_frag_state_w),
 
     .resolves_o                (mw_resolves_o),
     .switches_o                (mw_switches_o),

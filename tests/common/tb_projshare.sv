@@ -105,6 +105,20 @@ module tb_projshare #(
     input  var logic               f_view_i,
     input  var logic [PAY_W-3:0]   f_slot_i,
 
+    // ARM L -- GEOM.LODSTATE's instance centre, OWNER_LOD 2'd3. THE FOURTH AND
+    // LAST arm the two-bit owner field can hold. It landed 2026-09-23
+    // (SHADOWRIDE); before that this bench measured lodstate's SHAPE on the
+    // forge arm, because the real one did not exist -- which is exactly the
+    // substitution `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md` flagged as
+    // the half of R3's proof still owed. It is owed no longer: the intermittent
+    // case now drives THIS arm.
+    input  var logic               l_valid_i,
+    output var logic               l_ready_o,
+    input  var logic signed [31:0] l_vx_i,
+    input  var logic signed [31:0] l_vy_i,
+    input  var logic signed [31:0] l_vz_i,
+    input  var logic               l_view_i,
+
     // ---- client B -- terrain, the OTHER service arm -----------------------
     input  var logic               b_valid_i,
     output var logic               b_ready_o,
@@ -207,6 +221,15 @@ module tb_projshare #(
   logic               h_behind;
   logic [PAY_W-1:0]   h_payload;
   logic               rf_valid;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The instance centre's demux arm. This bench measures the REQUEST
+  // side's fairness and rate; the answer's arithmetic belongs to
+  // zhao_geom_projradius and is asserted there, so these are read by
+  // nothing here and say so.
+  logic        rl_valid;
+  logic [30:0] rl_w;
+  logic        rl_behind;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic signed [20:0] rf_x, rf_y;
   logic        [30:0] rf_w;
   logic               rf_behind;
@@ -279,6 +302,13 @@ module tb_projshare #(
       .f_view_i (f_view_i),
       .f_slot_i (f_slot_i),
 
+      .l_valid_i(l_valid_i),
+      .l_ready_o(l_ready_o),
+      .l_vx_i   (l_vx_i),
+      .l_vy_i   (l_vy_i),
+      .l_vz_i   (l_vz_i),
+      .l_view_i (l_view_i),
+
       .a_valid_o  (pa_valid),
       .a_ready_i  (pa_ready),
       .a_vx_o     (pa_vx),
@@ -310,6 +340,10 @@ module tb_projshare #(
       .rf_w_o     (rf_w),
       .rf_behind_o(rf_behind),
       .rf_slot_o  (rf_slot),
+
+      .rl_valid_o (rl_valid),
+      .rl_w_o     (rl_w),
+      .rl_behind_o(rl_behind),
 
       .lad_valid_o    (lad_valid),
       .lad_ready_i    (lad_ready),

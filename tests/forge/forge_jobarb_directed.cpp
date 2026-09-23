@@ -59,6 +59,7 @@ struct Desc {
   int32_t r, g, b, aalpha;
   uint8_t tier;
   uint8_t cull;
+  uint32_t fstate;
 };
 
 // What the assembler would have seen on the clock a vertex was taken.
@@ -69,6 +70,7 @@ struct Landed {
   uint16_t mid;
   uint8_t mode;
   uint8_t valpha;
+  uint32_t fstate;
   int32_t r;
   uint8_t tier;
   uint8_t cull;
@@ -100,6 +102,7 @@ void put_desc_a(Vzhao_forge_jobarb& d, const Desc& j) {
   d.a_j_material_id_i = j.mid;
   d.a_j_material_mode_i = j.mode;
   d.a_j_vertex_alpha_i = j.valpha;
+  d.a_j_frag_state_i = j.fstate;
   d.a_j_art_r_i = j.r;
   d.a_j_art_g_i = j.g;
   d.a_j_art_b_i = j.b;
@@ -114,6 +117,7 @@ void put_desc_b(Vzhao_forge_jobarb& d, const Desc& j) {
   d.b_j_material_id_i = j.mid;
   d.b_j_material_mode_i = j.mode;
   d.b_j_vertex_alpha_i = j.valpha;
+  d.b_j_frag_state_i = j.fstate;
   d.b_j_art_r_i = j.r;
   d.b_j_art_g_i = j.g;
   d.b_j_art_b_i = j.b;
@@ -176,6 +180,7 @@ Job run_job(Vzhao_forge_jobarb& d, bool on_b, int nv, int nt, int32_t base, int 
                             static_cast<uint16_t>(d.j_material_id_o),
                             static_cast<uint8_t>(d.j_material_mode_o),
                             static_cast<uint8_t>(d.j_vertex_alpha_o),
+                            static_cast<uint32_t>(d.j_frag_state_o),
                             static_cast<int32_t>(d.art_r_o),
                             static_cast<uint8_t>(d.art_quality_tier_o),
                             static_cast<uint8_t>(d.art_cull_mode_o)});
@@ -208,7 +213,7 @@ void check_job(const Job& j, const Desc& want, int nv, int nt, const char* label
 
   bool set_ok = !j.landed.empty(), id_ok = !j.landed.empty(), mode_ok = !j.landed.empty();
   bool va_ok = !j.landed.empty(), r_ok = !j.landed.empty(), tier_ok = !j.landed.empty();
-  bool cull_ok = !j.landed.empty();
+  bool cull_ok = !j.landed.empty(), fs_ok = !j.landed.empty();
   for (const Landed& l : j.landed) {
     set_ok = set_ok && (l.mset == want.mset);
     id_ok = id_ok && (l.mid == want.mid);
@@ -217,6 +222,7 @@ void check_job(const Job& j, const Desc& want, int nv, int nt, const char* label
     r_ok = r_ok && (l.r == want.r);
     tier_ok = tier_ok && (l.tier == want.tier);
     cull_ok = cull_ok && (l.cull == want.cull);
+    fs_ok = fs_ok && (l.fstate == want.fstate);
   }
   std::snprintf(buf, sizeof(buf), "%s: material_set held for every vertex", label);
   check(set_ok, buf, 1, set_ok ? 1 : 0);
@@ -232,6 +238,8 @@ void check_job(const Job& j, const Desc& want, int nv, int nt, const char* label
   check(tier_ok, buf, 1, tier_ok ? 1 : 0);
   std::snprintf(buf, sizeof(buf), "%s: cull_mode held", label);
   check(cull_ok, buf, 1, cull_ok ? 1 : 0);
+  std::snprintf(buf, sizeof(buf), "%s: raster state held", label);
+  check(fs_ok, buf, 1, fs_ok ? 1 : 0);
 
   bool tri_va_ok = !j.tri_alpha.empty();
   for (uint8_t a : j.tri_alpha) tri_va_ok = tri_va_ok && (a == want.valpha);
@@ -240,14 +248,17 @@ void check_job(const Job& j, const Desc& want, int nv, int nt, const char* label
 }
 
 const Desc kForgeJob0 = {0xDEAD0001u, 0x0041, 0, 0xFF, 0x11111111, 0x22222222,
-                         0x33333333, 0x00010000, 0x07, 1};
+                         0x33333333, 0x00010000, 0x07, 1, 0x00000000u};
 const Desc kForgeJob1 = {0xDEAD0002u, 0x0042, 0, 0xFF, 0x44444444, 0x55555555,
-                         0x66666666, 0x00010000, 0x09, 2};
+                         0x66666666, 0x00010000, 0x09, 2, 0x00000000u};
 // The shadow's descriptor: MATMODE_NONE with a ZERO pair, which is what
 // `zhao_material_window` requires of a non-sampling span, and a strength that
 // is not opaque.
+// BLEND=ALPHA in [4:3], Z_TEST_EN in [0], Z_WRITE_DIS in [1]: the raster state
+// without which the flat alpha above reaches `zhao_raster_blend_prod.a_i` and
+// is thrown away by the BL_REPLACE arm of the finish half.
 const Desc kShadowJob = {0x00000000u, 0x0000, 1, 0x60, 0x0A0A0A0A, 0x0B0B0B0B,
-                         0x0C0C0C0C, 0x00006000, 0x00, 0};
+                         0x0C0C0C0C, 0x00006000, 0x00, 0, 0x0000000Bu};
 
 }  // namespace
 
@@ -320,6 +331,7 @@ int main(int argc, char** argv) {
                           static_cast<uint16_t>(d.j_material_id_o),
                           static_cast<uint8_t>(d.j_material_mode_o),
                           static_cast<uint8_t>(d.j_vertex_alpha_o),
+                          static_cast<uint32_t>(d.j_frag_state_o),
                           static_cast<int32_t>(d.art_r_o),
                           static_cast<uint8_t>(d.art_quality_tier_o),
                           static_cast<uint8_t>(d.art_cull_mode_o)};

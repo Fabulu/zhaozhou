@@ -219,6 +219,17 @@ module zhao_material_window #(
     // travels on the SAME beat as the pair it qualifies, which is what stops it
     // being a second live wire (entry I39).
     input  wire        [ 1:0]       t_material_mode_i,
+    // ---- THE PRIMITIVE'S RASTER DECLARATION, 2026-09-23 (SHADOWRIDE) ------
+    // R89's FLAT per-primitive alpha and the raster state word, arriving on the
+    // SAME granted beat as the material pair and the mode, from
+    // `zhao_geom_clipdoor`.  They are latched into the published record by the
+    // SAME enable as `pub_mode_q` and they are part of `match_c`, for the
+    // reason `t_material_mode_i` is: a span is a run of primitives that agree,
+    // and two primitives that disagree about their alpha are two spans.  A
+    // field latched by a different enable, or left out of the identity, is the
+    // independently-advancing metadata queue this block exists to refuse.
+    input  wire        [ 7:0]       t_vertex_alpha_i,
+    input  wire        [31:0]       t_frag_state_i,
     // The draw's semantic weight, carried as the resolve's quality tier.  The
     // resolver ECHOES it (`tier_q`) and reads it nowhere, so this is a label
     // travelling with its request, not a policy this block invents.
@@ -265,6 +276,10 @@ module zhao_material_window #(
     // `pub_sample_count_o == 0`, which is true of a legal non-sampling MATERIAL
     // too (the `page == 255` creature).
     output logic       [ 1:0]       pub_material_mode_o,
+    // The span's own alpha and raster state, for entry I20's
+    // `tri_continuation_tail_i` and `tri_fragment_state_i`.
+    output logic       [ 7:0]       pub_vertex_alpha_o,
+    output logic       [31:0]       pub_frag_state_o,
 
     // ---- evidence ---------------------------------------------------------
     output logic       [31:0]       resolves_o,
@@ -328,6 +343,8 @@ module zhao_material_window #(
   logic [7:0]  pub_binding_q;
   logic [1:0]  pub_class_q;
   logic [1:0]  pub_mode_q;
+  logic [7:0]  pub_valpha_q;
+  logic [31:0] pub_state_q;
 
   // The pending request, captured from the triangle that asked for it.  It is
   // captured ONCE, on the transition out of ST_RUN, while that triangle is
@@ -337,6 +354,8 @@ module zhao_material_window #(
   logic [15:0] ask_id_q;
   logic [7:0]  ask_tier_q;
   logic [1:0]  ask_mode_q;
+  logic [7:0]  ask_valpha_q;
+  logic [31:0] ask_state_q;
 
   logic [OCCW-1:0] occupancy_q;
 
@@ -360,6 +379,8 @@ module zhao_material_window #(
   // miss, and a `match_c` miss is the existing mechanism.
   wire match_c = pub_valid_q &&
                  (t_material_mode_i == pub_mode_q) &&
+                 (t_vertex_alpha_i  == pub_valpha_q) &&
+                 (t_frag_state_i    == pub_state_q) &&
                  (t_material_set_i  == pub_set_q) &&
                  (t_material_id_i   == pub_id_q);
   wire pass_c  = (st_q == ST_RUN) && match_c && !refuse_c;
@@ -380,6 +401,8 @@ module zhao_material_window #(
   assign pub_base_binding_o    = pub_binding_q;
   assign pub_response_class_o  = pub_class_q;
   assign pub_material_mode_o   = pub_mode_q;
+  assign pub_vertex_alpha_o    = pub_valpha_q;
+  assign pub_frag_state_o      = pub_state_q;
 
   // ---- the request --------------------------------------------------------
   assign req_valid_o        = (st_q == ST_REQ);
@@ -448,10 +471,14 @@ module zhao_material_window #(
       pub_binding_q         <= 8'd0;
       pub_class_q           <= 2'd0;
       pub_mode_q            <= MATMODE_BACKED_C;
+      pub_valpha_q          <= 8'd0;
+      pub_state_q           <= 32'd0;
       ask_set_q             <= 32'd0;
       ask_id_q              <= 16'd0;
       ask_tier_q            <= 8'd0;
       ask_mode_q            <= MATMODE_BACKED_C;
+      ask_valpha_q          <= 8'd0;
+      ask_state_q           <= 32'd0;
       no_material_spans_o   <= 32'd0;
       mode_refused_o        <= 32'd0;
       resolves_o            <= 32'd0;
@@ -477,7 +504,9 @@ module zhao_material_window #(
             ask_set_q  <= t_material_set_i;
             ask_id_q   <= t_material_id_i;
             ask_tier_q <= t_quality_tier_i;
-            ask_mode_q <= t_material_mode_i;
+            ask_mode_q   <= t_material_mode_i;
+            ask_valpha_q <= t_vertex_alpha_i;
+            ask_state_q  <= t_frag_state_i;
             switches_o <= switches_o + 32'd1;
             st_q       <= ST_DRAIN;
           end
@@ -504,7 +533,9 @@ module zhao_material_window #(
               // The drain still happened. That is what keeps an in-flight
               // MATERIAL_BACKED triangle on its own profile across the switch.
               pub_valid_q <= 1'b1;
-              pub_mode_q  <= MATMODE_NONE_C;
+              pub_mode_q   <= MATMODE_NONE_C;
+              pub_valpha_q <= ask_valpha_q;
+              pub_state_q  <= ask_state_q;
               pub_set_q   <= ask_set_q;   // zero, enforced by `mode_contra_c`
               pub_id_q    <= ask_id_q;    // zero, enforced by `mode_contra_c`
               pub_count_q   <= NOMAT_SAMPLE_COUNT_C;
@@ -538,7 +569,9 @@ module zhao_material_window #(
             // the record beside it -- one more field of one published record,
             // which is the whole of "do not add an independently advancing
             // metadata queue".
-            pub_mode_q  <= MATMODE_BACKED_C;
+            pub_mode_q   <= MATMODE_BACKED_C;
+            pub_valpha_q <= ask_valpha_q;
+            pub_state_q  <= ask_state_q;
             pub_set_q   <= ask_set_q;
             pub_id_q    <= ask_id_q;
             if (rsp_has_record_i) begin

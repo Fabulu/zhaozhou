@@ -419,6 +419,82 @@ module zhao_console_board
   // `pcf_o_material_mode`, which the block itself drives.
   parameter logic [1:0] GEOM_REPLAY_MATERIAL_MODE = 2'd0,
   parameter logic [1:0] FORGE_MATERIAL_MODE       = 2'd0,
+
+  // ---- THE PER-PRIMITIVE RASTER DECLARATIONS (SHADOWRIDE, 2026-09-23) -----
+  // R89 routes a shadow's flat alpha down `tri_continuation_tail_i`'s
+  // `vertex_alpha` to `zhao_raster_blend_prod.a_i`. THAT IS NECESSARY AND NOT
+  // SUFFICIENT, and the missing half is the reason these are two constants and
+  // not one: `zhao_raster_blend_fin`'s BL_REPLACE arm returns `src_i` and
+  // THROWS THE PRODUCT AWAY (`zhao_raster_blend_fin.sv:42`), so an alpha
+  // delivered under the default raster state changes not one pixel. A shadow
+  // needs BLEND=ALPHA as well, and the blend mode lives in the raster state
+  // word's `[4:3]` -- `tri_fragment_state_i`, entry I20's other half.
+  //
+  // THE MESH AND PARTICLE PROFILES ARE THE FRAME DEFAULT SAID OUT LOUD.
+  // Opaque, and state zero, which `zhao_raster_fragment.sv:214` defines as
+  // "the plain opaque write: depth test off, depth written, blend REPLACE, no
+  // alpha test, stencil ALWAYS + REPLACE, tag written from the packet". That
+  // is what every triangle in this console has always been drawn under; these
+  // constants change nothing about it and make it a producer's declaration
+  // rather than a boundary word nobody named.
+  parameter logic [ 7:0] GEOM_REPLAY_VERTEX_ALPHA = 8'hFF,
+  parameter logic [31:0] GEOM_REPLAY_FRAG_STATE   = 32'd0,
+  parameter logic [ 7:0] PART_VERTEX_ALPHA        = 8'hFF,
+  parameter logic [31:0] PART_FRAG_STATE          = 32'd0,
+  parameter logic [ 7:0] FORGE_VERTEX_ALPHA       = 8'hFF,
+  parameter logic [31:0] FORGE_FRAG_STATE         = 32'd0,
+
+  // ---- FORGE.SHADOW's OWN ART, and all of it is a knob --------------------
+  // OWNER RULING R133 D-FORGESHADOW-A, "accepted as recommended": a caster's
+  // `cast_strength_i` comes "from a named constant at composition". This is
+  // that constant. It is a unit8, so the value is raw/256 and 255 is the
+  // largest representable rather than 1.0 -- 0x60 is about 37 % opacity.
+  //
+  // ITS CORRECTNESS IS A LOOK-GATE AND NOTHING HERE DECIDES IT. The contract
+  // is explicit: "a creature walking across flat ground, a slope, a cliff edge
+  // and a breach, at 240p, watched in motion. A contact shadow either sells
+  // the contact or it does not, and no measurement decides that." So this is
+  // a starting point somebody adjusts by looking, which is why it is one
+  // named parameter and not a derived expression.
+  parameter logic [7:0] SHADOW_STRENGTH = 8'h60,
+  // THE SAME VALUE IN THE OTHER FORMAT, for attribute slot 6. The slot has no
+  // interpolator (`zhao_geom_attrpack` publishes six planes and slot 6 is the
+  // seventh), which is exactly why R89 routed the real alpha down the
+  // continuation tail instead -- so this carries the same number rather than a
+  // second opinion about it. fx16: 0x60/256 * 65536 = 0x6000.
+  parameter logic signed [31:0] SHADOW_ART_ALPHA = 32'sh0000_6000,
+  // THE HULL'S COLOUR. Near-black rather than black: a pure-black shadow reads
+  // as a hole in the ground rather than as shade, and at 240p under one key
+  // light the difference is visible. ART, so it is three knobs.
+  parameter logic signed [31:0] SHADOW_LIT_R = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_G = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_B = 32'sh0000_2000,
+  // BLEND=ALPHA in [4:3], Z_TEST_EN in [0], Z_WRITE_DIS in [1]. The blend is
+  // what makes the hull transparent at all; the depth test keeps it behind
+  // whatever stands in front of it; and Z_WRITE_DIS is there because a
+  // transparent primitive that writes depth occludes everything drawn after
+  // it, which would be a shadow that erased its own creature.
+  parameter logic [31:0] SHADOW_FRAG_STATE = 32'h0000_000B,
+  // A shadow is a BACKGROUND producer (the contract's backpressure rule), so
+  // it declares the LOWEST semantic weight: if the Measure policy ever degrades
+  // by tier, hulls go first.
+  parameter logic [7:0] SHADOW_QUALITY_TIER = 8'd0,
+  // NO CULLING. A ground-conforming hull can be seen from either side at a
+  // cliff edge, and a winding law inherited from the ring's emission order is
+  // not something to bet a disappearing shadow on.
+  parameter logic [1:0] SHADOW_CULL_MODE = 2'd0,
+  // MATMODE_NONE. A shadow hull has no material record and takes no texture
+  // sample; `zhao_material_window`'s `mode_contra_c` REFUSES this mode paired
+  // with a non-zero {set, id}, which is why the pair beside it is zero, and
+  // R197's door at GEOM.CLIP's input admits an untextured primitive only under
+  // a zero-sample material -- which is what a MATMODE_NONE span publishes.
+  parameter logic [1:0] SHADOW_MATERIAL_MODE = 2'd1,
+  // WHICH SURFACE A SHADOW LANDS ON. `zhao_terrain_heighttap.sv:173` defines
+  // it: "0 = the top surface (the ground a shadow lands on), 1 = the bottom".
+  // The block's own words, so this is a citation and not a choice -- and it is
+  // a named constant because the day a keel-mounted creature wants the other
+  // one, this is the line.
+  parameter logic TERRAIN_TAP_SHADOW_SURFACE = 1'b0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -1621,6 +1697,85 @@ module zhao_console_board
   // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
   // 2026-09-22). Its traffic is per creature publication and per POSED draw.
   output logic [31:0] geom_ma_jobs_g_o,
+  // Requester H, GEOM.LADDERBANK's kind-8 CREATURE_FORM page reader
+  // (FORGE.SHADOW, composed 2026-09-23). Its traffic is per PUBLICATION and
+  // nothing else -- the ladder is adopted whole into registers and every
+  // lookup afterwards is a register read -- so it is the lightest requester on
+  // the share, and this is the number that says so rather than a claim that it
+  // is light.
+  output logic [31:0] geom_ma_jobs_h_o,
+
+  // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
+  // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
+  output logic [31:0] geom_lb_pages_o,
+  output logic [31:0] geom_lb_records_o,
+  output logic [31:0] geom_lb_pages_dropped_o,
+  output logic [31:0] geom_lb_bad_magic_o,
+  output logic [31:0] geom_lb_truncated_o,
+  output logic [31:0] geom_lb_bad_record_o,
+  output logic [31:0] geom_lb_overflow_o,
+  output logic [31:0] geom_lb_denied_o,
+  output logic [31:0] geom_lb_lookup_miss_o,
+
+  // GEOM.LODSTATE: one ladder per (instance, camera), owner ruling R74's
+  // D-LADDER-A. `ls_rung_counts_o` is flattened 32 bits per rung, least
+  // significant slice rung 0 (near hero), because Quartus 17.0 will not take
+  // an unpacked array port.
+  output logic [31:0]  geom_ls_ticks_o,
+  output logic [31:0]  geom_ls_skipped_repeat_o,
+  output logic [31:0]  geom_ls_bank_miss_o,
+  output logic [31:0]  geom_ls_no_radius_o,
+  output logic [31:0]  geom_ls_dropped_o,
+  output logic [31:0]  geom_ls_out_of_range_o,
+  output logic [127:0] geom_ls_rung_counts_o,
+  output logic [31:0]  geom_ls_rad_evaluations_o,
+  output logic [31:0]  geom_ls_rad_behind_o,
+  output logic [31:0]  geom_ls_rad_bad_bound_o,
+  output logic [31:0]  geom_ls_rad_saturated_o,
+
+  // TERRAIN.TAPSHARE: the height tap's two-client arbiter. `grants_o` is
+  // flattened, least significant slice client 0 (PART.COLLIDE's tap).
+  output logic [63:0] terr_tsh_grants_o,
+  output logic [31:0] terr_tsh_contended_o,
+  // A FAULT: a response arriving with no owner held. Its positive control is
+  // the committed `tests/mutants/zhao_terrain_tapshare_mutant.sv`.
+  output logic [31:0] terr_tsh_stray_rsp_o,
+
+  // FORGE.SHADOW itself. The three CORRECT refusals are counted APART from the
+  // one real fault, which is the block's own design and the reason a zero on
+  // `forge_shadow_tap_protocol_o` means something different from a zero on the
+  // other three.
+  output logic [15:0] forge_shadow_emitted_o,
+  output logic [15:0] forge_shadow_no_ground_o,
+  output logic [15:0] forge_shadow_zero_radius_o,
+  output logic [15:0] forge_shadow_far_rung_o,
+  output logic [15:0] forge_shadow_tap_protocol_o,
+  // The caster the ladder handed over but the console could not draw this
+  // frame, because its camera is not the one being rendered. CORRECT, and
+  // counted for the same reason `zhao_forge_ring_eval.skipped_view_o` is.
+  output logic [31:0] forge_shadow_skipped_view_o,
+
+  // The fan indexer. `forge_fanidx_hulls_rung_o` is flattened 32 bits per
+  // rung, least significant slice rung 0 -- the look-gate's evidence for "the
+  // shadow is too coarse here", which the contract says is the argument this
+  // subsystem will actually have.
+  output logic [31:0]  forge_fanidx_hulls_o,
+  output logic [31:0]  forge_fanidx_triangles_o,
+  output logic [31:0]  forge_fanidx_short_ring_o,
+  output logic [31:0]  forge_fanidx_ring_overflow_o,
+  output logic [127:0] forge_fanidx_hulls_rung_o,
+
+  // The job arbiter in front of the SHARED assembler.
+  output logic [31:0] forge_jobarb_grant_prim_o,
+  output logic [31:0] forge_jobarb_grant_shadow_o,
+  output logic [31:0] forge_jobarb_switches_o,
+  // THE NUMBER THE CONTRACT'S BACKPRESSURE RULE IS ABOUT. "A stalled shadow
+  // must never delay a creature": `forge_jobarb_wait_prim_o` is the clocks
+  // FORGE.PRIM spent held behind a shadow hull already in flight, and it is
+  // bounded by one hull. The shadow's own wait is the other one.
+  output logic [31:0] forge_jobarb_wait_prim_o,
+  output logic [31:0] forge_jobarb_wait_shadow_o,
+  output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
@@ -3972,97 +4127,113 @@ module zhao_console_board
   // which is a port that appeared in the core after this file was written.
   // ===========================================================================
   zhao_console_core #(
-      .FRAMER_Q                  (FRAMER_Q),
-      .WFIFO_W                   (WFIFO_W),
-      .SNAC_PORTS                (SNAC_PORTS),
-      .CMD_EXEC_STAMP_Q          (CMD_EXEC_STAMP_Q),
-      .PART_REC_W                (PART_REC_W),
-      .PART_CAPACITY             (PART_CAPACITY),
-      .PART_CHILD_D              (PART_CHILD_D),
-      .PART_SPECIES_N            (PART_SPECIES_N),
-      .PART_AGE_W                (PART_AGE_W),
-      .PART_POS_W                (PART_POS_W),
-      .PART_VEL_W                (PART_VEL_W),
-      .PART_NRM_W                (PART_NRM_W),
-      .PART_FX_W                 (PART_FX_W),
-      .PART_PID_W                (PART_PID_W),
-      .PART_TICK_W               (PART_TICK_W),
-      .PART_TBL_LD_W             (PART_TBL_LD_W),
-      .GEOM_ARENAS               (GEOM_ARENAS),
-      .GEOM_DEPTH                (GEOM_DEPTH),
-      .GEOM_NVIEWS               (GEOM_NVIEWS),
-      .GEOM_GEN_W                (GEOM_GEN_W),
-      .GEOM_PAY_A_W              (GEOM_PAY_A_W),
-      .GEOM_PAYLOAD_W            (GEOM_PAYLOAD_W),
-      .GEOM_INDEX_W              (GEOM_INDEX_W),
-      .GEOM_ARENA_W              (GEOM_ARENA_W),
-      .GEOM_MUL_LANES            (GEOM_MUL_LANES),
-      .GEOM_ASSET_MAX_VERTICES   (GEOM_ASSET_MAX_VERTICES),
-      .GEOM_ASSET_MAX_TRIANGLES  (GEOM_ASSET_MAX_TRIANGLES),
-      .GEOM_ASM_VIDW             (GEOM_ASM_VIDW),
-      .GEOM_CLIP_ATTRS           (GEOM_CLIP_ATTRS),
-      .GEOM_CLIP_ATTRW           (GEOM_CLIP_ATTRW),
-      .GEOM_ATTR_STORE_W         (GEOM_ATTR_STORE_W),
-      .FORGE_MAX_VERTS           (FORGE_MAX_VERTS),
-      .FORGE_INFLIGHT            (FORGE_INFLIGHT),
-      .FORGE_MAX_SCAN            (FORGE_MAX_SCAN),
-      .FORGE_LIT_R               (FORGE_LIT_R),
-      .FORGE_LIT_G               (FORGE_LIT_G),
-      .FORGE_LIT_B               (FORGE_LIT_B),
-      .FORGE_ALPHA               (FORGE_ALPHA),
-      .FORGE_QUALITY_TIER        (FORGE_QUALITY_TIER),
-      .FORGE_CULL_MODE           (FORGE_CULL_MODE),
-      .FORGE_CMD_VIEW_MASK       (FORGE_CMD_VIEW_MASK),
-      .GEOM_REPLAY_UNTEX_DECL    (GEOM_REPLAY_UNTEX_DECL),
-      .GEOM_REPLAY_MATERIAL_MODE (GEOM_REPLAY_MATERIAL_MODE),
-      .FORGE_MATERIAL_MODE       (FORGE_MATERIAL_MODE),
-      .GEOM_ATTR_SLOT_INVW       (GEOM_ATTR_SLOT_INVW),
-      .GEOM_ATTR_SLOT_U_OVER_W   (GEOM_ATTR_SLOT_U_OVER_W),
-      .GEOM_ATTR_SLOT_V_OVER_W   (GEOM_ATTR_SLOT_V_OVER_W),
-      .GEOM_ATTR_SLOT_R          (GEOM_ATTR_SLOT_R),
-      .GEOM_ATTR_SLOT_G          (GEOM_ATTR_SLOT_G),
-      .GEOM_ATTR_SLOT_B          (GEOM_ATTR_SLOT_B),
-      .GEOM_ATTR_SLOT_ALPHA      (GEOM_ATTR_SLOT_ALPHA),
-      .PART_ALPHA                (PART_ALPHA),
-      .PROJ_T_ARENAS             (PROJ_T_ARENAS),
-      .PROJ_T_DEPTH              (PROJ_T_DEPTH),
-      .PROJ_T_INDEX_W            (PROJ_T_INDEX_W),
-      .PROJ_T_ARENA_W            (PROJ_T_ARENA_W),
-      .PROJ_T_IDX_W              (PROJ_T_IDX_W),
-      .PROJ_T_VALID_MODE         (PROJ_T_VALID_MODE),
-      .POST_LINE_W               (POST_LINE_W),
-      .POST_MAX_H                (POST_MAX_H),
-      .POST_NLINE                (POST_NLINE),
-      .POST_LAG_LINES            (POST_LAG_LINES),
-      .POST_LAG_PX               (POST_LAG_PX),
-      .POST_XW                   (POST_XW),
-      .POST_YW                   (POST_YW),
-      .TWOD_PAGE_WORDS           (TWOD_PAGE_WORDS),
-      .TWOD_PAL_SLOTS            (TWOD_PAL_SLOTS),
-      .TWOD_BIND_SLOTS           (TWOD_BIND_SLOTS),
-      .TWOD_ATM_LINES            (TWOD_ATM_LINES),
-      .TWOD_PAW                  (TWOD_PAW),
-      .TWOD_PALAW                (TWOD_PALAW),
-      .TWOD_BSW                  (TWOD_BSW),
-      .HIST_EW                   (HIST_EW),
-      .HIST_SUB_BITS             (HIST_SUB_BITS),
-      .HIST_LANES                (HIST_LANES),
-      .HIST_CW                   (HIST_CW),
-      .HIST_BINW                 (HIST_BINW),
-      .SURF_SLOTS                (SURF_SLOTS),
-      .SURF_SQ_RADIX             (SURF_SQ_RADIX),
-      .TERR_SETS                 (TERR_SETS),
-      .TERR_WAYS                 (TERR_WAYS),
-      .TERR_SLOTW                (TERR_SLOTW),
-      .TERR_GENW                 (TERR_GENW),
-      .TERR_SEQW                 (TERR_SEQW),
-      .TERR_PINW                 (TERR_PINW),
-      .TERR_CSLOTS               (TERR_CSLOTS),
-      .TERR_LOADQ_D              (TERR_LOADQ_D),
-      .TERR_POOL_BASE            (TERR_POOL_BASE),
-      .TERR_POOL_SLOTS           (TERR_POOL_SLOTS),
-      .TERR_MEMSLOT              (TERR_MEMSLOT),
-      .TERR_PAGE_BYTES           (TERR_PAGE_BYTES)
+      .FRAMER_Q                   (FRAMER_Q),
+      .WFIFO_W                    (WFIFO_W),
+      .SNAC_PORTS                 (SNAC_PORTS),
+      .CMD_EXEC_STAMP_Q           (CMD_EXEC_STAMP_Q),
+      .PART_REC_W                 (PART_REC_W),
+      .PART_CAPACITY              (PART_CAPACITY),
+      .PART_CHILD_D               (PART_CHILD_D),
+      .PART_SPECIES_N             (PART_SPECIES_N),
+      .PART_AGE_W                 (PART_AGE_W),
+      .PART_POS_W                 (PART_POS_W),
+      .PART_VEL_W                 (PART_VEL_W),
+      .PART_NRM_W                 (PART_NRM_W),
+      .PART_FX_W                  (PART_FX_W),
+      .PART_PID_W                 (PART_PID_W),
+      .PART_TICK_W                (PART_TICK_W),
+      .PART_TBL_LD_W              (PART_TBL_LD_W),
+      .GEOM_ARENAS                (GEOM_ARENAS),
+      .GEOM_DEPTH                 (GEOM_DEPTH),
+      .GEOM_NVIEWS                (GEOM_NVIEWS),
+      .GEOM_GEN_W                 (GEOM_GEN_W),
+      .GEOM_PAY_A_W               (GEOM_PAY_A_W),
+      .GEOM_PAYLOAD_W             (GEOM_PAYLOAD_W),
+      .GEOM_INDEX_W               (GEOM_INDEX_W),
+      .GEOM_ARENA_W               (GEOM_ARENA_W),
+      .GEOM_MUL_LANES             (GEOM_MUL_LANES),
+      .GEOM_ASSET_MAX_VERTICES    (GEOM_ASSET_MAX_VERTICES),
+      .GEOM_ASSET_MAX_TRIANGLES   (GEOM_ASSET_MAX_TRIANGLES),
+      .GEOM_ASM_VIDW              (GEOM_ASM_VIDW),
+      .GEOM_CLIP_ATTRS            (GEOM_CLIP_ATTRS),
+      .GEOM_CLIP_ATTRW            (GEOM_CLIP_ATTRW),
+      .GEOM_ATTR_STORE_W          (GEOM_ATTR_STORE_W),
+      .FORGE_MAX_VERTS            (FORGE_MAX_VERTS),
+      .FORGE_INFLIGHT             (FORGE_INFLIGHT),
+      .FORGE_MAX_SCAN             (FORGE_MAX_SCAN),
+      .FORGE_LIT_R                (FORGE_LIT_R),
+      .FORGE_LIT_G                (FORGE_LIT_G),
+      .FORGE_LIT_B                (FORGE_LIT_B),
+      .FORGE_ALPHA                (FORGE_ALPHA),
+      .FORGE_QUALITY_TIER         (FORGE_QUALITY_TIER),
+      .FORGE_CULL_MODE            (FORGE_CULL_MODE),
+      .FORGE_CMD_VIEW_MASK        (FORGE_CMD_VIEW_MASK),
+      .GEOM_REPLAY_UNTEX_DECL     (GEOM_REPLAY_UNTEX_DECL),
+      .GEOM_REPLAY_MATERIAL_MODE  (GEOM_REPLAY_MATERIAL_MODE),
+      .FORGE_MATERIAL_MODE        (FORGE_MATERIAL_MODE),
+      .GEOM_REPLAY_VERTEX_ALPHA   (GEOM_REPLAY_VERTEX_ALPHA),
+      .GEOM_REPLAY_FRAG_STATE     (GEOM_REPLAY_FRAG_STATE),
+      .PART_VERTEX_ALPHA          (PART_VERTEX_ALPHA),
+      .PART_FRAG_STATE            (PART_FRAG_STATE),
+      .FORGE_VERTEX_ALPHA         (FORGE_VERTEX_ALPHA),
+      .FORGE_FRAG_STATE           (FORGE_FRAG_STATE),
+      .SHADOW_STRENGTH            (SHADOW_STRENGTH),
+      .SHADOW_ART_ALPHA           (SHADOW_ART_ALPHA),
+      .SHADOW_LIT_R               (SHADOW_LIT_R),
+      .SHADOW_LIT_G               (SHADOW_LIT_G),
+      .SHADOW_LIT_B               (SHADOW_LIT_B),
+      .SHADOW_FRAG_STATE          (SHADOW_FRAG_STATE),
+      .SHADOW_QUALITY_TIER        (SHADOW_QUALITY_TIER),
+      .SHADOW_CULL_MODE           (SHADOW_CULL_MODE),
+      .SHADOW_MATERIAL_MODE       (SHADOW_MATERIAL_MODE),
+      .TERRAIN_TAP_SHADOW_SURFACE (TERRAIN_TAP_SHADOW_SURFACE),
+      .GEOM_ATTR_SLOT_INVW        (GEOM_ATTR_SLOT_INVW),
+      .GEOM_ATTR_SLOT_U_OVER_W    (GEOM_ATTR_SLOT_U_OVER_W),
+      .GEOM_ATTR_SLOT_V_OVER_W    (GEOM_ATTR_SLOT_V_OVER_W),
+      .GEOM_ATTR_SLOT_R           (GEOM_ATTR_SLOT_R),
+      .GEOM_ATTR_SLOT_G           (GEOM_ATTR_SLOT_G),
+      .GEOM_ATTR_SLOT_B           (GEOM_ATTR_SLOT_B),
+      .GEOM_ATTR_SLOT_ALPHA       (GEOM_ATTR_SLOT_ALPHA),
+      .PART_ALPHA                 (PART_ALPHA),
+      .PROJ_T_ARENAS              (PROJ_T_ARENAS),
+      .PROJ_T_DEPTH               (PROJ_T_DEPTH),
+      .PROJ_T_INDEX_W             (PROJ_T_INDEX_W),
+      .PROJ_T_ARENA_W             (PROJ_T_ARENA_W),
+      .PROJ_T_IDX_W               (PROJ_T_IDX_W),
+      .PROJ_T_VALID_MODE          (PROJ_T_VALID_MODE),
+      .POST_LINE_W                (POST_LINE_W),
+      .POST_MAX_H                 (POST_MAX_H),
+      .POST_NLINE                 (POST_NLINE),
+      .POST_LAG_LINES             (POST_LAG_LINES),
+      .POST_LAG_PX                (POST_LAG_PX),
+      .POST_XW                    (POST_XW),
+      .POST_YW                    (POST_YW),
+      .TWOD_PAGE_WORDS            (TWOD_PAGE_WORDS),
+      .TWOD_PAL_SLOTS             (TWOD_PAL_SLOTS),
+      .TWOD_BIND_SLOTS            (TWOD_BIND_SLOTS),
+      .TWOD_ATM_LINES             (TWOD_ATM_LINES),
+      .TWOD_PAW                   (TWOD_PAW),
+      .TWOD_PALAW                 (TWOD_PALAW),
+      .TWOD_BSW                   (TWOD_BSW),
+      .HIST_EW                    (HIST_EW),
+      .HIST_SUB_BITS              (HIST_SUB_BITS),
+      .HIST_LANES                 (HIST_LANES),
+      .HIST_CW                    (HIST_CW),
+      .HIST_BINW                  (HIST_BINW),
+      .SURF_SLOTS                 (SURF_SLOTS),
+      .SURF_SQ_RADIX              (SURF_SQ_RADIX),
+      .TERR_SETS                  (TERR_SETS),
+      .TERR_WAYS                  (TERR_WAYS),
+      .TERR_SLOTW                 (TERR_SLOTW),
+      .TERR_GENW                  (TERR_GENW),
+      .TERR_SEQW                  (TERR_SEQW),
+      .TERR_PINW                  (TERR_PINW),
+      .TERR_CSLOTS                (TERR_CSLOTS),
+      .TERR_LOADQ_D               (TERR_LOADQ_D),
+      .TERR_POOL_BASE             (TERR_POOL_BASE),
+      .TERR_POOL_SLOTS            (TERR_POOL_SLOTS),
+      .TERR_MEMSLOT               (TERR_MEMSLOT),
+      .TERR_PAGE_BYTES            (TERR_PAGE_BYTES)
   ) u_core (
       .part_cfg_base0_i                   (part_cfg_base0_i),
       .part_cfg_base1_i                   (part_cfg_base1_i),
@@ -4509,6 +4680,47 @@ module zhao_console_board
       .cmd_exec_forge_src_truncated_o     (cmd_exec_forge_src_truncated_o),
       .geom_ma_jobs_f_o                   (geom_ma_jobs_f_o),
       .geom_ma_jobs_g_o                   (geom_ma_jobs_g_o),
+      .geom_ma_jobs_h_o                   (geom_ma_jobs_h_o),
+      .geom_lb_pages_o                    (geom_lb_pages_o),
+      .geom_lb_records_o                  (geom_lb_records_o),
+      .geom_lb_pages_dropped_o            (geom_lb_pages_dropped_o),
+      .geom_lb_bad_magic_o                (geom_lb_bad_magic_o),
+      .geom_lb_truncated_o                (geom_lb_truncated_o),
+      .geom_lb_bad_record_o               (geom_lb_bad_record_o),
+      .geom_lb_overflow_o                 (geom_lb_overflow_o),
+      .geom_lb_denied_o                   (geom_lb_denied_o),
+      .geom_lb_lookup_miss_o              (geom_lb_lookup_miss_o),
+      .geom_ls_ticks_o                    (geom_ls_ticks_o),
+      .geom_ls_skipped_repeat_o           (geom_ls_skipped_repeat_o),
+      .geom_ls_bank_miss_o                (geom_ls_bank_miss_o),
+      .geom_ls_no_radius_o                (geom_ls_no_radius_o),
+      .geom_ls_dropped_o                  (geom_ls_dropped_o),
+      .geom_ls_out_of_range_o             (geom_ls_out_of_range_o),
+      .geom_ls_rung_counts_o              (geom_ls_rung_counts_o),
+      .geom_ls_rad_evaluations_o          (geom_ls_rad_evaluations_o),
+      .geom_ls_rad_behind_o               (geom_ls_rad_behind_o),
+      .geom_ls_rad_bad_bound_o            (geom_ls_rad_bad_bound_o),
+      .geom_ls_rad_saturated_o            (geom_ls_rad_saturated_o),
+      .terr_tsh_grants_o                  (terr_tsh_grants_o),
+      .terr_tsh_contended_o               (terr_tsh_contended_o),
+      .terr_tsh_stray_rsp_o               (terr_tsh_stray_rsp_o),
+      .forge_shadow_emitted_o             (forge_shadow_emitted_o),
+      .forge_shadow_no_ground_o           (forge_shadow_no_ground_o),
+      .forge_shadow_zero_radius_o         (forge_shadow_zero_radius_o),
+      .forge_shadow_far_rung_o            (forge_shadow_far_rung_o),
+      .forge_shadow_tap_protocol_o        (forge_shadow_tap_protocol_o),
+      .forge_shadow_skipped_view_o        (forge_shadow_skipped_view_o),
+      .forge_fanidx_hulls_o               (forge_fanidx_hulls_o),
+      .forge_fanidx_triangles_o           (forge_fanidx_triangles_o),
+      .forge_fanidx_short_ring_o          (forge_fanidx_short_ring_o),
+      .forge_fanidx_ring_overflow_o       (forge_fanidx_ring_overflow_o),
+      .forge_fanidx_hulls_rung_o          (forge_fanidx_hulls_rung_o),
+      .forge_jobarb_grant_prim_o          (forge_jobarb_grant_prim_o),
+      .forge_jobarb_grant_shadow_o        (forge_jobarb_grant_shadow_o),
+      .forge_jobarb_switches_o            (forge_jobarb_switches_o),
+      .forge_jobarb_wait_prim_o           (forge_jobarb_wait_prim_o),
+      .forge_jobarb_wait_shadow_o         (forge_jobarb_wait_shadow_o),
+      .forge_jobarb_no_desc_o             (forge_jobarb_no_desc_o),
       .geom_clipdoor_granted_o            (geom_clipdoor_granted_o),
       .geom_clipdoor_switches_o           (geom_clipdoor_switches_o),
       .geom_clipdoor_idle_offered_o       (geom_clipdoor_idle_offered_o),

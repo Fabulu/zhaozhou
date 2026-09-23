@@ -107,7 +107,19 @@ struct Got {
   uint16_t src_id, material_id;
   uint32_t material_set;
   uint8_t untex, cull, tier;
+  // The per-job DECLARATION (SHADOWRIDE, 2026-09-23).
+  uint8_t material_mode, vertex_alpha;
+  uint32_t frag_state;
 };
+
+// FORGE.PRIM's declaration, which every case below keeps unless it says
+// otherwise: MATERIAL_BACKED, opaque, and the plain opaque write.
+constexpr uint8_t kModeBacked = 0;
+constexpr uint8_t kModeNone = 1;
+constexpr uint8_t kAlphaOpaque = 0xFF;
+constexpr uint32_t kStatePlain = 0;
+// A shadow hull's: BLEND=ALPHA in [4:3], Z_TEST_EN in [0], Z_WRITE_DIS in [1].
+constexpr uint32_t kStateShadow = 0x0000000Bu;
 
 void hard_reset(Vtb_forge_assemble& d) {
   d.rst_n = 0;
@@ -123,6 +135,9 @@ void hard_reset(Vtb_forge_assemble& d) {
   d.art_cull_mode_i = 0;
   d.j_material_set_i = 0;
   d.j_material_id_i = 0;
+  d.j_material_mode_i = kModeBacked;
+  d.j_vertex_alpha_i = kAlphaOpaque;
+  d.j_frag_state_i = kStatePlain;
   d.j_valid_i = 0;
   for (int i = 0; i < 8; ++i) tick(d);
   d.rst_n = 1;
@@ -181,9 +196,14 @@ int offer_without_last(Vtb_forge_assemble& d, int n, int* refused) {
 // that in the composed chain on its first run. So the driver hands the pair
 // over ONCE, and section 5d below then CHANGES THE PORTS UNDERNEATH to prove
 // the captured value is what ships.
-void presentJob(Vtb_forge_assemble& d, uint32_t mset, uint16_t mid) {
+void presentJob(Vtb_forge_assemble& d, uint32_t mset, uint16_t mid,
+                uint8_t mode = kModeBacked, uint8_t valpha = kAlphaOpaque,
+                uint32_t state = kStatePlain) {
   d.j_material_set_i = mset;
   d.j_material_id_i = mid;
+  d.j_material_mode_i = mode;
+  d.j_vertex_alpha_i = valpha;
+  d.j_frag_state_i = state;
   d.j_valid_i = 1;
   for (int guard = 0; guard < 1000; ++guard) {
     d.eval();
@@ -258,6 +278,9 @@ std::vector<Got> run_triples(Vtb_forge_assemble& d, const std::vector<Tri>& tris
       g.src_id = d.o_src_id_o;
       g.material_id = d.o_material_id_o;
       g.material_set = d.o_material_set_o;
+      g.material_mode = d.o_material_mode_o;
+      g.vertex_alpha = d.o_vertex_alpha_o;
+      g.frag_state = d.o_frag_state_o;
       g.untex = d.o_untex_o;
       g.cull = d.o_cull_mode_o;
       g.tier = d.o_quality_tier_o;
@@ -544,9 +567,14 @@ int main() {
     int sent7 = 0;
     int guard7 = 0;
     while (sent7 < kN7 && guard7++ < 200000) {
-      // THE PORTS MOVE, from the cycle after the handover.
+      // THE PORTS MOVE, from the cycle after the handover. All FIVE of them
+      // since 2026-09-23: the declaration is latched by the SAME enable as the
+      // pair, so it has to survive the same interference.
       d.j_material_set_i = 0xBADBAD22u;
       d.j_material_id_i = 0x0999;
+      d.j_material_mode_i = kModeNone;
+      d.j_vertex_alpha_i = 0x11;
+      d.j_frag_state_i = 0xDEADBEEFu;
       d.v_valid_i = 1;
       d.v_x_i = wx(sent7);
       d.v_y_i = wy(sent7);
@@ -573,10 +601,101 @@ int main() {
     check(got7[0].material_id == 0x0321,
           "THE CAPTURED ID SHIPS, not the one the ports moved to", 0x0321,
           got7[0].material_id);
+    check(got7[0].material_mode == kModeBacked,
+          "THE CAPTURED MODE SHIPS -- one enable, every field", kModeBacked,
+          got7[0].material_mode);
+    check(got7[0].vertex_alpha == kAlphaOpaque,
+          "THE CAPTURED ALPHA SHIPS", kAlphaOpaque, got7[0].vertex_alpha);
+    check(got7[0].frag_state == kStatePlain, "THE CAPTURED RASTER STATE SHIPS",
+          kStatePlain, got7[0].frag_state);
   }
   check(d.mat_skew_o == skew_before_cap,
         "and mat_skew_o is PUT -- the triangle agreed with the CAPTURED id",
         skew_before_cap, d.mat_skew_o);
+
+  // ==========================================================================
+  // 5e. THE SECOND PRODUCER'S DECLARATION (SHADOWRIDE, 2026-09-23).
+  //
+  //     This block is shared with FORGE.SHADOW through `zhao_forge_jobarb`,
+  //     and one composer constant cannot be true of both producers. A shadow
+  //     hull declares MATMODE_NONE with a ZERO {set, id} -- which is not a
+  //     convenience: `zhao_material_window.sv:354` REFUSES MATMODE_NONE paired
+  //     with a non-zero one -- a non-opaque flat alpha, and a raster state of
+  //     BLEND=ALPHA + Z_TEST_EN + Z_WRITE_DIS.
+  //
+  //     THE RASTER STATE IS LOAD-BEARING FOR THE ALPHA and that is the part
+  //     worth a test rather than a comment: `zhao_raster_blend_fin`'s
+  //     BL_REPLACE arm returns `src_i` and THROWS THE PRODUCT AWAY, so an
+  //     alpha delivered to `zhao_raster_blend_prod.a_i` under the default
+  //     state changes not one pixel. A shadow composed with the alpha and
+  //     without the state is a flat OPAQUE dark polygon under every creature,
+  //     which is exactly the art defect ruling R89 was written to refuse.
+  // ==========================================================================
+  {
+    const int kN8 = 4;
+    presentJob(d, 0x00000000u, 0x0000, kModeNone, 0x60, kStateShadow);
+    int sent8 = 0;
+    int guard8 = 0;
+    while (sent8 < kN8 && guard8++ < 200000) {
+      d.v_valid_i = 1;
+      d.v_x_i = wx(sent8);
+      d.v_y_i = wy(sent8);
+      d.v_z_i = wz(sent8);
+      d.v_last_i = (sent8 == kN8 - 1) ? 1 : 0;
+      d.eval();
+      const bool taken = d.v_ready_o != 0;
+      tick(d);
+      if (taken) ++sent8;
+    }
+    d.v_valid_i = 0;
+    d.v_last_i = 0;
+    d.eval();
+    check(sent8 == kN8, "the shadow job's vertices were accepted", kN8, sent8);
+
+    const uint32_t skew_before_shadow = d.mat_skew_o;
+    std::vector<Tri> tris8 = {{0, 1, 2}, {0, 2, 3}};
+    auto got8 = run_triples(d, tris8, 0x0000, 0x0000);
+    check(got8.size() == 2, "the shadow hull produced its fan", 2, got8.size());
+    for (size_t k = 0; k < got8.size(); ++k) {
+      check(got8[k].material_mode == kModeNone,
+            "the shadow declares MATMODE_NONE on every triangle", kModeNone,
+            got8[k].material_mode);
+      check(got8[k].vertex_alpha == 0x60,
+            "the caster's flat alpha rides every triangle", 0x60,
+            got8[k].vertex_alpha);
+      check(got8[k].frag_state == kStateShadow,
+            "and so does BLEND=ALPHA + Z_TEST_EN + Z_WRITE_DIS", kStateShadow,
+            got8[k].frag_state);
+      check(got8[k].material_set == 0u,
+            "a MATMODE_NONE span carries a ZERO set, which the window requires",
+            0u, got8[k].material_set);
+      check(got8[k].untex == 1,
+            "and it is untextured, unconditionally, as every forge primitive is",
+            1, got8[k].untex);
+    }
+    check(d.mat_skew_o == skew_before_shadow,
+          "a zero-id shadow job is NOT a skew", skew_before_shadow,
+          d.mat_skew_o);
+
+    // And the NEXT job takes the declaration back. A held declaration would be
+    // the metadata fault with the mode instead of the material.
+    const int kN9 = 3;
+    sent = feed_vertices(d, kN9, 0xFEED0009u, 0x0077, &stalls);
+    check(sent == kN9, "the job after a shadow was accepted", kN9, sent);
+    std::vector<Tri> tris9 = {{0, 1, 2}};
+    auto got9 = run_triples(d, tris9, 0x0077, 0x0055);
+    check(got9.size() == 1, "the job after a shadow produced its triangle", 1,
+          got9.size());
+    if (!got9.empty()) {
+      check(got9[0].material_mode == kModeBacked,
+            "the declaration goes BACK -- a shadow does not repaint the next job",
+            kModeBacked, got9[0].material_mode);
+      check(got9[0].vertex_alpha == kAlphaOpaque,
+            "and so does the alpha", kAlphaOpaque, got9[0].vertex_alpha);
+      check(got9[0].frag_state == kStatePlain, "and so does the raster state",
+            kStatePlain, got9[0].frag_state);
+    }
+  }
 
   // ==========================================================================
   // 5c. THE DISCRIMINATION (R95), and it is the awkward case on purpose.

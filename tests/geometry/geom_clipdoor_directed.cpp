@@ -97,6 +97,11 @@ void drive_client0(Vtb_geom_clipdoor& d) {
   // the door carried a constant, or carried the other client's, the assertion
   // would read the wrong one. MATMODE_BACKED for client 0, the mesh producer.
   d.c0_material_mode_i = 0;
+  // ...and its RASTER declaration (SHADOWRIDE, 2026-09-23). Opaque, and the
+  // plain opaque write. Deliberately DIFFERENT from client 1's below, for the
+  // same reason the mode is: a door that carried a constant would pass.
+  d.c0_vertex_alpha_i = 0xFF;
+  d.c0_frag_state_i = 0x00000000u;
 }
 
 void drive_client1(Vtb_geom_clipdoor& d) {
@@ -116,6 +121,10 @@ void drive_client1(Vtb_geom_clipdoor& d) {
   d.c1_quality_tier_i = 0x22;
   // MATMODE_NONE for client 1, which is what a polygon particle declares.
   d.c1_material_mode_i = 1;
+  // A shadow hull's declaration: a non-opaque flat alpha and BLEND=ALPHA with
+  // Z_TEST_EN and Z_WRITE_DIS.
+  d.c1_vertex_alpha_i = 0x60;
+  d.c1_frag_state_i = 0x0000000Bu;
 }
 
 void hard_reset(Vtb_geom_clipdoor& d) {
@@ -209,6 +218,12 @@ int main(int argc, char** argv) {
   check(d.o_material_mode_o == 0,
         "client 0 declares MATERIAL_BACKED and that is what the door carries",
         0, d.o_material_mode_o);
+  check(d.o_vertex_alpha_o == 0xFF,
+        "and client 0's OPAQUE flat alpha, on the same granted beat", 0xFF,
+        d.o_vertex_alpha_o);
+  check(d.o_frag_state_o == 0u,
+        "and client 0's raster state -- the plain opaque write", 0u,
+        d.o_frag_state_o);
   check(d.c0_ready_o == 1, "client 0 sees ready on the granted cycle", 1,
         d.c0_ready_o);
   check(d.c1_ready_o == 0, "client 1 does not see ready", 0, d.c1_ready_o);
@@ -312,6 +327,12 @@ int main(int argc, char** argv) {
   check(d.o_material_mode_o == 1,
         "client 1 declares NO_MATERIAL and the door carries THAT, not client 0's",
         1, d.o_material_mode_o);
+  check(d.o_vertex_alpha_o == 0x60,
+        "client 1's NON-OPAQUE alpha, not client 0's opaque one", 0x60,
+        d.o_vertex_alpha_o);
+  check(d.o_frag_state_o == 0x0000000Bu,
+        "and client 1's BLEND=ALPHA + Z_TEST_EN + Z_WRITE_DIS, on the SAME beat",
+        0x0000000Bu, d.o_frag_state_o);
   check(d.o_quality_tier_o == 0x22, "client 1's quality tier", 0x22,
         d.o_quality_tier_o);
   check(d.switches_o == sw_base + 1, "exactly one switch was recorded",

@@ -90,6 +90,7 @@ struct Result {
   Arm g{"geometry (2'd0)"};
   Arm p{"particles (2'd1)"};
   Arm f{"FORGE.PRIM (2'd2)"};
+  Arm l{"instance centre (2'd3)"};
   Arm b{"terrain, client B"};
 };
 
@@ -115,6 +116,11 @@ public:
     dut_->g_valid_i = 0;
     dut_->p_valid_i = 0;
     dut_->f_valid_i = 0;
+    dut_->l_valid_i = 0;
+    dut_->l_vx_i = 1 << 16;
+    dut_->l_vy_i = 1 << 16;
+    dut_->l_vz_i = 4 << 16;
+    dut_->l_view_i = 0;
     dut_->b_valid_i = 0;
     for (int i = 0; i < 8; ++i) tick();
     dut_->rst_n = 1;
@@ -152,16 +158,19 @@ public:
 
   // Run `clocks` cycles with the named arms held saturated, measuring the
   // worst gap each asking arm went without an accept.
-  Result run(std::uint64_t clocks, bool sg, bool sp, bool sf, bool sb) {
+  Result run(std::uint64_t clocks, bool sg, bool sp, bool sf, bool sb,
+             bool sl = false) {
     Result r;
     r.g.asking = sg;
     r.p.asking = sp;
     r.f.asking = sf;
     r.b.asking = sb;
+    r.l.asking = sl;
 
     dut_->g_valid_i = sg;
     dut_->p_valid_i = sp;
     dut_->f_valid_i = sf;
+    dut_->l_valid_i = sl;
     dut_->b_valid_i = sb;
 
     set_payloads();
@@ -171,16 +180,18 @@ public:
       const bool ga = sg && dut_->g_ready_o;
       const bool pa = sp && dut_->p_ready_o;
       const bool fa = sf && dut_->f_ready_o;
+      const bool la = sl && dut_->l_ready_o;
       const bool ba = sb && dut_->b_ready_o;
-      const bool any_a_asked = sg || sp || sf;
+      const bool any_a_asked = sg || sp || sf || sl;
       const bool any_asked = any_a_asked || sb;
 
       step_arm(r.g, sg, ga);
       step_arm(r.p, sp, pa);
       step_arm(r.f, sf, fa);
+      step_arm(r.l, sl, la);
       step_arm(r.b, sb, ba);
 
-      if (ga || pa || fa || ba) ++r.granted_clocks;
+      if (ga || pa || fa || la || ba) ++r.granted_clocks;
       if (!any_asked) ++r.idle_clocks;
 
       tick();
@@ -190,53 +201,64 @@ public:
     dut_->g_valid_i = 0;
     dut_->p_valid_i = 0;
     dut_->f_valid_i = 0;
+    dut_->l_valid_i = 0;
     dut_->b_valid_i = 0;
     return r;
   }
 
-  // Geometry, particles and client B saturated; the FORGE arm asks once every
-  // `period` clocks and holds until served -- `zhao_geom_lodstate`'s shape.
-  // Its `worst_gap` is then the wait for a RARE asker, which is a different
-  // and more useful number than a saturated arm's share.
+  // Geometry, particles, the forge and client B saturated; the LOD arm asks
+  // once every `period` clocks and holds until served -- `zhao_geom_lodstate`'s
+  // actual shape, on `zhao_geom_lodstate`'s ACTUAL ARM since 2026-09-23. Its
+  // `worst_gap` is the wait for a RARE asker, which is a different and more
+  // useful number than a saturated arm's share.
+  //
+  // BEFORE THE ARM EXISTED this case drove the FORGE arm in that shape, and
+  // `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md` flagged the substitution
+  // as the half of R3's proof still owed. It is owed no longer, and the number
+  // is measured at N=4 rather than at N=3.
   Result run_intermittent(std::uint64_t clocks, std::uint64_t period) {
     Result r;
     r.g.asking = true;
     r.p.asking = true;
     r.f.asking = true;
+    r.l.asking = true;
     r.b.asking = true;
 
     set_payloads();
     dut_->g_valid_i = 1;
     dut_->p_valid_i = 1;
+    dut_->f_valid_i = 1;
     dut_->b_valid_i = 1;
-    dut_->f_valid_i = 0;
+    dut_->l_valid_i = 0;
 
-    bool f_pending = false;
-    std::uint64_t f_wait = 0;
+    bool l_pending = false;
+    std::uint64_t l_wait = 0;
 
     for (std::uint64_t c = 0; c < clocks; ++c) {
-      if (!f_pending && (c % period) == 0) {
-        f_pending = true;
-        f_wait = 0;
-        dut_->f_valid_i = 1;
+      if (!l_pending && (c % period) == 0) {
+        l_pending = true;
+        l_wait = 0;
+        dut_->l_valid_i = 1;
       }
       dut_->eval();
 
-      const bool fa = f_pending && dut_->f_ready_o;
-      if (f_pending) {
-        if (fa) {
-          ++r.f.accepts;
-          f_pending = false;
-          dut_->f_valid_i = 0;
-          if (f_wait > r.f.worst_gap) r.f.worst_gap = f_wait;
+      const bool la = l_pending && dut_->l_ready_o;
+      if (l_pending) {
+        if (la) {
+          ++r.l.accepts;
+          l_pending = false;
+          dut_->l_valid_i = 0;
+          if (l_wait > r.l.worst_gap) r.l.worst_gap = l_wait;
         } else {
-          ++f_wait;
+          ++l_wait;
         }
       }
       if (dut_->g_ready_o) ++r.g.accepts;
       if (dut_->p_ready_o) ++r.p.accepts;
+      if (dut_->f_ready_o) ++r.f.accepts;
       if (dut_->b_ready_o) ++r.b.accepts;
-      if (dut_->g_ready_o || dut_->p_ready_o || fa || dut_->b_ready_o)
+      if (dut_->g_ready_o || dut_->p_ready_o || dut_->f_ready_o || la ||
+          dut_->b_ready_o)
         ++r.granted_clocks;
 
       tick();
@@ -246,6 +268,7 @@ public:
     dut_->g_valid_i = 0;
     dut_->p_valid_i = 0;
     dut_->f_valid_i = 0;
+    dut_->l_valid_i = 0;
     dut_->b_valid_i = 0;
     return r;
   }
@@ -298,7 +321,7 @@ private:
 void report(const char *title, const Result &r) {
   std::printf("\n%s  (%llu clocks)\n", title,
               static_cast<unsigned long long>(r.clocks));
-  const Arm *arms[4] = {&r.g, &r.p, &r.f, &r.b};
+  const Arm *arms[5] = {&r.g, &r.p, &r.f, &r.l, &r.b};
   for (const Arm *a : arms) {
     if (!a->asking) continue;
     std::printf("    %-22s accepts %8llu   worst wait %3llu clocks\n", a->name,
@@ -337,7 +360,7 @@ int main(int argc, char **argv) {
     b.reset();
     b.configure();
     Result r = b.run(kClocks, true, true, true, true);
-    report("CASE 1  all four arms saturated", r);
+    report("CASE 1  three client-A arms + terrain, saturated", r);
 
     const std::uint64_t bound = client_a_bound(3, true);
     check(r.g.worst_gap <= bound, "geometry never waited past the N=3 bound");
@@ -401,6 +424,30 @@ int main(int argc, char **argv) {
     check(r.granted_clocks == r.clocks, "work-conserving at two clients");
   }
 
+  // ---- CASE 3b: FOUR CLIENT-A ARMS SATURATED, plus terrain ---------------
+  // R3's owed N=4 REPEAT. Every arm of the front multiplex asking on every
+  // clock plus the other service arm -- the worst load the composed console
+  // can present, measured rather than extrapolated from the N=3 row.
+  {
+    Bench b;
+    b.reset();
+    b.configure();
+    Result r = b.run(kClocks, true, true, true, true, true);
+    report("CASE 3b  ALL FOUR client-A arms + terrain, saturated (R3 at N=4)",
+           r);
+
+    const std::uint64_t bound4 = client_a_bound(4, true);
+    check(r.g.worst_gap <= bound4, "geometry within the N=4 bound");
+    check(r.p.worst_gap <= bound4, "particles within the N=4 bound");
+    check(r.f.worst_gap <= bound4, "FORGE.PRIM within the N=4 bound");
+    check(r.l.worst_gap <= bound4, "the instance centre within the N=4 bound");
+    check(r.b.worst_gap <= 2, "terrain still waits only the A/B round-robin");
+    check(r.granted_clocks == r.clocks,
+          "the core is work-conserving at four client-A arms");
+    check(b.dut()->owner_unroutable_o == 0,
+          "no result went unrouted with the fourth owner code claimed");
+  }
+
   // ---- CASE 4: THE INSTANCE CENTRE'S ACTUAL SHAPE ------------------------
   // The three cases above saturate everything, which is the worst load but not
   // the right SHAPE for the arm this subsystem wants to add.
@@ -420,19 +467,20 @@ int main(int argc, char **argv) {
     b.configure();
     Result r = b.run_intermittent(kClocks, 200);
     std::printf(
-        "\nCASE 4  an INTERMITTENT client-A asker (1 request / 200 clocks)\n"
-        "        against geometry, particles and terrain all saturated\n"
-        "        -- zhao_geom_lodstate's shape, on the arm that exists\n");
+        "\nCASE 4  the INSTANCE CENTRE's OWN ARM, intermittent (1 request /\n"
+        "        200 clocks) against geometry, particles, the forge and\n"
+        "        terrain all saturated -- zhao_geom_lodstate's shape, on\n"
+        "        zhao_geom_lodstate's arm, at N=4\n");
     std::printf("    requests issued %llu   worst wait %llu clocks\n",
-                static_cast<unsigned long long>(r.f.accepts),
-                static_cast<unsigned long long>(r.f.worst_gap));
-    check(r.f.accepts >= (kClocks / 200) - 2,
+                static_cast<unsigned long long>(r.l.accepts),
+                static_cast<unsigned long long>(r.l.worst_gap));
+    check(r.l.accepts >= (kClocks / 200) - 2,
           "every intermittent request was served, none lost to starvation");
-    check(r.f.worst_gap <= client_a_bound(3, true),
-          "the rare asker is inside the same N=3 bound as a saturated one");
+    check(r.l.worst_gap <= client_a_bound(4, true),
+          "the rare asker is inside the same N=4 bound as a saturated one");
     // The number the proof actually needs: this wait plus the core's 36-clock
     // latency must leave zhao_geom_lodstate's 200-clock evaluation intact.
-    check(r.f.worst_gap + 36 + 121 + 5 + 2 <= 200,
+    check(r.l.worst_gap + 36 + 121 + 5 + 2 <= 200,
           "the measured wait still closes lodstate's 200-clock evaluation");
   }
 

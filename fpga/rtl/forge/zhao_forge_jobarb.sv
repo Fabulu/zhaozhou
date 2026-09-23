@@ -91,6 +91,7 @@ module zhao_forge_jobarb #(
     input  var logic [15:0]        a_j_material_id_i,
     input  var logic [ 1:0]        a_j_material_mode_i,
     input  var logic [ 7:0]        a_j_vertex_alpha_i,
+    input  var logic [31:0]        a_j_frag_state_i,
     input  var logic signed [31:0] a_j_art_r_i,
     input  var logic signed [31:0] a_j_art_g_i,
     input  var logic signed [31:0] a_j_art_b_i,
@@ -123,6 +124,7 @@ module zhao_forge_jobarb #(
     input  var logic [15:0]        b_j_material_id_i,
     input  var logic [ 1:0]        b_j_material_mode_i,
     input  var logic [ 7:0]        b_j_vertex_alpha_i,
+    input  var logic [31:0]        b_j_frag_state_i,
     input  var logic signed [31:0] b_j_art_r_i,
     input  var logic signed [31:0] b_j_art_g_i,
     input  var logic signed [31:0] b_j_art_b_i,
@@ -159,6 +161,10 @@ module zhao_forge_jobarb #(
     // neighbours), so they come from `jh_q` and not from a client port.
     output var logic [ 1:0]        j_material_mode_o,
     output var logic [ 7:0]        j_vertex_alpha_o,
+    // The raster state word. It travels with the alpha and not beside it,
+    // because it is what DECIDES whether the alpha is read at all:
+    // `zhao_raster_blend_fin`'s BL_REPLACE arm throws the alpha product away.
+    output var logic [31:0]        j_frag_state_o,
     output var logic signed [31:0] art_r_o,
     output var logic signed [31:0] art_g_o,
     output var logic signed [31:0] art_b_o,
@@ -179,8 +185,8 @@ module zhao_forge_jobarb #(
 );
 
   // The descriptor's packed width: {set 32, id 16, mode 2, alpha8 8,
-  // r 32, g 32, b 32, art_alpha 32, tier 8, cull 2}.
-  localparam int unsigned DESCW = 32 + 16 + 2 + 8 + 32 + 32 + 32 + 32 + 8 + 2;  // 196
+  // frag_state 32, r 32, g 32, b 32, art_alpha 32, tier 8, cull 2}.
+  localparam int unsigned DESCW = 32 + 16 + 2 + 8 + 32 + 32 + 32 + 32 + 32 + 8 + 2;  // 228
 
   typedef enum logic [1:0] { A_IDLE, A_SIDE, A_RUN } state_e;
   state_e st_q;
@@ -197,13 +203,14 @@ module zhao_forge_jobarb #(
       input logic [15:0]        mid,
       input logic [ 1:0]        mode,
       input logic [ 7:0]        valpha,
+      input logic [31:0]        fstate,
       input logic signed [31:0] r,
       input logic signed [31:0] g,
       input logic signed [31:0] b,
       input logic signed [31:0] aalpha,
       input logic [ 7:0]        tier,
       input logic [ 1:0]        cull);
-    pack_desc = {mset, mid, mode, valpha, r, g, b, aalpha, tier, cull};
+    pack_desc = {mset, mid, mode, valpha, fstate, r, g, b, aalpha, tier, cull};
   endfunction
 
   // ---- the descriptor registers -------------------------------------------
@@ -255,10 +262,11 @@ module zhao_forge_jobarb #(
   assign art_b_o            = $signed(jh_q[73:42]);
   assign art_g_o            = $signed(jh_q[105:74]);
   assign art_r_o            = $signed(jh_q[137:106]);
-  assign j_vertex_alpha_o   = jh_q[145:138];
-  assign j_material_mode_o  = jh_q[147:146];
-  assign j_material_id_o    = jh_q[163:148];
-  assign j_material_set_o   = jh_q[195:164];
+  assign j_frag_state_o     = jh_q[169:138];
+  assign j_vertex_alpha_o   = jh_q[177:170];
+  assign j_material_mode_o  = jh_q[179:178];
+  assign j_material_id_o    = jh_q[195:180];
+  assign j_material_set_o   = jh_q[227:196];
 
   assign busy_o = (st_q != A_IDLE);
 
@@ -286,6 +294,7 @@ module zhao_forge_jobarb #(
       if (a_j_valid_i) begin
         jd_a_q <= pack_desc(a_j_material_set_i, a_j_material_id_i,
                             a_j_material_mode_i, a_j_vertex_alpha_i,
+                            a_j_frag_state_i,
                             a_j_art_r_i, a_j_art_g_i, a_j_art_b_i,
                             a_j_art_alpha_i, a_j_quality_tier_i,
                             a_j_cull_mode_i);
@@ -294,6 +303,7 @@ module zhao_forge_jobarb #(
       if (b_j_valid_i) begin
         jd_b_q <= pack_desc(b_j_material_set_i, b_j_material_id_i,
                             b_j_material_mode_i, b_j_vertex_alpha_i,
+                            b_j_frag_state_i,
                             b_j_art_r_i, b_j_art_g_i, b_j_art_b_i,
                             b_j_art_alpha_i, b_j_quality_tier_i,
                             b_j_cull_mode_i);

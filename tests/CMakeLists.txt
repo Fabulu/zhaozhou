@@ -16010,6 +16010,30 @@ verilate(test_part_project_directed
 add_test(NAME part_project_directed COMMAND test_part_project_directed)
 set_tests_properties(part_project_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
 
+# THE POSITIVE CONTROL FOR `owner_unroutable_o`, which moved OUT of the bench
+# above on 2026-09-23 and had to. That counter was fired from `a_payload_i` by
+# forcing an UNCLAIMED owner encoding; the fourth request arm claims 2'd3, the
+# last code the two-bit field holds, so every code now routes and no stimulus
+# at any port can move it. A guard you cannot reach with legal stimulus needs a
+# committed mutant (CLAUDE.md), and this is it: the same block with the fourth
+# RESULT arm removed, driven with INVERTED POLARITY -- it passes when the
+# counter FIRES.
+add_executable(test_part_project_owner_mutant_control
+  particles/part_project_owner_mutant_control.cpp)
+target_link_libraries(test_part_project_owner_mutant_control PRIVATE zhao_harness)
+verilate(test_part_project_owner_mutant_control
+  PREFIX Vzhao_part_project_owner_mutant
+  TOP_MODULE zhao_part_project_owner_mutant
+  VERILATOR_ARGS -GSLOTS=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_part_project_owner_mutant.sv)
+add_test(NAME part_project_owner_mutant_control
+  COMMAND test_part_project_owner_mutant_control)
+set_tests_properties(part_project_owner_mutant_control
+  PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
 add_test(NAME lint_zhao_part_project
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_part_project

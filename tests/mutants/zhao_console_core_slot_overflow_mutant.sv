@@ -1256,6 +1256,85 @@ module zhao_console_core_slot_overflow_mutant
   // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
   // 2026-09-22). Its traffic is per creature publication and per POSED draw.
   output logic [31:0] geom_ma_jobs_g_o,
+  // Requester H, GEOM.LADDERBANK's kind-8 CREATURE_FORM page reader
+  // (FORGE.SHADOW, composed 2026-09-23). Its traffic is per PUBLICATION and
+  // nothing else -- the ladder is adopted whole into registers and every
+  // lookup afterwards is a register read -- so it is the lightest requester on
+  // the share, and this is the number that says so rather than a claim that it
+  // is light.
+  output logic [31:0] geom_ma_jobs_h_o,
+
+  // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
+  // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
+  output logic [31:0] geom_lb_pages_o,
+  output logic [31:0] geom_lb_records_o,
+  output logic [31:0] geom_lb_pages_dropped_o,
+  output logic [31:0] geom_lb_bad_magic_o,
+  output logic [31:0] geom_lb_truncated_o,
+  output logic [31:0] geom_lb_bad_record_o,
+  output logic [31:0] geom_lb_overflow_o,
+  output logic [31:0] geom_lb_denied_o,
+  output logic [31:0] geom_lb_lookup_miss_o,
+
+  // GEOM.LODSTATE: one ladder per (instance, camera), owner ruling R74's
+  // D-LADDER-A. `ls_rung_counts_o` is flattened 32 bits per rung, least
+  // significant slice rung 0 (near hero), because Quartus 17.0 will not take
+  // an unpacked array port.
+  output logic [31:0]  geom_ls_ticks_o,
+  output logic [31:0]  geom_ls_skipped_repeat_o,
+  output logic [31:0]  geom_ls_bank_miss_o,
+  output logic [31:0]  geom_ls_no_radius_o,
+  output logic [31:0]  geom_ls_dropped_o,
+  output logic [31:0]  geom_ls_out_of_range_o,
+  output logic [127:0] geom_ls_rung_counts_o,
+  output logic [31:0]  geom_ls_rad_evaluations_o,
+  output logic [31:0]  geom_ls_rad_behind_o,
+  output logic [31:0]  geom_ls_rad_bad_bound_o,
+  output logic [31:0]  geom_ls_rad_saturated_o,
+
+  // TERRAIN.TAPSHARE: the height tap's two-client arbiter. `grants_o` is
+  // flattened, least significant slice client 0 (PART.COLLIDE's tap).
+  output logic [63:0] terr_tsh_grants_o,
+  output logic [31:0] terr_tsh_contended_o,
+  // A FAULT: a response arriving with no owner held. Its positive control is
+  // the committed `tests/mutants/zhao_terrain_tapshare_mutant.sv`.
+  output logic [31:0] terr_tsh_stray_rsp_o,
+
+  // FORGE.SHADOW itself. The three CORRECT refusals are counted APART from the
+  // one real fault, which is the block's own design and the reason a zero on
+  // `forge_shadow_tap_protocol_o` means something different from a zero on the
+  // other three.
+  output logic [15:0] forge_shadow_emitted_o,
+  output logic [15:0] forge_shadow_no_ground_o,
+  output logic [15:0] forge_shadow_zero_radius_o,
+  output logic [15:0] forge_shadow_far_rung_o,
+  output logic [15:0] forge_shadow_tap_protocol_o,
+  // The caster the ladder handed over but the console could not draw this
+  // frame, because its camera is not the one being rendered. CORRECT, and
+  // counted for the same reason `zhao_forge_ring_eval.skipped_view_o` is.
+  output logic [31:0] forge_shadow_skipped_view_o,
+
+  // The fan indexer. `forge_fanidx_hulls_rung_o` is flattened 32 bits per
+  // rung, least significant slice rung 0 -- the look-gate's evidence for "the
+  // shadow is too coarse here", which the contract says is the argument this
+  // subsystem will actually have.
+  output logic [31:0]  forge_fanidx_hulls_o,
+  output logic [31:0]  forge_fanidx_triangles_o,
+  output logic [31:0]  forge_fanidx_short_ring_o,
+  output logic [31:0]  forge_fanidx_ring_overflow_o,
+  output logic [127:0] forge_fanidx_hulls_rung_o,
+
+  // The job arbiter in front of the SHARED assembler.
+  output logic [31:0] forge_jobarb_grant_prim_o,
+  output logic [31:0] forge_jobarb_grant_shadow_o,
+  output logic [31:0] forge_jobarb_switches_o,
+  // THE NUMBER THE CONTRACT'S BACKPRESSURE RULE IS ABOUT. "A stalled shadow
+  // must never delay a creature": `forge_jobarb_wait_prim_o` is the clocks
+  // FORGE.PRIM spent held behind a shadow hull already in flight, and it is
+  // bounded by one hull. The shadow's own wait is the other one.
+  output logic [31:0] forge_jobarb_wait_prim_o,
+  output logic [31:0] forge_jobarb_wait_shadow_o,
+  output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
@@ -1540,23 +1619,29 @@ module zhao_console_core_slot_overflow_mutant
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
-  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
-  //      this module by `zhao_terrain_fieldlist`, whose own intake is
-  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
-  //      footprint and a program hash RESOLVED against FIELD.LOADER's
-  //      publication port rather than forwarded as a handle.
+  // ---- I34, NARROWED AGAIN 2026-09-23 (EARTHADAPT): the HEIGHT RETURN LANE
+  //      has a PRODUCER and its three ports have LEFT this edge --
+  //      `terr_pt_fld_valid_i`, `_ready_o` and `_height_i`. They are driven
+  //      inside this module by `zhao_field_earth_adapter`
+  //      (`u_field_earth_adapter`), client 3 of the one `u_field_host`, from
+  //      the vertex the consumer hands over and the uniforms `zhao_cmd_exec`
+  //      has been publishing to nobody since 2026-09-21.
   //
-  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
-  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
-  //      declaring the other three channels present because they have spare bus
-  //      bits." The Earth record declares four channels and this consumer can
-  //      receive one, so the lane stays a boundary until
-  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
-  //      3.4 with an empty program list -- an absent input, not a faked one.
-  // I34's HEIGHT RETURN LANE LEFT THE CORE'S EDGE 2026-09-23 (EARTHADAPT):
-  // `zhao_field_earth_adapter` drives it inside the module. These three
-  // declarations went with it.
+  //      THE ENTRY DOES NOT CLOSE ON THAT, AND IT MAY NOT. Directive 20.8:
+  //      "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while declaring the other
+  //      three channels present because they have spare bus bits." The Earth
+  //      record declares FOUR channels, the adapter now PRODUCES all four
+  //      (`height_o`, `velocity_o`, `material_o`, `nav_cost_o`, from one
+  //      evaluation, which is 20.8's own instruction), and
+  //      `zhao_terrain_patch` still has an input for exactly one of them. The
+  //      gap has moved from "nothing evaluates the program" to "the consumer
+  //      has three missing ports", which is directive 13.2's
+  //      `zhao_terrain_patch_v2` and is a CONSUMER-side item. See entry I34.
+  //
+  //      The three adapter outputs with no consumer are left OPEN at that
+  //      instantiation and declared in the INCOMPLETE block, which is the same
+  //      shape -- and for the same stated reason -- that `zhao_cmd_exec`'s
+  //      three uniform outputs carried until this commit.
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
@@ -1572,7 +1657,22 @@ module zhao_console_core_slot_overflow_mutant
   output logic [4:0]              terr_fl_records_o,
   output logic                    terr_fl_sealed_o,
   output logic                    terr_fl_idle_o,
-  // FIELD.EARTH_ADAPTER's evidence, promoted in the same commit.
+  // FIELD.EARTH_ADAPTER's evidence, promoted 2026-09-23 (EARTHADAPT). Every
+  // one of these is FIRED by `tests/field/field_earth_adapter_directed.cpp`
+  // before it is quoted (R95); a counter whose zero nobody has seen move is a
+  // claim and not a measurement.
+  //
+  // TWO OF THEM ARE THE ONES TO READ FIRST.
+  //   `fld_earth_lane_desync_o` is the shadow guard. Its two operands are the
+  //     adapter's own per-vertex state and `zhao_terrain_patch`'s `busy`, and
+  //     nothing loads both -- which is the question CLAUDE.md's metadata-swap
+  //     chapter says to ask of a checker before quoting its silence.
+  //   `fld_earth_stall_cycles_o` is THE COST. A scalar field front answers one
+  //     vertex-lane per engine run, tens of clocks each, against a consumer
+  //     that would take one per clock. This number is what decides whether
+  //     directive 13.2's field-major `zhao_terrain_patch_v2` has to be built
+  //     before terrain fields can run at frame rate, and it is exported rather
+  //     than kept private for exactly that reason.
   output logic [31:0]             fld_earth_records_o,
   output logic [31:0]             fld_earth_tail_rejected_o,
   output logic [31:0]             fld_earth_runs_o,

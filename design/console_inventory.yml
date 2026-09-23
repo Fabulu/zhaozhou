@@ -135,12 +135,6 @@ modules:
   zhao_forge_cliff_ram:
     disposition: pending_compose
     why: "THE ADOPTED implementation of FORGE.CLIFF since 2026-09-20, under owner ruling R142 -- see the `zhao_forge_cliff` row above for the fit-minus-fit numbers and the whole decision. `pending_compose` is the honest word and it is chosen deliberately: this block BELONGS in the console and is not wired yet. It is a `top:` in design/prod_manifest.yml and in `zhao_prod_top`'s source list, and design/blocks.yml's FORGE.CLIFF row names it in `implementation:` so the completion register resolves the capability to THIS file rather than to the superseded golden. It is not composed into `zhao_console_core` because FORGE.CLIFF CANNOT yet be composed by either candidate: its three inputs -- a page command from a lattice-walking issuer, a 34x34 solid-bit window and a vdist read master -- have no producer anywhere in fpga/rtl, re-measured search by named search on 2026-09-20 (forge4). Wiring it now would tie off all three, which is the one thing this campaign forbids. Its extra port `walk_fault_o[7:0]` (the golden has nowhere to put it) is connected and folded in the regenerated `zhao_prod_top`, checked by reading the generated output rather than assuming it."
-  zhao_forge_fanindex:
-    disposition: pending_compose
-    why: "NEW 2026-09-23 (SHADOWRIDE). A shadow hull's RING of 16/8/4 world vertices becomes a TRIANGLE FAN over the same vertices -- the only genuinely new geometry FORGE.SHADOW's terminal link needed, once SHADOWCLOSE found that zhao_forge_assemble already does everything else a hull wants (projects through client A on owner 2'd2, makes its own invw24, declares o_untex_o unconditionally, carries a named per-primitive alpha, lands on zhao_geom_clipdoor) and that its v_* port is SPECIFIED as a composer mux. Riding that block instead of cloning it removes a FIFTH client-A demand -- which would have exhausted the 2-bit owner field, whose last code 2'd3 the instance centre needs -- a fourth clipdoor client, a second zhao_geom_depthquant_stream and a second 520-slot vertex store. EVIDENCE: 450 checks in forge_fanindex_directed, including both of this block's fault counters fired with legal stimulus (short_ring_o on a two-vertex ring, which must RETIRE rather than deadlock an assembler already holding those vertices; ring_overflow_o on a ring longer than MAXV, which is truncated rather than overrunning the store) and the metadata check that the per-caster alpha is LATCHED at the hull's first vertex rather than passed through -- a passthrough reads the NEXT caster's strength onto THIS hull's triangles. Not composed alone: it produces a vertex and index stream whose only consumer is zhao_forge_assemble through zhao_forge_jobarb, and its only producer is zhao_forge_shadow. DELETE THIS ENTRY when FORGE.SHADOW composes."
-  zhao_forge_jobarb:
-    disposition: pending_compose
-    why: "NEW 2026-09-23 (SHADOWRIDE). Arbitrates FORGE.PRIM and FORGE.SHADOW onto ONE zhao_forge_assemble at JOB granularity. CLIENT A (FORGE.PRIM) WINS ALWAYS, which is design/contracts/FORGE.SHADOW.md's own backpressure rule -- 'a stalled shadow must never delay a creature' -- and not a shortcut; the reverse wait is bounded at one hull (at most 14 triangles) and wait_a_o measures it. THE FAULT IT IS SHAPED TO MAKE IMPOSSIBLE is a metadata swap: zhao_forge_assemble moves jset_q into mset_q on the FIRST VERTEX TAKE, so two producers pushing sidebands into that one parking register would give job A's vertices job B's material with every handshake balancing -- the 'detector wired to two operands that move together' shape. So the grant is decided BY A VERTEX, the arbiter parks each client's descriptor in its own register and copies it privately at the grant, and the sideband handshake completes a cycle EARLY. Each descriptor register is always replaceable, deliberately: zhao_forge_pagebank issues a sideband with every draw and an evaluator that refuses the job (wrong view mask, wrong family, past a limit) emits NO VERTICES AT ALL, so a register that could not be overwritten would wedge the bank -- the same rule zhao_forge_assemble states about its own parking register. EVIDENCE: 150 checks in forge_jobarb_directed, including the contended case with both descriptors present and both clients offering on the same clock, the spent-descriptor refusal with no_desc_o fired, and the view-skipped draw replaced rather than wedged. Not composed alone: it is a pure mux whose clients and whose assembler must all arrive together. DELETE THIS ENTRY when FORGE.SHADOW composes."
   zhao_forge_jitter_rom:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -153,9 +147,6 @@ modules:
   zhao_forge_ring_eval:
     disposition: pending_compose
     why: "built and not composed; the POSITION law for the four forge families R199 recorded as having no evaluator (fan, tube, radial shell, billboard sheet), bought by owner decision R234 D2 on 2026-09-21. It is NOT a rival to zhao_forge_prim_eval and NOT a version of it: that block is the RIBBON family's lightning law and this one is the other four, so the two are disjoint by family and are adopted together. It carries no design/blocks.yml row of its own DELIBERATELY -- FORGE.PRIM.EVAL is the capability and this extends that contract's coverage rather than naming a new capability, so the completion register's count is unchanged and honest (R214's test: a row is legitimate when a capability already has a written contract and NO row). Its blocker is the one design/contracts/FORGE.PRIM.EVAL.md's closing section maps for its sibling: there is no forge dispatch that reads a FORGE_PROGRAM page and no door into the geometry path."
-  zhao_forge_shadow:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_bin_pipe:
     disposition: superseded
     superseded_by: zhao_geom_bin_pipe_v2
@@ -187,46 +178,11 @@ modules:
       because the descriptor bank has no producer for reasons of ownership and format
       rather than wiring -- zhao_console_core.sv's lighting section carries that
       argument in full."
-  zhao_geom_lodstate:
-    disposition: pending_compose
-    why: "THE PER-INSTANCE LADDER STATE (R68 sub-build 3) -- the owner zhao_geom_lod has
-      been waiting for since phase 8, and the answer to the FIFTEENTH false-absence claim
-      (zhao_console_core.sv: 'NOBODY HOLDS LADDER STATE AT ALL'). It holds one
-      zref::creature::LodState per instance, ticks once per DRAW off the
-      GEOM.DRAWJOB -> GEOM.MESHFETCH handshake as a TAP, and instantiates
-      zhao_geom_projradius and zhao_geom_lod, which have no other customer. Differenced
-      against zref::creature::lod_update as a live model over sixty frames and four
-      creatures. NOT composed yet: its pr_* port wants the instance centre's w from the
-      shared projector's client A, and owner ruling R3 keeps client A a time-multiplex --
-      so a front-mux on the geometry arm (and one more GEOM_PAY_A_W bit) is owed before
-      this can be wired. That mux is the half of R68 sub-build 4 this packet did not land."
-  zhao_geom_projradius:
-    disposition: pending_compose
-    why: "GEOM.LOD's proj_radius_q8_i, which IS
-      zref::creature::projected_bound_radius_q8 (R68 sub-build 4). Zero DSP and zero
-      M10K: every product is a shift-add and the quotient a 76-step restoring divide,
-      because this is evaluated once per creature instance per view per frame and 121
-      clocks of the 3,255 available is not a cost. Differenced against the oracle on 600
-      random cases across four cameras. NOT composed yet: its w comes from the shared
-      projector's client A for the INSTANCE CENTRE, and that stream is the half of R68
-      sub-build 4 this packet did not land."
   zhao_view_projscale:
     disposition: pending_compose
     why: "The two views' kx = max(|m[0][0..2]|) and viewport width, snooped off the
       projector configuration bus on zhao_view_eye's pattern (R68 sub-build 4). It is
       zhao_geom_projradius's only other input and lands with it."
-  zhao_geom_ladderbank:
-    disposition: pending_compose
-    why: "GEOM.LOD's four per-creature-type constants, read from the CREATURE_FORM page
-      layout owner ruling R26 unfroze and spec/cartridge.md 4c freezes (R68 sub-builds 1
-      and 3). Differenced against zref::creature_page and required to read the packer's
-      own committed golden. NOT composed yet because its consumer -- the per-instance
-      LodState owner that drives zhao_geom_lod -- is R68 sub-build 3 and lands with it;
-      composing a bank whose only reader does not exist would connect nothing at either
-      end, which is the test TERRAIN.HEIGHTTAP and GEOM.LOOM were held against."
-  zhao_geom_lod:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_parambuf:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -432,9 +388,6 @@ modules:
   zhao_forge_pagebank:
     disposition: pending_compose
     why: "THE FORGE_PROGRAM PAGE READER AND THE DrawProcedural DISPATCH, in one block. NEW 2026-09-21 (FORGECOMP), built against owner ruling R234 D2 (the page kind frozen, FORGE.PRIM / FORGE.PRIM_EVAL to be built) and R241 D-TICK-A (frame_tick is DrawProcedural's pad[11], per draw). FINDINGS-forgeprim's blocker list named TWO items here -- `zhao_cmd_exec` has no arm for 0x0302, and no bank stages a forge page -- and scoped the reader with its request side 'depend[ing] on the dispatch that does not exist'. That dependency is the argument for ONE block rather than two: the only thing that ever asks this bank a question is the draw, the only use of the answer is the draw's two evaluator jobs, and a seam between them would be a handshake with exactly one producer and one consumer carrying a record neither owns. `zhao_geom_drawjob` is the same shape for DrawForm and is what this is modelled on. ONE RESIDENT RECORD, NOT A REGISTER FILE: a forge record is 192 bytes -- THREE MEM.GUARD lines -- so `zhao_geom_ladderbank`'s whole-page-in-flops treatment would be ~15,000 flops on a device where ALMs are the binding constraint. Instead the header is read once at publication and a BOUNDED LINEAR SCAN of record line 0 finds the program index per draw, worst case count+2 reads of 64 bytes on the rarest traffic the ENGINE1 share carries (one per DRAW, against GEOM.MESHFETCH's one per MESHLET). THE ROTATION IS DISCHARGED HERE: `spec/commands.zidl` warns in capitals that forge_kind = (family + 1) mod 6 and that a straight-through assignment is silently wrong for all six values; `kind_of_family` is the one place it lives in RTL, written as a TABLE so it can be checked by eye against the zidl's own column, and an elaboration guard $fatals if it is ever an identity on FAM_RIBBON. THE PAGE'S family GOVERNS and a disagreeing command kind refuses the draw and is counted -- and the two operands are authored in DIFFERENT PLACES (page by the packer, command by the game's draw), so the comparison is real and not two operands moving together. THE LINT FOUND A SILENT BUG IN THE FIRST DRAFT: `anchor0` was read one 32-bit word low, out of `rsv0`, with every field beside it right -- no count, no handshake and no verdict could have seen it and a bolt would simply have started in the wrong place. Verilator's UNUSEDSIGNAL on the bits the record HAS and the decoder never read is what caught it, which is the argument for reading unused-bit warnings on a record decoder rather than silencing them. NOT COMPOSED YET: its consumers `zhao_forge_prim`, `zhao_forge_prim_eval` and `zhao_forge_ring_eval` are not composed either, and the chain is ONE COMMIT OR NONE. DELETE THIS ENTRY when the forge chain composes."
-  zhao_terrain_tapshare:
-    disposition: pending_compose
-    why: "THE ARBITER FOR zhao_terrain_heighttap'S ONE REQUESTER PORT, built 2026-09-21 (SHADOWSUB) because design/contracts/FORGE.SHADOW.md marked that port group the ONE genuinely clear thing in the FORGE.SHADOW subsystem and it is not. The tap has EXACTLY ONE requester group -- req_valid_i/req_ready_o/req_x_i/req_z_i/req_surface_i -- and in zhao_console_core.sv every wire of it is already driven by u_part_terrain_tap. The contract had read a claim about port SHAPE ('mirrors these ports signal for signal') as a claim about port AVAILABILITY, which is owner ruling R180 in a different coat. This is the same shape zhao_terrain_pageio's entry records for zhao_surface_sheet's single request port. THE HARD PART IS THAT THE RESPONSE CARRIES NO TAG AND NO RIDER: rsp_valid_o and eighteen data outputs arrive with nothing saying whose request they answer, so unlike every other shared service here the routing cannot be by rider and this block holds the owner itself. That is ONE register, not a queue, and the licence is measured rather than assumed -- zhao_terrain_heighttap's `assign req_ready_o = (st_q == S_IDLE)` makes it strictly single-in-flight. SINGLE_FLIGHT_ONLY is a parameter that records the premise and $fatal-guards it. The response DATA is broadcast rather than muxed N ways (18 x 32 bits x N of multiplexer for a value only one client can want), so a client must not latch the bus on a cycle its own r_rsp_valid_o bit is low -- stated here because it is a contract, not an implementation detail. EVIDENCE: 97 checks in terrain_tapshare_directed, whose discriminating case is client 0 outstanding across a SIX-CYCLE walk WHILE CLIENT 1 IS ASSERTING VALID -- an arbiter routing by 'who is asking now' answers the wrong client and every other check still passes. grants and contended are asserted moved (20 contended rounds, grants alternating exactly, the N-1 bound exercised rather than claimed); stray_rsp_o is the NEGATIVE control at zero and its positive control is the committed copy tests/mutants/zhao_terrain_tapshare_mutant.sv, which clears the owner one cycle after the grant and makes the answer reach nobody. THE DIRECTED TEST FOUND A REAL DEFECT IN THE FIRST VERSION OF THIS BLOCK: it could not grant on the cycle an owner retired, so every tap cost a dead cycle -- about 8% of the tap's thirteen-state walk, paid on every height tap the console ever makes. Nothing but that check would have seen it. It is NOT composed because its second client, zhao_forge_shadow, is not composed, and composing this block alone would put an arbiter in front of a port that has one user -- a cost with no capability. DELETE THIS ENTRY when FORGE.SHADOW composes."
   zhao_terrain_pipe:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

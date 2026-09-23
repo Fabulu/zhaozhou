@@ -140,6 +140,21 @@ module zhao_geom_clipdoor #(
     // door owns both halves. A mode arbitrated separately from its `{set, id}`
     // would be the metadata-swap shape with a third field in it.
     input  var logic [NCLIENT*2-1:0]            c_material_mode_i,
+    // ---- THE PER-PRIMITIVE RASTER DECLARATION, 2026-09-23 (SHADOWRIDE) ----
+    // R89's FLAT per-primitive alpha (unit8) and the raster state word
+    // (`zhao_raster_fragment.sv:213-236`'s layout), granted on the SAME BEAT as
+    // the triangle and its material -- which is the whole reason this door
+    // exists rather than a second arbiter downstream: "a door that arbitrated
+    // only the triangle would let a resolve answer for the material of a beat
+    // that did not win", and the same sentence is true of a primitive's alpha.
+    //
+    // The pair travels TOGETHER and not separately: the state's `[4:3]` BLEND
+    // field decides whether the alpha is read at all, because
+    // `zhao_raster_blend_fin`'s BL_REPLACE arm throws the alpha product away.
+    // Splitting them across two paths would let a primitive arrive transparent
+    // with the previous one's opacity.
+    input  var logic [NCLIENT*8-1:0]            c_vertex_alpha_i,
+    input  var logic [NCLIENT*32-1:0]           c_frag_state_i,
     input  var logic [NCLIENT*8-1:0]            c_quality_tier_i,
 
     // ---- the door -----------------------------------------------------------
@@ -161,6 +176,8 @@ module zhao_geom_clipdoor #(
     output var logic [31:0]          o_material_set_o,
     output var logic [15:0]          o_material_id_o,
     output var logic [1:0]           o_material_mode_o,
+    output var logic [7:0]           o_vertex_alpha_o,
+    output var logic [31:0]          o_frag_state_o,
     output var logic [7:0]           o_quality_tier_o,
     // Which client this beat belongs to, so a composer or a bench can say so
     // out loud rather than inferring it.  It is valid only while `o_valid_o`.
@@ -289,6 +306,8 @@ module zhao_geom_clipdoor #(
     o_material_set_o = '0;
     o_material_id_o  = '0;
     o_material_mode_o = '0;
+    o_vertex_alpha_o = '0;
+    o_frag_state_o   = '0;
     o_quality_tier_o = '0;
     for (i = 0; i < NCLIENT; i = i + 1) begin
       if (grant_q[i]) begin
@@ -308,6 +327,8 @@ module zhao_geom_clipdoor #(
         o_material_set_o = c_material_set_i[i*32 +: 32];
         o_material_id_o  = c_material_id_i[i*16 +: 16];
         o_material_mode_o = c_material_mode_i[i*2 +: 2];
+        o_vertex_alpha_o = c_vertex_alpha_i[i*8 +: 8];
+        o_frag_state_o   = c_frag_state_i[i*32 +: 32];
         o_quality_tier_o = c_quality_tier_i[i*8 +: 8];
       end
     end

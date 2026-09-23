@@ -137,10 +137,14 @@ module tb_geom_mem_adapter
       // discovers. G has no `beat_last` port at all -- the reader counts its
       // own eight beats a line -- so there is nothing to leave open here.
       .g_req_i('0), .g_rsp_o(), .g_beat_valid_o(), .g_beat_data_o(),
+      // Requester H, GEOM.LADDERBANK's kind-8 CREATURE_FORM page reader, added
+      // 2026-09-23 (SHADOWRIDE). HELD IDLE and NAMED for the reasons C..G are.
+      // H has no `beat_last` port either, for G's reason.
+      .h_req_i('0), .h_rsp_o(), .h_beat_valid_o(), .h_beat_data_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(), .jobs_g_o(),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(), .jobs_g_o(), .jobs_h_o(),
       .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)
