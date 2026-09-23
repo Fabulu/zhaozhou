@@ -6473,3 +6473,92 @@ smaller form was taken** (the underside's records are never read — TERRAIN.LOD
 law 7 gives the underside the top's level, so a second surface can be computed
 and thrown away with no effect on one output bit: 326 → 185). **The third form,
 the one that actually removes the cost, needed an owner and now has one.**
+
+## R243 — THREE OWNER DECISIONS, 2026-09-23. **(owner, explicit)**
+
+Put to Fabian after checking each against `reports/OWNER-RATIFICATION-*.md` and
+the 2026-09-22 rulings, per R240. **None was already answered.**
+
+### D-SDRAM-A — FIX THE MODEL FIRST, THEN THE ARBITER
+
+> **Fabian: *"3 first, then 2. Make the SDRAM model match real JEDEC BL8
+> wrapping first so the bug class becomes observable in simulation, then fix the
+> arbiter centrally and re-prove the exact liveness bound."***
+
+**The problem, found by PARAMARENA:** a JEDEC **BL8 sequential burst wraps
+inside its aligned eight-column block**; `zhao_vram_arbiter` never aligns to it;
+**the behavioural SDRAM model reads LINEARLY.** So **the model reads BETTER than
+silicon**, no client has ever exercised it, and **no test in this tree can fail
+on it** — the optimistic side is the one we simulate.
+
+**The owner rejected both cheap options and the ordering is the whole ruling.**
+Aligning each client individually (what ARENAWIRE is doing for the arena) leaves
+every future client having to remember, and forgetting yields **correct
+simulation and wrong hardware**. Fixing the arbiter first would fix the bug
+while **leaving the bug class undetectable**.
+
+**So: make the divergence VISIBLE before repairing it.** Expect the model repair
+to turn other things red — **that is the point**, and a red it produces is
+evidence, not a regression. Only then move the arbiter's bound, and
+**`mem_vram_arbiter_liveness` asserts that bound is EXACT, so it must be
+RE-PROVEN, not adjusted.** A lane must show the new bound holds.
+
+**This is the broken-instrument law with the instrument being the simulator
+itself:** *"a detector that has not been shown to FIRE has not been tested."*
+Here the detector cannot fire by construction until the model tells the truth.
+
+### D-NORMALS-A — DETAIL NORMALS ARE IN v1. COMMISSION THE PYRAMID.
+
+> **Fabian: *"In v1 — commission the pyramid."***
+
+**Why it was asked:** TERRACOMPOSE found `zhao_terrain_normalmap`'s fragment
+path **is already composed** (44 raster/texture modules in the core's closure) —
+but **the detail-normal pyramid does not exist anywhere: no RTL writer, no
+command arm, no asset tool.** Composing the block **would move the register down
+by one and change not one pixel**, which is the dishonest close the owner's *"the
+right way"* forbids. **The lane refused it and was right to.**
+
+**Authorized, across three layers:** the **asset tool** that builds the pyramid,
+the **command arm** that delivers it, and the **RTL writer** that populates it —
+then compose `zhao_terrain_normalmap` against real data.
+
+**This is NOT covered by the 2026-09-22 six**, so it is new scope, and it is the
+owner choosing capability over a cheaper register. **Terrain gets surface detail
+independent of mesh density.**
+
+### D-FIT-A — RUN THE LABELLED DIAGNOSTIC FIT NOW, ON THE SIDE
+
+> **Fabian: *"Run labelled first, just let it run on the side while you continue
+> working with the 2 subagents."***
+
+**This supersedes "fit at completion only" for this one run**, and does not
+retire it: the completion fit is still owed when the register reaches zero.
+
+**Launched 2026-09-23** from a worktree pinned at `18231903`:
+`run_block_fit.ps1 -Module zhao_console_core -Device 5CEBA9F31C7
+-RowLabel '@diag-incomplete-14gaps'`.
+
+**THE LABEL IS THE OWNER'S OWN INSTRUCTION — *"explicitly label the diagnostic
+fit incomplete"*** — and the runner's own comment agrees: *"a measurement
+labelled complete is how a wrong number gets believed."* **The row says
+INCOMPLETE and names the gap count**, so nobody can later quote it as the
+no-caveat number.
+
+**What this row IS and IS NOT.** `5CEBA9F31C7` is a **SIZING device**, not the
+target: every row it produces is stamped `sizingDevice` / `notTargetDevice`, and
+**its utilisation percentages are meaningless for this project — the ALM count
+is the only field such a row is good for**, plus the per-hierarchy map, DSP by
+owner and the timing picture. **The truth device remains 5CSEBA6U23I7 and only a
+row fitted there may be cited for closure.**
+
+**And it is incomplete in a way that is nameable, not vague:** register **14**,
+edge reconciliation **built but not composed** so the console is in
+**conservative edge mode** (and that constant is **not crack-free** — see the
+EDGERECON finding), the arena's three non-triangle record paths tied at I53–I56,
+and FORGE.SHADOW and FORGE.CLIFF uncomposed.
+
+**One tool fact confirmed at launch, and it frees the lanes:** the runner printed
+*"snapshot: 258 source(s) copied into the workspace; **the live tree cannot reach
+this fit**"* and recorded digest `e3d1a29c7e66`. **So merging lanes while it runs
+cannot corrupt it** — the CLAUDE.md live-tree trap does not apply to this
+runner's own closure. The pinned worktree was belt-and-braces.
