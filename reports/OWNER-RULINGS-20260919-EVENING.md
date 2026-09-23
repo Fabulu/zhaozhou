@@ -7608,3 +7608,83 @@ harvests the report.**
 in some cases, so part of the width may already be optimised away. **45 DSP in a
 938-ALUT leaf is strong evidence that it was not**, but the map is what settles
 it — the same standard applied to `zhao_geom_drawjob` above.
+
+
+### LEVER 2 DOWNGRADED FROM "STRONG" TO "WEAK", by a sweep that was meant to GENERALISE it
+
+I swept `fpga/rtl` for the wide-cast multiply shape expecting to find more of
+it. **The sweep found the shape in ten files and then disconfirmed the
+hypothesis**, which is the more useful outcome and the opposite of what I was
+looking for.
+
+| file | wide-cast sites | **measured DSP** |
+|---|---|---|
+| `zhao_geom_quat2mat` | **9** | **1** |
+| `zhao_geom_clipread` | 6 | 2 |
+| `zhao_geom_attrsetup` | 6 | **45** |
+| `zhao_surface_stamp` | 4 | **0** |
+| `zhao_raster_rcp24_mul` | 4 | 3 |
+| `zhao_geom_mat3x4_mul` | 4 | 3 |
+| `zhao_geom_paramarena` | 3 | **0** |
+| `zhao_terrain_pagestream` | 2 | **0** |
+| `zhao_terrain_loadq` | 2 | **0** |
+| `zhao_raster_attrdiv_v2` | — | **0** |
+
+**Nine files carry the pattern and cost between 0 and 3 DSP.
+`zhao_geom_quat2mat` has the MOST instances — nine — and uses ONE DSP.** So
+**Quartus prunes redundant width as a matter of course**, exactly the caveat I
+attached to the finding and then under-weighted. **The casts are not, in
+general, expensive.**
+
+**So what IS attrsetup's 45?** Most likely the arithmetic itself. The block
+computes three edge functions (2 products each), three interpolated values
+(`n0_c`, 3 products at genuinely 46×32) and two gradients (6 products at 22×32)
+— **fifteen multiplies, averaging 3 DSP each**, which is an ordinary price for
+products of that size. **A 46×32 product needs several 18×18 partials no matter
+how it is written.**
+
+**REVISED ESTIMATE: the recoverable part is the six NARROW products at `:122`
+(22×21, which should be ~1 DSP each and may be paying ~3), so on the order of
+10–12 DSP, not 27.** Still worth having — 3% of the console — but **it is no
+longer a headline and it is no longer "strong".** Lever 2's confidence in the
+table above should read **weak**, and the number should read **~10**.
+
+**THE DISCIPLINE THAT CAUGHT IT:** the hypothesis predicted that the same shape
+elsewhere would cost DSP. It was testable in one grep plus one column of the
+report, and it failed. **A lever estimated from reading code and never checked
+against the measurement is how a fortnight gets spent on 3%.**
+
+### AND A NEAR-MISS I AM RECORDING RATHER THAN QUIETLY FIXING
+
+While ranking DSP owners I mis-indexed the report's columns and read
+**`zhao_geom_vattr|zhao_raster_rcp24_v4` at 104 and 120 DSP** — which would have
+made the reciprocal units the dominant consumer at ~250 of 359, and I was one
+sentence from reporting it. **Those numbers were ALUT counts from the wrong
+field.** The table has ten columns and the full hierarchy name is field 7, not
+the last one; an earlier filter on the last field matched nothing, which is what
+made me look again.
+
+**The tell was that it did not reconcile**: 250 DSP in one subtree plus
+`zhao_shell_top_v2`'s 88 already exceeds the console's own 359. **A number that
+cannot fit inside its own total is a parsing error, not a finding.**
+
+### THE DSP DECOMPOSITION, CORRECTLY PARSED — indentation is nesting
+
+```
+  359  zhao_console_core
+   88    zhao_shell_top_v2          <- 24% of all DSP
+   86      zhao_geom_bin_pipe_v2
+   80        zhao_raster_tile_pipe_v2
+   23          zhao_raster_texture_stage_v3
+   45    zhao_geom_attrpack         <- all of it zhao_geom_attrsetup
+   39    zhao_proj_subsystem
+   33      zhao_project_service / zhao_project_core
+   21    zhao_geom_skin_norm
+   20    zhao_part_collide
+   15    zhao_field_host_v2
+```
+
+**The three largest direct children — shell (88), attrpack (45) and the
+projector subsystem (39) — are 172 of 359, 48%.** And **80 of the shell's 88 are
+`zhao_raster_tile_pipe_v2`**, which no lever above has examined. **That is where
+the next DSP question should be asked**, not at attrsetup.
