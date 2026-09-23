@@ -39,6 +39,24 @@
 // evidence about the instrument, not about the design.
 //
 // Renamed so no production source list can elaborate it by mistake.
+//
+// ---------------------------------------------------------------------------
+// RE-VERIFIED AGAINST CURRENT PRODUCTION 2026-09-23 (packet gz/trimerge)
+// ---------------------------------------------------------------------------
+// `mutant_copy_drift.py` flagged this copy because TRIMERGE committed a comment
+// correction to `zhao_geom_clipdoor.sv`'s header, which made production newer
+// than this file. The tool's signal is PROVENANCE, and it was right to fire:
+// commit order really had inverted. The copy was then diffed against current
+// production body-to-body, and it is FAITHFUL -- the only differences are this
+// file's own replaced header, the one substantive line below, the deliberately
+// disabled simulation assertion (with its reason beside it) and the
+// UNUSEDSIGNAL pragma around the now-unread `held_q`. Nothing of production's
+// shape was missing.
+//
+// This note is the refresh. It is recorded rather than done silently because a
+// copy whose provenance is corrected without anyone LOOKING at the body is the
+// stale-copy failure with a newer timestamp on it -- which is worse than the
+// stale copy, since the timestamp then argues against checking.
 `default_nettype none
 
 module zhao_geom_clipdoor_mutant #(
