@@ -1,0 +1,250 @@
+{
+  "_comment": "Comment sites in the composer that say a module is not composed, about a module that IS. Keyed by (file, module, phrase) and NOT by line, because these entries are rewritten constantly and a line-keyed baseline goes stale the first time somebody inserts a paragraph -- which is this tool's own subject. Lines are recorded for triage only.",
+  "known": [
+    {
+      "file": "fpga/rtl/prod/zhao_console_board.sv",
+      "module": "zhao_geom_clipread",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        1088
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_board.sv",
+      "module": "zhao_material_resolve",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2745
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_cmd_exec",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        4082,
+        4185
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_geom_clipread",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        8334
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_geom_ladderbank",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        6848
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_geom_lod",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2339,
+        2340,
+        2413
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_geom_lodstate",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2339,
+        2340,
+        2413,
+        6848
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_geom_setup",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2518,
+        16385
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_material_resolve",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        9994
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_measure_governor",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        6792
+      ],
+      "triage": "STALE-CONFIRMED",
+      "note": "Reads 'zhao_measure_governor EXISTS and is UNIT_VERIFIED, is NOT composed in this file'. It is composed, with all three of the inputs the same paragraph calls producerless driven. Fix the prose."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_mem_share_n",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        6848
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_part_ladder",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2340,
+        2413
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_part_table",
+      "phrase": "instantiated nowhere",
+      "lines_when_recorded": [
+        693,
+        11619
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_raster_blend_fin",
+      "phrase": "instantiated nowhere",
+      "lines_when_recorded": [
+        6931
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_raster_fragment",
+      "phrase": "instantiated nowhere",
+      "lines_when_recorded": [
+        6931
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_bake_v2",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        4867,
+        4868
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_compcache_front",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        15973
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_devstore",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        15566
+      ],
+      "triage": "STALE-CONFIRMED-AND-POSSIBLY-LIVE",
+      "note": "TERRAIN.LODFEED's header waives w_slot_o and w_cy_o 'AT the declaration' because 'that store is NOT composed here'. The store IS composed. This is the one site where the stale claim carries a WIRING consequence rather than only prose: two ports were waived on a premise that has expired. Needs a lane, not an edit."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_devstore",
+      "phrase": "uncomposed",
+      "lines_when_recorded": [
+        2431
+      ],
+      "triage": "STALE-CONFIRMED",
+      "note": "Reads 'zhao_terrain_devstore is uncomposed with no design/blocks.yml row at 185 M10K'. Stale twice: it is composed, and owner ruling R242 (2026-09-22) moved the store to SDRAM so the 185 M10K are gone."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_lod",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        2336,
+        2413
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_pageio",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        4867,
+        4868
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_patch",
+      "phrase": "not composed",
+      "lines_when_recorded": [
+        5222
+      ],
+      "triage": "FALSE-POSITIVE-WINDOW",
+      "note": "The phrase belongs to a general statement of ruling R163 -- 'a _v2 file that exists and is not composed' -- about zhao_terrain_patch_v2, which is correctly absent. The window picked up the composed parent's name two lines away. Expected noise of the +/-2 line window; recorded so nobody re-investigates it."
+    },
+    {
+      "file": "fpga/rtl/prod/zhao_console_core.sv",
+      "module": "zhao_terrain_seq",
+      "phrase": "nothing instantiates",
+      "lines_when_recorded": [
+        184,
+        18861
+      ],
+      "triage": "UNTRIAGED",
+      "note": "Recorded, NOT cleared. Nobody has read this site yet. It is visible here instead of invisible in 27,000 lines of prose, which is the whole gain; reading it is owed."
+    }
+  ],
+  "_comment_triage": "READ THIS BEFORE QUOTING THE GATE'S GREEN. Of the 23 sites, 4 have been read and are marked STALE-CONFIRMED or FALSE-POSITIVE-WINDOW; the rest are UNTRIAGED -- recorded, NOT cleared. A green from this gate means NO NEW CLAIM APPEARED, not that the prose is true. The UNTRIAGED rows are a work list. This file exists because nothing in the tree diffs prose against the RTL it describes (HANDOVER 15.14), and baselining 23 unread rows as 'known' without saying so would be the same failure one level up.",
+  "_comment_live": "ONE SITE MAY BE MORE THAN PROSE: TERRAIN.LODFEED waives w_slot_o and w_cy_o at their declaration because 'that store is NOT composed here'. zhao_terrain_devstore IS composed. A port waived on an expired premise is a wiring question, not a comment question. Marked STALE-CONFIRMED-AND-POSSIBLY-LIVE and owed a lane."
+}

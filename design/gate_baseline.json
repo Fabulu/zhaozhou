@@ -10,6 +10,7 @@
     "tools/design/check_array_storage.py": 0,
     "tools/design/check_counter_ids.py": 1,
     "tools/design/check_counters.py": 0,
+    "tools/design/check_entry_claims.py": 0,
     "tools/design/check_findings_citations.py": 0,
     "tools/design/check_formal_lanes.py": 0,
     "tools/design/check_localparam_comments.py": 0,
