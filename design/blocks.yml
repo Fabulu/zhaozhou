@@ -3075,7 +3075,6 @@ blocks:
       be work on a machine nobody ships. If an island handle is ever packed into
       one word in RTL, T10's 50 bits is the width it takes.
 
-    notes: >-
       IT COMPOSES THE STORE RATHER THAN DUPLICATING IT, and the arithmetic is
       why. A dense handle table for a 125 x 125 grid would be 16,384 x 32 bits
       = 524,288 bits = FIFTY-TWO M10Ks on a 553-block device, to hold a
