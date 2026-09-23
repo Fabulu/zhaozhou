@@ -15,10 +15,31 @@
 // serves read data with exact CAS shaping and write beats with DQM masking.
 // The law table it enforces is the one in zhao_sdram_ctrl.sv's header.
 //
-// Geometry: 4 banks x 8192 rows x 2048 cols x 16 bit = 128 MB. Read bursts
-// wrap within the row (sequential, modulo 2048); the controller never issues
-// a burst that crosses a row boundary, so the wrap is unreachable in lawful
-// traffic and exists only so unlawful traffic is served, not hung.
+// Geometry: 4 banks x 8192 rows x 2048 cols x 16 bit = 128 MB.
+//
+// BURST ADDRESSING -- READ THIS BEFORE TRUSTING A BENCH THAT PASSES.
+// The mode register this model checks is BL8 SEQUENTIAL (A[2:0]=011, A3=0),
+// and a JEDEC sequential burst of length 8 WRAPS INSIDE ITS ALIGNED
+// EIGHT-COLUMN BLOCK: col[10:3] is HELD and col[2:0] advances. From column 5
+// the device returns 5,6,7,0,1,2,3,4 -- not 5..12.
+//
+// THIS FILE USED TO SAY, TRUTHFULLY AND MISLEADINGLY: "Read bursts wrap within
+// the row (sequential, modulo 2048); the controller never issues a burst that
+// crosses a row boundary, SO THE WRAP IS UNREACHABLE IN LAWFUL TRAFFIC." Every
+// clause of that is correct ABOUT THE ROW, and the row is not the unit the
+// part wraps in. The sentence ended in a reassurance, the reassurance is what
+// a reader took away, and underneath it the model incremented the column
+// LINEARLY -- so it read BETTER THAN THE SILICON, which is the direction
+// nobody audits. `zhao_vram_arbiter` clamped only to the row tail and
+// `zhao_sdram_ctrl` takes its column straight off the request address, so a
+// misaligned client was served correctly here and would have been served
+// WRONG by the part, and no test in this tree could fail on it.
+//
+// Owner ruling R243 / D-SDRAM-A: "Make the SDRAM model match real JEDEC BL8
+// wrapping first so the bug class becomes observable in simulation, then fix
+// the arbiter centrally." `bl8_col` below is that repair. The wrap is now
+// REACHABLE, and it is the arbiter's `burst_words` -- not a comment -- that
+// keeps lawful traffic out of it.
 //
 // A peek port (peek_en/peek_waddr/peek_data) exposes memory contents to the
 // C++ harness for shadow-memory compares without touching model internals.
@@ -75,6 +96,20 @@ module zhao_sdram_model
                                           input logic [12:0] row,
                                           input logic [10:0] col);
     word_at = mem[{bank, row, col}];
+  endfunction
+
+  // The JEDEC BL8 SEQUENTIAL beat address: the aligned eight-column block is
+  // HELD and only the low three bits advance. This is the whole of the
+  // divergence D-SDRAM-A names, in one function, so that the read path and the
+  // write path cannot drift apart again -- they used to carry the same
+  // expression twice, which is why correcting one would have looked done.
+  //
+  // `beat` is 0..7 by construction (rd_beat/wr_beat are 4-bit counters that
+  // stop at 7), so beat[2:0] is the whole beat index and the addition is a
+  // 3-bit one that wraps by width.
+  function automatic logic [10:0] bl8_col(input logic [10:0] col,
+                                          input logic [3:0]  beat);
+    bl8_col = {col[10:3], 3'(col[2:0] + beat[2:0])};
   endfunction
 
   // ------------------------------------------------------------ bank state --
@@ -178,7 +213,7 @@ module zhao_sdram_model
     if (rd_active) begin
       if (rd_cas <= 3'd2) begin
         // driving phase: beat k visible during cycle R+CAS+k
-        dq_i_q     <= word_at(rd_bank, rd_row, rd_col + 11'(rd_beat));
+        dq_i_q     <= word_at(rd_bank, rd_row, bl8_col(rd_col, rd_beat));
         dq_valid_q <= 1'b1;
         if (rd_beat == 4'd7) rd_active <= 1'b0;
         else                 rd_beat   <= rd_beat + 4'd1;
@@ -191,7 +226,7 @@ module zhao_sdram_model
     // ---- write beat capture -----------------------------------------------
     if (wr_active) begin
       if (phy_dqm == 2'b00) begin
-        mem[{wr_bank, wr_row, wr_col + 11'(wr_beat)}] <= phy_dq_o;
+        mem[{wr_bank, wr_row, bl8_col(wr_col, wr_beat)}] <= phy_dq_o;
       end
       if (wr_beat == 4'd7) wr_active <= 1'b0;
       else                 wr_beat   <= wr_beat + 4'd1;
