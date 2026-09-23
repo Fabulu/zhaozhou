@@ -4739,6 +4739,173 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST. NARROWED AGAIN 2026-09-23 (PATCHV2), AND THE
+//      BLOCK BELOW IT OVERSTATED ONE THING AND UNDERSTATED ANOTHER.
+//
+//      THE ENTRY DOES NOT CLOSE, AND IT NOW CANNOT BE CLOSED BY BUILDING
+//      ALONE. That is the new fact and it is the one to carry forward.
+//
+//      (A) THE PRODUCER SIDE WAS NOT DONE. The EARTHADAPT block below says
+//          "the routing 20.8 commissions exists on the PRODUCER side" and
+//          that the only remaining blocker is consumer-side. That was wrong
+//          by one port, and the port is the one material's reducer law needs.
+//
+//          `zhao_field_host_v2` retires StOk when every ordinal the
+//          program's HEADER declared has landed -- `complete_c` is
+//          `((seen_next_c & req_mask_c) == req_mask_c)`, a test against the
+//          DECLARED mask and not against this profile's four. So an Earth
+//          program that declares only ordinals 0 and 1 returns status 8'h00
+//          with ordinals 2 and 3 clear, and the host's own comment beside
+//          StPartial says what the words behind them hold: "the absent ones
+//          read as the zero cleared at grant -- an answer a caller reading
+//          only the words cannot tell from a field that happens to be zero
+//          there".
+//
+//          `zhao_field_earth_adapter` gated on `resp_status_i` ALONE and
+//          therefore published those holes as VALUES. Owner ruling R168 and
+//          decision W10 are exactly this law, `u_field_warp_adapter` has
+//          read `resp_present_i` since 2026-09-20 -- AND THE COMPOSER HAD
+//          THE MASK ON A NAMED WIRE THE WHOLE TIME (`fld_resp_present_c`,
+//          declared before any adapter read it). The gap was ONE
+//          CONNECTION, not the producer rebuild this entry recorded. That is
+//          the fifth false-absence this campaign and it was this entry's own.
+//
+//          REPAIRED HERE: `.resp_present_i(fld_resp_present_c)` is connected,
+//          the adapter publishes `ans_present_o` -- the four ordinals'
+//          presence, LATCHED with the words it describes rather than read
+//          live beside them -- and `fld_earth_short_record_o` counts a StOk
+//          record that came back short. A present lane carries its word; an
+//          absent lane is published zero AND declared absent, which are two
+//          different statements and the consumer needs both. The counter is
+//          FIRED by `field_earth_adapter_directed` case 12 with a negative
+//          control beside it on byte-identical stimulus but for the mask, so
+//          it is seen to read the RECORD and not the run. No committed
+//          mutant is owed (R95): a short record is legal stimulus.
+//
+//          `efa_present` is an honestly open wire beside `efa_velocity`,
+//          `efa_material` and `efa_nav_cost`, for the same consumer.
+//
+//      (B) AND THE CONSUMER-SIDE BLOCKER IS BIGGER THAN S5 SAYS. S5 says
+//          `zhao_terrain_patch` can receive one of four channels, which is
+//          true and is a BUILD. What no entry in this file recorded is where
+//          the other three would GO once a v2 could receive them, and two of
+//          them have nowhere at all. MEASURED 2026-09-23, not inherited:
+//
+//            * velocity -- owner `zhao_terrain_velocity`, BUILT, ports cut,
+//              destination RATIFIED (`spec/memory_rules.md` 5b,
+//              TERRAIN.COMPOSED_VELOCITY at 0x056F_0000, 256 x 2,304 B).
+//              THE VRAM WRITER BETWEEN THEM DOES NOT EXIST. That is a build,
+//              and it is the smallest of the three.
+//            * material -- THERE IS NO MEMORY REGION. `spec/memory_rules.md`
+//              5b has no TERRAIN.COMPOSED_MATERIAL, and `spec/terrain_rules.
+//              md:503` rules layers A/C/E/H READ-ONLY TO FABRIC, so the
+//              composed material plane in `zhao_terrain_compcache_front` is
+//              not a candidate destination -- it is fed from
+//              `zhao_terrain_pagestream`, the AUTHORED layer E, which is
+//              `compose_material`'s starting point and not its result. AND
+//              TWO INCOMPATIBLE ENCODINGS ARE RATIFIED IN ONE TREE:
+//              `design/ops.yml` FIELD.WRITE.MATERIAL, `zref::fieldir::
+//              compose_material` and `zhao_field_sinks` all speak layer-E
+//              {u8 a, u8 b, u8 weight}; `spec/form/field-ir.md` 7.1, this
+//              adapter and `zhao_terrain_patch_acc` all speak an opaque u32.
+//              NOTHING DECLARES THE MAPPING.
+//            * nav_cost -- NO REGION, NO LATTICE, ANYWHERE, and the owner is
+//              not the fabric. `design/ops.yml:532` FIELD.WRITE.NAV notes
+//              "Consumed on the FPGA side and mirrored by SW.CPUCOLL for CPU
+//              navigation", and `spec/terrain_rules.md:505` rules it
+//              outright: "The sim (SW.CPUCOLL) owns the canonical mirror of
+//              B/D and the nav grid". `reference/src/zrender/terrain.cpp`
+//              `compose_lattice` -- the shipped renderer's own TerrainField
+//              application -- writes `lat.top[idx]` and pushes velocity, and
+//              computes NO material and NO nav lattice at all.
+//
+//          SO DIRECTIVE 20.8's "route all four to their REAL OWNERS" IS NOT
+//          SATISFIABLE AS WRITTEN. Two of the four owners are not blocks
+//          that need wiring; they are destinations that do not exist, one of
+//          them forbidden by a different ratified spec line and the other
+//          ruled to the CPU. THIS IS AN OWNER DECISION AND IT IS THE ONE
+//          THING ON THIS ENTRY THAT A PACKET MAY NOT DECIDE. The three
+//          shapes it could take, unranked deliberately:
+//            1. rule that the ACCUMULATOR is material's and nav's owner --
+//               v2 reduces all four exactly per 13.3 and publishes height
+//               and velocity, holding the other two as patch-local state a
+//               later consumer reads. Cheapest; leaves two lanes computed
+//               and unread, which is the trade this campaign keeps refusing.
+//            2. ratify a composed-material and/or nav region in
+//               `spec/memory_rules.md` 5b, with the encoding question
+//               answered. Largest, and it is the only one that makes 20.8
+//               literally true.
+//            3. rule material and nav OUT of the Earth record for this
+//               console, leaving a two-lane earth out record. Smallest
+//               silicon; contradicts field-ir 7.1 and needs the ISA changed.
+//          Recommendation, offered and not taken: (1), because it is the
+//          only one that neither changes a ratified ISA nor spends silicon
+//          on a lane with no reader, and because 13.3's exactness
+//          requirement is satisfied by it in full.
+//
+//      (C) AND `zhao_terrain_patch_v2` IS A SUBSYSTEM, NOT A CHANNEL
+//          WIDENING, which is worth stating because the obvious reading of
+//          S5 is "give the block three more inputs". FH18 and section 13.1
+//          select the FIELD-MAJOR patch-working-set form and close with "Do
+//          not leave two opposite stream-order laws alive" -- and this
+//          console composes the VERTEX-MAJOR arrangement end to end. So v2
+//          is walker + four-bank accumulator + phase owner + lifecycle +
+//          drain + the paired v1 oracle test, and 13.5 prices its storage at
+//          "about 20 M10Ks" as a PACKING CANDIDATE against a naive 32, with
+//          "verify actual synthesis when authorized". Three of 13.2's eight
+//          responsibilities are already built and must be INSTANTIATED, not
+//          rewritten: `zhao_terrain_fieldlist` (1 and 3),
+//          `zhao_terrain_patch_law_pkg` (4), `zhao_terrain_patch_acc` (5,
+//          owing 13.4's ready/valid, phase exclusivity and drain skid).
+//          AND RULING R163 GOVERNS THE FIRST COMMIT: a `_v2` file that
+//          exists and is not composed makes the completion register report
+//          `zhao_terrain_patch superseded by zhao_terrain_patch_v2` across
+//          three production roots. DO NOT CREATE THE FILE UNTIL IT COMPOSES.
+//
+//      (D) 13.7's `-FieldActive` IS ALSO A SEPARATE PACKET, and its blockers
+//          were measured here rather than guessed, because "add a smoke
+//          mode" reads like an afternoon and is not:
+//            * REGS=32 IS COMPOSED (`.REGS (32)` on `u_field_host`) and
+//              `crater_ring` needs 7 vector + 29 uniform = 36. Lowering it
+//              against a ceiling of 32 is expected to refuse with
+//              `kRefusalRegisterRange`. MEASURE THAT FIRST -- it is a
+//              five-minute C++ experiment and it decides the packet's whole
+//              shape (try `impact_wave`/`wave_pool`, author a small Earth
+//              program, or widen REGS).
+//            * the bench's played HPS has NO REGION at the staging base it
+//              already advertises (`fld_ldr_stage_base_i = 32'h1000_0000`),
+//              so the loader's first fetch hits the bench's own `$fatal`.
+//            * NO C++ HELPER TURNS A `HostPlan` INTO DOORBELL LOAD WORDS.
+//              `field_host_v2_directed` hand-builds uops. That translation
+//              is new code, and it belongs in a committed fixture generator
+//              beside `smoke_geom_fixture_gen.cpp`, not in the bench.
+//            * `PKT_MAX_C` is 768 and the current packet is 696; one
+//              TerrainField record is 112 bytes.
+//            * AND THE BENCH CONTRADICTS ITSELF ABOUT WHETHER TERRAIN PAGES
+//              LOAD AT ALL -- one comment says "the pages now load"
+//              (terrain9, 2026-09-20), another says the smoke "fails every
+//              terrain page's CRC, so terrain's composed door never opens
+//              and no vertex ever reaches the compose lane". WITHOUT A
+//              VERTEX ACCEPT `fld_earth_runs_o` CANNOT MOVE however perfect
+//              the load path is. Settle that by reading `terr_pt_samples_o`
+//              on a PLAIN run -- it is declared in the bench and never
+//              printed or asserted -- before writing a line of the new mode.
+//
+//      WHAT THIS PACKET DID NOT DO, AND WHY, SO IT IS NOT RE-DERIVED: it did
+//      not compose `zhao_terrain_velocity`. Section 13.6 does resolve the
+//      old "two walkers over one page" refusal -- "the velocity lattice
+//      consumes the SAME evaluation's velocity ... reconcile that module's
+//      old per-lane reduction interface by factoring a reduced-stream input"
+//      -- so that bullet in the TERRAIN.VELOCITY note above is spent by the
+//      directive rather than by a build. THE DECIDING REFUSAL IS UNCHANGED
+//      AND IS THE WRITER: composing it today spends a 33x33 sweep and a
+//      reducer and then discards every word, because `vv_*` has no VRAM
+//      writer and `moving_mask_o` is its own header's "PRODUCED, NEVER
+//      CONSUMED". That is a composition that moves the register and changes
+//      not one pixel.
+//      =====================================================================
+//
+//      =====================================================================
 //      NARROWED AGAIN 2026-09-23 (EARTHADAPT). THE HEIGHT RETURN LANE HAS A
 //      PRODUCER. THE ENTRY IS STILL OPEN, AND THE REASON IS NOW A DIFFERENT
 //      ONE FROM THE ONE IT HAS CARRIED SINCE IT WAS WRITTEN.
@@ -8850,6 +9017,14 @@ module zhao_console_core
   output logic [31:0]             fld_earth_not_begun_o,
   output logic [31:0]             fld_earth_noprog_o,
   output logic [31:0]             fld_earth_faults_o,
+  //   `fld_earth_short_record_o` is R168's arm on THIS record, NEW 2026-09-23
+  //   (PATCHV2): a run the host called OK that returned fewer than the four
+  //   canonical Earth ordinals. It is not a fault -- section 13.3 rules an
+  //   absent optional lane legitimate -- and it is not silence either, which is
+  //   the whole reason it is a port. A future `zhao_terrain_patch_v2` reducing
+  //   material off a stream of short records would be reducing HOLES, and this
+  //   is the only number that could say so.
+  output logic [31:0]             fld_earth_short_record_o,
   output logic [31:0]             fld_earth_lane_desync_o,
   output logic [31:0]             fld_earth_stall_cycles_o,
   output logic                    fld_earth_idle_o,
@@ -21674,6 +21849,7 @@ module zhao_console_core
   wire signed [31:0] efa_height;
   wire signed [31:0] efa_velocity, efa_nav_cost;
   wire [31:0]  efa_material;
+  wire [3:0]   efa_present;
   wire         efa_ans_field;
   wire         efa_req_valid, efa_req_ready, efa_req_noprog;
   wire [2:0]   efa_req_slot;
@@ -21964,6 +22140,14 @@ module zhao_console_core
     .resp_valid_i (efa_resp_valid),
     .resp_ready_o (efa_resp_ready),
     .resp_out_i   (fld_resp_out_c),
+    // R168/W10, THE SECOND READER OF A WIRE THAT HAD ONE. `fld_resp_present_c`
+    // was declared and named by this composer before any adapter read it, and
+    // `u_field_warp_adapter` became its first reader on 2026-09-20. THIS
+    // ADAPTER GATED ON `resp_status_i` ALONE UNTIL THIS COMMIT, which publishes
+    // a hole as a value on a four-lane record -- see the port's own comment for
+    // why a status cannot describe an ordinal. The mask was already here; the
+    // gap was one connection, not the producer rebuild entry I34 recorded.
+    .resp_present_i(fld_resp_present_c),
     .resp_status_i(fld_resp_status_c),
 
     // REAL: TERRAIN.PATCH's field-height lane, entry I34's remaining half.
@@ -21984,6 +22168,16 @@ module zhao_console_core
     .nav_cost_o (efa_nav_cost),
     .ans_field_o(efa_ans_field),
 
+    // PRODUCED, NOT CONSUMED, AND DECLARED IN THE INCOMPLETE BLOCK under I34
+    // with the three channels above it. This is the per-ordinal presence of the
+    // four words beside it, and it is what makes directive 13.2's material
+    // reducer ("the LAST field in command order that covers the vertex AND
+    // WRITES the material lane wins") implementable at all. Without it a
+    // consumer cannot tell a written zero from a lane no program declared, so
+    // every non-writing field reads as the last writer. NEW 2026-09-23
+    // (PATCHV2): the entry recorded the producer side as DONE and it was not.
+    .ans_present_o(efa_present),
+
     .records_o           (fld_earth_records_o),
     .tail_rejected_o     (fld_earth_tail_rejected_o),
     .runs_o              (fld_earth_runs_o),
@@ -21991,6 +22185,7 @@ module zhao_console_core
     .not_begun_o         (fld_earth_not_begun_o),
     .noprog_o            (fld_earth_noprog_o),
     .faults_o            (fld_earth_faults_o),
+    .short_record_o      (fld_earth_short_record_o),
     .lane_desync_o       (fld_earth_lane_desync_o),
     .stall_cycles_o      (fld_earth_stall_cycles_o),
     .idle_o              (fld_earth_idle_o)

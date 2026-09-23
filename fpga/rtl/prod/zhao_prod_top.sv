@@ -644,6 +644,7 @@ module zhao_prod_top (
   logic [32-1:0] u03_material_o;
   logic signed [32-1:0] u03_nav_cost_o;
   logic [1-1:0] u03_ans_field_o;
+  logic [4-1:0] u03_ans_present_o;
   logic [32-1:0] u03_records_o;
   logic [32-1:0] u03_tail_rejected_o;
   logic [32-1:0] u03_runs_o;
@@ -651,6 +652,7 @@ module zhao_prod_top (
   logic [32-1:0] u03_not_begun_o;
   logic [32-1:0] u03_noprog_o;
   logic [32-1:0] u03_faults_o;
+  logic [32-1:0] u03_short_record_o;
   logic [32-1:0] u03_lane_desync_o;
   logic [32-1:0] u03_stall_cycles_o;
   logic [1-1:0] u03_idle_o;
@@ -685,13 +687,15 @@ module zhao_prod_top (
       .resp_ready_o(u03_resp_ready_o),
       .resp_out_i(u03_src[119 +: 224]),
       .resp_status_i(u03_src[126 +: 8]),
+      .resp_present_i(u03_src[133 +: 7]),
       .ans_valid_o(u03_ans_valid_o),
-      .ans_ready_i(u03_src[133 +: 1]),
+      .ans_ready_i(u03_src[140 +: 1]),
       .height_o(u03_height_o),
       .velocity_o(u03_velocity_o),
       .material_o(u03_material_o),
       .nav_cost_o(u03_nav_cost_o),
       .ans_field_o(u03_ans_field_o),
+      .ans_present_o(u03_ans_present_o),
       .records_o(u03_records_o),
       .tail_rejected_o(u03_tail_rejected_o),
       .runs_o(u03_runs_o),
@@ -699,6 +703,7 @@ module zhao_prod_top (
       .not_begun_o(u03_not_begun_o),
       .noprog_o(u03_noprog_o),
       .faults_o(u03_faults_o),
+      .short_record_o(u03_short_record_o),
       .lane_desync_o(u03_lane_desync_o),
       .stall_cycles_o(u03_stall_cycles_o),
       .idle_o(u03_idle_o)
@@ -706,7 +711,7 @@ module zhao_prod_top (
   logic u03_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u03_fold_q <= 1'b0;
-    else u03_fold_q <= u03_fold_q ^ (((^u03_rec_ready_o)) & u03_src[0]) ^ (((^u03_req_valid_o)) & u03_src[1]) ^ (((^u03_req_slot_o)) & u03_src[2]) ^ (((^u03_req_noprog_o)) & u03_src[3]) ^ (((^u03_req_in_o)) & u03_src[4]) ^ (((^u03_resp_ready_o)) & u03_src[5]) ^ (((^u03_ans_valid_o)) & u03_src[6]) ^ (((^u03_height_o)) & u03_src[7]) ^ (((^u03_velocity_o)) & u03_src[8]) ^ (((^u03_material_o)) & u03_src[9]) ^ (((^u03_nav_cost_o)) & u03_src[10]) ^ (((^u03_ans_field_o)) & u03_src[11]) ^ (((^u03_records_o)) & u03_src[12]) ^ (((^u03_tail_rejected_o)) & u03_src[13]) ^ (((^u03_runs_o)) & u03_src[14]) ^ (((^u03_skipped_uncovered_o)) & u03_src[15]) ^ (((^u03_not_begun_o)) & u03_src[16]) ^ (((^u03_noprog_o)) & u03_src[17]) ^ (((^u03_faults_o)) & u03_src[18]) ^ (((^u03_lane_desync_o)) & u03_src[19]) ^ (((^u03_stall_cycles_o)) & u03_src[20]) ^ (((^u03_idle_o)) & u03_src[21]);
+    else u03_fold_q <= u03_fold_q ^ (((^u03_rec_ready_o)) & u03_src[0]) ^ (((^u03_req_valid_o)) & u03_src[1]) ^ (((^u03_req_slot_o)) & u03_src[2]) ^ (((^u03_req_noprog_o)) & u03_src[3]) ^ (((^u03_req_in_o)) & u03_src[4]) ^ (((^u03_resp_ready_o)) & u03_src[5]) ^ (((^u03_ans_valid_o)) & u03_src[6]) ^ (((^u03_height_o)) & u03_src[7]) ^ (((^u03_velocity_o)) & u03_src[8]) ^ (((^u03_material_o)) & u03_src[9]) ^ (((^u03_nav_cost_o)) & u03_src[10]) ^ (((^u03_ans_field_o)) & u03_src[11]) ^ (((^u03_ans_present_o)) & u03_src[12]) ^ (((^u03_records_o)) & u03_src[13]) ^ (((^u03_tail_rejected_o)) & u03_src[14]) ^ (((^u03_runs_o)) & u03_src[15]) ^ (((^u03_skipped_uncovered_o)) & u03_src[16]) ^ (((^u03_not_begun_o)) & u03_src[17]) ^ (((^u03_noprog_o)) & u03_src[18]) ^ (((^u03_faults_o)) & u03_src[19]) ^ (((^u03_short_record_o)) & u03_src[20]) ^ (((^u03_lane_desync_o)) & u03_src[21]) ^ (((^u03_stall_cycles_o)) & u03_src[22]) ^ (((^u03_idle_o)) & u03_src[23]);
 
   // ---- zhao_field_flow_adapter ----
   logic [63:0] u04_lfsr_q;

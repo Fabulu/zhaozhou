@@ -732,6 +732,14 @@ module tb_zhao_console_core_smoke
   logic [31:0]             fld_earth_not_begun_o;
   logic [31:0]             fld_earth_noprog_o;
   logic [31:0]             fld_earth_faults_o;
+  // R168's arm on the Earth record, NEW 2026-09-23 (PATCHV2). Declared so the
+  // `.*` binding stays total. This bench admits no field program, so no Earth
+  // run retires at all and this must read 0 -- asserted below with the rest of
+  // the Earth evidence, where a zero is the ABSENCE of a run and not a claim
+  // that short records cannot happen. The positive control is
+  // `field_earth_adapter_directed` case 14, which fires it from the block's own
+  // boundary with legal stimulus.
+  logic [31:0]             fld_earth_short_record_o;
   logic [31:0]             fld_earth_lane_desync_o;
   logic [31:0]             fld_earth_stall_cycles_o;
   logic                    fld_earth_idle_o;
@@ -7935,6 +7943,18 @@ module tb_zhao_console_core_smoke
     if (fld_earth_records_o != 32'd0)
       $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER banked %0d TerrainField uniform record(s) -- this bench issues none, so either the packet changed or the two-consumer join is taking records the field list is not",
              fld_earth_records_o);
+    // R168's arm on this record, NEW 2026-09-23 (PATCHV2). It is in the SECOND
+    // category the paragraph above sets out and not the first: no Earth run
+    // retires on this bench at all, so a short record is unreachable here BY
+    // CONSTRUCTION and this zero is evidence about the stimulus. It is asserted
+    // anyway, because the counter is new and a new counter that nothing reads
+    // is how a wiring mistake survives -- a nonzero here would mean a run
+    // retired on a console that issues no TerrainField, which is a louder
+    // failure than the number itself. The evidence that it DISCRIMINATES is
+    // `field_earth_adapter_directed` case 14, which fires it on purpose (R95).
+    if (fld_earth_short_record_o != 32'd0)
+      $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER counted %0d short Earth record(s) -- this bench retires no Earth run at all, so this counter cannot legitimately have moved",
+             fld_earth_short_record_o);
     // The shadow guard, which IS reachable here and is not two zeros agreeing.
     // `lane_desync_o` differences `vtx_live` against the consumer's own
     // `fld_ready_o` on EVERY clock of the run, not only inside a patch -- so an

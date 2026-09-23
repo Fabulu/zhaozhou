@@ -94,6 +94,10 @@ void reset(Dut& d) {
   d.req_ready_i = 0;
   d.resp_valid_i = 0;
   d.resp_status_i = 0;
+  // All four canonical Earth ordinals present, which is what every case before
+  // 12 assumes and what a complete Earth program returns. Case 12 is the one
+  // that changes it.
+  d.resp_present_i = 0xF;
   for (int i = 0; i < kOutLanes; ++i) d.resp_out_i[i] = 0;
   d.ans_ready_i = 0;
   for (int i = 0; i < 4; ++i) step(d);
@@ -179,8 +183,13 @@ void take_vertex(Dut& d, int32_t wx, int32_t wz, int lanes) {
 
 // Serve ONE lane: wait for either an engine request or an immediate answer,
 // play the engine if asked, and take the answer. Returns false on a timeout.
+// `present` is directive 8.1's output_present_mask over the four canonical
+// Earth ordinals, defaulted to all four so every case written before it
+// existed keeps describing a COMPLETE record. Case 12 is the one that hands
+// over a short one.
 bool serve_lane(Dut& d, bool covers, const int32_t out[4], uint8_t status, bool* ran,
-                int32_t* height, int* req_slot, int* req_noprog, uint32_t req_in[15]) {
+                int32_t* height, int* req_slot, int* req_noprog, uint32_t req_in[15],
+                uint32_t present = 0xF) {
   *ran = false;
   d.lane_covers_i = covers ? 1 : 0;
   int guard = 0;
@@ -204,6 +213,7 @@ bool serve_lane(Dut& d, bool covers, const int32_t out[4], uint8_t status, bool*
       for (int i = 0; i < kOutLanes; ++i) d.resp_out_i[i] = 0;
       for (int i = 0; i < 4; ++i) d.resp_out_i[i] = (uint32_t)out[i];
       d.resp_status_i = status;
+      d.resp_present_i = present;
       d.resp_valid_i = 1;
       step(d);
       ++guard;
@@ -678,6 +688,94 @@ void case11_capture(Dut& d) {
   take_answer(d);
 }
 
+// ---------------------------------------------------------------------------
+// 12 -- R168/W10 ON THIS RECORD: A SHORT RECORD IS NOT A ZERO RESULT
+// ---------------------------------------------------------------------------
+// THE DEFECT THIS FIRES ON, stated so the case cannot be read as a feature
+// test. Until 2026-09-23 this adapter gated its answer on `resp_status_i`
+// ALONE. `zhao_field_host_v2` retires StOk when every ordinal the program's
+// HEADER declared has landed -- not when this profile's four have -- so a
+// two-ordinal Earth program returns 8'h00 with ordinals 2 and 3 clear, and the
+// words behind them are the zero the host cleared at grant. The old adapter
+// published those holes as VALUES, which is exactly the conflation owner
+// directive 13.3 forbids: "a genuinely absent optional lane under an explicit
+// compatible program signature is not a write of zero."
+//
+// BOTH HALVES ARE MEASURED HERE, and the second is the one that makes the
+// first mean anything. The SHORT record must fire `short_record_o`, declare
+// ordinals 2/3 absent and publish them as zero; the COMPLETE record, on
+// byte-identical stimulus but for the mask, must leave the counter still and
+// carry all four words. A counter that moved on both would be measuring the
+// run, not the record.
+//
+// WHY NO COMMITTED MUTANT IS OWED (R95): this state is reachable with LEGAL
+// stimulus from the block's own boundary, because a short record is a legal
+// response the host is specified to produce. The mutant discipline is for a
+// guard no legal input can reach.
+void case12_short_record(Dut& d) {
+  const int32_t out[4] = {0x0000'1111, 0x0000'2222, 0x0000'3333, 0x0000'4444};
+
+  // ---- the SHORT record: height and velocity only ------------------------
+  reset(d);
+  d.tick_i = 1000;
+  uint32_t par[8];
+  zero_par(par);
+  offer_record(d, 0, 100, par, true);
+  const int obj[1] = {3};
+  const bool res[1] = {true};
+  replay(d, obj, res, 1);
+
+  take_vertex(d, 0x0001'0000, 0x0002'0000, 1);
+  bool ran = false;
+  int32_t h = 0;
+  bool ok = serve_lane(d, true, out, 0x00, &ran, &h, nullptr, nullptr, nullptr, 0x3);
+  check(ok && ran, "case 12: the short-record lane runs", 1, (ok && ran) ? 1 : 0);
+
+  check(d.short_record_o == 1, "case 12: short_record_o FIRES on a StOk record missing ordinals",
+        1, d.short_record_o);
+  check(d.ans_present_o == 0x3, "case 12: ans_present_o declares ordinals 0 and 1 present only",
+        0x3, d.ans_present_o);
+  check(h == out[0], "case 12: the PRESENT height is the engine's out-lane 0",
+        (uint64_t)(uint32_t)out[0], (uint64_t)(uint32_t)h);
+  check((int32_t)d.velocity_o == out[1], "case 12: the PRESENT velocity is out-lane 1",
+        (uint64_t)(uint32_t)out[1], (uint64_t)(uint32_t)d.velocity_o);
+  check(d.material_o == 0u, "case 12: the ABSENT material is published zero, not the hole's word",
+        0, d.material_o);
+  check((int32_t)d.nav_cost_o == 0, "case 12: the ABSENT nav_cost is published zero", 0,
+        (uint64_t)(uint32_t)d.nav_cost_o);
+  check(d.runs_o == 1, "case 12: a short record is still a RUN", 1, d.runs_o);
+  check(d.faults_o == 0, "case 12: and is NOT a fault -- 13.3 rules an absent lane legitimate", 0,
+        d.faults_o);
+  check(d.ans_field_o == 1, "case 12: a real evaluation happened", 1, d.ans_field_o);
+  take_answer(d);
+
+  // ---- THE NEGATIVE CONTROL: the same everything, a COMPLETE mask --------
+  reset(d);
+  d.tick_i = 1000;
+  zero_par(par);
+  offer_record(d, 0, 100, par, true);
+  replay(d, obj, res, 1);
+
+  take_vertex(d, 0x0001'0000, 0x0002'0000, 1);
+  ran = false;
+  h = 0;
+  ok = serve_lane(d, true, out, 0x00, &ran, &h, nullptr, nullptr, nullptr, 0xF);
+  check(ok && ran, "case 12 control: the complete-record lane runs", 1, (ok && ran) ? 1 : 0);
+  check(d.short_record_o == 0,
+        "case 12 control: short_record_o STAYS SILENT on a complete record -- the counter reads "
+        "the mask and not the run",
+        0, d.short_record_o);
+  check(d.ans_present_o == 0xF, "case 12 control: ans_present_o declares all four present", 0xF,
+        d.ans_present_o);
+  check(d.material_o == (uint32_t)out[2],
+        "case 12 control: a PRESENT material carries out-lane 2 -- so case 12's zero is the mask's "
+        "doing and not a suppression this commit added everywhere",
+        (uint64_t)(uint32_t)out[2], d.material_o);
+  check((int32_t)d.nav_cost_o == out[3], "case 12 control: a PRESENT nav_cost carries out-lane 3",
+        (uint64_t)(uint32_t)out[3], (uint64_t)(uint32_t)d.nav_cost_o);
+  take_answer(d);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -692,6 +790,7 @@ int main(int argc, char** argv) {
   case9_shadow(dut);
   case10_cost(dut);
   case11_capture(dut);
+  case12_short_record(dut);
 
   dut.final();
   return zhao::report_and_exit("field_earth_adapter_directed");
