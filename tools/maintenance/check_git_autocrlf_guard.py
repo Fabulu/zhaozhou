@@ -136,6 +136,123 @@ def _is_comment(path: str, stripped: str) -> bool:
     return False
 
 
+def _blank_py_literals(lines: list[str]) -> list[str]:
+    """Blank every STRING and COMMENT token in a Python source, exactly.
+
+    WHY THIS IS tokenize AND NOT ANOTHER HEURISTIC. `_is_comment` catches a
+    line that STARTS a docstring and `_EMITTERS` catches a printed hint, and
+    between them they missed two whole shapes:
+
+      * a line INSIDE a multi-line docstring -- `check_eol_worktree.py`'s
+        header shows `git ls-files --eol <path>` as advice to a human, four
+        indented lines below the opening quotes;
+      * a git command named in an ERROR MESSAGE --
+        `raise ShellPortError("git ls-files -v output has a truncated ...")`.
+        `raise` is not an emitter and never could be listed as one, because the
+        next shape would be `assert`, then a dict of messages.
+
+    Measured 2026-09-23: NINE of this checker's fifteen findings were text that
+    merely MENTIONS a git command. That is 60% false, and this repository
+    already wrote down what that costs -- `check_localparam_comments`:
+    "A detector with thirteen false positives and zero true ones is not a
+    strict detector, it is a broken one, and it fails in the direction that
+    gets it switched off."
+
+    The six that remained are real and are now guarded.
+
+    AND IT MUST NOT BLANK EVERY STRING, which is the first thing I tried and it
+    was WRONG IN THE DANGEROUS DIRECTION. A real call site is
+    `subprocess.run(["git", "ls-files", "--eol"], ...)` -- the subcommand IS a
+    string literal, so blanking all strings deleted the evidence and the
+    finding count fell from 15 to 4 by going BLIND to three genuine call sites.
+    A fix for false positives that manufactures false negatives is worse than
+    the fault it repairs, and it looked like success.
+
+    So exactly two categories are blanked, both of which are prose by
+    construction and neither of which can carry an argument list:
+
+      * COMMENTS and DOCSTRINGS -- a string that is an expression statement;
+      * the message of a `raise` -- every string anywhere under a Raise node.
+
+    Line and column structure is preserved so every reported line number is
+    unchanged. If the file does not parse, the original lines are returned and
+    the old heuristics still apply: a checker that goes SILENT on a file it
+    cannot read would be the very failure it exists to prevent.
+    """
+    import ast as _ast
+    import io as _io
+    import tokenize as _tok
+
+    text = "".join(lines)
+    out = [list(l) for l in lines]
+
+    def blank(r1, c1, r2, c2):
+        for r in range(r1, r2 + 1):
+            if r - 1 >= len(out):
+                break
+            row = out[r - 1]
+            lo = c1 if r == r1 else 0
+            hi = c2 if r == r2 else len(row)
+            for c in range(lo, min(hi, len(row))):
+                if row[c] != "\n":
+                    row[c] = " "
+
+    try:
+        for t in _tok.generate_tokens(_io.StringIO(text).readline):
+            if t.type == _tok.COMMENT:
+                blank(t.start[0], t.start[1], t.end[0], t.end[1])
+    except (_tok.TokenError, IndentationError, SyntaxError, UnicodeDecodeError):
+        return lines
+
+    try:
+        tree = _ast.parse(text)
+    except (SyntaxError, ValueError):
+        return ["".join(r) for r in out]
+
+    def _whole_command_string(n):
+        """A string that IS a command line, e.g. f"git diff -U6 -- {rel}".
+
+        AN ARGV ELEMENT IS ONE TOKEN. `["git", "diff", "-U6"]` holds `git`
+        ALONE; nothing in an argument vector is ever `git ` followed by more
+        words. So a literal beginning `git <something>` is a human-facing
+        label or a printed hint, never an invocation -- `qwen_job.py` returns
+        exactly that, `f"git diff -U6 -- {rel}"`, as the caption for output it
+        has already fetched two lines above.
+
+        The one form this could hide is `subprocess.run("git status",
+        shell=True)`. This tree has a single `shell=True`
+        (`tools/rtl/fire_tests_rcp24_v3.py:99`) and it passes a VARIABLE, so no
+        literal command string can reach a shell here. If one ever does, this
+        rule must go -- which is why the reason is written down and not just
+        the behaviour.
+        """
+        if isinstance(n, _ast.Constant) and isinstance(n.value, str):
+            return re.match(r"^\s*git\s+\S", n.value) is not None
+        if isinstance(n, _ast.JoinedStr) and n.values:
+            head = n.values[0]
+            return isinstance(head, _ast.Constant) and isinstance(head.value, str) \
+                and re.match(r"^\s*git\s+\S", head.value) is not None
+        return False
+
+    for node in _ast.walk(tree):
+        targets = []
+        if isinstance(node, _ast.Expr) and isinstance(node.value, _ast.Constant) \
+                and isinstance(node.value.value, str):
+            targets = [node.value]
+        elif isinstance(node, _ast.Raise):
+            targets = [n for n in _ast.walk(node)
+                       if isinstance(n, (_ast.Constant, _ast.JoinedStr))
+                       and not isinstance(getattr(n, "value", ""), (int, float, bool))]
+        elif _whole_command_string(node):
+            targets = [node]
+        for n in targets:
+            if getattr(n, "end_lineno", None) is None:
+                continue
+            blank(n.lineno, n.col_offset, n.end_lineno, n.end_col_offset)
+
+    return ["".join(r) for r in out]
+
+
 def scan_line(path: str, line: str) -> list[tuple[str, str]]:
     """Return [(subcommand, reason)] for unguarded content-dependent calls."""
     stripped = line.strip()
@@ -179,8 +296,31 @@ def scan_line(path: str, line: str) -> list[tuple[str, str]]:
                     continue
                 j += 1
                 continue
-            sub = tj
-            break
+            # A VALUE THAT IS AN EXPRESSION IS MORE THAN ONE TOKEN, and
+            # skipping exactly one of them was a FALSE NEGATIVE in the
+            # flattering direction. Measured 2026-09-23:
+            #
+            #   ["git", "-C", str(root), "diff", "-U6", "--", rel]   NOT flagged
+            #   ["git", "-C", "/repo",   "status", "--porcelain"]        flagged
+            #
+            # `str(root)` tokenises to more than one token, so `j += 2` landed
+            # mid-expression, `sub` became something that is not a subcommand,
+            # and the call went unreported -- while the f-string LABEL two lines
+            # below it was reported instead. A computed repo path is the common
+            # form in this tree, so this hid real call sites and showed text.
+            #
+            # So do not stop at the first non-option token: walk on until a
+            # token this checker actually RECOGNISES as a subcommand. If none
+            # appears, fall back to the first one, which is what keeps the
+            # `<runtime>` dynamic-helper rule working.
+            if sub is None:
+                sub = tj
+            if tj.lower() in ALWAYS_CONTENT or tj.lower() in RANGE_CONTENT:
+                sub = tj
+                break
+            j += 1
+            if j - i > 12:
+                break
         if sub is None:
             continue
 
@@ -249,6 +389,8 @@ def scan_repo() -> tuple[list[tuple[str, int, str, str]], int]:
                         lines = fh.readlines()
                 except OSError:
                     continue
+                if rel.endswith(".py"):
+                    lines = _blank_py_literals(lines)
                 for n, line in enumerate(lines, 1):
                     for sub, why in scan_line(rel, line):
                         findings.append((rel, n, sub, why))

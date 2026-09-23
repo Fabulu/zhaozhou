@@ -45,7 +45,7 @@ MODULE_RE = re.compile(r"^\s*module\s+([A-Za-z_]\w*)", re.M)
 
 def run_git(repo: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True,
+        ["git", "-c", "core.autocrlf=true", *args], cwd=repo, capture_output=True, text=True,
         encoding="utf-8", errors="replace")
     return result.stdout.strip() if result.returncode == 0 else ""
 

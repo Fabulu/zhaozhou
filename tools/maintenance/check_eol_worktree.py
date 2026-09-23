@@ -51,7 +51,7 @@ import sys
 
 def mismatches():
     """[(path, index_eol, worktree_eol)] for eol=lf pins whose worktree is not LF."""
-    out = subprocess.run(["git", "ls-files", "--eol"],
+    out = subprocess.run(["git", "-c", "core.autocrlf=true", "ls-files", "--eol"],
                          capture_output=True, text=True, check=True).stdout
     bad = []
     for line in out.splitlines():
@@ -73,7 +73,7 @@ def mismatches():
 def dirty(paths):
     if not paths:
         return set()
-    out = subprocess.run(["git", "status", "--porcelain", "--"] + paths,
+    out = subprocess.run(["git", "-c", "core.autocrlf=true", "status", "--porcelain", "--"] + paths,
                          capture_output=True, text=True, check=True).stdout
     return {l[3:].strip() for l in out.splitlines() if l.strip()}
 

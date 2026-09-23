@@ -113,7 +113,7 @@ def read_input(spec: str, root: Path) -> tuple[str, str]:
         return "", ""
     if spec.startswith("diff:"):
         rel = spec[5:].strip()
-        out = subprocess.run(["git", "-C", str(root), "diff", "-U6", "--", rel],
+        out = subprocess.run(["git", "-C", str(root), "-c", "core.autocrlf=true", "diff", "-U6", "--", rel],
                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         return f"git diff -U6 -- {rel}", out or "(no diff)"
     if spec.startswith("show:"):

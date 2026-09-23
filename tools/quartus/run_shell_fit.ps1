@@ -321,14 +321,14 @@ function Assert-LiveLauncherEquivalent([string]$Commit) {
 }
 
 function Assert-TrackedTreeClean([string]$Commit) {
-    $statusRows = @(& git -C $RepoRoot --no-replace-objects status --short --untracked-files=no)
+    $statusRows = @(& git -C $RepoRoot -c core.autocrlf=true --no-replace-objects status --short --untracked-files=no)
     if ($LASTEXITCODE -ne 0) {
         throw 'Could not inspect whole tracked worktree status.'
     }
     if ($statusRows.Count -ne 0) {
         throw "Whole tracked tree is dirty at shell-fit invocation: $($statusRows -join '; ')"
     }
-    & git -C $RepoRoot --no-replace-objects diff --quiet --no-ext-diff --no-textconv --binary --
+    & git -C $RepoRoot -c core.autocrlf=true --no-replace-objects diff --quiet --no-ext-diff --no-textconv --binary --
     if ($LASTEXITCODE -ne 0) {
         throw 'Whole tracked worktree is dirty at shell-fit invocation.'
     }
@@ -336,7 +336,7 @@ function Assert-TrackedTreeClean([string]$Commit) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Whole tracked index is dirty at shell-fit invocation.'
     }
-    $flagRows = @(& git -C $RepoRoot --no-replace-objects ls-files --cached -v)
+    $flagRows = @(& git -C $RepoRoot -c core.autocrlf=true --no-replace-objects ls-files --cached -v)
     if ($LASTEXITCODE -ne 0) {
         throw 'Could not inspect whole-tree index flags.'
     }
