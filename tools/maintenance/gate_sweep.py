@@ -73,9 +73,51 @@ NEEDS_ARGS = {
     "tools/budget/check_dual18_atom_routes.py",
 }
 
+# A DISCOVERY RULE IS ONLY AS GOOD AS ITS PREDICATE, and this one's predicate is
+# a FILENAME. Added 2026-09-23, after "gate_sweep RC 0, every gate matching the
+# baseline" was quoted three times in one afternoon while `mutant_copy_drift`
+# was RED -- on a regression introduced by that same afternoon's merge. The
+# sweep could not see it for one reason: the file is not called `check_*.py`.
+#
+# So these are named DELIBERATELY, each with what it watches and why its verdict
+# is trustworthy. The bar for entry is narrow and it is the important part:
+# **the tool's EXIT CODE must carry the verdict.** A tool that prints a finding
+# and returns 0 has nothing for a status baseline to compare -- baselining it
+# would add a number that cannot move and call it coverage, which is the exact
+# reassurance this sweep exists to refuse. `closure_liveness.py` and
+# `mutant_drivers.py` were both considered and REFUSED on that test: both print
+# real debt lists, both always return 0.
+#
+# AND TWO OF THESE CARRY THEIR VERDICT BEHIND A FLAG, which is its own trap:
+# run bare, `uncashed_cheques.py` and `refmodel_liveness.py` return 0 ALWAYS --
+# the checking is inside `if "--gate" in sys.argv`. A sweep that ran everything
+# bare "for safety" would have listed them green forever. They are run WITH the
+# flag here, and the argv is part of the baseline key so it cannot drift.
+EXTRA_GATES = {
+    "tools/budget/mutant_copy_drift.py": [],
+    # a committed mutant is a COPY; a copy older than its production module is
+    # a positive control for a block that no longer exists. Returns 1 on drift.
+    "tools/design/wrapper_port_parity.py": [],
+    # a `.*` wrapper mutant cannot bind a port the real module gained or lost,
+    # and the failure READS LIKE A BROKEN CORE. Returns 1 on either.
+    "tools/budget/uncashed_cheques.py": ["--gate"],
+    # a module built and installed nowhere, or a fit row gone stale, with no
+    # written disposition. BARE THIS RETURNS 0 WHATEVER IT FINDS.
+    "tools/budget/refmodel_liveness.py": ["--gate"],
+    # a block declaring a reference model with no differential test to hold it
+    # to. BARE THIS RETURNS 0 WHATEVER IT FINDS.
+}
 
-def discover() -> list[str]:
-    """Every `check_*.py` under tools/, found rather than remembered."""
+
+def gate_key(rel: str, argv: list[str]) -> str:
+    """The baseline key. Argv is part of it: the same file run two ways is two
+    different questions, and a flag quietly disappearing must read as NEW."""
+    return rel if not argv else rel + " " + " ".join(argv)
+
+
+def discover() -> list[tuple[str, list[str]]]:
+    """Every `check_*.py` under tools/, found rather than remembered -- plus the
+    deliberately named EXTRA_GATES above, which the filename rule cannot see."""
     out = []
     for dirpath, _dirs, files in os.walk(os.path.join(REPO, "tools")):
         for fn in files:
@@ -84,19 +126,26 @@ def discover() -> list[str]:
             rel = os.path.relpath(os.path.join(dirpath, fn), REPO).replace(os.sep, "/")
             if rel in NEEDS_ARGS:
                 continue
-            out.append(rel)
-    return sorted(set(out))
+            out.append((rel, []))
+    for rel, argv in EXTRA_GATES.items():
+        if os.path.exists(os.path.join(REPO, rel)):
+            out.append((rel, list(argv)))
+    uniq = {(rel, tuple(argv)) for rel, argv in out}
+    return sorted(((rel, list(argv)) for rel, argv in uniq),
+                  key=lambda ra: gate_key(ra[0], ra[1]))
 
 
-def run_gate(rel: str) -> tuple[int, str]:
+def run_gate(rel: str, argv: list[str]) -> tuple[int, str]:
     """Run one gate BARE and return its OWN exit code.
 
     Bare matters. `cmd | tail` reports tail's status -- a trap this repository
     has paid for more than once, including on the day it was written into every
     brief. So: no pipe, no shell, and the code is read straight off the child.
+    ("Bare" is about the PIPE, not the arguments: an EXTRA_GATES flag that turns
+    the checking on is part of asking the question at all.)
     """
     try:
-        p = subprocess.run([sys.executable, os.path.join(REPO, rel)],
+        p = subprocess.run([sys.executable, os.path.join(REPO, rel), *argv],
                            cwd=REPO, capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=TIMEOUT_S)
     except subprocess.TimeoutExpired:
@@ -125,8 +174,8 @@ def load_baseline() -> dict:
 def main(argv: list[str]) -> int:
     gates = discover()
     if "--list" in argv:
-        for g in gates:
-            print("  " + g)
+        for rel, gargv in gates:
+            print("  " + gate_key(rel, gargv))
         print("\n%d gate(s) discovered" % len(gates))
         return 0
 
@@ -136,8 +185,9 @@ def main(argv: list[str]) -> int:
     new: list[str] = []
 
     print("gate sweep: %d gate(s), each run BARE" % len(gates))
-    for g in gates:
-        rc, first = run_gate(g)
+    for rel, gargv in gates:
+        g = gate_key(rel, gargv)
+        rc, first = run_gate(rel, gargv)
         results[g] = rc
         was = base.get(g)
         if was is None:
