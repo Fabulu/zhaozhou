@@ -3225,6 +3225,137 @@
 //      clothes", which this file names as the campaign's first prohibition --
 //      and the register would have moved while not one pixel did.
 //
+//      RE-MEASURED 2026-09-23 (gz/terrainuv), AND THE FIRST OF TRIMERGE'S
+//      THREE CARRIAGE ITEMS IS BUILT AND COMPOSED. `zhao_terrain_uvlane` is
+//      instantiated below as `u_terrain_uvlane` and terrain's per-corner
+//      texture coordinates leave this module on `terr_uv_*`, in Q16.16 TILE
+//      units, tagged with the same `src_id` the triangle and the light carry.
+//      The entry does NOT close and the register did not move: 12 before, 12
+//      after, and `raster pixels=2560` is unchanged, exactly as the paragraph
+//      above predicted it must be.
+//
+//      TWO OF THIS ENTRY'S OWN SENTENCES ABOUT U/V WERE WRONG, and both in the
+//      direction that made the work look like it belonged somewhere else:
+//
+//      FALSE 1: "computable from `zhao_terrain_project`'s OWN INPUT PORTS, but
+//      its OUTPUT packet has nowhere to put the result." The law is computable
+//      and frozen -- that half stands. But `zhao_terrain_project` IS NOT IN THE
+//      MACHINE. It is instantiated ZERO times under `fpga/rtl` and once in
+//      `tests/terrain/tb_terrain_wcache.sv` as `u_legacy`, and
+//      `design/prod_manifest.yml` marks it `superseded by zhao_proj_subsystem`
+//      (owner ruling R3/R99). Its output packet is not the packet anything
+//      leaves on, so "its OUTPUT packet has nowhere to put the result" is a
+//      true statement about a dead block. THE LIVE PATH IS tess ->
+//      `zhao_terrain_group_seq` -> `zhao_proj_subsystem` ->
+//      `zhao_project_service` (ONE SHARED CORE; geometry is client A) -> arena
+//      fill, with triangles reassembled from {arena, index} AT REPLAY. So
+//      terrain's u/v was never a triangle field needing a wider output packet:
+//      it is a PER-VERTEX quantity, and the shape it wants already existed.
+//
+//      FALSE 2: "u_und/v_und = the same coordinates >> 3, for walls and the
+//      underside." Right about the underside, WRONG ABOUT WALLS, and the
+//      difference is a whole absent producer. `spec/terrain_rules.md` 6.6:
+//      "Wall U accumulates rim length in lattice scan order (z-then-x, side
+//      order -z, +z, -x, +x), reset per 32x32-cell page; V = (top - y)/STRATA_M
+//      per vertex." That is not a function of world x/z at all -- it needs the
+//      rim PLAN WALK (`zref::forge::rim_plan`) -- and it is FORGE.CLIFF's, whose
+//      own header says its emission stage is NOT WRITTEN. Anybody costing
+//      terrain's u/v off this entry's summary would have costed walls at zero.
+//      The tessellator emits TOP and UNDERSIDE only (`job_surface_i`, "0 = top,
+//      1 = underside"), so those two are the whole of what a terrain coordinate
+//      producer owes today, and `zhao_terrain_uvlane` refuses to guess the third
+//      rather than shipping a plausible wrong one.
+//
+//      WHAT WAS BUILT, and why it is this shape and not a wider packet. It is
+//      `zhao_terrain_lightlane`'s shape, deliberately: the same problem (a
+//      PER-VERTEX quantity the projected arena does not carry), and R11/R21
+//      already ruled a store beside the arena over widening `zhao_vertex_arena`
+//      and over recomputing at replay. Keyed by the producer's own
+//      {arena, index}, written on the SAME FILL BEAT, generation-checked, and
+//      joined to the SAME reference stream -- so nothing joins two streams and
+//      no stall can pair vertex A's position with vertex B's coordinates.
+//
+//      THE ALTERNATIVE IS PRICED, because the next lane will be tempted by it:
+//      riding u/v through the projector's payload costs ~32 flops PER BIT in
+//      `zhao_project_core`'s `dstep_pay` family (that file's own line 904) and
+//      -- because the core is SHARED -- charges 64 bits of it to the GEOMETRY
+//      client too. The store is `ARENAS * DEPTH` rows of {generation, v, u},
+//      M10K, no DSP, and the owner prefers M10K over ALM.
+//
+//      THE THREE OPERANDS WERE ALL ALREADY HERE, which is the fact that turned
+//      this from a subsystem into a composition:
+//        world x/z -- `ts_b_vx`/`ts_b_vz`, fx16 (Q16.16) world metres. NOT
+//          stated on the projector's ports; the format is declared one block
+//          up, `zhao_terrain_normals.sv:75` ("fx16 world units"), and produced
+//          by `zhao_terrain_place` as `wx(n) = n <<< (16 + pitch_log2)`.
+//        surface  -- `ts_b_surface`, ONE NEW PIN on `zhao_terrain_group_seq`
+//          carrying the `j_surface` it already held. Before today the tess drove
+//          `surface_o`, `vtx_surface_o` AND `ref_surface_o` and NOTHING IN THIS
+//          FILE READ ANY OF THE THREE -- they were dangling. It must be taken on
+//          the vertex's own beat: surface is per-JOB, so a wire read at replay
+//          would pair a vertex with whatever job happened to be open then.
+//        pitch    -- `ptt_pitch_c`, the HELD pitch, NOT `thr_h_pitch_log2`.
+//          This file's own height-tap paragraph already records why the literal
+//          wiring LINTS CLEAN AND IS WRONG (the header wire is
+//          HDR_PITCH_REFUSE = 127 on nearly every cycle). The trap was
+//          pre-documented and is not re-derived here.
+//
+//      AND THE CLAMP, which is the one line a summary of this law loses.
+//      `reference/src/zrender/terrain.cpp:589-591` is `if (top_shift < 0)
+//      top_shift = 0`. `pitch_log2 = -1` (0.5 m) is LEGAL by spec 1.3 and
+//      `zhao_terrain_place` accepts it (`SH_HALF = 15`), so an RTL
+//      `u = wx >>> pitch_log2` with a signed shift amount would diverge from
+//      the oracle on ONE OF THE FOUR LEGAL PITCHES -- quietly, on the pitch
+//      nobody tests first. `terr_uv_pitch_clamped_o` counts it instead of
+//      handling it silently.
+//
+//      THE EVIDENCE, and what it is NOT. `tests/terrain/terrain_uvlane_directed.cpp`
+//      is 1,281 checks with a `--break-oracle` positive control that fails 8 of
+//      them. `zref` does NOT export this law -- it is inline in `draw_terrain`'s
+//      loop -- so the test carries TWO oracles that share no arithmetic and must
+//      agree with each other BEFORE either is quoted: the shift itself, and the
+//      PLACEMENT ALGEBRA in which the pitch cancels (u = n << 16 on the top
+//      surface for pitch_log2 >= 0, n << 15 at the clamp, n << (13+p) on the
+//      underside). It also proves the ARITHMETIC shift on negative world
+//      coordinates, and one tile period per cell through the consumer's own
+//      frozen fold, `zref::terrain::mirror_texel`.
+//      THE SMOKE PROVES NONE OF IT, and that was known in advance: every
+//      terrain page it plays fails its CRC, so no reference ever reaches this
+//      lane. Its job here was to show the core still ELABORATES and still
+//      renders its 14 GEOMETRY triangles -- PASS, `raster pixels=2560`,
+//      `frames_admitted=1`, unchanged.
+//
+//      THE REFERENCE JOIN IS NOW THREE-WAY and the next lane must not break it.
+//      Replay, the light lane and the coordinate lane take the SAME reference on
+//      the SAME clock, and each consumer's VALID is gated on EVERY OTHER
+//      consumer's READY -- never on the raw `ts_r_valid`. Gating on the raw
+//      valid is the defect this file already measured once: 128 triangles
+//      replayed 18,244 times, about 147 each, output byte-identical, visible
+//      ONLY to a counter. A FOURTH client is legal and cheap, and it must
+//      follow the same rule.
+//
+//      WHAT THE NEXT LINK NEEDS, precisely, because this is where it reads:
+//        1. `invw24`. STILL ABSENT and unchanged by this lane. Terrain has its
+//           `w` at this module's edge (`proj_out_aw_o/bw_o/cw_o`, [30:0] fx16
+//           raw w -- NOT 1/w). What is needed is a FOURTH
+//           `zhao_geom_depthquant_stream` + `zhao_raster_rcp24_v4` pair (or an
+//           arbiter on `v_*` and a demux on `d_*`), with `zhao_forge_assemble`'s
+//           `u_dq`/`u_rcp` pair as the template. THREE such instances already
+//           exist in this console, so it is an exercised pattern.
+//        2. THE PERSPECTIVE MULTIPLY. GEOM.CLIP's attribute slots 1 and 2 are
+//           u/w and v/w; `terr_uv_*` is u and v. The multiply belongs with the
+//           `invw24` producer above, in a `pack_attr` analogue -- NOT in this
+//           composer, and NOT inside `zhao_terrain_uvlane`, which deliberately
+//           holds no perspective arithmetic.
+//        3. THE FOURTH DOOR CLIENT. `NCLIENT` 3 -> 4 on `u_geom_clipdoor`, per
+//           the TRIMERGE paragraph above, which is unchanged by this lane.
+//        4. The AUX surface context and the terrain material identity, which are
+//           TRIMERGE's second and third carriage items and were NOT touched
+//           here.
+//      The colour-at-identity question and layer-H tint content are still LAST
+//      in the sequence and still the owner's. Nothing in this lane touched them,
+//      and nothing in this lane needs them: a coordinate is not a colour.
+//
 // I20. Everything `zhao_shell_top_v2` already declares provisional at its own
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
 //      geometry memory clients -- is UNCHANGED and still provisional. This
