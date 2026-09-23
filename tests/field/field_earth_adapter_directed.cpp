@@ -747,6 +747,8 @@ void case12_short_record(Dut& d) {
   check(d.faults_o == 0, "case 12: and is NOT a fault -- 13.3 rules an absent lane legitimate", 0,
         d.faults_o);
   check(d.ans_field_o == 1, "case 12: a real evaluation happened", 1, d.ans_field_o);
+  const uint32_t short_fired = d.short_record_o;
+  const uint32_t short_present = d.ans_present_o;
   take_answer(d);
 
   // ---- THE NEGATIVE CONTROL: the same everything, a COMPLETE mask --------
@@ -773,6 +775,17 @@ void case12_short_record(Dut& d) {
         (uint64_t)(uint32_t)out[2], d.material_o);
   check((int32_t)d.nav_cost_o == out[3], "case 12 control: a PRESENT nav_cost carries out-lane 3",
         (uint64_t)(uint32_t)out[3], (uint64_t)(uint32_t)d.nav_cost_o);
+
+  // THE COUNTER'S OWN EVIDENCE, PRINTED AND NOT ONLY ASSERTED. A passing check
+  // is a pass; this is the number. R95 and CLAUDE.md's broken-instrument law
+  // both ask that a new counter be SEEN to move and seen to DISCRIMINATE, and
+  // a silent harness that prints only a total cannot show either. The two
+  // halves differ in the response mask alone.
+  std::printf(
+      "[field_earth_adapter_directed] R168 short-record control: "
+      "short mask 0x%X -> short_record_o=%u ans_present_o=0x%X | "
+      "complete mask 0xF -> short_record_o=%u ans_present_o=0x%X\n",
+      0x3u, short_fired, short_present, d.short_record_o, d.ans_present_o);
   take_answer(d);
 }
 

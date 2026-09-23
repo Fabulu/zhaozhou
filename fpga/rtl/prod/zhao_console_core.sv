@@ -4767,8 +4767,33 @@
 //          read `resp_present_i` since 2026-09-20 -- AND THE COMPOSER HAD
 //          THE MASK ON A NAMED WIRE THE WHOLE TIME (`fld_resp_present_c`,
 //          declared before any adapter read it). The gap was ONE
-//          CONNECTION, not the producer rebuild this entry recorded. That is
-//          the fifth false-absence this campaign and it was this entry's own.
+//          CONNECTION, not the producer rebuild this entry recorded.
+//
+//          AND HOW THIS PACKET ALMOST BUILT A PRODUCER THAT ALREADY EXISTED
+//          IS THE PART WORTH KEEPING, because it is this file's own
+//          broken-instrument law with a new set of clothes and it very
+//          nearly cost a day. Two independent greps were run before any
+//          conclusion: `wmask|out_mask|out_present|output_map|out_map` over
+//          `fpga/rtl/field/*.sv`, and the same over
+//          `spec/form/field-ir.md` section 7.1. BOTH RETURNED ZERO. The
+//          reading that followed was "the ISA cannot express an absent
+//          lane, so this is an owner decision about changing field-ir" --
+//          confident, evidenced, and WRONG, because the signal is spelled
+//          `req_mask_c` / `hdr_reqmask` / `rsp_pres` / `resp_present_o` and
+//          not one of the five names guessed. The producer was
+//          `zhao_field_host_v2.sv:370`, already stored PER RESERVATION at
+//          `:1631` (`rsp_pres[cur_rsv] <= cur_seen`, so the metadata-swap
+//          trap was designed out a year before this packet worried about
+//          it), already published at `:1138`, and already read by a sibling
+//          adapter.
+//          A BROKEN GREP READS AS AN ABSENCE AND AN ABSENCE READS AS A
+//          BUILD. That is the whole lesson and it is cheap to defend
+//          against: the check that caught it was not a better grep, it was
+//          reading the host's own port list around the line the first grep
+//          DID hit. When a search for a capability returns exactly zero,
+//          open the file that would own it and read its ports before
+//          believing the number -- "precision at zero is a tell, not a
+//          result", and this entry is now the campaign's sixteenth instance.
 //
 //          REPAIRED HERE: `.resp_present_i(fld_resp_present_c)` is connected,
 //          the adapter publishes `ans_present_o` -- the four ordinals'
@@ -4796,36 +4821,57 @@
 //              TERRAIN.COMPOSED_VELOCITY at 0x056F_0000, 256 x 2,304 B).
 //              THE VRAM WRITER BETWEEN THEM DOES NOT EXIST. That is a build,
 //              and it is the smallest of the three.
-//            * material -- THERE IS NO MEMORY REGION. `spec/memory_rules.md`
-//              5b has no TERRAIN.COMPOSED_MATERIAL, and `spec/terrain_rules.
-//              md:503` rules layers A/C/E/H READ-ONLY TO FABRIC, so the
-//              composed material plane in `zhao_terrain_compcache_front` is
-//              not a candidate destination -- it is fed from
-//              `zhao_terrain_pagestream`, the AUTHORED layer E, which is
-//              `compose_material`'s starting point and not its result. AND
-//              TWO INCOMPATIBLE ENCODINGS ARE RATIFIED IN ONE TREE:
-//              `design/ops.yml` FIELD.WRITE.MATERIAL, `zref::fieldir::
-//              compose_material` and `zhao_field_sinks` all speak layer-E
-//              {u8 a, u8 b, u8 weight}; `spec/form/field-ir.md` 7.1, this
-//              adapter and `zhao_terrain_patch_acc` all speak an opaque u32.
-//              NOTHING DECLARES THE MAPPING.
-//            * nav_cost -- NO REGION, NO LATTICE, ANYWHERE, and the owner is
-//              not the fabric. `design/ops.yml:532` FIELD.WRITE.NAV notes
-//              "Consumed on the FPGA side and mirrored by SW.CPUCOLL for CPU
-//              navigation", and `spec/terrain_rules.md:505` rules it
-//              outright: "The sim (SW.CPUCOLL) owns the canonical mirror of
-//              B/D and the nav grid". `reference/src/zrender/terrain.cpp`
-//              `compose_lattice` -- the shipped renderer's own TerrainField
-//              application -- writes `lat.top[idx]` and pushes velocity, and
-//              computes NO material and NO nav lattice at all.
+//            * material and nav_cost -- THE BLOCK OWNER IS NAMED AND THE
+//              DESTINATION IS NOT. This is the corrected form; the first
+//              version of this paragraph said nav was ruled to the CPU and
+//              that was OVERSTATED, in the direction that invites a
+//              descope. `design/ops.yml` FIELD.WRITE.MATERIAL (:527) and
+//              FIELD.WRITE.NAV (:532) BOTH carry
+//              `implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]`,
+//              and MATERIAL's `semantics` names the resolver outright:
+//              "2 candidate material IDs + blend weight per cell; resolved
+//              deterministically by TERRAIN.PATCH". The CPU's role is a
+//              MIRROR, not ownership -- NAV's note is "Consumed on the FPGA
+//              side AND MIRRORED by SW.CPUCOLL for CPU navigation", and
+//              `spec/terrain_rules.md:505` is the same shape: the sim owns
+//              "the CANONICAL MIRROR of B/D and the nav grid".
+//              SO THE FABRIC IS SUPPOSED TO CARRY BOTH, AND TERRAIN.PATCH
+//              -- the very block 13.2 asks to widen -- IS THE DESIGNATED
+//              WRITER OF BOTH. What does not exist is anywhere to put them:
+//                - `spec/memory_rules.md` 5b ratifies COMPOSED_HEIGHT and
+//                  COMPOSED_VELOCITY and has NO composed-material and NO nav
+//                  region at all;
+//                - `spec/terrain_rules.md:502-503` is NOT a bar on the
+//                  fabric writing a composed result and must not be quoted
+//                  as one -- the same sentence says "the composed cache
+//                  written only by TERRAIN.PATCH". It bars writing the
+//                  AUTHORED layers A/C/E/H. The composed material plane in
+//                  `zhao_terrain_compcache_front` is fed from
+//                  `zhao_terrain_pagestream`, i.e. the authored layer E,
+//                  which is `compose_material`'s STARTING POINT and not its
+//                  result -- so that plane is not the destination either,
+//                  for a reason about dataflow and not about permission;
+//                - and TWO INCOMPATIBLE ENCODINGS ARE RATIFIED IN ONE TREE
+//                  WITH NOTHING MAPPING BETWEEN THEM: `ops.yml`
+//                  FIELD.WRITE.MATERIAL, `zref::fieldir::compose_material`
+//                  and `zhao_field_sinks` all speak layer-E {u8 a, u8 b,
+//                  u8 weight}; `spec/form/field-ir.md` 7.1, this adapter and
+//                  `zhao_terrain_patch_acc` all speak an opaque u32.
+//              `reference/src/zrender/terrain.cpp` `compose_lattice` -- the
+//              shipped renderer's own TerrainField application -- writes
+//              `lat.top[idx]` and pushes velocity, and builds NO material
+//              and NO nav lattice, so the oracle cannot settle it either.
 //
 //          SO DIRECTIVE 20.8's "route all four to their REAL OWNERS" IS NOT
-//          SATISFIABLE AS WRITTEN. Two of the four owners are not blocks
-//          that need wiring; they are destinations that do not exist, one of
-//          them forbidden by a different ratified spec line and the other
-//          ruled to the CPU. THIS IS AN OWNER DECISION AND IT IS THE ONE
-//          THING ON THIS ENTRY THAT A PACKET MAY NOT DECIDE. The three
-//          shapes it could take, unranked deliberately:
+//          SATISFIABLE AS WRITTEN, AND THE REASON IS NARROWER THAN "two of
+//          them do not belong here". Two of the four have a NAMED owner
+//          block and an UNRATIFIED destination: TERRAIN.PATCH is designated
+//          to write something it has nowhere to put, in an encoding the tree
+//          declares two ways. That cannot be answered with "then drop it",
+//          which is exactly why it is the right question to put. THIS IS AN
+//          OWNER DECISION AND IT IS THE ONE THING ON THIS ENTRY THAT A
+//          PACKET MAY NOT DECIDE. The three shapes it could take, unranked
+//          deliberately:
 //            1. rule that the ACCUMULATOR is material's and nav's owner --
 //               v2 reduces all four exactly per 13.3 and publishes height
 //               and velocity, holding the other two as patch-local state a
