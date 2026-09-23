@@ -689,12 +689,29 @@ was handed. Three kinds of base exist:
   ENFORCES alignment, and it enforces **64 bytes by refusal** (`V_UNALIGNED`,
   `req_vram_addr_i[5:0] != 0`). Everything reached through `pub_base_i` /
   `dir_base_i` inherits it.
-* **Ports and host-shaped data** — `render_fb_base_i` and `render_fb_stride_i`
-  are inputs of `zhao_console_core` with **no alignment requirement anywhere**,
-  and `zhao_geom_clipread`'s per-row frame offsets rely on a HOST convention
-  (*"which is the whole reason `zref::clip_page` shapes every offset to the
-  64-byte grid"*) that the hardware does not check. Those were the unguarded
-  degrees of freedom, and the arbiter clamp is what makes them harmless.
+* **Unconstrained top-level PORTS** — `render_fb_base_i` and
+  `render_fb_stride_i` are inputs of `zhao_console_core` and
+  `zhao_console_board` with **no alignment requirement anywhere in the tree**.
+  Both ENGINE0 clients derive every address from them: `zhao_raster_fbwrite`
+  writes `fb_base + row_y*fb_stride + row_x0*2` and `zhao_post_fbread` reads
+  `origin + ry*stride + rx*2`. Everything else in those two is aligned by
+  construction, so **these two ports are the one remaining degree of freedom**,
+  and the arbiter clamp is what makes them harmless. The smoke drives base 0
+  and stride 768; nothing requires it.
+
+**TWO CLAIMS CHECKED AND WITHDRAWN, recorded because the confident one-line
+summary is where the error lives.**
+
+* *"`zhao_raster_fbwrite`'s row start is the span's first pixel, so partial
+  tile coverage makes it arbitrary."* **False.** `zhao_raster_resolve` emits
+  ALL 256 pixels of a tile in address order (`q_addr_r` walks 0..255,
+  completion is `emit_n == 255`), covered or not, so a row run always begins at
+  the tile's own x and `row_x0` is a multiple of 16 pixels.
+* *"`zhao_geom_clipread`'s per-row frame offsets rely on a host convention the
+  hardware does not check."* **False.** It REFUSES `dr_foff_c[5:0] != 0`, and
+  `stride_bytes_c` is `LINE_BYTES + (quat_lines << 6)` — a multiple of 64 by
+  construction. `zhao_geom_drawjob` refuses the same way on `base_q[5:0]` and
+  `hdr_dofs_c[5:0]`.
 
 **What this section still does NOT claim.** No board measurement has been taken.
 This is arithmetic over the RTL plus the JEDEC burst definition, and the part's
