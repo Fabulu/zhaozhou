@@ -84,3 +84,18 @@ Manafold pass 25, the FINAL pass. Three accepted mechanisms rolled out and tuned
   receipt. Looked at: continuous, no blackouts, no pops, loop seams close.
 - Eye contrast re-made from the SHIPPING bank frames rather than from the ladder
   renders, so the plate is of what ships.
+
+### 2026-09-23 - CLOSED
+- Matrix 240/240 PASS, 0 FAIL, one invocation. The background task reported exit
+  1 while the matrix reported MATRIX_RC=0 -- the 1 was my own trailing
+  `grep '^FAIL'` correctly finding nothing. CLAUDE.md's exit-code law in a third
+  costume; recorded in the report.
+- mbolt header corrected (it still called B3 "CONTROL GROUP"); mbolt alone
+  rebuilt and all seven legs/controls re-run green. Renderer NOT rebuilt, so
+  every bank CRC stands against the binary that produced it.
+- Commits: 451a9f11 (source), 306c6a63 (mbolt header), 82218e2a (evidence).
+  Pushed to origin/manafold-pass25.
+- Purge dry run: 0 candidates (everything inside the 48 h spare window).
+  ~17 GB of .rgb intermediates under .tmp/ will fall due to the next pass's run.
+- NOT done, by instruction: the 22-subject publication bank, the encode, the
+  merge, the deploy. The coordinator sends the review/publish packet.
