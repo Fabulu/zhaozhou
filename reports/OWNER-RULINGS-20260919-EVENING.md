@@ -6598,6 +6598,97 @@ then compose `zhao_terrain_normalmap` against real data.
 owner choosing capability over a cheaper register. **Terrain gets surface detail
 independent of mesh density.**
 
+
+### D-NORMALS-A SCOPED, 2026-09-23 — THE COMMAND ARM ALREADY EXISTS. Three layers are two.
+
+The ruling authorised three layers: *"the **asset tool** that builds the
+pyramid, the **command arm** that delivers it, and the **RTL writer** that
+populates it."* Reading the tree before spending a lane, **the middle one is
+already built, ratified and in use by three other blocks.** This is a
+correction that REMOVES work, which CLAUDE.md calls the most valuable kind.
+
+**WHAT IS ALREADY THERE, and it is more than the escalation implied.**
+
+`fpga/rtl/terrain/zhao_terrain_normalmap.sv` is not a stub. It carries the
+**full seven-level pyramid** — `logic [15:0] tile_m [0:PYR_WORDS-1]`, the
+64→1 levels packed flat, `zref::terrain::normalmap_pyramid_addr` as the
+addressing law — **and it already has the upload port**: `tw_we_i`,
+`tw_addr_i`, `tw_data_i`, a flat word address into that layout. It is
+zero-DSP, oracle-checked, and `ENFORCED-BY
+tests/texture/terrain_normalmap_directed.cpp`.
+
+It is instantiated **nowhere**. Every reference to it in `fpga/rtl/` is a
+COMMENT in another file citing it as the M10K-inference precedent. That is the
+"BUILT, INSTALLED NOWHERE" uncashed cheque exactly.
+
+**THE DELIVERY PATH IS GENERIC AND SHIPPED.** `PublishResource 0x0030` (owner
+ruling R17, 2026-09-19) is ratified and live in `zhao_cmd_exec`. `zhao_mem_upload`
+verifies an upload and raises `publish_valid_o` / `publish_tag_o` (the 8-bit
+page kind) / `publish_base_o` / `publish_extent_o`. A loader parameterised by
+`PAGE_KIND` watches its own kind and streams the page into its block:
+
+| block | `PAGE_KIND` | page |
+|---|---|---|
+| `zhao_geom_ladderbank` | `8'd8` | creature form |
+| `zhao_part_table_loader` | `8'd13` | species table (R42) |
+| `zhao_forge_pagebank` | `8'd14` | forge program (R234 D2) |
+
+**So no opcode is invented and none needs to be.** The pyramid travels as
+owner-authored DATA through the command that already publishes every other
+resource — which is the same answer R42 gave when core entry I33 refused to
+invent a species command, and the same shape as R234 D2 and the 2026-09-22
+item 3 TWOD page. **Three precedents, one mechanism.**
+
+**A FALSE ALARM WORTH RECORDING, because it nearly became three reported
+defects.** Those three `PAGE_KIND` values look wrong against the section-type
+table in `spec/cartridge.md` §2, where SPECIES_TABLE is `0x0011` (17) and
+FORGE_PROGRAM is `0x0012` (18). A loader matching the wrong tag never fires,
+silently — the exact failure this tree keeps finding, so it reads as an obvious
+catch.
+
+**It is not one.** `spec/cartridge.md` line 13 says in advance that the section
+vocabulary and the **RESOURCE_PAGES kind registry** are different numberings,
+and §3 line 93 carries the kind registry explicitly: **13 = species table,
+14 = forge program, 8 = creature form.** All three blocks are CORRECT, and
+they corroborate each other. The spec warned about this in its own second
+paragraph; reporting the "defect" would have meant not reading it.
+
+**THE NEXT FREE KIND IS 16** — the registry's own strikethrough history reads
+*"~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ ~~Kinds 15-255 reserved~~
+Kinds 16-255 reserved"*, so the allocation is maintained and the slot is
+unambiguous.
+
+**THE LANE'S WORK, THEN, IS TWO LAYERS AND A COMPOSITION:**
+
+1. **The page kind.** `DETAIL_NORMAL` = kind **16**, backing section `0x0014`,
+   a new §4g in `spec/cartridge.md` freezing the envelope: a 64-byte header
+   then the flat pyramid words, `{s8 dz, s8 dx}` per texel in
+   `normalmap_pyramid_addr` order. 64-byte shaping throughout, for MEM.GUARD's
+   read-shape rule — copy §4b's reasoning, it is the same constraint.
+2. **The asset tool**, the only genuinely new engineering: build the pyramid
+   offline by **averaging SIGNED dx/dz and never normalising** (the module
+   header is explicit that normalising is wrong), emitting the page above. The
+   oracle has the ADDRESSER (`normalmap_pyramid_addr`) and **not** the builder,
+   so the builder needs a `zref` model beside it or the tool becomes a second
+   implementation of the layout law.
+3. **The loader**, `zhao_terrain_normalloader`, modelled directly on
+   `zhao_part_table_loader` — same four publication wires, same guard-client
+   shape, `PAGE_KIND = 8'd16` — carrying words from the page to
+   `tw_we_i`/`tw_addr_i`/`tw_data_i`. Its payload is SIMPLER than the species
+   loader's: a flat 16-bit word at a flat address, with no selector slices.
+4. **Compose loader and `zhao_terrain_normalmap` in ONE commit.** This is the
+   group-composition method the campaign already proved: a leaf wired in alone
+   is a producer with no consumer. Composing the normalmap alone is what
+   TERRACOMPOSE correctly refused — *"it would move the register and change not
+   one pixel"* — and composing it WITH its loader and a real page is what makes
+   that refusal moot.
+
+**And it is a guard client**, so it owes the eight edits a new reading client
+costs and an entry in `tools/rtl/check_guard_verdict.py`'s `CLIENTS` **in the
+same commit that creates it** — that gate is now green and its coverage audit
+is exact, so a new client that is not listed will fail it immediately rather
+than silently.
+
 ### D-FIT-A — RUN THE LABELLED DIAGNOSTIC FIT NOW, ON THE SIDE
 
 > **Fabian: *"Run labelled first, just let it run on the side while you continue
