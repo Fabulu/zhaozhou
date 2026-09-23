@@ -7524,3 +7524,87 @@ produce one broken merge.
 **Together the two blocks are ~133,000 bits sitting in flops that ~13 M10K would
 hold**, with block memory measured at **52% of the target**. That is the whole
 of *"spend M10K to buy ALMs"* in two files.
+
+
+### THE DSP LEVER: `zhao_geom_attrsetup` CASTS ITS OPERANDS TO THE WIDTH OF THE RESULT
+
+**First, a correction to my own entry two sections up.** I wrote *"90 DSP — 25%
+of the console's total — in two blocks with ~2,100 ALUTs between them"*, in the
+same page where I had written **"hierarchical totals, DO NOT SUM"**. The map's
+full hierarchy name settles it:
+
+```
+|zhao_console_core|zhao_geom_attrpack:u_geom_attrpack|zhao_geom_attrsetup:u_attrsetup
+```
+
+**`attrsetup` is a CHILD of `attrpack`**, so attrpack's 45 *includes* it. It is
+**45 DSP, not 90** — and since attrpack's own DSP is therefore **zero**, **all
+45 belong to `zhao_geom_attrsetup`**, a **938-ALUT leaf**. That is still
+**12.5% of the console's 359 DSP in one small file**, which is the finding; the
+doubling was mine.
+
+### THE CAUSE IS VISIBLE IN FOUR LINES, and it is operand width
+
+The declared widths (`fpga/rtl/geometry/zhao_geom_attrsetup.sv`):
+
+| signal | width |
+|---|---|
+| `ax_i … cy_i` | **21** signed |
+| `va_i, vb_i, vc_i` | **32** signed |
+| `cx_bx, ax_cx, bx_ax` | **22** |
+| `w0_0 … w2_0` | 46 |
+| `n0_c` | 96 |
+| `dndx_c, dndy_c` | 72 |
+
+And the multiplies:
+
+```systemverilog
+:122  w0_0   = -(46'(cx_bx) * 46'(by_i)) + (46'(cy_by) * 46'(bx_i));
+:131  n0_c   = 96'(w0_0) * 96'(va_i) + 96'(w1_0) * 96'(vb_i) + …
+:134  dndx_c = ((-(72'(cy_by))) * 72'(va_i) + … ) <<< PIXEL_SHIFT;
+```
+
+**Every operand is cast to the width of the RESULT before the multiply.** The
+cast sizes the multiplier; the data does not.
+
+* `:122` — a **22 × 21** product, built as **46 × 46**.
+* `:131` — a **46 × 32** product, built as **96 × 96**.
+* `:134/:136` — a **22 × 32** product, built as **72 × 72**.
+
+A Cyclone V DSP does one **27×27** or two **18×18**. A 46×46 needs roughly
+**four** 27×27 partials where 22×21 needs **one**; a 96×96 needs roughly
+**sixteen** where 46×32 needs about **four**. **That is where the report's 78
+"Independent 27×27" blocks come from.**
+
+**ESTIMATED, WITH THE ARITHMETIC SHOWN — not measured:** at natural widths the
+six `:122`-class products need ~6 blocks rather than ~24, the three `:131`-class
+~6 rather than ~36 (capped by what 45 actually contains), and the six
+`:134`-class ~6 rather than ~18. **Order of 18 blocks against the 45 measured,
+so roughly 27 DSP — about 7.5% of the whole console's DSP — from one file.**
+
+### THE FIX IS STANDARD AND THE RISK IS LOW
+
+**Cast the PRODUCT, not the operands.** In SystemVerilog `$signed(a) *
+$signed(b)` has width `$bits(a) + $bits(b)` and sign-extends into a wider
+target, so the result is unchanged while the multiplier is built at the size the
+data needs:
+
+```systemverilog
+w0_0 = -46'($signed(cx_bx) * $signed(by_i)) + 46'($signed(cy_by) * $signed(bx_i));
+```
+
+**Bit-exactness is the thing to prove, not to assume** — the products are
+identical in value, but this block feeds the ratified attribute setup and the
+change must be shown equivalent against its oracle, not argued.
+
+### CONFIRM IT WITH A MAP, NOT A FIT
+
+DSP inference is an Analysis & Synthesis decision. **Map `zhao_geom_attrsetup`
+standalone before and after and read the DSP Block Usage Summary** — the same
+table that produced the 78 27×27 count. **Minutes, and the runner already
+harvests the report.**
+
+**Note what this does NOT claim:** Quartus does prune redundant sign-extension
+in some cases, so part of the width may already be optimised away. **45 DSP in a
+938-ALUT leaf is strong evidence that it was not**, but the map is what settles
+it — the same standard applied to `zhao_geom_drawjob` above.
