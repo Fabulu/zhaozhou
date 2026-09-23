@@ -130,6 +130,46 @@ module zhao_sdram_model
   assign model_error = err_trcd | err_trp | err_trc
                      | err_refresh_interval | err_protocol | err_mrs;
 
+  // ------------------------------------------- BL8 ALIGNMENT INSTRUMENTATION
+  // Ruling R243 / D-SDRAM-A, step 0: MEASURE BEFORE CHANGING BEHAVIOUR.
+  //
+  // A JEDEC BL8 SEQUENTIAL burst wraps inside its ALIGNED EIGHT-COLUMN BLOCK:
+  // col[10:3] is held and col[2:0] advances. The claim that motivated the
+  // model repair is "no client has ever issued a burst starting at
+  // col[2:0] != 0". That is an ARGUMENT until it is a NUMBER, so these
+  // counters make it one, and they are read BEFORE the wrap is installed.
+  //
+  // They are diagnostics, not ports: adding an output to this file would put
+  // a PINMISSING into every bench that instantiates it (there are twelve) and
+  // would read, in another lane's log, as that lane's own breakage.
+  //
+  // The banner is the POSITIVE CONTROL for the silence. "No unaligned line
+  // was printed" means nothing unless the instrumentation is known to be
+  // compiled in; the banner says it is. The `final` summary is printed only
+  // when the harness calls final(), which the --main smoke binaries do and
+  // some CTest harnesses do not -- hence the per-event lines as well.
+  int unsigned bl8_bursts_total /* verilator public_flat_rd */;
+  int unsigned bl8_bursts_unaligned /* verilator public_flat_rd */;
+  int unsigned bl8_reads_unaligned /* verilator public_flat_rd */;
+  int unsigned bl8_writes_unaligned /* verilator public_flat_rd */;
+  int unsigned bl8_lines_printed;
+
+  localparam int unsigned BL8_TRACE_LINES = 64;   // per-event lines, then quiet
+
+  // No initial-block zeroing: the five counters follow the same power-on
+  // convention as the rest of this file (Verilator zero-initializes, see the
+  // note at the foot of the module). Writing them from an `initial` AND from
+  // the always_ff is a MULTIDRIVEN warning, and the warning is right.
+  initial begin
+    $display("[bl8-align] zhao_sdram_model instrumentation ACTIVE (R243 D-SDRAM-A step 0)");
+  end
+
+  final begin
+    $display("[bl8-align] SUMMARY bursts=%0d unaligned=%0d (rd=%0d wr=%0d)",
+             bl8_bursts_total, bl8_bursts_unaligned,
+             bl8_reads_unaligned, bl8_writes_unaligned);
+  end
+
   always_ff @(posedge clk) begin
     cycle <= cycle + 32'd1;
 
@@ -200,6 +240,16 @@ module zhao_sdram_model
       rd_bank   <= phy_ba;
       rd_row    <= open_row[phy_ba];
       rd_col    <= phy_a[10:0];
+      bl8_bursts_total <= bl8_bursts_total + 1;
+      if (phy_a[2:0] != 3'b000) begin
+        bl8_bursts_unaligned <= bl8_bursts_unaligned + 1;
+        bl8_reads_unaligned  <= bl8_reads_unaligned + 1;
+        if (bl8_lines_printed < BL8_TRACE_LINES) begin
+          bl8_lines_printed <= bl8_lines_printed + 1;
+          $display("[bl8-align] UNALIGNED READ  bank=%0d row=%0d col=%0d (col[2:0]=%0d)",
+                   phy_ba, open_row[phy_ba], phy_a[10:0], phy_a[2:0]);
+        end
+      end
     end else if (cmd_write) begin
       if (!open_valid[phy_ba])              err_protocol <= 1'b1;
       if (cycle - last_act[phy_ba] < T_RCD) err_trcd     <= 1'b1;
@@ -209,6 +259,16 @@ module zhao_sdram_model
       wr_bank   <= phy_ba;
       wr_row    <= open_row[phy_ba];
       wr_col    <= phy_a[10:0];
+      bl8_bursts_total <= bl8_bursts_total + 1;
+      if (phy_a[2:0] != 3'b000) begin
+        bl8_bursts_unaligned <= bl8_bursts_unaligned + 1;
+        bl8_writes_unaligned <= bl8_writes_unaligned + 1;
+        if (bl8_lines_printed < BL8_TRACE_LINES) begin
+          bl8_lines_printed <= bl8_lines_printed + 1;
+          $display("[bl8-align] UNALIGNED WRITE bank=%0d row=%0d col=%0d (col[2:0]=%0d)",
+                   phy_ba, open_row[phy_ba], phy_a[10:0], phy_a[2:0]);
+        end
+      end
     end
   end
 
