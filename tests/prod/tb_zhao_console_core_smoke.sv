@@ -5911,6 +5911,18 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- TERRAIN's TEXTURE COORDINATES, measured on the DUT's own edge ----
+    // This bench CAN reach this lane, and the entry that said otherwise was
+    // wrong: the terrain spine loads 3 pages with crc_fails=0 and replays 128
+    // triangles, which `SMOKE: terrlight` beside this line has been reporting
+    // all along. What the smoke canNOT do is check a coordinate against the
+    // oracle -- that is `tests/terrain/terrain_uvlane_directed.cpp`'s job, with
+    // two independent oracles. What it CAN do is show the lane taking real
+    // references in the composed machine under real backpressure, which is the
+    // difference between "it elaborates" and "the value traverses".
+    $display("SMOKE: terruv    refs_taken=%0d emitted=%0d stale=%0d pitch_clamped=%0d pitch_illegal=%0d",
+             terr_uv_refs_taken_o, terr_uv_emitted_o, terr_uv_stale_reads_o,
+             terr_uv_pitch_clamped_o, terr_uv_pitch_illegal_o);
     // ---- R21: TERRAIN's LIT NORMALS, measured on the DUT's own edge --------
     $display("SMOKE: terrlight refs_taken=%0d lights=%0d shaded=%0d normals=%0d stale=%0d degenerate=%0d sat=%0d degen_mismatch=%0d",
              terr_light_refs_taken_o, terr_light_emitted_o, terr_light_shaded_o,

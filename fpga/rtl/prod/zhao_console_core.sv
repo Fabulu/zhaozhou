@@ -3356,6 +3356,70 @@
 //      in the sequence and still the owner's. Nothing in this lane touched them,
 //      and nothing in this lane needs them: a coordinate is not a colour.
 //
+//      AND THIS ENTRY'S SMOKE PREMISE IS FALSE, corrected 2026-09-23 by the
+//      lane that had just repeated it. The paragraph above says "THE CONSOLE
+//      SMOKE CANNOT PROVE ANY OF IT. Every terrain page the smoke plays fails
+//      its CRC, so no page becomes resident and terrain emits NO TRIANGLE AT
+//      ALL". Measured at this tree, in the smoke's own report lines:
+//
+//        SMOKE: res   hits=0 misses=3 claims=3 crc_fail=0 resident=3
+//        SMOKE: pl    loaded=3 faulted=0 crc_fails=0 bytes=64128 overflow=0
+//        SMOKE: terrain tess_vertices=81 tess_refs=128 fills_forwarded=81
+//                       refs_forwarded=128 groups_opened=1 b_grants=81
+//        SMOKE: projector a_grants=78 b_grants=81 contended=0
+//                       replay_triangles=128
+//        SMOKE: terrlight refs_taken=128 lights=128 shaded=128 normals=128
+//                       stale=0 degenerate=128 sat=0 degen_mismatch=0
+//
+//      THREE pages are RESIDENT, CRC failures are ZERO, and terrain replays
+//      128 TRIANGLES which the light lane takes and shades. The terrain arm is
+//      EXERCISED by the smoke and always was -- `SMOKE: terrlight` is a line
+//      this bench has printed all along, and it is the sibling of exactly the
+//      lane this entry said could not be reached.
+//
+//      THE CONCLUSION SURVIVES AND THE REASON DOES NOT, which is the part
+//      worth keeping. `raster pixels=2560` genuinely cannot move for terrain --
+//      but because terrain's triangles leave on `proj_out_*` and reach no
+//      raster, which is THIS ENTRY'S WHOLE SUBJECT, not because the fixture
+//      never gets there. The two are not interchangeable: the first says the
+//      carriage is unfinished, the second says the bench is blind, and only the
+//      first is true. A lane told the second will not instrument the smoke at
+//      all, and will therefore never see its own counters move in the composed
+//      console -- which is the one measurement that separates "it elaborates"
+//      from "the value traverses".
+//
+//      SO THE INSTRUCTION IS THE OPPOSITE OF WHAT THIS ENTRY CARRIED. A
+//      terrain arm still owes an acceptance bench, because the smoke cannot
+//      check a VALUE against the oracle. But it must ALSO print its counters on
+//      the smoke's terrain report beside `SMOKE: terrlight`, because the smoke
+//      CAN show the arm taking real references in the composed machine under
+//      real backpressure. `SMOKE: terruv` below is that line, and it reads:
+//
+//        SMOKE: terruv    refs_taken=128 emitted=128 stale=0
+//                         pitch_clamped=0 pitch_illegal=0
+//
+//      128 references taken and 128 coordinate packets emitted, in exact
+//      lockstep with `terrlight`'s 128 -- which is the three-way rendezvous
+//      doing its job, and the strongest available statement that THE VALUE
+//      TRAVERSES rather than merely that the core elaborates.
+//      The two zeros are honest and explained: the smoke's island runs a legal
+//      non-negative pitch, so the oracle's clamp never engages and no illegal
+//      pitch is ever presented. Those two counters are fired by stimulus in
+//      `terrain_uvlane_directed` instead, by exact amounts -- which is why a
+//      zero HERE is a measurement and not an untested guard.
+//
+//      ONE OBSERVATION RECORDED AND NOT ACTED ON, because it is nobody's task
+//      here and it should not be discovered twice: `terrlight` reports
+//      `degenerate=128` -- EVERY terrain triangle the smoke fixture produces is
+//      degenerate. The lane is behaving correctly (a degenerate triangle shades
+//      to zero by the ratified law) and coordinates are unaffected, since u/v is
+//      a per-vertex function of world x/z and does not care about triangle area.
+//      But it means the smoke's terrain triangles carry no AREA, so nothing
+//      downstream of a future merge would rasterise from this fixture even once
+//      the carriage is complete. WHOEVER BUILDS THE MERGE NEEDS A FIXTURE WITH
+//      NON-DEGENERATE TERRAIN, and finding that out after wiring the merge would
+//      cost a pass.
+//
 // I20. Everything `zhao_shell_top_v2` already declares provisional at its own
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
 //      geometry memory clients -- is UNCHANGED and still provisional. This
