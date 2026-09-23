@@ -332,9 +332,33 @@ When the copies re-aligned whitespace in regions production also edited, every
 merge conflicts; isolate each mutation whitespace-insensitively and re-apply it
 to the current body instead.
 
+**NORMALISE THE BASE'S LINE ENDINGS BEFORE YOU BELIEVE THE CONFLICTS.** Added
+2026-09-23, refreshing three `zhao_forge_cliff_ram_*` copies. `git merge-file`
+reported **ten conflicts in a file whose real divergence is nine lines**, and
+`diff` of copy against base claimed **1,415 changed lines out of 932**. The
+cause is not the copies: `git show <rev>:<path>` hands back **INDEX** content,
+which is **LF**, while the working copies are **CRLF**, so every line reads as
+changed. Convert the base to the working copy's endings and the identical merge
+reports **zero conflicts**.
+
+This is `check_eol_worktree.py`'s chapter in new clothes — *"a line-ending
+difference in a correct file reads as a content mismatch"* — and the obvious next
+move, hand-editing around the conflicts, is exactly wrong. Note the direction:
+for once the broken instrument is **alarming** rather than flattering, which
+means the cost is wasted work and a re-authored mutation nobody needed, not a
+false green.
+
 And **a refreshed copy is stale again the moment production moves again** —
 `tools/budget/mutant_copy_drift.py` caught exactly that, one change later, in
 the same session that wrote it.
+
+**"INHERITED" IS THE WORD THAT MAKES A RED NOBODY'S JOB.** Same day, three
+copies, two readers: both called the drift inherited debt from an earlier
+packet. It was not. Production and all three copies were committed **together**,
+and production moved **that morning** in the reader's own merge. A same-day
+regression described as inherited gets triaged instead of fixed. **Before
+calling a red inherited, read the two commit dates** — it is one `git log -1`
+per file, and it decides whose job it is.
 
 One more from the same day, about receipts rather than RTL. A fit row stamped
 `failed:structure` is **not** a failed measurement — the fit completed and the
