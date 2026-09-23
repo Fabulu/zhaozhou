@@ -17348,3 +17348,54 @@ add_test(NAME geom_clipdoor_mutant_control
          COMMAND test_geom_clipdoor_mutant_control)
 set_tests_properties(geom_clipdoor_mutant_control
   PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# THE BL8 BLOCK CLAMP'S POSITIVE CONTROL AND ITS NEGATIVE CONTROL
+# (owner ruling R243 / D-SDRAM-A).
+#
+# `sim/models/zhao_sdram_model.sv` now wraps like the part -- a JEDEC BL8
+# SEQUENTIAL burst holds col[10:3] and advances col[2:0] -- and
+# `zhao_vram_arbiter.burst_words` now clamps to the aligned eight-column block,
+# so NO burst the arbiter offers can reach that wrap. The repair is correct and
+# it makes the wrap UNREACHABLE WITH LEGAL STIMULUS, which is exactly the state
+# CLAUDE.md says owes a COMMITTED MUTANT: a repair nobody has watched fail is
+# indistinguishable from a repair to nothing.
+#
+# `tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv` is production with ONE
+# substantive change -- `burst_words` reverted to the ROW clamp it carried
+# before R243 -- renamed so no production source list can elaborate it.
+#
+# ONE source, TWO executables, opposite expectations. The `silent` half asserts
+# the CORRECT behaviour (a misaligned write lands word for word) rather than
+# the defect, so it survives the repair instead of being deleted by it.
+# ---------------------------------------------------------------------------
+foreach(ba_variant fires silent)
+  set(ba_target test_mem_blkalign_mut_${ba_variant})
+  add_executable(${ba_target} memory/mem_blkalign_mut.cpp)
+  target_link_libraries(${ba_target} PRIVATE zhao_harness zhao_zref)
+  set(ba_sources ${ZHAO_MEM_PKGS}
+                 ${ZHAO_MEM_RTL}/zhao_sdram_ctrl.sv)
+  if(ba_variant STREQUAL "fires")
+    # The macro reaches BOTH the source list and the C++ expectation, so the
+    # driver cannot end up compiled against one arbiter while asserting the
+    # other's behaviour.
+    target_compile_definitions(${ba_target} PRIVATE ZHAO_BLKALIGN_MUT)
+    list(APPEND ba_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv)
+  else()
+    list(APPEND ba_sources ${ZHAO_MEM_RTL}/zhao_vram_arbiter.sv)
+  endif()
+  list(APPEND ba_sources
+       ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+       ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_mem_chain.sv)
+  verilate(${ba_target}
+    PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+                 ${CMAKE_SOURCE_DIR}/sim/models
+    SOURCES ${ba_sources})
+  add_test(NAME mem_blkalign_mut_${ba_variant} COMMAND ${ba_target})
+  set_tests_properties(mem_blkalign_mut_${ba_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
