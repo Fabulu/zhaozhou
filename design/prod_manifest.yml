@@ -813,7 +813,27 @@ unpriced_requirements:
   # shade.sv was built 2026-09-09 and is accounted `excluded: unused` -- and is
   # deliberately left for that lane rather than corrected in passing. Flagged
   # here so the next reader inherits a known defect instead of a silent one.
-  - TERRAIN.SHADE: zhao_terrain_shade  terrain shading; contract maturity REFERENCE_COMPLETE, RTL not built
+  # 2026-09-23: TERRAIN.SHADE's and MEM.UPLOAD's rows LEFT this list, on the
+  # GEOM.LIGHT and MATERIAL.RESOLVE precedents recorded above. This list means
+  # "ratified requirement, NO RTL FILE", and both files exist -- but the
+  # sharper fact is stronger than staleness: BOTH ARE IN THE zhao_console_core
+  # FIT CLOSURE, and `zhao_mem_upload` is INSTANTIATED in the console. They were
+  # inside the 258 sources of `@diag-incomplete-14gaps`, so they are not merely
+  # built, they are MEASURED -- part of that row's 359 DSP and 381,585
+  # registers.
+  #
+  # A row saying "RTL not built" about a module the fit just priced makes
+  # `tools/budget/dsp_census.py` exclude it from the total, which is why the
+  # census reports 150 DSP against a measured 359 and warns that "a row
+  # declared absent is a row nobody prices". Owner ruling R80 named repairing
+  # this list as a PRECONDITION for the completion fit; the fit ran without it.
+  #
+  # FORGE.SHADOW's row BELOW IS DELIBERATELY KEPT. `zhao_forge_shadow.sv`
+  # exists, so the row is stale in the same way -- but it is ABSENT from the
+  # console's fit closure, so unlike these two it genuinely is not priced by
+  # anything, and the SHADOWRIDE lane is composing it right now. Correcting it
+  # from here would collide with that lane and would replace one wrong row with
+  # another the same day.
   #
   # 2026-09-19, packet MATRES: MATERIAL.RESOLVE's row LEFT this list too, on
   # exactly the GEOM.LIGHT precedent above. zhao_material_resolve.sv is built
@@ -830,7 +850,6 @@ unpriced_requirements:
   # than corrected in passing, exactly as TERRAIN.SHADE's is. Flagged so the
   # next reader inherits a known defect instead of a silent one.
   - FORGE.SHADOW: zhao_forge_shadow  forge shadow; RTL not built
-  - MEM.UPLOAD: zhao_mem_upload  upload path; RTL not built
   # THE FORGE.PRIM EVALUATOR -- the block that turns a params block into vertex
   # POSITIONS. Added 2026-09-09 after reading the owner's reports/ADDLIGHTNING.md
   # (2026-09-04, never read on this lane) and TESTING its central claim.
