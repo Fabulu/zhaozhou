@@ -7688,3 +7688,79 @@ cannot fit inside its own total is a parsing error, not a finding.**
 projector subsystem (39) — are 172 of 359, 48%.** And **80 of the shell's 88 are
 `zhao_raster_tile_pipe_v2`**, which no lever above has examined. **That is where
 the next DSP question should be asked**, not at attrsetup.
+
+
+## 96 LANE WORKTREES, AND TWO OF THEM HOLD WORK THE BRANCH DOES NOT
+
+**Found while verifying BURSTTRUTH's closure.** `git worktree list` returns
+**99 entries**; 96 are lane worktrees. Sampled at **~0.6–1.2 GB each**, so
+**roughly 90 GB**. Nothing prunes them, which is the `.gitignore` chapter's
+exact shape — *"making waste invisible to your tooling is not the same as
+removing it"* — except here it was never invisible, just never looked at.
+
+**Disk is at 747 GB free, so this is NOT urgent**, and it is recorded rather
+than acted on for a specific reason below.
+
+**93 of 96 are FULLY MERGED** into `claude/ceiling-architecture-20260912`, so
+their tracked content is safe and the directories are removable without loss.
+**I did not remove them**, because a worktree can hold deliberately-kept
+UNTRACKED files — BURSTTRUTH's own report says *"the raw per-run logs are left
+uncommitted under `subagents/20260923-bursttruth/`"*. **`git worktree remove`
+refuses on modified TRACKED files and says nothing about untracked ones**, so
+the obvious safety net does not cover the thing actually at risk. **A sweep here
+needs the owner's word, or a rule about what untracked lane output is worth
+keeping.**
+
+### THE THREE THAT ARE NOT MERGED
+
+| branch | ahead | age | state |
+|---|---|---|---|
+| `gz/shadowride` | — | live | **RUNNING RIGHT NOW. Do not touch.** |
+| `gz/engine1` | 4 | 3 days | *"both targets REFUSED, and both recorded blockers name…"* — a refusal packet; its value is the recorded blockers |
+| `dsf01/divider-fusion` | 2 | 6 days | **see below** |
+
+### DSF-01 — a COMPLETED experiment with a NEGATIVE verdict, and the input to that verdict has since changed
+
+**The packet is exemplary and its verdict is correct as written.** Owner
+experiment DSF-01, projector divider compare/subtract fusion, run to a stop on
+2026-09-17:
+
+* arithmetic **proved for the full domain including `d = 0`** — unsat;
+* **the prover itself proved** — four mutated candidates all `sat`, including
+  the two traps the guide names;
+* ten projector regressions bit-exact;
+* on a **matched seed-2 pair differing by exactly one file** (digests confirm
+  it): **−1,492 ALMs, six times the policy threshold**;
+* and it turns a leaf that **misses 100 MHz by −31.5 ns TNS into one that meets
+  it: 94.79 → 101.49 MHz, setup TNS to zero.**
+
+**It was still rejected, and rightly.** Two hold paths violate at −0.068 and
+−0.011 ns — **and the divider is in neither**; both launch from a top-level
+input into the configuration matrix. *"What moved was the floorplan."* Under the
+policy an unsatisfied hold requirement is a reject, and the packet explicitly
+refuses to soften it: *"the guide anticipated that exact temptation and said a
+timing trade is rejected even if it saves 1,000 ALMs."*
+
+**WHAT IS WORTH RE-EXAMINING IS NOT THE VERDICT BUT THE EVIDENCE BEHIND IT.**
+The packet says so itself: **the hold numbers were measured with VIRTUAL pins,
+where a top-level input has no real launch model** — *"which is exactly why the
+policy specifies physical pins"* — and **the physical-pin pair CANNOT BE
+PRODUCED for this block**: `zhao_geom_project` presents **344 ports**, far more
+than the package has, and the fitter fails in ~66 s. **Both halves failed
+identically**, which the packet correctly calls better evidence than one failure
+— it says the *boundary* is the problem, not the patch.
+
+**So the reject rests on a measurement the packet states is not the one the
+policy asks for, taken in a configuration that cannot produce the one it does.**
+Resolving it needs a **pin-reducing fit wrapper** (the technique the G8B fit top
+uses) — a new artifact with its own correctness question, which the packet
+declined to start because the guide says not to broaden the task. **That
+restraint was right.**
+
+**WHY IT IS WORTH THE OWNER'S ATTENTION NOW, six days later:** on
+2026-09-17 the console's size was an estimate. **It is now measured at ≥138,428
+ALMs — 330% of target — with `gpu_clk` at 18.5 MHz.** A lever worth **−1,492
+ALMs and +6.7 MHz on a leaf that otherwise misses 100 MHz** is a different
+proposition against that number than against a guess. **The decision to
+authorise the pin-reducing wrapper — which is what would let the policy actually
+answer — is the owner's, and it is not proposed here.**
