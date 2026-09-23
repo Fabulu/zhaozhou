@@ -315,20 +315,44 @@ it as a deliberate act under **R68 sub-build 4**, in terms:
 
 Verified in the RTL, not taken from the header: `PAY_W = 17` (was 16),
 `OWNER_W = 2` (was one bit `TAG_BIT`), `OWNER_GEOM = 2'd0`, `OWNER_PART = 2'd1`,
-**`2'd2` and `2'd3` unallocated**, with `owner_unroutable_o` counting a result
+~~**`2'd2` and `2'd3` unallocated**~~ — **THIS SENTENCE IS WRONG AS OF
+2026-09-21 AND WAS ALREADY WRONG WHEN IT WAS WRITTEN. CORRECTED BY SHADOWCLOSE,
+2026-09-23; see below.** — with `owner_unroutable_o` counting a result
 that carries one and `geom_tag_collision_o` counting a geometry rider that
 arrives with any owner bit set. The console mirrors it: `GEOM_PAY_A_W = 17`,
 `GEOM_OWNER_W_C = 2`, and a live `initial` elaboration guard requiring
 `GEOM_ARENA_W + GEOM_INDEX_W <= GEOM_PAY_A_W - GEOM_OWNER_W_C` (3 + 12 <= 15).
 
+> **`2'd2` IS SPENT. `zhao_part_project.sv:475` reads
+> `localparam logic [OWNER_W-1:0] OWNER_FORGE = 2'd2; // FORGE.PRIM's vertices`,
+> claimed by the FORGECOMP packet on 2026-09-21 and COMPOSED — the `f_*` arm is
+> wired to `zhao_forge_assemble` at `zhao_console_core.sv:19371-19378`.**
+>
+> This section read the block's COMMENT (`zhao_part_project.sv:476-479`,
+> *"2'd2 and 2'd3 are UNCLAIMED"*) rather than the localparam three lines above
+> it, which the same commit had just changed. The wrong half then travelled:
+> into this contract, and from here into **owner ruling R244 D-FORGESHADOW-C**,
+> which commissions *"a third request arm … claiming `OWNER_LOD = 2'd2`"*.
+> The comment is repaired in the same commit as this note.
+>
+> **The correct arrangement is `2'd3`, the LAST code**, and it is still the
+> already-authorised multiplex R3 names, so **no law changes and the ruling's
+> escalation clause is not reached**. A third CLIENT on the front mux was
+> already justified against R3 in writing at `zhao_console_core.sv:19366`; a
+> fourth is the same act. After `2'd3` the field is FULL and a fifth owner is a
+> `GEOM_OWNER_W_C` widening the elaboration guard above will refuse.
+
 **So the instance-centre half of Route B needs NO new law and NO owner
 decision.** What it needs is:
 
-* **a third request arm on `zhao_part_project`** claiming `OWNER_LOD = 2'd2`.
-  The block has exactly two input arms today (`g_*` geometry pass-through,
-  `p_*` particles) and no third. This is an edit to a composed, verified block,
-  so it costs its whole instantiation chain plus every bench — but it is the
-  arrangement R3 and the block's own header both prescribe.
+* **a FOURTH request arm on `zhao_part_project`** claiming `OWNER_LOD = 2'd3`
+  (not `2'd2` — see the correction above). The block has **three** input arms
+  today (`g_*` geometry pass-through, `p_*` particles, `f_*` FORGE.PRIM) and no
+  fourth. This is an edit to a composed, verified block, so it costs its whole
+  instantiation chain plus every bench — but it is the arrangement R3 and the
+  block's own header both prescribe. Its rate and fairness cost is measured in
+  `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`: 256 grant-clocks per frame
+  (0.0154 % of the frame) and **2 clocks** of added worst-case arbitration wait.
 * **the written schedule proof R3 OWES and that has never been produced.** It
   is a measurement, not a decision, and it is the one outstanding obligation of
   an owner-explicit ruling in this cluster. **It has two halves and only one of

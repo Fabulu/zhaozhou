@@ -473,10 +473,35 @@ module zhao_part_project #(
   localparam logic [OWNER_W-1:0] OWNER_GEOM = 2'd0;  // GEOM.GROUP_SEQ's vertices
   localparam logic [OWNER_W-1:0] OWNER_PART = 2'd1;  // this block's particles
   localparam logic [OWNER_W-1:0] OWNER_FORGE = 2'd2; // FORGE.PRIM's vertices
-  // 2'd2 and 2'd3 are UNCLAIMED. 2'd2 is reserved for GEOM.LOD's instance
-  // centre (`zhao_geom_lodstate.pr_*`); it is not wired here because that block
-  // is not composed in `zhao_console_core` yet -- see this packet's FINDINGS.
-  // Nothing mints them, and `owner_unroutable_o` is what says so at run time
+  // CORRECTED 2026-09-23 (SHADOWCLOSE). THIS COMMENT SAID "2'd2 and 2'd3 are
+  // UNCLAIMED. 2'd2 is reserved for GEOM.LOD's instance centre
+  // (`zhao_geom_lodstate.pr_*`)" -- three lines below the localparam that had
+  // just given 2'd2 to FORGE.PRIM, in the same 2026-09-21 commit that added it.
+  //
+  // IT WAS NOT A HARMLESS STALE LINE. `design/contracts/FORGE.SHADOW.md:319`
+  // quoted it as "`2'd2` and `2'd3` unallocated", and owner ruling R244
+  // D-FORGESHADOW-C then commissioned the FORGE.SHADOW subsystem with the
+  // explicit instruction to build "a third request arm on `zhao_part_project`
+  // claiming `OWNER_LOD = 2'd2`". The code was already spent. A comment
+  // contradicting the localparam three lines above it reached a contract and
+  // then an owner ruling, which is exactly the drift this block's own header
+  // says the two-bit field was sized early to prevent.
+  //
+  // THE STATE OF THE ENCODING, AS OF THIS LINE:
+  //   2'd0 OWNER_GEOM   claimed, composed   GEOM.GROUP_SEQ
+  //   2'd1 OWNER_PART   claimed, composed   this block's particles
+  //   2'd2 OWNER_FORGE  claimed, composed   FORGE.PRIM / zhao_forge_assemble
+  //   2'd3              UNCLAIMED -- the LAST code. It is the one reserved for
+  //                     GEOM.LOD's instance centre (`zhao_geom_lodstate.pr_*`),
+  //                     which is still not composed in `zhao_console_core`.
+  //
+  // AFTER 2'd3 THE FIELD IS FULL. A fifth client-A owner is a GEOM_OWNER_W_C
+  // widening, and `zhao_console_core.sv`'s elaboration guard on
+  // `GEOM_ARENA_W + GEOM_INDEX_W <= GEOM_PAY_A_W - GEOM_OWNER_W_C` is what
+  // refuses it rather than a comment. The rate consequence of a fourth arm is
+  // measured in `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`.
+  //
+  // Nothing mints 2'd3, and `owner_unroutable_o` is what says so at run time
   // rather than a comment claiming it.
 
   localparam int unsigned PTR_W   = SLOT_W + 1;
