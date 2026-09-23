@@ -63,7 +63,13 @@
 //
 // client_req[].len is BYTES (1..64, zhao_pkg law); ctrl_req.len at the SDRAM
 // edge is WORDS (1..8, 0 encodes 8) — the arbiter is the converter. A burst
-// never crosses a 2048-word row boundary (open-page law).
+// never crosses the ALIGNED EIGHT-COLUMN BLOCK a JEDEC BL8 SEQUENTIAL burst
+// wraps inside, and therefore never crosses a 2048-word row either (see
+// `burst_words`, which is where that is enforced and where the reason the
+// row alone was not enough is written down). `pend_addr[k]` still takes the
+// client's byte address VERBATIM — the arbiter aligns the BURST, not the
+// request, so a client's own addresses need no change and gain nothing from
+// being changed except one fewer burst per request.
 //
 // Conservative SystemVerilog subset only (charter §2). Lint: clean under
 // `verilator --lint-only -Wall` (lint_mem_vram_arbiter CTest).
@@ -127,19 +133,58 @@ module zhao_vram_arbiter
       eligible[k] = pend_active[k] && (pend_words[k] != 6'd0);
   end
 
-  // burst a client may issue now: min(remaining, 8, row tail) in words
-  // (rows are 2048 words; 8 divides the row so a tail burst never crosses)
+  // burst a client may issue now: min(remaining, ALIGNED-BLOCK TAIL) in words.
+  //
+  // THIS USED TO CLAMP TO THE ROW TAIL AND TO NOTHING FINER, under the comment
+  // "rows are 2048 words; 8 divides the row so a tail burst never crosses".
+  // That sentence is TRUE, it is about the ROW, and the unit that matters here
+  // is the BLOCK. `zhao_sdram_ctrl` programs the mode register BL8 SEQUENTIAL
+  // (A[2:0]=011, A3=0) and takes its column straight off the request address
+  // (`req_col = waddr[10:0]`, no alignment enforced), and a JEDEC sequential
+  // burst WRAPS INSIDE ITS ALIGNED EIGHT-COLUMN BLOCK -- col[10:3] held,
+  // col[2:0] advancing. So a burst starting at col 5 with 8 words asked the
+  // part for 5,6,7,0,1,2,3,4 and the client was handed four wrong words. The
+  // behavioural model incremented LINEARLY, so simulation served it correctly
+  // and no test in this tree could fail on it (owner ruling R243 / D-SDRAM-A;
+  // the model now wraps, which is what makes this reachable at all).
+  //
+  // THE REPAIR IS CENTRAL, and that is the ruling rather than a preference.
+  // Aligning each client individually leaves every future client having to
+  // remember, and forgetting yields correct simulation and wrong hardware.
+  // One clamp here covers every client, every length and every address.
+  //
+  // `blk_tail` = 8 - col[2:0] is in 1..8. It SUBSUMES both of the clamps it
+  // replaces and that is a theorem, not a hope:
+  //   * it is never more than 8, so the old `min(rem, 8)` is implied;
+  //   * row_tail = 2048 - col and 2048 is a multiple of 8, so writing
+  //     col = 8q + r gives row_tail = 8*(256-q) - r >= 8 - r = blk_tail for
+  //     every q <= 255 -- i.e. for every legal column. The row clamp can
+  //     therefore never be the binding one, and dropping its 12-bit subtract
+  //     and compare is an area saving rather than a risk.
+  // A burst confined to an aligned 8-column block is confined to its row.
+  //
+  // COST, stated so it is not discovered later: a request whose start column
+  // is not block-aligned is now split one burst further (a 64-byte request is
+  // up to FIVE bursts instead of ZHAO_ARB_BURSTS_PER_REQ = 4). The liveness
+  // bound is UNAFFECTED, and not by luck: the bound's competitor term is
+  // min(BURSTS_PER_REQ, ceil(AGING_OVERRIDE / MAX_BURST_SPAN)) = min(4, 2) = 2,
+  // the aging term is the binding one, and a SHORTER burst has a SHORTER
+  // grant-to-grant span -- so neither factor of the derivation moves. It is
+  // re-proven rather than argued: mem_vram_arbiter_liveness asserts the bound
+  // is EXACT in both directions and is run against this change.
+  //
+  // THE ARGUMENT NARROWED FROM 11 BITS TO 3, deliberately. The row clamp
+  // needed the whole column; the block clamp needs only `col[2:0]`, and
+  // passing the full column would leave `col[10:3]` unread -- which
+  // `verilator --lint-only -Wall` reports as UNUSEDSIGNAL and the
+  // lint_mem_vram_arbiter CTest treats as a failure. Narrowing the port says
+  // what the function actually depends on instead of waiving the warning.
   function automatic logic [3:0] burst_words(input logic [5:0] rem,
-                                              input logic [10:0] col);
-    logic [11:0] row_tail;
-    row_tail = 12'd2048 - {1'b0, col};
-    if (row_tail >= {6'b0, rem}) begin
-      if (rem >= 6'd8) burst_words = 4'd8;
-      else             burst_words = rem[3:0];
-    end else begin
-      if (row_tail >= 12'd8) burst_words = 4'd8;
-      else                   burst_words = row_tail[3:0];
-    end
+                                              input logic [2:0] col_lo);
+    logic [3:0] blk_tail;
+    blk_tail = 4'd8 - {1'b0, col_lo};
+    if (rem >= {2'b0, blk_tail}) burst_words = blk_tail;
+    else                         burst_words = rem[3:0];
   endfunction
 
   // ------------------------------------------------------------ selection ---
@@ -257,7 +302,10 @@ module zhao_vram_arbiter
   logic [3:0] bw_all [0:6];
   always_comb begin
     for (int k = 0; k < NCLIENT; k++)
-      bw_all[k] = burst_words(pend_words[k], pend_addr[k][11:1]);
+      // col = addr[11:1], so col[2:0] = addr[3:1]. The 16-byte quantum this
+      // clamp enforces is exactly "addr[3:0] == 0", which is why a 16-byte
+      // aligned request never needed the clamp and every other one does.
+      bw_all[k] = burst_words(pend_words[k], pend_addr[k][3:1]);
   end
 
   logic [3:0] sel_bw;

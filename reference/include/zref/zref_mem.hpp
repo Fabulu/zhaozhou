@@ -612,11 +612,25 @@ class VramArbiter {
     return (len_bytes + 1) / 2;
   }
 
+  // The ALIGNED-BLOCK clamp, mirroring zhao_vram_arbiter.burst_words gate for
+  // gate (owner ruling R243 / D-SDRAM-A). A JEDEC BL8 SEQUENTIAL burst wraps
+  // inside its aligned eight-column block, so clamping to the ROW tail -- what
+  // this and the RTL both used to do -- lets a burst started at a misaligned
+  // column run off the end of its block and come back at the block's start,
+  // handing the client words from the wrong addresses.
+  //
+  // THIS ORACLE MUST MOVE IN THE SAME COMMIT AS THE RTL. mem_random and
+  // vram_arbiter_directed compare the offered burst word-count cycle for
+  // cycle, so an oracle left on the row clamp reports the repair as a
+  // differential failure -- a right answer arriving as a red.
+  //
+  // blk_tail is in 1..8, so it subsumes the old min(rem, 8); and row_tail is
+  // never smaller than it (2048 is a multiple of 8), so it subsumes the row
+  // clamp too. A burst inside an aligned 8-column block is inside its row.
   static unsigned burst_words(unsigned rem, uint32_t addr) {
     const unsigned col = (addr >> 1) & 0x7FF;
-    const unsigned row_tail = 2048 - col;
-    if (row_tail >= rem) return rem >= 8 ? 8 : rem;
-    return row_tail >= 8 ? 8 : row_tail;
+    const unsigned blk_tail = 8u - (col & 7u);
+    return rem >= blk_tail ? blk_tail : rem;
   }
 
  private:
