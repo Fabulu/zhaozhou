@@ -1,0 +1,601 @@
+ZHAOZHOU - OWNER VACATION DIRECTIVE
+Decisions, architectural delegation, and uninterrupted completion
+23 September 2026
+
+Repository: Fabulu/zhaozhou
+Integration branch: claude/ceiling-architecture-20260912
+Recommended location: repository root, under this exact filename:
+OWNER_VACATION_DIRECTIVE_2026-09-23.txt
+
+Reviewed baseline: 13b229874905ace2c5367938eae0567c88fe3852
+Latest reviewed commit time: 2026-09-23 14:57:58 UTC / 16:57:58 CEST.
+This is a NEW directive, not a claim that its decisions were ratified earlier.
+The owner explicitly delegated making these decisions and requested a handoff
+that removes the need for further vacation-time approvals. The concrete choices
+below are that delegated decision set. The owner's commit or delivery of this
+file adopts the whole directive; no second ratification message is required.
+These decisions are not claims of implementation,
+verification, fit, timing closure, or physical-board success.
+
+==========================================================================
+0. THE INSTRUCTION THAT OVERRIDES THE APPROVAL LOOP
+==========================================================================
+
+I am on vacation. Use your own brain. You are the implementation architect,
+not a relay that sends every unresolved engineering choice back to me.
+
+Finish the complete mandatory console, exercise it honestly, measure it, and
+then optimize it. Do not stop at another list headed OWNER DECISION. Make the
+decision, write down the rationale and consequences, implement it, and test it.
+
+You have standing delegated authority over ALL further technical decisions
+needed for this work: architecture, formats, address maps, command extensions,
+producer/consumer ownership, identity, scheduling, resource allocation, numeric
+representation, compatibility transitions, validation, test infrastructure,
+implementation order, and the implementation details of the decisions below.
+This includes authoring or amending specifications and older owner/coordinator
+IMPLEMENTATION rulings when necessary to achieve the preserved requirements.
+Do not ask permission merely because a document calls something ratified.
+State exactly what is superseded and why; do not silently reinterpret it.
+
+The preserved requirements are the console's commissioned functionality,
+deterministic semantics, supported capacities and modes, data integrity, and
+honest evidence. This is NOT authority to delete a feature, reduce 16 fields to
+4, remove Gouraud/detail normals, shrink the guaranteed giant, replace a live
+path with testbench stimulus, waive a correctness failure, or call reduced work
+equivalent merely to reach zero or fit a device. The shipping target remains
+5CSEBA6U23I7 unless I later explicitly change it. A bigger diagnostic target does
+not change that shipping target.
+
+When two old documents conflict, prefer the most recent explicit behavioral
+requirement and the complete intended capability. Resolve the implementation
+conflict yourself. When behavior genuinely was never specified, choose a
+coherent deterministic rule and ratify it under this delegation. When a default
+below proves unsuitable, replace it with an evidenced, capability-preserving
+solution WITHOUT another owner round trip. Keep old captures on their declared
+semantics through versioning or an explicit compatibility path.
+
+A measured engineering impossibility is a finding, not permission to invent a
+pass or silently cut scope. Preserve a correct slower/reference configuration,
+record the unresolved performance or fit limit, and continue on independent
+work. Do not contact me just to choose between technical alternatives.
+
+This delegation lasts until I explicitly revoke or replace it. It does not
+expire at the end of a session, a packet, a day, or a context window.
+
+Boundary: do not spend new money, buy hardware/licenses/cloud capacity, expose
+private data, expand public deployment beyond existing authorization, or destroy
+unique work. Use existing authorized tools/accounts/resources. Where an action
+would cross that boundary, select a no-cost/non-destructive alternative, log it,
+and continue; do not stall the whole project. Normal commits and pushes on this
+project's working branches remain authorized.
+
+On receipt, put a conspicuous pointer to THIS file at the top of CLAUDE.md and
+in the current handover. Give every active and new worker the delegation and
+its relevant decisions. Record adoption once in the ruling index; do not spend
+a packet duplicating this document into multiple competing sources of truth.
+
+==========================================================================
+1. I34 / TERRAIN.VELOCITY: KEEP ALL FOUR CHANNELS AND GIVE THEM REAL HOMES
+==========================================================================
+
+Decision: complete the field-major TERRAIN.PATCH capability commissioned in
+the shared-Field directive, with ONE bounded patch working accumulator and
+all four Earth outputs. Do not interpose it after the old reducer and add a
+field twice. Keep MAX_FIELDS=16. Do not build a frame-wide field-by-vertex
+matrix to avoid scheduling the real working set. [S2, S3]
+
+Numerical policy remains the shared directive's section 13.3:
+- Height and velocity use the existing command-ordered saturating operations.
+- Material is the last covering field that actually writes that lane, in
+  original command order; its value remains an opaque, full-width u32.
+- Nav cost uses command-ordered saturating Q16.16 accumulation.
+- Preserve the exact initial/final height and underside clamp rules, closed
+  footprint test, and dirty-border attribution. Live Earth fields affect the
+  top lattice; do not silently deform or recolor the underside as well.
+- Presence travels with the result. Absent optional output is no write, not a
+  write of zero. Material token zero is a real value when present. An output
+  promised by the program but missing at retirement is a fault.
+
+The FPGA TERRAIN.PATCH capability owns producing/publishing the composed
+hardware caches. CPUCOLL retains the canonical simulation mirror under the
+shared deterministic law; GPU presentation is not allowed to mutate game truth.
+Extend the C++ reference to contain material/nav results explicitly rather than
+pretending today's height-only reference already defines those destinations.
+Retain paired height/velocity regression evidence during that extension.
+
+DESTINATIONS:
+Height uses the existing composed-height path. Velocity uses the existing
+TERRAIN.COMPOSED_VELOCITY region and a REAL writer plus its intended reader(s).
+Create TERRAIN.COMPOSED_MATERIAL and TERRAIN.COMPOSED_NAV as derived caches in
+local SDRAM bank 2, not as writes into authored layer E or canonical page bytes.
+Do not make another frame-sized flip-flop store.
+
+The following is the chosen initial address allocation, checked against the
+reserved interval in memory_rules.md at the reviewed baseline [S4]:
+
+  COMPOSED_MATERIAL  [0x058B0000, 0x05AB0000)   2 MiB
+  COMPOSED_NAV       [0x05AB0000, 0x05CB0000)   2 MiB
+
+Each provides 256 slots of 8 KiB. A slot can hold the 33x33 top-lattice u32/fx32
+payload plus a presence/validity bitmap and a versioned identity header. Specify
+and generate the exact offsets, padding, lengths and identifiers once. Keep the
+full material token; do not narrow it to fit an older consumer.
+
+Before enacting these ranges, check the LIVE map, guard, allocator, and branches
+being integrated. If a newer allocation occupies one, choose another proved-free
+range and record it without asking. If a complete lifetime scheme requires a
+different packing/slot allocation, derive and adopt it without dropping the
+supported live set. Retired mip ranges are reclaimable only after their readers,
+writers and guard mappings are actually retired and the guard proof is updated.
+
+All transactions use scoped guard permissions. No blanket bank-2 permission,
+no asset-pool widening, no request crossing a permitted-range boundary merely
+because both endpoints lie in the union. Extend the no-escape proof, positive
+covers and deliberately failing mutants with the new consumers/writers.
+
+Slots carry patch identity, residency generation, surface identity and the
+compose/tick generation. Stage and drain before publication; a reader never
+sees a partly updated multi-channel result. Never recycle a slot while a reader
+or transaction still owns it. Derive the actual buffering needed for this rule,
+not an imaginary unlimited double buffer.
+
+MATERIAL ENCODING BRIDGE - DECIDED:
+Do not reinterpret an opaque u32 field token as packed layer-E bytes or as part
+of a resource handle. Use an immutable, versioned, island/material-set-scoped
+mapping from the FULL token to the existing terrain material selection
+(matA, matB, weight and its real material-set/record identity as required).
+The authoring tool produces this mapping and validates its legal token domain;
+the reference and RTL use the same generated layout. Generation and binding
+identity accompany the mapping. Unresolved tokens are diagnosed and handled by
+the declared failure/fallback policy, never silently truncated or made token 0.
+
+Retain the field material as a discrete top-lattice overlay, with a separate
+written flag. For this newly specified overlay, choose the nearest canonical
+fine-lattice sample at the material query location, ties toward the lower
+lattice index, independently of render LOD. Never interpolate identifiers.
+When that sample has no field writer, use the authored layer-E selection
+unchanged. When present, resolve its token and use that selection through the
+existing frozen Mosaic sampling law. Preserve the top/underside/wall distinction
+and existing strata policy. Define the shared-border ownership/query rule in
+the reference so adjacent patches do not choose different samples at one world
+location. Existing programs with another explicitly versioned material encoding
+get a checked adapter; they are not reinterpreted in place.
+
+NAV - DECIDED:
+Publish the complete accumulated Q16.16 top-lattice nav-cost contribution, not
+an undocumented boolean or clamped byte. CPUCOLL consumes or deterministically
+mirrors the matching generation through the shared canonical query/reduction
+function. Keep authored navigation constraints and field contributions distinct.
+The architect owns the exact existing-nav-grid adapter; define it once in the
+reference and replay it in hardware/software. A DMA into unused memory is not a
+consumer. Demonstrate a nonzero field changing an actual navigation query.
+
+Acceptance must show real commands changing all four destinations, including
+short compatible records, a present zero material, overlapping fields in both
+orders, stalls, generation changes, and no-field baseline identity. A gate must
+observe each intended consumer, not just a four-word producer port.
+
+==========================================================================
+2. I21 / EDGERECON: ISLAND PITCH IS AUTHORITATIVE; BUILD THE FULL TWO-PASS PATH
+==========================================================================
+
+Decision: the frame-sealed island descriptor's pitch_log2 is authoritative for
+EVERY page belonging to that island generation. The page-header pitch remains
+a checked redundant value, not an independent source of placement law. This
+resolves D-2 and removes the need for the proposed per-resident-slot pitch table.
+
+Check page pitch, island identity and declared origin/envelope consistently at
+admission/load. Refuse and count a mismatch before publishing residency; do not
+silently rescale a page. A pitch change creates a new island/resource generation
+and drains/invalidates affected consumers. Legacy content needing mixed pitches
+must be explicitly represented as separate islands or handled by a versioned
+migration, not guessed into agreement. Both views use the same frozen world
+placement and their own frozen view-dependent LOD inputs.
+
+Reuse/factor the canonical PLACE arithmetic through a stateless query. Do not
+accept a fake header into the live fill path merely to obtain two coordinates.
+Complete a replayable sealed-list PREPARE reader independent of compose-cache
+backpressure, time-share the existing LOD machinery, then reconcile and EMIT.
+Do not resurrect a second terrain engine or duplicate the world store.
+
+Freeze the admitted set, its epoch, relevant camera/governor inputs and the
+referenced deviation/history version across PREPARE and EMIT. PREPARE must not
+commit hysteresis history or advance the state EMIT treats as last frame.
+Commit history once, for the completed/admitted result. A bake or residency
+change either waits for the pinned lifetime or produces a detected restart;
+never combine half of one generation with half of another.
+
+The four 8'h00 edges stay only as the explicitly incomplete bring-up profile
+until the real path is validated. They are not proof of crack freedom. A bank
+collision/missing neighbor cannot earn a crack-free claim merely because both
+sides return the same sentinel: test the resulting tessellation levels.
+Use bounded collision handling or a correctness-preserving fallback; do not
+silently emit a cracked admitted mesh to keep the register green.
+
+Include nondegenerate terrain fixtures, mixed neighboring LODs, both views,
+changing camera state, deformation, missing pages, history and backpressure.
+Close I21 and the disconnected EDGERECON entry only when the same complete
+production path satisfies both. Their shared seam is not a claim of one-packet
+implementation cost. [S1]
+
+==========================================================================
+3. I20: FRAGMENT STATE, STENCIL, COLOR AND ALPHA ARE NOW SPECIFIED
+==========================================================================
+
+Decision: ratify the existing fragment consumer's state semantics as the v1
+producer/consumer contract, then generate its producer fields and validation
+from ONE schema. Do not create a second incompatible stencil enum. [S6]
+
+For the reviewed fragment-state encoding:
+  STEN_FUNC: 0 ALWAYS, 1 EQUAL, 2 NOTEQUAL, 3 NEVER.
+  STEN_OP:   0 REPLACE, 1 KEEP, 2 INCR_SAT, 3 DECR_SAT.
+  Stencil reference and mask are explicit u8 values; comparisons and update
+  ordering retain the existing reference/RTL contract, including saturation.
+  BLEND: 0 REPLACE, 1 ALPHA, 2 ADD, 3 ADD_MOD.
+
+Preserve the published encoding for existing captures. Expose the missing
+reference/mask/state through real material/draw/primitive producers, using
+validated versioned extensions or a new opcode where needed. Allocate any opcode
+from the LIVE registry, regenerate the ABI, and provide pack/decode tests.
+Default opaque alpha is 255; default effect tag is 0. These are legitimate
+profile defaults, not permission to leave a mandatory programmable path tied.
+Preserve existing named sky/particle/shadow recipes and their depth/tag rules.
+
+COLOR/PROVOKING VERTEX - DECIDED:
+Keep the commissioned Gouraud path: smooth lit RGB and any declared smooth alpha
+must retain their interpolation and precision. Do not replace Gouraud with flat
+color to close I20 or save arithmetic. For an EXPLICIT flat profile, the provoking
+vertex is the FIRST vertex of the original submitted primitive, before clipping,
+triangulation or winding swaps. Capture the flat payload there and carry it as
+primitive metadata through all derived triangles. Clipping or a swap must not
+silently choose another vertex. Generated primitives with a declared per-job
+color/alpha use that declared payload. Profile selection is explicit, not inferred
+from whether a port happens to be zero.
+
+Alpha is a real authored per-draw/material/per-primitive input where supported;
+255 is the backwards-compatible opaque default. Preserve the existing smooth
+alpha route where required. Carry alpha AND the blend state that consumes it.
+Likewise, stencil reference and effect tag remain paired with the primitive
+under stalls, clipping, replay, binning and material-window span changes.
+
+Do not confuse R7's descriptor raster_state (which has its own cull fields)
+with the fragment pipeline's 32-bit state word. Use named conversion/transport
+rules and explicit identity for each. Do not OR two overlapping field owners
+together to avoid resolving which source is authoritative.
+
+The architect is authorized to finish any remaining state field whose producer
+was missing, including the currently parked color decision: preserve the full
+textured/Gouraud route with neutral tint as the multiplicative identity, and
+real authored tint where supplied. No invented constant may masquerade as
+missing material data. Add a deliberate test that proves each newly exposed
+field changes its intended result. Debug-only injection is not the sole producer.
+
+==========================================================================
+4. I53-I55: ONE FINAL GEOMETRY IDENTITY SPACE AND A REAL SDRAM RENDER PATH
+==========================================================================
+
+Decision: the rendering parameter arena is authoritative for the FINAL geometry
+actually referenced by the binner and raster consumer, including clipping-derived
+vertices. Pre-clip mesh IDs, transient replay slots, post-clip vertex IDs and
+triangle IDs are different namespaces. Never pass one off as another. [S7]
+
+Use deterministic, dense per-frame/per-view arena vertex IDs, assigned at the
+first accepted publication of a complete vertex identity. The identity includes
+the source geometry/object generation and draw instance, view, relevant pose/warp
+state, source vertex identity and any attribute discontinuity. Equal positions
+alone do not prove identity. Conversely, a true shared vertex in the same
+identity domain must not acquire a new ID simply because another triangle or
+an evicted on-chip cache references it.
+
+Carry clipping lineage explicitly. New intersections are identified from their
+canonical source edge/lineage and clipping operation, with exact shared-edge
+interpolation. Reuse shared intersections where they are the same vertex;
+attribute seams remain separate. Use a collision-safe mapping; neither a hash
+nor a CRC alone proves equality. The architect chooses a bounded implementation
+and may move backing state to SDRAM rather than growing a frame-sized FPGA
+register file. State the mapping lifetime and prove that eviction/reuse cannot
+change a still-referenced identity.
+
+Descriptors refer to the final arena IDs, not to an earlier private store.
+Preserve all mandatory color, alpha, UV/perspective, fog, cull, material-set,
+material-record and fragment metadata. If the old compact records cannot carry
+the full commissioned function, introduce a versioned extension or immutable
+sidecar keyed by the same identity. Do not silently overload an existing field,
+truncate a full handle, or replace a missing attribute with a convenient zero.
+The architect has explicit authority to amend record schemas for this purpose.
+
+Retain R7's intended 65,536-vertex capacity: IDs 0..65,535 fit u16, but a count
+of 65,536 requires a wider internal count/limit. Use at least 17 bits for that
+count instead of silently sacrificing a vertex or representing full capacity
+as zero. Allocation stride and serialized record size remain separate concepts;
+keep the current tested aligned allocation unless a measured, verified packing
+change justifies replacing it.
+
+I54 is actual serialization/assembly of the specified 14-reference chunks using
+final triangle identities. Do not dump the legacy binner's four narrow local
+references and call them the same record. Preserve deterministic tile/primitive
+order, generation, chain termination and capacity accounting.
+
+I55 requires the walker to feed the live raster path from SDRAM. A parallel
+legacy on-chip frame arena that still supplies the actual pixels is not closure.
+Keep only the bounded directories/caches/FIFOs permitted by R7. Generate a real
+producer-finished event, drain outstanding writes, then publish. Exercise a
+complete frame whose output depends on the bytes written and read through the
+real guard/arbiter/controller path, including the corrected BL8 model.
+
+Overflow remains a whole-frame fault with drain, source attribution and repeat
+of the prior complete frame. No arbitrary missing tail, and no reuse while a
+prior frame/reader owns the allocation.
+
+==========================================================================
+5. I56: THE GIANT RESERVATION AND THE MEASURE SEAL ARE REAL OUTPUTS
+==========================================================================
+
+Decision: commission a real per-view pre-frame allocation/admission plan and
+an immutable quota-seal record consumed by the arena. The Measure owns the
+validated plan. The architect may compute the plan on the authorized HPS path
+and validate/seal it in hardware; it is not required to duplicate a large policy
+engine merely to avoid adding a command or mailbox field.
+
+The seal names frame/view/resource generation, capacities, vertex/triangle/
+reference/chunk limits, and the designated giant's reservation. Keep those
+units distinct. Authorize the necessary generated command, publication or
+service transport and connect its real producer and consumer. A constant equal
+to arena capacity is not an admission plan.
+
+Reserve the guaranteed giant's 32,768 TILE REFERENCES before ordinary kMesh
+allocation, including ceil(32768/14) chunk payload units and all required
+vertices/descriptors/metadata. Do not confuse references with chunks or assume
+a reference budget pays for every other structure. Select the guaranteed giant
+by declared priority, then stable instance identity for ties. Additional large
+objects follow the explicit admission policy; do not promise them unpaid
+reservations or silently demote the guaranteed one.
+
+Demote ordinary presentation LOD in the existing declared deterministic order
+when permitted. Preserve gameplay and required capacity. Do not renegotiate a
+sealed frame or borrow from the giant's reservation because an early primitive
+happens to fit. A frame explicitly containing no guaranteed giant may release
+that reservation BEFORE sealing. Illegal/overflowing plans are refused before
+any partial publication, with the existing whole-frame fallback.
+
+The quota producer, encoded maximum values, absent-giant case, reservation under
+pressure, and oversized plans all need real execution and failure tests.
+
+==========================================================================
+6. TERRAIN ARM / NORMAL MAP / CLIFF: COMMISSION ALL MISSING LINKS
+==========================================================================
+
+The terrain arm remains fully textured, correctly lit, with the commissioned
+detail-normal functionality. Finish the aux-context, material-identity and
+color consumers; the UV law already implemented by TERRAINUV is not to be
+re-invented. Preserve the existing top/underside/wall UV and strata rules.
+Finish I13 and normal mapping as one coherent producer-to-pixel path. The new
+material overlay decision above does not replace the existing authored material
+or surface-sheet pipelines.
+
+The adopted RAM cliff evaluator remains the implementation choice. Build its
+real occupancy/distance/edge producer from the canonical terrain data and
+share existing placement/geometry machinery where semantics permit. Neither
+an LFSR nor disconnected top-level test ports are production producers.
+No new owner approval is needed for its adapters, scheduling or exact producer
+format. Recheck its real timing in the applicable composed context; a past
+leaf resource saving is not a current console saving.
+
+At the reviewed head the terrain smoke actually reports valid page CRCs and
+128 replayed terrain triangles, but all 128 are degenerate. Do not repeat the
+older claim that CRC failures make every terrain path unreachable. Fix/add the
+nondegenerate fixture needed by the actual path being tested. Similarly, do not
+claim a visible shadow from a smoke that never publishes a creature-form page.
+Use exercised consumer evidence, not inherited prose. [S1]
+
+==========================================================================
+7. SDRAM SCHEDULING: FRAME-CRITICAL READS ARE NOT UNBOUNDED BACKGROUND WORK
+==========================================================================
+
+Decision: authorize bounded guaranteed service for metadata/deviation reads
+needed to finish an ALREADY ADMITTED frame. Those reads must not inherit a
+background-only policy under which continuous debug/streaming traffic can
+starve them. This supersedes the background-only part of T3/R242 only to the
+extent needed for these frame-critical read transactions. [S4]
+
+Prefer sharing an appropriate existing guaranteed read route or using the
+currently reserved client slot if the LIVE design still has it available.
+Do not spend a specific numeric client ID based on an old comment. Keep page
+loading, background baking and unrelated writes in their appropriate background
+class. Give the new/read-shared route narrowly scoped READ permissions; do not
+relax another client's write protection to obtain priority.
+
+Preserve scanout and refresh guarantees, give other admitted clients bounded
+service, rate-limit background/debug competition, and re-prove the actual
+arbitration bounds including all enabled clients. Charge complete request,
+fragmentation, turnaround, refresh, queue and drain costs. A 64-byte fabric
+request is not one 16-byte BL8 SDRAM burst.
+
+The new bandwidth ledger's worst-on-worst oversubscription is NOT a measured
+board FPS result, and the optimistic case is not a guarantee. Exercise actual
+concurrent workloads and account for the idle residue available to background
+work. PREPARE's additional reads must be budgeted; suppress its history writes.
+
+A scheduler cannot create bandwidth. When a correctly modeled workload exceeds
+capacity, retain the correct complete oracle, use only the already-permitted
+admission/fallback behavior, and report the deadline miss. Optimize scheduling,
+reuse/locality, caching and representation without discarding mandatory work.
+Do not redefine the benchmark or reduce declared maxima to certify 60 Hz.
+The architect may revise the internal scheduling policy without another owner
+round trip, but must preserve the stated behavioral and safety guarantees.
+
+==========================================================================
+8. MEASUREMENT AND OPTIMIZATION: AUTHORIZED WITHOUT REPEATED APPROVAL
+==========================================================================
+
+Authorize DSF-01's pin-reducing diagnostic wrapper and a fair re-evaluation on
+current source. It must preserve the functional paths under measurement; no
+tie-offs, constant stimulus or pruned logic may buy a smaller result. Compare
+matched constraints/configurations, inspect setup AND hold, and do not treat
+virtual-pin artifacts as physical-board timing. A historical -1,492 ALM is a
+candidate result, not a promised saving in the current composed console.
+
+Authorize local, bounded synthesis/map experiments to fix demonstrated memory
+inference and arithmetic problems, without waiting for an impossible full fit.
+Prioritize by measured ownership, not attractive commit messages. The drawjob
+palette and forge assembler arrays are candidates; exact M10K counts require
+legal width/depth/port packing, not payload bits divided by 10,240.
+
+Preserve the full 16-field Earth capability. Synchronous banks, replicated
+read-only RAMs, exact narrower representations, shared arithmetic with proven
+schedules, and other capability-preserving changes are authorized. Prove numeric
+values AND flags/ordering before calling a transformation equivalent.
+
+Completion remains the primary campaign. Small validated local improvements
+may land along the way; do not turn it into an endless optimization campaign
+that never finishes the mandatory machine. Conversely, an old 'fit only at
+completion' instruction must not forbid the bounded experiment needed to fix
+an implementation defect. Use named questions and frozen source snapshots.
+
+For the complete diagnostic run, a larger compatible device/family is authorized
+as a MEASUREMENT target only, using tools/licenses already legally available.
+Verify IP/primitive portability and memory/DSP mapping. A successful cross-family
+fit is not a Cyclone-V ALM count or board proof. If no larger usable target is
+available without spending money, keep Cyclone-V map/hierarchy diagnostics and
+correct simulation; do not block completion or cut scope to obtain a fit.
+
+Always preserve stage logs, source closure/digest, tool/device settings,
+post-synthesis and any fitter reports, and the exact failure reason. Separate
+ALUTs, registers, estimated ALMs, placed ALMs and capacity bounds. Do not add
+parent and child resource totals or add register and logic bounds as though
+ALMs could not share them. Do not declare usable RAM headroom from payload-bit
+percentage alone; actual blocks/ports/packing matter.
+
+==========================================================================
+9. WORKTREE CLEANUP AND CONTINUOUS EXECUTION
+==========================================================================
+
+Cleanup decision: you may remove obsolete, inactive, fully merged lane
+worktrees after classifying and safeguarding their contents. You do not need
+another approval for each one.
+
+Confirm no active agent/tool uses the path, inspect tracked, untracked AND
+ignored files, and verify commits are reachable from retained refs. Preserve
+unique source, original art, evidence, failing seeds, scripts, logs and receipts
+in a durable local archive with an inventory and hashes; verify the copy before
+removal. Delete reproducible build products/caches only when their inputs and
+necessary provenance are retained. When classification is uncertain, keep that
+worktree and continue elsewhere. No indiscriminate git clean/reset/remove,
+no deleting sole copies, and no mass public upload of archived private output.
+Disk-size precision is not a prerequisite for making this safe decision.
+
+Keep TWO implementation workers usefully occupied, with the coordinator
+integrating and checking. This supersedes older one-worker/three-packet staffing
+notes for this campaign. Count descendants; do not evade the limit with nested
+spawns. When one task depends on another, use the spare slot for an independent
+producer, acceptance fixture, bounded optimization or verification work. Do not
+make idle workers touch the same RTL to manufacture parallelism.
+
+Do not announce 'day closed' simply because a wave ended. Refill the next safe
+slot and continue toward the goal. Tool/account exhaustion or a genuine access
+limit is a real constraint to record, not permission to claim ongoing work that
+is not running. Never leave stray jobs to impersonate an active lane.
+
+For each packet, recheck the live producer, consumer, schema and instantiation
+chain before accepting a prose blocker. A zero-result grep must be checked at a
+known example and the relevant port/source declaration. A discovered stale entry
+gets fixed locally; it is not a reason for another global essay and no build.
+Do not repeatedly commission audit-only packets for a decision delegated here.
+
+Stage helpers on isolated branches as needed. An unmerged implementation file
+is not a production supersession event. Switch the production manifest and
+capability owner atomically when its replacement is actually integrated;
+retain the old implementation as an oracle when useful. Adjust tooling that
+confuses file existence with adoption rather than banning incremental work.
+
+Report structural gaps, production reachability, exercised behavior and fit/
+performance as separate columns. A green baseline comparison can contain known
+red gates; do not call it globally green. A block entering a closure does not
+prove the path executed. Record counter demonstrations, negative controls and
+nondegenerate visual evidence where appropriate.
+
+If a newly discovered omission raises the structural count, record it honestly
+and complete it. Neither hide it nor use it to seek another owner permission.
+
+==========================================================================
+10. RECEIVING THIS DIRECTIVE / SAFE PUSH PROTOCOL
+==========================================================================
+
+This file belongs on claude/ceiling-architecture-20260912, not main and not a
+single worker's gz/* branch. Propagate it to workers after integration.
+
+A push sends local commits OUT; it does not fetch new owner instructions.
+Before each integration push, fetch the current remote branch, inspect new
+owner commits/files, reconcile them without overwriting anyone's work, then
+push. A non-fast-forward rejection is a signal to fetch/integrate, NOT to force
+push over the owner's directive. Never use --force or --force-with-lease to
+remove the owner's new commit.
+
+After safeguarding current uncommitted work, the coordinator's normal fetch is:
+
+  git fetch origin refs/heads/claude/ceiling-architecture-20260912:refs/remotes/origin/claude/ceiling-architecture-20260912
+
+Check the native exit code immediately. If it fails, inspect the actual error;
+do not continue on a stale tracking ref or weaken a guard to get a green code.
+Inspect the fetched history and this file, merge/reconcile at a safe integration
+point, rerun relevant checks, then perform a normal push. Do not paste commands
+into a worker's unrelated branch or hard-reset a shared dirty tree.
+
+On first receipt:
+1. Read this entire directive and record that it supersedes the approval holds.
+2. Add the startup/handover pointer and notify both workers.
+3. Update the affected specs/decision entries with the chosen semantics and
+   source/versioned ABI implications, in the implementation packets themselves.
+4. Start/refill the next two safe implementation packets. Do not send me a quiz.
+
+The decision record for further choices is short: question; chosen option;
+reason and alternatives; constraints/cost; code/tests/compatibility consequences.
+Then execute. Make good decisions. Keep going. I am on vacation.
+
+==========================================================================
+SOURCES / REVIEW SCOPE
+==========================================================================
+
+These references identify the baseline used to resolve the holds. They do not
+make this file a tested hardware implementation. Some repository prose already
+contradicts newer source; live rechecking remains mandatory. Large console-core
+content could not be retrieved directly in this review; the blocker inventory
+was cross-checked through the live handover, committed changes, contracts,
+memory specification, Field directive and selected reference/RTL interfaces.
+The technical choices in this file are NEW delegated policy, not asserted past
+facts or guaranteed resource savings.
+
+All repository paths below are pinned to:
+13b229874905ace2c5367938eae0567c88fe3852
+
+[S1] reports/HANDOVER-20260919.md, sections 15.13-15.16.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/reports/HANDOVER-20260919.md
+
+[S2] reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt,
+sections 13.1-13.5: field-major accumulation, four channels and presence.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt
+
+[S3] spec/form/field-ir.md section 7.1; reference/src/zrender/terrain.cpp,
+compose_lattice; committed PATCHV2 presence-mask repairs.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/spec/form/field-ir.md
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/reference/src/zrender/terrain.cpp
+
+[S4] spec/memory_rules.md, bank-2 map, R242 and scoped guard/lifetime rules.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/spec/memory_rules.md
+
+[S5] spec/terrain_rules.md, material/UV/strata and ownership provisions.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/spec/terrain_rules.md
+
+[S6] design/contracts/RASTER.FRAGMENT.md, fragment state and recipes.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/design/contracts/RASTER.FRAGMENT.md
+
+[S7] design/contracts/GEOM.PARAMBUF.md, R7 records, identity/lifetime,
+giants, external-memory consumer and overflow requirements.
+https://github.com/Fabulu/zhaozhou/blob/13b229874905ace2c5367938eae0567c88fe3852/design/contracts/GEOM.PARAMBUF.md
+
+[S8] Git's push/fetch behavior (not an agent-notification guarantee).
+https://git-scm.com/docs/git-push
+https://git-scm.com/docs/git-fetch
+
+END OF DIRECTIVE
