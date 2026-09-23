@@ -7372,3 +7372,93 @@ the first place to look for 27×27s.
 packing, replication and pruning have not happened. **It is attribution, which is
 what the optimisation phase needs, and it cost nothing** — the report was
 already on disk.
+
+
+## `zhao_geom_drawjob`: 98,304 FLOPS IN AN ARRAY WHOSE OWN COMMENT SAYS IT IS AN M10K
+
+**The single largest optimisation lead in the tree, and the comment beside it
+states the opposite of what was measured.**
+
+### THE MEASUREMENT — certain
+
+`zhao_geom_drawjob:u_geom_drawjob` reports **100,561 dedicated logic registers
+and 0 block memory bits**, all of it the block's **own** (`100561 (100561)` — no
+sub-entities). That is **26.4% of every flop in the console.**
+
+The array is at `fpga/rtl/geometry/zhao_geom_drawjob.sv:235`:
+
+```systemverilog
+logic [383:0] pal_q [XFORMS];      // XFORMS = 256
+```
+
+**256 × 384 = 98,304 bits.** The block's remaining logic accounts for the other
+~2,257 flops, which is an ordinary size for the rest of it. **The array is the
+block.**
+
+### THE COMMENT DIRECTLY ABOVE IT — refuted by the report
+
+> *"the palette. A REGISTERED READ WITH AN ENABLE, so the row holds for the
+> whole draw and **Quartus infers M10K rather than 98,304 flops**."*
+
+and at the write:
+
+> *"The array itself has NO reset, which is what lets it infer M10K."*
+
+**Both statements about the shape are true.** The read *is* registered with an
+enable (`:408`), the array *has* no reset. **And the inference did not happen.**
+The number the comment names as the bad outcome — **98,304 flops** — is exactly
+what the synthesis report measured. **This is "the comment is not the mechanism"
+with the mechanism's own number written in it.**
+
+### WHY, stated at the right confidence
+
+**EVIDENCE (strong):** Quartus emitted **zero** RAM-inference messages of any
+kind about `zhao_geom_drawjob` — not one `Info (276…)`, not even an "uninferred
+due to…" rejection. By contrast it explained itself about other blocks in the
+same run:
+
+* `zhao_twod_plane:u_twod_plane|pal_q` — *"uninferred due to inappropriate RAM
+  size"*
+* `zhao_twod_sampler:u_twod_sampler|bind_base_q` — *"uninferred due to
+  asynchronous read logic"*
+
+**A rejection with a reason means Quartus considered the array and refused it. No
+message at all means it never presented as a RAM candidate.** That is a
+different and more informative failure.
+
+**HYPOTHESIS (to be tested by a lane, NOT asserted here):** the write at `:405`
+is the reason —
+
+```systemverilog
+for (int unsigned k = 0; k < 12; k++)
+  pal_q[int'(px_index_i)][32 * k +: 32] <= px_m_i[k];
+```
+
+**Twelve separate partial-width slice assignments**, not one write. Functionally
+it is a full-width write — all twelve fire under one condition at one address —
+but structurally it is twelve partial writes, and the canonical inferable form
+is a **single full-width assignment**: build the 384 bits in a combinational
+concatenation and write `pal_q[idx] <= pal_wr_c;` once. **That is a small,
+well-understood change and it is a hypothesis until a `quartus_map` says
+otherwise — which costs minutes, not a fit.**
+
+### WHAT IT IS WORTH
+
+**98,304 bits is ~10 M10K** (98,304 / 10,240 = 9.6). Against the flops it
+currently spends, at four registers per Cyclone V ALM, that is on the order of
+**24,576 ALMs** — and the **entire target device is 41,910**. Even allowing that
+registers pack with logic rather than standing alone, **this one array is a
+double-digit percentage of the whole budget.**
+
+**And the memory to pay for it exists:** block memory measured **2,960,515 bits
+= 52% of the target's 5,662,720**. The owner's standing direction is *"spend
+M10K to buy ALMs"*; **this is that trade with the arithmetic already done.**
+
+### HOW TO CONFIRM IT CHEAPLY, so nobody spends a fit on it
+
+**`quartus_map` alone answers this** — RAM inference is an Analysis & Synthesis
+decision, and R109 already records the distinction: *"It is a `quartus_map`, not
+a fit … a map is minutes."* Change the write, map the block standalone, and read
+two things: whether `zhao_geom_drawjob` appears in the **RAM Summary**, and
+whether its register count drops by ~98,000. **Both are in the report the runner
+already harvests.**
