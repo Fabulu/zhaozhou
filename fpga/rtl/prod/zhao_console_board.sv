@@ -1215,6 +1215,25 @@ module zhao_console_board
   //                          share BROADCASTS beat data and demuxes only
   //                          `beat_valid`, so this is what sees a wrong demux
   //                          delivering another client's bytes.
+  //   geom_pa_unaligned_o    ADDED 2026-09-23, and it is the one detector here
+  //   geom_pw_unaligned_o    whose SILENCE IN SIMULATION IS GUARANTEED
+  //                          WHATEVER THE DESIGN DOES. A JEDEC BL8 sequential
+  //                          burst wraps inside its aligned eight-column (16
+  //                          byte) block; `zhao_vram_arbiter` chops to
+  //                          min(rem, 8, row_tail) and so aligns only to the
+  //                          2048-word ROW; and the behavioural SDRAM model
+  //                          reads and writes LINEARLY. So a misaligned
+  //                          request is served CORRECTLY here and WRONGLY by
+  //                          the part, and no functional test in this tree can
+  //                          fail on it in either polarity. These two count
+  //                          the invariant instead: every clock either block
+  //                          offers the guard an address that is not a
+  //                          multiple of the quantum. The arena's is
+  //                          unreachable with legal stimulus and owes
+  //                          tests/mutants/zhao_geom_paramarena_align_mutant.sv;
+  //                          the walker's is reachable, because it is TOLD its
+  //                          bases on `pub_*_base_i` rather than computing
+  //                          them.
   //
   // Each of these is asserted ZERO by the smoke, and a counter asserted zero
   // is a claim. The ones reachable with legal stimulus are fired by
@@ -1235,6 +1254,7 @@ module zhao_console_board
   output logic [31:0] geom_pa_addrbad_o,
   output logic [31:0] geom_pa_scrcontend_o,
   output logic [31:0] geom_pa_retireunder_o,
+  output logic [31:0] geom_pa_unaligned_o,
   output logic [15:0] geom_pa_fault_src_o,
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
@@ -1251,6 +1271,7 @@ module zhao_console_board
   output logic [31:0] geom_pw_short_o,
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
+  output logic [31:0] geom_pw_unaligned_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -4248,6 +4269,7 @@ module zhao_console_board
       .geom_pa_addrbad_o                  (geom_pa_addrbad_o),
       .geom_pa_scrcontend_o               (geom_pa_scrcontend_o),
       .geom_pa_retireunder_o              (geom_pa_retireunder_o),
+      .geom_pa_unaligned_o                (geom_pa_unaligned_o),
       .geom_pa_fault_src_o                (geom_pa_fault_src_o),
       .geom_pa_fault_o                    (geom_pa_fault_o),
       .geom_pa_busy_o                     (geom_pa_busy_o),
@@ -4264,6 +4286,7 @@ module zhao_console_board
       .geom_pw_short_o                    (geom_pw_short_o),
       .geom_pw_stray_o                    (geom_pw_stray_o),
       .geom_pw_genrace_o                  (geom_pw_genrace_o),
+      .geom_pw_unaligned_o                (geom_pw_unaligned_o),
       .geom_pw_depth_o                    (geom_pw_depth_o),
       .geom_ws_denied_o                   (geom_ws_denied_o),
       .geom_ws_contention_o               (geom_ws_contention_o),

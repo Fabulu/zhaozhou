@@ -5508,6 +5508,60 @@
 //      records reports every triangle illegal rather than silently reading
 //      zeros. The refusal is visible, which is the safe direction.
 //
+//      -- ARENAWIRE, 2026-09-23. STILL TIED, AND THE OBSTACLE IS TWO
+//      OBSTACLES. The paragraphs above name one; the tree holds a second that
+//      is independent of it, and either alone is enough to keep this tied.
+//
+//      (1) THE u16 FIELD IS ALREADY DOING TWO JOBS, so it cannot take a
+//      third meaning. `zhao_geom_assemble` emits `t_v*_o` as `voff_q` plus
+//      the served index, where `voff_q` LATCHES `m_vertex_offset_i` per
+//      meshlet -- and this file drives that port with `GEOM_ASM_VOFF_C`,
+//      which is zero, DELIBERATELY, because `zhao_geom_replay` takes the same
+//      field STRAIGHT to `look_index_o`, its index into the meshlet's own
+//      arena row. So the id in a TriangleDescriptor is REPLAY's ARENA-LOCAL
+//      INDEX. The arena's `vertex_id` is a FRAME-GLOBAL RECORD INDEX into the
+//      ProjectedVertex array. One field, two coordinate systems.
+//
+//      THE CONSEQUENCE IS ALREADY IN MEMORY AND IS WORTH STATING PLAINLY:
+//      the descriptors the arena writes TODAY name ids that COLLIDE ACROSS
+//      MESHLETS -- every meshlet restarts at zero. If the vertex intake were
+//      wired at those ids, meshlet N+1 would overwrite meshlet N's vertices,
+//      silently, and `td_illegal_o` could not see it because every colliding
+//      id is comfortably BELOW the seal. The refusal quoted above protects
+//      against an EMPTY vertex region, not against a doubly-written one.
+//      Giving the arena frame-global ids by moving `m_vertex_offset_i` off
+//      zero BREAKS GEOM.REPLAY's arena addressing, so the honest shape is a
+//      SECOND id riding GEOM.ASSEMBLE's existing per-meshlet latch -- a port
+//      change to that block and a widened descriptor stream, which is a
+//      producer change and not a wire.
+//
+//      (2) THE RECORD HAS NO SOURCE, WHOLE, ANYWHERE. A ProjectedVertex is
+//      screen x, screen y, invw24 + status, u_over_w, v_over_w and rgba8.
+//      The console DOES have a landed-vertex event with identity --
+//      `ln_fill_landed` / `ln_fill_arena` / `ln_fill_index` out of the
+//      vertex lanes -- and `ln_rider_payload` beside it. But that payload is
+//      GEOM.WCACHE's, and GEOM.WCACHE's own header enumerates it: x, y,
+//      invw, w, behind, 106 bits, and it says in terms that "THE ATTRIBUTES
+//      DO NOT LIVE HERE". u_over_w, v_over_w and the lit colour live in
+//      GEOM.VATTR, which answers only on a PER-CORNER LOOKUP that GEOM.REPLAY
+//      drives, one corner at a time, for triangles -- not per landed vertex.
+//
+//      So there is no handshake in this console that carries a vertex's
+//      IDENTITY and its ATTRIBUTES together. Building the intake from the
+//      two would be a join of two streams on two cadences, which is the
+//      fault this file punishes by name at I39 and which turned eight
+//      triangles into twenty-three in PARAMARENA's own composition. A wire
+//      that looks right and is a stage out is the expensive kind.
+//
+//      WHAT IS NO LONGER AN OBSTACLE. `reports/HANDOVER-20260919.md` 15.2
+//      says the SDRAM burst-wrap divergence "WILL [block] the moment somebody
+//      wires I53". That is handled, and it was never true that it waited --
+//      see `zhao_geom_paramarena`'s header section THE BURST THAT WRAPS. The
+//      merged layout put `TRI_OFF_B` at 65,535 * 24 = 1,572,840, which is
+//      8 mod 16, so EVERY TriangleDescriptor on the LIVE path was already
+//      misaligned. The arena now aligns its own requests and counts the
+//      invariant at `geom_pa_unaligned_o`.
+//
 // I54. GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
 //      (`u_geom_paramarena.ck_*`) -- TIED TO ZERO, the same standing as I53
 //      and a different missing thing.
@@ -5531,6 +5585,49 @@
 //      counts it and the walk stops. The arena is correct and EMPTY, not
 //      correct-looking and wrong.
 //
+//      -- ARENAWIRE, 2026-09-23. STILL TIED, AND THE PARAGRAPH ABOVE IS
+//      WRONG ABOUT THE OBSTACLE, IN THE FLATTERING DIRECTION. It says the
+//      binner "builds exactly these chunks" and that the missing piece is
+//      "three or four ports". Measured against `zhao_geom_binner_v2` and
+//      `zhao_geom_bin_pipe_v2`, neither half survives.
+//
+//      THEY ARE NOT THE SAME CHUNK. The binner's arena is
+//      `ref_ram [0:(CHUNKS*CHUNK_REFS)-1]` with `CHUNKS = 256`,
+//      `CHUNK_REFS = 4` and a ref of `TRI_W` = SEVEN BITS, plus
+//      `next_ram [0:CHUNKS-1]`. R7's chunk is 64 bytes: a u32 `next`, a u16
+//      count, a u16 generation and FOURTEEN u32 ids. Four 7-bit refs is a
+//      different object from fourteen 32-bit ids, so ports on that block
+//      would expose something that has to be re-aggregated 14-at-a-time
+//      before it is a chunk at all.
+//
+//      AND THE DISQUALIFYING ONE, WHICH IS ABOUT IDENTITY RATHER THAN
+//      SHAPE. The binner's 7-bit ref indexes ITS OWN per-frame triangle
+//      store, `TRI_CAP = 128` entries, filled from GEOM.SETUP --
+//      `zhao_geom_bin_pipe_v2`'s own header says the record is stored
+//      "under the binner's own triangle identity". That store is POST-CLIP.
+//      The arena's `triangle_id` indexes the TriangleDescriptor array, which
+//      the arena fills by tapping GEOM.ASSEMBLE -- PRE-CLIP. GEOM.CLIP
+//      CREATES TRIANGLES THE ASSEMBLER NEVER EMITTED AND DROPS OTHERS, so
+//      the two are not the same set with an offset between them. They are
+//      different sets with different cardinality and no mapping in the tree.
+//
+//      WHAT WIRING IT BY NAME WOULD PRODUCE, because this is the failure
+//      this file exists to prevent: a binner slot is 0..127, every one of
+//      those is far below any plausible sealed `tris`, so
+//      `zhao_geom_parambuf`'s `ck_illegal_o` and `td_illegal_o` would both
+//      PASS and the walk would return WRONG DESCRIPTORS THAT DECODE
+//      CLEANLY. Every counter would balance. No picture would look wrong,
+//      because nothing takes the walker's triangles yet (I55) -- and when
+//      something does, it would draw the wrong geometry with a clean bill
+//      of health.
+//
+//      SO WHAT IT ACTUALLY NEEDS is a triangle identity that SURVIVES CLIP:
+//      either the arena taps a POST-clip descriptor stream instead (a
+//      different producer, downstream of GEOM.SETUP, and then the
+//      descriptors change meaning), or GEOM.CLIP carries the arena's record
+//      index forward through the clip and the setup. Both are architecture,
+//      not ports, and neither is this packet's to choose.
+//
 // I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
 //      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
 //      CONSUMER that item 4 names.
@@ -5550,6 +5647,22 @@
 //      with the walker's triangles ORed into the live stream, would produce a
 //      picture and prove nothing.
 //
+//      -- ARENAWIRE, 2026-09-23. STILL TIED, for exactly the reason above,
+//      and I54's measurement makes it firmer rather than softer: the chunks
+//      the walk would follow cannot be built from the binner without a
+//      triangle identity that survives clip, so "it needs I54 first" is not
+//      an ordering preference but a correctness one.
+//
+//      ONE THING DID MOVE, AND IT IS WORTH THE LINE BECAUSE IT CHANGES WHAT
+//      A LATER PACKET INHERITS. `pub_valid` now REACHES the walker in the
+//      composed console: the arena takes the console's real frame end (see
+//      I56), so it publishes, so `walk_ready_o` is asserted for the first
+//      time outside the acceptance bench. What is tied is still `walk_valid_i`
+//      and `t_ready_i` -- who ASKS and who TAKES -- and offering a walk over
+//      an empty chunk region would burn ENGINE1 bandwidth to read zeros and
+//      count `chunks_stale_o`, which is a measurement of I54 rather than
+//      evidence about I55.
+//
 // I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
 //      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
 //
@@ -5566,15 +5679,40 @@
 //      all the staleness gate needs. It is not a console-wide frame identity
 //      and does not claim to be one.
 //
-//      THE FRAME END is `render_frame_begin_i` arriving while the arena
-//      cannot accept a seal. The console has no "the geometry producer has
-//      finished this frame" signal, and inventing one upstream is outside
-//      this packet's authority. The consequence: a frame is published one
-//      frame edge after it is built, so `publish_*` describes the PREVIOUS
-//      frame for the whole of the current one. For a two-view arena that is
-//      the intended shape -- the walker reads the view the producer is not
-//      writing -- but it is a consequence of a missing signal rather than a
-//      decision, and the difference matters to whoever supplies one.
+//      THE FRAME END was `render_frame_begin_i` arriving while the arena
+//      cannot accept a seal, on the grounds that "the console has no `the
+//      geometry producer has finished this frame` signal". THAT WAS NOT SO,
+//      AND IT IS CLOSED AS OF 2026-09-23 (ARENAWIRE).
+//
+//      `render_frame_end_i` IS THAT SIGNAL AND WAS ALREADY A CORE INPUT.
+//      It sits beside `render_frame_begin_i` at this module's RENDER edge, it
+//      is a ONE-CYCLE PULSE the bench raises once the last triangles have
+//      cleared GEOM.SETUP and the binner, and inside `u_shell` it already
+//      ends the frame for `zhao_geom_bin_pipe_v2`, `zhao_raster_fbwrite` and
+//      `zhao_post_lease`. Nothing was invented and nothing upstream changed;
+//      a signal that three blocks already treat as the frame's end was simply
+//      not offered to a fourth.
+//
+//      WHY IT IS SOUND FOR AN UPSTREAM TAP, stated rather than assumed from
+//      the name. The arena taps `zhao_geom_assemble`'s output, which is
+//      STRICTLY UPSTREAM of GEOM.CLIP -> GEOM.SETUP -> the bin pipe. A
+//      triangle the arena holds crossed the same handshake that feeds that
+//      chain, so at this edge the arena has seen everything the binner will
+//      see for this frame, and possibly more. Taking the downstream frame end
+//      for an upstream producer errs toward a LATER cut, which is the safe
+//      direction: it can only include records, never miss them.
+//
+//      THE MEASURED CONSEQUENCE. `frames_published_o` read 0 in the console
+//      smoke and the entry called that "a declared consequence, not a
+//      success" -- the frame never ended, so the publish path, the directory
+//      write and the walk were proven only by the acceptance bench. With the
+//      real edge the frame ends inside the smoke's own run, and the publish
+//      path is exercised by the composed console rather than beside it.
+//
+//      WHAT IS STILL OPEN HERE, and it is the FIRST half of this entry, not
+//      this one: R7's giant quota is NOT in force, because the seal is still
+//      the arena's own capacity. That waits on a Measure with somewhere to
+//      publish a number.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -7617,6 +7755,25 @@ module zhao_console_core
   //                          share BROADCASTS beat data and demuxes only
   //                          `beat_valid`, so this is what sees a wrong demux
   //                          delivering another client's bytes.
+  //   geom_pa_unaligned_o    ADDED 2026-09-23, and it is the one detector here
+  //   geom_pw_unaligned_o    whose SILENCE IN SIMULATION IS GUARANTEED
+  //                          WHATEVER THE DESIGN DOES. A JEDEC BL8 sequential
+  //                          burst wraps inside its aligned eight-column (16
+  //                          byte) block; `zhao_vram_arbiter` chops to
+  //                          min(rem, 8, row_tail) and so aligns only to the
+  //                          2048-word ROW; and the behavioural SDRAM model
+  //                          reads and writes LINEARLY. So a misaligned
+  //                          request is served CORRECTLY here and WRONGLY by
+  //                          the part, and no functional test in this tree can
+  //                          fail on it in either polarity. These two count
+  //                          the invariant instead: every clock either block
+  //                          offers the guard an address that is not a
+  //                          multiple of the quantum. The arena's is
+  //                          unreachable with legal stimulus and owes
+  //                          tests/mutants/zhao_geom_paramarena_align_mutant.sv;
+  //                          the walker's is reachable, because it is TOLD its
+  //                          bases on `pub_*_base_i` rather than computing
+  //                          them.
   //
   // Each of these is asserted ZERO by the smoke, and a counter asserted zero
   // is a claim. The ones reachable with legal stimulus are fired by
@@ -7637,6 +7794,7 @@ module zhao_console_core
   output logic [31:0] geom_pa_addrbad_o,
   output logic [31:0] geom_pa_scrcontend_o,
   output logic [31:0] geom_pa_retireunder_o,
+  output logic [31:0] geom_pa_unaligned_o,
   output logic [15:0] geom_pa_fault_src_o,
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
@@ -7653,6 +7811,7 @@ module zhao_console_core
   output logic [31:0] geom_pw_short_o,
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
+  output logic [31:0] geom_pw_unaligned_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -21959,7 +22118,26 @@ module zhao_console_core
       .seal_tris_i   (18'(GEOM_PA_MAX_TRIS)),
       .seal_chunks_i (18'(GEOM_PA_MAX_CHUNKS)),
       .frame_gen_i   (geom_pa_gen_q),
-      .frame_end_i   (geom_pa_frame_end_q),
+      // THE PRODUCER-FINISHED SIGNAL, AND IT ALREADY EXISTED. Entry I56 said
+      // "the console has no `the geometry producer has finished this frame`
+      // signal, and inventing one upstream is outside this packet's
+      // authority", and derived a frame end from the NEXT frame's begin edge
+      // instead -- so a frame published one frame late and `frames_published_o`
+      // read 0 in the smoke, which never plays a second frame.
+      // `render_frame_end_i` is that signal. It is a core INPUT, it is a
+      // one-cycle pulse, and inside `u_shell` it already closes the frame for
+      // `zhao_geom_bin_pipe_v2`, `zhao_raster_fbwrite` and `zhao_post_lease`.
+      // It is the console's own authority on "this frame's triangle submission
+      // has ended".
+      // AND IT IS SOUND FOR THIS BLOCK SPECIFICALLY, which is the part worth
+      // writing down rather than assuming from the name. The arena taps
+      // `zhao_geom_assemble`'s output, which is STRICTLY UPSTREAM of
+      // GEOM.CLIP -> GEOM.SETUP -> the bin pipe. A triangle the arena has
+      // taken crossed the same handshake that feeds that chain, so at this
+      // edge the arena has seen everything the binner will ever see for this
+      // frame and possibly more. Using the downstream frame end for an
+      // upstream tap is conservative in the safe direction.
+      .frame_end_i   (render_frame_end_i),
       .reader_busy_i (pw_busy),
 
       .pb_lease_valid_o   (pa_lease),
@@ -22027,6 +22205,7 @@ module zhao_console_core
       .view_flip_blocked_o (geom_pa_flipblock_o),
       .publish_blocked_o   (geom_pa_pubblock_o),
       .addr_view_bad_o     (geom_pa_addrbad_o),
+      .burst_unaligned_o   (geom_pa_unaligned_o),
       .scr_contend_o       (geom_pa_scrcontend_o),
       .retire_underflow_o  (geom_pa_retireunder_o),
       .fault_source_o      (geom_pa_fault_src_o),
@@ -22089,25 +22268,27 @@ module zhao_console_core
       .short_burst_o    (geom_pw_short_o),
       .stray_beat_o     (geom_pw_stray_o),
       .gen_race_o       (geom_pw_genrace_o),
+      .burst_unaligned_o(geom_pw_unaligned_o),
       .walk_depth_max_o (geom_pw_depth_o),
       .busy_o           (pw_busy)
   );
 
-  // THE FRAME GENERATION AND THE FRAME END. Both are this composition's, and
-  // both are declared as such: `geom_pa_gen_q` advances on every accepted
-  // seal so no two consecutive frames share a stamp, and `geom_pa_frame_end_q`
-  // closes the frame one cycle after the NEXT frame edge arrives -- the
-  // console has no "the producer has finished" signal today, and inventing one
-  // upstream is outside this packet's authority. The consequence is stated at
-  // entry I56 rather than left for somebody to measure.
+  // THE FRAME GENERATION IS THIS COMPOSITION'S AND IS DECLARED AS SUCH:
+  // `geom_pa_gen_q` advances on every ACCEPTED seal, so no two consecutive
+  // frames share a stamp, which is all the staleness gate needs. It is not a
+  // console-wide frame identity and does not claim to be one.
+  //
+  // THE FRAME END IS NO LONGER DERIVED HERE. It was `render_frame_begin_i &&
+  // !geom_pa_seal_ready_o` -- the NEXT frame's begin edge, arriving while the
+  // arena could not seal -- which published a frame one frame edge late and
+  // never published at all in a bench that plays one frame. The arena now
+  // takes `render_frame_end_i`, the console's own producer-finished pulse; the
+  // argument that it is the right edge for an UPSTREAM tap is at the port.
   logic [15:0] geom_pa_gen_q;
-  logic        geom_pa_frame_end_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       geom_pa_gen_q       <= 16'd1;
-      geom_pa_frame_end_q <= 1'b0;
     end else begin
-      geom_pa_frame_end_q <= render_frame_begin_i && !geom_pa_seal_ready_o;
       if (render_frame_begin_i && geom_pa_seal_ready_o)
         geom_pa_gen_q <= geom_pa_gen_q + 16'd1;
     end

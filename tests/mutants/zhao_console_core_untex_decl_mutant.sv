@@ -832,6 +832,25 @@ module zhao_console_core_untex_decl_mutant
   //                          share BROADCASTS beat data and demuxes only
   //                          `beat_valid`, so this is what sees a wrong demux
   //                          delivering another client's bytes.
+  //   geom_pa_unaligned_o    ADDED 2026-09-23, and it is the one detector here
+  //   geom_pw_unaligned_o    whose SILENCE IN SIMULATION IS GUARANTEED
+  //                          WHATEVER THE DESIGN DOES. A JEDEC BL8 sequential
+  //                          burst wraps inside its aligned eight-column (16
+  //                          byte) block; `zhao_vram_arbiter` chops to
+  //                          min(rem, 8, row_tail) and so aligns only to the
+  //                          2048-word ROW; and the behavioural SDRAM model
+  //                          reads and writes LINEARLY. So a misaligned
+  //                          request is served CORRECTLY here and WRONGLY by
+  //                          the part, and no functional test in this tree can
+  //                          fail on it in either polarity. These two count
+  //                          the invariant instead: every clock either block
+  //                          offers the guard an address that is not a
+  //                          multiple of the quantum. The arena's is
+  //                          unreachable with legal stimulus and owes
+  //                          tests/mutants/zhao_geom_paramarena_align_mutant.sv;
+  //                          the walker's is reachable, because it is TOLD its
+  //                          bases on `pub_*_base_i` rather than computing
+  //                          them.
   //
   // Each of these is asserted ZERO by the smoke, and a counter asserted zero
   // is a claim. The ones reachable with legal stimulus are fired by
@@ -852,6 +871,7 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0] geom_pa_addrbad_o,
   output logic [31:0] geom_pa_scrcontend_o,
   output logic [31:0] geom_pa_retireunder_o,
+  output logic [31:0] geom_pa_unaligned_o,
   output logic [15:0] geom_pa_fault_src_o,
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
@@ -868,6 +888,7 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0] geom_pw_short_o,
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
+  output logic [31:0] geom_pw_unaligned_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -877,7 +898,7 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0] geom_ws_unowned_o,
   output logic [31:0] geom_ws_retire_unowned_o,
   output logic [31:0] geom_ws_wbeat_unowned_o,
-  output logic        geom_ws_ledger_full_o,
+  output logic [31:0] geom_ws_ledger_full_o,
 
   output logic [31:0] geom_af_meshlets_fetched_o,
   output logic [31:0] geom_af_beats_read_o,
@@ -1855,10 +1876,13 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_groups_released_o,
   output logic [31:0]             terr_fills_forwarded_o,
   output logic [31:0]             terr_fills_dropped_o,
-  // ITEM 5 (owner ruling 2026-09-22, packet EDGERECON): jobs whose
-  // sparse-fill request was refused because this composition carries a
-  // dense-seal shell. Added to this WRAPPER because the real module gained
-  // it -- R220: fix the wrapper, never the module.
+  // ITEM 5 (owner ruling 2026-09-22): jobs whose sparse-fill request was
+  // refused because this composition carries a dense-seal shell. The job runs
+  // with a FULL fill and renders identically; this is the refusal, not a
+  // failure. FIRED by terrain_pipe_differential's fault control, which is the
+  // deliberately illegal combination the ruling says to retain -- it cannot be
+  // fired by the console smoke, which fails every terrain page's CRC so the
+  // compose door never opens (R95).
   output logic [31:0]             terr_sparse_refused_o,
   output logic [31:0]             terr_refs_forwarded_o,
   output logic [31:0]             terr_release_unsafe_o,

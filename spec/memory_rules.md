@@ -582,6 +582,65 @@ five `c_forward_pb_*` covers. Two committed mutants make it fail:
 `zhao_mem_guard_pbunion_mutant.sv` (the three containment tests collapse into
 their union).
 
+### THE BURST-ALIGNMENT LAW (ARENAWIRE, 2026-09-23) — PROVISIONAL, ONE LANE'S READING
+
+**A request to the local SDRAM should start at a byte address that is a
+multiple of 16.** This section had no alignment rule for the local SDRAM client
+ports at all, and `tests/geometry/geom_paramarena_directed.cpp` said so in
+terms while printing a warning it deliberately did not assert:
+*"The ruling is the owner's; what is reported here is the measurement."* This
+is the measurement written down. It is **not** an owner ruling and is marked
+provisional until one exists.
+
+**Why 16.** `zhao_sdram_ctrl` sets the mode register to **BL8 SEQUENTIAL**
+(`A[2:0]=011`, `A3=0`) and takes its column straight from the byte address —
+`waddr = req.addr[26:1]`, `req_col = waddr[10:0]` — so a column is one 16-bit
+word and the aligned eight-column block a JEDEC sequential burst wraps inside
+is **sixteen bytes**. `zhao_vram_arbiter.burst_words` chops a request into
+`min(remaining, 8, row_tail)` words, which aligns to the **2048-word row** and
+to nothing finer. A burst therefore wraps exactly when
+`(start_col mod 8) + words > 8`.
+
+**And the converse is what makes the law cheap.** If the request address is a
+multiple of 16 then `col mod 8 == 0`, so `row_tail` is a multiple of 8 and at
+least 8; every full burst is 8 words from an aligned column, and the tail burst
+is `rem < 8` words from an aligned column. **Neither can cross the block.** One
+condition on the address covers every length from 1 to 64 bytes and needs no
+change to the arbiter.
+
+**NO TEST IN THIS TREE CAN FAIL ON A BREACH.** `sim/models/zhao_sdram_model.sv`
+walks the column **linearly** and has no eight-column wrap to get wrong, so a
+misaligned request is served **correctly** in simulation and **wrongly** by the
+part. The model reads **better than the silicon** — the broken-instrument shape,
+in the flattering direction. That is why blocks **count the cause**
+(`burst_unaligned_o` on `zhao_geom_paramarena` and `zhao_geom_paramwalk`) rather
+than relying on a functional check, and why the counter owes a committed mutant:
+`tests/mutants/zhao_geom_paramarena_align_mutant.sv`.
+
+**It was already breached, on a live path.** `zhao_geom_paramarena`'s
+`TRI_OFF_B` was `MAX_VERTS * 24` = 1,572,840, which is **8 mod 16**, so every
+TriangleDescriptor the arena wrote — the record type with a live production
+producer — started at column 4 and wrapped. `reports/HANDOVER-20260919.md` 15.2
+recorded the divergence as waiting on entry I53; it was not waiting.
+
+**Three levers were named. The first is the one taken.** Round the sub-region
+bases up to the quantum (done, inside the producer, at most 15 bytes per
+region). **NOT taken:** splitting in `zhao_vram_arbiter` on 8-word boundaries
+rather than 8-word counts — that moves a bound `mem_vram_arbiter_liveness`
+asserts is **exact**. **Also not taken:** declaring the local SDRAM path
+linear-burst and teaching the model the same law, which would make the claim
+true by assertion rather than by construction.
+
+**Padding a request's LENGTH does not satisfy this rule.** The condition is on
+the START. A 24-byte record padded to 32 bytes at an address 8 mod 16 is
+exactly as wrapped as it was — that is the half-fix the handover warns
+"LOOKS fixed".
+
+**What this section does NOT claim.** No board measurement has been taken. This
+is arithmetic over two RTL files plus the JEDEC burst definition, by one lane,
+and the part's actual behaviour is unverified here. Blocks other than the two
+named above have **not** been audited against it.
+
 ## 5f. The shared render asset pool — Phase 3 / Packet E
 
 §5 promised that "later phases extend the map (texture/terrain/particle pools
