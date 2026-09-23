@@ -7132,3 +7132,91 @@ measurement. Quartus may already be duplicating the array itself, in which case
 the flops are not there and the finding is a documentation gap rather than an
 area one. **That is precisely what the receipt settles**, and it is why the
 question is written down before the number arrives rather than after.
+
+
+## THE RECEIPT — `@diag-incomplete-14gaps`, 2026-09-23. THE FIT FAILED, AND IT STILL ANSWERED THE QUESTION.
+
+**`status: incomplete:failed:quartus_fit.exe`, 8,030 s (2h14m).** Analysis &
+Synthesis **succeeded** at 09:09:43; the fitter then ran for two hours and
+**never produced an ALM count or an Fmax.** `partialStage:
+analysis_and_synthesis`.
+
+**THE PROVENANCE IS CLEAN, AND THIS IS THE FIRST CONSOLE ROW THAT CAN SAY SO.**
+`rtlCleanAtHead: true`, `treeCleanAtHead: true`, `sourceCommit 18231903`,
+`sourceDigest e3d1a29c7e66` over **258 hashed sources**. R80 demanded exactly
+that before either completion run, *"because the first-light row is
+`treeCleanAtHead: false`, so its digest describes nothing exactly."* This row
+describes a commit exactly.
+
+### LIKE FOR LIKE — same sizing device, same tool, the only honest comparison
+
+| | `console-core-first-light` | `@diag-incomplete-14gaps` | factor |
+|---|---|---|---|
+| status | `ok` | **`failed:quartus_fit.exe`** | |
+| **registers** | 56,031 | **381,585** | **6.8×** |
+| **DSP blocks** | 151 | **359** | **2.4×** |
+| **block memory bits** | 1,103,456 | **2,960,515** | **2.7×** |
+| ALMs | 47,582 | **never produced** | — |
+| Fmax | 18.5 MHz | **never produced** | — |
+| `treeCleanAtHead` | **false** | **true** | |
+
+### AGAINST THE TARGET, `5CSEBA6U23I7` — 41,910 ALM / 112 DSP / 553 M10K
+
+* **DSP: 359 against 112 — 320% of the target.** Measured, not derived.
+* **Memory: 2,960,515 bits against 553 × 10,240 = 5,662,720 — 52%. INSIDE, and
+  comfortably.** This is the one piece of good news on the page, and R242's move
+  of the deviation store to SDRAM is part of why.
+* **ALMs: not measured. But a FLOOR can be derived and it is brutal.** A
+  Cyclone V ALM carries **four registers**, so 381,585 registers need **at least
+  381,585 / 4 = 95,396 ALMs** — **228% of the target's 41,910 — before a single
+  LUT of combinational logic is counted.** Labelled DERIVED, not measured; it is
+  a lower bound and the true number can only be larger.
+
+**So the owner's prediction is now evidence rather than expectation.** *"It's
+likely the console as architected now will be impossible."* At minimum **2.3×
+over on ALMs from registers alone and 3.2× over on DSP** — and that is with
+**five subsystems still missing from the closure.**
+
+### THE NUMBERS ARE A FLOOR. Say it every time they are quoted.
+
+The 258 sources contain **none** of `zhao_terrain_normalmap`,
+`zhao_terrain_velocity`, `zhao_terrain_edgerecon`, `zhao_forge_shadow`,
+`zhao_forge_cliff_ram`, `zhao_geom_lodstate` or `zhao_geom_ladderbank`. The
+label says `incomplete` and names the gap count; **the direction is what the
+label does not say, and the direction is that every figure above reads LOW.**
+
+### WHAT THIS ROW DOES NOT SETTLE, and one of them is my own fault
+
+* **The placement failure's CAUSE is not recovered.** `run_block_fit.ps1` writes
+  its Quartus logs into a per-invocation workspace and removes it, so
+  `quartus_fit.exe.log` is gone. **Two hours of machine time produced a failure
+  whose error message no longer exists.** I will not guess between DSP
+  exhaustion and ALM/register pressure — both are plausible and the log would
+  have said. **The runner must preserve stage logs on failure; that is a
+  concrete tooling fix and it is the first thing to do before spending another
+  fit.**
+* **The named question is UNANSWERED.** I asked, before the receipt landed,
+  whether `zhao_texture_island_v3_top`'s per-owner arrays landed in M10K or
+  fabric. That needs the per-hierarchy map, which the fitter never produced. The
+  question stands and is now cheaper to ask than to re-fit.
+* **Nothing here is a timing statement.** First light's `gpu_clk` at 18.5 MHz
+  with −44 ns setup remains the only timing measurement, and R80 is right that
+  *"the number that will dominate the fixing is not area."*
+
+### WHAT TO DO WITH IT, in order
+
+1. **Attribute the 359 DSP without spending a fit.** `tools/budget/dsp_census.py`
+   exists for this. R80 records that its "SPECIFIED BUT NOT BUILT" list was
+   false — it excluded three blocks that exist — so **the pre-fit expectation
+   read LOW** and the census needs that repair checked before its total is
+   quoted. **151 → 359 is +208 DSP and something owns them.**
+2. **Preserve the fitter log** before the next attempt.
+3. **Then optimise against attribution, not against a total.** The owner's
+   standing direction is *"spend M10K to buy ALMs"*, and memory at 52% is the
+   slack that makes it possible.
+
+**R80's two-run plan still stands and this was run 2 of it — the MAP, on the
+sizing device.** It did not produce the map. **Run 1, the VERDICT on the target
+part, is now pointless to run**: a design needing ≥95,396 ALMs and 359 DSP
+cannot place on 41,910 ALMs and 112 DSP, and four hours would return one bit
+everybody can already derive from this page.
