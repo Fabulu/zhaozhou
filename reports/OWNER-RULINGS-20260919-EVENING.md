@@ -6725,3 +6725,72 @@ and FORGE.SHADOW and FORGE.CLIFF uncomposed.
 this fit**"* and recorded digest `e3d1a29c7e66`. **So merging lanes while it runs
 cannot corrupt it** — the CLAUDE.md live-tree trap does not apply to this
 runner's own closure. The pinned worktree was belt-and-braces.
+
+
+
+### WRITTEN BEFORE THE RECEIPT ARRIVES — HOW @diag-incomplete-14gaps MUST BE READ
+
+CLAUDE.md: *"when the fit comes back: write down where you were BEFORE reading
+it."* This is that note, and it is about the number rather than about the work
+in progress, because **the direction of this row's error is decidable now and
+will be much harder to argue after a concrete ALM figure is on the table.**
+
+**MEASURED, at HEAD, with the register run BARE: 14 gaps** — 9 tie-offs
+(I13, I20, I21, I34, I51, I53, I54, I55, I56) + 5 disconnected
+(`zhao_terrain_normalmap`, `zhao_terrain_velocity`, `zhao_terrain_edgerecon`,
+`zhao_forge_shadow`, `zhao_forge_cliff_ram`), 0 unbuilt, 0 uncited,
+0 unresolvable.
+
+**THE FIT'S CLOSURE WAS READ RATHER THAN ASSUMED.** The `zhao_console_core`
+target in `design/fit_targets.yml` declares **258 sources**, matching the
+runner's own *"snapshot: 258 source(s)"*. Searched for each disconnected block
+by name:
+
+| block | in the fitted closure |
+|---|---|
+| `zhao_forge_cliff` / `zhao_forge_cliff_ram` | **ABSENT** |
+| `zhao_forge_shadow` | **ABSENT** |
+| `zhao_terrain_normalmap` | **ABSENT** |
+| `zhao_terrain_velocity` | **ABSENT** |
+| `zhao_terrain_edgerecon` | **ABSENT** |
+| `zhao_geom_lodstate`, `zhao_geom_ladderbank` | **ABSENT** |
+
+**So this row measures a console with none of that silicon in it, and its ALM
+number is a FLOOR, not an estimate of the finished machine.** The label says
+`incomplete` and names the gap count, which is right; what the label does not
+say is the **direction**, and the direction is the whole risk. **A missing
+subsystem makes the number read LOW** — the flattering direction, the one
+CLAUDE.md says nobody audits. The failure mode is specific and easy to predict:
+*"the console came in at N, which is better than first light's 47,582"* — a
+sentence that would be true, comparing two different machines.
+
+**AND THE CONVERSE TRAP, because it is the one I nearly set myself.**
+`zhao_forge_cliff` is **7,664 ALM, 18.3% of the ALM budget**
+(`reports/BUDGET_HEATMAP.md:159`), and the ruling superseding R109 adopts the
+rival `zhao_forge_cliff_ram` — **fitted at 976 ALM on the actual target part**,
+smaller by a factor of six, *"plausibly the single largest lever in the tree."*
+It is one of the five disconnected, so closing it is **−1 on the register and a
+very large ALM saving at once**, and that is a real and important lever.
+
+**It is NOT a saving against this receipt.** Neither rival is in the closure, so
+the cliff contributes **zero** ALM to the number coming back. Quoting −6,688
+against it would be subtracting a block from a total that never contained it —
+the mismatched-comparison error, which this file already records twice. The
+saving is real against a **future** console that composes the cliff; against
+`@diag-incomplete-14gaps` it is zero.
+
+**What the row IS good for**, restated: the ALM count of the composed 258, the
+per-hierarchy map, DSP by owner, and the timing picture — on a **sizing** device
+(`5CEBA9F31C7`), so **its utilisation percentages are meaningless here** and only
+a row fitted on `5CSEBA6U23I7` may be cited for closure.
+
+**What was in progress when it was launched**, so it is not lost: the
+`check_guard_verdict` repair (**done** — RC 0 across 30 clients, arm-walker
+false-positive fixed with two fired positive controls, commit `f8cd2507`), then
+D-SDRAM-A verified at source (`925a4d25`) and D-NORMALS-A scoped (`61c96f69`).
+**Next, in order:** collect this receipt into `reports/synthesis/`, then the two
+R243 lanes as scoped above, then the FORGE.CLIFF adoption — whose two attached
+conditions (the four `Warning (276020)` pass-through insertions accounted for,
+and the bit-0 latch on `triangles_submitted_o` cleaned up) are **specific and
+already written down**, and whose ruling also asks for **a leaf fit of the
+GOLDEN `zhao_forge_cliff`** so the comparison stops being estimate-versus-fit.
