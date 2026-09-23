@@ -1615,3 +1615,55 @@ grep of an already-open file.
 **Lane closure VERIFIED rather than assumed:** no verilator, ctest, cmake or
 quartus process left, waiters exited. CLAUDE.md says stopping an agent does not
 stop its background work, so this was checked before merging.
+
+### 2026-09-23 — SHADOWRIDE closes the day: REGISTER 14 → 13, the first honest drop
+
+**Measured by me on the merged tree, bare: 13 gaps = 9 tie-offs + 4
+disconnected.** `gate_sweep` **RC 0, all 24 matching the committed baseline.**
+No lanes running, **zero** stray verilator/ctest/cmake/quartus/sby/yosys
+processes, tree clean, local == remote.
+
+**`zhao_forge_shadow` is COMPOSED END TO END** — ladderbank → lodstate (the
+fourth client-A arm at `OWNER_LOD = 2'd3`) → forge_shadow → fanindex → jobarb →
+the **shared** forge_assemble → clipdoor → material window → GEOM.CLIP. Riding
+the existing assembler removed a fifth client-A demand, a fourth clipdoor
+client, a second depthquant stream and a second 520-slot vertex store. **"Not a
+tie-off purchase: pixels change."**
+
+**IT CORRECTED TWO THINGS I HAD WRITTEN MYSELF, TWO HOURS EARLIER:**
+
+* **R89's alpha alone changes not one pixel**, though the contract calls it *"the
+  whole job"*. `zhao_raster_fragment` picks the blend from `s1_state_r[4:3]` — a
+  field of `tri_fragment_state_i`, **I20's OTHER open port** — and `BL_REPLACE`
+  is `acc = src_i`, so the product the alpha feeds is **computed and thrown
+  away**. **Both fields, or neither.**
+* **I51 was never a subsystem.** Its entry describes `zhao_raster_tile_pipe` —
+  **V1, not composed**. The composed `_v2` takes fragment state from **job
+  metadata**. The carriage exists; only a producer was missing. **Fifteenth
+  stale premise, and the second today I PASSED ON rather than caught.**
+
+**So one subsystem remains — TERRAIN.EDGERECON — not three.** §15.10 and §15.11
+updated.
+
+**R3's owed N=4 repeat is measured**, impossible before the fourth arm existed:
+four saturated arms, worst wait **7 against a bound of 8**.
+
+**And the instrument it would have been easiest to leave lying:**
+`owner_unroutable_o` went **structurally dead** when the fourth arm claimed the
+last owner code. The lane did not leave a tautological zero to be quoted later —
+it moved the positive control into a committed mutant and made the bench assert
+the correct behaviour.
+
+**Stated plainly by the lane:** the smoke **never publishes a CREATURE_FORM
+page**, so no hull is drawn — it proves elaboration and that nothing else moved,
+**not the shadow path**. And it is **NOT FITTED**; area changed.
+
+**ALSO FOUND, while verifying closure rather than by looking:** **96 lane
+worktrees, ~90 GB, nothing prunes them.** 93 fully merged; **not removed**,
+because worktrees hold deliberately-kept UNTRACKED files and `git worktree
+remove` guards only TRACKED ones. And **`dsf01/divider-fusion` has sat unmerged
+for six days** carrying a completed experiment: **−1,492 ALMs and 94.79 →
+101.49 MHz**, rejected on two hold paths the divider is not in, measured with
+**virtual pins**, in a configuration that **cannot produce physical ones** (344
+ports). **The verdict was right; the input to it has since changed** — the
+console is now measured at 330% of target.
