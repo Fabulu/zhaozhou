@@ -1129,10 +1129,29 @@
 //       field descriptor; nothing produces that descriptor yet. Velocity is
 //       out-lane 1 of the SAME evaluation whose out-lane 0 the height uses, so
 //       it is blocked by exactly what the height is blocked by.
-//     * TWO WALKERS OVER ONE PAGE. The block drives its own `vtx_vi_o`/
-//       `vtx_vj_o` by its own chosen law ("the block OWNS the sweep"), while
-//       TERRAIN.PAGESTREAM walks the lattice on its own schedule. Joining two
-//       address masters is a scheduler, and a composer may not write one.
+//       <-- SPENT 2026-09-23 (EARTHADAPT), and this bullet's own sentence is
+//       what makes the strike precise rather than convenient. Velocity IS
+//       out-lane 1 of the same evaluation, and that evaluation now happens:
+//       `u_field_earth_adapter` reads it on `velocity_o` and the console
+//       carries it as `efa_velocity`. The uniforms reach it from
+//       `zhao_cmd_exec`'s three previously-unread outputs. SO THE PRODUCER
+//       EXISTS AND IS COMPOSED. What follows is what remains, and neither of
+//       the two is "not built".
+//     * TWO WALKERS OVER ONE PAGE -- STILL THE REFUSAL, and re-measured
+//       2026-09-23 against the composed Earth datapath rather than inherited.
+//       The block drives its own `vtx_vi_o`/`vtx_vj_o` by its own chosen law
+//       V3 ("the block OWNS the sweep"), while TERRAIN.PAGESTREAM walks the
+//       lattice on its own schedule and `zhao_terrain_patch` consumes THAT
+//       walk. Joining two address masters is a scheduler, and a composer may
+//       not write one.
+//       WHAT THE EARTH ADAPTER CHANGES ABOUT THIS, precisely: nothing. The
+//       adapter answers the vertex the PATCH hands it, one lane at a time, in
+//       the patch's own order. TERRAIN.VELOCITY would have to be driven at the
+//       vertex IT asks for, and the only way to make those one walk is an
+//       interlock that starts its sweep from the patch job and holds both
+//       lanes together -- a scheduler, written by a composer, exactly as this
+//       bullet says. That interlock is buildable and it is NOT free, and the
+//       reason not to build it today is the next bullet rather than this one.
 //     * AND ITS OUTPUT HAS NO WRITER, which is NOT the same statement as the
 //       one that stood here and the difference is worth the correction.
 //
@@ -1153,6 +1172,18 @@
 //       belongs to whoever owns the VRAM page", and no client in this module
 //       writes that region. A destination without a writer is a smaller gap
 //       than a destination that does not exist, and it is a different job.
+//       AND IT IS THE DECIDING REFUSAL AS OF 2026-09-23, now that the producer
+//       argument has expired. Composing TERRAIN.VELOCITY today means building
+//       a two-master interlock, spending the area of a 33x33 sweep and a
+//       reducer, and then DISCARDING every word it produces, because `vv_*`
+//       has no writer and `moving_mask_o` is its own header's "PRODUCED, NEVER
+//       CONSUMED". That is a composition that moves this register and changes
+//       not one pixel, which is the trade packet TERRACOMPOSE refused for
+//       TERRAIN.NORMALMAP and the same refusal belongs here. The honest state
+//       is written down instead: velocity HAS a producer (`efa_velocity`), it
+//       has a ratified destination (`spec/memory_rules.md` 5b's
+//       TERRAIN.COMPOSED_VELOCITY at 0x056F_0000), and the VRAM writer between
+//       them is the job nobody has built.
 //       `moving_mask_o` remains honestly "PRODUCED, NEVER CONSUMED" -- the
 //       block's own chosen law V5 -- and that half is unchanged.
 //
@@ -4647,6 +4678,94 @@
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).
+//
+//      =====================================================================
+//      NARROWED AGAIN 2026-09-23 (EARTHADAPT). THE HEIGHT RETURN LANE HAS A
+//      PRODUCER. THE ENTRY IS STILL OPEN, AND THE REASON IS NOW A DIFFERENT
+//      ONE FROM THE ONE IT HAS CARRIED SINCE IT WAS WRITTEN.
+//
+//      `zhao_field_earth_adapter` is built and composed as
+//      `u_field_earth_adapter`, client 3 of the one `u_field_host`. Three more
+//      ports have LEFT this module's edge -- `terr_pt_fld_valid_i`,
+//      `_ready_o`, `_height_i` -- and ten evidence outputs (`fld_earth_*`)
+//      have arrived. THE THREE UNIFORM OUTPUTS `zhao_cmd_exec` HAS BEEN
+//      PUBLISHING TO NOBODY SINCE 2026-09-21 ARE READ: `tfld_start_tick_o`,
+//      `tfld_duration_o` and `tfld_params_o`, on the same handshake the field
+//      list takes, JOINED.
+//
+//      WHAT THE CONSOLE CAN NOW DO THAT IT COULD NOT, said plainly, because
+//      TERRACOMPOSE's test for a composition is whether it changes a pixel and
+//      not whether it moves this register. Before this commit a cartridge
+//      could issue TerrainField 0x0200, CMD.EXEC would lower it,
+//      `u_terrain_fieldlist` would seal and replay it, `u_terrain_patch` would
+//      accept it into its section 9.1 list and count it in `fields_active_o`
+//      -- AND THE GROUND WOULD NOT MOVE, because nothing in this console
+//      evaluated the program. The whole TerrainField path was a command that
+//      reached a list and stopped. It now reaches an evaluation and a height,
+//      and section 3.4's `live_top = max(compose_top + SUM field lanes, ...)`
+//      has a non-empty sum for the first time.
+//
+//      WHY IT DOES NOT CLOSE, AND THIS IS THE SENTENCE TO SHOW THE NEXT
+//      PACKET. Directive 20.8: "Route height, velocity, material and nav
+//      outputs from the same evaluation to their real owners. DO NOT CLOSE I34
+//      BY WIRING ONLY HEIGHT while declaring the other three channels present
+//      because they have spare bus bits."
+//
+//      THE FIRST HALF OF THAT SENTENCE IS NOW DONE AND THE SECOND HALF IS NOT,
+//      and the split is exactly where the work remains. The adapter produces
+//      ALL FOUR out-lanes from ONE evaluation -- `height_o`, `velocity_o`,
+//      `material_o`, `nav_cost_o`, ordinals 0..3 of field-ir 7.1's earth out
+//      record -- so the routing 20.8 commissions exists on the PRODUCER side.
+//      `zhao_terrain_patch` has an input for exactly one of them. Three of the
+//      four therefore have nowhere in this console to go, and they are OPEN at
+//      the instantiation and declared in the INCOMPLETE block rather than
+//      dropped, so the next packet finds the wires already named.
+//
+//      SO S5 IS STILL THE BLOCKER AND IT HAS NOT MOVED AN INCH -- but it is
+//      now the ONLY one, and it is a CONSUMER-side item. What closes this
+//      entry is directive 13.2's `zhao_terrain_patch_v2` owning four channels,
+//      not another producer. Every other recorded blocker on this entry is
+//      spent: S1 (the uniforms) spent 2026-09-21, S2 (the handle->hash map)
+//      spent by FIELDARM, S3 (the probes' promotion) spent 2026-09-20, the
+//      section 9.1 list intake closed by FIELDARM, and the evaluation itself
+//      closed here.
+//
+//      AND THE VELOCITY LANE HAS A REAL PRODUCER WITHOUT `zhao_terrain_
+//      velocity` BEING COMPOSED, which is a distinction worth keeping
+//      straight. `efa_velocity` is out-lane 1 of the same evaluation, on a
+//      named wire. TERRAIN.VELOCITY is NOT composed, for two reasons neither
+//      of which is "no producer" any more -- see the TERRAIN.VELOCITY note
+//      near the top of this header, corrected in the same commit.
+//
+//      THE COST, MEASURED AND NOT ARGUED. `zhao_field_host`'s front holds ONE
+//      point in flight, so a covered vertex-lane is order 80-100 clocks. A
+//      single field covering a whole 33x33 patch is therefore order 10^5
+//      clocks against the 10,416-clock allowance this entry records below.
+//      `fld_earth_stall_cycles_o` is that cost at the console's boundary, and
+//      it is the number that decides whether the FIELD-MAJOR machine
+//      (`zhao_terrain_field_walk` + `zhao_terrain_patch_acc`, both still
+//      `pending_compose`) has to be built before terrain fields run at frame
+//      rate. IT IS NOT A REASON TO WITHHOLD THIS BLOCK: with no TerrainField
+//      issued the list is empty, `fields_active_o` is 0, the lane is never
+//      raised and the adapter costs the frame nothing at all -- which is
+//      byte-for-byte this console's behaviour before it existed, and which is
+//      every smoke form.
+//
+//      TWO DEFECTS THE LINTER CAUGHT IN THE COMPOSITION AND THE SMOKE WOULD
+//      NOT HAVE, recorded because both were plausible-looking wrong terrain:
+//        * the adapter was first composed at `IN_LANES(13)`, its PROFILE's
+//          arity, against a host at 15. On a CONCATENATED four-client port
+//          that is a silent bit-slide across every client, not a width error
+//          on one. `run_console_core_smoke.ps1` passes `-Wno-fatal`, so the
+//          warning was printed and ignored; an explicit `-Wall` lint of the
+//          closure is what refused it.
+//        * `tick_i` was first wired to `core_tick_c`, which is `gpu_tick_o` --
+//          a ONE-BIT frame PULSE. The oracle's `frame_tick` is a COUNT
+//          compared against `cmd.start_tick`, and the 32-bit value is
+//          `gpu_tick_frame_id_o`. The pulse would have made `age` either 0 or
+//          1 forever and left every field permanently at the start of its
+//          span. Both names appear in this entry's own paragraph (2) below.
+//      =====================================================================
 //
 //      =====================================================================
 //      NARROWED 2026-09-22 (FIELDARM). THE SECTION 9.1 LIST INTAKE IS CLOSED,
