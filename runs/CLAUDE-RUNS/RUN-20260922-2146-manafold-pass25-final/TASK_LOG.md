@@ -99,3 +99,45 @@ Manafold pass 25, the FINAL pass. Three accepted mechanisms rolled out and tuned
   ~17 GB of .rgb intermediates under .tmp/ will fall due to the next pass's run.
 - NOT done, by instruction: the 22-subject publication bank, the encode, the
   merge, the deploy. The coordinator sends the review/publish packet.
+
+---
+
+### 2026-09-23 - RE-OPENED: the BACK-BALL packet (one targeted packet, Opus)
+
+The owner approved one more packet on item 3 after the rear-calm ladder proved
+to be the wrong lever. Report: **`P25-BACKBALL.md`** (supersedes
+`P25-IMPLEMENTATION.md` §3 on this item).
+
+- **Diagnosed first, with a committed probe.** `tools/reel/manafold_backball.cpp`
+  (`mback`, registered in `build-direct.sh`) decomposes the rear's posed-surface
+  motion by muting one authority at a time ON THE POSED RESULT. Findings:
+  the End swell's own position is the calmest back ball in the bank
+  (0.99 mm/sample, 65 % of it the socket following the breathing body);
+  90.3 % of its ORIENTATION is the rear rod aim; what an eye sees is carrier C
+  and the C->End rod, 81 % "the antenna's upstream life" with **no single
+  station over 9 %** because the chain is a travelling wave whose stations
+  CANCEL -- freezing station B alone costs the last rod +146 %.
+- **Hover was never the most violent rear in the bank.** Three clips shake C
+  harder. It is the only live clip where the BACK turns MORE than the FRONT
+  (1.08 against 0.39-0.99 everywhere else), on the long idle.
+- **Repair: a filter, not a gain.** `kBackBallDampPm` -- a centred zero-phase
+  moving average over the authored keys of stations A, B and C, run before the
+  closure is solved. Shipped at 700 pm / 21 keys on bake slot 0, chosen by eye
+  from a rendered ladder at native, 3x, 4x, 5x and 6x on both cameras.
+- **Scope, declared:** slot 0 is hover AND inspect, one bake under two cameras.
+  20 of 22 live subjects byte-identical FRAME BY FRAME (crackle included -- the
+  same choreography on the separate bake, the containment proof).
+  `ZHAO_U02_BACKBALL_DAMP_PM=0` reproduces the pass-25 bank bit for bit on 22/22.
+- **Gate:** mback `--gate`, two ceilings and two ART FLOORS, all three controls
+  fired (`--fail-undamped`, `--fail-window`, `--fail-dead`), the last reachable
+  with legal stimulus.
+- Matrix: `P25-BB-RECEIPTS/runmatrix_p25bb.sh`, one invocation, frozen copy.
+- Commits: `b743640c` (source). Evidence to follow.
+- **NOT done, by instruction:** the publication bank, the encode, the merge, the
+  deploy. The coordinator sends the review/publish packet.
+
+#### Where I was, written BEFORE reading the matrix
+- Source complete and pushed; report, receipts and looks written; every
+  by-eye judgement made and recorded.
+- NEXT AFTER THE MATRIX: read it, record the tally in `P25-BACKBALL.md` §4,
+  commit the evidence, push.

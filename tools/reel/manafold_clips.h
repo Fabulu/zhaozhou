@@ -1598,8 +1598,27 @@ inline zc::quat16 backball_window_mean(const std::vector<zc::quat16>& q,
   return acc;
 }
 
-/** Apply the damping to one freshly built clip. Call EXACTLY ONCE per clip and
- *  BEFORE finalize_rear_follow; every bank/gate/probe call site does. */
+/** Apply the damping to one freshly built clip.
+ *
+ *  ⚠ IT IS CALLED FROM INSIDE finalize_rear_follow, not beside it, and that is
+ *  a deliberate structural choice rather than tidiness. Six places build a clip
+ *  and finalize it -- the bank plus mnodule, mprobe, mjointpub, mqa and mspan --
+ *  and a damping applied at only one of them would give the gates a creature
+ *  the renderer does not draw. That is exactly the defect pass 24's reviewer
+ *  found in mbolt, where the gate held its own copy of the per-subject
+ *  lightning configuration and nothing bound it to the renderer's. Putting the
+ *  call where the closure is solved means the two cannot be configured apart:
+ *  a clip that is finalized is damped, and a clip that is not finalized is not
+ *  a production clip.
+ *
+ *  (It happens that all five gate call sites build slots 7, 11, 12, 13, 16 and
+ *  21 today, so every one of them is a no-op at the shipped table. "It is a
+ *  no-op today" is not a structure, which is why this is not left as a comment.)
+ *
+ *  It must therefore run EXACTLY ONCE per freshly built clip, which is
+ *  finalize_rear_follow's own pre-existing contract -- the copy below keeps the
+ *  filter from reading its own output WITHIN one pass, but a second call would
+ *  filter an already filtered track and widen the window silently. */
 inline void backball_damp(zc::Clip& c) {
   const int32_t pm = backball_damp_pm(c.slot_id);
   if (pm <= 0) return;  // the exact-off path: no arithmetic touches the clip
@@ -1638,6 +1657,14 @@ inline void finalize_rear_follow(zc::Clip& c) {
       c.quats.size() != static_cast<size_t>(c.frame_count) * kBoneCount ||
       c.deform.size() != c.frame_count)
     return;
+
+  // PASS 25 BACK-BALL PACKET. The rear stations are damped HERE, before the
+  // chain walk below, so HingeD re-aims and the socket re-solves against the
+  // damped chain -- damping after the closure would leave the arm aimed where
+  // carrier C no longer is. See backball_damp() for why it lives inside this
+  // function instead of beside its six call sites. Off on every slot but one,
+  // and off means an early return that touches no byte.
+  backball_damp(c);
 
   const int32_t socket_bind_x = fxu(kLoopTubeXMm);
   const int32_t socket_bind_y =

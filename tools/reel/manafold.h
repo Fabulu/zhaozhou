@@ -180,13 +180,11 @@ inline const zc::CreatureType& type() {
     // correct and which the owner has approved -- is bit-identical.
     bank.clips.push_back(build_hover_idle(kIdleFixedSlot));  // slot 23
 
-    // PASS 25 BACK-BALL PACKET: damp the rear stations BEFORE the closure is
-    // solved, so HingeD re-aims and the socket re-solves against the damped
-    // chain. Damping after finalize_rear_follow would leave the arm aimed at a
-    // place carrier C no longer is -- the pass-19 rear rip with a new cause.
-    // Off on every slot but one, and pm == 0 takes an early return that touches
-    // no byte. See backball_damp() and kBackBallDampClipPm.
-    for (zc::Clip& clip : bank.clips) backball_damp(clip);
+    // ⚠ PASS 25's BACK-BALL DAMPING IS NOT CALLED HERE, and its absence is the
+    // design. finalize_rear_follow calls backball_damp itself, as its first
+    // act, so the five gate/probe call sites that build and finalize their own
+    // clips cannot be configured differently from the renderer. A loop here as
+    // well would filter slot 0 twice. See backball_damp() in manafold_clips.h.
     // Direction 12: clip builders finish their body deformation samples after
     // authoring poses. Re-solve the rear socket/closure now, from that completed
     // sample, so the body, socket, return and committed probes share one state.

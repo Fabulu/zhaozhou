@@ -253,6 +253,30 @@ name in the matrix.
 
 ## 3. ITEM 3 — THE REAR-CALM LEVER: LADDERED, AND IT IS NOT THE LEVER
 
+> ⚠ **SUPERSEDED, 2026-09-23, by `P25-BACKBALL.md`.** The owner approved one
+> more targeted packet on this item. Everything below is still TRUE — the
+> rear-calm lever does not calm the back ball, and the "52×" was a category
+> error — but §3e's conclusion ("nothing short of lowering the antenna's
+> upstream life would calm it") is **wrong**, and the reason it is wrong is the
+> most useful finding either pass produced.
+>
+> A committed decomposition probe (`tools/reel/manafold_backball.cpp`) muted
+> every rear authority one at a time on the posed result and found that the
+> chain is a **travelling wave whose stations partially cancel** — freezing
+> station B alone makes the last rod move **146 % MORE**. That is why every
+> GAIN lever tried in four passes failed or backfired, including this one and
+> including "removing the knead dip makes C travel further". The complaint is a
+> FREQUENCY complaint, and it is answered by a **filter**: a centred zero-phase
+> moving average on three named stations, which calms carrier C's travel by
+> 30 % and its spin by 44 % while leaving the front ball's position untouched.
+>
+> It also found that the End swell — the thing this document and the codebase
+> both call "the back ball" — is the **calmest back ball in the bank** and is
+> not what the owner is looking at. See `P25-BACKBALL.md` §1.
+>
+> `kRearCarrierCalmPm` still ships unchanged at its authored value, and the
+> `e-item3` / `e-item3-live` legs below still hold.
+
 Laddered on Hover at **1000 / 800 / 700 / 600 / 500 / 420 / 300 / 150 / 0** —
 the whole range, ending with the knob switched fully off.
 
@@ -481,6 +505,14 @@ ladder.
 ---
 
 ## 7. EVIDENCE
+
+⚠ **The BACK-BALL packet that followed this report has its own evidence set:**
+`P25-BACKBALL.md`, `P25-BB-RECEIPTS/` and `P25-BB-LOOKS/`. Its matrix
+(`gate-matrix-backball.txt`) carries every leg below forward and supersedes
+`gate-matrix.txt` as the run's final gate record, and its
+`P25-BB-RECEIPTS/crcs-backball.txt` is the bank that ships. `crcs-ship.txt`
+below remains the EXACT-OFF reference that the packet's `e-bb-off` leg proves
+it can still reach, bit for bit, on all 22.
 
 | file | what it decides |
 |---|---|
