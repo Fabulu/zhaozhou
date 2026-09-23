@@ -1061,6 +1061,27 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_light_degenerate_count_o;
   logic [31:0]             terr_light_base_sat_o;
   logic [31:0]             terr_light_degen_mismatch_o;
+  // TERRAIN.UV's coordinate packet, added 2026-09-23. Declared here for the
+  // same reason the light's ports are: `.*` cannot bind what the bench does
+  // not declare. The smoke CANNOT exercise this lane -- every terrain page
+  // it plays fails its CRC, so no page becomes resident and terrain emits no
+  // triangle, so no reference ever reaches the lane. These nets prove the
+  // core still ELABORATES and still renders its 14 GEOMETRY triangles; the
+  // lane's own evidence is tests/terrain/terrain_uvlane_directed.cpp.
+  logic                    terr_uv_valid_o;
+  logic                    terr_uv_ready_i;
+  logic signed [31:0]      terr_uv_au_o;
+  logic signed [31:0]      terr_uv_av_o;
+  logic signed [31:0]      terr_uv_bu_o;
+  logic signed [31:0]      terr_uv_bv_o;
+  logic signed [31:0]      terr_uv_cu_o;
+  logic signed [31:0]      terr_uv_cv_o;
+  logic [15:0]             terr_uv_src_id_o;
+  logic [31:0]             terr_uv_refs_taken_o;
+  logic [31:0]             terr_uv_emitted_o;
+  logic [31:0]             terr_uv_stale_reads_o;
+  logic [31:0]             terr_uv_pitch_clamped_o;
+  logic [31:0]             terr_uv_pitch_illegal_o;
   // `post_gd_*` and `post_gg_*` ARE GONE, 2026-09-21 (owner ruling R195).
   // POST.GATHER, its R195 tag law and its plane store are composed inside the
   // core, so the gather planes are no longer nets this bench has to invent.
@@ -4199,6 +4220,7 @@ module tb_zhao_console_core_smoke
     // attribute store's (I46) -- see the store above.
     // R21: always take the terrain light (see its declaration).
     terr_light_ready_i = 1'b1;
+    terr_uv_ready_i    = 1'b1;
     render_frame_open_q = 1'b0;
     // The fourteen `geom_pose_*_i` initialisers that stood here are gone with
     // the ports: I29 closed and the decoder's source is `zhao_geom_bonesrc`,
@@ -5897,6 +5919,18 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- TERRAIN's TEXTURE COORDINATES, measured on the DUT's own edge ----
+    // This bench CAN reach this lane, and the entry that said otherwise was
+    // wrong: the terrain spine loads 3 pages with crc_fails=0 and replays 128
+    // triangles, which `SMOKE: terrlight` beside this line has been reporting
+    // all along. What the smoke canNOT do is check a coordinate against the
+    // oracle -- that is `tests/terrain/terrain_uvlane_directed.cpp`'s job, with
+    // two independent oracles. What it CAN do is show the lane taking real
+    // references in the composed machine under real backpressure, which is the
+    // difference between "it elaborates" and "the value traverses".
+    $display("SMOKE: terruv    refs_taken=%0d emitted=%0d stale=%0d pitch_clamped=%0d pitch_illegal=%0d",
+             terr_uv_refs_taken_o, terr_uv_emitted_o, terr_uv_stale_reads_o,
+             terr_uv_pitch_clamped_o, terr_uv_pitch_illegal_o);
     // ---- R21: TERRAIN's LIT NORMALS, measured on the DUT's own edge --------
     $display("SMOKE: terrlight refs_taken=%0d lights=%0d shaded=%0d normals=%0d stale=%0d degenerate=%0d sat=%0d degen_mismatch=%0d",
              terr_light_refs_taken_o, terr_light_emitted_o, terr_light_shaded_o,

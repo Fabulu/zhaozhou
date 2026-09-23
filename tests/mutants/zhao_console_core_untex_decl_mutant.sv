@@ -2090,6 +2090,23 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_light_degenerate_count_o,
   output logic [31:0]             terr_light_base_sat_o,
   output logic [31:0]             terr_light_degen_mismatch_o,
+  // TERRAIN.UV, added 2026-09-23. Wrapper parity only: `.*` cannot bind a
+  // port the wrapper does not declare, so the control would not elaborate.
+  // Ruling R220 -- fix the WRAPPER, never the module.
+  output logic                    terr_uv_valid_o,
+  input  logic                    terr_uv_ready_i,
+  output logic signed [31:0]      terr_uv_au_o,
+  output logic signed [31:0]      terr_uv_av_o,
+  output logic signed [31:0]      terr_uv_bu_o,
+  output logic signed [31:0]      terr_uv_bv_o,
+  output logic signed [31:0]      terr_uv_cu_o,
+  output logic signed [31:0]      terr_uv_cv_o,
+  output logic [15:0]             terr_uv_src_id_o,
+  output logic [31:0]             terr_uv_refs_taken_o,
+  output logic [31:0]             terr_uv_emitted_o,
+  output logic [31:0]             terr_uv_stale_reads_o,
+  output logic [31:0]             terr_uv_pitch_clamped_o,
+  output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 

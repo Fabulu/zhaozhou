@@ -2496,6 +2496,7 @@ targets:
       - fpga/rtl/common/zhao_qsq_bytemul.sv
       - fpga/rtl/terrain/zhao_terrain_shade.sv
       - fpga/rtl/terrain/zhao_terrain_lightlane.sv
+      - fpga/rtl/terrain/zhao_terrain_uvlane.sv
       - fpga/rtl/terrain/zhao_terrain_island_dir.sv
       - fpga/rtl/forge/zhao_forge_shadow.sv
       - fpga/rtl/mem/zhao_mem_upload.sv
@@ -2968,6 +2969,7 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_normals.sv
       - fpga/rtl/terrain/zhao_terrain_shade.sv
       - fpga/rtl/terrain/zhao_terrain_lightlane.sv
+      - fpga/rtl/terrain/zhao_terrain_uvlane.sv
       # Added 2026-09-19, packet P-GEOM. THREE blocks, each with a REAL
       # producer or a REAL consumer inside this closure and not one of them a
       # file added to make a count move:

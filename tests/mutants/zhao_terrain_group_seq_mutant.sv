@@ -291,6 +291,10 @@ module zhao_terrain_group_seq_mutant #(
     output wire               b_view_o,
     output wire [ARENA_W-1:0] b_arena_o,
     output wire [INDEX_W-1:0] b_index_o,
+    // REFRESHED 2026-09-23 (TERRAIN.UV): production gained this port, and
+    // zhao_terrain_pipe connects BOTH modules through one shared port list
+    // under `ifdef, so the copy needs it to elaborate at all.
+    output wire               b_surface_o,
     input  wire               fill_landed_i,   // the result port's valid
     input  wire [ARENA_W-1:0] fill_arena_i,    // ... and its rider's arena
 
@@ -447,6 +451,7 @@ module zhao_terrain_group_seq_mutant #(
   assign b_view_o  = slot_view_q[vs_q];
   assign b_arena_o = slot_arena_q[vs_q];
   assign b_index_o = INDEX_W'(t_vtx_index_i);
+  assign b_surface_o = j_surface;
 
   wire vtx_take_c = b_valid_o && b_ready_i;
   wire vtx_drop_c = vtx_here_c && skip_c;

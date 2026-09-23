@@ -7275,6 +7275,38 @@ add_test(NAME lint_terrain_lightlane
 set_tests_properties(lint_terrain_lightlane PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.UV (the terrain texture-coordinate law, terrain_rules 6.2/6.6)
+#
+# The frozen law checked TWO independent ways -- the shift itself, and the
+# placement algebra in which the pitch cancels -- because `zref` does not
+# export the law (it is inline in `draw_terrain`'s loop), so a driver that
+# replayed the same shift would be one implementation checking itself. Also
+# proves the arithmetic shift on NEGATIVE world coordinates, the oracle's
+# `top_shift < 0` clamp as a value AND as a counter, one tile period per cell
+# through `zref::terrain::mirror_texel`, and both refusal counters by stimulus.
+add_executable(test_terrain_uvlane_directed terrain/terrain_uvlane_directed.cpp)
+target_link_libraries(test_terrain_uvlane_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_uvlane_directed
+  PREFIX Vtb_terrain_uvlane
+  TOP_MODULE tb_terrain_uvlane
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_uvlane.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_uvlane.sv)
+add_test(NAME terrain_uvlane_directed COMMAND test_terrain_uvlane_directed)
+set_tests_properties(terrain_uvlane_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME terrain_uvlane_break_oracle
+         COMMAND test_terrain_uvlane_directed --break-oracle)
+set_tests_properties(terrain_uvlane_break_oracle PROPERTIES
+  LABELS "fast;nightly" WILL_FAIL TRUE TIMEOUT 600)
+
+add_test(NAME lint_terrain_uvlane
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_uvlane
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_uvlane.sv)
+set_tests_properties(lint_terrain_uvlane PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ---------------------------------------------------------------------------
 # TERRAIN.PATCH (phase 6, ZH-033)
 #
