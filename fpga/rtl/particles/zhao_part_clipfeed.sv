@@ -153,22 +153,52 @@
 //                    the same as relying on it.
 //
 // ---------------------------------------------------------------------------
-// WHAT THIS BLOCK DOES NOT CARRY, NAMED SO NOBODY READS IT AS AN OVERSIGHT
+// THE PASS-7 LAW NOW ENTERS HERE, AND THE PARAGRAPH THIS REPLACES WAS WRONG
+// ABOUT THE CONSOLE RATHER THAN ABOUT THE PARTICLE (PARTDEPTH, 2026-09-23)
 // ---------------------------------------------------------------------------
-// `zhao_part_expand.t_depth_test_o` (1) and `t_depth_write_o` (0) -- the pass-7
-// law -- do NOT enter here, and the reason is not particle-specific. In this
-// console the raster state word is `zhao_console_core.render_state_i`, a
-// BOUNDARY INPUT sampled per tile job at `zhao_raster_tile_pipe.job_state_i`.
-// There is no per-primitive route for it for ANY producer: GEOM.CLIP carries
-// `cull_mode` and consumes it internally, and nothing downstream of GEOM.SETUP
-// takes a depth mode from the triangle. Adding one is a field through
-// GEOM.CLIP, GEOM.SETUP, GEOM.BINNER and the shell door -- a subsystem, and a
-// change to blocks on the critical path of every triangle the console draws.
+// What stood here said `zhao_part_expand.t_depth_test_o` (1) and
+// `t_depth_write_o` (0) could not enter, because "the raster state word is
+// `zhao_console_core.render_state_i`, a BOUNDARY INPUT sampled per tile job at
+// `zhao_raster_tile_pipe.job_state_i`", so a port here "would have nowhere to
+// go". EVERY CLAUSE OF THAT NAMES THE V1 BLOCK. `zhao_raster_tile_pipe` is
+// superseded and is not in the console's closure; `zhao_raster_tile_pipe_v2`,
+// which is, takes the fragment state from the JOB METADATA --
+// `job_meta_i[377:346]`, packed by `zhao_geom_bin_pipe_v2` from the shell's
+// `tri_fragment_state_i` -- and hands it to `zhao_raster_fragment.frag_state_i`
+// to be decoded. `render_state_i` reaches a `^` reduction and nothing else.
 //
-// So a port here would have nowhere to go, which is a tie-off wearing a port's
-// clothes. The gap is DECLARED in `zhao_console_core`'s INCOMPLETE block
-// instead, where the completion register can see it. PART.EXPAND's two
-// boundary outputs are untouched and still leave the module.
+// So the per-primitive carrier EXISTS and is COMPOSED, and the door already has
+// the port: `zhao_geom_clipdoor.c_frag_state_i`, granted on the same beat as the
+// triangle and latched per span by `zhao_material_window`. The particle arm's
+// slice was the named constant `PART_FRAG_STATE` -- the frame default said out
+// loud -- and this block now supplies the two bits its producer actually owns.
+//
+// WHAT THIS BLOCK DECLARES AND WHAT IT DOES NOT. `zhao_raster_fragment`'s word
+// is 32 bits; PART.EXPAND declares TWO of them and nothing in this console
+// declares the other thirty for a particle. So the word is assembled as
+// `PART_FRAG_STATE_BASE` with bits [1:0] REPLACED by the producer's law --
+// never OR-ed, because an OR cannot clear a bit and would make the knob able to
+// silently overrule the producer. The base is a parameter so the thirty bits
+// with no producer stay the owner's, and an elaboration check refuses a base
+// that sets [1:0] rather than letting it lose an argument at runtime.
+//
+//   [0] Z_TEST_EN    = `p_depth_test_i`
+//   [1] Z_WRITE_DIS  = `!p_depth_write_i`   -- the word's bit is a DISABLE and
+//                      the producer's port is an ENABLE, which is the one place
+//                      a polarity can be got wrong, so it is written once here.
+//
+// AND THE LAW TRAVELS IN THE RING, WITH ITS PARTICLE. It would be cheaper to
+// read the two input bits combinationally at the emit, and it would be wrong in
+// the way this repository has been bitten by twice: the ring's head is a
+// particle accepted some clocks ago, so an input read at the emit is the law of
+// whatever PART.EXPAND is OFFERING then -- record A's geometry with record B's
+// state, and no counter in this block looks at the field that moved. The two
+// bits are therefore part of `tri_q`'s ONE RECORD at ONE INDEX, written by the
+// one enable that writes the corners. That they are constant 1 and 0 in this
+// console today is a fact about the current producer and not a licence.
+//
+// PART.EXPAND's two outputs remain boundary outputs of `zhao_console_core` as
+// well. A port is not a tie-off, and the board keeps its observability.
 //
 // Conservative SystemVerilog subset only; Quartus 17.0 syntax rules apply
 // (elaboration checks inside `initial begin ... end`, explicit generate, no
@@ -197,7 +227,15 @@ module zhao_part_clipfeed #(
     // AUTHORED, not derived. See the header: alpha is an art value, and the
     // cull mode is `draw_population`'s double-sided default stated as a knob.
     parameter int signed   PART_ALPHA     = 32'sd65536,  // 1.0, opaque
-    parameter logic [1:0]  PART_CULL_MODE = 2'd0         // CULL_NONE
+    parameter logic [1:0]  PART_CULL_MODE = 2'd0,        // CULL_NONE
+    // THE THIRTY BITS OF THE FRAGMENT STATE WORD THIS CONSOLE HAS NO PARTICLE
+    // PRODUCER FOR -- blend mode, alpha test, stencil, tag channel. Zero is
+    // `zhao_raster_fragment`'s "plain opaque write", the frame default every
+    // triangle here has always been drawn under, and it stays an editable knob
+    // because nothing in this block derives it. Bits [1:0] are NOT the owner's
+    // to set: they are PART.EXPAND's pass-7 law and the elaboration check below
+    // refuses a base that claims them.
+    parameter logic [31:0] PART_FRAG_STATE_BASE = 32'd0
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -217,6 +255,13 @@ module zhao_part_clipfeed #(
     input  var logic        [ 7:0] p_g_i,
     input  var logic        [ 7:0] p_b_i,
     input  var logic        [IDW-1:0] p_src_id_i,
+    // PART.EXPAND's PASS-7 LAW, on the same beat as the fan it belongs to.
+    // `zhao_part_expand.t_depth_test_o` and `t_depth_write_o`, which until this
+    // block took them were outputs of `zhao_console_core` with no consumer
+    // anywhere inside it. Both are ENABLES here; the word's bit [1] is a
+    // DISABLE, and the inversion happens once, at the assign.
+    input  var logic               p_depth_test_i,
+    input  var logic               p_depth_write_i,
 
     // ---- one GEOM.CLIPDOOR client -------------------------------------------
     output var logic                 o_valid_o,
@@ -238,6 +283,11 @@ module zhao_part_clipfeed #(
     output var logic [15:0]          o_material_id_o,
     output var logic [1:0]           o_material_mode_o,
     output var logic [7:0]           o_quality_tier_o,
+    // THE DOOR'S `c_frag_state_i` SLICE for this client. Assembled from
+    // `PART_FRAG_STATE_BASE` and the RING'S OWN copy of the accepted particle's
+    // law -- never from `p_depth_test_i` at the emit, which would be a later
+    // particle's state on this one's beat.
+    output var logic [31:0]          o_frag_state_o,
 
     // ---- evidence -----------------------------------------------------------
     // THE CENSUS PAIR, and it DISCRIMINATES (ruling R95): a ring that stopped
@@ -277,12 +327,22 @@ module zhao_part_clipfeed #(
              SLOTS, DQ_SLOTS);
     if ((SLOTS & (SLOTS - 1)) != 0)
       $fatal(1, "zhao_part_clipfeed: SLOTS (%0d) must be a power of two -- the pointers wrap on it", SLOTS);
+    // THE KNOB MAY NOT CLAIM THE PRODUCER'S TWO BITS. Caught at elaboration
+    // rather than silently overwritten at the assign, because a base that sets
+    // [1:0] is somebody expressing an intention this block is about to ignore.
+    if (PART_FRAG_STATE_BASE[1:0] != 2'd0)
+      $fatal(1, "zhao_part_clipfeed: PART_FRAG_STATE_BASE (%h) sets [1:0]; Z_TEST_EN and Z_WRITE_DIS are PART.EXPAND's pass-7 law, not a parameter",
+             PART_FRAG_STATE_BASE);
   end
   // synthesis translate_on
 
   localparam int unsigned SW  = $clog2(SLOTS);
   localparam int unsigned PW  = SW + 1;
-  localparam int unsigned TRIW = 6*21 + 24 + IDW;   // the fan, its colour, its id
+  // THE FAN, ITS COLOUR, ITS ID AND ITS PASS-7 LAW -- one record, one index,
+  // one write enable. The law's two bits sit at the BOTTOM so the corner
+  // extractions above stay anchored to `TRIW` and move with it.
+  localparam int unsigned LAWW = 2;
+  localparam int unsigned TRIW = 6*21 + 24 + IDW + LAWW;
 
   // A POLYGON PARTICLE HAS NO MATERIAL, BY LAW RATHER THAN BY CHOICE, so this
   // is a localparam and not a parameter: `draw_population`'s tris branch passes
@@ -441,17 +501,20 @@ module zhao_part_clipfeed #(
   // THE ONE PLACE THE PACKED RECORD'S OFFSETS APPEAR BESIDE THE PACK ORDER --
   // written from the top down in the same order as the write below, which is
   // the discipline `zhao_part_project` uses for its own two records.
-  //   [TRIW-1 -: 21] ax  ... six corners ... [39:16] rgb  [IDW-1:0] src_id
+  //   [TRIW-1 -: 21] ax ... six corners ... rgb ... src_id ... [1] ztest [0] zwdis
   wire signed [20:0] hd_ax_c = $signed(head_tri_c[TRIW-1   -: 21]);
   wire signed [20:0] hd_ay_c = $signed(head_tri_c[TRIW-22  -: 21]);
   wire signed [20:0] hd_bx_c = $signed(head_tri_c[TRIW-43  -: 21]);
   wire signed [20:0] hd_by_c = $signed(head_tri_c[TRIW-64  -: 21]);
   wire signed [20:0] hd_cx_c = $signed(head_tri_c[TRIW-85  -: 21]);
   wire signed [20:0] hd_cy_c = $signed(head_tri_c[TRIW-106 -: 21]);
-  wire        [ 7:0] hd_r_c  = head_tri_c[IDW+23 -: 8];
-  wire        [ 7:0] hd_g_c  = head_tri_c[IDW+15 -: 8];
-  wire        [ 7:0] hd_b_c  = head_tri_c[IDW+7  -: 8];
-  wire [IDW-1:0]     hd_id_c = head_tri_c[IDW-1:0];
+  wire        [ 7:0] hd_r_c  = head_tri_c[IDW+LAWW+23 -: 8];
+  wire        [ 7:0] hd_g_c  = head_tri_c[IDW+LAWW+15 -: 8];
+  wire        [ 7:0] hd_b_c  = head_tri_c[IDW+LAWW+7  -: 8];
+  wire [IDW-1:0]     hd_id_c = head_tri_c[IDW+LAWW-1 -: IDW];
+  // THE ACCEPTED PARTICLE'S OWN LAW, not the one being offered now.
+  wire               hd_ztest_c = head_tri_c[1];
+  wire               hd_zwdis_c = head_tri_c[0];
 
   // THE EXACT LEFT INVERSE of `zhao_raster_tile_pipe_v2::lit_unit8`, which is
   // `v[15:8]` saturating: `lit_unit8({16'd0, c, 8'd0}) == c` for all 256 bytes.
@@ -508,15 +571,23 @@ module zhao_part_clipfeed #(
   assign o_material_id_o   = 16'd0;
   assign o_material_mode_o = PART_MATERIAL_MODE_C;
   assign o_quality_tier_o  = 8'd0;
+  // THE PASS-7 LAW AT THE DOOR. The base's thirty upper bits, with [1:0]
+  // REPLACED -- not OR-ed -- by the record's own two. `draw_population`'s law
+  // is "test only, no write", so a particle declaring `depth_write = 0` sets
+  // the word's DISABLE bit; the polarity flip lives here and nowhere else.
+  assign o_frag_state_o = {PART_FRAG_STATE_BASE[31:2], hd_zwdis_c, hd_ztest_c};
 
   wire emit_c = o_valid_o && o_ready_i;
 
   // ==========================================================================
   // STATE
   // ==========================================================================
+  // The law is captured HERE, by the accept, beside the corners it belongs to.
+  // `!p_depth_write_i` is the word's Z_WRITE_DIS; `p_depth_test_i` is Z_TEST_EN.
   wire [TRIW-1:0] tri_wr_c = {p_ax_i[20:0], p_ay_i[20:0], p_bx_i[20:0],
                               p_by_i[20:0], p_cx_i[20:0], p_cy_i[20:0],
-                              p_r_i, p_g_i, p_b_i, p_src_id_i};
+                              p_r_i, p_g_i, p_b_i, p_src_id_i,
+                              p_depth_test_i, !p_depth_write_i};
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
