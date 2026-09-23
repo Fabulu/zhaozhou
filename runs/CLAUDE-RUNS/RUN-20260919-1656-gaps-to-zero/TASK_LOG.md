@@ -1500,3 +1500,70 @@ registers live *and* my pre-receipt question about the texture island's arrays.
 
 **`dsp_census.py` sees 42% of the DSP that is actually there.** That is the
 instrument this project budgets by.
+
+### 2026-09-23 — AFTER THE FIT: attribution, four levers, and three corrections I made to myself
+
+**The map report was already on disk.** `reports/synthesis/blockpaths/*.map.rpt`,
+20.3 MB, harvested at 09:09 by the runner's own *"HARVESTED WHATEVER HAPPENED"*
+block, `.gitignore`d by a **size** rule. I launched a `-MapOnly` run to
+regenerate it. **`git status` is not an inventory.**
+
+**It carried the ALM number the fitter never produced: 276,856 combinational
+ALUTs → ≥138,428 ALMs — 330% of the target and 122% of the SIZING device.** So
+the design does not fit the part it was measured on, on **logic** as well as DSP
+(359 against 342). **Logic, not flops, sets the floor.**
+
+**THE LEVERS** (HANDOVER §15.12 carries the ranked table):
+
+1. **`zhao_geom_drawjob.pal_q` — 98,304 bits in flops**, in a block with **zero
+   block memory bits**, under a comment reading *"Quartus infers M10K rather
+   than 98,304 flops."* **It names the exact number of the outcome it claims to
+   have avoided.** ~10 M10K.
+2. **`zhao_forge_assemble.pos_q/inv_q` — ~34,840 bits**, with **both** known
+   blockers in source: an async read at `:538` and an array reset at `:661`.
+3. **`zhao_geom_attrsetup` — 45 DSP in a 938-ALUT leaf.** **Downgraded to weak**
+   (below).
+4. **`zhao_raster_tile_pipe_v2` — 80 of the shell's 88 DSP**, unexamined. The
+   next DSP question.
+
+**And the reassuring half: it is NOT systemic.** Every other register-heavy
+block carries real block memory — `zhao_shell_top_v2` 571,114 bits against 4,920
+own flops. **Two files, not a habit.**
+
+**THE DIAGNOSTIC WORTH REUSING:** Quartus says *"uninferred due to …"* when it
+**considered** an array and refused. **It says nothing at all when the array
+never presented as a candidate** — `pal_q`, `pos_q`, `inv_q`. **Silence is the
+worse signal.**
+
+**THREE CORRECTIONS I MADE TO MYSELF:**
+
+* **The projector lever does not exist.** Three leaf rows at 33 DSP each, and
+  CLAUDE.md's uncashed cheque — but the console composes `zhao_proj_subsystem`,
+  **one** core. One grep.
+* **"90 DSP in two blocks" was 45.** `attrsetup` is a **child** of `attrpack` —
+  I summed a parent and its child on the page where I wrote *"hierarchical
+  totals, DO NOT SUM."*
+* **Lever 3 downgraded from strong to weak by a sweep meant to GENERALISE it.**
+  Nine other files carry the same wide-cast shape and cost **0–3 DSP**;
+  `quat2mat` has **nine** sites and uses **one**. Quartus prunes width as a
+  matter of course. Revised ~10 DSP, not ~27.
+
+**A NEAR-MISS, recorded not fixed away:** I mis-indexed the report's columns and
+read the reciprocal units at 104 and 120 DSP — which would have made them the
+dominant consumer. **The tell was that it did not reconcile:** 250 in one
+subtree plus the shell's 88 exceeds the console's own 359. **A number that
+cannot fit inside its own total is a parsing error.**
+
+**AND R80's MECHANISM WAS WRONG.** Two manifest rows said *"RTL not built"*
+about modules **inside the fitted closure**. Removing them changed **no number,
+byte for byte**. The census under-reads **150 against 359** because of **56
+unpriced rows, 28 with no fit target at all.**
+
+**TOOLING:** `run_block_fit.ps1` now **keeps stage logs when a run fails** — the
+failed fit deleted the only record of why. **Measured map-vs-fit price: 1,920 s
+against 8,030 s**, a factor of 4.2, so *"a map is minutes"* is wrong by an order
+of magnitude and briefs should say **~30 minutes**.
+
+**REPRODUCED:** `@diag-map-attrib` re-ran synthesis at the same digest and
+returned **identical** 381,585 registers and 359 DSP. **The first reproduced
+console measurement.** Workspace cleaned up after (529 MB); 747 GB free.
