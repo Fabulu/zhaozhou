@@ -797,6 +797,26 @@ be settled in one direction before anyone builds tooling on either reading.
 **NOT REPAIRED HERE, deliberately:** `design/blocks.yml` is shared and two lanes
 are live. 81 rows is lane work, and six of them need their authors.
 
+**CI STATE AT HEAD, MEASURED LOCALLY 2026-09-23 — and the ledger's red MOVED rather than stayed.**
+
+| job | at HEAD, measured here |
+|---|---|
+| `format + static analysis` | **clang-format is CLEAN — 680 files swept, 0 drift.** The 2026-09-22 failure was at an older commit. `cppcheck` is **not installed on this machine**, so its half is untested locally and CI pins 2.19.0 against a local 2.20.0 that D17 already records as giving a different answer. |
+| `npm tooling` | **still RC 1 — but on a different fault.** |
+| `cmake + ctest (fast)` | cancelled by the next push, every time. |
+
+**The ledger's failure moved from "cannot read the file" to "the file is
+readable and 25 rows are malformed", and that distinction is the whole point.**
+Before `1f9df385` it died on `YAMLParseError` before validating anything; now it
+validates and reports 81 schema errors. Same exit code, completely different
+statement. **"Still red" would be a true sentence that says the wrong thing** —
+the class this file keeps recording, where a number or a status is quoted
+without the question it answers.
+
+**So CI cannot go green until the 81 are triaged**, and that is now a nameable,
+bounded task rather than an opaque one: 19 blocks drifting, 6 incomplete rows,
+worst offenders listed above. **`abi:check` and `manifest:check` are RC 0.**
+
 **STILL OPEN AND IT IS AN OWNER CALL:** whether to stop cancelling the ctest
 job. Letting every push run the full suite costs runner minutes on the owner's
 account at exactly the push frequency this campaign generates; the alternative
