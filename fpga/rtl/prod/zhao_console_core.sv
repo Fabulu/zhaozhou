@@ -3726,7 +3726,96 @@
 //          over 256 admitted patches is ~1,280 extra 64-byte SDRAM reads per
 //          frame, ON TOP OF the identical ~1,280 the EMIT pass already spends.
 //          THAT BANDWIDTH, NOT AREA, IS WHAT DECIDES WHETHER THE WALKER IS
-//          AFFORDABLE, AND NOBODY HAS COSTED IT. Note also that R242 made
+//          AFFORDABLE.
+//
+//          >> COSTED 2026-09-23 (gz/edgeband). THE ~1,280 HOLDS AND IT IS NOT
+//          >> AN ESTIMATE: it is exactly 5 x 256. Derived twice -- by hand off
+//          >> the read FSM (R_HREQ is ONE history burst; R_STREAM re-enters
+//          >> R_DREQ at `r_ptr_q[1:0] == 3`, once per four of sixteen records,
+//          >> so 1 + 4 = 5) and by the COMMITTED test `terrain_lodpath_directed`
+//          >> case 8, which already asserts `rd1 + 5 == bursts_read_o`. Built
+//          >> and ran it: 472 checks, 0 failures. The slot footprint agrees
+//          >> from the layout side: 256 B deviations + 64 B history = 5 x 64.
+//          >>
+//          >> THE CONVERSION THE PROSE OMITS IS A FACTOR OF FOUR. Every
+//          >> bytes/frame figure in this tree is in 64-byte FABRIC requests.
+//          >> The SDRAM is a 16-BIT BUS with BURST_LENGTH 8
+//          >> (`zhao_sdram_params_pkg.sv` :38,:72), so one SDRAM burst is 16 B
+//          >> and `zhao_vram_arbiter.sv` :167 splits every 64-byte request into
+//          >> FOUR. A "1,280-burst" pass is 5,120 SDRAM bursts. At the ctrl's
+//          >> own cycle-exact grant-to-grant spans (`zhao_sdram_ctrl.sv` :30-31,
+//          >> read 12/15/18 hit/miss/conflict):
+//          >>
+//          >>   PREPARE = +80 KiB/frame = ~+4.9 MB/s at 60 Hz
+//          >>           = +61,440 grant-clocks (page-hit)   = +3.69% of frame
+//          >>           = +92,160 grant-clocks (conflict)   = +5.53% of frame
+//          >>
+//          >> against a frame of 1,666,666 SDRAM cycles (100 MHz / 60). SO THE
+//          >> BANDWIDTH GATE ON PACKET P2 IS LIFTED -- PREPARE IS AFFORDABLE.
+//          >>
+//          >> TWO THINGS SURVIVE THE COMFORTABLE ANSWER, and they are the
+//          >> reason this is not simply "there is headroom":
+//          >>
+//          >> (1) THE DENOMINATOR DOES NOT EXIST. The "Phase-0 bandwidth
+//          >>     matrix" that four documents cost themselves against is an
+//          >>     EMPTY DIRECTORY -- `reports/bandwidth/` is one 0-byte
+//          >>     `.gitkeep` from 2026-08-14, already called a phantom citation
+//          >>     by LANE2-TERRAIN-8KM.md :22-25 and DOCKET.md :2655. NO tool
+//          >>     under tools/ computed bandwidth until this packet wrote
+//          >>     `tools/budget/sdram_bandwidth.py`, and
+//          >>     `tests/memory/mem_bandwidth_budget.cpp` -- named like a budget
+//          >>     -- is a STARVATION test that never compares a total to a
+//          >>     ceiling, PREDATES R242 by five weeks, and models two clients,
+//          >>     neither of them terrain.
+//          >>
+//          >> (2) SUMMING THE DECLARED NUMERATORS FOR THE FIRST TIME PUTS THE
+//          >>     FRAME OVER, AND IT WAS OVER BEFORE PREPARE EXISTED. At
+//          >>     bank-conflict spans: 124.33% WITHOUT prepare, 129.86% with.
+//          >>     Dominated by TERRAIN bake (43.9%) and TERRAIN streaming
+//          >>     (41.0%) -- the two provisional ~41 MB/s figures LANE2 recorded
+//          >>     on 2026-09-03 as "nothing anywhere adds them". At page-hit
+//          >>     spans everything fits at 83.86%. Both big rows are self-
+//          >>     flagged "do not freeze" / "NOT COSTED" and nothing says the
+//          >>     two worst cases co-occur, so this is worst-on-worst, not a
+//          >>     prediction. ZH-004 closes that range, not more arithmetic.
+//          >>
+//          >> AND THE BINDING CONSTRAINT IS NOT BYTES. `zhao_mem_guard.sv`
+//          >> :591-594 passes `devstore_rd_ok`/`devstore_wr_ok` for
+//          >> ZHAO_CLIENT_TERRAIN_BUILD AND NO OTHER ARM, and ruling T3 makes
+//          >> client 6 BACKGROUND -- "served only when nothing else is pending,
+//          >> DEBUG included" (`zhao_vram_arbiter.sv` :33-41). ITS BUDGET IS
+//          >> THE IDLE RESIDUE, NOT A SHARE OF THE FRAME, so "3.69% of frame"
+//          >> invites exactly the wrong reading. Against the residue:
+//          >>
+//          >>                         page-hit            bank-conflict
+//          >>   residue              1,303,114            1,118,794
+//          >>   wants w/o PREPARE      972,640 (74.6%)    1,524,256 (136.2%)
+//          >>   wants w/  PREPARE    1,034,080 (79.4%)    1,616,416 (144.5%)
+//          >>
+//          >> PREPARE never breaks the frame and is never free. It DOUBLES the
+//          >> frame-critical read demand on the one client ruled first to
+//          >> starve -- which `spec/memory_rules.md` :396-402 already predicted
+//          >> ("the record READ is frame-critical ... a frame whose page loads
+//          >> saturate the socket therefore DELAYS LOD decisions") and already
+//          >> named the instrument for: `rd_wait_clocks_o`.
+//          >>
+//          >> SO P2 CARRIES TWO THINGS INSTEAD OF THE GATE:
+//          >>   * BUDGET `rd_wait_clocks_o`, NOT BURSTS. Case 8's 660 clocks
+//          >>     for 11 patch reads is 12 clocks per 64-byte burst ON A PLAYED
+//          >>     FABRIC AT 2-CYCLE READ LATENCY (`design/blocks.yml` :2613).
+//          >>     A real request is four SDRAM bursts at 12-18, so the honest
+//          >>     figure is 48-72 and that bench floor understates by 4-6x.
+//          >>     DO NOT QUOTE 660 AS THE COST OF ANYTHING.
+//          >>   * SUPPRESS THE R_HWR HISTORY WRITEBACK, which is NEW and is a
+//          >>     CORRECTNESS defect rather than a cost. A PREPARE teed off
+//          >>     `r_start_i` inherits R_HWR, so it writes each patch's history
+//          >>     row back a SECOND time per frame -- and EMIT, which reads
+//          >>     history at R_HREQ BEFORE its own LOD runs, then reads
+//          >>     PREPARE's write as "the PREVIOUS frame's" level. A crack with
+//          >>     every counter balancing, same family as blocker (C) below,
+//          >>     and it belongs beside P3's governor freeze.
+//
+//          Note also that R242 made
 //          devstore's `w_ready_o` FALL during a burst; ~:17273 of this file
 //          records that same change silently making a histogram count one
 //          record 86 times. A walker joining against that ready inherits it.
