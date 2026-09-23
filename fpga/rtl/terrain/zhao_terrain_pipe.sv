@@ -397,6 +397,13 @@ module zhao_terrain_pipe #(
       .b_view_o         (b_view),
       .b_arena_o        (b_arena),
       .b_index_o        (b_index),
+      // TERRAIN.UV's operand. This pipeline composes the projector and the
+      // arena shell and holds no coordinate lane, so the class is not
+      // consumed HERE; `zhao_console_core` takes it into
+      // `zhao_terrain_uvlane`. Left open deliberately rather than tied.
+      /* verilator lint_off PINCONNECTEMPTY */
+      .b_surface_o      (),
+      /* verilator lint_on PINCONNECTEMPTY */
       .fill_landed_i    (fill_landed),
       .fill_arena_i     (fill_arena),
       .open_o           (open_v),

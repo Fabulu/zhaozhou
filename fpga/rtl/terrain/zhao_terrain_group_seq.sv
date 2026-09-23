@@ -264,6 +264,14 @@ module zhao_terrain_group_seq #(
     output wire               b_view_o,
     output wire [ARENA_W-1:0] b_arena_o,
     output wire [INDEX_W-1:0] b_index_o,
+    // The SURFACE CLASS of the job this vertex belongs to (0 = top,
+    // 1 = underside), for TERRAIN.UV: terrain_rules 6.2 shifts the top
+    // surface by the island pitch and 6.6 shifts the underside by STRATA_M,
+    // so a coordinate producer needs the class ON THE VERTEX'S OWN BEAT.
+    // `b_valid_o` only fires in StFill of the current job, so this is that
+    // job's surface by construction rather than a wire read at replay --
+    // which would pair a vertex with whatever job happened to be open then.
+    output wire               b_surface_o,
     input  wire               fill_landed_i,   // the result port's valid
     input  wire [ARENA_W-1:0] fill_arena_i,    // ... and its rider's arena
 
@@ -420,6 +428,7 @@ module zhao_terrain_group_seq #(
   assign b_view_o  = slot_view_q[vs_q];
   assign b_arena_o = slot_arena_q[vs_q];
   assign b_index_o = INDEX_W'(t_vtx_index_i);
+  assign b_surface_o = j_surface;
 
   wire vtx_take_c = b_valid_o && b_ready_i;
   wire vtx_drop_c = vtx_here_c && skip_c;

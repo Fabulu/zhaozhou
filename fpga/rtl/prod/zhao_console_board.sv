@@ -2557,6 +2557,39 @@ module zhao_console_board
   output logic [31:0]             terr_light_degenerate_count_o,
   output logic [31:0]             terr_light_base_sat_o,
   output logic [31:0]             terr_light_degen_mismatch_o,
+
+  // ---- TERRAIN's TEXTURE COORDINATES: the per-corner u/v (terrain_rules 6.2)
+  // The OTHER half of the same packet, and the same kind of thing as the light
+  // above: a per-vertex quantity the projected arena does not carry, stored
+  // beside it on the projector's own fill beat and replayed with the triangle
+  // it belongs to, tagged with the same `src_id`. Entry I13 named terrain's
+  // u/v as one of the three CARRIAGE items blocking the textured profile and
+  // said the law "is FROZEN and computable" -- this is that law, produced.
+  // Q16.16 TILE units, which is exactly what `zhao_texture_mosaic_v2`'s
+  // `req_u_i`/`req_v_i` declare.
+  //
+  // THE CONSUMER IS THE SAME ABSENT ONE THE LIGHT WAITS FOR, and this edge
+  // says so rather than implying it: GEOM.CLIP's attribute slots 1 and 2 want
+  // u/w and v/w, so the multiply by invw belongs with terrain's `invw24`
+  // producer -- a fourth `zhao_geom_depthquant_stream` client and a `pack_attr`
+  // analogue -- which is I13's next link and is NOT built. These ports are the
+  // arrival point of that work, not a tie-off: the value is real, it traverses,
+  // and `tests/terrain/terrain_uvlane_directed.cpp` proves it against the
+  // frozen law two independent ways.
+  output logic                    terr_uv_valid_o,
+  input  logic                    terr_uv_ready_i,
+  output logic signed [31:0]      terr_uv_au_o,
+  output logic signed [31:0]      terr_uv_av_o,
+  output logic signed [31:0]      terr_uv_bu_o,
+  output logic signed [31:0]      terr_uv_bv_o,
+  output logic signed [31:0]      terr_uv_cu_o,
+  output logic signed [31:0]      terr_uv_cv_o,
+  output logic [15:0]             terr_uv_src_id_o,
+  output logic [31:0]             terr_uv_refs_taken_o,
+  output logic [31:0]             terr_uv_emitted_o,
+  output logic [31:0]             terr_uv_stale_reads_o,
+  output logic [31:0]             terr_uv_pitch_clamped_o,
+  output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -5084,6 +5117,20 @@ module zhao_console_board
       .terr_light_degenerate_count_o      (terr_light_degenerate_count_o),
       .terr_light_base_sat_o              (terr_light_base_sat_o),
       .terr_light_degen_mismatch_o        (terr_light_degen_mismatch_o),
+      .terr_uv_valid_o                    (terr_uv_valid_o),
+      .terr_uv_ready_i                    (terr_uv_ready_i),
+      .terr_uv_au_o                       (terr_uv_au_o),
+      .terr_uv_av_o                       (terr_uv_av_o),
+      .terr_uv_bu_o                       (terr_uv_bu_o),
+      .terr_uv_bv_o                       (terr_uv_bv_o),
+      .terr_uv_cu_o                       (terr_uv_cu_o),
+      .terr_uv_cv_o                       (terr_uv_cv_o),
+      .terr_uv_src_id_o                   (terr_uv_src_id_o),
+      .terr_uv_refs_taken_o               (terr_uv_refs_taken_o),
+      .terr_uv_emitted_o                  (terr_uv_emitted_o),
+      .terr_uv_stale_reads_o              (terr_uv_stale_reads_o),
+      .terr_uv_pitch_clamped_o            (terr_uv_pitch_clamped_o),
+      .terr_uv_pitch_illegal_o            (terr_uv_pitch_illegal_o),
       .proj_contended_o                   (proj_contended_o),
       .proj_mat_refused_o                 (proj_mat_refused_o),
       .post_busy_o                        (post_busy_o),

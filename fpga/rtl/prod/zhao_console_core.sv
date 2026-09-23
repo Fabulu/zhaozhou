@@ -9447,6 +9447,39 @@ module zhao_console_core
   output logic [31:0]             terr_light_degenerate_count_o,
   output logic [31:0]             terr_light_base_sat_o,
   output logic [31:0]             terr_light_degen_mismatch_o,
+
+  // ---- TERRAIN's TEXTURE COORDINATES: the per-corner u/v (terrain_rules 6.2)
+  // The OTHER half of the same packet, and the same kind of thing as the light
+  // above: a per-vertex quantity the projected arena does not carry, stored
+  // beside it on the projector's own fill beat and replayed with the triangle
+  // it belongs to, tagged with the same `src_id`. Entry I13 named terrain's
+  // u/v as one of the three CARRIAGE items blocking the textured profile and
+  // said the law "is FROZEN and computable" -- this is that law, produced.
+  // Q16.16 TILE units, which is exactly what `zhao_texture_mosaic_v2`'s
+  // `req_u_i`/`req_v_i` declare.
+  //
+  // THE CONSUMER IS THE SAME ABSENT ONE THE LIGHT WAITS FOR, and this edge
+  // says so rather than implying it: GEOM.CLIP's attribute slots 1 and 2 want
+  // u/w and v/w, so the multiply by invw belongs with terrain's `invw24`
+  // producer -- a fourth `zhao_geom_depthquant_stream` client and a `pack_attr`
+  // analogue -- which is I13's next link and is NOT built. These ports are the
+  // arrival point of that work, not a tie-off: the value is real, it traverses,
+  // and `tests/terrain/terrain_uvlane_directed.cpp` proves it against the
+  // frozen law two independent ways.
+  output logic                    terr_uv_valid_o,
+  input  logic                    terr_uv_ready_i,
+  output logic signed [31:0]      terr_uv_au_o,
+  output logic signed [31:0]      terr_uv_av_o,
+  output logic signed [31:0]      terr_uv_bu_o,
+  output logic signed [31:0]      terr_uv_bv_o,
+  output logic signed [31:0]      terr_uv_cu_o,
+  output logic signed [31:0]      terr_uv_cv_o,
+  output logic [15:0]             terr_uv_src_id_o,
+  output logic [31:0]             terr_uv_refs_taken_o,
+  output logic [31:0]             terr_uv_emitted_o,
+  output logic [31:0]             terr_uv_stale_reads_o,
+  output logic [31:0]             terr_uv_pitch_clamped_o,
+  output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -14973,6 +15006,9 @@ module zhao_console_core
   // wiring below is `zhao_terrain_pipe`'s, seam for seam.
   // ==========================================================================
   wire                      ts_b_valid, ts_b_ready, ts_b_view;
+  // The surface class of the job the offered vertex belongs to, for TERRAIN.UV.
+  // Taken from the sequencer on the vertex's OWN beat, never read at replay.
+  wire                      ts_b_surface;
   wire signed [31:0]        ts_b_vx, ts_b_vy, ts_b_vz;
   wire [PROJ_T_ARENA_W-1:0] ts_b_arena, ts_fill_arena, ts_open_arena, ts_seal_arena;
   wire [PROJ_T_INDEX_W-1:0] ts_b_index;
@@ -14997,10 +15033,26 @@ module zhao_console_core
   // ITS OWN VALID: `tl_r_ready` is `st_q == S_IDLE` in the lane, a register,
   // and the shell's is its own arena state -- so nothing here closes a
   // combinational loop.
-  wire                      ps_r_ready, tl_r_ready;
-  wire                      ps_r_valid_c = ts_r_valid && tl_r_ready;
-  wire                      tl_r_valid_c = ts_r_valid && ps_r_ready;
-  assign ts_r_ready = ps_r_ready && tl_r_ready;
+  //
+  // EXTENDED TO THREE, 2026-09-23 (TERRAIN.UV). The rendezvous above is now a
+  // three-way one: the replay shell, the light lane and the coordinate lane
+  // all take the SAME reference on the SAME clock. The rule the two-way
+  // version established is preserved EXACTLY and is the whole reason this is
+  // safe -- each consumer's VALID is gated on EVERY OTHER consumer's READY,
+  // never on the raw `ts_r_valid`. Gating on the raw valid is precisely the
+  // defect measured above (128 triangles replayed 18,244 times, output
+  // identical every time, visible only to a counter), and a third client makes
+  // that failure easier to reach, not harder.
+  //
+  // Still no combinational loop, for the same reason and now checked for the
+  // third: `tu_r_ready` is `st_q == S_IDLE` inside `zhao_terrain_uvlane` -- a
+  // register, and one that does not read its own valid, exactly like
+  // `tl_r_ready`.
+  wire                      ps_r_ready, tl_r_ready, tu_r_ready;
+  wire                      ps_r_valid_c = ts_r_valid && tl_r_ready && tu_r_ready;
+  wire                      tl_r_valid_c = ts_r_valid && ps_r_ready && tu_r_ready;
+  wire                      tu_r_valid_c = ts_r_valid && ps_r_ready && tl_r_ready;
+  assign ts_r_ready = ps_r_ready && tl_r_ready && tu_r_ready;
   wire [PROJ_T_ARENA_W-1:0] ts_r_arena;
   wire [GEOM_GEN_W-1:0]     ts_r_gen;
   wire [PROJ_T_INDEX_W-1:0] ts_r_ia, ts_r_ib, ts_r_ic;
@@ -15778,6 +15830,7 @@ module zhao_console_core
     .b_view_o     (ts_b_view),
     .b_arena_o    (ts_b_arena),
     .b_index_o    (ts_b_index),
+    .b_surface_o  (ts_b_surface),
     .fill_landed_i(ts_fill_landed),
     .fill_arena_i (ts_fill_arena),
 
@@ -16146,6 +16199,90 @@ module zhao_console_core
     .degen_mismatch_o   (terr_light_degen_mismatch_o),
     /* verilator lint_off PINCONNECTEMPTY */
     .idle_o             ()
+    /* verilator lint_on PINCONNECTEMPTY */
+  );
+
+  // ==========================================================================
+  // TERRAIN.UV -- the terrain texture-coordinate law (composed 2026-09-23)
+  // ==========================================================================
+  // The light lane's twin, and deliberately so: the same store shape beside
+  // the same arena, keyed by the same {arena, index}, written on the same fill
+  // beat, generation-checked the same way, and joined to the same reference
+  // stream. It produces terrain_rules 6.2/6.6's u/v in Q16.16 tile units.
+  //
+  // WHAT MAKES THIS A COMPOSITION AND NOT A TIE-OFF: every input is a REAL
+  // producer that is live in this file today.
+  //   * the fill beat is `ts_b_*` -- client B's accepted vertex, the same
+  //     handshake that writes the projector's arena;
+  //   * the SURFACE class is `ts_b_surface`, the sequencer's own job surface on
+  //     the vertex's own beat. It was a DANGLING wire before today: the tess
+  //     drove `vtx_surface_o`/`ref_surface_o`/`surface_o` and nothing in this
+  //     file read any of them;
+  //   * the PITCH is `ptt_pitch_c` -- the HELD pitch, loaded on TERRAIN.
+  //     HDRREAD's valid handshake and only when it is a legal spec-1.3 value.
+  //     NOT `thr_h_pitch_log2`, which is `HDR_PITCH_REFUSE` (127) on nearly
+  //     every cycle; the tap's own paragraph above explains why the literal
+  //     wiring LINTS CLEAN AND IS WRONG, and this lane takes the same held
+  //     value from the same source of truth rather than re-deriving it.
+  //
+  // WHAT IT DOES NOT YET REACH is stated plainly at the port group: GEOM.CLIP
+  // wants u/w and v/w, so terrain's `invw24` producer and a `pack_attr`
+  // analogue stand between these coordinates and the door. That is I13's next
+  // link.
+  zhao_terrain_uvlane #(
+    .ARENAS (PROJ_T_ARENAS),
+    .DEPTH  (PROJ_T_DEPTH),
+    .GEN_W  (GEOM_GEN_W),
+    .SRCW   (16)
+  ) u_terrain_uvlane (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the same fill beat the arena and the light lane take.
+    .fill_valid_i  (ts_b_valid),
+    .fill_ready_i  (ts_b_ready),
+    .fill_arena_i  (ts_b_arena),
+    .fill_index_i  (ts_b_index),
+    .fill_vx_i     (ts_b_vx),
+    .fill_vz_i     (ts_b_vz),
+    .fill_surface_i(ts_b_surface),
+
+    // REAL: the island's placed pitch, held on the header handshake.
+    .pitch_log2_i  (ptt_pitch_c),
+
+    // REAL: the arena's lifetime, from the same sequencer and the same shell.
+    .open_i      (ts_open),
+    .open_arena_i(ts_open_arena),
+    .open_gen_i  (ts_open_gen),
+
+    // REAL: the reference stream, three-way joined with the replay and the light.
+    .ref_valid_i (tu_r_valid_c),
+    .ref_ready_o (tu_r_ready),
+    .ref_arena_i (ts_r_arena),
+    .ref_gen_i   (ts_r_gen),
+    .ref_ia_i    (ts_r_ia),
+    .ref_ib_i    (ts_r_ib),
+    .ref_ic_i    (ts_r_ic),
+    .ref_src_id_i(ts_r_src_id),
+
+    // I13: the coordinates leave with the triangle they belong to.
+    .uv_valid_o  (terr_uv_valid_o),
+    .uv_ready_i  (terr_uv_ready_i),
+    .uv_au_o     (terr_uv_au_o),
+    .uv_av_o     (terr_uv_av_o),
+    .uv_bu_o     (terr_uv_bu_o),
+    .uv_bv_o     (terr_uv_bv_o),
+    .uv_cu_o     (terr_uv_cu_o),
+    .uv_cv_o     (terr_uv_cv_o),
+    .uv_src_id_o (terr_uv_src_id_o),
+
+    .refs_taken_o   (terr_uv_refs_taken_o),
+    .uvs_emitted_o  (terr_uv_emitted_o),
+    .stale_reads_o  (terr_uv_stale_reads_o),
+    .pitch_clamped_o(terr_uv_pitch_clamped_o),
+    .pitch_illegal_o(terr_uv_pitch_illegal_o),
+    /* verilator lint_off PINCONNECTEMPTY */
+    .idle_o         ()
     /* verilator lint_on PINCONNECTEMPTY */
   );
 
