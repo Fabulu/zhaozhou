@@ -1680,6 +1680,11 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             fld_earth_not_begun_o,
   output logic [31:0]             fld_earth_noprog_o,
   output logic [31:0]             fld_earth_faults_o,
+  // NEW 2026-09-23 (PATCHV2). This wrapper binds the production core with
+  // `.*`, so a core port with no wrapper port of the same name is a bind
+  // failure rather than a silent stale control -- which is this file's own
+  // stated reason for being a wrapper and not a copy.
+  output logic [31:0]             fld_earth_short_record_o,
   output logic [31:0]             fld_earth_lane_desync_o,
   output logic [31:0]             fld_earth_stall_cycles_o,
   output logic                    fld_earth_idle_o,

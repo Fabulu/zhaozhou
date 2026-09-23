@@ -4883,11 +4883,25 @@
 //               literally true.
 //            3. rule material and nav OUT of the Earth record for this
 //               console, leaving a two-lane earth out record. Smallest
-//               silicon; contradicts field-ir 7.1 and needs the ISA changed.
-//          Recommendation, offered and not taken: (1), because it is the
-//          only one that neither changes a ratified ISA nor spends silicon
-//          on a lane with no reader, and because 13.3's exactness
-//          requirement is satisfied by it in full.
+//               silicon, and the one to be most careful with: it contradicts
+//               `field-ir.md` 7.1, needs the ISA changed, AND it deletes a
+//               requirement `ops.yml` states twice by naming TERRAIN.PATCH
+//               an implementation block of both sinks. It is a real option
+//               and it is the one an overstated blocker would smuggle in.
+//          Recommendation, offered and not taken: (2) if the owner wants
+//          20.8 literally true, otherwise (1) as an explicitly TEMPORARY
+//          state with a recorded expiry.
+//          AND THE HONEST COST OF (1), because the first draft of this
+//          recommendation claimed it "does not spend silicon on a lane with
+//          no reader" AND described it as holding two lanes as patch-local
+//          state, which are the same sentence disagreeing with itself: (1)
+//          DOES spend that silicon -- roughly two 32-bit lanes across the
+//          patch working set, 13.5's accumulator priced for four channels
+//          either way -- and its merit is only that the arithmetic is
+//          computed ONCE, exactly, at the moment the evaluation is
+//          available, rather than re-derived later from a record that no
+//          longer exists. That is a real argument and it is a smaller one
+//          than the draft made it.
 //
 //      (C) AND `zhao_terrain_patch_v2` IS A SUBSYSTEM, NOT A CHANNEL
 //          WIDENING, which is worth stating because the obvious reading of
