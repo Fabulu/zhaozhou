@@ -6507,6 +6507,78 @@ RE-PROVEN, not adjusted.** A lane must show the new bound holds.
 itself:** *"a detector that has not been shown to FIRE has not been tested."*
 Here the detector cannot fire by construction until the model tells the truth.
 
+
+### D-SDRAM-A VERIFIED AT SOURCE, 2026-09-23 — and the divergence is worse-documented than reported
+
+R243 was ruled on **one lane's reading**. Before spending a lane executing it,
+the coordinator read the three files itself. **The claim holds, and the shape of
+why nobody caught it is the part worth keeping.**
+
+**1. The model increments the column LINEARLY.** `sim/models/zhao_sdram_model.sv`
+line 141:
+
+```systemverilog
+dq_i_q <= word_at(rd_bank, rd_row, rd_col + 11'(rd_beat));
+```
+
+and the write path at line 154 is the same expression. `rd_col` is 11 bits, so
+this wraps at the ROW (modulo 2048) and **nowhere else**. A JEDEC BL8 sequential
+burst wraps inside its **aligned eight-column block**: column bits [2:0] advance
+and **[10:3] are held**. Starting at column 5 the device returns
+`5,6,7,0,1,2,3,4`; the model returns `5,6,7,8,9,10,11,12`.
+
+**2. The controller programs BL8 SEQUENTIAL and then issues an arbitrary
+column.** `zhao_sdram_ctrl.sv` line 204 writes the mode register as
+`13'b0000_00_011_0_011` — `A[2:0]=011` is BL8, `A3=0` is sequential — so the
+part is explicitly told to wrap. Line 143 is `req_col = waddr[10:0]`: **the
+column is the low bits of the request address, with no alignment enforced
+anywhere.**
+
+**3. `design/contracts/MEM.SDRAM.md` contains the words `align`, `wrap` and
+`BL8` exactly ZERO times.** The law the silicon obeys is not written down, so no
+client could have been told to obey it and no review could have checked it.
+
+**THE INSTRUCTIVE PART: two separate comments state a TRUE fact about the ROW
+and are read as covering the BLOCK.** They are the reason this survived.
+
+* The model's header: *"Read bursts wrap within the row (sequential, modulo
+  2048); the controller never issues a burst that crosses a row boundary, **so
+  the wrap is unreachable in lawful traffic** and exists only so unlawful
+  traffic is served, not hung."*
+* The arbiter's `burst_words()`: *"min(remaining, 8, row tail) in words (rows
+  are 2048 words; **8 divides the row so a tail burst never crosses**)"*.
+
+**Both sentences are true.** Both are about the row. Both conclude with a
+reassurance — *"unreachable"*, *"never crosses"* — and that reassurance is
+exactly what a reader takes away. `burst_words()` clamps to the **row tail** and
+considers the eight-column block nowhere; `pend_addr[k] <= client_req[k].addr`
+(line 351) takes the client's byte address verbatim.
+
+This is CLAUDE.md's own law with a new instance: **the comfortable explanation
+arrives first and explains ALMOST all of the evidence.** Here it explains the
+row and is silent on the block, and the silence reads as coverage. It is also
+the broken-instrument law — the defect makes the simulated machine **better
+behaved** than the real one, which is the direction nobody audits.
+
+**WHAT IS STILL UNMEASURED, stated so it is not read as settled.** Whether any
+*current* client already issues a 16-byte-unaligned burst is **not known** — a
+64-byte-aligned request is 16-byte aligned and therefore safe, and most clients
+plausibly are. **That question does not need a hand sweep, because the owner's
+ordering answers it for free:** once the model wraps like the device, an
+unaligned burst returns wrong data and the existing suite says so. **A red the
+model repair produces is the measurement, not a regression** — which is the
+whole reason *"3 first, then 2"* is the ruling.
+
+**NOT DONE, DELIBERATELY, AND THE REASON IS A STANDING TRAP.** The obvious next
+move is to instrument the model with a counter of bursts starting at
+`col[2:0] != 0`, converting *"no client has exercised it"* from an argument into
+a number **before** any behaviour changes. It was not done today because **two
+lanes were mid-gate and every memory bench elaborates that file**: adding a port
+to it is the *"a suite reads the LIVE TREE"* trap, and a `PINMISSING` in another
+lane's lint reads as that lane's own breakage. **It is the first task of the
+D-SDRAM-A lane, ahead of the wrap itself** — instrument, measure, then change
+behaviour.
+
 ### D-NORMALS-A — DETAIL NORMALS ARE IN v1. COMMISSION THE PYRAMID.
 
 > **Fabian: *"In v1 — commission the pyramid."***
