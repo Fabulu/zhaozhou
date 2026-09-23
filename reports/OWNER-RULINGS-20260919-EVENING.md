@@ -7028,3 +7028,55 @@ capture state after the directed evidence was taken"*, which is why the lane
 correctly left it behind the fit that prices it. It is commissioned by this
 ruling, not by a packet's own judgement, and its directed evidence must be
 re-taken.
+
+
+### THE OTHER 32, CLASSIFIED 2026-09-23 — and 10 of them must be RENAMED before they can be given an id
+
+The append-only half of `check_counter_ids` is repaired (`77cdcb02`). What
+remains is one class: **32 counters a block declares in its `counters:` row that
+are not in `counter_catalog` at all**, so they have no id. Classified here so the
+repair is mechanical, and **not performed**, because minting an id is permanent:
+the list is append-only, so a name added today can never be removed, only
+tombstoned. That is the lesson `post_gather_vram_bytes_by_client` had just
+taught, one commit earlier.
+
+**21 ARE PREFIXED AND UNAMBIGUOUS. Appending them at the END is safe and
+renumbers nothing:**
+
+| block | counters |
+|---|---|
+| `TERRAIN.BAKEREC` | `bakerec_*` × **11** |
+| `TERRAIN.COMPCACHE` | `compcache_mat_cells`, `compcache_mat_oob` |
+| `TERRAIN.EDGERECON` | `terrain_edgerecon_collisions`, `terrain_edgerecon_edges_fallback` |
+| `TERRAIN.JOBISSUE` | `terrain_jobissue_ctx_refused`, `terrain_jobissue_ctx_src_mismatch` |
+| `TERRAIN.SPDESC` | `terrain_spdesc_door_src_mismatch`, `terrain_spdesc_serve_no_door` |
+| `TERRAIN.PAGESTREAM` | `pagestream_cells` |
+| `TWOD.PLANE` | `twod_plane_disabled` |
+| `TERRAIN.TESS` | `mat_unarmed` — the one judgement call in this group |
+
+**10 ARE BARE GENERIC WORDS AND MUST NOT BE CATALOGUED AS THEY STAND**, and they
+come from exactly two blocks:
+
+* **`PART.CLIPFEED`** — `triangles`, `particles`, `dq_refused`, `dq_stray`,
+  `range_refused`, `stall_full`
+* **`GEOM.CLIPDOOR`** — `granted`, `idle_offered`, `switches`,
+  `err_hold_broken`
+
+**`counter_catalog` is a FLAT GLOBAL NAMESPACE keyed by name**, and the id is the
+position in it. A catalog holding a bare `triangles` collides with the next block
+that wants to count triangles — and the tree already shows the convention it
+broke: `forge_prim_triangles_submitted` and `forge_cliff_triangles_submitted` are
+both in the catalog, prefixed, precisely so they can coexist. **`granted`,
+`switches`, `particles` and `stall_full` are signal names, not console counter
+names.**
+
+So the order is: **rename these ten to the prefixed convention in their blocks
+first** (`clipfeed_triangles`, `clipdoor_granted`, …), which is an RTL and ledger
+change owned by those blocks' authors, **and only then append**. Appending them
+as they stand would freeze ten collisions into a list that cannot forget.
+
+**Note what this does NOT say.** It is not evidence that those counters are
+wrong, missing or unfired — only that they have no id, which means nothing
+outside their own block can name them. **A counter with no id is invisible to
+every `.zcap` capture's COUNTERS section and to DEBUG.COUNTERS**, which is the
+whole reason the catalog exists.
