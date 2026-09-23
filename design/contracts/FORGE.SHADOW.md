@@ -545,13 +545,89 @@ sourced so the next reader can tell what was checked and when.
    `zhao_geom_lodstate`'s composition. Its rate and fairness cost is now
    **measured**, not estimated: `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`.
 3. `zhao_terrain_tapshare` + `zhao_forge_shadow`, in the same commit.
-4. **The terminal link, still the largest:** a shadow fan assembler, a fourth
-   `zhao_geom_clipdoor` client, the zero-sample material span, and a producer
-   for **core entry I20's `tri_continuation_tail_i`** so the flat per-caster
-   alpha R89 ruled actually reaches the blend. `zhao_forge_assemble` is the
-   working sibling of the first of these and should be read before it is
-   designed — it already takes absolute world vertices through client A, makes
-   its own `invw24`, and presents triangles at the clipdoor.
+4. **The terminal link.** See the section directly below: it is smaller than
+   this contract has been recording, because the block it describes already
+   exists and was designed to be shared.
+
+### THE TERMINAL LINK IS MOSTLY BUILT: RIDE `zhao_forge_assemble`, DO NOT CLONE IT
+
+**SHADOWCLOSE, 2026-09-23.** This contract plans a *"shadow fan assembler"*, a
+**fourth** `zhao_geom_clipdoor` client, and a **fifth** client-A demand for the
+hull's own vertices — which `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`
+had to flag as fitting the bandwidth but **exhausting the 2-bit owner field**.
+
+**None of those three is necessary, and the evidence is in the block FORGE.PRIM
+already runs.** `zhao_forge_assemble` (849 lines, composed at
+`zhao_console_core.sv:13299`, tested by `forge_assemble_directed`) does the
+entire job end to end:
+
+| what a shadow hull needs | what `zhao_forge_assemble` already does | evidence |
+|---|---|---|
+| world vertices in, with an end marker | `v_valid_i`/`v_x_i`/`v_y_i`/`v_z_i`/`v_last_i` | `:205-210` |
+| a triangle list over them | `t_valid_i`/`t_i0_i`/`t_i1_i`/`t_i2_i`/`t_last_i` | `:213-220` |
+| projection through client A | `f_*` out, `rs_*` back — **owner `2'd2`, already composed** | `:251-265`, core `:19371` |
+| `invw24` for GEOM.CLIP slot 0 | its own `zhao_geom_depthquant_stream` | core `:3036` |
+| **declare untextured** | `assign o_untex_o = 1'b1;` — **unconditionally** | **`:576`** |
+| triangles at the clipdoor | `o_*`, clipdoor **client 1** | core `:13383`, `:13512` |
+| **a per-primitive alpha from a named constant** | `art_alpha_i`, written into `SLOT_ALPHA = 6` | `:246`, `:596` |
+
+**Its `v_*` port is ALREADY SPECIFIED AS A COMPOSER MUX**, in its own words at
+`:199-204`:
+
+> *"Muxed at the composer by family: `zhao_forge_prim_eval` for the ribbon,
+> `zhao_forge_ring_eval` for the four swept-ring families. **This block does not
+> read the family and must not**: the ordering convention is the whole of the
+> contract between the two halves."*
+
+A shadow hull is another producer on that mux. And the block's **own header
+already names this contract's ruling as the pattern it follows** (`:106-108`):
+
+> *"THAT IS THE R48 NAMED-SEAM SHAPE AND IT IS THE TREATMENT THE OWNER HAS
+> ALREADY ACCEPTED FOR THIS EXACT PROBLEM — R133's D-FORGESHADOW-A accepted
+> `zhao_forge_shadow`'s `cast_strength_i` 'from a named constant' on the same
+> grounds."*
+
+**So the terminal link reduces to three small pieces:**
+
+1. **A fan indexer** — `zhao_forge_shadow` emits a **RING** of 16/8/4 vertices
+   with `vtx_last_o` on the final one (`zhao_forge_shadow.sv:291-296`; there is
+   **no centre vertex**). A ring of N becomes N−2 triangles, `(0,1,2)`,
+   `(0,2,3)` … `(0,N−2,N−1)`. That is a counter and a comparator: it forwards
+   `vtx_*` to `v_*` unchanged and emits the triples on `t_*` after `last`.
+   **This is the only genuinely new RTL the terminal link needs.**
+2. **An arbiter in front of the shared assembler's `v_*`/`t_*`/`j_*`**, two
+   producers deep, with the same run-length fairness `zhao_geom_clipdoor`
+   already uses. The assembler is single-job (`busy_o` holds the bank off), so
+   this is a job-granularity arbiter, not a beat-granularity one.
+3. **A per-job material mode on `zhao_forge_assemble`.** Today the core supplies
+   `FORGE_MATERIAL_MODE = 2'd0` (MATERIAL_BACKED) as a *parameter* at the
+   clipdoor slice (`zhao_console_core.sv:7172`, `:13526`). A shadow must declare
+   `MATMODE_NONE_C = 2'd1` so `mw_pub_sample_count` is zero and R197's
+   `cl_in_refuse_c` admits it. **The core forbids choosing this at the composer**
+   — `:13519-13525`: *"never a constant chosen here, because a mode chosen at a
+   composer is the 'inferred' mode the ruling forbids"* — so it becomes a real
+   per-job input on the assembler, driven by whichever producer won.
+
+**What this removes outright:** the fifth client-A demand (the hull rides owner
+`2'd2` with FORGE.PRIM), the fourth clipdoor client, the second
+`zhao_geom_depthquant_stream`, and a second 520-slot vertex store. **The owner
+field is no longer exhausted** — `2'd3` goes to the instance centre and nothing
+else needs a code.
+
+**What still stands unchanged:** a producer for core entry **I20's
+`tri_continuation_tail_i`**, so R89's flat per-caster alpha actually reaches
+`zhao_raster_blend_prod.a_i`. `SLOT_ALPHA = 6` is the seventh attribute slot and
+`zhao_geom_attrpack` publishes **six** planes (it *"shipped as THREE planes and
+grew to SIX on 2026-09-21"*, `zhao_geom_attrpack.sv:1-4`), so slot 6 is carried
+in the clip packet and interpolated by nothing — which is exactly why R89 routed
+the alpha down the continuation tail instead. **That reasoning survives the
+attrpack widening; only the plane count in this contract's R89 section is
+stale.**
+
+**This route is a RECOMMENDATION, not a ruling.** It was derived by reading the
+composed blocks and it has not been built or benched. The reason it is written
+here rather than acted on is the same reason nothing else was: *it is one commit
+or none*, and this is a description of what that commit should contain.
 
 **"It is one commit or none" still holds** and is the reason this packet
 composed nothing: every link's outputs terminate on the next, so any prefix
