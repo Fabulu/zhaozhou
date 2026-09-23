@@ -533,6 +533,114 @@ and a deformation bake landing between the two passes breaks their determinism.
 Until that walker exists the console remains in **conservative edge mode** and
 `u_terrain_lod`'s `edge_*` still read the literal `8'h00`.
 
+### RE-MEASURED 2026-09-23 (gz/edgerecon2). THE REMAINDER IS BIGGER, NOT SMALLER
+
+Every previous re-measurement of this walker shrank it. This one grows it, which
+is the direction R237 says to check hardest and the direction nobody had found
+yet. Two of the three obstacles above are **not** the obstacle, and **three that
+appear nowhere above are**.
+
+**The `sp_cx`/`sp_cz` decision this contract deliberately left open is now made,
+and it is none of the three candidates.** The section above records the obstacle
+as *"getting its PLACED world x/z"*. Measured in `zhao_terrain_place.sv`:
+
+```
+:41    wx(i) = (patch_ix * 32 + i) <<< (16 + pitch_log2)
+:318   vtx_wx_o = place32(units_of(ix_q, vtx_vi_i), pitch_q);
+:282   env_ok_c = (org_x_c == hdr_env_x0_i) && (org_z_c == hdr_env_z0_i);
+```
+
+**`hdr_env_x0_i`/`hdr_env_z0_i` are a CHECK, not an operand.** No page payload
+reaches placement at all: it is a pure function of the patch coordinate, the
+vertex index and `pitch_log2`. So a patch's world x/z **is knowable without
+composing it**, and candidates (1) and (2) each pay a store to carry a number
+that is two shifts away. **The actual missing datum is `pitch_log2` for a
+resident patch — two bits**, produced only by the page's own header (spec 2.1
++2, `zhao_terrain_hdrread`) and retained nowhere per slot.
+
+Candidate (3) is dead for a reason this contract does not give: `hdr_ready_o` is
+tied high unconditionally (`:287`), and a header acceptance **displaces** the
+latched patch (`:361-375`) *and* launches the 66-write `pos_we_o` fill into the
+compose cache. You cannot ask PLACE about another patch without destroying the
+patch it is placing. The honest shape is a **stateless query port** on PLACE
+reusing `place32`/`units_of`, so PREPARE and EMIT are bit-identical *by
+construction* rather than by two implementations agreeing.
+
+**BLOCKER A — A PREPARE PASS TEED OFF THE ISSUE PORT CANNOT TERMINATE.** The
+correction above says the enumerator *"EXISTS AND IS COMPOSED"*. It does, and it
+cannot be used the way that implies. PREPARE must hold the whole admitted set
+before EMIT opens; the issue stream is one-shot (`is_valid_o == (st == S_ISSUE)`,
+the record overwritten on the next fetch, frame state wiped on `fr_start_i`, and
+architecture 2.5 rejecting the persistent cache a replay would need). So a walker
+must drink the stream as it flies — but that stream's ready **is the compose
+cache's**: `tis_ready = thr_j_ready && tce_can_start`, `tce_can_start =
+!tcc_fill_busy`, against a front that holds exactly two lattices. Holding
+tessellation back until the last patch is issued stalls the compose, drops
+`tce_can_start`, stalls the issue port, and the walk never reaches the last
+patch. **The walker must be a second, independent reader of the sealed list that
+never touches the compose spine** — a different and larger block.
+
+**BLOCKER B — STEP 2'S COST IS BANDWIDTH, NOT AREA, AND IT IS UNCOSTED.** Owner
+ruling **R242 moved `zhao_terrain_devstore` to SDRAM on 2026-09-22 — the same day
+this contract was written** — and step 2 above still describes the M10K store.
+`zhao_terrain_devstore.sv:48-53`: *"Neither array exists any more; this block now
+infers NO MEMORY AT ALL … 320 KiB of local SDRAM."* A read costs two full 64-byte
+bursts before the first descriptor and another every four (`:880-883`). A PREPARE
+pass over 256 admitted patches is **~1,280 extra 64-byte SDRAM reads per frame,
+on top of the identical ~1,280 EMIT already spends.** That, and not the ~3 M10K
+bank sized above, is what decides whether this walker is affordable. R242 also
+made devstore's `w_ready_o` fall during a burst, which already made one histogram
+count a single record 86 times; a walker joining against that ready inherits it.
+
+**BLOCKER C — THE DETERMINISM PREMISE IS NOT SATISFIED BY THE CURRENT
+COMPOSITION.** Step 3 rests on *"identical `sp_*` and identical governor targets
+give identical `lvl[]`"*. In `zhao_console_core.sv` the held governor targets
+`gv_*_q` are captured under an `else if (tld_idle)` arm, and `tld_idle` is
+TERRAIN.LOD's own `idle_o` — high **between every patch**. They are therefore
+re-sampled ~256 times a frame. MEASURE.GOVERNOR itself decides on `frame_i`, a
+frame-boundary pulse, so `mgv_*` is stable within a frame and this is harmless
+today; but `veye0_*`/`veye1_*` come from the view block, and a PREPARE pass would
+sample them at a different point in the frame from EMIT. **Any motion between the
+two passes banks a level the patch does not tessellate at — a crack, with every
+counter balancing.** The walker owes a frame-scoped freeze of `gv_*_q`, which is a
+behaviour change to composed, working serve-path code.
+
+**AND ONE OBJECTION THAT DIES ON MEASUREMENT**, recorded so it is not raised
+again. The ledger sets TERRAIN.LOD at *"1 decision per patch per frame"*, and
+`zhao_terrain_lod.sv:52-56` justifies choosing the 32-step isqrt over a
+squared-domain multiply **by that rate** — so a second pass reads at first like a
+breach. It is not. `:157-159` records ~784 clocks a patch and that 256 live
+patches is *"still about 8x the required rate"*. Two passes are 401,408 clocks of
+a 1.67 M-clock frame — ~24%, with ~4x margin remaining. **Throughput is not the
+blocker.** What step 3 *does* owe is the time-share: TERRAIN.LOD has no mode,
+bypass or phase input, so PREPARE-vs-EMIT selection across twelve `sp_*` inputs
+and fourteen `out_*` outputs must be a **named block**, never composer wires.
+
+**THE REMAINDER, AS FOUR PACKETS.** None of them may compose this block alone.
+
+| | work | fit |
+|---|---|---|
+| **P1** | per-slot `pitch_log2` retention from TERRAIN.HDRREAD + a stateless query port on TERRAIN.PLACE. A port change on a composed block: regenerate `gen_prod_top`, `gen_console_board`, `gen_shell_paired_diff`, and connect every bench instantiating PLACE. | none |
+| **P2** | the sealed-list PREPARE reader — step 1's real shape — gated on B's bandwidth measurement. | none |
+| **P3** | the LOD time-share block and the frame-scoped governor freeze. | none |
+| **P4** | compose this block, wire `edge_*`, land an **acceptance bench** on `tests/prod/partmat_acceptance.cpp`'s pattern. | **one** |
+
+P4's fit question, named in advance: *does the terrain island still close at NCTX
+with the walker, the pitch table and EDGERECON added?*
+
+**The console smoke cannot be P4's evidence.** It fails every terrain page's CRC,
+so no page becomes resident, `zhao_terrain_devstore` holds no record, and the
+walker is quiescent — the ruling's own *"an otherwise green smoke whose upstream
+fixture never reaches the new path does not prove the path."*
+
+**OPEN OWNER QUESTION, and nobody has asked it.** May
+`zhao_terrain_island_dir`'s **frame-scoped** `desc_pitch_log2_i` (`:70`) be
+ratified as authoritative for every page of its island, rather than each page's
+own header field? `zhao_terrain_hdrread.sv:31-35` records that these are two
+different fields today. If the island's is authoritative, P1's per-slot table
+disappears and P1 halves. If it is not, the table is owed and the walker must
+carry it.
+
 ## Notes
 
 1. **The bank stores decisions, not geometry.** The ruling permits buffering
