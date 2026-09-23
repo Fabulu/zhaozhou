@@ -117,6 +117,60 @@
 // inverted -- it passes when the counter FIRES.
 //
 // ---------------------------------------------------------------------------
+// THE BURST THAT WRAPS, AND WHY NO TEST IN THIS TREE CAN FAIL ON IT
+// ---------------------------------------------------------------------------
+// ADDED 2026-09-23. `reports/HANDOVER-20260919.md` section 15.2 names this as
+// one of three things the owner must rule on, and says it "does NOT block item
+// 4 as merged, because the vertex intake is tied at I53 -- but it WILL the
+// moment somebody wires I53."
+//
+// THAT TRIGGER CONDITION IS TOO GENEROUS, AND THE ARITHMETIC IS WHY.
+// `zhao_sdram_ctrl` sets the mode register to BL8 SEQUENTIAL (A[2:0]=011,
+// A3=0) and takes its column straight from the byte address:
+// `waddr = req.addr[26:1]`, `req_col = waddr[10:0]`. A column is one 16-bit
+// word, so the aligned eight-column block a JEDEC sequential burst wraps
+// inside is SIXTEEN BYTES. `zhao_vram_arbiter.burst_words` chops a request
+// into `min(remaining, 8, row_tail)` words, which aligns to the 2048-word ROW
+// and to nothing finer.
+//
+// So a burst wraps exactly when `(start_col mod 8) + words > 8`, and the
+// converse is the law this block now keeps: IF EVERY REQUEST ADDRESS IS A
+// MULTIPLE OF SIXTEEN BYTES, NO BURST THE ARBITER DERIVES FROM IT CAN WRAP.
+// (With `col mod 8 == 0`, `row_tail` is a multiple of 8 and at least 8, so
+// every full burst is 8 words from an aligned column and the tail burst is
+// `rem < 8` words from an aligned column. Neither can cross the block.)
+//
+// MEASURED AGAINST THE LAYOUT AS MERGED, AND IT WAS ALREADY BROKEN:
+//
+//   TRI_OFF_B was MAX_VERTS * PV_B = 65,535 * 24 = 1,572,840, and
+//   1,572,840 mod 16 = 8. EVERY TriangleDescriptor -- the one record type
+//   with a live production producer, the eight the console smoke reports as
+//   `arena_tris=8` -- started at column 4 of an aligned block and asked for
+//   eight words. In silicon the last four words wrap to columns 0..3 and
+//   overwrite the first half of the same block.
+//
+//   CHUNK_OFF_B inherited it (1,834,984 mod 16 = 8), and the 24-byte vertex
+//   stride misaligned every odd vertex on its own.
+//
+// It was therefore never true that the divergence waited on I53. It was live
+// on the merged path, invisible, in the flattering direction, for the reason
+// the handover gives: THE BEHAVIOURAL MODEL IS THE OPTIMISTIC SIDE. Every
+// gate stayed green because the model reads and writes LINEARLY.
+//
+// THE REPAIR IS INSIDE THIS BLOCK AND NOWHERE ELSE. `zhao_vram_arbiter` is
+// untouched -- the handover records that a fix there "moves a bound
+// `mem_vram_arbiter_liveness` asserts is exact", and this block has no
+// business moving another block's proven bound to fix its own addresses.
+// Nor is the length padded: padding a request to 64 bytes leaves a misaligned
+// START misaligned, which is precisely the half-fix the handover warns
+// "LOOKS fixed". What changed is the ALLOCATION: `PV_STRIDE_B` is a multiple
+// of the quantum, and both sub-region offsets are rounded up to it.
+//
+// AND THE INVARIANT IS MEASURED, NOT ASSERTED. `burst_unaligned_o` counts
+// every clock this block offers the guard a misaligned address, including the
+// directory write, whose address comes from a base rather than a cursor.
+//
+// ---------------------------------------------------------------------------
 // THE CONTRACTS THIS BLOCK PRESERVES (R7, and item 4 says preserve them)
 // ---------------------------------------------------------------------------
 // QUOTA. The Measure seals quotas BEFORE the frame; within a sealed frame the
@@ -214,7 +268,29 @@ module zhao_geom_paramarena_drain_mutant
     parameter int unsigned MAX_VERTS  = 65535,
     parameter int unsigned MAX_TRIS   = 16384,
     parameter int unsigned MAX_CHUNKS = 16384,
-    parameter int unsigned CHUNK_IDS  = 14
+    parameter int unsigned CHUNK_IDS  = 14,
+    // THE SDRAM'S BURST-ALIGNMENT QUANTUM, IN BYTES. See the header section
+    // "THE BURST THAT WRAPS, AND WHY NO TEST IN THIS TREE CAN FAIL ON IT".
+    // `zhao_sdram_params_pkg::BURST_LENGTH` is eight words and `WORD_BYTES`
+    // is two, so the aligned block a JEDEC BL8 SEQUENTIAL burst wraps inside
+    // is sixteen bytes wide. Restated as a KNOB here rather than imported:
+    // this block acquires no dependency on the controller's package (it is in
+    // three leaf fit targets that carry only geometry sources), and the owner
+    // keeps control of the number. The elaboration guard below refuses a
+    // value that is not a power of two.
+    parameter int unsigned BURST_ALIGN_B = 16,
+    // THE PROJECTED-VERTEX ALLOCATION STRIDE, WHICH IS NOT THE RECORD SIZE.
+    // The record is `PV_B` = 24 bytes and R7 freezes that. The STRIDE is what
+    // the allocator advances by, and it must be a multiple of BURST_ALIGN_B
+    // or every SECOND vertex starts eight bytes into an aligned block and its
+    // burst wraps -- 24 is not a multiple of 16, so the natural stride is the
+    // one shape that cannot be made safe by moving a base.
+    // THE COST IS DECLARED RATHER THAN ABSORBED: eight bytes of slack per
+    // vertex, 524,280 bytes at MAX_VERTS, and the view still fits (the
+    // elaboration guard checks it, and the header states the arithmetic).
+    // The 16-byte descriptor and the 64-byte chunk need no slack at all --
+    // both strides are already multiples of the quantum.
+    parameter int unsigned PV_STRIDE_B = 32
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -310,6 +386,16 @@ module zhao_geom_paramarena_drain_mutant
     output var logic [31:0] view_flip_blocked_o,
     output var logic [31:0] publish_blocked_o,
     output var logic [31:0] addr_view_bad_o,
+    // THE BURST-ALIGNMENT TRIPWIRE. Counts CLOCKS -- the same unit as
+    // `addr_view_bad_o` beside it, so the two read alike -- during which this
+    // block is offering the guard a request whose held address is not a
+    // multiple of `BURST_ALIGN_B`. Such a request is served correctly by the
+    // behavioural SDRAM model and WRONGLY by the part, so this counter is the
+    // only witness this tree can have. It is UNREACHABLE while the allocation
+    // arithmetic above is correct, which is why it owes a committed mutant
+    // (`tests/mutants/zhao_geom_paramarena_align_mutant.sv`) rather than an
+    // argument.
+    output var logic [31:0] burst_unaligned_o,
     output var logic [31:0] scr_contend_o,
     output var logic [31:0] retire_underflow_o,
     output var logic [15:0] fault_source_o,
@@ -327,13 +413,60 @@ module zhao_geom_paramarena_drain_mutant
   localparam int unsigned CK_B = ZHAO_PARAMBUF_CK_BYTES;   // w=64 bytes
 
   // The three sub-regions inside a view, laid out in allocation order. Bases
-  // are BYTE OFFSETS from the view base.
-  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_B;
-  localparam int unsigned TRI_OFF_B   = VERT_CAP_B;
-  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;
-  localparam int unsigned CHUNK_OFF_B = TRI_OFF_B + TRI_CAP_B;
-  localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B;
+  // are BYTE OFFSETS from the view base, and EVERY ONE OF THEM IS ROUNDED UP
+  // TO `BURST_ALIGN_B`.
+  //
+  // THAT ROUNDING IS THE REPAIR, and the arithmetic below is why it is not
+  // cosmetic. Before it, `TRI_OFF_B` was `MAX_VERTS * PV_B` = 65,535 * 24 =
+  // 1,572,840 -- and 1,572,840 mod 16 is EIGHT. So EVERY TriangleDescriptor
+  // this block has ever written sat eight bytes into an aligned block, at
+  // column 4 of 8, and its sixteen-byte (eight-word) burst ran to column 11,
+  // which in silicon WRAPS BACK TO COLUMN 0 of the same block. The chunk
+  // region inherited the same offset (1,834,984 mod 16 = 8) and every odd
+  // vertex was misaligned by the 24-byte stride on its own.
+  //
+  // With PV_STRIDE_B = 32 and BURST_ALIGN_B = 16 both round-ups below are
+  // no-ops -- the sums already land on the quantum -- and that is the point:
+  // the expression states the LAW so a later change to any capacity cannot
+  // quietly reintroduce the fault. `check_localparam_comments` evaluates
+  // these, so the numbers in the comments are checked rather than asserted.
+  // THE TWO HALVES OF THE REPAIR, EACH ON ONE LINE, and that is deliberate:
+  // `tests/mutants/zhao_geom_paramarena_align_mutant.sv` is this file with
+  // exactly these two lines changed back to the pre-repair values, which is
+  // how the positive control stays ONE readable diff rather than five.
+  //   PV_SLOT_B      = PV_B  restores the 24-byte vertex stride
+  //   LAYOUT_ALIGN_B = 1     turns both round-ups below into no-ops
+  // Both are needed to reproduce the fault, and that is itself informative:
+  // with the round-up in place a 24-byte stride still lands `TRI_OFF_B` on
+  // 1,572,848, so the region base is repaired even when the stride is not --
+  // the two protections are not redundant, they cover different records.
+  localparam int unsigned PV_SLOT_B      = PV_STRIDE_B;    // w=32 bytes
+  localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;  // w=16 bytes
+
+  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,120
+  // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
+  // `check_localparam_comments` parses SINGLE-LINE declarations only. Fire
+  // tested on an isolated copy of this file: with `TRI_OFF_B` wrapped over two
+  // lines, a deliberately WRONG trailing number still produced
+  // "disagreements : 0" -- the claim beside it was unchecked, which is exactly
+  // the shape that tool exists to catch (a stale 576 beside a real 704).
+  // Joined, it is checked, and the tool confirms 2,097,120.
+  //
+  // `CHUNK_OFF_B` IS STILL NOT CHECKED EVEN SO, and the reason is worth the
+  // line rather than being rediscovered: it reaches `TRI_CAP_B`, which is
+  // `MAX_TRIS * TD_B`, and `TD_B` is `ZHAO_PARAMBUF_TD_BYTES` -- a PACKAGE
+  // import the tool cannot resolve in this module, so it SKIPS the constant
+  // rather than guessing at it. Its number below is therefore verified by the
+  // acceptance bench, which reads memory AT that offset, and not by the gate.
+  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
+  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
+  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
+  localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,840
+
+  // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
+  // guarded to be a power of two at elaboration, so this is the whole test.
+  localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);       // w=4 bits
 
   // The directory lives at the scratch base. One record, chunk-sized, so the
   // walker's read is the same shape as a chunk read and needs no second
@@ -368,6 +501,32 @@ module zhao_geom_paramarena_drain_mutant
       $fatal(1, "zhao_geom_paramarena: the scratch does not follow view 1");
     if (CHUNK_IDS != 14)
       $fatal(1, "zhao_geom_paramarena: R7's chunk holds fourteen ids");
+    // ---- THE BURST-ALIGNMENT LAW, refused at elaboration -----------------
+    // Each of these is a way the block could issue an address that a BL8
+    // sequential burst wraps inside. They are separate `$fatal`s and not one
+    // conjunction so a breach says WHICH quantity moved: a single "alignment
+    // is wrong" message sends the next reader to re-derive all six.
+    if ((BURST_ALIGN_B < 2) || ((BURST_ALIGN_B & (BURST_ALIGN_B - 1)) != 0))
+      $fatal(1, "zhao_geom_paramarena: BURST_ALIGN_B must be a power of two >= 2");
+    if (PV_STRIDE_B < PV_B)
+      $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is narrower than the record");
+    if ((PV_STRIDE_B % BURST_ALIGN_B) != 0)
+      $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is not burst-aligned");
+    if ((TD_B % BURST_ALIGN_B) != 0)
+      $fatal(1, "zhao_geom_paramarena: TD_B is not burst-aligned");
+    if ((CK_B % BURST_ALIGN_B) != 0)
+      $fatal(1, "zhao_geom_paramarena: CK_B is not burst-aligned");
+    // The BASES are the other half: a per-record stride that is a multiple of
+    // the quantum still lands every record off it if the region does not
+    // start on it. VIEW0/VIEW1/SCRATCH come from `zhao_pkg` and are 4 MiB and
+    // 2 MiB aligned today, which is why this has never fired -- a guard that
+    // holds by luck is one that should say so out loud.
+    if ((VIEW0_BASE % 32'(BURST_ALIGN_B)) != 32'd0)
+      $fatal(1, "zhao_geom_paramarena: VIEW0_BASE is not burst-aligned");
+    if ((VIEW1_BASE % 32'(BURST_ALIGN_B)) != 32'd0)
+      $fatal(1, "zhao_geom_paramarena: VIEW1_BASE is not burst-aligned");
+    if ((SCRATCH_BASE % 32'(BURST_ALIGN_B)) != 32'd0)
+      $fatal(1, "zhao_geom_paramarena: SCRATCH_BASE is not burst-aligned");
   end
   // synthesis translate_on
 
@@ -546,7 +705,10 @@ module zhao_geom_paramarena_drain_mutant
   // the stride. 40-bit intermediates so a cursor at its maximum times a stride
   // cannot wrap before the bound is tested -- overflow-safe arithmetic, which
   // item 4 asks for by name.
-  wire [39:0] pv_addr_c = 40'(view_base_c) + 40'(n_verts_q)  * 40'(PV_B);
+  // THE STRIDE, NOT THE RECORD SIZE. `PV_B` is how many bytes are written;
+  // `PV_STRIDE_B` is how far the cursor moves, and it is the stride that
+  // decides whether the NEXT address is burst-aligned.
+  wire [39:0] pv_addr_c = 40'(view_base_c) + 40'(n_verts_q)  * 40'(PV_SLOT_B);
   wire [39:0] td_addr_c = 40'(view_base_c) + 40'(TRI_OFF_B)
                         + 40'(n_tris_q)    * 40'(TD_B);
   wire [39:0] ck_addr_c = 40'(view_base_c) + 40'(CHUNK_OFF_B)
@@ -567,7 +729,11 @@ module zhao_geom_paramarena_drain_mutant
   // as a legal-looking request. Checked here so the block does not RELY on the
   // guard to catch its own arithmetic.
   wire [39:0] view_top_c = 40'(view_base_c) + 40'(VIEW_SPAN);
-  wire pv_in_view_c = (pv_addr_c + 40'(PV_B)) <= view_top_c;
+  // THE SLOT, NOT THE RECORD, is what must fit: the allocator has reserved
+  // `PV_STRIDE_B` for this vertex whether or not it writes all of it, and a
+  // containment test on the narrower record would admit a final slot whose
+  // reserved tail lies outside the view.
+  wire pv_in_view_c = (pv_addr_c + 40'(PV_SLOT_B)) <= view_top_c;
   wire td_in_view_c = (td_addr_c + 40'(TD_B)) <= view_top_c;
   wire ck_in_view_c = (ck_addr_c + 40'(CK_B)) <= view_top_c;
 
@@ -671,6 +837,19 @@ module zhao_geom_paramarena_drain_mutant
       (mstate_q == M_REQ) && !addr_is_dir_c
       && (view_q ? !addr_in_v1_c : !addr_in_v0_c);
 
+  // THE BURST-ALIGNMENT TRIPWIRE, and it is a DIFFERENT SHAPE of check from
+  // the one above on purpose. `addr_view_bad_o` DIFFERENCES two registers
+  // loaded by two enables, which is what lets it see a stale request.
+  // This one is an INVARIANT over a single register, so the question
+  // "are its two operands driven by one enable" does not arise -- there is
+  // one operand and a constant. It cannot be blinded by a lockstep
+  // corruption because there is nothing for a corruption to move WITH.
+  // It covers K_DIR too: the directory write is the one op whose address is
+  // not derived from a cursor, so an unaligned SCRATCH_BASE would show here
+  // and nowhere else.
+  wire        addr_unaligned_c =
+      (mstate_q == M_REQ) && (m_addr_q[ALIGN_LSB-1:0] != '0);
+
   // --------------------------------------------------------------- core ----
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -714,6 +893,7 @@ module zhao_geom_paramarena_drain_mutant
       view_flip_blocked_o <= '0;
       publish_blocked_o   <= '0;
       addr_view_bad_o     <= '0;
+      burst_unaligned_o   <= '0;
       scr_contend_o       <= '0;
       retire_underflow_o  <= '0;
       fault_source_o      <= 16'd0;
@@ -737,6 +917,10 @@ module zhao_geom_paramarena_drain_mutant
       // ---- the address detector -------------------------------------------
       if (addr_view_mismatch_c)
         addr_view_bad_o <= addr_view_bad_o + 32'd1;
+
+      // ---- the burst-alignment tripwire ------------------------------------
+      if (addr_unaligned_c)
+        burst_unaligned_o <= burst_unaligned_o + 32'd1;
 
       // ---- the seal --------------------------------------------------------
       // A seal that cannot take effect is not refused, it WAITS -- and every

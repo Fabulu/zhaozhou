@@ -10758,6 +10758,50 @@ foreach(pa_variant fires silent)
 endforeach()
 
 # ---------------------------------------------------------------------------
+# `burst_unaligned_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL.
+# The counter watches for a request address that is not a multiple of the
+# SDRAM's burst-alignment quantum.  A JEDEC BL8 SEQUENTIAL burst wraps inside
+# its aligned eight-column block and the BEHAVIOURAL MODEL READS LINEARLY, so
+# a misaligned request is served correctly in simulation and wrongly by the
+# part -- NO functional test in this tree can fail on it, in either polarity.
+# The invariant is therefore counted, and a counted invariant that has never
+# been seen to move is a claim.  Unreachable with legal stimulus while the
+# allocator is correct, so it owes a COMMITTED MUTANT.
+# ONE source, TWO executables, opposite expectations.
+# ---------------------------------------------------------------------------
+foreach(pal_variant fires silent)
+  set(pal_target test_geom_paramarena_alignmut_${pal_variant})
+  add_executable(${pal_target} geometry/geom_paramarena_alignmut.cpp)
+  target_link_libraries(${pal_target} PRIVATE zhao_harness)
+  set(pal_sources ${ZHAO_PARAMARENA_SOURCES})
+  if(pal_variant STREQUAL "fires")
+    # The macro reaches BOTH the RTL seam and the C++ expectation, so the two
+    # cannot drift into a driver that expects one block and measures the other.
+    target_compile_definitions(${pal_target} PRIVATE ZHAO_PARAMARENA_ALIGN_MUT)
+    set(pal_vargs -DZHAO_PARAMARENA_ALIGN_MUT)
+    list(APPEND pal_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_paramarena_align_mutant.sv)
+  else()
+    set(pal_vargs "")
+    list(APPEND pal_sources
+         ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv)
+  endif()
+  list(APPEND pal_sources
+       ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+  verilate(${pal_target}
+    PREFIX Vtb_zhao_geom_paramarena
+    TOP_MODULE tb_zhao_geom_paramarena
+    VERILATOR_ARGS ${pal_vargs}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+    SOURCES ${pal_sources})
+  add_test(NAME geom_paramarena_alignmut_${pal_variant} COMMAND ${pal_target})
+  set_tests_properties(geom_paramarena_alignmut_${pal_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
+
+# ---------------------------------------------------------------------------
 # THE SAME PRODUCER INTO THE OTHER CONSUMER -- core entry I18, ruling R70:
 #   zhao_terrain_lodfeed -> the 24 -> 32 widening -> zhao_measure_histogram
 # The path above ends at the STORE and proves the deviation is CORRECT; this

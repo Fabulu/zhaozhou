@@ -407,6 +407,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_pa_addrbad_o;
   logic [31:0] geom_pa_scrcontend_o;
   logic [31:0] geom_pa_retireunder_o;
+  logic [31:0] geom_pa_unaligned_o;
   logic [15:0] geom_pa_fault_src_o;
   logic        geom_pa_fault_o;
   logic        geom_pa_busy_o;
@@ -423,6 +424,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_pw_short_o;
   logic [31:0] geom_pw_stray_o;
   logic [31:0] geom_pw_genrace_o;
+  logic [31:0] geom_pw_unaligned_o;
   logic [15:0] geom_pw_depth_o;
   logic [31:0] geom_ws_denied_o;
   logic [31:0] geom_ws_contention_o;
@@ -5722,6 +5724,15 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: paramarena flipblock=%0d pubblock=%0d addrbad=%0d scrcontend=%0d retireunder=%0d",
              geom_pa_flipblock_o, geom_pa_pubblock_o, geom_pa_addrbad_o,
              geom_pa_scrcontend_o, geom_pa_retireunder_o);
+    // THE TWO ALIGNMENT TRIPWIRES. Printed apart from the rest because their
+    // zero means something different: the behavioural SDRAM model reads and
+    // writes LINEARLY where a JEDEC BL8 sequential burst wraps inside its
+    // aligned sixteen-byte block, so these two CANNOT be made to fire by any
+    // functional stimulus and their silence here is not evidence that the
+    // addresses are right. It is the committed align mutant
+    // (geom_paramarena_alignmut_fires) that makes them evidence.
+    $display("SMOKE: paramalign arena_unaligned=%0d walk_unaligned=%0d",
+             geom_pa_unaligned_o, geom_pw_unaligned_o);
     $display("SMOKE: paramwalk  dirs=%0d dirmiss=%0d chunks=%0d stale=%0d illegal=%0d depth=%0d",
              geom_pw_dirs_o, geom_pw_dirmiss_o, geom_pw_chunks_o,
              geom_pw_stale_o, geom_pw_illegal_o, geom_pw_depth_o);

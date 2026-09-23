@@ -169,6 +169,10 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] view_flip_blocked_o,
     output var logic [31:0] publish_blocked_o,
     output var logic [31:0] addr_view_bad_o,
+    // THE BURST-ALIGNMENT TRIPWIRES, one per block. Named apart because the
+    // two answer different questions: the arena's says its own allocator
+    // computed a misaligned address, the walker's says it was HANDED one.
+    output var logic [31:0] arena_burst_unaligned_o,
     output var logic [31:0] scr_contend_o,
     output var logic [31:0] retire_underflow_o,
     output var logic [15:0] fault_source_o,
@@ -205,6 +209,7 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] short_burst_o,
     output var logic [31:0] stray_beat_o,
     output var logic [31:0] gen_race_o,
+    output var logic [31:0] walk_burst_unaligned_o,
     output var logic [15:0] walk_depth_max_o,
     output var logic        walk_busy_o,
 
@@ -261,6 +266,26 @@ module tb_zhao_geom_paramarena
     input  var logic        peek_en_i,
     input  var logic [25:0] peek_waddr_i,
     output var logic [15:0] peek_data_o,
+    // ---- THE WALKER'S PUBLISHED-CHUNK-BASE BUMP -----------------------------
+    // A BENCH INPUT, and the reason it exists is that `walk_burst_unaligned_o`
+    // must be SEEN to fire and it is NOT unreachable -- the walker does not
+    // compute its bases, it is TOLD them.  Claiming "reachable, so no mutant
+    // is owed" without firing it is exactly the claim CLAUDE.md says to check
+    // hardest, so this is the stimulus that fires it.
+    //
+    // It adds a byte offset to the chunk base the WALKER sees.  On its own
+    // that would be caught one state earlier -- `dir_agrees_c` compares the
+    // directory that travelled through SDRAM against `pub_chunk_base_i`, and a
+    // bumped base disagrees, so the walk would fail at W_DIR_CHECK with
+    // `dir_mismatch_o` and never reach a chunk read.  The driver therefore
+    // POKES the directory's chunk-base word to match, which is why this is a
+    // two-part stimulus and not a knob that hides a check.
+    //
+    // NOTHING IN PRODUCTION HAS THIS.  It cannot widen a permission: the
+    // request still goes through the real `zhao_mem_guard`, and a bumped base
+    // that left the view would be REFUSED rather than counted.
+    input  var logic [26:0] wcfg_chunk_base_bump_i,
+
     input  var logic        poke_en_i,
     input  var logic [25:0] poke_waddr_i,
     input  var logic [15:0] poke_data_i,
@@ -293,6 +318,11 @@ module tb_zhao_geom_paramarena
   // selector engaged rather than compiling production twice.
 `ifdef ZHAO_PARAMARENA_DRAIN_MUT
   zhao_geom_paramarena_drain_mutant #(
+`elsif ZHAO_PARAMARENA_ALIGN_MUT
+  // The SECOND positive control, selected the same way and for the same
+  // reason: `burst_unaligned_o` is unreachable while the allocator is
+  // correct, so the only demonstration is an allocator that is not.
+  zhao_geom_paramarena_align_mutant #(
 `else
   zhao_geom_paramarena #(
 `endif
@@ -379,6 +409,7 @@ module tb_zhao_geom_paramarena
       .view_flip_blocked_o(view_flip_blocked_o),
       .publish_blocked_o  (publish_blocked_o),
       .addr_view_bad_o    (addr_view_bad_o),
+      .burst_unaligned_o  (arena_burst_unaligned_o),
       .scr_contend_o      (scr_contend_o),
       .retire_underflow_o (retire_underflow_o),
       .fault_source_o     (fault_source_o),
@@ -406,7 +437,7 @@ module tb_zhao_geom_paramarena
       .pub_gen_i       (publish_gen_o),
       .pub_vert_base_i (publish_vert_base_o),
       .pub_tri_base_i  (publish_tri_base_o),
-      .pub_chunk_base_i(publish_chunk_base_o),
+      .pub_chunk_base_i(publish_chunk_base_o + wcfg_chunk_base_bump_i),
       .pub_verts_i     (publish_verts_o),
       .pub_tris_i      (publish_tris_o),
       .pub_chunks_i    (publish_chunks_o),
@@ -448,6 +479,7 @@ module tb_zhao_geom_paramarena
       .short_burst_o   (short_burst_o),
       .stray_beat_o    (stray_beat_o),
       .gen_race_o      (gen_race_o),
+      .burst_unaligned_o(walk_burst_unaligned_o),
       .walk_depth_max_o(walk_depth_max_o),
       .busy_o          (walk_busy_o)
   );

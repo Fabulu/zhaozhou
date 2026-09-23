@@ -503,6 +503,25 @@ counter_catalog:
   - devstore_bursts_read
   - devstore_bursts_written
   - devstore_rd_wait_clocks
+
+  # APPENDED AT THE END, AND THAT IS THE WHOLE POINT. A counter id IS its
+  # zero-based index in this list (spec/counters.md 2), so inserting a name
+  # beside its relatives silently renumbers every counter after it. These two
+  # were first written beside the other paramarena/paramwalk entries and moved
+  # here on 2026-09-23 after tools/design/check_counter_ids.py measured the
+  # damage: cmd_dma_commands read index 246 against the RTL constant 198,
+  # where the inherited breakage alone accounts for 244. The +2 was ours.
+  # paramarena_burst_unaligned / paramwalk_burst_unaligned, 2026-09-23. These
+  # two are unlike every other detector in this catalog: their SILENCE IN
+  # SIMULATION IS GUARANTEED WHATEVER THE DESIGN DOES. A JEDEC BL8 SEQUENTIAL
+  # burst wraps inside its aligned eight-column (16-byte) block; the arbiter
+  # chops to min(rem, 8, row_tail) and so aligns only to the 2048-word row;
+  # and sim/models/zhao_sdram_model.sv walks the column LINEARLY. So a
+  # misaligned request is served CORRECTLY in simulation and WRONGLY by the
+  # part, and no functional test can fail on the consequence. These count the
+  # CAUSE instead -- a request address that is not a multiple of the quantum.
+  - paramarena_burst_unaligned
+  - paramwalk_burst_unaligned
 blocks:
 
   # ===========================================================================
@@ -4547,7 +4566,7 @@ blocks:
     tests:
       directed: tests/geometry/geom_paramarena_directed.cpp
       random: tests/geometry/geom_paramarena_directed.cpp
-    counters: [paramarena_verts_written, paramarena_tris_written, paramarena_chunks_written, paramarena_frames_published, paramarena_guard_denied, paramarena_quota_overflow, paramarena_records_discarded, paramarena_records_unsealed, paramarena_arena_overrun, paramarena_view_flip_blocked, paramarena_publish_blocked, paramarena_addr_view_bad, paramarena_scratch_contend, paramarena_retire_underflow]
+    counters: [paramarena_verts_written, paramarena_tris_written, paramarena_chunks_written, paramarena_frames_published, paramarena_guard_denied, paramarena_quota_overflow, paramarena_records_discarded, paramarena_records_unsealed, paramarena_arena_overrun, paramarena_view_flip_blocked, paramarena_publish_blocked, paramarena_addr_view_bad, paramarena_scratch_contend, paramarena_retire_underflow, paramarena_burst_unaligned]
     counter_ports:
       paramarena_verts_written: verts_written_o
       paramarena_tris_written: tris_written_o
@@ -4563,6 +4582,7 @@ blocks:
       paramarena_addr_view_bad: addr_view_bad_o
       paramarena_scratch_contend: scr_contend_o
       paramarena_retire_underflow: retire_underflow_o
+      paramarena_burst_unaligned: burst_unaligned_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: BUILT
@@ -4601,7 +4621,7 @@ blocks:
     tests:
       directed: tests/geometry/geom_paramarena_directed.cpp
       random: tests/geometry/geom_paramarena_directed.cpp
-    counters: [paramwalk_dirs_read, paramwalk_dir_mismatch, paramwalk_chunks_walked, paramwalk_chunks_stale, paramwalk_chunks_illegal, paramwalk_tris_emitted, paramwalk_tris_illegal, paramwalk_walk_cut, paramwalk_guard_denied, paramwalk_short_burst, paramwalk_stray_beat, paramwalk_gen_race]
+    counters: [paramwalk_dirs_read, paramwalk_dir_mismatch, paramwalk_chunks_walked, paramwalk_chunks_stale, paramwalk_chunks_illegal, paramwalk_tris_emitted, paramwalk_tris_illegal, paramwalk_walk_cut, paramwalk_guard_denied, paramwalk_short_burst, paramwalk_stray_beat, paramwalk_gen_race, paramwalk_burst_unaligned]
     counter_ports:
       paramwalk_dirs_read: dirs_read_o
       paramwalk_dir_mismatch: dir_mismatch_o
@@ -4615,6 +4635,7 @@ blocks:
       paramwalk_short_burst: short_burst_o
       paramwalk_stray_beat: stray_beat_o
       paramwalk_gen_race: gen_race_o
+      paramwalk_burst_unaligned: burst_unaligned_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: BUILT

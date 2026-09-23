@@ -2341,6 +2341,7 @@ module zhao_prod_top (
   logic [32-1:0] u24_view_flip_blocked_o;
   logic [32-1:0] u24_publish_blocked_o;
   logic [32-1:0] u24_addr_view_bad_o;
+  logic [32-1:0] u24_burst_unaligned_o;
   logic [32-1:0] u24_scr_contend_o;
   logic [32-1:0] u24_retire_underflow_o;
   logic [16-1:0] u24_fault_source_o;
@@ -2413,6 +2414,7 @@ module zhao_prod_top (
       .view_flip_blocked_o(u24_view_flip_blocked_o),
       .publish_blocked_o(u24_publish_blocked_o),
       .addr_view_bad_o(u24_addr_view_bad_o),
+      .burst_unaligned_o(u24_burst_unaligned_o),
       .scr_contend_o(u24_scr_contend_o),
       .retire_underflow_o(u24_retire_underflow_o),
       .fault_source_o(u24_fault_source_o),
@@ -2422,7 +2424,7 @@ module zhao_prod_top (
   logic u24_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u24_fold_q <= 1'b0;
-    else u24_fold_q <= u24_fold_q ^ (((^u24_seal_ready_o)) & u24_src[0]) ^ (((^u24_pb_lease_valid_o)) & u24_src[1]) ^ (((^u24_pb_wr_view_o)) & u24_src[2]) ^ (((^u24_pb_scratch_valid_o)) & u24_src[3]) ^ (((^u24_pv_ready_o)) & u24_src[4]) ^ (((^u24_td_ready_o)) & u24_src[5]) ^ (((^u24_ck_ready_o)) & u24_src[6]) ^ (((^u24_scr_grant_o)) & u24_src[7]) ^ (((^u24_publish_valid_o)) & u24_src[8]) ^ (((^u24_publish_view_o)) & u24_src[9]) ^ (((^u24_publish_gen_o)) & u24_src[10]) ^ (((^u24_publish_vert_base_o)) & u24_src[11]) ^ (((^u24_publish_tri_base_o)) & u24_src[12]) ^ (((^u24_publish_chunk_base_o)) & u24_src[13]) ^ (((^u24_publish_verts_o)) & u24_src[14]) ^ (((^u24_publish_tris_o)) & u24_src[15]) ^ (((^u24_publish_chunks_o)) & u24_src[16]) ^ (((^u24_guard_req_o)) & u24_src[17]) ^ (((^u24_guard_wdata_o)) & u24_src[18]) ^ (((^u24_guard_wvalid_o)) & u24_src[19]) ^ (((^u24_guard_wlast_o)) & u24_src[20]) ^ (((^u24_verts_written_o)) & u24_src[21]) ^ (((^u24_tris_written_o)) & u24_src[22]) ^ (((^u24_chunks_written_o)) & u24_src[23]) ^ (((^u24_frames_published_o)) & u24_src[24]) ^ (((^u24_guard_denied_o)) & u24_src[25]) ^ (((^u24_quota_overflow_o)) & u24_src[26]) ^ (((^u24_records_discarded_o)) & u24_src[27]) ^ (((^u24_records_unsealed_o)) & u24_src[28]) ^ (((^u24_arena_overrun_o)) & u24_src[29]) ^ (((^u24_view_flip_blocked_o)) & u24_src[30]) ^ (((^u24_publish_blocked_o)) & u24_src[31]) ^ (((^u24_addr_view_bad_o)) & u24_src[32]) ^ (((^u24_scr_contend_o)) & u24_src[33]) ^ (((^u24_retire_underflow_o)) & u24_src[34]) ^ (((^u24_fault_source_o)) & u24_src[35]) ^ (((^u24_frame_fault_o)) & u24_src[36]) ^ (((^u24_busy_o)) & u24_src[37]);
+    else u24_fold_q <= u24_fold_q ^ (((^u24_seal_ready_o)) & u24_src[0]) ^ (((^u24_pb_lease_valid_o)) & u24_src[1]) ^ (((^u24_pb_wr_view_o)) & u24_src[2]) ^ (((^u24_pb_scratch_valid_o)) & u24_src[3]) ^ (((^u24_pv_ready_o)) & u24_src[4]) ^ (((^u24_td_ready_o)) & u24_src[5]) ^ (((^u24_ck_ready_o)) & u24_src[6]) ^ (((^u24_scr_grant_o)) & u24_src[7]) ^ (((^u24_publish_valid_o)) & u24_src[8]) ^ (((^u24_publish_view_o)) & u24_src[9]) ^ (((^u24_publish_gen_o)) & u24_src[10]) ^ (((^u24_publish_vert_base_o)) & u24_src[11]) ^ (((^u24_publish_tri_base_o)) & u24_src[12]) ^ (((^u24_publish_chunk_base_o)) & u24_src[13]) ^ (((^u24_publish_verts_o)) & u24_src[14]) ^ (((^u24_publish_tris_o)) & u24_src[15]) ^ (((^u24_publish_chunks_o)) & u24_src[16]) ^ (((^u24_guard_req_o)) & u24_src[17]) ^ (((^u24_guard_wdata_o)) & u24_src[18]) ^ (((^u24_guard_wvalid_o)) & u24_src[19]) ^ (((^u24_guard_wlast_o)) & u24_src[20]) ^ (((^u24_verts_written_o)) & u24_src[21]) ^ (((^u24_tris_written_o)) & u24_src[22]) ^ (((^u24_chunks_written_o)) & u24_src[23]) ^ (((^u24_frames_published_o)) & u24_src[24]) ^ (((^u24_guard_denied_o)) & u24_src[25]) ^ (((^u24_quota_overflow_o)) & u24_src[26]) ^ (((^u24_records_discarded_o)) & u24_src[27]) ^ (((^u24_records_unsealed_o)) & u24_src[28]) ^ (((^u24_arena_overrun_o)) & u24_src[29]) ^ (((^u24_view_flip_blocked_o)) & u24_src[30]) ^ (((^u24_publish_blocked_o)) & u24_src[31]) ^ (((^u24_addr_view_bad_o)) & u24_src[32]) ^ (((^u24_burst_unaligned_o)) & u24_src[33]) ^ (((^u24_scr_contend_o)) & u24_src[34]) ^ (((^u24_retire_underflow_o)) & u24_src[35]) ^ (((^u24_fault_source_o)) & u24_src[36]) ^ (((^u24_frame_fault_o)) & u24_src[37]) ^ (((^u24_busy_o)) & u24_src[38]);
 
   // ---- zhao_geom_paramwalk ----
   logic [63:0] u25_lfsr_q;
@@ -2460,6 +2462,7 @@ module zhao_prod_top (
   logic [32-1:0] u25_short_burst_o;
   logic [32-1:0] u25_stray_beat_o;
   logic [32-1:0] u25_gen_race_o;
+  logic [32-1:0] u25_burst_unaligned_o;
   logic [16-1:0] u25_walk_depth_max_o;
   logic [1-1:0] u25_busy_o;
   zhao_geom_paramwalk u25_i (
@@ -2507,13 +2510,14 @@ module zhao_prod_top (
       .short_burst_o(u25_short_burst_o),
       .stray_beat_o(u25_stray_beat_o),
       .gen_race_o(u25_gen_race_o),
+      .burst_unaligned_o(u25_burst_unaligned_o),
       .walk_depth_max_o(u25_walk_depth_max_o),
       .busy_o(u25_busy_o)
   );
   logic u25_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u25_fold_q <= 1'b0;
-    else u25_fold_q <= u25_fold_q ^ (((^u25_scr_req_o)) & u25_src[0]) ^ (((^u25_walk_ready_o)) & u25_src[1]) ^ (((^u25_walk_done_o)) & u25_src[2]) ^ (((^u25_walk_failed_o)) & u25_src[3]) ^ (((^u25_t_valid_o)) & u25_src[4]) ^ (((^u25_t_v0_o)) & u25_src[5]) ^ (((^u25_t_v1_o)) & u25_src[6]) ^ (((^u25_t_v2_o)) & u25_src[7]) ^ (((^u25_t_material_o)) & u25_src[8]) ^ (((^u25_t_raster_o)) & u25_src[9]) ^ (((^u25_t_source_o)) & u25_src[10]) ^ (((^u25_t_illegal_o)) & u25_src[11]) ^ (((^u25_guard_req_o)) & u25_src[12]) ^ (((^u25_dirs_read_o)) & u25_src[13]) ^ (((^u25_dir_mismatch_o)) & u25_src[14]) ^ (((^u25_chunks_walked_o)) & u25_src[15]) ^ (((^u25_chunks_stale_o)) & u25_src[16]) ^ (((^u25_chunks_illegal_o)) & u25_src[17]) ^ (((^u25_tris_emitted_o)) & u25_src[18]) ^ (((^u25_tris_illegal_o)) & u25_src[19]) ^ (((^u25_walk_cut_o)) & u25_src[20]) ^ (((^u25_guard_denied_o)) & u25_src[21]) ^ (((^u25_short_burst_o)) & u25_src[22]) ^ (((^u25_stray_beat_o)) & u25_src[23]) ^ (((^u25_gen_race_o)) & u25_src[24]) ^ (((^u25_walk_depth_max_o)) & u25_src[25]) ^ (((^u25_busy_o)) & u25_src[26]);
+    else u25_fold_q <= u25_fold_q ^ (((^u25_scr_req_o)) & u25_src[0]) ^ (((^u25_walk_ready_o)) & u25_src[1]) ^ (((^u25_walk_done_o)) & u25_src[2]) ^ (((^u25_walk_failed_o)) & u25_src[3]) ^ (((^u25_t_valid_o)) & u25_src[4]) ^ (((^u25_t_v0_o)) & u25_src[5]) ^ (((^u25_t_v1_o)) & u25_src[6]) ^ (((^u25_t_v2_o)) & u25_src[7]) ^ (((^u25_t_material_o)) & u25_src[8]) ^ (((^u25_t_raster_o)) & u25_src[9]) ^ (((^u25_t_source_o)) & u25_src[10]) ^ (((^u25_t_illegal_o)) & u25_src[11]) ^ (((^u25_guard_req_o)) & u25_src[12]) ^ (((^u25_dirs_read_o)) & u25_src[13]) ^ (((^u25_dir_mismatch_o)) & u25_src[14]) ^ (((^u25_chunks_walked_o)) & u25_src[15]) ^ (((^u25_chunks_stale_o)) & u25_src[16]) ^ (((^u25_chunks_illegal_o)) & u25_src[17]) ^ (((^u25_tris_emitted_o)) & u25_src[18]) ^ (((^u25_tris_illegal_o)) & u25_src[19]) ^ (((^u25_walk_cut_o)) & u25_src[20]) ^ (((^u25_guard_denied_o)) & u25_src[21]) ^ (((^u25_short_burst_o)) & u25_src[22]) ^ (((^u25_stray_beat_o)) & u25_src[23]) ^ (((^u25_gen_race_o)) & u25_src[24]) ^ (((^u25_burst_unaligned_o)) & u25_src[25]) ^ (((^u25_walk_depth_max_o)) & u25_src[26]) ^ (((^u25_busy_o)) & u25_src[27]);
 
   // ---- zhao_geom_pose_cache ----
   logic [63:0] u26_lfsr_q;

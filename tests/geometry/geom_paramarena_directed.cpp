@@ -100,12 +100,31 @@ constexpr uint32_t PV_B = 24;
 constexpr uint32_t TD_B = 16;
 constexpr uint32_t CK_B = 64;
 
+// THE BURST-ALIGNMENT QUANTUM AND THE VERTEX ALLOCATION STRIDE, 2026-09-23.
+// `PV_B` is the RECORD (R7 freezes it at 24 bytes).  `PV_SLOT_B` is what the
+// allocator ADVANCES by, and it is 32 because 24 is not a multiple of 16 and
+// a 24-byte stride puts every ODD vertex eight bytes into an aligned
+// eight-column block -- where a JEDEC BL8 SEQUENTIAL burst wraps.
+//
+// These mirror `zhao_geom_paramarena`'s `PV_SLOT_B` and `LAYOUT_ALIGN_B`.  A
+// mirrored constant is a frozen copy of yesterday's agreement, so the bench
+// does not merely restate them: the alignment ASSERTION at the end of this
+// file re-derives the property from the addresses the RTL actually issued,
+// through `req_unaligned_o`, which is the bench's OWN observer on the guard
+// request and not the block's counter.
+constexpr uint32_t BURST_ALIGN_B = 16;
+constexpr uint32_t PV_SLOT_B     = 32;
+
 constexpr uint32_t MAX_VERTS  = 65535;
 constexpr uint32_t MAX_TRIS   = 16384;
 constexpr uint32_t ARENA_CHUNKS = 16384;
 
-constexpr uint32_t TRI_OFF_B   = MAX_VERTS * PV_B;              // 1,572,840
-constexpr uint32_t CHUNK_OFF_B = TRI_OFF_B + MAX_TRIS * TD_B;   // 1,834,984
+constexpr uint32_t align_up(uint32_t v) {
+  return ((v + BURST_ALIGN_B - 1u) / BURST_ALIGN_B) * BURST_ALIGN_B;
+}
+
+constexpr uint32_t TRI_OFF_B   = align_up(MAX_VERTS * PV_SLOT_B);          // 2,097,120
+constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,359,264
 
 uint32_t view_base(int view) { return view ? VIEW1_BASE : VIEW0_BASE; }
 
@@ -396,6 +415,7 @@ void bring_up(Dut& t) {
   t.t_ready_i = 0;
   t.peek_en_i = 0;
   t.peek_waddr_i = 0;
+  t.wcfg_chunk_base_bump_i = 0;
   t.poke_en_i = 0;
   t.poke_waddr_i = 0;
   t.poke_data_i = 0;
@@ -687,7 +707,8 @@ int main(int argc, char** argv) {
   {
     const uint32_t vbase = VIEW1_BASE;
     for (int i = 0; i < 2; ++i) {
-      const uint32_t a = vbase + static_cast<uint32_t>(i) * PV_B;
+      // THE SLOT, not the record: the allocator advances by PV_SLOT_B.
+      const uint32_t a = vbase + static_cast<uint32_t>(i) * PV_SLOT_B;
       cke(static_cast<uint32_t>(verts[i].x), peek32(t, a + 0), "A: PV byte 0..3 is screen_x");
       cke(static_cast<uint32_t>(verts[i].y), peek32(t, a + 4), "A: PV byte 4..7 is screen_y");
       const uint32_t w2 = peek32(t, a + 8);
@@ -1157,45 +1178,130 @@ int main(int argc, char** argv) {
   cke(0, t.gen_race_o, "gen_race_o is zero -- the reader's busy blocks the seal");
 
   // -----------------------------------------------------------------------
-  // A REPORTED OBSERVATION, NOT AN ASSERTION: BURST ALIGNMENT.
+  // ASSERTED AS OF 2026-09-23, AND IT WAS "REPORTED, NOT ASSERTED" BEFORE.
   // `zhao_sdram_ctrl` puts `req.addr[26:1]` straight into the COLUMN field of
   // a JEDEC BL8 burst.  A real SDR SDRAM's BL8 SEQUENTIAL burst wraps within
   // its eight-column block, so a burst whose start column is not a multiple of
   // eight returns / writes its words ROTATED.  `sim/models/zhao_sdram_model.sv`
-  // walks the column LINEARLY, so THIS BENCH CANNOT FAIL ON IT -- which is
-  // exactly why it is counted and printed rather than trusted to the model.
+  // walks the column LINEARLY, so THIS BENCH CANNOT FAIL ON THE CONSEQUENCE --
+  // which is exactly why the CAUSE is asserted instead.
   //
-  // It is not asserted because spec/memory_rules.md states no alignment rule
-  // for the local SDRAM client ports and the model cannot settle the question.
-  // The ruling is the owner's; what is reported here is the measurement.
-  if (t.req_unaligned_o != 0) {
+  // WHAT CHANGED.  This block used to print a warning and assert nothing,
+  // on the grounds that "spec/memory_rules.md states no alignment rule for the
+  // local SDRAM client ports and the model cannot settle the question. The
+  // ruling is the owner's."  The rule is now written down -- memory_rules.md
+  // section 5c, THE BURST-ALIGNMENT LAW -- and the first of the three levers
+  // that paragraph named ("round the sub-region bases up to a 16-byte
+  // boundary") is what `zhao_geom_paramarena` now does.  `zhao_vram_arbiter`
+  // was NOT touched: the second lever moves a bound
+  // `mem_vram_arbiter_liveness` asserts is exact.
+  //
+  // `req_unaligned_o` IS THE BENCH'S OWN OBSERVER, watching the guard request
+  // at the wire, and is NOT `arena_burst_unaligned_o`.  Both are checked, and
+  // that is deliberate: a block's own counter agreeing with itself is one
+  // measurement, and a counter that had been wired to the wrong expression
+  // would agree with itself perfectly.
+  // SNAPSHOT, because case 12 below FIRES the walker's counter on purpose and
+  // the bench's observer sees that request too. The banner and the summary
+  // must report the HEALTHY run's number, not the control's -- quoting a
+  // deliberately-broken tail as though it were the measurement is how an
+  // alarm gets learned-past.
+  const uint32_t unaligned_healthy = t.req_unaligned_o;
+  ckt(unaligned_healthy == 0,
+     "every guard request the HEALTHY part of this run issued started on a"
+     " 16-byte boundary (the bench's own observer)");
+  ckt(t.arena_burst_unaligned_o == 0,
+     "the arena's own burst_unaligned_o agrees with the bench's observer");
+  ckt(t.walk_burst_unaligned_o == 0,
+     "the walker's burst_unaligned_o is silent -- its bases came in aligned");
+  ckt(TRI_OFF_B % BURST_ALIGN_B == 0,
+     "the derived triangle base is burst-aligned");
+  ckt(CHUNK_OFF_B % BURST_ALIGN_B == 0,
+     "the derived chunk base is burst-aligned");
+  ckt(PV_SLOT_B % BURST_ALIGN_B == 0,
+     "the vertex allocation stride is burst-aligned");
+
+  // -----------------------------------------------------------------------
+  // CASE 12 -- FIRE `walk_burst_unaligned_o`.
+  // RUN LAST, AND AFTER the assertions above, deliberately: those require the
+  // counter SILENT across the whole healthy run, and this one requires it to
+  // MOVE.  A control that fired earlier would make every silence above
+  // unreadable.
+  //
+  // WHY THIS COUNTER OWES A STIMULUS AND NOT A MUTANT.  The arena's
+  // `burst_unaligned_o` is unreachable while its allocator is correct, so it
+  // has a committed mutant.  The WALKER's is different in kind: it does not
+  // compute its bases, it is TOLD them on `pub_*_base_i`.  Its job is to catch
+  // a PRODUCER whose layout drifted, and that is a legal input, not a broken
+  // block.  Saying "reachable, therefore no mutant is owed" and never firing
+  // it would be the claim, not the evidence.
+  //
+  // THE STIMULUS IS TWO-PART, AND THE SECOND PART IS WHY.  Bumping the chunk
+  // base the walker sees is caught ONE STATE EARLIER: `dir_agrees_c` compares
+  // the directory that travelled through SDRAM against `pub_chunk_base_i`, so
+  // a bumped base fails at W_DIR_CHECK with `dir_mismatch_o` and never reaches
+  // a chunk read.  The directory is therefore poked to MATCH -- which is what
+  // a producer with a drifted layout would actually have written -- and only
+  // then is the base offered misaligned.
+  {
+    std::printf("\n=== case 12: walk_burst_unaligned_o FIRED\n");
+    const uint32_t dirmiss_before = t.dir_mismatch_o;
+    const uint32_t saved_cbase = peek32(t, SCRATCH_BASE + 8);
+    ckt((saved_cbase % BURST_ALIGN_B) == 0,
+        "case 12: the published chunk base was aligned before the bump");
+
+    poke16(t, SCRATCH_BASE + 8, static_cast<uint16_t>((saved_cbase + 8u) & 0xFFFFu));
+    poke16(t, SCRATCH_BASE + 10, static_cast<uint16_t>(((saved_cbase + 8u) >> 16) & 0xFFFFu));
+    cke(saved_cbase + 8u, peek32(t, SCRATCH_BASE + 8),
+        "case 12: the directory really carries the drifted chunk base");
+    t.wcfg_chunk_base_bump_i = 8;
+    t.eval();
+
+    const WalkResult r = walk(t, 0);
+    ckt(r.completed, "case 12: the walk completed");
+    cke(dirmiss_before, t.dir_mismatch_o,
+        "case 12: the directory still AGREES -- the fault under test is ALIGNMENT,"
+        " not a round-trip mismatch");
+    ckt(t.walk_burst_unaligned_o > 0,
+        "case 12: walk_burst_unaligned_o FIRED on a producer whose chunk base"
+        " is not burst-aligned");
+    ckt(t.guard_violations_o == 0,
+        "case 12: the guard refused nothing -- a misaligned address inside the"
+        " view is LEGAL, which is exactly why only this counter can see it");
+    std::printf("case 12: walk_burst_unaligned_o = %u (was 0)\n",
+                t.walk_burst_unaligned_o);
+
+    // Put it back, and prove the counter STOPS. A control that fires and then
+    // keeps firing on healthy input is a stuck bit, not a detector.
+    const uint32_t fired = t.walk_burst_unaligned_o;
+    poke16(t, SCRATCH_BASE + 8, static_cast<uint16_t>(saved_cbase & 0xFFFFu));
+    poke16(t, SCRATCH_BASE + 10, static_cast<uint16_t>((saved_cbase >> 16) & 0xFFFFu));
+    t.wcfg_chunk_base_bump_i = 0;
+    t.eval();
+    cke(saved_cbase, peek32(t, SCRATCH_BASE + 8),
+        "case 12: the directory is restored");
+    const WalkResult r2 = walk(t, 0);
+    ckt(r2.completed, "case 12: the restored frame walks again");
+    cke(fired, t.walk_burst_unaligned_o,
+        "case 12: the counter did NOT move again once the base was aligned");
+  }
+  if (unaligned_healthy != 0) {
     std::printf(
         "\n"
         "***************************************************************\n"
-        "* REPORTED, NOT ASSERTED: %u of this run's guard requests start\n"
-        "* at an address that is NOT 16-BYTE (8-WORD) ALIGNED.\n"
+        "* %u of this run's guard requests start at an address that is\n"
+        "* NOT 16-BYTE (8-WORD) ALIGNED.\n"
         "***************************************************************\n"
-        "  zhao_geom_paramarena's derived sub-region bases are\n"
-        "    TRI_OFF_B   = MAX_VERTS*24            = %u   (mod 16 = %u)\n"
-        "    CHUNK_OFF_B = TRI_OFF_B + MAX_TRIS*16 = %u   (mod 16 = %u)\n"
-        "  and a ProjectedVertex's 24-byte stride alternates 0 / 8 mod 16, so\n"
-        "  roughly half of every record kind starts mid-block.\n"
-        "\n"
-        "  EVERY CHECK IN THIS FILE PASSES WHILE THE HARDWARE WOULD NOT, because\n"
-        "  the behavioural model walks rd_col + rd_beat linearly and has no\n"
+        "  derived sub-region bases were\n"
+        "    TRI_OFF_B   = %u   (mod 16 = %u)\n"
+        "    CHUNK_OFF_B = %u   (mod 16 = %u)\n"
+        "  EVERY OTHER CHECK IN THIS FILE CAN STILL PASS, because the\n"
+        "  behavioural model walks rd_col + rd_beat linearly and has no\n"
         "  eight-column wrap to get wrong.  That is the shape of a broken\n"
         "  instrument: the model reads BETTER than the silicon.\n"
-        "\n"
-        "  Three levers, none of which is this test:\n"
-        "    * round the sub-region bases up to a 16-byte boundary (at most 8\n"
-        "      wasted bytes in a 4 MiB view);\n"
-        "    * split in zhao_vram_arbiter on 8-word BOUNDARIES, not 8-word\n"
-        "      COUNTS;\n"
-        "    * or state in spec/memory_rules.md that the local SDRAM path is\n"
-        "      linear-burst and teach the model the same law, so the claim is\n"
-        "      written down rather than inherited.\n"
         "***************************************************************\n\n",
-        t.req_unaligned_o, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B, CHUNK_OFF_B % 16u);
+        unaligned_healthy, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B,
+        CHUNK_OFF_B % 16u);
   }
 
   std::printf(
@@ -1213,7 +1319,8 @@ int main(int argc, char** argv) {
       "  guard_violations     = %u   addr_view_bad_o     = %u\n"
       "  writes v0/v1/scratch = %u / %u / %u\n"
       "  share ledger_full    = %u\n"
-      "  req_unaligned_o      = %u  (REPORTED, not asserted -- see above)\n"
+      "  req_unaligned_o      = %u  (the HEALTHY run; ASSERTED ZERO since 2026-09-23)\n"
+      "  walk_unaligned_o     = %u  (NON-ZERO BY DESIGN: case 12 fires it LAST)\n"
       "-----------------------------------------------------------------\n",
       t.frames_published_o, t.verts_written_o, t.tris_written_o, t.chunks_written_o,
       t.publish_blocked_o, t.view_flip_blocked_o, t.quota_overflow_o, t.records_discarded_o,
@@ -1221,7 +1328,7 @@ int main(int argc, char** argv) {
       t.chunks_walked_o, t.chunks_stale_o, t.chunks_illegal_o, t.tris_emitted_o,
       static_cast<unsigned>(t.walk_depth_max_o), t.walk_cut_o, t.guard_violations_o,
       t.addr_view_bad_o, t.wr_in_view0_o, t.wr_in_view1_o, t.wr_in_scratch_o,
-      t.share_ledger_full_o, t.req_unaligned_o);
+      t.share_ledger_full_o, unaligned_healthy, t.walk_burst_unaligned_o);
 
   std::printf("geom_paramarena_directed: %d/%d checks failed\n", g_fail, g_checks);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);

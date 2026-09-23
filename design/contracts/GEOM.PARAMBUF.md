@@ -95,6 +95,38 @@ triangles with draw M's cull mode -- the fault I39 refuses by name.
 than plausible: a chunk from last frame reads as a valid chunk in every other
 respect.
 
+## The RECORD size is not the ALLOCATION stride (ARENAWIRE, 2026-09-23)
+
+The three layouts above are **records**, and R7 freezes them. What the arena
+**advances its cursor by** is a separate number, and for the ProjectedVertex it
+is **not** the record size.
+
+| record | size | allocation stride | why |
+|---|---|---|---|
+| `ProjectedVertex` | 24 B | **32 B** (`PV_STRIDE_B`, a knob) | 24 is not a multiple of the SDRAM's 16-byte burst-alignment quantum, so a 24-byte stride puts every **odd** vertex 8 bytes into an aligned eight-column block — where a JEDEC BL8 sequential burst wraps |
+| `TriangleDescriptor` | 16 B | 16 B | already a multiple |
+| tile-reference chunk | 64 B | 64 B | already a multiple |
+
+**The sub-region bases are rounded up to the quantum too**, because a stride
+that is a multiple of 16 still lands every record off it if the region does not
+**start** on one. `zhao_geom_paramarena` derives `TRI_OFF_B` and `CHUNK_OFF_B`
+that way and refuses a breach at elaboration; the full argument, including the
+arithmetic that shows a 16-byte-aligned address makes every burst the arbiter
+derives from it safe, is in that block's header under **THE BURST THAT WRAPS**,
+and the law is `spec/memory_rules.md` §5c (**provisional**).
+
+**THE COST, DECLARED RATHER THAN ABSORBED.** Eight bytes of slack per vertex,
+524,280 bytes at 65,535 vertices. The view's used footprint is **3,407,840 of
+4,194,304 bytes** — 2,097,120 vertex + 262,144 descriptor + 1,048,576 chunk —
+so R7's preferred tier still fits inside 4 MiB with the stride applied.
+
+**AND IT WAS NOT A PRECAUTION.** The layout before this change put
+`TRI_OFF_B` at `65,535 * 24` = 1,572,840, which is **8 mod 16**, so every
+TriangleDescriptor the arena wrote was misaligned. `sim/models/zhao_sdram_model.sv`
+reads **linearly**, so nothing in this repository could fail on it. The
+invariant is therefore **counted** — `burst_unaligned_o` on both blocks — and
+both counters have been seen to fire.
+
 ## Backpressure rules
 
 The Measure **seals quotas before the frame**. Within a sealed frame the arena
