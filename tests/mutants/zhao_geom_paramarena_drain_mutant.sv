@@ -166,6 +166,43 @@
 // "LOOKS fixed". What changed is the ALLOCATION: `PV_STRIDE_B` is a multiple
 // of the quantum, and both sub-region offsets are rounded up to it.
 //
+// ===========================================================================
+// SUPERSEDED IN PART, 2026-09-23 (owner ruling R243 / D-SDRAM-A, lane
+// BURSTTRUTH). THREE SENTENCES ABOVE ARE NOW FALSE, and they are left standing
+// because they record why this block was built the way it is -- not because
+// they still describe the tree.
+//
+//   1. "`zhao_vram_arbiter.burst_words` chops a request into
+//      `min(remaining, 8, row_tail)` words, which aligns to the 2048-word ROW
+//      and to nothing finer."
+//      IT NOW CLAMPS TO THE ALIGNED EIGHT-COLUMN BLOCK: `blk_tail =
+//      8 - col[2:0]`, which is never more than 8 and never more than the row
+//      tail, so it subsumes both of the clamps it replaced.
+//
+//   2. "THE REPAIR IS INSIDE THIS BLOCK AND NOWHERE ELSE. `zhao_vram_arbiter`
+//      is untouched -- ... a fix there moves a bound `mem_vram_arbiter_liveness`
+//      asserts is exact."
+//      THE OWNER TOOK THAT LEVER. Aligning each client individually "leaves
+//      every future client having to remember", and the bound was RE-PROVEN
+//      rather than adjusted: `bmc` passes at 34/52 and both `bmc_tight_*`
+//      tasks still FAIL at bound-1. It is unaffected structurally -- the
+//      competitor term is min(BURSTS_PER_REQ, ceil(AGING/SPAN)) = min(4,2) = 2
+//      so the aging term binds, and a shorter burst has a shorter span.
+//
+//   3. "Every gate stayed green because the model reads and writes LINEARLY."
+//      IT NO LONGER DOES. `sim/models/zhao_sdram_model.sv` holds col[10:3] and
+//      advances col[2:0] (`bl8_col`), so a burst that crosses its block
+//      returns the part's answer. That repair came FIRST, by ruling, so the
+//      bug class would be observable rather than merely fixed.
+//
+// WHAT THIS BLOCK'S OWN REPAIR IS NOW WORTH. It is no longer a correctness
+// obligation: a misaligned request is served correctly by the arbiter. It
+// still saves a burst per request, so `BURST_ALIGN_B`, `PV_STRIDE_B` and
+// `burst_unaligned_o` stay -- as a PERFORMANCE property and its counter, not
+// as the last line of defence. The counter's committed mutant stays too: it is
+// evidence about the counter, which is a different question.
+// ===========================================================================
+//
 // AND THE INVARIANT IS MEASURED, NOT ASSERTED. `burst_unaligned_o` counts
 // every clock this block offers the guard a misaligned address, including the
 // directory write, whose address comes from a base rather than a cursor.

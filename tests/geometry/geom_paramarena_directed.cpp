@@ -1182,9 +1182,16 @@ int main(int argc, char** argv) {
   // `zhao_sdram_ctrl` puts `req.addr[26:1]` straight into the COLUMN field of
   // a JEDEC BL8 burst.  A real SDR SDRAM's BL8 SEQUENTIAL burst wraps within
   // its eight-column block, so a burst whose start column is not a multiple of
-  // eight returns / writes its words ROTATED.  `sim/models/zhao_sdram_model.sv`
-  // walks the column LINEARLY, so THIS BENCH CANNOT FAIL ON THE CONSEQUENCE --
-  // which is exactly why the CAUSE is asserted instead.
+  // eight returns / writes its words ROTATED.
+  //
+  // WHEN THIS WAS WRITTEN the sentence continued: "`zhao_sdram_model.sv` walks
+  // the column LINEARLY, so THIS BENCH CANNOT FAIL ON THE CONSEQUENCE -- which
+  // is exactly why the CAUSE is asserted instead."  THE MODEL NO LONGER WALKS
+  // LINEARLY (owner ruling R243 / D-SDRAM-A, the same day): it holds col[10:3]
+  // and advances col[2:0], so the consequence IS now reachable by a functional
+  // test.  The cause is still asserted here, because a counter that names the
+  // fault is a better diagnosis than a corrupted word that does not -- but it
+  // is no longer the ONLY thing that could fail.
   //
   // WHAT CHANGED.  This block used to print a warning and assert nothing,
   // on the grounds that "spec/memory_rules.md states no alignment rule for the
@@ -1192,9 +1199,16 @@ int main(int argc, char** argv) {
   // ruling is the owner's."  The rule is now written down -- memory_rules.md
   // section 5c, THE BURST-ALIGNMENT LAW -- and the first of the three levers
   // that paragraph named ("round the sub-region bases up to a 16-byte
-  // boundary") is what `zhao_geom_paramarena` now does.  `zhao_vram_arbiter`
-  // was NOT touched: the second lever moves a bound
-  // `mem_vram_arbiter_liveness` asserts is exact.
+  // boundary") is what `zhao_geom_paramarena` now does.
+  //
+  // THE SECOND LEVER WAS THEN TAKEN BY THE OWNER (R243), against the note that
+  // used to stand here -- "`zhao_vram_arbiter` was NOT touched: the second
+  // lever moves a bound `mem_vram_arbiter_liveness` asserts is exact".  It
+  // does not move it: the arbiter now clamps every burst to the aligned
+  // eight-column block, and the bound was RE-PROVEN at 34/52 with both
+  // `bmc_tight_*` tasks still failing at bound-1.  So this block's alignment
+  // is now a PERFORMANCE property (one burst fewer per request), not a
+  // correctness obligation.
   //
   // `req_unaligned_o` IS THE BENCH'S OWN OBSERVER, watching the guard request
   // at the wire, and is NOT `arena_burst_unaligned_o`.  Both are checked, and

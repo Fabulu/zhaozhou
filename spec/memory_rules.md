@@ -582,7 +582,7 @@ five `c_forward_pb_*` covers. Two committed mutants make it fail:
 `zhao_mem_guard_pbunion_mutant.sv` (the three containment tests collapse into
 their union).
 
-### THE BURST-ALIGNMENT LAW (ARENAWIRE, 2026-09-23) — PROVISIONAL, ONE LANE'S READING
+### THE BURST-ALIGNMENT LAW (ARENAWIRE, 2026-09-23) — RATIFIED BY R243, AND ENFORCED CENTRALLY SINCE BURSTTRUTH, 2026-09-23
 
 **A request to the local SDRAM should start at a byte address that is a
 multiple of 16.** This section had no alignment rule for the local SDRAM client
@@ -608,14 +608,27 @@ is `rem < 8` words from an aligned column. **Neither can cross the block.** One
 condition on the address covers every length from 1 to 64 bytes and needs no
 change to the arbiter.
 
-**NO TEST IN THIS TREE CAN FAIL ON A BREACH.** `sim/models/zhao_sdram_model.sv`
-walks the column **linearly** and has no eight-column wrap to get wrong, so a
-misaligned request is served **correctly** in simulation and **wrongly** by the
-part. The model reads **better than the silicon** — the broken-instrument shape,
-in the flattering direction. That is why blocks **count the cause**
-(`burst_unaligned_o` on `zhao_geom_paramarena` and `zhao_geom_paramwalk`) rather
-than relying on a functional check, and why the counter owes a committed mutant:
-`tests/mutants/zhao_geom_paramarena_align_mutant.sv`.
+**THAT WAS TRUE UNTIL 2026-09-23 AND IS NOT NOW.** As written, the sentence
+below was the whole difficulty:
+
+> NO TEST IN THIS TREE CAN FAIL ON A BREACH. `sim/models/zhao_sdram_model.sv`
+> walks the column **linearly** and has no eight-column wrap to get wrong, so a
+> misaligned request is served **correctly** in simulation and **wrongly** by
+> the part. The model reads **better than the silicon** — the broken-instrument
+> shape, in the flattering direction.
+
+Owner ruling **R243 / D-SDRAM-A** repaired the instrument first and the design
+second, in that order and for that reason: *"Make the SDRAM model match real
+JEDEC BL8 wrapping first so the bug class becomes observable in simulation,
+then fix the arbiter centrally."* The model now holds `col[10:3]` and advances
+`col[2:0]` (`bl8_col`), so a burst that crosses its block returns the part's
+answer rather than the flattering one, and a breach is a **functional failure**
+instead of an invisible one.
+
+Blocks still **count the cause** (`burst_unaligned_o` on
+`zhao_geom_paramarena` and `zhao_geom_paramwalk`, with the committed mutant
+`tests/mutants/zhao_geom_paramarena_align_mutant.sv`) — but the counters are now
+a *diagnostic*, not the only detector there is.
 
 **It was already breached, on a live path.** `zhao_geom_paramarena`'s
 `TRI_OFF_B` was `MAX_VERTS * 24` = 1,572,840, which is **8 mod 16**, so every
@@ -623,23 +636,69 @@ TriangleDescriptor the arena wrote — the record type with a live production
 producer — started at column 4 and wrapped. `reports/HANDOVER-20260919.md` 15.2
 recorded the divergence as waiting on entry I53; it was not waiting.
 
-**Three levers were named. The first is the one taken.** Round the sub-region
-bases up to the quantum (done, inside the producer, at most 15 bytes per
-region). **NOT taken:** splitting in `zhao_vram_arbiter` on 8-word boundaries
-rather than 8-word counts — that moves a bound `mem_vram_arbiter_liveness`
-asserts is **exact**. **Also not taken:** declaring the local SDRAM path
-linear-burst and teaching the model the same law, which would make the claim
-true by assertion rather than by construction.
+**Three levers were named, and the OWNER TOOK THE SECOND ONE.** ARENAWIRE took
+the first — round the sub-region bases up to the quantum, inside the producer,
+at most 15 bytes per region — and recorded the second as *"NOT taken: splitting
+in `zhao_vram_arbiter` on 8-word boundaries rather than 8-word counts — that
+moves a bound `mem_vram_arbiter_liveness` asserts is exact."*
+
+**R243 overrules that, and the reason it gives is the one that matters:**
+aligning each client individually *"leaves every future client having to
+remember"*, and a client that forgets yields correct simulation and wrong
+hardware. So `zhao_vram_arbiter.burst_words` now clamps to the **aligned
+eight-column block tail** (`blk_tail = 8 - col[2:0]`), which subsumes both of
+the clamps it replaces: it is never more than 8, and 2048 is a multiple of 8 so
+the row tail is never smaller than it. **One clamp covers every client, every
+length and every address.**
+
+The bound was **re-proven, not adjusted** — `mem_vram_arbiter_liveness` asserts
+34/52 in both directions (the `bmc_tight_*` tasks must FAIL at bound−1) and was
+re-run against the change. It is unaffected for a structural reason rather than
+by luck: the competitor term is
+`min(BURSTS_PER_REQ, ceil(AGING_OVERRIDE / MAX_BURST_SPAN)) = min(4, 2) = 2`,
+so the aging term binds; and a shorter burst has a shorter grant-to-grant span.
+The cost is one extra burst on a misaligned 64-byte request (five, not four).
+
+**The third lever stays NOT taken:** declaring the local SDRAM path linear-burst
+and teaching the model the same law would make the claim true by assertion
+rather than by construction.
 
 **Padding a request's LENGTH does not satisfy this rule.** The condition is on
 the START. A 24-byte record padded to 32 bytes at an address 8 mod 16 is
 exactly as wrapped as it was — that is the half-fix the handover warns
 "LOOKS fixed".
 
-**What this section does NOT claim.** No board measurement has been taken. This
-is arithmetic over two RTL files plus the JEDEC burst definition, by one lane,
-and the part's actual behaviour is unverified here. Blocks other than the two
-named above have **not** been audited against it.
+**A CLIENT'S ALIGNMENT IS NO LONGER A CORRECTNESS OBLIGATION.** Since the
+arbiter clamp, a misaligned request is served **correctly**; what it costs is
+one extra burst. Alignment is therefore a *performance* property of a client and
+`burst_unaligned_o` is a *performance* counter. The rule above stays written
+down because a client that is aligned is a client that never pays it, and
+because the next reader needs to know why the clamp exists — not because
+forgetting it now breaks anything.
+
+**The audit R243 asked for was done (BURSTTRUTH, 2026-09-23).** Every requester
+that reaches `zhao_vram_arbiter` was walked. Every one of them steps by a
+constant that is a multiple of 16 (64-byte lines, 32-byte records, 192-byte
+records, 512/640/768-byte framebuffer rows), so **no client's own arithmetic
+introduces a misalignment** — each one is aligned exactly as far as the BASE it
+was handed. Three kinds of base exist:
+
+* **Constants in `zhao_pkg`** — the framebuffer slots, the terrain region, the
+  asset pool. All 16-byte aligned, none of them declared to be.
+* **`zhao_mem_upload`'s publish base** — the ONE place in the tree that
+  ENFORCES alignment, and it enforces **64 bytes by refusal** (`V_UNALIGNED`,
+  `req_vram_addr_i[5:0] != 0`). Everything reached through `pub_base_i` /
+  `dir_base_i` inherits it.
+* **Ports and host-shaped data** — `render_fb_base_i` and `render_fb_stride_i`
+  are inputs of `zhao_console_core` with **no alignment requirement anywhere**,
+  and `zhao_geom_clipread`'s per-row frame offsets rely on a HOST convention
+  (*"which is the whole reason `zref::clip_page` shapes every offset to the
+  64-byte grid"*) that the hardware does not check. Those were the unguarded
+  degrees of freedom, and the arbiter clamp is what makes them harmless.
+
+**What this section still does NOT claim.** No board measurement has been taken.
+This is arithmetic over the RTL plus the JEDEC burst definition, and the part's
+actual behaviour is unverified here.
 
 ## 5f. The shared render asset pool — Phase 3 / Packet E
 
