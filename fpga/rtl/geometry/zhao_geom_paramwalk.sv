@@ -97,6 +97,15 @@ module zhao_geom_paramwalk
   import zhao_pkg::*;
 #(
     parameter logic [31:0] SCRATCH_BASE = ZHAO_PARAMBUF_SCRATCH_BASE,
+    // THE SDRAM'S BURST-ALIGNMENT QUANTUM, IN BYTES -- the same knob, with the
+    // same default and the same reason, as `zhao_geom_paramarena`'s. The full
+    // argument lives in that block's header under "THE BURST THAT WRAPS";
+    // in one sentence, a JEDEC BL8 sequential burst wraps inside its aligned
+    // eight-column block, a column here is one 16-bit word, and the arbiter
+    // aligns only to the 2048-word row. This block READS, and a read that
+    // wraps returns the right bytes in the wrong order -- which decodes to a
+    // plausible record, not to an error.
+    parameter int unsigned BURST_ALIGN_B = 16,
     // The longest chain a walk will follow before cutting it. A `next` that
     // points backwards is a legal-looking cycle, and nothing inside a chunk
     // can tell you so.
@@ -169,6 +178,13 @@ module zhao_geom_paramwalk
     output var logic [31:0] short_burst_o,
     output var logic [31:0] stray_beat_o,
     output var logic [31:0] gen_race_o,
+    // THE BURST-ALIGNMENT TRIPWIRE. Unlike the producer's, THIS ONE IS
+    // REACHABLE WITH LEGAL STIMULUS and therefore owes no mutant: the walker
+    // does not compute its bases, it is TOLD them on `pub_*_base_i`, so a
+    // directed case that publishes a misaligned base fires it. That is the
+    // useful direction anyway -- this counter's job is to catch a PRODUCER
+    // whose layout drifted, not this block's own arithmetic.
+    output var logic [31:0] burst_unaligned_o,
     output var logic [15:0] walk_depth_max_o,
     output var logic        busy_o
 );
@@ -176,6 +192,8 @@ module zhao_geom_paramwalk
   localparam int unsigned CK_B  = ZHAO_PARAMBUF_CK_BYTES;  // w=64 bytes
   localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=16 bytes
   localparam int unsigned CKW   = CK_B * 8;                // w=512 bits
+  // The low bits an aligned address must have clear.
+  localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);  // w=4 bits
   localparam int unsigned CK_BEATS = CK_B / 8;             // w=8 beats
   localparam int unsigned TD_BEATS = TD_B / 8;             // w=2 beats
 
@@ -414,6 +432,7 @@ module zhao_geom_paramwalk
       short_burst_o    <= '0;
       stray_beat_o     <= '0;
       gen_race_o       <= '0;
+      burst_unaligned_o <= '0;
       walk_depth_max_o <= 16'd0;
     end else begin
       walk_done_o   <= 1'b0;
@@ -435,6 +454,15 @@ module zhao_geom_paramwalk
       // walk start, pub_gen_i at publication.
       if ((wstate_q != W_IDLE) && pub_valid_i && (pub_gen_i != w_gen_q))
         gen_race_o <= gen_race_o + 32'd1;
+
+      // ---- the burst-alignment tripwire -------------------------------------
+      // An INVARIANT over one register, not a difference between two, so the
+      // lockstep-blindness question does not arise: there is one operand and a
+      // constant, and nothing for a corruption to move WITH. It covers all
+      // three request states, including the directory read, whose address is
+      // SCRATCH_BASE rather than a computed offset.
+      if (guard_req_o.valid && (m_addr_q[ALIGN_LSB-1:0] != '0))
+        burst_unaligned_o <= burst_unaligned_o + 32'd1;
 
       case (wstate_q)
         // ---- start -----------------------------------------------------
