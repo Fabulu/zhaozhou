@@ -1,0 +1,56 @@
+# THE DECOMPOSITION, UNDAMPED (the state the owner complained about).
+# manafold-backball.exe --slot 0 --worst, with ZHAO_U02_BACKBALL_DAMP_PM=0.
+# Root-local, posed surface, every key and every presentation midpoint.
+# Binary f2cc355b23945ed6fb45fee9feb74a92 -- the one in binaries-md5.txt.
+
+back-ball damping: bank-wide 0 pm (-1 = the table decides), window 21 KEYS, clip table [slot 0 = 0 pm]
+
+=== slot 0: 600 presentation samples, looping (cyclic diff) ===
+BASELINE, root-local, posed surface:
+  back ball : path    592.7 mm  vmax  2.683  amax  0.665  jmax  0.689 @367  jrms  0.291
+  last rod  : path   5619.0 mm  vmax 19.709  jmax 10.305  jrms  4.388
+  C ball    : path  11108.4 mm  vmax 37.840  jmax 17.226  jrms  6.586
+  ball angle: path   1403.5 deg vmax  5.310  jmax  1.454  jrms  0.490
+  (world frame, for scale: back-ball path 4548.0 mm)
+
+MUTE ONE AUTHORITY AT A TIME (share = 1 - muted/baseline).
+Shares do NOT sum to 100%: the authorities overlap by construction.
+authority muted                          |  ENDpos  ENDang ENDjrms |   C pos   C ang | rod pos
+socket follows breathing body            |   65.0%    0.0%   54.0% |    0.0%    0.0% |    0.0%
+rear rod aim (arm arrival qd)            |   10.9%   90.3%    9.0% |    0.0%    0.0% |    0.0%
+End authored rot (ambient+knead B2)      |    0.9%    3.1%   -4.1% |    0.0%    0.0% |    0.0%
+antenna upstream life (F/N/A/B/C/D)      |    0.0%    0.0%    0.0% |   81.1%  100.0% |   40.4%
+  .. station F alone (junction)          |    0.0%    0.0%    0.0% |    9.0%    1.4% |    8.5%
+  .. station Neck alone                  |    0.0%    0.0%    0.0% |    5.8%    8.2% |    5.8%
+  .. station A alone                     |    0.0%    0.0%    0.0% |    0.2%   20.6% |  -66.4%
+  .. station B alone (the peak)          |    0.0%    0.0%    0.0% |   -6.6%    2.2% | -146.4%
+  .. station C alone                     |    0.0%    0.0%    0.0% |    0.7%   22.7% |  -79.5%
+  .. station D alone (closure solver)    |    0.0%    0.0%    0.0% |    0.0%    0.0% | -114.1%
+carrier nodule offsets (swallow+ambient) |    0.0%    0.0%    0.0% |    0.0%    0.0% |  -22.5%
+rear span/bow helpers                    |    0.0%    0.0%    0.0% |    0.0%    0.0% |  -22.5%
+body bob + attitude (root)               |    0.0%   -0.0%    0.9% |    0.0%   -0.0% |    0.0%
+
+WORST SAMPLES BY BACK-BALL JERK (sample = key*2+sub):
+  sample  367 (key 183 sub 1): jerk  0.689 mm  speed  0.176
+  sample  368 (key 184 sub 0): jerk  0.675 mm  speed  0.176
+  sample  361 (key 180 sub 1): jerk  0.641 mm  speed  1.528
+  sample  362 (key 181 sub 0): jerk  0.621 mm  speed  1.528
+  sample   21 (key  10 sub 1): jerk  0.606 mm  speed  1.614
+  sample  433 (key 216 sub 1): jerk  0.603 mm  speed  0.361
+  sample   22 (key  11 sub 0): jerk  0.600 mm  speed  1.613
+  sample  549 (key 274 sub 1): jerk  0.599 mm  speed  0.943
+
+WORST-FRAME SHARES (jerk at the baseline's worst sample 367):
+  socket follows breathing body        jerk  0.175  share  74.5%
+  rear rod aim (arm arrival qd)        jerk  0.575  share  16.6%
+  End authored rot (ambient+knead B2)  jerk  0.668  share   3.0%
+  antenna upstream life (F/N/A/B/C/D)  jerk  0.689  share   0.0%
+    .. station F alone (junction)      jerk  0.689  share   0.0%
+    .. station Neck alone              jerk  0.689  share   0.0%
+    .. station A alone                 jerk  0.689  share   0.0%
+    .. station B alone (the peak)      jerk  0.689  share   0.0%
+    .. station C alone                 jerk  0.689  share   0.0%
+    .. station D alone (closure solver) jerk  0.689  share   0.0%
+  carrier nodule offsets (swallow+ambient) jerk  0.689  share   0.0%
+  rear span/bow helpers                jerk  0.689  share   0.0%
+  body bob + attitude (root)           jerk  0.687  share   0.2%

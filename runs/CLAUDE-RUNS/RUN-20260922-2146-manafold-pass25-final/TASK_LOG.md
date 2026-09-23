@@ -141,3 +141,26 @@ to be the wrong lever. Report: **`P25-BACKBALL.md`** (supersedes
   by-eye judgement made and recorded.
 - NEXT AFTER THE MATRIX: read it, record the tally in `P25-BACKBALL.md` §4,
   commit the evidence, push.
+
+#### 2026-09-23 - BACK-BALL PACKET CLOSED
+- **Matrix 265 / 265 PASS, 0 FAIL, one invocation**, frozen copy, `MATRIX_RC=0`
+  (`P25-BB-RECEIPTS/gate-matrix-backball.txt`). Every pass-25 leg carried
+  forward green with `DAMPOFF`, plus mback's four legs and 19 new selectors.
+- Identity: `e-bb-off` reproduces the pass-25 bank 22/22 bit for bit;
+  `e-ship` == the committed back-ball bank; `e-bb-scope` changes exactly
+  hover and inspect.
+- **Two matrix runs were stopped and discarded before this one**, and both for
+  reasons worth keeping: the first measured the arrangement before
+  `backball_damp` moved inside `finalize_rear_follow`; the second carried a
+  scope leg that read a `.crc` no `bank` call writes, which would have printed a
+  false red at the very end. The script was NOT edited mid-run -- bash reads by
+  byte offset, and its own header records what that cost a pass-24 matrix.
+- Three of my own instruments were broken in the same way the creature's four
+  levers were, and all three are written down in `P25-BACKBALL.md` §5: a screen
+  sweep saturated by the lightning, a `pgrep` liveness check firing on
+  "command not found", and four monitors waiting for a line the script prints
+  to stdout and never to the file.
+- Commits: `b743640c` (source), `af8c97c1` (structural fix + report), plus the
+  evidence commit. Pushed to origin/manafold-pass25.
+- **NOT done, by instruction:** the 22-subject publication bank, the encode,
+  the merge, the deploy. The coordinator sends the review/publish packet.

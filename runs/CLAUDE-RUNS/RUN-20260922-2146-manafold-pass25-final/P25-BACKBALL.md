@@ -423,14 +423,41 @@ Repaired with an explicit sentinel: `kBackBallDampPmUnset = -1` means "the table
 decides", and 0 now genuinely reaches off. Found by asking what `0` would do,
 before running anything.
 
-### The matrix
+### The matrix: 265 / 265 PASS, 0 FAIL
 
 `P25-BB-RECEIPTS/runmatrix_p25bb.sh` → `gate-matrix-backball.txt`, **one
-invocation**, from a **frozen copy** of the script. The pass-25 matrix carried
-forward in full, plus mback's normal leg and three controls, 19 new selector
-legs (16 on the probe, 3 on the **reel** — a knob parsed by one `main()` is this
-creature's signature defect and it has shipped twice), `DAMPOFF` on every leg
-that compares against a pass-23/24 receipt, and the two new identity legs.
+invocation**, from a **frozen copy** of the script, `MATRIX_RC=0`. The pass-25
+matrix carried forward in full, plus mback's normal leg and three controls, 19
+new selector legs (16 on the probe, 3 on the **reel** — a knob parsed by one
+`main()` is this creature's signature defect and it has shipped twice),
+`DAMPOFF` on every leg that compares against a pass-23/24 receipt, and the two
+new identity legs.
+
+| family | legs |
+|---|---:|
+| selectors, RC 2 (`f-sel-*`) | 107 |
+| span / smooth / public controls (`s*`) | 56 |
+| protected legs (`p*`) | 27 |
+| normals, every gate binary incl. mback | 16 |
+| mutants, attributed and fired (`m*`) | 16 |
+| controls, fired and attributed (`d*`) | 16 |
+| **back-ball selectors, RC 2 (`s-bb-*`)** | **19** |
+| identity + live history (`e-*`) | 14 |
+| mrear mask controls (`r*`) | 13 |
+
+The identity family in full, every row PASS:
+
+| leg | asserts | result |
+|---|---|---|
+| `e-p24off` | pass-24's bank reproduced with every pass-25 and back-ball mechanism off | 22/22 identical |
+| `e-p23off` | the floor still reaches pass 23 | 22/22 identical |
+| `e-item1` | the bolt rollout + clearance alone changes all 22 | 22 changed |
+| `e-item2` | the eye raise alone changes 19, leaving Curious, Startle and Taunt III | exactly those 19 |
+| `e-item3` | the rear-calm lever still changes no byte | 22/22 identical |
+| `e-item3-live` | …and moved, it changes exactly the three slot-0 subjects | crackle, hover, inspect |
+| **`e-bb-off`** | **the damping off reproduces the PASS-25 bank** | **22/22 identical** |
+| **`e-ship`** | the shipping bank is the committed back-ball bank | 22/22 identical |
+| **`e-bb-scope`** | **the damping alone changes exactly two subjects** | **hover, inspect** |
 
 > **`e-ship` now compares against `P25-BB-RECEIPTS/crcs-backball.txt`, and
 > `e-bb-off` against `P25-RECEIPTS/crcs-ship.txt`.** Three different files in
@@ -439,7 +466,10 @@ that compares against a pass-23/24 receipt, and the two new identity legs.
 
 ---
 
-## 5. FIVE THINGS THIS PACKET LEARNED THE HARD WAY
+## 5. EIGHT THINGS THIS PACKET LEARNED THE HARD WAY
+
+Every one of them is a measurement or a checker that was wrong in a way that
+looked like a result — which is the whole reason this packet exists.
 
 1. **A summed path measures the clip's LENGTH.** The census's first draft made
    Hover look like the worst rear in the bank by 2× purely because it is the
@@ -459,6 +489,29 @@ that compares against a pass-23/24 receipt, and the two new identity legs.
 4. **A gate that only watched the rms would have blessed window 5**, whose worst
    frame is 20 % more violent than the undamped creature's.
 5. **A knob's "off" must be reachable.** See §4.
+6. **A matrix helper that reads `$L/<id>.crc` silently differences a file that
+   does not exist** when the leg id has no `bank` call of its own. The scope leg
+   was written that way and would have reported an empty changed-list, a FAIL,
+   and pointed a reader straight at the damping. Caught by reading the helper
+   while the run was in flight, and the run was stopped rather than allowed to
+   produce a false red. **The fix was NOT to edit the script mid-run** — bash
+   reads a script by byte offset and the header of this very file records what
+   that did to a pass-24 matrix.
+7. **A liveness check written as `if ! pgrep -f <job>; then echo "it died"`
+   reports the job dead when `pgrep` is not installed** — and it is not, in Git
+   Bash on Windows. It announced a healthy matrix as killed. The detector's
+   negative branch fired on a missing tool rather than on the condition it
+   names, which is this packet's own subject in miniature: **the instrument was
+   broken and its output looked exactly like a finding.** Replaced by a
+   no-progress timer, which cannot be satisfied by an absent binary.
+8. **And the same fault once more, in the watch itself.** Four monitors were
+   armed on "wait until the matrix file contains its `total` line". The script
+   `echo`s that line to **stdout**, not to `$OUT`, so the condition can never
+   occur — all four expired silently, and a watch that cannot reach its own
+   trigger is indistinguishable from a job still running. Three instruments in
+   one afternoon (§5.3, §5.7, this) were wrong in the same way the creature's
+   four levers were: **they could not see the thing they were pointed at, and
+   their silence read as information.** That is the packet, in miniature.
 
 ---
 
@@ -489,7 +542,7 @@ closure re-solves around it. Nothing was softened, removed or re-timed.
 
 ---
 
-## 6b. OPEN ISSUES
+## 6B. OPEN ISSUES
 
 1. **Crackle carries the same fault and is left undamped.** Same choreography,
    same 1.08 back/front ratio, separate bake (slot 23). Kept as a byte-identical
@@ -519,6 +572,7 @@ closure re-solves around it. Nothing was softened, removed or re-timed.
 | `P25-BB-RECEIPTS/decomposition-shipped.txt` | the same reading after the damping |
 | `P25-BB-RECEIPTS/census.txt` | every bake slot, per sample, before and after — the owner's premise checked |
 | `P25-BB-RECEIPTS/ladder.txt` | the five gain rungs at the shipped window |
+| `P25-BB-RECEIPTS/window-ladder.txt` | the six window rungs, and the finding that a NARROW window lowers the jerk rms while raising the worst frame's jerk max above the undamped creature's |
 | `P25-BB-RECEIPTS/gate-and-controls.txt` | the gate and its three fired controls, rc read directly |
 | `P25-BB-RECEIPTS/gate-matrix-backball.txt` + `gatematrix_p25bb.sh` + `runmatrix_p25bb.sh` | the matrix, one invocation, frozen copy |
 | `P25-BB-RECEIPTS/crcs-backball.txt` | the 22-subject bank this packet ships |

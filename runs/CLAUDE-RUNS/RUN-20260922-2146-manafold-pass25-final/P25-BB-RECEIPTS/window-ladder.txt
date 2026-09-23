@@ -1,0 +1,47 @@
+# THE WINDOW LADDER, at full gain, and it is kept because it holds the
+# finding a single metric would have hidden: a NARROW window lowers the
+# jerk RMS while raising the worst frame's jerk MAX above the undamped
+# creature's 17.226. Window 21 improves both and window 31 saturates.
+
+=== window 5 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    586.3 mm  vmax  2.653  amax  0.639  jmax  0.684 @22  jrms  0.288
+  last rod  : path   5378.9 mm  vmax 18.761  jmax 12.523  jrms  4.117
+  C ball    : path  10622.0 mm  vmax 35.489  jmax 20.598  jrms  6.143
+  ball angle: path   1324.8 deg vmax  4.840  jmax  1.226  jrms  0.444
+  (world frame, for scale: back-ball path 4549.8 mm)
+=== window 7 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    580.9 mm  vmax  2.635  amax  0.640  jmax  0.668 @22  jrms  0.283
+  last rod  : path   5168.8 mm  vmax 18.419  jmax 10.409  jrms  4.163
+  C ball    : path  10190.3 mm  vmax 34.943  jmax 19.114  jrms  5.919
+  ball angle: path   1254.0 deg vmax  4.599  jmax  1.143  jrms  0.409
+  (world frame, for scale: back-ball path 4552.0 mm)
+=== window 11 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    567.4 mm  vmax  2.608  amax  0.654  jmax  0.671 @368  jrms  0.280
+  last rod  : path   4649.2 mm  vmax 17.329  jmax 11.694  jrms  3.877
+  C ball    : path   9137.8 mm  vmax 34.246  jmax 17.060  jrms  5.491
+  ball angle: path   1074.5 deg vmax  3.796  jmax  1.183  jrms  0.343
+  (world frame, for scale: back-ball path 4557.7 mm)
+=== window 15 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    553.6 mm  vmax  2.622  amax  0.614  jmax  0.639 @22  jrms  0.274
+  last rod  : path   4159.1 mm  vmax 17.321  jmax  9.100  jrms  3.903
+  C ball    : path   8109.3 mm  vmax 34.377  jmax 16.583  jrms  5.138
+  ball angle: path    884.0 deg vmax  3.475  jmax  0.976  jrms  0.289
+  (world frame, for scale: back-ball path 4565.5 mm)
+=== window 21 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    539.5 mm  vmax  2.596  amax  0.631  jmax  0.657 @22  jrms  0.267
+  last rod  : path   3716.5 mm  vmax 17.473  jmax  9.253  jrms  3.728
+  C ball    : path   7202.3 mm  vmax 33.215  jmax 16.465  jrms  4.873
+  ball angle: path    686.0 deg vmax  3.386  jmax  0.958  jrms  0.258
+  (world frame, for scale: back-ball path 4578.1 mm)
+=== window 31 keys, gain 1000 pm ===
+BASELINE, root-local, posed surface:
+  back ball : path    533.5 mm  vmax  2.571  amax  0.633  jmax  0.667 @22  jrms  0.268
+  last rod  : path   3678.0 mm  vmax 17.319  jmax 10.540  jrms  3.770
+  C ball    : path   7086.7 mm  vmax 31.627  jmax 17.195  jrms  4.862
+  ball angle: path    621.1 deg vmax  3.315  jmax  0.980  jrms  0.248
+  (world frame, for scale: back-ball path 4590.9 mm)

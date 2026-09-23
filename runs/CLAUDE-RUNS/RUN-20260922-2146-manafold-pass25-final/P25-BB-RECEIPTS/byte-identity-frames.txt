@@ -1,0 +1,39 @@
+# BYTE IDENTITY, AT FRAME LEVEL, not only by sequence CRC.
+#
+# Every .rgb of the pass-25 shipping render (.tmp/p25sheets, produced by
+# the pass-25 renderer c4fba132fbadd8b02115caae3465dbba) compared byte
+# for byte against the back-ball shipping render
+# (d9cdcce01238f21d84e613ea6f9bfb60), with cmp, one file at a time.
+#
+# manafold-crackle is the containment proof: it is the SAME choreography
+# on the separate fixed-camera bake (slot 23), damping off, and it does
+# not move by one byte on any of its 600 frames.
+
+subject                    frames  differing
+manafold-rest                 400          0
+manafold-drift                300          0
+manafold-taunt2               240          0
+manafold-death-drop           450          0
+manafold-crackle              600          0
+manafold-inspect              600        600
+manafold-hover                600        600
+
+# And the whole 22-subject bank, by sequence CRC:
+#   EXACT-OFF   ZHAO_U02_BACKBALL_DAMP_PM=0 == P25-RECEIPTS/crcs-ship.txt, 22/22
+#   SHIPPING    20 of 22 rows identical; hover and inspect differ, and only those.
+
+== diff, pass-25 shipping vs the back-ball bank ==
+13,14c13,14
+< manafold-hover: 600 frames, sequence_crc32c=0x8124751D
+< manafold-inspect: 600 frames, sequence_crc32c=0xEF7FBD6D
+---
+> manafold-hover: 600 frames, sequence_crc32c=0x89EBA648
+> manafold-inspect: 600 frames, sequence_crc32c=0x3A179F08
+
+== diff, EXACT-OFF vs pass-25 shipping (must be empty) ==
+
+== THE REFACTOR IS BYTE-NEUTRAL ==
+# backball_damp moved from a loop in manafold.h into finalize_rear_follow,
+# so the five gate/probe call sites that build their own clips cannot be
+# configured differently from the renderer. Re-rendered 22-subject bank:
+#   diff(before-refactor, after-refactor) == empty, all 22 rows.

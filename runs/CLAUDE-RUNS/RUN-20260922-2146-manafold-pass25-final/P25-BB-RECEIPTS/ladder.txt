@@ -1,0 +1,41 @@
+# THE LADDER. Window 21 authored keys; gain per mille on bake slot 0.
+# Rendered at 0 / 300 / 500 / 700 / 1000 and looked at at native, 3x, 4x,
+# 5x and 6x on BOTH cameras. 700 was chosen by eye; the numbers are the
+# check, not the chooser (CLAUDE.md).
+# Binary f2cc355b23945ed6fb45fee9feb74a92.
+
+=== slot-0 gain 0 pm, window 21 keys ===
+BASELINE, root-local, posed surface:
+  back ball : path    592.7 mm  vmax  2.683  amax  0.665  jmax  0.689 @367  jrms  0.291
+  last rod  : path   5619.0 mm  vmax 19.709  jmax 10.305  jrms  4.388
+  C ball    : path  11108.4 mm  vmax 37.840  jmax 17.226  jrms  6.586
+  ball angle: path   1403.5 deg vmax  5.310  jmax  1.454  jrms  0.490
+  (world frame, for scale: back-ball path 4548.0 mm)
+=== slot-0 gain 300 pm, window 21 keys ===
+BASELINE, root-local, posed surface:
+  back ball : path    571.7 mm  vmax  2.634  amax  0.639  jmax  0.672 @367  jrms  0.282
+  last rod  : path   4819.4 mm  vmax 18.290  jmax 11.236  jrms  3.962
+  C ball    : path   9480.1 mm  vmax 34.851  jmax 16.869  jrms  5.696
+  ball angle: path   1130.5 deg vmax  4.292  jmax  1.142  jrms  0.378
+  (world frame, for scale: back-ball path 4556.2 mm)
+=== slot-0 gain 500 pm, window 21 keys ===
+BASELINE, root-local, posed surface:
+  back ball : path    559.7 mm  vmax  2.631  amax  0.636  jmax  0.651 @367  jrms  0.279
+  last rod  : path   4366.6 mm  vmax 17.457  jmax  9.564  jrms  3.836
+  C ball    : path   8544.5 mm  vmax 33.170  jmax 16.845  jrms  5.257
+  ball angle: path    968.9 deg vmax  3.812  jmax  1.055  jrms  0.319
+  (world frame, for scale: back-ball path 4562.1 mm)
+=== slot-0 gain 700 pm, window 21 keys ===
+BASELINE, root-local, posed surface:
+  back ball : path    549.8 mm  vmax  2.608  amax  0.628  jmax  0.659 @22  jrms  0.274
+  last rod  : path   4004.1 mm  vmax 16.883  jmax  9.980  jrms  3.832
+  C ball    : path   7802.8 mm  vmax 32.994  jmax 16.454  jrms  4.929
+  ball angle: path    828.0 deg vmax  3.667  jmax  1.046  jrms  0.285
+  (world frame, for scale: back-ball path 4568.4 mm)
+=== slot-0 gain 1000 pm, window 21 keys ===
+BASELINE, root-local, posed surface:
+  back ball : path    539.5 mm  vmax  2.596  amax  0.631  jmax  0.657 @22  jrms  0.267
+  last rod  : path   3716.5 mm  vmax 17.473  jmax  9.253  jrms  3.728
+  C ball    : path   7202.3 mm  vmax 33.215  jmax 16.465  jrms  4.873
+  ball angle: path    686.0 deg vmax  3.386  jmax  0.958  jrms  0.258
+  (world frame, for scale: back-ball path 4578.1 mm)

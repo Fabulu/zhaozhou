@@ -1,0 +1,23 @@
+g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+# Every binary rebuilt after the final source change (backball_damp moved
+# inside finalize_rear_follow). The shipping bank is byte-identical across
+# that refactor -- see byte-identity-frames.txt.
+
+f2cc355b23945ed6fb45fee9feb74a92 *manafold-backball.exe
+986ea368db3d54170629e74d74623e17 *manafold-boltgate.exe
+1ec494c69eed1a71c12d78d02191716b *manafold-eyesize.exe
+6be1ee8378919edd226fc38bdb1c9db8 *manafold-meshcheck.exe
+864f30d16861373b97229512bfd5f26e *manafold-motiongate.exe
+f19c496a449147f142f76a6785ea7eb2 *manafold-nodule.exe
+7926c1eb85995ae03e20aa410d7ac812 *manafold-outlinegate.exe
+7c8d595393879697fa473103068d5bc5 *manafold-probe.exe
+eb872491021fb2fd3cac5677b32ac311 *manafold-public-jointgate.exe
+e094f1b525e7708050935f975ee7a0e0 *manafold-qa-p12.exe
+8ca70604dce82361f3c99302e9ad3103 *manafold-rear-audit.exe
+390b05721d796d73e6f70af54e1b7108 *manafold-rodgate.exe
+f0fd4dbecdb9a43960d32357c798dc6e *manafold-shellgate.exe
+87a5cd416a72b79e4027cc734090b928 *manafold-spangate.exe
+9f567357100fc37ec73d53d665f6bf10 *zhao-reel-cel.exe
+
+5aa557df2aa2431cc64acab2ad58d6b724a978645de9c4814e1ba3abdad5d7f8 *zhao-reel-cel.exe
+782a6091d4541dfa3e3139c09bdd80363187d23cb65a68a93eb68e2d9246c8ab *manafold-backball.exe

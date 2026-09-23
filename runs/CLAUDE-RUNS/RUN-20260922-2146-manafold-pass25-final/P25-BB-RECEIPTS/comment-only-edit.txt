@@ -1,0 +1,26 @@
+# A COMMENT-ONLY EDIT MADE AFTER THE BINARIES WERE BUILT, declared rather
+# than left to be noticed -- the same disclosure pass 25 made for mbolt's
+# header.
+#
+# backball_damp's doc comment claimed the authored-key copy stops a SECOND
+# CALL from filtering its own output. That is false: the copy stops the
+# filter reading its own output WITHIN one pass; a second call would filter
+# an already filtered track and silently widen the window. A comment that
+# asserts a safety property the code does not have is worse than no comment,
+# so it was corrected.
+#
+# NO BINARY WAS REBUILT. The edit is inside a /** */ block and changes no
+# token the compiler emits, so every row of gate-matrix-backball.txt and
+# every CRC in this folder stands against the binary that produced it.
+#
+# (An md5 comparison cannot prove this: a Windows PE carries a
+# TimeDateStamp, so two builds of identical source differ. The diff is the
+# proof, and it is here.)
+
+$ git diff tools/reel/manafold_clips.h  -- the comment hunk only
+
++ *  It must therefore run EXACTLY ONCE per freshly built clip, which is
++ *  finalize_rear_follow's own pre-existing contract -- the copy below keeps the
++ *  filter from reading its own output WITHIN one pass, but a second call would
++ *  filter an already filtered track and widen the window silently. */
+ inline void backball_damp(zc::Clip& c) {
