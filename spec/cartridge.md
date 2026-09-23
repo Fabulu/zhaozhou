@@ -68,6 +68,7 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x0011 | SPECIES_TABLE | particle species descriptor table (§4b; owner ruling R42, 2026-09-19) |
 | 0x0012 | FORGE_PROGRAM | Primitive Forge program table (§4d; owner decision R234 D2, 2026-09-21) |
 | 0x0013 | TWOD_PAGE | compositor 2D page: texels or palette entries for the TWOD sampler's on-chip store (§4f; owner ruling 2026-09-22 item 3) |
+| 0x0014 | DETAIL_NORMAL | terrain detail-normal pyramid: a header then the flat seven-level signed {dx, dz} pyramid TERRAIN.NORMALMAP's resident tile holds (§4g; owner ruling R243 D-NORMALS-A, 2026-09-23) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -108,9 +109,11 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 13 | species table | SPECIES_TABLE | the particle species descriptor table: a header then PART.TABLE load words, one per entry (§4b; owner ruling R42, 2026-09-19) |
 | 14 | forge program | FORGE_PROGRAM | the Primitive Forge program table: a header then one 192-byte record per program — family, subdivision and the anchors/axes/radii its evaluator places vertices from (§4d; owner decision R234 D2, 2026-09-21) |
 | 15 | twod page | TWOD_PAGE | compositor 2D page: a raw run of little-endian 16-bit words, either CLUT8/RGB565 texels or RGB565 palette entries, loaded into the TWOD sampler's on-chip store. `dst_slot` names the destination region (§4f; owner ruling 2026-09-22 item 3) |
+| 16 | detail normal | DETAIL_NORMAL | TERRAIN.NORMALMAP's resident detail tile and its mip tail: a 64-byte header then `words` little-endian `u16` texels `{s8 dz, s8 dx}`, in `zref::terrain::normalmap_pyramid_addr` order, read into the block's on-chip pyramid by `zhao_terrain_normalloader` (§4g; owner ruling R243 D-NORMALS-A, 2026-09-23) |
 
 ~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ ~~Kinds 10-255 reserved~~
-~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ ~~Kinds 15-255 reserved~~ Kinds 16-255 reserved
+~~Kinds 13-255 reserved~~ ~~Kinds 14-255 reserved~~ ~~Kinds 15-255 reserved~~
+~~Kinds 16-255 reserved~~ Kinds 17-255 reserved
 (world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
 that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
@@ -726,3 +729,113 @@ sampler's store is on-chip and *"there is no texel page store in the tree that a
 page store of its own rather than a memory client. `CMD.EXEC` forks the upload
 request by `kind`: 15 goes to `TWOD.ASSET`, everything else to `MEM.UPLOAD`,
 and no existing kind changes route.
+
+## §4g — DETAIL_NORMAL (owner ruling R243 D-NORMALS-A, 2026-09-23)
+
+**Ruled in four words** — *"In v1 — commission the pyramid."*
+
+`fpga/rtl/terrain/zhao_terrain_normalmap.sv` has held a seven-level signed
+detail pyramid (`tile_m [0:PYR_WORDS-1]`, 5,461 words) and a write-only upload
+port (`tw_we_i` / `tw_addr_i` / `tw_data_i`) since it was rebuilt to contract on
+2026-09-09. It is instantiated **nowhere**. `design/prod_manifest.yml` carries
+it as an open deferral, and every reference to the file in `fpga/rtl/` is a
+comment citing it as an M10K-inference precedent.
+
+The reason is not the block. **Nothing in the tree could put bytes in that
+pyramid.** A module with a resident tile and no producer is the shape the
+completion ruling's asset clause names: *"An opcode plus descriptors referring
+to data that only the testbench can inject is not completion. Reuse
+`PublishResource` and the existing validated resource mechanisms wherever
+applicable."* This kind is that reuse. **No new command opcode exists for it**
+— `PublishResource 0x0030` (R17) already carries every field, and three blocks
+already select their own publications by a `PAGE_KIND` parameter
+(`zhao_geom_ladderbank` 8, `zhao_part_table_loader` 13, `zhao_forge_pagebank`
+14). A fourth joins them.
+
+### The bytes
+
+```
+HEADER — 64 bytes, one line, at the page's base
+  u32 magic     'ZDNM'  (0x4D4E445A little-endian on the wire)
+  u16 version   1
+  u16 words     pyramid words that follow, 1..5461
+  u8  rsv[56]   zero
+
+BODY — `words` × u16, THIRTY-TWO per line, starting at byte 64
+  each word  {s8 dz, s8 dx}   dx in bits 7:0, dz in bits 15:8
+  in `zref::terrain::normalmap_pyramid_addr` order, flat word 0 first
+```
+
+Everything is 64-byte shaped for the reason §4b gives and no other:
+**`MEM.GUARD`'s read is at most 64 bytes and its shape rule requires the byte
+mask to match the length**, so the simplest reader that can be correct is one
+that asks for whole lines. A word is 2 bytes and a line is 64, so a line holds
+exactly 32 words and **no word ever straddles a read**. There is no padding
+inside the body; the page as a whole is padded to a multiple of 64 because
+`MEM.UPLOAD`'s length rule requires that of every upload — a refusal, never a
+pad, on the command side.
+
+The word is the hardware's upload word unchanged. `zhao_terrain_normalmap`'s
+`tw_data_i` is `{s8 dz, s8 dx}` and `tw_addr_i` is a flat 13-bit word address;
+the loader hands over one and the other, and interprets neither.
+
+### The header carries NO level count, and that is deliberate
+
+The pyramid's level structure is `normalmap_pyramid_addr`'s law and the
+hardware's `LEVELS` parameter. A `levels` field would be a **second opinion
+about the same fact**, and §4d already records what a second opinion costs
+— *"the page's `family` governs; a `kind` that disagrees REFUSES the draw"*.
+There is nothing here to disagree, and the loader forms no view about which
+level a word belongs to: it carries a flat word to a flat address.
+
+`words` is a COUNT, not a structure claim, and it is the field §4b's `entries`
+is. A page with fewer words than the hardware's `PYR_WORDS` loads a prefix; the
+block ignores writes at or beyond `PYR_WORDS` by its own rule (*"an upload-tool
+fault, not a machine state"*), so a page built for a deeper pyramid than the
+silicon carries is truncated by the silicon rather than refused by it.
+
+### The pyramid is built OFFLINE, by averaging SIGNED dx/dz, NEVER normalising
+
+`zhao_terrain_normalmap.sv` and the mipmapping addendum
+(`reports/zhaozhou-terrain-mipmapping-architecture-2026-09-05.txt` §4) both say
+this in the same words, and it is a LAW of the page rather than a hint to the
+packer, because the hardware has no way to check it.
+
+`s*dot(d, L)` is **linear in `d`**, so the average of four texels'
+contributions is the contribution of their average. Re-normalising each level
+would break that linearity and — worse — would give a flat region
+(`dx = dz = 0`, the correct answer for *"no relief here"*) an arbitrary unit
+direction, so a surface that should go quiet at distance would instead acquire
+a constant tilt. **Coarsening detail must converge to nothing**, and signed
+averaging is what makes it: a lone 127 spike decays 127, 32, 8, 2, 1, 0, 0
+across the seven levels.
+
+Rounding is **half away from zero**. The symmetry is load-bearing: negating a
+detail tile must negate its whole pyramid exactly, or a relief and its mirror
+image would coarsen differently and a mirrored piece of terrain would shimmer
+where its twin did not.
+
+### A page is REFUSED WHOLE
+
+On a wrong magic, a wrong version, a `words` above the layout's 5,461, or a
+`words` that runs past the extent the publication declared. It is never
+partially loaded: a half-loaded pyramid is terrain whose relief changes at a
+mip boundary for no authored reason, which reads as an aliasing bug and is not
+one. A publication arriving while a load runs is **dropped and counted**, not
+queued, for the reason §4b gives for SPECIES_TABLE.
+
+### It travels the ordinary route
+
+Kind 16 is staged into local SDRAM by `MEM.UPLOAD` exactly as kinds 0..14 are,
+and the loader reads it back through the ENGINE1 asset window. **Kind 15
+remains the only kind `CMD.EXEC` forks**, and no existing kind changes route.
+`length` is a multiple of 64, `crc32c` is `zhao_crc32c_fold`'s law over the
+staged bytes, `epoch` is checked against the open resource epoch, and
+`hps_addr_lo/hi` above 4 GiB is refused rather than narrowed. **DETAIL_NORMAL
+adds no new integrity mechanism**; it adds a destination.
+
+Model: `reference/include/zref/zref_normal_page.hpp` (`build_pyramid`, `build`
+and `decode`). Packer: `tools/pack/mkdetailnormal.py`, pinned with the model
+and the hardware reader to the one committed artefact
+`tests/golden/detail_normal/detail_normal_v1.bin`. Hardware:
+`fpga/rtl/terrain/zhao_terrain_normalloader.sv`.
