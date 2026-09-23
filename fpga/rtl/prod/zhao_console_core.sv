@@ -3069,8 +3069,43 @@
 //        tri_v_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 2
 //        tri_flat_request_i     298b   CLOSED 2026-09-20 -- MATERIAL.RESOLVE,
 //                                      through `u_material_window` (I49)
-//        tri_continuation_tail_i 48b   OPEN, still a BOUNDARY
-//        tri_fragment_state_i    32b   OPEN, still a BOUNDARY
+//        tri_continuation_tail_i 48b   NARROWED 2026-09-23 -- `vertex_alpha`
+//                                      is DRIVEN; the other three fields are
+//                                      still a BOUNDARY
+//        tri_fragment_state_i    32b   NARROWED 2026-09-23 -- BLEND, Z_TEST_EN
+//                                      and Z_WRITE_DIS are DRIVEN; the rest is
+//                                      still a BOUNDARY
+//
+//      BOTH REMAINING PORTS WERE NARROWED 2026-09-23 (SHADOWRIDE), and the
+//      pair had to move TOGETHER. R89 ruled that FORGE.SHADOW's flat alpha
+//      rides `tri_continuation_tail_i`'s `vertex_alpha` to
+//      `zhao_raster_blend_prod.a_i`, and said "giving that open boundary a
+//      producer is the whole job". IT IS NOT. `zhao_raster_fragment` picks the
+//      blend from `s1_state_r[4:3]` -- a field of the OTHER open port -- and
+//      `zhao_raster_blend_fin`'s BL_REPLACE arm is `acc = src_i`, so the
+//      product `a_i` took part in is COMPUTED AND THROWN AWAY. An alpha
+//      delivered under the state this console has always used changes not one
+//      pixel, and a shadow composed that way is the flat OPAQUE dark polygon
+//      R89 was written to refuse. So both are driven, from the same place, or
+//      neither is.
+//
+//      WHERE THEY COME FROM: each producer DECLARES its profile at
+//      `u_geom_clipdoor`'s own port, the door grants it on the SAME BEAT as
+//      the triangle and its material, and `u_material_window` latches all of
+//      it into one published record by one enable -- the same alignment
+//      `tri_flat_request_c` relies on, and the declaration is part of the
+//      span's identity so a primitive cannot be painted with the previous
+//      one's opacity. See `tri_continuation_tail_c` beside the flat request.
+//
+//      WHAT STAYS A BOUNDARY, and it is the whole of why this entry is still
+//      open: the tail's `effect_tag` (R195's bloom selector, which the console
+//      smoke drives from outside to prove that path end to end), its
+//      `stencil_reference` (no producer anywhere), its `vertex_rgb` (which
+//      since owner decision R234 D1 no longer reaches the fragment at all),
+//      and the state word's alpha test, stencil and tag channel (no producer
+//      declares them, and a composer choosing them would be inventing). The
+//      two halves of the state are OR-ed rather than replaced, so an external
+//      driver can still raise a bit the span leaves clear.
 //
 //      TWO OPEN PORTS REMAIN and this entry stays a BOUNDARY for them. The
 //      third, `tri_flat_request_i`, is retired as of 2026-09-20: it is built
@@ -4648,6 +4683,41 @@
 //      triangle at all. So a mesh and a particle in the same frame are drawn
 //      under the same externally-supplied state, and that was true before this
 //      entry existed.
+//
+//      ===================================================================
+//      THE PARAGRAPH ABOVE DESCRIBES A SUPERSEDED BLOCK, AND THAT MATTERS
+//      (corrected 2026-09-23, SHADOWRIDE, while composing FORGE.SHADOW)
+//      ===================================================================
+//      `zhao_raster_tile_pipe` is the V1 block. It is superseded, it is not
+//      in this console's closure, and `zhao_raster_tile_pipe_v2` -- which IS
+//      -- does not take the fragment state from `render_state_i` at all. It
+//      takes it from the JOB METADATA: `incoming_fragment_state_w =
+//      job_meta_i[377:346]`, packed by `zhao_geom_bin_pipe_v2.sv:266` from
+//      THIS MODULE'S `tri_fragment_state_i`, carried to
+//      `zhao_raster_fragment.frag_state_i` and decoded there into Z_TEST_EN,
+//      Z_WRITE_DIS, BLEND and the rest.
+//
+//      SO THE PER-PRIMITIVE CARRIAGE THIS ENTRY SAYS WOULD BE "A SUBSYSTEM"
+//      ALREADY EXISTS AND IS COMPOSED. What was missing was a PRODUCER at
+//      this module's edge, and entry I20 now has one for three of the word's
+//      bits -- BLEND, Z_TEST_EN and Z_WRITE_DIS -- declared per client at
+//      `u_geom_clipdoor` and latched per span by `u_material_window`.
+//
+//      THIS ENTRY IS STILL OPEN AND THE REASON IS NOW A DIFFERENT ONE.
+//      PART.EXPAND's `t_depth_test_o` / `t_depth_write_o` are still boundary
+//      outputs with no internal consumer: the door's `c_frag_state_i` slice
+//      for PART.CLIPFEED is the named constant `PART_FRAG_STATE`, the frame
+//      default said out loud, and not the particle's own pass-7 law. Closing
+//      it is now a per-client mux at a port that exists rather than a field
+//      threaded through five blocks -- which is a much smaller piece of work
+//      than this entry has been recording, and it is still a piece of work
+//      this packet did not do, because PART.CLIPFEED's chain is not its
+//      commission.
+//
+//      `render_state_i` ITSELF IS A DIFFERENT QUESTION. Inside
+//      `zhao_shell_top_v2` it now reaches only a `^` reduction, so it is a
+//      port this console carries and nothing reads -- worth saying here
+//      because reading THAT as the raster state is what this entry did.
 //
 //      WHY NOTHING WAS ADDED TO CLOSE IT HERE. A per-primitive route is a
 //      field through GEOM.CLIPDOOR, GEOM.CLIP, GEOM.SETUP, GEOM.BINNER and the
@@ -7170,6 +7240,82 @@ module zhao_console_core
   // `pcf_o_material_mode`, which the block itself drives.
   parameter logic [1:0] GEOM_REPLAY_MATERIAL_MODE = 2'd0,
   parameter logic [1:0] FORGE_MATERIAL_MODE       = 2'd0,
+
+  // ---- THE PER-PRIMITIVE RASTER DECLARATIONS (SHADOWRIDE, 2026-09-23) -----
+  // R89 routes a shadow's flat alpha down `tri_continuation_tail_i`'s
+  // `vertex_alpha` to `zhao_raster_blend_prod.a_i`. THAT IS NECESSARY AND NOT
+  // SUFFICIENT, and the missing half is the reason these are two constants and
+  // not one: `zhao_raster_blend_fin`'s BL_REPLACE arm returns `src_i` and
+  // THROWS THE PRODUCT AWAY (`zhao_raster_blend_fin.sv:42`), so an alpha
+  // delivered under the default raster state changes not one pixel. A shadow
+  // needs BLEND=ALPHA as well, and the blend mode lives in the raster state
+  // word's `[4:3]` -- `tri_fragment_state_i`, entry I20's other half.
+  //
+  // THE MESH AND PARTICLE PROFILES ARE THE FRAME DEFAULT SAID OUT LOUD.
+  // Opaque, and state zero, which `zhao_raster_fragment.sv:214` defines as
+  // "the plain opaque write: depth test off, depth written, blend REPLACE, no
+  // alpha test, stencil ALWAYS + REPLACE, tag written from the packet". That
+  // is what every triangle in this console has always been drawn under; these
+  // constants change nothing about it and make it a producer's declaration
+  // rather than a boundary word nobody named.
+  parameter logic [ 7:0] GEOM_REPLAY_VERTEX_ALPHA = 8'hFF,
+  parameter logic [31:0] GEOM_REPLAY_FRAG_STATE   = 32'd0,
+  parameter logic [ 7:0] PART_VERTEX_ALPHA        = 8'hFF,
+  parameter logic [31:0] PART_FRAG_STATE          = 32'd0,
+  parameter logic [ 7:0] FORGE_VERTEX_ALPHA       = 8'hFF,
+  parameter logic [31:0] FORGE_FRAG_STATE         = 32'd0,
+
+  // ---- FORGE.SHADOW's OWN ART, and all of it is a knob --------------------
+  // OWNER RULING R133 D-FORGESHADOW-A, "accepted as recommended": a caster's
+  // `cast_strength_i` comes "from a named constant at composition". This is
+  // that constant. It is a unit8, so the value is raw/256 and 255 is the
+  // largest representable rather than 1.0 -- 0x60 is about 37 % opacity.
+  //
+  // ITS CORRECTNESS IS A LOOK-GATE AND NOTHING HERE DECIDES IT. The contract
+  // is explicit: "a creature walking across flat ground, a slope, a cliff edge
+  // and a breach, at 240p, watched in motion. A contact shadow either sells
+  // the contact or it does not, and no measurement decides that." So this is
+  // a starting point somebody adjusts by looking, which is why it is one
+  // named parameter and not a derived expression.
+  parameter logic [7:0] SHADOW_STRENGTH = 8'h60,
+  // THE SAME VALUE IN THE OTHER FORMAT, for attribute slot 6. The slot has no
+  // interpolator (`zhao_geom_attrpack` publishes six planes and slot 6 is the
+  // seventh), which is exactly why R89 routed the real alpha down the
+  // continuation tail instead -- so this carries the same number rather than a
+  // second opinion about it. fx16: 0x60/256 * 65536 = 0x6000.
+  parameter logic signed [31:0] SHADOW_ART_ALPHA = 32'sh0000_6000,
+  // THE HULL'S COLOUR. Near-black rather than black: a pure-black shadow reads
+  // as a hole in the ground rather than as shade, and at 240p under one key
+  // light the difference is visible. ART, so it is three knobs.
+  parameter logic signed [31:0] SHADOW_LIT_R = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_G = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_B = 32'sh0000_2000,
+  // BLEND=ALPHA in [4:3], Z_TEST_EN in [0], Z_WRITE_DIS in [1]. The blend is
+  // what makes the hull transparent at all; the depth test keeps it behind
+  // whatever stands in front of it; and Z_WRITE_DIS is there because a
+  // transparent primitive that writes depth occludes everything drawn after
+  // it, which would be a shadow that erased its own creature.
+  parameter logic [31:0] SHADOW_FRAG_STATE = 32'h0000_000B,
+  // A shadow is a BACKGROUND producer (the contract's backpressure rule), so
+  // it declares the LOWEST semantic weight: if the Measure policy ever degrades
+  // by tier, hulls go first.
+  parameter logic [7:0] SHADOW_QUALITY_TIER = 8'd0,
+  // NO CULLING. A ground-conforming hull can be seen from either side at a
+  // cliff edge, and a winding law inherited from the ring's emission order is
+  // not something to bet a disappearing shadow on.
+  parameter logic [1:0] SHADOW_CULL_MODE = 2'd0,
+  // MATMODE_NONE. A shadow hull has no material record and takes no texture
+  // sample; `zhao_material_window`'s `mode_contra_c` REFUSES this mode paired
+  // with a non-zero {set, id}, which is why the pair beside it is zero, and
+  // R197's door at GEOM.CLIP's input admits an untextured primitive only under
+  // a zero-sample material -- which is what a MATMODE_NONE span publishes.
+  parameter logic [1:0] SHADOW_MATERIAL_MODE = 2'd1,
+  // WHICH SURFACE A SHADOW LANDS ON. `zhao_terrain_heighttap.sv:173` defines
+  // it: "0 = the top surface (the ground a shadow lands on), 1 = the bottom".
+  // The block's own words, so this is a citation and not a choice -- and it is
+  // a named constant because the day a keel-mounted creature wants the other
+  // one, this is the line.
+  parameter logic TERRAIN_TAP_SHADOW_SURFACE = 1'b0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -8291,6 +8437,85 @@ module zhao_console_core
   // Requester G, GEOM.POSE's kind-8/kind-9 page reader (I29, closed
   // 2026-09-22). Its traffic is per creature publication and per POSED draw.
   output logic [31:0] geom_ma_jobs_g_o,
+  // Requester H, GEOM.LADDERBANK's kind-8 CREATURE_FORM page reader
+  // (FORGE.SHADOW, composed 2026-09-23). Its traffic is per PUBLICATION and
+  // nothing else -- the ladder is adopted whole into registers and every
+  // lookup afterwards is a register read -- so it is the lightest requester on
+  // the share, and this is the number that says so rather than a claim that it
+  // is light.
+  output logic [31:0] geom_ma_jobs_h_o,
+
+  // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
+  // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
+  output logic [31:0] geom_lb_pages_o,
+  output logic [31:0] geom_lb_records_o,
+  output logic [31:0] geom_lb_pages_dropped_o,
+  output logic [31:0] geom_lb_bad_magic_o,
+  output logic [31:0] geom_lb_truncated_o,
+  output logic [31:0] geom_lb_bad_record_o,
+  output logic [31:0] geom_lb_overflow_o,
+  output logic [31:0] geom_lb_denied_o,
+  output logic [31:0] geom_lb_lookup_miss_o,
+
+  // GEOM.LODSTATE: one ladder per (instance, camera), owner ruling R74's
+  // D-LADDER-A. `ls_rung_counts_o` is flattened 32 bits per rung, least
+  // significant slice rung 0 (near hero), because Quartus 17.0 will not take
+  // an unpacked array port.
+  output logic [31:0]  geom_ls_ticks_o,
+  output logic [31:0]  geom_ls_skipped_repeat_o,
+  output logic [31:0]  geom_ls_bank_miss_o,
+  output logic [31:0]  geom_ls_no_radius_o,
+  output logic [31:0]  geom_ls_dropped_o,
+  output logic [31:0]  geom_ls_out_of_range_o,
+  output logic [127:0] geom_ls_rung_counts_o,
+  output logic [31:0]  geom_ls_rad_evaluations_o,
+  output logic [31:0]  geom_ls_rad_behind_o,
+  output logic [31:0]  geom_ls_rad_bad_bound_o,
+  output logic [31:0]  geom_ls_rad_saturated_o,
+
+  // TERRAIN.TAPSHARE: the height tap's two-client arbiter. `grants_o` is
+  // flattened, least significant slice client 0 (PART.COLLIDE's tap).
+  output logic [63:0] terr_tsh_grants_o,
+  output logic [31:0] terr_tsh_contended_o,
+  // A FAULT: a response arriving with no owner held. Its positive control is
+  // the committed `tests/mutants/zhao_terrain_tapshare_mutant.sv`.
+  output logic [31:0] terr_tsh_stray_rsp_o,
+
+  // FORGE.SHADOW itself. The three CORRECT refusals are counted APART from the
+  // one real fault, which is the block's own design and the reason a zero on
+  // `forge_shadow_tap_protocol_o` means something different from a zero on the
+  // other three.
+  output logic [15:0] forge_shadow_emitted_o,
+  output logic [15:0] forge_shadow_no_ground_o,
+  output logic [15:0] forge_shadow_zero_radius_o,
+  output logic [15:0] forge_shadow_far_rung_o,
+  output logic [15:0] forge_shadow_tap_protocol_o,
+  // The caster the ladder handed over but the console could not draw this
+  // frame, because its camera is not the one being rendered. CORRECT, and
+  // counted for the same reason `zhao_forge_ring_eval.skipped_view_o` is.
+  output logic [31:0] forge_shadow_skipped_view_o,
+
+  // The fan indexer. `forge_fanidx_hulls_rung_o` is flattened 32 bits per
+  // rung, least significant slice rung 0 -- the look-gate's evidence for "the
+  // shadow is too coarse here", which the contract says is the argument this
+  // subsystem will actually have.
+  output logic [31:0]  forge_fanidx_hulls_o,
+  output logic [31:0]  forge_fanidx_triangles_o,
+  output logic [31:0]  forge_fanidx_short_ring_o,
+  output logic [31:0]  forge_fanidx_ring_overflow_o,
+  output logic [127:0] forge_fanidx_hulls_rung_o,
+
+  // The job arbiter in front of the SHARED assembler.
+  output logic [31:0] forge_jobarb_grant_prim_o,
+  output logic [31:0] forge_jobarb_grant_shadow_o,
+  output logic [31:0] forge_jobarb_switches_o,
+  // THE NUMBER THE CONTRACT'S BACKPRESSURE RULE IS ABOUT. "A stalled shadow
+  // must never delay a creature": `forge_jobarb_wait_prim_o` is the clocks
+  // FORGE.PRIM spent held behind a shadow hull already in flight, and it is
+  // bounded by one hull. The shadow's own wait is the other one.
+  output logic [31:0] forge_jobarb_wait_prim_o,
+  output logic [31:0] forge_jobarb_wait_shadow_o,
+  output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
   // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
@@ -11482,7 +11707,12 @@ module zhao_console_core
     .tap_req_x_o      (htp_req_x),
     .tap_req_z_o      (htp_req_z),
     .tap_req_surface_o(htp_req_surface),
-    .tap_rsp_valid_i    (htp_rsp_valid),
+    // The ARBITER's response bit for THIS client, not the tap's raw
+    // `rsp_valid_o`. The response carries no tag, so the arbiter's held owner
+    // is the only thing that says whose answer it is -- taking the raw valid
+    // would hand this block the shadow's height taps as though they were its
+    // own collision samples.
+    .tap_rsp_valid_i    (tsh_r_rsp_valid_w[0]),
     .tap_rsp_no_ground_i(htp_rsp_no_ground),
     .tap_rsp_h00_i (htp_h00),
     .tap_rsp_h10_i (htp_h10),
@@ -12728,6 +12958,10 @@ module zhao_console_core
   // this composer is to be VISIBLE -- a waveform and a bench can say which of
   // the two spans they are looking at without inferring it from a zero.
   wire [ 1:0]             mw_pub_material_mode;
+  // The span's own flat alpha and raster state, latched by the SAME enable as
+  // the mode. These are what close entry I20's two open fields below.
+  wire [ 7:0]             mw_pub_vertex_alpha;
+  wire [31:0]             mw_pub_frag_state;
   /* verilator lint_on UNUSEDSIGNAL */
   wire signed [20:0]      rp_o_ax, rp_o_ay, rp_o_bx, rp_o_by, rp_o_cx, rp_o_cy;
   wire [2:0]              rp_o_behind;
@@ -13060,6 +13294,9 @@ module zhao_console_core
   wire [GEOM_CLIP_ATTRW-1:0] fa_o_attr_a, fa_o_attr_b, fa_o_attr_c;
   wire [31:0]  fa_o_material_set;
   wire [15:0]  fa_o_material_id;
+  wire [ 1:0]  fa_o_material_mode;
+  wire [ 7:0]  fa_o_vertex_alpha;
+  wire [31:0]  fa_o_frag_state;
   wire [ 7:0]  fa_o_quality_tier;
   wire         fa_busy;
 
@@ -13323,40 +13560,52 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // REAL: whichever evaluator this family's positions come from. The two can
-    // never both be running -- see the mux's comment above.
-    .v_valid_i(fa_v_valid),
-    .v_ready_o(fa_v_ready),
-    .v_x_i    (fa_v_x),
-    .v_y_i    (fa_v_y),
-    .v_z_i    (fa_v_z),
-    .v_last_i (fa_v_last),
+    // REAL: the GRANTED producer's vertices. SHADOWRIDE 2026-09-23: this port
+    // was the two evaluators' plain mux, which the block's own header
+    // specifies it as -- "muxed at the composer by family ... this block does
+    // not read the family and must not". It still is; what changed is that a
+    // THIRD producer, FORGE.SHADOW's hull through `u_forge_fanindex`, is on
+    // that mux, and a job-granularity arbiter chooses between the families and
+    // the hull rather than a wire choosing between two families.
+    .v_valid_i(fjb_v_valid),
+    .v_ready_o(fjb_v_ready),
+    .v_x_i    (fjb_v_x),
+    .v_y_i    (fjb_v_y),
+    .v_z_i    (fjb_v_z),
+    .v_last_i (fjb_v_last),
 
-    // REAL: FORGE.PRIM's index triples.
-    .t_valid_i   (fp_t_valid),
-    .t_ready_o   (fp_t_ready),
-    .t_i0_i      (fp_t_i0),
-    .t_i1_i      (fp_t_i1),
-    .t_i2_i      (fp_t_i2),
-    .t_material_i(fp_t_material),
-    .t_src_id_i  (fp_t_src_id),
-    .t_last_i    (fp_t_last),
+    // REAL: the granted producer's index triples -- FORGE.PRIM's for a
+    // procedural primitive, the fan indexer's for a shadow hull.
+    .t_valid_i   (fjb_t_valid),
+    .t_ready_o   (fjb_t_ready),
+    .t_i0_i      (fjb_t_i0),
+    .t_i1_i      (fjb_t_i1),
+    .t_i2_i      (fjb_t_i2),
+    .t_material_i(fjb_t_material),
+    .t_src_id_i  (fjb_t_src_id),
+    .t_last_i    (fjb_t_last),
 
-    // REAL: the primitive's material PAIR, held by the bank against `busy_o`
-    // and latched here by ONE enable at the job's first vertex.
-    .j_material_set_i(fpb_material_set),
-    .j_material_id_i (fpb_material_id),
-    .j_valid_i       (fpb_a_valid),
-    .j_ready_o       (fpb_a_ready),
+    // REAL: the granted job's material PAIR and DECLARATION, from the
+    // arbiter's private copy, taken a cycle BEFORE the job's first vertex.
+    .j_material_set_i (fjb_j_material_set),
+    .j_material_id_i  (fjb_j_material_id),
+    .j_material_mode_i(fjb_j_material_mode),
+    .j_vertex_alpha_i (fjb_j_vertex_alpha),
+    .j_frag_state_i   (fjb_j_frag_state),
+    .j_valid_i        (fjb_j_valid),
+    .j_ready_o        (fjb_j_ready),
 
-    // AUTHORED, at the named seams. See the parameters' comments; these are the
-    // owner's knobs and they must not become derived.
-    .art_r_i           (FORGE_LIT_R),
-    .art_g_i           (FORGE_LIT_G),
-    .art_b_i           (FORGE_LIT_B),
-    .art_alpha_i       (FORGE_ALPHA),
-    .art_quality_tier_i(FORGE_QUALITY_TIER),
-    .art_cull_mode_i   (FORGE_CULL_MODE),
+    // AUTHORED, at the named seams, and now PER JOB -- FORGE.PRIM's knobs for
+    // a procedural primitive and FORGE.SHADOW's for a hull. They are still the
+    // owner's constants and they must not become derived; what the arbiter
+    // adds is that there are two SETS of them and the granted producer's is
+    // the one that reaches this block.
+    .art_r_i           (fjb_art_r),
+    .art_g_i           (fjb_art_g),
+    .art_b_i           (fjb_art_b),
+    .art_alpha_i       (fjb_art_alpha),
+    .art_quality_tier_i(fjb_art_quality_tier),
+    .art_cull_mode_i   (fjb_art_cull_mode),
 
     // REAL: the projector's third owner and its demux arm.
     .f_valid_o  (fa_f_valid),
@@ -13398,6 +13647,15 @@ module zhao_console_core
     .o_attr_c_o      (fa_o_attr_c),
     .o_material_set_o(fa_o_material_set),
     .o_material_id_o (fa_o_material_id),
+    // THE JOB'S DECLARATION, out on the triangle's own beat. The mode used to
+    // be `FORGE_MATERIAL_MODE`, a constant chosen at THIS composer -- which
+    // was true while the forge was the only producer on this arm and stopped
+    // being true the moment a shadow hull joined it. See the clipdoor's own
+    // comment: "a mode chosen at a composer is the inferred mode the ruling
+    // forbids".
+    .o_material_mode_o(fa_o_material_mode),
+    .o_vertex_alpha_o (fa_o_vertex_alpha),
+    .o_frag_state_o   (fa_o_frag_state),
     .o_quality_tier_o(fa_o_quality_tier),
 
     .busy_o          (fa_busy),
@@ -13446,6 +13704,8 @@ module zhao_console_core
   wire [31:0]        cd_o_material_set;
   wire [15:0]        cd_o_material_id;
   wire [ 1:0]        cd_o_material_mode;
+  wire [ 7:0]        cd_o_vertex_alpha;
+  wire [31:0]        cd_o_frag_state;
   wire [ 7:0]        cd_o_quality_tier;
   /* verilator lint_off UNUSEDSIGNAL */
   // Which client the beat belongs to. The door publishes it so a composer or a
@@ -13534,7 +13794,23 @@ module zhao_console_core
     // declare MATERIAL_BACKED through the named constants below, which is the
     // true value for both: every mesh triangle and every forge primitive
     // carries a real {set, id} and expects it resolved.
-    .c_material_mode_i({pcf_o_material_mode, FORGE_MATERIAL_MODE, GEOM_REPLAY_MATERIAL_MODE}),
+    // SHADOWRIDE 2026-09-23: the forge arm's mode is now the ASSEMBLER's
+    // per-job output rather than `FORGE_MATERIAL_MODE`, a constant this
+    // composer chose. That constant was true while FORGE.PRIM was the only
+    // producer on the arm; a shadow hull declares MATMODE_NONE with a zero
+    // pair, and one constant cannot be true of both. The parameter survives as
+    // the value FORGE.PRIM's own job descriptor carries, which is where a
+    // producer's declaration belongs.
+    .c_material_mode_i({pcf_o_material_mode, fa_o_material_mode, GEOM_REPLAY_MATERIAL_MODE}),
+    // R89's FLAT PER-PRIMITIVE ALPHA and the RASTER STATE WORD, per client, on
+    // the same granted beat as the triangle and its material. GEOM.REPLAY and
+    // PART.CLIPFEED declare the opaque profile from named constants: that is
+    // the FRAME DEFAULT those producers have always been drawn under, said out
+    // loud at a port instead of inherited from a boundary word, and it is
+    // exactly the shape core entry I51 names -- "`render_state_i` becoming the
+    // FRAME DEFAULT that a primitive overrides rather than the only answer".
+    .c_vertex_alpha_i({PART_VERTEX_ALPHA, fa_o_vertex_alpha, GEOM_REPLAY_VERTEX_ALPHA}),
+    .c_frag_state_i  ({PART_FRAG_STATE,   fa_o_frag_state,   GEOM_REPLAY_FRAG_STATE}),
     .c_quality_tier_i({pcf_o_quality_tier, fa_o_quality_tier, rp_o_quality_tier}),
 
     .o_valid_o       (cd_o_valid),
@@ -13555,6 +13831,8 @@ module zhao_console_core
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),
+    .o_vertex_alpha_o (cd_o_vertex_alpha),
+    .o_frag_state_o   (cd_o_frag_state),
     .o_quality_tier_o(cd_o_quality_tier),
     .o_owner_o       (cd_o_owner),
 
@@ -13563,6 +13841,518 @@ module zhao_console_core
     .idle_offered_o (geom_clipdoor_idle_offered_o),
     .err_hold_broken_o(geom_clipdoor_err_hold_broken_o)
   );
+
+  // ==========================================================================
+  // FORGE.SHADOW -- CONTACT SHADOWS, composed 2026-09-23 (SHADOWRIDE), SIX
+  // BLOCKS IN ONE ACT under owner ruling R244 D-FORGESHADOW-C.
+  //
+  // `zhao_geom_ladderbank` -> `zhao_geom_lodstate` -> `zhao_forge_shadow` ->
+  // `zhao_forge_fanindex` -> `zhao_forge_jobarb` -> the SHARED
+  // `zhao_forge_assemble` -> `zhao_geom_clipdoor` client 1 -> the material
+  // window -> GEOM.CLIP. Plus `zhao_terrain_tapshare` at the height tap, down
+  // beside `u_terrain_heighttap`.
+  //
+  // WHY ALL OF IT IN ONE COMMIT, which is the only way it could land: every
+  // block here is a producer whose only consumer is another of them.
+  // LADDERBANK answers a query nobody could ask; LODSTATE emits casters nobody
+  // could draw; FORGE.SHADOW emits a ring nobody could index; the fan indexer
+  // emits triples with no assembler; the arbiter is a mux with one client. A
+  // prefix of this chain is a tie-off wearing a composition's clothes, which
+  // is this campaign's first prohibition -- and `design/contracts/
+  // FORGE.SHADOW.md` has said so through four passes.
+  //
+  // WHAT IS NOT HERE, AND THAT IS THE POINT. No second projector client, no
+  // second `zhao_geom_depthquant_stream`, no fourth clipdoor client, no second
+  // 520-slot vertex store and no shadow map. A hull RIDES the assembler
+  // FORGE.PRIM already runs, whose `v_*` port its own header specifies as a
+  // composer mux. That is what left owner code `2'd3` free for the instance
+  // centre, which needs it, instead of spending it on hull vertices.
+  //
+  // THE FOUR SEAMS THIS OPENS INTO COMPOSED BLOCKS, each with its authority:
+  //   * `zhao_geom_mem_adapter` gains requester H. spec/memory_rules.md 5f's
+  //     condition is met -- same pool, same client, same direction -- and the
+  //     traffic is ONE adoption per CREATURE_FORM publication and nothing per
+  //     draw, the lightest on the share.
+  //   * `zhao_part_project` gains its FOURTH owner, `OWNER_LOD = 2'd3`. After
+  //     it the field is FULL. OWNER RULING R3 IS NOT TOUCHED: R3 withholds a
+  //     third PORT on `zhao_project_service` and NAMES the time multiplex as
+  //     the thing to keep. R3's owed schedule proof is DISCHARGED and its N=4
+  //     repeat is measured at this commit -- `projshare_contention` CASE 3b
+  //     (four arms saturated, worst wait 7 clocks against a bound of 8) and
+  //     CASE 4 (the instance centre's own intermittent shape, 600 of 600
+  //     served, worst wait 6 clocks, closing its 200-clock evaluation).
+  //   * `zhao_forge_assemble` gains a PER-JOB material mode, flat alpha and
+  //     raster state. They were composer constants while the forge was its only
+  //     producer and could not stay so with two.
+  //   * `zhao_terrain_heighttap`'s single requester port gains an arbiter. The
+  //     response carries no tag and no rider, so the arbiter holds the owner
+  //     itself -- see `zhao_terrain_tapshare`'s header.
+  //
+  // AND ENTRY I20's TWO OPEN FIELDS GET A PRODUCER, which is the other half of
+  // this act and is down beside `tri_flat_request_c`.
+  // ==========================================================================
+
+  // ---- GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows --------------
+  zhao_guard_req_t lb_guard_req;
+  zhao_guard_rsp_t lb_guard_rsp;
+  wire        lb_beat_valid;
+  wire [63:0] lb_beat_data;
+
+  wire        ls_q_valid;
+  wire [23:0] ls_q_form;
+  wire        lb_a_valid, lb_a_hit;
+  wire signed [31:0] lb_a_bound, lb_a_micro, lb_a_splat, lb_a_glint;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The bank's adoption busy. `zhao_geom_lodstate` does not read it: a query
+  // during an adoption is answered as a MISS by the bank itself and counted on
+  // `lookup_miss_o`, which is the honest answer and not a stall. Named here
+  // rather than left for the linter.
+  wire        lb_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_geom_ladderbank u_geom_ladderbank (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: MEM.UPLOAD's 5f.1 publication, the SAME four wires
+    // `u_forge_pagebank` and `u_part_table_loader` already take. The block
+    // dispatches on `pub_tag_i == PAGE_KIND` (8, CREATURE_FORM) itself, so
+    // the kind test is the block's and not a composer's.
+    .pub_valid_i (upl_publish_valid_o),
+    .pub_tag_i   (upl_publish_tag_o),
+    .pub_base_i  (upl_publish_base_o),
+    .pub_extent_i(upl_publish_extent_o),
+
+    // REAL: requester H of the shared ENGINE1 client.
+    .g_req_o       (lb_guard_req),
+    .g_rsp_i       (lb_guard_rsp),
+    .g_beat_valid_i(lb_beat_valid),
+    .g_beat_data_i (lb_beat_data),
+
+    // REAL: GEOM.LODSTATE's ladder query and its answer.
+    .q_valid_i(ls_q_valid),
+    .q_form_i (ls_q_form),
+    .a_valid_o(lb_a_valid),
+    .a_hit_o  (lb_a_hit),
+    .a_bound_o(lb_a_bound),
+    .a_micro_o(lb_a_micro),
+    .a_splat_o(lb_a_splat),
+    .a_glint_o(lb_a_glint),
+
+    .pages_o        (geom_lb_pages_o),
+    .records_o      (geom_lb_records_o),
+    .pages_dropped_o(geom_lb_pages_dropped_o),
+    .bad_magic_o    (geom_lb_bad_magic_o),
+    .truncated_o    (geom_lb_truncated_o),
+    .bad_record_o   (geom_lb_bad_record_o),
+    .overflow_o     (geom_lb_overflow_o),
+    .denied_o       (geom_lb_denied_o),
+    .lookup_miss_o  (geom_lb_lookup_miss_o),
+    .busy_o         (lb_busy)
+  );
+
+  // ---- GEOM.LODSTATE: one ladder per (instance, camera) -------------------
+  // OWNER RULING R74 / D-LADDER-A: "the per-instance ladder PAYS THE CAMERA
+  // INDEX BIT". The store is INSTANCES * 2 and a dual-view job evaluates twice.
+  //
+  // ITS FOUR UPSTREAM PRODUCERS ARE ALL COMPOSED AND ALL NAMED HERE, which is
+  // the sentence four passes of this contract could not write:
+  //   j_*        <- GEOM.DRAWJOB's job handshake. The centre is the instance
+  //                 transform's TRANSLATION COLUMN, elements 3, 7 and 11 of the
+  //                 row-major 3x4 -- the block's own `:194-198` says so, so the
+  //                 composer is not choosing which elements mean position.
+  //   kx/vw      <- VIEW.PROJSCALE, which snoops the matrix bank the projector
+  //                 is configured from, so a console whose matrix moved cannot
+  //                 have a scale that did not.
+  //   thresh0/1  <- MEASURE.GOVERNOR's `cam0/1_thresh_q8_o`, live silicon that
+  //                 has been waiting for this consumer since 2026-09-23.
+  //   pr_*       <- the FOURTH client-A arm, added in this commit.
+  wire        ls_pr_valid, ls_pr_ready;
+  wire signed [31:0] ls_pr_x, ls_pr_y, ls_pr_z;
+  wire        ls_pr_view;
+  wire        ls_pr_ans_valid;
+  wire [30:0] ls_pr_w;
+  wire        ls_pr_behind;
+
+  wire        ls_c_valid, ls_c_ready;
+  wire [15:0] ls_c_instance_id;
+  wire signed [31:0] ls_c_x, ls_c_z, ls_c_radius;
+  wire [ 1:0] ls_c_rung;
+  wire        ls_c_view;
+  wire [31:0] ls_rung_counts_w [4];
+  /* verilator lint_off UNUSEDSIGNAL */
+  // LODSTATE's evaluation busy. Nothing gates on it: the block's own
+  // `dropped_o` counts a job arriving while it is busy, which is the honest
+  // record of what the single-in-flight FSM costs and is a number rather than
+  // a stall somebody has to reason about.
+  wire        ls_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_geom_lodstate u_geom_lodstate (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+    .frame_i(core_tick_c),
+
+    // REAL: GEOM.DRAWJOB's job seam, on the handshake itself.
+    .j_fire_i       (dj_j_valid && dj_j_ready),
+    .j_instance_id_i(dj_j_instance_id),
+    .j_form_index_i (dj_j_form_idx),
+    .j_cx_i         (dj_j_xform[3]),
+    .j_cy_i         (dj_j_xform[7]),
+    .j_cz_i         (dj_j_xform[11]),
+    .j_view_mask_i  (dj_j_active_mask),
+
+    // REAL: the ladder bank.
+    .q_valid_o(ls_q_valid),
+    .q_form_o (ls_q_form),
+    .a_valid_i(lb_a_valid),
+    .a_hit_i  (lb_a_hit),
+    .a_bound_i(lb_a_bound),
+    .a_micro_i(lb_a_micro),
+    .a_splat_i(lb_a_splat),
+    .a_glint_i(lb_a_glint),
+
+    // REAL: the instance centre through client A, owner 2'd3.
+    .pr_valid_o    (ls_pr_valid),
+    .pr_ready_i    (ls_pr_ready),
+    .pr_x_o        (ls_pr_x),
+    .pr_y_o        (ls_pr_y),
+    .pr_z_o        (ls_pr_z),
+    .pr_view_o     (ls_pr_view),
+    .pr_ans_valid_i(ls_pr_ans_valid),
+    .pr_w_i        (ls_pr_w),
+    .pr_behind_i   (ls_pr_behind),
+
+    // REAL: VIEW.PROJSCALE and MEASURE.GOVERNOR.
+    .kx0_i    (vps_kx0),
+    .kx1_i    (vps_kx1),
+    .vw0_i    (vps_vw0),
+    .vw1_i    (vps_vw1),
+    .thresh0_i(mgv_cam0_thresh),
+    .thresh1_i(mgv_cam1_thresh),
+
+    // REAL: the caster, into FORGE.SHADOW.
+    .c_valid_o      (ls_c_valid),
+    .c_ready_i      (ls_c_ready),
+    .c_instance_id_o(ls_c_instance_id),
+    .c_x_o          (ls_c_x),
+    .c_z_o          (ls_c_z),
+    .c_radius_o     (ls_c_radius),
+    .c_rung_o       (ls_c_rung),
+    .c_view_o       (ls_c_view),
+
+    .ticks_o          (geom_ls_ticks_o),
+    .skipped_repeat_o (geom_ls_skipped_repeat_o),
+    .bank_miss_o      (geom_ls_bank_miss_o),
+    .no_radius_o      (geom_ls_no_radius_o),
+    .dropped_o        (geom_ls_dropped_o),
+    .out_of_range_o   (geom_ls_out_of_range_o),
+    .rung_counts_o    (ls_rung_counts_w),
+    .rad_evaluations_o(geom_ls_rad_evaluations_o),
+    .rad_behind_o     (geom_ls_rad_behind_o),
+    .rad_bad_bound_o  (geom_ls_rad_bad_bound_o),
+    .rad_saturated_o  (geom_ls_rad_saturated_o),
+    .busy_o           (ls_busy)
+  );
+
+  // Flattened for the port, least significant slice rung 0. Quartus 17.0 will
+  // not take an unpacked array port and the census is worth having: "the
+  // shadow is too coarse here" is answerable from it and unanswerable without.
+  assign geom_ls_rung_counts_o = {ls_rung_counts_w[3], ls_rung_counts_w[2],
+                                  ls_rung_counts_w[1], ls_rung_counts_w[0]};
+
+  // ---- THE CASTER'S VIEW GATE ---------------------------------------------
+  // LODSTATE keeps ONE ladder per (instance, CAMERA) and emits a caster for
+  // each camera the instance is active in. Only one camera is being rendered
+  // on any given pass, and the hull is projected through THAT one -- so a
+  // caster for the other camera is CONSUMED AND COUNTED here rather than drawn
+  // through the wrong projection.
+  //
+  // This is `zhao_forge_ring_eval`'s `skipped_view_o` in a different place and
+  // for the same reason: a correct refusal that must be a number, because a
+  // shadow that silently fails to appear is indistinguishable from a creature
+  // that is flying.
+  //
+  // THE HANDSHAKE IS SAFE: `fsh_view_skip_c` is a function of `c_view_o` and
+  // of the rendering view, NEVER of `c_valid_o`, so the ready handed back is
+  // not a function of the valid handed out.
+  wire fsh_view_skip_c = (ls_c_view != part_prj_view_i);
+  wire fsh_cast_ready;
+  assign ls_c_ready = fsh_view_skip_c ? 1'b1 : fsh_cast_ready;
+
+  // ---- FORGE.SHADOW -------------------------------------------------------
+  wire        fsh_tap_req_valid, fsh_tap_req_ready;
+  wire signed [31:0] fsh_tap_x, fsh_tap_z;
+  wire        fsh_tap_rsp_valid;
+
+  wire        fsh_vtx_valid, fsh_vtx_ready;
+  wire signed [31:0] fsh_vtx_x, fsh_vtx_y, fsh_vtx_z;
+  wire [ 7:0] fsh_vtx_alpha;
+  wire        fsh_vtx_last;
+  wire [15:0] fsh_vtx_src_id;
+  wire [ 1:0] fsh_vtx_rung;
+
+  zhao_forge_shadow u_forge_shadow (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: GEOM.LODSTATE's caster, gated to the rendering camera.
+    .cast_valid_i  (ls_c_valid && !fsh_view_skip_c),
+    .cast_ready_o  (fsh_cast_ready),
+    .cast_x_i      (ls_c_x),
+    .cast_z_i      (ls_c_z),
+    .cast_radius_i (ls_c_radius),
+    // AUTHORED: owner ruling R133 D-FORGESHADOW-A accepted a named constant at
+    // composition for exactly this port, on exactly these grounds. It is an
+    // ART value and its correctness is a look-gate.
+    .cast_strength_i(SHADOW_STRENGTH),
+    .cast_rung_i   (ls_c_rung),
+    .cast_src_id_i (ls_c_instance_id),
+
+    // REAL: MEASURE.GOVERNOR's per-camera degradation, selected by the camera
+    // being rendered. TWO BITS AND TWO BITS: this is `deg0_o`/`deg1_o`, the
+    // per-camera coarseness floor, and NOT `zhao_part_project`'s
+    // `lad_gov_floor_o`, which is three bits, is read from a particle's own
+    // stored record, and serves PART.LADDER's eight-rung ladder. The contract
+    // names that near miss by hand because wiring it would truncate a bit and
+    // cross two ladders with every gate staying green.
+    .rung_floor_i  (part_prj_view_i ? mgv_deg1 : mgv_deg0),
+
+    // REAL: the height tap, through its arbiter.
+    .tap_req_valid_o(fsh_tap_req_valid),
+    .tap_req_ready_i(fsh_tap_req_ready),
+    .tap_x_o        (fsh_tap_x),
+    .tap_z_o        (fsh_tap_z),
+    .tap_rsp_valid_i(fsh_tap_rsp_valid),
+    .tap_height_i   (htp_height),
+    .tap_no_ground_i(htp_rsp_no_ground),
+
+    // REAL: the hull's ring, into the fan indexer.
+    .vtx_valid_o (fsh_vtx_valid),
+    .vtx_ready_i (fsh_vtx_ready),
+    .vtx_x_o     (fsh_vtx_x),
+    .vtx_y_o     (fsh_vtx_y),
+    .vtx_z_o     (fsh_vtx_z),
+    .vtx_alpha_o (fsh_vtx_alpha),
+    .vtx_last_o  (fsh_vtx_last),
+    .vtx_src_id_o(fsh_vtx_src_id),
+    .vtx_rung_o  (fsh_vtx_rung),
+
+    .shadows_emitted_o(forge_shadow_emitted_o),
+    .no_ground_o      (forge_shadow_no_ground_o),
+    .zero_radius_o    (forge_shadow_zero_radius_o),
+    .far_rung_o       (forge_shadow_far_rung_o),
+    .tap_protocol_o   (forge_shadow_tap_protocol_o)
+  );
+
+  // The casters dropped because their camera is not the one being rendered.
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) forge_shadow_skipped_view_o <= 32'd0;
+    else if (ls_c_valid && fsh_view_skip_c &&
+             (forge_shadow_skipped_view_o != 32'hffff_ffff))
+      forge_shadow_skipped_view_o <= forge_shadow_skipped_view_o + 32'd1;
+  end
+
+  // ---- THE FAN INDEXER ----------------------------------------------------
+  wire        fnx_v_valid, fnx_v_ready;
+  wire signed [31:0] fnx_v_x, fnx_v_y, fnx_v_z;
+  wire        fnx_v_last;
+  wire        fnx_t_valid, fnx_t_ready;
+  wire [15:0] fnx_t_i0, fnx_t_i1, fnx_t_i2, fnx_t_material, fnx_t_src_id;
+  wire        fnx_t_last;
+  wire [ 7:0] fnx_j_vertex_alpha;
+  wire [31:0] fnx_hulls_rung_w [4];
+
+  zhao_forge_fanindex #(
+    .MAXV (16),
+    .IDW  (16)
+  ) u_forge_fanindex (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .vtx_valid_i (fsh_vtx_valid),
+    .vtx_ready_o (fsh_vtx_ready),
+    .vtx_x_i     (fsh_vtx_x),
+    .vtx_y_i     (fsh_vtx_y),
+    .vtx_z_i     (fsh_vtx_z),
+    .vtx_alpha_i (fsh_vtx_alpha),
+    .vtx_last_i  (fsh_vtx_last),
+    .vtx_src_id_i(fsh_vtx_src_id),
+    .vtx_rung_i  (fsh_vtx_rung),
+
+    .v_valid_o(fnx_v_valid),
+    .v_ready_i(fnx_v_ready),
+    .v_x_o    (fnx_v_x),
+    .v_y_o    (fnx_v_y),
+    .v_z_o    (fnx_v_z),
+    .v_last_o (fnx_v_last),
+
+    .t_valid_o   (fnx_t_valid),
+    .t_ready_i   (fnx_t_ready),
+    .t_i0_o      (fnx_t_i0),
+    .t_i1_o      (fnx_t_i1),
+    .t_i2_o      (fnx_t_i2),
+    .t_material_o(fnx_t_material),
+    .t_src_id_o  (fnx_t_src_id),
+    .t_last_o    (fnx_t_last),
+
+    .j_vertex_alpha_o(fnx_j_vertex_alpha),
+
+    .hulls_o        (forge_fanidx_hulls_o),
+    .triangles_o    (forge_fanidx_triangles_o),
+    .short_ring_o   (forge_fanidx_short_ring_o),
+    .ring_overflow_o(forge_fanidx_ring_overflow_o),
+    .hulls_rung_o   (fnx_hulls_rung_w)
+  );
+
+  assign forge_fanidx_hulls_rung_o = {fnx_hulls_rung_w[3], fnx_hulls_rung_w[2],
+                                      fnx_hulls_rung_w[1], fnx_hulls_rung_w[0]};
+
+  // ---- THE JOB ARBITER, in front of the SHARED assembler ------------------
+  // CLIENT A IS FORGE.PRIM AND IT WINS, ALWAYS, which is the contract's own
+  // backpressure rule: "It is a background producer: a stalled shadow must
+  // never delay a creature."
+  //
+  // FORGE.SHADOW'S DESCRIPTOR IS A LEVEL, and that is a fact about the
+  // producer rather than a shortcut. Every field of it but one is a named
+  // constant above -- the material pair is {0, 0} because
+  // `zhao_material_window` REFUSES MATMODE_NONE paired with a non-zero one --
+  // and the one field that is produced, the caster's strength, comes off the
+  // fan indexer, which latches it at the hull's first vertex. The arbiter
+  // copies the descriptor privately at the grant, and the grant happens on a
+  // vertex, so the copy is of the hull that is starting.
+  wire        fjb_v_valid, fjb_v_ready;
+  wire signed [31:0] fjb_v_x, fjb_v_y, fjb_v_z;
+  wire        fjb_v_last;
+  wire        fjb_t_valid, fjb_t_ready;
+  wire [15:0] fjb_t_i0, fjb_t_i1, fjb_t_i2, fjb_t_material, fjb_t_src_id;
+  wire        fjb_t_last;
+  wire        fjb_j_valid, fjb_j_ready;
+  wire [31:0] fjb_j_material_set;
+  wire [15:0] fjb_j_material_id;
+  wire [ 1:0] fjb_j_material_mode;
+  wire [ 7:0] fjb_j_vertex_alpha;
+  wire [31:0] fjb_j_frag_state;
+  wire signed [31:0] fjb_art_r, fjb_art_g, fjb_art_b, fjb_art_alpha;
+  wire [ 7:0] fjb_art_quality_tier;
+  wire [ 1:0] fjb_art_cull_mode;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The arbiter's own busy. Neither producer gates on it: FORGE.PRIM is held
+  // by the assembler's `busy_o` through the page bank exactly as before, and
+  // FORGE.SHADOW is held by its own single-caster FSM. A third opinion about
+  // when the assembler is free would be a second law beside the one that ships.
+  wire        fjb_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_forge_jobarb #(
+    .IDW (16)
+  ) u_forge_jobarb (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // ---- CLIENT A: FORGE.PRIM, through the family mux ---------------------
+    .a_v_valid_i(fa_v_valid),
+    .a_v_ready_o(fa_v_ready),
+    .a_v_x_i    (fa_v_x),
+    .a_v_y_i    (fa_v_y),
+    .a_v_z_i    (fa_v_z),
+    .a_v_last_i (fa_v_last),
+
+    .a_t_valid_i   (fp_t_valid),
+    .a_t_ready_o   (fp_t_ready),
+    .a_t_i0_i      (fp_t_i0),
+    .a_t_i1_i      (fp_t_i1),
+    .a_t_i2_i      (fp_t_i2),
+    .a_t_material_i(fp_t_material),
+    .a_t_src_id_i  (fp_t_src_id),
+    .a_t_last_i    (fp_t_last),
+
+    .a_j_valid_i        (fpb_a_valid),
+    .a_j_ready_o        (fpb_a_ready),
+    .a_j_material_set_i (fpb_material_set),
+    .a_j_material_id_i  (fpb_material_id),
+    .a_j_material_mode_i(FORGE_MATERIAL_MODE),
+    .a_j_vertex_alpha_i (FORGE_VERTEX_ALPHA),
+    .a_j_frag_state_i   (FORGE_FRAG_STATE),
+    .a_j_art_r_i        (FORGE_LIT_R),
+    .a_j_art_g_i        (FORGE_LIT_G),
+    .a_j_art_b_i        (FORGE_LIT_B),
+    .a_j_art_alpha_i    (FORGE_ALPHA),
+    .a_j_quality_tier_i (FORGE_QUALITY_TIER),
+    .a_j_cull_mode_i    (FORGE_CULL_MODE),
+
+    // ---- CLIENT B: FORGE.SHADOW's hull ------------------------------------
+    .b_v_valid_i(fnx_v_valid),
+    .b_v_ready_o(fnx_v_ready),
+    .b_v_x_i    (fnx_v_x),
+    .b_v_y_i    (fnx_v_y),
+    .b_v_z_i    (fnx_v_z),
+    .b_v_last_i (fnx_v_last),
+
+    .b_t_valid_i   (fnx_t_valid),
+    .b_t_ready_o   (fnx_t_ready),
+    .b_t_i0_i      (fnx_t_i0),
+    .b_t_i1_i      (fnx_t_i1),
+    .b_t_i2_i      (fnx_t_i2),
+    .b_t_material_i(fnx_t_material),
+    .b_t_src_id_i  (fnx_t_src_id),
+    .b_t_last_i    (fnx_t_last),
+
+    // A LEVEL: see the comment above the instance.
+    .b_j_valid_i        (1'b1),
+    .b_j_ready_o        (),
+    .b_j_material_set_i (32'd0),
+    .b_j_material_id_i  (16'd0),
+    .b_j_material_mode_i(SHADOW_MATERIAL_MODE),
+    .b_j_vertex_alpha_i (fnx_j_vertex_alpha),
+    .b_j_frag_state_i   (SHADOW_FRAG_STATE),
+    .b_j_art_r_i        (SHADOW_LIT_R),
+    .b_j_art_g_i        (SHADOW_LIT_G),
+    .b_j_art_b_i        (SHADOW_LIT_B),
+    .b_j_art_alpha_i    (SHADOW_ART_ALPHA),
+    .b_j_quality_tier_i (SHADOW_QUALITY_TIER),
+    .b_j_cull_mode_i    (SHADOW_CULL_MODE),
+
+    // ---- the shared assembler ---------------------------------------------
+    .v_valid_o(fjb_v_valid),
+    .v_ready_i(fjb_v_ready),
+    .v_x_o    (fjb_v_x),
+    .v_y_o    (fjb_v_y),
+    .v_z_o    (fjb_v_z),
+    .v_last_o (fjb_v_last),
+
+    .t_valid_o   (fjb_t_valid),
+    .t_ready_i   (fjb_t_ready),
+    .t_i0_o      (fjb_t_i0),
+    .t_i1_o      (fjb_t_i1),
+    .t_i2_o      (fjb_t_i2),
+    .t_material_o(fjb_t_material),
+    .t_src_id_o  (fjb_t_src_id),
+    .t_last_o    (fjb_t_last),
+
+    .j_valid_o        (fjb_j_valid),
+    .j_ready_i        (fjb_j_ready),
+    .j_material_set_o (fjb_j_material_set),
+    .j_material_id_o  (fjb_j_material_id),
+    .j_material_mode_o(fjb_j_material_mode),
+    .j_vertex_alpha_o (fjb_j_vertex_alpha),
+    .j_frag_state_o   (fjb_j_frag_state),
+    .art_r_o           (fjb_art_r),
+    .art_g_o           (fjb_art_g),
+    .art_b_o           (fjb_art_b),
+    .art_alpha_o       (fjb_art_alpha),
+    .art_quality_tier_o(fjb_art_quality_tier),
+    .art_cull_mode_o   (fjb_art_cull_mode),
+
+    .grant_a_o (forge_jobarb_grant_prim_o),
+    .grant_b_o (forge_jobarb_grant_shadow_o),
+    .switches_o(forge_jobarb_switches_o),
+    .wait_a_o  (forge_jobarb_wait_prim_o),
+    .wait_b_o  (forge_jobarb_wait_shadow_o),
+    .no_desc_o (forge_jobarb_no_desc_o),
+    .busy_o    (fjb_busy)
+  );
+
 
   // ==========================================================================
   // THE UNTEXTURED DOOR -- owner ruling R197 (2026-09-20), law 3.
@@ -14426,17 +15216,106 @@ module zhao_console_core
   end
   assign ptt_pitch_c = ptt_pitch_q;
 
+  // ==========================================================================
+  // TERRAIN.TAPSHARE -- the height tap's ONE requester port, arbitrated
+  // (composed 2026-09-23, SHADOWRIDE, with the FORGE.SHADOW chain).
+  //
+  // `zhao_terrain_heighttap` has EXACTLY ONE requester group, and until today
+  // every wire of it was driven by `u_part_terrain_tap`. FORGE.SHADOW.md
+  // marked that port "the one genuinely clear thing" in this subsystem and it
+  // was not: a port SHAPE had been read as port AVAILABILITY. The arbiter was
+  // BUILT on 2026-09-21 and deliberately not composed, because an arbiter in
+  // front of a port with one user is cost without capability. It has two users
+  // now.
+  //
+  // THE RESPONSE CARRIES NO TAG AND NO RIDER -- `rsp_valid_o` and eighteen
+  // data outputs arrive with nothing saying whose request they answer -- so
+  // unlike every other shared service here the routing cannot be by rider, and
+  // the arbiter holds the owner itself. That is legal because the tap is
+  // strictly single-in-flight (`req_ready_o = (st_q == S_IDLE)`), a premise
+  // the block records and $fatal-guards as SINGLE_FLIGHT_ONLY.
+  //
+  // THE RESPONSE DATA IS BROADCAST, not muxed N ways -- eighteen 32-bit buses
+  // times N of multiplexer for a value only one client can want -- so a client
+  // must not latch the bus on a cycle its own `r_rsp_valid_o` bit is low. Both
+  // clients obey that: each takes `tsh_r_rsp_valid[k]` as its own
+  // `tap_rsp_valid_i` and reads the shared data only with it.
+  //
+  // CLIENT 0 IS PART.COLLIDE's tap and CLIENT 1 IS FORGE.SHADOW, and the order
+  // is the round-robin order rather than a priority: the rotation is bounded at
+  // N-1 turns, so neither can starve the other. A shadow hull takes 16, 8 or 4
+  // taps at the ladder's own fixed count per rung, which is what makes that
+  // bound a number rather than a hope.
+  // ==========================================================================
+  wire [1:0]         tsh_r_valid_c;
+  wire [1:0]         tsh_r_ready_w;
+  logic signed [31:0] tsh_r_x_c [2];
+  logic signed [31:0] tsh_r_z_c [2];
+  wire [1:0]         tsh_r_surface_c;
+  wire [1:0]         tsh_r_rsp_valid_w;
+  wire [31:0]        tsh_grants_w [2];
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The arbiter's busy. Neither client gates on it: each has its own
+  // ready/valid and the arbiter's rotation is what bounds the wait.
+  wire               tsh_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign tsh_r_valid_c   = {fsh_tap_req_valid, htp_req_valid};
+  assign tsh_r_surface_c = {TERRAIN_TAP_SHADOW_SURFACE, htp_req_surface};
+  always_comb begin
+    tsh_r_x_c[0] = htp_req_x;
+    tsh_r_z_c[0] = htp_req_z;
+    tsh_r_x_c[1] = fsh_tap_x;
+    tsh_r_z_c[1] = fsh_tap_z;
+  end
+  assign htp_req_ready     = tsh_r_ready_w[0];
+  assign fsh_tap_req_ready = tsh_r_ready_w[1];
+  assign fsh_tap_rsp_valid = tsh_r_rsp_valid_w[1];
+  assign terr_tsh_grants_o = {tsh_grants_w[1], tsh_grants_w[0]};
+
+  wire        tsh_t_req_valid, tsh_t_req_ready;
+  wire signed [31:0] tsh_t_req_x, tsh_t_req_z;
+  wire        tsh_t_req_surface;
+
+  zhao_terrain_tapshare #(
+    .N                 (2),
+    .SINGLE_FLIGHT_ONLY(1'b1)
+  ) u_terrain_tapshare (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .r_valid_i    (tsh_r_valid_c),
+    .r_ready_o    (tsh_r_ready_w),
+    .r_x_i        (tsh_r_x_c),
+    .r_z_i        (tsh_r_z_c),
+    .r_surface_i  (tsh_r_surface_c),
+    .r_rsp_valid_o(tsh_r_rsp_valid_w),
+
+    .t_req_valid_o  (tsh_t_req_valid),
+    .t_req_ready_i  (tsh_t_req_ready),
+    .t_req_x_o      (tsh_t_req_x),
+    .t_req_z_o      (tsh_t_req_z),
+    .t_req_surface_o(tsh_t_req_surface),
+    .t_rsp_valid_i  (htp_rsp_valid),
+
+    .grants_o   (tsh_grants_w),
+    .contended_o(terr_tsh_contended_o),
+    .stray_rsp_o(terr_tsh_stray_rsp_o),
+    .busy_o     (tsh_busy)
+  );
+
   zhao_terrain_heighttap u_terrain_heighttap (
     .clk  (gpu_clk),
     .rst_n(rst_n),
     .pitch_log2_i(ptt_pitch_c),
 
-    // REAL: PART.TERRAIN_TAP's cell fills.
-    .req_valid_i  (htp_req_valid),
-    .req_ready_o  (htp_req_ready),
-    .req_x_i      (htp_req_x),
-    .req_z_i      (htp_req_z),
-    .req_surface_i(htp_req_surface),
+    // REAL: the arbiter's granted request. PART.COLLIDE's tap is client 0 and
+    // FORGE.SHADOW's hull conformance is client 1.
+    .req_valid_i  (tsh_t_req_valid),
+    .req_ready_o  (tsh_t_req_ready),
+    .req_x_i      (tsh_t_req_x),
+    .req_z_i      (tsh_t_req_z),
+    .req_surface_i(tsh_t_req_surface),
     .rsp_valid_o    (htp_rsp_valid),
     .rsp_height_o   (htp_height),
     .rsp_no_ground_o(htp_rsp_no_ground),
@@ -16832,8 +17711,8 @@ module zhao_console_core
     .tri_b_plane_i             (ap_b_plane_w),
     // I49: the RESOLVED material, per triangle, from u_material_window.
     .tri_flat_request_i        (tri_flat_request_c),
-    .tri_continuation_tail_i   (tri_continuation_tail_i),
-    .tri_fragment_state_i      (tri_fragment_state_i),
+    .tri_continuation_tail_i   (tri_continuation_tail_c),
+    .tri_fragment_state_i      (tri_fragment_state_c),
     .fill_req_ready_i          (fill_req_ready_i),
     .fill_req_valid_o          (fill_req_valid_o),
     .fill_req_addr_o           (fill_req_addr_o),
@@ -19340,6 +20219,21 @@ module zhao_console_core
     // names as missing and as a content decision; the view is which camera this
     // pass is for, because ladder selection is PER CAMERA.
     .cfg_base_radius_i(part_prj_base_radius_i),
+    // REAL: the FOURTH client-A arm, GEOM.LODSTATE's instance centre, owner
+    // 2'd3 -- the last code the rider's two-bit owner field holds. R3's owed
+    // schedule proof is discharged and its N=4 repeat is measured at the same
+    // commit: `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`, and
+    // `projshare_contention` CASE 3b / CASE 4.
+    .l_valid_i(ls_pr_valid),
+    .l_ready_o(ls_pr_ready),
+    .l_vx_i   (ls_pr_x),
+    .l_vy_i   (ls_pr_y),
+    .l_vz_i   (ls_pr_z),
+    .l_view_i (ls_pr_view),
+    .rl_valid_o (ls_pr_ans_valid),
+    .rl_w_o     (ls_pr_w),
+    .rl_behind_o(ls_pr_behind),
+
     .cfg_view_i       (part_prj_view_i),
 
     // REAL: branch P of the fork on PART.COLLIDE's output. The draw pass reads
@@ -22265,6 +23159,19 @@ module zhao_console_core
     .g_beat_valid_o(cr_beat_valid),
     .g_beat_data_o (cr_beat_data),
 
+    // REAL: requester H, GEOM.LADDERBANK's kind-8 CREATURE_FORM page reader
+    // (FORGE.SHADOW, 2026-09-23). ONE adoption per creature-form PUBLICATION
+    // and nothing per draw -- the ladder is a handful of rows held in
+    // registers and every lookup afterwards is a register read -- so this is
+    // the lightest traffic on the share, on the same pool, client and
+    // direction as the seven above, which is 5f's condition for joining here.
+    // The bank counts its own eight beats a line, so it takes no `last` and
+    // the adapter has no such port for H.
+    .h_req_i       (lb_guard_req),
+    .h_rsp_o       (lb_guard_rsp),
+    .h_beat_valid_o(lb_beat_valid),
+    .h_beat_data_o (lb_beat_data),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -22279,6 +23186,7 @@ module zhao_console_core
     .jobs_e_o     (geom_ma_jobs_e_o),
     .jobs_f_o     (geom_ma_jobs_f_o),
     .jobs_g_o     (geom_ma_jobs_g_o),
+    .jobs_h_o     (geom_ma_jobs_h_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
@@ -23110,6 +24018,12 @@ module zhao_console_core
     // that makes the mode part of the span's identity rather than a second
     // stream running beside it.
     .t_material_mode_i(cd_o_material_mode),
+    // REAL, and on the SAME grant, the SAME clock: the primitive's flat alpha
+    // and raster state. They are part of the span's identity inside the
+    // window, so a primitive that disagrees about either gets its own span and
+    // cannot be painted with the previous one's opacity.
+    .t_vertex_alpha_i (cd_o_vertex_alpha),
+    .t_frag_state_i   (cd_o_frag_state),
     .t_quality_tier_i (cd_o_quality_tier),
 
     // REAL: into GEOM.CLIP, gated.
@@ -23150,6 +24064,8 @@ module zhao_console_core
     .pub_base_binding_o    (mw_pub_base_binding),
     .pub_response_class_o  (mw_pub_response_class),
     .pub_material_mode_o   (mw_pub_material_mode),
+    .pub_vertex_alpha_o    (mw_pub_vertex_alpha),
+    .pub_frag_state_o      (mw_pub_frag_state),
 
     .resolves_o                (mat_win_resolves_o),
     .switches_o                (mat_win_switches_o),
@@ -23235,6 +24151,74 @@ module zhao_console_core
   // carried when it was a boundary. So the retirement of the port changes what
   // the console does only once a material has actually been resolved.
   wire [297:0] tri_flat_request_c = mw_pub_valid ? mat_flat_request_c : 298'd0;
+
+  // --------------------------------------------------------------------------
+  // ENTRY I20's OTHER TWO FIELDS -- `tri_continuation_tail_i`'s `vertex_alpha`
+  // and `tri_fragment_state_i`'s BLEND, driven from here (SHADOWRIDE,
+  // 2026-09-23, owner ruling R89 and the FORGE.SHADOW composition above)
+  // --------------------------------------------------------------------------
+  // WHAT R89 SETTLED AND WHAT IT DID NOT. R89 read `zhao_forge_shadow.sv:295`
+  // -- `assign vtx_alpha_o = strength_q`, latched PER CASTER -- and ruled that
+  // shadow alpha is a FLAT PER-PRIMITIVE value which should travel down
+  // `tri_continuation_tail_i`'s EXISTING `vertex_alpha` field to
+  // `zhao_raster_blend_prod.a_i`, rather than becoming a fourth
+  // `zhao_geom_attrpack` plane and a fourth rasteriser lane for a value that
+  // does not vary across the primitive. That ruling is right and this is it,
+  // built: the alpha comes off `u_material_window`'s published SPAN, which is
+  // the one place a primitive's identity is aligned with the triangle at the
+  // shell's door -- the same alignment `tri_flat_request_c` above relies on.
+  //
+  // WHAT R89 DID NOT SETTLE, AND IT IS LOAD-BEARING: the alpha alone changes
+  // NOT ONE PIXEL. `zhao_raster_fragment` selects the blend from
+  // `s1_state_r[4:3]`, and `zhao_raster_blend_fin`'s BL_REPLACE arm is
+  // `acc = src_i` -- the product `a_i` took part in is COMPUTED AND THROWN
+  // AWAY. The console's raster state has been the boundary word's zero, which
+  // `zhao_raster_fragment.sv:214` defines as "the plain opaque write ... blend
+  // REPLACE". So a shadow composed with R89's alpha and nothing else is a flat
+  // OPAQUE dark polygon under every creature -- exactly the art defect R89 was
+  // written to refuse, shipped and counted as a gap closed. Both fields are
+  // driven here or neither is.
+  //
+  // WHERE THE VALUES COME FROM, and none of them is invented at this composer:
+  // each producer DECLARES its profile at `u_geom_clipdoor`'s own port, the
+  // door grants the declaration on the same beat as the triangle and the
+  // material, and `u_material_window` latches all of it into one published
+  // record by one enable. GEOM.REPLAY and PART.CLIPFEED declare the opaque
+  // profile from named constants, which is the frame default they have always
+  // been drawn under; FORGE.PRIM declares its own; FORGE.SHADOW declares
+  // BLEND=ALPHA with Z_WRITE_DIS and its caster's strength.
+  //
+  // THE OTHER THREE FIELDS OF THE TAIL STAY A BOUNDARY, and deliberately.
+  // `effect_tag` is R195's bloom selector and the smoke drives it from outside
+  // to prove that path end to end; `stencil_reference` has no producer; and
+  // `vertex_rgb` NO LONGER REACHES THE FRAGMENT AT ALL since owner decision
+  // R234 D1 made `zhao_raster_tile_pipe_v2` overwrite it per fragment from
+  // attribute lanes 3..5. Driving them from here would be moving a tie-off
+  // into the core, which is the campaign's first prohibition. So the port
+  // survives, carrying exactly what it still owns, and entry I20 is NARROWED
+  // rather than closed.
+  //
+  // THE SAME IS TRUE OF THE STATE WORD. Only `[4:3]` BLEND, `[1]` Z_WRITE_DIS
+  // and `[0]` Z_TEST_EN are span-declared today; the alpha test, the stencil
+  // and the tag channel stay the boundary word's, because no producer in this
+  // console declares them and a composer choosing them would be inventing.
+  // The two halves are OR-ed rather than replaced, so an external driver can
+  // still raise a bit the span leaves clear -- which is what keeps the R195
+  // GlowTag smoke form meaningful.
+  //
+  // BEFORE A SPAN IS PUBLISHED both are the boundary's own value, exactly as
+  // they were when the port was the only answer. So this changes what the
+  // console does only once a material has actually been resolved.
+  wire [47:0] tri_continuation_tail_c =
+      mw_pub_valid
+        ? { tri_continuation_tail_i[47:24],          // vertex_rgb, the port's
+            mw_pub_vertex_alpha,                     // [23:16] THE SPAN'S
+            tri_continuation_tail_i[15:0] }          // effect_tag, stencil ref
+        : tri_continuation_tail_i;
+
+  wire [31:0] tri_fragment_state_c =
+      mw_pub_valid ? (tri_fragment_state_i | mw_pub_frag_state)
+                   : tri_fragment_state_i;
 
 
   // --------------------------------------------------------------------------

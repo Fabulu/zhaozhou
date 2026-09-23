@@ -2190,9 +2190,14 @@ module zhao_prod_top (
   zhao_guard_rsp_t u23_g_rsp_o;
   logic [1-1:0] u23_g_beat_valid_o;
   logic [64-1:0] u23_g_beat_data_o;
+  zhao_guard_req_t u23_h_req_i;
+  assign u23_h_req_i = zhao_guard_req_t'(u23_src[49 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u23_h_rsp_o;
+  logic [1-1:0] u23_h_beat_valid_o;
+  logic [64-1:0] u23_h_beat_data_o;
   zhao_guard_req_t u23_m_req_o;
   zhao_guard_rsp_t u23_m_rsp_i;
-  assign u23_m_rsp_i = zhao_guard_rsp_t'(u23_src[49 +: $bits(zhao_guard_rsp_t)]);
+  assign u23_m_rsp_i = zhao_guard_rsp_t'(u23_src[56 +: $bits(zhao_guard_rsp_t)]);
   logic [32-1:0] u23_jobs_a_o;
   logic [32-1:0] u23_jobs_b_o;
   logic [32-1:0] u23_jobs_c_o;
@@ -2200,6 +2205,7 @@ module zhao_prod_top (
   logic [32-1:0] u23_jobs_e_o;
   logic [32-1:0] u23_jobs_f_o;
   logic [32-1:0] u23_jobs_g_o;
+  logic [32-1:0] u23_jobs_h_o;
   logic [32-1:0] u23_denied_o;
   logic [32-1:0] u23_contention_o;
   logic [32-1:0] u23_err_short_o;
@@ -2242,11 +2248,15 @@ module zhao_prod_top (
       .g_rsp_o(u23_g_rsp_o),
       .g_beat_valid_o(u23_g_beat_valid_o),
       .g_beat_data_o(u23_g_beat_data_o),
+      .h_req_i(u23_h_req_i),
+      .h_rsp_o(u23_h_rsp_o),
+      .h_beat_valid_o(u23_h_beat_valid_o),
+      .h_beat_data_o(u23_h_beat_data_o),
       .m_req_o(u23_m_req_o),
       .m_rsp_i(u23_m_rsp_i),
-      .m_beat_valid_i(u23_src[56 +: 1]),
-      .m_beat_data_i(u23_src[63 +: 64]),
-      .m_beat_last_i(u23_src[70 +: 1]),
+      .m_beat_valid_i(u23_src[63 +: 1]),
+      .m_beat_data_i(u23_src[70 +: 64]),
+      .m_beat_last_i(u23_src[77 +: 1]),
       .jobs_a_o(u23_jobs_a_o),
       .jobs_b_o(u23_jobs_b_o),
       .jobs_c_o(u23_jobs_c_o),
@@ -2254,6 +2264,7 @@ module zhao_prod_top (
       .jobs_e_o(u23_jobs_e_o),
       .jobs_f_o(u23_jobs_f_o),
       .jobs_g_o(u23_jobs_g_o),
+      .jobs_h_o(u23_jobs_h_o),
       .denied_o(u23_denied_o),
       .contention_o(u23_contention_o),
       .err_short_o(u23_err_short_o),
@@ -2263,7 +2274,7 @@ module zhao_prod_top (
   logic u23_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u23_fold_q <= 1'b0;
-    else u23_fold_q <= u23_fold_q ^ (((^u23_a_rsp_o)) & u23_src[0]) ^ (((^u23_a_beat_valid_o)) & u23_src[1]) ^ (((^u23_a_beat_data_o)) & u23_src[2]) ^ (((^u23_a_beat_last_o)) & u23_src[3]) ^ (((^u23_b_rsp_o)) & u23_src[4]) ^ (((^u23_b_beat_valid_o)) & u23_src[5]) ^ (((^u23_b_beat_data_o)) & u23_src[6]) ^ (((^u23_b_beat_last_o)) & u23_src[7]) ^ (((^u23_c_rsp_o)) & u23_src[8]) ^ (((^u23_c_beat_valid_o)) & u23_src[9]) ^ (((^u23_c_beat_data_o)) & u23_src[10]) ^ (((^u23_c_beat_last_o)) & u23_src[11]) ^ (((^u23_d_rsp_o)) & u23_src[12]) ^ (((^u23_d_beat_valid_o)) & u23_src[13]) ^ (((^u23_d_beat_data_o)) & u23_src[14]) ^ (((^u23_d_beat_last_o)) & u23_src[15]) ^ (((^u23_e_rsp_o)) & u23_src[16]) ^ (((^u23_e_beat_valid_o)) & u23_src[17]) ^ (((^u23_e_beat_data_o)) & u23_src[18]) ^ (((^u23_e_beat_last_o)) & u23_src[19]) ^ (((^u23_f_rsp_o)) & u23_src[20]) ^ (((^u23_f_beat_valid_o)) & u23_src[21]) ^ (((^u23_f_beat_data_o)) & u23_src[22]) ^ (((^u23_f_beat_last_o)) & u23_src[23]) ^ (((^u23_g_rsp_o)) & u23_src[24]) ^ (((^u23_g_beat_valid_o)) & u23_src[25]) ^ (((^u23_g_beat_data_o)) & u23_src[26]) ^ (((^u23_m_req_o)) & u23_src[27]) ^ (((^u23_jobs_a_o)) & u23_src[28]) ^ (((^u23_jobs_b_o)) & u23_src[29]) ^ (((^u23_jobs_c_o)) & u23_src[30]) ^ (((^u23_jobs_d_o)) & u23_src[31]) ^ (((^u23_jobs_e_o)) & u23_src[32]) ^ (((^u23_jobs_f_o)) & u23_src[33]) ^ (((^u23_jobs_g_o)) & u23_src[34]) ^ (((^u23_denied_o)) & u23_src[35]) ^ (((^u23_contention_o)) & u23_src[36]) ^ (((^u23_err_short_o)) & u23_src[37]) ^ (((^u23_err_long_o)) & u23_src[38]) ^ (((^u23_err_unowned_o)) & u23_src[39]);
+    else u23_fold_q <= u23_fold_q ^ (((^u23_a_rsp_o)) & u23_src[0]) ^ (((^u23_a_beat_valid_o)) & u23_src[1]) ^ (((^u23_a_beat_data_o)) & u23_src[2]) ^ (((^u23_a_beat_last_o)) & u23_src[3]) ^ (((^u23_b_rsp_o)) & u23_src[4]) ^ (((^u23_b_beat_valid_o)) & u23_src[5]) ^ (((^u23_b_beat_data_o)) & u23_src[6]) ^ (((^u23_b_beat_last_o)) & u23_src[7]) ^ (((^u23_c_rsp_o)) & u23_src[8]) ^ (((^u23_c_beat_valid_o)) & u23_src[9]) ^ (((^u23_c_beat_data_o)) & u23_src[10]) ^ (((^u23_c_beat_last_o)) & u23_src[11]) ^ (((^u23_d_rsp_o)) & u23_src[12]) ^ (((^u23_d_beat_valid_o)) & u23_src[13]) ^ (((^u23_d_beat_data_o)) & u23_src[14]) ^ (((^u23_d_beat_last_o)) & u23_src[15]) ^ (((^u23_e_rsp_o)) & u23_src[16]) ^ (((^u23_e_beat_valid_o)) & u23_src[17]) ^ (((^u23_e_beat_data_o)) & u23_src[18]) ^ (((^u23_e_beat_last_o)) & u23_src[19]) ^ (((^u23_f_rsp_o)) & u23_src[20]) ^ (((^u23_f_beat_valid_o)) & u23_src[21]) ^ (((^u23_f_beat_data_o)) & u23_src[22]) ^ (((^u23_f_beat_last_o)) & u23_src[23]) ^ (((^u23_g_rsp_o)) & u23_src[24]) ^ (((^u23_g_beat_valid_o)) & u23_src[25]) ^ (((^u23_g_beat_data_o)) & u23_src[26]) ^ (((^u23_h_rsp_o)) & u23_src[27]) ^ (((^u23_h_beat_valid_o)) & u23_src[28]) ^ (((^u23_h_beat_data_o)) & u23_src[29]) ^ (((^u23_m_req_o)) & u23_src[30]) ^ (((^u23_jobs_a_o)) & u23_src[31]) ^ (((^u23_jobs_b_o)) & u23_src[32]) ^ (((^u23_jobs_c_o)) & u23_src[33]) ^ (((^u23_jobs_d_o)) & u23_src[34]) ^ (((^u23_jobs_e_o)) & u23_src[35]) ^ (((^u23_jobs_f_o)) & u23_src[36]) ^ (((^u23_jobs_g_o)) & u23_src[37]) ^ (((^u23_jobs_h_o)) & u23_src[38]) ^ (((^u23_denied_o)) & u23_src[39]) ^ (((^u23_contention_o)) & u23_src[40]) ^ (((^u23_err_short_o)) & u23_src[41]) ^ (((^u23_err_long_o)) & u23_src[42]) ^ (((^u23_err_unowned_o)) & u23_src[43]);
 
   // ---- zhao_geom_meshfetch ----
   logic [63:0] u24_lfsr_q;

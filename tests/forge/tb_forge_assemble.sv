@@ -70,6 +70,12 @@ module tb_forge_assemble #(
     // is real, with no mutant needed.
     input  var logic [31:0]        j_material_set_i,
     input  var logic [15:0]        j_material_id_i,
+    // The per-job DECLARATION, added 2026-09-23 (SHADOWRIDE) when this block
+    // gained a second producer and one composer constant stopped being true of
+    // both. See the RTL's port comments.
+    input  var logic [ 1:0]        j_material_mode_i,
+    input  var logic [ 7:0]        j_vertex_alpha_i,
+    input  var logic [31:0]        j_frag_state_i,
     // THE SIDEBAND'S HANDSHAKE, on this bench's own ports. In the console it
     // is the page bank's job issue; here the driver performs it, which is what
     // lets a test present a pair and THEN change the ports underneath -- the
@@ -110,6 +116,9 @@ module tb_forge_assemble #(
     output var logic [31:0]        o_c_invw_o,
     output var logic [31:0]        o_material_set_o,
     output var logic [15:0]        o_material_id_o,
+    output var logic [ 1:0]        o_material_mode_o,
+    output var logic [ 7:0]        o_vertex_alpha_o,
+    output var logic [31:0]        o_frag_state_o,
     output var logic [ 7:0]        o_quality_tier_o,
 
     output var logic               busy_o,
@@ -267,6 +276,9 @@ module tb_forge_assemble #(
 
       .j_material_set_i(j_material_set_i),
       .j_material_id_i (j_material_id_i),
+      .j_material_mode_i(j_material_mode_i),
+      .j_vertex_alpha_i (j_vertex_alpha_i),
+      .j_frag_state_i   (j_frag_state_i),
       .j_valid_i       (j_valid_i),
       .j_ready_o       (j_ready_o),
 
@@ -311,6 +323,9 @@ module tb_forge_assemble #(
       .o_attr_c_o      (attr_c),
       .o_material_set_o(o_material_set_o),
       .o_material_id_o (o_material_id_o),
+      .o_material_mode_o(o_material_mode_o),
+      .o_vertex_alpha_o (o_vertex_alpha_o),
+      .o_frag_state_o   (o_frag_state_o),
       .o_quality_tier_o(o_quality_tier_o),
 
       .busy_o(busy_o),

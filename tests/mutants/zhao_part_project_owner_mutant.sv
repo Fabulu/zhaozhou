@@ -1,3 +1,43 @@
+// zhao_part_project_owner_mutant.sv -- A COMMITTED MUTANT. NOT PRODUCTION RTL.
+//
+// WHAT WAS CHANGED, and it is ONE logical edit in two places
+// ----------------------------------------------------------
+// The FOURTH demux arm and its matching term in `owner_unroutable_o`'s
+// exclusion list are REMOVED -- that is, this file is `zhao_part_project.sv` as
+// it would be if somebody had added the fourth REQUEST arm (`l_*`, owner 2'd3)
+// and forgotten its RESULT arm.
+//
+//   * `rl_valid_o` is forced low, so a result carrying OWNER_LOD is routed
+//     nowhere;
+//   * `&& (res_owner_c != OWNER_LOD)` is deleted from the detector, so that
+//     unrouted result is what the detector sees.
+//
+// WHY IT HAS TO EXIST
+// -------------------
+// Before 2026-09-23 `owner_unroutable_o` was reachable with legal stimulus:
+// the owner field is two bits, three codes were routed, and a result carrying
+// 2'd3 was dropped by every arm. `part_project_directed` fired it from
+// `a_payload_i`, which the bench owns.
+//
+// The fourth arm CLAIMS 2'd3, and after it the field is FULL. Every value of a
+// two-bit field now routes somewhere, so NO INPUT TO THE BLOCK CAN MOVE THIS
+// COUNTER and its zero became a tautology rather than a measurement. CLAUDE.md
+// is explicit about that state: "A guard you cannot reach with legal stimulus
+// needs a COMMITTED MUTANT", and "a detector reading zero is a claim, and it is
+// the claim to check hardest".
+//
+// So this file is evidence ABOUT THE INSTRUMENT, not about the design. Its
+// driver, `tests/particles/part_project_owner_mutant_control.cpp`, has INVERTED
+// POLARITY: it passes when `owner_unroutable_o` FIRES. The counter's silence in
+// production is quoted only because this shows it is not deaf.
+//
+// THE FAULT IT STANDS FOR IS REAL. It is the one the production comment names:
+// a result the demux does not route "would present downstream as a vertex that
+// never landed -- i.e. as a fault in the arena, several blocks away".
+//
+// REGENERATE IT if `zhao_part_project.sv` changes shape. This is a COPY, and a
+// copy of an old version is a positive control for a block that no longer
+// exists. `tools/budget/mutant_copy_drift.py` watches for exactly that.
 // zhao_part_project.sv -- PART.PROJECT: the particle's seat at the SHARED
 // projector, plus the world-radius-to-screen-size conversion PART.EXPAND's own
 // header refused to invent.
@@ -208,7 +248,7 @@
 // generate, no module-scope elaboration `if`, guards inside `initial`.
 `default_nettype none
 
-module zhao_part_project #(
+module zhao_part_project_owner_mutant #(
     parameter int unsigned REC_W = 128,      // particle128, amendment C2
 
     // The shared projector's client-A rider. The TOP `OWNER_W` bits are this
@@ -802,7 +842,9 @@ module zhao_part_project #(
   assign rf_behind_o = a_behind_i;
   assign rf_slot_o   = a_payload_i[OWNER_LO-1:0];
 
-  assign rl_valid_o  = a_valid_i && (res_owner_c == OWNER_LOD);
+  // MUTATION 1 of 1 (two lines, one logical edit): the fourth RESULT arm is
+  // missing, as it would be if only the request arm had been added.
+  assign rl_valid_o  = 1'b0;
   assign rl_w_o      = a_w_i;
   assign rl_behind_o = a_behind_i;
 
@@ -1046,7 +1088,7 @@ module zhao_part_project #(
       // unrouted one. CLAUDE.md: a guard you cannot reach with legal stimulus
       // needs a committed mutant.
       if (a_valid_i && (res_owner_c != OWNER_GEOM) && (res_owner_c != OWNER_PART)
-                    && (res_owner_c != OWNER_FORGE) && (res_owner_c != OWNER_LOD))
+                    && (res_owner_c != OWNER_FORGE))  // MUTATION: OWNER_LOD term deleted
         owner_unroutable_o <= owner_unroutable_o + 32'd1;
       if (pv_take_c) begin
         part_grants_o            <= part_grants_o + 32'd1;
@@ -1082,6 +1124,6 @@ module zhao_part_project #(
     end
   end
 
-endmodule : zhao_part_project
+endmodule : zhao_part_project_owner_mutant
 
 `default_nettype wire

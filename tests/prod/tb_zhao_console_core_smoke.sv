@@ -1463,6 +1463,35 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_forge_src_truncated_o;
   logic [31:0] geom_ma_jobs_f_o;
   logic [31:0] geom_ma_jobs_g_o;
+  // FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE). THIS BENCH DOES
+  // NOT REACH IT and says so rather than implying otherwise: the smoke drives
+  // DrawForm and never publishes a kind-8 CREATURE_FORM page, so
+  // `zhao_geom_ladderbank` adopts nothing, every ladder query is a miss, no
+  // caster is emitted and no hull is drawn. What a green run here DOES show is
+  // that the composition ELABORATES, that the shared assembler still serves
+  // FORGE.PRIM unchanged, and that the three counters below stay at zero --
+  // which is the correct answer for a frame with no creature forms in it.
+  logic [31:0] geom_ma_jobs_h_o;
+  logic [31:0] geom_lb_pages_o, geom_lb_records_o, geom_lb_pages_dropped_o;
+  logic [31:0] geom_lb_bad_magic_o, geom_lb_truncated_o, geom_lb_bad_record_o;
+  logic [31:0] geom_lb_overflow_o, geom_lb_denied_o, geom_lb_lookup_miss_o;
+  logic [31:0] geom_ls_ticks_o, geom_ls_skipped_repeat_o, geom_ls_bank_miss_o;
+  logic [31:0] geom_ls_no_radius_o, geom_ls_dropped_o, geom_ls_out_of_range_o;
+  logic [127:0] geom_ls_rung_counts_o;
+  logic [31:0] geom_ls_rad_evaluations_o, geom_ls_rad_behind_o;
+  logic [31:0] geom_ls_rad_bad_bound_o, geom_ls_rad_saturated_o;
+  logic [63:0] terr_tsh_grants_o;
+  logic [31:0] terr_tsh_contended_o, terr_tsh_stray_rsp_o;
+  logic [15:0] forge_shadow_emitted_o, forge_shadow_no_ground_o;
+  logic [15:0] forge_shadow_zero_radius_o, forge_shadow_far_rung_o;
+  logic [15:0] forge_shadow_tap_protocol_o;
+  logic [31:0] forge_shadow_skipped_view_o;
+  logic [31:0] forge_fanidx_hulls_o, forge_fanidx_triangles_o;
+  logic [31:0] forge_fanidx_short_ring_o, forge_fanidx_ring_overflow_o;
+  logic [127:0] forge_fanidx_hulls_rung_o;
+  logic [31:0] forge_jobarb_grant_prim_o, forge_jobarb_grant_shadow_o;
+  logic [31:0] forge_jobarb_switches_o, forge_jobarb_wait_prim_o;
+  logic [31:0] forge_jobarb_wait_shadow_o, forge_jobarb_no_desc_o;
   logic [31:0] geom_clipdoor_switches_o;
   logic [31:0] geom_clipdoor_idle_offered_o;
   logic [31:0] geom_clipdoor_err_hold_broken_o;

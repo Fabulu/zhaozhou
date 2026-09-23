@@ -7449,6 +7449,52 @@ verilate(test_forge_shadow_directed
 add_test(NAME forge_shadow_directed COMMAND test_forge_shadow_directed)
 set_tests_properties(forge_shadow_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# FORGE.SHADOW's TERMINAL LINK -- the two blocks that let a shadow hull RIDE
+# `zhao_forge_assemble` instead of cloning it. `zhao_forge_fanindex` turns the
+# hull's RING into a triangle fan (the only genuinely new geometry the shadow
+# subsystem needed); `zhao_forge_jobarb` arbitrates FORGE.PRIM and FORGE.SHADOW
+# onto that one assembler at JOB granularity, with FORGE.PRIM at absolute
+# priority because the contract says a stalled shadow must never delay a
+# creature. Both benches carry the positive controls for their own fault
+# counters -- reachable from the port, so neither needs a committed mutant.
+set(ZHAO_FORGE_FANINDEX_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_fanindex.sv)
+add_executable(test_forge_fanindex_directed forge/forge_fanindex_directed.cpp)
+target_link_libraries(test_forge_fanindex_directed PRIVATE zhao_harness)
+verilate(test_forge_fanindex_directed
+  PREFIX Vzhao_forge_fanindex
+  TOP_MODULE zhao_forge_fanindex
+  SOURCES ${ZHAO_FORGE_FANINDEX_SV})
+add_test(NAME forge_fanindex_directed COMMAND test_forge_fanindex_directed)
+set_tests_properties(forge_fanindex_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_forge_fanindex
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_fanindex
+                 ${ZHAO_FORGE_FANINDEX_SV})
+set_tests_properties(lint_forge_fanindex PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+set(ZHAO_FORGE_JOBARB_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jobarb.sv)
+add_executable(test_forge_jobarb_directed forge/forge_jobarb_directed.cpp)
+target_link_libraries(test_forge_jobarb_directed PRIVATE zhao_harness)
+verilate(test_forge_jobarb_directed
+  PREFIX Vzhao_forge_jobarb
+  TOP_MODULE zhao_forge_jobarb
+  SOURCES ${ZHAO_FORGE_JOBARB_SV})
+add_test(NAME forge_jobarb_directed COMMAND test_forge_jobarb_directed)
+set_tests_properties(forge_jobarb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_forge_jobarb
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_jobarb
+                 ${ZHAO_FORGE_JOBARB_SV})
+set_tests_properties(lint_forge_jobarb PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # MEM.UPLOAD -- the HPS->VRAM resource upload engine. Its oracle
 # (zref::mem::upload_verdict) was written BEFORE the RTL, so the bench is a
 # DIFFERENTIAL against that oracle rather than a second transcription of the
@@ -15963,6 +16009,30 @@ verilate(test_part_project_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
 add_test(NAME part_project_directed COMMAND test_part_project_directed)
 set_tests_properties(part_project_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+# THE POSITIVE CONTROL FOR `owner_unroutable_o`, which moved OUT of the bench
+# above on 2026-09-23 and had to. That counter was fired from `a_payload_i` by
+# forcing an UNCLAIMED owner encoding; the fourth request arm claims 2'd3, the
+# last code the two-bit field holds, so every code now routes and no stimulus
+# at any port can move it. A guard you cannot reach with legal stimulus needs a
+# committed mutant (CLAUDE.md), and this is it: the same block with the fourth
+# RESULT arm removed, driven with INVERTED POLARITY -- it passes when the
+# counter FIRES.
+add_executable(test_part_project_owner_mutant_control
+  particles/part_project_owner_mutant_control.cpp)
+target_link_libraries(test_part_project_owner_mutant_control PRIVATE zhao_harness)
+verilate(test_part_project_owner_mutant_control
+  PREFIX Vzhao_part_project_owner_mutant
+  TOP_MODULE zhao_part_project_owner_mutant
+  VERILATOR_ARGS -GSLOTS=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_part_project_owner_mutant.sv)
+add_test(NAME part_project_owner_mutant_control
+  COMMAND test_part_project_owner_mutant_control)
+set_tests_properties(part_project_owner_mutant_control
+  PROPERTIES LABELS "fast;particles" TIMEOUT 300)
 
 add_test(NAME lint_zhao_part_project
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

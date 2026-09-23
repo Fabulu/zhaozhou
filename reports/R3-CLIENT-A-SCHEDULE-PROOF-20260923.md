@@ -351,3 +351,59 @@ refuse the lazy answer.
 `design/contracts/PART.STATE.md`, `design/contracts/FORGE.PRIM.md`,
 `design/contracts/FORGE.SHADOW.md`, `design/prod_manifest.yml`,
 `reports/OWNER-RULINGS-20260919-EVENING.md`, `tests/CMakeLists.txt`.*
+
+---
+
+## THE N=4 REPEAT IS DONE — SHADOWRIDE, 2026-09-23
+
+**This report's one outstanding obligation is discharged.** It closed by saying:
+
+> *"What remains owed is only the N=4 repeat, at the commit that adds the arm.
+> The bench's fourth case is already the right shape for it."*
+
+The arm landed in this commit — `zhao_part_project`'s `l_*`, owner
+`OWNER_LOD = 2'd3`, feeding `zhao_geom_lodstate`'s instance centre — and the
+bench was extended rather than re-derived. Two things changed and both matter:
+
+1. **A NEW CASE 3b** saturates all FOUR client-A arms plus terrain. Nothing in
+   this report's N=3 rows could be extrapolated to it honestly, because the
+   bound depends on the number of asking arms and the core is shared
+   half-and-half with client B.
+2. **CASE 4 MOVED ONTO THE REAL ARM.** It used to drive the FORGE arm in
+   `zhao_geom_lodstate`'s shape, because the LOD arm did not exist and "a bench
+   that invented it would be asserting the thing it is supposed to measure".
+   That substitution was flagged here as the half still owed; it is owed no
+   longer.
+
+### The measurements, at 120,000 clocks per case
+
+| case | shape | result |
+|---|---|---|
+| **3b** | all four client-A arms + terrain, saturated | 15,000 grants **each**, worst wait **7 clocks** against the derived bound of 8 (`N * Kb` = 4 × 2), terrain still 1, **work-conserving on every clock somebody asked** |
+| **4** | the instance centre's own arm, one request per 200 clocks, against geometry, particles, the forge and terrain all saturated | **600 of 600 served**, worst wait **6 clocks** |
+
+`owner_unroutable_o`, `geom_tag_collision_o`, `ladder_unexpected_o` and
+`mat_refused_o` are all silent through both, which is what makes the rates
+measurements of arbitration rather than of a routing fault.
+
+### What the numbers say about the evaluation budget
+
+The number the proof actually needs is not the share, it is whether a rare
+asker's wait still leaves `zhao_geom_lodstate`'s 200-clock evaluation intact.
+Measured wait 6, plus the projector core's stated 36-clock latency, plus the
+radius and ladder walk, closes at well inside 200 — the bench asserts it
+rather than this paragraph doing so.
+
+### The delta from N=3, stated rather than implied
+
+The N=3 saturated rows in this report measured a worst wait of **5 clocks** for
+each of three arms; at four arms it is **7**. The rare asker went from **4** to
+**6**. Both moved by about one arm's turn, which is what a round robin bounded
+at `N * Kb` predicts — so the model this report derived is confirmed by the
+repeat rather than merely un-contradicted by it.
+
+**The owner field is now FULL.** `2'd3` was the last code, and a fifth client-A
+owner is a `GEOM_OWNER_W_C` widening that `zhao_console_core`'s own elaboration
+guard refuses. Any future sharer of client A is a re-opened law, not a fifth
+arm — which is worth writing here because this report is where the next person
+will look for the cost of one.

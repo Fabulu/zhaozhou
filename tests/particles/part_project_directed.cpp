@@ -38,20 +38,27 @@
 //      below walks `d` across three decades and also asserts the TREND, which
 //      an inversion fails even where a single value might not.
 //
-// THE THREE POSITIVE CONTROLS. `geom_tag_collision_o`, `owner_unroutable_o`
-// and `ladder_unexpected_o` are asserted zero through every functional case,
-// and this tree's law is that a detector reading zero is the claim to check
-// hardest. All three are fired deliberately here through ports the bench owns
-// -- a geometry rider whose owner field is not `OWNER_GEOM`, a client-A result
-// owned by one of the two UNCLAIMED encodings, and a ladder verdict offered
-// with nothing outstanding. None needs a committed mutant because none of the
-// three states is unreachable through a port.
+// THE POSITIVE CONTROLS. `geom_tag_collision_o` and `ladder_unexpected_o` are
+// asserted zero through every functional case and then FIRED deliberately here
+// through ports the bench owns -- a geometry rider whose owner field is not
+// `OWNER_GEOM`, and a ladder verdict offered with nothing outstanding. Neither
+// needs a committed mutant, because neither state is unreachable through a port.
 //
-// `owner_unroutable_o` also carries a NEGATIVE control, because it is new and
-// because it is the one that will read zero in every real run until GEOM.LOD
-// claims owner 2: the same stimulus with a well-formed owner must route
-// normally and leave the counter at zero. Fired-and-quiet together is the
-// evidence; either alone is not.
+// `owner_unroutable_o` WAS THE THIRD OF THOSE AND IS NO LONGER, and the reason
+// is this block's own progress rather than any weakening of the law. It fired
+// on a result carrying an UNCLAIMED owner encoding. On 2026-09-23 the fourth
+// request arm claimed 2'd3, the last one the two-bit field holds; every code
+// now routes, so no stimulus at any port of this block can move that counter.
+// A detector that cannot fire has a zero that is a tautology, so its positive
+// control MOVED OUT of this bench and into a committed mutant --
+// `tests/mutants/zhao_part_project_owner_mutant.sv`, which removes the fourth
+// RESULT arm while keeping the fourth REQUEST arm, driven with inverted
+// polarity by `part_project_owner_mutant_control`. CLAUDE.md's rule in one
+// line: a guard you cannot reach with legal stimulus needs a committed mutant.
+//
+// What THIS bench now owes instead is the other half, and it is checked below:
+// that ALL FOUR owner codes are actually DELIVERED to their arms, so the
+// detector's silence has a reason and not merely an absence.
 //
 // WHAT IS NOT CHECKED HERE. Whether the projection itself is right: that is
 // zhao_project_core's law and tests/geometry/geom_project_directed.cpp is its
@@ -89,7 +96,7 @@ constexpr uint32_t kOwnerPart = 1u;
 // stream, not by GEOM.LOD, which is the block the reservation was written for.
 // The name follows the CLAIMANT because that is what a reader has to trace.
 constexpr uint32_t kOwnerForge = 2u;
-constexpr uint32_t kOwnerSpare = 3u;  // the last UNCLAIMED encoding
+constexpr uint32_t kOwnerLod = 3u;    // the LAST code; claimed 2026-09-23
 
 // Put `owner` in the field of `rider`, leaving the low bits alone.
 static inline uint32_t with_owner(uint32_t rider, uint32_t owner) {
@@ -266,11 +273,17 @@ struct Bench {
   bool q_ready = true;
   bool ladder_enabled = true;
   bool force_rng_valid = false;  // the ladder positive control
-  // The `owner_unroutable_o` positive control. -1 leaves the returning rider
-  // exactly as the projector model produced it; 0..3 overrides its owner field
-  // on the way back in. The bench owns `a_payload_i`, so an owner no producer
-  // mints today is still reachable with LEGAL stimulus through a port -- this
-  // detector needs no committed mutant.
+  // Overrides the returning rider's owner field: -1 leaves it exactly as the
+  // projector model produced it; 0..3 forces one of the four codes.
+  //
+  // IT IS NO LONGER A POSITIVE CONTROL FOR `owner_unroutable_o`, and that is
+  // a change worth stating rather than discovering. It was one while 2'd3 was
+  // unclaimed. The fourth arm claims it, the two-bit field is now FULL, and
+  // every code routes -- so no value this hook can force reaches the detector
+  // and its zero became a tautology. Its positive control is the committed
+  // mutant `tests/mutants/zhao_part_project_owner_mutant.sv`, driven with
+  // inverted polarity by `part_project_owner_mutant_control`. What this hook
+  // proves now is the other half: that all FOUR codes are delivered.
   int force_a_owner = -1;
 
   explicit Bench(Vzhao_part_project* d) : v(d) {}
@@ -874,58 +887,55 @@ int main() {
   }
 
   // =========================================================================
-  // G2. POSITIVE CONTROL 3 -- `owner_unroutable_o` fires, both spare owners.
+  // G2. THE OWNER FIELD IS FULL, AND EVERY CODE IS DELIVERED.
   //
-  // With a one-bit tag the result-side demux was total: set or clear, particle
-  // or geometry. The two-bit field has two UNCLAIMED encodings, and a result
-  // carrying one would be dropped by both arms. That drop would surface
-  // downstream as a vertex that never landed in the arena -- a fault reported
-  // several blocks away from its cause -- so it is counted here.
+  // THIS CASE USED TO BE A POSITIVE CONTROL AND DELIBERATELY IS NOT ANY MORE.
+  // It fired `owner_unroutable_o` by forcing an UNCLAIMED owner onto the
+  // returning rider. There are no unclaimed owners left: 2'd0 geometry, 2'd1
+  // particles, 2'd2 FORGE.PRIM, 2'd3 GEOM.LODSTATE's instance centre. The
+  // block's own header says what comes after that -- a fifth owner is a
+  // `GEOM_OWNER_W_C` widening that an elaboration guard refuses.
   //
-  // This is the detector whose silence is easiest to misread, because nothing
-  // in the console mints owner 2 or 3 yet and it will read zero in every real
-  // run. That is exactly why it is fired deliberately before its zero is
-  // quoted. It needs no committed mutant: `a_payload_i` is an input port and
-  // the bench owns it, so the state is reachable with legal stimulus.
-  //
-  // Note what is asserted -- that the CORRECT behaviour holds (the routed
-  // owners still route, and the unroutable one is counted rather than
-  // silently dropped). Nothing here asserts a bug, so nothing here goes red
-  // when GEOM.LOD claims owner 2 and makes it routable; at that point this
-  // control moves to owner 3 and the law is unchanged.
+  // So what is asserted here is the CORRECT behaviour, which is also the
+  // REASON the detector is now silent: every code reaches an arm. Asserting
+  // the old way would have been asserting a bug, which this tree forbids
+  // ("do not write a test that asserts the bug"); the instrument's own
+  // evidence moved to a committed mutant, which is where an unreachable
+  // guard's evidence belongs.
   // =========================================================================
-  // ONE SPARE, NOT TWO, SINCE 2026-09-21. The loop above ran over owners 2 and
-  // 3; FORGE.PRIM now mints owner 2 and `zhao_part_project` routes it on its
-  // third demux arm, so a result carrying it is DELIVERED rather than dropped.
-  // This block's own comment anticipated exactly that -- "at that point this
-  // control moves to owner 3 and the law is unchanged" -- and it is carried
-  // out here rather than argued. The detector is unchanged and still fires;
-  // what changed is which encodings are unroutable, and that is a fact about
-  // the console rather than about this test.
-  for (const uint32_t spare : {kOwnerSpare}) {
+  {
     b.reset();
     b.geom_seen.clear();
     b.clear_offers();
-    b.force_a_owner = static_cast<int>(spare);
+    b.force_a_owner = static_cast<int>(kOwnerLod);
     b.load_geometry(0x2000, 0x1000, 0x30, with_owner(0x0041u, kOwnerGeom));
     top.g_valid_i = 1;
     b.pre();
     b.step();
-    b.idle(40);
+
+    bool lod_arm_fired = false;
+    for (int i = 0; i < 60; ++i) {
+      if (top.rl_valid_o) lod_arm_fired = true;
+      b.idle(1);
+    }
     b.force_a_owner = -1;
 
-    check(top.owner_unroutable_o >= 1,
-          "unroutable control: the detector FIRED on a spare owner", 1,
-          top.owner_unroutable_o);
+    check(lod_arm_fired,
+          "owner 3 REACHES the instance-centre demux arm -- the LAST code the "
+          "field holds is routed",
+          1, lod_arm_fired);
+    check(top.owner_unroutable_o == 0,
+          "and the detector stays PUT: with four arms no code is unroutable, "
+          "which is why its positive control is now a committed mutant",
+          0, top.owner_unroutable_o);
     check(b.geom_seen.empty(),
-          "unroutable control: it was NOT delivered as geometry", 0,
-          b.geom_seen.size());
+          "owner 3 was NOT also delivered as geometry", 0, b.geom_seen.size());
     check(top.particles_projected_o == 0,
-          "unroutable control: it was NOT delivered as a particle", 0,
+          "owner 3 was NOT also delivered as a particle", 0,
           top.particles_projected_o);
     check(top.geom_tag_collision_o == 0,
-          "unroutable control: the INGRESS detector stayed quiet (it is a "
-          "different fault, on a different port)",
+          "and the INGRESS detector stayed quiet (a different fault, on a "
+          "different port)",
           0, top.geom_tag_collision_o);
   }
 

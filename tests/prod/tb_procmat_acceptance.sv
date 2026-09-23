@@ -758,6 +758,12 @@ module tb_procmat_acceptance #(
     // THE PAIR, both halves of ONE held sideband.
     .j_material_set_i(fpb_material_set),
     .j_material_id_i (fpb_material_id),
+    // The per-job DECLARATION (SHADOWRIDE, 2026-09-23). This bench drives
+    // FORGE.PRIM's, which is what it has always measured: MATERIAL_BACKED,
+    // opaque, and the plain opaque write.
+    .j_material_mode_i(FORGE_MATERIAL_MODE),
+    .j_vertex_alpha_i (FORGE_VERTEX_ALPHA),
+    .j_frag_state_i   (FORGE_FRAG_STATE),
     .j_valid_i       (fpb_a_valid),
     .j_ready_o       (fpb_a_ready),
     // The authored art values, at the console's own named seams.
@@ -799,6 +805,9 @@ module tb_procmat_acceptance #(
     .o_attr_c_o      (fa_o_attr_c),
     .o_material_set_o(fa_material_set_o),
     .o_material_id_o (fa_material_id_o),
+    .o_material_mode_o(fa_o_material_mode),
+    .o_vertex_alpha_o (fa_o_vertex_alpha),
+    .o_frag_state_o   (fa_o_frag_state),
     .o_quality_tier_o(fa_o_quality_tier),
     .busy_o          (fa_busy),
     .jobs_o          (asm_jobs_o),
@@ -826,6 +835,19 @@ module tb_procmat_acceptance #(
   // expects it resolved; it is NOT the no-sampling arm owner ruling 1 gave
   // particles, and reusing that arm as a fallback is what the ruling forbids.
   localparam logic [1:0] FORGE_MATERIAL_MODE = 2'd0;
+  // FORGE.PRIM's raster declaration, unchanged by the shadow's arrival:
+  // opaque, and state zero is the plain opaque write.
+  localparam logic [ 7:0] FORGE_VERTEX_ALPHA = 8'hFF;
+  localparam logic [31:0] FORGE_FRAG_STATE   = 32'd0;
+  logic [ 1:0] fa_o_material_mode;
+  logic [ 7:0] fa_o_vertex_alpha;
+  logic [31:0] fa_o_frag_state;
+  logic [ 7:0] cd_o_vertex_alpha;
+  logic [31:0] cd_o_frag_state;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [ 7:0] pub_vertex_alpha_w;
+  logic [31:0] pub_frag_state_w;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_geom_clipdoor #(
     .NCLIENT (1),
@@ -851,7 +873,9 @@ module tb_procmat_acceptance #(
     .c_attr_c_i       (fa_o_attr_c),
     .c_material_set_i (fa_material_set_o),
     .c_material_id_i  (fa_material_id_o),
-    .c_material_mode_i(FORGE_MATERIAL_MODE),
+    .c_material_mode_i(fa_o_material_mode),
+    .c_vertex_alpha_i (fa_o_vertex_alpha),
+    .c_frag_state_i   (fa_o_frag_state),
     .c_quality_tier_i (fa_o_quality_tier),
     .o_valid_o       (cd_o_valid),
     .o_ready_i       (cd_o_ready),
@@ -871,6 +895,8 @@ module tb_procmat_acceptance #(
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),
+    .o_vertex_alpha_o (cd_o_vertex_alpha),
+    .o_frag_state_o   (cd_o_frag_state),
     .o_quality_tier_o(cd_o_quality_tier),
     .o_owner_o       (cd_owner),
     .granted_o       (cd_granted),
@@ -904,6 +930,8 @@ module tb_procmat_acceptance #(
     .t_material_set_i (cd_o_material_set),
     .t_material_id_i  (cd_o_material_id),
     .t_material_mode_i(cd_o_material_mode),
+    .t_vertex_alpha_i (cd_o_vertex_alpha),
+    .t_frag_state_i   (cd_o_frag_state),
     .t_quality_tier_i (cd_o_quality_tier),
     .t_valid_o        (mw_t_valid),
     .t_ready_i        (mw_t_ready),
@@ -935,6 +963,8 @@ module tb_procmat_acceptance #(
     .pub_base_binding_o    (mw_pub_binding),
     .pub_response_class_o  (mw_pub_class),
     .pub_material_mode_o   (pub_material_mode_o),
+    .pub_vertex_alpha_o    (pub_vertex_alpha_w),
+    .pub_frag_state_o      (pub_frag_state_w),
 
     .resolves_o                (mw_resolves_o),
     .switches_o                (mw_switches_o),

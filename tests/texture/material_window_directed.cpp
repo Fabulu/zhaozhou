@@ -103,6 +103,11 @@ class Bench {
     top_.t_material_set_i = 0;
     top_.t_material_id_i = 0;
     top_.t_material_mode_i = 0;   // MATMODE_BACKED
+    // The primitive's RASTER declaration (SHADOWRIDE, 2026-09-23): opaque and
+    // the plain opaque write, which is what every producer but FORGE.SHADOW
+    // declares and is the value the whole existing suite runs under.
+    top_.t_vertex_alpha_i = 0xFF;
+    top_.t_frag_state_i = 0;
     top_.t_quality_tier_i = 0;
     top_.t_ready_i = 1;
     top_.d_enter_i = 0;
@@ -228,10 +233,12 @@ class Bench {
 
   // Offer `n` triangles of one material and run until they are all accepted.
   int offer(uint32_t set, uint16_t id, uint8_t tier, int n, int budget = 4000,
-            uint8_t mode = 0) {
+            uint8_t mode = 0, uint8_t valpha = 0xFF, uint32_t fstate = 0) {
     top_.t_material_set_i = set;
     top_.t_material_id_i = id;
     top_.t_material_mode_i = mode;
+    top_.t_vertex_alpha_i = valpha;
+    top_.t_frag_state_i = fstate;
     top_.t_quality_tier_i = tier;
     top_.t_valid_i = 1;
     int taken = 0;
@@ -661,6 +668,53 @@ int main(int argc, char** argv) {
     const int after = b.offer(0x3333'0000u, 1, 0, 3);
     b.drain();
     check(after == 3, "case10: the stream runs again after the refusals"); ++checks;
+  }
+
+  // ==========================================================================
+  // case11: THE PRIMITIVE'S RASTER DECLARATION IS PART OF THE SPAN'S IDENTITY.
+  //
+  // SHADOWRIDE, 2026-09-23. `t_vertex_alpha_i` and `t_frag_state_i` arrive on
+  // the granted beat with the material pair and the mode, and are published
+  // with them by the SAME enable. Three things have to hold:
+  //
+  //   * the published alpha and state are the SPAN'S, not a constant;
+  //   * a primitive that disagrees about EITHER is a `match_c` miss, so it
+  //     gets its own span and cannot be painted with the previous one's
+  //     opacity -- the same law `t_material_mode_i` obeys and for the same
+  //     stated reason: "a mode change is a match_c miss, and a match_c miss is
+  //     the existing mechanism";
+  //   * and a run that agrees about all of them is still ONE span, so adding
+  //     two fields to the identity has not turned every triangle into a switch.
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    a.sample_count = 1; a.recipe = 0; a.weight = 0x33; a.binding = 2;
+    a.modes = 0x01;
+    b.set_answer(a);
+    const uint32_t sw0 = b.top().switches_o;
+    const int n1 = b.offer(0x51500000u, 7, 0, 3, 4000, 0, 0xFF, 0);
+    b.drain();
+    check(n1 == 3, "case11: the opaque run passed"); ++checks;
+    check(b.top().pub_vertex_alpha_o == 0xFF,
+          "case11: the span publishes ITS alpha"); ++checks;
+    check(b.top().pub_frag_state_o == 0u,
+          "case11: and ITS raster state"); ++checks;
+    const uint32_t sw1 = b.top().switches_o;
+    check(sw1 == sw0 + 1,
+          "case11: three agreeing triangles are ONE span"); ++checks;
+
+    // Same material pair, same mode, DIFFERENT alpha and state: a new span.
+    const int n2 = b.offer(0x51500000u, 7, 0, 2, 4000, 0, 0x60, 0x0000000Bu);
+    b.drain();
+    check(n2 == 2, "case11: the transparent run passed"); ++checks;
+    check(b.top().pub_vertex_alpha_o == 0x60,
+          "case11: the new span publishes the NEW alpha, not the held one");
+    ++checks;
+    check(b.top().pub_frag_state_o == 0x0000000Bu,
+          "case11: and BLEND=ALPHA + Z_TEST_EN + Z_WRITE_DIS"); ++checks;
+    check(b.top().switches_o == sw1 + 1,
+          "case11: the declaration change cost exactly ONE switch"); ++checks;
   }
 
   std::printf("material_window_directed: %d check(s), %d failure(s)\n", checks, fails);

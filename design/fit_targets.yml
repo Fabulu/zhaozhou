@@ -3030,6 +3030,19 @@ targets:
       - fpga/rtl/forge/zhao_forge_ring_eval.sv
       - fpga/rtl/forge/zhao_forge_pagebank.sv
       - fpga/rtl/forge/zhao_forge_assemble.sv
+      # Added 2026-09-23, SHADOWRIDE, with the FORGE.SHADOW chain. The hull
+      # RIDES `zhao_forge_assemble` rather than cloning it, so what joins the
+      # closure is a ring-to-fan indexer, a job arbiter, the shadow generator
+      # itself, its ladder and the height tap's arbiter -- and NOT a second
+      # assembler, a second depth-quantiser or a second vertex store.
+      - fpga/rtl/forge/zhao_forge_fanindex.sv
+      - fpga/rtl/forge/zhao_forge_jobarb.sv
+      - fpga/rtl/forge/zhao_forge_shadow.sv
+      - fpga/rtl/geometry/zhao_geom_ladderbank.sv
+      - fpga/rtl/geometry/zhao_geom_lod.sv
+      - fpga/rtl/geometry/zhao_geom_lodstate.sv
+      - fpga/rtl/geometry/zhao_geom_projradius.sv
+      - fpga/rtl/terrain/zhao_terrain_tapshare.sv
       - fpga/rtl/geometry/zhao_geom_clipdoor.sv
       # Added 2026-09-19, packet P-GEOMFORGE. GEOM.SKIN.NORM, composed on the
       # SAME handshake as GEOM.SKIN through an AND-fork on GEOM.POSE's palette

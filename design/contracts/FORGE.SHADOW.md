@@ -1,8 +1,11 @@
 # Contract — FORGE.SHADOW (Contact shadows, as ordinary geometry)
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: `fpga/rtl/forge/zhao_forge_shadow.sv` — BUILT and UNIT-TESTED
-> (`tests/forge/forge_shadow_directed.cpp`, 39 checks), NOT COMPOSED. The
+> RTL: `fpga/rtl/forge/zhao_forge_shadow.sv` — BUILT, UNIT-TESTED
+> (`tests/forge/forge_shadow_directed.cpp`) and **COMPOSED 2026-09-23**
+> (SHADOWRIDE, owner ruling R244 D-FORGESHADOW-C) — see the section
+> "FORGE.SHADOW IS COMPOSED" below. The sentence that stood here, "NOT
+> COMPOSED", was true for three weeks and is not any more. The
 > "RTL: not built" line that stood here was stale; corrected 2026-09-20 by the
 > geomseam packet, which read the file. The ledger's `tests:` rows still say
 > `PLANNED -- NOT WRITTEN` and are stale the same way.
@@ -751,6 +754,151 @@ Building the tail from four constants would be **moving a tie-off from a port
 into the core**, which closes a gap on the register while changing nothing in
 the silicon. That is the campaign's first prohibition and it is also the
 flattering move, which is why it is written down here rather than just avoided.
+
+## FORGE.SHADOW IS COMPOSED — SHADOWRIDE, 2026-09-23
+
+**Owner ruling R244 D-FORGESHADOW-C, "commission the full subsystem … close it
+end-to-end with its real producers/consumers and required tests."** Six blocks
+in one act, plus four seams into composed ones. The completion register moved
+**14 → 13** and it moved because a pixel changed, not because a module entered
+a closure.
+
+### The terminal-link finding HELD, and it was verified before it was built
+
+SHADOWCLOSE's recommendation was a lane's claim, so every line of it was
+re-read in the RTL rather than inherited. All of it stands:
+
+| claim | verified |
+|---|---|
+| world vertices plus a triangle list | `zhao_forge_assemble.sv:205-220` |
+| projects through client A on owner `2'd2` | `:251-265`, composed at core `:19371` |
+| its own `invw24` | `u_dq`, a local `zhao_geom_depthquant_stream` |
+| `o_untex_o = 1'b1` **unconditionally** | `:576` |
+| a named per-primitive alpha | `art_alpha_i` at `:246`, into `SLOT_ALPHA = 6` at `:596` |
+| `v_*` **specified as a composer mux** | `:199-204`, in the block's own words |
+
+So the hull **rides** that block. What that removed is not rhetorical: a fifth
+client-A demand (which would have spent `2'd3`, the last code the owner field
+holds, on hull vertices instead of the instance centre that needs it), a fourth
+`zhao_geom_clipdoor` client, a second `zhao_geom_depthquant_stream` and a second
+520-slot vertex store.
+
+### What was actually built
+
+1. **`zhao_forge_fanindex`** — a ring of N becomes N−2 triples, `(0,1,2)` …
+   `(0,N−2,N−1)`. It stores nothing; the assembler already holds the vertices.
+   450 directed checks, both fault counters fired from the port.
+2. **`zhao_forge_jobarb`** — FORGE.PRIM and FORGE.SHADOW onto one assembler at
+   job granularity, FORGE.PRIM at absolute priority because this contract's
+   backpressure rule says *"a stalled shadow must never delay a creature"*.
+   150 checks.
+3. **A per-job material mode, flat alpha and raster state on
+   `zhao_forge_assemble`** — they were composer constants while the forge was
+   its only producer and could not stay so with two.
+4. **`tri_continuation_tail_i`'s `vertex_alpha` AND `tri_fragment_state_i`'s
+   BLEND** — see the correction below, which is the load-bearing finding of
+   this pass.
+
+### THE CORRECTION THAT MATTERS: R89's ALPHA ALONE CHANGES NOT ONE PIXEL
+
+This contract's R89 section says *"giving that open boundary a producer is the
+whole job"*. **It is not, and a composition that believed it would have shipped
+exactly the art defect R89 was written to refuse.**
+
+`zhao_raster_fragment` selects the blend from `s1_state_r[4:3]` — a field of
+`tri_fragment_state_i`, entry I20's **other** open port. The console's raster
+state has always been that boundary word's zero, which
+`zhao_raster_fragment.sv:214` defines as *"the plain opaque write … blend
+REPLACE"*. And `zhao_raster_blend_fin`'s `BL_REPLACE` arm is `acc = src_i`:
+**the product `a_i` took part in is computed and thrown away.**
+
+So the ten-hop carriage R89 traced is real, the alpha does arrive at
+`zhao_raster_blend_prod.a_i`, and under the shipping state it is multiplied
+into a number nothing reads. A shadow composed with R89's alpha and nothing
+else is **a flat opaque dark polygon under every creature** — the exact sentence
+this contract uses to describe what R48-as-written would have produced.
+
+**Both fields are driven or neither is**, and both are driven from the same
+place: the producer declares its profile at `zhao_geom_clipdoor`'s own port, the
+door grants it on the same beat as the triangle and its material, and
+`zhao_material_window` latches all of it into one published record by one
+enable — the same alignment `tri_flat_request_c` already relies on. The
+declaration is part of the span's identity, so a primitive that disagrees about
+its alpha gets its own span and cannot be painted with the previous one's
+opacity.
+
+**Entry I20 is NARROWED, not closed.** `effect_tag` stays a boundary because the
+R195 GlowTag smoke form drives it from outside to prove the bloom path end to
+end; `stencil_reference` has no producer; and `vertex_rgb` no longer reaches the
+fragment at all since owner decision R234 D1. Driving those from the core would
+be moving a tie-off into the core, which is the campaign's first prohibition.
+The same is true of the state word: only BLEND, Z_TEST_EN and Z_WRITE_DIS are
+span-declared, and the two halves are OR-ed rather than replaced so an external
+driver can still raise a bit the span leaves clear.
+
+### AND IT NARROWS I51's REASON, which was written about a superseded block
+
+Core entry I51 says *"The raster state word is `render_state_i`, a BOUNDARY
+INPUT of this module, sampled once per tile job at
+`zhao_raster_tile_pipe.job_state_i`"*, and concludes that a per-primitive route
+would be *"a field through GEOM.CLIPDOOR, GEOM.CLIP, GEOM.SETUP, GEOM.BINNER and
+the shell's triangle door — a subsystem"*.
+
+**That describes `zhao_raster_tile_pipe`, the V1 block, which is superseded and
+not composed.** `zhao_raster_tile_pipe_v2` takes its fragment state from the
+JOB METADATA — `incoming_fragment_state_w = job_meta_i[377:346]`, packed by
+`zhao_geom_bin_pipe_v2.sv:266` from `tri_fragment_state_i`. The per-primitive
+carriage I51 says does not exist **already exists and is composed**; what was
+missing was only a producer at the core's edge, and that is what this commit
+supplies.
+
+I51 is still open, because what it is actually about — PART.EXPAND's
+`t_depth_test_o`/`t_depth_write_o`, per particle — still has no route into that
+word. But its stated *reason* is now wrong, and the cost of closing it is a
+per-client mux at the door rather than a subsystem: the door already carries the
+field.
+
+### R3's OWED N=4 REPEAT IS MEASURED
+
+`projshare_contention` now drives the **real** fourth arm rather than standing
+in for it on the forge's:
+
+* **CASE 3b**, all four client-A arms plus terrain saturated: 15,000 grants
+  each, **worst wait 7 clocks** against the derived bound of 8, work-conserving
+  on every clock somebody asked, `owner_unroutable_o` silent.
+* **CASE 4**, the instance centre's own intermittent shape (one request per 200
+  clocks against four saturated streams): **600 of 600 served, worst wait 6
+  clocks**, which still closes `zhao_geom_lodstate`'s 200-clock evaluation.
+
+### A DETECTOR THAT WENT DEAD, AND WHAT WAS DONE ABOUT IT
+
+`zhao_part_project`'s `owner_unroutable_o` was fired with legal stimulus while
+`2'd3` was unclaimed. **The fourth arm claims it and the field is now FULL**, so
+every code routes and no input to the block can move that counter: its zero
+became a tautology. Its positive control therefore moved out of
+`part_project_directed` and into a committed mutant,
+`tests/mutants/zhao_part_project_owner_mutant.sv` — the same block with the
+fourth RESULT arm removed — driven with inverted polarity by
+`part_project_owner_mutant_control` (fires 4). What the directed bench now
+asserts instead is the correct behaviour: all four codes are DELIVERED.
+
+### WHAT THE CONSOLE SMOKE DOES AND DOES NOT PROVE ABOUT THIS PATH
+
+**It does not reach it, and saying so is the point.** The smoke drives
+`DrawForm` and never publishes a kind-8 CREATURE_FORM page, so
+`zhao_geom_ladderbank` adopts nothing, every ladder query is a miss, no caster
+is emitted and no hull is drawn. A green smoke here shows that the composition
+ELABORATES, that the shared assembler still serves FORGE.PRIM unchanged, that
+the raster pixel count is unmoved, and that the shadow chain's counters read
+zero — which is the correct answer for a frame with no creature forms in it. It
+is not evidence about a shadow.
+
+The evidence about the shadow is the directed benches, and the evidence that
+will actually settle it is the contract's own look-gate: *a creature walking
+across flat ground, a slope, a cliff edge and a breach, at 240p, watched in
+motion.* Every value that gate would argue about — the strength, the three
+colour channels, the per-rung bias, the raster profile — is a named editable
+parameter on `zhao_console_core`.
 
 ## Latency (fixed or variable)
 
