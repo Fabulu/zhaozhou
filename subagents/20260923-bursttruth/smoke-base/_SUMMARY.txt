@@ -1,0 +1,10 @@
+﻿plain          rc=0  316s fatal=0 px=[raster pixels=2560] unalignedLines=3 [bl8-align] SUMMARY bursts=63350 unaligned=0 (rd=0 wr=0)
+Mutant         rc=0  326s fatal=0 px=[] unalignedLines=3 [bl8-align] SUMMARY bursts=61646 unaligned=0 (rd=0 wr=0)
+UntexMutant    rc=0  381s fatal=0 px=[] unalignedLines=3 [bl8-align] SUMMARY bursts=63030 unaligned=0 (rd=0 wr=0)
+NoTableLoad    rc=0  382s fatal=1 px=[] unalignedLines=1 
+BadDescriptor  rc=0  376s fatal=1 px=[] unalignedLines=1 
+BadVertex      rc=0  365s fatal=0 px=[] unalignedLines=3 [bl8-align] SUMMARY bursts=62983 unaligned=0 (rd=0 wr=0)
+NoEchoArm      rc=0  351s fatal=0 px=[raster pixels=2560] unalignedLines=3 [bl8-align] SUMMARY bursts=47222 unaligned=0 (rd=0 wr=0)
+BadTraceArm    rc=0  385s fatal=0 px=[raster pixels=2560] unalignedLines=3 [bl8-align] SUMMARY bursts=63350 unaligned=0 (rd=0 wr=0)
+GlowTag        rc=0  399s fatal=0 px=[raster pixels=2560] unalignedLines=3 [bl8-align] SUMMARY bursts=63350 unaligned=0 (rd=0 wr=0)
+LintOnly       rc=0   34s fatal=0 px=[] unalignedLines=0 
