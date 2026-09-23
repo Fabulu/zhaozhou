@@ -530,6 +530,20 @@ top:
   # closes entry I5 under owner ruling R40: PART.UPDATE's acceleration
   # sample has a producer, and it is the one engine rather than a second.
   - zhao_field_flow_adapter
+  # The E profile's STREAM ADAPTER, entry I34's build item (c), built and
+  # composed 2026-09-23 (EARTHADAPT). Counted because zhao_console_core
+  # instantiates it as client 3 and it gives TERRAIN.PATCH's field-height lane
+  # a PRODUCER: before it, a TerrainField command reached the section 9.1 list
+  # and stopped, because nothing in the console evaluated the program.
+  #
+  # IT DOES NOT CLOSE ENTRY I34 and the row says so rather than letting a
+  # counted top read as a closed gap. The Earth record declares FOUR output
+  # channels; this adapter produces all four from one evaluation, which is
+  # directive 20.8's instruction, and zhao_terrain_patch has an input for
+  # exactly one of them. velocity_o / material_o / nav_cost_o are open at the
+  # composition and declared in the core's INCOMPLETE block. The consumer that
+  # can receive them is directive 13.2's zhao_terrain_patch_v2.
+  - zhao_field_earth_adapter
   # The W profile's STREAM ADAPTER, GEOM.WARP prerequisite P2, built 2026-09-20.
   # Counted as a CENSUS TOP and NOT as part of the console closure, because
   # `zhao_console_core` does not instantiate it and must not yet: the shared
@@ -725,6 +739,16 @@ production_parameter_overrides:
     IN_LANES: 32'd15
     OUT_LANES: 32'd7
   zhao_field_flow_adapter:
+    IN_LANES: 32'd15
+    OUT_LANES: 32'd7
+  # The E profile, composed at the SAME shared pair. Its own guards are the
+  # profile minimum (`IN_LANES < 12`, `OUT_LANES < 4`) rather than an equality,
+  # because a client that demanded exactly its own arity could never share a
+  # bus -- and a number here that differed from the host's would be a silent
+  # bit-slide across all four clients on the concatenated port rather than a
+  # width error on one. That is not hypothetical: the composition was written
+  # at 13/7 first and the linter's WIDTHEXPAND is what separated them.
+  zhao_field_earth_adapter:
     IN_LANES: 32'd15
     OUT_LANES: 32'd7
   # NOT COMPOSED IN THE CONSOLE -- it is a census top only, and the row is here

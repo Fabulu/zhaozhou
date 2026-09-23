@@ -1260,7 +1260,22 @@ blocks:
     cut_order: null
     superseded_by: null
     implemented_by: FIELD.SEQ.CORE
-    notes: Golden semantics = the single C++ interpreter (W5); RTL is its differential pen-mate.
+    notes: >-
+      Golden semantics = the single C++ interpreter (W5); RTL is its
+      differential pen-mate. The E profile's STREAM ADAPTER is
+      fpga/rtl/field/zhao_field_earth_adapter.sv, built and composed
+      2026-09-23 (core entry I34 build item (c), directive 20.8) as client 3
+      of the one zhao_field_host_v2 -- the same standing the S, F and W
+      profiles' adapters have and, like them, not a ledger block of its own:
+      FIELD.SEQ.EARTH.md rules that "there is no separate FIELD.SEQ.EARTH
+      sequencer in hardware and there is not going to be one", so the profile
+      is a program set plus an adapter and counting the adapter as a block
+      would count one engine five times. The adapter builds the field-ir 7.1
+      input record from the oracle's own law
+      (reference/src/zrender/terrain.cpp:compose_lattice) and produces all
+      FOUR out-lanes; `downstream: [TERRAIN.PATCH]` above remains exactly
+      right, and remains the reason entry I34 does not close -- that consumer
+      can receive one of the four.
 
   - id: FIELD.SEQ.WARP
     name: Warp8 field sequencer
