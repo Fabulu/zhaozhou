@@ -89,49 +89,6 @@ counter_catalog:
   - parambuf_chunks_allocated
   - parambuf_stale_handles
   - parambuf_overflow_frames
-  # GEOM.PARAMARENA -- the arena PRODUCER (owner completion ruling ITEM 4,
-  # 2026-09-22). Five of these are DEFECT-CLASS DETECTORS rather than work
-  # counters and the list is grouped so nobody has to work out which:
-  # paramarena_addr_view_bad is the queued-request fault item 4 names, and its
-  # two operands load on DIFFERENT enables so it is not the lockstep-blind
-  # kind; paramarena_retire_underflow says the share's ledger attributed
-  # somebody else's write here, which would make every publish EARLY;
-  # paramarena_arena_overrun says an allocation left the view;
-  # paramarena_view_flip_blocked and paramarena_publish_blocked are the two
-  # that say the drain and retire GATES EVER DID ANYTHING, without which they
-  # are terms in an expression rather than protections.
-  - paramarena_verts_written
-  - paramarena_tris_written
-  - paramarena_chunks_written
-  - paramarena_frames_published
-  - paramarena_guard_denied
-  - paramarena_quota_overflow
-  - paramarena_records_discarded
-  - paramarena_records_unsealed
-  - paramarena_arena_overrun
-  - paramarena_view_flip_blocked
-  - paramarena_publish_blocked
-  - paramarena_addr_view_bad
-  - paramarena_scratch_contend
-  - paramarena_retire_underflow
-  # GEOM.PARAMWALK -- the record READER. paramwalk_dir_mismatch is the one
-  # this block exists to produce: the frame directory reaches it twice, once
-  # from the arena's registers and once as bytes that went through SDRAM, and
-  # nothing else in the system would notice them disagreeing because a walk
-  # over corrupt records still produces triangles. paramwalk_stray_beat is
-  # what sees a wrong beat demux, which an address round trip cannot.
-  - paramwalk_dirs_read
-  - paramwalk_dir_mismatch
-  - paramwalk_chunks_walked
-  - paramwalk_chunks_stale
-  - paramwalk_chunks_illegal
-  - paramwalk_tris_emitted
-  - paramwalk_tris_illegal
-  - paramwalk_walk_cut
-  - paramwalk_guard_denied
-  - paramwalk_short_burst
-  - paramwalk_stray_beat
-  - paramwalk_gen_race
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -249,34 +206,6 @@ counter_catalog:
   - writeback_outstanding_hwm
   - writeback_ack_wait_max_cycles
   - writeback_jobs_stall_cycles
-  # TERRAIN.PAGEIO (bake's page window; design/contracts/TERRAIN.PAGEIO.md).
-  # Named apart from writeback_* because they measure a DIFFERENT pool access:
-  # writeback evacuates layer F to the HPS journal, this reads layer D and
-  # writes layers B and D back into the TERRAIN.PAGE_POOL slot in place.
-  - pageio_pages_read
-  - pageio_pages_written
-  - pageio_guard_denied
-  - pageio_bursts_read
-  - pageio_bursts_written
-  - pageio_stale_gen
-  - pageio_marks_emitted
-  - pageio_jobs_refused
-  # TERRAIN.SHEETSEAM (the layer-F read path; design/contracts/TERRAIN.SHEETSEAM.md).
-  # Named apart from the surface_* family because they measure the BAKE side of
-  # layer F: surface_texels_touched counts what SURFACE.STAMP wrote, these count
-  # what a bake managed to read back and what it did when it could not.
-  - sheetseam_jobs
-  - sheetseam_sheet_served
-  - sheetseam_fallbacks
-  - sheetseam_miss_texels
-  - sheetseam_prefetch_beats
-  - sheetseam_refetches
-  - sheetseam_dig_stall_cycles
-  - sheetseam_bad_texels
-  - sheetseam_stray_done
-  - sheetseam_before_texels
-  - sheetseam_sr_dropped
-  - sheetseam_before_torn
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -436,10 +365,13 @@ counter_catalog:
   # the counter is retired rather than implemented. The four below are what
   # `zhao_post_gather.sv` exports; the sibling modules' thirteen are named in
   # the POST.GATHER row, with the reason they are not catalogued here.
-  - post_gather_fragments
-  - post_gather_glow_saturations
-  - post_gather_disp_clamps
-  - post_gather_cells_flushed
+  # TOMBSTONE, restored 2026-09-23. The retirement above is CORRECT and
+  # stands -- the counter named a store that reads no external memory, so it
+  # could not have been POST.GATHER's. DELETING THE LINE was the part that
+  # was not noticed: a counter's id IS its index (spec/counters.md 5s2), so
+  # removing one at index 262 silently renumbered the 22 locked ids after it.
+  # The slot is held, never reused, and nothing declares it.
+  - post_gather_vram_bytes_by_client
   - post_composite_covered_fragments
   - post_composite_blended_fragments
   - post_echo_vram_bytes_by_client
@@ -522,6 +454,93 @@ counter_catalog:
   # CAUSE instead -- a request address that is not a multiple of the quantum.
   - paramarena_burst_unaligned
   - paramwalk_burst_unaligned
+
+  # ---- RELOCATED 2026-09-23, APPEND-ONLY REPAIR -------------------------
+  # These three groups were INSERTED INSIDE the locked prefix -- at index 47,
+  # at 138 and over the retired slot at 262 -- instead of being appended. A
+  # counter's id is its zero-based index here and this list is append-only,
+  # so 50 insertions renumbered every id after them: zhao_pkg's
+  # ZHAO_CNT_CMD_DMA_COMMANDS = 198 was reading catalog index 244, exactly
+  # the 46 insertions that precede it. Moved here with their own comments
+  # intact; no counter was renamed, removed or re-declared.
+
+  # GEOM.PARAMARENA -- the arena PRODUCER (owner completion ruling ITEM 4,
+  # 2026-09-22). Five of these are DEFECT-CLASS DETECTORS rather than work
+  # counters and the list is grouped so nobody has to work out which:
+  # paramarena_addr_view_bad is the queued-request fault item 4 names, and its
+  # two operands load on DIFFERENT enables so it is not the lockstep-blind
+  # kind; paramarena_retire_underflow says the share's ledger attributed
+  # somebody else's write here, which would make every publish EARLY;
+  # paramarena_arena_overrun says an allocation left the view;
+  # paramarena_view_flip_blocked and paramarena_publish_blocked are the two
+  # that say the drain and retire GATES EVER DID ANYTHING, without which they
+  # are terms in an expression rather than protections.
+  - paramarena_verts_written
+  - paramarena_tris_written
+  - paramarena_chunks_written
+  - paramarena_frames_published
+  - paramarena_guard_denied
+  - paramarena_quota_overflow
+  - paramarena_records_discarded
+  - paramarena_records_unsealed
+  - paramarena_arena_overrun
+  - paramarena_view_flip_blocked
+  - paramarena_publish_blocked
+  - paramarena_addr_view_bad
+  - paramarena_scratch_contend
+  - paramarena_retire_underflow
+  # GEOM.PARAMWALK -- the record READER. paramwalk_dir_mismatch is the one
+  # this block exists to produce: the frame directory reaches it twice, once
+  # from the arena's registers and once as bytes that went through SDRAM, and
+  # nothing else in the system would notice them disagreeing because a walk
+  # over corrupt records still produces triangles. paramwalk_stray_beat is
+  # what sees a wrong beat demux, which an address round trip cannot.
+  - paramwalk_dirs_read
+  - paramwalk_dir_mismatch
+  - paramwalk_chunks_walked
+  - paramwalk_chunks_stale
+  - paramwalk_chunks_illegal
+  - paramwalk_tris_emitted
+  - paramwalk_tris_illegal
+  - paramwalk_walk_cut
+  - paramwalk_guard_denied
+  - paramwalk_short_burst
+  - paramwalk_stray_beat
+  - paramwalk_gen_race
+
+  # TERRAIN.PAGEIO (bake's page window; design/contracts/TERRAIN.PAGEIO.md).
+  # Named apart from writeback_* because they measure a DIFFERENT pool access:
+  # writeback evacuates layer F to the HPS journal, this reads layer D and
+  # writes layers B and D back into the TERRAIN.PAGE_POOL slot in place.
+  - pageio_pages_read
+  - pageio_pages_written
+  - pageio_guard_denied
+  - pageio_bursts_read
+  - pageio_bursts_written
+  - pageio_stale_gen
+  - pageio_marks_emitted
+  - pageio_jobs_refused
+  # TERRAIN.SHEETSEAM (the layer-F read path; design/contracts/TERRAIN.SHEETSEAM.md).
+  # Named apart from the surface_* family because they measure the BAKE side of
+  # layer F: surface_texels_touched counts what SURFACE.STAMP wrote, these count
+  # what a bake managed to read back and what it did when it could not.
+  - sheetseam_jobs
+  - sheetseam_sheet_served
+  - sheetseam_fallbacks
+  - sheetseam_miss_texels
+  - sheetseam_prefetch_beats
+  - sheetseam_refetches
+  - sheetseam_dig_stall_cycles
+  - sheetseam_bad_texels
+  - sheetseam_stray_done
+  - sheetseam_before_texels
+  - sheetseam_sr_dropped
+  - sheetseam_before_torn
+
+  - post_gather_fragments
+  - post_gather_glow_saturations
+  - post_gather_disp_clamps
+  - post_gather_cells_flushed
 blocks:
 
   # ===========================================================================
