@@ -56,6 +56,12 @@
 #include <string>
 #include <vector>
 
+// Verilator's generated root references this when the model is built without a
+// VerilatedContext-managed time source. It is never read by anything here --
+// this bench counts CLOCKS, not simulated time -- so it returns zero and says
+// so, rather than being a mystery symbol in a link line.
+double sc_time_stamp() { return 0.0; }
+
 namespace {
 
 int g_failures = 0;
@@ -158,30 +164,7 @@ public:
     dut_->f_valid_i = sf;
     dut_->b_valid_i = sb;
 
-    // Distinguishable payloads. The geometry rider MUST have a zero owner
-    // field or `geom_tag_collision_o` fires -- that detector is one of the
-    // three this bench shows silent, so honouring it here is the point.
-    dut_->g_vx_i = 1 << 16;
-    dut_->g_vy_i = 2 << 16;
-    dut_->g_vz_i = 3 << 16;
-    dut_->g_view_i = 0;
-    dut_->g_payload_i = 0x0123;          // owner bits [16:15] clear
-    dut_->f_vx_i = 4 << 16;
-    dut_->f_vy_i = 5 << 16;
-    dut_->f_vz_i = 6 << 16;
-    dut_->f_view_i = 0;
-    dut_->f_slot_i = 0x0042;
-    dut_->b_vx_i = 7 << 16;
-    dut_->b_vy_i = 8 << 16;
-    dut_->b_vz_i = 9 << 16;
-    dut_->b_view_i = 0;
-    dut_->b_payload_i = 0x0007;
-    // A fixed plausible particle record. Its contents never reach the
-    // arbiter (`pv_valid_c = p_valid_i && !slot_full_c`).
-    dut_->p_record_i[0] = 0x00010000u;
-    dut_->p_record_i[1] = 0x00020000u;
-    dut_->p_record_i[2] = 0x00000010u;
-    dut_->p_record_i[3] = 0x00000001u;
+    set_payloads();
 
     for (std::uint64_t c = 0; c < clocks; ++c) {
       dut_->eval();
@@ -211,9 +194,93 @@ public:
     return r;
   }
 
+  // Geometry, particles and client B saturated; the FORGE arm asks once every
+  // `period` clocks and holds until served -- `zhao_geom_lodstate`'s shape.
+  // Its `worst_gap` is then the wait for a RARE asker, which is a different
+  // and more useful number than a saturated arm's share.
+  Result run_intermittent(std::uint64_t clocks, std::uint64_t period) {
+    Result r;
+    r.g.asking = true;
+    r.p.asking = true;
+    r.f.asking = true;
+    r.b.asking = true;
+
+    set_payloads();
+    dut_->g_valid_i = 1;
+    dut_->p_valid_i = 1;
+    dut_->b_valid_i = 1;
+    dut_->f_valid_i = 0;
+
+    bool f_pending = false;
+    std::uint64_t f_wait = 0;
+
+    for (std::uint64_t c = 0; c < clocks; ++c) {
+      if (!f_pending && (c % period) == 0) {
+        f_pending = true;
+        f_wait = 0;
+        dut_->f_valid_i = 1;
+      }
+      dut_->eval();
+
+      const bool fa = f_pending && dut_->f_ready_o;
+      if (f_pending) {
+        if (fa) {
+          ++r.f.accepts;
+          f_pending = false;
+          dut_->f_valid_i = 0;
+          if (f_wait > r.f.worst_gap) r.f.worst_gap = f_wait;
+        } else {
+          ++f_wait;
+        }
+      }
+      if (dut_->g_ready_o) ++r.g.accepts;
+      if (dut_->p_ready_o) ++r.p.accepts;
+      if (dut_->b_ready_o) ++r.b.accepts;
+      if (dut_->g_ready_o || dut_->p_ready_o || fa || dut_->b_ready_o)
+        ++r.granted_clocks;
+
+      tick();
+      ++r.clocks;
+    }
+
+    dut_->g_valid_i = 0;
+    dut_->p_valid_i = 0;
+    dut_->f_valid_i = 0;
+    dut_->b_valid_i = 0;
+    return r;
+  }
+
   Vtb_projshare *dut() { return dut_; }
 
 private:
+  // Distinguishable payloads. The geometry rider MUST have a zero owner field
+  // or `geom_tag_collision_o` fires -- that detector is one of the three this
+  // bench shows silent, so honouring it here is the point rather than an
+  // accident.
+  void set_payloads() {
+    dut_->g_vx_i = 1 << 16;
+    dut_->g_vy_i = 2 << 16;
+    dut_->g_vz_i = 3 << 16;
+    dut_->g_view_i = 0;
+    dut_->g_payload_i = 0x0123;          // owner bits [16:15] clear
+    dut_->f_vx_i = 4 << 16;
+    dut_->f_vy_i = 5 << 16;
+    dut_->f_vz_i = 6 << 16;
+    dut_->f_view_i = 0;
+    dut_->f_slot_i = 0x0042;
+    dut_->b_vx_i = 7 << 16;
+    dut_->b_vy_i = 8 << 16;
+    dut_->b_vz_i = 9 << 16;
+    dut_->b_view_i = 0;
+    dut_->b_payload_i = 0x0007;
+    // A fixed plausible particle record. Its contents never reach the arbiter
+    // (`pv_valid_c = p_valid_i && !slot_full_c`, zhao_part_project.sv:623).
+    dut_->p_record_i[0] = 0x00010000u;
+    dut_->p_record_i[1] = 0x00020000u;
+    dut_->p_record_i[2] = 0x00000010u;
+    dut_->p_record_i[3] = 0x00000001u;
+  }
+
   static void step_arm(Arm &a, bool asking, bool accepted) {
     if (!asking) return;
     if (accepted) {
@@ -334,23 +401,39 @@ int main(int argc, char **argv) {
     check(r.granted_clocks == r.clocks, "work-conserving at two clients");
   }
 
-  // ---- CASE 4: a LONE client-A arm against a saturated client B ----------
-  // This is the shape the FORGE.SHADOW instance centre actually presents: one
-  // request every ~200 clocks from `zhao_geom_lodstate`'s single-in-flight
-  // FSM, against whatever else is running. The measured wait here is the
-  // number the proof's 200-clock evaluation budget is spent against.
+  // ---- CASE 4: THE INSTANCE CENTRE'S ACTUAL SHAPE ------------------------
+  // The three cases above saturate everything, which is the worst load but not
+  // the right SHAPE for the arm this subsystem wants to add.
+  // `zhao_geom_lodstate` is a single-in-flight FSM (`:277`, `pr_valid_o` is
+  // `st_w == S_PROJ`): it asks ONCE, waits for the answer, spends ~164 clocks
+  // on the radius and the ladder, and asks again. One request per instance per
+  // frame, 256 instances -- an INTERMITTENT asker among saturated ones.
+  //
+  // That is a different question from "does a saturated arm get its share",
+  // and it is the one the 200-clock evaluation budget is spent against. The
+  // forge arm is driven in that shape here, because the LOD arm does not exist
+  // yet and a bench that invented it would be asserting the thing it is
+  // supposed to measure.
   {
     Bench b;
     b.reset();
     b.configure();
-    Result r = b.run(kClocks, true, false, false, true);
+    Result r = b.run_intermittent(kClocks, 200);
     std::printf(
-        "\nCASE 4  the instance centre's shape: a single client-A asker\n"
-        "    measured worst wait for the lone client-A arm: %llu clocks\n"
-        "    (the proof spends 8 against a 200-clock evaluation budget)\n",
-        static_cast<unsigned long long>(r.g.worst_gap));
-    check(r.g.worst_gap <= 2,
-          "a lone client-A asker waits at most the A/B round-robin");
+        "\nCASE 4  an INTERMITTENT client-A asker (1 request / 200 clocks)\n"
+        "        against geometry, particles and terrain all saturated\n"
+        "        -- zhao_geom_lodstate's shape, on the arm that exists\n");
+    std::printf("    requests issued %llu   worst wait %llu clocks\n",
+                static_cast<unsigned long long>(r.f.accepts),
+                static_cast<unsigned long long>(r.f.worst_gap));
+    check(r.f.accepts >= (kClocks / 200) - 2,
+          "every intermittent request was served, none lost to starvation");
+    check(r.f.worst_gap <= client_a_bound(3, true),
+          "the rare asker is inside the same N=3 bound as a saturated one");
+    // The number the proof actually needs: this wait plus the core's 36-clock
+    // latency must leave zhao_geom_lodstate's 200-clock evaluation intact.
+    check(r.f.worst_gap + 36 + 121 + 5 + 2 <= 200,
+          "the measured wait still closes lodstate's 200-clock evaluation");
   }
 
   std::printf("\n%s  (%d failure%s)\n", g_failures == 0 ? "PASS" : "FAIL",

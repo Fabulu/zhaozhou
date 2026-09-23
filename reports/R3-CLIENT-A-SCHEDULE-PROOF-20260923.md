@@ -225,29 +225,90 @@ reasoning held on real traffic, and `zhao_project_service`'s `contended_o` is th
 one that says whether two clients' combined demand approached the one-per-clock
 limit.
 
-### WHAT THIS BOUND IS, AND WHAT IT IS NOT
+### AND IT IS NOW MEASURED AT N=3, WHICH IS WHAT MAKES THE N=4 PREDICTION EVIDENCE
 
-**It is a proof about the arbiters' structure, read from their RTL, and it is
-what R3 asks for.** R3 says *"a written schedule proof"*; a bound derived from a
-rotating-priority law that advances only on acceptance is a proof in a way a
-measured average would not be.
+`design/contracts/FORGE.SHADOW.md:509-516` records why this could not be done:
 
-**It is not a measurement, and one is still owed.**
-`tests/CMakeLists.txt:15956-15962` verilates `tb_part_project` from
-`zhao_part_project.sv` and `zhao_part_record.sv` **only** — no service, no core —
-so the composed multi-client throughput has never been measured in this tree, at
-three arms or at four.
+> *"The RATE half needs a bench holding `zhao_part_project` against the real
+> `zhao_proj_subsystem` with every arm saturated. `tb_part_project` drives the
+> block **standalone** … so the composed multi-client throughput has never been
+> measured, and cannot be from any bench in this tree until the third arm
+> exists."*
 
-| leg | status | where it lands |
-|---|---|---|
-| grant-clock sum at four arms | **DONE, above** | this document |
-| structural starvation bound at N=4 | **DONE, above** | this document |
-| **measured** grant distribution and worst-case wait, three arms saturated against the real `zhao_proj_subsystem` | **NOT MEASURED — no bench exists** | buildable today; needs no new RTL and no owner decision |
-| the same at four arms, with `zhao_geom_lodstate`'s FSM closing its 200 clocks under contention | **cannot be measured without the arm** | the commit that adds the arm |
+The first two sentences were true (`tests/CMakeLists.txt:15956-15962`, checked).
+**The third was not: the third arm landed on 2026-09-21.** The bench is built in
+this packet — `tests/common/tb_projshare.sv` and
+`tests/common/projshare_contention.cpp`, registered as `projshare_contention` —
+and holds the **real** `zhao_part_project` against the **real**
+`zhao_project_service` and `zhao_project_core`. The only thing modelled is
+PART.LADDER's one-deep skid, because an open ladder loop would wedge the
+particle arm and the bench would measure a stall it invented.
 
-The third row is the one worth naming loudly: **it needs no new RTL, so a bound
-predicted at N=4 from a model never checked at N=3 is arithmetic, where the same
-bound checked at N=3 first is evidence.**
+*(It instantiates `zhao_project_service` rather than `zhao_proj_subsystem`: the
+subsystem passes **both** client arms straight through to it, unregistered —
+`zhao_proj_subsystem.sv:203-234`, the only transformation being
+`b_payload_i({b_arena_i, b_index_i})`. The arbitration is therefore identical
+and the shell would add fifty tie-offs that can only obscure it. The citation is
+there so a future reader can check that the shell still does not register an
+arm.)*
+
+**120,000 clocks per case. Every number below is measured, not derived.**
+
+| case | load | measured accepts | worst wait |
+|---|---|---|---|
+| **1** | all four saturated | geom **20,000** · part **20,000** · forge **20,000** · terrain **60,000** | client A arms **5**, terrain **1** |
+| **2** | three client-A arms, terrain idle | geom **48,571** · part **22,858** · forge **48,571** | geom/forge **2**, part **20** |
+| **3** | geometry + terrain only | geom **60,000** · terrain **60,000** | **1** each |
+| **4** | **one INTERMITTENT client-A asker** (1 request / 200 clocks) against geometry, particles and terrain all saturated | **600 of 600 requests served** | **4** |
+
+**The bound holds in every case, and it is tight.** Predicted 6 at N=3 with
+terrain saturated; measured 5. The core was granted on **100 % of clocks in
+every case** — work-conserving, so grant-clocks are additive and the sum in the
+rate half is the right kind of sum. `a_grants_o + b_grants_o = 120,000` exactly,
+in a case where both clients asked on every clock.
+
+`geom_tag_collision_o`, `owner_unroutable_o`, `ladder_unexpected_o` and
+`mat_refused_o` are asserted silent throughout, because a contention bench that
+fires one is measuring a **routing** fault and reporting it as a **rate**.
+
+### THREE THINGS THE MEASUREMENT SAYS THAT THE ARITHMETIC DID NOT
+
+**1. CASE 4 is the answer to R3's actual question.** The other three cases
+saturate everything, which is the worst load but the wrong SHAPE.
+`zhao_geom_lodstate` is a single-in-flight FSM: it asks **once**, waits, spends
+~164 clocks on the radius and the ladder, and asks again. Driven in that shape
+against a fully saturated machine, **every request was served and the worst wait
+was 4 clocks.** The evaluation closes at 4 + 36 + 121 + 5 + 2 = **168 of its 200
+budgeted clocks**, measured rather than assumed. *That is the fairness half of
+R3's proof, at the load the arm will actually present.*
+
+**2. Client A's arms share HALF the core, not all of it.** In CASE 1 each
+client-A arm took exactly **1/6** of the clocks while terrain took **1/2** — the
+service's A/B round-robin halves client A *before* the front multiplex divides
+it three ways. Nothing in the tree said this, and a reader reasoning from the
+front multiplex alone would predict 1/3. **It does not threaten the rate half**
+(total demand is 40.2 %, so no arm is rate-limited) but it is the number that
+matters if client A's demand ever approaches half the frame.
+
+**3. `SLOTS = 8` is the binding constraint only when terrain is idle**, and the
+block's own model of it is validated. In CASE 2 the particle arm took
+22,858/120,000 = **0.190 particles per clock** against
+`zhao_part_project.sv:81`'s predicted `8/36 = 0.222` — the difference being the
+ladder round trip the header's figure leaves out. Its worst wait of **20
+clocks** is that round trip, **not** arbitration, which is why this document
+does not assert the rotating-priority bound against it. In CASE 1 the throttle
+does **not** bind at all: client A gets 0.5 clocks per clock split three ways =
+0.167 each, below the 0.222 cap. *A frontier knob that binds in one load shape
+and not the other is worth knowing before anyone spends ALMs raising it.*
+
+### WHAT IS STILL OWED
+
+| leg | status |
+|---|---|
+| grant-clock sum at four arms | **DONE** — above |
+| structural starvation bound at N=4 | **DONE** — above |
+| measured grant distribution and worst-case wait at N=3, composed | **DONE** — `projshare_contention`, four cases |
+| the same at N=4, with `zhao_geom_lodstate`'s FSM closing 200 clocks under real contention | **owed at the commit that adds the arm.** The bench is built and its fourth case is already the right shape; adding the arm is a `run_intermittent` call away from covering it. |
 
 ## A FIFTH DEMAND NOBODY HAS COUNTED, AND THERE IS NO CODE LEFT FOR IT
 

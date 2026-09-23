@@ -161,8 +161,16 @@ module tb_projshare #(
   // See the header. `lad_ready_i` is unconditional and `rng_valid_i` is the
   // accepted beat delayed one clock, which is the shortest legal round trip.
   logic       lad_valid, lad_ready;
-  logic [2:0] lad_gov_floor, lad_prev_rung;
+  logic [2:0] lad_prev_rung;
   logic [3:0] lad_hold;
+  // The governor floor the block hands PART.LADDER with the particle. It is
+  // read by nothing here because this bench models the LADDER's TIMING and not
+  // its POLICY -- `part_ladder_directed` owns the floor's law, and a second
+  // opinion about it inside a contention bench would be a second
+  // implementation of a settled rule.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [2:0] lad_gov_floor;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic       rng_valid, rng_ready;
   logic [2:0] rng_rung;
   logic [3:0] rng_hold;

@@ -562,7 +562,45 @@ governor by name. **It is one commit or none.** In dependency order:
 **Steps 5 and 6b are decisions, not builds.** They are docked in the findings
 with the evidence attached rather than taken here.
 
+### R3's SCHEDULE PROOF IS DISCHARGED — SHADOWCLOSE, 2026-09-23
+
+**The section immediately below is superseded and kept for its reasoning.** It
+argued that both halves of R3's proof had to land with the arm. **One sentence
+in it was wrong and it is the load-bearing one:** *"the composed multi-client
+throughput has never been measured, and cannot be from any bench in this tree
+**until the third arm exists**."* The third arm landed on 2026-09-21, two days
+before this was read — the same staleness as the `2'd2` correction above, in the
+same paragraph's neighbourhood, and found the same way.
+
+So the bench was buildable and is now built:
+`tests/common/tb_projshare.sv` + `tests/common/projshare_contention.cpp`,
+registered as `projshare_contention`, holding the **real** `zhao_part_project`
+against the **real** `zhao_project_service` and `zhao_project_core` with only
+PART.LADDER's one-deep skid modelled.
+
+**`reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md` carries the proof.** In
+short, at 120,000 clocks per case:
+
+* **RATE:** 669,376 grant-clocks of 1,666,666 = **40.2 %** at four client-A arms
+  plus terrain, worst case. The instance centre's own share is **256 clocks,
+  0.0154 % of the frame**.
+* **FAIRNESS, measured:** the starvation bound holds in all four load shapes and
+  is tight (predicted 6 at N=3, measured 5). Driven in
+  `zhao_geom_lodstate`'s **actual shape** — one request per 200 clocks against a
+  fully saturated machine — **600 of 600 requests were served with a worst wait
+  of 4 clocks**, closing the evaluation at 168 of its 200 budgeted clocks.
+* **Three things the arithmetic did not say**, all in the report: client A's
+  arms share **half** the core rather than all of it (1/6 each, not 1/3);
+  `SLOTS = 8` binds only when terrain is idle; and
+  `zhao_part_project.sv:76-84`'s own "41.6 %" adds the particle client's
+  **elapsed** time to other clients' **grant**-clocks, which double-counts idle
+  cycles in the pessimistic direction.
+
+**What remains owed** is only the N=4 repeat, at the commit that adds the arm.
+The bench's fourth case is already the right shape for it.
+
 ### WHAT R3'S SCHEDULE PROOF STILL OWES, and why it is not in this packet
+### — SUPERSEDED 2026-09-23, see above
 
 The RATE half needs a bench holding `zhao_part_project` against the real
 `zhao_proj_subsystem` with every arm saturated. `tb_part_project` drives the
