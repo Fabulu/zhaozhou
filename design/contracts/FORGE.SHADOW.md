@@ -514,7 +514,53 @@ The kind-dispatch pattern to copy is the port-level `valid && (tag == KIND)`
 used for DRAWJOB's directory and MATERIAL.RESOLVE; LADDERBANK's `PAGE_KIND` is
 `8'd8`, CREATURE_FORM.
 
+## THE BUILD ORDER RE-VERIFIED AT `220c67fd` — SHADOWCLOSE, 2026-09-23
+
+**SIX of the blockers recorded below are STALE, and the list is now verified
+first-hand rather than inherited.** Every one was checked by reading the RTL or
+the ruling, never by quoting this file. The pattern is R240's, and it has now
+caught this contract three times in four days — so the table below is dated and
+sourced so the next reader can tell what was checked and when.
+
+| # | what this file says | verified state at `220c67fd` |
+|---|---|---|
+| 2 | `zhao_view_projscale` uncomposed | **COMPOSED** — `zhao_console_core.sv:24283`, with `zhao_view_projq88` at `:24302` |
+| 3 | `zhao_measure_starve` uncomposed | **COMPOSED** — `:24327` |
+| 4 | the governor's upstream needs CMD.EXEC arms | **DONE** — `:24359-24400`; the core states *"EVERY ONE OF ITS EIGHT DATA INPUTS NOW HAS A NAMED PRODUCER IN THIS FILE"*. `mgv_cam0/1_thresh` and `mgv_deg0/1` are live silicon waiting for this subsystem |
+| 5 | the governor's TERRAIN.LOD output group has no consumer (R223's trade) | **DISCHARGED** — `gv_*_q` at `:24124-24130` holds them for the composed `zhao_terrain_lod` |
+| 6a | *"No form index"* on the DRAWJOB seam | **WRONG** — `zhao_geom_drawjob.sv:171` emits `j_form_idx_o [23:0]`, driven at `:372`, and its consumer `zhao_geom_clipread.p_form_idx_i` landed with it. It is the MESH_STREAM handle index LADDERBANK keys on |
+| 6b | the view index is *"an OWNER DECISION"* | **DECIDED, AND NOW BUILT** — owner ruling **R74 / D-LADDER-A**: *"the per-instance ladder PAYS THE CAMERA INDEX BIT … SHADOWSUB's recommendation was to pay the bit, and the owner agreed."* Implemented in `zhao_geom_lodstate` by this packet: the store is `INSTANCES * 2`, the port is `j_view_mask_i [1:0]`, and a dual-view job evaluates twice |
+| 5 (§5) | `zhao_geom_mem_adapter` *"takes no parameters … fixed A–E wrapper"* at **five** | **IT IS AT SEVEN** — `s_req[0..6]`, `zhao_mem_share_n #(.N(7))`, slots F (FORGE.PRIM's page bank) and G (`zhao_geom_clipread`) added since. LADDERBANK is an **eighth** requester, not a sixth. The conclusion survives and the cost is *lower* than recorded: the widening has now been executed twice, with `geom_mem_adapter_directed` running against it each time |
+| §2 | `tap_*` needs an arbiter that does not exist | **BUILT** — `zhao_terrain_tapshare`, 97 checks, plus an inverted-polarity positive control. Still uncomposed, correctly: an arbiter in front of a port with one user is cost without capability |
+| §3 | the GEOM.CLIP door needs an arbiter | **BUILT AND COMPOSED** — `zhao_geom_clipdoor` at `zhao_console_core.sv:13491`, `.NCLIENT(3)`: GEOM.REPLAY, FORGE.PRIM and PART.CLIPFEED. A shadow arm is `NCLIENT(4)`, not a new door |
+| the rebase | *"the absolute→rebased frame conversion"* is owed | **NOT OWED ON THE CHOSEN ROUTE.** The rebase is owed only by a producer entering through `zhao_geom_group_seq`'s `v_*` port, which is documented as LOCAL (rebased) coords. This contract already chose the **particle/forge route** instead — world vertices straight into client A, screen vertices back on a demux arm — and `zhao_forge_assemble` does exactly that today with absolute world input. R27 disabled the arena origin write precisely because *"the projector consumes WORLD positions"* |
+| `cast_strength_i` | *"no producer anywhere. Owner decision."* | **RULED** — R133 **D-FORGESHADOW-A**, *"Accepted as recommended"*: a named, editable constant at composition, under CLAUDE.md rule 6 |
+
+**WHAT IS ACTUALLY LEFT IS FOUR ENGINEERING ITEMS AND NO DECISIONS:**
+
+1. `zhao_geom_mem_adapter` seven → eight (`h_*`), then `zhao_geom_ladderbank`.
+   The widening pattern has been run twice and has a bench.
+2. A **FOURTH** client-A arm on `zhao_part_project` claiming **`2'd3`** (not
+   `2'd2` — see the correction in §1), plus its result demux arm, plus
+   `zhao_geom_lodstate`'s composition. Its rate and fairness cost is now
+   **measured**, not estimated: `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`.
+3. `zhao_terrain_tapshare` + `zhao_forge_shadow`, in the same commit.
+4. **The terminal link, still the largest:** a shadow fan assembler, a fourth
+   `zhao_geom_clipdoor` client, the zero-sample material span, and a producer
+   for **core entry I20's `tri_continuation_tail_i`** so the flat per-caster
+   alpha R89 ruled actually reaches the blend. `zhao_forge_assemble` is the
+   working sibling of the first of these and should be read before it is
+   designed — it already takes absolute world vertices through client A, makes
+   its own `invw24`, and presents triangles at the clipdoor.
+
+**"It is one commit or none" still holds** and is the reason this packet
+composed nothing: every link's outputs terminate on the next, so any prefix
+dangles an edge. What this packet changed is that the commit is now four pieces
+of engineering rather than four pieces of engineering behind three stale
+blockers and a decision nobody had noticed was already taken.
+
 ### THE BUILD ORDER, for whoever takes this next
+### — partially SUPERSEDED 2026-09-23, see the table above
 
 **Nothing in this chain composes alone.** Every link's outputs terminate on the
 next link, so composing any prefix dangles an edge and closes a gap by opening

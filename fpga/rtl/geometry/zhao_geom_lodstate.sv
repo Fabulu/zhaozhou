@@ -70,19 +70,66 @@
 // names the same instance as the last draw of this one.
 //
 // ---------------------------------------------------------------------------
-// ONE LodState PER INSTANCE, NOT PER CAMERA -- AND THAT IS A DEVIATION
+// ONE LodState PER (INSTANCE, CAMERA) -- OWNER RULING R74 / D-LADDER-A
 // ---------------------------------------------------------------------------
-// `zref::creature::CreatureInstance` holds ONE `LodState`, and `lod_update`
-// takes one threshold. PART.LADDER's ruling of 2026-08-31 section 2.5 says
-// particle representation selection is PER CAMERA, and `zhao_part_project`
-// carries `p_prev_rung_i`/`p_hold_i` per (particle, camera) accordingly.
+// THIS BLOCK USED TO HOLD ONE LodState PER INSTANCE AND SAY SO AS A DOCKED
+// DEVIATION: "`zref::creature::CreatureInstance` holds ONE `LodState`, and
+// `lod_update` takes one threshold ... The creature reference does NOT say
+// that, and nothing ratifies it for creatures ... It is an owner decision, and
+// the cost of changing it is one more index bit on the store."
 //
-// The creature reference does NOT say that, and nothing ratifies it for
-// creatures. This block follows the reference -- one state per instance, and
-// `view_i` selects which camera's threshold that single ladder is measured
-// against -- and the disagreement is REPORTED rather than resolved here. It is
-// an owner decision, it is written up in the packet's findings, and the cost of
-// changing it is one more index bit on the store.
+// **THE OWNER RULED, AND THE RULING IS NOW BUILT.**
+// `reports/OWNER-RULINGS-20260919-EVENING.md` R74 and its D-LADDER-A section:
+//
+//   "D-LADDER-A -- the per-instance ladder PAYS THE CAMERA INDEX BIT.
+//    Decided: one more bit x INSTANCES, so each creature's ladder measures
+//    against the right camera ... For `active_mask == 2'b11` there was no
+//    honest answer in the tree ... SHADOWSUB's recommendation was to pay the
+//    bit, and the owner agreed."
+//
+// The failure mode it buys off, in the ruling's own words, is "a creature that
+// pops LOD rungs in the second view for reasons nothing records" -- one shared
+// ladder lets player 1's camera coarsen player 2's creature, a Duo FAIRNESS
+// defect under charter section 9. It also makes creatures select LOD the same
+// way particles already do (PART.LADDER 2026-08-31 section 2.5), which is one
+// fewer place where two subsystems do the same thing differently.
+//
+// WHAT CHANGED, CONCRETELY:
+//
+//   * `st_q` is `INSTANCES * 2` deep, indexed `{view, instance}`. That IS the
+//     "one more bit x INSTANCES" the ruling priced.
+//   * THE PORT IS THE MASK, NOT A BIT. `j_view_mask_i [1:0]` replaces
+//     `j_view_i`, because `zhao_geom_drawjob` emits `j_active_mask_o [1:0]`
+//     and there is no single-bit field on that seam to read. A composer
+//     narrowing the mask to a bit would be making the very choice this ruling
+//     took away from it.
+//   * A DUAL-VIEW JOB EVALUATES TWICE, once per set bit, each against its own
+//     threshold, its own `kx`/`vw` and its own stored ladder. The second pass
+//     re-enters at S_PROJ -- the bank row is the same form and is already
+//     latched, but the CENTRE PROJECTION and the RADIUS are per-camera and
+//     must be redone. Skipping them would be measuring camera 1's creature
+//     with camera 0's arithmetic, which is the defect wearing the fix's
+//     clothes.
+//   * TWO CASTERS COME OUT, each tagged with its `c_view_o`. That is correct
+//     rather than duplicated: if the two cameras chose different rungs the
+//     shadow hulls are genuinely different geometry, and `c_view_o` is the
+//     field that says which view each belongs to. It is why that port exists.
+//
+// THE RATE, RE-DERIVED RATHER THAN INHERITED (see below for the single-view
+// figure this replaces): a dual-view instance is two evaluations, so 256
+// instances all drawn in both views is 512 evaluations and 512 client-A
+// requests. `design/prod_manifest.yml:1531` already prices the radius service
+// at exactly that -- "512 at the content tier" -- so this ruling brings the
+// block into line with a figure the manifest had already assumed.
+// `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md` measures what those 512
+// requests cost the shared projector: 0.031% of the frame, and a worst-case
+// arbitration wait of 4 clocks against a fully saturated machine.
+//
+// A MASK OF `2'b00` EVALUATES NOTHING. `zhao_geom_drawjob` does not emit a job
+// for a fully masked draw (its own `masked_o` counts them), so this is a
+// defensive case rather than a live one -- but it is written as a case instead
+// of assumed away, because "the producer never does that" is how a block
+// acquires an unreachable state nobody can name.
 //
 // ---------------------------------------------------------------------------
 // WHAT IT INSTANTIATES AND WHAT IT TAKES AS A PORT
@@ -108,6 +155,14 @@
 // 3.1%. `zhao_geom_meshfetch`'s own meshlet loop is 305 clocks per meshlet and
 // a creature is many meshlets, so the tap is not the thing that can fall
 // behind. `dropped_o` is the number that says whether that reasoning held.
+//
+// UNDER D-LADDER-A THAT FIGURE IS THE SINGLE-VIEW CASE AND IS NO LONGER THE
+// WORST ONE. A dual-view job re-enters at S_PROJ, so its second pass costs the
+// projection + radius + ladder but NOT the bank lookup -- about 164 clocks
+// against the first pass's ~166. So 256 instances all drawn in BOTH views is
+// roughly 256 * 330 = 84,480 clocks, **5.1% of the frame**, against 3.1% for
+// the single-view case. Both are comfortably inside the tap's headroom, and
+// `dropped_o` remains the counter that would say otherwise.
 //
 // Conservative SystemVerilog subset only (charter section 2).
 `default_nettype none
@@ -141,8 +196,17 @@ module zhao_geom_lodstate #(
     input var logic signed [31:0] j_cx_i,
     input var logic signed [31:0] j_cy_i,
     input var logic signed [31:0] j_cz_i,
-    // Which camera's threshold this instance's ladder is measured against.
-    input var logic               j_view_i,
+    // WHICH CAMERAS DRAW THIS INSTANCE -- the two-view MASK, exactly as
+    // `zhao_geom_drawjob` emits it on `j_active_mask_o [1:0]`. Owner ruling
+    // R74 / D-LADDER-A: one ladder per (instance, camera), so a job with both
+    // bits set is evaluated TWICE, each pass against its own camera's
+    // threshold and its own stored ladder. See the header.
+    //
+    // IT IS THE MASK AND NOT A BIT BECAUSE THE SEAM HAS NO BIT. The job
+    // handshake carries `j_active_mask_o` and nothing else about views; a
+    // single-bit port here would oblige the composer to narrow two bits to one
+    // and that narrowing IS the decision D-LADDER-A removed from it.
+    input var logic        [ 1:0] j_view_mask_i,
 
     // ---- the ladder-constant bank (zhao_geom_ladderbank) -------------------
     output var logic               q_valid_o,
@@ -225,16 +289,79 @@ module zhao_geom_lodstate #(
     if (IIDW != $clog2(INSTANCES))
       $fatal(1, "zhao_geom_lodstate: IIDW is %0d but INSTANCES %0d needs %0d",
              IIDW, INSTANCES, $clog2(INSTANCES));
+    // ------------------------------------------------------------------
+    // THERE IS DELIBERATELY NO GUARD ON THE PER-CAMERA SLOT INDEX, AND THAT
+    // IS THE INTERESTING PART OF THIS BLOCK'S 2026-09-23 CHANGE.
+    // ------------------------------------------------------------------
+    // Owner ruling R74 / D-LADDER-A doubled the store to `INSTANCES * 2`, and
+    // TWO guards were written for it before the right answer was to write
+    // none. Both were DEAD, and each looked like protection:
+    //
+    //   1. `INSTANCES*2 != (1 << (IIDW+1)) && (1 << IIDW) == INSTANCES`
+    //      -- unsatisfiable for every legal INSTANCES. Meanwhile the indexing
+    //      it was guarding genuinely WAS wrong: `{view, idx}` overflows the
+    //      array for any INSTANCES that is not a power of two (at 200, camera
+    //      1's instance 199 addresses slot 455 of 400). The guard could not
+    //      fire, and the bug it should have caught was real and present.
+    //   2. `(1 << SIDX_W) < SLOTS_C` with `SIDX_W = $clog2(SLOTS_C)`
+    //      -- a tautology. `1 << $clog2(N) >= N` by definition.
+    //
+    // WHAT MADE THE FAULT GO AWAY WAS THE ARITHMETIC INDEX, NOT A CHECK.
+    // `slot_c = idx + view*INSTANCES` with `SIDX_W = $clog2(2*INSTANCES)` is
+    // bounded by construction: `in_range_c` already refuses `idx >= INSTANCES`
+    // and counts it on `out_of_range_o`, so the largest reachable slot is
+    // `2*INSTANCES - 1`, which SIDX_W holds for every INSTANCES. There is
+    // nothing left for an elaboration check to say.
+    //
+    // CLAUDE.md's law is that a detector reading zero is the claim to check
+    // hardest, and a guard that CANNOT fire is the degenerate case of it: it
+    // reads as evidence and is not. Shipping a third unfireable `$fatal` here
+    // to look thorough would be worse than this comment, because the comment
+    // cannot be mistaken for a test. `--lint-only` does not execute `initial`
+    // blocks anyway, so a clean lint would never have distinguished the two
+    // dead guards from live ones.
   end
 
-  // ---- the ladder state: one {rung, hold} per instance ---------------------
+  // ---- the ladder state: one {rung, hold} per (INSTANCE, CAMERA) -----------
   // `zref::creature::LodState` is `{LodRung rung = kMesh; uint16_t hold = 0;}`
   // and the reset below is that initialiser, not a convenient zero: kMesh IS
   // rung 0, and a creature that has never been evaluated is at the FINEST rung
   // rather than the coarsest. The other way round, a creature would pop into
   // existence as a splat and take fifteen ticks to become itself.
-  localparam int unsigned STW = 18;   // {rung[1:0], hold[15:0]}
-  logic [STW-1:0] st_q [INSTANCES];
+  //
+  // THE STORE IS `INSTANCES * 2` AND THE EXTRA BIT IS THE CAMERA -- owner
+  // ruling R74 / D-LADDER-A, "one more bit x INSTANCES". Camera 0's whole
+  // ladder bank is the low half and camera 1's the high half; that ordering is
+  // arbitrary but it is NAMED here rather than implied, because a reader
+  // debugging a rung needs to know which half they are looking at.
+  //
+  // THE INDEX IS ARITHMETIC (`idx + view*INSTANCES`) AND NOT A CONCATENATION
+  // (`{view, idx}`), AND THE FIRST DRAFT OF THIS CHANGE USED THE
+  // CONCATENATION AND WAS WRONG. `{view, idx}` is correct only when INSTANCES
+  // is a power of two. At INSTANCES = 200, `idx_q` is 8 bits, `in_range_c`
+  // admits idx up to 199, and `{1'b1, 8'd199}` is 455 against an array of 400
+  // -- an out-of-bounds write on camera 1 for every instance past the halfway
+  // point. INSTANCES is a PARAMETER whose own comment calls it "NAMED AND
+  // EDITABLE", so "it is 256 today" is not an argument, it is the reason the
+  // fault would have shipped.
+  //
+  // THE DIRECTED TEST RUNS AT INSTANCES = 8 AND WOULD NOT HAVE CAUGHT IT --
+  // at a power of two the two indexings are identical. It was found by reading
+  // the expression against the parameter's declared range, not by a bench, and
+  // that is worth saying rather than implying coverage this block does not
+  // have. The arithmetic form is correct by CONSTRUCTION for every INSTANCES,
+  // which is why no test is owed for it; see the `initial` block's note on why
+  // it carries no guard either.
+  localparam int unsigned STW     = 18;                  // {rung[1:0], hold[15:0]}
+  localparam int unsigned SLOTS_C = INSTANCES * 2;
+  localparam int unsigned SIDX_W  = $clog2(SLOTS_C);
+  logic [STW-1:0] st_q [SLOTS_C];
+
+  // The slot the CURRENT evaluation reads and writes. One expression, used at
+  // both the `zhao_geom_lod` read ports and the `S_LOD` write, because the two
+  // disagreeing is precisely the fault a per-camera store introduces and the
+  // single-camera store could not have.
+  logic [SIDX_W-1:0] slot_c;
 
   // ---- the walk ------------------------------------------------------------
   localparam logic [2:0] S_IDLE  = 3'd0;
@@ -252,6 +379,12 @@ module zhao_geom_lodstate #(
   logic [23:0]       form_q;
   logic signed [31:0] cx_q, cy_q, cz_q;
   logic               view_q;
+  // The job's view mask, and which of its set bits have been evaluated. Both
+  // are needed: `mask_q` says what is owed and `done_q` says what has been
+  // paid, and a single "second pass pending" flag would be the same two facts
+  // compressed into one that cannot express a mask of `2'b10`.
+  logic        [ 1:0] mask_q;
+  logic        [ 1:0] done_q;
   logic signed [31:0] bnd_q, mic_q, spl_q, gli_q;
   logic [30:0]        w_q;
   logic               behind_q;
@@ -268,6 +401,24 @@ module zhao_geom_lodstate #(
   // `zhao_geom_drawjob`'s FSM, not of a workload.
   wire new_inst_c = j_fire_i && (!have_last_q || (j_instance_id_i != last_iid_q));
   wire in_range_c = (j_instance_id_i < 16'(INSTANCES));
+  // A draw no camera sees is not this block's business. DRAWJOB does not emit
+  // one (its `masked_o` counts them), so this guard is defensive -- see the
+  // header's note about not assuming a producer's behaviour away.
+  wire any_view_c = (j_view_mask_i != 2'b00);
+
+  // The slot the current pass owns. See the declaration for why this is a sum
+  // and not a concatenation.
+  assign slot_c = SIDX_W'(idx_q) + (view_q ? SIDX_W'(INSTANCES) : SIDX_W'(0));
+
+  // THE PASS BOOKKEEPING, AS TWO NAMED COMBINATIONAL FACTS rather than as an
+  // expression repeated at each exit. `nx_done_c` is what will have been paid
+  // once the current pass retires; `nx_owed_c` is what the mask still asks for
+  // after that. There are two exits that retire a pass -- the caster handover
+  // and the per-camera `no_radius` skip -- and writing the same two
+  // expressions twice is how one of them acquires a different meaning.
+  logic [1:0] nx_done_c, nx_owed_c;
+  assign nx_done_c = done_q | (view_q ? 2'b10 : 2'b01);
+  assign nx_owed_c = mask_q & ~nx_done_c;
 
   // ---- the bank lookup -----------------------------------------------------
   assign q_valid_o = (st_w == S_LOOK);
@@ -359,8 +510,8 @@ module zhao_geom_lodstate #(
       .splat_error_i (spl_q),
       .glint_error_i (gli_q),
 
-      .rung_i(st_q[idx_q][17:16]),
-      .hold_i(st_q[idx_q][15:0]),
+      .rung_i(st_q[slot_c][17:16]),
+      .hold_i(st_q[slot_c][15:0]),
 
       .rung_o (lod_rung_w),
       .hold_o (lod_hold_w),
@@ -383,6 +534,8 @@ module zhao_geom_lodstate #(
       cy_q        <= 32'sd0;
       cz_q        <= 32'sd0;
       view_q      <= 1'b0;
+      mask_q      <= 2'b00;
+      done_q      <= 2'b00;
       bnd_q       <= 32'sd0;
       mic_q       <= 32'sd0;
       spl_q       <= 32'sd0;
@@ -393,7 +546,7 @@ module zhao_geom_lodstate #(
       rr_issued_q <= 1'b0;
       last_iid_q  <= 16'd0;
       have_last_q <= 1'b0;
-      for (i = 0; i < INSTANCES; i = i + 1) st_q[i] <= 18'd0;  // {kMesh, hold 0}
+      for (i = 0; i < SLOTS_C; i = i + 1) st_q[i] <= 18'd0;  // {kMesh, hold 0}
       c_instance_id_o  <= 16'd0;
       c_x_o            <= 32'sd0;
       c_z_o            <= 32'sd0;
@@ -429,14 +582,21 @@ module zhao_geom_lodstate #(
 
       case (st_w)
         S_IDLE: begin
-          if (new_inst_c && in_range_c) begin
+          if (new_inst_c && in_range_c && any_view_c) begin
             iid_q  <= j_instance_id_i;
             idx_q  <= j_instance_id_i[IIDW-1:0];
             form_q <= j_form_index_i;
             cx_q   <= j_cx_i;
             cy_q   <= j_cy_i;
             cz_q   <= j_cz_i;
-            view_q <= j_view_i;
+            // THE LOWEST SET BIT FIRST, and the order is a DECLARED
+            // convention rather than an accident of the expression: view 0
+            // before view 1, so two consecutive frames of the same dual-view
+            // instance produce the two casters in the same order and a
+            // capture CRC does not move for a reason nobody authored.
+            mask_q <= j_view_mask_i;
+            done_q <= 2'b00;
+            view_q <= !j_view_mask_i[0];
             st_w   <= S_LOOK;
           end
         end
@@ -484,8 +644,23 @@ module zhao_geom_lodstate #(
               // Behind the eye, or a bound radius the bank could not supply.
               // The reference SKIPS the creature entirely in this case, so the
               // ladder is not ticked and the state stands.
+              //
+              // BUT IT SKIPS IT FOR **THIS CAMERA**, NOT FOR THE JOB. "Behind
+              // the eye" is a per-camera fact -- a creature behind camera 0
+              // can be squarely in front of camera 1 -- so the other view is
+              // still owed and is taken next. Abandoning the job here would
+              // reintroduce exactly the Duo defect D-LADDER-A was ruled to
+              // remove, in the one path where it is least visible: the second
+              // player's creature would keep a stale rung whenever the first
+              // player turned away from it.
               no_radius_o <= no_radius_o + 32'd1;
-              st_w        <= S_IDLE;
+              done_q      <= nx_done_c;
+              if (nx_owed_c != 2'b00) begin
+                view_q <= !nx_owed_c[0];
+                st_w   <= S_PROJ;
+              end else begin
+                st_w <= S_IDLE;
+              end
             end else begin
               rad_q <= rr_radius_w;
               st_w  <= S_LOD;
@@ -495,21 +670,38 @@ module zhao_geom_lodstate #(
 
         S_LOD: begin
           if (lod_valid_w) begin
-            st_q[idx_q]              <= {lod_rung_w, lod_hold_w};
-            ticks_o                  <= ticks_o + 32'd1;
+            st_q[slot_c]              <= {lod_rung_w, lod_hold_w};
+            ticks_o                   <= ticks_o + 32'd1;
             rung_counts_o[lod_rung_w] <= rung_counts_o[lod_rung_w] + 32'd1;
-            c_instance_id_o          <= iid_q;
-            c_x_o                    <= cx_q;
-            c_z_o                    <= cz_q;
-            c_radius_o               <= bnd_q;
-            c_rung_o                 <= lod_rung_w;
-            c_view_o                 <= view_q;
-            st_w                     <= S_EMIT;
+            c_instance_id_o           <= iid_q;
+            c_x_o                     <= cx_q;
+            c_z_o                     <= cz_q;
+            c_radius_o                <= bnd_q;
+            c_rung_o                  <= lod_rung_w;
+            c_view_o                  <= view_q;
+            st_w                      <= S_EMIT;
           end
         end
 
         default: begin  // S_EMIT
-          if (c_ready_i) st_w <= S_IDLE;
+          // THE CASTER IS HANDED OVER BEFORE THE SECOND VIEW STARTS, not
+          // after both are done. The consumer takes one caster per camera and
+          // `c_view_o` says which; holding the first while the second is
+          // computed would put a ~164-clock bubble between them for no reason
+          // and would need a second set of output registers to hold it in.
+          if (c_ready_i) begin
+            done_q <= nx_done_c;
+            if (nx_owed_c != 2'b00) begin
+              // The other camera is owed. Re-enter at S_PROJ: the bank row is
+              // this form's and is still latched, but the centre projection
+              // and the radius are PER CAMERA and must be redone. See the
+              // header.
+              view_q <= !nx_owed_c[0];
+              st_w   <= S_PROJ;
+            end else begin
+              st_w <= S_IDLE;
+            end
+          end
         end
       endcase
     end
