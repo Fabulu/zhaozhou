@@ -315,20 +315,44 @@ it as a deliberate act under **R68 sub-build 4**, in terms:
 
 Verified in the RTL, not taken from the header: `PAY_W = 17` (was 16),
 `OWNER_W = 2` (was one bit `TAG_BIT`), `OWNER_GEOM = 2'd0`, `OWNER_PART = 2'd1`,
-**`2'd2` and `2'd3` unallocated**, with `owner_unroutable_o` counting a result
+~~**`2'd2` and `2'd3` unallocated**~~ — **THIS SENTENCE IS WRONG AS OF
+2026-09-21 AND WAS ALREADY WRONG WHEN IT WAS WRITTEN. CORRECTED BY SHADOWCLOSE,
+2026-09-23; see below.** — with `owner_unroutable_o` counting a result
 that carries one and `geom_tag_collision_o` counting a geometry rider that
 arrives with any owner bit set. The console mirrors it: `GEOM_PAY_A_W = 17`,
 `GEOM_OWNER_W_C = 2`, and a live `initial` elaboration guard requiring
 `GEOM_ARENA_W + GEOM_INDEX_W <= GEOM_PAY_A_W - GEOM_OWNER_W_C` (3 + 12 <= 15).
 
+> **`2'd2` IS SPENT. `zhao_part_project.sv:475` reads
+> `localparam logic [OWNER_W-1:0] OWNER_FORGE = 2'd2; // FORGE.PRIM's vertices`,
+> claimed by the FORGECOMP packet on 2026-09-21 and COMPOSED — the `f_*` arm is
+> wired to `zhao_forge_assemble` at `zhao_console_core.sv:19371-19378`.**
+>
+> This section read the block's COMMENT (`zhao_part_project.sv:476-479`,
+> *"2'd2 and 2'd3 are UNCLAIMED"*) rather than the localparam three lines above
+> it, which the same commit had just changed. The wrong half then travelled:
+> into this contract, and from here into **owner ruling R244 D-FORGESHADOW-C**,
+> which commissions *"a third request arm … claiming `OWNER_LOD = 2'd2`"*.
+> The comment is repaired in the same commit as this note.
+>
+> **The correct arrangement is `2'd3`, the LAST code**, and it is still the
+> already-authorised multiplex R3 names, so **no law changes and the ruling's
+> escalation clause is not reached**. A third CLIENT on the front mux was
+> already justified against R3 in writing at `zhao_console_core.sv:19366`; a
+> fourth is the same act. After `2'd3` the field is FULL and a fifth owner is a
+> `GEOM_OWNER_W_C` widening the elaboration guard above will refuse.
+
 **So the instance-centre half of Route B needs NO new law and NO owner
 decision.** What it needs is:
 
-* **a third request arm on `zhao_part_project`** claiming `OWNER_LOD = 2'd2`.
-  The block has exactly two input arms today (`g_*` geometry pass-through,
-  `p_*` particles) and no third. This is an edit to a composed, verified block,
-  so it costs its whole instantiation chain plus every bench — but it is the
-  arrangement R3 and the block's own header both prescribe.
+* **a FOURTH request arm on `zhao_part_project`** claiming `OWNER_LOD = 2'd3`
+  (not `2'd2` — see the correction above). The block has **three** input arms
+  today (`g_*` geometry pass-through, `p_*` particles, `f_*` FORGE.PRIM) and no
+  fourth. This is an edit to a composed, verified block, so it costs its whole
+  instantiation chain plus every bench — but it is the arrangement R3 and the
+  block's own header both prescribe. Its rate and fairness cost is measured in
+  `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`: 256 grant-clocks per frame
+  (0.0154 % of the frame) and **2 clocks** of added worst-case arbitration wait.
 * **the written schedule proof R3 OWES and that has never been produced.** It
   is a measurement, not a decision, and it is the one outstanding obligation of
   an owner-explicit ruling in this cluster. **It has two halves and only one of
@@ -490,7 +514,129 @@ The kind-dispatch pattern to copy is the port-level `valid && (tag == KIND)`
 used for DRAWJOB's directory and MATERIAL.RESOLVE; LADDERBANK's `PAGE_KIND` is
 `8'd8`, CREATURE_FORM.
 
+## THE BUILD ORDER RE-VERIFIED AT `220c67fd` — SHADOWCLOSE, 2026-09-23
+
+**SIX of the blockers recorded below are STALE, and the list is now verified
+first-hand rather than inherited.** Every one was checked by reading the RTL or
+the ruling, never by quoting this file. The pattern is R240's, and it has now
+caught this contract three times in four days — so the table below is dated and
+sourced so the next reader can tell what was checked and when.
+
+| # | what this file says | verified state at `220c67fd` |
+|---|---|---|
+| 2 | `zhao_view_projscale` uncomposed | **COMPOSED** — `zhao_console_core.sv:24283`, with `zhao_view_projq88` at `:24302` |
+| 3 | `zhao_measure_starve` uncomposed | **COMPOSED** — `:24327` |
+| 4 | the governor's upstream needs CMD.EXEC arms | **DONE** — `:24359-24400`; the core states *"EVERY ONE OF ITS EIGHT DATA INPUTS NOW HAS A NAMED PRODUCER IN THIS FILE"*. `mgv_cam0/1_thresh` and `mgv_deg0/1` are live silicon waiting for this subsystem |
+| 5 | the governor's TERRAIN.LOD output group has no consumer (R223's trade) | **DISCHARGED** — `gv_*_q` at `:24124-24130` holds them for the composed `zhao_terrain_lod` |
+| 6a | *"No form index"* on the DRAWJOB seam | **WRONG** — `zhao_geom_drawjob.sv:171` emits `j_form_idx_o [23:0]`, driven at `:372`, and its consumer `zhao_geom_clipread.p_form_idx_i` landed with it. It is the MESH_STREAM handle index LADDERBANK keys on |
+| 6b | the view index is *"an OWNER DECISION"* | **DECIDED, AND NOW BUILT** — owner ruling **R74 / D-LADDER-A**: *"the per-instance ladder PAYS THE CAMERA INDEX BIT … SHADOWSUB's recommendation was to pay the bit, and the owner agreed."* Implemented in `zhao_geom_lodstate` by this packet: the store is `INSTANCES * 2`, the port is `j_view_mask_i [1:0]`, and a dual-view job evaluates twice |
+| 5 (§5) | `zhao_geom_mem_adapter` *"takes no parameters … fixed A–E wrapper"* at **five** | **IT IS AT SEVEN** — `s_req[0..6]`, `zhao_mem_share_n #(.N(7))`, slots F (FORGE.PRIM's page bank) and G (`zhao_geom_clipread`) added since. LADDERBANK is an **eighth** requester, not a sixth. The conclusion survives and the cost is *lower* than recorded: the widening has now been executed twice, with `geom_mem_adapter_directed` running against it each time |
+| §2 | `tap_*` needs an arbiter that does not exist | **BUILT** — `zhao_terrain_tapshare`, 97 checks, plus an inverted-polarity positive control. Still uncomposed, correctly: an arbiter in front of a port with one user is cost without capability |
+| §3 | the GEOM.CLIP door needs an arbiter | **BUILT AND COMPOSED** — `zhao_geom_clipdoor` at `zhao_console_core.sv:13491`, `.NCLIENT(3)`: GEOM.REPLAY, FORGE.PRIM and PART.CLIPFEED. A shadow arm is `NCLIENT(4)`, not a new door |
+| the rebase | *"the absolute→rebased frame conversion"* is owed | **NOT OWED ON THE CHOSEN ROUTE.** The rebase is owed only by a producer entering through `zhao_geom_group_seq`'s `v_*` port, which is documented as LOCAL (rebased) coords. This contract already chose the **particle/forge route** instead — world vertices straight into client A, screen vertices back on a demux arm — and `zhao_forge_assemble` does exactly that today with absolute world input. R27 disabled the arena origin write precisely because *"the projector consumes WORLD positions"* |
+| `cast_strength_i` | *"no producer anywhere. Owner decision."* | **RULED** — R133 **D-FORGESHADOW-A**, *"Accepted as recommended"*: a named, editable constant at composition, under CLAUDE.md rule 6 |
+
+**WHAT IS ACTUALLY LEFT IS FOUR ENGINEERING ITEMS AND NO DECISIONS:**
+
+1. `zhao_geom_mem_adapter` seven → eight (`h_*`), then `zhao_geom_ladderbank`.
+   The widening pattern has been run twice and has a bench.
+2. A **FOURTH** client-A arm on `zhao_part_project` claiming **`2'd3`** (not
+   `2'd2` — see the correction in §1), plus its result demux arm, plus
+   `zhao_geom_lodstate`'s composition. Its rate and fairness cost is now
+   **measured**, not estimated: `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`.
+3. `zhao_terrain_tapshare` + `zhao_forge_shadow`, in the same commit.
+4. **The terminal link.** See the section directly below: it is smaller than
+   this contract has been recording, because the block it describes already
+   exists and was designed to be shared.
+
+### THE TERMINAL LINK IS MOSTLY BUILT: RIDE `zhao_forge_assemble`, DO NOT CLONE IT
+
+**SHADOWCLOSE, 2026-09-23.** This contract plans a *"shadow fan assembler"*, a
+**fourth** `zhao_geom_clipdoor` client, and a **fifth** client-A demand for the
+hull's own vertices — which `reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md`
+had to flag as fitting the bandwidth but **exhausting the 2-bit owner field**.
+
+**None of those three is necessary, and the evidence is in the block FORGE.PRIM
+already runs.** `zhao_forge_assemble` (849 lines, composed at
+`zhao_console_core.sv:13299`, tested by `forge_assemble_directed`) does the
+entire job end to end:
+
+| what a shadow hull needs | what `zhao_forge_assemble` already does | evidence |
+|---|---|---|
+| world vertices in, with an end marker | `v_valid_i`/`v_x_i`/`v_y_i`/`v_z_i`/`v_last_i` | `:205-210` |
+| a triangle list over them | `t_valid_i`/`t_i0_i`/`t_i1_i`/`t_i2_i`/`t_last_i` | `:213-220` |
+| projection through client A | `f_*` out, `rs_*` back — **owner `2'd2`, already composed** | `:251-265`, core `:19371` |
+| `invw24` for GEOM.CLIP slot 0 | its own `zhao_geom_depthquant_stream` | core `:3036` |
+| **declare untextured** | `assign o_untex_o = 1'b1;` — **unconditionally** | **`:576`** |
+| triangles at the clipdoor | `o_*`, clipdoor **client 1** | core `:13383`, `:13512` |
+| **a per-primitive alpha from a named constant** | `art_alpha_i`, written into `SLOT_ALPHA = 6` | `:246`, `:596` |
+
+**Its `v_*` port is ALREADY SPECIFIED AS A COMPOSER MUX**, in its own words at
+`:199-204`:
+
+> *"Muxed at the composer by family: `zhao_forge_prim_eval` for the ribbon,
+> `zhao_forge_ring_eval` for the four swept-ring families. **This block does not
+> read the family and must not**: the ordering convention is the whole of the
+> contract between the two halves."*
+
+A shadow hull is another producer on that mux. And the block's **own header
+already names this contract's ruling as the pattern it follows** (`:106-108`):
+
+> *"THAT IS THE R48 NAMED-SEAM SHAPE AND IT IS THE TREATMENT THE OWNER HAS
+> ALREADY ACCEPTED FOR THIS EXACT PROBLEM — R133's D-FORGESHADOW-A accepted
+> `zhao_forge_shadow`'s `cast_strength_i` 'from a named constant' on the same
+> grounds."*
+
+**So the terminal link reduces to three small pieces:**
+
+1. **A fan indexer** — `zhao_forge_shadow` emits a **RING** of 16/8/4 vertices
+   with `vtx_last_o` on the final one (`zhao_forge_shadow.sv:291-296`; there is
+   **no centre vertex**). A ring of N becomes N−2 triangles, `(0,1,2)`,
+   `(0,2,3)` … `(0,N−2,N−1)`. That is a counter and a comparator: it forwards
+   `vtx_*` to `v_*` unchanged and emits the triples on `t_*` after `last`.
+   **This is the only genuinely new RTL the terminal link needs.**
+2. **An arbiter in front of the shared assembler's `v_*`/`t_*`/`j_*`**, two
+   producers deep, with the same run-length fairness `zhao_geom_clipdoor`
+   already uses. The assembler is single-job (`busy_o` holds the bank off), so
+   this is a job-granularity arbiter, not a beat-granularity one.
+3. **A per-job material mode on `zhao_forge_assemble`.** Today the core supplies
+   `FORGE_MATERIAL_MODE = 2'd0` (MATERIAL_BACKED) as a *parameter* at the
+   clipdoor slice (`zhao_console_core.sv:7172`, `:13526`). A shadow must declare
+   `MATMODE_NONE_C = 2'd1` so `mw_pub_sample_count` is zero and R197's
+   `cl_in_refuse_c` admits it. **The core forbids choosing this at the composer**
+   — `:13519-13525`: *"never a constant chosen here, because a mode chosen at a
+   composer is the 'inferred' mode the ruling forbids"* — so it becomes a real
+   per-job input on the assembler, driven by whichever producer won.
+
+**What this removes outright:** the fifth client-A demand (the hull rides owner
+`2'd2` with FORGE.PRIM), the fourth clipdoor client, the second
+`zhao_geom_depthquant_stream`, and a second 520-slot vertex store. **The owner
+field is no longer exhausted** — `2'd3` goes to the instance centre and nothing
+else needs a code.
+
+**What still stands unchanged:** a producer for core entry **I20's
+`tri_continuation_tail_i`**, so R89's flat per-caster alpha actually reaches
+`zhao_raster_blend_prod.a_i`. `SLOT_ALPHA = 6` is the seventh attribute slot and
+`zhao_geom_attrpack` publishes **six** planes (it *"shipped as THREE planes and
+grew to SIX on 2026-09-21"*, `zhao_geom_attrpack.sv:1-4`), so slot 6 is carried
+in the clip packet and interpolated by nothing — which is exactly why R89 routed
+the alpha down the continuation tail instead. **That reasoning survives the
+attrpack widening; only the plane count in this contract's R89 section is
+stale.**
+
+**This route is a RECOMMENDATION, not a ruling.** It was derived by reading the
+composed blocks and it has not been built or benched. The reason it is written
+here rather than acted on is the same reason nothing else was: *it is one commit
+or none*, and this is a description of what that commit should contain.
+
+**"It is one commit or none" still holds** and is the reason this packet
+composed nothing: every link's outputs terminate on the next, so any prefix
+dangles an edge. What this packet changed is that the commit is now four pieces
+of engineering rather than four pieces of engineering behind three stale
+blockers and a decision nobody had noticed was already taken.
+
 ### THE BUILD ORDER, for whoever takes this next
+### — partially SUPERSEDED 2026-09-23, see the table above
 
 **Nothing in this chain composes alone.** Every link's outputs terminate on the
 next link, so composing any prefix dangles an edge and closes a gap by opening
@@ -538,7 +684,45 @@ governor by name. **It is one commit or none.** In dependency order:
 **Steps 5 and 6b are decisions, not builds.** They are docked in the findings
 with the evidence attached rather than taken here.
 
+### R3's SCHEDULE PROOF IS DISCHARGED — SHADOWCLOSE, 2026-09-23
+
+**The section immediately below is superseded and kept for its reasoning.** It
+argued that both halves of R3's proof had to land with the arm. **One sentence
+in it was wrong and it is the load-bearing one:** *"the composed multi-client
+throughput has never been measured, and cannot be from any bench in this tree
+**until the third arm exists**."* The third arm landed on 2026-09-21, two days
+before this was read — the same staleness as the `2'd2` correction above, in the
+same paragraph's neighbourhood, and found the same way.
+
+So the bench was buildable and is now built:
+`tests/common/tb_projshare.sv` + `tests/common/projshare_contention.cpp`,
+registered as `projshare_contention`, holding the **real** `zhao_part_project`
+against the **real** `zhao_project_service` and `zhao_project_core` with only
+PART.LADDER's one-deep skid modelled.
+
+**`reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md` carries the proof.** In
+short, at 120,000 clocks per case:
+
+* **RATE:** 669,376 grant-clocks of 1,666,666 = **40.2 %** at four client-A arms
+  plus terrain, worst case. The instance centre's own share is **256 clocks,
+  0.0154 % of the frame**.
+* **FAIRNESS, measured:** the starvation bound holds in all four load shapes and
+  is tight (predicted 6 at N=3, measured 5). Driven in
+  `zhao_geom_lodstate`'s **actual shape** — one request per 200 clocks against a
+  fully saturated machine — **600 of 600 requests were served with a worst wait
+  of 4 clocks**, closing the evaluation at 168 of its 200 budgeted clocks.
+* **Three things the arithmetic did not say**, all in the report: client A's
+  arms share **half** the core rather than all of it (1/6 each, not 1/3);
+  `SLOTS = 8` binds only when terrain is idle; and
+  `zhao_part_project.sv:76-84`'s own "41.6 %" adds the particle client's
+  **elapsed** time to other clients' **grant**-clocks, which double-counts idle
+  cycles in the pessimistic direction.
+
+**What remains owed** is only the N=4 repeat, at the commit that adds the arm.
+The bench's fourth case is already the right shape for it.
+
 ### WHAT R3'S SCHEDULE PROOF STILL OWES, and why it is not in this packet
+### — SUPERSEDED 2026-09-23, see above
 
 The RATE half needs a bench holding `zhao_part_project` against the real
 `zhao_proj_subsystem` with every arm saturated. `tb_part_project` drives the

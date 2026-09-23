@@ -80,8 +80,14 @@ struct Bench {
   uint32_t proj_w = 0;
   bool proj_behind = false;
   int proj_delay = 0;
-  uint32_t next_w = 0;
-  bool next_behind = false;
+  // PER VIEW, because owner ruling R74 / D-LADDER-A makes a dual-view job two
+  // projections through two different cameras -- and the case that matters is
+  // the one where they ANSWER DIFFERENTLY (behind camera 0, in front of camera
+  // 1). A single held answer could not express it, and the block's per-camera
+  // `no_radius` path would have looked correct against a model that could not
+  // tell the two apart.
+  uint32_t next_w[2] = {0, 0};
+  bool next_behind[2] = {false, false};
   int proj_stall = 0;        // hold pr_ready low for this many offers
   bool consumer_stall = false;
 
@@ -113,7 +119,7 @@ struct Bench {
     d.j_cx_i = 0;
     d.j_cy_i = 0;
     d.j_cz_i = 0;
-    d.j_view_i = 0;
+    d.j_view_mask_i = 0;
   }
 
   void cycle() {
@@ -147,8 +153,9 @@ struct Bench {
         d.pr_ready_i = 1;
         proj_pending = true;
         proj_delay = 12;          // the projector's core latency, abbreviated
-        proj_w = next_w;
-        proj_behind = next_behind ? 1 : 0;
+        const int v = d.pr_view_o ? 1 : 0;
+        proj_w = next_w[v];
+        proj_behind = next_behind[v] ? 1 : 0;
       }
     } else if (proj_delay > 0) {
       --proj_delay;
@@ -215,19 +222,49 @@ struct Bench {
    *  this instance's centre. */
   void job(uint16_t iid, uint32_t form, int32_t cx, int32_t cy, int32_t cz, int view,
            uint32_t w, bool behind) {
-    next_w = w;
-    next_behind = behind;
+    next_w[0] = next_w[1] = w;
+    next_behind[0] = next_behind[1] = behind;
     d.j_fire_i = 1;
     d.j_instance_id_i = iid;
     d.j_form_index_i = form & cp::kFormIndexMask;
     d.j_cx_i = cx;
     d.j_cy_i = cy;
     d.j_cz_i = cz;
-    d.j_view_i = view ? 1 : 0;
+    d.j_view_mask_i = static_cast<uint8_t>(view ? 2 : 1);
     d.eval();
     zhao::tick(d);
     idle();
     d.eval();
+  }
+
+  /** One observed job with an explicit two-view MASK and a per-camera
+   *  projector answer. Owner ruling R74 / D-LADDER-A: mask 2'b11 is TWO
+   *  evaluations, and the two cameras may legitimately answer differently --
+   *  a creature behind camera 0 can be in front of camera 1. */
+  void job_mask(uint16_t iid, uint32_t form, int32_t cx, int32_t cy, int32_t cz,
+                uint8_t mask, uint32_t w0, bool behind0, uint32_t w1,
+                bool behind1) {
+    next_w[0] = w0;
+    next_behind[0] = behind0;
+    next_w[1] = w1;
+    next_behind[1] = behind1;
+    d.j_fire_i = 1;
+    d.j_instance_id_i = iid;
+    d.j_form_index_i = form & cp::kFormIndexMask;
+    d.j_cx_i = cx;
+    d.j_cy_i = cy;
+    d.j_cz_i = cz;
+    d.j_view_mask_i = mask;
+    d.eval();
+    zhao::tick(d);
+    idle();
+    d.eval();
+  }
+
+  /** Both cameras draw this instance: mask 2'b11. */
+  void job_dual(uint16_t iid, uint32_t form, int32_t cx, int32_t cy, int32_t cz,
+                uint32_t w0, bool behind0, uint32_t w1, bool behind1) {
+    job_mask(iid, form, cx, cy, cz, 0x3, w0, behind0, w1, behind1);
   }
 };
 
@@ -491,6 +528,111 @@ int main(int argc, char** argv) {
           got_before + 1, b.got.size());
     check(b.got.back().x == 7 * kOne, "with its own world x", 7 * kOne,
           static_cast<uint64_t>(b.got.back().x));
+  }
+
+  // ---- 7. OWNER RULING R74 / D-LADDER-A: one ladder per (INSTANCE, CAMERA) -
+  //
+  // "Decided: one more bit x INSTANCES, so each creature's ladder measures
+  //  against the right camera ... For `active_mask == 2'b11` there was no
+  //  honest answer in the tree."
+  //
+  // The two thresholds set above are DIFFERENT on purpose -- view 0 is 2.0 px
+  // and view 1 is 1.0 px -- so a creature at one distance can legitimately sit
+  // at two different rungs. That is the whole point of paying the bit, and a
+  // test run with equal thresholds would pass against a block that still held
+  // ONE ladder.
+  {
+    const uint32_t ticks_before = top->ticks_o;
+    const size_t got_before = b.got.size();
+
+    b.frame();
+    // Both cameras draw instance 5. One job, mask 2'b11.
+    b.job_dual(5, 0x000102u, 11 * kOne, 0, 40 * kOne,
+               40u * static_cast<uint32_t>(kOne), false,
+               40u * static_cast<uint32_t>(kOne), false);
+    b.run(600);
+
+    check(top->ticks_o == ticks_before + 2,
+          "a dual-view job ticks TWICE -- once per camera", ticks_before + 2,
+          top->ticks_o);
+    check(b.got.size() == got_before + 2, "and emits TWO casters",
+          got_before + 2, b.got.size());
+    const Caster &c0 = b.got[got_before];
+    const Caster &c1 = b.got[got_before + 1];
+    check(!c0.view && c1.view,
+          "VIEW 0 FIRST, then view 1 -- the declared emission order, so a "
+          "capture CRC does not move for a reason nobody authored",
+          1, (!c0.view && c1.view) ? 1 : 0);
+    check(c0.instance_id == 5 && c1.instance_id == 5,
+          "both name the same instance", 5, c0.instance_id);
+    check(c0.x == c1.x && c0.z == c1.z && c0.radius == c1.radius,
+          "the world position and bound radius are the INSTANCE's, not the "
+          "camera's -- only the rung may differ",
+          1, (c0.x == c1.x && c0.z == c1.z && c0.radius == c1.radius) ? 1 : 0);
+    // The finer threshold demands the finer rung, so view 1's rung is <= view
+    // 0's. Asserting the INEQUALITY rather than two literals keeps this a test
+    // of the per-camera law and not of one distance's arithmetic, which
+    // geom_lod_directed already owns.
+    check(c1.rung <= c0.rung,
+          "the FINER threshold (view 1, 1.0 px) never picks a COARSER rung",
+          1, (c1.rung <= c0.rung) ? 1 : 0);
+  }
+
+  // ---- 8. THE TWO LADDERS ARE GENUINELY SEPARATE STORAGE -------------------
+  //
+  // The case above could still pass against a single shared ladder that simply
+  // re-evaluated twice. THIS is the one that cannot: drive view 0 alone for
+  // long enough that its hysteresis settles at a coarse rung, then ask view 1
+  // for the FIRST time at the same distance. A shared store would hand view 1
+  // the rung view 0 walked to; separate stores start view 1 at kMesh and let
+  // its own hold count up. That is the "creature that pops LOD rungs in the
+  // second view for reasons nothing records" the ruling names.
+  {
+    b.frame();
+    for (int f = 0; f < 40; ++f) {
+      b.frame();
+      b.job(6, 0x000103u, 0, 0, 400 * kOne, 0,
+            400u * static_cast<uint32_t>(kOne), false);
+      b.run(400);
+    }
+    const uint8_t v0_settled = b.got.back().rung;
+
+    const size_t before = b.got.size();
+    b.frame();
+    b.job(6, 0x000103u, 0, 0, 400 * kOne, 1,
+          400u * static_cast<uint32_t>(kOne), false);
+    b.run(400);
+    check(b.got.size() == before + 1, "view 1's first evaluation emitted",
+          before + 1, b.got.size());
+    check(b.got.back().view, "and it is tagged view 1", 1,
+          b.got.back().view ? 1 : 0);
+    // zref::creature::LodState initialises to kMesh (rung 0) with hold 0, and
+    // the stability law needs kLodHoldTicks before it may leave. So view 1's
+    // very first answer is rung 0 whatever view 0 walked to.
+    check(b.got.back().rung == 0,
+          "VIEW 1 STARTS AT kMESH -- it did not inherit view 0's settled rung, "
+          "which is the Duo fairness defect D-LADDER-A was ruled to remove",
+          0, b.got.back().rung);
+    std::printf(
+        "[geom_lodstate_directed] view0 settled at rung %u; view1's first "
+        "answer was rung %u\n",
+        v0_settled, b.got.back().rung);
+  }
+
+  // ---- 9. A JOB NO CAMERA DRAWS EVALUATES NOTHING -------------------------
+  // Defensive: zhao_geom_drawjob does not emit a fully masked job (its own
+  // `masked_o` counts them). Written as a case rather than assumed away.
+  {
+    const uint32_t ticks_before = top->ticks_o;
+    b.frame();
+    b.job_mask(7, 0x000100u, 0, 0, 50 * kOne, 0,
+               50u * static_cast<uint32_t>(kOne), false,
+               50u * static_cast<uint32_t>(kOne), false);
+    b.run(400);
+    check(top->ticks_o == ticks_before,
+          "a mask of 2'b00 ticks no ladder at all", ticks_before, top->ticks_o);
+    check(top->busy_o == 0, "and leaves the block idle rather than wedged", 0,
+          top->busy_o);
   }
 
   // ---- every counter moved -------------------------------------------------

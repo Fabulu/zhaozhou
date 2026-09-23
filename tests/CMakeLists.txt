@@ -15972,6 +15972,58 @@ add_test(NAME lint_zhao_part_project
 set_tests_properties(lint_zhao_part_project PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# PROJSHARE -- owner ruling R3's owed schedule proof, MEASURED.
+#
+# THE ENTRY DIRECTLY ABOVE IS WHY THIS EXISTS. It says, correctly and in terms,
+# that part_project_directed "MODELS the projector rather than instantiating
+# it" -- which is the right call for the question that bench asks. But it means
+# the COMPOSED multi-client throughput has never been measured anywhere in this
+# tree, and design/contracts/FORGE.SHADOW.md records exactly that as the reason
+# half of R3's proof could not be produced:
+#
+#   "The RATE half needs a bench holding zhao_part_project against the real
+#    zhao_proj_subsystem with every arm saturated. tb_part_project drives the
+#    block STANDALONE ... so the composed multi-client throughput has never
+#    been measured, and cannot be from any bench in this tree."
+#
+# This is that bench. It instantiates zhao_project_service rather than
+# zhao_proj_subsystem, and tb_projshare.sv's header carries the argument for
+# why those are the same arbitration (the subsystem passes both client arms
+# straight through, zhao_proj_subsystem.sv:203-234) -- with the citation to
+# check if the shell ever registers one.
+#
+# NO zhao_harness: this bench counts clocks and reads counters, uses none of
+# the harness's helpers, and defines its own sc_time_stamp shim. Linking a
+# library for nothing is how a test's closure stops describing its subject.
+#
+# The numbers it produces are written up in
+# reports/R3-CLIENT-A-SCHEDULE-PROOF-20260923.md.
+add_executable(test_projshare_contention common/projshare_contention.cpp)
+verilate(test_projshare_contention
+  PREFIX Vtb_projshare
+  TOP_MODULE tb_projshare
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_project.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_core.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/common/tb_projshare.sv)
+add_test(NAME projshare_contention COMMAND test_projshare_contention)
+set_tests_properties(projshare_contention PROPERTIES
+  LABELS "fast;particles;geometry" TIMEOUT 300)
+
+add_test(NAME lint_tb_projshare
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module tb_projshare
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_project.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_core.sv
+                 ${CMAKE_CURRENT_SOURCE_DIR}/common/tb_projshare.sv)
+set_tests_properties(lint_tb_projshare PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ===========================================================================
 # GEOM.LOOM -- the Transform Loom (fpga/rtl/geometry/zhao_geom_loom.sv)
 # ===========================================================================

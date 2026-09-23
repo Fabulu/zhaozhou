@@ -60,7 +60,9 @@ module tb_geom_lodstate
     input  var logic signed [31:0] j_cx_i,
     input  var logic signed [31:0] j_cy_i,
     input  var logic signed [31:0] j_cz_i,
-    input  var logic               j_view_i,
+    // OWNER RULING R74 / D-LADDER-A: the two-view MASK, as zhao_geom_drawjob
+    // emits it. A job with both bits set is evaluated twice, once per camera.
+    input  var logic        [ 1:0] j_view_mask_i,
 
     // ---- the instance centre's projection, from client A --------------------
     output var logic               pr_valid_o,
@@ -214,7 +216,7 @@ module tb_geom_lodstate
       .j_cx_i         (j_cx_i),
       .j_cy_i         (j_cy_i),
       .j_cz_i         (j_cz_i),
-      .j_view_i       (j_view_i),
+      .j_view_mask_i  (j_view_mask_i),
 
       .q_valid_o(q_valid_w),
       .q_form_o (q_form_w),
