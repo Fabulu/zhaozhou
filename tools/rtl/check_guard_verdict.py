@@ -142,13 +142,29 @@ CLIENTS = [
     "fpga/rtl/terrain/zhao_terrain_pagestream.sv",
     "fpga/rtl/mem/zhao_mem_upload.sv",
     "fpga/rtl/memory/zhao_render_asset_mux.sv",
-    # Four ROUTE a verdict down to a client and test nothing themselves --
+    # Two ROUTE a verdict down to a client and test nothing themselves --
     # the same standing `zhao_video_scanout` is listed under above. Listed
     # rather than excepted, so the audit stays exact.
-    "fpga/rtl/prod/zhao_console_core.sv",
-    "fpga/rtl/prod/zhao_console_board.sv",
     "fpga/rtl/generated/zhao_shell_fit_top.sv",
     "fpga/rtl/generated/zhao_shell_v2_fit_top.sv",
+    #
+    # THE TWO CONSOLE COMPOSERS WERE HERE AND ARE GONE, 2026-09-23. They were
+    # added under the sentence above -- "route a verdict down to a client" --
+    # and that sentence has since EXPIRED. `zhao_console_core` gave up its
+    # guard edge (its own comment records it: "`geom_guard_rsp_o` and the three
+    # `geom_beat_*_o` were this module's edge"), so neither file declares a
+    # `zhao_guard_rsp_t` input any more and the coverage audit had been calling
+    # both stale for weeks.
+    #
+    # Scanning them bought nothing measurable and the measurement says so:
+    # `zhao_console_board` contains ZERO `*rsp*.ready` references, and
+    # `zhao_console_core` contains exactly ONE -- `.mem_req_ready_i
+    # (mr_guard_rsp.ready)`, a port connection, not a state-machine arm. So the
+    # "clean" these two reported was structurally guaranteed, which is the
+    # comfortable kind of green this tree keeps learning to distrust.
+    #
+    # The verdicts inside the core are tested by the LEAVES it instantiates,
+    # and every one of those leaves is listed here in its own right.
     # ---------------------------------------------------------------------
     # THE TERRAIN COMPOSE PATH's TWO NEW CLIENTS, 2026-09-19. Added in the
     # change that created them, which is what the note on TERRAIN.PAGELOADER
@@ -160,6 +176,31 @@ CLIENTS = [
     "fpga/rtl/memory/zhao_mem_share2.sv",
     # TERRAIN.HDRREAD reads the 64-byte patch header on the COMPOSE path.
     "fpga/rtl/terrain/zhao_terrain_hdrread.sv",
+
+    # ---- THE SEVEN INHERITED CONSUMERS, ADDED 2026-09-23 BY THE COORDINATOR --
+    # These were named as known debt in the DEVSTORE entry above and carried as
+    # base-red findings for weeks. Listing them is NOT a claim that they are
+    # correct -- it is the opposite. The gate only inspects its listed clients,
+    # so while these sat outside the list its SILENCE SAID NOTHING ABOUT THEM,
+    # and "nine findings" was repeatedly mis-read (by me, in a handover, until
+    # corrected) as "nine bugs". It was a COVERAGE hole, and an unmeasured one.
+    #
+    # Adding them converts an unmeasured hole into a measured answer: whatever
+    # this gate now says about these seven is the first real evidence anyone has
+    # had. If it reports arms, they are real and inherited; if it reports none,
+    # that silence finally means something, because the gate can now see them.
+    #
+    # The defect it hunts, restated because it is subtle: zhao_mem_guard drives
+    # `ready` as a LEVEL and `ok` as a PULSE ONE CYCLE LATER. They are never
+    # high together on a passing request, so an arm waiting for BOTH reads
+    # EVERY PASS AS A DENIAL -- and that failure is silent and total.
+    "fpga/rtl/forge/zhao_forge_pagebank.sv",
+    "fpga/rtl/geometry/zhao_geom_clipread.sv",
+    "fpga/rtl/geometry/zhao_geom_drawjob.sv",
+    "fpga/rtl/geometry/zhao_geom_ladderbank.sv",
+    "fpga/rtl/memory/zhao_mem_share_wr.sv",
+    "fpga/rtl/particles/zhao_part_table_loader.sv",
+    "fpga/rtl/terrain/zhao_terrain_pageio.sv",
 ]
 
 # `if (foo_rsp.ready)` / `else if (guard_rsp_i.ready)` -- the accepting arm.
@@ -191,11 +232,41 @@ def arm_body(lines, i, col=0):
     tested, and this one had been shown to fire only on a shape whose opening
     line has no `end` on it.
     """
+    # THE ARM'S SHAPE IS DECIDED BY ITS OPENING LINE AND NOWHERE ELSE.
+    #
+    # The walk used to infer "this arm has a body" from whichever line carried
+    # the first `begin`. For a BRACELESS arm that line is the NEXT CASE ITEM --
+    #
+    #     S_DRD_REQ:  if (guard_rsp_i.ready) state_q <= S_DRD_VERD;
+    #     S_DRD_VERD: begin
+    #       if (guard_rsp_i.violation) ...
+    #
+    # -- so the `not started` break never fired, the walker ran off the end of
+    # the arm, and it read the NEIGHBOUR's `.ok` as though it belonged here.
+    #
+    # That is a FALSE POSITIVE generator, and it fired: on 2026-09-23 the gate
+    # reported four `.ok` defects in zhao_terrain_pageio at lines 926, 966,
+    # 1151 and 1182 whose four arms are the correct two-state shape this tool
+    # exists to PRESCRIBE. Note the direction -- this is the rare break that
+    # reads WORSE than the truth, which is why it was caught on first contact
+    # instead of living for weeks. See _GOOD_BRACELESS below.
+    opening = lines[i][col:]
+    braceless = not re.search(r"\bbegin\b", opening)
+
     depth = 0
     started = False
     out = []
     for k in range(i, min(i + 60, len(lines))):
         t = lines[k][col:] if k == i else lines[k]
+        if braceless:
+            # A single-statement arm ends at its first `;` and may NEVER cross
+            # into a following case item.
+            if k > i and re.match(r"\s*(?:\w+|\d+'[bdhoBDHO][0-9a-fA-FxXzZ_]+|default)\s*:(?!:)", t):
+                break
+            out.append((k + 1, t))
+            if ";" in t:
+                break
+            continue
         out.append((k + 1, t))
         opens = len(re.findall(r"\bbegin\b", t))
         closes = len(re.findall(r"\bend\b(?!case|module|function)", t))
@@ -203,9 +274,6 @@ def arm_body(lines, i, col=0):
         if opens:
             started = True
         if started and depth <= 0:
-            break
-        if not started and k > i:
-            # no `begin`: a single-statement arm, already captured
             break
     return out
 
@@ -332,12 +400,76 @@ _GOOD = chr(10).join([
     "          if (guard_rsp_i.ok) st_q <= S_FILL;",
     "        end",
 ])
+# THE NEGATIVE CONTROL THE TOOL DID NOT HAVE, and the gap is exactly the one a
+# self-test is for: _GOOD above covers the correct two-state shape only in its
+# BRACED form, so the arm walker's inability to bound a BRACELESS arm was never
+# measured. zhao_terrain_pageio writes it braceless in all four of its request
+# states, and the gate reported all four as defects on 2026-09-23.
+#
+# Note the second arm must follow immediately, with no blank line: that
+# adjacency IS the test. The walker has to stop at the `;` rather than run on
+# into `S_VERD` and read a neighbour's `.ok`.
+_GOOD_BRACELESS = chr(10).join([
+    "        S_REQ:  if (guard_rsp_i.ready) st_q <= S_VERD;",
+    "        S_VERD: begin",
+    "          if (guard_rsp_i.violation) begin",
+    "            denied_o <= denied_o + 32'd1;",
+    "          end else if (guard_rsp_i.ok) begin",
+    "            st_q <= S_FILL;",
+    "          end",
+    "        end",
+])
+# And the same arm wrapped across two lines, because a braceless arm is bounded
+# by its `;`, not by its line.
+_GOOD_BRACELESS_WRAPPED = chr(10).join([
+    "        S_REQ:",
+    "          if (guard_rsp_i.ready)",
+    "            st_q <= S_VERD;",
+    "        S_VERD: begin",
+    "          if (guard_rsp_i.ok) st_q <= S_FILL;",
+    "        end",
+])
+# THE TWO POSITIVE CONTROLS FOR THE NARROWED WALKER, and they are the whole
+# reason the repair above is allowed to ship.
+#
+# Bounding a braceless arm makes the walk read FEWER lines, and reading fewer
+# lines is precisely how a detector goes quiet. A fix for a false positive that
+# is not paired with a demonstration that the true positive still fires is the
+# broken-instrument law being committed on purpose: the gate would go green,
+# the four pageio reds would vanish, and nobody would be able to tell that
+# outcome apart from the gate having been switched off.
+#
+# So: the SAME braceless shape, written with the defect in it, must still be
+# caught -- on one line, and wrapped across two.
+_BAD_BRACELESS = chr(10).join([
+    "        S_REQ:  if (guard_rsp_i.ready) if (guard_rsp_i.ok) st_q <= S_FILL; else st_q <= S_IDLE;",
+    "        S_VERD: begin",
+    "          st_q <= S_IDLE;",
+    "        end",
+])
+_BAD_BRACELESS_WRAPPED = chr(10).join([
+    "        S_REQ:",
+    "          if (guard_rsp_i.ready)",
+    "            if (guard_rsp_i.ok) st_q <= S_FILL;",
+    "        S_VERD: begin",
+    "          st_q <= S_IDLE;",
+    "        end",
+])
 
 
 def _selftest():
     import tempfile
     import os
-    for text, want in ((_BAD, True), (_BAD_ELSE, True), (_GOOD, False)):
+    cases = (
+        ("one-cycle", _BAD, True),
+        ("one-cycle, leading `end`", _BAD_ELSE, True),
+        ("two-cycle, braced", _GOOD, False),
+        ("two-cycle, braceless", _GOOD_BRACELESS, False),
+        ("two-cycle, braceless wrapped", _GOOD_BRACELESS_WRAPPED, False),
+        ("one-cycle, braceless", _BAD_BRACELESS, True),
+        ("one-cycle, braceless wrapped", _BAD_BRACELESS_WRAPPED, True),
+    )
+    for label, text, want in cases:
         fd, name = tempfile.mkstemp(suffix=".sv")
         os.close(fd)
         io.open(name, "w", encoding="utf-8", newline=chr(10)).write(text)
@@ -346,8 +478,10 @@ def _selftest():
         if got != want:
             raise SystemExit(
                 "check_guard_verdict SELF-TEST FAILED: the %s example was %s. "
-                "The detector is broken and would report clean on real files."
-                % ("one-cycle" if want else "two-cycle", "missed" if want else "flagged"))
+                "The detector is broken and would %s on real files."
+                % (label,
+                   "missed" if want else "flagged",
+                   "report clean" if want else "report defects that are not there"))
 
 
 def discover():
