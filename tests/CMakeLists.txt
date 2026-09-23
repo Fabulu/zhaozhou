@@ -16640,6 +16640,31 @@ verilate(test_field_flow_adapter_directed
 add_test(NAME field_flow_adapter_directed COMMAND test_field_flow_adapter_directed)
 set_tests_properties(field_flow_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# --------------------------------------------------------------------------
+# FIELD.SEQ.EARTH's STREAM ADAPTER -- the terrain height lane.
+# zhao_console_core entry I34 build item (c), owner directive section 20.8.
+# Driven STANDALONE with the field engine PLAYED, so a case can hand it an
+# exact out-lane and check the answer word for word. Every one of its nine
+# counters is FIRED here by legal stimulus, including both arms of the lane
+# shadow guard -- so no committed mutant is owed (R95).
+# --------------------------------------------------------------------------
+add_executable(test_field_earth_adapter_directed field/field_earth_adapter_directed.cpp)
+target_link_libraries(test_field_earth_adapter_directed PRIVATE zhao_harness)
+verilate(test_field_earth_adapter_directed
+  PREFIX Vzhao_field_earth_adapter
+  TOP_MODULE zhao_field_earth_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_earth_adapter.sv)
+add_test(NAME field_earth_adapter_directed COMMAND test_field_earth_adapter_directed)
+set_tests_properties(field_earth_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_field_earth_adapter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_earth_adapter
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_earth_adapter.sv)
+set_tests_properties(lint_zhao_field_earth_adapter PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_zhao_field_flow_adapter
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_field_flow_adapter
