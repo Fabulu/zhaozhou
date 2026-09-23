@@ -1341,3 +1341,53 @@ superseding R109 adopts `zhao_forge_cliff_ram` (**976 ALM fitted**) over
 disconnected, so **−1 on the register and the largest single ALM lever in the
 tree at the same time**. It is **not** a saving against the running fit: neither
 rival is in its closure.
+
+### 2026-09-23 continued — both lanes landed, four instruments repaired, two relaunched
+
+| | |
+|---|---|
+| **ARENAWIRE** | I53–I56: **four HELD**, and I56 shown not to be a tie-off at all. Register **14 → 14, an honest 14.** Found the arena's own bursts **already misaligned on the merged path** and repaired them under two knobs. |
+| **EARTHADAPT** | `zhao_field_earth_adapter` built and composed; **the field EVALUATES for the first time.** I34 narrowed to a **consumer-side** blocker. Register **14 → 14.** |
+| **relaunched** | **NORMALPYR** (R243 D-NORMALS-A) and **BURSTTRUTH** (R243 D-SDRAM-A). |
+
+**Both lanes refused to close entries they could have closed, and both were
+right.** ARENAWIRE: wiring I53 *"gives correct simulation and wrong silicon."*
+EARTHADAPT on velocity: it now has a producer and still no VRAM writer, so
+composing it would *"spend a sweep, a reducer and an interlock and discard
+545 KiB/frame"* — the same refusal TERRACOMPOSE made for `normalmap`. **The
+register did not move and the console got better.**
+
+**I54's entry text was WRONG IN THE FLATTERING DIRECTION** — it described a
+binner chunk as 14 × u32 when it is 4 × 7-bit refs, and the binner's slot
+indexes a **post-clip** store while the arena's ids are **pre-clip**. Corrected
+in place. That is the twelfth blocker to die or change shape on first contact.
+
+**FOUR INSTRUMENTS REPAIRED, and three were reading LOW:**
+
+* **`check_guard_verdict`** — arm walker could not bound a braceless case arm and
+  read the *neighbour's* `.ok`. Four false findings in `zhao_terrain_pageio`.
+  **RC 0 across 30 clients now**, with two fired positive controls.
+* **`check_v3_banks`** — **dark for nine days** (rc=2 CANNOT PARSE on a
+  three-line `localparam`), self-test included. Now parses multi-line params,
+  ternaries and package constants; **registered as a ctest** so it cannot go
+  unrun again. Its four findings triaged: **two are declaration gaps, one is
+  real** (`material_m` has two read addresses and cannot be one M10K).
+* **`check_localparam_comments`** — read one line at a time. **49 multi-line
+  declarations invisible, 7 of them carrying an unchecked claim**, and every
+  constant derived from them silently unevaluable too.
+* **`check_git_autocrlf_guard`** — **9 of 15 findings were prose**, and it was
+  blind to `run_shell_fit.ps1`'s own dirty-tree gate because one token after
+  `-C` is not an expression. All seven real sites guarded; **RC 0**.
+
+**The counter-id shift is repaired.** 50 names had been inserted inside an
+append-only list, so `ZHAO_CNT_CMD_DMA_COMMANDS = 198` was reading catalog index
+**244 — exactly the 46 insertions before it.** Moved to the end with their
+comments; **the locked prefix is exact again** and survived both merges. The
+retired `post_gather_vram_bytes_by_client` is back as a **tombstone**: retiring a
+counter and freeing its id are different acts and only the first was intended.
+
+**A NEW COSTUME FOR AN OLD TRAP, recorded because I fell into it today:**
+`python $g >/dev/null 2>&1; echo "$(basename $g) RC=$?"` reports **`basename`'s**
+exit code. A command substitution between the command and `$?` is the same
+failure as reading a pipeline's status, and it told me four gates were green
+when one was red.
