@@ -696,13 +696,18 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_rdshare_err_long_o;
   logic [31:0]             terr_rdshare_err_unowned_o;
 
-  // I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 list intake's eight
-  // ports LEFT the core's edge -- `zhao_terrain_fieldlist` drives them from
-  // CMD.EXEC's TerrainField arm inside the module. Only the HEIGHT return lane
-  // is still a boundary, which is the half directive 20.8 forbids faking.
-  logic                    terr_pt_fld_valid_i;
-  logic                    terr_pt_fld_ready_o;
-  logic signed [31:0]      terr_pt_fld_height_i;
+  // I34, NARROWED AGAIN 2026-09-23 (EARTHADAPT): the HEIGHT RETURN LANE's
+  // three ports have LEFT the core's edge too. `zhao_field_earth_adapter`
+  // drives them inside the module from the one field engine, so this bench no
+  // longer holds `fld_valid_i` low -- there is nothing here to hold.
+  //
+  // WHAT THIS BENCH THEREFORE NO LONGER PROVES, said rather than left implicit:
+  // the old `terr_pt_fld_valid_i = '0` was a positive statement that the smoke
+  // ran section 3.4 with an EMPTY program list. It still does -- no smoke form
+  // issues a TerrainField, so `fields_active_o` stays 0 and the adapter is
+  // never asked for a lane -- but that is now a property of the STIMULUS and
+  // not of a wire this file drives. `fld_earth_records_o` reading 0 is the
+  // assertion that says so, and it is checked below.
   logic                    terr_pt_fld_add_accept_o;
   logic                    terr_pt_fld_add_reject_o;
   logic                    terr_pt_fld_covers_o;
@@ -717,6 +722,17 @@ module tb_zhao_console_core_smoke
   logic [4:0]              terr_fl_records_o;
   logic                    terr_fl_sealed_o;
   logic                    terr_fl_idle_o;
+  // FIELD.EARTH_ADAPTER's evidence (EARTHADAPT, 2026-09-23).
+  logic [31:0]             fld_earth_records_o;
+  logic [31:0]             fld_earth_tail_rejected_o;
+  logic [31:0]             fld_earth_runs_o;
+  logic [31:0]             fld_earth_skipped_uncovered_o;
+  logic [31:0]             fld_earth_not_begun_o;
+  logic [31:0]             fld_earth_noprog_o;
+  logic [31:0]             fld_earth_faults_o;
+  logic [31:0]             fld_earth_lane_desync_o;
+  logic [31:0]             fld_earth_stall_cycles_o;
+  logic                    fld_earth_idle_o;
   logic [31:0]             cmd_exec_tflds_o;
   logic [31:0]             cmd_exec_tfld_overflow_o;
   logic [31:0]             cmd_exec_tfld_src_truncated_o;
@@ -4048,12 +4064,11 @@ module tb_zhao_console_core_smoke
     // rest of composed item 13's counters stay at zero for the same reason
     // every other compose-engine counter does, and none of them is quoted as
     // evidence of anything.
-    // I34: the field lane. LOW, never a constant height -- a constant on
-    // `fld_height_i` is a field program that moves every vertex of every patch
-    // by the same amount, and section 3.4 would still produce a real composed
-    // height. Absent and faked are different things.
-    terr_pt_fld_valid_i = '0;
-    terr_pt_fld_height_i = '0;
+    // (I34's `terr_pt_fld_valid_i`/`_height_i` were driven low here until
+    // 2026-09-23. They are no longer this bench's to drive: the lane has a
+    // producer inside the core. The property they asserted -- section 3.4 with
+    // an empty program list -- is now asserted directly, on
+    // `fld_earth_records_o`, at the end of the run.)
     terr_job_valid_i = '0;
     terr_job_ox_i = '0;
     terr_job_oz_i = '0;
@@ -7856,6 +7871,41 @@ module tb_zhao_console_core_smoke
     // that silently stopped arriving FAIL rather than fall back to the note.
     if (cmd_commands_o == 32'd0)
       $fatal(1, "SMOKE: CMD.DECODER walked 0 records -- the bench's command packet no longer arrives, so DEBUG.TRACE's equality above is two zeros agreeing");
+
+    // ---- FIELD.EARTH_ADAPTER (EARTHADAPT, 2026-09-23) --------------------
+    // WHAT THIS SMOKE CAN AND CANNOT SAY ABOUT THE EARTH SEAM, stated so the
+    // green is not quoted for more than it covers.
+    //
+    // It CAN say the adapter is inert on a console that issues no
+    // TerrainField: the bench's packet is BeginFrame / PublishResource /
+    // EndFrame, so `zhao_cmd_exec` stages no TerrainField record, the frame
+    // list seals empty, `fields_active_o` is 0 and the consumer never raises
+    // its field lane. `fld_earth_records_o == 0` is that, asserted rather than
+    // assumed -- and it replaces the `terr_pt_fld_valid_i = '0` this bench used
+    // to drive, which said the same thing about a wire instead of about the
+    // machine.
+    //
+    // It CANNOT say the adapter WORKS. The console smoke fails every terrain
+    // page's CRC, so terrain's composed door never opens and no vertex ever
+    // reaches `zhao_terrain_patch`'s compose lane. Every counter past that door
+    // is unreachable from here BY CONSTRUCTION, and a zero on one of them is
+    // evidence about the stimulus and not about the block. The evidence that
+    // they discriminate is `tests/field/field_earth_adapter_directed.cpp`,
+    // which fires each of them on purpose (R95).
+    if (fld_earth_records_o != 32'd0)
+      $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER banked %0d TerrainField uniform record(s) -- this bench issues none, so either the packet changed or the two-consumer join is taking records the field list is not",
+             fld_earth_records_o);
+    // The shadow guard, which IS reachable here and is not two zeros agreeing.
+    // `lane_desync_o` differences `vtx_live` against the consumer's own
+    // `fld_ready_o` on EVERY clock of the run, not only inside a patch -- so an
+    // adapter whose vertex state were inverted, or whose `ans_ready_i` were
+    // wired to the wrong block's ready, would move it on the first cycle after
+    // reset with no terrain traffic whatever. That is what makes this check
+    // worth its line in a smoke that cannot open terrain's door.
+    if (fld_earth_lane_desync_o != 32'd0)
+      $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER lane shadow desynchronised %0d time(s) against TERRAIN.PATCH's own busy, with no terrain traffic at all",
+             fld_earth_lane_desync_o);
+
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
 `endif  // ZHAO_SMOKE_BAD_VERTEX -- the clean verdict above is compiled OUT under the R31 control

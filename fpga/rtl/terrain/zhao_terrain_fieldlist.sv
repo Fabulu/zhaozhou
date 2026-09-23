@@ -173,6 +173,26 @@ module zhao_terrain_fieldlist #(
     output var logic signed [31:0] add_z1_o,
     output var logic        [31:0] add_hash_o,
     output var logic        [15:0] add_cmd_o,
+    // ADDED 2026-09-23 (EARTHADAPT), and it is the SAME SWEEP's other half.
+    // This block already walks FIELD.LOADER's publication objects to turn a
+    // handle into a canonical program hash, and it already knows WHICH object
+    // matched -- it simply threw the index away. `zhao_field_earth_adapter`
+    // needs exactly that index, because a BIND reply's `fh2_resp_slot_o` IS
+    // the object index and is what an adapter puts on `req_slot_o` (the same
+    // value `zhao_geom_warp` resolves its own `d_slot_i` from).
+    //
+    // IT IS NOT A SECOND SWEEPER, and that is the point of carrying it here.
+    // `pub_sel_o` has one master in this console; a consumer that resolved its
+    // own slot would need a second, which is the two-client share entry I34
+    // lists as build item (d) and which nobody has had to build.
+    //
+    // `add_resident_o` is the RESOLUTION, not the residency of the program in
+    // the field fabric. It says a ready publication object claims this handle.
+    // Whether that object's header is loaded is `zhao_field_host_v2`'s own
+    // `!hdr_loaded[slot]` test, and the two are deliberately separate: this
+    // block can see the binding and cannot see the fabric.
+    output var logic        [OBJW-1:0] add_obj_o,
+    output var logic                   add_resident_o,
 
     // ---- evidence ----------------------------------------------------------
     // Every one of these is asserted silent and then FIRED by
@@ -217,6 +237,8 @@ module zhao_terrain_fieldlist #(
   logic signed [31:0] e_z1  [0:MAX_FIELDS-1];
   logic        [31:0] e_hash[0:MAX_FIELDS-1];
   logic        [15:0] e_cmd [0:MAX_FIELDS-1];
+  logic [OBJW-1:0]    e_obj [0:MAX_FIELDS-1];
+  logic               e_res [0:MAX_FIELDS-1];
 
   logic [IDXW-1:0] n_rec;     // entries in the current list, 0..MAX_FIELDS
   logic            list_open; // records are still arriving for this commit
@@ -230,6 +252,7 @@ module zhao_terrain_fieldlist #(
   logic [IDXW-1:0] sw_cnt;      // objects examined so far
   logic            sw_hit;
   logic [31:0]     sw_hash;
+  logic [OBJW-1:0] sw_obj;      // the object index the hit was found at
   logic            sw_reject;   // the held record is beyond MAX_FIELDS
   // THE HELD RECORD'S `cmd_last_i`, AND IT IS A REGISTER FOR A MEASURED
   // REASON. The first version of this block cleared `list_open` at the TAKE.
@@ -274,6 +297,8 @@ module zhao_terrain_fieldlist #(
   assign add_z1_o    = e_z1  [rp_a];
   assign add_hash_o  = e_hash[rp_a];
   assign add_cmd_o   = e_cmd [rp_a];
+  assign add_obj_o   = e_obj [rp_a];
+  assign add_resident_o = e_res[rp_a];
 
   // The object the sweep is currently looking at agrees with the record.
   wire sw_match = pub_ready_i[sw_sel] && (pub_handle_i == h_handle);
@@ -281,6 +306,11 @@ module zhao_terrain_fieldlist #(
   // object, else nothing resolved.
   wire [31:0] sw_resolved   = sw_hit ? sw_hash : (sw_match ? pub_prog_hash_i : 32'd0);
   wire        sw_unresolved = !sw_hit && !sw_match;
+  // The OBJECT the resolved hash came from, by the same three-way rule and in
+  // the same expression shape, so the two can never disagree about which
+  // object answered. An unresolved record stores object 0 with `e_res` low:
+  // the index is meaningless and the bit is what says so.
+  wire [OBJW-1:0] sw_resolved_obj = sw_hit ? sw_obj : sw_sel;
 
   // A record arriving on a SEALED list opens a new one: the previous frame's
   // list is finished with, and section 9.1's bound is per list.
@@ -305,6 +335,8 @@ module zhao_terrain_fieldlist #(
         e_z1[i]   <= 32'sd0;
         e_hash[i] <= 32'd0;
         e_cmd[i]  <= 16'd0;
+        e_obj[i]  <= {OBJW{1'b0}};
+        e_res[i]  <= 1'b0;
       end
       n_rec              <= 5'd0;
       list_open          <= 1'b0;
@@ -313,6 +345,7 @@ module zhao_terrain_fieldlist #(
       sw_cnt             <= 5'd0;
       sw_hit             <= 1'b0;
       sw_hash            <= 32'd0;
+      sw_obj             <= {OBJW{1'b0}};
       sw_reject          <= 1'b0;
       sw_last            <= 1'b0;
       h_x0               <= 32'sd0;
@@ -362,6 +395,7 @@ module zhao_terrain_fieldlist #(
             sw_cnt  <= 5'd0;
             sw_hit  <= 1'b0;
             sw_hash <= 32'd0;
+            sw_obj  <= {OBJW{1'b0}};
             in_st   <= S_SWEEP;
           end
         end
@@ -370,6 +404,7 @@ module zhao_terrain_fieldlist #(
           if (!sw_hit && sw_match) begin
             sw_hit  <= 1'b1;
             sw_hash <= pub_prog_hash_i;
+            sw_obj  <= sw_sel;
           end
           if (({27'd0, sw_cnt} + 32'd1) >= OBJECTS) begin
             // The sweep is over. Commit or reject.
@@ -382,6 +417,8 @@ module zhao_terrain_fieldlist #(
               e_z1  [wr_a]     <= h_z1;
               e_hash[wr_a]     <= sw_resolved;
               e_cmd [wr_a]     <= h_cmd;
+              e_obj [wr_a]     <= sw_resolved_obj;
+              e_res [wr_a]     <= !sw_unresolved;
               n_rec            <= n_rec + 5'd1;
               records_sealed_o <= records_sealed_o + 32'd1;
               if (sw_unresolved) unresolved_o <= unresolved_o + 32'd1;

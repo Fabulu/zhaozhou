@@ -2349,6 +2349,7 @@ targets:
       - fpga/rtl/field/zhao_field_host_v2.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
+      - fpga/rtl/field/zhao_field_earth_adapter.sv
       # GEOM.WARP. In THIS list because zhao_prod_top is a census top that
       # instantiates it. Being in the manifest is not enough on its own --
       # zhao_geom_assemble and zhao_geom_depthquant were added to the manifest
@@ -3457,6 +3458,7 @@ targets:
       - fpga/rtl/field/zhao_field_host_v2.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
+      - fpga/rtl/field/zhao_field_earth_adapter.sv
       - fpga/rtl/field/zhao_field_doorbell.sv
       - fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
       - fpga/rtl/field/zhao_field_loader.sv

@@ -8286,23 +8286,29 @@ module zhao_console_core
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
-  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
-  //      this module by `zhao_terrain_fieldlist`, whose own intake is
-  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
-  //      footprint and a program hash RESOLVED against FIELD.LOADER's
-  //      publication port rather than forwarded as a handle.
+  // ---- I34, NARROWED AGAIN 2026-09-23 (EARTHADAPT): the HEIGHT RETURN LANE
+  //      has a PRODUCER and its three ports have LEFT this edge --
+  //      `terr_pt_fld_valid_i`, `_ready_o` and `_height_i`. They are driven
+  //      inside this module by `zhao_field_earth_adapter`
+  //      (`u_field_earth_adapter`), client 3 of the one `u_field_host`, from
+  //      the vertex the consumer hands over and the uniforms `zhao_cmd_exec`
+  //      has been publishing to nobody since 2026-09-21.
   //
-  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
-  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
-  //      declaring the other three channels present because they have spare bus
-  //      bits." The Earth record declares four channels and this consumer can
-  //      receive one, so the lane stays a boundary until
-  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
-  //      3.4 with an empty program list -- an absent input, not a faked one.
-  input  logic                    terr_pt_fld_valid_i,
-  output logic                    terr_pt_fld_ready_o,
-  input  logic signed [31:0]      terr_pt_fld_height_i,
+  //      THE ENTRY DOES NOT CLOSE ON THAT, AND IT MAY NOT. Directive 20.8:
+  //      "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while declaring the other
+  //      three channels present because they have spare bus bits." The Earth
+  //      record declares FOUR channels, the adapter now PRODUCES all four
+  //      (`height_o`, `velocity_o`, `material_o`, `nav_cost_o`, from one
+  //      evaluation, which is 20.8's own instruction), and
+  //      `zhao_terrain_patch` still has an input for exactly one of them. The
+  //      gap has moved from "nothing evaluates the program" to "the consumer
+  //      has three missing ports", which is directive 13.2's
+  //      `zhao_terrain_patch_v2` and is a CONSUMER-side item. See entry I34.
+  //
+  //      The three adapter outputs with no consumer are left OPEN at that
+  //      instantiation and declared in the INCOMPLETE block, which is the same
+  //      shape -- and for the same stated reason -- that `zhao_cmd_exec`'s
+  //      three uniform outputs carried until this commit.
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
@@ -8318,6 +8324,32 @@ module zhao_console_core
   output logic [4:0]              terr_fl_records_o,
   output logic                    terr_fl_sealed_o,
   output logic                    terr_fl_idle_o,
+  // FIELD.EARTH_ADAPTER's evidence, promoted 2026-09-23 (EARTHADAPT). Every
+  // one of these is FIRED by `tests/field/field_earth_adapter_directed.cpp`
+  // before it is quoted (R95); a counter whose zero nobody has seen move is a
+  // claim and not a measurement.
+  //
+  // TWO OF THEM ARE THE ONES TO READ FIRST.
+  //   `fld_earth_lane_desync_o` is the shadow guard. Its two operands are the
+  //     adapter's own per-vertex state and `zhao_terrain_patch`'s `busy`, and
+  //     nothing loads both -- which is the question CLAUDE.md's metadata-swap
+  //     chapter says to ask of a checker before quoting its silence.
+  //   `fld_earth_stall_cycles_o` is THE COST. A scalar field front answers one
+  //     vertex-lane per engine run, tens of clocks each, against a consumer
+  //     that would take one per clock. This number is what decides whether
+  //     directive 13.2's field-major `zhao_terrain_patch_v2` has to be built
+  //     before terrain fields can run at frame rate, and it is exported rather
+  //     than kept private for exactly that reason.
+  output logic [31:0]             fld_earth_records_o,
+  output logic [31:0]             fld_earth_tail_rejected_o,
+  output logic [31:0]             fld_earth_runs_o,
+  output logic [31:0]             fld_earth_skipped_uncovered_o,
+  output logic [31:0]             fld_earth_not_begun_o,
+  output logic [31:0]             fld_earth_noprog_o,
+  output logic [31:0]             fld_earth_faults_o,
+  output logic [31:0]             fld_earth_lane_desync_o,
+  output logic [31:0]             fld_earth_stall_cycles_o,
+  output logic                    fld_earth_idle_o,
   // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
   // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
   // queue could never drain and `tfld_overflow_o` could not be read. A refusal
@@ -19535,15 +19567,23 @@ module zhao_console_core
   // pin, and it is not smuggled in here.
   // FIELDARM 2026-09-22: CMD.EXEC's TerrainField 0x0200 carriers. THE UNIFORMS
   // ARE DELIBERATELY ABSENT FROM THIS LIST. `tfld_start_tick_o`,
-  // `tfld_duration_o` and `tfld_params_o` are the EARTH stream adapter's
-  // descriptor (entry I34 build item (c)) and that block does not exist, so
-  // they stay unconnected outputs rather than becoming a stored word nothing
-  // reads or a table with an address port nothing drives. An honestly
-  // unconnected output on the producer is the smallest of the three.
+  // `tfld_duration_o` and `tfld_params_o` were the EARTH stream adapter's
+  // descriptor and that block did not exist.  IT DOES NOW
+  // (`zhao_field_earth_adapter`, 2026-09-23), so all three are carried.
+  //
+  // `cmd_tfld_ready_w` IS A JOIN OF TWO CONSUMERS AND NOT ONE BLOCK'S PORT.
+  // The record's FOOTPRINT goes to `u_terrain_fieldlist` and its UNIFORMS go
+  // to `u_field_earth_adapter`, and the two must take the same record in the
+  // same cycle or their entry indices are two numbers instead of one. Neither
+  // block's `ready` depends on the other's `valid` (the field list's is
+  // `S_TAKE && !rp_run`, the adapter's is `I_TAKE`), so the AND is a join and
+  // not a combinational loop. See the assignment beside `u_terrain_fieldlist`.
   wire        cmd_tfld_valid_w, cmd_tfld_ready_w, cmd_tfld_last_w;
   wire signed [31:0] cmd_tfld_x0_w, cmd_tfld_z0_w, cmd_tfld_x1_w, cmd_tfld_z1_w;
   wire [31:0] cmd_tfld_handle_w;
   wire [15:0] cmd_tfld_cmd_w;
+  wire [31:0] cmd_tfld_start_tick_w, cmd_tfld_duration_w;
+  wire [255:0] cmd_tfld_params_w;
 
   // R18/R33: CMD.EXEC's token outputs, declared ahead of both instances.
   logic        cmd_tok_budget_valid, cmd_tok_vreq_valid, cmd_tok_vreq_view;
@@ -19787,13 +19827,15 @@ module zhao_console_core
     .tfld_z1_o        (cmd_tfld_z1_w),
     .tfld_handle_o    (cmd_tfld_handle_w),
     .tfld_cmd_o       (cmd_tfld_cmd_w),
-    // THE UNIFORMS ARE LEFT UNCONNECTED, ON PURPOSE AND WITH AN OWNER. Their
-    // only reader is the EARTH stream adapter (I34 build item (c)); directive
-    // 20.8 forbids declaring a channel present because its bits exist, and the
-    // same sentence forbids inventing a consumer for one.
-    .tfld_start_tick_o(),
-    .tfld_duration_o  (),
-    .tfld_params_o    (),
+    // THE UNIFORMS HAVE THEIR READER AS OF 2026-09-23 (EARTHADAPT). It is
+    // `u_field_earth_adapter`, which is what the note that stood here named:
+    // "their only reader is the EARTH stream adapter (I34 build item (c))".
+    // They reach it on the SAME handshake these three ride, joined -- see
+    // `cmd_tfld_ready_w` below -- so a record's footprint and its uniforms
+    // cannot land in two different entries of two different lists.
+    .tfld_start_tick_o(cmd_tfld_start_tick_w),
+    .tfld_duration_o  (cmd_tfld_duration_w),
+    .tfld_params_o    (cmd_tfld_params_w),
     .tfld_last_o      (cmd_tfld_last_w),
     .tflds_issued_o        (cmd_exec_tflds_o),
     .tfld_overflow_o       (cmd_exec_tfld_overflow_o),
@@ -20424,6 +20466,37 @@ module zhao_console_core
   wire [31:0] tfl_add_hash;
   wire [15:0] tfl_add_cmd;
   wire [2:0]  tfl_pub_sel;
+  wire [2:0]  tfl_add_obj;
+  wire        tfl_add_resident;
+  wire        tfl_cmd_ready;
+
+  // ---- FIELD.EARTH_ADAPTER's wires, declared ahead of the join below -------
+  wire         efa_rec_ready;
+  wire         efa_ans_valid, efa_ans_ready;
+  wire signed [31:0] efa_height;
+  wire signed [31:0] efa_velocity, efa_nav_cost;
+  wire [31:0]  efa_material;
+  wire         efa_ans_field;
+  wire         efa_req_valid, efa_req_ready, efa_req_noprog;
+  wire [2:0]   efa_req_slot;
+  wire [415:0] efa_req_in;
+  wire         efa_resp_valid, efa_resp_ready;
+
+  // THE TWO-CONSUMER JOIN. `zhao_cmd_exec` offers ONE TerrainField record
+  // carrying a footprint, a handle and three uniforms; the footprint half is
+  // this console's section 9.1 list and the uniform half is the Earth
+  // adapter's descriptor bank. Both must take it on the same clock, because
+  // each indexes its own array by its own running count and the two counts are
+  // only the same number while the two takes are the same event.
+  //
+  // THIS IS THE SHAPE ENTRY I34 SPENT A YEAR REFUSING, BUILT PROPERLY. The
+  // refused version was `cmd_exec` joined DIRECTLY to a per-patch list, whose
+  // fault is a CADENCE mismatch -- one publication per frame against one clear
+  // per patch job. This join is between two blocks with the SAME cadence, both
+  // of which seal per frame and replay or read per patch, so there is no
+  // mismatch to hide. The check that it stays true is
+  // `zhao_field_earth_adapter`'s `lane_desync_o`, not this comment.
+  assign cmd_tfld_ready_w = tfl_cmd_ready && efa_rec_ready;
 
   zhao_terrain_fieldlist #(
     .MAX_FIELDS(16),   // terrain_rules section 9.1, the consumer's own bound
@@ -20437,7 +20510,7 @@ module zhao_console_core
     // its thirteen ports was connected -- including `tfld_ready_i`, so the
     // staged records had no way out at all.
     .cmd_valid_i (cmd_tfld_valid_w),
-    .cmd_ready_o (cmd_tfld_ready_w),
+    .cmd_ready_o (tfl_cmd_ready),
     .cmd_x0_i    (cmd_tfld_x0_w),
     .cmd_z0_i    (cmd_tfld_z0_w),
     .cmd_x1_i    (cmd_tfld_x1_w),
@@ -20468,6 +20541,12 @@ module zhao_console_core
     .add_z1_o   (tfl_add_z1),
     .add_hash_o (tfl_add_hash),
     .add_cmd_o  (tfl_add_cmd),
+
+    // NEW 2026-09-23 (EARTHADAPT): the same publication sweep's other half.
+    // The object index the handle resolved AT is what `zhao_field_host`
+    // executes from, and this block already knew it.
+    .add_obj_o     (tfl_add_obj),
+    .add_resident_o(tfl_add_resident),
 
     .records_sealed_o  (terr_fl_records_sealed_o),
     .tail_rejected_o   (terr_fl_tail_rejected_o),
@@ -20533,10 +20612,24 @@ module zhao_console_core
     .vj_i       (tps_v_vj),
     .src_id_i   (tps_v_src_id[15:0]),
 
-    // I34: the field-height lane.  NOT tied to a constant height -- see (d).
-    .fld_valid_i (terr_pt_fld_valid_i),
-    .fld_ready_o (terr_pt_fld_ready_o),
-    .fld_height_i(terr_pt_fld_height_i),
+    // I34, NARROWED 2026-09-23 (EARTHADAPT): the field-height lane has a
+    // PRODUCER. `u_field_earth_adapter` answers one word per accepted list
+    // entry per vertex, in list order, from a real Earth evaluation on the one
+    // field engine -- or from the oracle's own `continue`, expressed as the
+    // additive zero this block's fx_add chain treats identically, when the
+    // section 9.1 test misses, the field has not begun, or the program is not
+    // resident. It is still NOT a constant: with no TerrainField issued
+    // `fields_active_o` is 0, this lane is never raised, and section 3.4
+    // collapses to `compose_top` exactly as before.
+    //
+    // `fld_covers_o` now has TWO readers and they want the same thing: the
+    // section 9.1 answer decided ONCE, here, by the block that owns the list
+    // (its chosen law 2). The adapter uses it to skip the engine run for a
+    // lane that misses -- which is the whole of section 9.1's value on this
+    // seam -- and never to re-decide it.
+    .fld_valid_i (efa_ans_valid),
+    .fld_ready_o (efa_ans_ready),
+    .fld_height_i(efa_height),
     .fld_covers_o(terr_pt_fld_covers_o),
 
     // REAL: TERRAIN.COMPCACHE's fill port, port-for-port, with the cache's own
@@ -20553,6 +20646,128 @@ module zhao_console_core
 
     .terrain_samples_evaluated_o(terr_pt_samples_o),
     .idle_o                     (terr_pt_idle_o)
+  );
+
+  // ==========================================================================
+  // FIELD.EARTH_ADAPTER -- entry I34 build item (c), directive 20.8's Commit G
+  // ==========================================================================
+  // CLIENT 3 of the one `u_field_host`. It sits HERE, beside its consumer,
+  // rather than beside the engine, for the same reason
+  // `u_field_warp_adapter` sits beside `u_geom_warp`: the hard part of an
+  // adapter is the seam it serves, not the port it borrows.
+  //
+  // WHAT IT MADE POSSIBLE, said plainly, because "the register moved" is not a
+  // reason to land anything. Before this instance, a cartridge could issue
+  // TerrainField 0x0200, `zhao_cmd_exec` would lower it, `u_terrain_fieldlist`
+  // would seal and replay it, `u_terrain_patch` would accept it into its
+  // section 9.1 list and count it in `fields_active_o` -- and THE GROUND WOULD
+  // NOT MOVE, because nothing in this console evaluated the program. The whole
+  // TerrainField path was a command that reached a list and stopped. It now
+  // reaches an evaluation and a height.
+  //
+  // THREE JOINS, AND EACH ONE IS A CADENCE STATEMENT RATHER THAN A NAME MATCH:
+  //
+  //  * `rec_*` is CMD.EXEC's record, taken on the SAME CLOCK as
+  //    `u_terrain_fieldlist` takes it (`cmd_tfld_ready_w` is the AND). One
+  //    record, two halves, one index.
+  //  * `add_fire_i`/`add_obj_i`/`add_resident_i` is the field list's per-patch
+  //    REPLAY, watched rather than consumed -- so the entry this module binds a
+  //    program slot to is the slot the consumer just filled, on the cycle it
+  //    filled it. `patch_open_i` is the consumer's own `list_clear_i`, so the
+  //    clear and the rebind cannot disagree about which patch they belong to.
+  //  * `vtx_fire_i` is the consumer's own vertex ACCEPT, which is where
+  //    `zhao_terrain_patch` latches `held_wx`/`held_wz`. This module latches
+  //    the same two wires on the same event, so the point the engine evaluates
+  //    and the point the accumulator credits are the same point by
+  //    construction. `tpc_wx`/`tpc_wz` are the same wires that block is given.
+  //
+  // THE VERTEX LANE IS ALREADY HELD ACROSS THE REPLAY (`tfl_patch_stall`, the
+  // interlock FIELDARM built), so every `add_fire` for a patch lands before its
+  // first `vtx_fire`. This module DEPENDS on that rather than restating it --
+  // and `lane_desync_o`'s second arm is what would say so if it ever stopped
+  // holding, by differencing the entries it watched against the consumer's own
+  // `fields_active_o`.
+  zhao_field_earth_adapter #(
+    .MAX_FIELDS(16),  // terrain_rules section 9.1, the same knob next door
+    .OBJW      (3),   // zhao_field_loader's OBJW
+    .SLOTW     (3),   // ... which IS zhao_field_host's program slot
+    .IN_LANES  (13),  // the HOST's arity; earth uses 12 (field-ir 7.1)
+    .OUT_LANES (7)    // the HOST's arity; earth uses 4
+  ) u_field_earth_adapter (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // REAL: the shell's frame boundary, the oracle's `frame_tick`. The same
+    // one PART.SPAWN's `tick_i` consumes, so `age` is measured against one
+    // clock in this console and not two.
+    .tick_i(core_tick_c),
+
+    // REAL: CMD.EXEC's three uniform outputs, which had no reader at all until
+    // this commit and whose header named this block by name.
+    .rec_valid_i     (cmd_tfld_valid_w),
+    .rec_ready_o     (efa_rec_ready),
+    .rec_start_tick_i(cmd_tfld_start_tick_w),
+    .rec_duration_i  (cmd_tfld_duration_w),
+    .rec_params_i    (cmd_tfld_params_w),
+    .rec_last_i      (cmd_tfld_last_w),
+
+    // REAL: the field list's per-patch replay, WATCHED. `add_fire_i` is the
+    // handshake itself, so this module cannot backpressure a lane it only
+    // observes -- which is correct: the consumer owns that flow.
+    .patch_open_i  (tce_job_take),
+    .add_fire_i    (tfl_add_valid && tfl_add_ready),
+    .add_obj_i     (tfl_add_obj),
+    .add_resident_i(tfl_add_resident),
+
+    // REAL: the consumer's own vertex accept and the two coordinates it
+    // latches on it.
+    .vtx_fire_i(tpt_vtx_valid && tpt_vtx_ready),
+    .vtx_wx_i  (tpc_wx),
+    .vtx_wz_i  (tpc_wz),
+    .lanes_i   (terr_pt_fields_active_o),
+
+    // REAL: section 9.1 decided ONCE, by the block that owns the list.
+    .lane_covers_i(terr_pt_fld_covers_o),
+
+    // REAL: client 3 of the one field engine.
+    .req_valid_o  (efa_req_valid),
+    .req_ready_i  (efa_req_ready),
+    .req_slot_o   (efa_req_slot),
+    .req_noprog_o (efa_req_noprog),
+    .req_in_o     (efa_req_in),
+    .resp_valid_i (efa_resp_valid),
+    .resp_ready_o (efa_resp_ready),
+    .resp_out_i   (fld_resp_out_c),
+    .resp_status_i(fld_resp_status_c),
+
+    // REAL: TERRAIN.PATCH's field-height lane, entry I34's remaining half.
+    .ans_valid_o(efa_ans_valid),
+    .ans_ready_i(efa_ans_ready),
+    .height_o   (efa_height),
+
+    // PRODUCED, NOT CONSUMED, AND DECLARED IN THE INCOMPLETE BLOCK (R159).
+    // These are out-lanes 1, 2 and 3 of the SAME evaluation whose out-lane 0
+    // the height takes, which is directive 20.8's instruction carried out on
+    // the producer's side. `zhao_terrain_patch` has an input for exactly one of
+    // the four, so the other three have nowhere in this console to go -- which
+    // is the CONSUMER-side gap S5 named and the reason entry I34 does not
+    // close. They are named wires rather than bare `()` so the next packet to
+    // build `zhao_terrain_patch_v2` finds them already declared.
+    .velocity_o (efa_velocity),
+    .material_o (efa_material),
+    .nav_cost_o (efa_nav_cost),
+    .ans_field_o(efa_ans_field),
+
+    .records_o           (fld_earth_records_o),
+    .tail_rejected_o     (fld_earth_tail_rejected_o),
+    .runs_o              (fld_earth_runs_o),
+    .skipped_uncovered_o (fld_earth_skipped_uncovered_o),
+    .not_begun_o         (fld_earth_not_begun_o),
+    .noprog_o            (fld_earth_noprog_o),
+    .faults_o            (fld_earth_faults_o),
+    .lane_desync_o       (fld_earth_lane_desync_o),
+    .stall_cycles_o      (fld_earth_stall_cycles_o),
+    .idle_o              (fld_earth_idle_o)
   );
 
   // ---- TERRAIN.COMPCACHE (the front) --------------------------------------
@@ -25020,7 +25235,7 @@ module zhao_console_core
     // thing worth inheriting: the sentence that stood here named the wrong
     // blocker, and a wrong blocker is worse than a stale fact -- everyone who
     // read it went looking for a block to build instead of a carrier to lay.
-    .CLIENTS  (3),
+    .CLIENTS  (4),
     // PROGS is one number wearing three hats: the directory's ENTRIES, the
     // executor's CONTEXT count and the front's slot space. The v3 uop store is
     // indexed by context, so a program IS a context.
@@ -25228,22 +25443,30 @@ module zhao_console_core
     .pc_evictions_o    (fld_pc_evictions_o),
     .pc_occupancy_o    (fld_pc_occupancy_o),
 
-    // ALL THREE CLIENTS ARE REAL AS OF 2026-09-22. Client 0 is the S-profile
+    // ALL FOUR CLIENTS ARE REAL AS OF 2026-09-23. Client 0 is the S-profile
     // stamp adapter below; client 1 is the F-profile FLOW adapter, which is
     // what entry I5 called "its own stream adapter" and what entry I42 said
     // would take the edge seam; client 2 is the W-profile WARP adapter,
-    // composed with `zhao_geom_warp` in the same act. Two live profiles was
-    // already what made `fld_contended_grants_o` reachable with legal
-    // stimulus; three makes the arbiter's contention reachable from the
-    // GEOMETRY clock domain's own traffic rather than only from the particle
-    // and surface paths.
-    .req_valid_i ({wfa_req_valid, pfa_req_valid, sfa_req_valid}),
-    .req_ready_o ({wfa_req_ready, pfa_req_ready, sfa_req_ready}),
-    .req_slot_i  ({wfa_req_slot, pfa_req_slot, sfa_req_slot}),
-    .req_noprog_i({wfa_req_noprog, pfa_req_noprog, sfa_req_noprog}),
-    .req_in_i    ({wfa_req_in, pfa_req_in, sfa_req_in}),
-    .resp_valid_o({wfa_resp_valid, pfa_resp_valid, sfa_resp_valid}),
-    .resp_ready_i({wfa_resp_ready, pfa_resp_ready, sfa_resp_ready}),
+    // composed with `zhao_geom_warp` in the same act; client 3 is the
+    // E-profile EARTH adapter, entry I34's build item (c). Two live profiles
+    // was already what made `fld_contended_grants_o` reachable with legal
+    // stimulus; three made the arbiter's contention reachable from the
+    // GEOMETRY clock domain's own traffic; the fourth is the first client on
+    // the TERRAIN path, so a terrain patch composing a field and a draw
+    // warping a vertex now contend for the one engine -- which is the
+    // contention this console's `FAB_GROUP_PTS=1` scalar front actually has to
+    // answer for, and `efa_stall_cycles_o` is where that answer is read.
+    //
+    // THE WIDENING AND THE COMPOSITION ARE ONE ACT, which is the rule the
+    // paragraph below spent two clients' worth of history establishing: a
+    // fourth client whose `req_valid_i` is a constant zero is a TIE-OFF.
+    .req_valid_i ({efa_req_valid, wfa_req_valid, pfa_req_valid, sfa_req_valid}),
+    .req_ready_o ({efa_req_ready, wfa_req_ready, pfa_req_ready, sfa_req_ready}),
+    .req_slot_i  ({efa_req_slot, wfa_req_slot, pfa_req_slot, sfa_req_slot}),
+    .req_noprog_i({efa_req_noprog, wfa_req_noprog, pfa_req_noprog, sfa_req_noprog}),
+    .req_in_i    ({efa_req_in, wfa_req_in, pfa_req_in, sfa_req_in}),
+    .resp_valid_o({efa_resp_valid, wfa_resp_valid, pfa_resp_valid, sfa_resp_valid}),
+    .resp_ready_i({efa_resp_ready, wfa_resp_ready, pfa_resp_ready, sfa_resp_ready}),
     .resp_out_o  (fld_resp_out_c),
     // FH05's other two thirds. THE CONSOLE DOES NOT FORWARD THESE, and that is
     // a decision rather than an omission.
