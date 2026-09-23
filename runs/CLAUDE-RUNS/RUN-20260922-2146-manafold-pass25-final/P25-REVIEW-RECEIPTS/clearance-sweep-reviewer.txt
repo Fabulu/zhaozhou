@@ -1,0 +1,12 @@
+mm=46 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 4.4 mm, on manafold-blown frame 130
+mm=56 rc=1 failB1legs=1 banktotal=? | nearest a drawn bolt comes to the band anywhere in the bank is -27.7 mm, on manafold-blown frame 122
+mm=66 rc=1 failB1legs=1 banktotal=? | nearest a drawn bolt comes to the band anywhere in the bank is -21.9 mm, on manafold-blown frame 120
+mm=70 rc=1 failB1legs=1 banktotal=? | nearest a drawn bolt comes to the band anywhere in the bank is -56.4 mm, on manafold-blown frame 142
+mm=76 rc=1 failB1legs=1 banktotal=? | nearest a drawn bolt comes to the band anywhere in the bank is -9.7 mm, on manafold-blown frame 128
+mm=86 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 45.8 mm, on manafold-channel frame 247
+mm=96 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 32.3 mm, on manafold-channel frame 247
+mm=106 rc=1 failB1legs=1 banktotal=? | nearest a drawn bolt comes to the band anywhere in the bank is -2.7 mm, on manafold-channel frame 247
+mm=116 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 81.5 mm, on manafold-trick frame 261
+mm=130 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 59.8 mm, on manafold-crackle frame 492
+mm=150 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 24.3 mm, on manafold-fall frame 92
+mm=170 rc=0 failB1legs=0 banktotal=0 | nearest a drawn bolt comes to the band anywhere in the bank is 43.6 mm, on manafold-hasty frame 119

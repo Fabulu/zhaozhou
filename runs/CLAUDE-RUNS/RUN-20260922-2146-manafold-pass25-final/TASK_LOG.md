@@ -164,3 +164,48 @@ to be the wrong lever. Report: **`P25-BACKBALL.md`** (supersedes
   evidence commit. Pushed to origin/manafold-pass25.
 - **NOT done, by instruction:** the 22-subject publication bank, the encode,
   the merge, the deploy. The coordinator sends the review/publish packet.
+
+---
+
+### 2026-09-23 - INDEPENDENT REVIEW: **PASS**
+
+Report: **`P25-REVIEW.md`**. Evidence: `P25-REVIEW-LOOKS/` (10 plates, my own
+renders), `P25-REVIEW-RECEIPTS/` (my gate logs, my CRC sets, findings as written).
+
+- **Built the tree myself** into `.tmp/p25rev` (cel + 7 gates, ALL_RC=0, rc read
+  directly). Binary MD5s DIFFER from the implementer's, so every check is
+  behavioural rather than a hash comparison.
+- **My renderer reproduces the shipping bank 22/22 byte for byte** against the
+  committed `crcs-backball.txt`. Exact-off reproduces pass 25 22/22; all-off
+  reproduces pass 24 22/22.
+- **Non-monotonicity confirmed on all 12 rungs, independently**: 56(3) 66(8)
+  70(11) 76(4) 106(1) dirty; 46/86/96/116/130/150/170 clean. Every rc, hit count
+  and worst frame matches. `CLEARANCE_MM=70 --gate` -> rc 1, and the repaired B3
+  goes red WITH B1 (pass 24's B3 would have printed a reassuring zero there).
+- **The back-ball DIAGNOSIS reproduces number for number** on my binary
+  (65.0 / 90.3 / 81.1 / -146.4). Verified, not taken on trust.
+- **Visual: the back ball is calm and the antenna keeps its life.** Undamped the
+  rear column's silhouette boils frame to frame; damped it holds one shape and
+  drifts. Clearest on the fixed camera. The art floors (13.005 >= 11.5,
+  1.850 >= 1.2) say the same from the other side.
+- **Front-ball spin: NOT a problem, and it is structural.** Pass 24's lift is
+  `tilt_front/yaw_front` -> `kBJunctionF`; the damp set is {HingeA,B,C} and
+  JunctionF is upstream of all three. Measured: pass 24 delivered the owner's
+  ask as TRAVEL (+2.4%) and in SPIN gave +0.3%, so a 35% spin cut cannot undo it.
+  Travel preserved to +0.2%. Looked at: indistinguishable.
+- **Crackle: RECOMMEND OFFERING IT.** Same choreography, same 1.08 ratio, and it
+  is the worse case (long idle, fixed CLOSE camera). Not changed, per instruction.
+  One table entry: `kBackBallDampClipPm[23] = 700`.
+- **Every control fired by me**, each for its own reason: mback undamped/window
+  breach the CEILINGS, --fail-dead breaches the ART FLOORS (legal stimulus, no
+  mutant owed); all four mbolt controls plus both exit-code positives.
+- **No bound relaxed** (the only removed constexpr in the whole diff is
+  `kBoltRodClearanceMm = 46`, raised). **No gate default samples a subset.**
+- Three RECORD corrections, all the same cause (numbers taken before the
+  back-ball packet moved hover's rig), none changing a conclusion: two stale
+  rows in `clearance-sweep.txt` (116, 130 - both moved the SAFE way, shipped rung
+  unaffected); "54,595" is now 54,885; `P25-BB-LOOKS/README` calls plate 01
+  consecutive when it is every-other-frame.
+
+**NEXT: Part 2 -- archive pass 24, exact bank, encode, site, gates, deploy,
+production-verify.**

@@ -1,0 +1,75 @@
+back-ball damping: bank-wide -1 pm (-1 = the table decides), window 21 KEYS, clip table [slot 0 = 700 pm]
+G1 OK   slot  0: carrier C jerk rms  4.929 (<= 5.600)
+G2 OK   slot  0: End angular  1.380 deg/sample (<= 1.700)
+G3 OK   slot  0: carrier C travel 13.005 mm/sample (>= 11.500) and C angular  1.850 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  1: carrier C jerk rms  6.347 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  1: End angular  2.073 deg/sample (<= 1.700)
+G3 info slot  1: carrier C travel 16.561 mm/sample (>= 11.500) and C angular  2.856 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  2: carrier C jerk rms  5.318 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  2: End angular  1.091 deg/sample (<= 1.700)
+G3 info slot  2: carrier C travel 11.333 mm/sample (>= 11.500) and C angular  1.741 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  3: carrier C jerk rms  7.642 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  3: End angular  1.246 deg/sample (<= 1.700)
+G3 info slot  3: carrier C travel 13.569 mm/sample (>= 11.500) and C angular  1.590 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  4: carrier C jerk rms  6.389 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  4: End angular  1.234 deg/sample (<= 1.700)
+G3 info slot  4: carrier C travel 15.021 mm/sample (>= 11.500) and C angular  2.453 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  5: carrier C jerk rms  5.777 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  5: End angular  1.815 deg/sample (<= 1.700)
+G3 info slot  5: carrier C travel 13.571 mm/sample (>= 11.500) and C angular  2.565 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  6: carrier C jerk rms  5.574 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  6: End angular  1.142 deg/sample (<= 1.700)
+G3 info slot  6: carrier C travel 10.789 mm/sample (>= 11.500) and C angular  1.568 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  7: carrier C jerk rms  0.000 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  7: End angular  0.000 deg/sample (<= 1.700)
+G3 info slot  7: carrier C travel  0.000 mm/sample (>= 11.500) and C angular  0.000 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  8: carrier C jerk rms  8.484 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  8: End angular  2.414 deg/sample (<= 1.700)
+G3 info slot  8: carrier C travel 23.442 mm/sample (>= 11.500) and C angular  2.933 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot  9: carrier C jerk rms  5.108 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot  9: End angular  0.849 deg/sample (<= 1.700)
+G3 info slot  9: carrier C travel 11.211 mm/sample (>= 11.500) and C angular  1.472 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 10: carrier C jerk rms  8.101 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 10: End angular  1.018 deg/sample (<= 1.700)
+G3 info slot 10: carrier C travel 12.174 mm/sample (>= 11.500) and C angular  1.885 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 11: carrier C jerk rms  8.530 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 11: End angular  1.492 deg/sample (<= 1.700)
+G3 info slot 11: carrier C travel 17.928 mm/sample (>= 11.500) and C angular  2.042 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 12: carrier C jerk rms  9.043 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 12: End angular  1.871 deg/sample (<= 1.700)
+G3 info slot 12: carrier C travel 24.043 mm/sample (>= 11.500) and C angular  2.074 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 13: carrier C jerk rms  6.239 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 13: End angular  0.725 deg/sample (<= 1.700)
+G3 info slot 13: carrier C travel 12.492 mm/sample (>= 11.500) and C angular  1.042 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 14: carrier C jerk rms  5.506 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 14: End angular  0.804 deg/sample (<= 1.700)
+G3 info slot 14: carrier C travel  8.510 mm/sample (>= 11.500) and C angular  1.403 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 15: carrier C jerk rms  4.589 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 15: End angular  1.867 deg/sample (<= 1.700)
+G3 info slot 15: carrier C travel 13.824 mm/sample (>= 11.500) and C angular  2.144 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 16: carrier C jerk rms  5.380 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 16: End angular  0.728 deg/sample (<= 1.700)
+G3 info slot 16: carrier C travel  9.996 mm/sample (>= 11.500) and C angular  0.892 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 17: carrier C jerk rms  4.722 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 17: End angular  0.133 deg/sample (<= 1.700)
+G3 info slot 17: carrier C travel  2.572 mm/sample (>= 11.500) and C angular  0.322 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 18: carrier C jerk rms  2.406 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 18: End angular  0.307 deg/sample (<= 1.700)
+G3 info slot 18: carrier C travel  3.476 mm/sample (>= 11.500) and C angular  0.555 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 19: carrier C jerk rms  5.966 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 19: End angular  1.100 deg/sample (<= 1.700)
+G3 info slot 19: carrier C travel  9.829 mm/sample (>= 11.500) and C angular  1.471 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 20: carrier C jerk rms  6.976 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 20: End angular  1.132 deg/sample (<= 1.700)
+G3 info slot 20: carrier C travel 11.456 mm/sample (>= 11.500) and C angular  1.551 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 21: carrier C jerk rms  8.404 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 21: End angular  0.760 deg/sample (<= 1.700)
+G3 info slot 21: carrier C travel 13.529 mm/sample (>= 11.500) and C angular  1.307 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 22: carrier C jerk rms  5.350 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 22: End angular  2.019 deg/sample (<= 1.700)
+G3 info slot 22: carrier C travel 15.805 mm/sample (>= 11.500) and C angular  2.416 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+G1 info slot 23: carrier C jerk rms  6.586 (<= 5.600)  [not judged: the complaint is Hover's]
+G2 info slot 23: End angular  2.339 deg/sample (<= 1.700)
+G3 info slot 23: carrier C travel 18.514 mm/sample (>= 11.500) and C angular  3.285 deg/sample (>= 1.200)  [the ART floors: the rear must stay wiggly]
+
+BACKBALL GATE: PASS
