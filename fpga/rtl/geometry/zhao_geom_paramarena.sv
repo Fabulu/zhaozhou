@@ -410,11 +410,23 @@ module zhao_geom_paramarena
   localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;  // w=16 bytes
 
   localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,120
-  localparam int unsigned TRI_OFF_B   =
-      ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
+  // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
+  // `check_localparam_comments` parses SINGLE-LINE declarations only. Fire
+  // tested on an isolated copy of this file: with `TRI_OFF_B` wrapped over two
+  // lines, a deliberately WRONG trailing number still produced
+  // "disagreements : 0" -- the claim beside it was unchecked, which is exactly
+  // the shape that tool exists to catch (a stale 576 beside a real 704).
+  // Joined, it is checked, and the tool confirms 2,097,120.
+  //
+  // `CHUNK_OFF_B` IS STILL NOT CHECKED EVEN SO, and the reason is worth the
+  // line rather than being rediscovered: it reaches `TRI_CAP_B`, which is
+  // `MAX_TRIS * TD_B`, and `TD_B` is `ZHAO_PARAMBUF_TD_BYTES` -- a PACKAGE
+  // import the tool cannot resolve in this module, so it SKIPS the constant
+  // rather than guessing at it. Its number below is therefore verified by the
+  // acceptance bench, which reads memory AT that offset, and not by the gate.
+  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
   localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
-  localparam int unsigned CHUNK_OFF_B =
-      ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
+  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
   localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,840
 
