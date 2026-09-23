@@ -828,12 +828,35 @@ unpriced_requirements:
   # declared absent is a row nobody prices". Owner ruling R80 named repairing
   # this list as a PRECONDITION for the completion fit; the fit ran without it.
   #
-  # FORGE.SHADOW's row BELOW IS DELIBERATELY KEPT. `zhao_forge_shadow.sv`
-  # exists, so the row is stale in the same way -- but it is ABSENT from the
-  # console's fit closure, so unlike these two it genuinely is not priced by
-  # anything, and the SHADOWRIDE lane is composing it right now. Correcting it
-  # from here would collide with that lane and would replace one wrong row with
-  # another the same day.
+  # FORGE.SHADOW's row WAS DELIBERATELY KEPT HERE, and the reason has now
+  # EXPIRED. The paragraph said: "`zhao_forge_shadow.sv` exists, so the row is
+  # stale in the same way -- but it is ABSENT from the console's fit closure,
+  # so unlike these two it genuinely is not priced by anything, and the
+  # SHADOWRIDE lane is composing it right now. Correcting it from here would
+  # collide with that lane and would replace one wrong row with another the
+  # same day."
+  #
+  # SHADOWRIDE LANDED 2026-09-23 and `zhao_forge_shadow` is INSTANTIATED in
+  # `fpga/rtl/prod/zhao_console_core.sv` as `u_forge_shadow`, end to end from
+  # `zhao_geom_ladderbank` through the SHARED `zhao_forge_assemble` to
+  # GEOM.CLIP. The completion register moved 14 -> 13 on it. So the row now
+  # says "RTL not built" about a module this console COMPOSES, which is the
+  # worst version of this list's documented failure mode, and the deferral that
+  # justified keeping it is spent. THE ROW IS REMOVED.
+  #
+  # WHAT IT IS NOT: priced. FORGE.SHADOW is built and composed but NOT
+  # MEASURED -- `@diag-incomplete-14gaps` ran before SHADOWRIDE, so it is not
+  # among that row's 258 sources and its DSP and ALM are not inside the 359 and
+  # the 138,428. It moves from "declared absent, silently excluded from the
+  # total" to "present and honestly unpriced", which is a different fact and
+  # the one the next measurement has to answer. Do not read its removal from
+  # this list as a claim about its cost.
+  #
+  # A DEFERRAL WITH A CONDITION NEEDS SOMETHING THAT READS THE CONDITION BACK.
+  # This row's condition ("the lane is running right now") was true for about
+  # five hours and nothing in the tree would have noticed it expiring;
+  # `dsp_census.py`'s own warning is what surfaced it, three commits later.
+  # That is the uncashed-cheque shape in CLAUDE.md, at its smallest scale.
   #
   # 2026-09-19, packet MATRES: MATERIAL.RESOLVE's row LEFT this list too, on
   # exactly the GEOM.LIGHT precedent above. zhao_material_resolve.sv is built
@@ -849,7 +872,14 @@ unpriced_requirements:
   # both were built on 2026-09-19 -- and are left for their own lanes rather
   # than corrected in passing, exactly as TERRAIN.SHADE's is. Flagged so the
   # next reader inherits a known defect instead of a silent one.
-  - FORGE.SHADOW: zhao_forge_shadow  forge shadow; RTL not built
+  #
+  # 2026-09-23: BOTH OF THOSE ROWS ARE NOW GONE -- MEM.UPLOAD's earlier today
+  # (it is instantiated and inside the measured closure), FORGE.SHADOW's in
+  # this commit (instantiated, not yet measured). THIS LIST IS NOW EMPTY of
+  # rows naming a module that exists, and `dsp_census.py`'s
+  # "!! N ROW(S) ... NAME A MODULE THAT EXISTS" warning reads 0 for the first
+  # time. An empty list is the correct state for it, not a suspicious one:
+  # it means "ratified requirement with NO RTL file" describes nothing today.
   # THE FORGE.PRIM EVALUATOR -- the block that turns a params block into vertex
   # POSITIONS. Added 2026-09-09 after reading the owner's reports/ADDLIGHTNING.md
   # (2026-09-04, never read on this lane) and TESTING its central claim.
