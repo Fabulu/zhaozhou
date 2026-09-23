@@ -1215,25 +1215,36 @@ module zhao_console_board
   //                          share BROADCASTS beat data and demuxes only
   //                          `beat_valid`, so this is what sees a wrong demux
   //                          delivering another client's bytes.
-  //   geom_pa_unaligned_o    ADDED 2026-09-23, and it is the one detector here
-  //   geom_pw_unaligned_o    whose SILENCE IN SIMULATION IS GUARANTEED
-  //                          WHATEVER THE DESIGN DOES. A JEDEC BL8 sequential
-  //                          burst wraps inside its aligned eight-column (16
-  //                          byte) block; `zhao_vram_arbiter` chops to
-  //                          min(rem, 8, row_tail) and so aligns only to the
-  //                          2048-word ROW; and the behavioural SDRAM model
-  //                          reads and writes LINEARLY. So a misaligned
-  //                          request is served CORRECTLY here and WRONGLY by
-  //                          the part, and no functional test in this tree can
-  //                          fail on it in either polarity. These two count
-  //                          the invariant instead: every clock either block
-  //                          offers the guard an address that is not a
-  //                          multiple of the quantum. The arena's is
-  //                          unreachable with legal stimulus and owes
+  //   geom_pa_unaligned_o    ADDED 2026-09-23. When they were added they were
+  //   geom_pw_unaligned_o    described here as "the one detector whose SILENCE
+  //                          IN SIMULATION IS GUARANTEED WHATEVER THE DESIGN
+  //                          DOES", because `zhao_vram_arbiter` chopped to
+  //                          min(rem, 8, row_tail) -- aligning to the 2048-word
+  //                          ROW and to nothing finer -- while the behavioural
+  //                          SDRAM model read and wrote LINEARLY, so a
+  //                          misaligned request was served CORRECTLY in
+  //                          simulation and WRONGLY by the part.
+  //
+  //                          THAT IS NO LONGER TRUE, AND IT IS THE SAME DAY'S
+  //                          WORK. Owner ruling R243 / D-SDRAM-A repaired the
+  //                          INSTRUMENT first and the design second: the model
+  //                          now wraps inside the aligned eight-column block
+  //                          (`bl8_col`) and the arbiter now CLAMPS to that
+  //                          block (`blk_tail = 8 - col[2:0]`), so a burst can
+  //                          no longer cross it whatever address a client
+  //                          supplies, and a breach would be a FUNCTIONAL
+  //                          failure rather than an invisible one.
+  //
+  //                          So these two now count a PERFORMANCE property --
+  //                          a misaligned request costs one extra burst -- not
+  //                          the last line of defence. They are kept, with
+  //                          their controls: the arena's is unreachable with
+  //                          legal stimulus and owes
   //                          tests/mutants/zhao_geom_paramarena_align_mutant.sv;
   //                          the walker's is reachable, because it is TOLD its
   //                          bases on `pub_*_base_i` rather than computing
-  //                          them.
+  //                          them. The block clamp's own control is
+  //                          tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv.
   //
   // Each of these is asserted ZERO by the smoke, and a counter asserted zero
   // is a claim. The ones reachable with legal stimulus are fired by

@@ -8,18 +8,27 @@
 // column straight from the byte address (`waddr = req.addr[26:1]`,
 // `req_col = waddr[10:0]`), so a column is one 16-bit word and the aligned
 // eight-column block a JEDEC sequential burst wraps inside is SIXTEEN BYTES.
-// `zhao_vram_arbiter.burst_words` chops a request into
+// WHEN THIS FILE WAS WRITTEN, EARLIER THE SAME DAY, the next two paragraphs
+// read: "`zhao_vram_arbiter.burst_words` chops a request into
 // `min(remaining, 8, row_tail)` words, which aligns to the 2048-word ROW and
-// to nothing finer.  A burst therefore wraps exactly when
-// `(start_col mod 8) + words > 8`.
+// to nothing finer ... THE BEHAVIOURAL SDRAM MODEL READS AND WRITES LINEARLY.
+// So a misaligned request is served CORRECTLY here and WRONGLY by the part,
+// and NO FUNCTIONAL TEST IN THIS REPOSITORY CAN FAIL ON IT -- not a
+// shadow-memory comparison, not a decode round trip, not a framebuffer CRC,
+// in either polarity."
 //
-// THE BEHAVIOURAL SDRAM MODEL READS AND WRITES LINEARLY.  So a misaligned
-// request is served CORRECTLY here and WRONGLY by the part, and NO FUNCTIONAL
-// TEST IN THIS REPOSITORY CAN FAIL ON IT -- not a shadow-memory comparison,
-// not a decode round trip, not a framebuffer CRC, in either polarity.  That is
-// the whole reason `zhao_geom_paramarena` COUNTS the invariant instead of
-// relying on it, and the reason the counter's silence is worth nothing until
-// the counter has been seen to move.  This file is where it moves.
+// BOTH HALVES OF THAT WERE REPAIRED BY OWNER RULING R243 / D-SDRAM-A, in the
+// order the owner set: the model now WRAPS inside the aligned eight-column
+// block (`bl8_col`), which is what makes the bug class visible at all, and
+// only then does `zhao_vram_arbiter.burst_words` CLAMP to that block
+// (`blk_tail = 8 - col[2:0]`), which is what makes it harmless.
+//
+// SO THIS FILE IS NO LONGER "THE ONLY EVIDENCE AVAILABLE" -- a misaligned
+// burst is now a functional failure, and `tests/memory/mem_blkalign_mut.cpp`
+// demonstrates exactly that against a committed arbiter mutant. What THIS
+// file still is, and what it is still worth, is the positive control for
+// `burst_unaligned_o` itself: the counter names the CAUSE, and a counter
+// asserted zero is a claim whatever else can fail.
 //
 // TWO CTESTS ARE BUILT FROM THIS ONE FILE:
 //
