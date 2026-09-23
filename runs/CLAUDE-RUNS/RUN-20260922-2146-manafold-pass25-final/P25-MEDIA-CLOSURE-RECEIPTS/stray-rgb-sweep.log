@@ -1,0 +1,35 @@
+=== STRAY .rgb SWEEP -- gitignore hides these from every tool, so look directly ===
+count under manafold-p16:
+103042
+count under the whole zencrifice root:
+103042
+biggest holders (top 8):
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr96/manafold-hover
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr96/manafold-crackle
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr86/manafold-hover
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr86/manafold-crackle
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr70/manafold-hover
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr70/manafold-crackle
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr46/manafold-hover
+    600 /c/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p25work/clr46/manafold-crackle
+none committed anywhere?
+0
+0
+=== DISK ===
+
+FreeGB
+------
+ 745.5
+
+
+=== This run's own .rgb intermediates, deleted. ===
+CLAUDE.md: the purge tool spares anything touched in 48 h, which protects
+IN-FLIGHT work. This lane is closed and the creature is closed, so the
+spare is protecting nothing. Only *.rgb under .tmp/p25* is removed --
+every log, receipt, contact sheet and plate in those trees is kept.
+
+before: 103042 files, 26.5 GiB
+after : 0 files
+
+whole zencrifice root, stray .rgb remaining:
+0

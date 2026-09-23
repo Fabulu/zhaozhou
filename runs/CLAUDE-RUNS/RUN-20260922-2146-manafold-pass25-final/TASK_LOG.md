@@ -1,7 +1,7 @@
-# Task Log: RUN-20260922-2146 - [Describe objective here]
+# Task Log: RUN-20260922-2146 - Manafold pass 25 (FINAL): review, publish, verify
 
 **Created:** 2026-09-22 21:46 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260922-2146-manafold-pass25-final/
 
 ---
@@ -209,3 +209,67 @@ renders), `P25-REVIEW-RECEIPTS/` (my gate logs, my CRC sets, findings as written
 
 **NEXT: Part 2 -- archive pass 24, exact bank, encode, site, gates, deploy,
 production-verify.**
+
+---
+
+### 2026-09-23 - PUBLISHED. Where I am, written BEFORE reading the verification
+
+- Archive: pass 24 preserved 44/44 (43,768,883 B), generation 20 added,
+  checkarchive extended AND its selftest given the pass-23 lock legs pass 24
+  never wrote. Selftest: 43 red legs fire, 16 positive legs.
+- Bank: 22 subjects / 7,992 frames, ONE invocation, production ink, identical to
+  the reviewed bank on all 22. Renderer is the REVIEWER's build,
+  MD5 a0c0c80a2e9b02dc852c25c1ff1aa530.
+  Bank manifest SHA-256 23cd615d25ceb27f29231c769f3e1a507e2d9cc2dcc74612da247b99fc3cef16.
+  Scope vs pass 24: 22/22 frame counts unchanged, 22/22 CRCs differ.
+- Frame review: 7,992 frames scanned, ZERO blackout/pop flags; 22 complete
+  every-frame sheets built and looked at. One finding, NOT this pass's:
+  hasty wraps with a 38.8 px jump (39.52 px in pass 24, so slightly worse then).
+- Encode: 22/22, ENCODE_RC=0 read directly. Media receipt 44 files / 44,526,868 B,
+  every webm ffprobed for codec, size, pix_fmt, fps AND frame count.
+- Gates: assemble 0 (after correctly refusing twice until BOTH style.css
+  archive-generation families reached 20), checkfresh 0, checkarchive 0,
+  checkplayback 0, checkmedia 1728/1728, decodecheck 44/0, exact noindex.
+- **A durable provenance gap found and closed:** the committed index.html had
+  NEVER been the bytes production serves -- core.autocrlf normalised it, ~16 KB
+  of difference, on every pass including 24. `.gitattributes` now marks that one
+  path `-text`; blob and working file hash equal for the first time.
+- Deployed: DEPLOY_RC=0, `deploy.ps1 -Project upheaval -Branch main`,
+  https://034764be.upheaval.pages.dev, 45 files uploaded.
+  The deploy re-runs assemble and restamps the build time, so the SERVED page
+  was committed afterwards (5eb814a0...).
+- Verifier selftested against the served page BEFORE querying a host: 22 index
+  negatives fire; corrupted, truncated and non-200 media fire.
+
+**NEXT AFTER THE VERIFICATION:** read it, write P25-PRODUCTION-VERIFY.md,
+commit/push so all four heads agree, set Status: Complete, then delete the raw
+frame root (.tmp/p25ship, .tmp/p25rev, website/scratch-reel), the full-res
+sheets, and run the purge tool, watching for stray .rgb that .gitignore hides.
+
+### 2026-09-23 - VERIFIED AND CLOSED. Status: Complete.
+
+- **Production: 69/69 on BOTH hosts, 0 mismatches, 0 retries, 103,465,143 bytes
+  each, 31 index checks each with 0 failed.** `upheaval.pages.dev` and the
+  per-deploy alias `034764be.upheaval.pages.dev`. Report:
+  **`P25-PRODUCTION-VERIFY.md`**.
+- The verifier was selftested twice (before any host, and again against the page
+  that actually shipped): 22 index negatives fire; corrupted, truncated and
+  non-200 media fire.
+- **One fault in my own instrument**, recorded because its shape is this run's
+  recurring theme: the first verification named `main.upheaval.pages.dev` as the
+  second host. That alias 404s, and the retry policy sleeps 50 s per URL, so the
+  run sat for half an hour with an EMPTY LOG -- a job with no progress output is
+  indistinguishable from a job that is working. Four direct URL probes settled it
+  in eight seconds; pass 24's own receipt then named the right host (the
+  per-deploy alias). Killed by PID after confirming the command line was mine.
+- **Provenance gap closed for good:** the committed index.html had never been the
+  bytes production serves (autocrlf normalisation, ~16 KB, every pass including
+  24). `.gitattributes` marks that path `-text`; blob == working file == both
+  hosts, checked rather than assumed. The deploy restamps the build time, so the
+  SERVED page was committed after the deploy.
+- Cleanup: raw frame roots and full-res sheets deleted, purge tool run, stray
+  `.rgb` swept. See the final commit.
+
+**Open on the creature at its close** (PASS-25-FINDINGS.md §7): the front ball's
+own spin, Crackle's rear, and hasty's 38.8 px loop seam (pre-existing, 39.52 px
+in pass 24, newly measured).

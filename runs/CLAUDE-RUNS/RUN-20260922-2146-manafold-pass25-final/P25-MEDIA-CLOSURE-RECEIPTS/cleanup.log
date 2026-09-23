@@ -1,0 +1,13 @@
+=== BEFORE ===
+2.1G	zhaozhou/.tmp/p25ship
+3.0G	zhaozhou/.tmp/p25rev
+2.1G	Upheaval/website/scratch-reel
+166M	p25-sheets
+
+=== raw frame roots and full-res sheets removed ===
+=== AFTER ===
+15M	zhaozhou/.tmp/p25rev
+2.6M	p25-sheets
+COMPOSITE-1.jpg
+COMPOSITE-2.jpg
+sheets.log
