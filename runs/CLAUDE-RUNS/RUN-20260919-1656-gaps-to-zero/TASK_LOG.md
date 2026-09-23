@@ -1285,3 +1285,59 @@ directly; the script's own column can be blind.**
    why five lanes correctly refused before the group method worked.
 3. **Then the fit**, on **5CEBA9F31C7** for the map — and **label it a
    diagnostic profile** while edge reconciliation is uncomposed.
+
+## 2026-09-23 — coordinator wave while ARENAWIRE, EARTHADAPT and the diagnostic fit run
+
+**Two lane slots full (ARENAWIRE on I53–I56, EARTHADAPT on I34), one labelled
+diagnostic fit alive.** The fit-running Stop hook is the reason this wave
+exists: *"find work that does not touch its sources and do it."* Nothing below
+touches the fit's 258 sources or either lane's files.
+
+| # | work | result |
+|---|---|---|
+| 1 | `check_guard_verdict` repaired | **RC 0 across 30 clients** — the gate's first meaningful green (`f8cd2507`) |
+| 2 | R243 D-SDRAM-A verified at source | claim **holds**; the mechanism is sharper than reported (`925a4d25`) |
+| 3 | R243 D-NORMALS-A scoped | **three layers are two** — the command arm already exists (`61c96f69`) |
+| 4 | pre-receipt note for the fit | the row is a **FLOOR**, and why (`94c93e1d`) |
+| 5 | swept **every** `check_*.py`, 26 gates | **three reds I was not running** (`52ba80eb`) |
+
+**1 — the gate was red and four of its findings were not there.** Adding the
+seven inherited consumers made it report four `.ok`-inside-`.ready` arms in
+`zhao_terrain_pageio`. **All four are the correct two-state shape the tool
+exists to prescribe.** The defect was in `arm_body()`: it inferred "this arm has
+a body" from whichever line carried the first `begin`, which for a BRACELESS arm
+is the **next case item**, so the walk ran off the end and read the neighbour's
+`.ok`. Note the direction — this instrument read **worse** than the truth, which
+is why it died on first contact instead of living for weeks. The repair ships
+with **two fired positive controls** (`_BAD_BRACELESS`, `_BAD_BRACELESS_WRAPPED`),
+because bounding a walk makes it read fewer lines and that is exactly how a
+detector goes quiet.
+
+**3 — the correction that removes work.** `zhao_terrain_normalmap` already
+carries the full seven-level pyramid **and** its upload port; `PublishResource
+0x0030` (R17) already delivers pages; three blocks already use the
+`PAGE_KIND` loader mechanism. So no opcode is invented: kind **16**, an asset
+tool, a loader on `zhao_part_table_loader`'s pattern, composed **with** the
+normalmap in one commit. **A false alarm was caught on the way**: those three
+`PAGE_KIND` values look wrong against the section-type table, and
+`spec/cartridge.md` line 13 warns in its own second paragraph that the kind
+registry is a different numbering. Reporting it would have meant not reading it.
+
+**5 — counter ids have moved again, and the gate that catches it was never
+run.** 23 `pageio_*` inserted at index 138 (`afe77593`) and 23 `paramarena_*` at
+index 47 (`c5ac4def`), inside a list `spec/counters.md` §2 makes **append-only**.
+Measured consequence: `ZHAO_CNT_CMD_DMA_COMMANDS = 198` against catalog index
+**244** — **exactly +46**, the insertion count, reached independently. The
+detector exists, fires, is a registered ctest, and describes this very failure in
+its own docstring. **A detector nobody consults is indistinguishable from one
+that does not exist.** Repair deferred deliberately: `blocks.yml` is shared and
+one live lane is working in the arena. **Both lanes told to append at the END and
+NOT to `--update-lock`** — blessing the current catalog is the one move that
+freezes a repairable defect.
+
+**Also standing, and it matters for what comes after zero:** the ruling
+superseding R109 adopts `zhao_forge_cliff_ram` (**976 ALM fitted**) over
+`zhao_forge_cliff` (**7,664 ALM, 18.3% of budget**) — one of the five
+disconnected, so **−1 on the register and the largest single ALM lever in the
+tree at the same time**. It is **not** a saving against the running fit: neither
+rival is in its closure.
