@@ -4075,6 +4075,30 @@ static constexpr const char* kU02LiveSiteSubjects[] = {
 };
 static_assert(sizeof(kU02LiveSiteSubjects) / sizeof(kU02LiveSiteSubjects[0]) == 22,
               "version-18 live Manafold bank is 22 subjects");
+// PASS 25: AND IT IS BOUND, NAME BY NAME AND IN ORDER, TO u02::kBoltLiveSubjects
+// -- the list the lightning rollout and manafold_boltgate.cpp both read. Two
+// copies of the same 22 names is precisely the drift surface pass 24's reviewer
+// found between the renderer and the gate, and adding a third would have been a
+// worse version of it. This list stays because the committed live-history gate
+// greps it out of this file and checks it against creatures.json; the assert is
+// what keeps that check true of the list the rollout actually uses.
+constexpr bool u02_name_eq(const char* a, const char* b) {
+  while (*a != '\0' && *a == *b) { ++a; ++b; }
+  return *a == *b;
+}
+constexpr bool u02_live_lists_agree() {
+  if (sizeof(kU02LiveSiteSubjects) / sizeof(kU02LiveSiteSubjects[0]) !=
+      static_cast<size_t>(u02::kBoltLiveSubjectCount))
+    return false;
+  for (int i = 0; i < u02::kBoltLiveSubjectCount; ++i)
+    if (!u02_name_eq(kU02LiveSiteSubjects[i], u02::kBoltLiveSubjects[i]))
+      return false;
+  return true;
+}
+static_assert(u02_live_lists_agree(),
+              "kU02LiveSiteSubjects and u02::kBoltLiveSubjects must be the same "
+              "22 names in the same order -- a subject added to one and not the "
+              "other renders without avoidance while mbolt measures it with");
 bool u02_is_live_site_subject(const char* name) {
   if (name == nullptr) return false;
   for (const char* n : kU02LiveSiteSubjects)
@@ -6167,6 +6191,18 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
     // outliving the structure -- and this one sent three separate passes to
     // tune lightning constants against a backdrop problem.
   }
+  // ---- PASS 25 (Direction 26 item 1): THE LIGHTNING CONFIGURATION ---------
+  // Read from u02::bolt_avoid_for / bolt_split_n_for -- the SAME accessor
+  // manafold_boltgate.cpp reads, which is the whole point of it. Pass 24 set
+  // these by hand at three call sites while the gate held its own private copy
+  // of which subject carried what; a drift between the two would have shown as
+  // a green "0 of 38,152" over a clip that still drew bolts through the rod.
+  // One door, and the rollout is now expressed once instead of 22 times.
+  //
+  // Keyed on the NAME, so `manafold-crackle-legacy` (the version-18 Wave D
+  // byte control) and the form diagnostics are untouched and stay byte-exact.
+  s.u02_bolt_avoid_rods = u02::bolt_avoid_for(name) == u02::BoltAvoid::kRods;
+  s.u02_bolt_split_n = u02::bolt_split_n_for(name);
   return s;
 }
 
@@ -9062,9 +9098,8 @@ int main(int argc, char** argv) {
   if (wanted("manafold-hover")) {
     SceneSubject s = subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true,
                                       &kU02SunHover);
-    // PASS 24, Direction 25 item 2: the owner asked for 3D avoidance on
-    // Crackle and *"Upgrade Hover to that."*
-    s.u02_bolt_avoid_rods = true;
+    // PASS 25: avoidance is no longer set here. It comes from the shared
+    // per-subject accessor in subject_u02_clip, which mbolt reads too.
     rc |= render_scene(s);
   }
   if (wanted("manafold-inspect")) {
@@ -9092,12 +9127,14 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(0, "manafold-inspect", u02::kIdleKeys, true, nullptr);
     s.creature_moving_light = true;
     s.cam_k = 460000;
-    // PASS 24, Direction 25 item 2: *"for comparison let's do option 1 on
-    // inspect"* -- the OTHER mechanism, depth-splitting, on the same animation
-    // Hover plays, so the two can be compared without a pose difference
-    // between them. This subject is the closest camera in the bank, which is
-    // also where a crossing is easiest to judge.
-    s.u02_bolt_split_n = u02::kBoltDepthSplitN;
+    // PASS 24 ran depth-splitting here, as the owner's comparison against
+    // Crackle's and Hover's 3D avoidance. PASS 25 RETIRES IT: it was measured a
+    // no-op (all 155 depth-straddling segments were already drawn partly
+    // occluded unsplit) and looked at in isolation still crossing the antenna.
+    // Inspect now takes the rollout's avoidance like every other live subject,
+    // through the shared accessor in subject_u02_clip. The mechanism survives
+    // as declared dead code with its knob and its gate leg -- see
+    // kBoltSplitLiveN in manafold_art.h.
     rc |= render_scene(s);
   }
   if (wanted("manafold-drift")) rc |= render_scene(subject_u02_clip(1, "manafold-drift", u02::kDriftKeys, false, &kU02SunDrift));
@@ -9473,9 +9510,7 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle",
                                      u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_smear = 0;  // Direction 12: no active Manafold subject carries smear
-    // PASS 24, Direction 25 item 2: *"Crackle has lightning pass antennae a lot
-    // right now."* -- the clip the owner named as the worst offender.
-    s.u02_bolt_avoid_rods = true;
+    // PASS 25: avoidance comes from the shared accessor (see subject_u02_clip).
     s.note = "the crackle idle under the normal shipping mana (candidate 9, day sky)";
     rc |= render_scene(s);
   }

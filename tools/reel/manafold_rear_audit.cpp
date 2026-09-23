@@ -1829,8 +1829,15 @@ int main(int argc, char** argv) {
     u02::g_u02_rear_span_travel_mm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_SOFT_MM"))
     u02::g_u02_rear_span_soft_mm = std::atoi(e);
-  if (const char* e = std::getenv("ZHAO_U02_REAR_CARRIER_CALM_PM"))
-    u02::g_u02_rear_carrier_calm_pm = std::atoi(e);
+  // ⚠ ZHAO_U02_REAR_CARRIER_CALM_PM IS DELIBERATELY NOT PARSED HERE ANY MORE.
+  // This private `atoi` WAS the fault: from pass 20 to pass 24 it was the only
+  // parse of that variable anywhere, so the knob moved mrear's reading of the
+  // creature and nothing that shipped, and three renders at 1000/500/250 came
+  // back byte-identical. Pass 24 added it to the shared parser below; pass 25
+  // gave it a per-clip table, which a private atoi cannot see. Leaving a second
+  // door open here would let mrear read one value while the reel reads another
+  // -- the same fault with the lanes swapped. apply_knead_dip_env() (line below)
+  // is the ONE read, and it bounds-checks where this did not.
   if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_DEEP_BIAS_PM"))
     u02::g_u02_rear_span_deep_bias_pm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_REAR_BOW")) {

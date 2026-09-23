@@ -2371,7 +2371,7 @@ inline void hinge_play(HingePlay& hp, uint32_t slot, int f, int keys, int cyc) {
   // PASS 20: C is the back nodule the eye reads, and its always-on rotation is
   // the long-lever term in the rear closure. Shared named share.
   {
-    const int32_t cg = rear_carrier_calm_pm();
+    const int32_t cg = rear_carrier_calm_pm(slot);
     hp.tilt_c = cg == 1000 ? t[3] : static_cast<int32_t>(
         (static_cast<int64_t>(t[3]) * cg) / 1000);
     hp.yaw_c = cg == 1000 ? y[3] : static_cast<int32_t>(
@@ -3287,6 +3287,17 @@ inline bool apply_knead_dip_env() {
   // manafold-boltgate, and the boltgate's whole job is to say whether the
   // avoidance worked -- a gate that could not be put into the configuration it
   // is judging would be judging its own default.
+  // PASS 25 (Direction 26 item 1): the rollout selector, strict. `pass24`
+  // restores the previous PER-SUBJECT assignment exactly, which no bank-wide
+  // flag can express -- see BoltRollout in manafold_art.h.
+  if (const char* e = std::getenv("ZHAO_U02_BOLT_ROLLOUT")) {
+    if (std::strcmp(e, "all") == 0)
+      g_u02_bolt_rollout = BoltRollout::kAll;
+    else if (std::strcmp(e, "pass24") == 0)
+      g_u02_bolt_rollout = BoltRollout::kPass24;
+    else
+      return false;
+  }
   if (const char* e = std::getenv("ZHAO_U02_BOLT_AVOID")) {
     if (std::strcmp(e, "rods") == 0)
       g_u02_bolt_avoid_env_value = BoltAvoid::kRods;
@@ -3352,6 +3363,13 @@ inline bool apply_knead_dip_env() {
     if (!per_clip("ZHAO_U02_EYE_AMBIENT_CLIP_PM", kEyeAmbientClipSlots, 0, 1000,
                   g_u02_eye_ambient_clip_pm.data()))
       return false;
+    // PASS 25 (Direction 26 item 3): the carrier-C calm, per clip. This is both
+    // the ladder that chose slot 0's value and the EXACT-OFF CONTROL for the
+    // item -- `...=0:1000,23:1000` restores pass 24's pose on every clip.
+    if (!per_clip("ZHAO_U02_REAR_CARRIER_CALM_CLIP_PM",
+                  kRearCarrierCalmClipSlots, 0, 1000,
+                  g_u02_rear_carrier_calm_clip_pm.data()))
+      return false;
   }
   if (!num("ZHAO_U02_EYE_AMBIENT_PM", 0, 1000, g_u02_eye_ambient_master_pm))
     return false;
@@ -3365,6 +3383,11 @@ inline bool apply_knead_dip_env() {
   // over -- live in a gate, inert in production, the mirror image of pass 20's
   // ladder. 1000 is the authored value and changes nothing, so adding it here
   // is byte-neutral and makes mrear's reading true of the thing that ships.
+  // PASS 25: it is now the BANK-WIDE knob above a per-clip table
+  // (kRearCarrierCalmClipPm), on the same override rule the rear ambient uses:
+  // moved off its compiled default it wins everywhere, because it is also
+  // mrear's own lever and a table that could silently out-vote it is how this
+  // knob would go dead a second time. See rear_carrier_calm_pm().
   if (!num("ZHAO_U02_REAR_CARRIER_CALM_PM", 0, 1000, g_u02_rear_carrier_calm_pm))
     return false;
   return true;
@@ -3668,7 +3691,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // is what moves the point the return arm starts from, and therefore what the
   // rear span has to cover. Shared named share; authored beats are untouched.
   {
-    const int32_t cg = rear_carrier_calm_pm();
+    const int32_t cg = rear_carrier_calm_pm(slot);
     if (cg != 1000) {
       g.nod.cx = static_cast<int32_t>((static_cast<int64_t>(g.nod.cx) * cg) / 1000);
       g.nod.cy = static_cast<int32_t>((static_cast<int64_t>(g.nod.cy) * cg) / 1000);
@@ -3801,7 +3824,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
       g.q[kBHingeC],
       quat_z(static_cast<int32_t>(
           (static_cast<int64_t>(a(kKneadGripCA16, ph_c.amp_pm)) *
-           rear_carrier_calm_pm()) / 1000)));
+           rear_carrier_calm_pm(slot)) / 1000)));
   // PASS 6 C.1/C.3: THE OUT-OF-PLANE CHANNEL -- the axis that did not exist
   // until this pass. A, B and C swing ACROSS the loop plane on their own
   // period, so "up and down separately" is now something the rig can express.
@@ -3820,7 +3843,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
         g.q[kBHingeC],
         quat_x(static_cast<int32_t>(
             (static_cast<int64_t>(oop(kKneadOopCA16, ph_c, 0x6800)) *
-             rear_carrier_calm_pm()) / 1000)));
+             rear_carrier_calm_pm(slot)) / 1000)));
   }
   // KNEAD: the two hands wedge in counter-rotation; the neck stirs
   // out-of-plane; the rear junction's closure ANCHOR slides. One consistent
@@ -3855,7 +3878,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
         quat_z(-static_cast<int32_t>(
             (static_cast<int64_t>(legacy_accent(static_cast<int32_t>(
                  (static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)) *
-             rear_carrier_calm_pm()) / 1000)));
+             rear_carrier_calm_pm(slot)) / 1000)));
     g.q[kBNeck] = quat_mul(
         g.q[kBNeck],
         quat_x(legacy_accent(static_cast<int32_t>(

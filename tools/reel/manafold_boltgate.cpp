@@ -351,8 +351,6 @@ struct Row {
   int slot;
   bool orbit;
   int32_t cam_yaw;
-  bool avoid;
-  int split_n;
   long segs = 0;
   long hit3d = 0;
   long near_miss = 0;
@@ -360,10 +358,35 @@ struct Row {
   long cross_behind = 0;
   double worst_pen = 0;
   int worst_pen_frame = -1;
+  // ⚠ PASS 25: THE NUMBER THE OWNER'S COMPLAINT IS ABOUT.
+  // "It gets very close now and looks like crossing" is not a statement about
+  // intersections -- there were none. It is about the CLOSEST APPROACH, which
+  // nothing measured, so pass 24 had a gate that read zero and an owner who
+  // could still see the fault. This is the smallest gap between any drawn bolt
+  // segment and the antenna's surface, and the frame it happens on, so the
+  // clearance ladder can be looked at ON THE WORST FRAME rather than on an
+  // evenly sampled one.
+  //
+  // It is reported and NOT asserted against a threshold. The clearance is an
+  // art value chosen by eye; a gate that picked a minimum gap would be the
+  // generation-side measurement CLAUDE.md forbids.
+  double min_clear = 1e18;
+  int min_clear_frame = -1;
   long frames_with_hit = 0;
   int frames = 0;
   double worst_gap = 0;      // mm between stamps, over near-rod segments
   long near_rod_segs = 0;
+  // ⚠ PASS 25: B2's OPERAND MOVED TO THIS ONE, over EVERY bolt segment.
+  // `worst_gap` above is measured only over segments within kNearBandMm of a
+  // rod, and raising the clearance knob is exactly what empties that set: at
+  // 96 mm not one segment on Inspect was still in the band, so `worst_gap` and
+  // its reference were both 0, and B2 went RED because an ART VALUE moved. A
+  // gate leg whose operand is deleted by a knob the owner is allowed to turn is
+  // not a gate on the mechanism. The split's contract is about every stamp it
+  // lays, so this measures every one, and the near-rod figure stays as INFO
+  // because it is what the resolution question was originally about.
+  double worst_gap_all = 0;
+  double ref_worst_gap_all = 0;
   // B2: segments whose GEOMETRY straddles a rod's surface in depth, and how many
   // of them the sprite chain actually draws as partly occluded.
   long straddle_segs = 0;
@@ -383,35 +406,77 @@ struct Row {
   double worst_seg_len = 0;
 };
 
-/** The LIVE bank with the camera each subject renders under. It mirrors
- *  zhao_reel.cpp's kU02LiveSiteSubjects, and the count is asserted against the
- *  same 22 the renderer asserts, so a subject added there and not here is a
- *  build error rather than a quietly short census. */
+/** The LIVE bank with the camera each subject renders under.
+ *
+ *  ⚠ PASS 25: THE `avoid` AND `split_n` COLUMNS ARE GONE FROM THIS TABLE.
+ *  Pass 24's reviewer found them here as an UNBOUND MIRROR of the renderer's
+ *  assignment: mbolt read its own copy, applied it to itself with
+ *  bolt_set_subject, measured that, and reported. If a subject had lost
+ *  avoidance in zhao_reel.cpp while this column still said `true`, mbolt would
+ *  have switched avoidance on for its own run and printed
+ *  "B1 CLEAR manafold-hover: 0 of 38,152" -- green over a clip that drew bolts
+ *  straight through the rod. A checker whose two operands are configured by
+ *  itself cannot see the fault it exists for.
+ *
+ *  Both sides now read u02::bolt_avoid_for / bolt_split_n_for, and B4 asserts
+ *  that these names ARE the shared list, in order. What stays here is only what
+ *  the gate genuinely owns and the renderer does not expose: the clip slot each
+ *  subject plays and the camera it renders under. */
 constexpr int kLiveSubjects = 22;
 Row g_rows[kLiveSubjects] = {
-    {"manafold-hover", 0, true, 0, true, 1},
-    {"manafold-inspect", 0, true, 0, false, u02::kBoltDepthSplitN},
-    {"manafold-channel", 2, false, 0x2000, false, 1},
-    {"manafold-trick", 13, false, 0x2000, false, 1},
-    {"manafold-damage", 14, false, 0x2000, false, 1},
-    {"manafold-hasty", 8, false, 0x2000, false, 1},
-    {"manafold-flight", 22, false, 0x2000, false, 1},
-    {"manafold-fall", 9, false, 0x2000, false, 1},
-    {"manafold-hit", 10, false, 0x2000, false, 1},
-    {"manafold-taunt", 11, false, 0x2000, false, 1},
-    {"manafold-taunt2", 12, false, 0x2000, false, 1},
-    {"manafold-death-drop", 17, false, 0x2000, false, 1},
-    {"manafold-death-gutter", 18, false, 0x2000, false, 1},
-    {"manafold-lasso", 19, false, 0x2000, false, 1},
-    {"manafold-blown", 20, false, 0x2000, false, 1},
-    {"manafold-taunt3", 21, false, 0x2000, false, 1},
-    {"manafold-drift", 1, false, 0x2000, false, 1},
-    {"manafold-curious", 3, false, 0x2000, false, 1},
-    {"manafold-startle", 4, false, 0x2000, false, 1},
-    {"manafold-rest", 5, false, 0x2000, false, 1},
-    {"manafold-pirouette", 6, false, 0x2000, false, 1},
-    {"manafold-crackle", 23, false, 0x2000, true, 1},
+    {"manafold-hover", 0, true, 0},
+    {"manafold-inspect", 0, true, 0},
+    {"manafold-channel", 2, false, 0x2000},
+    {"manafold-trick", 13, false, 0x2000},
+    {"manafold-damage", 14, false, 0x2000},
+    {"manafold-hasty", 8, false, 0x2000},
+    {"manafold-flight", 22, false, 0x2000},
+    {"manafold-fall", 9, false, 0x2000},
+    {"manafold-hit", 10, false, 0x2000},
+    {"manafold-taunt", 11, false, 0x2000},
+    {"manafold-taunt2", 12, false, 0x2000},
+    {"manafold-death-drop", 17, false, 0x2000},
+    {"manafold-death-gutter", 18, false, 0x2000},
+    {"manafold-lasso", 19, false, 0x2000},
+    {"manafold-blown", 20, false, 0x2000},
+    {"manafold-taunt3", 21, false, 0x2000},
+    {"manafold-drift", 1, false, 0x2000},
+    {"manafold-curious", 3, false, 0x2000},
+    {"manafold-startle", 4, false, 0x2000},
+    {"manafold-rest", 5, false, 0x2000},
+    {"manafold-pirouette", 6, false, 0x2000},
+    {"manafold-crackle", 23, false, 0x2000},
 };
+static_assert(kLiveSubjects == u02::kBoltLiveSubjectCount,
+              "mbolt must measure exactly the live bank the rollout covers");
+
+// ---- PASS 25: THE SPLIT PROBE ---------------------------------------------
+// Direction 26 leaves the retirement of depth-splitting to this pass's judgement
+// and requires that its exact-off control stay honest. It is retired from the
+// BANK (u02::kBoltSplitLiveN == 1) and kept as declared dead code, so B2 and
+// `--fail-no-split` would have had nothing to act on: a control whose mechanism
+// no subject carries is a control that quietly stops being a control.
+//
+// So the gate drives the mechanism ITSELF, on a named subject, at a named N.
+// B2 then asserts the mechanism's own contract -- N times the sprites at 1/N of
+// the spacing, measured twice in one invocation -- which is a statement about
+// the code and needs no shipped configuration to be true. Inspect is the probe
+// because it is the closest camera in the bank and it is the clip the owner
+// compared under.
+constexpr const char* kBoltSplitProbeSubject = "manafold-inspect";
+constexpr int kBoltSplitProbeN = u02::kBoltDepthSplitN;
+bool is_split_probe(const Row& r) {
+  return std::strcmp(r.name, kBoltSplitProbeSubject) == 0;
+}
+int split_n_for_row(const Row& r) {
+  return is_split_probe(r) ? kBoltSplitProbeN : u02::bolt_split_n_for(r.name);
+}
+// B4's control: rename one row so it no longer matches the shared list. The
+// mirror the reviewer found cannot be fired by any legal stimulus -- the two
+// lists agree today and a static_assert already catches the renderer's copy --
+// so the detector's silence is a claim, and this is the deliberate fault it is
+// fired on before that silence is quoted.
+bool g_ctl_mirror_drift = false;
 
 const zc::Clip* clip_for(const zc::CreatureType& T, int slot) {
   for (const zc::Clip& c : T.bank.clips)
@@ -425,9 +490,12 @@ void run_subject(const zc::CreatureType& T, Row& r, bool force_no_avoid,
   if (cl == nullptr) return;
   const int keys = static_cast<int>(cl->frame_count);
   r.frames = keys * 2;
+  // PASS 25: THROUGH THE SHARED ACCESSOR, not through a column of this file's
+  // own. u02::bolt_avoid_for is the same read subject_u02_clip makes, so what
+  // is measured here is what the bank renders, by construction.
   u02::bolt_set_subject(
-      (r.avoid && !force_no_avoid) ? u02::BoltAvoid::kRods : u02::BoltAvoid::kOff,
-      force_no_split ? 1 : r.split_n);
+      force_no_avoid ? u02::BoltAvoid::kOff : u02::bolt_avoid_for(r.name),
+      force_no_split ? 1 : split_n_for_row(r));
   u02::FoldState fold{};
   std::vector<u02::ManaSplat> splats;
   std::vector<Seg> segs;
@@ -447,10 +515,25 @@ void run_subject(const zc::CreatureType& T, Row& r, bool force_no_avoid,
     if (!ant.valid) continue;
     const View v = view_for(r.orbit, f, r.frames, r.cam_yaw);
     long fhit = 0;
+    // PASS 25: this FRAME's own closest approach, so the csv can be sorted by
+    // badness. CLAUDE.md: sample frames by badness, never by index -- an evenly
+    // spaced ladder finds the typical frame and misses the near one, and "it
+    // gets very close" is a complaint about exactly the frames index sampling
+    // throws away.
+    double fmin = 1e18;
     for (const Seg& sg : segs) {
       ++r.segs;
       r.stamp_total += sg.stamps;
       const double c = ant.clearance(sg.a, sg.b);
+      // PASS 25: the closest approach, tracked over EVERY segment including the
+      // intersecting ones (where it goes negative and equals -worst_pen). One
+      // number that is meaningful before and after the rollout, so the ladder
+      // rungs can be compared against the pass-24 state on the same scale.
+      if (c < r.min_clear) {
+        r.min_clear = c;
+        r.min_clear_frame = f;
+      }
+      if (c < fmin) fmin = c;
       if (c < 0) {
         ++r.hit3d;
         ++fhit;
@@ -471,14 +554,17 @@ void run_subject(const zc::CreatureType& T, Row& r, bool force_no_avoid,
       } else if (c < kNearBandMm) {
         ++r.near_miss;
       }
-      // B2's operand: any segment close enough to a rod to be partly occluded
-      // must be drawn finely enough to cut it. The band is the near band, so a
-      // segment that only grazes counts too.
-      if (c < kNearBandMm) {
-        ++r.near_rod_segs;
+      // The stamp spacing. PASS 25 takes it over EVERY segment (B2's operand,
+      // see worst_gap_all) and keeps the near-rod one beside it as the INFO
+      // figure the resolution question was asked about.
+      {
         const double gap = len(sg.b - sg.a) /
                            static_cast<double>(sg.stamps > 0 ? sg.stamps : 1);
-        if (gap > r.worst_gap) r.worst_gap = gap;
+        if (gap > r.worst_gap_all) r.worst_gap_all = gap;
+        if (c < kNearBandMm) {
+          ++r.near_rod_segs;
+          if (gap > r.worst_gap) r.worst_gap = gap;
+        }
       }
       if (c < 0) continue;  // an intersecting segment is a geometry fault, not
                             // a screen-order one; do not count it twice
@@ -568,27 +654,29 @@ void run_subject(const zc::CreatureType& T, Row& r, bool force_no_avoid,
     }
     if (fhit > 0) ++r.frames_with_hit;
     if (csv != nullptr)
-      std::fprintf(csv, "%s,%d,%d,%ld,%ld,%.2f\n", r.name, r.slot, f,
-                   static_cast<long>(segs.size()), fhit, r.worst_gap);
+      std::fprintf(csv, "%s,%d,%d,%ld,%ld,%.2f,%.2f\n", r.name, r.slot, f,
+                   static_cast<long>(segs.size()), fhit, r.worst_gap,
+                   fmin > 1e17 ? 0.0 : fmin);
   }
 }
 
 void reset_rows() {
   for (Row& r : g_rows) {
-    const Row keep{r.name, r.slot, r.orbit, r.cam_yaw, r.avoid, r.split_n};
+    const Row keep{r.name, r.slot, r.orbit, r.cam_yaw};
     r = keep;
   }
 }
 
 void print_table(const char* title) {
   std::printf("\n%s\n", title);
-  std::printf("%-24s %4s %8s %8s %8s %8s %8s %7s %9s %8s\n", "subject", "slot",
-              "segs", "hit3d", "worst_mm", "nearmiss", "xfront", "xbehind",
-              "frames_hit", "gap_mm");
+  std::printf("%-24s %4s %8s %8s %8s %8s %8s %7s %9s %8s %9s %9s\n", "subject",
+              "slot", "segs", "hit3d", "worst_mm", "nearmiss", "xfront",
+              "xbehind", "frames_hit", "gap_mm", "minclr_mm", "minclr_f");
   for (const Row& r : g_rows)
-    std::printf("%-24s %4d %8ld %8ld %8.1f %8ld %8ld %7ld %9ld %8.1f\n", r.name,
-                r.slot, r.segs, r.hit3d, r.worst_pen, r.near_miss,
-                r.cross_front, r.cross_behind, r.frames_with_hit, r.worst_gap);
+    std::printf("%-24s %4d %8ld %8ld %8.1f %8ld %8ld %7ld %9ld %8.1f %9.1f %9d\n",
+                r.name, r.slot, r.segs, r.hit3d, r.worst_pen, r.near_miss,
+                r.cross_front, r.cross_behind, r.frames_with_hit, r.worst_gap,
+                r.min_clear > 1e17 ? 0.0 : r.min_clear, r.min_clear_frame);
   std::printf("\nBREAKDOWN of the intersections -- which primitive, which "
               "obstacle, and whether the segment touches an anchor point\n");
   std::printf("%-24s %8s %8s %10s %10s %8s %8s %10s\n", "subject", "edge",
@@ -619,6 +707,8 @@ int main(int argc, char** argv) {
     else if (a == "--fail-no-avoid") ctl_no_avoid = true;
     else if (a == "--fail-no-split") ctl_no_split = true;
     else if (a == "--fail-fat-rod") ctl_fat = true;
+    // PASS 25: B4's control. See g_ctl_mirror_drift.
+    else if (a == "--fail-mirror-drift") g_ctl_mirror_drift = true;
     else {
       std::fprintf(stderr, "mbolt: unknown argument '%s'\n", a.c_str());
       return 2;
@@ -648,7 +738,8 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "mbolt: cannot open %s\n", csv_path);
       return 2;
     }
-    std::fprintf(csv, "subject,slot,frame,segments,hits,worst_gap_mm\n");
+    std::fprintf(csv,
+                 "subject,slot,frame,segments,hits,worst_gap_mm,min_clear_mm\n");
   }
 
   g_rod_scale_pm = ctl_fat ? kFatRodControlPm : 1000;
@@ -658,11 +749,12 @@ int main(int argc, char** argv) {
   // measurements of one clip in one invocation, so the ratio the leg asserts is
   // a comparison rather than a remembered number from another run.
   for (Row& r : g_rows) {
-    if (r.split_n <= 1) continue;
-    Row ref{r.name, r.slot, r.orbit, r.cam_yaw, r.avoid, r.split_n};
+    if (split_n_for_row(r) <= 1) continue;
+    Row ref{r.name, r.slot, r.orbit, r.cam_yaw};
     run_subject(T, ref, ctl_no_avoid, /*force_no_split=*/true, nullptr);
     r.ref_stamp_total = ref.stamp_total;
     r.ref_worst_gap = ref.worst_gap;
+    r.ref_worst_gap_all = ref.worst_gap_all;
     r.ref_straddle_segs = ref.straddle_segs;
     r.ref_straddle_partial = ref.straddle_drawn_partial;
   }
@@ -674,9 +766,14 @@ int main(int argc, char** argv) {
   if (!gate) return 0;
 
   // ---- B1 CLEAR ----------------------------------------------------------
+  // PASS 25: the `if (!r.avoid) continue` that stood here is gone with the
+  // mirror. Which subjects this leg covers is now decided by the SHIPPED
+  // configuration, so the rollout cannot be half-done and green: a subject the
+  // bank stopped avoiding drops out of B1 and is caught by B4's coverage line
+  // instead of vanishing from the report.
   int fails = 0;
   for (const Row& r : g_rows) {
-    if (!r.avoid) continue;
+    if (u02::bolt_avoid_for(r.name) != u02::BoltAvoid::kRods) continue;
     if (r.hit3d != 0) {
       std::printf("FAIL B1 CLEAR %s: %ld of %ld bolt segments intersect the "
                   "antenna (worst %.1f mm at frame %d)\n",
@@ -689,54 +786,143 @@ int main(int argc, char** argv) {
   }
   // ---- B2 SPLIT ----------------------------------------------------------
   for (const Row& r : g_rows) {
-    if (r.split_n <= 1) continue;
-    const long want = r.ref_stamp_total * r.split_n;
-    const bool gap_ok = r.ref_worst_gap > 0 &&
-                        std::fabs(r.worst_gap * r.split_n - r.ref_worst_gap) <
-                            0.05 * r.ref_worst_gap;
+    const int split_n = split_n_for_row(r);
+    if (split_n <= 1) continue;
+    const long want = r.ref_stamp_total * split_n;
+    const bool gap_ok = r.ref_worst_gap_all > 0 &&
+                        std::fabs(r.worst_gap_all * split_n -
+                                  r.ref_worst_gap_all) <
+                            0.05 * r.ref_worst_gap_all;
     if (r.stamp_total != want || !gap_ok) {
       std::printf("FAIL B2 SPLIT %s: N=%d lays %ld sprites against %ld expected "
                   "(%ld unsplit x %d), spacing %.2f mm against %.2f/%d\n",
-                  r.name, r.split_n, r.stamp_total, want, r.ref_stamp_total,
-                  r.split_n, r.worst_gap, r.ref_worst_gap, r.split_n);
+                  r.name, split_n, r.stamp_total, want, r.ref_stamp_total,
+                  split_n, r.worst_gap_all, r.ref_worst_gap_all, split_n);
       ++fails;
     } else {
       std::printf("OK   B2 SPLIT %s: N=%d lays %ld sprites along the bolt, "
                   "exactly %d x the %ld it lays unsplit, and the near-rod "
                   "spacing is %.2f mm against %.2f\n",
-                  r.name, r.split_n, r.stamp_total, r.split_n, r.ref_stamp_total,
-                  r.worst_gap, r.ref_worst_gap);
+                  r.name, split_n, r.stamp_total, split_n, r.ref_stamp_total,
+                  r.worst_gap_all, r.ref_worst_gap_all);
     }
     std::printf("INFO B2b PARTIAL OCCLUSION %s: %ld of %ld depth-straddling "
                 "segments are drawn partly occluded at N=%d, and %ld of %ld at "
                 "N=1 -- the split changes the SPACING, not whether a crossing is "
                 "cut, because the unsplit bolt is already finer than the rod\n",
-                r.name, r.straddle_drawn_partial, r.straddle_segs, r.split_n,
+                r.name, r.straddle_drawn_partial, r.straddle_segs, split_n,
                 r.ref_straddle_partial, r.ref_straddle_segs);
   }
-  // ---- B3 CONTROL GROUP --------------------------------------------------
+  // ---- B3 ROLLOUT COVERAGE ------------------------------------------------
+  // PASS 24's B3 counted the intersections left on the subjects the experiment
+  // had NOT touched, to size the rollout the owner was deciding about. He has
+  // decided, so the leg now asserts the decision instead of describing it:
+  // every live subject carries avoidance, and any that does not is named.
+  //
+  // ⚠ AND IT FAILS RATHER THAN INFORMS. An INFO line saying "19 subjects still
+  // have 39,500 intersections" is exactly what a half-finished rollout would
+  // print while B1 reported green over the three that were done.
+  //
+  // ⚠ AND ITS RESIDUAL IS THE WHOLE BANK'S, NOT THE UNCOVERED SUBJECTS'.
+  // The first version of this leg summed `hit3d` over the subjects that carry
+  // NO avoidance, and printed "0 intersections remain in the bank" from an
+  // empty sum. Fired at clearance 70 it said exactly that WHILE B1 WAS RED
+  // with 11 intersections on `blown` -- a reassuring number produced by a
+  // counter that cannot see the case it is quoted about, which is the fault
+  // this whole file was rewritten around. It is the bank total now, and it is
+  // asserted, so B3 cannot be green while B1 is red.
   {
-    long other = 0, others_with_hits = 0;
+    long covered = 0, uncovered = 0;
     for (const Row& r : g_rows) {
-      if (r.avoid || r.split_n > 1) continue;
-      other += r.hit3d;
-      if (r.hit3d > 0) ++others_with_hits;
+      if (u02::bolt_avoid_for(r.name) == u02::BoltAvoid::kRods) {
+        ++covered;
+      } else {
+        ++uncovered;
+        std::printf("FAIL B3 ROLLOUT %s: live subject carries NO avoidance "
+                    "(%ld intersections)\n", r.name, r.hit3d);
+      }
     }
-    std::printf("INFO B3 CONTROL GROUP: %ld intersections remain on the %ld "
-                "untouched subjects that still have them -- that is the "
-                "measured size of the rollout the owner is deciding about\n",
-                other, others_with_hits);
+    const long residual = total_hits();
+    if (uncovered == 0 && residual == 0) {
+      std::printf("OK   B3 ROLLOUT: all %ld live subjects carry 3D avoidance, "
+                  "and 0 intersections remain anywhere in the bank\n", covered);
+    } else {
+      std::printf("FAIL B3 ROLLOUT: %ld of %d live subjects avoid; %ld "
+                  "intersections remain across the whole bank\n",
+                  covered, kLiveSubjects, residual);
+      ++fails;
+    }
+  }
+  // ---- B4 MIRROR ----------------------------------------------------------
+  // ⚠ THE LEG PASS 24's REVIEWER ASKED FOR, AND THE REASON IT IS A LEG AND NOT
+  // A COMMENT. mbolt applies a lightning configuration TO ITSELF before
+  // measuring. If the names it walks were not the names the renderer builds,
+  // every number in this file would describe a bank that does not exist -- and
+  // it would describe it as CLEAR, because mbolt would have switched avoidance
+  // on for its own run. That is the cancelling-errors pattern inside a checker:
+  // the two operands (what is measured, what it is measured with) would be
+  // moved by the same hand.
+  //
+  // B1's shipping reading is zero and B3's is "all 22". Both are claims. This
+  // leg is what makes them claims ABOUT THE BANK.
+  {
+    int drift = 0;
+    for (int i = 0; i < kLiveSubjects; ++i) {
+      const char* mine = g_rows[i].name;
+      // The control: one row renamed, so the lists disagree by exactly one
+      // entry. Nothing legal can produce that -- a real drift would be a source
+      // edit -- so without it this leg's silence would stay an argument.
+      if (g_ctl_mirror_drift && i == 0) mine = "manafold-hover-DRIFTED";
+      if (std::strcmp(mine, u02::kBoltLiveSubjects[i]) != 0) {
+        std::printf("FAIL B4 MIRROR row %d: mbolt measures '%s' while the "
+                    "rollout table names '%s'\n",
+                    i, mine, u02::kBoltLiveSubjects[i]);
+        ++drift;
+      }
+    }
+    if (drift == 0) {
+      std::printf("OK   B4 MIRROR: mbolt's %d rows ARE u02::kBoltLiveSubjects, "
+                  "in order, and the avoid/split columns it used to own are "
+                  "gone -- both sides read u02::bolt_avoid_for\n",
+                  kLiveSubjects);
+    } else {
+      ++fails;
+    }
+  }
+  // ---- INFO: the closest approach, which is what the owner was looking at --
+  // Direction 26: *"it gets very close now and looks like crossing."* Zero
+  // intersections was true and was not the whole question, so the smallest gap
+  // between a drawn bolt and the band is printed per subject, with the frame it
+  // happens on, as the thing the clearance ladder was judged against.
+  // NOT ASSERTED: the clearance is an art value and a threshold here would be a
+  // measurement on the generation side.
+  {
+    double worst = 1e18;
+    const char* worst_name = "";
+    int worst_frame = -1;
+    for (const Row& r : g_rows)
+      if (r.min_clear < worst) {
+        worst = r.min_clear;
+        worst_name = r.name;
+        worst_frame = r.min_clear_frame;
+      }
+    std::printf("INFO B5 CLOSEST APPROACH: clearance knob %d mm; the nearest a "
+                "drawn bolt comes to the band anywhere in the bank is %.1f mm, "
+                "on %s frame %d\n",
+                u02::g_u02_bolt_clearance_mm, worst > 1e17 ? 0.0 : worst,
+                worst_name, worst_frame);
   }
 
-  if (ctl_no_avoid || ctl_no_split || ctl_fat) {
+  if (ctl_no_avoid || ctl_no_split || ctl_fat || g_ctl_mirror_drift) {
     // A control run REPORTS; it is an instrument demonstration, not a gate
     // failure, so it returns 0 and says whether it fired (the mrod precedent).
     const bool fired = fails > 0;
-    std::printf("CONTROL %s%s%s: the control %s (%d leg(s) red, %ld total "
+    std::printf("CONTROL %s%s%s%s: the control %s (%d leg(s) red, %ld total "
                 "intersections)\n",
                 ctl_no_avoid ? "--fail-no-avoid " : "",
                 ctl_no_split ? "--fail-no-split " : "",
-                ctl_fat ? "--fail-fat-rod" : "",
+                ctl_fat ? "--fail-fat-rod " : "",
+                g_ctl_mirror_drift ? "--fail-mirror-drift" : "",
                 fired ? "FIRED" : "did NOT fire", fails, total_hits());
     if (ctl_fat) {
       std::printf("CONTROL --fail-fat-rod: radii scaled to %d pm; B1's operand "

@@ -27,6 +27,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 namespace u02 {
 
@@ -1206,8 +1207,43 @@ constexpr int32_t kBoltBallRadiusMm[5] = {0, kBallRxMm[0], kBallRxMm[1],
                                           kBallRxMm[2], kBallRxMm[3]};
 // THE ART KNOB: how far OUTSIDE the antenna's surface a bolt point is held.
 // Zero would put the bolt exactly tangent, which at a 6 px band and a 3 px hot
-// core still reads as touching. CHOSEN BY EYE -- see P24-IMPLEMENTATION.md.
-constexpr int32_t kBoltRodClearanceMm = 46;
+// core still reads as touching. CHOSEN BY EYE -- see P25-IMPLEMENTATION.md.
+//
+// PASS 25 (Direction 26 item 1). The owner looked at pass 24's 46 mm and said
+// *"it gets very close now and looks like crossing."* He is right, and the
+// reason is that 46 mm is a clearance between the SURFACES OF TWO MODELS while
+// what he sees is a clearance between two DRAWN RIBBONS: the bolt is stamped as
+// a sprite chain several pixels wide about its path and the band carries its own
+// contour ink, so both are drawn wider than the centreline the avoidance holds
+// apart. 46 mm at this camera is a little over one native pixel of gap -- a
+// mathematically clear pass that the ink closes back up. Laddered at native and
+// at 4x on the nearest passes and raised; see P25-IMPLEMENTATION.md for the
+// rungs and what was seen at each.
+//
+// ⚠ THE KNOB IS NOT MONOTONE, AND A VALUE MUST BE TAKEN FROM THE CLEAN LIST.
+// Measured over the whole bank with mbolt (every key and midpoint of all 22
+// live subjects), raising the clearance does NOT monotonically reduce the
+// intersections -- it can introduce them:
+//
+//     46  CLEAN   86  CLEAN    116 CLEAN    150 CLEAN
+//     56  3 hits  96  CLEAN    130 CLEAN    170 CLEAN
+//     66  8 hits  106 1 hit
+//     70 11 hits
+//     76  4 hits
+//
+// The reason is structural, not noise: bolt_avoid_rods is a FIXED-COUNT
+// relaxation (kBoltAvoidSweeps) with a directed push, and a clearance that is
+// large enough to shove a chord off one rod but not large enough to carry it
+// past the neighbouring ball leaves it wedged where the remaining sweeps cannot
+// recover. Every dirty rung above is `blown` or `channel`, on the tight rear
+// pocket. Left as measured rather than repaired: Direction 26 is art tuning of
+// an ACCEPTED mechanism, and raising the sweep count would move every clip's
+// bolt path on a final pass. It is open issue 1 in P25-IMPLEMENTATION.md.
+//
+// Whoever turns this knob next: run `manafold-boltgate.exe --gate` after, and
+// take the value only if B1 and B3 are green. The gate catches it -- it went
+// red at 70 during this pass's own ladder, which is how the table above exists.
+constexpr int32_t kBoltRodClearanceMm = 96;
 inline int32_t g_u02_bolt_clearance_mm = kBoltRodClearanceMm;
 // A push out of rod 1 can land a point inside rod 2. Three sweeps is enough for
 // this geometry (the rods meet at obtuse joints and a point can be inside at
@@ -1276,6 +1312,91 @@ inline int32_t bolt_split_gain(int32_t gain_pm) {
   if (n <= 1 || !g_u02_bolt_split_compensate) return gain_pm;
   return static_cast<int32_t>(gain_pm / n);
 }
+// ---- PASS 25 (Direction 26 item 1): THE ROLLOUT, THROUGH ONE DOOR ---------
+//
+// ⚠ THIS TABLE EXISTS BECAUSE THE GATE HELD ITS OWN COPY OF IT.
+// Pass 24's reviewer found `manafold_boltgate.cpp` carrying its own per-subject
+// avoid/split columns and applying them to ITSELF before measuring. Nothing
+// bound them to the renderer's assignment, so if a subject lost avoidance in
+// zhao_reel.cpp and the gate's mirror still said `true`, mbolt would switch
+// avoidance on for its own run, measure that, and print
+// "B1 CLEAR manafold-hover: 0 of 38,152" -- green, while the shipped clip drew
+// bolts straight through the rod. That is the cancelling-errors pattern inside
+// a checker: not a wrong answer, a REASSURING one. Both sides now read here.
+//
+// The rollout also makes the answer uniform, which is the strongest form the
+// binding can take: every LIVE subject avoids, so there is no per-subject value
+// left for the two files to disagree about.
+//
+// ⚠ IT IS KEYED ON THE SUBJECT NAME, NOT ON "IS A MANAFOLD CLIP". The bank
+// holds control subjects that must reproduce OLDER bytes exactly --
+// `manafold-crackle-legacy` is the version-18 Wave D control, and the
+// diagnostics (still, mana lab, nodule solo) answer questions about the form.
+// Handing them this pass's lightning would silently destroy what they control
+// for, and the destruction would look like a successful rollout.
+constexpr int kBoltLiveSubjectCount = 22;
+constexpr const char* kBoltLiveSubjects[kBoltLiveSubjectCount] = {
+    "manafold-hover",        "manafold-inspect",   "manafold-channel",
+    "manafold-trick",        "manafold-damage",    "manafold-hasty",
+    "manafold-flight",       "manafold-fall",      "manafold-hit",
+    "manafold-taunt",        "manafold-taunt2",    "manafold-death-drop",
+    "manafold-death-gutter", "manafold-lasso",     "manafold-blown",
+    "manafold-taunt3",       "manafold-drift",     "manafold-curious",
+    "manafold-startle",      "manafold-rest",      "manafold-pirouette",
+    "manafold-crackle",
+};
+// PASS 25: the rollout decision, as a knob rather than as a hard-coded `true`.
+// Direction 26: *"Roll out bolt avoidance to every live subject."*
+constexpr bool kBoltAvoidLive = true;
+// PASS 25: THE SPLIT IS RETIRED FROM THE BANK, and this is the declaration.
+// Pass 24 measured it a no-op -- all 155 depth-straddling segments were already
+// drawn partly occluded at N = 1, because the unsplit bolt stamps every 26.6 mm
+// and the thinnest rod is 46 mm wide, so there was no resolution to win -- and
+// the isolated A/B plate showed the bolt still crossing. It ships nowhere.
+//
+// The MECHANISM stays in the source as declared dead code with its own knob,
+// because the owner asked for the comparison and the comparison's answer must
+// remain reproducible. mbolt still drives it on a named probe subject so B2 and
+// `--fail-no-split` keep firing on a live mechanism; see kBoltSplitProbe* in
+// manafold_boltgate.cpp. A retired mechanism whose control stopped being run is
+// a control that dies quietly, which is worse than deleting the code.
+constexpr int kBoltSplitLiveN = 1;
+inline bool bolt_is_live_subject(const char* name) {
+  if (name == nullptr) return false;
+  for (const char* n : kBoltLiveSubjects)
+    if (std::strcmp(n, name) == 0) return true;
+  return false;
+}
+// ⚠ ITEM 1's EXACT-OFF CONTROL HAS TO BE A NAMED SELECTOR, NOT AN ENV FLAG.
+// Every other item this pass can be switched back to its pass-24 value with a
+// number. This one cannot: pass 24's configuration was PER SUBJECT -- avoidance
+// on hover and crackle, depth-splitting on inspect, nothing on the other
+// nineteen -- and `ZHAO_U02_BOLT_AVOID=off` is bank-wide, so it would reproduce
+// pass 23 and not pass 24. A rollout whose predecessor state cannot be
+// re-rendered is a rollout nobody can diff against, so the predecessor is
+// declared here as data.
+//   ZHAO_U02_BOLT_ROLLOUT=all      the pass-25 rollout (default)
+//   ZHAO_U02_BOLT_ROLLOUT=pass24   exact pass-24 bytes
+enum class BoltRollout : uint8_t { kAll, kPass24 };
+inline BoltRollout g_u02_bolt_rollout = BoltRollout::kAll;
+/** THE ONE READ. Both the renderer's subject builder and mbolt go through it,
+ *  so the gate cannot measure a configuration the bank does not ship. */
+inline BoltAvoid bolt_avoid_for(const char* name) {
+  if (!bolt_is_live_subject(name)) return BoltAvoid::kOff;
+  if (g_u02_bolt_rollout == BoltRollout::kPass24)
+    return (std::strcmp(name, "manafold-hover") == 0 ||
+            std::strcmp(name, "manafold-crackle") == 0)
+               ? BoltAvoid::kRods
+               : BoltAvoid::kOff;
+  return kBoltAvoidLive ? BoltAvoid::kRods : BoltAvoid::kOff;
+}
+inline int bolt_split_n_for(const char* name) {
+  if (!bolt_is_live_subject(name)) return 1;
+  if (g_u02_bolt_rollout == BoltRollout::kPass24)
+    return std::strcmp(name, "manafold-inspect") == 0 ? kBoltDepthSplitN : 1;
+  return kBoltSplitLiveN;
+}
+
 /** The one place a SUBJECT's lightning configuration is installed. The env
  *  override, if present, outranks it (see the flags above). */
 inline void bolt_set_subject(BoltAvoid avoid, int split_n) {
@@ -1331,32 +1452,63 @@ constexpr int32_t kEyeAmbientEyeSkewA16 = 0x2800;
 //   13 trick            -- carries the layer, but see kEyeAmbientTrickMuteKey*:
 //                          nothing runs inside the planted window.
 constexpr int kEyeAmbientClipSlots = 24;
+// PASS 25 (Direction 26 item 2): *"make the eye movement for everything a
+// little stronger than it is now."*
+//
+// ONE constant for every ordinary clip, because that is what "everything"
+// means and because twenty separate 800s would be twenty places for the next
+// tweak to go half-applied. 600 shipped in pass 24 and the owner read it as
+// subtle; laddered 600 / 700 / 800 / 900 / 1000 on Rest, four CONSECUTIVE
+// frames per rung at 8x, sampled at the frames a framediff named as the ones
+// this knob moves most (f008, f264, f272 -- not evenly spaced ones).
+//
+//   600  the stars drift a little; this is the value he called subtle
+//   700  a touch more; separable from 600 only side by side
+//   800  SHIPPED -- the stars plainly travel and breathe, and the right star
+//        at f008 comes NEAR the lens edge without reaching it
+//   900  the first rung that draws attention to itself: at f008 the right
+//        star's arm sits ON the lens rim
+//  1000  a deliberate look, in a clip whose whole subject is resting
+//
+// 800 is the rung below the first that oversteps, which is the rule pass 24
+// set and the owner did not revise. The change is confined to the two lenses:
+// measured with the committed framediff, 600 -> 800 moves at most 217 px on
+// Rest's worst frame inside x=171..241 y=159..176, and 276 px on Taunt II
+// inside x=164..242 y=164..183. Nothing on the body, the band or the bolt.
+constexpr int32_t kEyeAmbientOrdinaryPm = 800;
 constexpr int32_t kEyeAmbientClipPm[kEyeAmbientClipSlots] = {
-    600,  // 0  hover / inspect
-    600,  // 1  drift
-    600,  // 2  channel
-    0,    // 3  curious      (authored beat)
-    0,    // 4  startle      (authored beat)
-    600,  // 5  rest
-    600,  // 6  pirouette
-    0,    // 7  still        (diagnostic)
-    600,  // 8  hasty
-    600,  // 9  fall
-    600,  // 10 hit
-    600,  // 11 taunt
-    600,  // 12 taunt2
-    600,  // 13 trick        (muted inside the plant, below)
-    600,  // 14 damage
-    0,    // 15 mana lab     (diagnostic lane)
-    0,    // 16 nodule solo  (diagnostic)
-    600,  // 17 death drop
-    600,  // 18 death gutter
-    600,  // 19 lasso
-    600,  // 20 blown
-    0,    // 21 taunt III    (authored beat)
-    600,  // 22 flight
-    600,  // 23 crackle idle
+    kEyeAmbientOrdinaryPm,  // 0  hover / inspect
+    kEyeAmbientOrdinaryPm,  // 1  drift
+    kEyeAmbientOrdinaryPm,  // 2  channel
+    0,                      // 3  curious      (authored beat)
+    0,                      // 4  startle      (authored beat)
+    kEyeAmbientOrdinaryPm,  // 5  rest
+    kEyeAmbientOrdinaryPm,  // 6  pirouette
+    0,                      // 7  still        (diagnostic)
+    kEyeAmbientOrdinaryPm,  // 8  hasty
+    kEyeAmbientOrdinaryPm,  // 9  fall
+    kEyeAmbientOrdinaryPm,  // 10 hit
+    kEyeAmbientOrdinaryPm,  // 11 taunt
+    kEyeAmbientOrdinaryPm,  // 12 taunt2
+    kEyeAmbientOrdinaryPm,  // 13 trick        (muted inside the plant, below)
+    kEyeAmbientOrdinaryPm,  // 14 damage
+    0,                      // 15 mana lab     (diagnostic lane)
+    0,                      // 16 nodule solo  (diagnostic)
+    kEyeAmbientOrdinaryPm,  // 17 death drop
+    kEyeAmbientOrdinaryPm,  // 18 death gutter
+    kEyeAmbientOrdinaryPm,  // 19 lasso
+    kEyeAmbientOrdinaryPm,  // 20 blown
+    0,                      // 21 taunt III    (authored beat)
+    kEyeAmbientOrdinaryPm,  // 22 flight
+    kEyeAmbientOrdinaryPm,  // 23 crackle idle
 };
+// ⚠ THE THREE ZEROS ARE THE CONTRAST, AND IT WAS CHECKED DELIBERATELY AT 800
+// rather than assumed to survive the raise. Curious, Startle and Taunt III keep
+// their authored acting and take none of this layer; laid beside Rest at 800
+// (P25-LOOKS/E04) their stars are still several times the size, swing across
+// the whole lens and change size from beat to beat, while the ambient layer is
+// a sliver drifting inside a narrow lens. They remain plainly the loud ones,
+// and their byte-identity under this item is asserted by name in the matrix.
 // Direction 25: "none inside Trick's planted window." The plant is the
 // creature's seventy-key headstand and its face is doing one deliberate thing;
 // an ambient drift across it is the overdone read. The window is the authored
@@ -3349,7 +3501,122 @@ inline int32_t g_u02_rear_span_deep_bias_pm = kRearSpanDeepBiasPm;
 //   ZHAO_U02_REAR_CARRIER_CALM_PM=0..1000, 1000 = pass-19 as authored.
 constexpr int32_t kRearCarrierCalmPm = 1000;
 inline int32_t g_u02_rear_carrier_calm_pm = kRearCarrierCalmPm;
-inline int32_t rear_carrier_calm_pm() { return g_u02_rear_carrier_calm_pm; }
+
+// ---- PASS 25 (Direction 26 item 3): THE SAME LEVER, PER CLIP --------------
+//
+// ⚠ THIS KNOB WAS READABLE BY ONE GATE BINARY FROM PASS 20 UNTIL PASS 24.
+// `manafold_rear_audit.cpp` parsed `ZHAO_U02_REAR_CARRIER_CALM_PM` and nothing
+// else did, so it moved mrear's READING of the creature and not one byte of
+// what shipped: three full renders at 1000 / 500 / 250 came back byte-identical,
+// which is how it was found. Pass 24 put it in the shared parser. So the honest
+// statement about the value below is that until pass 25 **nobody had ever seen
+// what it does**, and pass 24's reviewer then measured it at roughly 52x the
+// lever Direction 25 had named -- 9,352 changed pixels on the worst Hover frame
+// against 178 for the rear ambient. Direction 26: *"ladder that rear-calm lever
+// on hover."*
+//
+// It is per clip slot for the reason pass 24's rear ambient is: the owner's
+// complaint is about ONE animation ("the hover animation seems to be the only
+// one with that problem, others are gucchi"), and a bank-wide value would calm
+// twenty clips nobody asked about.
+//
+// ⚠ SLOT 0 IS PLAYED BY THREE LIVE SUBJECTS -- hover, inspect AND crackle.
+// manafold.h compiles one clip per slot; inspect differs from hover by cam_k
+// alone, and knead_schedule_slot(23) -> 0 sends every SCHEDULED layer on
+// crackle's fixed-camera idle to slot 0's entry as well. All three are the same
+// animation under three cameras, so they must show one back ball. Stated here
+// because pass 24's prose named only two of the three and the reviewer had to
+// find the third.
+constexpr int kRearCarrierCalmClipSlots = 24;
+//
+// ⚠⚠ AND THE LADDER'S ANSWER IS THAT THIS LEVER DOES NOT CALM THE BACK BALL.
+// It was laddered on Hover at 1000 / 800 / 700 / 600 / 500 / 420 / 300 / 150 /
+// 0 -- the whole range, ending with the knob completely OFF -- and carrier C's
+// own measured motion is FLAT across all of it (mrear, root-local, posed skin
+// ring at the C knuckle, every key and midpoint of the clip):
+//
+//     calm 1000 : C path 11269  vmax 39.0  amax 16.36  jmax 17.45  jrms 6.665
+//     calm    0 : C path 11126  vmax 38.6  amax 16.92  jmax 18.36  jrms 6.623
+//
+// 1.3 % of path and nothing at all in the derivatives, with the knob switched
+// off entirely. Looked at on CRACKLE -- which plays this same slot-0
+// choreography under a FIXED camera, so every pixel of movement is the creature
+// and not the orbit -- six frames across the rear's busiest window at 1000 and
+// at 0 are the same motion (P25-LOOKS/R07). At native, four rungs side by side
+// are indistinguishable (R09).
+//
+// ⚠ AND THE "52x" FIGURE THAT SENT THIS PASS HERE WAS A CATEGORY ERROR, worth
+// writing down because it is a measurement that lied in a new way. Pass 24's
+// reviewer reported this knob at 9,352 changed pixels on Hover's worst frame
+// against the rear ambient's 178, and read that as "roughly 52x the lever".
+// Both numbers are correct. But CHANGED PIXELS BETWEEN TWO CONFIGURATIONS
+// MEASURES AN OFFSET, NOT A MOTION. This knob shifts the whole inked rear band
+// by a native pixel or two, and a one-pixel shift of a large contoured shape
+// repaints thousands of pixels; the rear ambient moves a 20x16 patch. Nothing
+// in either number says how much anything MOVES over the clip, which is the
+// entire content of "too finicky and moves too much".
+//
+// ⚠ WHY NO VALUE HERE COULD HAVE WORKED, structurally. This knob scales carrier
+// C's OWN rotation (hinge play at C, the knead's grip / out-of-plane / wag at
+// C) plus nodule C's small translation. A joint's own rotation moves what is
+// DOWNSTREAM of it; it cannot move the joint itself. The back ball IS at C, and
+// its position is written by JunctionF, Neck, HingeA and HingeB upstream --
+// which are the antenna's life, bank-wide, and the thing the owner has approved
+// four directions running. Everything reachable was swept and none of it is a
+// lever either: the rear ambient moves C by EXACTLY ZERO (it is the End
+// carrier, one joint further back), the knead dip by 3.7 % of jrms, the dent
+// swing and depth by less, and removing the dip INCREASES C's path.
+//
+// So every slot ships kRearCarrierCalmPm and this item changes no bytes. The
+// table and its ladder stay because the knob is now real in production (it was
+// readable by one gate binary from pass 20 to pass 24) and because a per-clip
+// lever the owner can turn is worth more than a value chosen to look busy.
+constexpr int32_t kRearCarrierCalmClipPm[kRearCarrierCalmClipSlots] = {
+    //  0 hover / inspect / crackle -- THE ONE THE OWNER NAMED. Laddered over
+    //     the full range and left at the authored value, because no rung calms
+    //     the back ball and none reads better. See the block above.
+    kRearCarrierCalmPm,
+    //  1..22: pass 19 as authored, untouched. A slot at kRearCarrierCalmPm does
+    //     the identical integer arithmetic it always did (the call sites take a
+    //     `cg == 1000` fast path, and the ones that do not multiply and divide
+    //     by 1000), so every other clip is byte-exact by construction rather
+    //     than by measurement -- and the measurement is taken anyway.
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm, kRearCarrierCalmPm, kRearCarrierCalmPm,
+    kRearCarrierCalmPm,
+    // 23 crackle's fixed-camera idle: set equal to slot 0's for the same reason
+    //    the rear ambient's is -- it is reached THROUGH slot 0 and never read
+    //    directly, so a different number here would be a value nothing uses.
+    kRearCarrierCalmPm,
+};
+inline std::array<int32_t, kRearCarrierCalmClipSlots>
+make_rear_carrier_calm_clip_pm() {
+  std::array<int32_t, kRearCarrierCalmClipSlots> a{};
+  for (int i = 0; i < kRearCarrierCalmClipSlots; ++i)
+    a[i] = kRearCarrierCalmClipPm[i];
+  return a;
+}
+inline std::array<int32_t, kRearCarrierCalmClipSlots>
+    g_u02_rear_carrier_calm_clip_pm = make_rear_carrier_calm_clip_pm();
+/** THE ONE PRODUCTION READ of a clip's carrier-C calm share.
+ *
+ *  ⚠ `g_u02_rear_carrier_calm_pm` STILL OVERRIDES IT, on exactly the rule
+ *  rear_ambient_clip_gain_pm states: the bank-wide knob is pass 20's ladder AND
+ *  mrear's own control, and a per-clip table that could silently out-vote it
+ *  would be how this knob goes dead a second time. The per-clip table decides
+ *  unless the bank-wide knob has been moved off its compiled default. */
+inline int32_t rear_carrier_calm_pm(uint32_t slot) {
+  if (g_u02_rear_carrier_calm_pm != kRearCarrierCalmPm)
+    return g_u02_rear_carrier_calm_pm;
+  return slot < static_cast<uint32_t>(kRearCarrierCalmClipSlots)
+             ? g_u02_rear_carrier_calm_clip_pm[slot]
+             : kRearCarrierCalmPm;
+}
 
 constexpr int32_t kSpanEStartRunMm = kFoldBlendMm[3];
 constexpr int32_t kSpanEMidRunMm = kSpanEGradientMm / 2;
