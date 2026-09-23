@@ -415,6 +415,7 @@ void bring_up(Dut& t) {
   t.t_ready_i = 0;
   t.peek_en_i = 0;
   t.peek_waddr_i = 0;
+  t.wcfg_chunk_base_bump_i = 0;
   t.poke_en_i = 0;
   t.poke_waddr_i = 0;
   t.poke_data_i = 0;
@@ -1200,9 +1201,15 @@ int main(int argc, char** argv) {
   // that is deliberate: a block's own counter agreeing with itself is one
   // measurement, and a counter that had been wired to the wrong expression
   // would agree with itself perfectly.
-  ckt(t.req_unaligned_o == 0,
-     "every guard request this run issued started on a 16-byte boundary"
-     " (the bench's own observer)");
+  // SNAPSHOT, because case 12 below FIRES the walker's counter on purpose and
+  // the bench's observer sees that request too. The banner and the summary
+  // must report the HEALTHY run's number, not the control's -- quoting a
+  // deliberately-broken tail as though it were the measurement is how an
+  // alarm gets learned-past.
+  const uint32_t unaligned_healthy = t.req_unaligned_o;
+  ckt(unaligned_healthy == 0,
+     "every guard request the HEALTHY part of this run issued started on a"
+     " 16-byte boundary (the bench's own observer)");
   ckt(t.arena_burst_unaligned_o == 0,
      "the arena's own burst_unaligned_o agrees with the bench's observer");
   ckt(t.walk_burst_unaligned_o == 0,
@@ -1213,7 +1220,72 @@ int main(int argc, char** argv) {
      "the derived chunk base is burst-aligned");
   ckt(PV_SLOT_B % BURST_ALIGN_B == 0,
      "the vertex allocation stride is burst-aligned");
-  if (t.req_unaligned_o != 0) {
+
+  // -----------------------------------------------------------------------
+  // CASE 12 -- FIRE `walk_burst_unaligned_o`.
+  // RUN LAST, AND AFTER the assertions above, deliberately: those require the
+  // counter SILENT across the whole healthy run, and this one requires it to
+  // MOVE.  A control that fired earlier would make every silence above
+  // unreadable.
+  //
+  // WHY THIS COUNTER OWES A STIMULUS AND NOT A MUTANT.  The arena's
+  // `burst_unaligned_o` is unreachable while its allocator is correct, so it
+  // has a committed mutant.  The WALKER's is different in kind: it does not
+  // compute its bases, it is TOLD them on `pub_*_base_i`.  Its job is to catch
+  // a PRODUCER whose layout drifted, and that is a legal input, not a broken
+  // block.  Saying "reachable, therefore no mutant is owed" and never firing
+  // it would be the claim, not the evidence.
+  //
+  // THE STIMULUS IS TWO-PART, AND THE SECOND PART IS WHY.  Bumping the chunk
+  // base the walker sees is caught ONE STATE EARLIER: `dir_agrees_c` compares
+  // the directory that travelled through SDRAM against `pub_chunk_base_i`, so
+  // a bumped base fails at W_DIR_CHECK with `dir_mismatch_o` and never reaches
+  // a chunk read.  The directory is therefore poked to MATCH -- which is what
+  // a producer with a drifted layout would actually have written -- and only
+  // then is the base offered misaligned.
+  {
+    std::printf("\n=== case 12: walk_burst_unaligned_o FIRED\n");
+    const uint32_t dirmiss_before = t.dir_mismatch_o;
+    const uint32_t saved_cbase = peek32(t, SCRATCH_BASE + 8);
+    ckt((saved_cbase % BURST_ALIGN_B) == 0,
+        "case 12: the published chunk base was aligned before the bump");
+
+    poke16(t, SCRATCH_BASE + 8, static_cast<uint16_t>((saved_cbase + 8u) & 0xFFFFu));
+    poke16(t, SCRATCH_BASE + 10, static_cast<uint16_t>(((saved_cbase + 8u) >> 16) & 0xFFFFu));
+    cke(saved_cbase + 8u, peek32(t, SCRATCH_BASE + 8),
+        "case 12: the directory really carries the drifted chunk base");
+    t.wcfg_chunk_base_bump_i = 8;
+    t.eval();
+
+    const WalkResult r = walk(t, 0);
+    ckt(r.completed, "case 12: the walk completed");
+    cke(dirmiss_before, t.dir_mismatch_o,
+        "case 12: the directory still AGREES -- the fault under test is ALIGNMENT,"
+        " not a round-trip mismatch");
+    ckt(t.walk_burst_unaligned_o > 0,
+        "case 12: walk_burst_unaligned_o FIRED on a producer whose chunk base"
+        " is not burst-aligned");
+    ckt(t.guard_violations_o == 0,
+        "case 12: the guard refused nothing -- a misaligned address inside the"
+        " view is LEGAL, which is exactly why only this counter can see it");
+    std::printf("case 12: walk_burst_unaligned_o = %u (was 0)\n",
+                t.walk_burst_unaligned_o);
+
+    // Put it back, and prove the counter STOPS. A control that fires and then
+    // keeps firing on healthy input is a stuck bit, not a detector.
+    const uint32_t fired = t.walk_burst_unaligned_o;
+    poke16(t, SCRATCH_BASE + 8, static_cast<uint16_t>(saved_cbase & 0xFFFFu));
+    poke16(t, SCRATCH_BASE + 10, static_cast<uint16_t>((saved_cbase >> 16) & 0xFFFFu));
+    t.wcfg_chunk_base_bump_i = 0;
+    t.eval();
+    cke(saved_cbase, peek32(t, SCRATCH_BASE + 8),
+        "case 12: the directory is restored");
+    const WalkResult r2 = walk(t, 0);
+    ckt(r2.completed, "case 12: the restored frame walks again");
+    cke(fired, t.walk_burst_unaligned_o,
+        "case 12: the counter did NOT move again once the base was aligned");
+  }
+  if (unaligned_healthy != 0) {
     std::printf(
         "\n"
         "***************************************************************\n"
@@ -1228,7 +1300,7 @@ int main(int argc, char** argv) {
         "  eight-column wrap to get wrong.  That is the shape of a broken\n"
         "  instrument: the model reads BETTER than the silicon.\n"
         "***************************************************************\n\n",
-        t.req_unaligned_o, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B,
+        unaligned_healthy, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B,
         CHUNK_OFF_B % 16u);
   }
 
@@ -1247,7 +1319,8 @@ int main(int argc, char** argv) {
       "  guard_violations     = %u   addr_view_bad_o     = %u\n"
       "  writes v0/v1/scratch = %u / %u / %u\n"
       "  share ledger_full    = %u\n"
-      "  req_unaligned_o      = %u  (ASSERTED ZERO since 2026-09-23)\n"
+      "  req_unaligned_o      = %u  (the HEALTHY run; ASSERTED ZERO since 2026-09-23)\n"
+      "  walk_unaligned_o     = %u  (NON-ZERO BY DESIGN: case 12 fires it LAST)\n"
       "-----------------------------------------------------------------\n",
       t.frames_published_o, t.verts_written_o, t.tris_written_o, t.chunks_written_o,
       t.publish_blocked_o, t.view_flip_blocked_o, t.quota_overflow_o, t.records_discarded_o,
@@ -1255,7 +1328,7 @@ int main(int argc, char** argv) {
       t.chunks_walked_o, t.chunks_stale_o, t.chunks_illegal_o, t.tris_emitted_o,
       static_cast<unsigned>(t.walk_depth_max_o), t.walk_cut_o, t.guard_violations_o,
       t.addr_view_bad_o, t.wr_in_view0_o, t.wr_in_view1_o, t.wr_in_scratch_o,
-      t.share_ledger_full_o, t.req_unaligned_o);
+      t.share_ledger_full_o, unaligned_healthy, t.walk_burst_unaligned_o);
 
   std::printf("geom_paramarena_directed: %d/%d checks failed\n", g_fail, g_checks);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);

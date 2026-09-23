@@ -266,6 +266,26 @@ module tb_zhao_geom_paramarena
     input  var logic        peek_en_i,
     input  var logic [25:0] peek_waddr_i,
     output var logic [15:0] peek_data_o,
+    // ---- THE WALKER'S PUBLISHED-CHUNK-BASE BUMP -----------------------------
+    // A BENCH INPUT, and the reason it exists is that `walk_burst_unaligned_o`
+    // must be SEEN to fire and it is NOT unreachable -- the walker does not
+    // compute its bases, it is TOLD them.  Claiming "reachable, so no mutant
+    // is owed" without firing it is exactly the claim CLAUDE.md says to check
+    // hardest, so this is the stimulus that fires it.
+    //
+    // It adds a byte offset to the chunk base the WALKER sees.  On its own
+    // that would be caught one state earlier -- `dir_agrees_c` compares the
+    // directory that travelled through SDRAM against `pub_chunk_base_i`, and a
+    // bumped base disagrees, so the walk would fail at W_DIR_CHECK with
+    // `dir_mismatch_o` and never reach a chunk read.  The driver therefore
+    // POKES the directory's chunk-base word to match, which is why this is a
+    // two-part stimulus and not a knob that hides a check.
+    //
+    // NOTHING IN PRODUCTION HAS THIS.  It cannot widen a permission: the
+    // request still goes through the real `zhao_mem_guard`, and a bumped base
+    // that left the view would be REFUSED rather than counted.
+    input  var logic [26:0] wcfg_chunk_base_bump_i,
+
     input  var logic        poke_en_i,
     input  var logic [25:0] poke_waddr_i,
     input  var logic [15:0] poke_data_i,
@@ -417,7 +437,7 @@ module tb_zhao_geom_paramarena
       .pub_gen_i       (publish_gen_o),
       .pub_vert_base_i (publish_vert_base_o),
       .pub_tri_base_i  (publish_tri_base_o),
-      .pub_chunk_base_i(publish_chunk_base_o),
+      .pub_chunk_base_i(publish_chunk_base_o + wcfg_chunk_base_bump_i),
       .pub_verts_i     (publish_verts_o),
       .pub_tris_i      (publish_tris_o),
       .pub_chunks_i    (publish_chunks_o),
