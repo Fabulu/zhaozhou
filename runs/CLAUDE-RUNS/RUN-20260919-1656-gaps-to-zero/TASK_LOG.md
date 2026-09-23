@@ -1667,3 +1667,78 @@ for six days** carrying a completed experiment: **−1,492 ALMs and 94.79 →
 **virtual pins**, in a configuration that **cannot produce physical ones** (344
 ports). **The verdict was right; the input to it has since changed** — the
 console is now measured at 330% of target.
+
+### 2026-09-23 — REGISTER 13 -> 12, two instruments repaired, and I34 turns into an OWNER DECISION
+
+**Measured bare on the merged tree: 12 gaps = 8 tie-offs + 4 disconnected.**
+`gate_sweep` RC 0 across **25** gates (one added today), tree clean, local ==
+remote — and that last clause means something again, see below.
+
+**CLIFFADOPT merged (`15060551`), register 13 -> 13.** Both R117/R142
+conditions discharged; **composition REFUSED for want of a producer** —
+`solid…_o` zero hits as an output port, every `vdist` in the console core a
+comment, the only live references in the generated *pricing* top fed by
+`assign u09_src = {16{u09_lfsr_q}}`. **An LFSR is not a producer.** It also
+refused **three stale premises I wrote into its brief**, including a golden leaf
+fit that had already been run — the **third** false-absence claim on that one
+gate. And it read the field nobody had read: **golden hold +0.263 ns against
+candidate hold −4.140 ns**, a sign change, the one genuine cost of the swap.
+
+**PARTDEPTH merged (`0c0aa5d9`), register 13 -> 12, and pixels move.** The
+constant meant `Z_TEST_EN=0` / `Z_WRITE_DIS=0`; the pass-7 law is the opposite
+on both bits. **The state travels in the ring, not read at the emit** — the
+committed live-read mutant fires `offered=8 emitted=8 disagreements=6`, six
+records carrying the wrong state **while both balance counters agree
+perfectly**.
+
+**A NARROWED `remote.origin.fetch` HAD FROZEN EVERY REMOTE-TRACKING REF.**
+`git push` reported success while `origin/claude/ceiling-architecture-20260912`
+still read a 2026-09-19 commit. The refspec had been cut to one unrelated
+branch, in the COMMON git dir shared by all 96 worktrees, so neither fetch **nor
+push** maintained `refs/remotes/origin/*`. **"local == remote" was comparing
+against a value that could not change** — it happened to read DISagreement,
+which is the only reason it was seen; matching the frozen ref would have read as
+a clean sync forever. Repaired, and
+`tools/maintenance/check_git_remote_refspec.py` now guards it with the real
+broken refspec as its positive control. **The sweep's first run on the new file
+caught the new file's own unguarded `git` helper**, which is the whole argument
+for discovering gates rather than running a remembered list.
+
+**FORGE.SHADOW left `unpriced_requirements`.** The row said *"RTL not built"*
+about a module the console instantiates as of this morning. It had been kept
+deliberately while SHADOWRIDE ran — a good reason that **expired five hours
+later with nothing in the tree reading the condition back**. `dsp_census.py`'s
+own warning surfaced it. Removed, with the limit written into the file: it is
+composed but **NOT measured**, so it is not inside the fit's 359 DSP.
+
+**PATCHV2 came back and I34 DID NOT CLOSE — correctly.** It repaired a real
+ratified-law breach on the producer side (`resp_present_i` was never connected,
+so an absent ordinal was published as a zero indistinguishable from a real one)
+and it killed all three premises in my brief. The one that changes the plan:
+**"route all four channels to their real owners" is not satisfiable as
+written.** Velocity has a ratified region and no VRAM writer; material has no
+region at all and layer E is fabric-read-only (`spec/terrain_rules.md:501`);
+nav has no region and no lattice.
+
+**AND I CORRECTED ONE OF ITS REFUSALS BEFORE IT PROPAGATED.** The lane read
+`design/ops.yml:532` as ruling nav's owner to be the CPU. The file says
+`implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]` with the CPU holding a
+**mirror** — and FIELD.WRITE.MATERIAL carries the identical pair. So the block
+owner IS named; what is missing is the **destination**. That is a sharper
+blocker and a better question, because it cannot be answered with "then drop
+it". Sent back to the lane.
+
+**SO §15.11's "Nothing is waiting on an owner decision" IS NOW FALSE** and has
+to be corrected: I34 needs a ruling on where material and nav land.
+
+**NOT MERGED: `gz/patchv2`.** Its new counter `fld_earth_short_record_o` has
+not been watched to move — the lane said so itself rather than claiming it.
+**A counter that has never been seen to fire is a claim, and a claim does not
+get merged.** Waiting on `field_earth_adapter_directed` case 12 and its
+negative control.
+
+**WHERE I WAS WHEN THIS WAS WRITTEN:** TRIMERGE (I13, the two-producer triangle
+merge into GEOM.CLIP) still running; PATCHV2 resumed with the nav correction and
+its directed build. Next after those: the §15.11 owner-decision correction, then
+the remaining tie-offs I20 / I21 / I53–I56 and the three disconnected terrain
+blocks.
