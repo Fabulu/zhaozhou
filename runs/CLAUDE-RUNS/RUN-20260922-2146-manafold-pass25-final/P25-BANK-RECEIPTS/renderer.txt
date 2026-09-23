@@ -1,0 +1,5 @@
+# The one binary that rendered the pass-25 publication bank.
+# Built by the independent reviewer from a clean tree at HEAD with
+# tools/reel/build-direct.sh and the zhao-env.ps1 toolchain.
+a0c0c80a2e9b02dc852c25c1ff1aa530 *.tmp/p25rev/bin/zhao-reel-cel.exe
+85c3c7e3c7e1d2390793ffb161771710807ed973f217ca21e837d917bb067237 *.tmp/p25rev/bin/zhao-reel-cel.exe

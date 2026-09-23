@@ -1,0 +1,67 @@
+zhao-reel: deterministic frame sequences -> .tmp/p25ship
+manafold-hover: 24627 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-hover declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-hover: 600 frames, 24627 unique colours, sequence_crc32c=0x89EBA648
+manafold-inspect: 24786 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-inspect declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-inspect: 600 frames, 24786 unique colours, sequence_crc32c=0x3A179F08
+manafold-drift: 13624 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-drift declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-drift: 300 frames, 13624 unique colours, sequence_crc32c=0x7E79CF0D
+manafold-channel: 20584 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-channel declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-channel: 420 frames, 20584 unique colours, sequence_crc32c=0x148A6D26
+manafold-curious: 17498 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-curious declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-curious: 180 frames, 17498 unique colours, sequence_crc32c=0x0FADAD4A
+manafold-startle: 18459 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-startle declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-startle: 160 frames, 18459 unique colours, sequence_crc32c=0x7F5A8C07
+manafold-rest: 21075 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-rest declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-rest: 400 frames, 21075 unique colours, sequence_crc32c=0xDA5BE66B
+manafold-pirouette: 18998 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-pirouette declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-pirouette: 240 frames, 18998 unique colours, sequence_crc32c=0x8EDBFD33
+manafold-hasty: 13682 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-hasty declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-hasty: 240 frames, 13682 unique colours, sequence_crc32c=0xDC044A02
+manafold-fall: 11902 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-fall declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-fall: 340 frames, 11902 unique colours, sequence_crc32c=0x00EFD9A0
+manafold-hit: 18480 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-hit declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-hit: 140 frames, 18480 unique colours, sequence_crc32c=0xAD1D60BB
+manafold-taunt: 20086 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-taunt declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-taunt: 280 frames, 20086 unique colours, sequence_crc32c=0x8A507701
+manafold-taunt2: 19141 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-taunt2 declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-taunt2: 240 frames, 19141 unique colours, sequence_crc32c=0x23502CC5
+manafold-trick: 21089 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-trick declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-trick: 400 frames, 21089 unique colours, sequence_crc32c=0x8D40D834
+manafold-damage: 21342 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-damage declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-damage: 464 frames, 21342 unique colours, sequence_crc32c=0x280C18B5
+manafold-death-drop: 15800 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-death-drop declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-death-drop: 450 frames, 15800 unique colours, sequence_crc32c=0xF8FB62E4
+manafold-death-gutter: 16348 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-death-gutter declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-death-gutter: 590 frames, 16348 unique colours, sequence_crc32c=0xC809393A
+manafold-lasso: 20344 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-lasso declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-lasso: 336 frames, 20344 unique colours, sequence_crc32c=0x8B697508
+manafold-blown: 13593 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-blown declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-blown: 292 frames, 13593 unique colours, sequence_crc32c=0x2589D260
+manafold-flight: 17122 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-flight declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-flight: 352 frames, 17122 unique colours, sequence_crc32c=0x39FB01E0
+manafold-taunt3: 20373 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-taunt3 declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-taunt3: 368 frames, 20373 unique colours, sequence_crc32c=0xF72CA961
+manafold-crackle: 21998 unique colours — full-colour lane, palette gate not applied
+live-history: manafold-crackle declared mist=0 smear=0 executed mist=0 smear=0 frames -- OK
+manafold-crackle: 600 frames, 21998 unique colours, sequence_crc32c=0x370F7F3E

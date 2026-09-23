@@ -1,0 +1,33 @@
+# Manafold pass 25 SCOPE PROOF: the shipping bank against pass 24's
+# Item 1 rolls bolt avoidance out to ALL 22, so ALL 22 are expected to differ.
+# The frame COUNT of every subject must be unchanged -- a changed count is a
+# retimed clip, which no item in this pass is allowed to do.
+# subjects p25=22 p24=22
+
+subject	frames_p24	frames_p25	crc_p24	crc_p25	frames	pixels
+manafold-blown	292	292	0x429E954D	0x2589D260	SAME	differ
+manafold-channel	420	420	0x7E372A2E	0x148A6D26	SAME	differ
+manafold-crackle	600	600	0x7891EF60	0x370F7F3E	SAME	differ
+manafold-curious	180	180	0x26588572	0x0FADAD4A	SAME	differ
+manafold-damage	464	464	0xD6B7614A	0x280C18B5	SAME	differ
+manafold-death-drop	450	450	0x303D8296	0xF8FB62E4	SAME	differ
+manafold-death-gutter	590	590	0x182C4C9A	0xC809393A	SAME	differ
+manafold-drift	300	300	0x9999FD21	0x7E79CF0D	SAME	differ
+manafold-fall	340	340	0xBF6623E9	0x00EFD9A0	SAME	differ
+manafold-flight	352	352	0x2DFCD78D	0x39FB01E0	SAME	differ
+manafold-hasty	240	240	0x367BD407	0xDC044A02	SAME	differ
+manafold-hit	140	140	0x04ADC5E0	0xAD1D60BB	SAME	differ
+manafold-hover	600	600	0x8EDC6DE3	0x89EBA648	SAME	differ
+manafold-inspect	600	600	0xA7972F35	0x3A179F08	SAME	differ
+manafold-lasso	336	336	0x8901C681	0x8B697508	SAME	differ
+manafold-pirouette	240	240	0x9A6401D9	0x8EDBFD33	SAME	differ
+manafold-rest	400	400	0x80F07CDF	0xDA5BE66B	SAME	differ
+manafold-startle	160	160	0x3D6E86C7	0x7F5A8C07	SAME	differ
+manafold-taunt	280	280	0x56D8443E	0x8A507701	SAME	differ
+manafold-taunt2	240	240	0xEC25554F	0x23502CC5	SAME	differ
+manafold-taunt3	368	368	0x984C3C99	0xF72CA961	SAME	differ
+manafold-trick	400	400	0x93B777D4	0x8D40D834	SAME	differ
+
+# frame counts unchanged: 22/22
+# sequence CRCs differing from pass 24: 22/22
+# EXPECTED: 22/22 and 22/22.

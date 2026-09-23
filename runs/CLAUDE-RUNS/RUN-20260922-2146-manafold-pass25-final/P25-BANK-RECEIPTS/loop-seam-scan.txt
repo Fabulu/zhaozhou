@@ -1,0 +1,50 @@
+# Manafold pass 25: LOOP-SEAM DISPLACEMENT, every live subject, pass 24 vs pass 25.
+#
+# The frame review found one thing the mean-luminance scan flagged as odd, and it
+# is worth a receipt of its own: manafold-hasty's last frame does not sit where
+# its first frame does. The creature's pink-ink centroid drifts steadily leftward
+# from x=211.0 at frame 0 to x=172.2 at frame 239 -- 38.8 native pixels, a tenth
+# of the frame width -- while the largest FRAME-TO-FRAME step anywhere in the
+# clip is 1.47 px. So the clip wraps with a visible jump.
+#
+# EVERY OTHER LIVE SUBJECT CLOSES ITS LOOP TO UNDER 1.6 PX. hasty is an outlier
+# by a factor of twenty-five.
+#
+# ! IT IS NOT A PASS-25 REGRESSION. Measured on the pass-24 bank re-rendered from
+# the same tree with every pass-25 mechanism switched off, hasty's seam is 39.52
+# px -- very slightly WORSE than what pass 25 ships. It has been live at least
+# since pass 24 and nothing in this pass caused it or could have.
+#
+# Two incidental improvements, the damping tightening the closure it re-solves:
+#   manafold-hover   0.71 -> 0.28 px
+#   manafold-inspect 0.97 -> 0.62 px
+#
+# Method: pink-ink mask (r>150, r-g>60, b-g>20) horizontal centroid. The mask was
+# checked to be non-empty on every one of hasty's 240 frames (4,706..5,596 px)
+# before any centroid was quoted -- CLAUDE.md: run a presence metric on a case
+# where the answer should be NO before trusting it, and never report "missing"
+# from a mask you have not watched behave.
+
+subject               loop?      seam_dx_px(p25)  seam_dx_px(p24)
+manafold-blown        loop                  0.05             0.05
+manafold-channel      loop                  0.05             0.09
+manafold-crackle      loop                  0.06             0.04
+manafold-curious      loop                  0.18             0.19
+manafold-damage       loop                  0.12             0.12
+manafold-death-drop   one-shot              0.86             0.85
+manafold-death-gutter one-shot              1.54             1.56
+manafold-drift        loop                  1.45             1.47
+manafold-fall         one-shot              1.11             1.13
+manafold-flight       loop                  0.17             0.18
+manafold-hasty        loop                 38.79            39.52   <-- THE OUTLIER
+manafold-hit          loop                  0.34             0.31
+manafold-hover        loop                  0.28             0.71
+manafold-inspect      loop                  0.62             0.97
+manafold-lasso        loop                  0.27             0.28
+manafold-pirouette    loop                  0.74             0.74
+manafold-rest         loop                  0.01             0.05
+manafold-startle      loop                  0.06             0.05
+manafold-taunt        loop                  0.07             0.18
+manafold-taunt2       loop                  0.11             0.06
+manafold-taunt3       loop                  0.28             0.28
+manafold-trick        loop                  0.12             0.11
