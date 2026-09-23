@@ -6929,3 +6929,102 @@ which is this tree's mismatched-comparison law wearing a tooling costume. The
 gate is still worth having; its output is a list of questions, not a list of
 defects, and three of these four were answered by reading the RTL for ten
 minutes.
+
+
+## R244 — TWO OWNER DECISIONS, 2026-09-23 (second batch). **(owner, explicit)**
+
+### D-FORGESHADOW-C — D-FORGESHADOW-B IS LIFTED, NARROWLY. COMMISSION THE SUBSYSTEM.
+
+> **Fabian: *"FORGE.SHADOW: lift D-FORGESHADOW-B narrowly and commission the
+> full subsystem. Do not compose `zhao_forge_shadow` as an isolated wiring job.
+> Close it end-to-end with its real producers/consumers and required tests.
+> Preserve R3: no third projector port in v1; client A remains time-multiplexed.
+> The existing 2-bit client-A owner encoding already reserved a third owner, so
+> use that route and produce the written schedule/bandwidth proof R3 requires.
+> If closing the subsystem actually requires changing that ratified law rather
+> than using the already-authorized multiplex, stop and escalate."***
+
+**AND THE OWNER CORRECTED ME ON THE PREMISE, which is the part worth keeping.**
+I reported in `HANDOVER §15.11` that closing FORGE.SHADOW would **"re-author a
+ratified law"**, and offered it as the one thing standing between the campaign
+and zero that is not work. **That clause is STALE and the tree already said so.**
+
+`design/contracts/FORGE.SHADOW.md:225` — dated **2026-09-21, two days before I
+quoted it** — reads:
+
+> *"The **client-A widening** clause is **STRUCK**: that widening was PERFORMED
+> under R68 sub-build 4 and **R3 sanctions it**."*
+
+and its §1 is titled **"THE CLIENT-A WIDENING WAS ALREADY PERFORMED, AND R3
+SANCTIONS IT"**, continuing:
+
+> *"R3 does not forbid this subsystem's use of client A. **It NAMES it**"* …
+> *"`2'd2` and `2'd3` unallocated"* … *"So the instance-centre half of Route B
+> needs **NO new law and NO owner decision**."*
+
+**So the law was never the obstacle. R3 keeps client A a time-multiplex and
+ANTICIPATES geometry, particles and FORGE.SHADOW sharing it; R68 already widened
+the owner field to two bits and left `2'd2` free.** The correct action was to
+authorise the subsystem *under* the existing law, not to ask for the law to be
+rewritten.
+
+**THIS IS R240 AGAIN, AND I RAN ONLY HALF OF IT.** R240 says a stated blocker
+that has expired is evidence the ENTRY STOPPED BEING MAINTAINED, so re-read the
+whole entry. I did re-check D-FORGESHADOW-B's *composition* premise — all five
+modules exist on disk and not one is instantiated, which is still true — and I
+did **not** re-read the CONTRACT, which is where the correction had been
+recorded. **Checking one half of a stale entry and reporting the other half
+verbatim is how a struck clause gets re-quoted to the owner as a live blocker.**
+Thirteenth instance.
+
+**WHAT IS ACTUALLY OUTSTANDING**, now that the law is not:
+
+* **the written schedule / bandwidth proof R3 OWES and that has never been
+  produced** — the contract calls this *"two halves and only one of them"*, and
+  the owner's ruling requires the missing half;
+* **Route B**: the private arena, an arbiter at GEOM.CLIP's door, and the
+  absolute→rebased frame conversion;
+* **Route A stays dead** — `zhao_geom_vattr`'s `done_o` deadlocks a hull, and
+  note the citation drift the contract itself records: *"the citation `:490` is
+  a comment banner; `done_o` is `:553`"*;
+* **a third request arm on `zhao_part_project` claiming `OWNER_LOD = 2'd2`**,
+  which is the arrangement R3 and the block's own header both prescribe.
+
+**The escalation clause is narrow and stands:** if closing it turns out to need
+the law changed rather than the authorised multiplex used, **stop and escalate**
+rather than deciding it inside a packet.
+
+### D-EARTH-A — MAX_FIELDS STAYS 16. MEASURE BEFORE CUTTING A CAPABILITY.
+
+> **Fabian: *"keep MAX_FIELDS=16 for now. Do not cut it to 4. Sixteen is a
+> ratified gameplay/capacity law; four would be a real v1 capability reduction
+> just to save estimated area. Let the diagnostic fit tell us whether the bank
+> actually lands in ALMs. If it does, first pursue the already-identified
+> synchronous-read RAM implementation and spend roughly 8 M10K to remove the
+> huge 16→1 register/mux bank. Only revisit MAX_FIELDS after measured
+> optimization says we still need a feature cut."***
+
+**The ordering is the ruling and it is this file's own art law in hardware
+clothes: the number is an ESTIMATE and the cut is a CAPABILITY.** EARTHADAPT's
+~3,350 ALM is **hand-counted, explicitly unfitted**, and the lane said so. Cutting
+a ratified gameplay bound from 16 to 4 on the strength of an unmeasured number
+— *before Quartus has said whether the bank lands in ALMs at all* — is deciding
+a value from a measurement that has not been taken.
+
+**The escape hatch the lane already found is the one to take first:** make the
+bank read **synchronous**, adding one state to an ~80–100 cycle field run, and
+the 5,200-bit uniform bank plus its 16→1 × 325-bit mux — **~2,600 of the ~3,350**
+— becomes roughly **8 M10K** instead. That is the **trade ALMs for M10K** lever
+this project already has as a standing rule: **ALM is the binding constraint at
+~113% of the target part; M10K has historically had the slack**, and after R242
+returned ~185 it sits near ~402 against 553.
+
+**So the order is: read the diagnostic fit → if the bank is in ALMs, do the
+synchronous-read RAM → only then, if measured optimisation still says so,
+revisit MAX_FIELDS.** A feature cut is the last resort, not the first saving.
+
+**Note what this does NOT license.** The synchronous read *"moves the 15.1
+capture state after the directed evidence was taken"*, which is why the lane
+correctly left it behind the fit that prices it. It is commissioned by this
+ruling, not by a packet's own judgement, and its directed evidence must be
+re-taken.
