@@ -96,6 +96,23 @@ CLIENTS = [
     # "DEVSDRAM FINDINGS" -- the harness refuses to let a packet write its own
     # findings FILE, so a citation to one would be a promise nothing keeps.
     "fpga/rtl/terrain/zhao_terrain_devstore.sv",
+    # TERRAIN.NORMALLOADER -- owner ruling R243 D-NORMALS-A, 2026-09-23. Added
+    # in the commit that CREATES the file, which is the only way this audit
+    # stays exact -- and the audit proved itself on it: the gate went RC 1 the
+    # moment the file existed and named it, before a single test had run.
+    #
+    # It has TWO request/verdict pairs (the header line, then each 32-word
+    # line), so it has two places to make this exact mistake instead of one,
+    # and both are split -- S_HREQ/S_HVERD and S_WREQ/S_WVERD.
+    #
+    # WORTH RECORDING BESIDE IT, because it is why this block does NOT copy its
+    # own model: `zhao_part_table_loader` (listed below, and reported clean)
+    # tests `ready` and `violation` in ONE cycle, as a continuous-assign wire
+    # rather than inside a state arm -- so this gate's pattern, which looks for
+    # a `ready`-guarded ARM, does not see it. Clean here is a statement about
+    # the arm shape, not about that block. TERRAIN.NORMALLOADER was written to
+    # the two-state shape deliberately rather than inheriting an unexamined one.
+    "fpga/rtl/terrain/zhao_terrain_normalloader.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
     # Pass-through wrapper: it routes the port down to zhao_scanout_fetch and

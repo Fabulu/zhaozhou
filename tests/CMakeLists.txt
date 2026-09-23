@@ -15386,6 +15386,64 @@ add_test(NAME lint_zhao_part_table_loader
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv)
 set_tests_properties(lint_zhao_part_table_loader PROPERTIES LABELS "lint;fast")
 
+# ---- TERRAIN.NORMALMAP's detail-page loader (owner ruling R243 D-NORMALS-A) -
+# The same discipline as the species-page loader above, plus the one thing that
+# bench does NOT do: its guard responder is the REAL two-cycle one. MEM.GUARD
+# drives `ready` as a level and pulses `ok` the cycle AFTER the accept, and
+# `tools/rtl/check_guard_verdict.py`'s header records that every played
+# responder in the tree raised them together -- "the RTL, the harnesses and the
+# measurements all agreed with each other about a machine that does not exist".
+# This responder models zhao_mem_guard.sv:604-680, and it ASSERTS on every
+# cycle of every test that the two are never high together, so a drift back
+# toward the fiction fails loudly instead of quietly re-blessing the defect.
+add_executable(test_terrain_normalloader_directed terrain/normalloader_directed.cpp)
+target_link_libraries(test_terrain_normalloader_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_normalloader_directed
+  PREFIX Vtb_terrain_normalloader
+  TOP_MODULE tb_terrain_normalloader
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normalloader.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_normalloader.sv)
+add_test(NAME terrain_normalloader_directed COMMAND test_terrain_normalloader_directed)
+set_tests_properties(terrain_normalloader_directed PROPERTIES LABELS "fast;terrain" TIMEOUT 300)
+
+add_test(NAME lint_zhao_terrain_normalloader
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_normalloader
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normalloader.sv)
+set_tests_properties(lint_zhao_terrain_normalloader PROPERTIES LABELS "lint;fast")
+
+# The POSITIVE CONTROL for the responder above, kept SEPARATE from the directed
+# test exactly as CLAUDE.md requires: "Do not write a test that asserts the bug
+# ... keep the detector's positive control separate."
+#
+# `tests/mutants/zhao_terrain_normalloader_onecycle_mutant.sv` is the loader
+# with its two verdict states collapsed back into the broken one-cycle form.
+# No legal stimulus can produce that defect -- it is a property of the RTL's
+# SHAPE, not a reachable state -- so the only demonstration is a committed
+# mutant, and the driver's polarity is INVERTED: it passes when the load FAILS.
+#
+# MEASURED: pages=0 words=0 writes=0 busy=1 denied=0. The driver asserts the
+# SILENT SIGNATURE, not merely a failure -- a block with this defect reports
+# nothing at all and looks idle, which is why it survived in two geometry
+# fetchers until a tool went looking for the shape.
+add_executable(test_normalloader_onecycle_mutant
+               mutants/normalloader_onecycle_mutant_driver.cpp)
+target_link_libraries(test_normalloader_onecycle_mutant PRIVATE zhao_harness zhao_zref)
+verilate(test_normalloader_onecycle_mutant
+  PREFIX Vtb_terrain_normalloader_onecycle_mutant
+  TOP_MODULE tb_terrain_normalloader_onecycle_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/mutants/zhao_terrain_normalloader_onecycle_mutant.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/mutants/tb_terrain_normalloader_onecycle_mutant.sv)
+add_test(NAME normalloader_onecycle_mutant COMMAND test_normalloader_onecycle_mutant)
+set_tests_properties(normalloader_onecycle_mutant
+                     PROPERTIES LABELS "fast;terrain;mutant" TIMEOUT 300)
+
 # ---- GEOM.LOD's ladder-constant bank (owner rulings R26/R68) ---------------
 # The same discipline as the species-page loader above, plus one case that only
 # a DOUBLE-BANKED store can pass: an illegal record FIVE rows into a seven-row
