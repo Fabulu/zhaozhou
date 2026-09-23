@@ -1,0 +1,31 @@
+mbolt: rods rig=rods  rod radii mm = 74 46 48 58  balls = 101 85 101 106
+mbolt: clearance 96 mm, split N default 4, split gap bound 46 mm
+mbolt: screen leg is ORTHOGRAPHIC along the production view direction (ps 0.25882 pc 0.96608); the gate does not rest on it
+OK   B1 CLEAR manafold-hover: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-inspect: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-channel: 0 of 28560 bolt segments intersect the antenna over 420 frames
+OK   B1 CLEAR manafold-trick: 0 of 24168 bolt segments intersect the antenna over 400 frames
+OK   B1 CLEAR manafold-damage: 0 of 32848 bolt segments intersect the antenna over 464 frames
+OK   B1 CLEAR manafold-hasty: 0 of 16928 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-flight: 0 of 23680 bolt segments intersect the antenna over 352 frames
+OK   B1 CLEAR manafold-fall: 0 of 23120 bolt segments intersect the antenna over 340 frames
+OK   B1 CLEAR manafold-hit: 0 of 9024 bolt segments intersect the antenna over 140 frames
+OK   B1 CLEAR manafold-taunt: 0 of 19368 bolt segments intersect the antenna over 280 frames
+OK   B1 CLEAR manafold-taunt2: 0 of 17240 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-death-drop: 0 of 16344 bolt segments intersect the antenna over 450 frames
+OK   B1 CLEAR manafold-death-gutter: 0 of 15492 bolt segments intersect the antenna over 590 frames
+OK   B1 CLEAR manafold-lasso: 0 of 23448 bolt segments intersect the antenna over 336 frames
+OK   B1 CLEAR manafold-blown: 0 of 20672 bolt segments intersect the antenna over 292 frames
+OK   B1 CLEAR manafold-taunt3: 0 of 25024 bolt segments intersect the antenna over 368 frames
+OK   B1 CLEAR manafold-drift: 0 of 19640 bolt segments intersect the antenna over 300 frames
+OK   B1 CLEAR manafold-curious: 0 of 12240 bolt segments intersect the antenna over 180 frames
+OK   B1 CLEAR manafold-startle: 0 of 11344 bolt segments intersect the antenna over 160 frames
+OK   B1 CLEAR manafold-rest: 0 of 28392 bolt segments intersect the antenna over 400 frames
+OK   B1 CLEAR manafold-pirouette: 0 of 17104 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-crackle: 0 of 42364 bolt segments intersect the antenna over 600 frames
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 40.20 mm against 160.82
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 0 of 54 depth-straddling segments are drawn partly occluded at N=4, and 0 of 54 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+OK   B3 ROLLOUT: all 22 live subjects carry 3D avoidance, and 0 intersections remain anywhere in the bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is 32.3 mm, on manafold-channel frame 247
+mbolt: ALL LEGS OK

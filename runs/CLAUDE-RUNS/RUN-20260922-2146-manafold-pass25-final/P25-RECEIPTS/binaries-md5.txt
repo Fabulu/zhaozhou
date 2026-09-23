@@ -1,0 +1,18 @@
+g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+
+db85b53ec62cb3d7e8e810fdfc6692a8 *manafold-boltgate.exe
+0fb10dba042a61708cced65fa32cbe76 *manafold-eyesize.exe
+25c90bc7d0bba4f356333946b22af66d *manafold-meshcheck.exe
+542c37ed4f63e6839a831b8e3f0e90d3 *manafold-motiongate.exe
+68b0fec85d7eb4c8a21b0258c4f0396a *manafold-nodule.exe
+ff918ec5363e2bd1d4df08bf7a9a1706 *manafold-outlinegate.exe
+7d7bbf1bb8ac16672907993e4242aef3 *manafold-probe.exe
+6827b5c4d08c4a4ac5645d01055a2d39 *manafold-public-jointgate.exe
+5045b2bbe837db19bcbe7831bb0e6b4d *manafold-qa-p12.exe
+39b787359031f6bbbadd6a965c2d5d50 *manafold-rear-audit.exe
+a1a3350b731628d3aa81df54ff71ef91 *manafold-rodgate.exe
+1b5f20b1dd8b3c732a547ac45528e580 *manafold-shellgate.exe
+0c67dd265207f4b0774de461b3c36f06 *manafold-spangate.exe
+c4fba132fbadd8b02115caae3465dbba *zhao-reel-cel.exe
+
+6e96c375d03579cca952103ada20421194027dfcd5b8ec2ae2074c1fefcff7e3 *zhao-reel-cel.exe

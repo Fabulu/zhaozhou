@@ -1,0 +1,13 @@
+clearance rc hits minclear worstsubject
+46 rc=0 hits=0 | 4.4 mm, on manafold-blown frame 130
+56 rc=1 hits=3 | -27.7 mm, on manafold-blown frame 122
+66 rc=1 hits=8 | -21.9 mm, on manafold-blown frame 120
+70 rc=1 hits=11 | -56.4 mm, on manafold-blown frame 142
+76 rc=1 hits=4 | -9.7 mm, on manafold-blown frame 128
+86 rc=0 hits=0 | 45.8 mm, on manafold-channel frame 247
+96 rc=0 hits=0 | 32.3 mm, on manafold-channel frame 247
+106 rc=1 hits=1 | -2.7 mm, on manafold-channel frame 247
+116 rc=0 hits=0 | 56.7 mm, on manafold-hover frame 99
+130 rc=0 hits=0 | 36.1 mm, on manafold-hover frame 99
+150 rc=0 hits=0 | 24.3 mm, on manafold-fall frame 92
+170 rc=0 hits=0 | 43.6 mm, on manafold-hasty frame 119

@@ -1,0 +1,98 @@
+mbolt legs re-run after the header-comment-only rebuild of manafold_boltgate.cpp
+binary MD5 before comment edit: db85b53ec62cb3d7e8e810fdfc6692a8  (the one the gate matrix used)
+binary MD5 after  comment edit: b2bd424275eb61172e51c3ddee972559  (the one the committed source builds)
+The renderer was NOT rebuilt, so every bank CRC and identity leg in gate-matrix.txt stands.
+
+== gate  RC=0 (expect 0) ==
+OK   B1 CLEAR manafold-hover: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-crackle: 0 of 42364 bolt segments intersect the antenna over 600 frames
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 40.20 mm against 160.82
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 0 of 54 depth-straddling segments are drawn partly occluded at N=4, and 0 of 54 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+OK   B3 ROLLOUT: all 22 live subjects carry 3D avoidance, and 0 intersections remain anywhere in the bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is 32.3 mm, on manafold-channel frame 247
+mbolt: ALL LEGS OK
+== no-avoid  RC=0 (expect 0) ==
+FAIL B1 CLEAR manafold-hover: 4705 of 38152 bolt segments intersect the antenna (worst 88.8 mm at frame 339)
+FAIL B1 CLEAR manafold-inspect: 4705 of 38152 bolt segments intersect the antenna (worst 88.8 mm at frame 339)
+FAIL B1 CLEAR manafold-channel: 3316 of 28560 bolt segments intersect the antenna (worst 77.1 mm at frame 169)
+FAIL B1 CLEAR manafold-trick: 2819 of 24168 bolt segments intersect the antenna (worst 92.7 mm at frame 357)
+FAIL B1 CLEAR manafold-damage: 3882 of 32848 bolt segments intersect the antenna (worst 99.0 mm at frame 324)
+FAIL B1 CLEAR manafold-hasty: 1845 of 16928 bolt segments intersect the antenna (worst 92.4 mm at frame 28)
+FAIL B1 CLEAR manafold-flight: 1492 of 23680 bolt segments intersect the antenna (worst 73.8 mm at frame 35)
+FAIL B1 CLEAR manafold-fall: 2698 of 23120 bolt segments intersect the antenna (worst 93.3 mm at frame 186)
+FAIL B1 CLEAR manafold-hit: 616 of 9024 bolt segments intersect the antenna (worst 60.4 mm at frame 68)
+FAIL B1 CLEAR manafold-taunt: 2025 of 19368 bolt segments intersect the antenna (worst 90.2 mm at frame 74)
+FAIL B1 CLEAR manafold-taunt2: 668 of 17240 bolt segments intersect the antenna (worst 93.8 mm at frame 224)
+FAIL B1 CLEAR manafold-death-drop: 2715 of 16344 bolt segments intersect the antenna (worst 95.9 mm at frame 138)
+FAIL B1 CLEAR manafold-death-gutter: 2030 of 15492 bolt segments intersect the antenna (worst 96.2 mm at frame 185)
+FAIL B1 CLEAR manafold-lasso: 2221 of 23448 bolt segments intersect the antenna (worst 98.6 mm at frame 55)
+FAIL B1 CLEAR manafold-blown: 2633 of 20672 bolt segments intersect the antenna (worst 92.8 mm at frame 227)
+FAIL B1 CLEAR manafold-taunt3: 1502 of 25024 bolt segments intersect the antenna (worst 73.9 mm at frame 35)
+FAIL B1 CLEAR manafold-drift: 3008 of 19640 bolt segments intersect the antenna (worst 80.7 mm at frame 270)
+FAIL B1 CLEAR manafold-curious: 205 of 12240 bolt segments intersect the antenna (worst 71.9 mm at frame 20)
+FAIL B1 CLEAR manafold-startle: 880 of 11344 bolt segments intersect the antenna (worst 71.6 mm at frame 71)
+FAIL B1 CLEAR manafold-rest: 2938 of 28392 bolt segments intersect the antenna (worst 97.4 mm at frame 74)
+FAIL B1 CLEAR manafold-pirouette: 2007 of 17104 bolt segments intersect the antenna (worst 89.5 mm at frame 229)
+FAIL B1 CLEAR manafold-crackle: 5685 of 42364 bolt segments intersect the antenna (worst 98.9 mm at frame 123)
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 7.37 mm against 29.48
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 155 of 155 depth-straddling segments are drawn partly occluded at N=4, and 155 of 155 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+FAIL B3 ROLLOUT: 22 of 22 live subjects avoid; 54595 intersections remain across the whole bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is -99.0 mm, on manafold-damage frame 324
+CONTROL --fail-no-avoid : the control FIRED (23 leg(s) red, 54595 total intersections)
+== no-split  RC=0 (expect 0) ==
+OK   B1 CLEAR manafold-hover: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-crackle: 0 of 42364 bolt segments intersect the antenna over 600 frames
+FAIL B2 SPLIT manafold-inspect: N=4 lays 228912 sprites against 915648 expected (228912 unsplit x 4), spacing 160.82 mm against 160.82/4
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 0 of 54 depth-straddling segments are drawn partly occluded at N=4, and 0 of 54 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+OK   B3 ROLLOUT: all 22 live subjects carry 3D avoidance, and 0 intersections remain anywhere in the bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is 32.3 mm, on manafold-channel frame 247
+CONTROL --fail-no-split : the control FIRED (1 leg(s) red, 0 total intersections)
+== fat-rod  RC=0 (expect 0) ==
+FAIL B1 CLEAR manafold-hover: 10133 of 38152 bolt segments intersect the antenna (worst 44.0 mm at frame 345)
+FAIL B1 CLEAR manafold-inspect: 10133 of 38152 bolt segments intersect the antenna (worst 44.0 mm at frame 345)
+FAIL B1 CLEAR manafold-channel: 8176 of 28560 bolt segments intersect the antenna (worst 56.5 mm at frame 247)
+FAIL B1 CLEAR manafold-trick: 8069 of 24168 bolt segments intersect the antenna (worst 31.6 mm at frame 108)
+FAIL B1 CLEAR manafold-damage: 7218 of 32848 bolt segments intersect the antenna (worst 28.9 mm at frame 68)
+FAIL B1 CLEAR manafold-hasty: 7662 of 16928 bolt segments intersect the antenna (worst 31.9 mm at frame 119)
+FAIL B1 CLEAR manafold-flight: 4815 of 23680 bolt segments intersect the antenna (worst 31.2 mm at frame 244)
+FAIL B1 CLEAR manafold-fall: 6002 of 23120 bolt segments intersect the antenna (worst 27.2 mm at frame 230)
+FAIL B1 CLEAR manafold-hit: 1623 of 9024 bolt segments intersect the antenna (worst 25.4 mm at frame 0)
+FAIL B1 CLEAR manafold-taunt: 6594 of 19368 bolt segments intersect the antenna (worst 31.3 mm at frame 38)
+FAIL B1 CLEAR manafold-taunt2: 1903 of 17240 bolt segments intersect the antenna (worst 31.3 mm at frame 42)
+FAIL B1 CLEAR manafold-death-drop: 4308 of 16344 bolt segments intersect the antenna (worst 27.8 mm at frame 196)
+FAIL B1 CLEAR manafold-death-gutter: 3745 of 15492 bolt segments intersect the antenna (worst 31.2 mm at frame 194)
+FAIL B1 CLEAR manafold-lasso: 3865 of 23448 bolt segments intersect the antenna (worst 31.5 mm at frame 290)
+FAIL B1 CLEAR manafold-blown: 4699 of 20672 bolt segments intersect the antenna (worst 31.2 mm at frame 121)
+FAIL B1 CLEAR manafold-taunt3: 3752 of 25024 bolt segments intersect the antenna (worst 26.7 mm at frame 344)
+FAIL B1 CLEAR manafold-drift: 6791 of 19640 bolt segments intersect the antenna (worst 29.1 mm at frame 221)
+FAIL B1 CLEAR manafold-curious: 1667 of 12240 bolt segments intersect the antenna (worst 31.3 mm at frame 40)
+FAIL B1 CLEAR manafold-startle: 1783 of 11344 bolt segments intersect the antenna (worst 25.5 mm at frame 41)
+FAIL B1 CLEAR manafold-rest: 5565 of 28392 bolt segments intersect the antenna (worst 28.3 mm at frame 243)
+FAIL B1 CLEAR manafold-pirouette: 4697 of 17104 bolt segments intersect the antenna (worst 32.6 mm at frame 137)
+FAIL B1 CLEAR manafold-crackle: 11005 of 42364 bolt segments intersect the antenna (worst 34.3 mm at frame 389)
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 40.20 mm against 160.82
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 426 of 535 depth-straddling segments are drawn partly occluded at N=4, and 424 of 535 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+FAIL B3 ROLLOUT: 22 of 22 live subjects avoid; 124205 intersections remain across the whole bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is -56.5 mm, on manafold-channel frame 247
+CONTROL --fail-fat-rod : the control FIRED (23 leg(s) red, 124205 total intersections)
+CONTROL --fail-fat-rod: radii scaled to 2200 pm; B1's operand is reading the RODS, not a constant
+== mirror-drift  RC=0 (expect 0) ==
+OK   B1 CLEAR manafold-hover: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-crackle: 0 of 42364 bolt segments intersect the antenna over 600 frames
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 40.20 mm against 160.82
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 0 of 54 depth-straddling segments are drawn partly occluded at N=4, and 0 of 54 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+OK   B3 ROLLOUT: all 22 live subjects carry 3D avoidance, and 0 intersections remain anywhere in the bank
+FAIL B4 MIRROR row 0: mbolt measures 'manafold-hover-DRIFTED' while the rollout table names 'manafold-hover'
+INFO B5 CLOSEST APPROACH: clearance knob 96 mm; the nearest a drawn bolt comes to the band anywhere in the bank is 32.3 mm, on manafold-channel frame 247
+CONTROL --fail-mirror-drift: the control FIRED (1 leg(s) red, 0 total intersections)
+== envoff RC=1 expected ==
+mbolt: LEGS RED
+== clr70 RC=1 expected ==
+FAIL B1 CLEAR manafold-blown: 11 of 20672 bolt segments intersect the antenna (worst 56.4 mm at frame 142)
+FAIL B3 ROLLOUT: 22 of 22 live subjects avoid; 11 intersections remain across the whole bank
+INFO B5 CLOSEST APPROACH: clearance knob 70 mm; the nearest a drawn bolt comes to the band anywhere in the bank is -56.4 mm, on manafold-blown frame 142
+mbolt: LEGS RED

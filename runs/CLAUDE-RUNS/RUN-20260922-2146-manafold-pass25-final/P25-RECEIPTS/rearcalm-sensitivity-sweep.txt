@@ -1,0 +1,24 @@
+SHIP   motion (root-local, mm/sample): End  path 600 vmax 2.6 amax 0.63 jmax 0.64 jrms 0.291
+SHIP                                   last path 5558 vmax 19.3 amax 9.55 jmax 11.62 jrms 4.271
+SHIP                                   C    path 11152 vmax 38.6 amax 18.42 jmax 19.93 jrms 6.686
+AMB400   motion (root-local, mm/sample): End  path 604 vmax 2.6 amax 0.62 jmax 0.65 jrms 0.294
+AMB400                                   last path 5558 vmax 19.3 amax 9.55 jmax 11.62 jrms 4.271
+AMB400                                   C    path 11152 vmax 38.6 amax 18.42 jmax 19.93 jrms 6.686
+AMB0   motion (root-local, mm/sample): End  path 597 vmax 2.6 amax 0.62 jmax 0.63 jrms 0.292
+AMB0                                   last path 5558 vmax 19.3 amax 9.55 jmax 11.62 jrms 4.271
+AMB0                                   C    path 11152 vmax 38.6 amax 18.42 jmax 19.93 jrms 6.686
+KNEAD0   motion (root-local, mm/sample): End  path 602 vmax 2.6 amax 0.63 jmax 0.67 jrms 0.291
+KNEAD0                                   last path 5692 vmax 19.1 amax 7.61 jmax 8.33 jrms 4.187
+KNEAD0                                   C    path 11419 vmax 38.5 amax 16.70 jmax 17.32 jrms 6.440
+DENTSWING0   motion (root-local, mm/sample): End  path 600 vmax 2.6 amax 0.63 jmax 0.67 jrms 0.293
+DENTSWING0                                   last path 5560 vmax 20.6 amax 11.08 jmax 13.65 jrms 4.403
+DENTSWING0                                   C    path 11149 vmax 39.5 amax 19.19 jmax 20.49 jrms 6.583
+DENTDEPTH0   motion (root-local, mm/sample): End  path 600 vmax 2.6 amax 0.63 jmax 0.64 jrms 0.293
+DENTDEPTH0                                   last path 5565 vmax 19.6 amax 8.98 jmax 10.58 jrms 4.285
+DENTDEPTH0                                   C    path 11159 vmax 39.5 amax 17.39 jmax 18.38 jrms 6.471
+FOLDDIP0   motion (root-local, mm/sample): End  path 600 vmax 2.6 amax 0.63 jmax 0.64 jrms 0.291
+FOLDDIP0                                   last path 5558 vmax 19.3 amax 9.55 jmax 11.62 jrms 4.271
+FOLDDIP0                                   C    path 11152 vmax 38.6 amax 18.42 jmax 19.93 jrms 6.686
+DIPPM0   motion (root-local, mm/sample): End  path 602 vmax 2.6 amax 0.63 jmax 0.67 jrms 0.291
+DIPPM0                                   last path 5692 vmax 19.1 amax 7.61 jmax 8.33 jrms 4.187
+DIPPM0                                   C    path 11419 vmax 38.5 amax 16.70 jmax 17.32 jrms 6.440

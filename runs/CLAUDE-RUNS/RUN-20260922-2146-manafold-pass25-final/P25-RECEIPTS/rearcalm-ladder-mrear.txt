@@ -1,0 +1,10 @@
+rung | slot0 C path/vmax/amax/jmax/jrms | slot0 rel mean/max
+1000 | path 11269 vmax 39.0 amax 16.36 jmax 17.45 jrms 6.665 | rel max 11.2 mean 2.2 step 1.19 (sample 227)
+800 | path 11217 vmax 37.4 amax 17.12 jmax 18.62 jrms 6.767 | rel max 11.1 mean 2.2 step 1.24 (sample 225)
+700 | path 11195 vmax 38.3 amax 15.97 jmax 17.49 jrms 6.747 | rel max 11.1 mean 2.2 step 1.16 (sample 225)
+600 | path 11181 vmax 39.1 amax 16.83 jmax 18.16 jrms 6.706 | rel max 11.1 mean 2.2 step 1.23 (sample 225)
+500 | path 11160 vmax 38.2 amax 17.68 jmax 18.52 jrms 6.763 | rel max 11.1 mean 2.2 step 1.19 (sample 225)
+420 | path 11152 vmax 38.6 amax 18.42 jmax 19.93 jrms 6.686 | rel max 11.2 mean 2.2 step 1.24 (sample 225)
+300 | path 11136 vmax 38.8 amax 17.88 jmax 19.25 jrms 6.682 | rel max 11.1 mean 2.2 step 1.12 (sample 455)
+150 | path 11120 vmax 39.3 amax 18.95 jmax 20.32 jrms 6.667 | rel max 11.1 mean 2.2 step 1.17 (sample 456)
+0 | path 11126 vmax 38.6 amax 16.92 jmax 18.36 jrms 6.623 | rel max 11.1 mean 2.2 step 1.17 (sample 227)

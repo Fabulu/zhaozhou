@@ -1,0 +1,81 @@
+mbolt: rods rig=rods  rod radii mm = 74 46 48 58  balls = 101 85 101 106
+mbolt: clearance 46 mm, split N default 4, split gap bound 46 mm
+mbolt: screen leg is ORTHOGRAPHIC along the production view direction (ps 0.25882 pc 0.96608); the gate does not rest on it
+
+CENSUS -- per live subject, every key and midpoint
+subject                  slot     segs    hit3d worst_mm nearmiss   xfront xbehind frames_hit   gap_mm minclr_mm  minclr_f
+manafold-hover              0    38152        0      0.0    12683    11225    6887         0    131.3      37.7       253
+manafold-inspect            0    38152        0      0.0    12683    11225    6887         0     32.8      37.7       253
+manafold-channel            2    28560        0      0.0     9948    10430    1691         0    100.5      38.0       258
+manafold-trick             13    24168        0      0.0     7647     8251    1389         0     52.3      44.8       342
+manafold-damage            14    32848        0      0.0     9438    15153    2279         0     85.6      43.0       114
+manafold-hasty              8    16928        0      0.0     6501     6725    1520         0     71.5      28.0        48
+manafold-flight            22    23680        0      0.0     5252     7509    2358         0     77.7      44.1       167
+manafold-fall               9    23120        0      0.0     8221     7885    2527         0     73.3      43.3        37
+manafold-hit               10     9024        0      0.0     2139     3007     572         0     33.9      45.5       135
+manafold-taunt             11    19368        0      0.0     6367     6980    1490         0     95.8      41.8       186
+manafold-taunt2            12    17240        0      0.0     1856     2479     571         0     47.8      44.9        82
+manafold-death-drop        17    16344        0      0.0     4892     6573    1049         0     80.8      43.9       196
+manafold-death-gutter      18    15492        0      0.0     4236     6527    1134         0     90.1      42.7       185
+manafold-lasso             19    23448        0      0.0     4955     4013     361         0     71.6      44.7        36
+manafold-blown             20    20672        0      0.0     6997     5849     950         0    120.9       4.4       130
+manafold-taunt3            21    25024        0      0.0     4412     8539    1930         0     79.3      44.6       166
+manafold-drift              1    19640        0      0.0     7064     7740    1624         0     70.1      43.2       247
+manafold-curious            3    12240        0      0.0     1286     4533    1154         0     48.2      45.8        19
+manafold-startle            4    11344        0      0.0     2490     4576     796         0     51.7      44.9        42
+manafold-rest               5    28392        0      0.0     8155    10715    2398         0     68.0      44.9        26
+manafold-pirouette          6    17104        0      0.0     5873     6091    2046         0     80.2      42.5        53
+manafold-crackle           23    42364        0      0.0    14390    16418    2423         0    111.0      12.1       250
+
+BREAKDOWN of the intersections -- which primitive, which obstacle, and whether the segment touches an anchor point
+subject                      edge     free   anchored   interior      rod     ball   worstlen
+manafold-hover                  0        0          0          0        0        0        0.0
+manafold-inspect                0        0          0          0        0        0        0.0
+manafold-channel                0        0          0          0        0        0        0.0
+manafold-trick                  0        0          0          0        0        0        0.0
+manafold-damage                 0        0          0          0        0        0        0.0
+manafold-hasty                  0        0          0          0        0        0        0.0
+manafold-flight                 0        0          0          0        0        0        0.0
+manafold-fall                   0        0          0          0        0        0        0.0
+manafold-hit                    0        0          0          0        0        0        0.0
+manafold-taunt                  0        0          0          0        0        0        0.0
+manafold-taunt2                 0        0          0          0        0        0        0.0
+manafold-death-drop             0        0          0          0        0        0        0.0
+manafold-death-gutter           0        0          0          0        0        0        0.0
+manafold-lasso                  0        0          0          0        0        0        0.0
+manafold-blown                  0        0          0          0        0        0        0.0
+manafold-taunt3                 0        0          0          0        0        0        0.0
+manafold-drift                  0        0          0          0        0        0        0.0
+manafold-curious                0        0          0          0        0        0        0.0
+manafold-startle                0        0          0          0        0        0        0.0
+manafold-rest                   0        0          0          0        0        0        0.0
+manafold-pirouette              0        0          0          0        0        0        0.0
+manafold-crackle                0        0          0          0        0        0        0.0
+OK   B1 CLEAR manafold-hover: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-inspect: 0 of 38152 bolt segments intersect the antenna over 600 frames
+OK   B1 CLEAR manafold-channel: 0 of 28560 bolt segments intersect the antenna over 420 frames
+OK   B1 CLEAR manafold-trick: 0 of 24168 bolt segments intersect the antenna over 400 frames
+OK   B1 CLEAR manafold-damage: 0 of 32848 bolt segments intersect the antenna over 464 frames
+OK   B1 CLEAR manafold-hasty: 0 of 16928 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-flight: 0 of 23680 bolt segments intersect the antenna over 352 frames
+OK   B1 CLEAR manafold-fall: 0 of 23120 bolt segments intersect the antenna over 340 frames
+OK   B1 CLEAR manafold-hit: 0 of 9024 bolt segments intersect the antenna over 140 frames
+OK   B1 CLEAR manafold-taunt: 0 of 19368 bolt segments intersect the antenna over 280 frames
+OK   B1 CLEAR manafold-taunt2: 0 of 17240 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-death-drop: 0 of 16344 bolt segments intersect the antenna over 450 frames
+OK   B1 CLEAR manafold-death-gutter: 0 of 15492 bolt segments intersect the antenna over 590 frames
+OK   B1 CLEAR manafold-lasso: 0 of 23448 bolt segments intersect the antenna over 336 frames
+OK   B1 CLEAR manafold-blown: 0 of 20672 bolt segments intersect the antenna over 292 frames
+OK   B1 CLEAR manafold-taunt3: 0 of 25024 bolt segments intersect the antenna over 368 frames
+OK   B1 CLEAR manafold-drift: 0 of 19640 bolt segments intersect the antenna over 300 frames
+OK   B1 CLEAR manafold-curious: 0 of 12240 bolt segments intersect the antenna over 180 frames
+OK   B1 CLEAR manafold-startle: 0 of 11344 bolt segments intersect the antenna over 160 frames
+OK   B1 CLEAR manafold-rest: 0 of 28392 bolt segments intersect the antenna over 400 frames
+OK   B1 CLEAR manafold-pirouette: 0 of 17104 bolt segments intersect the antenna over 240 frames
+OK   B1 CLEAR manafold-crackle: 0 of 42364 bolt segments intersect the antenna over 600 frames
+OK   B2 SPLIT manafold-inspect: N=4 lays 915648 sprites along the bolt, exactly 4 x the 228912 it lays unsplit, and the near-rod spacing is 32.83 mm against 131.31
+INFO B2b PARTIAL OCCLUSION manafold-inspect: 0 of 59 depth-straddling segments are drawn partly occluded at N=4, and 0 of 59 at N=1 -- the split changes the SPACING, not whether a crossing is cut, because the unsplit bolt is already finer than the rod
+OK   B3 ROLLOUT: all 22 live subjects carry 3D avoidance; 0 intersections remain in the bank
+OK   B4 MIRROR: mbolt's 22 rows ARE u02::kBoltLiveSubjects, in order, and the avoid/split columns it used to own are gone -- both sides read u02::bolt_avoid_for
+INFO B5 CLOSEST APPROACH: clearance knob 46 mm; the nearest a drawn bolt comes to the band anywhere in the bank is 4.4 mm, on manafold-blown frame 130
+mbolt: ALL LEGS OK
