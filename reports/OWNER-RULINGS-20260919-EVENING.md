@@ -7462,3 +7462,65 @@ a fit … a map is minutes."* Change the write, map the block standalone, and re
 two things: whether `zhao_geom_drawjob` appears in the **RAM Summary**, and
 whether its register count drops by ~98,000. **Both are in the report the runner
 already harvests.**
+
+
+### CANDIDATE 2 — `zhao_forge_assemble`, ~34,840 bits in flops, with BOTH classic blockers visible
+
+**And the sweep that found it also says the problem is NOT systemic**, which is
+the more useful half.
+
+Ranking every entity by its **OWN** registers against its block memory bits:
+
+| own registers | membits | entity |
+|---|---|---|
+| **100,561** | **0** | `zhao_geom_drawjob` |
+| **37,638** | 2,048 | `zhao_forge_assemble` |
+| 24,795 | 25,344 | `zhao_field_v3_exec` |
+| 11,141 | 17,128 | `zhao_cmd_exec` |
+| 5,115 | 85,282 | `zhao_field_host_v2` |
+| 4,920 | 571,114 | `zhao_shell_top_v2` |
+| 4,491 | 187,308 | `zhao_vertex_arena` |
+
+**Every other register-heavy block carries substantial block memory — their
+arrays DID infer.** `zhao_shell_top_v2` holds 571,114 bits against 4,920 own
+flops; `zhao_vertex_arena` 187,308 against 4,491. **So this is not a tree-wide
+coding problem. It is two blocks**, and one of them is 2.7× the other.
+
+**`zhao_forge_assemble`'s arrays** (`fpga/rtl/forge/zhao_forge_assemble.sv`):
+
+```systemverilog
+logic [POSW-1:0] pos_q [MAX_VERTS];   // POSW = 1+21+21 = 43, MAX_VERTS = 520
+logic [23:0]     inv_q [MAX_VERTS];
+```
+
+**520 × 43 + 520 × 24 = 34,840 bits**, against 37,638 own registers measured —
+the arrays plus ordinary control state. **≈ 3.4 M10K if they inferred.**
+
+**THIS ONE'S CAUSE IS BETTER EVIDENCED THAN DRAWJOB'S, because both known
+blockers are visible in the source:**
+
+* **`:538` — an ASYNCHRONOUS read.**
+  `wire [POSW-1:0] pos_rd_c = pos_q[rd_a_q];` — combinational, not registered.
+  **Quartus names exactly this failure elsewhere in this same report**:
+  *"`zhao_twod_sampler|bind_base_q` is uninferred due to **asynchronous read
+  logic**"*.
+* **`:661` — a RESET on the array.** `pos_q[k] <= '0;`. **`zhao_geom_drawjob`'s
+  own comment identifies this as fatal** — *"The array itself has NO reset,
+  which is what lets it infer M10K"* — so the tree already knows the rule and
+  this block breaks it.
+
+**And the same silent signature:** Quartus emitted nine `Info (276…)` messages
+about `zhao_forge_assemble`, but the only two "uninferred" ones name a
+**sub-module** (`zhao_raster_rcp24_v4:u_rcp|p_k_q`, `p_tok_q`). **Nothing was
+said about `pos_q` or `inv_q` at all** — they never presented as candidates,
+exactly as in drawjob.
+
+**A caution on sequencing:** the **SHADOWRIDE lane is riding
+`zhao_forge_assemble` right now**. This is recorded as a lever for the
+optimisation phase, **not handed to that lane** — changing a block's storage
+shape underneath a packet composing against it is how two correct changes
+produce one broken merge.
+
+**Together the two blocks are ~133,000 bits sitting in flops that ~13 M10K would
+hold**, with block memory measured at **52% of the target**. That is the whole
+of *"spend M10K to buy ALMs"* in two files.
