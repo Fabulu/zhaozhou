@@ -12322,6 +12322,27 @@ add_test(NAME counter_ids_append_only
 set_tests_properties(counter_ids_append_only PROPERTIES
   LABELS "fast;lint;nightly" TIMEOUT 120)
 
+# V3 BANK GEOMETRY AND FABRIC STATE -- registered 2026-09-23, and the reason it
+# was not registered before is the point. tools/rtl/check_v3_banks.py has an
+# exemplary self-test: it plants a primitive that is not in the tree and REFUSES
+# TO RUN unless the hand-list audit fires. Nothing ever ran it, because it was
+# not a test. On 2026-09-14 commit 096c7139 gave
+# zhao_texture_material_combine_v3.sv a `localparam` written across three lines;
+# the gate could not resolve it, returned rc=2 CANNOT PARSE, and went dark FOR
+# NINE DAYS -- self-test included, which is how its own alarm ended up being the
+# symptom that found it. A gate nobody runs is indistinguishable from a gate
+# that does not exist, so it is a test now.
+#
+# IT IS RED AT REGISTRATION, INHERITED AND PRE-EXISTING: two fabric stores
+# (uvw_m 4,096 bits, shadow_metadata_m 7,680 bits), a MATERIAL bank 46 bits wide
+# against a declared 48, and a two-read-address array that cannot infer an M10K.
+# None of that is new; it was merely unprintable while the parser was stuck.
+add_test(NAME v3_bank_geometry
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/rtl/check_v3_banks.py)
+set_tests_properties(v3_bank_geometry PROPERTIES
+  LABELS "lint;nightly" TIMEOUT 180)
+
 # The short finish forms are an arithmetic claim over the whole raw-product
 # domain, including products no legal byte pair can make. The differential above
 # drives legal texels and so cannot reach that domain; this compares the two

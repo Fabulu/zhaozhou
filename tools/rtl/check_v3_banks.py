@@ -396,6 +396,63 @@ def strip_comments_keep_lines(src):
     return src
 
 
+def param_value(text, m):
+    """The full value of the parameter PARAM_RE matched, which MAY span lines.
+
+    PARAM_RE's own comment explains why its capture stops at a newline: the LAST
+    parameter in a `#( ... )` header has no trailing comma, so an unbounded
+    value ran on through `) (` and into the port list. That reasoning is right
+    and the cure was too blunt -- it also truncated every BODY `localparam`
+    written across lines, and a truncated value is an UNRESOLVED one:
+
+        localparam int PAYW = (READ_LATE != 0)
+            ? 47
+            : (47 + 4 * TEXTURE_RESULT_W);
+
+    `zhao_texture_material_combine_v3.sv:287` is exactly that shape, and because
+    a file this gate cannot read is rc=2, THE WHOLE GATE WAS DARK -- including
+    its own template audit, whose self-test is what reported the symptom.
+
+    So the terminator is found by SCANNING with paren depth rather than by
+    forbidding newlines: a value ends at `;` always, and at `,` or a CLOSING
+    paren only at depth zero. That bounds the header case the comment describes
+    more precisely than the newline rule did -- the trailing header parameter
+    now stops at its own `)` instead of at end-of-line.
+    """
+    i = m.start(2)
+    depth = 0
+    out = []
+    while i < len(text):
+        c = text[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                break          # the `#( ... )` parameter list closing
+            depth -= 1
+        elif depth == 0 and c in ";,":
+            break
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+# A SystemVerilog conditional is not a Python one, and the difference is exact
+# rather than a matter of taste: `c ? a : b` becomes `(a) if (c) else (b)`.
+# Translating it is not guessing a value -- it is reading the one that is
+# written. The comparison operators come with it because a conditional whose
+# test cannot be evaluated is no more use than no conditional at all.
+TERNARY_RE = re.compile(r"^(.*?)\?([^?:]*):(.*)$", re.S)
+
+
+def _ternary_to_python(e):
+    m = TERNARY_RE.match(e)
+    if not m:
+        return e
+    cond, a, b = m.group(1), m.group(2), m.group(3)
+    return "((%s) if (%s) else (%s))" % (a, cond, _ternary_to_python(b))
+
+
 def resolve(expr, params):
     """Evaluate a width/depth expression against the file's own parameters.
 
@@ -404,6 +461,9 @@ def resolve(expr, params):
     which this repository does not do."
     """
     e = expr.strip()
+    # A package-qualified name is the same name: the gate resolves against a
+    # flat table that already carries the package's own localparams.
+    e = re.sub(r"\b[A-Za-z_]\w*\s*::\s*", "", e)
     for _ in range(8):
         sub = re.sub(r"\b([A-Za-z_]\w*)\b",
                      lambda m: str(params[m.group(1)])
@@ -416,7 +476,11 @@ def resolve(expr, params):
             break
         e = sub
     e = e.replace("'d", "").strip()
-    if not re.match(r"^[\d\s+\-*/()%]+$", e):
+    e = _ternary_to_python(e)
+    # The charset is the guard that keeps `eval` safe, so it is widened exactly
+    # as far as the forms above need and no further: comparisons and the
+    # conditional's own parentheses, plus the `if`/`else` the translation emits.
+    if not re.match(r"^(?:[\d\s+\-*/()%<>=!&|]|\bif\b|\belse\b)+$", e):
         raise Unparsed("cannot resolve %r (unresolved symbol)" % expr)
     try:
         return int(eval(e, {"__builtins__": {}}, {}))  # noqa: S307 - guarded above
@@ -796,9 +860,10 @@ def module_param_defaults(src):
             continue
         end = _balanced(src, k)
         vals = {}
-        for pm in PARAM_RE.finditer(src[k:end]):
+        chunk = src[k:end]
+        for pm in PARAM_RE.finditer(chunk):
             try:
-                vals[pm.group(1)] = resolve(pm.group(2), vals)
+                vals[pm.group(1)] = resolve(param_value(chunk, pm), vals)
             except Unparsed:
                 pass
         out[m.group(1)] = vals
@@ -819,6 +884,46 @@ def module_spans(lines):
             open_name = None
     if open_name is not None:
         out.append((open_name, start, len(lines) - 1))
+    return out
+
+
+_PKG_PARAMS = None
+
+
+def package_params():
+    """The `localparam`s every module gets by importing a common package.
+
+    A width written as `zhao_render_texture_pkg::TEXTURE_RESULT_W` -- or, after
+    an import, as the bare `TEXTURE_RESULT_W` -- is not in the file that uses
+    it, so a per-file parameter table cannot resolve it and the array it sizes
+    becomes CANNOT PARSE. That is rc=2, and rc=2 is the whole gate dark.
+
+    Read once, from `fpga/rtl/common/*_pkg.sv` only. The narrow scope is
+    deliberate: these are the packages every block imports, a name collision
+    between two of them would be an error in the tree rather than here, and a
+    file-local `localparam` of the same name still WINS because it is applied
+    over this table afterwards.
+    """
+    global _PKG_PARAMS
+    if _PKG_PARAMS is not None:
+        return _PKG_PARAMS
+    out = {}
+    pkgdir = os.path.join(REPO, "fpga", "rtl", "common")
+    try:
+        names = sorted(f for f in os.listdir(pkgdir) if f.endswith("_pkg.sv"))
+    except OSError:
+        names = []
+    for f in names:
+        try:
+            src = strip_comments_keep_lines(read_source(os.path.join(pkgdir, f)))
+        except Exception:
+            continue
+        for m in PARAM_RE.finditer(src):
+            try:
+                out[m.group(1)] = resolve(param_value(src, m), out)
+            except Unparsed:
+                pass
+    _PKG_PARAMS = out
     return out
 
 
@@ -888,10 +993,10 @@ def analyse(path, defaults=None):
     src = strip_comments_keep_lines(raw)
     lines = src.split("\n")
 
-    params = {}
+    params = dict(package_params())
     for m in PARAM_RE.finditer(src):
         try:
-            params[m.group(1)] = resolve(m.group(2), params)
+            params[m.group(1)] = resolve(param_value(src, m), params)
         except Unparsed:
             pass          # a non-numeric parameter is fine until an array needs it
 
