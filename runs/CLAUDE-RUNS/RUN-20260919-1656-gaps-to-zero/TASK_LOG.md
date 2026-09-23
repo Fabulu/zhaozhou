@@ -1444,3 +1444,59 @@ in tool form, after the prose version had already failed once.
 
 **Lanes:** BURSTTRUTH (R243 D-SDRAM-A) and SHADOWCLOSE (R244 D-FORGESHADOW-C)
 running. The labelled diagnostic fit is still placing.
+
+### 2026-09-23 — THE FIT CAME BACK. It failed, and it answered the question anyway.
+
+**`@diag-incomplete-14gaps`: `incomplete:failed:quartus_fit.exe`, 8,030 s.**
+Analysis & Synthesis **succeeded**; the fitter then ran two hours and produced
+**no ALM count and no Fmax**.
+
+**Same sizing device, same tool, against first light — the only honest
+comparison:**
+
+| | first light | today | factor |
+|---|---|---|---|
+| registers | 56,031 | **381,585** | **6.8×** |
+| DSP | 151 | **359** | **2.4×** |
+| memory bits | 1,103,456 | **2,960,515** | **2.7×** |
+
+**Against the target** (41,910 ALM / 112 DSP / 553 M10K): **DSP at 320%**;
+**memory at 52% and comfortably INSIDE** — the one good number, and R242 is part
+of why. ALMs were not measured, but **381,585 registers at four per Cyclone V
+ALM need ≥ 95,396 ALMs — 228% of target before one LUT of logic.** Derived, not
+measured; a floor.
+
+**So the owner's prediction is evidence now: ≥2.3× over on ALM from registers
+alone, 3.2× over on DSP — with five subsystems still missing from the closure.**
+Every figure reads LOW.
+
+**And it is the FIRST console row with clean provenance** — `treeCleanAtHead:
+true`, digest over 258 hashed sources. First light was `false`, so its digest
+described nothing exactly. R80 demanded that before either run.
+
+**WHAT IT DID NOT SETTLE, AND ONE IS MY FAULT.** `run_block_fit.ps1` deletes its
+per-invocation workspace, so **two hours of machine time produced a failure
+whose error message no longer exists.** I will not guess whether DSP exhaustion
+or ALM pressure killed it. A **`-MapOnly -KeepWorkspace`** run was launched at
+**the same commit `18231903`** — ~30 min against the fitter's 134 — to get
+"Resource Utilization by Entity", which answers where the 359 DSP and 381,585
+registers live *and* my pre-receipt question about the texture island's arrays.
+
+**TWO CORRECTIONS I MADE TO MYSELF BEFORE THEY COULD BE QUOTED:**
+
+* **The projector lever is not there.** Three leaf rows show 33 DSP each and
+  CLAUDE.md records the un-deduplicated silicon — but the console instantiates
+  `zhao_proj_subsystem`, which carries **ONE** core, and the other two are not
+  in the 258. **That cheque is cashed for the console.** One grep.
+* **R80's manifest repair is not the lever R80 thought.** Two rows said "RTL not
+  built" about modules **in the fitted closure** — `zhao_mem_upload` is even
+  instantiated — so they were part of the 359 just measured. Removing them
+  changed **no number**: DSP 150, ALM 29,300, M10K 57, REG 117,676 and the 56
+  unpriced rows are byte-identical before and after. The rows made the list
+  **lie**; they never subtracted from the total. The census under-reads
+  **150 against 359** because of the **56 unpriced rows**, 28 with no fit target
+  at all. FORGE.SHADOW's row was kept on purpose — it is genuinely unpriced and
+  its lane is live.
+
+**`dsp_census.py` sees 42% of the DSP that is actually there.** That is the
+instrument this project budgets by.
