@@ -4783,9 +4783,9 @@
 //          not one of the five names guessed. The producer was
 //          `zhao_field_host_v2.sv:370`, already stored PER RESERVATION at
 //          `:1631` (`rsp_pres[cur_rsv] <= cur_seen`, so the metadata-swap
-//          trap was designed out a year before this packet worried about
-//          it), already published at `:1138`, and already read by a sibling
-//          adapter.
+//          trap was designed out on the host side before this packet went
+//          looking for it), already published at `:1138`, and already read
+//          by a sibling adapter.
 //          A BROKEN GREP READS AS AN ABSENCE AND AN ABSENCE READS AS A
 //          BUILD. That is the whole lesson and it is cheap to defend
 //          against: the check that caught it was not a better grep, it was
@@ -4793,7 +4793,15 @@
 //          DID hit. When a search for a capability returns exactly zero,
 //          open the file that would own it and read its ports before
 //          believing the number -- "precision at zero is a tell, not a
-//          result", and this entry is now the campaign's sixteenth instance.
+//          result".
+//          (A COUNT USED TO STAND HERE -- "the campaign's sixteenth
+//          instance" -- AND IT IS REMOVED BECAUSE IT WAS TWO TALLIES ADDED
+//          TOGETHER. `reports/HANDOVER-20260919.md` counts STALE PREMISES
+//          and `PACKET-PROTOCOL.md` counts FALSE-ABSENCE claims; they are
+//          different sets and neither was fifteen-plus-this-one. A
+//          confident ordinal over a number nobody maintains is the same
+//          error this very paragraph is about, committed in the sentence
+//          that describes it.)
 //
 //          REPAIRED HERE: `.resp_present_i(fld_resp_present_c)` is connected,
 //          the adapter publishes `ans_present_o` -- the four ordinals'
