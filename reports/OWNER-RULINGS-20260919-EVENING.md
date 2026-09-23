@@ -7770,3 +7770,76 @@ ALMs and +6.7 MHz on a leaf that otherwise misses 100 MHz** is a different
 proposition against that number than against a guess. **The decision to
 authorise the pin-reducing wrapper — which is what would let the policy actually
 answer — is the owner's, and it is not proposed here.**
+
+## REGISTER 13 -> 12: BOTH MERGES LANDED, AND THE CLIFF ENTRY I WROTE WAS WRONG
+
+**CLIFFADOPT merged at `15060551`; PARTDEPTH merged at `0c0aa5d9`. Measured on
+the merged tree, BARE: `MANDATORY GAPS REMAINING : 12` = 8 tie-offs +
+4 disconnected + 0 unbuilt + 0 uncited + 0 unresolvable. `gate_sweep` RC 0, all
+24 gates matching the committed baseline. Tree clean, local == remote.**
+
+**I51 is CLOSED and it moves pixels.** `zhao_part_clipfeed` now carries
+`p_depth_test_i` / `p_depth_write_i` and emits `o_frag_state_o`, from
+`zhao_part_expand`. The constant it replaced meant `Z_TEST_EN=0` and
+`Z_WRITE_DIS=0` -- particles always passed depth and always wrote it -- and the
+pass-7 law is the opposite on **both** bits. The state **travels with the record
+in the ring**, not read live at the emit, because a live read would pair record
+A's geometry with record B's state on a stall **with every accepted/emitted
+counter still balancing**. The live-read variant is committed as a mutant and
+fires: `offered=8 emitted=8 disagreements=6 held_value_seen=8`.
+
+**CLIFFADOPT discharged both R117/R142 conditions and REFUSED composition, and
+it refused three stale premises I put in its brief** -- a golden leaf fit that
+had already been run (the **third** false-absence claim on that one gate), a
+ledger ask already discharged by `gz/forge4`, and R117's conditions quoted
+un-amended when R142 had amended them. **§15.11 has been corrected**:
+`zhao_forge_cliff_ram` is **not** "one lane, two named conditions". It has **no
+producer** -- `solid...*_o` as an output port is zero hits tree-wide, every
+`vdist` in `zhao_console_core.sv` is a comment, and the only live references are
+in the generated **pricing** top fed by `assign u09_src = {16{u09_lfsr_q}}`.
+**An LFSR is not a producer.** It is the same kind of work as the other three
+disconnected blocks, and my entry understated it.
+
+**AND THE COST NOBODY HAD READ, now recorded where the saving is quoted:** both
+labelled rows carry full timing fields and every prior reading used the **area
+fields only**. Golden hold **+0.263 ns** against candidate hold **-4.140 ns** --
+a sign change, and unlike the latch and the four warnings this **is** a cost of
+the swap. The saving itself is **fit-minus-fit**: ~976 ALM against ~6,674, so
+**5,698 ALM, 13.6% of the device**, both halves `rtlCleanAtHead: true`. The
+older *7,664 ALM / 18.3%* figure was an estimate and is superseded.
+
+## A NARROWED `remote.origin.fetch` HAD FROZEN EVERY REMOTE-TRACKING REF
+
+**Found immediately after pushing, because `git push` reported
+`a8d4443d..0c0aa5d9` and `git rev-parse origin/claude/ceiling-architecture-20260912`
+came back `f98f5846` -- a commit from 2026-09-19.** `git ls-remote` showed the
+real remote at the new commit, so nothing was lost; the **instrument** was
+broken, not the push.
+
+The cause: `remote.origin.fetch` had been reduced to a single line --
+
+```
++refs/heads/zixxtrixx-v8-closeout:refs/remotes/origin/zixxtrixx-v8-closeout
+```
+
+-- with the default `+refs/heads/*:refs/remotes/origin/*` gone. `.git/config`
+was last written **today at 14:08**, and the config is in the **common** git
+dir, so **all 96 lane worktrees shared it**.
+
+**Two consequences, and the second is the one that matters.** `git fetch origin`
+stopped updating `refs/remotes/origin/*` -- and so did `git push`, which updates
+a tracking ref only if the remote's fetch refspec maps it. So the tracking refs
+stood still at whatever they last held while the real remote moved on.
+
+**"local == remote" has been a closure check in this campaign, and for some
+window it was reading a frozen ref.** It is the broken-instrument law in its
+purest form: a comparison against a value that cannot change reports agreement
+or disagreement with equal confidence and means neither. Here it happened to
+read **dis**agreement, which is why it was noticed at all; had HEAD matched the
+frozen ref it would have read as a clean sync forever.
+
+**Repaired**: the wildcard refspec is restored, `git fetch` brought
+`refs/remotes/origin/*` back (and pulled in 8 branches it had never seen), and
+`origin/claude/ceiling-architecture-20260912` now resolves to `0c0aa5d9`,
+equal to HEAD. **`git ls-remote` is the truth; a remote-tracking ref is a
+cache, and a cache nobody refreshes is a stale number with a reassuring name.**
