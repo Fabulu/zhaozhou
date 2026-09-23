@@ -1,3 +1,57 @@
+// zhao_forge_cliff_ram_bit0_latch_control.sv -- A POSITIVE CONTROL. NOT SHIPPED.
+//
+// This exists so that "Info (10041) does not appear" is a DETECTOR READING and
+// not a hopeful zero.
+//
+// R117 reported `Info (10041): Inferred latch for "triangles_submitted_o[0]"`
+// against `zhao_forge_cliff_ram`, and R142 diagnosed it exactly: C3 advanced a
+// 32-bit counter by `+ 32'd2`, so bit 0 was provably constant zero for all time,
+// and THAT constant bit is what Quartus latched. The production file now counts
+// PAIRS in 31 bits and drives `{tri_pairs_r, 1'b0}` at the port, and a
+// `quartus_map` of it reports the latch ZERO times.
+//
+// A zero is a claim, and CLAUDE.md says it is the claim to check hardest. The
+// shipping map report does carry Info-level messages -- 584 of them in the same
+// run -- so the category is not suppressed; but that only shows Infos CAN print,
+// not that THIS one would have. The only demonstration is to map the counter in
+// its pre-fix shape and watch the message appear.
+//
+// This file is that shape: `a8d4443d:fpga/rtl/forge/zhao_forge_cliff_ram.sv`
+// verbatim, with ONE substantive difference from the shipping source --
+//
+//     triangles_submitted_o <= triangles_submitted_o + 32'd2;   (32 bits, by two)
+//
+// where production now has a 31-bit `tri_pairs_r` incremented by one. The module
+// is RENAMED so no source list can elaborate it in place of the real one, and it
+// lives under tests/ where check_forbidden_sources.py will not find it in a
+// production closure.
+//
+// ITS POLARITY IS INVERTED: this control PASSES when the latch FIRES. A map of
+// it that reported zero `Info (10041)` would mean the instrument is blind and
+// the shipping result means nothing.
+//
+// REPRODUCE -- map only, 33 s, not a fit. The PROJECT NAME is read as the
+// top-level entity, so it must equal the module name; naming it anything else
+// fails with `Error (12007): Top-level design entity "..." is undefined`, which
+// cost one run to learn:
+//
+//   cp tests/mutants/zhao_forge_cliff_ram_bit0_latch_control.sv <scratch>/
+//   cd <scratch>
+//   quartus_map --family="Cyclone V" --part=5CSEBA6U23I7
+//       --source=zhao_forge_cliff_ram_bit0_latch_control.sv
+//       zhao_forge_cliff_ram_bit0_latch_control
+//   grep -c 10041 zhao_forge_cliff_ram_bit0_latch_control.map.rpt
+//
+// MEASURED 2026-09-23, both on 5CSEBA6U23I7 under Quartus 17.0.2:
+//
+//   this control (32-bit, +2)      Info (10041) x 1   <- the latch
+//   shipping     (31-bit pairs)    Info (10041) x 0
+//
+// and BOTH report the same four `Warning (276020)`, which is the second half of
+// the evidence: the pair fix moved the latch and moved nothing else.
+//
+// It is evidence about the INSTRUMENT, not about the design.
+// ---------------------------------------------------------------------------
 // zhao_forge_cliff_ram.sv — FORGE.CLIFF, the bitmap-RAM CANDIDATE beside the
 // golden `zhao_forge_cliff.sv` (ALM-Liberation Roadmap §6 / §14 Commit6;
 // reports/FORGE-CLIFF-REARCH-ARCHITECTURE-20260909.md §2, §3, §8 step D1).
@@ -102,75 +156,6 @@
 //   2048x12 -> 3; 2048x6 -> 2; 2048x32 -> 7; 1024x17 -> 2. Total 15.
 //
 // ---------------------------------------------------------------------------
-// THE FOUR `Warning (276020)` -- ACCEPTED IN WRITING, WITH THEIR COST
-// (R117 condition 1, as amended by R142. Discharged here 2026-09-23.)
-// ---------------------------------------------------------------------------
-// The F-CLIFF1 gate demanded `ramConversionWarnings 0` and the map reports
-// FOUR. R117 required them "either accepted in writing with their cost, or
-// removed by matching the RAM's native read-during-write behaviour." This is
-// the acceptance, and it is written here rather than in a run folder because a
-// run folder is orphaned by the next pass.
-//
-// WHICH FOUR. Predicted from this source and then confirmed by the instrument,
-// in that order. Of the five inferred memories, exactly one -- `win_mem` -- is
-// read inside a clocked block. The other four are written in an `always_ff` and
-// read by a bare `assign` (`edge_rd_c`, `run_rd_c`, `prio_rd_c`), and the map
-// names those four and only those four:
-//
-//     edge_key_r_rtl_0   edge_span_r_rtl_0   prio_mem_r_rtl_0   run_mem_r_rtl_0
-//
-// `win_mem`, the one with the registered read, is absent from the list. This is
-// the third instance of the shape `reports/PREDICTION-forge-cliff-ram.md` names
-// -- after `uvw_m` and `fragment_m` -- and the first where the prediction was
-// written down before the report was read.
-//
-// THEIR COST, stated three ways, because only one of them is a budget number.
-//
-//   AREA: none additional. The fitted 976 ALM on 5CSEBA6U23I7 was measured on
-//   RTL that already contains all four. They are inside the number the campaign
-//   quotes, not a charge on top of it.
-//
-//   AGAINST THE RIVAL: none. R142 measured the golden `zhao_forge_cliff` and
-//   found it carries EXACTLY FOUR as well. Neither is introduced by this
-//   implementation; both are costs of the design in either shape, and quoting
-//   them as the price of the swap would be the one-sided comparison R142 says
-//   it committed once already.
-//
-//   TIMING: real, and this is the cost that is actually owed. The fit's worst
-//   internal path launches from
-//   `edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG`
-//   -- one of these four. A write enable launching a data path is the signature
-//   of exactly this bypass logic. So the four do not cost ALMs; they cost the
-//   block's gating path, and the fit's own honest summary says the clock is
-//   unmeasured.
-//
-// AND THE CHEAP REMOVAL DOES NOT EXIST -- measured, not assumed.
-// `tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv` is this file with
-// `(* ramstyle = "no_rw_check" *)` on all four declarations and nothing else
-// changed. Mapped on the same part with the same settings it reports the SAME
-// four warnings, 1,326 combinational ALUTs, 826 registers and an 889-ALM
-// estimate -- every number identical, and `ramstyle` never mentioned in the
-// report.
-//
-// The reason is worth keeping, because it is not obvious and it took a map to
-// see: THIS PASS-THROUGH IS NOT A READ-DURING-WRITE POLICY. A Cyclone V M10K
-// cannot read combinationally, so a bare `assign mem[idx]` read must be built
-// as a registered-read RAM plus logic that reproduces what the source says --
-// a read that sees the same cycle's write. `no_rw_check` waives a CHOICE about
-// collisions; it cannot waive the semantics of the source. The attribute would
-// bite on a clocked-read array and is inert on these.
-//
-// So the removal branch means what this header already said under MEMORY SHEET:
-// "Making the reads explicitly synchronous is the named follow-up, not this
-// commit." That is a cycle-level change to the block, it moves the differential
-// test's recorded cycle figures, and it is a piece of engineering rather than an
-// attribute. It is NOT done here, it is not a blocker (R142), and it is the
-// right next thing for whoever wants this block's Fmax.
-//
-// Evidence: `zhao_forge_cliff_ram@cliffadopt-latchfix` (map_only, 32.6 s,
-// digest 896d60de3a5e) and the two committed probes under tests/mutants/.
-//
-// ---------------------------------------------------------------------------
 // THE ONE NEW INSTRUMENT
 // ---------------------------------------------------------------------------
 // `walk_fault_o` counts a span walk (StCompact, or StKeep/StEmit while
@@ -191,7 +176,7 @@
 // generate/endgenerate where used, elaboration checks inside `initial begin`,
 // no bare module-scope `if`. Lint: clean under `-Wall`.
 
-module zhao_forge_cliff_ram (
+module zhao_forge_cliff_ram_bit0_latch_control (
     input logic clk,
     input logic rst_n,
 
@@ -252,19 +237,7 @@ module zhao_forge_cliff_ram (
   localparam int unsigned PrimeLen = 4;       // 3 reads; data lands a cycle later, rotates on 1..3
   localparam int unsigned WalkFW   = 8;       // walk_fault_o width (saturating)
 
-  // R117 condition 2, as amended by R142 (NOT an adoption blocker -- the
-  // golden carries the identical latch in identical quantity -- but a latch
-  // cell is real area, so it is discharged here).  The map reported
-  // `Info (10041): Inferred latch for "triangles_submitted_o[0]"`.  It was
-  // never a missing combinational branch: C3 advanced the counter by
-  // `+ 32'd2` because it counts triangles in PAIRS, so bit 0 is provably
-  // constant zero for all time, and THAT constant bit is what Quartus
-  // latched.  The remedy R142 named is taken verbatim -- count PAIRS in 31
-  // bits and shift at the port -- so the LSB becomes a literal `1'b0` the
-  // fitter ties off instead of a latched constant.  Every emitted value is
-  // bit-identical, the saturation point is unmoved, and the PORT is untouched
-  // in name, width and direction, so no generated top needs regenerating.
-  localparam logic [30:0] PairMax = 31'h7FFF_FFFF;  // pairs*2 < 32'hFFFF_FFFE
+  localparam logic [31:0] CntMax = 32'hFFFF_FFFF;
 
   localparam logic [3:0] StIdle      = 4'd0;
   localparam logic [3:0] StLoad      = 4'd1;
@@ -282,9 +255,9 @@ module zhao_forge_cliff_ram (
   localparam logic [3:0] StEmit      = 4'd13;
 
   initial begin
-    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram: WinAW too narrow for WinDim");
-    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram: RowW must equal WinDim (one row per word)");
-    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram: EIW too narrow for MaxEdges");
+    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: WinAW too narrow for WinDim");
+    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: RowW must equal WinDim (one row per word)");
+    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: EIW too narrow for MaxEdges");
   end
 
   // ===========================================================================
@@ -311,10 +284,6 @@ module zhao_forge_cliff_ram (
   logic [ 16:0]   run_mem_r   [0:MaxRuns-1];   // {start[10:0], len[5:0]}
   logic [EIW-1:0] cnt_r;
   logic [RIW-1:0] runs_r;
-
-  // C3's pair counter -- see PairMax above.  `triangles_submitted_o` is driven
-  // continuously from it, so its bit 0 is a constant and not a register bit.
-  logic [30:0]    tri_pairs_r;
 
   logic [5:0]     sc_ci_r, sc_cj_r;
   logic [1:0]     sc_side_r;
@@ -597,8 +566,6 @@ module zhao_forge_cliff_ram (
   // ===========================================================================
   assign cmd_ready_o    = (st_r == StIdle);
   assign ld_ready_o     = (st_r == StLoad);
-  assign triangles_submitted_o = {tri_pairs_r, 1'b0};
-
   assign idle_o         = (st_r == StIdle);
   assign edge_valid_o   = (st_r == StEmit) && emit_live_r;
   assign edge_ci_o      = pg_ci_r + {11'd0, emit_e_r[12:8]};
@@ -665,7 +632,7 @@ module zhao_forge_cliff_ram (
       emit_e_r    <= 18'd0;
       emit_live_r <= 1'b0;
       page_done_r <= 1'b0;
-      tri_pairs_r           <= 31'd0;
+      triangles_submitted_o <= 32'd0;
       walk_fault_o <= {WalkFW{1'b0}};
     end else begin
       page_done_r <= 1'b0;
@@ -965,8 +932,8 @@ module zhao_forge_cliff_ram (
           if (emit_live_r) begin
             if (edge_ready_i) begin
               emit_live_r <= 1'b0;
-              if (tri_pairs_r < PairMax) begin
-                tri_pairs_r <= tri_pairs_r + 31'd1;  // C3 -- ONE PAIR = 2 tris
+              if (triangles_submitted_o < (CntMax - 32'd1)) begin
+                triangles_submitted_o <= triangles_submitted_o + 32'd2;  // C3
               end
               idx_r <= idx_r + step_c;
             end

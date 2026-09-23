@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1823190377c2084d926718fd660ea42f012c322e",
+    "newestRunCommit":  "2f80c59db38eda96b22d2e736ef08d708c77f379",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -288,6 +288,26 @@
                        "gatingPeriodNs":  25.259,
                        "holdSlackNs":  0.263,
                        "holdTnsNs":  0
+                   },
+                   {
+                       "module":  "zhao_forge_cliff_ram@cliffadopt-latchfix",
+                       "status":  "map_only",
+                       "sourceCommit":  "2f80c59db38eda96b22d2e736ef08d708c77f379",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "896d60de3a5e2b19c22654c4b32b8741107ecf6a2dfbbe83fd490be06906c7d4",
+                       "variantOf":  "zhao_forge_cliff_ram",
+                       "seconds":  32.6,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  826,
+                       "blockMemoryBits":  120964,
+                       "dspBlocks":  2,
+                       "virtualPins":  273
                    },
                    {
                        "module":  "zhao_forge_cliff_ram@first-measurement",

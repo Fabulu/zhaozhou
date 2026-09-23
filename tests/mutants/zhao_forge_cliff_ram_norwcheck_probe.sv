@@ -1,3 +1,110 @@
+// zhao_forge_cliff_ram_norwcheck_probe.sv -- A COST PROBE. NOT SHIPPED.
+//
+// R117 condition 1 says the four `Warning (276020)` pass-through insertions
+// must be "either accepted in writing WITH THEIR COST, or removed by matching
+// the RAM's native read-during-write behaviour. The gate asked for zero."
+//
+// An acceptance without a number is not an acceptance, it is a shrug. This file
+// exists to put a measured number on the left-hand branch. It is an instrument
+// on the COMPARISON side: it decides nothing, it prices what was decided.
+//
+// WHICH four -- established from the source, then CONFIRMED by the map rather
+// than assumed. The module has five inferred memories. Exactly one, win_mem, is
+// read inside a clocked block:
+//
+//     always_ff @(posedge clk) begin
+//       if (win_we_c) win_mem[win_wa_c] <= win_wd_c;
+//       if (win_re_c) win_q_r <= win_mem[win_ra_c];      <- registered read
+//     end
+//
+// The other four are written in an always_ff and read by a bare assign:
+//
+//     assign edge_rd_c = {edge_key_r[idx_r[10:0]], edge_span_r[idx_r[10:0]]};
+//     assign run_rd_c  = run_mem_r[ridx_r[9:0]];
+//     assign prio_rd_c = prio_mem_r[idx_r[10:0]];
+//
+// That is precisely the shape reports/PREDICTION-forge-cliff-ram.md names as
+// forcing read-during-write bypass logic -- its third instance in three
+// subsystems -- and the map names those same four and only those four. win_mem,
+// the one with the clocked read, is NOT among them. Source hypothesis first,
+// instrument second, and they agree.
+//
+// WHAT THIS FILE CHANGES: one attribute on each of those four declarations,
+//
+//     (* ramstyle = "no_rw_check" *)
+//
+// which tells Quartus the design never reads an address in the cycle it writes
+// it, so the pass-through logic need not be built. Nothing else differs from
+// the shipping source. The ALUT delta between a map of this file and a map of
+// the shipping module IS the cost of the four insertions.
+//
+// THE RESULT, MEASURED 2026-09-23 -- AND IT IS A NEGATIVE ONE.
+//
+// The attribute changed NOTHING. Mapped against the shipping module under
+// identical hand-run settings on 5CSEBA6U23I7 / Quartus 17.0.2:
+//
+//                          276020   comb ALUT   registers   ALM estimate
+//   shipping module            4       1,326         826            889
+//   this probe (no_rw_check)   4       1,326         826            889
+//
+// Not one number moved, and the report never mentions `ramstyle` at all. So
+// the intended measurement -- the ALUT delta as the price of the four
+// insertions -- COULD NOT BE TAKEN, and the reason it could not is the useful
+// finding:
+//
+//   THIS PASS-THROUGH IS NOT A READ-DURING-WRITE *POLICY*. It is the mechanism
+//   that gives a bare `assign mem[idx]` read its SEMANTICS on a device with no
+//   asynchronous memory. A Cyclone V M10K cannot read combinationally, so
+//   Quartus builds a registered-read RAM and then adds logic to reproduce what
+//   the RTL says -- a read that sees the write of the same cycle. `no_rw_check`
+//   waives a CHOICE about collisions; it cannot waive the semantics of the
+//   source. That is why the attribute is inert here and would not be inert on a
+//   clocked-read array.
+//
+// The consequence for R117 condition 1 is direct: THE CHEAP REMOVAL DOES NOT
+// EXIST. The branch "removed by matching the RAM's native read-during-write
+// behaviour" means making the four reads explicitly synchronous -- which is a
+// cycle-level change to the block, exactly the follow-up the module header
+// already defers -- and not an attribute. The condition is therefore discharged
+// on the other branch, in writing, in the module header.
+//
+// The file is kept anyway, because "we tried the attribute" is otherwise an
+// argument the next lane has to have again from scratch.
+//
+// WHY IT WAS A PROBE AND NOT A PATCH -- and why it stays one.
+// no_rw_check is a PROMISE, and if it is ever false the hardware returns old
+// data where simulation returns new. The promise is stated in the module's own
+// MEMORY SHEET, per array, with reasons -- "no same-address read/write ... idx <
+// cnt_r always ... StCompact and StKeep write wr while reading rd, and write
+// only when wr != rd". That is a COMMENT. This lane did not have the simulation
+// evidence to turn it into a measurement, and CLAUDE.md is explicit that a
+// structural argument is not a demonstration. Shipping an attribute on the
+// strength of a header comment is the move this campaign keeps paying for, so
+// it is not shipped.
+//
+// WHAT WOULD LET IT SHIP: a same-address read-during-write detector inside the
+// block under `// synthesis translate_off` -- which Verilator DOES execute, see
+// CLAUDE.md -- run over the existing 246-lattice / 752-page differential
+// workload and seen to read zero, WITH a positive control proving it can fire.
+// Then the promise is measured and the attribute is free. That is a bounded
+// follow-up, not a rewrite, and it is named here so the next lane inherits the
+// task rather than the argument.
+//
+// REPRODUCE -- map only, seconds, not a fit. The project name is read as the
+// top-level entity and must equal the module name, or Quartus answers
+// `Error (12007): Top-level design entity "..." is undefined`:
+//
+//   cp tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv <scratch>/
+//   cd <scratch>
+//   quartus_map --family="Cyclone V" --part=5CSEBA6U23I7
+//       --source=zhao_forge_cliff_ram_norwcheck_probe.sv
+//       zhao_forge_cliff_ram_norwcheck_probe
+//   grep -c 276020 zhao_forge_cliff_ram_norwcheck_probe.map.rpt
+//
+// The module is RENAMED so no source list can elaborate it in place of the real
+// one, and it lives under tests/ where check_forbidden_sources.py will not find
+// it in a production closure.
+// ---------------------------------------------------------------------------
 // zhao_forge_cliff_ram.sv — FORGE.CLIFF, the bitmap-RAM CANDIDATE beside the
 // golden `zhao_forge_cliff.sv` (ALM-Liberation Roadmap §6 / §14 Commit6;
 // reports/FORGE-CLIFF-REARCH-ARCHITECTURE-20260909.md §2, §3, §8 step D1).
@@ -102,75 +209,6 @@
 //   2048x12 -> 3; 2048x6 -> 2; 2048x32 -> 7; 1024x17 -> 2. Total 15.
 //
 // ---------------------------------------------------------------------------
-// THE FOUR `Warning (276020)` -- ACCEPTED IN WRITING, WITH THEIR COST
-// (R117 condition 1, as amended by R142. Discharged here 2026-09-23.)
-// ---------------------------------------------------------------------------
-// The F-CLIFF1 gate demanded `ramConversionWarnings 0` and the map reports
-// FOUR. R117 required them "either accepted in writing with their cost, or
-// removed by matching the RAM's native read-during-write behaviour." This is
-// the acceptance, and it is written here rather than in a run folder because a
-// run folder is orphaned by the next pass.
-//
-// WHICH FOUR. Predicted from this source and then confirmed by the instrument,
-// in that order. Of the five inferred memories, exactly one -- `win_mem` -- is
-// read inside a clocked block. The other four are written in an `always_ff` and
-// read by a bare `assign` (`edge_rd_c`, `run_rd_c`, `prio_rd_c`), and the map
-// names those four and only those four:
-//
-//     edge_key_r_rtl_0   edge_span_r_rtl_0   prio_mem_r_rtl_0   run_mem_r_rtl_0
-//
-// `win_mem`, the one with the registered read, is absent from the list. This is
-// the third instance of the shape `reports/PREDICTION-forge-cliff-ram.md` names
-// -- after `uvw_m` and `fragment_m` -- and the first where the prediction was
-// written down before the report was read.
-//
-// THEIR COST, stated three ways, because only one of them is a budget number.
-//
-//   AREA: none additional. The fitted 976 ALM on 5CSEBA6U23I7 was measured on
-//   RTL that already contains all four. They are inside the number the campaign
-//   quotes, not a charge on top of it.
-//
-//   AGAINST THE RIVAL: none. R142 measured the golden `zhao_forge_cliff` and
-//   found it carries EXACTLY FOUR as well. Neither is introduced by this
-//   implementation; both are costs of the design in either shape, and quoting
-//   them as the price of the swap would be the one-sided comparison R142 says
-//   it committed once already.
-//
-//   TIMING: real, and this is the cost that is actually owed. The fit's worst
-//   internal path launches from
-//   `edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG`
-//   -- one of these four. A write enable launching a data path is the signature
-//   of exactly this bypass logic. So the four do not cost ALMs; they cost the
-//   block's gating path, and the fit's own honest summary says the clock is
-//   unmeasured.
-//
-// AND THE CHEAP REMOVAL DOES NOT EXIST -- measured, not assumed.
-// `tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv` is this file with
-// `(* ramstyle = "no_rw_check" *)` on all four declarations and nothing else
-// changed. Mapped on the same part with the same settings it reports the SAME
-// four warnings, 1,326 combinational ALUTs, 826 registers and an 889-ALM
-// estimate -- every number identical, and `ramstyle` never mentioned in the
-// report.
-//
-// The reason is worth keeping, because it is not obvious and it took a map to
-// see: THIS PASS-THROUGH IS NOT A READ-DURING-WRITE POLICY. A Cyclone V M10K
-// cannot read combinationally, so a bare `assign mem[idx]` read must be built
-// as a registered-read RAM plus logic that reproduces what the source says --
-// a read that sees the same cycle's write. `no_rw_check` waives a CHOICE about
-// collisions; it cannot waive the semantics of the source. The attribute would
-// bite on a clocked-read array and is inert on these.
-//
-// So the removal branch means what this header already said under MEMORY SHEET:
-// "Making the reads explicitly synchronous is the named follow-up, not this
-// commit." That is a cycle-level change to the block, it moves the differential
-// test's recorded cycle figures, and it is a piece of engineering rather than an
-// attribute. It is NOT done here, it is not a blocker (R142), and it is the
-// right next thing for whoever wants this block's Fmax.
-//
-// Evidence: `zhao_forge_cliff_ram@cliffadopt-latchfix` (map_only, 32.6 s,
-// digest 896d60de3a5e) and the two committed probes under tests/mutants/.
-//
-// ---------------------------------------------------------------------------
 // THE ONE NEW INSTRUMENT
 // ---------------------------------------------------------------------------
 // `walk_fault_o` counts a span walk (StCompact, or StKeep/StEmit while
@@ -191,7 +229,7 @@
 // generate/endgenerate where used, elaboration checks inside `initial begin`,
 // no bare module-scope `if`. Lint: clean under `-Wall`.
 
-module zhao_forge_cliff_ram (
+module zhao_forge_cliff_ram_norwcheck_probe (
     input logic clk,
     input logic rst_n,
 
@@ -282,9 +320,9 @@ module zhao_forge_cliff_ram (
   localparam logic [3:0] StEmit      = 4'd13;
 
   initial begin
-    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram: WinAW too narrow for WinDim");
-    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram: RowW must equal WinDim (one row per word)");
-    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram: EIW too narrow for MaxEdges");
+    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: WinAW too narrow for WinDim");
+    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: RowW must equal WinDim (one row per word)");
+    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: EIW too narrow for MaxEdges");
   end
 
   // ===========================================================================
@@ -305,10 +343,10 @@ module zhao_forge_cliff_ram (
   logic [2:0]       prime_k_r;
 
   // the payload tables — same geometry as the golden, one write site each.
-  logic [ 11:0]   edge_key_r  [0:MaxEdges-1];  // {cj[4:0], ci[4:0], side[1:0]}
-  logic [  5:0]   edge_span_r [0:MaxEdges-1];  // span[5:0]
-  logic [ 31:0]   prio_mem_r  [0:MaxEdges-1];
-  logic [ 16:0]   run_mem_r   [0:MaxRuns-1];   // {start[10:0], len[5:0]}
+  (* ramstyle = "no_rw_check" *) logic [ 11:0] edge_key_r  [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [  5:0] edge_span_r [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [ 31:0] prio_mem_r  [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [ 16:0] run_mem_r   [0:MaxRuns-1];
   logic [EIW-1:0] cnt_r;
   logic [RIW-1:0] runs_r;
 
