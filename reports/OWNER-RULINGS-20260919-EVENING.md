@@ -7080,3 +7080,55 @@ wrong, missing or unfired — only that they have no id, which means nothing
 outside their own block can name them. **A counter with no id is invisible to
 every `.zcap` capture's COUNTERS section and to DEBUG.COUNTERS**, which is the
 whole reason the catalog exists.
+
+
+### A NAMED QUESTION TO ASK THE RECEIPT, written before it lands
+
+CLAUDE.md: *"Name the fit gates in advance. A fit nobody could state a question
+for is a fit that should not run."* `@diag-incomplete-14gaps` was launched to
+answer "how wrong are we", which is a real question but a vague one. Here is a
+specific one it can answer, arrived at from today's `check_v3_banks` repair.
+
+**THE QUESTION: did `zhao_texture_island_v3_top`'s PER-OWNER ARRAYS land in
+M10K or in FABRIC?**
+
+`check_v3_banks` reports `material_m` as **V3-MULTIREAD** — two distinct read
+addresses:
+
+* `material_m[uvjoin_data_w[364:359]]` at `:1258`, enabled by
+  `material_join_accept_c`;
+* `material_m[owner_combine_owner_w[13:8]]` at `:2408`, enabled by
+  `owner_combine_fire_c`.
+
+Two registered reads with **independent enables**. *"A simple-dual-port M10K has
+one read port; `ramstyle` cannot give an M10K an extra port."* So this array
+**cannot infer one**, and the same two sites read **four more arrays beside it**
+— `material_refused_m`, `material_generation_m`, `owner_required_mask_m` and
+`owner_required_mask_generation_m`. The gate named the widest; the shape is
+shared. **Order of 3,000+ flops at 64 owners**, if they are indeed in fabric.
+
+**ALL THREE FILES ARE IN THE FIT'S 258-SOURCE CLOSURE** —
+`zhao_texture_island_v3_top.sv`, `zhao_texture_v3own.sv` and
+`zhao_texture_material_combine_v3.sv` — verified against
+`design/fit_targets.yml`, not assumed. **So the per-hierarchy map and the RAM
+summary in this receipt price it, and nobody has to fit anything again to find
+out.**
+
+**IF THEY ARE IN FABRIC, the repair is the standing lever, not a redesign.**
+Owner direction 2026-09-16 is *"spend M10K to buy ALMs"*, and R244 D-EARTH-A
+applies exactly that reasoning to the Earth adapter's uniform bank on the same
+day. Here it is cheaper still: **duplicate the bank, one copy per reader**, so
+each copy has a single read port and both can infer. Two M10Ks in place of
+thousands of flops, with no arbitration, no extra cycle and no throughput
+change. **ALM is the binding constraint at ~113% of the target part; M10K sits
+near ~402 of 553 after R242.**
+
+**Serialising the two reads is the wrong answer here** and is worth naming so
+nobody reaches for it: it would cost a cycle on the fragment path to save memory
+that is not scarce, which is the trade backwards.
+
+**AND THE HONEST CAVEAT:** this is a *structural* claim about port count, not a
+measurement. Quartus may already be duplicating the array itself, in which case
+the flops are not there and the finding is a documentation gap rather than an
+area one. **That is precisely what the receipt settles**, and it is why the
+question is written down before the number arrives rather than after.
