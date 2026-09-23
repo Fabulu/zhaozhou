@@ -1,5 +1,17 @@
-"""PARAMARENA: regenerate GEOM.PARAMBUF's arena positive control from current
-production.  A COPY with a rename and ONE substantive change.
+"""PARAMARENA: regenerate GEOM.PARAMBUF's arena positive controls from current
+production.  Each is a COPY with a rename and ONE substantive change.
+
+TWO mutants, for two counters that no legal stimulus can move:
+
+  drain  -- `addr_view_bad_o`.  The drain precondition is dropped, so a seal
+            takes effect with writes still outstanding and a request outlives
+            the view selector that admitted it.
+  align  -- `burst_unaligned_o`.  The two lines that make every request
+            address a multiple of the SDRAM's burst-alignment quantum go back
+            to their pre-2026-09-23 values, which is exactly the layout that
+            shipped with owner item 4 and that NO TEST IN THIS TREE CAN FAIL
+            ON -- the behavioural SDRAM model reads LINEARLY where the part
+            wraps inside its aligned eight-column block.
 
 `zhao_geom_paramarena`'s `addr_view_bad_o` differences the view the HELD
 address lies in against the view the LEASE names.  Its two operands load on
@@ -10,9 +22,12 @@ view cannot move while anything is in flight, so the two are equal by
 construction and NO LEGAL STIMULUS CAN MOVE THE COUNTER.  That leaves "it can
 fire" as an argument forever.
 
-So the drain precondition is removed HERE, in a committed file, renamed so no
-production source list can elaborate it, and driven by
-`tests/geometry/geom_paramarena_drainmut.cpp` with INVERTED POLARITY.
+`burst_unaligned_o` is unreachable for a different reason: the allocator
+cannot compute a misaligned address, so the only way to see the counter move
+is to break the allocator.
+
+So each break lives HERE, in a committed file, renamed so no production source
+list can elaborate it, and driven with INVERTED POLARITY.
 
 Run from the worktree root, or with the root as argv[1].
 """
@@ -24,11 +39,41 @@ ROOT = (pathlib.Path(sys.argv[1]) if len(sys.argv) > 1
 PROD = ROOT / "fpga/rtl/geometry/zhao_geom_paramarena.sv"
 src = PROD.read_text(encoding="utf-8")
 
-OLD = """  wire drained_c   = (wr_words_q == '0) && (mstate_q == M_IDLE);
+
+def emit(pairs, head, suffix):
+    """Copy production, apply each (old, new) EXACTLY ONCE, rename, write.
+
+    The uniqueness check is the load-bearing part: a `replace` that matched
+    nothing would write a renamed copy of production and the positive control
+    would measure the unmutated block, passing or failing for reasons that have
+    nothing to do with the counter.
+    """
+    body = src
+    for old, new in pairs:
+        if body.count(old) != 1:
+            raise SystemExit(
+                "PRODUCTION TEXT NOT FOUND (or not unique) -- the copy cannot"
+                " be generated from a version it does not match:\n" + old[:120])
+        body = body.replace(old, new, 1)
+    renames = (("module zhao_geom_paramarena\n",
+                "module zhao_geom_paramarena_%s\n" % suffix),
+               ("endmodule : zhao_geom_paramarena\n",
+                "endmodule : zhao_geom_paramarena_%s\n" % suffix))
+    for old, new in renames:
+        if body.count(old) != 1:
+            raise SystemExit("module rename failed: " + old.strip())
+        body = body.replace(old, new, 1)
+    out = ROOT / ("tests/mutants/zhao_geom_paramarena_%s.sv" % suffix)
+    out.write_text(head + body, encoding="utf-8", newline="\n")
+    print("wrote", out)
+
+
+# ---------------------------------------------------------------- drain ----
+DRAIN_OLD = """  wire drained_c   = (wr_words_q == '0) && (mstate_q == M_IDLE);
   wire seal_ok_c   = drained_c && !reader_busy_i && !pub_pending_q;
 """
 
-NEW = """  // ============ THE MUTATION, AND IT IS THIS ONE TERM ============
+DRAIN_NEW = """  // ============ THE MUTATION, AND IT IS THIS ONE TERM ============
   // Production writes
   //     wire seal_ok_c = drained_c && !reader_busy_i && !pub_pending_q;
   // and `drained_c` is the whole of item 4's "a chunk must not be reused while
@@ -49,7 +94,7 @@ NEW = """  // ============ THE MUTATION, AND IT IS THIS ONE TERM ============
   wire seal_ok_c   = !reader_busy_i && !pub_pending_q;
 """
 
-HEAD = """// zhao_geom_paramarena_drain_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
+DRAIN_HEAD = """// zhao_geom_paramarena_drain_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
 //
 // DRIVEN-BY: tests/geometry/geom_paramarena_drainmut.cpp, INVERTED POLARITY:
 //            the `geom_paramarena_drainmut_fires` ctest PASSES when
@@ -85,26 +130,68 @@ HEAD = """// zhao_geom_paramarena_drain_mutant.sv -- A POSITIVE CONTROL, NOT A D
 // ===========================================================================
 """
 
-if OLD not in src:
-    raise SystemExit("PRODUCTION TEXT NOT FOUND -- the copy cannot be generated"
-                     " from a version it does not match.")
-body = src.replace(OLD, NEW, 1)
+# ---------------------------------------------------------------- align ----
+ALIGN_OLD = """  localparam int unsigned PV_SLOT_B      = PV_STRIDE_B;    // w=32 bytes
+  localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;  // w=16 bytes
+"""
 
-MOD_OLD = "module zhao_geom_paramarena\n"
-MOD_NEW = "module zhao_geom_paramarena_drain_mutant\n"
-if MOD_OLD not in body:
-    raise SystemExit("module declaration not found")
-body = body.replace(MOD_OLD, MOD_NEW, 1)
+ALIGN_NEW = """  // ============ THE MUTATION, AND IT IS THESE TWO LINES ============
+  // Production writes
+  //     localparam int unsigned PV_SLOT_B      = PV_STRIDE_B;
+  //     localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;
+  // and those two together are the whole of the 2026-09-23 burst-alignment
+  // repair.  This copy puts both back to the values the layout carried when
+  // owner item 4 merged: the 24-byte vertex stride, and no round-up of the
+  // sub-region offsets.  TRI_OFF_B is then 65,535 * 24 = 1,572,840, which is
+  // 8 mod 16, so every TriangleDescriptor request starts at column 4 of an
+  // aligned eight-column block and its eight-word burst wraps in silicon.
+  //
+  // BOTH lines are needed, and that is informative rather than tidy: with the
+  // round-up alive a 24-byte stride still lands TRI_OFF_B on 1,572,848, so the
+  // region base is repaired even when the stride is not.  The two halves of
+  // the repair cover different records.
+  //
+  // `BURST_ALIGN_B` itself is NOT touched, so `ALIGN_LSB` and the detector go
+  // on measuring against the real SDRAM quantum while the layout is wrong --
+  // which is the only arrangement in which the counter is evidence.
+  localparam int unsigned PV_SLOT_B      = PV_B;
+  localparam int unsigned LAYOUT_ALIGN_B = 1;
+"""
 
-END_OLD = "endmodule : zhao_geom_paramarena\n"
-END_NEW = "endmodule : zhao_geom_paramarena_drain_mutant\n"
-if END_OLD not in body:
-    raise SystemExit("endmodule label not found")
-body = body.replace(END_OLD, END_NEW, 1)
+ALIGN_HEAD = """// zhao_geom_paramarena_align_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
+//
+// DRIVEN-BY: tests/geometry/geom_paramarena_alignmut.cpp, INVERTED POLARITY:
+//            the `geom_paramarena_alignmut_fires` ctest PASSES when
+//            `burst_unaligned_o` FIRES against this copy, and the
+//            `geom_paramarena_alignmut_silent` ctest beside it builds the SAME
+//            driver against UNMUTATED production and requires SILENCE.  That
+//            pair is the negative control CLAUDE.md asks for: without it a seam
+//            that never engaged would compile production twice and both runs
+//            would agree, saying nothing.
+//
+// WHY THE COUNTER NEEDS ONE, AND WHY THIS IS THE ONLY WITNESS THIS TREE CAN
+// HAVE.  `zhao_sdram_ctrl` sets BL8 SEQUENTIAL and derives its column straight
+// from the byte address, so a JEDEC sequential burst wraps inside its aligned
+// sixteen-byte block; `zhao_vram_arbiter` chops to min(rem, 8, row_tail) and
+// therefore aligns only to the 2048-word ROW.  The behavioural SDRAM model
+// reads and writes LINEARLY, so a misaligned request is served CORRECTLY in
+// simulation and WRONGLY by the part.  No functional test in this repository
+// can fail on it, in either polarity -- which is exactly why the invariant is
+// COUNTED rather than assumed, and why the counter's silence is worth nothing
+// until it has been seen to move.
+//
+// WHAT WAS CHANGED: two localparams, back to the pre-repair layout.  See the
+// block comment at the mutation.  Everything else in this file is production,
+// character for character.
+//
+// GENERATED by tools/rtl/gen_paramarena_mutants.py from production, so a
+// refresh is a command rather than an act of transcription.
+//
+// REGENERATE IT if zhao_geom_paramarena.sv changes shape: it is a COPY, and
+// tools/budget/mutant_copy_drift.py will say when it is stale.
+// RENAMED so no production source list can elaborate it.
+// ===========================================================================
+"""
 
-if MOD_NEW not in body or END_NEW not in body:
-    raise SystemExit("module rename failed")
-
-out = ROOT / "tests/mutants/zhao_geom_paramarena_drain_mutant.sv"
-out.write_text(HEAD + body, encoding="utf-8", newline="\n")
-print("wrote", out)
+emit([(DRAIN_OLD, DRAIN_NEW)], DRAIN_HEAD, "drain_mutant")
+emit([(ALIGN_OLD, ALIGN_NEW)], ALIGN_HEAD, "align_mutant")

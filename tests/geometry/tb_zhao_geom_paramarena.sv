@@ -169,6 +169,10 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] view_flip_blocked_o,
     output var logic [31:0] publish_blocked_o,
     output var logic [31:0] addr_view_bad_o,
+    // THE BURST-ALIGNMENT TRIPWIRES, one per block. Named apart because the
+    // two answer different questions: the arena's says its own allocator
+    // computed a misaligned address, the walker's says it was HANDED one.
+    output var logic [31:0] arena_burst_unaligned_o,
     output var logic [31:0] scr_contend_o,
     output var logic [31:0] retire_underflow_o,
     output var logic [15:0] fault_source_o,
@@ -205,6 +209,7 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] short_burst_o,
     output var logic [31:0] stray_beat_o,
     output var logic [31:0] gen_race_o,
+    output var logic [31:0] walk_burst_unaligned_o,
     output var logic [15:0] walk_depth_max_o,
     output var logic        walk_busy_o,
 
@@ -293,6 +298,11 @@ module tb_zhao_geom_paramarena
   // selector engaged rather than compiling production twice.
 `ifdef ZHAO_PARAMARENA_DRAIN_MUT
   zhao_geom_paramarena_drain_mutant #(
+`elsif ZHAO_PARAMARENA_ALIGN_MUT
+  // The SECOND positive control, selected the same way and for the same
+  // reason: `burst_unaligned_o` is unreachable while the allocator is
+  // correct, so the only demonstration is an allocator that is not.
+  zhao_geom_paramarena_align_mutant #(
 `else
   zhao_geom_paramarena #(
 `endif
@@ -379,6 +389,7 @@ module tb_zhao_geom_paramarena
       .view_flip_blocked_o(view_flip_blocked_o),
       .publish_blocked_o  (publish_blocked_o),
       .addr_view_bad_o    (addr_view_bad_o),
+      .burst_unaligned_o  (arena_burst_unaligned_o),
       .scr_contend_o      (scr_contend_o),
       .retire_underflow_o (retire_underflow_o),
       .fault_source_o     (fault_source_o),
@@ -448,6 +459,7 @@ module tb_zhao_geom_paramarena
       .short_burst_o   (short_burst_o),
       .stray_beat_o    (stray_beat_o),
       .gen_race_o      (gen_race_o),
+      .burst_unaligned_o(walk_burst_unaligned_o),
       .walk_depth_max_o(walk_depth_max_o),
       .busy_o          (walk_busy_o)
   );

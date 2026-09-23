@@ -100,12 +100,31 @@ constexpr uint32_t PV_B = 24;
 constexpr uint32_t TD_B = 16;
 constexpr uint32_t CK_B = 64;
 
+// THE BURST-ALIGNMENT QUANTUM AND THE VERTEX ALLOCATION STRIDE, 2026-09-23.
+// `PV_B` is the RECORD (R7 freezes it at 24 bytes).  `PV_SLOT_B` is what the
+// allocator ADVANCES by, and it is 32 because 24 is not a multiple of 16 and
+// a 24-byte stride puts every ODD vertex eight bytes into an aligned
+// eight-column block -- where a JEDEC BL8 SEQUENTIAL burst wraps.
+//
+// These mirror `zhao_geom_paramarena`'s `PV_SLOT_B` and `LAYOUT_ALIGN_B`.  A
+// mirrored constant is a frozen copy of yesterday's agreement, so the bench
+// does not merely restate them: the alignment ASSERTION at the end of this
+// file re-derives the property from the addresses the RTL actually issued,
+// through `req_unaligned_o`, which is the bench's OWN observer on the guard
+// request and not the block's counter.
+constexpr uint32_t BURST_ALIGN_B = 16;
+constexpr uint32_t PV_SLOT_B     = 32;
+
 constexpr uint32_t MAX_VERTS  = 65535;
 constexpr uint32_t MAX_TRIS   = 16384;
 constexpr uint32_t ARENA_CHUNKS = 16384;
 
-constexpr uint32_t TRI_OFF_B   = MAX_VERTS * PV_B;              // 1,572,840
-constexpr uint32_t CHUNK_OFF_B = TRI_OFF_B + MAX_TRIS * TD_B;   // 1,834,984
+constexpr uint32_t align_up(uint32_t v) {
+  return ((v + BURST_ALIGN_B - 1u) / BURST_ALIGN_B) * BURST_ALIGN_B;
+}
+
+constexpr uint32_t TRI_OFF_B   = align_up(MAX_VERTS * PV_SLOT_B);          // 2,097,120
+constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,359,264
 
 uint32_t view_base(int view) { return view ? VIEW1_BASE : VIEW0_BASE; }
 
@@ -687,7 +706,8 @@ int main(int argc, char** argv) {
   {
     const uint32_t vbase = VIEW1_BASE;
     for (int i = 0; i < 2; ++i) {
-      const uint32_t a = vbase + static_cast<uint32_t>(i) * PV_B;
+      // THE SLOT, not the record: the allocator advances by PV_SLOT_B.
+      const uint32_t a = vbase + static_cast<uint32_t>(i) * PV_SLOT_B;
       cke(static_cast<uint32_t>(verts[i].x), peek32(t, a + 0), "A: PV byte 0..3 is screen_x");
       cke(static_cast<uint32_t>(verts[i].y), peek32(t, a + 4), "A: PV byte 4..7 is screen_y");
       const uint32_t w2 = peek32(t, a + 8);
@@ -1157,45 +1177,59 @@ int main(int argc, char** argv) {
   cke(0, t.gen_race_o, "gen_race_o is zero -- the reader's busy blocks the seal");
 
   // -----------------------------------------------------------------------
-  // A REPORTED OBSERVATION, NOT AN ASSERTION: BURST ALIGNMENT.
+  // ASSERTED AS OF 2026-09-23, AND IT WAS "REPORTED, NOT ASSERTED" BEFORE.
   // `zhao_sdram_ctrl` puts `req.addr[26:1]` straight into the COLUMN field of
   // a JEDEC BL8 burst.  A real SDR SDRAM's BL8 SEQUENTIAL burst wraps within
   // its eight-column block, so a burst whose start column is not a multiple of
   // eight returns / writes its words ROTATED.  `sim/models/zhao_sdram_model.sv`
-  // walks the column LINEARLY, so THIS BENCH CANNOT FAIL ON IT -- which is
-  // exactly why it is counted and printed rather than trusted to the model.
+  // walks the column LINEARLY, so THIS BENCH CANNOT FAIL ON THE CONSEQUENCE --
+  // which is exactly why the CAUSE is asserted instead.
   //
-  // It is not asserted because spec/memory_rules.md states no alignment rule
-  // for the local SDRAM client ports and the model cannot settle the question.
-  // The ruling is the owner's; what is reported here is the measurement.
+  // WHAT CHANGED.  This block used to print a warning and assert nothing,
+  // on the grounds that "spec/memory_rules.md states no alignment rule for the
+  // local SDRAM client ports and the model cannot settle the question. The
+  // ruling is the owner's."  The rule is now written down -- memory_rules.md
+  // section 5c, THE BURST-ALIGNMENT LAW -- and the first of the three levers
+  // that paragraph named ("round the sub-region bases up to a 16-byte
+  // boundary") is what `zhao_geom_paramarena` now does.  `zhao_vram_arbiter`
+  // was NOT touched: the second lever moves a bound
+  // `mem_vram_arbiter_liveness` asserts is exact.
+  //
+  // `req_unaligned_o` IS THE BENCH'S OWN OBSERVER, watching the guard request
+  // at the wire, and is NOT `arena_burst_unaligned_o`.  Both are checked, and
+  // that is deliberate: a block's own counter agreeing with itself is one
+  // measurement, and a counter that had been wired to the wrong expression
+  // would agree with itself perfectly.
+  ckt(t.req_unaligned_o == 0,
+     "every guard request this run issued started on a 16-byte boundary"
+     " (the bench's own observer)");
+  ckt(t.arena_burst_unaligned_o == 0,
+     "the arena's own burst_unaligned_o agrees with the bench's observer");
+  ckt(t.walk_burst_unaligned_o == 0,
+     "the walker's burst_unaligned_o is silent -- its bases came in aligned");
+  ckt(TRI_OFF_B % BURST_ALIGN_B == 0,
+     "the derived triangle base is burst-aligned");
+  ckt(CHUNK_OFF_B % BURST_ALIGN_B == 0,
+     "the derived chunk base is burst-aligned");
+  ckt(PV_SLOT_B % BURST_ALIGN_B == 0,
+     "the vertex allocation stride is burst-aligned");
   if (t.req_unaligned_o != 0) {
     std::printf(
         "\n"
         "***************************************************************\n"
-        "* REPORTED, NOT ASSERTED: %u of this run's guard requests start\n"
-        "* at an address that is NOT 16-BYTE (8-WORD) ALIGNED.\n"
+        "* %u of this run's guard requests start at an address that is\n"
+        "* NOT 16-BYTE (8-WORD) ALIGNED.\n"
         "***************************************************************\n"
-        "  zhao_geom_paramarena's derived sub-region bases are\n"
-        "    TRI_OFF_B   = MAX_VERTS*24            = %u   (mod 16 = %u)\n"
-        "    CHUNK_OFF_B = TRI_OFF_B + MAX_TRIS*16 = %u   (mod 16 = %u)\n"
-        "  and a ProjectedVertex's 24-byte stride alternates 0 / 8 mod 16, so\n"
-        "  roughly half of every record kind starts mid-block.\n"
-        "\n"
-        "  EVERY CHECK IN THIS FILE PASSES WHILE THE HARDWARE WOULD NOT, because\n"
-        "  the behavioural model walks rd_col + rd_beat linearly and has no\n"
+        "  derived sub-region bases were\n"
+        "    TRI_OFF_B   = %u   (mod 16 = %u)\n"
+        "    CHUNK_OFF_B = %u   (mod 16 = %u)\n"
+        "  EVERY OTHER CHECK IN THIS FILE CAN STILL PASS, because the\n"
+        "  behavioural model walks rd_col + rd_beat linearly and has no\n"
         "  eight-column wrap to get wrong.  That is the shape of a broken\n"
         "  instrument: the model reads BETTER than the silicon.\n"
-        "\n"
-        "  Three levers, none of which is this test:\n"
-        "    * round the sub-region bases up to a 16-byte boundary (at most 8\n"
-        "      wasted bytes in a 4 MiB view);\n"
-        "    * split in zhao_vram_arbiter on 8-word BOUNDARIES, not 8-word\n"
-        "      COUNTS;\n"
-        "    * or state in spec/memory_rules.md that the local SDRAM path is\n"
-        "      linear-burst and teach the model the same law, so the claim is\n"
-        "      written down rather than inherited.\n"
         "***************************************************************\n\n",
-        t.req_unaligned_o, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B, CHUNK_OFF_B % 16u);
+        t.req_unaligned_o, TRI_OFF_B, TRI_OFF_B % 16u, CHUNK_OFF_B,
+        CHUNK_OFF_B % 16u);
   }
 
   std::printf(
@@ -1213,7 +1247,7 @@ int main(int argc, char** argv) {
       "  guard_violations     = %u   addr_view_bad_o     = %u\n"
       "  writes v0/v1/scratch = %u / %u / %u\n"
       "  share ledger_full    = %u\n"
-      "  req_unaligned_o      = %u  (REPORTED, not asserted -- see above)\n"
+      "  req_unaligned_o      = %u  (ASSERTED ZERO since 2026-09-23)\n"
       "-----------------------------------------------------------------\n",
       t.frames_published_o, t.verts_written_o, t.tris_written_o, t.chunks_written_o,
       t.publish_blocked_o, t.view_flip_blocked_o, t.quota_overflow_o, t.records_discarded_o,
