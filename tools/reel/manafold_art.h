@@ -3618,6 +3618,125 @@ inline int32_t rear_carrier_calm_pm(uint32_t slot) {
              : kRearCarrierCalmPm;
 }
 
+// ===========================================================================
+// PASS 25, THE BACK-BALL PACKET (Direction 26 item 3, re-opened by the owner
+// after the rear-calm ladder proved to be the wrong lever).
+//
+// THE DAMPING TERM, and it is a filter rather than a scale. Every lever tried
+// before it was a GAIN on some authority's amplitude; the decomposition
+// (manafold-backball.exe --decompose --worst) is what finally said which
+// authority to point a lever at, and the answer made a gain unusable -- see the
+// numbers in the pass-25 back-ball report. A gain on the dominant authority
+// would have removed the back ball's POSE as well as its jitter.
+//
+// So this is a small cyclic moving average applied to the three REAR STATION
+// rotations (A, B, C) of the authored KEYS, over an odd window, at a gain in
+// per mille. It is zero-phase by construction -- the window is centred and the
+// clip is cyclic -- so it does not lag the performance the way a one-pole
+// filter would: it removes the high-frequency content and leaves the beat
+// where the animator put it. The mechanism itself, and the full reason it is
+// A, B and C and not JunctionF or Neck, is at backball_damp() in
+// manafold_clips.h.
+//
+//   damp 0     : exact pass-25 bytes, bit for bit, on every clip.
+//   damp 1000  : the window's full average.
+//
+// The window is in AUTHORED KEYS (30 Hz), not presentation samples, because
+// the filter runs on the authored track before compile_creature bakes the
+// midpoints -- so a window of 5 is 167 ms of damping and the presentation
+// interpolation follows the damped keys rather than fighting them.
+//
+// ⚠ IT IS KEYED ON THE BAKE SLOT (`Clip::slot_id`), NOT on the schedule slot.
+// That distinction is the difference between changing two subjects and three:
+// slot 0 is the orbiting idle bake that `hover` and `inspect` play, slot 23 is
+// the byte-separate fixed-camera bake `crackle` and the six mana tiles play,
+// and every SCHEDULED layer on slot 23 is called with slot 0 (see
+// build_hover_idle). A knob read inside antenna_knead therefore reaches all
+// three; a knob read in finalize_rear_follow off `c.slot_id` reaches exactly
+// the bake it is applied to.
+constexpr int kBackBallDampClipSlots = 24;
+/** The window, in AUTHORED KEYS (30 Hz), always odd and centred. 1 is an
+ *  identity filter whatever the gain -- which is why the gate carries a
+ *  separate `--fail-window` control: a checker that watched only the gain would
+ *  read "damping on" over a creature that is not damped at all. */
+constexpr int kBackBallDampWin = 21;
+/** THE BANK-WIDE LEVER'S "NOT SET" SENTINEL, and it is -1 rather than 0 for a
+ *  reason this pass caught in its own first draft.
+ *
+ *  Every other knob on this creature uses the rule "the bank-wide value wins
+ *  once it differs from its compiled default", and every one of those defaults
+ *  is the SHIPPING value, so the rule works. Here the compiled default is OFF,
+ *  and OFF is exactly the state a positive control has to reach -- so
+ *  `...DAMP_PM=0` would have compared equal to the default, declined to
+ *  override, and left the per-clip table's 700 in place. The gate's
+ *  `--fail-undamped` leg would have reported the damping switched off while
+ *  rendering a fully damped creature: a control that cannot fire, quoted as
+ *  evidence, which is the exact fault CLAUDE.md's detector law names. Caught
+ *  before it shipped by asking what `0` would do, not by a test.
+ *
+ *  With a sentinel, -1 means "the table decides" and 0 means "off everywhere",
+ *  and both are reachable. */
+constexpr int32_t kBackBallDampPmUnset = -1;
+inline int32_t g_u02_backball_damp_pm = kBackBallDampPmUnset;
+inline int32_t g_u02_backball_damp_win = kBackBallDampWin;
+/** Per BAKE slot. Only slot 0 is nonzero, and that is the whole proof of
+ *  containment: every other clip multiplies by nothing and takes the
+ *  `pm <= 0` early return, so it is byte-exact by construction as well as by
+ *  measurement. */
+constexpr int32_t kBackBallDampClipPm[kBackBallDampClipSlots] = {
+    //  0 THE ORBITING IDLE BAKE. Chosen by eye off the w21 ladder
+    //    (0 / 300 / 500 / 700 / 1000, rendered and looked at at native and 6x
+    //    on both the orbiting and the fixed camera). 700 is the rung where the
+    //    rear holds its shape across consecutive frames while the loop still
+    //    visibly breathes; 1000 reads carried rather than alive. Measured, as
+    //    the check rather than the chooser: carrier C's travel 18.5 -> 13.0 mm
+    //    per sample and its jerk rms 6.59 -> 4.93, the last rod 9.4 -> 6.7, the
+    //    End swell's angular rate 2.34 -> 1.85 deg per sample. That lands
+    //    Hover's rear among the calm clips (rest 13.6, channel 11.3) instead of
+    //    at the top of the bank, and restores the back/front angular ratio from
+    //    1.08 -- the back turning MORE than the front, which no other live clip
+    //    does -- to 0.99.
+    //
+    //    ⚠ SLOT 0 IS TWO SUBJECTS: hover AND inspect, one bake under two
+    //    cameras. They cannot be separated by any per-clip knob and this pass
+    //    did not invent a second bake to do it. Direction 26 authorises it in
+    //    terms: "Other clips stay byte-identical unless the owner's fault is
+    //    visible there too -- in which case say so rather than changing them
+    //    silently." Inspect IS the same choreography under a TIGHTER camera
+    //    (cam_k 460000 against 360000), so the fault is more visible there, not
+    //    less. Said, not done silently.
+    700,
+    // 1..23: untouched, and byte-exact by construction rather than by
+    // measurement -- backball_damp takes its `pm <= 0` early return and no
+    // arithmetic touches the clip. The measurement is taken anyway.
+    //
+    // ⚠ 23 IS DELIBERATELY 0. It is the SEPARATE fixed-camera bake of this same
+    // choreography that crackle and the six mana tiles play, and leaving it
+    // undamped keeps a byte-identical control for the whole mechanism inside
+    // the shipping bank. The owner named Hover; if he wants crackle calmed too
+    // it is this one entry.
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+inline std::array<int32_t, kBackBallDampClipSlots> make_backball_damp_clip_pm() {
+  std::array<int32_t, kBackBallDampClipSlots> a{};
+  for (int i = 0; i < kBackBallDampClipSlots; ++i) a[i] = kBackBallDampClipPm[i];
+  return a;
+}
+inline std::array<int32_t, kBackBallDampClipSlots> g_u02_backball_damp_clip_pm =
+    make_backball_damp_clip_pm();
+/** THE ONE PRODUCTION READ of a bake slot's back-ball damping gain. The
+ *  bank-wide lever wins whenever it has been SET AT ALL (see
+ *  kBackBallDampPmUnset), so a per-clip table can never silently out-vote it
+ *  and `=0` genuinely reaches off. */
+inline int32_t backball_damp_pm(uint32_t slot) {
+  if (g_u02_backball_damp_pm != kBackBallDampPmUnset)
+    return g_u02_backball_damp_pm;
+  return slot < static_cast<uint32_t>(kBackBallDampClipSlots)
+             ? g_u02_backball_damp_clip_pm[slot]
+             : 0;
+}
+
 constexpr int32_t kSpanEStartRunMm = kFoldBlendMm[3];
 constexpr int32_t kSpanEMidRunMm = kSpanEGradientMm / 2;
 constexpr int32_t kSpanEPreSocketRunMm =

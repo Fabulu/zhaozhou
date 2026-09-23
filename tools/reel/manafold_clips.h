@@ -1527,6 +1527,104 @@ inline zc::quat16 rear_socket_compose(const zc::quat16& qd,
   return zc::quat16_nlerp(q, q, 1, 2);
 }
 
+// ===========================================================================
+// PASS 25, THE BACK-BALL PACKET: THE DAMPING, and why it is a FILTER on three
+// named stations rather than a gain on anything.
+//
+// The decomposition (manafold-backball.exe, committed) settled three things no
+// earlier instrument had asked:
+//
+//   * The End swell's own POSITION barely moves -- 0.99 mm per presentation
+//     sample on Hover, the calmest back ball in the bank relative to its own
+//     front (END/A = 0.11). 65 % of the little it does is the socket following
+//     the BREATHING BODY. Damping it would be invisible, and saying so is the
+//     point: the owner is not looking at the End swell.
+//   * The rear motion an eye can actually see is CARRIER C and the C->End ROD:
+//     18.5 and 9.4 mm per sample, and C carries the HIGHEST angular rate in the
+//     whole bank (3.285 deg/sample). C's position is 81 % "the antenna's
+//     upstream life" and its orientation is 100 % of it.
+//   * AND NO SINGLE STATION OWNS IT. F alone is 9.0 %, Neck 5.8 %, A 0.2 %,
+//     B -6.6 %, C 0.7 % -- they do not sum to 81 % because the chain is a
+//     TRAVELLING WAVE with a per-station lag, and its stations partially
+//     CANCEL. Freezing station B alone makes the last rod move 146 % MORE.
+//
+// That last line is why every lever tried in four passes failed or backfired,
+// including "removing the knead dip makes C travel further". A gain on any one
+// authority breaks a cancellation. The quantity the owner is objecting to is
+// not any authority's AMPLITUDE; it is the rear's HIGH-FREQUENCY CONTENT --
+// "too finicky" -- and Direction 20's "a bit wiggly" says the low-frequency
+// swing must survive. A frequency complaint needs a filter, not a scale.
+//
+// So: a CENTRED (zero-phase) moving average over the authored KEYS of exactly
+// three local rotations -- A, B and C -- run BEFORE the closure is solved.
+//
+//   * Centred, and the clip is cyclic, so it introduces NO LAG. A one-pole
+//     filter would drag the beat late, which is a different defect wearing the
+//     word "damping".
+//   * JunctionF and Neck are NOT damped, and that is the containment proof the
+//     owner's sentence asks for. The FRONT ball's pivot position is
+//     junctionF + R_F*arc0 + R_FN*arc1 -- it depends on those two rotations and
+//     on nothing else in this list -- so "Hover's front ball is already right;
+//     leave it" is honoured by construction and not by measurement.
+//   * It runs before finalize_rear_follow, so HingeD re-aims and the socket
+//     re-solves against the DAMPED chain. Damping after the closure would
+//     detach the rear -- the pass-19 rip with a new cause.
+//   * pm == 0 takes the early return and is bit-for-bit the undamped bake.
+constexpr uint8_t kBackBallDampBones[3] = {kBHingeA, kBHingeB, kBHingeC};
+
+/** The window's centred mean of one bone's authored key rotations, as an
+ *  incremental nlerp -- the production renormalizer, hemisphere-corrected, so
+ *  the mean of two nearly-opposite quantizations of the same rotation is that
+ *  rotation and not zero. */
+inline zc::quat16 backball_window_mean(const std::vector<zc::quat16>& q,
+                                       int n, int bone, int f, int half,
+                                       bool cyclic) {
+  zc::quat16 acc = q[static_cast<size_t>(f) * kBoneCount + bone];
+  int used = 1;
+  for (int d = 1; d <= half; ++d) {
+    for (int s = -1; s <= 1; s += 2) {
+      int i = f + s * d;
+      if (cyclic) {
+        i = ((i % n) + n) % n;
+      } else {
+        if (i < 0) i = 0;
+        if (i >= n) i = n - 1;
+      }
+      ++used;
+      acc = zc::quat16_nlerp(acc, q[static_cast<size_t>(i) * kBoneCount + bone],
+                             1, used);
+    }
+  }
+  return acc;
+}
+
+/** Apply the damping to one freshly built clip. Call EXACTLY ONCE per clip and
+ *  BEFORE finalize_rear_follow; every bank/gate/probe call site does. */
+inline void backball_damp(zc::Clip& c) {
+  const int32_t pm = backball_damp_pm(c.slot_id);
+  if (pm <= 0) return;  // the exact-off path: no arithmetic touches the clip
+  const int win = g_u02_backball_damp_win;
+  if (win <= 1) return;  // an identity filter; see the gate's --fail-window
+  const int n = c.frame_count;
+  if (n <= win) return;
+  if (c.quats.size() != static_cast<size_t>(n) * kBoneCount) return;
+  const int half = win / 2;
+  // A LOOPING clip wraps, a ONE-SHOT clamps. Wrapping a death would average
+  // the corpse's last key with the living first key and flash the animal alive
+  // -- the exact fault Clip::hold_last was added for.
+  const bool cyclic = !c.hold_last;
+  const std::vector<zc::quat16> src = c.quats;  // read the AUTHORED keys only
+  for (uint8_t b : kBackBallDampBones) {
+    for (int f = 0; f < n; ++f) {
+      const zc::quat16 mean =
+          backball_window_mean(src, n, b, f, half, cyclic);
+      const zc::quat16 authored = src[static_cast<size_t>(f) * kBoneCount + b];
+      c.quats[static_cast<size_t>(f) * kBoneCount + b] =
+          pm >= 1000 ? mean : zc::quat16_nlerp(authored, mean, pm, 1000);
+    }
+  }
+}
+
 // The clip builders historically solved closure before assigning c.deform[f].
 // Finish the rear attachment only after the whole clip exists, so the socket,
 // return solver and body surface all consume the exact same authored sample.
@@ -3370,6 +3468,12 @@ inline bool apply_knead_dip_env() {
                   kRearCarrierCalmClipSlots, 0, 1000,
                   g_u02_rear_carrier_calm_clip_pm.data()))
       return false;
+    // PASS 25 BACK-BALL PACKET: the damping, per BAKE slot. This is both the
+    // ladder that chose slot 0's value and the EXACT-OFF CONTROL for the item
+    // -- `...=0:0` restores the pass-25 pose on every clip, bit for bit.
+    if (!per_clip("ZHAO_U02_BACKBALL_DAMP_CLIP_PM", kBackBallDampClipSlots, 0,
+                  1000, g_u02_backball_damp_clip_pm.data()))
+      return false;
   }
   if (!num("ZHAO_U02_EYE_AMBIENT_PM", 0, 1000, g_u02_eye_ambient_master_pm))
     return false;
@@ -3390,6 +3494,24 @@ inline bool apply_knead_dip_env() {
   // knob would go dead a second time. See rear_carrier_calm_pm().
   if (!num("ZHAO_U02_REAR_CARRIER_CALM_PM", 0, 1000, g_u02_rear_carrier_calm_pm))
     return false;
+  // PASS 25 BACK-BALL PACKET. The bank-wide damping gain (the ladder lever, and
+  // the gate's `--fail-undamped` operand) and its WINDOW. Both are here, in the
+  // one shared parser, because a knob parsed in a single main() is the fault
+  // this function exists for and this creature has now committed it twice.
+  // -1 is the "not set" sentinel; see kBackBallDampPmUnset for why 0 could not
+  // be one and what that would have done to the gate's positive control.
+  if (!num("ZHAO_U02_BACKBALL_DAMP_PM", -1, 1000, g_u02_backball_damp_pm))
+    return false;
+  // ⚠ THE RANGE GOES TO 201, NOT TO A "SENSIBLE" 31, and the reason is the
+  // gate's LOWER bound. G3 asserts the rear is still alive (Direction 20: "a
+  // bit wiggly"), and a floor nothing can reach is not evidence about the
+  // floor. At 31 the filter saturates (C travels 11.8 mm/sample against the
+  // shipped 13.0) and no legal input could fire it, which would have forced a
+  // committed mutant for a guard that a wider window reaches honestly. 201 is
+  // under Hover's 300 keys, so backball_damp's `n <= win` guard still holds.
+  if (!num("ZHAO_U02_BACKBALL_DAMP_WIN", 1, 201, g_u02_backball_damp_win))
+    return false;
+  if ((g_u02_backball_damp_win & 1) == 0) return false;  // centred => odd
   return true;
 }
 

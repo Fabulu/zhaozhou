@@ -52,6 +52,10 @@ Targets:
              probe and gate, Direction 25 item 2 -- bolt-segment vs rod-capsule
              intersection in 3D, the orthographic screen-crossing diagnosis,
              and the depth-split resolution bound, each with a fired control)
+  mback      manafold-backball.exe (pass 25 back-ball packet: THE MOTION
+             DECOMPOSITION probe and gate -- which authority actually moves the
+             back ball, measured by muting one at a time on the POSED result,
+             plus the per-sample jerk bound on Hover and its fired controls)
   mrear      manafold-rear-audit.exe (pass 19: the committed REAR-CHAIN audit,
              Direction 20 items 1+2 -- arm/End relative rotation, rear
              centreline bend and End/last-segment motion energy per sample)
@@ -80,7 +84,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mrear|mrod|mbolt|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mrear|mrod|mbolt|mback|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -309,6 +313,12 @@ build_mrod() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_rodgate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-rodgate.exe"
 }
 
+build_mback() {
+  printf '%s
+' "LD manafold-backball"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_backball.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-backball.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -326,6 +336,7 @@ case "$TARGET" in
   mrear) build_mrear ;;
   mrod) build_mrod ;;
   mbolt) build_mbolt ;;
+  mback) build_mback ;;
   mnodule) build_mnodule ;;
   mjointpub) build_mjointpub ;;
   mqa) build_mqa ;;
