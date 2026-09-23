@@ -20479,7 +20479,7 @@ module zhao_console_core
   wire         efa_ans_field;
   wire         efa_req_valid, efa_req_ready, efa_req_noprog;
   wire [2:0]   efa_req_slot;
-  wire [415:0] efa_req_in;
+  wire [479:0] efa_req_in;       // IN_LANES(15) * 32, the SHARED pair's width
   wire         efa_resp_valid, efa_resp_ready;
 
   // THE TWO-CONSUMER JOIN. `zhao_cmd_exec` offers ONE TerrainField record
@@ -20691,16 +20691,44 @@ module zhao_console_core
     .MAX_FIELDS(16),  // terrain_rules section 9.1, the same knob next door
     .OBJW      (3),   // zhao_field_loader's OBJW
     .SLOTW     (3),   // ... which IS zhao_field_host's program slot
-    .IN_LANES  (13),  // the HOST's arity; earth uses 12 (field-ir 7.1)
-    .OUT_LANES (7)    // the HOST's arity; earth uses 4
+    // THE HOST'S ARITY, NOT THIS PROFILE'S, and the distinction has already
+    // cost this console once. The shared client pair is FIFTEEN in / SEVEN out
+    // (decision W01, the W profile's width); the earth record is TWELVE in /
+    // FOUR out (field-ir 7.1). The adapter's own elaboration guards are
+    // `IN_LANES < 12` and `OUT_LANES < 4`, so it accepts the wider pair and
+    // pads lanes 12..14 -- exactly as `u_field_flow_adapter` beside it fills
+    // 0..12 and pads 13 and 14. Writing 13 here instead would have made
+    // `efa_req_in` 416 bits against the host's 480 on a CONCATENATED port,
+    // which is a silent bit-slide across all four clients rather than a width
+    // error on one.
+    .IN_LANES  (15),
+    .OUT_LANES (7)
   ) u_field_earth_adapter (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // REAL: the shell's frame boundary, the oracle's `frame_tick`. The same
-    // one PART.SPAWN's `tick_i` consumes, so `age` is measured against one
-    // clock in this console and not two.
-    .tick_i(core_tick_c),
+    // REAL: the shell's FRAME ID, and it is NOT `core_tick_c`. That name is
+    // `gpu_tick_o` -- a ONE-BIT frame-boundary PULSE -- and entry I34's own
+    // paragraph about this seam names it first ("`gpu_tick_o` is the shell's
+    // frame boundary (already `core_tick_c` in this file)") before going on to
+    // say "and the shell publishes a frame id beside it, which PART.SPAWN's
+    // `tick_i` already consumes". The oracle's `frame_tick` is a COUNT
+    // compared against `cmd.start_tick`, so it is the second of those two and
+    // not the first. Connecting the pulse would have widened 1 bit to 32,
+    // made `age` either 0 or 1 forever and left every field permanently at the
+    // start of its span -- a plausible-looking terrain that never animates.
+    // The linter's WIDTHEXPAND caught it -- and note the phrasing: a comment
+    // line whose FIRST WORD is that tool's name is a metacomment, not prose,
+    // and the first draft of this paragraph began with it and was refused with
+    // BADVLTPRAGMA. Entry I34 records that exact trap, in this file, from the
+    // FIELDARM commit; it was re-created here one commit later by someone who
+    // had read it. It is written down because the two names (`core_tick_c` and
+    // `gpu_tick_frame_id_o`) sit four lines apart in this file's own header
+    // and read alike, and because a lint flag is what separated them.
+    //
+    // It is the SAME value PART.SPAWN's `tick_i` takes, so particle age and
+    // field age are one clock in this console and not two.
+    .tick_i(gpu_tick_frame_id_o),
 
     // REAL: CMD.EXEC's three uniform outputs, which had no reader at all until
     // this commit and whose header named this block by name.

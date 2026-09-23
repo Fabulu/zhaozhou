@@ -1533,9 +1533,9 @@ module zhao_console_core_slot_overflow_mutant
   //      receive one, so the lane stays a boundary until
   //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
   //      3.4 with an empty program list -- an absent input, not a faked one.
-  input  logic                    terr_pt_fld_valid_i,
-  output logic                    terr_pt_fld_ready_o,
-  input  logic signed [31:0]      terr_pt_fld_height_i,
+  // I34's HEIGHT RETURN LANE LEFT THE CORE'S EDGE 2026-09-23 (EARTHADAPT):
+  // `zhao_field_earth_adapter` drives it inside the module. These three
+  // declarations went with it.
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
@@ -1551,6 +1551,17 @@ module zhao_console_core_slot_overflow_mutant
   output logic [4:0]              terr_fl_records_o,
   output logic                    terr_fl_sealed_o,
   output logic                    terr_fl_idle_o,
+  // FIELD.EARTH_ADAPTER's evidence, promoted in the same commit.
+  output logic [31:0]             fld_earth_records_o,
+  output logic [31:0]             fld_earth_tail_rejected_o,
+  output logic [31:0]             fld_earth_runs_o,
+  output logic [31:0]             fld_earth_skipped_uncovered_o,
+  output logic [31:0]             fld_earth_not_begun_o,
+  output logic [31:0]             fld_earth_noprog_o,
+  output logic [31:0]             fld_earth_faults_o,
+  output logic [31:0]             fld_earth_lane_desync_o,
+  output logic [31:0]             fld_earth_stall_cycles_o,
+  output logic                    fld_earth_idle_o,
   // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
   // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
   // queue could never drain and `tfld_overflow_o` could not be read. A refusal

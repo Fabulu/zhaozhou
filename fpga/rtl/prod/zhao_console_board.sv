@@ -1884,23 +1884,29 @@ module zhao_console_board
   // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
   // left this list with the rest of I26.
 
-  // ---- I34, NARROWED 2026-09-22 (FIELDARM): the section 9.1 LIST INTAKE is
-  //      CLOSED and its eight ports have LEFT this edge. They are driven inside
-  //      this module by `zhao_terrain_fieldlist`, whose own intake is
-  //      `zhao_cmd_exec`'s TerrainField 0x0200 arm -- a real command, a real
-  //      footprint and a program hash RESOLVED against FIELD.LOADER's
-  //      publication port rather than forwarded as a handle.
+  // ---- I34, NARROWED AGAIN 2026-09-23 (EARTHADAPT): the HEIGHT RETURN LANE
+  //      has a PRODUCER and its three ports have LEFT this edge --
+  //      `terr_pt_fld_valid_i`, `_ready_o` and `_height_i`. They are driven
+  //      inside this module by `zhao_field_earth_adapter`
+  //      (`u_field_earth_adapter`), client 3 of the one `u_field_host`, from
+  //      the vertex the consumer hands over and the uniforms `zhao_cmd_exec`
+  //      has been publishing to nobody since 2026-09-21.
   //
-  //      WHAT REMAINS AT THIS EDGE IS THE HEIGHT RETURN LANE, and that is what
-  //      20.8 forbids faking: "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while
-  //      declaring the other three channels present because they have spare bus
-  //      bits." The Earth record declares four channels and this consumer can
-  //      receive one, so the lane stays a boundary until
-  //      `zhao_terrain_patch_v2` owns all four. `fld_valid_i` low is section
-  //      3.4 with an empty program list -- an absent input, not a faked one.
-  input  logic                    terr_pt_fld_valid_i,
-  output logic                    terr_pt_fld_ready_o,
-  input  logic signed [31:0]      terr_pt_fld_height_i,
+  //      THE ENTRY DOES NOT CLOSE ON THAT, AND IT MAY NOT. Directive 20.8:
+  //      "DO NOT CLOSE I34 BY WIRING ONLY HEIGHT while declaring the other
+  //      three channels present because they have spare bus bits." The Earth
+  //      record declares FOUR channels, the adapter now PRODUCES all four
+  //      (`height_o`, `velocity_o`, `material_o`, `nav_cost_o`, from one
+  //      evaluation, which is 20.8's own instruction), and
+  //      `zhao_terrain_patch` still has an input for exactly one of them. The
+  //      gap has moved from "nothing evaluates the program" to "the consumer
+  //      has three missing ports", which is directive 13.2's
+  //      `zhao_terrain_patch_v2` and is a CONSUMER-side item. See entry I34.
+  //
+  //      The three adapter outputs with no consumer are left OPEN at that
+  //      instantiation and declared in the INCOMPLETE block, which is the same
+  //      shape -- and for the same stated reason -- that `zhao_cmd_exec`'s
+  //      three uniform outputs carried until this commit.
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
@@ -1916,6 +1922,32 @@ module zhao_console_board
   output logic [4:0]              terr_fl_records_o,
   output logic                    terr_fl_sealed_o,
   output logic                    terr_fl_idle_o,
+  // FIELD.EARTH_ADAPTER's evidence, promoted 2026-09-23 (EARTHADAPT). Every
+  // one of these is FIRED by `tests/field/field_earth_adapter_directed.cpp`
+  // before it is quoted (R95); a counter whose zero nobody has seen move is a
+  // claim and not a measurement.
+  //
+  // TWO OF THEM ARE THE ONES TO READ FIRST.
+  //   `fld_earth_lane_desync_o` is the shadow guard. Its two operands are the
+  //     adapter's own per-vertex state and `zhao_terrain_patch`'s `busy`, and
+  //     nothing loads both -- which is the question CLAUDE.md's metadata-swap
+  //     chapter says to ask of a checker before quoting its silence.
+  //   `fld_earth_stall_cycles_o` is THE COST. A scalar field front answers one
+  //     vertex-lane per engine run, tens of clocks each, against a consumer
+  //     that would take one per clock. This number is what decides whether
+  //     directive 13.2's field-major `zhao_terrain_patch_v2` has to be built
+  //     before terrain fields can run at frame rate, and it is exported rather
+  //     than kept private for exactly that reason.
+  output logic [31:0]             fld_earth_records_o,
+  output logic [31:0]             fld_earth_tail_rejected_o,
+  output logic [31:0]             fld_earth_runs_o,
+  output logic [31:0]             fld_earth_skipped_uncovered_o,
+  output logic [31:0]             fld_earth_not_begun_o,
+  output logic [31:0]             fld_earth_noprog_o,
+  output logic [31:0]             fld_earth_faults_o,
+  output logic [31:0]             fld_earth_lane_desync_o,
+  output logic [31:0]             fld_earth_stall_cycles_o,
+  output logic                    fld_earth_idle_o,
   // CMD.EXEC's TerrainField arm's own evidence, promoted in the same act. It
   // was UNCONNECTED until this commit -- `tfld_ready_i` included -- so the
   // queue could never drain and `tfld_overflow_o` could not be read. A refusal
@@ -4541,9 +4573,6 @@ module zhao_console_board
       .terr_wb_acks_overdue_o             (terr_wb_acks_overdue_o),
       .terr_jdb_starved_cycles_o          (terr_jdb_starved_cycles_o),
       .terr_jdb_ret_overflow_o            (terr_jdb_ret_overflow_o),
-      .terr_pt_fld_valid_i                (terr_pt_fld_valid_i),
-      .terr_pt_fld_ready_o                (terr_pt_fld_ready_o),
-      .terr_pt_fld_height_i               (terr_pt_fld_height_i),
       .terr_pt_fld_add_accept_o           (terr_pt_fld_add_accept_o),
       .terr_pt_fld_add_reject_o           (terr_pt_fld_add_reject_o),
       .terr_pt_fld_covers_o               (terr_pt_fld_covers_o),
@@ -4556,6 +4585,16 @@ module zhao_console_board
       .terr_fl_records_o                  (terr_fl_records_o),
       .terr_fl_sealed_o                   (terr_fl_sealed_o),
       .terr_fl_idle_o                     (terr_fl_idle_o),
+      .fld_earth_records_o                (fld_earth_records_o),
+      .fld_earth_tail_rejected_o          (fld_earth_tail_rejected_o),
+      .fld_earth_runs_o                   (fld_earth_runs_o),
+      .fld_earth_skipped_uncovered_o      (fld_earth_skipped_uncovered_o),
+      .fld_earth_not_begun_o              (fld_earth_not_begun_o),
+      .fld_earth_noprog_o                 (fld_earth_noprog_o),
+      .fld_earth_faults_o                 (fld_earth_faults_o),
+      .fld_earth_lane_desync_o            (fld_earth_lane_desync_o),
+      .fld_earth_stall_cycles_o           (fld_earth_stall_cycles_o),
+      .fld_earth_idle_o                   (fld_earth_idle_o),
       .cmd_exec_tflds_o                   (cmd_exec_tflds_o),
       .cmd_exec_tfld_overflow_o           (cmd_exec_tfld_overflow_o),
       .cmd_exec_tfld_src_truncated_o      (cmd_exec_tfld_src_truncated_o),

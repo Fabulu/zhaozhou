@@ -187,11 +187,14 @@ module zhao_field_earth_adapter #(
     // object index, and it is what an adapter puts on `req_slot_o`.
     parameter int unsigned OBJW       = 3,
     parameter int unsigned SLOTW      = 3,
-    // The shared field port's lane counts, which are the HOST's arity and not
+    // The shared field port's lane counts, which are the HOST's arity and NOT
     // this profile's. The earth record is 12 in / 4 out (field-ir.md 7.1); the
-    // host is widened to 13/7 by the flow profile, so lanes 12 and 4..6 are
-    // padded and ignored respectively. Guarded at elaboration.
-    parameter int unsigned IN_LANES   = 13,
+    // shipped shared pair is FIFTEEN in / SEVEN out (decision W01, the W
+    // profile's width, which every client on the one engine has to carry). So
+    // input lanes 12..14 are PADDED and output ordinals 4..6 are IGNORED, and
+    // the guards below are the profile's minimum rather than an equality: a
+    // client that demanded exactly its own arity could never share a bus.
+    parameter int unsigned IN_LANES   = 15,
     parameter int unsigned OUT_LANES  = 7,
     // The oracle's `duration_ticks == 0` answer: phase is 1.0, Q16.16. Named
     // because it is a LAW READ OFF THE REFERENCE and the owner may not rewrite
