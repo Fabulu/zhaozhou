@@ -1354,6 +1354,37 @@ if ($Device) {
         # StrictMode: a failed or timed-out fit never gains the resource keys.
         $almShow = if ($row.Contains('alms') -and $null -ne $row.alms) { $row.alms } else { '-' }
         Write-Host ("{0,-34} {1,-16} {2,7}s   ALM {3}" -f $rowModule, $row.status, $row.seconds, $almShow)
+        # A FAILED STAGE'S LOG IS THE ONLY RECORD OF WHY, AND IT WAS BEING
+        # DELETED. Added 2026-09-23, after `zhao_console_core@diag-incomplete-
+        # 14gaps` spent 8,030 SECONDS, failed in quartus_fit, and left nothing
+        # whatever to say what it ran out of. The row records
+        # `status: incomplete:failed:quartus_fit.exe`, and the ONE file that
+        # would have named the resource -- `quartus_fit.exe.log` -- went out
+        # with the workspace seconds later.
+        #
+        # Two hours of machine time producing a failure whose error message no
+        # longer exists is the most expensive shape of the `.gitignore` lesson
+        # in CLAUDE.md: the evidence was not lost by accident, it was cleaned up
+        # on purpose by a rule that never asked whether the run had SUCCEEDED.
+        #
+        # The map report is already harvested "whatever happened" a few lines
+        # above; this does the same for the stage logs, and ONLY on failure, so
+        # a green run still leaves nothing behind. They are small -- the fit log
+        # of the run that prompted this would have been a few hundred KB against
+        # the 20 MB .map.rpt that was kept.
+        if (-not $ok) {
+            $logDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+            foreach ($lg in @('quartus_map.exe.log', 'quartus_fit.exe.log', 'quartus_sta.exe.log')) {
+                $lgSrc = Join-Path $dir $lg
+                if (Test-Path -LiteralPath $lgSrc) {
+                    $stage = $lg -replace '\.exe\.log$', ''
+                    Copy-Item -LiteralPath $lgSrc `
+                        -Destination (Join-Path $logDir ($rowModule + '.' + $stage + '.log')) -Force
+                }
+            }
+            Write-Host ("kept stage logs for the FAILED row: {0}/{1}.*.log" -f 'reports/synthesis/blockpaths', $rowModule)
+        }
         if (-not $KeepWorkspace) {
             Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
         }
