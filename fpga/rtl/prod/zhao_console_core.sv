@@ -3053,6 +3053,178 @@
 //      `zhao_vertex_arena`'s payload would have to widen -- a change to that
 //      block, not to a composer.
 //
+//      RE-MEASURED 2026-09-23 (gz/trimerge), AND THE HEADLINE IS THAT (a) IS
+//      DEAD. THE MERGE EXISTS, IT IS COMPOSED IN THIS FILE, AND IT HAS THREE
+//      CLIENTS. Every sentence in this entry that says otherwise -- including
+//      the 2026-09-21 and 2026-09-22 re-measurements above, which both state
+//      "One producer chain through `u_material_window`'s gate. No merge." --
+//      is reading the wrong side of the window.
+//
+//        `zhao_geom_clipdoor` (`fpga/rtl/geometry/zhao_geom_clipdoor.sv`) is
+//        instantiated below as `u_geom_clipdoor` with `.NCLIENT (3)`: slice 0
+//        GEOM.REPLAY, slice 1 FORGE.ASSEMBLE, slice 2 PART.CLIPFEED. Its own
+//        first line is "N PRODUCERS ON ONE zhao_geom_clip INPUT". It carries
+//        BOTH halves of the beat -- the triangle and the material -- so no
+//        shadow FIFO and no tag are needed, and its arbitration is run-length
+//        fair so a third idle client changes nothing about the other two.
+//
+//      WHY THE EARLIER MEASUREMENTS MISSED IT, because the METHOD matters more
+//      than the correction. They evaluated `u_geom_clip.tri_valid_i`, found
+//      `cl_in_valid` = `mw_t_valid && !cl_in_refuse_c` -- one wire from one
+//      block -- and read that as one producer. THE EXPRESSION IS STILL EXACTLY
+//      TRUE. The door does not sit at GEOM.CLIP's port; it sits UPSTREAM of
+//      `u_material_window`, and the window is a pure combinational gate, so a
+//      three-client arbiter and a one-wire input are the same picture seen from
+//      two ends. This entry warned about precisely this failure in the OPPOSITE
+//      direction -- "Anybody grepping for `rp_o_valid` at `u_geom_clip` will
+//      not find it and must not read that as progress" -- and then committed
+//      its mirror image twice. WALK THE CHAIN; DO NOT READ THE PORT.
+//
+//      AND ALL THREE OBLIGATIONS THIS ENTRY BILLED FOR A SECOND PRODUCER ARE
+//      DISCHARGED. Each was real when written; none survives:
+//        1. "it must fire `d_enter_i`" -- the door's single output IS the
+//           window's input, and `d_enter_i` is `cl_in_valid && cl_in_ready`,
+//           common to every client. A door client cannot enter without firing
+//           it. Structural, not argued.
+//        2. "it must carry a {material_set, material_id} pair ... TERRAIN HAS
+//           NEITHER" -- the search still returns ZERO hits today, re-run rather
+//           than quoted, and it NO LONGER MATTERS. Owner ruling 1 of 2026-09-22
+//           made `MATMODE_NONE_C` a LAWFUL DECLARED MODE: no resolve is issued,
+//           the defined no-sampling profile is published, no fault counter
+//           moves, and a ZERO {set, id} pair is what `mode_contra_c` REQUIRES
+//           rather than a tie-off. See `zhao_material_window.sv`'s mode
+//           constants and its refusal of a non-zero pair under that mode.
+//        3. "`err_unpublished_o`'s premise is falsified by any second door" --
+//           NO SECOND DOOR WAS BUILT. Every client passes THROUGH the window.
+//           The premise is intact and needed no re-argument.
+//
+//      SO (a) IS NOT "BUILD A MERGE". It is `NCLIENT` 3 -> 4 plus one flattened
+//      slice per port, with `cd_o_owner` and `geom_clipdoor_granted_o` widening
+//      with it, and a material-mode declaration coming from a TERRAIN PORT
+//      rather than a constant chosen here -- the ruling forbids the composer
+//      choosing it. `zhao_part_clipfeed` is the worked template, port for port,
+//      and `design/contracts/PART.CLIPFEED.md` is its argument.
+//
+//      THREE MORE OF THIS ENTRY'S OWN FACTS ARE STALE, each in the direction
+//      that makes the remaining work look larger or stranger than it is:
+//
+//        * "this console holds TWO of them today, one inside GEOM.VATTR and one
+//          inside FORGE.ASSEMBLE" -- THERE ARE THREE. `zhao_part_clipfeed`
+//          holds a third `zhao_geom_depthquant_stream` and is composed in this
+//          file. A fourth instance is an EXERCISED pattern, not a novelty; the
+//          DSP argument against it is untouched, but it is no longer unusual.
+//        * "the mosaic's consumer is `zhao_texture_island_v3_top`'s `u_mosaic`,
+//          and THIS core does not instantiate that top" -- TRUE OF DIRECT
+//          INSTANTIATION AND FALSE ABOUT RESIDENCY, which is what the sentence
+//          was being used for. The closure is this file -> `zhao_shell_top_v2`
+//          -> `zhao_geom_bin_pipe_v2` -> `zhao_raster_tile_pipe_v2` ->
+//          `zhao_raster_texture_stage_v3` -> `zhao_texture_island_v3_top` ->
+//          `zhao_texture_mosaic_v2`, every link UNCONDITIONAL at module scope,
+//          and `design/prod_manifest.yml` says it outright: "zhao_texture_
+//          mosaic_v2 is reachable inside the selected V3 root". THE CONSUMER IS
+//          RESIDENT. That removes the obstacle this entry told the next lane to
+//          confirm first. (A grep for `zhao_texture_mosaic` followed by
+//          whitespace does NOT find it -- the composed one is the `_v2` -- which
+//          is CLAUDE.md's "a grep for `_v2$` finds half of it" in this entry's
+//          own subject matter.)
+//        * and a defect CLAUDE.md names, which this lane was briefed to expect:
+//          `zhao_geom_wcache`'s 75-bit payload "never widened". IT WAS WIDENED
+//          75 -> 106 ON 2026-09-09 and that file's own header calls the
+//          widening "a REPAIR". Terrain does not touch that block in any case:
+//          its shell is `zhao_terrain_wcache`, 106 bits, carrying `fill_w_i`
+//          under an elaboration `$fatal` on the field map. The cheque was
+//          cashed; do not spend a packet re-cashing it.
+//
+//      WHAT IS ACTUALLY LEFT, NARROWED TO TWO ITEMS:
+//
+//        invw24 -- STILL ABSENT, and now fully specified. Terrain HAS its `w`:
+//          `proj_out_aw_o/bw_o/cw_o` are [30:0] fx16 raw `w` (NOT 1/w -- that
+//          lane is `proj_out_ad_o/bd_o/cd_o` and is a separate field), and the
+//          profile rides `proj_fill_profile_o`. So unlike the particle arm,
+//          NOTHING UPSTREAM HAS TO GROW A LANE -- PART.CLIPFEED's whole first
+//          half was carrying `w` through a ladder queue that had dropped it,
+//          and terrain's is already at this module's edge. What is needed is a
+//          fourth `zhao_geom_depthquant_stream` + `zhao_raster_rcp24_v4` pair
+//          (or an arbiter on `v_*` and a demux on `d_*`) and a `pack_attr`
+//          analogue. `zhao_forge_assemble`'s `u_dq`/`u_rcp` pair and its
+//          `pack_attr` are the template. The light needs no join FIFO: this
+//          composer already rate-locks the two streams, taking a terrain
+//          reference only when replay AND light can both accept it, so the
+//          triangle and its shade issue in lockstep from one reference and
+//          carry the same `src_id`.
+//
+//        lit r/g/b -- THE ONE REAL BLOCKER, AND IT IS AN OWNER DECISION THIS
+//          TREE HAS DELIBERATELY PARKED. `reports/OWNER-DECISIONS-20260920.md`
+//          section 5 carries terrain's two absent laws and its own
+//          recommendation is "Do not rule these yet, and that is the
+//          recommendation ... not because they are ripe."
+//          `design/contracts/GEOM.CLIP.md` says the same from the other side:
+//          terrain's lit r/g/b "is terrain art content and remains the owner's
+//          (dossier decision 5)".
+//
+//      AND R234 D1 MADE THAT BLOCKER STRICTLY HARDER. The paragraph above
+//      already says so; this re-measurement CONFIRMS it rather than softening
+//      it. `zhao_geom_attrpack`'s Gouraud lanes are deliberately NOT branched
+//      on `tri_untex_i` ("an untextured primitive is still lit"), so R197 buys
+//      a terrain triangle past u/w and v/w and DOES NOT buy it past lit r/g/b.
+//      Terrain must produce three channels and owns ONE SCALAR.
+//
+//      BOTH RATIFIED PROFILES WERE PRICED AGAINST THE TREE, AND NEITHER IS
+//      COMPOSABLE TODAY -- which is a different finding from "the colour is
+//      art", and a more useful one:
+//        * UNTEXTURED, `lit(base) = (base * shade + 32768) >> 16`
+//          (`reference/src/zrender/terrain.cpp`, three times, one per surface
+//          class). It needs a BASE COLOUR. In the oracle that is the patch
+//          material's `mat.r/g/b`; in RTL there is NO terrain material colour
+//          anywhere -- `zhao_terrain_patch`'s vertex stream is HEIGHTS ONLY,
+//          and the projector's `mat_a`/`mat_b`/`weight` are layer-E TILE IDS,
+//          "forwarded, never selected". The cheapest-looking profile is the one
+//          with the missing operand.
+//        * TEXTURED, `mod_of(shade, tint, sheet)`, EXACT at all-unity by the
+//          oracle's own sentence. This is the interesting one, because "tint
+//          absent" has a RATIFIED IDENTITY -- RGB565 0xFFFF, which `cell_tint`
+//          already defaults to, giving exactly 65536 in Q16.16 -- so a unity
+//          tint is NOT the stand-in this entry refused three times; it is an
+//          unauthored layer sitting at its exact identity. WHAT BLOCKS THE
+//          TEXTURED ROUTE IS THEREFORE NOT THE COLOUR AT ALL. It is three
+//          CARRIAGE items: terrain's u/v (the law is FROZEN and computable from
+//          `zhao_terrain_project`'s OWN INPUT PORTS, but its OUTPUT packet has
+//          nowhere to put the result), the 224-bit aux surface context (NO
+//          producer anywhere, and `zhao_raster_tile_pipe_v2` ABORTS THE FRAME
+//          on a non-zero one), and a terrain material identity so the window
+//          publishes a SAMPLING material -- which `MATMODE_NONE` by
+//          construction does not.
+//
+//      THE RECOMMENDATION, AND IT IS A SEQUENCE RATHER THAN A RULING. Under
+//      R234 D1 the owner has already taken the expensive option once and said
+//      "we just want the full capability", so the flat stand-in is very likely
+//      the wrong answer again. But the textured profile is not ONE decision --
+//      it is u/v carriage, then an aux producer, then a terrain material
+//      identity, and only THEN a colour, which can be unity HONESTLY. Each of
+//      those three is engineering against a frozen law and NONE of them is art.
+//      The art decision -- layer-H tint CONTENT -- is the LAST item, not the
+//      first, and the path can ship at the tint's exact identity until it is
+//      authored. THAT REORDERING IS THIS LANE'S FINDING: THE PARKED OWNER
+//      DECISION IS NOT BLOCKING THE NEXT THREE PIECES OF WORK, and every pass
+//      that has stopped here stopped at the last item instead of the first.
+//
+//      ONE CONSTRAINT ON WHOEVER BUILDS IT, which nothing in this entry said
+//      and which would otherwise be discovered at the end: THE CONSOLE SMOKE
+//      CANNOT PROVE ANY OF IT. Every terrain page the smoke plays fails its
+//      CRC, so no page becomes resident and terrain emits NO TRIANGLE AT ALL --
+//      this file says so in several other places. A terrain arm therefore lands
+//      with an ACCEPTANCE BENCH, the way PARTMAT proved the particle arm in
+//      `tests/prod/partmat_acceptance.cpp`, and `raster pixels=2560` will NOT
+//      move. A packet planning to quote the smoke as its evidence is planning
+//      to quote a fixture that never reaches its path.
+//
+//      NOTHING WAS COMPOSED BY THIS LANE, DELIBERATELY. The depthquant pair,
+//      the packer and the fourth client could all have been built today; with
+//      slots 3..5 carrying an invented colour they would be a PREFIX of a chain
+//      whose last link does not exist -- "a tie-off wearing a composition's
+//      clothes", which this file names as the campaign's first prohibition --
+//      and the register would have moved while not one pixel did.
+//
 // I20. Everything `zhao_shell_top_v2` already declares provisional at its own
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
 //      geometry memory clients -- is UNCHANGED and still provisional. This

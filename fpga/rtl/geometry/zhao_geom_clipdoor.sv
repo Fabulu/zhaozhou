@@ -29,8 +29,16 @@
 //                  untextured gate --> zhao_geom_clip (the TRIANGLE half)
 //
 // and the window is a PURE COMBINATIONAL GATE on that path -- its own body is
-// `assign t_valid_o = t_valid_i && pass_c; assign t_ready_o = t_ready_i &&
-// pass_c;`.  It buffers nothing and reorders nothing.  So the beat that is
+// `assign t_valid_o = t_valid_i && pass_c;` and
+// `assign t_ready_o = refuse_c || (t_ready_i && pass_c);`.
+// (CORRECTED 2026-09-23, gz/trimerge: this header quoted the ready line as
+// `t_ready_i && pass_c`, which is one revision behind the block it quotes --
+// the `refuse_c ||` term is what CONSUMES a refused primitive instead of
+// stalling it.  The argument below is unaffected, because both forms are
+// unbuffered and neither reorders; but a header that quotes a line production
+// no longer has is the citation rot this repository keeps paying for, and it
+// sits in the block this door's own entry cites as authority.)
+// It buffers nothing and reorders nothing.  So the beat that is
 // offered at the window's material input is the SAME beat whose triangle is
 // offered at GEOM.CLIP's data input, on the same clock, and one arbiter can
 // own both halves without a tag and without a shadow FIFO.

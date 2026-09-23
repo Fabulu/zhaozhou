@@ -39,8 +39,17 @@ producer -> zhao_material_window (MATERIAL half) -> R197's untextured gate
 ```
 
 and the window is a **pure combinational gate** on that path — its body is
-`assign t_valid_o = t_valid_i && pass_c; assign t_ready_o = t_ready_i &&
-pass_c;`. It buffers nothing and reorders nothing.
+`assign t_valid_o = t_valid_i && pass_c;` and
+`assign t_ready_o = refuse_c || (t_ready_i && pass_c);`. It buffers nothing and
+reorders nothing.
+
+> **Corrected 2026-09-23 (gz/trimerge).** This contract and
+> `zhao_geom_clipdoor.sv`'s header both quoted the ready line as
+> `t_ready_i && pass_c`, one revision behind the block they quote: the
+> `refuse_c ||` term is what CONSUMES a refused primitive rather than stalling
+> it. The argument is unaffected — both forms are unbuffered and neither
+> reorders — but the quotation was wrong in both places at once, which is what a
+> copied citation does.
 
 So the beat offered at the window's material input **is** the beat whose
 triangle is offered at GEOM.CLIP's data input, on the same clock, and one
