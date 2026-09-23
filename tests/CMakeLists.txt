@@ -7449,6 +7449,52 @@ verilate(test_forge_shadow_directed
 add_test(NAME forge_shadow_directed COMMAND test_forge_shadow_directed)
 set_tests_properties(forge_shadow_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# FORGE.SHADOW's TERMINAL LINK -- the two blocks that let a shadow hull RIDE
+# `zhao_forge_assemble` instead of cloning it. `zhao_forge_fanindex` turns the
+# hull's RING into a triangle fan (the only genuinely new geometry the shadow
+# subsystem needed); `zhao_forge_jobarb` arbitrates FORGE.PRIM and FORGE.SHADOW
+# onto that one assembler at JOB granularity, with FORGE.PRIM at absolute
+# priority because the contract says a stalled shadow must never delay a
+# creature. Both benches carry the positive controls for their own fault
+# counters -- reachable from the port, so neither needs a committed mutant.
+set(ZHAO_FORGE_FANINDEX_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_fanindex.sv)
+add_executable(test_forge_fanindex_directed forge/forge_fanindex_directed.cpp)
+target_link_libraries(test_forge_fanindex_directed PRIVATE zhao_harness)
+verilate(test_forge_fanindex_directed
+  PREFIX Vzhao_forge_fanindex
+  TOP_MODULE zhao_forge_fanindex
+  SOURCES ${ZHAO_FORGE_FANINDEX_SV})
+add_test(NAME forge_fanindex_directed COMMAND test_forge_fanindex_directed)
+set_tests_properties(forge_fanindex_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_forge_fanindex
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_fanindex
+                 ${ZHAO_FORGE_FANINDEX_SV})
+set_tests_properties(lint_forge_fanindex PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+set(ZHAO_FORGE_JOBARB_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jobarb.sv)
+add_executable(test_forge_jobarb_directed forge/forge_jobarb_directed.cpp)
+target_link_libraries(test_forge_jobarb_directed PRIVATE zhao_harness)
+verilate(test_forge_jobarb_directed
+  PREFIX Vzhao_forge_jobarb
+  TOP_MODULE zhao_forge_jobarb
+  SOURCES ${ZHAO_FORGE_JOBARB_SV})
+add_test(NAME forge_jobarb_directed COMMAND test_forge_jobarb_directed)
+set_tests_properties(forge_jobarb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_forge_jobarb
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_jobarb
+                 ${ZHAO_FORGE_JOBARB_SV})
+set_tests_properties(lint_forge_jobarb PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # MEM.UPLOAD -- the HPS->VRAM resource upload engine. Its oracle
 # (zref::mem::upload_verdict) was written BEFORE the RTL, so the bench is a
 # DIFFERENTIAL against that oracle rather than a second transcription of the
