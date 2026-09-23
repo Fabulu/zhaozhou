@@ -764,6 +764,39 @@ which is what `check_v3_banks` did for nine days. It also refuses to silently
 accept a gate it has never seen. It is the tool form of §15.9's *"discover the
 gates; do not run a remembered list"*, which as prose had already failed once.
 
+**THE 81, CLASSIFIED 2026-09-23 — and the shape says exactly what happened.**
+**25 blocks of 133 are affected. 19 are DRIFT** (enum, pattern, const, type)
+**and 6 are INCOMPLETE ROWS** (missing required properties). The worst are, in
+order: `TERRAIN.EDGERECON` (8), `TERRAIN.JOBISSUE` (7), `PART.CLIPFEED` (7),
+`TERRAIN.SPDESC` (6), `MATERIAL.RESOLVE` (6), `TWOD.BAND` (5), `GEOM.CLIPDOOR`
+(4), `TWOD.CMD` (4).
+
+**Every one of those is a block THIS CAMPAIGN ADDED.** The schema gate died on
+2026-09-06 and the rows written after it drifted behind the corpse — nobody was
+careless, the instrument simply was not there. That is the `.gitignore` lesson
+again: the rule existed, and nothing read it back.
+
+**IT DOES NOT MOVE THE REGISTER, and that is measured rather than assumed.**
+`completion_register.py` returned **14** on every run today, before and after the
+YAML repair, and its output was byte-identical across the NORMALPYR merge. It
+does not read the fields that are drifting (`blocked_on`'s enum, `maturity_log`'s
+type, `tests.random`, `latency`'s pattern).
+
+**ONE FINDING IS WORTH MORE THAN THE OTHER EIGHTY.** `/blocks/43` and
+`/blocks/45` are **TERRAIN.ISLAND and TERRAIN.VISIBLE — precisely the two blocks
+the completion register excludes as "superseded by a ruling".** Their
+`superseded_by` holds a justification PARAGRAPH; the schema demands a
+`BLOCK.ID`. So **two gates disagree about the type of the one field that decides
+whether those blocks are gaps**, and the schema has never been satisfied for
+them. The register's rule is the richer of the two — it checks the note against
+the tree and requires a ruling, a replacement file and a BUILT test, each named
+— so the count is sound. **But a field that is an id to one gate and prose to
+another is a defect in the ledger, not a difference of opinion**, and it should
+be settled in one direction before anyone builds tooling on either reading.
+
+**NOT REPAIRED HERE, deliberately:** `design/blocks.yml` is shared and two lanes
+are live. 81 rows is lane work, and six of them need their authors.
+
 **STILL OPEN AND IT IS AN OWNER CALL:** whether to stop cancelling the ctest
 job. Letting every push run the full suite costs runner minutes on the owner's
 account at exactly the push frequency this campaign generates; the alternative
