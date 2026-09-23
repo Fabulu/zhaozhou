@@ -592,6 +592,135 @@ bank sized above, is what decides whether this walker is affordable. R242 also
 made devstore's `w_ready_o` fall during a burst, which already made one histogram
 count a single record 86 times; a walker joining against that ready inherits it.
 
+### BLOCKER B IS NOW COSTED — packet EDGEBAND, 2026-09-23
+
+**The ~1,280 HOLDS, and it is not an estimate — it is exactly 5 × 256.** Derived
+twice independently, which is why the suspiciously round number is not a tell
+here:
+
+* **By hand off the read FSM.** `R_IDLE → R_HREQ` issues ONE history burst;
+  `R_HWAIT → R_DREQ` issues the first record burst; `R_STREAM` re-enters
+  `R_DREQ` whenever `r_ptr_q[1:0] == 3`, i.e. once per four of the sixteen
+  records. 1 + 4 = **5 reads per patch**. `R_HWR` issues ONE history WRITE
+  burst, taken only when the LOD pass emitted a decision (`h_any_q ||
+  h_valid_i`). The slot footprint corroborates it from the layout side:
+  `zhao_terrain_devstore.sv:129-137`, 256 B of deviations + 64 B of history =
+  320 B = 5 × 64.
+* **By the committed directed test.** `terrain_lodpath_directed` case 8 already
+  asserts `rd1 + 5 == bursts_read_o` — *"a patch read is ONE history burst plus
+  FOUR record bursts"*. EDGEBAND built and ran it: **472 checks, 0 failures**,
+  case 8 printing *"55 bursts read, 22 written, 77 guard requests; a patch read
+  cost 660 clocks of memory wait in total"*. 55 / 5 = 11 patch reads.
+
+**THE CONVERSION THE TREE'S PROSE OMITS, AND IT IS A FACTOR OF FOUR.** Every
+bytes-per-frame figure in this repository is written in 64-byte *fabric
+requests*. The SDRAM is a **16-bit bus with BURST_LENGTH 8**
+(`zhao_sdram_params_pkg.sv:38,72`), so one SDRAM burst moves **16 bytes** and
+`zhao_vram_arbiter.sv:167` splits *"a 64-byte request one burst further"* — into
+**four**. A "1,280-burst" pass is **5,120 SDRAM bursts**. Converting at the
+controller's own cycle-exact grant-to-grant spans (`zhao_sdram_ctrl.sv:30-31`,
+read 12/15/18 hit/miss/conflict):
+
+| | bytes/frame | SDRAM grant-clocks | % of a 1,666,666-cycle frame |
+|---|---|---|---|
+| PREPARE, page-hit (flattering) | 80 KiB | **61,440** | **3.69%** |
+| PREPARE, bank-conflict (budget against this) | 80 KiB | **92,160** | **5.53%** |
+
+**So PREPARE's own cost is small, exact and affordable: +80 KiB/frame,
+≈ +4.9 MB/s at 60 Hz, +3.7% to +5.5% of the frame's SDRAM cycles.** That is the
+number P2 asked for.
+
+**AND THE FRAME STILL MAY NOT HAVE IT, FOR A REASON THAT IS NOT PREPARE'S
+FAULT.** The comfortable answer here is "there is plenty of headroom", so it got
+the extra five minutes. Two findings survive it:
+
+**(1) The denominator does not exist.** The *"Phase-0 bandwidth matrix"* that
+`spec/terrain_rules.md:496-500` and three other documents cost themselves
+against is an **empty directory** — `reports/bandwidth/` holds one 0-byte
+`.gitkeep` from the 2026-08-14 skeleton commit, and
+`reports/digests/LANE2-TERRAIN-8KM.md:22-25` and `reports/DOCKET.md:2655`
+already call citing it a phantom citation. **No tool under `tools/` computes
+bandwidth**, and `tests/memory/mem_bandwidth_budget.cpp` — named like a budget —
+is a *starvation* test that asserts `scanout_preempted == 0` and prints burst
+counts as "informational". It never compares a total against a ceiling. It also
+**predates R242 by five weeks** (2026-08-18) and models two clients, neither of
+them terrain.
+
+`tools/budget/sdram_bandwidth.py` is the missing half, committed by this packet.
+It adds up only figures the tree already declares, in the unit the tree already
+uses, and its self-test proves it can report a **shortfall** and not merely a
+surplus.
+
+**(2) Summing the declared numerators for the first time puts the frame OVER,
+and it was over before PREPARE was proposed.** At bank-conflict spans:
+
+```
+TOTAL COMMITTED, WITHOUT PREPARE   2,072,128 grant-clocks   124.33% of frame
+TOTAL COMMITTED, WITH PREPARE      2,164,288 grant-clocks   129.86% of frame
+```
+
+The two rows that dominate are **TERRAIN bake (43.9%)** and **TERRAIN streaming
+(41.0%)** — the two independent provisional ~41 MB/s figures that
+`LANE2-TERRAIN-8KM.md:385-389` recorded on 2026-09-03 as *"nothing anywhere adds
+them"*. Adding them is what puts the frame over. Both are self-flagged *"do not
+freeze"* / *"Affordability: NOT COSTED"*, and nothing states that a
+worst-case-streaming frame and a worst-case-baking frame co-occur — so this is
+a worst-on-worst, not a prediction. At page-hit spans everything fits at 83.86%.
+**The honest range is that wide, and closing it needs ZH-004, not more
+arithmetic.**
+
+**THE BINDING CONSTRAINT IS NOT BYTES — IT IS THAT DEVSTORE RIDES A BACKGROUND
+CLIENT.** `zhao_mem_guard.sv:591-594` passes `devstore_rd_ok` /
+`devstore_wr_ok` for `ZHAO_CLIENT_TERRAIN_BUILD` **and no other arm**, and
+ruling T3 makes client 6 *"served only when NOTHING else is pending, DEBUG
+included"* (`zhao_vram_arbiter.sv:33-41`). Its budget is therefore the **idle
+residue**, not a share of the frame, so a row reading "3.69% of frame" invites
+exactly the wrong reading:
+
+| | page-hit | bank-conflict |
+|---|---|---|
+| idle residue left for TERRAIN_BUILD | 1,303,114 | 1,118,794 |
+| TERRAIN_BUILD wants, **without** PREPARE | 972,640 (74.6%) | 1,524,256 (136.2%) |
+| TERRAIN_BUILD wants, **with** PREPARE | 1,034,080 (79.4%) | 1,616,416 (144.5%) |
+
+**PREPARE moves the background client from 74.6% → 79.4% of its residue in the
+flattering case, and from 136.2% → 144.5% in the unflattering one.** It is never
+the thing that breaks the frame, and it is never free. `spec/memory_rules.md:396-402`
+already predicted the failure mode in its own voice — *"The record READ is
+frame-critical … while client 6 is T3's background class … A frame whose page
+loads saturate the socket therefore **delays** LOD decisions rather than
+corrupting them"* — and named the instrument, `rd_wait_clocks_o`. **PREPARE
+doubles the frame-critical read demand on the one client that is ruled first to
+starve.**
+
+**VERDICT FOR P2: the bandwidth is affordable and the measurement is no longer
+the gate.** P2 may proceed on bandwidth grounds. What it must carry instead:
+
+* **A `rd_wait_clocks_o` budget, not a burst budget.** The bench figure of 660
+  clocks for 11 patch reads is **12 clocks per 64-byte burst on a played fabric
+  running at 2-cycle read latency** (`design/blocks.yml:2613`). A real request
+  is four SDRAM bursts at 12–18 grant-clocks, so the honest per-request figure
+  is **48–72** and the bench floor understates by 4–6×. **Do not quote 660 as
+  the cost of anything.**
+* **PREPARE MUST SUPPRESS THE HISTORY WRITEBACK, and this is new.** A PREPARE
+  teed naively off `r_start_i` inherits `R_HWR`, so it writes each patch's
+  history row back a second time per frame — and EMIT, which reads history at
+  `R_HREQ` *before* its own LOD runs, would then read PREPARE's write as *"the
+  previous frame's"* level. That is a hysteresis corruption with every counter
+  balancing, in the same family as blocker C, and it is a **correctness** defect
+  rather than the 256 extra write bursts it also costs. It belongs beside P3's
+  governor freeze.
+
+**ONE READING TRAP TO LEAVE CLOSED.** The "dies on measurement" paragraph below
+costs two LOD passes against a 1.67 M-clock frame and is **correct** — that is
+the *compute* budget (100 MHz ÷ 60, `design/budgets/workloads.yml:51`). The
+bandwidth arithmetic above uses 1,666,666 *SDRAM* cycles, which coincides only
+because both clocks are quoted at 100 MHz. `design/budgets/latency.md:50` warns
+that the tree carries **two "cycles per frame" numbers differing 6.6×** — the
+other being the per-mode video deadline (`zhao_pkg.sv` `frame_gpu_cycles`:
+251,520 / 217,984 / **318,592** Duo). Neither figure above is that one, and
+ZH-004 could move the two clocks independently.
+
 **BLOCKER C — THE DETERMINISM PREMISE IS NOT SATISFIED BY THE CURRENT
 COMPOSITION.** Step 3 rests on *"identical `sp_*` and identical governor targets
 give identical `lvl[]`"*. In `zhao_console_core.sv` the held governor targets
@@ -621,7 +750,7 @@ and fourteen `out_*` outputs must be a **named block**, never composer wires.
 | | work | fit |
 |---|---|---|
 | **P1** | per-slot `pitch_log2` retention from TERRAIN.HDRREAD + a stateless query port on TERRAIN.PLACE. A port change on a composed block: regenerate `gen_prod_top`, `gen_console_board`, `gen_shell_paired_diff`, and connect every bench instantiating PLACE. | none |
-| **P2** | the sealed-list PREPARE reader — step 1's real shape — gated on B's bandwidth measurement. | none |
+| **P2** | the sealed-list PREPARE reader — step 1's real shape. **Bandwidth gate LIFTED 2026-09-23 (EDGEBAND): +80 KiB/frame, +3.7–5.5% of frame SDRAM cycles, affordable.** Now carries instead: suppress the `R_HWR` history writeback (a correctness defect, see blocker B above), and budget `rd_wait_clocks_o` rather than bursts. | none |
 | **P3** | the LOD time-share block and the frame-scoped governor freeze. | none |
 | **P4** | compose this block, wire `edge_*`, land an **acceptance bench** on `tests/prod/partmat_acceptance.cpp`'s pattern. | **one** |
 
