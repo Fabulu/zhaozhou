@@ -136,12 +136,61 @@ def _eval_expr(expr: str, consts: dict[str, int]) -> int | None:
     return value
 
 
+DECL_START_RE = re.compile(r"^\s*(?:localparam|parameter)\b")
+
+
+def _decl_extent(lines: list[str], i: int) -> int:
+    """Index of the LAST physical line of the declaration starting at `i`.
+
+    THE TOOL READ ONE LINE AT A TIME AND SYSTEMVERILOG IS NOT A ONE-LINE
+    LANGUAGE.  A constant written across lines --
+
+        localparam int PAYW = (READ_LATE != 0)
+            ? 47
+            : (47 + 4 * TEXTURE_RESULT_W);   // 239
+
+    -- never matched `DECL_RE` at all, so it was never evaluated, its comment
+    was never checked, AND every later constant derived from it silently became
+    unevaluable too (`value is None: continue`).  Found 2026-09-23 by the
+    ARENAWIRE lane, which planted a deliberately WRONG number in one of four
+    new constants and still got "disagreements : 0" -- three of its four were
+    multi-line and none of them was being read.
+
+    That is the same single-line assumption `tools/rtl/check_v3_banks.py`
+    carried in its own parameter parser, repaired the same day.  Two tools, one
+    blind spot, and both failed silently in the flattering direction.
+
+    The terminator is found by paren DEPTH, not by forbidding newlines: a
+    declaration ends at `;` or at a `,` at depth zero, and a parameter PORT
+    entry with no terminator at all ends at the `)` that closes the list --
+    which is why the closer is a stop and is not consumed.
+    """
+    depth = 0
+    for k in range(i, min(i + 40, len(lines))):
+        code = lines[k].partition("//")[0]
+        for c in code:
+            if c in "([{":
+                depth += 1
+            elif c in ")]}":
+                if depth == 0:
+                    return k - 1 if k > i else k
+                depth -= 1
+            elif depth == 0 and c in ";,":
+                return k
+    return i
+
+
 def scan_text(text: str, path: str) -> list[dict]:
     """Return every disagreement between a derived constant and its comment."""
     findings: list[dict] = []
     consts: dict[str, int] = {}
     module = "<file scope>"
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    lines = text.splitlines()
+    i = -1
+    while i + 1 < len(lines):
+        i += 1
+        lineno = i + 1
+        line = lines[i]
         mod = MODULE_RE.match(line)
         if mod:
             module = mod.group(1)
@@ -154,6 +203,17 @@ def scan_text(text: str, path: str) -> list[dict]:
         # legitimately contain `/`, so a regex that tries to do both at once
         # either loses division or swallows the comment.
         code, _sep, comment = line.partition("//")
+        if DECL_START_RE.match(code) and "=" in code:
+            end = _decl_extent(lines, i)
+            if end > i:
+                # The CLAIM is the comment on the line that terminates the
+                # declaration -- that is where an author writes the value --
+                # and the code is the joined expression.  The finding is still
+                # reported at the line the declaration STARTS on.
+                code = " ".join(lines[k].partition("//")[0].strip()
+                                for k in range(i, end + 1))
+                comment = lines[end].partition("//")[2]
+                i = end
         decl = DECL_RE.match(code)
         if not decl:
             continue
@@ -215,6 +275,12 @@ module zhao_selftest_example #(
   localparam int unsigned OKAY  = SUBS * 2;        // 32
   localparam int unsigned BEATS = SUBS / 4;        // 64 B / (8 words * 2 B)
   localparam int unsigned PROSE = SUBS + 1;        // one per lane
+  localparam int unsigned WIDE  = SUBS
+                                + RECW
+                                + 4;               // 100
+  localparam int unsigned TALL  = SUBS
+                                * 2;               // 32
+  localparam int unsigned DERIV = TALL + 1;        // 33
 endmodule
 """
 
@@ -222,11 +288,21 @@ endmodule
 def _self_test() -> list[dict]:
     found = scan_text(_SELF_TEST_SRC, "<self-test>")
     names = {f["name"] for f in found}
+    by = {f["name"]: f for f in found}
     # ROWW fires (576 against 704).  HISTW must NOT -- it proves MORPHW, the
     # unterminated last parameter, resolved.  BEATS must NOT -- it proves the
     # prose rule.  OKAY and RECW must not -- they agree.
-    assert names == {"ROWW"}, f"self-test expected {{ROWW}}, saw {names}"
-    assert found[0]["claimed"] == 576 and found[0]["actual"] == 704, found[0]
+    #
+    # WIDE fires and TALL does not, and BOTH are needed: a joiner that reads
+    # multi-line declarations is worth nothing unless it still DISAGREES when
+    # the number is wrong, and worth less than nothing if it disagrees when the
+    # number is right.  DERIV must not fire either -- it proves TALL, computed
+    # across three lines, actually entered `consts` for the constants after it.
+    # Before 2026-09-23 all three were invisible and the file read CLEAN.
+    assert names == {"ROWW", "WIDE"}, \
+        f"self-test expected {{ROWW, WIDE}}, saw {names}"
+    assert by["ROWW"]["claimed"] == 576 and by["ROWW"]["actual"] == 704, by["ROWW"]
+    assert by["WIDE"]["claimed"] == 100 and by["WIDE"]["actual"] == 108, by["WIDE"]
     return found
 
 
