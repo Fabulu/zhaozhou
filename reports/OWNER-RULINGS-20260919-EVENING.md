@@ -7220,3 +7220,66 @@ sizing device.** It did not produce the map. **Run 1, the VERDICT on the target
 part, is now pointless to run**: a design needing ≥95,396 ALMs and 359 DSP
 cannot place on 41,910 ALMs and 112 DSP, and four hours would return one bit
 everybody can already derive from this page.
+
+
+### ATTRIBUTING THE 359 DSP — what the census says, what it CANNOT say, and a correction to myself
+
+**`tools/budget/dsp_census.py`, run bare: `DSP 150 COUNTED, 56 rows unpriced`.**
+The synthesis measured **359**. **The instrument the project budgets by sees
+42% of the DSP that is actually there.**
+
+The census is honest about it — it prints *"PARTIAL MIXED EVIDENCE — not a
+floor, not a ceiling"* and names the 56 unpriced rows, of which **28 have no fit
+target at all, so nobody can measure them**. What was not known until today is
+the **magnitude** of the gap. It is 209 DSP.
+
+**AND R80'S FLAGGED REPAIR WAS NEVER DONE.** The census still reports
+**3 rows of `unpriced_requirements:` naming a module that EXISTS** —
+`TERRAIN.SHADE`, `FORGE.SHADOW` and `MEM.UPLOAD`, all three on disk while the
+manifest calls them "RTL not built". Its own warning is the right one: *"a row
+declared absent is a row nobody prices"*, so the total reads **LOW**. R80 named
+this as a precondition for the completion fit and it went unrepaired; the fit
+ran anyway.
+
+**A CORRECTION TO MYSELF, MADE BEFORE IT COULD BE QUOTED.** Reading the leaf
+rows I saw `zhao_project_service`, `zhao_geom_project` and
+`zhao_terrain_project` at **33 DSP each** and reached for CLAUDE.md's
+uncashed-cheque entry — *"the duplication is gone from the SOURCE. It is NOT
+gone from the SILICON"* — and priced it at 33–66 DSP recoverable.
+
+**That is wrong for the console, and one grep of the closure says so.** The
+console instantiates **`zhao_proj_subsystem`**, which carries
+`zhao_project_service` and therefore **ONE** `zhao_project_core`.
+`zhao_geom_project` and `zhao_terrain_project` are **NOT IN THE 258**. The
+cheque was cashed for the composed console; the three copies exist as
+uncomposed leaf blocks. **The 359 is not projector duplication and nobody
+should go looking there.**
+
+**THE LEAF ROWS DO NOT DECOMPOSE THE 359, and it is worth saying why.** Summed,
+the 48 blocks with a measured DSP row come to **677** — nearly double the
+console's 359. That is not a contradiction, it is the census's own first
+sentence: *"composition changes mapping, replication, pruning and packing."*
+**Leaf sums are not a breakdown**, and treating them as one is this file's
+mismatched-comparison law.
+
+**Two rows are also known-stale in the flattering direction's opposite:**
+CLAUDE.md records `zhao_terrain_normals` going from six multipliers to one on
+2026-08-24 while the database still carries a **dirty 2026-08-20 row asserting
+18 DSP** — so that 18 reads **HIGH**, and it is still 18 in the table today.
+
+### SO THE ATTRIBUTION NEEDS A MAP, AND A MAP IS NOT A FIT
+
+The per-entity breakdown lives in `.map.rpt`'s **"Resource Utilization by
+Entity"**. The failed run saved only `.map.summary`, which carries totals and
+nothing else — and its workspace, with `quartus_map.exe.log` and the full
+`.map.rpt` in it, was removed on exit.
+
+`run_block_fit.ps1` has **`-MapOnly`** and **`-KeepWorkspace`**, and Analysis &
+Synthesis for these 258 sources completed in about **30 minutes** against the
+fitter's 2h14m. **Launched at the SAME commit `18231903`**, so the attribution
+describes exactly the machine the receipt measured rather than a later one —
+like for like, which is the whole reason the pinned worktree exists.
+
+**That run answers both open questions at once:** where the 359 DSP and the
+381,585 registers live, per entity, and whether
+`zhao_texture_island_v3_top`'s per-owner arrays landed in fabric.
