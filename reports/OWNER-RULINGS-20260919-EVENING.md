@@ -7693,8 +7693,14 @@ the next DSP question should be asked**, not at attrsetup.
 ## 96 LANE WORKTREES, AND TWO OF THEM HOLD WORK THE BRANCH DOES NOT
 
 **Found while verifying BURSTTRUTH's closure.** `git worktree list` returns
-**99 entries**; 96 are lane worktrees. Sampled at **~0.6–1.2 GB each**, so
-**roughly 90 GB**. Nothing prunes them, which is the `.gitignore` chapter's
+**99 entries**; 96 are lane worktrees. **Sizes MEASURED only in part, and the partial measurement says my first
+estimate read LOW.** Three sampled worktrees came to 0.6, 1.1 and 1.2 GB, from
+which I wrote *"roughly 90 GB"*. A later listing of the LARGEST ones found
+`gz-procmat` at **3.8 GB** and `gz-layere` at **3.7 GB** — three times the
+sample. **So 90 GB is a floor, not a total**, and the true figure is unknown:
+the full sum was started and then STOPPED, because it walks ~96 complete
+checkouts and no decision here depends on the precision. **What is decided by
+the untracked-files question below, not by the size.** Nothing prunes them, which is the `.gitignore` chapter's
 exact shape — *"making waste invisible to your tooling is not the same as
 removing it"* — except here it was never invisible, just never looked at.
 
