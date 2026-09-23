@@ -6794,3 +6794,86 @@ conditions (the four `Warning (276020)` pass-through insertions accounted for,
 and the bit-0 latch on `triangles_submitted_o` cleaned up) are **specific and
 already written down**, and whose ruling also asks for **a leaf fit of the
 GOLDEN `zhao_forge_cliff`** so the comparison stops being estimate-versus-fit.
+
+
+## COUNTER IDS HAVE MOVED AGAIN — 46 entries inserted inside a list that is append-only by law
+
+**Found 2026-09-23 by running every `check_*.py` in the tree rather than the
+list I remember.** That habit is itself the §15.9 lesson from this campaign
+(*"I told two lanes the tree is FULLY GREEN when I meant every gate on my list
+is green"*), and it paid immediately: the sweep of 26 gates found **three reds
+I was not running**, of which this is the serious one.
+
+**THE LAW.** `spec/counters.md` §2 makes a counter's id its **zero-based
+position** in `design/blocks.yml`'s `counter_catalog`, and makes that list
+**append-only**: *"an existing index is never renumbered and never reused."*
+The id is not decoration — it is what every `.zcap` capture's COUNTERS section
+and DEBUG.COUNTERS key by.
+
+**WHAT IS WRONG.** Two lanes inserted new names **inside** the locked prefix
+instead of appending:
+
+| commit | lane | inserted | at index |
+|---|---|---|---|
+| `afe77593` | TERRAIN.EDGERECON | 23 × `pageio_*` | 138 |
+| `c5ac4def` | PARAMARENA merge | 23 × `paramarena_*` | 47 |
+
+**46 insertions, and the consequence is measured rather than argued.**
+`zhao_pkg.sv` declares `ZHAO_CNT_CMD_DMA_COMMANDS = 198`, and the catalog now
+puts `cmd_dma_commands` at index **244**. `ZHAO_CNT_CMD_DMA_HPS_BYTES` 199 vs
+245. `ZHAO_CNT_CMD_DMA_DROPS` 200 vs 246. **Exactly +46 on all three** — the
+insertion count, arrived at independently. **Every counter from index 47 onward
+now has an id that disagrees with the one the RTL emits**, silently.
+
+**THE LAST GREEN IS KNOWN.** Walking all 218 commits that touch `blocks.yml`
+with the gate's own parser: the catalog matched the lock exactly at `aafe0db7`
+(285 entries), diverged first at `afe77593`, and index 47 itself moved at
+`c5ac4def`.
+
+**One further difference is NOT a defect and is recorded so nobody repairs it
+twice.** The locked name `post_gather_vram_bytes_by_client` is gone from the
+catalog entirely — **deliberately**, and `blocks.yml:431` says so in place:
+*"`post_gather_vram_bytes_by_client` WAS HERE and is gone, 2026-09-21."* That
+removal needs the lock **regenerated as a deliberate act**, not reverted.
+
+**THE PART THAT SHOULD STING.** `tools/design/check_counter_ids.py` exists for
+precisely this failure and its own docstring describes the previous instance:
+*"twenty-three commits PREPENDED new entries at the top, and `frame_cycles`,
+whose id is 0 … had become catalog index 150."* It was built under owner ruling
+R19 to stop exactly this. **It works. It fired. It is a registered ctest
+(`counter_ids_append_only`). Nobody ran it.** Two lanes then made the same
+mistake again, 23 entries each — the same number as the original.
+
+This is not the broken-instrument law: the instrument is fine. It is the
+uncashed-cheque law applied to a gate — **a detector nobody consults is
+indistinguishable from a detector that does not exist**, and the failure it was
+built to catch recurred at the same magnitude within days.
+
+**THE REPAIR, and why it is NOT being done right now.** It is mechanical: move
+the 46 inserted names to **after** the locked prefix, keeping `blocks.yml`'s
+first 285 in the lock's exact order, then run `--update-lock` **once**, for the
+one documented removal, and commit catalog and lock together.
+
+`design/blocks.yml` is a **shared file** and two lanes are live, one of them
+(ARENAWIRE, I53–I56) working in the arena — the very area whose counters are
+half the problem. Repairing it under them is the `git add <shared file>` trap
+this campaign has already paid for twice. **Both lanes have been told: append at
+the END, run the gate bare before committing, and do NOT run `--update-lock`**
+— blessing the current catalog as the new baseline would make the id shift
+permanent and unrecoverable, which is the one move that turns a repairable
+defect into a frozen one. **The repair lands centrally when the lanes merge.**
+
+**The other two reds from the same sweep**, recorded so they are not lost:
+
+* **`tools/rtl/check_v3_banks.py` RC=1 — the gate's OWN SELF-TEST FAILS**:
+  *"the registered-template audit did not fire for a primitive that is not in
+  the tree … The hand list is then unguarded, which is how a gate quietly
+  checks nothing."* A gate that reports its own blindness and is still in the
+  tree reporting nothing. This one **is** the broken-instrument law, and it is
+  the good version of it: the tool says so out loud.
+* **`tools/maintenance/check_git_autocrlf_guard.py` RC=1** — 15 unguarded
+  content-dependent git call sites. Lower severity; its own self-test passes
+  (7 fire / 22 no-fire).
+
+`check_dual18_map.py` and `check_dual18_atom_routes.py` returned RC=2 on a bare
+run because they **require arguments** — that is my invocation, not a red.
