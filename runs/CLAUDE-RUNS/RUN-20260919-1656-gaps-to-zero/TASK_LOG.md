@@ -1391,3 +1391,56 @@ counter and freeing its id are different acts and only the first was intended.
 exit code. A command substitution between the command and `$?` is the same
 failure as reading a pipeline's status, and it told me four gates were green
 when one was red.
+
+### 2026-09-23 late — two owner rulings, a 17-day-dead gate, and CI that has not passed in 60 runs
+
+**R244, both adopted.** **D-FORGESHADOW-C** lifts D-FORGESHADOW-B narrowly and
+commissions the subsystem end-to-end; **D-EARTH-A** keeps `MAX_FIELDS=16` and
+orders the synchronous-read RAM (~8 M10K for ~2,600 ALM) *after* the fit says
+whether the bank lands in ALMs at all. **A feature cut is the last resort, not
+the first saving.**
+
+**AND THE OWNER CORRECTED MY PREMISE ON THE FIRST ONE.** I reported that closing
+FORGE.SHADOW would *"re-author a ratified law"*. `FORGE.SHADOW.md:225`, dated
+**2026-09-21 — two days before I quoted it** — says the client-A widening clause
+is **STRUCK**, was performed under R68, and **R3 sanctions it**; `2'd2` is free.
+**I ran half of R240**: I re-checked the composition premise and never re-read
+the CONTRACT, which is where the correction lived. Thirteenth instance, and the
+first one I handed upward rather than caught.
+
+**NORMALPYR delivered parts 1–3 and refused part 4 with proof.** Kind 16, an
+oracle *builder* (not just the addresser), an asset tool whose output is
+**byte-identical to the C++ model**, and a loader with a fired mutant. Then:
+`f_detail_i` has **zero producers**, GEOM.CLIP has no two-producer merge, no
+terrain UV law exists, and `terr_light_base_o` is a top-level output. **"I will
+not buy a gap with a tie-off"** — `disconnected()` tests closure membership, so
+composing the pair tied off would read 14 → 13 and change no pixel. **Fourteenth
+stale premise found on the way**: `OWNER-DECISIONS-20260920.md:331-343`'s "no
+port change required" rests on a module that is superseded and instantiated
+nowhere.
+
+**`design/blocks.yml` had a DUPLICATE KEY since 2026-09-06** — `notes:` twice in
+one map. A strict parser refuses the file; a lenient one silently keeps the last,
+so the 2026-09-19 note on why R6 is moot had been invisible since it was written.
+**`npm run ledger:check` died on it for 17 days.** Repaired by folding both
+paragraphs under one key. With it parsing, the ledger runs and reports
+**81 errors against 133 blocks / 40 ops** — none attributed, all unreachable
+until now.
+
+**AND CI HAS NOT PASSED IN 60 RUNS: 39 cancelled, 19 failed, 0 succeeded.**
+`concurrency: cancel-in-progress` plus campaign-rate pushes kills the slow
+`ctest (fast)` job every time, while the short npm and format jobs live long
+enough to go red. **`counter_ids_append_only` IS a registered ctest and it never
+ran on the commit that broke it.** Registering a check and that check executing
+are two different acts — the same shape as this session's four blind
+instruments, one level up.
+
+**So the local sweep became a tool.** `tools/maintenance/gate_sweep.py` runs all
+24 `check_*.py` bare against `design/gate_baseline.json` and fails when a gate
+**moves in either direction** — because an inherited red being fixed must be
+recorded, and *a gate that starts returning 0 by going blind looks exactly like
+a repair*. That is §15.9's *"discover the gates; do not run a remembered list"*
+in tool form, after the prose version had already failed once.
+
+**Lanes:** BURSTTRUTH (R243 D-SDRAM-A) and SHADOWCLOSE (R244 D-FORGESHADOW-C)
+running. The labelled diagnostic fit is still placing.

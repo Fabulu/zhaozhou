@@ -1,0 +1,29 @@
+{
+  "_comment": "Committed status of every check_*.py gate. A gate that MOVES from this -- in either direction -- fails the sweep, because an inherited red being fixed must be recorded and a gate that starts returning 0 by going blind looks exactly like a repair.",
+  "gates": {
+    "tools/budget/check_case_labels.py": 0,
+    "tools/design/check_array_storage.py": 0,
+    "tools/design/check_counter_ids.py": 1,
+    "tools/design/check_counters.py": 0,
+    "tools/design/check_findings_citations.py": 0,
+    "tools/design/check_formal_lanes.py": 0,
+    "tools/design/check_localparam_comments.py": 0,
+    "tools/design/check_port_coverage.py": 0,
+    "tools/design/check_seam_widths.py": 0,
+    "tools/maintenance/check_eol_worktree.py": 0,
+    "tools/maintenance/check_git_autocrlf_guard.py": 0,
+    "tools/quartus/check_console_inventory.py": 0,
+    "tools/quartus/check_fit_ledger.py": 0,
+    "tools/quartus/check_forbidden_sources.py": 0,
+    "tools/quartus/check_ownership_roles.py": 0,
+    "tools/quartus/check_prod_manifest.py": 0,
+    "tools/quartus/check_quartus17_syntax.py": 0,
+    "tools/quartus/check_ram_inference.py": 0,
+    "tools/quartus/check_rule_freshness.py": 0,
+    "tools/rtl/check_global_binding.py": 0,
+    "tools/rtl/check_guard_verdict.py": 0,
+    "tools/rtl/check_ingress_capture.py": 0,
+    "tools/rtl/check_texture_v3_interface_manifest.py": 0,
+    "tools/rtl/check_v3_banks.py": 1
+  }
+}

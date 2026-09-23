@@ -712,6 +712,64 @@ errors; a newer cppcheck is usually a better one, but it is never silent.
 
 ---
 
+### D17 UPDATE 2026-09-23 — THE JOBS RUN, AND NOT ONE HAS SUCCEEDED IN 60 RUNS
+
+D17's five sub-items are closed and CI does trigger on this branch. **The gate
+is still not gating, for two reasons that are not in the table above.**
+
+**Of the last 60 runs: 39 CANCELLED, 19 FAILED, 0 SUCCEEDED.** The most recent
+conclusive run is the **PARAMARENA merge of 2026-09-22 — the very commit that
+broke the counter-catalog's append-only rule.**
+
+**1. `concurrency: cancel-in-progress: true` kills the slow job, never the fast
+ones.** `ci.yml:72-74`. Pushes during an active campaign land minutes apart, so
+`cmake + ctest (fast)` — the job that runs every registered ctest — is cancelled
+before it finishes, every time. The short `npm tooling` and `format + static
+analysis` jobs survive long enough to conclude, which is why **every failure on
+record comes from one of those two and none from the test suite.**
+
+**The consequence is the one this repository keeps rediscovering: a gate that
+cannot reach the state is not evidence about the state.**
+`counter_ids_append_only` **is** a registered ctest, labelled `fast`, and it
+**never ran** on the commit that broke it. Registering a check as a ctest is not
+the same act as that check being executed.
+
+**2. `npm run ledger:check` died on a YAML parse error for SEVENTEEN DAYS.**
+`design/blocks.yml` had `notes:` twice in one map (3064 and 3078) since
+`b9bbb40d`, 2026-09-06. A strict parser refuses the file; a lenient one silently
+keeps the last, so the 2026-09-19 note recording why owner ruling R6 is moot had
+been invisible to every lenient reader since it was written. **Repaired
+2026-09-23** by folding both paragraphs under one key — no text edited or
+dropped.
+
+**With the file parsing, the ledger runs and reports `CHECK FAILED — 81
+error(s) against 133 blocks / 40 ops`** (29 of them "must have required
+property"; the rest enum, const and pattern violations across `blocked_on`,
+`source_ids`, `superseded_by`, `downstream`, `latency`, `tests.random`,
+`maturity_log`). **None is repaired or attributed here.** They have been
+unreachable since 2026-09-06, so the only honest statement is that the parse
+fault predates them and the gate could not have reported any of them. Triaging
+81 rows is lane work. **`design/blocks.yml` is one of the completion register's
+TWO ROOTS (R94)**, which is what makes this more than tidiness.
+
+**3. `format + static analysis` is red and was not investigated here** —
+clang-format drift, the same class as D17(a).
+
+**WHAT WAS DONE ABOUT IT, since CI cannot be trusted to catch the next one:**
+`tools/maintenance/gate_sweep.py` discovers and runs **every** `check_*.py`
+bare, against a committed baseline in `design/gate_baseline.json`. It fails when
+a gate MOVES in either direction — a red appearing, an inherited red being fixed
+without being recorded, or a gate that starts returning 0 **by going blind**,
+which is what `check_v3_banks` did for nine days. It also refuses to silently
+accept a gate it has never seen. It is the tool form of §15.9's *"discover the
+gates; do not run a remembered list"*, which as prose had already failed once.
+
+**STILL OPEN AND IT IS AN OWNER CALL:** whether to stop cancelling the ctest
+job. Letting every push run the full suite costs runner minutes on the owner's
+account at exactly the push frequency this campaign generates; the alternative
+is to keep relying on local sweeps. **Not decided here.**
+
+
 ## D22 — **THE GEOMETRY FRONT END IS NOT WIRED INTO THE CONSOLE**
 
 **Found 2026-09-04 while tracing why `GEOM.DEPTHQUANT` has no consumer.** The
