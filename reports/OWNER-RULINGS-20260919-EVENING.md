@@ -6877,3 +6877,55 @@ defect into a frozen one. **The repair lands centrally when the lanes merge.**
 
 `check_dual18_map.py` and `check_dual18_atom_routes.py` returned RC=2 on a bare
 run because they **require arguments** — that is my invocation, not a red.
+
+
+### TRIAGE OF THE FOUR check_v3_banks FINDINGS — and a correction to my own commit message
+
+**Commit `6fb106eb`, which re-enabled the gate, described its findings as
+*"11,776 bits of payload-shaped state in FABRIC"* beside the observation that
+ALM is the binding constraint. **That framing overstates two of the four and
+would send the next person chasing an ALM lever that is not there.** Corrected
+here, at source, having read each one:
+
+**1. `shadow_metadata_m` (192 x 40 = 7,680 bits) — NOT IN THE CONSOLE'S
+SILICON.** It sits inside `if (MIGRATION_SHADOWS) begin : g_migration_shadows`
+(`zhao_texture_island_v3_top.sv:1679`), so with the parameter low it is not
+elaborated at all. The island's own default is `1'b1`, but **every path that
+reaches it passes zero**: `zhao_raster_texture_stage_v3.sv` defaults the
+parameter to `1'b0` and forwards it, `zhao_raster_tile_pipe_v2.sv:963` passes
+`1'b0` explicitly, and `zhao_raster_tile_pipe_v2.sv:1615` carries a `$fatal`
+reading *"Packet-D MIGRATION_SHADOWS=0 exposed shadow state"*. There is even a
+committed witness, `tools/design/packet_h_shadow_witness.py`, whose whole
+purpose is to refuse the easy version of this check. **The comfortable
+explanation is the correct one this time, and it is correct because it is
+enforced in four places rather than asserted in a comment.**
+
+**2. `uvw_m` (64 x 64 = 4,096 bits) — ONE WRITE PORT, ONE READ PORT.** Written
+at line 923 on admission, read at line 1005, and nowhere else. The comment
+above the read says *"THE uvw_m READ, MOVED OUT OF THE RESET BLOCK SO THE ARRAY
+CAN INFER"* — somebody has already shaped it deliberately for RAM inference,
+and a 1W/1R array is exactly what a simple-dual-port M10K is. **This is a
+DECLARATION gap, which is what the gate's own remedy line says**: *"add it to
+ACCOUNTED_STORES with its spec section, or mark it with `// V3-BANK: <NAME>`."*
+
+**3. `material_m` V3-MULTIREAD — THIS ONE IS REAL, and it is the one worth
+acting on.** Two distinct read addresses, confirmed by reading every reference:
+`material_m[uvjoin_data_w[364:359]]` at line 1258 and
+`material_m[owner_combine_owner_w[13:8]]` at line 2408. **A simple-dual-port
+M10K has one read port and `ramstyle` cannot give it another**, so this array
+either duplicates into two M10Ks or lands in fabric as **64 x 46 = 2,944
+flops**. That is a genuine cost and a genuine question for a lane.
+
+**4. `material_m` V3-WIDTH — 46 bits against a declared 48.** A spec-versus-RTL
+mismatch to reconcile in one direction or the other, not a defect on its face.
+
+**THE GENERAL LESSON, and it applies to the gate I just re-enabled:**
+`check_v3_banks` resolves parameters from **the module's own defaults**, never
+from the overrides its instantiations pass. That is sound for a standalone
+audit and it is exactly why finding 1 reads alarming — the file says
+`MIGRATION_SHADOWS = 1'b1` and the console says `1'b0`. **A gate that analyses a
+module out of its elaboration context reports the module, not the machine**,
+which is this tree's mismatched-comparison law wearing a tooling costume. The
+gate is still worth having; its output is a list of questions, not a list of
+defects, and three of these four were answered by reading the RTL for ten
+minutes.
