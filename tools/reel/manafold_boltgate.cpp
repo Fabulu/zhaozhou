@@ -67,9 +67,36 @@
 //                 its depth beside the point, and a SPHERE's surface instead of
 //                 a cylinder's. Each produced a confident failure count that was
 //                 the measure rather than the drawing.)
-//   B3 CONTROL GROUP  every other live subject is measured too, and its census
-//               is printed, so "the experiment moved three clips" is a
-//               statement about all twenty-two rather than about three.
+//   B3 ROLLOUT  (pass 25) every live subject carries avoidance AND the whole
+//               bank's intersection total is zero. Pass 24's B3 was an INFO
+//               line counting what was left on the subjects the experiment had
+//               not touched; the owner has decided, so the leg now asserts the
+//               decision instead of describing it.
+//
+//               ! AND ITS RESIDUAL IS THE BANK'S, WHICH IT WAS NOT AT FIRST.
+//               The first pass-25 form summed hit3d over the subjects carrying
+//               NO avoidance -- an empty set after the rollout -- and therefore
+//               printed "0 intersections remain in the bank" from an empty sum.
+//               Fired at clearance 70 it said exactly that WHILE B1 WAS RED
+//               with 11 intersections on `blown`. A reassuring number from a
+//               counter that cannot see the case it is quoted about.
+//   B4 MIRROR   (pass 25) mbolt's rows ARE u02::kBoltLiveSubjects, in order.
+//               This exists because pass 24's reviewer found this file holding
+//               its OWN per-subject avoid/split columns and applying them to
+//               ITSELF before measuring, with nothing binding them to the
+//               renderer's assignment: a subject that lost avoidance in
+//               zhao_reel.cpp would have been switched back on here, measured,
+//               and reported "B1 CLEAR: 0 of 38,152" over a clip drawing bolts
+//               through the rod. Those columns are gone; both sides read
+//               u02::bolt_avoid_for.
+//   B5          INFO, not asserted: the CLOSEST APPROACH -- the smallest gap
+//               between any drawn bolt segment and the band anywhere in the
+//               bank, with the frame it happens on. Pass 24's B1 read zero and
+//               the owner could still see the fault, because zero
+//               intersections is not "clear": at the pass-24 clearance the
+//               nearest pass was 4.4 mm, which the ink closes back up. It is
+//               deliberately NOT gated -- the clearance is an art value and a
+//               threshold here would be a measurement on the generation side.
 //
 // Every leg has a control fired in the same invocation:
 //   --fail-no-avoid  run the avoidance subjects with avoidance OFF. B1 must go
@@ -92,6 +119,32 @@
 //                    1,180) but could not turn B1 red, because a thinner rod is
 //                    EASIER to clear. A control that moves a number without
 //                    firing the leg is not a control; it is a second reading.
+//   --fail-mirror-drift  (pass 25) rename one row so mbolt's list and the
+//                    rollout table disagree by exactly one entry. B4 must go
+//                    red. No LEGAL stimulus can produce that -- the lists agree
+//                    and a static_assert already guards the renderer's copy --
+//                    so without this the leg's silence stays an argument
+//                    forever (CLAUDE.md, the committed-mutant law as a flag).
+//
+// Two more controls live in the matrix rather than here, because they are the
+// gate's own EXIT CODE rather than a leg:
+//   ZHAO_U02_BOLT_AVOID=off --gate         must return 1. B1 and B3 both read
+//                    zero at the shipping configuration, and a detector reading
+//                    zero is the claim to check hardest.
+//   ZHAO_U02_BOLT_CLEARANCE_MM=70 --gate   must return 1. The clearance knob is
+//                    NOT monotone (see kBoltRodClearanceMm): 70 mm leaves 11
+//                    intersections on `blown`, and this leg is the standing
+//                    proof that the measured table beside that constant is real
+//                    and that the gate catches a rung that looks like an
+//                    improvement and is not.
+//
+// ! B2's SPACING OPERAND IS OVER EVERY SEGMENT, NOT THE NEAR-ROD ONES (pass 25)
+// and that is a repair, not a widening. It was measured only over segments
+// within kNearBandMm of a rod, and raising the clearance knob is exactly what
+// empties that set: at 96 mm not one segment on the probe clip was still in the
+// band, so the spacing and its reference were both 0 and B2 went RED because an
+// ART VALUE moved. A gate leg whose operand a legal knob can delete is not a
+// gate on the mechanism. The near-rod figure stays, as INFO.
 //
 // ⚠ IT GATES NOTHING ABOUT THE LOOK. Whether the avoided bolt reads better than
 // the split one is the owner's comparison, decided on the plates. This
