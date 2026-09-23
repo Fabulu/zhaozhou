@@ -402,6 +402,9 @@ modules:
   zhao_terrain_normalmap:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_normalloader:
+    disposition: pending_compose
+    why: "TERRAIN.NORMALMAP's page host, built 2026-09-23 under owner ruling R243 D-NORMALS-A (\"commission the pyramid\"). It reads a published DETAIL_NORMAL page (spec/cartridge.md 4g, kind 16) to zhao_terrain_normalmap's tw_we_i/tw_addr_i/tw_data_i, so the note at zhao_console_core.sv:1197 -- 'the tw_* upload port is waiting on an asset pipeline rather than on a block' -- no longer holds. It reaches the console exactly when TERRAIN.NORMALMAP does and not before: composing it alone would be a producer with no consumer, and composing the PAIR would move completion_register from 14 to 13 while changing not one pixel, because `disconnected()` tests closure membership and the fragment side is unreachable (f_detail_i has ZERO producers in fpga/rtl, and terrain triangles never reach GEOM.CLIP -- zhao_console_core.sv:2494). It is NOT a second owner of a capability and has no design/blocks.yml row of its own, because the capability it serves is TERRAIN.NORMALMAP's. The full argument is the commit message of the empty commit on gz/normalpyr titled \"NORMALPYR FINDINGS\""
   zhao_terrain_normals:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
