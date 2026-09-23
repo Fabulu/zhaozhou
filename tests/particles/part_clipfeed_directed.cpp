@@ -101,7 +101,23 @@ struct Particle {
   uint8_t profile;
   uint8_t r, g, b;
   uint16_t src_id;
+  // PART.EXPAND's PASS-7 LAW, per particle. `zhao_part_expand` emits 1 and 0
+  // for every particle it has ever produced, so a bench that only ever drove
+  // those two values could not tell "the block carries the law" from "the block
+  // returns a constant" -- the gate-that-cannot-reach-the-state law. Section 6
+  // therefore VARIES them, which the port permits and the producer does not.
+  uint8_t depth_test = 1;
+  uint8_t depth_write = 0;
 };
+
+// The 32-bit fragment state word `zhao_part_clipfeed` must present for a
+// particle: `zhao_raster_fragment`'s [0] Z_TEST_EN and [1] Z_WRITE_DIS, over
+// the block's `PART_FRAG_STATE_BASE`, which this bench leaves at its default 0.
+// Note the INVERSION on write: the producer's port is an enable, the word's bit
+// is a disable, and that flip is the one place this can be silently wrong.
+uint32_t frag_state_of(const Particle& p) {
+  return (uint32_t)(p.depth_test ? 1u : 0u) | (uint32_t)(p.depth_write ? 0u : 2u);
+}
 
 struct Expect {
   Particle p;
@@ -168,6 +184,8 @@ class Bench {
     top_.p_profile_i = p.profile;
     top_.p_r_i = p.r; top_.p_g_i = p.g; top_.p_b_i = p.b;
     top_.p_src_id_i = p.src_id;
+    top_.p_depth_test_i = p.depth_test;
+    top_.p_depth_write_i = p.depth_write;
 
     bool taken = false;
     for (int i = 0; i < budget && !taken; ++i) {
@@ -200,6 +218,8 @@ class Bench {
     top_.p_profile_i = p.profile;
     top_.p_r_i = p.r; top_.p_g_i = p.g; top_.p_b_i = p.b;
     top_.p_src_id_i = p.src_id;
+    top_.p_depth_test_i = p.depth_test;
+    top_.p_depth_write_i = p.depth_write;
     top_.eval();
     const bool taken = top_.p_ready_o != 0;
     if (taken && record) {
@@ -225,6 +245,8 @@ class Bench {
   int mismatch_geom() const { return mismatch_geom_; }
   int mismatch_colour() const { return mismatch_colour_; }
   int mismatch_decl() const { return mismatch_decl_; }
+  int mismatch_state() const { return mismatch_state_; }
+  uint32_t emitted_frag_state() const { return last_frag_state_; }
   int emitted() const { return emitted_; }
   int surplus() const { return surplus_; }
   int stalled_beats() const { return stalled_beats_; }
@@ -282,6 +304,19 @@ class Bench {
         top_.o_cull_mode_o != 0) {
       ++mismatch_decl_;
     }
+
+    // THE PASS-7 LAW, AGAINST THE EXPECTATION RECORDED WHEN THIS PARTICLE WAS
+    // ACCEPTED -- not against whatever the input ports hold now. That is the
+    // whole point: the ring's head was accepted some clocks ago, and a block
+    // that read `p_depth_test_i` at the emit would present a LATER particle's
+    // state on this one's beat with every counter still balancing. Counted
+    // separately from `mismatch_decl_` so a failure names the field.
+    if (top_.o_frag_state_o != frag_state_of(e.p)) {
+      ++mismatch_state_;
+    }
+    // The LAST word actually seen leaving, kept so a section can read the value
+    // out rather than only assert that two things agreed.
+    last_frag_state_ = top_.o_frag_state_o;
   }
 
   Vzhao_part_clipfeed top_;
@@ -290,6 +325,8 @@ class Bench {
   int mismatch_geom_ = 0;
   int mismatch_colour_ = 0;
   int mismatch_decl_ = 0;
+  int mismatch_state_ = 0;
+  uint32_t last_frag_state_ = 0xFFFFFFFFu;
   int emitted_ = 0;
   int surplus_ = 0;
   int stalled_beats_ = 0;
@@ -322,6 +359,11 @@ Particle make(int i) {
   p.g = (uint8_t)(i * 29 + 11);
   p.b = (uint8_t)(i * 43 + 7);
   p.src_id = (uint16_t)(0x1000 + i);
+  // THE PRODUCER'S OWN VALUES for every section but 6. `zhao_part_expand`
+  // emits exactly these, so sections 1-5 measure the console's real traffic;
+  // section 6 overrides them to prove the carriage rather than the constant.
+  p.depth_test = 1;
+  p.depth_write = 0;
   return p;
 }
 
@@ -367,6 +409,10 @@ int main(int argc, char** argv) {
     check_eq(b.mismatch_geom(), 0, "1: the six corners and the source id are this particle's");
     check_eq(b.mismatch_colour(), 0, "1: the Gouraud slots round-trip the colour bytes exactly");
     check_eq(b.mismatch_decl(), 0, "1: untex=1, NO_MATERIAL, set=id=tier=0, behind=0, cull=NONE");
+    check_eq(b.mismatch_state(), 0,
+             "1: the door beat carries the pass-7 law -- Z_TEST_EN set, Z_WRITE_DIS set");
+    check_eq((int)b.emitted_frag_state(), 3,
+             "1: and the word EMITTED was 0x3, read out rather than only compared to itself");
     check_eq(b.top().particles_o, 1, "1: one particle accounted");
     check_eq(b.top().triangles_o, 1, "1: one triangle accounted");
     check_eq(b.top().range_refused_o, 0, "1: a legal fan is not refused");
@@ -399,6 +445,7 @@ int main(int argc, char** argv) {
     check_eq(b.mismatch_geom(), 0, "2: and its own corners and source id");
     check_eq(b.mismatch_colour(), 0, "2: and its own colour");
     check_eq(b.mismatch_decl(), 0, "2: and the same declaration on every beat");
+    check_eq(b.mismatch_state(), 0, "2: and the pass-7 law on every beat of the burst");
     check_eq(b.top().particles_o, (uint32_t)n, "2: the census counts every particle");
     check_eq(b.top().triangles_o, (uint32_t)n, "2: and every triangle");
     check_eq(b.top().range_refused_o, 0, "2: nothing was refused");
@@ -535,6 +582,96 @@ int main(int argc, char** argv) {
     check_eq(b.outstanding(), 0u, "5: nothing was left behind");
     check_eq(b.top().dq_refused_o, 0, "5: the converter refused nothing under a full ring");
     check_eq(b.top().dq_stray_o, 0, "5: and answered no question it was not asked");
+  }
+
+  // ==========================================================================
+  // SECTION 6 -- THE PASS-7 LAW TRAVELS WITH ITS PARTICLE.
+  //
+  // Core entry I51's last open clause was that `zhao_part_expand`'s
+  // `t_depth_test_o` / `t_depth_write_o` left `zhao_console_core` with no
+  // internal consumer, while the door's `c_frag_state_i` slice for this block
+  // was a composer's constant. This block now carries them. The fault that
+  // closure could introduce is the one this file already has a chapter about:
+  // the two bits read AT THE EMIT rather than captured AT THE ACCEPT, so the
+  // head's beat wears a later particle's law.
+  //
+  // THAT FAULT IS INVISIBLE TO EVERY OTHER SECTION, and deliberately so: they
+  // all drive the producer's real constants 1 and 0, under which the swapped
+  // value and the correct value are THE SAME VALUE. A bench that only drives
+  // the shipping stimulus cannot distinguish the carriage from a tie-off. So
+  // this section drives the two bits per particle across all four
+  // combinations, with the sink SHUT for the whole burst -- which forces a
+  // queue of particles whose laws differ from the one being offered when each
+  // is finally emitted, i.e. exactly the state the swap needs to be visible.
+  //
+  // It asserts the CORRECT behaviour (the record holds), never the bug.
+  // ==========================================================================
+  {
+    Bench b;
+    // Four laws, cycled, so consecutive ring slots disagree and the emitted
+    // sequence cannot be produced by any single held value.
+    const uint8_t kTests[4]  = {1, 1, 0, 0};
+    const uint8_t kWrites[4] = {0, 1, 0, 1};
+
+    b.set_sink_ready(false);
+    int offered = 0;
+    for (int guard = 0; guard < 2000 && offered < 12; ++guard) {
+      Particle p = make(offered + 41);
+      p.depth_test = kTests[offered % 4];
+      p.depth_write = kWrites[offered % 4];
+      if (b.present(p)) ++offered;
+    }
+    check(offered >= 8, "6: a queue of particles with DIFFERING laws was taken with the door shut");
+    check_eq(b.emitted(), 0, "6: and nothing left while it was shut");
+
+    // THE OFFER NOW CONTRADICTS EVERY QUEUED RECORD. `p_valid_i` is low, so
+    // nothing more is accepted, but the two law inputs are held at the OPPOSITE
+    // of the first queued particle's. A block reading them at the emit would
+    // present this pair on every beat that follows; a block that captured them
+    // at the accept is unaffected. This is the positive control for the swap,
+    // written as a property of the correct design rather than as a detector.
+    b.top().p_valid_i = 0;
+    b.top().p_depth_test_i = 0;
+    b.top().p_depth_write_i = 1;
+    b.top().eval();
+
+    b.set_sink_ready(true);
+    check(b.drain(20000), "6: the queue drained");
+    check_eq(b.emitted(), offered, "6: everything taken came out");
+    check_eq(b.mismatch_state(), 0,
+             "6: EVERY beat carried ITS OWN particle's pass-7 law, while the input ports "
+             "held the opposite of the first record's");
+    check_eq(b.mismatch_depth(), 0, "6: and its own depth");
+    check_eq(b.mismatch_geom(), 0, "6: and its own geometry");
+    check_eq(b.outstanding(), 0u, "6: nothing was left behind");
+
+    // AND THE FOUR LAWS ARE FOUR DIFFERENT WORDS, asserted here rather than
+    // assumed, because if `frag_state_of` collapsed them the section above
+    // would be comparing a constant to itself -- the section-0 law applied to
+    // this section's own stimulus.
+    std::vector<uint32_t> words;
+    for (int i = 0; i < 4; ++i) {
+      Particle q{};
+      q.depth_test = kTests[i];
+      q.depth_write = kWrites[i];
+      words.push_back(frag_state_of(q));
+    }
+    std::sort(words.begin(), words.end());
+    const size_t distinct = (size_t)(std::unique(words.begin(), words.end()) - words.begin());
+    check_eq((int)distinct, 4,
+             "6: the four driven laws are four DISTINCT state words, so the check above "
+             "could have failed");
+
+    // THE POLARITY, SAID OUT LOUD ONCE. The producer's ports are enables; the
+    // word's bit 1 is a DISABLE. `draw_population`'s "test only, no write" is
+    // therefore 0x3, not 0x1, and this is the assertion that catches an
+    // inverted flip -- which would otherwise leave particles writing depth
+    // while every count in this file still balanced.
+    Particle law{};
+    law.depth_test = 1;
+    law.depth_write = 0;
+    check_eq((int)frag_state_of(law), 3,
+             "6: pass-7 -- test only, no write -- is Z_TEST_EN | Z_WRITE_DIS = 0x3");
   }
 
   std::printf("part_clipfeed_directed: %d check(s), %d failure(s)\n", checks, fails);

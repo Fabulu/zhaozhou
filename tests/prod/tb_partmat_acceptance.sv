@@ -73,6 +73,14 @@ module tb_partmat_acceptance #(
     input  var logic        [15:0] c2_material_id_i,
     input  var logic        [ 1:0] c2_material_mode_i,
     input  var logic        [IDW-1:0] c2_src_id_i,
+    // THE PARTICLE ARM'S RASTER STATE, per client, because as of 2026-09-23
+    // (PARTDEPTH) `zhao_console_core` no longer feeds this slice a constant:
+    // it feeds it `zhao_part_clipfeed.o_frag_state_o`, which carries
+    // `zhao_part_expand`'s pass-7 law. A bench that went on tying all three
+    // clients to zero would be measuring an arrangement the composer no longer
+    // builds -- and would do so silently, which is the whole failure mode this
+    // file's header is about.
+    input  var logic        [31:0] c2_frag_state_i,
 
     // ---- what reaches GEOM.CLIP's input ------------------------------------
     output var logic               cl_in_valid_o,
@@ -85,6 +93,10 @@ module tb_partmat_acceptance #(
     output var logic        [ 7:0] pub_base_binding_o,
     output var logic        [ 1:0] pub_response_class_o,
     output var logic        [ 1:0] pub_material_mode_o,
+    // THE PUBLISHED SPAN'S RASTER STATE. It was already wired internally and
+    // read by nobody; exporting it is what lets the driver check the CONSUMER
+    // end of the carriage rather than only that a wire exists.
+    output var logic        [31:0] pub_frag_state_o,
     output var logic               pub_valid_o,
     output var logic        [ 2:0] owner_o,
 
@@ -150,7 +162,9 @@ module tb_partmat_acceptance #(
     c_mid_c    = {c2_material_id_i, c1_material_id_i, c0_material_id_i};
     c_mmode_c  = {c2_material_mode_i, c1_material_mode_i, c0_material_mode_i};
     c_valpha_c = {NC{8'hFF}};
-    c_fstate_c = {NC{32'd0}};
+    // Clients 0 and 1 (the two meshes) keep the opaque frame default; client 2
+    // (the particles) declares its own, exactly as the composer wires it.
+    c_fstate_c = {c2_frag_state_i, 32'd0, 32'd0};
     c_tier_c   = {8'h33, 8'h22, 8'h11};
     c_cull_c   = 6'd0;
     c_behind_c = 9'd0;
@@ -182,7 +196,6 @@ module tb_partmat_acceptance #(
   // against the MODE and does not need the other two, which the console
   // reads into entry I20's two ports.
   logic [ 7:0] pub_vertex_alpha_w;
-  logic [31:0] pub_frag_state_w;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [ 7:0]        cd_o_quality_tier;
   /* verilator lint_off UNUSEDSIGNAL */
@@ -307,7 +320,7 @@ module tb_partmat_acceptance #(
     .pub_response_class_o  (pub_response_class_o),
     .pub_material_mode_o   (pub_material_mode_o),
     .pub_vertex_alpha_o    (pub_vertex_alpha_w),
-    .pub_frag_state_o      (pub_frag_state_w),
+    .pub_frag_state_o      (pub_frag_state_o),
 
     .resolves_o                (mw_resolves_o),
     .switches_o                (mw_switches_o),

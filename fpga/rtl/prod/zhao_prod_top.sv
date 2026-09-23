@@ -3937,6 +3937,7 @@ module zhao_prod_top (
   logic [16-1:0] u46_o_material_id_o;
   logic [2-1:0] u46_o_material_mode_o;
   logic [8-1:0] u46_o_quality_tier_o;
+  logic [32-1:0] u46_o_frag_state_o;
   logic [32-1:0] u46_particles_o;
   logic [32-1:0] u46_triangles_o;
   logic [32-1:0] u46_range_refused_o;
@@ -3960,8 +3961,10 @@ module zhao_prod_top (
       .p_g_i(u46_src[70 +: 8]),
       .p_b_i(u46_src[77 +: 8]),
       .p_src_id_i(u46_src[84 +: 16]),
+      .p_depth_test_i(u46_src[91 +: 1]),
+      .p_depth_write_i(u46_src[98 +: 1]),
       .o_valid_o(u46_o_valid_o),
-      .o_ready_i(u46_src[91 +: 1]),
+      .o_ready_i(u46_src[105 +: 1]),
       .o_ax_o(u46_o_ax_o),
       .o_ay_o(u46_o_ay_o),
       .o_bx_o(u46_o_bx_o),
@@ -3979,6 +3982,7 @@ module zhao_prod_top (
       .o_material_id_o(u46_o_material_id_o),
       .o_material_mode_o(u46_o_material_mode_o),
       .o_quality_tier_o(u46_o_quality_tier_o),
+      .o_frag_state_o(u46_o_frag_state_o),
       .particles_o(u46_particles_o),
       .triangles_o(u46_triangles_o),
       .range_refused_o(u46_range_refused_o),
@@ -3989,7 +3993,7 @@ module zhao_prod_top (
   logic u46_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u46_fold_q <= 1'b0;
-    else u46_fold_q <= u46_fold_q ^ (((^u46_p_ready_o)) & u46_src[0]) ^ (((^u46_o_valid_o)) & u46_src[1]) ^ (((^u46_o_ax_o)) & u46_src[2]) ^ (((^u46_o_ay_o)) & u46_src[3]) ^ (((^u46_o_bx_o)) & u46_src[4]) ^ (((^u46_o_by_o)) & u46_src[5]) ^ (((^u46_o_cx_o)) & u46_src[6]) ^ (((^u46_o_cy_o)) & u46_src[7]) ^ (((^u46_o_behind_o)) & u46_src[8]) ^ (((^u46_o_src_id_o)) & u46_src[9]) ^ (((^u46_o_untex_o)) & u46_src[10]) ^ (((^u46_o_cull_mode_o)) & u46_src[11]) ^ (((^u46_o_attr_a_o)) & u46_src[12]) ^ (((^u46_o_attr_b_o)) & u46_src[13]) ^ (((^u46_o_attr_c_o)) & u46_src[14]) ^ (((^u46_o_material_set_o)) & u46_src[15]) ^ (((^u46_o_material_id_o)) & u46_src[16]) ^ (((^u46_o_material_mode_o)) & u46_src[17]) ^ (((^u46_o_quality_tier_o)) & u46_src[18]) ^ (((^u46_particles_o)) & u46_src[19]) ^ (((^u46_triangles_o)) & u46_src[20]) ^ (((^u46_range_refused_o)) & u46_src[21]) ^ (((^u46_stall_full_o)) & u46_src[22]) ^ (((^u46_dq_refused_o)) & u46_src[23]) ^ (((^u46_dq_stray_o)) & u46_src[24]);
+    else u46_fold_q <= u46_fold_q ^ (((^u46_p_ready_o)) & u46_src[0]) ^ (((^u46_o_valid_o)) & u46_src[1]) ^ (((^u46_o_ax_o)) & u46_src[2]) ^ (((^u46_o_ay_o)) & u46_src[3]) ^ (((^u46_o_bx_o)) & u46_src[4]) ^ (((^u46_o_by_o)) & u46_src[5]) ^ (((^u46_o_cx_o)) & u46_src[6]) ^ (((^u46_o_cy_o)) & u46_src[7]) ^ (((^u46_o_behind_o)) & u46_src[8]) ^ (((^u46_o_src_id_o)) & u46_src[9]) ^ (((^u46_o_untex_o)) & u46_src[10]) ^ (((^u46_o_cull_mode_o)) & u46_src[11]) ^ (((^u46_o_attr_a_o)) & u46_src[12]) ^ (((^u46_o_attr_b_o)) & u46_src[13]) ^ (((^u46_o_attr_c_o)) & u46_src[14]) ^ (((^u46_o_material_set_o)) & u46_src[15]) ^ (((^u46_o_material_id_o)) & u46_src[16]) ^ (((^u46_o_material_mode_o)) & u46_src[17]) ^ (((^u46_o_quality_tier_o)) & u46_src[18]) ^ (((^u46_o_frag_state_o)) & u46_src[19]) ^ (((^u46_particles_o)) & u46_src[20]) ^ (((^u46_triangles_o)) & u46_src[21]) ^ (((^u46_range_refused_o)) & u46_src[22]) ^ (((^u46_stall_full_o)) & u46_src[23]) ^ (((^u46_dq_refused_o)) & u46_src[24]) ^ (((^u46_dq_stray_o)) & u46_src[25]);
 
   // ---- zhao_part_expand ----
   logic [63:0] u47_lfsr_q;

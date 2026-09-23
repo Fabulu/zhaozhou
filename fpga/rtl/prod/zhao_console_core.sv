@@ -4720,11 +4720,19 @@
 //          base parameter, deliberately, and inventing them here would be a
 //          composer choosing a value it has no authority over.
 //
-//      ENFORCED BY: `tests/particles/part_clipfeed_directed.cpp` section 9,
-//      which drives the two inputs INDEPENDENTLY and per particle under
-//      backpressure and proves the emitted word follows the RECORD rather than
-//      the offered input -- the positive control for the swap this could have
-//      been.
+//      ENFORCED BY: `tests/particles/part_clipfeed_directed.cpp` SECTION 6,
+//      which drives the two inputs INDEPENDENTLY and per particle with the sink
+//      shut, then holds the PORTS at the opposite of the first queued record,
+//      and proves every emitted word follows the RECORD rather than the offer.
+//      Its POSITIVE CONTROL is separate and committed:
+//      `tests/mutants/zhao_part_clipfeed_emitstate_mutant.sv` is production
+//      with that one assign reading the input ports, and
+//      `tests/particles/part_clipfeed_emitstate_mutant_control.cpp` passes
+//      when it DISAGREES. Measured 6 disagreements of 8 beats, every one
+//      carrying the held port word -- so section 6's zero is a measurement and
+//      not a tautology. It needs to be: PART.EXPAND drives this law as the
+//      constant pair 1/0, under which a correct block and a swapping block emit
+//      byte-identical output forever.
 //
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
