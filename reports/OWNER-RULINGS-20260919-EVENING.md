@@ -7283,3 +7283,92 @@ like for like, which is the whole reason the pinned worktree exists.
 **That run answers both open questions at once:** where the 359 DSP and the
 381,585 registers live, per entity, and whether
 `zhao_texture_island_v3_top`'s per-owner arrays landed in fabric.
+
+
+## THE ATTRIBUTION — and the map report was on disk the whole time
+
+**`reports/synthesis/blockpaths/zhao_console_core@diag-incomplete-14gaps.map.rpt`,
+20.3 MB, harvested at 09:09 by the runner's own *"THE MAP REPORT IS HARVESTED
+WHATEVER HAPPENED"* block.** It is `.gitignore`d at line 133 (`*.map.rpt` — a
+size rule, not a kind rule), which is why `git status` never showed it and why I
+launched a `-MapOnly` run to regenerate something I already had. **That run was
+redundant and the redundancy was avoidable: `git status` is not an inventory.**
+
+### THE MISSING ALM NUMBER WAS IN IT
+
+| | measured |
+|---|---|
+| **combinational ALUTs** | **276,856** |
+| dedicated logic registers | 381,585 |
+| block memory bits | 2,960,515 |
+| DSP blocks | 359 |
+
+**Cyclone V packs 2 ALUTs per ALM, so 276,856 ALUTs need ≥ 138,428 ALMs.**
+
+* **330% of the target's 41,910.**
+* **122% of the SIZING device's 113,560** — so the design does not fit the part
+  it was measured on, on **logic** as well as on DSP (359 against 342).
+
+**That fully explains the placement failure**, and it is a better answer than
+the register floor: 138,428 from ALUTs exceeds the 95,396 the registers alone
+demand, so **logic, not flops, sets the floor.** The Quartus log is still gone;
+this is arithmetic on the report rather than the fitter's own words.
+
+### WHERE IT LIVES — top entities, **hierarchical totals, DO NOT SUM**
+
+| ALUTs | registers | DSP | entity |
+|---|---|---|---|
+| 46,819 | 47,149 | 88 | `zhao_shell_top_v2:u_shell` |
+| 40,093 | 48,614 | 15 | `zhao_field_host_v2:u_field_host` |
+| 34,041 | **100,561** | 0 | **`zhao_geom_drawjob:u_geom_drawjob`** |
+| 30,765 | 42,660 | 15 | `zhao_field_v3_engine:u_fabric` |
+| 30,519 | 31,737 | 86 | `zhao_geom_bin_pipe_v2:u_render_bin` |
+| 29,198 | 28,958 | 80 | `zhao_raster_tile_pipe_v2:u_tile` |
+| 15,557 | 38,999 | 3 | `zhao_forge_assemble` |
+
+**`zhao_geom_drawjob` holds 100,561 registers — 26.4% of every flop in the
+console — with ZERO DSP.** A job-dispatch block holding a quarter of the
+machine's state in fabric is **exactly** what `check_v3_banks`'s §21.8 language
+was written for: *"stop before another long fit when a supposedly banked payload
+shows up as thousands of registers."* **This is the single largest lever on the
+page**, and with memory at **52% of target** it is the standing *"spend M10K to
+buy ALMs"* trade in its purest form.
+
+### THE DSP BREAKDOWN, BY KIND — 78 blocks each holding ONE multiply
+
+| mode | blocks |
+|---|---|
+| Independent 9×9 | 42 |
+| Two Independent 18×18 | 134 |
+| Independent 18×18 plus 36 | 52 |
+| Sum of two 18×18 | 53 |
+| **Independent 27×27** | **78** |
+| **total** | **359** |
+
+412 multipliers in total (90 signed, 159 unsigned, 163 mixed-sign).
+
+**A Cyclone V DSP holds TWO independent 18×18 but only ONE 27×27.** So the 134
+"two independent 18×18" blocks carry **268** multiplies, while the **78 27×27
+blocks carry 78**. **Narrowing a 27×27 operand to ≤18 bits lets two share one
+block** — up to **~39 blocks** recoverable if all 78 could be narrowed, and any
+subset pays proportionally.
+
+**And two small blocks are startlingly DSP-dense:** `zhao_geom_attrpack` at
+**45 DSP for 1,184 ALUTs** and `zhao_geom_attrsetup` at **45 DSP for 938
+ALUTs**. **90 DSP — 25% of the console's total — in two blocks with ~2,100 ALUTs
+between them.** That ratio is the signature of wide multipliers, and they are
+the first place to look for 27×27s.
+
+### THE ORDER THIS SUGGESTS, for the optimisation phase
+
+1. **`zhao_geom_drawjob`'s 100,561 registers.** Find what the payload is and
+   whether it belongs in M10K. Largest single lever, and memory has the slack.
+2. **`zhao_geom_attrpack` / `zhao_geom_attrsetup`'s 90 DSP.** Check operand
+   widths against the 78 27×27 count; each pair narrowed to 18×18 frees a block.
+3. **`zhao_shell_top_v2` at 46,819 ALUTs and 88 DSP** — the biggest single
+   entity, and a shell, so ask what of it the console actually needs.
+
+**None of this is a fit result.** It is Analysis & Synthesis, pre-placement, so
+packing, replication and pruning have not happened. **It is attribution, which is
+what the optimisation phase needs, and it cost nothing** — the report was
+already on disk.
