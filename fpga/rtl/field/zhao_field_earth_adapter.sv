@@ -265,6 +265,42 @@ module zhao_field_earth_adapter #(
     input  var logic [OUT_LANES*32-1:0] resp_out_i,
     /* verilator lint_on UNUSEDSIGNAL */
     input  var logic [7:0]              resp_status_i,
+    // DIRECTIVE 8.1's `output_present_mask`, ORDINAL-INDEXED: bit j is set when
+    // ordinal j is a VALUE and clear when it is a HOLE. Owner ruling R168 and
+    // decision W10. `zhao_field_warp_adapter` has read this port since
+    // 2026-09-20 and THIS ADAPTER DID NOT until this commit, although the
+    // composer had the mask on a named wire (`fld_resp_present_c`) the whole
+    // time -- so the gap was one hop, not the producer rebuild entry I34
+    // recorded.
+    //
+    // WHY IT IS NOT REDUNDANT WITH `resp_status_i`, which is the reading that
+    // left it unconnected here. A STATUS IS A VERDICT ON THE RUN; THE PRESENCE
+    // MASK IS A STATEMENT ABOUT EACH ORDINAL. `zhao_field_host_v2` retires
+    // StOk when every DECLARED ordinal landed -- `complete_c` is
+    // `((seen_next_c & req_mask_c) == req_mask_c)`, a test against what the
+    // header DECLARED and not against this profile's four. So a program whose
+    // header declares only ordinals 0 and 1 returns 8'h00 with ordinals 2 and 3
+    // clear, and the host's own comment beside StPartial says what those words
+    // then hold: "the absent ones read as the zero cleared at grant -- an
+    // answer a caller reading only the words cannot tell from a field that
+    // happens to be zero there". Gating on the status alone therefore publishes
+    // a HOLE as a VALUE, and on THIS seam the hole is a terrain material or a
+    // nav cost, which is the flattering direction: a plausible number from a
+    // lane no program wrote.
+    //
+    // Owner directive section 13.3 is the same law stated for this record: "A
+    // genuinely absent optional lane under an explicit compatible program
+    // signature is not a write of zero. Do not conflate those to make material
+    // reduction plausible." The reducer 13.2 commissions for material is "the
+    // LAST field in command order that covers the vertex AND WRITES the
+    // material lane wins" -- UNIMPLEMENTABLE without this mask. That is why the
+    // mask is read and republished here rather than left for the consumer to
+    // go and find: the consumer cannot, because by then the response is gone.
+    // Ordinals 4..6 belong to the wider profiles sharing this seam and are not
+    // this record's, exactly as for `resp_out_i` three lines up.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  var logic [OUT_LANES-1:0]    resp_present_i,
+    /* verilator lint_on UNUSEDSIGNAL */
 
     // ---- the answer: FOUR out-lanes from ONE evaluation ----------------------
     // `ans_valid_o`/`ans_ready_i` is `zhao_terrain_patch`'s
@@ -302,6 +338,40 @@ module zhao_field_earth_adapter #(
     // and a consumer that one day wants "did a field act here" needs the bit.
     output var logic               ans_field_o,
 
+    // THE PER-ORDINAL PRESENCE OF THIS ANSWER -- {nav_cost, material, velocity,
+    // height} in ordinal order, bit j set when lane j is a VALUE this
+    // evaluation wrote and clear when it is a HOLE. Directive 20.8's "route
+    // height, velocity, material and nav outputs from the same evaluation to
+    // their real owners" is not satisfiable without it: an owner handed four
+    // words and no presence cannot apply material's writer-selection law, and
+    // applying it anyway makes every non-writing field the last writer.
+    //
+    // IT IS LATCHED WITH THE WORDS IT DESCRIBES, not read live beside them, and
+    // that is CLAUDE.md's metadata-swap law rather than a style choice. The
+    // answer registers hold across `E_ANS` until the consumer accepts; a
+    // presence read live off `resp_present_i` in that window would describe
+    // whatever response the host was offering NEXT -- answer A's four words
+    // with answer B's presence, and `runs_o`, `faults_o` and `noprog_o` all
+    // still balancing, because not one of them looks at the field that moved.
+    // The host itself already designed this out one level up: `resp_present_o`
+    // is `rsp_pres[head_idx_c]`, stored per reservation at retirement, exactly
+    // as `rsp_stat` is. This port keeps that property across this seam.
+    //
+    // ZERO ON EVERY ANSWER THAT IS NOT A RUN -- uncovered, not begun, no
+    // program, faulted -- because each of those is the oracle's `continue`, and
+    // a `continue` writes no lane at all. `ans_field_o` low and
+    // `ans_present_o` zero are then the same statement made twice, which is
+    // correct: the first says no evaluation happened, the second says no lane
+    // was written, and a future record could have one without the other.
+    //
+    // IT HAS NO CONSUMER IN THIS CONSOLE YET, deliberately, and that is the
+    // shape `velocity_o`/`material_o`/`nav_cost_o` already have beside it: the
+    // consumer is directive 13.2's `zhao_terrain_patch_v2`. An honestly open
+    // output on a producer is the smallest of the three available shapes and is
+    // the one entry I34 chose for CMD.EXEC's uniforms for this seam's whole
+    // life.
+    output var logic [3:0]         ans_present_o,
+
     // ---- evidence -------------------------------------------------------------
     // R95: every one of these is asserted silent and then FIRED by
     // `tests/field/field_earth_adapter_directed.cpp`. A counter whose zero
@@ -313,6 +383,15 @@ module zhao_field_earth_adapter #(
     output var logic [31:0] not_begun_o,          // tick < start_tick: zero, no run
     output var logic [31:0] noprog_o,             // handle unresolved, or engine said so
     output var logic [31:0] faults_o,             // the run ended on an alarm
+    // R168's ARM, AND THE ONLY REASON IT CAN BE REACHED IS THAT PRESENCE IS NOW
+    // READ. A run the host called OK whose record was SHORT -- at least one of
+    // the four canonical Earth ordinals came back a hole. It is counted apart
+    // from `faults_o` because it is not a fault: section 13.3 rules an absent
+    // optional lane legitimate under a compatible signature. It is counted at
+    // all because "legitimate" is not "invisible" -- a console composing
+    // material off a stream of short records would reduce holes, and the only
+    // number that could ever say so is this one.
+    output var logic [31:0] short_record_o,
     output var logic [31:0] lane_desync_o,        // THE SHADOW GUARD; see the header
     output var logic [31:0] stall_cycles_o,       // THE COST: consumer waiting, no answer
     output var logic        idle_o
@@ -323,6 +402,22 @@ module zhao_field_earth_adapter #(
   // mean the run produced nothing a vertex may be moved by, and neither is
   // separable from this side without a second status port.
   localparam logic [7:0] StNoProgram = 8'hF0;
+
+  // The four canonical Earth ordinals (field-ir.md 7.1). A response carrying
+  // all four is COMPLETE; anything less is SHORT.
+  //
+  // A SHORT RECORD IS COUNTED AND PUBLISHED, NOT REFUSED, AND THE DIFFERENCE
+  // FROM THE WARP ADAPTER IS RATIFIED RATHER THAN CHOSEN. `zhao_field_warp_
+  // adapter` voids the whole answer on a short record, because decision W10
+  // says "publish no partially warped meshlet" -- a vertex displaced on two
+  // axes of three is a broken vertex. Directive 13.3 says the opposite about
+  // THIS record: "a genuinely absent optional lane under an explicit
+  // compatible program signature is not a write of zero". An Earth program
+  // that moves the ground and declares no material is a legal, ordinary
+  // program, and refusing its height because it wrote no material would
+  // discard a real evaluation. So the present lanes are published, the absent
+  // ones are published as absent, and the consumer decides per lane.
+  localparam logic [3:0] EarthOrdinals = 4'b1111;
 
   // The Q16.16 scale, as a SHIFT COUNT. The oracle writes `age * (1 << 16)`.
   localparam int unsigned FxShift = 16;
@@ -460,6 +555,9 @@ module zhao_field_earth_adapter #(
   logic signed [31:0] a_height, a_velocity, a_nav;
   logic [31:0] a_material;
   logic a_field;
+  // Latched beside the four words, for the reason `ans_present_o`'s port
+  // comment gives: a live read here is the metadata-swap defect.
+  logic [3:0] a_present;
   logic [SLOTW-1:0] held_slot;
   // The engine's own "there is no program here". `zhao_field_host_v2` ORs it
   // with its `!hdr_loaded[slot]` test, so a lane whose handle resolved to no
@@ -507,6 +605,7 @@ module zhao_field_earth_adapter #(
 
   assign ans_valid_o = (state == E_ANS);
   assign ans_field_o = a_field;
+  assign ans_present_o = a_present;
   assign height_o = a_height;
   assign velocity_o = a_velocity;
   assign material_o = a_material;
@@ -530,6 +629,20 @@ module zhao_field_earth_adapter #(
   // fabric's own ratified status and is equally not a field value. So OK is the
   // exact zero, not "not one of the three I remembered".
   wire status_ok = (resp_status_i == 8'h00);
+
+  // The four canonical ordinals' presence, read ONLY in E_WAIT beside the words
+  // it describes -- the same cycle, the same response, the same `resp_valid_i`.
+  // Ordinals 4..6 exist on the shared seven-wide seam and belong to other
+  // profiles; this adapter's own guard refuses OUT_LANES < 4 at elaboration, so
+  // the slice is total rather than hopeful.
+  wire [3:0] present_c = resp_present_i[3:0];
+
+  // R168's case: the host called the run OK and at least one declared-by-this-
+  // profile ordinal is a hole. NOT a fault (13.3), so it is counted apart from
+  // `faults_o` -- and it is a genuinely reachable state under legal stimulus,
+  // because `complete_c` in the host tests the HEADER's declared mask and not
+  // these four, so a two-ordinal Earth program retires StOk by construction.
+  wire short_record_c = status_ok && (present_c != EarthOrdinals);
 
   // A_SKIP: the three causes that answer ZERO WITHOUT A RUN, evaluated on the
   // bank entry the shadow says the consumer is offering. Each is counted apart,
@@ -613,6 +726,8 @@ module zhao_field_earth_adapter #(
       a_material <= 32'd0;
       a_nav <= 32'sd0;
       a_field <= 1'b0;
+      a_present <= 4'd0;
+      short_record_o <= 32'd0;
       records_o <= 32'd0;
       tail_rejected_o <= 32'd0;
       runs_o <= 32'd0;
@@ -786,6 +901,7 @@ module zhao_field_earth_adapter #(
               // The oracle's `continue`, expressed as the additive zero the
               // consumer's fx_add chain treats identically. Counted by CAUSE.
               a_field <= 1'b0;
+              a_present <= 4'd0;  // a `continue` writes no lane at all
               a_height <= 32'sd0;
               a_velocity <= 32'sd0;
               a_material <= 32'd0;
@@ -813,16 +929,31 @@ module zhao_field_earth_adapter #(
           if (resp_valid_i) begin
             if (status_ok) begin
               a_field <= 1'b1;
-              a_height <= out_height;
-              a_velocity <= out_velocity;
-              a_material <= out_material;
-              a_nav <= out_nav;
+              // A HOLE IS PUBLISHED AS A ZERO *AND* DECLARED ABSENT, which are
+              // two different statements and both are needed. The zero is
+              // belt-and-braces over the host's grant clear, so this module's
+              // output cannot carry a stale word from an earlier response even
+              // if that clear ever changed; `a_present` is the part a consumer
+              // reads to tell the zero from a value. Publishing the word
+              // without the bit is the defect this commit repairs, and
+              // suppressing the word without the bit would merely move it.
+              a_present <= present_c;
+              a_height <= present_c[0] ? out_height : 32'sd0;
+              a_velocity <= present_c[1] ? out_velocity : 32'sd0;
+              a_material <= present_c[2] ? out_material : 32'd0;
+              a_nav <= present_c[3] ? out_nav : 32'sd0;
               if (runs_o != 32'hFFFF_FFFF) runs_o <= runs_o + 32'd1;
+              // Counted on the SAME condition that shaped the words above, so
+              // the number and the behaviour cannot drift apart.
+              if (short_record_c && (short_record_o != 32'hFFFF_FFFF)) begin
+                short_record_o <= short_record_o + 32'd1;
+              end
             end else begin
               // A refused run contributes NOTHING, which is the oracle's
               // `prog == nullptr -> continue`, not a zero height standing in
               // for a height that was never computed.
               a_field <= 1'b0;
+              a_present <= 4'd0;  // a refused run wrote no lane at all
               a_height <= 32'sd0;
               a_velocity <= 32'sd0;
               a_material <= 32'd0;

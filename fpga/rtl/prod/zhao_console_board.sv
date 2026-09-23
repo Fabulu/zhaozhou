@@ -2132,6 +2132,14 @@ module zhao_console_board
   output logic [31:0]             fld_earth_not_begun_o,
   output logic [31:0]             fld_earth_noprog_o,
   output logic [31:0]             fld_earth_faults_o,
+  //   `fld_earth_short_record_o` is R168's arm on THIS record, NEW 2026-09-23
+  //   (PATCHV2): a run the host called OK that returned fewer than the four
+  //   canonical Earth ordinals. It is not a fault -- section 13.3 rules an
+  //   absent optional lane legitimate -- and it is not silence either, which is
+  //   the whole reason it is a port. A future `zhao_terrain_patch_v2` reducing
+  //   material off a stream of short records would be reducing HOLES, and this
+  //   is the only number that could say so.
+  output logic [31:0]             fld_earth_short_record_o,
   output logic [31:0]             fld_earth_lane_desync_o,
   output logic [31:0]             fld_earth_stall_cycles_o,
   output logic                    fld_earth_idle_o,
@@ -4838,6 +4846,7 @@ module zhao_console_board
       .fld_earth_not_begun_o              (fld_earth_not_begun_o),
       .fld_earth_noprog_o                 (fld_earth_noprog_o),
       .fld_earth_faults_o                 (fld_earth_faults_o),
+      .fld_earth_short_record_o           (fld_earth_short_record_o),
       .fld_earth_lane_desync_o            (fld_earth_lane_desync_o),
       .fld_earth_stall_cycles_o           (fld_earth_stall_cycles_o),
       .fld_earth_idle_o                   (fld_earth_idle_o),

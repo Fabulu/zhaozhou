@@ -1662,6 +1662,9 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             fld_earth_not_begun_o,
   output logic [31:0]             fld_earth_noprog_o,
   output logic [31:0]             fld_earth_faults_o,
+  // NEW 2026-09-23 (PATCHV2). See the note in the slot-overflow wrapper: `.*`
+  // binds every production port, so this list tracks the core's by necessity.
+  output logic [31:0]             fld_earth_short_record_o,
   output logic [31:0]             fld_earth_lane_desync_o,
   output logic [31:0]             fld_earth_stall_cycles_o,
   output logic                    fld_earth_idle_o,
