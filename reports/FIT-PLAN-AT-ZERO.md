@@ -193,6 +193,48 @@ none, so wiring FORGE.CLIFF today would tie off three inputs and change no pixel
 `completion_register.py` stays at **13** and `zhao_forge_cliff_ram` stays under
 BUILT BUT NOT CONNECTED, honestly.
 
+#### AND ONE THING THE RECEIPTS CARRY THAT NOBODY HAS QUOTED: HOLD
+
+Both labelled rows in `reports/synthesis/zhao_block_fit.json` carry full timing
+fields, and every reading of this rivalry so far has used the area fields only.
+R142 said in as many words that the fit "measures AREA", which is true of what it
+was asked -- but the numbers were sitting there:
+
+| | golden `@golden-for-F-CLIFF1` | candidate `@first-measurement` |
+|---|---|---|
+| fitted ALM | 6,674 | **976** |
+| Fmax (`clk`) | 39.59 MHz | 39.72 MHz |
+| setup slack | -15.259 ns | -15.174 ns |
+| setup TNS | -10,377 ns | **-2,070 ns** |
+| **hold slack** | **+0.263 ns** | **-4.140 ns** |
+| hold TNS | 0 | -4.605 ns |
+| fit seconds | 1,047.6 | 466.2 |
+
+Like for like -- same part, same tool, same pinned seed, same virtual-pin I/O
+mode, both `rtlCleanAtHead: true` -- so the comparison is legitimate in the way
+R142 established for the area numbers.
+
+**The candidate is better on setup and WORSE ON HOLD.** Setup TNS improves by 5x
+alongside the area, which is the expected direction. Hold goes from met to
+**-4.140 ns violated**, and that is a real difference between the two
+implementations that no ruling mentions.
+
+**Stated with its limits, because a leaf fit is not the console.** These are
+unconstrained-ish leaf placements with virtual pins; both sides sit ~15 ns behind
+setup, so neither closes at this stage and the absolute numbers are not board
+truth. What survives those caveats is the *sign change*: on identical treatment
+the golden met hold and the candidate does not. Hold violations do not fix
+themselves in a larger placement.
+
+**This does not reopen the adoption.** 5,698 ALM is 13.6% of the device, the
+binding constraint is ALMs, and a hold violation on a leaf fit is a routing and
+retiming problem rather than a functional one. It is recorded here so the number
+everyone quotes travels with the one nobody had read, and so whoever eventually
+composes FORGE.CLIFF knows to watch hold on this block specifically. The likely
+first suspect is the same four pass-throughs -- a write enable launching a data
+path is exactly where short paths come from.
+
+
 
 *(Original entry, kept because its reasoning is why the fit was worth spending:)*
 
