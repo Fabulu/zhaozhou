@@ -1742,3 +1742,80 @@ merge into GEOM.CLIP) still running; PATCHV2 resumed with the nav correction and
 its directed build. Next after those: the §15.11 owner-decision correction, then
 the remaining tie-offs I20 / I21 / I53–I56 and the three disconnected terrain
 blocks.
+
+### 2026-09-23 (later) — TRIMERGE merged, four instruments repaired, and the TERRAIN ARM turns out to be ONE subsystem behind three entries
+
+**Register still 12.** `gate_sweep` is now **29 gates**, RC 0, every one matching
+the committed baseline.
+
+**TRIMERGE merged (`3217c8e6`), I13 REFUSED, and its first named blocker is
+DEAD.** `zhao_geom_clipdoor` is composed with `.NCLIENT (3)` — REPLAY 0,
+FORGE.ASSEMBLE 1, PART.CLIPFEED 2. The entry claimed one producer and no merge,
+and **survived two re-measurements** (09-21, 09-22) because both evaluated
+`u_geom_clip.tri_valid_i`, found one wire, and concluded one producer. **That
+expression is still exactly true** — the door sits UPSTREAM of the material
+window, a pure combinational gate. **Right expression, wrong place: a true
+reading and a false conclusion.** Every changed line in all three RTL files is a
+comment; checked before merging, not assumed.
+
+**THE RE-SEQUENCING IS THE DELIVERABLE, and it moves an owner decision out of
+the way.** Terrain's `lit r/g/b` is parked art content — but **neither ratified
+colour profile is blocked by colour**. Untextured lacks a base colour the RTL
+does not have; textured is blocked by **three CARRIAGE items** (u/v, the 224-bit
+aux context, a material identity), and a unity tint there is **exact**, not a
+stand-in. So: `u/v → aux → material identity → colour-at-identity → layer-H
+content`. **The parked decision does not block the next three pieces of work**,
+and every pass that stopped here stopped at the last item instead of the first.
+
+**AND IT IS ONE SUBSYSTEM, NOT THREE ENTRIES.** NORMALPYR refused to compose
+`zhao_terrain_normalmap` this morning on fact 3 — *"THERE IS NO TERRAIN
+TEXTURE-COORDINATE LAW AT ALL … ZERO hits"* — which is TRIMERGE's step 1,
+reached from the opposite end. **TERRAINUV is now running on exactly that**, and
+its brief says up front that the register will not move.
+
+**FOUR INSTRUMENT REPAIRS, all mine, all found by accident rather than by a
+tool:**
+
+* **A narrowed `remote.origin.fetch`** froze every remote-tracking ref; neither
+  fetch nor push maintained them. `check_git_remote_refspec.py` now guards it,
+  with the real broken refspec as its positive control — and the sweep's first
+  run on the new file caught **the new file's own** unguarded `git` helper.
+* **CLAUDE.md asserted a defect repaired the day it was written.**
+  `zhao_geom_wcache` was widened 75 → 106 on 2026-09-09 and its header calls it
+  a REPAIR; the law file said "never widened" for fourteen days, and **I quoted
+  it to a lane as live**. A stale claim in the RULES file is the worst kind: it
+  is the file people quote INSTEAD of measuring.
+* **Three `zhao_forge_cliff_ram_*` mutants** were left stale by my own CLIFFADOPT
+  merge that morning — **not inherited debt**, which two readers called it.
+  Refreshed by three-way merge, all three controls re-run and still fire, and the
+  generated Verilator sources checked for `tri_pairs_r` so the binaries are not
+  stale.
+* **`gate_sweep` could not see the gate that caught it**, because the file is not
+  named `check_*.py`. **A discovery rule is only as good as its predicate.** Four
+  gates named explicitly — and two of them, `uncashed_cheques` and
+  `refmodel_liveness`, do all their checking inside `if "--gate"`, so **run bare
+  they return 0 whatever they find**. With the flag, `refmodel_liveness` returns
+  1 on six blocks declaring a reference model the oracle does not have. Baselined
+  as inherited, recorded rather than absorbed.
+
+**PATCHV2 is at four of five smoke forms** (plain, `-Mutant`, `-BadVertex`,
+`-NoEchoArm` all PASS) and will not claim the last two unread. Its result is
+**12 → 12, no pixel moved**, a ratified-law breach repaired on I34's producer
+side — `zhao_field_earth_adapter` no longer publishes a hole as a value — and
+**I34 handed to the owner**: TERRAIN.PATCH is designated to write material and
+nav and has nowhere to put either.
+
+### MEASURED WHILE WAITING, AND IT MAKES THE NEXT LANE: I21's REMAINDER IS STALE
+
+`I21`'s recorded remainder item (a) is *"MEASURE.GOVERNOR's six knobs — the
+governor is built and uncomposed"*, and several places in the entry say
+TERRAIN.LOD is not composed. **Both are composed today:**
+`zhao_measure_governor` at `zhao_console_core.sv:25550`, `zhao_terrain_lod` at
+`:25811`, `zhao_geom_lodstate` at `:14167` (SHADOWRIDE's fourth client-A arm).
+**So I21 must be re-measured before anyone builds against its written
+remainder** — that is the next lane after PATCHV2 lands, and its brief must not
+inherit item (a).
+
+**WHERE I AM:** TERRAINUV running on terrain u/v; PATCHV2 finishing
+`-BadTraceArm` and `-UntexMutant`. Next: merge PATCHV2 and re-measure the sweep
+at 29, then the I21 re-measurement lane.
