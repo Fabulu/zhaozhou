@@ -1567,3 +1567,51 @@ of magnitude and briefs should say **~30 minutes**.
 **REPRODUCED:** `@diag-map-attrib` re-ran synthesis at the same digest and
 returned **identical** 381,585 registers and 359 DSP. **The first reproduced
 console measurement.** Workspace cleaned up after (529 MB); 747 GB free.
+
+### 2026-09-23 — BURSTTRUTH lands: R243 D-SDRAM-A complete, and the audit finds ONE hole
+
+**Register 14 → 14. Eight commits. No fit.** Verified by me on the merged tree,
+not quoted from the lane: **`gate_sweep` RC 0, all 24 gates matching the
+committed baseline; `completion_register` 14.**
+
+**The owner's ordering was right and the evidence says so.** Step 0 instrumented
+*before* any behaviour changed — five counters in the SDRAM model with
+**deliberately no ports** (twelve files instantiate it; an added output is a
+`PINMISSING` that reads as another lane's breakage) plus an **elaboration banner
+as the positive control for the silence**.
+
+**THE BASELINE IS A ZERO AND THE ZERO IS THE FINDING:** ten smoke forms,
+**~427,000 bursts, zero unaligned.** The composed console was already 16-byte
+aligned, so **neither repair could move a smoke number** — which is exactly why
+the proof had to come from `mem_random` (87% unaligned) and a committed mutant.
+
+**The model repair produced ONE red and every silence is explained.**
+`mem_random` RC 1, 479 oracle disagreements, words for the second aligned block
+landing in the first block's low half. Three benches *cannot* change (zero
+unaligned). **`mem_guard_directed` carries 26 unaligned bursts and stayed green
+because it compares VERDICTS, not read data** — *a bench can carry the stimulus
+and be blind to the consequence.*
+
+**THE AUDIT'S HOLE, and it is at the console's own edge:** six of seven arbiter
+slots are aligned by construction or **by refusal** (`zhao_mem_upload` is the
+only place in the tree that *enforces* alignment, and it enforces by refusing).
+**`render_fb_base_i` and `render_fb_stride_i` are TOP-LEVEL INPUTS with no
+alignment requirement anywhere, and both ENGINE0 clients derive every address
+from them.** The smoke drives base 0 / stride 768; nothing requires it.
+
+**THE BOUND WAS RE-PROVEN, NOT ADJUSTED** — `bmc` PASS at 52/34, cover PASS
+non-vacuous, and **both tight tasks FAIL, which is REQUIRED**: a tight task that
+passes means the bound is not exact. The new clamp **subsumes the old row clamp
+as a theorem**, so dropping a 12-bit subtract is an area saving.
+
+**Instrument found blind in passing:** `mutant_copy_drift.py` silently exempted
+the new mutant because it kept production's module name — **the tell was the
+unmatched count going 19 → 20 while the tool still printed OK.**
+
+**And two of its own audit claims were CHECKED AND WITHDRAWN**, committed rather
+than deleted. Both were the confident one-line summary; both checks were one
+grep of an already-open file.
+
+**Lane closure VERIFIED rather than assumed:** no verilator, ctest, cmake or
+quartus process left, waiters exited. CLAUDE.md says stopping an agent does not
+stop its background work, so this was checked before merging.
