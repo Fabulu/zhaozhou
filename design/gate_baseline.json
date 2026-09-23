@@ -12,6 +12,7 @@
     "tools/design/check_seam_widths.py": 0,
     "tools/maintenance/check_eol_worktree.py": 0,
     "tools/maintenance/check_git_autocrlf_guard.py": 0,
+    "tools/maintenance/check_git_remote_refspec.py": 0,
     "tools/quartus/check_console_inventory.py": 0,
     "tools/quartus/check_fit_ledger.py": 0,
     "tools/quartus/check_forbidden_sources.py": 0,
