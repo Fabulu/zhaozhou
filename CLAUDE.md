@@ -561,12 +561,32 @@ in its first forty lines.
 the producer. Grep for every place the corrected value is STORED or FORWARDED.**
 `GEOM.DEPTHQUANT` was corrected on 2026-09-03 to consume `w` rather than `1/w`;
 `zhao_project_core` and `zhao_geom_project` both grew `out_w_o`. `zhao_geom_wcache`
-is dated three days EARLIER and its 75-bit payload was never widened, so the
-replay cache between the fixed producer and the consumer still drops the field.
+was dated three days EARLIER and its payload had not been widened, so the replay
+cache between the fixed producer and the consumer dropped the field.
 Caches, replay buffers and packet layouts are **frozen copies of yesterday's
 agreement** and carry no marker saying so. This is the harder variant to see,
 because the cheque was PARTIALLY cashed: most links were fixed, so it reads as
 done to anyone who checks the producer or the contract.
+
+**THAT CHEQUE WAS CASHED AND THIS PARAGRAPH WENT ON SAYING IT WAS OUTSTANDING,
+FOR FOURTEEN DAYS.** Corrected 2026-09-23. `zhao_geom_wcache.sv:43` reads
+*"106 bits. WIDENED 75 -> 106 ON 2026-09-09, and the widening is a REPAIR"*, and
+`PAYLOAD_W = 106` sits at `:95`. The widening happened the same day this
+paragraph was written. It was found because I quoted this file to a lane as a
+live defect and the lane went and looked.
+
+**The correction is worth more than the example was.** A stale claim in the
+RULES file is worse than a stale claim anywhere else, because this is the file
+people quote INSTEAD of measuring — it is read as settled law, it is read by
+every lane, and nothing in the tree checks it against the tree. The *rule* above
+is sound and stands; its worked example had simply been repaired and nobody came
+back to close it, which is this chapter's own subject arriving one level up.
+
+So: **when you fix a thing this file names as broken, fix this file in the same
+commit.** And when you are about to cite a defect from here, spend the one grep
+first. The "X does not exist" claims this campaign has killed came overwhelmingly
+out of DOCUMENTS rather than out of the tree, and a document cannot go stale
+loudly.
 
 **A deliberately-failing frontier point is not a saving.** `GEOM.SKIN`'s
 `MUL_LANES=1` row shows 3 DSP against the shipping 9, and was quoted as a −6 DSP
