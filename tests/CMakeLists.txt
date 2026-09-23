@@ -17380,9 +17380,11 @@ foreach(ba_variant fires silent)
     # driver cannot end up compiled against one arbiter while asserting the
     # other's behaviour.
     target_compile_definitions(${ba_target} PRIVATE ZHAO_BLKALIGN_MUT)
+    set(ba_vargs -DZHAO_BLKALIGN_MUT)
     list(APPEND ba_sources
          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv)
   else()
+    set(ba_vargs "")
     list(APPEND ba_sources ${ZHAO_MEM_RTL}/zhao_vram_arbiter.sv)
   endif()
   list(APPEND ba_sources
@@ -17390,6 +17392,7 @@ foreach(ba_variant fires silent)
        ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_mem_chain.sv)
   verilate(${ba_target}
     PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+    VERILATOR_ARGS ${ba_vargs}
     INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/memory

@@ -94,7 +94,24 @@ module tb_zhao_mem_chain
   assign vram_bytes_3 = vb_flat[3];
   assign vram_bytes_4 = vb_flat[4];
 
+  // THE ARBITER UNDER TEST, and which one is a MACRO CHOICE.
+  //
+  // `ZHAO_BLKALIGN_MUT` selects tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv
+  // -- production with `burst_words` reverted to the pre-R243 ROW clamp -- so
+  // that the SDRAM model's BL8 wrap becomes reachable and can be watched to
+  // corrupt a misaligned request. Undefined (every other target in this file's
+  // source list) it is production, character for character.
+  //
+  // A PLAIN `ifdef`, deliberately: CLAUDE.md records that a command-line `-D`
+  // cannot override a FUNCTION-LIKE `define` and says nothing when it fails to.
+  // The negative control is the SAME driver compiled with the macro undefined
+  // (mem_blkalign_mut_silent), and its output must DIFFER -- it does: 0 of 32
+  // words corrupted against the mutant's 20.
+`ifdef ZHAO_BLKALIGN_MUT
+  zhao_vram_arbiter_blkalign_mutant u_arb (
+`else
   zhao_vram_arbiter u_arb (
+`endif
     .clk, .rst_n,
     .client_req, .client_rsp,
     .ctrl_req, .hold_refresh, .ctrl_rsp,
