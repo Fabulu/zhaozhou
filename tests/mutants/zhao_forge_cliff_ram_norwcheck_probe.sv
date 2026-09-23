@@ -1,56 +1,109 @@
-// zhao_forge_cliff_ram_bit0_latch_control.sv -- A POSITIVE CONTROL. NOT SHIPPED.
+// zhao_forge_cliff_ram_norwcheck_probe.sv -- A COST PROBE. NOT SHIPPED.
 //
-// This exists so that "Info (10041) does not appear" is a DETECTOR READING and
-// not a hopeful zero.
+// R117 condition 1 says the four `Warning (276020)` pass-through insertions
+// must be "either accepted in writing WITH THEIR COST, or removed by matching
+// the RAM's native read-during-write behaviour. The gate asked for zero."
 //
-// R117 reported `Info (10041): Inferred latch for "triangles_submitted_o[0]"`
-// against `zhao_forge_cliff_ram`, and R142 diagnosed it exactly: C3 advanced a
-// 32-bit counter by `+ 32'd2`, so bit 0 was provably constant zero for all time,
-// and THAT constant bit is what Quartus latched. The production file now counts
-// PAIRS in 31 bits and drives `{tri_pairs_r, 1'b0}` at the port, and a
-// `quartus_map` of it reports the latch ZERO times.
+// An acceptance without a number is not an acceptance, it is a shrug. This file
+// exists to put a measured number on the left-hand branch. It is an instrument
+// on the COMPARISON side: it decides nothing, it prices what was decided.
 //
-// A zero is a claim, and CLAUDE.md says it is the claim to check hardest. The
-// shipping map report does carry Info-level messages -- 584 of them in the same
-// run -- so the category is not suppressed; but that only shows Infos CAN print,
-// not that THIS one would have. The only demonstration is to map the counter in
-// its pre-fix shape and watch the message appear.
+// WHICH four -- established from the source, then CONFIRMED by the map rather
+// than assumed. The module has five inferred memories. Exactly one, win_mem, is
+// read inside a clocked block:
 //
-// This file is that shape: `a8d4443d:fpga/rtl/forge/zhao_forge_cliff_ram.sv`
-// verbatim, with ONE substantive difference from the shipping source --
+//     always_ff @(posedge clk) begin
+//       if (win_we_c) win_mem[win_wa_c] <= win_wd_c;
+//       if (win_re_c) win_q_r <= win_mem[win_ra_c];      <- registered read
+//     end
 //
-//     triangles_submitted_o <= triangles_submitted_o + 32'd2;   (32 bits, by two)
+// The other four are written in an always_ff and read by a bare assign:
 //
-// where production now has a 31-bit `tri_pairs_r` incremented by one. The module
-// is RENAMED so no source list can elaborate it in place of the real one, and it
-// lives under tests/ where check_forbidden_sources.py will not find it in a
-// production closure.
+//     assign edge_rd_c = {edge_key_r[idx_r[10:0]], edge_span_r[idx_r[10:0]]};
+//     assign run_rd_c  = run_mem_r[ridx_r[9:0]];
+//     assign prio_rd_c = prio_mem_r[idx_r[10:0]];
 //
-// ITS POLARITY IS INVERTED: this control PASSES when the latch FIRES. A map of
-// it that reported zero `Info (10041)` would mean the instrument is blind and
-// the shipping result means nothing.
+// That is precisely the shape reports/PREDICTION-forge-cliff-ram.md names as
+// forcing read-during-write bypass logic -- its third instance in three
+// subsystems -- and the map names those same four and only those four. win_mem,
+// the one with the clocked read, is NOT among them. Source hypothesis first,
+// instrument second, and they agree.
 //
-// REPRODUCE -- map only, 33 s, not a fit. The PROJECT NAME is read as the
-// top-level entity, so it must equal the module name; naming it anything else
-// fails with `Error (12007): Top-level design entity "..." is undefined`, which
-// cost one run to learn:
+// WHAT THIS FILE CHANGES: one attribute on each of those four declarations,
 //
-//   cp tests/mutants/zhao_forge_cliff_ram_bit0_latch_control.sv <scratch>/
+//     (* ramstyle = "no_rw_check" *)
+//
+// which tells Quartus the design never reads an address in the cycle it writes
+// it, so the pass-through logic need not be built. Nothing else differs from
+// the shipping source. The ALUT delta between a map of this file and a map of
+// the shipping module IS the cost of the four insertions.
+//
+// THE RESULT, MEASURED 2026-09-23 -- AND IT IS A NEGATIVE ONE.
+//
+// The attribute changed NOTHING. Mapped against the shipping module under
+// identical hand-run settings on 5CSEBA6U23I7 / Quartus 17.0.2:
+//
+//                          276020   comb ALUT   registers   ALM estimate
+//   shipping module            4       1,326         826            889
+//   this probe (no_rw_check)   4       1,326         826            889
+//
+// Not one number moved, and the report never mentions `ramstyle` at all. So
+// the intended measurement -- the ALUT delta as the price of the four
+// insertions -- COULD NOT BE TAKEN, and the reason it could not is the useful
+// finding:
+//
+//   THIS PASS-THROUGH IS NOT A READ-DURING-WRITE *POLICY*. It is the mechanism
+//   that gives a bare `assign mem[idx]` read its SEMANTICS on a device with no
+//   asynchronous memory. A Cyclone V M10K cannot read combinationally, so
+//   Quartus builds a registered-read RAM and then adds logic to reproduce what
+//   the RTL says -- a read that sees the write of the same cycle. `no_rw_check`
+//   waives a CHOICE about collisions; it cannot waive the semantics of the
+//   source. That is why the attribute is inert here and would not be inert on a
+//   clocked-read array.
+//
+// The consequence for R117 condition 1 is direct: THE CHEAP REMOVAL DOES NOT
+// EXIST. The branch "removed by matching the RAM's native read-during-write
+// behaviour" means making the four reads explicitly synchronous -- which is a
+// cycle-level change to the block, exactly the follow-up the module header
+// already defers -- and not an attribute. The condition is therefore discharged
+// on the other branch, in writing, in the module header.
+//
+// The file is kept anyway, because "we tried the attribute" is otherwise an
+// argument the next lane has to have again from scratch.
+//
+// WHY IT WAS A PROBE AND NOT A PATCH -- and why it stays one.
+// no_rw_check is a PROMISE, and if it is ever false the hardware returns old
+// data where simulation returns new. The promise is stated in the module's own
+// MEMORY SHEET, per array, with reasons -- "no same-address read/write ... idx <
+// cnt_r always ... StCompact and StKeep write wr while reading rd, and write
+// only when wr != rd". That is a COMMENT. This lane did not have the simulation
+// evidence to turn it into a measurement, and CLAUDE.md is explicit that a
+// structural argument is not a demonstration. Shipping an attribute on the
+// strength of a header comment is the move this campaign keeps paying for, so
+// it is not shipped.
+//
+// WHAT WOULD LET IT SHIP: a same-address read-during-write detector inside the
+// block under `// synthesis translate_off` -- which Verilator DOES execute, see
+// CLAUDE.md -- run over the existing 246-lattice / 752-page differential
+// workload and seen to read zero, WITH a positive control proving it can fire.
+// Then the promise is measured and the attribute is free. That is a bounded
+// follow-up, not a rewrite, and it is named here so the next lane inherits the
+// task rather than the argument.
+//
+// REPRODUCE -- map only, seconds, not a fit. The project name is read as the
+// top-level entity and must equal the module name, or Quartus answers
+// `Error (12007): Top-level design entity "..." is undefined`:
+//
+//   cp tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv <scratch>/
 //   cd <scratch>
 //   quartus_map --family="Cyclone V" --part=5CSEBA6U23I7
-//       --source=zhao_forge_cliff_ram_bit0_latch_control.sv
-//       zhao_forge_cliff_ram_bit0_latch_control
-//   grep -c 10041 zhao_forge_cliff_ram_bit0_latch_control.map.rpt
+//       --source=zhao_forge_cliff_ram_norwcheck_probe.sv
+//       zhao_forge_cliff_ram_norwcheck_probe
+//   grep -c 276020 zhao_forge_cliff_ram_norwcheck_probe.map.rpt
 //
-// MEASURED 2026-09-23, both on 5CSEBA6U23I7 under Quartus 17.0.2:
-//
-//   this control (32-bit, +2)      Info (10041) x 1   <- the latch
-//   shipping     (31-bit pairs)    Info (10041) x 0
-//
-// and BOTH report the same four `Warning (276020)`, which is the second half of
-// the evidence: the pair fix moved the latch and moved nothing else.
-//
-// It is evidence about the INSTRUMENT, not about the design.
+// The module is RENAMED so no source list can elaborate it in place of the real
+// one, and it lives under tests/ where check_forbidden_sources.py will not find
+// it in a production closure.
 // ---------------------------------------------------------------------------
 // zhao_forge_cliff_ram.sv — FORGE.CLIFF, the bitmap-RAM CANDIDATE beside the
 // golden `zhao_forge_cliff.sv` (ALM-Liberation Roadmap §6 / §14 Commit6;
@@ -176,7 +229,7 @@
 // generate/endgenerate where used, elaboration checks inside `initial begin`,
 // no bare module-scope `if`. Lint: clean under `-Wall`.
 
-module zhao_forge_cliff_ram_bit0_latch_control (
+module zhao_forge_cliff_ram_norwcheck_probe (
     input logic clk,
     input logic rst_n,
 
@@ -237,7 +290,19 @@ module zhao_forge_cliff_ram_bit0_latch_control (
   localparam int unsigned PrimeLen = 4;       // 3 reads; data lands a cycle later, rotates on 1..3
   localparam int unsigned WalkFW   = 8;       // walk_fault_o width (saturating)
 
-  localparam logic [31:0] CntMax = 32'hFFFF_FFFF;
+  // R117 condition 2, as amended by R142 (NOT an adoption blocker -- the
+  // golden carries the identical latch in identical quantity -- but a latch
+  // cell is real area, so it is discharged here).  The map reported
+  // `Info (10041): Inferred latch for "triangles_submitted_o[0]"`.  It was
+  // never a missing combinational branch: C3 advanced the counter by
+  // `+ 32'd2` because it counts triangles in PAIRS, so bit 0 is provably
+  // constant zero for all time, and THAT constant bit is what Quartus
+  // latched.  The remedy R142 named is taken verbatim -- count PAIRS in 31
+  // bits and shift at the port -- so the LSB becomes a literal `1'b0` the
+  // fitter ties off instead of a latched constant.  Every emitted value is
+  // bit-identical, the saturation point is unmoved, and the PORT is untouched
+  // in name, width and direction, so no generated top needs regenerating.
+  localparam logic [30:0] PairMax = 31'h7FFF_FFFF;  // pairs*2 < 32'hFFFF_FFFE
 
   localparam logic [3:0] StIdle      = 4'd0;
   localparam logic [3:0] StLoad      = 4'd1;
@@ -255,9 +320,9 @@ module zhao_forge_cliff_ram_bit0_latch_control (
   localparam logic [3:0] StEmit      = 4'd13;
 
   initial begin
-    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: WinAW too narrow for WinDim");
-    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: RowW must equal WinDim (one row per word)");
-    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram_bit0_latch_control: EIW too narrow for MaxEdges");
+    if (WinDim > (1 << WinAW)) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: WinAW too narrow for WinDim");
+    if (RowW != WinDim) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: RowW must equal WinDim (one row per word)");
+    if (MaxEdges > (1 << (EIW - 1))) $fatal(1, "zhao_forge_cliff_ram_norwcheck_probe: EIW too narrow for MaxEdges");
   end
 
   // ===========================================================================
@@ -278,12 +343,16 @@ module zhao_forge_cliff_ram_bit0_latch_control (
   logic [2:0]       prime_k_r;
 
   // the payload tables — same geometry as the golden, one write site each.
-  logic [ 11:0]   edge_key_r  [0:MaxEdges-1];  // {cj[4:0], ci[4:0], side[1:0]}
-  logic [  5:0]   edge_span_r [0:MaxEdges-1];  // span[5:0]
-  logic [ 31:0]   prio_mem_r  [0:MaxEdges-1];
-  logic [ 16:0]   run_mem_r   [0:MaxRuns-1];   // {start[10:0], len[5:0]}
+  (* ramstyle = "no_rw_check" *) logic [ 11:0] edge_key_r  [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [  5:0] edge_span_r [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [ 31:0] prio_mem_r  [0:MaxEdges-1];
+  (* ramstyle = "no_rw_check" *) logic [ 16:0] run_mem_r   [0:MaxRuns-1];
   logic [EIW-1:0] cnt_r;
   logic [RIW-1:0] runs_r;
+
+  // C3's pair counter -- see PairMax above.  `triangles_submitted_o` is driven
+  // continuously from it, so its bit 0 is a constant and not a register bit.
+  logic [30:0]    tri_pairs_r;
 
   logic [5:0]     sc_ci_r, sc_cj_r;
   logic [1:0]     sc_side_r;
@@ -566,6 +635,8 @@ module zhao_forge_cliff_ram_bit0_latch_control (
   // ===========================================================================
   assign cmd_ready_o    = (st_r == StIdle);
   assign ld_ready_o     = (st_r == StLoad);
+  assign triangles_submitted_o = {tri_pairs_r, 1'b0};
+
   assign idle_o         = (st_r == StIdle);
   assign edge_valid_o   = (st_r == StEmit) && emit_live_r;
   assign edge_ci_o      = pg_ci_r + {11'd0, emit_e_r[12:8]};
@@ -632,7 +703,7 @@ module zhao_forge_cliff_ram_bit0_latch_control (
       emit_e_r    <= 18'd0;
       emit_live_r <= 1'b0;
       page_done_r <= 1'b0;
-      triangles_submitted_o <= 32'd0;
+      tri_pairs_r           <= 31'd0;
       walk_fault_o <= {WalkFW{1'b0}};
     end else begin
       page_done_r <= 1'b0;
@@ -932,8 +1003,8 @@ module zhao_forge_cliff_ram_bit0_latch_control (
           if (emit_live_r) begin
             if (edge_ready_i) begin
               emit_live_r <= 1'b0;
-              if (triangles_submitted_o < (CntMax - 32'd1)) begin
-                triangles_submitted_o <= triangles_submitted_o + 32'd2;  // C3
+              if (tri_pairs_r < PairMax) begin
+                tri_pairs_r <= tri_pairs_r + 31'd1;  // C3 -- ONE PAIR = 2 tris
               end
               idx_r <= idx_r + step_c;
             end

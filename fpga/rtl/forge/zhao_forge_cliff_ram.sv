@@ -102,6 +102,75 @@
 //   2048x12 -> 3; 2048x6 -> 2; 2048x32 -> 7; 1024x17 -> 2. Total 15.
 //
 // ---------------------------------------------------------------------------
+// THE FOUR `Warning (276020)` -- ACCEPTED IN WRITING, WITH THEIR COST
+// (R117 condition 1, as amended by R142. Discharged here 2026-09-23.)
+// ---------------------------------------------------------------------------
+// The F-CLIFF1 gate demanded `ramConversionWarnings 0` and the map reports
+// FOUR. R117 required them "either accepted in writing with their cost, or
+// removed by matching the RAM's native read-during-write behaviour." This is
+// the acceptance, and it is written here rather than in a run folder because a
+// run folder is orphaned by the next pass.
+//
+// WHICH FOUR. Predicted from this source and then confirmed by the instrument,
+// in that order. Of the five inferred memories, exactly one -- `win_mem` -- is
+// read inside a clocked block. The other four are written in an `always_ff` and
+// read by a bare `assign` (`edge_rd_c`, `run_rd_c`, `prio_rd_c`), and the map
+// names those four and only those four:
+//
+//     edge_key_r_rtl_0   edge_span_r_rtl_0   prio_mem_r_rtl_0   run_mem_r_rtl_0
+//
+// `win_mem`, the one with the registered read, is absent from the list. This is
+// the third instance of the shape `reports/PREDICTION-forge-cliff-ram.md` names
+// -- after `uvw_m` and `fragment_m` -- and the first where the prediction was
+// written down before the report was read.
+//
+// THEIR COST, stated three ways, because only one of them is a budget number.
+//
+//   AREA: none additional. The fitted 976 ALM on 5CSEBA6U23I7 was measured on
+//   RTL that already contains all four. They are inside the number the campaign
+//   quotes, not a charge on top of it.
+//
+//   AGAINST THE RIVAL: none. R142 measured the golden `zhao_forge_cliff` and
+//   found it carries EXACTLY FOUR as well. Neither is introduced by this
+//   implementation; both are costs of the design in either shape, and quoting
+//   them as the price of the swap would be the one-sided comparison R142 says
+//   it committed once already.
+//
+//   TIMING: real, and this is the cost that is actually owed. The fit's worst
+//   internal path launches from
+//   `edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG`
+//   -- one of these four. A write enable launching a data path is the signature
+//   of exactly this bypass logic. So the four do not cost ALMs; they cost the
+//   block's gating path, and the fit's own honest summary says the clock is
+//   unmeasured.
+//
+// AND THE CHEAP REMOVAL DOES NOT EXIST -- measured, not assumed.
+// `tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv` is this file with
+// `(* ramstyle = "no_rw_check" *)` on all four declarations and nothing else
+// changed. Mapped on the same part with the same settings it reports the SAME
+// four warnings, 1,326 combinational ALUTs, 826 registers and an 889-ALM
+// estimate -- every number identical, and `ramstyle` never mentioned in the
+// report.
+//
+// The reason is worth keeping, because it is not obvious and it took a map to
+// see: THIS PASS-THROUGH IS NOT A READ-DURING-WRITE POLICY. A Cyclone V M10K
+// cannot read combinationally, so a bare `assign mem[idx]` read must be built
+// as a registered-read RAM plus logic that reproduces what the source says --
+// a read that sees the same cycle's write. `no_rw_check` waives a CHOICE about
+// collisions; it cannot waive the semantics of the source. The attribute would
+// bite on a clocked-read array and is inert on these.
+//
+// So the removal branch means what this header already said under MEMORY SHEET:
+// "Making the reads explicitly synchronous is the named follow-up, not this
+// commit." That is a cycle-level change to the block, it moves the differential
+// test's recorded cycle figures, and it is a piece of engineering rather than an
+// attribute. It is NOT done here, it is not a blocker (R142), and it is the
+// right next thing for whoever wants this block's Fmax.
+//
+// Evidence: `zhao_forge_cliff_ram@cliffadopt-latchfix` (map_only, 32.6 s,
+// digest 896d60de3a5e) and the two committed probes under tests/mutants/.
+//
+// ---------------------------------------------------------------------------
 // THE ONE NEW INSTRUMENT
 // ---------------------------------------------------------------------------
 // `walk_fault_o` counts a span walk (StCompact, or StKeep/StEmit while

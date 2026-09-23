@@ -126,6 +126,74 @@ module changed category. Nothing lost coverage.
 candidate, so neither is an adoption blocker -- they are costs of the design, not
 of the swap.
 
+#### BOTH CONDITIONS ARE DISCHARGED -- 2026-09-23, packet `gz/cliffadopt`
+
+**And no fit was spent doing it.** The lane arrived authorised to run a leaf fit
+of the golden, on a brief stating that only one half of the fit-minus-fit
+comparison existed today. **It already existed.**
+`zhao_forge_cliff@golden-for-F-CLIFF1` landed 2026-09-20 18:20 at **6,674 ALM**,
+its `.sources.sha256` (`445a89ba...`) matches `fpga/rtl/forge/zhao_forge_cliff.sv`
+in the tree today, and R142 is the reading of it. Re-running it would have
+measured a circuit already measured. **The authorised fit was refused on the
+ground that it was redundant** -- another false-absence claim attached to this
+very gate, which is now the third time this pair of blocks has produced one.
+
+What was spent instead: the committed leaf map row at **32.6 s**, plus **two
+hand-run leaf `quartus_map` runs of about 33 s each** for the controls. R109
+itself draws the distinction ("It is a `quartus_map`, not a fit"), so this is
+strictly less than the authorisation rather than more.
+
+**Condition 2 -- the bit-0 latch -- REMOVED AND MEASURED.**
+`triangles_submitted_o` is now `{tri_pairs_r, 1'b0}` over a 31-bit pair counter,
+which is R142's own named remedy taken verbatim.
+`zhao_forge_cliff_ram@cliffadopt-latchfix` reports `Info (10041)` **zero times**.
+The zero is not quoted on its own: the report carries 584 `Info` lines, so the
+category is live, and
+`tests/mutants/zhao_forge_cliff_ram_bit0_latch_control.sv` -- the pre-fix counter,
+renamed, polarity inverted so it passes when the latch fires -- reports the latch
+**once**. Both runs carry the same four `Warning (276020)` and identical
+1,326 ALUT / 826 register / 120,964 bit / 2 DSP numbers, so the fix moved the
+latch and moved nothing else.
+
+**Condition 1 -- the four `Warning (276020)` -- ACCEPTED IN WRITING, WITH THEIR
+COST**, in `zhao_forge_cliff_ram.sv`'s own header, because a run folder is
+orphaned by the next pass. They are `edge_key_r`, `edge_span_r`, `prio_mem_r` and
+`run_mem_r` -- predicted from the source (the four tables written in an
+`always_ff` and read by a bare `assign`) *before* the report was read, and the
+report names those four and only those four. `win_mem`, the one with a clocked
+read, is absent. The cost is **no additional area** (the fitted 976 ALM was
+measured on RTL that already contains all four), **no differential cost** (R142
+measured exactly four on the golden too), and **a real timing cost** -- the fit's
+worst internal path launches from `edge_key_r_rtl_0|...~PORT_B_WRITE_ENABLE_REG`,
+one of these four.
+
+**The cheap removal was tried and measured not to exist.**
+`tests/mutants/zhao_forge_cliff_ram_norwcheck_probe.sv` puts
+`(* ramstyle = "no_rw_check" *)` on all four declarations and nothing else, and
+changes **not one number**: same four warnings, same 1,326 ALUT, same 826
+registers, same 889-ALM estimate, and `ramstyle` never mentioned in the report.
+The reason is the part worth keeping -- **this pass-through is not a
+read-during-write POLICY.** A Cyclone V M10K cannot read combinationally, so a
+bare `assign mem[idx]` read must be built as a registered-read RAM plus logic
+that reproduces what the source says. `no_rw_check` waives a *choice* about
+collisions; it cannot waive the *semantics* of the source. Removal therefore
+means making the four reads synchronous -- the follow-up this module's header
+already defers, a cycle-level change that moves the differential test's recorded
+figures, and not a blocker (R142).
+
+**What is still NOT done, and is refused with evidence: COMPOSITION.** Re-measured
+at this base rather than inherited. `solid` as an output-port suffix across every
+subdirectory of `fpga/rtl`: **zero hits**. `vdist`: four files, and in
+`zhao_console_core.sv` **every occurrence is a comment** -- no port, no wire. The
+only live references sit in `zhao_prod_top.sv`, the generated **pricing** top
+whose own header says "Blocks are not wired to each other", feeding the block
+from `assign u09_src = {16{u09_lfsr_q}}`. That is an LFSR, not a producer. All
+three inputs -- page command, 34x34 solid window, vdist read master -- still have
+none, so wiring FORGE.CLIFF today would tie off three inputs and change no pixel.
+`completion_register.py` stays at **13** and `zhao_forge_cliff_ram` stays under
+BUILT BUT NOT CONNECTED, honestly.
+
+
 *(Original entry, kept because its reasoning is why the fit was worth spending:)*
 
 ### ~~F-CLIFF-GOLDEN~~ -- the question, as posed before the run
