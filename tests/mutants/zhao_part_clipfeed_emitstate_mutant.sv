@@ -1,3 +1,41 @@
+// zhao_part_clipfeed_emitstate_mutant.sv -- A COMMITTED MUTANT. NOT PRODUCTION RTL.
+//
+// WHAT WAS CHANGED, and it is ONE line
+// ------------------------------------
+// `o_frag_state_o`'s two law bits are taken from the INPUT PORTS
+// (`p_depth_test_i`, `p_depth_write_i`) instead of from the ring record's own
+// copy (`hd_ztest_c`, `hd_zwdis_c`). The module is renamed so no source list
+// can elaborate it by mistake.
+//
+// WHY IT HAS TO EXIST
+// -------------------
+// `zhao_part_clipfeed` carries `zhao_part_expand`'s pass-7 law to
+// GEOM.CLIPDOOR (core entry I51). In this console that law is the CONSTANT
+// pair 1/0 for every particle ever produced -- so under the shipping stimulus
+// the mutated design and the correct design emit THE SAME WORD, on every beat,
+// forever. `part_clipfeed_directed` section 6 is the only thing that can tell
+// them apart, and it can do so only because it drives the two bits per
+// particle and shuts the sink. A check whose failure mode has never been
+// observed is a claim, and CLAUDE.md is explicit that it is the claim to check
+// hardest.
+//
+// So this file is evidence ABOUT THE INSTRUMENT, not about the design. Its
+// driver, `tests/particles/part_clipfeed_emitstate_mutant_control.cpp`, has
+// INVERTED POLARITY: it passes when the emitted word DISAGREES with the
+// accepted record. Section 6's green is quoted only because this shows it is
+// not blind.
+//
+// THE FAULT IT STANDS FOR IS REAL AND IS THIS REPOSITORY'S OWN. It is the
+// metadata-swap shape from CLAUDE.md: the ring's head is a particle accepted
+// some clocks ago, so reading a live input at the emit pairs record A's
+// geometry with record B's state -- with `particles_o` and `triangles_o`
+// balancing perfectly, because no counter in the block looks at the field that
+// moved.
+//
+// REGENERATE IT if `zhao_part_clipfeed.sv` changes shape. This is a COPY, and
+// a copy of an old version is a positive control for a block that no longer
+// exists. `tools/budget/mutant_copy_drift.py` watches for exactly that.
+//
 // zhao_part_clipfeed.sv -- PART.EXPAND's fan, made into a GEOM.CLIPDOOR client.
 //
 // ENFORCED-BY: tests/particles/part_clipfeed_directed.cpp:main
@@ -205,7 +243,7 @@
 // inline `for (genvar ...)`, loop variables declared inside their block).
 `default_nettype none
 
-module zhao_part_clipfeed #(
+module zhao_part_clipfeed_emitstate_mutant #(
     // GEOM.CLIP's ruling-5 attribute packet.
     parameter int unsigned ATTRS      = 7,
     parameter int unsigned IDW        = 16,
@@ -513,8 +551,12 @@ module zhao_part_clipfeed #(
   wire        [ 7:0] hd_b_c  = head_tri_c[IDW+LAWW+7  -: 8];
   wire [IDW-1:0]     hd_id_c = head_tri_c[IDW+LAWW-1 -: IDW];
   // THE ACCEPTED PARTICLE'S OWN LAW, not the one being offered now.
+  /* verilator lint_off UNUSEDSIGNAL */
+  // MUTANT ONLY: the mutation below ignores these, which is the fault. The
+  // waiver is here so the mutant lints clean; production reads both.
   wire               hd_ztest_c = head_tri_c[1];
   wire               hd_zwdis_c = head_tri_c[0];
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // THE EXACT LEFT INVERSE of `zhao_raster_tile_pipe_v2::lit_unit8`, which is
   // `v[15:8]` saturating: `lit_unit8({16'd0, c, 8'd0}) == c` for all 256 bytes.
@@ -575,7 +617,9 @@ module zhao_part_clipfeed #(
   // REPLACED -- not OR-ed -- by the record's own two. `draw_population`'s law
   // is "test only, no write", so a particle declaring `depth_write = 0` sets
   // the word's DISABLE bit; the polarity flip lives here and nowhere else.
-  assign o_frag_state_o = {PART_FRAG_STATE_BASE[31:2], hd_zwdis_c, hd_ztest_c};
+  // THE MUTATION. Production reads the RING's copy of the accepted particle's
+  // law (`hd_zwdis_c`, `hd_ztest_c`); this reads the INPUT PORTS at the emit.
+  assign o_frag_state_o = {PART_FRAG_STATE_BASE[31:2], !p_depth_write_i, p_depth_test_i};
 
   wire emit_c = o_valid_o && o_ready_i;
 

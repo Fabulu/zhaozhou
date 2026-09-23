@@ -4662,88 +4662,77 @@
 //      the same chain around a played HPS, rather than by the smoke bench.)
 //
 //
-// I51. THE PER-PRIMITIVE RASTER STATE (`render_state_i`) -- DISCONNECTED, and
-//      NOT PARTICLE-SPECIFIC. NEW 2026-09-22 (PARTMAT), declared under R159 in
-//      the same commit as the work that found it.
+// I51 IS CLOSED AND DELETED, 2026-09-23 (PARTDEPTH). THE PER-PRIMITIVE RASTER
+//      STATE. The entry is kept as the sentences that say what closed it, what
+//      its own first paragraph got wrong, and what is deliberately NOT claimed
+//      by closing it -- because it was wrong for a day in a way that is worth
+//      being able to find again.
 //
-//      WHAT IS MISSING. `zhao_part_expand` produces the pass-7 law per
-//      particle -- `t_depth_test_o` = 1 and `t_depth_write_o` = 0, from
-//      `draw_population`'s own "pass-7 law: test only, no write" -- and both
-//      leave this module as boundary outputs with NO INTERNAL CONSUMER. They
-//      cannot have one, because the geometry path has no per-primitive carrier
-//      for a depth mode.
+//      WHAT IT SAID WAS MISSING. `zhao_part_expand`'s `t_depth_test_o` (1) and
+//      `t_depth_write_o` (0) -- `draw_population`'s "pass-7 law: test only, no
+//      write" -- left this module as boundary outputs with NO INTERNAL
+//      CONSUMER, and "they cannot have one, because the geometry path has no
+//      per-primitive carrier for a depth mode".
 //
-//      WHY IT IS NOT A PARTICLE PROBLEM, which is the part worth writing down.
-//      The raster state word is `render_state_i`, a BOUNDARY INPUT of this
-//      module, sampled once per tile job at
-//      `zhao_raster_tile_pipe.job_state_i` and held in `state_r`. NO producer
-//      in this console supplies it per primitive -- not GEOM.REPLAY, not the
-//      forge, not terrain. GEOM.CLIP carries `cull_mode` and CONSUMES it
-//      internally; nothing downstream of GEOM.SETUP takes a depth mode from a
-//      triangle at all. So a mesh and a particle in the same frame are drawn
-//      under the same externally-supplied state, and that was true before this
-//      entry existed.
+//      WHY THAT WAS WRONG, corrected here in place on 2026-09-23 by SHADOWRIDE
+//      and confirmed independently by this packet before it built anything.
+//      Every clause of it described `zhao_raster_tile_pipe`, THE V1 BLOCK,
+//      which is superseded and is not in this console's closure. The composed
+//      `zhao_raster_tile_pipe_v2` takes the fragment state from JOB METADATA --
+//      `job_meta_i[377:346]`, packed by `zhao_geom_bin_pipe_v2.sv:266` from
+//      this module's `tri_fragment_state_i` and decoded in
+//      `zhao_raster_fragment` -- so the per-primitive carrier the entry called
+//      "a subsystem" had been composed the whole time. The entry's own name for
+//      the word, `render_state_i`, is a DIFFERENT PORT that reaches a `^`
+//      reduction inside `zhao_shell_top_v2` and nothing else; reading that as
+//      the raster state is the mistake the entry was built on.
 //
-//      ===================================================================
-//      THE PARAGRAPH ABOVE DESCRIBES A SUPERSEDED BLOCK, AND THAT MATTERS
-//      (corrected 2026-09-23, SHADOWRIDE, while composing FORGE.SHADOW)
-//      ===================================================================
-//      `zhao_raster_tile_pipe` is the V1 block. It is superseded, it is not
-//      in this console's closure, and `zhao_raster_tile_pipe_v2` -- which IS
-//      -- does not take the fragment state from `render_state_i` at all. It
-//      takes it from the JOB METADATA: `incoming_fragment_state_w =
-//      job_meta_i[377:346]`, packed by `zhao_geom_bin_pipe_v2.sv:266` from
-//      THIS MODULE'S `tri_fragment_state_i`, carried to
-//      `zhao_raster_fragment.frag_state_i` and decoded there into Z_TEST_EN,
-//      Z_WRITE_DIS, BLEND and the rest.
+//      WHAT CLOSED IT, and it is one mux at a port that already existed.
+//      `u_geom_clipdoor`'s `c_frag_state_i` slice for PART.CLIPFEED was the
+//      named constant `PART_FRAG_STATE`. It is now `zhao_part_clipfeed`'s own
+//      `o_frag_state_o`, which carries PART.EXPAND's two bits -- captured WITH
+//      the particle at the ring's accept, not read at the emit, because the
+//      ring's head is a particle accepted some clocks earlier and an input read
+//      then is a later particle's law on this one's beat. The block keeps
+//      `PART_FRAG_STATE` as the base for the thirty bits no producer in this
+//      console declares, and refuses at elaboration a base that claims [1:0].
 //
-//      SO THE PER-PRIMITIVE CARRIAGE THIS ENTRY SAYS WOULD BE "A SUBSYSTEM"
-//      ALREADY EXISTS AND IS COMPOSED. What was missing was a PRODUCER at
-//      this module's edge, and entry I20 now has one for three of the word's
-//      bits -- BLEND, Z_TEST_EN and Z_WRITE_DIS -- declared per client at
-//      `u_geom_clipdoor` and latched per span by `u_material_window`.
+//      AND IT MOVES PIXELS, which is the test that matters. The constant was
+//      state zero: Z_TEST_EN=0 and Z_WRITE_DIS=0, i.e. every polygon particle
+//      PASSED the depth test unconditionally and WROTE the depth buffer. The
+//      pass-7 law is the opposite on both bits. Particles now occlude correctly
+//      behind geometry and no longer occlude what is drawn after them.
 //
-//      THIS ENTRY IS STILL OPEN AND THE REASON IS NOW A DIFFERENT ONE.
-//      PART.EXPAND's `t_depth_test_o` / `t_depth_write_o` are still boundary
-//      outputs with no internal consumer: the door's `c_frag_state_i` slice
-//      for PART.CLIPFEED is the named constant `PART_FRAG_STATE`, the frame
-//      default said out loud, and not the particle's own pass-7 law. Closing
-//      it is now a per-client mux at a port that exists rather than a field
-//      threaded through five blocks -- which is a much smaller piece of work
-//      than this entry has been recording, and it is still a piece of work
-//      this packet did not do, because PART.CLIPFEED's chain is not its
-//      commission.
+//      WHAT CLOSING IT DOES NOT CLAIM, said here so the next reader does not
+//      have to re-derive it:
+//        * `render_state_i` is STILL a port this console carries and nothing
+//          reads. That is not this entry and never was; it is a boundary port
+//          whose retirement is a shell question.
+//        * THE MESH ARM's state word is still `GEOM_REPLAY_FRAG_STATE`, the
+//          frame default, and that is not a gap. R28's `raster_state[31:2]` is
+//          a DIFFERENT 32-bit word from `zref_fragment.hpp`'s fragment state
+//          (both are called "state"; see the note near the top of this header),
+//          and R28 says [31:2] has "no ratified consumer in v1". No producer
+//          for a mesh's fragment state exists in the ABI, R224's docket for one
+//          was refused, and what is owed there is I20's, not this entry's.
+//        * The word's other thirty bits for a particle -- blend, alpha test,
+//          stencil, tag -- have no particle producer either. They are the
+//          base parameter, deliberately, and inventing them here would be a
+//          composer choosing a value it has no authority over.
 //
-//      `render_state_i` ITSELF IS A DIFFERENT QUESTION. Inside
-//      `zhao_shell_top_v2` it now reaches only a `^` reduction, so it is a
-//      port this console carries and nothing reads -- worth saying here
-//      because reading THAT as the raster state is what this entry did.
-//
-//      WHY NOTHING WAS ADDED TO CLOSE IT HERE. A per-primitive route is a
-//      field through GEOM.CLIPDOOR, GEOM.CLIP, GEOM.SETUP, GEOM.BINNER and the
-//      shell's triangle door -- a subsystem, on blocks that sit on the critical
-//      path of every triangle the console draws, and "a port on a leaf costs
-//      its WHOLE instantiation chain plus every bench". A port added at
-//      `zhao_part_clipfeed` alone would have nowhere to go: a tie-off wearing
-//      a port's clothes, which is this campaign's first prohibition.
-//
-//      WHAT OWNER RULING 1 SAYS ABOUT IT, read carefully rather than
-//      conveniently. It requires that particle state be "supplied according to
-//      the applicable existing producer/reference laws, NEVER INHERITED from
-//      the mesh that happened to run previously". In this console the
-//      applicable existing law IS the frame-scoped boundary word, for every
-//      producer equally -- so there is no previous mesh's state to inherit,
-//      because no per-primitive state exists to be inherited. That is a
-//      truthful reading and it is also an uncomfortable one, which is why it is
-//      declared as a GAP here instead of being argued as compliance.
-//
-//      WHAT WOULD CLOSE IT: a `depth_test`/`depth_write` pair (and, the day
-//      blending is per primitive, the rest of the state word) carried from the
-//      door to the shell's triangle door, with `render_state_i` becoming the
-//      FRAME DEFAULT that a primitive overrides rather than the only answer.
-//      PART.EXPAND's two outputs are the producer for the particle arm and are
-//      already correct; the mesh arm's producer is GEOM.REPLAY's raster word,
-//      of which only bits [1:0] are carried today.
+//      ENFORCED BY: `tests/particles/part_clipfeed_directed.cpp` SECTION 6,
+//      which drives the two inputs INDEPENDENTLY and per particle with the sink
+//      shut, then holds the PORTS at the opposite of the first queued record,
+//      and proves every emitted word follows the RECORD rather than the offer.
+//      Its POSITIVE CONTROL is separate and committed:
+//      `tests/mutants/zhao_part_clipfeed_emitstate_mutant.sv` is production
+//      with that one assign reading the input ports, and
+//      `tests/particles/part_clipfeed_emitstate_mutant_control.cpp` passes
+//      when it DISAGREES. Measured 6 disagreements of 8 beats, every one
+//      carrying the held port word -- so section 6's zero is a measurement and
+//      not a tautology. It needs to be: PART.EXPAND drives this law as the
+//      constant pair 1/0, under which a correct block and a swapping block emit
+//      byte-identical output forever.
 //
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
@@ -13732,6 +13721,7 @@ module zhao_console_core
   wire [15:0]        pcf_o_material_id;
   wire [ 1:0]        pcf_o_material_mode;
   wire [ 7:0]        pcf_o_quality_tier;
+  wire [31:0]        pcf_o_frag_state;
   wire               pcf_p_ready;
 
   // ==========================================================================
@@ -13803,14 +13793,28 @@ module zhao_console_core
     // producer's declaration belongs.
     .c_material_mode_i({pcf_o_material_mode, fa_o_material_mode, GEOM_REPLAY_MATERIAL_MODE}),
     // R89's FLAT PER-PRIMITIVE ALPHA and the RASTER STATE WORD, per client, on
-    // the same granted beat as the triangle and its material. GEOM.REPLAY and
-    // PART.CLIPFEED declare the opaque profile from named constants: that is
-    // the FRAME DEFAULT those producers have always been drawn under, said out
-    // loud at a port instead of inherited from a boundary word, and it is
-    // exactly the shape core entry I51 names -- "`render_state_i` becoming the
-    // FRAME DEFAULT that a primitive overrides rather than the only answer".
+    // the same granted beat as the triangle and its material. GEOM.REPLAY
+    // declares the opaque profile from named constants: that is the FRAME
+    // DEFAULT that producer has always been drawn under, said out loud at a
+    // port instead of inherited from a boundary word, and it is exactly the
+    // shape core entry I51 named -- "`render_state_i` becoming the FRAME
+    // DEFAULT that a primitive overrides rather than the only answer".
+    // PART.CLIPFEED is the first producer to OVERRIDE it (PARTDEPTH,
+    // 2026-09-23); FORGE.SHADOW overrides it on the forge arm through the
+    // assembler's per-job word.
+    // PARTDEPTH 2026-09-23: the PARTICLE arm's state word is no longer the
+    // constant `PART_FRAG_STATE`. It is `zhao_part_clipfeed`'s own port,
+    // carrying `zhao_part_expand`'s `t_depth_test_o` / `t_depth_write_o` --
+    // `draw_population`'s "pass-7 law: test only, no write" -- captured with the
+    // particle at the ring's accept and presented at the door on that
+    // particle's own beat. `PART_FRAG_STATE` survives as the base the block
+    // takes for the thirty bits no producer here declares, so the frame default
+    // is still a knob and the two bits that have a producer come from it.
+    // THIS IS NOT A RESTATEMENT OF THE DEFAULT: the constant said Z_TEST_EN=0
+    // and Z_WRITE_DIS=0, i.e. particles always passed the depth test and wrote
+    // the depth buffer. The law says test and do not write. Pixels move.
     .c_vertex_alpha_i({PART_VERTEX_ALPHA, fa_o_vertex_alpha, GEOM_REPLAY_VERTEX_ALPHA}),
-    .c_frag_state_i  ({PART_FRAG_STATE,   fa_o_frag_state,   GEOM_REPLAY_FRAG_STATE}),
+    .c_frag_state_i  ({pcf_o_frag_state,  fa_o_frag_state,   GEOM_REPLAY_FRAG_STATE}),
     .c_quality_tier_i({pcf_o_quality_tier, fa_o_quality_tier, rp_o_quality_tier}),
 
     .o_valid_o       (cd_o_valid),
@@ -20594,7 +20598,11 @@ module zhao_console_core
     .SLOT_G     (GEOM_ATTR_SLOT_G),
     .SLOT_B     (GEOM_ATTR_SLOT_B),
     .SLOT_ALPHA (GEOM_ATTR_SLOT_ALPHA),
-    .PART_ALPHA (PART_ALPHA)
+    .PART_ALPHA (PART_ALPHA),
+    // THE THIRTY BITS WITH NO PARTICLE PRODUCER, still the owner's knob and
+    // still the frame default. The block refuses a base that sets [1:0] at
+    // elaboration, because those two are PART.EXPAND's to declare.
+    .PART_FRAG_STATE_BASE (PART_FRAG_STATE)
   ) u_part_clipfeed (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -20614,6 +20622,12 @@ module zhao_console_core
     .p_g_i      (part_exp_g_o),
     .p_b_i      (part_exp_b_o),
     .p_src_id_i (part_exp_src_id_o),
+    // REAL: PART.EXPAND's PASS-7 LAW, on the same fork beat as the fan above.
+    // These two nets have been boundary outputs of this module with NO INTERNAL
+    // CONSUMER since PART.EXPAND was composed -- core entry I51's last open
+    // clause. They still leave the module; they are now also read.
+    .p_depth_test_i (part_exp_depth_test_o),
+    .p_depth_write_i(part_exp_depth_write_o),
 
     // REAL: client 2 of GEOM.CLIP's door.
     .o_valid_o        (pcf_o_valid),
@@ -20635,6 +20649,7 @@ module zhao_console_core
     .o_material_id_o  (pcf_o_material_id),
     .o_material_mode_o(pcf_o_material_mode),
     .o_quality_tier_o (pcf_o_quality_tier),
+    .o_frag_state_o   (pcf_o_frag_state),
 
     .particles_o    (part_cf_particles_o),
     .triangles_o    (part_cf_triangles_o),
@@ -24183,10 +24198,19 @@ module zhao_console_core
   // each producer DECLARES its profile at `u_geom_clipdoor`'s own port, the
   // door grants the declaration on the same beat as the triangle and the
   // material, and `u_material_window` latches all of it into one published
-  // record by one enable. GEOM.REPLAY and PART.CLIPFEED declare the opaque
-  // profile from named constants, which is the frame default they have always
-  // been drawn under; FORGE.PRIM declares its own; FORGE.SHADOW declares
-  // BLEND=ALPHA with Z_WRITE_DIS and its caster's strength.
+  // record by one enable. GEOM.REPLAY declares the opaque profile from named
+  // constants, which is the frame default it has always been drawn under;
+  // FORGE.PRIM declares its own; FORGE.SHADOW declares BLEND=ALPHA with
+  // Z_WRITE_DIS and its caster's strength; and PART.CLIPFEED declares
+  // Z_TEST_EN with Z_WRITE_DIS from `zhao_part_expand`'s pass-7 law, carried
+  // with the particle through that block's ring (PARTDEPTH, 2026-09-23).
+  //
+  // THE SWITCH IS WHAT KEEPS THEM APART. `zhao_material_window.match_c`
+  // includes `t_frag_state_i == pub_state_q`, so a producer whose word differs
+  // from the published one forces a span switch and a DRAIN before its own
+  // word is published. A mesh in flight therefore finishes under its own state
+  // when a particle arrives behind it, which is the structural reason a
+  // per-primitive declaration here does not become a per-frame race.
   //
   // THE OTHER THREE FIELDS OF THE TAIL STAY A BOUNDARY, and deliberately.
   // `effect_tag` is R195's bloom selector and the smoke drives it from outside

@@ -16378,6 +16378,31 @@ add_test(NAME lint_part_clipfeed
 set_tests_properties(lint_part_clipfeed PROPERTIES
   LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---- PART.CLIPFEED's fragment-state carriage: THE POSITIVE CONTROL --------
+# `part_clipfeed_directed` section 6 asserts that the pass-7 law emitted at the
+# door is the ACCEPTED particle's, not the one on the input ports at the emit.
+# In this console PART.EXPAND drives that law as the constant pair 1/0, so a
+# block that read the ports at the emit would be byte-identical under every
+# stimulus the console can produce -- section 6 is the only thing that can tell
+# them apart, and a green whose red has never been seen is a claim.
+#
+# This is the red. Same block, ONE line changed, INVERTED polarity: it passes
+# when the emitted word disagrees with the record. The negative control is
+# `part_clipfeed_directed` itself.
+add_executable(test_part_clipfeed_emitstate_mutant_control
+  particles/part_clipfeed_emitstate_mutant_control.cpp)
+target_link_libraries(test_part_clipfeed_emitstate_mutant_control PRIVATE zhao_harness)
+verilate(test_part_clipfeed_emitstate_mutant_control
+  PREFIX Vzhao_part_clipfeed_emitstate_mutant
+  TOP_MODULE zhao_part_clipfeed_emitstate_mutant
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_GEOM_VATTR_SOURCES}
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_part_clipfeed_emitstate_mutant.sv)
+add_test(NAME part_clipfeed_emitstate_mutant_control
+  COMMAND test_part_clipfeed_emitstate_mutant_control)
+set_tests_properties(part_clipfeed_emitstate_mutant_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_material_window_directed texture/material_window_directed.cpp)
 target_link_libraries(test_material_window_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_material_window_directed

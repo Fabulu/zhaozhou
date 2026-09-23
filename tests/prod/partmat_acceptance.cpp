@@ -108,13 +108,25 @@ struct Client {
   bool untex;
   Record rec;
   int want;          // triangles still to offer
+  // THE PER-PRIMITIVE RASTER STATE this producer declares at the door. Only
+  // the particle arm has a non-default one, and only since 2026-09-23: the
+  // composer feeds that slice `zhao_part_clipfeed.o_frag_state_o`, carrying
+  // `zhao_part_expand`'s pass-7 law, instead of the constant it fed before.
+  uint32_t frag_state = 0;
 };
+
+// `zhao_raster_fragment`'s word: [0] Z_TEST_EN, [1] Z_WRITE_DIS. Written out
+// here rather than taken from the DUT, for the same reason `kNoSampling` is:
+// the check is against the law, not against the block's opinion of itself.
+const uint32_t kFragStateOpaque = 0x0000'0000u;   // test off, depth written
+const uint32_t kFragStatePass7  = 0x0000'0003u;   // test on, depth NOT written
 
 // One triangle that passed R197's gate, with the material that was published
 // for it at that instant, and who produced it.
 struct Drawn {
   uint16_t src_id;
   uint8_t sample_count, recipe, weight, binding, response_class, mode;
+  uint32_t frag_state;
 };
 
 class Bench {
@@ -158,6 +170,7 @@ class Bench {
       d.binding = top_.pub_base_binding_o;
       d.response_class = top_.pub_response_class_o;
       d.mode = top_.pub_material_mode_o;
+      d.frag_state = top_.pub_frag_state_o;
       if (!top_.pub_valid_o) ++entered_unpublished_;
       span_.push_back(d);
       drawn_.push_back(d);
@@ -176,7 +189,8 @@ class Bench {
           t.weight != top_.pub_recipe_weight_o ||
           t.binding != top_.pub_base_binding_o ||
           t.response_class != top_.pub_response_class_o ||
-          t.mode != top_.pub_material_mode_o) {
+          t.mode != top_.pub_material_mode_o ||
+          t.frag_state != top_.pub_frag_state_o) {
         ++inflight_mismatch_;
       }
       ++disposed_;
@@ -246,6 +260,20 @@ class Bench {
     return n;
   }
 
+  // Every triangle from `src_id` carried exactly this raster state word, and
+  // there was at least one. The "at least one" half is not padding: without it
+  // a source that drew nothing passes vacuously, which is the shape of every
+  // green tick this repository has had to throw away.
+  bool frag_state_held(uint16_t src_id, uint32_t want) const {
+    int n = 0;
+    for (const Drawn& d : drawn_) {
+      if (d.src_id != src_id) continue;
+      ++n;
+      if (d.frag_state != want) return false;
+    }
+    return n > 0;
+  }
+
   // Every triangle from `src_id` carried exactly `r`.
   bool state_held(uint16_t src_id, const Record& r, int mode) const {
     for (const Drawn& d : drawn_) {
@@ -284,6 +312,7 @@ class Bench {
         top_.c2_valid_i = v; top_.c2_material_set_i = c.set;
         top_.c2_material_id_i = c.id; top_.c2_material_mode_i = c.mode;
         top_.c2_untex_i = c.untex; top_.c2_src_id_i = c.src_id;
+        top_.c2_frag_state_i = c.frag_state;
         break;
     }
   }
@@ -309,7 +338,12 @@ const Record kRecB{2, 5, 0xC3, 0x22, 0x02};   // sampling, class BIL
 
 Client mesh_a(int n) { return Client{0xAAAA'0001u, 7, 0x00A0, kModeBacked, false, kRecA, n}; }
 Client mesh_b(int n) { return Client{0xBBBB'0002u, 9, 0x00B0, kModeBacked, false, kRecB, n}; }
-Client particles(int n) { return Client{0, 0, 0x00C0, kModeNone, true, kNoSampling, n}; }
+// THE PARTICLE ARM DECLARES THE PASS-7 LAW, which is what
+// `zhao_part_clipfeed` now presents at this door: `draw_population`'s
+// "pass-7 law: test only, no write", i.e. Z_TEST_EN with Z_WRITE_DIS.
+Client particles(int n) {
+  return Client{0, 0, 0x00C0, kModeNone, true, kNoSampling, n, kFragStatePass7};
+}
 
 // Drive the three clients to completion, decrementing each as its own beats are
 // taken. The door's ready is per client, so this is the real producer shape.
@@ -514,6 +548,65 @@ int main(int argc, char** argv) {
           "4: carrying its own resolved record, in mode MATERIAL_BACKED");
     check_eq(b.top().mw_no_record_o, 0, "4: and no missing-material fault anywhere");
     check_eq(b.inflight_mismatch(), 0, "4: every in-flight profile held");
+  }
+
+  // ==========================================================================
+  // SECTION 5 -- THE PARTICLE'S OWN RASTER STATE SURVIVES THE INTERLEAVE.
+  //
+  // Core entry I51, closed 2026-09-23 (PARTDEPTH). `zhao_part_clipfeed` now
+  // declares `zhao_part_expand`'s pass-7 law at `zhao_geom_clipdoor`'s
+  // `c_frag_state_i`, where the composer used to feed a constant. Sections 1-4
+  // above prove the MATERIAL half of a producer's declaration survives the
+  // interleave; this is the same property for the RASTER half, which is a
+  // separate field latched by the same enable and therefore NOT covered by
+  // them -- `inflight_mismatch_` now watches it too, but only this section
+  // asserts the VALUES, and only here do the three clients disagree about it.
+  //
+  // WHY IT MATTERS THAT THEY DISAGREE. Before this closure every client
+  // declared state zero, so the window's `match_c` never saw the field change
+  // and no span switch was ever caused by it. A particle batch between two
+  // meshes now forces TWO MORE SWITCHES, each with a real drain -- and the
+  // thing that would be silently wrong is a mesh in flight finishing under the
+  // particle's state, or a particle drawing under a mesh's. Both leave every
+  // counter in this bench healthy.
+  //
+  // WHAT THIS DOES NOT PROVE: pixels. This is the door, the window and R197's
+  // gate, which is where the declaration lives; it is not the rasteriser, and
+  // it is not the console. `tb_zhao_console_core_smoke` cannot help -- its
+  // fixture's particles are ALL BEHIND THE EYE (projected=30 behind=30
+  // expanded=0), so PART.CLIPFEED is never reached at all, and the bench says
+  // so in its own output.
+  // ==========================================================================
+  {
+    Bench b;
+    b.set_record(0xAAAA'0001u, kRecA);
+    b.set_record(0xBBBB'0002u, kRecB);
+    b.set_pattern(5);                        // GEOM.CLIP ready 1 clock in 5
+    interleave(b, mesh_a(12), particles(10), mesh_b(12));
+
+    check_eq(b.drawn_by(0x00C0), 10, "5: every particle drew");
+    check_eq(b.drawn_by(0x00A0), 12, "5: mesh A drew");
+    check_eq(b.drawn_by(0x00B0), 12, "5: mesh B drew");
+
+    check(b.frag_state_held(0x00C0, kFragStatePass7),
+          "5: EVERY particle triangle entered the span under the PASS-7 law -- "
+          "Z_TEST_EN set, Z_WRITE_DIS set -- and not the frame default");
+    check(b.frag_state_held(0x00A0, kFragStateOpaque),
+          "5: and mesh A kept the opaque profile across the particle batch");
+    check(b.frag_state_held(0x00B0, kFragStateOpaque),
+          "5: and so did mesh B");
+    check_eq(b.inflight_mismatch(), 0,
+             "5: no raster state moved under a triangle that was already in the span");
+    check_eq(b.entered_unpublished(), 0, "5: nothing entered the span unpublished");
+    check_eq(b.top().mw_err_unpublished_o, 0, "5: the window's interlock held");
+    check_eq(b.top().mw_err_underflow_o, 0, "5: the drain accounting balanced");
+
+    // AND THE STIMULUS COULD HAVE FAILED. Two distinct words were in play; if
+    // the particle's law equalled the frame default, every check above would
+    // pass for a block that ignored the field entirely.
+    check(kFragStatePass7 != kFragStateOpaque,
+          "5: the two declarations are DIFFERENT words, so the checks above "
+          "discriminate");
   }
 
   std::printf("partmat_acceptance: %d check(s), %d failure(s)\n", checks, fails);
