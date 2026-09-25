@@ -14,11 +14,20 @@
 # INPUT PIN. There is not ONE register-to-register hold violation in the
 # design. Every launch point is a net that is INTERNAL in zhao_console_core:
 #
-#   lat_rsp_i      74 paths  <- {tcc_lat_wz, tcc_lat_wx, tcc_lat_h}
-#   serve_src_id_i 70 paths  <- terr_cc_serve_src_id_o
+#   lat_rsp_i      74 paths  <- {tcc_lat_wz, tcc_lat_wx, tcc_lat_h}, the compose
+#                               cache's registered lattice outputs
+#   serve_src_id_i 70 paths  <- terr_cc_serve_src_id_o. CHECKED RATHER THAN
+#                               ASSUMED, because this one is not like the other
+#                               four: that name IS a port of zhao_console_core.
+#                               But it is an OUTPUT, a telemetry tap, and the
+#                               net is DRIVEN INSIDE the core by
+#                               zhao_terrain_compcache_front's serve_src_id_o.
+#                               The path the feed sees is register-to-register
+#                               within the core; the port observes it and does
+#                               not source it.
 #   t_ready_i      49 paths  <- u_forge_jobarb2.b_t_ready_o
 #   v_ready_i       4 paths  <- u_forge_jobarb2.b_v_ready_o
-#   o0_lat_req_i    3 paths  <- spd_c_lat_req
+#   o0_lat_req_i    3 paths  <- spd_c_lat_req, TERRAIN.SPDESC's request
 #
 # A virtual pin models almost no input delay, so data arrives too early
 # relative to the clock and hold fails. Driven by a real registered source
