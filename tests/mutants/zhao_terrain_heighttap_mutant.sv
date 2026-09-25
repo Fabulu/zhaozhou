@@ -239,6 +239,33 @@ module zhao_terrain_heighttap_mutant #(
     // multi-cycle one. Valid with the answer when it has ground; these are
     // read straight off the registers the answer was computed from, so they
     // cannot disagree with it.
+    // terrain_rules 4.3's ratified return tuple is
+    // {class, top, bottom, velocity, matA, matB, weight, sheet} and the
+    // velocity member had no implementation anywhere -- not here, and not in
+    // zref::terrain::ColumnResult either. These four corners finish it.
+    //
+    // WHY THE CORNERS AND NOT AN INTERPOLATED ANSWER. This block already
+    // publishes THE CELL and lets the client run 4.3 on it: that is exactly
+    // what zhao_part_terrain_tap does with rsp_h00_o..rsp_h11_o, through its
+    // own single multiplier. Interpolating velocity HERE would be a second
+    // implementation of 4.3 in the same datapath, and would buy multipliers
+    // on a device already over on DSP to answer a question the client is
+    // already set up to answer. The triangle pick is then the SAME pick --
+    // the client has rsp_sh_o, rsp_wx00_o and rsp_wz00_o and decides
+    // un >= vn once -- so height and velocity structurally cannot choose
+    // different triangles, which they could if this block picked one and the
+    // client picked another.
+    //
+    // The word is height16 (s16), 4.2's frozen storage format, not fx16.
+    output var logic signed [15:0] rsp_v00_o,
+    output var logic signed [15:0] rsp_v10_o,
+    output var logic signed [15:0] rsp_v01_o,
+    output var logic signed [15:0] rsp_v11_o,
+    // ALL FOUR corners came from a completely written velocity plane.
+    // Presence travels with the result (owner directive section 1): absent
+    // means NOT MEASURED, and a zero word means MEASURED AS STILL. Those are
+    // different statements and a consumer needs both.
+    output var logic               rsp_vel_present_o,
     output var logic signed [31:0] rsp_h00_o,
     output var logic signed [31:0] rsp_h10_o,
     output var logic signed [31:0] rsp_h01_o,
@@ -272,6 +299,13 @@ module zhao_terrain_heighttap_mutant #(
     output var logic        [ 5:0] c_lat_vj_o,
     output var logic               c_lat_surface_o,
     input  var logic signed [31:0] c_lat_h_i,
+    // The VELOCITY word at the SAME vertex, on the SAME borrowed read.
+    // NEW 2026-09-26 (TERRVEL). It costs this block no extra cycle and no
+    // arithmetic: the compose cache answers it beside the height, and this
+    // block does with it exactly what it does with the height corners --
+    // hands the CELL to the client and lets the client interpolate.
+    input  var logic signed [15:0] c_lat_vel_i,
+    input  var logic               c_lat_vel_present_i,
     input  var logic signed [31:0] c_lat_wx_i,
     input  var logic signed [31:0] c_lat_wz_i,
     output var logic               c_cs_req_o,
@@ -354,6 +388,8 @@ module zhao_terrain_heighttap_mutant #(
 
   // ---- the four corners, the cell state, and the answer ----------------------
   logic signed [31:0] h00_q, h10_q, h01_q, h11_q;
+  logic signed [15:0] v00_q, v10_q, v01_q, v11_q;
+  logic               vpres_q;
   logic signed [31:0] wx00_q, wx10_q, wz00_q, wz01_q;
   logic [ 1:0]        sub_q;
 
@@ -674,6 +710,11 @@ module zhao_terrain_heighttap_mutant #(
       h10_q              <= '0;
       h01_q              <= '0;
       h11_q              <= '0;
+      v00_q              <= '0;
+      v10_q              <= '0;
+      v01_q              <= '0;
+      v11_q              <= '0;
+      vpres_q            <= 1'b0;
       wx00_q             <= '0;
       wx10_q             <= '0;
       wz00_q             <= '0;
@@ -713,10 +754,19 @@ module zhao_terrain_heighttap_mutant #(
 
       // Capture whichever borrowed read is landing now.
       case (lat_in_q)
-        S_C00: begin h00_q <= c_lat_h_i; wx00_q <= c_lat_wx_i; wz00_q <= c_lat_wz_i; end
-        S_C10: begin h10_q <= c_lat_h_i; wx10_q <= c_lat_wx_i; end
-        S_C01: begin h01_q <= c_lat_h_i; wz01_q <= c_lat_wz_i; end
-        S_C11: begin h11_q <= c_lat_h_i; end
+        // The velocity corner rides the SAME capture as its height corner, so
+        // the two cannot come from different vertices. vpres_q is SET by the
+        // first corner and ANDed by the other three: a cell is present only if
+        // every corner of it was, which is what the client's interpolation
+        // actually requires.
+        S_C00: begin h00_q <= c_lat_h_i; wx00_q <= c_lat_wx_i; wz00_q <= c_lat_wz_i;
+                     v00_q <= c_lat_vel_i; vpres_q <= c_lat_vel_present_i; end
+        S_C10: begin h10_q <= c_lat_h_i; wx10_q <= c_lat_wx_i;
+                     v10_q <= c_lat_vel_i; vpres_q <= vpres_q && c_lat_vel_present_i; end
+        S_C01: begin h01_q <= c_lat_h_i; wz01_q <= c_lat_wz_i;
+                     v01_q <= c_lat_vel_i; vpres_q <= vpres_q && c_lat_vel_present_i; end
+        S_C11: begin h11_q <= c_lat_h_i;
+                     v11_q <= c_lat_vel_i; vpres_q <= vpres_q && c_lat_vel_present_i; end
         default: ;
       endcase
 
@@ -829,6 +879,11 @@ module zhao_terrain_heighttap_mutant #(
   // in the corner states or at request capture, both of which are strictly
   // AFTER the cycle `rsp_valid_o` is high (capture happens at the END of the
   // IDLE cycle that cycle is), so on that cycle they are the answer's cell.
+  assign rsp_v00_o         = v00_q;
+  assign rsp_v10_o         = v10_q;
+  assign rsp_v01_o         = v01_q;
+  assign rsp_v11_o         = v11_q;
+  assign rsp_vel_present_o = vpres_q;
   assign rsp_h00_o  = h00_q;
   assign rsp_h10_o  = h10_q;
   assign rsp_h01_o  = h01_q;
