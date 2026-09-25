@@ -1,0 +1,8 @@
+﻿snapshot: 1 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 1 declared source(s)
+source digest: 6f86070661e8 over 1 file(s) -> zhao_attrsetup_mul_probe@probe-m0.sources.sha256
+INCOMPLETE: zhao_attrsetup_mul_probe kept its synthesis numbers (225 registers, 0 memory bits); ALMs and Fmax were 
+never produced.
+zhao_attrsetup_mul_probe@probe-m0  map_only            13.7s   ALM -
+WROTE C:\programmieren\zencrifice\gz-attrsetup\reports\synthesis\zhao_block_fit.json (210 block(s); 1 measured this 
+run)
