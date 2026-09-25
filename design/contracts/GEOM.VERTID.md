@@ -269,6 +269,46 @@ reports.
 `vid_stall_o` counts every clock GEOM.CLIP is held by this block, so the cost is
 a measurement rather than a worry.
 
+## The composed cost, MEASURED before and after
+
+The console smoke, run on the integration base `22745cb3` and on this work,
+same stimulus, same closure, in two worktrees:
+
+| | baseline | with GEOM.VERTID | |
+|---|---|---|---|
+| `paramarena verts` | **0** | **30** | the entry I53 closed |
+| `paramarena tris` | 8 (pre-clip) | 14 (post-clip) | a different, correct set |
+| `vertid refs / published / reused` | — | 42 / 30 / **12** | |
+| **raster pixels** | **2,560** | **2,560** | **unchanged** |
+| raster bursts / issued / retired | 160 / 94,720 / 94,720 | 160 / 94,720 / 94,720 | **unchanged** |
+| clip submitted/clipped/culled/setup | 16 / 2 / 0 / 14 | 16 / 2 / 0 / 14 | **unchanged** |
+| skin steady | 54.52 clk/vertex | 69.39 | +27.3% |
+| landings steady | 26.70 clk/landing | 33.97 | +27.2% |
+| replay steady | 74.33 clk/view-tri | 125.80 | +69.2% |
+| **frame span** | **1,410 clk** | **2,182 clk** | **+54.8%** |
+| `vid_stall_o` | — | 1,759 | clocks GEOM.CLIP was held |
+
+**The register moved and the pixels did not.** Those are two separate claims
+and they are answered separately.
+
+**THE COST IS THE SDRAM, NOT THE BLOCK.** The arena wrote 8 descriptors before
+and writes 30 vertices plus 14 descriptors now — 44 guard round trips where
+there were 8 — and each is a request, a verdict and four or two 64-bit beats
+through the real guard, arbiter, controller and SDRAM model. `vid_stall_o` is
+1,759 of the 2,182-clock frame, which is that traffic and not a stall inside
+this block.
+
+**AND THE SHARING IS ALREADY PAYING.** Without the identity space the same
+frame would have written **42** vertex records instead of 30 — every corner of
+every triangle, 40% more traffic, on a three-meshlet toy scene. At a full
+meshlet (64 vertices, 126 triangles) the ratio is 378 references to 64 records,
+which is the arithmetic R7's tier depends on.
+
+**This is a declared cost, not an absorbed one**, and it is the cost §4
+intends: the external arena exists to BE the render path (entry I55), so its
+traffic is the path's traffic. It is also the number the Measure's quota work
+will need, and it is written here rather than left to be rediscovered.
+
 ## The one thing a lint cannot answer: MEASURED under Quartus
 
 `quartus_map`, Quartus Prime Lite 17.0.2, 5CSEBA6U23I7, map-only, 320.9 s,
