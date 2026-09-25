@@ -122,10 +122,12 @@ module tb_terrain_downstream (
       .out_attr_a_o         (c_attr_a_unused),
       .out_attr_b_o         (c_attr_b_unused),
       .out_attr_c_o         (c_attr_c_unused),
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
       .out_key_a_o          (),
       .out_key_b_o          (),
       .out_key_c_o          (),
       .out_rider_o          (),
+      /* verilator lint_on PINCONNECTEMPTY */
       .out_flip_o           (c_flip_unused),
       .ret_valid_o          (ret_valid_o),
       .ret_verdict_o        (ret_verdict_o),

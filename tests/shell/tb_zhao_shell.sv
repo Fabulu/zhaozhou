@@ -1362,7 +1362,9 @@ module tb_zhao_shell (
       .out_src_id_o(cl_src_id),
       .out_untex_o(cl_untex),
       .out_attr_a_o(cl_attr_a), .out_attr_b_o(cl_attr_b), .out_attr_c_o(cl_attr_c),
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
       .out_key_a_o(), .out_key_b_o(), .out_key_c_o(), .out_rider_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
       .out_flip_o(dbg_clip_flip_o),
       .ret_valid_o(cl_ret_valid), .ret_verdict_o(cl_ret_verdict),
       .triangles_submitted_o(cl_sub), .triangles_clipped_o(cl_clipped),

@@ -4627,6 +4627,58 @@ blocks:
     deferred: false
     superseded_by: null
 
+  - id: GEOM.VERTID
+    name: Geometry identity space
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: >-
+      The console's ONE geometry identity space. Takes GEOM.CLIP's post-clip
+      triangles, publishes each corner as a GEOM.PARAMBUF ProjectedVertex the
+      first time its identity is seen in a frame, and emits the
+      TriangleDescriptor naming the three ids the ALLOCATOR handed back. The
+      identity is the console's own arena lookup key -- {domain, arena,
+      generation, index} -- held in a direct-mapped EXACT table, never a hash
+      and never a position comparison. Owner vacation directive section 4,
+      2026-09-23; console entry I53, closed 2026-09-25.
+    contract: design/contracts/GEOM.VERTID.md
+    phase: 8
+    owner_issue: ZH-121
+    inputs: [clipped_triangles]
+    outputs: [parambuf_records]
+    upstream: [GEOM.CLIP]
+    downstream: [GEOM.PARAMARENA]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one corner per lookup plus one arena op per published record
+    reference_model: null
+    tests:
+      directed: tests/geometry/geom_vertid_directed.cpp
+    counters: [vertid_tris, vertid_refs, vertid_published, vertid_reused, vertid_unshared, vertid_opens, vertid_sunk, vertid_index_oob, vertid_key_split, vertid_id_unnameable, vertid_seal_abort, vertid_stall]
+    counter_ports:
+      vertid_tris: vid_tris_o
+      vertid_refs: vid_refs_o
+      vertid_published: vid_published_o
+      vertid_reused: vid_reused_o
+      vertid_unshared: vid_unshared_o
+      vertid_opens: vid_opens_o
+      vertid_sunk: vid_sunk_o
+      vertid_index_oob: vid_index_oob_o
+      vertid_key_split: vid_key_split_o
+      vertid_id_unnameable: vid_id_unnameable_o
+      vertid_seal_abort: vid_seal_abort_o
+      vertid_stall: vid_stall_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: BUILT
+    maturity_log:
+      - state: BUILT
+        date: "2026-09-25"
+        commit: "ARENAID"
+        evidence: fpga/rtl/geometry/zhao_geom_vertid.sv
+    deferred: false
+    superseded_by: null
+
   - id: GEOM.PARAMWALK
     name: Geometry arena chunk walker
     kind: rtl

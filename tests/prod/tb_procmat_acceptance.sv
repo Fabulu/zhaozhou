@@ -898,10 +898,12 @@ module tb_procmat_acceptance #(
     .o_attr_a_o      (cd_o_attr_a),
     .o_attr_b_o      (cd_o_attr_b),
     .o_attr_c_o      (cd_o_attr_c),
+    /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
     .o_key_a_o       (),
     .o_key_b_o       (),
     .o_key_c_o       (),
     .o_rider_o       (),
+    /* verilator lint_on PINCONNECTEMPTY */
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),

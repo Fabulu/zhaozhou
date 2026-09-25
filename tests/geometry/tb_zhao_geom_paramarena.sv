@@ -381,11 +381,13 @@ module tb_zhao_geom_paramarena
       // exercise the identity space -- `geom_vertid_directed` does, with a
       // model of these very ports -- so they leave open. Declared rather than
       // omitted: a missing pin is what the next fit finds.
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
       .pv_accept_o (),
       .pv_id_o     (),
       .td_accept_o (),
       .td_id_o     (),
       .seal_fire_o (),
+      /* verilator lint_on PINCONNECTEMPTY */
 
       .scr_req_i  (scr_req_w),
       .scr_grant_o(scr_grant_o),

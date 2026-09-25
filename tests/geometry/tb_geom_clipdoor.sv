@@ -226,10 +226,12 @@ module tb_geom_clipdoor #(
       .o_attr_a_o       (o_attr_a_c),
       .o_attr_b_o       (o_attr_b_c),
       .o_attr_c_o       (o_attr_c_c),
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
       .o_key_a_o        (),
       .o_key_b_o        (),
       .o_key_c_o        (),
       .o_rider_o        (),
+      /* verilator lint_on PINCONNECTEMPTY */
       .o_material_set_o (o_material_set_o),
       .o_material_id_o  (o_material_id_o),
       .o_material_mode_o(o_material_mode_o),
