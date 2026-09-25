@@ -447,6 +447,178 @@ assets**: losing one costs a regeneration, not data.
 > which `resident_o` is structurally zero. **A named consumer reverts all of
 > this in one ledger line.**
 
+> **DECISION RECORD — `TERRAIN.COMPOSED_HEIGHT` AND `TERRAIN.COMPOSED_VELOCITY`
+> ARE NOT PUBLISHED, AND THEIR GUARD WINDOWS STAY SHUT. Packet COMPOSEPUB,
+> 2026-09-25, under the owner vacation directive's delegation.**
+>
+> **QUESTION.** Directive §1 says *"Height uses the existing composed-height
+> path. Velocity uses the existing TERRAIN.COMPOSED_VELOCITY region and a REAL
+> writer plus its intended reader(s)."* The coordinator's DECISION RECORD 2
+> (`reports/OWNER-RULINGS-20260919-EVENING.md`) had already measured that no
+> such path exists and commissioned the publication path for all four channels.
+> Before building a writer, this packet asked the question the directive itself
+> makes gating: **does a composed lattice in SDRAM have a CONSUMER?** *"A DMA
+> into unused memory is not a consumer."*
+>
+> **ANSWER: THE TWO CHANNELS DIVERGE, AND NEITHER SUPPORTS A WRITER TODAY.**
+>
+> **HEIGHT — the composed lattice ALREADY REACHES FOUR CONSUMERS, through
+> FABRIC, not through this region.** `zhao_terrain_patch` sums base + scar +
+> the live Earth field lanes into `top_o` (§3.4's `live_top`) and streams it
+> straight into `zhao_terrain_compcache_front`'s fill port, whose `st_top_i` is
+> labelled *"live_top, fx16 raw"*. That front serves TERRAIN.TESS,
+> `zhao_terrain_heighttap`, and through TERRAIN.TAPSHARE both **PART.COLLIDE**
+> and **FORGE.SHADOW**. So the composed height is neither unbuilt nor unread —
+> it is **unpublished**, which is a different fact, and a writer into this
+> region would be read by nothing. The front's own header states the intended
+> role of the region and that it is unbuilt: *"The full 256-patch composed
+> store is 256 × 2,178 B for heights plus as much again for velocity = 8.92
+> Mbit = 161% of this device's entire 5.53 Mbit of M10K … The SDRAM backing
+> attaches later on the FILL side without changing the serve ports."*
+> **"Attaches later" is the missing consumer**, and it is a re-stage path with
+> a policy, an allocator (*"frame-scoped and lives with the sequencer"*) and a
+> budget — not a writer.
+>
+> **VELOCITY — no consumer at ANY level, and its blocker is architectural
+> rather than a wire.** `efa_velocity` dead-ends in `zhao_console_core.sv`
+> beside `efa_material` and `efa_nav_cost`, all three declared and read by
+> nothing. Its named owner `zhao_terrain_velocity` is instantiated **only** in
+> the generated fit harness `zhao_prod_top.sv`, never in the console, and the
+> Earth adapter records why composing it is not a connection: it *"drives its
+> OWN 33×33 sweep, so joining it to the consumer's vertex stream is a scheduler
+> and a composer may not write one."* In the C++ reference, `compose_lattice`
+> pushes `TerrainVelocitySample` into `RenderResult::terrain_velocity`, which
+> **no production code reads** — only `render_golden`, `render_heightfield` and
+> `terrain_velocity_directed`. A velocity publisher would therefore serve a
+> lattice nothing anywhere consumes.
+>
+> **MEASUREMENT, with its control.** Across all 377 SystemVerilog files of
+> `fpga/rtl`, `COMPOSED_HEIGHT` and `COMPOSED_VELOCITY` appear on **ten lines
+> and every one is a comment**; `COMPOSED_HEIGHT_BASE`, `ZHAO_TERRAIN_COMPOSED*`
+> and the literal `0x0566` return **zero hits**. Control, same sweep, same
+> tree: `TERRAIN` returns **1,585**, so the search reached the files. There is
+> **no base constant** for either region in `zhao_pkg.sv`, and `zhao_mem_guard`
+> has exactly **two** bank-2 read arms — `terrain_rd_ok` and `devstore_rd_ok` —
+> with no third reachable.
+>
+> **AND IT DOES NOT FIT THE FRAME EITHER, which is a second and independent
+> argument.** `tools/budget/sdram_bandwidth.py` now carries the row
+> (`--with-composed-publish`). 2,304 B ÷ 64 = 36 fabric requests per slot per
+> channel; 256 patches × 36 × 2 channels = **18,432 write requests per frame**,
+> at four 16-byte bursts each:
+>
+> | ledger | grant-clocks | % frame |
+> |---|---|---|
+> | baseline, unchanged | 1,336,192 | **80.17%** |
+> | + composed publish (write side) | 2,073,472 | **124.41%** |
+> | + the fill-side backing read that would make it a consumer | 2,958,208 | **177.49%** |
+> | the same, at conflict spans | 4,578,880 | **274.73%** |
+>
+> The 124% column is the **flattering** one — hit spans, the best case of a
+> worst-on-worst workload — and none of it is a board result. Per directive §0
+> *a measured engineering impossibility is a finding, not permission to invent
+> a pass*, so it is recorded rather than designed around. The real driver is
+> the **dirty set**, since `zhao_terrain_patch` already reduces per-vertex dirt
+> to `subpatch_dirty_o`; at dirty fraction *d* the cost is *d ×* the row, and
+> the break-even against the ledger's own 19.83% headroom is **d ≈ 0.45** for
+> the write alone and **d ≈ 0.20** once the re-stage read is counted. **The
+> packet that builds the publisher owes that fraction measured on a real scene.**
+>
+> **CHOSEN OPTION.** Neither region is written, and **neither guard window is
+> opened**, on `TERRAIN.DEVSTORE`'s own six-day-old precedent recorded above:
+> ***"a window opened WITH its block, never ahead of it."*** The guard's
+> existing statement — *"RESIDENT_MIP_POOL, COMPOSED_HEIGHT, COMPOSED_VELOCITY,
+> WRITEBACK_STAGING and COMPOSED_MIP_POOL stay unmapped until the blocks that
+> touch them exist"* (`zhao_mem_guard.sv:244-251`) — **stands unamended**, and
+> this record is why it was re-examined and kept rather than overlooked.
+>
+> **ALTERNATIVE REJECTED.** Build the writer now and let the re-stage reader
+> follow in a later packet. Refused: it is exactly *"do not buy a gap with a
+> write nobody reads"*, it spends 44% of the frame to move no pixel, and it
+> would open a guard window ahead of its block six days after this document
+> ratified the opposite rule. **The precedent for refusing on consumer grounds
+> is already in this section** — owner ruling **R64** retired both mip pools
+> for having *"no consumer anywhere"*, and that is the same test applied to the
+> same kind of derived cache.
+>
+> **WHAT IS COMMISSIONED INSTEAD, and it is the consumer, not the writer.**
+> For HEIGHT: the compcache **fill-side backing path** — allocator, re-stage
+> policy driven by `taps_off_patch_o`, and the measured dirty fraction — is the
+> block that turns this region into a read. For VELOCITY: a consumer must exist
+> in fabric *before* a region can serve one, and reaching it runs through
+> directive §13.2's field-major `zhao_terrain_patch_v2`, because
+> `zhao_terrain_velocity`'s own sweep cannot be joined to the vertex stream by
+> a composer.
+>
+> **CONSEQUENCES.** No ABI act, no client id spent, no proof re-derivation:
+> `mem_guard_no_escape` is untouched because no arm changed. §5b's table is
+> unchanged. What this packet added instead is the **gate that observes the
+> consumer that does exist** — `tests/terrain/composepub_acceptance.cpp`, which
+> drives `zhao_field_earth_adapter` → `zhao_terrain_patch` →
+> `zhao_terrain_compcache_front` → `zhao_terrain_heighttap` and shows a live
+> Earth field changing the height PART.COLLIDE and FORGE.SHADOW read (80
+> checks, 0 failures). Before it, §3.4's field sum had **never had a non-empty
+> term in any bench of the real chain**.
+
+> **DECISION RECORD — THE RATIFIED 2,304 B SLOT CANNOT CARRY A PRESENCE
+> BITMAP. Packet COMPOSEPUB, 2026-09-25. This AMENDS the shape column above
+> for whoever builds the publisher.**
+>
+> **QUESTION.** Directive §1 requires that a slot carry *"patch identity,
+> residency generation, surface identity and the compose/tick generation"* and
+> that *"presence travels with the result"*. §5b ratified both composed regions
+> at **256 × 2,304 B** on 2026-09-02, before that requirement existed. Does the
+> payload plus presence plus a versioned identity header fit 2,304 B?
+>
+> **NO, AND THE REGION CANNOT ABSORB THE DIFFERENCE.** 33 × 33 = 1,089
+> vertices.
+>
+> | item | bytes |
+> |---|---|
+> | height16 payload, 2 B/vertex | 2,178 |
+> | per-vertex presence bitmap, 1 b/vertex | 137 |
+> | **sum** | **2,315** |
+> | the ratified slot | 2,304 |
+> | **room left for the identity header** | **−11** |
+>
+> It overflows by **11 bytes before a single byte of header**. And the slot
+> cannot simply grow: `0x0566_0000 .. 0x056E_FFFF` is 589,824 B, which is
+> **exactly** 256 × 2,304, and `TERRAIN.WRITEBACK_STAGING` begins at
+> `0x0578_0000` immediately above VELOCITY. The 2,304 figure is coherent as
+> originally ratified — 2,178 rounded up to 2,304 = 9 × 256 B, nine whole
+> bursts, with 126 B of header room — but that was a **payload-plus-header**
+> shape, not a payload-plus-presence-plus-header one. `zhao_terrain_compcache_
+> front`'s own header confirms the payload figure independently: *"256 × 2,178 B
+> for heights"*.
+>
+> **CHOSEN OPTION, and it differs per channel because the requirement does.**
+>
+> * **HEIGHT keeps 2,304 B.** Height is a **total** function — every vertex has
+>   one, since §3.4 collapses to `compose_top` with no field — so a per-vertex
+>   presence bitmap is not merely unaffordable here, it is **meaningless**.
+>   126 B is ample for the versioned identity header, and the 4×4
+>   `subpatch_dirty_o` mask (16 bits) is the per-region granularity that already
+>   exists and is what anything downstream consumes.
+> * **VELOCITY needs a LARGER SLOT, because for it presence is real.** A vertex
+>   no field covers has **no** velocity sample — `compose_lattice` pushes none,
+>   and `zhao_terrain_velocity` carries `vv_covered_o` per vertex precisely for
+>   this. Writing zero there is the directive's forbidden *"write of zero"*.
+>   The next stride up is **2,560 B** (10 × 256): 2,178 payload + 137 presence
+>   + 245 B header. At 2,560 B the ratified 576 KiB region holds **230 slots**,
+>   not 256. **Choosing between 230 slots at 2,560 B and a relocated 640 KiB
+>   region belongs to the packet that builds a velocity consumer**, because
+>   until one exists the slot count has no demand to be sized against — and
+>   under this record there is no such consumer.
+>
+> **CONSTRAINTS.** Mixed slot sizes in one bank are fine; treating them as one
+> stride is not. Any publisher must carry the two strides as **named
+> constants**, never a shared literal.
+>
+> **CONSEQUENCES.** The table above is left at its ratified values because
+> nothing yet writes either region; this record is the amendment that applies
+> **at the moment a writer is built**, and it exists so the 11-byte overflow is
+> not rediscovered by a block that has already committed to a layout.
+
 **Every region starts DENY-BY-DEFAULT, with state-aware permissions.** This is
 stronger than the Phase-2 rule and the difference matters:
 

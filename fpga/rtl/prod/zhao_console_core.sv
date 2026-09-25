@@ -5322,6 +5322,50 @@
 //      THE ENTRY DOES NOT CLOSE, AND IT NOW CANNOT BE CLOSED BY BUILDING
 //      ALONE. That is the new fact and it is the one to carry forward.
 //
+//      =====================================================================
+//      COMPOSEPUB, 2026-09-25: THE HEIGHT LANE NOW HAS A GATE THAT WATCHES
+//      A CONSUMER, AND THE SDRAM HALF IS REFUSED WITH A PROOF.
+//
+//      (1) THE HEIGHT LANE IS MEASURED LIVE, END TO END, FOR THE FIRST TIME.
+//          This entry's note that section 3.4's sum "now has a non-empty sum"
+//          described ARITHMETIC REACHING A VALUE. Nothing observed the value
+//          arriving anywhere: `tb_terrain_compose.sv` -- the only bench of
+//          the real chain -- ties the lane off in its own wiring
+//          (`.fld_valid_i(1'b0)`, `.fld_height_i(32'sd0)`, :443,445) and
+//          says so. `tests/terrain/composepub_acceptance.cpp` now drives
+//          FOUR REAL BLOCKS, wired port-for-port as this file wires them --
+//          zhao_field_earth_adapter -> zhao_terrain_patch ->
+//          zhao_terrain_compcache_front -> zhao_terrain_heighttap -- and
+//          shows a live Earth field changing the height the CONSUMER reads:
+//          1,089 engine runs, 0 skipped/noprog/faults, live_top - compose_top
+//          equal to the field's out-lane 0 at every vertex, and the tap's
+//          answer still equal to zref::terrain::column_query.top. 80 checks,
+//          0 failures. The consumer is TERRAIN.TAPSHARE's single service,
+//          whose clients are PART.COLLIDE and FORGE.SHADOW.
+//
+//      (2) THE COMPOSED CACHES ARE NOT PUBLISHED, AND THE GUARD WINDOWS STAY
+//          SHUT. Decision record in `spec/memory_rules.md` 5b. The composed
+//          HEIGHT already reaches its consumers THROUGH FABRIC, so an SDRAM
+//          writer would be read by nothing; composed VELOCITY has no consumer
+//          at any level -- `efa_velocity` dead-ends below, and
+//          `zhao_terrain_velocity` is instantiated only in the generated fit
+//          harness. Charging the write (tools/budget/sdram_bandwidth.py
+//          --with-composed-publish) takes the frame from 80.17% to 124.41%
+//          at the FLATTERING hit spans, and to 177.49% once the fill-side
+//          read that would make it a consumer is counted. A window opened
+//          WITH its block, never ahead of it (TERRAIN.DEVSTORE, 2026-09-22).
+//
+//      (3) WHAT REMAINS, restated so the next packet does not re-derive it.
+//          For HEIGHT: the compcache FILL-SIDE BACKING path -- allocator,
+//          a re-stage policy driven by `taps_off_patch_o`, and the dirty
+//          fraction measured on a real scene (break-even d ~ 0.45 write-only,
+//          d ~ 0.20 with the re-stage). For VELOCITY, MATERIAL and NAV: still
+//          consumer-side, and velocity's blocker is architectural rather than
+//          a wire -- `zhao_terrain_velocity` "drives its OWN 33x33 sweep, so
+//          joining it to the consumer's vertex stream is a scheduler and a
+//          composer may not write one", which routes through directive 13.2's
+//          `zhao_terrain_patch_v2`. THE ENTRY STILL DOES NOT CLOSE.
+//
 //      (A) THE PRODUCER SIDE WAS NOT DONE. The EARTHADAPT block below says
 //          "the routing 20.8 commissions exists on the PRODUCER side" and
 //          that the only remaining blocker is consumer-side. That was wrong
