@@ -8321,6 +8321,72 @@ module zhao_console_core
   // that changes.
   parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
 
+  // ---- FORGE.CLIFF, composed 2026-09-25 (CLIFFPROD) ----------------------
+  // Every one of these is a KNOB rather than a literal, because each decides
+  // something that gets DRAWN, and CLAUDE.md's art law is explicit: never
+  // remove the owner's control in the name of fidelity -- every shape, colour
+  // and timing value belongs in a named, editable constant.
+  //
+  // THE ONE-CELL HALO. The 34x34 window needs the border cells of the FOUR
+  // NEIGHBOURING patches, and the compose cache stages exactly ONE patch, so
+  // no neighbour is reachable -- the 5-bit cell address cannot even express
+  // one. 2'd0 = SOLID (spec/terrain_rules.md 3.3) suppresses the rim at a
+  // patch seam; 2'd1 = VOID would emit a wall around every patch's whole
+  // perimeter -- 128 spurious edges per page against a budget of 512, a
+  // visible grid of walls along every interior seam. See
+  // `zhao_forge_cliff_feed.sv` DECISION RECORD 2 for the argument and for the
+  // island-directory route that supersedes this the day the fill side
+  // publishes a patch coordinate.
+  parameter logic [1:0] CLIFF_HALO_SUBSTANCE = 2'd0,
+
+  // THE PRIORITY DEGRADE'S NEARNESS INPUT IS OFF, and that is a decision with
+  // a reason rather than a tie-off. `vdist` is per-vertex nearness, Q16.16
+  // 1/w (zref_terrain.hpp:414), and NO per-lattice-vertex 1/w store exists
+  // anywhere in fpga/rtl -- re-measured 2026-09-25. The VALUE is computed
+  // (`zhao_project_core.out_d_o`, that exact format) and is even stored per
+  // vertex in `zhao_vertex_arena`'s payload bits [73:42] -- but the index
+  // there is a GROUP-LOCAL 9x9 window slot, not `vj*lat_w + vi`. Recovering
+  // the lattice index needs new ports on `zhao_proj_subsystem` and
+  // `zhao_terrain_group_seq`, and the fill fires ONCE PER VIEW into a
+  // different arena, so a naive store would be written twice with two
+  // different values for one vertex.
+  //
+  // With this LOW the evaluator never asserts `vd_en_o` at all -- ASSERTED,
+  // in forge_cliff_chain lane 6, not argued -- and the degrade falls back to
+  // the reference's OWN null-vdist path, which terrain_rules.md 5 defines as
+  // priority 0 everywhere, i.e. keep scan order under a stable sort. It
+  // changes nothing until a page is still over 512 edges AFTER merging. Turn
+  // it on the day the store exists; the port is wired, not tied.
+  parameter logic CLIFF_VDIST_EN = 1'b0,
+
+  // The owner's off switch for the whole cliff path.
+  parameter logic CLIFF_ARM = 1'b1,
+
+  // The material stamped on every wall triple, paired with the mode below.
+  // `zhao_material_window.sv:354` REFUSES MATMODE_NONE (2'd1) against a
+  // non-zero {set, id}, so these two move together or neither moves.
+  parameter logic [15:0] CLIFF_MATERIAL_ID = 16'd0,
+  parameter logic [ 1:0] CLIFF_MATERIAL_MODE = 2'd1,
+  parameter logic [ 7:0] CLIFF_VERTEX_ALPHA = 8'hFF,
+  // Plain opaque write, z-tested, as FORGE.PRIM's is. A wall is solid
+  // geometry, not a blended overlay.
+  parameter logic [31:0] CLIFF_FRAG_STATE = 32'd0,
+  // The flat art lanes the wall is shaded with -- darker than FORGE.PRIM's,
+  // because a cliff face is a shadowed vertical, not a lit top. AUTHORED BY
+  // EYE against the terrain's own lighting and expected to be adjusted once
+  // somebody looks at a frame: that loop is the job, and these are the three
+  // numbers it turns.
+  parameter logic signed [31:0] CLIFF_LIT_R = 32'sd36044,  // 0.55
+  parameter logic signed [31:0] CLIFF_LIT_G = 32'sd34406,  // 0.525
+  parameter logic signed [31:0] CLIFF_LIT_B = 32'sd32768,  // 0.50
+  parameter logic signed [31:0] CLIFF_ALPHA = 32'sd65536,  // 1.0, opaque
+  // A background producer: it degrades first when the governor sheds work.
+  parameter logic [7:0] CLIFF_QUALITY_TIER = 8'd16,
+  // No culling, for FORGE_CULL_MODE's own reason: a wall's outward sense
+  // comes from the reference's A-before-B endpoint order, and a seam seen
+  // from the wrong side must still draw rather than vanish.
+  parameter logic [1:0] CLIFF_CULL_MODE = 2'd0,
+
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
   // `zhao_material_window`'s MATMODE_BACKED_C is 2'd0 and MATMODE_NONE_C is
@@ -15490,6 +15556,509 @@ module zhao_console_core
     .b_j_quality_tier_i (SHADOW_QUALITY_TIER),
     .b_j_cull_mode_i    (SHADOW_CULL_MODE),
 
+    // ---- OUT, into the SECOND arbiter -------------------------------------
+    // Renamed fjb_* -> fjb1_* on 2026-09-25 (CLIFFPROD) so FORGE.CLIFF could be
+    // cascaded in front of the assembler WITHOUT touching the assembler's own
+    // instantiation.  `zhao_forge_jobarb`'s output face is protocol-identical
+    // to one of its CLIENT faces -- same widths, same signedness, descriptor
+    // strictly before the first vertex (`A_SIDE` precedes `A_RUN`,
+    // zhao_forge_jobarb.sv:255/368), and the owner is stable for a whole job
+    // because `own_q` is written only in the A_IDLE arm (:340-365) and A_RUN is
+    // left only on the last triple (:372-377).  So jobarb(jobarb(A, B), C) is
+    // legal, and the ONLY difference between the two faces is a NAME: the
+    // output calls the art lanes `art_*` where a client calls them
+    // `*_j_art_*`.  That is why this is a rename and not an adapter.
+    .v_valid_o(fjb1_v_valid),
+    .v_ready_i(fjb1_v_ready),
+    .v_x_o    (fjb1_v_x),
+    .v_y_o    (fjb1_v_y),
+    .v_z_o    (fjb1_v_z),
+    .v_last_o (fjb1_v_last),
+
+    .t_valid_o   (fjb1_t_valid),
+    .t_ready_i   (fjb1_t_ready),
+    .t_i0_o      (fjb1_t_i0),
+    .t_i1_o      (fjb1_t_i1),
+    .t_i2_o      (fjb1_t_i2),
+    .t_material_o(fjb1_t_material),
+    .t_src_id_o  (fjb1_t_src_id),
+    .t_last_o    (fjb1_t_last),
+
+    .j_valid_o        (fjb1_j_valid),
+    .j_ready_i        (fjb1_j_ready),
+    .j_material_set_o (fjb1_j_material_set),
+    .j_material_id_o  (fjb1_j_material_id),
+    .j_material_mode_o(fjb1_j_material_mode),
+    .j_vertex_alpha_o (fjb1_j_vertex_alpha),
+    .j_frag_state_o   (fjb1_j_frag_state),
+    .art_r_o           (fjb1_art_r),
+    .art_g_o           (fjb1_art_g),
+    .art_b_o           (fjb1_art_b),
+    .art_alpha_o       (fjb1_art_alpha),
+    .art_quality_tier_o(fjb1_art_quality_tier),
+    .art_cull_mode_o   (fjb1_art_cull_mode),
+
+    // These five still mean PRIM against SHADOW, which is what they are named
+    // for and what the ledger reads them as.  The OUTER arbiter's counters are
+    // separate and declared beside it: one number published twice would be no
+    // evidence at all.  Note that `wait_a_o` here now also includes clocks the
+    // pair spent waiting on the outer arbiter, not only on each other -- it is
+    // no longer a clean "shadow delayed the creature" number.
+    .grant_a_o (forge_jobarb_grant_prim_o),
+    .grant_b_o (forge_jobarb_grant_shadow_o),
+    .switches_o(forge_jobarb_switches_o),
+    .wait_a_o  (forge_jobarb_wait_prim_o),
+    .wait_b_o  (forge_jobarb_wait_shadow_o),
+    .no_desc_o (forge_jobarb_no_desc_o),
+    .busy_o    (fjb1_busy)
+  );
+
+
+  // ==========================================================================
+  // FORGE.CLIFF -- COMPOSED 2026-09-25 (packet CLIFFPROD).
+  //
+  // `design/console_inventory.yml` said, until this hunk existed: "FORGE.CLIFF
+  // CANNOT yet be composed by either candidate: its three inputs -- a page
+  // command from a lattice-walking issuer, a 34x34 solid-bit window and a vdist
+  // read master -- have no producer anywhere in fpga/rtl.  Wiring it now would
+  // tie off all three, which is the one thing this campaign forbids."
+  //
+  // That was true, and it UNDERCOUNTED by one.  There was no rim-edge CONSUMER
+  // either -- `edge_ci_i`, `edge_side_i` and `rim_edge` are zero hits as ports
+  // across the whole tree -- and `design/contracts/FORGE.CLIFF.md` records why:
+  // "It does NOT turn a rim edge into wall VERTICES ... THE EMISSION STAGE IS
+  // NOT WRITTEN."  So three producers and one consumer were built, and the
+  // block below is composed behind real terrain rather than behind a tie-off.
+  //
+  // THE DATA IS THE CANONICAL TERRAIN DATA, read back rather than recomputed:
+  //
+  //   occupancy  layer D, `zhao_terrain_compcache_front`'s `cs_*` service --
+  //              `zref::terrain::ComposedLattice::cell_state`, the plane
+  //              `substance()` reads and the tessellator already obeys.
+  //   geometry   the same block's `lat_*` service -- TERRAIN.PLACE's PLACED
+  //              wx/wz and both surfaces' heights.  The placement law
+  //              (`zhao_terrain_place_law_pkg`) is CONSUMED, never re-derived:
+  //              nothing here multiplies an index by a pitch, so there is no
+  //              second opinion about where a lattice vertex is.
+  //   identity   `serve_src_id_o` rides the page command through to every
+  //              emitted triple's `t_src_id_o`, so an edge can always be
+  //              attributed to the patch it came from.
+  //
+  // NEITHER SERVICE IS ARBITRATED, because neither can be: both are one clock,
+  // registered, with NO ready and no tag, so a denied client has nowhere to be
+  // told.  `zhao_forge_cliff_srvshare` therefore passes the INCUMBENT straight
+  // through, unconditionally, and lets the cliff spend the cycles the incumbent
+  // leaves.  TERRAIN.TESS cannot be slowed by one clock by this composition,
+  // and that is structural rather than argued: the incumbent's request path
+  // contains no logic that depends on the cliff at all.
+  //
+  // THE PRIORITY DEGRADE'S `vdist` IS OFF -- see CLIFF_VDIST_EN's own note in
+  // the parameter list for the whole measurement.  It is the reference's own
+  // null-vdist mode, not a tie-off standing in for a missing producer, and the
+  // evaluator is measured never to assert `vd_en_o` in it.
+  //
+  // EVIDENCE: `tests/forge/forge_cliff_chain.cpp` elaborates this exact chain
+  // against a real `zref::terrain::ComposedLattice` and matches its emitted
+  // wall quads to `zref::forge::rim_plan` edge for edge, with the incumbent
+  // contending and with the staged patch pulled mid-window.
+  // `tests/forge/forge_cliff_srvshare_unit.cpp` is the sharer's poison
+  // detector's positive control.
+  // ==========================================================================
+
+  // ---- jobarb1's output face, now the outer arbiter's client A -------------
+  wire        fjb1_v_valid, fjb1_v_ready;
+  wire signed [31:0] fjb1_v_x, fjb1_v_y, fjb1_v_z;
+  wire        fjb1_v_last;
+  wire        fjb1_t_valid, fjb1_t_ready;
+  wire [15:0] fjb1_t_i0, fjb1_t_i1, fjb1_t_i2, fjb1_t_material, fjb1_t_src_id;
+  wire        fjb1_t_last;
+  wire        fjb1_j_valid, fjb1_j_ready;
+  wire [31:0] fjb1_j_material_set;
+  wire [15:0] fjb1_j_material_id;
+  wire [ 1:0] fjb1_j_material_mode;
+  wire [ 7:0] fjb1_j_vertex_alpha;
+  wire [31:0] fjb1_j_frag_state;
+  wire signed [31:0] fjb1_art_r, fjb1_art_g, fjb1_art_b, fjb1_art_alpha;
+  wire [ 7:0] fjb1_art_quality_tier;
+  wire [ 1:0] fjb1_art_cull_mode;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The inner arbiter's own busy, kept for the same reason the original was:
+  // nothing gates on it, because `zhao_forge_assemble.busy_o` is the single
+  // law for that and two busy signals would be two opinions.
+  wire        fjb1_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- the two shared terrain services -------------------------------------
+  wire        fcl_cs_srv_req;
+  wire [ 9:0] fcl_cs_srv_addr;     // {cj, ci}
+  wire [ 1:0] fcl_cs_o0_sub;
+  wire        fcl_cs_req, fcl_cs_grant, fcl_cs_rsp_valid;
+  wire [ 4:0] fcl_cs_ci, fcl_cs_cj;
+  wire [ 1:0] fcl_cs_sub;
+
+  wire        fcl_lat_srv_req;
+  wire [12:0] fcl_lat_srv_addr;    // {surface, vj, vi}
+  wire [95:0] fcl_lat_o0_rsp;      // {wz, wx, h}
+  wire        fcl_lat_req, fcl_lat_grant, fcl_lat_rsp_valid, fcl_lat_surface;
+  wire [ 5:0] fcl_lat_vi, fcl_lat_vj;
+  wire [95:0] fcl_lat_rsp;
+
+  // ---- the producer, the evaluator and the emission stage ------------------
+  wire        fcl_cmd_valid, fcl_cmd_ready, fcl_cmd_vdist_en;
+  wire [15:0] fcl_cmd_page_ci, fcl_cmd_page_cj, fcl_cmd_lat_w, fcl_cmd_src_id;
+  wire [ 5:0] fcl_cmd_cw, fcl_cmd_ch;
+  wire        fcl_ld_valid, fcl_ld_ready, fcl_ld_solid;
+  wire        fcl_edge_valid, fcl_edge_ready;
+  wire [15:0] fcl_edge_ci, fcl_edge_cj, fcl_edge_src_id;
+  wire [ 1:0] fcl_edge_side;
+  wire [ 5:0] fcl_edge_span;
+  wire        fcl_v_valid, fcl_v_ready, fcl_v_last;
+  wire signed [31:0] fcl_v_x, fcl_v_y, fcl_v_z;
+  wire        fcl_t_valid, fcl_t_ready, fcl_t_last;
+  wire [15:0] fcl_t_i0, fcl_t_i1, fcl_t_i2, fcl_t_material, fcl_t_src_id;
+
+  // ---- census ---------------------------------------------------------------
+  // Terminated locally rather than exported.  Every one of these is FIRED and
+  // asserted in `tests/forge/forge_cliff_chain.cpp` and
+  // `tests/forge/forge_cliff_srvshare_unit.cpp`, and each block's own fit
+  // target reads them at its boundary, so they are evidence that exists rather
+  // than evidence that is merely declared.  Lifting them to console_core's port
+  // list is a port change that would ripple into `zhao_console_board` while
+  // another packet is live in this file; it is telemetry, not function, and it
+  // is named here as deferred rather than left for a reader to infer.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0] fcl_cs_grants0, fcl_cs_grants1, fcl_cs_denied1, fcl_cs_poison1;
+  wire [31:0] fcl_lat_grants0, fcl_lat_grants1, fcl_lat_denied1, fcl_lat_poison1;
+  wire [31:0] fcl_pages_issued, fcl_windows_done, fcl_cs_reads, fcl_cs_denied;
+  wire [31:0] fcl_solid_cells, fcl_cells_degraded, fcl_pages_degraded;
+  wire        fcl_feed_busy, fcl_emit_busy, fcl_idle, fcl_page_done;
+  wire [31:0] fcl_tri_submitted;
+  wire [ 7:0] fcl_walk_fault;
+  wire [11:0] fcl_page_merged, fcl_page_dropped;
+  wire        fcl_vd_en;
+  wire [31:0] fcl_vd_addr;
+  wire [31:0] fcl_edges_taken, fcl_quads_emitted, fcl_tris_emitted;
+  wire [31:0] fcl_emit_lat_reads, fcl_emit_lat_denied, fcl_endpoint_clamped;
+  wire [31:0] fjb2_grant_a, fjb2_grant_b, fjb2_switches;
+  wire [31:0] fjb2_wait_a, fjb2_wait_b, fjb2_no_desc;
+  wire        fjb2_busy;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- the cell-state sharer ------------------------------------------------
+  zhao_forge_cliff_srvshare #(
+    .REQ_W    (10),
+    .RSP_W    (2),
+    .POISON_EN(1'b1),
+    .CENSUS_W (32)
+  ) u_cliff_cs_share (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    // 2'd3 is the compose cache's OWN refusal encoding
+    // (zhao_terrain_compcache_front.sv:562), returned when no patch is served.
+    .poison_value_i(2'd3),
+
+    // Client 0: TERRAIN.HEIGHTTAP's cache side, which already carries
+    // TERRAIN.TESS (the owner) and the tap's own borrowed read.
+    .o0_req_i        (htp_c_cs_req),
+    .o0_req_payload_i({htp_c_cs_cj, htp_c_cs_ci}),
+    .o0_rsp_payload_o(fcl_cs_o0_sub),
+
+    .c1_req_i        (fcl_cs_req),
+    .c1_req_payload_i({fcl_cs_cj, fcl_cs_ci}),
+    .c1_grant_o      (fcl_cs_grant),
+    .c1_rsp_valid_o  (fcl_cs_rsp_valid),
+    .c1_rsp_payload_o(fcl_cs_sub),
+
+    .srv_req_o        (fcl_cs_srv_req),
+    .srv_req_payload_o(fcl_cs_srv_addr),
+    .srv_rsp_payload_i(tcc_cs_substance),
+
+    .grants0_o(fcl_cs_grants0),
+    .grants1_o(fcl_cs_grants1),
+    .denied1_o(fcl_cs_denied1),
+    .poison1_o(fcl_cs_poison1)
+  );
+
+  // ---- the lattice sharer ---------------------------------------------------
+  // POISON_EN is 0 and that is a statement, not an omission: `lat_h_o`/
+  // `lat_wx_o`/`lat_wz_o` are raw fx16 and EVERY bit pattern is a legal
+  // height, so there is no refusal encoding to watch.  A detector here would
+  // have to invent a sentinel and would then be watching a value this
+  // composition made up.  Tied low, and the block says so.
+  zhao_forge_cliff_srvshare #(
+    .REQ_W    (13),
+    .RSP_W    (96),
+    .POISON_EN(1'b0),
+    .CENSUS_W (32)
+  ) u_cliff_lat_share (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .poison_value_i(96'd0),
+
+    // Client 0: TERRAIN.SPDESC's cache side, which carries TESS through the
+    // heighttap plus the assembler's own centre-vertex reads.
+    .o0_req_i        (spd_c_lat_req),
+    .o0_req_payload_i({spd_c_lat_surface, spd_c_lat_vj, spd_c_lat_vi}),
+    .o0_rsp_payload_o(fcl_lat_o0_rsp),
+
+    .c1_req_i        (fcl_lat_req),
+    .c1_req_payload_i({fcl_lat_surface, fcl_lat_vj, fcl_lat_vi}),
+    .c1_grant_o      (fcl_lat_grant),
+    .c1_rsp_valid_o  (fcl_lat_rsp_valid),
+    .c1_rsp_payload_o(fcl_lat_rsp),
+
+    .srv_req_o        (fcl_lat_srv_req),
+    .srv_req_payload_o(fcl_lat_srv_addr),
+    .srv_rsp_payload_i({tcc_lat_wz, tcc_lat_wx, tcc_lat_h}),
+
+    .grants0_o(fcl_lat_grants0),
+    .grants1_o(fcl_lat_grants1),
+    .denied1_o(fcl_lat_denied1),
+    .poison1_o(fcl_lat_poison1)
+  );
+
+  // ---- THE PRODUCER: the page command and the 34x34 SOLID window -----------
+  // One page per STAGED PATCH, self-triggered on a `serve_src_id` this block
+  // has not planned.  No new sequencer is introduced, because the residency
+  // handshake already IS the sequence.
+  zhao_forge_cliff_feed #(
+    .LAT_W   (33),
+    .LAT_H   (33),
+    .CENSUS_W(32)
+  ) u_forge_cliff_feed (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .arm_i           (CLIFF_ARM),
+    .halo_substance_i(CLIFF_HALO_SUBSTANCE),
+    .vdist_en_i      (CLIFF_VDIST_EN),
+
+    .serve_valid_i (terr_cc_serve_valid_o),
+    .serve_src_id_i(terr_cc_serve_src_id_o),
+
+    .cs_req_o      (fcl_cs_req),
+    .cs_ci_o       (fcl_cs_ci),
+    .cs_cj_o       (fcl_cs_cj),
+    .cs_grant_i    (fcl_cs_grant),
+    .cs_rsp_valid_i(fcl_cs_rsp_valid),
+    .cs_substance_i(fcl_cs_sub),
+
+    .cmd_valid_o   (fcl_cmd_valid),
+    .cmd_ready_i   (fcl_cmd_ready),
+    .cmd_page_ci_o (fcl_cmd_page_ci),
+    .cmd_page_cj_o (fcl_cmd_page_cj),
+    .cmd_cw_o      (fcl_cmd_cw),
+    .cmd_ch_o      (fcl_cmd_ch),
+    .cmd_lat_w_o   (fcl_cmd_lat_w),
+    .cmd_vdist_en_o(fcl_cmd_vdist_en),
+    .cmd_src_id_o  (fcl_cmd_src_id),
+
+    .ld_valid_o(fcl_ld_valid),
+    .ld_ready_i(fcl_ld_ready),
+    .ld_solid_o(fcl_ld_solid),
+
+    .busy_o          (fcl_feed_busy),
+    .pages_issued_o  (fcl_pages_issued),
+    .windows_done_o  (fcl_windows_done),
+    .cs_reads_o      (fcl_cs_reads),
+    .cs_denied_o     (fcl_cs_denied),
+    .solid_cells_o   (fcl_solid_cells),
+    .cells_degraded_o(fcl_cells_degraded),
+    .pages_degraded_o(fcl_pages_degraded)
+  );
+
+  // ---- THE ADOPTED EVALUATOR (owner ruling R142), unmodified ---------------
+  zhao_forge_cliff_ram u_forge_cliff (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cmd_valid_i   (fcl_cmd_valid),
+    .cmd_ready_o   (fcl_cmd_ready),
+    .cmd_page_ci_i (fcl_cmd_page_ci),
+    .cmd_page_cj_i (fcl_cmd_page_cj),
+    .cmd_cw_i      (fcl_cmd_cw),
+    .cmd_ch_i      (fcl_cmd_ch),
+    .cmd_lat_w_i   (fcl_cmd_lat_w),
+    .cmd_vdist_en_i(fcl_cmd_vdist_en),
+    .cmd_src_id_i  (fcl_cmd_src_id),
+
+    .ld_valid_i(fcl_ld_valid),
+    .ld_ready_o(fcl_ld_ready),
+    .ld_solid_i(fcl_ld_solid),
+
+    // THE VDIST MASTER.  With CLIFF_VDIST_EN low this block never asserts
+    // `vd_en_o`, so `vd_data_i` is never sampled -- measured in
+    // forge_cliff_chain lane 6, which asserts `vd_en_o` stays 0 for a whole
+    // run.  The zero here is an unread input being driven, which SystemVerilog
+    // requires, and not a producer standing in for one that is missing.  The
+    // day the per-lattice-vertex 1/w store exists, CLIFF_VDIST_EN goes high and
+    // these three lines are where it lands.
+    .vd_en_o  (fcl_vd_en),
+    .vd_addr_o(fcl_vd_addr),
+    .vd_data_i(32'd0),
+
+    .edge_valid_o (fcl_edge_valid),
+    .edge_ready_i (fcl_edge_ready),
+    .edge_ci_o    (fcl_edge_ci),
+    .edge_cj_o    (fcl_edge_cj),
+    .edge_side_o  (fcl_edge_side),
+    .edge_span_o  (fcl_edge_span),
+    .edge_src_id_o(fcl_edge_src_id),
+
+    .page_done_o   (fcl_page_done),
+    .page_merged_o (fcl_page_merged),
+    .page_dropped_o(fcl_page_dropped),
+
+    .idle_o               (fcl_idle),
+    .triangles_submitted_o(fcl_tri_submitted),
+    .walk_fault_o         (fcl_walk_fault)
+  );
+
+  // ---- THE EMISSION STAGE: one rim edge -> one wall quad -------------------
+  zhao_forge_cliff_emit #(
+    .LAT_W   (33),
+    .LAT_H   (33),
+    .CENSUS_W(32)
+  ) u_forge_cliff_emit (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .edge_valid_i (fcl_edge_valid),
+    .edge_ready_o (fcl_edge_ready),
+    .edge_ci_i    (fcl_edge_ci),
+    .edge_cj_i    (fcl_edge_cj),
+    .edge_side_i  (fcl_edge_side),
+    .edge_span_i  (fcl_edge_span),
+    .edge_src_id_i(fcl_edge_src_id),
+
+    .lat_req_o      (fcl_lat_req),
+    .lat_vi_o       (fcl_lat_vi),
+    .lat_vj_o       (fcl_lat_vj),
+    .lat_surface_o  (fcl_lat_surface),
+    .lat_grant_i    (fcl_lat_grant),
+    .lat_rsp_valid_i(fcl_lat_rsp_valid),
+    .lat_h_i        ($signed(fcl_lat_rsp[31:0])),
+    .lat_wx_i       ($signed(fcl_lat_rsp[63:32])),
+    .lat_wz_i       ($signed(fcl_lat_rsp[95:64])),
+
+    .v_valid_o(fcl_v_valid),
+    .v_ready_i(fcl_v_ready),
+    .v_x_o    (fcl_v_x),
+    .v_y_o    (fcl_v_y),
+    .v_z_o    (fcl_v_z),
+    .v_last_o (fcl_v_last),
+
+    .t_valid_o   (fcl_t_valid),
+    .t_ready_i   (fcl_t_ready),
+    .t_i0_o      (fcl_t_i0),
+    .t_i1_o      (fcl_t_i1),
+    .t_i2_o      (fcl_t_i2),
+    .t_material_o(fcl_t_material),
+    .t_src_id_o  (fcl_t_src_id),
+    .t_last_o    (fcl_t_last),
+
+    .material_id_i(CLIFF_MATERIAL_ID),
+
+    .busy_o            (fcl_emit_busy),
+    .edges_taken_o     (fcl_edges_taken),
+    .quads_emitted_o   (fcl_quads_emitted),
+    .tris_emitted_o    (fcl_tris_emitted),
+    .lat_reads_o       (fcl_emit_lat_reads),
+    .lat_denied_o      (fcl_emit_lat_denied),
+    .endpoint_clamped_o(fcl_endpoint_clamped)
+  );
+
+  // ---- THE OUTER ARBITER ----------------------------------------------------
+  // CLIENT A is the existing {FORGE.PRIM, FORGE.SHADOW} pair and it WINS,
+  // always -- `zhao_forge_jobarb.sv:228-230` has no rotation.  So the standing
+  // rule from `design/contracts/FORGE.SHADOW.md` ("CLIENT A IS FORGE.PRIM AND
+  // IT WINS") is preserved exactly: nesting the pair on the outer A leaves
+  // their relative priority untouched and puts the cliff BELOW both.
+  //
+  // That is the right order and it is a decision, not an accident.  A cliff
+  // wall is terrain skirt geometry that hides an LOD seam; it is background
+  // work by the same argument that makes SHADOW_QUALITY_TIER 0, and it must
+  // never delay a creature or a ribbon.  Putting the cliff on the outer A
+  // instead would invert a ratified rule, which is an owner-facing change and
+  // is not made here.
+  //
+  // The cost is two clocks of latency per cliff job (the inner A_SIDE plus the
+  // outer grant decision) and zero throughput inside a job.  A page's 512-edge
+  // worst case is order 10k clocks against a 1.67M-clock frame.
+  zhao_forge_jobarb #(
+    .IDW     (16),
+    .CENSUS_W(32)
+  ) u_forge_jobarb2 (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // ---- CLIENT A: the composed {PRIM, SHADOW} pair -----------------------
+    .a_v_valid_i(fjb1_v_valid),
+    .a_v_ready_o(fjb1_v_ready),
+    .a_v_x_i    (fjb1_v_x),
+    .a_v_y_i    (fjb1_v_y),
+    .a_v_z_i    (fjb1_v_z),
+    .a_v_last_i (fjb1_v_last),
+
+    .a_t_valid_i   (fjb1_t_valid),
+    .a_t_ready_o   (fjb1_t_ready),
+    .a_t_i0_i      (fjb1_t_i0),
+    .a_t_i1_i      (fjb1_t_i1),
+    .a_t_i2_i      (fjb1_t_i2),
+    .a_t_material_i(fjb1_t_material),
+    .a_t_src_id_i  (fjb1_t_src_id),
+    .a_t_last_i    (fjb1_t_last),
+
+    .a_j_valid_i        (fjb1_j_valid),
+    .a_j_ready_o        (fjb1_j_ready),
+    .a_j_material_set_i (fjb1_j_material_set),
+    .a_j_material_id_i  (fjb1_j_material_id),
+    .a_j_material_mode_i(fjb1_j_material_mode),
+    .a_j_vertex_alpha_i (fjb1_j_vertex_alpha),
+    .a_j_frag_state_i   (fjb1_j_frag_state),
+    // The ONE naming difference between an output face and a client face.
+    .a_j_art_r_i        (fjb1_art_r),
+    .a_j_art_g_i        (fjb1_art_g),
+    .a_j_art_b_i        (fjb1_art_b),
+    .a_j_art_alpha_i    (fjb1_art_alpha),
+    .a_j_quality_tier_i (fjb1_art_quality_tier),
+    .a_j_cull_mode_i    (fjb1_art_cull_mode),
+
+    // ---- CLIENT B: FORGE.CLIFF's wall quads -------------------------------
+    .b_v_valid_i(fcl_v_valid),
+    .b_v_ready_o(fcl_v_ready),
+    .b_v_x_i    (fcl_v_x),
+    .b_v_y_i    (fcl_v_y),
+    .b_v_z_i    (fcl_v_z),
+    .b_v_last_i (fcl_v_last),
+
+    .b_t_valid_i   (fcl_t_valid),
+    .b_t_ready_o   (fcl_t_ready),
+    .b_t_i0_i      (fcl_t_i0),
+    .b_t_i1_i      (fcl_t_i1),
+    .b_t_i2_i      (fcl_t_i2),
+    .b_t_material_i(fcl_t_material),
+    .b_t_src_id_i  (fcl_t_src_id),
+    .b_t_last_i    (fcl_t_last),
+
+    // A LEVEL, exactly as FORGE.SHADOW's descriptor is driven on the inner
+    // arbiter: the arbiter grants on a VERTEX, not on a descriptor, so a
+    // permanently-valid descriptor cannot steal a turn.  The fields are
+    // constants because a wall quad's shading is authored, not computed.
+    .b_j_valid_i        (1'b1),
+    .b_j_ready_o        (),
+    .b_j_material_set_i (32'd0),
+    .b_j_material_id_i  (CLIFF_MATERIAL_ID),
+    .b_j_material_mode_i(CLIFF_MATERIAL_MODE),
+    .b_j_vertex_alpha_i (CLIFF_VERTEX_ALPHA),
+    .b_j_frag_state_i   (CLIFF_FRAG_STATE),
+    .b_j_art_r_i        (CLIFF_LIT_R),
+    .b_j_art_g_i        (CLIFF_LIT_G),
+    .b_j_art_b_i        (CLIFF_LIT_B),
+    .b_j_art_alpha_i    (CLIFF_ALPHA),
+    .b_j_quality_tier_i (CLIFF_QUALITY_TIER),
+    .b_j_cull_mode_i    (CLIFF_CULL_MODE),
+
     // ---- the shared assembler ---------------------------------------------
     .v_valid_o(fjb_v_valid),
     .v_ready_i(fjb_v_ready),
@@ -15521,13 +16090,16 @@ module zhao_console_core
     .art_quality_tier_o(fjb_art_quality_tier),
     .art_cull_mode_o   (fjb_art_cull_mode),
 
-    .grant_a_o (forge_jobarb_grant_prim_o),
-    .grant_b_o (forge_jobarb_grant_shadow_o),
-    .switches_o(forge_jobarb_switches_o),
-    .wait_a_o  (forge_jobarb_wait_prim_o),
-    .wait_b_o  (forge_jobarb_wait_shadow_o),
-    .no_desc_o (forge_jobarb_no_desc_o),
-    .busy_o    (fjb_busy)
+    // `no_desc_o` on THIS arbiter is zero by construction -- the inner one
+    // never offers a vertex without a descriptor -- so the diagnostic that can
+    // still fire is the inner one's, which stays wired to the exported port.
+    .grant_a_o (fjb2_grant_a),
+    .grant_b_o (fjb2_grant_b),
+    .switches_o(fjb2_switches),
+    .wait_a_o  (fjb2_wait_a),
+    .wait_b_o  (fjb2_wait_b),
+    .no_desc_o (fjb2_no_desc),
+    .busy_o    (fjb2_busy)
   );
 
 
@@ -16559,7 +17131,10 @@ module zhao_console_core
     .c_cs_req_o      (htp_c_cs_req),
     .c_cs_ci_o       (htp_c_cs_ci),
     .c_cs_cj_o       (htp_c_cs_cj),
-    .c_cs_substance_i(tcc_cs_substance),
+    // Through the cliff's sharer, which passes the served answer straight
+    // through on client 0.  Routed rather than shorted to `tcc_cs_substance`
+    // so the topology is what the code says it is.
+    .c_cs_substance_i(fcl_cs_o0_sub),
 
     .taps_answered_o   (terr_tap_answered_o),
     .taps_void_o       (htp_void),
@@ -23383,17 +23958,27 @@ module zhao_console_core
     // HEIGHTTAP -> SPDESC -> here.  The assembler injects its centre-vertex
     // reads only on cycles the upstream client leaves, because this port has
     // NO READY and a request not forwarded on its own cycle is destroyed.
-    .lat_req_i    (spd_c_lat_req),
-    .lat_vi_i     (spd_c_lat_vi),
-    .lat_vj_i     (spd_c_lat_vj),
-    .lat_surface_i(spd_c_lat_surface),
+    // AND THROUGH FORGE.CLIFF'S LATTICE SHARER from 2026-09-25, for the same
+    // reason and on the same terms: the emission stage reads the PLACED wx/wz
+    // and both surfaces' heights back rather than recomputing them, so the
+    // ratified placement law has exactly one implementation.
+    .lat_req_i    (fcl_lat_srv_req),
+    .lat_vi_i     (fcl_lat_srv_addr[5:0]),
+    .lat_vj_i     (fcl_lat_srv_addr[11:6]),
+    .lat_surface_i(fcl_lat_srv_addr[12]),
     .lat_h_o      (tcc_lat_h),
     .lat_wx_o     (tcc_lat_wx),
     .lat_wz_o     (tcc_lat_wz),
 
-    .cs_req_i      (htp_c_cs_req),
-    .cs_ci_i       (htp_c_cs_ci),
-    .cs_cj_i       (htp_c_cs_cj),
+    // THROUGH FORGE.CLIFF'S CELL-STATE SHARER from 2026-09-25: the chain is
+    // TESS -> HEIGHTTAP -> SRVSHARE -> here, with FORGE.CLIFF's window feed
+    // spending only the cycles the heighttap leaves.  This port has NO READY,
+    // so it cannot be arbitrated; the incumbent is passed through
+    // unconditionally and the sharer's request path contains no logic that
+    // depends on the cliff.
+    .cs_req_i      (fcl_cs_srv_req),
+    .cs_ci_i       (fcl_cs_srv_addr[4:0]),
+    .cs_cj_i       (fcl_cs_srv_addr[9:5]),
     .cs_substance_o(tcc_cs_substance),
 
     // R13's query, DIRECT from TERRAIN.TESS -- one requester, no arbiter. See
@@ -27046,9 +27631,10 @@ module zhao_console_core
     .c_lat_vi_o     (spd_c_lat_vi),
     .c_lat_vj_o     (spd_c_lat_vj),
     .c_lat_surface_o(spd_c_lat_surface),
-    .c_lat_h_i      (tcc_lat_h),
-    .c_lat_wx_i     (tcc_lat_wx),
-    .c_lat_wz_i     (tcc_lat_wz),
+    // Through the cliff's lattice sharer, client 0's pass-through.
+    .c_lat_h_i      ($signed(fcl_lat_o0_rsp[31:0])),
+    .c_lat_wx_i     ($signed(fcl_lat_o0_rsp[63:32])),
+    .c_lat_wz_i     ($signed(fcl_lat_o0_rsp[95:64])),
 
     .r_start_o(tds_r_start),
     .r_slot_o (tds_r_slot),
