@@ -9852,6 +9852,35 @@ verilate(test_terrain_velocity_chain
 add_test(NAME terrain_velocity_chain COMMAND test_terrain_velocity_chain)
 set_tests_properties(terrain_velocity_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+# TERRAIN.VELJOIN: the lockstep fork that joins earth out-lane 1 to the
+# velocity sweep from the SAME evaluation whose out-lane 0 feeds the height
+# composition. Both blocks REAL, wired in C++ exactly as zhao_console_core
+# wires them, and the lattice checked against zref::terrain::velocity_vertex.
+# It is also where the three counters the console smoke asserts ZERO are seen
+# to FIRE, each against a negative control on identical stimulus.
+add_executable(test_terrain_veljoin_directed terrain/terrain_veljoin_directed.cpp)
+target_link_libraries(test_terrain_veljoin_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_veljoin_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_veljoin_directed
+  PREFIX Vzhao_terrain_veljoin
+  TOP_MODULE zhao_terrain_veljoin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_veljoin.sv)
+verilate(test_terrain_veljoin_directed
+  PREFIX Vzhao_terrain_velocity
+  TOP_MODULE zhao_terrain_velocity
+  SOURCES ${ZHAO_TERRAIN_VELOCITY_SV})
+add_test(NAME terrain_veljoin_directed COMMAND test_terrain_veljoin_directed)
+set_tests_properties(terrain_veljoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_veljoin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_veljoin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_veljoin.sv)
+set_tests_properties(lint_terrain_veljoin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_terrain_velocity
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_velocity

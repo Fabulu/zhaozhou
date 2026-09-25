@@ -4424,6 +4424,107 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      TERRVEL, 2026-09-26: THE VELOCITY CHANNEL IS CLOSED. THE ENTRY IS NOT.
+//
+//      `zhao_terrain_velocity` has LEFT the completion register's BUILT BUT
+//      NOT CONNECTED list -- 8 gaps -> 7, connected capabilities 109 -> 110,
+//      measured bare. What follows is what that cost and what it did NOT buy.
+//
+//      (1) THE ARCHITECTURAL BLOCKER WAS NARROWER THAN THIS ENTRY RECORDED,
+//          AND THE MEASUREMENT IS THE USEFUL PART. The entry said joining the
+//          block's own 33x33 sweep to the consumer's vertex stream "is a
+//          scheduler and a composer may not write one". The second half is a
+//          rule about WHERE LOGIC LIVES and it is obeyed: the join is
+//          `zhao_terrain_veljoin`, a named block with a manifest row, a source
+//          list entry and a directed test, exactly EDGECLOSE's precedent.
+//          The FIRST half does not survive measurement.
+//          `zhao_terrain_pagestream` advances its vertex address column-fast
+//          then row over 33x33 (:797-801, EDGE=33, VERTS=1,089) and
+//          `zhao_terrain_velocity`'s law V3 sweep advances identically. THEY
+//          ARE THE SAME WALK. Nothing needs reordering or buffering -- which
+//          is what a scheduler would be. What was needed is a FORK WITH A
+//          JOINT READY and an ADDRESS INTERLOCK, and the interlock is what
+//          turns "the same walk" from a comment into a checked fact.
+//          The seam was designed for this and half-built: `fld_covers_o` on
+//          `zhao_terrain_patch` already says "TERRAIN.VELOCITY consumes the
+//          same per-vertex lane stream for out-lane 1 and takes this answer
+//          ... Exported 2026-08-19 with TERRAIN.VELOCITY."
+//
+//      (2) THE SDRAM PUBLISH IS STILL REFUSED AND WAS NOT BUILT.
+//          `spec/memory_rules.md` 5b's bandwidth proof stands untouched and
+//          `TERRAIN.COMPOSED_VELOCITY`'s guard window stays shut. COMPOSEPUB's
+//          own sentence named the route that was taken instead: "the composed
+//          HEIGHT already reaches its consumers THROUGH FABRIC". So does
+//          velocity now.
+//
+//      (3) WHAT THE CHANNEL ACTUALLY REACHES, all real production modules:
+//            zhao_field_earth_adapter  (ONE evaluation, four out-lanes)
+//              out-lane 0 -> zhao_terrain_patch            (height, unchanged)
+//              out-lane 1 -> zhao_terrain_veljoin              NEW
+//                            -> zhao_terrain_velocity
+//                            -> zhao_terrain_compcache_front  (4.2 plane, NEW)
+//                            -> zhao_forge_cliff_srvshare     (payload 96->113)
+//                            -> zhao_terrain_spdesc
+//                            -> zhao_terrain_heighttap        (4.3's cell, NEW)
+//                            -> zhao_part_terrain_tap         (4.3 interp)
+//                            -> zhao_part_collide             (relative v)
+//          `efa_velocity` was driven by one block and read by nobody from
+//          2026-09-23. It is read, and what it reaches is a particle contact.
+//
+//      (4) NONE OF THAT WAS INVENTED. Every step is a RATIFIED LAW THAT HAD
+//          NEVER BEEN IMPLEMENTED, and finding that out is what made the
+//          packet cheap:
+//            * `spec/terrain_rules.md` 4.3's NORMATIVE pseudocode returns
+//              {class, top, bottom, VELOCITY, matA, matB, weight, sheet} and
+//              computes "velocity = interp(velocity lattice)". There was no
+//              implementation ANYWHERE -- `zhao_terrain_heighttap` IS 4.3 in
+//              fabric and contained zero occurrences of the string, and
+//              `zref::terrain::ColumnResult` carries {cls, top, bottom}.
+//            * 4.1 law 2 names the destination: "Every consumer --
+//              tessellation/render, sim height query, particle collision,
+//              velocity, normals, nav -- reads the SAME composed lattice."
+//            * `design/contracts/PART.COLLIDE.md`:135-139 commissioned the
+//              consumer: "body surface velocity enters the relative-velocity
+//              calculation ... so that the oracle is written with a
+//              relative-velocity form now, rather than an absolute-velocity
+//              form that would have to be rewritten later." The RTL shipped
+//              the absolute form that paragraph warned against.
+//
+//      (5) THE UNITS ARE MEASURED, NOT CHOSEN, and this was checked BEFORE any
+//          arithmetic was written, because a wrong conversion here would have
+//          been an invented physical constant. 4.2 stores velocity as
+//          height16; height16 is fx16 rescaled by 8, i.e. Q8.8 metres, so
+//          1 LSB = 1/256 m. `zhao_part_collide`'s own ratified FORMATS block
+//          (amendment C2 / ruling R3) reads "vel s11 S 2.8 m/tick -> 1 LSB =
+//          1/256 m". The field tick and the particle tick are ONE clock here.
+//          So the two are the SAME UNIT and the only conversion is a
+//          saturating narrow s16 -> s11, counted by `part_ter_vel_sats_o`.
+//          No spec in this tree states the velocity lane's TIME BASE, so had a
+//          scale factor been needed it would have had to be invented, and this
+//          packet would have stopped instead.
+//
+//      (6) NOTHING MOVES WITHOUT A LIVE FIELD, STRUCTURALLY. Law V2 makes the
+//          lattice word exactly zero at any vertex no lane covers, so
+//          `t_vy` is 0 over still ground and `zhao_part_collide`'s arithmetic
+//          collapses bit-for-bit to what it was. That is the whole
+//          compatibility argument and it is why no existing particle test
+//          moves.
+//
+//      (7) WHAT THIS DID NOT CLOSE, AND THE ENTRY STAYS OPEN FOR BOTH:
+//            * MATERIAL and NAV. Untouched, deliberately. Item (B) below puts
+//              them to the OWNER as a decision a packet may not take, and
+//              nothing here changes that: their destination is still
+//              unratified and the tree still declares two incompatible
+//              encodings. The velocity work does NOT generalise to them --
+//              velocity had a ratified destination and a ratified
+//              interpolation law, and they have neither.
+//            * THE INTAKE-versus-LIVE-PATCH hole. See the TERRVEL note in
+//              item (4) of the COMPOSEPUB block below.
+//
+//      (8) `zhao_terrain_normalmap` is now the ONLY entry left on the
+//          register's BUILT BUT NOT CONNECTED list. It is not this entry's.
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST. NARROWED AGAIN 2026-09-23 (PATCHV2), AND THE
 //      BLOCK BELOW IT OVERSTATED ONE THING AND UNDERSTATED ANOTHER.
 //
@@ -4494,6 +4595,80 @@
 //          resident set, a real engine run on the previous frame's uniforms
 //          MOVING NO COUNTER AT ALL. That half is now demonstrated (case 13b)
 //          and closed. Full statement in that block's header.
+//
+//          TERRVEL, 2026-09-26: THE QUESTION THIS ENTRY ASKED IS ANSWERED,
+//          AND THE ANSWER IS "NOTHING DOES". THE HOLE IS NOT CLOSED.
+//
+//          The entry's instruction was to "say what BOUNDS CMD.EXEC's record
+//          stream against the patch schedule rather than assert it is
+//          bounded". Measured, not inherited:
+//
+//            * THE STREAM IS BOUNDED IN QUANTITY. `zhao_cmd_exec`'s
+//              `TFLD_Q = 4` caps a packet at four records and refuses a
+//              bigger one WHOLE (`tfld_overflow_o`); `tq_cp` advances only at
+//              the verdict, so a packet's set becomes visible once,
+//              contiguously, and is never re-offered.
+//            * IT IS BOUNDED IN DRAIN RATE. The adapter's intake is
+//              I_TAKE + 17 x I_DIV + I_WR, about 19 clocks per record, so a
+//              full packet drains in roughly 76.
+//            * IT IS BOUNDED IN TIME RELATIVE TO A PATCH BY NOTHING AT ALL.
+//              `cmd_tfld_ready_w = tfl_cmd_ready && efa_rec_ready`. The first
+//              term is low only while a replay is RUNNING -- 16 clocks at the
+//              head of a patch -- and the second is `(in_st == I_TAKE)`.
+//              NEITHER TERM MENTIONS THE PATCH. For the remaining order 10^5
+//              clocks of a covered walk the joined ready is high.
+//            * THE ONLY THING STANDING IN FOR A BOUND IS A SENTENCE IN
+//              `zhao_cmd_exec.sv`:667-669 -- that staging a packet is
+//              thousands of clocks while a drain is a handful. That is a
+//              property of the cartridge's packet stream, not of this
+//              hardware, and the number it has to beat is not "a handful" but
+//              a patch walk of order 10^5 clocks that nothing tells the
+//              adapter has ended.
+//
+//          WHERE THE CLEAR ACTUALLY IS, stated precisely because the entry's
+//          phrasing invites the wrong file: inside the adapter `patch_open_i`
+//          touches exactly one register (`rep_idx <= 0`). The clear that drops
+//          the binding is the INTAKE's, `b_res[eff_n_c] <= 1'b0` at I_TAKE,
+//          firing for frame F+1's record while frame F's replay-set `b_res` is
+//          still being read by the lane stream.
+//
+//          `fld_earth_idle_o` IS THE RIGHT SIGNAL, CONFIRMED. It is
+//          `(in_st == I_TAKE) && (state == E_IDLE) && !vtx_live`, and
+//          `vtx_live` is raised at a vertex fire with `lanes_i != 0` and is
+//          high for the whole of a patch's field walk. Its ZERO READERS are
+//          re-confirmed at this commit, and it is not alone: `terr_pt_idle_o`
+//          and `terr_fl_idle_o` have the same shape, core port -> board port
+//          -> nothing, and a sweep of the production composers finds NO
+//          `*_idle_o` used as a gate anywhere.
+//
+//          THE CANDIDATE CLOSE IS ONE LINE, AND IT IS NOT TAKEN HERE:
+//            assign cmd_tfld_ready_w =
+//                tfl_cmd_ready && efa_rec_ready && fld_earth_idle_o;
+//          It is refused for two reasons, both of which are MEASUREMENTS
+//          somebody owes before that line lands, and neither of which this
+//          packet could settle without building the thing it would gate:
+//
+//            1. DEADLOCK, and it is reachable rather than theoretical.
+//               `vtx_live` is set by a vertex fire and the adapter has NO PORT
+//               THAT SAYS THE PATCH RETIRED -- that is this very entry's
+//               finding. The composer discards an entire unplaced patch
+//               (`tps_v_ready = tpc_placed ? ... : 1'b1`, :22257), so a walk
+//               abandoned part-way is a legal thing for the console to do. If
+//               `vtx_live` can survive that, the gate holds CMD.EXEC's record
+//               stream for the rest of the frame and the fault is far worse
+//               than the one it repairs. A bounded clear has to exist first.
+//            2. STARVATION. A covered patch walk is order 10^5 clocks against
+//               the 10,416-clock frame allowance this entry already records.
+//               Gating the stream on idle makes it wait for the gaps between
+//               walks. There ARE gaps -- one packet per frame, many patches
+//               per frame -- but that is a SCHEDULING argument, which is the
+//               same kind of claim this hole exists to retire.
+//
+//          AND THE DETECTOR NEARBY IS THE MIRROR IMAGE, not this fault:
+//          `zhao_terrain_fieldlist`'s `open_at_patch_o` counts a PATCH JOB
+//          meeting an UNSEALED LIST. Records arriving mid-patch leave it at
+//          zero, so its silence is not evidence about this hole. Anyone
+//          quoting it as such is reading the wrong counter.
 //
 //          WHAT REMAINS HERE, NARROWED. Intake versus REPLAY is closed.
 //          Intake versus a LIVE PATCH is not, and it is THIS file's to close,

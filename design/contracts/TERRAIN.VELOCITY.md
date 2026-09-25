@@ -190,13 +190,32 @@ still needs.
 
 ## Memory ownership
 
-**As built: none.** The block has no VRAM port. Lane words arrive on one stream
-and height16 words leave on the other. When a memory subsystem exists it is the
-writer of the §4.2 velocity lattice (0.53 MiB of the terrain hot cache, §8)
-via its MEM.GUARD grant. §7's ownership table does not yet name the velocity
-plane at all; it names A/B/C/D/E/F/H and "the composed cache written only by
-TERRAIN.PATCH". The velocity plane wants the same sentence and does not have
-one — recorded here, not written into §7 by this increment.
+**As built: none, and that is now a statement about the BLOCK rather than
+about the console.** The block still has no VRAM port: lane words arrive on one
+stream and height16 words leave on the other, which is the right shape and is
+unchanged.
+
+**AMENDED 2026-09-26 (TERRVEL). THE §4.2 LATTICE HAS AN OWNER AND IT IS NOT
+SDRAM.** The paragraph that stood here said the lattice waits on "a memory
+subsystem ... via its MEM.GUARD grant". That destination is REFUSED, with a
+bandwidth proof, in `spec/memory_rules.md` §5b (packet COMPOSEPUB, 2026-09-25):
+charging the composed publish takes the frame from 80.17% to 124.41% at the
+flattering hit spans and to 177.49% once the fill-side read that would make it a
+consumer is counted. **The route the refusal leaves open is FABRIC**, and
+`spec/terrain_rules.md` §4.1 law 2 already said which one: *"Every consumer —
+tessellation/render, sim height query, particle collision, velocity, normals,
+nav — reads the SAME composed lattice."*
+
+So the §4.2 lattice lives in `zhao_terrain_compcache_front`'s velocity plane
+(2 × 1,089 × 16 b, about 4 M10K), written straight off this block's `vv_*`
+stream, and read back through `zhao_terrain_heighttap` — which is §4.3's
+`column_query` in fabric. The SDRAM region `TERRAIN.COMPOSED_VELOCITY` stays
+unwritten and its guard window stays shut.
+
+§7's ownership table still does not name the velocity plane, and that is still
+worth fixing; what has changed is that the sentence it wants is now *"the
+composed velocity plane, written only by TERRAIN.VELOCITY"* and the block that
+would satisfy it exists.
 
 ## Q formats and rounding
 
@@ -371,10 +390,21 @@ and been sliced off, and that would not synthesize.
 
 ## Integration capture cases
 
-None yet — the block has no capture surface until a memory subsystem owns the
-§4.2 lattice. The `terrain-wave` / `terrain-impact` / `terrain-scars` reel
-subjects are the shipping software console's live deformation and remain the
-behaviour this lane must stay consistent with.
+**AMENDED 2026-09-26 (TERRVEL): there is one, and the sentence that stood here
+— "none yet ... until a memory subsystem owns the §4.2 lattice" — was made
+false by giving the lattice a FABRIC owner instead of a memory one.**
+
+`tests/terrain/terrain_veljoin_directed.cpp` drives this block and
+`zhao_terrain_veljoin` as a real pair, wired as `zhao_console_core` wires them,
+and checks all 1,089 lattice words against `zref::terrain::velocity_vertex`.
+In the console the chain continues: compose cache velocity plane →
+`zhao_terrain_heighttap`'s §4.3 velocity cell → `zhao_part_terrain_tap`'s
+interpolation → `zhao_part_collide`'s relative-velocity term. The
+consumer-side counters are `part_ter_moving_o` and `part_col_moving_ground_o`.
+
+The `terrain-wave` / `terrain-impact` / `terrain-scars` reel subjects are the
+shipping software console's live deformation and remain the behaviour this lane
+must stay consistent with.
 
 ## OPEN: persistent scars or healing wake — NOT ratified anywhere
 

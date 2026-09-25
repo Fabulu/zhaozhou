@@ -574,7 +574,21 @@ module zhao_part_terrain_tap #(
 
         S_EV1: begin
           acc_q <= acc_q + mul_p_c;
-          st_q  <= S_EV3;
+          // THE VELOCITY MADS ARE ONLY SPENT WHEN THERE IS A VELOCITY TO
+          // INTERPOLATE, and that is not tidiness -- it is the block's
+          // declared throughput. This lane is SIX CLOCKS PER PARTICLE
+          // (header, and `part_terrain_tap_directed` asserts the number), and
+          // running the two extra MADs unconditionally made it EIGHT: a 33%
+          // cut to particle collision sampling, paid on every frame, to
+          // interpolate a plane that is absent in every one of them today.
+          // Skipping them when `vpres_q` is low keeps the no-field console
+          // byte-identical in TIMING as well as in value, and charges the two
+          // clocks only to the frames that use the feature.
+          //
+          // `vacc_q` is not cleared on the skip and does not need to be: `v_c`
+          // is read only under `vpres_q`, which is the same bit that chose
+          // this branch.
+          st_q  <= vpres_q ? S_EV3 : S_EV2;
         end
 
         S_EV3: begin

@@ -71,6 +71,17 @@
 //     (I34: "zhao_field_host's front holds ONE point in flight, so a covered
 //     vertex-lane is order 80-100 clocks").
 //
+//     AND THE FIRST VERTEX FIRE IS LATE ENOUGH, WHICH IS A STRUCTURAL FACT AND
+//     NOT A RACE THIS BLOCK WINS BY LUCK. `zhao_terrain_fieldlist` raises
+//     `patch_stall_o` (`rp_pending || rp_run`) from `patch_open_i` until its
+//     per-patch replay has drained, and the composer ANDs it into the vertex
+//     lane: `tpt_vtx_valid = tps_v_valid && tpc_placed && !tfl_patch_stall`
+//     (`zhao_console_core.sv`:22256). So no vertex can fire while the section
+//     9.1 list is still being refilled, and `fields_active_o` is therefore
+//     settled at the first fire by construction. Directive 13.4 forbids
+//     exactly the alternative -- a comment promising the page burst is long
+//     enough -- and FIELDARM built the stall rather than write one.
+//
 //     This also handles the unplaced patch for free and for the right reason.
 //     The composer discards a whole unplaced patch --
 //     `tps_v_ready = tpc_placed ? (tpt_vtx_ready && !tfl_patch_stall) : 1'b1`
