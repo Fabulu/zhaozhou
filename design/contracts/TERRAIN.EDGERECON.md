@@ -1146,6 +1146,100 @@ would have read zero for ever while looking like the right instrument. The form
 that ships differences the offer bit against the port's availability, which
 come from different state.
 
+#### THE FIT: RUN, ANSWERED, AND THE ANSWER IS THAT IT DOES NOT PLACE
+
+`zhao_console_core@edgeclose`, 9,335.7 s, `rtlCleanAtHead: true`,
+`treeCleanAtHead: true`, digest `86fe42d2b46e` over 276 sources — **verified
+byte-identical to HEAD's closure**, because the only RTL committed after the
+fit started was `zhao_console_board.sv`, which is not in it.
+
+**THE QUESTION** (restated; the contract's own was wrong — see above): *does the
+composed console still place, with the six blocks added?*
+
+**THE ANSWER IS NO, AND NO ALM NUMBER EXISTS.** The fitter ran 1 h 54 m wall /
+14 h 19 m CPU at 17 GB peak virtual memory and stopped in placement
+preparation:
+
+```
+Error (170011): Design contains 336023 blocks of type combinational node.
+                However, the device contains only 227120 blocks.
+Error (11802):  Can't fit design in device.
+```
+
+**THE FIVE RESOURCE CATEGORIES, KEPT APART**, because three of them do not
+exist and saying so is the point:
+
+| | value | stage |
+|---|---:|---|
+| combinational nodes REQUIRED | **336,023** | fitter, placement prep |
+| combinational nodes AVAILABLE (5CEBA9F31C7) | **227,120** | device |
+| registers | **405,872** | Analysis & Synthesis |
+| block memory bits | **3,009,171** | Analysis & Synthesis |
+| DSP blocks | **375** | Analysis & Synthesis |
+| virtual pins | **40,610** | Analysis & Synthesis |
+| **estimated ALMs** | **NOT PRODUCED** | — |
+| **placed ALMs** | **NOT PRODUCED** | — |
+| **Fmax / slack** | **NOT PRODUCED** | — |
+
+`Logic utilization (in ALMs) : N/A` in the map summary, and the fitter never
+placed, so there is no ALM figure of any kind from this run. **Do not let one
+be inferred from the register count.** And note the device in that table is the
+**SIZING** part: the shipping target is 5CSEBA6U23I7 at 41,910 ALM, so a design
+at 148 % of a part nearly three times its size is further over than the ratio
+above suggests.
+
+**THIS IS NOT A REGRESSION THIS PACKET INTRODUCED, AND THE COMPARISON THAT SAYS
+SO IS NOT `@console-core-first-light`.** That row is 106 sources from
+2026-09-18 and describes a much smaller console; differencing against it would
+attribute six months of growth to one packet. The honest baseline is
+`@diag-incomplete-14gaps` — 258 sources, the same sizing device, and **the same
+status and the same partial stage**:
+
+| | @diag-incomplete-14gaps | @edgeclose | delta |
+|---|---:|---:|---:|
+| sources | 258 | 276 | +18 |
+| registers | 381,585 | 405,872 | +24,287 (+6.4 %) |
+| block memory bits | 2,960,515 | 3,009,171 | +48,656 (+1.6 %) |
+| DSP blocks | 359 | 375 | +16 |
+| virtual pins | 36,752 | 40,610 | +3,858 |
+| status | `incomplete:failed:quartus_fit.exe` | **the same** | — |
+| partial stage | `analysis_and_synthesis` | **the same** | — |
+
+**THE DELTA SPANS EIGHTEEN FILES AND SEVERAL PACKETS, AND SIX OF THE EIGHTEEN
+ARE THIS SEAM'S.** The other twelve are FORGE.SHADOW's three, GEOM.LOD's four,
+the FIELD earth adapter, the fragment-state package, TERRAIN.TAPSHARE and
+TERRAIN.UVLANE. Attributing +24,287 registers or +16 DSP to EDGECLOSE would be
+arithmetic wearing a measurement's clothes.
+
+**THE +16 DSP GOT THE EXTRA FIVE MINUTES**, because "none of it is mine" is
+exactly the comfortable explanation this repository has been burned by. Counted
+by site across all eighteen new files: the only genuine variable-by-variable
+products are in `zhao_field_earth_adapter` (20 sites), `zhao_geom_ladderbank`
+(9) and `zhao_forge_shadow` (4). **Every `*` in the six blocks of this seam is
+an `import ::*`, an elaboration-time constant inside `initial`, or a
+multiplication by a power of two** — `{...} * SUB_EDGE_6` (8) and `{...} * 2`
+for a bit-slice offset. Zero multipliers.
+
+**AND THAT IS AN INSPECTION, NOT A PER-ENTITY MEASUREMENT.** Quartus emits
+resource usage by entity in the FITTER report, and there is no fitter report,
+because the fitter failed. Anyone who needs the per-block number should run
+`tools/quartus/run_block_map.ps1` on the six; it is a map and not a fit.
+
+**WHAT THE RUN DID SETTLE, AND IT IS R212.** `Analysis & Synthesis Status :
+Successful`. All six blocks went through `quartus_map` inside the composed
+console under Quartus 17.0.2. The contract said P4's fit was where that would
+be settled, and it was — a clean `verilator --lint-only` settles one tool's
+opinion, and this settles the other. None of the elaboration guards fired and
+none of the Quartus-17-rejected forms appeared.
+
+**THE ROW IS KEPT.** It is `failed`, and per CLAUDE.md the field to read first
+is `rtlCleanAtHead`, which is TRUE: this is a real measurement of a real limit
+from a clean tree, which is the opposite of the dirty-tree `ok` row that rules
+file warns about. Directive section 0: *"A measured engineering impossibility is
+a finding, not permission to invent a pass."* The finding is recorded; the
+correct configuration is unchanged and passing; nothing was cut to obtain a
+number.
+
 ## Notes
 
 1. **The bank stores decisions, not geometry.** The ruling permits buffering

@@ -130,6 +130,31 @@ fit-*.log
 # The evidence is the fit summary, the setup report's gating path and
 # reports/synthesis/worst_path_index.json -- not the node list they were
 # derived from. Same reasoning as *.rgb: the contact sheet, not the frames.
+# Quartus RAW STAGE STDOUT, untracked 2026-09-25 (EDGECLOSE).
+# `zhao_console_core@edgeclose.quartus_map.log` is 208 MB and GitHub refuses a
+# file over 100 MB, so the push was REJECTED and that is how this was found --
+# not by anyone noticing the size.
+#
+# It is the same class as `fit-*.log` above, which the 2026-09-07 note already
+# untracked for the same reason: raw console spew whose useful content is
+# already harvested. The naming simply missed it, because run_block_fit.ps1
+# writes these into blockpaths/ rather than the repo root.
+#
+# WHAT IS KEPT AND IS THE EVIDENCE: `*.map.summary` (546 bytes, and it carries
+# the register/memory/DSP/virtual-pin totals), `*.quartus_fit.log` (21 KB, and
+# it carries the Error 170011 / Error 11802 pair that says WHY a fit failed),
+# `*.sources.sha256`, and the row in zhao_block_fit.json. The MAP log is a node
+# dump; nothing has ever been read out of it that the summary does not state.
+# NOTE the fit log is deliberately NOT ignored -- it is small and it is the
+# only place the failure reason appears in words.
+#
+# WHAT NOW REMOVES THEM, because an ignore rule that hides waste is not a rule
+# that removes it (CLAUDE.md, the 952 GB incident): the filename is keyed on
+# `<module>@<label>`, so re-running the same row OVERWRITES it rather than
+# accumulating, and `tools/maintenance/purge_render_intermediates.py` already
+# sweeps anything untouched for 48 h. Asked and answered, so the next person
+# does not have to rediscover the question.
+reports/synthesis/blockpaths/*.quartus_map.log
 reports/synthesis/blockpaths/*.map.rpt
 reports/synthesis/blockpaths/*.fit.rpt
 # Setup/hold reports too: 2-6 MB each, 50 tracked, ~200 MB of blockpaths.
