@@ -2343,3 +2343,81 @@ summary and measures nothing itself, which keeps it on the comparison side.
 **Not measured, so the census is not read as complete:** `zhao_geom_bin_pipe_v2`
 (86) and `zhao_proj_subsystem` (39) have no leaf target. With the census that
 accounts for 220 of 375.
+
+### 2026-09-26 — PALRAM MERGED: 100,561 registers become 1,865. And I broke a tool.
+
+**Merged at `4d9afb25`.** `zhao_geom_drawjob`: **registers 100,561 -> 1,865,
+ALUTs 33,914 -> 1,266, memory bits 0 -> 98,304** in one 256x384 simple dual port.
+The 65,280-LE 256:1 mux is gone. `XFORMS` stays 256, the refusal still refuses
+and counts, and `geom_drawjob_directed` passes **676 checks / 0 failed** — built
+and run on the merged tree here, not inherited. **No ALM or Fmax anywhere: this
+design has never placed.**
+
+**The cause is a CONJUNCTION**, which is why it survived every review — each
+property is correct alone. A **part-select element write** (twelve 32-bit slices
+in a loop) **AND** an **index wider than the array's address**. Remove either and
+it infers.
+
+| arm | change | registers | mem bits |
+|---|---|---:|---:|
+| 0 | production (control) | 99,008 | 0 |
+| 1 | whole-element write | 320 | 98,304 |
+| 2 | index narrowed, **slices kept** | 320 | 98,304 |
+| 3 | read split to own `always_ff` | 99,008 | 0 |
+| 4 | 1 + 2 | 320 | 98,304 |
+
+**Arm 3 is the one that matters.** The shared `always_ff` is what a plausible
+story would have convicted, and it is innocent. **PALRAM's own first conclusion
+was wrong** — after arm 1 it had a clean single-cause story and arm 2 refuted it.
+Only the controls it had already predicted caught it.
+
+**It was measured in August and the checker never learned it.**
+`QUARTUS_GOTCHAS.md` §10 is a 102-bench grid naming byte enables as the third
+killer, and `zhao_surface_sheet.sv:164` paid 131,258 registers for it.
+`check_ram_inference.py` encoded killers 1 and 2 and never 3 — **which is why its
+silence on the biggest array in the design was not a verdict.** Rule 5 now
+encodes it, with blocking positive AND negative controls.
+
+**I checked rule 5's seven other hits against the entity table before anyone
+spends a packet:** all small, largest `zhao_terrain_sheetseam.bf_q` at 9,801
+bits — and that instance holds 167 registers and 18,513 memory bits in the
+console, so the source hit is **not a console cost**. A source checker reads
+declared parameters, not the composition's. **The big prize was `pal_q` and it is
+taken.** The one real remainder in the family is `zhao_geom_lodstate.st_q`:
+9,216 bits, **9,985 own registers, zero memory bits**, blocked by a
+combinational read and a reset loop. Third in the queue.
+
+### THE MISTAKE, and a gate caught it rather than me
+
+I created `tools/budget/dsp_census.py` for the DSP mode table. **That name was
+already taken**, and I overwrote a **999-line committed instrument** — the
+resource bill, one selected measurement per instance across every ledger under
+the rescue brief's §2.3 selection order. **I did not look at the target before
+writing to it.** CLAUDE.md says to, in those words.
+
+**What caught it was `gate_sweep`**, moving `uncashed_cheques.py --gate` from
+**0 -> 1** because it imports `load_evidence` and `commit_time` from the module I
+replaced. The baseline did its job. **I had already written up and pushed the
+census as finished work while that gate was red.**
+
+Repaired in the merge: original restored from git, `--self-test` passes (twelve
+selection fixtures plus dirty, duplicate and misattributed-shell controls); mine
+renamed **`tools/budget/dsp_mode_census.py`** with a header stating what it is
+NOT; every reference in the handover, this log and the ATTRSETUP brief updated;
+`dsp_census.md` renamed `dsp_mode_census.md`.
+
+**The lesson is narrower than "be careful": a new tool's NAME is a claim that
+nothing owns it, and that claim is checkable in one command.** I checked the
+content of everything I measured and not the name of the file I wrote it into.
+
+### WHERE I AM
+
+**Running:** TERRVEL (velocity + I34's live-patch hole) and **ATTRSETUP**,
+launched at `4d9afb25`. **At the cap of two.**
+
+**Register 7**, unchanged by PALRAM — it is optimization, not a gap close.
+Remaining: `I13`+`normalmap`, `I34`+`velocity`, `I54`, `I55`, `I56`.
+
+**Optimization queue:** ATTRSETUP (running) -> `zhao_forge_assemble`'s
+`pos_q`/`inv_q` (34,840 bits, **not free**) -> `zhao_geom_lodstate`'s `st_q`
+(9,216 bits).
