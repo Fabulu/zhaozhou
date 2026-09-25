@@ -228,6 +228,12 @@ module tb_partmat_acceptance #(
     .c_attr_a_i       (c_attr_a_c),
     .c_attr_b_i       (c_attr_b_c),
     .c_attr_c_i       (c_attr_c_c),
+    // ARENAID 2026-09-25: the identity half, tied -- this bench measures
+    // the door's material arbitration, not the identity space.
+    .c_key_a_i        ('0),
+    .c_key_b_i        ('0),
+    .c_key_c_i        ('0),
+    .c_rider_i        ('0),
     .c_material_set_i (c_mset_c),
     .c_material_id_i  (c_mid_c),
     .c_material_mode_i(c_mmode_c),
@@ -250,6 +256,10 @@ module tb_partmat_acceptance #(
     .o_attr_a_o       (cd_o_attr_a),
     .o_attr_b_o       (cd_o_attr_b),
     .o_attr_c_o       (cd_o_attr_c),
+    .o_key_a_o        (),
+    .o_key_b_o        (),
+    .o_key_c_o        (),
+    .o_rider_o        (),
     .o_material_set_o (cd_o_material_set),
     .o_material_id_o  (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),

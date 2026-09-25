@@ -376,6 +376,17 @@ module tb_zhao_geom_paramarena
       .ck_count_i(ck_count_i),
       .ck_ids_i  (ck_ids_i),
 
+      // ARENAID 2026-09-25: the allocation index rides its own acceptance, so
+      // a producer can NAME the vertex it just published. This bench does not
+      // exercise the identity space -- `geom_vertid_directed` does, with a
+      // model of these very ports -- so they leave open. Declared rather than
+      // omitted: a missing pin is what the next fit finds.
+      .pv_accept_o (),
+      .pv_id_o     (),
+      .td_accept_o (),
+      .td_id_o     (),
+      .seal_fire_o (),
+
       .scr_req_i  (scr_req_w),
       .scr_grant_o(scr_grant_o),
 

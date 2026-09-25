@@ -28,6 +28,7 @@
 // mutant, because all twelve are reachable with legal stimulus at this block's
 // own ports -- which is the point of the port list being what it is.
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -94,6 +95,8 @@ struct Pub {
   int32_t uow, vow;
   uint32_t rgba;
 };
+
+void ck(bool cond, const char* what);
 
 struct Env {
   Vzhao_geom_vertid* v;
@@ -167,20 +170,26 @@ struct Env {
       rec.vow = static_cast<int32_t>(v->pv_vow_o);
       rec.rgba = v->pv_rgba_o;
     }
-    if (td_acc) {
+    if (td) {
       ids[0] = v->td_v0_o;
       ids[1] = v->td_v1_o;
       ids[2] = v->td_v2_o;
     }
     tick();
+    // `pubs` holds ALLOCATED records only; `descs` holds every descriptor
+    // HANDSHAKE, accepted or sunk. The distinction is the point of case 1: an
+    // unsealed frame must still retire descriptors at full rate, and a model
+    // that recorded only accepted ones could not tell a free sink from a wedge.
     if (pv_acc) {
       pubs.push_back(rec);
       if (!force_pv_id) ++vcursor;
     }
-    if (td_acc) {
+    if (td) {
       descs.push_back(ids);
-      desc_ids.push_back(tcursor);
-      ++tcursor;
+      if (td_acc) {
+        desc_ids.push_back(tcursor);
+        ++tcursor;
+      }
     }
   }
 
@@ -251,7 +260,7 @@ struct Env {
       if (taken) v->tri_valid_i = 0;
       if (descs.size() >= want) return;
     }
-    check(false, "GEOM.VERTID: a triangle did not retire inside 200 clocks");
+    ck(false, "GEOM.VERTID: a triangle did not retire inside 200 clocks");
   }
 };
 
@@ -283,7 +292,7 @@ uint32_t rgba_of(const Attr& a) {
 int checks = 0;
 void ck(bool cond, const char* what) {
   ++checks;
-  check(cond, what);
+  check(cond, what, 1, cond ? 1 : 0);
 }
 
 }  // namespace
@@ -479,6 +488,13 @@ int main() {
     t.key[2] = key_of(1, 9, 0);                // legal
     for (int k = 0; k < 3; ++k) { t.x[k] = 11 + k; t.y[k] = 12 + k; }
     e.submit(t);
+    // Corner C is the legal one and is published last of the three, so the
+    // most recent record is its. Checked HERE and not after the second
+    // triangle, where C is a HIT and the last record is an illegal corner's.
+    ck(e.pubs.back().status == status_of(kDomMesh, false, true),
+       "out-of-range key: the legal corner is still shared_capable");
+    ck(e.pubs[e.pubs.size() - 2].status == status_of(kDomMesh, false, false),
+       "out-of-range key: an illegal corner is NOT shared_capable");
     // Offer the identical triangle again: the two illegal keys must publish
     // AGAIN (they were never held), and only the legal one may be reused.
     e.submit(t);
@@ -487,8 +503,6 @@ int main() {
        "out-of-range key: four illegal corners counted across two triangles");
     ck(dut.vid_reused_o - r0 == 1,
        "out-of-range key: only the LEGAL corner was reused");
-    ck(e.pubs.back().status == status_of(kDomMesh, false, true),
-       "out-of-range key: the legal corner is still shared_capable");
   }
 
   // ------------------------------------------------------------------ case 6
@@ -581,16 +595,23 @@ int main() {
       t.y[k] = 52 + k;
     }
     e.submit(t);
-    size_t n = e.descs.size();
-    uint16_t before = e.descs[n - 1][0];
+    // Offer it a SECOND time inside the same frame first, so the case proves
+    // the row was there to survive: three reuses, then none across the seal.
+    uint32_t rs = dut.vid_reused_o;
+    e.submit(t);
+    e.idle(2);
+    ck(dut.vid_reused_o - rs == 3,
+       "frame boundary: inside one frame the same key is reused");
     e.seal();
     uint32_t r0 = dut.vid_reused_o;
+    size_t p0 = e.pubs.size();
     e.submit(t);
     e.idle(2);
     ck(dut.vid_reused_o - r0 == 0, "frame boundary: no row survived the seal");
+    ck(e.pubs.size() - p0 == 3,
+       "frame boundary: all three corners were published again");
     ck(e.descs.back()[0] == 0,
        "frame boundary: the new frame's first vertex is id 0");
-    ck(before != 0 || n == 0, "frame boundary: the earlier id was not 0");
   }
 
   // ----------------------------------------------------------------- case 10
@@ -723,5 +744,8 @@ int main() {
   ck(dut.vid_seal_abort_o > 0, "fired: vid_seal_abort_o");
   ck(dut.vid_stall_o > 0, "fired: vid_stall_o");
   std::printf("geom_vertid_directed: all twelve counters fired\n");
-  return 0;
+  // The harness accumulates failures rather than aborting, so the verdict has
+  // to be asked for. Exiting through the harness is also the toolchain
+  // workaround zhao_sim.hpp records: every Verilated main here ends this way.
+  return zhao::report_and_exit("geom_vertid_directed");
 }

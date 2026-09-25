@@ -93,6 +93,12 @@ module tb_terrain_downstream (
       .tri_attr_a_i         (tri_attr_a_i),
       .tri_attr_b_i         (tri_attr_b_i),
       .tri_attr_c_i         (tri_attr_c_i),
+      // ARENAID 2026-09-25: the identity half, tied -- the terrain arm
+      // reaches GEOM.CLIP through its own producer and carries no arena key.
+      .tri_key_a_i          ('0),
+      .tri_key_b_i          ('0),
+      .tri_key_c_i          ('0),
+      .tri_rider_i          ('0),
       .vp_x0_i              (vp_x0_i),
       .vp_y0_i              (vp_y0_i),
       .vp_w_i               (vp_w_i),
@@ -116,6 +122,10 @@ module tb_terrain_downstream (
       .out_attr_a_o         (c_attr_a_unused),
       .out_attr_b_o         (c_attr_b_unused),
       .out_attr_c_o         (c_attr_c_unused),
+      .out_key_a_o          (),
+      .out_key_b_o          (),
+      .out_key_c_o          (),
+      .out_rider_o          (),
       .out_flip_o           (c_flip_unused),
       .ret_valid_o          (ret_valid_o),
       .ret_verdict_o        (ret_verdict_o),

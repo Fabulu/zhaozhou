@@ -5882,13 +5882,36 @@ module tb_zhao_console_core_smoke
     // WHAT THE NUMBERS BELOW ACTUALLY MEAN IN THIS COMPOSITION, so nobody
     // reads a zero as a pass. Console entries I53/I54 tie the vertex and chunk
     // intakes, and I55 ties the walk request. So in THIS bench:
-    //   verts/chunks  are EXPECTED ZERO -- no producer port exists yet
-    //   dirs/walk/*   are EXPECTED ZERO -- nothing asks for a walk
-    //   tris          is the LIVE one: GEOM.ASSEMBLE's descriptors, tapped
+    //   verts         is LIVE as of 2026-09-25 (ARENAID, entry I53 CLOSED):
+    //                 `u_geom_vertid` publishes GEOM.CLIP's post-clip corners,
+    //                 once per {arena, generation, index} identity
+    //   tris          is LIVE and now POST-CLIP: the descriptors name the ids
+    //                 the ALLOCATOR handed back, not GEOM.ASSEMBLE's
+    //                 arena-local indices
+    //   chunks        is EXPECTED ZERO -- no producer port yet (entry I54)
+    //   dirs/walk/*   are EXPECTED ZERO -- nothing asks for a walk (entry I55)
     // The detectors below them -- overrun, addrbad, retireunder, dirmiss,
     // genrace, stray, ws_unowned -- are the ones that must be zero for a
     // reason rather than for lack of traffic, and `tris` non-zero beside
     // them is what makes their zero worth anything at all.
+    // GEOM.VERTID -- the one geometry identity space (ARENAID, entry I53).
+    // `reused` is the property the whole scheme exists for: a corner answered
+    // from the identity map instead of published a second time. It is printed
+    // beside `refs` and `published` because the three are one statement --
+    // refs == published + reused + sunk -- and a `published` nobody can
+    // compare `refs` against is a number, not evidence.
+    $display("SMOKE: vertid     tris=%0d refs=%0d published=%0d reused=%0d unshared=%0d",
+             geom_vid_tris_o, geom_vid_refs_o, geom_vid_published_o,
+             geom_vid_reused_o, geom_vid_unshared_o);
+    $display("SMOKE: vertid     opens=%0d sunk=%0d stall=%0d",
+             geom_vid_opens_o, geom_vid_sunk_o, geom_vid_stall_o);
+    if (geom_vid_refs_o !=
+        (geom_vid_published_o + geom_vid_reused_o + geom_vid_sunk_o)) begin
+      $display("SMOKE FAIL: vertid refs %0d != published %0d + reused %0d + sunk %0d",
+               geom_vid_refs_o, geom_vid_published_o, geom_vid_reused_o,
+               geom_vid_sunk_o);
+      $fatal(1, "GEOM.VERTID: every corner reference is published, reused or sunk");
+    end
     $display("SMOKE: paramarena verts=%0d tris=%0d chunks=%0d frames=%0d unsealed=%0d",
              geom_pa_verts_o, geom_pa_tris_o, geom_pa_chunks_o,
              geom_pa_frames_o, geom_pa_unsealed_o);

@@ -258,14 +258,33 @@ triangles. All eight fields are compared; a check that compared only the
 generation would pass while every base was wrong, and the bases are what a bad
 address or a wrong beat demux corrupts.
 
-### One declared divergence from the tier table above
+### The divergence that was declared here is CLOSED (ARENAID, 2026-09-25)
 
-`GEOM.PARAMARENA`'s `MAX_VERTS` defaults to **65,535**, not the 65,536 the
-preferred tier states. A `vertex_id` is u16 and `td_sealed_vertices_i` is u16
-with it, so the *seal* 65,536 is not expressible in the port the legality rule
-is tested against — it would arrive as 0 and refuse every triangle. The choices
-were to widen a frozen record layout, to special-case the maximum, or to lose
-one vertex of 65,536. This takes the vertex, and the number stays a knob.
+**This section used to record a permanent loss and it was a port width.** It
+said `MAX_VERTS` defaults to 65,535 because *"a `vertex_id` is u16 and
+`td_sealed_vertices_i` is u16 with it, so the seal 65,536 is not expressible in
+the port the legality rule is tested against"*, and concluded *"this takes the
+vertex, and the number stays a knob."*
+
+Owner vacation directive §4: *"Retain R7's intended 65,536-vertex capacity: IDs
+0..65,535 fit u16, but a COUNT of 65,536 requires a wider internal count/limit.
+Use at least 17 bits for that count instead of silently sacrificing a vertex or
+representing full capacity as zero."*
+
+Three places, one cause, all repaired:
+
+* `zhao_geom_parambuf`'s `td_sealed_vertices_i` is **u18** (18 rather than 17
+  because the arena's cursors, quotas and publication ports already are);
+* `zhao_geom_paramwalk`'s `w_verts_q` is u18 and **no longer saturates the
+  published count at `0xFFFF`** — that saturation was the "silently sacrificing
+  a vertex" arriving through a clamp rather than a truncation;
+* `zhao_geom_paramarena`'s `MAX_VERTS` defaults to **65,536**.
+
+**The record layout did not move.** A `vertex_id` is still u16 and still names
+0..65,535 — which is exactly 65,536 ids. **Allocation stride and serialized
+record size remain separate concepts**, and so do a serialized *id* and an
+internal *count*. The allocation side never needed the change, which is why this
+was a decoder-port defect wearing an allocator's clothes.
 
 ### Capacity tiers
 
@@ -384,17 +403,44 @@ and composed in `zhao_console_core`, behind the real `zhao_mem_guard`, the real
 **WHAT REACHES THE ARENA IN THE COMPOSED CONSOLE, AND WHAT DOES NOT.** Said
 plainly, because "composed" and "exercised" are different claims:
 
-* **TriangleDescriptor — REAL.** `zhao_geom_assemble`'s live output, the stream
-  this repository's own comments call "exactly GEOM.PARAMBUF's layout", already
-  feeding GEOM.REPLAY. The arena taps it losslessly: `asm_t_ready` is
-  GEOM.REPLAY's ready ANDed with the arena's.
-* **ProjectedVertex — TIED**, console entry I53. Not "not built": the record
-  path is built and tested, and what is missing is a producer PORT. GEOM.PROJECT
-  emits *triangles* (`proj_out_*`) and the arena's intake is a *vertex*, and
-  bridging them needs a vertex-identity scheme, because a descriptor names
-  vertices by u16 index and two triangles sharing an edge must name the same
-  one. `zhao_geom_wcache` already holds projected vertices by identity and is
-  the obvious owner of that decision.
+* **TriangleDescriptor — REAL, and POST-CLIP since 2026-09-25.** It used to be
+  `zhao_geom_assemble`'s live output, tapped with GEOM.REPLAY. **That is
+  superseded**: §4 requires descriptors to *"refer to the FINAL arena IDs, not
+  to an earlier private store"*, and GEOM.ASSEMBLE's `t_v*_o` are GEOM.REPLAY's
+  **arena-local** indices, which restart at zero in every meshlet. The tap is
+  **moved** to `zhao_geom_vertid`'s output, not duplicated — two descriptor
+  streams in two namespaces filling one array is the fault entry I54 measured
+  and refused.
+
+  **The per-primitive metadata the 16-byte record cannot carry** — the
+  `material_set` handle32, `material_mode`, `frag_state`, the R89 flat
+  `vertex_alpha`, `quality_tier` and the per-primitive untextured bit — is
+  **not** overloaded onto an existing field and **not** replaced with a
+  convenient zero. §4's remedy, a **versioned `TriangleExt` sidecar keyed by the
+  same `triangle_id`**, is specified in `design/contracts/GEOM.VERTID.md`; its
+  **writer belongs to entry I54**, which owns triangle serialisation. Until it
+  exists the shortfall is a declared gap.
+* **ProjectedVertex — REAL**, console entry I53 **CLOSED 2026-09-25**
+  (packet ARENAID, owner vacation directive §4). The producer is
+  **`zhao_geom_vertid` — GEOM.VERTID**, the console's one geometry identity
+  space, with its own contract at `design/contracts/GEOM.VERTID.md`.
+
+  It sits on **GEOM.CLIP's output** — the final geometry the binner references —
+  and publishes each corner once per identity, where the identity is the
+  console's own arena lookup key `{domain, arena, generation, index}`. The map
+  is a **direct-mapped exact table**: no hash, no CRC, no position comparison.
+  **The id is the allocator's**: `GEOM.PARAMARENA` gained `pv_accept_o` /
+  `pv_id_o` / `td_accept_o` / `td_id_o` / `seal_fire_o`, driven from the same
+  expressions its intake arm tests, so there is exactly one vertex counter in
+  the console and a producer-side copy cannot drift from it.
+
+  **The `ProjectedVertex` status byte is now specified** — it never was — as
+  `{reserved[7:4], shared_capable[3], untextured[2], domain[1:0]}`, under §4's
+  authority to amend record schemas.
+
+  **Clipping lineage is a measured absence.** `zhao_geom_clip` performs
+  whole-primitive near-plane rejection and creates no vertices, so there are no
+  clipping-derived vertices in this console to identify. See GEOM.VERTID.md.
 * **Tile-reference chunk — TIED**, console entry I54. `zhao_geom_binner_v2`
   builds exactly these chunks in an on-chip arena and exposes no way to see
   one: `ref_ram` and `next_ram` are internal and `job_*` is a drained stream,

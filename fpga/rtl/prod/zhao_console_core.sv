@@ -465,6 +465,80 @@
 // The full record is `design/contracts/TERRAIN.EDGERECON.md`, which carries
 // the symmetry theorem, the four-packet plan, the costed bandwidth section and
 // this packet's evidence. The manifest rows for the six blocks carry the rest.
+//
+// I53 -- CLOSED AND DELETED 2026-09-25 (packet ARENAID, owner vacation
+// directive section 4). GEOM.PARAMBUF's projected-vertex intake was this
+// file's one record type with no producer PORT, and the entry said its
+// obstacle was "a DESIGN DECISION and not an implementation detail, which is
+// why it is declared here rather than decided". The directive decided it and
+// `zhao_geom_vertid` (GEOM.VERTID) implements it. `u_geom_paramarena.pv_*` is
+// REAL: see that instance and `design/contracts/GEOM.VERTID.md`.
+//
+// THE TWO OBSTACLES THE ENTRY MEASURED, AND WHAT EACH TURNED OUT TO BE:
+//
+//   (1) "THE u16 FIELD IS ALREADY DOING TWO JOBS." STILL TRUE, AND STILL TWO.
+//       `GEOM_ASM_VOFF_C` is still zero and GEOM.ASSEMBLE's `t_v*_o` are still
+//       GEOM.REPLAY's arena-LOCAL indices. Nothing was loaded onto that field.
+//       What changed is that the arena stopped taking its descriptors from
+//       there: GEOM.VERTID builds them, from ids the ALLOCATOR handed back.
+//
+//   (2) "THERE IS NO HANDSHAKE IN THIS CONSOLE THAT CARRIES A VERTEX'S
+//       IDENTITY AND ITS ATTRIBUTES TOGETHER." TRUE AT THE LANDING, AND FALSE
+//       ONE BLOCK LATER -- which is the premise that had to die for this to
+//       close. The entry measured `ln_fill_landed` / `ln_rider_payload`, where
+//       GEOM.WCACHE holds position and GEOM.VATTR holds the attributes and the
+//       landing carries one of them. But GEOM.REPLAY's PER-CORNER REPLY has
+//       both: GEOM.VATTR's own header says it is "read by GEOM.REPLAY's own
+//       three lookups with the arena's own one-clock timing", so the two stores
+//       answer the SAME lookup on the SAME clock. The join the entry feared is
+//       not built here; it was already built, upstream, as a handshake.
+//
+// THREE MORE THINGS THE OLD ENTRIES SAID THAT MEASURED FALSE:
+//
+//   * "GEOM.CLIP CREATES TRIANGLES THE ASSEMBLER NEVER EMITTED" (entry I54).
+//     IT DOES NOT. `zhao_geom_clip`'s own header: "THE NEAR PLANE IS A
+//     WHOLE-PRIMITIVE REJECTION, NOT A CLIP ... GEOM.CLIP never produces more
+//     than one triangle for one triangle in." It DROPS and it normalises
+//     winding; it has no divider and no vertex queue to interpolate with. So
+//     post-clip triangles are a SUBSET of pre-clip ones, not a different set,
+//     and the directive's "clipping-derived vertices" and "clipping lineage"
+//     describe a machine this console is not. The lineage is a measured
+//     ABSENCE, recorded in GEOM.VERTID.md so nobody adds a field for a case
+//     that cannot arise.
+//   * "R7's 65,536-vertex tier costs one vertex, a DECLARED LOSS." IT DOES
+//     NOT. That was a DECODER PORT WIDTH -- `zhao_geom_parambuf`'s
+//     `td_sealed_vertices_i` was u16 and `zhao_geom_paramwalk` SATURATED the
+//     published count at 0xFFFF. Both are u18 now, MAX_VERTS is 65,536, and
+//     the record layout did not move: a `vertex_id` is still u16 and still
+//     names 0..65,535, which is exactly 65,536 ids.
+//   * "The ProjectedVertex status byte." NOTHING IN THIS REPOSITORY EVER SAID
+//     WHAT IT HOLDS -- `zhao_geom_parambuf` decoded it and no producer ever
+//     wrote one. It is specified now (domain, untextured, shared_capable,
+//     reserved) under the directive's authority to amend record schemas, in
+//     GEOM.VERTID.md and in the producer.
+//
+// WHAT I54 AND I55 CAN NOW CONSUME, stated so the next packet does not have to
+// re-derive it:
+//
+//   * A FINAL TRIANGLE IDENTITY. `u_geom_paramarena.td_id_o` is the
+//     descriptor's own arena index, valid with `td_accept_o`, and GEOM.VERTID
+//     re-exports it on `tri_id_o`/`tri_id_valid_o` on the beat it lands. I54's
+//     disqualifying measurement -- "the binner's store is POST-clip, the
+//     arena's descriptors are PRE-clip, different sets with no mapping in the
+//     tree" -- no longer holds: the arena's descriptors ARE the post-clip set,
+//     in order.
+//   * A FINAL VERTEX ID SPACE, dense from zero per frame, whose lifetime and
+//     eviction proof are in GEOM.VERTID.md. A walker reading a descriptor gets
+//     ids that index the ProjectedVertex array of the same frame.
+//   * A DECLARED SIDECAR for the per-primitive metadata the 16-byte
+//     TriangleDescriptor cannot carry (material_set, material_mode,
+//     frag_state, vertex_alpha, quality_tier, the per-primitive untex bit).
+//     GEOM.VERTID.md specifies `TriangleExt` -- versioned, immutable, keyed by
+//     the same `triangle_id` -- and leaves its WRITER to I54, which owns
+//     triangle serialisation. Until it is built the shortfall is a declared
+//     gap and not a silent one; no field is overloaded and no handle is
+//     truncated to hide it.
+//
 
 //
 // IT LIVES HERE, ABOVE THE FIRST ENTRY, AND THE PLACEMENT IS LOAD-BEARING.
@@ -5529,87 +5603,6 @@
 //      `refuse_valid_o` used to be a pulse under an UNUSEDSIGNAL waiver with
 //      no consumer at all.
 //
-// I53. GEOM.PARAMBUF's PROJECTED-VERTEX INTAKE (`u_geom_paramarena.pv_*`)
-//      -- TIED TO ZERO, and it is the arena's one record type with no
-//      producer PORT rather than no producer BLOCK.
-//
-//      Opened 2026-09-22 by the owner's completion ruling, item 4. The arena
-//      writes all three of R7's record types and is tested on all three; what
-//      is missing is a wire. GEOM.PROJECT's output reaches this file as
-//      `proj_out_*`, which is a TRIANGLE -- three screen positions, three
-//      depths, one source id -- and the arena's intake is a VERTEX. Turning
-//      one into the other is not plumbing: it needs a vertex-identity scheme,
-//      because a TriangleDescriptor names vertices by u16 INDEX and two
-//      triangles that share an edge must name the SAME index, or the arena
-//      stores every vertex two or three times and the 65,535-vertex seal buys
-//      a third of what R7's tier promises.
-//
-//      THAT IS A DESIGN DECISION AND NOT AN IMPLEMENTATION DETAIL, which is
-//      why it is declared here rather than decided. `zhao_geom_wcache` is the
-//      block that already holds projected vertices BY IDENTITY and is the
-//      obvious owner of the answer; naming it is as far as this packet's
-//      authority goes.
-//
-//      WHAT IS AND IS NOT AFFECTED: the descriptors the arena DOES write
-//      carry vertex ids, and `zhao_geom_parambuf`'s `td_illegal_o` refuses
-//      any id at or past the seal -- so a walk over a frame with no vertex
-//      records reports every triangle illegal rather than silently reading
-//      zeros. The refusal is visible, which is the safe direction.
-//
-//      -- ARENAWIRE, 2026-09-23. STILL TIED, AND THE OBSTACLE IS TWO
-//      OBSTACLES. The paragraphs above name one; the tree holds a second that
-//      is independent of it, and either alone is enough to keep this tied.
-//
-//      (1) THE u16 FIELD IS ALREADY DOING TWO JOBS, so it cannot take a
-//      third meaning. `zhao_geom_assemble` emits `t_v*_o` as `voff_q` plus
-//      the served index, where `voff_q` LATCHES `m_vertex_offset_i` per
-//      meshlet -- and this file drives that port with `GEOM_ASM_VOFF_C`,
-//      which is zero, DELIBERATELY, because `zhao_geom_replay` takes the same
-//      field STRAIGHT to `look_index_o`, its index into the meshlet's own
-//      arena row. So the id in a TriangleDescriptor is REPLAY's ARENA-LOCAL
-//      INDEX. The arena's `vertex_id` is a FRAME-GLOBAL RECORD INDEX into the
-//      ProjectedVertex array. One field, two coordinate systems.
-//
-//      THE CONSEQUENCE IS ALREADY IN MEMORY AND IS WORTH STATING PLAINLY:
-//      the descriptors the arena writes TODAY name ids that COLLIDE ACROSS
-//      MESHLETS -- every meshlet restarts at zero. If the vertex intake were
-//      wired at those ids, meshlet N+1 would overwrite meshlet N's vertices,
-//      silently, and `td_illegal_o` could not see it because every colliding
-//      id is comfortably BELOW the seal. The refusal quoted above protects
-//      against an EMPTY vertex region, not against a doubly-written one.
-//      Giving the arena frame-global ids by moving `m_vertex_offset_i` off
-//      zero BREAKS GEOM.REPLAY's arena addressing, so the honest shape is a
-//      SECOND id riding GEOM.ASSEMBLE's existing per-meshlet latch -- a port
-//      change to that block and a widened descriptor stream, which is a
-//      producer change and not a wire.
-//
-//      (2) THE RECORD HAS NO SOURCE, WHOLE, ANYWHERE. A ProjectedVertex is
-//      screen x, screen y, invw24 + status, u_over_w, v_over_w and rgba8.
-//      The console DOES have a landed-vertex event with identity --
-//      `ln_fill_landed` / `ln_fill_arena` / `ln_fill_index` out of the
-//      vertex lanes -- and `ln_rider_payload` beside it. But that payload is
-//      GEOM.WCACHE's, and GEOM.WCACHE's own header enumerates it: x, y,
-//      invw, w, behind, 106 bits, and it says in terms that "THE ATTRIBUTES
-//      DO NOT LIVE HERE". u_over_w, v_over_w and the lit colour live in
-//      GEOM.VATTR, which answers only on a PER-CORNER LOOKUP that GEOM.REPLAY
-//      drives, one corner at a time, for triangles -- not per landed vertex.
-//
-//      So there is no handshake in this console that carries a vertex's
-//      IDENTITY and its ATTRIBUTES together. Building the intake from the
-//      two would be a join of two streams on two cadences, which is the
-//      fault this file punishes by name at I39 and which turned eight
-//      triangles into twenty-three in PARAMARENA's own composition. A wire
-//      that looks right and is a stage out is the expensive kind.
-//
-//      WHAT IS NO LONGER AN OBSTACLE. `reports/HANDOVER-20260919.md` 15.2
-//      says the SDRAM burst-wrap divergence "WILL [block] the moment somebody
-//      wires I53". That is handled, and it was never true that it waited --
-//      see `zhao_geom_paramarena`'s header section THE BURST THAT WRAPS. The
-//      merged layout put `TRI_OFF_B` at 65,535 * 24 = 1,572,840, which is
-//      8 mod 16, so EVERY TriangleDescriptor on the LIVE path was already
-//      misaligned. The arena now aligns its own requests and counts the
-//      invariant at `geom_pa_unaligned_o`.
-//
 // I54. GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
 //      (`u_geom_paramarena.ck_*`) -- TIED TO ZERO, the same standing as I53
 //      and a different missing thing.
@@ -5676,6 +5669,26 @@
 //      index forward through the clip and the setup. Both are architecture,
 //      not ports, and neither is this packet's to choose.
 //
+//      -- ARENAID, 2026-09-25. STILL TIED, AND THE DISQUALIFYING HALF IS
+//      GONE. The paragraph above says the binner's store is POST-clip while
+//      the arena's descriptors are PRE-clip, "different sets with different
+//      cardinality and no mapping in the tree". The arena's descriptors are
+//      now POST-CLIP: `u_geom_vertid` builds them from `u_geom_clip`'s
+//      accepted packet and `u_geom_paramarena.td_id_o` gives each one its
+//      arena index at the clock it is allocated, re-exported on
+//      `u_geom_vertid.tri_id_o`. So the mapping this entry says is absent now
+//      EXISTS and is a port.
+//
+//      WHAT REMAINS IS THE SHAPE, WHICH THIS ENTRY IS ALSO RIGHT ABOUT.
+//      `zhao_geom_binner_v2`'s `ref_ram` is 256 x 4 refs of SEVEN BITS against
+//      R7's 64-byte chunk of fourteen u32 ids, so a chunk still has to be
+//      AGGREGATED 14-at-a-time from something, and the binner's 7-bit ref
+//      still indexes its own `TRI_CAP = 128` store rather than the arena. The
+//      remaining work is a serialiser that translates the binner's per-tile
+//      reference order into chunks of arena triangle ids and stamps the
+//      generation -- and `tri_id_o` is the translation table's one input.
+//      Entry I54 is that block, and it is no longer blocked on an identity.
+//
 // I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
 //      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
 //      CONSUMER that item 4 names.
@@ -5710,6 +5723,15 @@
 //      an empty chunk region would burn ENGINE1 bandwidth to read zeros and
 //      count `chunks_stale_o`, which is a measurement of I54 rather than
 //      evidence about I55.
+//
+//      -- ARENAID, 2026-09-25. STILL TIED, and one of its two preconditions
+//      is met. "A walk over an arena nothing fills is a walk over nothing" was
+//      true of the VERTEX array as well as the chunks; the vertex array is now
+//      filled by `u_geom_vertid` and the descriptors name ids inside it, so a
+//      walk that reaches a descriptor today decodes a real vertex reference
+//      rather than one `td_illegal_o` must refuse. What is still missing is
+//      I54's chunks -- there is nothing to start a walk FROM -- and the
+//      raster-path swap this entry declines to do half-way. Unchanged.
 //
 // I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
 //      tie-off: the core assigns it, in the same standing as I9, I25 and I40.

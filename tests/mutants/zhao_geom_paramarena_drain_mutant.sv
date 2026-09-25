@@ -382,6 +382,16 @@ module zhao_geom_paramarena_drain_mutant
     input  var logic [15:0] ck_count_i,
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
 
+    // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE (ARENAID) -----------
+    // Carried forward from production 2026-09-25 so this copy still elaborates
+    // against the shared testbench. NOT the mutation -- the mutation is the one
+    // substantive line this file's header names.
+    output var logic        pv_accept_o,
+    output var logic [17:0] pv_id_o,
+    output var logic        td_accept_o,
+    output var logic [17:0] td_id_o,
+    output var logic        seal_fire_o,
+
     // ---- the scratch's second owner -----------------------------------------
     input  var logic        scr_req_i,      // the walker wants the scratch
     output var logic        scr_grant_o,
@@ -804,6 +814,12 @@ module zhao_geom_paramarena_drain_mutant
   wire td_fire_c = td_valid_i && td_ready_o;
   wire ck_fire_c = ck_valid_i && ck_ready_o;
 
+  wire rec_live_c = frame_open_q && !frame_fault_q;
+  assign pv_accept_o = pv_fire_c && rec_live_c && pv_fits_c && pv_in_view_c;
+  assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
+  assign pv_id_o     = n_verts_q;
+  assign td_id_o     = n_tris_q;
+
   // ---------------------------------------------------------- publication --
   // A frame is publishable when its producer is done AND every write it issued
   // has retired AND it did not fault. `pub_pending_q` holds the "done" half so
@@ -839,6 +855,7 @@ module zhao_geom_paramarena_drain_mutant
   wire seal_ok_c   = !reader_busy_i && !pub_pending_q;
   assign seal_ready_o = seal_ok_c;
   wire seal_fire_c = seal_valid_i && seal_ok_c;
+  assign seal_fire_o  = seal_fire_c;
 
   // ------------------------------------------------------------- the port --
   always_comb begin

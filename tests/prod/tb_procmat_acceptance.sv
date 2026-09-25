@@ -871,6 +871,12 @@ module tb_procmat_acceptance #(
     .c_attr_a_i       (fa_o_attr_a),
     .c_attr_b_i       (fa_o_attr_b),
     .c_attr_c_i       (fa_o_attr_c),
+    // ARENAID 2026-09-25: the identity half, tied -- this bench measures
+    // the forge arm's material path, not the identity space.
+    .c_key_a_i        ('0),
+    .c_key_b_i        ('0),
+    .c_key_c_i        ('0),
+    .c_rider_i        ('0),
     .c_material_set_i (fa_material_set_o),
     .c_material_id_i  (fa_material_id_o),
     .c_material_mode_i(fa_o_material_mode),
@@ -892,6 +898,10 @@ module tb_procmat_acceptance #(
     .o_attr_a_o      (cd_o_attr_a),
     .o_attr_b_o      (cd_o_attr_b),
     .o_attr_c_o      (cd_o_attr_c),
+    .o_key_a_o       (),
+    .o_key_b_o       (),
+    .o_key_c_o       (),
+    .o_rider_o       (),
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),
