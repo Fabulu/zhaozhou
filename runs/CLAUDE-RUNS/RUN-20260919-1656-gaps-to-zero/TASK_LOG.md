@@ -2108,3 +2108,80 @@ snapshotted sources; it will describe **that** tree, not the merged one.
 
 **Remaining 8:** `I13`+`normalmap` (one subsystem), `I34`+`velocity`, and
 `I53`–`I56` — **four entries and one arena.**
+
+### 2026-09-26 — TERRAINAUX merged at 8, TERRVEL launched, and PHASE 3 ARRIVED FOR FREE
+
+**TERRAINAUX merged at `c7d04ebf` and pushed.** Register **8 -> 8**, and the
+refusal is the point: `f_detail_i` still has zero producers and terrain triangles
+still reach no raster, so composing `zhao_terrain_normalmap` would have moved the
+number while changing no pixel. What it DID move:
+
+* **A pixel, on the aux arm** — `terrainaux_acceptance.cpp`, 758 checks, four
+  production modules: `base 8040C0 -> 4E2774` at strength 200, `-> 763BB0` at 40.
+* **The terrain fixture**: `degenerate=128 -> 0`, `refs_taken 128 -> 256`,
+  `raster pixels=2560` unchanged. Cause: `zhao_terrain_seq` walks a set ONCE and
+  skips non-resident patches, so one `SubmitTerrainSet` never opens the compose
+  door, so `compcache_front` answers POISON `32'h5BADF00D` and all 81 vertices
+  are the same point. **The bench's own note blaming "zero heights, cross product
+  exactly zero" was false** — a flat lattice with distinct x/z has an up-facing
+  normal.
+* *"The aux context has no producer anywhere"* was **HALF FALSE**: the consumer
+  chain was composed and resident, and the missing wire was in two places, both
+  inside `zhao_console_core`. Three refusals, **each correct given the other two.**
+
+The merge conflicted **whole-file** on the handover, all 4,168 lines — ours LF,
+theirs CRLF, nothing else. Normalising all three sides left exactly **one** real
+conflict. That is this campaign's CRLF rule arriving in a real merge.
+
+**TERRVEL launched** (`BRIEF-TERRVEL.md`, branch `gz/terrvel`). Velocity's close
+is **fabric, not SDRAM**: the VRAM writer to the ratified
+`TERRAIN.COMPOSED_VELOCITY` is the build COMPOSEPUB already refused at 124.41%
+and 177.49% of the frame. The open route is the one height takes —
+`zhao_terrain_heighttap`, whose `rsp_*` set has no velocity port today. I34's
+material/nav question is **fenced off from the packet**; it is the owner's.
+
+**Two agents, at the cap: ARENAID and TERRVEL.**
+
+### AND THEN PHASE 3 TURNED UP IN A WORKTREE
+
+**I wrote in 15.18 that the per-entity breakdown "lives in a fitter report that
+does not exist". That was false.** `quartus_map` SUCCEEDED — the failure was one
+stage later, in `quartus_fit` — and Analysis & Synthesis writes its entity table
+regardless. The 21 MB `.map.rpt` was in `gz-edgeclose` the whole time. **A fit
+that cannot place still tells you what the logic is made of**, and the standing
+goal's damage-control phase cost **no fit at all**.
+
+| | measured | against `5CSEBA6U23I7` |
+|---|---:|---:|
+| combinational ALUTs | 294,872 | **352%** |
+| logic registers | 405,872 | **242%** |
+| block memory bits | 3,009,171 | **53%** |
+
+**The registers alone need 101,468 ALM — 242% of the device with the
+combinational logic at zero.** The overflow is **storage held in flip-flops**,
+and M10K is the slack. That is the owner's trade, confirmed at full scale.
+
+**Four entities are 47% of the logic and 58% of the registers**, and the sharpest
+is `zhao_geom_drawjob`: **no hierarchy under it at all, 100,561 registers in one
+leaf, zero memory bits — 60% of the part's whole register capacity.** Reading the
+source, `logic [383:0] pal_q [256]` is 98,304 bits of it, written at one index and
+read at one index into a flop — the exact shape that should infer M10K. It did
+not, **and it is not even in the map report's uninferred list** while a dozen
+sibling arrays are, each with a reason attached. **That diagnosis is a packet's.**
+Prize: roughly 24,600 ALM, 59% of the device, on the EARTHRAM precedent.
+
+Committed: `tools/budget/map_entity_attrib.py` (the probe — one written once and
+thrown away leaves unreproducible numbers) and
+`reports/synthesis/console_entity_attrib.md` (the evidence). The 21 MB report
+stays gitignored; the table is the contact sheet.
+
+### WHERE I AM
+
+**Running:** ARENAID (GEOM.PARAMBUF, `I53`–`I56`) and TERRVEL (velocity + I34's
+live-patch hole). **At the cap of two.**
+
+**Remaining 8:** `I13`+`normalmap`, `I34`+`velocity`, `I53`–`I56`.
+
+**Queued, not started:** the `pal_q` M10K conversion — the single biggest
+optimization on the board, and the first phase-3 packet to launch when a slot
+frees.
