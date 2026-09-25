@@ -58,6 +58,7 @@ EXPECTED_PACKET_B_CLOSURE = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_sheetmod.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 EXPECTED_PRODUCTION_PARAMETER_INVENTORY = (

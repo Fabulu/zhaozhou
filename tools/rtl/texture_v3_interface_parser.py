@@ -88,9 +88,36 @@ SUPPORTED_DUPLICATE_PROFILES = {
     # fitting its remap to a target digest is the one thing it must never do.
     # The resolver already speaks in packed vectors with a cast, so nothing was
     # given up.
+    # RE-PINNED 2026-09-25 (TERRAINAUX), for `zhao_texture_sheetmod`.
+    #
+    # The island gained ONE instance and one per-owner record array, and the
+    # leaf joined the source closure ahead of the root. That is the exact
+    # family the 2026-09-18 note above describes -- "adding declarations to a
+    # module in the closure moves that grouping without changing any member's
+    # name or location" -- and THE COUNT STAYED AT 105, which is what says the
+    # duplicate-name exception set itself did not move.
+    #
+    # Refreshed only after field-diffing the regenerated manifest against the
+    # committed one, and the diff is stated exactly rather than summarised as
+    # "unchanged", because two of the four hashes DID move and both had to:
+    #
+    #   ports                      IDENTICAL, all 120
+    #   parameters                 IDENTICAL
+    #   module_declaration_sha256  IDENTICAL  <- the interface did not move
+    #   top_source_sha256          MOVED      <- the island's BODY gained
+    #                                            `u_sheetmod` and `sheet_m`
+    #   canonical_interface_sha256 MOVED      <- it hashes the source closure
+    #                                            and the argv, and the closure
+    #                                            gained one leaf
+    #
+    # So the island's INTERFACE is byte-identical and the two that moved are
+    # the two that describe what was deliberately changed. That is the
+    # difference between refreshing a derived fingerprint and quietly moving
+    # a frozen one; a note claiming all four were unchanged would have been
+    # the reassuring kind of wrong this file exists to prevent.
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a",
+        "sha256": "a95970fe412b1cb3f054b5749633071a1eb7b15f60c1427ec47f88878885cfec",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})
@@ -122,6 +149,9 @@ PRODUCTION_SOURCE_CLOSURE = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    # TEXTURE.SHEETMOD, 2026-09-25 (TERRAINAUX): the surface sheet's visible
+    # effect, a LEAF of the selected root, so it precedes it.
+    "fpga/rtl/texture/zhao_texture_sheetmod.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 

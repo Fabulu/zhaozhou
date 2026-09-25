@@ -46,6 +46,7 @@ TOP_SOURCES = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_sheetmod.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 MUX_SOURCES = (
@@ -218,7 +219,7 @@ CURRENT_HASHES = {
     # changed -- `zhao_prod_top` was regenerated and confirmed byte-identical,
     # not assumed to be.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875",
+        "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
     # interface manifest moved, because two files in its source closure gained
     # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
@@ -239,7 +240,7 @@ CURRENT_HASHES = {
     # named for did not move: `cmb_owner_all_o` and `cmb_rp_o` are new ports of
     # zhao_texture_v3own, which is a CHILD, and the island consumes them
     # internally.
-        "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437",
+        "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b",
 }
 
 
@@ -575,8 +576,8 @@ def validate_cmake(text: str) -> None:
         "tools/test_packet_e_assertion_control.py",
         "add_test(NAME packet_e_cache_double_resv_behavior COMMAND pe_cb)",
         "texture/texture_island_v3_packet_e.sources.txt)",
-        "Packet-E top source manifest must contain exactly 26 SV paths",
-        "Packet-E top source manifest diverges from Packet B's exact 26-source authority",
+        "Packet-E top source manifest must contain exactly 27 SV paths",
+        "Packet-E top source manifest diverges from Packet B's exact 27-source authority",
         "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25",
         "-GMIGRATION_SHADOWS=1 -D${SV_SELECTOR}",
         "historical_fill_lifetime PACKET_E_EXPECT_PRE_E_FILL_LIFETIME",

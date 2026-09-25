@@ -6882,7 +6882,15 @@ module tb_zhao_console_core_smoke
              terr_seq_frame_faults_o);
 
     // ---- 4. THE SEQ -> LOADQ -> PAGELOADER CHAIN -------------------------
-    if (terr_seq_loads_issued_o != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_seq_loads_issued_o < N_TERR_REC)
       $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d loads for %0d non-resident patches", terr_seq_loads_issued_o, N_TERR_REC);
     if (terr_lq_accepted_o != terr_seq_loads_issued_o)
       $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d load jobs and TERRAIN.LOADQ accepted %0d -- the queue's job port is not carrying",
@@ -6917,9 +6925,15 @@ module tb_zhao_console_core_smoke
     // AND EVERY CLAIM WAS A FRESH ONE. `claims_same_o` moving on records with
     // distinct {island, ix, iz} is the other face of the same defect: two
     // records that both present a zero key collide in the directory.
-    if (terr_seq_claims_same_o != 0)
-      $fatal(1, "SMOKE: %0d of %0d claims came back SAME for records with distinct patch coordinates -- two records are presenting one key",
-             terr_seq_claims_same_o, terr_seq_claims_issued_o);
+    // RESTATED AS THE FRESH COUNT, 2026-09-25 (TERRAINAUX). The second
+    // submission legitimately claims a patch the directory already holds,
+    // so `claims_same_o` is no longer expected to be zero. What the check
+    // was FOR survives exactly: N_TERR_REC records with distinct
+    // {island, ix, iz} must produce N_TERR_REC DISTINCT fresh claims, and
+    // two records presenting one key still cannot.
+    if ((terr_seq_claims_issued_o - terr_seq_claims_same_o) < N_TERR_REC)
+      $fatal(1, "SMOKE: %0d claims of which %0d came back SAME -- fewer than %0d were FRESH, so two records with distinct patch coordinates are presenting one key",
+             terr_seq_claims_issued_o, terr_seq_claims_same_o, N_TERR_REC);
     if (terr_pl_guard_denied_o != 0)
       $fatal(1, "SMOKE: TERRAIN.PAGELOADER was denied %0d guard requests -- it is writing outside TERRAIN.PAGE_POOL",
              terr_pl_guard_denied_o);
@@ -6932,7 +6946,12 @@ module tb_zhao_console_core_smoke
     // loaded + faulted silently treats a REFUSED job as a lost one, which is
     // the flattering direction for a spine that is dropping work -- and it
     // read exactly that way on the first run here.
-    if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != N_TERR_REC)
+    // AGAINST THE JOBS THAT REACHED THE LOADER, not against N_TERR_REC:
+    // with two submissions the loader is handed more than one job per patch
+    // and the law it states is ONE JOB, ONE COMPLETION. `terr_lq_issued_o`
+    // is the count of jobs handed on, so this is now the law itself rather
+    // than a number that happened to equal it.
+    if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != terr_lq_issued_o)
       $fatal(1, "SMOKE: %0d jobs produced %0d loaded + %0d faulted + %0d refused completions -- 'one job, one completion' is broken (or the wait timed out at guard=%0d)",
              N_TERR_REC, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, guard);
@@ -6948,7 +6967,15 @@ module tb_zhao_console_core_smoke
     // machine that has strictly improved, which is CLAUDE.md's "do not write a
     // test that asserts the bug" with the bug living in the bench rather than
     // in the RTL. It is now two checks that mean what they say.
-    if ((terr_res_claims_o) != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_res_claims_o < N_TERR_REC)
       $fatal(1, "SMOKE: the directory recorded %0d claims for %0d jobs -- TERRAIN.SEQ's claims are not reaching TERRAIN.RESIDENCY",
              terr_res_claims_o, N_TERR_REC);
     if (terr_res_crc_failures_o != 0)
@@ -6984,7 +7011,15 @@ module tb_zhao_console_core_smoke
     // only on a load that finished OK, so each link below is unreachable while
     // the one above it is zero -- which is why the whole chain sat at zero and
     // no check could see it.
-    if (terr_pl_pages_loaded_o != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_pl_pages_loaded_o < N_TERR_REC)
       $fatal(1, "SMOKE: %0d of %0d page(s) loaded (faulted=%0d refused=%0d, verdict=%0d, hdr_ident_fails=%0d) -- the bench now writes a spec 2.1 header and the page's own body CRC, so a page that does not load is a spine fault",
              terr_pl_pages_loaded_o, N_TERR_REC, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, terr_pl_fault_verdict_o,

@@ -559,6 +559,16 @@ module zhao_shell_paired_diff_mut
     .sheet_req_handle_o(),
     .sheet_req_texel_o(),
     .sheet_req_src_id_o(),
+    // SURFACE.SHEET's RESPONSE, new on the shell 2026-09-25 (TERRAINAUX).
+    // Held open here for the same reason the production copy holds it open:
+    // the store is one level up, in `zhao_console_core`.
+    .pg_valid_i(1'b0),
+    .pg_ready_o(),
+    .pg_op_i(2'd0),
+    .pg_status_i(2'd0),
+    .pg_tag_i(8'd0),
+    .pg_strength_i(8'd0),
+    .pg_src_id_i(16'd0),
     .blank_cmd_i(blank_cmd_i),
     .scanout_ack_i(scanout_ack_i),
     .frame_swap_valid_i(frame_swap_valid_i),
