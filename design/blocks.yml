@@ -6625,11 +6625,37 @@ blocks:
     # ruling records for FIELD, where "connected" was satisfiable by wiring the
     # superseded block and the instrument said fine. The rivalry is NOT a version
     # suffix, so `successor_in()` cannot see it: it has to be declared.
+    # COMPOSED 2026-09-25 (CLIFFPROD) into `zhao_console_core` as
+    # `u_forge_cliff`, and the completion register moved 11 -> 10 on it.
+    # Until then the capability had a producer for NONE of its three inputs
+    # and, uncounted by anyone, no consumer for its output either -- the
+    # emission stage FORGE.CLIFF.md records as unwritten. Four blocks close
+    # it: `zhao_forge_cliff_srvshare` (one parameterised sharer for the
+    # compose cache's two untagged one-clock read services, instantiated
+    # twice), `zhao_forge_cliff_feed` (the page command and the 34x34 SOLID
+    # window, from layer D), the adopted evaluator, and
+    # `zhao_forge_cliff_emit` (one rim edge -> one wall quad) feeding a
+    # SECOND `zhao_forge_jobarb` instance into the shared assembler.
+    #
+    # THE ONE INPUT STILL NOT PRODUCED is `vdist`, and it is a declared
+    # decision rather than a tie-off: no per-lattice-vertex 1/w store
+    # exists in fpga/rtl (re-measured 2026-09-25 -- the value is computed
+    # and even stored, but under a GROUP-LOCAL 9x9 index, and the fill
+    # fires once per VIEW). CLIFF_VDIST_EN is 0, which is the reference's
+    # own null-vdist path -- terrain_rules 5's 'priority 0 everywhere',
+    # i.e. keep scan order -- and the evaluator is MEASURED never to
+    # assert `vd_en_o` in it. It changes nothing until a page is still
+    # over 512 edges AFTER merging.
     implementation: fpga/rtl/forge/zhao_forge_cliff_ram.sv
     reference_model: zref::forge::rim_plan
     tests:
       directed: tests/forge/forge_cliff_directed.cpp
       random: tests/forge/forge_cliff_random.cpp
+      # The whole producer-to-consumer chain on a real ComposedLattice,
+      # matched to `zref::forge::rim_plan` edge for edge, with the
+      # incumbent contending and the staged patch pulled mid-window.
+      chain: tests/forge/forge_cliff_chain.cpp
+      sharer: tests/forge/forge_cliff_srvshare_unit.cpp
     counters: [forge_cliff_triangles_submitted]
     counter_ports:
       forge_cliff_triangles_submitted: triangles_submitted_o
