@@ -1008,6 +1008,73 @@ verilate(test_forge_cliff_ram_rowoff_control
 add_test(NAME forge_cliff_ram_rowoff_control COMMAND test_forge_cliff_ram_rowoff_control)
 set_tests_properties(forge_cliff_ram_rowoff_control PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# ---- FORGE.CLIFF PRODUCER TO CONSUMER, on real terrain (CLIFFPROD) ----------
+# The adopted evaluator had no producer for any of its three inputs and no
+# consumer for its output -- an LFSR in the pricing top was the whole of it.
+# `tb_forge_cliff_chain.sv` elaborates the real chain in one process: a
+# behavioural copy of the compose cache's two read services (one clock,
+# registered, untagged, refusing with 2'd3 when no patch is served), the two
+# service sharers, the window feed, the UNMODIFIED `zhao_forge_cliff_ram`, and
+# the emission stage, with the driver playing `zhao_forge_assemble`.
+set(ZHAO_FORGE_CLIFF_CHAIN_SV
+    ${CMAKE_SOURCE_DIR}/tests/forge/tb_forge_cliff_chain.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_srvshare.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_feed.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_emit.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_ram.sv)
+
+add_test(NAME lint_forge_cliff_srvshare
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_cliff_srvshare
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_srvshare.sv)
+set_tests_properties(lint_forge_cliff_srvshare PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_forge_cliff_feed
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_cliff_feed
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_feed.sv)
+set_tests_properties(lint_forge_cliff_feed PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_forge_cliff_emit
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_cliff_emit
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_emit.sv)
+set_tests_properties(lint_forge_cliff_emit PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_forge_cliff_chain forge/forge_cliff_chain.cpp)
+target_link_libraries(test_forge_cliff_chain PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_chain PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_chain
+  PREFIX Vtb_forge_cliff_chain
+  TOP_MODULE tb_forge_cliff_chain
+  SOURCES ${ZHAO_FORGE_CLIFF_CHAIN_SV})
+add_test(NAME forge_cliff_chain COMMAND test_forge_cliff_chain)
+set_tests_properties(forge_cliff_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# The sharer at its own port, and THE POSITIVE CONTROL for `poison1_o`. The
+# composed chain reads that counter as zero because `zhao_forge_cliff_feed`
+# never asks while the patch is gone -- which is evidence about the feed and
+# none whatever about the detector. Legal stimulus reaches the state here,
+# because a client that does not guard is a legal client, so this is a driver
+# rather than a committed mutant.
+add_executable(test_forge_cliff_srvshare_unit forge/forge_cliff_srvshare_unit.cpp)
+target_link_libraries(test_forge_cliff_srvshare_unit PRIVATE zhao_harness)
+target_include_directories(test_forge_cliff_srvshare_unit PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_srvshare_unit
+  PREFIX Vzhao_forge_cliff_srvshare
+  TOP_MODULE zhao_forge_cliff_srvshare
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_srvshare.sv)
+add_test(NAME forge_cliff_srvshare_unit COMMAND test_forge_cliff_srvshare_unit)
+set_tests_properties(forge_cliff_srvshare_unit PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # ---- deep-keel wave: TEXTURE.MOSAIC (terrain_rules.md 6.2) ------------------
 # The oracle lanes (the mirrored-repeat fold at wrap boundaries, the frozen
 # pick constants, the rendered dither + exact modulation through the

@@ -218,8 +218,10 @@ module zhao_forge_cliff_emit #(
   // arriving here by mistake would set them.
   logic        e_hici_r;
 
-  // DECISION RECORD 4: the fetch phase's ONLY position state.
+  // DECISION RECORD 4: the fetch phase's ONLY position state, plus the
+  // single-flight bit that keeps the address and the answer married.
   logic [1:0] fk_r;
+  logic       fl_r;
 
   // corner stores: 0 = A top, 1 = A bottom, 2 = B top, 3 = B bottom
   logic signed [31:0] h_r    [4];
@@ -280,7 +282,16 @@ module zhao_forge_cliff_emit #(
   assign clamp_vi_c = (want_vi_c > 7'(VMax)) ? 6'(VMax) : want_vi_c[5:0];
   assign clamp_vj_c = (want_vj_c > 7'(VMax)) ? 6'(VMax) : want_vj_c[5:0];
 
-  assign lat_req_o     = (st_r == StFetch);
+  // SINGLE FLIGHT, and this line is load-bearing. `fk_r` and the read address
+  // update on the SAME clock edge as the capture, so a continuously-asserted
+  // request re-issues the OLD address on the capture cycle and the next answer
+  // lands in the next slot -- corner A's height stored as corner A's twice and
+  // corner B's never read. That is precisely the drift DECISION RECORD 4 claims
+  // to have removed, it was written here and NOT implemented on the first cut,
+  // and `forge_cliff_chain` lane 1 caught it: 218 edges correct, every vertex 1
+  // holding vertex 0's x and a height of zero. A decision record is not the
+  // code; the bench is what makes them the same thing.
+  assign lat_req_o     = (st_r == StFetch) && !fl_r;
   assign lat_vi_o      = clamp_vi_c;
   assign lat_vj_o      = clamp_vj_c;
   assign lat_surface_o = want_surface_c;
@@ -334,6 +345,7 @@ module zhao_forge_cliff_emit #(
       e_src_id_r <= '0;
       e_hici_r   <= 1'b0;
       fk_r       <= '0;
+      fl_r       <= 1'b0;
       vk_r       <= '0;
       tk_r       <= 1'b0;
       ax_r       <= '0;
@@ -353,6 +365,7 @@ module zhao_forge_cliff_emit #(
       endpoint_clamped_r <= '0;
     end else begin
       if (lat_req_o && lat_grant_i) begin
+        fl_r <= 1'b1;
         if (!(&lat_reads_r)) begin
           lat_reads_r <= lat_reads_r + CENSUS_W'(1);
         end
@@ -374,6 +387,7 @@ module zhao_forge_cliff_emit #(
             e_src_id_r <= edge_src_id_i;
             e_hici_r   <= (edge_ci_i[15:6] != 10'd0) || (edge_cj_i[15:6] != 10'd0);
             fk_r       <= '0;
+            fl_r       <= 1'b0;
             vk_r       <= '0;
             tk_r       <= 1'b0;
             st_r       <= StFetch;
@@ -386,7 +400,8 @@ module zhao_forge_cliff_emit #(
         // DECISION RECORD 4: fk_r advances only when an answer LANDS, and the
         // address it advances from is the address that answer was asked at.
         StFetch: begin
-          if (lat_rsp_valid_i) begin
+          if (lat_rsp_valid_i && fl_r) begin
+            fl_r      <= 1'b0;
             h_r[fk_r] <= lat_h_i;
             if (fk_r == 2'd0) begin
               ax_r <= lat_wx_i;

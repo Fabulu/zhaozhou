@@ -3044,6 +3044,17 @@ targets:
       - fpga/rtl/forge/zhao_forge_fanindex.sv
       - fpga/rtl/forge/zhao_forge_jobarb.sv
       - fpga/rtl/forge/zhao_forge_shadow.sv
+      # Added 2026-09-25, CLIFFPROD, with FORGE.CLIFF's producer-to-consumer
+      # chain. `zhao_forge_jobarb` above is instantiated a SECOND time to
+      # cascade the cliff behind the {PRIM, SHADOW} pair -- one more instance,
+      # not one more source line. What joins the closure is the adopted
+      # evaluator (owner ruling R142), its window feed, its emission stage and
+      # ONE parameterised read-service sharer instantiated twice, for the
+      # cell-state plane and for the lattice.
+      - fpga/rtl/forge/zhao_forge_cliff_srvshare.sv
+      - fpga/rtl/forge/zhao_forge_cliff_feed.sv
+      - fpga/rtl/forge/zhao_forge_cliff_ram.sv
+      - fpga/rtl/forge/zhao_forge_cliff_emit.sv
       - fpga/rtl/geometry/zhao_geom_ladderbank.sv
       - fpga/rtl/geometry/zhao_geom_lod.sv
       - fpga/rtl/geometry/zhao_geom_lodstate.sv
