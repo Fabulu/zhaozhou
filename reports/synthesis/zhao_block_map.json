@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "1cfc141cf31166c01b3606ecd3ef53d30eecf770",
-    "newestRunClean":  false,
+    "newestRunCommit":  "60bd7505e1778ae316c3a665a256299af730141a",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "13a7f524a80d6f8d",
+    "sourceListHash":  "79b44f51d810dc72",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -365,6 +365,35 @@
                        "estimatedAlms":  950,
                        "combAluts":  1219,
                        "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_field_earth_adapterearthlock_after",
+                       "status":  "ok",
+                       "sourceCommit":  "60bd7505e1778ae316c3a665a256299af730141a",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "79b44f51d810dc72",
+                       "sourceFileCount":  378,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_field_earth_adapter",
+                       "seconds":  30.5,
+                       "dspBlocks":  0,
+                       "registers":  1093,
+                       "blockMemoryBits":  4880,
+                       "virtualPins":  1617,
+                       "pins":  0,
+                       "estimatedAlms":  1636,
+                       "combAluts":  897,
+                       "mlabMemoryBits":  0,
                        "inferredMemories":  [
 
                                             ],

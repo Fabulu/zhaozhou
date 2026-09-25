@@ -1,0 +1,74 @@
+{
+  "schema": "zhao_map_receipt/1",
+  "note": "Packet EARTHLOCK: the intake/replay race repair. The obligation on this pair is NOT that the block got smaller -- it is that EARTHRAM's measured M10K and its numbers SURVIVED a correctness repair. before=00b46669 (the packet's true parent, the integration merge), after=60bd7505 (the repair). Two -MapOnly leaf runs, both from a clean tree, SAME sourceListHash 79b44f51d810dc72 and same 378-file closure on both sides -- so this is a pair and not two measurements of different trees.",
+  "whatMoved": {
+    "ram": "UNCHANGED. `uni_we_c` neither moved nor gained a term, so the WRITE beat of the M10K is byte-identical. Only the READ enable `cap_en_c` gained `&& !entry_busy_c`. blockMemoryBits is 4880 on both sides and the inferred shape is the same 16 x 305 simple dual port EARTHRAM measured.",
+    "logic": "+9 combinational ALUTs and +8 estimated ALMs, which is the per-entry interlock: one BankAw-wide equality (`lane_a == intake_a_c`), one 2:1 address mux and two AND terms. ZERO added registers -- the interlock is combinational over state that already existed, which is why `dedicatedRegisters` is identical.",
+    "notTaken": "`no_rw_check` is now PROVABLY true on `b_uni` -- `entry_busy_c` makes the same-cycle same-address collision unreachable -- and is deliberately NOT declared. Taking it would change what the fitter may infer and would put a second, unrelated variable into this pair. It is an area question for a packet that can measure it alone."
+  },
+  "categoriesKeptApart": "ALUTs, registers, estimated ALMs, placed ALMs and block memory bits are five different numbers and are never summed. A MAP REPORTS NO BLOCK COUNT and no placed ALMs; those are fitter results and are recorded null rather than guessed.",
+  "capacityBound": {
+    "device": "5CSEBA6U23I7",
+    "alms": 41910,
+    "m10k": 553,
+    "dsp": 112,
+    "note": "the shipping target; a leaf map's utilisation is not a closure claim and these are recorded as the BOUND only"
+  },
+  "baselineCorrection": {
+    "what": "The first before-run was taken at 346d5b18 and DISCARDED. That commit is COMPOSEPUB's branch tip, not this packet's parent -- `git log -- <the adapter>` names it as the last commit to touch the FILE, which is not the same question as which commit this branch descends from. Its tree was missing fpga/rtl/common/zhao_fragment_state_pkg.sv (FRAGSTATE's, present in the merge) and its sourceListHash was 773ab0be0533f646 against the after-run's 79b44f51d810dc72.",
+    "why": "A pair whose two sides have different closures measures the closure. The discarded run happened to return the identical 888/1093/1628/4880, and that agreement is NOT the reason it is fine to discard -- the reason the rows below are trustworthy is that their source-list hashes match. The tell was sourceFileCount 377 against 378."
+  },
+  "rows": {
+    "before": {
+      "rowLabel": "earthlock_before2",
+      "sourceCommit": "00b466694df47b43671aa526cbe7fbbb03e65091",
+      "rtlCleanAtHead": true,
+      "status": "ok",
+      "stage": "map-only",
+      "toolVersion": "Quartus Prime Lite 17.0.2",
+      "topLevelEntity": "zhao_field_earth_adapter",
+      "device": "5CSEBA6U23I7",
+      "sourceListHash": "79b44f51d810dc72",
+      "sourceFileCount": 378,
+      "virtualPins": 1617,
+      "combinationalALUTs": 888,
+      "dedicatedRegisters": 1093,
+      "estimatedALMs": 1628,
+      "blockMemoryBits": 4880,
+      "mlabMemoryBits": 0,
+      "dspBlocks": 0,
+      "placedALMs": null,
+      "seconds": 23.6
+    },
+    "after": {
+      "rowLabel": "earthlock_after",
+      "sourceCommit": "60bd7505e1778ae316c3a665a256299af730141a",
+      "rtlCleanAtHead": true,
+      "status": "ok",
+      "stage": "map-only",
+      "toolVersion": "Quartus Prime Lite 17.0.2",
+      "topLevelEntity": "zhao_field_earth_adapter",
+      "device": "5CSEBA6U23I7",
+      "sourceListHash": "79b44f51d810dc72",
+      "sourceFileCount": 378,
+      "virtualPins": 1617,
+      "combinationalALUTs": 897,
+      "dedicatedRegisters": 1093,
+      "estimatedALMs": 1636,
+      "blockMemoryBits": 4880,
+      "mlabMemoryBits": 0,
+      "dspBlocks": 0,
+      "placedALMs": null,
+      "seconds": 30.5
+    }
+  },
+  "deltas": {
+    "combinationalALUTs": 9,
+    "dedicatedRegisters": 0,
+    "estimatedALMs": 8,
+    "blockMemoryBits": 0,
+    "dspBlocks": 0,
+    "placedALMs": "not measured by a map"
+  },
+  "portParity": "virtualPins is 1617 on BOTH rows, which is the structural statement that this repair changed NO PORT. No `gen_prod_top.py` regeneration is owed and no committed `zhao_console_core` mutant copy is staled."
+}

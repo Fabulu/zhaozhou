@@ -5580,21 +5580,43 @@
 //          composer may not write one", which routes through directive 13.2's
 //          `zhao_terrain_patch_v2`. THE ENTRY STILL DOES NOT CLOSE.
 //
-//      (4) AND ONE OPEN DEFECT WAS FOUND ON THIS LANE, NOT REPAIRED HERE.
-//          `zhao_field_earth_adapter`'s `rec_ready_o` is the FIRST beat of its
-//          intake, not the last: the sequencer then walks seventeen divide
-//          steps before I_WR writes the banks, including `b_res[wr_a] <= 1'b0`.
-//          `b_res` therefore has TWO writers on TWO counters -- the intake's
-//          late clear and the per-patch replay's `add_fire_i` set -- with
-//          nothing interlocking their timing, and `tce_job_take` here is NOT
-//          gated on the adapter's `idle_o`. A replay landing inside that
-//          eighteen-clock window has its resident flag WIPED: measured at
-//          1,089 engine runs, `noprog_o` == 1,089, every other census
-//          balancing, and a field that moved nothing. FIELDARM's
-//          `tfl_patch_stall` does not cover this -- it guards replay vs
-//          VERTEX, not intake vs REPLAY. The full statement, the related
-//          silent stale-uniform risk and the shape of the repair are in that
-//          block's own header under "OPEN DEFECT".
+//      (4) A DEFECT WAS FOUND ON THIS LANE AND IS NOW REPAIRED (EARTHLOCK,
+//          2026-09-25). `zhao_field_earth_adapter`'s `rec_ready_o` is the
+//          FIRST beat of its intake, not the last: the sequencer walks
+//          seventeen divide steps before I_WR writes the banks, which included
+//          `b_res[wr_a] <= 1'b0`. `b_res` therefore had TWO writers on TWO
+//          counters -- the intake's late clear and the per-patch replay's
+//          `add_fire_i` set -- with nothing interlocking their timing. A
+//          replay landing inside that eighteen-clock window had its resident
+//          flag WIPED: 1,089 engine runs, `noprog_o` == 1,089, every other
+//          census balancing, and a field that moved nothing.
+//
+//          THE REPAIR IS ENTIRELY INSIDE THE ADAPTER and changed NO PORT here
+//          (`virtualPins` 1617 on both sides of its map pair): the clear moved
+//          to I_TAKE, and `entry_busy_c` makes the entry under construction
+//          unreadable by the lane stream. The second half was needed because
+//          `b_begun`/`b_uni` land at I_WR and CANNOT move -- `phase` is the
+//          divider's result -- and a vertex in the window read them stale with
+//          resident set, a real engine run on the previous frame's uniforms
+//          MOVING NO COUNTER AT ALL. That half is now demonstrated (case 13b)
+//          and closed. Full statement in that block's header.
+//
+//          WHAT REMAINS HERE, NARROWED. Intake versus REPLAY is closed.
+//          Intake versus a LIVE PATCH is not, and it is THIS file's to close,
+//          not the adapter's: if CMD.EXEC begins frame F+1's TerrainField
+//          records while frame F's patch is still composing, F+1's clear
+//          correctly drops F's binding mid-walk. It is LOUD (`noprog_o`) and
+//          it is not made worse by the repair. The adapter cannot own it --
+//          it is given `patch_open_i` (the start) and `vtx_fire_i` but NOTHING
+//          THAT SAYS A PATCH RETIRED, and `zhao_terrain_fieldlist` has no
+//          input by which a replay could be held off. The close is here:
+//          either hold the record intake off while a patch is live, or gate
+//          `tce_job_take` on `fld_earth_idle_o`. NOTE THAT `fld_earth_idle_o`
+//          IS EXPORTED FOR EXACTLY THIS AND HAS ZERO READERS IN THE TREE --
+//          core port, board port, and nothing consumes it. FIELDARM's
+//          `tfl_patch_stall` does not cover it either; that guards replay vs
+//          VERTEX. Whoever takes it should say what BOUNDS CMD.EXEC's record
+//          stream against the patch schedule rather than assert it is bounded.
 //
 //      (A) THE PRODUCER SIDE WAS NOT DONE. The EARTHADAPT block below says
 //          "the routing 20.8 commissions exists on the PRODUCER side" and

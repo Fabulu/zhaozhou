@@ -1,3 +1,51 @@
+// zhao_field_earth_adapter_intake_race_mutant.sv
+// ===========================================================================
+// A DELIBERATELY BROKEN COPY of `fpga/rtl/field/zhao_field_earth_adapter.sv`.
+// IT IS NOT PRODUCTION RTL AND NOTHING SHIPS IT. The module is RENAMED so that
+// no source list can elaborate it by mistake.
+//
+// WHAT IT PROVES, and why it had to be committed rather than argued.
+// ---------------------------------------------------------------------------
+// Packet EARTHLOCK repaired the intake/replay race COMPOSEPUB found: the
+// adapter's `rec_ready_o` is the FIRST beat of its intake, the banks landed
+// EIGHTEEN CLOCKS LATER at I_WR, and the joined handshake had already told the
+// rest of the console that record N was in. After the repair THERE IS NO RACE
+// TO MISS -- which is exactly why a test asserting the race would have been a
+// test that passes only while the defect exists. CLAUDE.md forbids that test,
+// so the demonstration lives here instead, with its polarity INVERTED.
+//
+// `tests/mutants/field_earth_adapter_intake_race_control.cpp` drives this file
+// and PASSES WHEN THE RACE IS OBSERVED. It is evidence about the repair, not
+// about the design.
+//
+// THE FIVE HUNKS, AND ALL FIVE ARE SUBSTANTIVE. This is the repair reverted,
+// nothing more and nothing less:
+//
+//   1. the module name (the rename; required so nothing elaborates it)
+//   2. `cap_en_c` loses `&& !entry_busy_c` -- the RAM read enable no longer
+//      holds off the entry under construction
+//   3. the `E_IDLE` branch loses `&& !entry_busy_c` -- the lane stream no
+//      longer holds either, so `skip_c` may read a half-written `b_begun`
+//   4. the stale-binding clear LEAVES I_TAKE
+//   5. ...and returns to I_WR, where the per-patch replay's `add_fire_i` set
+//      can land in front of it and be WIPED
+//
+// `entry_busy_c` and `intake_a_c` are left DECLARED and unused, deliberately:
+// the diff against production is then exactly the five hunks that matter, and
+// a reader can see that the wires were not what was wrong -- their USE was.
+//
+// WHAT THE DRIVER SEES, measured against this file on 2026-09-25:
+//   the loud half   -- `req_noprog_o` 1 where production gives 0, and
+//                      `req_slot_o` 0 where production gives the replay's own
+//                      object: the intake's late clear wiped the replay
+//   the silent half -- the engine handed the PREVIOUS frame's age, phase and
+//                      parameters with resident already set, and NOT ONE
+//                      COUNTER MOVING
+//
+// The silent half is the one no instrument in the tree could see: `noprog_o`
+// is silent on it, both arms of the lane shadow difference entry COUNTS and
+// the count is right, and arm (c) pairs the read's address with itself.
+// ===========================================================================
 // zhao_field_earth_adapter.sv - THE E PROFILE'S STREAM ADAPTER: one lattice
 // vertex and one section 9.1 list lane in, ONE Earth evaluation out, through
 // the ONE field engine.
@@ -338,7 +386,7 @@
 // ENFORCED-BY: tests/field/field_earth_adapter_directed.cpp:main
 `default_nettype none
 
-module zhao_field_earth_adapter #(
+module zhao_field_earth_adapter_intake_race_mutant #(
     // terrain_rules section 9.1's MAX_PATCH_FIELDS, frozen 2026-08-16. The
     // SAME knob `zhao_terrain_patch` and `zhao_terrain_fieldlist` carry: three
     // hard-coded 16s would be one law with three halves.
@@ -1019,7 +1067,7 @@ module zhao_field_earth_adapter #(
   // below, and the two must stay the same expression: this wire is that
   // branch's condition restated, and the header's atomicity argument depends on
   // that being literally true.
-  wire cap_en_c = (state == E_IDLE) && lanes_left_c && !skip_c && !entry_busy_c;
+  wire cap_en_c = (state == E_IDLE) && lanes_left_c && !skip_c;  // MUTANT: no interlock
   wire uni_we_c = (in_st == I_WR) && !h_reject;
 
   // The oracle: `duration == 0 ? 1.0fx : the divide`. The divider ran anyway
@@ -1216,10 +1264,7 @@ module zhao_field_earth_adapter #(
             // is the one that survives -- and that is the correct precedence,
             // since the replay carries the resolution this clear is waiting
             // for.
-            if (!would_reject_c) begin
-              b_res[eff_n_c[BankAw-1:0]] <= 1'b0;
-              b_obj[eff_n_c[BankAw-1:0]] <= {OBJW{1'b0}};
-            end
+            // MUTANT: the clear is not here; it is back at I_WR.
 
             // The oracle's numerator, with its own pre-added half. Formed from
             // the SATURATED age, which is what bounds the quotient at 65536 and
@@ -1264,6 +1309,9 @@ module zhao_field_earth_adapter #(
             // something else: `uni_we_c` is `(in_st == I_WR) && !h_reject`,
             // and this is the `!h_reject` arm of `I_WR`.
             b_begun[wr_a] <= h_begun;
+            // MUTANT: the pre-repair late clear, restored. This is the defect.
+            b_res[wr_a] <= 1'b0;
+            b_obj[wr_a] <= {OBJW{1'b0}};
             // `b_res[wr_a] <= 1'b0;` AND `b_obj[wr_a] <= '0;` USED TO BE HERE
             // AND HAVE MOVED TO I_TAKE. They are not gone and their purpose is
             // not withdrawn -- see the block comment at the clear's new home
@@ -1324,7 +1372,7 @@ module zhao_field_earth_adapter #(
           // because `skip_c` reads `b_begun[lane_a]` and that flop is written
           // at I_WR too -- a skip decided on a half-written entry is the same
           // stale read wearing the oracle's `continue` as a disguise.
-          if (lanes_left_c && !entry_busy_c) begin
+          if (lanes_left_c) begin  // MUTANT: no per-entry hold
             // 15.1's CAPTURE HAPPENS IN THE RAM PROCESS ABOVE, off `cap_en_c`,
             // which is `(state == E_IDLE) && lanes_left_c && !skip_c` -- this
             // branch's own condition. One enable loads the payload, the
