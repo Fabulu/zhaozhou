@@ -54,7 +54,21 @@ $args2 = @{
 }
 if ($TopParameters) { $args2['TopParameters'] = $TopParameters }
 
-& $runner @args2 2>&1 | Out-File -Encoding utf8 $log
+# `*>&1`, NOT `2>&1`, AND THIS COST FOUR ZERO-BYTE LOGS.
+#
+# The first version of this line was `2>&1 | Out-File`, which is what ruling
+# R82 asks for -- and it captured NOTHING. run_block_fit.ps1 reports through
+# Write-Host, which writes to the INFORMATION stream (6), not the success
+# stream, so Out-File received an empty pipeline and wrote a 0-byte file while
+# the run itself succeeded and printed to the console perfectly. Four maps'
+# evidence was lost that way, and nothing failed to say so: the wrapper
+# returned RC=0 and the log existed.
+#
+# That is R82's own trap wearing the flattering costume -- "I redirected the
+# output" is not "I captured the output", and an empty log looks identical to a
+# quiet run. Caught by listing the files' SIZES, not by any error.
+# `*>&1` merges every stream, Information included.
+& $runner @args2 *>&1 | Out-File -Encoding utf8 $log
 $rc = $LASTEXITCODE
 Write-Host ("palram_map_probe: runner RC=" + $rc)
 exit $rc

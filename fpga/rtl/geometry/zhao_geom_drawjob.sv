@@ -232,6 +232,62 @@ module zhao_geom_drawjob
   // bits are separate flops because they must be CLEARED by reset and an
   // asynchronous clear on the array would destroy that inference (the argument
   // `zhao_geom_loom` makes about its own store).
+  //
+  // THAT SENTENCE WAS AN ASSERTION ABOUT A SYNTHESIS OUTCOME THAT HAD NEVER
+  // BEEN CHECKED AGAINST A SYNTHESIS RESULT, AND IT WAS FALSE FOR SIX DAYS.
+  // Measured 2026-09-26, `zhao_geom_drawjob@palram-base`, quartus_map 17.0.2:
+  // 100,561 registers and ZERO block memory bits, with a 256:1 x 384-bit read
+  // multiplexer costing 65,280 LEs. Every precaution the paragraph above
+  // describes was present and correct, and the array was still 98,304 flops.
+  //
+  // THE CAUSE WAS IN THE WRITE, AND IT IS A CONJUNCTION OF TWO THINGS.
+  // Neither one alone does any harm, which is exactly why it survived review:
+  // every individual property here reads as correct. The write used to be
+  // twelve 32-bit PARTIAL-SELECT assignments in an unrolled for loop, indexed
+  // by a 32-bit expression on a 256-deep array:
+  //
+  //     for (int unsigned k = 0; k < 12; k++)
+  //       pal_q[int'(px_index_i)][32 * k +: 32] <= px_m_i[k];
+  //
+  //   (i)  the element is written through a PART-SELECT rather than whole, and
+  //   (ii) the index expression is WIDER THAN THE ARRAY'S ADDRESS -- `int'()`
+  //        of a LOOM_IDXW (10-bit) port, cast to 32 bits, on 256 rows, so the
+  //        value can leave the array's range and Quartus must reason about it.
+  //
+  // Isolated one change at a time by `tests/probes/zhao_palram_probe.sv`, whose
+  // arm 0 is this description verbatim and reproduces the defect exactly
+  // (99,008 registers = 98,304 + 256 + 384 + 64, 0 memory bits):
+  //
+  //   arm 0  both (i) and (ii)                  99,008 reg        0 mem bits
+  //   arm 1  whole-element write, (ii) kept        320 reg   98,304 mem bits
+  //   arm 2  part-select kept, index narrowed      320 reg   98,304 mem bits
+  //   arm 3  read split to its own always_ff    99,008 reg        0 mem bits
+  //   arm 4  arms 1 and 2 together                 320 reg   98,304 mem bits
+  //
+  // So REMOVING EITHER ONE restores inference, and the shared always_ff -- the
+  // property most likely to be blamed -- is innocent (arm 3 is the control that
+  // says so). This block takes the arm 1 repair: assemble the word
+  // combinationally and write the ELEMENT whole. The wide index is retained
+  // because it is harmless on its own and because the enable wants the full
+  // width; narrowing it is the independent second lever if the write ever has
+  // to go back to slices.
+  //
+  // WHY NOTHING WARNED. Quartus 17.0's RAM recognition matches a whole-element
+  // assignment `mem[addr] <= expr`. Under the conjunction above `pal_q` was
+  // never a RAM CANDIDATE -- which is why it appears in no `Info (276004)`
+  // uninferred line with a reason attached, while a dozen sibling arrays do.
+  // The array was not rejected; it was never considered. Silence from that
+  // list means "not a candidate", NOT "fine".
+  //
+  // This is the third killer in reports/QUARTUS_GOTCHAS.md section 10, whose
+  // 102-bench calibration grid already ruled that a byte-enabled (per-slice)
+  // write infers NOTHING on this device -- and `zhao_surface_sheet.sv:164`
+  // paid 131,258 registers for the same construct in August. That knowledge
+  // was on disk the whole time and no instrument read it back;
+  // `tools/quartus/check_ram_inference.py` rule 5 now does.
+  //
+  // Keep it whole. Reintroduce a partial-select write here and 98,304
+  // flip-flops come back silently, with every gate in this tree still green.
   logic [383:0] pal_q [XFORMS];
   logic         pal_v_q [XFORMS];
   logic [383:0] pal_rd_q;
@@ -399,11 +455,29 @@ module zhao_geom_drawjob
     end
   end
 
-  // The array itself has NO reset, which is what lets it infer M10K.
+  // The row, assembled COMBINATIONALLY so the array write below can name the
+  // whole element. This loop is the one that used to live inside the always_ff
+  // writing `pal_q[...][32*k +: 32]` a slice at a time; moving it out here is
+  // the entire repair, and it is bit-for-bit the same word. Every one of the
+  // 384 bits is covered exactly once by k = 0..11, so `pal_wr_word_c` is fully
+  // driven and there is no latch and no undriven bit. The unpacking at the
+  // read end (`j_xform_o[k] = pal_rd_q[32*k +: 32]`, above) uses the identical
+  // lane mapping, so the round trip is unchanged.
+  logic [383:0] pal_wr_word_c;
+  always_comb begin
+    for (int unsigned k = 0; k < 12; k++)
+      pal_wr_word_c[32 * k +: 32] = px_m_i[k];
+  end
+
+  // The array itself has NO reset, which is what lets it infer M10K -- and
+  // the WHOLE-ELEMENT write is the other half of what lets it. See :229.
+  // The enable is unchanged: the full-width `px_index_i < XFORMS` comparison
+  // still guards the write, so a node index at or past the tier is still
+  // dropped and counted by `pal_dropped_o` and is NEVER wrapped into another
+  // instance's row.
   always_ff @(posedge clk) begin
     if (px_valid_i && (32'(px_index_i) < 32'(XFORMS))) begin
-      for (int unsigned k = 0; k < 12; k++)
-        pal_q[int'(px_index_i)][32 * k +: 32] <= px_m_i[k];
+      pal_q[int'(px_index_i)] <= pal_wr_word_c;
     end
     if (st_q == S_CHECK) pal_rd_q <= pal_q[int'(xf_idx_q[XIDXW-1:0])];
   end

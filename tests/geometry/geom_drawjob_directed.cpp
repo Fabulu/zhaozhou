@@ -488,6 +488,72 @@ int main(int argc, char** argv) {
     compare("N after refusals", r, w);
   }
 
+  // ---- P: the palette across its FULL 256 range, and the boundary at 256 --
+  //
+  // Added 2026-09-26 with the M10K conversion (zhao_geom_drawjob.sv:229). Until
+  // then `pal_q` was 98,304 flip-flops with a 256:1 x 384-bit read mux; it is
+  // now a 256x384 Simple Dual Port altsyncram. A register file and a memory
+  // differ exactly where this case looks -- whether EVERY row is addressable
+  // and holds its own contents, rather than the handful any previous case
+  // touched. Cases A-N between them exercised two rows out of 256.
+  //
+  // This asserts the CORRECT behaviour and contains no positive control. The
+  // instrument evidence that the array really became memory is the quartus_map
+  // RAM Summary, not this test: a directed test cannot tell M10K from flops,
+  // and must not be quoted as though it could.
+  {
+    const uint32_t writes_before_p = top.pal_writes_o;
+
+    // Every row gets a pattern that NAMES ITS OWN INDEX, so a row returning a
+    // neighbour's contents fails instead of coincidentally matching. A sweep
+    // of identical rows would pass against almost any addressing defect.
+    for (uint32_t n = 0; n < kXforms; ++n) {
+      int32_t mm[12];
+      for (int k = 0; k < 12; ++k)
+        mm[k] = static_cast<int32_t>(0xA0000000u + (n << 8) + static_cast<uint32_t>(k));
+      palette_write(top, n, mm);
+      pal.write(n, mm);
+    }
+    check(top.pal_writes_o - writes_before_p == kXforms,
+          "P: all 256 rows were written", top.pal_writes_o - writes_before_p, kXforms);
+
+    // Read back across the range, both ends included.
+    const uint32_t probe_rows[] = {0u, 1u, 127u, 254u, kXforms - 1u};
+    for (uint32_t n : probe_rows) {
+      dj::DrawForm dp = d;
+      dp.transform = (n << 8);
+      Run rp = drive(top, dp, hdr);
+      dj::Outcome wp = dj::expand(dp, dir, pal, hdr, kPoolBase);
+      char nm[48];
+      std::snprintf(nm, sizeof nm, "P row %u", n);
+      compare(nm, rp, wp);
+    }
+
+    // THE BOUNDARY, AT EXACTLY XFORMS. Case M already covers index 1000, but
+    // 1000 mod 256 is 232 -- an ordinary row. 256 mod 256 is ZERO, so a wrap
+    // at exactly the tier would overwrite ROW 0: the most damaging wrap
+    // available, and the one the refusal law exists to prevent. It is also the
+    // classic off-by-one, where a `<=` in place of a `<` would let exactly this
+    // one index through and nothing else.
+    const uint32_t dropped_before_b = top.pal_dropped_o;
+    const uint32_t writes_before_b = top.pal_writes_o;
+    int32_t poison[12];
+    for (int k = 0; k < 12; ++k) poison[k] = static_cast<int32_t>(0xDEAD0000u + k);
+    palette_write(top, kXforms, poison);
+    check(top.pal_dropped_o - dropped_before_b == 1,
+          "P: index 256 is REFUSED and counted", top.pal_dropped_o - dropped_before_b, 1);
+    check(top.pal_writes_o - writes_before_b == 0,
+          "P: index 256 writes nothing", top.pal_writes_o - writes_before_b, 0);
+
+    // Row 0 must still hold what the sweep put there. This passes BECAUSE the
+    // refusal holds; it fails if the index is ever wrapped.
+    dj::DrawForm d0 = d;
+    d0.transform = 0u;
+    Run r0 = drive(top, d0, hdr);
+    dj::Outcome w0 = dj::expand(d0, dir, pal, hdr, kPoolBase);
+    compare("P row 0 survives the boundary write", r0, w0);
+  }
+
   std::printf("geom_drawjob_directed: %d checks, %d failed\n", g_checks, g_failed);
   zhao::exit_hard(g_failed == 0 ? 0 : 1);
   return 0;

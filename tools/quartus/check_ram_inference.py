@@ -244,12 +244,25 @@ def bracket_groups(text, pos):
 
 
 def write_sites(text, name):
-    """(start, joined-index) for every `name[...] <=` site, nesting allowed."""
+    """(start, joined-index, groups) for every `name[...] <=` site, nesting ok.
+
+    The GROUPS are returned as a list as well as joined, because rule 5 needs to
+    count them: on an array with one unpacked dimension, a SECOND bracket group
+    is a bit- or part-select of the element rather than another dimension, and
+    that is a killer of storage inference in its own right.
+
+    Note this matches `<=` only. Blocking writes are deliberately out of scope:
+    a blocking assignment to an array in an `always_comb`, or a continuous
+    `assign`, is combinational and has no storage to infer -- rule 2 is what
+    covers the damage those do. Measured 2026-09-26 while adding rule 5: of 28
+    two-bracket sites in fpga/rtl, 8 were `=` or `assign` (ch_pack, dstep_sat,
+    same_c, seen_n, rt_n_valid) and every one of them would have been noise.
+    """
     out = []
     for m in re.finditer(r"\b" + re.escape(name) + r"\s*(?=\[)", text):
         end, groups = bracket_groups(text, m.end())
         if groups and text[end:end + 2] == "<=":
-            out.append((m.start(), "".join(groups)))
+            out.append((m.start(), "".join(groups), groups))
     return out
 
 
@@ -275,8 +288,51 @@ def self_fire_test():
     return len(nested) == 1 and len(flat) == 1 and "[src[HI:LO]]" in nested[0][1]
 
 
+# RULE 5's POSITIVE CONTROL, and its negative one beside it.
+#
+# "A detector that has not been shown to FIRE has not been tested." Rule 5 is
+# the rule most likely to be written once and never exercised, because the
+# construct it catches is rare -- and it is also the rule most likely to be
+# written TOO BROADLY, because the obvious version of it collides head-on with
+# rule 4. So both directions are asserted on every run:
+#
+#   pal_q    one unpacked dimension, element written through a part-select.
+#            Rule 5 MUST fire. This is zhao_geom_drawjob's shape before the
+#            2026-09-26 repair, reduced to four lines.
+#   twodim_m two unpacked dimensions, element written WHOLE at [i][j]. Rule 5
+#            must NOT fire -- that second bracket is a dimension, and rule 4
+#            already owns it. ~175 sites in fpga/rtl have this shape, so a
+#            rule 5 that fires here is a rule nobody will read.
+_RULE5_FIRE = (
+    "  logic [383:0] pal_q [XFORMS];\n"
+    "  logic [31:0] twodim_m [LANES][DEPTH];\n"
+    "  always_ff @(posedge clk) begin\n"
+    "    for (int unsigned k = 0; k < 12; k++)\n"
+    "      pal_q[int'(px_index_i)][32 * k +: 32] <= px_m_i[k];\n"
+    "    twodim_m[lane_q][slot_q] <= payload_c;\n"
+    "  end\n"
+)
+
+
+def rule5_fire_test():
+    """True if rule 5 fires on the part-select shape and NOT on [i][j]."""
+    fired = {n for n, why in check_file_text(_RULE5_FIRE)
+             if "written through a bit/part-select" in why}
+    return "pal_q" in fired and "twodim_m" not in fired
+
+
 def check_file(path, sizes=None):
     raw = io.open(path, encoding="utf-8", errors="replace").read()
+    return check_file_text(raw, sizes)
+
+
+def check_file_text(raw, sizes=None):
+    """The body of check_file, over TEXT rather than a path.
+
+    Split out 2026-09-26 so rule 5's positive control can run the real rule
+    against a known-bad snippet instead of a reimplementation of it. A control
+    that exercises a copy of the logic proves nothing about the logic that ships.
+    """
     text = strip_comments(raw)
     procs = processes(text)
     vals = local_params(text)
@@ -305,13 +361,13 @@ def check_file(path, sizes=None):
         # Nesting-aware: see bracket_groups' header for the 63 arrays the old
         # regex silently skipped.
         sites = write_sites(text, name)
-        writes = [p for p, _ in sites]
+        writes = [p for p, _, _ in sites]
         if not writes:
             continue
 
         async_writes = 0
         write_addrs = set()
-        for w, addr in sites:
+        for w, addr, _groups in sites:
             o = owner(procs, w)
             if o and o[1] == "ff" and o[2]:
                 async_writes += 1
@@ -373,6 +429,79 @@ def check_file(path, sizes=None):
                        "the device does not have"
                  % sorted(write_addrs)))
 
+        # 5. THE ELEMENT IS WRITTEN THROUGH A BIT- OR PART-SELECT.
+        #
+        # Added 2026-09-26 by the PALRAM packet, which found `pal_q` in
+        # `zhao_geom_drawjob` sitting in 98,304 flip-flops while THIS CHECKER
+        # REPORTED IT CLEAN. It passed all four rules above and was still the
+        # single largest array in flops in the design -- 60% of the shipping
+        # part's register capacity in one leaf.
+        #
+        # The construct, measured by tests/probes/zhao_palram_probe.sv at one
+        # change per map:
+        #
+        #     for (int unsigned k = 0; k < 12; k++)
+        #       pal_q[int'(px_index_i)][32 * k +: 32] <= px_m_i[k];   0 mem bits
+        #     pal_q[int'(px_index_i)] <= whole_word_c;            98,304 mem bits
+        #
+        # THIS IS NOT A NEW DISCOVERY, WHICH IS THE POINT. QUARTUS_GOTCHAS.md
+        # section 10 established it on purpose in August with a 102-bench
+        # calibration grid: "an ASYNCHRONOUS READ, a RESET on the array, or BYTE
+        # ENABLES -- ZERO memory bits. The three conditions kill inference
+        # INDEPENDENTLY." This file encoded the first two (rules 2 and 1) and
+        # never encoded the third. zhao_surface_sheet.sv:164 then paid 131,258
+        # REGISTERS and an estimated 229% of the device for exactly this
+        # template, wrote the post-mortem in its own header, and nothing read it
+        # back. A killer that is documented and unencoded is a killer that gets
+        # rewritten -- which is this repository's own law about uncashed
+        # cheques, arriving inside its own checker.
+        #
+        # HOW HARD TO BELIEVE IT, stated in rule 1's spirit rather than repeating
+        # rule 1's mistake. Two sub-cases, both measured:
+        #
+        #   * a write with a PER-SLICE ENABLE (a true byte enable) infers
+        #     NOTHING on this device, ever. Section 10's grid, 102 benches.
+        #     The remedy is surface_sheet's: one array per plane, each written
+        #     whole under its own enable. That is a DESIGN change, not a rewrite
+        #     of one line.
+        #   * an UNGATED set of part-selects covering the whole element can
+        #     still infer -- probe arm 2 does, at 98,304 bits -- PROVIDED the
+        #     element index is exactly the array's address width. Combined with
+        #     an over-wide index expression (`int'()` of a wider port) it does
+        #     not. drawjob was that conjunction.
+        #
+        # So this finding is A REASON TO LOOK, and the array's size decides
+        # whether it is worth the look -- which is what --rank is for. A sweep
+        # of fpga/rtl at the commit this was added found no array anywhere that
+        # is written through an element part-select AND still infers, so the
+        # measured false-positive rate on this tree is zero; but "no innocents
+        # today" is not "no innocents possible", and arm 2 is the proof that an
+        # innocent shape exists.
+        #
+        # Scoped deliberately:
+        #   * ONE unpacked dimension only. On `arr [A][B]` the second bracket is
+        #     a dimension, not a select, and that is rule 4's business -- firing
+        #     here too would double-count ~175 sites in this tree.
+        #   * NON-BLOCKING writes only (see write_sites). A blocking write or a
+        #     continuous assign is combinational; rule 2 owns that damage.
+        if len(unpacked_dims) == 1:
+            selects = []
+            for w, _addr, groups in sites:
+                if len(groups) > 1:
+                    o = owner(procs, w)
+                    if o and o[1] == "ff" and groups[1] not in selects:
+                        selects.append(groups[1])
+            if selects:
+                findings.append(
+                    (name, "the ELEMENT is written through a bit/part-select %s "
+                           "-- QUARTUS_GOTCHAS section 10's third killer. A "
+                           "per-slice-enabled (byte-enable) write infers NOTHING "
+                           "on this device; an ungated one infers only while the "
+                           "element index is exactly the array's address width. "
+                           "Assemble the word combinationally and write the "
+                           "element WHOLE, or split it into one array per plane."
+                     % ", ".join("`%s`" % s for s in selects[:3])))
+
     return findings
 
 
@@ -423,6 +552,19 @@ def main():
               "report findings from a scan that cannot find writes -- an array "
               "whose write is missed is dropped from every rule below without a "
               "word.")
+        return 2
+
+    # Rule 5 owes the same proof as the write scan, in BOTH directions: it must
+    # fire on the construct it was written for, and stay silent on the
+    # multidimensional shape rule 4 owns. A rule that has never been watched to
+    # fire is an assertion, not an instrument.
+    if not rule5_fire_test():
+        print("RAM-INFERENCE CHECKER BROKEN: rule 5 no longer fires on an "
+              "element part-select write, or it now fires on a whole-element "
+              "write into a multidimensional array. Refusing to report: a "
+              "silent rule 5 reads exactly like a design with no part-select "
+              "writes, which is how zhao_geom_drawjob kept 98,304 flip-flops "
+              "while this file called it clean.")
         return 2
 
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
