@@ -205,6 +205,13 @@ module tb_terrain_composepub #(
     // case proves a field contributed, and differencing the TAP against `top_o`
     // is how it proves the contribution survived to the consumer.
     output var logic               st_valid_o,
+    // THE CACHE'S OWN ACCEPT. Exported because the fill port is NOT one record
+    // per clock -- "the cache accepts on alternate clocks: one record is two
+    // writes" (zhao_console_core.sv) -- so a driver that captured the stream on
+    // `st_valid_o` alone would record every record TWICE and hand a lattice of
+    // 2,177 entries to an oracle expecting 1,089. It did, on this bench's first
+    // run, which is why this port exists.
+    output var logic               st_ready_o,
     output var logic signed [31:0] st_top_o,
     output var logic signed [31:0] st_compose_top_o,
     output var logic               st_dirty_o,
@@ -212,6 +219,7 @@ module tb_terrain_composepub #(
     output var logic [15:0]        subpatch_dirty_o,
 
     output var logic               efa_ans_valid_o,
+    output var logic               efa_ans_ready_o,
     output var logic signed [31:0] efa_height_o,
     output var logic signed [31:0] efa_velocity_o,
     output var logic [31:0]        efa_material_o,
@@ -348,6 +356,7 @@ module tb_terrain_composepub #(
   );
 
   assign efa_ans_valid_o = efa_ans_valid;
+  assign efa_ans_ready_o = efa_ans_ready;
   assign efa_height_o    = efa_height;
 
   // ==========================================================================
@@ -411,6 +420,7 @@ module tb_terrain_composepub #(
   );
 
   assign st_valid_o = pt_st_valid;
+  assign st_ready_o = pt_st_ready;
   assign st_top_o   = pt_top;
 
   // ==========================================================================
