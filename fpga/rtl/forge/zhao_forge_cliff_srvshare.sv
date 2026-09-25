@@ -100,8 +100,14 @@ module zhao_forge_cliff_srvshare #(
     input var logic rst_n,
 
     // The serve block's refusal encoding, in the response's own bit layout.
-    // Ignored entirely when POISON_EN = 0.
+    // GENUINELY UNUSED when POISON_EN = 0, and that is the point rather than an
+    // oversight: the counter that reads it is generated away entirely, so there
+    // is no register left to hold a value nobody watches. The lint waiver is
+    // here, on the port, with its reason -- not at the instance, where a reader
+    // would have to guess which of the two configurations it is about.
+    /* verilator lint_off UNUSEDSIGNAL */
     input var logic [RSP_W-1:0] poison_value_i,
+    /* verilator lint_on UNUSEDSIGNAL */
 
     // ---- client 0: THE INCUMBENT. Never denied, never delayed. --------------
     input  var logic             o0_req_i,
@@ -164,14 +170,13 @@ module zhao_forge_cliff_srvshare #(
   assign c1_rsp_payload_o = srv_rsp_payload_i;
 
   // ---- evidence -------------------------------------------------------------
-  logic [CENSUS_W-1:0] grants0_r, grants1_r, denied1_r, poison1_r;
+  logic [CENSUS_W-1:0] grants0_r, grants1_r, denied1_r;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       grants0_r <= '0;
       grants1_r <= '0;
       denied1_r <= '0;
-      poison1_r <= '0;
     end else begin
       if (o0_req_i && !(&grants0_r)) begin
         grants0_r <= grants0_r + CENSUS_W'(1);
@@ -182,16 +187,55 @@ module zhao_forge_cliff_srvshare #(
       if (c1_req_i && o0_req_i && !(&denied1_r)) begin
         denied1_r <= denied1_r + CENSUS_W'(1);
       end
-      if (POISON_EN && inflight1_q && (srv_rsp_payload_i == poison_value_i) &&
-          !(&poison1_r)) begin
-        poison1_r <= poison1_r + CENSUS_W'(1);
-      end
     end
   end
+
+  // THE POISON COUNTER IS GENERATED, NOT GATED, AND A FIT IS WHY.
+  //
+  // The first cut put `if (POISON_EN && ...)` inside the shared `always_ff`
+  // above. That is lint-clean, simulates correctly, and on the POISON_EN = 0
+  // instance it makes `poison1_r` a register with a reset value and NO OTHER
+  // ASSIGNMENT -- a register that can only ever hold zero. Quartus 17.0.2
+  // reported `Info (10041): Inferred latch for "poison1_r[0..31]"` THIRTY-TWO
+  // TIMES for the lattice-service instance, in the very first map this chain
+  // was ever put through.
+  //
+  // That is real area, and it is the SAME SHAPE the campaign already paid to
+  // remove once: R117 condition 2 was an inferred latch on
+  // `triangles_submitted_o[0]`, for the same reason -- a bit that was provably
+  // constant. Reintroducing it in a new block, in a packet whose own evidence
+  // quotes `Info (10041)` at zero, would have been a quiet regression against a
+  // number somebody is going to cite.
+  //
+  // A `--lint-only -Wall` pass saw NOTHING here, on all four files, which is
+  // this tree's standing rule arriving again: a block that has not been through
+  // `quartus_map` has not been shown to be synthesizable, however clean its
+  // lint. The explicit `generate`/`endgenerate` keywords are the conservative
+  // subset Quartus 17.0 requires (charter 2); an implicit generate is a syntax
+  // error there and lints clean here.
+  generate
+    if (POISON_EN) begin : g_poison
+      logic [CENSUS_W-1:0] poison1_r;
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          poison1_r <= '0;
+        end else if (inflight1_q && (srv_rsp_payload_i == poison_value_i) &&
+                     !(&poison1_r)) begin
+          poison1_r <= poison1_r + CENSUS_W'(1);
+        end
+      end
+      assign poison1_o = poison1_r;
+    end else begin : g_no_poison
+      // The service has no refusal encoding to watch, so the counter does not
+      // exist rather than existing and reading zero. A counter that is
+      // structurally incapable of moving must not be quotable as a silent
+      // detector -- that is CLAUDE.md's whole chapter on instruments.
+      assign poison1_o = '0;
+    end
+  endgenerate
 
   assign grants0_o = grants0_r;
   assign grants1_o = grants1_r;
   assign denied1_o = denied1_r;
-  assign poison1_o = poison1_r;
 
 endmodule
