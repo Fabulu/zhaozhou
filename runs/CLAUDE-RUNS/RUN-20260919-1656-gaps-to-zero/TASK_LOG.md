@@ -1965,3 +1965,82 @@ close (I20). **11 → 0 is five subsystems, not five wiring jobs** — the terra
 arm (I13 + normalmap), the edge seam (I21 + edgerecon), the arena (I53–I56),
 the composed caches (I34 + velocity), and the cliff producer. What changed today
 is that **none of them waits on the owner any more.**
+
+### 2026-09-25 (evening) — REGISTER 11, four merges, and a defect repaired that nothing in the tree could see
+
+**12 -> 11 on I20** (FRAGSTATE), and the close is the cleanest of the campaign:
+GlowTag smoke **1,062 lit fragments / 1,344 bloom cells** against plain's 0 and 0,
+**the two runs differing by ONE BYTE in one uploaded `MaterialRecord`** — a
+producer-to-pixel demonstration with no bench port anywhere in the chain. Both
+I20 ports are **retired from the core's port list**, and the **OR is gone**: the
+material now declares the profile through an explicit ABI selector, which is what
+the directive demanded instead of averaging two owners.
+
+### The defect chain, because three packets each saw one link
+
+* **COMPOSEPUB** refused to publish the composed caches and was right twice over:
+  composed height **already reaches four consumers through FABRIC** (TERRAIN.TESS,
+  the heighttap, and through TAPSHARE both PART.COLLIDE and FORGE.SHADOW), so an
+  SDRAM writer would have been **read by nobody** — and the write alone takes the
+  frame from **80.17% to 124.41%**. It built the missing gate instead: **the first
+  non-empty term ever in §3.4's field sum in a bench of the real chain.**
+  `tb_terrain_compose.sv` ties that lane off and says so.
+* **It also found a latent RTL defect** and I over-asked whether it was real. It
+  was. `rec_ready_o` is the intake's **first** beat; the banks land **eighteen
+  clocks later**; `b_res` has two writers on two counters with no interlock. And
+  **nothing could catch it** — `lane_desync_o` differences entry COUNTS and the
+  count is right.
+* **EARTHLOCK repaired both halves**, including the silent one COMPOSEPUB named
+  and did not claim: a vertex between the replay and `I_WR` read **frame 1's age,
+  phase and parameters with every counter at zero.** Cost **+9 ALUTs, +8 ALMs,
+  zero registers**, and **EARTHRAM's M10K intact at 4,880 bits** — verified
+  independently here, `check_ram_inference --rank` no longer lists the bank.
+
+**AND IT CORRECTED THE CITATION, WHICH IS A NEW SHAPE FOR THE COLLECTION.** The
+defect header said the race was *"MEASURED, not argued"* by
+`composepub_acceptance.cpp`. **That bench cannot present the ordering** — its
+`bank()` ends with a drain added AFTER the run that found the defect. The
+measurement was real and **the instrument that made it had since been changed**,
+so it could catch neither the defect nor a regression of the repair. Not a stale
+claim about the tree: a true claim whose instrument moved underneath it.
+
+**EARTHLOCK also refused the proposed one-liner**, which clears the wrong entry
+twice: `wr_a` is `n_rec` and the take edge RESETS `n_rec`, so it names the
+previous list's tail; and ungated, `n_rec == 16` aliases through a 4-bit address
+to **entry 0**. Applied literally it would have replaced one race with two.
+
+### EDGEPREP: P2 and P3 built, and blocker A dissolved on something already here
+
+`zhao_terrain_prepwalk`, `zhao_terrain_lodshare` and `zhao_terrain_place_law_pkg`
+exist and are tested. **`zhao_terrain_cmd` already reads the sealed list twice
+every frame** under T5 — *"pass one folds the CRC and emits nothing; pass two
+emits and folds nothing"* — so replayability was already in the tree. **+8
+KiB/frame on the HPS bridge, not SDRAM.**
+
+**And blocker C's comfortable half is false:** I21 calls the per-patch re-latch
+*"harmless TODAY"*; it is harmless for seven of thirteen operands and **false for
+six** — `veye0/1_*` are host-write-scoped, so **the shipped SINGLE pass already
+samples a moving camera** and nothing was watching.
+
+Three premises died, one of them the owner's phrasing I passed through
+unexamined: **client 5 is ACTIVELY REFUSED**, not unspent (`port_grant
+[RESERVED_ID] = 1'b0`); **`zhao_terrain_island_dir` is not instantiated at all**,
+so the newly-authoritative island pitch **has no live producer**; and I21's port
+counts are wrong in both directions.
+
+### A GAP IN MY OWN INTEGRATION, FOUND BY A LANE
+
+Two acceptance benches were missing eight ports FRAGSTATE added the same
+afternoon, so **NO TARGET IN THE TREE COULD CONFIGURE** — and **I merged
+FRAGSTATE with `gate_sweep` RC 0 and the register green without noticing, because
+THE GATES DO NOT BUILD.** `cmake --preset windows-native` is now part of my merge
+verification and has passed on every merge since.
+
+### WHERE I AM
+
+**Register 11.** 30 gates matching baseline, configure RC 0, bandwidth baseline
+byte-identical at 80.17%. **I stopped once at 11 with both slots empty — the
+"wave ended" stop the directive forbids — and refilled immediately.** Running:
+**EDGECLOSE** (P4: closes I21 **and** edgerecon together, the only −2 left) and
+**CLIFFPROD** (the cliff evaluator's real producer; the current one is an LFSR in
+a generated pricing top).
