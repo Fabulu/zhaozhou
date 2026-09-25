@@ -95,7 +95,18 @@ module zhao_texture_sheetmod (
     input  var logic        en_i,
     // Layer F's strength byte for this fragment, as SURFACE.SHEET returned it
     // and `zhao_texture_aux_pipe_v2` typed it ([31:24] of the AUX plane).
+    //
+    // BIT 0 IS DROPPED BY THE LAW, not by an oversight: `255 - (strength >> 1)`
+    // is what terrain.cpp:640 and :718 both write, so the strength byte's
+    // resolution in the tint is 7 bits and its LSB has no effect on any pixel.
+    // The waiver is here with its reason rather than on the whole file, and the
+    // directed test's section 6 walks strength in steps of 2 for the same
+    // reason. Narrowing the PORT to 7 bits was rejected: it is SURFACE.SHEET's
+    // byte, it is what layer F stores, and a port that silently re-scaled it
+    // would make the stamp's own value unreadable at its consumer.
+    /* verilator lint_off UNUSEDSIGNAL */
     input  var logic [ 7:0] strength_i,
+    /* verilator lint_on UNUSEDSIGNAL */
     // The recipe's finished colour, {r, g, b} with r in [23:16].
     input  var logic [23:0] rgb_i,
 

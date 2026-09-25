@@ -2529,8 +2529,103 @@ module zhao_texture_island_v3_top #(
       .phases_issued_o(cnt_combine_phases_o),
       .phases_completed_o(combine_phases_completed_w));
 
+  // ===========================================================================
+  // THE SURFACE SHEET'S VISIBLE EFFECT (TERRAINAUX, 2026-09-25)
+  // ===========================================================================
+  // `design/contracts/TEXTURE.AUX.V2.md` and `design/contracts/TEXTURE.COMBINE.md`
+  // both end their AUX section with the same sentence: *"tag and strength are
+  // reserved for A LATER VISIBLE TERRAIN-EFFECT COMPOSITION and Packet B does
+  // not claim that effect is connected."* This is that composition, and the
+  // decision record -- what each contract amendment supersedes and why -- is in
+  // `design/contracts/TEXTURE.SHEETMOD.md`.
+  //
+  // WHAT IS NOT WEAKENED. AUX still never occupies, aliases or substitutes for a
+  // TMU sample, and NO RECIPE consumes tag or strength as an operand: the
+  // combiner below is untouched, runs exactly as it did, and its 13 committed
+  // mutants still describe it. The tint is applied to the colour the recipe
+  // PRODUCED. That is the ORACLE'S OWN SHAPE -- `span.mod_r/g/b` multiplies the
+  // texel the recipe made; it is not one of the texels.
+  //
+  // WHY THE STRENGTH IS TAKEN FROM A PER-SLOT RECORD AND NOT FROM A WIRE.
+  // `u_aux` returns its result some clocks before `u_combine` produces the
+  // colour for the same fragment, and the combiner interleaves NCTX contexts --
+  // so a wire read at the combiner's output would apply fragment A's scar to
+  // fragment B's colour, with every counter in this file balancing. That is
+  // CLAUDE.md's lockstep fault exactly. The record is therefore keyed by the
+  // OWNER SLOT and read back with the OWNER THE COMBINER RETURNS, which is the
+  // record's own key -- the same discipline `material_m` above already uses and
+  // the same one `zhao_terrain_lightlane` uses for its world vertices.
+  //
+  // AND NO GENERATION COUNTER IS ADDED, DELIBERATELY (a counter declined at
+  // design time beats a counter explained at review time). `zhao_texture_v3own`
+  // is the sole lifecycle owner and does not free a slot until its OUTPUT
+  // handshake, which is downstream of `fin_result_i` -- so the slot cannot be
+  // re-admitted while its own result is in the combiner. The generation is
+  // stored and CHECKED anyway, because the check is free: a mismatch suppresses
+  // the tint (fail-safe: an untinted colour, never a wrong one) and trips a
+  // simulation assertion -- and `synthesis translate_off` does NOT hide such an
+  // assertion from the simulator (CLAUDE.md, proven by planting a syntax error
+  // inside one).
+  logic [GENW+8:0] sheet_m [0:OWNERS-1];   // {generation, aux_required, strength}
+  always_ff @(posedge clk) begin
+    // ADMISSION writes the DECLARATION and a zero strength. Writing it here and
+    // not only on the AUX return is what makes a fragment that requires no AUX
+    // read its OWN record instead of the previous tenant's.
+    if (own_adm_accept_w)
+      sheet_m[own_adm_owner_w[13:8]] <= {own_adm_owner_w[7:0], frag_aux_i, 8'd0};
+    // THE AUX RETURN overwrites the strength, keeping the declaration and the
+    // generation the admission wrote. The two writers cannot collide on one
+    // slot: a slot's AUX return is inside its own lifetime, and admission is
+    // the start of a lifetime.
+    else if (aux_return_valid_w && aux_return_ready_w)
+      sheet_m[aux_return_owner_w[13:8]] <= {
+          sheet_m[aux_return_owner_w[13:8]][GENW+8 -: GENW],
+          sheet_m[aux_return_owner_w[13:8]][8],
+          aux_return_result_w[TEXTURE_RESULT_ALPHA_HI:TEXTURE_RESULT_ALPHA_LO]};
+  end
+
+  wire [GENW+8:0] sheet_row_c = sheet_m[combine_owner_w[13:8]];
+  wire sheet_gen_ok_c = (sheet_row_c[GENW+8 -: GENW] == combine_owner_w[7:0]);
+  // THE THREE GUARDS, each for a different reason:
+  //   `sheet_row_c[8]`  the MATERIAL's own `aux_required` declaration, not a
+  //                     non-zero strength. Owner directive 2026-09-23 section 3:
+  //                     "Profile selection is explicit, not inferred from
+  //                     whether a port happens to be zero."
+  //   `sheet_gen_ok_c`  see above; fail-safe, not fail-quiet.
+  //   status == 0       TEXTURE.COMBINE.md fixes the terminal value of a faulted
+  //                     result at EXACTLY 24'hFF00FF. A tinted magenta is a
+  //                     different and quieter colour, and a fault must stay loud.
+  wire sheet_apply_c =
+      sheet_row_c[8] && sheet_gen_ok_c &&
+      (combine_result_w[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] == 8'd0);
+
+  logic [23:0] sheet_rgb_w;
+  logic sheet_applied_w;
+  zhao_texture_sheetmod u_sheetmod (
+      .en_i      (sheet_apply_c),
+      .strength_i(sheet_row_c[7:0]),
+      .rgb_i     (combine_result_w[TEXTURE_RESULT_RGB_HI:TEXTURE_RESULT_RGB_LO]),
+      .rgb_o     (sheet_rgb_w),
+      .applied_o (sheet_applied_w)
+  );
+  // `applied_o` is `en_i` by construction and is therefore not a second opinion
+  // about anything; it is consumed so the port is not dangling, and the leaf's
+  // own directed test owns that equality.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire unused_sheet_applied_w = sheet_applied_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // synthesis translate_off
+  always_ff @(posedge clk) begin
+    if (rst_n && combine_rsp_valid_w && sheet_row_c[8] && !sheet_gen_ok_c)
+      $fatal(1, "zhao_texture_island_v3_top: the sheet record's generation %0d does not match the combiner's returned owner generation %0d -- a slot was reused while its result was in flight",
+             sheet_row_c[GENW+8 -: GENW], combine_owner_w[7:0]);
+  end
+  // synthesis translate_on
+
   assign owner_final_owner_w = combine_owner_w;
-  assign owner_final_result_w = combine_result_w;
+  assign owner_final_result_w = {
+      combine_result_w[TEXTURE_RESULT_W-1:TEXTURE_RESULT_RGB_HI+1], sheet_rgb_w};
 
   assign out_valid_o = owner_out_valid_w;
   assign out_status_o = owner_out_result_w[47:40];

@@ -11607,6 +11607,11 @@ set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  # TEXTURE.SHEETMOD, 2026-09-25: the surface sheet's visible effect, the
+  # composition both TEXTURE.AUX.V2.md and TEXTURE.COMBINE.md named as
+  # "reserved for a later visible terrain-effect composition". A LEAF of the
+  # selected root, so it precedes it -- architecture 12.1's frozen order.
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
 )
 
@@ -16485,6 +16490,72 @@ verilate(test_terrain_edge_acceptance
           ${CMAKE_SOURCE_DIR}/tests/prod/tb_terrain_edge_acceptance.sv)
 add_test(NAME terrain_edge_acceptance COMMAND test_terrain_edge_acceptance)
 set_tests_properties(terrain_edge_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# TEXTURE.SHEETMOD -- the surface sheet's visible effect (TERRAINAUX 2026-09-25)
+# ---------------------------------------------------------------------------
+# `design/contracts/TEXTURE.SHEETMOD.md` is the decision record and names what
+# it supersedes in TEXTURE.AUX.V2.md and TEXTURE.COMBINE.md. The suite proves
+# that the two independently transcribed statements of charter section 12's
+# tint law agree over all 65,536 operand pairs BEFORE it looks at the RTL, so
+# the exhaustive comparison that follows is evidence about the RTL rather than
+# a transcription agreeing with itself.
+add_executable(test_sheetmod_directed texture/sheetmod_directed.cpp)
+target_link_libraries(test_sheetmod_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_sheetmod_directed
+  PREFIX Vzhao_texture_sheetmod
+  TOP_MODULE zhao_texture_sheetmod
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv)
+add_test(NAME sheetmod_directed COMMAND test_sheetmod_directed)
+set_tests_properties(sheetmod_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# Its own positive control, registered rather than described.
+add_test(NAME sheetmod_break_oracle COMMAND test_sheetmod_directed --break-oracle)
+set_tests_properties(sheetmod_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_texture_sheetmod
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_sheetmod
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv)
+set_tests_properties(lint_texture_sheetmod PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAINAUX ACCEPTANCE -- the surface sheet's LOOP, closed, and a PIXEL
+# ---------------------------------------------------------------------------
+# Four PRODUCTION modules in the arrangement `zhao_console_core` now holds:
+# the real layer-F store, the real three-client share, the real AUX adapter on
+# CLIENT C, and the visible effect. It stamps a scar, samples it through the
+# whole loop, and requires the COLOUR to differ -- which the console could not
+# do before 2026-09-25, when the response half was tied to zero inside
+# `zhao_shell_top_v2` and the request half left the board unconnected.
+#
+# Section 3 is the COMPATIBILITY claim asserted rather than said: a material
+# that declares no AUX is bit-identical over 256 colours. Section 4 is its
+# twin and both are needed -- with the sheet PRESENT, strength 0 still darkens
+# by ~0.4%, which is the oracle's own behaviour and the reason the enable and
+# the value are different questions.
+add_executable(test_terrainaux_acceptance prod/terrainaux_acceptance.cpp)
+target_link_libraries(test_terrainaux_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_terrainaux_acceptance
+  PREFIX Vtb_terrainaux_acceptance
+  TOP_MODULE tb_terrainaux_acceptance
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheetshare.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
+          ${CMAKE_SOURCE_DIR}/tests/prod/tb_terrainaux_acceptance.sv)
+add_test(NAME terrainaux_acceptance COMMAND test_terrainaux_acceptance)
+set_tests_properties(terrainaux_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME terrainaux_acceptance_break_oracle
+         COMMAND test_terrainaux_acceptance --break-oracle)
+set_tests_properties(terrainaux_acceptance_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
 # THE POSITIVE CONTROL FOR `descriptor_unarmed_o` -- INVERTED POLARITY

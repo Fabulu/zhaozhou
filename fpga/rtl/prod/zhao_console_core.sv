@@ -9556,12 +9556,15 @@ module zhao_console_core
   input  logic [15:0]  fill_data_i,
   input  logic         fill_refused_i,
   input  logic [63:0]  frame_clear_word_i,
-  input  logic         sheet_req_ready_i,
-  output logic         sheet_req_valid_o,
-  output logic [1:0]   sheet_req_op_o,
-  output logic [31:0]  sheet_req_handle_o,
-  output logic [11:0]  sheet_req_texel_o,
-  output logic [15:0]  sheet_req_src_id_o,
+  // `sheet_req_*` LEFT THIS LIST 2026-09-25 (TERRAINAUX). It was the composed
+  // texture island's AUX pipe asking SURFACE.SHEET for a layer-F byte, and it
+  // left the console -- and the BOARD -- as a dangling output group while
+  // `zhao_surface_sheet`, the store that answers it, was instantiated a few
+  // thousand lines below in THIS FILE. Its response half was TIED TO ZERO
+  // inside `zhao_shell_top_v2`. The loop is closed through
+  // `u_surface_sheetshare`'s CLIENT C; six ports left this list rather than
+  // being driven, and the arbitration lives in a file with a contract and a
+  // test, which is what entry I32 required of any second requester.
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two
@@ -17682,6 +17685,16 @@ module zhao_console_core
   // first reference.
   wire        ssh_a_pg_valid, ssh_a_pg_ready;
   wire        ssh_b_pg_valid;
+  // CLIENT C -- the composed texture island's AUX pipe (TERRAINAUX,
+  // 2026-09-25). Its request half arrives from `u_shell` a few thousand
+  // lines below and its response half goes back the same way, so both are
+  // declared here beside the share that owns them.
+  wire        ssh_c_req_valid, ssh_c_req_ready;
+  wire [ 1:0] ssh_c_req_op;
+  wire [31:0] ssh_c_req_handle;
+  wire [11:0] ssh_c_req_texel;
+  wire [15:0] ssh_c_req_src_id;
+  wire        ssh_c_pg_valid, ssh_c_pg_ready;
   wire        ssh_s_req_valid, ssh_s_req_ready;
   wire [ 1:0] ssh_s_req_op;
   wire [31:0] ssh_s_req_handle;
@@ -17695,11 +17708,12 @@ module zhao_console_core
   wire        ssm_pg_ready;
   /* verilator lint_off UNUSEDSIGNAL */
   // The share's own evidence. `ssh_busy`/`ssh_owner` are its state for a
-  // waveform, and the four counters are read by no port of this module; they
+  // waveform, and the five counters are read by no port of this module; they
   // are named here rather than left as empty connections so a reader can see
   // that the decision was taken.
-  wire        ssh_busy, ssh_owner;
-  wire [31:0] ssh_a_reqs, ssh_b_reqs, ssh_pg_orphan, ssh_pg_op_mismatch;
+  wire        ssh_busy;
+  wire [ 1:0] ssh_owner;
+  wire [31:0] ssh_a_reqs, ssh_b_reqs, ssh_c_reqs, ssh_pg_orphan, ssh_pg_op_mismatch;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ---- TWO MORE OF THE BAKE CHAIN's FORWARD WIRES --------------------------
@@ -18053,6 +18067,25 @@ module zhao_console_core
     .b_pg_valid_o  (ssh_b_pg_valid),
     .b_pg_ready_i  (ssm_pg_ready),
 
+    // CLIENT C -- TEXTURE.AUX.V2's per-FRAGMENT layer-F read, from inside the
+    // composed texture island (TERRAINAUX, 2026-09-25). OP_READ only: the
+    // island has no write path to layer F and terrain_rules 7 gives that to
+    // SURFACE.STAMP alone, so this client can neither allocate nor stamp.
+    //
+    // IT IS THE ONE CLIENT THAT CANNOT BE MADE TO WAIT INDEFINITELY, and that
+    // is why the share's round robin is the correctness argument rather than a
+    // courtesy: `zhao_texture_aux_pipe_v2` holds a credit for the whole
+    // accepted lifetime, so a starved AUX read is a FRAGMENT THAT NEVER
+    // RETIRES. Round robin bounds it at one beat behind each of the other two.
+    .c_req_valid_i (ssh_c_req_valid),
+    .c_req_ready_o (ssh_c_req_ready),
+    .c_req_op_i    (ssh_c_req_op),
+    .c_req_handle_i(ssh_c_req_handle),
+    .c_req_texel_i (ssh_c_req_texel),
+    .c_req_src_id_i(ssh_c_req_src_id),
+    .c_pg_valid_o  (ssh_c_pg_valid),
+    .c_pg_ready_i  (ssh_c_pg_ready),
+
     // THE STORE.
     .s_req_valid_o (ssh_s_req_valid),
     .s_req_ready_i (ssh_s_req_ready),
@@ -18068,6 +18101,7 @@ module zhao_console_core
     .owner_o          (ssh_owner),
     .a_reqs_o         (ssh_a_reqs),
     .b_reqs_o         (ssh_b_reqs),
+    .c_reqs_o         (ssh_c_reqs),
     .pg_orphan_o      (ssh_pg_orphan),
     .pg_op_mismatch_o (ssh_pg_op_mismatch)
   );
@@ -18433,12 +18467,24 @@ module zhao_console_core
     .fill_data_i               (fill_data_i),
     .fill_refused_i            (fill_refused_i),
     .frame_clear_word_i        (frame_clear_word_i),
-    .sheet_req_ready_i         (sheet_req_ready_i),
-    .sheet_req_valid_o         (sheet_req_valid_o),
-    .sheet_req_op_o            (sheet_req_op_o),
-    .sheet_req_handle_o        (sheet_req_handle_o),
-    .sheet_req_texel_o         (sheet_req_texel_o),
-    .sheet_req_src_id_o        (sheet_req_src_id_o),
+    // TEXTURE.AUX.V2's layer-F READ, INTERNAL from 2026-09-25 (TERRAINAUX).
+    // Both halves land on `u_surface_sheetshare`'s CLIENT C a few thousand
+    // lines above, so the composed island's AUX pipe reads the SAME
+    // `zhao_surface_sheet` that SURFACE.STAMP writes and TERRAIN.SHEETSEAM
+    // prefetches. Six ports left this module's edge rather than being driven.
+    .sheet_req_ready_i         (ssh_c_req_ready),
+    .sheet_req_valid_o         (ssh_c_req_valid),
+    .sheet_req_op_o            (ssh_c_req_op),
+    .sheet_req_handle_o        (ssh_c_req_handle),
+    .sheet_req_texel_o         (ssh_c_req_texel),
+    .sheet_req_src_id_o        (ssh_c_req_src_id),
+    .pg_valid_i                (ssh_c_pg_valid),
+    .pg_ready_o                (ssh_c_pg_ready),
+    .pg_op_i                   (surf_pg_op_o),
+    .pg_status_i               (surf_pg_status),
+    .pg_tag_i                  (surf_pg_tag_o),
+    .pg_strength_i             (surf_pg_strength),
+    .pg_src_id_i               (surf_pg_src_id_o),
     .blank_cmd_i               (blank_cmd_i),
     .scanout_ack_i             (scanout_ack_i),
     .frame_swap_valid_i        (frame_swap_valid_i),

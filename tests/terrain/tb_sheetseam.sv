@@ -13,7 +13,7 @@
 //                            them, so the seam's mirrored `StHit` localparam
 //                            is checked against the store's rather than
 //                            against a copy of itself.
-//   zhao_surface_sheetshare  the two-client share.
+//   zhao_surface_sheetshare  the three-client share (client C idle here).
 //   zhao_terrain_sheetseam   the DUT.
 //
 // PLAYED: the two ENDS.  Client A stands where SURFACE.STAMP stands and is
@@ -138,7 +138,7 @@ module tb_sheetseam (
     output var logic        seam_idle_o,
 
     output var logic        share_busy_o,
-    output var logic        share_owner_o,
+    output var logic [ 1:0] share_owner_o,
     output var logic [31:0] share_a_reqs_o,
     output var logic [31:0] share_b_reqs_o,
     output var logic [31:0] share_pg_orphan_o,
@@ -182,6 +182,10 @@ module tb_sheetseam (
   logic [31:0] nc_sheet_touched;
   logic        nc_sheet_idle;
   logic        nc_p_a_req_ready;
+  logic        nc_c_req_ready, nc_c_pg_valid;
+  logic [31:0] nc_c_reqs;
+  logic        nc_p_c_req_ready, nc_p_c_pg_valid;
+  logic [31:0] nc_p_c_reqs;
   logic        nc_p_a_pg_valid;
   logic        nc_p_b_req_ready;
   logic        nc_p_b_pg_valid;
@@ -192,7 +196,7 @@ module tb_sheetseam (
   logic [15:0] nc_p_s_req_src_id;
   logic        nc_p_s_pg_ready;
   logic        nc_p_busy;
-  logic        nc_p_owner;
+  logic [ 1:0] nc_p_owner;
   logic [31:0] nc_p_a_reqs;
   logic [31:0] nc_p_b_reqs;
   logic signed [31:0] nc_law_fx16;
@@ -292,6 +296,21 @@ module tb_sheetseam (
       .b_pg_valid_o(b_pg_valid),
       .b_pg_ready_i(b_pg_ready),
 
+      // CLIENT C -- TEXTURE.AUX.V2 (share widened 2 -> 3 on 2026-09-25).
+      // This bench is TERRAIN.SHEETSEAM's and drives it IDLE, which is the
+      // point: the seam's measured 1,089 texels and 1,091 prefetch cycles
+      // must not move when a third client exists and never asks. The third
+      // client is exercised where it lives, in
+      // tests/prod/terrainaux_acceptance.cpp.
+      .c_req_valid_i(1'b0),
+      .c_req_ready_o(nc_c_req_ready),
+      .c_req_op_i(2'd0),
+      .c_req_handle_i(32'd0),
+      .c_req_texel_i(12'd0),
+      .c_req_src_id_i(16'd0),
+      .c_pg_valid_o(nc_c_pg_valid),
+      .c_pg_ready_i(1'b1),
+
       .s_req_valid_o(s_req_valid),
       .s_req_ready_i(s_req_ready),
       .s_req_op_o(s_req_op),
@@ -306,6 +325,7 @@ module tb_sheetseam (
       .owner_o(share_owner_o),
       .a_reqs_o(share_a_reqs_o),
       .b_reqs_o(share_b_reqs_o),
+      .c_reqs_o(nc_c_reqs),
       .pg_orphan_o(share_pg_orphan_o),
       .pg_op_mismatch_o(share_pg_op_mismatch_o)
   );
@@ -393,6 +413,15 @@ module tb_sheetseam (
       .b_pg_valid_o(nc_p_b_pg_valid),
       .b_pg_ready_i(1'b1),
 
+      .c_req_valid_i(1'b0),
+      .c_req_ready_o(nc_p_c_req_ready),
+      .c_req_op_i(2'd0),
+      .c_req_handle_i(32'd0),
+      .c_req_texel_i(12'd0),
+      .c_req_src_id_i(16'd0),
+      .c_pg_valid_o(nc_p_c_pg_valid),
+      .c_pg_ready_i(1'b1),
+
       .s_req_valid_o(nc_p_s_req_valid),
       .s_req_ready_i(p_s_req_ready_i),
       .s_req_op_o(nc_p_s_req_op),
@@ -407,6 +436,7 @@ module tb_sheetseam (
       .owner_o(nc_p_owner),
       .a_reqs_o(nc_p_a_reqs),
       .b_reqs_o(nc_p_b_reqs),
+      .c_reqs_o(nc_p_c_reqs),
       .pg_orphan_o(p_pg_orphan_o),
       .pg_op_mismatch_o(p_pg_op_mismatch_o)
   );
@@ -432,7 +462,9 @@ module tb_sheetseam (
                       nc_p_b_pg_valid, nc_p_s_req_valid, nc_p_s_req_op,
                       nc_p_s_req_handle, nc_p_s_req_texel, nc_p_s_req_src_id,
                       nc_p_s_pg_ready, nc_p_busy, nc_p_owner, nc_p_a_reqs,
-                      nc_p_b_reqs, nc_law_fx16, nc_law_h16, nc_law_cov};
+                      nc_p_b_reqs, nc_law_fx16, nc_law_h16, nc_law_cov,
+                      nc_c_req_ready, nc_c_pg_valid, nc_c_reqs,
+                      nc_p_c_req_ready, nc_p_c_pg_valid, nc_p_c_reqs};
   /* verilator lint_on UNUSEDSIGNAL */
 
 endmodule
