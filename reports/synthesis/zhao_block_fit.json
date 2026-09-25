@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e97dc4210401e2e24b33bb15e915217125a30b5b",
+    "newestRunCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -525,6 +525,26 @@
                        "dspBlocksAvailable":  112
                    },
                    {
+                       "module":  "zhao_geom_cull@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "e4c2cf24c3cfff919dad5e791ece4c06f3c4d7a8ef2952bb6744fe1ec62a87d1",
+                       "variantOf":  "zhao_geom_cull",
+                       "seconds":  44.3,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1825,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  6,
+                       "virtualPins":  177
+                   },
+                   {
                        "module":  "zhao_geom_fogfactor",
                        "status":  "ok",
                        "sourceCommit":  "c6997ab846f0eccbd9784ed0420a8cb2049044c0",
@@ -586,6 +606,26 @@
                        "lastAttemptCommit":  "bd5ecd215dca1063892f3c3d26e4e1520d51125a"
                    },
                    {
+                       "module":  "zhao_geom_meshfetch@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "cc7b2e679f96aef59154424850f8a4f1d6bd93280d7834452b02ff42aea37df3",
+                       "variantOf":  "zhao_geom_meshfetch",
+                       "seconds":  42.1,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1688,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  6,
+                       "virtualPins":  1433
+                   },
+                   {
                        "module":  "zhao_geom_project",
                        "status":  "failed:structure",
                        "sourceCommit":  "83f050c518fc1855be6c581b98825ad35353dcad",
@@ -640,6 +680,26 @@
                        "fmaxClock":  "clk"
                    },
                    {
+                       "module":  "zhao_geom_skin@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "057f56787d97de2a0ee9c34ddc10dfbc3652dbcd2dffc48984b15db04827f56a",
+                       "variantOf":  "zhao_geom_skin",
+                       "seconds":  61.4,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2146,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  9,
+                       "virtualPins":  1050
+                   },
+                   {
                        "module":  "zhao_geom_skin@MUL_LANES=1",
                        "status":  "ok",
                        "sourceCommit":  "e7591e8c5279bfa4a18533e5d8981504140286c1",
@@ -678,6 +738,26 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  84.61,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_geom_skin_norm@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "c9338495f42a509385f82bde962b5aaa8b4626542176be4201343c10f4bb6401",
+                       "variantOf":  "zhao_geom_skin_norm",
+                       "seconds":  115.9,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  920,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  21,
+                       "virtualPins":  1126
                    },
                    {
                        "module":  "zhao_geom_wcache@arena-after",
@@ -3984,6 +4064,26 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  75.79,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_twod_plane@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "ece03d818deed28c83905ffaab46e12cb69933b8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "705663b24c15b0bbdd28c7318382e258736c8aba35932ac1bc45836383da9c51",
+                       "variantOf":  "zhao_twod_plane",
+                       "seconds":  25,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  746,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  8,
+                       "virtualPins":  571
                    },
                    {
                        "module":  "zhao_video_framectl",

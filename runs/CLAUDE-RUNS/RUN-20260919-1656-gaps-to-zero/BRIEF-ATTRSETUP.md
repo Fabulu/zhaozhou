@@ -79,6 +79,32 @@ tools/quartus/run_block_fit.ps1 -Module zhao_geom_attrsetup -MapOnly -RowLabel '
 27×27s are the three 96-bit products and narrowing them to 46×32 costs N"* — is
 worth far more than a smaller number nobody can explain.
 
+## The census puts your block alone in the expensive mode
+
+I mapped five more DSP consumers standalone after yours —
+`reports/synthesis/dsp_census.md`, built by `tools/budget/dsp_census.py`. Six
+leaf blocks are **95 DSP, 85% of the whole device**, and the modes separate them
+cleanly:
+
+| block | DSP | 18x18 pairs | 18x18+36 | **27x27** |
+|---|---:|---:|---:|---:|
+| `zhao_geom_attrsetup` | 45 | 15 + 6 | | **24** |
+| `zhao_geom_skin_norm` | 21 | 6 | 7 | 8 |
+| `zhao_geom_skin` | 9 | 6 + 3 | | |
+| `zhao_twod_plane` | 8 | 4 | 4 | |
+| `zhao_geom_cull` | 6 | 4 + 2 | | |
+| `zhao_geom_meshfetch` | 6 | 4 + 2 | | |
+
+**A `Two Independent 18x18` block does two multiplies; an `Independent 27x27`
+block does one.** Four of the six blocks use no 27x27 at all — their multipliers
+are narrow and busy, and there is nothing to reclaim. **Yours holds 24 of the
+census's 32 wide blocks.** That does not prove the declarations are the cause,
+but it is the shape the hypothesis predicts, and it is why you are first.
+
+**And the standalone counts match the composed entity table EXACTLY** — 45, 21,
+9, 8, 6, 6 in both. The composition neither shares nor inflates DSPs, so
+**whatever you save here is saved in the console, one for one.**
+
 ## What must NOT change, and it is the whole point of the block
 
 **THE BITS OF THE RESULT.** This block's entire justification is that it emits
