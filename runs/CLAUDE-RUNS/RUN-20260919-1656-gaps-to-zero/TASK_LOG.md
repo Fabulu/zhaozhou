@@ -2316,3 +2316,30 @@ currently in `quartus_map`). **At the cap of two.**
 **Queued, in order:** ATTRSETUP (written), then `zhao_forge_assemble`'s
 `pos_q`/`inv_q` (diagnosed in 15.21, **not free** — a pipeline stage and a
 validity discipline).
+
+### 2026-09-26 — the DSP census, and the check that made it worth having
+
+Six leaf blocks mapped standalone in under six minutes, no fit:
+`reports/synthesis/dsp_census.md`. **95 DSP, 85% of the 112-DSP part, out of the
+console's 375.**
+
+**The count was never the actionable number — the MODE is.** A `Two Independent
+18x18` block does two multiplies; an `Independent 27x27` does one. Four of the
+six blocks use **no** 27x27 at all and have nothing to reclaim. **32 of the 95
+are wide and 24 of those are in `zhao_geom_attrsetup`** — the shape 15.23's
+declared-width hypothesis predicts, which is why that block is first and not a
+reason to skip its experiment.
+
+**And the check worth having done rather than assumed:** the standalone counts
+match the composed entity table **exactly** — 45, 21, 9, 8, 6, 6 in both. Nothing
+is shared or inflated, so a DSP saved in a leaf is a DSP saved in the console,
+one for one. The ALM census got the analogous question WRONG historically (a
+leaf's 976 could not be subtracted from a census 8,715), so it was not safe to
+assume.
+
+`tools/budget/dsp_census.py` is committed with it — it reads Quartus's own
+summary and measures nothing itself, which keeps it on the comparison side.
+
+**Not measured, so the census is not read as complete:** `zhao_geom_bin_pipe_v2`
+(86) and `zhao_proj_subsystem` (39) have no leaf target. With the census that
+accounts for 220 of 375.
