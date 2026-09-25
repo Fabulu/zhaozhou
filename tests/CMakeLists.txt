@@ -16962,6 +16962,35 @@ add_test(NAME field_earth_adapter_directed COMMAND test_field_earth_adapter_dire
 set_tests_properties(field_earth_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # --------------------------------------------------------------------------
+# THE POSITIVE CONTROL FOR EARTHLOCK'S INTAKE/REPLAY INTERLOCK, AND ITS
+# POLARITY IS INVERTED: it PASSES WHEN THE RACE IS OBSERVED.
+#
+# Case 13 of the directed test above asserts the CORRECT behaviour -- that a
+# replay's resident flag survives an in-flight intake, and that a vertex in
+# that window is handed THIS frame's uniforms. That is the right way round and
+# it keeps its meaning after the repair, but by construction it can no longer
+# say whether the repair was ever needed. This target is the half that can.
+#
+# It elaborates `tests/mutants/zhao_field_earth_adapter_intake_race_mutant.sv`
+# -- production with the repair reverted in five marked hunks and the module
+# renamed so no source list can elaborate it by mistake. The SILENT half is
+# what it exists for: a real engine run on the previous frame's age, phase and
+# parameters with resident already set, moving NOT ONE COUNTER, which no
+# instrument in the tree could see.
+# --------------------------------------------------------------------------
+add_executable(test_field_earth_adapter_intake_race_control
+  mutants/field_earth_adapter_intake_race_control.cpp)
+target_link_libraries(test_field_earth_adapter_intake_race_control PRIVATE zhao_harness)
+verilate(test_field_earth_adapter_intake_race_control
+  PREFIX Vzhao_field_earth_adapter_intake_race_mutant
+  TOP_MODULE zhao_field_earth_adapter_intake_race_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_earth_adapter_intake_race_mutant.sv)
+add_test(NAME field_earth_adapter_intake_race_control
+  COMMAND test_field_earth_adapter_intake_race_control)
+set_tests_properties(field_earth_adapter_intake_race_control
+  PROPERTIES LABELS "fast;mutant" TIMEOUT 300)
+
+# --------------------------------------------------------------------------
 # THE CYCLE CENSUS. Packet EARTHRAM made the uniform bank's read SYNCHRONOUS,
 # and the owner's instruction allowed "one more state on an ~80-100-cycle field
 # run" for it. The measured cost is ZERO clocks, which is a surprising enough
