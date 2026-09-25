@@ -2501,6 +2501,7 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_island_dir.sv
       - fpga/rtl/forge/zhao_forge_shadow.sv
       - fpga/rtl/mem/zhao_mem_upload.sv
+      - fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_place.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
       # R99: zhao_terrain_project.sv out, the three-replica read cache that
@@ -3254,6 +3255,7 @@ targets:
       #      the 4-way select is wrong.
       #   3. zhao_terrain_patch carries section 3.4's clamps and a 16-entry
       #      rectangle list; it is the ALM in this packet.
+      - fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_place.sv
       # TERRAIN.HDRREAD, added 2026-09-19: the compose-path patch header reader
       # core entry I35 named as the absent owner. It is an FSM, one 64-byte

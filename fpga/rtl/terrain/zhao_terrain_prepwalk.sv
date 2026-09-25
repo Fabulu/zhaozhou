@@ -130,8 +130,14 @@
 `default_nettype none
 
 module zhao_terrain_prepwalk
-  import zhao_pkg::*;
-  import zhao_terrain_place_law_pkg::*;
+  // ONE `import` STATEMENT, NOT TWO. Quartus 17.0 takes a single item list in
+  // a module header and rejects a second `import` line outright -- while
+  // `verilator --lint-only -Wall` accepts both forms with 0 diagnostics. This
+  // file was written with two and `tools/quartus/check_quartus17_syntax.py`
+  // caught it; because `run_block_map.ps1` compiles every .sv under fpga/rtl,
+  // the two-line form would have failed EVERY map in the tree, not just this
+  // block's. A clean lint settles one tool's opinion and nothing else.
+  import zhao_pkg::*, zhao_terrain_place_law_pkg::*;
 #(
     // T5's record, and `zref::swstream::kRecordBytes`. A parameter so the
     // elaboration checks have something to check, NOT a knob: a different
@@ -406,6 +412,7 @@ module zhao_terrain_prepwalk
   logic [4:0]         d_count_q;    // descriptors accepted for this patch, 0..16
 
   // ---- the freeze ----------------------------------------------------------
+  logic            begin_q;       // the one-cycle sweep request
   logic [TOKW-1:0] tok_q;
   logic            prep_valid_q;
   logic            restart_q;
@@ -413,6 +420,7 @@ module zhao_terrain_prepwalk
   typedef enum logic [3:0] {
     P_IDLE,
     P_SWEEP,    // frame_begin pulsed; waiting for the reconciler to open
+    P_NEXT,     // dispatch the next record, or finish
     P_REQ,      // offer a burst to the bridge
     P_BEAT,     // consume beats, assemble records
     P_LOOKUP,   // ask residency where this patch lives
@@ -536,7 +544,15 @@ module zhao_terrain_prepwalk
   assign lu_ix_o     = cur_ix_q;
   assign lu_iz_o     = cur_iz_q;
 
-  assign prep_begin_o  = (state_q == P_SWEEP) && !prep_gate_i;
+  // A ONE-CYCLE PULSE, and the first version of this block had it as a LEVEL
+  // held for as long as `prep_gate_i` was low. That is a REAL defect, not a
+  // style point: `zhao_terrain_edgerecon`'s `frame_begin_i` is documented as a
+  // pulse, and "frame_begin_i during a sweep RESTARTS it rather than queueing".
+  // A level would therefore have restarted the 257-clock sweep on every cycle
+  // it was asserted, so the sweep would never complete, `prep_gate_i` would
+  // never rise, and the two blocks would hold each other still for ever --
+  // each waiting for the other, with every counter reading zero.
+  assign prep_begin_o  = begin_q;
   assign prep_done_o   = (state_q == P_DONE);
   assign prep_valid_o  = prep_valid_q;
   assign restart_req_o = restart_q;
@@ -579,6 +595,7 @@ module zhao_terrain_prepwalk
       cur_slot_q   <= '0;
       cur_gen_q    <= '0;
       d_count_q    <= '0;
+      begin_q      <= 1'b0;
       tok_q        <= '0;
       prep_valid_q <= 1'b0;
       restart_q    <= 1'b0;
@@ -602,6 +619,10 @@ module zhao_terrain_prepwalk
       list_bytes_read_o      <= '0;
       list_refetch_bytes_o   <= '0;
     end else begin
+      // The sweep request is ONE cycle wide, always. Raised on the transition
+      // into P_SWEEP below, dropped here on the cycle after.
+      begin_q <= 1'b0;
+
       // ---- the two CLOCK counters, and they are the budget ------------------
       // `store_wait_clocks_o` is what P2 was told to budget instead of bursts:
       // "Case 8's 660 clocks for 11 patch reads is 12 clocks per 64-byte burst
@@ -651,6 +672,7 @@ module zhao_terrain_prepwalk
             restart_q      <= 1'b1;
             state_q        <= P_DONE;
           end else begin
+            begin_q <= 1'b1;      // sweep the reconciler's bank, once
             state_q <= P_SWEEP;
           end
         end
@@ -660,7 +682,14 @@ module zhao_terrain_prepwalk
         // the reconciler's sweep is REQUESTED until it acknowledges by opening
         // PREPARE. Waiting on the gate rather than counting clocks is what
         // makes a sweep that never ran visible instead of invisible.
-        P_SWEEP: if (prep_gate_i) begin
+        P_SWEEP: if (prep_gate_i) state_q <= P_NEXT;
+
+        // ------------------------------------------------------------------
+        // The per-record dispatch is its OWN state and not a second job for
+        // P_SWEEP. Sharing them would re-enter the sweep wait after every
+        // patch, which works only for as long as `prep_gate_i` happens to stay
+        // high -- a correctness property resting on a level nobody promised.
+        P_NEXT: begin
           if (walked_q >= job_count_q) state_q <= P_FIN;
           else                         state_q <= P_REQ;
         end
@@ -743,14 +772,14 @@ module zhao_terrain_prepwalk
             // of the world and every downstream block treats it as geometry.
             if (!range_ok_c) begin
               place_range_o <= place_range_o + 32'd1;
-              state_q       <= P_SWEEP;
+              state_q       <= P_NEXT;
             end else begin
               d_count_q <= 5'd0;
               state_q   <= P_START;
             end
           end else begin
             skipped_not_resident_o <= skipped_not_resident_o + 32'd1;
-            state_q                <= P_SWEEP;
+            state_q                <= P_NEXT;
           end
         end
 
@@ -781,7 +810,7 @@ module zhao_terrain_prepwalk
               if ((d_count_q == 5'd0) && !r_fresh_i)
                 patches_unfresh_o <= patches_unfresh_o + 32'd1;
 
-              if (d_count_q == 5'(SUBPATCHES - 1)) state_q <= P_SWEEP;
+              if (d_count_q == 5'(SUBPATCHES - 1)) state_q <= P_NEXT;
             end
           end
         end
