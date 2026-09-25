@@ -1,0 +1,24 @@
+THE KNOWN-NEGATIVE CHECK on both creature masks.
+
+CLAUDE.md: "Before trusting any presence or coverage metric, run it on a frame
+where the answer is NO. A known-positive proves nothing." These three frames are
+from follow-0 ladder renders where the creature has travelled clean out of shot,
+so the correct population is ZERO.
+
+! THIS CHECK EARNED ITS KEEP IMMEDIATELY. The chroma mask's first threshold
+(saturation >= 60) scored the first of these frames at 29,719 px -- 32% OF THE
+FRAME -- because the dusty-rose SKY is itself saturated. That is the exact
+failure CLAUDE.md records, reproduced within a minute of the check existing.
+Measured ceiling: sky and terrain top out at saturation 82, the creature reaches
+222. The shipped threshold is 100.
+
+No number from the chroma mask was quoted anywhere in this pass before it passed
+this check.
+
+0236.rgb                                 chroma       0 px ok
+0236.rgb                                 ink          0 px ok
+0237.rgb                                 chroma       0 px ok
+0237.rgb                                 ink          0 px ok
+0237.rgb                                 chroma       7 px ok
+0237.rgb                                 ink          0 px ok
+absent-check: PASS

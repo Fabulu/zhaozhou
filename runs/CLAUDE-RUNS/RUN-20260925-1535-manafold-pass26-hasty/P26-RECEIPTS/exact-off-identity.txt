@@ -1,0 +1,22 @@
+THE EXACT-OFF CONTROL.
+
+ZHAO_U02_HASTY_HURRY=off on the PASS-26 binary
+  (md5 5ba3da3d5449cb9110446b302dd77c75)
+against manafold-hasty rendered by the PASS-25 binary
+  (git f66d107c, detached worktree, md5 2749bb7a48a35572f608ccb73a33cb25).
+Presentation ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross on both.
+
+frames            240 vs 240
+frames differing  0
+
+pass-25 binary sequence sha256   fb8d7b60c192074047522da29bc1e4eff104b7b7ef59fcfba53a34e97b0d68bf
+hurry=off      sequence sha256   fb8d7b60c192074047522da29bc1e4eff104b7b7ef59fcfba53a34e97b0d68bf
+
+VERDICT: BYTE-IDENTICAL -- the exact-off control reproduces pass 25
+
+This is asserted in the gate matrix too, as `e-p25off` (hurry=off IS the
+pass-25 bank, all 22 subjects) -- AND beside it as `e-item-hasty` (the
+hurry alone changes EXACTLY manafold-hasty). Both legs or neither: a bank
+that matches pass 25 with the knob OFF proves nothing on its own about
+whether the knob does anything at all. That is the lesson pass 25's own
+item-3 leg recorded, carried forward here.

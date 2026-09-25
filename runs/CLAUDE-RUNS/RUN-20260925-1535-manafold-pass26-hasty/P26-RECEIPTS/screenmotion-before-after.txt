@@ -1,0 +1,50 @@
+SCREEN MOTION, pass 25 vs pass 26. Both blocks are labelled `manafold-hasty`
+because the tool names by directory basename; the FIRST is .tmp/p26/bank25
+(pass-25 binary, BEFORE) and the SECOND is .tmp/p26/bank26 (pass-26, AFTER).
+Creature mask: chroma, validated on known-EMPTY frames (`screenmotion.py
+absent` -> 0, 0 and 7 px) before any number here was quoted.
+
+HOW TO READ THIS, AND WHAT NOT TO QUOTE FROM IT
+-----------------------------------------------
+BEFORE is the trustworthy block and it is the whole diagnosis: creature -0.684
+px/frame, background -0.750, RELATIVE +0.066 (|mean| 0.147). The two operands
+were measured independently and they AGREE -- the signature of a pure camera
+pan, which is exactly what the tool's selftest leg A reproduces synthetically.
+Screen motion with no speed in it.
+
+AFTER: the creature figures are sound -- +0.425 px/frame of drift, 113.7 px of
+span, 45/93 px edge margins, 0 frames touching an edge.
+
+! DO NOT QUOTE THE AFTER BLOCK'S bg_dx OR relative_dx. It reports +0.133 for a
+background that must be scrolling LEFT while the creature travels right, i.e.
+the wrong SIGN. The cause is in the subject, not the tool: this staging's
+terrain is a near-featureless brown gradient whose only strong feature is a
+SCREEN-ANCHORED ordered dither, and an integer band correlator cannot track a
+smooth ramp carrying a pattern that does not move. The BEFORE block survives it
+because there the terrain and the creature move together, so the estimate lands
+in the same place either way.
+
+THE GROUND-RELATIVE RATE IS AUTHORED, NOT INFERRED, and does not need this
+instrument. The root traverses 8.4 m of world along the screen-lateral axis.
+Measured directly at follow 0 -- the configuration where the ground IS static
+and bg_dx read +0.001 px/frame, which is the positive control proving the band
+correlator was reading the ground and not the creature -- the creature crosses
+at +2.177 px/frame at cam_k 200000, hence +3.05 px/frame at the shipping
+cam_k 280000.
+
+Pass 25's ground-relative rate was ZERO.
+
+-- manafold-hasty
+   frames            238   (rates differenced over lag 16)
+   ink_cx            111.6 .. 274.2  (span 162.6 px)
+   creature dx/frame mean -0.684 px   |mean| 0.684 px
+   background dx/frm mean -0.750 px   |mean| 0.750 px
+   RELATIVE  dx/frame mean +0.066 px  |mean| 0.147 px   <-- the speed cue
+   edge margin       L 75 px  R 85 px   touching 0 frame(s)
+-- manafold-hasty
+   frames            238   (rates differenced over lag 16)
+   ink_cx            129.2 .. 242.9  (span 113.7 px)
+   creature dx/frame mean +0.425 px   |mean| 0.439 px
+   background dx/frm mean +0.133 px   |mean| 0.696 px
+   RELATIVE  dx/frame mean +0.292 px  |mean| 0.848 px   <-- the speed cue
+   edge margin       L 45 px  R 93 px   touching 0 frame(s)

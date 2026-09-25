@@ -1,0 +1,20 @@
+Malformed / out-of-range values must be REFUSED, not clamped.
+A knob that silently clamps reports a rung it did not run.
+
+ZHAO_U02_HASTY_HURRY               'maybe'        RC=2  refused (correct)
+ZHAO_U02_HASTY_HURRY               ''             RC=2  refused (correct)
+ZHAO_U02_HASTY_BOB_CYCLES          '0'            RC=2  refused (correct)
+ZHAO_U02_HASTY_BOB_CYCLES          '41'           RC=2  refused (correct)
+ZHAO_U02_HASTY_BOB_CYCLES          '13x'          RC=2  refused (correct)
+ZHAO_U02_HASTY_BOB_AMP_MM          '601'          RC=2  refused (correct)
+ZHAO_U02_HASTY_SURGE_A16           '-1'           RC=2  refused (correct)
+ZHAO_U02_HASTY_TRAVERSE_PM         '3001'         RC=2  refused (correct)
+ZHAO_U02_HASTY_CAM_FOLLOW_PM       '1001'         RC=2  refused (correct)
+ZHAO_U02_HASTY_CAM_K               '59999'        RC=2  refused (correct)
+ZHAO_U02_HASTY_CAM_K               '600001'       RC=2  refused (correct)
+ZHAO_U02_HASTY_EYE_DRIVE_PM        '399'          RC=2  refused (correct)
+ZHAO_U02_HASTY_EYE_DRIVE_PM        '1901'         RC=2  refused (correct)
+ZHAO_U02_HASTY_EYE_CHECK_PM        '1901'         RC=2  refused (correct)
+ZHAO_U02_HASTY_SQUINT_PM           '1001'         RC=2  refused (correct)
+ZHAO_U02_HASTY_BROW_PM             '-1001'        RC=2  refused (correct)
+ZHAO_U02_HASTY_BROW_PM             '1001'         RC=2  refused (correct)

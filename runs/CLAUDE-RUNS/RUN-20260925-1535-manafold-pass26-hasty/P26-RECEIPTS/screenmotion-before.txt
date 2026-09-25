@@ -1,0 +1,10 @@
+THE DIAGNOSIS, pass-25 Hasty alone, before any value was touched.
+Chroma mask, validated on known-empty frames first.
+
+-- manafold-hasty
+   frames            238   (rates differenced over lag 16)
+   ink_cx            111.6 .. 274.2  (span 162.6 px)
+   creature dx/frame mean -0.684 px   |mean| 0.684 px
+   background dx/frm mean -0.750 px   |mean| 0.750 px
+   RELATIVE  dx/frame mean +0.066 px  |mean| 0.147 px   <-- the speed cue
+   edge margin       L 75 px  R 85 px   touching 0 frame(s)

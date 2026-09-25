@@ -1,0 +1,25 @@
+EVERY PASS-26 CONTROL, fired against the SHIPPING render.
+A control that changes no pixel is a dead control, and this project has
+shipped dead or wrong-operand instruments in most recent passes.
+
+hurry-off    ZHAO_U02_HASTY_HURRY=off           FIRED  240/240 frames differ
+bob-cycles   ZHAO_U02_HASTY_BOB_CYCLES=9        FIRED  240/240 frames differ
+bob-amp      ZHAO_U02_HASTY_BOB_AMP_MM=260      FIRED  238/240 frames differ
+surge        ZHAO_U02_HASTY_SURGE_A16=0         FIRED  240/240 frames differ
+traverse     ZHAO_U02_HASTY_TRAVERSE_PM=500     FIRED  239/240 frames differ
+cam-follow   ZHAO_U02_HASTY_CAM_FOLLOW_PM=1000  FIRED  238/240 frames differ
+cam-k        ZHAO_U02_HASTY_CAM_K=200000        FIRED  240/240 frames differ
+eye-drive    ZHAO_U02_HASTY_EYE_DRIVE_PM=1100   FIRED  238/240 frames differ
+eye-check    ZHAO_U02_HASTY_EYE_CHECK_PM=900    FIRED   41/240 frames differ
+squint       ZHAO_U02_HASTY_SQUINT_PM=0         FIRED  238/240 frames differ
+brow         ZHAO_U02_HASTY_BROW_PM=800         FIRED  238/240 frames differ
+
+EYE_CHECK firing on 41 frames rather than ~240 is a CONSISTENCY CHECK, not a
+weak control. It acts only inside the three check windows (kHastyChecks spans
+9+9+7 = 25 keys), and the symmetric triangle is EXACTLY ZERO on the first and
+last key of each window -- so the number the authored curve predicts is smaller
+than the window count, and 41 is it.
+
+A control whose footprint matches its authored extent is better evidence than
+one that simply changes everything: "240/240 differ" would be equally true of a
+knob wired to the wrong thing.

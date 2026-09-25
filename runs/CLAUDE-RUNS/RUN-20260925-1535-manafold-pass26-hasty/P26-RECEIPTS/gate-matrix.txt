@@ -1,0 +1,275 @@
+PASS n-mspan rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-msmooth rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mprobe rc=0 exp=0 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS n-mjointpub rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mqa rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mmeshcheck rc=0 exp=0 | u02-meshcheck: 34 meshlets, 2800 tris, 1416 position groups, 4200 edges — CLEAN
+PASS n-moutline rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mshell rc=0 exp=0 | shellgate: PASS
+PASS n-mshell-selftest rc=0 exp=0 | shellgate --selftest: every check is failable
+PASS n-mnodule rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-meyesize rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mrod rc=0 exp=0 | mrod: ALL LEGS OK
+PASS n-mrear rc=0 exp=0 | rear gate mask 0x0 -> GREEN
+PASS n-mrear-dip rc=0 exp=0 | rear gate mask 0x0 -> GREEN
+PASS n-mbolt rc=0 exp=0 | mbolt: ALL LEGS OK
+PASS d-mbolt-no-avoid rc=0 exp=0 | CONTROL --fail-no-avoid : the control FIRED (23 leg(s) red, 54903 total intersections)
+PASS d-mbolt-no-split rc=0 exp=0 | CONTROL --fail-no-split : the control FIRED (1 leg(s) red, 0 total intersections)
+PASS d-mbolt-fat-rod rc=0 exp=0 | CONTROL --fail-fat-rod: radii scaled to 2200 pm; B1's operand is reading the RODS, not a constant
+PASS d-mbolt-mirror-drift rc=0 exp=0 | CONTROL --fail-mirror-drift: the control FIRED (1 leg(s) red, 0 total intersections)
+PASS d-mbolt-envoff-red rc=1 exp=1 | mbolt: LEGS RED
+PASS d-mbolt-clr70-red rc=1 exp=1 | mbolt: LEGS RED
+PASS r-rear-frame rc=1 exp=1 mask=0x3 want=0x3
+PASS r-rear-joint rc=1 exp=1 mask=0x2 want=0x2
+PASS r-line-scale rc=1 exp=1 mask=0x24 want=0x24
+PASS r-line-flag rc=1 exp=1 mask=0x4 want=0x4
+PASS r-rear-strain rc=1 exp=1 mask=0x8 want=0x8
+PASS r-no-dip rc=1 exp=1 mask=0x50 want=0x50
+PASS r-dip-stuck rc=1 exp=1 mask=0x10 want=0x10
+PASS r-dot-scale rc=1 exp=1 mask=0x20 want=0x20
+PASS r-dot-flag rc=1 exp=1 mask=0x20 want=0x20
+PASS r-knead-shape rc=1 exp=1 mask=0x40 want=0x40
+PASS r-line-far rc=1 exp=1 mask=0x20 want=0x20
+PASS r-knead-clip rc=1 exp=1 mask=0x40 want=0x40
+PASS r-knead-drop rc=1 exp=1 mask=0x40 want=0x40
+PASS d-mrod-rig-pass20 rc=0 exp=0+FIRED+ATTRIBUTED | CONTROL --fail-rig-pass20: 8 leg(s) failed -- the control FIRED (instrument proven)
+PASS d-mrod-rod-twist rc=0 exp=0+FIRED+ATTRIBUTED | CONTROL --fail-rod-twist: 5 leg(s) failed -- the control FIRED (instrument proven)
+PASS d-mrod-ball-blend rc=0 exp=0+FIRED+ATTRIBUTED | CONTROL --fail-ball-blend: 1 leg(s) failed -- the control FIRED (instrument proven)
+PASS d-mrod-joint-step rc=0 exp=0+FIRED+ATTRIBUTED | CONTROL --fail-joint-step: 1 leg(s) failed -- the control FIRED (instrument proven)
+PASS d-mrod-retired-rod-bend rc=2 exp=2 | --fail-rod-bend was one of THREE NAMES for the single pass-20 rig swap and is retired (pass-21 close). Use --fail-rig-pass20.
+PASS d-mrod-retired-rod-flicker rc=2 exp=2 | --fail-rod-flicker was one of THREE NAMES for the single pass-20 rig swap and is retired (pass-21 close). Use --fail-rig-pass20.
+PASS d-mrod-retired-rod-uniform rc=2 exp=2 | --fail-rod-uniform was one of THREE NAMES for the single pass-20 rig swap and is retired (pass-21 close). Use --fail-rig-pass20.
+PASS s-rigid-F-A rc=1 exp=1 | MUTANT] rigid free span F-A
+PASS s-rigid-A-B rc=1 exp=1 | MUTANT] rigid free span A-B
+PASS s-rigid-B-C rc=1 exp=1 | MUTANT] rigid free span B-C
+PASS s-rigid-C-E rc=1 exp=1 | MUTANT] rigid free span C-E
+PASS s-clamp-F-A rc=1 exp=1 | MUTANT] clamp negative F-A
+PASS s-clamp-A-B rc=1 exp=1 | MUTANT] clamp negative A-B
+PASS s-clamp-B-C rc=1 exp=1 | MUTANT] clamp negative B-C
+PASS s-clamp-C-E rc=1 exp=1 | MUTANT] clamp negative C-E
+PASS s-over-F-A rc=1 exp=1 | MUTANT] overcompact F-A
+PASS s-over-A-B rc=1 exp=1 | MUTANT] overcompact A-B
+PASS s-over-B-C rc=1 exp=1 | MUTANT] overcompact B-C
+PASS s-over-C-E rc=1 exp=1 | MUTANT] overcompact C-E
+PASS s-drift-A rc=1 exp=1 | MUTANT] delta drift at F-A endpoint
+PASS s-drift-B rc=1 exp=1 | MUTANT] delta drift at A-B endpoint
+PASS s-drift-C rc=1 exp=1 | MUTANT] delta drift at B-C endpoint
+PASS s-drift-E rc=1 exp=1 | MUTANT] delta drift at C-E endpoint
+PASS s-e-start rc=1 exp=1 | MUTANT] omit C-End start-helper fraction
+PASS s-e-mid rc=1 exp=1 | MUTANT] omit C-End midpoint-helper fraction
+PASS s-e-presocket rc=1 exp=1 | MUTANT] omit C-End pre-socket-helper fraction
+PASS s-posed-order rc=1 exp=1 | MUTANT] rotate one shipping partial helper 180 degrees
+PASS s-order rc=1 exp=1 | MUTANT] zero the production crown-shuffle gain
+PASS s-antenna-snap rc=1 exp=1 | MUTANT] restore instantaneous crown tableau replacement
+PASS s-accent-switch rc=1 exp=1 | MUTANT] restore per-cycle hashed accent/lead switch
+PASS s-hold-tremor rc=1 exp=1 | MUTANT] restore hard-gated hold tremor
+PASS s-compress-wrap rc=1 exp=1 | MUTANT] restore raw u16 impact-deform wrap
+PASS s-final-dwell rc=1 exp=1 | MUTANT] fail to clamp the first held carrier tick
+PASS s-root-authority rc=1 exp=1 | MUTANT] restore split Front/End root rotation authority
+PASS s-front-flex rc=1 exp=1 | MUTANT] mute all version-18 public Front X/Y curves
+PASS s-swell-size rc=1 exp=1 | MUTANT] restore version-17 protruding swell amplitudes
+PASS s-terminal-cap rc=1 exp=1 | MUTANT] restore the authored 42/26 profile on the buried terminal ring
+PASS s-walk-pairing rc=1 exp=1 | MUTANT] restore the packet-5 one-bone-early dent walk
+PASS s-dent-pin rc=1 exp=1 | MUTANT] drop the dent's HingeC world-frame pin
+PASS s-mute-F rc=1 exp=1 | MUTANT] mute crown-shuffle carrier F
+PASS s-mute-A rc=1 exp=1 | MUTANT] mute crown-shuffle carrier A
+PASS s-mute-B rc=1 exp=1 | MUTANT] mute crown-shuffle carrier B
+PASS s-mute-C rc=1 exp=1 | MUTANT] mute crown-shuffle carrier C
+PASS s-mute-E rc=1 exp=1 | MUTANT] mute crown-shuffle carrier E
+PASS m-lightning-switch rc=1 exp=1 | MUTANT lightning-switch: attributed detector fired categories=0x4c20 expected=0x800 allowed=0x4c20
+PASS m-shape-blackout rc=1 exp=1 | MUTANT shape-blackout: attributed detector fired categories=0x10 expected=0x10 allowed=0x58010
+PASS m-particle-reseed rc=1 exp=1 | MUTANT fold-particle-reseed: attributed detector fired categories=0x2024 expected=0x4 allowed=0x2024
+PASS m-surge-reseed rc=1 exp=1 | MUTANT surge-reseed: attributed detector fired categories=0x4420 expected=0x4000 allowed=0x4420
+PASS m-loop-seam rc=1 exp=1 | MUTANT loop-seam: attributed detector fired categories=0x1480 expected=0x400 allowed=0x1480
+PASS m-mote-count rc=1 exp=1 | MUTANT mote-count: attributed detector fired categories=0x82028 expected=0x8 allowed=0x82028
+PASS m-mote-role rc=1 exp=1 | MUTANT mote-role: attributed detector fired categories=0x2428 expected=0x8 allowed=0x2428
+PASS m-weight-wrap rc=1 exp=1 | MUTANT mvc-weight-wrap: attributed detector fired categories=0x1001 expected=0x1 allowed=0x1001
+PASS m-morph-reverse rc=1 exp=1 | MUTANT morph-reverse: attributed detector fired categories=0x1b500 expected=0x1100 allowed=0x1b500
+PASS m-brightness-seam rc=1 exp=1 | MUTANT brightness-seam: attributed detector fired categories=0x18000 expected=0x18000 allowed=0x58000
+PASS m-stamp-count rc=1 exp=1 | MUTANT stamp-count-pop: attributed detector fired categories=0x60040 expected=0x60040 allowed=0x60040
+PASS m-final-dwell rc=1 exp=1 | MUTANT final-dwell: attributed detector fired categories=0x18000 expected=0x10000 allowed=0x58000
+PASS m-mote-visibility rc=1 exp=1 | MUTANT mote-visibility-pop: attributed detector fired categories=0x80000 expected=0x80000 allowed=0x80000
+PASS m-palette-raw-clock rc=1 exp=1 | MUTANT palette-raw-clock: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-palette-hard-switch rc=1 exp=1 | MUTANT palette-hard-switch: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-death-effect-cutoff rc=1 exp=1 | MUTANT death-effect-cutoff: attributed detector fired categories=0x400000 expected=0x400000 allowed=0x400000
+PASS p-mjoint-F rc=0 exp=0 | RED LEG OK: mute F makes its own public visible-skin gate fail
+PASS p-mjoint-A rc=0 exp=0 | RED LEG OK: mute A makes its own public visible-skin gate fail
+PASS p-mjoint-B rc=0 exp=0 | RED LEG OK: mute B makes its own public visible-skin gate fail
+PASS p-mjoint-C rc=0 exp=0 | RED LEG OK: mute C makes its own public visible-skin gate fail
+PASS p-mjoint-E rc=0 exp=0 | RED LEG OK: mute E makes its own public visible-skin gate fail
+PASS p-mnodule-F rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-A rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-B rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-C rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-E rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-ignore rc=0 exp=0 | FAIL: 6 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mprobe-mirror rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-outline rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-scale rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-support rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-mprobe-support-depth rc=1 exp=1 | u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+PASS p-moutline-owner rc=1 exp=1 | MUTANT] enclosed-opening owner disabled
+PASS p-moutline-repaint rc=1 exp=1 | MUTANT] stale post-energy ink restore enabled
+PASS p-mqa-lane rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with lane 0 answering for every lane Q1 reports the corpse as dead, which is exactly what the shipped gate does
+PASS p-mqa-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports 2 death(s) standing back up, which is the fault pass 12 shipped
+PASS p-mqa-eyesnap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- Q2 rejects both death eye resets at their own settle keys
+PASS p-mqa-startle-step rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Startle timing exceeds its unchanged 260 mm ceiling
+PASS p-mqa-rootstep rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with the sag carry at one key Q3 reports 1 clip(s) over ceiling, which is the 240 mm teleport pass 12 shipped
+PASS p-mqa-fall-wrap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Fall wrap makes Q5 reject 4 contract/channel item(s), including the non-root pose reset
+PASS p-meyesize-L rc=0 exp=0 | RED LEG OK: mute L restores only its eye to identity
+PASS p-meyesize-R rc=0 exp=0 | RED LEG OK: mute R restores only its eye to identity
+PASS p-meyesize-wrong rc=0 exp=0 | RED LEG OK: wrong-bone scale fails only left Eye->Pupil registration
+PASS f-mqa-trick-spin-gain rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-gain [Q6a] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 1 = declared: Q3 slot-13 root step, two turns in one window)
+PASS f-mqa-trick-spin-ease rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-ease [Q6b] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-trick-spin-pivot rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-pivot [Q6c] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-trick-plant-pin rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-plant-pin [Q6d] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-mqa-flight-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-flight-seam [Q7] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+PASS f-sel-spin-bogus rc=2 exp=2 | ZHAO_U02_TRICK_SPIN=bogus invalid (expected normal|none)
+PASS f-sel-start-range rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_START_KEY=78 outside 79..147
+PASS f-sel-short-seg rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_*_KEY: start 100 turn 104 settle 140 leaves a segment under 8 keys
+PASS f-sel-overshoot rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM=300 outside 0..250
+PASS f-sel-gain rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_GAIN_PM=-1 outside 0..2000
+PASS f-sel-trick-bias rc=2 exp=2 | ZHAO_U02_TRICK_CAM_BIAS=abc is not an integer; expected -40000..40000
+PASS f-sel-trick-k rc=2 exp=2 | ZHAO_U02_TRICK_CAM_K=1 outside 60000..600000
+PASS f-sel-cycles rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_CYCLES=0 outside 1..12
+PASS f-sel-amp rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_MM=-5 outside 0..2000
+PASS f-sel-rise rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16=100 outside 16384..49152
+PASS f-sel-warp rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16/TOP_HANG16: warp |(4096,10000)| exceeds 10000 (the clock would run backwards)
+PASS f-sel-flight-k rc=2 exp=2 | ZHAO_U02_FLIGHT_CAM_K=5 outside 60000..400000
+PASS f-sel-drift-bx rc=2 exp=2 | ZHAO_U02_DRIFT_CAM_BX=x is not an integer; expected -40000..40000
+PASS f-sel-lift rc=2 exp=2 | ZHAO_U02_FLIGHT_LIFT_MM=3000 outside 0..2000
+PASS f-sel-plant-pin rc=2 exp=2 | ZHAO_U02_TRICK_PLANT_PIN=bogus invalid (expected pinned|legacy)
+PASS f-sel-pin-release rc=2 exp=2 | ZHAO_U02_TRICK_PIN_RELEASE_KEYS=99 outside 2..30
+PASS f-sel-rear-frame rc=2 exp=2 | ZHAO_U02_REAR_SOCKET_FRAME=root invalid (expected arm|legacy-root)
+PASS f-sel-rear-follow rc=2 exp=2 | ZHAO_U02_REAR_SOCKET_FOLLOW_PM=1001 outside 0..1000
+PASS f-sel-rear-ambient rc=2 exp=2 | ZHAO_U02_REAR_AMBIENT_GAIN_PM=abc is not an integer; expected 0..1000
+PASS f-sel-line-scale rc=2 exp=2 | ZHAO_U02_MANA_LINE_SCALE=wide invalid (expected distance|legacy)
+PASS f-sel-line-full rc=2 exp=2 | ZHAO_U02_MANA_LINE_FULL_PX=10 outside 40..2000
+PASS f-sel-end-swell-rx rc=2 exp=2 | ZHAO_U02_END_SWELL_RX_MM=81 outside 0..80
+PASS f-sel-end-ball-rz rc=2 exp=2 | ZHAO_U02_END_BALL_RZ_MM=abc is not an integer; expected 0..80
+PASS f-sel-end-ball-half rc=2 exp=2 | ZHAO_U02_END_BALL_HALF_MM=10 outside 40..280
+PASS f-sel-end-ball-at rc=2 exp=2 | ZHAO_U02_END_BALL_AT_MM=2300 outside 2380..2700
+PASS f-sel-end-ball-support rc=2 exp=2 | ZHAO_U02_END_BALL_AT/HALF: ball leaves the End swell support
+PASS f-sel-span-limit rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-span-travel rc=2 exp=2 | ZHAO_U02_REAR_SPAN_TRAVEL_MM=10 outside 40..2000
+PASS f-sel-span-soft rc=2 exp=2 | ZHAO_U02_REAR_SPAN_SOFT_MM=5 outside 10..1999
+PASS f-sel-span-knee rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dip-pm rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dip-depth rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_DEPTH_MM=abc is not an integer; expected 0..1200
+PASS f-sel-dip-fold rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_FOLD_PM=-1 outside 0..3000
+PASS f-sel-fold-dip rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dip-fold-hi rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_FOLD_PM=3001 outside 0..3000
+PASS f-sel-bow-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bow-sign rc=2 exp=2 | ZHAO_U02_REAR_BOW_SIGN=2 outside -1..1
+PASS f-sel-bow-onset rc=2 exp=2 | ZHAO_U02_REAR_BOW_ONSET_MM=2001 outside 0..2000
+PASS f-sel-bow-maxa rc=2 exp=2 | ZHAO_U02_REAR_BOW_MAX_A16=32001 outside 64..32000
+PASS f-sel-dent-solver rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dent-swing rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dent-overpress rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dent-depth rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dip-ramp rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dip-ramp-zero rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dent-cross rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dent-duck rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rig-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-ball-pm rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-dot-scale rc=2 exp=2 | ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid (expected ink|distance|legacy, 40..2000, 0..1000)
+PASS f-sel-dot-full rc=2 exp=2 | ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid (expected ink|distance|legacy, 40..2000, 0..1000)
+PASS f-sel-dot-strength rc=2 exp=2 | ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid (expected ink|distance|legacy, 40..2000, 0..1000)
+PASS f-sel-dot-strength-neg rc=2 exp=2 | ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid (expected ink|distance|legacy, 40..2000, 0..1000)
+PASS f-sel-dot-strength-empty rc=2 exp=2 | ZHAO_U02_MANA_DOT_SCALE/_FULL_PX/_STRENGTH_PM invalid (expected ink|distance|legacy, 40..2000, 0..1000)
+PASS f-sel-knead-shape rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-knead-shape-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-empty rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-nopair rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-novalue rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-neg rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-slot rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-comma rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-sep rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-clip-pm-nonhosting rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-avoid-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-avoid-empty rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-clear-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-clear-neg rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-clear-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-split-zero rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-split-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-split-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-bolt-comp-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-clip-empty rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-clip-nopair rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-clip-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-clip-slot rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-clip-comma rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-front-clip-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-front-clip-slot rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-front-clip-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-amb-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-amb-neg rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-amb-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-clip-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-clip-slot rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-eye-clip-nopair rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-calm-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rear-calm-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rollout-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rollout-empty rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-rollout-case rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-empty rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-nopair rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-novalue rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-high rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-neg rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-slot rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-bogus rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS f-sel-calm-clip-comma rc=2 exp=2 | ZIXX_EXP=celmain (experimental lane)
+PASS e-live-history-normal rc=0 exp=0 | PASS: no persistent history on any live Manafold subject
+PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
+PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
+PASS e-p24off 22-subject bank identical to crcs-ship.txt (rows=22)
+PASS e-p23off 22-subject bank identical to baseline-pass23-crcs.txt (rows=22)
+PASS e-item1 changed=22 want=22
+PASS e-item2 changed=[manafold-blown manafold-channel manafold-crackle manafold-damage manafold-death-drop manafold-death-gutter manafold-drift manafold-fall manafold-flight manafold-hasty manafold-hit manafold-hover manafold-inspect manafold-lasso manafold-pirouette manafold-rest manafold-taunt manafold-taunt2 manafold-trick ] want=[manafold-blown manafold-channel manafold-crackle manafold-damage manafold-death-drop manafold-death-gutter manafold-drift manafold-fall manafold-flight manafold-hasty manafold-hit manafold-hover manafold-inspect manafold-lasso manafold-pirouette manafold-rest manafold-taunt manafold-taunt2 manafold-trick ]
+PASS e-item3 22-subject bank identical to crcs-ship.txt (rows=22)
+PASS e-item3-live changed=[manafold-crackle manafold-hover manafold-inspect ] want=[manafold-crackle manafold-hover manafold-inspect ]
+PASS e-p25off 22-subject bank identical to crcs-reviewer-ship.txt (rows=22)
+PASS e-item-hasty changed=[manafold-hasty ] want=[manafold-hasty ]
+PASS e-ship 22-subject bank identical to crcs-ship.txt (rows=22)
+PASS e-backball-live changed=[manafold-hover manafold-inspect ] want=[manafold-hover manafold-inspect ]
+PASS h-fire-hurry rc=0 | ZHAO_U02_HASTY_HURRY=off FIRED: 240/240 frames differ
+PASS h-fire-bobcycles rc=0 | ZHAO_U02_HASTY_BOB_CYCLES=9 FIRED: 240/240 frames differ
+PASS h-fire-bobamp rc=0 | ZHAO_U02_HASTY_BOB_AMP_MM=260 FIRED: 238/240 frames differ
+PASS h-fire-surge rc=0 | ZHAO_U02_HASTY_SURGE_A16=0 FIRED: 240/240 frames differ
+PASS h-fire-traverse rc=0 | ZHAO_U02_HASTY_TRAVERSE_PM=500 FIRED: 239/240 frames differ
+PASS h-fire-camfollow rc=0 | ZHAO_U02_HASTY_CAM_FOLLOW_PM=1000 FIRED: 238/240 frames differ
+PASS h-fire-camk rc=0 | ZHAO_U02_HASTY_CAM_K=200000 FIRED: 240/240 frames differ
+PASS h-fire-eyedrive rc=0 | ZHAO_U02_HASTY_EYE_DRIVE_PM=1100 FIRED: 238/240 frames differ
+PASS h-fire-eyecheck rc=0 | ZHAO_U02_HASTY_EYE_CHECK_PM=900 FIRED: 41/240 frames differ
+PASS h-fire-squint rc=0 | ZHAO_U02_HASTY_SQUINT_PM=0 FIRED: 238/240 frames differ
+PASS h-fire-brow rc=0 | ZHAO_U02_HASTY_BROW_PM=800 FIRED: 238/240 frames differ
+PASS h-rej-hurry-word rc=2 exp=2 | ZHAO_U02_HASTY_HURRY='maybe' refused, not clamped
+PASS h-rej-hurry-empty rc=2 exp=2 | ZHAO_U02_HASTY_HURRY='' refused, not clamped
+PASS h-rej-bob-lo rc=2 exp=2 | ZHAO_U02_HASTY_BOB_CYCLES='0' refused, not clamped
+PASS h-rej-bob-hi rc=2 exp=2 | ZHAO_U02_HASTY_BOB_CYCLES='41' refused, not clamped
+PASS h-rej-bob-junk rc=2 exp=2 | ZHAO_U02_HASTY_BOB_CYCLES='13x' refused, not clamped
+PASS h-rej-amp-hi rc=2 exp=2 | ZHAO_U02_HASTY_BOB_AMP_MM='601' refused, not clamped
+PASS h-rej-surge-lo rc=2 exp=2 | ZHAO_U02_HASTY_SURGE_A16='-1' refused, not clamped
+PASS h-rej-trav-hi rc=2 exp=2 | ZHAO_U02_HASTY_TRAVERSE_PM='3001' refused, not clamped
+PASS h-rej-follow-hi rc=2 exp=2 | ZHAO_U02_HASTY_CAM_FOLLOW_PM='1001' refused, not clamped
+PASS h-rej-camk-lo rc=2 exp=2 | ZHAO_U02_HASTY_CAM_K='59999' refused, not clamped
+PASS h-rej-camk-hi rc=2 exp=2 | ZHAO_U02_HASTY_CAM_K='600001' refused, not clamped
+PASS h-rej-eyed-lo rc=2 exp=2 | ZHAO_U02_HASTY_EYE_DRIVE_PM='399' refused, not clamped
+PASS h-rej-eyed-hi rc=2 exp=2 | ZHAO_U02_HASTY_EYE_DRIVE_PM='1901' refused, not clamped
+PASS h-rej-eyec-hi rc=2 exp=2 | ZHAO_U02_HASTY_EYE_CHECK_PM='1901' refused, not clamped
+PASS h-rej-squint-hi rc=2 exp=2 | ZHAO_U02_HASTY_SQUINT_PM='1001' refused, not clamped
+PASS h-rej-brow-lo rc=2 exp=2 | ZHAO_U02_HASTY_BROW_PM='-1001' refused, not clamped
+PASS h-rej-brow-hi rc=2 exp=2 | ZHAO_U02_HASTY_BROW_PM='1001' refused, not clamped
+PASS h-eyesize-off rc=0 exp=0 | PASS: 0 failure(s)
+PASS h-eyesize-flat rc=1 exp=1 | FAIL: 1 failure(s)
+PASS h-mqa-off rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-screenmotion-selftest rc=0 exp=0 | selftest: PASS
+PASS e-rig-pass20-mspan rc=0 exp=0 | PASS: 0 failure(s)
+PASS e-rig-pass20-mrear rc=0 exp=0 | rear gate mask 0x0 -> GREEN

@@ -1,0 +1,31 @@
+PRESENTATION SEAM (tools/reel/wrapseam.py): the mean absolute inter-frame
+difference across the clip, with the wrap frame called out against the clip's
+OWN interior median. This is the half that mqa's Q3 cannot see, because Q3
+reads the AUTHORED KEYS and this reads the rendered frames.
+
+=== PASS 25 (before) ===
+bank25     n=240   interior median 0.707   p95 0.922   MAX interior 0.989 at f211
+             INTO the wrap frame  f237->f238     0.577  =   0.82x median  in band
+             out of the wrap      f238->f239     1.206  =   1.71x median
+
+=== PASS 26 (after) ===
+bank26     n=240   interior median 3.832   p95 4.723   MAX interior 5.383 at f231
+             INTO the wrap frame  f237->f238     2.408  =   0.63x median  in band
+             out of the wrap      f238->f239    15.019  =   3.92x median
+
+READ IT WITH P26-RECEIPTS/loop-seam.txt, NOT INSTEAD OF IT. The two answer
+different questions and they disagree in an informative way:
+
+  * loop-seam.txt asks WHERE THE CREATURE IS -- the pass-25 receipt's own
+    metric, the pink-ink centroid at f0 vs the last frame. 38.8 px -> 0.0 px.
+  * wrapseam.py asks HOW MUCH THE PICTURE CHANGES at the wrap, whole frame,
+    creature and terrain together. Its ratio rises, because the TERRAIN now
+    snaps back a full traverse where before it sat still.
+
+So the creature's seam vanished and the ground's appeared. That trade is the
+point of clocking the aim by the animation's phase, and it is the right way
+round: the owner accepted a hitch on a clip that traverses, and a featureless
+desert shifting is far less visible than a creature jumping a tenth of frame.
+The interior median also rises (0.707 -> 3.9) simply because the clip now
+MOVES -- a wrap ratio is stated against the clip's own motion for exactly
+that reason, and the absolute interior figure is the honest one to compare.

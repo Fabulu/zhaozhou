@@ -1,0 +1,29 @@
+# Pass-26 binaries. Built with tools/reel/build-direct.sh and the zhao-env.ps1
+# toolchain. NO CMAKE WAS USED and no CMake result is claimed. Exit codes were
+# read directly from each command, never through a pipe.
+#
+# compiler: g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+
+03f005188a1d60bc79c436bf3cad3e42 *.tmp/p26/bin/manafold-backball.exe
+dc385277556b9a9a8cfa5c78030bff72 *.tmp/p26/bin/manafold-boltgate.exe
+91c20901fd50054b8346743a76714ea2 *.tmp/p26/bin/manafold-eyesize.exe
+1740c413da541796a165b83a1ee99f66 *.tmp/p26/bin/manafold-meshcheck.exe
+851f5a08adf3d8ddb7ae7fdc1428fa9f *.tmp/p26/bin/manafold-motiongate.exe
+7081da1844ec743bf534530f7e34a539 *.tmp/p26/bin/manafold-nodule.exe
+76981f10e443c3ef2228c8b1b8c5cef9 *.tmp/p26/bin/manafold-outlinegate.exe
+cb753dc43e04e440a707dc42ff013167 *.tmp/p26/bin/manafold-probe.exe
+b8fd1042204569b17a41ce90627ea7cb *.tmp/p26/bin/manafold-public-jointgate.exe
+4cd00f39928164b99f0770eca38153b8 *.tmp/p26/bin/manafold-qa-p12.exe
+aa3387d162d4a8ecb51fe86b59e13ae5 *.tmp/p26/bin/manafold-rear-audit.exe
+76ca6384a2fb4d4ebac15789975543e5 *.tmp/p26/bin/manafold-rodgate.exe
+f70c287cec005d6e5de4d8fb45681917 *.tmp/p26/bin/manafold-shellgate.exe
+bdcc111985081ee495ad6d02b92880ba *.tmp/p26/bin/manafold-spangate.exe
+a6cc688b451e800150ce571cf51e4363 *.tmp/p26/bin/zhao-reel-cel.exe
+
+# sha256 of the production renderer:
+1fd6b02e562b40f67c93162956575f4f3d7e4be5417d473941ab1d108d1ece36 *.tmp/p26/bin/zhao-reel-cel.exe
+
+# THE PASS-25 REFERENCE RENDERER, for the byte-identity comparison. Built from
+# git f66d107c in a DETACHED WORKTREE, so the comparison is against the shipped
+# pass-25 source and not against a memory of it:
+2749bb7a48a35572f608ccb73a33cb25 *.tmp/p25ref/.tmp/ref25/bin/zhao-reel-cel.exe

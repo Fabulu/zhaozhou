@@ -1,0 +1,39 @@
+LOOP-SEAM DISPLACEMENT, THE PASS-25 METHOD COPIED EXACTLY so the two
+numbers are comparable: pink-ink mask (r>150, r-g>60, b-g>20), horizontal
+centroid, frame 0 vs the last frame. Source of the accepted figure:
+RUN-...-pass25-final/P25-BANK-RECEIPTS/loop-seam-scan.txt.
+
+That receipt reports hasty at 38.8 px, accepted by the owner in Direction
+27 ('it moves across screen, it makes sense it hitches'). Direction 27
+asks only that a new figure be REPORTED. Reproducing 38.8 px exactly is
+what licenses the comparison -- compare like with like, or do not compare.
+
+pass 25 (before)  n=240
+   mask population       4706 .. 5596 px, empty on 0 frame(s)
+   centroid f0           211.0 px
+
+pass 25 (before)  n=240
+   mask population       4706 .. 5596 px, empty on 0 frame(s)
+   centroid f0           211.0 px
+   centroid f239         172.2 px
+   SEAM DISPLACEMENT     38.8 px
+   largest interior step 1.47 px
+
+pass 26 (after)  n=240
+   mask population       4578 .. 7624 px, empty on 0 frame(s)
+   centroid f0           158.8 px
+   centroid f239         158.8 px
+   SEAM DISPLACEMENT     0.0 px
+   largest interior step 3.62 px
+
+The seam did not get worse; it effectively VANISHED. The aim now wraps in
+phase with the animation (SceneSubject::cam_bias_x_wrap_keys), so the
+creature returns to its starting position and attitude across the loop.
+
+WHAT SNAPS INSTEAD IS THE TERRAIN. mqa Q3 reports slot 8's ROOT wrap at
+8330.6 mm -- the authored traverse returning -- beside drift's existing
+6854.4 mm. Q3 reports the wrap column and does NOT gate it, precisely
+because a travelling clip's seam is authored. Looked at across
+f236->f001 (P26-LOOKS/09): the creature holds; the horizon line shifts
+slightly. On this near-featureless staging that is close to invisible,
+and it is the right thing to spend.
