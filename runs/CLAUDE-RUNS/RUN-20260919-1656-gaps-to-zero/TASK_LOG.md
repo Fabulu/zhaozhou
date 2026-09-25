@@ -2250,3 +2250,69 @@ large memories already. Those are architecture questions.
 **At the cap of two.**
 
 **Remaining 7:** `I13`+`normalmap`, `I34`+`velocity`, `I54`, `I55`, `I56`.
+
+### 2026-09-26 — THE THIRD CEILING, and the DSP packet is written before it is needed
+
+Done while PALRAM's `quartus_map` ran, touching nothing in its closure.
+
+**DSP is the axis nobody had compared.** 15.20 printed `DSP blocks 375` next to
+an empty cell. **375 against 112 is 335%** — and an M10K buys back zero
+multipliers, so the whole phase-3 plan as written covered one ceiling out of
+three. The probe now carries `SHIP_DSP` and ranks by DSP, so that column cannot
+be printed bare again.
+
+| | measured | vs `5CSEBA6U23I7` |
+|---|---:|---:|
+| combinational ALUTs | 294,872 | **352%** |
+| registers | 405,872 | **242%** |
+| **DSP** | **375** | **335%** |
+| memory bits | 3,009,171 | 53% |
+
+**Three of the four ceilings are breached and only one is bought back by the
+trade we have.**
+
+**And the projector relief is ALREADY TAKEN** — R3 says production *"still
+carries two"* unshared wrappers at ~66 DSP; this core has exactly **one**
+`zhao_project_service` at 33. Nobody should subtract it twice.
+
+**`zhao_geom_attrsetup` measured standalone, 14.3 s:** **45 DSP, 225 registers,
+164 lines** — 40% of the device in one block, `rtlCleanAtHead true`, digest
+`bd84da4c2517`. Breakdown: **24 Independent 27×27**, 15 two-independent 18×18,
+6 sum-of-two 18×18.
+
+The hypothesis — **flagged as one, twice** — is that every multiply is declared
+far wider than its operands hold (`96×96` for a 46-bit × 32-bit product, `72×72`
+for 22 × 32, `46×46` for 22 × 21) and DSP inference follows declared width.
+**The block's own comment says why:** *"96 is carried so the widths are obviously
+sufficient rather than exactly sufficient."* Correct about ALUTs and latency —
+which is why it is only 938 ALUTs — and **the cost landed on the ceiling that is
+335% breached.**
+
+`BRIEF-ATTRSETUP.md` is written and queued. Its hard line: **narrowing a MULTIPLY
+is legal, narrowing a RESULT is not** — the block exists to emit exactly the
+oracle's numerator, proved over 32,805 pixel-attributes, and the header's bounds
+argument IS the specification of the output widths. If the ceiling needs
+precision, that is an escalation.
+
+### Reconciliation with the rescue roadmap, done honestly
+
+R9's whole-machine estimate (2026-09-18) is ~92,700 ALM and 123 DSP. It is **not**
+comparable line-for-line: `zhao_prod_top` is a RESOURCE top rather than a machine
+(the roadmap corrects itself on exactly that), the old figure is a calibrated map
+estimate against a real synthesis report, and the console has grown on purpose —
+381,585 registers at 14 gaps, 405,872 at 8. **The honest statement is not that
+the estimate was wrong by 3×; it is that the newer number describes a composed
+machine and the older one described a pile of parts, and the composed machine is
+worse on every axis.**
+
+### WHERE I AM
+
+**Running:** TERRVEL (velocity + I34's live-patch hole) and PALRAM (`pal_q`,
+currently in `quartus_map`). **At the cap of two.**
+
+**Register 7.** Remaining: `I13`+`normalmap`, `I34`+`velocity`, `I54`, `I55`,
+`I56`.
+
+**Queued, in order:** ATTRSETUP (written), then `zhao_forge_assemble`'s
+`pos_q`/`inv_q` (diagnosed in 15.21, **not free** — a pipeline stage and a
+validity discipline).
