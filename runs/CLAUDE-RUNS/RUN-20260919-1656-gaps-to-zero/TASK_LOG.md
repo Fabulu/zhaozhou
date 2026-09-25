@@ -1819,3 +1819,68 @@ inherit item (a).
 **WHERE I AM:** TERRAINUV running on terrain u/v; PATCHV2 finishing
 `-BadTraceArm` and `-UntexMutant`. Next: merge PATCHV2 and re-measure the sweep
 at 29, then the I21 re-measurement lane.
+
+### 2026-09-25 — R244 re-read, and D-EARTH-A's PRECONDITION IS NOW MEASURED TRUE
+
+**Both of the owner's 2026-09-23 directives verified satisfied, structurally, not
+from memory:**
+
+* **FORGE.SHADOW** — `zhao_forge_shadow` composed at `zhao_console_core.sv:14952`,
+  under the existing law, with R3's owed N=4 schedule proof produced (four
+  saturated arms, worst wait **7 against a bound of 8**).
+* **`MAX_FIELDS` is still 16** in both `zhao_field_earth_adapter.sv:184` and
+  `zhao_terrain_fieldlist.sv:135`. Nothing was cut.
+
+**AND THE BANK DOES LAND IN ALMs — answered WITHOUT re-opening a fit.**
+`check_ram_inference.py --rank` puts it on the *"ARRAYS THAT WILL NOT INFER AS
+MEMORY"* list and the arithmetic matches the owner's figure exactly:
+`b_par` 4,096 + `b_phase` 512 + `b_age` 512, plus `b_begun`/`b_obj`/`b_res` =
+**16 × 325 = 5,200 bits**. Three named blockers, identical on all three arrays:
+
+1. **read COMBINATIONALLY through dynamic index `lane_a`** — *"forces a per-bit
+   mux the width of the array"*. **That is the owner's 16→1 × 325-bit mux.**
+2. **two distinct write addresses `[i]` and `[wr_a]`** — `[i]` is the
+   per-element reset loop; island brief S5.3 forbids the shape by name.
+3. async-reset process — the tool marks this a **WEAK SIGNAL with measured false
+   positives**, so it is context, not a blocker.
+
+**EARTHRAM is running the owner's own escape hatch**: synchronous read plus
+removal of the reset loop, `MAX_FIELDS` untouched, **two leaf maps and no fit**,
+with the question named in advance — does the 5,200-bit bank appear as block
+memory bits, and what happens to ALUTs. Its brief carries the hazard the change
+creates: a synchronous read means data arrives a cycle after the address, which
+is the metadata-swap shape, and PATCHV2's `ans_present_o` latching must not be
+disturbed underneath it.
+
+### AND THE ATTRIBUTION REPORT IS GONE — a lesson about receipts rather than probes
+
+`zhao_console_core@diag-map-attrib.map.rpt` **is no longer on disk**; only its
+`.map.summary` survives, and that carries totals only (381,585 registers,
+2,960,515 block memory bits, 359 DSP) with **no per-entity table**. §15.12's
+four optimisation levers were derived from that file, and **nobody can re-open
+it.** `.map.rpt` is gitignored by a SIZE rule.
+
+**CLAUDE.md's rule is "commit the probe"; the gap it leaves is the RECEIPT.**
+The next attribution run must extract a small committed table, not leave the
+numbers inside a 20 MB ignored artifact. Recorded rather than acted on, because
+the question at hand was answered more cheaply by a static check.
+
+### A STALE WAITER HELD THE GOAL EVALUATION FOR 47 HOURS
+
+`bzum7bwv7` was TERRAINUV's `BadTraceArm` watcher — `until grep … sleep 45` over
+a scratchpad log last written **2026-09-23 16:38**. No verilator, ctest, cmake,
+quartus or python process anywhere backed it. Stopped.
+
+**Its answer had been available the whole time**, and I read it from the logs
+rather than from memory: all four controls green, including
+`SMOKE: MUTANT PASS -- terr_pl_slot_overflow_o fired 1 time(s)`.
+
+**A poll loop with no timeout cannot distinguish "not finished" from "never
+will be", and it reports the same way for both.** That is the converse of
+CLAUDE.md's *"stopping an agent does not stop its background work"*: here the
+work stopped and the WATCHER outlived it.
+
+**WHERE I AM:** EARTHRAM running. Register 12, 30 gates matching baseline, tree
+clean and pushed at `13b22987`. Next after EARTHRAM: the owner decisions in
+§15.13 (D-1 material/nav destination, D-2 island-descriptor pitch) are what
+stand between the terrain half of the register and zero.
