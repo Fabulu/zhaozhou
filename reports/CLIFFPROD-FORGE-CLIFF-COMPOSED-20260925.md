@@ -222,3 +222,107 @@ time any of the three new blocks goes through `quartus_map`.
 * **No console fit was run.** The 2026-09-08 batching law: the questions this
   packet raises are answered by a subsystem fit, and the console's ALM total
   moves for many reasons at once.
+
+---
+
+## 7. The §6 timing recheck, answered
+
+`zhao_forge_cliff_chain_fit_top`, one fit, both questions named in
+`design/fit_targets.yml` and in the wrapper's own header **before it ran**.
+`sourceCommit f8d1f121`, **`rtlCleanAtHead: true`**, digest `fbb87047b3bf`,
+745.6 s, `5CSEBA6U23I7`, Quartus 17.0.2.
+
+### The three rows, side by side
+
+| | golden leaf | candidate leaf | **composed context** |
+|---|---|---|---|
+| ALM | 6,674 | 976 | **1,350** (whole chain, 5 modules) |
+| registers | 4,025 | 939 | **1,749** |
+| DSP | 2 | 2 | **0** |
+| RAM blocks | 14 | 15 | **8** |
+| memory bits | 119,808 | 120,964 | **55,428** |
+| Fmax | 39.59 MHz | 39.72 MHz | **94.93 MHz** |
+| setup WNS | −15.259 ns | −15.174 ns | **−0.534 ns** |
+| hold WNS | +0.263 ns | −4.140 ns | −2.113 ns |
+| hold report on disk | **none** | **none** | **yes** |
+| virtual pins | 265 | 273 | 448 |
+
+### (a) Timing — the premise is NOT supported
+
+**138 violated hold paths, and all 138 launch from an input pin. Zero
+register-to-register.** By launch pin: `lat_rsp_i` 55, `cs_substance_i` 45,
+`serve_src_id_i` 38 — and all three are **internal nets in
+`zhao_console_core`**: the compose cache's registered lattice and cell-state
+outputs, and a telemetry tap the core drives itself.
+
+A virtual pin models almost no input delay, so data arrives too early relative
+to the clock and hold fails. Driven by a real registered source with real
+clock-to-out, these paths do not exist.
+
+**Setup moved the other way and moved a lot**: −0.534 ns / 94.93 MHz against
+−15.174 / 39.72 at the leaf. Both leaf setup numbers were the vdist port's
+virtual pins, and that port carries nothing in the console.
+
+So the −4.140 ns hold was a boundary measurement of a port the composed console
+does not use, and the sign change against the golden is **not a cost of the
+R142 swap**. That is now **three** things read as the price of the candidate and
+found not to be: the inferred latch, the four RAM warnings, and the hold slack.
+
+**On my own loose wording, because it matters.** The falsifier was named as *"a
+hold violation that survives here on a path whose ENDPOINT is an internal
+register"*. Read literally that fired — the endpoints **are** internal
+registers. Read as intended (register to register) it did not. Rather than
+reinterpret my own sentence to get the answer I wanted, the decisive measurement
+is the **launch-point census**, which settles it either way: a boundary artefact
+launches at the boundary.
+
+**Caveat, and it bounds the claim.** 448 virtual pins remain and Quartus reports
+**Critical Warning (15725)** — *"clock port is fed by virtual pin `clk~input`;
+timing analysis treats input to the clock port as a ripple clock"*. **This is
+not a console timing number and must not be quoted as one.** It is better
+bounded than the leaf rows and taken on the *same* footing as them — which is
+what makes it like for like, and like for like was the whole problem with the
+pair it replaces.
+
+### (b) Area — and a saving nobody had measured
+
+The whole capability: **1,350 ALM, 1,749 registers, 0 DSP, 8 RAM blocks, 55,428
+memory bits**. Five categories, kept apart, never summed.
+
+Against the evaluator alone the ALM figure is **not** a clean delta — different
+boundary, different constant folding — so it is quoted as a measurement of the
+chain, not as a difference. But two differences **are** exact and explicable:
+
+* **120,964 − 55,428 = 65,536 = 2048 × 32 = `prio_mem_r` exactly.** The
+  priority table is pruned because vdist is off. Confirmed independently by the
+  map's own inference table, which lists **four** memories rather than five, and
+  by `prio_mem` appearing **zero** times in the entire report. About **7 M10K
+  returned**.
+* **DSP 2 → 0** — the vdist address arithmetic's two multipliers.
+
+And the four `Warning (276020)` RAM pass-throughs are now **three**, because
+`prio_mem_r` was one of the four and went with it.
+
+**So `CLIFF_VDIST_EN = 0` is not merely free: it returns 2 DSP and ~7 M10K** on
+a device already at 97% of its ALM budget. Turning vdist on later buys those
+back, and that price is now known in advance rather than discovered by a fit
+after the fact.
+
+### What the first fit of this chain found, and why there were two
+
+The first fit reported `Info (10041): Inferred latch for "poison1_r[0..31]"`
+**32 times** — in my own new `zhao_forge_cliff_srvshare`, on the instance where
+`POISON_EN = 0` makes the counter's increment condition constant-false, leaving
+a register that can only ever hold its reset value.
+
+That is the **same shape R117 already paid to remove** from
+`triangles_submitted_o[0]`, and `--lint-only -Wall` had reported **zero**
+diagnostics on all four files since they were written. A fit that measures a
+circuit you already know is wrong is wasted, so the counter was moved into an
+explicit `generate` — with `POISON_EN = 0` it now **does not exist** rather than
+existing and reading zero — and the fit was re-run on the repaired, committed
+RTL. The clean run reports `Info (10041)` **zero** times.
+
+Two tool facts paid for on the way: an **implicit generate** lints clean and is
+a Quartus 17.0 syntax error, and a comment whose first word is the linter's own
+name is parsed as a **pragma** and fails the build.

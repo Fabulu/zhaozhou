@@ -1716,6 +1716,65 @@ targets:
   # Correctness, throughput, handshake behaviour and field routing are already
   # answered by Verilator (tests/forge/forge_cliff_chain.cpp) and do not need
   # Quartus, per the 2026-09-08 batching law.
+  # ANSWERED 2026-09-25, sourceCommit f8d1f121, rtlCleanAtHead TRUE, digest
+  # fbb87047b3bf, 745.6 s, 5CSEBA6U23I7. Both questions. The receipt is
+  # blockpaths/zhao_forge_cliff_chain_fit_top.hold.summary.rpt -- the full
+  # .hold.rpt is gitignored by the size rule, so it is distilled and kept.
+  #
+  # (a) TIMING -- THE HOLD VIOLATION IS NOT AN INTERNAL PATH. 138 violated
+  #     paths, and ALL 138 LAUNCH FROM AN INPUT PIN: lat_rsp_i (55),
+  #     cs_substance_i (45), serve_src_id_i (38). ZERO register-to-register.
+  #     All three are internal nets in zhao_console_core -- the compose
+  #     cache's registered lattice and cell-state outputs, and a telemetry
+  #     tap the core drives itself. A virtual pin models almost no input
+  #     delay, so data arrives too early and hold fails; driven by a real
+  #     registered source with real clock-to-out, these paths do not exist.
+  #
+  #     SETUP MOVED THE OTHER WAY, AND MOVED A LOT: -0.534 ns / 94.93 MHz
+  #     here, against -15.174 / 39.72 for the candidate leaf and -15.259 /
+  #     39.59 for the golden leaf. Both leaf numbers were the vdist port's
+  #     virtual pins, and that port carries nothing in the console.
+  #
+  #     SO THE PREMISE IS NOT SUPPORTED. The -4.140 ns hold on
+  #     `zhao_forge_cliff_ram@first-measurement` was a boundary measurement
+  #     of a port the console does not use, and the sign change against the
+  #     golden is not a cost of the R142 swap. That makes THREE -- the
+  #     inferred latch, the four RAM warnings, and now the hold slack --
+  #     read as the price of the candidate and found not to be.
+  #
+  #     CAVEAT, and it bounds the claim: 448 virtual pins remain, and
+  #     Quartus reports Critical Warning (15725), the clock fed by a virtual
+  #     pin and analysed as a RIPPLE CLOCK. This is NOT a console timing
+  #     number and must not be quoted as one. It is better bounded than the
+  #     leaf rows and taken on the SAME footing, which is what makes it like
+  #     for like -- and like for like was the whole problem with the pair it
+  #     replaces.
+  #
+  # (b) AREA -- and a saving nobody had measured. The whole capability:
+  #     1,350 ALM, 1,749 registers, 0 DSP, 8 RAM blocks, 55,428 memory bits.
+  #     The five categories are kept apart and never summed.
+  #
+  #     AGAINST THE EVALUATOR ALONE (976 ALM / 2 DSP / 15 blocks / 120,964
+  #     bits) the ALM figure is NOT a clean delta -- different boundary,
+  #     different constant folding, and it is quoted as a measurement of the
+  #     chain rather than as a difference. But two differences ARE exact and
+  #     explicable, and both are budget relevant:
+  #
+  #       * 120,964 - 55,428 = 65,536 = 2048 x 32 = `prio_mem_r` EXACTLY.
+  #         The priority table is pruned because vdist is off; the map's own
+  #         inference table lists FOUR memories rather than five, and
+  #         `prio_mem` appears ZERO times in the whole report. About 7 M10K
+  #         returned.
+  #       * DSP 2 -> 0: the vdist address arithmetic's two multipliers.
+  #
+  #     And the four `Warning (276020)` RAM pass-throughs are now THREE,
+  #     because prio_mem_r was one of the four and went with it.
+  #
+  #     So CLIFF_VDIST_EN = 0 is not merely free: it RETURNS 2 DSP and about
+  #     7 M10K on a device already at 97% of its ALM budget. Turning vdist on
+  #     later buys those back, and that price is now known in advance rather
+  #     than discovered by a fit after the fact.
+
   - top: zhao_forge_cliff_chain_fit_top
     sources:
       - fpga/rtl/generated/zhao_forge_cliff_chain_fit_top.sv
