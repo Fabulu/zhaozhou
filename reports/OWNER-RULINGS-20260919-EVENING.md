@@ -7843,3 +7843,67 @@ frozen ref it would have read as a clean sync forever.
 `origin/claude/ceiling-architecture-20260912` now resolves to `0c0aa5d9`,
 equal to HEAD. **`git ls-remote` is the truth; a remote-tracking ref is a
 cache, and a cache nobody refreshes is a stale number with a reassuring name.**
+
+## ADOPTION: THE OWNER VACATION DIRECTIVE OF 2026-09-23 (recorded ONCE, here)
+
+**`reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt`, delivered on the
+integration branch as `460296f9` + `ead6f107`, reviewed against `13b22987`,
+ADOPTED 2026-09-25.** Its own words: *"The owner's commit or delivery of this
+file adopts the whole directive; no second ratification message is required."*
+
+**It supersedes the approval holds.** Recorded here rather than reproduced: the
+directive is the single source of truth and it explicitly forbids *"duplicating
+this document into multiple competing sources of truth."* Pointers were added at
+the top of `CLAUDE.md` and of `reports/HANDOVER-20260919.md`, which is what it
+asks for, and nothing else is copied.
+
+**WHAT IT CHANGES ABOUT HOW THIS CAMPAIGN RUNS, one line each:**
+
+* **The approval loop is over.** *"Use your own brain. You are the implementation
+  architect, not a relay... Do not stop at another list headed OWNER DECISION."*
+  Standing delegated authority over architecture, formats, address maps, command
+  extensions, ownership, identity, scheduling, allocation, numeric
+  representation, compatibility, validation, test infrastructure and order --
+  **including amending specs and older rulings**, provided what is superseded is
+  STATED rather than silently reinterpreted.
+* **It does not expire** at the end of a session, packet, day or context window.
+* **Section 15.13 IS CLOSED.** Every hold it listed is decided in the directive.
+* **The limits are explicit, and they are capability limits rather than resource
+  limits:** no deleting a feature, no 16->4 fields, no removing Gouraud or detail
+  normals, no shrinking the guaranteed giant, no replacing a live path with
+  testbench stimulus, no waiving a correctness failure, no calling reduced work
+  equivalent. **Shipping target stays `5CSEBA6U23I7`**; a larger diagnostic
+  target is a MEASUREMENT target only.
+* **A measured impossibility is a finding**, not permission to invent a pass:
+  keep the correct slower configuration, record the limit, continue elsewhere.
+* **Two implementation workers**, coordinator integrating. Supersedes the older
+  one-worker and three-packet staffing notes. Count descendants; no nested spawns
+  to evade it; never leave stray jobs impersonating an active lane.
+* **Push protocol, and it caught us the day it arrived:** fetch and inspect new
+  owner commits BEFORE each integration push. *"A push sends local commits OUT;
+  it does not fetch new owner instructions."* A non-fast-forward rejection is a
+  signal to integrate -- **never force over an owner commit.** This directive was
+  found exactly that way: a push was rejected, and **the rejection was the
+  notification.** Nothing else would have told us.
+
+**AND IT CORRECTS THREE THINGS WE HAD WRITTEN, all in the direction the lanes
+were already moving:**
+
+1. *"The terrain smoke actually reports valid page CRCs and 128 replayed terrain
+   triangles, but all 128 are degenerate. Do not repeat the older claim that CRC
+   failures make every terrain path unreachable."* TERRAINUV measured this
+   independently on 2026-09-23; the directive ratifies the correction.
+2. *"Do not claim a visible shadow from a smoke that never publishes a
+   creature-form page."* SHADOWRIDE had said so itself.
+3. *"The new bandwidth ledger's worst-on-worst oversubscription is NOT a measured
+   board FPS result, and the optimistic case is not a guarantee."* -- section
+   15.15's own caveat, ratified, plus the instruction to charge fragmentation,
+   turnaround, refresh, queue and drain costs, and the reminder that **a 64-byte
+   fabric request is not one 16-byte BL8 burst.**
+
+**THE DECISION RECORD FORMAT for everything from here**, from section 10:
+question; chosen option; reason and alternatives; constraints/cost;
+code/tests/compatibility consequences. Then execute. Further decisions belong in
+the implementation packets themselves, per section 10 item 3 -- not in a new
+essay. The directive is explicit that an audit-only packet for a decision already
+delegated here is not to be commissioned again.

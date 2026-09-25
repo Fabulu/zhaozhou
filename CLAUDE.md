@@ -1,5 +1,40 @@
 # Zencrifice — working rules
 
+> ## ⚑ READ FIRST: `reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt`
+>
+> **The owner is on vacation and has DELEGATED the technical decisions. That file
+> is standing authority and it OVERRIDES THE APPROVAL LOOP.** It does not expire
+> at the end of a session, a packet, a day or a context window; only the owner
+> revoking or replacing it ends it. Adopted 2026-09-25 (commits `460296f9`,
+> `ead6f107`), reviewed against `13b22987`.
+>
+> *"Use your own brain. You are the implementation architect, not a relay that
+> sends every unresolved engineering choice back to me. … Do not stop at another
+> list headed OWNER DECISION. Make the decision, write down the rationale and
+> consequences, implement it, and test it."*
+>
+> **Every open hold is decided there** — I34's four channels and their new bank-2
+> destinations, I21's island-pitch authority, I20's fragment-state/stencil/
+> provoking-vertex semantics, I53–I55's single geometry identity space, I56's
+> quota seal, the terrain arm, SDRAM scheduling for frame-critical reads,
+> DSF-01's wrapper, bounded map experiments, and worktree cleanup.
+>
+> **What the delegation is NOT:** authority to delete a feature, cut 16 fields to
+> 4, remove Gouraud or detail normals, shrink the guaranteed giant, replace a live
+> path with testbench stimulus, waive a correctness failure, or call reduced work
+> equivalent to reach zero or fit a device. **The shipping target stays
+> `5CSEBA6U23I7`;** a bigger diagnostic target does not change it. *"A measured
+> engineering impossibility is a finding, not permission to invent a pass."*
+>
+> **Decision record format, and it is short:** question; chosen option; reason and
+> alternatives; constraints/cost; code/tests/compatibility consequences. Then
+> execute.
+>
+> **Before every integration push:** fetch the remote branch and inspect new owner
+> commits FIRST. *"A push sends local commits OUT; it does not fetch new owner
+> instructions."* A non-fast-forward rejection means fetch and integrate —
+> **never `--force`, never `--force-with-lease`, over an owner commit.**
+
 Three repos: **zhaozhou** (the console — silicon, reference oracle, tools),
 **nanquan** (the language), **Upheaval** (the game, full title *Tribute
 Upheaval*; the folder stays `Upheaval/`).
