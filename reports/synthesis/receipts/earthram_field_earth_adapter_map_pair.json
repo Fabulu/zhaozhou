@@ -1,0 +1,49 @@
+{
+  "schema": "zhao_map_receipt/1",
+  "note": "Packet EARTHRAM: the 5,120-bit uniform payload moved from flip-flops to a synchronous-read M10K. before=ead6f107 (flop bank), after=1397b754 (RAM). Two -MapOnly leaf runs, same closure, same device, both from a clean tree.",
+  "capacityBound": {
+    "device": "5CSEBA6U23I7",
+    "alms": 41910,
+    "m10k": 553,
+    "dsp": 112,
+    "note": "the shipping target; a leaf map's utilisation is not a closure claim and these are recorded as the BOUND only"
+  },
+  "rows": {
+    "before": {
+      "toolVersion": "17.0.2 Build 602 07/19/2017 SJ Lite Edition",
+      "topLevelEntity": "zhao_field_earth_adapter",
+      "family": "Cyclone V",
+      "dedicatedRegisters": 6274,
+      "physicalPins": 0,
+      "virtualPins": 1617,
+      "blockMemoryBits": 0,
+      "dspBlocks": 0,
+      "device": "5CSEBA6U23I7             ;",
+      "estimatedALMs": 4326,
+      "combinationalALUTs": 2419,
+      "ramSummaryPresent": false,
+      "ramSummary": [],
+      "uninferredNotes": [],
+      "placedALMs": null
+    },
+    "after": {
+      "toolVersion": "17.0.2 Build 602 07/19/2017 SJ Lite Edition",
+      "topLevelEntity": "zhao_field_earth_adapter",
+      "family": "Cyclone V",
+      "dedicatedRegisters": 1093,
+      "physicalPins": 0,
+      "virtualPins": 1617,
+      "blockMemoryBits": 4880,
+      "dspBlocks": 0,
+      "device": "5CSEBA6U23I7             ;",
+      "estimatedALMs": 1628,
+      "combinationalALUTs": 888,
+      "ramSummaryPresent": true,
+      "ramSummary": [
+        "; altsyncram:b_uni_rtl_0|altsyncram_70s1:auto_generated|ALTSYNCRAM ; M10K block ; Simple Dual Port ; 16           ; 305          ; 16           ; 305          ; 4880 ; None ;"
+      ],
+      "uninferredNotes": [],
+      "placedALMs": null
+    }
+  }
+}

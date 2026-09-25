@@ -16947,8 +16947,10 @@ set_tests_properties(field_flow_adapter_directed PROPERTIES LABELS "fast;nightly
 # zhao_console_core entry I34 build item (c), owner directive section 20.8.
 # Driven STANDALONE with the field engine PLAYED, so a case can hand it an
 # exact out-lane and check the answer word for word. Every one of its nine
-# counters is FIRED here by legal stimulus, including both arms of the lane
-# shadow guard -- so no committed mutant is owed (R95).
+# counters is FIRED here by legal stimulus, including all THREE arms of the
+# lane shadow guard -- so no committed mutant is owed (R95). Arm (c) is the
+# synchronous uniform bank's pairing check, added by packet EARTHRAM and fired
+# by case 9d with the other two arms held silent so the count is attributable.
 # --------------------------------------------------------------------------
 add_executable(test_field_earth_adapter_directed field/field_earth_adapter_directed.cpp)
 target_link_libraries(test_field_earth_adapter_directed PRIVATE zhao_harness)
@@ -16958,6 +16960,25 @@ verilate(test_field_earth_adapter_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_earth_adapter.sv)
 add_test(NAME field_earth_adapter_directed COMMAND test_field_earth_adapter_directed)
 set_tests_properties(field_earth_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# --------------------------------------------------------------------------
+# THE CYCLE CENSUS. Packet EARTHRAM made the uniform bank's read SYNCHRONOUS,
+# and the owner's instruction allowed "one more state on an ~80-100-cycle field
+# run" for it. The measured cost is ZERO clocks, which is a surprising enough
+# result to owe a committed probe rather than a paragraph -- CLAUDE.md's
+# "commit the probe", applied to a latency instead of a ground contact.
+#
+# It asserts the CORRECT behaviour (accept-to-offer is one clock, and the
+# payload is already valid on that clock), never the bug. A future change that
+# inserts a state goes red here and names the number.
+# --------------------------------------------------------------------------
+add_executable(test_field_earth_adapter_cycle_census field/field_earth_adapter_cycle_census.cpp)
+verilate(test_field_earth_adapter_cycle_census
+  PREFIX Vzhao_field_earth_adapter
+  TOP_MODULE zhao_field_earth_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_earth_adapter.sv)
+add_test(NAME field_earth_adapter_cycle_census COMMAND test_field_earth_adapter_cycle_census)
+set_tests_properties(field_earth_adapter_cycle_census PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 add_test(NAME lint_zhao_field_earth_adapter
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
