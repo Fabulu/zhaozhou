@@ -16420,6 +16420,32 @@ add_test(NAME terrain_edge_acceptance COMMAND test_terrain_edge_acceptance)
 set_tests_properties(terrain_edge_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
+# THE POSITIVE CONTROL FOR `descriptor_unarmed_o` -- INVERTED POLARITY
+# ---------------------------------------------------------------------------
+# `terrain_edge_acceptance` section 10 asserts that counter is ZERO on
+# unmutated production. That zero is only evidence if the counter can move at
+# all, and NO LEGAL STIMULUS MOVES IT: it watches for a descriptor arriving
+# with nothing armed and no query pending, and every exit from the query FSM
+# arms the answer, so `armed_q == 0` implies the FSM is not idle while the
+# valve needs both.
+#
+# So the demonstration is a COMMITTED MUTANT with one substantive line changed
+# -- the serve edge no longer enters Q_REQ -- and a driver that PASSES WHEN THE
+# COUNTER FIRES. It is evidence about the instrument, not about the design.
+add_executable(test_terrain_edgequery_unarmed_mutant
+               terrain/terrain_edgequery_unarmed_mutant.cpp)
+target_link_libraries(test_terrain_edgequery_unarmed_mutant PRIVATE zhao_harness)
+verilate(test_terrain_edgequery_unarmed_mutant
+  PREFIX Vzhao_terrain_edgequery_unarmed_mutant
+  TOP_MODULE zhao_terrain_edgequery_unarmed_mutant
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_edgequery_unarmed_mutant.sv)
+add_test(NAME terrain_edgequery_unarmed_mutant
+         COMMAND test_terrain_edgequery_unarmed_mutant)
+set_tests_properties(terrain_edgequery_unarmed_mutant
+                     PROPERTIES LABELS "fast;nightly;mutant" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
 # PROCMAT -- the acceptance test owner completion ruling 2 (2026-09-22) names
 # ---------------------------------------------------------------------------
 # COMMAND BYTES TO GEOM.CLIP'S INPUT, over nine production modules: the real

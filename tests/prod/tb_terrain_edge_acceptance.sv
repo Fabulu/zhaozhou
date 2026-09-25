@@ -125,6 +125,40 @@ module tb_terrain_edge_acceptance
     // directive's "backpressure" on the frame-critical read socket, and it is
     // what makes `terr_ps_*_blocked_clocks` and the gate move.
     input  var logic [7:0]         dev_latency_i,
+    // THE EMIT ASSEMBLER ASKING CONTINUOUSLY. `zhao_terrain_spdesc` drives
+    // `r_start_o = (st_q == StStart)` -- a held state, released only by the
+    // grant -- so a console under load has requester A asking on most cycles.
+    // The model below asks once per SERVE EDGE, which is right for the ordinary
+    // sections and cannot produce the exact-cycle alignment
+    // `dev_contended_o` counts. This forces the held shape so that the
+    // arbiter's positive control has stimulus rather than an argument.
+    input  var logic               a_hog_i,
+    // A SPURIOUS LOOKUP ANSWER, injected at TERRAIN.PREPSHARE's own boundary.
+    // `lu_ans_unowned_o` is that block's fault detector: an answer arriving
+    // with no outstanding grant means the directory answered something the
+    // arbiter did not ask, or answered twice -- the one fault a lookup
+    // arbiter can commit, and the one that would hand PREPARE the pager's
+    // slot. The state is unreachable through a correct directory, so the
+    // demonstration is to present the answer directly. `d_lu_ans_valid_i` IS
+    // an input of the block, so this is legal stimulus at its boundary and
+    // not a mutation.
+    input  var logic               lu_spurious_i,
+    // A SWEEP, forced. TERRAIN.EDGERECON's `frame_begin_i` is a pulse and
+    // `zhao_terrain_edgequery`'s `query_abandoned_o` counts the bank leaving
+    // EMIT with a query in flight -- a frame boundary landing mid-patch, which
+    // is a real event whose stimulus is a pulse this bench can present.
+    input  var logic               force_sweep_i,
+
+    // ---- TERRAIN.SEQ's side of the residency lookup, driven --------------
+    // In the console this is `u_terrain_seq`'s `lu_*` port. It is driven here
+    // so that `zhao_terrain_prepshare`'s A-side lookup counters can be SHOWN
+    // TO FIRE rather than asserted zero against a tied-off requester -- a
+    // counter whose stimulus is a constant zero is not an instrument.
+    input  var logic               a_lu_valid_i,
+    input  var logic signed [15:0] a_lu_ix_i,
+    input  var logic signed [15:0] a_lu_iz_i,
+    output var logic               a_lu_ready_o,
+    output var logic               a_lu_ans_valid_o,
 
     // ---- the frame's job ----------------------------------------------------
     input  var logic        cfg_valid_i,
@@ -295,6 +329,8 @@ module tb_terrain_edge_acceptance
     output var logic [31:0] ps_b_dev_blocked_clocks_o,
     output var logic [31:0] ps_a_lu_grants_o,
     output var logic [31:0] ps_b_lu_grants_o,
+    output var logic [31:0] ps_a_lu_blocked_clocks_o,
+    output var logic [31:0] ps_b_lu_blocked_clocks_o,
     output var logic [31:0] ps_lu_ans_unowned_o,
     output var logic [31:0] ps_dev_contended_o,
 
@@ -606,8 +642,10 @@ module tb_terrain_edge_acceptance
         a_r_slot_q   <= SLOTW'(serve_src_id_i);
       end
       if (a_r_start_q && a_r_ready) begin
-        a_r_start_q <= 1'b0;
+        a_r_start_q <= a_hog_i;      // re-ask at once when hogging
         a_beats_q   <= 5'd16;
+      end else if (a_hog_i) begin
+        a_r_start_q <= 1'b1;
       end
       if (a_r_valid && (a_beats_q != 5'd0)) a_beats_q <= a_beats_q - 5'd1;
     end
@@ -623,21 +661,23 @@ module tb_terrain_edge_acceptance
     .d_r_start_o(d_r_start), .d_r_slot_o(d_r_slot),
     .d_r_ready_i(d_r_ready), .d_r_valid_i(d_r_valid), .d_r_ready_o(d_r_take),
     .d_r_sp_i(d_r_sp),
-    .a_lu_valid_i(1'b0), .a_lu_ready_o(),
-    .a_lu_epoch_i(32'd0), .a_lu_island_i(32'd0),
-    .a_lu_ix_i(16'sd0), .a_lu_iz_i(16'sd0), .a_lu_ans_valid_o(),
+    .a_lu_valid_i(a_lu_valid_i), .a_lu_ready_o(a_lu_ready_o),
+    .a_lu_epoch_i(cfg_epoch_i), .a_lu_island_i(32'h42),
+    .a_lu_ix_i(a_lu_ix_i), .a_lu_iz_i(a_lu_iz_i),
+    .a_lu_ans_valid_o(a_lu_ans_valid_o),
     .b_lu_valid_i(pw_lu_valid), .b_lu_ready_o(pw_lu_ready),
     .b_lu_epoch_i(pw_lu_epoch), .b_lu_island_i(pw_lu_island),
     .b_lu_ix_i(pw_lu_ix), .b_lu_iz_i(pw_lu_iz), .b_lu_ans_valid_o(pw_lu_ansv),
     .d_lu_valid_o(d_lu_valid), .d_lu_ready_i(d_lu_ready),
     .d_lu_epoch_o(d_lu_epoch), .d_lu_island_o(d_lu_island),
     .d_lu_ix_o(d_lu_ix), .d_lu_iz_o(d_lu_iz),
-    .d_lu_ans_valid_i(d_lu_ans_valid),
+    .d_lu_ans_valid_i(d_lu_ans_valid || lu_spurious_i),
     .a_dev_grants_o(ps_a_dev_grants_o), .b_dev_grants_o(ps_b_dev_grants_o),
     .a_dev_blocked_clocks_o(ps_a_dev_blocked_clocks_o),
     .b_dev_blocked_clocks_o(ps_b_dev_blocked_clocks_o),
     .a_lu_grants_o(ps_a_lu_grants_o), .b_lu_grants_o(ps_b_lu_grants_o),
-    .a_lu_blocked_clocks_o(), .b_lu_blocked_clocks_o(),
+    .a_lu_blocked_clocks_o(ps_a_lu_blocked_clocks_o),
+    .b_lu_blocked_clocks_o(ps_b_lu_blocked_clocks_o),
     .lu_ans_unowned_o(ps_lu_ans_unowned_o),
     .dev_contended_o(ps_dev_contended_o),
     .busy_o()
@@ -840,7 +880,7 @@ module tb_terrain_edge_acceptance
 
   zhao_terrain_edgerecon #(.IXW(4), .IZW(4)) u_edgerecon (
     .clk(clk), .rst_n(rst_n),
-    .frame_begin_i(pw_prep_begin), .prepare_done_i(prep_done_c),
+    .frame_begin_i(pw_prep_begin || force_sweep_i), .prepare_done_i(prep_done_c),
     .phase_o(er_phase), .frame_count_o(),
     .f_valid_i(f_valid), .f_ready_o(f_ready),
     .f_ix_i(f_ix), .f_iz_i(f_iz), .f_ox_i(f_ox), .f_oz_i(f_oz),

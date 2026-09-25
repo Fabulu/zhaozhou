@@ -177,6 +177,8 @@ class Bench {
     t.e_sp_prev_level_i = 0; t.e_sp_prev_morph_i = 0; t.e_sp_hold_i = 0;
     t.e_sp_src_id_i = 0;
     t.h_valid_i = 0; t.h_level_i = 0; t.h_morph_i = 0; t.h_hold_i = 0;
+    t.a_lu_valid_i = 0; t.a_lu_ix_i = 0; t.a_lu_iz_i = 0; t.a_hog_i = 0;
+    t.lu_spurious_i = 0; t.force_sweep_i = 0;
     t.e_out_ready_i = 1;
     for (int i = 0; i < 6; ++i) tick();
     t.rst_n = 1;
@@ -894,6 +896,244 @@ int main(int argc, char** argv) {
           "history: THE NEGATIVE CONTROL -- the identical offer DOES pass in "
           "EMIT, so the zero above is a gate and not a dead wire");
     check_eq(b.t().h_out_level_o, 3, "history: the level passed through unchanged");
+  }
+
+
+  // =======================================================================
+  // SECTION 9 -- CONTENTION: BOTH REQUESTERS ASKING AT ONCE
+  // =======================================================================
+  // `zhao_terrain_prepshare` exists for a case a sequential bench never
+  // reaches. Sections 1-8 run PREPARE and EMIT one after the other, so the
+  // two requesters never contend, and every contention counter reads zero for
+  // a reason that has NOTHING TO DO with the arbiter. That zero would be the
+  // flattering kind: it looks like "no contention happened" and means "this
+  // run could not produce any".
+  //
+  // Here the EMIT side is served WHILE the walk is running, which is what the
+  // console does -- the compose spine has its own schedule and does not wait
+  // for PREPARE.
+  {
+    std::printf("SECTION 9 -- CONTENTION: both requesters on both shared ports\n");
+    Bench b;
+    load_common(b);
+    set_camera(b, 0, 0);
+    b.freeze_frame();
+    b.t().dev_latency_i = 20;          // make the store slow enough to overlap
+    b.t().a_hog_i = 1;                 // the EMIT assembler holds its start
+
+    // THE PAGER'S LOOKUPS, HELD FOR THE WHOLE WALK. A burst that happens to
+    // fall between PREPARE's lookups contends with nothing -- the first
+    // writing of this section did exactly that and read `b_lu_blocked = 0`,
+    // which is a stimulus gap wearing an arbiter's clothes.
+    b.t().a_lu_valid_i = 1;
+    b.t().a_lu_ix_i = 0;
+    b.t().a_lu_iz_i = 0;
+    b.start_walk();
+
+    // AND THE EMIT ASSEMBLER'S devstore read, REPEATEDLY, while the walker
+    // holds the port. The bench's requester-A model asks on each RISING serve
+    // edge, so one long level asks once; the port is only contended if it asks
+    // again while PREPARE owns it.
+    for (int burst = 0; burst < 12; ++burst) {
+      b.t().serve_src_id_i = (uint16_t)(100 + (burst % 3));
+      b.t().serve_valid_i = 1;
+      b.tick(10);
+      b.t().serve_valid_i = 0;
+      b.tick(2);
+      b.t().a_lu_ix_i = (int16_t)(burst % 3);
+    }
+
+    check(b.wait_walk(), "contention: the walk still terminated");
+    b.t().a_lu_valid_i = 0;
+    b.t().a_hog_i = 0;
+    check(b.t().ps_a_lu_grants_o > 0,
+          "contention: the PAGER was granted the lookup port (A-side grants)");
+    check(b.t().ps_b_lu_grants_o > 0,
+          "contention: and so was PREPARE (B-side grants)");
+    check(b.t().ps_a_lu_blocked_clocks_o > 0,
+          "contention: a_lu_blocked_clocks_o FIRED -- the pager waited, and the "
+          "cost of sharing is charged to the frame-critical side too");
+    check(b.t().ps_b_lu_blocked_clocks_o > 0,
+          "contention: b_lu_blocked_clocks_o FIRED");
+    check(b.t().ps_a_dev_grants_o > 0,
+          "contention: the EMIT assembler was granted the store");
+    check(b.t().ps_dev_contended_o > 0,
+          "contention: dev_contended_o FIRED -- THE ARBITER'S POSITIVE CONTROL. "
+          "Without this the blocked-clock counters' silence would be quoting an "
+          "arbiter that was never contended");
+    check(b.t().ps_a_dev_blocked_clocks_o > 0,
+          "contention: a_dev_blocked_clocks_o FIRED -- the EMIT side waited");
+    check_eq(b.t().ps_lu_ans_unowned_o, 0,
+             "contention: EVERY lookup answer had an owner -- THE DETECTOR, "
+             "silent while two requesters share one pipelined port, which is "
+             "the only condition under which its silence is worth anything");
+    std::printf("  a_lu_grants=%u b_lu_grants=%u a_lu_blocked=%u b_lu_blocked=%u\n",
+                b.t().ps_a_lu_grants_o, b.t().ps_b_lu_grants_o,
+                b.t().ps_a_lu_blocked_clocks_o, b.t().ps_b_lu_blocked_clocks_o);
+    std::printf("  a_dev_grants=%u b_dev_grants=%u contended=%u a_dev_blocked=%u\n",
+                b.t().ps_a_dev_grants_o, b.t().ps_b_dev_grants_o,
+                b.t().ps_dev_contended_o, b.t().ps_a_dev_blocked_clocks_o);
+  }
+
+  // =======================================================================
+  // SECTION 10 -- EVERY REMAINING COUNTER, FIRED ON PURPOSE
+  // =======================================================================
+  // "A detector that has not been shown to FIRE has not been tested." Sections
+  // 1-9 leave six of `zhao_terrain_edgequery`'s counters and two of
+  // `zhao_terrain_islandseal`'s at zero, which is correct behaviour and
+  // therefore no evidence at all. Each is driven here with LEGAL STIMULUS at
+  // the block's own boundary, with the healthy case beside it.
+  {
+    std::printf("SECTION 10 -- every remaining counter, fired on purpose\n");
+    Bench b;
+    load_common(b);
+    set_camera(b, 0, 0);
+    b.freeze_frame();
+
+    // --- serve_no_door_o: a serve edge with nothing in the queue -----------
+    b.t().serve_src_id_i = 555;
+    b.t().serve_valid_i = 1;
+    b.tick(6);
+    b.t().serve_valid_i = 0;
+    b.tick(2);
+    check(b.t().eq_serve_no_door_o >= 1,
+          "fire: serve_no_door_o -- a serve found the door queue empty");
+
+    // --- door_src_unknown_o: a door whose identity matches no record -------
+    b.t().door_valid_i = 1; b.t().door_src_id_i = 0xBEEF;
+    b.tick(); b.t().door_valid_i = 0; b.tick();
+    check(b.t().eq_door_src_unknown_o >= 1,
+          "fire: door_src_unknown_o -- the door matched neither held record, "
+          "so it was queued with a coordinate no patch can carry");
+
+    // --- serve_src_mismatch_o: THE DETECTOR ---------------------------------
+    // A door pushed under one identity and a serve arriving under another is
+    // the exact desync the side queue exists to be caught by. The two values
+    // are written by two DIFFERENT enables through two different ports, which
+    // is what makes this counter capable of firing at all.
+    b.t().rec_valid_i = 1; b.t().rec_ix_i = 0; b.t().rec_iz_i = 0;
+    b.t().rec_src_id_i = 100;
+    b.tick(); b.t().rec_valid_i = 0;
+    b.t().door_valid_i = 1; b.t().door_src_id_i = 100;
+    b.tick(); b.t().door_valid_i = 0; b.tick();
+    const uint32_t mm_before = b.t().eq_serve_src_mismatch_o;
+    b.t().serve_src_id_i = 101;          // NOT the id the door carried
+    b.t().serve_valid_i = 1;
+    b.tick(6);
+    b.t().serve_valid_i = 0;
+    b.tick(2);
+    check(b.t().eq_serve_src_mismatch_o == mm_before + 1,
+          "fire: serve_src_mismatch_o -- THE DETECTOR moved on a deliberate "
+          "desync, so its zero in sections 2 and 5 is a measurement");
+
+    // --- door_refused_o: DOORD+1 pushes with no serve -----------------------
+    const uint32_t dr_before = b.t().eq_door_refused_o;
+    for (int k = 0; k < 6; ++k) {
+      b.t().door_valid_i = 1; b.t().door_src_id_i = (uint16_t)(200 + k);
+      b.tick();
+    }
+    b.t().door_valid_i = 0; b.tick();
+    check(b.t().eq_door_refused_o > dr_before,
+          "fire: door_refused_o -- the fifth push into a four-deep door queue "
+          "was refused and COUNTED rather than overwriting an entry");
+
+    // --- descriptor_unarmed_o: UNREACHABLE BY LEGAL STIMULUS ----------------
+    // This is the SAFETY VALVE on the descriptor gate, and it is
+    // `idq_overflow_o`'s case exactly: no legal input can move it while the
+    // query FSM is correct, so "it can fire" would stay an argument for ever.
+    //
+    // WHY it cannot: `armed_q` is cleared only on a serve edge, and EVERY exit
+    // from the query FSM sets it again -- `q_done_i` in Q_WAIT, and
+    // `!bank_emit_i` in both Q_REQ and Q_WAIT. So `armed_q == 0` implies the
+    // FSM is not idle, and `stuck_c` requires both.
+    //
+    // The demonstration is therefore a COMMITTED MUTANT with inverted
+    // polarity, `tests/mutants/zhao_terrain_edgequery_unarmed_mutant.sv`,
+    // driven by `terrain_edgequery_unarmed_mutant`. It is evidence about the
+    // INSTRUMENT; this assertion is evidence about the DESIGN.
+    check_eq(b.t().eq_descriptor_unarmed_o, 0,
+             "fire: descriptor_unarmed_o is ZERO, which is the CORRECT "
+             "behaviour -- its ability to fire is the committed mutant's job");
+
+    // --- lu_ans_unowned_o: THE LOOKUP ARBITER'S FAULT DETECTOR --------------
+    // An answer arriving with no outstanding grant. The two sides of this
+    // comparison are loaded by two DIFFERENT enables -- the owner register on
+    // the GRANT handshake, the answer on the directory's own pipeline -- which
+    // is the property CLAUDE.md's metadata-bank defect lacked and the reason
+    // that block's counter could never fire. `d_lu_ans_valid_i` is an INPUT of
+    // `zhao_terrain_prepshare`, so presenting one with the arbiter idle is
+    // legal stimulus at its boundary and not a mutation.
+    {
+      const uint32_t un_before = b.t().ps_lu_ans_unowned_o;
+      b.tick(8);                       // let any real lookup settle
+      b.t().lu_spurious_i = 1;
+      b.tick();
+      b.t().lu_spurious_i = 0;
+      b.tick(2);
+      check(b.t().ps_lu_ans_unowned_o > un_before,
+            "fire: lu_ans_unowned_o -- THE DETECTOR moved on an answer the "
+            "arbiter never asked for, so its zero in section 9 is a reading");
+    }
+
+    // --- query_abandoned_o: A FRAME BOUNDARY LANDING MID-QUERY --------------
+    // Real, and not a fault: the bank sweeps on `frame_begin_i` whenever it
+    // arrives, and a query in flight at that moment cannot be answered from a
+    // bank that is being erased. The query driver abandons it and serves the
+    // conservative fallback, which is the console's existing behaviour.
+    {
+      Bench d;
+      load_common(d);
+      set_camera(d, 0, 0);
+      d.freeze_frame();
+      check(d.prepare(), "abandon: a clean walk first");
+      check_eq(d.t().phase_o, 2, "abandon: EMIT is open");
+
+      // Arm a query, then sweep the bank underneath it.
+      d.t().rec_valid_i = 1; d.t().rec_ix_i = 0; d.t().rec_iz_i = 0;
+      d.t().rec_src_id_i = 100;
+      d.tick(); d.t().rec_valid_i = 0;
+      d.t().door_valid_i = 1; d.t().door_src_id_i = 100;
+      d.tick(); d.t().door_valid_i = 0;
+      d.t().serve_src_id_i = 100;
+      d.t().serve_valid_i = 1;
+      d.tick();                        // the serve edge starts the query
+      d.t().force_sweep_i = 1;
+      d.tick();
+      d.t().force_sweep_i = 0;
+      d.tick(8);
+      d.t().serve_valid_i = 0;
+      d.tick(2);
+      check(d.t().eq_query_abandoned_o >= 1,
+            "fire: query_abandoned_o -- the bank left EMIT with a query in "
+            "flight and the driver fell back rather than answering from a "
+            "bank that was being erased");
+      check_eq(d.t().edge_px_o, 0,
+               "abandon: and the answer served is the conservative fallback");
+    }
+
+    // --- reseals_o and island_bounced_o -------------------------------------
+    // A SECOND ISLAND under one resource epoch. Legal -- nothing forbids a
+    // frame spanning two islands -- and it RE-SEALS rather than reporting a
+    // mismatch, because the directive scopes authority to "that island
+    // generation" and a different generation is a different authority.
+    const uint32_t rs_before = b.t().isl_reseals_o;
+    present_header(b, 0, 0, kPitch, kIsland + 1);
+    check(b.t().isl_reseals_o == rs_before + 1,
+          "fire: reseals_o -- a new island generation re-sealed");
+    check(b.t().isl_island_bounced_o >= 1,
+          "fire: island_bounced_o -- and the bounce inside one epoch is "
+          "counted separately, because a frame that alternates re-seals per "
+          "page and every page after the first is checked against the wrong "
+          "island for one beat");
+    check_eq((int)b.t().island_pitch_o, kPitch,
+             "fire: and the re-seal took the NEW island's pitch, which here "
+             "happens to be the same -- the seal moved, the value did not");
+    std::printf("  serve_no_door=%u src_unknown=%u mismatch=%u refused=%u "
+                "unarmed=%u reseals=%u bounced=%u\n",
+                b.t().eq_serve_no_door_o, b.t().eq_door_src_unknown_o,
+                b.t().eq_serve_src_mismatch_o, b.t().eq_door_refused_o,
+                b.t().eq_descriptor_unarmed_o, b.t().isl_reseals_o,
+                b.t().isl_island_bounced_o);
   }
 
   std::printf("terrain_edge_acceptance: %d check(s), %d failure(s)\n", checks, fails);
