@@ -168,8 +168,14 @@
 // `fields_active_o`, which is a register in the other block.
 //
 // ---------------------------------------------------------------------------
-// OPEN DEFECT -- `rec_ready_o` IS NOT THE RECORD BEING BANKED, AND THE REPLAY
-// CAN LAND IN THE GAP. FOUND 2026-09-25 (COMPOSEPUB), NOT REPAIRED HERE.
+// CLOSED DEFECT -- `rec_ready_o` IS NOT THE RECORD BEING BANKED, AND THE
+// REPLAY COULD LAND IN THE GAP. FOUND 2026-09-25 (COMPOSEPUB), REPAIRED
+// 2026-09-25 (EARTHLOCK). ONE NARROWED RESIDUAL REMAINS AND IS NAMED AT THE
+// END OF THIS BLOCK.
+//
+// KEPT IN FULL RATHER THAN DELETED, because the defect's SHAPE is the
+// instructive part: a flag and the record it describes loaded by different
+// enables, with every census balancing. The repair is described in place.
 // ---------------------------------------------------------------------------
 // THE ORDERING. `rec_ready_o` is `(in_st == I_TAKE)`, so the handshake is the
 // FIRST beat of the intake, not its last. The sequencer then walks
@@ -192,9 +198,18 @@
 // job's replay of entry N lands inside entry N's eighteen-clock window, the
 // replay sets the resident flag and the intake's late clear WIPES IT.
 //
-// MEASURED, not argued. `tests/terrain/composepub_acceptance.cpp` presented
-// exactly that ordering -- a record handshake followed about six clocks later
-// by the section 9.1 replay -- and the console-shaped chain returned:
+// MEASURED, not argued -- BUT NOT BY THE FILE THIS ONCE NAMED, and EARTHLOCK
+// corrects the citation rather than inheriting it. The sentence here used to
+// read "`tests/terrain/composepub_acceptance.cpp` presented exactly that
+// ordering". IT DOES NOT. That bench's `bank()` ends with a DRAIN --
+// `while (!d.efa_idle_o) step();` -- which COMPOSEPUB added after the first
+// run, with a comment saying so. The measurement below was real and the file
+// that made it had already been changed. Run against the unrepaired tree the
+// committed bench returns `runs_o=1089 noprog=0` and passes 80/80.
+//
+// It is reproducible again because EARTHLOCK put the ordering back as CASE 10,
+// on `bank_no_drain()`, which is case 2 with the drain removed and nothing
+// else changed. Against the unrepaired tree case 10 returns:
 //
 //     engine runs=1089  runs_o=0  noprog=1089  skipped=0  not_begun=0
 //     faults=0  short=0   live_top == compose_top at every vertex
@@ -204,37 +219,114 @@
 // in its racing form: the flag and the record it describes are loaded by
 // different enables, and `noprog_o` is the ONLY symptom.
 //
-// WHY NOTHING CATCHES IT. There is no assertion in this file (deliberately --
-// see `no_rw_check` below, "buy area by asserting an interlock this module
-// does not own"). `lane_desync_o` cannot see it: both its arms difference
-// ENTRY COUNTS, and the count is right -- only the flag's value is wrong.
-// `tce_job_take` is not gated on `idle_o`. And FIELDARM's `tfl_patch_stall`
-// interlock guards a DIFFERENT hazard (replay vs vertex), not intake vs replay.
+// WHY NOTHING CAUGHT IT. There is no assertion in this file (deliberately --
+// see `no_rw_check` below). `lane_desync_o` cannot see it: both its arms
+// difference ENTRY COUNTS, and the count is right -- only the flag's value is
+// wrong. `tce_job_take` is not gated on `idle_o`, and `idle_o` has ZERO
+// READERS anywhere in the tree -- it is a boundary output nothing consumes.
+// And FIELDARM's `tfl_patch_stall` guards a DIFFERENT hazard (replay vs
+// vertex), not intake vs replay.
 //
-// WHETHER THE SHIPPED CONSOLE REACHES IT IS A SCHEDULING PROPERTY, NOT A
-// STRUCTURAL GUARANTEE: it depends on the gap between CMD.EXEC's last
-// TerrainField record and the first `tce_job_take`, which is a property of the
-// command packet's ordering. Safety today therefore rests on an unverified
+// WHAT CATCHES IT NOW. Three things, and none of them is a counter asserted
+// zero:
+//   * `tests/field/field_earth_adapter_directed.cpp` case 13 -- the unit
+//     assertion, both halves, RIGHT WAY ROUND (the flag survives; the uniforms
+//     are this frame's). It failed 5 checks against the unrepaired block.
+//   * `tests/terrain/composepub_acceptance.cpp` case 10 -- the same ordering
+//     through four real blocks to a consumer that reads the composed height.
+//     It fails 4 checks against the unrepaired block, including "THE
+//     CONSUMER'S HEIGHT MOVED BY THE FIELD'S CONTRIBUTION (got 0, want
+//     458752)".
+//   * `tests/mutants/zhao_field_earth_adapter_intake_race_mutant.sv` and its
+//     INVERTED-POLARITY control, which passes only while the race is present.
+//     Its three most important checks are `noprog_o == 0`,
+//     `lane_desync_o == 0` and `faults_o == 0` ON THE STALE-UNIFORM RUN: the
+//     silent half demonstrated to be silent.
+//
+// IT NO LONGER DEPENDS ON A SCHEDULING PROPERTY. It used to: the gap between
+// CMD.EXEC's last TerrainField record and the first `tce_job_take` is a
+// property of the command packet's ordering, so safety rested on an unverified
 // promise about command order -- the exact shape the composer rejects two
-// lines from `tpt_vtx_valid` ("a comment asserting the page burst is long
-// enough would be the unverified promise directive 13.4 names").
+// lines from `tpt_vtx_valid`. The repair below is structural and removes that
+// promise from the intake-window case entirely.
 //
-// THE RELATED SILENT RISK, STATED BUT NOT DEMONSTRATED. `b_begun` and `b_uni`
-// are also written at I_WR and are read by the lane stream. A vertex that
-// fires after the replay but BEFORE I_WR reads the PREVIOUS FRAME's age, phase
-// and parameters with the resident flag still set -- a real engine run on
-// stale uniforms, which unlike the noprog path moves no counter at all. This
-// packet did not reach that ordering and does not claim it; it is the same
-// missing interlock and belongs in the same repair.
+// THE RELATED SILENT RISK -- NOW DEMONSTRATED, AND IT WAS THE WORSE HALF.
+// `b_begun` and `b_uni` are also written at I_WR and are read by the lane
+// stream. A vertex firing after the replay but BEFORE I_WR read the PREVIOUS
+// FRAME's age, phase and parameters with the resident flag still set: a real
+// engine run on stale uniforms which, unlike the noprog path, MOVED NO COUNTER
+// AT ALL. COMPOSEPUB stated it without claiming it. EARTHLOCK reached it. Case
+// 13b against the unrepaired block returned frame 1's age (0x32 for 0x5A),
+// frame 1's phase (0x8000 for 0xE666) and frame 1's parameters (0xAAAA0001 for
+// 0xBBBB0002), with `noprog_o`, `lane_desync_o` and `faults_o` all at zero.
 //
-// THE SHAPE OF THE REPAIR, for the packet that owns this block. Move the
-// `b_res`/`b_obj` clear from I_WR to I_TAKE. Its stated purpose -- "a fresh
-// entry is NOT resident until the replay says so ... inheriting the previous
-// frame's answer would be a stale binding" -- is served exactly as well at
-// ACCEPTANCE, and acceptance is the beat the rest of the console is
-// synchronised to. That makes "the same number by construction" true in TIME
-// as well as in VALUE. Do NOT assert the bug: the test to keep is that a
-// replay's resident flag SURVIVES an in-flight intake.
+// ===========================================================================
+// THE REPAIR AS BUILT (EARTHLOCK). TWO PARTS, BECAUSE ONE IS NOT ENOUGH.
+// ===========================================================================
+// COMPOSEPUB proposed moving the `b_res`/`b_obj` clear from I_WR to I_TAKE.
+// That is part (1) and it is right, with one correction. It is NOT SUFFICIENT,
+// and the reason is the part that had to be measured rather than reasoned:
+//
+//   (1) THE CLEAR MOVES TO I_TAKE. Its purpose -- not resident until the
+//       replay says so -- is served identically at acceptance, and acceptance
+//       is the beat the joined handshake synchronises the console to. That
+//       makes "the same number by construction" true in TIME as well as in
+//       VALUE. THE CORRECTION: the address is `eff_n_c`, NOT `wr_a`. `wr_a` is
+//       `n_rec`, and the take edge is the edge that resets `n_rec` on a
+//       reopened list, so `wr_a` names the PREVIOUS list's tail for exactly
+//       that cycle. And it is gated on `!would_reject_c`, because `n_rec == 16`
+//       aliases to address 0 through a four-bit `BankAw` and a tail reject must
+//       not clear entry 0's binding. Applied literally, without either, the
+//       proposal clears the wrong entry.
+//
+//   (2) AND THE ENTRY UNDER CONSTRUCTION BECOMES UNREADABLE -- `entry_busy_c`.
+//       Part (1) closes the LOUD half and only narrows the silent one: it
+//       moves the window's start from the take beat to the replay beat, and a
+//       vertex landing between the replay and I_WR still reads fresh-resident
+//       beside stale uniforms. `b_begun` and `b_uni` CANNOT be moved to I_TAKE
+//       the way the flags were, because `phase` is the divider's own result and
+//       does not exist until I_WR. So the entry is held instead of relocated.
+//       See the interlock's own block beside `would_reject_c`.
+//
+// WHAT WAS REJECTED. A global `in_st != I_TAKE` bar (it stops the lane for
+// eighteen of every nineteen clocks under a saturated record stream, which is
+// legal input). A new counter port (the hold's cost already lands in
+// `stall_cycles_o`, and a port would have staled two committed
+// `zhao_console_core` mutant copies for a diagnostic the tests already give).
+// `no_rw_check`, which part (2) now makes provably true -- deliberately not
+// taken, so this packet's map pair measures ONE variable; see its note below.
+//
+// THE COST, MEASURED (`reports/synthesis/receipts/earthlock_field_earth_adapter_map_pair.json`,
+// two -MapOnly leaf runs, same 378-file closure, same sourceListHash on both
+// sides): +9 combinational ALUTs, +8 estimated ALMs, ZERO added registers,
+// block memory bits UNCHANGED at 4,880 -- EARTHRAM's M10K and its numbers
+// survive. `virtualPins` 1617 on both rows: NO PORT CHANGED.
+//
+// ---------------------------------------------------------------------------
+// THE RESIDUAL, NARROWED. INTAKE VERSUS A LIVE PATCH IS STILL A SCHEDULING
+// PROPERTY, AND THIS MODULE CANNOT OWN IT.
+// ---------------------------------------------------------------------------
+// What is closed is intake versus REPLAY: a replay landing in the intake's
+// window now survives it, and no lane can read a half-written entry.
+//
+// What is NOT closed is the FRAME BOUNDARY. If CMD.EXEC begins frame F+1's
+// TerrainField records while frame F's patch is still composing, frame F+1's
+// I_TAKE clears `b_res[N]` -- correctly, for F+1 -- and the patch still
+// running on F's list loses that entry's binding mid-walk. This is not made
+// worse by the repair: the old late clear did the same thing eighteen clocks
+// later. It is now LOUD (`noprog_o` moves) rather than silent, which is the
+// most this module can do about it, because THE ADAPTER CANNOT SEE A PATCH
+// END. It is given `patch_open_i` (the start, `tce_job_take`) and
+// `vtx_fire_i`; there is no port that tells it the patch retired, and
+// `zhao_terrain_fieldlist` has NO INPUT by which a replay could be held off.
+//
+// THE STRUCTURAL CLOSE IS A COMPOSER CHANGE, not one available here: either
+// hold the record intake off while a patch is live, or gate `tce_job_take` on
+// this module's `idle_o`. `idle_o` is already exported for it and TODAY HAS
+// ZERO READERS IN THE TREE -- a wire nobody reads is a promise nobody keeps.
+// Whoever takes it owns `zhao_console_core.sv` and the two committed mutant
+// copies of it, and should say what bounds CMD.EXEC's record stream against
+// the patch schedule rather than assert that it is bounded.
 //
 // ---------------------------------------------------------------------------
 // SECTION 9.1 IS DECIDED ONCE, BY THE BLOCK THAT OWNS THE LIST
