@@ -1680,6 +1680,51 @@ targets:
     sources:
       - fpga/rtl/forge/zhao_forge_cliff_ram.sv
 
+  # FORGE.CLIFF IN ITS COMPOSED CONTEXT -- owner vacation directive 2026-09-23
+  # section 6: "Recheck its real timing in the applicable composed context; a
+  # past leaf resource saving is not a current console saving." This is that
+  # recheck, and it is ONE fit answering TWO questions, both named here and in
+  # the wrapper's own header before it ran.
+  #
+  # (a) TIMING. Does the adopted evaluator still show a HOLD violation when its
+  #     vdist read master is left as the composed console leaves it -- vd_addr_o
+  #     with NO LOAD and vd_data_i a constant, because CLIFF_VDIST_EN is 0? The
+  #     -4.140 ns hold on `zhao_forge_cliff_ram@first-measurement` has been read
+  #     as the one real cost of the R142 swap, against the golden's +0.263 ns.
+  #     Three facts, all read off the committed receipts before this gate was
+  #     written: NO HOLD REPORT EXISTS ON DISK for either row, so neither number
+  #     has a path endpoint behind it; BOTH blocks' worst SETUP path is the same
+  #     path and it ENDS ON `vd_addr_o` (-15.259 golden against -15.174
+  #     candidate -- the candidate is 0.085 ns BETTER on the path they share);
+  #     and the two summaries are not like for like, because 228 of the
+  #     candidate's 314 reported paths touch the vdist port (72.6%) against 32
+  #     of the golden's 2,000 (1.6%). A leaf fit makes every port a virtual pin
+  #     with a full I/O budget, so it cannot see a port the console does not
+  #     use. This wrapper removes that boundary and nothing else.
+  #     WHAT WOULD FALSIFY IT: a hold violation that survives here on a path
+  #     whose endpoint is an INTERNAL register. That would make the sign change
+  #     real and would earn the follow-up the evaluator's header already names
+  #     -- making its four bare-`assign` RAM reads explicitly synchronous.
+  #
+  # (b) AREA. What does the WHOLE capability cost on 5CSEBA6U23I7? The
+  #     campaign's 976 ALM prices the EVALUATOR ALONE; closing FORGE.CLIFF took
+  #     three more blocks whose cost is hand-counted and unfitted, on a device
+  #     already at 97% of its ALM budget. Keep the five categories APART --
+  #     ALUTs, registers, estimated ALMs, placed ALMs, block memory bits are
+  #     five numbers and never a sum.
+  #
+  # Correctness, throughput, handshake behaviour and field routing are already
+  # answered by Verilator (tests/forge/forge_cliff_chain.cpp) and do not need
+  # Quartus, per the 2026-09-08 batching law.
+  - top: zhao_forge_cliff_chain_fit_top
+    sources:
+      - fpga/rtl/generated/zhao_forge_cliff_chain_fit_top.sv
+      - fpga/rtl/forge/zhao_forge_cliff_srvshare.sv
+      - fpga/rtl/forge/zhao_forge_cliff_feed.sv
+      - fpga/rtl/forge/zhao_forge_cliff_ram.sv
+      - fpga/rtl/forge/zhao_forge_cliff_emit.sv
+
+
   - top: zhao_forge_prim
     sources:
       - fpga/rtl/forge/zhao_forge_prim.sv

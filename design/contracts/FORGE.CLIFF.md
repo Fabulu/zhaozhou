@@ -479,3 +479,100 @@ one.** `u08_i` connects every port including `walk_fault_o`, and every input
 comes from `{16{u08_lfsr_q}}` while every output is XOR-folded into one bit.
 That is the generated area census (`gen_prod_top.py`), one identical stanza per
 top. It produces nothing and consumes nothing.
+
+---
+
+## SUPERSEDED IN PART, 2026-09-25 — FORGE.CLIFF IS COMPOSED (packet CLIFFPROD)
+
+Owner vacation directive 2026-09-23 §6. The four-item blocker list above was
+**re-measured item by item at the CLIFFPROD base and every item was still
+true** — including item 4, which this contract deserves the credit for being
+the first pass to list. All four are now closed, by three new blocks and a
+second instance of an existing one:
+
+| leg | closed by |
+|---|---|
+| page issuer | `zhao_forge_cliff_feed` — one page per **staged patch**, self-triggered on a `serve_src_id` it has not planned. No new sequencer: the residency handshake already **is** the sequence. |
+| 34×34 solid window | the same block, from layer D through `zhao_forge_cliff_srvshare` |
+| vdist master | **still absent, and recorded as a DECISION rather than closed** — see below |
+| rim-edge consumer | `zhao_forge_cliff_emit`, one edge → one wall quad → a second `zhao_forge_jobarb` instance → the shared `zhao_forge_assemble` |
+
+`zhao_forge_cliff_ram` is instantiated in `zhao_console_core` as `u_forge_cliff`.
+The completion register moved **11 → 10**. So the sentence above — *"Adoption is
+not composition and FORGE.CLIFF remains a gap"* — is discharged, and `u08_i` in
+the pricing top is now `u09_i` (the mirage paragraph is right about what it is
+and one renumber behind).
+
+### One claim in §2 above is WRONG, and it was measured rather than argued
+
+> *"the halo ring of the 34×34 window is outside the addressable index, which is
+> exactly this contract's own 'off-lattice loads as 0' case. **The halo is free,
+> not a problem.**"*
+
+**It is not free, and reading it that way draws a grid of walls over the whole
+island.** The 5-bit address cannot reach a neighbour because the compose cache
+stages exactly **one** patch — that part is right. But a patch seam is *not*
+outside the lattice, and "off-lattice loads as 0" is written for a cell outside
+the **island**. Loading the ring as VOID makes every one of a patch's 128 border
+cells face a non-solid neighbour, so every patch emits a wall around its entire
+perimeter.
+
+Measured on one real 33×33 `ComposedLattice`,
+`tests/forge/forge_cliff_chain.cpp` lanes 1 and 2:
+
+* halo = VOID: **218** rim edges — bit-for-bit what `zref::forge::rim_plan`
+  returns for that lattice, because the reference is *also* being asked about a
+  lattice with nothing beyond it;
+* halo = SOLID: **90** rim edges.
+
+**218 − 90 = 128 = 4 sides × 32 cells.** Every edge of the difference is
+perimeter. So the ring is a **port** (`halo_substance_i`, defaulted by
+`CLIFF_HALO_SUBSTANCE` to SOLID) and not a constant, because it decides what
+gets drawn and CLAUDE.md's art law puts such a value in a named, editable knob.
+
+The right long-term answer is named and **not** built: ask
+`zhao_terrain_island_dir` whether the neighbouring patch exists, and use VOID
+for an absent neighbour (a true island edge, where a cliff *is* wanted) and
+SOLID for a present one. It is unreachable today because that query is keyed on
+`(ix, iz)` and `serve_src_id_o` is an **opaque** id, not a structured
+coordinate. It becomes a two-line change the day the fill side publishes one,
+and `halo_substance_i` is already the port it would drive.
+
+### §3 stands exactly as written, and is why vdist is OFF
+
+*"The work is a store and an address map, not a projector"* — re-measured and
+still exact. The value exists in the right format (`zhao_project_core.out_d_o`,
+signed Q16.16 1/w) and is even stored per vertex in `zhao_vertex_arena`'s
+payload bits `[73:42]`. Two things stop a snoop, and the second is one this
+contract had not yet found:
+
+1. the arena index is a **group-local 9×9 window slot**, not `vj*lat_w + vi`;
+   recovering the lattice index needs new ports on `zhao_proj_subsystem` and
+   `zhao_terrain_group_seq`;
+2. the fill fires **once per VIEW**, into a different arena, so a naive
+   per-lattice-vertex store would be written twice with two different values for
+   one vertex — and no counter on either side would see it.
+
+So `CLIFF_VDIST_EN` is `1'b0`. That is **not** a tie-off standing in for a
+missing producer: it selects the reference's own null-vdist path, which §5 of
+`spec/terrain_rules.md` defines as *"priority 0 everywhere"* — under a stable
+sort, exactly "keep scan order" — and `zref::forge::rim_plan(lat, nullptr)` is a
+first-class argument the directed suites use throughout. In that mode the
+evaluator **never asserts `vd_en_o`**, which `forge_cliff_chain` lane 6 asserts
+for a whole run rather than arguing. The degrade it disables only matters for a
+page still over the 512 budget **after** merging.
+
+### What is still open, stated so nobody infers it from a missing test
+
+**The strata U.** §6.6's accumulated rim length has no port to arrive on:
+`zhao_forge_assemble` hardwires `o_untex_o = 1'b1` under R197, because a forge
+primitive carries no u/v by law. The wall is shaded by the job's flat art lanes
+(`CLIFF_LIT_R/G/B`, authored by eye and expected to be turned once somebody
+looks at a frame). Closing it is a change to the assembler's attribute set, not
+to any block this packet built.
+
+**The strata U is also why `triangles_submitted` still means what it meant.**
+Law C3 counts two per emitted edge, and the emission stage now really does emit
+two triangles per edge — `forge_cliff_chain` lane 1 asserts
+`triangles_submitted_o == 2 × quads`, so the counter and the geometry agree for
+the first time rather than by construction.
