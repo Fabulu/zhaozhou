@@ -7963,3 +7963,64 @@ POST.ECHO's; the guard's formal lane gains the new covers and mutants. **The
 implementing packet writes all of that**, per the directive's section 10 item 3 --
 this record exists so the verification is not lost if that packet is re-scoped,
 and so nobody re-derives the collision.
+
+### DECISION RECORD 2: "HEIGHT USES THE EXISTING COMPOSED-HEIGHT PATH" -- THERE ISN'T ONE YET
+
+**Question.** Section 1 of the directive says *"Height uses the existing
+composed-height path. Velocity uses the existing TERRAIN.COMPOSED_VELOCITY region
+and a REAL writer plus its intended reader(s)."* Both phrases assume a publication
+path exists. Does it?
+
+**Measured, and NO -- for height as well as velocity.**
+
+* **No writer.** `COMPOSED_HEIGHT_BASE`, `ZHAO_TERRAIN_COMPOSED*` and `0x0566`
+  return **zero hits across all of `fpga/rtl`**. `COMPOSED_VELOCITY` appears in
+  `fpga/rtl` only inside **comments** -- four of them, in the package, the guard,
+  the Earth adapter and the composer -- and in no transaction.
+* **No guard window either**, and this is the part that changes the scope.
+  `zhao_mem_guard.sv:244-251` states the rule and the current state together:
+  *"ONE region of the six T2 names in bank 2. RESIDENT_MIP_POOL, COMPOSED_HEIGHT,
+  COMPOSED_VELOCITY, WRITEBACK_STAGING and COMPOSED_MIP_POOL **stay unmapped
+  until the blocks that touch them exist**."* The guard's live bank-2 windows are
+  the page pool (`terrain_ok` / `terrain_rd_ok`) and `TERRAIN.DEVSTORE`
+  (`devstore_wr_ok` / `devstore_rd_ok`), and nothing else.
+* **The precedent is explicit and recent.** `spec/memory_rules.md:362` on
+  DEVSTORE: *"ENACTED, 2026-09-22 ... a window opened WITH its block, never ahead
+  of it."*
+
+So the composed caches are **computed and not published**. Entry I34's own note
+that section 3.4's `live_top = max(compose_top + SUM field lanes, ...)` now has a
+non-empty sum describes **arithmetic reaching a value**, not a lattice reaching
+SDRAM.
+
+**Chosen option.** The section-1 packet commissions the composed-cache
+**publication path for all four channels, height included**, rather than treating
+height as done. Each region's guard window is opened **with its writer** -- four
+windows arriving with four writers, on the DEVSTORE precedent -- and **not** as a
+block of four permissions ahead of the blocks.
+
+**Reason, and the alternative I rejected.** The tempting alternative is to take
+the directive's words at face value, build material and nav only, and report I34
+closed with height "already handled". That would be the campaign's signature
+failure committed deliberately: the directive itself warns *"Some repository prose
+already contradicts newer source; live rechecking remains mandatory"* and *"A DMA
+into unused memory is not a consumer."* A height lane that publishes nowhere is
+the same defect as a nav lane that publishes nowhere, and closing I34 over it
+would put the register down by one while no frame could read a composed height.
+
+**Constraints and cost.** This makes section 1 a subsystem, not a wiring job:
+four writers, four scoped guard windows, the no-escape proof extended with covers
+and deliberately failing mutants per region, slot lifetime/generation rules, and
+a reader for each channel. **Note the geometries differ and must not be assumed
+uniform:** `COMPOSED_HEIGHT` and `COMPOSED_VELOCITY` are `256 x 2,304 B` in the
+ratified section 5b table, while the directive specifies `256 x 8 KiB` slots for
+MATERIAL and NAV (33x33 u32 payload plus presence bitmap and versioned identity
+header). Mixed slot sizes in one bank are fine; silently treating them as one
+stride is not.
+
+**Consequences.** The directive's phrase *"the existing composed-height path"* is
+recorded as **superseded by measurement** rather than reinterpreted -- which is
+the form the delegation requires. Nothing about the numerical policy in section
+13.3 changes; what changes is that height's destination is commissioned here
+instead of assumed. Sequencing and the exact writer/reader shapes are the
+packet's to decide.
