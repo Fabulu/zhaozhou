@@ -82,7 +82,7 @@ worth far more than a smaller number nobody can explain.
 ## The census puts your block alone in the expensive mode
 
 I mapped five more DSP consumers standalone after yours —
-`reports/synthesis/dsp_census.md`, built by `tools/budget/dsp_census.py`. Six
+`reports/synthesis/dsp_mode_census.md`, built by `tools/budget/dsp_mode_census.py`. Six
 leaf blocks are **95 DSP, 85% of the whole device**, and the modes separate them
 cleanly:
 

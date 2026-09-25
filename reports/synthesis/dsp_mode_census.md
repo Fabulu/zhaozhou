@@ -1,8 +1,8 @@
-# DSP census — `@dsp-census-20260926`
+# DSP MODE census — `@dsp-census-20260926`
 
 Each row is a block mapped **on its own** by `quartus_map`, so nothing in
 the composition is inflating or sharing it. Modes come from Quartus's own
-`DSP Block Usage Summary`. Derived by `tools/budget/dsp_census.py`.
+`DSP Block Usage Summary`. Derived by `tools/budget/dsp_mode_census.py`.
 
 **A `Two Independent 18x18` block is doing two multiplies; an
 `Independent 27x27` block is doing one.** So the 27x27 column is the

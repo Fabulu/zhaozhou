@@ -2320,7 +2320,7 @@ validity discipline).
 ### 2026-09-26 — the DSP census, and the check that made it worth having
 
 Six leaf blocks mapped standalone in under six minutes, no fit:
-`reports/synthesis/dsp_census.md`. **95 DSP, 85% of the 112-DSP part, out of the
+`reports/synthesis/dsp_mode_census.md`. **95 DSP, 85% of the 112-DSP part, out of the
 console's 375.**
 
 **The count was never the actionable number — the MODE is.** A `Two Independent
@@ -2337,7 +2337,7 @@ one for one. The ALM census got the analogous question WRONG historically (a
 leaf's 976 could not be subtracted from a census 8,715), so it was not safe to
 assume.
 
-`tools/budget/dsp_census.py` is committed with it — it reads Quartus's own
+`tools/budget/dsp_mode_census.py` is committed with it — it reads Quartus's own
 summary and measures nothing itself, which keeps it on the comparison side.
 
 **Not measured, so the census is not read as complete:** `zhao_geom_bin_pipe_v2`
