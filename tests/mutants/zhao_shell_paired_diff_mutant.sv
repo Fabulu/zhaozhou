@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 65 inputs exist only on the sibling. They get harness ports of
+// 71 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -114,6 +114,12 @@ module zhao_shell_paired_diff_mut
   input  logic fill_refused_i,
   input  logic [63:0] frame_clear_word_i,
   input  logic sheet_req_ready_i,
+  input  logic pg_valid_i,
+  input  logic [1:0] pg_op_i,
+  input  logic [1:0] pg_status_i,
+  input  logic [7:0] pg_tag_i,
+  input  logic [7:0] pg_strength_i,
+  input  logic [15:0] pg_src_id_i,
   input  logic blank_cmd_i,
   input  logic scanout_ack_i,
   input  logic frame_swap_valid_i,
@@ -504,7 +510,7 @@ module zhao_shell_paired_diff_mut
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 80 outputs the historical shell never had
+  // The sibling has 81 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -559,16 +565,13 @@ module zhao_shell_paired_diff_mut
     .sheet_req_handle_o(),
     .sheet_req_texel_o(),
     .sheet_req_src_id_o(),
-    // SURFACE.SHEET's RESPONSE, new on the shell 2026-09-25 (TERRAINAUX).
-    // Held open here for the same reason the production copy holds it open:
-    // the store is one level up, in `zhao_console_core`.
-    .pg_valid_i(1'b0),
+    .pg_valid_i(pg_valid_i),
     .pg_ready_o(),
-    .pg_op_i(2'd0),
-    .pg_status_i(2'd0),
-    .pg_tag_i(8'd0),
-    .pg_strength_i(8'd0),
-    .pg_src_id_i(16'd0),
+    .pg_op_i(pg_op_i),
+    .pg_status_i(pg_status_i),
+    .pg_tag_i(pg_tag_i),
+    .pg_strength_i(pg_strength_i),
+    .pg_src_id_i(pg_src_id_i),
     .blank_cmd_i(blank_cmd_i),
     .scanout_ack_i(scanout_ack_i),
     .frame_swap_valid_i(frame_swap_valid_i),

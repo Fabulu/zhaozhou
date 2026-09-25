@@ -281,6 +281,34 @@ module zhao_part_collide #(
     input  var logic signed [NRM_W-1:0] t_ny_i,
     input  var logic signed [NRM_W-1:0] t_nz_i,
 
+    // ---- the ground's own vertical rate at the sample ----------------------
+    // NEW 2026-09-26 (TERRVEL). This is terrain_rules 4.4's velocity lane,
+    // composed by TERRAIN.VELOCITY from the same Earth evaluation that moved
+    // the height beside it, interpolated by 4.3 in zhao_part_terrain_tap with
+    // the SAME triangle pick as t_height_i.
+    //
+    // THIS IS THIS BLOCK'S OWN CONTRACT BEING CARRIED OUT, NOT A NEW LAW.
+    // design/contracts/PART.COLLIDE.md says, in as many words: "Moving terrain
+    // bodies, when they arrive: body surface velocity enters the
+    // relative-velocity calculation. The ruling names this explicitly so that
+    // the oracle is written with a relative-velocity form now, rather than an
+    // absolute-velocity form that would have to be rewritten later." The RTL
+    // shipped the absolute form the paragraph warned against; this is the
+    // repair, and terrain deforming under a live TerrainField IS the moving
+    // surface it was waiting for.
+    //
+    // NOTHING CHANGES WITHOUT A LIVE FIELD, AND THAT IS STRUCTURAL RATHER THAN
+    // HOPED FOR. TERRAIN.VELOCITY's law V2 makes the lattice word EXACTLY zero
+    // at any vertex no field lane covers, so `t_vy_i` is 0 over still ground
+    // and every expression below collapses to the one that was here before,
+    // bit for bit. `t_vy_valid_i` low does the same. That is why no existing
+    // particle test moves.
+    //
+    // UNITS: s11, 1 LSB = 1/256 m per tick -- the SAME scale as `vel` in the
+    // FORMATS block above. The tap does the saturating narrow and counts it.
+    input  var logic signed [VEL_W-1:0] t_vy_i,
+    input  var logic                    t_vy_valid_i,
+
     // ---- the plane -----------------------------------------------------------
     // The contract says planes "arrive as parameters". They are PORTS here:
     // strictly more general, the same silicon, and it keeps the owner's control
@@ -338,7 +366,12 @@ module zhao_part_collide #(
     // reverse a particle's direction and read as a physics bug rather than a
     // numeric one — PART.UPDATE's contract says exactly that about velocity.
     // So this block clamps, and says when it clamped.
-    output var logic [31:0] field_clamps_o
+    output var logic [31:0] field_clamps_o,
+    // Contacts resolved against ground that was actually MOVING. Not a
+    // tautology of t_vy_valid_i: a present velocity plane over still ground is
+    // valid and zero. This is the number that moves when a TerrainField moves,
+    // measured at the last consumer in the chain.
+    output var logic [31:0] contacts_moving_ground_o
 );
 
   // The two frozen widths. `zhao_part_record` hardcodes 18 and 11, so a
@@ -553,12 +586,43 @@ module zhao_part_collide #(
   logic signed [VEL_W-1:0] vel_c [3];
   logic signed [POS_W-1:0] pos_c [3];
   logic signed [VN_W-1:0]  vn_c, vn_eff_c;
+
+  // The surface's own velocity. Vertical only, because the terrain lattice
+  // stores dH/dt at a vertex and nothing in this console gives the ground a
+  // horizontal rate -- terrain_rules 4.2's lattice is one word per vertex.
+  // ZERO FOR THE PLANE, and that is a statement about the plane rather than a
+  // convenience: `pl_*` is a static authored surface with no velocity input,
+  // so claiming the terrain's rate for it would attribute one surface's motion
+  // to another. Zero for a sample with no ground and zero when the velocity
+  // plane is absent.
+  logic signed [VEL_W-1:0] gv_c [3];
+  logic                    ground_moving_c;
+
+  // One bit wider than the record's field: a particle at the negative rail
+  // minus a ground at the positive rail does not fit VEL_W, and silently
+  // wrapping it would invert the approach direction -- the exact sign error
+  // this block's inward clamp exists to catch.
+  logic signed [VEL_W:0]   vrel_c [3];
+
   always_comb begin
     vel_c[0] = u_vx; vel_c[1] = u_vy; vel_c[2] = u_vz;
     pos_c[0] = u_px; pos_c[1] = u_py; pos_c[2] = u_pz;
-    vn_c = VN_W'(vel_c[0]) * VN_W'(nrm_c[0])
-         + VN_W'(vel_c[1]) * VN_W'(nrm_c[1])
-         + VN_W'(vel_c[2]) * VN_W'(nrm_c[2]);
+
+    gv_c[0] = VEL_W'(0);
+    gv_c[1] = (!use_plane_c && t_valid_i && t_vy_valid_i) ? t_vy_i : VEL_W'(0);
+    gv_c[2] = VEL_W'(0);
+    ground_moving_c = (gv_c[1] != VEL_W'(0));
+
+    for (int unsigned a = 0; a < 3; a++) begin
+      vrel_c[a] = (VEL_W + 1)'(vel_c[a]) - (VEL_W + 1)'(gv_c[a]);
+    end
+
+    // v_rel . n, not v . n. A particle falling onto ground that is rising to
+    // meet it approaches faster than its own speed; one resting on ground
+    // that is falling away is not in contact at all.
+    vn_c = VN_W'(vrel_c[0]) * VN_W'(nrm_c[0])
+         + VN_W'(vrel_c[1]) * VN_W'(nrm_c[1])
+         + VN_W'(vrel_c[2]) * VN_W'(nrm_c[2]);
     vn_eff_c = (vn_c < 0) ? vn_c : VN_W'(0);
   end
 
@@ -610,7 +674,13 @@ module zhao_part_collide #(
     k_c  = K_W'(nrm_k_c) - K_W'(tan_c);
     kv_c = KV_W'(k_c) * KV_W'(vn_eff_c);
     for (int unsigned a = 0; a < 3; a++) begin
-      vacc_c[a] = (ACC_W'(tan_c) * ACC_W'(vel_c[a]) <<< PSH)
+      // The response is computed in the GROUND's frame -- tangential and
+      // normal parts of the RELATIVE velocity -- and the ground's own motion
+      // is added back at `vsel_c` below. Doing it in the world frame instead
+      // would apply friction and restitution to the ground's speed as though
+      // it were the particle's, so a spark resting on a rising wave would be
+      // decelerated by friction against the surface carrying it.
+      vacc_c[a] = (ACC_W'(tan_c) * ACC_W'(vrel_c[a]) <<< PSH)
                 + ACC_W'(kv_c) * ACC_W'(nrm_c[a]);
       vrnd_c[a] = (vacc_c[a] >= 0) ? ((vacc_c[a] + V_HALF) >>> VSH)
                                    : -(((-vacc_c[a]) + V_HALF) >>> VSH);
@@ -687,7 +757,14 @@ module zhao_part_collide #(
   always_comb begin
     clamp_c = 1'b0;
     for (int unsigned a = 0; a < 3; a++) begin
-      vsel_c[a] = (respond_c && r_setv_c)  ? vrnd_c[a] : ACC_W'(vel_c[a]);
+      // Back into the world frame. The clamp below is the SAME one the
+      // absolute form already had, so an overflow introduced by the addition
+      // is caught and counted by `field_clamps_o` without a second guard.
+      // With `gv_c` zero this is `vrnd_c[a]` exactly, which is what makes the
+      // no-field case bit-identical to the previous behaviour.
+      vsel_c[a] = (respond_c && r_setv_c)
+                    ? (vrnd_c[a] + ACC_W'(gv_c[a]))
+                    : ACC_W'(vel_c[a]);
       psel_c[a] = (respond_c && r_place_c) ? pacc_c[a] : DISP_W'(pos_c[a]);
 
       if (vsel_c[a] > V_MAX)      begin vout_c[a] = VEL_W'(V_MAX); clamp_c = 1'b1; end
@@ -753,6 +830,7 @@ module zhao_part_collide #(
       terrain_sample_unavailable_o <= 32'd0;
       response_refused_o           <= 32'd0;
       field_clamps_o               <= 32'd0;
+      contacts_moving_ground_o     <= 32'd0;
       collision_events_o           <= 32'd0;
     end else begin
       if (c_valid_o && c_ready_i) c_valid_o <= 1'b0;
@@ -792,6 +870,14 @@ module zhao_part_collide #(
           endcase
           if (use_plane_c) contacts_plane_o   <= contacts_plane_o   + 32'd1;
           else             contacts_terrain_o <= contacts_terrain_o + 32'd1;
+
+          // Beside the terrain count and not inside it: this says how many of
+          // those contacts were against ground that was actually MOVING, which
+          // is the number the whole TERRAIN.VELOCITY chain exists to make
+          // non-zero. It sits here, at the accepted contact, so it counts
+          // RESOLVED contacts rather than samples offered.
+          if (ground_moving_c && !use_plane_c)
+            contacts_moving_ground_o <= contacts_moving_ground_o + 32'd1;
 
           // Counted only for the responses that PLACE. IGNORE and DIE promise
           // nothing about where the particle ends up, so a deep entry under

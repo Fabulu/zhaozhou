@@ -6375,6 +6375,7 @@ module zhao_prod_top (
     else u75_lfsr_q <= {u75_lfsr_q[62:0], (^(u75_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u75_start_ready_o;
   logic [16-1:0] u75_trace_patch_id_o;
+  logic [32-1:0] u75_sweeps_aborted_o;
   logic [6-1:0] u75_vtx_vi_o;
   logic [6-1:0] u75_vtx_vj_o;
   logic [1-1:0] u75_lane_ready_o;
@@ -6400,14 +6401,16 @@ module zhao_prod_top (
       .start_patch_id_i(u75_src[14 +: 16]),
       .start_src_id_i(u75_src[21 +: 16]),
       .trace_patch_id_o(u75_trace_patch_id_o),
+      .abort_i(u75_src[28 +: 1]),
+      .sweeps_aborted_o(u75_sweeps_aborted_o),
       .vtx_vi_o(u75_vtx_vi_o),
       .vtx_vj_o(u75_vtx_vj_o),
-      .lane_valid_i(u75_src[28 +: 1]),
+      .lane_valid_i(u75_src[35 +: 1]),
       .lane_ready_o(u75_lane_ready_o),
-      .lane_velocity_i(u75_src[35 +: 32]),
-      .lane_covers_i(u75_src[42 +: 1]),
+      .lane_velocity_i(u75_src[42 +: 32]),
+      .lane_covers_i(u75_src[49 +: 1]),
       .vv_valid_o(u75_vv_valid_o),
-      .vv_ready_i(u75_src[49 +: 1]),
+      .vv_ready_i(u75_src[56 +: 1]),
       .vv_velocity_o(u75_vv_velocity_o),
       .vv_vi_o(u75_vv_vi_o),
       .vv_vj_o(u75_vv_vj_o),
@@ -6424,7 +6427,7 @@ module zhao_prod_top (
   logic u75_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u75_fold_q <= 1'b0;
-    else u75_fold_q <= u75_fold_q ^ (((^u75_start_ready_o)) & u75_src[0]) ^ (((^u75_trace_patch_id_o)) & u75_src[1]) ^ (((^u75_vtx_vi_o)) & u75_src[2]) ^ (((^u75_vtx_vj_o)) & u75_src[3]) ^ (((^u75_lane_ready_o)) & u75_src[4]) ^ (((^u75_vv_valid_o)) & u75_src[5]) ^ (((^u75_vv_velocity_o)) & u75_src[6]) ^ (((^u75_vv_vi_o)) & u75_src[7]) ^ (((^u75_vv_vj_o)) & u75_src[8]) ^ (((^u75_vv_moving_o)) & u75_src[9]) ^ (((^u75_vv_covered_o)) & u75_src[10]) ^ (((^u75_vv_src_id_o)) & u75_src[11]) ^ (((^u75_moving_mask_o)) & u75_src[12]) ^ (((^u75_patch_done_o)) & u75_src[13]) ^ (((^u75_terrain_samples_evaluated_o)) & u75_src[14]) ^ (((^u75_velocity_add_sats_o)) & u75_src[15]) ^ (((^u75_velocity_rescale_sats_o)) & u75_src[16]) ^ (((^u75_idle_o)) & u75_src[17]);
+    else u75_fold_q <= u75_fold_q ^ (((^u75_start_ready_o)) & u75_src[0]) ^ (((^u75_trace_patch_id_o)) & u75_src[1]) ^ (((^u75_sweeps_aborted_o)) & u75_src[2]) ^ (((^u75_vtx_vi_o)) & u75_src[3]) ^ (((^u75_vtx_vj_o)) & u75_src[4]) ^ (((^u75_lane_ready_o)) & u75_src[5]) ^ (((^u75_vv_valid_o)) & u75_src[6]) ^ (((^u75_vv_velocity_o)) & u75_src[7]) ^ (((^u75_vv_vi_o)) & u75_src[8]) ^ (((^u75_vv_vj_o)) & u75_src[9]) ^ (((^u75_vv_moving_o)) & u75_src[10]) ^ (((^u75_vv_covered_o)) & u75_src[11]) ^ (((^u75_vv_src_id_o)) & u75_src[12]) ^ (((^u75_moving_mask_o)) & u75_src[13]) ^ (((^u75_patch_done_o)) & u75_src[14]) ^ (((^u75_terrain_samples_evaluated_o)) & u75_src[15]) ^ (((^u75_velocity_add_sats_o)) & u75_src[16]) ^ (((^u75_velocity_rescale_sats_o)) & u75_src[17]) ^ (((^u75_idle_o)) & u75_src[18]);
 
   // ---- zhao_twod_asset ----
   logic [63:0] u78_lfsr_q;

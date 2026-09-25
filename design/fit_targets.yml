@@ -3394,6 +3394,13 @@ targets:
       # check_console_inventory's G2.
       - fpga/rtl/terrain/zhao_terrain_fieldlist.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
+      # TERRAIN.VELJOIN + TERRAIN.VELOCITY, 2026-09-26 (TERRVEL). The join
+      # forks the Earth answer lane so out-lane 1 reaches the velocity sweep
+      # from the SAME evaluation whose out-lane 0 feeds the height
+      # composition. Registering a block in the ledger, in the manifest and in
+      # a source list are three different acts; this is the third.
+      - fpga/rtl/terrain/zhao_terrain_veljoin.sv
+      - fpga/rtl/terrain/zhao_terrain_velocity.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
       # TERRAIN.HEIGHTTAP, 2026-09-19 (item 14): the pass-through tap in front
       # of the compose cache's read ports. Its normaliser is FIELD's

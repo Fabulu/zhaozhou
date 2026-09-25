@@ -106,6 +106,8 @@ module zhao_part_terrain_tap #(
     // PART.COLLIDE's formats, passed through so the two cannot disagree.
     parameter int unsigned POS_W    = 18,   // S 9.8 m (qformats 10, frozen)
     parameter int unsigned NRM_W    = 12,
+    // The particle record's velocity width (zhao_part_record, bits 54..86).
+    parameter int unsigned VEL_W    = 11,
     parameter int unsigned NRM_Q    = 10,
     // OWNER KNOB: how many terrain cells are held. Debris clusters; four
     // cells covers a crater's worth of it. Round-robin replacement.
@@ -151,6 +153,11 @@ module zhao_part_terrain_tap #(
     output var logic signed [NRM_W-1:0] t_nx_o,
     output var logic signed [NRM_W-1:0] t_ny_o,
     output var logic signed [NRM_W-1:0] t_nz_o,
+    // The GROUND's vertical rate at the sample, interpolated by the SAME 4.3
+    // triangle pick as the height beside it -- one `un >= vn` decision, so the
+    // two cannot disagree about which triangle they came from.
+    output var logic signed [VEL_W-1:0] t_vy_o,
+    output var logic                    t_vy_valid_o,
 
     // ---- TERRAIN.HEIGHTTAP, as a client --------------------------------------
     output var logic               tap_req_valid_o,
@@ -160,6 +167,26 @@ module zhao_part_terrain_tap #(
     output var logic               tap_req_surface_o,
     input  var logic               tap_rsp_valid_i,
     input  var logic               tap_rsp_no_ground_i,
+    // terrain_rules 4.3's VELOCITY member, as a cell, from TERRAIN.HEIGHTTAP.
+    // NEW 2026-09-26 (TERRVEL).
+    //
+    // THE UNITS NEED NO CONVERSION AND THAT IS A MEASURED FACT, NOT A CHOSEN
+    // ONE. terrain_rules 4.2 stores velocity as height16; height16 is fx16
+    // rescaled by 8, i.e. Q8.8 metres, so 1 LSB = 1/256 m. zhao_part_collide's
+    // ratified format block (amendment C2 / ruling R3) reads
+    //   pos  s18  S 9.8 m      -> 1 LSB = 1/256 m
+    //   vel  s11  S 2.8 m/tick -> 1 LSB = 1/256 m
+    // and the field tick and the particle tick are ONE clock in this console
+    // (zhao_console_core wires the same gpu_tick_frame_id_o to both). So the
+    // terrain rate and the particle velocity are the SAME UNIT and the only
+    // thing this block does is a saturating narrow s16 -> s11, counted.
+    // Had a scale factor been needed it would have been an INVENTED constant,
+    // because no spec in this tree states the velocity lane's time base.
+    input  var logic signed [15:0] tap_rsp_v00_i,
+    input  var logic signed [15:0] tap_rsp_v10_i,
+    input  var logic signed [15:0] tap_rsp_v01_i,
+    input  var logic signed [15:0] tap_rsp_v11_i,
+    input  var logic               tap_rsp_vel_present_i,
     input  var logic signed [31:0] tap_rsp_h00_i,
     input  var logic signed [31:0] tap_rsp_h10_i,
     input  var logic signed [31:0] tap_rsp_h01_i,
@@ -188,7 +215,14 @@ module zhao_part_terrain_tap #(
     output var logic [CENSUS_W-1:0] fills_issued_o,
     output var logic [CENSUS_W-1:0] fills_landed_o,
     output var logic [CENSUS_W-1:0] fills_discarded_o,    // an invalidation overtook it
-    output var logic [CENSUS_W-1:0] invalidations_o
+    output var logic [CENSUS_W-1:0] invalidations_o,
+    // Samples whose interpolated ground rate was NON-ZERO. This is the number
+    // that moves when a TerrainField moves, measured at the CONSUMER's edge
+    // rather than at the producer's port -- which is the whole point of the
+    // chain. It is not a tautology of t_vy_valid_o: a present velocity plane
+    // over still ground reports valid and zero, every tick.
+    output var logic [CENSUS_W-1:0] samples_moving_o,
+    output var logic [CENSUS_W-1:0] vel_sats_o
 );
 
   initial begin
@@ -268,6 +302,11 @@ module zhao_part_terrain_tap #(
   logic signed [31:0] ce_wx0 [CELLS], ce_wz0 [CELLS];
   logic signed [NRM_W-1:0] ce_nax [CELLS], ce_nay [CELLS], ce_naz [CELLS];
   logic signed [NRM_W-1:0] ce_nbx [CELLS], ce_nby [CELLS], ce_nbz [CELLS];
+  // The velocity corners ride the SAME cache entry as the heights they belong
+  // to, so a cell can never hold this patch's heights beside the last patch's
+  // rates. `ce_vpres` is the compose cache's per-buffer presence, carried.
+  logic signed [15:0] ce_v00 [CELLS], ce_v10 [CELLS], ce_v01 [CELLS], ce_v11 [CELLS];
+  logic               ce_vpres [CELLS];
   logic [IW-1:0]      rr_q;     // round-robin victim
 
   logic          hit_c;
@@ -291,6 +330,12 @@ module zhao_part_terrain_tap #(
   localparam logic [2:0] S_EV1  = 3'd3;
   localparam logic [2:0] S_EV2  = 3'd4;
   localparam logic [2:0] S_OUT  = 3'd5;
+  // Two more MAD cycles for the velocity, through THE SAME multiplier. Six
+  // clocks per particle becomes eight. A second multiplier would have been
+  // one clock cheaper and is refused: this device is over on DSP, and the
+  // block's header already argues that trade for the height.
+  localparam logic [2:0] S_EV3  = 3'd6;
+  localparam logic [2:0] S_EV4  = 3'd7;
 
   logic [2:0] st_q;
 
@@ -306,11 +351,15 @@ module zhao_part_terrain_tap #(
   logic signed [NRM_W-1:0] nax_q, nay_q, naz_q, nbx_q, nby_q, nbz_q;
   logic signed [31:0] oy_q;
   logic signed [63:0] acc_q;
+  logic signed [63:0] vacc_q;
+  logic signed [15:0] v00_q, v10_q, v01_q, v11_q;
+  logic               vpres_q;
 
   // ---- the evaluation: spec 4.3 on the cached cell ----------------------------
   logic               tri_a_c, contained_c;
   logic signed [32:0] d_c;
   logic signed [33:0] dh_a_c, dh_b_c;
+  logic signed [33:0] dv_a_c, dv_b_c;
   logic signed [33:0] mul_a_c;
   logic signed [19:0] mul_b_c;
   logic signed [63:0] mul_p_c;
@@ -320,8 +369,16 @@ module zhao_part_terrain_tap #(
     tri_a_c     = (un_q >= vn_q);   // ud == vd == D: licensed by the tap's check
     dh_a_c      = tri_a_c ? (34'(h10_q) - 34'(h00_q)) : (34'(h11_q) - 34'(h01_q));
     dh_b_c      = tri_a_c ? (34'(h11_q) - 34'(h10_q)) : (34'(h01_q) - 34'(h00_q));
-    mul_a_c     = (st_q == S_EV0) ? dh_a_c : dh_b_c;
-    mul_b_c     = (st_q == S_EV0) ? 20'(un_q[19:0]) : 20'(vn_q[19:0]);
+    // The velocity deltas take the SAME triangle as the height deltas above.
+    // One `tri_a_c`, so 4.3 is decided once for both members of the answer.
+    dv_a_c      = tri_a_c ? (34'(v10_q) - 34'(v00_q)) : (34'(v11_q) - 34'(v01_q));
+    dv_b_c      = tri_a_c ? (34'(v11_q) - 34'(v10_q)) : (34'(v01_q) - 34'(v00_q));
+    case (st_q)
+      S_EV0:   begin mul_a_c = dh_a_c; mul_b_c = 20'(un_q[19:0]); end
+      S_EV1:   begin mul_a_c = dh_b_c; mul_b_c = 20'(vn_q[19:0]); end
+      S_EV3:   begin mul_a_c = dv_a_c; mul_b_c = 20'(un_q[19:0]); end
+      default: begin mul_a_c = dv_b_c; mul_b_c = 20'(vn_q[19:0]); end
+    endcase
     mul_p_c     = mul_a_c * mul_b_c;
   end
 
@@ -333,11 +390,19 @@ module zhao_part_terrain_tap #(
   localparam logic signed [63:0] P_MIN = -64'sd131072;
   logic signed [63:0] h_c, hl_c, hq_c;
   logic               hsat_c;
+  // The velocity needs NO frame change: it is a RATE, so the population
+  // origin does not enter it, and no second rounding is taken.
+  localparam logic signed [63:0] V_MAX = 64'sd1023;    // 2^(VEL_W-1) - 1
+  localparam logic signed [63:0] V_MIN = -64'sd1024;
+  logic signed [63:0] v_c;
+  logic               vsat_c;
   always_comb begin
     h_c    = 64'(h00_q) + ((acc_q + (64'sd1 <<< (sh_q - 5'd1))) >>> sh_q);
     hl_c   = h_c - 64'(oy_q);
     hq_c   = (hl_c + 64'sd128) >>> 8;
     hsat_c = (hq_c > P_MAX) || (hq_c < P_MIN);
+    v_c    = 64'(v00_q) + ((vacc_q + (64'sd1 <<< (sh_q - 5'd1))) >>> sh_q);
+    vsat_c = (v_c > V_MAX) || (v_c < V_MIN);
   end
 
   // ---- the fill engine ----------------------------------------------------------
@@ -433,6 +498,11 @@ module zhao_part_terrain_tap #(
         ce_nbx[e]    <= '0;
         ce_nby[e]    <= '0;
         ce_nbz[e]    <= '0;
+        ce_v00[e]    <= '0;
+        ce_v10[e]    <= '0;
+        ce_v01[e]    <= '0;
+        ce_v11[e]    <= '0;
+        ce_vpres[e]  <= 1'b0;
       end
       particles_o         <= '0;
       samples_ground_o    <= '0;
@@ -445,6 +515,16 @@ module zhao_part_terrain_tap #(
       fills_landed_o      <= '0;
       fills_discarded_o   <= '0;
       invalidations_o     <= '0;
+      samples_moving_o    <= '0;
+      vel_sats_o          <= '0;
+      t_vy_o              <= '0;
+      t_vy_valid_o        <= 1'b0;
+      vacc_q              <= '0;
+      v00_q               <= '0;
+      v10_q               <= '0;
+      v01_q               <= '0;
+      v11_q               <= '0;
+      vpres_q             <= 1'b0;
     end else begin
       // ---------------- the particle ----------------
       case (st_q)
@@ -475,6 +555,11 @@ module zhao_part_terrain_tap #(
           nbx_q <= ce_nbx[hit_idx_c];
           nby_q <= ce_nby[hit_idx_c];
           nbz_q <= ce_nbz[hit_idx_c];
+          v00_q <= ce_v00[hit_idx_c];
+          v10_q <= ce_v10[hit_idx_c];
+          v01_q <= ce_v01[hit_idx_c];
+          v11_q <= ce_v11[hit_idx_c];
+          vpres_q <= ce_vpres[hit_idx_c];
           if (!in_range_c)                            kind_q <= K_RANGE;
           else if (!hit_c || inval_i)                 kind_q <= K_MISS;
           else if (!ce_ground[hit_idx_c])             kind_q <= K_NOGND;
@@ -489,7 +574,17 @@ module zhao_part_terrain_tap #(
 
         S_EV1: begin
           acc_q <= acc_q + mul_p_c;
-          st_q  <= S_EV2;
+          st_q  <= S_EV3;
+        end
+
+        S_EV3: begin
+          vacc_q <= mul_p_c;
+          st_q   <= S_EV4;
+        end
+
+        S_EV4: begin
+          vacc_q <= vacc_q + mul_p_c;
+          st_q   <= S_EV2;
         end
 
         // Finish and present. Exactly one census bucket per particle.
@@ -503,6 +598,8 @@ module zhao_part_terrain_tap #(
           t_nx_o      <= '0;
           t_ny_o      <= '0;
           t_nz_o      <= '0;
+          t_vy_o       <= '0;
+          t_vy_valid_o <= 1'b0;
           particles_o <= particles_o + 1;
           case (kind_q)
             K_RANGE: out_of_range_o      <= out_of_range_o + 1;
@@ -521,6 +618,18 @@ module zhao_part_terrain_tap #(
                 t_nx_o <= tri_a_c ? nax_q : nbx_q;
                 t_ny_o <= tri_a_c ? nay_q : nby_q;
                 t_nz_o <= tri_a_c ? naz_q : nbz_q;
+                // PRESENCE TRAVELS WITH THE RESULT: a cell whose velocity
+                // plane was not completely written answers NOT MEASURED, and
+                // a written zero answers MEASURED AS STILL. The consumer is
+                // handed both statements, never one standing for the other.
+                if (vpres_q) begin
+                  t_vy_valid_o <= 1'b1;
+                  if (v_c > V_MAX)      t_vy_o <= VEL_W'(V_MAX);
+                  else if (v_c < V_MIN) t_vy_o <= VEL_W'(V_MIN);
+                  else                  t_vy_o <= VEL_W'(v_c);
+                  if (vsat_c) vel_sats_o <= vel_sats_o + 1;
+                  if (v_c != 64'sd0) samples_moving_o <= samples_moving_o + 1;
+                end
               end
             end
           endcase
@@ -576,6 +685,14 @@ module zhao_part_terrain_tap #(
               ce_nbx[rr_q]    <= to_nrm(tap_rsp_nb_x_i);
               ce_nby[rr_q]    <= to_nrm(tap_rsp_nb_y_i);
               ce_nbz[rr_q]    <= to_nrm(tap_rsp_nb_z_i);
+              // The velocity corners land in the SAME entry, on the SAME
+              // response, so a cell cannot hold one patch's heights beside
+              // another's rates.
+              ce_v00[rr_q]    <= tap_rsp_v00_i;
+              ce_v10[rr_q]    <= tap_rsp_v10_i;
+              ce_v01[rr_q]    <= tap_rsp_v01_i;
+              ce_v11[rr_q]    <= tap_rsp_v11_i;
+              ce_vpres[rr_q]  <= tap_rsp_vel_present_i;
               rr_q <= (rr_q == IW'(CELLS - 1)) ? '0 : rr_q + 1'b1;
             end
           end
