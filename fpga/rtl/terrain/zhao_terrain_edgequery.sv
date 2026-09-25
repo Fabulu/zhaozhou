@@ -109,11 +109,23 @@ module zhao_terrain_edgequery #(
     input var logic clk,
     input var logic rst_n,
 
+    // ---- the ADMITTED RECORD, as the page's compose job is accepted --------
+    // `{ix, iz, src_id}` straight off TERRAIN.SEQ's issue port, captured on
+    // the cycle TERRAIN.HDRREAD accepts that job. THIS IS THE SEALED LIST'S
+    // OWN COORDINATE, which is the same field `zhao_terrain_prepwalk` files
+    // the bank under -- not the page header's copy, which the header reader
+    // only CHECKS against it. A query keyed on a different field from the
+    // filing would miss every time and fall back in silence.
+    input  var logic               rec_valid_i,
+    input  var logic signed [15:0] rec_ix_i,
+    input  var logic signed [15:0] rec_iz_i,
+    input  var logic        [15:0] rec_src_id_i,
+
     // ---- the compose door, the SAME pulse TERRAIN.SPDESC's door takes ------
+    // It carries only the identity; the coordinate is LOOKED UP by it in the
+    // record hold above. See "WHY THE COORDINATE IS MATCHED AND NOT HELD".
     input  var logic               door_valid_i,
     output var logic               door_ready_o,
-    input  var logic signed [15:0] door_ix_i,
-    input  var logic signed [15:0] door_iz_i,
     input  var logic        [15:0] door_src_id_i,
 
     // ---- the serve edge ----------------------------------------------------
@@ -176,6 +188,11 @@ module zhao_terrain_edgequery #(
     // ---- counters -----------------------------------------------------------
     output var logic [CW-1:0] patches_queued_o,
     output var logic [CW-1:0] door_refused_o,          // the queue was full at a push
+    // THE DOOR'S IDENTITY DID NOT MATCH EITHER HELD RECORD. The entry is still
+    // pushed, with a coordinate no patch can carry, so the patch falls back on
+    // all four seams and its neighbours fall back symmetrically -- correct,
+    // and loud.
+    output var logic [CW-1:0] door_src_unknown_o,
     output var logic [CW-1:0] serve_no_door_o,         // a serve with an empty queue
     output var logic [CW-1:0] serve_src_mismatch_o,    // THE DETECTOR
     output var logic [CW-1:0] queries_issued_o,
@@ -213,6 +230,49 @@ module zhao_terrain_edgequery #(
   assign door_ready_o = !dq_full_c;
 
   wire dq_push_c = door_valid_i && !dq_full_c;
+
+  // ===========================================================================
+  // WHY THE COORDINATE IS MATCHED AND NOT HELD
+  // ===========================================================================
+  // The obvious wiring is one register holding `{ix, iz}`, loaded on the job
+  // accept, read at the door pulse -- which is what `bkr_pg_ix_q` does a few
+  // thousand lines away in `zhao_console_core.sv`, with an argument that reads
+  // exactly right: "the block takes one job at a time, so the pair held here
+  // always belongs to the job now being forwarded".
+  //
+  // THAT ARGUMENT IS ABOUT THE FORWARD, AND THIS BLOCK'S PULSE IS LATER THAN
+  // THE FORWARD. TERRAIN.HDRREAD returns to idle once TERRAIN.PAGESTREAM takes
+  // the job; the compose cache's `fill_accept` comes later still, on the first
+  // vertex beat. In the window between them the header reader may accept and
+  // emit the NEXT job, and a single held register would then describe the
+  // wrong patch -- a query against a coordinate the frame does not contain,
+  // answered with the fallback, in total silence.
+  //
+  // So TWO records are held and the door SELECTS BY IDENTITY. Two is the
+  // bound, not a guess: the header reader holds one job (`j_ready_o` is low
+  // while it is busy) and the streamer holds one, so at most two admitted
+  // records can be in flight between the issue port and a fill acceptance. A
+  // door whose `src_id` matches neither is pushed with `UNKNOWN_IX` -- a
+  // coordinate no patch can carry, because the island extent is 125 and the
+  // direct-mapped bank's tag compare fails on it exactly as an off-island
+  // neighbour's `16'hFFFF` does -- and counted on `door_src_unknown_o`.
+  //
+  // This is strictly stronger than the precedent it departs from, and the
+  // departure is deliberate: a timing argument becomes an identity match.
+  localparam logic signed [15:0] UNKNOWN_IX = 16'sh4000;
+
+  logic signed [15:0] rh_ix  [2];
+  logic signed [15:0] rh_iz  [2];
+  logic        [15:0] rh_src [2];
+  logic        [1:0]  rh_v;
+  logic               rh_wr_q;
+
+  wire rh_hit0_c = rh_v[0] && (rh_src[0] == door_src_id_i);
+  wire rh_hit1_c = rh_v[1] && (rh_src[1] == door_src_id_i);
+  wire rh_miss_c = !rh_hit0_c && !rh_hit1_c;
+
+  wire signed [15:0] push_ix_c = rh_hit0_c ? rh_ix[0] : rh_hit1_c ? rh_ix[1] : UNKNOWN_IX;
+  wire signed [15:0] push_iz_c = rh_hit0_c ? rh_iz[0] : rh_hit1_c ? rh_iz[1] : UNKNOWN_IX;
 
   // ---- the serve edge -------------------------------------------------------
   // ONE POP PER RISING `serve_valid_i`, which is `zhao_terrain_spdesc:394`'s
@@ -274,6 +334,8 @@ module zhao_terrain_edgequery #(
       dq_wr_q              <= '0;
       dq_rd_q              <= '0;
       dq_cnt_q             <= '0;
+      rh_v                 <= 2'b00;
+      rh_wr_q              <= 1'b0;
       serve_seen_q         <= 1'b0;
       qst_q                <= Q_IDLE;
       q_ix_q               <= '0;
@@ -289,6 +351,7 @@ module zhao_terrain_edgequery #(
       e_px_q               <= 8'h00;
       patches_queued_o     <= '0;
       door_refused_o       <= '0;
+      door_src_unknown_o   <= '0;
       serve_no_door_o      <= '0;
       serve_src_mismatch_o <= '0;
       queries_issued_o     <= '0;
@@ -299,10 +362,21 @@ module zhao_terrain_edgequery #(
       descriptor_unarmed_o <= '0;
       gate_wait_clocks_o   <= '0;
     end else begin
+      // ---- the record hold, two deep --------------------------------------
+      if (rec_valid_i) begin
+        rh_ix [rh_wr_q] <= rec_ix_i;
+        rh_iz [rh_wr_q] <= rec_iz_i;
+        rh_src[rh_wr_q] <= rec_src_id_i;
+        rh_v[rh_wr_q]   <= 1'b1;
+        rh_wr_q         <= !rh_wr_q;
+      end
+
       // ---- the door -------------------------------------------------------
       if (dq_push_c) begin
-        dq_ix [dq_wr_q] <= door_ix_i;
-        dq_iz [dq_wr_q] <= door_iz_i;
+        dq_ix [dq_wr_q] <= push_ix_c;
+        dq_iz [dq_wr_q] <= push_iz_c;
+        if (rh_miss_c && (door_src_unknown_o != {CW{1'b1}}))
+          door_src_unknown_o <= door_src_unknown_o + CW'(1);
         dq_src[dq_wr_q] <= door_src_id_i;
         dq_wr_q <= (dq_wr_q == DPTRW'(DOORD - 1)) ? '0 : (dq_wr_q + DPTRW'(1));
         if (patches_queued_o != {CW{1'b1}}) patches_queued_o <= patches_queued_o + CW'(1);

@@ -1887,6 +1887,96 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
   output logic [31:0]             terr_hps_c6_bursts_o,
   output logic [31:0]             terr_hps_c6_wait_cycles_o,
+  output logic [31:0]             terr_hps_c7_bursts_o,
+  // ---- ENTRY I21's PRODUCER CHAIN, added 2026-09-25 (EDGECLOSE) --------
+  // The wrapper binds with `.*`, so these exist only so that the core's new
+  // counters have somewhere to land. Content-identical to the core's block;
+  // `tools/design/wrapper_port_parity.py` is what says so.
+  output logic [31:0]             terr_hps_c7_wait_cycles_o,
+
+  // ======================================================================
+  // ENTRY I21's PRODUCER CHAIN -- TERRAIN.EDGERECON AND THE PREPARE PASS
+  // ======================================================================
+  // Composed 2026-09-25 (packet EDGECLOSE). These are the counters of the six
+  // blocks that turn the four `edge_*` tie-offs into a real neighbour-edge
+  // level producer. They leave this module because a counter with no reader at
+  // the console boundary cannot be read from a board, and because two of them
+  // -- `terr_er_edges_real_o` and `terr_er_edges_fallback_o` -- PARTITION
+  // `4 x terr_er_queries_o` by construction, which is the invariant that makes
+  // either one's silence worth reading.
+  //
+  // ---- TERRAIN.ISLANDSEAL: the admission check the directive requires -----
+  output logic [31:0]             terr_isl_headers_checked_o,
+  output logic [31:0]             terr_isl_seals_o,
+  output logic [31:0]             terr_isl_reseals_o,
+  output logic [31:0]             terr_isl_pitch_illegal_o,
+  output logic [31:0]             terr_isl_pitch_mismatch_o,
+  output logic [31:0]             terr_isl_island_bounced_o,
+  output logic [31:0]             terr_isl_envelope_bad_o,
+
+  // ---- TERRAIN.PREPWALK: the admitted-set PREPARE walker -----------------
+  output logic [31:0]             terr_pw_walks_completed_o,
+  output logic [31:0]             terr_pw_patches_prepared_o,
+  output logic [31:0]             terr_pw_descriptors_emitted_o,
+  output logic [31:0]             terr_pw_skipped_not_resident_o,
+  output logic [31:0]             terr_pw_list_crc_mismatch_o,
+  output logic [31:0]             terr_pw_freeze_broken_o,
+  output logic [31:0]             terr_pw_pitch_illegal_o,
+  output logic [31:0]             terr_pw_jobs_refused_o,
+  output logic [31:0]             terr_pw_place_range_o,
+  output logic [31:0]             terr_pw_bridge_errs_o,
+  output logic [31:0]             terr_pw_sub_order_bad_o,
+  // CLOCKS. `spec/memory_rules.md:396-402` named this instrument for exactly
+  // this question: PREPARE doubles the frame-critical read demand on the one
+  // client ruling T3 starves first, so what matters is how long the reads WAIT.
+  // Do NOT quote a burst count against this.
+  output logic [31:0]             terr_pw_store_wait_clocks_o,
+
+  // ---- TERRAIN.PREPSHARE: what sharing the two single-master ports cost ---
+  output logic [31:0]             terr_ps_b_dev_grants_o,
+  output logic [31:0]             terr_ps_a_dev_blocked_clocks_o,
+  output logic [31:0]             terr_ps_b_dev_blocked_clocks_o,
+  output logic [31:0]             terr_ps_a_lu_blocked_clocks_o,
+  output logic [31:0]             terr_ps_b_lu_blocked_clocks_o,
+  output logic [31:0]             terr_ps_lu_ans_unowned_o,
+  output logic [31:0]             terr_ps_dev_contended_o,
+
+  // ---- TERRAIN.LODSHARE: the time-share and the frame-scoped freeze -------
+  output logic [31:0]             terr_ls_prep_decisions_o,
+  output logic [31:0]             terr_ls_emit_decisions_o,
+  output logic [31:0]             terr_ls_ident_mismatch_o,
+  output logic [31:0]             terr_ls_hist_leak_o,
+  output logic [31:0]             terr_ls_sel_midpatch_o,
+  output logic [31:0]             terr_ls_idq_overflow_o,
+  output logic [31:0]             terr_ls_idq_full_stalls_o,
+  // NOT A FAULT. The cycles the live camera disagreed with the frozen one --
+  // the size of the hazard the OLD per-patch re-latch was absorbing silently,
+  // and entry I21 blocker C's "harmless today" claim measured rather than
+  // argued.
+  output logic [31:0]             terr_ls_freeze_drift_o,
+  output logic [31:0]             terr_ls_freezes_o,
+
+  // ---- TERRAIN.EDGERECON: the bank -----------------------------------------
+  output logic [31:0]             terr_er_records_filed_o,
+  output logic [31:0]             terr_er_lanes_filed_o,
+  output logic [31:0]             terr_er_collisions_o,
+  output logic [31:0]             terr_er_queries_o,
+  output logic [31:0]             terr_er_edges_real_o,
+  output logic [31:0]             terr_er_edges_fallback_o,
+  output logic [31:0]             terr_er_query_own_missing_o,
+  output logic [31:0]             terr_er_file_out_of_phase_o,
+  output logic [31:0]             terr_er_query_out_of_phase_o,
+
+  // ---- TERRAIN.EDGEQUERY: the EMIT-side driver -----------------------------
+  output logic [31:0]             terr_eq_door_refused_o,
+  output logic [31:0]             terr_eq_serve_no_door_o,
+  output logic [31:0]             terr_eq_serve_src_mismatch_o,
+  output logic [31:0]             terr_eq_queries_answered_o,
+  output logic [31:0]             terr_eq_edges_real_o,
+  output logic [31:0]             terr_eq_fallback_patches_o,
+  output logic [31:0]             terr_eq_query_abandoned_o,
+  output logic [31:0]             terr_eq_descriptor_unarmed_o,
+  output logic [31:0]             terr_eq_gate_wait_clocks_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -1894,7 +1984,7 @@ module zhao_console_core_slot_overflow_mutant
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [6:0]              terr_hps_pend_dropped_mask_o,
+  output logic [7:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`

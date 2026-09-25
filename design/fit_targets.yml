@@ -3421,6 +3421,26 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_spdesc.sv
       - fpga/rtl/terrain/zhao_terrain_lod.sv
       - fpga/rtl/terrain/zhao_terrain_jobissue.sv
+      # ---- ENTRY I21's PRODUCER CHAIN, composed 2026-09-25 (EDGECLOSE) -----
+      # SIX blocks in one commit, for the reason the nine above landed
+      # together: each is the next one's producer, so composing any one alone
+      # dangles a port and puts the completion register UP by one -- R75, and
+      # the trade this entry has refused twice. `zhao_terrain_edgerecon` had
+      # sat BUILT AND DISCONNECTED since 2026-09-22 for exactly that reason.
+      #
+      # `zhao_terrain_place_law_pkg` is NOT re-listed here and that is
+      # deliberate: it is already in this closure above `zhao_terrain_place`,
+      # which imports it, and a package listed twice in one source list is a
+      # duplicate definition rather than a second copy. `zhao_terrain_prepwalk`
+      # and `zhao_terrain_islandseal` import the SAME one, which is the whole
+      # point -- PREPARE and EMIT compute a placement with the same functions
+      # rather than with two implementations that agree.
+      - fpga/rtl/terrain/zhao_terrain_islandseal.sv
+      - fpga/rtl/terrain/zhao_terrain_prepshare.sv
+      - fpga/rtl/terrain/zhao_terrain_prepwalk.sv
+      - fpga/rtl/terrain/zhao_terrain_lodshare.sv
+      - fpga/rtl/terrain/zhao_terrain_edgerecon.sv
+      - fpga/rtl/terrain/zhao_terrain_edgequery.sv
       # ---- THE BAKE CHAIN, composed 2026-09-21 (core entries I32, I27) ------
       # `zhao_terrain_stampdepth` is a LEAF of `zhao_terrain_bake_v2` -- two
       # instances of it, the absolute law and the `before` it is differenced
