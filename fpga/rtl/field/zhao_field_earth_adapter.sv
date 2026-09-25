@@ -448,6 +448,14 @@ module zhao_field_earth_adapter #(
     // its own `d_slot_i` from and hands an adapter for `req_slot_o`. Equality
     // is asserted rather than padded, so a console that widened one of them
     // stops here instead of silently zero-extending a binding.
+    // THE RAM'S ADDRESS MUST COVER THE BANK. `BankAw` is derived from
+    // `MAX_FIELDS` two lines up, so this cannot fire at the ratified 16 -- it
+    // is here because the payload is now addressed memory rather than a mux,
+    // and a bank a parameter made bigger than its address would alias entries
+    // onto each other silently, which a mux never could.
+    if ((32'd1 << BankAw) < MAX_FIELDS) begin
+      $fatal(1, "zhao_field_earth_adapter: BankAw=%0d cannot address MAX_FIELDS=%0d", BankAw, MAX_FIELDS);
+    end
     if (OBJW != SLOTW) begin
       $fatal(1, "zhao_field_earth_adapter: OBJW=%0d != SLOTW=%0d; the loader object index IS the engine slot", OBJW, SLOTW);
     end
@@ -456,22 +464,79 @@ module zhao_field_earth_adapter #(
   // ==========================================================================
   // THE UNIFORM BANK -- one entry per sealed TerrainField record
   // ==========================================================================
-  // {age, phase, params} per entry. WHAT IT COSTS, HAND COUNTED IN THE
-  // UNFLATTERING DIRECTION (R236): MAX_FIELDS * (32 + 32 + 256 + 1) = 5,136
-  // bits. Written one per record per frame, read one per lane, so a synthesiser
-  // is free to infer MLAB/M10K -- but if it does NOT, that is 5,136 registers
-  // plus a 16-to-1 321-bit read mux, order 2,000 ALM. THAT IS THE NUMBER TO
-  // QUOTE. It is the largest single cost of this adapter by a wide margin and
-  // it is the reason `MAX_FIELDS` is a parameter: a console that ruled the
-  // per-patch bound down to 4 would recover three quarters of it.
+  // {age, phase, params} per entry, MAX_FIELDS * (32 + 32 + 256) = 5,120 bits
+  // of PAYLOAD plus 80 bits of control.
+  //
+  // IT DID NOT INFER, AND THAT WAS MEASURED RATHER THAN FEARED. This paragraph
+  // used to say a synthesiser "is free to infer MLAB/M10K -- but if it does
+  // NOT, that is 5,136 registers plus a 16-to-1 321-bit read mux, order 2,000
+  // ALM". A leaf `quartus_map` on 2026-09-25 settled it, and the estimate was
+  // LOW: 6,274 registers, 2,419 combinational ALUTs, 4,326 ESTIMATED ALMs and
+  // `Total block memory bits = 0`.
+  //
+  // NOTE HOW IT FAILED, because it is the easier signal to misread. Quartus
+  // says "uninferred due to ..." when it CONSIDERED an array and refused. It
+  // said nothing at all here -- the array never presented as a RAM candidate,
+  // so an absence of complaints was not evidence of success, and the only
+  // number that could say so is the block-memory-bits one.
+  //
+  // THE THREE BLOCKERS, and two of them had to go together.
+  // `tools/quartus/check_ram_inference.py` named them: a COMBINATIONAL read
+  // through the dynamic index `lane_a`, which forces a per-bit mux the width of
+  // the array; TWO dynamic write addresses, `[i]` and `[wr_a]`, where `[i]` was
+  // the per-element reset loop the island brief's S5.3 forbids by name; and an
+  // async-reset process, which that tool marks a WEAK SIGNAL with measured
+  // false positives. The read is now synchronous and the reset loop is gone
+  // from the payload. Either repair alone leaves the array in flip-flops.
+  //
+  // AND `MAX_FIELDS` STAYS 16. This paragraph used to end "it is the reason
+  // `MAX_FIELDS` is a parameter: a console that ruled the per-patch bound down
+  // to 4 would recover three quarters of it." THAT SENTENCE IS SUPERSEDED and
+  // is not a lever anyone may pull: owner ruling R244/D-EARTH-A -- "keep
+  // MAX_FIELDS=16 for now. Do not cut it to 4. Sixteen is a ratified
+  // gameplay/capacity law" -- and `reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt`
+  // section 8, which authorises "synchronous banks" and names cutting 16 fields
+  // to 4 as outside the standing delegation entirely. `MAX_FIELDS` remains a
+  // parameter because three hard-coded 16s would be one law with three halves,
+  // which is what its own declaration says; it is NOT an area knob.
   //
   // `b_obj`/`b_res` are written on the REPLAY, not on the intake, because the
   // resolution is what the field list's publication sweep produces and the
   // replay is the handshake on which it is aligned with the consumer's own
   // list slot.
-  logic [31:0] b_age [0:MAX_FIELDS-1];
-  logic [31:0] b_phase[0:MAX_FIELDS-1];
-  logic [255:0] b_par [0:MAX_FIELDS-1];
+  // THE PAYLOAD IS ONE 320-BIT RAM WORD PER ENTRY, and its layout is NAMED
+  // rather than implied, because a part-select on a concatenation is exactly
+  // where a silent field swap lives.
+  localparam int unsigned UniAgeLo   = 0;                // age:u32   R2
+  localparam int unsigned UniPhaseLo = UniAgeLo + 32;    // phase:fx  R3
+  localparam int unsigned UniParLo   = UniPhaseLo + 32;  // p0..p7    R4..R11
+  localparam int unsigned UniW       = UniParLo + 256;   // 320
+
+  // `ramstyle` IS A HINT AND A HINT IS NOT AN INFERENCE -- the phrasing
+  // `zhao_part_table.sv` uses for the same attribute, and the reason the two
+  // committed leaf maps in this packet's receipt exist. The number that says
+  // whether this worked is `Total block memory bits`, not this line.
+  //
+  // NO `no_rw_check`. The intake writes `wr_a` from one process and the lane
+  // stream reads `lane_a` from another, and nothing in this module interlocks
+  // them, so a same-cycle same-address collision is not provably impossible.
+  // The nonblocking read below therefore yields the OLD word -- which is
+  // byte-identical to the combinational flop read it replaces, and that
+  // equality is the whole equivalence argument. Declaring `no_rw_check` would
+  // buy area by asserting an interlock this module does not own.
+  (* ramstyle = "M10K" *) logic [UniW-1:0] b_uni [0:MAX_FIELDS-1];
+  // THE READ REGISTER, WHICH IS THE 15.1 CAPTURE LATCH ITSELF. It is not an
+  // extra pipeline stage bolted in front of one: `held_in` is GONE, and this
+  // register holds its job. See THE CAPTURE below for why that costs no cycle.
+  logic [UniW-1:0] b_uni_q;
+
+  // THE CONTROL WORD STAYS IN FLOPS, DELIBERATELY, AND THAT IS NOT A LEFTOVER.
+  // Eighty bits against the payload's 5,120. All three are read on the
+  // DECISION cycle -- `b_begun` decides `skip_c`, and the decision is what
+  // chooses whether to read the payload at all -- so a synchronous read could
+  // not have answered in time. Moving them would cost a state to delete a
+  // 16-to-1 mux five bits wide. They keep their reset loop for the same
+  // reason: a reset loop is only a problem for an array that must infer.
   logic b_begun[0:MAX_FIELDS-1];
   logic [OBJW-1:0] b_obj[0:MAX_FIELDS-1];
   logic b_res[0:MAX_FIELDS-1];
@@ -551,19 +616,27 @@ module zhao_field_earth_adapter #(
   localparam logic [1:0] E_ANS  = 2'd3;
 
   logic [1:0] state;
-  logic [IN_LANES*32-1:0] held_in;
+  // ---- THE 15.1 CAPTURE REGISTERS, AND THEY CARRY NO RESET ------------------
+  // Every one is loaded by `cap_en_c` and read only from `E_REQ` onward, and
+  // `cap_en_c` is the sole gate on reaching `E_REQ`, so an unreset value can
+  // never be published on a port. A reset on `b_uni_q` would additionally cost
+  // the M10K its own output register and put 320 flops back.
+  logic signed [31:0] cap_wx, cap_wz;
+  // The address the payload was ACTUALLY read at, kept so arm (c) of the
+  // shadow guard has something to difference `cur_lane` against. See there.
+  logic [BankAw-1:0] cap_a;
   logic signed [31:0] a_height, a_velocity, a_nav;
   logic [31:0] a_material;
   logic a_field;
   // Latched beside the four words, for the reason `ans_present_o`'s port
   // comment gives: a live read here is the metadata-swap defect.
   logic [3:0] a_present;
-  logic [SLOTW-1:0] held_slot;
+  logic [SLOTW-1:0] cap_slot;
   // The engine's own "there is no program here". `zhao_field_host_v2` ORs it
   // with its `!hdr_loaded[slot]` test, so a lane whose handle resolved to no
   // ready object and a lane whose object holds no header BOTH come back 0xF0
   // and are counted in one place.
-  logic held_noprog;
+  logic cap_noprog;
 
   // ==========================================================================
   // THE CANDIDATE PAYLOAD, FORMED FROM THE LIVE PINS AND NEVER SENT
@@ -577,29 +650,33 @@ module zhao_field_earth_adapter #(
   // -- and on THIS seam the mover would be the consumer advancing to the next
   // lane, which happens on a handshake this module drives. The latch makes that
   // impossible rather than merely unlikely.
-  logic [IN_LANES*32-1:0] cap_in_c;
+  // IT IS ASSEMBLED FROM THE CAPTURE REGISTERS AND FROM NO LIVE PIN. The bank
+  // is NOT re-read here: `b_uni_q` was loaded once, by `cap_en_c`, on the
+  // cycle the state machine left `E_IDLE`, and it is held for the whole run.
+  // That is what makes this wiring and not a second read.
+  logic [IN_LANES*32-1:0] req_in_c;
   always_comb begin
-    cap_in_c = '0;
-    cap_in_c[(0*32) +: 32] = held_wx;                  // x:fx   -- the VERTEX
-    cap_in_c[(1*32) +: 32] = held_wz;                  // z:fx
-    cap_in_c[(2*32) +: 32] = b_age[lane_a];            // age:u32   R2, uniform
-    cap_in_c[(3*32) +: 32] = b_phase[lane_a];          // phase:fx  R3, uniform
-    cap_in_c[(4*32) +: 32] = b_par[lane_a][(0*32) +: 32];   // p0    R4
-    cap_in_c[(5*32) +: 32] = b_par[lane_a][(1*32) +: 32];   // p1    R5
-    cap_in_c[(6*32) +: 32] = b_par[lane_a][(2*32) +: 32];   // p2    R6
-    cap_in_c[(7*32) +: 32] = b_par[lane_a][(3*32) +: 32];   // p3    R7
-    cap_in_c[(8*32) +: 32] = b_par[lane_a][(4*32) +: 32];   // p4    R8
-    cap_in_c[(9*32) +: 32] = b_par[lane_a][(5*32) +: 32];   // p5    R9
-    cap_in_c[(10*32) +: 32] = b_par[lane_a][(6*32) +: 32];  // p6    R10
-    cap_in_c[(11*32) +: 32] = b_par[lane_a][(7*32) +: 32];  // p7    R11
+    req_in_c = '0;
+    req_in_c[(0*32) +: 32] = cap_wx;                          // x:fx -- VERTEX
+    req_in_c[(1*32) +: 32] = cap_wz;                          // z:fx
+    req_in_c[(2*32) +: 32] = b_uni_q[UniAgeLo   +: 32];       // age:u32  R2
+    req_in_c[(3*32) +: 32] = b_uni_q[UniPhaseLo +: 32];       // phase:fx R3
+    req_in_c[(4*32) +: 32] = b_uni_q[UniParLo + (0*32) +: 32];   // p0   R4
+    req_in_c[(5*32) +: 32] = b_uni_q[UniParLo + (1*32) +: 32];   // p1   R5
+    req_in_c[(6*32) +: 32] = b_uni_q[UniParLo + (2*32) +: 32];   // p2   R6
+    req_in_c[(7*32) +: 32] = b_uni_q[UniParLo + (3*32) +: 32];   // p3   R7
+    req_in_c[(8*32) +: 32] = b_uni_q[UniParLo + (4*32) +: 32];   // p4   R8
+    req_in_c[(9*32) +: 32] = b_uni_q[UniParLo + (5*32) +: 32];   // p5   R9
+    req_in_c[(10*32) +: 32] = b_uni_q[UniParLo + (6*32) +: 32];  // p6   R10
+    req_in_c[(11*32) +: 32] = b_uni_q[UniParLo + (7*32) +: 32];  // p7   R11
     // lane 12 is the HOST's thirteenth, which the earth profile does not have.
     // It is zero rather than absent because the port is IN_LANES wide for every
     // client; the engine takes the profile's arity from the program.
   end
 
-  assign req_in_o = held_in;
-  assign req_slot_o = held_slot;
-  assign req_noprog_o = held_noprog;
+  assign req_in_o = req_in_c;
+  assign req_slot_o = cap_slot;
+  assign req_noprog_o = cap_noprog;
   assign req_valid_o = (state == E_REQ);
   assign resp_ready_o = (state == E_WAIT);
 
@@ -685,14 +762,79 @@ module zhao_field_earth_adapter #(
   // (2^32-1) * 2^16 + 2^31, which is below 2^48, so 49 bits cannot carry.
   wire [48:0] num_c = ({17'd0, age_eff_c} << FxShift) + {18'd0, rec_duration_i[31:1]};
 
+  // ==========================================================================
+  // THE BANK ITSELF: ONE SYNCHRONOUS-READ RAM, ONE CAPTURE ENABLE, NO RESET
+  // ==========================================================================
+  // WHY THIS COSTS NO EXTRA STATE, which is the one thing about this change a
+  // reader will not believe. A synchronous read hands its data over one cycle
+  // after the address, so the obvious shape is a new state between `E_IDLE`
+  // and `E_REQ`. It is not needed, because THE CYCLE THE ADDRESS IS PRESENTED
+  // IS ALREADY A CYCLE IN WHICH NOTHING IS OFFERED: `req_valid_o` is
+  // `(state == E_REQ)`, and `state` leaves `E_IDLE` on the very edge that
+  // loads `b_uni_q`. So the data lands exactly as `req_valid_o` rises. The
+  // owner's estimate allowed "one more state on an 80-100 cycle run"; the
+  // measured cost is ZERO, and the directed test's cycle census says so.
+  //
+  // THE WHOLE REQUEST IS ONE ATOMIC CAPTURE, and that is CLAUDE.md's
+  // metadata-swap law applied on the generation side rather than the checking
+  // side. The payload, the vertex, the slot and the no-program bit are loaded
+  // by ONE enable on ONE edge. There is no arrangement of stalls in which the
+  // engine can be handed one lane's uniforms with another lane's slot, because
+  // nothing downstream re-reads anything: the defect that law describes needed
+  // a bank whose read was registered UNCONDITIONALLY, and `cap_en_c` is the
+  // opposite of unconditional.
+  //
+  // NO RESET ON THIS PROCESS, and that is required rather than tidy: an M10K
+  // has no reset port, and the per-element reset loop that used to zero this
+  // payload was itself the SECOND WRITE ADDRESS that
+  // `tools/quartus/check_ram_inference.py` names as a blocker. Removing it is
+  // half the change; making the read synchronous is the other half, and either
+  // alone leaves the array in flip-flops.
+  wire cap_en_c = (state == E_IDLE) && lanes_left_c && !skip_c;
+  wire uni_we_c = (in_st == I_WR) && !h_reject;
+
+  // The oracle: `duration == 0 ? 1.0fx : the divide`. The divider ran anyway
+  // (see the reject note in I_WR) and its answer on a zero denominator is
+  // discarded here rather than guarded there, so the divide has one shape and
+  // no special case inside the loop. Assigned to a 32-bit unsigned target,
+  // which is the identical context the old `b_phase[wr_a] <= ...` had.
+  logic [31:0] uni_phase_wd_c;
+  always_comb begin
+    uni_phase_wd_c = h_dur_zero ? PHASE_ONE : {15'd0, dv_q};
+  end
+  wire [UniW-1:0] uni_wd_c = {h_par, uni_phase_wd_c, h_age};
+
+  always_ff @(posedge clk) begin
+    // ONE write address. `wr_a` and nothing else -- see the reset block.
+    if (uni_we_c) begin
+      b_uni[wr_a] <= uni_wd_c;
+    end
+    // ONE read address, registered. Nonblocking, so a same-cycle write to the
+    // same address yields the OLD word: exactly what the combinational read of
+    // a flop array did, which is why this is an equivalence and not a change.
+    if (cap_en_c) begin
+      b_uni_q    <= b_uni[lane_a];
+      cap_wx     <= held_wx;
+      cap_wz     <= held_wz;
+      cap_slot   <= b_obj[lane_a];
+      cap_noprog <= !b_res[lane_a];
+      cap_a      <= lane_a;
+    end
+  end
+
   integer i;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      // ONLY THE CONTROL WORD IS RESET, AND THE OMISSION IS THE POINT.
+      // A per-element reset loop is a second dynamic write address, which no
+      // single-port memory on this device has, so `[i]` beside `[wr_a]` is
+      // what kept the payload in flip-flops however synchronous the read was.
+      // Nothing reads an unwritten payload entry: `cur_lane < held_lanes`, and
+      // `held_lanes` is the consumer's `fields_active_o`, which counts entries
+      // this module watched replayed -- every one of which was banked first.
+      // Arm (b) of the shadow guard is the check that says so if it stops.
       for (i = 0; i < MAX_FIELDS; i = i + 1) begin
-        b_age[i] <= 32'd0;
-        b_phase[i] <= 32'd0;
-        b_par[i] <= 256'd0;
         b_begun[i] <= 1'b0;
         b_obj[i] <= {OBJW{1'b0}};
         b_res[i] <= 1'b0;
@@ -718,9 +860,9 @@ module zhao_field_earth_adapter #(
       held_wx <= 32'sd0;
       held_wz <= 32'sd0;
       state <= E_IDLE;
-      held_in <= '0;
-      held_slot <= {SLOTW{1'b0}};
-      held_noprog <= 1'b0;
+      // `held_in`, `held_slot` and `held_noprog` are gone from here: they are
+      // the capture registers above, in a process with no reset, for the
+      // reason stated at their declaration.
       a_height <= 32'sd0;
       a_velocity <= 32'sd0;
       a_material <= 32'd0;
@@ -771,6 +913,30 @@ module zhao_field_earth_adapter #(
         if (lane_desync_o != 32'hFFFF_FFFF) lane_desync_o <= lane_desync_o + 32'd1;
       end
       if (vtx_fire_i && (rep_idx != lanes_i)) begin
+        if (lane_desync_o != 32'hFFFF_FFFF) lane_desync_o <= lane_desync_o + 32'd1;
+      end
+      // ARM (c), NEW WITH THE SYNCHRONOUS BANK, AND IT IS THE ARM THAT LAW
+      // EXISTS FOR. A registered read means the payload arrives a cycle after
+      // its address, which is the exact shape of CLAUDE.md's metadata-swap
+      // defect -- "response A's data, A's token, and B's metadata", with every
+      // accepted/emitted counter balancing because none of them looks at the
+      // field that moved. This one looks at it.
+      //
+      // ASK WHAT CLOCKS EACH SIDE, which is that chapter's first instruction.
+      // `cap_a` is loaded by `cap_en_c`, in the RESET-FREE RAM PROCESS above.
+      // `cur_lane` is loaded IN THIS PROCESS, by the consumer's `ans_ready_i`
+      // handshake in `E_ANS` and by `vtx_fire_i`. Two processes, two
+      // separately authored enables, and NO register enable drives both -- so
+      // this is not the blind detector that chapter is about, and it can see a
+      // TIMING fault and not merely a value one.
+      //
+      // IT IS SILENT WHILE THE DESIGN IS CORRECT, because `cur_lane` cannot
+      // move while `state` is `E_REQ`. It is nonetheless reachable from the
+      // block's own boundary -- a consumer that fires a vertex underneath a
+      // request in flight resets `cur_lane` while `cap_a` holds the lane the
+      // payload was actually read at -- so it owes no committed mutant, and
+      // `tests/field/field_earth_adapter_directed.cpp` case 9d fires it.
+      if ((state == E_REQ) && (cap_a != lane_a)) begin
         if (lane_desync_o != 32'hFFFF_FFFF) lane_desync_o <= lane_desync_o + 32'd1;
       end
 
@@ -826,13 +992,11 @@ module zhao_field_earth_adapter #(
           if (h_reject) begin
             tail_rejected_o <= tail_rejected_o + 32'd1;
           end else begin
-            b_age[wr_a] <= h_age;
-            // The oracle: `duration == 0 ? 1.0fx : the divide`. The divider ran
-            // anyway (see the reject note) and its answer on a zero denominator
-            // is discarded here rather than guarded there, so the divide has
-            // one shape and no special case inside the loop.
-            b_phase[wr_a] <= h_dur_zero ? PHASE_ONE : {15'd0, dv_q};
-            b_par[wr_a] <= h_par;
+            // THE PAYLOAD IS WRITTEN BY THE RAM PROCESS ABOVE, off `uni_we_c`,
+            // which is this branch's own condition restated as a wire. It is
+            // not written twice and it is not written there conditionally on
+            // something else: `uni_we_c` is `(in_st == I_WR) && !h_reject`,
+            // and this is the `!h_reject` arm of `I_WR`.
             b_begun[wr_a] <= h_begun;
             // A fresh entry is NOT resident until the replay says so. The
             // resolution belongs to the field list's publication sweep, and
@@ -889,14 +1053,12 @@ module zhao_field_earth_adapter #(
           // too), so nothing is lost -- and the one cycle of skew is why the
           // shadow guard is gated on `vtx_live` rather than on `vtx_fire_i`.
           if (lanes_left_c) begin
-            // 15.1's CAPTURE, and it is ONE act: the vertex is already held,
-            // and the lane's uniforms, its slot and the whole payload are
-            // latched here from this cycle's bank read. Nothing downstream
-            // re-reads the bank, so the consumer advancing its lane counter
-            // cannot move this run's operands.
-            held_in <= cap_in_c;
-            held_slot <= b_obj[lane_a];
-            held_noprog <= !b_res[lane_a];
+            // 15.1's CAPTURE HAPPENS IN THE RAM PROCESS ABOVE, off `cap_en_c`,
+            // which is `(state == E_IDLE) && lanes_left_c && !skip_c` -- this
+            // branch's own condition. One enable loads the payload, the
+            // vertex, the slot and the no-program bit together, so nothing
+            // downstream re-reads the bank and the consumer advancing its lane
+            // counter cannot move this run's operands.
             if (skip_c) begin
               // The oracle's `continue`, expressed as the additive zero the
               // consumer's fx_add chain treats identically. Counted by CAUSE.

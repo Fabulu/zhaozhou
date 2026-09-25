@@ -28,7 +28,7 @@
 //    7  an alarm status is counted apart from a refusal               faults_o
 //    8  a seventeenth record on one list is rejected at the TAIL tail_rejected_o
 //    9  the lane shadow is SILENT across a correct three-lane vertex, and
-//       FIRES when the consumer's ready disagrees with it          lane_desync_o
+//       FIRES on all THREE of its arms                             lane_desync_o
 //   10  the cost is measured: a consumer waiting on an unanswered lane
 //                                                                stall_cycles_o
 //   11  THE CAPTURE LAW (directive 15.1): a vertex moved underneath a run in
@@ -37,7 +37,15 @@
 // CASE 9 IS THE ONE WORTH READING. `lane_desync_o` differences this module's
 // `vtx_live` against the CONSUMER's `fld_ready_o`, and nothing in either block
 // loads both -- which is the property CLAUDE.md's metadata-swap chapter says to
-// establish before quoting a checker's silence. The case asserts the CORRECT
+// establish before quoting a checker's silence.
+//
+// ARM (c) AND CASE 9d ARE NEW WITH THE SYNCHRONOUS UNIFORM BANK (packet
+// EARTHRAM). The payload now arrives a clock after its address, which is the
+// exact shape of the metadata-swap defect -- A's data with B's metadata, every
+// other counter balancing. Arm (c) differences the address the payload was
+// READ AT (`cap_a`, loaded in the reset-free RAM process) against the lane the
+// module believes it is serving (`cur_lane`, loaded in the main process by the
+// consumer's handshake). Two processes, two enables, neither loading both. The case asserts the CORRECT
 // behaviour first (the guard stays at zero across a real multi-lane vertex) and
 // then fires it deliberately, from the consumer's side, because a detector
 // nobody has watched move is a claim and not a measurement (R95).
@@ -592,6 +600,71 @@ void case9_shadow(Dut& d) {
   check(d.lane_desync_o > before2,
         "case 9c: the replay-count arm FIRES when the consumer's list and this bank disagree",
         1, d.lane_desync_o > before2 ? 1 : 0);
+
+  // (d) THE THIRD ARM: the bank pairing. A consumer that accepts a new vertex
+  // while a request is still in flight resets `cur_lane` underneath a payload
+  // that was read at the OLD lane -- which is precisely "A's data with B's
+  // metadata", and precisely what no other counter in this block looks at.
+  //
+  // THE OTHER TWO ARMS ARE HELD SILENT ACROSS THIS STIMULUS ON PURPOSE, so the
+  // increment is attributable. Arm (a) differences `vtx_live` against
+  // `ans_ready_i`: both are high throughout. Arm (b) fires on `vtx_fire_i`
+  // with `rep_idx != lanes_i`: two entries are replayed and the vertex claims
+  // two, so it is silent. A control pass with the same stimulus MINUS the
+  // mid-flight accept is measured first, and it must leave the counter still.
+  reset(d);
+  d.tick_i = 1000;
+  zero_par(par);
+  offer_record(d, 0, 100, par, false);
+  offer_record(d, 0, 100, par, true);
+  const int obj2[2] = {1, 2};
+  const bool res2[2] = {true, true};
+  replay(d, obj2, res2, 2);
+
+  // LANE 0 IS SERVED IN FULL FIRST, AND THAT IS LOAD-BEARING RATHER THAN
+  // SETUP. The first version of this case fired the vertex while `cur_lane`
+  // was still 0, so `cap_a` and `lane_a` were BOTH 0 and there was nothing for
+  // the arm to disagree about -- the counter stayed still and read like a
+  // detector that cannot fire. It is the stimulus that has to reach the state,
+  // which is CLAUDE.md's "a gate that cannot reach the state is not evidence
+  // about the state" arriving from the test's side.
+  take_vertex(d, 0x0001'0000, 0x0002'0000, 2);
+  const int32_t out9[4] = {0x0000'1234, 0, 0, 0};
+  bool ran9 = false;
+  int32_t h9 = 0;
+  const bool ok9 = serve_lane(d, true, out9, 0x00, &ran9, &h9, nullptr, nullptr, nullptr);
+  check(ok9, "case 9d: lane 0 is served first so the lane counter is non-zero", 1,
+        ok9 ? 1 : 0);
+  take_answer(d);  // cur_lane is now 1
+
+  // -- the CONTROL: reach an in-flight request and do NOT disturb it ---------
+  d.lane_covers_i = 1;
+  int g = 0;
+  while (!d.req_valid_o && g < 200) {
+    step(d);
+    ++g;
+  }
+  check(d.req_valid_o == 1, "case 9d: a request is in flight", 1, d.req_valid_o);
+  const uint32_t quiet = d.lane_desync_o;
+  step(d);
+  step(d);
+  check(d.lane_desync_o == quiet,
+        "case 9d control: the pairing arm is SILENT while a request sits in flight",
+        quiet, d.lane_desync_o);
+
+  // -- FIRED: move the consumer's lane counter under the live request --------
+  const uint32_t before3 = d.lane_desync_o;
+  d.vtx_fire_i = 1;
+  d.vtx_wx_i = 0x0003'0000;
+  d.vtx_wz_i = 0x0004'0000;
+  d.lanes_i = 2;  // equal to the replayed count, so arm (b) stays silent
+  step(d);
+  d.vtx_fire_i = 0;
+  step(d);
+  check(d.lane_desync_o > before3,
+        "case 9d: the pairing arm FIRES when the lane moves under a live bank read",
+        1, d.lane_desync_o > before3 ? 1 : 0);
+  d.ans_ready_i = 0;
 }
 
 // ---------------------------------------------------------------------------
