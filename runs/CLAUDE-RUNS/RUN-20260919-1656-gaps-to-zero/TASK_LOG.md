@@ -1884,3 +1884,84 @@ work stopped and the WATCHER outlived it.
 clean and pushed at `13b22987`. Next after EARTHRAM: the owner decisions in
 §15.13 (D-1 material/nav destination, D-2 island-descriptor pitch) are what
 stand between the terrain half of the register and zero.
+
+### 2026-09-25 (later) — THE OWNER'S DIRECTIVE ARRIVED, AND A REJECTED PUSH WAS THE ONLY THING THAT SAID SO
+
+**`reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt` — 601 lines, delivered as
+`460296f9` + `ead6f107`, reviewed against `13b22987`, ADOPTED at `c0941d85`.**
+It had been sitting on the remote for **two days** while work continued here.
+
+**Nothing told me.** My TASK_LOG push was rejected non-fast-forward, and *that
+rejection was the notification.* The directive's own §10 says why: *"A push sends
+local commits OUT; it does not fetch new owner instructions."* This is the
+"instructions are not delivered until they are read" chapter with a new
+mechanism — not a file in the wrong folder, but **a channel that only carries
+outbound traffic**. The rule now in CLAUDE.md and practised on every push since:
+**fetch and inspect new owner commits BEFORE each integration push**, and a
+non-fast-forward is a signal to integrate, **never** to force. My one unpushed
+commit was rebased onto the owner's two rather than merged over them.
+
+**IT CLOSES §15.13.** Every decision that list was waiting on is made:
+I34's four channels and their destinations, I21's island-pitch authority, I20's
+fragment state / stencil enums / provoking vertex, I53–I55's single geometry
+identity space, I56's quota seal, the terrain arm, the cliff producer, SDRAM
+scheduling for frame-critical reads, DSF-01's wrapper, bounded map experiments,
+worktree cleanup. **Standing delegated authority over all further technical
+decisions**, including amending specs and older rulings, provided what is
+superseded is STATED. The limits are **capability** limits, not resource ones,
+and the shipping target stays `5CSEBA6U23I7`.
+
+**TWO OF ITS OWN PREMISES DIED ON MEASUREMENT WITHIN THE HOUR — which is the
+arrangement working, not a complaint about it.**
+
+* **DECISION 1 (`0de16994`): `COMPOSED_NAV`'s range collides with POST.ECHO.**
+  The directive told me to check its addresses against the live map first.
+  `[0x05AB_0000, 0x05CB_0000)` contains POST.ECHO's capture at
+  `0x05C0_0000..0x05C3_BFFF`. **It looked free because §5b's own table still
+  calls that tail "reserved / unmapped" and POST.ECHO was added LATER in the same
+  document** — a spec contradicting itself in the order it was written. **NAV
+  moves to `[0x05C4_0000, 0x05E4_0000)`.** I refused the contiguous alternative:
+  it requires relocating a region carrying a no-escape proof **re-run
+  2026-09-19**, and adjacency buys nothing when both caches are addressed by slot.
+* **DECISION 2 (`f097c95f`): "height uses the existing composed-height path" —
+  there isn't one.** `COMPOSED_HEIGHT_BASE` / `ZHAO_TERRAIN_COMPOSED*` / `0x0566`
+  are **zero hits across `fpga/rtl`**; `COMPOSED_VELOCITY` appears only in
+  comments; **neither has a guard window**, because
+  `zhao_mem_guard.sv:244-251` keeps them unmapped *"until the blocks that touch
+  them exist"*. **The composed caches are computed and never published.** That
+  makes §1 a subsystem, and I split it rather than pretend otherwise.
+
+### EARTHRAM MERGED (`d822f67f`) — the first real bite out of the ALM number
+
+Two `-MapOnly` leaf runs, five categories kept apart, never summed:
+**ALUTs 2,419 → 888, registers 6,274 → 1,093, ESTIMATED ALMs 4,326 → 1,628
+(−2,698), block memory bits 0 → 4,880**, placed ALMs **n/a, no fit ran**.
+One M10K simple-dual-port, **16 × 305** — 305 not 320 because fifteen phase bits
+are structurally zero in both assignment arms and Quartus trimmed them, verified
+lossless. **Cycle cost ZERO**, and the rebuild was asserted both ways because
+identical numbers are the stale-binary signature.
+
+`MAX_FIELDS` untouched at 16. The owner's ALM estimate was **low** (4,326 vs
+~3,350) while his *saving* figure was right (−2,698 vs ~2,600); his "~8 M10K" is
+**neither confirmed nor denied**, because a map reports no block count.
+
+**And it closed the receipt gap I had recorded that morning:**
+`tools/quartus/extract_map_receipt.py` plus a committed JSON receipt, with
+`placedALMs` explicitly null and device capacity recorded as a BOUND. The
+attribution report §15.12's levers came from is **gone from disk** and
+unreproducible; this one is not.
+
+### WHERE I AM
+
+**Register 12.** Sweep **30 gates**, RC 0, matching baseline. Two packets in
+flight and neither is idle: **FRAGSTATE** closing I20 on directive §3 (final
+sweep running), **COMPOSEPUB** commissioning the composed-cache publication path
+for height and velocity on §1, with its first question being whether a composed
+height lattice has a **consumer** at all — *"A DMA into unused memory is not a
+consumer."*
+
+**Honest trajectory, recorded so nobody reads 12 as nearly-zero:** 12 → 11 is
+close (I20). **11 → 0 is five subsystems, not five wiring jobs** — the terrain
+arm (I13 + normalmap), the edge seam (I21 + edgerecon), the arena (I53–I56),
+the composed caches (I34 + velocity), and the cliff producer. What changed today
+is that **none of them waits on the owner any more.**
