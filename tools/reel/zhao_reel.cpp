@@ -1061,6 +1061,24 @@ struct SceneSubject {
   // tracker and must not be pointed at a clip whose motion is not linear
   // without looking at the result first.
   int32_t cam_bias_x = 0, cam_bias_x_end = 0;
+  // PASS 26: THE FOLLOW'S CLOCK. Zero (the default, and every other subject)
+  // lerps the aim over the RENDERED FRAME INDEX, 0 .. frames-1.
+  //
+  // ⚠ That clock is wrong for a LOOPING traverse, and it fails in the ugliest
+  // possible way. The reel advances then renders, so rendered frame i shows key
+  // (i+1)/2 -- and the last frame shows key 0, the start of the next lap. The
+  // creature's root has therefore already wrapped back to the beginning of its
+  // journey while the frame-index lerp has the aim at the far END of the sweep.
+  // The two are a whole traverse apart, and the subject is simply GONE for the
+  // seam frames. Pass 25 survived it only because its root was pinned at centre,
+  // so the mismatch was the aim's own 28000 and not a journey.
+  //
+  // Set to the clip's KEY COUNT and the aim is clocked by the same phase the
+  // animation is, ((i+1)/2) % keys, so the follow wraps exactly where the root
+  // wraps. The terrain then snaps at the seam instead of the creature, which on
+  // this staging is very nearly invisible -- and the seam was accepted by the
+  // owner besides ("it moves across screen, it makes sense it hitches").
+  int cam_bias_x_wrap_keys = 0;
   // debris: spawned at spawn_frame, integer gravity fxm per frame^2
   uint32_t debris_spawn_frame = 0;
   int32_t debris_gravity = 0;      // fx raw per frame^2 (subtracted from vy)
@@ -4803,9 +4821,20 @@ int render_scene(const SceneSubject& sub) {
       }
       int32_t bx_now = sub.cam_bias_x;
       if (sub.cam_bias_x_end != sub.cam_bias_x && sub.frames > 1) {
-        bx_now = sub.cam_bias_x + static_cast<int32_t>(
-            (static_cast<int64_t>(sub.cam_bias_x_end - sub.cam_bias_x) * f) /
-            (sub.frames - 1));
+        if (sub.cam_bias_x_wrap_keys > 0) {
+          // PASS 26: clocked by the ANIMATION's phase, not the frame index, so
+          // a looping traverse's follow wraps where the root wraps. See the
+          // field's declaration for why the frame-index clock empties the seam.
+          const int keys = sub.cam_bias_x_wrap_keys;
+          const int key = static_cast<int>((f + 1) / 2) % keys;
+          bx_now = sub.cam_bias_x + static_cast<int32_t>(
+              (static_cast<int64_t>(sub.cam_bias_x_end - sub.cam_bias_x) * key) /
+              keys);
+        } else {
+          bx_now = sub.cam_bias_x + static_cast<int32_t>(
+              (static_cast<int64_t>(sub.cam_bias_x_end - sub.cam_bias_x) * f) /
+              (sub.frames - 1));
+        }
       }
       sv.payload.view_projection =
           cam_pitch(k_now, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw,
@@ -6034,9 +6063,49 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // ~3/4 across and left through the left edge over f260-298 before the wrap.
   // A CONSTANT horizontal aim (u02::kU02DriftCamBiasX, below) recentres it.
   if (slot == 8) {
-    const int32_t bx = kU02HastyBiasX;
+    // THE FRAMING FIRST, because the follow below is derived from it. Slot 8
+    // inherited kU02CamKTraverse above, sized for DRIFT's shorter journey and
+    // kept by a clip that now travels behind a follow cam. Direction 27 asks
+    // for facial expression, which a two-pixel eye cannot carry, so Hasty takes
+    // its own k. At hurry-off this is kU02CamKTraverse and the subject is
+    // pass 25's.
+    s.cam_k = u02::hasty_hurry_on() ? u02::g_u02_hasty_cam_k : u02::kU02CamKTraverse;
+    // PASS 26 (Direction 27). Pass 25 ran kU02HastyBiasX's sweep against a root
+    // PINNED AT CENTRE, so it moved the creature and the ground together and
+    // produced screen motion with no speed in it. The aim is now DERIVED FROM
+    // THE JOURNEY: kHastyFullFollowBiasX is the calibrated full-follow sweep,
+    // scaled by the framing, by how much of the traverse is authored and by how
+    // much of it the camera chooses to follow. They cannot drift apart, because
+    // there is only one number to get wrong.
+    //
+    // ⚠ THE EXACT-OFF PATH TAKES THE UNSCALED CONSTANT. The first draft scaled
+    // unconditionally, and at hurry-off that gives 28000 * 1000/1000 * 750/1000
+    // = 21000, not 28000 -- byte-identity lost in the one line whose whole job
+    // is to preserve it, and nothing in the clip file would have shown it.
+    //
+    // ⚠⚠ AND THE FOLLOW MUST SCALE WITH cam_k, WHICH IS NOT OBVIOUS AND COST A
+    // RUNG. `cam_pitch` folds the aim in as NDC `x = k*X/w + bias_x`: the
+    // creature's screen displacement per millimetre carries the k, and the aim
+    // offset DOES NOT. kU02HastyBiasX was calibrated by eye at
+    // kU02CamKTraverse, so the moment Hasty took a tighter camera the two sides
+    // of the follow stopped describing the same journey -- the creature
+    // out-ran its own tracking shot and left the right of frame by f239, with
+    // every constant in the expression individually correct. Two quantities
+    // that must move together, and only one of them was moving.
+    const int32_t bx =
+        u02::hasty_hurry_on()
+            ? static_cast<int32_t>(
+                  (static_cast<int64_t>(u02::kHastyFullFollowBiasX) * s.cam_k /
+                   u02::kU02CamKTraverse *
+                   u02::g_u02_hasty_traverse_pm / 1000 *
+                   u02::g_u02_hasty_cam_follow_pm) / 1000)
+            : kU02HastyBiasX;
     s.cam_bias_x = bx;       // the aim starts AHEAD of the creature...
     s.cam_bias_x_end = -bx;  // ...and ends behind it, travelling with it
+    // ...and wraps where the root wraps. At hurry-off the root is pinned at
+    // centre, there is no journey to wrap, and pass 25's frame-index clock is
+    // what produced the shipped bytes -- so the wrap is ON only with the hurry.
+    if (u02::hasty_hurry_on()) s.cam_bias_x_wrap_keys = u02::kHastyKeys;
     if (const char* e = std::getenv("ZHAO_U02_CAM_BX")) {
       const int32_t v = std::atoi(e);
       s.cam_bias_x = -v;      // sign kept as the LADDER was run, so the

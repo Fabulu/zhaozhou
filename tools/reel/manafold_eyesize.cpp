@@ -117,8 +117,12 @@ int main(int argc, char** argv) {
   int failures = 0;
   const zc::CreatureType& t = u02::type();
   for (const zc::Clip& c : t.bank.clips) {
-    const bool expression_slot =
-        c.slot_id == 3 || c.slot_id == 4 || c.slot_id == 11 || c.slot_id == 21;
+    // PASS 26: the list moved to u02::eye_expression_slot() in manafold_clips.h.
+    // It used to live here ALONE while the clips each called
+    // enable_eye_scale_track() in their own source -- two copies of one fact,
+    // and this gate correctly went red the first time one of them moved
+    // (hasty, Direction 27). One definition, read by the gate and the clips.
+    const bool expression_slot = u02::eye_expression_slot(c.slot_id);
     const size_t expected = static_cast<size_t>(c.frame_count) * u02::kBoneCount;
     if (expression_slot) {
       if (c.uniform_scale_q15.size() != expected ||

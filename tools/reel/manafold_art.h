@@ -4156,6 +4156,183 @@ constexpr int32_t kHastyFishtailA16 = 0;   // was 1500 -- the shimmy that walked
 constexpr int kHastyBobCycles = 5;         // the vertical layer that replaces it
 constexpr int32_t kHastyBobAmpMm = 210;    // deeper than the house hover bob
 constexpr int kHastyFishtailCycles = 8;
+
+// ---- PASS 26: THE HURRY (Owner Direction 27) ------------------------------
+//
+//   "It is, however, not very hasty. Make it look like it's actually in a
+//    hurry, both in facial expression and speed."
+//
+// WHY IT DID NOT READ HASTY, established by rendering the clip and looking at
+// all 240 frames before a value was touched (P26-NOTES/look-01):
+//
+//  1. THE CREATURE DOES NOT MOVE RELATIVE TO ANYTHING. Direction 12 deleted the
+//     net traverse (`c.root[f*3+0] = 0`) along with the frame-history smear the
+//     traverse existed to feed -- and the CAMERA's traverse compensation was
+//     left in place. Slot 8 still pans `cam_bias_x` +28000 -> -28000, which
+//     `cam_pitch` folds in as NDC `x = k*X/w + bias_x`: a constant offset at
+//     every depth, so it slides the creature and the ground TOGETHER. The owner
+//     saw motion and there is motion; it is a pan over a stationary creature,
+//     and a pan is not speed. Measured (`tools/reel/screenmotion.py`, lag 16):
+//     creature -0.670 px/frame, background -0.694, RELATIVE -0.170. Zero cue.
+//  2. THE POSE IS A POSTURE, NOT AN EFFORT. kHastyPitchA16/kHastyBankA16 are
+//     constant offsets applied identically on every key: the creature has been
+//     leaning for the whole clip, which reads as an attitude.
+//  3. THE CADENCE IS LEISURELY. kHastyBobCycles 5 over 120 keys is 48 RENDERED
+//     FRAMES per bob -- 0.8 s at 60 Hz. That is a float.
+//  4. THE FACE CANNOT ACT. Slot 8 inherits kU02CamKTraverse (148000) against
+//     the house 360000 -- a camera pulled back for a journey the clip no longer
+//     takes. The contour ink is 1-2 px per frame.
+//
+// 1, 3 and 4 are one leftover: the staging still compensates for a deleted
+// traverse. The hurry is authored as FIVE channels, each its own named knob.
+//
+// ⚠ THE SELECTOR IS THE EXACT-OFF CONTROL. `HastyHurry::kOff` takes the
+// pass-25 arithmetic on every channel, so the clip renders BYTE-IDENTICAL to
+// the shipped bank. It is the byte-identity proof and the one-edit reversal.
+enum class HastyHurry { kOn, kOff };
+inline HastyHurry g_u02_hasty_hurry = HastyHurry::kOn;
+inline bool hasty_hurry_on() { return g_u02_hasty_hurry == HastyHurry::kOn; }
+
+// (a) CADENCE. Rendered frames per pulse = 2*kHastyKeys / cycles, so 5 -> 48 f
+// and 13 -> 18 f. Chosen off the 5/9/13/17 ladder by looking: 9 still ambles,
+// 17 is a vibration rather than a stride. The amplitude comes DOWN with the
+// rate -- the same 210 mm at three times the frequency reads as bouncing, not
+// hurrying, which is the trap this constant exists to keep adjustable.
+constexpr int kHastyHurryBobCycles = 13;
+// ⚠ 140, NOT 165, AND THE BOUND CHOSE IT -- BY REFUSING, NOT BY BEING MOVED.
+// mqa's Q3 root-continuity ceiling is 135 mm per key. A bob's peak per-key step
+// is amp * 2*pi*cycles/keys, so tripling the cadence triples what a given
+// amplitude costs there, and 165 mm at 13 cycles lands the root step at
+// 143.3 mm -- over. Laddered against the gate: 165 -> 143.3, 150 -> 134.7,
+// 140 -> 129.0, 130 -> 123.5.
+//
+// 150 PASSES BY 0.3 mm AND WAS REJECTED FOR IT. A value that clears a bound by
+// a rounding error is not a passing value, it is a leg waiting to go red on an
+// unrelated change. 140 keeps 6 mm of margin and, looked at, is
+// indistinguishable from 165 in the read -- which is the point: the bound was
+// never the enemy of the picture here.
+//
+// The ceiling itself is UNTOUCHED. Five clips declare their own and slot 8
+// could have joined them; declaring a ceiling to fit a value is relaxing a
+// bound, and the direction did not ask for that.
+constexpr int32_t kHastyHurryBobAmpMm = 140;
+inline int32_t g_u02_hasty_bob_cycles = kHastyHurryBobCycles;
+inline int32_t g_u02_hasty_bob_amp_mm = kHastyHurryBobAmpMm;
+
+// (b) THE SURGE. The lean stops being a posture: kHastyPitchA16 gains a
+// sinusoid on the cadence clock, so the body digs in and eases. The phase LEADS
+// the bob by 3/8 of a cycle, which is the anticipation -- it pitches down
+// before it rises, rather than reporting the rise after the fact.
+constexpr int32_t kHastyHurrySurgeA16 = 1400;
+constexpr int32_t kHastyHurrySurgePhaseA16 = 0x6000;
+inline int32_t g_u02_hasty_surge_a16 = kHastyHurrySurgeA16;
+
+// (c) THE TRAVERSE, RESTORED -- in permille of kHastySpeedMmPerKey, so 1000 is
+// the 70 mm/key (8.4 m) the clip was authored with and 0 is Direction 12's
+// held centre. This is the only channel that can move the loop seam, and the
+// owner has already accepted a seam hitch on this clip ("it moves across
+// screen, it makes sense it hitches"), so it is declared rather than defended.
+constexpr int32_t kHastyHurryTraversePm = 1000;
+inline int32_t g_u02_hasty_traverse_pm = kHastyHurryTraversePm;
+
+// (d) THE CAMERA FOLLOW, in permille of the traverse. 1000 = the creature holds
+// frame and the whole traverse becomes ground scroll; 0 = no follow and the
+// creature crosses the frame alone. Neither extreme is right here: full follow
+// throws away the screen motion the owner saw and liked, and no follow throws
+// away the ground-relative cue that IS the speed -- and at this framing it also
+// throws the creature clean out of frame (measured span 381.5 px in a 384 px
+// picture). Partial keeps both: the ground streams past while the body still
+// drifts forward through the shot.
+// 820 off the 650/750/800/820/900/940/1000 ladder, by eye at cam_k 280000:
+// the creature crosses 113 px of the frame -- screen motion the owner already
+// said she liked -- while the ground streams the other way, with 45 px of left
+// margin and 93 px of right and no frame touching an edge. 1000 pins the body
+// dead centre and throws the owner's read away; 650 puts it 15 px from the
+// left edge, which is one bob away from clipping.
+constexpr int32_t kHastyHurryCamFollowPm = 820;
+inline int32_t g_u02_hasty_cam_follow_pm = kHastyHurryCamFollowPm;
+
+// THE FULL-FOLLOW AIM SWEEP, at kU02CamKTraverse, for the full 8.4 m traverse:
+// the half-amplitude that holds the creature exactly still in frame.
+//
+// ⚠ IT IS NOT kU02HastyBiasX, AND ASSUMING IT WAS COST A RUNG. That constant's
+// own comment says it was picked off a four-rung ladder "at f235, the frame
+// where it used to be gone" -- it is the sweep that was ENOUGH TO KEEP THE
+// CREATURE IN SHOT, never a calibrated tracker, and it is short of full follow
+// by a factor of about 2.7. Deriving a follow from it produced a creature that
+// out-ran its own tracking shot with every constant individually correct.
+//
+// This one IS calibrated, on the comparison side and from the thing itself:
+// `screenmotion.py --mask chroma` at cam_k 200000 reports the creature crossing
+// at +2.177 px/frame with NO follow, against a background measured at
+// +0.001 px/frame -- the positive control, no pan and no scroll, which is what
+// says the instrument is reading the ground and not the creature.
+//
+// ⚠ AND IT IS SOLVED FROM TWO RUNGS, NOT DERIVED FROM THE PROJECTION. The
+// derivation is seductive and wrong: `cam_pitch` adds bias_x straight into NDC,
+// so "65536 units = 1 NDC = 192 px of a 384 px frame" and full follow needs
+// 89,170. Rendered, that left a creature still drifting 164 px across the clip
+// at follow 940, where the arithmetic promised 40. The horizontal NDC the
+// viewport actually shows is ~2.49 wide, not 2.0, so a unit of bias buys about
+// 154 px and not 192 -- a factor of 1.25 hiding in a step nobody measured.
+//
+// So: two renders, follow 0 (bias 0, +2.177 px/frame) and follow 800
+// (bias 71351, +0.771 px/frame), give 1.9705e-5 px/frame removed per bias unit
+// and a zero crossing at 110,477 for cam_k 200000 -- i.e. 81,753 at
+// kU02CamKTraverse. VERIFIED by a third render at follow 1000, which is the
+// point of solving from two and checking with a third rather than trusting the
+// line through them.
+//
+// It is a MEASURED BIAS REMOVAL, not a chosen value: it fixes the tracker to
+// the traverse. What the shot looks like is then chosen by eye with the follow
+// permille above, which is the knob that has an opinion in it.
+constexpr int32_t kHastyFullFollowBiasX = 81753;
+
+// (e) THE CAMERA, its own constant at last. 148000 is kU02CamKTraverse, sized
+// for DRIFT's 6.9 m and inherited by a clip that now travels behind a follow
+// cam. Larger k is TIGHTER. The face is the owner's explicit ask and cannot be
+// authored onto a creature whose eyes are two pixels, so this is a requirement
+// of the direction and not a preference.
+// 280000 off the 148000/200000/240000/250000/280000/300000/320000 ladder.
+// Bigger is better for the face and for the speed cue alike (relative motion in
+// PIXELS scales with k), so the binding constraint is edge clearance, and at
+// this follow 280000 is the tightest rung with room for the antenna at both
+// ends of the journey. The house framing is 360000.
+constexpr int32_t kU02CamKHasty = 280000;
+inline int32_t g_u02_hasty_cam_k = kU02CamKHasty;
+
+// (f) THE FACE. Hasty's own read, in the family of Startle and Curious but not
+// a copy of either: Startle's payoff is the eyes flying WIDE and Curious's is
+// an ASYMMETRIC double-take, and both are events. Hurry is a STATE -- committed
+// forward gaze, eyes narrowed with effort, brow tops drawn together, and the
+// size channel doing the acting on three quick checks to the side where the eye
+// snaps wide for a beat and re-narrows. Pass 25's ambient eye layer runs
+// underneath at its shipped gain.
+//
+// ⚠ Hasty never called enable_eye_scale_track(), so the pass-24 ambient eye
+// SIZE half could not land on it at all -- Rig::write only applies it when the
+// clip has a scale track. Authoring size here turns the track on, and the
+// shipped ambient size therefore starts reaching this clip. Declared, not
+// smuggled: it is the shipped gain arriving where it was always meant to.
+constexpr int32_t kHastyEyeDrivePm = 880;    // the held, narrowed driving eye
+constexpr int32_t kHastyEyeCheckPm = 1210;   // the snap wide on a check
+constexpr int32_t kHastySquintDrivePm = 430; // pass 25 held 220 flat
+constexpr int32_t kHastyBrowPm = -620;       // tops together: effort, not alarm
+constexpr int32_t kHastyGazeCheckPm = 900;   // how far a check throws the gaze
+inline int32_t g_u02_hasty_eye_drive_pm = kHastyEyeDrivePm;
+inline int32_t g_u02_hasty_eye_check_pm = kHastyEyeCheckPm;
+inline int32_t g_u02_hasty_squint_pm = kHastySquintDrivePm;
+inline int32_t g_u02_hasty_brow_pm = kHastyBrowPm;
+
+// The three checks, as [start, end) key windows over kHastyKeys = 120. Pass 25
+// had ONE, keys 56..72 -- a single 16-key glance in a 120-key clip, which is a
+// creature looking around, not one hurrying. Three shorter ones, unevenly
+// spaced so the clip never reads as metronomic, and none of them landing on the
+// loop seam.
+struct HastyCheck { int from, to; int32_t dir; };
+constexpr HastyCheck kHastyChecks[] = {
+    {18, 27, +1000}, {57, 65, -1000}, {88, 95, +700}};
+constexpr int kHastyCheckCount = 3;
 // PASS 3 (Direction 3 §7: "make it longer"): keys 100 -> 170, higher
 // start, and an extra tumble axis (a slow yaw under the pitch tumble).
 

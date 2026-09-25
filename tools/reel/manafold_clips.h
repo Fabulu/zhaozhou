@@ -2398,6 +2398,46 @@ inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   return c;
 }
 
+/** THE EXPRESSION SLOTS: the clips that author EYE SIZE.
+ *
+ *  ⚠ THIS EXISTS BECAUSE THE LIST WAS A HARDCODE THAT ONLY THE GATE KNEW.
+ *  `manafold-eyesize` carried `slot == 3 || slot == 4 || slot == 11 ||
+ *  slot == 21` in its own source, and the clips each called
+ *  enable_eye_scale_track() in theirs. Two copies of one fact, and pass 26
+ *  moved one of them: the moment Hasty started acting with its eyes the gate
+ *  went red with "non-expression slot 8 unexpectedly allocates eye scale".
+ *  The gate was RIGHT and its message was exact -- but the failure was a
+ *  registration that had to be made in two places, which is the house's
+ *  ledger/manifest/source-list fault in miniature. One definition now; the
+ *  gate reads this.
+ *
+ *  ⚠ AND SLOT 8's ANSWER DEPENDS ON THE HURRY. With `HastyHurry::kOff` the
+ *  clip takes pass 25's arithmetic and allocates NO track, so a gate that
+ *  expected one unconditionally would go red on the exact-off configuration --
+ *  a leg failing on the one setting whose entire purpose is to reproduce a
+ *  shipped bank. The clip and the gate therefore read the SAME function.
+ *
+ *  That is deliberately not the "two operands moving together" trap: this
+ *  comparison is registration against allocation, not a timing relationship,
+ *  and the gate still fails loudly in BOTH directions -- an expression slot
+ *  with no active track, and a non-expression slot with one. A clip that
+ *  enabled a track without being registered here would be caught exactly as
+ *  Hasty was.
+ */
+inline bool eye_expression_slot(uint16_t slot) {
+  switch (slot) {
+    case 3:   // curious -- the asymmetric double-take
+    case 4:   // startle -- the eyes flying wide
+    case 11:  // taunt
+    case 21:  // taunt III (kTaunt3Slot, declared later in this header)
+      return true;
+    case 8:   // hasty -- PASS 26, and only when the hurry is on
+      return hasty_hurry_on();
+    default:
+      return false;
+  }
+}
+
 inline void enable_eye_scale_track(zc::Clip& c) {
   c.uniform_scale_q15.assign(
       static_cast<size_t>(c.frame_count) * kBoneCount, kEyeScaleIdentityQ15);
@@ -3502,6 +3542,48 @@ inline bool apply_knead_dip_env() {
                   1000, g_u02_backball_damp_clip_pm.data()))
       return false;
   }
+  // ---- PASS 26 (Direction 27): THE HURRY ---------------------------------
+  // Every channel of Hasty's hurry, here in the SHARED parser for the reason
+  // the function's header gives -- an env control is only a control in a binary
+  // that reads it, and the motion/span/probe gates judge the same clip.
+  //
+  // ZHAO_U02_HASTY_HURRY=off is the EXACT-OFF CONTROL: the clip and its camera
+  // both take the pass-25 arithmetic and the subject renders byte-identical.
+  if (const char* e = std::getenv("ZHAO_U02_HASTY_HURRY")) {
+    if (std::strcmp(e, "on") == 0)
+      g_u02_hasty_hurry = HastyHurry::kOn;
+    else if (std::strcmp(e, "off") == 0)
+      g_u02_hasty_hurry = HastyHurry::kOff;
+    else
+      return false;  // strict, like every selector here
+  }
+  // The ladder knobs. Ranges are authoring ranges, not safety rails: each was
+  // picked wide enough that the rung either side of the shipped value is
+  // reachable, because a knob whose useful setting is outside its own range is
+  // the inert-control trap in another costume (see ZHAO_U02_KNEAD_DENT_DEPTH_PM).
+  if (!num("ZHAO_U02_HASTY_BOB_CYCLES", 1, 40, g_u02_hasty_bob_cycles))
+    return false;
+  if (!num("ZHAO_U02_HASTY_BOB_AMP_MM", 0, 600, g_u02_hasty_bob_amp_mm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_SURGE_A16", 0, 6000, g_u02_hasty_surge_a16))
+    return false;
+  if (!num("ZHAO_U02_HASTY_TRAVERSE_PM", 0, 3000, g_u02_hasty_traverse_pm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_CAM_FOLLOW_PM", 0, 1000, g_u02_hasty_cam_follow_pm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_CAM_K", 60000, 600000, g_u02_hasty_cam_k))
+    return false;
+  // set_eye_scale_pm rejects <=0 and >=2000 outright, so the parser's range is
+  // the one the setter will actually accept -- a value that parses and is then
+  // silently dropped is worse than one that is refused.
+  if (!num("ZHAO_U02_HASTY_EYE_DRIVE_PM", 400, 1900, g_u02_hasty_eye_drive_pm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_EYE_CHECK_PM", 400, 1900, g_u02_hasty_eye_check_pm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_SQUINT_PM", 0, 1000, g_u02_hasty_squint_pm))
+    return false;
+  if (!num("ZHAO_U02_HASTY_BROW_PM", -1000, 1000, g_u02_hasty_brow_pm))
+    return false;
   if (!num("ZHAO_U02_EYE_AMBIENT_PM", 0, 1000, g_u02_eye_ambient_master_pm))
     return false;
   // ⚠ NOT A PASS-24 KNOB. `ZHAO_U02_REAR_CARRIER_CALM_PM` has existed since
@@ -4488,35 +4570,154 @@ inline zc::Clip build_hasty() {
   // so Zixxtrixx stays bit-identical; these four clips opt in. See
   // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
   c.wrap_root_delta = true;
+  // PASS 26 (Direction 27): the hurry. The scale track carries the authored eye
+  // size -- and, because Rig::write only applies the pass-24 ambient eye SIZE
+  // to a clip that HAS a track, turning it on is also what lets the shipped
+  // ambient size reach this clip for the first time. Declared in manafold_art.h
+  // beside kHastyEyeDrivePm. In the exact-off path the track is not enabled, so
+  // that arithmetic does not run at all and the bytes are pass 25's.
+  const bool hurry = hasty_hurry_on();
+  if (hurry) enable_eye_scale_track(c);
+  const int bob_cycles = hurry ? g_u02_hasty_bob_cycles : kHastyBobCycles;
+  const int32_t bob_amp = hurry ? g_u02_hasty_bob_amp_mm : kHastyBobAmpMm;
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 8, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // pitched into the travel, banked, fishtailing — travel is +x, the
     // rest facing, so no yaw circuit at all
-    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(-kHastyPitchA16));
+    //
+    // PASS 26 (b): the pitch is no longer a held posture. The surge rides the
+    // CADENCE clock (bob_cycles), leading the bob by kHastyHurrySurgePhaseA16,
+    // so the body digs into the travel a beat before it rises out of it. At
+    // hurry-off the addend is exactly 0 and the quat is pass 25's.
+    int32_t pitch = kHastyPitchA16;
+    if (hurry) {
+      pitch += static_cast<int32_t>(
+          (static_cast<int64_t>(g_u02_hasty_surge_a16) *
+           sinp(f, K, bob_cycles, kHastyHurrySurgePhaseA16)) >> 16);
+    }
+    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(-pitch));
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_x(kHastyBankA16));
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot], quat_y(static_cast<int32_t>(
                          (static_cast<int64_t>(kHastyFishtailA16) *
                           sinp(f, K, kHastyFishtailCycles)) >> 16)));
-    // the antenna drags: stronger sway, and the whole loop blown back a bit
+    // the antenna drags: stronger sway, and the whole loop blown back a bit.
+    // PASS 26: the drag is driven off the same cadence clock as the body, so a
+    // faster stride whips the antenna faster instead of leaving it ambling
+    // against a hurrying body.
+    //
+    // ⚠ loop_alive's 5th argument and compress_at's 3rd are CYCLES, not a
+    // period. Pass 25 passes `K / 15`, which is 8 on a 120-key clip and reads
+    // like a period -- the first draft of this line duly computed
+    // `K / bob_cycles` and would have quietly SLOWED the antenna to 9 cycles
+    // while the body sped up to 13. The names are spelled out here so the next
+    // reader does not have to re-derive it.
     const HingePlay front = front_flex_play(8, f, K);
-    loop_alive(g, 8, f, K, K / 15, kAntennaSwayPm * 3, kCompressAmpPm,
-               K / 15, &front);
+    const int sway_cycles = hurry ? bob_cycles : (K / 15);  // pass 25: 8
+    loop_alive(g, 8, f, K, sway_cycles, kAntennaSwayPm * 3, kCompressAmpPm,
+               sway_cycles, &front);
     face_rest(g);
-    // eyes ahead-up; one panic glance sideways mid-flight
-    apply_gaze(g, f >= 56 && f < 72 ? kGazeMaxA16 / 2 : 0, kGazeLiftMaxA16 / 3);
-    apply_squint(g, 220 + blink_at(f, 11));  // squinting into the wind
+    if (hurry) {
+      // PASS 26 (f): THE HURRIED FACE. A held state with three checks in it,
+      // not an event. `check` is 0 on the drive and ramps to +/-1000 inside a
+      // window; every face channel reads that one curve, so the eye size, the
+      // gaze and the lid cannot drift out of agreement with each other.
+      int32_t check = 0;
+      for (int i = 0; i < kHastyCheckCount; ++i) {
+        const HastyCheck& w = kHastyChecks[i];
+        if (f >= w.from && f < w.to) {
+          // a triangular in/out so a check ARRIVES and LEAVES rather than
+          // cutting -- at 2 rendered frames per key a cut is a pop
+          const int span = w.to - w.from;
+          const int t = f - w.from;
+          const int half = span / 2;
+          const int tri = t <= half ? t : span - t;
+          check = static_cast<int32_t>(
+              (static_cast<int64_t>(w.dir) * tri) / (half > 0 ? half : 1));
+        }
+      }
+      const int32_t mag = check < 0 ? -check : check;
+      // gaze: committed AHEAD and slightly up on the drive; thrown to the side
+      // on a check. Pass 25 lifted by kGazeLiftMaxA16/3 all clip; the drive
+      // keeps that and the check flattens it, because a creature checking its
+      // flank is not also looking up.
+      apply_gaze(g,
+                 static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16) *
+                                       kHastyGazeCheckPm / 1000 * check) / 1000),
+                 static_cast<int32_t>(
+                     (static_cast<int64_t>(kGazeLiftMaxA16 / 3) * (1000 - mag)) / 1000));
+      // the lid: narrowed into the wind on the drive, opening on a check
+      apply_squint(g,
+                   static_cast<int32_t>(
+                       (static_cast<int64_t>(g_u02_hasty_squint_pm) * (1000 - mag)) / 1000) +
+                       blink_at(f, 11));
+      // the brow: tops drawn together, held. Same sign as Curious's fix, and
+      // deliberately NOT Startle's tops-apart -- this animal is determined,
+      // not alarmed. It eases off on a check so the snap-wide can read.
+      const int32_t brow = static_cast<int32_t>(
+          (static_cast<int64_t>(g_u02_hasty_brow_pm) * (1000 - mag)) / 1000);
+      apply_eye_roll(g, brow, brow);
+      // the SIZE does the acting: held small and driving, snapping wide on a
+      // check and settling back.
+      const int32_t eye = g_u02_hasty_eye_drive_pm +
+          static_cast<int32_t>(
+              (static_cast<int64_t>(g_u02_hasty_eye_check_pm - g_u02_hasty_eye_drive_pm) *
+               mag) / 1000);
+      (void)g.set_eye_scale_pm(eye, eye);
+    } else {
+      // eyes ahead-up; one panic glance sideways mid-flight
+      apply_gaze(g, f >= 56 && f < 72 ? kGazeMaxA16 / 2 : 0, kGazeLiftMaxA16 / 3);
+      apply_squint(g, 220 + blink_at(f, 11));  // squinting into the wind
+    }
     g.write(c, f);
-    // Direction 12 removes the screen-space smear, which was the only reason
-    // Hasty kept a non-looping net traverse. Hold x at centre: the vertical
-    // floating bob remains, and the site loop no longer ends on an empty frame.
-    c.root[static_cast<size_t>(f) * 3 + 0] = 0;
+    // Direction 12 removed the screen-space smear, which was the only reason
+    // Hasty kept a non-looping net traverse, and held x at centre.
+    //
+    // PASS 26 (c) PUTS THE TRAVERSE BACK, because holding x at centre is
+    // precisely why the clip does not read hasty: the camera's traverse
+    // compensation was never removed with it, so all the screen motion became a
+    // pan that carries the ground along and leaves ZERO ground-relative speed
+    // cue (measured: relative -0.170 px/frame).
+    //
+    // ⚠ AND IT TRAVELS ALONG THE SCREEN-LATERAL WORLD AXIS, NOT +X. The u02
+    // creature camera is a FIXED THREE-QUARTER (kU02FixedCamYawA16 = 45 deg),
+    // applied as `vp * rot_world_yaw(theta)`, whose rows give
+    //     X_rot = c*X - s*Z      Z_rot = s*X + c*Z
+    // so world +X is HALF LATERAL AND HALF DEPTH. Every earlier version of this
+    // traverse ran along +X, which is why the creature visibly GREW and SANK as
+    // it went -- it was running diagonally into the lens -- and it is why a
+    // purely lateral follow cam could never hold it: the bias corrects the
+    // horizontal half while the depth half changes the creature's SCALE and its
+    // height in frame. R5's standing comment in zhao_reel.cpp claims "a linear
+    // lateral lerp tracks them exactly"; that is true only for travel parallel
+    // to the screen, and this camera is at 45 degrees to it.
+    //
+    // Travelling L along (cos, 0, -sin) makes Z_rot constant (s*c + c*(-s) = 0)
+    // and X_rot exactly L -- no depth change, no scale change, and the follow
+    // becomes the exact tracker its comment always said it was. Deriving both
+    // components from kU02FixedCamYawA16 means the traverse cannot fall out of
+    // agreement with the camera it was authored against.
+    if (hurry) {
+      const int32_t L = static_cast<int32_t>(
+          (static_cast<int64_t>(fxu((f - K / 2) * kHastySpeedMmPerKey)) *
+           g_u02_hasty_traverse_pm) / 1000);
+      const int32_t cw = zref::fx_cos(zref::angle16{
+          static_cast<uint16_t>(kU02FixedCamYawA16 & 0xFFFF)}).raw;
+      const int32_t sw = zref::fx_sin(zref::angle16{
+          static_cast<uint16_t>(kU02FixedCamYawA16 & 0xFFFF)}).raw;
+      c.root[static_cast<size_t>(f) * 3 + 0] =
+          static_cast<int32_t>((static_cast<int64_t>(L) * cw) >> 16);
+      c.root[static_cast<size_t>(f) * 3 + 2] =
+          static_cast<int32_t>(-((static_cast<int64_t>(L) * sw) >> 16));
+    } else {
+      c.root[static_cast<size_t>(f) * 3 + 0] = 0;
+    }
     c.root[static_cast<size_t>(f) * 3 + 1] =
-        hover_at(f, K, kHoverHeightMm, kHastyBobAmpMm, kBobAmpBMm,
-                 kHastyBobCycles, K / 20);
-    c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / 15, kCompressAmpPm);
+        hover_at(f, K, kHoverHeightMm, bob_amp, kBobAmpBMm,
+                 bob_cycles, K / 20);
+    c.deform[static_cast<size_t>(f)] = compress_at(f, K, sway_cycles, kCompressAmpPm);
   }
   return c;
 }
