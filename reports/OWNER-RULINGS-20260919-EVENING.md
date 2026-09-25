@@ -7907,3 +7907,59 @@ code/tests/compatibility consequences. Then execute. Further decisions belong in
 the implementation packets themselves, per section 10 item 3 -- not in a new
 essay. The directive is explicit that an audit-only packet for a decision already
 delegated here is not to be commissioned again.
+
+### DECISION RECORD 1 under the delegation: COMPOSED_NAV MOVES, because the directive's range collides with POST.ECHO
+
+**Question.** Section 1 of the vacation directive allocates
+`COMPOSED_MATERIAL [0x058B_0000, 0x05AB_0000)` and
+`COMPOSED_NAV [0x05AB_0000, 0x05CB_0000)`, each 2 MiB / 256 slots x 8 KiB, and
+instructs: *"Before enacting these ranges, check the LIVE map, guard, allocator,
+and branches being integrated. If a newer allocation occupies one, choose another
+proved-free range and record it without asking."* Do they collide?
+
+**MATERIAL does not. NAV DOES.** `spec/memory_rules.md:865` places **POST.ECHO's
+capture at `0x05C0_0000 .. 0x05C3_BFFF`**, and `fpga/rtl/common/zhao_pkg.sv:242`
+carries the same half-open end `0x05C3_C000` in RTL. That sits **inside** the
+proposed NAV interval. The directive's own section 5b table still calls
+`0x058B_0000..0x05FF_FFFF` *"reserved / unmapped"*, which is why the range looked
+free; POST.ECHO was added later in the document, under core entries I15/I16 and
+ruling R7, and is the only live allocation in that tail. I swept every
+`0x05[8-F]x_xxxx` literal in `spec/`, `design/` and `fpga/rtl/` to confirm it is
+the only one.
+
+**Chosen option.**
+
+| region | interval | size |
+|---|---|---|
+| `TERRAIN.COMPOSED_MATERIAL` | `[0x058B_0000, 0x05AB_0000)` | 2 MiB = 256 x 8 KiB **(unchanged)** |
+| `TERRAIN.COMPOSED_NAV` | `[0x05C4_0000, 0x05E4_0000)` | 2 MiB = 256 x 8 KiB **(moved above POST.ECHO)** |
+
+`0x05C4_0000` clears POST.ECHO's half-open end `0x05C3_C000` by 16 KiB and is
+256 KiB-aligned. `0x05E4_0000` leaves `0x05E4_0000..0x0600_0000` (1.75 MiB) and
+`0x05AB_0000..0x05C0_0000` (1.31 MiB) still reserved.
+
+**Reason, and the alternative I rejected.** The obvious alternative is to keep the
+two caches CONTIGUOUS by moving POST.ECHO. I refused it. Contiguity is
+impossible below POST.ECHO -- 4 MiB from `0x058B_0000` ends at `0x05CB_0000` and
+straddles it -- so keeping them adjacent means relocating a region that carries a
+**formal no-escape proof re-run on 2026-09-19**: `mem_guard_no_escape.sby` bmc
+PASS at depth 30, cover PASS on every arm, with `a1_echo_not_fb`, `a1_echo_wo`,
+`a1_echo_owner` and `a1_echo_lease` all bound to its constant bounds. **Adjacency
+buys nothing here** -- both caches are addressed independently by slot index, and
+nothing walks from one into the other -- so spending a proof re-derivation to
+gain it would be paying a real cost for an aesthetic one.
+
+**Constraints and cost.** No client id is spent; no FB window moves; POST.ECHO is
+untouched, so its proof stands unmodified. The two new regions need their own
+**scoped** guard permissions -- the directive forbids blanket bank-2 permission,
+asset-pool widening, and any request crossing a permitted-range boundary merely
+because both endpoints lie in the union -- so the no-escape proof gains covers and
+deliberately failing mutants for the new writer and reader rather than a widened
+existing rule.
+
+**Consequences.** `spec/memory_rules.md` section 5b gains both rows and section
+5-guard gains two permission rows; `zhao_pkg.sv` gains the bounds beside
+POST.ECHO's; the guard's formal lane gains the new covers and mutants. **The
+implementing packet writes all of that**, per the directive's section 10 item 3 --
+this record exists so the verification is not lost if that packet is re-scoped,
+and so nobody re-derives the collision.
