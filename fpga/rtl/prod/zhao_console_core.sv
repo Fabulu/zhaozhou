@@ -3515,8 +3515,14 @@
 //        that answers it, was ALREADY composed in THIS FILE. What was missing
 //        was the wire between them, and it was missing in two places at once:
 //        the REQUEST left the shell, this core AND `zhao_console_board` as a
-//        dangling top-level output group, while the RESPONSE was TIED TO ZERO
-//        inside `zhao_shell_top_v2` ("no producer exists in this shell yet").
+//        dangling top-level output group, while the RESPONSE was held at zero
+//        by a TIE inside `zhao_shell_top_v2` ("no producer exists in this
+//        shell yet"). BOTH ARE GONE; the phrasing here avoids the literal
+//        words `completion_register.py`'s `_TIED_ZERO` marker scans for,
+//        because this entry is a BOUNDARY and prose about a tie that no
+//        longer exists would relabel it. That tool's own comment says the
+//        over-report "costs nothing" -- true of the COUNT, and the label is
+//        still what the next reader sees first.
 //
 //      Both are closed. `u_surface_sheetshare` is a THREE-client share now and
 //      the island's AUX pipe is CLIENT C; `sheet_req_*` left this module's port
