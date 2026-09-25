@@ -770,6 +770,181 @@ different fields today. If the island's is authoritative, P1's per-slot table
 disappears and P1 halves. If it is not, the table is owed and the walker must
 carry it.
 
+### BUILT 2026-09-25 (EDGEPREP). P2 AND P3 EXIST; P1 IS DELETED BY RULING
+
+Owner directive 2026-09-23 section 2 decided the open question this contract
+records as *"OPEN OWNER QUESTION, and nobody has asked it"*:
+
+> *"the frame-sealed island descriptor's pitch_log2 is authoritative for EVERY
+> page belonging to that island generation. The page-header pitch remains a
+> checked redundant value, not an independent source of placement law. This
+> resolves D-2 and removes the need for the proposed per-resident-slot pitch
+> table."*
+
+**That deletes P1.** The per-slot `pitch_log2` table is not owed. The pitch is
+a frame-scoped input (`frz_pitch_log2_i`) and the page-header value becomes a
+CHECK to be made at admission/load — see "what P4 still owes", below, because
+that check is not built and this packet did not build it.
+
+**P2 is `fpga/rtl/terrain/zhao_terrain_prepwalk.sv`** and **P3 is
+`fpga/rtl/terrain/zhao_terrain_lodshare.sv`**. Neither is composed; P4 composes
+all three blocks together and spends the plan's one fit.
+
+#### The replay mechanism was already in the tree, and it is the list's address
+
+The directive asks for *"a replayable sealed-list PREPARE reader independent of
+compose-cache backpressure"*. **`zhao_terrain_cmd` already reads the sealed list
+TWICE, every frame, by design** — *"pass one folds the CRC and emits nothing;
+pass two emits and folds nothing"* — because ruling T5 makes the list CAPTURE
+DATA at a known address with a known length and CRC. That is the definition of
+replayable, and blocker A dissolves against it: `zhao_terrain_prepwalk` is a
+THIRD reader of the same bytes whose ready is its OWN consumer's, so the compose
+spine is nowhere in its loop.
+
+It is a separate block rather than a third pass inside `zhao_terrain_cmd`
+because that block is COMPOSED: new output ports on it would dangle at
+`zhao_console_core`'s boundary until P4 wired them and put the completion
+register UP, which is the trade R75 endorses refusing.
+
+#### The sp_cx/sp_cz decision, settled by REMOVING the choice
+
+This contract lists three candidates and EDGERECON2 refused all three. The
+answer taken is the fourth shape that findings named: **the placement law moved
+into `zhao_terrain_place_law_pkg`**, a package holding `place32`, `units_fits`,
+`units_of` and `pitch_legal`, moved VERBATIM out of `zhao_terrain_place`, which
+now calls them. PREPARE and EMIT are bit-identical **by construction** rather
+than by two implementations agreeing, which is the property the symmetry law
+needs and the one a second implementation cannot promise.
+
+A package holds no state, has no ports, costs no ALMs and cannot be composed or
+left disconnected, so it is not a second PROVIDER: `zhao_terrain_place` still
+owns header acceptance, the envelope check, the pitch refusal, the census and
+the 66-write compose fill. What moved is the shifter, which was never the
+provider. No port changed, so nothing regenerates. Behaviour-neutrality is
+measured, not asserted: `terrain_place_directed` (68), `terrain_heighttap_
+directed` (2,272) and `surface_dispatch_directed` (1,072 checks, with
+`pitch_refused=3`) all pass unchanged.
+
+#### Blocker C survives, and its "harmless today" half does NOT
+
+The re-latch is confirmed at `zhao_console_core.sv:26414`: thirteen `gv_*_q`
+captured under `else if (tld_idle)`, re-sampled ~256 times a frame. **The claim
+that it is harmless today is false for six of the thirteen.** `veye0_*`/
+`veye1_*` come from `zhao_view_eye`, whose registers update on `cfg_we_i` —
+*"a pulse the executor owns, and a write lands the cycle it is"* (`:43`,
+`:123`). They are HOST-WRITE-SCOPED, not frame-scoped. **The SINGLE pass is
+already sampling a moving camera and nothing was watching it.**
+`zhao_terrain_lodshare` freezes all thirteen on `frame_i` and `freeze_drift_o`
+measures the motion the old arrangement absorbed silently.
+
+#### The history writeback: suppressed, and devstore needed NO change
+
+`zhao_terrain_devstore` enters `R_HWR` on `(h_any_q || h_valid_i)` and
+`h_any_q` is set ONLY inside `if (h_valid_i)` (`:859-865`, `:877`); the
+producer of `h_valid` is `zhao_terrain_jobissue` (`:343`). The time-share
+routes PREPARE's ladder output to the RECONCILER and not to jobissue, so
+jobissue is starved for the whole pass and emits no history at all — devstore's
+own comment already describes it: *"A patch whose LOD pass emitted NOTHING
+skips the write entirely."*
+
+The port is nevertheless routed THROUGH the time-share and gated, because a
+correctness property that holds through somebody else's wiring is the kind an
+innocent edit breaks in silence — and because the gate gives `hist_leak_o`
+somewhere to live.
+
+#### Two defects found in this packet's own new RTL, both recorded
+
+* **`prep_begin_o` was a LEVEL.** This block documents `frame_begin_i` as a
+  PULSE and says *"`frame_begin_i` during a sweep RESTARTS it rather than
+  queueing"*. A level held while waiting for the phase gate would have
+  restarted the 257-clock sweep every cycle — the sweep never completes, the
+  gate never rises, and the two blocks hold each other still FOR EVER, with
+  every counter reading zero. It is one cycle wide now.
+* **`idq_overflow_o` counted the guard CORRECTLY REFUSING**, not an overflow. A
+  counter named for a fault that fires on correct behaviour trains its reader
+  to ignore it.
+
+#### Evidence
+
+| | |
+|---|---|
+| `terrain_prepwalk_directed` | **85 checks, 0 failures**, twelve cases |
+| `terrain_lodshare_directed` | **96 checks, 0 failures**, nine cases |
+| `terrain_lodshare_mutant` | `idq_overflow_o` fired **12x**; positive control `idq_full_stalls_o` = 12; INVERTED polarity |
+| `check_quartus17_syntax.py` | clean — it caught a second `import` in a module header that Verilator accepts and Quartus 17.0 rejects |
+| `verilator --lint-only -Wall` | 0 diagnostics on both blocks |
+
+**R212 for both new blocks: neither has been through `quartus_map`.** Lint is
+one tool's opinion. P4's fit is where that is settled.
+
+**Counters.** `zhao_terrain_prepwalk` has eighteen, ALL fired from the block's
+own boundary with legal stimulus, each with a control — so no mutant is owed
+there and that is measured rather than omitted. `zhao_terrain_lodshare` has
+twelve; eleven fire with stimulus and the twelfth,`idq_overflow_o`, is
+unreachable by construction and owns the committed mutant.
+
+**`store_wait_clocks_o` is the budget instrument, not a burst count** — the
+thing P2 was told to carry. `spec/memory_rules.md:396-402` named it first.
+**Do not quote `terrain_lodpath_directed` case 8's 660 clocks as the cost of
+anything**: it is 12 clocks per 64-byte burst on a played fabric at 2-cycle
+read latency, and a real request is four SDRAM bursts at 12–18, so that floor
+understates by 4–6x.
+
+**Bandwidth.** `tools/budget/sdram_bandwidth.py` gained one row and one
+correction. `devstore_prepare()`'s zero write demand is no longer a REQUIREMENT
+on a future packet but a built, measured property. `prepare_list_reread()` is
+new and is **deliberately not in the total**: the third list pass is 8 KiB a
+frame on the **HPS-DDR bridge**, a different socket from the local SDRAM this
+ledger adds up, and folding it in would teach the tool that the two are
+interchangeable. Totals are unchanged and still reproduce EDGEBAND's:
+**124.33% → 129.86% at bank-conflict spans, 83.86% at page-hit.**
+
+### WHAT P4 STILL OWES, NAMED RATHER THAN LEFT TO BE REDISCOVERED
+
+1. **Compose all three blocks together** and wire `edge_*`. Composing any one
+   alone dangles ports and puts the register UP.
+2. **The admission-time pitch/identity/envelope check the directive requires** —
+   *"Check page pitch, island identity and declared origin/envelope consistently
+   at admission/load. Refuse and count a mismatch before publishing residency;
+   do not silently rescale a page."* **THIS IS NOT BUILT.** `zhao_terrain_place`
+   checks the envelope against the PAGE HEADER's pitch; nothing compares the
+   header's pitch against the ISLAND descriptor's, which is what the directive
+   now makes authoritative. A page whose header disagrees would be placed one
+   way in EMIT and another in PREPARE — a crack. The comparator is small and
+   belongs in the page-load path.
+3. **A producer for `frz_pitch_log2_i`.** `zhao_terrain_island_dir` is **not
+   instantiated in `zhao_console_core` at all** — measured, not assumed — so the
+   frame-sealed island descriptor has no live producer in the console. P4 must
+   supply one rather than tie the port.
+4. **A producer for `frz_tok_i`**, the freeze witness: a residency/bake
+   generation that changes when either moves. `restart_req_o` is a detected
+   restart REQUEST and the caller decides what to do with it.
+5. **`prep_gate_i` from the reconciler's `phase_o == 1`**, and `prep_sel_i` from
+   the walker's `busy_o`.
+6. **The EMIT-side query driver**: the time-share files during PREPARE, but who
+   QUERIES `zhao_terrain_edgerecon` during EMIT, with which `q_ix_i`/`q_iz_i`,
+   is still the caller's business — this contract's original exclusion stands.
+7. **SDRAM scheduling, directive section 7.** Bounded guaranteed service for
+   the frame-critical devstore reads. **The reserved client 5 is NOT available
+   in the live design** — `zhao_vram_arbiter.sv:353` forces `port_grant[5]` low
+   and `:246` records that it appears in no selector arm, while
+   `zhao_mem_guard`'s `default` arm grants it nothing. Spending it means
+   changing two proven blocks, re-proving the arbitration bound B with all
+   clients enabled, and extending `tests/formal/mem_guard_no_escape.sby`. This
+   packet measured it and did not spend it, because the route only matters once
+   PREPARE actually issues reads in a composed console — doing it now would be
+   BUILT, INSTALLED NOWHERE against a path that does not yet exist.
+8. **The acceptance bench**, on `tests/prod/partmat_acceptance.cpp`'s pattern,
+   covering what the directive names: nondegenerate terrain fixtures, mixed
+   neighbouring LODs, both views, changing camera state, deformation, missing
+   pages, history and backpressure. **The console smoke cannot be the
+   evidence**: its 128 replayed terrain triangles are all degenerate, so it
+   cannot evidence a tessellation result, and the directive says to fix the
+   fixture rather than repeat the older claim.
+
+P4's fit question is unchanged and already named: *does the terrain island
+still close at NCTX with the walker, the time-share and EDGERECON added?*
+
 ## Notes
 
 1. **The bank stores decisions, not geometry.** The ruling permits buffering
