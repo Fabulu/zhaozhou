@@ -211,23 +211,91 @@ def devstore_prepare() -> Demand:
     lvl[] before EMIT opens, so its READ demand is EMIT's exactly -- the same
     five bursts for the same 256 patches.
 
-    ITS WRITE DEMAND IS ZERO, AND THAT IS A REQUIREMENT ON P2 RATHER THAN AN
-    OBSERVATION ABOUT IT.  A PREPARE teed naively off `r_start_i` inherits
+    ITS WRITE DEMAND IS ZERO.  THAT WAS A REQUIREMENT ON P2 AND IS NOW A BUILT
+    AND MEASURED PROPERTY -- EDGEPREP, 2026-09-25.
+
+    The requirement was real: a PREPARE teed naively off `r_start_i` inherits
     R_HWR, so it would write each patch's history row back a second time per
-    frame -- and EMIT, which reads history at R_HREQ before its own LOD runs,
-    would then read PREPARE's write as "the previous frame's" level.  That is
-    a hysteresis corruption with every counter balancing, not a bandwidth cost.
-    P2 must suppress the writeback; if it does not, add 256 writes here and
-    treat the crack as the real defect.
+    frame, and EMIT -- which reads history at R_HREQ BEFORE its own LOD runs --
+    would then read PREPARE's write as "the previous frame's" level.  A
+    hysteresis corruption with every counter balancing, not a bandwidth cost.
+
+    IT IS SUPPRESSED, AND devstore NEEDED NO CHANGE.  The read FSM enters
+    R_HWR on `(h_any_q || h_valid_i)` and `h_any_q` is set ONLY inside
+    `if (h_valid_i)` (zhao_terrain_devstore.sv:859-865, :877), while the
+    producer of `h_valid` is `zhao_terrain_jobissue` (:343).
+    `zhao_terrain_lodshare` routes PREPARE's ladder output to the RECONCILER
+    and not to jobissue, so jobissue is starved for the whole pass and emits no
+    history at all -- devstore's own comment already describes the path, "A
+    patch whose LOD pass emitted NOTHING skips the write entirely."
+
+    That block ALSO gates the history port explicitly, belt and braces, and
+    `hist_leak_o` counts any history beat offered while PREPARE owns the
+    ladder.  `terrain_lodshare_directed` case 5 forwards a beat in EMIT and
+    watches the identical beat be swallowed in PREPARE, with the counter firing
+    on the offer -- so the zero here is a reading rather than a hope.
+
+    SO THE 256 WRITES THIS DOCSTRING USED TO THREATEN ARE NOT OWED.  If a
+    future edit routes PREPARE's output to jobissue, `hist_leak_o` moves and
+    the crack, not the bandwidth, is the defect to fix.
     """
     return Demand(
         name="TERRAIN.DEVSTORE PREPARE (proposed, EDGERECON P2)",
         priority=CLASS_BACKGROUND,
         read_requests=LIVE_PATCHES * 5,
         write_requests=0,
-        basis="identical read to EMIT; writeback MUST be suppressed (see docstring)",
-        provenance="design/contracts/TERRAIN.EDGERECON.md:583-593 (uncosted); "
-                   "EDGEBAND derivation 2026-09-23",
+        basis="identical read to EMIT; writeback SUPPRESSED and measured "
+              "(zhao_terrain_lodshare, hist_leak_o, EDGEPREP 2026-09-25)",
+        provenance="design/contracts/TERRAIN.EDGERECON.md:583-593; "
+                   "EDGEBAND derivation 2026-09-23; "
+                   "EDGEPREP build + terrain_lodshare_directed case 5",
+        confidence="derived",
+    )
+
+
+def prepare_list_reread() -> Demand:
+    """P2's THIRD pass over the sealed patch list.  A DIFFERENT SOCKET.
+
+    ADDED 2026-09-25 (EDGEPREP), and the reason it is reported rather than
+    summed is the whole point of the row.
+
+    `zhao_terrain_prepwalk` re-reads the frame's sealed T5 patch list to
+    enumerate the admitted set without touching the compose spine.  That is a
+    third pass over bytes `zhao_terrain_cmd` already reads twice -- once to
+    fold the CRC, once to emit -- and it is what makes the walk REPLAYABLE
+    rather than a tee off a one-shot stream that cannot terminate.
+
+    THE COST IS 256 x 32 B = 8 KiB/frame, and it lands on the HPS-DDR BRIDGE,
+    NOT on the local SDRAM this ledger adds up.  `zhao_terrain_cmd` and
+    `zhao_terrain_prepwalk` both take `cfg_hps_client_i` and drive
+    `zhao_hps_burst_req_t` through `u_terr_hps_arb` into `zhao_hps_bridge`;
+    the local-SDRAM clients reach `zhao_vram_arbiter` through
+    `zhao_mem_guard`.  Two sockets, two budgets.
+
+    SO THIS ROW IS NOT IN `declared_demands()` AND MUST NOT BE ADDED TO THE
+    TOTAL.  Folding it in would overstate the local SDRAM by 8 KiB/frame and,
+    worse, would establish that the two sockets are interchangeable in this
+    tool -- which is the kind of quiet category error that survives for
+    months.  It exists here so the number is WRITTEN DOWN somewhere a later
+    packet will look, because `zhao_terrain_cmd`'s own header already costs
+    its two passes ("16 KB of HPS traffic per frame against the 684 KB that
+    T7's 32 whole pages already cost -- 2.4% more") and a third pass belongs
+    beside that sentence: 24 KB against 684 KB, ~3.5%.
+
+    A REAL HPS-BRIDGE LEDGER IS OWED AND DOES NOT EXIST.  Nothing under
+    tools/ adds up that socket, exactly as nothing added up this one before
+    EDGEBAND wrote this file.  Naming the gap is cheaper than inventing a
+    denominator for it.
+    """
+    return Demand(
+        name="TERRAIN.CMD sealed-list re-read, PREPARE pass (HPS BRIDGE, not SDRAM)",
+        priority=CLASS_BACKGROUND,
+        read_requests=(LIVE_PATCHES * 32) // FABRIC_REQUEST_BYTES,
+        write_requests=0,
+        basis="256 records x 32 B = 8 KiB/frame on the HPS-DDR bridge; "
+              "a THIRD pass over a list zhao_terrain_cmd already reads twice",
+        provenance="zhao_terrain_cmd.sv header ('read it twice', 16 KB/frame); "
+                   "zhao_terrain_prepwalk.sv (EDGEPREP 2026-09-25); ruling T5",
         confidence="derived",
     )
 
@@ -593,6 +661,16 @@ def main(argv: list[str]) -> int:
     print("* The rows marked 'provisional' are figures their own authors refused")
     print("  to freeze -- spec/terrain_rules.md:631-639, 'Affordability: NOT")
     print("  COSTED'.  Summing provisional numerators gives a provisional total.")
+    if args.with_prepare:
+        other = prepare_list_reread()
+        print("* AND ONE COST OF PREPARE IS NOT IN THE TABLE ABOVE, ON PURPOSE.")
+        print("  %s" % other.name)
+        print("  is %d read request(s)/frame = %d KiB/frame, and it lands on the"
+              % (other.read_requests, (other.read_requests * FABRIC_REQUEST_BYTES) // 1024))
+        print("  HPS-DDR BRIDGE, not the local SDRAM this ledger adds up. Two")
+        print("  sockets, two budgets: folding it in would overstate this one and")
+        print("  would teach the next reader that they are interchangeable.")
+        print("  No tool adds up the HPS socket yet. That gap is named, not filled.")
     print("* TERRAIN.DEVSTORE rides arbiter client 6, TERRAIN_BUILD, which ruling")
     print("  T3 makes BACKGROUND: served only when nothing else is pending, DEBUG")
     print("  included (zhao_vram_arbiter.sv:33-41).  Its budget is therefore the")

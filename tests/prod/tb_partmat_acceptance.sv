@@ -312,6 +312,27 @@ module tb_partmat_acceptance #(
     .rsp_selector_overflow_i(1'b0),
     .rsp_sample0_modes_i    (rsp_sample0_modes_i),
 
+    // ---- I20's fragment-state group, CONNECTED 2026-09-25 (EDGEPREP) ------
+    // NOT this packet's work, and fixed here rather than reported, because
+    // `zhao_material_window` gained these eight ports at `eca5b8d3` (FRAGSTATE
+    // 2/n, earlier the same day) and this bench was not updated with it -- so
+    // `verilate` failed with eight PINMISSING warnings and NO target in the
+    // whole tree could configure. It is the trap CLAUDE.md names for
+    // `zhao_prod_top`, one level down: production gained ports and an
+    // instantiation of it did not.
+    //
+    // `rsp_frag_declared_i` LOW is FRAGSTATE's own documented compatibility
+    // default -- the material declares no fragment state, so the primitive's
+    // remains authoritative and this bench's behaviour is unchanged. The other
+    // three are therefore don't-care and are tied to the profile defaults the
+    // directive names (opaque alpha 255 is elsewhere; effect tag 0 here).
+    // Choosing HIGH instead would silently hand this acceptance bench a
+    // material-declared state it never asked for.
+    .rsp_frag_declared_i (1'b0),
+    .rsp_frag_state_i    (32'd0),
+    .rsp_effect_tag_i    (8'd0),
+    .rsp_stencil_ref_i   (8'd0),
+
     .pub_valid_o           (pub_valid_o),
     .pub_sample_count_o    (pub_sample_count_o),
     .pub_material_recipe_o (pub_material_recipe_o),
@@ -321,6 +342,14 @@ module tb_partmat_acceptance #(
     .pub_material_mode_o   (pub_material_mode_o),
     .pub_vertex_alpha_o    (pub_vertex_alpha_w),
     .pub_frag_state_o      (pub_frag_state_o),
+
+    // Explicitly OPEN rather than absent. An empty connection is a statement
+    // that this bench does not observe the port; a MISSING one is a pin the
+    // next port change will hide inside a wall of warnings.
+    .pub_frag_declared_o   (),
+    .pub_mat_frag_state_o  (),
+    .pub_effect_tag_o      (),
+    .pub_stencil_ref_o     (),
 
     .resolves_o                (mw_resolves_o),
     .switches_o                (mw_switches_o),

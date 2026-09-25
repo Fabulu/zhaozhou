@@ -7556,6 +7556,7 @@ set_tests_properties(mem_upload_directed PROPERTIES LABELS "fast;nightly" TIMEOU
 # count. No mutant is needed -- every refusal is reachable from the header port,
 # which is the point of the envelope redundancy the format carries.
 set(ZHAO_TERRAIN_PLACE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv)
 add_executable(test_terrain_place_directed terrain/terrain_place_directed.cpp)
 target_link_libraries(test_terrain_place_directed PRIVATE zhao_harness)
@@ -7630,7 +7631,8 @@ target_link_libraries(test_terrain_place_cache_directed PRIVATE zhao_harness)
 verilate(test_terrain_place_cache_directed
   PREFIX Vtb_terrain_place_cache
   TOP_MODULE tb_terrain_place_cache
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_place_cache.sv)
 add_test(NAME terrain_place_cache_directed COMMAND test_terrain_place_cache_directed)
@@ -7655,7 +7657,8 @@ verilate(test_terrain_place_cache_axis_swap
   PREFIX Vtb_terrain_place_cache
   TOP_MODULE tb_terrain_place_cache
   VERILATOR_ARGS +define+ZHAO_PLACE_CACHE_AXIS_SWAP
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_place_cache.sv)
 add_test(NAME terrain_place_cache_axis_swap_control
@@ -10587,6 +10590,78 @@ verilate(test_terrain_edgerecon_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_edgerecon.sv)
 add_test(NAME terrain_edgerecon_directed COMMAND test_terrain_edgerecon_directed)
 set_tests_properties(terrain_edgerecon_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ===========================================================================
+# EDGEPREP, 2026-09-25: the two links between TERRAIN.LOD and TERRAIN.EDGERECON
+# ===========================================================================
+# P2 `zhao_terrain_prepwalk` -- the REPLAYABLE sealed-list PREPARE reader, and
+# P3 `zhao_terrain_lodshare` -- the LOD time-share, the frame-scoped governor
+# freeze, and the suppression of PREPARE's history writeback.
+#
+# Neither is composed. Owner directive 2026-09-23 section 2 stages this as four
+# packets and says "Close I21 and the disconnected EDGERECON entry only when the
+# same complete production path satisfies both"; P4 composes all three blocks
+# together and spends the one fit.
+#
+# THE MUTANT AND WHY THERE IS EXACTLY ONE. Eleven of lodshare's twelve counters
+# are reachable from the block's own boundary with legal stimulus and
+# terrain_lodshare_directed fires each with a control beside it. The twelfth,
+# `idq_overflow_o`, counts a push into a FULL identity queue -- mutually
+# exclusive with the full-guard, so UNREACHABLE BY CONSTRUCTION. Its
+# demonstration is the committed mutant, driven with INVERTED polarity by
+# terrain_lodshare_mutant: that test PASSES when the counter FIRES. Directed
+# case 9 is its positive control, proving a HEALTHY block reaches full with the
+# same stimulus, so a mutant run reading zero cannot be excused as "the state
+# was never reached".
+add_test(NAME lint_terrain_lodshare
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_lodshare
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodshare.sv)
+set_tests_properties(lint_terrain_lodshare PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_lodshare_directed terrain/terrain_lodshare_directed.cpp)
+target_link_libraries(test_terrain_lodshare_directed PRIVATE zhao_harness)
+verilate(test_terrain_lodshare_directed
+  PREFIX Vzhao_terrain_lodshare
+  TOP_MODULE zhao_terrain_lodshare
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodshare.sv)
+add_test(NAME terrain_lodshare_directed COMMAND test_terrain_lodshare_directed)
+set_tests_properties(terrain_lodshare_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_terrain_lodshare_mutant terrain/terrain_lodshare_mutant.cpp)
+target_link_libraries(test_terrain_lodshare_mutant PRIVATE zhao_harness)
+verilate(test_terrain_lodshare_mutant
+  PREFIX Vzhao_terrain_lodshare_idqoverflow_mutant
+  TOP_MODULE zhao_terrain_lodshare_idqoverflow_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_lodshare_idqoverflow_mutant.sv)
+add_test(NAME terrain_lodshare_mutant COMMAND test_terrain_lodshare_mutant)
+set_tests_properties(terrain_lodshare_mutant PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_terrain_prepwalk
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_prepwalk
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_prepwalk.sv)
+set_tests_properties(lint_terrain_prepwalk PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_prepwalk_directed terrain/terrain_prepwalk_directed.cpp)
+target_link_libraries(test_terrain_prepwalk_directed PRIVATE zhao_harness)
+verilate(test_terrain_prepwalk_directed
+  PREFIX Vtb_terrain_prepwalk
+  TOP_MODULE tb_terrain_prepwalk
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_prepwalk.sv
+          ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_prepwalk.sv)
+add_test(NAME terrain_prepwalk_directed COMMAND test_terrain_prepwalk_directed)
+set_tests_properties(terrain_prepwalk_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # TERRAIN.LOD's three deviations (owner ruling R8), zhao_terrain_loddev.
 # Differential against zref::terrain::lod_deviation, built TWICE from one

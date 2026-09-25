@@ -98,7 +98,20 @@
 
 `default_nettype none
 
-module zhao_terrain_place #(
+module zhao_terrain_place
+  // THE PLACEMENT ARITHMETIC MOVED OUT, 2026-09-25 (EDGEPREP), AND NOTHING
+  // ABOUT IT CHANGED. `place32`, `units_fits`, `units_of` and the four pitch
+  // shifts now live in `zhao_terrain_place_law_pkg` so that
+  // `zhao_terrain_prepwalk`'s PREPARE pass and this block's EMIT-side fill
+  // call ONE definition. The alternative -- a second copy in the walker -- is
+  // the "second implementation of the ratified arithmetic" that
+  // TERRAIN.EDGERECON.md refuses by name, and a copy is a thing that goes
+  // stale in the flattering direction (CLAUDE.md, "a committed mutant is a
+  // COPY").  No port changed and no behaviour changed: this block is still the
+  // only PROVIDER of a placed patch, and still owns header acceptance, the
+  // envelope check, the pitch refusal, the census and the 66-write fill.
+  import zhao_terrain_place_law_pkg::*;
+#(
     // 33x33 vertex lattice, spec/terrain_rules.md 2.1 / charter 11.1.
     parameter int unsigned LAT_W = 33,
     parameter int unsigned LAT_H = 33,
@@ -178,15 +191,11 @@ module zhao_terrain_place #(
   end
 
   // ==========================================================================
-  // THE FOUR LEGAL PITCHES.
+  // THE FOUR LEGAL PITCHES -- now in `zhao_terrain_place_law_pkg`.
   // ==========================================================================
-  // shift = 16 + pitch_log2, so {-1,0,1,2} -> {15,16,17,18}. Held as four
-  // constants selected by a 2-bit code rather than computed, so no barrel
-  // shifter appears anywhere in this block.
-  localparam int unsigned SH_HALF = 15;  // pitch_log2 = -1, 0.5 m
-  localparam int unsigned SH_ONE  = 16;  // pitch_log2 =  0, 1.0 m
-  localparam int unsigned SH_TWO  = 17;  // pitch_log2 = +1, 2.0 m  (canonical)
-  localparam int unsigned SH_FOUR = 18;  // pitch_log2 = +2, 4.0 m
+  // SH_HALF/SH_ONE/SH_TWO/SH_FOUR and UNITS_W come in through the import on
+  // the module line. They are not redeclared here, because two declarations of
+  // one constant is how the two callers come to disagree.
 
   // Latched header.
   logic signed [ 7:0] pitch_q;
@@ -195,73 +204,24 @@ module zhao_terrain_place #(
   logic               placed_q;     // a patch is currently placed and legal
 
   wire signed [7:0] pitch_c = hdr_valid_i ? hdr_pitch_log2_i : pitch_q;
-  wire pitch_ok_c = (pitch_c >= -8'sd1) && (pitch_c <= 8'sd2);
+  // `pitch_legal` is the package's, so the ISLAND-DESCRIPTOR pitch that owner
+  // directive section 2 makes authoritative is tested by the identical
+  // predicate a PAGE-HEADER pitch is tested by here.
+  wire pitch_ok_c = pitch_legal(pitch_c);
 
   // ==========================================================================
-  // THE PLACEMENT SHIFTER.
+  // THE PLACEMENT SHIFTER -- now in `zhao_terrain_place_law_pkg`.
   // ==========================================================================
+  // `place32`, `units_fits` and `units_of` were defined here and are now
+  // imported. THE ARITHMETIC IS UNCHANGED, character for character; only its
+  // home moved, so that `zhao_terrain_prepwalk` calls the SAME function
+  // rather than a copy of it. TERRAIN.EDGERECON.md's requirement is that
+  // PREPARE and EMIT be "bit-identical BY CONSTRUCTION rather than by two
+  // implementations agreeing"; one definition is what makes that structural.
+  //
   // `units` is (patch_coord * 32 + index) -- the lattice vertex counted in
-  // CELLS from the island datum. `* 32` is a shift by 5, folded in here so the
-  // output stage is one shift rather than two.
-  //
-  // Width: patch_coord is s16 and the index is 0..32, so units needs 16 + 5 + 1
-  // = 22 bits signed. The output shift reaches 18, so the exact product needs
-  // 40 bits; WIDE is 41 so the sign bit of the widest legal result is never the
-  // top bit of the vector, which is what makes the range test below a simple
-  // sign-extension check rather than a special case.
-  localparam int unsigned UNITS_W = 22;
-
-  // The shift is done at the OUTPUT width, 32 bits, and never wider. That is
-  // exact for every placement `units_fits` below admits, and it is the reason
-  // no 41-bit intermediate appears in this block: carrying one would mean nine
-  // bits that exist only to be discarded, which reads to a linter -- correctly
-  // -- as logic with no consumer.
-  function automatic logic signed [31:0] place32
-      (input logic signed [UNITS_W-1:0] units, input logic signed [7:0] p);
-    logic signed [31:0] u;
-    begin
-      u = 32'(units);
-      // Four constants, selected. NOT `u <<< (16 + p)`; see the header.
-      case (p)
-        -8'sd1:  place32 = u <<< SH_HALF;
-         8'sd0:  place32 = u <<< SH_ONE;
-         8'sd1:  place32 = u <<< SH_TWO;
-         8'sd2:  place32 = u <<< SH_FOUR;
-        default: place32 = '0;   // refused upstream; never placed
-      endcase
-    end
-  endfunction
-
-  // RANGE, DECIDED ON THE OPERAND RATHER THAN THE RESULT.
-  //
-  // `units <<< sh` is exact in s32 exactly when `units` fits in 32 - sh bits
-  // signed, i.e. -2**(31-sh) <= units < 2**(31-sh). Testing the input this way
-  // costs one comparison against a constant; testing the output would need the
-  // wide shift this block otherwise never performs, so the cheap test and the
-  // honest test are the same test here.
-  function automatic logic units_fits
-      (input logic signed [UNITS_W-1:0] units, input logic signed [7:0] p);
-    logic signed [UNITS_W-1:0] lim;
-    begin
-      case (p)
-        -8'sd1:  lim = UNITS_W'(1) <<< (31 - SH_HALF);   // 2**16
-         8'sd0:  lim = UNITS_W'(1) <<< (31 - SH_ONE);    // 2**15
-         8'sd1:  lim = UNITS_W'(1) <<< (31 - SH_TWO);    // 2**14
-         8'sd2:  lim = UNITS_W'(1) <<< (31 - SH_FOUR);   // 2**13
-        default: lim = UNITS_W'(0);
-      endcase
-      units_fits = (units < lim) && (units >= -lim);
-    end
-  endfunction
-
-  // ---- the two placements this block must answer ---------------------------
-  // Column x for lattice index i, row z for lattice index j.
-  function automatic logic signed [UNITS_W-1:0] units_of
-      (input logic signed [15:0] coord, input logic [5:0] idx);
-    begin
-      units_of = UNITS_W'(coord) * UNITS_W'(32) + UNITS_W'({1'b0, idx});
-    end
-  endfunction
+  // CELLS from the island datum -- and UNITS_W is 22 for the reason the
+  // package records. Neither is redeclared here.
 
   // ==========================================================================
   // HEADER ACCEPTANCE, AND THE TWO REFUSALS

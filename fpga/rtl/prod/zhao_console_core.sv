@@ -4117,6 +4117,86 @@
 //          >>     every counter balancing, same family as blocker (C) below,
 //          >>     and it belongs beside P3's governor freeze.
 //
+//          >> BUILT 2026-09-25 (gz/edgeprep). P2 AND P3 EXIST. P1 IS DELETED
+//          >> BY RULING, AND THE FOUR-PACKET TABLE BELOW IS NOW TWO.
+//          >>
+//          >> OWNER DIRECTIVE 2026-09-23 SECTION 2 ANSWERED THE OPEN QUESTION
+//          >> THIS ENTRY RECORDS AS "nobody has asked": the frame-sealed island
+//          >> descriptor's pitch_log2 IS authoritative for every page of that
+//          >> island generation, and the page-header pitch is a CHECKED
+//          >> REDUNDANT VALUE. That removes the per-resident-slot pitch table
+//          >> P1 existed to build, so P1 is not owed.
+//          >>
+//          >> BLOCKER A DISSOLVES AGAINST A MECHANISM ALREADY IN THE TREE, and
+//          >> this entry's own analysis of it was right. A walker CANNOT be
+//          >> teed off the issue port. But `zhao_terrain_cmd` ALREADY READS THE
+//          >> SEALED LIST TWICE EVERY FRAME -- "pass one folds the CRC and
+//          >> emits nothing; pass two emits and folds nothing" -- because
+//          >> ruling T5 makes the list CAPTURE DATA at a known address with a
+//          >> known length and CRC. That is the definition of replayable.
+//          >> `zhao_terrain_prepwalk` is a THIRD reader of the same bytes whose
+//          >> ready is its OWN consumer's, so the compose spine is nowhere in
+//          >> its loop. Cost: +8 KiB/frame on the HPS-DDR BRIDGE, a DIFFERENT
+//          >> SOCKET from the devstore SDRAM reads, budgeted separately.
+//          >>
+//          >> IT IS A NEW FILE AND NOT A THIRD PASS INSIDE `zhao_terrain_cmd`
+//          >> precisely because that block is COMPOSED: new outputs on it would
+//          >> dangle at this module's boundary until P4 wired them and put the
+//          >> register UP -- the trade R75 endorses refusing.
+//          >>
+//          >> STEP 2's sp_cx/sp_cz ANSWER IS THE FOURTH SHAPE, NOT ONE OF THE
+//          >> THREE. The placement law moved into
+//          >> `zhao_terrain_place_law_pkg` -- place32, units_fits, units_of and
+//          >> pitch_legal, moved VERBATIM out of `zhao_terrain_place`, which now
+//          >> calls them. PREPARE and EMIT are bit-identical BY CONSTRUCTION
+//          >> rather than by two implementations agreeing. A package has no
+//          >> state, no ports and no ALMs, so it is not a second PROVIDER:
+//          >> TERRAIN.PLACE still owns header acceptance, the envelope check,
+//          >> the pitch refusal, the census and the 66-write fill. NO PORT
+//          >> CHANGED, so nothing regenerates. Behaviour-neutrality is measured:
+//          >> terrain_place_directed 68, terrain_heighttap_directed 2,272 and
+//          >> surface_dispatch_directed 1,072 checks all pass unchanged, with
+//          >> pitch_refused=3 proving the refusal still refuses.
+//          >>
+//          >> BLOCKER C SURVIVES AND ITS "HARMLESS TODAY" HALF DOES NOT, which
+//          >> is this entry's own claim and it is WRONG FOR SIX OF THE THIRTEEN.
+//          >> The re-latch is confirmed at ~:26414. But `veye0_*`/`veye1_*` come
+//          >> from `zhao_view_eye`, whose registers update on `cfg_we_i` -- "a
+//          >> pulse the executor owns, and a write lands the cycle it is"
+//          >> (:43, :123). THEY ARE HOST-WRITE-SCOPED, NOT FRAME-SCOPED. So the
+//          >> SINGLE pass is already sampling a moving camera between patches
+//          >> and nothing was watching. `zhao_terrain_lodshare` freezes all
+//          >> thirteen on `frame_i`; `freeze_drift_o` measures what the old
+//          >> arrangement was absorbing silently.
+//          >>
+//          >> THE R_HWR SUPPRESSION NEEDS NO DEVSTORE CHANGE AT ALL. That block
+//          >> enters R_HWR on (h_any_q || h_valid_i) and h_any_q is set ONLY
+//          >> inside `if (h_valid_i)` (:859-865, :877), while h_valid's producer
+//          >> is `zhao_terrain_jobissue` (:343). The time-share routes PREPARE's
+//          >> ladder output to the RECONCILER and not to jobissue, so jobissue
+//          >> is starved for the whole pass -- devstore's own comment already
+//          >> describes it: "A patch whose LOD pass emitted NOTHING skips the
+//          >> write entirely." The port is still routed THROUGH the time-share
+//          >> and gated, because a correctness property holding through somebody
+//          >> else's wiring is what an innocent edit breaks in silence, and
+//          >> because it gives `hist_leak_o` somewhere to live.
+//          >>
+//          >> EVIDENCE: terrain_prepwalk_directed 85 checks / 0 failures over
+//          >> twelve cases; terrain_lodshare_directed 96 / 0 over nine;
+//          >> terrain_lodshare_mutant fires `idq_overflow_o` 12x with its
+//          >> positive control at 12, polarity INVERTED. check_quartus17_syntax
+//          >> clean -- it caught a SECOND `import` in a module header, which
+//          >> Verilator accepts with 0 diagnostics and Quartus 17.0 rejects, and
+//          >> which would have failed EVERY map in the tree because
+//          >> run_block_map.ps1 compiles every .sv under fpga/rtl. R212 stands
+//          >> for both new blocks: NEITHER has been through quartus_map.
+//          >>
+//          >> NEITHER BLOCK IS COMPOSED AND THIS ENTRY IS NOT CLOSED. The
+//          >> directive is explicit -- "Close I21 and the disconnected EDGERECON
+//          >> entry only when the same complete production path satisfies both.
+//          >> Their shared seam is not a claim of one-packet implementation
+//          >> cost." The register did not move and no pixel moved.
+//
 //          Note also that R242 made
 //          devstore's `w_ready_o` FALL during a burst; ~:17273 of this file
 //          records that same change silently making a histogram count one
@@ -4156,7 +4236,34 @@
 //          serve-path code. The deformation-bake interlock the old paragraph
 //          named is still owed as well.
 //
-//          SO THE REMAINDER IS FOUR PACKETS, NOT ONE BUILD, AND NONE OF THEM
+//          THE REMAINDER IS NOW P4 ALONE. P1 IS DELETED BY THE DIRECTIVE'S
+//          ISLAND-PITCH RULING AND P2/P3 ARE BUILT (gz/edgeprep, 2026-09-25):
+//          `zhao_terrain_prepwalk` and `zhao_terrain_lodshare`, with
+//          `zhao_terrain_place_law_pkg` holding the shared placement law.
+//          WHAT P4 STILL OWES is listed in TERRAIN.EDGERECON.md under "WHAT P4
+//          STILL OWES" and is EIGHT items, of which three are NOT wiring:
+//            * the ADMISSION-TIME pitch/identity/envelope check the directive
+//              requires. NOT BUILT. TERRAIN.PLACE checks the envelope against
+//              the PAGE HEADER's pitch; nothing compares that header against the
+//              ISLAND descriptor's, which is now the authoritative one. A page
+//              whose header disagrees is placed one way in EMIT and another in
+//              PREPARE -- a crack.
+//            * a PRODUCER for the island pitch. `zhao_terrain_island_dir` is NOT
+//              INSTANTIATED IN THIS FILE AT ALL -- measured, not assumed -- so
+//              the frame-sealed descriptor has no live producer in the console.
+//            * SDRAM scheduling, directive section 7. THE RESERVED CLIENT 5 IS
+//              NOT AVAILABLE IN THE LIVE DESIGN: `zhao_vram_arbiter.sv` :353
+//              forces `port_grant[5]` low, :246 records it appears in no
+//              selector arm, and `zhao_mem_guard`'s default arm grants it
+//              nothing. Spending it means changing two proven blocks,
+//              re-proving bound B with all clients enabled, and extending
+//              tests/formal/mem_guard_no_escape.sby. EDGEPREP measured it and
+//              did NOT spend it: the route only matters once PREPARE issues
+//              reads in a composed console.
+//
+//          ---- the original four-packet table, kept because P4's row and the
+//          ---- fit question are unchanged ------------------------------------
+//          SO THE REMAINDER WAS FOUR PACKETS, AND NONE OF THEM
 //          MAY COMPOSE TERRAIN.EDGERECON ALONE:
 //            P1  per-slot `pitch_log2` retention from TERRAIN.HDRREAD, plus a
 //                STATELESS QUERY PORT on TERRAIN.PLACE. A port change on a
