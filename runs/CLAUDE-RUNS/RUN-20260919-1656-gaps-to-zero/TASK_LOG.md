@@ -2044,3 +2044,67 @@ byte-identical at 80.17%. **I stopped once at 11 with both slots empty — the
 **EDGECLOSE** (P4: closes I21 **and** edgerecon together, the only −2 left) and
 **CLIFFPROD** (the cliff evaluator's real producer; the current one is an LFSR in
 a generated pricing top).
+
+### 2026-09-25 (night) — REGISTER 8. Four entries closed in one day, and none of them with a tie-off.
+
+**Measured bare on the merged tree: `MANDATORY GAPS REMAINING : 8`** = 6 tie-offs
++ 2 disconnected. 30 gates matching the committed baseline, `cmake --preset`
+RC 0, bandwidth baseline byte-identical at 80.17%.
+
+| closed | packet | the evidence, not the wiring |
+|---|---|---|
+| **I20** | FRAGSTATE | GlowTag **1,062 lit fragments / 1,344 bloom cells** vs plain's 0 — **one byte difference in one `MaterialRecord`**, no bench port in the chain |
+| **I21** + **`terrain_edgerecon`** | EDGECLOSE | a seam that **DISAGREED** `[1 1 1 1]/[3 3 3 3]` now **AGREES**, computed as `zhao_terrain_tess` computes it, **so a failure is a crack** |
+| **`forge_cliff_ram`** | CLIFFPROD | **218 rim edges bit-identical to `zref::forge::rim_plan`** from the real layer-D plane. Pixels **not** claimed, and the lane said so |
+
+### The three that would have been easy to get wrong
+
+* **EDGECLOSE closed two entries TOGETHER** because composing the bank alone
+  dangles `f_*` and two phase pulses and puts the register **UP**. Both obligations
+  resolved differently than briefed: the island pitch **could not be composed**
+  (`island_dir` takes the descriptor as an *input*), so a new block **seals and
+  checks** instead; and **client 5 was never needed** — PREPARE's devstore reads
+  turn out to BE devstore's own reads on an existing requester, so the arbiter,
+  the guard and `mem_guard_no_escape.sby` are all untouched.
+* **CLIFFPROD found the entry had FOUR missing legs, not three** — there was no
+  rim-edge *consumer* either, which no blocker list had counted. Feeding the
+  three known inputs would have closed nothing.
+* **And it measured the contract's *"the halo is free"* FALSE by 128 edges a
+  page** — 218 void-halo against 90 solid-halo, 4 sides × 32 cells of pure
+  artefact. A wall around every patch, asserted free by prose and never counted.
+
+### MY EIGHTH STALE PREMISE, AND THIS ONE I HAD ALREADY REFUTED MYSELF
+
+I said twice that the cliff adoption's one genuine cost was a hold sign change,
+**+0.263 ns against −4.140 ns**. Opened the reports: the golden's worst hold path
+is `need_r[7] → need_r[7]`, **an internal register loop, 0 violated**; the
+candidate's is `vd_data_i[25] → pr_va_r[25]`, **launched from a top-level INPUT
+PORT**, 8 violated. **On a leaf fit with virtual pins a top-level input has no
+real launch model.** CLIFFPROD's own census settles it harder: **138 violated
+hold paths, ALL 138 launching from an input pin, zero register-to-register**, and
+the three launch nets are internal in the console.
+
+**§15.13 already said this, about DSF-01, in my own words, one section away.** I
+applied the rule to somebody else's number and not to mine. Withdrawn at
+`f691b860`; the ALM saving is unaffected.
+
+### Two operational faults of mine, both now fixed
+
+* **A green `gate_sweep` sat on a tree that could not build, twice in two days** —
+  a missing port on an acceptance bench, and a stale board with **silent
+  truncation of client 7's bit**. **The gates do not build.** `cmake --preset` is
+  now part of every merge verification.
+* **Seven `until … sleep` watchers accumulated on one fit**, one per "watch
+  re-armed" report. Six stopped. A poll loop with no timeout cannot distinguish
+  *not finished* from *never will be* — and seven cannot either, they just say it
+  seven times.
+
+### WHERE I AM
+
+**Running:** TERRAINAUX (the terrain arm — aux context, material identity, colour
+last) and ARENAID (§4's one final geometry identity space, plus `I53`).
+EDGECLOSE's console fit is still in placement in its own worktree with
+snapshotted sources; it will describe **that** tree, not the merged one.
+
+**Remaining 8:** `I13`+`normalmap` (one subsystem), `I34`+`velocity`, and
+`I53`–`I56` — **four entries and one arena.**
