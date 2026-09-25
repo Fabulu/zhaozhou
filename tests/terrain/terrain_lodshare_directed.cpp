@@ -565,6 +565,10 @@ void case8_selector_may_not_move_mid_patch(Harness& h) {
 }
 
 // ===========================================================================
+// THE BLOCK'S OWN PARAMETER, NAMED ONCE. A literal here is how this case came
+// to assert a depth the design no longer has.
+constexpr uint32_t kIdqDepth = 16;
+
 void case9_queue_reaches_full(Harness& h) {
   std::printf("-- case 9: THE QUEUE REALLY DOES REACH FULL (the mutant's positive control)\n");
   // Without this, a mutant run reporting `idq_overflow_o == 0` could be excused
@@ -575,21 +579,37 @@ void case9_queue_reaches_full(Harness& h) {
   h.t.prep_sel_i = 1;
   h.t.eval();
 
-  // IDQ_DEPTH is 4. Offer five, retiring nothing.
-  for (int k = 0; k < 4; ++k) {
+  // IDQ_DEPTH IS SIXTEEN, NOT FOUR, AND THE CHANGE IS A REPAIR RATHER THAN A
+  // TUNING. Corrected 2026-09-25 (EDGECLOSE). The parameter's old default and
+  // this case's old constant both rested on the block header's claim that
+  // `zhao_terrain_lod` is "a sequential ladder with ONE descriptor in flight".
+  // It is not: `zhao_terrain_lod.sv:671-684` accepts ALL SIXTEEN subpatches
+  // before it emits any of them, because a subpatch's four interior
+  // neighbours need the whole `lvl[]` array. At four the queue filled on the
+  // fourth descriptor, the ladder never reached its sixteenth, and the two
+  // blocks DEADLOCKED with every counter reading zero.
+  //
+  // THIS SUITE COULD NOT HAVE SEEN IT AND THAT IS THE LESSON: it drives a
+  // ladder MODEL that emits per descriptor. Ninety-six checks passed against
+  // a machine that does not exist. The deadlock was found by
+  // `terrain_edge_acceptance`, which instantiates the REAL ladder.
+  //
+  // The case itself is unchanged in kind -- fill the queue, offer one more,
+  // prove the guard refuses it -- and only the depth moved.
+  for (int k = 0; k < kIdqDepth; ++k) {
     Desc d; d.src_id = static_cast<uint32_t>(0x40 + k);
     d.ix = static_cast<int32_t>(k); d.iz = static_cast<int32_t>(k);
     char what[64];
     std::snprintf(what, sizeof what, "case9: descriptor %d accepted", k);
     check_true(h.offer_prep(d), what);
   }
-  check_eq(h.t.prep_descriptors_o, 4, "case9: four descriptors queued");
+  check_eq(h.t.prep_descriptors_o, kIdqDepth, "case9: the queue filled");
 
-  // The fifth must be REFUSED.
+  // The (depth+1)-th must be REFUSED.
   h.t.p_sp_valid_i = 1;
-  h.t.p_sp_src_id_i = 0x44;
+  h.t.p_sp_src_id_i = 0x40 + kIdqDepth;
   h.t.eval();
-  check_eq(h.t.p_sp_ready_o, 0, "case9: the fifth descriptor is REFUSED -- the guard holds");
+  check_eq(h.t.p_sp_ready_o, 0, "case9: the next descriptor is REFUSED -- the guard holds");
   check_eq(h.t.lod_sp_valid_o, 0, "case9: ... and nothing is offered to the ladder");
   for (int i = 0; i < 4; ++i) { zhao::tick(h.t); h.t.eval(); }
   check_true(h.t.idq_full_stalls_o != 0,
@@ -599,7 +619,8 @@ void case9_queue_reaches_full(Harness& h) {
            "-- its ability to fire is the committed mutant's job");
   h.t.p_sp_valid_i = 0;
   h.t.eval();
-  check_eq(h.t.prep_descriptors_o, 4, "case9: the refused descriptor was never counted");
+  check_eq(h.t.prep_descriptors_o, kIdqDepth,
+           "case9: the refused descriptor was never counted");
 }
 
 }  // namespace

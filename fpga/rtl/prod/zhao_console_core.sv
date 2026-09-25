@@ -25743,8 +25743,11 @@ module zhao_console_core
   // does leave), the underside forward (TERRAIN.EDGERECON's `lanes_filed_o`
   // is the check that catches a lost lane, and it leaves), and `idle_o`.
   wire [31:0]        tls_prep_descriptors, tls_emit_descriptors, tls_prep_underside;
-  wire               tls_idle;
   /* verilator lint_on UNUSEDSIGNAL */
+  // READ, not waived: `idle_o` is the drain condition below. It is the
+  // time-share's own statement that every descriptor it accepted has been
+  // answered, and it is what stops the last patch of a frame being lost.
+  wire               tls_idle;
 
   // ---- TERRAIN.EDGERECON ----------------------------------------------------
   wire [ 1:0]        ter_phase;
@@ -26693,27 +26696,66 @@ module zhao_console_core
     .busy_o                (tps_busy)
   );
 
+  // ---- THE DRAIN, AND WHY THE TWO OBVIOUS WIRES ARE BOTH WRONG -----------
+  // Found 2026-09-25 by `terrain_edge_acceptance`, composing the walker against
+  // the REAL ladder for the first time. Both of these read as the natural
+  // connection and both LOSE THE LAST PATCH OF EVERY FRAME:
+  //
+  //   `prep_sel_i(tpw_busy)`        -- `busy_o` is `(state_q != P_IDLE)`, and
+  //     the walker reaches P_IDLE as soon as its SIXTEENTH DESCRIPTOR IS
+  //     ACCEPTED. `zhao_terrain_lod` still holds all sixteen at that moment
+  //     (it accepts the whole patch before emitting any of it), so ownership
+  //     flips to EMIT while the last patch's answers are still in flight: they
+  //     are routed to TERRAIN.JOBISSUE instead of to the reconciler, the
+  //     record never completes, and `ok()` is false for that patch. Silent,
+  //     and `terr_ls_sel_midpatch_o` is the counter that saw it.
+  //
+  //   `prepare_done_i(tpw_prep_done)` -- same cause, worse effect: the bank
+  //     FREEZES before the last patch's sixteen lanes are filed.
+  //
+  // So both are gated on the TIME-SHARE BEING DRAINED. `idle_o` on that block
+  // is `idq_empty_c` -- its own statement that no descriptor it accepted is
+  // still unanswered -- which is exactly the question, asked of the block that
+  // knows. No timeout, no counter, no policy invented here.
+  logic tprep_done_pend_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n)              tprep_done_pend_q <= 1'b0;
+    else if (tpw_prep_done)  tprep_done_pend_q <= 1'b1;
+    else if (tls_idle)       tprep_done_pend_q <= 1'b0;
+  end
+  // A PULSE, one cycle, on the first idle cycle at or after the walker's own
+  // done. TERRAIN.EDGERECON documents `prepare_done_i` as a pulse and a level
+  // would re-freeze the bank every cycle.
+  wire tprep_done_c = tprep_done_pend_q && tls_idle;
+  // PREPARE owns the ladder until the last descriptor it fed has been answered.
+  wire tprep_sel_c  = tpw_busy || !tls_idle;
+
   // ---- TERRAIN.LODSHARE ----------------------------------------------------
   // `frame_i` is `terr_set_accept_c` -- the frame's ADMITTED SET arriving --
   // and NOT `core_tick_c`. The thing being frozen is the state the admitted
   // set will be decided against, so the freeze must be scoped to that set's
   // life, not to the video frame's.
   //
-  // `prep_sel_i` is the walker's `busy_o`, and it is SAMPLED PER HANDSHAKE
-  // rather than continuously: `sel_midpatch_o` counts a change while the
-  // identity queue is non-empty, which means somebody's descriptors are in
-  // flight and their answers are about to be routed to the wrong consumer.
+  // `prep_sel_i` IS NOT the walker's `busy_o`, and the difference is a whole
+  // patch per frame -- see the drain above. It is sampled per handshake, and
+  // `sel_midpatch_o` counts a change while the identity queue is non-empty,
+  // which is how the wrong wiring was caught rather than argued about.
   zhao_terrain_lodshare #(
     .DEVW     (24),
     .MORPHW   (17),
     .GENW     (TERR_GENW),
-    .IDQ_DEPTH(4)
+    // SIXTEEN, and it is the LADDER'S in-flight depth rather than a comfort
+    // margin: `zhao_terrain_lod` accepts all sixteen subpatches before it
+    // emits one, so a shallower identity queue fills first and stops the
+    // producer that would have unblocked it. Found by composing the two for
+    // the first time; the block's own elaboration guard now refuses less.
+    .IDQ_DEPTH(16)
   ) u_terrain_lodshare (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
     .frame_i   (terr_set_accept_c),
-    .prep_sel_i(tpw_busy),
+    .prep_sel_i(tprep_sel_c),
 
     // THE LIVE nets. Seven from MEASURE.GOVERNOR, which is already
     // frame-scoped, and SIX from VIEW.EYE, which is HOST-WRITE-SCOPED and is
@@ -26875,7 +26917,7 @@ module zhao_console_core
     .rst_n(rst_n),
 
     .frame_begin_i (tpw_prep_begin),
-    .prepare_done_i(tpw_prep_done),
+    .prepare_done_i(tprep_done_c),
     .phase_o       (ter_phase),
     .frame_count_o (ter_frame_count),
 
