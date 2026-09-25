@@ -10,7 +10,7 @@ and nothing here should be quoted as either.
 | combinational ALUTs | 294872 | 352% of ~83820 |
 | dedicated logic registers | 405872 | 242% of 167640 |
 | block memory bits | 3009171 | 53% of 5662720 |
-| DSP blocks | 375 | |
+| DSP blocks | 375 | **335%** of 112 |
 
 **The registers alone need at least 101468 ALM, 242% of the part, with the
 combinational logic at zero.** Memory, by contrast, fits: 53%. That is
@@ -79,6 +79,39 @@ are: one such array cost 5,181 registers and ~2,698 estimated ALMs, and
 | `zhao_terrain_heighttap:u_terrain_heighttap` | 2305 | 1% | 5556 | 0 |
 | `zhao_terrain_lightlane:u_terrain_lightlane` | 2180 | 1% | 2401 | 50080 |
 | `zhao_terrain_writeback:u_terrain_writeback` | 2180 | 1% | 1034 | 0 |
+
+## Biggest subtrees by DSP
+
+**The M10K trade does nothing for this column.** A block here is a
+candidate for a quarter-square or coefficient-memory replacement, which
+is a different programme from moving an array into a memory.
+
+| entity | DSP | % of part | ALUTs |
+|---|---:|---:|---:|
+| `zhao_shell_top_v2:u_shell` | 88 | 79% | 46299 |
+| `zhao_geom_attrpack:u_geom_attrpack` | 45 | 40% | 1184 |
+| `zhao_proj_subsystem:u_proj_subsystem` | 39 | 35% | 8659 |
+| `zhao_geom_skin_norm:u_geom_skin_norm` | 21 | 19% | 1192 |
+| `zhao_part_collide:u_part_collide` | 20 | 18% | 1607 |
+| `zhao_field_host_v2:u_field_host` | 15 | 13% | 40989 |
+| `zhao_post_composite:u_post_composite` | 12 | 11% | 1147 |
+| `zhao_geom_skin:u_geom_skin` | 9 | 8% | 2116 |
+| `zhao_light_stream:u_light_stream` | 9 | 8% | 5278 |
+| `zhao_twod_plane:u_twod_plane` | 8 | 7% | 892 |
+| `zhao_forge_shadow:u_forge_shadow` | 7 | 6% | 508 |
+| `zhao_geom_cull:u_geom_cull` | 6 | 5% | 1534 |
+| `zhao_geom_lodstate:u_geom_lodstate` | 6 | 5% | 6160 |
+| `zhao_geom_meshfetch:u_geom_meshfetch` | 6 | 5% | 1040 |
+| `zhao_part_update:u_part_update` | 6 | 5% | 2208 |
+| `zhao_terrain_heighttap:u_terrain_heighttap` | 6 | 5% | 5556 |
+| `zhao_terrain_lightlane:u_terrain_lightlane` | 6 | 5% | 2401 |
+| `zhao_part_project:u_part_project` | 5 | 4% | 878 |
+| `zhao_geom_pose_decode:u_geom_pose_decode` | 4 | 4% | 1376 |
+| `zhao_geom_setup:u_geom_setup` | 4 | 4% | 466 |
+| `zhao_geom_vattr:u_geom_vattr` | 4 | 4% | 2620 |
+| `zhao_post_gather_tag:u_post_gather_tag` | 4 | 4% | 281 |
+| `zhao_terrain_tess:u_terrain_tess` | 4 | 4% | 1908 |
+| `zhao_forge_assemble:u_forge_assemble` | 3 | 3% | 15524 |
 
 ## Inside `zhao_geom_drawjob:u_geom_drawjob`
 

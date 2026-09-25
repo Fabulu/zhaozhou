@@ -56,6 +56,10 @@ SHIP_ALUT = SHIP_ALM * 2
 SHIP_REGS = SHIP_ALM * 4
 SHIP_M10K = 553
 SHIP_MEMBITS = SHIP_M10K * 10240
+# The DSP ceiling was printed here once with NO denominator beside it, which is
+# how 375 against 112 went unremarked for a day. A number without its ceiling is
+# not a measurement, it is a decoration.
+SHIP_DSP = 112
 
 
 def _num(s: str) -> int:
@@ -159,7 +163,8 @@ def render(rows: list[dict], top_n: int, drills: list[str]) -> str:
       % (top["reg"], 100.0 * top["reg"] / SHIP_REGS, SHIP_REGS))
     a("| block memory bits | %d | %.0f%% of %d |"
       % (top["mem"], 100.0 * top["mem"] / SHIP_MEMBITS, SHIP_MEMBITS))
-    a("| DSP blocks | %d | |" % top["dsp"])
+    a("| DSP blocks | %d | **%.0f%%** of %d |"
+      % (top["dsp"], 100.0 * top["dsp"] / SHIP_DSP, SHIP_DSP))
     a("")
     a("**The registers alone need at least %d ALM, %.0f%% of the part, with the"
       % (top["reg"] // 4, 100.0 * (top["reg"] / 4) / SHIP_ALM))
@@ -192,6 +197,21 @@ def render(rows: list[dict], top_n: int, drills: list[str]) -> str:
         a("| `%s` | %d | %.0f%% | %d | %d |"
           % (r["node"], r["reg"], 100.0 * r["reg"] / SHIP_REGS,
              r["alut"], r["mem"]))
+    a("")
+
+    a("## Biggest subtrees by DSP")
+    a("")
+    a("**The M10K trade does nothing for this column.** A block here is a")
+    a("candidate for a quarter-square or coefficient-memory replacement, which")
+    a("is a different programme from moving an array into a memory.")
+    a("")
+    a("| entity | DSP | % of part | ALUTs |")
+    a("|---|---:|---:|---:|")
+    for r in top_disjoint(rows, "dsp", top_n):
+        if not r["dsp"]:
+            break
+        a("| `%s` | %d | %.0f%% | %d |"
+          % (r["node"], r["dsp"], 100.0 * r["dsp"] / SHIP_DSP, r["alut"]))
     a("")
 
     for name in drills:
