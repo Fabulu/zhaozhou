@@ -269,6 +269,44 @@ reports.
 `vid_stall_o` counts every clock GEOM.CLIP is held by this block, so the cost is
 a measurement rather than a worry.
 
+## The one thing a lint cannot answer: MEASURED under Quartus
+
+`quartus_map`, Quartus Prime Lite 17.0.2, 5CSEBA6U23I7, map-only, 320.9 s,
+`sourceCommit eedf1175`, **`rtlCleanAtHead: true`**. Row
+`zhao_geom_vertid@arenaid-vertid-map` in `reports/synthesis/zhao_block_map.json`.
+
+| quantity | value |
+|---|---|
+| status | **ok** — it is synthesizable, which a clean Verilator lint does not settle |
+| DSP blocks | **0** |
+| block memory bits | **8,704** |
+| inferred memories | **1** — `map_ram`, `Simple Dual Port`, depth 256, width 34, `autoShift: false` |
+| RAM conversion warnings | **0** |
+| registers | 1,657 |
+| estimated ALMs | 2,247 (comb ALUTs 1,401) |
+| virtual pins | 1,705 |
+
+**The memory row is the one that matters and it is exactly the design.** 256
+rows of `{epoch[17:0], id[15:0]}` is 8,704 bits, and it inferred as **one
+altsyncram with zero conversion warnings** rather than becoming 8,704 flops and
+a selection network — which is what happened to `zhao_geom_wcache`'s valid
+bitmap before it was rewritten (its header records 1,545,804 comb ALUTs). The
+standing direction is that M10K is the slack and ALMs are the binding
+constraint; this block spends the slack.
+
+**The ALM number is NOT a composed cost and must not be quoted as one.** 1,705
+virtual pins on a leaf map is a boundary that dominates a block this size, and
+`estimatedAlms` from Analysis & Synthesis is an estimate the fitter routinely
+moves. **GEOM.VERTID has never been through a composed fit**; what this row
+establishes is synthesizability, the DSP count and the RAM inference, and
+nothing about area or Fmax in the island.
+
+The 1,657 registers ARE real state and are worth naming, because most of them
+are not this block's idea: the held triangle carries GEOM.CLIP's own
+seven-slot attribute packet for three corners, 3 x 224 = 672 bits, plus three
+21-bit coordinate pairs, three 23-bit keys, three 16-bit ids, the 256-bit valid
+bitmap and the per-arena epoch state.
+
 ## Counters, and how each one fires
 
 All twelve are reachable with **legal stimulus at this block's own ports**, so
