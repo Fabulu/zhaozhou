@@ -486,5 +486,8 @@ int main() {
   if (failures == 0) {
     std::printf("forge_cliff_chain: OK\n");
   }
-  return failures == 0 ? 0 : 1;
+  // See zhao_sim.hpp's exit_hard note, and forge_cliff_srvshare_unit.cpp's tail
+  // for the instance that proved it: every Verilated main on this toolchain
+  // must end here, or it can hang at ~0 CPU with its verdict unflushed.
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }

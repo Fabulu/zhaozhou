@@ -79,6 +79,12 @@ void reset_dut(Dut& d) {
 }  // namespace
 
 int main() {
+  // TWO DELIBERATE STARTUP PROBES, kept rather than removed. This binary hung
+  // three times at ~0 CPU with no output at all, and "hung before main" and
+  // "hung at exit-time static destruction" look IDENTICAL from outside when
+  // stdout is unflushed -- zhao_sim.hpp documents the second as systemic to
+  // every Verilated exe on this toolchain. These two lines cost nothing and
+  // tell the next reader which one it is.
   std::printf("srvshare: main entered\n");
   std::fflush(nullptr);
   Dut d;
@@ -185,5 +191,12 @@ int main() {
   if (failures == 0) {
     std::printf("forge_cliff_srvshare_unit: OK\n");
   }
-  return failures == 0 ? 0 : 1;
+  // MANDATORY ON THIS TOOLCHAIN, and this file is the evidence for why.
+  // zhao_sim.hpp records that Verilator 5.051 + winlibs libwinpthread
+  // intermittently deadlocks in VlThreadPool::~VlThreadPool() during exit-time
+  // static destruction -- "a hang with ~0 CPU in WaitForSingleObject" -- and
+  // that "every Verilated main must end through here". This binary did exactly
+  // that three times, with its verdict still sitting in an unflushed buffer,
+  // which is indistinguishable from a process that never started.
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }
