@@ -25440,6 +25440,45 @@ module zhao_console_core
   // removed, black is a visible fault and white is a convincing wrong answer.
   localparam logic [23:0] TAIL_VERTEX_RGB_UNUSED_C    = 24'h00_0000;
 
+  // AND THE PAIRING IS STRUCTURAL, NOT ARGUED. The owner directive requires
+  // that the stencil reference, the alpha, the blend and the tag "remain paired
+  // with the primitive under stalls, clipping, replay, binning and
+  // material-window span changes" -- which is CLAUDE.md's metadata-swap chapter
+  // as a requirement, and the question it says to ask is what clocks each side.
+  //
+  // MEASURED, 2026-09-25, because "the span protects it" is the kind of sentence
+  // that is true of the BLOCK and silently false of the COMPOSITION. The window
+  // drains on `d_leave_i`, which this module wires to
+  // `door_tri_valid_w && door_tri_ready_w`. Those two nets ARE `u_render_bin`'s
+  // `render_tri_valid_i` / `render_tri_ready_o` -- the same instance these two
+  // `_c` wires feed -- and `zhao_geom_binner_v2` samples the metadata on exactly
+  // that handshake, "only on the same `tri_we` edge that stores the
+  // corresponding 142-bit triangle".
+  //
+  // So THE DRAIN'S DEPARTURE EVENT IS THE METADATA SAMPLING EVENT: one
+  // handshake, one clock, no window between them. A span cannot switch while a
+  // triangle is in flight toward the binner, because the switch waits for
+  // occupancy zero and occupancy only falls when the binner has taken the beat.
+  // The profile a triangle is binned with is necessarily the one published when
+  // it was accepted -- a property of the structure rather than of a counter that
+  // would have to be believed. Note which way round that argument runs: it is
+  // NOT "the two move together so nothing can differ", which is the reasoning
+  // the metadata-swap chapter warns about; it is that there is no clock on which
+  // they CAN differ, because the event that retires one is the event that
+  // samples the other.
+  //
+  // ONE VALUE DID CHANGE AND IT IS NOT A PIXEL, recorded because a silent
+  // default change is how this file gets audited later. Before the port was
+  // retired, the tail's `vertex_alpha` before any span was published was
+  // whatever the boundary carried -- which every bench drove to 0x00, i.e.
+  // FULLY TRANSPARENT, a value nobody ever authored. It is now
+  // `TAIL_VERTEX_ALPHA_DEFAULT_C`, opaque, which is what owner ruling R48
+  // actually says the default is. No pixel moves either way while the
+  // unpublished profile is BLEND=REPLACE, because that arm is `acc = src_i` and
+  // throws the alpha away -- and the console smoke measured exactly that, with
+  // both forms reporting the same pixel counts before and after this packet.
+  // The old value would have become a defect the day anything published an
+  // alpha blend before a material resolved; the new one is simply correct.
   wire mat_declares_frag_c = mw_pub_valid && mw_pub_frag_declared;
 
   wire [31:0] tri_fragment_state_c =
