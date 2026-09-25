@@ -945,6 +945,153 @@ interchangeable. Totals are unchanged and still reproduce EDGEBAND's:
 P4's fit question is unchanged and already named: *does the terrain island
 still close at NCTX with the walker, the time-share and EDGERECON added?*
 
+### LANDED 2026-09-25 (EDGECLOSE). P4 IS DONE; BOTH REGISTER ENTRIES CLOSED
+
+`zhao_terrain_edgerecon` is composed in `zhao_console_core`, entry I21 is
+DELETED from the INCOMPLETE block, and the completion register went **11 → 9**.
+The four `edge_*` literals are gone from `u_terrain_lod`.
+
+**Six blocks landed together**, because each is the next one's producer and
+composing any one alone dangles a port — the trade R75 endorses refusing and
+the reason this block sat BUILT AND DISCONNECTED for three days.
+
+| | what it is | which owed item |
+|---|---|---|
+| `zhao_terrain_islandseal` | the island pitch SEAL and the admission check | 2 **and** 3 |
+| `zhao_terrain_prepwalk` | the PREPARE walker (P2, already built) | 1 |
+| `zhao_terrain_prepshare` | the two borrowed ports, arbitrated | 7 |
+| `zhao_terrain_lodshare` | the time-share and the freeze (P3, already built) | 1 |
+| `zhao_terrain_edgerecon` | this block | 1 |
+| `zhao_terrain_edgequery` | the EMIT-side query driver | 6 |
+
+Items 4 and 5 are console wiring: `frz_tok_i` is a witness counter moved by a
+residency publication, a deformation mark or an island-seal refusal, and
+`prep_gate_i`/`prep_sel_i` come from `phase_o` and the drain below.
+
+#### THE ISLAND PITCH HAD NO PRODUCER, AND `zhao_terrain_island_dir` IS NOT ONE
+
+The directive made the island descriptor's `pitch_log2` authoritative. Measured
+rather than inherited: `zhao_terrain_island_dir` is not instantiated in the
+console **and would not help if it were** — `desc_pitch_log2_i` is an *input* of
+that block (`:70`). It CONSUMES a descriptor and produces no pitch, and
+TERRAIN.ISLAND is already `superseded by a ruling` in the register besides. The
+only ratified carrier of an island table is `TerrainEpoch 0x0220`'s
+`island_table_handle`, and that command is `reserved` in `spec/commands.zidl:616`.
+
+`zhao_terrain_islandseal` **seals** the pitch from the first legal page header
+of an island generation and thereafter **checks** every header against it —
+pitch, island identity, and the envelope origin recomputed through
+`zhao_terrain_place_law_pkg`, the same functions `zhao_terrain_place` calls.
+Spec 1.5 gives an island one pitch and spec 2.1 +2 says the header's copy "must
+match the island table", so the two are the same number by construction and the
+COMPARISON was what was missing, not a register. A refusal moves the freeze
+witness, so the frame falls back rather than combining a patch placed one way in
+PREPARE and another in EMIT. Seven counters say which field disagreed.
+
+#### CLIENT 5 IS STILL NOT SPENT, AND THE SHARED ROUTE COST NOTHING
+
+Re-measured: `zhao_vram_arbiter.sv:353` still forces `port_grant[5]` low.
+**PREPARE's devstore reads ARE devstore's own reads** — requester 4 of
+`u_build_share` under `ZHAO_CLIENT_TERRAIN_BUILD`, the same socket with the same
+scoped permission, because they are literally the same port. No new client, no
+arbiter change, no guard change, and `tests/formal/mem_guard_no_escape.sby` does
+not move. The sealed list's re-read is HPS client 7 (the arbiter widened 7 → 8),
+read-only, at the HIGHEST index on purpose: the arbiter starves high indices
+first and PREPARE is the one reader whose failure is a counted fallback.
+
+#### THE FIT QUESTION AS WRITTEN NAMES A TARGET THAT DOES NOT EXIST
+
+This contract named P4's fit in advance as *"does the terrain island still close
+at NCTX with the walker, the pitch table and EDGERECON added?"* **Two of those
+three nouns are wrong**, and saying so is cheaper than running the wrong fit:
+
+* there is **no `terrain island` fit target**. `design/fit_targets.yml` has
+  `zhao_texture_island_top` and `zhao_texture_island_v3_top` and no terrain one;
+* **`NCTX` is a texture-island parameter** (`zhao_raster_rcp24_svc`), not a
+  terrain one;
+* **the pitch table does not exist** — the directive deleted P1.
+
+The question the six blocks actually raise is an AREA and Fmax question about
+the composed console, and the target that answers it is `zhao_console_core`,
+which has a successful prior row to difference against
+(`@console-core-first-light`: 47,582 ALM, 151 DSP, 306 RAM blocks, 56,031
+registers, gpu_clk 18.5 MHz, on the 5CEBA9F31C7 SIZING device). **That** is the
+one fit this plan spends, as `@edgeclose`, and the five resource categories are
+kept apart as `design/budgets` requires.
+
+#### THE ACCEPTANCE BENCH, AND THE THREE DEFECTS IT FOUND
+
+`tests/prod/terrain_edge_acceptance` — 90 checks, 0 failures, seven production
+modules, on `tests/prod/partmat_acceptance.cpp`'s pattern. It asks one question:
+
+```
+SECTION 1 (control, no PREPARE -- the console as it shipped)
+  seam(0,0)+x / (1,0)-x: A=[1 1 1 1] B=[3 3 3 3] DISAGREE
+SECTION 2 (the composed producer)
+  seam(0,0)+x / (1,0)-x: A=[3 3 3 3] B=[3 3 3 3] AGREE
+  control=[1 1 1 1] -> producer=[3 3 3 3]
+```
+
+That is `max(neighbour, own)` computed as `zhao_terrain_tess` computes it, so a
+failure IS a crack. The "a level actually moved" assertion is separate and is
+what stops the bench going green on a fixture that could not have failed.
+
+**Composing against the REAL ladder for the first time found three defects, all
+silent, none visible to any existing gate:**
+
+1. **`IDQ_DEPTH = 4` WAS A DEADLOCK.** This block's own header claimed
+   `zhao_terrain_lod` is *"a sequential ladder with ONE descriptor in flight"*.
+   It is not: `zhao_terrain_lod.sv:671-684` accepts **all sixteen** subpatches
+   before emitting any, because a subpatch's four interior neighbours need the
+   whole `lvl[]` array. The queue filled on the fourth descriptor, the producer
+   stalled, the ladder never reached its sixteenth, and the two blocks held each
+   other still **with every counter reading zero**. `terrain_lodshare_directed`
+   passed 96 checks against this because it drives a ladder MODEL that emits per
+   descriptor — *"a gate that cannot reach the state is not evidence about the
+   state"*.
+2. **THE IDENTITY QUEUE POPPED TWICE PER SUBPATCH ON A DUAL PAGE.** `StEmit` is
+   interleaved per subpatch (`:715-723`) — top, underside, advance — so two
+   beats carry one identity. The queue emptied halfway through a dual patch,
+   `ident_mismatch_o` fired, the file was refused, and every seam that patch
+   touched fell back. Defect 1 was masking it.
+3. **`prep_sel_i(busy_o)` AND `prepare_done_i(prep_done_o)` LOSE THE LAST PATCH
+   OF EVERY FRAME.** `busy_o` is `(state != P_IDLE)` and the walker reaches idle
+   when its sixteenth descriptor is ACCEPTED, while the ladder still holds all
+   sixteen. Ownership flipped mid-patch and the bank froze before the last
+   sixteen lanes were filed. Both are now gated on the time-share being
+   **drained** (`idle_o`), which is the block's own statement and not a timeout.
+
+#### ONE THING THE FALLBACK STILL DOES NOT BUY, asserted rather than assumed
+
+Section 3 drives a **missing page** and the seam across it **still disagrees**:
+both sides get `8'h00`, and `max(0, own) == own`, so the two patches' own levels
+differ. **The symmetry law holds and crack freedom does not** — which is the
+directive's own sentence about a shared sentinel, now measured on the live path.
+In the console a non-resident patch is not composed either, so it presents no
+geometry for the seam to crack against; the bench emits it anyway, which is why
+the assertion is about the sentinel and the counters rather than about
+agreement.
+
+#### WHAT THIS PACKET DID NOT DO
+
+* **`zhao_terrain_island_dir` is still not composed**, and is not owed: the
+  register records TERRAIN.ISLAND as superseded, and the block consumes a
+  descriptor rather than producing one.
+* **The console smoke still replays 128 degenerate triangles.** Measured this
+  session, the cause is NOT the one the smoke's own comment gives (*"a flat zero
+  height field"*): a flat but PLACED lattice has a non-zero cross product,
+  because `zhao_terrain_place` supplies distinct world x/z from the patch
+  coordinate with no page payload reaching placement. The real cause is that the
+  bench writes only the 64-byte header, so the compose cache never fills and
+  `zhao_terrain_compcache_front` returns POISON on all three lanes. Fixing that
+  fixture is the smoke's packet, not this one; the acceptance bench does not go
+  through the compose cache at all.
+* **`zhao_terrain_edgequery` owes no committed mutant**, and that is measured:
+  every one of its twelve counters is fired by the acceptance bench or by a
+  named fallback path with legal stimulus. `door_src_unknown_o` is the one that
+  is unreachable in a well-ordered frame and it is reachable by construction —
+  a door whose identity matches neither held record — rather than by a mutation.
+
 ## Notes
 
 1. **The bank stores decisions, not geometry.** The ruling permits buffering
