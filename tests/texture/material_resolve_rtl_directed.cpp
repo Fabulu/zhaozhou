@@ -501,15 +501,28 @@ int main(int argc, char** argv) {
       r.control |= 0x20;  // a set RESERVED control bit
       bads.push_back({"a set reserved control bit", r});
     }
+    // THE FRAGMENT PROFILE (FRAGSTATE, 2026-09-25). These two words were
+    // `rsv0`/`rsv1` and are now `fragment_state`/`fragment_decl`. Both cases
+    // below still refuse, and they now refuse for a STATED reason rather than
+    // because the whole word was reserved -- which is the point of differencing
+    // them against the oracle here: the RTL's `record_ok_f` and
+    // `zref::material::record_legal` are two independently written copies of one
+    // rule, and a rule that drifted would show up as a verdict mismatch rather
+    // than as two agreeing mistakes.
     {
       zhao_abi::ZhMaterialRecord r = make_record(2, mat::kModulate);
-      r.rsv0 = 1;
-      bads.push_back({"a non-zero reserved word rsv0", r});
+      r.fragment_state = 1;  // a state word with the declaration flag CLEAR
+      bads.push_back({"a fragment_state with fragment_decl bit 0 clear", r});
     }
     {
       zhao_abi::ZhMaterialRecord r = make_record(2, mat::kModulate);
-      r.rsv1 = 0x8000'0000u;
-      bads.push_back({"a non-zero reserved word rsv1", r});
+      r.fragment_decl = 0x8000'0000u;  // a RESERVED bit of fragment_decl
+      bads.push_back({"a set reserved fragment_decl bit", r});
+    }
+    {
+      zhao_abi::ZhMaterialRecord r = make_record(2, mat::kModulate);
+      r.fragment_decl = 0x0000'5A00u;  // an effect tag, and no declaration
+      bads.push_back({"an effect_tag with fragment_decl bit 0 clear", r});
     }
     {
       zhao_abi::ZhMaterialRecord r = make_record(2, mat::kModulate);
@@ -832,7 +845,7 @@ int main(int argc, char** argv) {
     zhao_abi::ZhMaterialRecord ok = make_record(2, mat::kModulate);
     ok.sample0.binding_slot = 0x0201;  // 513: overflows the u8 selector
     zhao_abi::ZhMaterialRecord bad = make_record(1, mat::kModulate);  // pair bad
-    bad.rsv0 = 7;                                                     // and malformed
+    bad.fragment_state = 7;  // and malformed: a state word, declaration clear
 
     Sdram mem;
     mem.base = kBase;

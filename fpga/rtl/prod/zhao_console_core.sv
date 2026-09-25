@@ -3420,28 +3420,105 @@
 //      NON-DEGENERATE TERRAIN, and finding that out after wiring the merge would
 //      cost a pass.
 //
-// I20. Everything `zhao_shell_top_v2` already declares provisional at its own
-//      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
-//      geometry memory clients -- is UNCHANGED and still provisional. This
-//      file adds no opinion about them; read that file's header.
+// I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
+//      ports are retired from this module's edge and every field of the last
+//      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
+//      vacation directive of 2026-09-23, section 3.
 //
-//      NARROWED AND MADE SPECIFIC 2026-09-19, because "read that file's
-//      header" was hiding a group of six ports that file's header does not
-//      discuss and this one had never named -- the PACKET-D ATTRIBUTE
-//      CARRIAGE. HALF OF IT IS NOW CLOSED. What is left, and what it is
-//      waiting for, is the rest of this entry.
+//      `zhao_shell_top_v2`'s own provisional edge -- the triangle port,
+//      `fb_writer_i`, the FRAME_RING view, the geometry memory clients -- is
+//      UNCHANGED and still provisional, and that file keeps its own
+//      `tri_continuation_tail_i` and `tri_fragment_state_i` because it has its
+//      own `u_render_bin`. That is exactly the shape `tri_flat_request_i` and
+//      `tri_area2_i` retired in, not a loophole: THIS module's edge is what
+//      this entry was ever about.
 //
 //        tri_invw_plane_i       240b   CLOSED -- GEOM.ATTRPACK, plane 0
 //        tri_u_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 1
 //        tri_v_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 2
 //        tri_flat_request_i     298b   CLOSED 2026-09-20 -- MATERIAL.RESOLVE,
 //                                      through `u_material_window` (I49)
-//        tri_continuation_tail_i 48b   NARROWED 2026-09-23 -- `vertex_alpha`
-//                                      is DRIVEN; the other three fields are
-//                                      still a BOUNDARY
-//        tri_fragment_state_i    32b   NARROWED 2026-09-23 -- BLEND, Z_TEST_EN
-//                                      and Z_WRITE_DIS are DRIVEN; the rest is
-//                                      still a BOUNDARY
+//        tri_continuation_tail_i 48b   CLOSED 2026-09-25 -- RETIRED as a port
+//        tri_fragment_state_i    32b   CLOSED 2026-09-25 -- RETIRED as a port
+//
+//      THE PRODUCER OF EVERY FORMERLY-OPEN FIELD, and why each is a producer
+//      rather than a default somebody chose:
+//
+//        the 32-bit state word
+//            THE MATERIAL's `MaterialRecord.fragment_state` when
+//            `fragment_decl` bit 0 declares it, else THE PRODUCER's own
+//            declaration at `u_geom_clipdoor`. Both are real: the first is a
+//            host-authored ABI field validated on arrival by both mirrors, the
+//            second is what GEOM.REPLAY, FORGE.PRIM, FORGE.SHADOW and
+//            PART.CLIPFEED already present on their own granted beat.
+//        `vertex_alpha` [23:16]
+//            the published span's, owner ruling R89, unchanged from SHADOWRIDE.
+//        `effect_tag` [15:8]
+//            THE MATERIAL's `fragment_decl[15:8]`. This is the field
+//            `sun_additive` has always required and the ABI has never carried
+//            -- see the STARS/SUN analysis further down, which is still
+//            accurate and is why the tag had to be PER-PRIMITIVE and could not
+//            be read from a texel. Default 0, which the directive names as a
+//            legitimate profile default in as many words.
+//        `stencil_reference` [7:0]
+//            THE MATERIAL's `fragment_decl[23:16]`. Default 0, and INERT under
+//            the default profile's STEN_FUNC=ALWAYS, which never reads the
+//            reference at all. A material that declares a stencil FUNCTION
+//            declares its REFERENCE in the same validated word, so the two
+//            cannot arrive separately.
+//        `vertex_rgb` [47:24]
+//            NOBODY's, and this is the field whose answer changed rather than
+//            arrived. Owner decision R234 D1 made
+//            `zhao_raster_tile_pipe_v2.sv:810-812` overwrite it PER FRAGMENT
+//            from Gouraud lanes 3..5, UNCONDITIONALLY, one statement after the
+//            tail is cast. So the 24 bits cannot reach a pixel whatever is put
+//            in them. It is filled with a named dead constant -- BLACK rather
+//            than a plausible white, so that if the overwrite is ever removed
+//            the result is a visible fault instead of a convincing wrong
+//            answer.
+//
+//      THE STENCIL MASK WAS NEVER MISSING, and this is the premise that died
+//      first. Three passes described this entry as owing "reference and mask".
+//      The MASK is `[31:24]` of the state word -- the same word, already
+//      arbitrated by the door, already a term of `zhao_material_window`'s
+//      `match_c`. An 8-bit mask port would have been a SECOND PATH TO THE SAME
+//      SILICON, which is the metadata-swap shape the door's own header refuses.
+//      Measured before building: `grep -rn stencil_mask` over the whole tree
+//      returns nothing, against six files for `stencil_reference`.
+//
+//      THE OR IS GONE, and it was the thing this entry most needed removing.
+//      The state word was composed `tri_fragment_state_i | mw_pub_frag_state`,
+//      and this entry's own words for that were "an external driver can still
+//      raise a bit the span leaves clear". The directive forbids it by name.
+//      The reason it is worse than untidy: UNDER AN OR NEITHER OWNER CAN
+//      EXPRESS A ZERO. BLEND REPLACE is 2'b00, so under an OR no owner could
+//      ever select REPLACE once anything had raised either bit of `[4:3]` -- an
+//      opaque surface behind a transparent one would silently blend. One owner
+//      per span now, selected by `mw_pub_frag_declared`, a registered field.
+//
+//      THE SELECTOR IS A FIELD AND NOT A ZERO TEST, which is the directive's
+//      "profile selection is explicit, not inferred from whether a port happens
+//      to be zero" doing real work: the all-zero state word is a LEGAL,
+//      MEANINGFUL profile -- the plain opaque write -- so a material declaring
+//      opaque is bit-identical to one declaring nothing. Written as
+//      `state != 0` this would have worked for seven profiles and silently
+//      ignored the eighth. The console smoke's `-GlowTag` form declares exactly
+//      that all-zero profile, so the cheap test is not merely argued against,
+//      it is the case the bench runs.
+//
+//      WHERE THE SCHEMA LIVES. `zhao_render_texture_pkg.sv` carries the word's
+//      fields, all twelve enum encodings and the eight named profiles, with an
+//      elaboration contract and fifty-nine executed span probes. Nothing about
+//      the ENCODING changed: the directive's STEN_FUNC / STEN_OP / BLEND
+//      numbering was measured against `zhao_raster_fragment.sv` and
+//      `zhao_raster_blend_fin.sv` first and is already what ships, so every
+//      published capture still decodes. What changed is CUSTODY -- the word had
+//      been hand-maintained in four copies, two of which nothing checked.
+//
+//      (HISTORY FROM HERE DOWN. The paragraphs below are kept because their
+//      REASONING is what made the closure possible and several of them killed a
+//      premise that would otherwise be re-derived. Where one is now superseded
+//      it says so at the point of the claim rather than being deleted.)
 //
 //      BOTH REMAINING PORTS WERE NARROWED 2026-09-23 (SHADOWRIDE), and the
 //      pair had to move TOGETHER. R89 ruled that FORGE.SHADOW's flat alpha
@@ -3463,6 +3540,11 @@
 //      `tri_flat_request_c` relies on, and the declaration is part of the
 //      span's identity so a primitive cannot be painted with the previous
 //      one's opacity. See `tri_continuation_tail_c` beside the flat request.
+//
+//      SUPERSEDED 2026-09-25: every field this paragraph lists now has an
+//      owner, and the OR it describes is removed. It is kept because its
+//      analysis of WHY each was refused is correct and is the reason none of
+//      them was ever quietly filled.
 //
 //      WHAT STAYS A BOUNDARY, and it is the whole of why this entry is still
 //      open: the tail's `effect_tag` (R195's bloom selector, which the console
@@ -3697,6 +3779,31 @@
 //                  art decision. There is no PROVOKING-VERTEX law in this tree
 //                  -- searched every .sv, .md, .hpp and .zidl; ZERO hits -- so
 //                  there is not even a convention to appeal to. OWNER DECISION.
+//                  SUPERSEDED 2026-09-25, TWICE OVER, and the second half is
+//                  the one worth carrying forward.
+//                  (a) THE LAW EXISTS NOW. The directive rules the provoking
+//                  vertex is the FIRST vertex of the ORIGINAL SUBMITTED
+//                  primitive, before clipping, triangulation or winding swaps.
+//                  It is written down in `design/contracts/RASTER.FRAGMENT.md`
+//                  under "THE PROVOKING VERTEX" -- the reference and the spec,
+//                  not only here.
+//                  (b) THE ZERO-HIT GREP WAS ALREADY WRONG WHEN IT WAS
+//                  WRITTEN, or became so. `zref_creature.hpp` carries
+//                  `g_force_flat_shading` with `kShadeFlatPvA/B/C` -- three
+//                  provoking-vertex readings, built as a LOOK-AT-IT comparison
+//                  for this exact question -- and `creature_sim.cpp` implements
+//                  them. The file even QUOTES this entry's "no law" sentence.
+//                  A zero-result grep that is quoted for four days is this
+//                  repository's most reliable way of inheriting a false
+//                  premise, and it cost this packet a near-miss: the first plan
+//                  was to write a SECOND provoking-vertex convention.
+//                  (c) AND THE ENUM ALONE IS NOT THE LAW. `kShadeFlatPvA` names
+//                  a corner of the triangle the RASTERISER receives;
+//                  `zhao_geom_clip` swaps B and C on a negative area, and
+//                  clipping can produce derived triangles containing NONE of
+//                  the submitted corners. So the payload must be captured at
+//                  submission and carried as primitive metadata, which is a
+//                  different mechanism and is why the directive says so.
 //        vertex_alpha [23:16] R89 ruled the route (flat, not a fourth attrpack
 //                  plane) and FORGE.SHADOW.md's own section records that the
 //                  VALUE has no producer: `zhao_forge_shadow`'s `strength_q`

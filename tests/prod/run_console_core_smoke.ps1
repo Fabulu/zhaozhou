@@ -393,7 +393,7 @@ if ($NoEchoArm) {
 }
 if ($GlowTag) {
   $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
-  Write-Host 'R195 END-TO-END: tri_continuation_tail_i carries a GLOW tag (0x7F) and a non-black vertex colour, DIRECT polarity (passes when gather_frag_lit_o EQUALS the framebuffer pixels carrying the tail colour, the bloom stage finds cells, and the post pass CHANGES the frame)'
+  Write-Host 'R195 END-TO-END FROM THE ABI: the uploaded MaterialRecord declares a fragment profile whose effect_tag is a GLOW tag (0x7F), DIRECT polarity (passes when gather_frag_lit_o EQUALS the framebuffer pixels carrying a colour, the bloom stage finds cells, and the post pass CHANGES the frame). The declared state word is the all-zero opaque profile, so the tag is the ONLY variable that moves between this form and the plain one -- and because that word is bit-identical to declaring nothing, this form is also the positive control for reading fragment_decl bit 0 rather than testing the payload for zero.'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'

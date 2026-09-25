@@ -99,6 +99,40 @@ Every recipe is **one value of this word**; none needed a datapath mode of its o
 
 `sun_additive`'s tag is **constant**, not from a texel index, and that is a real distinction rather than an oversight: the sun quad's texture is "64×64 ARGB4444" (§1.1) — direct colour, with no CLUT index to read a strength from. Only the star recipes sample CLUT8, and only they can honour §1's "strength = source texel's CLUT intensity".
 
+### Where a constant tag comes from, since 2026-09-25
+
+`MaterialRecord.fragment_decl[15:8]`, an `effect_tag` u8 validated on arrival, reaching this block as the continuation tail's `effect_tag` and selected by `TAG_FROM_TEXEL` low. Before that allocation the field had no producer anywhere and `sun_additive` was a recipe the ABI could not ask for. See `spec/commands.zidl`'s MaterialRecord and `zhao_console_core.sv` entry I20.
+
+## THE PROVOKING VERTEX — the law, written down here for the first time
+
+**Ruled by the owner vacation directive of 2026-09-23, section 3.** Recorded in this contract because it is a rendering law and not a composition detail, and because until now **the tree had no such law and said so in four places**.
+
+> For an EXPLICIT flat profile, the provoking vertex is the **FIRST vertex of the original submitted primitive, before clipping, triangulation or winding swaps.** Capture the flat payload there and carry it as **primitive metadata** through all derived triangles. Clipping or a swap must not silently choose another vertex. Generated primitives with a declared per-job color/alpha use that declared payload. **Profile selection is explicit, not inferred from whether a port happens to be zero.**
+
+### What this supersedes
+
+`zhao_console_core.sv` entry I20 said, and had said since 2026-09-21: *"There is no PROVOKING-VERTEX law in this tree — searched every .sv, .md, .hpp and .zidl; ZERO hits — so there is not even a convention to appeal to. OWNER DECISION."* `reference/include/zref/zref_creature.hpp` quotes that sentence back. **Both are now superseded**: the law exists, it is this section, and the decision is made. The entry's classification of `vertex_rgb` as "an art decision a composer may not make" was correct at the time and is the reason the field was never quietly filled.
+
+### It is NOT simply `kShadeFlatPvA`, and that difference is the whole content
+
+`zref_creature.hpp` already carries `g_force_flat_shading` with `kShadeFlatPvA/B/C` (2/3/4) — "compute the three corner lights exactly as Gouraud does, then hold ONE of them across the whole triangle". That knob was built to *ask* this question by rendering the alternatives and looking at them, which is the right way to settle a visual choice. The directive has now answered it: **A**.
+
+But those enums name a corner of the **triangle the rasteriser receives**, and the law names a vertex of the **primitive the host submitted**. Between the two sit:
+
+* **`zhao_geom_clip`'s winding flip** — `zhao_geom_clip.sv:22` and `:90`, *"the `area < 0` double-sided winding flip"*, which **swaps B and C**. A flip alone leaves A in place, so A survives it — but the flip is proof that the pipeline reorders corners, and any future rule that picked B or C would have been wrong here.
+* **clipping and triangulation**, which produce derived triangles whose corners are new points on the original's edges. A derived triangle may contain **none** of the submitted vertices, so "the first corner of this triangle" is not merely a different answer — it is frequently not an answer at all.
+
+So the law cannot be implemented by reading a corner at the rasteriser. It requires the flat payload to be **captured at submission and carried as primitive metadata**, which is a different mechanism from the attribute lanes and is why the directive says so in those words.
+
+### What is built, and what is not
+
+**Built:** nothing changes for Gouraud, which is the commissioned path and stays exactly as owner decision R234 D1 left it — `zhao_raster_tile_pipe_v2.sv:810-812` overwrites the tail's `vertex_rgb` per fragment from attribute lanes 3..5, unconditionally, so smooth lit RGB keeps its interpolation and its precision. The directive's *"Do not replace Gouraud with flat color to close I20 or save arithmetic"* is satisfied structurally: with that assignment in place a flat colour **cannot** reach a fragment, whatever any producer puts in the tail.
+
+**Not built:** the explicit flat profile itself. It was not required to close I20 and building it would add a mode nobody has asked to render. When it is wanted, this section is the specification, and two constraints are already known:
+
+1. **Its selector cannot be a bit of the fragment state word.** That word has *no reserved holes* — every one of the 32 bits is allocated (see the table above) and *"every 32-bit value is a legal state"* is a deliberate property the randomized lane depends on. A flat selector must live in **primitive metadata**, alongside the tail in `zhao_geom_bin_pipe_v2`'s `META_FIXED_W` sum, which that module's own comment already invites: *"Stating the sum makes the next change one term."*
+2. **It must be captured before `zhao_geom_clip`.** Capturing after it would measure the pipeline's reordering rather than the submission's intent — the mismatched-poses error in a new costume, which is the same mistake `zref_creature.hpp`'s own knob comment was careful to avoid.
+
 ## Input and output packet layouts
 
 | channel | fields | meaning |

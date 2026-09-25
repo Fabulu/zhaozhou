@@ -1147,11 +1147,31 @@ extern int g_smooth_toon_bands;
  *                      lights exactly as Gouraud does, then hold ONE of them
  *                      across the whole triangle.
  *
+ * THE QUESTION THIS KNOB WAS BUILT TO ASK HAS BEEN ANSWERED, 2026-09-25.
+ * The owner vacation directive of 2026-09-23 section 3 rules that the provoking
+ * vertex is "the FIRST vertex of the original submitted primitive, before
+ * clipping, triangulation or winding swaps" -- so among the three readings
+ * below it is **A**. The law is written down in
+ * `design/contracts/RASTER.FRAGMENT.md`, section "THE PROVOKING VERTEX", and
+ * the sentence quoted at the end of this paragraph is SUPERSEDED: there is a
+ * provoking-vertex law in this tree now, and that document is it.
+ *
+ * TWO THINGS THAT DID NOT CHANGE, and they matter more than the choice did.
+ * `kShadeFlatPvA` names a corner of the triangle the RASTERISER receives; the
+ * law names a vertex of the primitive the HOST SUBMITTED, and `zhao_geom_clip`
+ * swaps B and C on a negative area while clipping can produce derived triangles
+ * containing none of the submitted corners at all. So this knob remains a
+ * COMPARISON instrument and is not an implementation of the law. And the ship
+ * default is still kShadeGouraud: the directive is explicit that the
+ * commissioned Gouraud path stays, and owner decision R234 D1 has the hardware
+ * overwrite the flat stand-in per fragment from the interpolated lanes, so in
+ * silicon the flat colour currently cannot reach a pixel at all.
+ *
  * The provoking-vertex readings are here because they are what the hardware
  * would actually do. `zhao_raster_tile_pipe_v2.sv` already names a flat
  * stand-in -- the 24-bit `vertex_rgb` of the continuation tail, loaded ONCE
- * PER TRIANGLE -- and `zhao_console_core.sv` records that it has no producer
- * and that picking the corner is an open owner decision: "There is no
+ * PER TRIANGLE -- and `zhao_console_core.sv` recorded that it has no producer
+ * and that picking the corner was an open owner decision: "There is no
  * PROVOKING-VERTEX law in this tree." GEOM.VATTR holds PER-VERTEX colours, so
  * the cheap stand-in selects one of them; recovering a face normal instead
  * would be additional arithmetic nobody has budgeted. Rendering only the face

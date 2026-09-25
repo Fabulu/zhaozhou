@@ -121,7 +121,11 @@ void test_sample_count_three_accepted_four_impossible_and_reserved_bits_refused(
   t.records[1] = make_record(2, 1);
   t.records[1].control |= 0x20;  // a reserved control bit set
   t.records[2] = make_record(2, 1);
-  t.records[2].rsv1 = 0xFFFFFFFFu;  // a reserved word non-zero
+  // RENAMED 2026-09-25 (FRAGSTATE): this word was `rsv1` and is now
+  // `fragment_decl`. All ones still sets reserved bits [7:1] and [31:24], so
+  // the case is unchanged in what it proves -- a record from a newer format
+  // being read by older logic is refused rather than guessed at.
+  t.records[2].fragment_decl = 0xFFFFFFFFu;
   R.publish(t);
 
   mat::ResolveLedger L;
@@ -132,6 +136,82 @@ void test_sample_count_three_accepted_four_impossible_and_reserved_bits_refused(
   check(R.resolve({handle32(2, 1), 2, 0}, &L).status == mat::Status::kRefusedRecord,
         "a non-zero reserved word is REFUSED", 3, 3);
   check(L.refused_record == 2, "both malformed records counted", 2, L.refused_record);
+}
+
+// THE FRAGMENT PROFILE'S OWN LEGALITY (FRAGSTATE, 2026-09-25).
+//
+// `MaterialRecord.fragment_state` and `fragment_decl` were `rsv0`/`rsv1` until
+// the owner vacation directive of 2026-09-23 section 3 allocated them. This is
+// the fire demonstration for the CONTRADICTORY-DECLARATION rule, which is a new
+// way to reach an existing counter: `refused_record` was already proven to move,
+// but "this counter can fire" says nothing about whether it fires for THIS
+// fault, and a rule nobody has watched refuse anything is a claim.
+//
+// All four cases use LEGAL STIMULUS -- a record is just bytes, so every one of
+// them is constructible and no mutant is needed.
+void test_fragment_profile_declaration_and_its_contradiction() {
+  mat::Resolver<> R;
+  mat::Table t = make_table(5, 2, 5);
+
+  // 0: DECLARED, and everything about it is legal.
+  t.records[0] = make_record(2, 1);
+  t.records[0].fragment_state = 0x0044001Bu;  // sun_additive's word
+  t.records[0].fragment_decl = 0x007F5A01u;   // sref 0x7F, tag 0x5A, DECLARED
+
+  // 1: DECLARED, state all zero. THE CASE A `!= 0` TEST WOULD MISS. The opaque
+  // profile is bit-identical to declaring nothing, so this record is legal and
+  // its declaration is real, and only bit 0 says so.
+  t.records[1] = make_record(2, 1);
+  t.records[1].fragment_state = 0x00000000u;
+  t.records[1].fragment_decl = 0x00000001u;
+
+  // 2: CONTRADICTORY -- a state word filled and the flag forgotten. This is the
+  // mistake the shape invites, and it is REFUSED rather than masked: masking
+  // would draw the material opaque with no diagnostic anywhere.
+  t.records[2] = make_record(2, 1);
+  t.records[2].fragment_state = 0x0044001Bu;
+  t.records[2].fragment_decl = 0x00000000u;
+
+  // 3: CONTRADICTORY the other way -- a tag and a stencil reference with no
+  // declaration. Same rule, a different payload, so the check cannot be passing
+  // by only ever looking at the state word.
+  t.records[3] = make_record(2, 1);
+  t.records[3].fragment_state = 0x00000000u;
+  t.records[3].fragment_decl = 0x007F5A00u;
+
+  // 4: a RESERVED bit of fragment_decl set, with the declaration made. Legal
+  // declaration, illegal record.
+  t.records[4] = make_record(2, 1);
+  t.records[4].fragment_decl = 0x00000003u;  // bit 1 is reserved
+  R.publish(t);
+
+  mat::ResolveLedger L;
+  const auto d0 = R.resolve({handle32(5, 2), 0, 0}, &L);
+  check(d0.has_record, "a declared fragment profile is ACCEPTED", 1, 1);
+  check(d0.record.fragment_state == 0x0044001Bu,
+        "and the state word is carried through unchanged", 1, 1);
+  check(d0.record.fragment_decl == 0x007F5A01u,
+        "and so are the tag and the stencil reference", 1, 1);
+
+  check(R.resolve({handle32(5, 2), 1, 0}, &L).has_record,
+        "a DECLARED all-zero state word is legal -- the opaque profile is a "
+        "profile, and only fragment_decl bit 0 distinguishes it from silence",
+        1, 1);
+
+  check(R.resolve({handle32(5, 2), 2, 0}, &L).status == mat::Status::kRefusedRecord,
+        "a state word with the declaration flag CLEAR is REFUSED, not masked",
+        3, 3);
+  check(R.resolve({handle32(5, 2), 3, 0}, &L).status == mat::Status::kRefusedRecord,
+        "a tag and stencil reference with the flag CLEAR are REFUSED too", 3, 3);
+  check(R.resolve({handle32(5, 2), 4, 0}, &L).status == mat::Status::kRefusedRecord,
+        "a reserved fragment_decl bit is REFUSED", 3, 3);
+
+  // THE COUNTER IS SEEN TO MOVE, by exactly the number of refusals and no more.
+  // Two accepted records sit beside the three refused ones in the same table, so
+  // a rule that refused everything would fail the checks above and a rule that
+  // refused nothing would fail this one.
+  check(L.refused_record == 3, "three contradictory/illegal records counted",
+        3, L.refused_record);
 }
 
 void test_hit_and_miss_return_identical_records() {
@@ -209,6 +289,7 @@ int main() {
   test_every_field_survives_at_its_own_offset();
   test_id_past_the_count_is_refused_not_clamped();
   test_sample_count_three_accepted_four_impossible_and_reserved_bits_refused();
+  test_fragment_profile_declaration_and_its_contradiction();
   test_hit_and_miss_return_identical_records();
   test_a_resolve_after_republish_must_not_return_the_old_record();
   test_a_non_resident_set_is_a_residency_fault();
