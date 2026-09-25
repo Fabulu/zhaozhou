@@ -956,6 +956,18 @@ module tb_procmat_acceptance #(
     .rsp_selector_overflow_i(1'b0),
     .rsp_sample0_modes_i    (rsp_sample0_modes_i),
 
+    // ---- I20's fragment-state group, CONNECTED 2026-09-25 (EDGEPREP) ------
+    // The second of the two benches left stale when `zhao_material_window`
+    // gained eight ports at `eca5b8d3` earlier the same day. See
+    // `tb_partmat_acceptance.sv` for the full note. `rsp_frag_declared_i` LOW
+    // is the compatibility default: the material declares nothing and the
+    // primitive's fragment state stays authoritative, so this bench's
+    // behaviour is unchanged.
+    .rsp_frag_declared_i (1'b0),
+    .rsp_frag_state_i    (32'd0),
+    .rsp_effect_tag_i    (8'd0),
+    .rsp_stencil_ref_i   (8'd0),
+
     .pub_valid_o           (pub_valid_o),
     .pub_sample_count_o    (pub_sample_count_o),
     .pub_material_recipe_o (mw_pub_recipe),
@@ -965,6 +977,14 @@ module tb_procmat_acceptance #(
     .pub_material_mode_o   (pub_material_mode_o),
     .pub_vertex_alpha_o    (pub_vertex_alpha_w),
     .pub_frag_state_o      (pub_frag_state_w),
+
+    // Explicitly OPEN rather than absent: an empty connection states that this
+    // bench does not observe the port, where a MISSING one is a pin the next
+    // port change hides inside a wall of warnings.
+    .pub_frag_declared_o   (),
+    .pub_mat_frag_state_o  (),
+    .pub_effect_tag_o      (),
+    .pub_stencil_ref_o     (),
 
     .resolves_o                (mw_resolves_o),
     .switches_o                (mw_switches_o),
