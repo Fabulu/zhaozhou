@@ -17139,6 +17139,58 @@ set_tests_properties(lint_zhao_terrain_heighttap PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# COMPOSEPUB -- A LIVE EARTH FIELD, ALL THE WAY TO A CONSUMER.
+#
+#   zhao_field_earth_adapter -> zhao_terrain_patch
+#     -> zhao_terrain_compcache_front -> zhao_terrain_heighttap
+#
+# FOUR REAL BLOCKS, wired port-for-port as zhao_console_core.sv wires them.
+#
+# WHAT IT CLOSES. tb_terrain_compose.sv -- the nearest existing bench -- ties
+# the field lane off in its own wiring (.fld_valid_i(1'b0), .fld_height_i(0),
+# :443,445) and says so in its header: "The field list is EMPTY ... The field
+# half needs FIELD.SEQ.EARTH." So terrain_rules section 3.4's
+# `live_top = max(compose_top + SUM field lanes, fx(bottom))` had NEVER had a
+# non-empty term in any bench of the real chain, and the composed height had
+# never been shown to reach anything that reads it. Entry I34's note that the
+# sum "now has a non-empty sum" describes arithmetic reaching a value; this is
+# the gate that watches the value arrive at a consumer.
+#
+# THE CONSUMER IS REAL: zhao_terrain_heighttap is TERRAIN.TAPSHARE's single
+# service and its two clients are PART.COLLIDE and FORGE.SHADOW.
+#
+# THE ORACLE IS zref::terrain::column_query, evaluated on a ComposedLattice
+# built from the very words the hardware streamed into the compose cache
+# (captured off st_top_o as they land, not recomputed). The separate assertion
+# that st_top_o != st_compose_top_o is what says the field moved the lattice --
+# split deliberately, because a tap-vs-reference differential alone passes
+# perfectly on a lattice no field ever touched.
+#
+# Case 7 is the saturation evidence compose_rtl_directed.cpp commissioned when
+# it proved "NOTHING SOURCED FROM A PAGE CAN SATURATE THIS ADD ... Only the
+# FIELD lanes can ... a different lane's evidence". This is that lane.
+set(ZHAO_TERRAIN_COMPOSEPUB_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_earth_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_composepub.sv)
+add_executable(test_composepub_acceptance terrain/composepub_acceptance.cpp)
+target_link_libraries(test_composepub_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_composepub_acceptance
+  PREFIX Vtb_terrain_composepub
+  TOP_MODULE tb_terrain_composepub
+  SOURCES ${ZHAO_TERRAIN_COMPOSEPUB_SV})
+add_test(NAME composepub_acceptance COMMAND test_composepub_acceptance)
+set_tests_properties(composepub_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
 # THE HEIGHTTAP OVERFLOW GUARD, POSITIVE CONTROL. `interp_overflow_o` is
 # UNREACHABLE with legal stimulus -- the interpolation is a convex combination of
 # three corner heights, so it cannot leave the interval they span, and the
