@@ -1588,7 +1588,33 @@ void run_directed() {
 #endif
   require(h.retired.back().status == 0, "hot metadata cadence fragment refused", h.cycle);
 
-  // AUX HIT is independently owed and cannot become sample 2 or alter RGBA.
+  // AUX HIT is independently owed and cannot become sample 2.
+  //
+  // "... OR ALTER RGBA" WAS THE REST OF THIS SENTENCE AND IT IS SUPERSEDED,
+  // 2026-09-25 (TERRAINAUX), by `zhao_texture_sheetmod` -- the visible
+  // terrain-effect composition `TEXTURE.AUX.V2.md` and `TEXTURE.COMBINE.md`
+  // both said was "reserved for later" and "not claimed connected".
+  // `design/contracts/TEXTURE.SHEETMOD.md` is the decision record.
+  //
+  // WHAT IS SUPERSEDED IS EXACTLY ONE CLAUSE. AUX still never becomes sample
+  // 2 (the case below still proves it, and its mutant control still fires),
+  // no RECIPE consumes tag or strength, and the tag byte is still consumed by
+  // nothing. What changed is that a fragment whose material DECLARES AUX now
+  // has charter section 12's sheet tint applied to the colour the recipe
+  // produced -- `rgb * (255 - strength/2) / 256`, the oracle's own law.
+  //
+  // SO THIS EXPECTATION IS NOW THE PROOF THAT THE EFFECT IS CONNECTED, and it
+  // is written as an arithmetic statement rather than a constant so it cannot
+  // be satisfied by accident: strength 0x44 gives tint 255 - 0x22 = 221, and
+  // 0xff becomes (255*221 + 128) >> 8 = 0xdc. Red 0xff0000 -> 0xdc0000; the
+  // zero channels stay zero, which is the same law and a different witness.
+  //
+  // The two cases after this one are its controls and BOTH still expect the
+  // untinted value, for two different reasons: the DETAIL_MASK fragment's RGB
+  // is 0x000000 and a tint of zero is zero, and the AUX MISS fragment's status
+  // is non-zero so the tint arm is refused outright -- `TEXTURE.COMBINE.md`
+  // fixes a faulted result at EXACTLY 0xff00ff and a tinted magenta would be a
+  // quieter colour.
   h.sheet_plans.push_back(SheetPlan{0, 0x99, 0x44, 6});
   h.dut.sheet_req_ready_i = 0;
   set_fragment(h, 0x1005, 0xa0000005u, 1, 1, 0, true, 1, 0);
@@ -1619,7 +1645,13 @@ void run_directed() {
   h.wait_outputs(h.retired.size() + 1);
   require(h.sheet_requests == sheet_before_hit + 1, "AUX HIT did not issue exactly one Sheet READ",
           h.cycle);
-  expect_result(h.retired.back(), 0xff0000u, 0xff, 0, 0, 0x1005, aux_hit_ctx, h.cycle);
+  {
+    const uint32_t kSheetStrength = 0x44u;
+    const uint32_t tint = 255u - (kSheetStrength >> 1);
+    const uint32_t red = (0xffu * tint + 128u) >> 8;
+    expect_result(h.retired.back(), red << 16, 0xff, 0, 0, 0x1005, aux_hit_ctx, h.cycle);
+    require(red != 0xffu, "the sheet tint did not move the retired red channel", h.cycle);
+  }
 
   // Sample 2 and AUX are simultaneously required. DETAIL_MASK must take alpha
   // from real sample 2 (blue ARGB/RGB565 => 255), never AUX strength 0x22.

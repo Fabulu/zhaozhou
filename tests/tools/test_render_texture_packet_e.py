@@ -578,7 +578,7 @@ def validate_cmake(text: str) -> None:
         "texture/texture_island_v3_packet_e.sources.txt)",
         "Packet-E top source manifest must contain exactly 27 SV paths",
         "Packet-E top source manifest diverges from Packet B's exact 27-source authority",
-        "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25",
+        "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26",
         "-GMIGRATION_SHADOWS=1 -D${SV_SELECTOR}",
         "historical_fill_lifetime PACKET_E_EXPECT_PRE_E_FILL_LIFETIME",
         "relabel_refusal PACKET_E_EXPECT_RELABEL_REFUSAL_ERR",
@@ -812,7 +812,7 @@ class PacketEClosureTests(unittest.TestCase):
         prefix, section = cmake[:start], cmake[start:]
         mutations = (
             section.replace("-GLANES=8 -GREQN=2", "-GLANES=8 -GREQN=8", 1),
-            section.replace("list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25", "list(APPEND ZHAO_PACKET_E_TOP_MUTANT_SOURCES", 1),
+            section.replace("list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26", "list(APPEND ZHAO_PACKET_E_TOP_MUTANT_SOURCES", 1),
             section.replace("SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}", "SOURCES", 1),
             section.replace("  packet_e_registration_static)", ")", 1),
             section.replace("packet_e_mux_cpp_selector_collision", "packet_e_mux_cpp_collision", 1),

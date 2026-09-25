@@ -1323,12 +1323,12 @@ module tb_zhao_console_core_smoke
   logic [15:0]  fill_data_i;
   logic         fill_refused_i;
   logic [63:0]  frame_clear_word_i;
-  logic         sheet_req_ready_i;
-  logic         sheet_req_valid_o;
-  logic [1:0]   sheet_req_op_o;
-  logic [31:0]  sheet_req_handle_o;
-  logic [11:0]  sheet_req_texel_o;
-  logic [15:0]  sheet_req_src_id_o;
+  // `sheet_req_*` LEFT THE CORE'S PORT LIST 2026-09-25 (TERRAINAUX). The
+  // texture island's AUX read lands on `u_surface_sheetshare`'s CLIENT C
+  // INSIDE the core now, and both halves of the loop are internal. These six
+  // declarations are deleted rather than left: a `logic` named after a port
+  // that no longer exists binds to nothing under `.*` and reads, to the next
+  // person, as a port the bench forgot to drive.
   logic        blank_cmd_i;
   logic        scanout_ack_i;
   logic        frame_swap_valid_i;
@@ -4350,7 +4350,6 @@ module tb_zhao_console_core_smoke
     // The owner directive's "Debug-only injection is not the sole producer" is
     // satisfied by it no longer being a producer AT ALL.
     frame_clear_word_i = '0;
-    sheet_req_ready_i = '0;
     blank_cmd_i = '0;
     scanout_ack_i = '0;
     frame_swap_valid_i = '0;
