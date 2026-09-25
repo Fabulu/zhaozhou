@@ -3473,6 +3473,132 @@
 //      NON-DEGENERATE TERRAIN, and finding that out after wiring the merge would
 //      cost a pass.
 //
+//      THAT FIXTURE IS FIXED, 2026-09-25 (gz/terrainaux), AND THE CAUSE WAS NOT
+//      WHAT ANY OF THE THREE PREVIOUS EXPLANATIONS SAID. The console smoke now
+//      reports `terrlight ... degenerate=0` of 256. What it took was not a new
+//      fixture and not one line of RTL:
+//
+//        `zhao_terrain_seq` walks a submitted set ONCE and SKIPS the compose
+//        issue for any patch that is not yet resident -- measured, `seq
+//        consumed=3 issued_patches=0 claims=3 loads=3 SKIPPED=3`. Residency
+//        arrives AFTER that walk. So with ONE SubmitTerrainSet the compose
+//        door never opens: `hdr_headers=0`, TERRAIN.PLACE places nothing,
+//        and `zhao_terrain_compcache_front` never leaves `serve_valid_q = 0`
+//        -- where it answers `lat_h_o`/`lat_wx_o`/`lat_wz_o` with POISON,
+//        32'h5BADF00D, its line 532. ALL 81 WINDOW VERTICES WERE THE SAME
+//        POISON POSITION. That is why every triangle was exactly degenerate.
+//
+//      A real frame loop submits the set EVERY FRAME -- the first frame pages
+//      in, later frames compose -- and the smoke now does. After:
+//      `hdr_headers=1 place_patches=1 cc_filled=1 cc_records=1089
+//      cc_serving=1`, and the bench GATES on `degenerate == 0` so a
+//      regression that shuts the door again is loud.
+//
+//      THE BENCH'S OWN STATED CAUSE WAS WRONG AND IS WORTH KEEPING AS A
+//      LESSON. It read: "the pages this bench plays are all-zero BODIES, so
+//      the lattice is a flat zero height field, the cross product is exactly
+//      zero." A FLAT LATTICE WITH DISTINCT WORLD x/z HAS AN UP-FACING NORMAL,
+//      NOT A ZERO ONE. Zero heights alone cannot make a cross product vanish,
+//      so that could not have been the cause -- and the sentence had been read
+//      and repeated by three packets without anybody checking the arithmetic
+//      in it. The cause was one hop upstream the whole time.
+//
+//      RE-MEASURED 2026-09-25 (gz/terrainaux), AND THE FIRST OF TRIMERGE's TWO
+//      REMAINING CARRIAGE ITEMS IS DONE. The 224-bit aux surface context's
+//      CONSUMER is finished, composed and measured; what this entry called
+//      "NO producer anywhere" was half true in a way that mattered.
+//
+//        `zhao_texture_aux_pipe_v2` -- the AUX adapter that turns a world
+//        position and a patch envelope into a SURFACE.SHEET read -- was
+//        ALREADY composed, inside `zhao_texture_island_v3_top`, which is
+//        resident in this core's closure. And `zhao_surface_sheet`, the store
+//        that answers it, was ALREADY composed in THIS FILE. What was missing
+//        was the wire between them, and it was missing in two places at once:
+//        the REQUEST left the shell, this core AND `zhao_console_board` as a
+//        dangling top-level output group, while the RESPONSE was TIED TO ZERO
+//        inside `zhao_shell_top_v2` ("no producer exists in this shell yet").
+//
+//      Both are closed. `u_surface_sheetshare` is a THREE-client share now and
+//      the island's AUX pipe is CLIENT C; `sheet_req_*` left this module's port
+//      list; `zhao_texture_sheetmod` gives the sheet's strength byte a VISIBLE
+//      effect for the first time (charter 12's tint law, which both texture
+//      contracts had reserved for "a later visible terrain-effect composition").
+//      `tests/prod/terrainaux_acceptance.cpp` is 758 checks over four production
+//      modules and its second section is a PIXEL: base 0x8040C0 shades to
+//      0x4E2774 under a strength-200 scar and 0x763BB0 under strength 40.
+//
+//      WHAT THAT LEAVES FOR THIS ENTRY, and it is narrower than the aux item
+//      looked: a terrain triangle still has to CARRY an aux context to the
+//      fragment, and that is the per-triangle carriage problem below, not an
+//      absent consumer. `zhao_geom_binner_v2`'s `meta_aux_bad_c` still drops a
+//      job whose context is non-zero, and that gate is now the only thing
+//      between a produced context and a sampled sheet.
+//
+//      AND ONE CONSEQUENCE WORTH KNOWING BEFORE IT IS DISCOVERED: a ST_MISS
+//      raises `zhao_texture_aux_pipe_v2`'s `frame_fault_o`. So a terrain
+//      material that declares AUX against a sheet handle that is not resident
+//      does not merely read zero -- it FAULTS THE ISLAND'S FRAME. Measured in
+//      the acceptance bench's section 4.
+//
+//      THREE OF THIS ENTRY'S PREMISES WERE RE-MEASURED AND HOLD: `f_detail_i`
+//      has ZERO producers in `fpga/rtl` (one grep hit, the block's own file);
+//      `terr_light_base_o` is a top-level output of this core AND of the board;
+//      and `u_geom_clipdoor` is composed with `.NCLIENT (3)` -- GEOM.REPLAY,
+//      FORGE.ASSEMBLE, PART.CLIPFEED.
+//
+//      AND THREE NEW FACTS CHANGE THE SHAPE OF WHAT REMAINS. Each was found by
+//      reading the consumer rather than the entry:
+//
+//      1. THE MOSAIC'S MATERIAL TRIPLE COMES FROM THE MATERIAL RECORD, NOT PER
+//         CELL, and this entry has been blaming the wrong thing for the
+//         textured route. `zhao_texture_island_v3_top` lines 1097-1099 read
+//           .wr_mosaic_material_a_i(frag_base_rgb_i[23:16])
+//           .wr_mosaic_material_b_i(frag_base_rgb_i[15:8])
+//           .wr_mosaic_weight_i(frag_weight_i)
+//         -- so the mosaic's {tile_a, tile_b, weight} is the FLAT REQUEST's
+//         `base_rgb` and `recipe_weight`, and BOTH of those are published PER
+//         SPAN by `u_material_window`. Terrain's per-cell layer-E triple, the
+//         one `proj_out_mat_a_o`/`mat_b_o`/`weight_o` already forwards, HAS NO
+//         CARRIAGE AT ALL. Making each cell its own material would make each
+//         cell its own SPAN, and the window's own header prices that: a drain
+//         and a resolve between every pair of triangles.
+//
+//         SO THE TEXTURED ROUTE'S BLOCKER IS A PER-TRIANGLE FIELD, NOT A
+//         COLOUR DECISION. That is a different job from the one this entry has
+//         been carrying, and it is the one to cost first.
+//
+//      2. THE UNTEXTURED PROFILE'S "MISSING OPERAND" IS NOT MISSING FROM THE
+//         TREE. This entry says the untextured law "needs a BASE COLOUR. In
+//         the oracle that is the patch material's `mat.r/g/b`; in RTL there is
+//         NO terrain material colour anywhere." `zref::render::Material` is the
+//         DrawProcedural MATERIAL PAGE -- `{uint8 r, g, b}`, zref_render.hpp
+//         :172 -- `DrawProcedural` carries `material_set` and `material_id` by
+//         the owner ruling of 2026-09-22, and MATERIAL.RESOLVE's record has a
+//         `base_rgb`. What is actually missing is ONE PORT: this file's
+//         `MAT_BASE_RGB_C` is a constant white *because `zhao_material_window`
+//         does not publish the resolved record's colour*, not because no
+//         colour exists. A `pub_base_rgb_o` is a leaf change with a bench;
+//         "terrain has no colour" is a design gap. They are not the same size.
+//
+//      3. THE PERSPECTIVE MULTIPLY HAS AN UNPRICED RANGE BOUND, and nothing in
+//         this entry or anywhere else has costed it. `spec/qformats.md` 8 fixes
+//         `u_over_w` at S8.24 and `invw24` at U0.24, so the product is only
+//         representable while |u_value x invw_value| < 128. `zhao_geom_vattr`'s
+//         header can say "NO saturation case exists" because ITS u is a 16-bit
+//         record field. TERRAIN's `terr_uv_*` is Q16.16 in TILE UNITS over a
+//         world patch, so a patch far from the origin exceeds 128 tiles easily
+//         and the product saturates or wraps. WHOEVER WRITES THE `pack_attr`
+//         ANALOGUE MUST ANSWER THIS FIRST; it may force a per-patch u/v origin
+//         bias, which is a law and therefore not a composer's to invent.
+//
+//      NOTHING WAS COMPOSED FOR THE TRIANGLE PATH BY THIS LANE, DELIBERATELY,
+//      and `zhao_terrain_normalmap` was NOT composed. `f_detail_i` still has no
+//      producer and terrain triangles still reach no raster, so composing it
+//      would move the completion register while changing not one pixel -- the
+//      prefix this file's first law forbids. What DID change in its favour is
+//      the fixture: the arm's triangles have AREA now, so the merge it waits
+//      behind can be measured when it lands instead of only wired.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner

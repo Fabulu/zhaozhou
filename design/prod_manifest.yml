@@ -1504,7 +1504,7 @@ excluded:
   # do nothing. Excluded until the architecture in
   # reports/NORMALMAP-ARCHITECTURE.md is built. It is deliberately NOT in the
   # running fit, so the normal-map cost stays a clean measured delta.
-  - zhao_terrain_normalmap: unused  rebuilt to contract 2026-09-09 (zero-DSP, mip tail), directed-tested standalone; OPEN DEFERRAL until the fragment-seam wiring lands -- reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md
+  - zhao_terrain_normalmap: unused  rebuilt to contract 2026-09-09 (zero-DSP, mip tail), directed-tested standalone; OPEN DEFERRAL until the fragment-seam wiring lands -- reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md. RE-MEASURED AND DELIBERATELY NOT COMPOSED 2026-09-25 (TERRAINAUX): f_detail_i still has ZERO producers in fpga/rtl -- one grep hit, the block's own file -- and terrain triangles still reach no raster, so composing it would move the completion register while changing not one pixel, which is the prefix this campaign forbids. WHAT DID CHANGE IN ITS FAVOUR: the terrain arm's fixture is no longer degenerate (the console smoke went 128-of-128 degenerate to 0-of-256 when the compose door was made to open), so the merge this block waits behind can now be MEASURED rather than only wired. Its seam remains I13's four items: invw24, the perspective multiply, NCLIENT 3 -> 4 on zhao_geom_clipdoor, and a terrain material identity
   # 2026-09-23 (gz/normalpyr, owner ruling R243 D-NORMALS-A "commission the
   # pyramid"): the UPLOAD half of that deferral is now BUILT and the deferral is
   # NARROWED to the fragment seam alone. DETAIL_NORMAL kind 16 is frozen
@@ -1525,7 +1525,7 @@ excluded:
   # `disconnected()` tests CLOSURE MEMBERSHIP, so instantiating the pair would
   # move the register 14 -> 13 while changing not one pixel. That is a gate
   # passing rather than a thing being right, and it is refused.
-  - zhao_terrain_normalloader: unused  built 2026-09-23 to spec/cartridge.md 4g, differenced against zref::normal_page (1,099 checks) with a committed one-cycle-verdict mutant as its positive control; OPEN DEFERRAL, same seam as zhao_terrain_normalmap (spec/cartridge.md 4g)
+  - zhao_terrain_normalloader: unused  built 2026-09-23 to spec/cartridge.md 4g, differenced against zref::normal_page (1,099 checks) with a committed one-cycle-verdict mutant as its positive control; OPEN DEFERRAL, same seam as zhao_terrain_normalmap (spec/cartridge.md 4g). VERIFIED STILL THE SAME SEAM 2026-09-25 (TERRAINAUX); composing the PAIR alone would still be a producer and a consumer with no fragment between them
   # TERRAIN.SHADE — the terrain base light, built 2026-09-09 to the exact
   # law (bit-exact vs the compiled shade_flat_tri_dir_unclamped, 4,142
   # checks). Zero DSP, one M10K, II ~147 against a 2,000-triangle/frame
