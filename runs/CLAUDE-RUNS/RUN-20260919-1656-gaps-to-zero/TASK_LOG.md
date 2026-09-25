@@ -2185,3 +2185,68 @@ live-patch hole). **At the cap of two.**
 **Queued, not started:** the `pal_q` M10K conversion — the single biggest
 optimization on the board, and the first phase-3 packet to launch when a slot
 frees.
+
+### 2026-09-26 — REGISTER 7. ARENAID merged, PALRAM launched, and a third blind instrument
+
+**ARENAID merged at `f52b2bbe` and pushed. Register 8 -> 7.** `I53` is closed and
+deleted from the INCOMPLETE block. **The vertices moved and the pixels did not,
+and both halves are the point**: `paramarena verts 0 -> 30`, `vertid refs/
+published/reused 42 / 30 / 12`, `raster pixels 2560 -> 2560`, frame span
+`1,410 -> 2,182 clk (+54.8%, declared)`.
+
+The identity is `{domain, arena, generation, index}` — GEOM.REPLAY's own arena
+key — in a **direct-mapped exact table with the discriminator compared
+bit-for-bit. No hash, no CRC, no digest**, so there is no collision to reason
+about, and a broken premise yields a **miss** (a duplicate vertex), never a wrong
+hit.
+
+**Four premises measured FALSE**, and one retires a whole section: *"GEOM.CLIP
+creates triangles the assembler never emitted"* is false — clip does
+whole-primitive rejection — so §4's clipping-lineage language **describes a
+machine this console is not**. Also false: *"no handshake carries identity and
+attributes together"* (true at the landing, false at REPLAY's per-corner reply)
+and *"R7's 65,536th vertex is a declared loss"* (it was a decoder port width).
+
+**It refused to close I54 and I55**, and specified the `TriangleExt` sidecar
+without building it rather than overload a field or truncate a handle. It also
+proved two reds were not its, with dates.
+
+**Merge:** one conflict, the GENERATED `zhao_prod_top.sv`. **Regenerated** rather
+than hand-merged — a generated file merged by hand is a stale file with a
+reassuring provenance line on top. 82 instances, manifest OK at 397 modules.
+Verified: configure RC 0, gate_sweep RC 0 / 30 matching, eol RC 0, register 7.
+
+**PALRAM launched** (`BRIEF-PALRAM.md`, branch `gz/palram`) — the first phase-3
+packet, on `zhao_geom_drawjob`'s 98,304-bit `pal_q`.
+
+### AND THEN A THIRD INSTRUMENT TURNED OUT TO BE SILENT
+
+`tools/quartus/check_ram_inference.py` exists for exactly this failure, was
+written after an 85-minute fit found 9,728 bits in flops, and has a `--rank` mode
+that orders arrays by declared bits. **Its largest entry is 65,536 bits. `pal_q`
+is 98,304 and is not on the list at all.**
+
+So on one array: the source comment asserts the inference, Quartus's 46-entry
+uninferred list omits it, and the purpose-built static checker ranks it nowhere —
+while the fit says 98,304 flip-flops. **The checker is not broken**; its four
+rules are necessary conditions collected from past failures and `pal_q` passes
+all four, which makes it the case proving they are not sufficient. PALRAM has
+been messaged: **the checker cannot be acceptance evidence in either direction**,
+and a fifth rule with a positive control may be worth more than the conversion.
+
+**Second target diagnosed, not assigned:** `zhao_forge_assemble`'s
+`pos_q`/`inv_q`, 34,840 bits ≈ 21% of the part, blocked by an **async reset loop
+over the array** (`:710`) and a **combinational read** (`:579`) — both the
+checker's own rules, and **not free**: the read costs a pipeline stage and the
+reset loop needs a validity discipline, not a deletion.
+
+**Ruled OUT as conversions**, so nobody queues them cheaply:
+`zhao_field_v3_engine` and `zhao_geom_bin_pipe_v2` have distributed registers and
+large memories already. Those are architecture questions.
+
+### WHERE I AM
+
+**Running:** TERRVEL (velocity + I34's live-patch hole) and PALRAM (`pal_q`).
+**At the cap of two.**
+
+**Remaining 7:** `I13`+`normalmap`, `I34`+`velocity`, `I54`, `I55`, `I56`.
