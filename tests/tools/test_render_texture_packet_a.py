@@ -718,17 +718,17 @@ class RenderTextureLayoutTests(unittest.TestCase):
             normal = run_generated_model(executable)
             field_span_runs = [
                 run_generated_model(executable, "+FIELD_SPAN_CONTROL=%d" % control)
-                for control in range(1, 46)
+                for control in range(1, 60)
             ]
             roundtrip_runs = [
                 run_generated_model(executable, "+ROUNDTRIP_CONTROL=%d" % control)
-                for control in range(1, 7)
+                for control in range(1, 8)
             ]
 
         diagnostic = normal.stdout + normal.stderr
         self.assertEqual(normal.returncode, 0, diagnostic)
-        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45", diagnostic)
-        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=6", diagnostic)
+        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=59", diagnostic)
+        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7", diagnostic)
 
         for control, ran in enumerate(field_span_runs, 1):
             with self.subTest(field_span_control=control):
@@ -742,7 +742,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
 
         roundtrip_names = (
             "continuation", "aux", "earlyz_payload",
-            "pretexture", "retirement", "result",
+            "pretexture", "retirement", "result", "frag_state",
         )
         for control, (name, ran) in enumerate(
                 zip(roundtrip_names, roundtrip_runs), 1):
@@ -792,6 +792,11 @@ class RenderTextureLayoutTests(unittest.TestCase):
             13: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[13]: PRETEX_LAYOUT",
             14: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[14]: RETIRE_LAYOUT",
             15: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[15]: RESULT_LAYOUT",
+            # The fragment state word, added 2026-09-25 (FRAGSTATE). 16 is the
+            # AUX fingerprint, whose control is the committed reversed-wx/wz
+            # mutant rather than a parameter, so these take 17 and 18.
+            17: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[17]: FRAG_STATE_OFFSET_CONTRACT",
+            18: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[18]: FRAG_STATE_LAYOUT",
         }
         top = "zhao_render_texture_elab_control_top"
 
@@ -811,7 +816,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
         baseline_diagnostic = baseline.stdout + baseline.stderr
         self.assertEqual(baseline.returncode, 0, baseline_diagnostic)
         self.assertIn(
-            "ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45",
+            "ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=59",
             baseline_diagnostic,
         )
 

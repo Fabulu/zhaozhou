@@ -27,12 +27,15 @@ module zhao_render_texture_layout_top;
   logic [RASTER_PRETEX_W-1:0] pretex_roundtrip_bits;
   logic [RASTER_RETIRE_CTX_W-1:0] retire_ctx_roundtrip_bits;
   logic [TEXTURE_RESULT_W-1:0] result_roundtrip_bits;
+  zhao_fragment_state_v1_t frag_state;
+  logic [FRAG_STATE_W-1:0] frag_state_bits;
+  logic [FRAG_STATE_W-1:0] frag_state_roundtrip_bits;
   integer roundtrip_control;
 
   initial begin
     roundtrip_control = 0;
     if ($value$plusargs("ROUNDTRIP_CONTROL=%d", roundtrip_control)) begin
-      if ((roundtrip_control < 1) || (roundtrip_control > 6))
+      if ((roundtrip_control < 1) || (roundtrip_control > 7))
         $fatal(1, "invalid ROUNDTRIP_CONTROL=%0d", roundtrip_control);
     end
     continuation = '0;
@@ -80,6 +83,26 @@ module zhao_render_texture_layout_top;
     result.alpha             = 8'h7F;
     result.rgb               = 24'h12_34AB;
 
+    // The fragment state word. The vector below is written as an independent
+    // literal concatenation, so a struct that reordered two same-width
+    // neighbours fails here as well as in the guard's own fingerprint.
+    frag_state                = '0;
+    frag_state.sten_mask      = 8'h3C;
+    frag_state.tag_channel    = FRAG_TAG_CHANNEL_GLOW;
+    frag_state.tag_from_texel = 1'b1;
+    frag_state.tag_write_dis  = 1'b0;
+    frag_state.sten_op        = FRAG_STEN_OP_INCR_SAT;
+    frag_state.sten_func      = FRAG_STEN_FUNC_NOTEQUAL;
+    frag_state.atest_ref      = 8'hE1;
+    frag_state.atest_en       = 1'b1;
+    frag_state.alpha_mod      = 1'b0;
+    frag_state.shade_mod      = 1'b1;
+    frag_state.blend          = FRAG_BLEND_ADD_MOD;
+    frag_state.z_force_far    = 1'b0;
+    frag_state.z_write_dis    = 1'b1;
+    frag_state.z_test_en      = 1'b1;
+    frag_state_bits = frag_state_pack(frag_state);
+
     continuation_bits = pack_raster_continuation(continuation);
     aux_bits = pack_aux_surface_ctx(aux);
     request_bits = request;
@@ -114,6 +137,10 @@ module zhao_render_texture_layout_top;
     if (roundtrip_control == 6)
       result_roundtrip_bits[TEXTURE_RESULT_STATUS_LO] =
           ~result_roundtrip_bits[TEXTURE_RESULT_STATUS_LO];
+    frag_state_roundtrip_bits = frag_state_bits;
+    if (roundtrip_control == 7)
+      frag_state_roundtrip_bits[FRAG_STEN_FUNC_LO] =
+          ~frag_state_roundtrip_bits[FRAG_STEN_FUNC_LO];
 
     if (continuation_bits !== {
           8'hA5, 24'h12_3456, 32'h89AB_CDEF, 16'h1357,
@@ -147,6 +174,38 @@ module zhao_render_texture_layout_top;
       $fatal(1, "retirement context exact vector mismatch");
     if (result_bits !== {8'h81, 8'h42, 8'h7F, 24'h12_34AB})
       $fatal(1, "texture result exact vector mismatch");
+    if (frag_state_bits !== {
+          8'h3C, 2'b01, 1'b1, 1'b0, 2'b10, 2'b10, 8'hE1,
+          1'b1, 1'b0, 1'b1, 2'b11, 1'b0, 1'b1, 1'b1})
+      $fatal(1, "fragment state exact vector mismatch");
+    // THE SIX RATIFIED RECIPES AND THE TWO PROFILES, as exact words. These are
+    // the values `zref::FragmentPipeline`'s constructors pack, and a producer
+    // declaring a profile gets exactly this. Written as literals so a recipe
+    // whose field assignments drifted fails here rather than in a picture.
+    if (frag_profile_opaque_geometry() !== 32'h0000_0000)
+      $fatal(1, "profile opaque_geometry is not the all-zero opaque word");
+    if (frag_profile_sky_backdrop() !== 32'h0004_0004)
+      $fatal(1, "profile sky_backdrop mismatch");
+    if (frag_profile_sky_cloud_fade() !== 32'h0014_004B)
+      $fatal(1, "profile sky_cloud_fade mismatch");
+    if (frag_profile_sun_additive() !== 32'h0044_001B)
+      $fatal(1, "profile sun_additive mismatch");
+    if (frag_profile_beam_additive_fade() !== 32'h0014_0033)
+      $fatal(1, "profile beam_additive_fade mismatch");
+    if (frag_profile_star_disc_masked() !== 32'h0064_0083)
+      $fatal(1, "profile star_disc_masked mismatch");
+    if (frag_profile_star_halo_additive() !== 32'h0064_0013)
+      $fatal(1, "profile star_halo_additive mismatch");
+    if (frag_profile_shadow_alpha() !== 32'h0014_000B)
+      $fatal(1, "profile shadow_alpha mismatch");
+    // EVERY PROFILE THAT READS AN ALPHA MUST NOT BE BLEND=REPLACE. This is the
+    // structural form of the R89 defect: a flat alpha delivered under REPLACE
+    // has its product thrown away by `zhao_raster_blend_fin`, so a profile that
+    // means to consume an alpha and selects REPLACE is a silent no-op.
+    if (frag_state_unpack(frag_profile_shadow_alpha()).blend == FRAG_BLEND_REPLACE)
+      $fatal(1, "shadow_alpha selects BLEND=REPLACE: the alpha would be computed and thrown away");
+    if (frag_state_unpack(frag_profile_sky_cloud_fade()).blend == FRAG_BLEND_REPLACE)
+      $fatal(1, "sky_cloud_fade selects BLEND=REPLACE: the alpha would be computed and thrown away");
 
     if (unpack_raster_continuation(continuation_roundtrip_bits) !== continuation) begin
       if (roundtrip_control == 1)
@@ -178,10 +237,15 @@ module zhao_render_texture_layout_top;
         $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_FIRE[6]: result");
       $fatal(1, "result pack/unpack round trip failed");
     end
+    if (frag_state_unpack(frag_state_roundtrip_bits) !== frag_state) begin
+      if (roundtrip_control == 7)
+        $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_FIRE[7]: frag_state");
+      $fatal(1, "fragment state pack/unpack round trip failed");
+    end
     if (roundtrip_control != 0)
       $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_ESCAPED[%0d]", roundtrip_control);
 
-    $display("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=6");
+    $display("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7");
   end
 endmodule
 
@@ -207,6 +271,8 @@ module zhao_render_texture_elab_control_top #(
       {{(RASTER_RETIRE_CTX_W-1){1'b0}}, 1'b1};
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_ONE =
       {{(TEXTURE_RESULT_W-1){1'b0}}, 1'b1};
+  localparam logic [FRAG_STATE_W-1:0] FRAG_STATE_ONE =
+      {{(FRAG_STATE_W-1){1'b0}}, 1'b1};
 
   localparam logic [RASTER_CONTINUATION_W-1:0] CONT_PROBE =
       continuation_layout_probe() ^ ((CONTROL == 10) ? CONT_ONE : '0);
@@ -220,6 +286,8 @@ module zhao_render_texture_elab_control_top #(
       retire_layout_probe() ^ ((CONTROL == 14) ? RETIRE_ONE : '0);
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_PROBE =
       result_layout_probe() ^ ((CONTROL == 15) ? RESULT_ONE : '0);
+  localparam logic [FRAG_STATE_W-1:0] FRAG_STATE_PROBE =
+      frag_state_layout_probe() ^ ((CONTROL == 18) ? FRAG_STATE_ONE : '0);
 
   zhao_render_texture_layout_guard #(
     .WIDTH_CONTRACT_OK_P(WIDTH_CONTRACT_OK && (CONTROL != 1)),
@@ -237,6 +305,9 @@ module zhao_render_texture_elab_control_top #(
     .EZPAY_LAYOUT_PROBE_P(EZPAY_PROBE),
     .PRETEX_LAYOUT_PROBE_P(PRETEX_PROBE),
     .RETIRE_LAYOUT_PROBE_P(RETIRE_PROBE),
-    .RESULT_LAYOUT_PROBE_P(RESULT_PROBE)
+    .RESULT_LAYOUT_PROBE_P(RESULT_PROBE),
+    .FRAG_STATE_OFFSET_CONTRACT_OK_P(
+      FRAG_STATE_OFFSET_CONTRACT_OK && (CONTROL != 17)),
+    .FRAG_STATE_LAYOUT_PROBE_P(FRAG_STATE_PROBE)
   ) u_control();
 endmodule
