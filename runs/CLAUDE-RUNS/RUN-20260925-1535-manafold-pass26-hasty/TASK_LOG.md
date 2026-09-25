@@ -233,3 +233,59 @@ improvement and will NOT say the seam closed.
 ### In progress → next
 Part 1 closed. Next: Part 2 publish — archive pass 25, exact bank, encode,
 site, local gates, deploy, production verify.
+
+---
+
+## Publish (reviewer lane, Part 2) — 2026-09-25
+
+**Status: Complete.** Deployed and verified on both hosts.
+
+* **Archive first, before the encode.** All 44 live files verified against the
+  published pass-25 receipt, copied, and the COPIES re-hashed: 44/44,
+  44,526,868 bytes. One new generation, each clip declared once, 20 → 21.
+  `checkarchive.py` extended to lock it — selftest 43 → **49 red legs**.
+* **Exact bank.** 22 subjects, 7,992 frames, ONE invocation, production ink, no
+  override; environment verified empty of `ZHAO_U02_*` first. Renderer md5
+  `b822bb9bd7ceb8f0b921623566b26169`, manifest sha256
+  `eb6d4e9a8191d8e958711eb09d955842bec5782ef53c2b236d206b81126c5e13`.
+  Scope: exactly one subject moved and it is Hasty; 0 frame counts changed.
+* **Frame review.** 22 sheets / **7,992 tiles**, each sheet checked to hold its
+  count. Automatic sweep over all 7,992: 0 black, 0 frozen, 0 without the
+  creature. All 240 Hasty frames looked at. Not overclaimed on the card.
+* **Encode 22/22**, RC 0 read directly. Of the 22 WebMs exactly ONE changed
+  size — Hasty. A third independent containment check, at the media layer.
+* **Gates**, real exit codes: assemble 0, checkfresh 0, checkarchive 0,
+  checkarchive --selftest 0, checkplayback 0, checkmedia 0 (1,772/1,772),
+  decodecheck 0 on 44 files, exactly one `noindex` meta tag.
+* **Deployed** `-Project upheaval -Branch main`, RC 0 →
+  https://7dec0772.upheaval.pages.dev
+* **Production verified: 72/72 on BOTH hosts**, 0 mismatches, 0 retries, 42
+  index content checks each, all green. Verifier selftest run FIRST: 33 index
+  negatives fire plus corrupted/truncated/non-200 media.
+
+### Three things that went wrong and were fixed rather than worked around
+
+1. **`assemble.py` refused the build** — style.css wired 20 archive-generation
+   slots against 21 generations. The guard worked. Both nth families extended to
+   22 in the same edit as the constant.
+2. **`decodecheck.sh` exited 0 on an empty argument list** — a green line about
+   nothing. It now refuses one; proved both ways (empty → RC 2, truncated →
+   RC 1).
+3. **The production verifier failed its own selftest three times**: six regexes
+   whose `\b` a heredoc had turned into literal backspaces, three check strings
+   carrying raw apostrophes the assembler escapes to `&#x27;`, and a
+   quoted-claim stripper aimed at `&ldquo;` where the page writes `&quot;`.
+   Every one would have been a green check that could not fail.
+
+### And the fast-forward that was NOT available
+
+`origin/main` on Upheaval had advanced **54 commits** from the game-engine lane
+(P1/P3/P4a movement and world core, the stickman lab, the SDL_GPU redirection),
+and was **not an ancestor** of this branch. Forcing the fast-forward would have
+deleted all 54. The lanes were verified disjoint — the other lane touched
+**zero** files under `website/` or `creature/` — and their main was MERGED into
+this branch instead, so the update to `main` was still a genuine fast-forward
+and nothing was rewritten or lost. zhaozhou fast-forwarded cleanly.
+
+Four heads agree: zhaozhou `main` == `manafold-pass26`, Upheaval `main` ==
+`manafold-pass26`.
