@@ -235,6 +235,11 @@ module tb_terrain_place_cache (
       .mat_w_a_i     (8'd0),
       .mat_w_b_i     (8'd0),
       .mat_w_weight_i(8'd0),
+      .vel_we_i    (1'b0),
+      .vel_w_vi_i  (6'd0),
+      .vel_w_vj_i  (6'd0),
+      .vel_w_val_i (16'sd0),
+      .vel_done_i  (1'b0),
 
       .cs_we_i         (1'b0),
       .cs_w_ci_i       (5'd0),
@@ -277,6 +282,12 @@ module tb_terrain_place_cache (
       .lat_oob_o       (lat_oob),
       .cs_oob_o        (cs_oob_w),
       .mat_oob_o       (mat_oob_w),
+      .lat_vel_o          (),
+      .lat_vel_present_o  (),
+      .vel_words_o        (),
+      .vel_oob_o          (),
+      .vel_orphan_o       (),
+      .vel_done_mismatch_o(),
       .mat_cells_o     (mat_cells_w)
   );
 

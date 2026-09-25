@@ -173,6 +173,50 @@ module zhao_terrain_compcache_front #(
     input logic [7:0] mat_w_b_i,
     input logic [7:0] mat_w_weight_i,
 
+    // -----------------------------------------------------------------------
+    // The VELOCITY plane -- terrain_rules 4.2's height16 lattice, 2 B/vertex.
+    // NEW 2026-09-26 (TERRVEL).
+    // -----------------------------------------------------------------------
+    // IT LIVES HERE FOR THE REASON 4.1 LAW 2 GIVES, VERBATIM: "Every consumer
+    // -- tessellation/render, sim height query, particle collision, velocity,
+    // normals, nav -- reads the SAME composed lattice." This block IS that
+    // lattice in fabric. A velocity plane of its own would have had to copy
+    // `fill_par_q`, `serve_par_q` and `serve_valid_q`'s handover branch, which
+    // is the same argument the layer-E comment above makes, and a copy of an
+    // arming law diverges.
+    //
+    // THE HEADER'S OWN 161% SENTENCE IS ABOUT A DIFFERENT THING AND MUST NOT
+    // BE READ AS A REFUSAL OF THIS. "256 x 2,178 B for heights plus as much
+    // again for velocity = 8.92 Mbit = 161%" prices ALL 256 PATCHES RESIDENT
+    // AT ONCE, which is the SDRAM region's shape, not this block's. This block
+    // holds TWO patches -- one filling, one serving. The velocity plane is
+    // therefore 2 x 1,089 x 16 b = 34,848 bit, about 4 M10K, against a device
+    // with 553. The owner directive authorises exactly this trade ("synchronous
+    // banks ... exact narrower representations ... are authorized") and the
+    // ALM/M10K note in CLAUDE.md names memory as the slack side.
+    //
+    // THE WRITE FACE IS `cs_we_i`'S AND `mat_we_i`'S, VERBATIM: fire and
+    // forget, no ready, the producer owning the handshake. TERRAIN.VELOCITY
+    // emits one word per vertex and can always be accepted, because this is one
+    // RAM write -- which is also what lets TERRAIN.VELJOIN's ready-join never
+    // backpressure the height lane once a sweep is running.
+    //
+    // THE WORD IS height16 (s16), NOT fx16. That is terrain_rules 4.2's frozen
+    // storage format and `design/ops.yml` FIELD.OUT.VELOCITY's ratified
+    // bake-back, and TERRAIN.VELOCITY has already done the single rounding
+    // qformats 3 permits. Widening it here to 32 bits would store eight bits of
+    // nothing per vertex and invite a second rounding downstream.
+    input logic               vel_we_i,
+    input logic        [ 5:0] vel_w_vi_i,
+    input logic        [ 5:0] vel_w_vj_i,
+    input logic signed [15:0] vel_w_val_i,
+    // TERRAIN.VELOCITY's `patch_done_o`: the 1,089th word of THIS sweep landed.
+    // PRESENCE TRAVELS WITH THE RESULT (owner directive 1) -- a plane that was
+    // not completely written is served as ABSENT rather than as whatever the
+    // previous patch left, so a consumer is never handed a stale velocity
+    // beside a fresh height with every counter agreeing.
+    input logic               vel_done_i,
+
     input logic dual_i,  // 0 = legacy single-surface page: bottom == top
 
     // -----------------------------------------------------------------------
@@ -204,6 +248,17 @@ module zhao_terrain_compcache_front #(
     output logic signed [31:0] lat_h_o,
     output logic signed [31:0] lat_wx_o,
     output logic signed [31:0] lat_wz_o,
+    // The velocity word at the SAME vertex, on the SAME request. It is not a
+    // second serve port: a consumer asking for a vertex is asking terrain_rules
+    // 4.3's `column_query`, whose ratified return tuple is
+    // `{class, top, bottom, velocity, matA, matB, weight, sheet}` -- velocity
+    // is a FIELD of that answer, not a separate query, and giving it its own
+    // request would let the two disagree about which vertex they describe.
+    // `lat_surface_i` does not apply: 4.2's velocity lattice is per-vertex with
+    // no top/underside distinction, because a RATE has no surface (the same
+    // reason TERRAIN.VELOCITY declines 3.4's underside clamp).
+    output logic signed [15:0] lat_vel_o,
+    output logic               lat_vel_present_o,
 
     input  logic       cs_req_i,
     input  logic [4:0] cs_ci_i,
@@ -233,7 +288,18 @@ module zhao_terrain_compcache_front #(
     output logic [31:0] lat_oob_o,          // lattice requests outside the grid
     output logic [31:0] cs_oob_o,           // cell requests outside the plane
     output logic [31:0] mat_oob_o,          // layer-E requests outside the plane
-    output logic [31:0] mat_cells_o         // layer-E cells taken into a fill
+    output logic [31:0] mat_cells_o,        // layer-E cells taken into a fill
+    output logic [31:0] vel_words_o,        // velocity words taken into a fill
+    output logic [31:0] vel_oob_o,          // velocity writes outside the grid
+    // A velocity word arriving with NO fill buffer held. It is dropped, because
+    // the only parity it could land in is the one a consumer is reading. A
+    // non-zero value means TERRAIN.VELOCITY's sweep outlived its patch's fill,
+    // which is a real finding about the walk and not noise.
+    output logic [31:0] vel_orphan_o,
+    // TERRAIN.VELOCITY claimed a sweep complete on a clock that was NOT the one
+    // this block's 1,089th word landed on. The two operands are clocked by
+    // different things on purpose -- see `vel_last_word_c`.
+    output logic [31:0] vel_done_mismatch_o
 );
 
   localparam int unsigned VERTS = LAT_W * LAT_H;           // 1,089
@@ -278,6 +344,19 @@ module zhao_terrain_compcache_front #(
   // and unlike a wrong height a wrong tile id does not move anything -- it
   // just renders the wrong ground, which no geometric check would catch.
   logic        [23:0] mat_m [2*CELLS];
+
+  // The velocity plane, both parities. ONE word per VERTEX and no surface
+  // dimension -- 2 x 1,089 x 16 b = 34,848 bit, about 4 M10K. Addressed with
+  // the lattice's own `vidx = vj * LAT_W + vi`, the same index the height
+  // plane uses, so a velocity word and a height word at one vertex cannot
+  // land at two different places.
+  logic signed [15:0] vel_m [2*VERTS];
+
+  // Per-buffer completion, handed over by the swap exactly as `src_m` is.
+  // NOT a single flag: the filling buffer's completion and the serving
+  // buffer's completion are different facts about different patches, and one
+  // flag would let a fill in progress mark the patch being SERVED as present.
+  logic vel_full_m[2];
   logic signed [31:0] wx_m  [2*LAT_W];
   logic signed [31:0] wz_m  [2*LAT_H];
 
@@ -509,6 +588,38 @@ module zhao_terrain_compcache_front #(
     mat_rd_q <= mat_m[mat_rd_addr_c];
   end
 
+  // ---- the velocity plane: the same two parities, the lattice's own index --
+  // The range test zero-extends the 6-bit port and states the bound in 7 bits,
+  // for the reason the layer-D comment below spells out at length: `6'(LAT_W)`
+  // is `6'(33)`, which fits, but the next lattice size up would not, and a
+  // comparison that is constant due to unsigned arithmetic fails SILENTLY and
+  // in the flattering direction -- every write dropped, every read poisoned,
+  // and every height still perfect.
+  wire vel_w_in_range_c = ({1'b0, vel_w_vi_i} < 7'(LAT_W)) &&
+                          ({1'b0, vel_w_vj_i} < 7'(LAT_H));
+
+  // A word with no fill buffer held has nowhere legal to go: the only parity
+  // that exists for it is the one being SERVED. Dropped and counted (J3's
+  // hazard, from the other side).
+  wire vel_we_ok_c = vel_we_i && vel_w_in_range_c && fill_active_q;
+
+  wire [11:0] vel_w_vidx_c = 12'(vel_w_vj_i) * 12'(LAT_W) + 12'(vel_w_vi_i);
+  wire [11:0] vel_wr_vidx_c = vel_w_in_range_c ? vel_w_vidx_c : 12'd0;
+
+  wire [VW:0] vel_wr_addr_c =
+      (VW + 1)'( (fill_par_q ? VERTS : 0) + int'(vel_wr_vidx_c) );
+
+  // The read reuses the HEIGHT request's folded index, so the two planes are
+  // structurally incapable of answering about different vertices.
+  wire [VW:0] vel_rd_addr_c =
+      (VW + 1)'( (serve_par_q ? VERTS : 0) + int'(rd_vidx_c) );
+
+  logic signed [15:0] vel_rd_q;
+  always_ff @(posedge clk) begin
+    if (vel_we_ok_c) vel_m[vel_wr_addr_c] <= vel_w_val_i;
+    vel_rd_q <= vel_m[vel_rd_addr_c];
+  end
+
   // Position planes: 33 words each, far too small for an M10K and correctly
   // left as MLAB/registers.
   wire [5:0] wx_wr_c = pos_idx_i;
@@ -531,14 +642,24 @@ module zhao_terrain_compcache_front #(
   // value it has been able to recognise since before this block existed.
   localparam logic signed [31:0] POISON = 32'sh5BADF00D;
 
-  logic req_ok_q, cs_req_ok_q, mat_req_ok_q;
+  logic req_ok_q, cs_req_ok_q, mat_req_ok_q, vel_ok_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       req_ok_q     <= 1'b0;
       cs_req_ok_q  <= 1'b0;
       mat_req_ok_q <= 1'b0;
+      vel_ok_q     <= 1'b0;
     end else begin
       req_ok_q     <= lat_req_i && lat_in_range_c && serve_valid_q;
+      // A SEPARATE FLOP AGAIN, and here it carries an EXTRA term the height's
+      // does not: the served buffer's velocity plane must have been completely
+      // written. Sharing `req_ok_q` would have made presence a property of the
+      // REQUEST when it is a property of the BUFFER, and the two are exactly
+      // what disagree on the patch where a sweep was aborted -- the one case
+      // the flag exists for. Read from `serve_par_q`, which is the parity this
+      // cycle's read address used.
+      vel_ok_q     <= lat_req_i && lat_in_range_c && serve_valid_q
+                      && vel_full_m[serve_par_q];
       cs_req_ok_q  <= cs_req_i && cs_rd_in_range_c && serve_valid_q;
       // A SEPARATE FLOP, not a share of `cs_req_ok_q`. The two queries come
       // from different ports of the same consumer on different cycles -- TESS
@@ -555,6 +676,16 @@ module zhao_terrain_compcache_front #(
   assign lat_h_o  = req_ok_q ? lat_rd_q : POISON;
   assign lat_wx_o = req_ok_q ? wx_rd_q  : POISON;
   assign lat_wz_o = req_ok_q ? wz_rd_q  : POISON;
+
+  // ZERO, NOT POISON, and the difference is deliberate. A height has no legal
+  // zero -- terrain at exactly 0 is meaningful, so an unanswered height must
+  // be a value nothing could mistake for one. A VELOCITY's zero is the law V2
+  // answer for ground no field touches, so zero is the correct reading of
+  // "absent" for a consumer that ignores `lat_vel_present_o`, and poison would
+  // be a huge fake speed. The present bit is still the thing to read: absent
+  // means NOT MEASURED, and zero means MEASURED AS STILL.
+  assign lat_vel_o         = vel_ok_q ? vel_rd_q : 16'sd0;
+  assign lat_vel_present_o = vel_ok_q;
   // Substance has no spare encoding for poison in two bits, and inventing one
   // would change TESS's port. 3 is what the existing composed test already
   // drives when no request is pending; sec 3.3 gives 0 = SOLID, so 3 is not the
@@ -576,6 +707,17 @@ module zhao_terrain_compcache_front #(
   logic [31:0] patches_filled_q, patches_served_q, fill_overrun_q;
   logic [31:0] lat_oob_q, cs_oob_q;
   logic [31:0] mat_oob_q, mat_cells_q;
+  logic [31:0] vel_words_q, vel_oob_q, vel_orphan_q, vel_done_mm_q;
+
+  // THE COUNT IS THE AUTHORITY ON COMPLETENESS, NOT THE PULSE. The plane is
+  // marked present when the 1,089th word of THIS fill lands, which is a fact
+  // this block observed. `vel_done_i` -- TERRAIN.VELOCITY's own `patch_done_o`
+  // -- is then CROSS-CHECKED against it rather than believed, because the two
+  // are clocked by different things: the count by this block's write enable,
+  // the pulse by TERRAIN.VELOCITY's internal `last_vtx`. A detector whose two
+  // operands share an enable cannot fire, and this repository has already
+  // shipped one that did not.
+  wire vel_last_word_c = vel_we_ok_c && (vel_words_q == 32'(VERTS - 1));
 
   assign fill_records_o   = {{(32 - CURW){1'b0}}, wcur_q};
   assign patches_filled_o = patches_filled_q;
@@ -590,6 +732,10 @@ module zhao_terrain_compcache_front #(
   // walk skips the last row -- the shape a 33-vertex walk reused for 32 cells
   // fails in -- lands 992 and every other counter in this block still balances.
   assign mat_cells_o      = mat_cells_q;
+  assign vel_words_o      = vel_words_q;
+  assign vel_oob_o        = vel_oob_q;
+  assign vel_orphan_o     = vel_orphan_q;
+  assign vel_done_mismatch_o = vel_done_mm_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -612,8 +758,37 @@ module zhao_terrain_compcache_front #(
       cs_oob_q         <= '0;
       mat_oob_q        <= '0;
       mat_cells_q      <= '0;
+      vel_words_q      <= '0;
+      vel_oob_q        <= '0;
+      vel_orphan_q     <= '0;
+      vel_done_mm_q    <= '0;
+      vel_full_m[0]    <= 1'b0;
+      vel_full_m[1]    <= 1'b0;
     end else begin
       serve_release_q <= serve_release_i;
+
+      // ---- the velocity plane ---------------------------------------------
+      // These sit ABOVE the fill branch, so `fill_go_c`'s `vel_words_q <= '0`
+      // overrides this increment on a clock where both fire. That is the
+      // correct precedence and it is stated rather than left to the reader:
+      // a fill start is the patch's FIRST vertex and TERRAIN.VELOCITY has not
+      // been started yet, so no word can legitimately arrive on that clock --
+      // and if one ever did it would belong to the sweep being abandoned, not
+      // to the one beginning.
+      if (vel_we_ok_c) vel_words_q <= vel_words_q + 1'b1;
+      if (vel_we_i && !vel_w_in_range_c) vel_oob_q <= vel_oob_q + 1'b1;
+      // A word with no buffer held. Dropped by `vel_we_ok_c` and counted here:
+      // the only parity available to it is the one being served, so writing it
+      // would corrupt a patch a consumer is reading.
+      if (vel_we_i && vel_w_in_range_c && !fill_active_q)
+        vel_orphan_q <= vel_orphan_q + 1'b1;
+      // The 1,089th word of this fill makes the plane PRESENT.
+      if (vel_last_word_c) vel_full_m[fill_par_q] <= 1'b1;
+      // The cross-check, not a belief: TERRAIN.VELOCITY says 'sweep
+      // complete' and this block says 'the 1,089th word just landed'. They
+      // must be the same clock. Nothing loads both operands.
+      if (vel_done_i && fill_active_q && !vel_last_word_c)
+        vel_done_mm_q <= vel_done_mm_q + 1'b1;
 
       // ---- fill ---------------------------------------------------------
       if (fill_go_c) begin
@@ -621,6 +796,12 @@ module zhao_terrain_compcache_front #(
         wcur_q        <= '0;
         wphase_q      <= 1'b0;
         dual_q        <= dual_i;
+        // The incoming buffer's velocity plane is ABSENT until this fill's own
+        // 1,089 words land. Cleared on the buffer being TAKEN, not on the swap,
+        // so a fill that is abandoned part-way can never hand over a plane that
+        // is half this patch and half the last one.
+        vel_words_q       <= '0;
+        vel_full_m[~serve_par_q] <= 1'b0;
         // Take the buffer that is NOT being served. When nothing is served
         // yet this is still well defined because serve_par_q resets to the
         // opposite of fill_par_q.
