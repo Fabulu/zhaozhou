@@ -7009,6 +7009,18 @@ module zhao_console_core
   // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
   // would emit a descriptor the record layer cannot store.
   parameter int unsigned GEOM_ASM_VIDW = 16,
+  // ---- THE GEOMETRY IDENTITY SPACE (ARENAID, owner directive section 4) ----
+  // The console's vertex identity is GEOM.REPLAY's own arena lookup key,
+  // {arena, generation, index}, and `zhao_geom_vertid` is the only block that
+  // turns one into a GEOM.PARAMBUF vertex id. Named here because the door and
+  // GEOM.CLIP both carry it opaquely and three literals would drift.
+  parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
+  // The per-primitive rider GEOM.CLIP carries beside `src_id`:
+  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
+  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
+  // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
+  parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
 
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
@@ -8000,6 +8012,19 @@ module zhao_console_core
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
+  // `geom_vid_reused_o` is the number this whole subsystem exists for: a
+  // corner answered from the identity map, i.e. a vertex published ONCE and
+  // referenced again. `refs == published + reused + sunk` is the identity that
+  // makes the group readable together, and the smoke asserts it.
+  output logic [31:0] geom_vid_tris_o,
+  output logic [31:0] geom_vid_refs_o,
+  output logic [31:0] geom_vid_published_o,
+  output logic [31:0] geom_vid_reused_o,
+  output logic [31:0] geom_vid_unshared_o,
+  output logic [31:0] geom_vid_sunk_o,
+  output logic [31:0] geom_vid_opens_o,
+  output logic [31:0] geom_vid_stall_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -13063,6 +13088,11 @@ module zhao_console_core
   // the day a material format gives one of those bits a meaning, the value is
   // already here and only its reader is new.
   wire [31:0]             rp_o_raster;
+  // ARENAID: the three corner identities, {arena, generation, index}, carried
+  // out of the arena lookups that produced them. Captured AT ISSUE inside
+  // GEOM.REPLAY, never read off the live lookup nets -- see that block's
+  // `o_key_a_o` comment for why the distinction is the whole point.
+  wire [GEOM_VID_KEYW-1:0] rp_o_key_a, rp_o_key_b, rp_o_key_c;
   /* verilator lint_on UNUSEDSIGNAL */
   // GEOM.REPLAY -> GEOM.ASSETFETCH: the proven release (entry I38)
   wire                    rp_af_release;
@@ -13213,6 +13243,10 @@ module zhao_console_core
   // synthesis translate_on
 
   wire               cl_o_valid, cl_o_ready;
+  // ARENAID: GEOM.CLIP's own output carries the identities (B/C swapped with
+  // their attributes when the winding flip applies) and the primitive rider.
+  wire [GEOM_VID_KEYW-1:0]   cl_o_key_a, cl_o_key_b, cl_o_key_c;
+  wire [GEOM_VID_RIDERW-1:0] cl_o_rider;
   wire signed [20:0] cl_o_ax, cl_o_ay, cl_o_bx, cl_o_by, cl_o_cx, cl_o_cy;
   wire signed [47:0] cl_o_area2;
   wire signed [11:0] cl_o_min_x, cl_o_max_x, cl_o_min_y, cl_o_max_y;
@@ -13786,6 +13820,20 @@ module zhao_console_core
   wire               cd_o_untex;
   wire [ 1:0]        cd_o_cull_mode;
   wire [GEOM_CLIP_ATTRW-1:0] cd_o_attr_a, cd_o_attr_b, cd_o_attr_c;
+  // ---- ARENAID: the per-corner identity and the per-primitive rider --------
+  // The key is GEOM.REPLAY's {arena, generation, index}; the rider is
+  // {material_id, R28 raster word, producer domain}. Both are granted by the
+  // door on the beat they belong to -- see `zhao_geom_clipdoor`'s own VKEYW
+  // comment for why that mux is inside the door and not here.
+  wire [GEOM_VID_KEYW-1:0]   cd_o_key_a, cd_o_key_b, cd_o_key_c;
+  wire [GEOM_VID_RIDERW-1:0] cd_o_rider;
+  // The producer domains, as named constants. Slice 0 of the door is
+  // GEOM.REPLAY, slice 1 the forge, slice 2 PART.CLIPFEED, and the domain a
+  // producer declares is what decides whether its corners carry a dedupable
+  // identity at all.
+  localparam logic [1:0] GEOM_VID_DOM_MESH  = 2'd0;
+  localparam logic [1:0] GEOM_VID_DOM_FORGE = 2'd1;
+  localparam logic [1:0] GEOM_VID_DOM_PART  = 2'd2;
   wire [31:0]        cd_o_material_set;
   wire [15:0]        cd_o_material_id;
   wire [ 1:0]        cd_o_material_mode;
@@ -13848,7 +13896,9 @@ module zhao_console_core
   zhao_geom_clipdoor #(
     .NCLIENT (3),
     .ATTRS   (GEOM_CLIP_ATTRS),
-    .IDW     (16)
+    .IDW     (16),
+    .VKEYW   (GEOM_VID_KEYW),
+    .RIDERW  (GEOM_VID_RIDERW)
   ) u_geom_clipdoor (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -13871,6 +13921,34 @@ module zhao_console_core
     .c_attr_a_i      ({pcf_o_attr_a,       fa_o_attr_a,       rp_attr_a}),
     .c_attr_b_i      ({pcf_o_attr_b,       fa_o_attr_b,       rp_attr_b}),
     .c_attr_c_i      ({pcf_o_attr_c,       fa_o_attr_c,       rp_attr_c}),
+    // ---- ARENAID: the per-corner identity, per client ---------------------
+    // ONLY THE MESH ARM HAS ONE. GEOM.REPLAY carries {arena, gen, index} out
+    // of the arena lookups that produced each corner. A forge primitive and a
+    // polygon particle are built corner by corner and no two of their corners
+    // are the same vertex under any definition this console holds, so their
+    // keys are ZERO and are never read -- the rider's DOMAIN field is what
+    // tells `zhao_geom_vertid` not to look. That is a DECLARATION of
+    // unshareability, not a lookup that fails: "we could not find it" and "it
+    // cannot be found" are different facts and only the second is true here.
+    .c_key_a_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_a}),
+    .c_key_b_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_b}),
+    .c_key_c_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_c}),
+    // ---- ARENAID: the per-primitive rider, per client ---------------------
+    // {material_id[15:0], raster_state[31:0], domain[1:0]}.
+    //
+    // THE RASTER WORD IS EACH PRODUCER'S OWN AND NOT A COMPOSER CONSTANT. For
+    // the mesh arm it is `rp_o_raster`, R28's full word, which travelled from
+    // GEOM.DRAWJOB with the meshlet. The forge and particle arms have NO
+    // material half yet, and R28's encoding for that case is written down
+    // rather than invented here -- "bits [31:2] material = MaterialRecord
+    // .raster_state[31:2] ... no v1 consumer, so a v1 material writes 0", with
+    // bits [1:0] the DRAW's cull mode, which is exactly each of those
+    // producers' own `c_cull_mode_i`. So `{30'd0, <that producer's own cull
+    // mode>}` IS the true R28 word for a producer with no material half. It is
+    // not a convenient zero standing in for something that exists elsewhere.
+    .c_rider_i       ({{pcf_o_material_id, 30'd0, pcf_o_cull_mode, GEOM_VID_DOM_PART},
+                       {fa_o_material_id,  30'd0, fa_o_cull_mode,  GEOM_VID_DOM_FORGE},
+                       {rp_o_material,     rp_o_raster,            GEOM_VID_DOM_MESH}}),
     .c_material_set_i({pcf_o_material_set, fa_o_material_set, rp_o_material_set}),
     .c_material_id_i ({pcf_o_material_id,  fa_o_material_id,  rp_o_material}),
     // THE MATERIAL-MODE DECLARATION, per client (owner ruling 1). Particles
@@ -13928,6 +14006,10 @@ module zhao_console_core
     .o_attr_a_o      (cd_o_attr_a),
     .o_attr_b_o      (cd_o_attr_b),
     .o_attr_c_o      (cd_o_attr_c),
+    .o_key_a_o       (cd_o_key_a),
+    .o_key_b_o       (cd_o_key_b),
+    .o_key_c_o       (cd_o_key_c),
+    .o_rider_o       (cd_o_rider),
     .o_material_set_o(cd_o_material_set),
     .o_material_id_o (cd_o_material_id),
     .o_material_mode_o(cd_o_material_mode),
@@ -15045,7 +15127,9 @@ module zhao_console_core
   end
 
   zhao_geom_clip #(
-    .ATTRS (GEOM_CLIP_ATTRS)
+    .ATTRS  (GEOM_CLIP_ATTRS),
+    .VKEYW  (GEOM_VID_KEYW),
+    .RIDERW (GEOM_VID_RIDERW)
   ) u_geom_clip (
     .clk          (gpu_clk),
     .rst_n        (rst_n),
@@ -15085,6 +15169,12 @@ module zhao_console_core
     .tri_attr_a_i (cd_o_attr_a),
     .tri_attr_b_i (cd_o_attr_b),
     .tri_attr_c_i (cd_o_attr_c),
+    // ARENAID: the identity travels with its corner through the winding flip,
+    // and the rider with its primitive through the three stages.
+    .tri_key_a_i  (cd_o_key_a),
+    .tri_key_b_i  (cd_o_key_b),
+    .tri_key_c_i  (cd_o_key_c),
+    .tri_rider_i  (cd_o_rider),
 
     // REAL: the scissor is the console's own pass geometry (GLUE 1).
     .vp_x0_i      (12'd0),
@@ -15128,6 +15218,10 @@ module zhao_console_core
     .out_attr_a_o (geom_clip_attr_a_o),
     .out_attr_b_o (geom_clip_attr_b_o),
     .out_attr_c_o (geom_clip_attr_c_o),
+    .out_key_a_o  (cl_o_key_a),
+    .out_key_b_o  (cl_o_key_b),
+    .out_key_c_o  (cl_o_key_c),
+    .out_rider_o  (cl_o_rider),
     .out_flip_o   (geom_clip_flip_o),
     .ret_valid_o  (geom_clip_ret_valid_o),
     .ret_verdict_o(geom_clip_ret_verdict_o),
@@ -15177,6 +15271,26 @@ module zhao_console_core
   // and `st_o_ready` are declared with their streams and are DRIVEN here; see
   // the GEOM.ATTRPACK block for what each one is.
   wire         st_tri_ready_w;
+  // ARENAID: GEOM.VERTID is the THIRD consumer of GEOM.CLIP's accepted packet.
+  // Same fork shape as the two beside it: one AND for the ready, and each
+  // consumer's valid gated by the OTHER two readies, so a transfer is seen by
+  // all three or by none. `vid_tri_ready_w` is a STATE decode inside
+  // `zhao_geom_vertid` and is not a function of its own valid, so the fork
+  // cannot close a combinational loop through it.
+  wire         vid_tri_ready_w;
+  // ARENAID: GEOM.VERTID <-> GEOM.PARAMARENA. Declared here, beside the fork
+  // that feeds the producer; the arena instance below binds the other end.
+  wire                vid_pv_valid, vid_pv_ready, vid_pv_accept;
+  wire signed [31:0]  vid_pv_x, vid_pv_y, vid_pv_uow, vid_pv_vow;
+  wire [23:0]         vid_pv_invw;
+  wire [7:0]          vid_pv_status;
+  wire [31:0]         vid_pv_rgba;
+  wire [17:0]         vid_pv_id;
+  wire                vid_td_valid, vid_td_ready, vid_td_accept;
+  wire [15:0]         vid_td_v0, vid_td_v1, vid_td_v2, vid_td_material;
+  wire [31:0]         vid_td_raster, vid_td_source;
+  wire [17:0]         vid_td_id;
+  wire                pa_seal_fire;
   wire         ap_tri_ready_w, ap_o_valid_w;
   wire [239:0] ap_invw_plane_w, ap_u_over_w_plane_w, ap_v_over_w_plane_w;
   wire [239:0] ap_r_plane_w, ap_g_plane_w, ap_b_plane_w;
@@ -15190,7 +15304,7 @@ module zhao_console_core
 
     // REAL: GEOM.CLIP's accepted packet, field for field -- now through the
     // FORK declared above, because GEOM.ATTRPACK takes the same packet.
-    .tri_valid_i (cl_o_valid && ap_tri_ready_w),
+    .tri_valid_i (cl_o_valid && ap_tri_ready_w && vid_tri_ready_w),
     .tri_ready_o (st_tri_ready_w),
     .tri_ax_i    (cl_o_ax),
     .tri_ay_i    (cl_o_ay),
@@ -15303,7 +15417,7 @@ module zhao_console_core
     .rst_n (rst_n),
 
     // REAL: the same GEOM.CLIP packet GEOM.SETUP takes, through the fork.
-    .tri_valid_i  (cl_o_valid && st_tri_ready_w),
+    .tri_valid_i  (cl_o_valid && st_tri_ready_w && vid_tri_ready_w),
     .tri_ready_o  (ap_tri_ready_w),
     .tri_ax_i     (cl_o_ax),
     .tri_ay_i     (cl_o_ay),
@@ -15343,8 +15457,165 @@ module zhao_console_core
   assign geom_attrpack_triangles_o = ap_triangles_w;
   assign geom_attrpack_planes_o    = ap_planes_w;
 
+
+  // ==========================================================================
+  // GEOM.VERTID -- THE ONE GEOMETRY IDENTITY SPACE, and GEOM.PARAMBUF's
+  // projected-vertex producer. Console entry I53; owner vacation directive
+  // section 4 (ARENAID, 2026-09-25).
+  // ==========================================================================
+  //
+  // WHAT THIS CLOSES, SAID AGAINST THE ENTRY THAT SAID IT COULD NOT BE. Entry
+  // I53 named two obstacles and said either alone keeps the intake tied. Both
+  // are answered here and neither is answered by a wire:
+  //
+  //   (1) "THE u16 FIELD IS ALREADY DOING TWO JOBS." True, and it still is:
+  //       `GEOM_ASM_VOFF_C` stays ZERO and GEOM.ASSEMBLE's `t_v*_o` remain
+  //       GEOM.REPLAY's ARENA-LOCAL indices. Nothing about that field moved.
+  //       What changed is that the arena no longer takes its descriptors from
+  //       there. The TriangleDescriptor the arena stores is built HERE, from
+  //       ids this block obtained from the ALLOCATOR, in the frame-global
+  //       namespace the record layer has always meant. Two namespaces, two
+  //       fields, no third meaning loaded onto the first.
+  //
+  //   (2) "THE RECORD HAS NO SOURCE, WHOLE, ANYWHERE ... there is no handshake
+  //       in this console that carries a vertex's IDENTITY and its ATTRIBUTES
+  //       together." That was measured at the LANDING, and at the landing it is
+  //       true -- GEOM.WCACHE holds position and GEOM.VATTR holds the
+  //       attributes, and the landing carries only one of them. It is NOT true
+  //       at GEOM.REPLAY's per-corner reply, where both stores answer the SAME
+  //       lookup on the SAME clock, by construction and by GEOM.VATTR's own
+  //       header ("read by GEOM.REPLAY's own three lookups with the arena's own
+  //       one-clock timing"). GEOM.REPLAY assembles the whole vertex, and now
+  //       emits the key beside it. There is no join of two cadences here
+  //       because the join already happened, three blocks upstream, with a
+  //       handshake rather than a timing assumption.
+  //
+  // WHY THE TAP MOVED FROM GEOM.ASSEMBLE TO GEOM.CLIP'S OUTPUT, AND WHAT THAT
+  // SUPERSEDES. The composition of 2026-09-22 tapped `asm_t_*` and called it
+  // "REAL", which it was. The directive supersedes it: "Descriptors refer to
+  // the FINAL arena IDs, not to an earlier private store", and the final
+  // geometry is what leaves GEOM.CLIP. The assemble tap is REMOVED rather than
+  // kept beside this one -- two descriptor streams in two namespaces writing
+  // the same array is the fault this file exists to refuse.
+  //
+  // AND IT MAKES I54 REACHABLE. Entry I54's disqualifying measurement was that
+  // the binner's triangle store is POST-clip while the arena's descriptors were
+  // PRE-clip, "different sets with different cardinality and no mapping in the
+  // tree". They are now the same set in the same order: `td_accept_i`/`td_id_i`
+  // give each accepted descriptor its arena index at the moment it is
+  // allocated, and `tri_id_o` carries it out on the same beat.
+  //
+  // THE THROUGHPUT COST IS DECLARED AND MEASURED, NOT ABSORBED. This block is
+  // in GEOM.CLIP's ready, so the arena's SDRAM rate now throttles the raster
+  // path -- as the descriptor tap already did, and more so, because a triangle
+  // may publish up to three vertices as well. `vid_stall_o` counts every clock
+  // GEOM.CLIP is held by it, so the cost is a number rather than a worry. The
+  // number the sharing buys is `vid_reused_o`: a 64-vertex, 126-triangle
+  // meshlet presents 378 corner references and publishes 64 records.
+  zhao_geom_vertid #(
+    .ARENAS  (GEOM_ARENAS),
+    .ARENA_W (GEOM_ARENA_W),
+    .GEN_W   (GEOM_GEN_W),
+    .INDEX_W (GEOM_INDEX_W),
+    .VSLOTS  (GEOM_VID_VSLOTS),
+    .ATTRS   (GEOM_CLIP_ATTRS),
+    // Bit 0 -- the mesh arm -- and nothing else. The forge and particle arms
+    // declare their own domains at the door and carry no vertex store.
+    .SHARED_DOMAINS (4'b0001),
+    .ID_LIMIT (GEOM_PA_MAX_VERTS)
+  ) u_geom_vertid (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // THE ARENA'S OWN SEAL, not `render_frame_begin_i`. A seal is a REQUEST at
+    // the arena and is held pending while the drain completes, so clearing the
+    // identity map on the frame edge that ASKED would leave this block
+    // describing frame N+1 while the allocator is still filling frame N.
+    .frame_seal_i (pa_seal_fire),
+
+    // REAL: GEOM.CLIP's accepted triangle, through the three-way fork.
+    .tri_valid_i    (cl_o_valid && st_tri_ready_w && ap_tri_ready_w),
+    .tri_ready_o    (vid_tri_ready_w),
+    // The rider's three fields, unpacked at the one place that knows the
+    // layout: {material_id[15:0], raster_state[31:0], domain[1:0]}.
+    .tri_domain_i   (cl_o_rider[1:0]),
+    .tri_key_a_i    (cl_o_key_a),
+    .tri_key_b_i    (cl_o_key_b),
+    .tri_key_c_i    (cl_o_key_c),
+    .tri_ax_i       (cl_o_ax),
+    .tri_ay_i       (cl_o_ay),
+    .tri_bx_i       (cl_o_bx),
+    .tri_by_i       (cl_o_by),
+    .tri_cx_i       (cl_o_cx),
+    .tri_cy_i       (cl_o_cy),
+    // GEOM.CLIP's WINDING-FLIPPED attribute packets -- the same three the
+    // block already published and which until now only GEOM.ATTRPACK read.
+    // The keys above went through the identical swap inside the same block.
+    .tri_attr_a_i   (geom_clip_attr_a_o),
+    .tri_attr_b_i   (geom_clip_attr_b_o),
+    .tri_attr_c_i   (geom_clip_attr_c_o),
+    .tri_untex_i    (cl_o_untex),
+    .tri_material_i (cl_o_rider[49:34]),
+    .tri_raster_i   (cl_o_rider[33:2]),
+    .tri_src_id_i   (cl_o_src_id),
+
+    // REAL: GEOM.PARAMARENA's ProjectedVertex intake -- entry I53's tie-off.
+    .pv_valid_o  (vid_pv_valid),
+    .pv_ready_i  (vid_pv_ready),
+    .pv_x_o      (vid_pv_x),
+    .pv_y_o      (vid_pv_y),
+    .pv_invw_o   (vid_pv_invw),
+    .pv_status_o (vid_pv_status),
+    .pv_uow_o    (vid_pv_uow),
+    .pv_vow_o    (vid_pv_vow),
+    .pv_rgba_o   (vid_pv_rgba),
+    .pv_accept_i (vid_pv_accept),
+    .pv_id_i     (vid_pv_id),
+
+    // REAL: GEOM.PARAMARENA's TriangleDescriptor intake, now naming FINAL ids.
+    .td_valid_o    (vid_td_valid),
+    .td_ready_i    (vid_td_ready),
+    .td_v0_o       (vid_td_v0),
+    .td_v1_o       (vid_td_v1),
+    .td_v2_o       (vid_td_v2),
+    .td_material_o (vid_td_material),
+    .td_raster_o   (vid_td_raster),
+    .td_source_o   (vid_td_source),
+    .td_accept_i   (vid_td_accept),
+    .td_id_i       (vid_td_id),
+    // I54's half: the triangle's own arena index at the moment it lands.
+    // Nothing consumes it yet and that is DECLARED rather than hidden -- the
+    // chunk serialiser is entry I54 and this is the port it reads.
+    .tri_id_valid_o (vid_tri_id_valid),
+    .tri_id_o       (vid_tri_id),
+
+    .vid_tris_o          (geom_vid_tris_o),
+    .vid_refs_o          (geom_vid_refs_o),
+    .vid_published_o     (geom_vid_published_o),
+    .vid_reused_o        (geom_vid_reused_o),
+    .vid_unshared_o      (geom_vid_unshared_o),
+    .vid_opens_o         (geom_vid_opens_o),
+    .vid_sunk_o          (geom_vid_sunk_o),
+    // The remaining five are exercised and FIRED by
+    // tests/geometry/geom_vertid_directed.cpp, which can present the keys and
+    // the allocator replies this composition cannot produce. They are left
+    // unconnected here rather than given console ports nobody reads.
+    .vid_index_oob_o     (),
+    .vid_key_split_o     (),
+    .vid_id_unnameable_o (),
+    .vid_seal_abort_o    (),
+    .vid_stall_o         (geom_vid_stall_o),
+    .busy_o              ()
+  );
+
+  // GEOM.VERTID's seams, declared with the block that drives them.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire        vid_tri_id_valid;
+  wire [17:0] vid_tri_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   // The fork's single ready and the join's single valid.
-  assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w;
+  assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w && vid_tri_ready_w;
   assign st_o_ready       = door_tri_ready_w && ap_o_valid_w;
   assign door_tri_valid_w = st_o_valid && ap_o_valid_w;
 
@@ -24071,7 +24342,13 @@ module zhao_console_core
   // whoever computes these, so sealing at capacity is the NEUTRAL choice: it
   // enforces the arena's real bound and reserves nothing, which is visible
   // rather than being a wrong reservation that looks like a right one.
-  localparam int unsigned GEOM_PA_MAX_VERTS  = 65535;
+  // 65,536 -- R7's PREFERRED TIER. ARENAID, 2026-09-25, owner directive 4:
+  // "Retain R7's intended 65,536-vertex capacity: IDs 0..65,535 fit u16, but a
+  // COUNT of 65,536 requires a wider internal count/limit." The declared loss
+  // of one vertex is gone; `zhao_geom_parambuf`'s `td_sealed_vertices_i` and
+  // `zhao_geom_paramwalk`'s `w_verts_q` are u18 and the walker no longer
+  // saturates the published count at 0xFFFF.
+  localparam int unsigned GEOM_PA_MAX_VERTS  = 65536;
   localparam int unsigned GEOM_PA_MAX_TRIS   = 16384;
   localparam int unsigned GEOM_PA_MAX_CHUNKS = 16384;
 
@@ -24093,7 +24370,6 @@ module zhao_console_core
   wire             pa_lease, pa_wr_view, pa_scratch;
   wire             pa_scr_grant, pw_scr_req;
   wire             pw_busy;
-  wire             pa_td_ready;
   // `pub_view` is NOT taken by the walker, and that is the design rather than
   // an omission: the walker addresses through `pub_*_base_i`, which already
   // carry the published view in their high bits. A second copy of the same
@@ -24244,26 +24520,41 @@ module zhao_console_core
       .pb_wr_view_o       (pa_wr_view),
       .pb_scratch_valid_o (pa_scratch),
 
-      // ---- ProjectedVertex: TIED, and declared at entry I53 ----------------
-      .pv_valid_i  (1'b0),
-      .pv_ready_o  (),
-      .pv_x_i      (32'sd0),
-      .pv_y_i      (32'sd0),
-      .pv_invw_i   (24'd0),
-      .pv_status_i (8'd0),
-      .pv_uow_i    (32'sd0),
-      .pv_vow_i    (32'sd0),
-      .pv_rgba_i   (32'd0),
+      // ---- ProjectedVertex: REAL, entry I53 CLOSED 2026-09-25 -------------
+      // `zhao_geom_vertid` publishes each post-clip corner ONCE, under the
+      // console's own vertex identity {arena, generation, index}, and takes
+      // the id back out of `pv_id_o` below.
+      .pv_valid_i  (vid_pv_valid),
+      .pv_ready_o  (vid_pv_ready),
+      .pv_x_i      (vid_pv_x),
+      .pv_y_i      (vid_pv_y),
+      .pv_invw_i   (vid_pv_invw),
+      .pv_status_i (vid_pv_status),
+      .pv_uow_i    (vid_pv_uow),
+      .pv_vow_i    (vid_pv_vow),
+      .pv_rgba_i   (vid_pv_rgba),
+      .pv_accept_o (vid_pv_accept),
+      .pv_id_o     (vid_pv_id),
 
-      // ---- TriangleDescriptor: REAL, GEOM.ASSEMBLE's live output -----------
-      .td_valid_i    (pa_t_valid),
-      .td_ready_o    (pa_td_ready),
-      .td_v0_i       (16'(asm_t_v0)),
-      .td_v1_i       (16'(asm_t_v1)),
-      .td_v2_i       (16'(asm_t_v2)),
-      .td_material_i (asm_t_material),
-      .td_raster_i   (asm_t_raster),
-      .td_source_i   ({16'd0, asm_t_src_id}),
+      // ---- TriangleDescriptor: REAL, and now POST-CLIP --------------------
+      // SUPERSEDES the 2026-09-22 composition, which tapped `asm_t_*` --
+      // GEOM.ASSEMBLE's pre-clip stream, whose `t_v*_o` are GEOM.REPLAY's
+      // arena-LOCAL indices and collide across meshlets. Owner directive 4:
+      // "Descriptors refer to the FINAL arena IDs, not to an earlier private
+      // store." The tap is MOVED, not duplicated: two descriptor streams in
+      // two namespaces filling one array is exactly the fault entry I54
+      // measured and refused.
+      .td_valid_i    (vid_td_valid),
+      .td_ready_o    (vid_td_ready),
+      .td_v0_i       (vid_td_v0),
+      .td_v1_i       (vid_td_v1),
+      .td_v2_i       (vid_td_v2),
+      .td_material_i (vid_td_material),
+      .td_raster_i   (vid_td_raster),
+      .td_source_i   (vid_td_source),
+      .td_accept_o   (vid_td_accept),
+      .td_id_o       (vid_td_id),
+      .seal_fire_o   (pa_seal_fire),
 
       // ---- tile-reference chunk: TIED, declared at entry I54 ---------------
       .ck_valid_i  (1'b0),
@@ -24517,9 +24808,14 @@ module zhao_console_core
   // So `rpl_t_ready` may depend on REPLAY's valid as freely as it likes: the
   // path ends at the arena's valid and never returns.
   wire                     rpl_t_ready;
-  wire                     rpl_t_valid = asm_t_valid && pa_td_ready;
-  wire                     pa_t_valid  = asm_t_valid && rpl_t_ready;
-  assign asm_t_ready = rpl_t_ready && pa_td_ready;
+  // ARENAID, 2026-09-25: THE FORK IS GONE AND THE STREAM HAS ONE CONSUMER
+  // AGAIN. The arena's descriptor tap moved to GEOM.CLIP's output (see
+  // `u_geom_vertid`), because owner directive section 4 requires descriptors
+  // to name FINAL arena ids and these are pre-clip arena-LOCAL ones. The fork
+  // essay above is kept because its LESSON is not obsolete -- it is why the
+  // new tap at GEOM.CLIP's output is a three-way fork and not an ANDed ready.
+  wire                     rpl_t_valid = asm_t_valid;
+  assign asm_t_ready = rpl_t_ready;
   // `t_last_o` is not read: it rides an EMITTED triangle, so a refused last
   // triplet or an empty meshlet ends the walk without one. GEOM.REPLAY ends a
   // meshlet on `m_done_o`, which fires on every ending.
@@ -24741,6 +25037,9 @@ module zhao_console_core
     .o_invw_a_o   (rp_invw_a),
     .o_invw_b_o   (rp_invw_b),
     .o_invw_c_o   (rp_invw_c),
+    .o_key_a_o    (rp_o_key_a),
+    .o_key_b_o    (rp_o_key_b),
+    .o_key_c_o    (rp_o_key_c),
     .o_attr_a_o   (rp_st_a),
     .o_attr_b_o   (rp_st_b),
     .o_attr_c_o   (rp_st_c),

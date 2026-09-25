@@ -477,6 +477,15 @@ module tb_zhao_console_core_smoke
   logic        geom_pa_fault_o;
   logic        geom_pa_busy_o;
   logic        geom_pa_seal_ready_o;
+  // GEOM.VERTID -- the one geometry identity space (ARENAID, 2026-09-25).
+  logic [31:0] geom_vid_tris_o;
+  logic [31:0] geom_vid_refs_o;
+  logic [31:0] geom_vid_published_o;
+  logic [31:0] geom_vid_reused_o;
+  logic [31:0] geom_vid_unshared_o;
+  logic [31:0] geom_vid_sunk_o;
+  logic [31:0] geom_vid_opens_o;
+  logic [31:0] geom_vid_stall_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;

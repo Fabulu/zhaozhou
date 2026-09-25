@@ -329,6 +329,18 @@ module zhao_console_board
   // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
   // would emit a descriptor the record layer cannot store.
   parameter int unsigned GEOM_ASM_VIDW = 16,
+  // ---- THE GEOMETRY IDENTITY SPACE (ARENAID, owner directive section 4) ----
+  // The console's vertex identity is GEOM.REPLAY's own arena lookup key,
+  // {arena, generation, index}, and `zhao_geom_vertid` is the only block that
+  // turns one into a GEOM.PARAMBUF vertex id. Named here because the door and
+  // GEOM.CLIP both carry it opaquely and three literals would drift.
+  parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
+  // The per-primitive rider GEOM.CLIP carries beside `src_id`:
+  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
+  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
+  // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
+  parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
 
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
@@ -402,6 +414,72 @@ module zhao_console_board
   // command surface, and the day DrawProcedural grows a mask it is the line
   // that changes.
   parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
+
+  // ---- FORGE.CLIFF, composed 2026-09-25 (CLIFFPROD) ----------------------
+  // Every one of these is a KNOB rather than a literal, because each decides
+  // something that gets DRAWN, and CLAUDE.md's art law is explicit: never
+  // remove the owner's control in the name of fidelity -- every shape, colour
+  // and timing value belongs in a named, editable constant.
+  //
+  // THE ONE-CELL HALO. The 34x34 window needs the border cells of the FOUR
+  // NEIGHBOURING patches, and the compose cache stages exactly ONE patch, so
+  // no neighbour is reachable -- the 5-bit cell address cannot even express
+  // one. 2'd0 = SOLID (spec/terrain_rules.md 3.3) suppresses the rim at a
+  // patch seam; 2'd1 = VOID would emit a wall around every patch's whole
+  // perimeter -- 128 spurious edges per page against a budget of 512, a
+  // visible grid of walls along every interior seam. See
+  // `zhao_forge_cliff_feed.sv` DECISION RECORD 2 for the argument and for the
+  // island-directory route that supersedes this the day the fill side
+  // publishes a patch coordinate.
+  parameter logic [1:0] CLIFF_HALO_SUBSTANCE = 2'd0,
+
+  // THE PRIORITY DEGRADE'S NEARNESS INPUT IS OFF, and that is a decision with
+  // a reason rather than a tie-off. `vdist` is per-vertex nearness, Q16.16
+  // 1/w (zref_terrain.hpp:414), and NO per-lattice-vertex 1/w store exists
+  // anywhere in fpga/rtl -- re-measured 2026-09-25. The VALUE is computed
+  // (`zhao_project_core.out_d_o`, that exact format) and is even stored per
+  // vertex in `zhao_vertex_arena`'s payload bits [73:42] -- but the index
+  // there is a GROUP-LOCAL 9x9 window slot, not `vj*lat_w + vi`. Recovering
+  // the lattice index needs new ports on `zhao_proj_subsystem` and
+  // `zhao_terrain_group_seq`, and the fill fires ONCE PER VIEW into a
+  // different arena, so a naive store would be written twice with two
+  // different values for one vertex.
+  //
+  // With this LOW the evaluator never asserts `vd_en_o` at all -- ASSERTED,
+  // in forge_cliff_chain lane 6, not argued -- and the degrade falls back to
+  // the reference's OWN null-vdist path, which terrain_rules.md 5 defines as
+  // priority 0 everywhere, i.e. keep scan order under a stable sort. It
+  // changes nothing until a page is still over 512 edges AFTER merging. Turn
+  // it on the day the store exists; the port is wired, not tied.
+  parameter logic CLIFF_VDIST_EN = 1'b0,
+
+  // The owner's off switch for the whole cliff path.
+  parameter logic CLIFF_ARM = 1'b1,
+
+  // The material stamped on every wall triple, paired with the mode below.
+  // `zhao_material_window.sv:354` REFUSES MATMODE_NONE (2'd1) against a
+  // non-zero {set, id}, so these two move together or neither moves.
+  parameter logic [15:0] CLIFF_MATERIAL_ID = 16'd0,
+  parameter logic [ 1:0] CLIFF_MATERIAL_MODE = 2'd1,
+  parameter logic [ 7:0] CLIFF_VERTEX_ALPHA = 8'hFF,
+  // Plain opaque write, z-tested, as FORGE.PRIM's is. A wall is solid
+  // geometry, not a blended overlay.
+  parameter logic [31:0] CLIFF_FRAG_STATE = 32'd0,
+  // The flat art lanes the wall is shaded with -- darker than FORGE.PRIM's,
+  // because a cliff face is a shadowed vertical, not a lit top. AUTHORED BY
+  // EYE against the terrain's own lighting and expected to be adjusted once
+  // somebody looks at a frame: that loop is the job, and these are the three
+  // numbers it turns.
+  parameter logic signed [31:0] CLIFF_LIT_R = 32'sd36044,  // 0.55
+  parameter logic signed [31:0] CLIFF_LIT_G = 32'sd34406,  // 0.525
+  parameter logic signed [31:0] CLIFF_LIT_B = 32'sd32768,  // 0.50
+  parameter logic signed [31:0] CLIFF_ALPHA = 32'sd65536,  // 1.0, opaque
+  // A background producer: it degrades first when the governor sheds work.
+  parameter logic [7:0] CLIFF_QUALITY_TIER = 8'd16,
+  // No culling, for FORGE_CULL_MODE's own reason: a wall's outward sense
+  // comes from the reference's A-before-B endpoint order, and a seam seen
+  // from the wrong side must still draw rather than vanish.
+  parameter logic [1:0] CLIFF_CULL_MODE = 2'd0,
 
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
@@ -1346,6 +1424,19 @@ module zhao_console_board
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
+  // `geom_vid_reused_o` is the number this whole subsystem exists for: a
+  // corner answered from the identity map, i.e. a vertex published ONCE and
+  // referenced again. `refs == published + reused + sunk` is the identity that
+  // makes the group readable together, and the smoke asserts it.
+  output logic [31:0] geom_vid_tris_o,
+  output logic [31:0] geom_vid_refs_o,
+  output logic [31:0] geom_vid_published_o,
+  output logic [31:0] geom_vid_reused_o,
+  output logic [31:0] geom_vid_unshared_o,
+  output logic [31:0] geom_vid_sunk_o,
+  output logic [31:0] geom_vid_opens_o,
+  output logic [31:0] geom_vid_stall_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -4314,6 +4405,9 @@ module zhao_console_board
       .GEOM_ASSET_MAX_VERTICES    (GEOM_ASSET_MAX_VERTICES),
       .GEOM_ASSET_MAX_TRIANGLES   (GEOM_ASSET_MAX_TRIANGLES),
       .GEOM_ASM_VIDW              (GEOM_ASM_VIDW),
+      .GEOM_VID_KEYW              (GEOM_VID_KEYW),
+      .GEOM_VID_RIDERW            (GEOM_VID_RIDERW),
+      .GEOM_VID_VSLOTS            (GEOM_VID_VSLOTS),
       .GEOM_CLIP_ATTRS            (GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW            (GEOM_CLIP_ATTRW),
       .GEOM_ATTR_STORE_W          (GEOM_ATTR_STORE_W),
@@ -4327,6 +4421,19 @@ module zhao_console_board
       .FORGE_QUALITY_TIER         (FORGE_QUALITY_TIER),
       .FORGE_CULL_MODE            (FORGE_CULL_MODE),
       .FORGE_CMD_VIEW_MASK        (FORGE_CMD_VIEW_MASK),
+      .CLIFF_HALO_SUBSTANCE       (CLIFF_HALO_SUBSTANCE),
+      .CLIFF_VDIST_EN             (CLIFF_VDIST_EN),
+      .CLIFF_ARM                  (CLIFF_ARM),
+      .CLIFF_MATERIAL_ID          (CLIFF_MATERIAL_ID),
+      .CLIFF_MATERIAL_MODE        (CLIFF_MATERIAL_MODE),
+      .CLIFF_VERTEX_ALPHA         (CLIFF_VERTEX_ALPHA),
+      .CLIFF_FRAG_STATE           (CLIFF_FRAG_STATE),
+      .CLIFF_LIT_R                (CLIFF_LIT_R),
+      .CLIFF_LIT_G                (CLIFF_LIT_G),
+      .CLIFF_LIT_B                (CLIFF_LIT_B),
+      .CLIFF_ALPHA                (CLIFF_ALPHA),
+      .CLIFF_QUALITY_TIER         (CLIFF_QUALITY_TIER),
+      .CLIFF_CULL_MODE            (CLIFF_CULL_MODE),
       .GEOM_REPLAY_UNTEX_DECL     (GEOM_REPLAY_UNTEX_DECL),
       .GEOM_REPLAY_MATERIAL_MODE  (GEOM_REPLAY_MATERIAL_MODE),
       .FORGE_MATERIAL_MODE        (FORGE_MATERIAL_MODE),
@@ -4636,6 +4743,14 @@ module zhao_console_board
       .geom_pa_fault_o                    (geom_pa_fault_o),
       .geom_pa_busy_o                     (geom_pa_busy_o),
       .geom_pa_seal_ready_o               (geom_pa_seal_ready_o),
+      .geom_vid_tris_o                    (geom_vid_tris_o),
+      .geom_vid_refs_o                    (geom_vid_refs_o),
+      .geom_vid_published_o               (geom_vid_published_o),
+      .geom_vid_reused_o                  (geom_vid_reused_o),
+      .geom_vid_unshared_o                (geom_vid_unshared_o),
+      .geom_vid_sunk_o                    (geom_vid_sunk_o),
+      .geom_vid_opens_o                   (geom_vid_opens_o),
+      .geom_vid_stall_o                   (geom_vid_stall_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
       .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
       .geom_pw_chunks_o                   (geom_pw_chunks_o),

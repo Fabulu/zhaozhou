@@ -10936,6 +10936,39 @@ set_tests_properties(geom_paramarena_directed
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
+# GEOM.VERTID -- the one geometry identity space (ARENAID 2026-09-25, owner
+# vacation directive section 4; console entry I53).
+#
+# The bench plays the ALLOCATOR, because the block deliberately does not count
+# vertices: `zhao_geom_paramarena` hands back `pv_accept_o`/`pv_id_o` on the
+# clock it allocates, and the whole design rests on there being exactly ONE
+# vertex counter in the console. A model that can disagree with the block is
+# the only way to test that.
+#
+# ALL TWELVE COUNTERS ARE FIRED BY THIS FILE and none owes a mutant, which is
+# the reason the port list carries the keys, the allocator replies and the seal
+# as INPUTS rather than deriving them: every fault the block detects is
+# presentable at its own ports.
+add_executable(test_geom_vertid_directed geometry/geom_vertid_directed.cpp)
+target_link_libraries(test_geom_vertid_directed PRIVATE zhao_harness)
+verilate(test_geom_vertid_directed
+  PREFIX Vzhao_geom_vertid
+  TOP_MODULE zhao_geom_vertid
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_vertid.sv)
+add_test(NAME geom_vertid_directed COMMAND test_geom_vertid_directed)
+set_tests_properties(geom_vertid_directed
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_geom_vertid
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_vertid
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_vertid.sv)
+set_tests_properties(lint_geom_vertid PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+
+# ---------------------------------------------------------------------------
 # `addr_view_bad_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL (item 4).
 # The counter watches for a request whose held address is not in the view the
 # lease names -- the queued-request fault item 4 names by hand -- and it is

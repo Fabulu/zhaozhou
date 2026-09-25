@@ -237,7 +237,13 @@ module zhao_geom_paramwalk
   // here is the belt to that guard's braces and runs in the REFUSING
   // direction, because admitting an id the seal does not cover is how one bad
   // descriptor reads somebody else's vertex.
-  logic [15:0] w_verts_q;
+  // 18 BITS, ARENAID 2026-09-25. See `zhao_geom_parambuf`'s
+  // `td_sealed_vertices_i` for the directive-section-4 reason. It used to be
+  // u16 and to SATURATE at 0xFFFF, which turned a full 65,536-vertex frame
+  // into a seal of 65,535 and made the last vertex illegal -- the "silently
+  // sacrificing a vertex" the directive names, arriving through a saturation
+  // rather than through a truncation.
+  logic [17:0] w_verts_q;
   logic [22:0] w_chunk_q;          // the chunk index being read; ARENA_CHUNKS
                                    // bounds it far below 2^23
   logic [15:0] w_depth_q;
@@ -404,7 +410,7 @@ module zhao_geom_paramwalk
       w_gen_q        <= 16'd0;
       w_tri_base_q   <= 27'd0;
       w_chunk_base_q <= 27'd0;
-      w_verts_q      <= 16'd0;
+      w_verts_q      <= 18'd0;
       w_chunk_q      <= 23'd0;
       w_depth_q      <= 16'd0;
       w_failed_q     <= 1'b0;
@@ -471,8 +477,10 @@ module zhao_geom_paramwalk
           w_gen_q        <= pub_gen_i;
           w_tri_base_q   <= pub_tri_base_i;
           w_chunk_base_q <= pub_chunk_base_i;
-          w_verts_q      <= (pub_verts_i > 18'd65535) ? 16'hFFFF
-                                                      : 16'(pub_verts_i);
+          // No saturation: the port is as wide as the published count, so
+          // the seal the decoder is tested against is the seal the arena
+          // actually published, for every value the arena can publish.
+          w_verts_q      <= pub_verts_i;
           w_chunk_q      <= walk_head_i[22:0];
           w_depth_q      <= 16'd0;
           w_failed_q     <= 1'b0;

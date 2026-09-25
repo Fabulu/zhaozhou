@@ -149,7 +149,21 @@ module zhao_geom_parambuf #(
     // ---- TriangleDescriptor: 16 bytes ---------------------------------------
     input  var logic          td_valid_i,
     input  var logic [127:0]  td_bytes_i,
-    input  var logic [15:0]   td_sealed_vertices_i,   // the frame's vertex count
+    // THE FRAME'S VERTEX COUNT -- 18 BITS AND NOT 16, ARENAID 2026-09-25.
+    // Owner vacation directive section 4: "IDs 0..65,535 fit u16, but a count
+    // of 65,536 requires a wider internal count/limit. Use at least 17 bits
+    // for that count instead of silently sacrificing a vertex or representing
+    // full capacity as zero."
+    //
+    // WHAT WAS SUPERSEDED, AND WHERE IT IS WRITTEN DOWN. This port was u16,
+    // and because it was, `zhao_geom_paramarena`'s MAX_VERTS defaulted to
+    // 65,535 with a header paragraph calling the lost vertex "a DECLARED
+    // LOSS", and `zhao_geom_paramwalk` SATURATED the published count at
+    // 0xFFFF. Three places, one cause. GEOM.PARAMBUF.md's section "One
+    // declared divergence from the tier table above" recorded it as permanent;
+    // it is not permanent, it was a port width. 18 rather than 17 because the
+    // arena's own cursors, quotas and publication ports are already 18.
+    input  var logic [17:0]   td_sealed_vertices_i,   // the frame's vertex count
     output var logic [15:0]   td_v0_o,
     output var logic [15:0]   td_v1_o,
     output var logic [15:0]   td_v2_o,
@@ -223,10 +237,13 @@ module zhao_geom_parambuf #(
   // A vertex id past the frame's sealed vertex count indexes memory that
   // belongs to no vertex. Refused rather than clamped: clamping would draw a
   // triangle using somebody else's position.
+  // The ids are u16 and the seal is u18, so the comparison is written at the
+  // WIDER width explicitly. Left implicit it is still correct here, but the
+  // next person reading a mixed-width compare has to prove that to themselves.
   assign td_illegal_o = td_valid_i &&
-                        ((v0_c >= td_sealed_vertices_i) ||
-                         (v1_c >= td_sealed_vertices_i) ||
-                         (v2_c >= td_sealed_vertices_i));
+                        ((18'(v0_c) >= td_sealed_vertices_i) ||
+                         (18'(v1_c) >= td_sealed_vertices_i) ||
+                         (18'(v2_c) >= td_sealed_vertices_i));
 
   // ---- tile-reference chunk -----------------------------------------------
   logic [31:0] next_c;

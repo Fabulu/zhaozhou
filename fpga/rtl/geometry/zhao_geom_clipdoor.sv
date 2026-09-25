@@ -113,7 +113,24 @@ module zhao_geom_clipdoor #(
     // `zhao_geom_clip`'s ruling-5 attribute packet, flattened.  The door never
     // reads inside it.
     parameter int unsigned ATTRS   = 7,
-    parameter int unsigned IDW     = 16
+    parameter int unsigned IDW     = 16,
+    // ---- THE PER-CORNER IDENTITY AND THE PER-PRIMITIVE RIDER (ARENAID) ----
+    // `zhao_geom_vertid` publishes GEOM.PARAMBUF's projected vertices from
+    // GEOM.CLIP's OUTPUT, so the identity of each corner and the primitive's
+    // material/raster/domain rider have to reach that output -- and they have
+    // to arrive on the beat that WON, not on a live wire selected later.
+    //
+    // That is the whole reason they are muxed HERE rather than in the
+    // composer. This door's own header states the law for the material half:
+    // "a door that arbitrated only the triangle would let a resolve answer for
+    // the material of a beat that did not win". An identity muxed outside the
+    // door on `o_owner_o` would be the same shape with an index in it, and it
+    // would be a SECOND selection network that has to agree with this one.
+    //
+    // The door never reads inside either field, exactly as it never reads
+    // inside the attribute packet.
+    parameter int unsigned VKEYW   = 24,
+    parameter int unsigned RIDERW  = 50
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -139,6 +156,12 @@ module zhao_geom_clipdoor #(
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_a_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_b_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_c_i,
+    // the identity half -- per corner, opaque, never interpreted here
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_a_i,
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_b_i,
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_c_i,
+    // the per-primitive rider -- opaque, granted with its triangle
+    input  var logic [NCLIENT*RIDERW-1:0]       c_rider_i,
     // the material half -- what `zhao_material_window`'s input takes
     input  var logic [NCLIENT*32-1:0]           c_material_set_i,
     input  var logic [NCLIENT*16-1:0]           c_material_id_i,
@@ -181,6 +204,10 @@ module zhao_geom_clipdoor #(
     output var logic [ATTRS*32-1:0]  o_attr_a_o,
     output var logic [ATTRS*32-1:0]  o_attr_b_o,
     output var logic [ATTRS*32-1:0]  o_attr_c_o,
+    output var logic [VKEYW-1:0]     o_key_a_o,
+    output var logic [VKEYW-1:0]     o_key_b_o,
+    output var logic [VKEYW-1:0]     o_key_c_o,
+    output var logic [RIDERW-1:0]    o_rider_o,
     output var logic [31:0]          o_material_set_o,
     output var logic [15:0]          o_material_id_o,
     output var logic [1:0]           o_material_mode_o,
@@ -311,6 +338,10 @@ module zhao_geom_clipdoor #(
     o_attr_a_o       = '0;
     o_attr_b_o       = '0;
     o_attr_c_o       = '0;
+    o_key_a_o        = '0;
+    o_key_b_o        = '0;
+    o_key_c_o        = '0;
+    o_rider_o        = '0;
     o_material_set_o = '0;
     o_material_id_o  = '0;
     o_material_mode_o = '0;
@@ -332,6 +363,10 @@ module zhao_geom_clipdoor #(
         o_attr_a_o       = c_attr_a_i[i*AW +: AW];
         o_attr_b_o       = c_attr_b_i[i*AW +: AW];
         o_attr_c_o       = c_attr_c_i[i*AW +: AW];
+        o_key_a_o        = c_key_a_i[i*VKEYW +: VKEYW];
+        o_key_b_o        = c_key_b_i[i*VKEYW +: VKEYW];
+        o_key_c_o        = c_key_c_i[i*VKEYW +: VKEYW];
+        o_rider_o        = c_rider_i[i*RIDERW +: RIDERW];
         o_material_set_o = c_material_set_i[i*32 +: 32];
         o_material_id_o  = c_material_id_i[i*16 +: 16];
         o_material_mode_o = c_material_mode_i[i*2 +: 2];

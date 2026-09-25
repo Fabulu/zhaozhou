@@ -224,6 +224,24 @@ module zhao_geom_replay #(
     output wire [ATTRW-1:0]        o_attr_a_o,
     output wire [ATTRW-1:0]        o_attr_b_o,
     output wire [ATTRW-1:0]        o_attr_c_o,
+    // ---- THE CORNER'S IDENTITY, ARENAID 2026-09-25 -------------------------
+    // {arena, generation, index} for each corner of the emitted triangle --
+    // the key this block already presents on `look_*_o`, now carried out with
+    // the reply it produced. It is the console's vertex identity: the arena
+    // handle names the (meshlet instance, view), the generation separates one
+    // use of that handle from the next, and the index is the vertex's ordinal
+    // among the batch's decoded vertices.
+    //
+    // CAPTURED AT ISSUE, NOT AT REPLY. `ik_q` is the corner being OFFERED and
+    // `rk_q` the corner being ANSWERED, and they are not the same corner while
+    // a lookup is in flight. Reading `look_*_o` at the reply would pair corner
+    // rk's position with corner ik's identity -- "response A's data and B's
+    // metadata", the defect this repository names in three separate headers.
+    // So the key is written into `ck_q[ik_q]` by the same enable that advances
+    // `ik_q`, and the output reads the slot, never the live nets.
+    output wire [ARENA_W+GEN_W+INDEX_W-1:0] o_key_a_o,
+    output wire [ARENA_W+GEN_W+INDEX_W-1:0] o_key_b_o,
+    output wire [ARENA_W+GEN_W+INDEX_W-1:0] o_key_c_o,
     output wire                    o_view_o,
     output wire [SRCW-1:0]         o_src_id_o,
     output wire [15:0]             o_material_o,
@@ -347,6 +365,8 @@ module zhao_geom_replay #(
   logic signed [20:0] cx_q [3];
   logic signed [20:0] cy_q [3];
   logic [2:0]         cb_q;
+  // The three corner identities, written at ISSUE (see o_key_a_o's comment).
+  logic [ARENA_W+GEN_W+INDEX_W-1:0] ck_q [0:2];
   logic [ATTRW-1:0]   ca_q [3];
   logic [23:0]        invw_q [3];
   logic [OCCW-1:0]    tdone_q;         // descriptors taken off the queue for mr_q
@@ -391,6 +411,9 @@ module zhao_geom_replay #(
   assign o_attr_a_o   = ca_q[0];
   assign o_attr_b_o   = ca_q[1];
   assign o_attr_c_o   = ca_q[2];
+  assign o_key_a_o    = ck_q[0];
+  assign o_key_b_o    = ck_q[1];
+  assign o_key_c_o    = ck_q[2];
   assign o_view_o     = sv_q[mr_q][vs_q];
   assign o_src_id_o   = src_q[mr_q];
   assign o_material_o = mat_q[mr_q];
@@ -479,6 +502,7 @@ module zhao_geom_replay #(
       tdone_q         <= '0;
       for (ai = 0; ai < 3; ai = ai + 1) begin
         cx_q[ai]   <= '0;
+        ck_q[ai]   <= '0;
         cy_q[ai]   <= '0;
         ca_q[ai]   <= '0;
         invw_q[ai] <= '0;
@@ -604,7 +628,12 @@ module zhao_geom_replay #(
         end
 
         E_LOOK: begin
-          if (look_valid_o && look_ready_i) ik_q <= ik_q + 2'd1;
+          if (look_valid_o && look_ready_i) begin
+            ik_q       <= ik_q + 2'd1;
+            // ONE ENABLE, BOTH QUANTITIES: the key that is being asked and the
+            // slot it will be answered into move on the same clock.
+            ck_q[ik_q] <= {look_arena_o, look_gen_o, look_index_o};
+          end
           if (rep_valid_i) begin
             cx_q[rk_q] <= $signed(rp[20:0]);
             cy_q[rk_q] <= $signed(rp[41:21]);
