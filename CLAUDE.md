@@ -869,6 +869,33 @@ A stop instruction was sent and obeyed, and a build it had already launched ran 
 completion anyway. **Kill the background tasks too**, then verify nothing is
 running before assuming a lane is closed.
 
+### And killing a lane's watcher WITHOUT TELLING IT makes the lane replace it
+
+Added 2026-09-25, after **seven** `until … sleep` pollers accumulated on one
+Quartus fit. The coordinator stopped six. The lane's own account of why there
+were seven:
+
+> *"I read every `Task … was stopped by main session` notification as **my watch
+> has lapsed** and re-armed on each one. They were you clearing duplicates. So my
+> correction loop was feeding the exact problem it was reacting to."*
+
+**Four of the seven were created AFTER the cleanup started.** A stop looks
+identical, from inside the lane, to a watcher that died on its own — so a
+conscientious lane re-arms, and the tidier the coordinator is the faster they
+breed.
+
+**So stop the task and say so in the same action**, naming which one survives.
+And two things the lane noticed that generalise beyond watchers:
+
+* **A poll loop whose only terminal condition is "the process vanished" cannot
+  report WEDGED.** A wedge and a long placement look identical to it — and
+  identical to seven of it. *"The watchers were never carrying information I
+  lacked"*: `tasklist | grep -i quartus` answered the same question directly,
+  every time, and so does reading the process's CPU. **11,974 CPU seconds against
+  74 minutes wall is ~2.7 cores sustained — that is placement working**, and it
+  is a distinction no `until` loop can make.
+* **Prefer one watcher plus a direct process read** to any number of watchers.
+
 ## Seeing the work properly
 
 Judging an animation from a handful of evenly-spaced stills does not work —
