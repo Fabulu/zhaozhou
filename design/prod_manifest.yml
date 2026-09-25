@@ -1404,6 +1404,7 @@ excluded:
   # instrument.  It is a probe rather than a production provider and adding it
   # does not make the future raster/texture composition adopted.
   - zhao_render_texture_layout_guard: probe  Packet-A exact packed-layout static/runtime instrument for zhao_render_texture_pkg; uninstantiated by every selected top and exercised only by the committed layout fixture/mutant
+  - zhao_fragment_state_guard: probe  the fragment-state word's elaboration contract for zhao_fragment_state_pkg; uninstantiated by every selected top and exercised only by the committed layout fixture, which drives it at its real value and forces it false under CONTROL 17
 
   # --- superseded implementations -------------------------------------------
   # One newer implementation of the same logical block is chosen above. These

@@ -2260,6 +2260,7 @@ targets:
       # The selected Packet-B accounting root uses the same exact 26-source
       # compile order as its standalone fit target and interface artifact.
       - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/common/zhao_fragment_state_pkg.sv
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
       - fpga/rtl/raster/zhao_raster_ticketq.sv
       - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
@@ -2598,6 +2599,7 @@ targets:
     sources:
       - fpga/rtl/generated/zhao_abi_pkg.sv
       - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/common/zhao_fragment_state_pkg.sv
       - fpga/rtl/common/zhao_skid2.sv
       - fpga/rtl/common/zhao_mul27_exact.sv
       - fpga/rtl/common/zhao_dual18_mul.sv
@@ -2786,6 +2788,7 @@ targets:
       # than fixed-for-now. A package has to precede its users.
       - fpga/rtl/field/zhao_field_ops_pkg.sv
       - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/common/zhao_fragment_state_pkg.sv
       - fpga/rtl/common/zhao_skid2.sv
       - fpga/rtl/common/zhao_mul27_exact.sv
       - fpga/rtl/common/zhao_dual18_mul.sv

@@ -53,222 +53,6 @@ package zhao_render_texture_pkg;
     logic  [7:0] stencil_reference; // [7:0]
   } zhao_raster_continuation_tail_v2_t;
 
-  // ---- THE 32-BIT FRAGMENT STATE WORD -- ONE SCHEMA, v1 ---------------------
-  // RATIFIED by the owner vacation directive of 2026-09-23 section 3 as the v1
-  // producer/consumer contract: "ratify the existing fragment consumer's state
-  // semantics as the v1 producer/consumer contract, then generate its producer
-  // fields and validation from ONE schema. Do not create a second incompatible
-  // stencil enum."
-  //
-  // NOTHING HERE IS NEW LAW, and that is the point. Every span and every
-  // encoding below was ALREADY what `fpga/rtl/raster/zhao_raster_fragment.sv`
-  // decodes (lines 394-407 and 717/722), what
-  // `design/contracts/RASTER.FRAGMENT.md`'s state table publishes, and what
-  // `zref::FragmentPipeline::State` packs. Measured field by field against all
-  // three on 2026-09-25 (FRAGSTATE) before this block was written: they agree,
-  // and the directive's three enums agree with them. So the published encoding
-  // is PRESERVED bit for bit and every existing capture still decodes.
-  //
-  // WHAT WAS ACTUALLY WRONG was not the encoding but its CUSTODY. The word was
-  // hand-maintained in FOUR independent copies -- the RTL decode, a prose table
-  // in the same RTL header, the contract's Markdown table, and the C++ mirror's
-  // own hand-written pack()/unpack(). Two of those four are checked by nothing
-  // whatever and can rot in silence; there was no generator, no schema and no
-  // entry for the word in `spec/commands.zidl`. A producer that wanted to
-  // DECLARE a state therefore had to handwrite numeric slices, which is exactly
-  // what this package's own header forbids for every other packet it carries.
-  // This section is the missing declaration, in the one place the tail it
-  // travels beside is already declared.
-  //
-  // ALL TWELVE ENCODINGS ARE NAMED HERE, deliberately, including the two the
-  // RTL only ever reached through a `default:` arm (`STEN_FUNC` 3 NEVER and
-  // `STEN_OP` 3 DECR_SAT). An encoding that exists only as somebody's fallback
-  // cannot be referred to by a producer, and a fifth function could have been
-  // added without anything flagging the collision.
-  localparam int unsigned FRAG_STATE_W = 32;
-
-  localparam int unsigned FRAG_Z_TEST_EN_BIT      = 0;
-  localparam int unsigned FRAG_Z_WRITE_DIS_BIT    = 1;
-  localparam int unsigned FRAG_Z_FORCE_FAR_BIT    = 2;
-  localparam int unsigned FRAG_BLEND_LO           = 3;
-  localparam int unsigned FRAG_BLEND_HI           = 4;
-  localparam int unsigned FRAG_SHADE_MOD_BIT      = 5;
-  localparam int unsigned FRAG_ALPHA_MOD_BIT      = 6;
-  localparam int unsigned FRAG_ATEST_EN_BIT       = 7;
-  localparam int unsigned FRAG_ATEST_REF_LO       = 8;
-  localparam int unsigned FRAG_ATEST_REF_HI       = 15;
-  localparam int unsigned FRAG_STEN_FUNC_LO       = 16;
-  localparam int unsigned FRAG_STEN_FUNC_HI       = 17;
-  localparam int unsigned FRAG_STEN_OP_LO         = 18;
-  localparam int unsigned FRAG_STEN_OP_HI         = 19;
-  localparam int unsigned FRAG_TAG_WRITE_DIS_BIT  = 20;
-  localparam int unsigned FRAG_TAG_FROM_TEXEL_BIT = 21;
-  localparam int unsigned FRAG_TAG_CHANNEL_LO     = 22;
-  localparam int unsigned FRAG_TAG_CHANNEL_HI     = 23;
-  localparam int unsigned FRAG_STEN_MASK_LO       = 24;
-  localparam int unsigned FRAG_STEN_MASK_HI       = 31;
-
-  // THE DIRECTIVE'S THREE ENUMS, which are the consumer's own numbering.
-  localparam logic [1:0] FRAG_BLEND_REPLACE     = 2'd0;
-  localparam logic [1:0] FRAG_BLEND_ALPHA       = 2'd1;
-  localparam logic [1:0] FRAG_BLEND_ADD         = 2'd2;
-  localparam logic [1:0] FRAG_BLEND_ADD_MOD     = 2'd3;
-
-  localparam logic [1:0] FRAG_STEN_FUNC_ALWAYS   = 2'd0;
-  localparam logic [1:0] FRAG_STEN_FUNC_EQUAL    = 2'd1;
-  localparam logic [1:0] FRAG_STEN_FUNC_NOTEQUAL = 2'd2;
-  localparam logic [1:0] FRAG_STEN_FUNC_NEVER    = 2'd3;
-
-  localparam logic [1:0] FRAG_STEN_OP_REPLACE   = 2'd0;
-  localparam logic [1:0] FRAG_STEN_OP_KEEP      = 2'd1;
-  localparam logic [1:0] FRAG_STEN_OP_INCR_SAT  = 2'd2;
-  localparam logic [1:0] FRAG_STEN_OP_DECR_SAT  = 2'd3;
-
-  // `spec/stars_and_flares.md` 1 is FROZEN: `tag = (channel << 6) | strength`,
-  // and GLOW is channel 1. This is that channel number, not a new allocation.
-  localparam logic [1:0] FRAG_TAG_CHANNEL_GLOW  = 2'd1;
-
-  // MSB to LSB, like every other packed declaration in this package.
-  typedef struct packed {
-    logic [7:0] sten_mask;      // [31:24] masks EQUAL / NOTEQUAL COMPARES only
-    logic [1:0] tag_channel;    // [23:22]
-    logic       tag_from_texel; // [21]
-    logic       tag_write_dis;  // [20]
-    logic [1:0] sten_op;        // [19:18]
-    logic [1:0] sten_func;      // [17:16]
-    logic [7:0] atest_ref;      // [15:8]  an INDEX reference, not an alpha one
-    logic       atest_en;       // [7]
-    logic       alpha_mod;      // [6]
-    logic       shade_mod;      // [5]
-    logic [1:0] blend;          // [4:3]
-    logic       z_force_far;    // [2]
-    logic       z_write_dis;    // [1]
-    logic       z_test_en;      // [0]
-  } zhao_fragment_state_v1_t;
-
-  // ---- THE NAMED PROFILES A PRODUCER DECLARES -------------------------------
-  // "Profile selection is explicit, not inferred from whether a port happens to
-  // be zero" (the directive). These functions are how a producer says WHICH
-  // profile it wants; they are the SystemVerilog twins of
-  // `zref::FragmentPipeline::sky_backdrop()` and its five siblings, and a
-  // producer naming one of them is making a declaration rather than filling in
-  // thirty-two bits by hand.
-  //
-  // THE ZERO WORD IS A PROFILE AND IT HAS A NAME NOW. `opaque_geometry()`
-  // returns 32'd0, and that is not a coincidence to be relied on silently: the
-  // consumer's encoding was chosen so the all-zero word IS the plain opaque
-  // write (depth test off, depth written, blend REPLACE, no alpha test, stencil
-  // ALWAYS + REPLACE, tag from the packet). Giving it a name is what lets a
-  // producer DECLARE it, and lets a reader tell a declared opaque profile from
-  // an undriven port -- which is the whole distinction entry I20 turns on.
-  function automatic logic [FRAG_STATE_W-1:0] frag_state_pack(
-      input zhao_fragment_state_v1_t s);
-    frag_state_pack = FRAG_STATE_W'(s);
-  endfunction
-
-  function automatic zhao_fragment_state_v1_t frag_state_unpack(
-      input logic [FRAG_STATE_W-1:0] w);
-    frag_state_unpack = zhao_fragment_state_v1_t'(w);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_opaque_geometry();
-    zhao_fragment_state_v1_t s;
-    s = '0;                              // every field at its opaque default
-    frag_profile_opaque_geometry = frag_state_pack(s);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_sky_backdrop();
-    zhao_fragment_state_v1_t s;
-    s               = '0;
-    s.z_force_far   = 1'b1;              // the WRITTEN depth is the far constant
-    s.blend         = FRAG_BLEND_REPLACE;
-    s.sten_op       = FRAG_STEN_OP_KEEP; // the backdrop owns colour/tag/depth
-    frag_profile_sky_backdrop = frag_state_pack(s);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_sky_cloud_fade();
-    zhao_fragment_state_v1_t s;
-    s               = '0;
-    s.z_test_en     = 1'b1;
-    s.z_write_dis   = 1'b1;
-    s.blend         = FRAG_BLEND_ALPHA;
-    s.alpha_mod     = 1'b1;              // a = tex.a x vertex.a
-    s.tag_write_dis = 1'b1;              // the cloud sheet writes no effect tag
-    s.sten_op       = FRAG_STEN_OP_KEEP;
-    frag_profile_sky_cloud_fade = frag_state_pack(s);
-  endfunction
-
-  // THE ONE RECIPE THAT GENUINELY WANTS THE TAIL'S CONSTANT TAG. The sun quad
-  // is 64x64 ARGB4444 -- direct colour, with no CLUT index to read a strength
-  // out of -- so `tag_from_texel` is LOW here and the tag rides the packet's
-  // own `effect_tag` field. `reference/src/zrender/fragment.cpp`'s
-  // `sun_additive` says exactly this in its own comment.
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_sun_additive();
-    zhao_fragment_state_v1_t s;
-    s               = '0;
-    s.z_test_en     = 1'b1;
-    s.z_write_dis   = 1'b1;
-    s.blend         = FRAG_BLEND_ADD_MOD;
-    s.tag_channel   = FRAG_TAG_CHANNEL_GLOW;
-    s.sten_op       = FRAG_STEN_OP_KEEP;
-    frag_profile_sun_additive = frag_state_pack(s);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_beam_additive_fade();
-    zhao_fragment_state_v1_t s;
-    s               = '0;
-    s.z_test_en     = 1'b1;
-    s.z_write_dis   = 1'b1;              // beams never occlude anything
-    s.blend         = FRAG_BLEND_ADD;
-    s.shade_mod     = 1'b1;              // colour = tex.RGB x vertex.RGB
-    s.tag_write_dis = 1'b1;              // a beam is not a glow-probe source
-    s.sten_op       = FRAG_STEN_OP_KEEP;
-    frag_profile_beam_additive_fade = frag_state_pack(s);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_star_disc_masked();
-    zhao_fragment_state_v1_t s;
-    s                = '0;
-    s.z_test_en      = 1'b1;
-    s.z_write_dis    = 1'b1;
-    s.blend          = FRAG_BLEND_REPLACE;
-    s.atest_en       = 1'b1;
-    s.atest_ref      = 8'd0;             // CLUT index 0 is the transparent one
-    s.tag_from_texel = 1'b1;             // strength = the texel's CLUT intensity
-    s.tag_channel    = FRAG_TAG_CHANNEL_GLOW;
-    s.sten_op        = FRAG_STEN_OP_KEEP;
-    frag_profile_star_disc_masked = frag_state_pack(s);
-  endfunction
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_star_halo_additive();
-    zhao_fragment_state_v1_t s;
-    s                = '0;
-    s.z_test_en      = 1'b1;
-    s.z_write_dis    = 1'b1;
-    s.blend          = FRAG_BLEND_ADD;   // pal_h[0] is black: no mask needed
-    s.tag_from_texel = 1'b1;
-    s.tag_channel    = FRAG_TAG_CHANNEL_GLOW;
-    s.sten_op        = FRAG_STEN_OP_KEEP;
-    frag_profile_star_halo_additive = frag_state_pack(s);
-  endfunction
-
-  // FORGE.SHADOW's profile, owner ruling R89. A shadow is ordinary transparent
-  // geometry: it blends with what it falls on and it writes no depth, because a
-  // shadow does not occlude the thing casting it. BLEND=ALPHA is the field that
-  // makes R89's flat per-caster alpha reach the picture at all -- with the
-  // REPLACE that this console used before, `zhao_raster_blend_fin`'s arm is
-  // `acc = src_i` and the alpha's product is computed and thrown away.
-  function automatic logic [FRAG_STATE_W-1:0] frag_profile_shadow_alpha();
-    zhao_fragment_state_v1_t s;
-    s               = '0;
-    s.z_test_en     = 1'b1;
-    s.z_write_dis   = 1'b1;
-    s.blend         = FRAG_BLEND_ALPHA;
-    s.tag_write_dis = 1'b1;              // a shadow is not a glow source
-    s.sten_op       = FRAG_STEN_OP_KEEP;
-    frag_profile_shadow_alpha = frag_state_pack(s);
-  endfunction
-
   // ---- the complete 128-bit raster continuation -----------------------------
   localparam int unsigned CONT_STENCIL_REFERENCE_LO    = 0;
   localparam int unsigned CONT_STENCIL_REFERENCE_HI    = 7;
@@ -543,43 +327,6 @@ package zhao_render_texture_pkg;
       (CONT_INVW24_LO == 96) && (CONT_INVW24_HI == 119) &&
       (CONT_IN_TILE_ADDR_LO == 120) && (CONT_IN_TILE_ADDR_HI == 127);
 
-  // Literal pins for the fragment state word, on the same terms as every other
-  // contract here: changing a declaration and its helper constants in lockstep
-  // must still make the elaboration guard fail.
-  localparam bit FRAG_STATE_OFFSET_CONTRACT_OK =
-      (FRAG_STATE_W == 32) &&
-      ($bits(zhao_fragment_state_v1_t) == 32) &&
-      (FRAG_Z_TEST_EN_BIT == 0) &&
-      (FRAG_Z_WRITE_DIS_BIT == 1) &&
-      (FRAG_Z_FORCE_FAR_BIT == 2) &&
-      (FRAG_BLEND_LO == 3) && (FRAG_BLEND_HI == 4) &&
-      (FRAG_SHADE_MOD_BIT == 5) &&
-      (FRAG_ALPHA_MOD_BIT == 6) &&
-      (FRAG_ATEST_EN_BIT == 7) &&
-      (FRAG_ATEST_REF_LO == 8) && (FRAG_ATEST_REF_HI == 15) &&
-      (FRAG_STEN_FUNC_LO == 16) && (FRAG_STEN_FUNC_HI == 17) &&
-      (FRAG_STEN_OP_LO == 18) && (FRAG_STEN_OP_HI == 19) &&
-      (FRAG_TAG_WRITE_DIS_BIT == 20) &&
-      (FRAG_TAG_FROM_TEXEL_BIT == 21) &&
-      (FRAG_TAG_CHANNEL_LO == 22) && (FRAG_TAG_CHANNEL_HI == 23) &&
-      (FRAG_STEN_MASK_LO == 24) && (FRAG_STEN_MASK_HI == 31) &&
-      // The directive's three enums, pinned as literals. A second incompatible
-      // stencil enum is exactly what section 3 forbids, so the numbers are
-      // asserted here rather than trusted to a reader comparing two tables.
-      (FRAG_BLEND_REPLACE == 2'd0) && (FRAG_BLEND_ALPHA == 2'd1) &&
-      (FRAG_BLEND_ADD == 2'd2) && (FRAG_BLEND_ADD_MOD == 2'd3) &&
-      (FRAG_STEN_FUNC_ALWAYS == 2'd0) && (FRAG_STEN_FUNC_EQUAL == 2'd1) &&
-      (FRAG_STEN_FUNC_NOTEQUAL == 2'd2) && (FRAG_STEN_FUNC_NEVER == 2'd3) &&
-      (FRAG_STEN_OP_REPLACE == 2'd0) && (FRAG_STEN_OP_KEEP == 2'd1) &&
-      (FRAG_STEN_OP_INCR_SAT == 2'd2) && (FRAG_STEN_OP_DECR_SAT == 2'd3) &&
-      (FRAG_TAG_CHANNEL_GLOW == 2'd1) &&
-      // THE ZERO WORD IS THE OPAQUE PROFILE. This is the one pin that makes the
-      // "a declared opaque profile is not an undriven port" argument checkable
-      // rather than rhetorical: if the encoding ever moved so that all-zero
-      // stopped meaning the plain opaque write, every producer that declares it
-      // would change behaviour silently, and this fails instead.
-      (frag_profile_opaque_geometry() == 32'd0);
-
   localparam bit AUX_OFFSET_CONTRACT_OK =
       (AUX_WX_LO == 0) && (AUX_WX_HI == 31) &&
       (AUX_WZ_LO == 32) && (AUX_WZ_HI == 63) &&
@@ -788,48 +535,6 @@ package zhao_render_texture_pkg;
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_LAYOUT_EXPECTED = {
     8'h81, 8'h42, 8'h7F, 24'h12_34AB
   };
-  // Every field distinguishable from every other, so a probe that swapped two
-  // same-width neighbours -- `sten_func` with `sten_op`, or the four single bits
-  // among themselves -- fails rather than matching by luck. That is why the
-  // four lone bits are NOT all 1: `z_force_far` and `tag_from_texel` are set and
-  // `z_write_dis` and `tag_write_dis` are clear, so their positions are pinned
-  // individually instead of as a block.
-  localparam logic [FRAG_STATE_W-1:0] FRAG_STATE_LAYOUT_EXPECTED = {
-    8'hC7,   // [31:24] sten_mask
-    2'b10,   // [23:22] tag_channel
-    1'b1,    // [21]    tag_from_texel
-    1'b0,    // [20]    tag_write_dis
-    2'b01,   // [19:18] sten_op
-    2'b11,   // [17:16] sten_func
-    8'h5A,   // [15:8]  atest_ref
-    1'b1,    // [7]     atest_en
-    1'b0,    // [6]     alpha_mod
-    1'b1,    // [5]     shade_mod
-    2'b10,   // [4:3]   blend
-    1'b1,    // [2]     z_force_far
-    1'b0,    // [1]     z_write_dis
-    1'b1     // [0]     z_test_en
-  };
-
-  function automatic logic [FRAG_STATE_W-1:0] frag_state_layout_probe();
-    zhao_fragment_state_v1_t value;
-    value                = '0;
-    value.sten_mask      = 8'hC7;
-    value.tag_channel    = 2'b10;
-    value.tag_from_texel = 1'b1;
-    value.tag_write_dis  = 1'b0;
-    value.sten_op        = 2'b01;
-    value.sten_func      = 2'b11;
-    value.atest_ref      = 8'h5A;
-    value.atest_en       = 1'b1;
-    value.alpha_mod      = 1'b0;
-    value.shade_mod      = 1'b1;
-    value.blend          = 2'b10;
-    value.z_force_far    = 1'b1;
-    value.z_write_dis    = 1'b0;
-    value.z_test_en      = 1'b1;
-    return frag_state_pack(value);
-  endfunction
 
   function automatic logic [RASTER_CONTINUATION_W-1:0]
       continuation_layout_probe();
@@ -942,10 +647,6 @@ module zhao_render_texture_layout_guard #(
       zhao_render_texture_pkg::RETIRE_OFFSET_CONTRACT_OK,
   parameter bit RESULT_OFFSET_CONTRACT_OK_P =
       zhao_render_texture_pkg::RESULT_OFFSET_CONTRACT_OK,
-  parameter bit FRAG_STATE_OFFSET_CONTRACT_OK_P =
-      zhao_render_texture_pkg::FRAG_STATE_OFFSET_CONTRACT_OK,
-  parameter logic [zhao_render_texture_pkg::FRAG_STATE_W-1:0]
-      FRAG_STATE_LAYOUT_PROBE_P = zhao_render_texture_pkg::frag_state_layout_probe(),
   parameter logic [zhao_render_texture_pkg::RASTER_CONTINUATION_W-1:0]
       CONTINUATION_LAYOUT_PROBE_P = zhao_render_texture_pkg::continuation_layout_probe(),
   parameter logic [zhao_render_texture_pkg::AUX_SURFACE_CTX_W-1:0]
@@ -986,10 +687,6 @@ module zhao_render_texture_layout_guard #(
       $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[8]: RETIRE_OFFSET_CONTRACT");
     if (!RESULT_OFFSET_CONTRACT_OK_P)
       $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[9]: RESULT_OFFSET_CONTRACT");
-    if (!FRAG_STATE_OFFSET_CONTRACT_OK_P)
-      $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[17]: FRAG_STATE_OFFSET_CONTRACT");
-    if (FRAG_STATE_LAYOUT_PROBE_P !== FRAG_STATE_LAYOUT_EXPECTED)
-      $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[18]: FRAG_STATE_LAYOUT");
 
     if (($bits(zhao_raster_continuation_v2_t) != RASTER_CONTINUATION_W) ||
         (CONTINUATION_LAYOUT_PROBE_P !== CONTINUATION_LAYOUT_EXPECTED))
@@ -1023,7 +720,6 @@ module zhao_render_texture_layout_guard #(
   integer field_span_control;
   integer field_span_call_index;
   zhao_raster_earlyz_key_v2_t earlyz;
-  zhao_fragment_state_v1_t fstate;
   zhao_raster_continuation_tail_v2_t tail;
   zhao_raster_continuation_v2_t continuation;
   zhao_aux_surface_ctx_v2_t aux;
@@ -1060,57 +756,9 @@ module zhao_render_texture_layout_guard #(
     field_span_control = 0;
     field_span_call_index = 0;
     if ($value$plusargs("FIELD_SPAN_CONTROL=%d", field_span_control)) begin
-      if ((field_span_control < 1) || (field_span_control > 59))
+      if ((field_span_control < 1) || (field_span_control > 45))
         $fatal(1, "invalid FIELD_SPAN_CONTROL=%0d", field_span_control);
     end
-
-    // THE FRAGMENT STATE WORD, all fourteen fields. Each is set through its
-    // FIELD NAME and checked against its independently written LO/HI pair, so a
-    // struct whose declaration order drifted from the named spans fails here
-    // rather than in whatever block next read a slice by number. These run
-    // first because every other packet in this package carries this word.
-    fstate = '0; fstate.z_test_en = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.z_test_en", observed, FRAG_Z_TEST_EN_BIT, FRAG_Z_TEST_EN_BIT);
-    fstate = '0; fstate.z_write_dis = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.z_write_dis", observed, FRAG_Z_WRITE_DIS_BIT, FRAG_Z_WRITE_DIS_BIT);
-    fstate = '0; fstate.z_force_far = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.z_force_far", observed, FRAG_Z_FORCE_FAR_BIT, FRAG_Z_FORCE_FAR_BIT);
-    fstate = '0; fstate.blend = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.blend", observed, FRAG_BLEND_LO, FRAG_BLEND_HI);
-    fstate = '0; fstate.shade_mod = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.shade_mod", observed, FRAG_SHADE_MOD_BIT, FRAG_SHADE_MOD_BIT);
-    fstate = '0; fstate.alpha_mod = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.alpha_mod", observed, FRAG_ALPHA_MOD_BIT, FRAG_ALPHA_MOD_BIT);
-    fstate = '0; fstate.atest_en = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.atest_en", observed, FRAG_ATEST_EN_BIT, FRAG_ATEST_EN_BIT);
-    fstate = '0; fstate.atest_ref = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.atest_ref", observed, FRAG_ATEST_REF_LO, FRAG_ATEST_REF_HI);
-    fstate = '0; fstate.sten_func = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.sten_func", observed, FRAG_STEN_FUNC_LO, FRAG_STEN_FUNC_HI);
-    fstate = '0; fstate.sten_op = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.sten_op", observed, FRAG_STEN_OP_LO, FRAG_STEN_OP_HI);
-    fstate = '0; fstate.tag_write_dis = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.tag_write_dis", observed, FRAG_TAG_WRITE_DIS_BIT, FRAG_TAG_WRITE_DIS_BIT);
-    fstate = '0; fstate.tag_from_texel = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.tag_from_texel", observed, FRAG_TAG_FROM_TEXEL_BIT, FRAG_TAG_FROM_TEXEL_BIT);
-    fstate = '0; fstate.tag_channel = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.tag_channel", observed, FRAG_TAG_CHANNEL_LO, FRAG_TAG_CHANNEL_HI);
-    fstate = '0; fstate.sten_mask = '1;
-    observed = '0; observed[FRAG_STATE_W-1:0] = fstate;
-    expect_span("frag_state.sten_mask", observed, FRAG_STEN_MASK_LO, FRAG_STEN_MASK_HI);
 
     // Field-name probes independently prove that the declarations occupy the
     // named spans.  Nested-type span probes then prove every absolute offset.
@@ -1275,13 +923,13 @@ module zhao_render_texture_layout_guard #(
     observed = '0; observed[TEXTURE_RESULT_W-1:0] = result;
     expect_span("result.status", observed, TEXTURE_RESULT_STATUS_LO, TEXTURE_RESULT_STATUS_HI);
 
-    if (field_span_call_index != 59)
-      $fatal(1, "render-texture field-span census expected 59, found %0d",
+    if (field_span_call_index != 45)
+      $fatal(1, "render-texture field-span census expected 45, found %0d",
              field_span_call_index);
     if (field_span_control != 0)
       $fatal(1, "ZHAO_RENDER_TEXTURE_FIELD_SPAN_ESCAPED[%0d]",
              field_span_control);
-    $display("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=59");
+    $display("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45");
   end
   // synthesis translate_on
 

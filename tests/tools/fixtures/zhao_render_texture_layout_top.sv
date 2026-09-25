@@ -2,8 +2,68 @@
 // linted, so the production guard's initial-block $fatal checks are live.
 module zhao_render_texture_layout_top;
   import zhao_render_texture_pkg::*;
+  import zhao_fragment_state_pkg::*;
+
+  // ---- THE FRAGMENT STATE WORD's SECOND OPINION -----------------------------
+  // The package declares this word as named LO/HI spans and builds every
+  // profile through them; it deliberately carries NO packed struct, because
+  // `tools/rtl/texture_v3_interface_parser.py` pins the island's duplicate-name
+  // marker fingerprint and "a packed struct emits one MEMBERDTYPE per member".
+  // A 14-member struct in the package moved the island's count 105 -> 119, and
+  // that file's own 2026-09-18 note refused the identical trade at TWO markers.
+  //
+  // So the struct lives in the FIXTURE, which is where a layout probe belongs:
+  // it is an INDEPENDENTLY WRITTEN statement of the same layout, and the checks
+  // below set each field BY NAME and compare against the package's own spans.
+  // If the two ever disagree, one of them is wrong and this fails -- which is
+  // the entire value the struct was ever providing, obtained without making the
+  // production closure's schema fingerprint noisier.
+  typedef struct packed {
+    logic [7:0] sten_mask;      // [31:24] masks EQUAL / NOTEQUAL COMPARES only
+    logic [1:0] tag_channel;    // [23:22]
+    logic       tag_from_texel; // [21]
+    logic       tag_write_dis;  // [20]
+    logic [1:0] sten_op;        // [19:18]
+    logic [1:0] sten_func;      // [17:16]
+    logic [7:0] atest_ref;      // [15:8]  an INDEX reference, not an alpha one
+    logic       atest_en;       // [7]
+    logic       alpha_mod;      // [6]
+    logic       shade_mod;      // [5]
+    logic [1:0] blend;          // [4:3]
+    logic       z_force_far;    // [2]
+    logic       z_write_dis;    // [1]
+    logic       z_test_en;      // [0]
+  } fixture_fragment_state_t;
+
+  integer frag_span_control;
+  integer frag_span_index;
+  logic [FRAG_STATE_W-1:0] fs_probe;
+  logic [FRAG_STATE_W-1:0] fs_expect;
+
+  // The fixture's own span checker, with the same runtime positive control the
+  // package's `expect_span` carries: corrupt the independently built expected
+  // mask for exactly one named span and watch that one fail.
+  task automatic expect_frag_span(input string name,
+                                  input logic [FRAG_STATE_W-1:0] actual,
+                                  input int unsigned lo,
+                                  input int unsigned hi);
+    begin
+      frag_span_index = frag_span_index + 1;
+      fs_expect = '0;
+      for (int unsigned b = lo; b <= hi; b++) fs_expect[b] = 1'b1;
+      if (frag_span_control == frag_span_index)
+        fs_expect[lo] = ~fs_expect[lo];
+      if (actual !== fs_expect) begin
+        if (frag_span_control == frag_span_index)
+          $fatal(1, "ZHAO_FRAG_STATE_SPAN_FIRE[%0d]: %s", frag_span_index, name);
+        $fatal(1, "fragment-state span %s expected [%0d:%0d]", name, hi, lo);
+      end
+    end
+  endtask
 
   zhao_render_texture_layout_guard u_layout_guard();
+  // The fragment-state offset contract, executed in the plain run.
+  zhao_fragment_state_guard u_frag_state_guard();
 
   zhao_raster_continuation_v2_t continuation;
   zhao_aux_surface_ctx_v2_t aux;
@@ -27,7 +87,7 @@ module zhao_render_texture_layout_top;
   logic [RASTER_PRETEX_W-1:0] pretex_roundtrip_bits;
   logic [RASTER_RETIRE_CTX_W-1:0] retire_ctx_roundtrip_bits;
   logic [TEXTURE_RESULT_W-1:0] result_roundtrip_bits;
-  zhao_fragment_state_v1_t frag_state;
+  fixture_fragment_state_t frag_state;
   logic [FRAG_STATE_W-1:0] frag_state_bits;
   logic [FRAG_STATE_W-1:0] frag_state_roundtrip_bits;
   integer roundtrip_control;
@@ -83,9 +143,52 @@ module zhao_render_texture_layout_top;
     result.alpha             = 8'h7F;
     result.rgb               = 24'h12_34AB;
 
+    // FOURTEEN FIELD-NAME PROBES against the package's own spans. Each sets
+    // ONE field of the fixture's struct and asserts the bits that light up are
+    // exactly the span the package names -- two independently written
+    // statements of one layout, compared.
+    frag_span_control = 0;
+    frag_span_index = 0;
+    if ($value$plusargs("FRAG_SPAN_CONTROL=%d", frag_span_control)) begin
+      if ((frag_span_control < 1) || (frag_span_control > 14))
+        $fatal(1, "invalid FRAG_SPAN_CONTROL=%0d", frag_span_control);
+    end
+    frag_state = '0; frag_state.z_test_en = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("z_test_en", fs_probe, FRAG_Z_TEST_EN_BIT, FRAG_Z_TEST_EN_BIT);
+    frag_state = '0; frag_state.z_write_dis = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("z_write_dis", fs_probe, FRAG_Z_WRITE_DIS_BIT, FRAG_Z_WRITE_DIS_BIT);
+    frag_state = '0; frag_state.z_force_far = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("z_force_far", fs_probe, FRAG_Z_FORCE_FAR_BIT, FRAG_Z_FORCE_FAR_BIT);
+    frag_state = '0; frag_state.blend = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("blend", fs_probe, FRAG_BLEND_LO, FRAG_BLEND_HI);
+    frag_state = '0; frag_state.shade_mod = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("shade_mod", fs_probe, FRAG_SHADE_MOD_BIT, FRAG_SHADE_MOD_BIT);
+    frag_state = '0; frag_state.alpha_mod = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("alpha_mod", fs_probe, FRAG_ALPHA_MOD_BIT, FRAG_ALPHA_MOD_BIT);
+    frag_state = '0; frag_state.atest_en = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("atest_en", fs_probe, FRAG_ATEST_EN_BIT, FRAG_ATEST_EN_BIT);
+    frag_state = '0; frag_state.atest_ref = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("atest_ref", fs_probe, FRAG_ATEST_REF_LO, FRAG_ATEST_REF_HI);
+    frag_state = '0; frag_state.sten_func = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("sten_func", fs_probe, FRAG_STEN_FUNC_LO, FRAG_STEN_FUNC_HI);
+    frag_state = '0; frag_state.sten_op = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("sten_op", fs_probe, FRAG_STEN_OP_LO, FRAG_STEN_OP_HI);
+    frag_state = '0; frag_state.tag_write_dis = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("tag_write_dis", fs_probe, FRAG_TAG_WRITE_DIS_BIT, FRAG_TAG_WRITE_DIS_BIT);
+    frag_state = '0; frag_state.tag_from_texel = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("tag_from_texel", fs_probe, FRAG_TAG_FROM_TEXEL_BIT, FRAG_TAG_FROM_TEXEL_BIT);
+    frag_state = '0; frag_state.tag_channel = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("tag_channel", fs_probe, FRAG_TAG_CHANNEL_LO, FRAG_TAG_CHANNEL_HI);
+    frag_state = '0; frag_state.sten_mask = '1; fs_probe = FRAG_STATE_W'(frag_state);
+    expect_frag_span("sten_mask", fs_probe, FRAG_STEN_MASK_LO, FRAG_STEN_MASK_HI);
+    if (frag_span_index != 14)
+      $fatal(1, "fragment-state span census expected 14, found %0d", frag_span_index);
+    if (frag_span_control != 0)
+      $fatal(1, "ZHAO_FRAG_STATE_SPAN_ESCAPED[%0d]", frag_span_control);
+
     // The fragment state word. The vector below is written as an independent
     // literal concatenation, so a struct that reordered two same-width
-    // neighbours fails here as well as in the guard's own fingerprint.
+    // neighbours fails here as well as against the spans above.
     frag_state                = '0;
     frag_state.sten_mask      = 8'h3C;
     frag_state.tag_channel    = FRAG_TAG_CHANNEL_GLOW;
@@ -101,7 +204,7 @@ module zhao_render_texture_layout_top;
     frag_state.z_force_far    = 1'b0;
     frag_state.z_write_dis    = 1'b1;
     frag_state.z_test_en      = 1'b1;
-    frag_state_bits = frag_state_pack(frag_state);
+    frag_state_bits = FRAG_STATE_W'(frag_state);
 
     continuation_bits = pack_raster_continuation(continuation);
     aux_bits = pack_aux_surface_ctx(aux);
@@ -202,9 +305,9 @@ module zhao_render_texture_layout_top;
     // structural form of the R89 defect: a flat alpha delivered under REPLACE
     // has its product thrown away by `zhao_raster_blend_fin`, so a profile that
     // means to consume an alpha and selects REPLACE is a silent no-op.
-    if (frag_state_unpack(frag_profile_shadow_alpha()).blend == FRAG_BLEND_REPLACE)
+    if (frag_profile_shadow_alpha()[FRAG_BLEND_LO +: 2] == FRAG_BLEND_REPLACE)
       $fatal(1, "shadow_alpha selects BLEND=REPLACE: the alpha would be computed and thrown away");
-    if (frag_state_unpack(frag_profile_sky_cloud_fade()).blend == FRAG_BLEND_REPLACE)
+    if (frag_profile_sky_cloud_fade()[FRAG_BLEND_LO +: 2] == FRAG_BLEND_REPLACE)
       $fatal(1, "sky_cloud_fade selects BLEND=REPLACE: the alpha would be computed and thrown away");
 
     if (unpack_raster_continuation(continuation_roundtrip_bits) !== continuation) begin
@@ -237,7 +340,7 @@ module zhao_render_texture_layout_top;
         $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_FIRE[6]: result");
       $fatal(1, "result pack/unpack round trip failed");
     end
-    if (frag_state_unpack(frag_state_roundtrip_bits) !== frag_state) begin
+    if (fixture_fragment_state_t'(frag_state_roundtrip_bits) !== frag_state) begin
       if (roundtrip_control == 7)
         $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_FIRE[7]: frag_state");
       $fatal(1, "fragment state pack/unpack round trip failed");
@@ -245,7 +348,7 @@ module zhao_render_texture_layout_top;
     if (roundtrip_control != 0)
       $fatal(1, "ZHAO_RENDER_TEXTURE_ROUNDTRIP_ESCAPED[%0d]", roundtrip_control);
 
-    $display("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7");
+    $display("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7 frag_spans=14");
   end
 endmodule
 
@@ -258,6 +361,7 @@ module zhao_render_texture_elab_control_top #(
   parameter int unsigned CONTROL = 0
 );
   import zhao_render_texture_pkg::*;
+  import zhao_fragment_state_pkg::*;
 
   localparam logic [RASTER_CONTINUATION_W-1:0] CONT_ONE =
       {{(RASTER_CONTINUATION_W-1){1'b0}}, 1'b1};
@@ -271,8 +375,6 @@ module zhao_render_texture_elab_control_top #(
       {{(RASTER_RETIRE_CTX_W-1){1'b0}}, 1'b1};
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_ONE =
       {{(TEXTURE_RESULT_W-1){1'b0}}, 1'b1};
-  localparam logic [FRAG_STATE_W-1:0] FRAG_STATE_ONE =
-      {{(FRAG_STATE_W-1){1'b0}}, 1'b1};
 
   localparam logic [RASTER_CONTINUATION_W-1:0] CONT_PROBE =
       continuation_layout_probe() ^ ((CONTROL == 10) ? CONT_ONE : '0);
@@ -286,8 +388,6 @@ module zhao_render_texture_elab_control_top #(
       retire_layout_probe() ^ ((CONTROL == 14) ? RETIRE_ONE : '0);
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_PROBE =
       result_layout_probe() ^ ((CONTROL == 15) ? RESULT_ONE : '0);
-  localparam logic [FRAG_STATE_W-1:0] FRAG_STATE_PROBE =
-      frag_state_layout_probe() ^ ((CONTROL == 18) ? FRAG_STATE_ONE : '0);
 
   zhao_render_texture_layout_guard #(
     .WIDTH_CONTRACT_OK_P(WIDTH_CONTRACT_OK && (CONTROL != 1)),
@@ -305,9 +405,15 @@ module zhao_render_texture_elab_control_top #(
     .EZPAY_LAYOUT_PROBE_P(EZPAY_PROBE),
     .PRETEX_LAYOUT_PROBE_P(PRETEX_PROBE),
     .RETIRE_LAYOUT_PROBE_P(RETIRE_PROBE),
-    .RESULT_LAYOUT_PROBE_P(RESULT_PROBE),
-    .FRAG_STATE_OFFSET_CONTRACT_OK_P(
-      FRAG_STATE_OFFSET_CONTRACT_OK && (CONTROL != 17)),
-    .FRAG_STATE_LAYOUT_PROBE_P(FRAG_STATE_PROBE)
+    .RESULT_LAYOUT_PROBE_P(RESULT_PROBE)
   ) u_control();
+
+  // THE FRAGMENT STATE WORD's OWN GUARD, in its own module because its schema is
+  // its own package -- `zhao_render_texture_pkg` is inside the texture island's
+  // FROZEN interface manifest and had to stay byte-identical. CONTROL 17 forces
+  // its offset contract false, exactly as 1..9 do for the render-texture ones.
+  zhao_fragment_state_guard #(
+    .FRAG_STATE_OFFSET_CONTRACT_OK_P(
+      zhao_fragment_state_pkg::FRAG_STATE_OFFSET_CONTRACT_OK && (CONTROL != 17))
+  ) u_frag_control();
 endmodule

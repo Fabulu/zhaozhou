@@ -25420,7 +25420,7 @@ module zhao_console_core
   // meaning the plain opaque write, this would follow it instead of silently
   // becoming something else.
   localparam logic [31:0] FRAG_STATE_UNPUBLISHED_C =
-      zhao_render_texture_pkg::frag_profile_opaque_geometry();
+      zhao_fragment_state_pkg::frag_profile_opaque_geometry();
   // R48: no ratified vertex format carries alpha, so OPAQUE is the default and
   // nothing is stubbed. A span publishes the producer's real declaration.
   localparam logic [ 7:0] TAIL_VERTEX_ALPHA_DEFAULT_C = 8'hFF;
