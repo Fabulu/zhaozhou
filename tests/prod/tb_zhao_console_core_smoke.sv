@@ -6010,6 +6010,30 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- THE COMPOSE SPINE, which is WHY the triangles are degenerate ------
+    // TERRAINAUX, 2026-09-25. `SMOKE: terrlight degenerate=128` has been read
+    // three different ways by three packets and the bench's own note below
+    // still offers a WRONG cause ("the pages are all-zero BODIES, so the
+    // lattice is flat and the cross product is exactly zero"). A flat lattice
+    // with DISTINCT world x/z has an UP-facing normal, not a zero one; zero
+    // heights alone cannot make a cross product vanish.
+    //
+    // The real cause is one hop upstream and this line is how a reader sees
+    // it without a waveform: TERRAIN.TESS reads its lattice through
+    // TERRAIN.HEIGHTTAP from `zhao_terrain_compcache_front`, and that block
+    // answers `lat_h_o`/`lat_wx_o`/`lat_wz_o` with POISON (32'h5BADF00D,
+    // compcache_front.sv:532) on every cycle `serve_valid_q` is low. With no
+    // patch served, all 81 window vertices are the SAME poison position, so
+    // every one of the 128 triangles is exactly degenerate.
+    //
+    // So the number to read here is `patches_served`, not `degenerate`.
+    $display("SMOKE: terrcompose hdr_headers=%0d hdr_refused=%0d ps_lattices=%0d ps_vertices=%0d ps_cells=%0d place_patches=%0d pt_samples=%0d | cc_filled=%0d cc_served=%0d cc_records=%0d cc_serving=%0d cc_overrun=%0d lat_oob=%0d mat_cells=%0d",
+             terr_hr_headers_o, terr_hr_refused_o,
+             terr_ps_lattices_o, terr_ps_vertices_o, terr_ps_cells_o,
+             terr_place_patches_o, terr_pt_samples_o,
+             terr_cc_patches_filled_o, terr_cc_patches_served_o,
+             terr_cc_fill_records_o, terr_cc_serve_valid_o,
+             terr_cc_fill_overrun_o, terr_cc_lat_oob_o, terr_cc_mat_cells_o);
     // ---- TERRAIN's TEXTURE COORDINATES, measured on the DUT's own edge ----
     // This bench CAN reach this lane, and the entry that said otherwise was
     // wrong: the terrain spine loads 3 pages with crc_fails=0 and replays 128
