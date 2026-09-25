@@ -1338,6 +1338,10 @@ module tb_zhao_shell (
       // the bench's own zeros, which is not the declaration -- the bit is.
       .tri_untex_i(1'b0),
       .tri_attr_a_i('0), .tri_attr_b_i('0), .tri_attr_c_i('0),
+      // ARENAID 2026-09-25: GEOM.CLIP now carries an opaque per-corner
+      // identity and a per-primitive rider for GEOM.VERTID. Tied here.
+      .tri_key_a_i('0), .tri_key_b_i('0), .tri_key_c_i('0),
+      .tri_rider_i('0),
       // The scissor is the render grid in whole pixels; sixteen pixels per
       // tile is the shell's own tile size, so this is the same rectangle the
       // bench derives its scan box from -- which is why the two agree.
@@ -1358,6 +1362,9 @@ module tb_zhao_shell (
       .out_src_id_o(cl_src_id),
       .out_untex_o(cl_untex),
       .out_attr_a_o(cl_attr_a), .out_attr_b_o(cl_attr_b), .out_attr_c_o(cl_attr_c),
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
+      .out_key_a_o(), .out_key_b_o(), .out_key_c_o(), .out_rider_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
       .out_flip_o(dbg_clip_flip_o),
       .ret_valid_o(cl_ret_valid), .ret_verdict_o(cl_ret_verdict),
       .triangles_submitted_o(cl_sub), .triangles_clipped_o(cl_clipped),

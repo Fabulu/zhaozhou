@@ -156,7 +156,29 @@ module zhao_geom_clip #(
   // The attribute-bearing vertex packet, ruling 5: invw24, u_over_w, v_over_w,
   // lit r/g/b and alpha, each a 32-bit field. A flat, untextured triangle sets
   // ATTRS to whatever it actually carries; the block never interprets them.
-  parameter int unsigned ATTRS = 7
+  parameter int unsigned ATTRS = 7,
+  // ---- THE PER-CORNER IDENTITY AND THE PER-PRIMITIVE RIDER (ARENAID) ------
+  // Owner vacation directive section 4 makes the rendering parameter arena
+  // authoritative for "the FINAL geometry actually referenced by the binner
+  // and raster consumer", and the final geometry is what leaves THIS block:
+  // GEOM.CLIP drops primitives and normalises winding, so its output is the
+  // set the binner sees. `zhao_geom_vertid` therefore publishes from here,
+  // and it needs two things this block was not carrying.
+  //
+  // `VKEYW` is an OPAQUE per-corner identity. This block never reads inside
+  // it, exactly as it never reads inside the attribute packet -- and it swaps
+  // it on the winding flip for exactly the same reason the attributes are
+  // swapped here rather than in a companion block: "swapping the positions and
+  // not the attributes produces a triangle that is geometrically correct and
+  // shaded wrong". A descriptor that named B's vertex where C's corner now is
+  // would be the same defect wearing an index.
+  //
+  // `RIDERW` is an OPAQUE per-primitive rider, carried exactly as `src_id` is
+  // carried and untouched by the flip, because it describes the primitive and
+  // not a corner. The composer puts the material id, the R28 raster word and
+  // the producer domain in it; this block does not know that and must not.
+  parameter int unsigned VKEYW = 24,
+  parameter int unsigned RIDERW = 50
 ) (
   input  logic clk,
   input  logic rst_n,
@@ -196,6 +218,11 @@ module zhao_geom_clip #(
   input  logic [ATTRS*32-1:0] tri_attr_a_i,
   input  logic [ATTRS*32-1:0] tri_attr_b_i,
   input  logic [ATTRS*32-1:0] tri_attr_c_i,
+  // ---- the per-corner identity and the per-primitive rider ---------------
+  input  logic [VKEYW-1:0]    tri_key_a_i,
+  input  logic [VKEYW-1:0]    tri_key_b_i,
+  input  logic [VKEYW-1:0]    tri_key_c_i,
+  input  logic [RIDERW-1:0]   tri_rider_i,
 
   // ---- configuration, sampled with the packet ----------------------------
   // The scissor rectangle in whole pixels (zref::render::Viewport: a canvas
@@ -236,6 +263,12 @@ module zhao_geom_clip #(
   output logic [ATTRS*32-1:0] out_attr_a_o,
   output logic [ATTRS*32-1:0] out_attr_b_o,
   output logic [ATTRS*32-1:0] out_attr_c_o,
+  // The identities, FOLLOWING their vertices through the same swap.
+  output logic [VKEYW-1:0]    out_key_a_o,
+  output logic [VKEYW-1:0]    out_key_b_o,
+  output logic [VKEYW-1:0]    out_key_c_o,
+  // The rider, untouched -- per primitive, like `out_src_id_o` beside it.
+  output logic [RIDERW-1:0]   out_rider_o,
   // The flip actually applied, so a consumer can say so out loud rather than
   // inferring it.
   output logic               out_flip_o,
@@ -334,6 +367,8 @@ module zhao_geom_clip #(
   logic        [15:0] s1_src;
   logic               s1_untex;
   logic [ATTRS*32-1:0] s1_aa, s1_ab, s1_ac;
+  logic [VKEYW-1:0]    s1_ka, s1_kb, s1_kc;
+  logic [RIDERW-1:0]   s1_rider;
   logic        [2:0]  s1_behind;
   logic        [1:0]  s1_cull;
   logic        [11:0] s1_x0, s1_y0, s1_w, s1_h;
@@ -345,6 +380,8 @@ module zhao_geom_clip #(
   logic        [15:0] s2_src;
   logic               s2_untex;
   logic [ATTRS*32-1:0] s2_aa, s2_ab, s2_ac;
+  logic [VKEYW-1:0]    s2_ka, s2_kb, s2_kc;
+  logic [RIDERW-1:0]   s2_rider;
   logic        [2:0]  s2_behind;
   logic        [1:0]  s2_cull;
   logic        [11:0] s2_x0, s2_y0, s2_w, s2_h;
@@ -363,6 +400,8 @@ module zhao_geom_clip #(
   logic        [15:0] s3_src;
   logic               s3_untex;
   logic [ATTRS*32-1:0] s3_aa, s3_ab, s3_ac;
+  logic [VKEYW-1:0]    s3_ka, s3_kb, s3_kc;
+  logic [RIDERW-1:0]   s3_rider;
   logic        [2:0]  s3_behind;
   logic        [1:0]  s3_cull;
   // The box is registered at the OUTPUT width (12 bits, RASTER.EDGEWALK's tile
@@ -428,6 +467,10 @@ module zhao_geom_clip #(
   assign out_attr_a_o = s3_aa;
   assign out_attr_b_o = flip ? s3_ac : s3_ab;
   assign out_attr_c_o = flip ? s3_ab : s3_ac;
+  assign out_key_a_o  = s3_ka;
+  assign out_key_b_o  = flip ? s3_kc : s3_kb;
+  assign out_key_c_o  = flip ? s3_kb : s3_kc;
+  assign out_rider_o  = s3_rider;
   assign out_flip_o   = flip;
 
   assign ret_valid_o   = s3_v && pipe_en;
@@ -457,6 +500,10 @@ module zhao_geom_clip #(
       s1_cy     <= 21'sd0;
       s1_src    <= 16'd0;
       s1_untex  <= 1'b0;
+      s1_ka     <= '0;
+      s1_kb     <= '0;
+      s1_kc     <= '0;
+      s1_rider  <= '0;
       s1_aa     <= '0;
       s1_ab     <= '0;
       s1_ac     <= '0;
@@ -478,6 +525,10 @@ module zhao_geom_clip #(
       s2_cy     <= 21'sd0;
       s2_src    <= 16'd0;
       s2_untex  <= 1'b0;
+      s2_ka     <= '0;
+      s2_kb     <= '0;
+      s2_kc     <= '0;
+      s2_rider  <= '0;
       s2_aa     <= '0;
       s2_ab     <= '0;
       s2_ac     <= '0;
@@ -500,6 +551,10 @@ module zhao_geom_clip #(
       s3_cy     <= 21'sd0;
       s3_src    <= 16'd0;
       s3_untex  <= 1'b0;
+      s3_ka     <= '0;
+      s3_kb     <= '0;
+      s3_kc     <= '0;
+      s3_rider  <= '0;
       s3_aa     <= '0;
       s3_ab     <= '0;
       s3_ac     <= '0;
@@ -527,6 +582,10 @@ module zhao_geom_clip #(
       s1_aa     <= tri_attr_a_i;
       s1_ab     <= tri_attr_b_i;
       s1_ac     <= tri_attr_c_i;
+      s1_ka     <= tri_key_a_i;
+      s1_kb     <= tri_key_b_i;
+      s1_kc     <= tri_key_c_i;
+      s1_rider  <= tri_rider_i;
       s1_behind <= tri_behind_i;
       s1_cull   <= cull_mode_i;
       s1_x0     <= vp_x0_i;
@@ -551,6 +610,10 @@ module zhao_geom_clip #(
       s2_cy     <= s1_cy;
       s2_src    <= s1_src;
       s2_untex  <= s1_untex;
+      s2_ka     <= s1_ka;
+      s2_kb     <= s1_kb;
+      s2_kc     <= s1_kc;
+      s2_rider  <= s1_rider;
       s2_aa     <= s1_aa;
       s2_ab     <= s1_ab;
       s2_ac     <= s1_ac;
@@ -584,6 +647,10 @@ module zhao_geom_clip #(
       s3_cy     <= s2_cy;
       s3_src    <= s2_src;
       s3_untex  <= s2_untex;
+      s3_ka     <= s2_ka;
+      s3_kb     <= s2_kb;
+      s3_kc     <= s2_kc;
+      s3_rider  <= s2_rider;
       s3_aa     <= s2_aa;
       s3_ab     <= s2_ab;
       s3_ac     <= s2_ac;

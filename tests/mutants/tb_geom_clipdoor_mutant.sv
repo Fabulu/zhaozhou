@@ -198,6 +198,12 @@ module tb_geom_clipdoor_mutant #(
       .c_attr_a_i       (c_attr_a_c),
       .c_attr_b_i       (c_attr_b_c),
       .c_attr_c_i       (c_attr_c_c),
+      // ARENAID 2026-09-25: the identity half, carried so the control still
+      // elaborates. This control measures the grant-hold guard, not identity.
+      .c_key_a_i        ('0),
+      .c_key_b_i        ('0),
+      .c_key_c_i        ('0),
+      .c_rider_i        ('0),
       .c_material_set_i (c_mset_c),
       .c_material_id_i  (c_mid_c),
       .c_material_mode_i(c_mmode_c),
@@ -220,6 +226,12 @@ module tb_geom_clipdoor_mutant #(
       .o_attr_a_o       (o_attr_a_c),
       .o_attr_b_o       (o_attr_b_c),
       .o_attr_c_o       (o_attr_c_c),
+      /* verilator lint_off PINCONNECTEMPTY */   // ARENAID: no consumer here
+      .o_key_a_o        (),
+      .o_key_b_o        (),
+      .o_key_c_o        (),
+      .o_rider_o        (),
+      /* verilator lint_on PINCONNECTEMPTY */
       .o_material_set_o (o_material_set_o),
       .o_material_id_o  (o_material_id_o),
       .o_material_mode_o(o_material_mode_o),

@@ -259,16 +259,29 @@ module zhao_geom_paramarena
     // references divided by the fourteen a chunk holds, rounded UP and then to
     // a power of two -- 131072/14 = 9363, so 16,384 chunks, which also leaves
     // the giant's 32,768 reserved references expressible (2,341 chunks).
-    // 65,535 AND NOT 65,536, AND THE ONE VERTEX IS A DECLARED LOSS.
-    // R7's preferred tier says 65,536 projected vertices. A `vertex_id` is
-    // u16 and `zhao_geom_parambuf`'s `td_sealed_vertices_i` is u16 with it, so
-    // the SEAL 65,536 is not expressible in the port the legality rule is
-    // tested against -- it would arrive as 0 and refuse every triangle. The
-    // choices were to widen a frozen record layout, to special-case the
-    // maximum, or to lose one vertex of 65,536. This takes the vertex, says so
-    // here, and leaves the number a knob. It is a REAL divergence from R7's
-    // tier table and is reported rather than absorbed.
-    parameter int unsigned MAX_VERTS  = 65535,
+    // 65,536 -- R7's PREFERRED TIER, RESTORED. ARENAID, 2026-09-25.
+    //
+    // THIS DEFAULT WAS 65,535 AND THE MISSING VERTEX WAS CALLED "A DECLARED
+    // LOSS". The reasoning recorded here was: "a `vertex_id` is u16 and
+    // `zhao_geom_parambuf`'s `td_sealed_vertices_i` is u16 with it, so the
+    // SEAL 65,536 is not expressible in the port the legality rule is tested
+    // against -- it would arrive as 0 and refuse every triangle." That was a
+    // true statement about a port width and a false statement about the
+    // architecture, and the owner's vacation directive section 4 says which:
+    // "IDs 0..65,535 fit u16, but a count of 65,536 requires a wider internal
+    // count/limit. Use at least 17 bits for that count instead of silently
+    // sacrificing a vertex or representing full capacity as zero."
+    //
+    // SUPERSEDED, EXPLICITLY: the divergence paragraph in
+    // design/contracts/GEOM.PARAMBUF.md and this comment's earlier text.
+    // `td_sealed_vertices_i` is now u18 and `zhao_geom_paramwalk`'s
+    // `w_verts_q` no longer saturates at 0xFFFF. The ALLOCATION side never
+    // needed the change -- `n_verts_q`, `q_verts_q` and `publish_verts_o` have
+    // been 18 bits all along, which is why this was a decoder-port defect
+    // wearing an allocator's clothes. The RECORD is untouched: a `vertex_id`
+    // is still u16 and still names 0..65,535, which is exactly 65,536 ids.
+    // Allocation stride and serialized record size remain separate concepts.
+    parameter int unsigned MAX_VERTS  = 65536,
     parameter int unsigned MAX_TRIS   = 16384,
     parameter int unsigned MAX_CHUNKS = 16384,
     parameter int unsigned CHUNK_IDS  = 14,
@@ -289,7 +302,7 @@ module zhao_geom_paramarena
     // burst wraps -- 24 is not a multiple of 16, so the natural stride is the
     // one shape that cannot be made safe by moving a base.
     // THE COST IS DECLARED RATHER THAN ABSORBED: eight bytes of slack per
-    // vertex, 524,280 bytes at MAX_VERTS, and the view still fits (the
+    // vertex, 524,288 bytes at MAX_VERTS, and the view still fits (the
     // elaboration guard checks it, and the header states the arithmetic).
     // The 16-byte descriptor and the 64-byte chunk need no slack at all --
     // both strides are already multiples of the quantum.
@@ -347,6 +360,34 @@ module zhao_geom_paramarena
     input  var logic [31:0] ck_next_i,
     input  var logic [15:0] ck_count_i,
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
+
+    // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE ---------------------
+    // ARENAID, 2026-09-25, owner vacation directive section 4. This block is
+    // the ALLOCATION AUTHORITY -- the contract's table says so in one word --
+    // and a producer that must NAME a vertex in a TriangleDescriptor needs the
+    // index this block gave it. The alternative, a second counter in the
+    // producer kept in step with `n_verts_q`, is exactly CLAUDE.md's "detector
+    // wired to two operands that move together": the two would diverge on the
+    // first discarded record and no counter here would notice, because no
+    // counter here looks at the producer's copy.
+    //
+    // So the index travels WITH its acceptance, on the clock the allocation
+    // happens, out of the SAME expressions the intake arm tests. `*_accept_o`
+    // is high only when the record was really allocated -- not when it was
+    // consumed into the free sink, not after the frame faulted, not when it
+    // overran the quota or the view. `*_id_o` means nothing otherwise, and the
+    // consumer is required to ignore it otherwise.
+    output var logic        pv_accept_o,
+    output var logic [17:0] pv_id_o,
+    output var logic        td_accept_o,
+    output var logic [17:0] td_id_o,
+    // The seal actually TOOK EFFECT this clock. A seal is a REQUEST here and
+    // may be held pending for as long as the drain takes, so anything
+    // downstream holding per-frame identity state must clear it on THIS edge
+    // and not on the frame edge that asked -- otherwise its state and this
+    // block's cursor describe different frames, and a stale identity would
+    // name a record index that now belongs to somebody else.
+    output var logic        seal_fire_o,
 
     // ---- the scratch's second owner -----------------------------------------
     input  var logic        scr_req_i,      // the walker wants the scratch
@@ -446,14 +487,14 @@ module zhao_geom_paramarena
   localparam int unsigned PV_SLOT_B      = PV_STRIDE_B;    // w=32 bytes
   localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;  // w=16 bytes
 
-  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,120
+  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,152
   // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
   // `check_localparam_comments` parses SINGLE-LINE declarations only. Fire
   // tested on an isolated copy of this file: with `TRI_OFF_B` wrapped over two
   // lines, a deliberately WRONG trailing number still produced
   // "disagreements : 0" -- the claim beside it was unchecked, which is exactly
   // the shape that tool exists to catch (a stale 576 beside a real 704).
-  // Joined, it is checked, and the tool confirms 2,097,120.
+  // Joined, it is checked, and the tool confirms 2,097,152.
   //
   // `CHUNK_OFF_B` IS STILL NOT CHECKED EVEN SO, and the reason is worth the
   // line rather than being rediscovered: it reaches `TRI_CAP_B`, which is
@@ -461,11 +502,11 @@ module zhao_geom_paramarena
   // import the tool cannot resolve in this module, so it SKIPS the constant
   // rather than guessing at it. Its number below is therefore verified by the
   // acceptance bench, which reads memory AT that offset, and not by the gate.
-  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
+  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
   localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
   localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,840
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,872
 
   // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
   // guarded to be a power of two at elaboration, so this is the whole test.
@@ -770,6 +811,16 @@ module zhao_geom_paramarena
   wire td_fire_c = td_valid_i && td_ready_o;
   wire ck_fire_c = ck_valid_i && ck_ready_o;
 
+  // THE ACCEPTANCE PORTS, built from the SAME terms the intake arm below
+  // tests, in the same order, so there is ONE decision with two readers rather
+  // than two decisions that have to agree. `rec_live_c` is that arm's
+  // `frame_open_q && !frame_fault_q` said once instead of twice.
+  wire rec_live_c = frame_open_q && !frame_fault_q;
+  assign pv_accept_o = pv_fire_c && rec_live_c && pv_fits_c && pv_in_view_c;
+  assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
+  assign pv_id_o     = n_verts_q;
+  assign td_id_o     = n_tris_q;
+
   // ---------------------------------------------------------- publication --
   // A frame is publishable when its producer is done AND every write it issued
   // has retired AND it did not fault. `pub_pending_q` holds the "done" half so
@@ -788,6 +839,7 @@ module zhao_geom_paramarena
   wire seal_ok_c   = drained_c && !reader_busy_i && !pub_pending_q;
   assign seal_ready_o = seal_ok_c;
   wire seal_fire_c = seal_valid_i && seal_ok_c;
+  assign seal_fire_o  = seal_fire_c;
 
   // ------------------------------------------------------------- the port --
   always_comb begin

@@ -329,6 +329,18 @@ module zhao_console_board
   // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
   // would emit a descriptor the record layer cannot store.
   parameter int unsigned GEOM_ASM_VIDW = 16,
+  // ---- THE GEOMETRY IDENTITY SPACE (ARENAID, owner directive section 4) ----
+  // The console's vertex identity is GEOM.REPLAY's own arena lookup key,
+  // {arena, generation, index}, and `zhao_geom_vertid` is the only block that
+  // turns one into a GEOM.PARAMBUF vertex id. Named here because the door and
+  // GEOM.CLIP both carry it opaquely and three literals would drift.
+  parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
+  // The per-primitive rider GEOM.CLIP carries beside `src_id`:
+  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
+  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
+  // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
+  parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
 
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
@@ -1412,6 +1424,19 @@ module zhao_console_board
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
+  // `geom_vid_reused_o` is the number this whole subsystem exists for: a
+  // corner answered from the identity map, i.e. a vertex published ONCE and
+  // referenced again. `refs == published + reused + sunk` is the identity that
+  // makes the group readable together, and the smoke asserts it.
+  output logic [31:0] geom_vid_tris_o,
+  output logic [31:0] geom_vid_refs_o,
+  output logic [31:0] geom_vid_published_o,
+  output logic [31:0] geom_vid_reused_o,
+  output logic [31:0] geom_vid_unshared_o,
+  output logic [31:0] geom_vid_sunk_o,
+  output logic [31:0] geom_vid_opens_o,
+  output logic [31:0] geom_vid_stall_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -4383,6 +4408,9 @@ module zhao_console_board
       .GEOM_ASSET_MAX_VERTICES    (GEOM_ASSET_MAX_VERTICES),
       .GEOM_ASSET_MAX_TRIANGLES   (GEOM_ASSET_MAX_TRIANGLES),
       .GEOM_ASM_VIDW              (GEOM_ASM_VIDW),
+      .GEOM_VID_KEYW              (GEOM_VID_KEYW),
+      .GEOM_VID_RIDERW            (GEOM_VID_RIDERW),
+      .GEOM_VID_VSLOTS            (GEOM_VID_VSLOTS),
       .GEOM_CLIP_ATTRS            (GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW            (GEOM_CLIP_ATTRW),
       .GEOM_ATTR_STORE_W          (GEOM_ATTR_STORE_W),
@@ -4718,6 +4746,14 @@ module zhao_console_board
       .geom_pa_fault_o                    (geom_pa_fault_o),
       .geom_pa_busy_o                     (geom_pa_busy_o),
       .geom_pa_seal_ready_o               (geom_pa_seal_ready_o),
+      .geom_vid_tris_o                    (geom_vid_tris_o),
+      .geom_vid_refs_o                    (geom_vid_refs_o),
+      .geom_vid_published_o               (geom_vid_published_o),
+      .geom_vid_reused_o                  (geom_vid_reused_o),
+      .geom_vid_unshared_o                (geom_vid_unshared_o),
+      .geom_vid_sunk_o                    (geom_vid_sunk_o),
+      .geom_vid_opens_o                   (geom_vid_opens_o),
+      .geom_vid_stall_o                   (geom_vid_stall_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
       .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
       .geom_pw_chunks_o                   (geom_pw_chunks_o),

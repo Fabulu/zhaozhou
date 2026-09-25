@@ -294,6 +294,13 @@ top:
   # console fit's source list because something finally instantiates it.
   - zhao_geom_paramarena
   - zhao_geom_paramwalk
+  # GEOM.VERTID: the one geometry identity space (ARENAID 2026-09-25, owner
+  # vacation directive section 4). It is instantiated by zhao_console_core --
+  # not a census top of its own -- and it is the producer core entry I53 said
+  # was missing: GEOM.CLIP's post-clip corners become ProjectedVertex records
+  # under {arena, generation, index}, published ONCE per identity, and the
+  # TriangleDescriptor names them by the ids the ALLOCATOR handed back.
+  - zhao_geom_vertid
   # GEOM.MESHFETCH's descriptor CRC walker (core entry I37, closed 2026-09-19):
   # two constant-count zhao_crc32c_fold trees and a beat counter, composed
   # beside the fetcher on its own beat nets, so it is a census top of its own.

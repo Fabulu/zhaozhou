@@ -894,6 +894,16 @@ module zhao_console_core_slot_overflow_mutant
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // GEOM.VERTID's evidence (ARENAID 2026-09-25). Carried into the wrapper so
+  // `.*` can bind it -- owner ruling R220: fix the WRAPPER, never the module.
+  output logic [31:0] geom_vid_tris_o,
+  output logic [31:0] geom_vid_refs_o,
+  output logic [31:0] geom_vid_published_o,
+  output logic [31:0] geom_vid_reused_o,
+  output logic [31:0] geom_vid_unshared_o,
+  output logic [31:0] geom_vid_sunk_o,
+  output logic [31:0] geom_vid_opens_o,
+  output logic [31:0] geom_vid_stall_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,

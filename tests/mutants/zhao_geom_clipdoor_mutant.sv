@@ -68,7 +68,11 @@ module zhao_geom_clipdoor_mutant #(
     // `zhao_geom_clip`'s ruling-5 attribute packet, flattened.  The door never
     // reads inside it.
     parameter int unsigned ATTRS   = 7,
-    parameter int unsigned IDW     = 16
+    parameter int unsigned IDW     = 16,
+    // ARENAID 2026-09-25: carried forward from production so this copy still
+    // elaborates against the shared driver. NOT the mutation.
+    parameter int unsigned VKEYW   = 24,
+    parameter int unsigned RIDERW  = 50
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -94,6 +98,10 @@ module zhao_geom_clipdoor_mutant #(
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_a_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_b_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_c_i,
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_a_i,
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_b_i,
+    input  var logic [NCLIENT*VKEYW-1:0]        c_key_c_i,
+    input  var logic [NCLIENT*RIDERW-1:0]       c_rider_i,
     // the material half -- what `zhao_material_window`'s input takes
     input  var logic [NCLIENT*32-1:0]           c_material_set_i,
     input  var logic [NCLIENT*16-1:0]           c_material_id_i,
@@ -118,6 +126,10 @@ module zhao_geom_clipdoor_mutant #(
     output var logic [ATTRS*32-1:0]  o_attr_a_o,
     output var logic [ATTRS*32-1:0]  o_attr_b_o,
     output var logic [ATTRS*32-1:0]  o_attr_c_o,
+    output var logic [VKEYW-1:0]     o_key_a_o,
+    output var logic [VKEYW-1:0]     o_key_b_o,
+    output var logic [VKEYW-1:0]     o_key_c_o,
+    output var logic [RIDERW-1:0]    o_rider_o,
     output var logic [31:0]          o_material_set_o,
     output var logic [15:0]          o_material_id_o,
     output var logic [1:0]           o_material_mode_o,
@@ -259,6 +271,10 @@ module zhao_geom_clipdoor_mutant #(
     o_attr_a_o       = '0;
     o_attr_b_o       = '0;
     o_attr_c_o       = '0;
+    o_key_a_o        = '0;
+    o_key_b_o        = '0;
+    o_key_c_o        = '0;
+    o_rider_o        = '0;
     o_material_set_o = '0;
     o_material_id_o  = '0;
     o_material_mode_o = '0;
@@ -280,6 +296,10 @@ module zhao_geom_clipdoor_mutant #(
         o_attr_a_o       = c_attr_a_i[i*AW +: AW];
         o_attr_b_o       = c_attr_b_i[i*AW +: AW];
         o_attr_c_o       = c_attr_c_i[i*AW +: AW];
+        o_key_a_o        = c_key_a_i[i*VKEYW +: VKEYW];
+        o_key_b_o        = c_key_b_i[i*VKEYW +: VKEYW];
+        o_key_c_o        = c_key_c_i[i*VKEYW +: VKEYW];
+        o_rider_o        = c_rider_i[i*RIDERW +: RIDERW];
         o_material_set_o = c_material_set_i[i*32 +: 32];
         o_material_id_o  = c_material_id_i[i*16 +: 16];
         o_material_mode_o = c_material_mode_i[i*2 +: 2];

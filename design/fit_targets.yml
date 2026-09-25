@@ -2335,6 +2335,10 @@ targets:
       # two blocks that give it a producer and a consumer.
       - fpga/rtl/geometry/zhao_geom_paramarena.sv
       - fpga/rtl/geometry/zhao_geom_paramwalk.sv
+      # GEOM.VERTID, 2026-09-25 (ARENAID). A census top of its own because the
+      # resource top does not instantiate zhao_console_core, so this block is
+      # not reachable through anything else here.
+      - fpga/rtl/geometry/zhao_geom_vertid.sv
       - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --
@@ -3211,6 +3215,12 @@ targets:
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
       - fpga/rtl/geometry/zhao_geom_paramarena.sv
       - fpga/rtl/geometry/zhao_geom_paramwalk.sv
+      # Added 2026-09-25 (ARENAID, owner directive section 4): GEOM.VERTID,
+      # the one geometry identity space. It is the producer console entry I53
+      # said was missing -- it turns GEOM.CLIP's post-clip triangles into
+      # ProjectedVertex records under {arena, generation, index} and names them
+      # in TriangleDescriptors with the ids the ALLOCATOR handed back.
+      - fpga/rtl/geometry/zhao_geom_vertid.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv

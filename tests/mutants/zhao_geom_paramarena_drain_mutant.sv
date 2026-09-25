@@ -323,7 +323,7 @@ module zhao_geom_paramarena_drain_mutant
     // burst wraps -- 24 is not a multiple of 16, so the natural stride is the
     // one shape that cannot be made safe by moving a base.
     // THE COST IS DECLARED RATHER THAN ABSORBED: eight bytes of slack per
-    // vertex, 524,280 bytes at MAX_VERTS, and the view still fits (the
+    // vertex, 524,288 bytes at MAX_VERTS, and the view still fits (the
     // elaboration guard checks it, and the header states the arithmetic).
     // The 16-byte descriptor and the 64-byte chunk need no slack at all --
     // both strides are already multiples of the quantum.
@@ -381,6 +381,16 @@ module zhao_geom_paramarena_drain_mutant
     input  var logic [31:0] ck_next_i,
     input  var logic [15:0] ck_count_i,
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
+
+    // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE (ARENAID) -----------
+    // Carried forward from production 2026-09-25 so this copy still elaborates
+    // against the shared testbench. NOT the mutation -- the mutation is the one
+    // substantive line this file's header names.
+    output var logic        pv_accept_o,
+    output var logic [17:0] pv_id_o,
+    output var logic        td_accept_o,
+    output var logic [17:0] td_id_o,
+    output var logic        seal_fire_o,
 
     // ---- the scratch's second owner -----------------------------------------
     input  var logic        scr_req_i,      // the walker wants the scratch
@@ -480,14 +490,14 @@ module zhao_geom_paramarena_drain_mutant
   localparam int unsigned PV_SLOT_B      = PV_STRIDE_B;    // w=32 bytes
   localparam int unsigned LAYOUT_ALIGN_B = BURST_ALIGN_B;  // w=16 bytes
 
-  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,120
+  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,152
   // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
   // `check_localparam_comments` parses SINGLE-LINE declarations only. Fire
   // tested on an isolated copy of this file: with `TRI_OFF_B` wrapped over two
   // lines, a deliberately WRONG trailing number still produced
   // "disagreements : 0" -- the claim beside it was unchecked, which is exactly
   // the shape that tool exists to catch (a stale 576 beside a real 704).
-  // Joined, it is checked, and the tool confirms 2,097,120.
+  // Joined, it is checked, and the tool confirms 2,097,152.
   //
   // `CHUNK_OFF_B` IS STILL NOT CHECKED EVEN SO, and the reason is worth the
   // line rather than being rediscovered: it reaches `TRI_CAP_B`, which is
@@ -495,11 +505,11 @@ module zhao_geom_paramarena_drain_mutant
   // import the tool cannot resolve in this module, so it SKIPS the constant
   // rather than guessing at it. Its number below is therefore verified by the
   // acceptance bench, which reads memory AT that offset, and not by the gate.
-  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
+  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
   localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
   localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,840
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,872
 
   // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
   // guarded to be a power of two at elaboration, so this is the whole test.
@@ -804,6 +814,12 @@ module zhao_geom_paramarena_drain_mutant
   wire td_fire_c = td_valid_i && td_ready_o;
   wire ck_fire_c = ck_valid_i && ck_ready_o;
 
+  wire rec_live_c = frame_open_q && !frame_fault_q;
+  assign pv_accept_o = pv_fire_c && rec_live_c && pv_fits_c && pv_in_view_c;
+  assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
+  assign pv_id_o     = n_verts_q;
+  assign td_id_o     = n_tris_q;
+
   // ---------------------------------------------------------- publication --
   // A frame is publishable when its producer is done AND every write it issued
   // has retired AND it did not fault. `pub_pending_q` holds the "done" half so
@@ -839,6 +855,7 @@ module zhao_geom_paramarena_drain_mutant
   wire seal_ok_c   = !reader_busy_i && !pub_pending_q;
   assign seal_ready_o = seal_ok_c;
   wire seal_fire_c = seal_valid_i && seal_ok_c;
+  assign seal_fire_o  = seal_fire_c;
 
   // ------------------------------------------------------------- the port --
   always_comb begin

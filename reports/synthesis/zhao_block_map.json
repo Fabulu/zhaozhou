@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "60bd7505e1778ae316c3a665a256299af730141a",
+    "newestRunCommit":  "eedf1175f8c4ed0356a976c34b9f5c9c47c91c2b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "79b44f51d810dc72",
+    "sourceListHash":  "83407fe981ff2ccd",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -2004,6 +2004,42 @@
                                                 "Fixed Point Unsigned Multiplier":  3,
                                                 "Fixed Point Mixed Sign Multiplier":  6
                                             },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_geom_vertidarenaid-vertid-map",
+                       "status":  "ok",
+                       "sourceCommit":  "eedf1175f8c4ed0356a976c34b9f5c9c47c91c2b",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "83407fe981ff2ccd",
+                       "sourceFileCount":  389,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_geom_vertid",
+                       "seconds":  320.9,
+                       "dspBlocks":  0,
+                       "registers":  1657,
+                       "blockMemoryBits":  8704,
+                       "virtualPins":  1705,
+                       "pins":  0,
+                       "estimatedAlms":  2247,
+                       "combAluts":  1401,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:map_ram_rtl_0|altsyncram_o6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  34,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  1,
+                       "inferredDesignMemoryCount":  1,
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
