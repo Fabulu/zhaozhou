@@ -232,6 +232,77 @@ def devstore_prepare() -> Demand:
     )
 
 
+def composed_cache_publish() -> Demand:
+    """TERRAIN.COMPOSED_HEIGHT + COMPOSED_VELOCITY publication. THE QUESTION
+    the owner directive's section 1 asks, costed here for the first time.
+
+    ADDED 2026-09-25 (COMPOSEPUB), because the directive says in as many words
+    that publishing lattices adds write traffic and that it must be charged.
+
+    THE ARITHMETIC.  `spec/memory_rules.md` 5b ratifies both regions as
+    256 x 2,304 B.  2,304 / 64 = 36 fabric requests per slot per channel;
+    two channels over 256 live patches is 256 x 36 x 2 = 18,432 WRITE
+    requests per frame, which at four 16-byte bursts each and the hit-page
+    write span is a little over 737,000 grant-clocks -- roughly 44% of the
+    frame ON TOP of the 80% the ledger already carries.
+
+    SO THE PUBLICATION AS SPECIFIED DOES NOT FIT, and that is a finding rather
+    than a reason to shrink it.  It is worst-on-worst by the tool's own
+    convention: every live patch republished every frame.  The real driver is
+    the DIRTY set -- TERRAIN.PATCH already reduces per-vertex dirt to
+    `subpatch_dirty_o`, so a publisher would write only patches a field or a
+    bake actually moved.  At a dirty fraction d the cost is d x this row, and
+    the break-even against the ledger's own 19.83% headroom is d ~ 0.45.
+    A packet that builds the publisher owes that fraction MEASURED on a real
+    scene, not assumed.
+
+    THIS ROW IS NOT IN `declared_demands()` and does not move the baseline
+    total, because nothing publishes today: across all 377 SystemVerilog files
+    of `fpga/rtl` the two region names appear only in comments, there is no
+    base constant, and `zhao_mem_guard` has no window for either.  It is
+    reported under --proposed so the number exists before the build does.
+    """
+    return Demand(
+        name="TERRAIN.COMPOSED_HEIGHT+VELOCITY publish (proposed, COMPOSEPUB)",
+        priority=CLASS_BACKGROUND,
+        read_requests=0,
+        write_requests=LIVE_PATCHES * (2_304 // FABRIC_REQUEST_BYTES) * 2,
+        basis="256 live patches x 2,304 B x 2 channels, every patch every "
+              "frame (worst-on-worst); scale by the dirty fraction",
+        provenance="spec/memory_rules.md:301-302 (5b, ratified 2026-09-02); "
+                   "OWNER_VACATION_DIRECTIVE_2026-09-23 section 1; "
+                   "COMPOSEPUB measurement 2026-09-25",
+        confidence="derived",
+    )
+
+
+def composed_cache_restage() -> Demand:
+    """The FILL-side backing read that would make the publication a CONSUMER.
+
+    `zhao_terrain_compcache_front`'s own header is the design intent:
+    "The full 256-patch composed store is 256 x 2,178 B for heights plus as
+    much again for velocity = 8.92 Mbit = 161% of this device's entire
+    5.53 Mbit of M10K ... The SDRAM backing attaches later on the FILL side
+    without changing the serve ports."
+
+    "Attaches later" is the unbuilt half, and it is the ONLY thing that would
+    make a composed-cache write a read by anybody -- the directive's own "A
+    DMA into unused memory is not a consumer."  Costed here at one re-stage
+    per live patch per frame, the symmetric worst case to the publish row.
+    A real re-stage policy is driven by tap misses, not by patch count.
+    """
+    return Demand(
+        name="TERRAIN.COMPCACHE fill-side backing read (unbuilt, COMPOSEPUB)",
+        priority=CLASS_BACKGROUND,
+        read_requests=LIVE_PATCHES * (2_304 // FABRIC_REQUEST_BYTES) * 2,
+        write_requests=0,
+        basis="the symmetric re-stage of what the publish row writes",
+        provenance="zhao_terrain_compcache_front.sv:12-20 ('the SDRAM backing "
+                   "attaches later on the FILL side'); COMPOSEPUB 2026-09-25",
+        confidence="derived",
+    )
+
+
 def declared_demands() -> list[Demand]:
     """Everything else the tree declares, each with its source and its date.
 
@@ -486,6 +557,12 @@ def main(argv: list[str]) -> int:
                          "unflattering direction)")
     ap.add_argument("--with-prepare", action="store_true",
                     help="include EDGERECON P2's proposed PREPARE pass")
+    ap.add_argument("--with-composed-publish", action="store_true",
+                    help="include COMPOSEPUB's proposed TERRAIN.COMPOSED_HEIGHT"
+                         "/VELOCITY publication (write side)")
+    ap.add_argument("--with-composed-restage", action="store_true",
+                    help="also include the unbuilt compcache fill-side backing "
+                         "read that would make that publication a consumer")
     ap.add_argument("--terrain-only", action="store_true",
                     help="show only the TERRAIN_BUILD background client, whose "
                          "budget is the idle residue rather than a share")
@@ -497,6 +574,10 @@ def main(argv: list[str]) -> int:
     demands = [devstore_emit()] + declared_demands()
     if args.with_prepare:
         demands.append(devstore_prepare())
+    if args.with_composed_publish or args.with_composed_restage:
+        demands.append(composed_cache_publish())
+    if args.with_composed_restage:
+        demands.append(composed_cache_restage())
     if args.terrain_only:
         demands = [d for d in demands if d.priority == CLASS_BACKGROUND]
 
