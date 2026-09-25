@@ -341,19 +341,68 @@ pass-25 receipt's 38.8 px exactly, which is what licenses the comparison.
 | largest interior step | 1.47 px | 3.62 px |
 | mask empty on | 0 frames | 0 frames |
 
-**The seam did not get worse; it effectively vanished** — the pink-ink centroid
-lands on 158.8 px at both ends. Because the aim now
-wraps in phase with the animation (§4.3), the creature returns to its starting
-position and attitude across the loop point.
+> ### ⚠ CORRECTED BY THE PASS-26 REVIEW. READ `P26-REVIEW.md` §4.
+>
+> **What this section originally said — "the seam effectively vanished" and
+> "the creature holds; what snaps instead is the terrain" — is not true**, and
+> the review corrected it before it reached the owner's page. The arithmetic
+> above is right; the *instrument* cannot see the thing it was being quoted for.
+>
+> **Two faults, both of them CLAUDE.md's standing ones:**
+>
+> 1. **The pink-ink mask fails its known-negative.** Paint the creature's bbox
+>    out with a sky pixel and re-score: on a pass-25 frame it still returns
+>    **4,073 of 4,977 px — 82% of it is sky and terrain**; on the pass-26
+>    framing it returns *more* with the creature gone (17,421 px) than present
+>    (5,695 px). It is a background centroid with a creature-shaped ripple in
+>    it. I ran that check on the NEW chroma mask (§5.2), found it broken and
+>    fixed it — and then inherited this one unchecked, because it was "the
+>    pass-25 method copied exactly". **Copying a method exactly copies its
+>    defects exactly.**
+> 2. **`f0` vs `f_last` samples exactly two frames**, and clocking the aim by
+>    the animation's phase brings precisely those two into agreement. The
+>    discontinuity did not go away — it moved to **f238→f239**, one frame
+>    earlier, where this metric never looks. A gate that cannot reach the state
+>    is not evidence about the state.
+>
+> **What actually happens**, on `tools/reel/seamdisp.py` (new, committed, four
+> selftest legs green, mask scores 0 px with the creature removed), walking
+> *every* adjacent pair and separating creature from terrain:
+>
+> | | jump | where | × the clip's own median motion | terrain |
+> |---|---|---|---|---|
+> | pass 25 | **+163.4 px** | **f239→f0 (loop point)** | **237.5×** | +0.05 px |
+> | pass 26 | **−110.7 px** | **f238→f239** | **35.4×** | +3.47 px |
+>
+> Pass 26's loop point is now clean (+3.24 px against a 3.12 px clip median —
+> an ordinary frame).
+>
+> **The honest finding, which is a better story than the one it replaces:** the
+> hitch did not vanish, it **moved** off the loop point and got **substantially
+> smaller — 163 px → 111 px, and from 238× the clip's own motion down to 35×, a
+> 6.7-fold improvement in how much it stands out.** In pass 25 the clip barely
+> moved, so the jump was a teleport against a static picture; now the creature
+> is visibly travelling and the same event reads as a stride hitch — which is
+> exactly what the owner described and accepted.
+>
+> **Which is more visible: the CREATURE, decisively.** ~111 px is 29% of frame
+> width and carries a pose change. The terrain's horizon shift at the wrap is
+> a few pixels (3.47 px against ~0.5 px interior) and on this featureless
+> gradient it really is near-invisible — that half of the original claim was
+> right. The trade as described did not happen; a plain improvement did, and it
+> never needed the framing.
 
-**What snaps instead is the terrain.** `mqa` Q3 reports slot 8's root wrap at
+**The measured figures above are correct arithmetic and the wrong conclusion.**
+The pink-ink centroid lands on 158.8 px at both ends because the aim now wraps
+in phase with the animation (§4.3) — which is a real and valuable repair, just
+not the one the number was read as proving.
+
+**The terrain does also snap.** `mqa` Q3 reports slot 8's root wrap at
 **8330.6 mm** — the authored traverse returning — alongside drift's existing
-6854.4 mm. Q3 reports the wrap column and does not gate it, precisely because a
-travelling clip's seam is authored. Looked at across f236→f001
-(`P26-LOOKS/`): the creature holds; the horizon line shifts slightly. On this
-near-featureless staging that is close to invisible, and it is the right thing
-to spend — a ground that snaps reads far better than a creature that jumps a
-tenth of the frame.
+6854.4 mm, and it prints it as `<-- SEAM POP`. Q3 reports the wrap column and
+does not gate it, precisely because a travelling clip's seam is authored. That
+ground shift is genuinely near-invisible here. It is simply not what the
+creature is doing at the same instant.
 
 ---
 
@@ -566,7 +615,7 @@ it was reached.
 | `P26-RECEIPTS/exact-off-identity.txt` | hurry=off ≡ the pass-25 binary |
 | `P26-RECEIPTS/controls-fired.txt` | 11 controls, all fired |
 | `P26-RECEIPTS/controls-strict.txt` | 17 bad values, all refused |
-| `P26-RECEIPTS/loop-seam.txt` | 38.8 px → 0.2 px, pass-25 method |
+| `P26-RECEIPTS/loop-seam.txt` | the pass-25 method, **and why its mask cannot be quoted** (§6, corrected) |
 | `P26-RECEIPTS/wrapseam.txt` | the presentation seam, before and after |
 | `P26-RECEIPTS/screenmotion-before-after.txt` | the speed cue, with its bounds stated |
 | `P26-RECEIPTS/screenmotion-selftest.txt` | six legs, including pan-only |
@@ -604,8 +653,13 @@ sha256 `1fd6b02e562b40f67c93162956575f4f3d7e4be5417d473941ab1d108d1ece36`.
    A terrain with any real feature would fix it; so would sub-pixel
    interpolation in `_band_shift`. Neither was needed here because the
    ground-relative rate is authored.
-5. **The terrain snaps at the loop seam** (§6) — 8330.6 mm of root wrap, close
-   to invisible on a featureless gradient but real. Reported, per Direction 27.
+5. **The loop hitch MOVED and shrank; it did not vanish** (§6, corrected by the
+   review). f239→f0 at 163 px becomes f238→f239 at 111 px — 238× the clip's own
+   motion down to 35×. The terrain also snaps (8330.6 mm of root wrap), and that
+   half really is near-invisible. Reported, per Direction 27; accepted, not a fault.
+   **And the pass-25 pink-ink seam mask is background-dominated** — the 38.8 px
+   figure in the pass-25 records is not a creature displacement. Use
+   `tools/reel/seamdisp.py`.
 6. **The historic floors were repaired late, not on the pass that broke them.**
    `$BBOFF` should have been added to the ladders by the back-ball packet
    itself. The general form of this is worth a standing habit rather than a

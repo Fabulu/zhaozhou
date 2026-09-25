@@ -37,3 +37,44 @@ because a travelling clip's seam is authored. Looked at across
 f236->f001 (P26-LOOKS/09): the creature holds; the horizon line shifts
 slightly. On this near-featureless staging that is close to invisible,
 and it is the right thing to spend.
+
+================================================================================
+⚠ CORRECTED BY THE PASS-26 REVIEW. The numbers above are correct arithmetic on
+an instrument that cannot see what they were quoted for. See P26-REVIEW.md §4.
+
+THE PINK-INK MASK FAILS ITS KNOWN-NEGATIVE. Paint the creature's bbox out with
+a sky pixel and re-score:
+    pink-ink, pass 25 f120   full  4,977 px | creature REMOVED  4,073 px  (82%)
+    pink-ink, pass 26 f120   full  5,695 px | creature REMOVED 17,421 px
+    saturation>=100, p25     full  1,076 px | creature REMOVED      0 px
+    saturation>=100, p26     full  4,385 px | creature REMOVED      0 px
+It is a BACKGROUND centroid with a creature-shaped ripple in it. The 38.8 px
+figure in the pass-25 records is therefore not a creature displacement either.
+
+AND f0-vs-f_last SAMPLES EXACTLY TWO FRAMES, which is exactly the pair that
+cam_bias_x_wrap_keys brings into agreement. The discontinuity moved to
+f238->f239, one frame earlier, where this metric never looks.
+
+MEASURED WITH tools/reel/seamdisp.py (new, committed; four selftest legs green;
+mask scores 0 px with the creature removed; walks EVERY adjacent pair including
+the wrap; reports creature and terrain separately):
+
+                  jump        where                x clip's median   terrain
+    pass 25   +163.4 px   f239->f0 (loop point)         237.5x      +0.05 px
+    pass 26   -110.7 px   f238->f239                     35.4x      +3.47 px
+
+    pass 26 loop point f239->f0:  +3.24 px against a 3.12 px clip median --
+    indistinguishable from an ordinary frame.
+
+THE HONEST FINDING. The hitch did not vanish; it MOVED off the loop point and
+got substantially SMALLER -- 163 px -> 111 px, and from 238x the clip's own
+motion down to 35x, a 6.7-fold improvement in how much it stands out. In pass 25
+the clip barely moved, so the jump was a teleport against a static picture; now
+the creature is visibly travelling and the same event reads as a stride hitch --
+which is what the owner described and accepted.
+
+WHICH IS MORE VISIBLE: THE CREATURE, decisively. ~111 px is 29% of frame width
+and carries a pose change. The terrain's horizon shift at the wrap is a few
+pixels (3.47 px against ~0.5 px interior) and on this featureless gradient it
+really is near-invisible -- that half of the original claim was right.
+================================================================================

@@ -1,0 +1,28 @@
+=== KNOWN-NEGATIVE on the saturation mask (must be 0 px with the creature removed) ===
+0120.rgb                                             full    1076 px   creature REMOVED       0 px   ok
+0120.rgb                                             full    4385 px   creature REMOVED       0 px   ok
+0000.rgb                                             full    3165 px   creature REMOVED       0 px   ok
+
+=== PASS 25 ===
+-- C:/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p26-review/bank25/manafold-hasty
+   frames            240
+   creature mask     744 .. 1505 px, empty on 0 frame(s)
+   median |dx|       0.69 px   (the clip's own motion)
+   LOOP POINT f239->f0  creature dx +163.42 px   terrain dy +0.05 px
+   largest jumps, ANY adjacent pair (the wrap included):
+      f239->f000  creature dx  +163.42 px  = 237.5x median   terrain dy  +0.05 px   <-- LOOP POINT
+      f153->f154  creature dx    -2.26 px  =   3.3x median   terrain dy  +0.01 px 
+      f147->f148  creature dx    -2.06 px  =   3.0x median   terrain dy  -0.03 px 
+      f151->f152  creature dx    -1.88 px  =   2.7x median   terrain dy  -0.01 px 
+
+=== PASS 26 ===
+-- C:/programmieren/zencrifice/manafold-p16/zhaozhou/.tmp/p26-review/bank/manafold-hasty
+   frames            240
+   creature mask     2816 .. 5511 px, empty on 0 frame(s)
+   median |dx|       3.12 px   (the clip's own motion)
+   LOOP POINT f239->f0  creature dx   +3.24 px   terrain dy +0.00 px
+   largest jumps, ANY adjacent pair (the wrap included):
+      f238->f239  creature dx  -110.65 px  =  35.4x median   terrain dy  +3.47 px 
+      f231->f232  creature dx    +5.85 px  =   1.9x median   terrain dy  +0.12 px 
+      f081->f082  creature dx    +5.82 px  =   1.9x median   terrain dy  +0.16 px 
+      f083->f084  creature dx    +5.63 px  =   1.8x median   terrain dy  +0.07 px 

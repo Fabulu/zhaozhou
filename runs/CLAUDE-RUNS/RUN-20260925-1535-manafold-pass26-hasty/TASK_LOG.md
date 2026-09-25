@@ -176,3 +176,60 @@ changing exactly hover and inspect, and the exact-off control byte-identical.
 
 Source `78d8fde9` + `bfb22a65`, evidence to follow. NOT encoding, merging or
 deploying -- the coordinator sends the review/publish packet.
+
+---
+
+## Independent review (reviewer lane) — 2026-09-25
+
+### VERDICT: FIXED
+
+Everything rebuilt from source; every control fired personally; nothing quoted
+from the implementer's receipts except where explicitly labelled *reported*.
+Full write-up in `P26-REVIEW.md`; looks in `P26-REVIEW-LOOKS/`.
+
+**Reproduced exactly, on my own builds:**
+- Reviewer pass-26 binary → **all 22 CRCs identical** to `crcs-ship.txt`.
+- Reviewer pass-25 reference, my own detached worktree at `f66d107c` → bank CRC
+  diff is **one line**, hasty `0xDC044A02` → `0xD7FA75A4`.
+- **22 subjects, 7,992 frames, 240 differing, all `manafold-hasty`.**
+  **Crackle 600/0. Hover 600/0.** The owner's closed items are untouched.
+- `HURRY=off` vs my pass-25 build: 240 frames, 0 differing, sha256
+  `fb8d7b60c192074047522da29bc1e4eff104b7b7ef59fcfba53a34e97b0d68bf`.
+- **The diagnosis**: creature −0.684, background −0.750, **relative +0.066**
+  (|mean| 0.147) — to three decimals. Structurally confirmed too: pass 25's
+  `c.root[f*3+0] = 0` beside `kU02HastyBiasX = 28000 // hasty traverses 8400 mm`.
+- Margins 45/93, 0 frames touching an edge. Cadence 5 → 13 by spectrum; rungs
+  9 and 17 give 9 and 17. Bob ladder against Q3: 123.5 / **129.0** / 134.7 /
+  143.3 (165 red). **No bound relaxed** — ceiling table byte-identical to p25.
+- 11 controls fire (every count matching, incl. `EYE_CHECK` at 41), 17 bad
+  values refused RC 2, registration leg green both ways and firing on
+  `h-eyesize-flat` with RC 1. One `bank()` in the matrix, always `$LIVE22`.
+- **Stale gate, both halves.** Four independent paths agree on pass 25's bank.
+  And I fired the repair myself: pass-25 binary + `BACKBALL_DAMP_CLIP_PM=0:0`
+  → hover `0x8124751D`, inspect `0xEF7FBD6D` — **the stale receipt exactly**.
+
+### The one thing that did not survive: the seam claim
+
+`38.8 px → 0.0 px` / "the seam effectively vanished" is correct arithmetic on an
+instrument that cannot see the thing. **The pink-ink mask fails its
+known-negative** — 82% of what it scores on a pass-25 frame is sky and terrain —
+and `f0` vs `f_last` samples exactly the two frames the wrap-keys repair brings
+into agreement. The hitch **moved** to f238→f239, where that metric never looks.
+
+Measured on `tools/reel/seamdisp.py` (new, committed, 4 selftest legs green,
+mask scores 0 px with the creature removed, walks every adjacent pair):
+**pass 25 +163.4 px at the loop point = 237.5× the clip's own motion;
+pass 26 −110.7 px at f238→f239 = 35.4×.** So the hitch did not close — it moved
+and **shrank by a third in pixels and 6.7-fold in how much it stands out**,
+which is a better story than the one it replaces. **The creature is the more
+visible of the two, decisively**; the terrain's few-px horizon shift really is
+near-invisible, so that half of the claim was right.
+
+Not a blocker — Direction 27 accepted the hitch and asked only for a number.
+Corrected in `P26-IMPLEMENTATION.md` §6/§9 and `P26-RECEIPTS/loop-seam.txt`.
+**No constant, no render and no CRC changed.** The site copy will state the
+improvement and will NOT say the seam closed.
+
+### In progress → next
+Part 1 closed. Next: Part 2 publish — archive pass 25, exact bank, encode,
+site, local gates, deploy, production verify.
