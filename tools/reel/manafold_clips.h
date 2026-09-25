@@ -4628,14 +4628,32 @@ inline zc::Clip build_hasty() {
       for (int i = 0; i < kHastyCheckCount; ++i) {
         const HastyCheck& w = kHastyChecks[i];
         if (f >= w.from && f < w.to) {
-          // a triangular in/out so a check ARRIVES and LEAVES rather than
-          // cutting -- at 2 rendered frames per key a cut is a pop
+          // A triangular in/out so a check ARRIVES and LEAVES rather than
+          // cutting -- at 2 rendered frames per key a cut is a pop, and every
+          // face channel below rides this ONE curve, so a step here steps the
+          // eye size, the gaze, the lid and the brow together.
+          //
+          // ⚠ THE FIRST VERSION DID NOT LEAVE, AND THE COMMENT ABOVE IT SAID
+          // IT DID. `tri = (t <= half) ? t : span - t` over t in [0, span)
+          // never reaches zero coming down -- printed, the 9-key window runs
+          // 0, 250, 500, 750, 1000, 1000, 750, 500, 250 and then CUTS to 0 on
+          // the next key. A 25% step in all four face channels in one key,
+          // about 5.7 degrees of gaze. A comment claiming a property the code
+          // does not have is worse than no comment at all, and this one would
+          // have been read as evidence that the arrival had been handled.
+          //
+          // A symmetric triangle in permille of the window instead: exactly 0
+          // at both ends and 1000 in the middle. THE WINDOWS ARE ODD-SPAN so
+          // the midpoint is actually sampled -- on an even span the peak falls
+          // between two keys and the check only ever reaches ~86% of the
+          // amplitude its constant names, which would make kHastyEyeCheckPm a
+          // number that does not mean what it says.
           const int span = w.to - w.from;
           const int t = f - w.from;
-          const int half = span / 2;
-          const int tri = t <= half ? t : span - t;
+          const int u = span > 1 ? (2000 * t) / (span - 1) : 0;  // 0 .. 2000
+          const int tri_pm = 1000 - (u > 1000 ? u - 1000 : 1000 - u);
           check = static_cast<int32_t>(
-              (static_cast<int64_t>(w.dir) * tri) / (half > 0 ? half : 1));
+              (static_cast<int64_t>(w.dir) * tri_pm) / 1000);
         }
       }
       const int32_t mag = check < 0 ? -check : check;

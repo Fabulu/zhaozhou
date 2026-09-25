@@ -4329,9 +4329,15 @@ inline int32_t g_u02_hasty_brow_pm = kHastyBrowPm;
 // creature looking around, not one hurrying. Three shorter ones, unevenly
 // spaced so the clip never reads as metronomic, and none of them landing on the
 // loop seam.
+//
+// ⚠ EVERY SPAN IS ODD. The check curve is a symmetric triangle sampled at the
+// window's keys, so an even span straddles the midpoint and the check reaches
+// only ~86% of `dir` -- which would quietly make kHastyEyeCheckPm a constant
+// that does not mean what it says. The middle window was 57..65 (span 8) for
+// exactly that reason and is now 57..66.
 struct HastyCheck { int from, to; int32_t dir; };
 constexpr HastyCheck kHastyChecks[] = {
-    {18, 27, +1000}, {57, 65, -1000}, {88, 95, +700}};
+    {18, 27, +1000}, {57, 66, -1000}, {88, 95, +700}};
 constexpr int kHastyCheckCount = 3;
 // PASS 3 (Direction 3 §7: "make it longer"): keys 100 -> 170, higher
 // start, and an extra tumble axis (a slow yaw under the pitch tumble).
