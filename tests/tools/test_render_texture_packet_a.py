@@ -68,6 +68,7 @@ PACKET_B_SOURCES = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_sheetmod.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 PACKET_B_PRODUCTION_FORBIDDEN_SOURCES = (
@@ -1031,7 +1032,7 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             encoding="utf-8"
         )
         validate_packet_b_registration_texts(cmake_text, fit_text)
-        self.assertEqual(len(PACKET_B_SOURCES), 26)
+        self.assertEqual(len(PACKET_B_SOURCES), 27)
         self.assertEqual(len(PACKET_B_SOURCES), len(set(PACKET_B_SOURCES)))
 
     def test_packet_b_source_list_parsers_fire_on_every_structural_mutation(self) -> None:

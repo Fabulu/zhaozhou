@@ -76,9 +76,9 @@ PROTECTED = {
         # The field diff that justifies it is recorded once, beside the pin in
         # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
         # 119 -> 119, parameters 16 -> 16.
-        "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437",
+        "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875",
+        "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",
@@ -173,7 +173,7 @@ def validate_cmake(text: str) -> None:
     if sources != EXPECTED_SOURCES or len(sources) != len(set(sources)):
         raise AssertionError("G8A CMake source closure is not exact")
     require_once(text, (
-        "G8A raster/texture fit closure must contain exactly 48 sources",
+        "G8A raster/texture fit closure must contain exactly 49 sources",
         "add_executable(pf_g8a raster/raster_texture_v3_fit_top_directed.cpp)",
         "TOP_MODULE zhao_raster_texture_v3_fit_top",
         "SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}",

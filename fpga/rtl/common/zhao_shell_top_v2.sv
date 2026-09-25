@@ -213,6 +213,27 @@ module zhao_shell_top_v2
   output logic [31:0]  sheet_req_handle_o,
   output logic [11:0]  sheet_req_texel_o,
   output logic [15:0]  sheet_req_src_id_o,
+  // ---- SURFACE.SHEET's RESPONSE, into TEXTURE.AUX.V2 (TERRAINAUX 2026-09-25)
+  // These six were TIED TO ZERO in this file -- "TIE: page-generation
+  // residency is its own clause and its own packet; no producer exists in this
+  // shell yet" -- while the REQUEST half left the shell, the core AND the
+  // board as a dangling top-level output group, and `zhao_surface_sheet`, the
+  // store that answers it, sat composed inside `zhao_console_core` the whole
+  // time. The producer did exist; it was one module up and one arbiter short.
+  //
+  // The tie was not harmless bookkeeping: with `pg_valid_i` low forever, any
+  // fragment whose material declared AUX would hold its credit in
+  // `zhao_texture_aux_pipe_v2` and never retire -- which is exactly why the
+  // core's flat request pinned `aux_required` to zero and
+  // `zhao_geom_binner_v2` computed `meta_aux_bad_c` to drop such a job. Three
+  // separate refusals, all of them downstream of this tie.
+  input  logic         pg_valid_i,
+  output logic         pg_ready_o,
+  input  logic [1:0]   pg_op_i,
+  input  logic [1:0]   pg_status_i,
+  input  logic [7:0]   pg_tag_i,
+  input  logic [7:0]   pg_strength_i,
+  input  logic [15:0]  pg_src_id_i,
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two
@@ -1282,11 +1303,14 @@ module zhao_shell_top_v2
     .sheet_req_op_o(sheet_req_op_o), .sheet_req_handle_o(sheet_req_handle_o),
     .sheet_req_texel_o(sheet_req_texel_o),
     .sheet_req_src_id_o(sheet_req_src_id_o),
-    // TIE: page-generation residency is its own clause and its own packet; no
-    // producer exists in this shell yet.
-    .pg_valid_i(1'b0), .pg_ready_o(), .pg_op_i(2'd0), .pg_status_i(2'd0),
-    // TIE: same clause as above -- no page-generation producer in this shell.
-    .pg_tag_i(8'd0), .pg_strength_i(8'd0), .pg_src_id_i(16'd0),
+    // REAL since 2026-09-25 (TERRAINAUX): SURFACE.SHEET's response, straight
+    // through from this shell's own port. `zhao_console_core` closes the loop
+    // onto `u_surface_sheet` through `u_surface_sheetshare`'s CLIENT C. Nothing
+    // is renamed, buffered or reinterpreted here -- the arbitration is in a
+    // file with a contract and a test, which is what entry I32 asked for.
+    .pg_valid_i(pg_valid_i), .pg_ready_o(pg_ready_o),
+    .pg_op_i(pg_op_i), .pg_status_i(pg_status_i),
+    .pg_tag_i(pg_tag_i), .pg_strength_i(pg_strength_i), .pg_src_id_i(pg_src_id_i),
     .fb_valid_o(rpx_valid), .fb_ready_i(rpx_ready),
     .fb_rgb565_o(rpx_rgb565),
     // REAL: the effect tag and the in-tile address now LEAVE this shell, on

@@ -1,4 +1,21 @@
-// zhao_surface_sheetshare.sv -- SURFACE.SHEET'S TWO-CLIENT REQUEST SHARE.
+// zhao_surface_sheetshare.sv -- SURFACE.SHEET'S THREE-CLIENT REQUEST SHARE.
+//
+// WIDENED 2 -> 3 ON 2026-09-25 (TERRAINAUX). The third client is the composed
+// texture island's AUX pipe -- `zhao_texture_aux_pipe_v2` inside
+// `zhao_texture_island_v3_top`, whose Sheet READ port left `zhao_console_core`
+// as a dangling top-level output group while its RESPONSE was TIED TO ZERO
+// inside `zhao_shell_top_v2` ("TIE: page-generation residency is its own clause
+// and its own packet; no producer exists in this shell yet"). The store it
+// needed was composed in the same module the whole time. Closing that loop is
+// what this client is for, and the ROUND ROBIN BELOW IS UNCHANGED IN KIND --
+// see THE ARBITRATION LAW section for why a third idle client changes nothing
+// about the other two, and why a third BUSY one is still bounded at one beat.
+//
+// The fragment path is the one client that CANNOT be made to wait indefinitely:
+// `zhao_texture_aux_pipe_v2` holds a credit for the whole accepted lifetime, so
+// a starved AUX read is a fragment that never retires. Round robin is therefore
+// not merely fair here, it is the correctness argument -- which is the same
+// reason the two-client version rejected both strict priorities below.
 //
 // ---------------------------------------------------------------------------
 // WHY THIS BLOCK EXISTS
@@ -154,6 +171,26 @@ module zhao_surface_sheetshare (
     input  var logic        b_pg_ready_i,
 
     // -----------------------------------------------------------------------
+    // CLIENT C -- TEXTURE.AUX.V2, the FRAGMENT path's layer-F read (2026-09-25)
+    // -----------------------------------------------------------------------
+    // `zhao_texture_aux_pipe_v2`, inside the composed texture island. OP_READ
+    // only, exactly like client B: the island has no write path to layer F and
+    // terrain_rules 7 gives that to SURFACE.STAMP alone. Its `src_id` is the
+    // island's OWNER tag, not a patch id, and this block neither reads nor
+    // interprets it -- the AUX pipe checks its own echo (`sheet_rsp_wrong_src_o`)
+    // and that check is a THIRD independent quantity beside this block's own
+    // `pg_orphan_o` and `pg_op_mismatch_o`.
+    input  var logic        c_req_valid_i,
+    output var logic        c_req_ready_o,
+    input  var logic [ 1:0] c_req_op_i,
+    input  var logic [31:0] c_req_handle_i,
+    input  var logic [11:0] c_req_texel_i,
+    input  var logic [15:0] c_req_src_id_i,
+
+    output var logic        c_pg_valid_o,
+    input  var logic        c_pg_ready_i,
+
+    // -----------------------------------------------------------------------
     // THE SHARED zhao_surface_sheet REQUEST PORT
     // -----------------------------------------------------------------------
     output var logic        s_req_valid_o,
@@ -171,9 +208,12 @@ module zhao_surface_sheetshare (
     // evidence (spec/counters.md S4: saturate, never wrap)
     // -----------------------------------------------------------------------
     output var logic        busy_o,
-    output var logic        owner_o,  // 0 = A, 1 = B; read while busy_o
+    // 0 = A, 1 = B, 2 = C; read while busy_o. WIDENED 1 -> 2 bits 2026-09-25
+    // with the third client; 3 is never produced.
+    output var logic [ 1:0] owner_o,
     output var logic [31:0] a_reqs_o,
     output var logic [31:0] b_reqs_o,
+    output var logic [31:0] c_reqs_o,
     // A response arrived with NO request outstanding. Compares the store's own
     // response register against our request handshake -- two different clock
     // enables, which is the whole point (CLAUDE.md, the lockstep chapter).
@@ -184,9 +224,9 @@ module zhao_surface_sheetshare (
 );
 
   logic busy_q;
-  logic owner_q;  // 0 = A, 1 = B
-  logic last_q;  // who was granted last; 0 = A, 1 = B
-  logic [1:0] op_q;  // the opcode of the outstanding request
+  logic [1:0] owner_q;  // 0 = A, 1 = B, 2 = C
+  logic [1:0] last_q;   // who was granted last
+  logic [1:0] op_q;     // the opcode of the outstanding request
 
   // ---- the grant ----------------------------------------------------------
   // While a transaction is outstanding nothing may be offered: the store can
@@ -196,10 +236,15 @@ module zhao_surface_sheetshare (
   //
   // While idle: both asking -> the turn goes to !last_q; otherwise whoever
   // asks. One flip-flop, and starvation is structurally impossible.
-  logic sel_b_c;
+  logic [1:0] sel_c;
   logic grant_c;
   logic retire_c;
   logic can_grant_c;
+  logic [2:0] req_c;
+  logic       any_c;
+
+  assign req_c = {c_req_valid_i, b_req_valid_i, a_req_valid_i};
+  assign any_c = |req_c;
 
   always_comb begin
     // The outstanding transaction retires the cycle its response is taken.
@@ -215,30 +260,53 @@ module zhao_surface_sheetshare (
     // every handshake stays legal and every counter agrees. It was written
     // that way first and measured before it was believed.
     can_grant_c = !busy_q || retire_c;
-    if (a_req_valid_i && b_req_valid_i) begin
-      sel_b_c = !last_q;
-    end else begin
-      sel_b_c = b_req_valid_i;
-    end
-    grant_c = can_grant_c && (sel_b_c ? b_req_valid_i : a_req_valid_i);
+    // THE TURN, generalised from the two-client `sel_b_c = !last_q`. It is a
+    // PRIORITY WALK over the three clients starting one PAST the last grant,
+    // written as two ascending passes rather than a modulo for the reason
+    // `zhao_geom_clipdoor` records: an `integer` index trips UNUSEDSIGNAL on
+    // its top 31 bits and waiving a warning to keep a modulo is a worse trade.
+    //
+    // IT REDUCES EXACTLY TO THE OLD LAW WHEN C NEVER ASKS, which is why the
+    // two-client behaviour this block was measured on is preserved rather than
+    // re-argued: last = A, both asking -> start at B -> B; last = B, both
+    // asking -> start at C, C idle, wrap -> A. That is `!last_q`.
+    sel_c = last_q;
+    if (req_c[0] && (last_q == 2'd2)) sel_c = 2'd0;
+    else if (req_c[1] && (last_q == 2'd0)) sel_c = 2'd1;
+    else if (req_c[2] && (last_q == 2'd1)) sel_c = 2'd2;
+    else if (req_c[1] && (last_q == 2'd2)) sel_c = 2'd1;
+    else if (req_c[2] && (last_q == 2'd0)) sel_c = 2'd2;
+    else if (req_c[0] && (last_q == 2'd1)) sel_c = 2'd0;
+    else if (req_c[2] && (last_q == 2'd2)) sel_c = 2'd2;
+    else if (req_c[0] && (last_q == 2'd0)) sel_c = 2'd0;
+    else if (req_c[1] && (last_q == 2'd1)) sel_c = 2'd1;
+    grant_c = can_grant_c && any_c;
   end
 
   assign s_req_valid_o  = grant_c;
-  assign s_req_op_o     = sel_b_c ? b_req_op_i : a_req_op_i;
-  assign s_req_handle_o = sel_b_c ? b_req_handle_i : a_req_handle_i;
-  assign s_req_texel_o  = sel_b_c ? b_req_texel_i : a_req_texel_i;
-  assign s_req_src_id_o = sel_b_c ? b_req_src_id_i : a_req_src_id_i;
+  assign s_req_op_o     = (sel_c == 2'd0) ? a_req_op_i
+                        : (sel_c == 2'd1) ? b_req_op_i : c_req_op_i;
+  assign s_req_handle_o = (sel_c == 2'd0) ? a_req_handle_i
+                        : (sel_c == 2'd1) ? b_req_handle_i : c_req_handle_i;
+  assign s_req_texel_o  = (sel_c == 2'd0) ? a_req_texel_i
+                        : (sel_c == 2'd1) ? b_req_texel_i : c_req_texel_i;
+  assign s_req_src_id_o = (sel_c == 2'd0) ? a_req_src_id_i
+                        : (sel_c == 2'd1) ? b_req_src_id_i : c_req_src_id_i;
 
-  assign a_req_ready_o  = grant_c && !sel_b_c && s_req_ready_i;
-  assign b_req_ready_o  = grant_c && sel_b_c && s_req_ready_i;
+  assign a_req_ready_o  = grant_c && (sel_c == 2'd0) && s_req_ready_i;
+  assign b_req_ready_o  = grant_c && (sel_c == 2'd1) && s_req_ready_i;
+  assign c_req_ready_o  = grant_c && (sel_c == 2'd2) && s_req_ready_i;
 
   // ---- the response, demuxed by the captured owner ------------------------
   // THE DATA WIRES ARE BROADCAST (psmux's rule): `pg_status_o`, `pg_tag_o`,
   // `pg_strength_o` and `pg_src_id_o` go to both clients unchanged and each
   // reads them in the cycles its own `valid` is high. Nothing is copied.
-  assign a_pg_valid_o   = s_pg_valid_i && busy_q && !owner_q;
-  assign b_pg_valid_o   = s_pg_valid_i && busy_q && owner_q;
-  assign s_pg_ready_o   = busy_q ? (owner_q ? b_pg_ready_i : a_pg_ready_i) : 1'b1;
+  assign a_pg_valid_o   = s_pg_valid_i && busy_q && (owner_q == 2'd0);
+  assign b_pg_valid_o   = s_pg_valid_i && busy_q && (owner_q == 2'd1);
+  assign c_pg_valid_o   = s_pg_valid_i && busy_q && (owner_q == 2'd2);
+  assign s_pg_ready_o   = !busy_q ? 1'b1
+                        : (owner_q == 2'd0) ? a_pg_ready_i
+                        : (owner_q == 2'd1) ? b_pg_ready_i : c_pg_ready_i;
 
   assign busy_o         = busy_q;
   assign owner_o        = owner_q;
@@ -250,11 +318,12 @@ module zhao_surface_sheetshare (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       busy_q <= 1'b0;
-      owner_q <= 1'b0;
-      last_q <= 1'b0;
+      owner_q <= 2'd0;
+      last_q <= 2'd0;
       op_q <= 2'd0;
       a_reqs_o <= 32'd0;
       b_reqs_o <= 32'd0;
+      c_reqs_o <= 32'd0;
       pg_orphan_o <= 32'd0;
       pg_op_mismatch_o <= 32'd0;
     end else begin
@@ -265,11 +334,12 @@ module zhao_surface_sheetshare (
       // asked for it.
       if (grant_c && s_req_ready_i) begin
         busy_q  <= 1'b1;
-        owner_q <= sel_b_c;
-        last_q  <= sel_b_c;
-        op_q    <= sel_b_c ? b_req_op_i : a_req_op_i;
-        if (sel_b_c) b_reqs_o <= sat_inc(b_reqs_o);
-        else a_reqs_o <= sat_inc(a_reqs_o);
+        owner_q <= sel_c;
+        last_q  <= sel_c;
+        op_q    <= s_req_op_o;
+        if (sel_c == 2'd0) a_reqs_o <= sat_inc(a_reqs_o);
+        else if (sel_c == 2'd1) b_reqs_o <= sat_inc(b_reqs_o);
+        else c_reqs_o <= sat_inc(c_reqs_o);
       end else if (retire_c) begin
         busy_q <= 1'b0;
       end

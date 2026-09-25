@@ -423,7 +423,7 @@ def validate_parent_selection() -> None:
 
     cmake = CMAKE.read_text(encoding="utf-8")
     require_once(cmake, (
-        "G8A raster/texture fit closure must contain exactly 48 sources",
+        "G8A raster/texture fit closure must contain exactly 49 sources",
         "VERILATOR_ARGS --assert -GATTR_DSP3=1 -GBILERP_DSP2=1",
         "-DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1 -DZHAO_DUAL18_BEHAVIORAL",
     ), "connected G8A simulation selection")

@@ -2419,12 +2419,12 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [15:0]  fill_data_i,
   input  logic         fill_refused_i,
   input  logic [63:0]  frame_clear_word_i,
-  input  logic         sheet_req_ready_i,
-  output logic         sheet_req_valid_o,
-  output logic [1:0]   sheet_req_op_o,
-  output logic [31:0]  sheet_req_handle_o,
-  output logic [11:0]  sheet_req_texel_o,
-  output logic [15:0]  sheet_req_src_id_o,
+  // `sheet_req_*` LEFT `zhao_console_core`'s PORT LIST 2026-09-25
+  // (TERRAINAUX): the texture island's AUX read now lands on
+  // `u_surface_sheetshare`'s CLIENT C inside the core instead of
+  // dangling off the board. Six declarations removed from this WRAPPER
+  // so `.*` still binds -- owner ruling R220: fix the wrapper, never
+  // the module.
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two

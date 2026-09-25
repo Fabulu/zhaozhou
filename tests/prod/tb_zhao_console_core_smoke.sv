@@ -1323,12 +1323,12 @@ module tb_zhao_console_core_smoke
   logic [15:0]  fill_data_i;
   logic         fill_refused_i;
   logic [63:0]  frame_clear_word_i;
-  logic         sheet_req_ready_i;
-  logic         sheet_req_valid_o;
-  logic [1:0]   sheet_req_op_o;
-  logic [31:0]  sheet_req_handle_o;
-  logic [11:0]  sheet_req_texel_o;
-  logic [15:0]  sheet_req_src_id_o;
+  // `sheet_req_*` LEFT THE CORE'S PORT LIST 2026-09-25 (TERRAINAUX). The
+  // texture island's AUX read lands on `u_surface_sheetshare`'s CLIENT C
+  // INSIDE the core now, and both halves of the loop are internal. These six
+  // declarations are deleted rather than left: a `logic` named after a port
+  // that no longer exists binds to nothing under `.*` and reads, to the next
+  // person, as a port the bench forgot to drive.
   logic        blank_cmd_i;
   logic        scanout_ack_i;
   logic        frame_swap_valid_i;
@@ -2546,6 +2546,14 @@ module tb_zhao_console_core_smoke
   // is what hid this, and it takes three to make the directory's `same` answer
   // and the second re-request of an abandoned burst both happen.
   localparam int unsigned N_TERR_REC   = 3;
+  // HOW MANY TIMES THE SET IS SUBMITTED. TWO since 2026-09-25 (TERRAINAUX).
+  // `zhao_terrain_seq` walks a submitted set ONCE and SKIPS the compose issue
+  // for any patch that is not yet resident, so a single submission pages the
+  // patches in and composes NOTHING -- measured, `seq skipped=3 issued=0`.
+  // A real frame loop submits every frame; this is the second frame, and it
+  // is what turns the compose cache from POISON into a served patch and the
+  // terrain triangles from 128-of-128 degenerate into 0-of-256.
+  localparam int unsigned N_TERR_SUBMITS = 2;
   localparam int unsigned LIST_BYTES_C = N_TERR_REC * 32;
   localparam int unsigned PAGE0_OFF_C  = 4096;
   // THE WINDOW IS DERIVED, NOT TYPED. It was a hand-written 64 KiB while the
@@ -4342,7 +4350,6 @@ module tb_zhao_console_core_smoke
     // The owner directive's "Debug-only injection is not the sole producer" is
     // satisfied by it no longer being a producer AT ALL.
     frame_clear_word_i = '0;
-    sheet_req_ready_i = '0;
     blank_cmd_i = '0;
     scanout_ack_i = '0;
     frame_swap_valid_i = '0;
@@ -5490,6 +5497,74 @@ module tb_zhao_console_core_smoke
     // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
     // fork inside the core issues it, from the meshlet the draw above fetched.)
 
+    // ---- PACKET P-TERRAIN, SECOND SUBMISSION: THE COMPOSE PASS ------------
+    // TERRAINAUX, 2026-09-25. THIS IS THE FIXTURE REPAIR, and it is a bench
+    // change because the console was never at fault.
+    //
+    // `zhao_terrain_seq` walks a submitted set ONCE. On the first walk it finds
+    // every patch ABSENT, claims a slot, issues a load -- and SKIPS the compose
+    // issue, because there is nothing resident to compose. The measured line
+    // says exactly that:
+    //
+    //   SMOKE:  seq  consumed=3 issued_patches=0 claims=3/0 loads=3 SKIPPED=3
+    //   SMOKE:  res  hits=0 misses=6 claims=3 crc_fail=0 resident=3
+    //
+    // Residency arrives AFTER that walk. With one submission the compose door
+    // therefore never opens: `hdr_headers=0`, TERRAIN.PLACE places nothing,
+    // `zhao_terrain_compcache_front` never leaves `serve_valid_q = 0`, and it
+    // answers every lattice read with POISON (32'h5BADF00D, its line 532). All
+    // 81 of TERRAIN.TESS's window vertices are then the SAME poison position,
+    // which is why all 128 triangles are exactly degenerate.
+    //
+    // A real frame loop submits the set EVERY FRAME -- the first frame pages
+    // in, later frames compose. This is that second frame, and it is the
+    // smallest stimulus that reaches the path under test. A new `sequence` so
+    // it is a new set and not a replay of the accepted one.
+    //
+    // THE THREE NUMBERS THIS IS ASSERTED ON ARE AT THE FOOT OF THE RUN, not
+    // here: `patches_served`, `place_patches` and `terrlight degenerate`.
+    guard = 0;
+    // ONE resident patch is enough for the compose door, and waiting for all
+    // three costs 400,000 cycles of simulation for no extra evidence -- the
+    // remaining two land later in the run anyway (`res resident=3` at the
+    // foot). Measured: the second completion is TERRAIN.MIPGEN's, and the mip
+    // pass is 6,534 samples a page.
+    while ((terr_res_resident_o < 1) && (guard < 400000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    $display("SMOKE: terrcompose WAIT resident=%0d/%0d after %0d cycles | pl loaded=%0d faulted=%0d | mipfeed pages_mipped=%0d | seq skipped=%0d issued=%0d",
+             terr_res_resident_o, N_TERR_REC, guard,
+             terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
+             terr_mip_pages_mipped_o, terr_seq_skipped_not_resident_o,
+             terr_seq_patches_issued_o);
+
+    terr_cmd_epoch_i       = 32'd9;
+    terr_cmd_list_off_i    = 32'(LIST_OFF_C);
+    terr_cmd_list_bytes_i  = 32'(LIST_BYTES_C);
+    terr_cmd_patch_count_i = 16'(N_TERR_REC);
+    terr_cmd_sequence_i    = 32'd2;
+    terr_cmd_src_id_i      = 32'd778;
+    terr_cmd_valid_i       = 1'b1;
+    guard = 0;
+    while (!(terr_cmd_valid_i && terr_cmd_ready_o) && (guard < 1000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    @(posedge gpu_clk);
+    terr_cmd_valid_i = 1'b0;
+    if (guard >= 1000)
+      $fatal(1, "SMOKE: TERRAIN.CMD never accepted the COMPOSE-pass command");
+
+    // Let the compose door run: header read, place, page stream, cache fill.
+    // Bounded, and the bound is generous -- a 33x33 lattice is 1,089 records
+    // and the streamer is one vertex a burst.
+    guard = 0;
+    while ((terr_cc_patches_served_o == 32'd0) && (guard < 400000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+
     // ---- the terrain job, INJECTED THROUGH THE OVERRIDE -------------------
     // One subpatch, one view, level 0, top surface, no geomorph. The tess
     // turns this into 81 window vertices (client B's fill) and then its
@@ -6010,6 +6085,30 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- THE COMPOSE SPINE, which is WHY the triangles are degenerate ------
+    // TERRAINAUX, 2026-09-25. `SMOKE: terrlight degenerate=128` has been read
+    // three different ways by three packets and the bench's own note below
+    // still offers a WRONG cause ("the pages are all-zero BODIES, so the
+    // lattice is flat and the cross product is exactly zero"). A flat lattice
+    // with DISTINCT world x/z has an UP-facing normal, not a zero one; zero
+    // heights alone cannot make a cross product vanish.
+    //
+    // The real cause is one hop upstream and this line is how a reader sees
+    // it without a waveform: TERRAIN.TESS reads its lattice through
+    // TERRAIN.HEIGHTTAP from `zhao_terrain_compcache_front`, and that block
+    // answers `lat_h_o`/`lat_wx_o`/`lat_wz_o` with POISON (32'h5BADF00D,
+    // compcache_front.sv:532) on every cycle `serve_valid_q` is low. With no
+    // patch served, all 81 window vertices are the SAME poison position, so
+    // every one of the 128 triangles is exactly degenerate.
+    //
+    // So the number to read here is `patches_served`, not `degenerate`.
+    $display("SMOKE: terrcompose hdr_headers=%0d hdr_refused=%0d ps_lattices=%0d ps_vertices=%0d ps_cells=%0d place_patches=%0d pt_samples=%0d | cc_filled=%0d cc_served=%0d cc_records=%0d cc_serving=%0d cc_overrun=%0d lat_oob=%0d mat_cells=%0d",
+             terr_hr_headers_o, terr_hr_refused_o,
+             terr_ps_lattices_o, terr_ps_vertices_o, terr_ps_cells_o,
+             terr_place_patches_o, terr_pt_samples_o,
+             terr_cc_patches_filled_o, terr_cc_patches_served_o,
+             terr_cc_fill_records_o, terr_cc_serve_valid_o,
+             terr_cc_fill_overrun_o, terr_cc_lat_oob_o, terr_cc_mat_cells_o);
     // ---- TERRAIN's TEXTURE COORDINATES, measured on the DUT's own edge ----
     // This bench CAN reach this lane, and the entry that said otherwise was
     // wrong: the terrain spine loads 3 pages with crc_fails=0 and replays 128
@@ -6212,21 +6311,37 @@ module tb_zhao_console_core_smoke
     if (terr_light_degen_mismatch_o != 0)
       $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
              terr_light_degen_mismatch_o);
-    // WHAT THIS BENCH DOES NOT PROVE ABOUT THE LIGHT, said before somebody
-    // quotes `degenerate=128` as a defect or as a pass. The pages this bench
-    // plays are all-zero BODIES (a real spec 2.1 header over 21,256 zero
-    // bytes), so the lattice TERRAIN.TESS emits is a flat zero height field,
-    // the cross product is exactly zero, and the LAW's answer to that is
-    // degenerate with shade 0. UPDATED 2026-09-20 (terrain9): the reason used
-    // to read "every page fails its CRC by construction, so no page is
-    // resident" -- the pages now load, and the degeneracy survives because it
-    // was never residency that caused it, it was the ZERO HEIGHTS. Giving the
-    // bench a non-flat page body is the next step and is a separate change,
-    // because it moves what the rasteriser sees. The counters above are
-    // evidence that the reference reached the store, the normal and the shade
-    // and came back -- not that the shade VALUE is right. The value is proved
-    // bit-for-bit against zref in tests/terrain/terrain_lightlane_directed.cpp
-    // over a random sub-metre lattice.
+    // THE DEGENERACY IS REPAIRED, AND THE PARAGRAPH THAT STOOD HERE WAS WRONG
+    // ABOUT ITS CAUSE. It read: "the pages this bench plays are all-zero
+    // BODIES ... so the lattice TERRAIN.TESS emits is a flat zero height
+    // field, the cross product is exactly zero ... it was never residency
+    // that caused it, it was the ZERO HEIGHTS."
+    //
+    // A FLAT LATTICE WITH DISTINCT WORLD x/z HAS AN UP-FACING NORMAL, NOT A
+    // ZERO ONE. Zero heights alone cannot make a cross product vanish, so that
+    // could not have been the cause, and nobody checked.
+    //
+    // The cause was one hop upstream: TERRAIN.TESS reads its lattice through
+    // TERRAIN.HEIGHTTAP from `zhao_terrain_compcache_front`, which answers
+    // `lat_h_o`/`lat_wx_o`/`lat_wz_o` with POISON (32'h5BADF00D, its line 532)
+    // on every cycle `serve_valid_q` is low. With ONE SubmitTerrainSet the
+    // compose door never opened -- `zhao_terrain_seq` walks a set once and
+    // skips a patch that is not yet resident -- so all 81 window vertices were
+    // the SAME poison position and every triangle was exactly degenerate.
+    //
+    // The second submission above opens it. Measured 2026-09-25 (TERRAINAUX):
+    // `hdr_headers=1 place_patches=1 cc_filled=1 cc_records=1089 cc_serving=1`
+    // and `terrlight ... degenerate=0` of 256. THIS CHECK IS THE REPAIR'S
+    // GATE: a regression that closes the compose door again puts it back to
+    // 256-of-256 and this line fires.
+    if (terr_light_degenerate_count_o != 0)
+      $fatal(1, "SMOKE: %0d of %0d terrain triangles are DEGENERATE -- the compose cache is serving POISON again (see `SMOKE: terrcompose`: patches_filled and serve_valid are the numbers to read)",
+             terr_light_degenerate_count_o, terr_light_shaded_o);
+    // WHAT THIS STILL DOES NOT PROVE: that the shade VALUE is right. That is
+    // proved bit-for-bit against zref in
+    // tests/terrain/terrain_lightlane_directed.cpp over a random sub-metre
+    // lattice. What it proves is that the reference reached the store, the
+    // normal and the shade, came back, and described a triangle with AREA.
     if (terr_light_stale_reads_o != 0)
       $fatal(1, "SMOKE: the light lane refused %0d reference(s) as stale -- the world store and the projector's arena disagree about a generation",
              terr_light_stale_reads_o);
@@ -6707,7 +6822,12 @@ module tb_zhao_console_core_smoke
 `else
 
     // ---- 1. THE COMMAND WAS READ OVER THE BRIDGE -------------------------
-    if (terr_cmd_sets_accepted_o != 1)
+    // TWO SETS SINCE 2026-09-25 (TERRAINAUX), not one: the first pages the
+    // patches in and the second COMPOSES them, which is what a real frame
+    // loop does and the only stimulus that reaches the compose door. See
+    // the `PACKET P-TERRAIN, SECOND SUBMISSION` block above for why one
+    // submission could never open it.
+    if (terr_cmd_sets_accepted_o != N_TERR_SUBMITS)
       $fatal(1, "SMOKE: TERRAIN.CMD accepted %0d sets and refused %0d (verdict %0d, crc seen %08x against %08x) -- the host packet was rejected",
              terr_cmd_sets_accepted_o, terr_cmd_sets_refused_o,
              terr_cmd_done_verdict_o, terr_cmd_done_crc_seen_o, terr_cmd_list_crc_i);
@@ -6716,9 +6836,9 @@ module tb_zhao_console_core_smoke
     if (terr_cmd_bridge_errs_o != 0)
       $fatal(1, "SMOKE: TERRAIN.CMD saw %0d bridge errors -- the played HPS engine is malforming bursts",
              terr_cmd_bridge_errs_o);
-    if (terr_cmd_records_emitted_o != N_TERR_REC)
+    if (terr_cmd_records_emitted_o != N_TERR_REC * N_TERR_SUBMITS)
       $fatal(1, "SMOKE: TERRAIN.CMD emitted %0d of %0d records -- it read the list and did not produce it",
-             terr_cmd_records_emitted_o, N_TERR_REC);
+             terr_cmd_records_emitted_o, N_TERR_REC * N_TERR_SUBMITS);
 
     // ---- 2. THE CMD -> SEQ SEAM ------------------------------------------
     // The check that separates "CMD produced records" from "SEQ received
@@ -6738,7 +6858,11 @@ module tb_zhao_console_core_smoke
     if (terr_seq_claims_issued_o != terr_res_claims_o)
       $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d claims and the directory recorded %0d -- the claim seam drops or duplicates",
              terr_seq_claims_issued_o, terr_res_claims_o);
-    if (terr_seq_claims_issued_o != N_TERR_REC)
+    // THE SECOND SUBMISSION CLAIMS AGAIN for any patch not yet resident when
+    // it walks, so the claim count is a LOWER bound of N_TERR_REC rather than
+    // an equality. What stays an equality is the SEAM above -- SEQ's count
+    // against the directory's -- which is the thing this check was for.
+    if (terr_seq_claims_issued_o < N_TERR_REC)
       $fatal(1, "SMOKE: %0d claims for %0d distinct patches -- the answer path back into TERRAIN.SEQ is wrong",
              terr_seq_claims_issued_o, N_TERR_REC);
 
@@ -6757,7 +6881,15 @@ module tb_zhao_console_core_smoke
              terr_seq_frame_faults_o);
 
     // ---- 4. THE SEQ -> LOADQ -> PAGELOADER CHAIN -------------------------
-    if (terr_seq_loads_issued_o != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_seq_loads_issued_o < N_TERR_REC)
       $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d loads for %0d non-resident patches", terr_seq_loads_issued_o, N_TERR_REC);
     if (terr_lq_accepted_o != terr_seq_loads_issued_o)
       $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d load jobs and TERRAIN.LOADQ accepted %0d -- the queue's job port is not carrying",
@@ -6792,9 +6924,15 @@ module tb_zhao_console_core_smoke
     // AND EVERY CLAIM WAS A FRESH ONE. `claims_same_o` moving on records with
     // distinct {island, ix, iz} is the other face of the same defect: two
     // records that both present a zero key collide in the directory.
-    if (terr_seq_claims_same_o != 0)
-      $fatal(1, "SMOKE: %0d of %0d claims came back SAME for records with distinct patch coordinates -- two records are presenting one key",
-             terr_seq_claims_same_o, terr_seq_claims_issued_o);
+    // RESTATED AS THE FRESH COUNT, 2026-09-25 (TERRAINAUX). The second
+    // submission legitimately claims a patch the directory already holds,
+    // so `claims_same_o` is no longer expected to be zero. What the check
+    // was FOR survives exactly: N_TERR_REC records with distinct
+    // {island, ix, iz} must produce N_TERR_REC DISTINCT fresh claims, and
+    // two records presenting one key still cannot.
+    if ((terr_seq_claims_issued_o - terr_seq_claims_same_o) < N_TERR_REC)
+      $fatal(1, "SMOKE: %0d claims of which %0d came back SAME -- fewer than %0d were FRESH, so two records with distinct patch coordinates are presenting one key",
+             terr_seq_claims_issued_o, terr_seq_claims_same_o, N_TERR_REC);
     if (terr_pl_guard_denied_o != 0)
       $fatal(1, "SMOKE: TERRAIN.PAGELOADER was denied %0d guard requests -- it is writing outside TERRAIN.PAGE_POOL",
              terr_pl_guard_denied_o);
@@ -6807,7 +6945,12 @@ module tb_zhao_console_core_smoke
     // loaded + faulted silently treats a REFUSED job as a lost one, which is
     // the flattering direction for a spine that is dropping work -- and it
     // read exactly that way on the first run here.
-    if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != N_TERR_REC)
+    // AGAINST THE JOBS THAT REACHED THE LOADER, not against N_TERR_REC:
+    // with two submissions the loader is handed more than one job per patch
+    // and the law it states is ONE JOB, ONE COMPLETION. `terr_lq_issued_o`
+    // is the count of jobs handed on, so this is now the law itself rather
+    // than a number that happened to equal it.
+    if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != terr_lq_issued_o)
       $fatal(1, "SMOKE: %0d jobs produced %0d loaded + %0d faulted + %0d refused completions -- 'one job, one completion' is broken (or the wait timed out at guard=%0d)",
              N_TERR_REC, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, guard);
@@ -6823,7 +6966,15 @@ module tb_zhao_console_core_smoke
     // machine that has strictly improved, which is CLAUDE.md's "do not write a
     // test that asserts the bug" with the bug living in the bench rather than
     // in the RTL. It is now two checks that mean what they say.
-    if ((terr_res_claims_o) != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_res_claims_o < N_TERR_REC)
       $fatal(1, "SMOKE: the directory recorded %0d claims for %0d jobs -- TERRAIN.SEQ's claims are not reaching TERRAIN.RESIDENCY",
              terr_res_claims_o, N_TERR_REC);
     if (terr_res_crc_failures_o != 0)
@@ -6859,7 +7010,15 @@ module tb_zhao_console_core_smoke
     // only on a load that finished OK, so each link below is unreachable while
     // the one above it is zero -- which is why the whole chain sat at zero and
     // no check could see it.
-    if (terr_pl_pages_loaded_o != N_TERR_REC)
+    // A BOUND AND NOT AN EQUALITY SINCE 2026-09-25 (TERRAINAUX), and the
+    // reason is the SECOND SubmitTerrainSet the compose pass needs: a patch
+    // that is still loading when the second walk reaches it is claimed and
+    // loaded again, so every cumulative spine counter is now "at least once
+    // per patch" rather than "exactly once". The SEAM equalities above --
+    // SEQ's count against the directory's, LOADQ's against SEQ's -- are
+    // untouched, and they are what these checks were actually for: a dropped
+    // or duplicated handshake still fails there.
+    if (terr_pl_pages_loaded_o < N_TERR_REC)
       $fatal(1, "SMOKE: %0d of %0d page(s) loaded (faulted=%0d refused=%0d, verdict=%0d, hdr_ident_fails=%0d) -- the bench now writes a spec 2.1 header and the page's own body CRC, so a page that does not load is a spine fault",
              terr_pl_pages_loaded_o, N_TERR_REC, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, terr_pl_fault_verdict_o,

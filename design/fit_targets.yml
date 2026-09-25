@@ -1430,6 +1430,7 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
       - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_sheetmod.sv
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
     rules:
       max_alms: 7500
@@ -1473,6 +1474,7 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
       - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_sheetmod.sv
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
       - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
       - fpga/rtl/raster/zhao_raster_fill.sv
@@ -2389,6 +2391,7 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
       - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_sheetmod.sv
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
 
       - fpga/rtl/common/zhao_skid2.sv
@@ -2733,6 +2736,7 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
       - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_sheetmod.sv
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
       - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
       - fpga/rtl/raster/zhao_raster_fill.sv
@@ -2922,6 +2926,7 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
       - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_sheetmod.sv
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
       - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
       - fpga/rtl/raster/zhao_raster_fill.sv

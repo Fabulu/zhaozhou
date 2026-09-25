@@ -403,6 +403,72 @@ module zhao_console_board
   // that changes.
   parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
 
+  // ---- FORGE.CLIFF, composed 2026-09-25 (CLIFFPROD) ----------------------
+  // Every one of these is a KNOB rather than a literal, because each decides
+  // something that gets DRAWN, and CLAUDE.md's art law is explicit: never
+  // remove the owner's control in the name of fidelity -- every shape, colour
+  // and timing value belongs in a named, editable constant.
+  //
+  // THE ONE-CELL HALO. The 34x34 window needs the border cells of the FOUR
+  // NEIGHBOURING patches, and the compose cache stages exactly ONE patch, so
+  // no neighbour is reachable -- the 5-bit cell address cannot even express
+  // one. 2'd0 = SOLID (spec/terrain_rules.md 3.3) suppresses the rim at a
+  // patch seam; 2'd1 = VOID would emit a wall around every patch's whole
+  // perimeter -- 128 spurious edges per page against a budget of 512, a
+  // visible grid of walls along every interior seam. See
+  // `zhao_forge_cliff_feed.sv` DECISION RECORD 2 for the argument and for the
+  // island-directory route that supersedes this the day the fill side
+  // publishes a patch coordinate.
+  parameter logic [1:0] CLIFF_HALO_SUBSTANCE = 2'd0,
+
+  // THE PRIORITY DEGRADE'S NEARNESS INPUT IS OFF, and that is a decision with
+  // a reason rather than a tie-off. `vdist` is per-vertex nearness, Q16.16
+  // 1/w (zref_terrain.hpp:414), and NO per-lattice-vertex 1/w store exists
+  // anywhere in fpga/rtl -- re-measured 2026-09-25. The VALUE is computed
+  // (`zhao_project_core.out_d_o`, that exact format) and is even stored per
+  // vertex in `zhao_vertex_arena`'s payload bits [73:42] -- but the index
+  // there is a GROUP-LOCAL 9x9 window slot, not `vj*lat_w + vi`. Recovering
+  // the lattice index needs new ports on `zhao_proj_subsystem` and
+  // `zhao_terrain_group_seq`, and the fill fires ONCE PER VIEW into a
+  // different arena, so a naive store would be written twice with two
+  // different values for one vertex.
+  //
+  // With this LOW the evaluator never asserts `vd_en_o` at all -- ASSERTED,
+  // in forge_cliff_chain lane 6, not argued -- and the degrade falls back to
+  // the reference's OWN null-vdist path, which terrain_rules.md 5 defines as
+  // priority 0 everywhere, i.e. keep scan order under a stable sort. It
+  // changes nothing until a page is still over 512 edges AFTER merging. Turn
+  // it on the day the store exists; the port is wired, not tied.
+  parameter logic CLIFF_VDIST_EN = 1'b0,
+
+  // The owner's off switch for the whole cliff path.
+  parameter logic CLIFF_ARM = 1'b1,
+
+  // The material stamped on every wall triple, paired with the mode below.
+  // `zhao_material_window.sv:354` REFUSES MATMODE_NONE (2'd1) against a
+  // non-zero {set, id}, so these two move together or neither moves.
+  parameter logic [15:0] CLIFF_MATERIAL_ID = 16'd0,
+  parameter logic [ 1:0] CLIFF_MATERIAL_MODE = 2'd1,
+  parameter logic [ 7:0] CLIFF_VERTEX_ALPHA = 8'hFF,
+  // Plain opaque write, z-tested, as FORGE.PRIM's is. A wall is solid
+  // geometry, not a blended overlay.
+  parameter logic [31:0] CLIFF_FRAG_STATE = 32'd0,
+  // The flat art lanes the wall is shaded with -- darker than FORGE.PRIM's,
+  // because a cliff face is a shadowed vertical, not a lit top. AUTHORED BY
+  // EYE against the terrain's own lighting and expected to be adjusted once
+  // somebody looks at a frame: that loop is the job, and these are the three
+  // numbers it turns.
+  parameter logic signed [31:0] CLIFF_LIT_R = 32'sd36044,  // 0.55
+  parameter logic signed [31:0] CLIFF_LIT_G = 32'sd34406,  // 0.525
+  parameter logic signed [31:0] CLIFF_LIT_B = 32'sd32768,  // 0.50
+  parameter logic signed [31:0] CLIFF_ALPHA = 32'sd65536,  // 1.0, opaque
+  // A background producer: it degrades first when the governor sheds work.
+  parameter logic [7:0] CLIFF_QUALITY_TIER = 8'd16,
+  // No culling, for FORGE_CULL_MODE's own reason: a wall's outward sense
+  // comes from the reference's A-before-B endpoint order, and a seam seen
+  // from the wrong side must still draw rather than vanish.
+  parameter logic [1:0] CLIFF_CULL_MODE = 2'd0,
+
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
   // `zhao_material_window`'s MATMODE_BACKED_C is 2'd0 and MATMODE_NONE_C is
@@ -2899,12 +2965,15 @@ module zhao_console_board
   input  logic [15:0]  fill_data_i,
   input  logic         fill_refused_i,
   input  logic [63:0]  frame_clear_word_i,
-  input  logic         sheet_req_ready_i,
-  output logic         sheet_req_valid_o,
-  output logic [1:0]   sheet_req_op_o,
-  output logic [31:0]  sheet_req_handle_o,
-  output logic [11:0]  sheet_req_texel_o,
-  output logic [15:0]  sheet_req_src_id_o,
+  // `sheet_req_*` LEFT THIS LIST 2026-09-25 (TERRAINAUX). It was the composed
+  // texture island's AUX pipe asking SURFACE.SHEET for a layer-F byte, and it
+  // left the console -- and the BOARD -- as a dangling output group while
+  // `zhao_surface_sheet`, the store that answers it, was instantiated a few
+  // thousand lines below in THIS FILE. Its response half was TIED TO ZERO
+  // inside `zhao_shell_top_v2`. The loop is closed through
+  // `u_surface_sheetshare`'s CLIENT C; six ports left this list rather than
+  // being driven, and the arbitration lives in a file with a contract and a
+  // test, which is what entry I32 required of any second requester.
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two
@@ -4327,6 +4396,19 @@ module zhao_console_board
       .FORGE_QUALITY_TIER         (FORGE_QUALITY_TIER),
       .FORGE_CULL_MODE            (FORGE_CULL_MODE),
       .FORGE_CMD_VIEW_MASK        (FORGE_CMD_VIEW_MASK),
+      .CLIFF_HALO_SUBSTANCE       (CLIFF_HALO_SUBSTANCE),
+      .CLIFF_VDIST_EN             (CLIFF_VDIST_EN),
+      .CLIFF_ARM                  (CLIFF_ARM),
+      .CLIFF_MATERIAL_ID          (CLIFF_MATERIAL_ID),
+      .CLIFF_MATERIAL_MODE        (CLIFF_MATERIAL_MODE),
+      .CLIFF_VERTEX_ALPHA         (CLIFF_VERTEX_ALPHA),
+      .CLIFF_FRAG_STATE           (CLIFF_FRAG_STATE),
+      .CLIFF_LIT_R                (CLIFF_LIT_R),
+      .CLIFF_LIT_G                (CLIFF_LIT_G),
+      .CLIFF_LIT_B                (CLIFF_LIT_B),
+      .CLIFF_ALPHA                (CLIFF_ALPHA),
+      .CLIFF_QUALITY_TIER         (CLIFF_QUALITY_TIER),
+      .CLIFF_CULL_MODE            (CLIFF_CULL_MODE),
       .GEOM_REPLAY_UNTEX_DECL     (GEOM_REPLAY_UNTEX_DECL),
       .GEOM_REPLAY_MATERIAL_MODE  (GEOM_REPLAY_MATERIAL_MODE),
       .FORGE_MATERIAL_MODE        (FORGE_MATERIAL_MODE),
@@ -5388,12 +5470,6 @@ module zhao_console_board
       .fill_data_i                        (fill_data_i),
       .fill_refused_i                     (fill_refused_i),
       .frame_clear_word_i                 (frame_clear_word_i),
-      .sheet_req_ready_i                  (sheet_req_ready_i),
-      .sheet_req_valid_o                  (sheet_req_valid_o),
-      .sheet_req_op_o                     (sheet_req_op_o),
-      .sheet_req_handle_o                 (sheet_req_handle_o),
-      .sheet_req_texel_o                  (sheet_req_texel_o),
-      .sheet_req_src_id_o                 (sheet_req_src_id_o),
       .blank_cmd_i                        (blank_cmd_i),
       .scanout_ack_i                      (scanout_ack_i),
       .frame_swap_valid_i                 (frame_swap_valid_i),

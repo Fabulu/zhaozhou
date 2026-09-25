@@ -11607,6 +11607,11 @@ set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  # TEXTURE.SHEETMOD, 2026-09-25: the surface sheet's visible effect, the
+  # composition both TEXTURE.AUX.V2.md and TEXTURE.COMBINE.md named as
+  # "reserved for a later visible terrain-effect composition". A LEAF of the
+  # selected root, so it precedes it -- architecture 12.1's frozen order.
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
 )
 
@@ -12897,13 +12902,13 @@ foreach(relative_source IN LISTS ZHAO_PACKET_C_RELATIVE_SOURCES)
   list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_C_RELATIVE_SOURCES ZHAO_PACKET_C_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 34)
-  message(FATAL_ERROR "Packet-C source manifest must contain exactly 34 SV paths")
+if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 35)
+  message(FATAL_ERROR "Packet-C source manifest must contain exactly 35 SV paths")
 endif()
 list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 0 ZHAO_PACKET_C_FIRST_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 31 ZHAO_PACKET_C_MUTANT_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 32 ZHAO_PACKET_C_STAGE_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_LAST_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 32 ZHAO_PACKET_C_MUTANT_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_STAGE_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 34 ZHAO_PACKET_C_LAST_SOURCE)
 if(NOT ZHAO_PACKET_C_FIRST_SOURCE STREQUAL
    "fpga/rtl/common/zhao_render_texture_pkg.sv" OR
    NOT ZHAO_PACKET_C_MUTANT_SOURCE STREQUAL
@@ -13418,16 +13423,16 @@ foreach(relative_source IN LISTS ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
     "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_D_FULL_RELATIVE_SOURCES ZHAO_PACKET_D_FULL_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 57)
-  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 57 SV paths")
+if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 58)
+  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 58 SV paths")
 endif()
 list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 0 ZHAO_PACKET_D_FULL_FIRST)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 31 ZHAO_PACKET_D_FULL_PC_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 32 ZHAO_PACKET_D_FULL_PC_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 53 ZHAO_PACKET_D_FULL_TILE_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 54 ZHAO_PACKET_D_FULL_TILE_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_BIN_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_TOP)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 32 ZHAO_PACKET_D_FULL_PC_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 33 ZHAO_PACKET_D_FULL_PC_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 54 ZHAO_PACKET_D_FULL_TILE_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_TILE_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_BIN_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 57 ZHAO_PACKET_D_FULL_TOP)
 if(NOT ZHAO_PACKET_D_FULL_FIRST STREQUAL
    "fpga/rtl/generated/zhao_abi_pkg.sv" OR
    NOT ZHAO_PACKET_D_FULL_PC_MUTANT STREQUAL
@@ -13645,8 +13650,8 @@ file(STRINGS "${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}"
   ZHAO_PACKET_E_TOP_RELATIVE_SOURCES
   REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
 list(LENGTH ZHAO_PACKET_E_TOP_RELATIVE_SOURCES ZHAO_PACKET_E_TOP_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 26)
-  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 26 SV paths")
+if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 27)
+  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 27 SV paths")
 endif()
 set(ZHAO_PACKET_E_TOP_SOURCES)
 foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
@@ -13659,10 +13664,10 @@ foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
 endforeach()
 if(NOT ZHAO_PACKET_E_TOP_SOURCES STREQUAL ZHAO_TEXTURE_V3_PACKET_B_SOURCES)
   message(FATAL_ERROR
-    "Packet-E top source manifest diverges from Packet B's exact 26-source authority")
+    "Packet-E top source manifest diverges from Packet B's exact 27-source authority")
 endif()
 set(ZHAO_PACKET_E_TOP_MUTANT_SOURCES ${ZHAO_PACKET_E_TOP_SOURCES})
-list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25
+list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26
   ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv)
 
 function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
@@ -13889,6 +13894,7 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
@@ -13908,8 +13914,8 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv)
 list(LENGTH ZHAO_G8A_RASTER_TEXTURE_SOURCES ZHAO_G8A_SOURCE_COUNT)
-if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 48)
-  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 48 sources")
+if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 49)
+  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 49 sources")
 endif()
 foreach(g8a_source IN LISTS ZHAO_G8A_RASTER_TEXTURE_SOURCES)
   if(NOT EXISTS "${g8a_source}")
@@ -16485,6 +16491,72 @@ verilate(test_terrain_edge_acceptance
           ${CMAKE_SOURCE_DIR}/tests/prod/tb_terrain_edge_acceptance.sv)
 add_test(NAME terrain_edge_acceptance COMMAND test_terrain_edge_acceptance)
 set_tests_properties(terrain_edge_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# TEXTURE.SHEETMOD -- the surface sheet's visible effect (TERRAINAUX 2026-09-25)
+# ---------------------------------------------------------------------------
+# `design/contracts/TEXTURE.SHEETMOD.md` is the decision record and names what
+# it supersedes in TEXTURE.AUX.V2.md and TEXTURE.COMBINE.md. The suite proves
+# that the two independently transcribed statements of charter section 12's
+# tint law agree over all 65,536 operand pairs BEFORE it looks at the RTL, so
+# the exhaustive comparison that follows is evidence about the RTL rather than
+# a transcription agreeing with itself.
+add_executable(test_sheetmod_directed texture/sheetmod_directed.cpp)
+target_link_libraries(test_sheetmod_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_sheetmod_directed
+  PREFIX Vzhao_texture_sheetmod
+  TOP_MODULE zhao_texture_sheetmod
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv)
+add_test(NAME sheetmod_directed COMMAND test_sheetmod_directed)
+set_tests_properties(sheetmod_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# Its own positive control, registered rather than described.
+add_test(NAME sheetmod_break_oracle COMMAND test_sheetmod_directed --break-oracle)
+set_tests_properties(sheetmod_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_texture_sheetmod
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_sheetmod
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv)
+set_tests_properties(lint_texture_sheetmod PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAINAUX ACCEPTANCE -- the surface sheet's LOOP, closed, and a PIXEL
+# ---------------------------------------------------------------------------
+# Four PRODUCTION modules in the arrangement `zhao_console_core` now holds:
+# the real layer-F store, the real three-client share, the real AUX adapter on
+# CLIENT C, and the visible effect. It stamps a scar, samples it through the
+# whole loop, and requires the COLOUR to differ -- which the console could not
+# do before 2026-09-25, when the response half was tied to zero inside
+# `zhao_shell_top_v2` and the request half left the board unconnected.
+#
+# Section 3 is the COMPATIBILITY claim asserted rather than said: a material
+# that declares no AUX is bit-identical over 256 colours. Section 4 is its
+# twin and both are needed -- with the sheet PRESENT, strength 0 still darkens
+# by ~0.4%, which is the oracle's own behaviour and the reason the enable and
+# the value are different questions.
+add_executable(test_terrainaux_acceptance prod/terrainaux_acceptance.cpp)
+target_link_libraries(test_terrainaux_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_terrainaux_acceptance
+  PREFIX Vtb_terrainaux_acceptance
+  TOP_MODULE tb_terrainaux_acceptance
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheetshare.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
+          ${CMAKE_SOURCE_DIR}/tests/prod/tb_terrainaux_acceptance.sv)
+add_test(NAME terrainaux_acceptance COMMAND test_terrainaux_acceptance)
+set_tests_properties(terrainaux_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME terrainaux_acceptance_break_oracle
+         COMMAND test_terrainaux_acceptance --break-oracle)
+set_tests_properties(terrainaux_acceptance_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
 # THE POSITIVE CONTROL FOR `descriptor_unarmed_o` -- INVERTED POLARITY

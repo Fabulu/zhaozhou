@@ -43,6 +43,7 @@ PACKET_B_SOURCES = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_sheetmod.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 PACKET_C_SOURCES = (
@@ -87,8 +88,8 @@ PACKET_C_SOURCES = (
 # The field diff that justifies it is recorded once, beside the pin in
 # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
 # 119 -> 119, parameters 16 -> 16.
-INTERFACE_SHA256 = "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437"  # R9: cnt_texture_samples_o
-PACKET_B_TOP_SHA256 = "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875"  # R9: cnt_texture_samples_o
+INTERFACE_SHA256 = "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b"  # R9: cnt_texture_samples_o
+PACKET_B_TOP_SHA256 = "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a"  # R9: cnt_texture_samples_o
 # RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
 # to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
 # 3 lines x 4 zhao_mem_guard instances = 12 lines, each
@@ -219,7 +220,7 @@ def validate_cmake_registration(text: str) -> None:
         'list(FIND ZHAO_PACKET_C_SEEN "${relative_source}" duplicate_index)',
         'if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")',
         'list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")',
-        "Packet-C source manifest must contain exactly 34 SV paths",
+        "Packet-C source manifest must contain exactly 35 SV paths",
         "Packet-C source manifest lost package-first/mutant-stage/top-last order",
         "add_executable(pc_dir raster/raster_texture_stage_v3_directed.cpp)",
         "add_executable(pc_seq raster/raster_texture_stage_v3_directed.cpp)",
@@ -262,7 +263,7 @@ class PacketCClosureTests(unittest.TestCase):
             tuple(row for row in rows if row in PACKET_B_SOURCES),
             PACKET_B_SOURCES,
         )
-        self.assertEqual(len(rows), 34)
+        self.assertEqual(len(rows), 35)
         self.assertEqual(
             rows[-3:],
             (

@@ -3473,6 +3473,138 @@
 //      NON-DEGENERATE TERRAIN, and finding that out after wiring the merge would
 //      cost a pass.
 //
+//      THAT FIXTURE IS FIXED, 2026-09-25 (gz/terrainaux), AND THE CAUSE WAS NOT
+//      WHAT ANY OF THE THREE PREVIOUS EXPLANATIONS SAID. The console smoke now
+//      reports `terrlight ... degenerate=0` of 256. What it took was not a new
+//      fixture and not one line of RTL:
+//
+//        `zhao_terrain_seq` walks a submitted set ONCE and SKIPS the compose
+//        issue for any patch that is not yet resident -- measured, `seq
+//        consumed=3 issued_patches=0 claims=3 loads=3 SKIPPED=3`. Residency
+//        arrives AFTER that walk. So with ONE SubmitTerrainSet the compose
+//        door never opens: `hdr_headers=0`, TERRAIN.PLACE places nothing,
+//        and `zhao_terrain_compcache_front` never leaves `serve_valid_q = 0`
+//        -- where it answers `lat_h_o`/`lat_wx_o`/`lat_wz_o` with POISON,
+//        32'h5BADF00D, its line 532. ALL 81 WINDOW VERTICES WERE THE SAME
+//        POISON POSITION. That is why every triangle was exactly degenerate.
+//
+//      A real frame loop submits the set EVERY FRAME -- the first frame pages
+//      in, later frames compose -- and the smoke now does. After:
+//      `hdr_headers=1 place_patches=1 cc_filled=1 cc_records=1089
+//      cc_serving=1`, and the bench GATES on `degenerate == 0` so a
+//      regression that shuts the door again is loud.
+//
+//      THE BENCH'S OWN STATED CAUSE WAS WRONG AND IS WORTH KEEPING AS A
+//      LESSON. It read: "the pages this bench plays are all-zero BODIES, so
+//      the lattice is a flat zero height field, the cross product is exactly
+//      zero." A FLAT LATTICE WITH DISTINCT WORLD x/z HAS AN UP-FACING NORMAL,
+//      NOT A ZERO ONE. Zero heights alone cannot make a cross product vanish,
+//      so that could not have been the cause -- and the sentence had been read
+//      and repeated by three packets without anybody checking the arithmetic
+//      in it. The cause was one hop upstream the whole time.
+//
+//      RE-MEASURED 2026-09-25 (gz/terrainaux), AND THE FIRST OF TRIMERGE's TWO
+//      REMAINING CARRIAGE ITEMS IS DONE. The 224-bit aux surface context's
+//      CONSUMER is finished, composed and measured; what this entry called
+//      "NO producer anywhere" was half true in a way that mattered.
+//
+//        `zhao_texture_aux_pipe_v2` -- the AUX adapter that turns a world
+//        position and a patch envelope into a SURFACE.SHEET read -- was
+//        ALREADY composed, inside `zhao_texture_island_v3_top`, which is
+//        resident in this core's closure. And `zhao_surface_sheet`, the store
+//        that answers it, was ALREADY composed in THIS FILE. What was missing
+//        was the wire between them, and it was missing in two places at once:
+//        the REQUEST left the shell, this core AND `zhao_console_board` as a
+//        dangling top-level output group, while the RESPONSE was held at zero
+//        by a TIE inside `zhao_shell_top_v2` ("no producer exists in this
+//        shell yet"). BOTH ARE GONE; the phrasing here avoids the literal
+//        words `completion_register.py`'s `_TIED_ZERO` marker scans for,
+//        because this entry is a BOUNDARY and prose about a tie that no
+//        longer exists would relabel it. That tool's own comment says the
+//        over-report "costs nothing" -- true of the COUNT, and the label is
+//        still what the next reader sees first.
+//
+//      Both are closed. `u_surface_sheetshare` is a THREE-client share now and
+//      the island's AUX pipe is CLIENT C; `sheet_req_*` left this module's port
+//      list; `zhao_texture_sheetmod` gives the sheet's strength byte a VISIBLE
+//      effect for the first time (charter 12's tint law, which both texture
+//      contracts had reserved for "a later visible terrain-effect composition").
+//      `tests/prod/terrainaux_acceptance.cpp` is 758 checks over four production
+//      modules and its second section is a PIXEL: base 0x8040C0 shades to
+//      0x4E2774 under a strength-200 scar and 0x763BB0 under strength 40.
+//
+//      WHAT THAT LEAVES FOR THIS ENTRY, and it is narrower than the aux item
+//      looked: a terrain triangle still has to CARRY an aux context to the
+//      fragment, and that is the per-triangle carriage problem below, not an
+//      absent consumer. `zhao_geom_binner_v2`'s `meta_aux_bad_c` still drops a
+//      job whose context is non-zero, and that gate is now the only thing
+//      between a produced context and a sampled sheet.
+//
+//      AND ONE CONSEQUENCE WORTH KNOWING BEFORE IT IS DISCOVERED: a ST_MISS
+//      raises `zhao_texture_aux_pipe_v2`'s `frame_fault_o`. So a terrain
+//      material that declares AUX against a sheet handle that is not resident
+//      does not merely read zero -- it FAULTS THE ISLAND'S FRAME. Measured in
+//      the acceptance bench's section 4.
+//
+//      THREE OF THIS ENTRY'S PREMISES WERE RE-MEASURED AND HOLD: `f_detail_i`
+//      has ZERO producers in `fpga/rtl` (one grep hit, the block's own file);
+//      `terr_light_base_o` is a top-level output of this core AND of the board;
+//      and `u_geom_clipdoor` is composed with `.NCLIENT (3)` -- GEOM.REPLAY,
+//      FORGE.ASSEMBLE, PART.CLIPFEED.
+//
+//      AND THREE NEW FACTS CHANGE THE SHAPE OF WHAT REMAINS. Each was found by
+//      reading the consumer rather than the entry:
+//
+//      1. THE MOSAIC'S MATERIAL TRIPLE COMES FROM THE MATERIAL RECORD, NOT PER
+//         CELL, and this entry has been blaming the wrong thing for the
+//         textured route. `zhao_texture_island_v3_top` lines 1097-1099 read
+//           .wr_mosaic_material_a_i(frag_base_rgb_i[23:16])
+//           .wr_mosaic_material_b_i(frag_base_rgb_i[15:8])
+//           .wr_mosaic_weight_i(frag_weight_i)
+//         -- so the mosaic's {tile_a, tile_b, weight} is the FLAT REQUEST's
+//         `base_rgb` and `recipe_weight`, and BOTH of those are published PER
+//         SPAN by `u_material_window`. Terrain's per-cell layer-E triple, the
+//         one `proj_out_mat_a_o`/`mat_b_o`/`weight_o` already forwards, HAS NO
+//         CARRIAGE AT ALL. Making each cell its own material would make each
+//         cell its own SPAN, and the window's own header prices that: a drain
+//         and a resolve between every pair of triangles.
+//
+//         SO THE TEXTURED ROUTE'S BLOCKER IS A PER-TRIANGLE FIELD, NOT A
+//         COLOUR DECISION. That is a different job from the one this entry has
+//         been carrying, and it is the one to cost first.
+//
+//      2. THE UNTEXTURED PROFILE'S "MISSING OPERAND" IS NOT MISSING FROM THE
+//         TREE. This entry says the untextured law "needs a BASE COLOUR. In
+//         the oracle that is the patch material's `mat.r/g/b`; in RTL there is
+//         NO terrain material colour anywhere." `zref::render::Material` is the
+//         DrawProcedural MATERIAL PAGE -- `{uint8 r, g, b}`, zref_render.hpp
+//         :172 -- `DrawProcedural` carries `material_set` and `material_id` by
+//         the owner ruling of 2026-09-22, and MATERIAL.RESOLVE's record has a
+//         `base_rgb`. What is actually missing is ONE PORT: this file's
+//         `MAT_BASE_RGB_C` is a constant white *because `zhao_material_window`
+//         does not publish the resolved record's colour*, not because no
+//         colour exists. A `pub_base_rgb_o` is a leaf change with a bench;
+//         "terrain has no colour" is a design gap. They are not the same size.
+//
+//      3. THE PERSPECTIVE MULTIPLY HAS AN UNPRICED RANGE BOUND, and nothing in
+//         this entry or anywhere else has costed it. `spec/qformats.md` 8 fixes
+//         `u_over_w` at S8.24 and `invw24` at U0.24, so the product is only
+//         representable while |u_value x invw_value| < 128. `zhao_geom_vattr`'s
+//         header can say "NO saturation case exists" because ITS u is a 16-bit
+//         record field. TERRAIN's `terr_uv_*` is Q16.16 in TILE UNITS over a
+//         world patch, so a patch far from the origin exceeds 128 tiles easily
+//         and the product saturates or wraps. WHOEVER WRITES THE `pack_attr`
+//         ANALOGUE MUST ANSWER THIS FIRST; it may force a per-patch u/v origin
+//         bias, which is a law and therefore not a composer's to invent.
+//
+//      NOTHING WAS COMPOSED FOR THE TRIANGLE PATH BY THIS LANE, DELIBERATELY,
+//      and `zhao_terrain_normalmap` was NOT composed. `f_detail_i` still has no
+//      producer and terrain triangles still reach no raster, so composing it
+//      would move the completion register while changing not one pixel -- the
+//      prefix this file's first law forbids. What DID change in its favour is
+//      the fixture: the arm's triangles have AREA now, so the merge it waits
+//      behind can be measured when it lands instead of only wired.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
@@ -9556,12 +9688,15 @@ module zhao_console_core
   input  logic [15:0]  fill_data_i,
   input  logic         fill_refused_i,
   input  logic [63:0]  frame_clear_word_i,
-  input  logic         sheet_req_ready_i,
-  output logic         sheet_req_valid_o,
-  output logic [1:0]   sheet_req_op_o,
-  output logic [31:0]  sheet_req_handle_o,
-  output logic [11:0]  sheet_req_texel_o,
-  output logic [15:0]  sheet_req_src_id_o,
+  // `sheet_req_*` LEFT THIS LIST 2026-09-25 (TERRAINAUX). It was the composed
+  // texture island's AUX pipe asking SURFACE.SHEET for a layer-F byte, and it
+  // left the console -- and the BOARD -- as a dangling output group while
+  // `zhao_surface_sheet`, the store that answers it, was instantiated a few
+  // thousand lines below in THIS FILE. Its response half was TIED TO ZERO
+  // inside `zhao_shell_top_v2`. The loop is closed through
+  // `u_surface_sheetshare`'s CLIENT C; six ports left this list rather than
+  // being driven, and the arbitration lives in a file with a contract and a
+  // test, which is what entry I32 required of any second requester.
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two
@@ -17682,6 +17817,16 @@ module zhao_console_core
   // first reference.
   wire        ssh_a_pg_valid, ssh_a_pg_ready;
   wire        ssh_b_pg_valid;
+  // CLIENT C -- the composed texture island's AUX pipe (TERRAINAUX,
+  // 2026-09-25). Its request half arrives from `u_shell` a few thousand
+  // lines below and its response half goes back the same way, so both are
+  // declared here beside the share that owns them.
+  wire        ssh_c_req_valid, ssh_c_req_ready;
+  wire [ 1:0] ssh_c_req_op;
+  wire [31:0] ssh_c_req_handle;
+  wire [11:0] ssh_c_req_texel;
+  wire [15:0] ssh_c_req_src_id;
+  wire        ssh_c_pg_valid, ssh_c_pg_ready;
   wire        ssh_s_req_valid, ssh_s_req_ready;
   wire [ 1:0] ssh_s_req_op;
   wire [31:0] ssh_s_req_handle;
@@ -17695,11 +17840,12 @@ module zhao_console_core
   wire        ssm_pg_ready;
   /* verilator lint_off UNUSEDSIGNAL */
   // The share's own evidence. `ssh_busy`/`ssh_owner` are its state for a
-  // waveform, and the four counters are read by no port of this module; they
+  // waveform, and the five counters are read by no port of this module; they
   // are named here rather than left as empty connections so a reader can see
   // that the decision was taken.
-  wire        ssh_busy, ssh_owner;
-  wire [31:0] ssh_a_reqs, ssh_b_reqs, ssh_pg_orphan, ssh_pg_op_mismatch;
+  wire        ssh_busy;
+  wire [ 1:0] ssh_owner;
+  wire [31:0] ssh_a_reqs, ssh_b_reqs, ssh_c_reqs, ssh_pg_orphan, ssh_pg_op_mismatch;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ---- TWO MORE OF THE BAKE CHAIN's FORWARD WIRES --------------------------
@@ -18053,6 +18199,25 @@ module zhao_console_core
     .b_pg_valid_o  (ssh_b_pg_valid),
     .b_pg_ready_i  (ssm_pg_ready),
 
+    // CLIENT C -- TEXTURE.AUX.V2's per-FRAGMENT layer-F read, from inside the
+    // composed texture island (TERRAINAUX, 2026-09-25). OP_READ only: the
+    // island has no write path to layer F and terrain_rules 7 gives that to
+    // SURFACE.STAMP alone, so this client can neither allocate nor stamp.
+    //
+    // IT IS THE ONE CLIENT THAT CANNOT BE MADE TO WAIT INDEFINITELY, and that
+    // is why the share's round robin is the correctness argument rather than a
+    // courtesy: `zhao_texture_aux_pipe_v2` holds a credit for the whole
+    // accepted lifetime, so a starved AUX read is a FRAGMENT THAT NEVER
+    // RETIRES. Round robin bounds it at one beat behind each of the other two.
+    .c_req_valid_i (ssh_c_req_valid),
+    .c_req_ready_o (ssh_c_req_ready),
+    .c_req_op_i    (ssh_c_req_op),
+    .c_req_handle_i(ssh_c_req_handle),
+    .c_req_texel_i (ssh_c_req_texel),
+    .c_req_src_id_i(ssh_c_req_src_id),
+    .c_pg_valid_o  (ssh_c_pg_valid),
+    .c_pg_ready_i  (ssh_c_pg_ready),
+
     // THE STORE.
     .s_req_valid_o (ssh_s_req_valid),
     .s_req_ready_i (ssh_s_req_ready),
@@ -18068,6 +18233,7 @@ module zhao_console_core
     .owner_o          (ssh_owner),
     .a_reqs_o         (ssh_a_reqs),
     .b_reqs_o         (ssh_b_reqs),
+    .c_reqs_o         (ssh_c_reqs),
     .pg_orphan_o      (ssh_pg_orphan),
     .pg_op_mismatch_o (ssh_pg_op_mismatch)
   );
@@ -18433,12 +18599,24 @@ module zhao_console_core
     .fill_data_i               (fill_data_i),
     .fill_refused_i            (fill_refused_i),
     .frame_clear_word_i        (frame_clear_word_i),
-    .sheet_req_ready_i         (sheet_req_ready_i),
-    .sheet_req_valid_o         (sheet_req_valid_o),
-    .sheet_req_op_o            (sheet_req_op_o),
-    .sheet_req_handle_o        (sheet_req_handle_o),
-    .sheet_req_texel_o         (sheet_req_texel_o),
-    .sheet_req_src_id_o        (sheet_req_src_id_o),
+    // TEXTURE.AUX.V2's layer-F READ, INTERNAL from 2026-09-25 (TERRAINAUX).
+    // Both halves land on `u_surface_sheetshare`'s CLIENT C a few thousand
+    // lines above, so the composed island's AUX pipe reads the SAME
+    // `zhao_surface_sheet` that SURFACE.STAMP writes and TERRAIN.SHEETSEAM
+    // prefetches. Six ports left this module's edge rather than being driven.
+    .sheet_req_ready_i         (ssh_c_req_ready),
+    .sheet_req_valid_o         (ssh_c_req_valid),
+    .sheet_req_op_o            (ssh_c_req_op),
+    .sheet_req_handle_o        (ssh_c_req_handle),
+    .sheet_req_texel_o         (ssh_c_req_texel),
+    .sheet_req_src_id_o        (ssh_c_req_src_id),
+    .pg_valid_i                (ssh_c_pg_valid),
+    .pg_ready_o                (ssh_c_pg_ready),
+    .pg_op_i                   (surf_pg_op_o),
+    .pg_status_i               (surf_pg_status),
+    .pg_tag_i                  (surf_pg_tag_o),
+    .pg_strength_i             (surf_pg_strength),
+    .pg_src_id_i               (surf_pg_src_id_o),
     .blank_cmd_i               (blank_cmd_i),
     .scanout_ack_i             (scanout_ack_i),
     .frame_swap_valid_i        (frame_swap_valid_i),
