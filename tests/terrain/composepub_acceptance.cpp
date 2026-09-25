@@ -306,14 +306,54 @@ struct Sim {
     // THIS BENCH MEASURED EXACTLY THAT on its first run: 1,089 engine runs,
     // `noprog_o` == 1,089, and a composed height identical to the authored
     // one -- a field that ran, cost the engine every cycle it should, and
-    // moved nothing. In `zhao_console_core` the uniform intake is a FRAME
-    // event joined with TERRAIN.FIELDLIST's seal while the replay is a
-    // per-patch event much later, so the console never stands in this window.
-    // The driver reproduces that separation instead of pretending it away.
+    // moved nothing.
+    //
+    // THE DEFECT IS REPAIRED (packet EARTHLOCK, 2026-09-25) AND THIS DRAIN
+    // STAYS, for a reason that is no longer the original one. The separation
+    // it models is real: in `zhao_console_core` the uniform intake is a FRAME
+    // event joined with TERRAIN.FIELDLIST's seal, while the replay is a
+    // per-patch event much later. Every case below wants that well-separated
+    // console, so `bank()` keeps reproducing it.
+    //
+    // BUT A WORKAROUND LEFT IN PLACE IS A PLACE A REGRESSION CAN HIDE. With
+    // this drain in every path, reverting EARTHLOCK's interlock would leave
+    // all eighty checks GREEN -- the bench would go on passing about a machine
+    // that had started racing again. `bank_no_drain()` beside it is the
+    // answer: case 10 banks WITHOUT draining, replays inside the window, and
+    // demands the field still reach the consumer. That case is the one this
+    // comment is evidence for.
     int drain = 0;
     while (!d.efa_idle_o && drain++ < 100000) step();
     ck(d.efa_idle_o != 0, "bank(): the adapter's uniform intake drained");
     steps(2);
+  }
+
+  // ---- THE SAME INTAKE, STOPPED INSIDE THE WINDOW -------------------------
+  // `bank()` above waits for `efa_idle_o`. This one deliberately does NOT: it
+  // returns on the handshake beat, which is the beat the rest of the console
+  // is synchronised to, with the divider still running and the banks not yet
+  // written. Everything a caller does next lands in the eighteen-clock window
+  // the repair closed. It is the console-shaped twin of
+  // `tests/field/field_earth_adapter_directed.cpp` case 13.
+  void bank_no_drain(uint32_t start_tick, uint32_t duration, bool last,
+                     const uint32_t par[8]) {
+    d.rec_start_tick_i = start_tick;
+    d.rec_duration_i   = duration;
+    for (int i = 0; i < 8; ++i) d.rec_params_i[i] = par[i];
+    d.rec_last_i  = last ? 1 : 0;
+    d.rec_valid_i = 1;
+    int guard = 0;
+    for (;;) {
+      eng.drive(d);
+      d.eval();
+      const bool fire = d.rec_ready_o != 0;
+      step();
+      if (fire) break;
+      if (++guard > 10000) { ck(false, "bank_no_drain(): rec_ready_o never rose"); break; }
+    }
+    d.rec_valid_i = 0;
+    d.rec_last_i  = 0;
+    // NO DRAIN. The caller replays into the window on purpose.
   }
 
   // ---- replay one section 9.1 list entry into TERRAIN.PATCH ---------------
@@ -925,6 +965,77 @@ int main(int argc, char** argv) {
     // the same point, on the patch that IS staged, still answers
     const Sim::Answer b = s.tap(kTapX, kTapZ);
     ck(!b.no_ground, "the staged patch still answers beside it");
+  }
+
+  // =========================================================================
+  // CASE 10 -- THE REPLAY LANDS INSIDE THE INTAKE WINDOW, AT CONSOLE SCALE
+  // (packet EARTHLOCK, 2026-09-25)
+  //
+  // Every case above calls `bank()`, which DRAINS the adapter's intake before
+  // replaying. That models the real console's separation faithfully -- and it
+  // means none of them can see the ordering COMPOSEPUB found. This case is
+  // case 2 with the drain removed and nothing else changed: the section 9.1
+  // replay lands while the divider is still running and the banks are still
+  // the previous frame's.
+  //
+  // BEFORE THE REPAIR this is the 1,089-run / 1,089-noprog measurement -- a
+  // field that ran, cost the engine every cycle it should, and moved nothing,
+  // with every other census balancing perfectly. It is asserted here the RIGHT
+  // WAY ROUND: the field MUST reach the consumer. Nothing below mentions the
+  // race, so this case keeps its meaning now that there is no race to miss --
+  // and it FAILS if the interlock is ever reverted, which the drained cases
+  // cannot do.
+  // =========================================================================
+  {
+    std::printf("case 10: the replay lands INSIDE the intake window -- the field must still land\n");
+    Sim s;
+    s.reset();
+    const int32_t kLift = 7 << 16;
+    s.eng.out[0]  = kLift;
+    s.eng.present = 0x0F;
+
+    s.d.tick_i = 50;
+    s.bank_no_drain(/*start_tick=*/0, /*duration=*/100, /*last=*/true, kParams);
+    // NO DRAIN between these two lines. That is the whole case.
+    s.open_patch(10);
+    const Foot f = whole_patch(0, 0);
+    s.add(f.x0, f.z0, f.x1, f.z1, /*cmd=*/1);
+    s.d.eval();
+    ck_eq(s.d.fields_active_o, 1, "one accepted list entry -> fields_active_o == 1");
+
+    s.fill(0, 0, kBase, kScar, kBottom);
+
+    std::printf("  engine runs=%llu  adapter runs_o=%u  noprog=%u  faults=%u\n",
+                static_cast<unsigned long long>(s.eng.runs), s.d.efa_runs_o,
+                s.d.efa_noprog_o, s.d.efa_faults_o);
+
+    ck_eq(s.d.efa_noprog_o, 0,
+          "THE RESIDENT FLAG SURVIVED THE IN-FLIGHT INTAKE: no evaluation was refused");
+    ck_eq(static_cast<int64_t>(s.eng.runs), kVerts,
+          "the engine ran once per vertex, as a whole-patch footprint must");
+    ck_eq(s.d.efa_runs_o, static_cast<uint32_t>(kVerts),
+          "and every one of those runs RETIRED -- runs that move nothing are the defect");
+
+    bool every_vertex_lifted = true;
+    for (size_t i = 0; i < s.streamed_top.size(); ++i)
+      if (s.streamed_top[i] - s.streamed_compose_top[i] != kLift)
+        every_vertex_lifted = false;
+    ck(every_vertex_lifted,
+       "live_top - compose_top == the field's out-lane 0 at EVERY vertex");
+
+    const Sim::Answer a = s.tap(kTapX, kTapZ);
+    ck(!a.no_ground, "the consumer answered");
+    ck_eq(a.height - baseline_tap_height, kLift,
+          "THE CONSUMER'S HEIGHT MOVED BY THE FIELD'S CONTRIBUTION");
+
+    const zref::terrain::ComposedLattice lat = s.oracle_lattice(0, 0);
+    const zref::terrain::ColumnResult r =
+        zref::terrain::column_query(lat, zref::fx16{kTapX}, zref::fx16{kTapZ});
+    ck_eq(a.height, r.top.raw, "tap height == zref::terrain::column_query.top");
+
+    ck_eq(s.d.efa_lane_desync_o, 0, "lane shadow stayed aligned across the hold");
+    ck_eq(s.d.efa_faults_o, 0, "no engine fault");
+    ck_eq(s.d.place_mismatch_o, 0, "no placement fault");
   }
 
   std::printf("\ncomposepub_acceptance: %d checks, %d failures\n", g_checks, g_fails);
