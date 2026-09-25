@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1397b75427702e1d3d7e07b61fa5a3c6ba4f095a",
+    "newestRunCommit":  "558569bc376c4dab0029bd3cfa1ef829e9d0281c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -168,6 +168,29 @@
                        "blockMemoryBits":  2960515,
                        "dspBlocks":  359,
                        "virtualPins":  36752
+                   },
+                   {
+                       "module":  "zhao_console_core@edgeclose",
+                       "status":  "incomplete:failed:quartus_fit.exe",
+                       "sourceCommit":  "558569bc376c4dab0029bd3cfa1ef829e9d0281c",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sizingDevice":  "5CEBA9F31C7",
+                       "notTargetDevice":  true,
+                       "sizingNote":  "fitted on 5CEBA9F31C7 ONLY to measure size; the target is 5CSEBA6U23I7 at 41,910 ALM and almsAvailable below is NOT that device",
+                       "sourceDigest":  "86fe42d2b46ef783451698398b3dfd6c383f27ce6d43a975068be45493212ea3",
+                       "variantOf":  "zhao_console_core",
+                       "seconds":  9335.7,
+                       "sourcesHashed":  276,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  405872,
+                       "blockMemoryBits":  3009171,
+                       "dspBlocks":  375,
+                       "virtualPins":  40610
                    },
                    {
                        "module":  "zhao_debug_counters",
