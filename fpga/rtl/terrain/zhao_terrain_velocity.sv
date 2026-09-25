@@ -148,6 +148,35 @@ module zhao_terrain_velocity (
     output logic [15:0] trace_patch_id_o,  // the patch under sweep
 
     // -----------------------------------------------------------------------
+    // abort: discard a partial sweep and return to StIdle (TERRVEL, 2026-09-26)
+    // -----------------------------------------------------------------------
+    // ADDED WITH TERRAIN.VELJOIN, AND THE REASON IS A REACHABLE DEADLOCK RATHER
+    // THAN TIDINESS. The join feeds this block from the SAME per-vertex lane
+    // stream `zhao_terrain_patch` consumes, with a JOINT ready -- a lane word is
+    // taken only when both blocks can take it. That is the only fork law that
+    // cannot silently shorten the lattice, and it makes this block able to hold
+    // a SHIPPED path.
+    //
+    // The composer discards an entire unplaced patch
+    // (`tps_v_ready = tpc_placed ? ... : 1'b1`, zhao_console_core.sv:22257), so
+    // a patch whose placement drops part-way through leaves this block parked in
+    // StLane with 1,088 vertices still owed. `start_ready_o` would then never
+    // return, and the joint ready would hold TERRAIN.PATCH's field-height lane
+    // for the rest of the frame.
+    //
+    // So a one-cycle `abort_i` returns the sweep to StIdle and DROPS the partial
+    // lattice. It drops it rather than publishing it: a half-swept lattice
+    // describes terrain the composer abandoned, and a consumer cannot tell that
+    // from a complete one. `sweeps_aborted_o` is the count and a non-zero value
+    // is a real finding about the walk.
+    //
+    // It does NOT clear the census counters (same law as TERRAIN.PATCH's chosen
+    // law 4 for `programs_rejected_o`): evidence about what the block did
+    // survives the patch it did it on.
+    input  logic        abort_i,
+    output logic [31:0] sweeps_aborted_o,
+
+    // -----------------------------------------------------------------------
     // the velocity lane stream (chosen V3/V4): the block drives the address,
     // the producer answers with `lanes` words for that vertex, in list order.
     // -----------------------------------------------------------------------
@@ -325,6 +354,24 @@ module zhao_terrain_velocity (
       terrain_samples_evaluated_o <= '0;
       velocity_add_sats_o <= '0;
       velocity_rescale_sats_o <= '0;
+      sweeps_aborted_o <= '0;
+    end else if (abort_i) begin
+      // The partial lattice is DROPPED, not published -- see the port comment.
+      // `patch_done_o` is deliberately NOT pulsed: the lattice is not complete,
+      // and a consumer that treats the pulse as "a patch's words have all
+      // arrived" would be told a lie it cannot check.
+      state <= StIdle;
+      r_valid <= 1'b0;
+      k <= '0;
+      acc <= '0;
+      any_cov <= 1'b0;
+      moving_mask_o <= '0;
+      patch_done_o <= 1'b0;
+      // Counted only when there was really a sweep to drop, so the number is
+      // the count of DISCARDED LATTICES and not the count of abort pulses.
+      if (!((state == StIdle) && !r_valid)) begin
+        sweeps_aborted_o <= sweeps_aborted_o + 32'd1;
+      end
     end else begin
       patch_done_o <= 1'b0;
 
