@@ -1092,6 +1092,60 @@ agreement.
   is unreachable in a well-ordered frame and it is reachable by construction —
   a door whose identity matches neither held record — rather than by a mutation.
 
+#### EVERY COUNTER OF THE THREE NEW BLOCKS, AND HOW IT WAS SHOWN TO FIRE
+
+Twenty-nine counters. **Twenty-eight fire by legal stimulus at the block's own
+boundary; one is unreachable by construction and owns a committed mutant.**
+
+| block | counter | demonstration |
+|---|---|---|
+| ISLANDSEAL | `headers_checked_o` | s2, two headers after the seal |
+| | `seals_o` | s2, one island generation |
+| | `reseals_o` | s10, a second island id |
+| | `island_bounced_o` | s10, the bounce inside one epoch |
+| | `pitch_illegal_o` | s6, `HDR_PITCH_REFUSE` (127) |
+| | `pitch_mismatch_o` | s6, a legal pitch that is not the island's |
+| | `envelope_bad_o` | s6, an origin off by four units |
+| PREPSHARE | `a_dev_grants_o` / `b_dev_grants_o` | s9, 13 and 3 |
+| | `a_dev_blocked_clocks_o` | s9, 2,712 — **the frame-critical side's cost** |
+| | `b_dev_blocked_clocks_o` | s5, 56 |
+| | `a_lu_grants_o` / `b_lu_grants_o` | s9, 679 and 3 |
+| | `a_lu_blocked_clocks_o` / `b_lu_blocked_clocks_o` | s9, 2,047 and 7 |
+| | `dev_contended_o` | s9, 3 — **the arbiter's positive control** |
+| | `lu_ans_unowned_o` | s10, **THE DETECTOR**, on an injected spurious answer |
+| EDGEQUERY | `patches_queued_o` | s2 |
+| | `door_refused_o` | s10, six pushes into a four-deep door |
+| | `door_src_unknown_o` | s10, a door matching neither held record |
+| | `serve_no_door_o` | s10, a serve with an empty queue |
+| | `serve_src_mismatch_o` | s10, **THE DETECTOR**, on a deliberate desync |
+| | `queries_issued_o` / `queries_answered_o` | s2 |
+| | `edges_real_o` / `fallback_patches_o` | s2 and s3 |
+| | `query_abandoned_o` | s10, a sweep under a query in flight |
+| | `gate_wait_clocks_o` | s5, 16 |
+| | `descriptor_unarmed_o` | **COMMITTED MUTANT** — see below |
+
+`descriptor_unarmed_o` is the safety valve on the descriptor gate and **no
+legal stimulus can move it**: `armed_q` is cleared only on a serve edge and
+every exit from the query FSM sets it again (`q_done_i` in Q_WAIT,
+`!bank_emit_i` in both Q_REQ and Q_WAIT), so `armed_q == 0` implies the FSM is
+not idle while the valve needs both. `tests/mutants/
+zhao_terrain_edgequery_unarmed_mutant.sv` changes ONE substantive line — the
+serve edge no longer enters Q_REQ — and `terrain_edgequery_unarmed_mutant`
+runs it with **inverted polarity**, passing only when the counter fires. It
+carries its own positive control (`patches_queued_o` nonzero) and its own
+negative control (`queries_issued_o == 0`, proving the mutation bit), and the
+acceptance bench asserts the counter is ZERO on unmutated production.
+
+**AND ONE COUNTER DEFINITION WAS REFUSED RATHER THAN WRITTEN.**
+`zhao_terrain_prepshare`'s obvious wait counter for requester B,
+`b_r_start_i && !b_r_ready_o`, is structurally incapable of firing:
+`zhao_terrain_prepwalk:538` drives `r_start_o = (state_q == P_START) &&
+r_ready_i`, so its start is high only when it is already ready. That is
+CLAUDE.md's detector wired to two operands that move together, exactly, and it
+would have read zero for ever while looking like the right instrument. The form
+that ships differences the offer bit against the port's availability, which
+come from different state.
+
 ## Notes
 
 1. **The bank stores decisions, not geometry.** The ruling permits buffering
