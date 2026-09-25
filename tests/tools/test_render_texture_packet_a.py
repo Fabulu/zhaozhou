@@ -17,6 +17,11 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "tools" / "quartus"
 PACKAGE = REPO / "fpga" / "rtl" / "common" / "zhao_render_texture_pkg.sv"
+# The fragment state word's schema is its OWN package: `zhao_render_texture_pkg`
+# is inside the texture island's frozen interface manifest, where a single added
+# comment moves three pinned hashes and a packed struct moves the duplicate-name
+# marker count. See that file's header.
+FRAG_PACKAGE = REPO / "fpga" / "rtl" / "common" / "zhao_fragment_state_pkg.sv"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zhao_render_texture_layout_top.sv"
 MUTANT = REPO / "tests" / "mutants" / "zhao_render_texture_wrong_layout_mutant.sv"
 OBSERVATION_SUCCESSOR_MANIFEST = (
@@ -706,7 +711,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
             # The canonical ownership-tool environment must load Verilator even
             # when the invoking process contributes no executable search path.
             generated = run_verilator(
-                top, [PACKAGE, FIXTURE], mdir, "--cc",
+                top, [PACKAGE, FRAG_PACKAGE, FIXTURE], mdir, "--cc",
                 base_environment=stripped_path_environment(),
             )
             self.assertEqual(
@@ -722,13 +727,24 @@ class RenderTextureLayoutTests(unittest.TestCase):
             ]
             roundtrip_runs = [
                 run_generated_model(executable, "+ROUNDTRIP_CONTROL=%d" % control)
-                for control in range(1, 7)
+                for control in range(1, 8)
+            ]
+            # The fourteen fragment-state field-name probes live in the FIXTURE
+            # rather than the package, because a packed struct in the package
+            # emits one duplicate-name MEMBERDTYPE per member and would make the
+            # island's pinned schema fingerprint permanently noisier -- see
+            # `tools/rtl/texture_v3_interface_parser.py`'s 2026-09-18 note, which
+            # refused the same trade at two markers. They get their own control
+            # so each one is SEEN TO FIRE rather than merely present.
+            frag_span_runs = [
+                run_generated_model(executable, "+FRAG_SPAN_CONTROL=%d" % control)
+                for control in range(1, 15)
             ]
 
         diagnostic = normal.stdout + normal.stderr
         self.assertEqual(normal.returncode, 0, diagnostic)
         self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45", diagnostic)
-        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=6", diagnostic)
+        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7 frag_spans=14", diagnostic)
 
         for control, ran in enumerate(field_span_runs, 1):
             with self.subTest(field_span_control=control):
@@ -740,9 +756,17 @@ class RenderTextureLayoutTests(unittest.TestCase):
                 )
                 self.assertNotIn("FIELD_SPAN_ESCAPED", diagnostic)
 
+        for control, ran in enumerate(frag_span_runs, 1):
+            with self.subTest(frag_span_control=control):
+                diagnostic = ran.stdout + ran.stderr
+                self.assertNotEqual(ran.returncode, 0, diagnostic)
+                self.assertIn(
+                    "ZHAO_FRAG_STATE_SPAN_FIRE[%d]" % control, diagnostic)
+                self.assertNotIn("FRAG_STATE_SPAN_ESCAPED", diagnostic)
+
         roundtrip_names = (
             "continuation", "aux", "earlyz_payload",
-            "pretexture", "retirement", "result",
+            "pretexture", "retirement", "result", "frag_state",
         )
         for control, (name, ran) in enumerate(
                 zip(roundtrip_names, roundtrip_runs), 1):
@@ -792,6 +816,14 @@ class RenderTextureLayoutTests(unittest.TestCase):
             13: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[13]: PRETEX_LAYOUT",
             14: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[14]: RETIRE_LAYOUT",
             15: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[15]: RESULT_LAYOUT",
+            # The fragment state word, added 2026-09-25 (FRAGSTATE). 16 is the
+            # AUX fingerprint, whose control is the committed reversed-wx/wz
+            # mutant rather than a parameter, so these take 17 and 18.
+            # The fragment state word lives in its OWN package and its own
+            # guard, because `zhao_render_texture_pkg` is inside the texture
+            # island's frozen interface manifest and had to stay byte-identical.
+            # Its fatal therefore carries its own prefix.
+            17: "ZHAO_FRAG_STATE_CONTRACT_FIRE[1]: FRAG_STATE_OFFSET_CONTRACT",
         }
         top = "zhao_render_texture_elab_control_top"
 
@@ -800,7 +832,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(
                 prefix="zhao-packet-a-contract-baseline-") as temporary:
             mdir = Path(temporary)
-            generated = run_verilator(top, [PACKAGE, FIXTURE], mdir, "--cc")
+            generated = run_verilator(top, [PACKAGE, FRAG_PACKAGE, FIXTURE], mdir, "--cc")
             self.assertEqual(
                 generated.returncode, 0,
                 generated.stdout + generated.stderr,
@@ -820,7 +852,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
                     prefix="zhao-packet-a-contract-control-") as temporary:
                 mdir = Path(temporary)
                 generated = run_verilator(
-                    top, [PACKAGE, FIXTURE], mdir,
+                    top, [PACKAGE, FRAG_PACKAGE, FIXTURE], mdir,
                     "--cc", "-GCONTROL=%d" % control,
                 )
                 self.assertEqual(

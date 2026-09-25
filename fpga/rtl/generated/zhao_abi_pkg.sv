@@ -303,8 +303,8 @@ package zhao_abi_pkg;
 
   // MaterialRecord: 32 B (spec/commands.zidl). REVERSE field order.
   typedef struct packed {
-    logic [31:0] rsv1;  // u32 @28
-    logic [31:0] rsv0;  // u32 @24
+    logic [31:0] fragment_decl;  // u32 @28
+    logic [31:0] fragment_state;  // u32 @24
     logic [31:0] raster_state;  // u32 @20
     logic [31:0] palette_base;  // u32 @16
     zhao_material_sample_t sample2;  // 4 B @12
@@ -1835,8 +1835,8 @@ package zhao_abi_pkg;
       v[96 +: 32] = c.sample2;
       v[128 +: 32] = c.palette_base;
       v[160 +: 32] = c.raster_state;
-      v[192 +: 32] = c.rsv0;
-      v[224 +: 32] = c.rsv1;
+      v[192 +: 32] = c.fragment_state;
+      v[224 +: 32] = c.fragment_decl;
       zhao_pack_material_record = v;
     end
   endfunction
@@ -1852,8 +1852,8 @@ package zhao_abi_pkg;
       c.sample2 = v[96 +: 32];
       c.palette_base = v[128 +: 32];
       c.raster_state = v[160 +: 32];
-      c.rsv0 = v[192 +: 32];
-      c.rsv1 = v[224 +: 32];
+      c.fragment_state = v[192 +: 32];
+      c.fragment_decl = v[224 +: 32];
       zhao_unpack_material_record = c;
     end
   endfunction

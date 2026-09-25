@@ -262,6 +262,15 @@ module zhao_material_window #(
     input  wire        [ 7:0]       rsp_base_binding_i,
     input  wire                     rsp_selector_overflow_i,
     input  wire        [ 7:0]       rsp_sample0_modes_i,
+    // ---- THE MATERIAL'S FRAGMENT PROFILE (FRAGSTATE, 2026-09-25) ----------
+    // MATERIAL.RESOLVE's projection of `MaterialRecord.fragment_state` and
+    // `fragment_decl`.  `rsp_frag_declared_i` is the AUTHORITY SELECTOR and it
+    // is not a "payload is non-zero" test: the all-zero state word is the legal
+    // opaque profile, so the declaration cannot be inferred from the payload.
+    input  wire                     rsp_frag_declared_i,
+    input  wire        [31:0]       rsp_frag_state_i,
+    input  wire        [ 7:0]       rsp_effect_tag_i,
+    input  wire        [ 7:0]       rsp_stencil_ref_i,
 
     // ---- the published material, into the flat request --------------------
     output logic                    pub_valid_o,
@@ -280,6 +289,24 @@ module zhao_material_window #(
     // `tri_continuation_tail_i` and `tri_fragment_state_i`.
     output logic       [ 7:0]       pub_vertex_alpha_o,
     output logic       [31:0]       pub_frag_state_o,
+    // THE MATERIAL'S HALF OF THE SAME THREE QUANTITIES, published beside the
+    // producer's so the CORE can resolve the authority by NAME rather than by
+    // OR-ing two owners together.  `pub_frag_declared_o` says which of the two
+    // is authoritative for this span; the owner directive of 2026-09-23 forbids
+    // merging them ("Do not OR two overlapping field owners together to avoid
+    // resolving which source is authoritative"), and this is the field that
+    // makes the resolution possible.
+    //
+    // All four are loaded by the SAME enable as `pub_count_q` and the rest of
+    // the published record, in ST_WAIT, so they cannot advance independently of
+    // the material they describe.  They are NOT terms of `match_c`, and that is
+    // correct rather than an omission: they are a pure function of
+    // {pub_set_q, pub_id_q}, which ARE terms of it, so two primitives that share
+    // a span necessarily share this profile.
+    output logic                    pub_frag_declared_o,
+    output logic       [31:0]       pub_mat_frag_state_o,
+    output logic       [ 7:0]       pub_effect_tag_o,
+    output logic       [ 7:0]       pub_stencil_ref_o,
 
     // ---- evidence ---------------------------------------------------------
     output logic       [31:0]       resolves_o,
@@ -345,6 +372,14 @@ module zhao_material_window #(
   logic [1:0]  pub_mode_q;
   logic [7:0]  pub_valpha_q;
   logic [31:0] pub_state_q;
+  // The MATERIAL's half of the published span (FRAGSTATE, 2026-09-25). There is
+  // deliberately no `ask_*` twin for these four: an `ask_*` register exists for
+  // a field the UPSTREAM offered and the window must remember across the drain,
+  // and these arrive in the RESPONSE, after the drain has already finished.
+  logic        pub_frag_decl_q;
+  logic [31:0] pub_mat_state_q;
+  logic [7:0]  pub_tag_q;
+  logic [7:0]  pub_sref_q;
 
   // The pending request, captured from the triangle that asked for it.  It is
   // captured ONCE, on the transition out of ST_RUN, while that triangle is
@@ -403,6 +438,10 @@ module zhao_material_window #(
   assign pub_material_mode_o   = pub_mode_q;
   assign pub_vertex_alpha_o    = pub_valpha_q;
   assign pub_frag_state_o      = pub_state_q;
+  assign pub_frag_declared_o   = pub_frag_decl_q;
+  assign pub_mat_frag_state_o  = pub_mat_state_q;
+  assign pub_effect_tag_o      = pub_tag_q;
+  assign pub_stencil_ref_o     = pub_sref_q;
 
   // ---- the request --------------------------------------------------------
   assign req_valid_o        = (st_q == ST_REQ);
@@ -473,6 +512,10 @@ module zhao_material_window #(
       pub_mode_q            <= MATMODE_BACKED_C;
       pub_valpha_q          <= 8'd0;
       pub_state_q           <= 32'd0;
+      pub_frag_decl_q       <= 1'b0;
+      pub_mat_state_q       <= 32'd0;
+      pub_tag_q             <= 8'd0;
+      pub_sref_q            <= 8'd0;
       ask_set_q             <= 32'd0;
       ask_id_q              <= 16'd0;
       ask_tier_q            <= 8'd0;
@@ -538,6 +581,15 @@ module zhao_material_window #(
               pub_state_q  <= ask_state_q;
               pub_set_q   <= ask_set_q;   // zero, enforced by `mode_contra_c`
               pub_id_q    <= ask_id_q;    // zero, enforced by `mode_contra_c`
+              // NO MATERIAL MEANS NO MATERIAL DECLARATION, said explicitly.
+              // A producer that declared MATMODE_NONE has no record to read a
+              // profile out of, so the PRODUCER's door declaration is
+              // authoritative for this span -- which is what `pub_frag_decl_q`
+              // low means downstream. Particles and shadows live here.
+              pub_frag_decl_q <= 1'b0;
+              pub_mat_state_q <= 32'd0;
+              pub_tag_q       <= 8'd0;
+              pub_sref_q      <= 8'd0;
               pub_count_q   <= NOMAT_SAMPLE_COUNT_C;
               pub_recipe_q  <= NOMAT_RECIPE_C;
               pub_weight_q  <= NOMAT_WEIGHT_C;
@@ -580,6 +632,12 @@ module zhao_material_window #(
               pub_weight_q  <= rsp_recipe_weight_i;
               pub_binding_q <= rsp_base_binding_i;
               pub_class_q   <= rsp_class_c;
+              // The material's fragment profile, on the same enable as the
+              // four fields above it.
+              pub_frag_decl_q <= rsp_frag_declared_i;
+              pub_mat_state_q <= rsp_frag_state_i;
+              pub_tag_q       <= rsp_effect_tag_i;
+              pub_sref_q      <= rsp_stencil_ref_i;
               if (rsp_class_c == CLS_CLUT_C)
                 clut_unowned_o <= clut_unowned_o + 32'd1;
             end else begin
@@ -601,6 +659,16 @@ module zhao_material_window #(
               pub_weight_q  <= 8'd0;
               pub_binding_q <= 8'd0;
               pub_class_q   <= 2'd0;
+              // A FAULT MATERIAL DECLARES NOTHING. There is no record, so there
+              // is no profile to take, and the producer's declaration stands --
+              // the same answer as the lawful no-material arm, reached for a
+              // different reason, and `pub_mode_q` is still what tells the two
+              // apart. Taking the PREVIOUS material's profile here would be the
+              // stale-metadata fault this block exists to refuse.
+              pub_frag_decl_q <= 1'b0;
+              pub_mat_state_q <= 32'd0;
+              pub_tag_q       <= 8'd0;
+              pub_sref_q      <= 8'd0;
               no_record_o   <= no_record_o + 32'd1;
             end
             if (rsp_selector_overflow_i)

@@ -139,8 +139,31 @@ inline bool record_legal(const zhao_abi::ZhMaterialRecord& r) {
   // flags bits 3-15 reserved 0.
   if ((r.flags & 0xFFF8u) != 0) return false;
 
-  // Reserved words must be zero.
-  if (r.rsv0 != 0 || r.rsv1 != 0) return false;
+  // THE FRAGMENT PROFILE (FRAGSTATE, 2026-09-25). These two words were
+  // `rsv0`/`rsv1`, refused-if-nonzero, and the owner vacation directive of
+  // 2026-09-23 section 3 allocates them as the material's fragment-pipeline
+  // declaration. `spec/commands.zidl`'s MaterialRecord carries the layout and
+  // the reasoning; this is its legality half.
+  //
+  // fragment_decl bits 1-7 and 24-31 are still reserved and MUST be zero, on
+  // the same argument the control and flags fields use above.
+  if ((r.fragment_decl & 0xFF0000FEu) != 0) return false;
+
+  // THE CONTRADICTORY DECLARATION, REFUSED WHOLE. `fragment_declared` is bit 0
+  // and it is the EXPLICIT selector the directive requires -- "profile
+  // selection is explicit, not inferred from whether a port happens to be
+  // zero". That is not pedantry here: the all-zero state word is itself a legal
+  // and meaningful profile (the plain opaque write), so "is the word zero?"
+  // cannot answer the question and the flag has to.
+  //
+  // The mistake this shape invites is a producer that fills the state and
+  // forgets the flag. Masking the payload off would draw that material opaque
+  // with no diagnostic anywhere, so instead the record is REFUSED -- the
+  // `SetPost.flags` discipline, "it never masks a bit it does not know", rather
+  // than `raster_state::compose`'s silent mask.
+  const bool declared = (r.fragment_decl & 0x1u) != 0;
+  if (!declared && (r.fragment_state != 0 ||
+                    (r.fragment_decl & 0x00FFFF00u) != 0)) return false;
 
   // Every sample the record CLAIMS must have legal modes; samples beyond the
   // count are not inspected, because they are not read.

@@ -107,6 +107,15 @@ module tb_zhao_material_resolve #(
     output logic [7:0]       a_rsp_sample0_modes_o,
     output logic [7:0]       a_rsp_sample1_modes_o,
     output logic [7:0]       a_rsp_sample2_modes_o,
+    // THE FRAGMENT PROFILE's projection (FRAGSTATE, 2026-09-25). Exposed on the
+    // SHIPPING instance only, because the test uses it to check that a declared
+    // profile is CARRIED rather than merely accepted -- a record that passes
+    // legality and then arrives with a zeroed profile would satisfy every other
+    // port on this bench.
+    output logic             a_rsp_frag_declared_o,
+    output logic [31:0]      a_rsp_frag_state_o,
+    output logic [7:0]       a_rsp_effect_tag_o,
+    output logic [7:0]       a_rsp_stencil_ref_o,
     output logic [31:0]      a_material_hits_o,
     output logic [31:0]      a_material_misses_o,
     output logic [31:0]      a_material_refused_o,
@@ -156,6 +165,10 @@ module tb_zhao_material_resolve #(
       .rsp_sample0_modes_o(a_rsp_sample0_modes_o),
       .rsp_sample1_modes_o(a_rsp_sample1_modes_o),
       .rsp_sample2_modes_o(a_rsp_sample2_modes_o),
+      .rsp_frag_declared_o(a_rsp_frag_declared_o),
+      .rsp_frag_state_o(a_rsp_frag_state_o),
+      .rsp_effect_tag_o(a_rsp_effect_tag_o),
+      .rsp_stencil_ref_o(a_rsp_stencil_ref_o),
       .material_hits_o(a_material_hits_o),
       .material_misses_o(a_material_misses_o),
       .material_refused_o(a_material_refused_o),
@@ -198,6 +211,8 @@ module tb_zhao_material_resolve #(
       .rsp_selector_overflow_o(),
       .rsp_palette_base_o(), .rsp_raster_state_o(), .rsp_flags_o(),
       .rsp_sample0_modes_o(), .rsp_sample1_modes_o(), .rsp_sample2_modes_o(),
+      .rsp_frag_declared_o(), .rsp_frag_state_o(),
+      .rsp_effect_tag_o(), .rsp_stencil_ref_o(),
       .material_hits_o(), .material_misses_o(b_material_misses_o),
       .material_refused_o(),
       .refused_id_o(), .refused_record_o(b_refused_record_o),

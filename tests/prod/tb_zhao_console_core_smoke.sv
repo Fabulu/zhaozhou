@@ -1243,8 +1243,14 @@ module tb_zhao_console_core_smoke
   // supplying them.
   // 	ri_flat_request_i is no longer a core port (entry I49): the console
   // builds it from MATERIAL.RESOLVE's published answer.
-  logic [47:0]  tri_continuation_tail_i;
-  logic [31:0]  tri_fragment_state_i;
+  // `tri_continuation_tail_i` and `tri_fragment_state_i` are no longer core
+  // ports either (entry I20, FRAGSTATE 2026-09-25), and their DECLARATIONS go
+  // with them for the reason this file has already written down twice: `.*`
+  // binds by NAME, so a net whose port no longer exists is silently not bound,
+  // and a bench that went on driving it would look like stimulus while
+  // supplying nothing. The console builds both from named owners now -- the
+  // MATERIAL's `fragment_state`/`fragment_decl` when it declares a profile,
+  // the PRODUCER's door declaration otherwise.
   logic         fill_req_ready_i;
   logic         fill_req_valid_o;
   logic [31:0]  fill_req_addr_o;
@@ -4262,19 +4268,14 @@ module tb_zhao_console_core_smoke
     pal_load_rgb565_i = '0;
     pal_load_crc_ok_i = '0;
     tri_area2_i = '0;
-    tri_continuation_tail_i = '0;
-`ifdef ZHAO_SMOKE_GLOW_TAG
-    // -GlowTag (see SMK_GLOW_TAG_C above). The two fields are addressed through
-    // `zhao_render_texture_pkg`'s OWN span constants rather than literal bit
-    // numbers, so a bench that placed the tag where the package does not keep
-    // it cannot compile into a green run. The package self-tests those spans
-    // one-hot at its `:tail.effect_tag` case.
-    tri_continuation_tail_i[zhao_render_texture_pkg::CONT_TAIL_EFFECT_TAG_LO +: 8]
-        = SMK_GLOW_TAG_C;
-    tri_continuation_tail_i[zhao_render_texture_pkg::CONT_TAIL_VERTEX_RGB_LO +: 24]
-        = SMK_GLOW_RGB_C;
-`endif
-    tri_fragment_state_i = '0;
+    // -GlowTag NO LONGER DRIVES A PORT FROM HERE, and that is the point of the
+    // change rather than a side effect of it. The tag is set on the MATERIAL
+    // RECORD this bench uploads -- see `build_material1` -- so it travels
+    // PublishResource -> MEM.UPLOAD -> the residency row -> MATERIAL.RESOLVE ->
+    // the material window's published span -> the composer -> the bin pipe ->
+    // the tile pipe -> Early-Z -> RASTER.FRAGMENT -> POST.GATHER -> the frame.
+    // The owner directive's "Debug-only injection is not the sole producer" is
+    // satisfied by it no longer being a producer AT ALL.
     frame_clear_word_i = '0;
     sheet_req_ready_i = '0;
     blank_cmd_i = '0;
@@ -4711,6 +4712,31 @@ module tb_zhao_console_core_smoke
       mr1.sample0.modes              = 8'h01;         // tmu_mode 1 = NEAREST, wrap 0
       mr1.palette_base               = 32'h0000_0000; // direct format: no CLUT
       mr1.raster_state               = 32'h0000_0000;
+`ifdef ZHAO_SMOKE_GLOW_TAG
+      // -GlowTag, 2026-09-25 (FRAGSTATE). THE TAG IS A FIELD OF THE MATERIAL
+      // RECORD NOW, not a value this bench forces onto a boundary port.
+      //
+      // ONE VARIABLE MOVES. The declared state word is
+      // `frag_profile_opaque_geometry()` -- all zero, the plain opaque write --
+      // which is EXACTLY what this console already drew under, so the blend,
+      // the depth behaviour and every pixel count are unchanged and the ONLY
+      // difference between this form and the plain one is that the fragments
+      // arrive TAGGED. An additive profile would have changed the picture for
+      // three reasons at once and proved none of them.
+      //
+      // AND IT IS THE POSITIVE CONTROL FOR THE EXPLICIT SELECTOR. This record
+      // declares a state word that is bit-identical to a record declaring
+      // NOTHING; only `fragment_decl` bit 0 separates them. A composer that had
+      // tested `fragment_state != 0` instead of reading the flag would treat
+      // this material as undeclared, the tag would never leave the record, and
+      // this form would fail. That is the one case the cheap test misses, and
+      // it is the case this bench runs.
+      mr1.fragment_state = 32'h0000_0000;  // frag_profile_opaque_geometry()
+      mr1.fragment_decl  = {8'h00,             // [31:24] reserved 0
+                            8'h00,             // [23:16] stencil_reference
+                            SMK_GLOW_TAG_C,    // [15:8]  effect_tag
+                            8'h01};            // [7:1] reserved 0, [0] DECLARED
+`endif
       upl_rec1 = zhao_abi_pkg::zhao_pack_material_record(mr1);
       for (int unsigned w = 0; w < 4; w++) upl_mem[4 + w] = upl_rec1[64*w +: 64];
     end
@@ -7280,19 +7306,33 @@ module tb_zhao_console_core_smoke
     if (post_bloom_cells_contributing_o == 0)
       $fatal(1, "SMOKE: %0d LIT fragment(s) reached R195's law and POST.COMPOSITE's bloom stage found NO cell contributing. The gather's plane flush and the compositor's plane read disagree about where the cells are.",
              gather_frag_lit_o);
-    $display("SMOKE: -GlowTag  END TO END: tag 0x%02h on one boundary port -> %0d covered pixel(s) of %0d resolved -> %0d LIT by R195's law -> %0d bloom cell(s) -> the frame. The composed console has carried a lit fragment.",
+    $display("SMOKE: -GlowTag  END TO END FROM THE ABI: tag 0x%02h in the uploaded MaterialRecord's `fragment_decl` -> MEM.UPLOAD -> MATERIAL.RESOLVE -> the window's published span -> %0d covered pixel(s) of %0d resolved -> %0d LIT by R195's law -> %0d bloom cell(s) -> the frame. No bench port is involved anywhere in that chain.",
              SMK_GLOW_TAG_C, smk_lit_px_q, gather_fragments_o,
              gather_frag_lit_o, post_bloom_cells_contributing_o);
 `else
-    // NEGATIVE, and it is the half that makes the positive mean anything. With
+    // NEGATIVE, and it is the half that makes the positive mean anything.
+    //
+    // REWORDED 2026-09-25 (FRAGSTATE), because the REASON changed even though
+    // the number did not, and a check whose stated cause has gone stale is the
+    // shape this repository keeps getting caught by. It used to read "with
     // `tri_continuation_tail_i` at its boundary value every fragment carries
-    // tag 0, so the law must classify all of them UNTAGGED and the bloom stage
-    // must find nothing. If this were not exactly zero, the positive form above
-    // would be measuring something other than the tag.
+    // tag 0" -- but that port no longer exists at this edge. The tag now comes
+    // from the MATERIAL, and in this form the uploaded record leaves
+    // `fragment_decl` bit 0 CLEAR, so the material declares no profile, the
+    // composer takes `TAIL_EFFECT_TAG_DEFAULT_C` -- the owner directive's named
+    // default of 0 -- and every fragment is untagged.
+    //
+    // SO THIS PAIR IS NOW A REAL A/B ON ONE ABI FIELD. The two forms differ in
+    // exactly one byte of one uploaded MaterialRecord, and everything else
+    // about the run is identical. Untagged here, lit there.
     if (gather_frag_untagged_o != gather_fragments_o)
-      $fatal(1, "SMOKE: entry I20 leaves `tri_continuation_tail_i` a boundary at '0, so every fragment's tag is 0 and all %0d must be UNTAGGED -- %0d were [below_knee=%0d lit=%0d reserved=%0d]. Something is putting a tag on the stream.",
+      $fatal(1, "SMOKE: the uploaded material leaves `fragment_decl` bit 0 clear, so the composer takes the default effect tag 0 and all %0d fragment(s) must be UNTAGGED -- %0d were [below_knee=%0d lit=%0d reserved=%0d]. Something is putting a tag on the stream.",
              gather_fragments_o, gather_frag_untagged_o, gather_frag_below_knee_o,
              gather_frag_lit_o, gather_reserved_channel_o);
+    // And the bloom must find nothing, for the same reason. If this fired while
+    // the material declared nothing, the tag would be arriving from somewhere
+    // that is not the record -- which after the port retirement means somewhere
+    // nobody authored.
     if (post_bloom_cells_contributing_o != 0)
       $fatal(1, "SMOKE: no fragment was tagged and POST.COMPOSITE's bloom stage still found %0d contributing cell(s) -- the plane is not being cleared between frames, or the read is off the flush's coordinate",
              post_bloom_cells_contributing_o);

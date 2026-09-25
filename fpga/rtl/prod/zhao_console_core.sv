@@ -3420,28 +3420,105 @@
 //      NON-DEGENERATE TERRAIN, and finding that out after wiring the merge would
 //      cost a pass.
 //
-// I20. Everything `zhao_shell_top_v2` already declares provisional at its own
-//      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
-//      geometry memory clients -- is UNCHANGED and still provisional. This
-//      file adds no opinion about them; read that file's header.
+// I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
+//      ports are retired from this module's edge and every field of the last
+//      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
+//      vacation directive of 2026-09-23, section 3.
 //
-//      NARROWED AND MADE SPECIFIC 2026-09-19, because "read that file's
-//      header" was hiding a group of six ports that file's header does not
-//      discuss and this one had never named -- the PACKET-D ATTRIBUTE
-//      CARRIAGE. HALF OF IT IS NOW CLOSED. What is left, and what it is
-//      waiting for, is the rest of this entry.
+//      `zhao_shell_top_v2`'s own provisional edge -- the triangle port,
+//      `fb_writer_i`, the FRAME_RING view, the geometry memory clients -- is
+//      UNCHANGED and still provisional, and that file keeps its own
+//      `tri_continuation_tail_i` and `tri_fragment_state_i` because it has its
+//      own `u_render_bin`. That is exactly the shape `tri_flat_request_i` and
+//      `tri_area2_i` retired in, not a loophole: THIS module's edge is what
+//      this entry was ever about.
 //
 //        tri_invw_plane_i       240b   CLOSED -- GEOM.ATTRPACK, plane 0
 //        tri_u_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 1
 //        tri_v_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 2
 //        tri_flat_request_i     298b   CLOSED 2026-09-20 -- MATERIAL.RESOLVE,
 //                                      through `u_material_window` (I49)
-//        tri_continuation_tail_i 48b   NARROWED 2026-09-23 -- `vertex_alpha`
-//                                      is DRIVEN; the other three fields are
-//                                      still a BOUNDARY
-//        tri_fragment_state_i    32b   NARROWED 2026-09-23 -- BLEND, Z_TEST_EN
-//                                      and Z_WRITE_DIS are DRIVEN; the rest is
-//                                      still a BOUNDARY
+//        tri_continuation_tail_i 48b   CLOSED 2026-09-25 -- RETIRED as a port
+//        tri_fragment_state_i    32b   CLOSED 2026-09-25 -- RETIRED as a port
+//
+//      THE PRODUCER OF EVERY FORMERLY-OPEN FIELD, and why each is a producer
+//      rather than a default somebody chose:
+//
+//        the 32-bit state word
+//            THE MATERIAL's `MaterialRecord.fragment_state` when
+//            `fragment_decl` bit 0 declares it, else THE PRODUCER's own
+//            declaration at `u_geom_clipdoor`. Both are real: the first is a
+//            host-authored ABI field validated on arrival by both mirrors, the
+//            second is what GEOM.REPLAY, FORGE.PRIM, FORGE.SHADOW and
+//            PART.CLIPFEED already present on their own granted beat.
+//        `vertex_alpha` [23:16]
+//            the published span's, owner ruling R89, unchanged from SHADOWRIDE.
+//        `effect_tag` [15:8]
+//            THE MATERIAL's `fragment_decl[15:8]`. This is the field
+//            `sun_additive` has always required and the ABI has never carried
+//            -- see the STARS/SUN analysis further down, which is still
+//            accurate and is why the tag had to be PER-PRIMITIVE and could not
+//            be read from a texel. Default 0, which the directive names as a
+//            legitimate profile default in as many words.
+//        `stencil_reference` [7:0]
+//            THE MATERIAL's `fragment_decl[23:16]`. Default 0, and INERT under
+//            the default profile's STEN_FUNC=ALWAYS, which never reads the
+//            reference at all. A material that declares a stencil FUNCTION
+//            declares its REFERENCE in the same validated word, so the two
+//            cannot arrive separately.
+//        `vertex_rgb` [47:24]
+//            NOBODY's, and this is the field whose answer changed rather than
+//            arrived. Owner decision R234 D1 made
+//            `zhao_raster_tile_pipe_v2.sv:810-812` overwrite it PER FRAGMENT
+//            from Gouraud lanes 3..5, UNCONDITIONALLY, one statement after the
+//            tail is cast. So the 24 bits cannot reach a pixel whatever is put
+//            in them. It is filled with a named dead constant -- BLACK rather
+//            than a plausible white, so that if the overwrite is ever removed
+//            the result is a visible fault instead of a convincing wrong
+//            answer.
+//
+//      THE STENCIL MASK WAS NEVER MISSING, and this is the premise that died
+//      first. Three passes described this entry as owing "reference and mask".
+//      The MASK is `[31:24]` of the state word -- the same word, already
+//      arbitrated by the door, already a term of `zhao_material_window`'s
+//      `match_c`. An 8-bit mask port would have been a SECOND PATH TO THE SAME
+//      SILICON, which is the metadata-swap shape the door's own header refuses.
+//      Measured before building: `grep -rn stencil_mask` over the whole tree
+//      returns nothing, against six files for `stencil_reference`.
+//
+//      THE OR IS GONE, and it was the thing this entry most needed removing.
+//      The state word was composed `tri_fragment_state_i | mw_pub_frag_state`,
+//      and this entry's own words for that were "an external driver can still
+//      raise a bit the span leaves clear". The directive forbids it by name.
+//      The reason it is worse than untidy: UNDER AN OR NEITHER OWNER CAN
+//      EXPRESS A ZERO. BLEND REPLACE is 2'b00, so under an OR no owner could
+//      ever select REPLACE once anything had raised either bit of `[4:3]` -- an
+//      opaque surface behind a transparent one would silently blend. One owner
+//      per span now, selected by `mw_pub_frag_declared`, a registered field.
+//
+//      THE SELECTOR IS A FIELD AND NOT A ZERO TEST, which is the directive's
+//      "profile selection is explicit, not inferred from whether a port happens
+//      to be zero" doing real work: the all-zero state word is a LEGAL,
+//      MEANINGFUL profile -- the plain opaque write -- so a material declaring
+//      opaque is bit-identical to one declaring nothing. Written as
+//      `state != 0` this would have worked for seven profiles and silently
+//      ignored the eighth. The console smoke's `-GlowTag` form declares exactly
+//      that all-zero profile, so the cheap test is not merely argued against,
+//      it is the case the bench runs.
+//
+//      WHERE THE SCHEMA LIVES. `zhao_render_texture_pkg.sv` carries the word's
+//      fields, all twelve enum encodings and the eight named profiles, with an
+//      elaboration contract and fifty-nine executed span probes. Nothing about
+//      the ENCODING changed: the directive's STEN_FUNC / STEN_OP / BLEND
+//      numbering was measured against `zhao_raster_fragment.sv` and
+//      `zhao_raster_blend_fin.sv` first and is already what ships, so every
+//      published capture still decodes. What changed is CUSTODY -- the word had
+//      been hand-maintained in four copies, two of which nothing checked.
+//
+//      (HISTORY FROM HERE DOWN. The paragraphs below are kept because their
+//      REASONING is what made the closure possible and several of them killed a
+//      premise that would otherwise be re-derived. Where one is now superseded
+//      it says so at the point of the claim rather than being deleted.)
 //
 //      BOTH REMAINING PORTS WERE NARROWED 2026-09-23 (SHADOWRIDE), and the
 //      pair had to move TOGETHER. R89 ruled that FORGE.SHADOW's flat alpha
@@ -3463,6 +3540,11 @@
 //      `tri_flat_request_c` relies on, and the declaration is part of the
 //      span's identity so a primitive cannot be painted with the previous
 //      one's opacity. See `tri_continuation_tail_c` beside the flat request.
+//
+//      SUPERSEDED 2026-09-25: every field this paragraph lists now has an
+//      owner, and the OR it describes is removed. It is kept because its
+//      analysis of WHY each was refused is correct and is the reason none of
+//      them was ever quietly filled.
 //
 //      WHAT STAYS A BOUNDARY, and it is the whole of why this entry is still
 //      open: the tail's `effect_tag` (R195's bloom selector, which the console
@@ -3697,6 +3779,31 @@
 //                  art decision. There is no PROVOKING-VERTEX law in this tree
 //                  -- searched every .sv, .md, .hpp and .zidl; ZERO hits -- so
 //                  there is not even a convention to appeal to. OWNER DECISION.
+//                  SUPERSEDED 2026-09-25, TWICE OVER, and the second half is
+//                  the one worth carrying forward.
+//                  (a) THE LAW EXISTS NOW. The directive rules the provoking
+//                  vertex is the FIRST vertex of the ORIGINAL SUBMITTED
+//                  primitive, before clipping, triangulation or winding swaps.
+//                  It is written down in `design/contracts/RASTER.FRAGMENT.md`
+//                  under "THE PROVOKING VERTEX" -- the reference and the spec,
+//                  not only here.
+//                  (b) THE ZERO-HIT GREP WAS ALREADY WRONG WHEN IT WAS
+//                  WRITTEN, or became so. `zref_creature.hpp` carries
+//                  `g_force_flat_shading` with `kShadeFlatPvA/B/C` -- three
+//                  provoking-vertex readings, built as a LOOK-AT-IT comparison
+//                  for this exact question -- and `creature_sim.cpp` implements
+//                  them. The file even QUOTES this entry's "no law" sentence.
+//                  A zero-result grep that is quoted for four days is this
+//                  repository's most reliable way of inheriting a false
+//                  premise, and it cost this packet a near-miss: the first plan
+//                  was to write a SECOND provoking-vertex convention.
+//                  (c) AND THE ENUM ALONE IS NOT THE LAW. `kShadeFlatPvA` names
+//                  a corner of the triangle the RASTERISER receives;
+//                  `zhao_geom_clip` swaps B and C on a negative area, and
+//                  clipping can produce derived triangles containing NONE of
+//                  the submitted corners. So the payload must be captured at
+//                  submission and carried as primitive metadata, which is a
+//                  different mechanism and is why the directive says so.
 //        vertex_alpha [23:16] R89 ruled the route (flat, not a fourth attrpack
 //                  plane) and FORGE.SHADOW.md's own section records that the
 //                  VALUE has no producer: `zhao_forge_shadow`'s `strength_q`
@@ -10316,8 +10423,20 @@ module zhao_console_core
   // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
   // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
   // as `tri_area2_i` and the three attribute planes were retired before it.
-  input  logic [47:0]  tri_continuation_tail_i,
-  input  logic [31:0]  tri_fragment_state_i,
+  //
+  // `tri_continuation_tail_i` AND `tri_fragment_state_i` LEFT THIS LIST
+  // 2026-09-25 (FRAGSTATE, entry I20), the last two of the PACKET-D ATTRIBUTE
+  // CARRIAGE's six. Both are built below from named owners:
+  //   the 32-bit state word   the MATERIAL's `fragment_state` when
+  //                           `fragment_decl` bit 0 declares it, else the
+  //                           PRODUCER's declaration at `u_geom_clipdoor`;
+  //   `vertex_alpha`          the published span's (owner ruling R89);
+  //   `effect_tag`            the MATERIAL's, default 0 per the owner directive;
+  //   `stencil_reference`     the MATERIAL's, default 0, inert under ALWAYS;
+  //   `vertex_rgb`            NOBODY's -- R234 D1 has the consumer overwrite it
+  //                           per fragment from the Gouraud lanes.
+  // There is no OR anywhere in that composition and no field has two owners at
+  // once; see the block beside `tri_continuation_tail_c`.
   input  logic         fill_req_ready_i,
   output logic         fill_req_valid_o,
   output logic [31:0]  fill_req_addr_o,
@@ -13804,6 +13923,18 @@ module zhao_console_core
   // the mode. These are what close entry I20's two open fields below.
   wire [ 7:0]             mw_pub_vertex_alpha;
   wire [31:0]             mw_pub_frag_state;
+  // THE MATERIAL'S HALF of the same declaration (FRAGSTATE, 2026-09-25), latched
+  // by the same enable as the published record it belongs to.
+  // `mw_pub_frag_declared` is the AUTHORITY SELECTOR between this and the
+  // producer's `mw_pub_frag_state` above -- read the composition block below.
+  wire                    mat_rsp_frag_declared_c;
+  wire [31:0]             mat_rsp_frag_state_c;
+  wire [ 7:0]             mat_rsp_effect_tag_c;
+  wire [ 7:0]             mat_rsp_stencil_ref_c;
+  wire                    mw_pub_frag_declared;
+  wire [31:0]             mw_pub_mat_frag_state;
+  wire [ 7:0]             mw_pub_effect_tag;
+  wire [ 7:0]             mw_pub_stencil_ref;
   /* verilator lint_on UNUSEDSIGNAL */
   wire signed [20:0]      rp_o_ax, rp_o_ay, rp_o_bx, rp_o_by, rp_o_cx, rp_o_cy;
   wire [2:0]              rp_o_behind;
@@ -24066,6 +24197,16 @@ module zhao_console_core
     .rsp_palette_base_o     (mat_rsp_palette_base_o),
     .rsp_raster_state_o     (mat_rsp_raster_state_o),
     .rsp_flags_o            (mat_rsp_flags_o),
+    // THE MATERIAL'S FRAGMENT PROFILE (FRAGSTATE, 2026-09-25). These four are
+    // INTERNAL wires and not core outputs, deliberately: they are consumed
+    // entirely by `u_material_window` a few hundred lines below, and a boundary
+    // output for each would be four more provisional shell ports that nothing
+    // reads -- the uncashed-cheque shape. The record they come from is already
+    // observable on `mat_rsp_record_o`.
+    .rsp_frag_declared_o    (mat_rsp_frag_declared_c),
+    .rsp_frag_state_o       (mat_rsp_frag_state_c),
+    .rsp_effect_tag_o       (mat_rsp_effect_tag_c),
+    .rsp_stencil_ref_o      (mat_rsp_stencil_ref_c),
     .rsp_sample0_modes_o    (mat_rsp_sample0_modes_o),
     .rsp_sample1_modes_o    (mat_rsp_sample1_modes_o),
     .rsp_sample2_modes_o    (mat_rsp_sample2_modes_o),
@@ -25046,6 +25187,10 @@ module zhao_console_core
     .rsp_recipe_weight_i    (mat_rsp_recipe_weight_o),
     .rsp_base_binding_i     (mat_rsp_base_binding_o),
     .rsp_selector_overflow_i(mat_rsp_selector_overflow_o),
+    .rsp_frag_declared_i    (mat_rsp_frag_declared_c),
+    .rsp_frag_state_i       (mat_rsp_frag_state_c),
+    .rsp_effect_tag_i       (mat_rsp_effect_tag_c),
+    .rsp_stencil_ref_i      (mat_rsp_stencil_ref_c),
     .rsp_sample0_modes_i    (mat_rsp_sample0_modes_o),
 
     // REAL: the published material, into the flat request below.
@@ -25058,6 +25203,12 @@ module zhao_console_core
     .pub_material_mode_o   (mw_pub_material_mode),
     .pub_vertex_alpha_o    (mw_pub_vertex_alpha),
     .pub_frag_state_o      (mw_pub_frag_state),
+    // THE MATERIAL'S FRAGMENT PROFILE, published beside the producer's rather
+    // than merged with it, so the authority can be resolved BY NAME below.
+    .pub_frag_declared_o   (mw_pub_frag_declared),
+    .pub_mat_frag_state_o  (mw_pub_mat_frag_state),
+    .pub_effect_tag_o      (mw_pub_effect_tag),
+    .pub_stencil_ref_o     (mw_pub_stencil_ref),
 
     .resolves_o                (mat_win_resolves_o),
     .switches_o                (mat_win_switches_o),
@@ -25210,16 +25361,160 @@ module zhao_console_core
   // BEFORE A SPAN IS PUBLISHED both are the boundary's own value, exactly as
   // they were when the port was the only answer. So this changes what the
   // console does only once a material has actually been resolved.
-  wire [47:0] tri_continuation_tail_c =
-      mw_pub_valid
-        ? { tri_continuation_tail_i[47:24],          // vertex_rgb, the port's
-            mw_pub_vertex_alpha,                     // [23:16] THE SPAN'S
-            tri_continuation_tail_i[15:0] }          // effect_tag, stencil ref
-        : tri_continuation_tail_i;
+  // --------------------------------------------------------------------------
+  // THE AUTHORITY, RESOLVED (FRAGSTATE, 2026-09-25). The OR is GONE.
+  // --------------------------------------------------------------------------
+  // WHAT WAS HERE AND WHY IT HAD TO GO. The state word was composed as
+  // `tri_fragment_state_i | mw_pub_frag_state`, and this file's own words for
+  // that were "the two halves of the state are OR-ed rather than replaced, so an
+  // external driver can still raise a bit the span leaves clear". The owner
+  // vacation directive of 2026-09-23 names exactly this and forbids it: **"Do
+  // not OR two overlapping field owners together to avoid resolving which source
+  // is authoritative."**
+  //
+  // The OR is not merely untidy, and it is worth saying why rather than citing
+  // the ruling and moving on. Under an OR NEITHER owner can express a ZERO. A
+  // material that means `Z_WRITE_DIS = 0` -- write the depth -- cannot say so if
+  // any other owner has that bit high, so half of every field's value space is
+  // unreachable and which half depends on a value nobody chose. `BLEND` is the
+  // sharpest case: REPLACE is encoded 2'b00, so under an OR **no owner can ever
+  // select REPLACE** once anything else has raised either bit of `[4:3]`. An
+  // opaque surface behind a transparent one would silently blend.
+  //
+  // THE RESOLUTION IS ONE OWNER PER SPAN, NAMED, WITH AN EXPLICIT SELECTOR.
+  //
+  //   `mw_pub_frag_declared` set -- the MATERIAL is authoritative for the whole
+  //       word, its effect tag and its stencil reference. This is
+  //       `MaterialRecord.fragment_decl` bit 0, validated on arrival by BOTH
+  //       mirrors, refused if it contradicts its own payload.
+  //   `mw_pub_frag_declared` clear -- the PRODUCER's door declaration is
+  //       authoritative for the whole word. That is `mw_pub_frag_state`, which
+  //       every producer presents at `u_geom_clipdoor` on the same granted beat
+  //       as its triangle. Particles (PART.EXPAND's pass-7 law) and shadows
+  //       (R89's BLEND=ALPHA) live here, and so does every MATMODE_NONE span,
+  //       which has no record to read a profile out of.
+  //
+  // THE SELECTOR IS A FIELD AND NOT A ZERO TEST, and that is the directive's
+  // "profile selection is explicit, not inferred from whether a port happens to
+  // be zero" doing real work rather than sounding principled. The all-zero state
+  // word is a LEGAL, MEANINGFUL profile -- `frag_profile_opaque_geometry()`, the
+  // plain opaque write -- so a material that deliberately declares opaque is
+  // bit-identical to one that declares nothing, and only the flag separates
+  // them. Had this been written as `mw_pub_mat_frag_state != 0` it would have
+  // worked for seven profiles and silently ignored the eighth.
+  //
+  // NOTHING IS OR-ED, NOTHING IS MASKED, AND NO FIELD HAS TWO OWNERS AT ONCE.
+  // A primitive is painted under exactly one declaration, and which one is a
+  // registered field of the published span rather than a property of the data.
+  // THE FOUR NAMED VALUES THIS COMPOSER OWNS. Every one is a knob, in this
+  // file, with the ruling or the measurement that chose it beside it -- because
+  // "this is derived from the reference, so it is not a knob" is how a wrong
+  // number becomes an unadjustable wrong number.
+  //
+  // THE UNPUBLISHED PROFILE. Before `u_material_window` has published anything,
+  // no material and no span exists, and this is the word every triangle in this
+  // console has always been drawn under. It is written as the PACKAGE's named
+  // profile rather than as `32'd0`, and that is the whole point of giving the
+  // zero word a name: a reader can tell a DECLARED opaque profile from an
+  // undriven wire, and if the encoding ever moved so that all-zero stopped
+  // meaning the plain opaque write, this would follow it instead of silently
+  // becoming something else.
+  localparam logic [31:0] FRAG_STATE_UNPUBLISHED_C =
+      zhao_fragment_state_pkg::frag_profile_opaque_geometry();
+  // R48: no ratified vertex format carries alpha, so OPAQUE is the default and
+  // nothing is stubbed. A span publishes the producer's real declaration.
+  localparam logic [ 7:0] TAIL_VERTEX_ALPHA_DEFAULT_C = 8'hFF;
+  // The owner directive of 2026-09-23: "Default opaque alpha is 255; default
+  // effect tag is 0." Tag 0 is `untagged` -- POST.GATHER counts it and the bloom
+  // law leaves it alone, which is what an ordinary surface wants.
+  localparam logic [ 7:0] TAIL_EFFECT_TAG_DEFAULT_C   = 8'h00;
+  // Stencil reference 0 under the default profile's STEN_FUNC=ALWAYS, which
+  // never reads the reference at all -- so this value is inert unless a material
+  // declares a stencil function, and a material that declares one also declares
+  // its reference. The two travel in the same validated word.
+  localparam logic [ 7:0] TAIL_STENCIL_REF_DEFAULT_C  = 8'h00;
+  // [47:24] of the tail. NOT a colour: R234 D1 makes the consumer overwrite
+  // these 24 bits per fragment from the Gouraud lanes before anything reads
+  // them, so this is a named DEAD FILLER and its value cannot reach a pixel.
+  // Zero rather than a plausible white, deliberately: if the overwrite is ever
+  // removed, black is a visible fault and white is a convincing wrong answer.
+  localparam logic [23:0] TAIL_VERTEX_RGB_UNUSED_C    = 24'h00_0000;
+
+  // AND THE PAIRING IS STRUCTURAL, NOT ARGUED. The owner directive requires
+  // that the stencil reference, the alpha, the blend and the tag "remain paired
+  // with the primitive under stalls, clipping, replay, binning and
+  // material-window span changes" -- which is CLAUDE.md's metadata-swap chapter
+  // as a requirement, and the question it says to ask is what clocks each side.
+  //
+  // MEASURED, 2026-09-25, because "the span protects it" is the kind of sentence
+  // that is true of the BLOCK and silently false of the COMPOSITION. The window
+  // drains on `d_leave_i`, which this module wires to
+  // `door_tri_valid_w && door_tri_ready_w`. Those two nets ARE `u_render_bin`'s
+  // `render_tri_valid_i` / `render_tri_ready_o` -- the same instance these two
+  // `_c` wires feed -- and `zhao_geom_binner_v2` samples the metadata on exactly
+  // that handshake, "only on the same `tri_we` edge that stores the
+  // corresponding 142-bit triangle".
+  //
+  // So THE DRAIN'S DEPARTURE EVENT IS THE METADATA SAMPLING EVENT: one
+  // handshake, one clock, no window between them. A span cannot switch while a
+  // triangle is in flight toward the binner, because the switch waits for
+  // occupancy zero and occupancy only falls when the binner has taken the beat.
+  // The profile a triangle is binned with is necessarily the one published when
+  // it was accepted -- a property of the structure rather than of a counter that
+  // would have to be believed. Note which way round that argument runs: it is
+  // NOT "the two move together so nothing can differ", which is the reasoning
+  // the metadata-swap chapter warns about; it is that there is no clock on which
+  // they CAN differ, because the event that retires one is the event that
+  // samples the other.
+  //
+  // ONE VALUE DID CHANGE AND IT IS NOT A PIXEL, recorded because a silent
+  // default change is how this file gets audited later. Before the port was
+  // retired, the tail's `vertex_alpha` before any span was published was
+  // whatever the boundary carried -- which every bench drove to 0x00, i.e.
+  // FULLY TRANSPARENT, a value nobody ever authored. It is now
+  // `TAIL_VERTEX_ALPHA_DEFAULT_C`, opaque, which is what owner ruling R48
+  // actually says the default is. No pixel moves either way while the
+  // unpublished profile is BLEND=REPLACE, because that arm is `acc = src_i` and
+  // throws the alpha away -- and the console smoke measured exactly that, with
+  // both forms reporting the same pixel counts before and after this packet.
+  // The old value would have become a defect the day anything published an
+  // alpha blend before a material resolved; the new one is simply correct.
+  wire mat_declares_frag_c = mw_pub_valid && mw_pub_frag_declared;
 
   wire [31:0] tri_fragment_state_c =
-      mw_pub_valid ? (tri_fragment_state_i | mw_pub_frag_state)
-                   : tri_fragment_state_i;
+        mat_declares_frag_c ? mw_pub_mat_frag_state   // the MATERIAL's, whole
+      : mw_pub_valid        ? mw_pub_frag_state       // the PRODUCER's, whole
+                            : FRAG_STATE_UNPUBLISHED_C;
+
+  // THE TAIL. `vertex_alpha` is the span's (R89). `effect_tag` and
+  // `stencil_reference` are the MATERIAL's when it declares a profile, and the
+  // named profile defaults otherwise -- which the directive blesses in as many
+  // words: "Default opaque alpha is 255; default effect tag is 0. These are
+  // legitimate profile defaults, not permission to leave a mandatory
+  // programmable path tied." They are defaults WITH a producer, not tie-offs:
+  // the same two fields carry a real authored value the moment a material
+  // declares one, and the constants below are named and editable.
+  //
+  // `vertex_rgb` IS NOT DRIVEN FROM HERE AND MUST NOT BE. Owner decision R234
+  // D1 made `zhao_raster_tile_pipe_v2` OVERWRITE this field per fragment from
+  // attribute lanes 3..5 -- `continuation_w.post_earlyz.vertex_rgb` is assigned
+  // unconditionally from the three Gouraud lanes one statement after the tail is
+  // cast. Measured, not assumed: `zhao_raster_tile_pipe_v2.sv:810-812`. So the
+  // 24 bits are DEAD on arrival, whatever is put in them, and the directive's
+  // "Do not replace Gouraud with flat color to close I20" is satisfied by the
+  // consumer rather than by this composer's restraint. See the PROVOKING VERTEX
+  // section in `design/contracts/RASTER.FRAGMENT.md` for where a future EXPLICIT
+  // flat profile would have to put its selector, and why it cannot be a bit of
+  // the fragment state word.
+  wire [47:0] tri_continuation_tail_c = {
+      TAIL_VERTEX_RGB_UNUSED_C,                        // [47:24] dead: R234 D1
+      mw_pub_valid ? mw_pub_vertex_alpha
+                   : TAIL_VERTEX_ALPHA_DEFAULT_C,      // [23:16] R89's, the span's
+      mat_declares_frag_c ? mw_pub_effect_tag
+                          : TAIL_EFFECT_TAG_DEFAULT_C, // [15:8]  the MATERIAL's
+      mat_declares_frag_c ? mw_pub_stencil_ref
+                          : TAIL_STENCIL_REF_DEFAULT_C // [7:0]   the MATERIAL's
+  };
 
 
   // --------------------------------------------------------------------------
