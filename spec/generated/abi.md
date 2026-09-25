@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = ad14c103b016eedf3dae60948a4e236f8f03563e046bfc1d4aaa058eacf37366
-zidl_sha256         = a70d78a2a2947ec4a5c23c8f153c1ebb457de7a44e7fa56b10a69f724cdc57b3
+abi_identity_sha256 = 790acb28781b1cf4e4e97542062360951cc28a3e7259166141937dcc832f3de5
+zidl_sha256         = c91773e0c7c0e4b28ca6bbaacbe5943f20257364d92c1f7e95b97df08a91b45c
 ```
 
 ABI version **3**, little-endian, command alignment
@@ -810,8 +810,8 @@ TS `zhaoPackDrawSprite(zhaoSampleDrawSprite(), ...)`, SV round-trips it via
 | 12 | 4 | `sample2` | MaterialSample |
 | 16 | 4 | `palette_base` | u32 |
 | 20 | 4 | `raster_state` | u32 |
-| 24 | 4 | `rsv0` | u32 |
-| 28 | 4 | `rsv1` | u32 |
+| 24 | 4 | `fragment_state` | u32 |
+| 28 | 4 | `fragment_decl` | u32 |
 
 ## Value enums (ABI v2)
 

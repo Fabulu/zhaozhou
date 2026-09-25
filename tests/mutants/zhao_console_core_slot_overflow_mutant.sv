@@ -2315,8 +2315,13 @@ module zhao_console_core_slot_overflow_mutant
   // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
   // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
   // as `tri_area2_i` and the three attribute planes were retired before it.
-  input  logic [47:0]  tri_continuation_tail_i,
-  input  logic [31:0]  tri_fragment_state_i,
+  // `tri_continuation_tail_i` and `tri_fragment_state_i` were RETIRED from
+  // zhao_console_core's port list 2026-09-25 (FRAGSTATE, entry I20), so this
+  // WRAPPER dropped them with it. `tools/design/wrapper_port_parity.py` is what
+  // caught the two-port skew, and its own message is the rule: fix the wrapper,
+  // never the module (owner ruling R220). A wrapper that keeps a port the real
+  // module dropped cannot bind it even through `.*`, and the failure reads like
+  // a broken core rather than a stale copy.
   input  logic         fill_req_ready_i,
   output logic         fill_req_valid_o,
   output logic [31:0]  fill_req_addr_o,

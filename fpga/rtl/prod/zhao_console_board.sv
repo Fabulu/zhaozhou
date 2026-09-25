@@ -2783,8 +2783,13 @@ module zhao_console_board
   // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
   // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
   // as `tri_area2_i` and the three attribute planes were retired before it.
-  input  logic [47:0]  tri_continuation_tail_i,
-  input  logic [31:0]  tri_fragment_state_i,
+  //
+  // `tri_continuation_tail_i` AND `tri_fragment_state_i` LEFT THIS LIST
+  // 2026-09-25 (FRAGSTATE, entry I20), with the core's -- this wrapper MIRRORS
+  // the core's port list and `tools/design/wrapper_port_parity.py` is the gate
+  // that says so, so the two files move together or neither does. The composed
+  // owners are named in `zhao_console_core.sv`'s own port comment and built
+  // beside `tri_continuation_tail_c`.
   input  logic         fill_req_ready_i,
   output logic         fill_req_valid_o,
   output logic [31:0]  fill_req_addr_o,
@@ -5219,8 +5224,6 @@ module zhao_console_board
       .pal_load_idx_i                     (pal_load_idx_i),
       .pal_load_rgb565_i                  (pal_load_rgb565_i),
       .pal_load_crc_ok_i                  (pal_load_crc_ok_i),
-      .tri_continuation_tail_i            (tri_continuation_tail_i),
-      .tri_fragment_state_i               (tri_fragment_state_i),
       .fill_req_ready_i                   (fill_req_ready_i),
       .fill_req_valid_o                   (fill_req_valid_o),
       .fill_req_addr_o                    (fill_req_addr_o),

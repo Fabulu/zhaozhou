@@ -372,9 +372,91 @@ struct MaterialRecord {
                       // descriptor's raster_state[31:2] (no v1 consumer: 0);
                       // bits 0-1 reserved 0 -- the cull mode is the DRAW's
                       // (DrawForm flags[3:2]). Model: zref::raster_state.
-  u32 rsv0;           // reserved, must be 0
-  u32 rsv1;           // reserved, must be 0 (closes the record at 32 B)
+  u32 fragment_state; // THE FRAGMENT PIPELINE'S 32-BIT STATE WORD, v1 schema
+                      // (zhao_render_texture_pkg::zhao_fragment_state_v1_t,
+                      // mirror zref::FragmentPipeline::State). Bit for bit the
+                      // word zhao_raster_fragment.sv has always decoded:
+                      //   [0] Z_TEST_EN      [1] Z_WRITE_DIS  [2] Z_FORCE_FAR
+                      //   [4:3] BLEND        [5] SHADE_MOD    [6] ALPHA_MOD
+                      //   [7] ATEST_EN       [15:8] ATEST_REF
+                      //   [17:16] STEN_FUNC  [19:18] STEN_OP
+                      //   [20] TAG_WRITE_DIS [21] TAG_FROM_TEXEL
+                      //   [23:22] TAG_CHANNEL [31:24] STEN_MASK
+                      // MUST BE 0 unless fragment_decl bit0 is set -- see the
+                      // contradiction rule below.
+                      // NOT R28's raster_state: that word is the TRIANGLE
+                      // DESCRIPTOR's draw-state sideband with its own cull
+                      // field, four bytes up. Same width, same English name,
+                      // different layouts, different consumers, and the owner
+                      // directive names confusing them as a trap by itself.
+                      // zref_raster_state.hpp's header says the same.
+  u32 fragment_decl;  // bit0     fragment_declared -- THE EXPLICIT SELECTOR
+                      // bits 1-7 reserved, must be 0
+                      // bits 8-15  effect_tag        (u8)
+                      // bits 16-23 stencil_reference (u8)
+                      // bits 24-31 reserved, must be 0 (closes at 32 B)
 }
+
+// ---- THE FRAGMENT PROFILE, allocated 2026-09-25 (FRAGSTATE) ----------------
+// Owner vacation directive of 2026-09-23 section 3: "Expose the missing
+// reference/mask/state through real material/draw/primitive producers, using
+// validated versioned extensions or a new opcode where needed."
+//
+// SUPERSEDES the two words' previous declaration -- `u32 rsv0; u32 rsv1;
+// // reserved, must be 0`. Nothing else about MaterialRecord moves.
+//
+// VERSION: UNCHANGED at 3, and no opcode is allocated. This is a same-bytes
+// reinterpretation of two MANDATORY-ZERO words at unchanged offsets (24 and 28)
+// and unchanged sizes, which is the ratified pattern -- the DrawProcedural
+// frame_tick/material_id allocation and SetView's depth_profile are the
+// precedents, and capture_format.md 1.3's "opcode, field set and sizes never
+// change" is honoured because none of the three does.
+//
+// ZERO KEEPS ITS MEANING, which is the whole reason these two words were chosen
+// over any other carrier. Both were already refused-if-nonzero by BOTH mirrors
+// (zref::material_resolve's record_legal and zhao_material_resolve.sv's
+// record_ok_f), so every committed capture has them zero, and zero now decodes
+// to "this material declares no fragment profile" -- under which the primitive
+// producer's own door declaration stands exactly as it did before this line was
+// written. No existing capture changes by one pixel.
+//
+// THE SELECTOR IS EXPLICIT AND THE CONTRADICTION IS REFUSED. The directive says
+// "profile selection is explicit, not inferred from whether a port happens to be
+// zero", and that is load-bearing here rather than decorative: the all-zero
+// state word IS a legal and meaningful profile -- frag_profile_opaque_geometry(),
+// the plain opaque write -- so "is the word zero?" cannot be the question.
+// fragment_decl bit0 answers it. And a record with bit0 CLEAR but a non-zero
+// fragment_state, or a non-zero effect_tag or stencil_reference, is a
+// CONTRADICTORY DECLARATION: it is REFUSED whole and counted, never masked.
+// That is SetPost.flags's discipline ("CMD.EXEC drops the record and counts it,
+// it never masks a bit it does not know") rather than compose()'s silent mask,
+// and it catches the one mistake this shape invites -- a producer that fills the
+// state and forgets the flag, whose material would otherwise be drawn opaque
+// with no diagnostic.
+//
+// WHY THE MATERIAL AND NOT THE DRAW. DrawForm.flags has 12 unassigned bits and
+// they are NOT enforced zero: the committed golden cmd_draw_form.bin's own
+// sample sets flags = 0xB338, i.e. bits 4,5,8,9,12,13 and 15. Claiming one would
+// change the meaning of bytes existing captures already carry, which is the one
+// thing the frozen-opcode rule forbids. Measured, not assumed.
+//
+// WHY NOT MaterialRecord.raster_state[31:2], which also has 30 spare bits: that
+// word is R28's TRIANGLE DESCRIPTOR state, and the directive explicitly names
+// confusing the two as a trap. It is also not actually carried -- both mirrors
+// substitute a named constant for it (zref_drawjob.hpp's kV1MaterialRaster = 0
+// and zhao_geom_drawjob.sv's V1_MATERIAL_RASTER_C = 30'd0) -- so plumbing the
+// fragment profile through it would have been routing a live value down a
+// channel whose current content is an invented zero. Separate identity, separate
+// word.
+//
+// WHY A WHOLE 32-BIT WORD rather than a small profile index. The directive
+// requires "stencil reference and mask are explicit u8 values", and the MASK is
+// a field of this very word ([31:24] STEN_MASK) -- it is not a separate quantity
+// and must never become a second port to the same silicon. An index into a table
+// of eight named recipes could not express a mask, an ATEST_REF or a stencil
+// function at all. The named profiles in zhao_render_texture_pkg.sv are how a
+// producer CONSTRUCTS this word conveniently; they are not a narrower channel it
+// has to squeeze through.
 
 // ---- frame control ---------------------------------------------------------
 

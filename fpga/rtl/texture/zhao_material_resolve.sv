@@ -282,6 +282,22 @@ module zhao_material_resolve #(
     output logic [7:0]               rsp_sample1_modes_o,
     output logic [7:0]               rsp_sample2_modes_o,
 
+    // ---- THE FRAGMENT PROFILE (FRAGSTATE, 2026-09-25) -----------------------
+    // The material's own declaration for the fragment pipeline, projected beside
+    // the rest of the record rather than left inside `rsp_record_o` for a
+    // consumer to slice by number. Four ports and not one, because the state
+    // word, the tag and the stencil reference travel to three different places
+    // downstream and the DECLARED flag selects between this material and the
+    // primitive producer's own door declaration.
+    //
+    // `rsp_frag_declared_o` is the authority selector, NOT a "is it non-zero"
+    // test: the all-zero state word is the legal opaque profile, so a consumer
+    // cannot infer the declaration from the payload and must read this bit.
+    output logic                     rsp_frag_declared_o,
+    output logic [31:0]              rsp_frag_state_o,
+    output logic [7:0]               rsp_effect_tag_o,
+    output logic [7:0]               rsp_stencil_ref_o,
+
     // ---- evidence -----------------------------------------------------------
     // The ledger's three catalog identities first, then the refusal classes
     // the oracle's `ResolveLedger` separates. `material_refused_o` is their
@@ -335,8 +351,11 @@ module zhao_material_resolve #(
   localparam int unsigned OFF_S2_MODES       = 120;
   localparam int unsigned OFF_PALETTE_BASE   = 128;  // bytes 16-19
   localparam int unsigned OFF_RASTER_STATE   = 160;  // bytes 20-23
-  localparam int unsigned OFF_RSV0           = 192;  // bytes 24-27
-  localparam int unsigned OFF_RSV1           = 224;  // bytes 28-31
+  // FRAGSTATE 2026-09-25: these two were OFF_RSV0 / OFF_RSV1. The OFFSETS are
+  // unchanged -- that is the whole point of a same-bytes reinterpretation -- and
+  // only the names and the legality rules moved. See `spec/commands.zidl`.
+  localparam int unsigned OFF_FRAG_STATE     = 192;  // bytes 24-27
+  localparam int unsigned OFF_FRAG_DECL      = 224;  // bytes 28-31
   /* verilator lint_on UNUSEDPARAM */
 
   // ---- `zref::material::Status`, value for value ---------------------------
@@ -490,9 +509,25 @@ module zhao_material_resolve #(
       if ({1'b0, recipe} >= RECIPE_COUNT[3:0]) ok = 1'b0;
       // flags bits 3-15 reserved 0.
       if (flags[15:3] != 13'd0) ok = 1'b0;
-      // both reserved words.
-      if (r[OFF_RSV0 +: 32] != 32'd0) ok = 1'b0;
-      if (r[OFF_RSV1 +: 32] != 32'd0) ok = 1'b0;
+      // THE FRAGMENT PROFILE (FRAGSTATE, 2026-09-25). These two words were
+      // `rsv0`/`rsv1`, both refused-if-nonzero; the owner vacation directive of
+      // 2026-09-23 section 3 allocates them as the material's fragment-pipeline
+      // declaration. `spec/commands.zidl`'s MaterialRecord carries the layout,
+      // `zref::material::record_legal` is the mirror of these three lines, and
+      // the two are differenced by `material_resolve_rtl_directed`.
+      //
+      // fragment_decl bits 1-7 and 24-31 stay reserved and MUST be zero.
+      if (r[OFF_FRAG_DECL + 1 +: 7]  != 7'd0) ok = 1'b0;
+      if (r[OFF_FRAG_DECL + 24 +: 8] != 8'd0) ok = 1'b0;
+      // THE CONTRADICTORY DECLARATION, REFUSED WHOLE. Bit 0 is the EXPLICIT
+      // selector: the all-zero state word is a legal, meaningful profile (the
+      // plain opaque write), so "is the word zero?" cannot select and the flag
+      // must. A record that fills the state and forgets the flag is refused
+      // rather than masked, because masking would draw it opaque and say
+      // nothing -- `SetPost.flags`'s rule, not `compose`'s silent mask.
+      if (!r[OFF_FRAG_DECL] &&
+          ((r[OFF_FRAG_STATE +: 32]      != 32'd0) ||
+           (r[OFF_FRAG_DECL + 8 +: 16]   != 16'd0))) ok = 1'b0;
       // Every sample the record CLAIMS must have a legal wrap code; samples
       // beyond the count are NOT inspected, because they are not read. Wrap 3
       // is reserved by the frozen layout.
@@ -563,6 +598,16 @@ module zhao_material_resolve #(
   assign rsp_sample0_modes_o   = has_rec_q ? rec_q[OFF_S0_MODES +: 8] : 8'd0;
   assign rsp_sample1_modes_o   = has_rec_q ? rec_q[OFF_S1_MODES +: 8] : 8'd0;
   assign rsp_sample2_modes_o   = has_rec_q ? rec_q[OFF_S2_MODES +: 8] : 8'd0;
+
+  // The fragment profile, on the SAME `has_rec_q` gate as every field above, so
+  // a refusal presents "no declaration" rather than the previous material's
+  // profile. A stale `declared` would be worse than a stale state word: the
+  // consumer would take a dead material's blend mode as authoritative over the
+  // live producer's own.
+  assign rsp_frag_declared_o   = has_rec_q && rec_q[OFF_FRAG_DECL];
+  assign rsp_frag_state_o      = has_rec_q ? rec_q[OFF_FRAG_STATE +: 32] : 32'd0;
+  assign rsp_effect_tag_o      = has_rec_q ? rec_q[OFF_FRAG_DECL + 8  +: 8] : 8'd0;
+  assign rsp_stencil_ref_o     = has_rec_q ? rec_q[OFF_FRAG_DECL + 16 +: 8] : 8'd0;
 
   // The assembled fill, one beat at a time, low beat first (little-endian, the
   // same order `spec/commands.zidl` lays the record out in).
