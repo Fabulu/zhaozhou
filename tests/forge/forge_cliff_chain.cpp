@@ -334,6 +334,48 @@ std::vector<Quad> expected_quads(const zt::ComposedLattice& lat,
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// AN INDEPENDENT GEOMETRIC INVARIANT, and it is here because of a real
+// weakness in the check below it.
+// ---------------------------------------------------------------------------
+// `expected_quads` is built from `endpoints()`, which is a TRANSCRIPTION of the
+// RTL's own endpoint map. Transcribing it twice catches DRIFT -- a silent edit
+// to either side turns red rather than producing a matching pair of wrongs --
+// but it cannot catch a map that was wrong in the first place, because both
+// copies would be wrong together. (The map is separately ratified upstream:
+// `forge_cliff_ram_differential` drives vdist and compares the priorities the
+// evaluator reads through those very addresses against
+// `zref::forge::rim_plan`. So it is not unchecked. It is just not checked
+// HERE.)
+//
+// These assertions owe nothing to the map. They are what a wall quad IS:
+//   * it is a VERTICAL quad -- corners 0 and 3 share (x, z), so do 1 and 2;
+//   * the top edge is not below the bottom edge at either end;
+//   * its two ends are distinct, and they differ along exactly ONE axis,
+//     because every rim edge in v1 is axis-aligned (law: "4-neighbourhood,
+//     axis-aligned in v1").
+// A transposed wx/wz, a swapped surface, a corner store taking one answer for
+// another, or an endpoint map that picked a diagonal would break one of these
+// without any reference to what the map is supposed to say.
+void check_quad_invariants(const std::vector<Quad>& got, const char* tag) {
+  for (size_t k = 0; k < got.size(); ++k) {
+    const Quad& q = got[k];
+    const bool vertical = (q.v[0].x == q.v[3].x) && (q.v[0].z == q.v[3].z) &&
+                          (q.v[1].x == q.v[2].x) && (q.v[1].z == q.v[2].z);
+    const bool top_above = (q.v[0].y >= q.v[3].y) && (q.v[1].y >= q.v[2].y);
+    const bool ends_differ = (q.v[0].x != q.v[1].x) || (q.v[0].z != q.v[1].z);
+    const bool axis_aligned = (q.v[0].x == q.v[1].x) != (q.v[0].z == q.v[1].z);
+    if (!vertical || !top_above || !ends_differ || !axis_aligned) {
+      std::fprintf(stderr,
+                   "FAIL: %s: quad %zu breaks a wall invariant "
+                   "(vertical=%d top_above=%d ends_differ=%d axis_aligned=%d)\n",
+                   tag, k, vertical, top_above, ends_differ, axis_aligned);
+      ++failures;
+      return;
+    }
+  }
+}
+
 bool compare_quads(const std::vector<Quad>& got, const std::vector<Quad>& want, const char* tag) {
   if (got.size() != want.size()) {
     std::fprintf(stderr, "FAIL: %s: %zu quads, expected %zu\n", tag, got.size(), want.size());
@@ -385,6 +427,7 @@ int main() {
                 r.quads.size(), r.clocks, want.edges.size());
     compare_quads(r.quads, expected_quads(lat, want.edges),
                   "lane 1: chain quads against zref::forge::rim_plan");
+    check_quad_invariants(r.quads, "lane 3: lane 1 quads against the wall invariants");
     check(!r.vd_en_seen, "lane 6: vd_en_o never asserted with vdist disabled");
     check(dut.feed_windows_done_o == 1, "lane 1: exactly one window streamed");
     check(dut.feed_cs_reads_o == static_cast<uint32_t>(kCells * kCells),
@@ -406,6 +449,7 @@ int main() {
     std::printf("lane 2 (solid halo): %zu quads in %ld clocks, expected %zu edges\n",
                 r.quads.size(), r.clocks, want.size());
     compare_quads(r.quads, expected_quads(lat, want), "lane 2+3: solid-halo chain quads");
+    check_quad_invariants(r.quads, "lane 3: solid-halo quads against the wall invariants");
     check(r.quads.size() == want.size(), "lane 2: the perimeter edges are gone");
     check(!want.empty(), "lane 2: the fixture still has interior cliffs to draw");
     for (const Quad& q : r.quads) {
