@@ -266,12 +266,15 @@ int main(int argc, char** argv) {
 
   std::printf("SHEETMOD: %d checks, %d failures%s\n", g_checks, g_fails,
               g_break_oracle ? "  (--break-oracle: a failure is the PASS)" : "");
-  if (g_break_oracle) {
-    if (g_fails == 0) {
-      std::printf("SHEETMOD: --break-oracle produced NO failure -- the checker is blind\n");
-      zhao::exit_hard(1);
-    }
-    std::printf("SHEETMOD: positive control OK\n");
+  // THE POLARITY IS CTEST'S, NOT THIS FILE'S, and getting it backwards makes
+  // the control read GREEN-WHEN-BROKEN. The registration marks the
+  // --break-oracle run `WILL_FAIL TRUE`, so the control PASSES when this
+  // process exits NON-ZERO. A corruption that was CAUGHT therefore exits
+  // through the ordinary failure path below; the only special case is the
+  // dangerous one -- a corruption that produced NO failure means the checker
+  // is blind, and that must exit ZERO so the WILL_FAIL entry goes RED.
+  if (g_break_oracle && (g_fails == 0)) {
+    std::printf("SHEETMOD: --break-oracle produced NO failure -- THE CHECKER IS BLIND\n");
     zhao::exit_hard(0);
   }
   zhao::exit_hard(g_fails == 0 ? 0 : 1);
