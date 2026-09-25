@@ -1,0 +1,28 @@
+subject                      n  black   dup  nocre min_cre max_cre
+manafold-blown             292      0     0      0    6307    7970
+manafold-channel           420      0     0      0    7038   10578
+manafold-crackle           600      0     0      0   11286   16974
+manafold-curious           180      0     0      0   11618   15516
+manafold-damage            464      0     0      0   12149   16725
+manafold-death-drop        450      0     0      0    5912    7408
+manafold-death-gutter      590      0     0      0    6027    7553
+manafold-drift             300      0     0      0     521    2103
+manafold-fall              340      0     0      0    5986    7250
+manafold-flight            352      0     0      0    2125    4190
+manafold-hasty             240      0     0      0    2816    5511
+manafold-hit               140      0     0      0   12198   16450
+manafold-hover             600      0     0      0    6308   15812
+manafold-inspect           600      0     0      0    8063   22434
+manafold-lasso             336      0     0      0   12018   16315
+manafold-pirouette         240      0     0      0   11053   16024
+manafold-rest              400      0     0      0   11229   15455
+manafold-startle           160      0     0      0   12562   18905
+manafold-taunt             280      0     0      0   11977   16471
+manafold-taunt2            240      0     0      0   11182   16631
+manafold-taunt3            368      0     0      0   12514   15703
+manafold-trick             400      0     0      0   10852   16212
+
+TOTAL frames 7992
+BLACK frames 0
+CONSECUTIVE-IDENTICAL frames 0
+FRAMES WITH NO CREATURE 0

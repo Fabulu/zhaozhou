@@ -1,0 +1,7 @@
+A pan-only       PASS   rel0  (creature +3.00  bg +3.00  rel +0.00  flat 90.98)
+B travel-only    PASS   releq  (creature +3.00  bg +0.00  rel +3.00  flat 91.38)
+C flat-ground    PASS   flat  (creature +3.00  bg -12.00  rel +15.00  flat 0.00)
+E both           PASS   reldiff  (creature +3.00  bg -3.00  rel +6.00  flat 91.30)
+D vacuous        PASS   vacuous  (vacuous_frames 4)
+F subpixel       PASS   subpixel (lag8 bg +0.500 want +0.500;  lag1 bg +0.487, fyi)
+selftest: PASS

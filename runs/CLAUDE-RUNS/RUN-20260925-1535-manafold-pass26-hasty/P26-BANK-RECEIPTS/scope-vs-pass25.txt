@@ -1,0 +1,38 @@
+# Manafold pass 26 SCOPE PROOF: the shipping bank against pass 25's.
+# Direction 27 reopened HASTY ALONE. Crackle's rear and Hover's front spin were
+# CLOSED by the owner, so exactly one subject may differ and 21 must not.
+# The frame COUNT of every subject must also be unchanged -- a changed count is a
+# retimed clip, which this pass is not allowed to do.
+# subjects p26=22 p25=22
+
+subject	frames_p25	frames_p26	crc_p25	crc_p26	frames	pixels
+manafold-blown	292	292	0x2589D260	0x2589D260	SAME	identical
+manafold-channel	420	420	0x148A6D26	0x148A6D26	SAME	identical
+manafold-crackle	600	600	0x370F7F3E	0x370F7F3E	SAME	identical
+manafold-curious	180	180	0x0FADAD4A	0x0FADAD4A	SAME	identical
+manafold-damage	464	464	0x280C18B5	0x280C18B5	SAME	identical
+manafold-death-drop	450	450	0xF8FB62E4	0xF8FB62E4	SAME	identical
+manafold-death-gutter	590	590	0xC809393A	0xC809393A	SAME	identical
+manafold-drift	300	300	0x7E79CF0D	0x7E79CF0D	SAME	identical
+manafold-fall	340	340	0x00EFD9A0	0x00EFD9A0	SAME	identical
+manafold-flight	352	352	0x39FB01E0	0x39FB01E0	SAME	identical
+manafold-hasty	240	240	0xDC044A02	0xD7FA75A4	SAME	differ
+manafold-hit	140	140	0xAD1D60BB	0xAD1D60BB	SAME	identical
+manafold-hover	600	600	0x89EBA648	0x89EBA648	SAME	identical
+manafold-inspect	600	600	0x3A179F08	0x3A179F08	SAME	identical
+manafold-lasso	336	336	0x8B697508	0x8B697508	SAME	identical
+manafold-pirouette	240	240	0x8EDBFD33	0x8EDBFD33	SAME	identical
+manafold-rest	400	400	0xDA5BE66B	0xDA5BE66B	SAME	identical
+manafold-startle	160	160	0x7F5A8C07	0x7F5A8C07	SAME	identical
+manafold-taunt	280	280	0x8A507701	0x8A507701	SAME	identical
+manafold-taunt2	240	240	0x23502CC5	0x23502CC5	SAME	identical
+manafold-taunt3	368	368	0xF72CA961	0xF72CA961	SAME	identical
+manafold-trick	400	400	0x8D40D834	0x8D40D834	SAME	identical
+
+SUBJECTS DIFFERING: 1  (expected 1: manafold-hasty)
+UNEXPECTED SUBJECTS MOVED: none
+FRAME COUNTS CHANGED: 0  (expected 0)
+CRACKLE: identical  <- owner CLOSED
+HOVER:   identical  <- owner CLOSED
+
+VERDICT: IN SCOPE -- only manafold-hasty moved

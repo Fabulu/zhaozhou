@@ -1,0 +1,2 @@
+checkfresh: 22 rendered subject(s) -- 22 live fresh, 0 archived, 0 STALE, 0 absent, 0 unknown
+checkfresh: OK every live encoded clip is newer than its source; archived source exemptions are explicit

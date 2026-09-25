@@ -1,0 +1,24 @@
+# Manafold pass 26 exact bank -- per-subject frame count and sequence CRC32
+# subjects=22 frames=7992
+manafold-blown	292	0x2589D260
+manafold-channel	420	0x148A6D26
+manafold-crackle	600	0x370F7F3E
+manafold-curious	180	0x0FADAD4A
+manafold-damage	464	0x280C18B5
+manafold-death-drop	450	0xF8FB62E4
+manafold-death-gutter	590	0xC809393A
+manafold-drift	300	0x7E79CF0D
+manafold-fall	340	0x00EFD9A0
+manafold-flight	352	0x39FB01E0
+manafold-hasty	240	0xD7FA75A4
+manafold-hit	140	0xAD1D60BB
+manafold-hover	600	0x89EBA648
+manafold-inspect	600	0x3A179F08
+manafold-lasso	336	0x8B697508
+manafold-pirouette	240	0x8EDBFD33
+manafold-rest	400	0xDA5BE66B
+manafold-startle	160	0x7F5A8C07
+manafold-taunt	280	0x8A507701
+manafold-taunt2	240	0x23502CC5
+manafold-taunt3	368	0xF72CA961
+manafold-trick	400	0x8D40D834
