@@ -116,8 +116,8 @@ derives from it safe, is in that block's header under **THE BURST THAT WRAPS**,
 and the law is `spec/memory_rules.md` §5c (**provisional**).
 
 **THE COST, DECLARED RATHER THAN ABSORBED.** Eight bytes of slack per vertex,
-524,280 bytes at 65,535 vertices. The view's used footprint is **3,407,840 of
-4,194,304 bytes** — 2,097,120 vertex + 262,144 descriptor + 1,048,576 chunk —
+524,288 bytes at 65,536 vertices. The view's used footprint is **3,407,872 of
+4,194,304 bytes** — 2,097,152 vertex + 262,144 descriptor + 1,048,576 chunk —
 so R7's preferred tier still fits inside 4 MiB with the stride applied.
 
 **AND IT WAS NOT A PRECAUTION.** The layout before this change put

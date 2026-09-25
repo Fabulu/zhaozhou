@@ -2333,6 +2333,10 @@ targets:
       # two blocks that give it a producer and a consumer.
       - fpga/rtl/geometry/zhao_geom_paramarena.sv
       - fpga/rtl/geometry/zhao_geom_paramwalk.sv
+      # GEOM.VERTID, 2026-09-25 (ARENAID). A census top of its own because the
+      # resource top does not instantiate zhao_console_core, so this block is
+      # not reachable through anything else here.
+      - fpga/rtl/geometry/zhao_geom_vertid.sv
       - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --

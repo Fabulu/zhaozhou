@@ -322,7 +322,7 @@ module zhao_geom_paramarena_align_mutant
     // burst wraps -- 24 is not a multiple of 16, so the natural stride is the
     // one shape that cannot be made safe by moving a base.
     // THE COST IS DECLARED RATHER THAN ABSORBED: eight bytes of slack per
-    // vertex, 524,280 bytes at MAX_VERTS, and the view still fits (the
+    // vertex, 524,288 bytes at MAX_VERTS, and the view still fits (the
     // elaboration guard checks it, and the header states the arithmetic).
     // The 16-byte descriptor and the 64-byte chunk need no slack at all --
     // both strides are already multiples of the quantum.
@@ -508,14 +508,14 @@ module zhao_geom_paramarena_align_mutant
   localparam int unsigned PV_SLOT_B      = PV_B;
   localparam int unsigned LAYOUT_ALIGN_B = 1;
 
-  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,120
+  localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,152
   // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
   // `check_localparam_comments` parses SINGLE-LINE declarations only. Fire
   // tested on an isolated copy of this file: with `TRI_OFF_B` wrapped over two
   // lines, a deliberately WRONG trailing number still produced
   // "disagreements : 0" -- the claim beside it was unchecked, which is exactly
   // the shape that tool exists to catch (a stale 576 beside a real 704).
-  // Joined, it is checked, and the tool confirms 2,097,120.
+  // Joined, it is checked, and the tool confirms 2,097,152.
   //
   // `CHUNK_OFF_B` IS STILL NOT CHECKED EVEN SO, and the reason is worth the
   // line rather than being rediscovered: it reaches `TRI_CAP_B`, which is
@@ -523,11 +523,11 @@ module zhao_geom_paramarena_align_mutant
   // import the tool cannot resolve in this module, so it SKIPS the constant
   // rather than guessing at it. Its number below is therefore verified by the
   // acceptance bench, which reads memory AT that offset, and not by the gate.
-  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,120
+  localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
   localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
   localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,840
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,872
 
   // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
   // guarded to be a power of two at elaboration, so this is the whole test.
