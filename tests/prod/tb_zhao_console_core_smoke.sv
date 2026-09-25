@@ -206,7 +206,72 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_ticks_faulted_o;
   logic [31:0]             part_hps_records_discarded_o;
   logic [31:0]             terr_hps_pend_dropped_o;
-  logic [6:0]              terr_hps_pend_dropped_mask_o;
+  // EIGHT BITS SINCE 2026-09-25 (EDGECLOSE): the terrain HPS arbiter gained
+  // client 7, the PREPARE walker's sealed-list re-read. A 7-bit declaration
+  // here would SILENTLY TRUNCATE the new client's bit, so a dropped request
+  // from the one client whose failure is a counted fallback would be the one
+  // the bench could not see.
+  logic [7:0]              terr_hps_pend_dropped_mask_o;
+  // ---- ENTRY I21's PRODUCER CHAIN (EDGECLOSE, 2026-09-25) ---------------
+  // The core binds by `.*`, so a port with no declaration here is an
+  // elaboration error rather than a silent miss -- which is the one good
+  // property of `.*` and the reason this list is exhaustive.
+  logic [31:0]              terr_hps_c7_bursts_o;
+  logic [31:0]              terr_hps_c7_wait_cycles_o;
+  logic [31:0]              terr_isl_headers_checked_o;
+  logic [31:0]              terr_isl_seals_o;
+  logic [31:0]              terr_isl_reseals_o;
+  logic [31:0]              terr_isl_pitch_illegal_o;
+  logic [31:0]              terr_isl_pitch_mismatch_o;
+  logic [31:0]              terr_isl_island_bounced_o;
+  logic [31:0]              terr_isl_envelope_bad_o;
+  logic [31:0]              terr_pw_walks_completed_o;
+  logic [31:0]              terr_pw_patches_prepared_o;
+  logic [31:0]              terr_pw_descriptors_emitted_o;
+  logic [31:0]              terr_pw_skipped_not_resident_o;
+  logic [31:0]              terr_pw_list_crc_mismatch_o;
+  logic [31:0]              terr_pw_freeze_broken_o;
+  logic [31:0]              terr_pw_pitch_illegal_o;
+  logic [31:0]              terr_pw_jobs_refused_o;
+  logic [31:0]              terr_pw_place_range_o;
+  logic [31:0]              terr_pw_bridge_errs_o;
+  logic [31:0]              terr_pw_sub_order_bad_o;
+  logic [31:0]              terr_pw_store_wait_clocks_o;
+  logic [31:0]              terr_ps_b_dev_grants_o;
+  logic [31:0]              terr_ps_a_dev_blocked_clocks_o;
+  logic [31:0]              terr_ps_b_dev_blocked_clocks_o;
+  logic [31:0]              terr_ps_a_lu_blocked_clocks_o;
+  logic [31:0]              terr_ps_b_lu_blocked_clocks_o;
+  logic [31:0]              terr_ps_lu_ans_unowned_o;
+  logic [31:0]              terr_ps_dev_contended_o;
+  logic [31:0]              terr_ls_prep_decisions_o;
+  logic [31:0]              terr_ls_emit_decisions_o;
+  logic [31:0]              terr_ls_ident_mismatch_o;
+  logic [31:0]              terr_ls_hist_leak_o;
+  logic [31:0]              terr_ls_sel_midpatch_o;
+  logic [31:0]              terr_ls_idq_overflow_o;
+  logic [31:0]              terr_ls_idq_full_stalls_o;
+  logic [31:0]              terr_ls_freeze_drift_o;
+  logic [31:0]              terr_ls_freezes_o;
+  logic [31:0]              terr_er_records_filed_o;
+  logic [31:0]              terr_er_lanes_filed_o;
+  logic [31:0]              terr_er_collisions_o;
+  logic [31:0]              terr_er_queries_o;
+  logic [31:0]              terr_er_edges_real_o;
+  logic [31:0]              terr_er_edges_fallback_o;
+  logic [31:0]              terr_er_query_own_missing_o;
+  logic [31:0]              terr_er_file_out_of_phase_o;
+  logic [31:0]              terr_er_query_out_of_phase_o;
+  logic [31:0]              terr_eq_door_refused_o;
+  logic [31:0]              terr_eq_serve_no_door_o;
+  logic [31:0]              terr_eq_serve_src_mismatch_o;
+  logic [31:0]              terr_eq_queries_answered_o;
+  logic [31:0]              terr_eq_edges_real_o;
+  logic [31:0]              terr_eq_fallback_patches_o;
+  logic [31:0]              terr_eq_query_abandoned_o;
+  logic [31:0]              terr_eq_descriptor_unarmed_o;
+  logic [31:0]              terr_eq_gate_wait_clocks_o;
+
   logic [31:0]             terr_hps_c3_bursts_o;
   logic [31:0]             terr_hps_c4_bursts_o, terr_hps_c4_wait_cycles_o;
   logic [31:0]             terr_hps_c5_bursts_o, terr_hps_c5_wait_cycles_o;
@@ -6026,7 +6091,7 @@ module tb_zhao_console_core_smoke
         (part_hps_records_discarded_o != 0))
       $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
              part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
-    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 7'd0))
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 8'd0))
       $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
              terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is

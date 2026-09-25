@@ -16438,6 +16438,81 @@ add_test(NAME partmat_acceptance COMMAND test_partmat_acceptance)
 set_tests_properties(partmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
+# TERRAIN EDGE ACCEPTANCE -- the test owner directive 2026-09-23 section 2 names
+# ---------------------------------------------------------------------------
+# "The four 8'h00 edges stay only as the explicitly incomplete bring-up profile
+#  until the real path is validated. THEY ARE NOT PROOF OF CRACK FREEDOM. A
+#  bank collision/missing neighbor cannot earn a crack-free claim merely
+#  because both sides return the same sentinel: TEST THE RESULTING TESSELLATION
+#  LEVELS. ... Include nondegenerate terrain fixtures, mixed neighbouring LODs,
+#  both views, changing camera state, deformation, missing pages, history and
+#  backpressure."
+#
+# SEVEN PRODUCTION MODULES, the whole decision path from the sealed list to the
+# levels TERRAIN.TESS consumes. Four things are modelled inside the bench --
+# the HPS bridge, the residency directory, the deviation store and
+# TERRAIN.SPDESC -- and every one of them is a SOURCE OF BYTES rather than a
+# decider of levels, with its own directed suite. The bench's header names each
+# one and says why.
+#
+# AND THE CONSOLE SMOKE CANNOT BE THIS EVIDENCE, which is why this exists: it
+# replays 128 terrain triangles and ALL 128 ARE DEGENERATE, because it writes
+# only the 64-byte page header and the compose cache therefore never fills.
+#
+# Section 1 is the NEGATIVE CONTROL and it is the console as it shipped: no
+# PREPARE pass, every edge answered with the retained 8'h00, and the seam
+# ASSERTED TO DISAGREE. Section 2 runs the identical stimulus through the
+# composed producer and asserts the seam AGREES *and that a level actually
+# moved*. An agreement test alone would go green on a fixture that could not
+# have failed.
+add_executable(test_terrain_edge_acceptance prod/terrain_edge_acceptance.cpp)
+target_link_libraries(test_terrain_edge_acceptance PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_edge_acceptance
+  PREFIX Vtb_terrain_edge_acceptance
+  TOP_MODULE tb_terrain_edge_acceptance
+  VERILATOR_ARGS --assert --timing
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_islandseal.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_prepwalk.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_prepshare.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodshare.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_edgerecon.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_edgequery.sv
+          ${CMAKE_SOURCE_DIR}/tests/prod/tb_terrain_edge_acceptance.sv)
+add_test(NAME terrain_edge_acceptance COMMAND test_terrain_edge_acceptance)
+set_tests_properties(terrain_edge_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# THE POSITIVE CONTROL FOR `descriptor_unarmed_o` -- INVERTED POLARITY
+# ---------------------------------------------------------------------------
+# `terrain_edge_acceptance` section 10 asserts that counter is ZERO on
+# unmutated production. That zero is only evidence if the counter can move at
+# all, and NO LEGAL STIMULUS MOVES IT: it watches for a descriptor arriving
+# with nothing armed and no query pending, and every exit from the query FSM
+# arms the answer, so `armed_q == 0` implies the FSM is not idle while the
+# valve needs both.
+#
+# So the demonstration is a COMMITTED MUTANT with one substantive line changed
+# -- the serve edge no longer enters Q_REQ -- and a driver that PASSES WHEN THE
+# COUNTER FIRES. It is evidence about the instrument, not about the design.
+add_executable(test_terrain_edgequery_unarmed_mutant
+               terrain/terrain_edgequery_unarmed_mutant.cpp)
+target_link_libraries(test_terrain_edgequery_unarmed_mutant PRIVATE zhao_harness)
+verilate(test_terrain_edgequery_unarmed_mutant
+  PREFIX Vzhao_terrain_edgequery_unarmed_mutant
+  TOP_MODULE zhao_terrain_edgequery_unarmed_mutant
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_edgequery_unarmed_mutant.sv)
+add_test(NAME terrain_edgequery_unarmed_mutant
+         COMMAND test_terrain_edgequery_unarmed_mutant)
+set_tests_properties(terrain_edgequery_unarmed_mutant
+                     PROPERTIES LABELS "fast;nightly;mutant" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
 # PROCMAT -- the acceptance test owner completion ruling 2 (2026-09-22) names
 # ---------------------------------------------------------------------------
 # COMMAND BYTES TO GEOM.CLIP'S INPUT, over nine production modules: the real

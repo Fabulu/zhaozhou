@@ -19,8 +19,17 @@
 // and the matching term on `p_sp_ready_o`, which is the same guard spelled for
 // the producer. Removing only one of the two would leave the block refusing the
 // descriptor it had already declared valid, which is a different defect. With
-// the guard gone a fifth identity is admitted into a four-deep queue and the
+// the guard gone an identity beyond the queue's depth is admitted and the
 // counter moves.
+//
+// REFRESHED 2026-09-25 (EDGECLOSE), onto a production body that changed in
+// TWO substantive ways: IDQ_DEPTH is sixteen rather than four (four was a
+// DEADLOCK against the real ladder, which accepts all sixteen subpatches
+// before emitting any), and the queue now POPS ON THE LAST BEAT OF A
+// SUBPATCH rather than on every decision (a dual page emits a top and an
+// underside for ONE identity). The mutation is unchanged -- the same two
+// `!idq_full_c` terms removed -- and the driver now needs more than sixteen
+// offers to overflow, which it already makes: it offers twenty-four.
 //
 // THE DRIVER'S POLARITY IS INVERTED: the mutant driver PASSES when
 // `idq_overflow_o` is NONZERO and FAILS when it is zero. It is evidence about
@@ -53,6 +62,7 @@
 // exists. `tools/budget/mutant_copy_drift.py` watches for exactly that and
 // signals on PROVENANCE -- if the production file has been committed since this
 // one was, this copy cannot contain what production gained.
+
 
 
 // zhao_terrain_lodshare.sv -- the LOD TIME-SHARE: one `zhao_terrain_lod`, two
@@ -180,10 +190,34 @@ module zhao_terrain_lodshare_idqoverflow_mutant #(
     parameter int unsigned MORPHW = 17,
     parameter int unsigned GENW   = 8,
     // The identity queue's depth. It must cover every descriptor the ladder can
-    // hold between accepting `sp` and emitting `out`; `zhao_terrain_lod` is a
-    // sequential ladder with one descriptor in flight, so 4 is already generous
-    // and the full-guard makes a wrong value SAFE rather than silent.
-    parameter int unsigned IDQ_DEPTH = 4
+    // hold between accepting `sp` and emitting `out`.
+    //
+    // SIXTEEN, AND THE FOUR THIS PARAMETER USED TO DEFAULT TO WAS A DEADLOCK.
+    // Corrected 2026-09-25 (EDGECLOSE), found by composing this block against
+    // the REAL `zhao_terrain_lod` for the first time. The claim it replaces --
+    // "a sequential ladder with ONE descriptor in flight, so 4 is already
+    // generous" -- is false, and `zhao_terrain_lod.sv:671-684` says so:
+    //
+    //     StDecide: lvl[fill_idx] <= n_level;
+    //               if (fill_idx == 5'd15) state <= StEmit;
+    //               else { fill_idx <= fill_idx + 1; state <= StFill; }
+    //
+    // The ladder ACCEPTS ALL SIXTEEN SUBPATCHES BEFORE IT EMITS ANYTHING,
+    // because `edge_lane()` needs the whole `lvl[]` array to answer a
+    // subpatch's four interior neighbours. Its in-flight depth is sixteen.
+    //
+    // At four, the queue filled on the fourth descriptor, `p_sp_ready_o`
+    // dropped, the ladder never reached its sixteenth, never emitted, and
+    // never drained the queue -- A PERMANENT DEADLOCK, with `idq_overflow_o`,
+    // `ident_mismatch_o` and every other counter reading ZERO. The full-guard
+    // made the wrong value SAFE, exactly as the old comment claimed, and safe
+    // is not the same as live.
+    //
+    // THE DIRECTED SUITE COULD NOT SEE IT. `terrain_lodshare_directed` drives
+    // a ladder MODEL, and the model emitted per descriptor. That is CLAUDE.md's
+    // "a gate that cannot reach the state is not evidence about the state": 96
+    // checks passed against a machine that does not exist.
+    parameter int unsigned IDQ_DEPTH = 16
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -392,6 +426,13 @@ module zhao_terrain_lodshare_idqoverflow_mutant #(
     // -- which presents as a coordinate swap, not as an overflow.
     if ((IDQ_DEPTH & (IDQ_DEPTH - 1)) != 0)
       $fatal(1, "lodshare: IDQ_DEPTH must be a power of two, not %0d", IDQ_DEPTH);
+    // THE LADDER'S OWN IN-FLIGHT DEPTH, and a shallower queue DEADLOCKS rather
+    // than degrading. `zhao_terrain_lod` accepts sixteen descriptors before it
+    // emits one (`:671-684`), so a queue that fills first stops the producer
+    // that would have unblocked it. This guard is why a future reader cannot
+    // "tune" this back down.
+    if (IDQ_DEPTH < 16)
+      $fatal(1, "lodshare: IDQ_DEPTH=%0d is below zhao_terrain_lod's sixteen-descriptor in-flight depth; the identity queue would fill before the ladder emits and the two blocks would deadlock with every counter at zero", IDQ_DEPTH);
   end
 `endif
 
@@ -493,6 +534,11 @@ module zhao_terrain_lodshare_idqoverflow_mutant #(
   // FILED: the ladder must not be left holding it, and the reconciler must not
   // be told a level for ground it cannot name.
   wire ident_ok_c = !idq_empty_c && (idq_head_src_c == lod_out_src_id_i);
+
+  // THE LAST BEAT OF A SUBPATCH. See the pop below for why this is not simply
+  // "every decision": a dual page emits a TOP and an UNDERSIDE for ONE
+  // descriptor, interleaved, and they share one identity.
+  wire idq_pop_c = lod_out_dual_i ? lod_out_surface_i : !lod_out_surface_i;
 
   assign f_valid_o   = prep_sel_i && lod_out_valid_i && ident_ok_c;
   assign f_ix_o      = idq_head_ix_c;
@@ -634,7 +680,26 @@ module zhao_terrain_lodshare_idqoverflow_mutant #(
 
       if (p_out_fire_c) begin
         if (ident_ok_c) begin
-          idq_rd_q <= idq_rd_q + (IDQW+1)'(1);
+          // POP ON THE LAST BEAT OF THE SUBPATCH, NOT ON EVERY DECISION.
+          // Corrected 2026-09-25 (EDGECLOSE), the second defect composing
+          // against the real ladder exposed and the one the first was masking.
+          //
+          // `zhao_terrain_lod`'s StEmit is INTERLEAVED PER SUBPATCH, not
+          // tops-then-undersides (`:715-723`): for each `emit_idx` it emits the
+          // TOP, then -- if `dual_i` -- the UNDERSIDE, and only then advances.
+          // So a dual page emits TWO beats carrying ONE identity.
+          //
+          // Advancing on every beat popped twice per subpatch: the queue would
+          // empty halfway through a dual patch, `ident_ok_c` would go false on
+          // every remaining beat, `ident_mismatch_o` would fire eight times and
+          // the FILE WOULD BE REFUSED -- so a dual page's record would never
+          // complete, `ok()` would be false for it, and every seam it touches
+          // would fall back. Silent, symmetric, and wrong.
+          //
+          // `lod_out_dual_i` is already on this block's port list, so the rule
+          // needs no new wire: the last beat of a subpatch is the UNDERSIDE
+          // when the page is dual and the TOP when it is not.
+          if (idq_pop_c) idq_rd_q <= idq_rd_q + (IDQW+1)'(1);
           prep_decisions_o <= prep_decisions_o + 32'd1;
           if (lod_out_surface_i) prep_underside_o <= prep_underside_o + 32'd1;
         end else begin

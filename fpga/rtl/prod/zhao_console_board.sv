@@ -2342,6 +2342,101 @@ module zhao_console_board
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
   output logic [31:0]             terr_hps_c6_bursts_o,
   output logic [31:0]             terr_hps_c6_wait_cycles_o,
+  // EIGHT CLIENTS SINCE 2026-09-25 (packet EDGECLOSE). Client 7 is
+  // `u_terrain_prepwalk`, the admitted-set PREPARE walker, re-reading the
+  // frame's SEALED LIST. It takes the HIGHEST index deliberately: the arbiter
+  // starves high indices first, and PREPARE is the one reader here whose
+  // failure mode is a COUNTED FALLBACK (`prep_valid_o` low, every edge back to
+  // the conservative constant) rather than a stalled page load or a program
+  // install that never completes. Its cost is +8 KiB/frame at T6's 256
+  // patches, on the HPS-DDR bridge -- a DIFFERENT socket from the local-SDRAM
+  // devstore reads, budgeted separately in `tools/budget/sdram_bandwidth.py`.
+  output logic [31:0]             terr_hps_c7_bursts_o,
+  output logic [31:0]             terr_hps_c7_wait_cycles_o,
+
+  // ======================================================================
+  // ENTRY I21's PRODUCER CHAIN -- TERRAIN.EDGERECON AND THE PREPARE PASS
+  // ======================================================================
+  // Composed 2026-09-25 (packet EDGECLOSE). These are the counters of the six
+  // blocks that turn the four `edge_*` tie-offs into a real neighbour-edge
+  // level producer. They leave this module because a counter with no reader at
+  // the console boundary cannot be read from a board, and because two of them
+  // -- `terr_er_edges_real_o` and `terr_er_edges_fallback_o` -- PARTITION
+  // `4 x terr_er_queries_o` by construction, which is the invariant that makes
+  // either one's silence worth reading.
+  //
+  // ---- TERRAIN.ISLANDSEAL: the admission check the directive requires -----
+  output logic [31:0]             terr_isl_headers_checked_o,
+  output logic [31:0]             terr_isl_seals_o,
+  output logic [31:0]             terr_isl_reseals_o,
+  output logic [31:0]             terr_isl_pitch_illegal_o,
+  output logic [31:0]             terr_isl_pitch_mismatch_o,
+  output logic [31:0]             terr_isl_island_bounced_o,
+  output logic [31:0]             terr_isl_envelope_bad_o,
+
+  // ---- TERRAIN.PREPWALK: the admitted-set PREPARE walker -----------------
+  output logic [31:0]             terr_pw_walks_completed_o,
+  output logic [31:0]             terr_pw_patches_prepared_o,
+  output logic [31:0]             terr_pw_descriptors_emitted_o,
+  output logic [31:0]             terr_pw_skipped_not_resident_o,
+  output logic [31:0]             terr_pw_list_crc_mismatch_o,
+  output logic [31:0]             terr_pw_freeze_broken_o,
+  output logic [31:0]             terr_pw_pitch_illegal_o,
+  output logic [31:0]             terr_pw_jobs_refused_o,
+  output logic [31:0]             terr_pw_place_range_o,
+  output logic [31:0]             terr_pw_bridge_errs_o,
+  output logic [31:0]             terr_pw_sub_order_bad_o,
+  // CLOCKS. `spec/memory_rules.md:396-402` named this instrument for exactly
+  // this question: PREPARE doubles the frame-critical read demand on the one
+  // client ruling T3 starves first, so what matters is how long the reads WAIT.
+  // Do NOT quote a burst count against this.
+  output logic [31:0]             terr_pw_store_wait_clocks_o,
+
+  // ---- TERRAIN.PREPSHARE: what sharing the two single-master ports cost ---
+  output logic [31:0]             terr_ps_b_dev_grants_o,
+  output logic [31:0]             terr_ps_a_dev_blocked_clocks_o,
+  output logic [31:0]             terr_ps_b_dev_blocked_clocks_o,
+  output logic [31:0]             terr_ps_a_lu_blocked_clocks_o,
+  output logic [31:0]             terr_ps_b_lu_blocked_clocks_o,
+  output logic [31:0]             terr_ps_lu_ans_unowned_o,
+  output logic [31:0]             terr_ps_dev_contended_o,
+
+  // ---- TERRAIN.LODSHARE: the time-share and the frame-scoped freeze -------
+  output logic [31:0]             terr_ls_prep_decisions_o,
+  output logic [31:0]             terr_ls_emit_decisions_o,
+  output logic [31:0]             terr_ls_ident_mismatch_o,
+  output logic [31:0]             terr_ls_hist_leak_o,
+  output logic [31:0]             terr_ls_sel_midpatch_o,
+  output logic [31:0]             terr_ls_idq_overflow_o,
+  output logic [31:0]             terr_ls_idq_full_stalls_o,
+  // NOT A FAULT. The cycles the live camera disagreed with the frozen one --
+  // the size of the hazard the OLD per-patch re-latch was absorbing silently,
+  // and entry I21 blocker C's "harmless today" claim measured rather than
+  // argued.
+  output logic [31:0]             terr_ls_freeze_drift_o,
+  output logic [31:0]             terr_ls_freezes_o,
+
+  // ---- TERRAIN.EDGERECON: the bank -----------------------------------------
+  output logic [31:0]             terr_er_records_filed_o,
+  output logic [31:0]             terr_er_lanes_filed_o,
+  output logic [31:0]             terr_er_collisions_o,
+  output logic [31:0]             terr_er_queries_o,
+  output logic [31:0]             terr_er_edges_real_o,
+  output logic [31:0]             terr_er_edges_fallback_o,
+  output logic [31:0]             terr_er_query_own_missing_o,
+  output logic [31:0]             terr_er_file_out_of_phase_o,
+  output logic [31:0]             terr_er_query_out_of_phase_o,
+
+  // ---- TERRAIN.EDGEQUERY: the EMIT-side driver -----------------------------
+  output logic [31:0]             terr_eq_door_refused_o,
+  output logic [31:0]             terr_eq_serve_no_door_o,
+  output logic [31:0]             terr_eq_serve_src_mismatch_o,
+  output logic [31:0]             terr_eq_queries_answered_o,
+  output logic [31:0]             terr_eq_edges_real_o,
+  output logic [31:0]             terr_eq_fallback_patches_o,
+  output logic [31:0]             terr_eq_query_abandoned_o,
+  output logic [31:0]             terr_eq_descriptor_unarmed_o,
+  output logic [31:0]             terr_eq_gate_wait_clocks_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -2349,7 +2444,7 @@ module zhao_console_board
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [6:0]              terr_hps_pend_dropped_mask_o,
+  output logic [7:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -2785,11 +2880,18 @@ module zhao_console_board
   // as `tri_area2_i` and the three attribute planes were retired before it.
   //
   // `tri_continuation_tail_i` AND `tri_fragment_state_i` LEFT THIS LIST
-  // 2026-09-25 (FRAGSTATE, entry I20), with the core's -- this wrapper MIRRORS
-  // the core's port list and `tools/design/wrapper_port_parity.py` is the gate
-  // that says so, so the two files move together or neither does. The composed
-  // owners are named in `zhao_console_core.sv`'s own port comment and built
-  // beside `tri_continuation_tail_c`.
+  // 2026-09-25 (FRAGSTATE, entry I20), the last two of the PACKET-D ATTRIBUTE
+  // CARRIAGE's six. Both are built below from named owners:
+  //   the 32-bit state word   the MATERIAL's `fragment_state` when
+  //                           `fragment_decl` bit 0 declares it, else the
+  //                           PRODUCER's declaration at `u_geom_clipdoor`;
+  //   `vertex_alpha`          the published span's (owner ruling R89);
+  //   `effect_tag`            the MATERIAL's, default 0 per the owner directive;
+  //   `stencil_reference`     the MATERIAL's, default 0, inert under ALWAYS;
+  //   `vertex_rgb`            NOBODY's -- R234 D1 has the consumer overwrite it
+  //                           per fragment from the Gouraud lanes.
+  // There is no OR anywhere in that composition and no field has two owners at
+  // once; see the block beside `tri_continuation_tail_c`.
   input  logic         fill_req_ready_i,
   output logic         fill_req_valid_o,
   output logic [31:0]  fill_req_addr_o,
@@ -4996,6 +5098,61 @@ module zhao_console_board
       .terr_hps_c5_wait_cycles_o          (terr_hps_c5_wait_cycles_o),
       .terr_hps_c6_bursts_o               (terr_hps_c6_bursts_o),
       .terr_hps_c6_wait_cycles_o          (terr_hps_c6_wait_cycles_o),
+      .terr_hps_c7_bursts_o               (terr_hps_c7_bursts_o),
+      .terr_hps_c7_wait_cycles_o          (terr_hps_c7_wait_cycles_o),
+      .terr_isl_headers_checked_o         (terr_isl_headers_checked_o),
+      .terr_isl_seals_o                   (terr_isl_seals_o),
+      .terr_isl_reseals_o                 (terr_isl_reseals_o),
+      .terr_isl_pitch_illegal_o           (terr_isl_pitch_illegal_o),
+      .terr_isl_pitch_mismatch_o          (terr_isl_pitch_mismatch_o),
+      .terr_isl_island_bounced_o          (terr_isl_island_bounced_o),
+      .terr_isl_envelope_bad_o            (terr_isl_envelope_bad_o),
+      .terr_pw_walks_completed_o          (terr_pw_walks_completed_o),
+      .terr_pw_patches_prepared_o         (terr_pw_patches_prepared_o),
+      .terr_pw_descriptors_emitted_o      (terr_pw_descriptors_emitted_o),
+      .terr_pw_skipped_not_resident_o     (terr_pw_skipped_not_resident_o),
+      .terr_pw_list_crc_mismatch_o        (terr_pw_list_crc_mismatch_o),
+      .terr_pw_freeze_broken_o            (terr_pw_freeze_broken_o),
+      .terr_pw_pitch_illegal_o            (terr_pw_pitch_illegal_o),
+      .terr_pw_jobs_refused_o             (terr_pw_jobs_refused_o),
+      .terr_pw_place_range_o              (terr_pw_place_range_o),
+      .terr_pw_bridge_errs_o              (terr_pw_bridge_errs_o),
+      .terr_pw_sub_order_bad_o            (terr_pw_sub_order_bad_o),
+      .terr_pw_store_wait_clocks_o        (terr_pw_store_wait_clocks_o),
+      .terr_ps_b_dev_grants_o             (terr_ps_b_dev_grants_o),
+      .terr_ps_a_dev_blocked_clocks_o     (terr_ps_a_dev_blocked_clocks_o),
+      .terr_ps_b_dev_blocked_clocks_o     (terr_ps_b_dev_blocked_clocks_o),
+      .terr_ps_a_lu_blocked_clocks_o      (terr_ps_a_lu_blocked_clocks_o),
+      .terr_ps_b_lu_blocked_clocks_o      (terr_ps_b_lu_blocked_clocks_o),
+      .terr_ps_lu_ans_unowned_o           (terr_ps_lu_ans_unowned_o),
+      .terr_ps_dev_contended_o            (terr_ps_dev_contended_o),
+      .terr_ls_prep_decisions_o           (terr_ls_prep_decisions_o),
+      .terr_ls_emit_decisions_o           (terr_ls_emit_decisions_o),
+      .terr_ls_ident_mismatch_o           (terr_ls_ident_mismatch_o),
+      .terr_ls_hist_leak_o                (terr_ls_hist_leak_o),
+      .terr_ls_sel_midpatch_o             (terr_ls_sel_midpatch_o),
+      .terr_ls_idq_overflow_o             (terr_ls_idq_overflow_o),
+      .terr_ls_idq_full_stalls_o          (terr_ls_idq_full_stalls_o),
+      .terr_ls_freeze_drift_o             (terr_ls_freeze_drift_o),
+      .terr_ls_freezes_o                  (terr_ls_freezes_o),
+      .terr_er_records_filed_o            (terr_er_records_filed_o),
+      .terr_er_lanes_filed_o              (terr_er_lanes_filed_o),
+      .terr_er_collisions_o               (terr_er_collisions_o),
+      .terr_er_queries_o                  (terr_er_queries_o),
+      .terr_er_edges_real_o               (terr_er_edges_real_o),
+      .terr_er_edges_fallback_o           (terr_er_edges_fallback_o),
+      .terr_er_query_own_missing_o        (terr_er_query_own_missing_o),
+      .terr_er_file_out_of_phase_o        (terr_er_file_out_of_phase_o),
+      .terr_er_query_out_of_phase_o       (terr_er_query_out_of_phase_o),
+      .terr_eq_door_refused_o             (terr_eq_door_refused_o),
+      .terr_eq_serve_no_door_o            (terr_eq_serve_no_door_o),
+      .terr_eq_serve_src_mismatch_o       (terr_eq_serve_src_mismatch_o),
+      .terr_eq_queries_answered_o         (terr_eq_queries_answered_o),
+      .terr_eq_edges_real_o               (terr_eq_edges_real_o),
+      .terr_eq_fallback_patches_o         (terr_eq_fallback_patches_o),
+      .terr_eq_query_abandoned_o          (terr_eq_query_abandoned_o),
+      .terr_eq_descriptor_unarmed_o       (terr_eq_descriptor_unarmed_o),
+      .terr_eq_gate_wait_clocks_o         (terr_eq_gate_wait_clocks_o),
       .terr_hps_pend_dropped_o            (terr_hps_pend_dropped_o),
       .terr_hps_pend_dropped_mask_o       (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                 (cmd_exec_uploads_o),
