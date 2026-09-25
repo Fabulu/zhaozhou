@@ -120,6 +120,75 @@
 // `fields_active_o`, which is a register in the other block.
 //
 // ---------------------------------------------------------------------------
+// OPEN DEFECT -- `rec_ready_o` IS NOT THE RECORD BEING BANKED, AND THE REPLAY
+// CAN LAND IN THE GAP. FOUND 2026-09-25 (COMPOSEPUB), NOT REPAIRED HERE.
+// ---------------------------------------------------------------------------
+// THE ORDERING. `rec_ready_o` is `(in_st == I_TAKE)`, so the handshake is the
+// FIRST beat of the intake, not its last. The sequencer then walks
+// I_TAKE -> I_DIV (seventeen restoring-division steps, and a REJECTED record
+// is walked through it too) -> I_WR, and it is I_WR that writes the banks:
+//
+//     b_begun[wr_a] <= h_begun;
+//     b_res  [wr_a] <= 1'b0;      // "not resident until the replay says so"
+//     b_obj  [wr_a] <= '0;
+//
+// So the banks for entry N land EIGHTEEN CLOCKS AFTER the handshake that the
+// rest of the console treats as "record N is in" -- and that handshake is
+// JOINED with `zhao_terrain_fieldlist`'s seal, which is the whole argument for
+// `wr_a` and the list's entry index being the same number.
+//
+// THE CONSEQUENCE. `b_res` HAS TWO WRITERS ON TWO DIFFERENT COUNTERS: the
+// intake clears `b_res[wr_a]` at I_WR, the per-patch replay sets
+// `b_res[rep_idx]` on `add_fire_i`. Nothing interlocks their TIMING -- this
+// module cannot backpressure a lane it only observes, and says so. If a patch
+// job's replay of entry N lands inside entry N's eighteen-clock window, the
+// replay sets the resident flag and the intake's late clear WIPES IT.
+//
+// MEASURED, not argued. `tests/terrain/composepub_acceptance.cpp` presented
+// exactly that ordering -- a record handshake followed about six clocks later
+// by the section 9.1 replay -- and the console-shaped chain returned:
+//
+//     engine runs=1089  runs_o=0  noprog=1089  skipped=0  not_begun=0
+//     faults=0  short=0   live_top == compose_top at every vertex
+//
+// A FIELD THAT RAN, COST THE ENGINE EVERY CYCLE IT SHOULD, AND MOVED NOTHING,
+// with every other census balancing. That is CLAUDE.md's metadata-swap shape
+// in its racing form: the flag and the record it describes are loaded by
+// different enables, and `noprog_o` is the ONLY symptom.
+//
+// WHY NOTHING CATCHES IT. There is no assertion in this file (deliberately --
+// see `no_rw_check` below, "buy area by asserting an interlock this module
+// does not own"). `lane_desync_o` cannot see it: both its arms difference
+// ENTRY COUNTS, and the count is right -- only the flag's value is wrong.
+// `tce_job_take` is not gated on `idle_o`. And FIELDARM's `tfl_patch_stall`
+// interlock guards a DIFFERENT hazard (replay vs vertex), not intake vs replay.
+//
+// WHETHER THE SHIPPED CONSOLE REACHES IT IS A SCHEDULING PROPERTY, NOT A
+// STRUCTURAL GUARANTEE: it depends on the gap between CMD.EXEC's last
+// TerrainField record and the first `tce_job_take`, which is a property of the
+// command packet's ordering. Safety today therefore rests on an unverified
+// promise about command order -- the exact shape the composer rejects two
+// lines from `tpt_vtx_valid` ("a comment asserting the page burst is long
+// enough would be the unverified promise directive 13.4 names").
+//
+// THE RELATED SILENT RISK, STATED BUT NOT DEMONSTRATED. `b_begun` and `b_uni`
+// are also written at I_WR and are read by the lane stream. A vertex that
+// fires after the replay but BEFORE I_WR reads the PREVIOUS FRAME's age, phase
+// and parameters with the resident flag still set -- a real engine run on
+// stale uniforms, which unlike the noprog path moves no counter at all. This
+// packet did not reach that ordering and does not claim it; it is the same
+// missing interlock and belongs in the same repair.
+//
+// THE SHAPE OF THE REPAIR, for the packet that owns this block. Move the
+// `b_res`/`b_obj` clear from I_WR to I_TAKE. Its stated purpose -- "a fresh
+// entry is NOT resident until the replay says so ... inheriting the previous
+// frame's answer would be a stale binding" -- is served exactly as well at
+// ACCEPTANCE, and acceptance is the beat the rest of the console is
+// synchronised to. That makes "the same number by construction" true in TIME
+// as well as in VALUE. Do NOT assert the bug: the test to keep is that a
+// replay's resident flag SURVIVES an in-flight intake.
+//
+// ---------------------------------------------------------------------------
 // SECTION 9.1 IS DECIDED ONCE, BY THE BLOCK THAT OWNS THE LIST
 // ---------------------------------------------------------------------------
 // `lane_covers_i` is `zhao_terrain_patch`'s `fld_covers_o` -- the closed-

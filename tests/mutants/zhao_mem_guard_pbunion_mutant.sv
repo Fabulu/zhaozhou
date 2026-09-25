@@ -285,7 +285,26 @@ module zhao_mem_guard_pbunion_mutant
   //   * ONE region of the six T2 names in bank 2. RESIDENT_MIP_POOL,
   //     COMPOSED_HEIGHT, COMPOSED_VELOCITY, WRITEBACK_STAGING and
   //     COMPOSED_MIP_POOL stay unmapped until the blocks that touch them
-  //     exist. TERRAIN.PAGELOADER writes pages and nothing else;
+  //     exist.
+  //
+  //     RE-EXAMINED AND DELIBERATELY KEPT, 2026-09-25 (COMPOSEPUB). The owner
+  //     vacation directive's section 1 commissions publishing the composed
+  //     caches, so this clause was the thing to check rather than inherit.
+  //     Two windows were NOT opened and the decision record is
+  //     `spec/memory_rules.md` 5b: COMPOSED_HEIGHT's lattice already reaches
+  //     four consumers THROUGH FABRIC -- zhao_terrain_patch's `top_o` streams
+  //     into zhao_terrain_compcache_front, which serves TERRAIN.TESS,
+  //     TERRAIN.HEIGHTTAP and through TAPSHARE both PART.COLLIDE and
+  //     FORGE.SHADOW -- so a writer here would be read by NOTHING, and
+  //     COMPOSED_VELOCITY has no consumer at any level (efa_velocity
+  //     dead-ends; zhao_terrain_velocity is instantiated only in the fit
+  //     harness). Charging the write with tools/budget/sdram_bandwidth.py
+  //     --with-composed-publish also takes the frame from 80.17% to 124.41%
+  //     at the FLATTERING hit spans. So the clause above stands for the
+  //     reason TERRAIN.DEVSTORE's own enactment gives six days earlier:
+  //     "a window opened WITH its block, never ahead of it."
+  //
+  //     TERRAIN.PAGELOADER writes pages and nothing else;
   //     TERRAIN.WRITEBACK reads sheets out of those same pages and nothing
   //     else. In particular WRITEBACK_STAGING/journal at 0x0578_0000 stays
   //     unmapped: v1's writeback goes straight across MEM.HPS.BRIDGE, so

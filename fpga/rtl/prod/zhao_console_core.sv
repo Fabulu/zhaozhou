@@ -5473,6 +5473,22 @@
 //          composer may not write one", which routes through directive 13.2's
 //          `zhao_terrain_patch_v2`. THE ENTRY STILL DOES NOT CLOSE.
 //
+//      (4) AND ONE OPEN DEFECT WAS FOUND ON THIS LANE, NOT REPAIRED HERE.
+//          `zhao_field_earth_adapter`'s `rec_ready_o` is the FIRST beat of its
+//          intake, not the last: the sequencer then walks seventeen divide
+//          steps before I_WR writes the banks, including `b_res[wr_a] <= 1'b0`.
+//          `b_res` therefore has TWO writers on TWO counters -- the intake's
+//          late clear and the per-patch replay's `add_fire_i` set -- with
+//          nothing interlocking their timing, and `tce_job_take` here is NOT
+//          gated on the adapter's `idle_o`. A replay landing inside that
+//          eighteen-clock window has its resident flag WIPED: measured at
+//          1,089 engine runs, `noprog_o` == 1,089, every other census
+//          balancing, and a field that moved nothing. FIELDARM's
+//          `tfl_patch_stall` does not cover this -- it guards replay vs
+//          VERTEX, not intake vs REPLAY. The full statement, the related
+//          silent stale-uniform risk and the shape of the repair are in that
+//          block's own header under "OPEN DEFECT".
+//
 //      (A) THE PRODUCER SIDE WAS NOT DONE. The EARTHADAPT block below says
 //          "the routing 20.8 commissions exists on the PRODUCER side" and
 //          that the only remaining blocker is consumer-side. That was wrong
