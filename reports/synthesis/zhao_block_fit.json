@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "558569bc376c4dab0029bd3cfa1ef829e9d0281c",
+    "newestRunCommit":  "e97dc4210401e2e24b33bb15e915217125a30b5b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -461,6 +461,26 @@
                        "ramBlocks":  0,
                        "dspBlocks":  0,
                        "virtualPins":  23
+                   },
+                   {
+                       "module":  "zhao_geom_attrsetup@dsp-census-20260926",
+                       "status":  "map_only",
+                       "sourceCommit":  "e97dc4210401e2e24b33bb15e915217125a30b5b",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "bd84da4c25174a5099b0f6c2dcfc341d1ca95bb673906ab0101021496428022f",
+                       "variantOf":  "zhao_geom_attrsetup",
+                       "seconds":  14.3,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  225,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  45,
+                       "virtualPins":  468
                    },
                    {
                        "module":  "zhao_geom_binner",
