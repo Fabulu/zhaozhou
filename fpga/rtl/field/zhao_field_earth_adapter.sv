@@ -569,10 +569,20 @@ module zhao_field_earth_adapter #(
   // parameter because three hard-coded 16s would be one law with three halves,
   // which is what its own declaration says; it is NOT an area knob.
   //
-  // `b_obj`/`b_res` are written on the REPLAY, not on the intake, because the
-  // resolution is what the field list's publication sweep produces and the
-  // replay is the handshake on which it is aligned with the consumer's own
-  // list slot.
+  // `b_obj`/`b_res` carry their VALUE from the REPLAY, not from the intake,
+  // because the resolution is what the field list's publication sweep produces
+  // and the replay is the handshake on which it is aligned with the consumer's
+  // own list slot. The intake's only touch is the stale-binding CLEAR, and
+  // that clear is at I_TAKE -- the accepted beat -- so the replay can never
+  // land on the far side of it.
+  //
+  // THIS PARAGRAPH USED TO READ "written on the REPLAY, not on the intake",
+  // FULL STOP, AND THE CODE TWO HUNDRED LINES BELOW CONTRADICTED IT: I_WR
+  // wrote both, eighteen clocks after the handshake the rest of the console
+  // treats as "record N is in". The comment was describing the design that was
+  // intended and the code was implementing a race. EARTHLOCK moved the code to
+  // match the comment rather than the comment to match the code, because the
+  // comment was the one that was right.
   // THE PAYLOAD IS ONE 320-BIT RAM WORD PER ENTRY, and its layout is NAMED
   // rather than implied, because a part-select on a concatenation is exactly
   // where a silent field swap lives.
@@ -586,13 +596,23 @@ module zhao_field_earth_adapter #(
   // committed leaf maps in this packet's receipt exist. The number that says
   // whether this worked is `Total block memory bits`, not this line.
   //
-  // NO `no_rw_check`. The intake writes `wr_a` from one process and the lane
-  // stream reads `lane_a` from another, and nothing in this module interlocks
-  // them, so a same-cycle same-address collision is not provably impossible.
-  // The nonblocking read below therefore yields the OLD word -- which is
-  // byte-identical to the combinational flop read it replaces, and that
-  // equality is the whole equivalence argument. Declaring `no_rw_check` would
-  // buy area by asserting an interlock this module does not own.
+  // NO `no_rw_check`, AND THE REASON HAS CHANGED WITHOUT THE ANSWER CHANGING.
+  // The intake writes `wr_a` from one process and the lane stream reads
+  // `lane_a` from another. That used to mean a same-cycle same-address
+  // collision was not provably impossible, because NOTHING in this module
+  // interlocked them. EARTHLOCK's `entry_busy_c` now does: `cap_en_c` is held
+  // low for exactly the entry the intake is writing, so the collision is in
+  // fact unreachable, and the attribute would now be TRUE rather than hopeful.
+  //
+  // IT IS STILL NOT DECLARED, DELIBERATELY. `no_rw_check` changes what the
+  // fitter may infer, and this packet's whole obligation on the memory is that
+  // EARTHRAM's measured M10K and its numbers SURVIVE a correctness repair. A
+  // second, unrelated change to the same array in the same map pair would make
+  // that comparison unreadable -- two variables, one measurement. The
+  // nonblocking read below still yields the OLD word, which is byte-identical
+  // to the combinational flop read it replaced, and that equality is still the
+  // whole equivalence argument. Taking the attribute is an area question for a
+  // packet that can measure it alone.
   (* ramstyle = "M10K" *) logic [UniW-1:0] b_uni [0:MAX_FIELDS-1];
   // THE READ REGISTER, WHICH IS THE 15.1 CAPTURE LATCH ITSELF. It is not an
   // extra pipeline stage bolted in front of one: `held_in` is GONE, and this
@@ -817,6 +837,50 @@ module zhao_field_earth_adapter #(
   wire [IdxW-1:0] eff_n_c = reopening_c ? {IdxW{1'b0}} : n_rec;
   wire would_reject_c = ({27'd0, eff_n_c} >= MAX_FIELDS);
 
+  // ==========================================================================
+  // THE INTAKE/REPLAY INTERLOCK (EARTHLOCK, 2026-09-25). THE ENTRY UNDER
+  // CONSTRUCTION IS NOT READABLE BY THE LANE STREAM.
+  // ==========================================================================
+  // `rec_ready_o` is the FIRST beat of the intake and `b_begun`/`b_uni` land
+  // EIGHTEEN CLOCKS LATER at I_WR, because `phase` is the divider's result and
+  // cannot exist before the divide ends. So there is a window in which the
+  // console believes record N is in -- the joined handshake told it so -- while
+  // entry N still holds the PREVIOUS frame's age, phase and parameters. A
+  // vertex reading it in that window is a real engine run on stale uniforms,
+  // and it moves NO counter: `noprog_o` is silent, both arms of the lane shadow
+  // difference entry COUNTS and the count is right, and `lane_desync_o`'s arm
+  // (c) pairs the read's own address with itself. NOTHING IN THE TREE SEES IT.
+  // That is the half of this defect that had to be closed structurally rather
+  // than watched.
+  //
+  // THE CLOSE IS TO MAKE THE ENTRY UNREADABLE WHILE IT IS BEING WRITTEN, which
+  // is a HOLD and not a wrong answer. The consumer already waits on this module
+  // for order 80-100 clocks per covered vertex, so at most eighteen more is
+  // inside the protocol it already speaks, and the cost lands in
+  // `stall_cycles_o` -- the counter that already exports exactly this number.
+  //
+  // IT IS PER-ENTRY AND NOT A GLOBAL BAR, and that is a liveness requirement
+  // rather than an optimisation. A global `in_st != I_TAKE` would stop the lane
+  // on EVERY record, and a saturated record stream -- which is legal, the tail
+  // reject is what bounds it -- holds `in_st` off `I_TAKE` for eighteen of
+  // every nineteen clocks. Per-entry, the intake walks `n_rec` forward, so any
+  // one entry is blocked for at most one record's worth of the sweep.
+  //
+  // A REJECTED RECORD HOLDS NOTHING, and this is the trap in the obvious
+  // version. `wr_a` is `n_rec[BankAw-1:0]` with `BankAw` = 4 and `n_rec` five
+  // bits, so the rejecting value `n_rec == 16` ALIASES TO ADDRESS 0. A hold
+  // that ignored the reject would starve entry 0 for as long as the tail
+  // rejects kept arriving. A reject writes no bank, so it owes no hold.
+  //
+  // AND THE ADDRESS IS `eff_n_c`, NOT `wr_a`, on the take cycle. `wr_a` reads
+  // `n_rec`, which the take edge itself resets to zero when the list reopens --
+  // so during that one cycle `wr_a` still names the PREVIOUS list's tail.
+  // `eff_n_c` is the value `would_reject_c` is already judged on, and it is the
+  // entry the clear below actually lands in.
+  wire [BankAw-1:0] intake_a_c = take_now_c ? eff_n_c[BankAw-1:0] : wr_a;
+  wire intake_writes_c = take_now_c ? !would_reject_c : ((in_st != I_TAKE) && !h_reject);
+  wire entry_busy_c = intake_writes_c && (lane_a == intake_a_c);
+
   // The oracle's saturated age, computed on the cycle the record is taken.
   // `span` is 32-bit and cannot borrow, because `begun` gates it.
   wire begun_c = (tick_i >= rec_start_tick_i);
@@ -859,7 +923,11 @@ module zhao_field_earth_adapter #(
   // `tools/quartus/check_ram_inference.py` names as a blocker. Removing it is
   // half the change; making the read synchronous is the other half, and either
   // alone leaves the array in flip-flops.
-  wire cap_en_c = (state == E_IDLE) && lanes_left_c && !skip_c;
+  // `!entry_busy_c` is here for the SAME reason it is on the `E_IDLE` branch
+  // below, and the two must stay the same expression: this wire is that
+  // branch's condition restated, and the header's atomicity argument depends on
+  // that being literally true.
+  wire cap_en_c = (state == E_IDLE) && lanes_left_c && !skip_c && !entry_busy_c;
   wire uni_we_c = (in_st == I_WR) && !h_reject;
 
   // The oracle: `duration == 0 ? 1.0fx : the divide`. The divider ran anyway
@@ -1024,6 +1092,43 @@ module zhao_field_earth_adapter #(
             h_age <= age_eff_c;
             h_dur_zero <= (rec_duration_i == 32'd0);
 
+            // THE STALE-BINDING CLEAR HAPPENS HERE, AT ACCEPTANCE, AND NOT AT
+            // I_WR EIGHTEEN CLOCKS LATER (EARTHLOCK, 2026-09-25).
+            //
+            // Its purpose is unchanged and is stated at the declaration: a
+            // fresh entry is NOT resident until the replay says so, because
+            // inheriting the previous frame's answer for this slot would
+            // evaluate a program the cartridge replaced. That purpose is served
+            // exactly as well at acceptance -- and acceptance is the beat the
+            // REST OF THE CONSOLE IS SYNCHRONISED TO, because `rec_ready_o` is
+            // joined with `zhao_terrain_fieldlist`'s `cmd_ready_o` and that
+            // join is the whole argument for the two blocks' entry indices
+            // being one number. Clearing at I_WR made that argument true in
+            // VALUE and false in TIME: the field list would seal, the patch
+            // replay would set `b_res[N]`, and this module's late clear would
+            // WIPE IT -- measured as 1,089 engine runs with `noprog_o` == 1,089
+            // and every other census balancing perfectly.
+            //
+            // `eff_n_c` AND NOT `wr_a`: on a reopened list the take edge is the
+            // edge that resets `n_rec`, so `wr_a` still names the previous
+            // list's tail for this one cycle. See `intake_a_c` above.
+            //
+            // GATED ON THE REJECT, because `eff_n_c == 16` aliases to address 0
+            // and a tail reject must not clear entry 0's binding. A rejected
+            // record writes no bank at I_WR either; it is walked through the
+            // divide for the timing reason below and banks nothing.
+            //
+            // THE REPLAY OUTRANKS THIS CLEAR ON A TIE. The per-patch replay
+            // block sits LATER IN THIS SAME PROCESS, so if `add_fire_i` lands
+            // on this very edge for this very entry, its nonblocking assignment
+            // is the one that survives -- and that is the correct precedence,
+            // since the replay carries the resolution this clear is waiting
+            // for.
+            if (!would_reject_c) begin
+              b_res[eff_n_c[BankAw-1:0]] <= 1'b0;
+              b_obj[eff_n_c[BankAw-1:0]] <= {OBJW{1'b0}};
+            end
+
             // The oracle's numerator, with its own pre-added half. Formed from
             // the SATURATED age, which is what bounds the quotient at 65536 and
             // licenses the seventeen-step divide above.
@@ -1067,12 +1172,13 @@ module zhao_field_earth_adapter #(
             // something else: `uni_we_c` is `(in_st == I_WR) && !h_reject`,
             // and this is the `!h_reject` arm of `I_WR`.
             b_begun[wr_a] <= h_begun;
-            // A fresh entry is NOT resident until the replay says so. The
-            // resolution belongs to the field list's publication sweep, and
-            // inheriting the previous frame's answer for this slot would be a
-            // stale binding that evaluates a program the cartridge replaced.
-            b_res[wr_a] <= 1'b0;
-            b_obj[wr_a] <= {OBJW{1'b0}};
+            // `b_res[wr_a] <= 1'b0;` AND `b_obj[wr_a] <= '0;` USED TO BE HERE
+            // AND HAVE MOVED TO I_TAKE. They are not gone and their purpose is
+            // not withdrawn -- see the block comment at the clear's new home
+            // for why acceptance is the correct beat and this one was not.
+            // Nothing else is written here that was not written here before:
+            // this arm now banks ONLY what the divide had to finish for, which
+            // is `b_begun` and the payload `uni_we_c` writes.
             n_rec <= n_rec + 5'd1;
             records_o <= records_o + 32'd1;
           end
@@ -1121,7 +1227,12 @@ module zhao_field_earth_adapter #(
           // `fld_ready_o` in that same later cycle (its `busy` is a register
           // too), so nothing is lost -- and the one cycle of skew is why the
           // shadow guard is gated on `vtx_live` rather than on `vtx_fire_i`.
-          if (lanes_left_c) begin
+          // `!entry_busy_c` HOLDS THE LANE while this entry's own intake is in
+          // flight. It gates the WHOLE branch and not just the request arm,
+          // because `skip_c` reads `b_begun[lane_a]` and that flop is written
+          // at I_WR too -- a skip decided on a half-written entry is the same
+          // stale read wearing the oracle's `continue` as a disguise.
+          if (lanes_left_c && !entry_busy_c) begin
             // 15.1's CAPTURE HAPPENS IN THE RAM PROCESS ABOVE, off `cap_en_c`,
             // which is `(state == E_IDLE) && lanes_left_c && !skip_c` -- this
             // branch's own condition. One enable loads the payload, the

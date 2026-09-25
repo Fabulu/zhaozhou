@@ -862,6 +862,173 @@ void case12_short_record(Dut& d) {
   take_answer(d);
 }
 
+
+// ---------------------------------------------------------------------------
+// 13 -- THE INTAKE/REPLAY INTERLOCK (packet EARTHLOCK, 2026-09-25)
+//
+// `rec_ready_o` is the FIRST beat of the intake and the banks land eighteen
+// clocks later, so for eighteen clocks the console believes a record is in
+// while entry N is still the PREVIOUS frame's. Two different failures live in
+// that window and this case asserts the CORRECT behaviour of both. Neither
+// check asserts the bug: after the repair there is no race to miss, and both
+// of these still describe what the block must do.
+//
+//  (a) THE LOUD ONE. A replay landing inside the window sets `b_res[N]`, and
+//      the intake's clear must not wipe it. Asserted as: the entry is RESIDENT
+//      and the engine RUNS with the replay's own object. Before the repair the
+//      late clear at I_WR won and this read `noprog`.
+//  (b) THE SILENT ONE, which moves no counter at all and is the more dangerous
+//      half. A vertex evaluating entry N inside the window must not be handed
+//      the PREVIOUS frame's age, phase and parameters. Asserted as: whatever
+//      the block's timing, the uniforms the engine is given are THIS frame's.
+//      `noprog_o` cannot see this, which is the whole reason it is here.
+// ---------------------------------------------------------------------------
+
+// Offer a record and return the moment it is TAKEN -- in the middle of the
+// intake, with the divide still running and the banks not yet written. This is
+// the window `offer_record` deliberately runs out; case 13 is the one that
+// stops inside it.
+void offer_record_take_only(Dut& d, uint32_t start_tick, uint32_t duration,
+                            const uint32_t par[8], bool last) {
+  d.rec_start_tick_i = start_tick;
+  d.rec_duration_i = duration;
+  for (int i = 0; i < 8; ++i) d.rec_params_i[i] = par[i];
+  d.rec_last_i = last ? 1 : 0;
+  d.rec_valid_i = 1;
+  int guard = 0;
+  while (!d.rec_ready_o && guard < 200) {
+    step(d);
+    ++guard;
+  }
+  step(d);  // THE TAKE. The console now believes the record is in.
+  d.rec_valid_i = 0;
+  d.rec_last_i = 0;
+}
+
+// Run the intake out to its end, so the banks are committed.
+void finish_intake(Dut& d) {
+  int guard = 0;
+  while (!d.rec_ready_o && guard < 200) {
+    step(d);
+    ++guard;
+  }
+  step(d);
+}
+
+void case13_intake_replay_interlock(Dut& d) {
+  uint32_t par[8];
+
+  // ---- (a) the replay's resident flag SURVIVES an in-flight intake --------
+  reset(d);
+  // FRAME 1: one record, banked to completion, replayed resident. This is the
+  // state entry 0 is in when frame 2's intake starts, and it is what makes the
+  // window's stale read possible at all.
+  d.tick_i = 1050;
+  zero_par(par);
+  par[0] = 0xAAAA0001u;
+  offer_record(d, 1000, 100, par, true);
+  {
+    const int obj[1] = {3};
+    const bool res[1] = {true};
+    replay(d, obj, res, 1);
+  }
+
+  // FRAME 2: take the record and STOP INSIDE THE INTAKE, then replay entry 0
+  // while the divide is still running. That is exactly the ordering
+  // `tests/terrain/composepub_acceptance.cpp` presented to the console-shaped
+  // chain -- a handshake followed about six clocks later by the section 9.1
+  // replay.
+  d.tick_i = 1090;
+  zero_par(par);
+  par[0] = 0xBBBB0002u;
+  offer_record_take_only(d, 1000, 100, par, true);
+  {
+    const int obj[1] = {5};
+    const bool res[1] = {true};
+    replay(d, obj, res, 1);  // lands INSIDE the eighteen-clock window
+  }
+  finish_intake(d);
+
+  take_vertex(d, 7, 9, 1);
+  {
+    bool ran = false;
+    int req_slot = -1;
+    int req_noprog = -1;
+    uint32_t in[15] = {0};
+    const int32_t out[4] = {0x1234, 0, 0, 0};
+    const bool served = serve_lane(d, true, out, kStOk, &ran, nullptr, &req_slot, &req_noprog, in);
+    // This one only says a request reached the engine, which is TRUE EVEN WITH
+    // THE DEFECT -- the wiped flag still issues a run, it issues it with
+    // `req_noprog_o` raised and the engine refuses it. That is why the
+    // residency assertion is the next check and not this one. Keeping them
+    // apart is the difference between "1,089 runs" and "1,089 runs that moved
+    // nothing", which is the whole shape of the defect.
+    check(served && ran, "case 13a: the vertex reaches the engine at all", 1,
+          (served && ran) ? 1 : 0);
+    check(req_noprog == 0,
+          "case 13a: and it is offered to the engine WITH a program, not as a no-program refusal", 0,
+          req_noprog);
+    check(req_slot == 5, "case 13a: bound to the REPLAY's object, which is frame 2's own binding", 5,
+          req_slot);
+    take_answer(d);
+  }
+  check(d.noprog_o == 0,
+        "case 13a: and `noprog_o` never moved -- the loud symptom of the wiped flag is absent", 0,
+        d.noprog_o);
+
+  // ---- (b) a vertex inside the window gets THIS frame's uniforms ----------
+  // The silent ordering. `b_begun` and `b_uni` are written at I_WR and read by
+  // the lane stream, so a vertex firing after the replay but before I_WR would
+  // evaluate on the previous frame's age, phase and parameters with resident
+  // already set -- a real engine run on stale uniforms that moves NO counter.
+  reset(d);
+  d.tick_i = 1050;
+  zero_par(par);
+  par[0] = 0xAAAA0001u;
+  offer_record(d, 1000, 100, par, true);
+  {
+    const int obj[1] = {3};
+    const bool res[1] = {true};
+    replay(d, obj, res, 1);
+  }
+  const Uniforms u_stale = oracle_uniforms(1050, 1000, 100);
+
+  // FRAME 2, with uniforms that DIFFER from frame 1's in every field that is
+  // read: a different age, a different phase and a different p0. If any of the
+  // three comes back as frame 1's, the engine ran on a stale bank.
+  d.tick_i = 1090;
+  zero_par(par);
+  par[0] = 0xBBBB0002u;
+  offer_record_take_only(d, 1000, 100, par, true);
+  const Uniforms u_fresh = oracle_uniforms(1090, 1000, 100);
+  check(u_fresh.age != u_stale.age,
+        "case 13b control: the two frames' ages really do differ, so the check CAN fail", 1,
+        (u_fresh.age != u_stale.age) ? 1 : 0);
+  {
+    const int obj[1] = {5};
+    const bool res[1] = {true};
+    replay(d, obj, res, 1);
+  }
+  // THE VERTEX FIRES INSIDE THE WINDOW -- before I_WR, with the divide still
+  // running. No waiting for `rec_ready_o` here: that wait is the bug's hiding
+  // place.
+  take_vertex(d, 7, 9, 1);
+  {
+    bool ran = false;
+    uint32_t in[15] = {0};
+    const int32_t out[4] = {0x1234, 0, 0, 0};
+    const bool served = serve_lane(d, true, out, kStOk, &ran, nullptr, nullptr, nullptr, in);
+    check(served && ran, "case 13b: the vertex is answered by a real engine run", 1,
+          (served && ran) ? 1 : 0);
+    check(in[2] == u_fresh.age,
+          "case 13b: the engine is handed THIS frame's age, never the previous frame's", u_fresh.age,
+          in[2]);
+    check(in[3] == u_fresh.phase, "case 13b: and this frame's phase", u_fresh.phase, in[3]);
+    check(in[4] == 0xBBBB0002u, "case 13b: and this frame's parameters", 0xBBBB0002u, in[4]);
+    take_answer(d);
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -877,6 +1044,7 @@ int main(int argc, char** argv) {
   case10_cost(dut);
   case11_capture(dut);
   case12_short_record(dut);
+  case13_intake_replay_interlock(dut);
 
   dut.final();
   return zhao::report_and_exit("field_earth_adapter_directed");
