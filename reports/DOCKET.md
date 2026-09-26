@@ -19,6 +19,23 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ---
 
+## OPEN OWNER DECISION 2026-09-26 -- `reports/OWNER-ESCALATION-20260926-I34.md`
+
+**ONE decision, and it is the only thing between the completion register and
+ZERO.** Five of the six remaining entries are engineering and need nothing from
+you. The sixth -- I34's MATERIAL and NAV channels -- is gated because all three
+of the entry's named options breach something the vacation directive protects:
+option 2's SDRAM regions need ~3.7 M cycles against 330 k free (re-measured, not
+quoted), option 3 is a feature deletion, and option 1 ships two lanes computed
+and read by nothing.
+
+**Nothing is blocked waiting on it.** The recommendation is a fourth shape --
+look for a FABRIC consumer, the way velocity closed on 2026-09-26 with no SDRAM
+at all -- and that is what proceeds if you say nothing. Options 1 and 3 are not
+taken without you.
+
+---
+
 ## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`
 
 The ordered packet plan for the texture island V3 rearchitecture, written
