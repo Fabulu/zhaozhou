@@ -13,7 +13,10 @@
 // magenta; it never borrows a current token, index, alpha, slot or generation.
 //
 // Palette programming retains the explicit BEGIN/WRITE/END protocol.  The RAM
-// is deliberately not reset.  Residency and generation are the reset guards.
+// is deliberately not reset.  Residency and generation are the reset guards --
+// and RESIDENCY is the one that guards the BEGIN.  A cold slot accepts ANY
+// generation, ZERO INCLUDED; only a slot that is currently resident refuses a
+// BEGIN at the generation it already advertises.
 `default_nettype none
 
 module zhao_texture_palette_res_v2 #(
@@ -117,6 +120,7 @@ module zhao_texture_palette_res_v2 #(
 
   logic rsp_slot_ready_c;
   logic l1_slot_ready_c;
+  logic begin_accept_c;
   logic begin_same_slot_c;
   logic req_stale_c;
   logic req_resident_c;
@@ -127,12 +131,39 @@ module zhao_texture_palette_res_v2 #(
     req_ready_o      = l1_slot_ready_c;
     req_fire_c       = req_valid_i && req_ready_o;
 
+    // THE ACCEPTANCE TERM IS WRITTEN ONCE AND READ TWICE.  The FSM below and
+    // the same-edge invalidation here MUST agree about whether a BEGIN was
+    // taken; two spellings of one condition is CLAUDE.md's detector-wired-to-
+    // two-operands defect with the operands swapped, and it would let a
+    // REFUSED begin invalidate a live binding, or an ACCEPTED one fail to.
+    //
+    // A BEGIN IS REFUSED ONLY WHEN IT WOULD REPLACE A *RESIDENT* BINDING WITH
+    // CONTENT UNDER THE GENERATION THAT BINDING ALREADY ADVERTISES.  That is
+    // the whole of the fault `err_same_gen_o` exists to catch: a consumer
+    // holding {slot, generation} cannot tell the old bytes from the new, so
+    // the replacement is an ABA hazard and must be a verdict, never a load.
+    //
+    // REPAIRED 2026-09-26 (gz/i13close).  The guard used to compare the
+    // generation ALONE, and `generation_q[slot]` RESETS TO ZERO -- so a slot
+    // that had never been loaded refused generation ZERO, and zero was the one
+    // generation no producer could hand this block in a single pass.  A real
+    // palette producer allocating generations from its own reset counter wants
+    // exactly that value first, and the previous shape forced it either to
+    // skip zero (a special case nobody could re-derive) or to load some other
+    // generation and reload at zero (a contortion a bench can reach and a
+    // machine should not have to).  RESIDENCY is the reset guard this block's
+    // own header names; the generation was doing residency's job.
+    //
+    // `err_same_gen_o` LOSES NOTHING: a resident slot re-BEGUN at its own
+    // generation still fires it, which is the only state in which the fault
+    // it describes can exist, and `texture_palette_res_v2_directed`'s control
+    // now fires it that way instead of by reusing the RESET generation.
+    begin_accept_c = ld_valid_i && ld_ready_o && (ld_op_i == LD_BEGIN)
+                  && !(resident_q[ld_slot_i] && (ld_gen_i == generation_q[ld_slot_i]));
     // An accepted BEGIN invalidates this slot on the same edge.  Compare that
     // independently from the registered state so a same-edge lookup cannot see
     // the palette being replaced as fresh.
-    begin_same_slot_c = ld_valid_i && ld_ready_o && (ld_op_i == LD_BEGIN)
-                     && (ld_gen_i != generation_q[ld_slot_i])
-                     && (ld_slot_i == req_slot_i);
+    begin_same_slot_c = begin_accept_c && (ld_slot_i == req_slot_i);
     req_stale_c   = (generation_q[req_slot_i] != req_gen_i) || begin_same_slot_c;
     req_resident_c = resident_q[req_slot_i] && !begin_same_slot_c;
 
@@ -214,7 +245,7 @@ module zhao_texture_palette_res_v2 #(
       if (ld_valid_i && ld_ready_o) begin
         unique case (ld_op_i)
           LD_BEGIN: begin
-            if (ld_gen_i == generation_q[ld_slot_i]) begin
+            if (!begin_accept_c) begin
               err_same_gen_o <= err_same_gen_o + 32'd1;
             end else begin
               generation_q[ld_slot_i] <= ld_gen_i;

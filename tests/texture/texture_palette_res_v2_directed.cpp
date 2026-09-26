@@ -255,7 +255,6 @@ void test_programming_error_controls(Vzhao_texture_palette_res_v2& top) {
   // Each misuse is independent and expected exactly once.  Zero-valued error
   // counters are not cited until every detector has been made to fire here.
   load_op(top, 1, 0, 0, 7, 0x1234, true);  // WRITE outside a load
-  load_op(top, 0, 0, 0, 0, 0, true);       // BEGIN reusing reset generation
 
   load_op(top, 0, 0, 1, 0, 0, true);
   load_op(top, 1, 0, 0, 0, 0x2000, true);
@@ -266,21 +265,104 @@ void test_programming_error_controls(Vzhao_texture_palette_res_v2& top) {
 
   load_slot(top, 0, 3, 0x3000);  // one successful load witness
 
+  // THE SAME-GENERATION CONTROL, RE-AUTHORED 2026-09-26 (gz/i13close), and the
+  // reason is the thing to keep.  It used to read
+  //
+  //     load_op(top, 0, 0, 0, 0, 0, true);  // BEGIN reusing reset generation
+  //
+  // on a COLD slot 0 -- it fired `err_same_gen_o` because `generation_q` RESETS
+  // to zero, not because any binding was at risk.  That is a test asserting the
+  // bug: it pinned the accident that made generation ZERO unreachable in one
+  // pass, and it would have gone red on the repair while reading like a
+  // regression in the block.  The fault the counter names is replacing a
+  // RESIDENT binding with content under the generation that binding already
+  // advertises, so that is what is presented here: slot 0 is resident at
+  // generation 3 from the load above, and this BEGIN re-uses 3.  It is REFUSED,
+  // so the resident binding is untouched -- which the next check READS.
+  load_op(top, 0, 0, 3, 0, 0, true);  // BEGIN over a RESIDENT slot's own generation
+
   zhao::check(top.err_write_outside_o == 1, "WRITE-outside detector fires exactly once", 1,
               top.err_write_outside_o);
   zhao::check(top.err_same_gen_o == 1, "same-generation BEGIN detector fires exactly once", 1,
               top.err_same_gen_o);
+  {
+    // A REFUSED BEGIN CHANGES NOTHING.  The refusal above must not have
+    // invalidated the binding it refused to replace -- which is exactly what a
+    // `begin_same_slot_c` spelled differently from the FSM's acceptance term
+    // would do, silently, on the same edge.
+    const Tuple66 survivor{0x11111u, 0x00, 0x2A, 0x77, 0x000000};
+    accept_request(top, survivor, 0, 3);
+    const Tuple66 got = take_response(top);
+    const Tuple66 want{survivor.token, 0x00, survivor.index, survivor.alpha,
+                       expand565(static_cast<uint16_t>(0x3000 + survivor.index))};
+    zhao::check(same(got, want),
+                "a refused same-generation BEGIN leaves the resident binding intact", 1,
+                same(got, want) ? 1 : 0);
+  }
   zhao::check(top.err_incomplete_o == 1, "incomplete END detector fires exactly once", 1,
               top.err_incomplete_o);
   zhao::check(top.err_crc_o == 1, "CRC-failed END detector fires exactly once", 1, top.err_crc_o);
   zhao::check(top.loads_ok_o == 1, "successful-load counter is independent and exact", 1,
               top.loads_ok_o);
-  zhao::check(top.lookups_o == 0 && top.stale_o == 0 && top.cold_o == 0,
-              "programming controls create no phantom lookup verdict", 0,
-              top.lookups_o + top.stale_o + top.cold_o);
+  zhao::check(top.lookups_o == 1 && top.stale_o == 0 && top.cold_o == 0,
+              "programming controls create no phantom stale or cold verdict", 0,
+              top.stale_o + top.cold_o);
   zhao::check(top.cfg_idle_o == 1 && top.idle_o == 1,
               "programming controls finish with both planes idle", 1,
               (top.cfg_idle_o && top.idle_o) ? 1 : 0);
+}
+
+// GENERATION ZERO IS NOT A SPECIAL CASE (2026-09-26, gz/i13close).
+//
+// `generation_q[slot]` resets to zero and `resident_q[slot]` resets low.  The
+// BEGIN guard used to difference the GENERATION alone, so a slot that had never
+// held anything refused generation zero, and zero became the one value no
+// producer could hand this block in a single pass.  `zhao_texture_palette_load`
+// allocates its generations from its own reset counter and therefore asks for
+// zero FIRST; this case is what says it may.
+//
+// Three statements, in order, and the third is what makes the first two mean
+// something: a cold slot LOADS at generation zero; a lookup at {slot, 0}
+// RESOLVES to the loaded colour rather than the SOURCE_REFUSED magenta; and the
+// slot is then protected by exactly the same law as every other generation -- a
+// second BEGIN at zero over the now-RESIDENT slot is refused.  Without the
+// third, "zero works" would be a hole rather than a citizenship.
+void test_generation_zero_is_ordinary(Vzhao_texture_palette_res_v2& top) {
+  reset(top);
+
+  load_slot(top, 1, 0, 0x5000);
+  zhao::check(top.loads_ok_o == 1, "a COLD slot completes a load at generation ZERO", 1,
+              top.loads_ok_o);
+  zhao::check(top.err_same_gen_o == 0,
+              "loading a cold slot at generation zero fires no same-generation fault", 0,
+              top.err_same_gen_o);
+
+  const Tuple66 ask{0x2AAAAu, 0x00, 0x5C, 0x91, 0x000000};
+  accept_request(top, ask, 1, 0);
+  const Tuple66 got = take_response(top);
+  const Tuple66 want{ask.token, 0x00, ask.index, ask.alpha,
+                     expand565(static_cast<uint16_t>(0x5000 + ask.index))};
+  zhao::check(same(got, want),
+              "a lookup at generation ZERO resolves to the loaded colour, not magenta", 1,
+              same(got, want) ? 1 : 0);
+  zhao::check(top.cold_o == 0 && top.stale_o == 0,
+              "generation zero is RESIDENT and CURRENT, not cold and not stale", 0,
+              top.cold_o + top.stale_o);
+
+  // The same law, at the same value.  Now that slot 1 IS resident at zero, a
+  // BEGIN at zero is the ABA hazard the counter exists for, and it fires.
+  load_op(top, 0, 1, 0, 0, 0, true);
+  zhao::check(top.err_same_gen_o == 1,
+              "a RESIDENT slot re-BEGUN at generation zero is refused like any other", 1,
+              top.err_same_gen_o);
+  zhao::check(top.loads_ok_o == 1, "the refused BEGIN completes no second load", 1,
+              top.loads_ok_o);
+
+  // And a DIFFERENT generation on the same slot is still taken, so the refusal
+  // above is about the value matching and not about the slot.
+  load_slot(top, 1, 1, 0x6000);
+  zhao::check(top.loads_ok_o == 2 && top.err_same_gen_o == 1,
+              "a resident slot still reloads at a NEW generation", 2, top.loads_ok_o);
 }
 
 void test_pipeline_cadence(Vzhao_texture_palette_res_v2& top) {
@@ -368,6 +450,7 @@ int main(int argc, char** argv) {
   test_cold_and_fresh(top);
   test_generation_and_hold(top);
   test_programming_error_controls(top);
+  test_generation_zero_is_ordinary(top);
   test_pipeline_cadence(top);
   return zhao::report_and_exit("texture_palette_res_v2_directed");
 }
