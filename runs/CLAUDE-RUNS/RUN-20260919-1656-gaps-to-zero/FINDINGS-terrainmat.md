@@ -309,7 +309,8 @@ see §3.
 |---|---|
 | `97a36b81` | the IDENTITY: the ABI field, CMD.EXEC's decode, the clipfeed's two ports and derived mode, the composer's commit-beat latch, two new core counters |
 | `17e77647` | the TEXEL: the fixture's terrain material, the smoke's new laws, the `-NoTerrainMaterial` control, the directed test, the I13 entry section |
-| (this)      | these findings |
+| `bab032d6` | these findings |
+| `b5f0b0c9` | the pad reinterpretation recorded in `spec/capture_format.md` beside its TWO existing precedents -- `DrawProcedural` byte 36 and `SurfaceStamp` bytes 36-43, both out of a `pad[12]`, both at the SAME offset. The compatibility argument is now that file's RULE 5 (a pad must be zero on the wire, refused with `ZH_ABI_RESERVED_FIELD`) rather than an assurance: every capture that ever validated carries zero there BY CONSTRUCTION, and zero is `MATMODE_NONE`. Old frames are not merely still legal; they mean precisely what they meant. |
 
 ---
 
@@ -335,7 +336,8 @@ see §3.
 | `-BadVertex` | PASS -- pixels **512**, `backed=128` |
 | `-NoEchoArm` | PASS -- pixels 2816, `samples=1216` |
 | `-Mutant` | PASS -- `terr_pl_slot_overflow_o=1`, fired exactly once |
-| `-BadTraceArm` | PASS |
+| `-BadTraceArm` | PASS -- "the reserved bit was refused whole and nothing was armed" |
+| console-board lint | RC 1, **263 warnings -- IDENTICAL to what TERRAINTEX measured**, class for class (1 DECLFILENAME, 34 PINCONNECTEMPTY, 209 UNUSEDPARAM, 17 UNUSEDSIGNAL, 2 WIDTHEXPAND). Inherited red, and my two board ports added ZERO to it -- measured rather than assumed, as the protocol's own caveat on this row requires. |
 | `terrain_clipfeed_mat_directed` (**NEW**) | **38 checks passed**; fire test fails exactly 4 |
 | `test_cmd_exec_directed` (R60) | **977 checks passed** |
 | `cmake --preset windows-native` | CFG_RC=0 |
