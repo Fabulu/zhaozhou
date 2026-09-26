@@ -27,6 +27,18 @@
 #     std::__cxx11::basic_string<...>::basic_string(basic_string&&)". Hence
 #     -D_GLIBCXX_USE_CXX11_ABI=0 below. Anything else linked against these
 #     objects needs the same flag.
+#  4. THREE CONCURRENT FORMS IS THE CEILING ON THIS BOX. Each form is its own
+#     build directory, so they cannot corrupt each other -- but they cannot all
+#     fit in memory either. Measured 2026-09-26: three ran clean; FIVE put
+#     `cc1plus.exe: out of memory allocating 1153316 bytes` in one log and made
+#     another exit with `verilator returned 3` AND NO `%Error` LINE AT ALL,
+#     because this script filters verilator's output to `%Error` and an
+#     out-of-memory death produces none. That second signature is the
+#     dangerous one: it looks exactly like the killed-g++ mystery
+#     `run_block_fit.ps1:955-966` records, and it is not -- nothing was
+#     killed, the box was full. Run at most three, and read the log for
+#     `out of memory` before believing a bare non-zero verilator exit.
+#
 #  3. COMPILE THE UNIT LIST, NOT EVERY .cpp. Verilator also writes
 #     `*_vm_classes_*.cpp` aggregators that #include the individual files;
 #     compiling both gives a multiple-definition link failure. The authority is
