@@ -1,4 +1,48 @@
-// zhao_forge_shadow.sv -- FORGE.SHADOW: contact shadows, as ordinary geometry.
+// zhao_shadow_trig_probe -- DSPHUNT's POSITIVE CONTROL for the 2026-09-26
+// unit-circle table narrowing in `zhao_forge_shadow`.
+//
+// WHAT THIS FILE IS
+// -----------------
+// It is `fpga/rtl/forge/zhao_forge_shadow.sv` AS IT STOOD AT COMMIT 5049399c,
+// with the module renamed and nothing else altered. It was produced
+// MECHANICALLY, by `git show` and a single identifier substitution, precisely
+// so that it is the old arithmetic rather than somebody's reading of it. A
+// C++ restatement of the old table would prove only that the DUT agrees with
+// MY TRANSCRIPTION -- which is the part most likely to be wrong, being written
+// by the same person at the same time from the same reading.
+//
+// WHAT CHANGED IN PRODUCTION. `unit_cos` and `unit_sin` declared
+// `logic signed [31:0]` while every one of their sixteen values lies in
+// [-65536, +65536]. Production now declares them `logic signed [17:0]`, whose
+// range is [-131072, +131071] -- so no returned integer moves. They feed
+// `$signed(rad_q) * unit_cos(tbl_c)` into a 64-bit wire, which was therefore a
+// 32x32 multiply and is now 32x18.
+//
+// WHAT IT MEASURED -- quartus_map 17.0.2, 5CSEBA6U23I7, -MapOnly:
+//
+//   row                              DSP  9x9  18x18pr  sum2  +36  reg  ALUT
+//   zhao_forge_shadow@gzdsp-base       7    1        4     2    0  733   510
+//   zhao_forge_shadow@gzdsp-tab18      5    1        2     0    2  733   450
+//
+// -2 DSP and -60 ALUTs, register count UNCHANGED at 733. NOTE THERE WAS NEVER
+// AN `Independent 27x27` IN THIS BLOCK -- the brief's sorting column would
+// have skipped it entirely, and it paid anyway.
+//
+// *** DO NOT "REFRESH" THIS FILE AGAINST PRODUCTION. ***
+//
+// The usual law for a committed copy is the opposite of what applies here. A
+// mutant copy goes stale in the flattering direction and must be merged
+// forward, and `tools/budget/mutant_copy_drift.py` exists to catch that. This
+// file is NOT in its scope (it scans tests/mutants/) and must not be brought
+// into it. It is the BASELINE the -2 DSP was measured against, and
+// `tests/proofs/forge_shadow_trig_differential.cpp` verilates it as
+// `Vshadow_old` against shipping production -- refresh it and that becomes a
+// comparison of the new block WITH ITSELF, green forever, proving nothing.
+//
+// This file is a PROBE, not production. Nothing composes it and nothing may.
+// ---------------------------------------------------------------------------
+
+// zhao_shadow_trig_probe.sv -- FORGE.SHADOW: contact shadows, as ordinary geometry.
 //
 // design/contracts/FORGE.SHADOW.md, written 2026-09-03 from
 // BORING_3D_FUNDAMENTALS_AUDIT.md R8. Full shadow maps are deliberately absent
@@ -73,7 +117,7 @@
 
 `default_nettype none
 
-module zhao_forge_shadow
+module zhao_shadow_trig_probe
   import zhao_pkg::*;
 #(
     // Vertices per rung. spec: "8-16 vertex ellipse" near hero, "4-8 vertex
@@ -165,10 +209,10 @@ module zhao_forge_shadow
 
   initial begin
     if (VTX_HERO != 16 || VTX_ARMY != 8 || VTX_MID != 4) begin
-      $fatal(1, "zhao_forge_shadow: the ladder's vertex counts are 16/8/4; one unit-circle table serves all three by stride");
+      $fatal(1, "zhao_shadow_trig_probe: the ladder's vertex counts are 16/8/4; one unit-circle table serves all three by stride");
     end
     if (CENSUS_W < 1) begin
-      $fatal(1, "zhao_forge_shadow: CENSUS_W must be positive");
+      $fatal(1, "zhao_shadow_trig_probe: CENSUS_W must be positive");
     end
   end
 
@@ -184,37 +228,25 @@ module zhao_forge_shadow
   // rather than computed so the values are auditable and so nothing in the
   // synthesised design contains a trig evaluation.
   //   65536, 60547, 46341, 25080, 0, -25080, -46341, -60547, ...
-  // *** THE RETURN TYPE IS 18 BITS, NOT 32, AND IT IS EXACT. *** DSPHUNT
-  // 2026-09-26. Every one of the sixteen values below lies in [-65536, +65536],
-  // which an 18-bit SIGNED value holds exactly (its range is -131072..131071).
-  // That is not a bound argued from a producer's behaviour -- it is the whole
-  // table, enumerated, sixteen cases, checked one by one. See
-  // `tests/proofs/forge_shadow_unit_table_exhaustive.cpp`, which walks all 16
-  // inputs of BOTH functions and asserts the 18-bit and 32-bit forms return the
-  // same integer.
-  //
-  // It matters because `off_x_w`/`off_z_w` multiply this by a signed 32-bit
-  // radius. At a declared 32-bit return that is a 32x32 multiply; at 18 it is
-  // 32x18, which is half the 18x18 chunk-multiplies.
-  function automatic logic signed [17:0] unit_cos(input logic [3:0] k);
+  function automatic logic signed [31:0] unit_cos(input logic [3:0] k);
     begin
       case (k)
-        4'd0:  unit_cos =  18'sd65536;
-        4'd1:  unit_cos =  18'sd60547;
-        4'd2:  unit_cos =  18'sd46341;
-        4'd3:  unit_cos =  18'sd25080;
-        4'd4:  unit_cos =  18'sd0;
-        4'd5:  unit_cos = -18'sd25080;
-        4'd6:  unit_cos = -18'sd46341;
-        4'd7:  unit_cos = -18'sd60547;
-        4'd8:  unit_cos = -18'sd65536;
-        4'd9:  unit_cos = -18'sd60547;
-        4'd10: unit_cos = -18'sd46341;
-        4'd11: unit_cos = -18'sd25080;
-        4'd12: unit_cos =  18'sd0;
-        4'd13: unit_cos =  18'sd25080;
-        4'd14: unit_cos =  18'sd46341;
-        default: unit_cos = 18'sd60547;
+        4'd0:  unit_cos =  32'sd65536;
+        4'd1:  unit_cos =  32'sd60547;
+        4'd2:  unit_cos =  32'sd46341;
+        4'd3:  unit_cos =  32'sd25080;
+        4'd4:  unit_cos =  32'sd0;
+        4'd5:  unit_cos = -32'sd25080;
+        4'd6:  unit_cos = -32'sd46341;
+        4'd7:  unit_cos = -32'sd60547;
+        4'd8:  unit_cos = -32'sd65536;
+        4'd9:  unit_cos = -32'sd60547;
+        4'd10: unit_cos = -32'sd46341;
+        4'd11: unit_cos = -32'sd25080;
+        4'd12: unit_cos =  32'sd0;
+        4'd13: unit_cos =  32'sd25080;
+        4'd14: unit_cos =  32'sd46341;
+        default: unit_cos = 32'sd60547;
       endcase
     end
   endfunction
@@ -223,7 +255,7 @@ module zhao_forge_shadow
   // it rather than tabulating it twice is not cleverness: two tables are two
   // chances to disagree about where vertex zero is, and the emission order is
   // part of the contract.
-  function automatic logic signed [17:0] unit_sin(input logic [3:0] k);
+  function automatic logic signed [31:0] unit_sin(input logic [3:0] k);
     begin
       unit_sin = unit_cos(k - 4'd4);
     end
