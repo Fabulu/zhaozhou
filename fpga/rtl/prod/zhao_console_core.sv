@@ -3808,7 +3808,32 @@
 //
 //         `ambient()` (`terrain.cpp:563`) returns Q16.16 in [16384, 65536], so
 //         `shade_q` takes FOUR values and the textured modulation is QUANTISED
-//         TO QUARTER STEPS before the product. That is not a rounding detail,
+//         TO QUARTER STEPS before the product.
+//
+//         *** THE "FOUR VALUES" IN THE SENTENCE ABOVE IS FALSE, CORRECTED
+//         2026-09-26 (gz/shadeladder), and the error is in the flattering
+//         direction -- it makes the ladder look like a 2-bit field with no
+//         zero. `ambient()` is applied to WALLS (`terrain.cpp:670`) and
+//         UNDERSIDES (`:795`), and BOTH of those call
+//         `mod_of(shade, 65536, 65536)` -- unity tint, unity sheet. The ONE
+//         path that carries a real tint and a real sheet is the TEXTURED TOP
+//         SURFACE, `terrain.cpp:731`, and it uses RAW `shade_tri` with NO
+//         `ambient()`. `shade_tri` -> `shade_points` -> `shade_flat_tri`,
+//         whose clamp at `terrain.cpp:137` is
+//         `shade < 0 ? 0 : (shade > 0x10000 ? 0x10000 : shade)`. So the domain
+//         is [0, 65536] and `shade_q` takes FIVE values {0,1,2,3,4}, exactly
+//         as the oracle's own comment "(0..4)" says. RUNG ZERO IS REACHABLE
+//         AND IT IS BLACK. A block built from the FOUR-value sentence would
+//         have carried a 2-bit ladder that cannot express a top-surface
+//         triangle turned from the sun, and the wrong pixel would have been a
+//         dark grey where the law says black -- against a capture-exact law,
+//         with every gate in this repository passing. The boundaries are now
+//         LOCATED BY SEARCH rather than asserted, at 0 / 8193 / 24577 / 40961
+//         / 57345, in `tests/terrain/terrain_shademod_directed.cpp` 3. The
+//         sentence is left standing above so this correction has something to
+//         point at. ***
+//
+//         That the quantisation happens at all is not a rounding detail,
 //         and the source's own comment gives the reason: a second tint family
 //         "doubled the modulated colour count past 256". THE LADDER IS THE
 //         256-COLOUR PALETTE BUDGET EXPRESSED AS ARITHMETIC, and it is frozen
@@ -3915,6 +3940,92 @@
 //      `zhao_terrain_normalmap` alone would move the register 5 -> 4 today,
 //      not 6 -> 5. Measured bare at this commit: 5 gaps, 4 boundaries plus
 //      this one disconnected module.
+//
+//      ================================================================
+//      2026-09-26 (gz/shadeladder). BOTH ARITHMETIC LAWS ARE NOW BUILT.
+//      THE ENTRY IS STILL OPEN, AND THIS IS THE FOURTH REFUSAL -- BUT THE
+//      REASON HAS CHANGED AND THE TWO BLOCKERS ABOVE ARE RETIRED.
+//      ================================================================
+//
+//      CELLCARRY refused this entry because "TWO ARITHMETIC LAWS ARE
+//      UNSETTLED, and a law must be settled BEFORE a wire is laid". The
+//      second half of that sentence is exactly right and the first half is
+//      off by one word. NEITHER LAW WAS EVER UNSETTLED. BOTH WERE UNBUILT.
+//
+//        * The ladder is FROZEN IN THE ORACLE with its own comment naming
+//          it (`terrain.cpp:633-637`, "the palette ladder (0..4)"). Nothing
+//          was awaiting a decision.
+//        * The saturate is MANDATED IN THE SPEC, in the bounds column of the
+//          type table: `spec/qformats.md:75`,
+//          `u/v_over_w | s32 | S 8.24 | saturate | round-half-up`, with 4
+//          making `rescale_s` "round-half-up ... followed by saturation to
+//          the destination width". The spec already said saturate.
+//
+//      Both re-read at the line rather than inherited. So these were a BUILD,
+//      not a decision, and the build is done:
+//
+//        `fpga/rtl/terrain/zhao_terrain_shademod.sv` -- `mod_of`, bit-exact,
+//        FIVE rungs, ONE rounding, 0 DSP (shift-add, 17 clocks, 6.5% of the
+//        compute frame at 6,000 modulations). The law's
+//        floor((P*2^14 + 2^31)/2^32) reduces EXACTLY to floor((P + 2^17)/2^18)
+//        and the test proves that reduction against a SEPARATE transcription
+//        of the s128 form before any RTL is in the room.
+//
+//        `fpga/rtl/geometry/zhao_geom_overw_sat.sv` -- `rescale_s(uv*invw24,16)`
+//        with the type's saturation, on a s32 coordinate, `sat_o` declaring
+//        engagement rather than differencing against a rail.
+//        `zref::geom_over_w_wide` beside the ratified `zref::geom_over_w` is
+//        the executable law, PROVEN a strict extension over all 65,536 s16
+//        coordinates so it cannot become a rival statement of ratified
+//        arithmetic.
+//
+//      MEASURED, NOT ASSERTED (all at the committing tree):
+//        * the ladder MOVES THE PIXEL -- 1,044 of 1,048 operand triples differ
+//          from the unquantised shade through the same rounding;
+//        * against the composed path's shape today (two 8-bit `unit_mul`
+//          roundings, no ladder) the LAW'S PIXEL DIFFERS ON 599 OF 1,248
+//          OPERAND TRIPLES, WORST 32 LSB OF 255. That is item 1's divergence
+//          with a number on it, and it is 12.5% of full scale;
+//        * `zhao_geom_vattr`'s "NO saturation case exists" is TRUE and is now
+//          PROVEN rather than quoted: 983,040 s16 x invw24 pairs, exact, ZERO
+//          saturations. This is why that block is NOT touched;
+//        * the saturation edge LOCATED BY BINARY SEARCH on the RTL at
+//          uv = 2^24 for invw24 = 2^23, oracle agreeing at that coordinate and
+//          at the one below it;
+//        * a patch 300 TILES OUT AT w = 2 -- value 150, past the bound of 128,
+//          a plausible island and not a contrived rail -- rails to
+//          2147483647 where a 32-bit truncation gives -1778384896. THE SIGN
+//          FLIP is the silent failure item 2 named, now with a coordinate.
+//
+//      WHAT IS STILL REFUSED, AND IT IS ITEM 3 ONLY. The carriage, `invw24`
+//      and the fourth clipdoor client are NOT laid. CELLCARRY's blocker was
+//      RE-MEASURED at this tree rather than quoted and it still holds:
+//      `material_set`/`material_id` under `fpga/rtl/terrain/` return ZERO
+//      hits, with `material` at 34 hits in the same directory as the positive
+//      control that the zero is not a broken grep. So the rider route still
+//      needs a terrain material identity that nothing in the tree assigns.
+//
+//      BUT THE NEXT LANE SHOULD READ THAT BLOCKER MORE CAREFULLY THAN THIS
+//      ONE HAD BUDGET TO. "Terrain has no material identity at all" is being
+//      used to mean "terrain CANNOT present one material for the whole run",
+//      and those are different claims. Nothing ASSIGNS an identity today;
+//      whether a CONSTANT terrain material plus the per-cell
+//      {tile_a, tile_b, weight} riding a WIDENED `GEOM_VID_RIDERW` satisfies
+//      `zhao_material_window`'s "a span is a run of primitives that AGREE" is
+//      a question this lane did not measure and is therefore not entitled to
+//      answer either way. It is named here so it is not inherited as settled.
+//      The 50 bits are confirmed fully allocated at `:16533`/`:16550-16551`
+//      (`cl_o_rider[49:34]` material, `[33:2]` raster, `[1:0]` domain).
+//
+//      WHAT THIS LANE GOT WRONG AND CAUGHT: the obvious named positive
+//      control for the ladder -- a half-lit shade of 32768 -- IS VACUOUS. The
+//      ladder snaps it to rung 2, whose gain is exactly 32768, so quantised
+//      and unquantised agree to the bit and a `check_ne` there would have
+//      FAILED against correct RTL. The rung CENTRES are precisely where the
+//      ladder is invisible. That is this file's own "an identity that cannot
+//      fail is not evidence" one level down, and the fix was to assert the
+//      vacuous case as an equality, name it, and take the real control from a
+//      shade inside rung 2 and off its centre.
 //
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
