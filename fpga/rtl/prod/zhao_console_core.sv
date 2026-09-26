@@ -4389,7 +4389,11 @@
 //      gate number moved by.
 //
 //      TWO KNOBS, AND BOTH WERE REQUIRED, exactly as PROJCOLLAPSE
-//      measured:
+//      measured -- AND A THIRD THING NEITHER OF US PREDICTED, which is
+//      the stimulus ORDER and is its own section below. Both knobs
+//      turned and the number was still 2,560; the order was the last
+//      hop and it is the one no counter in this bench could name until
+//      eight dangled shell counters were printed.
 //
 //        1. RELIEF, in layer A of the played pages: an AFFINE ramp,
 //           `h(vi,vj) = BASE + TILTX*vi + TILTZ*vj`, BASE = -20.0 m,
