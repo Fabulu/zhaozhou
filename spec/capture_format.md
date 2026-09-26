@@ -179,6 +179,19 @@ for pads, so ABI-v2-era captures stay valid); `SurfaceStamp` payload bytes
 circle/ring stamp geometry per D7). Both are validated range-wise as enum /
 fx16 fields from wave 3 on; the details are law in `spec/commands.zidl`.
 
+**[2026-09-26] A THIRD, AT THE SAME OFFSET.** `SetEnvironment` payload bytes
+36-41 (was `pad[12]` bytes 0-5) are now
+`handle32[material_set] terrain_material_set` and `u16 terrain_material_id`,
+leaving `pad[6]`. Same reasoning, same offset, and the compatibility argument
+is RULE 5 ABOVE rather than an assurance: a pad must be zero on the wire and
+the validator refuses a non-zero one with `ZH_ABI_RESERVED_FIELD`, so EVERY
+capture that ever validated carries zero there -- and a zero
+`terrain_material_set` is `MATMODE_NONE`, which is exactly what terrain
+declared at GEOM.CLIP's door before this field existed. Old frames are not
+merely still legal; they mean precisely what they meant. `abi version` does
+not move. Console entry I13 items (a) and (b); the details are law in
+`spec/commands.zidl`.
+
 Deviations from the P5 recon table (record sizes there were estimates; the
 .zidl layout math above is normative and the differences are all consequences
 of ratified decisions — 4-byte `fx16`, 24-byte `transform2fx` = 6 × fx16):
