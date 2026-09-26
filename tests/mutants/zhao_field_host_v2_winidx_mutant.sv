@@ -6,8 +6,12 @@
 //
 // WHAT WAS CHANGED, AND WHY THIS PARTICULAR LINE
 // -----------------------------------------------
-//   production:  rsp_data[cur_rsv][j] <= cur_export[j];    // ORDINAL-indexed
-//   here:        rsp_data[cur_rsv][j] <= cur_wexport[j];   // WINDOW-indexed
+//   production:  rsp_data[cur_rsv][p][j] <= cur_export[p][j]; // ORDINAL-indexed
+//   here:        rsp_data[cur_rsv][p][j] <= cur_wexport[j];   // WINDOW-indexed
+//
+// (RE-AUTHORED 2026-09-26 onto the gathering front's point index. `cur_wexport`
+//  is not indexed by point; this copy elaborates at FRONT_PTS=1, where the
+//  point loop runs once and the mutant means what it meant when it was cut.)
 //
 // with `rsp_pres` following it, and a three-line shadow capture filling
 // `cur_wexport` from `win_idx_c` -- which already existed, for `cur_winseen`.
@@ -329,6 +333,33 @@ module zhao_field_host_v2_winidx_mutant
     // FH20. Response entries reserved before acceptance.
     parameter int unsigned CREDITS = 2,
 
+    // ---- THE GATHERING FRONT (GATHERFRONT, 2026-09-26) ---------------------
+    // POINTS GATHERED PER ENGINE RUN. This is the knob the preload port's own
+    // paragraph below has been naming as absent since the file was written:
+    // "A front that gathers FAB_LANES points per grant is the thing that makes
+    // the width pay, AND IT IS NOT BUILT." It is built now.
+    //
+    // The fabric's LANES are INDEPENDENT DATAPATH REPLICAS sharing one
+    // instruction stream (`zhao_field_v3_exec.sv:82`: "LANES widens the
+    // DATAPATH and nothing else ... only operands, results and products carry
+    // four values instead of one"), so lane p can hold point p's registers and
+    // produce point p's answer from the SAME run. At FRONT_PTS = FAB_LANES one
+    // engine round trip covers a whole vector group instead of one point, and
+    // the per-group cost stops being FRONT_PTS round trips and becomes one.
+    //
+    // DEFAULT 1 IS THE MACHINE THIS GREW FROM, BIT FOR BIT. Every port width
+    // below multiplies by FRONT_PTS, so at 1 the module's interface and its
+    // behaviour are byte-identical to the scalar front and no composed client
+    // changes. FRONT_PTS > 1 is a client-visible widening of `req_in_i` and
+    // `resp_out_o` and is NOT composed by `zhao_console_core.sv` today -- see
+    // entry I34's GATHERFRONT block for what the composition still needs.
+    //
+    // A point beyond FRONT_PTS is not fabricated: lanes above FRONT_PTS are
+    // fed point 0's real words, exactly as the replication they replace did,
+    // because a fabricated zero is stimulus this front never received and it
+    // would reach the saturation ledger and the service alarms.
+    parameter int unsigned FRONT_PTS = 1,
+
     // ---- THE FABRIC'S OWN KNOBS, FORWARDED ---------------------------------
     parameter int unsigned FAB_LANES = 1,
     parameter int unsigned FAB_OUTSTANDING = 4,
@@ -423,7 +454,10 @@ module zhao_field_host_v2_winidx_mutant
     output var logic [CLIENTS-1:0]                 req_ready_o,
     input  var logic [CLIENTS*SLOTW-1:0]           req_slot_i,
     input  var logic [CLIENTS-1:0]                 req_noprog_i,
-    input  var logic [CLIENTS*IN_LANES*32-1:0]     req_in_i,
+    // FRONT_PTS POINTS PER CLIENT, point-major then lane-major: client c's
+    // point p lane l is word ((c*FRONT_PTS + p)*IN_LANES + l). At FRONT_PTS=1
+    // this is exactly the scalar layout it replaces.
+    input  var logic [CLIENTS*FRONT_PTS*IN_LANES*32-1:0] req_in_i,
 
     output var logic [CLIENTS-1:0]                 resp_valid_o,
     input  var logic [CLIENTS-1:0]                 resp_ready_i,
@@ -431,7 +465,15 @@ module zhao_field_host_v2_winidx_mutant
     // physical register and NOT by window position. That is the whole of FT020
     // and it is why this port is OUT_ORDINALS wide and the oracle's is
     // OUT_LANES wide.
-    output var logic [OUT_ORDINALS*32-1:0]         resp_out_o,
+    // FRONT_PTS RESULTS, point-major then ordinal-major: point p ordinal r is
+    // word (p*OUT_ORDINALS + r). `resp_present_o`, `resp_window_o`,
+    // `resp_count_o` and `resp_status_o` stay SINGULAR and are NOT widened,
+    // and that is a statement about the fabric rather than an economy: all
+    // FRONT_PTS lanes execute one instruction stream at one pc with one issue
+    // arbiter (`zhao_field_v3_exec.sv:82`), and `alu_lane_live_c` is
+    // `{LANES{s4_v_r}}` -- the lanes cannot diverge, so WHICH ordinals were
+    // written is one answer for the whole group while the VALUES are per-point.
+    output var logic [FRONT_PTS*OUT_ORDINALS*32-1:0] resp_out_o,
     // Directive 8.1's `output_present_mask`, ordinal-indexed. A caller reading
     // only the words cannot tell a value from a hole; this is how it can.
     output var logic [OUT_ORDINALS-1:0]            resp_present_o,
@@ -609,6 +651,14 @@ module zhao_field_host_v2_winidx_mutant
     if (CREDITS < 1)       $fatal(1, "zhao_field_host_v2_winidx_mutant: CREDITS must be at least 1");
     if (PREP_SCALARS < 1)  $fatal(1, "zhao_field_host_v2_winidx_mutant: PREP_SCALARS must be at least 1");
     if (FAB_LANES < 1)     $fatal(1, "zhao_field_host_v2_winidx_mutant: FAB_LANES must be at least 1");
+    if (FRONT_PTS < 1)     $fatal(1, "zhao_field_host_v2_winidx_mutant: FRONT_PTS must be at least 1");
+    // THE GATHERING FRONT CANNOT GATHER MORE POINTS THAN THE FABRIC HAS LANES.
+    // Point p lives in lane p's register file; asking for a fifth point on a
+    // four-lane fabric would silently alias two points onto one lane and
+    // publish one of them twice -- a wrong field, not a slow one.
+    if (FRONT_PTS > FAB_LANES) begin
+      $fatal(1, "zhao_field_host_v2_winidx_mutant: FRONT_PTS=%0d exceeds FAB_LANES=%0d; point p lives in fabric lane p", FRONT_PTS, FAB_LANES);
+    end
     if (FAB_OUTSTANDING < 1 || FAB_LONGQ < 1 || FAB_GATHERS < 1 ||
         FAB_DIST_BANKS < 1 || FAB_RING_UNITS < 1 || FAB_RING_DESC < 1) begin
       $fatal(1, "zhao_field_host_v2_winidx_mutant: every fabric knob must be at least 1");
@@ -945,10 +995,14 @@ module zhao_field_host_v2_winidx_mutant
   logic [CRDW-1:0]    cur_rsv;
   logic [REGW:0]      zero_i;
   logic [LANEW:0]     lane_i;
-  logic signed [31:0] cur_in  [0:IN_LANES-1];
+  // POINT-MAJOR. `cur_in[p][l]` is point p's input lane l, and point p is
+  // preloaded into FABRIC LANE p below.
+  logic signed [31:0] cur_in  [0:FRONT_PTS-1][0:IN_LANES-1];
 
-  // ORDINAL-INDEXED. Not window-indexed. This is the point of the file.
-  logic signed [31:0]      cur_export [0:OUT_ORDINALS-1];
+  // ORDINAL-INDEXED, then POINT-INDEXED. Not window-indexed. This is the point
+  // of the file. `cur_seen` beside it is NOT per point, because the lanes share
+  // one instruction stream and therefore write the same registers.
+  logic signed [31:0]      cur_export [0:FRONT_PTS-1][0:OUT_ORDINALS-1];
   logic [OUT_ORDINALS-1:0] cur_seen;
   // Set when a declared PREPARED_SCALAR ordinal could not be seeded.
   logic                    cur_prep_bad;
@@ -1166,7 +1220,7 @@ module zhao_field_host_v2_winidx_mutant
   // client. `rsv_count` is the live reservation count; a grant needs one.
   logic [CRDW:0]           rsv_count;
   logic [CIDW-1:0]         rsp_id   [0:CREDITS-1];
-  logic signed [31:0]      rsp_data [0:CREDITS-1][0:OUT_ORDINALS-1];
+  logic signed [31:0]      rsp_data [0:CREDITS-1][0:FRONT_PTS-1][0:OUT_ORDINALS-1];
   logic [OUT_ORDINALS-1:0] rsp_pres [0:CREDITS-1];
   logic [OUT_LANES-1:0]    rsp_win  [0:CREDITS-1];
   logic [3:0]              rsp_cnt  [0:CREDITS-1];
@@ -1198,10 +1252,13 @@ module zhao_field_host_v2_winidx_mutant
   end
 
   integer ro;
+  integer rp;
   always_comb begin
     resp_out_o = '0;
-    for (ro = 0; ro < int'(OUT_ORDINALS); ro = ro + 1) begin
-      resp_out_o[(ro*32) +: 32] = rsp_data[head_idx_c][ro];
+    for (rp = 0; rp < int'(FRONT_PTS); rp = rp + 1) begin
+      for (ro = 0; ro < int'(OUT_ORDINALS); ro = ro + 1) begin
+        resp_out_o[((rp*int'(OUT_ORDINALS) + ro)*32) +: 32] = rsp_data[head_idx_c][rp][ro];
+      end
     end
   end
   assign resp_present_o  = rsp_pres[head_idx_c];
@@ -1225,6 +1282,9 @@ module zhao_field_host_v2_winidx_mutant
   // THE FABRIC'S LOAD AND PRELOAD PORTS
   // ==========================================================================
   wire [LANEW-1:0] lane_sel = (lane_i < (LANEW+1)'(IN_LANES)) ? lane_i[LANEW-1:0] : '0;
+
+  // The fabric-lane index the gather below walks.
+  integer pl;
 
   always_comb begin
     //   [7:0] op  [13:8] dst  [19:14] a  [25:20] b  [31:26] c  [63:32] imm
@@ -1259,12 +1319,34 @@ module zhao_field_host_v2_winidx_mutant
                    ((state == E_WRITE) && (lane_i < (LANEW+1)'(IN_LANES)));
     fab_pre_ctx  = cur_slot;
     fab_pre_reg  = (state == E_ZERO) ? zero_i[REGW-1:0] : REGW'(lane_i);
-    // Replication across the fabric's lanes: this front holds one point, so at
-    // FAB_LANES>1 the other lanes recompute the same point and are discarded.
-    // They are fed the REAL point rather than a fabricated zero, because a
-    // fabricated zero is stimulus this front never received and it would reach
-    // the saturation ledger and the service alarms.
-    fab_pre_data = (state == E_ZERO) ? '0 : {FAB_LANES{cur_in[lane_sel]}};
+    // ---- THE GATHER. POINT p GOES INTO FABRIC LANE p. -------------------
+    // This is the whole of the gathering front, and it is three lines because
+    // the fabric was always able to do it: LANES are independent register-file
+    // and ALU replicas driven by one instruction stream, so writing a DIFFERENT
+    // word into each lane at the same register address puts FRONT_PTS points
+    // through one run. The line this replaces wrote the SAME word into every
+    // lane -- `{FAB_LANES{cur_in[lane_sel]}}` -- which is why the width bought
+    // nothing and why this module's header called it "a WASTE, not a fix".
+    //
+    // LANES ABOVE FRONT_PTS STILL REPLICATE POINT 0, and for the original
+    // reason rather than a new one: they are fed a REAL point, never a
+    // fabricated zero, because a fabricated zero is stimulus this front never
+    // received and it would reach the saturation ledger and the service alarms.
+    // Their results are discarded, exactly as all but lane 0's were before.
+    // THE LOOP IS UNCONDITIONAL ON PURPOSE. `pl` is declared at module scope,
+    // and `check_quartus17_syntax.py` rule 2 records what Quartus 17.0 does
+    // with such a variable under a CONDITIONAL loop: it retains its value
+    // between evaluations, the block stops inferring purely combinational
+    // logic, and the fit dies. A top-level loop always runs, so every bit of
+    // `fab_pre_data` is written on every evaluation and nothing is held. The
+    // E_ZERO case is therefore a term in the expression, not a branch around
+    // the loop.
+    for (pl = 0; pl < int'(FAB_LANES); pl = pl + 1) begin
+      fab_pre_data[(pl*32) +: 32] =
+          (state == E_ZERO)          ? 32'sd0                :
+          (pl < int'(FRONT_PTS))     ? cur_in[pl][lane_sel]  :
+                                       cur_in[0][lane_sel];
+    end
 
     fab_start     = (state == E_START);
     fab_start_ctx = cur_slot;
@@ -1276,6 +1358,10 @@ module zhao_field_host_v2_winidx_mutant
   integer k;
   integer j;
   integer li;
+  // THE POINT INDEX. Every per-point loop in the sequential body walks it, and
+  // at FRONT_PTS=1 every one of those loops runs exactly once -- which is what
+  // makes the default configuration the scalar front, bit for bit.
+  integer p;
 
   // GRANT-TIME QUANTITIES, as continuous wires rather than blocking temporaries
   // inside the clocked block. They are pure functions of the arbiter's pick and
@@ -1356,8 +1442,12 @@ module zhao_field_host_v2_winidx_mutant
         prep_value[k] <= 32'sd0;
         prep_gen[k]   <= 8'd0;
       end
-      for (k = 0; k < int'(IN_LANES); k = k + 1) cur_in[k] <= 32'sd0;
-      for (k = 0; k < int'(OUT_ORDINALS); k = k + 1) cur_export[k] <= 32'sd0;
+      for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+        for (k = 0; k < int'(IN_LANES); k = k + 1) cur_in[p][k] <= 32'sd0;
+      end
+      for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+        for (k = 0; k < int'(OUT_ORDINALS); k = k + 1) cur_export[p][k] <= 32'sd0;
+      end
       // MUTATION (2/4)
       for (k = 0; k < int'(OUT_LANES); k = k + 1) cur_wexport[k] <= 32'sd0;
       for (k = 0; k < int'(CREDITS); k = k + 1) begin
@@ -1366,7 +1456,9 @@ module zhao_field_host_v2_winidx_mutant
         rsp_pres[k] <= '0;
         rsp_win[k]  <= '0;
         rsp_cnt[k]  <= 4'd0;
-        for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) rsp_data[k][j] <= 32'sd0;
+        for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+          for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) rsp_data[k][p][j] <= 32'sd0;
+        end
       end
       runs_o             <= 32'd0;
       run_faults_o       <= 32'd0;
@@ -1432,7 +1524,16 @@ module zhao_field_host_v2_winidx_mutant
             // A LATER WRITE REPLACES AN EARLIER VALUE. Directive 7.3: "the
             // result at retirement is the FINAL value". The oracle stops
             // capturing at END and therefore publishes the earlier one.
-            cur_export[j] <= fab_wr_data[31:0];
+            //
+            // ONE GRANTED WRITE CARRIES FRONT_PTS VALUES. The arbiter's
+            // `wr_data_o` is 32*FAB_LANES wide and lane p holds point p's
+            // result, so the whole group is captured by one hit on one
+            // ordinal. `cur_seen` is not indexed by point for the same reason:
+            // the lanes share the instruction stream, so a write that happened
+            // for one point happened for all of them.
+            for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+              cur_export[p][j] <= fab_wr_data[(p*32) +: 32];
+            end
             cur_seen[j]   <= 1'b1;
           end
         end
@@ -1572,8 +1673,15 @@ module zhao_field_host_v2_winidx_mutant
           end else if (pick_any && !rsp_full) begin
             cur_slot <= gslot_c;
             cur_rsv  <= tail_idx_c;
-            for (li = 0; li < int'(IN_LANES); li = li + 1) begin
-              cur_in[li] <= req_in_i[((int'(pick_id)*int'(IN_LANES) + li)*32) +: 32];
+            // THE GATHER'S INTAKE. One grant takes FRONT_PTS points from the
+            // winning client, point-major: client c's point p lane l is word
+            // ((c*FRONT_PTS + p)*IN_LANES + l). At FRONT_PTS=1 the inner index
+            // collapses to (c*IN_LANES + l), which is the scalar layout.
+            for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+              for (li = 0; li < int'(IN_LANES); li = li + 1) begin
+                cur_in[p][li] <= req_in_i[
+                    (((int'(pick_id)*int'(FRONT_PTS) + p)*int'(IN_LANES) + li)*32) +: 32];
+              end
             end
             rr_ptr <= CIDW'((int'(pick_id) + 1) % int'(CLIENTS));
             zero_i <= '0;
@@ -1602,8 +1710,10 @@ module zhao_field_host_v2_winidx_mutant
               rsp_pres[tail_idx_c] <= '0;
               rsp_win[tail_idx_c]  <= '0;
               rsp_cnt[tail_idx_c]  <= 4'd0;
-              for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
-                rsp_data[tail_idx_c][j] <= 32'sd0;
+              for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+                for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
+                  rsp_data[tail_idx_c][p][j] <= 32'sd0;
+                end
               end
               rsp_filled[tail_idx_c] <= 1'b1;
               rsp_tail <= (rsp_tail == (CRDW+1)'(CREDITS - 1)) ? '0 : (rsp_tail + 1'b1);
@@ -1620,10 +1730,16 @@ module zhao_field_host_v2_winidx_mutant
               // result; a zero without it is an absence.
               cur_seen     <= seed_ok_c;
               cur_prep_bad <= (seed_bad_c != '0);
+              // THE SAME SEED FOR EVERY POINT, and that is the definition of
+              // the thing being seeded rather than a shortcut: a PREPARED
+              // SCALAR is association-owned and uniform over the group, so the
+              // group's points share it exactly as they share the program.
               for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
-                cur_export[j] <= seed_ok_c[j]
-                                 ? prep_value[omap_index[gslot_c][j][PREPW-1:0]]
-                                 : 32'sd0;
+                for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+                  cur_export[p][j] <= seed_ok_c[j]
+                                      ? prep_value[omap_index[gslot_c][j][PREPW-1:0]]
+                                      : 32'sd0;
+                end
               end
 
               // ---- THE ALL-UNIFORM TERMINAL PATH ---------------------------
@@ -1701,8 +1817,8 @@ module zhao_field_host_v2_winidx_mutant
         // 7.4: END held high over several clocks produces ONE result (FT028).
         E_RETIRE: begin
           // MUTATION (4/4) -- THE SUBSTANTIVE ONE.
-          //   production:  rsp_data[cur_rsv][j] <= cur_export[j];   // ORDINAL
-          //   here:        rsp_data[cur_rsv][j] <= cur_wexport[j];  // WINDOW
+          //   production:  rsp_data[cur_rsv][p][j] <= cur_export[p][j]; // ORDINAL
+          //   here:        rsp_data[cur_rsv][p][j] <= cur_wexport[j];   // WINDOW
           // and the present mask follows it. This is the OLD
           // `zhao_field_host`'s meaning re-planted in the new host's body:
           // `resp_out_o[j]` becomes the word written to register
@@ -1710,8 +1826,16 @@ module zhao_field_host_v2_winidx_mutant
           // ordinal j. THE COMPLETION RULE IS DELIBERATELY UNTOUCHED, so this
           // mutant still answers StOk -- which is the whole point. The defect
           // R168 describes is not a refusal, it is a plausible wrong number.
-          for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
-            rsp_data[cur_rsv][j] <= cur_wexport[j];
+          //
+          // RE-AUTHORED 2026-09-26 (GATHERFRONT) onto the gathering front's
+          // `rsp_data[credit][point][ordinal]`. `cur_wexport` is NOT indexed by
+          // point, and that is faithful rather than lazy: this copy elaborates
+          // at FRONT_PTS=1, where the point loop runs exactly once and the
+          // mutant means what it meant when it was cut.
+          for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
+            for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
+              rsp_data[cur_rsv][p][j] <= cur_wexport[j];
+            end
           end
           rsp_pres[cur_rsv]   <= cur_winseen[OUT_ORDINALS-1:0];
           rsp_filled[cur_rsv] <= 1'b1;

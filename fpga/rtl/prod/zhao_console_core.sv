@@ -6062,6 +6062,175 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST -- BEFORE THE EARTHMAJOR BLOCK BELOW, WHICH IT
+//      COMPLETES. GATHERFRONT, 2026-09-26: THE GATHERING FRONT IS BUILT AND
+//      MEASURED. A FOUR-POINT GROUP COSTS 62 CLOCKS INSTEAD OF 248, AND 30
+//      WITH INIT_PROOF -- 74,507 -> 9,761 PER ASSOCIATION, 12.42x -> 1.63x.
+//      IT IS STILL OVER 6,000, AND THE TERM THAT REMAINS HAS A STRUCTURAL
+//      OBSTACLE NO DOCUMENT HAD NAMED. Register 3 -> 3, bare. NOTHING
+//      COMPOSED: `u_field_host` keeps `.FAB_LANES(1)` and the new parameter
+//      defaults to the scalar front, bit for bit.
+//
+//      (G1) THE BLOCK EARTHMAJOR ORDERED FIRST IS BUILT, AND IT IS A
+//           PARAMETER ON `zhao_field_host_v2` RATHER THAN A NEW MODULE.
+//           `FRONT_PTS` is points gathered per engine run; point p is
+//           preloaded into FABRIC LANE p. The reason it is not a new file is
+//           the one CLAUDE.md gives for reading the sibling contract first:
+//           a second front standing beside this one would be a second
+//           implementation of `E_IDLE -> ... -> E_RETIRE`, and the thing that
+//           had to change is ONE EXPRESSION inside it.
+//
+//           The fabric could always do this. `zhao_field_v3_exec.sv:82`: "LANES
+//           widens the DATAPATH and nothing else ... only operands, results and
+//           products carry four values instead of one", and `store[ctx*PLAN+pc]`
+//           is shared. So lane p is an independent register file and ALU. The
+//           front was writing `{FAB_LANES{cur_in[lane_sel]}}` -- ONE point
+//           replicated -- and reading lane 0 back, which is why the width
+//           bought nothing and why this file's own header called it "a WASTE,
+//           not a fix".
+//
+//           DEFAULT 1 IS THE SCALAR FRONT AND THAT IS MEASURED, NOT ASSERTED.
+//           Every widened port multiplies by FRONT_PTS, so at 1 the interface
+//           and the behaviour are unchanged and none of the four composed
+//           clients moves. `field_host_depth_census` -- which elaborates THIS
+//           FILE'S OWN `-GFAB_LANES=1` -- still reports 62.00 / 248 / 74,507 /
+//           12.42x to the digit after the change, 25 checks / 0 failures.
+//
+//      (G2) THE MEASUREMENT, AT THIS FILE'S TWENTY PARAMETERS EXCEPT THE TWO
+//           THE FRONT REQUIRES. `tests/field/field_gather_front_census.cpp`,
+//           31 checks / 0 failures, four clients saturating 4,000 clocks:
+//
+//             scalar front (as composed)      248.00 clk/grp  74,507  12.42x
+//             GATHERING FRONT                  62.00 clk/grp  19,265   3.21x
+//             GATHERING FRONT + INIT_PROOF     30.00 clk/grp   9,761   1.63x
+//             the budget's ceiling              17.30 clk/grp   6,000   1.00x
+//
+//           The gather is EXACTLY /4 -- 248.00 -> 62.00 -- and 64 responses in
+//           4,000 clocks carry 256 POINTS where the scalar front's 64 responses
+//           carried 64. EARTHMAJOR's first two terms are therefore CONFIRMED BY
+//           MEASUREMENT and not inherited: the front's /4, and INIT_PROOF's
+//           -32, which is now -32 PER GROUP rather than per point and is
+//           asserted as REGS within 20%.
+//
+//      (G3) AND THE ANSWER IS 42 43 44 45, NOT 42 42 42 42. THAT IS THE ONLY
+//           CHECK THAT CAN TELL A GATHERING FRONT FROM THE FRONT IT REPLACED.
+//           The cadence, the group count, StOk, the derived overlap,
+//           `resp_count_o` and "the output is 42" ALL PASS UNCHANGED on a front
+//           that evaluates point 0 four times and publishes it four times. That
+//           is the depth census's `StNoProgram` lesson one level deeper: every
+//           status is StOk, every run is real work, and three quarters of the
+//           answers are the wrong point's.
+//
+//           So it is SEEN TO FAIL.
+//           `tests/mutants/zhao_field_host_v2_gather_replicate_mutant.sv` is
+//           production with that one expression reverted, renamed so no source
+//           list can elaborate it, and its driver's polarity is INVERTED -- it
+//           passes when the four answers COLLAPSE. It reports 42 42 42 42,
+//           64 collapsed / 0 distinct, 13 checks / 0 failures, while asserting
+//           the mutant RAN (StOk, point 0 still 42) so the collapse cannot be a
+//           refusal reading as a control.
+//
+//      (G4) WHAT COMPOSING IT WOULD COST, WHICH IS THE PART THAT IS NEW AND
+//           UNFLATTERING. THREE BILLS, and the first two were not on
+//           EARTHMAJOR's list:
+//             * `FAB_LANES` 1 -> 4. FRONT_PTS cannot exceed it (point p lives
+//               in lane p; the elaboration guard refuses the other
+//               arrangement), and four lanes are FOUR ALU AND REGISTER-FILE
+//               REPLICAS. THIS PACKET MEASURED NO AREA -- Verilator answers
+//               clocks, ALMs are a fit, and on a device already over on ALMs
+//               that bill is the one that decides it.
+//             * `FAB_GROUP_PTS` 1 -> 4, WHICH IS A SECOND PARAMETER AND WAS
+//               FOUND BY AN ELABORATION $fatal, not by reading.
+//               `zhao_field_v3_dispatch.sv:252`: "GROUP_PTS=1 must be 1..4 and
+//               a multiple of LANES=4". The first cut of the census copied this
+//               file's `-GFAB_GROUP_PTS=1` beside `-GFAB_LANES=4` and aborted.
+//             * THE FOUR COMPOSED CLIENTS. `req_in_i` and `resp_out_o` widen by
+//               FRONT_PTS, so composing the front at 4 obliges every client to
+//               present four points and read four results. The EARTH adapter is
+//               the one that wants to; the STAMP, FLOW and WARP adapters do
+//               not, and EARTHMAJOR was right that touching them is a subsystem
+//               swap. A client offering fewer real points replicates its own
+//               and discards the surplus, which costs the front nothing and is
+//               why no new control port was added -- but it is still four
+//               adapters' worth of edit.
+//
+//      (G5) THE TERM THAT REMAINS, AND THE OBSTACLE NOBODY HAD NAMED.
+//           EARTHMAJOR's route is front (/4) + INIT_PROOF (-32) + TWO RUNS
+//           OUTSTANDING (/2) ~= 15 clk/group ~= 5,300. The first two are
+//           measured here. THE THIRD IS NOT MERELY UNBUILT; IT NEEDS TWO
+//           THINGS, AND THE SECOND IS STRUCTURAL:
+//             1. A TWO-DEEP FRONT. `state`, `cur_slot`, `cur_rsv`, `zero_i`,
+//                `lane_i`, `cur_in`, `cur_export`, `cur_seen`, `cur_winseen`
+//                are all single, `req_ready_o` is gated on `state == E_IDLE`,
+//                and the fence is per-run. That is a redesign of the run state
+//                machine, not an extension of it.
+//             2. THE PROGRAM RESIDENT IN TWO SLOTS, BECAUSE ON THIS HOST A
+//                RUN'S IDENTITY IS ITS PROGRAM SLOT. `fab_pre_ctx`,
+//                `fab_start_ctx` and the `fab_done_ctx`/`fab_wr_ctx` match are
+//                all `cur_slot`, and the executor's uop store is
+//                `store[ctx*PLAN + pc]` written at `up_ctx_i = ld_slot_i`. Two
+//                groups of the SAME program cannot be in flight in ONE context.
+//                So the /2 costs a second resident slot out of eight, or a
+//                decoupling of run-context from program-slot in BOTH the host
+//                and the engine's uop store.
+//           ARITHMETIC, DECLARED AS SUCH: a perfect two-deep front overlaps
+//           E_WRITE's 16 clocks with the run's ~14 and lands at ~16 clk/group,
+//           i.e. ~5,600 -- UNDER 6,000 BUT ONLY JUST, AND ONLY FOR THIS
+//           CENSUS'S TWO-UOP PROGRAM. Every figure above is a FLOOR for that
+//           reason; a real Earth program's instructions land in the RUN half,
+//           which is the half the overlap has to hide. The contract's own
+//           expectation is ~5,460 of binding service.
+//           `tools/field/measure_earth_budget.cpp` owns that half and this
+//           packet did not run it.
+//
+//      (G6) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD.
+//           COMPOSING THE GATHERING FRONT. It is a BUILD, the decision is
+//           taken, and the refusal is about EVIDENCE rather than sequence:
+//           composing it raises `FAB_LANES` to 4 on a device the campaign
+//           already reports over on ALMs, and THIS PACKET HAS NO AREA NUMBER.
+//           CLAUDE.md: "a fit that measures a circuit you already know is wrong
+//           is wasted" -- and its converse, that composing a circuit whose area
+//           nobody has measured is a fit taken blind. The brief forbade a
+//           console fit and was right to. What is owed before composition is
+//           ONE leaf map of `zhao_field_host_v2` at FAB_LANES 1 against 4.
+//           NOT REFUSED and not to be re-inherited as open: the front itself,
+//           which is built, tested and in production RTL at its scalar default.
+//
+//      (G7) AND FOUR THINGS THIS PACKET GOT WRONG, THREE OF THEM ITS OWN.
+//           * The brief cites `zhao_field_host.sv:1472` for `LdInitProof`.
+//             THAT FILE HAS NO `LdInitProof` AT ALL and is 1,213 lines. The
+//             decision record has it right (`zhao_field_host_v2.sv:1472`); the
+//             brief dropped the `_v2` and would have sent a reader to the
+//             oracle.
+//           * The brief's own framing, "INIT_PROOF ... skippable TODAY", is
+//             TRUE AND HAS NOTHING TO LAND IN THIS REPO. `hdr_ipok`, the FH08
+//             fast path, the doorbell's three-bit kind and `verify_init_proof`
+//             in the reference all exist and all connect; the producer of kind
+//             6 is SW.STREAM, outside this console. So INIT_PROOF was MEASURED
+//             here, composed with the front, and there was no RTL act to take.
+//           * I EDITED THIS SUBSYSTEM'S RTL WHILE A `cmake --preset` WAS
+//             VERILATING IT and the configure died on a half-written file --
+//             CLAUDE.md's live-tree trap for suites, which a configure is.
+//           * The refreshed mutant copies' first diff claimed 1,690 changed
+//             lines in a file whose real divergence is one. `git show HEAD~1:`
+//             hands back INDEX content, which is LF, against a CRLF working
+//             copy -- the exact trap CLAUDE.md records, and it alarms rather
+//             than flatters, which is why it cost only minutes.
+//
+//      (G8) AND THE TWO EXISTING MUTANT COPIES WENT STALE IN MY OWN COMMIT.
+//           `tools/budget/mutant_copy_drift.py` is OK at the base commit and
+//           RED at mine, for `zhao_field_host_v2_any_not_all_mutant` and
+//           `zhao_field_host_v2_winidx_mutant`: production moved, so both
+//           copies are now older than what they copy. CLAUDE.md: "before
+//           calling a red inherited, read the two commit dates" -- these dates
+//           say it is mine. Both are refreshed onto the current body keeping
+//           their own mutation, and the winidx one had to be RE-AUTHORED rather
+//           than transplanted because `rsp_data` gained a point index. That is
+//           the conflict CLAUDE.md says means re-authoring, arriving on
+//           schedule.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST -- BEFORE THE FIELDMAJOR BLOCK BELOW, WHICH IT
 //      CORRECTS. EARTHMAJOR, 2026-09-26: THE COMPOSED HOST'S ENGINE OVERLAP
 //      IS **ONE**, MEASURED, AT EVERY PARAMETER SETTING. THE DECIDING CELL
