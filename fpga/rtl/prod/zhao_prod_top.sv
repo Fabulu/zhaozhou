@@ -1376,73 +1376,97 @@ module zhao_prod_top (
     if (!rst_n) u11_fold_q <= 1'b0;
     else u11_fold_q <= u11_fold_q ^ (((^u11_cast_ready_o)) & u11_src[0]) ^ (((^u11_tap_req_valid_o)) & u11_src[1]) ^ (((^u11_tap_x_o)) & u11_src[2]) ^ (((^u11_tap_z_o)) & u11_src[3]) ^ (((^u11_vtx_valid_o)) & u11_src[4]) ^ (((^u11_vtx_x_o)) & u11_src[5]) ^ (((^u11_vtx_y_o)) & u11_src[6]) ^ (((^u11_vtx_z_o)) & u11_src[7]) ^ (((^u11_vtx_alpha_o)) & u11_src[8]) ^ (((^u11_vtx_last_o)) & u11_src[9]) ^ (((^u11_vtx_src_id_o)) & u11_src[10]) ^ (((^u11_vtx_rung_o)) & u11_src[11]) ^ (((^u11_shadows_emitted_o)) & u11_src[12]) ^ (((^u11_no_ground_o)) & u11_src[13]) ^ (((^u11_zero_radius_o)) & u11_src[14]) ^ (((^u11_far_rung_o)) & u11_src[15]) ^ (((^u11_tap_protocol_o)) & u11_src[16]);
 
-  // ---- zhao_geom_assemble ----
+  // ---- zhao_geom_arenabin ----
   logic [63:0] u12_lfsr_q;
   logic [1023:0] u12_src;
   assign u12_src = {16{u12_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u12_lfsr_q <= 64'h000000076A9AD791;
     else u12_lfsr_q <= {u12_lfsr_q[62:0], (^(u12_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u12_m_ready_o;
-  logic [1-1:0] u12_ix_req_o;
-  logic [9-1:0] u12_ix_index_o;
-  logic [1-1:0] u12_t_valid_o;
-  logic [16-1:0] u12_t_v0_o;
-  logic [16-1:0] u12_t_v1_o;
-  logic [16-1:0] u12_t_v2_o;
-  logic [16-1:0] u12_t_material_o;
-  logic [32-1:0] u12_t_raster_o;
-  logic [32-1:0] u12_t_material_set_o;
-  logic [8-1:0] u12_t_quality_tier_o;
-  logic [16-1:0] u12_t_src_id_o;
-  logic [1-1:0] u12_t_last_o;
-  logic [1-1:0] u12_m_done_o;
-  logic [32-1:0] u12_meshlets_o;
-  logic [32-1:0] u12_triangles_o;
-  logic [32-1:0] u12_refused_limits_o;
-  logic [32-1:0] u12_refused_index_o;
-  zhao_geom_assemble u12_i (
+  logic [1-1:0] u12_tri_ready_o;
+  logic [1-1:0] u12_ck_valid_o;
+  logic [32-1:0] u12_ck_next_o;
+  logic [16-1:0] u12_ck_count_o;
+  logic [448-1:0] u12_ck_ids_o;
+  logic [1-1:0] u12_lk_valid_o;
+  logic [18-1:0] u12_lk_index_o;
+  logic [32-1:0] u12_lk_next_o;
+  logic [16-1:0] u12_lk_count_o;
+  logic [32-1:0] u12_head_chunk_o;
+  logic [1-1:0] u12_head_valid_o;
+  logic [1-1:0] u12_bin_frame_done_o;
+  logic [32-1:0] u12_tris_binned_o;
+  logic [32-1:0] u12_tris_unnamed_o;
+  logic [32-1:0] u12_refs_binned_o;
+  logic [32-1:0] u12_chunks_emitted_o;
+  logic [32-1:0] u12_links_patched_o;
+  logic [32-1:0] u12_tiles_with_refs_o;
+  logic [32-1:0] u12_chunk_refused_o;
+  logic [32-1:0] u12_intake_stall_o;
+  logic [32-1:0] u12_flush_cut_o;
+  logic [16-1:0] u12_max_tile_chunks_o;
+  logic [1-1:0] u12_overflow_o;
+  logic [1-1:0] u12_busy_o;
+  zhao_geom_arenabin u12_i (
       .clk(clk),
       .rst_n(rst_n),
-      .m_valid_i(u12_src[0 +: 1]),
-      .m_ready_o(u12_m_ready_o),
-      .m_vertex_offset_i(u12_src[7 +: 16]),
-      .m_vertex_count_i(u12_src[14 +: 8]),
-      .m_triangle_count_i(u12_src[21 +: 8]),
-      .m_material_id_i(u12_src[28 +: 16]),
-      .m_raster_state_i(u12_src[35 +: 32]),
-      .m_material_set_i(u12_src[42 +: 32]),
-      .m_quality_tier_i(u12_src[49 +: 8]),
-      .m_src_id_i(u12_src[56 +: 16]),
-      .ix_req_o(u12_ix_req_o),
-      .ix_index_o(u12_ix_index_o),
-      .ix_valid_i(u12_src[63 +: 1]),
-      .ix_a_i(u12_src[70 +: 8]),
-      .ix_b_i(u12_src[77 +: 8]),
-      .ix_c_i(u12_src[84 +: 8]),
-      .t_valid_o(u12_t_valid_o),
-      .t_ready_i(u12_src[91 +: 1]),
-      .t_v0_o(u12_t_v0_o),
-      .t_v1_o(u12_t_v1_o),
-      .t_v2_o(u12_t_v2_o),
-      .t_material_o(u12_t_material_o),
-      .t_raster_o(u12_t_raster_o),
-      .t_material_set_o(u12_t_material_set_o),
-      .t_quality_tier_o(u12_t_quality_tier_o),
-      .t_src_id_o(u12_t_src_id_o),
-      .t_last_o(u12_t_last_o),
-      .m_done_o(u12_m_done_o),
-      .meshlets_o(u12_meshlets_o),
-      .triangles_o(u12_triangles_o),
-      .refused_limits_o(u12_refused_limits_o),
-      .refused_index_o(u12_refused_index_o)
+      .frame_start_i(u12_src[0 +: 1]),
+      .geom_done_i(u12_src[7 +: 1]),
+      .grid_w_i(u12_src[14 +: 6]),
+      .grid_h_i(u12_src[21 +: 6]),
+      .tri_valid_i(u12_src[28 +: 1]),
+      .tri_ready_o(u12_tri_ready_o),
+      .tri_kx0_i(u12_src[35 +: 23]),
+      .tri_ky0_i(u12_src[42 +: 23]),
+      .tri_kc0_i(u12_src[49 +: 48]),
+      .tri_kx1_i(u12_src[56 +: 23]),
+      .tri_ky1_i(u12_src[63 +: 23]),
+      .tri_kc1_i(u12_src[70 +: 48]),
+      .tri_kx2_i(u12_src[77 +: 23]),
+      .tri_ky2_i(u12_src[84 +: 23]),
+      .tri_kc2_i(u12_src[91 +: 48]),
+      .tri_tl_i(u12_src[98 +: 3]),
+      .tri_min_x_i(u12_src[105 +: 12]),
+      .tri_max_x_i(u12_src[112 +: 12]),
+      .tri_min_y_i(u12_src[119 +: 12]),
+      .tri_max_y_i(u12_src[126 +: 12]),
+      .tri_arena_id_i(u12_src[133 +: 18]),
+      .tri_id_ok_i(u12_src[140 +: 1]),
+      .ck_valid_o(u12_ck_valid_o),
+      .ck_ready_i(u12_src[147 +: 1]),
+      .ck_next_o(u12_ck_next_o),
+      .ck_count_o(u12_ck_count_o),
+      .ck_ids_o(u12_ck_ids_o),
+      .ck_alloc_id_i(u12_src[154 +: 18]),
+      .ck_accept_i(u12_src[161 +: 1]),
+      .lk_valid_o(u12_lk_valid_o),
+      .lk_ready_i(u12_src[168 +: 1]),
+      .lk_index_o(u12_lk_index_o),
+      .lk_next_o(u12_lk_next_o),
+      .lk_count_o(u12_lk_count_o),
+      .head_tile_i(u12_src[175 +: 10]),
+      .head_chunk_o(u12_head_chunk_o),
+      .head_valid_o(u12_head_valid_o),
+      .bin_frame_done_o(u12_bin_frame_done_o),
+      .tris_binned_o(u12_tris_binned_o),
+      .tris_unnamed_o(u12_tris_unnamed_o),
+      .refs_binned_o(u12_refs_binned_o),
+      .chunks_emitted_o(u12_chunks_emitted_o),
+      .links_patched_o(u12_links_patched_o),
+      .tiles_with_refs_o(u12_tiles_with_refs_o),
+      .chunk_refused_o(u12_chunk_refused_o),
+      .intake_stall_o(u12_intake_stall_o),
+      .flush_cut_o(u12_flush_cut_o),
+      .max_tile_chunks_o(u12_max_tile_chunks_o),
+      .overflow_o(u12_overflow_o),
+      .busy_o(u12_busy_o)
   );
   logic u12_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u12_fold_q <= 1'b0;
-    else u12_fold_q <= u12_fold_q ^ (((^u12_m_ready_o)) & u12_src[0]) ^ (((^u12_ix_req_o)) & u12_src[1]) ^ (((^u12_ix_index_o)) & u12_src[2]) ^ (((^u12_t_valid_o)) & u12_src[3]) ^ (((^u12_t_v0_o)) & u12_src[4]) ^ (((^u12_t_v1_o)) & u12_src[5]) ^ (((^u12_t_v2_o)) & u12_src[6]) ^ (((^u12_t_material_o)) & u12_src[7]) ^ (((^u12_t_raster_o)) & u12_src[8]) ^ (((^u12_t_material_set_o)) & u12_src[9]) ^ (((^u12_t_quality_tier_o)) & u12_src[10]) ^ (((^u12_t_src_id_o)) & u12_src[11]) ^ (((^u12_t_last_o)) & u12_src[12]) ^ (((^u12_m_done_o)) & u12_src[13]) ^ (((^u12_meshlets_o)) & u12_src[14]) ^ (((^u12_triangles_o)) & u12_src[15]) ^ (((^u12_refused_limits_o)) & u12_src[16]) ^ (((^u12_refused_index_o)) & u12_src[17]);
+    else u12_fold_q <= u12_fold_q ^ (((^u12_tri_ready_o)) & u12_src[0]) ^ (((^u12_ck_valid_o)) & u12_src[1]) ^ (((^u12_ck_next_o)) & u12_src[2]) ^ (((^u12_ck_count_o)) & u12_src[3]) ^ (((^u12_ck_ids_o)) & u12_src[4]) ^ (((^u12_lk_valid_o)) & u12_src[5]) ^ (((^u12_lk_index_o)) & u12_src[6]) ^ (((^u12_lk_next_o)) & u12_src[7]) ^ (((^u12_lk_count_o)) & u12_src[8]) ^ (((^u12_head_chunk_o)) & u12_src[9]) ^ (((^u12_head_valid_o)) & u12_src[10]) ^ (((^u12_bin_frame_done_o)) & u12_src[11]) ^ (((^u12_tris_binned_o)) & u12_src[12]) ^ (((^u12_tris_unnamed_o)) & u12_src[13]) ^ (((^u12_refs_binned_o)) & u12_src[14]) ^ (((^u12_chunks_emitted_o)) & u12_src[15]) ^ (((^u12_links_patched_o)) & u12_src[16]) ^ (((^u12_tiles_with_refs_o)) & u12_src[17]) ^ (((^u12_chunk_refused_o)) & u12_src[18]) ^ (((^u12_intake_stall_o)) & u12_src[19]) ^ (((^u12_flush_cut_o)) & u12_src[20]) ^ (((^u12_max_tile_chunks_o)) & u12_src[21]) ^ (((^u12_overflow_o)) & u12_src[22]) ^ (((^u12_busy_o)) & u12_src[23]);
 
-  // ---- zhao_geom_assetfetch ----
+  // ---- zhao_geom_assemble ----
   logic [63:0] u13_lfsr_q;
   logic [1023:0] u13_src;
   assign u13_src = {16{u13_lfsr_q}};
@@ -1450,186 +1474,190 @@ module zhao_prod_top (
     if (!rst_n) u13_lfsr_q <= 64'h0000000808D25142;
     else u13_lfsr_q <= {u13_lfsr_q[62:0], (^(u13_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u13_m_ready_o;
-  zhao_client_e u13_m_client_i;
-  assign u13_m_client_i = zhao_client_e'(u13_src[70 +: $bits(zhao_client_e)]);
-  zhao_guard_req_t u13_guard_req_o;
-  zhao_guard_rsp_t u13_guard_rsp_i;
-  assign u13_guard_rsp_i = zhao_guard_rsp_t'(u13_src[77 +: $bits(zhao_guard_rsp_t)]);
-  logic [1-1:0] u13_s_valid_o;
-  logic [8-1:0] u13_s_vertex_count_o;
-  logic [8-1:0] u13_s_triangle_count_o;
-  logic [16-1:0] u13_s_src_id_o;
-  logic [2-1:0] u13_s_visible_mask_o;
-  logic [16-1:0] u13_s_material_id_o;
-  logic [72-1:0] u13_s_side_o;
-  logic [1-1:0] u13_ix_valid_o;
-  logic [8-1:0] u13_ix_a_o;
-  logic [8-1:0] u13_ix_b_o;
-  logic [8-1:0] u13_ix_c_o;
-  logic [1-1:0] u13_v_valid_o;
-  logic [256-1:0] u13_v_bytes_o;
-  logic [16-1:0] u13_v_src_id_o;
-  logic [6-1:0] u13_v_warp_cookie_o;
-  logic [32-1:0] u13_meshlets_fetched_o;
-  logic [32-1:0] u13_beats_read_o;
-  logic [32-1:0] u13_guard_denied_o;
-  logic [32-1:0] u13_refused_footprint_o;
-  logic [32-1:0] u13_prefetch_stall_o;
-  logic [32-1:0] u13_err_beat_truncated_o;
-  logic [32-1:0] u13_err_beat_overrun_o;
-  logic [32-1:0] u13_err_beat_unowned_o;
-  zhao_geom_assetfetch u13_i (
+  logic [1-1:0] u13_ix_req_o;
+  logic [9-1:0] u13_ix_index_o;
+  logic [1-1:0] u13_t_valid_o;
+  logic [16-1:0] u13_t_v0_o;
+  logic [16-1:0] u13_t_v1_o;
+  logic [16-1:0] u13_t_v2_o;
+  logic [16-1:0] u13_t_material_o;
+  logic [32-1:0] u13_t_raster_o;
+  logic [32-1:0] u13_t_material_set_o;
+  logic [8-1:0] u13_t_quality_tier_o;
+  logic [16-1:0] u13_t_src_id_o;
+  logic [1-1:0] u13_t_last_o;
+  logic [1-1:0] u13_m_done_o;
+  logic [32-1:0] u13_meshlets_o;
+  logic [32-1:0] u13_triangles_o;
+  logic [32-1:0] u13_refused_limits_o;
+  logic [32-1:0] u13_refused_index_o;
+  zhao_geom_assemble u13_i (
       .clk(clk),
       .rst_n(rst_n),
       .m_valid_i(u13_src[0 +: 1]),
       .m_ready_o(u13_m_ready_o),
-      .m_vertex_offset_i(u13_src[7 +: 32]),
-      .m_index_offset_i(u13_src[14 +: 32]),
-      .m_vertex_count_i(u13_src[21 +: 8]),
-      .m_triangle_count_i(u13_src[28 +: 8]),
-      .m_src_id_i(u13_src[35 +: 16]),
-      .m_visible_mask_i(u13_src[42 +: 2]),
-      .m_material_id_i(u13_src[49 +: 16]),
-      .m_side_i(u13_src[56 +: 72]),
-      .m_warp_cookie_i(u13_src[63 +: 6]),
-      .m_client_i(u13_m_client_i),
-      .guard_req_o(u13_guard_req_o),
-      .guard_rsp_i(u13_guard_rsp_i),
-      .beat_valid_i(u13_src[84 +: 1]),
-      .beat_data_i(u13_src[91 +: 64]),
-      .beat_last_i(u13_src[98 +: 1]),
-      .s_valid_o(u13_s_valid_o),
-      .s_ready_i(u13_src[105 +: 1]),
-      .s_vertex_count_o(u13_s_vertex_count_o),
-      .s_triangle_count_o(u13_s_triangle_count_o),
-      .s_src_id_o(u13_s_src_id_o),
-      .s_visible_mask_o(u13_s_visible_mask_o),
-      .s_material_id_o(u13_s_material_id_o),
-      .s_side_o(u13_s_side_o),
-      .release_i(u13_src[112 +: 1]),
-      .ix_req_i(u13_src[119 +: 1]),
-      .ix_index_i(u13_src[126 +: 9]),
-      .ix_valid_o(u13_ix_valid_o),
-      .ix_a_o(u13_ix_a_o),
-      .ix_b_o(u13_ix_b_o),
-      .ix_c_o(u13_ix_c_o),
-      .v_valid_o(u13_v_valid_o),
-      .v_ready_i(u13_src[133 +: 1]),
-      .v_bytes_o(u13_v_bytes_o),
-      .v_src_id_o(u13_v_src_id_o),
-      .v_warp_cookie_o(u13_v_warp_cookie_o),
-      .meshlets_fetched_o(u13_meshlets_fetched_o),
-      .beats_read_o(u13_beats_read_o),
-      .guard_denied_o(u13_guard_denied_o),
-      .refused_footprint_o(u13_refused_footprint_o),
-      .prefetch_stall_o(u13_prefetch_stall_o),
-      .err_beat_truncated_o(u13_err_beat_truncated_o),
-      .err_beat_overrun_o(u13_err_beat_overrun_o),
-      .err_beat_unowned_o(u13_err_beat_unowned_o)
+      .m_vertex_offset_i(u13_src[7 +: 16]),
+      .m_vertex_count_i(u13_src[14 +: 8]),
+      .m_triangle_count_i(u13_src[21 +: 8]),
+      .m_material_id_i(u13_src[28 +: 16]),
+      .m_raster_state_i(u13_src[35 +: 32]),
+      .m_material_set_i(u13_src[42 +: 32]),
+      .m_quality_tier_i(u13_src[49 +: 8]),
+      .m_src_id_i(u13_src[56 +: 16]),
+      .ix_req_o(u13_ix_req_o),
+      .ix_index_o(u13_ix_index_o),
+      .ix_valid_i(u13_src[63 +: 1]),
+      .ix_a_i(u13_src[70 +: 8]),
+      .ix_b_i(u13_src[77 +: 8]),
+      .ix_c_i(u13_src[84 +: 8]),
+      .t_valid_o(u13_t_valid_o),
+      .t_ready_i(u13_src[91 +: 1]),
+      .t_v0_o(u13_t_v0_o),
+      .t_v1_o(u13_t_v1_o),
+      .t_v2_o(u13_t_v2_o),
+      .t_material_o(u13_t_material_o),
+      .t_raster_o(u13_t_raster_o),
+      .t_material_set_o(u13_t_material_set_o),
+      .t_quality_tier_o(u13_t_quality_tier_o),
+      .t_src_id_o(u13_t_src_id_o),
+      .t_last_o(u13_t_last_o),
+      .m_done_o(u13_m_done_o),
+      .meshlets_o(u13_meshlets_o),
+      .triangles_o(u13_triangles_o),
+      .refused_limits_o(u13_refused_limits_o),
+      .refused_index_o(u13_refused_index_o)
   );
   logic u13_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u13_fold_q <= 1'b0;
-    else u13_fold_q <= u13_fold_q ^ (((^u13_m_ready_o)) & u13_src[0]) ^ (((^u13_guard_req_o)) & u13_src[1]) ^ (((^u13_s_valid_o)) & u13_src[2]) ^ (((^u13_s_vertex_count_o)) & u13_src[3]) ^ (((^u13_s_triangle_count_o)) & u13_src[4]) ^ (((^u13_s_src_id_o)) & u13_src[5]) ^ (((^u13_s_visible_mask_o)) & u13_src[6]) ^ (((^u13_s_material_id_o)) & u13_src[7]) ^ (((^u13_s_side_o)) & u13_src[8]) ^ (((^u13_ix_valid_o)) & u13_src[9]) ^ (((^u13_ix_a_o)) & u13_src[10]) ^ (((^u13_ix_b_o)) & u13_src[11]) ^ (((^u13_ix_c_o)) & u13_src[12]) ^ (((^u13_v_valid_o)) & u13_src[13]) ^ (((^u13_v_bytes_o)) & u13_src[14]) ^ (((^u13_v_src_id_o)) & u13_src[15]) ^ (((^u13_v_warp_cookie_o)) & u13_src[16]) ^ (((^u13_meshlets_fetched_o)) & u13_src[17]) ^ (((^u13_beats_read_o)) & u13_src[18]) ^ (((^u13_guard_denied_o)) & u13_src[19]) ^ (((^u13_refused_footprint_o)) & u13_src[20]) ^ (((^u13_prefetch_stall_o)) & u13_src[21]) ^ (((^u13_err_beat_truncated_o)) & u13_src[22]) ^ (((^u13_err_beat_overrun_o)) & u13_src[23]) ^ (((^u13_err_beat_unowned_o)) & u13_src[24]);
+    else u13_fold_q <= u13_fold_q ^ (((^u13_m_ready_o)) & u13_src[0]) ^ (((^u13_ix_req_o)) & u13_src[1]) ^ (((^u13_ix_index_o)) & u13_src[2]) ^ (((^u13_t_valid_o)) & u13_src[3]) ^ (((^u13_t_v0_o)) & u13_src[4]) ^ (((^u13_t_v1_o)) & u13_src[5]) ^ (((^u13_t_v2_o)) & u13_src[6]) ^ (((^u13_t_material_o)) & u13_src[7]) ^ (((^u13_t_raster_o)) & u13_src[8]) ^ (((^u13_t_material_set_o)) & u13_src[9]) ^ (((^u13_t_quality_tier_o)) & u13_src[10]) ^ (((^u13_t_src_id_o)) & u13_src[11]) ^ (((^u13_t_last_o)) & u13_src[12]) ^ (((^u13_m_done_o)) & u13_src[13]) ^ (((^u13_meshlets_o)) & u13_src[14]) ^ (((^u13_triangles_o)) & u13_src[15]) ^ (((^u13_refused_limits_o)) & u13_src[16]) ^ (((^u13_refused_index_o)) & u13_src[17]);
 
-  // ---- zhao_geom_attrsetup ----
+  // ---- zhao_geom_assetfetch ----
   logic [63:0] u14_lfsr_q;
   logic [1023:0] u14_src;
   assign u14_src = {16{u14_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u14_lfsr_q <= 64'h00000008A709CAF3;
     else u14_lfsr_q <= {u14_lfsr_q[62:0], (^(u14_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u14_v_ready_o;
-  logic [1-1:0] u14_r_valid_o;
-  logic signed [96-1:0] u14_n0_o;
-  logic signed [72-1:0] u14_dndx_o;
-  logic signed [72-1:0] u14_dndy_o;
-  zhao_geom_attrsetup u14_i (
+  logic [1-1:0] u14_m_ready_o;
+  zhao_client_e u14_m_client_i;
+  assign u14_m_client_i = zhao_client_e'(u14_src[70 +: $bits(zhao_client_e)]);
+  zhao_guard_req_t u14_guard_req_o;
+  zhao_guard_rsp_t u14_guard_rsp_i;
+  assign u14_guard_rsp_i = zhao_guard_rsp_t'(u14_src[77 +: $bits(zhao_guard_rsp_t)]);
+  logic [1-1:0] u14_s_valid_o;
+  logic [8-1:0] u14_s_vertex_count_o;
+  logic [8-1:0] u14_s_triangle_count_o;
+  logic [16-1:0] u14_s_src_id_o;
+  logic [2-1:0] u14_s_visible_mask_o;
+  logic [16-1:0] u14_s_material_id_o;
+  logic [72-1:0] u14_s_side_o;
+  logic [1-1:0] u14_ix_valid_o;
+  logic [8-1:0] u14_ix_a_o;
+  logic [8-1:0] u14_ix_b_o;
+  logic [8-1:0] u14_ix_c_o;
+  logic [1-1:0] u14_v_valid_o;
+  logic [256-1:0] u14_v_bytes_o;
+  logic [16-1:0] u14_v_src_id_o;
+  logic [6-1:0] u14_v_warp_cookie_o;
+  logic [32-1:0] u14_meshlets_fetched_o;
+  logic [32-1:0] u14_beats_read_o;
+  logic [32-1:0] u14_guard_denied_o;
+  logic [32-1:0] u14_refused_footprint_o;
+  logic [32-1:0] u14_prefetch_stall_o;
+  logic [32-1:0] u14_err_beat_truncated_o;
+  logic [32-1:0] u14_err_beat_overrun_o;
+  logic [32-1:0] u14_err_beat_unowned_o;
+  zhao_geom_assetfetch u14_i (
       .clk(clk),
       .rst_n(rst_n),
-      .v_valid_i(u14_src[0 +: 1]),
-      .v_ready_o(u14_v_ready_o),
-      .ax_i(u14_src[7 +: 21]),
-      .ay_i(u14_src[14 +: 21]),
-      .bx_i(u14_src[21 +: 21]),
-      .by_i(u14_src[28 +: 21]),
-      .cx_i(u14_src[35 +: 21]),
-      .cy_i(u14_src[42 +: 21]),
-      .va_i(u14_src[49 +: 32]),
-      .vb_i(u14_src[56 +: 32]),
-      .vc_i(u14_src[63 +: 32]),
-      .r_valid_o(u14_r_valid_o),
-      .r_ready_i(u14_src[70 +: 1]),
-      .n0_o(u14_n0_o),
-      .dndx_o(u14_dndx_o),
-      .dndy_o(u14_dndy_o)
+      .m_valid_i(u14_src[0 +: 1]),
+      .m_ready_o(u14_m_ready_o),
+      .m_vertex_offset_i(u14_src[7 +: 32]),
+      .m_index_offset_i(u14_src[14 +: 32]),
+      .m_vertex_count_i(u14_src[21 +: 8]),
+      .m_triangle_count_i(u14_src[28 +: 8]),
+      .m_src_id_i(u14_src[35 +: 16]),
+      .m_visible_mask_i(u14_src[42 +: 2]),
+      .m_material_id_i(u14_src[49 +: 16]),
+      .m_side_i(u14_src[56 +: 72]),
+      .m_warp_cookie_i(u14_src[63 +: 6]),
+      .m_client_i(u14_m_client_i),
+      .guard_req_o(u14_guard_req_o),
+      .guard_rsp_i(u14_guard_rsp_i),
+      .beat_valid_i(u14_src[84 +: 1]),
+      .beat_data_i(u14_src[91 +: 64]),
+      .beat_last_i(u14_src[98 +: 1]),
+      .s_valid_o(u14_s_valid_o),
+      .s_ready_i(u14_src[105 +: 1]),
+      .s_vertex_count_o(u14_s_vertex_count_o),
+      .s_triangle_count_o(u14_s_triangle_count_o),
+      .s_src_id_o(u14_s_src_id_o),
+      .s_visible_mask_o(u14_s_visible_mask_o),
+      .s_material_id_o(u14_s_material_id_o),
+      .s_side_o(u14_s_side_o),
+      .release_i(u14_src[112 +: 1]),
+      .ix_req_i(u14_src[119 +: 1]),
+      .ix_index_i(u14_src[126 +: 9]),
+      .ix_valid_o(u14_ix_valid_o),
+      .ix_a_o(u14_ix_a_o),
+      .ix_b_o(u14_ix_b_o),
+      .ix_c_o(u14_ix_c_o),
+      .v_valid_o(u14_v_valid_o),
+      .v_ready_i(u14_src[133 +: 1]),
+      .v_bytes_o(u14_v_bytes_o),
+      .v_src_id_o(u14_v_src_id_o),
+      .v_warp_cookie_o(u14_v_warp_cookie_o),
+      .meshlets_fetched_o(u14_meshlets_fetched_o),
+      .beats_read_o(u14_beats_read_o),
+      .guard_denied_o(u14_guard_denied_o),
+      .refused_footprint_o(u14_refused_footprint_o),
+      .prefetch_stall_o(u14_prefetch_stall_o),
+      .err_beat_truncated_o(u14_err_beat_truncated_o),
+      .err_beat_overrun_o(u14_err_beat_overrun_o),
+      .err_beat_unowned_o(u14_err_beat_unowned_o)
   );
   logic u14_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u14_fold_q <= 1'b0;
-    else u14_fold_q <= u14_fold_q ^ (((^u14_v_ready_o)) & u14_src[0]) ^ (((^u14_r_valid_o)) & u14_src[1]) ^ (((^u14_n0_o)) & u14_src[2]) ^ (((^u14_dndx_o)) & u14_src[3]) ^ (((^u14_dndy_o)) & u14_src[4]);
+    else u14_fold_q <= u14_fold_q ^ (((^u14_m_ready_o)) & u14_src[0]) ^ (((^u14_guard_req_o)) & u14_src[1]) ^ (((^u14_s_valid_o)) & u14_src[2]) ^ (((^u14_s_vertex_count_o)) & u14_src[3]) ^ (((^u14_s_triangle_count_o)) & u14_src[4]) ^ (((^u14_s_src_id_o)) & u14_src[5]) ^ (((^u14_s_visible_mask_o)) & u14_src[6]) ^ (((^u14_s_material_id_o)) & u14_src[7]) ^ (((^u14_s_side_o)) & u14_src[8]) ^ (((^u14_ix_valid_o)) & u14_src[9]) ^ (((^u14_ix_a_o)) & u14_src[10]) ^ (((^u14_ix_b_o)) & u14_src[11]) ^ (((^u14_ix_c_o)) & u14_src[12]) ^ (((^u14_v_valid_o)) & u14_src[13]) ^ (((^u14_v_bytes_o)) & u14_src[14]) ^ (((^u14_v_src_id_o)) & u14_src[15]) ^ (((^u14_v_warp_cookie_o)) & u14_src[16]) ^ (((^u14_meshlets_fetched_o)) & u14_src[17]) ^ (((^u14_beats_read_o)) & u14_src[18]) ^ (((^u14_guard_denied_o)) & u14_src[19]) ^ (((^u14_refused_footprint_o)) & u14_src[20]) ^ (((^u14_prefetch_stall_o)) & u14_src[21]) ^ (((^u14_err_beat_truncated_o)) & u14_src[22]) ^ (((^u14_err_beat_overrun_o)) & u14_src[23]) ^ (((^u14_err_beat_unowned_o)) & u14_src[24]);
 
-  // ---- zhao_geom_chunkser ----
+  // ---- zhao_geom_attrsetup ----
   logic [63:0] u15_lfsr_q;
   logic [1023:0] u15_src;
   assign u15_src = {16{u15_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u15_lfsr_q <= 64'h00000009454144A4;
     else u15_lfsr_q <= {u15_lfsr_q[62:0], (^(u15_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u15_ser_req_o;
-  logic [1-1:0] u15_ser_ready_o;
-  logic [1-1:0] u15_ck_valid_o;
-  logic [32-1:0] u15_ck_next_o;
-  logic [16-1:0] u15_ck_count_o;
-  logic [448-1:0] u15_ck_ids_o;
-  logic [32-1:0] u15_head_chunk_o;
-  logic [1-1:0] u15_head_valid_o;
-  logic [1-1:0] u15_ser_frame_done_o;
-  logic [32-1:0] u15_chunks_emitted_o;
-  logic [32-1:0] u15_refs_serialised_o;
-  logic [32-1:0] u15_tiles_with_refs_o;
-  logic [32-1:0] u15_chain_break_o;
-  logic [32-1:0] u15_chunks_sunk_o;
-  logic [32-1:0] u15_head_clash_o;
-  logic [32-1:0] u15_pass_truncated_o;
-  logic [1-1:0] u15_busy_o;
-  zhao_geom_chunkser u15_i (
+  logic [1-1:0] u15_v_ready_o;
+  logic [1-1:0] u15_r_valid_o;
+  logic signed [96-1:0] u15_n0_o;
+  logic signed [72-1:0] u15_dndx_o;
+  logic signed [72-1:0] u15_dndy_o;
+  zhao_geom_attrsetup u15_i (
       .clk(clk),
       .rst_n(rst_n),
-      .ser_req_o(u15_ser_req_o),
-      .ser_done_i(u15_src[0 +: 1]),
-      .ser_valid_i(u15_src[7 +: 1]),
-      .ser_ready_o(u15_ser_ready_o),
-      .ser_tri_id_i(u15_src[14 +: 18]),
-      .ser_tile_i(u15_src[21 +: 10]),
-      .ser_first_i(u15_src[28 +: 1]),
-      .ser_last_i(u15_src[35 +: 1]),
-      .frame_start_i(u15_src[42 +: 1]),
-      .geom_done_i(u15_src[49 +: 1]),
-      .ck_valid_o(u15_ck_valid_o),
-      .ck_ready_i(u15_src[56 +: 1]),
-      .ck_next_o(u15_ck_next_o),
-      .ck_count_o(u15_ck_count_o),
-      .ck_ids_o(u15_ck_ids_o),
-      .ck_alloc_id_i(u15_src[63 +: 18]),
-      .ck_accept_i(u15_src[70 +: 1]),
-      .head_tile_i(u15_src[77 +: 10]),
-      .head_chunk_o(u15_head_chunk_o),
-      .head_valid_o(u15_head_valid_o),
-      .ser_frame_done_o(u15_ser_frame_done_o),
-      .chunks_emitted_o(u15_chunks_emitted_o),
-      .refs_serialised_o(u15_refs_serialised_o),
-      .tiles_with_refs_o(u15_tiles_with_refs_o),
-      .chain_break_o(u15_chain_break_o),
-      .chunks_sunk_o(u15_chunks_sunk_o),
-      .head_clash_o(u15_head_clash_o),
-      .pass_truncated_o(u15_pass_truncated_o),
-      .busy_o(u15_busy_o)
+      .v_valid_i(u15_src[0 +: 1]),
+      .v_ready_o(u15_v_ready_o),
+      .ax_i(u15_src[7 +: 21]),
+      .ay_i(u15_src[14 +: 21]),
+      .bx_i(u15_src[21 +: 21]),
+      .by_i(u15_src[28 +: 21]),
+      .cx_i(u15_src[35 +: 21]),
+      .cy_i(u15_src[42 +: 21]),
+      .va_i(u15_src[49 +: 32]),
+      .vb_i(u15_src[56 +: 32]),
+      .vc_i(u15_src[63 +: 32]),
+      .r_valid_o(u15_r_valid_o),
+      .r_ready_i(u15_src[70 +: 1]),
+      .n0_o(u15_n0_o),
+      .dndx_o(u15_dndx_o),
+      .dndy_o(u15_dndy_o)
   );
   logic u15_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u15_fold_q <= 1'b0;
-    else u15_fold_q <= u15_fold_q ^ (((^u15_ser_req_o)) & u15_src[0]) ^ (((^u15_ser_ready_o)) & u15_src[1]) ^ (((^u15_ck_valid_o)) & u15_src[2]) ^ (((^u15_ck_next_o)) & u15_src[3]) ^ (((^u15_ck_count_o)) & u15_src[4]) ^ (((^u15_ck_ids_o)) & u15_src[5]) ^ (((^u15_head_chunk_o)) & u15_src[6]) ^ (((^u15_head_valid_o)) & u15_src[7]) ^ (((^u15_ser_frame_done_o)) & u15_src[8]) ^ (((^u15_chunks_emitted_o)) & u15_src[9]) ^ (((^u15_refs_serialised_o)) & u15_src[10]) ^ (((^u15_tiles_with_refs_o)) & u15_src[11]) ^ (((^u15_chain_break_o)) & u15_src[12]) ^ (((^u15_chunks_sunk_o)) & u15_src[13]) ^ (((^u15_head_clash_o)) & u15_src[14]) ^ (((^u15_pass_truncated_o)) & u15_src[15]) ^ (((^u15_busy_o)) & u15_src[16]);
+    else u15_fold_q <= u15_fold_q ^ (((^u15_v_ready_o)) & u15_src[0]) ^ (((^u15_r_valid_o)) & u15_src[1]) ^ (((^u15_n0_o)) & u15_src[2]) ^ (((^u15_dndx_o)) & u15_src[3]) ^ (((^u15_dndy_o)) & u15_src[4]);
 
   // ---- zhao_geom_clip ----
   logic [63:0] u16_lfsr_q;
@@ -5364,13 +5392,6 @@ module zhao_prod_top (
   logic [1-1:0] u65_cmd_pkt_valid_o;
   logic [8-1:0] u65_cmd_pkt_byte_o;
   logic [32-1:0] u65_cmd_pkt_len_o;
-  logic [1-1:0] u65_render_ser_busy_o;
-  logic [1-1:0] u65_render_ser_done_o;
-  logic [1-1:0] u65_render_ser_valid_o;
-  logic [18-1:0] u65_render_ser_tri_id_o;
-  logic [10-1:0] u65_render_ser_tile_o;
-  logic [1-1:0] u65_render_ser_first_o;
-  logic [1-1:0] u65_render_ser_last_o;
   zhao_shell_top_v2 #(
       .BUILD_HPS_N(32'd2)
   ) u65_i (
@@ -5679,21 +5700,12 @@ module zhao_prod_top (
       .cmd_pkt_valid_o(u65_cmd_pkt_valid_o),
       .cmd_pkt_byte_o(u65_cmd_pkt_byte_o),
       .cmd_pkt_len_o(u65_cmd_pkt_len_o),
-      .cmd_pkt_ready_i(u65_src[363 +: 1]),
-      .render_ser_req_i(u65_src[370 +: 1]),
-      .render_ser_busy_o(u65_render_ser_busy_o),
-      .render_ser_done_o(u65_render_ser_done_o),
-      .render_ser_valid_o(u65_render_ser_valid_o),
-      .render_ser_ready_i(u65_src[377 +: 1]),
-      .render_ser_tri_id_o(u65_render_ser_tri_id_o),
-      .render_ser_tile_o(u65_render_ser_tile_o),
-      .render_ser_first_o(u65_render_ser_first_o),
-      .render_ser_last_o(u65_render_ser_last_o)
+      .cmd_pkt_ready_i(u65_src[363 +: 1])
   );
   logic u65_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u65_fold_q <= 1'b0;
-    else u65_fold_q <= u65_fold_q ^ (((^u65_cfg_ready_o)) & u65_src[0]) ^ (((^u65_cfg_rsp_valid_o)) & u65_src[1]) ^ (((^u65_cfg_rsp_op_o)) & u65_src[2]) ^ (((^u65_cfg_rsp_status_o)) & u65_src[3]) ^ (((^u65_cfg_rsp_page_generation_o)) & u65_src[4]) ^ (((^u65_active_page_generation_o)) & u65_src[5]) ^ (((^u65_pal_load_ready_o)) & u65_src[6]) ^ (((^u65_fill_req_valid_o)) & u65_src[7]) ^ (((^u65_fill_req_addr_o)) & u65_src[8]) ^ (((^u65_sheet_req_valid_o)) & u65_src[9]) ^ (((^u65_sheet_req_op_o)) & u65_src[10]) ^ (((^u65_sheet_req_handle_o)) & u65_src[11]) ^ (((^u65_sheet_req_texel_o)) & u65_src[12]) ^ (((^u65_sheet_req_src_id_o)) & u65_src[13]) ^ (((^u65_pg_ready_o)) & u65_src[14]) ^ (((^u65_blank_ack_o)) & u65_src[15]) ^ (((^u65_blank_active_o)) & u65_src[16]) ^ (((^u65_lease_open_o)) & u65_src[17]) ^ (((^u65_frame_slot_ready_o)) & u65_src[18]) ^ (((^u65_v2_requests_accepted_o)) & u65_src[19]) ^ (((^u65_v2_responses_accepted_o)) & u65_src[20]) ^ (((^u65_v2_leases_granted_o)) & u65_src[21]) ^ (((^u65_v2_leases_refused_o)) & u65_src[22]) ^ (((^u65_v2_faults_latched_o)) & u65_src[23]) ^ (((^u65_v2_publications_o)) & u65_src[24]) ^ (((^u65_v2_releases_o)) & u65_src[25]) ^ (((^u65_v2_ready_events_o)) & u65_src[26]) ^ (((^u65_v2_swaps_o)) & u65_src[27]) ^ (((^u65_v2_contentions_o)) & u65_src[28]) ^ (((^u65_v2_clear_handshakes_o)) & u65_src[29]) ^ (((^u65_v2_frames_admitted_o)) & u65_src[30]) ^ (((^u65_v2_blit_leases_acquired_o)) & u65_src[31]) ^ (((^u65_v2_blit_leases_refused_o)) & u65_src[32]) ^ (((^u65_ring_wr_valid_o)) & u65_src[33]) ^ (((^u65_ring_wr_slot_o)) & u65_src[34]) ^ (((^u65_ring_wr_state_o)) & u65_src[35]) ^ (((^u65_hps_req_valid_o)) & u65_src[36]) ^ (((^u65_hps_req_write_o)) & u65_src[37]) ^ (((^u65_hps_req_addr_o)) & u65_src[38]) ^ (((^u65_hps_req_len_o)) & u65_src[39]) ^ (((^u65_hps_wr_valid_o)) & u65_src[40]) ^ (((^u65_hps_wr_data_o)) & u65_src[41]) ^ (((^u65_hps_wr_last_o)) & u65_src[42]) ^ (((^u65_aud_wr_ready_o)) & u65_src[43]) ^ (((^u65_aud_refill_req_o)) & u65_src[44]) ^ (((^u65_aud_occupancy_o)) & u65_src[45]) ^ (((^u65_pcm_valid_o)) & u65_src[46]) ^ (((^u65_pcm_l_o)) & u65_src[47]) ^ (((^u65_pcm_r_o)) & u65_src[48]) ^ (((^u65_underrun_status_o)) & u65_src[49]) ^ (((^u65_audio_underruns_o)) & u65_src[50]) ^ (((^u65_px_valid_o)) & u65_src[51]) ^ (((^u65_px_rgb_o)) & u65_src[52]) ^ (((^u65_px_x_o)) & u65_src[53]) ^ (((^u65_px_y_o)) & u65_src[54]) ^ (((^u65_px_hsync_o)) & u65_src[55]) ^ (((^u65_px_vsync_o)) & u65_src[56]) ^ (((^u65_px_hblank_o)) & u65_src[57]) ^ (((^u65_px_vblank_o)) & u65_src[58]) ^ (((^u65_scaler_violation_o)) & u65_src[59]) ^ (((^u65_crc_frame_o)) & u65_src[60]) ^ (((^u65_crc_valid_o)) & u65_src[61]) ^ (((^u65_crc_bytes_o)) & u65_src[62]) ^ (((^u65_crc_size_err_o)) & u65_src[63]) ^ (((^u65_gpu_tick_o)) & u65_src[64]) ^ (((^u65_gpu_tick_frame_id_o)) & u65_src[65]) ^ (((^u65_gpu_tick_repeated_o)) & u65_src[66]) ^ (((^u65_gpu_complete_slot_o)) & u65_src[67]) ^ (((^u65_deadline_faults_o)) & u65_src[68]) ^ (((^u65_frame_cycles_o)) & u65_src[69]) ^ ((u65_slot_state_o_fold) & u65_src[70]) ^ (((^u65_fence_valid_o)) & u65_src[71]) ^ (((^u65_fence_slot_o)) & u65_src[72]) ^ (((^u65_fence_ok_o)) & u65_src[73]) ^ (((^u65_fence_status_o)) & u65_src[74]) ^ (((^u65_mode_act_o)) & u65_src[75]) ^ (((^u65_dma_done_o)) & u65_src[76]) ^ (((^u65_dma_status_o)) & u65_src[77]) ^ (((^u65_blit_done_o)) & u65_src[78]) ^ (((^u65_blit_status_o)) & u65_src[79]) ^ (((^u65_pad_frame_flat_o)) & u65_src[80]) ^ ((u65_pad_sequence_o_fold) & u65_src[81]) ^ (((^u65_input_gaps_o)) & u65_src[82]) ^ ((u65_rumble_duty_o_fold) & u65_src[83]) ^ (((^u65_rumble_active_o)) & u65_src[84]) ^ (((^u65_rumble_pwm_o)) & u65_src[85]) ^ (((^u65_rumble_drops_o)) & u65_src[86]) ^ (((^u65_cnt_snap_valid_o)) & u65_src[87]) ^ (((^u65_cnt_snap_id_o)) & u65_src[88]) ^ (((^u65_cnt_snap_value_o)) & u65_src[89]) ^ (((^u65_cnt_window_open_o)) & u65_src[90]) ^ (((^u65_cnt_cat_violation_o)) & u65_src[91]) ^ (((^u65_guard_violations_o)) & u65_src[92]) ^ (((^u65_starvation_o)) & u65_src[93]) ^ (((^u65_init_done_o)) & u65_src[94]) ^ (((^u65_refresh_stalls_o)) & u65_src[95]) ^ (((^u65_bank_conflicts_o)) & u65_src[96]) ^ (((^u65_scanout_preempted_o)) & u65_src[97]) ^ (((^u65_hps_err_count_o)) & u65_src[98]) ^ (((^u65_shell_err_wfifo_o)) & u65_src[99]) ^ (((^u65_shell_err_route_o)) & u65_src[100]) ^ (((^u65_shell_err_cdc_o)) & u65_src[101]) ^ (((^u65_shell_err_framer_o)) & u65_src[102]) ^ (((^u65_render_tri_ready_o)) & u65_src[103]) ^ (((^u65_geom_guard_rsp_o)) & u65_src[104]) ^ (((^u65_geom_beat_valid_o)) & u65_src[105]) ^ (((^u65_geom_beat_data_o)) & u65_src[106]) ^ (((^u65_geom_beat_last_o)) & u65_src[107]) ^ (((^u65_geom_wready_o)) & u65_src[108]) ^ (((^u65_geom_retire_words_o)) & u65_src[109]) ^ (((^u65_build_guard_rsp_o)) & u65_src[110]) ^ (((^u65_build_wready_o)) & u65_src[111]) ^ (((^u65_build_retire_words_o)) & u65_src[112]) ^ (((^u65_build_beat_valid_o)) & u65_src[113]) ^ (((^u65_build_beat_data_o)) & u65_src[114]) ^ (((^u65_build_beat_last_o)) & u65_src[115]) ^ (((^u65_build_hps_grant_o)) & u65_src[116]) ^ (((^u65_build_hps_rsp_o)) & u65_src[117]) ^ (((^u65_build_hps_wait_o)) & u65_src[118]) ^ (((^u65_build_hps_wr_ready_o)) & u65_src[119]) ^ (((^u65_render_drain_done_o)) & u65_src[120]) ^ (((^u65_render_busy_o)) & u65_src[121]) ^ (((^u65_render_pixels_o)) & u65_src[122]) ^ (((^u65_render_bursts_o)) & u65_src[123]) ^ (((^u65_render_stream_error_o)) & u65_src[124]) ^ (((^u65_render_drained_o)) & u65_src[125]) ^ (((^u65_render_fatal_o)) & u65_src[126]) ^ (((^u65_render_issued_words_o)) & u65_src[127]) ^ (((^u65_render_retired_words_o)) & u65_src[128]) ^ (((^u65_render_overflow_o)) & u65_src[129]) ^ (((^u65_render_fragment_error_o)) & u65_src[130]) ^ (((^u65_render_texture_fragments_o)) & u65_src[131]) ^ (((^u65_render_texture_cache_hits_o)) & u65_src[132]) ^ (((^u65_render_texture_cache_misses_o)) & u65_src[133]) ^ (((^u65_render_texture_palette_lookups_o)) & u65_src[134]) ^ (((^u65_render_texture_plan_accepted_o)) & u65_src[135]) ^ (((^u65_render_texture_dispatch_accepted_o)) & u65_src[136]) ^ (((^u65_render_texture_combine_refused_o)) & u65_src[137]) ^ (((^u65_render_texture_samples_o)) & u65_src[138]) ^ (((^u65_gth_valid_o)) & u65_src[139]) ^ (((^u65_gth_rgb565_o)) & u65_src[140]) ^ (((^u65_gth_tag_o)) & u65_src[141]) ^ (((^u65_gth_addr_o)) & u65_src[142]) ^ (((^u65_gth_x_o)) & u65_src[143]) ^ (((^u65_gth_y_o)) & u65_src[144]) ^ (((^u65_gth_last_o)) & u65_src[145]) ^ (((^u65_post_pass_start_o)) & u65_src[146]) ^ (((^u65_post_view_o)) & u65_src[147]) ^ (((^u65_post_src_valid_o)) & u65_src[148]) ^ (((^u65_post_src_rgb_o)) & u65_src[149]) ^ (((^u65_post_out_ready_o)) & u65_src[150]) ^ (((^u65_post_busy_o)) & u65_src[151]) ^ (((^u65_post_passes_o)) & u65_src[152]) ^ (((^u65_post_frames_o)) & u65_src[153]) ^ (((^u65_post_fault_o)) & u65_src[154]) ^ (((^u65_post_src_reads_o)) & u65_src[155]) ^ (((^u65_post_src_pixels_o)) & u65_src[156]) ^ (((^u65_post_retire_unowned_o)) & u65_src[157]) ^ (((^u65_post_share_contention_o)) & u65_src[158]) ^ (((^u65_echo_passes_complete_o)) & u65_src[159]) ^ (((^u65_echo_passes_torn_o)) & u65_src[160]) ^ (((^u65_echo_pixels_written_o)) & u65_src[161]) ^ (((^u65_echo_pixels_dropped_o)) & u65_src[162]) ^ (((^u65_echo_fault_o)) & u65_src[163]) ^ (((^u65_phy_cs_n_o)) & u65_src[164]) ^ (((^u65_phy_ras_n_o)) & u65_src[165]) ^ (((^u65_phy_cas_n_o)) & u65_src[166]) ^ (((^u65_phy_we_n_o)) & u65_src[167]) ^ (((^u65_phy_a_o)) & u65_src[168]) ^ (((^u65_phy_ba_o)) & u65_src[169]) ^ (((^u65_phy_dq_o)) & u65_src[170]) ^ (((^u65_phy_dq_oe_o)) & u65_src[171]) ^ (((^u65_phy_dqm_o)) & u65_src[172]) ^ (((^u65_cmd_pkt_valid_o)) & u65_src[173]) ^ (((^u65_cmd_pkt_byte_o)) & u65_src[174]) ^ (((^u65_cmd_pkt_len_o)) & u65_src[175]) ^ (((^u65_render_ser_busy_o)) & u65_src[176]) ^ (((^u65_render_ser_done_o)) & u65_src[177]) ^ (((^u65_render_ser_valid_o)) & u65_src[178]) ^ (((^u65_render_ser_tri_id_o)) & u65_src[179]) ^ (((^u65_render_ser_tile_o)) & u65_src[180]) ^ (((^u65_render_ser_first_o)) & u65_src[181]) ^ (((^u65_render_ser_last_o)) & u65_src[182]);
+    else u65_fold_q <= u65_fold_q ^ (((^u65_cfg_ready_o)) & u65_src[0]) ^ (((^u65_cfg_rsp_valid_o)) & u65_src[1]) ^ (((^u65_cfg_rsp_op_o)) & u65_src[2]) ^ (((^u65_cfg_rsp_status_o)) & u65_src[3]) ^ (((^u65_cfg_rsp_page_generation_o)) & u65_src[4]) ^ (((^u65_active_page_generation_o)) & u65_src[5]) ^ (((^u65_pal_load_ready_o)) & u65_src[6]) ^ (((^u65_fill_req_valid_o)) & u65_src[7]) ^ (((^u65_fill_req_addr_o)) & u65_src[8]) ^ (((^u65_sheet_req_valid_o)) & u65_src[9]) ^ (((^u65_sheet_req_op_o)) & u65_src[10]) ^ (((^u65_sheet_req_handle_o)) & u65_src[11]) ^ (((^u65_sheet_req_texel_o)) & u65_src[12]) ^ (((^u65_sheet_req_src_id_o)) & u65_src[13]) ^ (((^u65_pg_ready_o)) & u65_src[14]) ^ (((^u65_blank_ack_o)) & u65_src[15]) ^ (((^u65_blank_active_o)) & u65_src[16]) ^ (((^u65_lease_open_o)) & u65_src[17]) ^ (((^u65_frame_slot_ready_o)) & u65_src[18]) ^ (((^u65_v2_requests_accepted_o)) & u65_src[19]) ^ (((^u65_v2_responses_accepted_o)) & u65_src[20]) ^ (((^u65_v2_leases_granted_o)) & u65_src[21]) ^ (((^u65_v2_leases_refused_o)) & u65_src[22]) ^ (((^u65_v2_faults_latched_o)) & u65_src[23]) ^ (((^u65_v2_publications_o)) & u65_src[24]) ^ (((^u65_v2_releases_o)) & u65_src[25]) ^ (((^u65_v2_ready_events_o)) & u65_src[26]) ^ (((^u65_v2_swaps_o)) & u65_src[27]) ^ (((^u65_v2_contentions_o)) & u65_src[28]) ^ (((^u65_v2_clear_handshakes_o)) & u65_src[29]) ^ (((^u65_v2_frames_admitted_o)) & u65_src[30]) ^ (((^u65_v2_blit_leases_acquired_o)) & u65_src[31]) ^ (((^u65_v2_blit_leases_refused_o)) & u65_src[32]) ^ (((^u65_ring_wr_valid_o)) & u65_src[33]) ^ (((^u65_ring_wr_slot_o)) & u65_src[34]) ^ (((^u65_ring_wr_state_o)) & u65_src[35]) ^ (((^u65_hps_req_valid_o)) & u65_src[36]) ^ (((^u65_hps_req_write_o)) & u65_src[37]) ^ (((^u65_hps_req_addr_o)) & u65_src[38]) ^ (((^u65_hps_req_len_o)) & u65_src[39]) ^ (((^u65_hps_wr_valid_o)) & u65_src[40]) ^ (((^u65_hps_wr_data_o)) & u65_src[41]) ^ (((^u65_hps_wr_last_o)) & u65_src[42]) ^ (((^u65_aud_wr_ready_o)) & u65_src[43]) ^ (((^u65_aud_refill_req_o)) & u65_src[44]) ^ (((^u65_aud_occupancy_o)) & u65_src[45]) ^ (((^u65_pcm_valid_o)) & u65_src[46]) ^ (((^u65_pcm_l_o)) & u65_src[47]) ^ (((^u65_pcm_r_o)) & u65_src[48]) ^ (((^u65_underrun_status_o)) & u65_src[49]) ^ (((^u65_audio_underruns_o)) & u65_src[50]) ^ (((^u65_px_valid_o)) & u65_src[51]) ^ (((^u65_px_rgb_o)) & u65_src[52]) ^ (((^u65_px_x_o)) & u65_src[53]) ^ (((^u65_px_y_o)) & u65_src[54]) ^ (((^u65_px_hsync_o)) & u65_src[55]) ^ (((^u65_px_vsync_o)) & u65_src[56]) ^ (((^u65_px_hblank_o)) & u65_src[57]) ^ (((^u65_px_vblank_o)) & u65_src[58]) ^ (((^u65_scaler_violation_o)) & u65_src[59]) ^ (((^u65_crc_frame_o)) & u65_src[60]) ^ (((^u65_crc_valid_o)) & u65_src[61]) ^ (((^u65_crc_bytes_o)) & u65_src[62]) ^ (((^u65_crc_size_err_o)) & u65_src[63]) ^ (((^u65_gpu_tick_o)) & u65_src[64]) ^ (((^u65_gpu_tick_frame_id_o)) & u65_src[65]) ^ (((^u65_gpu_tick_repeated_o)) & u65_src[66]) ^ (((^u65_gpu_complete_slot_o)) & u65_src[67]) ^ (((^u65_deadline_faults_o)) & u65_src[68]) ^ (((^u65_frame_cycles_o)) & u65_src[69]) ^ ((u65_slot_state_o_fold) & u65_src[70]) ^ (((^u65_fence_valid_o)) & u65_src[71]) ^ (((^u65_fence_slot_o)) & u65_src[72]) ^ (((^u65_fence_ok_o)) & u65_src[73]) ^ (((^u65_fence_status_o)) & u65_src[74]) ^ (((^u65_mode_act_o)) & u65_src[75]) ^ (((^u65_dma_done_o)) & u65_src[76]) ^ (((^u65_dma_status_o)) & u65_src[77]) ^ (((^u65_blit_done_o)) & u65_src[78]) ^ (((^u65_blit_status_o)) & u65_src[79]) ^ (((^u65_pad_frame_flat_o)) & u65_src[80]) ^ ((u65_pad_sequence_o_fold) & u65_src[81]) ^ (((^u65_input_gaps_o)) & u65_src[82]) ^ ((u65_rumble_duty_o_fold) & u65_src[83]) ^ (((^u65_rumble_active_o)) & u65_src[84]) ^ (((^u65_rumble_pwm_o)) & u65_src[85]) ^ (((^u65_rumble_drops_o)) & u65_src[86]) ^ (((^u65_cnt_snap_valid_o)) & u65_src[87]) ^ (((^u65_cnt_snap_id_o)) & u65_src[88]) ^ (((^u65_cnt_snap_value_o)) & u65_src[89]) ^ (((^u65_cnt_window_open_o)) & u65_src[90]) ^ (((^u65_cnt_cat_violation_o)) & u65_src[91]) ^ (((^u65_guard_violations_o)) & u65_src[92]) ^ (((^u65_starvation_o)) & u65_src[93]) ^ (((^u65_init_done_o)) & u65_src[94]) ^ (((^u65_refresh_stalls_o)) & u65_src[95]) ^ (((^u65_bank_conflicts_o)) & u65_src[96]) ^ (((^u65_scanout_preempted_o)) & u65_src[97]) ^ (((^u65_hps_err_count_o)) & u65_src[98]) ^ (((^u65_shell_err_wfifo_o)) & u65_src[99]) ^ (((^u65_shell_err_route_o)) & u65_src[100]) ^ (((^u65_shell_err_cdc_o)) & u65_src[101]) ^ (((^u65_shell_err_framer_o)) & u65_src[102]) ^ (((^u65_render_tri_ready_o)) & u65_src[103]) ^ (((^u65_geom_guard_rsp_o)) & u65_src[104]) ^ (((^u65_geom_beat_valid_o)) & u65_src[105]) ^ (((^u65_geom_beat_data_o)) & u65_src[106]) ^ (((^u65_geom_beat_last_o)) & u65_src[107]) ^ (((^u65_geom_wready_o)) & u65_src[108]) ^ (((^u65_geom_retire_words_o)) & u65_src[109]) ^ (((^u65_build_guard_rsp_o)) & u65_src[110]) ^ (((^u65_build_wready_o)) & u65_src[111]) ^ (((^u65_build_retire_words_o)) & u65_src[112]) ^ (((^u65_build_beat_valid_o)) & u65_src[113]) ^ (((^u65_build_beat_data_o)) & u65_src[114]) ^ (((^u65_build_beat_last_o)) & u65_src[115]) ^ (((^u65_build_hps_grant_o)) & u65_src[116]) ^ (((^u65_build_hps_rsp_o)) & u65_src[117]) ^ (((^u65_build_hps_wait_o)) & u65_src[118]) ^ (((^u65_build_hps_wr_ready_o)) & u65_src[119]) ^ (((^u65_render_drain_done_o)) & u65_src[120]) ^ (((^u65_render_busy_o)) & u65_src[121]) ^ (((^u65_render_pixels_o)) & u65_src[122]) ^ (((^u65_render_bursts_o)) & u65_src[123]) ^ (((^u65_render_stream_error_o)) & u65_src[124]) ^ (((^u65_render_drained_o)) & u65_src[125]) ^ (((^u65_render_fatal_o)) & u65_src[126]) ^ (((^u65_render_issued_words_o)) & u65_src[127]) ^ (((^u65_render_retired_words_o)) & u65_src[128]) ^ (((^u65_render_overflow_o)) & u65_src[129]) ^ (((^u65_render_fragment_error_o)) & u65_src[130]) ^ (((^u65_render_texture_fragments_o)) & u65_src[131]) ^ (((^u65_render_texture_cache_hits_o)) & u65_src[132]) ^ (((^u65_render_texture_cache_misses_o)) & u65_src[133]) ^ (((^u65_render_texture_palette_lookups_o)) & u65_src[134]) ^ (((^u65_render_texture_plan_accepted_o)) & u65_src[135]) ^ (((^u65_render_texture_dispatch_accepted_o)) & u65_src[136]) ^ (((^u65_render_texture_combine_refused_o)) & u65_src[137]) ^ (((^u65_render_texture_samples_o)) & u65_src[138]) ^ (((^u65_gth_valid_o)) & u65_src[139]) ^ (((^u65_gth_rgb565_o)) & u65_src[140]) ^ (((^u65_gth_tag_o)) & u65_src[141]) ^ (((^u65_gth_addr_o)) & u65_src[142]) ^ (((^u65_gth_x_o)) & u65_src[143]) ^ (((^u65_gth_y_o)) & u65_src[144]) ^ (((^u65_gth_last_o)) & u65_src[145]) ^ (((^u65_post_pass_start_o)) & u65_src[146]) ^ (((^u65_post_view_o)) & u65_src[147]) ^ (((^u65_post_src_valid_o)) & u65_src[148]) ^ (((^u65_post_src_rgb_o)) & u65_src[149]) ^ (((^u65_post_out_ready_o)) & u65_src[150]) ^ (((^u65_post_busy_o)) & u65_src[151]) ^ (((^u65_post_passes_o)) & u65_src[152]) ^ (((^u65_post_frames_o)) & u65_src[153]) ^ (((^u65_post_fault_o)) & u65_src[154]) ^ (((^u65_post_src_reads_o)) & u65_src[155]) ^ (((^u65_post_src_pixels_o)) & u65_src[156]) ^ (((^u65_post_retire_unowned_o)) & u65_src[157]) ^ (((^u65_post_share_contention_o)) & u65_src[158]) ^ (((^u65_echo_passes_complete_o)) & u65_src[159]) ^ (((^u65_echo_passes_torn_o)) & u65_src[160]) ^ (((^u65_echo_pixels_written_o)) & u65_src[161]) ^ (((^u65_echo_pixels_dropped_o)) & u65_src[162]) ^ (((^u65_echo_fault_o)) & u65_src[163]) ^ (((^u65_phy_cs_n_o)) & u65_src[164]) ^ (((^u65_phy_ras_n_o)) & u65_src[165]) ^ (((^u65_phy_cas_n_o)) & u65_src[166]) ^ (((^u65_phy_we_n_o)) & u65_src[167]) ^ (((^u65_phy_a_o)) & u65_src[168]) ^ (((^u65_phy_ba_o)) & u65_src[169]) ^ (((^u65_phy_dq_o)) & u65_src[170]) ^ (((^u65_phy_dq_oe_o)) & u65_src[171]) ^ (((^u65_phy_dqm_o)) & u65_src[172]) ^ (((^u65_cmd_pkt_valid_o)) & u65_src[173]) ^ (((^u65_cmd_pkt_byte_o)) & u65_src[174]) ^ (((^u65_cmd_pkt_len_o)) & u65_src[175]);
 
   // ---- zhao_surface_dispatch ----
   logic [63:0] u66_lfsr_q;

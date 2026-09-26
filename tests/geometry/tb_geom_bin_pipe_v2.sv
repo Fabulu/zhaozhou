@@ -241,9 +241,6 @@ module tb_geom_bin_pipe_v2 (
       // raster path, and with `ser_req_i` low the binner's walk is the raster
       // drain and nothing else -- which is what keeps this bench's numbers
       // comparable across the I54 change rather than silently re-baselined.
-      .ser_req_i(1'b0), .ser_ready_i(1'b0),
-      .ser_busy_o(), .ser_done_o(), .ser_valid_o(),
-      .ser_tri_id_o(), .ser_tile_o(), .ser_first_o(), .ser_last_o(),
       .clk(clk), .rst_n(rst_n),
       .frame_begin_i(frame_begin_i), .frame_end_i(frame_end_i),
       .grid_w_i(grid_w_i), .grid_h_i(grid_h_i),

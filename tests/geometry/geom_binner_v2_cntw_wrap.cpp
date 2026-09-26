@@ -308,8 +308,6 @@ int main(int argc, char** argv) {
   dut->tri_valid_i = 0;
   dut->tok_grant_i = 0;
   dut->job_ready_i = 1;
-  dut->ser_req_i = 0;
-  dut->ser_ready_i = 0;
   for (int i = 0; i < 8; ++i) tick();
   dut->rst_n = 1;
   // S_CLEAR walks every tile of the grid before the block will accept anything.

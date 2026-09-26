@@ -47,9 +47,13 @@
 //     NOT read the on-chip counters at all, because there they are constants;
 //   * the PRICE build (HAVE_ONCHIP = 1, `geom_arenabin_price`) has the whole
 //     on-chip path compiled in and LIVE, and it is there that
-//     "`cs_chunks_o == 0` while `chunks_written_o > 0`" is a real measurement
-//     -- the serialiser could have produced and did not, because
-//     `zhao_geom_arenabin` owns the intake.
+//     "`bin_tile_references_o > 0` while every arena chunk came from
+//     GEOM.ARENABIN" is a real measurement -- the binner ran the same scene,
+//     at full rate, and contributed no chunk, because `zhao_geom_arenabin`
+//     owns the intake. (It used to read `cs_chunks_o == 0`, the serialiser's
+//     counter; ARENACOMPOSE retired the serialiser with the binner's
+//     serialise pass, so the surviving on-chip producer is the binner and the
+//     assertion is made about IT.)
 //
 // ===========================================================================
 // THE SAME TRAP ENTRY I54 NAMES, AND THE SAME DEFENCE
@@ -185,8 +189,8 @@ void bring_up(Dut& t) {
   t.peek_en_i = 0;
   t.peek_waddr_i = 0;
 
-  // THE ON-CHIP HALF IS OFF. In the directed build it is not even elaborated.
-  t.cs_enable_i = 0;
+  // THE ON-CHIP HALF TAKES NO TRIANGLE UNLESS A CASE GIVES IT ONE. In the
+  // directed build it is not even elaborated.
   t.bin_frame_begin_i = 0;
   t.bin_frame_end_i = 0;
   t.bin_grid_w_i = 4;
@@ -196,8 +200,6 @@ void bring_up(Dut& t) {
   t.vid_retire_i = 0;
   t.vid_id_ok_i = 0;
   t.vid_id_i = 0;
-  t.cs_head_tile_i = 0;
-  t.cs_alloc_skew_i = 0;
   t.bin_kx0_i = 0; t.bin_ky0_i = 0; t.bin_kc0_i = (1ull << 40);
   t.bin_kx1_i = 0; t.bin_ky1_i = 0; t.bin_kc1_i = (1ull << 40);
   t.bin_kx2_i = 0; t.bin_ky2_i = 0; t.bin_kc2_i = (1ull << 40);
@@ -303,6 +305,45 @@ bool push_td(Dut& t, uint32_t arena_id) {
 
 // Offer one triangle to GEOM.ARENABIN. `id_ok` false is a descriptor the arena
 // refused: it has no index, so it must be dropped rather than binned.
+// THE SAME TRIANGLE, OFFERED TO THE ON-CHIP BINNER. Only the price case uses
+// this: everywhere else the binner is deliberately given nothing, so that
+// "the on-chip path produced no chunk" is about a block that COULD have.
+bool push_bin_tri(Dut& t, const TriPlan& p, uint16_t src_id) {
+  t.bin_min_x_i = static_cast<int16_t>(p.min_tx * 16);
+  t.bin_max_x_i = static_cast<int16_t>(p.max_tx * 16 + 15);
+  t.bin_min_y_i = static_cast<int16_t>(p.min_ty * 16);
+  t.bin_max_y_i = static_cast<int16_t>(p.max_ty * 16 + 15);
+  t.bin_src_id_i = src_id;
+  t.bin_tri_valid_i = 1;
+  for (int i = 0; i < 200000; ++i) {
+    t.eval();
+    const bool go = t.bin_tri_ready_o != 0;
+    zhao::tick(t);
+    if (go) {
+      t.bin_tri_valid_i = 0;
+      t.eval();
+      return true;
+    }
+  }
+  t.bin_tri_valid_i = 0;
+  t.eval();
+  return false;
+}
+
+// Run the binner's raster drain to completion. `dbg_drain_*` in the bench
+// measures the span from the first job handshake to the last.
+void drain_the_binner(Dut& t) {
+  t.bin_job_ready_i = 1;
+  for (int i = 0; i < 400000; ++i) {
+    t.eval();
+    const bool done = t.bin_drain_done_o != 0;
+    zhao::tick(t);
+    if (done) break;
+  }
+  t.bin_job_ready_i = 0;
+  t.eval();
+}
+
 bool push_tri(Dut& t, const TriPlan& p, uint32_t arena_id, bool id_ok) {
   t.ab_min_x_i = static_cast<int16_t>(p.min_tx * 16);
   t.ab_max_x_i = static_cast<int16_t>(p.max_tx * 16 + 15);
@@ -650,6 +691,113 @@ void case4_the_directory_does_not_outlive_its_frame() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// THE PRICE OF ENTRY I55'S RASTER SWAP -- ONE STIMULUS, BOTH CONSUMERS.
+// ---------------------------------------------------------------------------
+// REBUILT HERE BY ARENACOMPOSE, 2026-09-26. It lived in
+// `geom_chunkser_directed.cpp`, which was retired with `zhao_geom_chunkser`.
+// The NUMBER it produces is the one entry I55 quotes to refuse the raster
+// swap, so throwing the probe away and keeping the prose would have left a
+// measurement nobody could reproduce -- CLAUDE.md's ground-contact chapter,
+// "commit the probe".
+//
+// IT MEASURES THE CONSUMER SIDE, not the producer: `zhao_geom_binner_v2`'s
+// on-chip job drain (what `zhao_raster_tile_pipe_v2` eats today, and what the
+// swap would replace) against `zhao_geom_paramwalk`'s external walk over the
+// published SDRAM arena. Both are clocks per tile reference delivered to a
+// raster consumer.
+//
+// NOTE THE TWO DIFFERENCES IN CONVENTION, because BINARENA found them and the
+// entry's old "same unit on both sides" was doing more work than it could
+// carry: the drain is a SPAN divided by `refs - 1` while the walk is an
+// accumulated busy total divided by emitted triangles, and the two cover
+// different populations. The `refs - 1` convention inflates the drain figure
+// slightly at this scene size -- i.e. in the direction that makes the refusal
+// look STRONGER -- so it is left as it was rather than quietly improved, and
+// said here instead.
+//
+// AND IT IS THE PLACE THE ON-CHIP ASSERTION IS NOT VACUOUS. In this build the
+// binner is elaborated, fed the same scene and drained for real, so
+// "the arena's chunks all came from GEOM.ARENABIN" is a measurement about a
+// live competitor rather than about a tied-off generate.
+void price_the_swap() {
+  Dut t;
+  bring_up(t);
+  const std::vector<TriPlan> s = scene();
+
+  // ---- open the frame on both producers -----------------------------------
+  ckt(seal(t, 0x6666), "the arena sealed a frame");
+  t.bin_frame_begin_i = 1;
+  t.eval();
+  zhao::tick(t);
+  t.bin_frame_begin_i = 0;
+  t.eval();
+  idle(t, 700);   // both directories clear one entry per clock
+
+  for (int i = 0; i < 3; ++i)
+    ckt(push_pv(t, 100 + i), "the three vertices every descriptor names");
+  for (int i = 0; i < kDecoy; ++i) ckt(push_td(t, i), "decoy descriptor taken");
+
+  // ---- one scene, offered to BOTH ----------------------------------------
+  for (size_t i = 0; i < s.size(); ++i) {
+    const uint32_t arena_id = static_cast<uint32_t>(i) + kDecoy;
+    ckt(push_td(t, arena_id), "descriptor taken");
+    ckt(push_tri(t, s[i], arena_id, true), "triangle offered to the producer");
+    ckt(push_bin_tri(t, s[i], static_cast<uint16_t>(i)),
+        "the same triangle offered to the on-chip binner");
+  }
+
+  // ---- end the frame and drain the binner for the picture -----------------
+  t.bin_frame_end_i = 1;
+  t.ab_geom_done_i = 1;
+  t.eval();
+  zhao::tick(t);
+  t.bin_frame_end_i = 0;
+  t.ab_geom_done_i = 0;
+  t.eval();
+
+  drain_the_binner(t);
+
+  const uint32_t want_pub = t.frames_published_o + 1;
+  for (int i = 0; i < 2000000; ++i) {
+    t.eval();
+    if (t.frames_published_o >= want_pub) break;
+    zhao::tick(t);
+  }
+  cke(want_pub, t.frames_published_o, "the frame published");
+
+  // THE CONTROL, AND IT IS NOT A CONSTANT. The binner ran the same scene at
+  // full rate in this very elaboration.
+  ckt(t.bin_tile_references_o > 0,
+      "the on-chip binner really binned this scene");
+  ckt(t.ab_refs_binned_o > 0, "and so did GEOM.ARENABIN");
+  cke(t.ab_chunks_emitted_o, t.chunks_written_o,
+      "every chunk the arena holds came from GEOM.ARENABIN");
+
+  // ---- walk the same tile out of SDRAM ------------------------------------
+  const uint32_t head = head_of(t, tile_index(0, 0));
+  if (head != 0xFFFFFFFFu) {
+    walk(t, head);
+    t.eval();
+  }
+
+  const double drain_per =
+      t.dbg_drain_refs_o > 1
+          ? static_cast<double>(t.dbg_drain_cycles_o) /
+                static_cast<double>(t.dbg_drain_refs_o - 1)
+          : 0.0;
+  const double walk_per =
+      t.tris_emitted_o ? static_cast<double>(t.dbg_walk_cycles_o) /
+                             static_cast<double>(t.tris_emitted_o)
+                       : 0.0;
+  std::printf(
+      "PRICE on-chip drain: refs=%u span=%u clocks -> %.2f clocks/ref\n"
+      "PRICE external walk: tris=%u busy=%u clocks reqs=%u -> %.2f clocks/tri\n",
+      (unsigned)t.dbg_drain_refs_o, (unsigned)t.dbg_drain_cycles_o, drain_per,
+      (unsigned)t.tris_emitted_o, (unsigned)t.dbg_walk_cycles_o,
+      (unsigned)t.dbg_walk_reqs_o, walk_per);
+}
+
 // THE PRICE -- reported, not asserted, and only where both paths exist.
 // ---------------------------------------------------------------------------
 // Entry I55 carries WALKSWAP's measurement of the CONSUMER side: 4.12
@@ -668,11 +816,9 @@ void price_the_producer() {
   run_frame(t, s, 0x4242, -1);
 
   cke(1, t.frames_published_o, "the frame published");
-  // NOT A CONSTANT HERE. In this build `zhao_geom_chunkser` and
-  // `zhao_geom_binner_v2` are elaborated and clocked; they produced nothing
-  // because the intake is not theirs.
-  cke(0, t.cs_chunks_o, "the on-chip serialiser emitted NO chunk");
-  cke(0, t.cs_refs_o, "the on-chip serialiser serialised NO reference");
+  // NOT A CONSTANT HERE. In this build `zhao_geom_binner_v2` is elaborated and
+  // clocked. It was offered no triangle in this case, so it binned nothing --
+  // `price_the_swap` below is the case that feeds it and measures it.
   cke(0, t.bin_tile_references_o, "the on-chip binner binned NOTHING");
   ckt(t.chunks_written_o > 0, "and the external arena was filled anyway");
 
@@ -739,6 +885,7 @@ int main(int argc, char** argv) {
 
   if (price) {
     price_the_producer();
+    price_the_swap();
     std::printf("geom_arenabin_price: %d checks, %d failures\n", g_checks,
                 g_fail);
   } else {

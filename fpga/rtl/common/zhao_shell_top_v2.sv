@@ -133,9 +133,6 @@ module zhao_shell_top_v2
 #(
   parameter int unsigned FRAMER_Q = 8,    // record-queue depth (glue 3)
   parameter int unsigned WFIFO_W  = 64,   // write-data queue, 16-bit words
-  // The arena's TriangleDescriptor index width, carried out on the serialise
-  // pass (console entry I54). `zhao_geom_paramarena.td_id_o` is u18.
-  parameter int unsigned RENDER_SER_ID_W = 18,
   // ---- THE RENDER BINNER'S REFERENCE CAPACITY (GIANTREFS, ruling R7) -----
   // R7 guarantees a giant of 32,768 TILE REFERENCES that is "never silently
   // truncated", and the owner's standing directive explicitly withholds any
@@ -737,27 +734,17 @@ module zhao_shell_top_v2
   output logic        cmd_pkt_valid_o,
   output logic [ 7:0] cmd_pkt_byte_o,
   output logic [31:0] cmd_pkt_len_o,
-  input  logic        cmd_pkt_ready_i,
-
-  // ---- the binner's SERIALISE PASS, out to the console (entry I54) --------
-  // `zhao_geom_chunkser` sits beside `zhao_geom_paramarena` in
-  // `zhao_console_core`, not in here, because what it produces is a 64-byte
-  // SDRAM record and the arena owns the guard socket that writes it. What
-  // crosses this boundary is therefore the reference stream -- an 18-bit
-  // arena triangle index, a tile index and the two list markers -- and not a
-  // 448-bit chunk.
-  //
-  // Every pre-existing instantiator may tie `render_ser_req_i` low, which
-  // leaves the binner's walk exactly the raster drain it has always been.
-  input  logic                render_ser_req_i,
-  output logic                render_ser_busy_o,
-  output logic                render_ser_done_o,
-  output logic                render_ser_valid_o,
-  input  logic                render_ser_ready_i,
-  output logic [RENDER_SER_ID_W-1:0] render_ser_tri_id_o,
-  output logic [9:0]          render_ser_tile_o,
-  output logic                render_ser_first_o,
-  output logic                render_ser_last_o
+  input  logic        cmd_pkt_ready_i
+  // ---- THE BINNER'S SERIALISE PASS LEFT THIS BOUNDARY (ARENACOMPOSE) ------
+  // `render_ser_req_i` and seven `render_ser_*` outputs carried a SECOND read
+  // walk over `zhao_geom_binner_v2`'s tile lists out to `zhao_geom_chunkser`,
+  // which filled `zhao_geom_paramarena`'s chunk region. Console entry I55:
+  // that made the on-chip arena the thing that FILLED the external one, so the
+  // two were in SERIES and the SDRAM path could never become the sole
+  // producer by subtraction. `zhao_geom_arenabin` fills the arena from the
+  // post-clip stream in `zhao_console_core` instead. Nothing asks for the
+  // pass, so the pass and these ports are REMOVED rather than tied off --
+  // a live path left with no consumer is dangling ports, not a capability.
 );
 
   // ==========================================================================
@@ -1389,18 +1376,8 @@ module zhao_shell_top_v2
   zhao_geom_bin_pipe_v2 #(
     .CHUNKS(RENDER_CHUNKS),
     .CHUNK_W(RENDER_CHUNK_W),
-    .CHUNK_REFS(RENDER_CHUNK_REFS),
-    .ARENA_ID_W(RENDER_SER_ID_W)
+    .CHUNK_REFS(RENDER_CHUNK_REFS)
   ) u_render_bin (
-    .ser_req_i(render_ser_req_i),
-    .ser_busy_o(render_ser_busy_o),
-    .ser_done_o(render_ser_done_o),
-    .ser_valid_o(render_ser_valid_o),
-    .ser_ready_i(render_ser_ready_i),
-    .ser_tri_id_o(render_ser_tri_id_o),
-    .ser_tile_o(render_ser_tile_o),
-    .ser_first_o(render_ser_first_o),
-    .ser_last_o(render_ser_last_o),
     .clk(gpu_clk), .rst_n(rst_n),
     .frame_begin_i(v2_frame_admit_w), .frame_end_i(render_frame_end_i),
     .grid_w_i(render_grid_w_i), .grid_h_i(render_grid_h_i),

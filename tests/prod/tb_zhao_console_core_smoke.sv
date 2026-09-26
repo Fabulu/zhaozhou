@@ -512,23 +512,28 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_vid_sunk_o;
   logic [31:0] geom_vid_opens_o;
   logic [31:0] geom_vid_stall_o;
-  // Entry I54: the chunk serialiser and its identity queue, in the
-  // COMPOSED console. `geom_cs_head_tile_i` is the only input of the
-  // group and is held at tile 0 -- this bench does not walk, it only
-  // asserts that the producer ran and that its detectors stayed quiet.
+  // Entry I55: GEOM.ARENABIN, the INDEPENDENT chunk producer, and the
+  // identity queue that names its triangles, in the COMPOSED console.
+  // ARENACOMPOSE 2026-09-26 replaced the `geom_cs_*` group -- the retired
+  // chunk serialiser's -- with this one. `geom_ab_head_tile_i` is the
+  // group's only input and is held at tile 0.
   logic [31:0] geom_tidq_underflow_o;
   logic [31:0] geom_tidq_overflow_o;
   logic [31:0] geom_tidq_unnamed_o;
-  logic [31:0] geom_cs_chunks_o;
-  logic [31:0] geom_cs_refs_o;
-  logic [31:0] geom_cs_tiles_o;
-  logic [31:0] geom_cs_chain_break_o;
-  logic [31:0] geom_cs_head_clash_o;
-  logic [31:0] geom_cs_truncated_o;
-  logic [31:0] geom_cs_sunk_o;
-  logic [ 9:0] geom_cs_head_tile_i = 10'd0;
-  logic [31:0] geom_cs_head_chunk_o;
-  logic        geom_cs_head_valid_o;
+  logic [31:0] geom_ab_tris_o;
+  logic [31:0] geom_ab_unnamed_o;
+  logic [31:0] geom_ab_refs_o;
+  logic [31:0] geom_ab_chunks_o;
+  logic [31:0] geom_ab_links_o;
+  logic [31:0] geom_ab_tiles_o;
+  logic [31:0] geom_ab_refused_o;
+  logic [31:0] geom_ab_stall_o;
+  logic [31:0] geom_ab_flushcut_o;
+  logic [15:0] geom_ab_max_chunks_o;
+  logic        geom_ab_overflow_o;
+  logic [ 9:0] geom_ab_head_tile_i = 10'd0;
+  logic [31:0] geom_ab_head_chunk_o;
+  logic        geom_ab_head_valid_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
