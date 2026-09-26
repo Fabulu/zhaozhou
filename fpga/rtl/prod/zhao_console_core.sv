@@ -3787,6 +3787,135 @@
 //      triangles to reach a raster -- which is this entry. Composing it would
 //      move the register from 6 to 5 while changing not one pixel.
 //
+//      RE-MEASURED 2026-09-26 (gz/cellcarry). NOTHING WAS COMPOSED HERE
+//      EITHER. THIS IS THE THIRD CONSECUTIVE REFUSAL OF THIS ENTRY and the
+//      reason is no longer the one the last two gave. They refused because the
+//      CARRIAGE was unfinished; this lane refuses because TWO ARITHMETIC LAWS
+//      ARE UNSETTLED, and a law must be settled BEFORE a wire is laid -- get
+//      one wrong and the pixel is wrong against a capture-exact law while
+//      every gate in this repository passes. Four facts, two of them new
+//      blockers nobody had named, one CORRECTING a claim made in this entry's
+//      favour, and one making the carriage job SMALLER than this entry says.
+//
+//      1. THE TEXTURED LAW QUANTISES THE SHADE, AND NO RTL ANYWHERE DOES.
+//         Every pass has costed `mod_of(shade, tint, sheet)` as "a modulation,
+//         EXACT at all-unity" and stopped at the tint. READ THE LAMBDA --
+//         `reference/src/zrender/terrain.cpp:633-637`:
+//
+//           shade_q = (shade + 8191) >> 14;             // "the palette ladder (0..4)"
+//           prod    = (shade_q << 14) * tint_q * sheet_q;     // s128
+//           return div_rhu_s128(prod, 1 << 32);               // ONE rounding
+//
+//         `ambient()` (`terrain.cpp:563`) returns Q16.16 in [16384, 65536], so
+//         `shade_q` takes FOUR values and the textured modulation is QUANTISED
+//         TO QUARTER STEPS before the product. That is not a rounding detail,
+//         and the source's own comment gives the reason: a second tint family
+//         "doubled the modulated colour count past 256". THE LADDER IS THE
+//         256-COLOUR PALETTE BUDGET EXPRESSED AS ARITHMETIC, and it is frozen
+//         capture-exact like the rest of 6.2.
+//
+//         THE COMPOSED PATH DOES NOT CONTAIN IT. A terrain triangle carrying
+//         its flat shade in slots 3..5 arrives at `zhao_raster_fragment`'s
+//         `unit_mul` (`:428-432`), an 8-bit round-half-up product, with
+//         `zhao_texture_sheetmod`'s own `unit_mul` (`:132-142`) ahead of it --
+//         TWO 8-BIT ROUNDINGS AND NO LADDER, against the law's ONE s128
+//         rounding and four levels. Grepped for the ladder across
+//         `fpga/rtl/terrain`, `texture` and `raster`: ZERO hits, and the
+//         POSITIVE CONTROL FIRED -- 8191 is found where it legitimately
+//         appears, a range check at `zhao_terrain_normalloader.sv:154`.
+//         SO "the path can ship at the tint's exact identity" IS TRUE ABOUT
+//         THE TINT AND SAYS NOTHING ABOUT THE SHADE. A unity tint does not
+//         make the composed arithmetic the ratified arithmetic. This is a
+//         FIFTH item, it is an ARITHMETIC LAW rather than carriage, and it is
+//         the first thing the next lane must settle.
+//
+//      2. THE S8.24 BOUND IS REAL, AND ITS FAILURE IS SILENT. Item 3 of the
+//         TERRTRI paragraph called it "unpriced"; it is now measured at the
+//         spec. `spec/qformats.md:74-75` fixes `invw24` at U0.24 with an
+//         explicit `saturate 0xFFFFFF` and `u/v_over_w` at S8.24, so the
+//         product is representable only while |u x invw| < 128. What is NEW is
+//         why the mesh path is safe and terrain is not, and what happens when
+//         it is not: `zhao_geom_vattr`'s multiply (`:463-473`) takes a
+//         SIXTEEN-BIT source (`mul_a_c` is `signed [15:0]`, the record's s16 UV
+//         field), which is the whole of its header's "NO saturation case
+//         exists". Terrain's `terr_uv_*` is `signed [31:0]` Q16.16 in TILE
+//         units. AND THERE IS NO SATURATE AND NO CLAMP ANYWHERE ON THAT
+//         MULTIPLY -- `zhao_raster_attrdiv_v2`'s `q_saturated_o` guards the
+//         INTERPOLATED quotient, not the per-vertex numerator. So a terrain
+//         patch more than 128 tiles from the origin would WRAP, silently, with
+//         no counter watching. A packet that wires the `pack_attr` analogue
+//         without answering this ships a wrong pixel that no gate can see.
+//
+//         AND ONE PRECISION CORRECTION TO THIS ENTRY'S OWN PROSE, which does
+//         not change its conclusion. Line 3729 says `mosaic_pick`'s hash "has
+//         NO period at all". It has period 2^32 in tx, because 73856093 is odd
+//         and the product wraps at 32 bits. The conclusion stands and is
+//         stronger stated correctly: the only bias that is identity for BOTH
+//         the pick (mod 2^32) and the fold (mod 128) is ZERO, so the cheap way
+//         out of the bound is still closed.
+//
+//      3. THE NORMALMAP SEAM IS WORSE THAN THIS ENTRY AND THE MANIFEST RECORD,
+//         and the claim that made it look smaller is an ASSERTED PRESENCE that
+//         is false -- the rarer direction this campaign has seen once before.
+//         `reports/OWNER-DECISIONS-20260920.md` section 2's STRUCK note says
+//         "only `f_detail_i` lacks a producer ... NO PORT CHANGE ON A COMPOSED
+//         BLOCK IS REQUIRED", citing TEXJOIN's `f_*` accept port and
+//         `zhao_raster_texjoin_v2`'s matching `f_valid_i`/`f_u_i`/`f_v_i`/
+//         `f_lod_i`. THOSE PORTS ARE REAL AND THAT BLOCK IS NOT COMPOSED.
+//         `zhao_raster_texjoin_v2` is instantiated ZERO times under `fpga/rtl`
+//         and `design/prod_manifest.yml:1445` marks it `superseded` --
+//         "lifecycle is owned by `zhao_texture_v3own` inside selected
+//         `zhao_texture_island_v3_top`; NOT SHELL-CONNECTED". And the live
+//         owner has no such seam: grepped `detail_i|detail_o` across ALL of
+//         `fpga/rtl/texture/` and `fpga/rtl/raster/` -- ZERO hits.
+//         SO THE PAIR NEEDS A PORT BUILT INTO A COMPOSED BLOCK **AND** TERRAIN
+//         FRAGMENTS TO EXIST, not merely the second. Nothing here argues
+//         against the feature: owner ruling D-8 ratifies the terrain detail
+//         path by name and `design/V1-RELEASE-DEFINITION.md` calls it "a
+//         capability to protect and implement". It is the COST that was
+//         understated.
+//
+//      4. THE CARRIAGE JOB IS SMALLER THAN THIS ENTRY DESCRIBES, which is the
+//         one finding that helps. Fact 1 of the TERRAINAUX paragraph says
+//         terrain's per-cell triple "HAS NO CARRIAGE AT ALL". The BITS have
+//         carriage: `base_rgb[23:16]`/`[15:8]` and `recipe_weight` are 32 bits
+//         that already ride `tri_flat_request_c` per triangle from this file
+//         into the shell, through `zhao_geom_binner_v2`'s metadata bank and out
+//         to the mosaic -- that is the SAME 32 bits the island reads at
+//         `zhao_texture_island_v3_top.sv:1097-1099`. What is missing is a
+//         per-triangle SOURCE: `tri_flat_request_c` (`:26393`) is built ONLY
+//         from `mw_pub_*`, and `MAT_BASE_RGB_C` (`:26369`) is a named constant
+//         white. So this is NOT another `METAW` widening like R234 D1's
+//         eleven-file span. The shape is a per-client field on
+//         `u_geom_clipdoor` carried to GEOM.CLIP's output and muxed into those
+//         32 bits by the rider's DOMAIN -- and the rider is the constraint,
+//         because `GEOM_VID_RIDERW` is 16 + 32 + 2 = 50 bits and ALL FIFTY ARE
+//         ALLOCATED (`cl_o_rider[49:34]` material, `[33:2]` raster, `[1:0]`
+//         domain). Widening the rider touches `zhao_geom_clipdoor`,
+//         `zhao_geom_clip` and this file: THREE files, not eleven.
+//
+//         WHY THAT STILL DOES NOT CLOSE ANYTHING. The window's own law is "a
+//         span is a run of primitives that AGREE" (`zhao_material_window.sv`
+//         header), and `match_c` includes the mode and the pair -- so a
+//         per-cell `{set, id}` is a DRAIN PLUS A RESOLVE between every pair of
+//         triangles, which is the route this entry already priced and refused.
+//         The rider route avoids that only if terrain presents ONE material for
+//         the whole run, and terrain has no material identity at all:
+//         `material_set`/`material_id` under `fpga/rtl/terrain/` return ZERO
+//         hits, RE-MEASURED TODAY rather than quoted, with `material` at 34
+//         hits in the same directory as the positive control.
+//
+//      WHAT THIS LANE GOT WRONG AND CAUGHT: a case-sensitive grep for
+//      "Decision Record 3" in `reports/OWNER-RULINGS-20260919-EVENING.md`
+//      returned ZERO and was nearly reported as a false citation in a brief.
+//      The record is real, at line 8030, spelled `## DECISION RECORD 3`. That
+//      is this file's own zero-hit law biting the lane that was invoking it.
+//
+//      AND THE COUNT IN THE PARAGRAPH ABOVE IS STALE: composing
+//      `zhao_terrain_normalmap` alone would move the register 5 -> 4 today,
+//      not 6 -> 5. Measured bare at this commit: 5 gaps, 4 boundaries plus
+//      this one disconnected module.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
