@@ -17542,6 +17542,32 @@ add_test(NAME field_host_v2_directed COMMAND test_field_host_v2_directed)
 set_tests_properties(field_host_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # --------------------------------------------------------------------------
+# THE COMPOSED HOST'S ACCEPT INTERVAL AND ENGINE OVERLAP, MEASURED.
+#
+# NOTE THE -G VALUES: they are `zhao_console_core.sv`'s OWN arguments to
+# `u_field_host`, not this module's defaults. `zhao_field_host.sv:115` names
+# the trap this avoids -- "a fit that does not override them is measuring the
+# bench" -- and the same applies to a bench. A census taken at IN_LANES=12 and
+# REGS=32-by-default would report an interval the console never pays.
+#
+# It is registered `fast` because it is one elaboration and 8,000 clocks.
+# --------------------------------------------------------------------------
+add_executable(test_field_host_depth_census field/field_host_depth_census.cpp)
+target_link_libraries(test_field_host_depth_census PRIVATE zhao_harness)
+verilate(test_field_host_depth_census
+  PREFIX Vzhao_field_host_v2
+  TOP_MODULE zhao_field_host_v2
+  SOURCES ${ZHAO_FIELD_HOST_V2_SOURCES}
+  VERILATOR_ARGS -GCLIENTS=4 -GPROGS=8 -GINSTR_N=48 -GPCW=6 -GREGS=32
+                 -GTABLES=2 -GTBL_N=64 -GIN_LANES=15 -GOUT_LANES=7
+                 -GOUT_ORDINALS=7 -GPREP_SCALARS=64 -GCREDITS=2
+                 -GFAB_LANES=1 -GFAB_OUTSTANDING=4 -GFAB_LONGQ=4
+                 -GFAB_GATHERS=4 -GFAB_DIST_BANKS=2 -GFAB_GROUP_PTS=1
+                 -GFAB_RING_UNITS=2 -GFAB_RING_DESC=2)
+add_test(NAME field_host_depth_census COMMAND test_field_host_depth_census)
+set_tests_properties(field_host_depth_census PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# --------------------------------------------------------------------------
 # R126's GUARD, SEEN TO FIRE. Owner ruling R126 assigns this to H1 and names
 # both traps: Quartus 17.0 rejects a bare module-scope `if`, so the guard lives
 # in `initial begin ... end`; and **`--lint-only` does not run `initial`
