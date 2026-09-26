@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "68d4fd9e623cde54cd6fbb34d1903a62e9e0f4a7",
+    "newestRunCommit":  "c1723602997982e704436141dc86f5eed55f534b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -290,6 +290,30 @@
                        "gatingPeriodNs":  54.06,
                        "holdSlackNs":  0.251,
                        "holdTnsNs":  0
+                   },
+                   {
+                       "module":  "zhao_console_core@console-snapshot-20260926",
+                       "status":  "incomplete:failed:quartus_fit.exe",
+                       "sourceCommit":  "c1723602997982e704436141dc86f5eed55f534b",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "measuredDevice":  "5CEBA9F31C7",
+                       "sizingDevice":  "5CEBA9F31C7",
+                       "notTargetDevice":  true,
+                       "sizingNote":  "fitted on 5CEBA9F31C7 ONLY to measure size; the target is 5CSEBA6U23I7 at 41,910 ALM and almsAvailable below is NOT that device",
+                       "sourceDigest":  "a7c7a459394215f3d4d2fa0ee23b12503846e82f7438e39652b9507324c02363",
+                       "variantOf":  "zhao_console_core",
+                       "seconds":  10524.3,
+                       "sourcesHashed":  289,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  271464,
+                       "blockMemoryBits":  3522668,
+                       "dspBlocks":  375,
+                       "virtualPins":  41325
                    },
                    {
                        "module":  "zhao_console_core@diag-incomplete-14gaps",
