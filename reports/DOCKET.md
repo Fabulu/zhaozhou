@@ -19,21 +19,43 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ---
 
-## OPEN OWNER DECISION 2026-09-26 -- `reports/OWNER-ESCALATION-20260926-I34.md`
+## NARROWED 2026-09-26 -- `reports/OWNER-ESCALATION-20260926-I34.md`
+## READ ITS **ADDENDUM-2** FIRST: `reports/OWNER-ESCALATION-20260926-I34-ADDENDUM-2.md`
 
-**ONE decision, and it is the only thing between the completion register and
-ZERO.** Five of the six remaining entries are engineering and need nothing from
-you. The sixth -- I34's MATERIAL and NAV channels -- is gated because all three
-of the entry's named options breach something the vacation directive protects:
-option 2's SDRAM regions need ~3.7 M cycles against 330 k free (re-measured, not
-quoted), option 3 is a feature deletion, and option 1 ships two lanes computed
-and read by nothing.
+**THIS ESCALATION OVER-ASKED, BY ITS AUTHOR'S OWN LATER MEASUREMENT.** It posed
+two questions. **One was already decided in the vacation directive**, and the
+other **had a default the escalation itself declared and then did not execute.**
 
-**Nothing is blocked waiting on it.** The recommendation is a fourth shape --
-look for a FABRIC consumer, the way velocity closed on 2026-09-26 with no SDRAM
-at all -- and that is what proceeds if you say nothing. Options 1 and 3 are not
-taken without you.
+* **ENCODING: CLOSED, not an owner question.** Material is an opaque, full-width
+  u32 -- the directive's numerical policy for this entry says exactly that, and
+  adds *"do not narrow it to fit an older consumer."* The escalation's claim of
+  *"two incompatible encodings with nothing mapping between them"* is **struck**:
+  `ops.yml` names the mapping inside the sentence that was quoted from it --
+  *"resolved deterministically by TERRAIN.PATCH"* -- so layer-E's `{a, b,
+  weight}` is the **sink input** and `field-ir.md` 7.1's `material:u32` is that
+  block's **output**. Two ends of one pipeline, read as a contradiction.
+* **DESTINATION: the measured finding STANDS and is not withdrawn.** Option 2's
+  SDRAM regions need ~3.7 M cycles against 330 k free; option 3 is a feature
+  deletion; option 1 ships two lanes computed and read by nothing. The directive
+  covers this case -- *"a measured engineering impossibility is a finding, not
+  permission to invent a pass."*
+* **BUT ITS OWN RECOMMENDATION IS NOW RUNNING.** The escalation said the fourth
+  shape -- hunt for a FABRIC consumer, the way velocity closed with no SDRAM at
+  all -- *"is what I will start if you say nothing."* Under a standing vacation
+  directive, **"if you say nothing" was always going to be the state**, so
+  waiting on it was a second escalation wearing a decision's clothes.
+  `BRIEF-FABRICSINK.md` is commissioned.
 
+**WHAT IS STILL GENUINELY THE OWNER'S**, and only if the fabric hunt returns a
+measured negative: option 1 as a **temporary with a recorded expiry**, versus a
+**bandwidth re-architecture** to afford the directive's regions. That comes back
+with the measurement attached. **Option 3 stays refused** either way.
+
+**The lesson, recorded because it generalises: an escalation is an instrument,
+and it goes blind in the flattering direction.** Handing a question upward feels
+like the careful act, so nobody audits it the way a decision gets audited, and an
+already-answered question can sit in a docket looking like diligence. **Before
+escalating, grep the standing directive for the entry's own name.**
 ---
 
 ## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`
