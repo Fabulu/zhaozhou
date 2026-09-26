@@ -7727,9 +7727,31 @@ module tb_zhao_console_core_smoke
     if (geom_clip_submitted_o != (SGF_EXP_REPLAYED + terr_cf_emitted_o))
       $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d -- the mesh reference wants %0d and TERRAIN.CLIPFEED emitted %0d",
              geom_clip_submitted_o, SGF_EXP_REPLAYED, terr_cf_emitted_o);
+    // PROJCOLLAPSE: this exact equality is the MESH's, and its own comment
+    // above already said what would happen if terrain ever contributed --
+    // "if that ever changes this fires, which is new information rather than
+    // noise". It fired, under `-TerrainRelief`, with exactly that information:
+    // a lattice WITH relief produces 256 triangles that carry screen area and
+    // are then rejected as OFFSCREEN, because this fixture's patch is
+    // SUB-PIXEL. See the two checks under the ifdef and the NOTE below.
+`ifdef ZHAO_SMOKE_TERRAIN_RELIEF
+    if (geom_clip_clipped_o < SGF_EXP_CLIPPED ||
+        geom_clip_clipped_o > (SGF_EXP_CLIPPED + terr_cf_emitted_o))
+      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP clipped=%0d -- the mesh wants %0d and terrain can account for at most %0d more",
+             geom_clip_clipped_o, SGF_EXP_CLIPPED, terr_cf_emitted_o);
+    // THE CONTROL'S OWN CHECK, and it asserts the CORRECT behaviour rather
+    // than the defect: a lattice with relief produces NO zero-area triangle.
+    // It stays true after the fixture is repaired, so it is not a test that
+    // asserts the bug -- the plain run is the negative control and is left
+    // measuring, not asserting, what it finds.
+    if (geom_clip_culled_o != SGF_EXP_CULLED)
+      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP culled=%0d, the mesh reference wants %0d -- a lattice WITH relief must leave no triangle with zero screen area",
+             geom_clip_culled_o, SGF_EXP_CULLED);
+`else
     if (geom_clip_clipped_o != SGF_EXP_CLIPPED)
       $fatal(1, "SMOKE: GEOM.CLIP clipped=%0d -- the reference wants %0d",
              geom_clip_clipped_o, SGF_EXP_CLIPPED);
+`endif
     if (geom_clip_culled_o > (SGF_EXP_CULLED + terr_cf_emitted_o))
       $fatal(1, "SMOKE: GEOM.CLIP culled=%0d exceeds what terrain could account for (%0d) -- a MESH triangle was culled",
              geom_clip_culled_o, SGF_EXP_CULLED + terr_cf_emitted_o);
@@ -7752,8 +7774,31 @@ module tb_zhao_console_core_smoke
     // PROJECTED corners that reach the arena. A non-zero world normal does not
     // imply a non-zero projected area, and the repair was verified against the
     // first while the entry's sentence was written about the second.
+    // AND THE CAUSE IS NAMED, 2026-09-26 (PROJCOLLAPSE), with the value
+    // measured at the seam instead of a verdict reached by elimination.
+    // `SMOKE: projcol` above prints the corners: A=(5851,8192) B=(5862,8192)
+    // C=(5870,8192). The three x DIFFER; only the y is shared, and 8192 in
+    // S 12.8 is 32.0 px -- EXACTLY this view's vertical centre, y0 + h/2 =
+    // 0 + 64/2. It is the viewport centre with a zero ndc_y added to it.
+    //
+    // TWO FIXTURE FACTS, AND BOTH ARE REQUIRED. The camera
+    // (`smoke_geom_fixture_gen.cpp:116`) has rows 0 and 1 the identity and
+    // row 3 {0,0,1,0}, so ndc_y = world_y / world_z with the eye at world
+    // y = 0; and the played pages' BODY is all zeros, so layer A -- the
+    // 33x33 top base height -- is a CONSTANT. Together they put the ground
+    // plane THROUGH THE EYE, and a plane through the eye projects to a LINE.
+    // Every corner gets the same y, the cross product is
+    // (5862-5851)*0 - 0*(5870-5851) = 0 exactly, and the cull is LAWFUL.
+    // `zhao_project_core` is not at fault and neither is the carriage:
+    // `SMOKE: terrwc` reads corner_hits=768 of 768, refusals 0, misses 0.
+    //
+    // PROVEN BY REVERSAL, not by argument: `-TerrainRelief` writes a real
+    // height field into layer A and nothing else, and `culled` goes 256 -> 0
+    // while the corners' y become 8192 / 8265 / 8229. The predicted step was
+    // 36.6 S 12.8 units per metre of relief at this patch's measured
+    // w = 14680064 (224.0 m); the measured steps are 37 and 36.
     if (geom_clip_culled_o != 0)
-      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA. The arm is composed and its value traverses to the door (see `SMOKE: terrcf`); the projected corners enclose no area, so NO TERRAIN FRAGMENT IS DRAWN. This is a FIXTURE defect and entry I13 records it as the next thing to fix -- do not read this line as a design property.",
+      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA -- LAWFULLY. The projection is correct and the PLANE IS EDGE-ON: this fixture's camera leaves world Y on screen Y with the eye at world y=0 (smoke_geom_fixture_gen.cpp:116), and the played pages' all-zero BODY makes layer A a constant, so every lattice vertex has world y=0 and every projected corner gets screen y=8192 (=32.0 px, exactly y0+h/2). See `SMOKE: projcol` for the corners and run -TerrainRelief for the reversal (culled 256 -> 0). Repair is relief in layer A or an eye off the ground plane -- NOT a tolerance on the zero-area test, which would admit a degenerate triangle.",
                geom_clip_culled_o);
     if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
       $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",

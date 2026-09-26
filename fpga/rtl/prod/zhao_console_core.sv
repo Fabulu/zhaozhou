@@ -4199,6 +4199,148 @@
 //      a raster would be the register moving without the picture -- which
 //      is the thing five packets refused and the sixth will not do either.
 //
+//
+//      ================================================================
+//      2026-09-26 (gz/projcollapse). THE CAUSE IS NAMED. IT IS NOT THE
+//      PROJECTION, AND IT IS NOT THE CARRIAGE: THE PLANE IS EDGE-ON.
+//      ================================================================
+//
+//      CARRIAGE left this entry one item -- "THE FIXTURE'S TERRAIN
+//      TRIANGLES HAVE NO SCREEN AREA ... Measured, not suspected." That
+//      is a SYMPTOM, correctly measured. This is the cause, with the
+//      corners as numbers and a reversal that switches it off.
+//
+//      THE THREE CORNERS, read at `u_terrain_clipfeed`'s own input
+//      handshake in the composed smoke (`SMOKE: projcol`, new):
+//
+//        tri[0] A=(5851,8192) B=(5862,8192) C=(5870,8192) behind=0
+//        tri[1] A=(5851,8192) B=(5844,8192) C=(5862,8192) behind=0
+//
+//      THEY ARE NOT THREE COPIES OF ONE CORNER -- the reference triples
+//      are distinct (`ref[0] ia=0 ib=10 ic=1`) and the x values differ
+//      by 11 and 19 subpixel units. ONLY THE Y IS SHARED, and 8192 in
+//      S 12.8 is 32.0 px, which is EXACTLY this view's vertical centre,
+//      `y0 + h/2 = 0 + 64/2`. It is the viewport centre with a zero
+//      `ndc_y` added to it -- `zhao_project_core`'s stage 6 doing
+//      precisely what qformats 8 says.
+//
+//      TWO FIXTURE FACTS, AND BOTH ARE REQUIRED:
+//
+//        * THE CAMERA. `tests/prod/smoke_geom_fixture_gen.cpp:116` is
+//          rows 0 and 1 the IDENTITY and row 3 `{0,0,1,0}`, so
+//          `clip = (x, y, z, z)` and `ndc_y = world_y / world_z`, with
+//          the eye at the world origin -- at world y = 0.
+//        * THE LATTICE. The played pages' BODY is all zeros
+//          (`tb_zhao_console_core_smoke.sv`, its own paragraph), so
+//          layer A -- "Top base height, 33x33, height16",
+//          spec/terrain_rules 7 -- is a CONSTANT and every one of the
+//          81 lattice vertices has world y = 0.
+//
+//      EITHER ALONE IS HARMLESS. TOGETHER THEY PUT THE GROUND PLANE
+//      THROUGH THE EYE, and a plane through the eye projects to a LINE.
+//      The screen cross product is `(5862-5851)*0 - 0*(5870-5851)` = 0,
+//      exactly, and the cull is LAWFUL on a correct projection.
+//
+//      WHAT TERRAIN FEEDS THE SHARED PROJECTOR THAT THE MESH DOES NOT
+//      is therefore A CONSTANT Y. `kVerts` runs y from -0.5 to +0.9;
+//      terrain is y = 0 at all 81. That asymmetry is the whole of it.
+//
+//      THE CARRIAGE IS MEASURED INNOCENT, on a counter this bench has
+//      owned all along and never once printed. `SMOKE: terrwc` now
+//      reads `corner_hits=768 corner_refusals=0 corner_misses=0
+//      seal_short=0 overflow=0` -- 768 = 256 x 3, EVERY corner a HIT.
+//      This mattered: `zhao_terrain_wcache`'s header says a corner that
+//      is not a hit is answered with x = y = d = w = 0, and three
+//      zeroed corners are ALSO exactly zero area. A refused seal, a
+//      short seal or a stale generation would have produced an
+//      IDENTICAL symptom by a completely different mechanism, and
+//      nothing in the tree could tell the two apart. Eight such ports
+//      (`proj_corner_*`, `proj_replay_*`, `proj_arena_*`) were bound
+//      into the bench by its `.*` and read by nobody.
+//
+//      PROVEN BY REVERSAL, NOT BY ARGUMENT. `-TerrainRelief` writes a
+//      real height field into layer A and changes NOTHING else:
+//
+//        plain    clip submitted=272 clipped=2   culled=256
+//        relief   clip submitted=272 clipped=258 culled=0
+//        relief   tri[0] A=(5851,8192) B=(5862,8265) C=(5870,8229)
+//
+//      `culled` 256 -> 0. The predicted step was 36.6 S 12.8 units per
+//      metre of relief at this patch's measured `w = 14680064`
+//      (224.0 m); the measured steps are 37 and 36. The control is
+//      committed, has its own build TAG and its own `+define+`, and its
+//      assertion is that a lattice WITH relief leaves NO zero-area
+//      triangle -- which stays true after the fixture is repaired, so
+//      it is not a test that asserts the bug.
+//
+//      AND THE REVERSAL EXPOSED THE SECOND FIXTURE FACT, WHICH IS NOW
+//      THE THING BETWEEN THIS ARM AND A PIXEL. Under relief the 256
+//      triangles do not draw either: they move from CULLED to CLIPPED,
+//      with `behind = 0`, so the verdict is OFFSCREEN -- `box_lo` is
+//      `(vmin+127)>>8` and `box_hi` is `(vmax-128)>>8`, the PIXEL-CENTRE
+//      range, and these triangles are SUB-PIXEL. The measured fills put
+//      one metre of lattice at 18.5 subpixels, so a 1 m cell is 0.072 px
+//      and the whole 32 m patch is about 2.3 px wide: patch 0 sits at
+//      x0 = 96 m, z = 224 m (envelope `ix=3, iz=7`, pitch 1 m) and
+//      `ndc_x = 96/224` puts it at 22.86 px in a 32 px view. GEOM.CLIP
+//      is right again -- no pixel centre lies inside the triangle.
+//
+//      SO THE FIXTURE OWES TWO THINGS AND THEY ARE INDEPENDENT: RELIEF
+//      in layer A (or an eye off the ground plane), and A PATCH CLOSE
+//      ENOUGH TO COVER PIXELS. Neither is a wire and neither is a
+//      tolerance. Costing the second honestly: it moves `raster pixels`
+//      off 2560, and that number is REFERENCE-DERIVED by
+//      `smoke_geom_fixture_gen.cpp`, which models no terrain at all --
+//      so whoever takes the pixel takes the oracle with it. That is the
+//      owner-facing consequence this packet declines to decide inside a
+//      diagnosis.
+//
+//      AND THE INFERENCE THAT SENT FOUR PACKETS THE WRONG WAY IS THIS
+//      ENTRY'S, ONE LEVEL DEEPER THAN CARRIAGE FOUND IT. CARRIAGE was
+//      right that `terr_light_degenerate_o` (the 3D face normal) and
+//      screen area are two different quantities. The step that was then
+//      taken from it -- "the world positions are distinct while screen
+//      area is exactly zero, SO THE COLLAPSE IS IN THE PROJECTION, NOT
+//      THE LATTICE" -- is FALSE, and it is the same error again. For a
+//      flat lattice with distinct world x/z the face normal is
+//      `(dx1,0,dz1) x (dx2,0,dz2) = (0, dz1*dx2 - dx1*dz2, 0)`: a
+//      perfectly healthy vector pointing STRAIGHT UP, ENTIRELY IN Y.
+//      Screen area is the lattice's extent that is NOT in Y. The two
+//      are PERPENDICULAR BY CONSTRUCTION, so `degenerate = 0` is not
+//      weak evidence that the lattice is fine -- IT IS WHAT A FLAT
+//      PLANE LOOKS LIKE. It was evidence FOR the cause the whole time.
+//
+//      AND A CORRECT DIAGNOSIS WAS STRUCK FOR BEING RIGHT ABOUT THE
+//      OTHER CROSS PRODUCT. The TERRAINAUX paragraph above quotes and
+//      retires the bench's original sentence -- "the pages this bench
+//      plays are all-zero BODIES, so the lattice is a flat zero height
+//      field, the cross product is exactly zero" -- on the ground that
+//      a flat lattice has an up-facing normal. That ground is sound for
+//      the 3D cross product and wrong for the one that decides the
+//      pixel. THE STRUCK SENTENCE NAMES THE TRUE CAUSE OF THE SCREEN
+//      COLLAPSE, and it was deleted eight days before four more passes
+//      went looking for it. Both authors reasoned correctly about
+//      different cross products and neither said which.
+//
+//      NOT DONE HERE, AND OWED: `zhao_terrain_clipfeed` still has NO
+//      directed test -- `grep -rl zhao_terrain_clipfeed tests/` returns
+//      nothing. The debt was conditional on the hunt landing in that
+//      glue and IT DID NOT: the glue is measured innocent above (256
+//      references in, 256 triangles out, `src_mismatch=0`, corners
+//      arriving bit-for-bit as the arena served them). It is recorded
+//      still owed rather than paid with a bench written to have written
+//      one.
+//
+//      REFUSED, AND THE MEASUREMENT IS WHAT REMOVED THE TEMPTATION: no
+//      epsilon, no clamp and no bias on the zero-area test. Before the
+//      corners were numbers, "widen the degeneracy threshold" is a
+//      plausible-sounding repair; after them it is absurd, because the
+//      area is not NEARLY zero, it is ARITHMETICALLY zero from a
+//      CORRECT projection of a plane seen edge-on. A tolerance there
+//      would admit a degenerate triangle and draw a wrong pixel.
+//      `GEOM_CLIP_ATTRS` stays 7, `zhao_terrain_normalmap` was not
+//      composed, `kMat`/`kVp` were not touched, and no fit was run.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
