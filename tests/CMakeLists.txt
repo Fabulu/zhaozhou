@@ -13530,6 +13530,63 @@ set_tests_properties(geom_binner_v2_meta_addr_swap_mutant PROPERTIES
   PASS_REGULAR_EXPRESSION "PASS: metadata-address mutant fired exactly"
   FAIL_REGULAR_EXPRESSION "FAIL")
 
+# GIANTREFS: the derived per-tile count width, and its committed control.
+#
+# `CNT_W` was a hardcoded 11. Derived, a wrap is structurally impossible, so no
+# legal stimulus can show the guard working -- the mutant build restores the
+# literal and the driver's polarity inverts with it. The parameterisation is
+# deliberately NOT the shipped one: a per-tile count's reachable maximum is
+# min(TRI_CAP, CHUNKS*CHUNK_REFS), so BOTH have to be raised before 2,048 is
+# even attainable. METAW is cut to 64 because the metadata bank is 1,160 bits x
+# TRI_CAP and this bench needs TRI_CAP=4096; the bank plays no part in the
+# behaviour under test.
+function(zhao_giantrefs_cntw_target TARGET)
+  add_executable(${TARGET} geometry/geom_binner_v2_cntw_wrap.cpp)
+  verilate(${TARGET}
+    PREFIX Vzhao_geom_binner_v2
+    TOP_MODULE zhao_geom_binner_v2
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_binner_v2_mutants.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner_v2.sv
+    VERILATOR_ARGS -Wall --assert
+      -GTRI_CAP=4096 -GTRI_W=12 -GCHUNKS=8192 -GCHUNK_W=13
+      -GARENA_ID_LO=0 -GARENA_ID_W=18
+      ${ARGN})
+endfunction()
+
+zhao_giantrefs_cntw_target(gr_cntw)
+add_test(NAME geom_binner_v2_cntw_derived COMMAND gr_cntw)
+
+zhao_giantrefs_cntw_target(gr_cntw_mut
+  -DZHAO_GEOM_BINNER_V2_MUTANT_CNT_W_HARDCODED)
+target_compile_definitions(gr_cntw_mut PRIVATE EXPECT_GEOM_BINNER_V2_CNTW_WRAP=1)
+add_test(NAME geom_binner_v2_cntw_hardcoded_mutant COMMAND gr_cntw_mut)
+
+# And the ELABORATION guard's own positive control. `-D` defines an OBJECT-like
+# macro, which is exactly what `ZHAO_GEOM_BINNER_V2_CNT_W` is, so this build
+# gets the hardcoded 11 WITHOUT the mutant file's guard-disable beside it. The
+# `$fatal` must then stop it at time 0. A clean `--lint-only` proves nothing
+# about an initial block (CLAUDE.md), so this is the only evidence that the
+# guard is alive -- and it is the NEGATIVE CONTROL for the macro selector too:
+# if `-D` had silently failed to reach the definition, this would run to a
+# clean PASS instead of dying.
+zhao_giantrefs_cntw_target(gr_cntw_guard -DZHAO_GEOM_BINNER_V2_CNT_W=11)
+add_test(NAME geom_binner_v2_cntw_elab_guard COMMAND gr_cntw_guard)
+set_tests_properties(geom_binner_v2_cntw_elab_guard PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 600
+  PASS_REGULAR_EXPRESSION "CNT_W cannot count REF_CAP references without wrapping")
+
+set_tests_properties(geom_binner_v2_cntw_derived PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "PASS: derived CNT_W held"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(geom_binner_v2_cntw_hardcoded_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "PASS: CNT_W wrap mutant fired exactly"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
 # Packet D3: exact 57-source binner-to-resolve composition. Packet-C and
 # Packet-D selectors precede the exact production modules they alter.
 set(ZHAO_PACKET_D_FULL_SOURCE_MANIFEST
