@@ -4846,6 +4846,215 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      FABRICSINK, 2026-09-26: BOTH FABRIC ROUTES WALKED. MATERIAL'S IS REAL
+//      AND ENDS AT THIS FILE'S OTHER BOUNDARY; NAV'S DOES NOT EXIST IN EITHER
+//      LANGUAGE. NOTHING WAS COMPOSED AND THE REGISTER DID NOT MOVE (5 -> 5,
+//      measured bare at this commit, RC 1).
+//
+//      The commissioning question was the one ADDENDUM-2 to
+//      `reports/OWNER-ESCALATION-20260926-I34.md` left open: velocity closed
+//      with NO SDRAM by riding fabric to a real consumer, so do material and
+//      nav have fabric consumers too? Material's plausible one was the mosaic
+//      path; nav's was SW.CPUCOLL's mirror. Neither had been walked.
+//
+//      (0) THE BANDWIDTH FINDING IS RE-MEASURED AND UNCHANGED.
+//          `tools/budget/sdram_bandwidth.py` at this commit: 330,474 cycles
+//          free, 19.83% headroom, TOTAL COMMITTED 80.17%. The two provisional
+//          rows are 473,440 + 427,520 = 900,960, so even if BOTH vanished the
+//          free pool is 1,231,434 against option 2's order 3.7M. The table in
+//          BRIEF-FABRICSINK reproduces to the digit. Option 2 stays refused.
+//
+//      (1) MATERIAL: THE CARRIAGE ALREADY EXISTS, LIVE AND COMPOSED, AND IT
+//          DIES AT `proj_out_*` -- WHICH IS ENTRY I13, NOT A MISSING CONSUMER.
+//          The authored layer-E triple walks EIGHT composed hops in this file:
+//            u_terrain_pagestream .v_mat_a_o        (:24057)
+//              -> u_compcache_front .mat_a_o        (:24746)
+//              -> `tcc_mat_a`                       (:17418)
+//              -> u_terrain_tess .mat_a_i           (:17720)
+//              -> .ref_mat_a_o -> `tt_ref_mat_a`    (:17759, :17085)
+//              -> u_terrain_group_seq .t_ref_mat_a_i(:17855)
+//              -> .r_mat_a_o -> `ts_r_mat_a`        (:17889, :17067)
+//              -> u_proj_subsystem .ref_mat_a_i     (:18102)
+//              -> .out_mat_a_o -> `proj_out_mat_a_o`(:18134, :10522)
+//          and `proj_out_*` is a dangling top-level output of this module AND
+//          of `zhao_console_board` (:2738, :5450). So terrain material has a
+//          complete fabric route that ends exactly where every terrain
+//          triangle ends. THE MATERIAL LANE IS NOT MISSING A CONSUMER CHAIN;
+//          IT IS MISSING I13's LAST LINK, and it is per-TRIANGLE at that
+//          boundary already, which is the granularity "never interpolate
+//          identifiers" requires.
+//
+//      (2) AND PAST THAT BOUNDARY THE MOSAIC'S MATERIAL BYTES ARE A COMPILE-
+//          TIME CONSTANT. Walked to the leaf:
+//            `MAT_BASE_RGB_C = 24'hFF_FF_FF`              (:26924)
+//              -> `mat_flat_request_c` [43:20]            (:26937)
+//              -> `tri_flat_request_c`                    (:26944)
+//              -> zhao_raster_texture_stage_v3 .frag_base_rgb_i
+//                 (`admission_request_w.base_rgb`, that file :397)
+//              -> zhao_texture_island_v3_top :1097-1099
+//              -> u_mosaic .req_mat_a_i/.req_mat_b_i      (that file :1303)
+//          so `req_mat_a_i` and `req_mat_b_i` are 8'hFF and 8'hFF on every
+//          fragment this console draws, and the pick is constant whatever the
+//          weight. The mosaic IS composed and live -- u_geom_bin_pipe_v2 :413
+//          -> zhao_raster_tile_pipe_v2 :962 -> stage_v3 :363 -> island :1303 --
+//          so this is a constant travelling a real path, not a dead path.
+//
+//      (3) THE PRICED OBJECTION TO THE RIDER ROUTE IS MEASURABLY WRONG, AND
+//          THIS IS THE FINDING WITH THE MOST VALUE IN IT. The TERRAINAUX note
+//          in this entry prices a per-cell material as "a drain and a resolve
+//          between every pair of triangles", citing `zhao_material_window`'s
+//          span law. Read the span law: `match_c` (that file :415-420) has
+//          EXACTLY FIVE TERMS -- mode, vertex_alpha, frag_state, material_set,
+//          material_id. `base_rgb` AND `recipe_weight` -- the very bits the
+//          mosaic's {mat_a, mat_b, weight} are sliced from -- ARE NOT TERMS OF
+//          IT. So a per-triangle terrain triple carried on the rider and muxed
+//          into those bits by domain costs ZERO DRAINS. The drain price is
+//          real for a per-cell {material_set, material_id} and NOBODY IS
+//          PROPOSING THAT; it was charged to the triple by conflation. The
+//          rider cost stands as recorded (`GEOM_VID_RIDERW` is 16+32+2 = 50 at
+//          :8216 and board :340, all fifty allocated, so widening touches
+//          three files) -- but the DRAIN, which is what made the route look
+//          unaffordable, is not owed.
+//
+//      (4) SO SHADELADDER's FLAGGED CONFLATION IS REAL AND IS NOW MEASURED.
+//          This file at :4008-4017 names it and declines to answer it:
+//          "'Terrain has no material identity at all' is being used to mean
+//          'terrain CANNOT present one material for the whole run', and those
+//          are different claims." MEASURED HERE, and the second claim is FALSE
+//          on four independent counts:
+//            * `tileset_id` IS a per-PAGE material set. Frozen in the patch
+//              header at `spec/terrain_rules.md:143` (+12 u32), read off the
+//              wire by `zhao_terrain_hdrread.sv:53`, and deliberately not
+//              exported -- that file :121-127, "when the far corner gains a
+//              consumer it gains a port in the same change". A port, not a law.
+//            * THE ORACLE ALREADY EMITS SINGLE-MATERIAL RUNS. `terrain.cpp`
+//              :673-675 (rim, `tile_a = 240`, `mosaic = false`) and :773-775
+//              (underside, `tile_a = 241`, `mosaic = false`).
+//            * THE FROZEN MOSAIC LAW MAKES ONE BY CONSTRUCTION:
+//              `spec/terrain_rules.md:466` -- weight 0 selects matB
+//              everywhere, 255 selects matA everywhere.
+//            * RULING R13 REFUSED subpatch-uniform material
+//              (`zhao_terrain_jobissue.sv:115-122`). A refusal is evidence the
+//              thing EXISTS to be refused.
+//          The FIRST claim survives exactly as written and is narrow: the
+//          literal tokens `material_set`/`material_id` are 0 hits under
+//          `fpga/rtl/terrain/` with `material` at 34 as the positive control.
+//          It measures A NAMING BOUNDARY between two lanes -- GEOM spells it
+//          {material_set, material_id}, TERRAIN spells it
+//          {tileset_id, mat_a, mat_b, weight} -- not a structural absence.
+//
+//      (5) WHAT THE FIELD MATERIAL STILL OWES, IN ORDER, AND WHY THIS PACKET
+//          BUILT NONE OF IT. Even with (3) and (4), the FIELD's material is a
+//          u32 token and the mosaic eats a triple, so the route needs FOUR
+//          links and only one of them is small:
+//            a. I13's `proj_out_*` boundary. Not this entry's.
+//            b. 24 rider bits + a domain mux, three files. Useless before (a).
+//            c. `zhao_terrain_patch` must accept a field material at all -- it
+//               has `fld_height_i` and NOTHING ELSE (that file :154-166), and
+//               the compcache's material plane is written from the pagestream,
+//               i.e. the AUTHORED layer E. An override is a new port and a new
+//               write path.
+//            d. THE TOKEN MAP, WHICH DOES NOT EXIST IN ANY FORM. The directive
+//               commissions "an immutable, versioned, island/material-set-
+//               scoped mapping from the FULL token to ... matA, matB, weight"
+//               produced by "the authoring tool". Searched
+//               `material_token|mat_token|token_map|material_map` over `spec/`,
+//               `design/`, `reference/`, `fpga/` and `tools/`: ZERO, with
+//               `compose_material` and `COMPOSED_VELOCITY` as passing positive
+//               controls. No table, no generator, no authoring tool, no
+//               consumer. This is the link that is not a wire.
+//
+//      (6) NAV: A CLEAN NEGATIVE, AND THE ACCEPTANCE BAR CANNOT BE MET BY
+//          WIRING. The directive's own nav acceptance is "Demonstrate a
+//          nonzero field changing an actual navigation query." THERE IS NO
+//          NAVIGATION QUERY ANYWHERE IN THIS TREE, IN EITHER LANGUAGE.
+//          Zero-hit searches over `fpga/ reference/ spec/ design/ tests/
+//          tools/ runtime/ sim/`, positive control `column_query` = 25 hits:
+//            nav_grid 0 | navgrid 0 | navmesh 0 | pathfind 0 | zref::nav 0
+//          and `find -iname '*nav*'` returns no file at all.
+//          Every `nav` PORT in `fpga/rtl`: this adapter's own `nav_cost_o`
+//          (:493); `zhao_field_sinks`'s three (:34,:43,:49), a block
+//          `design/prod_manifest.yml:1494` marks "frozen  FIELD v1, no
+//          caller"; and `zhao_terrain_patch_acc`'s `out_nav_0..3_o`
+//          (:160-163), `not-yet-adopted` (manifest :1023). The three hits in
+//          `zhao_part_collide`/board/core are `terrain_sample_uNAVailable_o`
+//          -- a substring, and this packet's own grep produced them before it
+//          read them. SO THERE IS EXACTLY ONE NAV PORT ON A COMPOSED BLOCK IN
+//          THE WHOLE TREE AND IT IS THE PRODUCER. The adapter's own claim at
+//          :485-487 -- "No block in this repository has an input for a
+//          field-produced material ... nav_cost_o likewise" -- was TESTED, not
+//          quoted, by sweeping every `input ... material*_i` port in
+//          `fpga/rtl`: all are the GEOM {material_set:u32, material_id:u16}
+//          pair or layer-E u8 halves. IT HOLDS.
+//
+//      (7) AND SW.CPUCOLL IS NOT A CONSUMER -- IT IS A LEDGER ROW, AND THE
+//          ARCHITECTURE SAYS IT SHOULD NEVER READ THAT WIRE. `design/
+//          blocks.yml:7583-7601`: `kind: software`, `maturity: SPECIFIED`,
+//          `maturity_log: []`, no `tests:`, no `reference_model:`, zero hits
+//          in `prod_manifest.yml` and `console_inventory.yml`.
+//          `design/contracts/SW.CPUCOLL.md` carries three "TODO -- fill before
+//          this block advances past SPECIFIED" (:31,:52,:64) and two
+//          "Planned: (tbd)" (:56,:60). The ARM tree it would live in is
+//          `runtime/mister/.gitkeep`.
+//          AND EVEN BUILT, IT WOULD NOT READ `efa_nav_cost`. The mirror is
+//          specified as RE-DERIVATION, not readback: `spec/terrain_rules.md`
+//          :505-507, "the FPGA bake and the sim bake are the same
+//          deterministic function", and `zref::fieldir::compose_nav`
+//          (`zref_fieldir.hpp:121`) is that function with the docstring
+//          "SW.CPUCOLL consumes the identical composed number". The one
+//          composed fabric->CPU terrain path REFUSES mirrored state by name:
+//          `zhao_terrain_writeback.sv:27-32` under ruling T4 -- "B and D are
+//          NEVER written back ... writing them back here would create a SECOND
+//          writer". The directive's own wording permits this reading: CPUCOLL
+//          "consumes OR DETERMINISTICALLY MIRRORS". So nav's CPU half is
+//          re-derivation and needs no wire; nav's FPGA half ("Consumed on the
+//          FPGA side") has no consumer and no candidate.
+//
+//      (8) WHAT THIS PACKET REFUSED. Option 1 -- the accumulator owning
+//          material and nav with no reader -- was fenced by the brief and is
+//          refused on its own merits too: `zhao_terrain_patch_acc` and
+//          `zhao_terrain_field_walk` are both `not-yet-adopted`, so adopting
+//          them is composing the FIELD-MAJOR machine plus section 13.4's
+//          backpressure repair, not a small change. Option 2 stays refused on
+//          (0). Option 3 is not this packet's to take.
+//
+//      (9) A STALE ADDRESS THE NEXT PACKET SHOULD NOT INHERIT. The directive's
+//          `COMPOSED_NAV [0x05AB_0000, 0x05CB_0000)` COLLIDES with POST.ECHO
+//          -- base 0x05C0_0000 + span 0x0003_C000 = 0x05C3_C000
+//          (`fpga/rtl/common/zhao_pkg.sv:244-245`), inside that interval.
+//          DECISION RECORD 1 in `reports/OWNER-RULINGS-20260919-EVENING.md`
+//          :7911-7960 already moved it to `[0x05C4_0000, 0x05E4_0000)`.
+//          BRIEF-FABRICSINK and ADDENDUM-2 both quote the colliding range.
+//          `spec/memory_rules.md` 5b still shows `0x058B_0000..0x05FF_FFFF`
+//          as "reserved / unmapped" and carries NEITHER region, which is the
+//          escalation's claim and it re-measures TRUE.
+//
+//     (10) THE PARAGRAPH ADDENDUM-2 STRUCK IS STILL IN THIS ENTRY, AND IT IS
+//          STILL BEING INHERITED. Item (B) below reads "TWO INCOMPATIBLE
+//          ENCODINGS ARE RATIFIED IN ONE TREE WITH NOTHING MAPPING BETWEEN
+//          THEM". ADDENDUM-2 struck that on 2026-09-26: `ops.yml`
+//          FIELD.WRITE.MATERIAL names the map in the same sentence the
+//          escalation quoted eleven words of -- "resolved deterministically by
+//          TERRAIN.PATCH" -- so the layer-E triple is the SINK INPUT and
+//          `field-ir.md` 7.1's u32 is that block's RESOLVED OUTPUT. They are
+//          two ends of one pipeline. IT IS STRUCK HERE TOO, and the strike is
+//          recorded rather than the text deleted so the correction is visible.
+//          This is not bookkeeping: a recon run for THIS packet quoted that
+//          paragraph back as current authority. A struck claim left standing
+//          in RTL prose gets re-inherited within the day.
+//
+//     (11) WHAT THIS PACKET GOT WRONG AND CAUGHT ITSELF. A `grep ... | head
+//          -10` on the mosaic's instantiations returned only comment lines and
+//          very nearly produced the finding "the mosaic path is not composed
+//          at all" -- which would have made this refusal look STRONGER. The
+//          real instantiation (`zhao_raster_tile_pipe_v2.sv:962`) sorted below
+//          the cut. The truncation was the instrument and it failed in the
+//          flattering direction, exactly as this file's own law predicts.
+//          Re-run without `head`, the path is live, and item (2) above is the
+//          corrected finding.
+//      =====================================================================
+//
+//      =====================================================================
 //      TERRVEL, 2026-09-26: THE VELOCITY CHANNEL IS CLOSED. THE ENTRY IS NOT.
 //
 //      `zhao_terrain_velocity` has LEFT the completion register's BUILT BUT
@@ -5223,7 +5432,15 @@
 //                  which is `compose_material`'s STARTING POINT and not its
 //                  result -- so that plane is not the destination either,
 //                  for a reason about dataflow and not about permission;
-//                - and TWO INCOMPATIBLE ENCODINGS ARE RATIFIED IN ONE TREE
+//                - [STRUCK 2026-09-26 by ADDENDUM-2 TO THE I34 ESCALATION,
+//                  RE-CONFIRMED BY FABRICSINK. The layer-E triple is the
+//                  SINK INPUT and the u32 is TERRAIN.PATCH's RESOLVED
+//                  OUTPUT; `ops.yml` names the resolver in the same
+//                  sentence. The paragraph that follows is kept only so
+//                  the correction is visible, and MUST NOT be quoted as
+//                  current authority -- it was, once, on the day it was
+//                  struck.]
+//                  and TWO INCOMPATIBLE ENCODINGS ARE RATIFIED IN ONE TREE
 //                  WITH NOTHING MAPPING BETWEEN THEM: `ops.yml`
 //                  FIELD.WRITE.MATERIAL, `zref::fieldir::compose_material`
 //                  and `zhao_field_sinks` all speak layer-E {u8 a, u8 b,
