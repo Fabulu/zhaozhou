@@ -904,6 +904,22 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_vid_sunk_o,
   output logic [31:0] geom_vid_opens_o,
   output logic [31:0] geom_vid_stall_o,
+  // Entry I54, 2026-09-26. This wrapper replicates the core's port
+  // list and binds with `.*`, so a port the core gains is a port this
+  // file must gain or the whole bench stops elaborating.
+  output logic [31:0] geom_tidq_underflow_o,
+  output logic [31:0] geom_tidq_overflow_o,
+  output logic [31:0] geom_tidq_unnamed_o,
+  output logic [31:0] geom_cs_chunks_o,
+  output logic [31:0] geom_cs_refs_o,
+  output logic [31:0] geom_cs_tiles_o,
+  output logic [31:0] geom_cs_chain_break_o,
+  output logic [31:0] geom_cs_head_clash_o,
+  output logic [31:0] geom_cs_truncated_o,
+  output logic [31:0] geom_cs_sunk_o,
+  input  logic [ 9:0] geom_cs_head_tile_i,
+  output logic [31:0] geom_cs_head_chunk_o,
+  output logic        geom_cs_head_valid_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,

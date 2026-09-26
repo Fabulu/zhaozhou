@@ -486,6 +486,23 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_vid_sunk_o;
   logic [31:0] geom_vid_opens_o;
   logic [31:0] geom_vid_stall_o;
+  // Entry I54: the chunk serialiser and its identity queue, in the
+  // COMPOSED console. `geom_cs_head_tile_i` is the only input of the
+  // group and is held at tile 0 -- this bench does not walk, it only
+  // asserts that the producer ran and that its detectors stayed quiet.
+  logic [31:0] geom_tidq_underflow_o;
+  logic [31:0] geom_tidq_overflow_o;
+  logic [31:0] geom_tidq_unnamed_o;
+  logic [31:0] geom_cs_chunks_o;
+  logic [31:0] geom_cs_refs_o;
+  logic [31:0] geom_cs_tiles_o;
+  logic [31:0] geom_cs_chain_break_o;
+  logic [31:0] geom_cs_head_clash_o;
+  logic [31:0] geom_cs_truncated_o;
+  logic [31:0] geom_cs_sunk_o;
+  logic [ 9:0] geom_cs_head_tile_i = 10'd0;
+  logic [31:0] geom_cs_head_chunk_o;
+  logic        geom_cs_head_valid_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -6632,6 +6649,22 @@ module tb_zhao_console_core_smoke
     // whole 200,000-cycle budget on any run that refuses a job. That costs
     // nothing but time in production -- and it is exactly the case the slot-
     // overflow mutant creates deliberately.
+    // NOTE FOR THE MERGE, 2026-09-26 (CHUNKSER). This wait is DEFECTIVE at
+    // `50714814` and the repair is NOT here: it landed with TERRTRI at
+    // `0e43dc6b`, which found the same thing from the other side and changed
+    // no RTL at all. This packet reproduced it independently -- the loop
+    // terminates on `N_TERR_REC` while the check below asserts against
+    // `terr_lq_issued_o`, so it stops while the loader still owes completions
+    // and the bench then reports `3 jobs produced 4 loaded ... at guard=0`.
+    // `guard=0` is the tell: a wait that waited zero cycles was not waiting.
+    //
+    // A LOCAL FIX WAS WRITTEN, MEASURED AND THEN REVERTED ON PURPOSE. With it
+    // the plain smoke passes at this packet's HEAD -- raster pixels=2560,
+    // frames_admitted=1, and `paramarena chunks=10 frames=1`, which is entry
+    // I54 producing real chunks in the COMPOSED console. It is reverted
+    // because duplicating a landed repair on a shared bench buys nothing and
+    // costs the coordinator a conflict on lines this packet does not own.
+    // TAKE TERRTRI's VERSION.
     while (((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
              terr_pl_pages_refused_o) < N_TERR_REC) &&
            (guard < 200000)) begin
