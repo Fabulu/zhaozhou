@@ -220,6 +220,38 @@ everything in this subsection after the two measured constants is arithmetic.
   question and a measured baseline, not an architecture packet with an open
   decision.
 
+## AND MATERIAL'S DOWNSTREAM HALF IS ONE STEP WORSE THAN THE ENTRY RECORDS
+
+Found while checking rather than inheriting, and it sharpens §3 above: material
+is not "one missing link at a boundary". Entry `I34`'s FABRICSINK block says the
+authored triple *"DIES AT `proj_out_*` — WHICH IS ENTRY I13"*. **That port no
+longer exists** (two occurrences in `zhao_console_core.sv`, both comments). The
+`I13` note at `:11995-12002` (CARRIAGE, 2026-09-26) says the triangle, its raw
+w *and its layer-E triple* are now *"CONSUMED IN THIS MODULE"* by
+`u_terrain_clipfeed`. **True of the triangle and the w; false of the triple.**
+
+Counted by hand, because `tests/shell/v3_closure_inherited.vlt` waives
+`UNUSEDSIGNAL` across whole directories and the linter therefore cannot see it:
+
+* `tcf_tri_mat_a_w`, `_mat_b_w`, `_weight_w` — **exactly two occurrences each**:
+  the declaration at `:19568` and the projector's write at `:19705-19707`.
+  **No reader.**
+* `zhao_terrain_clipfeed` **has no material input port at all**; its material
+  outputs are the GEOM `{set, id, mode}` trio driven from constants at that
+  file's `:695-697`.
+
+The triple now has the same status as `tcf_tri_ad/bd/cd_w`, which the *same*
+comment block openly declares *"DELIBERATELY NOT USED"* — the difference is that
+those say so and the triple does not.
+
+**Retiring a port is not connecting a lane.** The triple went from *visibly*
+dangling at two module boundaries, where the closure gate and a reader could
+both see it, to *invisibly* dangling on an internal wire — and the register's
+`I13` row shrank in the same change. That is `CLAUDE.md`'s `.gitignore` chapter
+wearing RTL. **Nothing is changed here**: the seam is `I13`'s and TERRAINTEX is
+live on it. It is recorded so the next packet does not inherit *"material ends
+at a boundary"* when it ends before one.
+
 ## A DANGLING SPEC REFERENCE FOUND IN PASSING, NOT REPAIRED HERE
 
 `design/ops.yml:522-523` cites `spec/qformats.md §material-ids` and
