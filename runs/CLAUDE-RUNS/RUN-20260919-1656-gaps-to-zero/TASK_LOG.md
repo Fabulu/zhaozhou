@@ -2863,3 +2863,52 @@ ABI check), and the earth-stall measurement I owe the I34 escalation.
 
 **Register 5.** Reachable to **1** without the owner; **not to 0** --
 `reports/OWNER-ESCALATION-20260926-I34.md`, indexed in `reports/DOCKET.md`.
+
+### 2026-09-26 - THE LIKE-FOR-LIKE LANDED. Phase 3 is real; the DSP win was not.
+
+`zhao_console_core@post-palram-sizing`, 1,574 s, **on `5CEBA9F31C7` -- the same
+part `@edgeclose` used**. Both `map_only`, both clean. **This pair may be
+differenced; the earlier pair may not.**
+
+| | `@edgeclose` | `@post-palram-sizing` | delta |
+|---|---:|---:|---:|
+| combinational ALUTs | 294,872 | **265,558** | **-29,314** |
+| logic registers | 405,872 | **312,898** | **-92,974** |
+| block memory bits | 3,009,171 | 3,220,980 | +211,809 |
+| DSP blocks | 375 | **369** | **-6** |
+
+**Registers -92,974, 23%.** PALRAM measured -98,696 at the leaf; the console
+shows -92,974 after four gap-closing packets added their own state back. **The
+biggest optimization on the board survived composition.**
+
+**ALUTs -29,314, and the number is better than it looks** -- the tree GREW by ten
+declared sources between the two rows, so **the delta is NET of every gap closed
+in between.**
+
+**Memory +211,809** -- the M10K those registers moved into. The trade working in
+both columns at once, with memory still at 57%.
+
+**AND THE DSP DELTA IS -6, NOT -247.** 15.27's artefact call is confirmed: same
+part, 369 against 375. ATTRSETUP measured -9 at the leaf, the console shows -6.
+**A rounding error against a 329% overage -- the DSP problem is untouched**, as
+15.22 said it would be.
+
+**MY REGISTER CLAIM IS NOW MEASURED, NOT ARGUED.** Same tree reads **312,898**
+sizing and **312,114** shipping -- **784 apart, 0.25%.** It holds; the 92,974
+stands.
+
+Against the shipping part: ALUTs **317%** (was 352), registers **187%** (was
+242), DSP **329%** (was 335), memory **57%**. Three ceilings still breached, and
+the SHAPE changed: registers came down hardest, logic came down, **DSP did not
+move and is now the axis with no programme built against it.**
+
+**No fit since. No placement result, no Fmax, no ALM figure anywhere -- on
+purpose.**
+
+### WHERE I AM
+
+**Running:** WALKSWAP (`I55`) and FLOPARRAY, the latter interim and waiting on
+its five smoke controls. **At the cap of two.** **Queued:** CELLCARRY (`I13`),
+the I56 completion, and the earth-stall measurement owed to the I34 escalation.
+
+**Register 5.**
