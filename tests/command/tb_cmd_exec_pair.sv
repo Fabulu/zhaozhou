@@ -148,6 +148,8 @@ module tb_cmd_exec_pair #(
     output logic [15:0] env_sun_pitch_o,
     output logic [15:0] env_sun_colour_o,
     output logic [15:0] env_ambient_o,
+    output logic [31:0] env_terr_mat_set_o,
+    output logic [15:0] env_terr_mat_id_o,
     output logic [31:0] envs_issued_o,
     // R41: SetPopulation 0x0303, lowered to PART.POP.
     output logic        pop_valid_o,
@@ -474,6 +476,8 @@ module tb_cmd_exec_pair #(
       .env_sun_pitch_o (env_sun_pitch_o),
       .env_sun_colour_o(env_sun_colour_o),
       .env_ambient_o   (env_ambient_o),
+      .env_terr_mat_set_o(env_terr_mat_set_o),
+      .env_terr_mat_id_o (env_terr_mat_id_o),
       .envs_issued_o   (envs_issued_o),
       .pop_valid_o       (pop_valid_o),
       .pop_ready_i       (pop_ready_i),

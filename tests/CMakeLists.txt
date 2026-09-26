@@ -7454,6 +7454,53 @@ add_test(NAME lint_terrain_uvlane
 set_tests_properties(lint_terrain_uvlane PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.CLIPFEED's MATERIAL IDENTITY (entry I13 items (a)/(b), TERRAINMAT)
+#
+# The derivation `zhao_terrain_clipfeed` gained on 2026-09-26: the block no
+# longer declares MATMODE_NONE from a localparam, it DERIVES the mode from the
+# host's SetEnvironment terrain material. Proves all three arms by stimulus --
+# including THE ORPHAN (an id with no set), which is reachable at this block's
+# boundary and therefore owes no committed mutant -- that the 32-bit set and
+# 16-bit id arrive UNNARROWED, and that the identity is LATCHED on the
+# triangle's accept beat rather than read live off a frame-global register
+# while the triangle is in flight.
+#
+# SCOPE: this is NOT the directed test entry I13 records as owed for the whole
+# block. It says nothing about the perspective multiply, the palette ladder or
+# the depth converter. That debt stands; this pays the part TERRAINMAT created.
+add_executable(test_terrain_clipfeed_mat_directed terrain/terrain_clipfeed_mat_directed.cpp)
+target_link_libraries(test_terrain_clipfeed_mat_directed PRIVATE zhao_harness)
+verilate(test_terrain_clipfeed_mat_directed
+  PREFIX Vtb_terrain_clipfeed_mat
+  TOP_MODULE tb_terrain_clipfeed_mat
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_clipfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shademod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_overw_sat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_clipfeed_mat.sv)
+add_test(NAME terrain_clipfeed_mat_directed COMMAND test_terrain_clipfeed_mat_directed)
+set_tests_properties(terrain_clipfeed_mat_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_terrain_clipfeed
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_clipfeed
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/terrain
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/geometry
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/raster
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/field
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_clipfeed.sv)
+set_tests_properties(lint_terrain_clipfeed PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ---------------------------------------------------------------------------
 # TERRAIN.PATCH (phase 6, ZH-033)
 #

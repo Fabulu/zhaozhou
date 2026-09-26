@@ -273,6 +273,14 @@ module tb_zhao_twod_chain #(
   assign stamp_ready_i    = 1'b1;
   assign draw_ready_i     = 1'b1;
   assign upl_ready_i      = 1'b1;
+  // TERRAINMAT, 2026-09-26: `zhao_cmd_exec` gained two SetEnvironment
+  // outputs for terrain's material identity. This bench binds it with
+  // `.*`, which needs a declared net per port -- an implicit one is NOT
+  // created for a `.*` connection, which is how this file failed to
+  // elaborate the moment the ports landed. Declared and unread here: this
+  // bench is about the 2-D compositor chain and has no terrain arm.
+  logic [31:0] env_terr_mat_set_o;
+  logic [15:0] env_terr_mat_id_o;
   assign env_ready_i      = 1'b1;
   assign pop_ready_i      = 1'b1;
   assign tfld_ready_i     = 1'b1;

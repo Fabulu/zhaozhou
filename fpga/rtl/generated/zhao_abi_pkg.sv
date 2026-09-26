@@ -915,7 +915,9 @@ package zhao_abi_pkg;
   // SetEnvironment 0x0311: 48-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
-    logic [95:0] pad;  // 12 zero byte(s) @36
+    logic [47:0] pad;  // 6 zero byte(s) @42
+    logic [15:0] terrain_material_id;  // u16 @40
+    logic [31:0] terrain_material_set;  // handle32 @36  // handle32 {index:24, generation:8}
     logic [31:0] fog_far;  // fx16 = Q16.16 in 32 bits (qformats.md) @32
     logic [31:0] fog_near;  // fx16 = Q16.16 in 32 bits (qformats.md) @28
     logic [7:0] fog;  // fog_mode @27
@@ -949,7 +951,9 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_FOG = 27;
   localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_FOG_NEAR = 28;
   localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_FOG_FAR = 32;
-  localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_PAD = 36;
+  localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_SET = 36;
+  localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_ID = 40;
+  localparam int unsigned ZHAO_SET_ENVIRONMENT_OFF_PAD = 42;
 
   // EmitAudioEvent 0x0400: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -2583,7 +2587,9 @@ package zhao_abi_pkg;
       v[ZHAO_SET_ENVIRONMENT_OFF_FOG*8 +: 8] = c.fog;
       v[ZHAO_SET_ENVIRONMENT_OFF_FOG_NEAR*8 +: 32] = c.fog_near;
       v[ZHAO_SET_ENVIRONMENT_OFF_FOG_FAR*8 +: 32] = c.fog_far;
-      v[ZHAO_SET_ENVIRONMENT_OFF_PAD*8 +: 96] = c.pad;
+      v[ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_SET*8 +: 32] = c.terrain_material_set;
+      v[ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_ID*8 +: 16] = c.terrain_material_id;
+      v[ZHAO_SET_ENVIRONMENT_OFF_PAD*8 +: 48] = c.pad;
       zhao_pack_set_environment = v;
     end
   endfunction
@@ -2605,7 +2611,9 @@ package zhao_abi_pkg;
       c.fog = v[ZHAO_SET_ENVIRONMENT_OFF_FOG*8 +: 8];
       c.fog_near = v[ZHAO_SET_ENVIRONMENT_OFF_FOG_NEAR*8 +: 32];
       c.fog_far = v[ZHAO_SET_ENVIRONMENT_OFF_FOG_FAR*8 +: 32];
-      c.pad = v[ZHAO_SET_ENVIRONMENT_OFF_PAD*8 +: 96];
+      c.terrain_material_set = v[ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_SET*8 +: 32];
+      c.terrain_material_id = v[ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_ID*8 +: 16];
+      c.pad = v[ZHAO_SET_ENVIRONMENT_OFF_PAD*8 +: 48];
       zhao_unpack_set_environment = c;
     end
   endfunction
@@ -3520,7 +3528,7 @@ package zhao_abi_pkg;
           if (zhao_bytes_nonzero(p, base, 162, 14)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_SET_ENVIRONMENT: begin
-          if (zhao_bytes_nonzero(p, base, 36, 12)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 42, 6)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DEBUG_FRAME_BLIT: begin
           if (zhao_bytes_nonzero(p, base, 18, 2)) zhao_record_pad_nonzero = 1'b1;

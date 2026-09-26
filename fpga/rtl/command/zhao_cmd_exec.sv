@@ -557,6 +557,18 @@ module zhao_cmd_exec
     output logic [15:0] env_sun_pitch_o,
     output logic [15:0] env_sun_colour_o,   // rgb565
     output logic [15:0] env_ambient_o,      // rgb565
+    // TERRAIN'S MATERIAL IDENTITY (TERRAINMAT, 2026-09-26), allocated out of
+    // this record's own declared pad -- see `spec/commands.zidl`'s
+    // SetEnvironment. It rides the SAME `env_valid_o` handshake and the SAME
+    // shadow/verdict atomicity as the four light fields above, because it is
+    // one more field of ONE record: a consumer can never see this frame's
+    // terrain material beside the previous frame's sun. It is NOT a light-bank
+    // word and `zhao_light_env` does not read it; the composer forks it to the
+    // terrain arm. A ZERO set is MATMODE_NONE, which is what every capture
+    // written before this field existed says, so the default is the old
+    // behaviour rather than a new one.
+    output logic [31:0] env_terr_mat_set_o,
+    output logic [15:0] env_terr_mat_id_o,
     output logic [31:0] envs_issued_o,
 
     // ---- R41: SetPopulation 0x0303, the population descriptor ---------------
@@ -3087,12 +3099,25 @@ module zhao_cmd_exec
   localparam int unsigned OFF_EN_PITCH = ZHAO_SET_ENVIRONMENT_OFF_SUN_PITCH;
   localparam int unsigned OFF_EN_SUN   = ZHAO_SET_ENVIRONMENT_OFF_SUN_COLOUR;
   localparam int unsigned OFF_EN_AMB   = ZHAO_SET_ENVIRONMENT_OFF_AMBIENT;
+  localparam int unsigned OFF_EN_TMS   = ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_SET;
+  localparam int unsigned OFF_EN_TMI   = ZHAO_SET_ENVIRONMENT_OFF_TERRAIN_MATERIAL_ID;
   initial begin
     if ((OFF_EN_AMB + 2) >= ZHAO_SET_ENVIRONMENT_BYTES)
       $fatal(1, "zhao_cmd_exec: SetEnvironment's ambient reaches the record's last byte; the capture races rec_done");
+    // THE SAME GUARD, FOR THE SAME REASON, ON THE TWO FIELDS ADDED 2026-09-26.
+    // `en_dirty` is raised by `rec_done`, which lands on the record's LAST
+    // byte, so a field whose last byte IS that byte would be captured on the
+    // same edge the shadow is declared complete. These two end at byte 42 of
+    // 48 and the guard pins it rather than leaving a reader to re-derive it.
+    if ((OFF_EN_TMI + 2) >= ZHAO_SET_ENVIRONMENT_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetEnvironment's terrain_material_id reaches the record's last byte; the capture races rec_done");
+    if ((OFF_EN_TMS + 4) != OFF_EN_TMI)
+      $fatal(1, "zhao_cmd_exec: SetEnvironment's terrain material pair is not contiguous; the ABI moved under this decoder");
   end
 
   logic [15:0] en_yaw, en_pitch, en_sun, en_amb;
+  logic [31:0] en_tms;
+  logic [15:0] en_tmi;
   logic        en_dirty;
   wire en_byte_c = (st == EX_STAGE) && take && in_rec_region
                 && (r_op == ZHAO_OP_SET_ENVIRONMENT);
@@ -3100,10 +3125,12 @@ module zhao_cmd_exec
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       en_yaw <= 16'd0; en_pitch <= 16'd0; en_sun <= 16'd0; en_amb <= 16'd0;
+      en_tms <= 32'd0; en_tmi <= 16'd0;
       en_dirty <= 1'b0;
       env_valid_o <= 1'b0;
       env_sun_yaw_o <= 16'd0; env_sun_pitch_o <= 16'd0;
       env_sun_colour_o <= 16'd0; env_ambient_o <= 16'd0;
+      env_terr_mat_set_o <= 32'd0; env_terr_mat_id_o <= 16'd0;
       envs_issued_o <= 32'd0;
     end else begin
       if (en_byte_c) begin
@@ -3115,6 +3142,12 @@ module zhao_cmd_exec
           en_sun   <= {pkt_byte_i, en_sun[15:8]};
         if ((rpos >= 16'(OFF_EN_AMB))   && (rpos < 16'(OFF_EN_AMB + 2)))
           en_amb   <= {pkt_byte_i, en_amb[15:8]};
+        // Little-endian, LSB first, exactly as the four fields above: each new
+        // byte enters at the top and the shadow shifts down.
+        if ((rpos >= 16'(OFF_EN_TMS))   && (rpos < 16'(OFF_EN_TMS + 4)))
+          en_tms   <= {pkt_byte_i, en_tms[31:8]};
+        if ((rpos >= 16'(OFF_EN_TMI))   && (rpos < 16'(OFF_EN_TMI + 2)))
+          en_tmi   <= {pkt_byte_i, en_tmi[15:8]};
         if (rec_done) en_dirty <= 1'b1;
       end
 
@@ -3132,6 +3165,13 @@ module zhao_cmd_exec
           env_sun_pitch_o  <= en_pitch;
           env_sun_colour_o <= en_sun;
           env_ambient_o    <= en_amb;
+          // ONE RECORD, ONE ENABLE. These two are loaded by the same
+          // assignment as the four above, so a consumer cannot be handed this
+          // frame's terrain material beside the previous frame's sun -- the
+          // metadata-swap shape CLAUDE.md's chapter is about, refused by
+          // construction rather than by a counter watching for it.
+          env_terr_mat_set_o <= en_tms;
+          env_terr_mat_id_o  <= en_tmi;
         end
         en_dirty <= 1'b0;
       end

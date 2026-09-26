@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
-//   zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
+//   abi_identity_sha256 = 06b5df38e6c838560bc66f7fe8e3359965c1fa87b91b90b91a318cd50373edae
+//   zidl_sha256         = 8dd155e8e7eabd5926a636b14ca241bbe6b67c32afca3b6822cdb7026328cbda
 
 // ---------------------------------------------------------------- abi ---
 
@@ -382,6 +382,8 @@ export interface ZhRecordSetEnvironment {
   fog: number; // fog_mode (u8), @11
   fog_near: number; // fx16 (Q16.16, int32), @12
   fog_far: number; // fx16 (Q16.16, int32), @16
+  terrain_material_set: number; // handle32, @20
+  terrain_material_id: number; // u16, @24
 }
 
 /** EmitAudioEvent 0x0400: 32-byte record (implemented) */
@@ -587,7 +589,7 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: true, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
   { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [39, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0, 1, 2, 3, 4, 5] }] },
   { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
-  { name: 'SetEnvironment', opcode: 0x0311, recordBytes: 48, implemented: true, padOffsets: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 11, size: 1, values: [0, 1] }] },
+  { name: 'SetEnvironment', opcode: 0x0311, recordBytes: 48, implemented: true, padOffsets: [26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 11, size: 1, values: [0, 1] }] },
   { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DebugBootstrap', opcode: 0xF001, recordBytes: 64, implemented: false, padOffsets: [], enumChecks: [] },
   { name: 'DebugFrameBlit', opcode: 0xF002, recordBytes: 48, implemented: true, padOffsets: [2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 1, size: 1, values: [0, 1, 2] }] },
@@ -1022,6 +1024,8 @@ export function zhaoSampleSetEnvironment(): ZhRecordSetEnvironment {
     fog: 0,
     fog_near: 547351,
     fog_far: 88599,
+    terrain_material_set: 704643082,
+    terrain_material_id: 10022,
   };
 }
 
@@ -1499,7 +1503,9 @@ export function zhaoPackSetEnvironment(r: ZhRecordSetEnvironment, w: ZhByteWrite
   w.u8(r.fog);
   w.fx16(r.fog_near);
   w.fx16(r.fog_far);
-  w.zeros(12); // pad
+  w.u32(r.terrain_material_set);
+  w.u16(r.terrain_material_id);
+  w.zeros(6); // pad
 }
 
 export function zhaoPackEmitAudioEvent(r: ZhRecordEmitAudioEvent, w: ZhByteWriter): void {
@@ -1696,6 +1702,6 @@ export function zhaoPackDrawSprite(r: ZhRecordDrawSprite, w: ZhByteWriter): void
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x7D, 0x8E, 0x03, 0x5C, 0xD3, 0x80, 0x21, 0x4A, 0xD3, 0xF6, 0xBD, 0x44, 0x33, 0x7E, 0x5A, 0xE2, 0x66, 0x19, 0x03, 0xCB, 0xF3, 0x8E, 0x68, 0x35, 0x98, 0x90, 0x05, 0x47, 0xC5, 0x86, 0x42, 0xCE];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x08, 0x43, 0xB3, 0x29, 0xCE, 0xA3, 0xBA, 0x4D, 0xF5, 0x31, 0x75, 0x25, 0x05, 0x37, 0xDC, 0x69, 0x5B, 0x64, 0x75, 0x91, 0x44, 0xCC, 0x7F, 0x53, 0xB9, 0x07, 0x41, 0x1D, 0x57, 0xBD, 0xF7, 0x2B];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x06, 0xB5, 0xDF, 0x38, 0xE6, 0xC8, 0x38, 0x56, 0x0B, 0xC6, 0x6F, 0x7F, 0xE8, 0xE3, 0x35, 0x99, 0x65, 0xC1, 0xFA, 0x87, 0xB9, 0x1B, 0x90, 0xB9, 0x1A, 0x31, 0x8C, 0xD5, 0x03, 0x73, 0xED, 0xAE];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x8D, 0xD1, 0x55, 0xE8, 0xE7, 0xEA, 0xBD, 0x59, 0x26, 0xA6, 0x36, 0xB1, 0x4C, 0xA2, 0x41, 0xBB, 0xE6, 0xB6, 0x7C, 0x32, 0xAF, 0xCA, 0x3B, 0x68, 0x22, 0xCD, 0xB7, 0x02, 0x63, 0x28, 0xCB, 0xDA];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

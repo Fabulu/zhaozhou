@@ -926,7 +926,35 @@ command SetEnvironment 0x0311 implemented {
   fog_mode fog;       // fog law: qformats 8 (far <= near disables — deterministic no-op)
   fx16 fog_near;      // world metres
   fx16 fog_far;       // world metres
-  pad[12];
+  // ABI v4+ (2026-09-26, TERRAINMAT): TERRAIN'S MATERIAL IDENTITY, allocated
+  // out of this record's own mandatory-zero pad. Before it, terrain declared
+  // MATMODE_NONE at GEOM.CLIP's door, published `sample_count = 0`, and asked
+  // the texture island for nothing -- so no amount of correct u/v made a
+  // texel (console entry I13's items (a) and (b)).
+  //
+  // WHY THE SAME BYTES AND NOT A NEW OPCODE. `capture_format.md` 1.3 permits
+  // reinterpreting a record's declared pad when the opcode, the field set and
+  // the sizes do not move; `MaterialRecord.fragment_state` is the ratified
+  // precedent. The whole of the meaning rests on ZERO KEEPING ITS MEANING: a
+  // zero `terrain_material_set` is MATMODE_NONE, which is exactly what every
+  // committed capture's terrain declares today, so no capture changes by a
+  // pixel and the `abi version` does not move (no opcode, field set or size
+  // does either). The validator still zero-checks the remaining pad[6].
+  //
+  // SCOPE, AND ITS LIMIT IS DECLARED RATHER THAN DISCOVERED. This pair is
+  // FRAME-scoped. The reference resolves terrain's tileset PER PATCH --
+  // `reference/src/zrender/render_frame.cpp:373`,
+  // `if (patch->tileset_id != 0) ts = res.tileset(patch->tileset_id);` -- so
+  // a frame whose patches carry DIFFERENT `tileset_id`s is not expressible
+  // through this pair alone. The refinement is the page header's own
+  // `tileset_id` (terrain_rules 2.1 +12) overriding `terrain_material_id`
+  // per patch, and it changes NO field here and NO port downstream: only what
+  // drives `mat_id_i` on `zhao_terrain_clipfeed`. Recorded in console entry
+  // I13 with its carriage costed. This field is a strict capability increase
+  // over the zero tilesets terrain could present before it.
+  handle32[material_set] terrain_material_set;  // 0 = MATMODE_NONE (today's behaviour)
+  u16 terrain_material_id;                      // record within that set; the frame default
+  pad[6];
 }
 
 // ---- audio (implemented in wave 3 — D7)
