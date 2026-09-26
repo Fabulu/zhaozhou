@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "ec149c48cbc99d77560aec72cf985d56aead78d1",
+    "newestRunCommit":  "4bb430cf3a23208bf3fed7dbf06d0e732af96c5b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1322,6 +1322,27 @@
                        "partialStage":  "analysis_and_synthesis",
                        "registers":  146414,
                        "blockMemoryBits":  33408,
+                       "dspBlocks":  6,
+                       "virtualPins":  1305
+                   },
+                   {
+                       "module":  "zhao_geom_arenabin@arenainfer",
+                       "status":  "map_only",
+                       "sourceCommit":  "4bb430cf3a23208bf3fed7dbf06d0e732af96c5b",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "measuredDevice":  "5CSEBA6U23I7",
+                       "sourceDigest":  "4d2e914d08f05e394f33bc98e30bc4dc345ef9f9e8e5c69e71d137eb791969b1",
+                       "variantOf":  "zhao_geom_arenabin",
+                       "seconds":  37.1,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1010,
+                       "blockMemoryBits":  291456,
                        "dspBlocks":  6,
                        "virtualPins":  1305
                    },

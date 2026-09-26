@@ -88,11 +88,60 @@ WHAT IT LOOKS FOR, and why each one
    with no "Inferred RAM" line for it at all. Quartus cannot map a memory whose
    OUTER selection is dynamic; it builds a mux across every element of the
    outer dimension and the whole array falls into flip-flops, however correct
-   the writes are. The fix is one flat array per lane inside a `generate`, with
-   the outer index a genvar.
+   the writes are.
+
+   **THIS RULE'S REMEDY USED TO READ "one flat array per lane inside a
+   `generate`, with the outer index a genvar", AND THAT IS MEASURED WRONG.**
+   Corrected 2026-09-26 by ARENAINFER. `zhao_geom_arenabin` followed exactly
+   that advice -- fourteen flat one-dimensional arrays inside a generate-for --
+   and every one of them went to flip-flops, 145,152 bits of them. See rule 6:
+   the generate FOR-LOOP is itself a killer. The remedy is one flat array per
+   lane AT A MODULE'S SCOPE -- its own module, instantiated inside the loop --
+   and `zhao_dc_sdp_ram` is that module.
 
    This rule is the reason the checker exists at all: it was blind to the exact
-   construct that cost the fit it was written to prevent.
+   construct that cost the fit it was written to prevent. Its remedy then sent
+   the next block into a different one, which is the same lesson one level up:
+   ADVICE IN A TOOL IS A CLAIM, and this one had never been measured.
+6. AN ARRAY DECLARED INSIDE A `generate for` BLOCK.
+
+   Added 2026-09-26 by ARENAINFER. An array whose declaration sits inside a
+   genvar-indexed generate block is NOT A RAM CANDIDATE for Quartus 17.0.2 --
+   AT ONE ITERATION, with every other property held fixed.
+
+   Nine map_only rows on 5CSEBA6U23I7, one variable per arm, one bank of
+   576 x 18 (tests/probes/zhao_arenabin_stage_probe.sv, table in
+   reports/synthesis/arenabin/STAGE-PROBE-ROWS.txt):
+
+       production, verbatim (generate-FOR)   10,386 reg        0 bits  CONTROL
+       read address as its own net           10,386 reg        0 bits
+       write enable without the genvar cmp   10,386 reg        0 bits
+       read in its own always_ff             10,386 reg        0 bits
+       ramstyle = "no_rw_check"              10,386 reg        0 bits
+       declared at MODULE SCOPE                   0 reg   10,368 bits
+       declared in a generate-IF, no loop         0 reg   10,368 bits
+       a SUBMODULE instance inside the loop       0 reg   18,432 bits
+
+   IT IS THE LOOP, NOT "A GENERATE". A generate-`if` scope infers perfectly.
+   This matters because rule 4's remedy sends you straight into it, and
+   because the shape carries NONE of QUARTUS_GOTCHAS section 10's other three
+   killers -- the read is synchronous, nothing resets the array, the element
+   is written whole. It is the killer a clean block can have.
+
+   The remedy is a submodule: put the array at some module's scope and
+   instantiate that module inside the loop. On the real block that took
+   `zhao_geom_arenabin` from 146,414 registers / 33,408 memory bits to
+   1,010 / 291,456, same device, same 6 DSP, same 1,305 virtual pins, with
+   the map itself falling 1,025.7 s -> 37.1 s.
+
+   SCOPE AND ITS LIMIT, STATED. The detector walks begin/end nesting and asks
+   whether the declaration sits inside a `for`-opened block within a
+   `generate` region and outside any procedural block. An `always_ff` written
+   WITHOUT begin/end inside a generate would leave its procedural flag set
+   until the next `generate`/`endgenerate` keyword, which can only make this
+   rule MISS, never cry wolf -- stated because that is the flattering
+   direction and this file's own header is about instruments that fail
+   quietly.
 
 It is deliberately CONSERVATIVE about what counts as an array: only unpacked
 declarations with a depth, since those are what become memories. A packed
@@ -351,6 +400,104 @@ def rule5_fire_test():
     return "pal_q" in fired and "twodim_m" not in fired
 
 
+# RULE 6'S STRUCTURE SCAN. See rule 6 in the header for the nine rows.
+GEN_TOK = re.compile(
+    r"\b(generate|endgenerate|begin|end|for|always_ff|always_comb|always_latch"
+    r"|always|initial|function|task)\b")
+
+
+def genfor_spans(text):
+    """Character ranges that lie inside a genvar-indexed `generate for` block.
+
+    Comment-stripped text only. The scan is structural rather than regex-shaped
+    because the question is about NESTING, and a pattern that matched
+    `for (...) begin` would answer it for the first bank and not for an array
+    declared three lines further down.
+
+    `end` is matched with a word boundary, so `endcase`, `endgenerate`,
+    `endmodule`, `endfunction` and `endtask` do not pop the stack -- which is
+    what lets `case ... endcase` inside a loop body be ignored for free.
+    """
+    spans = []
+    in_gen = 0
+    stack = []          # one entry per open `begin`: True if it is a generate-for
+    opens = []          # start offsets of the currently open generate-for blocks
+    proc_depth = None   # stack depth at which the current procedural block began
+    pending_for = False
+    for m in GEN_TOK.finditer(text):
+        t = m.group(1)
+        if t == "generate":
+            in_gen += 1
+            proc_depth = None      # a generate keyword cannot be inside a process
+        elif t == "endgenerate":
+            in_gen = max(0, in_gen - 1)
+            proc_depth = None
+        elif t in ("always_ff", "always_comb", "always_latch", "always",
+                   "initial", "function", "task"):
+            proc_depth = len(stack)
+        elif t == "for":
+            pending_for = (in_gen > 0 and proc_depth is None)
+        elif t == "begin":
+            stack.append(pending_for)
+            if pending_for:
+                opens.append(m.end())
+            pending_for = False
+        elif t == "end":
+            if stack:
+                if stack.pop() and opens:
+                    spans.append((opens.pop(), m.start()))
+            if proc_depth is not None and len(stack) <= proc_depth:
+                proc_depth = None
+    # An unterminated block (a file this scan cannot balance) is reported as
+    # reaching the end of the text rather than silently dropped: a span that is
+    # too LONG produces a visible false alarm, a dropped one produces silence.
+    while opens:
+        spans.append((opens.pop(), len(text)))
+    return spans
+
+
+# RULE 6'S POSITIVE CONTROL AND ITS TWO NEGATIVE ONES.
+#
+#   loop_q   inside a generate FOR -- rule 6 MUST fire. This is
+#            zhao_geom_arenabin's shape before the 2026-09-26 repair.
+#   gif_q    inside a generate IF -- it must NOT fire; arm 8 measured this
+#            shape inferring at 10,368 bits, so firing here would be a lie.
+#   flat_q   module scope, with a PROCEDURAL for-loop in an always_ff between
+#            it and the generate -- it must NOT fire. This is the case the
+#            structure scan exists to get right; a `for` inside a process is
+#            not a generate loop.
+_RULE6_FIRE = (
+    "  logic [17:0] flat_q [576];\n"
+    "  always_ff @(posedge clk) begin\n"
+    "    for (int unsigned k = 0; k < 4; k++) begin\n"
+    "      flat_q[wa] <= wd;\n"
+    "    end\n"
+    "  end\n"
+    "  genvar gs;\n"
+    "  generate\n"
+    "    if (EN) begin : g_if\n"
+    "      logic [17:0] gif_q [576];\n"
+    "      always_ff @(posedge clk) begin\n"
+    "        gif_q[wa] <= wd;\n"
+    "      end\n"
+    "    end\n"
+    "    for (gs = 0; gs < 14; gs = gs + 1) begin : g_stage\n"
+    "      logic [17:0] loop_q [576];\n"
+    "      always_ff @(posedge clk) begin\n"
+    "        loop_q[wa] <= wd;\n"
+    "      end\n"
+    "    end\n"
+    "  endgenerate\n"
+)
+
+
+def rule6_fire_test():
+    """True if rule 6 fires ONLY on the generate-for declaration."""
+    fired = {n for n, why in check_file_text(_RULE6_FIRE)
+             if "generate FOR-LOOP" in why}
+    return fired == {"loop_q"}
+
+
 def check_file(path, sizes=None):
     raw = io.open(path, encoding="utf-8", errors="replace").read()
     return check_file_text(raw, sizes)
@@ -366,6 +513,7 @@ def check_file_text(raw, sizes=None):
     text = strip_comments(raw)
     procs = processes(text)
     vals = local_params(text)
+    gfspans = genfor_spans(text)
     findings = []
 
     arrays = {}
@@ -385,6 +533,25 @@ def check_file_text(raw, sizes=None):
                 sizes[name] = array_bits(widths, depths, vals)
 
     for name in sorted(arrays):
+        # 6. DECLARED INSIDE A `generate for` BLOCK.
+        #
+        # Checked FIRST and BEFORE the write scan's `continue`, because this
+        # one is a property of the DECLARATION and is fatal on its own. Putting
+        # it after `if not writes: continue` would have hidden it for any array
+        # whose write the scan cannot see -- which is exactly the compounding
+        # blindness this file's header is about.
+        d_lo = arrays[name][0]
+        if any(lo <= d_lo < hi for lo, hi in gfspans):
+            findings.append(
+                (name, "DECLARED INSIDE A generate FOR-LOOP -- not a RAM "
+                       "candidate for Quartus 17.0.2, at one iteration, with "
+                       "every other property clean. A generate-IF scope is "
+                       "fine; the LOOP is the killer. Put the array at a "
+                       "module's scope -- its own module, instantiated inside "
+                       "the loop -- as zhao_dc_sdp_ram is. Measured: "
+                       "zhao_geom_arenabin 146,414 reg / 33,408 bits -> "
+                       "1,010 / 291,456."))
+
         # Writes: `name [i] <=` or `name [i][j] <=`, whitespace tolerated,
         # because a spaced index is the same construct and missing it would
         # make this check quietly useless.
@@ -645,6 +812,19 @@ def main():
               "silent rule 5 reads exactly like a design with no part-select "
               "writes, which is how zhao_geom_drawjob kept 98,304 flip-flops "
               "while this file called it clean.")
+        return 2
+
+    # Rule 6 owes the same proof in THREE directions, because its two ways of
+    # being wrong are opposite: a generate-IF is innocent (measured: it infers)
+    # and a PROCEDURAL for-loop is innocent, so a rule that fired on either
+    # would bury the real finding under the ~175 generate blocks in this tree.
+    if not rule6_fire_test():
+        print("RAM-INFERENCE CHECKER BROKEN: rule 6 no longer fires on an "
+              "array declared inside a generate FOR-LOOP, or it now fires on a "
+              "generate-IF or on a procedural for. Refusing to report: this is "
+              "the rule that was ABSENT while zhao_geom_arenabin held 145,152 "
+              "bits in flip-flops and this file reported five other arrays -- "
+              "all five of which inferred -- and said nothing about that one.")
         return 2
 
     args = [a for a in sys.argv[1:] if not a.startswith("--")]

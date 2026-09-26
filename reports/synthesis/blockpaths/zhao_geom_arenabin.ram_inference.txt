@@ -4,11 +4,17 @@ Distilled from the Analysis & Synthesis RAM Summary of each map_only row, on
 the shipping part 5CSEBA6U23I7. The full *.map.rpt is 1.2 MB and gitignored by
 size; this is the twelve lines that carry the finding.
 
-THE FINDING: only the five MODULE-SCOPE directory arrays infer. The staging
-array -- 14 banks of 576 x 18 = 145,152 bits, declared INSIDE A GENERATE --
-does not appear in any row's RAM Summary, in any variant, and goes to
-flip-flops. That is the whole of the difference between the block's declared
-177,984 bits of on-chip state and its measured 33,408 block memory bits.
+THE FINDING AS ARENACOMPOSE LEFT IT: only the five MODULE-SCOPE directory
+arrays infer. The staging array -- 14 banks of 576 x 18 = 145,152 bits,
+declared INSIDE A GENERATE -- does not appear in any row's RAM Summary, in any
+variant, and goes to flip-flops. That is the whole of the difference between
+the block's declared 177,984 bits of on-chip state and its measured 33,408
+block memory bits.
+
+THAT IS NOW FIXED. Read the `@arenainfer` row at the bottom of this file
+first: the cause is the generate FOR-LOOP specifically, and all fourteen banks
+infer once the array sits at a module's scope. The three rows below are kept
+as the BEFORE half of the pair.
 
 zhao_geom_arenabin@arenacompose
   Total registers 146414   Total block memory bits 33,408
@@ -40,3 +46,35 @@ zhao_geom_arenabin@ramstyle
     nch_ram_rtl_0    9216 bits
     tail_ram_rtl_0   10368 bits
 
+zhao_geom_arenabin@arenainfer   (ARENAINFER, 2026-09-26, THE REPAIR)
+  Total registers 1,010   Total block memory bits 291,456
+  inferred:
+    fill_ram_rtl_0                      2304 bits
+    head_ram_rtl_0                     10368 bits
+    hv_ram_rtl_0                         576 bits
+    hv_ram_rtl_1                         576 bits
+    nch_ram_rtl_0                       9216 bits
+    tail_ram_rtl_0                     10368 bits
+    g_stage[0..13].u_bank  14 x        18432 bits   <- ALL FOURTEEN, SDP
+                                     --------
+                                      291,456 bits
+
+  146,414 -> 1,010 REGISTERS. 33,408 -> 291,456 MEMORY BITS. Same 6 DSP, same
+  1,305 virtual pins, same device 5CSEBA6U23I7, rtlCleanAtHead TRUE, and the
+  map itself fell from 1,025.7 s to 37.1 s -- the 27x collapse QUARTUS_GOTCHAS
+  section 10 records for SURFACE.SHEET, and a second, independent sign that
+  the flip-flops really are gone rather than merely uncounted.
+
+  THE CAUSE, measured with tests/probes/zhao_arenabin_stage_probe.sv at one
+  bank, nine rows, one variable per arm (see STAGE-PROBE-ROWS.txt beside this
+  file): AN ARRAY DECLARED INSIDE A GENVAR-INDEXED `generate for` BLOCK IS NOT
+  A RAM CANDIDATE FOR QUARTUS 17.0.2. A generate-IF scope infers. Module scope
+  infers. A submodule instance inside the for-loop infers. The for-loop itself,
+  at ONE iteration, does not. Read-during-write, the shared read/write process,
+  the genvar-compare write enable and every attribute tried are innocent.
+
+  The banks are `zhao_dc_sdp_ram` instances now, which is `1 << ADDR_W` deep,
+  so each is 1024 x 18 rather than 576 x 18. THE EXTRA DESCRIBED BITS ARE NOT
+  EXTRA SILICON -- an M10K holds 512 words at this width, so both depths are
+  two blocks per bank, 28 for the fourteen. A MAP DOES NOT REPORT M10K BLOCKS;
+  only a fit does, and no fit of this block exists.
