@@ -6062,6 +6062,217 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST. FIELDMAJOR, 2026-09-26: THE FIELD-MAJOR FORM IS
+//      BENCHED AND IT MEETS THE CONTRACT -- BUT ONLY IF THE EXECUTOR IS ALSO
+//      COMPOSED AT ITS GATED WIDTH. Register 3 -> 3, bare. Nothing composed.
+//
+//      Full decision record, in the owner's format:
+//      `reports/DECISION-20260926-I34-FIELDMAJOR-BENCHED.md`.
+//
+//      (F1) THE BLOCK BELOW LEFT ITS ALTERNATIVE AS ARITHMETIC AND SAID SO.
+//           "Everything in this subsection after the two measured constants is
+//           arithmetic"; "it has not been built or benched"; "whoever takes the
+//           performance packet ... should bench it." It is benched.
+//           `tests/terrain/tb_terrain_fieldmajor.sv` elaborates
+//           `zhao_terrain_field_walk` AND `zhao_terrain_patch_acc` together --
+//           each has carried a full differential test since 2026-09-20 and THE
+//           TWO HAD NEVER BEEN ELABORATED IN ONE DESIGN, because each test does
+//           the other block's job in C++. `fieldmajor_census.cpp` drives them:
+//           233 checks, 0 failures. Nothing was rewritten and no production RTL
+//           changed.
+//
+//      (F2) THE INTERCEPT FELL 5.21x, WHICH IS THE CLAIM THE COMMISSION RESTS
+//           ON. The engine is modelled at the SAME seam and the SAME declared
+//           latencies `composepub_acceptance` case 11 uses, because the
+//           field-major counterpart of `zhao_field_earth_adapter` DOES NOT
+//           EXIST -- that is what 13.1 commissions -- so the one axis the two
+//           measurements differ on is the stream order.
+//
+//             clocks(L) = 851 + (297/depth)*L    field-major   THIS BENCH
+//             clocks(L) = 4,431 + 1,089*L        vertex-major  case 11
+//
+//             engine lat   d=1      d=2      d=4      d=8      d=16     d=32
+//             0            851      851      851      851      851      851
+//             3            1742     1150     854      854      854      854
+//             20           6791     3683     2129     1352     961      871
+//             50           15701    8153     4379     2492     1531     1072
+//             80           24611    12623    6629     3632     2101     1372
+//
+//           4,431 clocks (4.07/vertex, 74% of the 6,000 contract) becomes 851
+//           (0.78/vertex, 14%): 273 INIT + 298 association + 276 DRAIN + 4
+//           phase-gap clocks, all measured. THE INTERCEPT IS THE SAME AT EVERY
+//           DEPTH, asserted -- depth buys SLOPE and never the floor.
+//
+//           AND THE BLOCK BELOW WAS RIGHT TO WITHIN EIGHT CLOCKS. It predicted
+//           "273 INIT + 297 UPDATE + 273 DRAIN ~= 843". That is recorded
+//           because this campaign expects a brief's numbers to come apart under
+//           measurement and THIS ONE HELD; the eight are the DRAIN pipeline's
+//           three, the descriptor's acceptance edge and the phase gaps the
+//           accumulator's header requires of its caller.
+//
+//           THE SLOPE FELL 3.67x FROM LANE WIDTH ALONE -- 297 against 1,089 at
+//           depth 1, ASSERTED rather than observed, exactly as case 11 asserts
+//           its 1,089. The walker deletes the per-VERTEX round trip and pays
+//           one per GROUP OF FOUR.
+//
+//      (F3) AND THE FINDING NOBODY HAD PRICED: THE FIELD-MAJOR WALK ALONE DOES
+//           NOT CLOSE IT. Two of the six depths are REAL CONFIGURATIONS, read
+//           out of the tree rather than chosen:
+//             * depth 2 = THE CONSOLE AS COMPOSED TODAY. This file gives
+//               `u_field_host` `.FAB_LANES(1)` and leaves `PROGS` at its
+//               default 8, so the executor is a SCALAR datapath with eight
+//               contexts and a four-point group occupies FOUR of them.
+//               12,623 clocks at L=80 -- STILL 2.10x THE CONTRACT.
+//             * depth 32 = THE ENGINE'S OWN GATED CONFIGURATION.
+//               `tests/CMakeLists.txt`'s `lint_field_v3_engine_shipped` runs
+//               `-GCTX=32 -GLANES=4`, and `zhao_field_host.sv:115` names the
+//               same seven values with its own warning beside them: "a fit
+//               that does not override them is measuring the bench." At
+//               LANES=4 one context IS one four-point group.
+//               1,372 clocks at L=80 -- 0.23x the contract, 4.4x margin.
+//           So 13.1's stream-order swap and the executor's WIDTH are ONE
+//           prerequisite, not two. Build the walk, leave `FAB_LANES(1)`
+//           composed, and the association still costs 12,623 clocks -- a 2.1x
+//           miss reached AFTER the whole subsystem swap. The contract is met
+//           from depth 4 upward, and the crossing lies between the console's
+//           present configuration and the engine's own.
+//
+//      (F4) L=80 IS CHARGED DELIBERATELY AND IT IS THE CONSERVATIVE COLUMN.
+//           `zhao_field_earth_adapter.sv:302-306` prices a run at REGS +
+//           IN_LANES + program length; at this console REGS(32) + IN_LANES(15)
+//           is 47 clocks of REGISTER AND LANE TRANSPORT, and the walker's whole
+//           purpose is that it GENERATES the points -- its header: "This block
+//           deletes that transport." So the field-major machine should not be
+//           paying most of that 80. It is charged anyway, in every number
+//           above, because the job is to report a cost and not to award a
+//           discount that has not been measured. The verdict does not need it.
+//
+//      (F4b) AND 851 IS A CEILING. CHECKING IT TOOK MOST OF IT BACK, WHICH IS
+//           THE UNFLATTERING DIRECTION AND THEREFORE THE ONE TO STATE FIRST.
+//           `zhao_terrain_patch_acc`'s header names its consumer: "the
+//           composed-height cache write port, A PLAIN ONE-GROUP-PER-CLOCK
+//           SINK". THAT SINK DOES NOT EXIST.
+//           `zhao_terrain_compcache_front.sv:414` is
+//             assign st_ready_o = fill_active_q && !at_capacity_c && !wphase_q;
+//           and `wphase_q` ALTERNATES, because one record is two writes (top
+//           plane, bottom plane). The composed cache takes ONE VERTEX EVERY TWO
+//           CLOCKS, so a four-vertex group costs EIGHT clocks and not one -- an
+//           8x mismatch between the accumulator's stated assumption and the
+//           block it names.
+//
+//           AND THAT IS WHERE THE VERTEX-MAJOR INTERCEPT COMES FROM. Case 11's
+//           OWN negative control -- the same 1,089-vertex walk with an EMPTY
+//           field list -- is 2,252 clocks, 2.07 per vertex: this cache, at this
+//           rate, with no field machinery involved at all. So MORE THAN HALF of
+//           the 4,431-clock vertex-major intercept is the cache write, and a
+//           field-major machine feeding the SAME cache does not escape it by
+//           walking differently.
+//
+//           SO THE BLOCK BELOW'S ATTRIBUTION OF ITS OWN INTERCEPT IS INCOMPLETE,
+//           and it is the one claim of PATCHV2's this packet found wanting. It
+//           reads "4.07 clocks per vertex ... the per-vertex walk, the adapter's
+//           own two clocks, and the consumer's accept". THE LARGEST SINGLE TERM
+//           IS NONE OF THOSE THREE -- it is the compose cache's
+//           two-clocks-per-record write port, and it is the term the
+//           stream-order swap does NOT remove on its own.
+//
+//           AND THE SOURCE IS NARROW TOO, AND THAT ONE IS STRUCTURAL. INIT
+//           reads the authored lattice at four vertices per clock in the bench;
+//           `zhao_terrain_pagestream.sv`'s S_EMIT advances ONE VERTEX PER CLOCK,
+//           which is the ceiling of the only authored-lattice producer in this
+//           tree. And the field-major form CANNOT HIDE IT, for a reason that is
+//           not a slow wire: in the VERTEX-MAJOR form intake and write OVERLAP
+//           -- one streaming pass whose rate is the slowest stage, which is
+//           exactly why case 11's no-field control is 2,252 clocks and not
+//           1,089 + 2,178 -- while `zhao_terrain_patch_acc`'s INIT/ACCUM/DRAIN
+//           are EXCLUSIVE PHASES by its own header. SO THE FIELD-MAJOR MACHINE
+//           PAYS FOR THE LATTICE TWICE WHERE VERTEX-MAJOR PAYS ONCE. That is a
+//           real cost of the transpose and NO DOCUMENT IN THIS TREE HAD PRICED
+//           IT.
+//
+//           MEASURED, by `fieldmajor_census` case 4 -- same association, same
+//           reduction, three rates:
+//             both ends group-wide (the acc's ports as built):   851 total, 14%
+//             only the cache write port left narrow          : 2,762 total, 46%
+//             BOTH ENDS AT THE TREE'S REAL PRODUCER/CONSUMER : 3,581 total, 60%
+//             vertex-major, for comparison                   : 4,431 total, 74%
+//           THE FLOOR FALLS 5.21x AT BEST AND 1.24x AS THE TREE STANDS, AND
+//           ALL THREE ARE BELOW THE 74% THE SWAP WAS COMMISSIONED TO REMOVE.
+//           THE VERDICT SURVIVES EVERY THROTTLE AND THE HEADLINE DOES NOT: the
+//           field-major intercept is A RANGE, and which end applies is decided
+//           by two blocks neither PATCHV2 nor this packet's brief mentions.
+//           Widening the cache write port is worth 1,911 clocks per association
+//           and widening the lattice source a further 819 -- together 2,730,
+//           more than three times what the whole field-major walk costs. Case 4
+//           also asserts what must hold at every rate: the reduction is
+//           IDENTICAL, so a slower producer or consumer costs clocks and never
+//           the answer.
+//
+//
+//      (F4c) AND THE CELL THAT DECIDES IT IS MEASURED, NOT ADDED UP. Case 3's
+//           grid was taken with both ends group-wide, so adding its slope to
+//           case 4's intercept would be ARITHMETIC ON TWO MEASUREMENTS -- the
+//           very thing this packet was sent to replace. So it is RUN: the
+//           engine's own GATED depth (32), the conservative L=80, and BOTH ends
+//           at the rates this tree runs today --
+//             4,102 CLOCKS = 0.68x THE 6,000 CONTRACT. IT FITS, 1.5x MARGIN,
+//           with the reduction still the ratified oracle's answer at every
+//           vertex, asserted in the same case. THE SAME CELL AT DEPTH 8 DOES
+//           NOT FIT: 3,581 + 34*80 = 6,301, over. So the executor's width is
+//           not a nicety, IT IS THE GATE, and the verdict is: build the
+//           field-major machine, and widen the executor, the cache write port
+//           and the lattice source WITH it, or it does not pay.
+//      (F5) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD RATHER THAN
+//           INHERITED. Composing `zhao_terrain_patch_v2` is a BUILD, the
+//           decision is taken, and what remains is SEQUENCE. Named so it is not
+//           re-inherited as an open question:
+//             1. A FIELD-MAJOR EARTH ADAPTER DOES NOT EXIST -- it is exactly
+//                what this bench's C++ engine model stands in for.
+//             2. `zhao_terrain_patch_acc` HAS NO BACKPRESSURE. Its own header:
+//                "no ready/valid and no backpressure on any phase", with phase
+//                exclusivity and the two idle cycles as CALLER OBLIGATIONS the
+//                RTL does not enforce. 13.4 commissions that repair.
+//             3. A PATCH PHASE OWNER / LIFECYCLE (stage and drain before
+//                publication) does not exist.
+//             4. `zhao_terrain_veljoin` MUST BE RE-HOMED -- re-checked, and the
+//                block below is right: `.vtx_fire_i(tpt_vtx_valid &&
+//                tpt_vtx_ready)` and `.a_covers_i(terr_pt_fld_covers_o)`, both
+//                vertex-major, on a chain reaching `zhao_part_collide` today.
+//             5. THE EXECUTOR'S WIDTH, per (F3) -- new on the bill.
+//             6. THE COMPOSE CACHE'S WRITE PORT, per (F4b) -- also new, 1,911
+//                clocks per association.
+//             7. THE AUTHORED-LATTICE SOURCE, per (F4b) -- `pagestream` emits
+//                one vertex/clock and INIT wants four; a further 819 clocks,
+//                and STRUCTURAL rather than incidental, because the exclusive
+//                phases cannot overlap intake with write the way the
+//                vertex-major pass does.
+//           What changed is that the refusal now sits on a MEASURED NUMBER
+//           saying the build is worth making, instead of on arithmetic.
+//
+//      (F6) THE CONTROLS, AND ONE FIRED ON ITS AUTHOR. The census first
+//           asserted `ceil(297/depth)` as the slope and THE MEASURED SURFACE
+//           REFUSED IT IN FIVE CELLS: the line is PIECEWISE, and while L <
+//           depth the walker's one-group-per-clock is the binding rate, so
+//           latency is free. It now asserts the exact accept recurrence
+//           `t_k = max(t_(k-1)+1, t_(k-D)+L+1)` for all 30 cells. Separately,
+//           driving `up_mask_i` to 0xF instead of the walker's mask was fired
+//           deliberately: case 2 reports 920 wrong vertices and case 1 reports
+//           96, so the coverage controls are load-bearing and have been SEEN to
+//           fail. The counter's own negative control is a footprint covering no
+//           lattice vertex -- `verts_covered_o` 0 WHILE THE WALK STILL RUNS ALL
+//           297 GROUPS, so the zero is about coverage and not an idle machine.
+//           NO ASSERTION ASSERTS THE BUDGET in either direction.
+//
+//      (F7) THE ENTRY DOES NOT CLOSE AND MUST NOT BE REPORTED AS CLOSING. Its
+//           remaining content is unchanged in kind -- material's absent
+//           encoding, and the clock contract -- except that the second now has
+//           a ROUTE and a named build list as well as a verdict. Velocity was
+//           demonstrated intact AFTER this work: `terrain_veljoin_directed`
+//           19/0, `part_terrain_tap_directed` 1297/0, `composepub_acceptance`
+//           122/0 with case 11 reproducing 91,551 at L=80 to the digit.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST. PATCHV2, 2026-09-26: THE FOUR-CHANNEL SENTENCE
 //      IS RETIRED, AND THE COST IS MEASURED AT LAST. Register 4 -> 4, bare.
 //
