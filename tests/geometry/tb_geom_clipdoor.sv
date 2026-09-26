@@ -191,6 +191,10 @@ module tb_geom_clipdoor #(
       .c_behind_i       (c_behind_c),
       .c_src_id_i       (c_src_id_c),
       .c_untex_i        (c_untex_c),
+      // NORMALMAP 2026-09-26: tied low. This harness exercises the GRANT and
+      // the hold law; the detail declaration is field placement the block does
+      // not interpret, and its own directed coverage is at the console.
+      .c_detail_i       ({2{1'b0}}),
       .c_cull_mode_i    (c_cull_c),
       .c_attr_a_i       (c_attr_a_c),
       .c_attr_b_i       (c_attr_b_c),
@@ -222,6 +226,9 @@ module tb_geom_clipdoor #(
       .o_behind_o       (o_behind_o),
       .o_src_id_o       (o_src_id_o),
       .o_untex_o        (o_untex_o),
+      /* verilator lint_off PINCONNECTEMPTY */
+      .o_detail_o       (),
+      /* verilator lint_on PINCONNECTEMPTY */
       .o_cull_mode_o    (o_cull_mode_o),
       .o_attr_a_o       (o_attr_a_c),
       .o_attr_b_o       (o_attr_b_c),

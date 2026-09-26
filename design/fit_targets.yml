@@ -2683,6 +2683,14 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_clipfeed.sv
       - fpga/rtl/terrain/zhao_terrain_shademod.sv
       - fpga/rtl/geometry/zhao_geom_overw_sat.sv
+      # TERRAIN.NORMALMAP and its page host (NORMALMAP, 2026-09-26). The
+      # block is instantiated inside zhao_texture_island_v3_top, beside
+      # u_persp, because that is the only place a terrain fragment's
+      # perspective-correct (u, v) exists; the loader is in the core
+      # because it needs MEM.UPLOAD's publication and a MEM.GUARD
+      # requester.
+      - fpga/rtl/terrain/zhao_terrain_normalmap.sv
+      - fpga/rtl/terrain/zhao_terrain_normalloader.sv
       - fpga/rtl/terrain/zhao_terrain_island_dir.sv
       - fpga/rtl/forge/zhao_forge_shadow.sv
       - fpga/rtl/mem/zhao_mem_upload.sv
@@ -3177,6 +3185,14 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_clipfeed.sv
       - fpga/rtl/terrain/zhao_terrain_shademod.sv
       - fpga/rtl/geometry/zhao_geom_overw_sat.sv
+      # TERRAIN.NORMALMAP and its page host (NORMALMAP, 2026-09-26). The
+      # block is instantiated inside zhao_texture_island_v3_top, beside
+      # u_persp, because that is the only place a terrain fragment's
+      # perspective-correct (u, v) exists; the loader is in the core
+      # because it needs MEM.UPLOAD's publication and a MEM.GUARD
+      # requester.
+      - fpga/rtl/terrain/zhao_terrain_normalmap.sv
+      - fpga/rtl/terrain/zhao_terrain_normalloader.sv
       # Added 2026-09-19, packet P-GEOM. THREE blocks, each with a REAL
       # producer or a REAL consumer inside this closure and not one of them a
       # file added to make a count move:

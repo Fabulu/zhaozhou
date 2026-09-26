@@ -120,7 +120,7 @@ logic [31:0] texture_samples_w;
   logic earlyz_hold_valid_w;
   logic [1:0] skid_level_w;
   logic stage_candidate_valid_w;
-  logic [489:0] stage_candidate_data_w;
+  logic [490:0] stage_candidate_data_w;
   logic stage_fragment_valid_w;
   logic [7:0] stage_fragment_addr_w;
   logic [23:0] stage_fragment_depth_w;
@@ -198,7 +198,7 @@ logic [31:0] texture_samples_w;
       6'd27: signature_word_c = stage_candidate_data_w[159:128];
       6'd28: signature_word_c = stage_candidate_data_w[287:256];
       6'd29: signature_word_c = stage_candidate_data_w[415:384];
-      6'd30: signature_word_c = {22'd0, stage_candidate_data_w[489:480]};
+      6'd30: signature_word_c = {21'd0, stage_candidate_data_w[490:480]};
       6'd31: signature_word_c = stage_fragment_state_w;
       6'd32: signature_word_c = {stage_fragment_depth_w, stage_fragment_addr_w};
       6'd33: signature_word_c = {stage_fragment_src_w, stage_fragment_status_w,
@@ -552,6 +552,17 @@ logic [31:0] texture_samples_w;
       .attribute_idle_o(attribute_idle_w),
       .earlyz_hold_valid_o(earlyz_hold_valid_w), .skid_level_o(skid_level_w),
       .stage_candidate_valid_o(stage_candidate_valid_w),
+      // TERRAIN.NORMALMAP's write port, tied off for characterization, and its
+      // evidence left open (NORMALMAP, 2026-09-26). This top measures AREA and
+      // Fmax; the detail block is INSIDE the closure and is therefore measured,
+      // which is the point -- what it is not given here is traffic.
+      .dtl_we_i(1'b0), .dtl_sel_i(1'b0), .dtl_addr_i(13'd0), .dtl_data_i(32'd0),
+      /* verilator lint_off PINCONNECTEMPTY */
+      .cnt_detail_fragments_o(), .cnt_detail_zeroed_o(),
+      .cnt_detail_railed_o(), .cnt_detail_cold_o(),
+      .cnt_detail_published_o(), .cnt_detail_applied_o(),
+      .err_detail_lost_o(), .dtl_table_ready_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
       .stage_candidate_data_o(stage_candidate_data_w),
       .stage_fragment_valid_o(stage_fragment_valid_w),
       .stage_fragment_addr_o(stage_fragment_addr_w),

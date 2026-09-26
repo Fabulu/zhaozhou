@@ -11,11 +11,11 @@ package zhao_render_texture_pkg;
   // ---- ratified packet widths ------------------------------------------------
   localparam int unsigned RASTER_EARLYZ_KEY_W          = 80;
   localparam int unsigned RASTER_CONTINUATION_TAIL_W   = 48;
-  localparam int unsigned TEXTURE_V3_REQUEST_W         = 362;
+  localparam int unsigned TEXTURE_V3_REQUEST_W         = 363;
   localparam int unsigned RASTER_CONTINUATION_W        = 128;
   localparam int unsigned AUX_SURFACE_CTX_W            = 224;
-  localparam int unsigned RASTER_PRETEX_W              = 490;
-  localparam int unsigned RASTER_EARLYZ_PAYLOAD_W      = 410;
+  localparam int unsigned RASTER_PRETEX_W              = 491;
+  localparam int unsigned RASTER_EARLYZ_PAYLOAD_W      = 411;
   localparam int unsigned RASTER_RETIRE_CTX_W          = 160;
   localparam int unsigned TEXTURE_RESULT_W             = 48;
 
@@ -139,8 +139,25 @@ package zhao_render_texture_pkg;
   localparam int unsigned TEXREQ_V_OVER_W_HI           = 329;
   localparam int unsigned TEXREQ_U_OVER_W_LO           = 330;
   localparam int unsigned TEXREQ_U_OVER_W_HI           = 361;
+  // TERRAIN.NORMALMAP's per-fragment declaration (NORMALMAP, 2026-09-26).
+  // PLACED AT THE TOP SO NO EXISTING OFFSET MOVES: every `TEXREQ_*` above is
+  // bit-identical to the 362-bit layout, and only the totals change. A field
+  // inserted lower would have shifted eleven frozen offsets and every capture
+  // that decodes them, for no gain.
+  localparam int unsigned TEXREQ_DETAIL_REQUIRED_LO     = 362;
+  localparam int unsigned TEXREQ_DETAIL_REQUIRED_HI     = 362;
 
   typedef struct packed {
+    // WHY IT RIDES THE REQUEST AND NOT A SIDE WIRE. The declaration is made per
+    // TRIANGLE at the door and consumed per FRAGMENT several stages later, with
+    // Early-Z and a two-entry skid in between. `zhao_raster_tile_pipe_v2` builds
+    // this field in the SAME `always_comb` that builds `post_earlyz`, from the
+    // same per-triangle register, so it traverses Early-Z inside the payload the
+    // fragment carries. A parallel one-bit pipeline beside it would separate on
+    // the first stall and hand one triangle's declaration to another's fragment
+    // with every counter balancing -- which is CLAUDE.md's metadata-swap
+    // chapter, and is the reason `post_earlyz` is carried this way already.
+    logic                        detail_required;      // [362]
     logic signed [31:0]          u_over_w;             // [361:330]
     logic signed [31:0]          v_over_w;             // [329:298]
     logic         [1:0]          sample_count;         // [297:296]
@@ -160,14 +177,18 @@ package zhao_render_texture_pkg;
   // ---- the 410-bit opaque Early-Z payload -----------------------------------
   localparam int unsigned EZPAY_TEXTURE_REQUEST_LO       = 0;
   localparam int unsigned EZPAY_TEXTURE_REQUEST_HI       = 361;
-  localparam int unsigned EZPAY_STENCIL_REFERENCE_LO     = 362;
-  localparam int unsigned EZPAY_STENCIL_REFERENCE_HI     = 369;
-  localparam int unsigned EZPAY_EFFECT_TAG_LO             = 370;
-  localparam int unsigned EZPAY_EFFECT_TAG_HI             = 377;
-  localparam int unsigned EZPAY_VERTEX_ALPHA_LO           = 378;
-  localparam int unsigned EZPAY_VERTEX_ALPHA_HI           = 385;
-  localparam int unsigned EZPAY_VERTEX_RGB_LO             = 386;
-  localparam int unsigned EZPAY_VERTEX_RGB_HI             = 409;
+  // THE REQUEST GREW ONE BIT AT ITS TOP (NORMALMAP, 2026-09-26), so every
+  // offset ABOVE it moves by exactly one and nothing below it moves at all.
+  localparam int unsigned EZPAY_DETAIL_REQUIRED_LO        = 362;
+  localparam int unsigned EZPAY_DETAIL_REQUIRED_HI        = 362;
+  localparam int unsigned EZPAY_STENCIL_REFERENCE_LO     = 363;
+  localparam int unsigned EZPAY_STENCIL_REFERENCE_HI     = 370;
+  localparam int unsigned EZPAY_EFFECT_TAG_LO             = 371;
+  localparam int unsigned EZPAY_EFFECT_TAG_HI             = 378;
+  localparam int unsigned EZPAY_VERTEX_ALPHA_LO           = 379;
+  localparam int unsigned EZPAY_VERTEX_ALPHA_HI           = 386;
+  localparam int unsigned EZPAY_VERTEX_RGB_LO             = 387;
+  localparam int unsigned EZPAY_VERTEX_RGB_HI             = 410;
 
   typedef struct packed {
     zhao_raster_continuation_tail_v2_t raster_continuation;
@@ -221,10 +242,10 @@ package zhao_render_texture_pkg;
   localparam int unsigned PRETEX_IN_TILE_ADDR_HI        = 489;
   localparam int unsigned PRETEX_EARLYZ_PAYLOAD_LO      = 0;
   localparam int unsigned PRETEX_EARLYZ_PAYLOAD_HI      = 409;
-  localparam int unsigned PRETEX_EARLYZ_KEY_LO          = 410;
-  localparam int unsigned PRETEX_EARLYZ_KEY_HI          = 489;
-  localparam int unsigned PRETEX_CONTINUATION_LO        = 362;
-  localparam int unsigned PRETEX_CONTINUATION_HI        = 489;
+  localparam int unsigned PRETEX_EARLYZ_KEY_LO          = 411;
+  localparam int unsigned PRETEX_EARLYZ_KEY_HI          = 490;
+  localparam int unsigned PRETEX_CONTINUATION_LO        = 363;
+  localparam int unsigned PRETEX_CONTINUATION_HI        = 490;
   localparam int unsigned PRETEX_TEXTURE_REQUEST_LO     = 0;
   localparam int unsigned PRETEX_TEXTURE_REQUEST_HI     = 361;
 
@@ -290,20 +311,20 @@ package zhao_render_texture_pkg;
   localparam bit WIDTH_CONTRACT_OK =
       (RASTER_EARLYZ_KEY_W == 80) &&
       (RASTER_CONTINUATION_TAIL_W == 48) &&
-      (TEXTURE_V3_REQUEST_W == 362) &&
+      (TEXTURE_V3_REQUEST_W == 363) &&
       (RASTER_CONTINUATION_W == 128) &&
       (AUX_SURFACE_CTX_W == 224) &&
-      (RASTER_PRETEX_W == 490) &&
-      (RASTER_EARLYZ_PAYLOAD_W == 410) &&
+      (RASTER_PRETEX_W == 491) &&
+      (RASTER_EARLYZ_PAYLOAD_W == 411) &&
       (RASTER_RETIRE_CTX_W == 160) &&
       (TEXTURE_RESULT_W == 48) &&
       ($bits(zhao_raster_earlyz_key_v2_t) == 80) &&
       ($bits(zhao_raster_continuation_tail_v2_t) == 48) &&
-      ($bits(zhao_texture_v3_request_v2_t) == 362) &&
+      ($bits(zhao_texture_v3_request_v2_t) == 363) &&
       ($bits(zhao_raster_continuation_v2_t) == 128) &&
       ($bits(zhao_aux_surface_ctx_v2_t) == 224) &&
-      ($bits(zhao_raster_pretex_v2_t) == 490) &&
-      ($bits(zhao_raster_earlyz_payload_v2_t) == 410) &&
+      ($bits(zhao_raster_pretex_v2_t) == 491) &&
+      ($bits(zhao_raster_earlyz_payload_v2_t) == 411) &&
       ($bits(zhao_raster_retire_ctx_v2_t) == 160) &&
       ($bits(zhao_texture_result_v2_t) == 48);
 
@@ -356,10 +377,11 @@ package zhao_render_texture_pkg;
 
   localparam bit EZPAY_OFFSET_CONTRACT_OK =
       (EZPAY_TEXTURE_REQUEST_LO == 0) && (EZPAY_TEXTURE_REQUEST_HI == 361) &&
-      (EZPAY_STENCIL_REFERENCE_LO == 362) && (EZPAY_STENCIL_REFERENCE_HI == 369) &&
-      (EZPAY_EFFECT_TAG_LO == 370) && (EZPAY_EFFECT_TAG_HI == 377) &&
-      (EZPAY_VERTEX_ALPHA_LO == 378) && (EZPAY_VERTEX_ALPHA_HI == 385) &&
-      (EZPAY_VERTEX_RGB_LO == 386) && (EZPAY_VERTEX_RGB_HI == 409);
+      (EZPAY_DETAIL_REQUIRED_LO == 362) && (EZPAY_DETAIL_REQUIRED_HI == 362) &&
+      (EZPAY_STENCIL_REFERENCE_LO == 363) && (EZPAY_STENCIL_REFERENCE_HI == 370) &&
+      (EZPAY_EFFECT_TAG_LO == 371) && (EZPAY_EFFECT_TAG_HI == 378) &&
+      (EZPAY_VERTEX_ALPHA_LO == 379) && (EZPAY_VERTEX_ALPHA_HI == 386) &&
+      (EZPAY_VERTEX_RGB_LO == 387) && (EZPAY_VERTEX_RGB_HI == 410);
 
   localparam bit PRETEX_OFFSET_CONTRACT_OK =
       (PRETEX_PALETTE_GENERATION_LO == 0) && (PRETEX_PALETTE_GENERATION_HI == 7) &&
@@ -385,8 +407,8 @@ package zhao_render_texture_pkg;
       (PRETEX_INVW24_LO == 458) && (PRETEX_INVW24_HI == 481) &&
       (PRETEX_IN_TILE_ADDR_LO == 482) && (PRETEX_IN_TILE_ADDR_HI == 489) &&
       (PRETEX_EARLYZ_PAYLOAD_LO == 0) && (PRETEX_EARLYZ_PAYLOAD_HI == 409) &&
-      (PRETEX_EARLYZ_KEY_LO == 410) && (PRETEX_EARLYZ_KEY_HI == 489) &&
-      (PRETEX_CONTINUATION_LO == 362) && (PRETEX_CONTINUATION_HI == 489) &&
+      (PRETEX_EARLYZ_KEY_LO == 411) && (PRETEX_EARLYZ_KEY_HI == 490) &&
+      (PRETEX_CONTINUATION_LO == 363) && (PRETEX_CONTINUATION_HI == 490) &&
       (PRETEX_TEXTURE_REQUEST_LO == 0) && (PRETEX_TEXTURE_REQUEST_HI == 361);
 
   localparam bit RETIRE_OFFSET_CONTRACT_OK =
@@ -517,6 +539,7 @@ package zhao_render_texture_pkg;
     32'hA1B2_C3D4, 32'hD00D_F00D, 32'h1020_3040
   };
   localparam logic [TEXTURE_V3_REQUEST_W-1:0] TEXREQ_LAYOUT_EXPECTED = {
+    1'b1,
     32'h8102_0304, 32'h0506_0708, 2'b11, 8'h91, 8'hA2,
     3'b101, 8'hB3, 1'b1,
     32'hFEDC_BA98, 32'h7654_3210, 32'h89AB_CDEF, 32'h0123_4567,
@@ -568,6 +591,7 @@ package zhao_render_texture_pkg;
       texreq_layout_probe();
     zhao_texture_v3_request_v2_t value;
     value = '0;
+    value.detail_required = 1'b1;
     value.u_over_w = 32'sh8102_0304;
     value.v_over_w = 32'sh0506_0708;
     value.sample_count = 2'b11;

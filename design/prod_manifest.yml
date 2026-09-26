@@ -388,6 +388,28 @@ top:
   # shade through zhao_terrain_shademod's five-rung ladder into slots 3..5, and
   # offers the packet at the door. Terrain triangles reach a raster.
   - zhao_terrain_clipfeed
+  # TERRAIN.NORMALMAP AND ITS PAGE HOST, COMPOSED 2026-09-26 (NORMALMAP).
+  # Their `unused` rows are DELETED by this commit rather than reworded: both
+  # said OPEN DEFERRAL "until the fragment-seam wiring lands", and it landed.
+  # `zhao_terrain_normalmap` is instantiated inside
+  # `zhao_texture_island_v3_top` beside `u_persp` -- the only place in the
+  # machine where a terrain fragment's perspective-correct (u, v) exists, and
+  # not listed separately below for `zhao_terrain_shademod`'s reason: it is
+  # accounted for inside the island. `zhao_terrain_normalloader` is composed
+  # in `zhao_console_core` as requester J of the ENGINE1 asset window,
+  # because it needs MEM.UPLOAD's publication beat and MEM.GUARD.
+  #
+  # WHAT THE OLD ROWS GOT RIGHT AND WHAT CHANGED. Their refusal was correct
+  # every time it was written -- `f_detail_i` had no producer and terrain
+  # triangles reached no raster -- and BOTH halves expired: CARRIAGE gave
+  # terrain a raster on 2026-09-26, and the declaration now originates at
+  # `zhao_terrain_clipfeed`'s own `o_detail_o`. What they got WRONG is the
+  # sentence they inherited from `OWNER-DECISIONS` section 2, that "no port
+  # change on a composed block is required": the delta's consumer is the LIT
+  # COLOUR LANE and the seam is a real port on
+  # `zhao_raster_texture_stage_v3`, which is where
+  # `zref::terrain::normalmap_apply` is now transcribed.
+  - zhao_terrain_normalloader
   # zhao_terrain_shademod and zhao_geom_overw_sat are NOT listed here. They are
   # INSTANTIATED BY zhao_terrain_clipfeed above, so they are accounted for as
   # inside it; listing them again would be the double count this file's own
@@ -1557,7 +1579,6 @@ excluded:
   # do nothing. Excluded until the architecture in
   # reports/NORMALMAP-ARCHITECTURE.md is built. It is deliberately NOT in the
   # running fit, so the normal-map cost stays a clean measured delta.
-  - zhao_terrain_normalmap: unused  rebuilt to contract 2026-09-09 (zero-DSP, mip tail), directed-tested standalone; OPEN DEFERRAL until the fragment-seam wiring lands -- reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md. RE-MEASURED AND DELIBERATELY NOT COMPOSED 2026-09-25 (TERRAINAUX): f_detail_i still has ZERO producers in fpga/rtl -- one grep hit, the block's own file -- and terrain triangles still reach no raster, so composing it would move the completion register while changing not one pixel, which is the prefix this campaign forbids. WHAT DID CHANGE IN ITS FAVOUR: the terrain arm's fixture is no longer degenerate (the console smoke went 128-of-128 degenerate to 0-of-256 when the compose door was made to open), so the merge this block waits behind can now be MEASURED rather than only wired. Its seam remains I13's four items: invw24, the perspective multiply, NCLIENT 3 -> 4 on zhao_geom_clipdoor, and a terrain material identity. RE-MEASURED AND AGAIN DELIBERATELY NOT COMPOSED 2026-09-26 (CELLCARRY), and the seam is WIDER than this row records: section 2 of reports/OWNER-DECISIONS-20260920.md says "only f_detail_i lacks a producer ... no port change on a composed block is required", citing zhao_raster_texjoin_v2's f_* accept port -- but that block is instantiated ZERO times under fpga/rtl and THIS FILE marks it superseded and not shell-connected, and a grep of detail_i|detail_o across ALL of fpga/rtl/texture/ and fpga/rtl/raster/ returns ZERO hits. So the pair needs a detail port BUILT INTO A COMPOSED BLOCK as well as terrain fragments to exist. The capability is not in question (owner ruling D-8 ratifies the terrain detail path by name); the COST was understated. I13 also gained a FIFTH item that lane measured: the frozen textured law reference/src/zrender/terrain.cpp:633-637 quantises shade to a four-level palette ladder before a single s128 rounding, and no RTL in fpga/rtl implements that ladder (zero hits, positive control fired)
   # 2026-09-23 (gz/normalpyr, owner ruling R243 D-NORMALS-A "commission the
   # pyramid"): the UPLOAD half of that deferral is now BUILT and the deferral is
   # NARROWED to the fragment seam alone. DETAIL_NORMAL kind 16 is frozen
@@ -1578,7 +1599,6 @@ excluded:
   # `disconnected()` tests CLOSURE MEMBERSHIP, so instantiating the pair would
   # move the register 14 -> 13 while changing not one pixel. That is a gate
   # passing rather than a thing being right, and it is refused.
-  - zhao_terrain_normalloader: unused  built 2026-09-23 to spec/cartridge.md 4g, differenced against zref::normal_page (1,099 checks) with a committed one-cycle-verdict mutant as its positive control; OPEN DEFERRAL, same seam as zhao_terrain_normalmap (spec/cartridge.md 4g). VERIFIED STILL THE SAME SEAM 2026-09-25 (TERRAINAUX); composing the PAIR alone would still be a producer and a consumer with no fragment between them
   # TERRAIN.SHADE — the terrain base light, built 2026-09-09 to the exact
   # law (bit-exact vs the compiled shade_flat_tri_dir_unclamped, 4,142
   # checks). Zero DSP, one M10K, II ~147 against a 2,000-triangle/frame

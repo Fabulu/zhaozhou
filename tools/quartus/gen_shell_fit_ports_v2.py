@@ -283,6 +283,15 @@ DRIVERS = {
         'pal_load_gen_i', 'pal_load_idx_i', 'pal_load_rgb565_i',
         'pal_load_crc_ok_i',
     ),
+    # TERRAIN.NORMALMAP's config and tile-upload write port (NORMALMAP,
+    # 2026-09-26). Its own handler, not folded into `v3_palette`: the two are
+    # different destinations with different laws -- a palette entry is CRC'd
+    # and slot/generation sealed, a detail word is a flat address into a
+    # resident pyramid -- and the fit needs every bit of both to TOGGLE, which
+    # is the whole reason this table exists.
+    'v3_detail': (
+        'dtl_we_i', 'dtl_sel_i', 'dtl_addr_i', 'dtl_data_i',
+    ),
     'fill_responder': (
         'fill_req_ready_i', 'fill_data_valid_i', 'fill_data_i',
         'fill_refused_i',

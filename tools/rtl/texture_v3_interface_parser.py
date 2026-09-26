@@ -42,7 +42,14 @@ SUPPORTED_VERILATOR_VERSION = (
 )
 VERILATOR_JSON_SCHEMA_ID = "verilator-5.051-tree-json-v1"
 KNOWN_DUPLICATE_PACKAGE_PATH = "fpga/rtl/common/zhao_render_texture_pkg.sv"
-SUPPORTED_DUPLICATE_PACKAGE_SHA256 = "54f7a8399b02634f5cf0fb892fa271ead317406fe8f35caa8cbd80694ff9c162"
+# RE-PINNED 2026-09-26 (NORMALMAP), for TERRAIN.NORMALMAP's per-fragment
+# declaration. `zhao_texture_v3_request_v2_t` gained ONE bit AT ITS TOP --
+# `detail_required` at 362 -- so every existing TEXREQ_* offset is
+# bit-identical and only three totals moved (request 362 -> 363, Early-Z
+# payload 410 -> 411, pretex 490 -> 491). The package file therefore has a
+# new digest, which this constant is measuring and nothing more: it is the
+# KNOWN-DUPLICATE package's bytes, not the island's schema.
+SUPPORTED_DUPLICATE_PACKAGE_SHA256 = "e508be0729b828b8e8e8bb0aba34776adec17af2925e1b7236aad67f8a8d4fba"
 SUPPORTED_DUPLICATE_PROFILES = {
     (SCHEMA_FIXTURE_TOP, SCHEMA_FIXTURE_PURPOSE): {
         "count": 41,
@@ -147,9 +154,40 @@ SUPPORTED_DUPLICATE_PROFILES = {
     #   canonical_interface_sha256 MOVED      <- it hashes the source closure
     #                                            and the argv, and the closure
     #                                            gained one leaf
+    # RE-PINNED 2026-09-26 (NORMALMAP), AND THE COUNT MOVED AGAIN: 106 -> 107.
+    #
+    # THE ONE NEW MARKER, BY NAME:
+    #
+    #     added:   member_name='detail_required'
+    #     removed: (none)
+    #
+    # AND THE METHOD IS NOT THE ONE THE NOTE ABOVE USED, because that probe was
+    # WRITTEN AND THEN DISCARDED: replaying the committed manifest's own argv in
+    # a shadow tree returned 0 markers on BOTH sides, which is not 106 on the
+    # base side, so it failed the very check this file prescribes and its answer
+    # is not quoted. What is quoted instead is a source-level count of the same
+    # quantity: markers are STRUCTDTYPE members of the known-duplicate package,
+    # so the DELTA is the delta of that package's packed-struct members, and
+    # `zhao_render_texture_pkg.sv` went 41 -> 42 with exactly one new name.
+    # `detail_required` is the field `zhao_texture_v3_request_v2_t` gained so
+    # TERRAIN.NORMALMAP's per-fragment declaration can ride the request rather
+    # than a side wire that would desynchronise on the first stall. It is placed
+    # at the TOP of the request, so every other TEXREQ_* offset is bit-identical
+    # and only three totals moved.
+    #
+    #   ports                      IDENTICAL, all 120, PLUS the twelve this
+    #                              packet adds -- the island's interface DID
+    #                              move here, deliberately, which is the whole
+    #                              point of the entry it closes
+    #   parameters                 IDENTICAL, all 16
+    #   module_declaration_sha256  MOVED      <- the interface gained ports
+    #   top_source_sha256          MOVED      <- the body gained
+    #                                            `u_terrain_normalmap` and two
+    #                                            per-owner record arrays
+    #   canonical_interface_sha256 MOVED      <- closure and argv both moved
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
-        "count": 106,
-        "sha256": "4626a498b0442051f9bf22ad6166185a4132d162ecef7a4b498dab1e5e474812",
+        "count": 107,
+        "sha256": "86a0c5863523866962285ef57ae75fc315d5579447bc45c43d902b7bef031ca2",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})
@@ -188,6 +226,9 @@ PRODUCTION_SOURCE_CLOSURE = (
     # TEXTURE.SHEETMOD, 2026-09-25 (TERRAINAUX): the surface sheet's visible
     # effect, a LEAF of the selected root, so it precedes it.
     "fpga/rtl/texture/zhao_texture_sheetmod.sv",
+    # TERRAIN.NORMALMAP, 2026-09-26 (NORMALMAP): the per-fragment detail
+    # term, a LEAF of the selected root, so it precedes it.
+    "fpga/rtl/terrain/zhao_terrain_normalmap.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 

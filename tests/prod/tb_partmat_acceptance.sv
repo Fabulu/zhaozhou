@@ -224,6 +224,8 @@ module tb_partmat_acceptance #(
     .c_behind_i       (c_behind_c),
     .c_src_id_i       (c_src_id_c),
     .c_untex_i        (c_untex_c),
+    // NORMALMAP 2026-09-26: no client here is a heightfield.
+    .c_detail_i       ('0),
     .c_cull_mode_i    (c_cull_c),
     .c_attr_a_i       (c_attr_a_c),
     .c_attr_b_i       (c_attr_b_c),
@@ -252,6 +254,9 @@ module tb_partmat_acceptance #(
     .o_behind_o       (cd_o_behind),
     .o_src_id_o       (cd_o_src_id),
     .o_untex_o        (cd_o_untex),
+    /* verilator lint_off PINCONNECTEMPTY */
+    .o_detail_o       (),
+    /* verilator lint_on PINCONNECTEMPTY */
     .o_cull_mode_o    (cd_o_cull_mode),
     .o_attr_a_o       (cd_o_attr_a),
     .o_attr_b_o       (cd_o_attr_b),
@@ -294,6 +299,7 @@ module tb_partmat_acceptance #(
     .t_material_id_i  (cd_o_material_id),
     .t_material_mode_i(cd_o_material_mode),
     .t_vertex_alpha_i (cd_o_vertex_alpha),
+    .t_detail_i       (1'b0),
     .t_frag_state_i   (cd_o_frag_state),
     .t_quality_tier_i (cd_o_quality_tier),
     .t_valid_o        (mw_t_valid),
@@ -368,6 +374,9 @@ module tb_partmat_acceptance #(
     .pub_base_binding_o    (pub_base_binding_o),
     .pub_response_class_o  (pub_response_class_o),
     .pub_material_mode_o   (pub_material_mode_o),
+    /* verilator lint_off PINCONNECTEMPTY */
+    .pub_detail_o          (),
+    /* verilator lint_on PINCONNECTEMPTY */
     .pub_vertex_alpha_o    (pub_vertex_alpha_w),
     .pub_frag_state_o      (pub_frag_state_o),
 

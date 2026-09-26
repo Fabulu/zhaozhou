@@ -45,6 +45,8 @@ PACKET_B_SOURCES = (
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
     "fpga/rtl/texture/zhao_texture_sheetmod.sv",
+    # TERRAIN.NORMALMAP, 2026-09-26 (NORMALMAP): a LEAF of the selected root.
+    "fpga/rtl/terrain/zhao_terrain_normalmap.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
 )
 PACKET_C_SOURCES = (
@@ -96,8 +98,8 @@ PACKET_C_SOURCES = (
 # module_declaration_sha256 byte-identical at 8766d3dd2a88dce...; the
 # interface artifact moved only because it hashes the island's source and
 # the source closure, which gained zhao_texture_mosaic_hold.sv.
-INTERFACE_SHA256 = "6377b5f75da0977eb55b3bf1f9beb5fa673528e19729b18837f487f1138f3e1b"  # R9: cnt_texture_samples_o
-PACKET_B_TOP_SHA256 = "18b5d63e560dd32a75836085f1625d83cd3fc565deb94cf8756e1cb62789a599"  # R9: cnt_texture_samples_o
+INTERFACE_SHA256 = "a3b4d15904e2d17b8d5ed241d87701c602bad2855ceeda5b460b721313fe8ca4"  # NORMALMAP 2026-09-26: +12 island ports  # R9: cnt_texture_samples_o
+PACKET_B_TOP_SHA256 = "0c20374a3170ce3891141f1680f4a030b66508c57b479ae8892bb92dee8645a2"  # NORMALMAP 2026-09-26: u_terrain_normalmap
 # RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
 # to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
 # 3 lines x 4 zhao_mem_guard instances = 12 lines, each
@@ -159,7 +161,9 @@ def validate_stage_shape(text: str) -> None:
         ".BILERP_DSP2(BILERP_DSP2)",
         "import zhao_render_texture_pkg::*;",
         "unpack_raster_pretex",
-        "input  logic [489:0] cand_data_i",
+        # 491 bits since NORMALMAP (2026-09-26): the texture request gained
+        # `detail_required` at its TOP, so no existing field offset moved.
+        "input  logic [490:0] cand_data_i",
         "output logic         lifetime_structural_fault_o",
         "logic         retire_head_v_q;",
         "assign retire_head_reload_credit_w = sequence_abort_q || frag_ready_i;",
@@ -228,7 +232,7 @@ def validate_cmake_registration(text: str) -> None:
         'list(FIND ZHAO_PACKET_C_SEEN "${relative_source}" duplicate_index)',
         'if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")',
         'list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")',
-        "Packet-C source manifest must contain exactly 36 SV paths",
+        "Packet-C source manifest must contain exactly 37 SV paths",
         "Packet-C source manifest lost package-first/mutant-stage/top-last order",
         "add_executable(pc_dir raster/raster_texture_stage_v3_directed.cpp)",
         "add_executable(pc_seq raster/raster_texture_stage_v3_directed.cpp)",
@@ -240,25 +244,31 @@ def validate_cmake_registration(text: str) -> None:
         "add_test(NAME raster_texture_stage_v3_directed COMMAND pc_dir)",
         "add_test(NAME raster_texture_stage_v3_identity_abort_control COMMAND pc_seq)",
         "add_test(NAME raster_texture_stage_v3_old_ready_control COMMAND pc_old)",
+        "add_test(NAME raster_texture_stage_v3_detail_lost_control COMMAND pc_dtl)",
         "add_test(NAME raster_texture_stage_v3_registration_static",
     )
     for marker in required_once:
         if active.count(marker) != 1:
             raise AssertionError("Packet-C CMake marker is not exact/unique: " + marker)
-    if active.count("TOP_MODULE tb_raster_texture_stage_v3") != 3:
-        raise AssertionError("Packet-C must elaborate the exact wrapper three times")
-    if active.count("SOURCES ${ZHAO_PACKET_C_SOURCES}") != 3:
+    # FOUR since NORMALMAP (2026-09-26): the fourth is the positive control
+    # for `err_detail_lost_o`, a counter no legal stimulus can move.
+    if active.count("TOP_MODULE tb_raster_texture_stage_v3") != 4:
+        raise AssertionError("Packet-C must elaborate the exact wrapper four times")
+    if active.count("SOURCES ${ZHAO_PACKET_C_SOURCES}") != 4:
         raise AssertionError("Packet-C profiles do not share one source authority")
-    if active.count("-GMIGRATION_SHADOWS=0") != 3:
+    if active.count("-GMIGRATION_SHADOWS=0") != 4:
         raise AssertionError("Packet-C profiles are not all explicit production shape")
     if "-GMIGRATION_SHADOWS=1" in active:
         raise AssertionError("Packet-C section contains a laboratory shadow profile")
-    if active.count("target_link_libraries(pc_") != 3 or active.count(
-            "PRIVATE zhao_harness zhao_zref") != 3:
+    if active.count("target_link_libraries(pc_") != 4 or active.count(
+            "PRIVATE zhao_harness zhao_zref") != 4:
         raise AssertionError("Packet-C profiles do not all link harness and zref")
-    if active.count('LABELS "fast;nightly;packet-c;mutant"') != 2:
+    # THREE since NORMALMAP (2026-09-26): the detail-drain control is the third
+    # inverse-polarity build in this section and carries the same label and the
+    # same ordinary-failure guard as the other two.
+    if active.count('LABELS "fast;nightly;packet-c;mutant"') != 3:
         raise AssertionError("Packet-C mutant labels are incomplete")
-    if active.count('FAIL_REGULAR_EXPRESSION "packet-c directed FAIL"') != 2:
+    if active.count('FAIL_REGULAR_EXPRESSION "packet-c directed FAIL"') != 3:
         raise AssertionError("Packet-C mutant tests do not fail on ordinary errors")
     if "target_compile_definitions(pc_dir" in active:
         raise AssertionError("healthy Packet-C target unexpectedly selects a mutant")
@@ -271,7 +281,9 @@ class PacketCClosureTests(unittest.TestCase):
             tuple(row for row in rows if row in PACKET_B_SOURCES),
             PACKET_B_SOURCES,
         )
-        self.assertEqual(len(rows), 36)
+        # 37 since NORMALMAP (2026-09-26): TERRAIN.NORMALMAP is a leaf of the
+        # island and precedes it in the frozen order.
+        self.assertEqual(len(rows), 37)
         self.assertEqual(
             rows[-3:],
             (

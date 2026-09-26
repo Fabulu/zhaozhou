@@ -276,7 +276,11 @@ module zhao_terrain_clipfeed #(
     parameter logic [ 1:0] TERR_CULL_MODE    = 2'd0,
     // The frame default raster state, the same knob the other three door
     // clients carry.
-    parameter logic [31:0] TERR_FRAG_STATE   = 32'd0
+    parameter logic [31:0] TERR_FRAG_STATE   = 32'd0,
+    // See `o_detail_o`. 1 = terrain's primitives are heightfield surfaces and
+    // may take TERRAIN.NORMALMAP's detail term; 0 withdraws the class from the
+    // feature without touching the relief strength, and vice versa.
+    parameter logic        TERR_DETAIL_ELIGIBLE = 1'b1
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -362,6 +366,24 @@ module zhao_terrain_clipfeed #(
     output var logic [2:0]           o_behind_o,
     output var logic [IDW-1:0]       o_src_id_o,
     output var logic                 o_untex_o,
+    // TERRAIN.NORMALMAP's DETAIL DECLARATION (NORMALMAP, 2026-09-26).
+    //
+    // THIS BLOCK IS ENTITLED TO MAKE IT AND NOTHING DOWNSTREAM IS. The detail
+    // normal perturbs a surface normal in world XZ with no tangent frame, and
+    // `zref_terrain_normalmap.hpp` says why that is legitimate: "a heightfield's
+    // tangent frame is axis-aligned in world space". Every triangle this block
+    // emits is a terrain heightfield surface; no mesh, particle or forge
+    // primitive is. So the declaration is a fact about THIS PRODUCER'S output,
+    // which is exactly the kind of statement owner ruling 1 says must come from
+    // the producer's own port rather than be chosen at a composer or inferred
+    // from a field that happens to be zero.
+    //
+    // IT IS A PARAMETER AND NOT A LITERAL so the owner keeps the switch. The
+    // relief's AMOUNT is a separate knob and lives where it belongs -- in
+    // TERRAIN.NORMALMAP's own `strength` config register, whose zero is
+    // bit-exact off by that block's contract. Two knobs, two questions: this
+    // one says "these primitives can take detail", that one says "how much".
+    output var logic                 o_detail_o,
     output var logic [1:0]           o_cull_mode_o,
     output var logic [ATTRS*32-1:0]  o_attr_a_o,
     output var logic [ATTRS*32-1:0]  o_attr_b_o,
@@ -774,6 +796,7 @@ module zhao_terrain_clipfeed #(
   assign o_src_id_o       = src_id_q;
   // Terrain IS textured. See WHAT THIS BLOCK DECLARES.
   assign o_untex_o        = 1'b0;
+  assign o_detail_o       = TERR_DETAIL_ELIGIBLE;
   assign o_cull_mode_o    = TERR_CULL_MODE;
   assign o_attr_a_o       = pack_attr(inv_q[0], ow_q[0], ow_q[1],
                                       mod_q[0], mod_q[1], mod_q[2]);

@@ -198,7 +198,7 @@ module tb_geom_bin_pipe_v2 (
     output logic               earlyz_hold_valid_o,
     output logic        [1:0]  skid_level_o,
     output logic               stage_candidate_valid_o,
-    output logic       [489:0] stage_candidate_data_o,
+    output logic       [490:0] stage_candidate_data_o,
     output logic               stage_fragment_valid_o,
     output logic        [7:0]  stage_fragment_addr_o,
     output logic        [23:0] stage_fragment_depth_o,
@@ -285,6 +285,18 @@ module tb_geom_bin_pipe_v2 (
       .pal_load_op_i(pal_load_op_i), .pal_load_slot_i(pal_load_slot_i),
       .pal_load_gen_i(pal_load_gen_i), .pal_load_idx_i(pal_load_idx_i),
       .pal_load_rgb565_i(pal_load_rgb565_i), .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      // NORMALMAP 2026-09-26: the detail write port tied off and the evidence
+      // left open. This harness does not exercise TERRAIN.NORMALMAP; the
+      // declaration rides the candidate, so a fragment here simply declares 0
+      // and the leaf forces delta 0 with its tile read enable low.
+      .dtl_we_i(1'b0), .dtl_sel_i(1'b0), .dtl_addr_i(13'd0), .dtl_data_i(32'd0),
+      /* verilator lint_off PINCONNECTEMPTY */
+      .cnt_detail_fragments_o(), .cnt_detail_zeroed_o(),
+      .cnt_detail_railed_o(), .cnt_detail_cold_o(),
+      .cnt_detail_published_o(), .cnt_detail_applied_o(),
+      .err_detail_lost_o(), .dtl_table_ready_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
+
       .sheet_req_valid_o(sheet_req_valid_o),
       .sheet_req_ready_i(sheet_req_ready_i), .sheet_req_op_o(sheet_req_op_o),
       .sheet_req_handle_o(sheet_req_handle_o), .sheet_req_texel_o(sheet_req_texel_o),

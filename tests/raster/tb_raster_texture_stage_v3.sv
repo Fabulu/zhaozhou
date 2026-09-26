@@ -19,7 +19,7 @@ module tb_raster_texture_stage_v3 #(
 
     input  logic         in_valid_i,
     output logic         in_ready_o,
-    input  logic [489:0] in_data_i,
+    input  logic [490:0] in_data_i,
     input  logic         stage_admit_enable_i,
     input  logic         fragment_pause_i,
     input  logic         skid_rst_n_i,
@@ -28,7 +28,7 @@ module tb_raster_texture_stage_v3 #(
     output logic [1:0]   skid_level_o,
     output logic         obs_cand_valid_o,
     output logic         obs_cand_ready_o,
-    output logic [489:0] obs_cand_data_o,
+    output logic [490:0] obs_cand_data_o,
 
     input  logic         frame_fault_clear_valid_i,
     output logic         frame_fault_clear_ready_o,
@@ -130,6 +130,23 @@ module tb_raster_texture_stage_v3 #(
 
     // Test-only terminal classifier.  classify_i is pulsed only after the
     // external fragment leaf is idle; these are evidence, never lease events.
+    // TERRAIN.NORMALMAP's write port and its evidence (NORMALMAP, 2026-09-26).
+    // Brought out as REAL ports, not tied off: this harness is where the detail
+    // seam is directed-tested, and `obs_frag_vert_rgb_o` above is the lane the
+    // delta lands on.
+    input  logic         dtl_we_i,
+    input  logic         dtl_sel_i,
+    input  logic [12:0]  dtl_addr_i,
+    input  logic [31:0]  dtl_data_i,
+    output logic [31:0]  dtl_fragments_o,
+    output logic [31:0]  dtl_zeroed_o,
+    output logic [31:0]  dtl_railed_o,
+    output logic [31:0]  dtl_cold_o,
+    output logic [31:0]  dtl_published_o,
+    output logic [31:0]  dtl_applied_o,
+    output logic [31:0]  dtl_lost_o,
+    output logic         dtl_table_ready_o,
+
     input  logic         classify_i,
     output logic         synthetic_release_o,
     output logic         synthetic_publish_o,
@@ -137,7 +154,7 @@ module tb_raster_texture_stage_v3 #(
 );
   logic skid_valid_w;
   logic skid_ready_w;
-  logic [489:0] skid_data_w;
+  logic [490:0] skid_data_w;
   logic stage_cand_valid_w;
   logic stage_cand_ready_w;
 
@@ -204,7 +221,7 @@ module tb_raster_texture_stage_v3 #(
       fragment_idle_o && !frame_fault_o;
   assign skid_cancelled_o = skid_cancel_i && (skid_level_o != 2'd0);
 
-  zhao_skid2 #(.W(490)) u_candidate_skid (
+  zhao_skid2 #(.W(491)) u_candidate_skid (
       .clk(clk),
       .rst_n(skid_rst_n_i),
       .up_valid_i(in_valid_i),
@@ -255,6 +272,18 @@ module tb_raster_texture_stage_v3 #(
       .pal_load_idx_i(pal_load_idx_i),
       .pal_load_rgb565_i(pal_load_rgb565_i),
       .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      .dtl_we_i(dtl_we_i),
+      .dtl_sel_i(dtl_sel_i),
+      .dtl_addr_i(dtl_addr_i),
+      .dtl_data_i(dtl_data_i),
+      .cnt_detail_fragments_o(dtl_fragments_o),
+      .cnt_detail_zeroed_o(dtl_zeroed_o),
+      .cnt_detail_railed_o(dtl_railed_o),
+      .cnt_detail_cold_o(dtl_cold_o),
+      .cnt_detail_published_o(dtl_published_o),
+      .cnt_detail_applied_o(dtl_applied_o),
+      .err_detail_lost_o(dtl_lost_o),
+      .dtl_table_ready_o(dtl_table_ready_o),
       .sheet_req_valid_o(sheet_req_valid_o),
       .sheet_req_ready_i(sheet_req_ready_i),
       .sheet_req_op_o(sheet_req_op_o),

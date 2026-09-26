@@ -619,6 +619,25 @@ module zhao_console_board
   // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
   // with a pixel behind it). A second application at the vertex would be a
   // second home for one law.
+
+  // ---- TERRAIN.NORMALMAP's RELIEF STRENGTH (NORMALMAP, 2026-09-26) --------
+  // u8 with value raw/256, written to the block's config word 2. ZERO IS
+  // BIT-EXACT OFF by that block's own contract, so this parameter is the
+  // feature's amount knob and `TERR_DETAIL_ELIGIBLE` on the terrain arm is its
+  // class switch -- two questions, two knobs, neither inferred from the other.
+  //
+  // THIS NUMBER IS AUTHORED AND IS OWED A LOOK. CLAUDE.md's first law is that
+  // a look value is chosen by rendering it and looking, and no rendered board
+  // of terrain detail exists yet. 64 (0.25) is a deliberate starting point and
+  // not a measurement dressed as one: at the tile's extreme texel it puts the
+  // delta at roughly a quarter of the colour lane, which is relief that should
+  // read at 240p without flattening the ladder. It is one editable constant
+  // here, reachable from the board, and the pass that looks at it should move
+  // it rather than re-derive it.
+  parameter logic [7:0] TERR_DETAIL_STRENGTH = 8'd64,
+  // Passed to `zhao_terrain_clipfeed`'s own declaration parameter. 0 withdraws
+  // terrain from the detail class without touching the strength above.
+  parameter logic       TERR_DETAIL_ELIGIBLE = 1'b1,
   parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
   parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
 
@@ -1886,6 +1905,28 @@ module zhao_console_board
   output logic [31:0] geom_ma_jobs_h_o,
   // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
   output logic [31:0] geom_ma_jobs_i_o,
+  output logic [31:0] geom_ma_jobs_j_o,
+  // ---- TERRAIN.NORMALMAP's evidence (NORMALMAP, 2026-09-26) ---------------
+  // The loader's seven and the fragment path's eight. `terr_nm_applied_o` is
+  // the one to read for "did the relief reach a pixel": it counts fragments
+  // whose lit colour lane the seam actually CHANGED, which is neither the
+  // fragments offered nor the deltas computed.
+  output logic [31:0]             terr_nm_pages_o,
+  output logic [31:0]             terr_nm_words_o,
+  output logic [31:0]             terr_nm_pages_dropped_o,
+  output logic [31:0]             terr_nm_bad_magic_o,
+  output logic [31:0]             terr_nm_oversize_o,
+  output logic [31:0]             terr_nm_truncated_o,
+  output logic [31:0]             terr_nm_denied_o,
+  output logic [31:0]             terr_nm_frag_o,
+  output logic [31:0]             terr_nm_zeroed_o,
+  output logic [31:0]             terr_nm_railed_o,
+  output logic [31:0]             terr_nm_cold_o,
+  output logic [31:0]             terr_nm_published_o,
+  output logic [31:0]             terr_nm_applied_o,
+  output logic [31:0]             terr_nm_lost_o,
+  output logic                    terr_nm_table_ready_o,
+
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
@@ -4610,6 +4651,8 @@ module zhao_console_board
       .GEOM_ATTR_SLOT_B           (GEOM_ATTR_SLOT_B),
       .GEOM_ATTR_SLOT_ALPHA       (GEOM_ATTR_SLOT_ALPHA),
       .PART_ALPHA                 (PART_ALPHA),
+      .TERR_DETAIL_STRENGTH       (TERR_DETAIL_STRENGTH),
+      .TERR_DETAIL_ELIGIBLE       (TERR_DETAIL_ELIGIBLE),
       .TERR_TINT_IDENTITY         (TERR_TINT_IDENTITY),
       .TERR_SHEET_IDENTITY        (TERR_SHEET_IDENTITY),
       .PROJ_T_ARENAS              (PROJ_T_ARENAS),
@@ -5139,6 +5182,22 @@ module zhao_console_board
       .geom_ma_jobs_g_o                   (geom_ma_jobs_g_o),
       .geom_ma_jobs_h_o                   (geom_ma_jobs_h_o),
       .geom_ma_jobs_i_o                   (geom_ma_jobs_i_o),
+      .geom_ma_jobs_j_o                   (geom_ma_jobs_j_o),
+      .terr_nm_pages_o                    (terr_nm_pages_o),
+      .terr_nm_words_o                    (terr_nm_words_o),
+      .terr_nm_pages_dropped_o            (terr_nm_pages_dropped_o),
+      .terr_nm_bad_magic_o                (terr_nm_bad_magic_o),
+      .terr_nm_oversize_o                 (terr_nm_oversize_o),
+      .terr_nm_truncated_o                (terr_nm_truncated_o),
+      .terr_nm_denied_o                   (terr_nm_denied_o),
+      .terr_nm_frag_o                     (terr_nm_frag_o),
+      .terr_nm_zeroed_o                   (terr_nm_zeroed_o),
+      .terr_nm_railed_o                   (terr_nm_railed_o),
+      .terr_nm_cold_o                     (terr_nm_cold_o),
+      .terr_nm_published_o                (terr_nm_published_o),
+      .terr_nm_applied_o                  (terr_nm_applied_o),
+      .terr_nm_lost_o                     (terr_nm_lost_o),
+      .terr_nm_table_ready_o              (terr_nm_table_ready_o),
       .geom_lb_pages_o                    (geom_lb_pages_o),
       .geom_lb_records_o                  (geom_lb_records_o),
       .geom_lb_pages_dropped_o            (geom_lb_pages_dropped_o),

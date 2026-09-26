@@ -53,6 +53,9 @@ fpga/rtl/raster/zhao_raster_ticketq_rh.sv text eol=lf
 fpga/rtl/raster/zhao_raster_rcp24_mul.sv text eol=lf
 fpga/rtl/raster/zhao_raster_rcp24_v4.sv text eol=lf
 fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv text eol=lf
+# TERRAIN.NORMALMAP joined the G8A fit closure on 2026-09-26 (NORMALMAP), and
+# that generator refuses any input that is not checkout-stable LF.
+fpga/rtl/terrain/zhao_terrain_normalmap.sv text eol=lf
 fpga/rtl/texture/zhao_texture_mod255.sv text eol=lf
 fpga/rtl/texture/zhao_texture_aux_div6.sv text eol=lf
 fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv text eol=lf

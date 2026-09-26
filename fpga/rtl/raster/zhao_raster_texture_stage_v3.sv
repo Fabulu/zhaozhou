@@ -1,6 +1,6 @@
 // zhao_raster_texture_stage_v3.sv -- Packet-C post-Early-Z texture join.
 //
-// One 490-bit candidate is unpacked through zhao_render_texture_pkg, admitted
+// One 491-bit candidate is unpacked through zhao_render_texture_pkg, admitted
 // atomically to exactly one Packet-B V3 island, and returned as the exact
 // RASTER.FRAGMENT packet.  The V3 owner carries both the 32-bit admission
 // sequence and all 128 continuation bits. This stage owns one bounded elastic
@@ -32,7 +32,7 @@ module zhao_raster_texture_stage_v3 #(
     // outside this module; cand_ready_o is the sole atomic admission ready.
     input  logic         cand_valid_i,
     output logic         cand_ready_o,
-    input  logic [489:0] cand_data_i,
+    input  logic [490:0] cand_data_i,
 
     // Canonical recoverable frame-fault handshake, mirrored from Packet B.
     input  logic         frame_fault_clear_valid_i,
@@ -72,6 +72,18 @@ module zhao_raster_texture_stage_v3 #(
     input  logic [7:0]   pal_load_idx_i,
     input  logic [15:0]  pal_load_rgb565_i,
     input  logic         pal_load_crc_ok_i,
+
+    // TERRAIN.NORMALMAP's config and tile-upload write port. See
+    // `zhao_texture_island_v3_top`'s port comment; this module carries it
+    // unchanged and owns exactly one thing, which is THE APPLICATION below.
+    //
+    // THE PER-FRAGMENT DECLARATION IS NOT A PORT HERE, deliberately: it rides
+    // `cand_data_i` as `detail_required`, so it arrives WITH the fragment it
+    // describes instead of beside it.
+    input  logic         dtl_we_i,
+    input  logic         dtl_sel_i,
+    input  logic [12:0]  dtl_addr_i,
+    input  logic [31:0]  dtl_data_i,
 
     // Complete Surface Sheet READ/page boundary.
     output logic         sheet_req_valid_o,
@@ -167,7 +179,24 @@ module zhao_raster_texture_stage_v3 #(
     output logic [31:0]  err_class_invalid_o,
     output logic [31:0]  err_palette_unusable_o,
     output logic [31:0]  err_class_mismatch_o,
-    output logic         err_plan_mode_o
+    output logic         err_plan_mode_o,
+
+    // TERRAIN.NORMALMAP's evidence, carried out of the island unreduced.
+    output logic [31:0]  cnt_detail_fragments_o,
+    output logic [31:0]  cnt_detail_zeroed_o,
+    output logic [31:0]  cnt_detail_railed_o,
+    output logic [31:0]  cnt_detail_cold_o,
+    output logic [31:0]  cnt_detail_published_o,
+    output logic [31:0]  err_detail_lost_o,
+    // Fragments whose lit colour lane this module actually CHANGED. It is
+    // deliberately NOT `delta != 0`: a declared fragment over a flat patch of
+    // the detail tile has delta 0 and is correctly unchanged, and a counter
+    // that could not tell "applied and happened to agree" from "not applied"
+    // would be the blind detector this repository has a chapter about. This
+    // counts the beats on which the APPLIED value differs from the input,
+    // which is the thing a picture would show.
+    output logic [31:0]  cnt_detail_applied_o,
+    output logic         dtl_table_ready_o
 );
   import zhao_render_texture_pkg::*;
 
@@ -194,6 +223,7 @@ module zhao_raster_texture_stage_v3 #(
   logic        v3_frag_valid_w;
   logic        v3_out_valid_w;
   logic        v3_out_ready_w;
+  logic signed [8:0] v3_out_detail_delta_w;
   logic [23:0] v3_out_rgb_w;
   logic [7:0]  v3_out_a_w;
   logic [7:0]  v3_out_texel_idx_w;
@@ -215,6 +245,17 @@ module zhao_raster_texture_stage_v3 #(
   logic [15:0]  retire_head_tag_q;
   logic [159:0] retire_head_ctx_q;
   logic         retire_head_refused_q;
+  // TERRAIN.NORMALMAP's delta for the held fragment. Captured by the SAME
+  // enable as `retire_head_ctx_q`, which is correct HERE and is the opposite of
+  // the fault CLAUDE.md's metadata-swap chapter describes: that chapter is
+  // about a CHECKER whose two operands share an enable and can therefore never
+  // disagree. This is not a checker -- it is a payload field travelling with
+  // the payload it belongs to, and sharing the capture enable is precisely what
+  // keeps the two from separating on a stall. The identity check that CAN fire
+  // is upstream, inside the island, where the delta's generation is compared
+  // against v3own's published owner generation and the two come from different
+  // registers in different modules.
+  logic signed [8:0] retire_head_detail_q;
   logic         retire_head_capture_w, retire_head_consume_w;
   logic         retire_head_reload_credit_w, retire_head_drop_policy_w;
 
@@ -282,7 +323,62 @@ module zhao_raster_texture_stage_v3 #(
   assign frag_depth_o     = returned_retire_ctx_w.raster_continuation.earlyz.invw24;
   assign frag_state_o     = returned_retire_ctx_w.raster_continuation.earlyz.fragment_state;
   assign frag_src_id_o    = returned_retire_ctx_w.raster_continuation.earlyz.source_id;
-  assign frag_vert_rgb_o  = returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb;
+  // ===========================================================================
+  // THE DETAIL NORMAL'S APPLICATION SEAM (NORMALMAP, 2026-09-26)
+  // ===========================================================================
+  // `zref::terrain::normalmap_apply` is the law and it is TRANSCRIBED, not
+  // derived (reference/include/zref/zref_terrain_normalmap.hpp):
+  //
+  //     inline uint8_t normalmap_apply(uint8_t v, int32_t delta) {
+  //       const int32_t sum = int32_t(v) + delta;
+  //       if (sum < 0) return 0;
+  //       if (sum > 255) return 255;
+  //       return uint8_t(sum);
+  //     }
+  //
+  // with the function's own preceding comment naming the operand: *"the delta
+  // lands on the flat lit colour lanes, saturating unsigned 8-bit"*. There is
+  // exactly one flat lit colour lane in this machine and it is the port below --
+  // `zhao_raster_fragment`'s `frag_vert_rgb_i`, whose own comment reads
+  // "interpolated, lit, tinted, FOGGED", and which for any primitive whose
+  // fragment-state SHADE_MOD bit is clear IS the source colour outright
+  // (`zhao_raster_fragment.sv:717-721`). Terrain is exactly such a primitive:
+  // `TERR_FRAG_STATE` is the opaque profile and its SHADE_MOD is 0.
+  //
+  // THE DELTA IS MONOCHROME AND THAT IS THE CONTRACT, not an approximation
+  // taken here. `zref_terrain_normalmap.hpp` calls the s9 delta "colour-lane
+  // LSBs under a white sun, the contract's declared monochrome approximation",
+  // so one delta lands on all three channels. A per-channel delta would need
+  // three sun colours and is not what the ratified block emits.
+  //
+  // NO DECLARATION, NO CHANGE, BY CONSTRUCTION. A fragment whose producer did
+  // not declare detail gets `f_detail_i = 0` at the leaf, which forces delta
+  // exactly 0 with the tile read enable held low -- so the expression below is
+  // the identity for every such fragment, bit for bit, and the mesh path is
+  // untouched without a second gate to keep in step with the first.
+  function automatic logic [7:0] detail_apply(input logic [7:0] v,
+                                              input logic signed [8:0] d);
+    logic signed [10:0] sum;
+    begin
+      sum = $signed({3'd0, v}) + $signed({{2{d[8]}}, d});
+      if (sum < 11'sd0) detail_apply = 8'd0;
+      else if (sum > 11'sd255) detail_apply = 8'd255;
+      else detail_apply = sum[7:0];
+    end
+  endfunction
+
+  wire [23:0] frag_vert_rgb_raw_w =
+      returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_rgb;
+  assign frag_vert_rgb_o = {
+      detail_apply(frag_vert_rgb_raw_w[23:16], retire_head_detail_q),
+      detail_apply(frag_vert_rgb_raw_w[15:8],  retire_head_detail_q),
+      detail_apply(frag_vert_rgb_raw_w[7:0],   retire_head_detail_q)};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) cnt_detail_applied_o <= 32'd0;
+    else if (fragment_fire_o && (frag_vert_rgb_o != frag_vert_rgb_raw_w))
+      cnt_detail_applied_o <= cnt_detail_applied_o + 32'd1;
+  end
   assign frag_vert_a_o    = returned_retire_ctx_w.raster_continuation.post_earlyz.vertex_alpha;
   assign frag_tag_o       = returned_retire_ctx_w.raster_continuation.post_earlyz.effect_tag;
   assign frag_sten_ref_o  = returned_retire_ctx_w.raster_continuation.post_earlyz.stencil_reference;
@@ -324,6 +420,7 @@ module zhao_raster_texture_stage_v3 #(
       retire_head_status_q    <= v3_out_status_w;
       retire_head_tag_q       <= v3_out_tag_w;
       retire_head_ctx_q       <= v3_out_retire_ctx_w;
+      retire_head_detail_q    <= v3_out_detail_delta_w;
       retire_head_refused_q   <= v3_out_refused_w;
     end
   end
@@ -430,6 +527,19 @@ module zhao_raster_texture_stage_v3 #(
       .pal_load_idx_i(pal_load_idx_i),
       .pal_load_rgb565_i(pal_load_rgb565_i),
       .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      .frag_detail_i(admission_request_w.detail_required),
+      .dtl_we_i(dtl_we_i),
+      .dtl_sel_i(dtl_sel_i),
+      .dtl_addr_i(dtl_addr_i),
+      .dtl_data_i(dtl_data_i),
+      .out_detail_delta_o(v3_out_detail_delta_w),
+      .cnt_detail_fragments_o(cnt_detail_fragments_o),
+      .cnt_detail_zeroed_o(cnt_detail_zeroed_o),
+      .cnt_detail_railed_o(cnt_detail_railed_o),
+      .cnt_detail_cold_o(cnt_detail_cold_o),
+      .cnt_detail_published_o(cnt_detail_published_o),
+      .err_detail_lost_o(err_detail_lost_o),
+      .dtl_table_ready_o(dtl_table_ready_o),
       .sheet_req_valid_o(sheet_req_valid_o),
       .sheet_req_ready_i(sheet_req_ready_i),
       .sheet_req_op_o(sheet_req_op_o),

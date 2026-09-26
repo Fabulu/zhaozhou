@@ -48,6 +48,7 @@ SOURCE_CLOSURE = (
     "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
     "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
     "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/terrain/zhao_terrain_normalmap.sv",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv",
     "fpga/rtl/raster/zhao_raster_fill.sv",

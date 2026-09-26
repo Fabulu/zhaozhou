@@ -30,9 +30,9 @@
     "BILERP_DSP2": "1'b1"
   },
   "hashes": {
-    "generated_rtl_sha256": "ff8cdef246dd87a0ab81f3103d40a7f22c8db70da98d311fd63c3626f0b2af12",
-    "generator_sha256": "2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291",
-    "template_sha256": "ae5eb48b27498c565904d2d7f22e4e36efdeae9c9b4dd891ed22015c56a84054"
+    "generated_rtl_sha256": "57846aa704fa01e738952e16563bee63fbc19f9d6cd9d60282b3ce41bb39e6fe",
+    "generator_sha256": "f99ad1f418434e7cff21dd5a98c7a766868ed7bad3960f7865b4c97907a079b2",
+    "template_sha256": "15f6b9a3d6dcf8c3c0faf7187bb343d09e2f8b31d327f076a4a601823e3044f2"
   },
   "hierarchy": {
     "owner": {
@@ -74,12 +74,12 @@
     {
       "ordinal": 0,
       "path": "fpga/rtl/generated/zhao_abi_pkg.sv",
-      "sha256": "3a8dee7b9a17982b9d7ed222dbc0e5dfea635343a85fe60460e3a879430df72a"
+      "sha256": "c7a9c2b70ffd46f526557904d892f45f896b509aea11962b6247523b1add6464"
     },
     {
       "ordinal": 1,
       "path": "fpga/rtl/common/zhao_render_texture_pkg.sv",
-      "sha256": "54f7a8399b02634f5cf0fb892fa271ead317406fe8f35caa8cbd80694ff9c162"
+      "sha256": "e508be0729b828b8e8e8bb0aba34776adec17af2925e1b7236aad67f8a8d4fba"
     },
     {
       "ordinal": 2,
@@ -154,7 +154,7 @@
     {
       "ordinal": 16,
       "path": "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
-      "sha256": "40279c6741d524ac3892cd5f0c3973975876074d6e57de9c002c1b27f96abc3b"
+      "sha256": "26bd791ecbe2f248214f4825d6e4bcd6c321e81783fa1cb8564ac4d75ef4b69f"
     },
     {
       "ordinal": 17,
@@ -204,7 +204,7 @@
     {
       "ordinal": 26,
       "path": "fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv",
-      "sha256": "d141120ef44ea1bfb7c383b96b2ede140258d2092035622e5618663c76f59ea3"
+      "sha256": "143c8e926f83ad6e3a2d0c388f22a9954e16515f539f02ac08697e1a3423ef5f"
     },
     {
       "ordinal": 27,
@@ -223,93 +223,98 @@
     },
     {
       "ordinal": 30,
-      "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
-      "sha256": "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875"
+      "path": "fpga/rtl/terrain/zhao_terrain_normalmap.sv",
+      "sha256": "1e6628072bf0f4faec80a00b10e4898a527055c61b0325c62f4c1533554d92d5"
     },
     {
       "ordinal": 31,
-      "path": "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv",
-      "sha256": "a3fbf98d0778c780c61b2ee63ae26aaf7344204af569358eff956715735488e5"
+      "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+      "sha256": "c2eaa109ef53fada5569f6a773e0f3f700b17598b1344ce4560a2f2cc0d139fe"
     },
     {
       "ordinal": 32,
+      "path": "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv",
+      "sha256": "16bbf9ab9baf3f4247a18169dd89548e9285e6d8cf14bead08d5477883371598"
+    },
+    {
+      "ordinal": 33,
       "path": "fpga/rtl/raster/zhao_raster_fill.sv",
       "sha256": "d1572544a821c8f2bf33d6361885e5892b7f7c22cda9c6e6c5aff1c1eb234c37"
     },
     {
-      "ordinal": 33,
+      "ordinal": 34,
       "path": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
       "sha256": "f1843560263e190efdbce7bec5508252b9a57d28e9bbea27d0efda0abf2508dd"
     },
     {
-      "ordinal": 34,
+      "ordinal": 35,
       "path": "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv",
       "sha256": "549bb04ae745850bdb132d89057d9aa1268a56880d458576adfce3772ec7c866"
     },
     {
-      "ordinal": 35,
+      "ordinal": 36,
       "path": "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv",
       "sha256": "684e5ba21141c0733e587e8bc57c98de7aa3b89e94cebb4d9b78a961a910cc5f"
     },
     {
-      "ordinal": 36,
+      "ordinal": 37,
       "path": "fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv",
       "sha256": "fd035c466d6a42a6d6436e0015ba3f8fd1e384e640b4a4eadd3def9e43d308b0"
     },
     {
-      "ordinal": 37,
+      "ordinal": 38,
       "path": "fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv",
       "sha256": "f064b806123f18608bbc237a1ec6113463ae92d22f03f6a7f84753e8ae4f0233"
     },
     {
-      "ordinal": 38,
+      "ordinal": 39,
       "path": "fpga/rtl/raster/zhao_raster_earlyz.sv",
       "sha256": "e0612b97b44fc7ed67418d0a29f2cedc95d2c8b69e8b5e03f0c42c9c06d51200"
     },
     {
-      "ordinal": 39,
+      "ordinal": 40,
       "path": "fpga/rtl/raster/zhao_raster_blend_prod.sv",
       "sha256": "d91b82dc937e957dc58876acec0f037ef16a0a6f1e67fcc81eb70ae54e45ce2d"
     },
     {
-      "ordinal": 40,
+      "ordinal": 41,
       "path": "fpga/rtl/raster/zhao_raster_blend_fin.sv",
       "sha256": "a96f2c8ee8e82ce95f01e557a6602c4472a471192aa3d7986453445e966be6e9"
     },
     {
-      "ordinal": 41,
+      "ordinal": 42,
       "path": "fpga/rtl/raster/zhao_raster_fragment.sv",
       "sha256": "1f4eed809cc2874588f72a7be6097cd8c47d6dc64e37ea25074ea7884b8f7900"
     },
     {
-      "ordinal": 42,
+      "ordinal": 43,
       "path": "fpga/rtl/raster/zhao_raster_tilestore.sv",
       "sha256": "831d005bfcee573145170dd1948064ccca8ea03956ea21556c8ad44430bc4bef"
     },
     {
-      "ordinal": 43,
+      "ordinal": 44,
       "path": "fpga/rtl/raster/zhao_raster_div255.sv",
       "sha256": "8a100d785f745fe906cd02d31f96d206379d9d4fa4fa242f32544fbfef198af3"
     },
     {
-      "ordinal": 44,
+      "ordinal": 45,
       "path": "fpga/rtl/raster/zhao_raster_quant.sv",
       "sha256": "f81ab9ed3b8d4acdad5d46569b4227f0d7110fd0dcce48812b316a779f99902c"
     },
     {
-      "ordinal": 45,
+      "ordinal": 46,
       "path": "fpga/rtl/raster/zhao_raster_resolve.sv",
       "sha256": "d2659304ffd9cc78fea8f2733abed34c19ffc3889391ce8887ace109750a9351"
     },
     {
-      "ordinal": 46,
+      "ordinal": 47,
       "path": "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv",
-      "sha256": "c997aa0d26f3a713d5fc600d6240b75b97f9a7e208807945962bee79d3b92a19"
+      "sha256": "592c713f0a475833481d9bc99e13a344d9f97ade00dde4cdd306fa102b79ea0d"
     },
     {
-      "ordinal": 47,
+      "ordinal": 48,
       "path": "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv",
-      "sha256": "ff8cdef246dd87a0ab81f3103d40a7f22c8db70da98d311fd63c3626f0b2af12"
+      "sha256": "57846aa704fa01e738952e16563bee63fbc19f9d6cd9d60282b3ce41bb39e6fe"
     }
   ],
   "traffic_profile": {
