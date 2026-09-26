@@ -5045,8 +5045,9 @@
 //
 //     (11) WHAT THIS PACKET GOT WRONG AND CAUGHT ITSELF. A `grep ... | head
 //          -10` on the mosaic's instantiations returned only comment lines and
-//          very nearly produced the finding "the mosaic path is not composed
-//          at all" -- which would have made this refusal look STRONGER. The
+//          very nearly produced the finding that the mosaic path was ABSENT
+//          FROM THE COMPOSITION ENTIRELY -- which would have made this refusal
+//          look STRONGER. The
 //          real instantiation (`zhao_raster_tile_pipe_v2.sv:962`) sorted below
 //          the cut. The truncation was the instrument and it failed in the
 //          flattering direction, exactly as this file's own law predicts.
