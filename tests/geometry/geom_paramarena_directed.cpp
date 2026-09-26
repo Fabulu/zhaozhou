@@ -1153,6 +1153,85 @@ int main(int argc, char** argv) {
   }
 
   // =======================================================================
+  // FRAME F -- CASE 3b.  THE **CHUNK** ARM OF `quota_overflow_o`.
+  //
+  // WHY THIS EXISTS, added 2026-09-26 by GIANTQUOTA.  `quota_overflow_o` is
+  // incremented at THREE independent sites in production -- the vertex arm
+  // (`!pv_fits_c`), the descriptor arm (`!td_fits_c`) and the chunk arm
+  // (`!ck_fits_c`).  Case 3 above fires the DESCRIPTOR arm and was the only
+  // positive control this counter had.  A counter with three producers and one
+  // exercised producer is two-thirds an assumption: the other two arms could
+  // be mis-wired, transposed, or comparing the wrong cursor, and every test in
+  // this tree would still pass while the counter read a plausible number.
+  //
+  // THE CHUNK ARM SPECIFICALLY, and this is not an arbitrary choice of the
+  // three.  `ck_fits_c = (n_chunks_q < q_chunks_q)` is the EXACT expression a
+  // giant's reservation has to modify -- R7 reserves 32,768 TILE REFERENCES,
+  // which is ceil(32768/14) = 2,341 CHUNKS, and console entry I56 is open
+  // against precisely that change.  Whoever makes it needs to know the arm
+  // fired BEFORE they touched it, or a broken reservation and a broken counter
+  // are indistinguishable afterwards.
+  //
+  // AND IT IS UNREACHABLE IN THE COMPOSED CONSOLE, which is why a directed
+  // frame is the only place it can be shown.  `zhao_console_core` seals at the
+  // arena's own capacity (`seal_chunks_i = 18'(GEOM_PA_MAX_CHUNKS)` = 16,384)
+  // while the console smoke's frame allocates TEN chunks, so `ck_fits_c` can
+  // only fail there on a physical overflow no stimulus produces.  Sealing a
+  // small quota here is the legal stimulus that the composition cannot offer.
+  // =======================================================================
+  std::printf("\n=== case 3b: the CHUNK arm of quota_overflow_o\n");
+  {
+    const uint32_t quota_before_ck = t.quota_overflow_o;
+    const uint32_t frames_before_ck = t.frames_published_o;
+    const uint32_t cw_before_ck = t.chunks_written_o;
+    const uint32_t overrun_before_ck = t.arena_overrun_o;
+
+    // A quota of TWO CHUNKS, with vertices and descriptors left generous so
+    // that the only bound this frame can reach is the chunk one.
+    ckt(seal(t, 64, 64, 2, 0xF00D) >= 0, "F: the small-CHUNK-quota seal takes effect");
+    cke(0, t.fault_source_o, "F: the seal cleared fault_source_o");
+
+    uint32_t ids[14] = {0};
+    for (int i = 0; i < 2; ++i) {
+      ids[0] = 0x00000100u + static_cast<uint32_t>(i);
+      ckt(push_ck(t, 0xFFFFFFFFu, 1, ids), "F: a chunk inside the quota is accepted");
+    }
+    cke(0, t.frame_fault_o, "case 3b: two chunks against a quota of two is NOT a fault");
+    cke(quota_before_ck, t.quota_overflow_o, "case 3b: and the counter has not moved yet");
+
+    // THE THIRD ONE OVERRUNS.  Like the descriptor arm, it is ACCEPTED and
+    // discarded rather than refused -- a block that stopped accepting would
+    // stall GEOM.CHUNKSER's serialise pass mid-tile.
+    ids[0] = 0x000001FFu;
+    ckt(push_ck(t, 0xFFFFFFFFu, 1, ids),
+        "F: the overrunning chunk is still ACCEPTED (never refused)");
+    cke(quota_before_ck + 1, t.quota_overflow_o,
+        "case 3b: quota_overflow_o FIRED on the CHUNK arm");
+    cke(1, t.frame_fault_o, "case 3b: frame_fault_o rose on the chunk overrun");
+    cke(overrun_before_ck, t.arena_overrun_o,
+        "case 3b: this was a QUOTA fault, NOT a view overrun -- the two are "
+        "different questions and only one of them fired");
+
+    // THE ASYMMETRY, ASSERTED RATHER THAN LEFT TO BE REDISCOVERED.  The
+    // descriptor arm writes `fault_source_o <= td_source_i[15:0]` because a
+    // TriangleDescriptor carries the draw that made it.  The chunk arm writes
+    // NOTHING, because a chunk is a tile-major slice of a per-tile reference
+    // list and has no owning draw to name -- it can hold references from two
+    // instances at once.  So R7's "report the source IDs" is satisfiable for a
+    // descriptor overrun and structurally is not for a chunk overrun.
+    cke(0, t.fault_source_o,
+        "case 3b: the CHUNK arm names NO source -- a chunk has no owning draw");
+
+    end_frame(t);
+    idle_cycles(t, 2000);
+    t.eval();
+    cke(cw_before_ck + 2, t.chunks_written_o,
+        "case 3b: exactly the two chunks inside the quota were written");
+    cke(frames_before_ck, t.frames_published_o,
+        "case 3b: the chunk-faulted frame was NEVER published");
+    cke(1, t.publish_valid_o, "case 3b: the prior complete frame still stands");
+  }
+  // =======================================================================
   // THE CLOSING SWEEP -- cases 9, 10, 11 across everything that ran.
   // =======================================================================
   std::printf("\n=== cases 9/10/11: the closing sweep\n");

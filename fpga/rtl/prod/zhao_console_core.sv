@@ -6546,6 +6546,127 @@
 //      campaign's first rule refuses as a closure. The seal stays at capacity,
 //      which remains the NEUTRAL choice and is still declared rather than
 //      hidden.
+//
+//      -- GIANTQUOTA, 2026-09-26. STILL OPEN, SEAL STILL AT CAPACITY, AND THE
+//      FOUR-ITEM DERIVATION ABOVE IS WRONG IN ITEM (2) AND UNDERSTATED IN ITEM
+//      (3). This is a refusal with measurements, not a deferral. A packet was
+//      sent to BUILD the list above; building it as written would have put the
+//      reservation at a seam that cannot carry it and re-invented a floor that
+//      already ships. The evidence is below so the next packet inherits
+//      measurements instead of a third re-derivation.
+//
+//      ITEM (2) IS NOT IMPLEMENTABLE AT THE SEAM IT NAMES. `ck_giant_i` beside
+//      `ck_valid_i` presumes a chunk HAS an owning instance. It does not. A
+//      chunk is a SPATIAL object: `zhao_geom_binner_v2` walks tiles in raster
+//      order (:1092-1103) and within a tile drains a FIFO in frame-wide
+//      TRIANGLE SUBMISSION order, head first, because the painter's algorithm
+//      requires it (:52-62, :1006-1041). `zhao_geom_chunkser` flushes on
+//      exactly two events -- staging register full, or last reference of the
+//      tile (:299) -- and inspects no identity. A tile covered by instances A
+//      and B holds A's refs then B's in ONE chain, and the 14-id chunk that
+//      straddles the boundary belongs to both. "Is this chunk the giant's" has
+//      no answer, so a class bit there would have to be fabricated.
+//
+//      AND THE IDENTITY IS SEVERED TWO BLOCKS UPSTREAM, DELIBERATELY. The
+//      binner HOLDS the instance id -- `tri_src_id_i` (:286), stored at :766 --
+//      and exports it on the RASTER port, `job_src_id_o = d_tri_r[141:126]`
+//      (:784). The SERIALISE port has no equivalent: it reads `d_meta_r`, a
+//      DIFFERENT register, and `job_valid_o = d_job_v && !ser_mode_r` (:776)
+//      silences the raster field group for the whole pass. The 64-byte R7 chunk
+//      record is full besides -- {ck_ids, gen, count, next}, `zhao_geom_
+//      paramarena:722-727` -- so there is nowhere to put one if it were routed.
+//
+//      WHERE THE ENFORCEMENT SEAM ACTUALLY IS, which is the useful half.
+//      Identity exists at the REFERENCE PUSH, and a reference is the
+//      DIRECTIVE'S OWN UNIT ("32,768 TILE REFERENCES"). The binner selects the
+//      tile list purely geometrically (`tile_ra = row_base_r + TIDX_W'(tx_r)`,
+//      :738) while holding the pushing triangle's instance id. Enforced THERE
+//      -- refuse ORDINARY reference pushes past (ref_cap - giant_reserve),
+//      admit the giant's -- the reservation is expressible with identity the
+//      block already has, and the chunk count follows, because chunks are only
+//      serialised references. The arena then needs NO class bit. That is a
+//      binner change, not an arena change, and it is the thing to cost next.
+//
+//      ITEM (3) IS THE OPPOSITE OF WRONG: THE MECHANISM ALREADY SHIPS, and the
+//      entry above sends a packet to invent it. `zhao_forge_shadow.sv:255` is
+//      literally max(ladder, floor) --
+//        wire [1:0] rung_c = (cast_rung_i > rung_floor_i) ? cast_rung_i
+//                                                         : rung_floor_i;
+//      under a header that says "THE FLOOR IS A MAX, NOT AN OVERRIDE. A higher
+//      code is a coarser rung, so the governor can only ever push the number
+//      up." Its floor is LIVE: `.rung_floor_i (part_prj_view_i ? mgv_deg1 :
+//      mgv_deg0)` (this file, :15165) -- MEASURE.GOVERNOR's `deg0_o`/`deg1_o`.
+//      (The comment near :10858 saying `deg0_o`/`deg1_o` "name NONE" is STALE;
+//      what is genuinely unwired is PART.LADDER's `p_gov_floor_i`.) The floor
+//      that exists is PER-CAMERA; item (3) wants PER-INSTANCE. That is a
+//      smaller, better-posed job than the entry implies -- copy a proven
+//      pattern, do not design one.
+//
+//      AND A CLAIM THIS PACKET MADE AND THEN KILLED ITSELF, recorded because
+//      the next reader will be tempted by it too. I first wrote that demoting
+//      `c_rung_o` "changes ZERO tile references, because its only consumer is
+//      the shadow caster". THAT IS FALSE. The hull is submitted geometry on the
+//      SAME path: `zhao_geom_lodstate` -> `zhao_forge_shadow` (rung sets the
+//      hull's vertex count, `n_q <= rung_vtx(rung_c)`, :330; R_FAR emits
+//      nothing, :335) -> `zhao_forge_fanindex` -> `zhao_forge_jobarb` ->
+//      `zhao_forge_assemble` -> `zhao_geom_clipdoor` client 1 -> the material
+//      window -> GEOM.CLIP -> GEOM.SETUP -> the binner. Rung reductions DO
+//      reach tile references. A second geometry-reducing ladder exists too:
+//      PART.LADDER's rung demux at :22467-22469 retires every rung but SHARD
+//      and SPRITE with a constant-1 ready, so four of six rungs emit nothing.
+//
+//      SO THE SURVIVING LIMITATION IS NARROW AND IS THE ONE THAT MATTERS: NO
+//      RUNG SELECTS A COARSER CREATURE MESH. `zhao_geom_lod.rung_o` never
+//      reaches GEOM.DRAWJOB, GEOM.MESHFETCH, GEOM.ASSETFETCH or GEOM.ASSEMBLE.
+//      `j_format` is a BYTE-LAYOUT agreement, not a detail level -- meshfetch
+//      uses it only to refuse a mismatched descriptor (`zhao_geom_meshfetch
+//      :289`) -- and meshfetch's only reduction is frustum cull from
+//      `zhao_geom_cull`, which has no LOD input at all. So demotion today can
+//      shrink SHADOW HULLS and PARTICLE representations but not a creature's
+//      own triangles, which are the dominant producer of tile references. A
+//      demotion law written against creature meshes has no consumer yet; one
+//      written against hulls and particles has two.
+//
+//      THE UNITS, COMPUTED RATHER THAN QUOTED. 32,768 REFERENCES is the ruled
+//      number; at CHUNK_IDS=14 that is ceil(32768/14) = 2,341 CHUNKS = 149,824
+//      bytes. Against R7's preferred tier (131,072 refs) the giant is 25% of
+//      references but only 14.3% of the MAX_CHUNKS=16,384 array. The flattering
+//      error is NOT writing 32,768 into `seal_chunks_i`: that is 200% of
+//      MAX_CHUNKS and refuses itself loudly. The flattering error is reserving
+//      2,341 chunks and calling the giant covered -- chunks are the PAYLOAD
+//      only, and the directive reserves "all required vertices/descriptors/
+//      metadata" in the same sentence. R7 rules NO number for those three, so
+//      the reservation CANNOT be a hardware constant. That is the real argument
+//      for the plan arriving from the HPS, and it is stronger than the one
+//      above it.
+//
+//      A REFINEMENT, because wording decides what the next grep concludes.
+//      "NOTHING READS THOSE EIGHT BITS" is true of POLICY and false of WIRING.
+//      `semantic_weight` IS connected to a named consumer port --
+//      `.m_quality_tier_i (af_s_side[71:64])` (:26108) -> GEOM.ASSEMBLE
+//      (`zhao_geom_assemble.sv:72`) -> MATERIAL.RESOLVE -- which echoes it and
+//      consults it nowhere, and says so: "The quality tier is CARRIED, not
+//      consulted. It selects a mip policy in a later tier-aware table and there
+//      is no such table" (`zhao_material_resolve.sv:241-243`). Its intended use
+//      is a TEXTURE MIP policy, not geometry reduction.
+//
+//      AN INSTRUMENT TRAP FOUND HERE, AND IT IS LIVE. This entry's head line
+//      ends "-- NOT a" and its body begins "tie-off:", so the phrase the
+//      register settles entries on is SPLIT BY A LINE WRAP, and
+//      `completion_register.py` matches it in the HEAD LINE ONLY (:200-224).
+//      I56 therefore reads as `unclassified` and counts as a gap. REJOINING
+//      THAT WRAP WOULD CLOSE I56 BY REFORMATTING -- a free reduction of exactly
+//      the kind that check exists to prevent. It is left as it is, and named
+//      here so a future tidy-up is recognised as a closure and refused.
+//
+//      WHAT WAS NOT DONE, DELIBERATELY: no selector, no ABI field, no arena
+//      port, no binner port. Each alone is a disconnected implementation, which
+//      the register counts as a gap and the campaign's first rule refuses as a
+//      closure. The seal stays at capacity -- still the NEUTRAL choice, still
+//      declared here rather than hidden. `npm run abi:check` was run at this
+//      commit and is clean (37 outputs match): the ABI was deliberately NOT
+//      moved, because the field it would carry belongs to a plan whose
+//      enforcement seam is not yet built.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
