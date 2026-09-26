@@ -152,3 +152,97 @@ and phase 3 — damage control on the failed console fit — is running in paral
 and producing measured reductions (`zhao_geom_drawjob` 100,561 -> 1,865
 registers; `zhao_geom_attrsetup` 45 -> 36 DSP). **The register can reach 1 without
 you. It cannot reach 0.**
+
+---
+
+# ADDENDUM, two hours later — I RE-ASKED MY OWN QUESTION AND THE SHAPE CHANGED
+
+**Everything above about options 2 and 3 stands. Option 1 was described wrongly,
+by me, in the flattering direction — and correcting it makes the whole decision
+better posed.**
+
+I called option 1 *"cheapest in silicon terms"*. Then I went looking for material
+and nav's fabric consumers, the way I said I would, and found something the
+entry's three options do not mention.
+
+## The accumulator that would own material and nav ALREADY EXISTS
+
+`fpga/rtl/terrain/zhao_terrain_patch_acc.sv` is **the four-bank patch
+accumulator** — its own header: *"height, velocity, material, nav_cost — 16 RAMs
+total"*, with `out_nav_0_o` … `out_nav_3_o` on its port list and both
+writer-selection laws written down:
+
+* **material** — *"the LAST field in COMMAND ORDER that covers the vertex AND
+  writes the material lane wins, wholesale (u32, opaque)"*;
+* **nav_cost** — *"command-ordered saturating fx_add chain, init 0"*.
+
+Both are marked **DECLARED HERE, chosen not found** — *"no document declares one
+— this is its first written form, recorded for negotiation."* **So the law you
+are being asked about has already been drafted, in RTL, by whoever built that
+block, and it has been waiting for someone to ratify or replace it.**
+
+## But it is NOT in the machine, and neither is its walker
+
+`design/prod_manifest.yml` marks both **`not-yet-adopted`**:
+
+* `zhao_terrain_field_walk` — the Earth lattice walker (ruling R44, directive
+  FH18/13.1–13.4), *"adopt when C1 composes the Earth datapath"*;
+* `zhao_terrain_patch_acc` — the same, section 13.4, with a **KNOWN OPEN** the
+  manifest states rather than hides: *"no ready/valid and no backpressure on any
+  phase, and phase exclusivity plus the 'two idle cycles' are caller obligations
+  the RTL does not enforce, which is the repair section 13.4 commissions."*
+
+**So option 1 is not a small change. It is composing the FIELD-MAJOR machine**,
+plus 13.4's backpressure repair. I was wrong to call it cheap and I would rather
+say so here than have you discover it.
+
+## And that reframes the question in a way that helps
+
+`zhao_console_core`'s own I34 text says the FIELD-MAJOR machine is **already on
+the critical path for a reason that has nothing to do with material or nav**:
+
+> *a single field covering a whole 33x33 patch is therefore order 10^5 clocks
+> against the 10,416-clock allowance this entry records below …
+> `fld_earth_stall_cycles_o` is … the number that decides whether the FIELD-MAJOR
+> machine … has to be built before terrain fields run at frame rate.*
+
+**If terrain fields are to run at frame rate, that machine gets built anyway.**
+And when it is, **material and nav arrive with it** — the banks exist, the
+reducers exist, the laws are drafted. They stop being two orphan lanes looking
+for a home and become two outputs of a subsystem you already need.
+
+## So the decision I am actually asking for, restated
+
+**Not "where do material and nav go."** That question has a provisional answer
+sitting in RTL already.
+
+**The question is: do we commission the Earth datapath (directive 13.1–13.4) as
+a subsystem, on its throughput case, and take material and nav as part of it?**
+
+* **If yes** — I34 closes as part of that work, the drafted writer-selection laws
+  get ratified or replaced on their merits rather than under gap pressure, and
+  option 2's impossible bandwidth never comes into it.
+* **If no** — then terrain fields do not run at frame rate, which is a much
+  larger statement than anything about material and nav, and it needs saying out
+  loud rather than arriving as a consequence.
+
+**What I will do unless told otherwise**, and it is narrower than before: spend
+one packet to **measure `fld_earth_stall_cycles_o` against the 10,416-clock
+allowance on a real workload**, so the throughput case is a number rather than an
+order-of-magnitude argument. That is the fact both branches turn on, it costs no
+ratification, and it is the kind of thing this campaign should never decide
+without.
+
+**Unchanged: I will not adopt option 3 at all, and I will not adopt option 1 as a
+silent permanent state.**
+
+## And a note on how this correction happened, because it is the pattern
+
+I wrote the section above from the entry's three options and my own bandwidth
+re-measurement, and it was **accurate and incomplete**. What it was missing was
+found by doing the recon I had recommended someone else do — twenty minutes of
+reading, no toolchain — and it inverted the cost ranking of the cheapest option.
+
+**An escalation assembled from an entry's own summary inherits that entry's
+blind spots.** This one nearly went to you with "cheapest" attached to the most
+expensive option on the list.
