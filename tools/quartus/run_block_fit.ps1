@@ -866,6 +866,21 @@ if ($Device) {
         # So the row carries its own device and a flag whose name cannot be
         # skimmed past. Any gate or report that sums ALM across rows should
         # refuse a row with notTargetDevice set, or say out loud that it did not.
+        # AND EVERY ROW NOW STAMPS THE DEVICE IT WAS MEASURED ON, not only
+        # the non-default ones. ADDED 2026-09-26, after two console maps were
+        # DIFFERENCED ACROSS PARTS and a 247-block DSP fall was read as a win.
+        #
+        # The information was already here -- every earlier console row carries
+        # `notTargetDevice: $true` and a sizingNote -- and it was still missed,
+        # because the ASYMMETRY hides the fault: a row on the DEFAULT part said
+        # nothing at all, so the absence of a flag read as agreement rather than
+        # as silence. A reader comparing a flagged row with an unflagged one has
+        # to know that only one side ever speaks.
+        #
+        # `measuredDevice` is on EVERY row, so two rows can be checked against
+        # each other mechanically and no row is silent about its part.
+        $row.measuredDevice = if ($Device) { $Device } else { '5CSEBA6U23I7' }
+
         if ($Device) {
             $row.sizingDevice    = $Device
             $row.notTargetDevice = $true
