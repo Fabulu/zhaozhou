@@ -1,5 +1,9 @@
 # Per-entity attribution — `zhao_console_core`
 
+**DEVICE: `5CEBA9F31C7`.** Rows from DIFFERENT devices MUST NOT be differenced —
+Quartus replaces multipliers a part cannot hold, so a smaller device
+reports fewer DSPs and more ALUTs for the same RTL.
+
 Derived by `tools/budget/map_entity_attrib.py` from the Analysis &
 Synthesis entity table. **Synthesis estimates, not a placement result:**
 this design has never placed, so there are no ALM figures and no Fmax,

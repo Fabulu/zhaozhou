@@ -72,6 +72,30 @@ def _own(s: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def read_device(path: str) -> str:
+    """The part this map was run against.
+
+    ADDED 2026-09-26, AFTER I DIFFERENCED TWO CONSOLE MAPS ON DIFFERENT PARTS.
+    `run_block_fit.ps1 -Device` defaults to the SHIPPING part `5CSEBA6U23I7`;
+    `@edgeclose` was run explicitly on the SIZING part `5CEBA9F31C7`, and I ran
+    mine without the flag. Quartus replaces multipliers it cannot place, so the
+    DSP column fell 375 -> 128 and the ALUT column ROSE -- and for twenty
+    minutes that read as a 66% DSP win.
+
+    A table that does not name its device invites exactly that subtraction.
+    This one names it, in the header, every time.
+    """
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.startswith("; Device "):
+                cells = [c.strip() for c in line.split(";") if c.strip()]
+                if len(cells) >= 2:
+                    return cells[1]
+            if line.startswith("+---") and "Device" not in line:
+                pass
+    return "UNKNOWN"
+
+
 def parse(path: str) -> list[dict]:
     """Rows of the Resource Utilization by Entity table, in report order.
 
@@ -143,12 +167,17 @@ def top_disjoint(rows: list[dict], key: str, n: int) -> list[dict]:
     return out
 
 
-def render(rows: list[dict], top_n: int, drills: list[str]) -> str:
+def render(rows: list[dict], top_n: int, drills: list[str],
+           device: str = "UNKNOWN") -> str:
     top = rows[0]
     L: list[str] = []
     a = L.append
 
     a("# Per-entity attribution — `%s`" % top["node"])
+    a("")
+    a("**DEVICE: `%s`.** Rows from DIFFERENT devices MUST NOT be differenced —" % device)
+    a("Quartus replaces multipliers a part cannot hold, so a smaller device")
+    a("reports fewer DSPs and more ALUTs for the same RTL.")
     a("")
     a("Derived by `tools/budget/map_entity_attrib.py` from the Analysis &")
     a("Synthesis entity table. **Synthesis estimates, not a placement result:**")
@@ -260,7 +289,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    text = render(rows, args.top, args.drill)
+    text = render(rows, args.top, args.drill, read_device(args.report))
     if args.markdown:
         with open(args.markdown, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
