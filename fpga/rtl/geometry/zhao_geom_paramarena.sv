@@ -395,11 +395,16 @@ module zhao_geom_paramarena
     // so a chunk that was born terminal becomes an interior link of its tile's
     // chain.
     //
-    // WHY IT IS NEEDED AT ALL, in one paragraph, because the obvious reading is
-    // that `zhao_geom_chunkser` manages without it. It does, and its header
-    // says exactly why: it emits `next` = `ck_alloc_id_i + 1` "because this
-    // block is the arena's only chunk producer AND OFFERS A TILE'S CHUNKS IN
-    // ORDER". That is true of a TILE-MAJOR serialiser walking finished lists.
+    // WHY IT IS NEEDED AT ALL, in one paragraph, because the obvious reading
+    // is that the block this one replaced managed without it. It did.
+    // `zhao_geom_chunkser` was DELETED by ARENACOMPOSE on 2026-09-26 -- do not
+    // grep for it -- and its header said exactly why it did not need a patch:
+    // it emitted `next` = `ck_alloc_id_i + 1` "because this block is the
+    // arena's only chunk producer AND OFFERS A TILE'S CHUNKS IN ORDER". That
+    // is true of a TILE-MAJOR serialiser walking finished lists, which is what
+    // it was, and it is why it could only ever be fed by
+    // `zhao_geom_binner_v2`'s serialise pass -- the series console entry I55
+    // exists to break.
     // `zhao_geom_arenabin` bins the live stream in SUBMISSION order, so
     // between one of a tile's chunks and the next there may be hundreds
     // belonging to other tiles, and the successor's index does not exist yet.
