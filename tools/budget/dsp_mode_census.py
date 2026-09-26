@@ -50,6 +50,22 @@ file proves the distinction twice over: its edge products negate the PRODUCT,
 the OPERAND, and the first shape costs nothing while the second cost nine
 blocks.
 
+AND THE COLUMN ALSO MISSES MONEY, WHICH IS THE HALF THIS HEADER DID NOT SAY.
+Added 2026-09-26 by DSPHUNT. `zhao_forge_shadow` has ZERO Independent 27x27 --
+its mode table is 9x9 and 18x18 throughout -- and narrowing one function return
+type from a declared 32 bits to its true 18 took it from 7 DSP to 5 and from 510
+combinational ALUTs to 450. Sorting on this column would have skipped it.
+
+So the column is wrong in BOTH directions. It sorts by how WIDE a multiply is;
+what costs is how much wider a multiply is than it NEEDS to be. A 32x32 in the
+cheapest available modes still costs twice a 32x18 in the cheapest available
+modes, and neither appears here as anything but 18x18 rows.
+
+Note also that an Independent 27x27 is not automatically waste: for operands of
+19..27 bits it is the CHEAPEST option, one block where 18x18 decomposition would
+need two. The rows that recovered blocks this week were found by asking what an
+operand's TRUE width is, never by reading this table.
+
 A reader who takes the 27x27 column as "declared-width money waiting to be
 collected" will spend a packet and collect zero. The column still SORTS blocks
 usefully -- it is why attrsetup was looked at first, and that was right -- but

@@ -2257,6 +2257,50 @@ targets:
       - fpga/rtl/field/zhao_field_sin.sv
       - fpga/rtl/field/zhao_field_sin_rom.sv
 
+  # DSPHUNT, 2026-09-26. 7 DSP in the console, from two 32x32 multiplies whose
+  # second operand is a FUNCTION RETURN (`unit_cos`/`unit_sin`) declared
+  # `signed [31:0]` while every value in its table fits in 18 bits signed.
+  # Mapped to test whether Quartus's sign-extension stripping reaches through a
+  # function boundary. NO RULES: never fitted before.
+  - top: zhao_forge_shadow
+    sources:
+      - fpga/rtl/forge/zhao_forge_shadow.sv
+
+  # DSPHUNT, 2026-09-26. `zhao_raster_attrgrad_v2` is the console's LARGEST DSP
+  # consumer by module and had never been fitted: 8 blocks of its own and SIX
+  # replicas instantiated, one per tile pipe, for 48 of the console's 375.
+  # It was invisible to every previous look at that column because
+  # `map_entity_attrib.py` reports SUBTREE totals, in which all 48 sit inside
+  # `zhao_shell_top_v2:u_shell`'s 88 with no name on them.
+  # `tools/budget/dsp_leaf_attrib.py` is what surfaced it.
+  #
+  # Closure from `tools/quartus/propose_fit_target.py`: it pulls in
+  # `zhao_raster_attrdiv_v2`, so the standalone row is the PAIR and not the
+  # leaf. That is fine for a before/after as long as both rows use this same
+  # closure, and it is stated here so nobody differences this row against the
+  # console's per-entity 8.
+  #
+  # NO RULES. This block has never been fitted and a bound invented after the
+  # measurement it governs reports a pass.
+  - top: zhao_raster_attrgrad_v2
+    sources:
+      - fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+
+  # DSPHUNT's positive control for the 2026-09-26 multiply narrowing. It is
+  # `zhao_geom_skin_norm.sv` at commit 19c8cfde with the module renamed and
+  # NOTHING else changed, so mapping it must reproduce the pre-repair block on
+  # every number. It did: 21 DSP, 920 registers, 2053 combinational ALUTs, 8
+  # Independent 27x27 -- identical to `zhao_geom_skin_norm@gzdsp-base`.
+  #
+  # A control arm that does not reproduce the block is measuring a different
+  # machine, and every number taken from the comparison is then about something
+  # else. NO RULES, for the same reason the block below states: a bound written
+  # here would be one invented after the measurement it governs.
+  - top: zhao_skinnorm_mul_probe
+    sources:
+      - tests/probes/zhao_skinnorm_mul_probe.sv
+
   - top: zhao_geom_skin_norm
     sources:
       - fpga/rtl/geometry/zhao_geom_skin_norm.sv
