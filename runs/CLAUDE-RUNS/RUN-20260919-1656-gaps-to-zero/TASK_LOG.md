@@ -2970,3 +2970,82 @@ instrument**, and recorded the shell construct as an open question, not a defect
 
 **Register 5 before, 5 after** -- correctly unchanged, because it refused I55
 rather than closing it.
+
+### 2026-09-26 - ALL FOUR LANES LANDED. Register 5, and three refusals that each got better.
+
+Merged this stretch: **CHUNKSER** (`4fd141da`, I54 closed, 6 -> 5), **WALKSWAP**
+(`0cc0da42`, a production defect and I55 refused with numbers), **FLOPARRAY**
+(`c1f0e896`, -43,548 registers at zero clocks), **CELLCARRY** (`bbe7dd33`, I13
+refused a third time on new grounds).
+
+**CELLCARRY: I13 refused, and CARRIAGE IS THE SMALLER HALF.** Two ARITHMETIC
+LAWS are unsettled, and a law must be settled before a wire is laid -- get one
+wrong and the pixel is wrong against a capture-exact law **while every gate in
+the repo passes**.
+
+* **The frozen textured law QUANTISES THE SHADE and no RTL does it.**
+  `terrain.cpp:633-637` is `shade_q = (shade + 8191) >> 14` then `<< 14`, and
+  with `ambient()` in [16384, 65536] that is a **four-level quarter-step
+  ladder** whose own comment gives the reason: the 256-colour budget. The
+  composed path would be two 8-bit `unit_mul` roundings and none. Zero RTL hits,
+  positive control fired.
+* **The S8.24 bound fails silently.** The mesh path is safe only because its `u`
+  is a **16-bit record field**; terrain's is 32-bit Q16.16 in tile units with
+  **no saturate or clamp anywhere** on that multiply.
+
+**AND IT REFUTED MY BRIEF.** I wrote *"the colour is NOT the blocker"* on the
+tint's ratified identity. `mod_of` HAS THREE OPERANDS AND I COSTED ONE, then
+declared the whole settled -- with more confidence than the ten passes that made
+the same mistake before me.
+
+**A FALSE PRESENCE, which is the rarer and worse kind.** OWNER-DECISIONS §2
+says the normal map needs *"no port change on a composed block"*, citing
+`zhao_raster_texjoin_v2` -- **zero instantiations, marked not shell-connected,
+no `detail_i`/`detail_o` anywhere**. The seam is WIDER than recorded. A dozen
+false absences have been caught here; **a false presence is worse, because
+nobody re-asks a thing already said to be there.**
+
+**Two corrections the other way**: the entry's "no carriage at all" is wrong (32
+bits already ride the flat request per triangle -- a **three-file** job, not
+eleven), and **`PACKET-PROTOCOL`'s "Bash is broken in this tree" is STALE**. I
+fixed that one here, because every packet reads it: **a blanket "bash is broken"
+sent packets round a working road.**
+
+**The switch-binding trap, twice in one day, opposite signs.** It read four RC=1
+controls as four reds when a splat through `powershell -File` stringified the
+switches so they never started. **Mine produced false GREENS** (a PowerShell
+exception leaves `$LASTEXITCODE` carrying the previous value); **its produced
+false REDS.** The false-red failure is the safer one -- it provokes
+investigation instead of a confident pass.
+
+**The two controls the low-memory reaper killed -- it declined to claim them
+green, and I ran them here.** Both PASS: `-NoEchoArm` SMOKE_RC=0, `-BadTraceArm`
+SMOKE_RC=0 with *"the reserved bit was refused whole and nothing was armed"*.
+
+### THE FLOP-ARRAY PROGRAMME IS CLOSED (15.29)
+
+I was about to commission a fourth conversion packet and **measured first**.
+`check_ram_inference.py --rank`'s top six are all **absent from the console or
+already inferring**. Rule 5's lesson was that its silence is not a verdict;
+**this is the other half -- its NOISE is not a work list.** Added
+`--against=<map.rpt>` so every ranked row carries what the composition shows.
+
+**Density decides the rest**: the three landed conversions ran 2,178-2,458
+ALM/M10K; the remainder is ~36,280 registers of many small arrays at **~225
+ALM/M10K, ten times worse**, against ~238 free blocks. **Phase 3's remaining
+levers are architecture** (`zhao_shell_top_v2` 48,352 ALUTs,
+`zhao_field_host_v2` 39,964) **and the DSP axis, where nothing has been built**:
+369 against 112, moved by 6 all campaign.
+
+### WHERE THINGS STAND
+
+**Nothing running. Register 5:** `I13` (refused x3, two laws unsettled), `I34`
+(**escalated -- the one open owner decision**), `I55` (refused with numbers, the
+path is circular), `I56` (decided, needs a command field and an ABI check), and
+`zhao_terrain_normalmap`.
+
+**Phase 3 measured like-for-like:** ALUTs -29,314, registers -92,974, DSP -6.
+Against the shipping part: **317% / 187% / 329% / 57%**.
+
+**Before the next console fit:** WALKSWAP's `wr_words_q` repair is in, so the
+known stall is gone.
