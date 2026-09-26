@@ -3389,3 +3389,68 @@ interrupted packet.**
 **Running: CARRIAGE (I13 item 3), BINARENA (I55's independent producer).**
 Register **5**, bare. Gates 31/31 at baseline, closure lint clean, ledger 246
 rows with zero lost. **I34 is the only entry now waiting on the owner.**
+
+### 2026-09-26 - CARRIAGE: THE CARRIAGE IS LAID AND NOT ONE PIXEL MOVED
+
+**Items 2 and 3 are DONE.** `zhao_terrain_clipfeed.sv` composed as slice 3 of a
+`.NCLIENT (4)` door, a fourth `zhao_geom_depthquant_stream` + `zhao_raster_rcp24_v4`
+pair off raw `w`, **both of SHADELADDER's laws instantiated** (their deferral rows
+deleted, which was each row's own stated delete condition), terrain edge retired
+from core and board.
+
+**And the value traverses the composed machine under real backpressure:**
+`clip submitted` **16 -> 272** -- the mesh's plus every one of terrain's 256.
+**Then all 256 cull, verdict ZERO AREA**, and `raster pixels` stays 2,560.
+
+### THE CLAIM THAT COST THE PIXEL IS I13's OWN, AND THREE PACKETS INHERITED IT
+
+The entry has said since 2026-09-25 that *"the arm's triangles have AREA now"*,
+on the evidence `terrlight degenerate=0`. **Two different quantities.**
+`terr_light_degenerate_o` is the **3D FACE NORMAL's** degeneracy from the compose
+cache's **world** positions; screen area is a property of the **PROJECTED**
+corners. TERRAINAUX's repair was real; the sentence written after it was about
+the other quantity.
+
+**The inference is the useful half**: world normals non-degenerate (distinct
+world positions) while screen area is **exactly zero** -> **the collapse is in
+the PROJECTION, not the lattice.** PROJCOLLAPSE is launched on exactly that, with
+the shared-projector asymmetry as its strongest clue -- `project_vertex` is the
+declared reference model of **both** GEOM.PROJECT and TERRAIN.PROJECT, so a fault
+in the shared core would break the mesh too, **and the mesh draws.**
+
+### A FALSE PRESENCE IN MY OWN BRIEF, AND THE LINT THAT HID IT
+
+**I wrote "the consumer is resident".** True about **INSTANTIATION**, false about
+**CONSUMPTION**: the mosaic's `mosaic_tile_w`/`tx_w`/`ty_w` occur **exactly twice
+each** -- declaration and port connection -- and **nothing reads them.** I
+verified it by hand. CARRIAGE refused item 1 on that ground and was right to;
+worse, wiring it would have been **harmful**, because `base_rgb` becomes the
+published texel RGB at `sample_count==0` and `recipe_weight` is the blend weight
+under `R_LERP` -- both shut today **only by coincidence.**
+
+**And it was invisible because `tests/shell/v3_closure_inherited.vlt` waives
+`UNUSEDSIGNAL` across FIVE WHOLE DIRECTORIES** -- texture, raster, geometry,
+common, video. **In those directories a signal that goes nowhere raises
+nothing.** That waiver is hiding the exact defect class this campaign keeps
+paying for, and it is now written into the next brief.
+
+**My job order was also backwards**: item 3 is the **prerequisite** for item 1.
+The flat request is a held **span** value, not per-triangle carriage; the 50-bit
+rider dies at `u_geom_vertid` and `zhao_geom_setup` has no field to carry it.
+
+**And CARRIAGE caught itself**: its first draft declared nine per-corner tint
+ports but walked **three** triples and copied corner A to B and C -- **a flat
+broadcast wearing a per-vertex port list**, which would have made authoring layer
+H an RTL change. Caught by `UNUSEDSIGNAL` -- **the same instrument waived four
+directories away.** It also rewrote three smoke checks that were correct
+conclusions on unenforced premises, **all three stronger, none relaxed**, and
+bounded `culled` rather than equalling it so as not to assert the bug.
+
+**Owed:** `zhao_terrain_clipfeed` has **no directed test of its own** -- its glue
+has counter evidence, not value-against-oracle.
+
+### WHERE THINGS STAND
+
+**Running: BINARENA (I55), PROJCOLLAPSE (the zero-area cull).** Register **5**,
+bare. Gates 31/31, closure lint clean at **289 sources**. **I34 remains the only
+entry waiting on the owner.**
