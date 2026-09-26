@@ -139,6 +139,17 @@ module tb_zhao_geom_paramarena
     // `ck_ids_i[k]` in the driver IS id k -- no packing arithmetic in C++.
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
 
+    // ---- the chain patch (BINARENA 2026-09-26, console entry I55) ----------
+    // Driven straight from the bench so `geom_paramarena_directed` can exercise
+    // the patch and FIRE `link_illegal_o` with legal stimulus -- an index at or
+    // above the allocation cursor is an ordinary input value, so this guard
+    // needs no committed mutant.
+    input  var logic        lk_valid_i,
+    output var logic        lk_ready_o,
+    input  var logic [17:0] lk_index_i,
+    input  var logic [31:0] lk_next_i,
+    input  var logic [15:0] lk_count_i,
+
     // ---- the guard lease the arena OWNS ------------------------------------
     output var logic pb_lease_valid_o,
     output var logic pb_wr_view_o,
@@ -160,6 +171,8 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] verts_written_o,
     output var logic [31:0] tris_written_o,
     output var logic [31:0] chunks_written_o,
+    output var logic [31:0] links_written_o,
+    output var logic [31:0] link_illegal_o,
     output var logic [31:0] frames_published_o,
     output var logic [31:0] arena_guard_denied_o,
     output var logic [31:0] quota_overflow_o,
@@ -507,6 +520,12 @@ module tb_zhao_geom_paramarena
       .ck_next_i (cs_enable_i ? cs_ck_next_w  : ck_next_i),
       .ck_count_i(cs_enable_i ? cs_ck_count_w : ck_count_i),
       .ck_ids_i  (cs_enable_i ? cs_ck_ids_w   : ck_ids_i),
+      .lk_valid_i(lk_valid_i),
+      .lk_ready_o(lk_ready_o),
+      .lk_index_i(lk_index_i),
+      .lk_next_i (lk_next_i),
+      .lk_count_i(lk_count_i),
+
       .ck_accept_o   (ck_accept_o),
       .ck_alloc_id_o (ck_alloc_id_o),
 
@@ -550,6 +569,8 @@ module tb_zhao_geom_paramarena
       .verts_written_o    (verts_written_o),
       .tris_written_o     (tris_written_o),
       .chunks_written_o   (chunks_written_o),
+      .links_written_o    (links_written_o),
+      .link_illegal_o     (link_illegal_o),
       .frames_published_o (frames_published_o),
       .guard_denied_o     (arena_guard_denied_o),
       .quota_overflow_o   (quota_overflow_o),

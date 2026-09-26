@@ -394,6 +394,43 @@ module zhao_geom_paramarena_align_mutant
     input  var logic [15:0] ck_count_i,
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
 
+    // ---- THE CHAIN PATCH (`lk_*`) -------------------------------------------
+    // BINARENA, 2026-09-26, console entry I55. Rewrites bytes 0..7 -- `next`,
+    // `count` and the generation -- of a chunk THIS BLOCK HAS ALREADY WRITTEN,
+    // so a chunk that was born terminal becomes an interior link of its tile's
+    // chain.
+    //
+    // WHY IT IS NEEDED AT ALL, in one paragraph, because the obvious reading is
+    // that `zhao_geom_chunkser` manages without it. It does, and its header
+    // says exactly why: it emits `next` = `ck_alloc_id_i + 1` "because this
+    // block is the arena's only chunk producer AND OFFERS A TILE'S CHUNKS IN
+    // ORDER". That is true of a TILE-MAJOR serialiser walking finished lists.
+    // `zhao_geom_arenabin` bins the live stream in SUBMISSION order, so
+    // between one of a tile's chunks and the next there may be hundreds
+    // belonging to other tiles, and the successor's index does not exist yet.
+    // The alternatives are holding the tile's chunks on chip -- the
+    // frame-sized array the owner directive says to move to SDRAM -- or a
+    // backward chain, which delivers a tile's triangles newest-first and
+    // breaks the painter's order the binner keeps a tail pointer to preserve.
+    //
+    // IT IS AN ADDRESSED WRITE AND NOT A NEW WRITER. It is issued by the one
+    // write engine below, from the one `m_addr_q`, is charged to `wr_words_q`
+    // like every other op, and is therefore covered by the drain precondition
+    // the publication arm waits on -- so a patch cannot still be in flight when
+    // the frame publishes. THE GENERATION IS STILL STAMPED HERE, from `gen_q`,
+    // never supplied by the caller: the law this file's chunk packing states is
+    // preserved rather than excepted.
+    //
+    // `lk_index_i` MUST NAME AN ALREADY ALLOCATED CHUNK. Patching a chunk the
+    // cursor has not reached would write a record nobody wrote into a region
+    // whose bytes are last frame's, and it would decode cleanly. It is refused
+    // and counted at `link_illegal_o` rather than clamped.
+    input  var logic        lk_valid_i,
+    output var logic        lk_ready_o,
+    input  var logic [17:0] lk_index_i,
+    input  var logic [31:0] lk_next_i,
+    input  var logic [15:0] lk_count_i,
+
     // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE ---------------------
     // ARENAID, 2026-09-25, owner vacation directive section 4. This block is
     // the ALLOCATION AUTHORITY -- the contract's table says so in one word --
@@ -469,6 +506,13 @@ module zhao_geom_paramarena_align_mutant
     output var logic [31:0] verts_written_o,
     output var logic [31:0] tris_written_o,
     output var logic [31:0] chunks_written_o,
+    // THE PATCHES. `links_written_o` counts them; `link_illegal_o` counts the
+    // ones refused for naming a chunk the cursor has not allocated. Both are
+    // reachable with legal stimulus -- `lk_index_i` is an INPUT, so a bench
+    // that offers an out-of-range index fires the second -- and neither
+    // therefore owes a committed mutant.
+    output var logic [31:0] links_written_o,
+    output var logic [31:0] link_illegal_o,
     output var logic [31:0] frames_published_o,
     output var logic [31:0] guard_denied_o,
     output var logic [31:0] quota_overflow_o,
@@ -778,6 +822,16 @@ module zhao_geom_paramarena_align_mutant
       ck_next_i                     // byte  0.. 3
   };
 
+  // The chain patch's eight bytes -- the chunk header, and nothing else. It
+  // stops at byte 8 ON PURPOSE: byte 8 is the chunk's FIRST TRIANGLE ID, and a
+  // patch that reached one byte further would silently rewrite a reference.
+  // The generation comes from `gen_q` here exactly as it does above.
+  wire [LK_B*8-1:0] lk_bytes_c = {
+      gen_q,                        // byte  6.. 7
+      lk_count_i,                   // byte  4.. 5
+      lk_next_i                     // byte  0.. 3
+  };
+
   // The frame directory. Written to the scratch at publish, read by the
   // walker, and the only record both sides must agree on.
   wire [DIR_B*8-1:0] dir_bytes_c = {
@@ -808,7 +862,7 @@ module zhao_geom_paramarena_align_mutant
   logic [3:0]      m_beat_q;
   logic [3:0]      m_beats_q;
   // WHAT the op is, kept so the completion counter names the right record.
-  typedef enum logic [1:0] { K_PV, K_TD, K_CK, K_DIR } kind_e;
+  typedef enum logic [2:0] { K_PV, K_TD, K_CK, K_DIR, K_LK } kind_e;
   kind_e m_kind_q;
 
   // ------------------------------------------------------- allocation ------
@@ -824,6 +878,15 @@ module zhao_geom_paramarena_align_mutant
                         + 40'(n_tris_q)    * 40'(TD_B);
   wire [39:0] ck_addr_c = 40'(view_base_c) + 40'(CHUNK_OFF_B)
                         + 40'(n_chunks_q)  * 40'(CK_B);
+
+  // THE PATCH'S ADDRESS, from the SAME chunk-base arithmetic the allocation
+  // uses, with the caller's index in place of the cursor. Deliberately the
+  // same expression rather than a second one in the producer: a chunk's byte
+  // address is this block's law, and a copy of it elsewhere is a copy that can
+  // drift while both sides go on agreeing with themselves.
+  localparam int unsigned LK_B = 8;             // next(4) + count(2) + gen(2)
+  wire [39:0] lk_addr_c = 40'(view_base_c) + 40'(CHUNK_OFF_B)
+                        + 40'(lk_index_i)  * 40'(CK_B);
 
   // QUOTA, not capacity. The sealed number is the bound; MAX_* is what the
   // arena could hold. A frame sealed below capacity must still fault at ITS
@@ -847,6 +910,13 @@ module zhao_geom_paramarena_align_mutant
   wire pv_in_view_c = (pv_addr_c + 40'(PV_SLOT_B)) <= view_top_c;
   wire td_in_view_c = (td_addr_c + 40'(TD_B)) <= view_top_c;
   wire ck_in_view_c = (ck_addr_c + 40'(CK_B)) <= view_top_c;
+  // A PATCH IS BOUNDED TWICE AND THE TWO BOUNDS ASK DIFFERENT QUESTIONS.
+  // `lk_alloc_c` says the chunk EXISTS -- the cursor has passed it this frame;
+  // `lk_in_view_c` says the bytes are inside the view. A patch that named an
+  // unallocated index would be inside the view and still be writing a record
+  // over last frame's bytes, which is why the first test is not redundant.
+  wire lk_alloc_c   = (lk_index_i < n_chunks_q);
+  wire lk_in_view_c = (lk_addr_c + 40'(LK_B)) <= view_top_c;
 
   // ---------------------------------------------------------- intake gate --
   wire engine_free_c = (mstate_q == M_IDLE);
@@ -873,10 +943,15 @@ module zhao_geom_paramarena_align_mutant
   assign pv_ready_o = taking_c;
   assign td_ready_o = taking_c && !pv_valid_i;
   assign ck_ready_o = taking_c && !pv_valid_i && !td_valid_i;
+  // THE PATCH IS LAST IN THE PRIORITY ORDER, and it is the right place for it:
+  // a patch never blocks a record, and it is the only op whose target already
+  // exists, so delaying it costs nothing but a clock.
+  assign lk_ready_o = taking_c && !pv_valid_i && !td_valid_i && !ck_valid_i;
 
   wire pv_fire_c = pv_valid_i && pv_ready_o;
   wire td_fire_c = td_valid_i && td_ready_o;
   wire ck_fire_c = ck_valid_i && ck_ready_o;
+  wire lk_fire_c = lk_valid_i && lk_ready_o;
 
   // THE ACCEPTANCE PORTS, built from the SAME terms the intake arm below
   // tests, in the same order, so there is ONE decision with two readers rather
@@ -990,6 +1065,8 @@ module zhao_geom_paramarena_align_mutant
       verts_written_o     <= '0;
       tris_written_o      <= '0;
       chunks_written_o    <= '0;
+      links_written_o     <= '0;
+      link_illegal_o      <= '0;
       frames_published_o  <= '0;
       guard_denied_o      <= '0;
       quota_overflow_o    <= '0;
@@ -1073,7 +1150,7 @@ module zhao_geom_paramarena_align_mutant
       scr_walker_q <= scr_req_i && !scr_mine_q;
 
       // ---- intake ----------------------------------------------------------
-      if (pv_fire_c || td_fire_c || ck_fire_c) begin
+      if (pv_fire_c || td_fire_c || ck_fire_c || lk_fire_c) begin
         if (!frame_open_q) begin
           // Nobody has sealed a frame. The record has nowhere to go and is
           // consumed so the producer does not stall; counted so a console
@@ -1122,7 +1199,7 @@ module zhao_geom_paramarena_align_mutant
             mstate_q  <= M_REQ;
             n_tris_q  <= n_tris_q + 18'd1;
           end
-        end else begin
+        end else if (ck_fire_c) begin
           if (!ck_fits_c) begin
             quota_overflow_o <= quota_overflow_o + 32'd1;
             frame_fault_q    <= 1'b1;
@@ -1138,6 +1215,29 @@ module zhao_geom_paramarena_align_mutant
             m_beat_q   <= 4'd0;
             mstate_q   <= M_REQ;
             n_chunks_q <= n_chunks_q + 18'd1;
+          end
+        end else begin
+          // ---- the chain patch ---------------------------------------------
+          // NO CURSOR MOVES HERE. A patch allocates nothing: it rewrites the
+          // header of a record this frame already wrote, so advancing
+          // `n_chunks_q` would make the arena describe a chunk that does not
+          // exist and the published count would be wrong by one per link.
+          if (!lk_alloc_c || !lk_in_view_c) begin
+            // REFUSED, NOT CLAMPED, AND IT DOES NOT FAULT THE FRAME. A patch
+            // naming a chunk the cursor has not reached is a PRODUCER defect,
+            // and the records already written are intact -- the tile's chain
+            // simply ends one chunk early, which is a correct if shorter list.
+            // Faulting the whole frame on it would throw away good geometry to
+            // punish a link, so it is counted loudly instead.
+            link_illegal_o <= link_illegal_o + 32'd1;
+          end else begin
+            m_addr_q  <= lk_addr_c[26:0];
+            m_len_q   <= 7'(LK_B);
+            m_wsh_q   <= SHW'(lk_bytes_c);
+            m_beats_q <= 4'(LK_B / 8);
+            m_kind_q  <= K_LK;
+            m_beat_q  <= 4'd0;
+            mstate_q  <= M_REQ;
           end
         end
       end
@@ -1254,6 +1354,7 @@ module zhao_geom_paramarena_align_mutant
               K_PV:  verts_written_o  <= verts_written_o + 32'd1;
               K_TD:  tris_written_o   <= tris_written_o + 32'd1;
               K_CK:  chunks_written_o <= chunks_written_o + 32'd1;
+              K_LK:  links_written_o  <= links_written_o + 32'd1;
               K_DIR: dir_written_q    <= 1'b1;
               default: ;
             endcase
