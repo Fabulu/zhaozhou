@@ -131,7 +131,14 @@ back and re-capture.
 
 ## Traps (full list in handover §5)
 
-* Bash is broken in this tree. **PowerShell only.**
+* ~~Bash is broken in this tree. PowerShell only.~~ **STALE, CORRECTED 2026-09-26 (CELLCARRY).**
+  Bash works. The coordinator has used it all campaign for git, greps and
+  python. **What is still true is narrower and is the part that matters:**
+  use PowerShell for anything that runs `run_block_fit.ps1`, `cmake
+  --preset` or the smoke scripts, because the toolchain environment comes
+  from `tools/env/zhao-env.ps1`; and **heredocs into `bash -c` fail on long
+  or quote-heavy text** -- write the file and run it, or use the Write
+  tool. A blanket "bash is broken" sent packets round a working road.
 * Backtick is PowerShell's escape character inside double quotes.
 * Read/write files with `[IO.File]::ReadAllText/WriteAllText`, not
   `Get-Content | -join`. Read fully, transform, THEN open for writing.
