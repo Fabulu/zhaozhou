@@ -437,8 +437,33 @@ module zhao_geom_chunkser #(
                 chunks_sunk_o <= chunks_sunk_o + 32'd1;
               end
 
+              // THE TAIL PAST `count` IS POISONED, NOT ZEROED.
+              //
+              // A first version of this line cleared the staging to ZERO, and
+              // a first version of this comment said the clear was racing the
+              // intake and losing a reference. THAT DIAGNOSIS WAS WRONG and it
+              // is written down because it was wrong in the usual direction --
+              // it blamed the block being written instead of the one being
+              // read. Tapping what this block actually hands the arena showed
+              // every chunk correct (`next=1 count=14 id0=4`, then
+              // `next=NULL count=5 id0=18`), and a peek of the DRAM showed the
+              // same bytes. The corruption was `zhao_geom_paramwalk` fetching a
+              // new chunk's first descriptor at the PREVIOUS chunk's index.
+              //
+              // What the zero clear DID do is disguise it: the walker's stale
+              // read landed on a zeroed tail slot and came back as id 0, which
+              // reads like a lost write. With the tail left stale it came back
+              // as the previous chunk's last id, which is what named the fault.
+              //
+              // So the tail is now ALL-ONES. `ck_count_o` already bounds what a
+              // reader may look at, and `zhao_geom_parambuf` refuses a count
+              // above CHUNK_IDS -- but if anything ever reads past the count
+              // anyway, all-ones is above any sealed `tris` and `td_illegal_o`
+              // REFUSES it. Zero is a legal descriptor index and would have
+              // been accepted. When this block cannot say something true, it
+              // says something the guard rejects.
               fill_q      <= {SLOT_W{1'b0}};
-              for (k = 0; k < CHUNK_IDS; k = k + 1) stage_q[k] <= 32'd0;
+              for (k = 0; k < CHUNK_IDS; k = k + 1) stage_q[k] <= 32'hFFFF_FFFF;
 
               // The pass may have ended while this chunk was being offered.
               if (ser_done_i || pass_end_q) begin

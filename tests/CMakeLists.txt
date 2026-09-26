@@ -10947,7 +10947,16 @@ set(ZHAO_PARAMARENA_SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_ctrl.sv
     ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_parambuf.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramwalk.sv)
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramwalk.sv
+    # Entry I54, 2026-09-26. The bench now carries the chunk serialiser's
+    # live chain behind `cs_enable_i`; with it LOW the pre-existing cases
+    # and both arena mutants behave exactly as before, which is why these
+    # go in the SHARED list rather than only in the new target.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_chunkser.sv)
 
 add_executable(test_geom_paramarena_directed geometry/geom_paramarena_directed.cpp)
 target_link_libraries(test_geom_paramarena_directed PRIVATE zhao_harness)
@@ -10963,6 +10972,53 @@ verilate(test_geom_paramarena_directed
 add_test(NAME geom_paramarena_directed COMMAND test_geom_paramarena_directed)
 set_tests_properties(geom_paramarena_directed
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# ENTRY I54 -- THE CHUNK SERIALISER'S ACCEPTANCE.
+#
+# The evidence entry I54 asks for is NOT that the guards pass: a binner slot is
+# 0..127, below any plausible sealed `tris`, so `ck_illegal_o` and
+# `td_illegal_o` would BOTH pass while the walk returned wrong descriptors that
+# decode cleanly. This target builds the whole chain -- binner, identity queue,
+# serialiser, arena, real guard/arbiter/controller/DRAM, walker, decoder -- and
+# compares each chunk's ids against the ARENA'S OWN DESCRIPTORS, with the arena
+# index deliberately offset from the binner slot so the two cannot coincide.
+#
+# Three cases: the correct behaviour with every counter at zero, and two
+# separate positive controls that inject a fault and assert the counter FIRES.
+# Neither control owes a committed mutant -- both faults are presentable at a
+# port, which is why `ck_alloc_id_i` and the retire beat are inputs.
+# ---------------------------------------------------------------------------
+add_executable(test_geom_chunkser_directed geometry/geom_chunkser_directed.cpp)
+target_link_libraries(test_geom_chunkser_directed PRIVATE zhao_harness)
+verilate(test_geom_chunkser_directed
+  PREFIX Vtb_zhao_geom_paramarena
+  TOP_MODULE tb_zhao_geom_paramarena
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_PARAMARENA_SOURCES}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
+          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+add_test(NAME geom_chunkser_directed COMMAND test_geom_chunkser_directed)
+set_tests_properties(geom_chunkser_directed
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+add_test(NAME lint_geom_chunkser
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_chunkser
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_chunkser.sv)
+set_tests_properties(lint_geom_chunkser PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_geom_tidq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_tidq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv)
+set_tests_properties(lint_geom_tidq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
 # GEOM.VERTID -- the one geometry identity space (ARENAID 2026-09-25, owner

@@ -402,6 +402,28 @@ module zhao_geom_paramwalk
   // construction rather than dropped by accident.
   wire [22:0] id_c     = r_buf_q[64 + 32*{28'd0, id_idx_q} +: 23];
   wire [22:0] nxt_id_c = r_buf_q[64 + 32*({28'd0, id_idx_q} + 32'd1) +: 23];
+  // AND THE CHUNK'S FIRST ID IS ITS OWN WIRE, for exactly the reason the two
+  // above are -- the paragraph over them was right about the hazard and missed
+  // one of its two sites.
+  //
+  // REPAIR, 2026-09-26 (CHUNKSER). The chunk-decode arm issues the first
+  // descriptor read of a new chunk on the SAME CLOCK it assigns
+  // `id_idx_q <= 0`. Non-blocking, so `id_c` there is indexed by the PREVIOUS
+  // chunk's final index, and the first descriptor of every chunk after the
+  // very first was fetched from the wrong id.
+  //
+  // IT WAS UNREACHABLE UNTIL ENTRY I54 EXISTED. Nothing in this tree had ever
+  // walked a chain of chunks holding DIFFERENT ids -- the chunk intake was
+  // tied to zero, and the hand-driven cases only ever walked one chunk from a
+  // fresh reset, where `id_idx_q` is 0 and the bug is invisible. MEASURED the
+  // first time a real producer filled the arena: a tile whose references are
+  // 4..22 walked back as `4 5 ... 16 17 [17] 19 20 21 22` -- an id that is in
+  // range, decodes cleanly and names the wrong triangle, which is precisely
+  // the fault console entry I54 is written against, arriving from the READER
+  // instead of the writer. Every counter in the arena, the walker and the
+  // parambuf read zero throughout.
+  // ENFORCED-BY: tests/geometry/geom_chunkser_directed.cpp
+  wire [22:0] id0_c    = r_buf_q[64 +: 23];
 
   // --------------------------------------------------------------- core ----
   always_ff @(posedge clk or negedge rst_n) begin
@@ -627,7 +649,10 @@ module zhao_geom_paramwalk
                 wstate_q <= W_END;
               end
             end else begin
-              m_addr_q  <= 27'(w_tri_base_q + 27'(id_c * 23'(TD_B)));
+              // `id0_c`, NOT `id_c`: `id_idx_q <= 0` is assigned above on this
+              // same clock, so `id_c` here would name the PREVIOUS chunk's
+              // last index. See the wire's own comment.
+              m_addr_q  <= 27'(w_tri_base_q + 27'(id0_c * 23'(TD_B)));
               m_len_q   <= 7'(TD_B);
               r_beats_q <= 4'(TD_BEATS);
               r_beat_q  <= 4'd0;
