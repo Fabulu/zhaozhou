@@ -4056,6 +4056,13 @@
 //      was again not taken up -- the entry's first prohibition stands and
 //      nothing here needed it.
 //
+//      [THAT RECEIPT STANDS FOR THE RUN IT DESCRIBES, and the number does
+//      not: `raster pixels` is 2,816 since 2026-09-26 (gz/terrainvisible),
+//      which repaired the FIXTURE this paragraph correctly reports drawing
+//      nothing. "Not one pixel moved" is this packet's honest account of its
+//      own pass and was true of it. See the TERRAINVISIBLE section at the end
+//      of this entry.]
+//
 //      WHAT IS BUILT AND COMPOSED, and it is items 1, 2 and 3 of the
 //      TERRTRI list in one file, because they are one beat:
 //      `zhao_terrain_clipfeed`, instantiated below as `u_terrain_clipfeed`
