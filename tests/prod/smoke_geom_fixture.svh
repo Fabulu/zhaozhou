@@ -25,8 +25,25 @@ localparam int unsigned SGF_EXP_REPLAYED = 16;  // view-triangles out of GEOM.RE
 localparam int unsigned SGF_EXP_CLIPPED  = 2;  // GEOM.CLIP `clipped` (near plane / empty box)
 localparam int unsigned SGF_EXP_CULLED   = 0;  // GEOM.CLIP `culled` (zero area / backface)
 localparam int unsigned SGF_EXP_ACCEPTED = 14;  // into GEOM.SETUP
-localparam int unsigned SGF_EXP_TILES    = 10;  // union over both views
-localparam int unsigned SGF_EXP_PIXELS   = 2560;  // tiles x 16 x 16
+localparam int unsigned SGF_TERR_RECORDS = 3;
+localparam int SGF_TERR_IX0 = 0;  // record r: patch_ix = r + this
+localparam int SGF_TERR_IZ0 = 1;  // record r: patch_iz = r + this
+localparam int SGF_TERR_PITCH_LOG2 = 0;  // pitch = 2^this metres
+localparam logic signed [15:0] SGF_TERR_BASE_H16 = -16'sd5120, SGF_TERR_TILTX_H16 = 16'sd256, SGF_TERR_TILTZ_H16 = 16'sd128;  // layer A = BASE + TILTX*vi + TILTZ*vj, height16 raw (256 = 1 m)
+localparam int unsigned SGF_TERR_JOBS = 1;  // subpatch jobs, MEASURED (`SMOKE: terrjob`)
+localparam int unsigned SGF_TERR_LEVEL = 0;  // every job's LOD level
+localparam int unsigned SGF_EXP_TERR_TRIS     = 128;  // TERRAIN.CLIPFEED emits (1 job x 128)
+localparam int unsigned SGF_EXP_TERR_CLIPPED  = 67;  // sub-pixel: no pixel centre inside
+localparam int unsigned SGF_EXP_TERR_CULLED   = 0;  // ZERO AREA -- must stay 0
+localparam int unsigned SGF_EXP_TERR_ACCEPTED = 61;  // into GEOM.SETUP
+localparam int unsigned SGF_EXP_TERR_TILES    = 2;  // tiles TERRAIN COVERS (binned: 2)
+localparam int unsigned SGF_EXP_MESH_TILES    = 10;  // tiles the MESH COVERS (binned: 10)
+localparam int unsigned SGF_EXP_TILES    = 11;  // UNION of the COVERED sets -- the tiles the raster resolves
+localparam int unsigned SGF_EXP_PIXELS   = 2816;  // tiles x 16 x 16 (was 2560, mesh only, before terrain drew)
+localparam int unsigned SGF_EXP_TILE_REFS  = 101;  // GEOM.BINNER catalog id 18, references PUSHED
+localparam int unsigned SGF_EXP_TILE_DEPTH = 59;  // GEOM.BINNER catalog id 19, the deepest tile list
+localparam int unsigned SGF_BINNER_TRI_CAP = 128;  // zhao_geom_bin_pipe_v2 TRI_CAP, triangles per frame
 localparam logic [15:0] SGF_ENV_YAW = 16'h4000, SGF_ENV_PITCH = 16'h1000, SGF_ENV_SUN = 16'hFD0C, SGF_ENV_AMB = 16'h10C4;  // the SetEnvironment record
 localparam logic [16:0] SGF_EXP_LIT_R = 17'd64406, SGF_EXP_LIT_G = 17'd44459, SGF_EXP_LIT_B = 17'd31863;  // bank_of(record) -> L=(60547,25080,0), ndl 60547
-// Tiles, (tx,ty): (0,1) (0,2) (1,1) (1,2) (1,3) (2,1) (2,2) (3,1) (3,2) (3,3)
+// Mesh tiles COVERED, (tx,ty): (0,1) (0,2) (1,1) (1,2) (1,3) (2,1) (2,2) (3,1) (3,2) (3,3)
+// Terrain tiles COVERED, (tx,ty): (1,0) (1,1)

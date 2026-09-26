@@ -7157,7 +7157,11 @@ blocks:
         evidence: >-
           COMPOSED in zhao_console_core (owner ruling R195, core entry I17 (c)).
           The seam carries: SMOKE frags=2560 against the raster's own
-          pixels=2560, one for one; cells_flushed=160 = ten whole tiles;
+          pixels=2560, one for one; cells_flushed=160 = ten whole tiles.
+          (Those three numbers are the 2026-09-21 MESH-ONLY fixture. The
+          smoke draws terrain as of 2026-09-26 and the same three read
+          2816 / 2816 / 176 = eleven tiles; the RATIO, which is what this
+          row is evidence for, is unchanged.)
           plane written=160 oob=0; reads[gd/gg]=[770308 770308] with
           miss[gd/gg]=[0 0]. Three files -- zhao_post_gather_tag.sv (R195's
           law, every coefficient a parameter), zhao_post_gather.sv (R5's

@@ -2816,6 +2816,70 @@ module tb_zhao_console_core_smoke
                    pcj_cx_q[k], pcj_cy_q[k], pcj_bh_q[k], pcj_aw_q[k]);
     end
   endtask
+
+  // ==========================================================================
+  // TERRAINVISIBLE PROBE (2026-09-26) -- THE SUBPATCH JOBS, AS NUMBERS
+  // ==========================================================================
+  // `smoke_geom_fixture_gen.cpp` derives the terrain half of the pixel gate by
+  // calling `zref::terrain::tessellate` on the SAME subpatch jobs the console
+  // issues.  Which jobs those are was, until this probe, read off nobody: the
+  // bench printed `tess_refs=256` and `tess_vertices=162` and the levels, the
+  // subpatch origins and the morph factors behind them were an inference.
+  //
+  // 162 = 2 x 81 and 256 = 2 x 128 are CONSISTENT with two level-0 subpatches
+  // and with nothing else in the level set -- but "consistent with" is exactly
+  // the step CLAUDE.md's broken-instrument chapter is about, and the generator
+  // now DEPENDS on the answer.  So the job port is read directly.
+  //
+  // It is read at `u_terrain_group_seq`'s own output handshake, which is the
+  // port `zhao_terrain_tess` accepts; the sequencer presents each job TWICE
+  // (mode 1 = fill, mode 2 = refs), so `mode` is captured with it rather than
+  // the pairs being assumed.
+  localparam int unsigned TJB_N = 8;
+  int unsigned       tjb_n_q;
+  logic [1:0]        tjb_mode_q [0:TJB_N-1];
+  logic [5:0]        tjb_ox_q   [0:TJB_N-1], tjb_oz_q [0:TJB_N-1];
+  logic [1:0]        tjb_lvl_q  [0:TJB_N-1];
+  logic [1:0]        tjb_nz_q   [0:TJB_N-1], tjb_pz_q [0:TJB_N-1];
+  logic [1:0]        tjb_nx_q   [0:TJB_N-1], tjb_px_q [0:TJB_N-1];
+  logic [16:0]       tjb_morph_q[0:TJB_N-1];
+  logic              tjb_surf_q [0:TJB_N-1], tjb_dual_q[0:TJB_N-1];
+  logic [15:0]       tjb_src_q  [0:TJB_N-1];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tjb_n_q <= 0;
+    end else if (`PC_CORE.tt_job_valid && `PC_CORE.tt_job_ready) begin
+      if (tjb_n_q < TJB_N) begin
+        tjb_mode_q [tjb_n_q] <= `PC_CORE.tt_job_mode;
+        tjb_ox_q   [tjb_n_q] <= `PC_CORE.tt_job_ox;
+        tjb_oz_q   [tjb_n_q] <= `PC_CORE.tt_job_oz;
+        tjb_lvl_q  [tjb_n_q] <= `PC_CORE.tt_job_level;
+        tjb_nz_q   [tjb_n_q] <= `PC_CORE.tt_job_nz;
+        tjb_pz_q   [tjb_n_q] <= `PC_CORE.tt_job_pz;
+        tjb_nx_q   [tjb_n_q] <= `PC_CORE.tt_job_nx;
+        tjb_px_q   [tjb_n_q] <= `PC_CORE.tt_job_px;
+        tjb_morph_q[tjb_n_q] <= `PC_CORE.tt_job_morph;
+        tjb_surf_q [tjb_n_q] <= `PC_CORE.tt_job_surface;
+        tjb_dual_q [tjb_n_q] <= `PC_CORE.tt_job_dual;
+        tjb_src_q  [tjb_n_q] <= `PC_CORE.tt_job_src_id;
+      end
+      tjb_n_q <= tjb_n_q + 1;
+    end
+  end
+
+  task automatic tjb_report();
+    int unsigned k;
+    begin
+      $display("SMOKE: terrjob   presentations=%0d (each subpatch is presented twice: mode 1 fill, mode 2 refs)", tjb_n_q);
+      for (k = 0; k < TJB_N; k = k + 1)
+        if (k < tjb_n_q)
+          $display("SMOKE: terrjob   [%0d] mode=%0d ox=%0d oz=%0d level=%0d nlvl[nz/pz/nx/px]=[%0d %0d %0d %0d] morph=%0d surface=%0d dual=%0d src=%0d",
+                   k, tjb_mode_q[k], tjb_ox_q[k], tjb_oz_q[k], tjb_lvl_q[k],
+                   tjb_nz_q[k], tjb_pz_q[k], tjb_nx_q[k], tjb_px_q[k],
+                   tjb_morph_q[k], tjb_surf_q[k], tjb_dual_q[k], tjb_src_q[k]);
+    end
+  endtask
   // ==========================================================================
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
@@ -4746,19 +4810,38 @@ module tb_zhao_console_core_smoke
     // TERRAIN.PLACE's `place_env_mismatch_o`), because a bench that satisfies
     // only the checks that happen to run today is a fixture that breaks the
     // moment the next block composes.
+    //
+    // THE COORDINATES MOVED 2026-09-26 (TERRAINVISIBLE), from (r+3, r+7) to
+    // (r + SGF_TERR_IX0, r + SGF_TERR_IZ0) = (r-1, r+1), AND THEY COME FROM
+    // THE GENERATED FIXTURE HEADER so the page and the oracle cannot drift.
+    // WHY: the envelope law above ties a patch's distance to its coordinates,
+    // so a patch at index iz subtends 1/iz of the view's half width at its
+    // near edge -- INDEPENDENT of pitch, because scaling the world scales z
+    // with it. At (3, 7) the whole 32 m patch was about 2.3 px wide and a 1 m
+    // cell 0.072 px, so every terrain triangle that was not culled for zero
+    // area was rejected OFFSCREEN with no pixel centre inside it
+    // (PROJCOLLAPSE, entry I13). At (-1, 1) the patch's near edge spans a full
+    // ndc unit. The camera and the viewports are NOT touched: `SGF_MAT` and
+    // `SGF_VP*` are what they were, so the mesh's own 14 triangles and 10
+    // tiles are unchanged and terrain ADDS tile (0,0) rather than trading any
+    // away.
+    if (N_TERR_REC != SGF_TERR_RECORDS)
+      $fatal(1, "SMOKE: N_TERR_REC=%0d but the fixture generator modelled %0d terrain record(s)",
+             N_TERR_REC, SGF_TERR_RECORDS);
     for (int unsigned r = 0; r < N_TERR_REC; r++) begin
       automatic int unsigned pw    = (PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3;
-      automatic int          ix_i  = int'(r) + 3;
-      automatic int          iz_i  = int'(r) + 7;
+      automatic int          ix_i  = int'(r) + SGF_TERR_IX0;
+      automatic int          iz_i  = int'(r) + SGF_TERR_IZ0;
       // fx16 is Q16.18-free Q16.16 here (FX16_ONE = 32'sh0001_0000), so one
       // metre is 65,536 raw and a 32 m patch edge is 32 * 65,536.
-      automatic logic signed [31:0] ex0 = 32'( ix_i      * 32 * 65536);
-      automatic logic signed [31:0] ez0 = 32'( iz_i      * 32 * 65536);
-      automatic logic signed [31:0] ex1 = 32'((ix_i + 1) * 32 * 65536);
-      automatic logic signed [31:0] ez1 = 32'((iz_i + 1) * 32 * 65536);
+      automatic int                 pm  = 32 * (65536 << SGF_TERR_PITCH_LOG2);
+      automatic logic signed [31:0] ex0 = 32'( ix_i      * pm);
+      automatic logic signed [31:0] ez0 = 32'( iz_i      * pm);
+      automatic logic signed [31:0] ex1 = 32'((ix_i + 1) * pm);
+      automatic logic signed [31:0] ez1 = 32'((iz_i + 1) * pm);
       hps_mem[pw + 0] = {32'h0000_0042,     // +4  island_id
                          8'h00,             // +3  flags (no C, no D layer)
-                         8'h00,             // +2  pitch_log2 = 0 -> 1 m
+                         8'(SGF_TERR_PITCH_LOG2),  // +2  pitch_log2 (0 -> 1 m)
                          16'h0001};         // +0  format_version = 1
       hps_mem[pw + 1] = {32'h0000_0000,     // +12 tileset_id
                          16'(iz_i),         // +10 patch_iz
@@ -4769,29 +4852,70 @@ module tb_zhao_console_core_smoke
     end
 
 
-    // ---- -TerrainRelief: LAYER A GETS A REAL HEIGHT FIELD ------------------
-    // PROJCOLLAPSE's positive control for the named cause.  The body of every
-    // played page is all zeros, so layer A -- "Top base height, 33x33,
-    // height16" (spec/terrain_rules.md sec 7, the FIRST plane of the body, at
-    // byte PAGE_CRC_LO_C) -- is a flat field, every lattice height is the same
-    // constant, and under this fixture's camera (SGF_MAT rows 0/1 are the
-    // identity and row 3 is {0,0,1,0}, so ndc_y = world_y / world_z with the
-    // eye at world y = 0) EVERY projected corner gets the SAME screen y.  The
-    // cross product is then exactly zero and GEOM.CLIP culls every terrain
-    // triangle with verdict ZERO_AREA -- lawfully, on a correct projection of
-    // a plane seen edge-on.
+    // ---- LAYER A: THE GROUND, AND WHY IT IS NOT ZERO ----------------------
+    // CHANGED 2026-09-26 (TERRAINVISIBLE), under
+    // `reports/DECISION-20260926-TERRAIN-FIXTURE.md`.  The relief that used to
+    // live behind `-TerrainRelief` is now the DEFAULT, and the flat page it
+    // used to be measured against is the switch.  The polarity inverted
+    // because the fixture was repaired, not because the check was weakened.
     //
-    // This arm writes relief instead.  height16 is S 1.7.8 metres
-    // (terrain_rules sec 2), so 256 raw is one metre; the pattern is a small
-    // staircase in both lattice axes, which is enough that no triangle has
-    // three corners at one height.  It is written BEFORE the CRC fold below so
-    // the page still seals against its own bytes.
+    // WHAT THE ZERO BODY DID, measured by PROJCOLLAPSE and not argued.  Layer
+    // A -- "Top base height, 33x33, height16" (spec/terrain_rules.md sec 7,
+    // the FIRST plane of the body, at byte PAGE_CRC_LO_C) -- was all zeros, so
+    // every one of the 81 lattice vertices in the subpatch sat at world
+    // y = 0.  This fixture's camera (SGF_MAT rows 0/1 the identity, row 3
+    // {0,0,1,0}) gives ndc_y = world_y / world_z with the eye at world y = 0.
+    // THE GROUND PLANE THEREFORE PASSED THROUGH THE EYE, AND A PLANE THROUGH
+    // THE EYE PROJECTS TO A LINE: all three corners carried screen y = 8192
+    // (= 32.0 px, exactly y0 + h/2), the cross product was arithmetically
+    // zero, and GEOM.CLIP culled all 256 with verdict ZERO_AREA -- correctly.
     //
-    // DIRECT POLARITY, and it does NOT assert the bug: it asserts that a
-    // lattice with relief carries screen area, which stays true after the
-    // fixture is repaired.  The plain build is the negative control and is
-    // unchanged.
-`ifdef ZHAO_SMOKE_TERRAIN_RELIEF
+    // WHAT IS WRITTEN NOW is an AFFINE ramp,
+    //     h(vi,vj) = SGF_TERR_BASE_H16 + SGF_TERR_TILTX_H16*vi
+    //                                  + SGF_TERR_TILTZ_H16*vj
+    // in height16 raw (S 1.7.8 metres, terrain_rules sec 2, so 256 raw = 1 m):
+    // ground 20 m BELOW the eye, sloping +1.0 m per lattice step in x and
+    // +0.5 m in z.  The three numbers come from the GENERATED fixture header,
+    // because `smoke_geom_fixture_gen.cpp` has to build the same lattice to
+    // derive SGF_EXP_PIXELS -- one source, exactly as for the mesh.
+    //
+    // AFFINE IS CHOSEN AND IT IS THE LOAD-BEARING CHOICE.  Every coarser LOD
+    // level reproduces an affine field EXACTLY (`zref::terrain::coarse_height`
+    // is the midpoint, and an affine field's midpoint is its own value there),
+    // so `lod_deviation` is zero at every level -- exactly as it was for the
+    // flat field -- and `morph_height` is the identity.  TERRAIN.LOD therefore
+    // sees what it saw before and the subpatch jobs do not move.  A curved or
+    // noisy field would change the deviations, hence the level, hence the
+    // triangle count, and the fixture generator would then have to model
+    // TERRAIN.LOD's selector as well: a second implementation of a law that
+    // already has one.  The tilts are powers of two in raw units, so every
+    // halving `coarse_height` performs is exact rather than nearly so.
+    //
+    // BASE alone is what removes the zero area.  It is the same repair as
+    // putting the eye off the ground plane, done in the layer this bench owns
+    // instead of in the camera, so `SGF_MAT` and `SGF_VP*` are untouched and
+    // the mesh's own pixels are exactly what they were.  The TILTS are what
+    // give the patch vertical extent on screen (12.0 .. 25.6 px of a 64 px
+    // view) and a face normal that is not the +Y axis, so TERRAIN.NORMALS and
+    // TERRAIN.SHADE are doing arithmetic rather than reproducing a constant.
+    //
+    // It is written BEFORE the CRC fold below so the page still seals against
+    // its own bytes.
+    //
+    // ---- -TerrainFlatLattice: THE ZERO BODY, KEPT AS A NAMED CONTROL ------
+    // The flat page is EVIDENCE and is not deleted.  With this switch layer A
+    // is left all zeros -- the page every run played until today -- and
+    // nothing else changes, so the run re-demonstrates that a ground plane
+    // through the eye projects to a line and is lawfully culled.  DIRECT
+    // polarity: it passes when GEOM.CLIP culls the terrain triangles.
+    //
+    // IT IS NOT A TEST THAT ASSERTS A BUG.  What it asserts is a property of
+    // the PROJECTION -- an edge-on plane has no screen area -- which stays
+    // true forever; the flatness is the control's own deliberate stimulus, the
+    // way `-BadVertex` pokes a reserved byte.  And it is the negative control
+    // the repaired plain run needs: without it, "terrain draws now" rests on a
+    // number nobody has seen fail.
+`ifndef ZHAO_SMOKE_TERRAIN_FLAT
     for (int unsigned r = 0; r < N_TERR_REC; r++) begin
       automatic int unsigned pbase = PAGE0_OFF_C + r * PAGE_BYTES_C;
       for (int unsigned vj = 0; vj < 33; vj++)
@@ -4802,10 +4926,9 @@ module tb_zhao_console_core_smoke
           // arena writer above records costing a whole diagnosis.
           automatic int unsigned k   = vj * 33 + vi;
           automatic int unsigned a   = pbase + PAGE_CRC_LO_C + 2 * k;
-          // 0..6 metres in a staircase whose two axes have coprime periods, so
-          // no cell has its three corners level. height16 is S 1.7.8 m, so one
-          // metre is 256 raw.
-          automatic int          hm  = 256 * int'((vi % 3) + (vj % 5));
+          automatic int          hm  = int'(SGF_TERR_BASE_H16)
+                                     + int'(SGF_TERR_TILTX_H16) * int'(vi)
+                                     + int'(SGF_TERR_TILTZ_H16) * int'(vj);
           automatic logic signed [15:0] h16 = 16'(hm);
           hps_mem[ a      >> 3][8*( a      % 8) +: 8] = h16[ 7:0];
           hps_mem[(a + 1) >> 3][8*((a + 1) % 8) +: 8] = h16[15:8];
@@ -4862,8 +4985,8 @@ module tb_zhao_console_core_smoke
     // the far end of the spine.
     for (int unsigned r = 0; r < N_TERR_REC; r++) begin
       automatic int unsigned b = (LIST_OFF_C >> 3) + r * 4;
-      hps_mem[b + 0] = {16'(r + 7),          // patch_iz   i16  bytes 6..7
-                        16'(r + 3),          // patch_ix   i16  bytes 4..5
+      hps_mem[b + 0] = {16'(int'(r) + SGF_TERR_IZ0),  // patch_iz   i16  bytes 6..7
+                        16'(int'(r) + SGF_TERR_IX0),  // patch_ix   i16  bytes 4..5
                         32'h0000_0042};      // island_id  u32  bytes 0..3
       hps_mem[b + 1] = 64'(HPS_BASE) +
                        64'(PAGE0_OFF_C + r * PAGE_BYTES_C); // hps_page_addr
@@ -4892,10 +5015,10 @@ module tb_zhao_console_core_smoke
       automatic int unsigned b = (LIST_OFF_C >> 3) + r * 4;
       if (hps_mem[b + 0][31:0] !== 32'h0000_0042)
         $fatal(1, "SMOKE: arena record %0d holds island %08x, not 00000042 -- the list layout aliased", r, hps_mem[b + 0][31:0]);
-      if (hps_mem[b + 0][47:32] !== 16'(r + 3))
-        $fatal(1, "SMOKE: arena record %0d holds ix %0d, not %0d -- the list layout aliased", r, hps_mem[b + 0][47:32], r + 3);
-      if (hps_mem[b + 0][63:48] !== 16'(r + 7))
-        $fatal(1, "SMOKE: arena record %0d holds iz %0d, not %0d -- the list layout aliased", r, hps_mem[b + 0][63:48], r + 7);
+      if (hps_mem[b + 0][47:32] !== 16'(int'(r) + SGF_TERR_IX0))
+        $fatal(1, "SMOKE: arena record %0d holds ix %0d, not %0d -- the list layout aliased", r, $signed(hps_mem[b + 0][47:32]), int'(r) + SGF_TERR_IX0);
+      if (hps_mem[b + 0][63:48] !== 16'(int'(r) + SGF_TERR_IZ0))
+        $fatal(1, "SMOKE: arena record %0d holds iz %0d, not %0d -- the list layout aliased", r, $signed(hps_mem[b + 0][63:48]), int'(r) + SGF_TERR_IZ0);
       if (hps_mem[b + 1] !== 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C))
         $fatal(1, "SMOKE: arena record %0d holds page address %016x, not %016x -- the list layout aliased",
                r, hps_mem[b + 1], 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C));
@@ -4906,11 +5029,11 @@ module tb_zhao_console_core_smoke
       // tests the job against, so a header written to the wrong word is LOUD at
       // time zero instead of arriving later as `hdr_ident_fails`.
       if (hps_mem[(PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3] !==
-          {32'h0000_0042, 8'h00, 8'h00, 16'h0001})
+          {32'h0000_0042, 8'h00, 8'(SGF_TERR_PITCH_LOG2), 16'h0001})
         $fatal(1, "SMOKE: page %0d header word 0 is %016x -- version/pitch/flags/island not where 2.1 puts them",
                r, hps_mem[(PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3]);
       if (hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 1] !==
-          {32'h0000_0000, 16'(r + 7), 16'(r + 3)})
+          {32'h0000_0000, 16'(int'(r) + SGF_TERR_IZ0), 16'(int'(r) + SGF_TERR_IX0)})
         $fatal(1, "SMOKE: page %0d header word 1 is %016x -- patch_ix/patch_iz do not match record %0d",
                r, hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 1], r);
       if (hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 4][31:0] !== page_crc_q[r])
@@ -5686,27 +5809,41 @@ module tb_zhao_console_core_smoke
              geom_loom_refused_shear_o, geom_loom_refused_framing_o,
              upl_published_o, upl_status_o,
              geom_mf_refused_zero_bound_o);
-    // Let the last accepted triangles clear GEOM.SETUP and the binner.
-    repeat (200) @(posedge gpu_clk);
-
-    @(posedge gpu_clk);
-    render_frame_end_i <= 1'b1;
-    @(posedge gpu_clk);
-    render_frame_end_i <= 1'b0;
-
-    guard = 0;
-    while (!render_drain_done_o && (guard < 200000)) begin
-      @(posedge gpu_clk);
-      guard = guard + 1;
-    end
-    if (!render_drain_done_o)
-      $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
-    repeat (4000) @(posedge gpu_clk);
-
-    // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
-    // fork inside the core issues it, from the meshlet the draw above fetched.)
-
-    // ---- PACKET P-TERRAIN, SECOND SUBMISSION: THE COMPOSE PASS ------------
+    // ======================================================================
+    // THE TERRAIN COMPOSE RUNS INSIDE THE RENDER FRAME, 2026-09-26
+    // (TERRAINVISIBLE), AND THAT IS THE WHOLE OF WHY A TERRAIN PIXEL EXISTS
+    // ======================================================================
+    // This block used to sit AFTER `render_frame_end_i` below. While terrain
+    // drew nothing that was invisible; the moment its triangles carried screen
+    // area it became the thing between the arm and a pixel, and the counters
+    // that say so had to be dangled out of `zhao_shell_top_v2` by hand to be
+    // read at all (`SMOKE: rasterdiag`). MEASURED, with the block still in its
+    // old place:
+    //
+    //   clip  submitted=144 clipped=69 culled=0 setup_submitted=75
+    //   binrefs tile_references=101 max_tile_list_depth=59 overflow=0
+    //   rasterdiag jobs[started/sunk]=[36 0] resolved_tiles=10
+    //              earlyz[covered/rejects]=[1190 0] frags[covered]=1190
+    //   raster pixels=2560
+    //
+    // Read those together. GEOM.CLIP accepted 75 triangles and GEOM.BINNER
+    // pushed 101 tile references -- BOTH exactly what the reference derives,
+    // so the geometry was right. And only THIRTY-SIX raster jobs ever started,
+    // which is the MESH's 36 references, with `sunk = 0`, `early_z_rejects =
+    // 0` and `fragment_covered` unchanged at the mesh's 1,190. Nothing was
+    // rejected. Terrain's 65 references were pushed into the binner's arena
+    // AFTER the frame had been serialised, so they were never turned into
+    // raster jobs at all.
+    //
+    // That is a stimulus ORDER fault and not a console one, and it is the
+    // fourth distinct reason a tile can hold references and write no pixel --
+    // the one no existing counter in this bench could distinguish from the
+    // other three.
+    //
+    // The expensive half stays where it was: the FIRST terrain command and its
+    // page loads are issued before the render frame opens, so the ~184,000
+    // cycles of paging overlap the meshlet fetch rather than adding to the
+    // frame. What moved is the COMPOSE pass and the wait for its triangles.
     // TERRAINAUX, 2026-09-25. THIS IS THE FIXTURE REPAIR, and it is a bench
     // change because the console was never at fault.
     //
@@ -5774,45 +5911,82 @@ module tb_zhao_console_core_smoke
       guard++;
     end
 
-    // ---- the terrain job, INJECTED THROUGH THE OVERRIDE -------------------
-    // One subpatch, one view, level 0, top surface, no geomorph. The tess
-    // turns this into 81 window vertices (client B's fill) and then its
-    // triangles (the replay), so both halves of client B are exercised by ONE
-    // job. `sparse_fill_i` stays LOW: the subsystem here carries a dense shell,
-    // and a sparse fill against a dense shell is a seal-short fault the terrain
-    // differential fires on purpose -- not something a wiring smoke bench
-    // should provoke.
-    //
-    // SINCE 2026-09-21 THIS IS AN OVERRIDE AND NOT THE ONLY PRODUCER.
-    // `zhao_terrain_jobissue` issues the same thirteen fields inside the core
-    // and cannot be reached from HERE -- see the declaration block above for
-    // why, and note that the reason is the CRC failure and not the
-    // composition. While this bench drives `terr_job_valid_i` the boundary
-    // wins the cycle, exactly as the host's `proj_cfg_we_i` wins over
-    // CMD.EXEC's lowering onto the projector bank.
-    @(posedge gpu_clk);
-    terr_job_ox_i        <= 6'd0;
-    terr_job_oz_i        <= 6'd0;
-    terr_job_level_i     <= 2'd0;
-    terr_job_lvl_nz_i    <= 2'd0;
-    terr_job_lvl_pz_i    <= 2'd0;
-    terr_job_lvl_nx_i    <= 2'd0;
-    terr_job_lvl_px_i    <= 2'd0;
-    terr_job_morph_i     <= 17'd0;
-    terr_job_surface_i   <= 1'b0;
-    terr_job_dual_i      <= 1'b0;
-    terr_job_src_id_i    <= 16'h5678;
-    terr_job_view_mask_i <= 2'b01;
-    terr_job_valid_i     <= 1'b1;
+    // AND WAIT FOR THE TRIANGLES THEMSELVES, not merely for the patch to be
+    // served. `terr_cc_patches_served_o` rising means the compose cache can
+    // answer; the triangles still have to be tessellated, projected, joined
+    // with their light and u/v, and offered at GEOM.CLIP's door. Ending the
+    // frame on the serve is what put them on the wrong side of the sweep.
     guard = 0;
-    while (!(terr_job_valid_i && terr_job_ready_o) && (guard < 1000)) begin
+    while ((terr_cf_emitted_o < 32'(SGF_EXP_TERR_TRIS)) && (guard < 400000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    if (terr_cf_emitted_o < 32'(SGF_EXP_TERR_TRIS))
+      $display("SMOKE: NOTE TERRAIN.CLIPFEED emitted %0d of the reference's %0d triangle(s) in %0d cycles -- the frame is about to close over an incomplete terrain arm and `raster pixels` will read LOW for that reason and not for a geometry one",
+               terr_cf_emitted_o, SGF_EXP_TERR_TRIS, guard);
+
+    // Let the last accepted triangles clear GEOM.SETUP and the binner.
+    repeat (200) @(posedge gpu_clk);
+
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b1;
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b0;
+
+    guard = 0;
+    while (!render_drain_done_o && (guard < 200000)) begin
       @(posedge gpu_clk);
       guard = guard + 1;
     end
-    @(posedge gpu_clk);
-    terr_job_valid_i <= 1'b0;
-    if (guard >= 1000)
-      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ never accepted a job (job_ready_o stuck low)");
+    if (!render_drain_done_o)
+      $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
+    repeat (4000) @(posedge gpu_clk);
+
+    // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
+    // fork inside the core issues it, from the meshlet the draw above fetched.)
+
+    // ---- PACKET P-TERRAIN, SECOND SUBMISSION: THE COMPOSE PASS ------------
+
+    // ---- THE TERRAIN JOB, AND WHY THIS BENCH NO LONGER INJECTS ONE --------
+    // RETIRED 2026-09-26 (TERRAINVISIBLE). This block used to drive
+    // `terr_job_*_i` -- the core's HOST OVERRIDE of the subpatch job port --
+    // with ox=0, oz=0, level 0, top surface, no geomorph, src_id 0x5678, and
+    // its own comment already recorded that it had become "AN OVERRIDE AND NOT
+    // THE ONLY PRODUCER" when `zhao_terrain_jobissue` composed on 2026-09-21.
+    //
+    // `SMOKE: terrjob` (new, read-only) measured what that actually meant, and
+    // it is worse than "redundant". The console presented FOUR job
+    // presentations, which are TWO jobs, and they are THE SAME SUBPATCH:
+    //
+    //   [0]/[1] ox=0 oz=0 level=0 morph=0 surface=0 dual=0 src=1000
+    //   [2]/[3] ox=0 oz=0 level=0 morph=0 surface=0 dual=0 src=22136
+    //
+    // src 1000 is `zhao_terrain_jobissue`'s, off the T5 record this bench
+    // stages; src 22136 is 0x5678, this block's. So the fixture tessellated
+    // ONE subpatch TWICE and drew the identical 128 triangles on top of
+    // themselves -- 256 triangles of carriage for one subpatch of coverage.
+    //
+    // THAT COST HALF THE FRAME'S TRIANGLE BUDGET, and with the fixture
+    // repaired so terrain actually DRAWS it stopped being free: GEOM.BINNER's
+    // triangle store is `TRI_CAP = 128` per frame
+    // (`zhao_geom_bin_pipe_v2.sv:18`), and the wall is a whole-frame fault --
+    // `overflow_o` latches, every later triangle is dropped WHOLE, and
+    // `render_overflow_o` goes high. MEASURED, before this block was retired:
+    // 226 triangles into GEOM.SETUP, `binrefs overflow=1`,
+    // `max_tile_list_depth=99`, and `raster pixels` STUCK AT 2560 -- the
+    // terrain tile was walled off. With one job it is 75 of 128.
+    //
+    // So the live producer keeps the port and the duplicate goes. That is the
+    // direction the owner's directive names: a bench must not replace a live
+    // path with testbench stimulus, and this stimulus was SHADOWING one.
+    //
+    // WHAT IS GIVEN UP, stated rather than left to be discovered: the core's
+    // `terr_job_*_i` boundary MUX (`zhao_console_core.sv:29163-29171`,
+    // `terr_job_valid_i ? boundary : tji_*`) is no longer exercised by this
+    // bench. The job PORT it feeds is exercised every run by
+    // `zhao_terrain_jobissue`, which is the half that matters for the arm; the
+    // override arm's own selection is not, and that is a real, small loss.
+    // `tests/terrain/terrain_jobissue_directed.cpp` owns the producer side.
 
     // ---- run until the shell reaches two frame edges ----------------------
     // Two rather than one: the first proves FRAMECTL runs, the second gives
@@ -6300,10 +6474,11 @@ module tb_zhao_console_core_smoke
              geom_va_dq_stray_o);
     $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_early=%0d replay_poisoned=%0d",
              geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o, geom_rp_poisoned_o);
-    $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
+    $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference mesh: %0d / %0d / %0d / %0d, terrain: %0d / %0d / %0d / %0d)",
              geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
              geom_setup_triangles_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_CLIPPED,
-             SGF_EXP_CULLED, SGF_EXP_ACCEPTED);
+             SGF_EXP_CULLED, SGF_EXP_ACCEPTED, SGF_EXP_TERR_TRIS, SGF_EXP_TERR_CLIPPED,
+             SGF_EXP_TERR_CULLED, SGF_EXP_TERR_ACCEPTED);
     $display("SMOKE: raster     pixels=%0d bursts=%0d issued=%0d retired=%0d busy=%0d drained=%0d fatal=%0d stream_err=%0d overflow=%0d",
              render_pixels_o, render_bursts_o, render_issued_words_o,
              render_retired_words_o, render_busy_o, render_drained_o,
@@ -6313,6 +6488,32 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: binrefs    sweep_beats=%0d tile_references=%0d (seen=%0d) max_tile_list_depth=%0d (seen=%0d) overflow=%0d",
              cnt_beats_seen_q, cnt_tile_refs_q, cnt_tile_refs_seen_q,
              cnt_tile_depth_q, cnt_tile_depth_seen_q, render_overflow_o);
+    // ---- TERRAINVISIBLE PROBE (2026-09-26): WHERE A FRAGMENT DIES --------
+    // EIGHT counters that `zhao_shell_top_v2.sv:1500-1506` leaves DANGLING at
+    // its `u_render_bin` instantiation -- `raster_jobs_started_o`,
+    // `raster_jobs_sunk_o`, `tilestore_references_o`, `resolved_tiles_o`,
+    // `early_z_covered_o`, `fragment_covered_o`, `blended_fragments_o`, and
+    // `early_z_rejects_o` (which lands on a wire named `rp_ez_unused`).
+    //
+    // They are the only things that separate FOUR different reasons a tile can
+    // hold binner references and still write no pixel: the job was never
+    // started, the job was SUNK, every fragment failed EARLY-Z, or no fragment
+    // was covered at all. Without them `raster pixels=2560` beside
+    // `binrefs tile_references=101` over eleven tiles is a symptom with four
+    // candidate causes and no way to choose -- which is CLAUDE.md's
+    // "identical symptoms" paragraph, and PROJCOLLAPSE's own finding about the
+    // eight projection counters nobody printed, one subsystem downstream.
+    //
+    // Read-only, through the hierarchy. Nothing is connected.
+    $display("SMOKE: rasterdiag jobs[started/sunk]=[%0d %0d] tilestore_refs=%0d resolved_tiles=%0d | earlyz[covered/rejects]=[%0d %0d] frags[covered/blended]=[%0d %0d]",
+             `PC_SHELL.u_render_bin.raster_jobs_started_o,
+             `PC_SHELL.u_render_bin.raster_jobs_sunk_o,
+             `PC_SHELL.u_render_bin.tilestore_references_o,
+             `PC_SHELL.u_render_bin.resolved_tiles_o,
+             `PC_SHELL.u_render_bin.early_z_covered_o,
+             `PC_SHELL.u_render_bin.early_z_rejects_o,
+             `PC_SHELL.u_render_bin.fragment_covered_o,
+             `PC_SHELL.u_render_bin.blended_fragments_o);
     $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
              v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o, v2_frames_admitted_o);
@@ -6423,6 +6624,7 @@ module tb_zhao_console_core_smoke
              terr_cf_uv_sat_o, terr_cf_shade_clamped_o, terr_cf_degenerate_o,
              terr_cf_dq_refused_o, terr_cf_dq_stray_o);
     pcj_report();
+    tjb_report();
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
@@ -6586,6 +6788,31 @@ module tb_zhao_console_core_smoke
     // blocks. `proj_b_grants_o` is the one that matters most: it is the
     // ARBITER inside the shared projector granting its second client, and
     // before TERRAIN.GROUP_SEQ was composed it could not move at all.
+    //
+    // COMPILED OUT UNDER THE SLOT-OVERFLOW MUTANT, 2026-09-26
+    // (TERRAINVISIBLE), for the reason this file already gives the degeneracy
+    // gate eighty lines below: the mutation legitimately breaks them, and
+    // running them against a deliberately broken machine would be asserting
+    // the bug. The mutation halves TERR_POOL_SLOTS, so TERRAIN.PAGELOADER
+    // refuses every job the directory places above its range -- which is the
+    // whole point, it is what moves `terr_pl_slot_overflow_o`. MEASURED in
+    // that form: `terrcompose WAIT resident=0/3 ... pl loaded=0`. No page
+    // loads, so no patch composes, so `zhao_terrain_jobissue` issues no
+    // subpatch job, so client B has nothing to carry. Every number below is
+    // then zero BY CONSTRUCTION.
+    //
+    // AND THIS IS WHY IT ONLY SURFACED NOW, which is the part worth keeping.
+    // Until this commit the bench ALSO injected a subpatch job through the
+    // core's `terr_job_*_i` host override, so TESS ran in the mutant form too
+    // -- on a compose cache that was serving `32'h5BADF00D` poison, because
+    // the pages had not loaded. These four checks were passing on POISON. The
+    // override is retired (see THE TERRAIN JOB above), the live producer is
+    // the only producer, and the mutant form now says honestly that its
+    // starved pool composes nothing.
+    //
+    // NOTHING IS WEAKENED FOR PRODUCTION. The plain run and all four other
+    // controls still assert every line of this.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
     if (terr_tess_vertices_o == 0)
       $fatal(1, "SMOKE: TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job port is dead");
     if (terr_fills_forwarded_o == 0)
@@ -6607,6 +6834,7 @@ module tb_zhao_console_core_smoke
     if (terr_light_degen_mismatch_o != 0)
       $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
              terr_light_degen_mismatch_o);
+`endif  // ZHAO_MUT_SLOT_OVERFLOW -- end of the client-B liveness block
     // THE DEGENERACY IS REPAIRED, AND THE PARAGRAPH THAT STOOD HERE WAS WRONG
     // ABOUT ITS CAUSE. It read: "the pages this bench plays are all-zero
     // BODIES ... so the lattice TERRAIN.TESS emits is a flat zero height
@@ -6669,8 +6897,16 @@ module tb_zhao_console_core_smoke
     if (terr_light_stale_reads_o != 0)
       $fatal(1, "SMOKE: the light lane refused %0d reference(s) as stale -- the world store and the projector's arena disagree about a generation",
              terr_light_stale_reads_o);
+    // Same class as the client-B block above: with the mutation's starved page
+    // pool no patch composes and no subpatch job is issued, so no arena is
+    // opened and a zero here describes the mutation rather than a dead
+    // handshake. The stale-read check above is NOT skipped -- zero refusals is
+    // true of a lane that never ran, so it costs nothing to keep and it stays
+    // honest if the mutant ever does compose something.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
     if (terr_groups_opened_o == 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ opened no arena -- the open/gen handshake with the subsystem is dead");
+`endif
     if (terr_release_unsafe_o != 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ released an arena with work outstanding (release_unsafe=%0d)",
              terr_release_unsafe_o);
@@ -7489,11 +7725,30 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / %0d (a hole never lands; the poisoned arenas still seal)",
              geom_landings_o, geom_groups_sealed_o, 2 * N_GEOM_MESHLETS * (N_GEOM_VERTS - 1),
              2 * N_GEOM_MESHLETS);
-    if ((v2_frames_admitted_o != 1) || (render_pixels_o != 0) || (render_issued_words_o != render_retired_words_o))
-      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / 0 / equal (the batch drops, the frame completes)",
-             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o);
-    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed",
-             geom_rp_poisoned_o);
+    // THE PIXEL EXPECTATION CHANGED 2026-09-26 (TERRAINVISIBLE), FROM ZERO TO
+    // TERRAIN'S OWN TILES, AND THE CONTROL GOT STRONGER FOR IT.
+    //
+    // This used to read `render_pixels_o != 0`: the mesh batch drops, so
+    // nothing is rastered. That was true only while terrain drew nothing. The
+    // measured value now is SGF_EXP_TERR_TILES x 256, and every part of that
+    // is reference-derived -- the tiles terrain COVERS, times the whole-tile
+    // resolve.
+    //
+    // WHY IT IS BETTER EVIDENCE THAN THE ZERO WAS. The plain run's 2,816 is a
+    // union: mesh tiles plus terrain tiles, and terrain's contribution is the
+    // ONE tile the mesh does not touch. Here the mesh's whole batch is
+    // refused, so what the raster writes is TERRAIN ALONE -- the two arms are
+    // separated by the control rather than by an argument. A regression that
+    // silently stopped terrain drawing would leave the plain run short by 256
+    // and this one short by 512, and only this one names terrain as the cause.
+    if ((v2_frames_admitted_o != 1) ||
+        (render_pixels_o != 32'(SGF_EXP_TERR_TILES) * 32'd256) ||
+        (render_issued_words_o != render_retired_words_o))
+      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / %0d / equal. The MESH batch drops and the frame completes; what is left is TERRAIN ALONE, which covers %0d tile(s) and the pipeline resolves a whole tile.",
+             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o,
+             SGF_EXP_TERR_TILES * 256, SGF_EXP_TERR_TILES);
+    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed, writing %0d pixel(s): TERRAIN's %0d tile(s) with the whole mesh refused.",
+             geom_rp_poisoned_o, render_pixels_o, SGF_EXP_TERR_TILES);
     $finish;
 `else
     // Everything from here to the PASS line is the CLEAN fixture's verdict. It is
@@ -7712,104 +7967,107 @@ module tb_zhao_console_core_smoke
     // `terr_cf_emitted_o` triangles of its own, so the equality below is
     // written against the MESH population explicitly rather than being relaxed.
     //
-    // WHAT IS ASSERTED, AND WHAT IS DELIBERATELY NOT:
-    //   submitted  EXACT, and it is now STRONGER than it was: it pins the mesh
-    //              reference AND proves every triangle TERRAIN.CLIPFEED emitted
-    //              arrived at GEOM.CLIP's input. A carriage that dropped one
-    //              would fail here.
-    //   clipped    EXACT against the mesh reference. No terrain triangle in
-    //              this fixture is behind the eye, so terrain contributes zero;
-    //              if that ever changes this fires, which is new information
-    //              rather than noise.
-    //   culled     BOUNDED, NOT EQUAL, and the reason is a rule rather than
-    //              convenience. Every terrain triangle in this fixture is
-    //              culled with verdict ZERO_AREA -- see the NOTE below -- and
-    //              writing `culled == SGF_EXP_CULLED + terr_cf_emitted_o` would
-    //              be ASSERTING THE BUG: it would pass only while the defect
-    //              exists and would have to be edited again the day the fixture
-    //              is repaired. The bound `culled <= terr_cf_emitted_o` says
-    //              the thing that must stay true whatever terrain does -- NO
-    //              MESH TRIANGLE IS CULLED -- so a geometry regression is still
-    //              caught exactly.
-    if (geom_clip_submitted_o != (SGF_EXP_REPLAYED + terr_cf_emitted_o))
-      $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d -- the mesh reference wants %0d and TERRAIN.CLIPFEED emitted %0d",
-             geom_clip_submitted_o, SGF_EXP_REPLAYED, terr_cf_emitted_o);
-    // PROJCOLLAPSE: this exact equality is the MESH's, and its own comment
-    // above already said what would happen if terrain ever contributed --
-    // "if that ever changes this fires, which is new information rather than
-    // noise". It fired, under `-TerrainRelief`, with exactly that information:
-    // a lattice WITH relief produces 256 triangles that carry screen area and
-    // are then rejected as OFFSCREEN, because this fixture's patch is
-    // SUB-PIXEL. See the two checks under the ifdef and the NOTE below.
-`ifdef ZHAO_SMOKE_TERRAIN_RELIEF
-    if (geom_clip_clipped_o < SGF_EXP_CLIPPED ||
-        geom_clip_clipped_o > (SGF_EXP_CLIPPED + terr_cf_emitted_o))
-      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP clipped=%0d -- the mesh wants %0d and terrain can account for at most %0d more",
-             geom_clip_clipped_o, SGF_EXP_CLIPPED, terr_cf_emitted_o);
-    // THE CONTROL'S OWN CHECK, and it asserts the CORRECT behaviour rather
-    // than the defect: a lattice with relief produces NO zero-area triangle.
-    // It stays true after the fixture is repaired, so it is not a test that
-    // asserts the bug -- the plain run is the negative control and is left
-    // measuring, not asserting, what it finds.
-    if (geom_clip_culled_o != SGF_EXP_CULLED)
-      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP culled=%0d, the mesh reference wants %0d -- a lattice WITH relief must leave no triangle with zero screen area",
-             geom_clip_culled_o, SGF_EXP_CULLED);
-`else
-    if (geom_clip_clipped_o != SGF_EXP_CLIPPED)
-      $fatal(1, "SMOKE: GEOM.CLIP clipped=%0d -- the reference wants %0d",
-             geom_clip_clipped_o, SGF_EXP_CLIPPED);
-`endif
-    if (geom_clip_culled_o > (SGF_EXP_CULLED + terr_cf_emitted_o))
-      $fatal(1, "SMOKE: GEOM.CLIP culled=%0d exceeds what terrain could account for (%0d) -- a MESH triangle was culled",
-             geom_clip_culled_o, SGF_EXP_CULLED + terr_cf_emitted_o);
-    // ---- I13: THE LAST HOP, AND IT IS NOT CLOSED -------------------------
-    // This NOTE is the finding CARRIAGE landed with and it must not be read as
-    // an accepted state. Terrain's triangles reach GEOM.CLIP -- that is what
-    // the `submitted` equality above proves -- and then EVERY ONE OF THEM IS
-    // CULLED. `zhao_geom_clip` bumps `triangles_culled_o` on
-    // `VERDICT_ZERO_AREA || back`, and terrain declares CULL_NONE, under which
-    // `s3_back` is false by construction. So the verdict is ZERO AREA: the
-    // projected corners of every terrain triangle in this fixture enclose no
-    // screen area, and no terrain FRAGMENT is produced.
+    // REWRITTEN 2026-09-26 (TERRAINVISIBLE), because the terrain population is
+    // now DRAWN and its numbers are DERIVED rather than bounded. CARRIAGE and
+    // PROJCOLLAPSE left these checks bounded on purpose -- every terrain
+    // triangle was being culled for zero area, and `culled == SGF_EXP_CULLED +
+    // terr_cf_emitted_o` would have been asserting the bug: an equality that
+    // passes only while the defect exists. The defect is repaired, so the
+    // bounds become equalities against the reference, which is what they should
+    // have been all along and could not be.
     //
-    // THE CLAIM THIS FALSIFIES IS THIS ENTRY'S OWN. TERRAINAUX repaired the
-    // fixture on 2026-09-25 and recorded `terrlight ... degenerate=0` of 256 as
-    // the evidence, and I13 has carried "the arm's triangles have AREA now" ever
-    // since. THOSE ARE TWO DIFFERENT QUANTITIES. `terr_light_degenerate_o` is
-    // the 3D FACE NORMAL's degeneracy, computed by `zhao_terrain_normals` from
-    // the COMPOSE CACHE's world positions; screen area is a property of the
-    // PROJECTED corners that reach the arena. A non-zero world normal does not
-    // imply a non-zero projected area, and the repair was verified against the
-    // first while the entry's sentence was written about the second.
-    // AND THE CAUSE IS NAMED, 2026-09-26 (PROJCOLLAPSE), with the value
-    // measured at the seam instead of a verdict reached by elimination.
-    // `SMOKE: projcol` above prints the corners: A=(5851,8192) B=(5862,8192)
-    // C=(5870,8192). The three x DIFFER; only the y is shared, and 8192 in
-    // S 12.8 is 32.0 px -- EXACTLY this view's vertical centre, y0 + h/2 =
-    // 0 + 64/2. It is the viewport centre with a zero ndc_y added to it.
+    // WHAT IS ASSERTED, AND WHERE EACH NUMBER COMES FROM:
+    //   submitted  = SGF_EXP_REPLAYED + SGF_EXP_TERR_TRIS, and ALSO differenced
+    //                against `terr_cf_emitted_o` so the two ways of counting
+    //                terrain's arrivals have to agree. The first pins the
+    //                fixture, the second proves the carriage delivered every
+    //                triangle it emitted.
+    //   clipped    = SGF_EXP_CLIPPED + SGF_EXP_TERR_CLIPPED. The mesh's two are
+    //                the behind-the-eye triangle in both views (a whole-
+    //                primitive near-plane rejection). Terrain's are OFFSCREEN,
+    //                and they are not a fault: at level 0 a 1 m cell is about
+    //                0.5 px wide at this patch's distance, so a triangle whose
+    //                box holds no pixel CENTRE is rejected by
+    //                `box_lo = (vmin+127)>>8 > box_hi = (vmax-128)>>8`. That is
+    //                GEOM.CLIP being right, and the count is reference-derived
+    //                by the same oracle, so it is pinned rather than tolerated.
+    //   culled     = SGF_EXP_CULLED + SGF_EXP_TERR_CULLED, and BOTH ARE ZERO.
+    //                This is the check the whole packet exists for. Terrain
+    //                declares CULL_NONE, under which `zhao_geom_clip`'s
+    //                `s3_back` is false BY CONSTRUCTION, so a cull here can
+    //                only mean ZERO SCREEN AREA -- i.e. the ground plane is
+    //                back through the eye. It asserts the CORRECT behaviour and
+    //                stays true however the fixture is re-authored.
+    //   accepted   = SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED, into GEOM.SETUP.
+    if (geom_clip_submitted_o != (SGF_EXP_REPLAYED + SGF_EXP_TERR_TRIS))
+      $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d -- the reference wants %0d mesh + %0d terrain = %0d",
+             geom_clip_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_TERR_TRIS,
+             SGF_EXP_REPLAYED + SGF_EXP_TERR_TRIS);
+    // The SECOND way of counting terrain's arrivals, and it is a different
+    // operand: `terr_cf_emitted_o` is TERRAIN.CLIPFEED's own emit counter,
+    // `geom_clip_submitted_o` is the door's arrival counter. A carriage that
+    // dropped a triangle between them fails here and nowhere else.
+    if (terr_cf_emitted_o != SGF_EXP_TERR_TRIS)
+      $fatal(1, "SMOKE: TERRAIN.CLIPFEED emitted %0d triangle(s) and the reference models %0d -- the subpatch jobs the console issues are no longer the ones smoke_geom_fixture_gen.cpp tessellates (see `SMOKE: terrjob`: %0d job(s) at level %0d)",
+             terr_cf_emitted_o, SGF_EXP_TERR_TRIS, SGF_TERR_JOBS, SGF_TERR_LEVEL);
+`ifdef ZHAO_SMOKE_TERRAIN_FLAT
+    // ---- -TerrainFlatLattice: THE ZERO BODY, AS A NAMED CONTROL ----------
+    // Layer A is left all zeros, so every lattice vertex sits at world y = 0
+    // and this camera's eye sits there too. A PLANE THROUGH THE EYE PROJECTS
+    // TO A LINE: the three corners share a screen y, the cross product is
+    // arithmetically zero, and GEOM.CLIP must cull the lot with verdict
+    // ZERO_AREA.
     //
-    // TWO FIXTURE FACTS, AND BOTH ARE REQUIRED. The camera
-    // (`smoke_geom_fixture_gen.cpp:116`) has rows 0 and 1 the identity and
-    // row 3 {0,0,1,0}, so ndc_y = world_y / world_z with the eye at world
-    // y = 0; and the played pages' BODY is all zeros, so layer A -- the
-    // 33x33 top base height -- is a CONSTANT. Together they put the ground
-    // plane THROUGH THE EYE, and a plane through the eye projects to a LINE.
-    // Every corner gets the same y, the cross product is
-    // (5862-5851)*0 - 0*(5870-5851) = 0 exactly, and the cull is LAWFUL.
-    // `zhao_project_core` is not at fault and neither is the carriage:
-    // `SMOKE: terrwc` reads corner_hits=768 of 768, refusals 0, misses 0.
-    //
-    // PROVEN BY REVERSAL, not by argument: `-TerrainRelief` writes a real
-    // height field into layer A and nothing else, and `culled` goes 256 -> 0
-    // while the corners' y become 8192 / 8265 / 8229. The predicted step was
-    // 36.6 S 12.8 units per metre of relief at this patch's measured
-    // w = 14680064 (224.0 m); the measured steps are 37 and 36.
-    if (geom_clip_culled_o != 0)
-      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA -- LAWFULLY. The projection is correct and the PLANE IS EDGE-ON: this fixture's camera leaves world Y on screen Y with the eye at world y=0 (smoke_geom_fixture_gen.cpp:116), and the played pages' all-zero BODY makes layer A a constant, so every lattice vertex has world y=0 and every projected corner gets screen y=8192 (=32.0 px, exactly y0+h/2). See `SMOKE: projcol` for the corners and run -TerrainRelief for the reversal (culled 256 -> 0). Repair is relief in layer A or an eye off the ground plane -- NOT a tolerance on the zero-area test, which would admit a degenerate triangle.",
-               geom_clip_culled_o);
+    // The control asserts THE PROJECTION LAW, not the old defect: no mesh
+    // triangle may be culled (the mesh is not on that plane) and EVERY terrain
+    // triangle must be, because they all are. `SGF_EXP_*` still describe the
+    // repaired fixture, so the pixel and accepted checks below are skipped in
+    // this form -- the run's purpose is the cull, and quoting the plain run's
+    // pixel number here would be quoting a different scene.
+    if (geom_clip_culled_o != terr_cf_emitted_o)
+      $fatal(1, "SMOKE: -TerrainFlatLattice: GEOM.CLIP culled=%0d and TERRAIN.CLIPFEED emitted %0d -- a lattice at the eye's own height has NO screen area and every one of its triangles must be culled; a shortfall means some triangle acquired area from somewhere",
+             geom_clip_culled_o, terr_cf_emitted_o);
     if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
-      $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",
+      $fatal(1, "SMOKE: -TerrainFlatLattice: GEOM.SETUP took %0d triangle(s) and the MESH reference wants %0d -- with a flat lattice terrain must contribute none",
              geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED);
+    $display("SMOKE: NOTE -TerrainFlatLattice: GEOM.CLIP culled %0d terrain triangle(s), all with verdict ZERO_AREA and all of them LAWFULLY. Layer A is the all-zero body every page carried until 2026-09-26, so every lattice vertex is at world y=0; this fixture's camera leaves world Y on screen Y with the eye at world y=0, the ground plane passes THROUGH the eye, and a plane through the eye projects to a line. `SMOKE: projcol` above prints the corners -- the three x differ and the y do not. The repair is in layer A (the plain run writes an affine ramp 20 m below the eye), NOT a tolerance on the zero-area test, which would admit a degenerate triangle and draw a wrong pixel.",
+             geom_clip_culled_o);
+`else
+    if (geom_clip_clipped_o != (SGF_EXP_CLIPPED + SGF_EXP_TERR_CLIPPED))
+      $fatal(1, "SMOKE: GEOM.CLIP clipped=%0d -- the reference wants %0d mesh (behind the eye) + %0d terrain (sub-pixel, no pixel centre inside) = %0d",
+             geom_clip_clipped_o, SGF_EXP_CLIPPED, SGF_EXP_TERR_CLIPPED,
+             SGF_EXP_CLIPPED + SGF_EXP_TERR_CLIPPED);
+    // THE PACKET'S OWN CHECK. Zero, and it is not a zero nobody has seen move:
+    // `-TerrainFlatLattice` is the committed control that drives this counter
+    // to `terr_cf_emitted_o`, so the silence here is evidence rather than a
+    // claim. See CLAUDE.md, "a detector reading zero is a claim".
+    if (geom_clip_culled_o != (SGF_EXP_CULLED + SGF_EXP_TERR_CULLED))
+      $fatal(1, "SMOKE: GEOM.CLIP culled=%0d and the reference wants %0d. Terrain declares CULL_NONE, so `s3_back` is false by construction and a cull can ONLY be ZERO SCREEN AREA -- the ground plane is back through the eye. Check SGF_TERR_BASE_H16 in the generated fixture; do NOT put a tolerance on the area test.",
+             geom_clip_culled_o, SGF_EXP_CULLED + SGF_EXP_TERR_CULLED);
+    if (geom_setup_triangles_submitted_o != (SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED))
+      $fatal(1, "SMOKE: GEOM.SETUP took %0d triangle(s) and the reference wants %0d mesh + %0d terrain = %0d -- the clip->setup seam or the shell's triangle door is not carrying",
+             geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED, SGF_EXP_TERR_ACCEPTED,
+             SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED);
+    // ---- I13: TERRAIN DRAWS, AND WHAT THAT DOES AND DOES NOT MEAN --------
+    // 2026-09-26 (TERRAINVISIBLE). For the first time a terrain triangle
+    // reaches GEOM.SETUP in the composed console, and `render_pixels_o` moves
+    // off 2560 because terrain enters a tile -- (0,0) -- that the mesh does not
+    // touch. The two fixture facts PROJCOLLAPSE named were both repaired, and
+    // BOTH were required: layer A carries an affine ramp 20 m below the eye
+    // (so the ground plane no longer passes through it), and the patch moved
+    // from (ix 3, iz 7) to (ix -1, iz 1) (so it is no longer sub-pixel).
+    //
+    // WHAT THIS DOES NOT DO, stated here because the entry has been mistaken
+    // for closure five times: it does not close I13. The terrain pixel is
+    // UNTEXTURED. `zhao_texture_mosaic_v2`'s answer -- `mosaic_tile_w`,
+    // `mosaic_tx_w`, `mosaic_ty_w` -- is still read by nobody inside
+    // `zhao_texture_island_v3_top`, so the layer-E triple still has no
+    // consumer, and `zhao_terrain_normalmap` is still not composed.
+    $display("SMOKE: NOTE TERRAIN DRAWS. %0d terrain triangle(s) reached GEOM.SETUP (reference %0d of %0d emitted; %0d rejected OFFSCREEN as sub-pixel, %0d culled for zero area). `raster pixels` is %0d and was 2560 while terrain drew nothing: the reference's tile union went from %0d mesh tiles to %0d, terrain touching %0d of them. The number moved because terrain enters a tile the mesh does not, and it is REFERENCE-DERIVED -- smoke_geom_fixture_gen.cpp tessellates the same lattice with zref::terrain::tessellate on the same subpatch jobs and runs it through the same projector, clip, setup and binner.",
+             geom_setup_triangles_submitted_o - SGF_EXP_ACCEPTED, SGF_EXP_TERR_ACCEPTED,
+             SGF_EXP_TERR_TRIS, SGF_EXP_TERR_CLIPPED, SGF_EXP_TERR_CULLED,
+             render_pixels_o, SGF_EXP_MESH_TILES, SGF_EXP_TILES, SGF_EXP_TERR_TILES);
+`endif
     // R197's untextured door. The mesh producer declares TEXTURED (format 0
     // carries u/v), so the door must refuse NOTHING here. This zero is a
     // measurement, not an invariant restated: `-UntexMutant` flips the
@@ -7857,11 +8115,36 @@ module tb_zhao_console_core_smoke
     // tiles `zref::Binner` names across both views, times 256 -- derived in
     // smoke_geom_fixture_gen.cpp from project_vertex, Clip and Setup, never read
     // off a run. It was 1536 when sixteen copies of one hand-placed triangle
-    // came through the bench's door (6 tiles); it is SGF_EXP_PIXELS now because
-    // the triangles are the meshlet's own, in two views.
+    // came through the bench's door (6 tiles); it became 2560 when the
+    // triangles became the meshlet's own, in two views.
+    //
+    // AND IT IS 2816 AS OF 2026-09-26 (TERRAINVISIBLE), which is a DECLARED
+    // move and not drift. The oracle now models the TERRAIN patch too -- the
+    // composed lattice, `zref::terrain::tessellate` on the subpatch jobs
+    // `SMOKE: terrjob` measures, then the same projector, clip, setup and
+    // binner -- so the union is 11 tiles instead of the mesh's 10. The extra
+    // tile is (0,0), which no mesh triangle touches. The old number, the new
+    // one and the reason are recorded together in
+    // `reports/DECISION-20260926-TERRAIN-FIXTURE.md` and in entry I13.
+    //
+    // The generator REFUSES to emit a fixture whose terrain adds no tile, so
+    // this number cannot quietly fall back to the mesh's while the terrain arm
+    // stops drawing -- that check is `smoke_geom_fixture_gen.cpp`'s
+    // "terrain touches N tile(s) and the union is still the mesh's".
+`ifndef ZHAO_SMOKE_TERRAIN_FLAT
     if (render_pixels_o != SGF_EXP_PIXELS)
-      $fatal(1, "SMOKE: the render path wrote %0d pixels and the reference names %0d tiles = %0d pixels",
-             render_pixels_o, SGF_EXP_TILES, SGF_EXP_PIXELS);
+      $fatal(1, "SMOKE: the render path wrote %0d pixels and the reference names %0d tiles = %0d pixels (of which the MESH accounts for %0d tiles and TERRAIN touches %0d)",
+             render_pixels_o, SGF_EXP_TILES, SGF_EXP_PIXELS, SGF_EXP_MESH_TILES,
+             SGF_EXP_TERR_TILES);
+`else
+    // The flat-lattice control draws a DIFFERENT scene -- no terrain at all --
+    // so the repaired fixture's pixel number does not describe it. What must
+    // still hold is that the MESH's own tiles are all there, which is the
+    // check that says the control changed terrain and nothing else.
+    if (render_pixels_o != (SGF_EXP_MESH_TILES * 256))
+      $fatal(1, "SMOKE: -TerrainFlatLattice: the render path wrote %0d pixels and the MESH alone accounts for %0d tiles = %0d -- the control was supposed to remove terrain's coverage and touch nothing else",
+             render_pixels_o, SGF_EXP_MESH_TILES, SGF_EXP_MESH_TILES * 256);
+`endif
     if (render_fatal_o)
       $fatal(1, "SMOKE: the render path wrote %0d pixel(s) and latched fatal_error_o -- a guard denial or a broken pixel stream; the frame is unpublishable",
              render_pixels_o);
@@ -8772,22 +9055,47 @@ module tb_zhao_console_core_smoke
     // reads is the broken-instrument law with a port list, and that is exactly
     // what `render_overflow_o` was.
     //
-    // The values are the measured truth of THIS bench's fixture -- 14
+    // THE TWO VALUES ARE NOW REFERENCE-DERIVED, 2026-09-26 (TERRAINVISIBLE).
+    // What stood here said "the measured truth of THIS bench's fixture -- 14
     // triangles in 1 admitted frame produce 36 tile references with a deepest
     // single tile list of 5. To re-derive after a fixture change, read
-    // `SMOKE: binrefs` from a run and pin it here; do not relax the check to a
-    // range, because a range cannot see the machine doing several times the
-    // work for the same picture.
+    // `SMOKE: binrefs` from a run and pin it here". That instruction was right
+    // about the danger (never relax to a range) and wrong about the source: a
+    // number read off a run is the thing this fixture's own header spent 2026-
+    // 09-19 removing from `raster pixels`.
+    //
+    // `zref::Binner::bin` IS GEOM.BINNER's oracle, and the generator already
+    // calls it for every accepted triangle to build the tile union. Counting
+    // the references it pushes, and the deepest per-tile list, costs nothing
+    // and turns both into SGF_EXP_* -- so a fixture change re-derives them
+    // instead of asking somebody to copy a number back.
+    //
+    // THE MODEL IS CHECKED AGAINST THE OLD MEASUREMENT RATHER THAN ASSERTED:
+    // the generator prints its MESH-only share separately and it is 36, which
+    // is exactly what this bench measured before terrain drew anything. A
+    // model that agrees with a number taken from the machine on the population
+    // that did not change is a model, not a coincidence.
     if (cnt_beats_seen_q == 0)
       $fatal(1, "SMOKE: DEBUG.COUNTERS never streamed a beat -- the read window is shut, so every console counter is unobservable");
     if (!cnt_tile_refs_seen_q)
       $fatal(1, "SMOKE: catalog id 18 (tile_references) never appeared in the counter sweep -- GEOM.BINNER's instrument does not reach the console's mailbox");
     if (!cnt_tile_depth_seen_q)
       $fatal(1, "SMOKE: catalog id 19 (max_tile_list_depth) never appeared in the counter sweep");
+`ifndef ZHAO_SMOKE_TERRAIN_FLAT
+    if (cnt_tile_refs_q != 64'(SGF_EXP_TILE_REFS))
+      $fatal(1, "SMOKE: tile_references=%0d, the reference names %0d from this fixture's %0d accepted triangle(s)",
+             cnt_tile_refs_q, SGF_EXP_TILE_REFS, SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED);
+    if (cnt_tile_depth_q != 64'(SGF_EXP_TILE_DEPTH))
+      $fatal(1, "SMOKE: max_tile_list_depth=%0d, the reference names %0d", cnt_tile_depth_q, SGF_EXP_TILE_DEPTH);
+`else
+    // The flat control draws no terrain, so only the MESH's references exist.
+    // 36 is what this bench measured for the mesh before terrain drew, and it
+    // is what the generator derives for the mesh alone.
     if (cnt_tile_refs_q != 64'd36)
-      $fatal(1, "SMOKE: tile_references=%0d, expected 36 from this fixture's 14 triangles", cnt_tile_refs_q);
+      $fatal(1, "SMOKE: -TerrainFlatLattice: tile_references=%0d, the MESH alone pushes 36", cnt_tile_refs_q);
     if (cnt_tile_depth_q != 64'd5)
-      $fatal(1, "SMOKE: max_tile_list_depth=%0d, expected 5", cnt_tile_depth_q);
+      $fatal(1, "SMOKE: -TerrainFlatLattice: max_tile_list_depth=%0d, the MESH alone reaches 5", cnt_tile_depth_q);
+`endif
     // TWO QUANTITIES THAT DO NOT MOVE TOGETHER. `tile_references` is a
     // frame-wide push count; `max_tile_list_depth` is a per-tile peak taken
     // from a different register on a different condition. A frame's total
@@ -8802,8 +9110,25 @@ module tb_zhao_console_core_smoke
     // FIRES is a separate build and lives in
     // `tests/geometry/geom_binner_v2_cntw_wrap.cpp` phase 2, which fills the
     // triangle store on purpose and requires overflow_o to rise.
+    //
+    // AND IT IS NOT A ZERO NOBODY HAS SEEN MOVE. It moved HERE, on 2026-09-26,
+    // and that is why the fixture looks the way it does. The store that runs
+    // out first is NOT the 32,768-reference chunk arena but the TRIANGLE store,
+    // `TRI_CAP = 128` per frame (`zhao_geom_bin_pipe_v2.sv:18`). The first
+    // repaired fixture offered 226 triangles to GEOM.SETUP -- the mesh's 14
+    // plus 212 terrain, because the bench was still injecting a DUPLICATE
+    // subpatch job beside `zhao_terrain_jobissue`'s -- and the run came back
+    // `binrefs ... max_tile_list_depth=99 overflow=1` with `raster pixels`
+    // STUCK AT 2560: the walled-off tail was exactly the terrain tile, so the
+    // symptom was a pixel count that looked like a terrain arm which had
+    // stopped drawing. Retiring the duplicate job put it at
+    // SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED of SGF_BINNER_TRI_CAP, and
+    // `smoke_geom_fixture_gen.cpp` now REFUSES to emit a fixture that exceeds
+    // it, so the next person gets a generator error instead of a pixel
+    // shortfall three blocks downstream.
     if (render_overflow_o !== 1'b0)
-      $fatal(1, "SMOKE: the binner walled off this frame -- render_overflow_o is high");
+      $fatal(1, "SMOKE: the binner walled off this frame -- render_overflow_o is high. This fixture offers %0d triangle(s) to GEOM.SETUP and GEOM.BINNER holds %0d per frame; past that the tail of the frame is dropped WHOLE and its tiles are never resolved.",
+             geom_setup_triangles_submitted_o, SGF_BINNER_TRI_CAP);
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
