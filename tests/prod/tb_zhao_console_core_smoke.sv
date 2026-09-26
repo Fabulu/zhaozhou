@@ -7691,11 +7691,30 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / %0d (a hole never lands; the poisoned arenas still seal)",
              geom_landings_o, geom_groups_sealed_o, 2 * N_GEOM_MESHLETS * (N_GEOM_VERTS - 1),
              2 * N_GEOM_MESHLETS);
-    if ((v2_frames_admitted_o != 1) || (render_pixels_o != 0) || (render_issued_words_o != render_retired_words_o))
-      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / 0 / equal (the batch drops, the frame completes)",
-             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o);
-    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed",
-             geom_rp_poisoned_o);
+    // THE PIXEL EXPECTATION CHANGED 2026-09-26 (TERRAINVISIBLE), FROM ZERO TO
+    // TERRAIN'S OWN TILES, AND THE CONTROL GOT STRONGER FOR IT.
+    //
+    // This used to read `render_pixels_o != 0`: the mesh batch drops, so
+    // nothing is rastered. That was true only while terrain drew nothing. The
+    // measured value now is SGF_EXP_TERR_TILES x 256, and every part of that
+    // is reference-derived -- the tiles terrain COVERS, times the whole-tile
+    // resolve.
+    //
+    // WHY IT IS BETTER EVIDENCE THAN THE ZERO WAS. The plain run's 2,816 is a
+    // union: mesh tiles plus terrain tiles, and terrain's contribution is the
+    // ONE tile the mesh does not touch. Here the mesh's whole batch is
+    // refused, so what the raster writes is TERRAIN ALONE -- the two arms are
+    // separated by the control rather than by an argument. A regression that
+    // silently stopped terrain drawing would leave the plain run short by 256
+    // and this one short by 512, and only this one names terrain as the cause.
+    if ((v2_frames_admitted_o != 1) ||
+        (render_pixels_o != 32'(SGF_EXP_TERR_TILES) * 32'd256) ||
+        (render_issued_words_o != render_retired_words_o))
+      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / %0d / equal. The MESH batch drops and the frame completes; what is left is TERRAIN ALONE, which covers %0d tile(s) and the pipeline resolves a whole tile.",
+             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o,
+             SGF_EXP_TERR_TILES * 256, SGF_EXP_TERR_TILES);
+    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed, writing %0d pixel(s): TERRAIN's %0d tile(s) with the whole mesh refused.",
+             geom_rp_poisoned_o, render_pixels_o, SGF_EXP_TERR_TILES);
     $finish;
 `else
     // Everything from here to the PASS line is the CLEAN fixture's verdict. It is
