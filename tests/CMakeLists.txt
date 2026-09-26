@@ -11215,6 +11215,14 @@ set(ZHAO_PARAMARENA_BASE_SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
     # BINARENA, 2026-09-26, console entry I55. The independent producer is in
     # the BASE list: it depends on nothing below.
+    #
+    # ARENAINFER, 2026-09-26: GEOM.ARENABIN's fourteen staging banks are
+    # `zhao_dc_sdp_ram` instances now, because an array declared inside a
+    # generate FOR-LOOP is not a RAM candidate for Quartus 17.0.2 and 145,152
+    # bits of it went to flip-flops. It is in the BASE list for the same
+    # reason the producer is: it depends on nothing, and the independent
+    # producer's binary needs it.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arenabin.sv)
 
 set(ZHAO_PARAMARENA_ONCHIP_SOURCES
@@ -11343,6 +11351,7 @@ add_test(NAME lint_geom_arenabin
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_geom_arenabin
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arenabin.sv)
 set_tests_properties(lint_geom_arenabin PROPERTIES
   LABELS "lint;fast"

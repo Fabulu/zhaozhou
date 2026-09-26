@@ -32,7 +32,11 @@
 param(
     [Parameter(Mandatory = $true)][string]$Label,
     [string]$Module = 'zhao_arenabin_stage_probe',
+    # `zhao_dc_sdp_ram.sv` is here for arm 7 only. It is harmless in every
+    # other arm -- nothing instantiates it, so Quartus elaborates nothing from
+    # it -- and having ONE source list keeps the arms comparable.
     [string[]]$Sources = @(
+        'fpga/rtl/common/zhao_dc_sdp_ram.sv',
         'tests/probes/zhao_arenabin_stage_probe.sv'
     ),
     [string[]]$TopParameters

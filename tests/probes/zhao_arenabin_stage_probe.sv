@@ -76,6 +76,33 @@
 //      obligation. Measured rather than assumed, and if it changes nothing it
 //      is not shipped -- an inert pragma reads as a guarantee.
 //   6  arms 1 and 5 together -- only meaningful once each is measured alone.
+//   7  THE PROPOSED REPAIR: the bank becomes an instance of the committed
+//      `zhao_dc_sdp_ram`, so the array sits at a MODULE's scope while the
+//      INSTANCE stays inside the generate-for and STAGE_IDS stays a knob.
+//      Its depth is `1 << ADDR_W`, so 576 becomes 1024 -- which is a second
+//      variable and is stated rather than hidden. It costs nothing in blocks:
+//      a Cyclone V M10K is 512 x 18 at this width, so 576 and 1024 both take
+//      two.
+//   8  the bank is declared inside a generate-IF with NO for-loop. Arms 0..6
+//      are inside BOTH an if and a for; arm 2 is inside neither. This is the
+//      arm that says which of the two scopes is the killer, and it changes
+//      nothing else.
+//
+// WHAT THE FIRST SEVEN ROWS SAID, so the next reader does not re-run them
+// (5CSEBA6U23I7, map_only, STAGE_IDS=1, one bank of 576 x 18 = 10,368 bits):
+//
+//   v0 production            10,386 reg        0 bits   <- the control, FIRED
+//   v1 split read address    10,386 reg        0 bits
+//   v2 MODULE SCOPE               0 reg   10,368 bits   <- ALTSYNCRAM SDP
+//   v3 plain write enable    10,386 reg        0 bits
+//   v4 split process         10,386 reg        0 bits
+//   v5 no_rw_check           10,386 reg        0 bits
+//   v6 v1 + v5               10,386 reg        0 bits
+//
+// So the read-during-write story, the shared process, the genvar compare and
+// every attribute are ALL INNOCENT, and only the declaration's SCOPE moves the
+// number. `no_rw_check` is as inert as `"M10K"` was, which is worth recording
+// because it is the attribute that would have been tried next.
 //
 // Quartus 17.0 syntax law, both halves: explicit `generate`/`endgenerate` (an
 // implicit generate is a syntax error there) and elaboration guards inside
@@ -123,10 +150,14 @@ module zhao_arenabin_stage_probe #(
 
   // Quartus 17.0 needs an elaboration guard inside `initial begin ... end`.
   initial begin
-    if (VARIANT > 6)
-      $fatal(1, "zhao_arenabin_stage_probe: VARIANT is 0..6");
+    if (VARIANT > 8)
+      $fatal(1, "zhao_arenabin_stage_probe: VARIANT is 0..8");
     if ((VARIANT == 2) && (STAGE_IDS != 1))
       $fatal(1, "zhao_arenabin_stage_probe: arm 2 is defined at STAGE_IDS=1 only");
+    if ((VARIANT == 8) && (STAGE_IDS != 1))
+      $fatal(1, "zhao_arenabin_stage_probe: arm 8 is defined at STAGE_IDS=1 only");
+    if ((VARIANT == 7) && ((32'd1 << TIDX_W) < TILES))
+      $fatal(1, "zhao_arenabin_stage_probe: arm 7's bank is 1<<TIDX_W deep and must cover TILES");
     if (ID_W > 32)
       $fatal(1, "zhao_arenabin_stage_probe: ID_W must fit a u32 chunk slot");
   end
@@ -246,6 +277,51 @@ module zhao_arenabin_stage_probe #(
                                      ? {{(32-ID_W){1'b0}}, rd_q}
                                      : ID_NULL;
       end
+
+    // ------------------------------------------------------------- arm 7 --
+    // THE PROPOSED REPAIR. The array moves to a MODULE's scope by becoming an
+    // instance of the committed `zhao_dc_sdp_ram` -- the file that exists
+    // precisely because this project has produced this defect five times --
+    // while the INSTANCE stays inside the generate-for, so STAGE_IDS remains a
+    // knob and `ck_ids_o`'s slot-per-bank structure is untouched.
+    //
+    // Both clocks are `clk`. Same-address read-during-write is outside that
+    // module's protocol and is UNREACHABLE HERE BY OWNERSHIP: production
+    // asserts `stg_we` only in A_PUSH and `stg_re` only in A_EMITR, which are
+    // different states of one FSM, so the two enables cannot be high together.
+    end else if (VARIANT == 7) begin : g_v7_sdp_submodule
+      for (gs = 0; gs < int'(STAGE_IDS); gs = gs + 1) begin : g_stage
+        logic [ID_W-1:0] rd_q;
+        zhao_dc_sdp_ram #(.DATA_W(ID_W), .ADDR_W(TIDX_W)) u_bank (
+          .wr_clk (clk),
+          .wr_en  (stg_we && (stg_wsel == STG_W'(gs))),
+          .wr_addr(stg_wa),
+          .wr_data(stg_wd),
+          .rd_clk (clk),
+          .rd_en  (stg_re),
+          .rd_addr(stg_wa),
+          .rd_data(rd_q)
+        );
+        assign ck_ids_o[gs*32 +: 32] = (STG_W'(gs) < cnt_i)
+                                     ? {{(32-ID_W){1'b0}}, rd_q}
+                                     : ID_NULL;
+      end
+
+    // ------------------------------------------------------------- arm 8 --
+    // ONE CHANGE from arm 0: the generate-FOR is gone. The declaration is
+    // still inside a generate-IF -- this very arm -- so a difference between
+    // this row and arm 0 is the for-loop, and a difference between this row
+    // and arm 2 is the generate scope itself.
+    end else if (VARIANT == 8) begin : g_v8_generate_if_only
+      logic [ID_W-1:0] bank [0:TILES-1];
+      logic [ID_W-1:0] rd_q;
+      always_ff @(posedge clk) begin
+        if (stg_we && (stg_wsel == STG_W'(0))) bank[stg_wa] <= stg_wd;
+        if (stg_re) rd_q <= bank[stg_wa];
+      end
+      assign ck_ids_o[0 +: 32] = (STG_W'(0) < cnt_i)
+                               ? {{(32-ID_W){1'b0}}, rd_q}
+                               : ID_NULL;
 
     // ------------------------------------------------------------- arm 6 --
     // Arms 1 and 5 TOGETHER. Present so an interaction can be read rather
