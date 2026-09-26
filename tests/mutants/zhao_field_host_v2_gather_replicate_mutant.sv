@@ -1,75 +1,61 @@
-// zhao_field_host_v2_winidx_mutant.sv -- A COMMITTED POSITIVE CONTROL.
-// THIS IS NOT PRODUCTION RTL. It is a COPY of
-// fpga/rtl/field/zhao_field_host_v2.sv with the module RENAMED so that no
-// source list can elaborate it by mistake, and with its RESULT PUBLICATION
-// changed from ORDINAL-indexed to WINDOW-indexed.
+// zhao_field_host_v2_gather_replicate_mutant.sv -- A COMMITTED POSITIVE
+// CONTROL FOR THE ONE CHECK THAT CAN TELL A GATHERING FRONT FROM THE FRONT IT
+// REPLACED. IT IS EVIDENCE ABOUT THE INSTRUMENT, NOT ABOUT THE DESIGN.
 //
-// WHAT WAS CHANGED, AND WHY THIS PARTICULAR LINE
-// -----------------------------------------------
-//   production:  rsp_data[cur_rsv][p][j] <= cur_export[p][j]; // ORDINAL-indexed
-//   here:        rsp_data[cur_rsv][p][j] <= cur_wexport[j];   // WINDOW-indexed
+// ---------------------------------------------------------------------------
+// WHY THIS FILE HAS TO EXIST
+// ---------------------------------------------------------------------------
+// `field_gather_front_census` asserts that a group's four points answer four
+// DIFFERENT values. Everything else it checks -- the cadence, the group count,
+// `StOk`, the overlap, `resp_count_o`, even "the output is 42" -- PASSES
+// UNCHANGED on a front that evaluates point 0 four times and publishes it four
+// times. There is no legal stimulus that distinguishes the two, because the
+// difference is not in the interface: it is in which point's registers reached
+// which fabric lane.
 //
-// (RE-AUTHORED 2026-09-26 onto the gathering front's point index. `cur_wexport`
-//  is not indexed by point; this copy elaborates at FRONT_PTS=1, where the
-//  point loop runs once and the mutant means what it meant when it was cut.)
+// `CLAUDE.md`: "A guard you cannot reach with legal stimulus needs a COMMITTED
+// MUTANT", and "a detector that has not been shown to FIRE has not been
+// tested". So the front is broken here, on purpose, in a file no source list
+// elaborates, and `tests/field/field_gather_replicate_mutant.cpp` drives it
+// WITH ITS POLARITY INVERTED -- that test PASSES when the four answers
+// COLLAPSE to one repeated value, and FAILS if they do not.
 //
-// with `rsp_pres` following it, and a three-line shadow capture filling
-// `cur_wexport` from `win_idx_c` -- which already existed, for `cur_winseen`.
-// Four marked hunks, ONE of them substantive; the other three exist only to
-// give the substantive one something to read.
+// Read the two together: the mutant passing says the census's discriminator
+// can fail, and the census passing says production does not make it fail.
+// Either alone is an argument.
 //
-// THIS IS OWNER RULING R168, MODELLED RATHER THAN ARGUED. R168:
+// ---------------------------------------------------------------------------
+// WHAT WAS CHANGED -- ONE LINE
+// ---------------------------------------------------------------------------
+// In the preload port's `always_comb`, production reads
 //
-//   > "`zhao_field_warp_adapter`'s host-side ports match the OLD host
-//   > name-for-name and the NEW host in MEANING. Wire it to the old host and
-//   > it elaborates, runs, and passes every gate -- while reading window
-//   > positions as ordinals."
+//     (state == E_ZERO) ? 0 : (pl < FRONT_PTS) ? cur_in[pl][lane_sel]
+//                                              : cur_in[0][lane_sel]
 //
-// The old `zhao_field_host` cannot serve as that control directly: its loader,
-// its header format and its arity all differ, so a bench wiring the adapter to
-// it would be measuring five differences at once and none of them cleanly.
-// This file is the old host's ONE relevant behaviour -- a window-indexed
-// `resp_out_o` -- put into the new host's body, so the mutant bench and the
-// production bench differ in exactly one instantiated module name. Compare
-// like with like, or do not compare.
+// and this file reads
 //
-// WHAT IS DELIBERATELY *NOT* MUTATED: the completion rule. `complete_c` still
-// tests the ordinal-indexed `cur_seen` against the required mask, so this
-// mutant still retires **StOk**. That matters more than it looks. R168's
-// defect is not a refusal somebody would notice; it is a SUCCESSFUL run
-// carrying a plausible wrong number. A mutant that answered StPartial would be
-// caught by an ordinary status check and would prove nothing about ordinals.
+//     (state == E_ZERO) ? 0 : cur_in[0][lane_sel]
 //
-// THE DRIVER'S POLARITY IS INVERTED:
-// tests/mutants/warp_sparse_ordinal_mutant_driver.cpp PASSES WHEN THE SPARSE
-// STIMULUS DETECTS THE WRONG VALUE. It is evidence about the INSTRUMENT --
-// that `warp_sparse_ordinal_directed` discriminates on the ordinal-versus-
-// window distinction and not on something incidental -- and it is NOT evidence
-// about the design.
+// i.e. POINT 0 INTO EVERY LANE. That is precisely the line the gathering front
+// replaced -- the old `{FAB_LANES{cur_in[lane_sel]}}` -- so this mutant is also
+// a faithful model of the machine the console composes today.
 //
-// ITS NEGATIVE CONTROL is the identical stimulus, built by the identical
-// shared header tests/field/warp_sparse_program.hpp, in
-// tests/field/warp_sparse_ordinal_directed.cpp against the real
-// `zhao_field_host_v2`. Neither run is evidence without the other: the mutant
-// alone would show only that SOMETHING changed, and production alone would
-// show only that it passes today.
+// The module is RENAMED so `ZHAO_FIELD_HOST_V2_SOURCES` cannot pull it in.
 //
-// WHY A CONTIGUOUS PROGRAM CANNOT BE USED HERE. For a contiguous output map
-// the window index and the ordinal index are THE SAME INTEGER, so this mutant
-// is bit-identical in behaviour to production under every other Warp test in
-// the tree. That is not a weakness of the control; it is the measured reason
-// the defect survived, restated as a property of the control.
+// ---------------------------------------------------------------------------
+// REGENERATE IT IF `zhao_field_host_v2.sv` CHANGES SHAPE
+// ---------------------------------------------------------------------------
+// THIS IS A COPY, and `CLAUDE.md`'s own chapter says what a copy does: "a copy
+// of an old version is a positive control for a block that no longer exists",
+// and it goes stale GREEN -- the mutation stays intact while the body around it
+// ages, so the control goes on passing while measuring a machine nobody ships.
+// `tools/budget/mutant_copy_drift.py` watches for it by COMMIT ORDER. To
+// refresh, re-cut from production and re-apply the one line above.
 //
-// REGENERATE IT if zhao_field_host_v2.sv changes shape. This is a COPY, and a
-// copy of an old version is a positive control for a block that no longer
-// exists. `tools/budget/mutant_copy_drift.py` detects it by PROVENANCE: if
-// production has been committed since this file was, this file cannot contain
-// what production gained. To refresh, THREE-WAY MERGE against the revision
-// this was cut from; do not transplant. It is regenerable by
-// tools/../scratchpad gz-warpfix-mkmutant.py's four asserted substitutions,
-// each of which fails loudly if it matches anything other than exactly once.
+// Cut from `fpga/rtl/field/zhao_field_host_v2.sv` on 2026-09-26 by packet
+// GATHERFRONT, in the same commit that added the gathering front.
 
-// zhao_field_host_v2_winidx_mutant.sv — THE ASSOCIATION-AWARE FIELD HOST.
+// zhao_field_host_v2.sv — THE ASSOCIATION-AWARE FIELD HOST.
 //
 // Contract: design/contracts/FIELD.SEQ.CORE.md
 // Schema:   fpga/rtl/field/generated/zhao_field_host_image_pkg.sv (packet S1)
@@ -304,7 +290,7 @@
 
 `default_nettype none
 
-module zhao_field_host_v2_winidx_mutant
+module zhao_field_host_v2_gather_replicate_mutant
   import zhao_field_host_image_pkg::*;
 #(
     // ---- IDENTITY AND CAPACITY ---------------------------------------------
@@ -631,18 +617,18 @@ module zhao_field_host_v2_winidx_mutant
     // `.OUT_LANES(7)` for `u_field_host` is at 15910. The claim is true; the
     // line number is not.)
     if (OUT_LANES != ZFH_WINDOW_MASK_BITS) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_LANES=%0d but the generated schema fixes ZFH_WINDOW_MASK_BITS=%0d. The window mask would pack, transmit and compare at the wrong width, silently. Regenerate the schema or compose the matching width; do not widen one side.", OUT_LANES, ZFH_WINDOW_MASK_BITS);
+      $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d but the generated schema fixes ZFH_WINDOW_MASK_BITS=%0d. The window mask would pack, transmit and compare at the wrong width, silently. Regenerate the schema or compose the matching width; do not widen one side.", OUT_LANES, ZFH_WINDOW_MASK_BITS);
     end
     // The ordinal mask is carried in a u8 by the schema and is meaningful only
     // to the profile's output count. A host with more ordinals than the
     // schema's carrier is a host whose top ordinals cannot be declared.
     if (OUT_ORDINALS > ZFH_MAX_CANONICAL_OUTPUTS) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_ORDINALS=%0d exceeds the schema's ZFH_MAX_CANONICAL_OUTPUTS=%0d", OUT_ORDINALS, ZFH_MAX_CANONICAL_OUTPUTS);
+      $fatal(1, "zhao_field_host_v2: OUT_ORDINALS=%0d exceeds the schema's ZFH_MAX_CANONICAL_OUTPUTS=%0d", OUT_ORDINALS, ZFH_MAX_CANONICAL_OUTPUTS);
     end
     if (OUT_ORDINALS > ZFH_REQUIRED_MASK_BITS) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_ORDINALS=%0d exceeds ZFH_REQUIRED_MASK_BITS=%0d, so the top ordinals could never be declared", OUT_ORDINALS, ZFH_REQUIRED_MASK_BITS);
+      $fatal(1, "zhao_field_host_v2: OUT_ORDINALS=%0d exceeds ZFH_REQUIRED_MASK_BITS=%0d, so the top ordinals could never be declared", OUT_ORDINALS, ZFH_REQUIRED_MASK_BITS);
     end
-    if (OUT_ORDINALS < 1) $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_ORDINALS must be at least 1");
+    if (OUT_ORDINALS < 1) $fatal(1, "zhao_field_host_v2: OUT_ORDINALS must be at least 1");
 
     // The v2 header word's field plan. The window mask keeps R101's home at
     // [32 +: OUT_LANES]; the ordinal mask, output count, execution form and
@@ -650,52 +636,52 @@ module zhao_field_host_v2_winidx_mutant
     // bit 47 or the two would overlap -- and an overlap here is the exact
     // ordinal/window confusion this file exists to prevent, expressed in bits.
     if (OUT_LANES > 16) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_LANES=%0d; the v2 header word puts the WINDOW mask at [32 +: OUT_LANES] and the ORDINAL mask at [48 +: 8], so 16 is the ceiling before they overlap", OUT_LANES);
+      $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d; the v2 header word puts the WINDOW mask at [32 +: OUT_LANES] and the ORDINAL mask at [48 +: 8], so 16 is the ceiling before they overlap", OUT_LANES);
     end
 
-    if (IN_LANES > REGS)   $fatal(1, "zhao_field_host_v2_winidx_mutant: IN_LANES=%0d exceeds REGS=%0d", IN_LANES, REGS);
-    if (OUT_LANES > REGS)  $fatal(1, "zhao_field_host_v2_winidx_mutant: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
-    if (CLIENTS < 1)       $fatal(1, "zhao_field_host_v2_winidx_mutant: CLIENTS must be at least 1");
-    if (CREDITS < 1)       $fatal(1, "zhao_field_host_v2_winidx_mutant: CREDITS must be at least 1");
-    if (PREP_SCALARS < 1)  $fatal(1, "zhao_field_host_v2_winidx_mutant: PREP_SCALARS must be at least 1");
-    if (FAB_LANES < 1)     $fatal(1, "zhao_field_host_v2_winidx_mutant: FAB_LANES must be at least 1");
-    if (FRONT_PTS < 1)     $fatal(1, "zhao_field_host_v2_winidx_mutant: FRONT_PTS must be at least 1");
+    if (IN_LANES > REGS)   $fatal(1, "zhao_field_host_v2: IN_LANES=%0d exceeds REGS=%0d", IN_LANES, REGS);
+    if (OUT_LANES > REGS)  $fatal(1, "zhao_field_host_v2: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
+    if (CLIENTS < 1)       $fatal(1, "zhao_field_host_v2: CLIENTS must be at least 1");
+    if (CREDITS < 1)       $fatal(1, "zhao_field_host_v2: CREDITS must be at least 1");
+    if (PREP_SCALARS < 1)  $fatal(1, "zhao_field_host_v2: PREP_SCALARS must be at least 1");
+    if (FAB_LANES < 1)     $fatal(1, "zhao_field_host_v2: FAB_LANES must be at least 1");
+    if (FRONT_PTS < 1)     $fatal(1, "zhao_field_host_v2: FRONT_PTS must be at least 1");
     // THE GATHERING FRONT CANNOT GATHER MORE POINTS THAN THE FABRIC HAS LANES.
     // Point p lives in lane p's register file; asking for a fifth point on a
     // four-lane fabric would silently alias two points onto one lane and
     // publish one of them twice -- a wrong field, not a slow one.
     if (FRONT_PTS > FAB_LANES) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: FRONT_PTS=%0d exceeds FAB_LANES=%0d; point p lives in fabric lane p", FRONT_PTS, FAB_LANES);
+      $fatal(1, "zhao_field_host_v2: FRONT_PTS=%0d exceeds FAB_LANES=%0d; point p lives in fabric lane p", FRONT_PTS, FAB_LANES);
     end
     if (FAB_OUTSTANDING < 1 || FAB_LONGQ < 1 || FAB_GATHERS < 1 ||
         FAB_DIST_BANKS < 1 || FAB_RING_UNITS < 1 || FAB_RING_DESC < 1) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: every fabric knob must be at least 1");
+      $fatal(1, "zhao_field_host_v2: every fabric knob must be at least 1");
     end
     // The 64-bit uop word packs four SIX-bit register fields edge to edge, so
     // REGS > 64 makes each [N +: REGW] slice overlap the next and `dst` eats
     // `a`'s bit 0 -- silent, and it produces a program that runs and computes
     // the wrong thing.
     if (REGW > 6) begin
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: REGS=%0d needs REGW=%0d, but the 64-bit uop word packs four 6-bit register fields", REGS, REGW);
+      $fatal(1, "zhao_field_host_v2: REGS=%0d needs REGW=%0d, but the 64-bit uop word packs four 6-bit register fields", REGS, REGW);
     end
     if (SLOTW != ((PROGS > 1) ? $clog2(PROGS) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: SLOTW=%0d disagrees with clog2(PROGS=%0d)", SLOTW, PROGS);
+      $fatal(1, "zhao_field_host_v2: SLOTW=%0d disagrees with clog2(PROGS=%0d)", SLOTW, PROGS);
     if (PCW != ((INSTR_N > 1) ? $clog2(INSTR_N) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: PCW=%0d disagrees with clog2(INSTR_N=%0d)", PCW, INSTR_N);
+      $fatal(1, "zhao_field_host_v2: PCW=%0d disagrees with clog2(INSTR_N=%0d)", PCW, INSTR_N);
     if (REGW != ((REGS > 1) ? $clog2(REGS) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: REGW=%0d disagrees with clog2(REGS=%0d)", REGW, REGS);
+      $fatal(1, "zhao_field_host_v2: REGW=%0d disagrees with clog2(REGS=%0d)", REGW, REGS);
     if (TSELW != ((TABLES > 1) ? $clog2(TABLES) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: TSELW=%0d disagrees with clog2(TABLES=%0d)", TSELW, TABLES);
+      $fatal(1, "zhao_field_host_v2: TSELW=%0d disagrees with clog2(TABLES=%0d)", TSELW, TABLES);
     if (TIDXW != ((TBL_N > 1) ? $clog2(TBL_N) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: TIDXW=%0d disagrees with clog2(TBL_N=%0d)", TIDXW, TBL_N);
+      $fatal(1, "zhao_field_host_v2: TIDXW=%0d disagrees with clog2(TBL_N=%0d)", TIDXW, TBL_N);
     if (LDADDRW != ((PCW > (TSELW + TIDXW)) ? PCW : (TSELW + TIDXW)))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: LDADDRW=%0d disagrees with max(PCW, TSELW+TIDXW)", LDADDRW);
+      $fatal(1, "zhao_field_host_v2: LDADDRW=%0d disagrees with max(PCW, TSELW+TIDXW)", LDADDRW);
     if (ORDW != ((OUT_ORDINALS > 1) ? $clog2(OUT_ORDINALS) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: ORDW=%0d disagrees with clog2(OUT_ORDINALS=%0d)", ORDW, OUT_ORDINALS);
+      $fatal(1, "zhao_field_host_v2: ORDW=%0d disagrees with clog2(OUT_ORDINALS=%0d)", ORDW, OUT_ORDINALS);
     if (PREPW != ((PREP_SCALARS > 1) ? $clog2(PREP_SCALARS) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: PREPW=%0d disagrees with clog2(PREP_SCALARS=%0d)", PREPW, PREP_SCALARS);
+      $fatal(1, "zhao_field_host_v2: PREPW=%0d disagrees with clog2(PREP_SCALARS=%0d)", PREPW, PREP_SCALARS);
     if (CRDW != ((CREDITS > 1) ? $clog2(CREDITS) : 1))
-      $fatal(1, "zhao_field_host_v2_winidx_mutant: CRDW=%0d disagrees with clog2(CREDITS=%0d)", CRDW, CREDITS);
+      $fatal(1, "zhao_field_host_v2: CRDW=%0d disagrees with clog2(CREDITS=%0d)", CRDW, CREDITS);
   end
 
   // ==========================================================================
@@ -1018,8 +1004,6 @@ module zhao_field_host_v2_winidx_mutant
   // genuine all-uniform retirement from a vector program that produced nothing.
   logic                    cur_any_vec;
   logic [OUT_LANES-1:0]    cur_winseen;
-  // MUTATION (1/4) -- the WINDOW-indexed export the old host publishes.
-  logic signed [31:0]      cur_wexport [0:OUT_LANES-1];
   logic [3:0]              cur_num;
 
   // ==========================================================================
@@ -1350,9 +1334,11 @@ module zhao_field_host_v2_winidx_mutant
     // E_ZERO case is therefore a term in the expression, not a branch around
     // the loop.
     for (pl = 0; pl < int'(FAB_LANES); pl = pl + 1) begin
+      // THE MUTATION. Production reads `cur_in[pl][lane_sel]` for
+      // pl < FRONT_PTS. This reads POINT 0 for EVERY lane, which is the
+      // replicating front the gather replaced. The E_ZERO term is untouched.
       fab_pre_data[(pl*32) +: 32] =
           (state == E_ZERO)          ? 32'sd0                :
-          (pl < int'(FRONT_PTS))     ? cur_in[pl][lane_sel]  :
                                        cur_in[0][lane_sel];
     end
 
@@ -1456,8 +1442,6 @@ module zhao_field_host_v2_winidx_mutant
       for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
         for (k = 0; k < int'(OUT_ORDINALS); k = k + 1) cur_export[p][k] <= 32'sd0;
       end
-      // MUTATION (2/4)
-      for (k = 0; k < int'(OUT_LANES); k = k + 1) cur_wexport[k] <= 32'sd0;
       for (k = 0; k < int'(CREDITS); k = k + 1) begin
         rsp_id[k]   <= '0;
         rsp_stat[k] <= 8'd0;
@@ -1546,11 +1530,7 @@ module zhao_field_host_v2_winidx_mutant
           end
         end
         if (wr_hits_c != '0) cur_any_vec <= 1'b1;
-        // MUTATION (3/4) -- the write is ALSO filed by its WINDOW position.
-        if (win_hit_c) begin
-          cur_winseen[win_idx_c] <= 1'b1;
-          cur_wexport[win_idx_c] <= fab_wr_data[31:0];
-        end
+        if (win_hit_c) cur_winseen[win_idx_c] <= 1'b1;
         if ((state == E_DRAIN) && (fence_writes_o != 32'hFFFF_FFFF)) begin
           fence_writes_o <= fence_writes_o + 32'd1;
         end
@@ -1824,28 +1804,12 @@ module zhao_field_host_v2_winidx_mutant
         // One terminal event per running identity, whatever END did. Directive
         // 7.4: END held high over several clocks produces ONE result (FT028).
         E_RETIRE: begin
-          // MUTATION (4/4) -- THE SUBSTANTIVE ONE.
-          //   production:  rsp_data[cur_rsv][p][j] <= cur_export[p][j]; // ORDINAL
-          //   here:        rsp_data[cur_rsv][p][j] <= cur_wexport[j];   // WINDOW
-          // and the present mask follows it. This is the OLD
-          // `zhao_field_host`'s meaning re-planted in the new host's body:
-          // `resp_out_o[j]` becomes the word written to register
-          // `out_base + j` rather than the word the OUTPUT_MAP assigned to
-          // ordinal j. THE COMPLETION RULE IS DELIBERATELY UNTOUCHED, so this
-          // mutant still answers StOk -- which is the whole point. The defect
-          // R168 describes is not a refusal, it is a plausible wrong number.
-          //
-          // RE-AUTHORED 2026-09-26 (GATHERFRONT) onto the gathering front's
-          // `rsp_data[credit][point][ordinal]`. `cur_wexport` is NOT indexed by
-          // point, and that is faithful rather than lazy: this copy elaborates
-          // at FRONT_PTS=1, where the point loop runs exactly once and the
-          // mutant means what it meant when it was cut.
           for (p = 0; p < int'(FRONT_PTS); p = p + 1) begin
             for (j = 0; j < int'(OUT_ORDINALS); j = j + 1) begin
-              rsp_data[cur_rsv][p][j] <= cur_wexport[j];
+              rsp_data[cur_rsv][p][j] <= cur_export[p][j];
             end
           end
-          rsp_pres[cur_rsv]   <= cur_winseen[OUT_ORDINALS-1:0];
+          rsp_pres[cur_rsv]   <= cur_seen;
           rsp_filled[cur_rsv] <= 1'b1;
           // The WINDOW the run actually touched, beside the ORDINAL results.
           // FT017: a caller asking "were the other window lanes missing?" gets
@@ -1902,6 +1866,6 @@ module zhao_field_host_v2_winidx_mutant
     end
   end
 
-endmodule : zhao_field_host_v2_winidx_mutant
+endmodule : zhao_field_host_v2_gather_replicate_mutant
 
 `default_nettype wire

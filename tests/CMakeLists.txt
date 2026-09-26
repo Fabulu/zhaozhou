@@ -17609,6 +17609,93 @@ add_test(NAME field_host_depth_census COMMAND test_field_host_depth_census)
 set_tests_properties(field_host_depth_census PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # --------------------------------------------------------------------------
+# THE GATHERING FRONT, MEASURED (GATHERFRONT, 2026-09-26).
+#
+# A SECOND EXECUTABLE RATHER THAN A CASE IN THE ONE ABOVE, and the reason is
+# the trap `zhao_field_host.sv:115` names: the depth census must keep
+# elaborating `-GFAB_LANES=1 -GFRONT_PTS=1`, because those are
+# `zhao_console_core.sv`'s OWN arguments to `u_field_host` and a census taken
+# at anything else stops being about the console. This entry measures a
+# DIFFERENT machine -- four fabric lanes, four points gathered per run -- and
+# every figure it prints says so.
+#
+# FAB_LANES=4 IS AN AREA BILL THIS TEST DOES NOT MEASURE. Verilator answers
+# clocks; four lanes are four ALU and register-file replicas and that is a fit.
+# --------------------------------------------------------------------------
+add_executable(test_field_gather_front_census field/field_gather_front_census.cpp)
+target_link_libraries(test_field_gather_front_census PRIVATE zhao_harness)
+verilate(test_field_gather_front_census
+  PREFIX Vzhao_field_host_v2
+  TOP_MODULE zhao_field_host_v2
+  SOURCES ${ZHAO_FIELD_HOST_V2_SOURCES}
+  VERILATOR_ARGS -GCLIENTS=4 -GPROGS=8 -GINSTR_N=48 -GPCW=6 -GREGS=32
+                 -GTABLES=2 -GTBL_N=64 -GIN_LANES=15 -GOUT_LANES=7
+                 -GOUT_ORDINALS=7 -GPREP_SCALARS=64 -GCREDITS=2
+                 -GFAB_LANES=4 -GFRONT_PTS=4 -GFAB_OUTSTANDING=4 -GFAB_LONGQ=4
+                 -GFAB_GATHERS=4 -GFAB_DIST_BANKS=2 -GFAB_GROUP_PTS=4
+                 -GFAB_RING_UNITS=2 -GFAB_RING_DESC=2)
+add_test(NAME field_gather_front_census COMMAND test_field_gather_front_census)
+set_tests_properties(field_gather_front_census PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# --------------------------------------------------------------------------
+# THE GATHER'S NEGATIVE CONTROL, AND IT IS THE ONLY ONE THAT MATTERS.
+#
+# A front that REPLICATES point 0 into every fabric lane passes the cadence
+# check, the run count, the status check and "the output is 42". The single
+# check it fails is that the group's four points answer four DIFFERENT values.
+# `tests/mutants/zhao_field_host_v2_gather_replicate_mutant.sv` is that front,
+# one line different, and this driver's polarity is INVERTED: it passes when
+# the four answers COLLAPSE.
+#
+# Its module is RENAMED so no source list can elaborate it by mistake.
+# --------------------------------------------------------------------------
+add_executable(test_field_gather_replicate_mutant
+               field/field_gather_replicate_mutant.cpp)
+target_link_libraries(test_field_gather_replicate_mutant PRIVATE zhao_harness)
+verilate(test_field_gather_replicate_mutant
+  PREFIX Vzhao_field_host_v2_gather_replicate_mutant
+  TOP_MODULE zhao_field_host_v2_gather_replicate_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_host_v2_gather_replicate_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+  VERILATOR_ARGS -GCLIENTS=4 -GPROGS=8 -GINSTR_N=48 -GPCW=6 -GREGS=32
+                 -GTABLES=2 -GTBL_N=64 -GIN_LANES=15 -GOUT_LANES=7
+                 -GOUT_ORDINALS=7 -GPREP_SCALARS=64 -GCREDITS=2
+                 -GFAB_LANES=4 -GFRONT_PTS=4 -GFAB_OUTSTANDING=4 -GFAB_LONGQ=4
+                 -GFAB_GATHERS=4 -GFAB_DIST_BANKS=2 -GFAB_GROUP_PTS=4
+                 -GFAB_RING_UNITS=2 -GFAB_RING_DESC=2)
+add_test(NAME field_gather_replicate_mutant
+         COMMAND test_field_gather_replicate_mutant)
+set_tests_properties(field_gather_replicate_mutant
+                     PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# --------------------------------------------------------------------------
 # R126's GUARD, SEEN TO FIRE. Owner ruling R126 assigns this to H1 and names
 # both traps: Quartus 17.0 rejects a bare module-scope `if`, so the guard lives
 # in `initial begin ... end`; and **`--lint-only` does not run `initial`
