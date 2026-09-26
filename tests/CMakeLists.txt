@@ -11186,10 +11186,14 @@ endforeach()
 # THE LIST IS SPLIT IN TWO, AND THE SPLIT IS THE EVIDENCE FOR ENTRY I55.
 # `ZHAO_PARAMARENA_BASE_SOURCES` is the memory path, the arena, the walker and
 # GEOM.ARENABIN -- the independent producer. `ZHAO_PARAMARENA_ONCHIP_SOURCES`
-# is the legacy half: the binner, its chunk free-list, the identity queue and
-# the serialiser. `geom_arenabin_directed` builds from the BASE ALONE, with
-# `-GHAVE_ONCHIP=0`, so the chunks that reach SDRAM in that binary cannot have
-# come from an on-chip reference array because the circuit contains none.
+# is the legacy half: the binner, its chunk free-list and the identity queue.
+# (`zhao_geom_chunkser.sv` was the fourth until ARENACOMPOSE retired it with
+# the binner's serialise pass; the binner ITSELF is not retired -- it still
+# supplies every pixel -- so the on-chip list still has three members and the
+# check below still has something to check.) `geom_arenabin_directed` builds
+# from the BASE ALONE, with `-GHAVE_ONCHIP=0`, so the chunks that reach SDRAM
+# in that binary cannot have come from an on-chip reference array because the
+# circuit contains none.
 # `ZHAO_PARAMARENA_SOURCES` is their concatenation and every pre-existing
 # target takes it unchanged.
 set(ZHAO_PARAMARENA_BASE_SOURCES
@@ -11216,8 +11220,7 @@ set(ZHAO_PARAMARENA_BASE_SOURCES
 set(ZHAO_PARAMARENA_ONCHIP_SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner_v2.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_chunkser.sv)
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv)
 
 set(ZHAO_PARAMARENA_SOURCES
     ${ZHAO_PARAMARENA_BASE_SOURCES}
@@ -11225,8 +11228,8 @@ set(ZHAO_PARAMARENA_SOURCES
 
 # THE REFUSAL, CHECKED AT CONFIGURE TIME. The claim entry I55 needs is that the
 # independent producer's build contains no on-chip arena, and a claim nothing
-# enforces is a comment. Adding any of those four files back to the BASE list
-# fails the configure with the reason, rather than quietly turning
+# enforces is a comment. Adding any of those files back to the BASE list fails
+# the configure with the reason, rather than quietly turning
 # `geom_arenabin_directed` back into the thing it exists to refute.
 foreach(onchip_source IN LISTS ZHAO_PARAMARENA_ONCHIP_SOURCES)
   list(FIND ZHAO_PARAMARENA_BASE_SOURCES "${onchip_source}" leak_index)
@@ -11253,35 +11256,25 @@ set_tests_properties(geom_paramarena_directed
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
-# ENTRY I54 -- THE CHUNK SERIALISER'S ACCEPTANCE.
+# ENTRY I54 -- `geom_chunkser_directed` WAS HERE AND IS RETIRED.
 #
-# The evidence entry I54 asks for is NOT that the guards pass: a binner slot is
-# 0..127, below any plausible sealed `tris`, so `ck_illegal_o` and
-# `td_illegal_o` would BOTH pass while the walk returned wrong descriptors that
-# decode cleanly. This target builds the whole chain -- binner, identity queue,
-# serialiser, arena, real guard/arbiter/controller/DRAM, walker, decoder -- and
-# compares each chunk's ids against the ARENA'S OWN DESCRIPTORS, with the arena
-# index deliberately offset from the binner slot so the two cannot coincide.
+# ARENACOMPOSE, 2026-09-26. It built the whole legacy chain -- binner, identity
+# queue, SERIALISER, arena, real guard/arbiter/controller/DRAM, walker, decoder
+# -- and compared each chunk's ids against the arena's own descriptors. Entry
+# I54 is still closed and the evidence it asks for is still produced, but by
+# `geom_arenabin_directed`, whose producer is the one the console composes.
+# `zhao_geom_chunkser.sv` and this test were deleted together: a test of a
+# module that is in no design is a test of nothing, and keeping it would have
+# forced the binner's serialise pass to survive in production purely to be
+# tested.
 #
-# Three cases: the correct behaviour with every counter at zero, and two
-# separate positive controls that inject a fault and assert the counter FIRES.
-# Neither control owes a committed mutant -- both faults are presentable at a
-# port, which is why `ck_alloc_id_i` and the retire beat are inputs.
+# WHAT WENT WITH IT, recorded because it was a real instrument: `price_the_swap`,
+# which measured the on-chip raster drain against the external walk in one
+# stimulus. It is REBUILT in `geom_arenabin_directed.cpp` under the `price`
+# argument, where the binner is compiled in, fed the same scene and drained for
+# real, so the number entry I55 quotes stays reproducible from a committed
+# probe rather than only from prose.
 # ---------------------------------------------------------------------------
-add_executable(test_geom_chunkser_directed geometry/geom_chunkser_directed.cpp)
-target_link_libraries(test_geom_chunkser_directed PRIVATE zhao_harness)
-verilate(test_geom_chunkser_directed
-  PREFIX Vtb_zhao_geom_paramarena
-  TOP_MODULE tb_zhao_geom_paramarena
-  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
-               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
-               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
-  SOURCES ${ZHAO_PARAMARENA_SOURCES}
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
-          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
-add_test(NAME geom_chunkser_directed COMMAND test_geom_chunkser_directed)
-set_tests_properties(geom_chunkser_directed
-  PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
 # ENTRY I55 -- THE INDEPENDENT PRODUCER'S ACCEPTANCE.
@@ -11352,14 +11345,6 @@ add_test(NAME lint_geom_arenabin
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arenabin.sv)
 set_tests_properties(lint_geom_arenabin PROPERTIES
-  LABELS "lint;fast"
-  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
-
-add_test(NAME lint_geom_chunkser
-         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
-                 --top-module zhao_geom_chunkser
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_chunkser.sv)
-set_tests_properties(lint_geom_chunkser PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
@@ -13931,7 +13916,6 @@ function(zhao_giantrefs_cntw_target TARGET)
       ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner_v2.sv
     VERILATOR_ARGS -Wall --assert
       -GTRI_CAP=4096 -GTRI_W=12 -GCHUNKS=8192 -GCHUNK_W=13
-      -GARENA_ID_LO=0 -GARENA_ID_W=18
       ${ARGN})
 endfunction()
 

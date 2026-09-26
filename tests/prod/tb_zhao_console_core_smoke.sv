@@ -512,23 +512,28 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_vid_sunk_o;
   logic [31:0] geom_vid_opens_o;
   logic [31:0] geom_vid_stall_o;
-  // Entry I54: the chunk serialiser and its identity queue, in the
-  // COMPOSED console. `geom_cs_head_tile_i` is the only input of the
-  // group and is held at tile 0 -- this bench does not walk, it only
-  // asserts that the producer ran and that its detectors stayed quiet.
+  // Entry I55: GEOM.ARENABIN, the INDEPENDENT chunk producer, and the
+  // identity queue that names its triangles, in the COMPOSED console.
+  // ARENACOMPOSE 2026-09-26 replaced the `geom_cs_*` group -- the retired
+  // chunk serialiser's -- with this one. `geom_ab_head_tile_i` is the
+  // group's only input and is held at tile 0.
   logic [31:0] geom_tidq_underflow_o;
   logic [31:0] geom_tidq_overflow_o;
   logic [31:0] geom_tidq_unnamed_o;
-  logic [31:0] geom_cs_chunks_o;
-  logic [31:0] geom_cs_refs_o;
-  logic [31:0] geom_cs_tiles_o;
-  logic [31:0] geom_cs_chain_break_o;
-  logic [31:0] geom_cs_head_clash_o;
-  logic [31:0] geom_cs_truncated_o;
-  logic [31:0] geom_cs_sunk_o;
-  logic [ 9:0] geom_cs_head_tile_i = 10'd0;
-  logic [31:0] geom_cs_head_chunk_o;
-  logic        geom_cs_head_valid_o;
+  logic [31:0] geom_ab_tris_o;
+  logic [31:0] geom_ab_unnamed_o;
+  logic [31:0] geom_ab_refs_o;
+  logic [31:0] geom_ab_chunks_o;
+  logic [31:0] geom_ab_links_o;
+  logic [31:0] geom_ab_tiles_o;
+  logic [31:0] geom_ab_refused_o;
+  logic [31:0] geom_ab_stall_o;
+  logic [31:0] geom_ab_flushcut_o;
+  logic [15:0] geom_ab_max_chunks_o;
+  logic        geom_ab_overflow_o;
+  logic [ 9:0] geom_ab_head_tile_i = 10'd0;
+  logic [31:0] geom_ab_head_chunk_o;
+  logic        geom_ab_head_valid_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -6696,6 +6701,72 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: binrefs    sweep_beats=%0d tile_references=%0d (seen=%0d) max_tile_list_depth=%0d (seen=%0d) overflow=%0d",
              cnt_beats_seen_q, cnt_tile_refs_q, cnt_tile_refs_seen_q,
              cnt_tile_depth_q, cnt_tile_depth_seen_q, render_overflow_o);
+    // ---- GEOM.ARENABIN, THE INDEPENDENT PRODUCER (entry I55) -------------
+    // ARENACOMPOSE, 2026-09-26. These are the counters of the block that fills
+    // the EXTERNAL arena's chunk region. It is NOT the binner and it reads no
+    // binner RAM: it runs its own corner test, on the same edge functions,
+    // over the same post-clip stream, at the same shell door.
+    // ---- GEOM.TIDQ, WHICH HAS BEEN DARK SINCE ENTRY I54 ------------------
+    // These three were DECLARED in this bench and never printed. A counter
+    // nobody prints is a counter nobody reads, and `unnamed_o` is the one that
+    // says a triangle reached the shell door with no arena identity -- which
+    // GEOM.ARENABIN then has to drop. Printed here because ARENACOMPOSE's
+    // agreement check stood down on exactly that, and "why" must be readable
+    // without a rebuild.
+    $display("SMOKE: tidq       underflow=%0d overflow=%0d unnamed=%0d",
+             geom_tidq_underflow_o, geom_tidq_overflow_o, geom_tidq_unnamed_o);
+    $display("SMOKE: arenabin   tris=%0d unnamed=%0d refs=%0d chunks=%0d links=%0d tiles=%0d",
+             geom_ab_tris_o, geom_ab_unnamed_o, geom_ab_refs_o,
+             geom_ab_chunks_o, geom_ab_links_o, geom_ab_tiles_o);
+    $display("SMOKE: arenabin   refused=%0d stall=%0d flushcut=%0d max_tile_chunks=%0d overflow=%0d head0[chunk/valid]=[%0d %0d]",
+             geom_ab_refused_o, geom_ab_stall_o, geom_ab_flushcut_o,
+             geom_ab_max_chunks_o, geom_ab_overflow_o,
+             geom_ab_head_chunk_o, geom_ab_head_valid_o);
+    // THE TWO PRODUCERS MUST AGREE ABOUT THE SCENE, and this is the check that
+    // says so. `tile_references` is GEOM.BINNER's own push count, read out of
+    // the console's counter window; `geom_ab_refs_o` is GEOM.ARENABIN's. Two
+    // separate modules, two separate coverage tests, two separate register
+    // enables -- so this is NOT the pattern where one enable drives both sides
+    // of a comparison and the check is blind to the timing it should catch.
+    // If the independent producer ever bins a DIFFERENT set of tiles from the
+    // one the pixels come from, the chunk lists describe a picture nobody drew
+    // and no other counter in this bench would notice.
+    //
+    // AND IT DOES NOT STAND DOWN, which is the part worth writing down.
+    //
+    // THE FIRST VERSION OF THIS CHECK WAS VACUOUS AND I CAUGHT IT BY RUNNING
+    // IT. It compared the two counts only when `geom_ab_unnamed_o == 0`, and
+    // GEOM.TIDQ hands GEOM.ARENABIN ONE poisoned identity on every run this
+    // bench has -- the plain fixture and `-BadVertex` both report exactly 1 --
+    // so the comparison never once executed. A gate whose guard is never true
+    // is the shape CLAUDE.md keeps finding, and it reads as a pass.
+    //
+    // So the check is now total. A SHORTFALL is legal ONLY when a triangle was
+    // dropped for want of an identity, and an EXCESS is never legal:
+    //
+    //   refs >  tile_references              GEOM.ARENABIN binned tiles the
+    //                                        picture does not have -> FATAL
+    //   refs <  tile_references, unnamed = 0 a reference vanished with NO
+    //                                        source attribution -> FATAL
+    //   refs <  tile_references, unnamed > 0 the shortfall is attributed;
+    //                                        reported with its size
+    //   refs == tile_references              the two producers agree exactly
+    if (geom_ab_refs_o > cnt_tile_refs_q) begin
+      $fatal(1, "SMOKE: GEOM.ARENABIN binned %0d tile reference(s) against GEOM.BINNER's %0d -- the external arena holds tiles the raster never draws",
+             geom_ab_refs_o, cnt_tile_refs_q);
+    end
+    if ((geom_ab_refs_o < cnt_tile_refs_q) && (geom_ab_unnamed_o == 32'd0)) begin
+      $fatal(1, "SMOKE: GEOM.ARENABIN binned %0d tile reference(s) against GEOM.BINNER's %0d with NO unnamed triangle -- a reference vanished and nothing counted it",
+             geom_ab_refs_o, cnt_tile_refs_q);
+    end
+    if (geom_ab_refs_o == cnt_tile_refs_q) begin
+      $display("SMOKE: arenabin   AGREES WITH THE BINNER EXACTLY: %0d tile reference(s) from both, independently binned",
+               geom_ab_refs_o);
+    end else begin
+      $display("SMOKE: arenabin   SHORTFALL %0d reference(s) (%0d against GEOM.BINNER's %0d), attributed to %0d triangle(s) that reached the shell door with NO arena identity -- see GEOM.TIDQ above and console entry I55",
+               cnt_tile_refs_q - geom_ab_refs_o, geom_ab_refs_o,
+               cnt_tile_refs_q, geom_ab_unnamed_o);
+    end
     // ---- TERRAINVISIBLE PROBE (2026-09-26): WHERE A FRAGMENT DIES --------
     // EIGHT counters that `zhao_shell_top_v2.sv:1500-1506` leaves DANGLING at
     // its `u_render_bin` instantiation -- `raster_jobs_started_o`,

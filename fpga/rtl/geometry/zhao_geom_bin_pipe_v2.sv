@@ -21,10 +21,15 @@ module zhao_geom_bin_pipe_v2 #(
     parameter int unsigned CHUNK_W    = 8,
     parameter int unsigned CHUNK_REFS = 4,
     parameter bit ATTR_DSP3           = 1'b0,
-    parameter bit BILERP_DSP2         = 1'b0,
-    // The arena's TriangleDescriptor index width (`td_id_o` is u18). Console
-    // entry I54; see ARENA_ID_LO below for WHERE in the metadata it rides.
-    parameter int unsigned ARENA_ID_W = 18
+    parameter bit BILERP_DSP2         = 1'b0
+    // ARENA_ID_W WAS HERE AND IS RETIRED (ARENACOMPOSE, 2026-09-26). It sized
+    // the binner's `ser_tri_id_o`; the serialise pass it belonged to is gone,
+    // and `zhao_geom_arenabin` now takes the arena identity straight from
+    // `zhao_geom_tidq` at the shell door instead of extracting it from the
+    // opaque metadata on the far side of the binner. THE FIELD ITSELF STAYS
+    // WHERE IT IS -- `zhao_console_core` still puts I54's arena id in the
+    // continuation tail's dead vertex_rgb bytes; this block simply stopped
+    // having an opinion about it.
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -159,20 +164,14 @@ module zhao_geom_bin_pipe_v2 #(
     output logic        [31:0] jobs_taken_o,
     output logic        [31:0] job_stall_clocks_o,
 
-    // ---- the binner's SERIALISE PASS, exported (console entry I54) --------
-    // The chunk serialiser lives beside `zhao_geom_paramarena` in the console,
-    // not in here, so what crosses this boundary is the lean reference stream
-    // and not a 448-bit chunk. See `zhao_geom_binner_v2`'s own port comment
-    // for why the pass exists and why it is not a tap on `job_*`.
-    input  logic               ser_req_i,
-    output logic               ser_busy_o,
-    output logic               ser_done_o,
-    output logic               ser_valid_o,
-    input  logic               ser_ready_i,
-    output logic [ARENA_ID_W-1:0] ser_tri_id_o,
-    output logic [TIDX_W-1:0]  ser_tile_o,
-    output logic               ser_first_o,
-    output logic               ser_last_o,
+    // ---- THE BINNER'S SERIALISE PASS IS RETIRED (ARENACOMPOSE) -----------
+    // `ser_req_i` and seven `ser_*` outputs crossed here, out through
+    // `zhao_shell_top_v2` as `render_ser_*`, to `zhao_geom_chunkser`. Console
+    // entry I55: that made the on-chip arena the thing that FILLED the
+    // external one, so the two were in SERIES and the SDRAM path could never
+    // be the sole producer. `zhao_geom_arenabin` fills the arena from the
+    // post-clip stream directly, so nothing asks for the pass and the ports
+    // are REMOVED rather than tied off.
 
     // Raster/texture/fragment/resolve counters and terminal status.
     output logic               quiet_o,
@@ -278,22 +277,18 @@ module zhao_geom_bin_pipe_v2 #(
   // offset is the flat-request width plus the field's own offset inside the
   // tail. Stated as a sum for the same reason METAW is: one term moves when
   // the layout does.
-  localparam int unsigned META_TAIL_LO      = 298;  // above tri_flat_request_i
-  localparam int unsigned TAIL_ARENA_ID_LO  = 24;   // the dead vertex_rgb field
-  localparam int unsigned ARENA_ID_LO       = META_TAIL_LO + TAIL_ARENA_ID_LO;
+  // THE THREE OFFSET LOCALPARAMS WENT WITH THE SERIALISE PASS (ARENACOMPOSE).
+  // `META_TAIL_LO` / `TAIL_ARENA_ID_LO` / `ARENA_ID_LO` existed only to tell
+  // `zhao_geom_binner_v2` where to slice I54's arena id back out of the
+  // metadata. Nothing slices it here any more. The ELABORATION GUARD on the
+  // tail's own width is kept below, because that contract is about the
+  // continuation tail and not about the pass.
 
   initial begin : p_packet_d_meta_contract
     if ($bits(tri_meta_w) != METAW)
       $fatal(1, "zhao_geom_bin_pipe_v2: metadata width changed");
     if (METAW != 1877)
       $fatal(1, "zhao_geom_bin_pipe_v2: METAW is not the ratified 1877");
-    // The arena index must land inside the DEAD vertex_rgb field and nowhere
-    // else. If the tail layout ever moves, this fails elaboration rather than
-    // quietly slicing eighteen bits out of a live attribute -- which would
-    // produce triangle ids that are wrong and in range, the exact fault
-    // entry I54 is written against.
-    if ((TAIL_ARENA_ID_LO + ARENA_ID_W) > 48)
-      $fatal(1, "zhao_geom_bin_pipe_v2: arena id overruns the continuation tail");
     if ($bits(tri_continuation_tail_i) != 48)
       $fatal(1, "zhao_geom_bin_pipe_v2: continuation tail width changed");
   end
@@ -338,8 +333,7 @@ module zhao_geom_bin_pipe_v2 #(
   zhao_geom_binner_v2 #(
       .GRID_W(GRID_W), .GRID_H(GRID_H), .TILES(TILES), .TIDX_W(TIDX_W),
       .TRI_CAP(TRI_CAP), .TRI_W(TRI_W), .CHUNKS(CHUNKS),
-      .CHUNK_W(CHUNK_W), .CHUNK_REFS(CHUNK_REFS), .METAW(METAW),
-      .ARENA_ID_LO(ARENA_ID_LO), .ARENA_ID_W(ARENA_ID_W)
+      .CHUNK_W(CHUNK_W), .CHUNK_REFS(CHUNK_REFS), .METAW(METAW)
   ) u_binner (
       .clk(clk),
       .rst_n(rst_n),
@@ -374,15 +368,6 @@ module zhao_geom_bin_pipe_v2 #(
       .job_profile_bad_o(job_profile_bad_w),
       .drain_busy_o(drain_busy_o),
       .drain_done_o(drain_done_o),
-      .ser_req_i(ser_req_i),
-      .ser_busy_o(ser_busy_o),
-      .ser_done_o(ser_done_o),
-      .ser_valid_o(ser_valid_o),
-      .ser_ready_i(ser_ready_i),
-      .ser_tri_id_o(ser_tri_id_o),
-      .ser_tile_o(ser_tile_o),
-      .ser_first_o(ser_first_o),
-      .ser_last_o(ser_last_o),
       .tile_references_o(binner_tile_references_o),
       .max_tile_list_depth_o(binner_max_tile_list_depth_o),
       .triangles_culled_o(binner_triangles_culled_o),

@@ -386,9 +386,47 @@ module zhao_geom_arenabin #(
   // ---- the staging banks -------------------------------------------------
   // ONE RAM PER CHUNK SLOT. Appending a reference is then a single narrow
   // write to ONE bank at the tile's address; one STAGE_IDS*ID_W-wide RAM would
-  // need a read-modify-write of all 252 bits per reference. Each bank is
-  // declared inside an explicit generate rather than as a 2-D unpacked array,
-  // which Quartus 17 does not reliably infer as memory.
+  // need a read-modify-write of all 252 bits per reference. A_EMITR reads all
+  // STAGE_IDS slots of a tile in ONE clock, which is why there are fourteen
+  // one-read-port banks and not one array.
+  //
+  // THE STAGING DOES NOT REACH BLOCK MEMORY ON QUARTUS 17.0.2, AND THAT IS A
+  // MEASUREMENT RATHER THAN A SUSPICION. ARENACOMPOSE, 2026-09-26, put this
+  // block through `quartus_map` for the first time -- R212: BINARENA counted
+  // these bits from the DECLARATIONS and was forbidden a fit. Three map_only
+  // rows on the shipping part 5CSEBA6U23I7, all three IDENTICAL:
+  //
+  //   `@arenacompose`      as written                146,414 reg   33,408 bits
+  //   `@ramstyle`          (* ramstyle = `MACRO *)   146,414 reg   33,408 bits
+  //   `@ramstyle-literal`  (* ramstyle = "M10K" *)   146,414 reg   33,408 bits
+  //
+  // WHAT INFERRED: only the five MODULE-SCOPE directory arrays -- head_ram,
+  // tail_ram, hv_ram, fill_ram, nch_ram, 33,408 bits between them, named in
+  // the map report's own RAM Summary. The 14 x 576 x 18 = 145,152-bit STAGING
+  // array did not infer at all, in any of the three, and went to flip-flops.
+  // A 5CSEBA6U23I7 holds about 167,640 of those, so this ONE BLOCK asks for
+  // roughly 87% of the device's registers.
+  //
+  // THE ATTRIBUTE IS THEREFORE NOT HERE. It was tried twice, it changed
+  // nothing either time, and Quartus said nothing either time. An INERT
+  // synthesis directive left in shipped RTL is worse than none: it reads as a
+  // guarantee that the storage is in memory, and the next person to look at
+  // this file would inherit the guarantee and not the measurement.
+  //
+  // THE DECLARATIONS ARE IDENTICAL IN STYLE to the five that DID infer; the
+  // one difference is that these are declared INSIDE A GENERATE. The header
+  // used to assert the opposite -- "declared inside an explicit generate
+  // rather than as a 2-D unpacked array, which Quartus 17 does not reliably
+  // infer as memory" -- and that is the sentence the fit refuted. Hoisting the
+  // banks to module scope is the next experiment and it is NOT done here: it
+  // is a change to this block's storage architecture, and ARENACOMPOSE's job
+  // was to compose the block and measure it.
+  //
+  // FOURTEEN ONE-READ-PORT BANKS ARE ARCHITECTURALLY REQUIRED whatever the
+  // storage: A_EMITR reads all STAGE_IDS slots of a tile in ONE clock. At
+  // 576 x 18 each, M10K would cost 2 blocks per bank -- 28 of the device's 553
+  // -- so the memory is affordable if it can be reached. THE LIMIT IS THE
+  // INFERENCE, NOT THE CAPACITY.
   logic              stg_we;
   logic [STG_W-1:0]  stg_wsel;
   logic [TIDX_W-1:0] stg_wa;

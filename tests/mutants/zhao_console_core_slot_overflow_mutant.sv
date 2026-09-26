@@ -1224,28 +1224,39 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_vid_sunk_o,
   output logic [31:0] geom_vid_opens_o,
   output logic [31:0] geom_vid_stall_o,
-  // ---- I54: the chunk serialiser and the identity queue that feeds it ------
+  // ---- I54/I55: the arena's chunk producer and the queue that names it -----
   // `geom_tidq_*` measure the rejoin between GEOM.VERTID's descriptor index and
   // the triangle it belongs to. On a frame whose ids are sound all three read
   // ZERO -- and a counter asserted zero is a claim, so each is fired
-  // deliberately by `geom_chunkser_directed` rather than quoted silent.
+  // deliberately by `geom_arenabin_directed` rather than quoted silent.
   output logic [31:0] geom_tidq_underflow_o,
   output logic [31:0] geom_tidq_overflow_o,
   output logic [31:0] geom_tidq_unnamed_o,
-  // `geom_cs_chain_break_o` is the one that would see a chunk chain whose
-  // `next` stopped naming the chunk that follows it. `geom_cs_head_chunk_o` is
-  // what a walk starts FROM: entry I55's consumer reads it, and until that
-  // lands it is the evidence that the heads were placed at all.
-  output logic [31:0] geom_cs_chunks_o,
-  output logic [31:0] geom_cs_refs_o,
-  output logic [31:0] geom_cs_tiles_o,
-  output logic [31:0] geom_cs_chain_break_o,
-  output logic [31:0] geom_cs_head_clash_o,
-  output logic [31:0] geom_cs_truncated_o,
-  output logic [31:0] geom_cs_sunk_o,
-  input  logic [ 9:0] geom_cs_head_tile_i,
-  output logic [31:0] geom_cs_head_chunk_o,
-  output logic        geom_cs_head_valid_o,
+  // ARENACOMPOSE, 2026-09-26: these were `geom_cs_*`, `zhao_geom_chunkser`'s
+  // seven counters and its head table. THE SERIALISER IS RETIRED and these are
+  // GEOM.ARENABIN's own, which are not the same quantities and are therefore
+  // NOT reused under the old names -- `chain_break_o`, `head_clash_o`,
+  // `pass_truncated_o` and `chunks_sunk_o` are faults only a second read pass
+  // over somebody else's tile lists can have, and this producer has no such
+  // pass. Renaming rather than re-pointing is the difference between a new
+  // measurement and an overloaded field.
+  // `geom_ab_head_chunk_o` is what a walk starts FROM: entry I55's consumer
+  // reads it, and until that lands it is the evidence that the heads were
+  // placed at all.
+  output logic [31:0] geom_ab_tris_o,        // triangles this block binned
+  output logic [31:0] geom_ab_unnamed_o,     // dropped: the arena refused them
+  output logic [31:0] geom_ab_refs_o,        // tile references produced
+  output logic [31:0] geom_ab_chunks_o,      // 64-byte chunk records written
+  output logic [31:0] geom_ab_links_o,       // chain patches issued
+  output logic [31:0] geom_ab_tiles_o,       // tiles that hold at least one
+  output logic [31:0] geom_ab_refused_o,     // chunks the arena's quota refused
+  output logic [31:0] geom_ab_stall_o,       // clocks the live stream waited
+  output logic [31:0] geom_ab_flushcut_o,    // partial chunks cut by frame end
+  output logic [15:0] geom_ab_max_chunks_o,  // deepest tile list, in chunks
+  output logic        geom_ab_overflow_o,
+  input  logic [ 9:0] geom_ab_head_tile_i,
+  output logic [31:0] geom_ab_head_chunk_o,
+  output logic        geom_ab_head_valid_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
