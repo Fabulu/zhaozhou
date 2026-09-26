@@ -3235,3 +3235,72 @@ FABRICSINK (I34), BINARENA (I55). **Register 5**, measured BARE.
 
 **And I ran the register through `| tail` once and read tail's RC 0** -- the
 documented trap, the same one REFPUSH hit today. Re-run bare: **RC 1**, correct.
+
+### 2026-09-26 - SHADELADDER LANDED: I13's TWO LAWS ARE BUILT, AND THE ENTRY WAS WRONG ABOUT THE LADDER
+
+**The reading held at every line it checked.** CELLCARRY's *"two ARITHMETIC LAWS
+are unsettled"* was wrong by one word: both were settled in writing, neither was
+in the tree. **It verified each at its source before building** rather than
+inheriting my brief -- the ladder frozen in `terrain.cpp:633-637` with the
+oracle's own comment, the saturate mandated at `qformats.md:75` in the bounds
+column.
+
+**AND IT FOUND THE ENTRY FALSE IN THE FLATTERING DIRECTION.**
+`zhao_console_core.sv:3809-3811` says `shade_q` **"takes FOUR values"**. It takes
+**FIVE, {0,1,2,3,4}**, exactly as the oracle's `(0..4)` comment says. The entry's
+derivation came from `ambient()`, which applies only to walls and undersides --
+**and both pass unity tint and unity sheet.** The one path carrying a real tint
+and sheet is the textured TOP surface, which uses raw `shade_tri` clamped to
+`[0, 65536]`.
+
+**Rung zero is reachable and it is BLACK.** A block built from that sentence
+would have carried a 2-bit ladder unable to express a top-surface triangle turned
+from the sun -- **dark grey where a capture-exact law says black, with every gate
+passing.** The test LOCATES the rung boundaries by search rather than asserting
+them: `0 / 8193 / 24577 / 40961 / 57345`.
+
+**Evidence that is the argument rather than decoration:** the ladder moves the
+pixel (1,044 of 1,048 triples differ from the unquantised shade); against the
+composed path today it is **599 of 1,248 differing, worst 32 LSB of 255 -- 12.5%
+of full scale**; `zhao_geom_vattr`'s *"no saturation case exists"* is now PROVEN
+rather than quoted (983,040 s16 pairs, zero saturations), which is why it left
+that block alone; and the saturation edge was found by binary search ON THE RTL,
+with a patch 300 tiles out railing where truncation gives **-1778384896** -- the
+sign flip, with a coordinate.
+
+**Three things it caught in itself**, and the first is the good one: **its named
+ladder control was VACUOUS** -- a half-lit shade of 32768 snaps to rung 2 whose
+gain IS 32768, so the check would have failed against CORRECT RTL. **Rung centres
+are exactly where the ladder is invisible.** Re-authored as an equality, with the
+real control off-centre. It also nearly planted a broken `.sv` while the smoke
+controls were reading the tree -- the live-tree trap -- and the sandbox stopped
+it.
+
+**Register 5 -> 5, and that is CORRECT**: it built laws, composed nothing, and
+registered both new blocks as OPEN deferrals with explicit delete conditions. My
+worry that this would push the register UP was unfounded -- the disconnected
+count is still 1. **It refused item 3 entirely** (carriage, `invw24`, the fourth
+clipdoor client) and re-measured the blocker rather than asserting it.
+
+Merged at `030a1b57`. **My `u_geom_tidq` clock fix survived the merge** -- its
+base predated `5ed6f773` and it said so rather than letting me discover it.
+Closure lint 0/0, gate sweep 31/31 at baseline.
+
+### THE BANDWIDTH FINDING, ATTACKED IN THE DIRECTION THAT COULD KILL IT
+
+`330,474` free re-measured and exact. **But `sdram_bandwidth.py` says its two
+largest rows are PROVISIONAL** -- *"their own authors refused to freeze"*, with
+`terrain_rules.md` reading **"Affordability: NOT COSTED"** -- and that is
+**54.06% of the frame.** I had quoted a provisional total as measured.
+
+**Tested against the most generous case: suppose BOTH vanish.** Free becomes
+1,231,434; option 2 still needs ~3.7 M. **Shortfall 2,468,566 cycles, ratio
+3.0 : 1.** The impossibility is not sensitive to the soft numbers and now carries
+the adversarial case instead of a headline.
+
+### WHERE THINGS STAND
+
+**Running: GIANTREFS (I56's real blocker), FABRICSINK (I34's two fabric
+routes).** Queued: BINARENA (I55) -- **held deliberately**, because it and
+GIANTREFS would both edit `zhao_geom_binner_v2.sv` heavily and FABRICSINK's
+terrain/field/mosaic territory does not overlap either. **Register 5**, bare.
