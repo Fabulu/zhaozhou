@@ -571,6 +571,56 @@ def effort(whys):
     return "DESIGN" if design else "MECHANICAL"
 
 
+def composed_index(map_rpt):
+    """module name -> (own registers, subtree memory bits) in a COMPOSED map.
+
+    ADDED 2026-09-26, BECAUSE THIS FILE'S OWN `--rank` LIST IS A BAD WORK LIST
+    AND NOBODY HAD CHECKED IT AGAINST A COMPOSITION. Its top six entries on
+    2026-09-26 were:
+
+        zhao_terrain_patch_acc      139,776 bits   NOT IN THE COMPOSED CONSOLE
+        zhao_forge_cliff            119,808 bits   NOT IN THE COMPOSED CONSOLE
+        zhao_forge_cliff_ram        119,808 bits   already 55,428 MEMORY BITS
+        zhao_audio_fifo              65,536 bits   already 65,536 MEMORY BITS
+        zhao_post_composite          64,512 bits   already 64,512 MEMORY BITS
+        zhao_texture_binding_res_v2  38,912 bits   already 38,912 MEMORY BITS
+
+    **Every one of them is either absent from the machine or ALREADY INFERRING.**
+    This checker reads SOURCE with DECLARED parameters; it cannot know what the
+    composition instantiated or what Quartus then did. Its silence is not a
+    verdict (that is rule 5's lesson) and its NOISE is not a work list either.
+
+    So a ranked row can now be annotated with what the composed console actually
+    shows for that module, and a reader can tell "this is 100k flip-flops in the
+    machine" from "this is a parameter in a file nothing instantiates".
+    """
+    idx = {}
+    try:
+        with open(map_rpt, "r", encoding="utf-8", errors="replace") as fh:
+            started = False
+            for line in fh:
+                if not started:
+                    if line.startswith("; Compilation Hierarchy Node"):
+                        started = True
+                    continue
+                if not line.startswith(";"):
+                    if idx:
+                        break
+                    continue
+                cells = [c.strip() for c in line.split(";")]
+                if len(cells) < 9 or not cells[1].startswith("|"):
+                    continue
+                mod = cells[1].strip("|").split(":")[0]
+                own = re.search(r"\((\d+)\)", cells[3])
+                mem = re.match(r"^(\d+)", cells[4])
+                if mod and mod not in idx:
+                    idx[mod] = (int(own.group(1)) if own else 0,
+                                int(mem.group(1)) if mem else 0)
+    except OSError:
+        return {}
+    return idx
+
+
 def main():
     # The write scan is this file's foundation: an array whose write it cannot see
     # is skipped from every rule, silently. It was defeated by a nested bracket for
@@ -599,6 +649,12 @@ def main():
 
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     rank = "--rank" in sys.argv
+    against = ""
+    for a in sys.argv[1:]:
+        if a.startswith("--against="):
+            against = a.split("=", 1)[1]
+    args = [a for a in args if not a.startswith("--against=")]
+    composed = composed_index(against) if against else {}
 
     targets = args
     if not targets:
@@ -648,8 +704,18 @@ def main():
             if bits < 256:
                 continue
             shown += 1
-            print("%8d bits  %s  %s  [%s]"
-                  % (bits, path.replace("fpga/rtl/", ""), name, effort(whys)))
+            note = ""
+            if composed:
+                mod = os.path.basename(path)[:-3]
+                if mod not in composed:
+                    note = "   <- NOT IN THE COMPOSED MAP"
+                else:
+                    own, mem = composed[mod]
+                    note = ("   <- composed: %d own reg, %d mem bits%s"
+                            % (own, mem,
+                               "  ALREADY INFERRING" if mem >= bits else ""))
+            print("%8d bits  %s  %s  [%s]%s"
+                  % (bits, path.replace("fpga/rtl/", ""), name, effort(whys), note))
             for w in whys:
                 print("               - %s" % w)
         small = sum(1 for b, _p, _n, _w in ranked if b < 256)
