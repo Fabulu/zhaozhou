@@ -216,8 +216,10 @@ amendment before it is the law** — the required changes are recorded in
   ambient-FLOOR semantics conflict with the ratified additive-ambient
   vertex-light law (`spec/sky_and_beams.md` §4a) and the application point has
   moved to the vertex-colour lanes; both functions are superseded by
-  `zref::terrain::normalmap_apply` (PLANNED AND NOT WRITTEN):
-  `v'_c = clamp_u8(v_c + delta)`.
+  `zref::terrain::normalmap_apply` (~~PLANNED AND NOT WRITTEN~~ **WRITTEN**,
+  `reference/include/zref/zref_terrain_normalmap.hpp:129`, corrected
+  2026-09-27 -- the function landed with the block and this line was never
+  updated): `v'_c = clamp_u8(v_c + delta)`.
 * `zref::terrain::normalmap_length` / `normalmap_base` — **MOVED 2026-09-03**,
   as this section required. TERRAIN.SHADE is now contracted
   (`design/contracts/TERRAIN.SHADE.md`) and they live in
@@ -230,9 +232,16 @@ amendment before it is the law** — the required changes are recorded in
 
 **Status of the amendments above, 2026-09-03:** `normalmap_detail` now rounds
 half-up rather than truncating; the ambient-FLOOR functions are gone and
-ambient is additive per §4a; the base light has moved out. What remains
+ambient is additive per §4a; the base light has moved out. ~~What remains
 planned is `normalmap_apply` at the vertex-colour lanes — the application
-point — which needs the fragment seam that does not exist yet.
+point — which needs the fragment seam that does not exist yet.~~
+
+**Superseded 2026-09-27 (NORMALMAP packet).** `normalmap_apply` is written
+in the header and the fragment seam now exists: `zhao_terrain_normalmap` is
+instantiated inside `zhao_texture_island_v3_top` beside `u_persp`, and
+`zhao_raster_texture_stage_v3` transcribes the oracle law as `detail_apply`
+onto `frag_vert_rgb_o`, the flat lit colour lane. The struck sentence is
+kept because it was true when written.
 
 ## THIS BLOCK IS NOT PRECEDENT — D-8, RULED 2026-09-03
 
@@ -269,7 +278,14 @@ unstated.
 
 ## Directed tests
 
-**PLANNED AND NOT WRITTEN** (`reports/PHANTOM-CITATIONS-AUDIT.md` — named
+**WRITTEN** -- `tests/texture/terrain_normalmap_directed.cpp`, registered as
+`terrain_normalmap_directed` with its own inverted-polarity positive control
+`terrain_normalmap_break_oracle` (WILL_FAIL). The block's two ENFORCED-BY
+lines therefore cite a test that exists and runs. Corrected 2026-09-27; the
+original text is kept struck below because it was true when written, and the
+case list is still the list this suite is measured against.
+
+~~**PLANNED AND NOT WRITTEN**~~ (`reports/PHANTOM-CITATIONS-AUDIT.md` — named
 without paths until the file exists; note the draft RTL's ENFORCED-BY line
 already cites a nonexistent test and must be fixed):
 
