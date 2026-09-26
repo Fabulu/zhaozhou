@@ -32,11 +32,23 @@ Four things a 2026-09-22 reader would call blockers are gone:
   underside only.
 * **The aux surface context has a producer** — `zhao_texture_sheetmod`, with the
   sheet share widened 2 → 3 clients (TERRAINAUX).
-* **The colour is NOT the blocker.** `mod_of(shade, tint, sheet)` is exact at
-  all-unity by the oracle's own sentence, and **"tint absent" has a RATIFIED
-  IDENTITY** — RGB565 `0xFFFF`, which `cell_tint` already defaults to, giving
-  exactly 65536 in Q16.16. A unity tint is **not** the stand-in this entry
-  refused three times; it is an unauthored layer at its exact identity.
+* **~~The colour is NOT the blocker.~~ CORRECTED 2026-09-26 BY THE PACKET THIS
+  BRIEF WAS WRITTEN FOR, AND THE ERROR IS MINE.** What I wrote is true about the
+  **TINT** and says nothing about the **SHADE**. *"Tint absent"* does have a
+  ratified identity — RGB565 `0xFFFF`, which `cell_tint` already defaults to,
+  giving exactly 65536 in Q16.16 — and that half stands. But
+  `mod_of(shade, tint, sheet)` has three operands and **I costed one of them and
+  declared the whole settled.**
+
+  **The frozen law QUANTISES THE SHADE, and no RTL anywhere does it.**
+  `reference/src/zrender/terrain.cpp:633-637` computes
+  `shade_q = (shade + 8191) >> 14` and then `shade_q << 14`; since `ambient()`
+  returns Q16.16 in `[16384, 65536]`, **that is a four-level quarter-step
+  ladder**, and its stated reason is the 256-colour palette budget. The composed
+  path would be two 8-bit `unit_mul` roundings and **no ladder at all**.
+
+  Ten passes have costed this as *"a modulation, exact at all-unity"* and
+  stopped at the tint. **Read the lambda, not the summary of it.**
 
 ## THE BLOCKER, and it is why this packet is called CELLCARRY
 
