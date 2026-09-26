@@ -2774,6 +2774,36 @@ add_test(NAME attrsetup_mul_narrow_differential
   COMMAND test_attrsetup_mul_narrow_differential)
 set_tests_properties(attrsetup_mul_narrow_differential
   PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# ---- DSPHUNT: the skin-normal multiply narrowing, 21 DSP -> 16 --------------
+#
+# `Vskinnorm_old` is tests/probes/zhao_skinnorm_mul_probe.sv, which is
+# zhao_geom_skin_norm.sv at commit 19c8cfde with the module renamed and nothing
+# else touched. It is a VERIFIED POSITIVE CONTROL: mapped on the shipping
+# 5CSEBA6U23I7 it reproduced the pre-repair block on every number -- 21 DSP, 920
+# registers, 2053 combinational ALUTs, modes 6 / 7 / 8 -- against
+# zhao_geom_skin_norm@gzdsp-base, digest c9338495f42a.
+#
+# DO NOT "REFRESH" THE PROBE WHEN PRODUCTION MOVES. The usual law for a
+# committed copy is that it goes stale in the flattering direction and must be
+# merged forward; this one inverts it. The probe is the BASELINE, not a mirror,
+# and refreshing it turns this differential into a comparison of the new block
+# with itself -- green forever, proving nothing.
+add_executable(test_skinnorm_mul_narrow_differential
+  proofs/skinnorm_mul_narrow_differential.cpp)
+target_link_libraries(test_skinnorm_mul_narrow_differential PRIVATE zhao_harness zhao_zref)
+verilate(test_skinnorm_mul_narrow_differential
+  PREFIX Vskinnorm_new
+  TOP_MODULE zhao_geom_skin_norm
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin_norm.sv)
+verilate(test_skinnorm_mul_narrow_differential
+  PREFIX Vskinnorm_old
+  TOP_MODULE zhao_skinnorm_mul_probe
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/probes/zhao_skinnorm_mul_probe.sv)
+add_test(NAME skinnorm_mul_narrow_differential
+  COMMAND test_skinnorm_mul_narrow_differential)
+set_tests_properties(skinnorm_mul_narrow_differential
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_raster_attrdiv_directed raster/raster_attrdiv_directed.cpp)
 target_link_libraries(test_raster_attrdiv_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_raster_attrdiv_directed

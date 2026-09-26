@@ -2255,6 +2255,20 @@ targets:
       - fpga/rtl/field/zhao_field_sin.sv
       - fpga/rtl/field/zhao_field_sin_rom.sv
 
+  # DSPHUNT's positive control for the 2026-09-26 multiply narrowing. It is
+  # `zhao_geom_skin_norm.sv` at commit 19c8cfde with the module renamed and
+  # NOTHING else changed, so mapping it must reproduce the pre-repair block on
+  # every number. It did: 21 DSP, 920 registers, 2053 combinational ALUTs, 8
+  # Independent 27x27 -- identical to `zhao_geom_skin_norm@gzdsp-base`.
+  #
+  # A control arm that does not reproduce the block is measuring a different
+  # machine, and every number taken from the comparison is then about something
+  # else. NO RULES, for the same reason the block below states: a bound written
+  # here would be one invented after the measurement it governs.
+  - top: zhao_skinnorm_mul_probe
+    sources:
+      - tests/probes/zhao_skinnorm_mul_probe.sv
+
   - top: zhao_geom_skin_norm
     sources:
       - fpga/rtl/geometry/zhao_geom_skin_norm.sv

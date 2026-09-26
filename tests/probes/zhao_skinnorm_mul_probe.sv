@@ -1,4 +1,61 @@
-// zhao_geom_skin_norm.sv — the blended, renormalised world normal, once per vertex.
+// zhao_skinnorm_mul_probe -- DSPHUNT's POSITIVE CONTROL for the skin-normal
+// multiply narrowing of 2026-09-26.
+//
+// WHAT THIS FILE IS
+// -----------------
+// It is `fpga/rtl/geometry/zhao_geom_skin_norm.sv` AS IT STOOD AT COMMIT
+// 19c8cfde, with the module renamed and nothing else altered. It was produced
+// MECHANICALLY, by `git show` and a single identifier substitution, precisely
+// so that it is the old arithmetic rather than somebody's reading of the old
+// arithmetic. The differential that consumes it exists because a C++
+// restatement of the pre-repair expressions would prove only that the DUT
+// agrees with MY TRANSCRIPTION -- which is the part most likely to be wrong,
+// being written by the same person at the same time from the same reading.
+// `tests/proofs/attrsetup_mul_narrow_differential.cpp` says this at length and
+// this file follows it.
+//
+// WHAT IT MEASURED -- quartus_map 17.0.2, 5CSEBA6U23I7, -MapOnly.
+// Row `zhao_geom_skin_norm@gzdsp-base`, digest c9338495f42a, rtlCleanAtHead
+// TRUE:
+//
+//     Total DSP Blocks           21      Two Independent 18x18       6
+//     Total registers           920      Independent 18x18 plus 36   7
+//     combinational ALUTs      2053      Independent 27x27           8
+//
+// and after the repair, row `zhao_geom_skin_norm@gzdsp-narrow`:
+//
+//     Total DSP Blocks           16      Two Independent 18x18       6
+//     Total registers           920      Independent 18x18 plus 36   8
+//     combinational ALUTs      1954      Independent 27x27           2
+//
+// -5 DSP and -99 ALUTs, with the register count UNCHANGED, which is the tell
+// that no state moved: this is the same machine multiplying at the widths its
+// operands actually have.
+//
+// *** DO NOT "REFRESH" THIS FILE AGAINST PRODUCTION. ***
+//
+// The usual law for a committed copy is the opposite of what applies here. A
+// mutant copy goes stale in the flattering direction and must be merged
+// forward, and `tools/budget/mutant_copy_drift.py` exists to catch exactly
+// that. This file is NOT in its scope (it scans tests/mutants/) and must not be
+// brought into it. Two things depend on it staying exactly as it is:
+//
+//   * it is the baseline the -5 DSP was measured against, so refreshing it
+//     silently invalidates that number;
+//   * `tests/proofs/skinnorm_mul_narrow_differential.cpp` verilates it as
+//     `Vskinnorm_old` and compares it against shipping production. Refresh it
+//     and the differential becomes a comparison of the new block WITH ITSELF --
+//     green forever, proving nothing. That is the broken-instrument law in its
+//     most flattering possible form.
+//
+// If production's ports ever change, this probe stops being a control for the
+// CURRENT block. That is fine and expected: its job is to be the 2026-09-26
+// baseline. Add a new probe; do not edit this one.
+//
+// This file is a PROBE, not production. Nothing composes it and nothing may.
+// ---------------------------------------------------------------------------
+
+// zhao_skinnorm_mul_probe.sv — the blended, renormalised world normal, once per vertex.
 //
 // ---------------------------------------------------------------------------
 // WHY THIS BLOCK EXISTS AND WHY IT IS NOT PART OF GEOM.SKIN
@@ -79,7 +136,7 @@
 // ENFORCED-BY: tests/geometry/skin_norm_rtl_directed.cpp:main
 `default_nettype none
 
-module zhao_geom_skin_norm #(
+module zhao_skinnorm_mul_probe #(
     parameter int unsigned SRCW = 16
 ) (
     input var logic clk,
@@ -146,109 +203,21 @@ module zhao_geom_skin_norm #(
   logic [1:0] lane_c;
   assign lane_c = 2'(mi_q[1:0]);
 
-  // ---- THE MULTIPLIES, NARROWED TO THEIR EXACT WIDTHS -----------------------
-  //
-  // Every width below is the m+n EXACT width of a signed product or the exact
-  // width of a sum, so NOTHING here rounds, truncates, saturates or wraps that
-  // did not already. The 64-bit forms are kept at every point a value LEAVES
-  // this expression, so `blend_c` and `n_q` are bit-for-bit what they were.
-  //
-  // The oracle accumulates in int64 and this still matches it deliberately: if
-  // the reference can overflow on a hostile input the RTL must overflow
-  // IDENTICALLY, or the two part company exactly where nobody looks. Nothing
-  // below can overflow FOR ANY VALUE THE PORTS CAN CARRY, so the narrow form
-  // and the int64 form hold the same integer and there is no divergence to
-  // have. The argument rests on the DECLARED port widths and on nothing else:
-  //
-  //   a_q[i], b_q[i]  signed [31:0]   nx_q, ny_q, nz_q  signed [7:0]
-  //   so |a*n| <= 2^31 * 2^7 = 2^38, which a 40-bit SIGNED value holds
-  //   exactly -- m+n = 32+8 = 40, the standard exact width.
-  //
-  //   |pa0 + pa1 + pa2| <= 3 * 2^38 < 2^40, which a 42-bit signed holds
-  //   exactly. (41 would do; 42 is kept so the bound is obvious and it is
-  //   measured to cost nothing.)
-  //
-  //   w0_q is [6:0] UNSIGNED, so 0 <= w0_q <= 127.
-  //
-  //   *** THE COMPLEMENT DOES NOT WRAP, AND THE FIRST VERSION OF THIS REPAIR
-  //   ASSUMED IT DID. *** `64'(7'd64 - w0_q)` LOOKS like a 7-bit unsigned
-  //   subtraction that wraps modulo 128 above w0_q = 64. It is not. A size
-  //   cast establishes the context for the expression INSIDE it, so both
-  //   operands are widened to 64 bits BEFORE the subtract, and the result is
-  //   the 64-bit unsigned residue of (64 - w0_q) -- which for w0_q > 64 is
-  //   2^64 - (w0_q - 64), and which the unsigned multiply and the truncation
-  //   to 64 bits then carry through as the NEGATIVE value it stands for.
-  //   So the shipped arithmetic is `(64 - w0_q)` as a SIGNED weight in
-  //   [-63, +64], and the wrapping reading is off by 128 for every w0_q >= 65.
-  //
-  //   That error is why `tests/proofs/skinnorm_mul_narrow_differential.cpp`
-  //   exists and it is what that proof caught: 43,330 of 43,497 vectors
-  //   disagreed, every root cause of it a w0_q in 65..127. It is exactly the
-  //   failure the DSP work is fenced against -- a saving that quietly changes
-  //   a sign -- and it would have passed every other gate in the tree, because
-  //   GEOM.SKIN hands this block w0 in 0..64 and no existing test looks above
-  //   it. The repair below computes the complement as an 8-bit SIGNED
-  //   subtraction, whose range is exactly [-63, +64], reproducing production
-  //   for EVERY value the port can carry rather than for the ones it is
-  //   usually given.
-  //
-  //   |w0 * na| <= 127 * 2^40 < 2^47 and |w1 * nb| <= 64 * 2^40 = 2^46,
-  //   both of which a 50-bit signed holds exactly. Their SUM is under
-  //   191 * 2^40 < 2^48, so blend_c never needs the truncation its
-  //   64-bit assignment would perform, and exact == modulo 2^64 here.
-  //
-  // WHY THE SIGNEDNESS CHANGE IS NOT AN ARITHMETIC CHANGE. Production's
-  // `64'(w0_q) * na_c` is an UNSIGNED 64-bit multiply, because SystemVerilog
-  // makes the whole operation unsigned when EITHER operand is, and `w0_q` is.
-  // Its result is the low 64 bits of the product, and residues modulo 2^64 do
-  // not care which interpretation produced them: for any a, b,
-  // (a mod 2^64)(b mod 2^64) = ab (mod 2^64). The signed form below computes
-  // the EXACT integer w*na -- which fits in 50 bits and therefore in 64 --
-  // and sign-extends it, and sign-extension of an exact value that fits IS
-  // its residue modulo 2^64. So the two agree bit for bit.
-  //
-  // Proven by `tests/proofs/skinnorm_mul_narrow_differential.cpp`, which
-  // verilates the pre-repair arithmetic and this one side by side and
-  // compares `n_x_o/n_y_o/n_z_o/n_degenerate_o` cycle by cycle. NOT an
-  // exhaustive sweep: the operand space is 2^(32*3+8*3+7) and exhaustion is
-  // not available at that width, so the proof is directed corners (every
-  // extreme of every declared port range, and every w0_q INCLUDING the
-  // wrapping 65..127) plus randomised vectors. Stated, not implied.
-  localparam int unsigned P_W  = 40;  // 32 x 8 exact
-  localparam int unsigned N_W  = 42;  // sum of three P_W exact
-  localparam int unsigned BL_W = 50;  // 8 x N_W exact
-
-  logic signed [P_W-1:0]  pa0_c, pa1_c, pa2_c, pb0_c, pb1_c, pb2_c;
-  logic signed [N_W-1:0]  na_n_c, nb_n_c;
-  logic signed [7:0]      w0_c, w1_c;
-  logic signed [BL_W-1:0] bla_c, blb_c;
-  logic signed [63:0]     blend_c;
+  logic signed [63:0] na_c, nb_c, blend_c;
   always_comb begin
-    pa0_c = P_W'(a_q[int'(lane_c) * 4 + 0]) * P_W'(nx_q);
-    pa1_c = P_W'(a_q[int'(lane_c) * 4 + 1]) * P_W'(ny_q);
-    pa2_c = P_W'(a_q[int'(lane_c) * 4 + 2]) * P_W'(nz_q);
-    pb0_c = P_W'(b_q[int'(lane_c) * 4 + 0]) * P_W'(nx_q);
-    pb1_c = P_W'(b_q[int'(lane_c) * 4 + 1]) * P_W'(ny_q);
-    pb2_c = P_W'(b_q[int'(lane_c) * 4 + 2]) * P_W'(nz_q);
-
-    na_n_c = N_W'(pa0_c) + N_W'(pa1_c) + N_W'(pa2_c);
-    nb_n_c = N_W'(pb0_c) + N_W'(pb1_c) + N_W'(pb2_c);
-
-    // The weight, 0..127, and its complement, -63..+64. The complement is a
-    // SIGNED 8-bit subtraction because that -- not a 7-bit wrap -- is what
-    // production's `64'(7'd64 - w0_q)` actually computes. See the note above:
-    // 8 bits is exact for the whole range, since the port's widest w0_q = 127
-    // gives -63 and its narrowest gives +64.
-    w0_c = $signed({1'b0, w0_q});
-    w1_c = 8'sd64 - $signed({1'b0, w0_q});
-
-    // The common 1/64 and the uniform bulk factor cancel in the
-    // normalisation, so the weighted direction is kept whole and no
-    // pre-normalise rounding is introduced.
-    bla_c = BL_W'(w0_c) * BL_W'(na_n_c);
-    blb_c = BL_W'(w1_c) * BL_W'(nb_n_c);
-
-    blend_c = 64'(bla_c) + 64'(blb_c);
+    // The oracle accumulates in int64 and this matches it deliberately: if the
+    // reference can overflow on a hostile input the RTL must overflow
+    // IDENTICALLY, or the two part company exactly where nobody looks.
+    na_c = 64'(a_q[int'(lane_c) * 4 + 0]) * 64'(nx_q)
+         + 64'(a_q[int'(lane_c) * 4 + 1]) * 64'(ny_q)
+         + 64'(a_q[int'(lane_c) * 4 + 2]) * 64'(nz_q);
+    nb_c = 64'(b_q[int'(lane_c) * 4 + 0]) * 64'(nx_q)
+         + 64'(b_q[int'(lane_c) * 4 + 1]) * 64'(ny_q)
+         + 64'(b_q[int'(lane_c) * 4 + 2]) * 64'(nz_q);
+    // The common 1/64 and the uniform bulk factor cancel in the normalisation,
+    // so the weighted direction is kept whole and no pre-normalise rounding is
+    // introduced.
+    blend_c = 64'(w0_q) * na_c + 64'(7'd64 - w0_q) * nb_c;
   end
 
   // ---- the range reduction --------------------------------------------------
@@ -340,6 +309,6 @@ module zhao_geom_skin_norm #(
     end
   end
 
-endmodule : zhao_geom_skin_norm
+endmodule : zhao_skinnorm_mul_probe
 
 `default_nettype wire
