@@ -2619,7 +2619,12 @@
 //      have no producer here; entry I45 records that as the remaining half.
 //
 //
-// I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+// I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- NOT a tie-off: the
+//      terrain arm is whole and the port group it names no longer carries a
+//      triangle out of this module. CLOSED 2026-09-26 (I13CLOSE); the
+//      measurements that closed it are the last section of this entry and the
+//      history above them is kept, because eight packets worked this entry and
+//      six refused it and every refusal was right when it was written.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
 //      is closed -- GEOM.REPLAY feeds GEOM.CLIP, which feeds GEOM.SETUP -- so
 //      what remains is TERRAIN's replayed triangles only. Their customer is
@@ -5055,6 +5060,188 @@
 //      green depended on a contortion nobody would have re-derived.
 //      A CLUT material whose palette identity is a composer constant is
 //      not made correct by a bench that can reach it.
+//
+//      ================================================================
+//      2026-09-26 (gz/i13close). THE MOSAIC IS COMPOSED, THE PALETTE
+//      IDENTITY HAS A PRODUCER, AND THIS ENTRY CLOSES.
+//      ================================================================
+//
+//      TERRAINMAT left this entry a blocker that was MEASURED rather
+//      than suspected, in four facts. Three of them stand exactly as
+//      written; the FOURTH was a defect in the palette store, and it is
+//      repaired rather than worked around.
+//
+//        1. a TILESET row is CLUT8 by law              -- TRUE, unchanged
+//        2. a CLUT sample needs a PALETTE IDENTITY     -- TRUE, unchanged
+//        3. the witness forces the ROW to match it     -- TRUE, unchanged
+//        4. "generation ZERO is the one generation
+//           `zhao_texture_palette_res_v2` cannot be
+//           handed in a single pass"                   -- TRUE, AND IT
+//           WAS A BUG. `LD_BEGIN` differenced the offered generation
+//           against `generation_q[slot]`, which RESETS TO ZERO, so a
+//           slot that had never held anything refused generation zero.
+//           The fault that counter names is replacing a RESIDENT
+//           binding with content under the generation that binding
+//           already advertises -- an ABA hazard -- and RESIDENCY is the
+//           reset guard the block's own header names. The generation was
+//           doing residency's job. `err_same_gen_o` loses nothing: a
+//           RESIDENT slot re-BEGUN at its own generation still fires it,
+//           which is the only state in which the fault can exist.
+//
+//      AND THE DIRECTED TEST WAS ASSERTING THE BUG, which is why nobody
+//      had questioned it. `texture_palette_res_v2_directed` fired that
+//      counter with `load_op(top, 0, 0, 0, 0, 0, true)` on a COLD slot
+//      and called it "BEGIN reusing reset generation" -- it pinned the
+//      ACCIDENT rather than the FAULT, and it would have gone red on the
+//      repair while reading like a regression in the block. The control
+//      now re-BEGINs a slot that IS resident. The new case fails 8 of
+//      1,863 against the pre-repair RTL, measured by restoring HEAD's
+//      file, forcing the timestamp, rebuilding and running, then
+//      restoring and verifying by CONTENT.
+//
+//      THE PRODUCER IS `zhao_texture_palette_load`, composed below as
+//      `u_texture_palette_load`, and `pal_load_*` LEFT THIS MODULE'S
+//      EDGE with it -- eight input ports, for the reason `tri_area2_i`
+//      and the three attribute planes left it. The smoke tied all eight
+//      to zero, so NO PALETTE SLOT IN THIS CONSOLE HAD EVER BEEN
+//      WRITTEN, which is the owner's completion ruling of 2026-09-22
+//      item 3 in its own words: "an opcode plus descriptors referring to
+//      data that ONLY THE TESTBENCH CAN INJECT is not completion."
+//
+//      ONE CLAIM IN `zhao_material_window.sv`'s HEADER WAS FALSE and is
+//      corrected in the same commit. It read "for a CLUT format the pair
+//      is real and nothing in this console produces it: NO RATIFIED
+//      MATERIAL FIELD CARRIES THE PALETTE'S IDENTITY." The first clause
+//      was true; the second was not. `MaterialRecord.palette_base` is a
+//      `u32` that `spec/commands.zidl` documents as "CLUT modes only; 0
+//      when no sample is a CLUT mode", the ORACLE READS THE PALETTE FROM
+//      THAT ADDRESS, and MATERIAL.RESOLVE has projected it on
+//      `rsp_palette_base_o` all along. It was carried to nobody. What
+//      was missing was never a FIELD; it was a block that made that
+//      address RESIDENT.
+//
+//      SO NO CARTRIDGE KIND IS ALLOCATED AND NO ABI FIELD MOVES. The
+//      loader reads VRAM on ENGINE1 requester I of `u_geom_mem_adapter`
+//      (N 8 -> 9, the fifth widening of that share), because
+//      `spec/cartridge.md` says palette data is "a SUBTYPE of
+//      TEXTURE_PAGE, not a separate family ... rather than growing an
+//      unrelated loader path" -- so a palette arrives through the same
+//      PublishResource -> MEM.UPLOAD -> VRAM path the smoke already ran
+//      for the MATERIAL_SET. That is the one place it differs from
+//      `u_twod_asset`, the other half of the same ruling, which reads
+//      the HPS arena because 4f ruled kind 15 never travels to VRAM.
+//
+//      THE GENERATION IS PRODUCED. `next_gen_q[slot]` resets to zero and
+//      advances on every BEGIN whatever the outcome, so the value
+//      offered always differs from the one the resolver holds by exactly
+//      one -- no wrap hazard and therefore no guard for one -- and the
+//      FIRST load of a slot is at generation ZERO. `pal_ld_gen_zero_o`
+//      is the counter that says the repair above is being USED rather
+//      than merely being present.
+//
+//      AND THE VALUE TRAVERSES, in the composed machine, at this tree:
+//
+//        SMOKE: palload  lookups=1 hits=0 loads=1 evictions=0 entries=256
+//                        gen_zero=1 denied=0 base_refused=0
+//                        clut[owned/unowned]=[1 0] jobs_i=64
+//        SMOKE: palres   lookups=26 stale=0 cold=0 loads_ok=1
+//                        err[same_gen/incomplete/crc/write]=[0 0 0 0]
+//        SMOKE: mosaic   fills[tileset/mesh/stray]=[23 21 0]
+//                        tile[max/or]=[255 255] first_addr=001ff730
+//                        base=00100000
+//        SMOKE: texture  fragments=1216 samples=1216
+//                        cache[hit/miss]=[1216 44] palette_lookups=26
+//                        combine_refused=0
+//        SMOKE: raster   pixels=2816
+//
+//      READ `stale=0 cold=0` TWICE. `palette_lookups` moving is NOT
+//      evidence on its own -- a palette that never loaded answers every
+//      lookup with SOURCE_REFUSED magenta and moves the same counter by
+//      the same amount, which is precisely what this console would have
+//      done yesterday. `cold` is "the slot holds nothing" and `stale` is
+//      "it holds another generation", and those were the ONLY outcomes
+//      available here before today. Both at zero means a terrain
+//      fragment read a colour out of a palette the machine fetched.
+//
+//      AND READ `tile[max]=255`. That is the ANTI-VACUITY gate: an
+//      unwired mosaic reader displaces by ZERO, so every fill would land
+//      in tile 0. `0x001FF730 - 0x00100000 = 0xFF730`, which is tile 255
+//      at within-tile offset 0x730 = `(28 << 6) + 48` -- a legal folded
+//      texel, 16-byte aligned. 23 fills landed inside the TILESET row's
+//      1 MiB extent, 21 inside the mesh's direct row, and ZERO anywhere
+//      else. `raster pixels` does not move, and that is correct: a
+//      sample changes a fragment's COLOUR, not its coverage.
+//
+//      THE HONEST BOUND, and it belongs immediately after the numbers.
+//      The console smoke's fill socket answers every line with one
+//      constant green, so a texel's INDEX is not checked there; what is
+//      checked is the ADDRESS it was fetched from and the palette it was
+//      looked up in. The mosaic pick's agreement with
+//      `zref::terrain::mosaic_pick` and `zref::terrain::mirror_texel` is
+//      TERRAINTEX's `texture_island_v3_packet_b_directed`, which asserts
+//      the exact cache line, and this run does not re-derive it. What is
+//      new is that the COMPOSED console exercises that reader with real
+//      terrain fragments under real backpressure -- the one measurement
+//      a leaf bench cannot make.
+//
+//      WHY THE ENTRY CLOSES, stated against its own head line. The port
+//      group it names does not carry a triangle out of this module any
+//      more: `proj_out_*` is TWO EVIDENCE COUNTERS, `proj_out_refused_o`
+//      and `proj_out_missed_o`, and CARRIAGE retired the rest when
+//      `zhao_terrain_clipfeed` took slice 3 of `u_geom_clipdoor`. Every
+//      one of the four items the TERRTRI list named is built and
+//      composed -- `invw24` and the perspective multiply and the fourth
+//      door client (CARRIAGE), and the terrain material identity
+//      (TERRAINMAT) -- the fixture's triangles have screen area
+//      (TERRAINVISIBLE), the mosaic pick has a reader (TERRAINTEX) and
+//      that reader is now EXERCISED BY THIS CONSOLE against a palette it
+//      loaded itself.
+//
+//      WHAT IS NOT CLOSED BY THIS, AND IS NOT THIS ENTRY'S, named so the
+//      closure cannot be read as more than it is:
+//
+//        * `zhao_terrain_normalmap` is STILL on the BUILT BUT NOT
+//          CONNECTED list and was again not composed. It is a SEPARATE
+//          register entry, counted separately, and it has always been
+//          this entry's PROHIBITION rather than its content; keeping
+//          I13 open for it would count one gap twice. Re-measured at
+//          this tree rather than quoted: `f_detail_i` has ZERO producers
+//          in `fpga/rtl` (every hit is the block's own file or this
+//          entry's prose), the module is instantiated ZERO times, and
+//          `zhao_terrain_normalloader` is uninstantiated too.
+//          WHAT CHANGED IN ITS FAVOUR TODAY IS REAL AND IS NOT A
+//          CLOSURE: the fragment stream `design/prod_manifest.yml`
+//          called "the gap" now EXISTS -- terrain fragments reach a
+//          raster, sample a TILESET row, and carry the perspective-
+//          correct Q16.16 tile-unit u/v `zhao_terrain_uvlane` produces,
+//          which is the exact shape and format `f_u_i`/`f_v_i` declare.
+//          And the DECLARATION `f_detail_i` wants has a carrier with no
+//          cost: the binding row's `mode[21]` TILESET bit already says
+//          "this fragment is terrain's mosaic", already rides to the
+//          resolver, and is already read there as `read_tileset_c`.
+//          What is still owed is the PORT -- a composed block on the
+//          per-fragment path has to grow `detail` in and a shade delta
+//          out, and `OWNER-DECISIONS` section 2's "no port change on a
+//          composed block is required" is FALSE and was measured false
+//          by CELLCARRY: it cites `zhao_raster_texjoin_v2`, which has
+//          zero instantiations and no `detail_i`/`detail_o` anywhere.
+//        * THE RESIDUAL TWO ROUNDINGS. `zhao_terrain_clipfeed`'s header
+//          declares it: the ladder is now present where it was absent,
+//          and the composed path still rounds twice where the frozen law
+//          rounds once. That belongs to the downstream arithmetic, not
+//          to this boundary, and it is declared there rather than
+//          inherited here.
+//
+//      REFUSED, AND NAMED. The layer-E triple was NOT wired into
+//      `base_rgb` -- CARRIAGE's ground holds and TERRAINTEX's rebuttal
+//      of the comfortable reading holds with it, and this lane needed
+//      neither: terrain's mosaic material is a BINDING ROW, so the tile
+//      pair comes from the row and the pick, never from a field whose
+//      other reader is the published texel RGB. `GEOM_CLIP_ATTRS` stays
+//      7. No flat colour stand-in. `zhao_terrain_normalmap` was not
+//      composed. The `{a,b,weight}` -> opaque-u32 resolver was NOT built
+//      and was not needed. `MAT_PALETTE_SLOT_C` and `MAT_PALETTE_GEN_C`
+//      were DELETED rather than re-pointed. No fit was run.
 //
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
