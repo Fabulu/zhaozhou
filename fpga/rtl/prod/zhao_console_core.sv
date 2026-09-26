@@ -4027,6 +4027,178 @@
 //      vacuous case as an equality, name it, and take the real control from a
 //      shade inside rung 2 and off its centre.
 //
+//      ================================================================
+//      2026-09-26 (gz/carriage). THE CARRIAGE IS LAID. THE ENTRY STAYS
+//      OPEN, AND NOT ONE PIXEL MOVED -- WHICH IS THE FINDING, NOT THE
+//      FAILURE.
+//      ================================================================
+//
+//      Say the disappointing half first, because five passes refused this
+//      entry rather than lay a wire ahead of its evidence and the sixth
+//      owes them a straight answer. `raster pixels=2560`, UNCHANGED. The
+//      register reads 5 before and 5 after, measured bare. `zhao_terrain_
+//      normalmap` did NOT leave the BUILT-BUT-NOT-CONNECTED list, and it
+//      was again not taken up -- the entry's first prohibition stands and
+//      nothing here needed it.
+//
+//      WHAT IS BUILT AND COMPOSED, and it is items 1, 2 and 3 of the
+//      TERRTRI list in one file, because they are one beat:
+//      `zhao_terrain_clipfeed`, instantiated below as `u_terrain_clipfeed`
+//      and taking slice 3 of `u_geom_clipdoor`, which is `.NCLIENT (4)`.
+//        * BOTH of SHADELADDER's laws are instantiated, which was the
+//          stated delete condition of both deferral rows -- the ladder
+//          (`zhao_terrain_shademod`, nine operand triples per triangle)
+//          and the S8.24 saturate (`zhao_geom_overw_sat`, one instance
+//          walked six times, `sat_o` counted on `uv_sat_o` exactly as that
+//          block's header says the composer owes).
+//        * `invw24` IS DONE: a fourth `zhao_geom_depthquant_stream` +
+//          `zhao_raster_rcp24_v4` pair off `proj_out_aw/bw/cw` -- RAW w,
+//          not 1/w -- wired as `zhao_forge_assemble`'s `u_dq`/`u_rcp`.
+//        * The terrain edge is RETIRED from this module and the board.
+//
+//      AND THE VALUE TRAVERSES, measured in the composed machine under
+//      real backpressure rather than argued:
+//
+//        SMOKE: terruv    refs_taken=256 emitted=256 stale=0
+//        SMOKE: terrlight refs_taken=256 lights=256 shaded=256 degenerate=0
+//        SMOKE: terrcf    triangles=256 emitted=256 src_mismatch=0
+//                         uv_sat=0 shade_clamped=0 dq_refused=0 dq_stray=0
+//        SMOKE: clip      submitted=272 clipped=2 culled=256 setup=14
+//        SMOKE: matwin    resolves=1 switches=2
+//
+//      256 taken, 256 emitted, in lockstep with the other two lanes;
+//      GEOM.CLIP's `submitted` goes 16 -> 272, which is the mesh reference
+//      plus every one of terrain's; terrain forms its OWN material span,
+//      the second switch being a lawful `MATMODE_NONE` that issues no
+//      resolve.
+//
+//      AND THEN EVERY ONE OF THE 256 IS CULLED. `zhao_geom_clip` bumps
+//      `triangles_culled_o` on `VERDICT_ZERO_AREA || s3_back`, and terrain
+//      declares CULL_NONE, under which `s3_back` is false BY
+//      CONSTRUCTION. So the verdict is ZERO AREA: the projected corners of
+//      every terrain triangle in this fixture enclose no screen area, and
+//      no terrain FRAGMENT is produced.
+//
+//      THE CLAIM THAT COST THE PIXEL IS THIS ENTRY'S OWN, and it is the
+//      sixth consecutive pass here stopped by a sentence that was true
+//      about the thing measured and false about the thing meant. The
+//      TERRAINAUX paragraph above reads "THAT FIXTURE IS FIXED ... the
+//      arm's triangles have AREA now, so the merge it waits behind can be
+//      measured when it lands instead of only wired", and its evidence is
+//      `terrlight ... degenerate=0` of 256. **THOSE ARE TWO DIFFERENT
+//      QUANTITIES.** `terr_light_degenerate_o` is the degeneracy of the 3D
+//      FACE NORMAL, computed by `zhao_terrain_normals` from the COMPOSE
+//      CACHE's world positions. Screen area is a property of the PROJECTED
+//      corners that reach the arena. A non-zero world normal does not
+//      imply a non-zero projected area. The repair was real and its
+//      evidence was real; the sentence written afterwards was about the
+//      other quantity, and three packets inherited it. THE FIXTURE'S
+//      TERRAIN TRIANGLES STILL HAVE NO SCREEN AREA, and that is now the
+//      first item on this entry rather than a suspicion.
+//
+//      THE LAYER-E TRIPLE IS REFUSED, ON A GROUND NONE OF THE FIVE
+//      PREVIOUS PACKETS FOUND, and it is the one finding here that would
+//      have cost another whole pass. The TERRAINAUX and CELLCARRY
+//      paragraphs above cost the textured route as "a per-triangle field",
+//      and FABRICSINK measured that `zhao_texture_mosaic_v2` is reachable
+//      inside the selected V3 root and concluded THE CONSUMER IS RESIDENT.
+//      The module is resident. **ITS ANSWER HAS NO READER.**
+//      `mosaic_tile_w`, `mosaic_tx_w` and `mosaic_ty_w` occur EXACTLY
+//      TWICE EACH in `zhao_texture_island_v3_top.sv` -- their `logic`
+//      declaration at :1297-1298 and their port connection at :1311-1312 --
+//      and nothing whatever reads them. They are module-local wires and
+//      not island ports. The sample's tile comes from the binding selector
+//      (`zhao_texture_frag_expand_v2.sv:236-248`), never from the pick.
+//      The unversioned island is the same shape.
+//
+//      SO CARRYING A TRIPLE INTO `base_rgb` WOULD HAVE BEEN A CARRIAGE TO
+//      A READER THAT DOES NOT EXIST -- this file's own first prohibition,
+//      one hop further downstream than anybody had looked -- and the
+//      register would have moved while, once again, not one pixel did.
+//
+//      WHY IT WAS NEVER SEEN: `tests/shell/v3_closure_inherited.vlt:45`
+//      waives UNUSEDSIGNAL for `*fpga?rtl?texture*` wholesale, and again
+//      for `raster`, `geometry`, `common` and `video`. The one instrument
+//      that would have shouted was told to look away. That is CLAUDE.md's
+//      "a rule that HIDES waste is not a rule that removes it", in RTL
+//      rather than on a disk.
+//
+//      AND IT WOULD HAVE BEEN ACTIVELY HARMFUL, which the drain analysis
+//      could not see because it was looking at the window rather than at
+//      the far end. `base_rgb` and `recipe_weight` have LIVE COLOUR
+//      consumers: `zhao_texture_material_combine_v3.sv:513` makes
+//      `base_rgb` the published texel RGB when `sample_count == 0`, and
+//      :719-722 makes `recipe_weight` the blend weight under `R_LERP`.
+//      Both are shut today only because the smoke's material happens to
+//      sample and SHADE_MOD happens to be off. Those bits are safe to
+//      repurpose for a COINCIDENCE, which is not the same as being spare.
+//
+//      THE COLOUR, AND WHY IT IS NOT THE STAND-IN THIS ENTRY REFUSED THREE
+//      TIMES. Slots 3..5 carry `mod_of(shade, tint, sheet)` through the
+//      ratified five-rung ladder, computed PER CORNER PER CHANNEL -- nine
+//      operand triples, nine tint ports. Layer H is unauthored, so the
+//      composer drives all nine from `TERR_TINT_IDENTITY`, which is layer
+//      H's RATIFIED ABSENT IDENTITY (RGB565 0xFFFF, exactly 65536 in
+//      Q16.16, what `cell_tint` already defaults to) and not a plausible
+//      number chosen here. The three corners therefore carry EQUAL values
+//      today BECAUSE THE ONLY PER-VERTEX TERM IS UNAUTHORED, not because
+//      anything averaged or broadcast; authoring layer H is a change to
+//      nine driver wires and to no RTL. The sheet is unity because
+//      `zhao_texture_sheetmod` already applies it PER FRAGMENT.
+//
+//      WHAT STAYS DIVERGENT, stated rather than hidden: the ladder is now
+//      present where it was absent, and everything downstream of the slots
+//      is still the composed path's two narrow roundings against the law's
+//      one. Quoting "the ladder is composed" as "terrain is capture-exact"
+//      would be the component-check error the art law names.
+//
+//      THE BUILDER'S OWN MISTAKE, CAUGHT AND RECORDED because this entry's
+//      last two passes set that standard. The first draft of
+//      `zhao_terrain_clipfeed` declared nine tint ports, walked THREE
+//      operand triples and copied corner A's answer to B and C, reasoning
+//      "all nine agree today, so computing one is the same answer for less
+//      silicon". The ANSWER is the same; THE STRUCTURE IS NOT -- that
+//      draft was a flat broadcast wearing a per-vertex port list, which is
+//      the Gouraud-as-a-constant shape this entry and the owner's
+//      directive both forbid. Verilator's UNUSEDSIGNAL on the six unread
+//      ports caught it, and the instrument that caught it is the one the
+//      paragraph above records being waived four directories away.
+//
+//      THREE SMOKE CHECKS WERE CORRECT CONCLUSIONS ON PREMISES NOTHING
+//      ENFORCED, and all three are rewritten to say what stays true rather
+//      than relaxed:
+//        * "`culled != 0` implies the raster word is not this draw's" does
+//          NOT follow from that counter -- `triangles_culled_o` bumps on
+//          ZERO_AREA or backface and cannot discriminate them, and a
+//          zero-area triangle is a lawful cull under EVERY cull mode. It
+//          was never wrong only because no producer had emitted one.
+//        * "`resolves == switches`" went stale against a RULING, not
+//          against a new arm: owner ruling 1 of 2026-09-22 made
+//          MATMODE_NONE lawful and resolve-free. It now reads
+//          `resolves == switches - no_material_spans`, which pins a third
+//          counter and is STRONGER than what it replaced.
+//        * the clip split `16 / 2 / 0` measured the mesh reference alone.
+//          `submitted` is now `SGF_EXP_REPLAYED + terr_cf_emitted_o`,
+//          which also proves every triangle the new arm emitted ARRIVED.
+//      `culled` is BOUNDED and not made equal to 256: an equality there
+//      would pass only while the defect exists, which is asserting the bug.
+//
+//      WHAT IS LEFT, AND IT IS TWO NAMED THINGS:
+//        1. THE FIXTURE'S TERRAIN TRIANGLES HAVE NO SCREEN AREA. Until
+//           that is repaired terrain draws nothing however complete the
+//           carriage. Measured, not suspected.
+//        2. THE MOSAIC PICK NEEDS A READER INSIDE THE ISLAND before any
+//           layer-E triple is worth carrying. That is real work in
+//           `zhao_texture_island_v3_top`, not a wire in a composer.
+//      The colour is still last and is still not what blocks.
+//
+//      ONE NOTE ON THIS ENTRY'S TITLE, which is now historical: the port
+//      group `proj_out_*` it names no longer leaves this module. The entry
+//      stays OPEN because the ARM it exists for still draws nothing, and
+//      closing it on a retired port list while no terrain fragment reaches
+//      a raster would be the register moving without the picture -- which
+//      is the thing five packets refused and the sixth will not do either.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
