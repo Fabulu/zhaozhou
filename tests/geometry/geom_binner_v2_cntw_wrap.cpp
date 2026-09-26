@@ -73,6 +73,8 @@ constexpr uint32_t kAreaBit = 1u << (378 % 32);
 
 // 2,049 = one more than the 2,048 a hardcoded 11-bit count can hold.
 constexpr int kPushes = 2049;
+// Must match the -GTRI_CAP the CMake target passes; phase 2 fills the store.
+constexpr int kTriCap = 4096;
 
 #if defined(EXPECT_GEOM_BINNER_V2_CNTW_WRAP)
 constexpr bool kExpectWrap = true;
@@ -268,6 +270,52 @@ int main(int argc, char** argv) {
             "max_tile_list_depth_o reported the true list depth");
     if (failures == 0)
       std::printf("PASS: derived CNT_W held %d references in one tile with no wrap\n", kPushes);
+  }
+
+  // ---- PHASE 2: THE OVERFLOW COUNTER'S POSITIVE CONTROL -------------------
+  // Phase 1 quotes `overflow_o == 0`, and a detector reading zero is a claim,
+  // not a result -- it is the claim to check hardest. So the same binary, the
+  // same instance, fires it deliberately: a fresh frame, then TRI_CAP + 1
+  // triangles. The store fills, S_IDLE raises the wall (LAWS CHOSEN D), and
+  // every triangle after it is dropped whole and counted.
+  //
+  // This is reachable with LEGAL STIMULUS, so it needs no mutant. It is kept
+  // separate from phase 1 deliberately: phase 1 asserts the CORRECT behaviour
+  // of the shipped capacity, and this asserts the instrument. Mixing them is
+  // how "the counter fires on the bug" becomes a test that passes only while
+  // the bug exists.
+  if (!kExpectWrap) {
+    const uint32_t culled_before = dut->triangles_culled_o;
+    dut->frame_begin_i = 1;
+    tick();
+    dut->frame_begin_i = 0;
+    for (int i = 0; i < kGridW * kGridH + 32; ++i) tick();
+    require(dut->overflow_o == 0, "the wall dropped at the frame boundary");
+
+    int fed = 0;
+    guard = 0;
+    while (fed < kTriCap + 1 && guard < 4000000) {
+      drive_tile0_tri(static_cast<uint16_t>(fed & 0xffff));
+      dut->tri_valid_i = 1;
+      settle();
+      const bool took = dut->tri_ready_o != 0;
+      tick();
+      if (took) ++fed;
+      ++guard;
+    }
+    dut->tri_valid_i = 0;
+    dut->tok_grant_i = 0;
+    for (int i = 0; i < 64; ++i) tick();
+    settle();
+
+    const uint32_t culled_after = dut->triangles_culled_o;
+    std::printf("CNTW: overflow control  fed=%d overflow=%d culled_delta=%u\n", fed,
+                dut->overflow_o ? 1 : 0, culled_after - culled_before);
+    require(dut->overflow_o != 0, "overflow_o FIRED when the triangle store filled");
+    require(culled_after > culled_before,
+            "triangles_culled_o counted the walled-off triangles");
+    if (failures == 0)
+      std::printf("PASS: overflow_o and triangles_culled_o fire on a real wall\n");
   }
 
   std::printf("CNTW: checks=%llu failures=%d\n", static_cast<unsigned long long>(checks),

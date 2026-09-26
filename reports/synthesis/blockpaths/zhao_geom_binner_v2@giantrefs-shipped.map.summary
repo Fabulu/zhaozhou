@@ -1,0 +1,17 @@
+Analysis & Synthesis Status : Successful - Sat Sep 26 10:14:57 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_geom_binner_v2
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 2109
+Total pins : 0
+Total virtual pins : 3,109
+Total block memory bits : 191,296
+Total DSP Blocks : 6
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0
+Total DLLs : 0

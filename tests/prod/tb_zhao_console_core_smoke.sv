@@ -3311,6 +3311,44 @@ module tb_zhao_console_core_smoke
   int unsigned part_children_seen_q;
   int unsigned part_children_at_contact_q;
 
+  // ---- GEOM.BINNER's COUNTERS, CAUGHT IN THE COMPOSED CONSOLE (GIANTREFS) --
+  // Entry I56's item (5): "whatever counter the reservation exports must be
+  // READ BY AN ASSERTION IN THE COMPOSED SMOKE, not merely connected." The
+  // binner's instruments were connected at the leaf, proven to fire at the
+  // leaf, and thrown into wires named `_unused` by the shell -- so the console
+  // could not say a frame had been truncated nor by how much.
+  //
+  // They are now DEBUG.COUNTERS providers at the ids `design/blocks.yml` gives
+  // GEOM.BINNER, and this is the reader. The sweep streams (id, u64) ascending
+  // once per frame tick; these registers latch the two ids this packet cares
+  // about out of that stream, off the console's REAL top ports.
+  localparam logic [15:0] SMOKE_CNT_TILE_REFERENCES     = 16'd18;
+  localparam logic [15:0] SMOKE_CNT_MAX_TILE_LIST_DEPTH = 16'd19;
+
+  logic [63:0] cnt_tile_refs_q, cnt_tile_depth_q;
+  logic        cnt_tile_refs_seen_q, cnt_tile_depth_seen_q;
+  int unsigned cnt_beats_seen_q;
+
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      cnt_tile_refs_q       <= 64'd0;
+      cnt_tile_depth_q      <= 64'd0;
+      cnt_tile_refs_seen_q  <= 1'b0;
+      cnt_tile_depth_seen_q <= 1'b0;
+      cnt_beats_seen_q      <= 0;
+    end else if (cnt_snap_valid_o && cnt_snap_ready_i) begin
+      cnt_beats_seen_q <= cnt_beats_seen_q + 1;
+      if (cnt_snap_id_o == SMOKE_CNT_TILE_REFERENCES) begin
+        cnt_tile_refs_q      <= cnt_snap_value_o;
+        cnt_tile_refs_seen_q <= 1'b1;
+      end
+      if (cnt_snap_id_o == SMOKE_CNT_MAX_TILE_LIST_DEPTH) begin
+        cnt_tile_depth_q      <= cnt_snap_value_o;
+        cnt_tile_depth_seen_q <= 1'b1;
+      end
+    end
+  end
+
   always @(posedge gpu_clk) begin
     cycles_q <= cycles_q + 1;
     if (reset_released_q) begin
@@ -4416,7 +4454,12 @@ module tb_zhao_console_core_smoke
     aud_wr_valid_i = '0;
     aud_wr_l_i = '0;
     aud_wr_r_i = '0;
-    cnt_snap_ready_i = '0;
+    // GIANTREFS: THE READ WINDOW IS OPEN NOW. It was tied to zero, so
+    // DEBUG.COUNTERS swept nothing and every counter the console publishes was
+    // unobservable from this bench by construction -- the sweep stalls on
+    // `snap_ready_i` and the window simply never advances. A consumer that is
+    // never ready is not a consumer.
+    cnt_snap_ready_i = '1;
     render_frame_begin_i = '0;
     render_frame_end_i = '0;
     render_grid_w_i = '0;
@@ -6144,6 +6187,11 @@ module tb_zhao_console_core_smoke
              render_pixels_o, render_bursts_o, render_issued_words_o,
              render_retired_words_o, render_busy_o, render_drained_o,
              render_fatal_o, render_stream_error_o, render_overflow_o);
+    // GIANTREFS: GEOM.BINNER's instruments, read out of the console's own
+    // counter window rather than out of a wire the shell throws away.
+    $display("SMOKE: binrefs    sweep_beats=%0d tile_references=%0d (seen=%0d) max_tile_list_depth=%0d (seen=%0d) overflow=%0d",
+             cnt_beats_seen_q, cnt_tile_refs_q, cnt_tile_refs_seen_q,
+             cnt_tile_depth_q, cnt_tile_depth_seen_q, render_overflow_o);
     $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
              v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o, v2_frames_admitted_o);
@@ -8452,6 +8500,44 @@ module tb_zhao_console_core_smoke
     if (fld_earth_lane_desync_o != 32'd0)
       $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER lane shadow desynchronised %0d time(s) against TERRAIN.PATCH's own busy, with no terrain traffic at all",
              fld_earth_lane_desync_o);
+
+    // ---- GEOM.BINNER's INSTRUMENTS, ASSERTED (GIANTREFS) ------------------
+    // Entry I56 item (5). These are not a $display: a connected counter nobody
+    // reads is the broken-instrument law with a port list, and that is exactly
+    // what `render_overflow_o` was.
+    //
+    // The values are the measured truth of THIS bench's fixture -- 14
+    // triangles in 1 admitted frame produce 36 tile references with a deepest
+    // single tile list of 5. To re-derive after a fixture change, read
+    // `SMOKE: binrefs` from a run and pin it here; do not relax the check to a
+    // range, because a range cannot see the machine doing several times the
+    // work for the same picture.
+    if (cnt_beats_seen_q == 0)
+      $fatal(1, "SMOKE: DEBUG.COUNTERS never streamed a beat -- the read window is shut, so every console counter is unobservable");
+    if (!cnt_tile_refs_seen_q)
+      $fatal(1, "SMOKE: catalog id 18 (tile_references) never appeared in the counter sweep -- GEOM.BINNER's instrument does not reach the console's mailbox");
+    if (!cnt_tile_depth_seen_q)
+      $fatal(1, "SMOKE: catalog id 19 (max_tile_list_depth) never appeared in the counter sweep");
+    if (cnt_tile_refs_q != 64'd36)
+      $fatal(1, "SMOKE: tile_references=%0d, expected 36 from this fixture's 14 triangles", cnt_tile_refs_q);
+    if (cnt_tile_depth_q != 64'd5)
+      $fatal(1, "SMOKE: max_tile_list_depth=%0d, expected 5", cnt_tile_depth_q);
+    // TWO QUANTITIES THAT DO NOT MOVE TOGETHER. `tile_references` is a
+    // frame-wide push count; `max_tile_list_depth` is a per-tile peak taken
+    // from a different register on a different condition. A frame's total
+    // cannot be smaller than its deepest single list, so this catches a swap
+    // or a shared shadow that equal-value checks cannot.
+    if (cnt_tile_refs_q < cnt_tile_depth_q)
+      $fatal(1, "SMOKE: tile_references (%0d) is below max_tile_list_depth (%0d) -- the two shadows are crossed", cnt_tile_refs_q, cnt_tile_depth_q);
+    // THE WALL IS SILENT, AND NOW THAT MEANS SOMETHING. The composed binner
+    // holds 32,768 tile references (R7's giant, RENDER_CHUNKS=8192 x
+    // RENDER_CHUNK_REFS=4), so a zero here is a frame that fitted rather than a
+    // counter nobody wired. The positive control that the same counter still
+    // FIRES is a separate build and lives in
+    // `tests/geometry/geom_binner_v2_cntw_wrap.cpp` phase 2, which fills the
+    // triangle store on purpose and requires overflow_o to rise.
+    if (render_overflow_o !== 1'b0)
+      $fatal(1, "SMOKE: the binner walled off this frame -- render_overflow_o is high");
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
