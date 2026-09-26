@@ -2761,3 +2761,61 @@ cherry-pick the fix, and asked it to **state the base commit in its findings** -
 
 **Register 6.** Queue after the two in flight: I13's carriage, and the earth
 stall measurement.
+
+### 2026-09-26 - REGISTER 5. CHUNKSER merged, and a console map that nearly lied.
+
+**CHUNKSER merged at `4fd141da`. Register 6 -> 5, `I54` CLOSED.** 299 checks,
+0 failures, and the chunks' ids checked **against the arena's descriptors** --
+through the real walker and independently against the DRAM bytes. It demonstrated
+the trap instead of asserting it: four descriptors are allocated and never
+binned, so arena index = binner slot + 4, and a chunk of raw slots would decode
+**cleanly into the wrong descriptor for every triangle with both range guards
+passing**. Composed console: `paramarena chunks=10 frames=1` against 0 at base.
+
+**I56 decided and deliberately NOT built** -- a disconnected block would have
+RAISED the register. Six claims measured false, two of them mine. One defect
+repaired (`zhao_geom_paramwalk` fetching the previous chunk's index), **one
+reported rather than waived: phase 53 never publishes**, wedged on
+`wr_words_q != 0` with every error counter at zero. Must go green before the
+console is fitted.
+
+**The merge conflict was the good kind**: both sides repairing the same smoke
+defect from opposite ends, CHUNKSER having written a local fix, MEASURED with it,
+then REVERTED it saying "TAKE TERRTRI's VERSION". I kept its note beside
+TERRTRI's code -- two packets reaching the same `guard=0` from different
+subsystems is the strongest evidence that bench has.
+
+### AND THE CONSOLE MAP NEARLY HANDED ME A 66% DSP WIN THAT WAS NOT THERE
+
+`zhao_console_core@post-palram`, 1,864 s, read as **DSP 375 -> 128**. A 247-block
+fall from work that claimed **nine**.
+
+**The two rows are on DIFFERENT PARTS.** `@edgeclose` ran on the SIZING part
+`5CEBA9F31C7` (342 DSP) with `-Device` passed deliberately; **I ran mine without
+the flag, so it took the default -- the SHIPPING part** `5CSEBA6U23I7` (112 DSP)
+-- and then differenced them. **Quartus REPLACES multipliers a part cannot
+hold**, which is also why ALUTs went UP 6,574 while PALRAM had removed 32,648
+from one block. **"Compare like with like, or do not compare" -- quoted at a lane
+by me earlier the same day.**
+
+**What survives**: registers barely depend on the part, so
+**405,872 -> 312,114, a fall of 93,758**, is real and is the phase-3 result.
+**What does not**: any DSP delta. `@post-palram-sizing` is running for a row that
+CAN be differenced.
+
+**Instrument fix**: `map_entity_attrib.py` now reads the device out of the report
+and prints it in every table header with the warning attached. Both tables
+regenerated and carry their part. **15.24's "standalone matches composed exactly"
+is QUALIFIED IN PLACE** -- those are the sizing part's numbers; the same blocks
+read 24, 4, 6, --, 2, -- on the shipping part.
+
+### WHERE I AM
+
+**Running:** FLOPARRAY and **WALKSWAP** (`I55`), launched at `b8f1c26c` --
+**its two preconditions are met for the first time**, ARENAID's vertex array and
+CHUNKSER's chunks. Job 1 is phase 53; job 2 is the swap, with the half-measure
+forbidden and the price demanded because it lands in the console's largest block
+(58,514 ALUTs, 70% of the device).
+
+**Register 5:** `I13`, `I34` (escalated), `I55` (in flight), `I56`,
+`zhao_terrain_normalmap`.
