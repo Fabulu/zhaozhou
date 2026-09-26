@@ -3631,3 +3631,113 @@ the 32,768-reference arena; **311 of 351 catalog counters are structurally
 unpublishable** (+20,032 registers to widen); and `cnt_snap_ready_i` **was tied
 to zero in the smoke**, so every console counter was unobservable from the gating
 bench -- which makes historical counter evidence from that bench suspect.
+
+### 2026-09-26 - THE CONSOLE IS MEASURED, AND A TERRAIN FRAGMENT CARRIES A TEXEL
+
+**THE NUMBER, at last.** Row `zhao_console_core@console-snapshot-20260926`, 289
+sources, digest `a7c7a4593942`, clean tree. Synthesis SUCCEEDED; the fitter
+refused to place **and stated the shortfall rather than merely failing**:
+
+> `Error (170011): Design contains 293352 blocks of type combinational node.
+> However, the device contains only 227120 blocks.`
+
+`227,120 = 113,560 ALM x 2` confirms the unit. Against the shipping part:
+**ALUTs 350%, registers 162%, DSP 335%, memory 62%.** It overflows the SIZING
+part too, by 66,232. **To fit we must remove 209,532 ALUTs -- 71% of the
+design's combinational logic.**
+
+**Three things it settles.** The 360% in circulation was honest (measured 350%).
+**The "~97% of device" figure is DEAD** -- a withdrawn subtotal of estimates.
+**And memory is genuinely the slack, proven for the first time**: 62%, 2.1 Mbit
+free. Trading ALMs for M10K is measured-correct, not merely plausible.
+
+**AND DSPHUNT CORRECTED MY OWN RECORD.** Every count in 15.32 was produced
+targeting the SIZING part and divided by SHIPPING ceilings, and I did not say
+so -- *this file's own law broken in the campaign's headline measurement.* The
+direction is known and asymmetric: on the shipping part DSP would read LOWER and
+ALUTs HIGHER. The conclusions survive because nothing is near a boundary, and
+**the fitter's own line names both sides and is exact.** Corrected in place.
+
+### DSPHUNT: -7 DSP, and the bit-exactness fence caught a SIGN FLIP
+
+Two blocks repaired with measured rows. **The fence earned its place on the
+packet's own work**: its first repair read `64'(7'd64 - w0_q)` as a 7-bit
+wrapping subtract. It is not -- the cast widens BOTH operands before the
+subtract, so the weight is signed `(64-w0)` in `[-63,+64]`. **Off by 128 for
+every `w0 >= 65`, flipping the blend weight's sign over a quarter of the port
+range** -- and the oracle test, the smoke, the lint AND the -5 DSP row **all
+stayed green.**
+
+**It refuted my brief in both halves of its first instruction**: the console
+`.map.rpt` is **gitignored** (verified, `.gitignore:158`) *and* no `.map.rpt`
+names a DSP by hierarchy -- mode is per-design, attribution per-entity, **the
+join I assumed does not exist.** *"27x27 is where to look"* is also wrong both
+ways: `forge_shadow` had **zero** and paid anyway, and 27x27 is the **cheapest**
+mode for 19-27-bit operands.
+
+### TERRAINMAT: A TERRAIN FRAGMENT CARRIES A TEXEL
+
+**`texture fragments=1216 samples=1216`** (was 1216/1190) -- **the 26 that never
+sampled were terrain's.** The chain runs host `SetEnvironment` -> FRAME_RING ->
+CMD.SCHEDULER -> CMD.DMA **over the real HPS bridge** -> CMD.EXEC latched on the
+**commit beat** -> clipfeed -> clipdoor slice 3 -> `zhao_material_window`
+resolves -> MATERIAL.RESOLVE directory + ENGINE1 -> binding page -> TMU -> texel.
+`raster pixels` stays 2,816, so **no oracle moved.**
+
+**It refused to claim the owner's bar** and said why: *"What terrain presents is
+host-authored. What did change is that the consumer now exists."*
+
+**And it found `draw_terrain` DOES NOT EXIST** -- my brief's and I13's claim. It
+is `draw_heightfield`, and `render_frame.cpp:373` selects the tileset **per
+patch**, so the frame-scoped pair is a capability increase with a declared
+limit, not the equivalence I asserted. Verified here: zero occurrences.
+
+### ARENACOMPOSE: I55's BLOCKER 1 CLOSED, AND THE MEASUREMENT BIT
+
+Composed `u_geom_arenabin`, **retired chunkser and the binner's whole serialise
+pass BY REMOVAL, never tie-off**. Careful about what it did NOT retire: the
+arena id still rides the tail, and `geom_cs_*` was **renamed** rather than
+re-pointed because chain-break and head-clash are faults only a second read pass
+can have.
+
+**I55 did NOT close and it says so** -- every pixel still comes from the on-chip
+drain, and §4 is explicit that a parallel legacy arena supplying the pixels is
+not closure.
+
+**THE COST IT REVEALED: 146,414 registers for ONE block -- 87% of the shipping
+part's entire register budget.** The 145,152-bit staging array, declared inside
+a generate, went **entirely to flip-flops**. `ramstyle` as macro and as literal
+**changed nothing and warned nothing**, so it removed the pragma rather than
+ship one that neither works nor warns.
+
+**BINARENA's "177,984 against 360,064" reads as a saving and MEASURES AS THE
+OPPOSITE** -- and survived unchallenged **because that packet was forbidden a
+fit.** Composing did not create this cost; it revealed it. **That is the owner's
+standing authorization paying for itself in one packet.**
+
+**It refused to un-compose after the fit**: *"that would hide the number and
+restore the series section 4 forbids."* Right, and worth keeping.
+
+**And it found a defect nobody had printed: `u_geom_tidq` UNDERFLOWS EXACTLY
+ONCE PER FRAME in all six forms** -- the external arena's lists are four
+references short, 97 against 101. Pre-existing since I54, on the queue whose
+dead clock was repaired this morning, invisible because the smoke declares the
+counter and only hands it to a formatter.
+
+### TWO MERGE-TIME REGRESSIONS, REPAIRED NOT BASELINED
+
+The **texture-v3 interface manifest** went stale when `zhao_texture_mosaic_hold`
+joined the island, and one **`.*` wrapper mutant** was missing two ports
+TERRAINMAT added to the other -- a failure that **reads like a broken core**
+(R220). Both regenerated/repaired; both gates green. Neither packet was at
+fault: this class only appears AT the merge.
+
+### WHERE THINGS STAND
+
+**Running: I13CLOSE** (which has committed *"I13 CLOSES. The register reads 3"*
+and then caught **its own mosaic gate asserting the bug**, found by
+`-TerrainFlatLattice` on the next run) **and ARENAINFER** (seven-arm probe; has
+already found **`check_ram_inference.py` is blind to the array that failed**).
+
+**Register 4, going to 3 on the I13CLOSE merge.** Remaining after that: **I34**
+(the field-HEIGHT lane) and **I55** (the raster swap half).
