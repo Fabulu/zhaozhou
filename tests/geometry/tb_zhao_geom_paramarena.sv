@@ -124,6 +124,12 @@ module tb_zhao_geom_paramarena
     input  var logic [17:0] seal_verts_i,
     input  var logic [17:0] seal_tris_i,
     input  var logic [17:0] seal_chunks_i,
+    // SEALPLAN 2026-09-26: the giant's reservation, in two distinct units.
+    // Default-free on purpose -- the driver sets them for every case, so a
+    // case that forgets reads zero and its reserve assertions fail loudly
+    // rather than inheriting the previous case's number.
+    input  var logic [17:0] seal_giant_refs_i,
+    input  var logic [17:0] seal_giant_chunks_i,
     input  var logic [15:0] frame_gen_i,
     input  var logic        frame_end_i,
 
@@ -192,6 +198,9 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] frames_published_o,
     output var logic [31:0] arena_guard_denied_o,
     output var logic [31:0] quota_overflow_o,
+    output var logic [17:0] q_giant_refs_o,
+    output var logic [17:0] q_giant_chunks_o,
+    output var logic [31:0] giant_reserve_breach_o,
     output var logic [31:0] records_discarded_o,
     output var logic [31:0] records_unsealed_o,
     output var logic [31:0] arena_overrun_o,
@@ -529,6 +538,14 @@ module tb_zhao_geom_paramarena
   // reason: `burst_unaligned_o` is unreachable while the allocator is
   // correct, so the only demonstration is an allocator that is not.
   zhao_geom_paramarena_align_mutant #(
+`elsif ZHAO_PARAMARENA_RESERVE_MUT
+  // THE THIRD, SEALPLAN 2026-09-26. `giant_reserve_breach_o` watches for an
+  // ordinary chunk allocation reaching into the giant's reserved region, which
+  // is unreachable while `ck_fits_c` and the plan validator are both correct.
+  // The mutant is `ck_fits_c`'s `<` become `<=`: one chunk past the ordinary
+  // quota, which with a seal at exactly MAX_CHUNKS - reservation is the first
+  // chunk of the reserve.
+  zhao_geom_paramarena_reserve_mutant #(
 `else
   zhao_geom_paramarena #(
 `endif
@@ -546,6 +563,8 @@ module tb_zhao_geom_paramarena
       .seal_verts_i  (seal_verts_i),
       .seal_tris_i   (seal_tris_i),
       .seal_chunks_i (seal_chunks_i),
+      .seal_giant_refs_i   (seal_giant_refs_i),
+      .seal_giant_chunks_i (seal_giant_chunks_i),
       .frame_gen_i   (frame_gen_i),
       // I54: with the serialiser live the frame ends when the CHUNKS ARE
       // IN, not when the producer stops. The arena publishes as soon as
@@ -651,6 +670,9 @@ module tb_zhao_geom_paramarena
       .frames_published_o (frames_published_o),
       .guard_denied_o     (arena_guard_denied_o),
       .quota_overflow_o   (quota_overflow_o),
+      .q_giant_refs_o        (q_giant_refs_o),
+      .q_giant_chunks_o      (q_giant_chunks_o),
+      .giant_reserve_breach_o(giant_reserve_breach_o),
       .records_discarded_o(records_discarded_o),
       .records_unsealed_o (records_unsealed_o),
       .arena_overrun_o    (arena_overrun_o),

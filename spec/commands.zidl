@@ -55,8 +55,40 @@
 // amendment C1) did NOT bump the version — a numeric-law constant change
 // moves no opcode, field set, or size, and leaves the frame wire untouched.
 
+// ABI v4 (2026-09-26, the frame admission plan, run
+// RUN-20260919-1656-gaps-to-zero, packet SEALPLAN): SealFramePlan 0x0003
+// implemented -- the per-view pre-frame allocation/admission plan that owner
+// vacation directive 2026-09-23 section 5 commissions, and the command field
+// that directive PRE-AUTHORISES: the architect "is not required to duplicate a
+// large policy engine merely to avoid adding a command or mailbox field" and
+// must "authorize the necessary generated command, publication or service
+// transport and connect its real producer and consumer."
+//
+// VERSION DECISION: this change DOES bump `abi version` 3 -> 4. A new opcode
+// is a wire change under the frozen rule ("additive change = new opcode"); a
+// v3 decoder reports ZH_ABI_UNKNOWN_OPCODE on 0x0003, so the generation must
+// be distinguishable at frame validation. This is the same reasoning the v3
+// bump recorded for SetEnvironment 0x0311, applied to an opcode that is
+// implemented rather than reserved.
+//
+// WHY A COMMAND AND NOT A GROWN RECORD. The plan is a whole frame's admission
+// agreement and it is SEALED: it is validated once, latched once, and may not
+// be renegotiated (directive section 5, "Do not renegotiate a sealed frame").
+// A record of its own can arrive, be refused, and be re-offered without
+// disturbing BeginFrame's meaning -- and growing BeginFrame would have moved a
+// layout every committed capture depends on, for a payload that is not frame
+// identity.
+//
+// WHO CONSUMES IT: `zhao_cmd_exec` decodes and stages it;
+// `zhao_measure_sealplan` validates it against every capacity in its own unit
+// and against R7's giant reservation, and REFUSES it before the seal if it
+// does not fit; `zhao_geom_paramarena` latches the validated numbers as its
+// frame quota. The field is READ, not merely carried -- which `npm run
+// abi:check` cannot tell you, because it is a drift gate and goes green on a
+// field nothing reads.
+
 abi zhao {
-  version 3
+  version 4
   endian little
   command_alignment 16
   opcode_width u16
@@ -469,6 +501,70 @@ command BeginFrame 0x0001 implemented {
   u32 resource_epoch;
   u32 flags;
   u32 deadline_cycles;
+}
+
+// ---- THE FRAME ADMISSION PLAN (owner vacation directive section 5) --------
+//
+// THE SEAL NAMES FOUR UNITS AND THEY ARE NOT INTERCHANGEABLE. The directive:
+// "The seal names frame/view/resource generation, capacities, vertex/triangle/
+// reference/chunk limits, and the designated giant's reservation. Keep those
+// units distinct." And: "Do not confuse references with chunks or assume a
+// reference budget pays for every other structure."
+//
+//   plan_verts   VERTICES         arena vertex slots
+//   plan_tris    TRIANGLES        arena triangle descriptors
+//   plan_chunks  CHUNKS           arena chunk payload units
+//   plan_refs    TILE REFERENCES  binner reference RAM
+//   giant_refs   TILE REFERENCES  the guaranteed giant's reservation
+//
+// THE FOUR ORDINARY BUDGETS ARE ORDINARY-ONLY. The giant's reservation is
+// subtracted from capacity BEFORE the ordinary demand is checked against what
+// remains -- "reserve ... before ordinary kMesh allocation" is an allocation-
+// ORDER statement and the plan is where that order is applied. A plan whose
+// ordinary demand plus the reservation exceeds a capacity is REFUSED before
+// the seal, in that unit, naming that unit.
+//
+// `giant_refs` MUST BE 32,768 EXACTLY when `flags` bit 0 is set, and MUST BE
+// ZERO when it is clear. It is carried on the wire rather than implied so the
+// plan the software computed and the reservation the hardware enforces are the
+// same statement and can be differenced; a reservation that only exists in
+// hardware cannot be checked against the budget the planner actually spent.
+// The hardware refuses any other value: the delegation does not cover shrinking
+// the guaranteed giant, so a trimmed reservation is an ILLEGAL plan and not a
+// smaller one. ceil(32768/14) = 2,341 CHUNKS is derived in hardware and is NOT
+// a wire field -- deriving it twice is how the 14x confusion gets a second
+// chance.
+//
+// THE ABSENT GIANT IS AN EXPLICIT DECLARATION. "A frame explicitly containing
+// no guaranteed giant may release that reservation BEFORE sealing." `flags`
+// bit 0 clear is that declaration and the full capacity becomes available.
+//
+// `giant_instance` is the designated giant's STABLE INSTANCE IDENTITY, in the
+// same space as a draw record's header `source_id`. The hardware selects by
+// declared priority (`semantic_weight`) and breaks ties on this identity; the
+// field is what the frame's own draw stream is CHECKED AGAINST at frame end,
+// not a hint. It is ignored when bit 0 is clear.
+//
+// GENERATIONS. `resource_gen` and `view_gen` are the generations the plan was
+// computed against; a plan whose generations do not match the console's live
+// values is refused, because a plan priced against a resource set that has
+// since been replaced is a plan for a different frame. The FRAME generation is
+// not a wire field: it is stamped by the hardware at the seal, for the same
+// reason `zhao_geom_paramarena` refuses to let a caller supply it -- a
+// caller-supplied generation lets a carried-over record keep last frame's
+// stamp, which is the one thing the field exists to make detectable.
+command SealFramePlan 0x0003 implemented {
+  u8  view_id;         // which view this plan admits
+  u8  flags;           // bit0 giant_present; bits 7:1 reserved, MUST BE ZERO
+  u16 resource_gen;    // resource generation the plan was priced against
+  u16 view_gen;        // view generation the plan was priced against
+  u16 giant_instance;  // stable instance identity of the designated giant
+  u32 plan_verts;      // VERTICES,        ordinary
+  u32 plan_tris;       // TRIANGLES,       ordinary
+  u32 plan_chunks;     // CHUNKS,          ordinary
+  u32 plan_refs;       // TILE REFERENCES, ordinary
+  u32 giant_refs;      // TILE REFERENCES, the reservation (32768 or 0)
+  pad[4];
 }
 
 command EndFrame 0x0002 implemented {

@@ -357,6 +357,34 @@ module zhao_geom_paramarena_drain_mutant
     input  var logic [17:0] seal_verts_i,
     input  var logic [17:0] seal_tris_i,
     input  var logic [17:0] seal_chunks_i,
+    // THE GIANT'S RESERVATION, IN TWO UNITS, NAMED BY THE SEAL.
+    // Owner vacation directive section 5: "The seal names frame/view/resource
+    // generation, capacities, vertex/triangle/reference/chunk limits, and the
+    // designated giant's reservation. Keep those units distinct."
+    //
+    // This block does NOT choose them -- the header's "WHAT THIS BLOCK DOES
+    // NOT DO" section has always said the reservation "is a decision made by
+    // whoever computes `seal_chunks_i`, not here", and as of 2026-09-26 that
+    // whoever exists and is `zhao_measure_sealplan`. What arrives here is the
+    // already-validated number, latched with the rest of the sealed record so
+    // the reservation is part of the immutable frame agreement rather than a
+    // quantity living only in the producer.
+    //
+    // `seal_chunks_i` IS THE ORDINARY CHUNK QUOTA, NOT THE TOTAL. The
+    // reservation has already been subtracted from it by the validator --
+    // "before ordinary kMesh allocation" is an allocation-ORDER statement and
+    // the plan is where that order is applied. So `ck_fits_c` is unchanged in
+    // form and the reserve is simply arena the ordinary stream is never given.
+    //
+    // REFERENCES ARE CARRIED, NOT ENFORCED HERE, and that is not an oversight.
+    // Tile references live in `zhao_geom_binner_v2.ref_ram`, not in this
+    // block; this arena's chunks are SERIALISED references and a reference
+    // budget does not pay for them (directive: "Do not confuse references with
+    // chunks"). The field rides in the sealed record so the frame's agreement
+    // is complete and so a reader of the record can name it; it is
+    // deliberately not differenced against anything here.
+    input  var logic [17:0] seal_giant_refs_i,
+    input  var logic [17:0] seal_giant_chunks_i,
     input  var logic [15:0] frame_gen_i,
     // The producer has no more records for this frame. Publication follows,
     // but only once every write has RETIRED.
@@ -517,6 +545,26 @@ module zhao_geom_paramarena_drain_mutant
     output var logic [31:0] frames_published_o,
     output var logic [31:0] guard_denied_o,
     output var logic [31:0] quota_overflow_o,
+    // The sealed reservation, presented so the frame's agreement is readable
+    // from outside rather than inferable. `q_giant_chunks_o` is what the
+    // ordinary stream may never reach; with `ck_alloc_id_o` (the chunk cursor)
+    // a reader can say at any moment how much arena is still untouched, which
+    // is what "the giant is whole" means at this seam.
+    output var logic [17:0] q_giant_refs_o,
+    output var logic [17:0] q_giant_chunks_o,
+    // THE BREACH DETECTOR, AND IT IS UNREACHABLE WITH LEGAL STIMULUS.
+    // It fires if an ACCEPTED ordinary chunk would carry total allocation into
+    // the reserved region. With a correct validator (ordinary quota <=
+    // MAX_CHUNKS - reservation) and a correct `ck_fits_c` (cursor < quota),
+    // that state cannot be reached, so no input moves this counter and "it can
+    // fire" would stay an argument forever.
+    //
+    // CLAUDE.md's rule for exactly this shape: a guard unreachable with legal
+    // stimulus needs a COMMITTED MUTANT. It is
+    // `tests/mutants/zhao_geom_paramarena_reserve_mutant.sv` -- one
+    // substantive line, `ck_fits_c`'s `<` becoming `<=` -- with a driver whose
+    // polarity is inverted, so it passes when this counter FIRES.
+    output var logic [31:0] giant_reserve_breach_o,
     output var logic [31:0] records_discarded_o,
     output var logic [31:0] records_unsealed_o,
     output var logic [31:0] arena_overrun_o,
@@ -674,6 +722,12 @@ module zhao_geom_paramarena_drain_mutant
   logic        view_q;
   logic [15:0] gen_q;
   logic [17:0] q_verts_q, q_tris_q, q_chunks_q;
+  // The sealed reservation, latched by the SAME enable as the quotas it was
+  // validated against. They are one record, and separating their capture is
+  // how a reservation comes to describe a different frame's plan.
+  logic [17:0] q_giant_ref_q, q_giant_ck_q;
+  assign q_giant_refs_o   = q_giant_ref_q;
+  assign q_giant_chunks_o = q_giant_ck_q;
   logic        frame_open_q;     // a sealed frame is accepting records
   logic        frame_fault_q;
 
@@ -878,6 +932,15 @@ module zhao_geom_paramarena_drain_mutant
   wire td_fits_c = (n_tris_q   < q_tris_q);
   wire ck_fits_c = (n_chunks_q < q_chunks_q);
 
+  // THE RESERVE, TESTED RATHER THAN TRUSTED. `n_chunks_q` is the index about
+  // to be written, so the frame holds `n_chunks_q + 1` chunks once this one is
+  // accepted; that plus the reservation may never exceed the arena. Nineteen
+  // bits on both sides because an eighteen-bit sum of two eighteen-bit
+  // quantities wraps, and a wrapped comparison reports "fits" -- the
+  // flattering direction.
+  wire [18:0] ck_after_c = {1'b0, n_chunks_q} + 19'd1 + {1'b0, q_giant_ck_q};
+  wire ck_reserve_breach_c = (ck_after_c > 19'(MAX_CHUNKS));
+
   // THE SECOND BOUND, AND IT IS NOT THE SAME QUESTION. The quota says the
   // frame kept its promise; this says the bytes are inside the view. A seal
   // whose quota exceeds the arena would otherwise walk a cursor out of the
@@ -1039,6 +1102,8 @@ module zhao_geom_paramarena_drain_mutant
       q_verts_q     <= 18'd0;
       q_tris_q      <= 18'd0;
       q_chunks_q    <= 18'd0;
+      q_giant_ref_q <= 18'd0;
+      q_giant_ck_q  <= 18'd0;
       frame_open_q  <= 1'b0;
       frame_fault_q <= 1'b0;
       n_verts_q     <= 18'd0;
@@ -1069,6 +1134,7 @@ module zhao_geom_paramarena_drain_mutant
       frames_published_o  <= '0;
       guard_denied_o      <= '0;
       quota_overflow_o    <= '0;
+      giant_reserve_breach_o <= '0;
       records_discarded_o <= '0;
       records_unsealed_o  <= '0;
       arena_overrun_o     <= '0;
@@ -1130,6 +1196,8 @@ module zhao_geom_paramarena_drain_mutant
         q_verts_q     <= seal_verts_i;
         q_tris_q      <= seal_tris_i;
         q_chunks_q    <= seal_chunks_i;
+        q_giant_ref_q <= seal_giant_refs_i;
+        q_giant_ck_q  <= seal_giant_chunks_i;
         n_verts_q     <= 18'd0;
         n_tris_q      <= 18'd0;
         n_chunks_q    <= 18'd0;
@@ -1214,6 +1282,16 @@ module zhao_geom_paramarena_drain_mutant
             m_beat_q   <= 4'd0;
             mstate_q   <= M_REQ;
             n_chunks_q <= n_chunks_q + 18'd1;
+            // THE RESERVE, MEASURED ON THE ACCEPT ITSELF. Counted and NOT
+            // faulted: this is an instrument reporting that the allocator's
+            // own arithmetic has gone wrong, not a workload doing something
+            // illegal, and faulting a frame on it would convert a detector
+            // into a second enforcement path that can disagree with the
+            // first. It is unreachable while `ck_fits_c` and the validator
+            // are correct -- see the port, and the committed mutant that
+            // fires it.
+            if (ck_reserve_breach_c && giant_reserve_breach_o != 32'hFFFF_FFFF)
+              giant_reserve_breach_o <= giant_reserve_breach_o + 32'd1;
           end
         end else begin
           // ---- the chain patch ---------------------------------------------

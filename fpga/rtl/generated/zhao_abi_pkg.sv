@@ -10,7 +10,7 @@
 package zhao_abi_pkg;
 
   // ---------------------------------------------------------- ABI ---
-  localparam int unsigned ZHAO_ABI_VERSION        = 3;
+  localparam int unsigned ZHAO_ABI_VERSION        = 4;
   localparam int unsigned ZHAO_COMMAND_ALIGNMENT = 16;
   // exported ABI constants: consumed by importing modules (stub top, probe),
   // not necessarily referenced inside this package.
@@ -91,6 +91,7 @@ package zhao_abi_pkg;
   // opcodes
   localparam logic [15:0] ZHAO_OP_NOP = 16'h0000;
   localparam logic [15:0] ZHAO_OP_BEGIN_FRAME = 16'h0001;
+  localparam logic [15:0] ZHAO_OP_SEAL_FRAME_PLAN = 16'h0003;
   localparam logic [15:0] ZHAO_OP_END_FRAME = 16'h0002;
   localparam logic [15:0] ZHAO_OP_SET_VIEW = 16'h0010;
   localparam logic [15:0] ZHAO_OP_SET_PRESENTATION_CONTRACT = 16'h0020;
@@ -360,6 +361,47 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_BEGIN_FRAME_OFF_RESOURCE_EPOCH = 20;
   localparam int unsigned ZHAO_BEGIN_FRAME_OFF_FLAGS = 24;
   localparam int unsigned ZHAO_BEGIN_FRAME_OFF_DEADLINE_CYCLES = 28;
+
+  // SealFramePlan 0x0003: 48-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] pad;  // 4 zero byte(s) @44
+    logic [31:0] giant_refs;  // u32 @40
+    logic [31:0] plan_refs;  // u32 @36
+    logic [31:0] plan_chunks;  // u32 @32
+    logic [31:0] plan_tris;  // u32 @28
+    logic [31:0] plan_verts;  // u32 @24
+    logic [15:0] giant_instance;  // u16 @22
+    logic [15:0] view_gen;  // u16 @20
+    logic [15:0] resource_gen;  // u16 @18
+    logic [7:0] flags;  // u8 @17
+    logic [7:0] view_id;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_seal_frame_plan_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_ID = 16;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_FLAGS = 17;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_RESOURCE_GEN = 18;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_GEN = 20;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_INSTANCE = 22;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_VERTS = 24;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_TRIS = 28;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_CHUNKS = 32;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_REFS = 36;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_REFS = 40;
+  localparam int unsigned ZHAO_SEAL_FRAME_PLAN_OFF_PAD = 44;
 
   // EndFrame 0x0002: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -1914,6 +1956,52 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [383:0] zhao_pack_seal_frame_plan(input zhao_rec_seal_frame_plan_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_ID*8 +: 8] = c.view_id;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_RESOURCE_GEN*8 +: 16] = c.resource_gen;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_GEN*8 +: 16] = c.view_gen;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_INSTANCE*8 +: 16] = c.giant_instance;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_VERTS*8 +: 32] = c.plan_verts;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_TRIS*8 +: 32] = c.plan_tris;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_CHUNKS*8 +: 32] = c.plan_chunks;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_REFS*8 +: 32] = c.plan_refs;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_REFS*8 +: 32] = c.giant_refs;
+      v[ZHAO_SEAL_FRAME_PLAN_OFF_PAD*8 +: 32] = c.pad;
+      zhao_pack_seal_frame_plan = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_seal_frame_plan_t zhao_unpack_seal_frame_plan(input logic [383:0] v);
+    zhao_rec_seal_frame_plan_t c;
+    begin
+      c.h_opcode = v[ZHAO_SEAL_FRAME_PLAN_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SEAL_FRAME_PLAN_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SEAL_FRAME_PLAN_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SEAL_FRAME_PLAN_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SEAL_FRAME_PLAN_OFF_H_RESERVED0*8 +: 32];
+      c.view_id = v[ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_ID*8 +: 8];
+      c.flags = v[ZHAO_SEAL_FRAME_PLAN_OFF_FLAGS*8 +: 8];
+      c.resource_gen = v[ZHAO_SEAL_FRAME_PLAN_OFF_RESOURCE_GEN*8 +: 16];
+      c.view_gen = v[ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_GEN*8 +: 16];
+      c.giant_instance = v[ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_INSTANCE*8 +: 16];
+      c.plan_verts = v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_VERTS*8 +: 32];
+      c.plan_tris = v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_TRIS*8 +: 32];
+      c.plan_chunks = v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_CHUNKS*8 +: 32];
+      c.plan_refs = v[ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_REFS*8 +: 32];
+      c.giant_refs = v[ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_REFS*8 +: 32];
+      c.pad = v[ZHAO_SEAL_FRAME_PLAN_OFF_PAD*8 +: 32];
+      zhao_unpack_seal_frame_plan = c;
+    end
+  endfunction
+
   function automatic logic [255:0] zhao_pack_end_frame(input zhao_rec_end_frame_t c);
     logic [255:0] v;
     begin
@@ -3346,6 +3434,7 @@ package zhao_abi_pkg;
       case (op)
         ZHAO_OP_NOP: zhao_opcode_record_bytes = 16;
         ZHAO_OP_BEGIN_FRAME: zhao_opcode_record_bytes = 32;
+        ZHAO_OP_SEAL_FRAME_PLAN: zhao_opcode_record_bytes = 48;
         ZHAO_OP_END_FRAME: zhao_opcode_record_bytes = 32;
         ZHAO_OP_SET_VIEW: zhao_opcode_record_bytes = 112;
         ZHAO_OP_SET_PRESENTATION_CONTRACT: zhao_opcode_record_bytes = 48;
@@ -3402,6 +3491,9 @@ package zhao_abi_pkg;
     begin
       zhao_record_pad_nonzero = 1'b0;
       case (op)
+        ZHAO_OP_SEAL_FRAME_PLAN: begin
+          if (zhao_bytes_nonzero(p, base, 44, 4)) zhao_record_pad_nonzero = 1'b1;
+        end
         ZHAO_OP_END_FRAME: begin
           if (zhao_bytes_nonzero(p, base, 28, 4)) zhao_record_pad_nonzero = 1'b1;
         end
@@ -3566,6 +3658,7 @@ package zhao_abi_pkg;
       zhao_layout_ok = 1'b1;
       if ($bits(zhao_rec_nop_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_begin_frame_t) != 8*32) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_seal_frame_plan_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_end_frame_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_view_t) != 8*112) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_presentation_contract_t) != 8*48) zhao_layout_ok = 1'b0;

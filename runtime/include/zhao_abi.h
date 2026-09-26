@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 790acb28781b1cf4e4e97542062360951cc28a3e7259166141937dcc832f3de5
-//   zidl_sha256         = c91773e0c7c0e4b28ca6bbaacbe5943f20257364d92c1f7e95b97df08a91b45c
+//   abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
+//   zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
 #pragma once
 
 #include <cstdint>
@@ -11,7 +11,7 @@
 
 namespace zhao_abi {
 
-constexpr uint16_t ZHAO_ABI_VERSION        = 3;
+constexpr uint16_t ZHAO_ABI_VERSION        = 4;
 constexpr uint16_t ZHAO_COMMAND_ALIGNMENT = 16;
 constexpr uint16_t ZHAO_OPCODE_WIDTH      = 2; // u16
 constexpr uint32_t FRAME_SLOT_BYTES = 1048576u;
@@ -67,6 +67,7 @@ enum warp_attribute_mode : uint8_t {
 
 constexpr uint16_t ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 constexpr uint16_t ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_SEAL_FRAME_PLAN = 0x0003; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_VIEW = 0x0010; // 112 B, implemented
 constexpr uint16_t ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
@@ -390,6 +391,39 @@ struct ZhRecordBeginFrame {
   ZhCmdBeginFrame payload;
 };
 static_assert(sizeof(ZhRecordBeginFrame) == 32, "layout drift: BeginFrame record");
+
+// SealFramePlan 0x0003: 48-byte record (implemented)
+struct ZhCmdSealFramePlan {
+  uint8_t view_id;
+  uint8_t flags;
+  uint16_t resource_gen;
+  uint16_t view_gen;
+  uint16_t giant_instance;
+  uint32_t plan_verts;
+  uint32_t plan_tris;
+  uint32_t plan_chunks;
+  uint32_t plan_refs;
+  uint32_t giant_refs;
+  uint8_t pad[4];
+};
+static_assert(offsetof(ZhCmdSealFramePlan, view_id) == 0, "layout drift: SealFramePlan.view_id");
+static_assert(offsetof(ZhCmdSealFramePlan, flags) == 1, "layout drift: SealFramePlan.flags");
+static_assert(offsetof(ZhCmdSealFramePlan, resource_gen) == 2, "layout drift: SealFramePlan.resource_gen");
+static_assert(offsetof(ZhCmdSealFramePlan, view_gen) == 4, "layout drift: SealFramePlan.view_gen");
+static_assert(offsetof(ZhCmdSealFramePlan, giant_instance) == 6, "layout drift: SealFramePlan.giant_instance");
+static_assert(offsetof(ZhCmdSealFramePlan, plan_verts) == 8, "layout drift: SealFramePlan.plan_verts");
+static_assert(offsetof(ZhCmdSealFramePlan, plan_tris) == 12, "layout drift: SealFramePlan.plan_tris");
+static_assert(offsetof(ZhCmdSealFramePlan, plan_chunks) == 16, "layout drift: SealFramePlan.plan_chunks");
+static_assert(offsetof(ZhCmdSealFramePlan, plan_refs) == 20, "layout drift: SealFramePlan.plan_refs");
+static_assert(offsetof(ZhCmdSealFramePlan, giant_refs) == 24, "layout drift: SealFramePlan.giant_refs");
+static_assert(offsetof(ZhCmdSealFramePlan, pad[0]) == 28, "layout drift: SealFramePlan.pad");
+static_assert(sizeof(ZhCmdSealFramePlan) == 32, "layout drift: SealFramePlan payload");
+
+struct ZhRecordSealFramePlan {
+  ZhCmdHeader hdr;
+  ZhCmdSealFramePlan payload;
+};
+static_assert(sizeof(ZhRecordSealFramePlan) == 48, "layout drift: SealFramePlan record");
 
 // EndFrame 0x0002: 32-byte record (implemented)
 struct ZhCmdEndFrame {
@@ -1173,11 +1207,31 @@ inline ZhRecordBeginFrame zhao_sample_begin_frame() {
   return r;
 }
 
+inline ZhRecordSealFramePlan zhao_sample_seal_frame_plan() {
+  ZhRecordSealFramePlan r{};
+  r.hdr.opcode       = ZHAO_OP_SEAL_FRAME_PLAN;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242818u; // kind 5, module 1, index 2
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.view_id = 32u;
+  r.payload.flags = 137u;
+  r.payload.resource_gen = 63077u;
+  r.payload.view_gen = 2654u;
+  r.payload.giant_instance = 48408u;
+  r.payload.plan_verts = 0u;
+  r.payload.plan_tris = 0u;
+  r.payload.plan_chunks = 0u;
+  r.payload.plan_refs = 0u;
+  r.payload.giant_refs = 0u;
+  return r;
+}
+
 inline ZhRecordEndFrame zhao_sample_end_frame() {
   ZhRecordEndFrame r{};
   r.hdr.opcode       = ZHAO_OP_END_FRAME;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242818u; // kind 5, module 1, index 2
+  r.hdr.source_id    = 1342242819u; // kind 5, module 1, index 3
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.completion_flags = 0u;
@@ -1190,7 +1244,7 @@ inline ZhRecordSetView zhao_sample_set_view() {
   ZhRecordSetView r{};
   r.hdr.opcode       = ZHAO_OP_SET_VIEW;
   r.hdr.record_bytes = 112;
-  r.hdr.source_id    = 1342242819u; // kind 5, module 1, index 3
+  r.hdr.source_id    = 1342242820u; // kind 5, module 1, index 4
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.view_id = 32u;
@@ -1210,7 +1264,7 @@ inline ZhRecordSetPresentationContract zhao_sample_set_presentation_contract() {
   ZhRecordSetPresentationContract r{};
   r.hdr.opcode       = ZHAO_OP_SET_PRESENTATION_CONTRACT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242820u; // kind 5, module 1, index 4
+  r.hdr.source_id    = 1342242821u; // kind 5, module 1, index 5
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.mode = static_cast<video_mode>(0u);
@@ -1228,7 +1282,7 @@ inline ZhRecordTerrainField zhao_sample_terrain_field() {
   ZhRecordTerrainField r{};
   r.hdr.opcode       = ZHAO_OP_TERRAIN_FIELD;
   r.hdr.record_bytes = 112;
-  r.hdr.source_id    = 1342242821u; // kind 5, module 1, index 5
+  r.hdr.source_id    = 1342242822u; // kind 5, module 1, index 6
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.program = 704643073u;
@@ -1306,7 +1360,7 @@ inline ZhRecordSurfaceStamp zhao_sample_surface_stamp() {
   ZhRecordSurfaceStamp r{};
   r.hdr.opcode       = ZHAO_OP_SURFACE_STAMP;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242822u; // kind 5, module 1, index 6
+  r.hdr.source_id    = 1342242823u; // kind 5, module 1, index 7
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.brush = 704643073u;
@@ -1324,7 +1378,7 @@ inline ZhRecordTerrainEpoch zhao_sample_terrain_epoch() {
   ZhRecordTerrainEpoch r{};
   r.hdr.opcode       = ZHAO_OP_TERRAIN_EPOCH;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242823u; // kind 5, module 1, index 7
+  r.hdr.source_id    = 1342242824u; // kind 5, module 1, index 8
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.epoch = 0u;
@@ -1340,7 +1394,7 @@ inline ZhRecordSubmitTerrainSet zhao_sample_submit_terrain_set() {
   ZhRecordSubmitTerrainSet r{};
   r.hdr.opcode       = ZHAO_OP_SUBMIT_TERRAIN_SET;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242824u; // kind 5, module 1, index 8
+  r.hdr.source_id    = 1342242825u; // kind 5, module 1, index 9
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.resource_epoch = 0u;
@@ -1360,7 +1414,7 @@ inline ZhRecordDrawForm zhao_sample_draw_form() {
   ZhRecordDrawForm r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_FORM;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242825u; // kind 5, module 1, index 9
+  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.form = 704643073u;
@@ -1376,7 +1430,7 @@ inline ZhRecordDrawPopulation zhao_sample_draw_population() {
   ZhRecordDrawPopulation r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_POPULATION;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
+  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.population = 704643073u;
@@ -1390,7 +1444,7 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   ZhRecordDrawProcedural r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_PROCEDURAL;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
+  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.program = 704643073u;
@@ -1408,7 +1462,7 @@ inline ZhRecordDrawSky zhao_sample_draw_sky() {
   ZhRecordDrawSky r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_SKY;
   r.hdr.record_bytes = 176;
-  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
+  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.sky_set = 704643073u;
@@ -1428,7 +1482,7 @@ inline ZhRecordSetEnvironment zhao_sample_set_environment() {
   ZhRecordSetEnvironment r{};
   r.hdr.opcode       = ZHAO_OP_SET_ENVIRONMENT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
+  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.sun_yaw = 22925;
@@ -1447,7 +1501,7 @@ inline ZhRecordEmitAudioEvent zhao_sample_emit_audio_event() {
   ZhRecordEmitAudioEvent r{};
   r.hdr.opcode       = ZHAO_OP_EMIT_AUDIO_EVENT;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
+  r.hdr.source_id    = 1342242831u; // kind 5, module 1, index 15
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.event_id = 0u;
@@ -1462,7 +1516,7 @@ inline ZhRecordDebugBootstrap zhao_sample_debug_bootstrap() {
   ZhRecordDebugBootstrap r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_BOOTSTRAP;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242831u; // kind 5, module 1, index 15
+  r.hdr.source_id    = 1342242832u; // kind 5, module 1, index 16
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.data[0] = 113u;
@@ -1520,7 +1574,7 @@ inline ZhRecordDebugFrameBlit zhao_sample_debug_frame_blit() {
   ZhRecordDebugFrameBlit r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_FRAME_BLIT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242832u; // kind 5, module 1, index 16
+  r.hdr.source_id    = 1342242833u; // kind 5, module 1, index 17
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.dst_slot = 53u;
@@ -1535,7 +1589,7 @@ inline ZhRecordDebugRumble zhao_sample_debug_rumble() {
   ZhRecordDebugRumble r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_RUMBLE;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242833u; // kind 5, module 1, index 17
+  r.hdr.source_id    = 1342242834u; // kind 5, module 1, index 18
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.pad_index = 113u;
@@ -1548,7 +1602,7 @@ inline ZhRecordPublishResource zhao_sample_publish_resource() {
   ZhRecordPublishResource r{};
   r.hdr.opcode       = ZHAO_OP_PUBLISH_RESOURCE;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242834u; // kind 5, module 1, index 18
+  r.hdr.source_id    = 1342242835u; // kind 5, module 1, index 19
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.resource = 704643073u;
@@ -1568,7 +1622,7 @@ inline ZhRecordSetPost zhao_sample_set_post() {
   ZhRecordSetPost r{};
   r.hdr.opcode       = ZHAO_OP_SET_POST;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242835u; // kind 5, module 1, index 19
+  r.hdr.source_id    = 1342242836u; // kind 5, module 1, index 20
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.bloom_gain = 134u;
@@ -1586,7 +1640,7 @@ inline ZhRecordSetGradeTable zhao_sample_set_grade_table() {
   ZhRecordSetGradeTable r{};
   r.hdr.opcode       = ZHAO_OP_SET_GRADE_TABLE;
   r.hdr.record_bytes = 96;
-  r.hdr.source_id    = 1342242836u; // kind 5, module 1, index 20
+  r.hdr.source_id    = 1342242837u; // kind 5, module 1, index 21
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.curve = 205u;
@@ -1671,7 +1725,7 @@ inline ZhRecordSetPopulation zhao_sample_set_population() {
   ZhRecordSetPopulation r{};
   r.hdr.opcode       = ZHAO_OP_SET_POPULATION;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242837u; // kind 5, module 1, index 21
+  r.hdr.source_id    = 1342242838u; // kind 5, module 1, index 22
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.population = 704643073u;
@@ -1691,7 +1745,7 @@ inline ZhRecordDebugTraceArm zhao_sample_debug_trace_arm() {
   ZhRecordDebugTraceArm r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_TRACE_ARM;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242838u; // kind 5, module 1, index 22
+  r.hdr.source_id    = 1342242839u; // kind 5, module 1, index 23
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.stage_mask = 165u;
@@ -1703,7 +1757,7 @@ inline ZhRecordDrawPosedForm zhao_sample_draw_posed_form() {
   ZhRecordDrawPosedForm r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_POSED_FORM;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242839u; // kind 5, module 1, index 23
+  r.hdr.source_id    = 1342242840u; // kind 5, module 1, index 24
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.form = 704643073u;
@@ -1722,7 +1776,7 @@ inline ZhRecordDrawWarpedForm zhao_sample_draw_warped_form() {
   ZhRecordDrawWarpedForm r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_WARPED_FORM;
   r.hdr.record_bytes = 96;
-  r.hdr.source_id    = 1342242840u; // kind 5, module 1, index 24
+  r.hdr.source_id    = 1342242841u; // kind 5, module 1, index 25
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.form = 704643073u;
@@ -1754,7 +1808,7 @@ inline ZhRecordSetPlane zhao_sample_set_plane() {
   ZhRecordSetPlane r{};
   r.hdr.opcode       = ZHAO_OP_SET_PLANE;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242841u; // kind 5, module 1, index 25
+  r.hdr.source_id    = 1342242842u; // kind 5, module 1, index 26
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.slot = 125u;
@@ -1785,7 +1839,7 @@ inline ZhRecordDrawSprite zhao_sample_draw_sprite() {
   ZhRecordDrawSprite r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_SPRITE;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242842u; // kind 5, module 1, index 26
+  r.hdr.source_id    = 1342242843u; // kind 5, module 1, index 27
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.x = 10553;
@@ -1865,6 +1919,23 @@ inline void zhao_pack_begin_frame(const ZhRecordBeginFrame& r, std::vector<uint8
   w.u32(r.payload.resource_epoch);
   w.u32(r.payload.flags);
   w.u32(r.payload.deadline_cycles);
+}
+
+inline void zhao_pack_seal_frame_plan(const ZhRecordSealFramePlan& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.view_id);
+  w.u8(r.payload.flags);
+  w.u16(r.payload.resource_gen);
+  w.u16(r.payload.view_gen);
+  w.u16(r.payload.giant_instance);
+  w.u32(r.payload.plan_verts);
+  w.u32(r.payload.plan_tris);
+  w.u32(r.payload.plan_chunks);
+  w.u32(r.payload.plan_refs);
+  w.u32(r.payload.giant_refs);
+  for (int i = 0; i < 4; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline void zhao_pack_end_frame(const ZhRecordEndFrame& r, std::vector<uint8_t>& out) {
@@ -2300,6 +2371,25 @@ inline bool zhao_unpack_begin_frame(ZhReader& r, ZhRecordBeginFrame& out) {
   { uint32_t t; if (!r.take32(t)) return false; out.payload.resource_epoch = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.flags = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.deadline_cycles = t; }
+  return true;
+}
+
+inline bool zhao_unpack_seal_frame_plan(ZhReader& r, ZhRecordSealFramePlan& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.view_id = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.resource_gen = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.view_gen = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.giant_instance = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plan_verts = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plan_tris = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plan_chunks = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plan_refs = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.giant_refs = t; }
+  if (!r.skip(4)) return false;
   return true;
 }
 
@@ -2924,6 +3014,7 @@ struct ZhCommandInfo {
   const uint16_t* pad_offsets;  // payload-relative must-be-zero bytes
   uint16_t pad_count;
 };
+constexpr uint16_t ZHAO_PADS_SEAL_FRAME_PLAN[] = {28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_END_FRAME[] = {12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_SET_VIEW[] = {92, 93, 94, 95};
 constexpr uint16_t ZHAO_PADS_SET_PRESENTATION_CONTRACT[] = {24, 25, 26, 27, 28, 29, 30, 31};
@@ -2946,6 +3037,7 @@ constexpr uint16_t ZHAO_PADS_DRAW_SPRITE[] = {22, 23};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
+  {"SealFramePlan", 0x0003, 48, true, ZHAO_PADS_SEAL_FRAME_PLAN, 4},
   {"EndFrame", 0x0002, 32, true, ZHAO_PADS_END_FRAME, 4},
   {"SetView", 0x0010, 112, true, ZHAO_PADS_SET_VIEW, 4},
   {"SetPresentationContract", 0x0020, 48, true, ZHAO_PADS_SET_PRESENTATION_CONTRACT, 8},
@@ -2972,7 +3064,7 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"SetPlane", 0x0306, 64, true, ZHAO_PADS_SET_PLANE, 2},
   {"DrawSprite", 0x0307, 64, true, ZHAO_PADS_DRAW_SPRITE, 2},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 27;
+constexpr size_t ZHAO_COMMAND_COUNT = 28;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -3012,8 +3104,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x79, 0x0A, 0xCB, 0x28, 0x78, 0x1B, 0x1C, 0xF4, 0xE4, 0xE9, 0x75, 0x42, 0x06, 0x23, 0x60, 0x95, 0x1C, 0xC2, 0x8A, 0x3E, 0x72, 0x59, 0x16, 0x61, 0x41, 0x93, 0x7D, 0xCC, 0x83, 0x2F, 0x3D, 0xE5};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xC9, 0x17, 0x73, 0xE0, 0xC7, 0xC0, 0xE4, 0xB2, 0x8C, 0xA6, 0xBB, 0xAA, 0xCB, 0xE5, 0x94, 0x3F, 0x20, 0x25, 0x73, 0x64, 0xD9, 0x2C, 0x1F, 0x7E, 0x95, 0xB9, 0x7D, 0xF0, 0x8A, 0x91, 0xB4, 0x5C};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x7D, 0x8E, 0x03, 0x5C, 0xD3, 0x80, 0x21, 0x4A, 0xD3, 0xF6, 0xBD, 0x44, 0x33, 0x7E, 0x5A, 0xE2, 0x66, 0x19, 0x03, 0xCB, 0xF3, 0x8E, 0x68, 0x35, 0x98, 0x90, 0x05, 0x47, 0xC5, 0x86, 0x42, 0xCE};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x08, 0x43, 0xB3, 0x29, 0xCE, 0xA3, 0xBA, 0x4D, 0xF5, 0x31, 0x75, 0x25, 0x05, 0x37, 0xDC, 0x69, 0x5B, 0x64, 0x75, 0x91, 0x44, 0xCC, 0x7F, 0x53, 0xB9, 0x07, 0x41, 0x1D, 0x57, 0xBD, 0xF7, 0x2B};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

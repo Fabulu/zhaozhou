@@ -1,7 +1,7 @@
 """PARAMARENA: regenerate GEOM.PARAMBUF's arena positive controls from current
 production.  Each is a COPY with a rename and ONE substantive change.
 
-TWO mutants, for two counters that no legal stimulus can move:
+THREE mutants, for three counters that no legal stimulus can move:
 
   drain  -- `addr_view_bad_o`.  The drain precondition is dropped, so a seal
             takes effect with writes still outstanding and a request outlives
@@ -12,6 +12,13 @@ TWO mutants, for two counters that no legal stimulus can move:
             shipped with owner item 4 and that NO TEST IN THIS TREE CAN FAIL
             ON -- the behavioural SDRAM model reads LINEARLY where the part
             wraps inside its aligned eight-column block.
+  reserve -- `giant_reserve_breach_o`.  `ck_fits_c`'s `<` becomes `<=`, so the
+            allocator admits ONE chunk past the frame's ordinary quota.  With
+            the seal at exactly MAX_CHUNKS - reservation -- which is what
+            `zhao_measure_sealplan` produces for a frame declaring R7's
+            guaranteed giant -- that one chunk is the first chunk of the
+            giant's reserve, and the breach detector is the only thing in the
+            tree that can say so.
 
 `zhao_geom_paramarena`'s `addr_view_bad_o` differences the view the HELD
 address lies in against the view the LEASE names.  Its two operands load on
@@ -25,6 +32,17 @@ fire" as an argument forever.
 `burst_unaligned_o` is unreachable for a different reason: the allocator
 cannot compute a misaligned address, so the only way to see the counter move
 is to break the allocator.
+
+`giant_reserve_breach_o` is unreachable for a THIRD reason, and it is the one
+worth stating because it spans two blocks.  The plan validator guarantees
+`ordinary quota <= MAX_CHUNKS - reservation` and `ck_fits_c` guarantees
+`cursor < ordinary quota`; compose them and the cursor can never reach the
+reserve.  Neither guarantee alone is enough and neither block can demonstrate
+the counter on its own, so the witness has to break one of them.  Breaking
+`ck_fits_c` is the honest choice: it leaves the VALIDATOR correct, so the
+frame that fires the counter is one whose plan was legal -- which is exactly
+the fault the detector exists to catch, an allocator that overruns a plan it
+agreed to.
 
 So each break lives HERE, in a committed file, renamed so no production source
 list can elaborate it, and driven with INVERTED POLARITY.
@@ -193,5 +211,72 @@ ALIGN_HEAD = """// zhao_geom_paramarena_align_mutant.sv -- A POSITIVE CONTROL, N
 // ===========================================================================
 """
 
+
+# -------------------------------------------------------------- reserve ----
+RESERVE_OLD = """  wire ck_fits_c = (n_chunks_q < q_chunks_q);
+"""
+
+RESERVE_NEW = """  // ============ THE MUTATION, AND IT IS ONE CHARACTER ============
+  // Production writes
+  //     wire ck_fits_c = (n_chunks_q < q_chunks_q);
+  // -- the frame may hold at most `q_chunks_q` chunks, the ORDINARY quota the
+  // plan validator sealed.  This copy writes `<=`, so the allocator admits one
+  // chunk MORE than the plan it agreed to.
+  //
+  // WHY ONE CHUNK IS THE WHOLE DEMONSTRATION.  `zhao_measure_sealplan` seals a
+  // frame that declares R7's guaranteed giant at exactly
+  // MAX_CHUNKS - ceil(GIANT_REFS/CHUNK_IDS), so chunk number `q_chunks_q` --
+  // the first one this mutation admits -- is the first chunk of the giant's
+  // reserved region.  `giant_reserve_breach_o` fires on it and nothing else in
+  // the tree can see it: `quota_overflow_o` does NOT fire, because under this
+  // mutation the allocation is (wrongly) considered to fit, and the frame is
+  // never faulted.  A silent overrun into the reservation is precisely the
+  // shape the detector was written for.
+  //
+  // NOTE THE DIRECTION, because it is this tree's own law.  The mutation makes
+  // the allocator MORE permissive, so every functional test goes on passing --
+  // more chunks are accepted, nothing is refused, no frame faults, no golden
+  // output moves.  The defect is invisible to every result-checking test by
+  // construction, which is why the invariant is COUNTED rather than assumed.
+  wire ck_fits_c = (n_chunks_q <= q_chunks_q);
+"""
+
+RESERVE_HEAD = """// zhao_geom_paramarena_reserve_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
+//
+// DRIVEN-BY: tests/geometry/geom_paramarena_reservemut.cpp, INVERTED POLARITY:
+//            the `geom_paramarena_reservemut_fires` ctest PASSES when
+//            `giant_reserve_breach_o` FIRES against this copy, and the
+//            `geom_paramarena_reservemut_silent` ctest beside it builds the
+//            SAME driver against UNMUTATED production and requires SILENCE.
+//            That pair is the negative control CLAUDE.md asks for: without it
+//            a seam that never engaged would compile production twice and both
+//            runs would agree, saying nothing.
+//
+// WHY THE COUNTER NEEDS ONE.  `giant_reserve_breach_o` fires when an ACCEPTED
+// ordinary chunk carries total allocation into the region reserved for R7's
+// guaranteed giant.  That state needs TWO guarantees to be unreachable and
+// they live in two different blocks: `zhao_measure_sealplan` refuses any plan
+// whose ordinary chunk demand exceeds MAX_CHUNKS minus the reservation, and
+// `ck_fits_c` here refuses any allocation past the sealed quota.  Compose them
+// and no legal stimulus can move the counter.  "It can fire" would otherwise
+// stay an argument forever, and a counter asserted zero that has never been
+// seen to move is a claim rather than an instrument.
+//
+// WHAT ONE CHARACTER WAS CHANGED: `ck_fits_c`'s `<` became `<=`.  The
+// VALIDATOR is left correct on purpose, so the frame that fires the counter is
+// one whose plan was legal -- an allocator overrunning a plan it agreed to,
+// which is the fault the detector is for.  Everything else in this file is
+// production, character for character.
+//
+// GENERATED by tools/rtl/gen_paramarena_mutants.py from production, so a
+// refresh is a command rather than an act of transcription.
+//
+// REGENERATE IT if zhao_geom_paramarena.sv changes shape: it is a COPY, and
+// tools/budget/mutant_copy_drift.py will say when it is stale.
+// RENAMED so no production source list can elaborate it.
+// ===========================================================================
+"""
+
 emit([(DRAIN_OLD, DRAIN_NEW)], DRAIN_HEAD, "drain_mutant")
 emit([(ALIGN_OLD, ALIGN_NEW)], ALIGN_HEAD, "align_mutant")
+emit([(RESERVE_OLD, RESERVE_NEW)], RESERVE_HEAD, "reserve_mutant")

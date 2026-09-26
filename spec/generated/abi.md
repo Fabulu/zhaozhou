@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 790acb28781b1cf4e4e97542062360951cc28a3e7259166141937dcc832f3de5
-zidl_sha256         = c91773e0c7c0e4b28ca6bbaacbe5943f20257364d92c1f7e95b97df08a91b45c
+abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
+zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
 ```
 
-ABI version **3**, little-endian, command alignment
+ABI version **4**, little-endian, command alignment
 **16 B**, opcode width u16,
-27 commands (23 implemented).
+28 commands (24 implemented).
 
 ## Commands
 
@@ -19,6 +19,7 @@ ABI version **3**, little-endian, command alignment
 |---|---|---|---|
 | `Nop` | `0x0000` | 16 | implemented |
 | `BeginFrame` | `0x0001` | 32 | implemented |
+| `SealFramePlan` | `0x0003` | 48 | implemented |
 | `EndFrame` | `0x0002` | 32 | implemented |
 | `SetView` | `0x0010` | 112 | implemented |
 | `SetPresentationContract` | `0x0020` | 48 | implemented |
@@ -83,6 +84,29 @@ Golden sample: `tests/abi/golden/cmd_begin_frame.bin` (C++ packer
 `zhao_abi::zhao_pack_begin_frame(zhao_abi::zhao_sample_begin_frame(), ...)`,
 TS `zhaoPackBeginFrame(zhaoSampleBeginFrame(), ...)`, SV round-trips it via
 `zhao_unpack_begin_frame`/`zhao_pack_begin_frame`).
+
+### SealFramePlan — 0x0003 (48 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `view_id` | u8 |
+| 1 | 1 | `flags` | u8 |
+| 2 | 2 | `resource_gen` | u16 |
+| 4 | 2 | `view_gen` | u16 |
+| 6 | 2 | `giant_instance` | u16 |
+| 8 | 4 | `plan_verts` | u32 |
+| 12 | 4 | `plan_tris` | u32 |
+| 16 | 4 | `plan_chunks` | u32 |
+| 20 | 4 | `plan_refs` | u32 |
+| 24 | 4 | `giant_refs` | u32 |
+| 28 | 4 | `pad` | pad (zero) ×4 |
+
+Golden sample: `tests/abi/golden/cmd_seal_frame_plan.bin` (C++ packer
+`zhao_abi::zhao_pack_seal_frame_plan(zhao_abi::zhao_sample_seal_frame_plan(), ...)`,
+TS `zhaoPackSealFramePlan(zhaoSampleSealFramePlan(), ...)`, SV round-trips it via
+`zhao_unpack_seal_frame_plan`/`zhao_pack_seal_frame_plan`).
 
 ### EndFrame — 0x0002 (32 B, implemented)
 
@@ -880,6 +904,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 |---|---|
 | `tests/abi/golden/cmd_nop.bin` | canonical Nop sample record |
 | `tests/abi/golden/cmd_begin_frame.bin` | canonical BeginFrame sample record |
+| `tests/abi/golden/cmd_seal_frame_plan.bin` | canonical SealFramePlan sample record |
 | `tests/abi/golden/cmd_end_frame.bin` | canonical EndFrame sample record |
 | `tests/abi/golden/cmd_set_view.bin` | canonical SetView sample record |
 | `tests/abi/golden/cmd_set_presentation_contract.bin` | canonical SetPresentationContract sample record |
