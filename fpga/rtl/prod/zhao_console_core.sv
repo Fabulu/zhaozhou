@@ -11510,6 +11510,8 @@ module zhao_console_core
   // the share, and this is the number that says so rather than a claim that it
   // is light.
   output logic [31:0] geom_ma_jobs_h_o,
+  // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
+  output logic [31:0] geom_ma_jobs_i_o,
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
@@ -12354,6 +12356,25 @@ module zhao_console_core
   // slot and generation as witnesses and NOTHING in this console produces
   // them. See FINDINGS-texmat2's owner decision.
   output logic [31:0]             mat_win_clut_unowned_o,
+  // ITS COMPANION (I13CLOSE, 2026-09-26). `clut_unowned_o` used to count
+  // every CLUT material, because none of them had a palette identity at all;
+  // it now counts one whose palette could not be made resident. A fault
+  // counter that narrows needs a census beside it or its zero is a silence.
+  output logic [31:0]             mat_win_clut_owned_o,
+
+  // ---- TEXTURE.PALETTELOAD evidence (I13CLOSE, 2026-09-26) ---------------
+  // `pal_ld_gen_zero_o` is the one to read first: it counts loads issued at
+  // GENERATION ZERO, which is the value `zhao_texture_palette_res_v2` used to
+  // refuse outright, so a non-zero here is the repair being USED rather than
+  // merely being present.
+  output logic [31:0]             pal_ld_lookups_o,
+  output logic [31:0]             pal_ld_hits_o,
+  output logic [31:0]             pal_ld_loads_o,
+  output logic [31:0]             pal_ld_evictions_o,
+  output logic [31:0]             pal_ld_entries_o,
+  output logic [31:0]             pal_ld_denied_o,
+  output logic [31:0]             pal_ld_base_refused_o,
+  output logic [31:0]             pal_ld_gen_zero_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
   // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
@@ -12687,14 +12708,18 @@ module zhao_console_core
   output logic [3:0]  cfg_rsp_status_o,
   output logic [7:0]  cfg_rsp_page_generation_o,
   output logic [7:0]  active_page_generation_o,
-  input  logic        pal_load_valid_i,
-  output logic        pal_load_ready_o,
-  input  logic [1:0]  pal_load_op_i,
-  input  logic [1:0]  pal_load_slot_i,
-  input  logic [7:0]  pal_load_gen_i,
-  input  logic [7:0]  pal_load_idx_i,
-  input  logic [15:0] pal_load_rgb565_i,
-  input  logic        pal_load_crc_ok_i,
+  // `pal_load_*` LEFT THIS EDGE 2026-09-26 (I13CLOSE), all eight of them, and
+  // for the reason `tri_area2_i` and the three attribute planes left it: the
+  // producer is composed below. `u_texture_palette_load` reads a published
+  // palette out of the asset pool on ENGINE1 requester I and drives the
+  // island's BEGIN/WRITE/END port, so the palette RAM is written by the
+  // console rather than poked in from outside it.
+  //
+  // THE RULING IS EXPLICIT AND IT IS QUOTED IN THE BLOCK'S OWN HEADER: "this
+  // includes any required legitimate asset/palette loading producer. AN OPCODE
+  // PLUS DESCRIPTORS REFERRING TO DATA THAT ONLY THE TESTBENCH CAN INJECT IS
+  // NOT COMPLETION" (owner completion ruling 2026-09-22 item 3). The smoke tied
+  // all eight to zero, which is that sentence's exact shape.
 
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
   // `tri_area2_i` USED TO BE HERE and is now driven internally by
@@ -16274,6 +16299,11 @@ module zhao_console_core
   wire [ 7:0]             mw_pub_recipe_weight;
   wire [ 7:0]             mw_pub_base_binding;
   wire [ 1:0]             mw_pub_response_class;
+  // The palette half of the published record (I13CLOSE, 2026-09-26). ZERO for
+  // every non-CLUT span, which is the DIRECT row's own legality law published
+  // by its owner rather than a constant chosen here.
+  wire [ 1:0]             mw_pub_palette_slot;
+  wire [ 7:0]             mw_pub_palette_gen;
   /* verilator lint_off UNUSEDSIGNAL */
   // THE PUBLISHED SPAN'S MATERIAL MODE (owner ruling 1, 2026-09-22). It is
   // EXPORTED rather than read here, and that is the deliberate choice: R197's
@@ -22280,14 +22310,19 @@ module zhao_console_core
     .cfg_rsp_status_o          (cfg_rsp_status_o),
     .cfg_rsp_page_generation_o (cfg_rsp_page_generation_o),
     .active_page_generation_o  (active_page_generation_o),
-    .pal_load_valid_i          (pal_load_valid_i),
-    .pal_load_ready_o          (pal_load_ready_o),
-    .pal_load_op_i             (pal_load_op_i),
-    .pal_load_slot_i           (pal_load_slot_i),
-    .pal_load_gen_i            (pal_load_gen_i),
-    .pal_load_idx_i            (pal_load_idx_i),
-    .pal_load_rgb565_i         (pal_load_rgb565_i),
-    .pal_load_crc_ok_i         (pal_load_crc_ok_i),
+    // REAL, 2026-09-26 (I13CLOSE): TEXTURE.PALETTELOAD, composed below. These
+    // eight were boundary inputs until today and the smoke tied them to zero,
+    // so no palette slot in this console had ever been written and a CLUT
+    // material had no identity to present. `u_texture_palette_load` reads the
+    // published palette out of the asset pool and drives this port.
+    .pal_load_valid_i          (palld_ld_valid),
+    .pal_load_ready_o          (palld_ld_ready),
+    .pal_load_op_i             (palld_ld_op),
+    .pal_load_slot_i           (palld_ld_slot),
+    .pal_load_gen_i            (palld_ld_gen),
+    .pal_load_idx_i            (palld_ld_idx),
+    .pal_load_rgb565_i         (palld_ld_rgb565),
+    .pal_load_crc_ok_i         (palld_ld_crc_ok),
     // REAL: GEOM.SETUP's own area, the twenty-first field of the triangle
     // packet whose other twenty arrive as `st_*` two lines below. See the
     // `st_area2` declaration for why this is 47 bits of a 48-bit value and
@@ -27989,6 +28024,138 @@ module zhao_console_core
     .recipe_count_mismatch_o(mat_recipe_count_mismatch_o),
     .fetch_denied_o         (mat_fetch_denied_o)
   );
+
+  // ==========================================================================
+  // TEXTURE.PALETTELOAD -- the palette identity's producer (I13CLOSE,
+  // 2026-09-26, owner completion ruling 2026-09-22 item 3)
+  // ==========================================================================
+  //
+  // WHAT CHANGED, STATED AGAINST THE SENTENCES THAT SAID IT COULD NOT.
+  // `zhao_material_window.sv`'s header said "for a CLUT format the pair is real
+  // and nothing in this console produces it: NO RATIFIED MATERIAL FIELD CARRIES
+  // THE PALETTE'S IDENTITY", and this file's own flat-request block published
+  // `MAT_PALETTE_SLOT_C`/`MAT_PALETTE_GEN_C` as constants because of it. The
+  // first clause was true. THE SECOND WAS NOT: `MaterialRecord.palette_base` is
+  // a `u32` that `spec/commands.zidl` documents as "CLUT modes only; 0 when no
+  // sample is a CLUT mode", and the oracle reads the palette FROM that address.
+  // The field was ratified, projected by MATERIAL.RESOLVE on
+  // `rsp_palette_base_o`, and carried to nobody.
+  //
+  // WHAT WAS ACTUALLY MISSING was a block that made that address RESIDENT in
+  // one of the island's four palette slots. `pal_load_*` -- the palette RAM's
+  // BEGIN/WRITE/END port -- left this module as EIGHT BOUNDARY INPUTS and the
+  // smoke tied every one of them to zero, so no palette slot in this console
+  // had ever been written. That is the ruling's own shape: "an opcode plus
+  // descriptors referring to data that ONLY THE TESTBENCH CAN INJECT is not
+  // completion. Reuse PublishResource and the existing validated resource
+  // mechanisms wherever applicable."
+  //
+  // AND THAT IS WHY IT READS VRAM RATHER THAN THE HPS ARENA, which is the one
+  // place it differs from `u_twod_asset`, the other half of the same ruling.
+  // A TWOD_PAGE never travels to VRAM because `spec/cartridge.md` 4f ruled that
+  // the compositor has no memory client; a palette is not in that position --
+  // that file says palette data is "a SUBTYPE of TEXTURE_PAGE, not a separate
+  // family ... rather than growing an unrelated loader path", and the asset
+  // pool is already open to this subsystem on ENGINE1. So NO cartridge kind is
+  // allocated, NO ABI field moves, `zhao_cmd_exec` gains no fork, and a palette
+  // arrives through the same PublishResource -> MEM.UPLOAD -> VRAM path the
+  // smoke already runs for the MATERIAL_SET.
+  //
+  // THE SHIM BELOW IS FIELD MAPPING, not arbitration, exactly as
+  // MATERIAL.RESOLVE's is. EIGHT BYTES a request, sixty-four requests a
+  // palette: `mem_rsp_valid_i` has no `ready`, and the destination port takes
+  // one 16-bit entry per cycle, so a 64-byte line would have to be absorbed
+  // into a 512-bit shadow register to feed a four-cycle drain. The block's own
+  // header carries that trade. The 27-bit narrowing is the same one MEM.UPLOAD
+  // and MATERIAL.RESOLVE make, and the block refuses a base whose extent does
+  // not fit in 27 bits rather than truncating it.
+  zhao_guard_req_t palld_guard_req;
+  zhao_guard_rsp_t palld_guard_rsp;
+  logic            palld_beat_valid;
+  logic [63:0]     palld_beat_data;
+  logic            palld_mem_req_valid;
+  logic [31:0]     palld_mem_req_addr;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // `ok` is the acceptance verdict; only a DENIAL changes what the loader does,
+  // and a denial ends the load with `ld_crc_ok_o` low so the RESOLVER refuses
+  // residency. Address bits above VRAM's 27 cannot be reached: the loader's own
+  // `bad_base_c` refuses a base whose 512-byte extent leaves the arena, and it
+  // tests that one bit wider than the address so the sum cannot wrap.
+  wire             palld_rsp_ok_unused   = palld_guard_rsp.ok;
+  wire [4:0]       palld_addr_hi_unused  = palld_mem_req_addr[31:27];
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  always_comb begin
+    palld_guard_req        = '0;
+    palld_guard_req.valid  = palld_mem_req_valid;
+    palld_guard_req.write  = 1'b0;
+    palld_guard_req.client = ZHAO_CLIENT_ENGINE1;
+    palld_guard_req.addr   = palld_mem_req_addr[ZHAO_VRAM_ADDR_BITS-1:0];
+    palld_guard_req.len    = 7'd8;
+    // EXACTLY the eight byte lanes the request names. MEM.GUARD's `shape_ok`
+    // demands a mask equal to the length's; an all-ones mask on an eight-byte
+    // read is refused on SHAPE, which is the trap MATERIAL.RESOLVE's shim
+    // records having fallen into at 32 bytes.
+    palld_guard_req.be     = 64'h0000_0000_0000_00FF;
+  end
+
+  logic       palld_ld_valid, palld_ld_ready, palld_ld_crc_ok;
+  logic [1:0] palld_ld_op, palld_ld_slot;
+  logic [7:0] palld_ld_gen, palld_ld_idx;
+  logic [15:0] palld_ld_rgb565;
+
+  logic        palld_q_valid, palld_q_ready, palld_r_valid, palld_r_ready, palld_r_owned;
+  logic [31:0] palld_q_base;
+  logic [1:0]  palld_r_slot;
+  logic [7:0]  palld_r_gen;
+
+  zhao_texture_palette_load #(
+    .SLOTS(4), .ENTRIES(256), .GENW(8), .ADDR_BITS(ZHAO_VRAM_ADDR_BITS)
+  ) u_texture_palette_load (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the lookup, from `u_material_window` below, on the RESOLVED
+    // record's own `palette_base`. It is asked once per CLUT span, after the
+    // span has drained, and it always answers.
+    .q_valid_i (palld_q_valid),
+    .q_ready_o (palld_q_ready),
+    .q_base_i  (palld_q_base),
+    .r_valid_o (palld_r_valid),
+    .r_ready_i (palld_r_ready),
+    .r_owned_o (palld_r_owned),
+    .r_slot_o  (palld_r_slot),
+    .r_gen_o   (palld_r_gen),
+
+    // REAL: requester I of `u_geom_mem_adapter`, the same ENGINE1 asset-pool
+    // window MATERIAL.RESOLVE reads its records through.
+    .mem_req_valid_o (palld_mem_req_valid),
+    .mem_req_ready_i (palld_guard_rsp.ready),
+    .mem_req_addr_o  (palld_mem_req_addr),
+    .mem_rsp_valid_i (palld_beat_valid),
+    .mem_rsp_data_i  (palld_beat_data),
+    .mem_rsp_denied_i(palld_guard_rsp.violation),
+
+    // REAL: the island's palette RAM, through the shell's programming port.
+    .ld_valid_o  (palld_ld_valid),
+    .ld_ready_i  (palld_ld_ready),
+    .ld_op_o     (palld_ld_op),
+    .ld_slot_o   (palld_ld_slot),
+    .ld_gen_o    (palld_ld_gen),
+    .ld_idx_o    (palld_ld_idx),
+    .ld_rgb565_o (palld_ld_rgb565),
+    .ld_crc_ok_o (palld_ld_crc_ok),
+
+    .lookups_o        (pal_ld_lookups_o),
+    .hits_o           (pal_ld_hits_o),
+    .loads_o          (pal_ld_loads_o),
+    .evictions_o      (pal_ld_evictions_o),
+    .entries_written_o(pal_ld_entries_o),
+    .denied_o         (pal_ld_denied_o),
+    .base_refused_o   (pal_ld_base_refused_o),
+    .gen_zero_loads_o (pal_ld_gen_zero_o)
+  );
+
   // --------------------------------------------------------------------------
   // GEOM.MEM_ADAPTER.  The whole reason the geometry front end can be in this
   // console at all: two logical requesters, one permitted client.  It forces
@@ -28073,6 +28240,16 @@ module zhao_console_core
     .h_beat_valid_o(lb_beat_valid),
     .h_beat_data_o (lb_beat_data),
 
+    // REAL: requester I, TEXTURE.PALETTELOAD's CLUT palette reader
+    // (I13CLOSE, 2026-09-26). Eight bytes a request and nothing at all once a
+    // palette is resident, on the same pool, client and direction as the eight
+    // above -- 5f's condition for joining here rather than opening a second
+    // ENGINE1 path. It counts its own entries, so it takes no `last`.
+    .i_req_i       (palld_guard_req),
+    .i_rsp_o       (palld_guard_rsp),
+    .i_beat_valid_o(palld_beat_valid),
+    .i_beat_data_o (palld_beat_data),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -28088,6 +28265,7 @@ module zhao_console_core
     .jobs_f_o     (geom_ma_jobs_f_o),
     .jobs_g_o     (geom_ma_jobs_g_o),
     .jobs_h_o     (geom_ma_jobs_h_o),
+    .jobs_i_o     (geom_ma_jobs_i_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
@@ -29238,6 +29416,19 @@ module zhao_console_core
     .rsp_effect_tag_i       (mat_rsp_effect_tag_c),
     .rsp_stencil_ref_i      (mat_rsp_stencil_ref_c),
     .rsp_sample0_modes_i    (mat_rsp_sample0_modes_o),
+    // REAL: the resolved record's own `palette_base`, and the ask it drives.
+    // `u_texture_palette_load` is composed above; it is asked ONCE per CLUT
+    // span, after the drain, and it always answers -- so a palette that cannot
+    // be made resident publishes a counted zero rather than stalling the span.
+    .rsp_palette_base_i     (mat_rsp_palette_base_o),
+    .pal_req_valid_o        (palld_q_valid),
+    .pal_req_ready_i        (palld_q_ready),
+    .pal_req_base_o         (palld_q_base),
+    .pal_rsp_valid_i        (palld_r_valid),
+    .pal_rsp_ready_o        (palld_r_ready),
+    .pal_rsp_owned_i        (palld_r_owned),
+    .pal_rsp_slot_i         (palld_r_slot),
+    .pal_rsp_gen_i          (palld_r_gen),
 
     // REAL: the published material, into the flat request below.
     .pub_valid_o           (mw_pub_valid),
@@ -29255,6 +29446,10 @@ module zhao_console_core
     .pub_mat_frag_state_o  (mw_pub_mat_frag_state),
     .pub_effect_tag_o      (mw_pub_effect_tag),
     .pub_stencil_ref_o     (mw_pub_stencil_ref),
+    // THE PALETTE HALF OF THE PUBLISHED RECORD, latched by the same enable as
+    // `pub_valid_q` and therefore not an independently advancing queue.
+    .pub_palette_slot_o      (mw_pub_palette_slot),
+    .pub_palette_generation_o(mw_pub_palette_gen),
 
     .resolves_o                (mat_win_resolves_o),
     .switches_o                (mat_win_switches_o),
@@ -29264,6 +29459,7 @@ module zhao_console_core
     .no_record_o               (mat_win_no_record_o),
     .selector_overflow_o       (mat_win_selector_overflow_o),
     .clut_unowned_o            (mat_win_clut_unowned_o),
+    .clut_owned_o              (mat_win_clut_owned_o),
     .no_material_spans_o       (mat_win_no_material_spans_o),
     .mode_refused_o            (mat_win_mode_refused_o),
     .err_unpublished_o         (mat_win_err_unpublished_o),
@@ -29302,12 +29498,17 @@ module zhao_console_core
   //   [11:10]   response_class         THE BINDING PAGE's, witnessed from the
   //             material record's tmu_mode (see the window's header and the
   //             owner decision in FINDINGS-texmat2).
-  //   [9:8]     palette_slot           THE BINDING PAGE's, and ZERO IS ITS LAW
-  //   [7:0]     palette_generation     for a direct format:
+  //   [9:8]     palette_slot           THE BINDING PAGE's, witnessed. For a
+  //   [7:0]     palette_generation     DIRECT format ZERO IS THE LAW --
   //             `binding_row_legal` REFUSES a direct row whose
-  //             {palette_generation, palette_slot} is not zero. For a CLUT row
-  //             they are real and unproduced, and `mat_win_clut_unowned_o`
-  //             counts every material that would need them.
+  //             {palette_generation, palette_slot} is not zero -- and the
+  //             window publishes zero for every non-CLUT span accordingly.
+  //             FOR A CLUT ROW THEY ARE NOW PRODUCED (I13CLOSE, 2026-09-26):
+  //             `u_texture_palette_load` owns the island's four palette slots,
+  //             is asked on the resolved record's `palette_base`, and answers
+  //             the {slot, generation} the row's witness has to equal.
+  //             `mat_win_clut_owned_o` counts the ones that got a real pair and
+  //             `mat_win_clut_unowned_o` the ones that could not.
   //
   // THE VERTEX COLOUR IS THE REMAINING HALF OF ENTRY I20 and it is left at its
   // constants deliberately rather than invented: GEOM.VATTR holds a per-VERTEX
@@ -29317,8 +29518,14 @@ module zhao_console_core
   localparam logic [ 7:0] MAT_LOD_Q4_4_C     = 8'd0;    // level 0, mip_enable low
   localparam logic [23:0] MAT_BASE_RGB_C     = 24'hFF_FF_FF;  // white: the record's own colour, unmodulated
   localparam logic [ 7:0] MAT_BASE_ALPHA_C   = 8'hFF;   // opaque -- owner ruling R48
-  localparam logic [ 1:0] MAT_PALETTE_SLOT_C = 2'd0;    // the direct-format row's law
-  localparam logic [ 7:0] MAT_PALETTE_GEN_C  = 8'd0;    // the direct-format row's law
+  // MAT_PALETTE_SLOT_C / MAT_PALETTE_GEN_C WERE HERE AND ARE GONE, 2026-09-26.
+  // They were `2'd0` and `8'd0` with the comment "the direct-format row's law",
+  // which was true of a direct row and was ALSO the only palette identity this
+  // console could present -- so a CLUT row could bind exactly one palette, and
+  // generation zero was the one generation the resolver refused. Both halves of
+  // that are repaired: the pair below comes off `u_material_window`'s published
+  // record, and it is ZERO for a non-CLUT span because the WINDOW publishes
+  // zero there, which is the same law arriving from its owner.
 
   wire [297:0] mat_flat_request_c = {
       mw_pub_sample_count,                      // [297:296]
@@ -29331,8 +29538,8 @@ module zhao_console_core
       MAT_BASE_RGB_C,                           // [43:20]
       MAT_BASE_ALPHA_C,                         // [19:12]
       mw_pub_response_class,                    // [11:10]
-      MAT_PALETTE_SLOT_C,                       // [9:8]
-      MAT_PALETTE_GEN_C                         // [7:0]
+      mw_pub_palette_slot,                      // [9:8]
+      mw_pub_palette_gen                        // [7:0]
   };
 
   // Before anything is published the request is ALL ZERO, which is the legal

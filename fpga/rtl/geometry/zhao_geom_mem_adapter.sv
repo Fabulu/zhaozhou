@@ -1,4 +1,4 @@
-// zhao_geom_mem_adapter.sv -- SEVEN logical ENGINE1 readers, one ENGINE1 client.
+// zhao_geom_mem_adapter.sv -- NINE logical ENGINE1 readers, one ENGINE1 client.
 //
 // Law: reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt 12
 //      spec/memory_rules.md 5f (the asset pool window, ENGINE1, read-only)
@@ -30,7 +30,9 @@
 //
 // (2026-09-19: requester C and `jobs_c_o` were ADDED for MATERIAL.RESOLVE;
 // A's and B's ports and counters kept their names, and the directed test
-// below runs against the widened adapter with C held idle.)
+// below runs against the widened adapter with C held idle.  2026-09-26:
+// requester I for TEXTURE.PALETTELOAD, by the same rule and with the same
+// consequence -- every earlier requester keeps its port names and counters.)
 //
 // PORTS, DEFAULTS AND BEHAVIOUR WERE UNCHANGED BY THE MOVE. `tests/geometry/
 // geom_mem_adapter_directed.cpp` is untouched and is the evidence for that:
@@ -174,6 +176,36 @@ module zhao_geom_mem_adapter
     output var logic            h_beat_valid_o,
     output var logic [63:0]     h_beat_data_o,
 
+    // Requester I, TEXTURE.PALETTELOAD's CLUT palette reader
+    // (`zhao_texture_palette_load`).  The SAME asset pool, the SAME client, the
+    // SAME read-only direction as the eight above, which is
+    // spec/memory_rules.md 5f's condition for joining here rather than opening
+    // a second ENGINE1 path.
+    //
+    // IT IS THE SHORTEST-BURST REQUESTER ON THIS SHARE and that is deliberate
+    // rather than accidental: it asks for EIGHT BYTES at a time, sixty-four
+    // times per palette, because its consumer -- the palette RAM's
+    // BEGIN/WRITE/END port -- takes one 16-bit entry per cycle and
+    // `mem_rsp_valid_i` cannot be stalled.  A 64-byte line would buy latency
+    // nobody needs at the price of a 512-bit shadow register; that reasoning
+    // is in `zhao_texture_palette_load.sv`'s header.  The consequence for
+    // THIS block is the one that matters here: I's turns are short, so the
+    // round robin's N-1 bound costs the other eight requesters one eight-byte
+    // read each rather than one 64-byte line.
+    //
+    // ITS TRAFFIC IS PER PALETTE RESIDENCY CHANGE, not per draw and not per
+    // fragment: a resident palette answers from this block's tag with no
+    // memory traffic at all.
+    //
+    // `i_beat_last_o` IS NOT BROUGHT OUT, for G's and H's reason: the reader
+    // takes exactly one beat per request and judges completeness from its own
+    // entry count, so a `last` it never reads would be a port nothing drives a
+    // decision from.
+    input  var zhao_guard_req_t i_req_i,
+    output var zhao_guard_rsp_t i_rsp_o,
+    output var logic            i_beat_valid_o,
+    output var logic [63:0]     i_beat_data_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -190,6 +222,7 @@ module zhao_geom_mem_adapter
     output var logic [31:0]     jobs_f_o,          // ...and F
     output var logic [31:0]     jobs_g_o,          // ...and G
     output var logic [31:0]     jobs_h_o,          // ...and H
+    output var logic [31:0]     jobs_i_o,          // ...and I
     output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
@@ -201,24 +234,25 @@ module zhao_geom_mem_adapter
   // share: a leaf test's generic client input must never be able to reach the
   // production guard through this path.
   //
-  // THE N-REQUESTER CORE (902949ea), at N=8 since requester H landed 2026-09-23
+  // THE N-REQUESTER CORE (902949ea), at N=9 since requester I landed 2026-09-26
+  // for TEXTURE.PALETTELOAD's CLUT palette reader; at N=8 since requester H landed 2026-09-23
   // for GEOM.LADDERBANK's creature-form page reader; at N=7 since G landed 2026-09-22
   // for GEOM.POSE's page reader (F landed 2026-09-21, C on 2026-09-19). Its
   // round robin is bounded at N-1 turns, so C's addition lengthens A's and B's
   // worst-case wait by at most one 32-byte record -- and it is the SAME core the
   // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
   // two-cycle verdict law is re-derived here.
-  zhao_guard_req_t [7:0] s_req;
-  zhao_guard_rsp_t [7:0] s_rsp;
-  logic            [7:0] s_bv;
-  // G and H take no `last`, so bits 6 and 7 of this vector are driven by the
-  // share and read by nothing. Named UNUSED here rather than left for the
+  zhao_guard_req_t [8:0] s_req;
+  zhao_guard_rsp_t [8:0] s_rsp;
+  logic            [8:0] s_bv;
+  // G, H and I take no `last`, so bits 6, 7 and 8 of this vector are driven by
+  // the share and read by nothing. Named UNUSED here rather than left for the
   // linter to find.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic            [7:0] s_bl;
+  logic            [8:0] s_bl;
   /* verilator lint_on UNUSEDSIGNAL */
   logic           [63:0] s_bd;
-  logic      [7:0][31:0] s_jobs;
+  logic      [8:0][31:0] s_jobs;
 
   assign s_req[0] = a_req_i;
   assign s_req[1] = b_req_i;
@@ -228,6 +262,7 @@ module zhao_geom_mem_adapter
   assign s_req[5] = f_req_i;
   assign s_req[6] = g_req_i;
   assign s_req[7] = h_req_i;
+  assign s_req[8] = i_req_i;
   assign a_rsp_o = s_rsp[0];
   assign b_rsp_o = s_rsp[1];
   assign c_rsp_o = s_rsp[2];
@@ -236,6 +271,7 @@ module zhao_geom_mem_adapter
   assign f_rsp_o = s_rsp[5];
   assign g_rsp_o = s_rsp[6];
   assign h_rsp_o = s_rsp[7];
+  assign i_rsp_o = s_rsp[8];
   assign a_beat_valid_o = s_bv[0];
   assign b_beat_valid_o = s_bv[1];
   assign c_beat_valid_o = s_bv[2];
@@ -244,6 +280,7 @@ module zhao_geom_mem_adapter
   assign f_beat_valid_o = s_bv[5];
   assign g_beat_valid_o = s_bv[6];
   assign h_beat_valid_o = s_bv[7];
+  assign i_beat_valid_o = s_bv[8];
   assign a_beat_last_o  = s_bl[0];
   assign b_beat_last_o  = s_bl[1];
   assign c_beat_last_o  = s_bl[2];
@@ -258,6 +295,7 @@ module zhao_geom_mem_adapter
   assign f_beat_data_o  = s_bd;
   assign g_beat_data_o  = s_bd;
   assign h_beat_data_o  = s_bd;
+  assign i_beat_data_o  = s_bd;
   assign jobs_a_o = s_jobs[0];
   assign jobs_b_o = s_jobs[1];
   assign jobs_c_o = s_jobs[2];
@@ -266,9 +304,10 @@ module zhao_geom_mem_adapter
   assign jobs_f_o = s_jobs[5];
   assign jobs_g_o = s_jobs[6];
   assign jobs_h_o = s_jobs[7];
+  assign jobs_i_o = s_jobs[8];
 
   zhao_mem_share_n #(
-    .N         (8),
+    .N         (9),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (

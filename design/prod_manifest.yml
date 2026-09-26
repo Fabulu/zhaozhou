@@ -465,6 +465,15 @@ top:
   # sampler its texels.
   - zhao_twod_cmd
   - zhao_twod_asset
+  # TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26). TWOD.ASSET's sibling under the
+  # SAME ruling clause -- "any required legitimate asset/palette loading
+  # producer" -- for the TEXTURE island rather than the compositor. A counted
+  # TOP for the reason the four above are: it is instantiated in
+  # `zhao_console_core`, it instantiates nothing itself, and it sits BESIDE
+  # MATERIAL.RESOLVE in the core's series, answering the material window's
+  # palette ask and driving the island's `pal_load_*` port -- which were eight
+  # BOUNDARY INPUTS the smoke tied to zero until it landed.
+  - zhao_texture_palette_load
   # TWOD.SAMPLER, built 2026-09-19. The texel-request-to-colour block between
   # the two above and POST.COMPOSITE. It is counted because the console does not
   # merely intend to have it -- it is instantiated in zhao_console_core and the

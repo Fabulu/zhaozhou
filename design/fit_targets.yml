@@ -2495,6 +2495,11 @@ targets:
       # testbench. Ledger, manifest and this list are three different acts.
       - fpga/rtl/compositor/zhao_twod_cmd.sv
       - fpga/rtl/compositor/zhao_twod_asset.sv
+      # TEXTURE.PALETTELOAD, composed 2026-09-26 (I13CLOSE). The same ruling
+      # clause as TWOD.ASSET above, for the TEXTURE island: the palette a CLUT
+      # material names now arrives through PublishResource instead of through
+      # eight boundary inputs a testbench drives.
+      - fpga/rtl/texture/zhao_texture_palette_load.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
@@ -3066,6 +3071,11 @@ targets:
       # 2026-09-20, texmat2). No new arithmetic and no memory: a small FSM,
       # one published record and an occupancy counter.
       - fpga/rtl/texture/zhao_material_window.sv
+      # TEXTURE.PALETTELOAD, composed 2026-09-26 (I13CLOSE). It is the ONLY
+      # writer of the island's palette RAM -- `pal_load_*` were eight boundary
+      # inputs until today -- so a source list without it cannot elaborate the
+      # console at all, which is how it was noticed.
+      - fpga/rtl/texture/zhao_texture_palette_load.sv
       # MEASURE.TOKENS, composed on its budget side 2026-09-19 (cmdmem, R18/R33).
       - fpga/rtl/measure/zhao_measure_tokens.sv
       # MEASURE.SEALPLAN, composed 2026-09-26 (SEALPLAN, entry I56). It is the
@@ -3518,6 +3528,11 @@ targets:
       # they name reachable without a testbench.
       - fpga/rtl/compositor/zhao_twod_cmd.sv
       - fpga/rtl/compositor/zhao_twod_asset.sv
+      # TEXTURE.PALETTELOAD, composed 2026-09-26 (I13CLOSE). The same ruling
+      # clause as TWOD.ASSET above, for the TEXTURE island: the palette a CLUT
+      # material names now arrives through PublishResource instead of through
+      # eight boundary inputs a testbench drives.
+      - fpga/rtl/texture/zhao_texture_palette_load.sv
       # POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195).
       # Three files because the gap was three separate things: the ART LAW
       # (`_tag`, R195's coefficients, every one a parameter), R5's tile-local

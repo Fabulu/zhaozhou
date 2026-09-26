@@ -1064,6 +1064,12 @@ module tb_zhao_console_core_smoke
   logic [31:0]  mat_win_drain_stall_o, mat_win_answer_stall_o;
   logic [31:0]  mat_win_occupancy_max_o, mat_win_no_record_o;
   logic [31:0]  mat_win_selector_overflow_o, mat_win_clut_unowned_o;
+  logic [31:0]  mat_win_clut_owned_o;
+  logic [31:0]  geom_ma_jobs_i_o;
+  // TEXTURE.PALETTELOAD's evidence (I13CLOSE, 2026-09-26).
+  logic [31:0]  pal_ld_lookups_o, pal_ld_hits_o, pal_ld_loads_o;
+  logic [31:0]  pal_ld_evictions_o, pal_ld_entries_o, pal_ld_denied_o;
+  logic [31:0]  pal_ld_base_refused_o, pal_ld_gen_zero_o;
   // Owner ruling 1, 2026-09-22: the NO_MATERIAL mode's census and its fault.
   logic [31:0]  mat_win_no_material_spans_o, mat_win_mode_refused_o;
   logic [31:0]  mat_win_err_unpublished_o, mat_win_err_underflow_o;
@@ -1339,14 +1345,12 @@ module tb_zhao_console_core_smoke
   logic [3:0]  cfg_rsp_status_o;
   logic [7:0]  cfg_rsp_page_generation_o;
   logic [7:0]  active_page_generation_o;
-  logic        pal_load_valid_i;
-  logic        pal_load_ready_o;
-  logic [1:0]  pal_load_op_i;
-  logic [1:0]  pal_load_slot_i;
-  logic [7:0]  pal_load_gen_i;
-  logic [7:0]  pal_load_idx_i;
-  logic [15:0] pal_load_rgb565_i;
-  logic        pal_load_crc_ok_i;
+  // `pal_load_*` LEFT THE CORE'S EDGE 2026-09-26 (I13CLOSE). This bench drove
+  // all eight to ZERO, which is precisely the state the owner's completion
+  // ruling calls "data that only the testbench can inject" -- except that not
+  // even the testbench injected any, so no palette slot in this console had
+  // ever been written. `u_texture_palette_load` writes them now, out of a
+  // published resource, and these eight nets are gone with the ports.
   logic [46:0]  tri_area2_i;
   // THE THREE ATTRIBUTE PLANES ARE GONE FROM HERE, and their absence is the
   // whole point. They were core INPUTS this bench drove to zero; the core now
@@ -4613,13 +4617,6 @@ module tb_zhao_console_core_smoke
     //  aperture, so the core no longer HAS those ports -- zero occurrences in
     //  `zhao_console_core.sv`. Keeping the two lines would have been an older
     //  version of the seam, driving signals that no longer exist.)
-    pal_load_valid_i = '0;
-    pal_load_op_i = '0;
-    pal_load_slot_i = '0;
-    pal_load_gen_i = '0;
-    pal_load_idx_i = '0;
-    pal_load_rgb565_i = '0;
-    pal_load_crc_ok_i = '0;
     tri_area2_i = '0;
     // -GlowTag NO LONGER DRIVES A PORT FROM HERE, and that is the point of the
     // change rather than a side effect of it. The tag is set on the MATERIAL
@@ -9167,6 +9164,29 @@ module tb_zhao_console_core_smoke
              mat_win_answer_stall_o, mat_win_occupancy_max_o, mat_win_no_record_o,
              mat_win_selector_overflow_o, mat_win_clut_unowned_o,
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    // TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26). Printed BESIDE the window's
+    // line rather than folded into it, because the two answer different
+    // questions: `clut_owned`/`clut_unowned` say what the WINDOW published, and
+    // these say what the PRODUCER did. `gen_zero` is the one to read first --
+    // it counts loads issued at generation ZERO, the value
+    // `zhao_texture_palette_res_v2` refused outright until today, so a non-zero
+    // here is the repair being USED and not merely being present.
+    $display("SMOKE: palload  lookups=%0d hits=%0d loads=%0d evictions=%0d entries=%0d gen_zero=%0d denied=%0d base_refused=%0d clut[owned/unowned]=[%0d %0d] jobs_i=%0d",
+             pal_ld_lookups_o, pal_ld_hits_o, pal_ld_loads_o, pal_ld_evictions_o,
+             pal_ld_entries_o, pal_ld_gen_zero_o, pal_ld_denied_o,
+             pal_ld_base_refused_o, mat_win_clut_owned_o, mat_win_clut_unowned_o,
+             geom_ma_jobs_i_o);
+    // A LAW, NOT A PINNED NUMBER: a completed load writes EXACTLY 256 entries,
+    // whatever the fixture's material count. A load that wrote fewer never
+    // reached its END, and the resolver would have refused residency for it --
+    // so this equality and `clut_unowned` reading zero are two independent
+    // statements about the same transfer.
+    if (pal_ld_entries_o != (pal_ld_loads_o * 32'd256))
+      $fatal(1, "SMOKE: TEXTURE.PALETTELOAD wrote %0d entries for %0d load(s) -- a palette load is 256 entries or it is not a load",
+             pal_ld_entries_o, pal_ld_loads_o);
+    if (pal_ld_denied_o != 32'd0 || pal_ld_base_refused_o != 32'd0)
+      $fatal(1, "SMOKE: TEXTURE.PALETTELOAD refused %0d base(s) and was denied %0d fetch(es) -- the fixture names a palette this console cannot read",
+             pal_ld_base_refused_o, pal_ld_denied_o);
     if (mat_win_err_unpublished_o != 32'd0 || mat_win_err_underflow_o != 32'd0)
       $fatal(1, "SMOKE: the material window's structural guards fired (unpublished %0d, underflow %0d) -- a triangle reached the door under a material nobody resolved",
              mat_win_err_unpublished_o, mat_win_err_underflow_o);

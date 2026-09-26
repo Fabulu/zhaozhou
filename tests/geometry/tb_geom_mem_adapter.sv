@@ -141,10 +141,14 @@ module tb_geom_mem_adapter
       // 2026-09-23 (SHADOWRIDE). HELD IDLE and NAMED for the reasons C..G are.
       // H has no `beat_last` port either, for G's reason.
       .h_req_i('0), .h_rsp_o(), .h_beat_valid_o(), .h_beat_data_o(),
+      // Requester I, TEXTURE.PALETTELOAD's CLUT palette reader, added
+      // 2026-09-26 (I13CLOSE). HELD IDLE and NAMED for the reasons C..H are.
+      // I has no `beat_last` port either, for G's reason.
+      .i_req_i('0), .i_rsp_o(), .i_beat_valid_o(), .i_beat_data_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(), .jobs_g_o(), .jobs_h_o(),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(), .jobs_e_o(), .jobs_f_o(), .jobs_g_o(), .jobs_h_o(), .jobs_i_o(),
       .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)

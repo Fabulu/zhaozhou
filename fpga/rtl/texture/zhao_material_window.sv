@@ -73,10 +73,29 @@
 //     ARGB1555, ARGB4444) `binding_row_legal` REQUIRES
 //     `{palette_generation, palette_slot} == 0` -- so publishing zero is the
 //     binding page's own law, not an invented value, and the witness is exact.
-//     For a CLUT format the pair is real and nothing in this console produces
-//     it: no ratified material field carries the palette's identity.  That is
-//     not hidden -- `clut_unowned_o` COUNTS every material published with a
-//     CLUT class, so the gap is loud at the exact moment it would matter.
+//
+//     FOR A CLUT FORMAT THE PAIR IS NOW PRODUCED, 2026-09-26 (I13CLOSE).  This
+//     header used to end "and nothing in this console produces it: no ratified
+//     material field carries the palette's identity".  The first clause was
+//     true and the second was NOT: `MaterialRecord.palette_base` is the
+//     palette's ratified name and the oracle reads the palette from it -- what
+//     was missing was a block that made that address RESIDENT.
+//     `zhao_texture_palette_load` is that block, and this one asks it, on the
+//     resolved record's own `palette_base`, before it publishes.
+//
+//     THE ASK IS A STATE, NOT A WIRE, and that is the whole reason it is safe.
+//     ST_PAL is entered from ST_WAIT only for a CLUT record, only after the
+//     span has already DRAINED, and `t_valid_o` is gated on ST_RUN -- so no
+//     triangle can be emitted against a half-formed material.  The pair is
+//     latched by the SAME enable that sets `pub_valid_q`, one more field of one
+//     published record.
+//
+//     `clut_unowned_o` SURVIVES AND NARROWS.  It used to count every CLUT
+//     material, because none of them had an identity; it now counts a CLUT
+//     material whose palette could not be made resident -- a null, misaligned
+//     or out-of-VRAM `palette_base`, or a denied fetch.  `clut_owned_o` is its
+//     companion, and the pair is what makes a ZERO on either side a
+//     measurement instead of a silence.
 //   * response_class.  `spec/commands.zidl` ratifies
 //     `MaterialSample.modes[3:0]` as "tmu_mode u4 nearest/bilinear/CLUT/direct"
 //     and NEVER ASSIGNS THE NUMBERS.  Searched: `spec/`, `reference/`,
@@ -262,6 +281,11 @@ module zhao_material_window #(
     input  wire        [ 7:0]       rsp_base_binding_i,
     input  wire                     rsp_selector_overflow_i,
     input  wire        [ 7:0]       rsp_sample0_modes_i,
+    // THE PALETTE'S RATIFIED NAME, MaterialRecord.palette_base -- an ADDRESS,
+    // and the field the oracle reads the palette from.  Zero when no sample is
+    // a CLUT mode, which is the record's own law and is why a zero base is a
+    // refusal here rather than a slot.
+    input  wire        [31:0]       rsp_palette_base_i,
     // ---- THE MATERIAL'S FRAGMENT PROFILE (FRAGSTATE, 2026-09-25) ----------
     // MATERIAL.RESOLVE's projection of `MaterialRecord.fragment_state` and
     // `fragment_decl`.  `rsp_frag_declared_i` is the AUTHORITY SELECTOR and it
@@ -308,6 +332,26 @@ module zhao_material_window #(
     output logic       [ 7:0]       pub_effect_tag_o,
     output logic       [ 7:0]       pub_stencil_ref_o,
 
+    // ---- THE PALETTE IDENTITY (I13CLOSE, 2026-09-26) -----------------------
+    // The resolved record's `palette_base` goes out on `pal_req_base_o` and the
+    // owner of the island's four palette slots answers with the {slot,
+    // generation} pair the binding row's witness has to equal.  Every outcome
+    // is an ANSWER -- R20's law, which is why this cannot deadlock the span.
+    output logic                    pal_req_valid_o,
+    input  logic                    pal_req_ready_i,
+    output logic       [31:0]       pal_req_base_o,
+    input  logic                    pal_rsp_valid_i,
+    output logic                    pal_rsp_ready_o,
+    input  logic                    pal_rsp_owned_i,
+    input  logic       [ 1:0]       pal_rsp_slot_i,
+    input  logic       [ 7:0]       pal_rsp_gen_i,
+
+    // The published pair.  ZERO for every non-CLUT span, which is the DIRECT
+    // row's own legality law rather than a default -- `binding_row_legal`
+    // refuses a direct row whose pair is non-zero.
+    output logic       [ 1:0]       pub_palette_slot_o,
+    output logic       [ 7:0]       pub_palette_generation_o,
+
     // ---- evidence ---------------------------------------------------------
     output logic       [31:0]       resolves_o,
     output logic       [31:0]       switches_o,
@@ -316,7 +360,15 @@ module zhao_material_window #(
     output logic       [31:0]       occupancy_max_o,
     output logic       [31:0]       no_record_o,
     output logic       [31:0]       selector_overflow_o,
+    // A FAULT, NARROWED 2026-09-26: a CLUT material whose palette could not be
+    // made resident.  Before the producer existed this counted every CLUT
+    // material, because none of them had an identity at all.
     output logic       [31:0]       clut_unowned_o,
+    // ITS COMPANION, and the reason `clut_unowned_o` reading zero is evidence:
+    // a CLUT material that DID get a real {slot, generation}.  Two counters
+    // that must sum to the CLUT spans resolved, moved by two arms of one
+    // decision -- so a zero on either side is a measurement and not a silence.
+    output logic       [31:0]       clut_owned_o,
     // CENSUS, NOT A FAULT: spans published in `MATMODE_NONE`. The ruling names
     // this mode lawful, so the number that matters beside it is `resolves_o`
     // and `no_record_o` NOT moving for those spans -- three independent
@@ -359,6 +411,7 @@ module zhao_material_window #(
   localparam logic [2:0] ST_DRAIN  = 3'd1;   // hold, waiting for the span to empty
   localparam logic [2:0] ST_REQ    = 3'd2;   // hold, offering the resolve
   localparam logic [2:0] ST_WAIT   = 3'd3;   // hold, waiting for the answer
+  localparam logic [2:0] ST_PAL    = 3'd4;   // hold, resolving a CLUT palette
 
   logic [2:0]  st_q;
   logic        pub_valid_q;
@@ -380,6 +433,12 @@ module zhao_material_window #(
   logic [31:0] pub_mat_state_q;
   logic [7:0]  pub_tag_q;
   logic [7:0]  pub_sref_q;
+
+  // The palette half of the published record, and the ask it came from.
+  logic [1:0]  pub_pslot_q;
+  logic [7:0]  pub_pgen_q;
+  logic [31:0] pal_base_q;
+  logic        pal_asked_q;
 
   // The pending request, captured from the triangle that asked for it.  It is
   // captured ONCE, on the transition out of ST_RUN, while that triangle is
@@ -442,6 +501,16 @@ module zhao_material_window #(
   assign pub_mat_frag_state_o  = pub_mat_state_q;
   assign pub_effect_tag_o      = pub_tag_q;
   assign pub_stencil_ref_o     = pub_sref_q;
+  assign pub_palette_slot_o       = pub_pslot_q;
+  assign pub_palette_generation_o = pub_pgen_q;
+
+  // ---- the palette ask ----------------------------------------------------
+  // One outstanding lookup, offered once and then awaited: `pal_asked_q` is the
+  // whole of the sequencing, and both sides are functions of the state and of
+  // that one bit, never of each other, so the pair cannot lock.
+  assign pal_req_valid_o = (st_q == ST_PAL) && !pal_asked_q;
+  assign pal_req_base_o  = pal_base_q;
+  assign pal_rsp_ready_o = (st_q == ST_PAL) && pal_asked_q;
 
   // ---- the request --------------------------------------------------------
   assign req_valid_o        = (st_q == ST_REQ);
@@ -531,6 +600,11 @@ module zhao_material_window #(
       no_record_o           <= 32'd0;
       selector_overflow_o   <= 32'd0;
       clut_unowned_o        <= 32'd0;
+      clut_owned_o          <= 32'd0;
+      pub_pslot_q           <= 2'd0;
+      pub_pgen_q            <= 8'd0;
+      pal_base_q            <= 32'd0;
+      pal_asked_q           <= 1'b0;
     end else begin
       // THE CONTRADICTORY DECLARATION, COUNTED. The ready is high on this
       // clock (`t_ready_o` is `refuse_c || ...`), so this is one count per
@@ -615,7 +689,9 @@ module zhao_material_window #(
         ST_WAIT: begin
           answer_stall_cycles_o <= answer_stall_cycles_o + 32'd1;
           if (rsp_valid_i) begin
-            pub_valid_q <= 1'b1;
+            // `pub_valid_q` IS DECIDED AT THE BOTTOM OF THIS ARM, not here: a
+            // CLUT record goes to ST_PAL first and must not be published until
+            // its palette identity exists.  It used to be raised on this line.
             // Only a MATERIAL_BACKED span reaches this state, so the mode
             // published here is that one. It is loaded by the SAME enable as
             // the record beside it -- one more field of one published record,
@@ -638,8 +714,17 @@ module zhao_material_window #(
               pub_mat_state_q <= rsp_frag_state_i;
               pub_tag_q       <= rsp_effect_tag_i;
               pub_sref_q      <= rsp_stencil_ref_i;
-              if (rsp_class_c == CLS_CLUT_C)
-                clut_unowned_o <= clut_unowned_o + 32'd1;
+              // THE PALETTE HALF.  A non-CLUT record publishes the DIRECT
+              // row's own legality law -- `binding_row_legal` REFUSES a direct
+              // row whose {palette_generation, palette_slot} is not zero -- and
+              // a CLUT record goes to ST_PAL to be given a real one.
+              if (rsp_class_c == CLS_CLUT_C) begin
+                pal_base_q  <= rsp_palette_base_i;
+                pal_asked_q <= 1'b0;
+              end else begin
+                pub_pslot_q <= 2'd0;
+                pub_pgen_q  <= 8'd0;
+              end
             end else begin
               // R20's defined fault material: a surface that takes no sample.
               // It is published, so the stream runs; it is counted, so the
@@ -673,7 +758,41 @@ module zhao_material_window #(
             end
             if (rsp_selector_overflow_i)
               selector_overflow_o <= selector_overflow_o + 32'd1;
-            st_q <= ST_RUN;
+            // A CLUT record is NOT published here.  `pub_valid_q` stays low
+            // through ST_PAL so the span cannot be read half-formed -- the
+            // drain has already emptied it and `t_valid_o` is gated on ST_RUN,
+            // so this is belt and braces rather than the only guard, and it is
+            // cheaper than arguing that the window nobody can look through is
+            // safe to leave open.
+            if (rsp_has_record_i && (rsp_class_c == CLS_CLUT_C)) begin
+              pub_valid_q <= 1'b0;
+              st_q        <= ST_PAL;
+            end else begin
+              pub_valid_q <= 1'b1;
+              st_q        <= ST_RUN;
+            end
+          end
+        end
+
+        // THE PALETTE ASK.  Counted on the SAME counter as ST_WAIT, because it
+        // is the same thing from the span's point of view: the window is
+        // holding the stream while the answer it will publish is assembled.
+        ST_PAL: begin
+          answer_stall_cycles_o <= answer_stall_cycles_o + 32'd1;
+          if (pal_req_valid_o && pal_req_ready_i) pal_asked_q <= 1'b1;
+          if (pal_rsp_valid_i && pal_rsp_ready_o) begin
+            // AN UNOWNED PALETTE PUBLISHES ZERO AND IS COUNTED.  It does NOT
+            // publish the previous span's pair, and it does not hold the
+            // stream: the witness will then fail at the binding resolver and
+            // the fragment takes the typed refusal, which is loud, rather than
+            // sampling somebody else's colours, which is not.
+            pub_pslot_q <= pal_rsp_owned_i ? pal_rsp_slot_i : 2'd0;
+            pub_pgen_q  <= pal_rsp_owned_i ? pal_rsp_gen_i  : 8'd0;
+            if (pal_rsp_owned_i) clut_owned_o   <= clut_owned_o   + 32'd1;
+            else                 clut_unowned_o <= clut_unowned_o + 32'd1;
+            pal_asked_q <= 1'b0;
+            pub_valid_q <= 1'b1;
+            st_q        <= ST_RUN;
           end
         end
 

@@ -1873,6 +1873,8 @@ module zhao_console_board
   // the share, and this is the number that says so rather than a claim that it
   // is light.
   output logic [31:0] geom_ma_jobs_h_o,
+  // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
+  output logic [31:0] geom_ma_jobs_i_o,
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
@@ -2717,6 +2719,25 @@ module zhao_console_board
   // slot and generation as witnesses and NOTHING in this console produces
   // them. See FINDINGS-texmat2's owner decision.
   output logic [31:0]             mat_win_clut_unowned_o,
+  // ITS COMPANION (I13CLOSE, 2026-09-26). `clut_unowned_o` used to count
+  // every CLUT material, because none of them had a palette identity at all;
+  // it now counts one whose palette could not be made resident. A fault
+  // counter that narrows needs a census beside it or its zero is a silence.
+  output logic [31:0]             mat_win_clut_owned_o,
+
+  // ---- TEXTURE.PALETTELOAD evidence (I13CLOSE, 2026-09-26) ---------------
+  // `pal_ld_gen_zero_o` is the one to read first: it counts loads issued at
+  // GENERATION ZERO, which is the value `zhao_texture_palette_res_v2` used to
+  // refuse outright, so a non-zero here is the repair being USED rather than
+  // merely being present.
+  output logic [31:0]             pal_ld_lookups_o,
+  output logic [31:0]             pal_ld_hits_o,
+  output logic [31:0]             pal_ld_loads_o,
+  output logic [31:0]             pal_ld_evictions_o,
+  output logic [31:0]             pal_ld_entries_o,
+  output logic [31:0]             pal_ld_denied_o,
+  output logic [31:0]             pal_ld_base_refused_o,
+  output logic [31:0]             pal_ld_gen_zero_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
   // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
@@ -3047,14 +3068,18 @@ module zhao_console_board
   output logic [3:0]  cfg_rsp_status_o,
   output logic [7:0]  cfg_rsp_page_generation_o,
   output logic [7:0]  active_page_generation_o,
-  input  logic        pal_load_valid_i,
-  output logic        pal_load_ready_o,
-  input  logic [1:0]  pal_load_op_i,
-  input  logic [1:0]  pal_load_slot_i,
-  input  logic [7:0]  pal_load_gen_i,
-  input  logic [7:0]  pal_load_idx_i,
-  input  logic [15:0] pal_load_rgb565_i,
-  input  logic        pal_load_crc_ok_i,
+  // `pal_load_*` LEFT THIS EDGE 2026-09-26 (I13CLOSE), all eight of them, and
+  // for the reason `tri_area2_i` and the three attribute planes left it: the
+  // producer is composed below. `u_texture_palette_load` reads a published
+  // palette out of the asset pool on ENGINE1 requester I and drives the
+  // island's BEGIN/WRITE/END port, so the palette RAM is written by the
+  // console rather than poked in from outside it.
+  //
+  // THE RULING IS EXPLICIT AND IT IS QUOTED IN THE BLOCK'S OWN HEADER: "this
+  // includes any required legitimate asset/palette loading producer. AN OPCODE
+  // PLUS DESCRIPTORS REFERRING TO DATA THAT ONLY THE TESTBENCH CAN INJECT IS
+  // NOT COMPLETION" (owner completion ruling 2026-09-22 item 3). The smoke tied
+  // all eight to zero, which is that sentence's exact shape.
 
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
   // `tri_area2_i` USED TO BE HERE and is now driven internally by
@@ -5098,6 +5123,7 @@ module zhao_console_board
       .geom_ma_jobs_f_o                   (geom_ma_jobs_f_o),
       .geom_ma_jobs_g_o                   (geom_ma_jobs_g_o),
       .geom_ma_jobs_h_o                   (geom_ma_jobs_h_o),
+      .geom_ma_jobs_i_o                   (geom_ma_jobs_i_o),
       .geom_lb_pages_o                    (geom_lb_pages_o),
       .geom_lb_records_o                  (geom_lb_records_o),
       .geom_lb_pages_dropped_o            (geom_lb_pages_dropped_o),
@@ -5484,6 +5510,15 @@ module zhao_console_board
       .mat_win_no_record_o                (mat_win_no_record_o),
       .mat_win_selector_overflow_o        (mat_win_selector_overflow_o),
       .mat_win_clut_unowned_o             (mat_win_clut_unowned_o),
+      .mat_win_clut_owned_o               (mat_win_clut_owned_o),
+      .pal_ld_lookups_o                   (pal_ld_lookups_o),
+      .pal_ld_hits_o                      (pal_ld_hits_o),
+      .pal_ld_loads_o                     (pal_ld_loads_o),
+      .pal_ld_evictions_o                 (pal_ld_evictions_o),
+      .pal_ld_entries_o                   (pal_ld_entries_o),
+      .pal_ld_denied_o                    (pal_ld_denied_o),
+      .pal_ld_base_refused_o              (pal_ld_base_refused_o),
+      .pal_ld_gen_zero_o                  (pal_ld_gen_zero_o),
       .mat_win_err_unpublished_o          (mat_win_err_unpublished_o),
       .mat_win_err_underflow_o            (mat_win_err_underflow_o),
       .mat_win_no_material_spans_o        (mat_win_no_material_spans_o),
@@ -5621,14 +5656,6 @@ module zhao_console_board
       .cfg_rsp_status_o                   (cfg_rsp_status_o),
       .cfg_rsp_page_generation_o          (cfg_rsp_page_generation_o),
       .active_page_generation_o           (active_page_generation_o),
-      .pal_load_valid_i                   (pal_load_valid_i),
-      .pal_load_ready_o                   (pal_load_ready_o),
-      .pal_load_op_i                      (pal_load_op_i),
-      .pal_load_slot_i                    (pal_load_slot_i),
-      .pal_load_gen_i                     (pal_load_gen_i),
-      .pal_load_idx_i                     (pal_load_idx_i),
-      .pal_load_rgb565_i                  (pal_load_rgb565_i),
-      .pal_load_crc_ok_i                  (pal_load_crc_ok_i),
       .fill_req_ready_i                   (fill_req_ready_i),
       .fill_req_valid_o                   (fill_req_valid_o),
       .fill_req_addr_o                    (fill_req_addr_o),
