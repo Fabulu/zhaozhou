@@ -1325,9 +1325,9 @@ module zhao_shell_top_v2
   //
   // WIDENING THE WINDOW WAS MEASURED, NOT ASSUMED. `-MapOnly` on
   // `zhao_debug_counters`, `-Device 5CSEBA6U23I7`, rows
-  // `zhao_debug_counters@giantrefs-scout-cat40` and
-  // `zhao_debug_counters@giantrefs-scout-cat353` in
-  // `reports/synthesis/zhao_block_fit.json`:
+  // `zhao_debug_counters@giantrefs-cat40` and
+  // `zhao_debug_counters@giantrefs-cat353` in
+  // `reports/synthesis/zhao_block_fit.json`, both `rtlCleanAtHead: true`:
   //     CATALOG_IDS =  40  ->   2,579 registers,  0 block memory bits
   //     CATALOG_IDS = 353  ->  22,611 registers,  0 block memory bits
   // **+20,032 registers, and ZERO of it in memory.** The bank accepts up to

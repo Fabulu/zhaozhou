@@ -6933,8 +6933,8 @@
 //      `geom_binner_triangles_culled` (id 241) and the two arena quantities
 //      (no catalog name at all) CANNOT be published. Measured, `-MapOnly`,
 //      `-Device 5CSEBA6U23I7`:
-//        zhao_debug_counters@giantrefs-scout-cat40    2,579 reg, 0 memory bits
-//        zhao_debug_counters@giantrefs-scout-cat353  22,611 reg, 0 memory bits
+//        zhao_debug_counters@giantrefs-cat40    2,579 reg, 0 memory bits
+//        zhao_debug_counters@giantrefs-cat353  22,611 reg, 0 memory bits
 //      **+20,032 REGISTERS, none of it in memory** -- the bank takes PROV_N
 //      scattered writes per cycle at variable addresses, so it cannot infer
 //      RAM, and 0 memory bits at BOTH widths is that argument measured. On a
