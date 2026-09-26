@@ -97,7 +97,23 @@ module tb_zhao_geom_paramarena
     parameter int unsigned MAX_TRIS     = 16384,
     parameter int unsigned MAX_CHUNKS   = 16384,
     parameter int unsigned CHUNK_IDS    = 14,
-    parameter int unsigned WALK_MAX     = 4096
+    parameter int unsigned WALK_MAX     = 4096,
+    // ---- THE ON-CHIP HALF IS OPTIONAL, AND THAT IS THE EVIDENCE ------------
+    // BINARENA, 2026-09-26, console entry I55. With `HAVE_ONCHIP = 0` the
+    // identity queue, `zhao_geom_binner_v2` and `zhao_geom_chunkser` are NOT
+    // ELABORATED, so the elaboration does not need those files at all and the
+    // `geom_arenabin_directed` ctest compiles from a source list that does not
+    // contain them.
+    //
+    // That is a stronger claim than "their counters read zero". A counter at
+    // zero is a claim about a run; a module absent from the closure is a claim
+    // about the CIRCUIT, and it is the claim owner directive section 4 is
+    // actually making when it refuses "a parallel legacy on-chip frame arena
+    // that still supplies the actual pixels". Both are checked -- the directed
+    // test also asserts the on-chip counters are zero in the composed case --
+    // but only this one cannot be satisfied by a path that merely happened not
+    // to run.
+    parameter bit          HAVE_ONCHIP  = 1'b1
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -139,6 +155,17 @@ module tb_zhao_geom_paramarena
     // `ck_ids_i[k]` in the driver IS id k -- no packing arithmetic in C++.
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
 
+    // ---- the chain patch (BINARENA 2026-09-26, console entry I55) ----------
+    // Driven straight from the bench so `geom_paramarena_directed` can exercise
+    // the patch and FIRE `link_illegal_o` with legal stimulus -- an index at or
+    // above the allocation cursor is an ordinary input value, so this guard
+    // needs no committed mutant.
+    input  var logic        lk_valid_i,
+    output var logic        lk_ready_o,
+    input  var logic [17:0] lk_index_i,
+    input  var logic [31:0] lk_next_i,
+    input  var logic [15:0] lk_count_i,
+
     // ---- the guard lease the arena OWNS ------------------------------------
     output var logic pb_lease_valid_o,
     output var logic pb_wr_view_o,
@@ -160,6 +187,8 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] verts_written_o,
     output var logic [31:0] tris_written_o,
     output var logic [31:0] chunks_written_o,
+    output var logic [31:0] links_written_o,
+    output var logic [31:0] link_illegal_o,
     output var logic [31:0] frames_published_o,
     output var logic [31:0] arena_guard_denied_o,
     output var logic [31:0] quota_overflow_o,
@@ -281,6 +310,56 @@ module tb_zhao_geom_paramarena
     // controller and SDRAM model already instantiated below; and then the REAL
     // `zhao_geom_paramwalk` reads them back.
     input  var logic        cs_enable_i,
+
+    // ======================= GEOM.ARENABIN, THE INDEPENDENT PRODUCER =======
+    // BINARENA, 2026-09-26, console entry I55. With `ab_enable_i` HIGH,
+    // `zhao_geom_arenabin` owns the arena's chunk and chain-patch intakes and
+    // NOTHING ELSE FILLS THEM. It is fed the same post-clip geometry the
+    // binner's port block below takes, plus the arena's own descriptor index,
+    // and it writes the chunk region through the same real guard, arbiter,
+    // controller and SDRAM model. `zhao_geom_paramwalk` then reads the chain
+    // back with no on-chip structure anywhere in the path.
+    input  var logic        ab_enable_i,
+    input  var logic        ab_geom_done_i,
+    input  var logic [5:0]  ab_grid_w_i,
+    input  var logic [5:0]  ab_grid_h_i,
+    input  var logic        ab_tri_valid_i,
+    output var logic        ab_tri_ready_o,
+    input  var logic signed [22:0] ab_kx0_i,
+    input  var logic signed [22:0] ab_ky0_i,
+    input  var logic signed [47:0] ab_kc0_i,
+    input  var logic signed [22:0] ab_kx1_i,
+    input  var logic signed [22:0] ab_ky1_i,
+    input  var logic signed [47:0] ab_kc1_i,
+    input  var logic signed [22:0] ab_kx2_i,
+    input  var logic signed [22:0] ab_ky2_i,
+    input  var logic signed [47:0] ab_kc2_i,
+    input  var logic [2:0]  ab_tl_i,
+    input  var logic signed [11:0] ab_min_x_i,
+    input  var logic signed [11:0] ab_max_x_i,
+    input  var logic signed [11:0] ab_min_y_i,
+    input  var logic signed [11:0] ab_max_y_i,
+    input  var logic [17:0] ab_arena_id_i,
+    input  var logic        ab_id_ok_i,
+    input  var logic [9:0]  ab_head_tile_i,
+    output var logic [31:0] ab_head_chunk_o,
+    output var logic        ab_head_valid_o,
+    output var logic        ab_frame_done_o,
+    output var logic [31:0] ab_tris_binned_o,
+    output var logic [31:0] ab_tris_unnamed_o,
+    output var logic [31:0] ab_refs_binned_o,
+    output var logic [31:0] ab_chunks_emitted_o,
+    output var logic [31:0] ab_links_patched_o,
+    output var logic [31:0] ab_tiles_with_refs_o,
+    output var logic [31:0] ab_chunk_refused_o,
+    output var logic [31:0] ab_intake_stall_o,
+    output var logic [31:0] ab_flush_cut_o,
+    output var logic [15:0] ab_max_tile_chunks_o,
+    output var logic        ab_overflow_o,
+    output var logic        ab_busy_o,
+    // The producer's own busy-clock meter, so the price this entry asks for is
+    // measured in the SAME unit on both sides -- clocks per tile reference.
+    output var logic [31:0] ab_busy_clocks_o,
 
     // ---- the binner's frame and triangle intake ----------------------------
     input  var logic        bin_frame_begin_i,
@@ -473,7 +552,8 @@ module tb_zhao_geom_paramarena
       // its frame ends and its writes retire, so the raw edge would
       // publish a frame whose tile lists are empty -- correct-looking and
       // wrong. This is exactly what `zhao_console_core` does.
-      .frame_end_i   (cs_enable_i ? cs_frame_done_o : frame_end_i),
+      .frame_end_i   (ab_enable_i ? ab_frame_done_o
+                                  : (cs_enable_i ? cs_frame_done_o : frame_end_i)),
       // THE READER'S OWN BUSY, not a bench input.  The drain precondition is
       // "no reader owns the view this seal is about to make the build target",
       // and the only thing that knows is the walker.
@@ -502,11 +582,27 @@ module tb_zhao_geom_paramarena
       .td_raster_i  (td_raster_i),
       .td_source_i  (td_source_i),
 
-      .ck_valid_i(cs_enable_i ? cs_ck_valid_w : ck_valid_i),
+      // ONE PRODUCER AT A TIME, AND THE ORDER SAYS WHICH. `ab_enable_i` takes
+      // precedence over `cs_enable_i`, so a test that raises both is running
+      // GEOM.ARENABIN while the on-chip serialiser offers into a port that is
+      // not listening. `geom_arenabin_directed` checks that rather than
+      // assuming it, because two producers on one intake is exactly the
+      // "parallel legacy arena" shape owner directive section 4 refuses.
+      .ck_valid_i(ab_enable_i ? ab_ck_valid_w
+                              : (cs_enable_i ? cs_ck_valid_w : ck_valid_i)),
       .ck_ready_o(arena_ck_ready_w),
-      .ck_next_i (cs_enable_i ? cs_ck_next_w  : ck_next_i),
-      .ck_count_i(cs_enable_i ? cs_ck_count_w : ck_count_i),
-      .ck_ids_i  (cs_enable_i ? cs_ck_ids_w   : ck_ids_i),
+      .ck_next_i (ab_enable_i ? ab_ck_next_w
+                              : (cs_enable_i ? cs_ck_next_w  : ck_next_i)),
+      .ck_count_i(ab_enable_i ? ab_ck_count_w
+                              : (cs_enable_i ? cs_ck_count_w : ck_count_i)),
+      .ck_ids_i  (ab_enable_i ? ab_ck_ids_w
+                              : (cs_enable_i ? cs_ck_ids_w   : ck_ids_i)),
+      .lk_valid_i(ab_enable_i ? ab_lk_valid_w : lk_valid_i),
+      .lk_ready_o(arena_lk_ready_w),
+      .lk_index_i(ab_enable_i ? ab_lk_index_w : lk_index_i),
+      .lk_next_i (ab_enable_i ? ab_lk_next_w  : lk_next_i),
+      .lk_count_i(ab_enable_i ? ab_lk_count_w : lk_count_i),
+
       .ck_accept_o   (ck_accept_o),
       .ck_alloc_id_o (ck_alloc_id_o),
 
@@ -550,6 +646,8 @@ module tb_zhao_geom_paramarena
       .verts_written_o    (verts_written_o),
       .tris_written_o     (tris_written_o),
       .chunks_written_o   (chunks_written_o),
+      .links_written_o    (links_written_o),
+      .link_illegal_o     (link_illegal_o),
       .frames_published_o (frames_published_o),
       .guard_denied_o     (arena_guard_denied_o),
       .quota_overflow_o   (quota_overflow_o),
@@ -1174,18 +1272,31 @@ module tb_zhao_geom_paramarena
   // ENTRY I54's LIVE CHAIN
   // ===========================================================================
   logic        pa_seal_fire_w;
-  logic        cs_ck_valid_w, cs_ck_ready_w, arena_ck_ready_w;
+  logic        cs_ck_valid_w, cs_ck_ready_w, arena_ck_ready_w, arena_lk_ready_w;
   logic [31:0] cs_ck_next_w;
   logic [15:0] cs_ck_count_w;
   logic [CHUNK_IDS*32-1:0] cs_ck_ids_w;
   logic [17:0] tidq_id_w;
 
+  // MODULE SCOPE, because the `ser_tap_*` assigns below read them and the
+  // producer half they come from is now inside a generate.
+  logic        cs_ser_req_w, cs_ser_done_w, cs_ser_valid_w, cs_ser_ready_w;
+  logic [17:0] cs_ser_tri_id_w;
+  logic [9:0]  cs_ser_tile_w;
+  logic        cs_ser_first_w, cs_ser_last_w;
+
   assign ck_ready_o    = arena_ck_ready_w;
-  assign ck_tap_fire_o  = cs_ck_valid_w && cs_ck_ready_w;
-  assign ck_tap_count_o = cs_ck_count_w;
-  assign ck_tap_id0_o   = cs_ck_ids_w[31:0];
-  assign ck_tap_id1_o   = cs_ck_ids_w[63:32];
-  assign ck_tap_next_o  = cs_ck_next_w;
+  // THE CHUNK TAP FOLLOWS WHICHEVER PRODUCER OWNS THE INTAKE. With
+  // `ab_enable_i` low this is byte-for-byte the serialiser tap the existing
+  // tests read; with it high the same four ports describe GEOM.ARENABIN's
+  // chunks, so `geom_arenabin_directed` can check a record as it is offered
+  // rather than only after it has been through SDRAM and come back.
+  assign ck_tap_fire_o  = ab_enable_i ? (ab_ck_valid_w && ab_ck_ready_w)
+                                      : (cs_ck_valid_w && cs_ck_ready_w);
+  assign ck_tap_count_o = ab_enable_i ? ab_ck_count_w : cs_ck_count_w;
+  assign ck_tap_id0_o   = ab_enable_i ? ab_ck_ids_w[31:0]  : cs_ck_ids_w[31:0];
+  assign ck_tap_id1_o   = ab_enable_i ? ab_ck_ids_w[63:32] : cs_ck_ids_w[63:32];
+  assign ck_tap_next_o  = ab_enable_i ? ab_ck_next_w : cs_ck_next_w;
   assign ser_tap_valid_o = cs_ser_valid_w && cs_ser_ready_w;
   assign ser_tap_id_o    = cs_ser_tri_id_w;
   assign ser_tap_tile_o  = cs_ser_tile_w;
@@ -1197,6 +1308,94 @@ module tb_zhao_geom_paramarena
   // the RETIRE beat with the acceptance as a payload bit, popped on the beat
   // the binner takes the triangle (the console's shell door), flushed on the
   // arena's own seal fire.
+  // ======================= GEOM.ARENABIN, THE INDEPENDENT PRODUCER =========
+  // ALWAYS ELABORATED, unlike the on-chip half below. It has no dependency on
+  // the binner, the identity queue or the serialiser, which is the point.
+  logic                    ab_ck_valid_w, ab_ck_ready_w;
+  logic [31:0]             ab_ck_next_w;
+  logic [15:0]             ab_ck_count_w;
+  logic [CHUNK_IDS*32-1:0] ab_ck_ids_w;
+  logic                    ab_lk_valid_w, ab_lk_ready_w;
+  logic [17:0]             ab_lk_index_w;
+  logic [31:0]             ab_lk_next_w;
+  logic [15:0]             ab_lk_count_w;
+
+  // The arena's two grants, routed to whichever producer owns the intake.
+  assign ab_ck_ready_w = arena_ck_ready_w && ab_enable_i;
+  assign ab_lk_ready_w = arena_lk_ready_w && ab_enable_i;
+  assign lk_ready_o    = arena_lk_ready_w && !ab_enable_i;
+
+  zhao_geom_arenabin #(
+      .GRID_W(24), .GRID_H(24), .TILES(576), .TIDX_W(10),
+      .STAGE_IDS(CHUNK_IDS), .ID_W(18), .CHIDX_W(18), .ACC_W(36)
+  ) u_arenabin (
+      .clk(clk), .rst_n(rst_n),
+      // THE ARENA'S OWN SEAL, not a bench pulse. `pa_seal_fire_w` is the clock
+      // the frame's quota and generation actually take effect on, which is
+      // what `zhao_geom_chunkser` takes below and what the console wires. A
+      // separate bench edge would let this block's frame and the arena's drift
+      // apart in simulation in a way the composed console cannot reproduce.
+      .frame_start_i(pa_seal_fire_w),
+      .geom_done_i  (ab_geom_done_i),
+      .grid_w_i(ab_grid_w_i), .grid_h_i(ab_grid_h_i),
+      .tri_valid_i(ab_tri_valid_i), .tri_ready_o(ab_tri_ready_o),
+      .tri_kx0_i(ab_kx0_i), .tri_ky0_i(ab_ky0_i), .tri_kc0_i(ab_kc0_i),
+      .tri_kx1_i(ab_kx1_i), .tri_ky1_i(ab_ky1_i), .tri_kc1_i(ab_kc1_i),
+      .tri_kx2_i(ab_kx2_i), .tri_ky2_i(ab_ky2_i), .tri_kc2_i(ab_kc2_i),
+      .tri_tl_i(ab_tl_i),
+      .tri_min_x_i(ab_min_x_i), .tri_max_x_i(ab_max_x_i),
+      .tri_min_y_i(ab_min_y_i), .tri_max_y_i(ab_max_y_i),
+      .tri_arena_id_i(ab_arena_id_i),
+      .tri_id_ok_i   (ab_id_ok_i),
+      .ck_valid_o   (ab_ck_valid_w),
+      .ck_ready_i   (ab_ck_ready_w),
+      .ck_next_o    (ab_ck_next_w),
+      .ck_count_o   (ab_ck_count_w),
+      .ck_ids_o     (ab_ck_ids_w),
+      .ck_alloc_id_i(ck_alloc_id_o),
+      .ck_accept_i  (ck_accept_o),
+      .lk_valid_o(ab_lk_valid_w),
+      .lk_ready_i(ab_lk_ready_w),
+      .lk_index_o(ab_lk_index_w),
+      .lk_next_o (ab_lk_next_w),
+      .lk_count_o(ab_lk_count_w),
+      .head_tile_i (ab_head_tile_i),
+      .head_chunk_o(ab_head_chunk_o),
+      .head_valid_o(ab_head_valid_o),
+      .bin_frame_done_o(ab_frame_done_o),
+      .tris_binned_o    (ab_tris_binned_o),
+      .tris_unnamed_o   (ab_tris_unnamed_o),
+      .refs_binned_o    (ab_refs_binned_o),
+      .chunks_emitted_o (ab_chunks_emitted_o),
+      .links_patched_o  (ab_links_patched_o),
+      .tiles_with_refs_o(ab_tiles_with_refs_o),
+      .chunk_refused_o  (ab_chunk_refused_o),
+      .intake_stall_o   (ab_intake_stall_o),
+      .flush_cut_o      (ab_flush_cut_o),
+      .max_tile_chunks_o(ab_max_tile_chunks_o),
+      .overflow_o       (ab_overflow_o),
+      .busy_o           (ab_busy_o)
+  );
+
+  // THE PRODUCER'S PRICE, IN THE SAME UNIT AS THE OTHER SIDE. Every clock the
+  // producer is busy, accumulated -- so `ab_busy_clocks_o / ab_refs_binned_o`
+  // is clocks per TILE REFERENCE, which is what `price_the_swap` divides on
+  // the on-chip side. Accumulated rather than latched-at-last-handshake,
+  // because this block's cost is dominated by SDRAM round trips that happen
+  // BETWEEN references and a span measurement would attribute them correctly
+  // only by accident.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)            ab_busy_clocks_o <= 32'd0;
+    else if (ab_busy_o)    ab_busy_clocks_o <= ab_busy_clocks_o + 32'd1;
+  end
+
+  // ======================= THE ON-CHIP HALF, WHICH IS OPTIONAL =============
+  // Explicit `generate` / `endgenerate` and an explicit `else`: Quartus 17
+  // rejects the implicit forms, `check_quartus17_syntax.py` scans `tests` too,
+  // and this file has no licence to be the exception.
+  generate
+  if (HAVE_ONCHIP) begin : g_onchip
+
   zhao_geom_tidq #(.ID_W(18), .DEPTH(8)) u_tidq (
       .clk        (clk),
       .rst_n      (rst_n),
@@ -1267,11 +1466,6 @@ module tb_zhao_geom_paramarena
       .arena_full_o(), .arena_used_o()
   );
 
-  logic        cs_ser_req_w, cs_ser_done_w, cs_ser_valid_w, cs_ser_ready_w;
-  logic [17:0] cs_ser_tri_id_w;
-  logic [9:0]  cs_ser_tile_w;
-  logic        cs_ser_first_w, cs_ser_last_w;
-
   // THE ARENA CURSOR THE TEST IS ALLOWED TO LIE ABOUT. `cs_alloc_skew_i` adds
   // one to the index the serialiser is shown WITHOUT changing the index the
   // arena actually uses, which is precisely a non-sequential allocator as the
@@ -1315,6 +1509,52 @@ module tb_zhao_geom_paramarena
       .pass_truncated_o (cs_truncated_o),
       .busy_o           ()
   );
+
+  end else begin : g_no_onchip
+    // THE ON-CHIP HALF IS ABSENT. Its outputs are driven to their inert values
+    // so the port list does not change shape between the two elaborations --
+    // a bench whose ports move with a parameter makes two different C++ APIs
+    // out of one header, and the driver would then silently read a field that
+    // has moved.
+    assign bin_tri_ready_o       = 1'b0;
+    assign bin_job_valid_o       = 1'b0;
+    assign bin_job_tile_x_o      = 12'sd0;
+    assign bin_job_tile_y_o      = 12'sd0;
+    assign bin_job_first_o       = 1'b0;
+    assign bin_job_last_o        = 1'b0;
+    assign bin_job_src_id_o      = 16'd0;
+    assign bin_drain_done_o      = 1'b0;
+    assign bin_tile_references_o = 32'd0;
+    assign bin_triangles_culled_o= 32'd0;
+    assign bin_overflow_o        = 1'b0;
+    assign cs_ck_valid_w         = 1'b0;
+    assign cs_ck_next_w          = 32'd0;
+    assign cs_ck_count_w         = 16'd0;
+    assign cs_ck_ids_w           = '0;
+    assign cs_chunks_o           = 32'd0;
+    assign cs_refs_o             = 32'd0;
+    assign cs_tiles_o            = 32'd0;
+    assign cs_chain_break_o      = 32'd0;
+    assign cs_sunk_o             = 32'd0;
+    assign cs_head_clash_o       = 32'd0;
+    assign cs_truncated_o        = 32'd0;
+    assign cs_frame_done_o       = 1'b0;
+    assign cs_head_chunk_o       = 32'hFFFF_FFFF;
+    assign cs_head_valid_o       = 1'b0;
+    assign tidq_underflow_o      = 32'd0;
+    assign tidq_overflow_o       = 32'd0;
+    assign tidq_unnamed_o        = 32'd0;
+    assign tidq_id_w             = 18'd0;
+    assign cs_ser_req_w          = 1'b0;
+    assign cs_ser_done_w         = 1'b0;
+    assign cs_ser_valid_w        = 1'b0;
+    assign cs_ser_ready_w        = 1'b0;
+    assign cs_ser_tri_id_w       = 18'd0;
+    assign cs_ser_tile_w         = 10'd0;
+    assign cs_ser_first_w        = 1'b0;
+    assign cs_ser_last_w         = 1'b0;
+  end
+  endgenerate
 
 endmodule
 

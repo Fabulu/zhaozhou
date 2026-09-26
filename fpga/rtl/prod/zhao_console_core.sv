@@ -7063,6 +7063,111 @@
 //      path's and the walker contributes nothing -- which is the demonstration
 //      this entry asks for, in the direction it can currently be given.
 //
+//      -- BINARENA, 2026-09-26. STILL TIED, AND THE THING WALKSWAP SAID WOULD
+//      CLOSE IT IS NOW BUILT. This entry is the campaign's own "DECISION or
+//      BUILD" lens applied to itself: WALKSWAP's refusal was correct and
+//      measured, and what it named as the way out was a BUILD, not a question.
+//
+//      BLOCKER 1 IS ANSWERED. `zhao_geom_arenabin` (GEOM.ARENABIN, new today)
+//      is the producer WALKSWAP's closing paragraph specified -- "a producer
+//      that fills the external arena WITHOUT the on-chip one -- tile binning
+//      performed against arena triangle ids directly". It bins the post-clip
+//      stream itself against `zhao_geom_paramarena.td_id_o` and writes 64-byte
+//      chunk records straight into the arena. It reads NO binner RAM. The
+//      claim is structural, not a counter at zero: `geom_arenabin_directed`
+//      elaborates the bench with `HAVE_ONCHIP = 0` and its source list
+//      contains no `zhao_geom_binner_v2.sv`, no `zhao_geom_chunkser.sv`, no
+//      `zhao_geom_tidq.sv` and no `zhao_geom_arena.sv` -- `tests/CMakeLists.txt`
+//      FAILS THE CONFIGURE if one leaks back in. 275 checks: the round trip
+//      through the real guard, arbiter, controller and SDRAM and back out
+//      through the real `zhao_geom_paramwalk`, with the arena index
+//      deliberately offset from any local index so a producer shipping a slot
+//      number would decode to the wrong descriptor with every range guard
+//      still passing. `geom_arenabin_price` adds 470 more with the whole
+//      legacy path compiled in and CLOCKED, and measures that it produced
+//      nothing -- which is the one form of that assertion that is not vacuous.
+//
+//      THE TRANSPOSE MOVED TO SDRAM, which is what directive section 4 asks
+//      for by name ("may move backing state to SDRAM rather than growing a
+//      frame-sized FPGA register file"). The binner holds the frame's whole
+//      reference array on chip -- about 360 Kbit at the shipped
+//      RENDER_CHUNKS = 8192 / CHUNK_REFS = 4. GEOM.ARENABIN holds ONE PARTIAL
+//      CHUNK PER TILE: 14 x 576 x 18b of staging and a 576-entry directory,
+//      about 169 Kbit, counted from the declarations and NOT fitted. The bound
+//      is per-TILE and constant, so the guaranteed giant costs exactly what a
+//      single triangle costs, and its reference capacity is the arena's SEALED
+//      CHUNK QUOTA rather than a second local REF_CAP to overflow.
+//
+//      ONE PORT WAS ADDED TO THE ARENA AND IT IS IN THIS CONSOLE'S CLOSURE.
+//      `lk_*` rewrites bytes 0..7 of an already written chunk. A SUBMISSION-
+//      ORDER producer cannot use `zhao_geom_chunkser`'s trick -- that block's
+//      own header says it emits `next = ck_alloc_id_i + 1` "because this block
+//      is the arena's only chunk producer AND OFFERS A TILE'S CHUNKS IN ORDER",
+//      which is true of a tile-major serialiser and false of a binner, where
+//      hundreds of other tiles' chunks may sit between one of a tile's chunks
+//      and the next. Holding them on chip is the frame-sized array the
+//      directive says to move; a backward chain delivers a tile newest-first
+//      and breaks the painter's order the binner keeps a tail pointer for. The
+//      patch is issued by the arena's OWN write engine from its OWN address
+//      register, is charged to the same retire gate, and the generation is
+//      still stamped by the arena -- that law is preserved, not excepted.
+//      `lk_valid_i` reads `1'b0` here because the producer that calls it is
+//      not composed; the console's behaviour is byte-identical to before.
+//
+//      THE PRICE, MEASURED ON THE PRODUCER SIDE, AND ONE POINT WOULD HAVE
+//      LIED. `busy_o` is high for a whole frame, which includes two sweeps of
+//      the 576-entry directory, so at the 27-reference scene the block reads
+//      86.41 clocks/ref -- alarming, and wrong. Two scene sizes solved for the
+//      line give 2,176 clocks/frame FIXED and 5.82 clocks/ref MARGINAL, i.e.
+//      5.88 clocks/ref at R7's 32,768-reference giant. For scale, the on-chip
+//      DRAIN above is 4.12 clocks/ref. The producer is therefore NOT the 7.3x
+//      problem; that figure is the CONSUMER side and this packet did not move
+//      it -- `price_the_swap` re-run at this commit still reports 4.12 and
+//      29.89 exactly.
+//
+//      AND THE COST THAT IS NEW: this block bins the LIVE stream, so it holds
+//      `tri_ready_o` low while writing a chunk, where `zhao_geom_chunkser`
+//      reads finished lists and is explicitly outside the raster path.
+//      `intake_stall_o` measures it: 8,093 clocks over a 1,600-reference
+//      frame, about 5 clocks per reference of backpressure on the geometry
+//      front end. A chunk FIFO would hide that behind a depth and was
+//      deliberately not added, because the first thing this entry needs is the
+//      measurement.
+//
+//      WHAT IS STILL REFUSED, AND IT IS THE HALF THIS ENTRY IS ACTUALLY ABOUT.
+//
+//      (1) `zhao_geom_arenabin` IS BUILT AND THIS CORE DOES NOT INSTANTIATE
+//          IT. (Said that way round deliberately: `check_entry_claims.py`
+//          keys on PROSE, and the phrase this sentence wants to use lands
+//          next to the name of a block that IS composed, so the tool reads
+//          the claim as being about the binner. It is not.) Instantiating it
+//          means retiring `u_geom_chunkser` as the arena's producer, which
+//          leaves the serialise pass in `zhao_geom_binner_v2` -- `ser_req_i`
+//          and seven `ser_*` outputs, exported through `zhao_shell_top_v2` as
+//          `render_ser_*` -- with no consumer, turning a live path into
+//          dangling ports and making entry I54's text false. That is a
+//          subsystem retirement on the block the fit budget is tightest on,
+//          and this packet is forbidden a console fit, so doing it here would
+//          be an unmeasured claim about the tightest budget in the design.
+//
+//      (2) BLOCKER 2 IS UNTOUCHED AND IS STILL 1,749 BITS. The producer
+//          changes who FILLS the external arena. It does not change who READS
+//          it. `job_*` still needs METAW = 1877 against the 16-byte
+//          descriptor's 128, so the raster swap still owes a SECOND
+//          GEOM.SETUP and GEOM.ATTRPACK back end fed from SDRAM plus the
+//          vertex-fetch arm. Nothing here reduces that.
+//
+//      (3) `paramwalk dirs/chunks/tris` IS STILL 0/0/0 AND THAT WAS A CHOICE.
+//          Wiring `walk_valid_i` to a tile sequencer over the head table would
+//          move `chunks_walked_o` and `tris_emitted_o` off zero tomorrow --
+//          `t_ready_i` is already `1'b1`. It would also be a producer driving
+//          into NOTHING: every `t_*` output is dangling, so the triangles
+//          would be counted and dropped. That is logic added to make a counter
+//          move, which is the exact shape the campaign's first rule refuses,
+//          and it is REFUSED here rather than taken. With a real consumer on
+//          `t_*` it is no longer a demonstration -- it IS the raster swap, and
+//          item (2) is its price.
+//
 // I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
 //      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
 //
@@ -9846,6 +9951,16 @@ module zhao_console_core
   output logic [31:0] geom_pa_verts_o,
   output logic [31:0] geom_pa_tris_o,
   output logic [31:0] geom_pa_chunks_o,
+  // BINARENA, 2026-09-26, console entry I55: the chain patch's two counters.
+  // `geom_pa_links_o` counts header rewrites that reached SDRAM;
+  // `geom_pa_link_bad_o` counts patches refused for naming a chunk the
+  // allocation cursor has not reached. Both read zero in this composition
+  // because nothing offers a patch, and both are brought OUT anyway -- a
+  // counter that cannot be read is not evidence about anything, including
+  // about being zero. The second is fired with legal stimulus in
+  // geom_arenabin_directed case 3, so neither owes a committed mutant.
+  output logic [31:0] geom_pa_links_o,
+  output logic [31:0] geom_pa_link_bad_o,
   output logic [31:0] geom_pa_frames_o,
   output logic [31:0] geom_pa_denied_o,
   output logic [31:0] geom_pa_overflow_o,
@@ -27108,6 +27223,29 @@ module zhao_console_core
       .ck_next_i   (cs_ck_next),
       .ck_count_i  (cs_ck_count),
       .ck_ids_i    (cs_ck_ids),
+
+      // ---- the chain patch: OFFERED, AND NOT YET ASKED FOR ----------------
+      // BINARENA, 2026-09-26, console entry I55. `zhao_geom_paramarena` can
+      // now rewrite an already-written chunk's header, which is what lets a
+      // SUBMISSION-ORDER producer build a forward chain. The producer that
+      // needs it -- `zhao_geom_arenabin` -- is built and tested and is NOT
+      // composed here; see entry I55 for why, and for what composing it costs.
+      //
+      // THIS IS NOT A TIE-OFF STANDING IN FOR MISSING FUNCTION, and the
+      // difference is worth the paragraph because the two look identical from
+      // a grep. `u_geom_chunkser` is the arena's chunk producer today and it
+      // NEVER PATCHES: its header states why in as many words -- it is
+      // tile-major, so a tile's next chunk is always the next allocation and
+      // `ck_alloc_id_i + 1` names it exactly. There is no work being skipped
+      // here and no value being faked; the intake simply has no caller while
+      // the caller it exists for is the one this entry has not composed. The
+      // console's behaviour is byte-identical to the composition before this
+      // port existed.
+      .lk_valid_i  (1'b0),
+      .lk_ready_o  (),
+      .lk_index_i  (18'd0),
+      .lk_next_i   (32'd0),
+      .lk_count_i  (16'd0),
       .ck_accept_o   (cs_ck_accept),
       .ck_alloc_id_o (cs_ck_alloc_id),
 
@@ -27135,6 +27273,13 @@ module zhao_console_core
       .verts_written_o     (geom_pa_verts_o),
       .tris_written_o      (geom_pa_tris_o),
       .chunks_written_o    (geom_pa_chunks_o),
+      // CONNECTED, NOT LEFT OPEN. `link_illegal_o` reads zero in this
+      // composition because nothing offers a patch -- but a counter left
+      // dangling cannot be read when something does, and "it was zero" would
+      // then be a claim about a wire nobody could see. Both go to the console's
+      // catalog beside the arena's other evidence.
+      .links_written_o     (geom_pa_links_o),
+      .link_illegal_o      (geom_pa_link_bad_o),
       .frames_published_o  (geom_pa_frames_o),
       .guard_denied_o      (geom_pa_denied_o),
       .quota_overflow_o    (geom_pa_overflow_o),

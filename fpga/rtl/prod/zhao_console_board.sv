@@ -1425,6 +1425,16 @@ module zhao_console_board
   output logic [31:0] geom_pa_verts_o,
   output logic [31:0] geom_pa_tris_o,
   output logic [31:0] geom_pa_chunks_o,
+  // BINARENA, 2026-09-26, console entry I55: the chain patch's two counters.
+  // `geom_pa_links_o` counts header rewrites that reached SDRAM;
+  // `geom_pa_link_bad_o` counts patches refused for naming a chunk the
+  // allocation cursor has not reached. Both read zero in this composition
+  // because nothing offers a patch, and both are brought OUT anyway -- a
+  // counter that cannot be read is not evidence about anything, including
+  // about being zero. The second is fired with legal stimulus in
+  // geom_arenabin_directed case 3, so neither owes a committed mutant.
+  output logic [31:0] geom_pa_links_o,
+  output logic [31:0] geom_pa_link_bad_o,
   output logic [31:0] geom_pa_frames_o,
   output logic [31:0] geom_pa_denied_o,
   output logic [31:0] geom_pa_overflow_o,
@@ -4797,6 +4807,8 @@ module zhao_console_board
       .geom_pa_verts_o                    (geom_pa_verts_o),
       .geom_pa_tris_o                     (geom_pa_tris_o),
       .geom_pa_chunks_o                   (geom_pa_chunks_o),
+      .geom_pa_links_o                    (geom_pa_links_o),
+      .geom_pa_link_bad_o                 (geom_pa_link_bad_o),
       .geom_pa_frames_o                   (geom_pa_frames_o),
       .geom_pa_denied_o                   (geom_pa_denied_o),
       .geom_pa_overflow_o                 (geom_pa_overflow_o),
