@@ -3541,3 +3541,93 @@ fit.** Queued: **NAVSERVICE**, to launch the moment a worker slot frees.
 **Register 5**, bare -- and I34 now splits into a material half (rides I13) and a
 nav half (the CPU service), **with the nav obligation closing only when that
 service is implemented, integrated and tested.**
+
+### 2026-09-26 - I56 CLOSED, TERRAIN DRAWS, NAV IS SERVED. REGISTER 5 -> 4.
+
+**THE FIRST CLOSURE OF THE CAMPAIGN.** SEALPLAN built the chain directive section 5
+specified end to end: `host -> SealFramePlan (ABI v4, 48 B) -> zhao_cmd_exec ->
+zhao_measure_sealplan -> zhao_geom_paramarena`. **The three hardcoded capacity
+literals are gone.** 99 directed checks; case 1 asserts *not one field equals its
+capacity*, which is the owner's acceptance test written as an assertion.
+
+**The committed mutant's finding is the good kind**: the `<` -> `<=` mutation is
+MORE PERMISSIVE, so `quota_overflow_o` reads **0**, nothing faults, no golden
+moves, **every result-checking test still passes -- and a chunk of the giant's
+reservation is silently gone.** That is invisible to every other instrument,
+which is exactly why the counter needed a mutant rather than an argument.
+
+**And a live defect found by composing, not reading:** `render_frame_begin_i` is
+a **held lease request**, so the old wiring **re-sealed the arena 2,531 times per
+frame** -- 2,531 view flips and cursor resets, invisible because the bench
+releases draws one line after the level drops. Repaired to 1.
+
+### TERRAIN DRAWS: raster pixels 2,560 -> 2,816
+
+**Oracle regenerated and agreeing exactly** (`clip submitted=144 clipped=69
+culled=0 setup=75`), new tile **(1,0)** that no mesh triangle touches, all six
+smoke forms passing.
+
+**THREE knobs, not the two the decision record predicted**, and the third is the
+one nobody would have guessed: with relief AND placement both correct the count
+was **still 2,560**, because terrain's 65 references reached the binner arena
+**after the frame was serialised**. Moving the compose pass inside the render
+frame gave the pixel.
+
+**Three corrections to my own decision record**, found by executing it: the
+staircase relief it cites **would have been wrong** (non-affine moves
+`lod_deviation`, the LOD level, the triangle count and the whole oracle); **the
+camera is not an interchangeable knob** and pitch does nothing, because a patch
+at index `iz` subtends `1/iz` scale-invariantly; and **`TRI_CAP = 128` is the
+real binder**, which walled an over-large fixture and returned `raster pixels`
+**STUCK at 2,560** -- a capacity limit wearing the costume of a terrain arm that
+had stopped drawing.
+
+### NAV IS SERVED -- AND I34 WAS NEVER MEASURING NAVIGATION
+
+`zref::nav::Service` ships inside `zhao_zref`, with **named callers**:
+`zgame::Wizards::advance_wizard`, the desktop host, and Upheaval's `uph_engine`.
+**113 + 77 checks green** on the production API -- wizards refuse impassable
+ground at every tick, a real `crater_ring` moves 38 cells inside its footprint
+and 0 outside, and a route goes 21 -> 27 steps under a band and back to
+**exactly 21** on expiry and on removal.
+
+**IT PUT THE SERVICE IN THE RIGHT PLACE BY CHECKING RATHER THAN ASSUMING.**
+`runtime/mister/` is **in no CMakeLists at all**; a service there would have
+reached neither the game nor ARM.
+
+**AND IT CORRECTED WHAT THE WHOLE CAMPAIGN HAD CONFLATED, MINE INCLUDED:
+`I34`'s register row is TERRAIN.PATCH's field-HEIGHT lane, an FPGA boundary
+tie-off. NAVIGATION WAS NEVER WHAT IT MEASURED.** The nav obligation is met and
+linked to the superseded publication requirement; **I34 stays open for an
+entirely different reason than a week of discussion assumed.**
+
+**Two phantoms in the tree**: `result_q: spec/qformats.md section nav-layer` has
+**zero "nav" hits in that file**, and the **"authored baseline" the owner's
+acceptance presumes does not exist** -- there is no authored nav layer in any
+terrain layer A-H. **`compose_lattice` already computed `out[3]` at every covered
+vertex and threw it away** -- a computed-but-unread lane hiding in the oracle.
+
+**Measured and honestly labelled:** ~457 us/tick rebuild, ~133 ns/query warm,
+60,120 bytes -- **x86-64 desktop; ARM UNVERIFIED**, with the rebuild counter
+asserted (200 rebuilds / 200,200 queries) **so the cheap number cannot hide a
+walk.**
+
+### THE CONSOLE SIZING MEASUREMENT IS STILL RUNNING
+
+Past synthesis, deep in placement. **Over 10,696 CPU-seconds.** Row
+`zhao_console_core@console-snapshot-20260926`, 289 sources, digest
+`a7c7a4593942`, sizing device `5CEBA9F31C7`.
+
+### WHERE THINGS STAND
+
+**Register 4**: `I13`, `I34` (the HEIGHT lane), `I55`, + `zhao_terrain_normalmap`
+disconnected. **Running: TERRAINTEX** (the first textured terrain pixel). Three
+red gates, **all proven inherited rather than assumed**: `refmodel_liveness`,
+`check_counter_ids`, `check_v3_banks`.
+
+**The uglies worth carrying forward:** `MAX_REFS == GIANT_REFS`, so **a giant
+frame admits ZERO ordinary references**; `TRI_CAP = 128` is the real binder, not
+the 32,768-reference arena; **311 of 351 catalog counters are structurally
+unpublishable** (+20,032 registers to widen); and `cnt_snap_ready_i` **was tied
+to zero in the smoke**, so every console counter was unobservable from the gating
+bench -- which makes historical counter evidence from that bench suspect.
