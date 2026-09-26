@@ -1,0 +1,101 @@
+﻿R31 CONTROL: ONE vertex record carries a nonzero reserved byte IN SDRAM, DIRECT polarity (passes when the batch drops and the frame completes)
+closure: 282 RTL sources from fit_targets.yml
+verilating
+declared model units: 74
+compiled 78 translation units
+linked 78 objects
+--- smoke run ---
+[bl8-align] zhao_sdram_model instrumentation ACTIVE (R243 D-SDRAM-A step 0)
+SMOKE: packet    records=13 command_bytes=656 pkt_len=696 setview=112
+SMOKE: record    off=0 opcode=0001 record_bytes=32 lawful=32
+SMOKE: record    off=32 opcode=f003 record_bytes=32 lawful=32
+SMOKE: record    off=64 opcode=0020 record_bytes=48 lawful=48
+SMOKE: record    off=112 opcode=0010 record_bytes=112 lawful=112
+SMOKE: record    off=224 opcode=0030 record_bytes=48 lawful=48
+SMOKE: record    off=272 opcode=0030 record_bytes=48 lawful=48
+SMOKE: record    off=320 opcode=0030 record_bytes=48 lawful=48
+SMOKE: record    off=368 opcode=0311 record_bytes=48 lawful=48
+SMOKE: record    off=416 opcode=0040 record_bytes=32 lawful=32
+SMOKE: record    off=448 opcode=0041 record_bytes=96 lawful=96
+SMOKE: record    off=544 opcode=0303 record_bytes=48 lawful=48
+SMOKE: record    off=592 opcode=0300 record_bytes=32 lawful=32
+SMOKE: record    off=624 opcode=0002 record_bytes=32 lawful=32
+SMOKE: terrcompose WAIT resident=1/3 after 362762 cycles | pl loaded=2 faulted=0 | mipfeed pages_mipped=1 | seq skipped=3 issued=0
+SMOKE: post       frames=1 passes=1 src_reads=2880 src_px=92160 line_fill=92160 out=92160 fault=0 unowned=0 share_waits=2787 waited=159981
+SMOKE: post       lease busy 928781 gpu cycles, frame_end to last retired write-back word (contract: ~103,680 work items for Z60; ~461,000 = five passes)
+SMOKE: post census sdram_busy=862051 (92%) bursts[e0 rd/wr, other]=[11520/23040, 31056] conflicts=29533 refresh_stalls=13368 share_reads_in_flight_clks=472143 fbw_px_stall=833305 src_starved=1399 src_blocked=824552
+SMOKE: twod band  descs=0 admitted=0 refused_budget=0 desc_overflow=0 bands=64 px=0 clipped=0 oob=0 underrun=10 addr_mismatch=0 order_inv=0 tint_dropped=0 blend_dropped=0
+SMOKE: echo       complete=1 torn=0 written=92160 dropped=0 fault=0
+SMOKE: post       raster-overwritten=0 (first drawn pixel 0x0000) | framebuffer after post differs in 0 word(s) | capture differs in 0 word(s)
+SMOKE: gouraud    0 of 0 drawn word(s) carry a COLOUR (the rest are the tile clear) -- GEOM.LIGHT lit 21 vertex/vertices and GEOM.VATTR stored 42 colour(s)
+SMOKE: look      looks=1 grade_entries=8 refused=0 overflow=0 | gain=5a bias=-256/37/255 flash=f81f amt=0 ink=07e0 grade=0 echo_arm=1
+SMOKE: cycles=1026474 frame_edges=3
+SMOKE: particles  read=30 written=36 survivors=30 updated=30
+SMOKE: particle->raster  projected=30 behind=30 ladder=30 expanded=0 | clipfeed particles=0 triangles=0 refused_range=0 stall_full=0 dq[refused/stray]=[0 0] | window no_material_spans=0 mode_refused=0 no_record=0 | untex_refused=0
+SMOKE: NOTE the particle-to-raster path is QUIESCENT in this fixture: PART.PROJECT projected 30, PART.LADDER made 30 decision(s), and PART.EXPAND emitted NO polygon particle -- so PART.CLIPFEED, the NO_MATERIAL span and GEOM.CLIPDOOR's third client were NEVER REACHED. THIS SMOKE IS NOT EVIDENCE ABOUT THAT PATH. tests/prod/partmat_acceptance.cpp and tests/particles/part_clipfeed_directed.cpp are.
+SMOKE: assetpath  considered=3 fetched=3 culled=0 refused[fmt/crc/gen/vc/tc/resv/bound]=[0 0 0 0 0 0 0]
+SMOKE: assetpath  meshlets=3 beats=120 denied[mf/af]=[0 0] footprint_refused=0 beat_err[trunc/over/unowned]=[0 0 0]
+SMOKE: desc crc   descriptors=3 fail=0 framing=0
+SMOKE: memadapter jobs[a/b]=[3 15] denied=0 contention=2 err[short/long/unowned]=[0 0 0]
+SMOKE: assemble   meshlets=3 triangles=8 refused[limits/index]=[0 0]
+SMOKE: vertid     tris=0 refs=0 published=0 reused=0 unshared=0
+SMOKE: vertid     opens=0 sunk=0 stall=0
+SMOKE: paramarena verts=0 tris=0 chunks=0 frames=1 unsealed=0
+SMOKE: paramarena denied=0 overflow=0 discarded=0 overrun=0 fault=0 src=0
+SMOKE: paramarena flipblock=0 pubblock=86 addrbad=0 scrcontend=0 retireunder=0
+SMOKE: paramalign arena_unaligned=0 walk_unaligned=0
+SMOKE: paramwalk  dirs=0 dirmiss=0 chunks=0 stale=0 illegal=0 depth=0
+SMOKE: paramwalk  tris=0 trisbad=0 cut=0 denied=0 short=0 stray=0 genrace=0
+SMOKE: geomwshare denied=0 contention=0 err[short/long/unowned]=[0 0 0] retireunowned=0 wbeatunowned=0 ledgerfull=0
+SMOKE: sdram      model_error=0 kinds[trcd/trp/trc/refresh/protocol/mrs]=000000
+SMOKE: vdecode    records_expected=24 decoded=21 refused[reserved/w0/format]=[3 0 0]
+SMOKE: geometry   skinned=21 vertices_sent=42 a_grants=72 landings=42 groups_opened=6 groups_sealed=6
+SMOKE: pose pal   served=21 bones_written=0 bone_unset=42 bone_oob=0 palettes_decoded=0
+SMOKE: rate       skin 21 moves, steady 59.10 clk/vertex | landings 42, steady 28.85 clk/landing | replay 0 view-tris, steady 0.00 clk/view-tri | frame span 1303 clk (first decode -> last release)
+SMOKE: loop       decode[0..1191] skin[9..1191] land[60..1243] replay[18446744073709547609..18446744073709547609] release=1303 | total=1303 clk
+SMOKE: aflat      GEOM.ASSETFETCH 15 line request(s): contention=170 clk, verdict+SDRAM wait=388 clk, beats=644 clk | 80.13 clk per 64-byte line
+SMOKE: invtx      IN-MESHLET vertex rate 84.71 clk/vertex over 8 vertices of meshlet 1 (the frame-wide figure on the rate line spans the gaps BETWEEN meshlets and is a different quantity)
+SMOKE: loop2      meshlets=3 retire[first=183 last=1303] steady_period=560.00 clk | af_release[n=3 first=175 last=1297] | meshlet2_first_decode=599
+SMOKE: skin norm  vertices=21 degenerate=0 reduced=0 fork_stall_cycles=18
+SMOKE: light      lit=21 seen=21 bad=0 last_rgb=64406/44459/31863 (reference 64406/44459/31863) adapter_refused=0 cfg_refused=0
+SMOKE: light env  cmd_envs=1 records=1 loads=2 superseded=0 gen=0
+SMOKE: replay     meshlets=3 handles=6 tri_in=8 tri_out=0 refused=0 missed=0 att_skew=0 view_bad=0
+SMOKE: vattr      landings=42 rows=42 colours=42 uv=21 lq_overflow=0 index_oob=0 look_oob=0 profile_mixed=0 dq_refused=0 dq_stray=0
+SMOKE: r31        holes=3 groups_poisoned=6 holes_early=0 replay_poisoned=8
+SMOKE: clip       submitted=0 clipped=0 culled=0 setup_submitted=0 (reference: 16 / 2 / 0 / 14)
+SMOKE: raster     pixels=0 bursts=0 issued=92160 retired=92160 busy=0 drained=1 fatal=0 stream_err=0 overflow=0
+SMOKE: renderlease leases_granted=1 refused=0 clears=1 frames_admitted=1
+SMOKE: terrain    tess_vertices=162 tess_refs=256 fills_forwarded=162 refs_forwarded=256 groups_opened=2 b_grants=162
+SMOKE: projector  a_grants=72 b_grants=162 contended=0 replay_triangles=256
+SMOKE: terrcompose hdr_headers=1 hdr_refused=0 ps_lattices=6 ps_vertices=6757 ps_cells=6361 place_patches=1 pt_samples=1089 | cc_filled=1 cc_served=0 cc_records=1089 cc_serving=1 cc_overrun=0 lat_oob=0 mat_cells=3289
+SMOKE: terruv    refs_taken=256 emitted=256 stale=0 pitch_clamped=0 pitch_illegal=0
+SMOKE: terrlight refs_taken=256 lights=256 shaded=256 normals=256 stale=0 degenerate=0 sat=0 degen_mismatch=0
+SMOKE: measure    snapshots=3
+SMOKE: spawn-on-collision: collisions_applied=6 contacts_stick=6 spawn_by_event=[0 0 6 0]
+SMOKE: children written=6, of which at the POST-CONTACT position (y=102)=6
+SMOKE: child accounting: requested=6 emitted=6 refused=0 written=6 dropped_cap=0 staging_stalls=0 max_in_tick=6
+SMOKE: particle store: seeds=1 refused=0 ticks=3 dropped=0 unseeded=0 rd_bursts=8 wr_bursts=9 read=30 written=36 ddr_rd_beats=60 ddr_records_landed=36 cur_buf=1 cur_count=12 c3_bursts=17 c3_wait=17
+SMOKE: particle store faults: bridge_errs=0 ticks_faulted=0 discarded=0 ; arbiter pend_dropped=0 mask=00000000
+SMOKE: terrain sample  particles=30 ground=0 no_ground=21 missed=9 faults=0 fills_landed=3 | tap answered=0 off_patch=3 faults=0 | collide unavailable=30
+SMOKE: PART.TABLE -- loads[upd/col/spw/crv]=[1 1 1 1] refused=0; 30 of 30 retires carried a5 from curve bucket 0; STICK contacts=6, collision spawns=6.
+SMOKE: species    pages=1 entries=4 dropped=0 bad_magic=0 truncated=0 denied=0 adapter_jobs_e=3
+SMOKE: TERRAIN spine counters after guard=0 cycles:
+SMOKE:   cmd   accepted=2 refused=0 verdict=0 records=6 crc_fails=0 bridge_errs=0
+SMOKE:   seq   consumed=6 issued_patches=1 claims=5/2(same) refused=0 loads=5 skipped=5 busy=0 faults=0 stray=0
+SMOKE:   res   hits=2 misses=10 claims=5 evictions=0 crc_fail=0 resident=2
+SMOKE:   loadq accepted=5 issued=5 high_water=1
+SMOKE:   pl    loaded=4 faulted=0 crc_fails=0 bytes=90048 guard_denied=0 bridge_errs=0 overflow=0
+SMOKE:   pl2   refused=0 verdict=0 incomplete=0 hdr_ident_fails=0
+SMOKE:   fault island=0 ix=0 iz=0 src_id=0 (verdict 1=UNALIGNED 3=SLOT 4=STALE 5=CRC 6=SRC_ARENA 7=UNREACH 8=HDR_IDENT 9=INCOMPLETE)
+SMOKE:   arb   c0_bursts=10 c1_bursts=1408 c1_wait_cycles=1652 c2_bursts=0 c2_wait_cycles=0
+SMOKE:   mip   mipreq requests=4 issued=3 drops=0 | mipfeed pages_mipped=2 faulted=0 samples_sent=5668 | mipgen m17_writes=1509 m9_writes=423 aborts=0
+SMOKE:   lodfd lattices_walked=3 dropped=0 dev_records=48 stray_samples=2147 -> hist events=144 updates=48 stalls=0
+SMOKE:   lodch ds_reads=2 ds_unwritten=0 ds_histstep=0 | sp descriptors=16 door_refused=0 serve_no_door=0 src_mismatch=0 order_bad=0 unfresh=0 | lod reps=17/0/0/0
+SMOKE: NOTE TERRAIN.LODFEED reported 2147 'stray' sample(s) of the 2401 surplus the second mip pass sends. THIS IS THE MISLABELLING DESCRIBED ABOVE, NOT A PAGING FAULT -- see zhao_terrain_lodfeed's classifier. Do not chase it as a spine defect.
+SMOKE:   wb    sheets written=0 refused=0 faulted=0 guard_denied=0 acks_unmatched=0 overdue=0 | doorbell starved=0 ret_overflow=0 | rdshare jobs A=1 B=958 WB=0
+SMOKE:   probe bridge hps_req_cycles=2944 hps_beats_in=11675 | socket contention=42 retire_unowned=0 wbeat_unowned=0
+SMOKE:   bridge bursts served by the played engine=1443
+[8212308000] %Fatal: tb_zhao_console_core_smoke.sv:6986: Assertion failed in tb_zhao_console_core_smoke.run: SMOKE: 3 jobs produced 4 loaded + 0 faulted + 0 refused completions -- 'one job, one completion' is broken (or the wait timed out at guard=0)
+%Error: C:/programmieren/zencrifice/gz-attrsetup/tests/prod\tb_zhao_console_core_smoke.sv:6986: Verilog $stop
+Aborting...
+SMOKE_RC=1
