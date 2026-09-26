@@ -94,6 +94,11 @@ module zhao_geom_clipdoor_mutant #(
     input  var logic [NCLIENT*3-1:0]            c_behind_i,
     input  var logic [NCLIENT*IDW-1:0]          c_src_id_i,
     input  var logic [NCLIENT-1:0]              c_untex_i,
+    // NORMALMAP 2026-09-26: carried forward from production. It is inert in
+    // this control -- the mutation is `take_new_c` and nothing here reads it --
+    // but the copy must be of the CURRENT block or it is a positive control
+    // for a module that no longer exists.
+    input  var logic [NCLIENT-1:0]              c_detail_i,
     input  var logic [NCLIENT*2-1:0]            c_cull_mode_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_a_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_b_i,
@@ -122,6 +127,7 @@ module zhao_geom_clipdoor_mutant #(
     output var logic [2:0]           o_behind_o,
     output var logic [IDW-1:0]       o_src_id_o,
     output var logic                 o_untex_o,
+    output var logic                 o_detail_o,
     output var logic [1:0]           o_cull_mode_o,
     output var logic [ATTRS*32-1:0]  o_attr_a_o,
     output var logic [ATTRS*32-1:0]  o_attr_b_o,
@@ -267,6 +273,7 @@ module zhao_geom_clipdoor_mutant #(
     o_behind_o       = '0;
     o_src_id_o       = '0;
     o_untex_o        = 1'b0;
+    o_detail_o       = 1'b0;
     o_cull_mode_o    = '0;
     o_attr_a_o       = '0;
     o_attr_b_o       = '0;
@@ -292,6 +299,7 @@ module zhao_geom_clipdoor_mutant #(
         o_behind_o       = c_behind_i[i*3 +: 3];
         o_src_id_o       = c_src_id_i[i*IDW +: IDW];
         o_untex_o        = c_untex_i[i];
+        o_detail_o       = c_detail_i[i];
         o_cull_mode_o    = c_cull_mode_i[i*2 +: 2];
         o_attr_a_o       = c_attr_a_i[i*AW +: AW];
         o_attr_b_o       = c_attr_b_i[i*AW +: AW];

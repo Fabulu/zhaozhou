@@ -1341,21 +1341,51 @@
 //   TERRAIN.WRITEBACK -- COMPOSED 2026-09-19 (the I28 note in the table below),
 //   once owner rulings R14 and R4 answered both of its refusals.
 //
-//   TERRAIN.NORMALMAP -- REFUSED, and it is the one whose seam is furthest
-//   away. It is a FRAGMENT-stage block: its input is a perspective-correct
-//   terrain (u, v) with an integer mip level, "tapped from the stream that
-//   feeds the texture path". That stream is the pre-resolve fragment stream
-//   entry I17 records as never leaving `zhao_geom_bin_pipe_v2`, and its tile
-//   upload port wants a generated asset. Neither end is here, and the second
-//   reading adds two facts that make that concrete rather than argued: NOTHING
-//   IN THE WHOLE REPOSITORY INSTANTIATES THIS MODULE -- not `fpga/rtl`, not
-//   `zhao_prod_top`, not `zhao_terrain_pipe`; the only place it is elaborated
-//   at all is `tests/texture/terrain_normalmap_directed.cpp`. And its detail
-//   pyramid is built OFFLINE ("by averaging SIGNED dx/dz", its line 61), so the
-//   `tw_*` upload port is waiting on an asset pipeline rather than on a block.
-//   `design/prod_manifest.yml` 856 already calls it an "OPEN DEFERRAL until the
-//   fragment-seam wiring lands", which is the same statement from the ledger's
-//   side.
+//   TERRAIN.NORMALMAP -- COMPOSED 2026-09-26 (NORMALMAP). The paragraph that
+//   stood here refused it six times and is kept below, struck, because every
+//   sentence in it was TRUE WHEN WRITTEN and the record of what expired is
+//   worth more than a tidy deletion.
+//
+//   WHERE IT IS: inside `zhao_texture_island_v3_top`, beside `u_persp`. That is
+//   the only place in this machine where a terrain fragment's perspective-
+//   correct (u, v) exists -- the island issues a reciprocal for EVERY admitted
+//   fragment, its own `a_atomic_admission` assertion says so, and `persp_u_w` /
+//   `persp_v_w` are `signed [31:0]`, which is `f_u_i`/`f_v_i`'s declared shape
+//   exactly. The refused sentence "that stream is the pre-resolve fragment
+//   stream entry I17 records as never leaving `zhao_geom_bin_pipe_v2`" was
+//   right about I17 and wrong about the conclusion: the stream it needed was
+//   one stage FURTHER IN than the one it was looking at.
+//
+//   WHERE THE DELTA GOES, and it is NOT this island's texel: the LIT COLOUR
+//   LANE. `zref::terrain::normalmap_apply` -- which exists in the oracle and
+//   whose contract row still says "PLANNED AND NOT WRITTEN" -- lands the s9
+//   delta on "the flat lit colour lanes, saturating unsigned 8-bit", and that
+//   lane is `zhao_raster_texture_stage_v3`'s `frag_vert_rgb_o`, which is
+//   `zhao_raster_fragment`'s source colour outright for any SHADE_MOD-clear
+//   primitive. `TERR_FRAG_STATE` is exactly such a profile.
+//
+//   THE DECLARATION AND THE TILE BOTH HAVE REAL PRODUCERS. The declaration is
+//   `zhao_terrain_clipfeed`'s own `o_detail_o`, granted at `u_geom_clipdoor`,
+//   published by `u_material_window` (and part of its `match_c`, so a span
+//   cannot inherit another client's), and carried to the fragment in the dead
+//   top bit of the continuation tail's `vertex_rgb` -- METAW unmoved. The tile
+//   is a published DETAIL_NORMAL page carried by `u_terrain_normalloader`,
+//   requester J of the ENGINE1 asset window, under owner ruling R243
+//   D-NORMALS-A. The sun is SetEnvironment's, halved round-half-up into the
+//   block's s1.15 config.
+//
+//   STRUCK, AND KEPT: "TERRAIN.NORMALMAP -- REFUSED, and it is the one whose
+//   seam is furthest away. It is a FRAGMENT-stage block: its input is a
+//   perspective-correct terrain (u, v) with an integer mip level, 'tapped from
+//   the stream that feeds the texture path'. That stream is the pre-resolve
+//   fragment stream entry I17 records as never leaving `zhao_geom_bin_pipe_v2`,
+//   and its tile upload port wants a generated asset. Neither end is here ...
+//   NOTHING IN THE WHOLE REPOSITORY INSTANTIATES THIS MODULE ... And its detail
+//   pyramid is built OFFLINE, so the `tw_*` upload port is waiting on an asset
+//   pipeline rather than on a block." The FIRST half expired when CARRIAGE gave
+//   terrain a raster on 2026-09-26; the SECOND expired on 2026-09-23 when
+//   NORMALPYR built the page host, and the ledger row saying so was three days
+//   old when this paragraph was last read.
 //
 
 // (I5 CLOSED 2026-09-20 (gz/field), under owner ruling R40. PART.UPDATE's
@@ -3692,9 +3722,10 @@
 //         bias, which is a law and therefore not a composer's to invent.
 //
 //      NOTHING WAS COMPOSED FOR THE TRIANGLE PATH BY THIS LANE, DELIBERATELY,
-//      and `zhao_terrain_normalmap` was NOT composed. `f_detail_i` still has no
-//      producer and terrain triangles still reach no raster, so composing it
-//      would move the completion register while changing not one pixel -- the
+//      and `zhao_terrain_normalmap` STOOD OUTSIDE THE CLOSURE AT THAT DATE.
+//      `f_detail_i` had no
+//      producer and terrain triangles reached no raster, so composing it
+//      would have moved the completion register while changing not one pixel -- the
 //      prefix this file's first law forbids. What DID change in its favour is
 //      the fixture: the arm's triangles have AREA now, so the merge it waits
 //      behind can be measured when it lands instead of only wired.
@@ -3793,9 +3824,10 @@
 //      quoted again. This lane did not need it either way: carriage blocks
 //      before colour does.
 //
-//      AND `zhao_terrain_normalmap` WAS AGAIN NOT COMPOSED, deliberately, on
-//      evidence read rather than inherited. It is instantiated NOWHERE in
-//      `fpga/rtl` (one grep hit, its own `module` line) and `f_detail_i`
+//      AND `zhao_terrain_normalmap` AGAIN STAYED OUTSIDE THE CLOSURE,
+//      deliberately, on
+//      evidence read rather than inherited. At that date it had NO INSTANTIATION
+//      in `fpga/rtl` (one grep hit, its own `module` line) and `f_detail_i`
 //      appears on FOUR LINES, ALL IN ITS OWN FILE. The near-miss that must not
 //      be mistaken for a producer: `zhao_terrain_normalloader` is real and
 //      built, but it drives the `tw_*` TILE UPLOAD port -- the texel data --
@@ -4622,9 +4654,9 @@
 //      REFUSED: no epsilon, clamp or bias anywhere near the zero-area
 //      test -- the area was ARITHMETICALLY zero from a CORRECT
 //      projection, and a tolerance there would draw a wrong pixel past
-//      a gate. `GEOM_CLIP_ATTRS` stays 7. `zhao_terrain_normalmap` was
-//      not composed. `kMat` and `kVp` were not touched. The layer-E
-//      triple was not wired into `base_rgb`. No fit was run.
+//      a gate. `GEOM_CLIP_ATTRS` stays 7. `zhao_terrain_normalmap` stayed
+//      outside that pass's closure. `kMat` and `kVp` were not touched.
+//      The layer-E triple did not reach `base_rgb`. No fit was run.
 //
 //
 //      AND A FOURTH REASON A TILE CAN HOLD REFERENCES AND WRITE NO
@@ -4708,8 +4740,8 @@
 //      the smoke's line is unchanged: 1216 / 1190, `combine_refused = 0`.
 //      The register reads 4 before and 4 after, measured bare, and
 //      `zhao_terrain_normalmap` did NOT leave the BUILT-BUT-NOT-CONNECTED
-//      list -- it was again not composed, as this entry's first
-//      prohibition requires.
+//      list -- it stayed outside that pass's closure, as this entry's
+//      first prohibition then required.
 //
 //      WHAT (c) TURNED OUT TO NEED, and the surprise is WHERE the answer
 //      lands. Every previous pass assumed the pick would have to displace
@@ -4847,8 +4879,8 @@
 //      island's OWN pre-existing overload
 //      (`wr_mosaic_material_a_i(frag_base_rgb_i[23:16])`) is untouched and
 //      is not this packet's to ratify. `GEOM_CLIP_ATTRS` stays 7. No flat
-//      colour stand-in. `zhao_terrain_normalmap` was not composed. No fit
-//      was run.
+//      colour stand-in. `zhao_terrain_normalmap` stayed outside that pass's
+//      closure. No fit was run.
 //
 //      WHAT THIS LANE GOT WRONG AND CAUGHT: the first draft put the pick's
 //      reader on the SELECTOR (`binding_selector + sample_index +
@@ -5026,8 +5058,9 @@
 //      the DIRECT RGB565 row this fixture already programmed, not a
 //      tileset, so the MOSAIC PICK'S READER IS STILL NOT EXERCISED BY
 //      THIS CONSOLE -- it is proven at `texture_island_v3_packet_b_
-//      directed` and nowhere else. `zhao_terrain_normalmap` was AGAIN
-//      not composed, as this entry's first prohibition requires.
+//      directed` and nowhere else. `zhao_terrain_normalmap` AGAIN stayed
+//      outside that pass's closure, as this entry's first prohibition
+//      then required.
 //
 //      ONE HONEST BOUND ON THE TEXEL'S VALUE, because a count is not a
 //      colour. This bench answers every fill line with one constant
@@ -5200,8 +5233,11 @@
 //      WHAT IS NOT CLOSED BY THIS, AND IS NOT THIS ENTRY'S, named so the
 //      closure cannot be read as more than it is:
 //
-//        * `zhao_terrain_normalmap` is STILL on the BUILT BUT NOT
-//          CONNECTED list and was again not composed. It is a SEPARATE
+//        * `zhao_terrain_normalmap` WAS STILL on the BUILT BUT NOT
+//          CONNECTED list at that date and again stayed outside the
+//          closure. (It left that list on 2026-09-26, NORMALMAP; the
+//          three facts this bullet then hands over are answered in the
+//          TERRAIN.NORMALMAP paragraph above.) It is a SEPARATE
 //          register entry, counted separately, and it has always been
 //          this entry's PROHIBITION rather than its content; keeping
 //          I13 open for it would count one gap twice. Re-measured at

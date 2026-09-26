@@ -145,6 +145,10 @@ module tb_geom_mem_adapter
       // 2026-09-26 (I13CLOSE). HELD IDLE and NAMED for the reasons C..H are.
       // I has no `beat_last` port either, for G's reason.
       .i_req_i('0), .i_rsp_o(), .i_beat_valid_o(), .i_beat_data_o(),
+      // NORMALMAP 2026-09-26: requester J, tied off like I. This harness
+      // measures the round robin, not any one client.
+      .j_req_i('0), .j_rsp_o(), .j_beat_valid_o(), .j_beat_data_o(),
+      .jobs_j_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),

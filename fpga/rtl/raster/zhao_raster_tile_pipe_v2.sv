@@ -288,10 +288,16 @@ module zhao_raster_tile_pipe_v2 #(
 
   initial begin : p_packet_d_contract
     if (($bits(job_meta_i) != META_W) ||
-        ($bits(zhao_texture_v3_request_v2_t) != 362) ||
+        // 363 / 411 / 491 since NORMALMAP (2026-09-26): the texture request
+        // gained `detail_required` at its TOP, so nothing BELOW it moved and
+        // `zhao_raster_continuation_v2_t` is untouched at 128. This guard is an
+        // `initial` block, so `--lint-only` does NOT run it -- it was missed on
+        // the first pass for exactly the reason CLAUDE.md gives, and the
+        // console smoke is what found it.
+        ($bits(zhao_texture_v3_request_v2_t) != 363) ||
         ($bits(zhao_raster_continuation_v2_t) != 128) ||
-        ($bits(zhao_raster_earlyz_payload_v2_t) != 410) ||
-        ($bits(zhao_raster_pretex_v2_t) != 490))
+        ($bits(zhao_raster_earlyz_payload_v2_t) != 411) ||
+        ($bits(zhao_raster_pretex_v2_t) != 491))
       $fatal(1, "zhao_raster_tile_pipe_v2: Packet-D width contract changed");
   end
 

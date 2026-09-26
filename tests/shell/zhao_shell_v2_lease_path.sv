@@ -616,6 +616,23 @@ module zhao_shell_v2_lease_path
       .pal_load_idx_i               (pal_load_idx_i),
       .pal_load_rgb565_i            (pal_load_rgb565_i),
       .pal_load_crc_ok_i            (pal_load_crc_ok_i),
+      // NORMALMAP 2026-09-26: the detail write port tied off and the evidence
+      // left open. This harness does not exercise TERRAIN.NORMALMAP; the
+      // declaration rides the candidate, so a fragment here simply declares 0
+      // and the leaf forces delta 0 with its tile read enable low.
+      .dtl_we_i(1'b0), .dtl_sel_i(1'b0), .dtl_addr_i(13'd0), .dtl_data_i(32'd0),
+      // NO lint_off/lint_on PAIR HERE, DELIBERATELY: this instantiation is
+      // already inside a file-scope PINCONNECTEMPTY waiver that opens above
+      // and closes far below, and Verilator's `lint_on` IS NOT A STACK -- a
+      // nested pair CLOSES the enclosing waiver and exposes every empty pin
+      // after it. That is what it did when this was first written: 75
+      // PINCONNECTEMPTY warnings appeared in code this packet never touched,
+      // which reads exactly like a regression somewhere else.
+      .cnt_detail_fragments_o(), .cnt_detail_zeroed_o(),
+      .cnt_detail_railed_o(), .cnt_detail_cold_o(),
+      .cnt_detail_published_o(), .cnt_detail_applied_o(),
+      .err_detail_lost_o(), .dtl_table_ready_o(),
+
       .sheet_req_valid_o            (sheet_req_valid_o),
       .sheet_req_ready_i            (sheet_req_ready_i),
       .sheet_req_op_o               (sheet_req_op_o),

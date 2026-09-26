@@ -155,6 +155,10 @@ module tb_terrain_clipfeed_mat (
       /* verilator lint_on PINCONNECTEMPTY */
       .o_src_id_o       (o_src_id),
       .o_untex_o        (o_untex),
+      /* verilator lint_off PINCONNECTEMPTY */
+      .o_detail_o       (),
+      /* verilator lint_on PINCONNECTEMPTY */
+
       .o_material_set_o (o_material_set),
       .o_material_id_o  (o_material_id),
       .o_material_mode_o(o_material_mode),

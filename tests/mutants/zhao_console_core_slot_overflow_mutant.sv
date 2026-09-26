@@ -453,6 +453,11 @@ module zhao_console_core_slot_overflow_mutant
   // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
   // with a pixel behind it). A second application at the vertex would be a
   // second home for one law.
+  // TERRAIN.NORMALMAP's two knobs (NORMALMAP, 2026-09-26): the relief AMOUNT
+  // and the terrain arm's CLASS declaration. Forwarded by name like every
+  // other parameter here.
+  parameter logic [7:0] TERR_DETAIL_STRENGTH = 8'd64,
+  parameter logic       TERR_DETAIL_ELIGIBLE = 1'b1,
   parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
   parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
 
@@ -1628,6 +1633,25 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_ma_jobs_h_o,
   // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
   output logic [31:0] geom_ma_jobs_i_o,
+  output logic [31:0] geom_ma_jobs_j_o,
+  // TERRAIN.NORMALMAP's evidence (NORMALMAP, 2026-09-26). Carried here for the
+  // reason this whole port list exists: the wrapper connects the production
+  // core by `.*`, so a port it does not declare will not elaborate.
+  output logic [31:0]             terr_nm_pages_o,
+  output logic [31:0]             terr_nm_words_o,
+  output logic [31:0]             terr_nm_pages_dropped_o,
+  output logic [31:0]             terr_nm_bad_magic_o,
+  output logic [31:0]             terr_nm_oversize_o,
+  output logic [31:0]             terr_nm_truncated_o,
+  output logic [31:0]             terr_nm_denied_o,
+  output logic [31:0]             terr_nm_frag_o,
+  output logic [31:0]             terr_nm_zeroed_o,
+  output logic [31:0]             terr_nm_railed_o,
+  output logic [31:0]             terr_nm_cold_o,
+  output logic [31:0]             terr_nm_published_o,
+  output logic [31:0]             terr_nm_applied_o,
+  output logic [31:0]             terr_nm_lost_o,
+  output logic                    terr_nm_table_ready_o,
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.

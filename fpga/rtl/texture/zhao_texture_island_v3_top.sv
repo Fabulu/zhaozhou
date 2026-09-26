@@ -52,6 +52,28 @@
 `define ZHAO_PACKET_E_REFUSAL_MERGE_VALID(valid) (valid)
 `endif
 
+// TERRAIN.NORMALMAP'S DETAIL-DRAIN SEAM (NORMALMAP, 2026-09-26).
+//
+// `err_detail_lost_o` below counts a fragment reaching the perspective stage
+// while the detail pipe cannot accept it. That state is UNREACHABLE with legal
+// stimulus -- the response goes to a record and never refuses, so the leaf's
+// II = 1 skid cannot fill -- and CLAUDE.md is explicit that a counter asserted
+// zero and never seen to move is a CLAIM. This selector is its positive
+// control, and it mutates the REAL top rather than a copy, so there is nothing
+// that can go stale in the flattering direction.
+//
+// IT IS AN OBJECT-LIKE MACRO SELECTED BY `ifdef`, which is the only shape a
+// command-line `-D` can reach: a `-D` defines an object-like macro, so an
+// `ifndef` guarding a FUNCTION-LIKE default would still see the name undefined
+// and compile production silently (CLAUDE.md, two combiner mutants measured
+// unmutated RTL that way). The negative control is the ordinary build, where
+// the counter is asserted at zero by the same directed test.
+`ifdef ZHAO_ISLAND_MUTANT_DETAIL_DRAIN
+  `define ZHAO_ISLAND_DETAIL_DRAIN 1'b0
+`else
+  `define ZHAO_ISLAND_DETAIL_DRAIN 1'b1
+`endif
+
 module zhao_texture_island_v3_top #(
     parameter bit MIGRATION_SHADOWS = 1'b1,
     parameter int unsigned DEPTH = 16,
@@ -1150,6 +1172,7 @@ module zhao_texture_island_v3_top #(
   // output register there), which is the property CLAUDE.md's metadata-swap
   // chapter says to check first.
   logic nm_f_ready_w, nm_d_valid_w, nm_idle_w;
+  wire  nm_d_ready_c = `ZHAO_ISLAND_DETAIL_DRAIN;
   logic signed [8:0] nm_d_delta_w;
   logic [15:0] nm_d_src_id_w;
 
@@ -1200,7 +1223,9 @@ module zhao_texture_island_v3_top #(
       // TIED HIGH, AND IT IS THE REASON THE TAP CANNOT STALL. The response
       // goes to a record and not to a stream, so there is nothing for it to
       // wait on. A block whose consumer never refuses cannot fill its own skid.
-      .d_ready_i (1'b1),
+      // The macro is `1'b1` in every ordinary build; see the seam at the top of
+      // this file for the one build in which it is not.
+      .d_ready_i (nm_d_ready_c),
       .d_delta_o (nm_d_delta_w),
       .d_src_id_o(nm_d_src_id_w),
       .tw_we_i   (nm_tw_we_c),
@@ -1223,9 +1248,18 @@ module zhao_texture_island_v3_top #(
   // response on a busy frame while every counter balanced -- which is the exact
   // shape this repository has a chapter about. The generation compare at the
   // read does the work instead, and it does it for free.
+  //
+  // WRITTEN ON THE ACCEPT BEAT, NOT ON `d_valid_o` ALONE. In production the two
+  // are the same event, because `d_ready_i` is tied high -- which is exactly
+  // why the first version of this line was `if (nm_d_valid_w)` and exactly why
+  // that was wrong: under the drain mutant the leaf holds an UNACCEPTED valid
+  // for many clocks, the record took it anyway, and the positive control
+  // measured a delta the machine had not delivered. A record that samples an
+  // offer rather than a transfer is this repository's metadata-swap chapter in
+  // miniature, and it was caught by its own control failing.
   logic [GENW+8:0] dtl_delta_m [0:OWNERS-1];
   always_ff @(posedge clk) begin
-    if (nm_d_valid_w)
+    if (nm_d_valid_w && nm_d_ready_c)
       dtl_delta_m[nm_d_src_id_w[13:8]] <= {nm_d_src_id_w[7:0], nm_d_delta_w};
   end
 
@@ -3192,6 +3226,7 @@ module zhao_texture_island_v3_top #(
 
 endmodule : zhao_texture_island_v3_top
 
+`undef ZHAO_ISLAND_DETAIL_DRAIN
 `undef ZHAO_PACKET_B_TMU_RESULT
 `undef ZHAO_ISLAND_T4_UVW_READ_OWNER
 `undef ZHAO_PACKET_B_COMBINE_S2

@@ -1071,6 +1071,25 @@ module tb_zhao_console_core_smoke
   logic [31:0]  mat_win_selector_overflow_o, mat_win_clut_unowned_o;
   logic [31:0]  mat_win_clut_owned_o;
   logic [31:0]  geom_ma_jobs_i_o;
+  logic [31:0]  geom_ma_jobs_j_o;
+  // TERRAIN.NORMALMAP's evidence (NORMALMAP, 2026-09-26). Declared here
+  // because this bench connects the core by `.*`: a port it does not name
+  // will not elaborate.
+  logic [31:0]  terr_nm_pages_o;
+  logic [31:0]  terr_nm_words_o;
+  logic [31:0]  terr_nm_pages_dropped_o;
+  logic [31:0]  terr_nm_bad_magic_o;
+  logic [31:0]  terr_nm_oversize_o;
+  logic [31:0]  terr_nm_truncated_o;
+  logic [31:0]  terr_nm_denied_o;
+  logic [31:0]  terr_nm_frag_o;
+  logic [31:0]  terr_nm_zeroed_o;
+  logic [31:0]  terr_nm_railed_o;
+  logic [31:0]  terr_nm_cold_o;
+  logic [31:0]  terr_nm_published_o;
+  logic [31:0]  terr_nm_applied_o;
+  logic [31:0]  terr_nm_lost_o;
+  logic         terr_nm_table_ready_o;
   // TEXTURE.PALETTELOAD's evidence (I13CLOSE, 2026-09-26).
   logic [31:0]  pal_ld_lookups_o, pal_ld_hits_o, pal_ld_loads_o;
   logic [31:0]  pal_ld_evictions_o, pal_ld_entries_o, pal_ld_denied_o;

@@ -130,6 +130,23 @@ module tb_raster_texture_stage_v3 #(
 
     // Test-only terminal classifier.  classify_i is pulsed only after the
     // external fragment leaf is idle; these are evidence, never lease events.
+    // TERRAIN.NORMALMAP's write port and its evidence (NORMALMAP, 2026-09-26).
+    // Brought out as REAL ports, not tied off: this harness is where the detail
+    // seam is directed-tested, and `obs_frag_vert_rgb_o` above is the lane the
+    // delta lands on.
+    input  logic         dtl_we_i,
+    input  logic         dtl_sel_i,
+    input  logic [12:0]  dtl_addr_i,
+    input  logic [31:0]  dtl_data_i,
+    output logic [31:0]  dtl_fragments_o,
+    output logic [31:0]  dtl_zeroed_o,
+    output logic [31:0]  dtl_railed_o,
+    output logic [31:0]  dtl_cold_o,
+    output logic [31:0]  dtl_published_o,
+    output logic [31:0]  dtl_applied_o,
+    output logic [31:0]  dtl_lost_o,
+    output logic         dtl_table_ready_o,
+
     input  logic         classify_i,
     output logic         synthetic_release_o,
     output logic         synthetic_publish_o,
@@ -255,6 +272,18 @@ module tb_raster_texture_stage_v3 #(
       .pal_load_idx_i(pal_load_idx_i),
       .pal_load_rgb565_i(pal_load_rgb565_i),
       .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      .dtl_we_i(dtl_we_i),
+      .dtl_sel_i(dtl_sel_i),
+      .dtl_addr_i(dtl_addr_i),
+      .dtl_data_i(dtl_data_i),
+      .cnt_detail_fragments_o(dtl_fragments_o),
+      .cnt_detail_zeroed_o(dtl_zeroed_o),
+      .cnt_detail_railed_o(dtl_railed_o),
+      .cnt_detail_cold_o(dtl_cold_o),
+      .cnt_detail_published_o(dtl_published_o),
+      .cnt_detail_applied_o(dtl_applied_o),
+      .err_detail_lost_o(dtl_lost_o),
+      .dtl_table_ready_o(dtl_table_ready_o),
       .sheet_req_valid_o(sheet_req_valid_o),
       .sheet_req_ready_i(sheet_req_ready_i),
       .sheet_req_op_o(sheet_req_op_o),

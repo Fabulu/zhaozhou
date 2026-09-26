@@ -1,6 +1,6 @@
 // raster_texture_stage_v3_directed.cpp -- private Packet-C composition gate.
 //
-// Drives the committed 490-bit package layout through zhao_skid2, the exact
+// Drives the committed 491-bit package layout through zhao_skid2, the exact
 // Packet-C stage, one Packet-B V3 island, and the real RASTER.FRAGMENT leaf.
 // The tile memory is an external fixed-one-cycle model.  Every admitted owner
 // is independently scoreboarding sequence32, all continuation128 bits, and the
@@ -10,6 +10,10 @@
 #include "verilated.h"
 
 #include "zref/zref_fragment.hpp"
+// TERRAIN.NORMALMAP's ratified law. The seam test below differences the
+// silicon against `normalmap_delta_s9` and `normalmap_apply` rather than
+// against a second transcription of either.
+#include "zref/zref_terrain_normalmap.hpp"
 #include "zref/zref_tilestore.hpp"
 
 #include <array>
@@ -25,6 +29,9 @@
 
 namespace {
 
+// 491 bits since NORMALMAP (2026-09-26) added `detail_required` at the TOP of
+// the texture request: every offset BELOW 362 is unchanged and every one above
+// it moved by exactly one. The array is still sixteen words.
 using Wide490 = std::array<uint32_t, 16>;
 
 uint64_t g_cycle = 0;
@@ -124,13 +131,21 @@ struct Candidate {
   uint8_t result_alpha = 0;
   uint8_t result_index = 0;
   uint8_t result_status = 0;
+  bool detail_required = false;
+  // What `frag_vert_rgb_o` must be. It is the candidate's own
+  // `vertex_rgb` for every fragment that declares no detail, which is
+  // every fragment in every other test in this file -- so the whole
+  // pre-existing suite is the detail seam's negative control, with no
+  // second gate to keep in step with the first.
+  uint32_t expected_vertex_rgb = 0;
 };
 
 Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source, uint32_t vertex_rgb,
                          uint8_t vertex_alpha, uint8_t effect_tag, uint8_t stencil_ref,
                          uint8_t sample_count, uint8_t binding, uint8_t recipe, uint32_t base_rgb,
                          uint8_t base_alpha, uint32_t result_rgb, uint8_t result_alpha,
-                         uint8_t result_index, uint8_t result_status) {
+                         uint8_t result_index, uint8_t result_status,
+                         bool detail_required = false) {
   Candidate c;
   c.addr = addr;
   c.depth = 0x800000u | addr;
@@ -144,6 +159,8 @@ Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source, uint32_t
   c.result_alpha = result_alpha;
   c.result_index = result_index;
   c.result_status = result_status;
+  c.detail_required = detail_required;
+  c.expected_vertex_rgb = c.vertex_rgb;
 
   // zhao_render_texture_pkg named spans, low field first.  AUX is canonical
   // zero because these Packet-C vectors do not request Surface Sheet work.
@@ -160,14 +177,15 @@ Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source, uint32_t
   set_bits(c.packed, 296, 2, sample_count);
   set_bits(c.packed, 298, 32, 0);  // v_over_w
   set_bits(c.packed, 330, 32, 0);  // u_over_w
-  set_bits(c.packed, 362, 8, stencil_ref);
-  set_bits(c.packed, 370, 8, effect_tag);
-  set_bits(c.packed, 378, 8, vertex_alpha);
-  set_bits(c.packed, 386, 24, vertex_rgb);
-  set_bits(c.packed, 410, 16, source);
-  set_bits(c.packed, 426, 32, state);
-  set_bits(c.packed, 458, 24, c.depth);
-  set_bits(c.packed, 482, 8, addr);
+  set_bits(c.packed, 362, 1, detail_required ? 1u : 0u);
+  set_bits(c.packed, 363, 8, stencil_ref);
+  set_bits(c.packed, 371, 8, effect_tag);
+  set_bits(c.packed, 379, 8, vertex_alpha);
+  set_bits(c.packed, 387, 24, vertex_rgb);
+  set_bits(c.packed, 411, 16, source);
+  set_bits(c.packed, 427, 32, state);
+  set_bits(c.packed, 459, 24, c.depth);
+  set_bits(c.packed, 483, 8, addr);
   return c;
 }
 
@@ -363,7 +381,7 @@ struct Harness {
       const FragBeat f = observed_fragment();
       require(f.addr == c.addr && f.depth == c.depth && f.state == c.state && f.source == c.source,
               "returned Early-Z continuation fields changed");
-      require(f.vertex_rgb == c.vertex_rgb && f.vertex_alpha == c.vertex_alpha &&
+      require(f.vertex_rgb == c.expected_vertex_rgb && f.vertex_alpha == c.vertex_alpha &&
                   f.effect_tag == c.effect_tag && f.stencil_ref == c.stencil_ref,
               "returned continuation tail fields changed");
       require(f.texture_rgb == c.result_rgb && f.texture_alpha == c.result_alpha &&
@@ -1023,6 +1041,176 @@ void test_mismatch_terminal(Harness& h, bool expect_old_ready) {
   std::printf("packet-c identity-only mismatch detector FIRED\n");
 }
 
+// ---------------------------------------------------------------------------
+// TERRAIN.NORMALMAP'S SEAM (NORMALMAP, 2026-09-26)
+// ---------------------------------------------------------------------------
+// The entry this closes was refused six times, and every refusal named the same
+// thing: a detail port with no consumer reading it. So what this test measures
+// is not that the port elaborates -- it is that a FRAGMENT'S LIT COLOUR LANE
+// CHANGES, and that it changes for the right reason.
+//
+// THE TILE IS UNIFORM ON PURPOSE. Every texel of level 0 carries the same
+// {s8 dz, s8 dx}, so the delta is independent of (u, v) and this test says
+// nothing about the perspective divide -- that is `u_persp`'s own coverage and
+// the leaf's 4,738-check directed suite. What is left is exactly the seam:
+// declaration in, delta out, saturating add on the lane.
+//
+// THREE CONTROLS, and the third is the one that matters:
+//   * an UNDECLARED fragment's lane must be bit-identical to what went in;
+//   * a DECLARED fragment's lane must equal `zref::terrain::normalmap_apply`
+//     of the same lane with `zref::terrain::normalmap_delta_s9`'s delta;
+//   * and a DECLARED fragment over an ALL-ZERO tile must be bit-identical
+//     again. That separates "the declaration moved it" from "the TILE moved
+//     it", which is the difference between a wired seam and a wired flag.
+// Plus an anti-vacuity assertion that the authored delta is not zero, because
+// a zero delta would make all three agree and the test would pass saying
+// nothing -- the shape this repository has a chapter about.
+int32_t detail_delta_of(int dx, int dz, int sun_x15, int sun_z15, int strength) {
+  zref::terrain::DetailNormal d;
+  d.nx = static_cast<int8_t>(dx);
+  d.nz = static_cast<int8_t>(dz);
+  return zref::terrain::normalmap_delta_s9(d, sun_x15, sun_z15, 0, 0, strength);
+}
+
+uint32_t detail_applied_rgb(uint32_t rgb, int32_t delta) {
+  const uint8_t r = zref::terrain::normalmap_apply(static_cast<uint8_t>(rgb >> 16), delta);
+  const uint8_t g = zref::terrain::normalmap_apply(static_cast<uint8_t>(rgb >> 8), delta);
+  const uint8_t b = zref::terrain::normalmap_apply(static_cast<uint8_t>(rgb), delta);
+  return (uint32_t{r} << 16) | (uint32_t{g} << 8) | uint32_t{b};
+}
+
+void dtl_write(Harness& h, bool tile, uint16_t addr, uint32_t data) {
+  h.dut.dtl_we_i = 1;
+  h.dut.dtl_sel_i = tile ? 1 : 0;
+  h.dut.dtl_addr_i = addr;
+  h.dut.dtl_data_i = data;
+  h.step();
+  h.dut.dtl_we_i = 0;
+  h.dut.dtl_sel_i = 0;
+  h.dut.dtl_addr_i = 0;
+  h.dut.dtl_data_i = 0;
+}
+
+// Level 0 is 4,096 words and `max_level` is 0 at reset -- the block's own
+// header calls that "the un-mipped contract behaviour, bit-exactly" -- so the
+// deeper levels are never addressed and are left unwritten on purpose.
+void upload_uniform_detail_tile(Harness& h, int dx, int dz) {
+  const uint32_t word = (uint32_t(uint8_t(int8_t(dz))) << 8) | uint8_t(int8_t(dx));
+  for (unsigned addr = 0; addr < 4096; ++addr) dtl_write(h, true, uint16_t(addr), word);
+}
+
+void program_detail_epoch(Harness& h, int sun_x15, int sun_z15, int strength) {
+  // Strength (word 2) then the sun pair (word 0); either drops `table_ready_o`
+  // and restarts the ~270-cycle coefficient refill, so the wait is after both.
+  dtl_write(h, false, 2, uint32_t(strength) & 0xffu);
+  dtl_write(h, false, 0,
+            (uint32_t(uint16_t(int16_t(sun_z15))) << 16) | uint16_t(int16_t(sun_x15)));
+  for (unsigned n = 0; n < 4000 && !h.dut.dtl_table_ready_o; ++n) h.step();
+  require(h.dut.dtl_table_ready_o != 0,
+          "TERRAIN.NORMALMAP's coefficient tables never became ready");
+}
+
+constexpr int kDtlStrength = 64;
+constexpr int kDtlSunX15 = 12000;
+constexpr int kDtlSunZ15 = -9000;
+constexpr int kDtlDx = 100;
+constexpr int kDtlDz = -40;
+constexpr uint32_t kDtlVertexRgb = 0x203040u;
+
+Candidate detail_candidate(uint8_t addr, uint16_t source, bool declared) {
+  const uint32_t base = 0x445566u;
+  return make_candidate(addr, 0, source, kDtlVertexRgb, 0xff, 0x11, 0x22, 0, 0, 0, base, 0xff,
+                        base, 0xff, 0, 0, declared);
+}
+
+void test_detail_normal_seam(Harness& h) {
+  begin_test("TERRAIN.NORMALMAP's delta reaches the lit colour lane");
+
+  program_detail_epoch(h, kDtlSunX15, kDtlSunZ15, kDtlStrength);
+  upload_uniform_detail_tile(h, kDtlDx, kDtlDz);
+
+  const int32_t delta = detail_delta_of(kDtlDx, kDtlDz, kDtlSunX15, kDtlSunZ15, kDtlStrength);
+  require(delta != 0,
+          "the authored tile and sun give a ZERO delta -- every check below would agree "
+          "vacuously");
+  const uint32_t applied = detail_applied_rgb(kDtlVertexRgb, delta);
+  require(applied != kDtlVertexRgb, "zref::terrain::normalmap_apply is the identity here");
+
+  const uint32_t lost_before = h.dut.dtl_lost_o;
+  const uint32_t applied_before = h.dut.dtl_applied_o;
+  const size_t first = h.fragment_beats.size();
+
+  Candidate plain = detail_candidate(0x40, 0x7040, false);
+  Candidate lit = detail_candidate(0x41, 0x7041, true);
+  lit.expected_vertex_rgb = applied;
+  h.offer(plain);
+  h.offer(lit);
+  h.wait_fragment_accepts(h.fragment_accepts + 2);
+
+  require(h.fragment_beats.size() == first + 2, "the two detail fragments did not both retire");
+  const uint32_t undeclared_lane = h.fragment_beats[first].vertex_rgb;
+  const uint32_t declared_lane = h.fragment_beats[first + 1].vertex_rgb;
+  require(undeclared_lane == kDtlVertexRgb,
+          "an UNDECLARED fragment's lit colour lane moved");
+  require(declared_lane != undeclared_lane,
+          "the DECLARED fragment's lit colour lane did not change -- the delta never reached "
+          "its consumer");
+  require(declared_lane == applied,
+          "the declared fragment's lane is not zref::terrain::normalmap_apply of the ratified "
+          "delta");
+  require(h.dut.dtl_applied_o == applied_before + 1,
+          "exactly one of the two fragments should have had its lane changed");
+  require(h.dut.dtl_lost_o == lost_before,
+          "a detail delta was lost on a healthy pipe");
+
+  // THE CONTROL THAT SEPARATES THE TILE FROM THE FLAG. Same declaration, same
+  // sun, same strength; a tile of zeros. A seam that changed the lane from the
+  // declaration alone would fail here and pass everything above.
+  upload_uniform_detail_tile(h, 0, 0);
+  const size_t flat_at = h.fragment_beats.size();
+  const uint32_t applied_at_flat = h.dut.dtl_applied_o;
+  h.offer(detail_candidate(0x42, 0x7042, true));
+  h.wait_fragment_accepts(h.fragment_accepts + 1);
+  require(h.fragment_beats.size() == flat_at + 1, "the flat-tile fragment did not retire");
+  require(h.fragment_beats[flat_at].vertex_rgb == kDtlVertexRgb,
+          "a DECLARED fragment over an ALL-ZERO detail tile still moved -- the change is not "
+          "coming from the tile");
+  require(h.dut.dtl_applied_o == applied_at_flat,
+          "the flat-tile fragment was counted as applied");
+  require(h.dut.dtl_zeroed_o >= 1,
+          "no fragment was ever counted as declaration-zero, so `zeroed_o` is unexercised");
+
+  // Put the authored tile back so nothing after this test inherits a flat one.
+  upload_uniform_detail_tile(h, kDtlDx, kDtlDz);
+}
+
+// THE POSITIVE CONTROL FOR `err_detail_lost_o`, which no legal stimulus can
+// fire: the tap does not participate in the persp handshake, and the leaf's
+// response consumer never refuses, so its II = 1 skid cannot fill. The mutant
+// build defines ZHAO_ISLAND_MUTANT_DETAIL_DRAIN, which holds the leaf's
+// `d_ready_i` low inside the REAL top -- no copied module, so nothing can
+// drift. POLARITY INVERTED: this passes when the counter FIRES.
+void run_detail_lost_control() {
+  Harness h;
+  h.reset();
+  program_detail_epoch(h, kDtlSunX15, kDtlSunZ15, kDtlStrength);
+  upload_uniform_detail_tile(h, kDtlDx, kDtlDz);
+  for (unsigned n = 0; n < 24; ++n) {
+    // No delta can come back, so the lane cannot move: the expectation stays
+    // the candidate's own colour and the harness checks it beat by beat.
+    h.offer(detail_candidate(static_cast<uint8_t>(0x50u + n),
+                             static_cast<uint16_t>(0x7050u + n), true));
+  }
+  h.wait_fragment_accepts(h.fragment_accepts + 24);
+  std::printf("[packet-c detail drain] err_detail_lost=%u applied=%u (lost MUST be non-zero)\n",
+              h.dut.dtl_lost_o, h.dut.dtl_applied_o);
+  require(h.dut.dtl_lost_o != 0,
+          "err_detail_lost_o stayed at zero with the detail pipe's consumer held off -- the "
+          "counter cannot see the fault it exists for");
+  require(h.dut.dtl_applied_o == 0,
+          "a lane moved although no delta could have been computed");
+}
+
 void run_healthy() {
   Harness h;
   h.reset();
@@ -1035,6 +1223,7 @@ void run_healthy() {
   test_normal_hold_bubble_and_refusal(h);
   test_external_tile_semantics(h);
   test_star_fragment_differential(h);
+  test_detail_normal_seam(h);
   h.wait_drained();
   require(h.owner_score.empty() && h.skid_score.empty() && h.expected_writes.empty(),
           "healthy gate ended with unaccounted work");
@@ -1057,7 +1246,9 @@ double sc_time_stamp() { return 0.0; }
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
-#if defined(PACKET_C_EXPECT_OLD_READY)
+#if defined(PACKET_C_EXPECT_DETAIL_LOST)
+  run_detail_lost_control();
+#elif defined(PACKET_C_EXPECT_OLD_READY)
   run_mutant(true);
 #elif defined(PACKET_C_EXPECT_IDENTITY_ABORT)
   run_mutant(false);

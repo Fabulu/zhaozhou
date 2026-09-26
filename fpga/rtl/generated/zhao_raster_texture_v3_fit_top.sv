@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
-// generator-sha256: 2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291
-// template-sha256: ae5eb48b27498c565904d2d7f22e4e36efdeae9c9b4dd891ed22015c56a84054
+// generator-sha256: f99ad1f418434e7cff21dd5a98c7a766868ed7bad3960f7865b4c97907a079b2
+// template-sha256: 15f6b9a3d6dcf8c3c0faf7187bb343d09e2f8b31d327f076a4a601823e3044f2
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.
@@ -561,6 +561,17 @@ logic [31:0] texture_samples_w;
       .attribute_idle_o(attribute_idle_w),
       .earlyz_hold_valid_o(earlyz_hold_valid_w), .skid_level_o(skid_level_w),
       .stage_candidate_valid_o(stage_candidate_valid_w),
+      // TERRAIN.NORMALMAP's write port, tied off for characterization, and its
+      // evidence left open (NORMALMAP, 2026-09-26). This top measures AREA and
+      // Fmax; the detail block is INSIDE the closure and is therefore measured,
+      // which is the point -- what it is not given here is traffic.
+      .dtl_we_i(1'b0), .dtl_sel_i(1'b0), .dtl_addr_i(13'd0), .dtl_data_i(32'd0),
+      /* verilator lint_off PINCONNECTEMPTY */
+      .cnt_detail_fragments_o(), .cnt_detail_zeroed_o(),
+      .cnt_detail_railed_o(), .cnt_detail_cold_o(),
+      .cnt_detail_published_o(), .cnt_detail_applied_o(),
+      .err_detail_lost_o(), .dtl_table_ready_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
       .stage_candidate_data_o(stage_candidate_data_w),
       .stage_fragment_valid_o(stage_fragment_valid_w),
       .stage_fragment_addr_o(stage_fragment_addr_w),

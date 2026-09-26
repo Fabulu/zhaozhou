@@ -12132,6 +12132,9 @@ set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
   # "reserved for a later visible terrain-effect composition". A LEAF of the
   # selected root, so it precedes it -- architecture 12.1's frozen order.
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
+  # TERRAIN.NORMALMAP, a LEAF of the selected root (NORMALMAP, 2026-09-26):
+  # architecture 12.1's frozen order puts it before the root it serves.
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normalmap.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
 )
 
@@ -13446,13 +13449,15 @@ foreach(relative_source IN LISTS ZHAO_PACKET_C_RELATIVE_SOURCES)
   list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_C_RELATIVE_SOURCES ZHAO_PACKET_C_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 36)
-  message(FATAL_ERROR "Packet-C source manifest must contain exactly 36 SV paths")
+# 37 since NORMALMAP (2026-09-26) added TERRAIN.NORMALMAP as a leaf of the
+# island; the three positional invariants below moved by one with it.
+if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 37)
+  message(FATAL_ERROR "Packet-C source manifest must contain exactly 37 SV paths")
 endif()
 list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 0 ZHAO_PACKET_C_FIRST_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_MUTANT_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 34 ZHAO_PACKET_C_STAGE_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 35 ZHAO_PACKET_C_LAST_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 34 ZHAO_PACKET_C_MUTANT_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 35 ZHAO_PACKET_C_STAGE_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 36 ZHAO_PACKET_C_LAST_SOURCE)
 if(NOT ZHAO_PACKET_C_FIRST_SOURCE STREQUAL
    "fpga/rtl/common/zhao_render_texture_pkg.sv" OR
    NOT ZHAO_PACKET_C_MUTANT_SOURCE STREQUAL
@@ -13484,6 +13489,30 @@ verilate(pc_seq
   VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0
     -DZHAO_PACKET_C_MUTANT_IDENTITY_ONLY)
 add_test(NAME raster_texture_stage_v3_identity_abort_control COMMAND pc_seq)
+
+# ---------------------------------------------------------------------------
+# TERRAIN.NORMALMAP'S DETAIL SEAM AND ITS POSITIVE CONTROL (NORMALMAP,
+# 2026-09-26).
+#
+# The healthy Packet-C gate above already runs `test_detail_normal_seam`, which
+# is where the FRAGMENT CHANGE is measured. This second target is the positive
+# control for `err_detail_lost_o`, a counter no legal stimulus can move: the
+# selector holds TERRAIN.NORMALMAP's response consumer off INSIDE THE REAL
+# ISLAND -- no copied module, so `mutant_copy_drift` has nothing to go stale --
+# and the driver's polarity is inverted, passing only when the counter fires.
+add_executable(pc_dtl raster/raster_texture_stage_v3_directed.cpp)
+target_compile_definitions(pc_dtl PRIVATE PACKET_C_EXPECT_DETAIL_LOST=1)
+target_link_libraries(pc_dtl PRIVATE zhao_harness zhao_zref)
+verilate(pc_dtl
+  PREFIX Vtb_raster_texture_stage_v3
+  TOP_MODULE tb_raster_texture_stage_v3
+  SOURCES ${ZHAO_PACKET_C_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0
+    -DZHAO_ISLAND_MUTANT_DETAIL_DRAIN)
+add_test(NAME raster_texture_stage_v3_detail_lost_control COMMAND pc_dtl)
+set_tests_properties(raster_texture_stage_v3_detail_lost_control PROPERTIES
+  LABELS "fast;nightly;packet-c;mutant" TIMEOUT 900
+  FAIL_REGULAR_EXPRESSION "packet-c directed FAIL")
 
 add_executable(pc_old raster/raster_texture_stage_v3_directed.cpp)
 target_compile_definitions(pc_old PRIVATE PACKET_C_EXPECT_OLD_READY=1)
@@ -14039,16 +14068,18 @@ foreach(relative_source IN LISTS ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
     "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_D_FULL_RELATIVE_SOURCES ZHAO_PACKET_D_FULL_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 59)
-  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 59 SV paths")
+# 60 since NORMALMAP (2026-09-26) added TERRAIN.NORMALMAP as a leaf of the
+# island; every positional invariant below it moved by one.
+if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 60)
+  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 60 SV paths")
 endif()
 list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 0 ZHAO_PACKET_D_FULL_FIRST)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 33 ZHAO_PACKET_D_FULL_PC_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 34 ZHAO_PACKET_D_FULL_PC_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_TILE_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_TILE_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 57 ZHAO_PACKET_D_FULL_BIN_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 58 ZHAO_PACKET_D_FULL_TOP)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 34 ZHAO_PACKET_D_FULL_PC_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 35 ZHAO_PACKET_D_FULL_PC_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_TILE_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 57 ZHAO_PACKET_D_FULL_TILE_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 58 ZHAO_PACKET_D_FULL_BIN_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 59 ZHAO_PACKET_D_FULL_TOP)
 if(NOT ZHAO_PACKET_D_FULL_FIRST STREQUAL
    "fpga/rtl/generated/zhao_abi_pkg.sv" OR
    NOT ZHAO_PACKET_D_FULL_PC_MUTANT STREQUAL
@@ -14266,8 +14297,11 @@ file(STRINGS "${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}"
   ZHAO_PACKET_E_TOP_RELATIVE_SOURCES
   REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
 list(LENGTH ZHAO_PACKET_E_TOP_RELATIVE_SOURCES ZHAO_PACKET_E_TOP_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 28)
-  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 28 SV paths")
+# 29 since NORMALMAP (2026-09-26) added TERRAIN.NORMALMAP as a leaf of the
+# island. The equality with Packet B's list below is what actually holds the
+# two manifests together; the count is the cheap half of the same check.
+if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 29)
+  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 29 SV paths")
 endif()
 set(ZHAO_PACKET_E_TOP_SOURCES)
 foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
@@ -14280,10 +14314,12 @@ foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
 endforeach()
 if(NOT ZHAO_PACKET_E_TOP_SOURCES STREQUAL ZHAO_TEXTURE_V3_PACKET_B_SOURCES)
   message(FATAL_ERROR
-    "Packet-E top source manifest diverges from Packet B's exact 28-source authority")
+    "Packet-E top source manifest diverges from Packet B's exact 29-source authority")
 endif()
 set(ZHAO_PACKET_E_TOP_MUTANT_SOURCES ${ZHAO_PACKET_E_TOP_SOURCES})
-list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 27
+# 28, not 27: the mutant top must sit immediately before the real top, and the
+# normalmap leaf now occupies the slot the island's predecessor used to have.
+list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 28
   ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv)
 
 function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
@@ -14512,6 +14548,9 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_sheetmod.sv
+  # TERRAIN.NORMALMAP, a LEAF of the selected root (NORMALMAP, 2026-09-26):
+  # architecture 12.1's frozen order puts it before the root it serves.
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normalmap.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
@@ -14531,8 +14570,10 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv)
 list(LENGTH ZHAO_G8A_RASTER_TEXTURE_SOURCES ZHAO_G8A_SOURCE_COUNT)
-if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 50)
-  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 50 sources")
+# 51 since NORMALMAP (2026-09-26): TERRAIN.NORMALMAP is inside the island and
+# therefore inside this fit closure, which is the point of the count.
+if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 51)
+  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 51 sources")
 endif()
 foreach(g8a_source IN LISTS ZHAO_G8A_RASTER_TEXTURE_SOURCES)
   if(NOT EXISTS "${g8a_source}")
