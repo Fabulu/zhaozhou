@@ -1,0 +1,34 @@
+zhao_arenabin_stage_probe -- ONE VARIABLE PER ARM, quartus_map on 5CSEBA6U23I7
+==============================================================================
+All nine rows are map_only, STAGE_IDS=1 (ONE bank of 576 x 18 = 10,368 bits),
+device 5CSEBA6U23I7 taken from the shell_fit QSF (no -Device was passed, so the
+unvalidated-device trap cannot apply; `measuredDevice` on every row says so).
+Arm 0 is the POSITIVE CONTROL and it FIRED: it reproduces the defect measured
+on the real block at one fourteenth the size.
+
+THE FINDING: only the DECLARATION'S SCOPE moves the number, and specifically
+only the generate FOR-LOOP. A generate-IF scope infers (arm 8). Module scope
+infers (arm 2). A submodule instance inside the for-loop infers (arm 7). The
+for-loop itself, at ONE iteration, does not (arm 0).
+
+Read-during-write, the shared process, the genvar-compare write enable and
+every attribute are INNOCENT -- arms 1, 3, 4, 5 and 6 are byte-identical to
+the control.
+
+arm    what it changes                                   registers   mem bits    secs
+--------------------------------------------------------------------------------------
+v0     production, verbatim (generate-FOR)                   10386          0   117.1
+v1     read address is its own net                           10386          0    45.9
+v2     declared at MODULE SCOPE                                  0      10368    10.7
+v3     write enable without the genvar compare               10386          0    41.3
+v4     read in its own always_ff                             10386          0    48.9
+v5     (* ramstyle = "no_rw_check" *)                        10386          0    34.9
+v6     arms 1 and 5 together                                 10386          0    34.1
+v7     zhao_dc_sdp_ram instance inside the generate-FOR          0      18432    20.9
+v8     generate-IF scope, no for-loop                            0      10368    20.1
+
+Arm 7's 18,432 bits against arm 2's 10,368 are the SAME SILICON and the extra
+bits are not a cost: `zhao_dc_sdp_ram` is 1 << ADDR_W deep, so 576 becomes
+1024, and a Cyclone V M10K carries 512 words at this width either way -- two
+blocks per bank in both cases. A map reports DESCRIBED bits; only a fit reports
+M10K, and neither of those numbers is a block count.

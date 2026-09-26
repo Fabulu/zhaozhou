@@ -243,7 +243,11 @@ the tool which path produced it.
 
 ---
 
-## 10. Storage inference is a LAW with three independent killers, and the penalty is superlinear
+## 10. Storage inference is a LAW with FOUR independent killers, and the penalty is superlinear
+
+> **Three until 2026-09-26.** The fourth — *an array declared inside a
+> `generate for` block* — has its own subsection below, and it is the dangerous
+> one because a shape carrying it can pass every other rule in this section.
 
 Every entry above was found by being surprised by one block. This one was
 **measured on purpose**, with a controlled grid of generated microbenches
@@ -306,6 +310,89 @@ how a blit buffer or a framebuffer wants to be written**, and
 blocking the composed fit on Error 276003. If a byte-enabled memory is needed,
 instantiate `altsyncram` explicitly rather than hoping — and then check the
 memory-bit count, because hoping is what this whole entry is about.
+
+### THE FOURTH KILLER: AN ARRAY DECLARED INSIDE A `generate for` BLOCK
+
+Added 2026-09-26 by ARENAINFER, after `zhao_geom_arenabin` measured **146,414
+registers against 33,408 block memory bits** on `5CSEBA6U23I7` — **145,152 bits
+of staging in flip-flops, 87% of the shipping part's register sites for one
+block.**
+
+**The shape passes all three killers above.** The read is synchronous, the
+process has *no reset at all*, the element is written whole, and a shared
+read/write process with a read enable is measured innocent at 65,536 bits
+(`calib_ram_8192x8_shared_re`). Worse, the five arrays in the SAME BLOCK that
+*do* infer sit in an `always_ff @(posedge clk or negedge rst_n)` with a
+forty-line reset branch — **the dirtier description of the two.** That is why
+it survived a compose and three map rows.
+
+The one difference is the **scope of the declaration**:
+
+```systemverilog
+generate
+  for (gs = 0; gs < STAGE_IDS; gs = gs + 1) begin : g_stage
+    logic [ID_W-1:0] bank [0:TILES-1];      // <- 0 memory bits, always
+```
+
+`tests/probes/zhao_arenabin_stage_probe.sv` moved one variable per map, nine
+rows, one bank of 576 x 18 = 10,368 bits, on the shipping part:
+
+| arm | what it changes | registers | mem bits |
+| --- | --- | ---: | ---: |
+| v0 | production, verbatim (generate-FOR) — **the control, and it FIRED** | 10,386 | **0** |
+| v1 | the read address becomes its own net | 10,386 | **0** |
+| v3 | write enable without the genvar compare | 10,386 | **0** |
+| v4 | the read gets its own `always_ff` | 10,386 | **0** |
+| v5 | `(* ramstyle = "no_rw_check" *)` | 10,386 | **0** |
+| v6 | v1 and v5 together | 10,386 | **0** |
+| v2 | declared at **MODULE SCOPE** | **0** | **10,368** |
+| v8 | declared inside a **generate-IF**, no for-loop | **0** | **10,368** |
+| v7 | a **submodule instance** inside the for-loop | **0** | 18,432 |
+
+> **It is the LOOP, not "a generate".** A generate-`if` scope infers perfectly
+> (v8). Module scope infers (v2). The for-loop fails **at one iteration**, with
+> every other property held fixed.
+
+**Read-during-write is NOT the cause, and it is the explanation that arrives
+first.** Production ties the read and write addresses to one net (`tile_r`),
+which describes a single-port RAM whose read-during-write returns the OLD word
+— and Cyclone V M10K same-port read-during-write is *new data*. That is a real
+mechanism, and it is a case every `sync` point in the 102-bench grid dodges
+because they all have separate `raddr_i`/`waddr_i` ports. **Arm 1 killed it.**
+`no_rw_check` is as inert as `"M10K"` was (arm 5) — and it is the attribute
+the next person would have reached for.
+
+**The remedy is a submodule**, not a rewrite: put the array at some module's
+scope and instantiate that module inside the loop. `zhao_dc_sdp_ram` already
+is that module — it exists precisely so "the shape lives in ONE place, written
+once, correctly" — so the repair is an instantiation and the circuit is
+unchanged. Measured on the real block, same device, `rtlCleanAtHead` true:
+
+| | `@arenacompose` | `@arenainfer` |
+| --- | ---: | ---: |
+| `registers` | 146,414 | **1,010** |
+| `blockMemoryBits` | 33,408 | **291,456** |
+| `dspBlocks` | 6 | 6 |
+| `virtualPins` | 1,305 | 1,305 |
+| map seconds | 1,025.7 | **37.1** |
+
+**The 27x fall in synthesis time is the second, independent signal.** It is the
+same tell SURFACE.SHEET left (34x, above): the missing thousand seconds were
+Quartus building flip-flops and the mux trees behind them.
+
+**And note what `blockMemoryBits` does NOT say.** It rose partly because
+`zhao_dc_sdp_ram` is `1 << ADDR_W` deep, so each bank went 576 -> 1024 words.
+That is **not** extra silicon: an M10K holds 512 words at 18 bits, so both
+depths are two blocks per bank. **A map reports DESCRIBED bits; only a fit
+reports M10K blocks**, and differencing the two is this file's own §10 mistake
+in a new costume.
+
+`tools/quartus/check_ram_inference.py` rule 6 now detects the construct
+statically, with a positive control and two negative ones. **Before it was
+added, that checker reported FIVE false alarms and ONE miss on this file** —
+it named all five arrays that infer as "will not infer as memory" and said
+nothing whatever about the 145,152-bit array that did not. The silence was the
+half that mattered, and it was silent in the flattering direction.
 
 ### The penalty is superlinear in the array
 
@@ -459,6 +546,9 @@ true-dual-port.
 2. Do **not** touch the array from a reset branch. M10K contents are undefined
    after reset anyway; use a `valid` bitmap, which is one register per entry
    and clears in a cycle.
+0. Do **not** declare it inside a `generate for` block. Put it at a module's
+   scope — its own module if it must be replicated — and instantiate that
+   inside the loop. A generate-`if` scope is fine; the loop is not.
 3. Do **not** write it with per-byte enables in RTL — and that includes ANY
    part-select on the left of a write to an array element, which is the same
    thing wearing different syntax. If the fields are written independently,

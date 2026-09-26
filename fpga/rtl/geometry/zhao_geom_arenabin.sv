@@ -53,14 +53,23 @@
 //
 // THIS BLOCK HOLDS ONE PARTIAL CHUNK PER TILE AND A PER-TILE DIRECTORY:
 //
-//     stage_ram  STAGE_IDS x TILES x ID_W = 14 x 576 x 18 = 145,152 bits
+//     stage      STAGE_IDS x 1024 x ID_W = 14 x 1024 x 18 = 258,048 bits
 //     head_ram   576 x CHIDX_W 18                         =  10,368 bits
 //     tail_ram   576 x CHIDX_W 18                         =  10,368 bits
 //     hv_ram     576 x 1                                  =     576 bits
 //     fill_ram   576 x STG_W 4                            =   2,304 bits
 //     nch_ram    576 x CHW 16                             =   9,216 bits
 //                                                           -------------
-//                                                             177,984 bits
+//                                                             290,880 bits
+//
+// THE STAGING ROW WAS `14 x 576 x 18 = 145,152` UNTIL 2026-09-26. It is a
+// `zhao_dc_sdp_ram` per bank now, which is `1 << ADDR_W` deep, so each bank
+// covers the whole TIDX_W tile-index space instead of only `TILES` of it.
+// THE EXTRA BITS ARE NOT EXTRA SILICON: an M10K holds 512 words at 18 bits,
+// so 576 and 1024 are both two blocks per bank, 28 for the fourteen. Recorded
+// as a rise anyway, because a table that quietly reports the flattering
+// number is this repo's most repeated failure -- and because DESCRIBED bits
+// and M10K BLOCKS are different quantities, and only a fit reports the second.
 //
 // THAT TOTAL WAS 168,768 IN THE FIRST VERSION OF THIS HEADER AND IT WAS WRONG
 // BY `nch_ram`, WHICH I ADDED AN HOUR LATER. Recorded rather than quietly
@@ -390,43 +399,34 @@ module zhao_geom_arenabin #(
   // STAGE_IDS slots of a tile in ONE clock, which is why there are fourteen
   // one-read-port banks and not one array.
   //
-  // THE STAGING DOES NOT REACH BLOCK MEMORY ON QUARTUS 17.0.2, AND THAT IS A
-  // MEASUREMENT RATHER THAN A SUSPICION. ARENACOMPOSE, 2026-09-26, put this
-  // block through `quartus_map` for the first time -- R212: BINARENA counted
-  // these bits from the DECLARATIONS and was forbidden a fit. Three map_only
-  // rows on the shipping part 5CSEBA6U23I7, all three IDENTICAL:
+  // THE STAGING DID NOT REACH BLOCK MEMORY UNTIL 2026-09-26, AND BOTH HALVES
+  // OF THAT ARE MEASUREMENTS. ARENACOMPOSE put this block through
+  // `quartus_map` for the first time -- R212: BINARENA counted these bits from
+  // the DECLARATIONS and was forbidden a fit -- and got three IDENTICAL
+  // map_only rows on the shipping part 5CSEBA6U23I7:
   //
   //   `@arenacompose`      as written                146,414 reg   33,408 bits
   //   `@ramstyle`          (* ramstyle = `MACRO *)   146,414 reg   33,408 bits
   //   `@ramstyle-literal`  (* ramstyle = "M10K" *)   146,414 reg   33,408 bits
   //
-  // WHAT INFERRED: only the five MODULE-SCOPE directory arrays -- head_ram,
-  // tail_ram, hv_ram, fill_ram, nch_ram, 33,408 bits between them, named in
-  // the map report's own RAM Summary. The 14 x 576 x 18 = 145,152-bit STAGING
-  // array did not infer at all, in any of the three, and went to flip-flops.
-  // A 5CSEBA6U23I7 holds about 167,640 of those, so this ONE BLOCK asks for
-  // roughly 87% of the device's registers.
+  // Only the five MODULE-SCOPE directory arrays inferred -- head_ram,
+  // tail_ram, hv_ram, fill_ram, nch_ram, 33,408 bits between them. The
+  // 14 x 576 x 18 = 145,152-bit STAGING array did not infer at all, in any of
+  // the three, and went to flip-flops: 87% of the device's register sites for
+  // one block. The attribute was removed rather than shipped, correctly -- an
+  // inert synthesis directive reads as a guarantee.
   //
-  // THE ATTRIBUTE IS THEREFORE NOT HERE. It was tried twice, it changed
-  // nothing either time, and Quartus said nothing either time. An INERT
-  // synthesis directive left in shipped RTL is worse than none: it reads as a
-  // guarantee that the storage is in memory, and the next person to look at
-  // this file would inherit the guarantee and not the measurement.
-  //
-  // THE DECLARATIONS ARE IDENTICAL IN STYLE to the five that DID infer; the
-  // one difference is that these are declared INSIDE A GENERATE. The header
-  // used to assert the opposite -- "declared inside an explicit generate
-  // rather than as a 2-D unpacked array, which Quartus 17 does not reliably
-  // infer as memory" -- and that is the sentence the fit refuted. Hoisting the
-  // banks to module scope is the next experiment and it is NOT done here: it
-  // is a change to this block's storage architecture, and ARENACOMPOSE's job
-  // was to compose the block and measure it.
+  // ARENAINFER THEN MEASURED WHY, AND THE CAUSE IS NOT ANY OF THE USUAL ONES.
+  // See the comment on the generate below for the nine-row table: the killer
+  // is the GENERATE FOR-LOOP itself, a fourth killer beside
+  // `reports/QUARTUS_GOTCHAS.md` section 10's three, and the banks are now
+  // `zhao_dc_sdp_ram` instances so the array sits at a module's scope.
   //
   // FOURTEEN ONE-READ-PORT BANKS ARE ARCHITECTURALLY REQUIRED whatever the
   // storage: A_EMITR reads all STAGE_IDS slots of a tile in ONE clock. At
-  // 576 x 18 each, M10K would cost 2 blocks per bank -- 28 of the device's 553
-  // -- so the memory is affordable if it can be reached. THE LIMIT IS THE
-  // INFERENCE, NOT THE CAPACITY.
+  // 1024 x 18 each an M10K costs 2 blocks per bank -- 28 of the device's 553.
+  // THE LIMIT WAS THE INFERENCE, NOT THE CAPACITY, and the inference is now
+  // reached.
   logic              stg_we;
   logic [STG_W-1:0]  stg_wsel;
   logic [TIDX_W-1:0] stg_wa;
@@ -540,15 +540,79 @@ module zhao_geom_arenabin #(
   // Each staging bank owns its own u32 slot of the chunk record. Slots past
   // the chunk's count carry ID_NULL -- an id `zhao_geom_parambuf` refuses --
   // rather than a legal-looking zero.
+  // EACH BANK IS A `zhao_dc_sdp_ram` INSTANCE, AND THE REASON IS MEASURED.
+  //
+  // This loop used to declare `logic [ID_W-1:0] bank [0:TILES-1]` inline, and
+  // that array went ENTIRELY TO FLIP-FLOPS -- 145,152 bits, 87% of the
+  // shipping part's register sites, for one block. ARENAINFER measured why
+  // with `tests/probes/zhao_arenabin_stage_probe.sv`, nine map_only rows on
+  // 5CSEBA6U23I7 at ONE bank, one variable per arm
+  // (`reports/synthesis/arenabin/STAGE-PROBE-ROWS.txt`):
+  //
+  //   production, verbatim (this loop)             10,386 reg        0 bits
+  //   read address as its own net                  10,386 reg        0 bits
+  //   write enable without the genvar compare      10,386 reg        0 bits
+  //   read in its own always_ff                    10,386 reg        0 bits
+  //   (* ramstyle = "no_rw_check" *)               10,386 reg        0 bits
+  //   declared at MODULE SCOPE                          0 reg   10,368 bits
+  //   declared inside a generate-IF, no for-loop        0 reg   10,368 bits
+  //   a submodule instance inside this for-loop         0 reg   18,432 bits
+  //
+  // THE KILLER IS THE GENERATE FOR-LOOP AND NOTHING ELSE. An array declared
+  // inside a genvar-indexed generate block is not a RAM candidate for Quartus
+  // 17.0.2 -- at ONE iteration, with every other property held fixed. A
+  // generate-IF scope is fine; module scope is fine. Read-during-write, the
+  // shared process, the genvar compare and every attribute are innocent:
+  // five arms are byte-identical to the control.
+  //
+  // THIS IS A FOURTH KILLER. `reports/QUARTUS_GOTCHAS.md` section 10 names
+  // three -- asynchronous read, a reset on the array, byte enables -- and this
+  // shape has NONE of them, which is what made it so hard to see. That section
+  // now carries it.
+  //
+  // AND THE HEADER ABOVE USED TO CLAIM THE OPPOSITE: "generate infers where a
+  // 2-D array does not". Both halves of that are now measured false for this
+  // block; the generate is the thing that prevented it.
+  //
+  // WHY `zhao_dc_sdp_ram` AND NOT A NEW MODULE. That file exists precisely so
+  // "the shape lives in ONE place, written once, correctly", after this
+  // project produced this defect five times. Its body is line-for-line what
+  // this loop described -- `if (wr_en) mem[wr_addr] <= wr_data;` and
+  // `if (rd_en) rd_data <= mem[rd_addr];`, no reset, no initial value -- so
+  // this is the SAME CIRCUIT with the declaration moved across a module
+  // boundary. Nothing about what this block computes, or when it handshakes,
+  // changes.
+  //
+  // THE DEPTH GOES 576 -> 1024 AND THAT IS NOT A COST. `zhao_dc_sdp_ram` is
+  // `1 << ADDR_W` deep, so each bank now covers the whole TIDX_W index space
+  // rather than only `TILES` of it. A Cyclone V M10K holds 512 words at this
+  // width, so 576 and 1024 both take two blocks: 28 for the fourteen banks
+  // either way. It is also STRICTLY SAFER -- `tile_c` is a TIDX_W-wide sum and
+  // the old array was `TILES` deep, so an out-of-range tile index had nothing
+  // under it.
+  //
+  // SAME-ADDRESS READ-DURING-WRITE IS OUTSIDE `zhao_dc_sdp_ram`'s PROTOCOL and
+  // is UNREACHABLE HERE BY OWNERSHIP, which is what that module's header asks
+  // a user to state: `stg_we` is `(st_q == A_PUSH)` and `stg_re` is
+  // `(st_q == A_EMITR)`, two states of ONE FSM, so the two enables cannot be
+  // asserted on the same clock. Both clocks are `clk`; there is no CDC here.
   genvar gs;
   generate
     for (gs = 0; gs < STAGE_IDS; gs = gs + 1) begin : g_stage
-      logic [ID_W-1:0] bank [0:TILES-1];
       logic [ID_W-1:0] rd_q;
-      always_ff @(posedge clk) begin
-        if (stg_we && (stg_wsel == STG_W'(gs))) bank[stg_wa] <= stg_wd;
-        if (stg_re) rd_q <= bank[stg_ra];
-      end
+      zhao_dc_sdp_ram #(
+          .DATA_W(ID_W),
+          .ADDR_W(TIDX_W)
+      ) u_bank (
+          .wr_clk (clk),
+          .wr_en  (stg_we && (stg_wsel == STG_W'(gs))),
+          .wr_addr(stg_wa),
+          .wr_data(stg_wd),
+          .rd_clk (clk),
+          .rd_en  (stg_re),
+          .rd_addr(stg_ra),
+          .rd_data(rd_q)
+      );
       assign ck_ids_o[gs*32 +: 32] = (STG_W'(gs) < cnt_r)
                                    ? {{(32-ID_W){1'b0}}, rd_q}
                                    : ID_NULL;
