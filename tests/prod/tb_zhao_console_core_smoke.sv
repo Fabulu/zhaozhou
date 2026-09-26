@@ -6585,6 +6585,44 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: binrefs    sweep_beats=%0d tile_references=%0d (seen=%0d) max_tile_list_depth=%0d (seen=%0d) overflow=%0d",
              cnt_beats_seen_q, cnt_tile_refs_q, cnt_tile_refs_seen_q,
              cnt_tile_depth_q, cnt_tile_depth_seen_q, render_overflow_o);
+    // ---- GEOM.ARENABIN, THE INDEPENDENT PRODUCER (entry I55) -------------
+    // ARENACOMPOSE, 2026-09-26. These are the counters of the block that fills
+    // the EXTERNAL arena's chunk region. It is NOT the binner and it reads no
+    // binner RAM: it runs its own corner test, on the same edge functions,
+    // over the same post-clip stream, at the same shell door.
+    $display("SMOKE: arenabin   tris=%0d unnamed=%0d refs=%0d chunks=%0d links=%0d tiles=%0d",
+             geom_ab_tris_o, geom_ab_unnamed_o, geom_ab_refs_o,
+             geom_ab_chunks_o, geom_ab_links_o, geom_ab_tiles_o);
+    $display("SMOKE: arenabin   refused=%0d stall=%0d flushcut=%0d max_tile_chunks=%0d overflow=%0d head0[chunk/valid]=[%0d %0d]",
+             geom_ab_refused_o, geom_ab_stall_o, geom_ab_flushcut_o,
+             geom_ab_max_chunks_o, geom_ab_overflow_o,
+             geom_ab_head_chunk_o, geom_ab_head_valid_o);
+    // THE TWO PRODUCERS MUST AGREE ABOUT THE SCENE, and this is the check that
+    // says so. `tile_references` is GEOM.BINNER's own push count, read out of
+    // the console's counter window; `geom_ab_refs_o` is GEOM.ARENABIN's. Two
+    // separate modules, two separate coverage tests, two separate register
+    // enables -- so this is NOT the pattern where one enable drives both sides
+    // of a comparison and the check is blind to the timing it should catch.
+    // If the independent producer ever bins a DIFFERENT set of tiles from the
+    // one the pixels come from, the chunk lists describe a picture nobody drew
+    // and no other counter in this bench would notice.
+    //
+    // IT STANDS DOWN WHEN A TRIANGLE HAD NO ARENA IDENTITY, because those are
+    // dropped by GEOM.ARENABIN (counted at `unnamed`) and still binned by
+    // GEOM.BINNER, so the two counts are legitimately different -- that is what
+    // `-BadVertex` arranges on purpose. Standing down is SAID rather than
+    // silent, so a run where the check did not happen cannot read as a pass.
+    if (geom_ab_unnamed_o == 32'd0) begin
+      if (geom_ab_refs_o != cnt_tile_refs_q) begin
+        $fatal(1, "SMOKE: GEOM.ARENABIN binned %0d tile reference(s) and GEOM.BINNER binned %0d from the same post-clip stream -- the external arena describes a different picture from the one the raster draws",
+               geom_ab_refs_o, cnt_tile_refs_q);
+      end
+      $display("SMOKE: arenabin   AGREES WITH THE BINNER: %0d tile reference(s) from both, independently binned",
+               geom_ab_refs_o);
+    end else begin
+      $display("SMOKE: arenabin   reference-agreement check STOOD DOWN: %0d triangle(s) had no arena identity, so the two producers are legitimately unequal",
+               geom_ab_unnamed_o);
+    end
     // ---- TERRAINVISIBLE PROBE (2026-09-26): WHERE A FRAGMENT DIES --------
     // EIGHT counters that `zhao_shell_top_v2.sv:1500-1506` leaves DANGLING at
     // its `u_render_bin` instantiation -- `raster_jobs_started_o`,

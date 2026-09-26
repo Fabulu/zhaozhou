@@ -386,9 +386,36 @@ module zhao_geom_arenabin #(
   // ---- the staging banks -------------------------------------------------
   // ONE RAM PER CHUNK SLOT. Appending a reference is then a single narrow
   // write to ONE bank at the tile's address; one STAGE_IDS*ID_W-wide RAM would
-  // need a read-modify-write of all 252 bits per reference. Each bank is
-  // declared inside an explicit generate rather than as a 2-D unpacked array,
-  // which Quartus 17 does not reliably infer as memory.
+  // need a read-modify-write of all 252 bits per reference. A_EMITR reads all
+  // STAGE_IDS slots of a tile in ONE clock, which is why there are fourteen
+  // one-read-port banks and not one array.
+  //
+  // THE BANKS ARE FORCED INTO BLOCK MEMORY, AND THAT IS A MEASUREMENT, NOT A
+  // PRECAUTION. ARENACOMPOSE, 2026-09-26, put this block through `quartus_map`
+  // for the first time (R212: BINARENA counted these bits from the
+  // DECLARATIONS and could not fit). The declaration above used to carry the
+  // sentence "declared inside an explicit generate rather than as a 2-D
+  // unpacked array, which Quartus 17 does not reliably infer as memory" --
+  // and the generate form DID NOT INFER EITHER. Quartus 17.0.2 put every one
+  // of the 14 x 576 x 18 = 145,152 staging bits into FLIP-FLOPS:
+  //
+  //   without this attribute   146,414 registers,  33,408 block memory bits
+  //   with it                  see the row `zhao_geom_arenabin@ramstyle`
+  //
+  // Only the module-scope directory arrays (head/tail/hv/fill/nch, 33,408
+  // bits) inferred on their own. 146,414 registers is about 87% of the
+  // shipping part's entire flip-flop count for ONE block, so the difference
+  // between "counted from the declarations" and "inferred as RAM" is the
+  // difference between a block that ships and one that cannot.
+  //
+  // IT IS A KNOB, NOT A CONSTANT, because the owner's control over every
+  // shipped value is a standing rule: `ZHAO_ARENABIN_STAGE_RAMSTYLE` defaults
+  // to "M10K" and can be set to "MLAB" or "logic" by a build that wants the
+  // other trade. Its default is defined immediately below rather than in a
+  // package, so a bench that elaborates this file alone still gets it.
+`ifndef ZHAO_ARENABIN_STAGE_RAMSTYLE
+  `define ZHAO_ARENABIN_STAGE_RAMSTYLE "M10K"
+`endif
   logic              stg_we;
   logic [STG_W-1:0]  stg_wsel;
   logic [TIDX_W-1:0] stg_wa;
@@ -505,6 +532,7 @@ module zhao_geom_arenabin #(
   genvar gs;
   generate
     for (gs = 0; gs < STAGE_IDS; gs = gs + 1) begin : g_stage
+      (* ramstyle = `ZHAO_ARENABIN_STAGE_RAMSTYLE *)
       logic [ID_W-1:0] bank [0:TILES-1];
       logic [ID_W-1:0] rd_q;
       always_ff @(posedge clk) begin
