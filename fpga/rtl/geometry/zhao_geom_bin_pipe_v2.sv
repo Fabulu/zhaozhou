@@ -21,7 +21,10 @@ module zhao_geom_bin_pipe_v2 #(
     parameter int unsigned CHUNK_W    = 8,
     parameter int unsigned CHUNK_REFS = 4,
     parameter bit ATTR_DSP3           = 1'b0,
-    parameter bit BILERP_DSP2         = 1'b0
+    parameter bit BILERP_DSP2         = 1'b0,
+    // The arena's TriangleDescriptor index width (`td_id_o` is u18). Console
+    // entry I54; see ARENA_ID_LO below for WHERE in the metadata it rides.
+    parameter int unsigned ARENA_ID_W = 18
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -156,6 +159,21 @@ module zhao_geom_bin_pipe_v2 #(
     output logic        [31:0] jobs_taken_o,
     output logic        [31:0] job_stall_clocks_o,
 
+    // ---- the binner's SERIALISE PASS, exported (console entry I54) --------
+    // The chunk serialiser lives beside `zhao_geom_paramarena` in the console,
+    // not in here, so what crosses this boundary is the lean reference stream
+    // and not a 448-bit chunk. See `zhao_geom_binner_v2`'s own port comment
+    // for why the pass exists and why it is not a tap on `job_*`.
+    input  logic               ser_req_i,
+    output logic               ser_busy_o,
+    output logic               ser_done_o,
+    output logic               ser_valid_o,
+    input  logic               ser_ready_i,
+    output logic [ARENA_ID_W-1:0] ser_tri_id_o,
+    output logic [TIDX_W-1:0]  ser_tile_o,
+    output logic               ser_first_o,
+    output logic               ser_last_o,
+
     // Raster/texture/fragment/resolve counters and terminal status.
     output logic               quiet_o,
     output logic               raster_abort_o,
@@ -239,11 +257,45 @@ module zhao_geom_bin_pipe_v2 #(
                                         +  47    // tri_area2_i
                                         +  12;   // tri_min_x_i
   localparam int unsigned METAW = META_FIXED_W + META_PLANES * META_PLANE_W;
+
+  // ---- WHERE THE ARENA'S TRIANGLE INDEX RIDES, AND WHY IT COSTS NOTHING ---
+  // Console entry I54 needs `zhao_geom_paramarena`'s TriangleDescriptor index
+  // to reach the binner's triangle store, because a chunk of BINNER SLOTS
+  // would decode cleanly into the wrong triangles with every range guard
+  // passing. The 142-bit triangle record has no free field and `tri_src_id_i`
+  // is a per-DRAW instance id, so the metadata is the only carrier.
+  //
+  // IT NEEDS NO NEW BITS. `tri_continuation_tail_i[47:24]` is the
+  // `vertex_rgb` field, and owner decision R234 D1 made
+  // `zhao_raster_tile_pipe_v2` OVERWRITE it per fragment from attribute lanes
+  // 3..5 -- the console's own comment at `zhao_console_core.sv` says the 24
+  // bits are "DEAD on arrival, whatever is put in them" and drives them with
+  // an explicit zero constant. Eighteen of those twenty-four now carry the
+  // arena index: METAW does not move, the ratified 1877 guard below still
+  // holds, the bank gains no slice, and no port crosses the shell for it.
+  //
+  // THE TAIL SITS ABOVE `tri_flat_request_i` IN THE CONCATENATION, so the
+  // offset is the flat-request width plus the field's own offset inside the
+  // tail. Stated as a sum for the same reason METAW is: one term moves when
+  // the layout does.
+  localparam int unsigned META_TAIL_LO      = 298;  // above tri_flat_request_i
+  localparam int unsigned TAIL_ARENA_ID_LO  = 24;   // the dead vertex_rgb field
+  localparam int unsigned ARENA_ID_LO       = META_TAIL_LO + TAIL_ARENA_ID_LO;
+
   initial begin : p_packet_d_meta_contract
     if ($bits(tri_meta_w) != METAW)
       $fatal(1, "zhao_geom_bin_pipe_v2: metadata width changed");
     if (METAW != 1877)
       $fatal(1, "zhao_geom_bin_pipe_v2: METAW is not the ratified 1877");
+    // The arena index must land inside the DEAD vertex_rgb field and nowhere
+    // else. If the tail layout ever moves, this fails elaboration rather than
+    // quietly slicing eighteen bits out of a live attribute -- which would
+    // produce triangle ids that are wrong and in range, the exact fault
+    // entry I54 is written against.
+    if ((TAIL_ARENA_ID_LO + ARENA_ID_W) > 48)
+      $fatal(1, "zhao_geom_bin_pipe_v2: arena id overruns the continuation tail");
+    if ($bits(tri_continuation_tail_i) != 48)
+      $fatal(1, "zhao_geom_bin_pipe_v2: continuation tail width changed");
   end
 
   // Exact ABI concatenation, MSB to LSB.  zhao_geom_binner_v2 samples it only on
@@ -286,7 +338,8 @@ module zhao_geom_bin_pipe_v2 #(
   zhao_geom_binner_v2 #(
       .GRID_W(GRID_W), .GRID_H(GRID_H), .TILES(TILES), .TIDX_W(TIDX_W),
       .TRI_CAP(TRI_CAP), .TRI_W(TRI_W), .CHUNKS(CHUNKS),
-      .CHUNK_W(CHUNK_W), .CHUNK_REFS(CHUNK_REFS), .METAW(METAW)
+      .CHUNK_W(CHUNK_W), .CHUNK_REFS(CHUNK_REFS), .METAW(METAW),
+      .ARENA_ID_LO(ARENA_ID_LO), .ARENA_ID_W(ARENA_ID_W)
   ) u_binner (
       .clk(clk),
       .rst_n(rst_n),
@@ -321,6 +374,15 @@ module zhao_geom_bin_pipe_v2 #(
       .job_profile_bad_o(job_profile_bad_w),
       .drain_busy_o(drain_busy_o),
       .drain_done_o(drain_done_o),
+      .ser_req_i(ser_req_i),
+      .ser_busy_o(ser_busy_o),
+      .ser_done_o(ser_done_o),
+      .ser_valid_o(ser_valid_o),
+      .ser_ready_i(ser_ready_i),
+      .ser_tri_id_o(ser_tri_id_o),
+      .ser_tile_o(ser_tile_o),
+      .ser_first_o(ser_first_o),
+      .ser_last_o(ser_last_o),
       .tile_references_o(binner_tile_references_o),
       .max_tile_list_depth_o(binner_max_tile_list_depth_o),
       .triangles_culled_o(binner_triangles_culled_o),

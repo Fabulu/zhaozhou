@@ -301,6 +301,14 @@ top:
   # under {arena, generation, index}, published ONCE per identity, and the
   # TriangleDescriptor names them by the ids the ALLOCATOR handed back.
   - zhao_geom_vertid
+  # GEOM.CHUNKSER and its identity queue (core entry I54, 2026-09-26).
+  # The serialiser re-aggregates zhao_geom_binner_v2's per-tile reference
+  # order into R7's fourteen-id chunks and hands them to the arena; the
+  # queue rejoins GEOM.VERTID's descriptor index with its own triangle at
+  # the shell door. Both are instantiated by zhao_console_core, not by a
+  # census top of their own.
+  - zhao_geom_chunkser
+  - zhao_geom_tidq
   # GEOM.MESHFETCH's descriptor CRC walker (core entry I37, closed 2026-09-19):
   # two constant-count zhao_crc32c_fold trees and a beat counter, composed
   # beside the fetcher on its own beat nets, so it is a census top of its own.

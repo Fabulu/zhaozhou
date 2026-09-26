@@ -486,6 +486,23 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_vid_sunk_o;
   logic [31:0] geom_vid_opens_o;
   logic [31:0] geom_vid_stall_o;
+  // Entry I54: the chunk serialiser and its identity queue, in the
+  // COMPOSED console. `geom_cs_head_tile_i` is the only input of the
+  // group and is held at tile 0 -- this bench does not walk, it only
+  // asserts that the producer ran and that its detectors stayed quiet.
+  logic [31:0] geom_tidq_underflow_o;
+  logic [31:0] geom_tidq_overflow_o;
+  logic [31:0] geom_tidq_unnamed_o;
+  logic [31:0] geom_cs_chunks_o;
+  logic [31:0] geom_cs_refs_o;
+  logic [31:0] geom_cs_tiles_o;
+  logic [31:0] geom_cs_chain_break_o;
+  logic [31:0] geom_cs_head_clash_o;
+  logic [31:0] geom_cs_truncated_o;
+  logic [31:0] geom_cs_sunk_o;
+  logic [ 9:0] geom_cs_head_tile_i = 10'd0;
+  logic [31:0] geom_cs_head_chunk_o;
+  logic        geom_cs_head_valid_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -6690,6 +6707,19 @@ module tb_zhao_console_core_smoke
              (terr_lq_issued_o   == terr_lq_accepted_o) &&
              ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
                terr_pl_pages_refused_o) == terr_lq_issued_o)) &&
+    //
+    // AND IT WAS FOUND TWICE, INDEPENDENTLY, FROM OPPOSITE SIDES -- recorded
+    // at the merge, 2026-09-26. CHUNKSER hit the same defect at `50714814`
+    // while composing I54, wrote a local repair, MEASURED WITH IT (raster
+    // pixels=2560, frames_admitted=1, and `paramarena chunks=10 frames=1`,
+    // which is I54 producing real chunks in the composed console), and then
+    // REVERTED it on purpose rather than duplicate a landed repair on a
+    // shared bench -- leaving a note saying "TAKE TERRTRI's VERSION". Its
+    // independent tell was the same one: `guard=0`.
+    //
+    // Two packets reaching the same `guard=0` from different subsystems is
+    // the strongest evidence this bench has that the fault was the WAIT and
+    // not the RTL underneath it.
            (guard < 200000)) begin
       @(posedge gpu_clk);
       guard++;

@@ -174,6 +174,14 @@ module tb_geom_binner_v2_pair #(
       // pair bench does not difference it. Connected explicitly rather than
       // left off: an omitted port is a PINMISSING the next fit discovers.
       .job_profile_bad_o(v2_job_profile_bad_w),
+    // The serialise pass is NOT REQUESTED in this bench, deliberately. This
+    // pair proves the V2 transport is the unversioned binner's, cycle for
+    // cycle; with `ser_req_i` low, `ser_mode_r` can never set and the raster
+    // drain is the only walk there is -- which is the property being asserted,
+    // not a way of dodging the new port.
+    .ser_req_i(1'b0), .ser_ready_i(1'b0),
+    .ser_busy_o(), .ser_done_o(), .ser_valid_o(),
+    .ser_tri_id_o(), .ser_tile_o(), .ser_first_o(), .ser_last_o(),
     .drain_busy_o(v2_drain_busy_o), .drain_done_o(v2_drain_done_o),
     .tile_references_o(v2_tile_references_o),
     .max_tile_list_depth_o(v2_max_tile_list_depth_o),

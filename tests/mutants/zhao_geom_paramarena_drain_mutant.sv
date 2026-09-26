@@ -390,6 +390,13 @@ module zhao_geom_paramarena_drain_mutant
     output var logic [17:0] pv_id_o,
     output var logic        td_accept_o,
     output var logic [17:0] td_id_o,
+    // Carried forward from production, console entry I54. See
+    // zhao_geom_paramarena.sv for the argument; this copy exists only for
+    // its own one-line mutation and must stay port-for-port with
+    // production, or mutant_copy_drift is measuring a block that no
+    // longer exists.
+    output var logic        ck_accept_o,
+    output var logic [17:0] ck_alloc_id_o,
     output var logic        seal_fire_o,
 
     // ---- the scratch's second owner -----------------------------------------
@@ -819,6 +826,8 @@ module zhao_geom_paramarena_drain_mutant
   assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
   assign pv_id_o     = n_verts_q;
   assign td_id_o     = n_tris_q;
+  assign ck_accept_o = ck_fire_c && rec_live_c && ck_fits_c && ck_in_view_c;
+  assign ck_alloc_id_o = n_chunks_q;
 
   // ---------------------------------------------------------- publication --
   // A frame is publishable when its producer is done AND every write it issued

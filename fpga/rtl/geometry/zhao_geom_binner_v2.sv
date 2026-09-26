@@ -227,7 +227,21 @@ module zhao_geom_binner_v2 #(
   parameter int unsigned CHUNKS     = 256,               // chunks in the arena
   parameter int unsigned CHUNK_W    = 8,                 // $clog2(CHUNKS)
   parameter int unsigned CHUNK_REFS = 4,                 // references per chunk
-  parameter int unsigned METAW      = 1157               // Packet-D opaque metadata
+  parameter int unsigned METAW      = 1157,              // Packet-D opaque metadata
+  // ---- WHERE THE ARENA'S TRIANGLE INDEX RIDES IN THE METADATA ------------
+  // Console entry I54. `zhao_geom_paramarena.td_id_o` names a triangle's
+  // TriangleDescriptor slot, re-exported on `zhao_geom_vertid.tri_id_o`. It
+  // reaches this block inside the opaque Packet-D metadata, because the
+  // 142-bit triangle record has no free field and `tri_src_id_i` is a 16-bit
+  // PER-DRAW instance id -- on a frame drawn from one source every triangle
+  // carries the same value, so it cannot name a triangle.
+  //
+  // THIS BLOCK DOES NOT KNOW THE ABI, AND MUST NOT. The offset is a knob the
+  // composer sets; the elaboration guard below refuses a slice that does not
+  // fit. Keeping it a parameter is also what stops this file from acquiring an
+  // opinion about a layout `zhao_geom_bin_pipe_v2` owns.
+  parameter int unsigned ARENA_ID_LO = 0,
+  parameter int unsigned ARENA_ID_W  = 18
 ) (
   input  logic clk,
   input  logic rst_n,
@@ -326,6 +340,44 @@ module zhao_geom_binner_v2 #(
   output logic               drain_busy_o,
   output logic               drain_done_o,   // one-cycle pulse: frame drained
 
+  // ---- THE SERIALISE PASS (console entry I54) ----------------------------
+  // A SECOND read walk over the same tile lists, run AFTER the raster drain
+  // has finished with them, so `zhao_geom_chunkser` can build R7's 64-byte
+  // chunks without ever being a term in `job_ready_i`.
+  //
+  // WHY A SECOND PASS AND NOT A TAP ON THE FIRST. A grid of 576 tiles holding
+  // one reference each drains in ~3,456 cycles and needs 576 chunks -- 4,608
+  // 64-bit beats through the guard. A passive observer is structurally slower
+  // than the stream it watches, so no FIFO depth makes it correct: depth only
+  // makes the loss rarer and keeps it silent. The alternative, letting the
+  // serialiser hold `job_ready_i`, puts a memory producer in the live raster
+  // path -- which is the change entry I55 declines to make and is not this
+  // block's to make either.
+  //
+  // IT COSTS NO EXTRA STORAGE. `tile_ram`, `ref_ram` and `next_ram` are
+  // written only at `frame_begin_i` (the clear) and at S_PUSH, so THE LISTS
+  // ARE STILL INTACT when the drain ends and this is a pure re-read of them,
+  // reusing the same single read port, the same cursors and the same states.
+  // The cost is one extra whole-grid scan: 720 cycles of a 251,520-cycle
+  // frame, entirely outside the picture.
+  //
+  // `ser_req_i` is sampled ONLY at D_DONE, so a pass can never interleave
+  // with the raster drain.
+  input  logic               ser_req_i,
+  output logic               ser_busy_o,
+  output logic               ser_done_o,     // one-cycle pulse: pass complete
+  output logic               ser_valid_o,
+  input  logic               ser_ready_i,
+  // The ARENA's TriangleDescriptor index for this reference, sliced out of the
+  // metadata this block already stores and already reads back. NOT a binner
+  // slot: a binner slot is 0..127, below any plausible sealed `tris`, so it
+  // would pass every range guard downstream and decode cleanly into the wrong
+  // triangle. That is the failure entry I54 exists to prevent.
+  output logic [ARENA_ID_W-1:0] ser_tri_id_o,
+  output logic [TIDX_W-1:0]  ser_tile_o,
+  output logic               ser_first_o,
+  output logic               ser_last_o,
+
   // ---- counters and status ----------------------------------------------
   output logic        [31:0] tile_references_o,
   output logic        [15:0] max_tile_list_depth_o,
@@ -360,6 +412,10 @@ module zhao_geom_binner_v2 #(
     if (METAW == 0) $fatal(1, "zhao_geom_binner_v2: METAW must be positive");
     if (META_PHYS_W < METAW)
       $fatal(1, "zhao_geom_binner_v2: metadata physical width underflow");
+    if (ARENA_ID_W == 0)
+      $fatal(1, "zhao_geom_binner_v2: ARENA_ID_W must be positive");
+    if ((ARENA_ID_LO + ARENA_ID_W) > METAW)
+      $fatal(1, "zhao_geom_binner_v2: arena id slice does not fit the metadata");
   end
 
   // ------------------------------------------------------------- states ----
@@ -716,7 +772,9 @@ module zhao_geom_binner_v2 #(
   assign tok_req_o   = tri_valid_i && tri_ready_o;
 
   // ------------------------------------------------------- drain outputs ---
-  assign job_valid_o  = d_job_v;
+  // The raster job port is SILENT during a serialise pass: the same walk, the
+  // same registers, one consumer at a time.
+  assign job_valid_o  = d_job_v && !ser_mode_r;
   assign job_ax_o     = $signed(d_tri_r[20:0]);
   assign job_ay_o     = $signed(d_tri_r[41:21]);
   assign job_bx_o     = $signed(d_tri_r[62:42]);
@@ -740,6 +798,21 @@ module zhao_geom_binner_v2 #(
   // and cleared on its first accepted emit.
   assign job_first_o  = d_first_r;
   assign job_last_o   = (d_rem_r == {{(CNT_W-1){1'b0}}, 1'b1});
+  // ---- the serialise pass's view of the SAME walk ------------------------
+  // One `d_job_v` drives both ports and `ser_mode_r` decides which one sees
+  // it, so the two streams are the same references in the same order and
+  // cannot disagree -- there is no second walk to keep in step with the first.
+  assign ser_valid_o  = d_job_v && ser_mode_r;
+  assign ser_first_o  = d_first_r;
+  assign ser_last_o   = (d_rem_r == {{(CNT_W-1){1'b0}}, 1'b1});
+  assign ser_tile_o   = d_jidx_r;
+  assign ser_tri_id_o = d_meta_r[ARENA_ID_LO +: ARENA_ID_W];
+  assign ser_busy_o   = ser_mode_r;
+  assign ser_done_o   = ser_done_r;
+  // The consumer of the walk this cycle. The raster drain keeps its own
+  // `job_ready_i` untouched in the normal mode, which is what makes the second
+  // pass free of the picture's timing.
+  assign take_c       = ser_mode_r ? ser_ready_i : job_ready_i;
   assign job_tile_x_o = $signed({2'd0, d_jx_r, 4'd0});
   assign job_tile_y_o = $signed({2'd0, d_jy_r, 4'd0});
   assign drain_busy_o = (state >= D_TILE) && (state <= D_EMIT);
@@ -751,11 +824,15 @@ module zhao_geom_binner_v2 #(
   logic d_first_r; // this emit is the first reference of its tile
   logic adv;       // finish this tile and move the BIN cursor
   logic nxt_tile;  // finish this tile and move the DRAIN cursor
+  logic ser_mode_r;   // this walk is the serialise pass, not the raster drain
+  logic ser_done_r;
+  logic [TIDX_W-1:0] d_jidx_r;  // the tile index this walk is emitting from
+  logic take_c;    // the consumer accepted, whichever consumer it is
 
   always_comb begin
     adv      = (state == S_TILE) ? !tile_keep : ((state == S_PUSH) && push_ok);
     nxt_tile = ((state == D_HEAD) && (cur_count == {CNT_W{1'b0}})) ||
-               ((state == D_EMIT) && d_job_v && job_ready_i &&
+               ((state == D_EMIT) && d_job_v && take_c &&
                 (d_rem_r == {{(CNT_W-1){1'b0}}, 1'b1}));
   end
 
@@ -794,6 +871,9 @@ module zhao_geom_binner_v2 #(
       d_jy_r       <= 6'd0;
       d_job_v      <= 1'b0;
       drain_done_r <= 1'b0;
+      ser_mode_r   <= 1'b0;
+      ser_done_r   <= 1'b0;
+      d_jidx_r     <= {TIDX_W{1'b0}};
       for (int k = 0; k < 3; k++) begin
         kx_r[k]  <= {ACC_W{1'b0}};
         ky_r[k]  <= {ACC_W{1'b0}};
@@ -804,6 +884,7 @@ module zhao_geom_binner_v2 #(
       end
     end else begin
       drain_done_r <= 1'b0;
+      ser_done_r   <= 1'b0;
 
       if (frame_begin_i) begin
         // A new frame. The arena is released by the same pulse (u_arena), the
@@ -816,6 +897,7 @@ module zhao_geom_binner_v2 #(
         overflow_r  <= 1'b0;
         drain_req_r <= 1'b0;
         d_job_v     <= 1'b0;
+        ser_mode_r  <= 1'b0;
       end else begin
         if (frame_end_i) drain_req_r <= 1'b1;
 
@@ -927,6 +1009,7 @@ module zhao_geom_binner_v2 #(
             d_slot_r  <= {SLOT_W{1'b0}};
             d_jx_r    <= d_tx_r;
             d_jy_r    <= d_ty_r;
+            d_jidx_r  <= d_idx_r;
             d_first_r <= 1'b1;
             state     <= D_REF;
           end
@@ -941,7 +1024,7 @@ module zhao_geom_binner_v2 #(
               d_meta_r <= meta_q[METAW-1:0];
               d_profile_bad_r <= meta_q[METAW+1 -: 2];
               d_job_v  <= 1'b1;
-            end else if (job_ready_i) begin
+            end else if (take_c) begin
               d_job_v   <= 1'b0;
               d_first_r <= 1'b0;
               if (d_rem_r != {{(CNT_W-1){1'b0}}, 1'b1}) begin
@@ -957,10 +1040,28 @@ module zhao_geom_binner_v2 #(
             end
           end
 
+          // The one place the serialise pass is armed. `ser_req_i` is sampled
+          // HERE and nowhere else, so a pass can only ever follow a completed
+          // raster drain and can never interleave with one.
           D_DONE: begin
-            drain_done_r <= 1'b1;
-            drain_req_r  <= 1'b0;
-            state        <= S_IDLE;
+            if (ser_mode_r) begin
+              ser_done_r  <= 1'b1;
+              ser_mode_r  <= 1'b0;
+              drain_req_r <= 1'b0;
+              state       <= S_IDLE;
+            end else begin
+              drain_done_r <= 1'b1;
+              if (ser_req_i) begin
+                ser_mode_r <= 1'b1;
+                d_idx_r    <= {TIDX_W{1'b0}};
+                d_tx_r     <= 6'd0;
+                d_ty_r     <= 6'd0;
+                state      <= D_TILE;
+              end else begin
+                drain_req_r <= 1'b0;
+                state       <= S_IDLE;
+              end
+            end
           end
 
           default: state <= S_IDLE;

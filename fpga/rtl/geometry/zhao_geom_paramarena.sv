@@ -381,6 +381,21 @@ module zhao_geom_paramarena
     output var logic [17:0] pv_id_o,
     output var logic        td_accept_o,
     output var logic [17:0] td_id_o,
+    // THE CHUNK CURSOR, EXPORTED FOR THE SAME REASON THE TWO ABOVE ARE.
+    // Console entry I54. A tile-reference chunk's `next_chunk` field has to
+    // name a chunk THIS BLOCK HAS NOT ALLOCATED YET, so the serialiser needs
+    // the index the next accepted chunk will receive. The alternative is a
+    // counter in the producer kept in step with `n_chunks_q` -- the same
+    // "two operands that move together" this block's header refuses for the
+    // vertex index, and it fails the same way: the two copies diverge on the
+    // first discarded record and no counter here looks at the producer's.
+    //
+    // It is the LIVE cursor, not a registered echo, so a producer reading it
+    // on the acceptance clock reads the index its own chunk is being given.
+    // `ck_accept_o` says that acceptance really happened -- not a consume into
+    // the free sink, not after the frame faulted, not past the quota.
+    output var logic        ck_accept_o,
+    output var logic [17:0] ck_alloc_id_o,
     // The seal actually TOOK EFFECT this clock. A seal is a REQUEST here and
     // may be held pending for as long as the drain takes, so anything
     // downstream holding per-frame identity state must clear it on THIS edge
@@ -820,6 +835,8 @@ module zhao_geom_paramarena
   assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
   assign pv_id_o     = n_verts_q;
   assign td_id_o     = n_tris_q;
+  assign ck_accept_o = ck_fire_c && rec_live_c && ck_fits_c && ck_in_view_c;
+  assign ck_alloc_id_o = n_chunks_q;
 
   // ---------------------------------------------------------- publication --
   // A frame is publishable when its producer is done AND every write it issued
