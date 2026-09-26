@@ -663,6 +663,47 @@ void case3_missing_id_is_loud() {
 }
 
 
+// CASE 4 -- THE FRAME PUBLISHES ON THE PHASE THAT USED TO WEDGE.
+//
+// `kTile0Tris = 53` is the one scene of sixty on which a retirement and a
+// guard acceptance land on the SAME CLOCK in `zhao_geom_paramarena`. That
+// block used to assign `wr_words_q` from two places in one always_ff -- a
+// retire arm and the M_VERD accept arm -- so the later non-blocking
+// assignment overwrote the earlier and the retired words were discarded. The
+// frame then waited forever in the publication arm for words that had already
+// come back, with the socket's own issued/credited/retired totals balancing
+// exactly and every error counter in the arena, the share and the queue
+// reading zero.
+//
+// THIS CASE ASSERTS THE CORRECT BEHAVIOUR, NOT THE DEFECT. `dbg_collide_o`
+// is checked to be NON-ZERO because the coincidence must still be REACHED --
+// a repair that moved the fixture off the colliding clock would pass a test
+// written against the wedge while proving nothing. So the collision is
+// required to happen AND the frame is required to publish under it, and the
+// outstanding-word ledger is required to have drained to zero.
+void case4_publishes_when_retire_and_accept_collide() {
+  kTile0Tris = 53;
+  Dut t;
+  bring_up(t);
+  ckt(seal(t, 0x5555), "case4: frame sealed");
+  idle(t, 700);
+  run_frame(t, scene(), -1, -1);
+  t.eval();
+
+  ckt(t.dbg_collide_o > 0,
+      "case4: a retirement and an acceptance DO land on one clock here");
+  cke(1, t.frames_published_o,
+      "case4: the frame publishes despite the collision");
+  cke(t.dbg_issued_words_o, t.dbg_retired_words_o,
+      "case4: every word the arena owed the socket retired");
+  cke(t.dbg_issued_words_o, t.dbg_client_credits_o,
+      "case4: the arena's share of the client credits is all of them");
+  cke(0, t.retire_underflow_o, "case4: no retirement went unowed");
+  cke(0, t.share_retire_unowned_o, "case4: the share attributed every credit");
+  cke(0, t.wq_err_o, "case4: the write queue was never popped empty");
+  kTile0Tris = 19;
+}
+
 // A PUBLICATION SWEEP, run only with an argument. It is not a ctest case: it
 // exists because an earlier fixture hit a ONE-PHASE stall in which the frame
 // never published, and the only honest way to say whether that is gone is to
@@ -676,9 +717,18 @@ void sweep(int lo, int hi) {
     idle(t, 700);
     run_frame(t, scene(), -1, -1);
     t.eval();
-    std::printf("sweep tris=%d published=%u chunks=%u refs=%u blocked=%u\n", n,
+    std::printf("sweep tris=%d published=%u chunks=%u refs=%u blocked=%u occ=%u owed=%u issued=%u credited=%u retired=%u unowned=%u ledgerfull=%u wqerr=%u underflow=%u collide=%u lost=%u\n", n,
                 (unsigned)t.frames_published_o, (unsigned)t.cs_chunks_o,
-                (unsigned)t.cs_refs_o, (unsigned)t.publish_blocked_o);
+                (unsigned)t.cs_refs_o, (unsigned)t.publish_blocked_o,
+                (unsigned)t.dbg_wq_occ_o, (unsigned)t.dbg_wq_owed_o,
+                (unsigned)t.dbg_issued_words_o,
+                (unsigned)t.dbg_client_credits_o,
+                (unsigned)t.dbg_retired_words_o,
+                (unsigned)t.share_retire_unowned_o,
+                (unsigned)t.share_ledger_full_o,
+                (unsigned)t.wq_err_o,
+                (unsigned)t.retire_underflow_o,
+                (unsigned)t.dbg_collide_o, (unsigned)t.dbg_collide_words_o);
   }
 }
 
@@ -695,6 +745,7 @@ int main(int argc, char** argv) {
   case1_ids_are_the_right_ids();
   case2_chain_break_fires();
   case3_missing_id_is_loud();
+  case4_publishes_when_retire_and_accept_collide();
 
   std::printf("geom_chunkser_directed: %d checks, %d failures\n", g_checks,
               g_fail);

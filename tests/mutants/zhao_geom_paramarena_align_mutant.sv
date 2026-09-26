@@ -292,16 +292,29 @@ module zhao_geom_paramarena_align_mutant
     // references divided by the fourteen a chunk holds, rounded UP and then to
     // a power of two -- 131072/14 = 9363, so 16,384 chunks, which also leaves
     // the giant's 32,768 reserved references expressible (2,341 chunks).
-    // 65,535 AND NOT 65,536, AND THE ONE VERTEX IS A DECLARED LOSS.
-    // R7's preferred tier says 65,536 projected vertices. A `vertex_id` is
-    // u16 and `zhao_geom_parambuf`'s `td_sealed_vertices_i` is u16 with it, so
-    // the SEAL 65,536 is not expressible in the port the legality rule is
-    // tested against -- it would arrive as 0 and refuse every triangle. The
-    // choices were to widen a frozen record layout, to special-case the
-    // maximum, or to lose one vertex of 65,536. This takes the vertex, says so
-    // here, and leaves the number a knob. It is a REAL divergence from R7's
-    // tier table and is reported rather than absorbed.
-    parameter int unsigned MAX_VERTS  = 65535,
+    // 65,536 -- R7's PREFERRED TIER, RESTORED. ARENAID, 2026-09-25.
+    //
+    // THIS DEFAULT WAS 65,535 AND THE MISSING VERTEX WAS CALLED "A DECLARED
+    // LOSS". The reasoning recorded here was: "a `vertex_id` is u16 and
+    // `zhao_geom_parambuf`'s `td_sealed_vertices_i` is u16 with it, so the
+    // SEAL 65,536 is not expressible in the port the legality rule is tested
+    // against -- it would arrive as 0 and refuse every triangle." That was a
+    // true statement about a port width and a false statement about the
+    // architecture, and the owner's vacation directive section 4 says which:
+    // "IDs 0..65,535 fit u16, but a count of 65,536 requires a wider internal
+    // count/limit. Use at least 17 bits for that count instead of silently
+    // sacrificing a vertex or representing full capacity as zero."
+    //
+    // SUPERSEDED, EXPLICITLY: the divergence paragraph in
+    // design/contracts/GEOM.PARAMBUF.md and this comment's earlier text.
+    // `td_sealed_vertices_i` is now u18 and `zhao_geom_paramwalk`'s
+    // `w_verts_q` no longer saturates at 0xFFFF. The ALLOCATION side never
+    // needed the change -- `n_verts_q`, `q_verts_q` and `publish_verts_o` have
+    // been 18 bits all along, which is why this was a decoder-port defect
+    // wearing an allocator's clothes. The RECORD is untouched: a `vertex_id`
+    // is still u16 and still names 0..65,535, which is exactly 65,536 ids.
+    // Allocation stride and serialized record size remain separate concepts.
+    parameter int unsigned MAX_VERTS  = 65536,
     parameter int unsigned MAX_TRIS   = 16384,
     parameter int unsigned MAX_CHUNKS = 16384,
     parameter int unsigned CHUNK_IDS  = 14,
@@ -381,21 +394,47 @@ module zhao_geom_paramarena_align_mutant
     input  var logic [15:0] ck_count_i,
     input  var logic [CHUNK_IDS*32-1:0] ck_ids_i,
 
-    // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE (ARENAID) -----------
-    // Carried forward from production 2026-09-25 so this copy still elaborates
-    // against the shared testbench. NOT the mutation -- the mutation is the one
-    // substantive line this file's header names.
+    // ---- THE ALLOCATED INDEX, RIDING ITS OWN ACCEPTANCE ---------------------
+    // ARENAID, 2026-09-25, owner vacation directive section 4. This block is
+    // the ALLOCATION AUTHORITY -- the contract's table says so in one word --
+    // and a producer that must NAME a vertex in a TriangleDescriptor needs the
+    // index this block gave it. The alternative, a second counter in the
+    // producer kept in step with `n_verts_q`, is exactly CLAUDE.md's "detector
+    // wired to two operands that move together": the two would diverge on the
+    // first discarded record and no counter here would notice, because no
+    // counter here looks at the producer's copy.
+    //
+    // So the index travels WITH its acceptance, on the clock the allocation
+    // happens, out of the SAME expressions the intake arm tests. `*_accept_o`
+    // is high only when the record was really allocated -- not when it was
+    // consumed into the free sink, not after the frame faulted, not when it
+    // overran the quota or the view. `*_id_o` means nothing otherwise, and the
+    // consumer is required to ignore it otherwise.
     output var logic        pv_accept_o,
     output var logic [17:0] pv_id_o,
     output var logic        td_accept_o,
     output var logic [17:0] td_id_o,
-    // Carried forward from production, console entry I54. See
-    // zhao_geom_paramarena.sv for the argument; this copy exists only for
-    // its own one-line mutation and must stay port-for-port with
-    // production, or mutant_copy_drift is measuring a block that no
-    // longer exists.
+    // THE CHUNK CURSOR, EXPORTED FOR THE SAME REASON THE TWO ABOVE ARE.
+    // Console entry I54. A tile-reference chunk's `next_chunk` field has to
+    // name a chunk THIS BLOCK HAS NOT ALLOCATED YET, so the serialiser needs
+    // the index the next accepted chunk will receive. The alternative is a
+    // counter in the producer kept in step with `n_chunks_q` -- the same
+    // "two operands that move together" this block's header refuses for the
+    // vertex index, and it fails the same way: the two copies diverge on the
+    // first discarded record and no counter here looks at the producer's.
+    //
+    // It is the LIVE cursor, not a registered echo, so a producer reading it
+    // on the acceptance clock reads the index its own chunk is being given.
+    // `ck_accept_o` says that acceptance really happened -- not a consume into
+    // the free sink, not after the frame faulted, not past the quota.
     output var logic        ck_accept_o,
     output var logic [17:0] ck_alloc_id_o,
+    // The seal actually TOOK EFFECT this clock. A seal is a REQUEST here and
+    // may be held pending for as long as the drain takes, so anything
+    // downstream holding per-frame identity state must clear it on THIS edge
+    // and not on the frame edge that asked -- otherwise its state and this
+    // block's cursor describe different frames, and a stale identity would
+    // name a record index that now belongs to somebody else.
     output var logic        seal_fire_o,
 
     // ---- the scratch's second owner -----------------------------------------
@@ -839,6 +878,10 @@ module zhao_geom_paramarena_align_mutant
   wire td_fire_c = td_valid_i && td_ready_o;
   wire ck_fire_c = ck_valid_i && ck_ready_o;
 
+  // THE ACCEPTANCE PORTS, built from the SAME terms the intake arm below
+  // tests, in the same order, so there is ONE decision with two readers rather
+  // than two decisions that have to agree. `rec_live_c` is that arm's
+  // `frame_open_q && !frame_fault_q` said once instead of twice.
   wire rec_live_c = frame_open_q && !frame_fault_q;
   assign pv_accept_o = pv_fire_c && rec_live_c && pv_fits_c && pv_in_view_c;
   assign td_accept_o = td_fire_c && rec_live_c && td_fits_c && td_in_view_c;
@@ -937,7 +980,6 @@ module zhao_geom_paramarena_align_mutant
       dir_written_q <= 1'b0;
       scr_mine_q    <= 1'b0;
       scr_walker_q  <= 1'b0;
-      wr_words_q    <= '0;
       mstate_q      <= M_IDLE;
       m_addr_q      <= 27'd0;
       m_len_q       <= 7'd0;
@@ -963,20 +1005,30 @@ module zhao_geom_paramarena_align_mutant
       fault_source_o      <= 16'd0;
     end else begin
       // ---- retirement ----------------------------------------------------
-      // Counted before anything that could add to it, so a retire and an issue
-      // in the same cycle are both seen. `retire_underflow_o` is the tripwire
-      // for the socket retiring more words than this block ever owed it --
-      // which would mean the share's ledger has attributed somebody else's
-      // write here, and would make every publish decision downstream wrong in
-      // the flattering direction (zero outstanding, publish early).
-      if (retire_words_i != 8'd0) begin
-        if ({8'd0, retire_words_i} > wr_words_q) begin
-          retire_underflow_o <= retire_underflow_o + 32'd1;
-          wr_words_q <= '0;
-        end else begin
-          wr_words_q <= wr_words_q - OUTW'(retire_words_i);
-        end
-      end
+      // `retire_underflow_o` is the tripwire for the socket retiring more words
+      // than this block ever owed it -- which would mean the share's ledger has
+      // attributed somebody else's write here, and would make every publish
+      // decision downstream wrong in the flattering direction (zero
+      // outstanding, publish early).
+      //
+      // `wr_words_q` ITSELF IS NOT UPDATED HERE ANY MORE. It used to be, and
+      // the comment that stood in this place claimed "counted before anything
+      // that could add to it, so a retire and an issue in the same cycle are
+      // both seen." THAT WAS FALSE, and it is the defect this file shipped:
+      // the M_VERD arm below also assigned `wr_words_q`, non-blocking, in THIS
+      // SAME always_ff. Textual order does not merge two non-blocking
+      // assignments to one variable -- the later one simply wins -- so on any
+      // clock where a retirement and a guard acceptance coincided the retired
+      // words were DISCARDED. The block then waited forever in the publication
+      // arm's `wr_words_q != 0` branch for words that had already come back.
+      // Measured: geom_chunkser_directed's 60-phase sweep, phase 53, ONE
+      // collision losing EIGHT words, with the socket's own issued/credited/
+      // retired totals balancing exactly at 716 and every error counter in the
+      // arena, the share and the queue reading zero. Nothing could see it,
+      // because no counter looked at the one quantity that moved.
+      // The single assignment that replaces both is below this always_ff.
+      if ((retire_words_i != 8'd0) && ({8'd0, retire_words_i} > wr_words_q))
+        retire_underflow_o <= retire_underflow_o + 32'd1;
 
       // ---- the address detector -------------------------------------------
       if (addr_view_mismatch_c)
@@ -1185,9 +1237,10 @@ module zhao_geom_paramarena_align_mutant
             frame_fault_q  <= 1'b1;
             mstate_q       <= M_IDLE;
           end else if (guard_rsp_i.ok) begin
-            // The words this request owes the socket, added the cycle the
-            // guard accepts it. This is the ONLY place wr_words_q grows.
-            wr_words_q <= wr_words_q + OUTW'(words_of(m_len_q));
+            // The words this request owes the socket are added by `wr_issue_c`
+            // below, off THIS SAME condition, in the one always_ff that owns
+            // `wr_words_q`. Assigning it from here as well is what lost a
+            // retirement that landed on the same clock.
             m_beat_q   <= 4'd0;
             mstate_q   <= M_WBEAT;
           end
@@ -1211,6 +1264,34 @@ module zhao_geom_paramarena_align_mutant
         default: mstate_q <= M_IDLE;
       endcase
     end
+  end
+
+  // ---------------------------------------------- THE OUTSTANDING-WORD LEDGER
+  // ONE always_ff, ONE assignment, BOTH deltas. `wr_words_q` is the gate the
+  // publication arm waits on ("data must not be published before its writes
+  // retire"), so a lost delta in either direction is a correctness fault:
+  // losing a RETIREMENT wedges the frame forever, and losing an ISSUE would
+  // publish early, which is the flattering direction.
+  //
+  // It was previously written from two places in the big always_ff above -- a
+  // retire arm and the M_VERD accept arm -- under a comment asserting that
+  // putting the retire first made both "seen". Two non-blocking assignments to
+  // one variable do not accumulate; the last one executed wins. Splitting the
+  // register out is what makes the two deltas structurally unable to overwrite
+  // each other, rather than relying on them never coinciding.
+  wire wr_issue_c = (mstate_q == M_VERD) && !guard_rsp_i.violation
+                    && guard_rsp_i.ok;
+  wire [OUTW-1:0] wr_add_c = wr_issue_c ? OUTW'(words_of(m_len_q)) : OUTW'(0);
+  wire [OUTW-1:0] wr_sub_c = OUTW'(retire_words_i);
+  // The saturating case is kept EXACTLY as it was: a retirement larger than the
+  // outstanding count clamps to zero rather than wrapping. It now clamps and
+  // still takes this clock's issue, which the old form also could not do.
+  wire wr_sat_c = (retire_words_i != 8'd0) && ({8'd0, retire_words_i} > wr_words_q);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)          wr_words_q <= '0;
+    else if (wr_sat_c)   wr_words_q <= wr_add_c;
+    else                 wr_words_q <= wr_words_q - wr_sub_c + wr_add_c;
   end
 
 endmodule : zhao_geom_paramarena_align_mutant
