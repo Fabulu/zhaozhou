@@ -13566,17 +13566,33 @@ add_test(NAME geom_binner_v2_cntw_hardcoded_mutant COMMAND gr_cntw_mut)
 
 # And the ELABORATION guard's own positive control. `-D` defines an OBJECT-like
 # macro, which is exactly what `ZHAO_GEOM_BINNER_V2_CNT_W` is, so this build
-# gets the hardcoded 11 WITHOUT the mutant file's guard-disable beside it. The
-# `$fatal` must then stop it at time 0. A clean `--lint-only` proves nothing
-# about an initial block (CLAUDE.md), so this is the only evidence that the
-# guard is alive -- and it is the NEGATIVE CONTROL for the macro selector too:
-# if `-D` had silently failed to reach the definition, this would run to a
-# clean PASS instead of dying.
+# gets the hardcoded 11 WITHOUT the mutant file's guard-disable beside it, and
+# the `$fatal` stops it at time 0. A clean `--lint-only` proves nothing about an
+# initial block (CLAUDE.md), so this is the only evidence the guard is alive --
+# and it is the NEGATIVE CONTROL for the macro selector too: a `-D` that
+# silently failed to reach the definition would run to a clean PASS instead of
+# dying. Measured, run by hand:
+#
+#   [0] %Fatal: zhao_geom_binner_v2.sv:492: Assertion failed in
+#       TOP.zhao_geom_binner_v2: zhao_geom_binner_v2: CNT_W cannot count
+#       REF_CAP references without wrapping
+#
+# IT IS A BUILD TARGET AND DELIBERATELY NOT A CTEST, and the reason is measured
+# rather than assumed. Verilator's `$fatal` goes through `vl_fatal`, NOT through
+# `zhao::exit_hard` -- and on this MinGW toolchain it then WEDGES in the
+# VlThreadPool teardown CLAUDE.md's harness note exists to avoid. Measured on
+# the run that produced the text above: the process was still alive 40 minutes
+# later having consumed **0.00 CPU seconds**, which is that note's own
+# alive-at-zero-CPU signature. Registered as a ctest it would not fail, it would
+# HANG the suite until its timeout, and a control that wedges the gate is worse
+# than no control.
+#
+# It stays a target so the default build keeps it compiling and it cannot rot,
+# and the two controls that DO gate -- derived and mutant, below -- are the ones
+# that carry the evidence. Run this one by hand after touching `CNT_W`:
+#   cmake --build build --target gr_cntw_guard ; .\build\tests\gr_cntw_guard.exe
+# and expect the fatal above and a process you have to kill.
 zhao_giantrefs_cntw_target(gr_cntw_guard -DZHAO_GEOM_BINNER_V2_CNT_W=11)
-add_test(NAME geom_binner_v2_cntw_elab_guard COMMAND gr_cntw_guard)
-set_tests_properties(geom_binner_v2_cntw_elab_guard PROPERTIES
-  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 600
-  PASS_REGULAR_EXPRESSION "CNT_W cannot count REF_CAP references without wrapping")
 
 set_tests_properties(geom_binner_v2_cntw_derived PROPERTIES
   LABELS "fast;nightly;packet-d" TIMEOUT 1800
