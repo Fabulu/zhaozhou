@@ -489,7 +489,15 @@ module zhao_field_host_v2_gather_replicate_mutant
     // -----------------------------------------------------------------------
     // counters and traces
     // -----------------------------------------------------------------------
-    output var logic [31:0] runs_o,             // points that retired complete
+    // RETIREMENTS that completed, EACH COVERING FRONT_PTS POINTS. At the
+    // default FRONT_PTS=1 that is "points that retired complete", which is what
+    // this comment said and what every existing reader assumes; at FRONT_PTS>1
+    // a reader wanting POINTS must multiply. The counter is deliberately NOT
+    // scaled here -- `uniform_runs_o`, `no_result_o`, `partial_o` and
+    // `run_faults_o` beside it all count the same event, and silently changing
+    // one of the five to a different unit is how a throughput number comes to
+    // mean two things.
+    output var logic [31:0] runs_o,
     output var logic [31:0] run_faults_o,
     output var logic [31:0] noprog_o,
     output var logic [31:0] instr_retired_o,
