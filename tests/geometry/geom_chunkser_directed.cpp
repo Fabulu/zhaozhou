@@ -663,6 +663,41 @@ void case3_missing_id_is_loud() {
 }
 
 
+// THE PRICE OF ENTRY I55'S SWAP, MEASURED ON ONE STIMULUS.
+//
+// Both producers run in this bench on the same scene: `zhao_geom_binner_v2`'s
+// on-chip job drain, which is what `zhao_raster_tile_pipe_v2` eats today, and
+// `zhao_geom_paramwalk`'s external walk over the published SDRAM arena. This
+// prints clocks per triangle for each. It asserts nothing about which is
+// better -- it reports the number entry I55 says must be reported.
+void price_the_swap() {
+  kTile0Tris = 19;
+  Dut t;
+  bring_up(t);
+  seal(t, 0x6666);
+  idle(t, 700);
+  run_frame(t, scene(), -1, -1);
+  t.eval();
+  const uint32_t head = head_of(t, tile_index(0, 0));
+  if (head != 0xFFFFFFFFu && t.frames_published_o >= 1) {
+    walk(t, head);
+    t.eval();
+  }
+  const double drain_per =
+      t.dbg_drain_refs_o > 1
+          ? (double)t.dbg_drain_cycles_o / (double)(t.dbg_drain_refs_o - 1)
+          : 0.0;
+  const double walk_per =
+      t.tris_emitted_o ? (double)t.dbg_walk_cycles_o / (double)t.tris_emitted_o
+                       : 0.0;
+  std::printf(
+      "PRICE on-chip drain: refs=%u span=%u clocks -> %.2f clocks/ref\n"
+      "PRICE external walk: tris=%u busy=%u clocks reqs=%u -> %.2f clocks/tri\n",
+      (unsigned)t.dbg_drain_refs_o, (unsigned)t.dbg_drain_cycles_o, drain_per,
+      (unsigned)t.tris_emitted_o, (unsigned)t.dbg_walk_cycles_o,
+      (unsigned)t.dbg_walk_reqs_o, walk_per);
+}
+
 // CASE 4 -- THE FRAME PUBLISHES ON THE PHASE THAT USED TO WEDGE.
 //
 // `kTile0Tris = 53` is the one scene of sixty on which a retirement and a
@@ -746,6 +781,7 @@ int main(int argc, char** argv) {
   case2_chain_break_fires();
   case3_missing_id_is_loud();
   case4_publishes_when_retire_and_accept_collide();
+  price_the_swap();
 
   std::printf("geom_chunkser_directed: %d checks, %d failures\n", g_checks,
               g_fail);

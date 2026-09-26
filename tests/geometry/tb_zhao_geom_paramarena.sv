@@ -408,6 +408,14 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] dbg_client_credits_o,
     output var logic [31:0] dbg_collide_o,
     output var logic [31:0] dbg_collide_words_o,
+    // ---- THROUGHPUT, BOTH PATHS, ONE STIMULUS -------------------------------
+    // Entry I55 asks what the raster-path swap COSTS. These measure the two
+    // producers on the same scene in the same bench: the binner's on-chip job
+    // drain (what the raster path eats today) and the external SDRAM walk.
+    output var logic [31:0] dbg_drain_refs_o,    // job handshakes
+    output var logic [31:0] dbg_drain_cycles_o,  // first handshake -> last
+    output var logic [31:0] dbg_walk_cycles_o,   // clocks the walker was busy
+    output var logic [31:0] dbg_walk_reqs_o,     // guard requests the walk issued
     output var logic        model_error_o,
     output var logic        init_done_o
 );
@@ -892,6 +900,37 @@ module tb_zhao_geom_paramarena
   // and never seen to move is the thing this repository does not ship.
   assign dbg_wq_occ_o  = {{(16-(QPW+1)){1'b0}}, wq_occ};
   assign dbg_wq_owed_o = {{(16-(QPW+1)){1'b0}}, wq_owed};
+
+  // ---------------------------------------------- THROUGHPUT, BOTH PATHS ----
+  // `dbg_drain_cycles_o` is the span from the FIRST job handshake to the LAST,
+  // so it excludes the binner's clear phase and any idle before the scene
+  // arrives -- it is the drain itself, which is what the raster path pays.
+  // `dbg_walk_cycles_o` accumulates every clock `busy_o` is high on the walker,
+  // which is the request, the SDRAM round trip and the decode together, and is
+  // what an external producer would pay for the same triangles.
+  logic        drain_started_q;
+  logic [31:0] drain_run_q;
+  wire         job_hs_c = bin_job_valid_o && bin_job_ready_i;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      drain_started_q    <= 1'b0;
+      drain_run_q        <= 32'd0;
+      dbg_drain_refs_o   <= 32'd0;
+      dbg_drain_cycles_o <= 32'd0;
+      dbg_walk_cycles_o  <= 32'd0;
+      dbg_walk_reqs_o    <= 32'd0;
+    end else begin
+      if (drain_started_q) drain_run_q <= drain_run_q + 32'd1;
+      if (job_hs_c) begin
+        drain_started_q    <= 1'b1;
+        dbg_drain_refs_o   <= dbg_drain_refs_o + 32'd1;
+        dbg_drain_cycles_o <= drain_run_q;
+      end
+      if (walk_busy_o) dbg_walk_cycles_o <= dbg_walk_cycles_o + 32'd1;
+      if (walk_req.valid && walk_rsp.ready)
+        dbg_walk_reqs_o <= dbg_walk_reqs_o + 32'd1;
+    end
+  end
 
   // WHERE THE WORDS GO.  Three totals over one frame, at three points on the
   // one path: what the ARENA was told it owed (the guard's accept, the same
