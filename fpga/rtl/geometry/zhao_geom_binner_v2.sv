@@ -174,7 +174,10 @@
 //   next_ram [CHUNKS]  9b = {valid, chunk} — the chunk chain. ONE pointer per
 //            CHUNK_REFS references: that is what "chunked" buys, and it is why
 //            the pointer overhead is 9/(4·7) ≈ 32% instead of 9/7 ≈ 129%.
-//   tile_ram [TILES]  27b = {count[10:0], tail[7:0], head[7:0]} — per tile.
+//   tile_ram [TILES]  27b = {count[CNT_W-1:0], tail[CHUNK_W-1:0],
+//            head[CHUNK_W-1:0]} — per tile. 27 bits at the DEFAULT parameters
+//            (11+8+8); every one of those three widths is DERIVED from the
+//            capacity parameters, so this row is a worked example, not a law.
 // No read and write of the same RAM address ever occur in the same cycle:
 // binning writes tile_ram one cycle after reading it and consecutive tiles of
 // one triangle are distinct; the clear phase only writes; the drain only reads.
@@ -212,6 +215,18 @@
 // before this exact RTL and overrides only the metadata read address expression.
 `ifndef ZHAO_GEOM_BINNER_V2_META_RA
 `define ZHAO_GEOM_BINNER_V2_META_RA(addr) (addr)
+`endif
+
+// Test-only WIDTH hook, same pattern and same reason as the one above
+// (GIANTREFS). `CNT_W` shipped as a hardcoded 11 sized by hand to the DEFAULT
+// arena, and the fault it hides is a per-tile count that WRAPS instead of
+// overflowing — silent, and invisible to `overflow_o` by construction. The
+// committed mutant `tests/mutants/zhao_geom_binner_v2_mutants.sv` defines this
+// back to 11 so that wrap can be SEEN to happen at a parameterisation the
+// derivation makes safe. It is a positive control for the derivation; it is
+// never defined by any production source list.
+`ifndef ZHAO_GEOM_BINNER_V2_CNT_W
+`define ZHAO_GEOM_BINNER_V2_CNT_W $clog2(REF_CAP + 1)
 `endif
 
 module zhao_geom_binner_v2 #(
@@ -395,8 +410,45 @@ module zhao_geom_binner_v2 #(
   // unsigned if EITHER operand is — which would make every negative edge
   // coefficient test as positive and pick the wrong tile corner.
   localparam logic signed [ACC_W-1:0] ACC_ZERO = {ACC_W{1'b0}};
-  localparam int unsigned CNT_W      = 11;   // per-tile reference count, 0…1024
-  localparam int unsigned SLOT_W     = 2;    // $clog2(CHUNK_REFS)
+  // ---- THE COUNT AND SLOT WIDTHS ARE DERIVED, NOT CHOSEN (GIANTREFS) ------
+  // Both of these were hardcoded — `CNT_W = 11` with the comment "0…1024" and
+  // `SLOT_W = 2` with the comment "$clog2(CHUNK_REFS)". Each was correct FOR
+  // THE DEFAULT PARAMETERS and neither was tied to them, so every capacity
+  // parameter of this block was a knob with a silent, undeclared ceiling. A
+  // width sized to a parameter by hand is a width that stops being right the
+  // first time the parameter moves, and the failure is a WRAP — a corruption,
+  // not an overflow, so the safe-overflow wall (LAWS CHOSEN D) does not fire
+  // and `overflow_o` stays low while references are lost.
+  //
+  // REF_CAP is the arena's whole reference capacity and is the conservative
+  // bound on a per-tile count: a tile cannot hold more references than the
+  // arena holds in total.
+  //
+  // THE TIGHTER BOUND IS TRI_CAP, AND IT IS DELIBERATELY NOT USED. The bin
+  // cursor walks each triangle's tile range strictly row-major and visits each
+  // (tx,ty) exactly once (`adv` below, :1071-1087), and a triangle past
+  // TRI_CAP is dropped WHOLE in S_IDLE and never enumerated — so a tile's
+  // count cannot exceed TRI_CAP either, and min(TRI_CAP, REF_CAP) would be
+  // exact. That bound is a property of the ENUMERATION, not of the storage;
+  // if a later pass ever re-enumerates a triangle, sizing to it would turn a
+  // structural change into a silent corruption. REF_CAP is a property of the
+  // memory the count indexes, cannot be invalidated from outside this block,
+  // and costs TILES × (CNT_W - $clog2(TRI_CAP+1)) bits to be safe — 1,728 bits
+  // at the shipped parameters. That is the right trade in a design where the
+  // binding constraint is ALMs and the slack is memory.
+  //
+  // AND THE DERIVATION IS A NO-OP AT THE SHIPPED PARAMETERS: CHUNKS=256,
+  // CHUNK_REFS=4 gives REF_CAP=1024 and $clog2(1025) = 11, exactly the
+  // hardcoded value, so this changes no shipped bit and the block's `-MapOnly`
+  // row is a like-for-like against the one taken before it.
+  localparam int unsigned REF_CAP    = CHUNKS * CHUNK_REFS;
+  localparam int unsigned CNT_W      = `ZHAO_GEOM_BINNER_V2_CNT_W;
+  localparam int unsigned SLOT_W     = $clog2(CHUNK_REFS);
+  // `max_tile_list_depth_o` is a 16-bit instrument port, so a count wider than
+  // 16 bits could not be reported even though it could be stored. Refuse that
+  // parameterisation at elaboration rather than truncate an instrument, which
+  // is the broken-instrument law's own direction: a depth that reads LOW.
+  localparam int unsigned DEPTH_W    = 16;
   localparam int unsigned REF_AW     = CHUNK_W + SLOT_W;
   localparam int unsigned TILE_ENT_W = CNT_W + CHUNK_W + CHUNK_W;
   localparam int unsigned TRI_ENT_W  = 16 + 6*21;
@@ -416,6 +468,29 @@ module zhao_geom_binner_v2 #(
       $fatal(1, "zhao_geom_binner_v2: ARENA_ID_W must be positive");
     if ((ARENA_ID_LO + ARENA_ID_W) > METAW)
       $fatal(1, "zhao_geom_binner_v2: arena id slice does not fit the metadata");
+    // ---- the derived-width guards (GIANTREFS) ---------------------------
+    // These do not defend against a bad edit of the two localparams above;
+    // they defend against a PARAMETERISATION the derivation cannot express.
+    if (CHUNK_REFS != (32'd1 << SLOT_W))
+      $fatal(1, "zhao_geom_binner_v2: CHUNK_REFS must be a power of two");
+    // CHUNK_W addresses the arena; CHUNKS need not be a power of two (the
+    // Packet-D pair bench runs CHUNKS=6, CHUNK_W=3 deliberately), but it must
+    // fit, or `push_chunk` cannot name every chunk the arena will grant.
+    if (CHUNKS > (32'd1 << CHUNK_W))
+      $fatal(1, "zhao_geom_binner_v2: CHUNK_W cannot address CHUNKS");
+    if (CNT_W > DEPTH_W)
+      $fatal(1, "zhao_geom_binner_v2: reference capacity exceeds the 16-bit max_tile_list_depth_o instrument");
+    // The count must be able to COUNT the arena it indexes. This is the guard a
+    // hand-set CNT_W fails, and it is disabled in the committed mutant ONLY --
+    // an elaboration $fatal would stop the simulation before the drain could be
+    // measured, and the drain is the evidence that ships. The guard firing on
+    // the mutant is independent corroboration, not the measurement. (And
+    // `--lint-only` does not run initial blocks, so a clean lint says nothing
+    // whatever about this line; CLAUDE.md, the committed-mutant section.)
+`ifndef ZHAO_GEOM_BINNER_V2_NO_CNTW_GUARD
+    if (CNT_W < $clog2(REF_CAP + 1))
+      $fatal(1, "zhao_geom_binner_v2: CNT_W cannot count REF_CAP references without wrapping");
+`endif
   end
 
   // ------------------------------------------------------------- states ----
@@ -436,7 +511,7 @@ module zhao_geom_binner_v2 #(
 
   // --------------------------------------------------------------- RAMs ----
   logic [TRI_ENT_W-1:0]  tri_ram  [0:TRI_CAP-1];
-  logic [TRI_W-1:0]      ref_ram  [0:(CHUNKS*CHUNK_REFS)-1];
+  logic [TRI_W-1:0]      ref_ram  [0:REF_CAP-1];
   logic [CHUNK_W-1:0]    next_ram [0:CHUNKS-1];
   logic [TILE_ENT_W-1:0] tile_ram [0:TILES-1];
 
@@ -995,8 +1070,13 @@ module zhao_geom_binner_v2 #(
               state      <= S_IDLE;
             end else begin
               if (cnt_refs != 32'hFFFF_FFFF) cnt_refs <= cnt_refs + 32'd1;
-              if (({5'd0, cur_count} + 16'd1) > max_depth)
-                max_depth <= {5'd0, cur_count} + 16'd1;
+              // WAS `{5'd0, cur_count}`, a zero-extension whose pad width
+              // encoded CNT_W == 11 in a place no reader of the localparam
+              // would look. Derive the extension from the instrument's own
+              // width; the elaboration guard above refuses CNT_W > DEPTH_W, so
+              // this cast is never a truncation. (GIANTREFS)
+              if ((DEPTH_W'(cur_count) + 16'd1) > max_depth)
+                max_depth <= DEPTH_W'(cur_count) + 16'd1;
             end
           end
 

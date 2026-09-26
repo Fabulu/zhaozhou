@@ -7175,6 +7175,111 @@
 //      claim on the binding budget. The seal stays at the arena's capacity --
 //      the NEUTRAL choice, and now a DECLARED SHORTFALL in the directive's own
 //      words rather than a resting place.
+//
+//      -- GIANTREFS, 2026-09-26. STILL OPEN, SEAL STILL AT CAPACITY -- BUT THE
+//      BREACH REFPUSH FOUND IS REPAIRED AND IS NO LONGER INVISIBLE. This packet
+//      did (1) and (2) of REFPUSH's list and the READ half of (5). It did NOT
+//      build the reservation, and that remains the right refusal.
+//
+//      THE CAPACITY. `zhao_shell_top_v2` now instantiates
+//      `zhao_geom_bin_pipe_v2` with RENDER_CHUNKS=8192, RENDER_CHUNK_W=13,
+//      RENDER_CHUNK_REFS=4 -- 32,768 tile references, R7's number EXACTLY,
+//      chosen for that reason and not sized to a tested workload. They are
+//      named module parameters, so the capacity is a knob rather than a literal
+//      in a port map. TRI_CAP deliberately does not move: the giant is
+//      TRIANGLE-CHEAP and REFERENCE-EXPENSIVE (126 triangles, 25,704
+//      references) and TRI_CAP carries the 1,160-bit-per-triangle metadata
+//      bank. Scaling it is the confident impossibility REFPUSH caught itself
+//      making.
+//
+//      MEASURED, MY OWN ROWS, `-MapOnly`, `-Device 5CSEBA6U23I7`, source
+//      digest `81478b109709`, BOTH `rtlCleanAtHead: true`:
+//        zhao_geom_binner_v2@giantrefs-shipped   191,296 bits, 2,109 registers
+//        zhao_geom_binner_v2@giantrefs-32k       see the row; predicted 526,592
+//      The SHIPPED row is BYTE-IDENTICAL to `@refpush-shipped` (191,296 /
+//      2,109) at a different source digest, which is the derivation below
+//      proving itself a no-op rather than being asserted to be one.
+//
+//      AND A CLAIM IN REFPUSH'S OWN SECTION THAT IS FALSE, checked because the
+//      brief told me to check it. It says the two priced rows are "same sources
+//      digest `14d58d825e87`, both `rtlCleanAtHead`". The digests do match, but
+//      `zhao_geom_binner_v2@refpush-giantrefs32k` carries
+//      **`rtlCleanAtHead: false`** in `reports/synthesis/zhao_block_fit.json`.
+//      Only `@refpush-shipped` is clean. CLAUDE.md's own rule -- "Read
+//      `rtlCleanAtHead` first, always" -- applied to the row the +33 M10K came
+//      from says that row cannot be tied to a file version. The NUMBER survives
+//      (the three-file digest is identical, so the binner's own sources were
+//      the same bytes) but the CLEANLINESS claim does not, and it was the claim
+//      doing the reassuring.
+//
+//      (2) FIRST, AND THE BRIEF IS WRONG ABOUT WHY IT MATTERS. REFPUSH and the
+//      brief both say raising CHUNKS "silently wraps every tile's count at
+//      2,048". IT CANNOT. `CNT_W` bounds a PER-TILE count; the bin cursor walks
+//      each triangle's tile range strictly row-major and visits every (tx,ty)
+//      exactly once, and a triangle past TRI_CAP is dropped WHOLE in S_IDLE and
+//      never enumerated. So a tile's count cannot exceed min(TRI_CAP, REF_CAP),
+//      and at TRI_CAP=128 it cannot exceed 128 -- CHUNKS=8192 alone would have
+//      been safe with the hardcoded 11. The derivation was still done first and
+//      is still right: it makes the ceiling a property of the code instead of
+//      an argument about the enumeration, and it found a THIRD hardcoded width
+//      nobody had recorded -- the max-depth compare's `{5'd0, cur_count}`,
+//      whose five-bit pad encodes CNT_W==11 where no reader of the localparam
+//      would look. `CNT_W = $clog2(REF_CAP+1)`, `SLOT_W = $clog2(CHUNK_REFS)`,
+//      `ref_ram [0:REF_CAP-1]`, `DEPTH_W'(cur_count)`, four elaboration guards.
+//
+//      THE WRAP IS SHOWN, AND IT IS NOT AN OVERFLOW. Committed control, both
+//      polarities from one source, at TRI_CAP=4096/CHUNKS=8192 where the count
+//      is actually reachable:
+//        derived CNT_W:  pushed=2049  drained=2049  tile_references_o=2049
+//        hardcoded 11:   pushed=2049  drained=1     tile_references_o=2049
+//      with `overflow_o` LOW in both. A wrapped count returns to zero, and
+//      `cur_count == 0` is the condition the push logic uses to re-seed a
+//      tile's list HEAD, so the list is orphaned -- and the frame-wide
+//      instrument goes on reporting 2,049 because it counts PUSHES MADE, not
+//      references the machine can still reach. Two operands that do not move
+//      together, for once, and the one that is read is the wrong one.
+//
+//      (3) THE INSTRUMENTS ARE READ, AND HALF OF IT WAS ALREADY IN THE LEDGER.
+//      `design/blocks.yml` has declared `[tile_references, max_tile_list_depth,
+//      geom_binner_triangles_culled]` for GEOM.BINNER since the beginning, and
+//      the first two are ORIGINAL section-25 minimum-list catalog entries at
+//      ids 18 and 19 that never had a producer wired to them. They are now
+//      DEBUG.COUNTERS providers in `zhao_shell_top_v2`, shadowed at
+//      `gpu_tick.pulse` and presented on `tick_d1` per `spec/counters.md` 3.2,
+//      leaving the console on `cnt_snap_id_o`/`cnt_snap_value_o` -- ports that
+//      already reach `zhao_console_board`. No id is shared with another
+//      emitter, so ruling R19 holds by construction rather than by care.
+//      `binner_overflow_o` is additionally the SEVENTH term of the shell's
+//      fault aggregation, which is not new policy: directive section 4 rules
+//      that "Overflow remains a whole-frame fault". `render_overflow_o` is
+//      unchanged for every existing reader.
+//
+//      THE OTHER THREE ARE A REFUSAL WITH A NUMBER, and the number is the
+//      campaign-wide finding. DEBUG.COUNTERS' read window is a DENSE bank
+//      indexed by catalog id, instantiated at CATALOG_IDS=40 against a
+//      `counter_catalog` of 351 entries, and a provider at or above the window
+//      raises `cat_violation_o` rather than going quietly unpublished. So
+//      `geom_binner_triangles_culled` (id 241) and the two arena quantities
+//      (no catalog name at all) CANNOT be published. Measured, `-MapOnly`,
+//      `-Device 5CSEBA6U23I7`:
+//        zhao_debug_counters@giantrefs-cat40    2,579 reg, 0 memory bits
+//        zhao_debug_counters@giantrefs-cat353  22,611 reg, 0 memory bits
+//      **+20,032 REGISTERS, none of it in memory** -- the bank takes PROV_N
+//      scattered writes per cycle at variable addresses, so it cannot infer
+//      RAM, and 0 memory bits at BOTH widths is that argument measured. On a
+//      41,910-ALM part near 97%, that is about a quarter of the device's whole
+//      register capacity for telemetry. **311 of the catalog's 351 counters are
+//      structurally unpublishable by this console today, whoever produces
+//      them**, and the fix is a SPARSE read window in DEBUG.COUNTERS (stream
+//      the providers' own ids; at PROV_N=11 that costs LESS than today), which
+//      is a change to `spec/counters.md` and that block's contract.
+//
+//      WHAT IS STILL OPEN, unchanged: the seal is still the arena's own
+//      capacity, which directive section 5 names as "not an admission plan".
+//      The reservation still needs a per-object REFERENCE COST the console does
+//      not hold, and that is still an ABI change and still not this packet's.
+//      What has changed is that the wall it would guard is now the RULED size
+//      rather than 3.1% of it, and that a frame which hits it says so.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder

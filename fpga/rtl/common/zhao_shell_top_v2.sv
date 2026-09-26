@@ -136,6 +136,38 @@ module zhao_shell_top_v2
   // The arena's TriangleDescriptor index width, carried out on the serialise
   // pass (console entry I54). `zhao_geom_paramarena.td_id_o` is u18.
   parameter int unsigned RENDER_SER_ID_W = 18,
+  // ---- THE RENDER BINNER'S REFERENCE CAPACITY (GIANTREFS, ruling R7) -----
+  // R7 guarantees a giant of 32,768 TILE REFERENCES that is "never silently
+  // truncated", and the owner's standing directive explicitly withholds any
+  // authority to shrink it. Until 2026-09-26 this instantiation overrode
+  // exactly ONE parameter of `zhao_geom_bin_pipe_v2`, so the composed binner
+  // ran the leaf's DEFAULTS -- CHUNKS=256 x CHUNK_REFS=4 = 1,024 references
+  // per frame -- and `zhao_geom_arena` is a bump allocator handed back WHOLE
+  // at `frame_begin_i`, so nothing recycles inside a frame.
+  //
+  // REFPUSH measured what the ruled workloads need, at its own commit, with
+  // `tools/render/count_bin_load.cpp` against the shipped `zref::Binner` --
+  // the same binning law this block implements:
+  //     giant near camera, 126 tris   25,704 refs   25.1x the old arena
+  //     256 creatures, no LOD         30,609 refs   29.9x
+  //     creature army, 200 x 96       23,912 refs   23.4x
+  //     one terrain patch 32x32        4,080 refs    4.0x
+  //     sky backdrop, 2 triangles        396 refs    0.4x
+  // So a frame holding a near-camera giant lost ~96% of its tile references
+  // to the binner's wall. The guarantee was not "not yet built"; it was
+  // BREACHED, in the shipped composition, every frame.
+  //
+  // 8,192 x 4 = 32,768 is R7's number EXACTLY, chosen for that reason and not
+  // sized to a workload we happen to test. It is a knob: raising it costs only
+  // ref_ram, next_ram and two pointer fields of tile_ram, and the giant is
+  // TRIANGLE-CHEAP and REFERENCE-EXPENSIVE (126 triangles, 25,704 references),
+  // so TRI_CAP -- which carries the 1,160-bit-per-triangle Packet-D metadata
+  // bank -- does not have to move with it. Scaling TRI_CAP to answer the
+  // giant's question is the confident impossibility REFPUSH caught itself
+  // making; the ARMY needs that and this device cannot pay for it.
+  parameter int unsigned RENDER_CHUNKS     = 8192,
+  parameter int unsigned RENDER_CHUNK_W    = 13,   // $clog2(RENDER_CHUNKS)
+  parameter int unsigned RENDER_CHUNK_REFS = 4,
   // THE TERRAIN.BUILD SOCKET's HPS clients (owner ruling R4). Each one is a
   // client of the shell's ONE `zhao_hps_arbiter_n`, at indices 2.. -- BELOW
   // CMD.DMA (0) and DEBUG.FRAMEBLIT (1), which is `spec/memory_rules.md` 5d's
@@ -1227,12 +1259,95 @@ module zhao_shell_top_v2
   // I17's named obstacle and they are now `rpx_tag`/`rpx_addr`, leaving on
   // the POST.GATHER tap. A name ending in `_unused` that starts being used is
   // worse than either state, so it is renamed in the same edit.
-  logic [15:0] rp_crc_idx_unused, rp_depth_unused;
-  logic [31:0] rp_crc_unused, rp_ez_unused, rp_refs_unused, rp_culled_unused;
+  logic [15:0] rp_crc_idx_unused;
+  logic [31:0] rp_crc_unused, rp_ez_unused;
   logic [31:0] rp_jobs_unused, rp_jobstall_unused, rp_stall_unused;
   logic [ 8:0] rp_cov_unused;
-  logic        rp_done_unused, rp_degen_unused, rp_arenafull_unused, rp_busy_unused;
+  logic        rp_done_unused, rp_degen_unused, rp_busy_unused;
   logic        rp_tok_unused;
+
+  // ---- GEOM.BINNER's INSTRUMENTS, which used to end here (GIANTREFS) ------
+  // `rp_refs_unused`, `rp_depth_unused`, `rp_culled_unused` and
+  // `rp_arenafull_unused` are GONE, and `binner_arena_used_o`'s empty
+  // connection with them. Five of the binner's six instruments were discarded
+  // at this instantiation and the sixth, `binner_overflow_o`, left as
+  // `render_overflow_o` and was read by nobody -- so the composed console
+  // could not say that a frame had lost geometry to the binner's wall, nor by
+  // how much. The counters are proven to fire at the LEAF
+  // (`geom_binner_v2_cntw_wrap.cpp`, `geom_binner_directed.cpp:437`), which is
+  // evidence about a bench, not about this machine.
+  //
+  // They now have THREE readers, none of them a pass-through:
+  //   * `tile_references` and `max_tile_list_depth` are published into
+  //     DEBUG.COUNTERS under GEOM.BINNER's OWN catalog ids -- 18 and 19,
+  //     declared for this block in `design/blocks.yml` and owned by nothing
+  //     else -- and leave the console on `cnt_snap_id_o`/`cnt_snap_value_o`.
+  //   * the WALL is a term of this shell's fault aggregation, which is the
+  //     directive's own rule: "Overflow remains a whole-frame fault."
+  //   * `arena_full`, `arena_used` and `triangles_culled` drive the wall
+  //     observer below, whose verdict is what makes the fault term mean
+  //     CAPACITY rather than any other cull.
+  logic [31:0] v2_bin_refs_w;
+  logic [15:0] v2_bin_depth_w;
+  logic [31:0] v2_bin_culled_w;
+  logic        v2_bin_arena_full_w;
+  logic [RENDER_CHUNK_W:0] v2_bin_arena_used_w;
+  logic        v2_bin_overflow_w;
+
+  // `render_overflow_o` is still this shell's top port and still carries the
+  // wall, unchanged for every existing reader. What changed is that the wall
+  // now ALSO has a reader INSIDE the console -- the fault aggregation below --
+  // so the port is no longer the only thing standing between the event and
+  // nobody at all.
+  assign render_overflow_o = v2_bin_overflow_w;
+
+  // ---- THREE INSTRUMENTS THAT STILL HAVE NO CONSOLE READER, AND THE
+  //      MEASUREMENT THAT SAYS WHY, so the next packet inherits a number
+  //      rather than a shrug (GIANTREFS, 2026-09-26).
+  //
+  // `binner_triangles_culled_o`, `binner_arena_full_o` and
+  // `binner_arena_used_o` are NAMED here rather than discarded, but nothing
+  // consumes them yet, and that is a measured refusal, not an oversight.
+  //
+  // DEBUG.COUNTERS is the console's only counter consumer and its read window
+  // is a DENSE bank indexed by catalog id: `u_counters` below is instantiated
+  // at CATALOG_IDS = 40, while `design/blocks.yml`'s `counter_catalog` holds
+  // 351 entries. A provider whose id is at or above CATALOG_IDS does not
+  // merely go unpublished -- `zhao_debug_counters` raises `cat_violation_o` on
+  // it, with no fallback. So the only ids this shell can publish are 0..39.
+  //
+  // GEOM.BINNER's own catalog counters are `tile_references` (18),
+  // `max_tile_list_depth` (19) and `geom_binner_triangles_culled` (241). The
+  // first two are inside the window and ARE published below, at the ids the
+  // catalog gives this block and no other. The third is outside it, and
+  // `arena_used`/`arena_full` have no catalog name at all, so they would have
+  // to be appended at 351 and beyond.
+  //
+  // WIDENING THE WINDOW WAS MEASURED, NOT ASSUMED. `-MapOnly` on
+  // `zhao_debug_counters`, `-Device 5CSEBA6U23I7`, rows
+  // `zhao_debug_counters@giantrefs-cat40` and
+  // `zhao_debug_counters@giantrefs-cat353` in
+  // `reports/synthesis/zhao_block_fit.json`, both `rtlCleanAtHead: true`:
+  //     CATALOG_IDS =  40  ->   2,579 registers,  0 block memory bits
+  //     CATALOG_IDS = 353  ->  22,611 registers,  0 block memory bits
+  // **+20,032 registers, and ZERO of it in memory.** The bank accepts up to
+  // PROV_N scattered writes per cycle at variable addresses, so it cannot
+  // infer RAM, and the 0 memory bits at BOTH widths is that argued fact
+  // measured instead. On a 41,910-ALM device already near 97% ALM, ~20k extra
+  // registers is about a quarter of the part's whole register capacity, spent
+  // on telemetry. Refused -- and refused WITHOUT shrinking anything: the
+  // instruments stay connected and named, and the real fix is a SPARSE read
+  // window in DEBUG.COUNTERS (stream the providers own ids instead of sweeping
+  // a dense catalog), which would cost LESS than today at PROV_N=11 and is a
+  // change to that block's contract in `spec/counters.md`.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic        v2_bin_unread_full;
+  logic [31:0] v2_bin_unread_culled;
+  logic [RENDER_CHUNK_W:0] v2_bin_unread_used;
+  assign v2_bin_unread_full   = v2_bin_arena_full_w;
+  assign v2_bin_unread_culled = v2_bin_culled_w;
+  assign v2_bin_unread_used   = v2_bin_arena_used_w;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   logic               rpx_valid, rpx_ready, rpx_last;
   logic        [15:0] rpx_rgb565;
@@ -1272,6 +1387,9 @@ module zhao_shell_top_v2
   // lease is granted and the clear accepted.
   /* verilator lint_off PINCONNECTEMPTY */
   zhao_geom_bin_pipe_v2 #(
+    .CHUNKS(RENDER_CHUNKS),
+    .CHUNK_W(RENDER_CHUNK_W),
+    .CHUNK_REFS(RENDER_CHUNK_REFS),
     .ARENA_ID_W(RENDER_SER_ID_W)
   ) u_render_bin (
     .ser_req_i(render_ser_req_i),
@@ -1357,12 +1475,12 @@ module zhao_shell_top_v2
     .tile_degenerate_o(rp_degen_unused),
     .drain_busy_o(rp_busy_unused), .drain_done_o(render_drain_done_o),
     .binner_initialized_o(v2_bin_initialized_w),
-    .binner_tile_references_o(rp_refs_unused),
-    .binner_max_tile_list_depth_o(rp_depth_unused),
-    .binner_triangles_culled_o(rp_culled_unused),
-    .binner_overflow_o(render_overflow_o),
-    .binner_arena_full_o(rp_arenafull_unused),
-    .binner_arena_used_o(),
+    .binner_tile_references_o(v2_bin_refs_w),
+    .binner_max_tile_list_depth_o(v2_bin_depth_w),
+    .binner_triangles_culled_o(v2_bin_culled_w),
+    .binner_overflow_o(v2_bin_overflow_w),
+    .binner_arena_full_o(v2_bin_arena_full_w),
+    .binner_arena_used_o(v2_bin_arena_used_w),
     .jobs_taken_o(rp_jobs_unused),
     .job_stall_clocks_o(rp_jobstall_unused),
     .quiet_o(v2_bin_quiet_w),
@@ -2433,9 +2551,25 @@ module zhao_shell_top_v2
   //
   // All six are sticky levels, which is why the edge detector below is load
   // bearing rather than decorative.
+  //
+  //   binner_overflow    THE BINNER'S WALL, added 2026-09-26 (GIANTREFS), and
+  //                      it is the SEVENTH term. It is not a new policy: the
+  //                      owner's standing directive rules that "Overflow
+  //                      remains a whole-frame fault with drain, source
+  //                      attribution and repeat of the prior complete frame."
+  //                      It latches (LAWS CHOSEN D in the binner) when the
+  //                      chunk arena or the triangle store is exhausted and the
+  //                      frame's remaining geometry is walled off -- which is
+  //                      exactly a frame that did not draw what it was asked to
+  //                      draw. It left this shell as `render_overflow_o` and
+  //                      was read by NOBODY, so the one event R7's giant
+  //                      guarantee is about was invisible to the console.
+  //                      It is a sticky LEVEL like the other six, which is why
+  //                      the edge detector below covers it without change.
   assign v2_fault_level_c = v2_bin_frame_fault_w || v2_bin_lifetime_fault_w ||
                             v2_bin_raster_abort_w || v2_bin_attr_abort_w ||
-                            v2_bin_sequence_mismatch_w || v2_cdc_gpu_fault_w;
+                            v2_bin_sequence_mismatch_w || v2_cdc_gpu_fault_w ||
+                            v2_bin_overflow_w;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) v2_fault_level_q <= 1'b0;
     else v2_fault_level_q <= v2_fault_level_c;
@@ -3469,7 +3603,31 @@ module zhao_shell_top_v2
     for (int k = 0; k < 7; k++) hps_total  = hps_total  + {32'd0, hps_bytes_shadow[k]};
   end
 
-  zhao_counter_snap_t prov [0:8];
+  // ---- GEOM.BINNER's SHADOWS (GIANTREFS, 2026-09-26) ---------------------
+  // `spec/counters.md` 3.2's protocol: every provider latches its shadow
+  // REGISTERS at the frame_tick edge and presents them with a one-cycle valid
+  // on the cycle AFTER, which `tick_d1` is. The binner's counters are
+  // free-running saturating totals on `gpu_clk` -- the same domain as
+  // `u_counters` -- so the crossing is a latch, not a synchroniser, and the
+  // shadow is what makes the value STABLE all frame as the contract requires.
+  //
+  // These are the first two of the six binner instruments this shell used to
+  // discard. They are published at the ids `design/blocks.yml` gives
+  // GEOM.BINNER and gives no other block, so owner ruling R19 -- "no counter id
+  // is shared across emitters" -- holds by construction rather than by care.
+  logic [31:0] bin_refs_shadow_q;
+  logic [15:0] bin_depth_shadow_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      bin_refs_shadow_q  <= 32'd0;
+      bin_depth_shadow_q <= 16'd0;
+    end else if (gpu_tick.pulse) begin
+      bin_refs_shadow_q  <= v2_bin_refs_w;
+      bin_depth_shadow_q <= v2_bin_depth_w;
+    end
+  end
+
+  zhao_counter_snap_t prov [0:10];
   always_comb begin
     prov[0] = sched_snap_cycles;                                  // id 0
     prov[1] = sched_snap_faults;                                  // id 1
@@ -3491,12 +3649,22 @@ module zhao_shell_top_v2
                 value: input_gaps_o};                             // id 35
     prov[8] = '{valid: tick_d1, counter_id: ZHAO_CNT_RUMBLE_DROPPED,
                 value: rumble_drops_o};                           // id 36
+    // GEOM.BINNER, at the two catalog ids it owns inside the 40-id window.
+    // `tile_references` is the number R7's giant guarantee is ABOUT: 32,768 of
+    // them reserved, and until this shell raised RENDER_CHUNKS the composed
+    // binner could hold 1,024. A console that cannot report the figure cannot
+    // report the breach either, which is how the guarantee came to be violated
+    // in the shipped composition without anything going red.
+    prov[9]  = '{valid: tick_d1, counter_id: ZHAO_CNT_TILE_REFERENCES,
+                 value: {32'd0, bin_refs_shadow_q}};              // id 18
+    prov[10] = '{valid: tick_d1, counter_id: ZHAO_CNT_MAX_TILE_LIST_DEPTH,
+                 value: {48'd0, bin_depth_shadow_q}};             // id 19
   end
 
   zhao_counter_snap_t cnt_snap;
 
   zhao_debug_counters #(
-    .PROV_N      (9),
+    .PROV_N      (11),
     .CATALOG_IDS (40)
   ) u_counters (
     .clk             (gpu_clk),
