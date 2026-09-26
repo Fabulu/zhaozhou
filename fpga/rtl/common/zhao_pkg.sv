@@ -617,6 +617,17 @@ package zhao_pkg;
   localparam logic [15:0] ZHAO_CNT_FRAME_CYCLES   = 16'd0;  // frame_cycles
   localparam logic [15:0] ZHAO_CNT_DEADLINE_FAULTS = 16'd1; // deadline_faults
   localparam logic [15:0] ZHAO_CNT_COMMANDS        = 16'd2; // commands
+  // GEOM.BINNER, added 2026-09-26 (GIANTREFS). Both names are ORIGINAL 25
+  // minimum-list entries that have sat in the catalog since the beginning with
+  // no producer wired to them -- `design/blocks.yml` declares exactly
+  // `[tile_references, max_tile_list_depth, geom_binner_triangles_culled]` for
+  // GEOM.BINNER, and the composed shell threw all three into wires named
+  // `_unused`. These two are the ones inside DEBUG.COUNTERS' 40-id read
+  // window; the third is catalog id 241 and cannot be published until that
+  // window stops being a dense bank (measured at +20,032 registers to widen,
+  // see `zhao_shell_top_v2`). No id is shared with another emitter (R19).
+  localparam logic [15:0] ZHAO_CNT_TILE_REFERENCES = 16'd18; // tile_references
+  localparam logic [15:0] ZHAO_CNT_MAX_TILE_LIST_DEPTH = 16'd19; // max_tile_list_depth
   localparam logic [15:0] ZHAO_CNT_VRAM_BYTES      = 16'd28; // vram_bytes_by_client
   localparam logic [15:0] ZHAO_CNT_HPS_BYTES       = 16'd29; // hps_ddr_bytes_by_client
   localparam logic [15:0] ZHAO_CNT_SCANOUT_STARVE  = 16'd30; // scanout_starvation_cycles
