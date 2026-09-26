@@ -1490,6 +1490,9 @@
 //    OWN CITATION for the port having no producer. It now drives 0, so
 //    `geom_write_camera()` is the only thing that can enable the projector --
 //    and `raster pixels=2560` is unmoved, over 160 bursts from 14 triangles,
+//    (2,560 was the gate number when this was measured; it is 2,816 since
+//    2026-09-26, when TERRAINVISIBLE made the fixture draw terrain -- this
+//    paragraph is a receipt of that run and is left as one,)
 //    with `SMOKE: projector arm=1` beside it from an instrument that shares
 //    no logic with the raster's counters. A wrong producer reads as 0 pixels.
 //
@@ -3344,6 +3347,11 @@
 //      `tests/prod/partmat_acceptance.cpp`, and `raster pixels=2560` will NOT
 //      move. A packet planning to quote the smoke as its evidence is planning
 //      to quote a fixture that never reaches its path.
+//      [OVERTAKEN 2026-09-26 (gz/terrainvisible). This was a correct reading of
+//      the fixture AS IT THEN WAS, and the fixture is what changed: the smoke
+//      now reaches the terrain path and `raster pixels` is 2,816. The advice
+//      that survives is the half about acceptance benches; the prediction does
+//      not.]
 //
 //      NOTHING WAS COMPOSED BY THIS LANE, DELIBERATELY. The depthquant pair,
 //      the packer and the fourth client could all have been built today; with
@@ -3450,7 +3458,8 @@
 //      terrain page it plays fails its CRC, so no reference ever reaches this
 //      lane. Its job here was to show the core still ELABORATES and still
 //      renders its 14 GEOMETRY triangles -- PASS, `raster pixels=2560`,
-//      `frames_admitted=1`, unchanged.
+//      `frames_admitted=1`, unchanged. (A receipt of that run. The gate number
+//      is 2,816 since 2026-09-26 and the smoke takes 75 triangles, not 14.)
 //
 //      THE REFERENCE JOIN IS NOW THREE-WAY and the next lane must not break it.
 //      Replay, the light lane and the coordinate lane take the SAME reference on
@@ -3508,7 +3517,13 @@
 //      worth keeping. `raster pixels=2560` genuinely cannot move for terrain --
 //      but because terrain's triangles leave on `proj_out_*` and reach no
 //      raster, which is THIS ENTRY'S WHOLE SUBJECT, not because the fixture
-//      never gets there. The two are not interchangeable: the first says the
+//      never gets there.
+//      [SUPERSEDED 2026-09-26 (gz/terrainvisible). The sentence above is now
+//      FALSE and its own distinction is why: the carriage was finished by
+//      CARRIAGE and the FIXTURE was then repaired, so terrain reaches the
+//      raster and `raster pixels` IS 2816. The clause kept its truth exactly
+//      as long as its stated reason held, which is the best a claim like this
+//      can do. See the TERRAINVISIBLE section at the end of this entry.] The two are not interchangeable: the first says the
 //      carriage is unfinished, the second says the bench is blind, and only the
 //      first is true. A lane told the second will not instrument the smoke at
 //      all, and will therefore never see its own counters move in the composed
@@ -4340,6 +4355,280 @@
 //      would admit a degenerate triangle and draw a wrong pixel.
 //      `GEOM_CLIP_ATTRS` stays 7, `zhao_terrain_normalmap` was not
 //      composed, `kMat`/`kVp` were not touched, and no fit was run.
+//
+//
+//      ================================================================
+//      2026-09-26 (gz/terrainvisible). TERRAIN DRAWS. `raster pixels`
+//      MOVES 2,560 -> 2,816, DECLARED. THE ENTRY STAYS OPEN.
+//      ================================================================
+//
+//      PROJCOLLAPSE named the cause and declined, correctly, to decide
+//      the consequence inside a diagnosis packet. The consequence was
+//      then decided in `reports/DECISION-20260926-TERRAIN-FIXTURE.md`
+//      under the owner's vacation directive: the fixture changes so
+//      terrain is actually drawn, and the gate number moves with it.
+//      This is that change. It touches NO production RTL -- the diff
+//      under `fpga/rtl/` is this entry's own text.
+//
+//      WHAT MOVED, measured in the composed smoke:
+//
+//        clip   submitted=144 clipped=69 culled=0  setup=75
+//                     (was   272        2      256          14)
+//        raster pixels=2816  (was 2560), tile union 11 (was 10)
+//
+//      `culled` 256 -> 0 and `setup` 14 -> 75. SIXTY-ONE terrain
+//      triangles reach GEOM.SETUP, get binned, and enter tile (1,0) --
+//      which no mesh triangle touches. That tile is the 256 pixels the
+//      gate number moved by.
+//
+//      TWO KNOBS, AND BOTH WERE REQUIRED, exactly as PROJCOLLAPSE
+//      measured:
+//
+//        1. RELIEF, in layer A of the played pages: an AFFINE ramp,
+//           `h(vi,vj) = BASE + TILTX*vi + TILTZ*vj`, BASE = -20.0 m,
+//           tilts +1.0 m and +0.5 m per lattice step. Ground BELOW the
+//           eye instead of through it. BASE alone removes the zero
+//           area; it is the same repair as putting the eye off the
+//           ground plane, done in the layer the bench owns. `kMat` and
+//           `kVp` were NOT touched, which is why the mesh's own 14
+//           triangles, 10 tiles and 36 tile references are unchanged.
+//
+//           AFFINE IS THE LOAD-BEARING CHOICE, not a convenience.
+//           `zref::terrain::coarse_height` is the midpoint and an
+//           affine field's midpoint is its own value there, so
+//           `lod_deviation` is zero at every level -- exactly as it was
+//           for the flat field -- and `morph_height` is the identity.
+//           The subpatch jobs therefore do not move. A staircase or a
+//           noise field would change the deviations, hence the level,
+//           hence the triangle count, and the fixture generator would
+//           then have to model TERRAIN.LOD's selector as well: a second
+//           implementation of a law that already has one.
+//
+//        2. PLACEMENT, via the patch COORDINATES, record 0 going from
+//           (ix 3, iz 7) to (ix 0, iz 1). That is the ONLY placement
+//           the header permits: terrain_rules 2.1 requires the envelope
+//           to equal `origin + coords x 32 x pitch` exactly, so a patch
+//           at index iz subtends `1/iz` of the view's half width at its
+//           near edge -- INDEPENDENT OF PITCH, because scaling the
+//           world scales z with it. At iz = 7 the whole 32 m patch was
+//           ~2.3 px wide; at iz = 1 its near edge spans a full ndc
+//           unit. THE CAMERA IS NOT AN INTERCHANGEABLE KNOB HERE, which
+//           both the decision record and the brief imply: `kVp` is 32 px
+//           wide and `kMat` is shared with a mesh at z = 1..3, so any
+//           zoom that makes a 32-cell patch legible throws the mesh off
+//           the canvas.
+//
+//      THE ORACLE MOVED IN THE SAME COMMIT, which is what makes 2,816 a
+//      measurement rather than drift.
+//      `tests/prod/smoke_geom_fixture_gen.cpp` builds the composed
+//      lattice, runs `zref::terrain::tessellate` on the console's own
+//      subpatch jobs, and puts the result through the SAME
+//      `project_vertex` -> `Clip` -> `Setup` -> `Binner` chain as the
+//      mesh; not one line of it is terrain-specific arithmetic. It also
+//      emits the fixture's own constants (`SGF_TERR_*`) and the bench
+//      writes layer A and the T5 records FROM THOSE, so the page and
+//      the oracle cannot drift apart.
+//
+//      AND THE JOBS ARE MEASURED, NOT INFERRED. `SMOKE: terrjob` is new
+//      and it changed the answer. `tess_vertices=162` and
+//      `tess_refs=256` are consistent with two level-0 subpatches, and
+//      the obvious reading -- two DIFFERENT subpatches -- was WRONG:
+//
+//        [0]/[1] ox=0 oz=0 level=0 morph=0 surface=0 dual=0 src=1000
+//        [2]/[3] ox=0 oz=0 level=0 morph=0 surface=0 dual=0 src=22136
+//
+//      Both were subpatch (0,0). src 1000 is
+//      `zhao_terrain_jobissue`'s, off the T5 record; src 22136 = 0x5678
+//      was the BENCH's own override at `terr_job_src_id_i`, which had
+//      driven client B since 2026-09-21 and was never retired. The
+//      fixture drew ONE subpatch TWICE -- 256 triangles of carriage for
+//      one subpatch of coverage. `tess_refs=256` was never evidence for
+//      two subpatches; it was evidence for 256 triangles.
+//
+//      THAT DUPLICATE IS RETIRED, AND THE REASON IS A WALL THIS ENTRY
+//      HAD NEVER REACHED. GEOM.BINNER's triangle store is
+//      `TRI_CAP = 128` PER FRAME (`zhao_geom_bin_pipe_v2.sv:18`), and
+//      overflowing it is a whole-frame fault: `overflow_o` latches,
+//      every later triangle is dropped WHOLE, and `render_overflow_o`
+//      goes high. With both jobs the repaired fixture put 226 triangles
+//      into GEOM.SETUP and the run came back
+//
+//        binrefs tile_references=160 max_tile_list_depth=99 overflow=1
+//        raster  pixels=2560
+//
+//      -- the walled-off tail was exactly the terrain tile, so the
+//      SYMPTOM of a capacity limit three blocks upstream was a pixel
+//      count that looked like a terrain arm which had stopped drawing.
+//      That is the flattering-direction failure CLAUDE.md's
+//      broken-instrument chapter is about, and it is worth recording
+//      for whoever next puts real terrain through this console: the
+//      binner's 32,768-reference chunk arena is not the constraint; 128
+//      triangles a frame is. `smoke_geom_fixture_gen.cpp` now REFUSES
+//      to emit a fixture that exceeds it.
+//
+//      TWO BINNER COUNTERS ALSO STOP BEING PINNED FROM A RUN.
+//      `tile_references` and `max_tile_list_depth` were hard-coded 36
+//      and 5 with an instruction to "read `SMOKE: binrefs` from a run
+//      and pin it here". They are `SGF_EXP_TILE_REFS` and
+//      `SGF_EXP_TILE_DEPTH` now, derived from `zref::Binner` -- and the
+//      model is CHECKED rather than asserted: its MESH-only share is
+//      36, exactly what this bench measured before terrain drew
+//      anything.
+//
+//      THE NEGATIVE CONTROL SURVIVES, WITH ITS POLARITY INVERTED.
+//      `-TerrainRelief` is replaced by `-TerrainFlatLattice`: layer A
+//      is left all zeros -- the body every page carried until today --
+//      and nothing else changes. It passes when GEOM.CLIP culls EVERY
+//      terrain triangle for zero area and GEOM.SETUP takes only the
+//      mesh's 14. What it asserts is a law of the PROJECTION (a plane
+//      through the eye has no screen area), which stays true forever,
+//      so it is not a test that asserts a bug: the flatness is the
+//      control's own stimulus, the way `-BadVertex` pokes a reserved
+//      byte. It is also the positive control for the zero the plain run
+//      now asserts on `geom_clip_culled_o`.
+//
+//      THE REGISTER DID NOT MOVE. 5 before, 5 after, measured bare, and
+//      THAT IS CORRECT: a register that moved on a bench-fixture edit
+//      would be the instrument being wrong.
+//
+//      WHAT THE FIRST *TEXTURED* TERRAIN PIXEL NEEDS, measured against
+//      the live path rather than argued, because that is the next
+//      packet's specification.
+//
+//      THE MEASUREMENT IS ONE LINE OF THE PASSING RUN AND IT IS EXACT:
+//
+//        SMOKE: texture fragments=1216 samples=1190
+//
+//      1,216 fragments reached the texture island and 1,190 were
+//      SAMPLED. The difference, 26, is exactly terrain's covered
+//      fragments -- the mesh's own count was 1,190 before terrain drew
+//      anything and is unchanged. **EVERY TERRAIN FRAGMENT REACHED THE
+//      ISLAND AND TOOK NO SAMPLE.** That is not a refusal:
+//      `combine_refused=0`, `plan_accepted=1190`,
+//      `dispatch_accepted=1190`. They asked for nothing.
+//
+//      The u/v half is DONE and that is the surprise: `zhao_terrain_clipfeed` declares `untex = 0` (:684),
+//      terrain's u/w and v/w are computed, saturated to S8.24 and
+//      carried (`SMOKE: terrcf uv_sat=0`), and GEOM.ATTRPACK packs
+//      their planes. THREE THINGS ARE MISSING AND NONE OF THEM IS A
+//      COORDINATE:
+//
+//        1. A SAMPLING MATERIAL. `zhao_terrain_clipfeed` declares
+//           `MATMODE_NONE` (:697), under which `zhao_material_window`
+//           publishes `NOMAT_SAMPLE_COUNT_C = 2'd0` (:352, :594) and
+//           issues no resolve at all -- `req_valid_o` is literally
+//           `(st_q == ST_REQ)` and that state is never entered on this
+//           arm. A fragment with `sample_count == 0` asks the island
+//           for nothing, so no amount of correct u/v makes a texel.
+//           THIS IS THE FIRST BLOCKER AND IT IS UPSTREAM OF THE MOSAIC.
+//        2. A BINDING KEY TERRAIN CAN PRESENT. `material_set` and
+//           `material_id` are zero at :695-696 BY LAW -- the window's
+//           `mode_contra_c` refuses a non-zero pair under MATMODE_NONE
+//           -- and a search of `fpga/rtl/terrain/` for either name
+//           returns zero hits, re-measured at this tree. Terrain's key
+//           is the page header's `tileset_id` plus the layer-E triple,
+//           which is a different mechanism, not a material record with
+//           a missing producer.
+//        3. A READER FOR THE MOSAIC PICK. Re-verified by hand here
+//           rather than inherited: `mosaic_tile_w`, `mosaic_tx_w` and
+//           `mosaic_ty_w` occur EXACTLY TWICE EACH in
+//           `zhao_texture_island_v3_top.sv` -- declared at :1297-1298,
+//           connected at :1311-1312 -- and nothing reads them. The
+//           sample's tile comes from the BINDING SELECTOR instead,
+//           `head_descriptor_c.binding_selector + sample_index_c` at
+//           `zhao_texture_frag_expand_v2.sv:238-247`. So even a
+//           sampling terrain material would sample whatever the
+//           selector named, never what the mosaic picked.
+//
+//      Ordered: give terrain a sampling declaration, give it a key the
+//      island's binding path accepts, give the mosaic's answer a
+//      reader. The layer-E triple is still NOT to be carried into
+//      `base_rgb`: that field is the published texel RGB at
+//      `sample_count == 0` (`zhao_texture_material_combine_v3.sv:513`)
+//      and `recipe_weight` is the `R_LERP` blend weight (:719-722),
+//      both shut today only by coincidence.
+//
+//      SO THIS DOES NOT CLOSE I13. What it removes is the FIRST of the
+//      two items CARRIAGE left -- "THE FIXTURE'S TERRAIN TRIANGLES HAVE
+//      NO SCREEN AREA. Until that is repaired terrain draws nothing
+//      however complete the carriage." That is done. The second stands
+//      verbatim: THE MOSAIC PICK NEEDS A READER INSIDE THE ISLAND. And
+//      `zhao_terrain_normalmap` is still on the BUILT-BUT-NOT-CONNECTED
+//      list, untouched here as this entry's first prohibition requires.
+//
+//      REFUSED: no epsilon, clamp or bias anywhere near the zero-area
+//      test -- the area was ARITHMETICALLY zero from a CORRECT
+//      projection, and a tolerance there would draw a wrong pixel past
+//      a gate. `GEOM_CLIP_ATTRS` stays 7. `zhao_terrain_normalmap` was
+//      not composed. `kMat` and `kVp` were not touched. The layer-E
+//      triple was not wired into `base_rgb`. No fit was run.
+//
+//
+//      AND A FOURTH REASON A TILE CAN HOLD REFERENCES AND WRITE NO
+//      PIXEL, which no counter in this bench could distinguish from
+//      the other three until the probe. With the terrain compose still
+//      sitting after `render_frame_end_i`, where it had sat since the
+//      arm was first staged:
+//
+//        clip    submitted=144 clipped=69 culled=0 setup=75
+//        binrefs tile_references=101 max_tile_list_depth=59 overflow=0
+//        rasterdiag jobs[started/sunk]=[36 0] resolved_tiles=10
+//                   earlyz[covered/rejects]=[1190 0] frags[covered]=1190
+//        raster  pixels=2560
+//
+//      Read those together. GEOM.CLIP accepted 75 and GEOM.BINNER
+//      pushed 101 references -- BOTH exactly what the reference
+//      derives, so the geometry was right and the oracle agreed with
+//      it. And only THIRTY-SIX raster jobs ever started, which is the
+//      MESH's 36 references, with `sunk = 0`, `early_z_rejects = 0` and
+//      `fragment_covered` unchanged at the mesh's 1,190. NOTHING WAS
+//      REJECTED. Terrain's 65 references were pushed into the binner's
+//      arena AFTER the frame had been serialised, so they were never
+//      turned into raster jobs at all.
+//
+//      That took eight counters `zhao_shell_top_v2.sv:1500-1506` leaves
+//      DANGLING at its `u_render_bin` -- `raster_jobs_started_o`,
+//      `raster_jobs_sunk_o`, `tilestore_references_o`,
+//      `resolved_tiles_o`, `early_z_covered_o`, `early_z_rejects_o`,
+//      `fragment_covered_o`, `blended_fragments_o`. Without them
+//      `pixels=2560` beside `tile_references=101` over eleven tiles is
+//      a symptom with four candidate causes -- never started, sunk,
+//      early-Z rejected, nothing covered -- and no way to choose. They
+//      print now, as `SMOKE: rasterdiag`, and they should stay printed.
+//      That is PROJCOLLAPSE's own finding about eight unprinted
+//      projection counters, one subsystem downstream, found the same
+//      way and for the same reason.
+//
+//      IT IS A STIMULUS ORDER FAULT AND NOT A CONSOLE ONE. The bench's
+//      own note beside the compose pass had said the right thing for a
+//      year -- "a real frame loop submits the set EVERY FRAME: the
+//      first frame pages in, later frames compose. This is that second
+//      frame" -- and the bench then closed its ONE render frame before
+//      that second frame's triangles existed.
+//
+//      A SECOND CORRECTION TO THIS FILE'S OWN MODEL CAME WITH IT, and
+//      it had been wrong since 2026-09-19 without ever being wrong
+//      about an answer. `SGF_EXP_PIXELS` was "the union of the tiles
+//      `zref::Binner` names, times 256". `Binner::bin` is conservative
+//      BY DESIGN -- its header says a tile is emitted "if the three
+//      edge functions can still be satisfied somewhere in it", an
+//      affine corner test -- and GEOM.CLIP's box test is conservative
+//      in the same direction, a pixel CENTRE inside the BOUNDING BOX.
+//      For the mesh's fourteen fat triangles binned and covered agree,
+//      so the formula was right by coincidence of the fixture. The
+//      generator now models coverage with `zref::fill_accept`, the
+//      transcription of `zhao_raster_fill.sv` the formal lane proves
+//      equal to `E0 + bias >= 0`, and checks itself: over the mesh
+//      alone it names the same ten tiles, 36 references and depth 5
+//      that `-TerrainFlatLattice` measures on the machine.
+//      AND ONE THING THIS PACKET GOT WRONG AND CAUGHT ITSELF. The first
+//      placement search assumed the two jobs were (0,0) and (8,0) --
+//      sixteen cells of ground -- and every candidate placement was
+//      scored against tile counts computed from that. It was wrong by a
+//      factor of two in screen extent and every number it produced was
+//      confident and self-consistent. It was caught only because the
+//      generator was about to DEPEND on the job list, so the port was
+//      probed instead of inferred. That probe is committed.
 //
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last

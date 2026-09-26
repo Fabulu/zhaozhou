@@ -96,3 +96,43 @@ then did it again within the hour.
 **Superseded by this record:** my own statement to the owner earlier today that
 the fixture question *"needs a decision from you"*. It did not; it needed one
 from me.
+
+---
+
+## OUTCOME, recorded 2026-09-26 by `gz/terrainvisible`
+
+**Executed. Terrain draws. `raster pixels` is 2,816.**
+
+* **Relief:** an AFFINE ramp in layer A — `h = BASE + TILTX*vi + TILTZ*vj`,
+  BASE −20.0 m, tilts +1.0 m and +0.5 m per lattice step, all in height16 raw.
+  BASE alone removes the zero area; it is the eye-off-the-ground-plane repair
+  done in the layer the bench owns, so `kMat`/`kVp` were never touched.
+* **Placement:** record 0 from (ix 3, iz 7) to (ix 0, iz 1).
+* **The oracle moved in the same commit.** `smoke_geom_fixture_gen.cpp` models
+  the terrain patch through `zref::terrain::tessellate` and the same
+  projector/clip/setup/binner chain as the mesh, and emits the fixture's own
+  constants so the page and the oracle cannot drift.
+
+**Three corrections to this record, found by executing it:**
+
+1. **"Relief" was right; the staircase control it cites would have been
+   wrong.** A non-affine field moves `lod_deviation` off zero, and with it the
+   LOD level, the triangle count and the whole oracle — the generator would
+   then have had to model TERRAIN.LOD's selector, which is a second
+   implementation of a law that already has one. The shipped field is affine
+   *precisely* so the tessellation cannot move.
+2. **The camera is not an interchangeable knob.** This record and the brief
+   both offer "camera, patch origin or view extent". `kVp` is 32 px wide and
+   `kMat` is shared with a mesh at z = 1..3, so any zoom that makes a 32-cell
+   patch legible throws the mesh off the canvas. Patch coordinate is the only
+   lever — and pitch does nothing at all, because a patch at index `iz`
+   subtends `1/iz` of the view's half-width whatever the pitch.
+3. **A capacity wall nobody had reached.** GEOM.BINNER holds `TRI_CAP = 128`
+   triangles per frame. The first repaired fixture offered 226 (the bench was
+   still injecting a DUPLICATE subpatch job beside `zhao_terrain_jobissue`'s),
+   the binner walled, and `raster pixels` came back STUCK at 2,560 — a capacity
+   limit wearing the costume of a terrain arm that had stopped drawing. The
+   duplicate job is retired and the generator now refuses to emit a fixture
+   that exceeds the cap.
+
+**This did not close I13**, exactly as this record said it would not.

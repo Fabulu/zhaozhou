@@ -5809,27 +5809,41 @@ module tb_zhao_console_core_smoke
              geom_loom_refused_shear_o, geom_loom_refused_framing_o,
              upl_published_o, upl_status_o,
              geom_mf_refused_zero_bound_o);
-    // Let the last accepted triangles clear GEOM.SETUP and the binner.
-    repeat (200) @(posedge gpu_clk);
-
-    @(posedge gpu_clk);
-    render_frame_end_i <= 1'b1;
-    @(posedge gpu_clk);
-    render_frame_end_i <= 1'b0;
-
-    guard = 0;
-    while (!render_drain_done_o && (guard < 200000)) begin
-      @(posedge gpu_clk);
-      guard = guard + 1;
-    end
-    if (!render_drain_done_o)
-      $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
-    repeat (4000) @(posedge gpu_clk);
-
-    // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
-    // fork inside the core issues it, from the meshlet the draw above fetched.)
-
-    // ---- PACKET P-TERRAIN, SECOND SUBMISSION: THE COMPOSE PASS ------------
+    // ======================================================================
+    // THE TERRAIN COMPOSE RUNS INSIDE THE RENDER FRAME, 2026-09-26
+    // (TERRAINVISIBLE), AND THAT IS THE WHOLE OF WHY A TERRAIN PIXEL EXISTS
+    // ======================================================================
+    // This block used to sit AFTER `render_frame_end_i` below. While terrain
+    // drew nothing that was invisible; the moment its triangles carried screen
+    // area it became the thing between the arm and a pixel, and the counters
+    // that say so had to be dangled out of `zhao_shell_top_v2` by hand to be
+    // read at all (`SMOKE: rasterdiag`). MEASURED, with the block still in its
+    // old place:
+    //
+    //   clip  submitted=144 clipped=69 culled=0 setup_submitted=75
+    //   binrefs tile_references=101 max_tile_list_depth=59 overflow=0
+    //   rasterdiag jobs[started/sunk]=[36 0] resolved_tiles=10
+    //              earlyz[covered/rejects]=[1190 0] frags[covered]=1190
+    //   raster pixels=2560
+    //
+    // Read those together. GEOM.CLIP accepted 75 triangles and GEOM.BINNER
+    // pushed 101 tile references -- BOTH exactly what the reference derives,
+    // so the geometry was right. And only THIRTY-SIX raster jobs ever started,
+    // which is the MESH's 36 references, with `sunk = 0`, `early_z_rejects =
+    // 0` and `fragment_covered` unchanged at the mesh's 1,190. Nothing was
+    // rejected. Terrain's 65 references were pushed into the binner's arena
+    // AFTER the frame had been serialised, so they were never turned into
+    // raster jobs at all.
+    //
+    // That is a stimulus ORDER fault and not a console one, and it is the
+    // fourth distinct reason a tile can hold references and write no pixel --
+    // the one no existing counter in this bench could distinguish from the
+    // other three.
+    //
+    // The expensive half stays where it was: the FIRST terrain command and its
+    // page loads are issued before the render frame opens, so the ~184,000
+    // cycles of paging overlap the meshlet fetch rather than adding to the
+    // frame. What moved is the COMPOSE pass and the wait for its triangles.
     // TERRAINAUX, 2026-09-25. THIS IS THE FIXTURE REPAIR, and it is a bench
     // change because the console was never at fault.
     //
@@ -5896,6 +5910,42 @@ module tb_zhao_console_core_smoke
       @(posedge gpu_clk);
       guard++;
     end
+
+    // AND WAIT FOR THE TRIANGLES THEMSELVES, not merely for the patch to be
+    // served. `terr_cc_patches_served_o` rising means the compose cache can
+    // answer; the triangles still have to be tessellated, projected, joined
+    // with their light and u/v, and offered at GEOM.CLIP's door. Ending the
+    // frame on the serve is what put them on the wrong side of the sweep.
+    guard = 0;
+    while ((terr_cf_emitted_o < 32'(SGF_EXP_TERR_TRIS)) && (guard < 400000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    if (terr_cf_emitted_o < 32'(SGF_EXP_TERR_TRIS))
+      $display("SMOKE: NOTE TERRAIN.CLIPFEED emitted %0d of the reference's %0d triangle(s) in %0d cycles -- the frame is about to close over an incomplete terrain arm and `raster pixels` will read LOW for that reason and not for a geometry one",
+               terr_cf_emitted_o, SGF_EXP_TERR_TRIS, guard);
+
+    // Let the last accepted triangles clear GEOM.SETUP and the binner.
+    repeat (200) @(posedge gpu_clk);
+
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b1;
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b0;
+
+    guard = 0;
+    while (!render_drain_done_o && (guard < 200000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
+    if (!render_drain_done_o)
+      $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
+    repeat (4000) @(posedge gpu_clk);
+
+    // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
+    // fork inside the core issues it, from the meshlet the draw above fetched.)
+
+    // ---- PACKET P-TERRAIN, SECOND SUBMISSION: THE COMPOSE PASS ------------
 
     // ---- THE TERRAIN JOB, AND WHY THIS BENCH NO LONGER INJECTS ONE --------
     // RETIRED 2026-09-26 (TERRAINVISIBLE). This block used to drive
