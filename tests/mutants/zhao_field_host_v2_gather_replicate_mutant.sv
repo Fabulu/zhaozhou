@@ -1,3 +1,60 @@
+// zhao_field_host_v2_gather_replicate_mutant.sv -- A COMMITTED POSITIVE
+// CONTROL FOR THE ONE CHECK THAT CAN TELL A GATHERING FRONT FROM THE FRONT IT
+// REPLACED. IT IS EVIDENCE ABOUT THE INSTRUMENT, NOT ABOUT THE DESIGN.
+//
+// ---------------------------------------------------------------------------
+// WHY THIS FILE HAS TO EXIST
+// ---------------------------------------------------------------------------
+// `field_gather_front_census` asserts that a group's four points answer four
+// DIFFERENT values. Everything else it checks -- the cadence, the group count,
+// `StOk`, the overlap, `resp_count_o`, even "the output is 42" -- PASSES
+// UNCHANGED on a front that evaluates point 0 four times and publishes it four
+// times. There is no legal stimulus that distinguishes the two, because the
+// difference is not in the interface: it is in which point's registers reached
+// which fabric lane.
+//
+// `CLAUDE.md`: "A guard you cannot reach with legal stimulus needs a COMMITTED
+// MUTANT", and "a detector that has not been shown to FIRE has not been
+// tested". So the front is broken here, on purpose, in a file no source list
+// elaborates, and `tests/field/field_gather_replicate_mutant.cpp` drives it
+// WITH ITS POLARITY INVERTED -- that test PASSES when the four answers
+// COLLAPSE to one repeated value, and FAILS if they do not.
+//
+// Read the two together: the mutant passing says the census's discriminator
+// can fail, and the census passing says production does not make it fail.
+// Either alone is an argument.
+//
+// ---------------------------------------------------------------------------
+// WHAT WAS CHANGED -- ONE LINE
+// ---------------------------------------------------------------------------
+// In the preload port's `always_comb`, production reads
+//
+//     (state == E_ZERO) ? 0 : (pl < FRONT_PTS) ? cur_in[pl][lane_sel]
+//                                              : cur_in[0][lane_sel]
+//
+// and this file reads
+//
+//     (state == E_ZERO) ? 0 : cur_in[0][lane_sel]
+//
+// i.e. POINT 0 INTO EVERY LANE. That is precisely the line the gathering front
+// replaced -- the old `{FAB_LANES{cur_in[lane_sel]}}` -- so this mutant is also
+// a faithful model of the machine the console composes today.
+//
+// The module is RENAMED so `ZHAO_FIELD_HOST_V2_SOURCES` cannot pull it in.
+//
+// ---------------------------------------------------------------------------
+// REGENERATE IT IF `zhao_field_host_v2.sv` CHANGES SHAPE
+// ---------------------------------------------------------------------------
+// THIS IS A COPY, and `CLAUDE.md`'s own chapter says what a copy does: "a copy
+// of an old version is a positive control for a block that no longer exists",
+// and it goes stale GREEN -- the mutation stays intact while the body around it
+// ages, so the control goes on passing while measuring a machine nobody ships.
+// `tools/budget/mutant_copy_drift.py` watches for it by COMMIT ORDER. To
+// refresh, re-cut from production and re-apply the one line above.
+//
+// Cut from `fpga/rtl/field/zhao_field_host_v2.sv` on 2026-09-26 by packet
+// GATHERFRONT, in the same commit that added the gathering front.
+
 // zhao_field_host_v2.sv — THE ASSOCIATION-AWARE FIELD HOST.
 //
 // Contract: design/contracts/FIELD.SEQ.CORE.md
@@ -233,7 +290,7 @@
 
 `default_nettype none
 
-module zhao_field_host_v2
+module zhao_field_host_v2_gather_replicate_mutant
   import zhao_field_host_image_pkg::*;
 #(
     // ---- IDENTITY AND CAPACITY ---------------------------------------------
@@ -1269,9 +1326,11 @@ module zhao_field_host_v2
     // E_ZERO case is therefore a term in the expression, not a branch around
     // the loop.
     for (pl = 0; pl < int'(FAB_LANES); pl = pl + 1) begin
+      // THE MUTATION. Production reads `cur_in[pl][lane_sel]` for
+      // pl < FRONT_PTS. This reads POINT 0 for EVERY lane, which is the
+      // replicating front the gather replaced. The E_ZERO term is untouched.
       fab_pre_data[(pl*32) +: 32] =
           (state == E_ZERO)          ? 32'sd0                :
-          (pl < int'(FRONT_PTS))     ? cur_in[pl][lane_sel]  :
                                        cur_in[0][lane_sel];
     end
 
@@ -1799,6 +1858,6 @@ module zhao_field_host_v2
     end
   end
 
-endmodule : zhao_field_host_v2
+endmodule : zhao_field_host_v2_gather_replicate_mutant
 
 `default_nettype wire
