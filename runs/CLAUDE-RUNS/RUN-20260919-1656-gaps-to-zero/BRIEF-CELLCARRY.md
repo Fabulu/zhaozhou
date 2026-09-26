@@ -106,10 +106,16 @@ recommendation of an arbiter.
 
 ## The fixture, stated so you do not plan your evidence around it
 
-**`raster pixels=2560` will not move**, and a packet quoting the console smoke as
-its evidence is quoting a fixture that never reaches its path: the smoke's
-terrain pages fail their CRC, so no page becomes resident and terrain emits no
-triangle. **A terrain arm lands with an ACCEPTANCE BENCH** —
+**`raster pixels=2560` will not move** — but **the REASON I gave was stale, and
+the packet settled it.** I wrote that the smoke's terrain pages fail their CRC so
+no page becomes resident. **That was true before TERRAINAUX repaired the
+fixture and is not true now.** Measured: the terrain arm **IS exercised** — 256
+references taken, 256 coordinate packets emitted, **zero degenerate** — and
+terrain still contributes zero pixels **because its triangles reach no raster.**
+
+**The bench is not blind; the path does not exist.** Those are different
+statements and only the second is still true. I had put the blind version into
+two briefs. **A terrain arm still lands with an ACCEPTANCE BENCH** —
 `tests/prod/terrainaux_acceptance.cpp` (758 checks ending in a pixel that
 changes) and `tests/prod/partmat_acceptance.cpp` are the patterns.
 
