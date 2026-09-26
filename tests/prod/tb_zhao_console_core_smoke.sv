@@ -2845,6 +2845,97 @@ module tb_zhao_console_core_smoke
   endtask
 
   // ==========================================================================
+  // ARENAINFER PROBE (2026-09-26) -- WHERE THE ONE LOST IDENTITY GOES
+  // ==========================================================================
+  // ARENACOMPOSE found `geom_tidq_underflow_o` reading 1 in all six forms and
+  // said the cause was a GEOM.TIDQ / seal-ordering question it was not fixing.
+  // `underflow=1` names the SYMPTOM -- a door beat that found the queue empty
+  // -- and says nothing whatever about WHY the queue was empty, and there are
+  // two very different answers:
+  //
+  //   A. the queue was FLUSHED under a triangle still in GEOM.SETUP's three
+  //      stages (`flush_i` is `pa_seal_fire`), or
+  //   B. GEOM.VERTID never PUSHED that triangle's id at all, because it
+  //      ABORTED the triangle on the seal edge -- `vid_seal_abort_o`, which
+  //      `zhao_console_core` leaves UNCONNECTED at `:19143`.
+  //
+  // Those have different repairs and nothing in the tree distinguishes them,
+  // so this counts BOTH SIDES OF THE SEAM and records WHEN each event
+  // happened relative to the seal. It is READ-ONLY through the hierarchy, the
+  // way the rasterdiag probe below already is: no console port is added, so
+  // no wrapper mutant, no `gen_prod_top`, no closure lint and no fit are
+  // disturbed by a diagnostic.
+  //
+  // `vid_seal_abort_o` is read out of the INSTANCE even though the console
+  // throws the port away -- an unconnected output is still driven inside the
+  // block, and reading it here is what makes the unconnected port harmless
+  // rather than invisible.
+  int unsigned tq_push_q;      // `vid_tri_id_retire` beats
+  int unsigned tq_pop_q;       // shell-door beats that pop the queue
+  int unsigned tq_flush_q;     // `pa_seal_fire` edges seen
+  int unsigned tq_uf_first_q;  // pushes already made when the first underflow hit
+  int unsigned tq_uf_pop_q;    // pops already made when the first underflow hit
+  logic        tq_uf_seen_q;
+  logic [31:0] tq_uf_prev_q;
+
+  // THE SKEW, MEASURED RATHER THAN INFERRED. `pushes == pops` with the FIRST
+  // pop landing before the FIRST push is consistent with a permanent one-entry
+  // rotation -- every triangle carrying its PREDECESSOR'S arena descriptor
+  // index -- and it is also consistent with several innocent stories. The
+  // difference matters enormously: entry I54's named failure is ids that are
+  // in range, decode cleanly and are WRONG, and NO range guard downstream can
+  // see it. So the two id streams are captured IN ORDER and compared position
+  // by position, instead of a conclusion being drawn from two totals.
+  localparam int unsigned TQI_N = 8;
+  int unsigned tqi_np_q;
+  int unsigned tqi_no_q;
+  logic [17:0] tqi_push_q [0:TQI_N-1];
+  logic [17:0] tqi_pop_q  [0:TQI_N-1];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tq_push_q     <= 0;
+      tq_pop_q      <= 0;
+      tq_flush_q    <= 0;
+      tq_uf_first_q <= 0;
+      tq_uf_pop_q   <= 0;
+      tq_uf_seen_q  <= 1'b0;
+      tq_uf_prev_q  <= 32'd0;
+      tqi_np_q      <= 0;
+      tqi_no_q      <= 0;
+    end else begin
+      if (`PC_CORE.vid_tri_id_retire) begin
+        tq_push_q <= tq_push_q + 1;
+        if (tqi_np_q < TQI_N) begin
+          tqi_push_q[tqi_np_q] <= `PC_CORE.vid_td_id;
+          tqi_np_q <= tqi_np_q + 1;
+        end
+      end
+      if (`PC_CORE.door_tri_valid_w && `PC_CORE.door_tri_ready_w) begin
+        tq_pop_q <= tq_pop_q + 1;
+        // `tidq_id_w` is COMBINATIONAL out of the queue's head, so this is the
+        // id GEOM.ARENABIN samples on this very beat -- the same wire, not a
+        // reconstruction of it.
+        if (tqi_no_q < TQI_N) begin
+          tqi_pop_q[tqi_no_q] <= `PC_CORE.tidq_id_w;
+          tqi_no_q <= tqi_no_q + 1;
+        end
+      end
+      if (`PC_CORE.pa_seal_fire) tq_flush_q <= tq_flush_q + 1;
+      // The counter is registered inside the queue, so it rises the cycle
+      // AFTER the offending beat; the tallies above are read at the same
+      // edge, which is what makes "how many pushes had happened by then" the
+      // honest question to ask of them.
+      tq_uf_prev_q <= geom_tidq_underflow_o;
+      if ((geom_tidq_underflow_o != tq_uf_prev_q) && !tq_uf_seen_q) begin
+        tq_uf_seen_q  <= 1'b1;
+        tq_uf_first_q <= tq_push_q;
+        tq_uf_pop_q   <= tq_pop_q;
+      end
+    end
+  end
+
+  // ==========================================================================
   // TERRAINVISIBLE PROBE (2026-09-26) -- THE SUBPATCH JOBS, AS NUMBERS
   // ==========================================================================
   // `smoke_geom_fixture_gen.cpp` derives the terrain half of the pixel gate by
@@ -6715,6 +6806,26 @@ module tb_zhao_console_core_smoke
     // without a rebuild.
     $display("SMOKE: tidq       underflow=%0d overflow=%0d unnamed=%0d",
              geom_tidq_underflow_o, geom_tidq_overflow_o, geom_tidq_unnamed_o);
+    // ARENAINFER: the two sides of the seam, so `underflow=1` has a CAUSE and
+    // not just a value. `pushes` is GEOM.VERTID's TD retire beat, `pops` is
+    // the shell door's; `vid_seal_abort` is the triangle GEOM.VERTID threw
+    // away on the seal edge, read out of an instance whose port the console
+    // does not connect.
+    $display("SMOKE: tidqseam   pushes=%0d pops=%0d flushes=%0d vid_seal_abort=%0d | at first underflow: pushes=%0d pops=%0d",
+             tq_push_q, tq_pop_q, tq_flush_q,
+             `PC_CORE.u_geom_vertid.vid_seal_abort_o,
+             tq_uf_first_q, tq_uf_pop_q);
+    // THE TWO ID STREAMS, IN ORDER. If entry k of `popped` equals entry k of
+    // `pushed`, the join is sound. If it equals entry k-1, every triangle
+    // after the first is binned under its PREDECESSOR'S arena descriptor --
+    // entry I54's named failure, invisible to every range guard.
+    $write("SMOKE: tidqids    pushed=");
+    for (int unsigned q = 0; q < TQI_N; q = q + 1)
+      if (q < tqi_np_q) $write("%0d ", tqi_push_q[q]);
+    $write("| popped=");
+    for (int unsigned q = 0; q < TQI_N; q = q + 1)
+      if (q < tqi_no_q) $write("%0d ", tqi_pop_q[q]);
+    $display("");
     $display("SMOKE: arenabin   tris=%0d unnamed=%0d refs=%0d chunks=%0d links=%0d tiles=%0d",
              geom_ab_tris_o, geom_ab_unnamed_o, geom_ab_refs_o,
              geom_ab_chunks_o, geom_ab_links_o, geom_ab_tiles_o);
