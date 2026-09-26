@@ -499,7 +499,10 @@ struct Sim {
   }
 
   // ---- PHASE 3: DRAIN, one aligned group per clock, result two later ------
-  int run_drain(const PatchIn& p) {
+  // `gap` is IDLE CLOCKS BETWEEN DRAIN GROUPS -- the sink's rate. 0 is the
+  // one-group-per-clock consumer `zhao_terrain_patch_acc`'s header assumes;
+  // 7 is the composed cache that actually exists (see case 4).
+  int run_drain(const PatchIn& p, int gap = 0) {
     std::memset(got_seen, 0, sizeof got_seen);
     int cycles = 0;
     for (int g = 0; g < kAlignedGroups + 3; ++g) {
@@ -529,6 +532,15 @@ struct Sim {
       step();
       ++cycles;
       d.eval();
+      // the sink's rate: hold the port idle while the consumer digests.
+      for (int q = 0; q < gap && g < kAlignedGroups; ++q) {
+        d.dr_valid_i = 0;
+        d.eval();
+        capture();
+        step();
+        ++cycles;
+        d.eval();
+      }
     }
     d.dr_valid_i = 0;
     d.eval();
@@ -936,6 +948,107 @@ int main(int argc, char** argv) {
                   budget > 0 ? budget / slope : -1);
     }
     std::printf("\n");
+  }
+
+  // =========================================================================
+  // CASE 4 -- THE DRAIN AGAINST THE CACHE THAT ACTUALLY EXISTS, AND IT TAKES
+  // MOST OF CASE 3's HEADLINE BACK.
+  //
+  // `zhao_terrain_patch_acc`'s header names its intended consumer: "the
+  // composed-height cache write port, A PLAIN ONE-GROUP-PER-CLOCK SINK". That
+  // sink does not exist. `zhao_terrain_compcache_front.sv:414` is
+  //
+  //     assign st_ready_o = fill_active_q && !at_capacity_c && !wphase_q;
+  //
+  // and `wphase_q` alternates, because ONE RECORD IS TWO WRITES (one top plane,
+  // one bottom plane). So the composed cache accepts ONE VERTEX EVERY TWO
+  // CLOCKS -- and a four-vertex group therefore costs EIGHT clocks, not one.
+  // That is an 8x mismatch between the accumulator's stated assumption and the
+  // block it names.
+  //
+  // IT IS ALSO EXACTLY WHERE THE VERTEX-MAJOR PATH'S OWN FLOOR COMES FROM.
+  // `composepub_acceptance` case 11's negative control -- the same 1,089-vertex
+  // walk with an EMPTY field list -- is 2,252 clocks, 2.07 per vertex. That is
+  // this cache, at this rate, with no field machinery involved at all. So more
+  // than half of the 4,431-clock vertex-major intercept is the cache write, and
+  // a field-major machine that still has to feed the SAME cache does not escape
+  // it by walking differently.
+  //
+  // MEASURING THIS RATHER THAN ASSERTING IT IS THE POINT. Case 3's 851 is the
+  // floor of the two blocks as their ports are built; this is the floor of the
+  // two blocks against the sink the console owns today. Reporting only the
+  // first would be the flattering direction, and it is the number this packet
+  // would otherwise have led with.
+  // =========================================================================
+  {
+    std::printf("case 4: THE SAME MACHINE AGAINST THE COMPOSE CACHE THAT EXISTS\n");
+
+    uint64_t fast = 0, slow = 0;
+    int drain_fast = 0, drain_slow = 0;
+
+    for (int slowsink = 0; slowsink < 2; ++slowsink) {
+      Sim s;
+      s.reset();
+      s.load_tables(lat);
+      s.eng.latency = 0;
+      s.eng.depth = 1;
+
+      const uint64_t t0 = s.clocks;
+      s.run_init(patch);
+      s.idle(2);
+      int groups = 0, covered = 0;
+      s.run_assoc(whole, &groups, &covered);
+      s.idle(2);
+      // gap 7 == one group per 8 clocks == four vertices at the cache's
+      // two-clocks-per-record rate.
+      const int dc = s.run_drain(patch, slowsink ? 7 : 0);
+      if (slowsink) {
+        slow = s.clocks - t0;
+        drain_slow = dc;
+      } else {
+        fast = s.clocks - t0;
+        drain_fast = dc;
+      }
+
+      // THE ANSWER MUST NOT CHANGE. A slower sink costs clocks and nothing
+      // else; if the reduction depended on the drain's spacing that would be a
+      // defect, and this is the check that says it does not.
+      const PatchOut want = oracle(lat, patch, {whole});
+      int bad = 0, seen = 0;
+      for (int v = 0; v < kVerts; ++v) {
+        if (!s.got_seen[v]) continue;
+        ++seen;
+        if (s.got_top[v] != want.top[v] || s.got_bot[v] != want.bottom[v] ||
+            s.got_vel[v] != want.vel[v] || s.got_mat[v] != want.mat[v] ||
+            s.got_nav[v] != want.nav[v] || s.got_dirty[v] != want.dirty[v])
+          ++bad;
+      }
+      ck_eq(seen, kVerts, "slow sink: every vertex still drains");
+      ck_eq(bad, 0, "slow sink: the reduction does not depend on the drain's spacing");
+    }
+
+    ck_eq(drain_fast, kAlignedGroups + 3, "the one-group-per-clock drain is 276 clocks");
+    ck_eq(drain_slow, 8 * kAlignedGroups + 3,
+          "the cache's two-clocks-per-record drain is 8 clocks per group");
+    ck(slow > fast, "a slower sink costs more clocks (the control that says gap is live)");
+
+    std::printf("\n  the SAME association, the SAME 233-check reduction, two sinks:\n");
+    std::printf("    drain at 1 group / clock (the header's assumed sink) : %llu total, drain %d\n",
+                static_cast<unsigned long long>(fast), drain_fast);
+    std::printf("    drain at 1 group / 8 clocks (THE CACHE THAT EXISTS)  : %llu total, drain %d\n",
+                static_cast<unsigned long long>(slow), drain_slow);
+    std::printf("\n  SO THE FIELD-MAJOR INTERCEPT IS A RANGE, NOT A NUMBER:\n");
+    std::printf("    %llu clocks (%.0f%% of 6,000) if the cache write port is widened to a group\n",
+                static_cast<unsigned long long>(fast), 100.0 * fast / 6000.0);
+    std::printf("    %llu clocks (%.0f%% of 6,000) against today's compose cache\n",
+                static_cast<unsigned long long>(slow), 100.0 * slow / 6000.0);
+    std::printf("    4,431 clocks (74%% of 6,000) is the vertex-major intercept it replaces\n");
+    std::printf("  The floor falls %.2fx in the best case and %.2fx in the worst, and BOTH\n",
+                4431.0 / static_cast<double>(fast), 4431.0 / static_cast<double>(slow));
+    std::printf("  are below the 74%% the field-major swap was commissioned to remove.\n");
+    std::printf("  WIDENING THE CACHE WRITE PORT IS THEREFORE A SEPARATE, NAMED PREREQUISITE\n");
+    std::printf("  and not a detail: it is worth %llu clocks per association.\n\n",
+                static_cast<unsigned long long>(slow - fast));
   }
 
   std::printf("fieldmajor_census: %d checks, %d failures\n", g_checks, g_fails);

@@ -1,4 +1,4 @@
-# DECISION 2026-09-26 — THE FIELD-MAJOR EARTH MACHINE IS BENCHED, IT MEETS THE CONTRACT, AND THE THING THAT DECIDES IT IS THE ENGINE'S WIDTH
+# DECISION 2026-09-26 — THE FIELD-MAJOR EARTH MACHINE IS BENCHED. IT MEETS THE CONTRACT, AND THE TWO THINGS THAT DECIDE IT ARE THE EXECUTOR'S WIDTH AND THE COMPOSE CACHE'S WRITE PORT
 
 Taken by packet FIELDMAJOR under the standing delegation in
 `reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt` §0. It settles the
@@ -26,9 +26,11 @@ on its own"*. The whole argument for §13.1 is that the field-major form
 
 ## THE DECISION
 
-**Yes, and by more than the arithmetic predicted. The field-major machine is
-commissioned, and a SECOND prerequisite that nothing had priced is now on the
-bill: the executor's WIDTH.**
+**Yes — but by LESS than the headline figure, and TWO prerequisites nothing had
+priced are now on the bill: the executor's WIDTH and the compose cache's WRITE
+PORT.** The field-major machine is commissioned and it meets the contract; the
+intercept it removes is a **range**, 851 to 2,762 clocks against the
+vertex-major 4,431, and which end applies is decided by those two blocks.
 
 ### What was built to answer it
 
@@ -37,7 +39,7 @@ differential test since 2026-09-20 and **had never been elaborated together** �
 each test does the other block's job in C++, so the composed machine's cost had
 never been a measurement. `tests/terrain/tb_terrain_fieldmajor.sv` instantiates
 both, port for port; `tests/terrain/fieldmajor_census.cpp` drives them.
-**233 checks, 0 failures.** No production RTL changed.
+**240 checks, 0 failures.** No production RTL changed.
 
 The engine between them is modelled **at the same seam and with the same
 declared latencies `composepub_acceptance` case 11 uses**, because the
@@ -62,9 +64,12 @@ clocks while this one contains no adapter at all.
   80           24611    12623    6629     3632     2101     1372
 ```
 
-**THE INTERCEPT FELL 5.21×.** 4,431 clocks (4.07/vertex, **74 %** of the
-contract) becomes **851 clocks** (0.78/vertex, **14 %**). Measured, it is
-273 INIT + 298 association + 276 DRAIN + 4 phase-gap clocks.
+**THE INTERCEPT FELL 5.21×** — *as the two blocks' ports are built.* 4,431
+clocks (4.07/vertex, **74 %** of the contract) becomes **851 clocks**
+(0.78/vertex, **14 %**): 273 INIT + 298 association + 276 DRAIN + 4 phase-gap
+clocks, all measured. **This figure is a ceiling and the section headed "AND THE
+NUMBER ABOVE IS A CEILING" below takes most of it back** — read the two
+together, never this one alone.
 
 **PATCHV2's arithmetic was right to within eight clocks.** It predicted
 "273 INIT + 297 UPDATE + 273 DRAIN ≈ 843". That is recorded deliberately: this
@@ -121,6 +126,61 @@ points."* So the field-major machine should not be paying most of that 80.
 report a cost and not to award itself a discount it has not measured. The
 verdict does not need the discount.
 
+## AND THE NUMBER ABOVE IS A CEILING. CHECKING IT TOOK MOST OF IT BACK.
+
+851 clocks is the floor of the two blocks **as their ports are built**. The
+comfortable reading is that the field-major form simply removes the floor, and
+`CLAUDE.md` says the explanation that absolves the design is the one to check
+hardest. Checking it found this:
+
+`zhao_terrain_patch_acc`'s header names its intended consumer — *"the
+composed-height cache write port, **a plain one-group-per-clock sink**"*.
+**That sink does not exist.** `zhao_terrain_compcache_front.sv:414` is
+
+```systemverilog
+assign st_ready_o = fill_active_q && !at_capacity_c && !wphase_q;
+```
+
+and `wphase_q` alternates, because **one record is two writes** (a top plane and
+a bottom plane). The composed cache accepts **one vertex every two clocks**, so
+a four-vertex group costs **eight** clocks rather than one — an **8× mismatch
+between the accumulator's stated assumption and the block it names**.
+
+**And that is exactly where the vertex-major intercept comes from.** Case 11's
+own negative control — the same 1,089-vertex walk with an **empty** field list —
+is **2,252 clocks, 2.07 per vertex**. That is this cache, at this rate, with no
+field machinery involved at all. So **more than half of the 4,431-clock
+vertex-major intercept is the cache write**, and a field-major machine that
+still feeds the *same* cache does not escape it by walking differently.
+
+**PATCHV2's attribution of the intercept is therefore incomplete**, and this is
+the one claim in that record this packet found wanting. It reads *"4.07 clocks
+per vertex of work that is not engine latency — the per-vertex walk, the
+adapter's own two clocks, and the consumer's accept"*. The largest single term
+is none of those three: it is the compose cache's two-clocks-per-record write
+port, and it is the term the stream-order swap does **not** remove on its own.
+
+**Measured rather than argued**, by `fieldmajor_census` case 4 — the same
+association and the same reduction, drained into the two sinks:
+
+| drain sink | total | drain | vs. 6,000 |
+|---|---|---|---|
+| 1 group / clock (the header's assumed sink) | **851** | 276 | **14 %** |
+| 1 group / 8 clocks (**THE CACHE THAT EXISTS**) | **2,762** | 2,187 | **46 %** |
+| — vertex-major, for comparison | 4,431 | — | 74 % |
+
+**The floor falls 5.21× in the best case and 1.60× in the worst, and both are
+below the 74 % the swap was commissioned to remove.** So the verdict stands and
+the headline does not: **the field-major intercept is a range, not a number**,
+and which end of it applies is decided by a block neither PATCHV2 nor this
+packet's brief mentions.
+
+**Widening the compose cache's write port to a group is therefore a sixth named
+prerequisite, worth 1,911 clocks per association** — more than the whole
+field-major walk costs. Case 4 also asserts the thing that must hold either way:
+the reduction is **identical** under both sinks, so a slower consumer costs
+clocks and never the answer.
+
 ## WHAT WAS REFUSED, AND WHY IT IS A REFUSAL THIS PACKET CHECKED RATHER THAN INHERITED
 
 **Composing `zhao_terrain_patch_v2` in this packet.** `CLAUDE.md`'s *"A REFUSAL
@@ -144,6 +204,9 @@ Named, so it cannot be inherited as an open question:
    `terr_pt_fld_covers_o`. A field-major v2 has neither. That chain reaches
    `zhao_part_collide` today and the fences forbid regressing it.
 5. **The executor's width**, above — new on the bill as of this packet.
+6. **The compose cache's write port**, above — also new, and the larger of the
+   two: worth 1,911 clocks per association against the 1,911-clock
+   field-major walk it would otherwise be paying for.
 
 Doing (1)–(5) inside one packet, against a live composed velocity chain, is the
 subsystem swap PATCHV2 refused for the same reasons and ruling R163 forbids
@@ -162,7 +225,7 @@ on arithmetic.
 
 ## CONSEQUENCES FOR CODE, TESTS AND COMPATIBILITY
 
-* New ctest `fieldmajor_census`, 233 checks. Correctness is checked **before**
+* New ctest `fieldmajor_census`, 240 checks. Correctness is checked **before**
   cost: all 1,089 vertices × 6 lanes against the ratified vertex-major oracle
   `zref::terrain::compose_vertex`, which is the claim behind the whole
   stream-order swap and had never been checked with both blocks in one
@@ -173,6 +236,10 @@ on arithmetic.
 
 ## THE CONTROLS, AND ONE OF THEM FIRED ON ITS AUTHOR
 
+* **The 851 headline was corrected by its own author before it shipped**, which
+  is the finding in the "AND THE NUMBER ABOVE IS A CEILING" section: the
+  comfortable number arrived first and explained almost everything, exactly as
+  `CLAUDE.md` says it will.
 * **The exact-recurrence assertion fired on me.** The census first asserted
   `ceil(297/depth)` as the slope, and the measured surface **refused it in five
   cells** — the line is **piecewise**, and while `L < depth` the walker's

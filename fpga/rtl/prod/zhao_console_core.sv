@@ -6147,6 +6147,48 @@
 //           above, because the job is to report a cost and not to award a
 //           discount that has not been measured. The verdict does not need it.
 //
+//      (F4b) AND 851 IS A CEILING. CHECKING IT TOOK MOST OF IT BACK, WHICH IS
+//           THE UNFLATTERING DIRECTION AND THEREFORE THE ONE TO STATE FIRST.
+//           `zhao_terrain_patch_acc`'s header names its consumer: "the
+//           composed-height cache write port, A PLAIN ONE-GROUP-PER-CLOCK
+//           SINK". THAT SINK DOES NOT EXIST.
+//           `zhao_terrain_compcache_front.sv:414` is
+//             assign st_ready_o = fill_active_q && !at_capacity_c && !wphase_q;
+//           and `wphase_q` ALTERNATES, because one record is two writes (top
+//           plane, bottom plane). The composed cache takes ONE VERTEX EVERY TWO
+//           CLOCKS, so a four-vertex group costs EIGHT clocks and not one -- an
+//           8x mismatch between the accumulator's stated assumption and the
+//           block it names.
+//
+//           AND THAT IS WHERE THE VERTEX-MAJOR INTERCEPT COMES FROM. Case 11's
+//           OWN negative control -- the same 1,089-vertex walk with an EMPTY
+//           field list -- is 2,252 clocks, 2.07 per vertex: this cache, at this
+//           rate, with no field machinery involved at all. So MORE THAN HALF of
+//           the 4,431-clock vertex-major intercept is the cache write, and a
+//           field-major machine feeding the SAME cache does not escape it by
+//           walking differently.
+//
+//           SO THE BLOCK BELOW'S ATTRIBUTION OF ITS OWN INTERCEPT IS INCOMPLETE,
+//           and it is the one claim of PATCHV2's this packet found wanting. It
+//           reads "4.07 clocks per vertex ... the per-vertex walk, the adapter's
+//           own two clocks, and the consumer's accept". THE LARGEST SINGLE TERM
+//           IS NONE OF THOSE THREE -- it is the compose cache's
+//           two-clocks-per-record write port, and it is the term the
+//           stream-order swap does NOT remove on its own.
+//
+//           MEASURED, by `fieldmajor_census` case 4 -- same association, same
+//           reduction, two sinks:
+//             1 group / clock  (the header's assumed sink) :   851 total,  14%
+//             1 group / 8 clks (THE CACHE THAT EXISTS)     : 2,762 total,  46%
+//             vertex-major, for comparison                 : 4,431 total,  74%
+//           THE FLOOR FALLS 5.21x IN THE BEST CASE AND 1.60x IN THE WORST, AND
+//           BOTH ARE BELOW THE 74% THE SWAP WAS COMMISSIONED TO REMOVE. The
+//           verdict stands; the headline does not. THE FIELD-MAJOR INTERCEPT IS
+//           A RANGE, NOT A NUMBER, and which end applies is decided by a block
+//           neither PATCHV2 nor this packet's brief mentions. Case 4 also
+//           asserts what must hold either way: the reduction is IDENTICAL under
+//           both sinks, so a slower consumer costs clocks and never the answer.
+//
 //      (F5) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD RATHER THAN
 //           INHERITED. Composing `zhao_terrain_patch_v2` is a BUILD, the
 //           decision is taken, and what remains is SEQUENCE. Named so it is not
@@ -6164,6 +6206,8 @@
 //                tpt_vtx_ready)` and `.a_covers_i(terr_pt_fld_covers_o)`, both
 //                vertex-major, on a chain reaching `zhao_part_collide` today.
 //             5. THE EXECUTOR'S WIDTH, per (F3) -- new on the bill.
+//             6. THE COMPOSE CACHE'S WRITE PORT, per (F4b) -- also new, and the
+//                LARGER of the two at 1,911 clocks per association.
 //           What changed is that the refusal now sits on a MEASURED NUMBER
 //           saying the build is worth making, instead of on arithmetic.
 //
