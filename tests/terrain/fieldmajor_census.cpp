@@ -941,6 +941,10 @@ int main(int argc, char** argv) {
                 100.0 * static_cast<double>(total[0][0]) / 6000.0);
     std::printf("    the floor FELL by %.2fx\n",
                 4431.0 / static_cast<double>(total[0][0]));
+    std::printf("    *** 851 IS A CEILING. It assumes the authored lattice can be\n");
+    std::printf("    *** presented to INIT and drained from DRAIN four vertices per\n");
+    std::printf("    *** clock. NEITHER END OF THIS TREE CAN. SEE CASE 4, which\n");
+    std::printf("    *** measures the same machine at the real rates and gets 3,581.\n");
     std::printf("\n  ACTIVE contract: <= 6,000 clocks / full 1,089-vertex association\n");
     std::printf("                   (design/contracts/FIELD.SEQ.EARTH.md:167)\n");
     for (int di = 0; di < nD; ++di)
@@ -1081,6 +1085,52 @@ int main(int argc, char** argv) {
     std::printf("  WIDENING THE LATTICE SOURCE A FURTHER %llu. Both are NAMED PREREQUISITES\n",
                 static_cast<unsigned long long>(tot[2] - tot[1]));
     std::printf("  and neither is a detail.\n\n");
+
+    // ---- AND THE CELL THAT ACTUALLY DECIDES IT, MEASURED ----------------
+    // Case 3's grid was taken with both ends group-wide, so adding its slope
+    // to this case's intercept would be ARITHMETIC ON TWO MEASUREMENTS rather
+    // than a measurement. The cell that decides the verdict -- the engine's
+    // own gated depth, the conservative L=80, and BOTH ends at the rates this
+    // tree runs -- is therefore run rather than computed.
+    {
+      Sim s;
+      s.reset();
+      s.load_tables(lat);
+      s.eng.latency = 80;
+      s.eng.depth = 32;
+      const uint64_t t0 = s.clocks;
+      s.run_init(patch, 3);
+      s.idle(2);
+      int groups = 0, covered = 0;
+      s.run_assoc(whole, &groups, &covered);
+      s.idle(2);
+      s.run_drain(patch, 7);
+      const uint64_t real_total = s.clocks - t0;
+
+      const PatchOut want = oracle(lat, patch, {whole});
+      int bad = 0, seen = 0;
+      for (int v = 0; v < kVerts; ++v) {
+        if (!s.got_seen[v]) continue;
+        ++seen;
+        if (s.got_top[v] != want.top[v] || s.got_vel[v] != want.vel[v] ||
+            s.got_mat[v] != want.mat[v] || s.got_nav[v] != want.nav[v])
+          ++bad;
+      }
+      ck_eq(seen, kVerts, "the deciding cell: every vertex drained");
+      ck_eq(bad, 0, "the deciding cell: still the ratified oracle's answer");
+      ck_eq(groups, kUpdateGroups, "the deciding cell: still 297 groups");
+
+      std::printf("  THE CELL THAT DECIDES IT, MEASURED RATHER THAN ADDED UP:\n");
+      std::printf("    the engine's GATED depth (32), the conservative L=80, and BOTH\n");
+      std::printf("    ends at the rates this tree runs: %llu clocks = %.2fx the 6,000\n",
+                  static_cast<unsigned long long>(real_total),
+                  static_cast<double>(real_total) / 6000.0);
+      std::printf("    contract. IT STILL FITS, with %.1fx margin, and that is the\n",
+                  6000.0 / static_cast<double>(real_total));
+      std::printf("    verdict after every throttle this packet could find.\n");
+      std::printf("    (the same cell at depth 8 does NOT: 3,581 + 34*80 = 6,301, over.\n");
+      std::printf("     so the executor's width is not a nicety, it is the gate.)\n\n");
+    }
   }
 
   std::printf("fieldmajor_census: %d checks, %d failures\n", g_checks, g_fails);

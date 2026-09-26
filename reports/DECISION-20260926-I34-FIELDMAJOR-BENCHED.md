@@ -39,7 +39,7 @@ differential test since 2026-09-20 and **had never been elaborated together** �
 each test does the other block's job in C++, so the composed machine's cost had
 never been a measurement. `tests/terrain/tb_terrain_fieldmajor.sv` instantiates
 both, port for port; `tests/terrain/fieldmajor_census.cpp` drives them.
-**245 checks, 0 failures.** No production RTL changed.
+**248 checks, 0 failures.** No production RTL changed.
 
 The engine between them is modelled **at the same seam and with the same
 declared latencies `composepub_acceptance` case 11 uses**, because the
@@ -200,6 +200,23 @@ the whole field-major walk costs. Case 4 also asserts what must hold at every
 rate: the reduction is **identical**, so a slower producer or consumer costs
 clocks and never the answer.
 
+
+### THE CELL THAT DECIDES IT, MEASURED RATHER THAN ADDED UP
+
+Case 3's grid was taken with both ends group-wide, so adding its slope to case
+4's intercept would be **arithmetic on two measurements** — the very thing this
+packet was sent to replace. So the cell that decides the verdict is **run**:
+
+> **the engine's own GATED depth (32), the conservative L = 80, and BOTH ends at
+> the rates this tree runs today: 4,102 clocks = 0.68× the 6,000 contract.
+> IT FITS, with 1.5× margin** — and the reduction is still the ratified oracle's
+> answer at every vertex, asserted in the same case.
+
+**The same cell at depth 8 does not fit** — 3,581 + 34 × 80 = 6,301, over. So
+**the executor's width is not a nicety, it is the gate**, and the field-major
+machine's verdict is: *build it, and widen the executor, the cache write port
+and the lattice source with it, or it does not pay.*
+
 ## WHAT WAS REFUSED, AND WHY IT IS A REFUSAL THIS PACKET CHECKED RATHER THAN INHERITED
 
 **Composing `zhao_terrain_patch_v2` in this packet.** `CLAUDE.md`'s *"A REFUSAL
@@ -247,7 +264,7 @@ on arithmetic.
 
 ## CONSEQUENCES FOR CODE, TESTS AND COMPATIBILITY
 
-* New ctest `fieldmajor_census`, 245 checks. Correctness is checked **before**
+* New ctest `fieldmajor_census`, 248 checks. Correctness is checked **before**
   cost: all 1,089 vertices × 6 lanes against the ratified vertex-major oracle
   `zref::terrain::compose_vertex`, which is the claim behind the whole
   stream-order swap and had never been checked with both blocks in one

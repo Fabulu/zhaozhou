@@ -6208,6 +6208,20 @@
 //           IDENTICAL, so a slower producer or consumer costs clocks and never
 //           the answer.
 //
+//
+//      (F4c) AND THE CELL THAT DECIDES IT IS MEASURED, NOT ADDED UP. Case 3's
+//           grid was taken with both ends group-wide, so adding its slope to
+//           case 4's intercept would be ARITHMETIC ON TWO MEASUREMENTS -- the
+//           very thing this packet was sent to replace. So it is RUN: the
+//           engine's own GATED depth (32), the conservative L=80, and BOTH ends
+//           at the rates this tree runs today --
+//             4,102 CLOCKS = 0.68x THE 6,000 CONTRACT. IT FITS, 1.5x MARGIN,
+//           with the reduction still the ratified oracle's answer at every
+//           vertex, asserted in the same case. THE SAME CELL AT DEPTH 8 DOES
+//           NOT FIT: 3,581 + 34*80 = 6,301, over. So the executor's width is
+//           not a nicety, IT IS THE GATE, and the verdict is: build the
+//           field-major machine, and widen the executor, the cache write port
+//           and the lattice source WITH it, or it does not pay.
 //      (F5) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD RATHER THAN
 //           INHERITED. Composing `zhao_terrain_patch_v2` is a BUILD, the
 //           decision is taken, and what remains is SEQUENCE. Named so it is not
