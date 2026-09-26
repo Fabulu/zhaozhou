@@ -7168,8 +7168,23 @@
 //          `t_*` it is no longer a demonstration -- it IS the raster swap, and
 //          item (2) is its price.
 //
-// I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
-//      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
+// I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
+//      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
+//
+//      THE HEAD LINE ABOVE WAS REJOINED, AND THAT NEEDS ITS OWN PARAGRAPH,
+//      because GIANTQUOTA refused to do it and was RIGHT to. It read
+//      "... -- NOT a" / "tie-off: ..." with the phrase split across the wrap,
+//      and `completion_register.py` matches it in the HEAD LINE ONLY (:200-224),
+//      so this entry read `unclassified` and counted as a gap. GIANTQUOTA's
+//      words: "REJOINING THAT WRAP WOULD CLOSE I56 BY REFORMATTING -- a free
+//      reduction of exactly the kind that check exists to prevent."
+//
+//      That was correct while the seal was a constant. It is not a free
+//      reduction now, and the difference is the SEALPLAN section at the foot
+//      of this entry. The head line has also been changed from asserting the
+//      negative to NAMING THE PRODUCER, so that if the seal ever reverts to a
+//      constant the line is a FALSE STATEMENT rather than merely a stale one --
+//      a reader who greps `u_measure_sealplan` gets a yes or a no.
 //
 //      THE QUOTA is the arena's own capacity, because the Measure has nowhere
 //      to publish one yet. Sealing at capacity is the NEUTRAL choice: it
@@ -7699,6 +7714,145 @@
 //      not hold, and that is still an ABI change and still not this packet's.
 //      What has changed is that the wall it would guard is now the RULED size
 //      rather than 3.1% of it, and that a frame which hits it says so.
+//
+//      -- SEALPLAN, 2026-09-26. **BUILT. THE SEAL IS NO LONGER A CONSTANT AND
+//      THIS ENTRY IS CLOSED.** Three packets refused here, each correctly about
+//      what it refused, and the thing none of them built is built.
+//
+//      WHAT REPLACED THE THREE LITERALS. This file drove the seal with
+//      `18'(GEOM_PA_MAX_VERTS)`, `18'(GEOM_PA_MAX_TRIS)` and
+//      `18'(GEOM_PA_MAX_CHUNKS)` -- the state owner directive section 5 names
+//      in the owner's own words, "a constant equal to arena capacity is not an
+//      admission plan". The chain now runs:
+//
+//        host -> SealFramePlan 0x0003 (ABI v3 -> v4, 48 bytes)
+//             -> `zhao_cmd_exec`  decodes by GENERATED offset, checks RECORD
+//                hygiene only, stages, and pulses `plan_valid_o` in the
+//                packet's COMMIT walk, so a plan from an ABANDONED packet
+//                never reaches the validator
+//             -> `zhao_measure_sealplan`  validates against four capacities in
+//                four units and against R7's reservation; REFUSES before the
+//                seal; otherwise seals
+//             -> `zhao_geom_paramarena`  latches the validated numbers
+//
+//      CMD.EXEC DELIBERATELY DOES NOT VALIDATE THE PLAN. It asks whether the
+//      RECORD is well formed -- reserved flag bits zero, each 32-bit wire field
+//      fits the 18-bit seal -- and forwards. Whether a plan FITS is a question
+//      about four hardware capacities and a reservation, and one block owns it.
+//      Two blocks deciding admission is two blocks that can disagree.
+//
+//      THE ABI FIELD GIANTQUOTA DECLINED IS THE ONE SECTION 5 PRE-AUTHORISES,
+//      and its objection was sound rather than wrong: a field whose only
+//      consumer does not exist is an uncashed cheque with an ABI's blast
+//      radius. The answer is to build the consumer and the field TOGETHER,
+//      which is what happened. The version bump is mandatory and not chosen: a
+//      new opcode is a wire change under the frozen rule, and a v3 decoder
+//      reports ZH_ABI_UNKNOWN_OPCODE on 0x0003.
+//
+//      THE RESERVATION, AND EXACTLY WHAT IT GUARANTEES. GIANTQUOTA's
+//      measurement that a per-chunk class bit CANNOT be built at the arena
+//      STANDS and is not overturned -- a chunk is spatial, the binner drains a
+//      tile FIFO in submission order, and the 14-id chunk straddling two
+//      instances belongs to both. So the reservation is enforced where the
+//      arena's own header always said it lives: "a decision made by whoever
+//      computes `seal_chunks_i`, not here". `seal_chunks_i` is now the ORDINARY
+//      quota, with the reservation already subtracted, and the guarantee is
+//      stated rather than implied:
+//
+//        A frame declaring a guaranteed giant is SEALED STRICTLY BELOW ARENA
+//        CAPACITY. The ordinary stream faults at its sealed quota, at which
+//        moment the reserved units are still PHYSICALLY UNALLOCATED. The giant
+//        is whole because the ordinary budget provably cannot REACH it -- not
+//        because the arena can tell the chunks apart.
+//
+//      MEASURED, both polarities, `geom_paramarena_reservemut` (MAX_CHUNKS=32,
+//      reserve 5, ordinary quota 27 -- the testbench exposes its capacities so
+//      the experiment is 28 pushes rather than 14,044):
+//        PRODUCTION  cursor 27, UNALLOCATED 5, quota_overflow 1, fault 1,
+//                    giant_reserve_breach 0
+//        MUTANT      cursor 28, UNALLOCATED 4, quota_overflow 0, fault 0,
+//                    giant_reserve_breach 1
+//      READ THE MUTANT'S `quota_overflow = 0`. The mutation is MORE permissive,
+//      so the frame believes it fits: no fault, no golden output moves, every
+//      result-checking test goes on passing, and one chunk of the reservation
+//      has been taken. A silent overrun into the reserve is invisible to every
+//      other instrument in this tree. That is why the counter exists and why it
+//      owes a committed mutant.
+//
+//      THE UNITS, AND BOTH HALVES OF THE 14x CONFUSION REFUSED BY DIFFERENT
+//      RULES. 32,768 in the CHUNK field is 200% of MAX_CHUNKS -> R_CHUNKS_CAP.
+//      2,341 as the giant's REFERENCE reserve -> R_GIANT_TRIM, because the
+//      delegation does not cover shrinking the guaranteed giant, so a trimmed
+//      reservation is an ILLEGAL plan and not a smaller one. And the case that
+//      would PASS under the confusion: 32,768 - 2,341 = 30,427 ordinary
+//      references beside a giant, which looks like comfortable headroom and is
+//      refused at R_REF_RESV, naming REFERENCES so the reader learns which unit
+//      was wrong. ceil(32768/14) is an ELABORATION constant, never a wire
+//      field -- deriving it twice is how the confusion gets a second chance.
+//
+//      AND THE CONSEQUENCE GIANTREFS' NUMBER CARRIES, WHICH NOBODY HAD DRAWN.
+//      `MAX_REFS == GIANT_REFS`: the composed binner's ENTIRE reference
+//      capacity is the giant's reservation. So a plan declaring the giant must
+//      declare ZERO ordinary tile references, and any positive ordinary
+//      reference demand is refused at R_REF_RESV. That is the ruled number
+//      enforced honestly and it is also a statement about the machine: AT
+//      TODAY'S BINNER CAPACITY A GIANT FRAME ADMITS NO ORDINARY GEOMETRY. The
+//      answer is more reference capacity, which is a FIT; it is NOT trimming
+//      the giant. In CHUNKS there is real room -- 2,341 of 16,384, leaving
+//      14,043 -- which is why the chunk arm has the non-degenerate pressure
+//      case and the reference arm does not. `measure_sealplan_directed` case 6
+//      asserts `MAX_REFS == GIANT_REFS` so the finding cannot go stale quietly.
+//
+//      `semantic_weight` HAS A POLICY CONSUMER AT LAST, exactly as the CHUNKSER
+//      section above predicted it would need none of a new ABI field. The
+//      selector is a streaming max over {semantic_weight, instance_id} --
+//      highest weight, lowest instance id on a tie. One comparator. NOT a heap:
+//      charter section 9 forbids one and a running max cannot answer "the
+//      second largest", so it is not a step toward one. It is the INDEPENDENT
+//      CHECK rather than the chooser -- the plan is sealed at the frame's begin
+//      edge and the stream arrives after it, so the HPS declares the identity
+//      and the stream's own max must agree at frame end. The two sides are
+//      enabled by DIFFERENT things (the draw stream, the frame edge), so the
+//      detector is not one of the blind ones, and it has been FIRED twice.
+//
+//      AND A LIVE DEFECT THIS COMPOSITION SURFACED, which is the part no
+//      earlier pass could have found by reading. `render_frame_begin_i` is NOT
+//      a pulse: it is `zhao_renderer_lease_v2`'s `frame_req_valid_i`, and
+//      `tb_zhao_console_core_smoke.sv` HOLDS it until the lease admits a frame
+//      -- measured at 2,531 cycles. The old composition drove `seal_valid_i`
+//      from that level directly, and `seal_fire_c` FLIPS THE VIEW and zeroes
+//      the three allocation cursors. So ONE FRAME RE-SEALED THE ARENA 2,531
+//      TIMES: 2,531 view flips, 2,531 frame restarts.
+//
+//      It was invisible because that bench releases its draws one line AFTER
+//      the level drops, so nothing had been allocated to lose -- the arena
+//      reports verts=30 tris=14 chunks=10 frames=1 before and after,
+//      identically. A console that let geometry flow while the lease was still
+//      being granted would have lost it SILENTLY and reported a clean, short
+//      frame, because the cursors reset to zero and zero is where they start.
+//      It was found because the seal now sits behind a COUNTER and the console
+//      was asked how many times it had sealed. The repair is both halves --
+//      raised on the rising edge, HELD until it fires, so one seal per frame
+//      and the retry survives -- and `default=2531` is now `default=1`.
+//
+//      EVERY COUNTER THIS ADDS LEAVES THE CORE AND IS ASSERTED ON, which is
+//      REFPUSH's item (5) and is the shape this entry records three times
+//      already (six binner counters in `_unused` wires; three `geom_tidq_*`
+//      declared in the smoke and asserted on by nothing; `ck_fits_c` never seen
+//      to fire until GIANTQUOTA fired it). The composed smoke now asserts that
+//      a frame was admitted THROUGH THE VALIDATOR, that it came through the
+//      DEFAULT door rather than a plan nobody published, that nothing was
+//      refused or malformed, that the absent-giant case RELEASED the
+//      reservation in both units, that the selector SAW DRAWS, and that the
+//      breach counter is quiet -- with the comment saying plainly that its zero
+//      is a claim about that run and the mutant is what makes it evidence.
+//
+//      WHAT IS STILL OPEN AND IS NOT THIS ENTRY: the binner's reference
+//      capacity against a giant frame (above -- a fit, not a decision), and
+//      `zhao_measure_sealplan`'s own ALM cost, which is UNMEASURED. No Quartus
+//      was run by this packet and no synthesis row is quoted anywhere in it.
+//      It is registered as a leaf target in `design/fit_targets.yml` so the
+//      next fit window can price it without a console run.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
