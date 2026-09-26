@@ -3641,3 +3641,27 @@ targets:
       - fpga/rtl/field/zhao_field_loader.sv
       - fpga/rtl/geometry/zhao_geom_loomfeed.sv
       - fpga/rtl/prod/zhao_console_core.sv
+
+  # Added 2026-09-26 for the phase-3 optimization queue. Both blocks hold an
+  # array in flip-flops (see reports/HANDOVER-20260919.md 15.21): forge_assemble
+  # `pos_q`/`inv_q` at 34,840 bits behind an async reset loop AND a
+  # combinational read, and geom_lodstate `st_q` at 9,216 bits behind the same
+  # two. Neither had a target, so neither had ever been measured on its own.
+  - top: zhao_forge_assemble
+    sources:
+      # The rcp24 pulls three more in -- two ticket queues and its multiplier.
+      # Found by a 9.8 s quartus_map that named all three at once (Error 12006),
+      # which is the cheap way to learn a closure and the reason the first
+      # attempt is not a waste.
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/geometry/zhao_geom_depthquant.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+      - fpga/rtl/forge/zhao_forge_assemble.sv
+
+  - top: zhao_geom_lodstate
+    sources:
+      - fpga/rtl/geometry/zhao_geom_projradius.sv
+      - fpga/rtl/geometry/zhao_geom_lod.sv
+      - fpga/rtl/geometry/zhao_geom_lodstate.sv
