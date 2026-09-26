@@ -19816,7 +19816,11 @@ module zhao_console_core
 
     // REAL: the shell's Packet-D attribute carriage.
     .out_valid_o          (ap_o_valid_w),
-    .out_ready_i          (door_tri_ready_w && st_o_valid),
+    // `tidq_have_w` is the third term as of 2026-09-27 (RASTERSWAP) and it is
+    // required, not defensive: without it GEOM.ATTRPACK would retire a packet
+    // on a clock the door did not fire, and the join would lose a triangle
+    // instead of misnaming one. See the door block for the whole argument.
+    .out_ready_i          (door_tri_ready_w && st_o_valid && tidq_have_w),
     .out_invw_plane_o     (ap_invw_plane_w),
     .out_u_over_w_plane_o (ap_u_over_w_plane_w),
     .out_v_over_w_plane_o (ap_v_over_w_plane_w),
@@ -19985,7 +19989,14 @@ module zhao_console_core
     .vid_id_unnameable_o (),
     .vid_seal_abort_o    (),
     .vid_stall_o         (geom_vid_stall_o),
-    .busy_o              ()
+    // READ AS OF 2026-09-27 (RASTERSWAP), and it costs no new port on a leaf.
+    // The seal ABORTS a triangle this block is mid-way through, so no
+    // TriangleDescriptor ever retires for it -- but GEOM.SETUP already has that
+    // triangle and the shell door will still ask for its identity. `busy_o` is
+    // `(st_q != S_IDLE)`, so `pa_seal_fire && vid_busy_w` IS that abort, as a
+    // one-clock pulse, without adding an output to a block instantiated in
+    // three places.
+    .busy_o              (vid_busy_w)
   );
 
   // GEOM.VERTID's seams, declared with the block that drives them.
@@ -19998,6 +20009,23 @@ module zhao_console_core
   /* verilator lint_on UNUSEDSIGNAL */
   wire [17:0] vid_tri_id;
   wire        vid_tri_id_retire;
+  wire        vid_busy_w;
+
+  // THE ABORT, AS A PUSH (RASTERSWAP, 2026-09-27). The invariant the door gate
+  // below rests on is that the queue receives EXACTLY ONE ENTRY PER TRIANGLE
+  // THAT CROSSED THE FORK. `tri_id_retire_o` alone does not give that: on a
+  // seal edge GEOM.VERTID throws away the triangle it is holding and retires no
+  // descriptor for it, while GEOM.SETUP -- which took the same triangle on the
+  // same clock from the same fork -- still delivers it to the door. Without an
+  // entry for it the door would wait for a push that can never arrive.
+  //
+  // So the abort pushes a NAMELESS entry. `id_ok_i` is forced low on that beat
+  // rather than trusting `vid_td_accept`, which is the arena's reply to a
+  // `td_valid_o` that is suppressed on exactly this clock and therefore means
+  // nothing here. The two cannot coincide: `td_valid_o` is
+  // `(st_q == S_TD) && !frame_seal_i`, so a retire and a seal are mutually
+  // exclusive by construction.
+  wire        vid_tri_id_abort_w = pa_seal_fire && vid_busy_w;
 
   // ---------------------------------------------------------------------------
   // I54: THE TRIANGLE IDENTITY, REJOINED WITH ITS TRIANGLE AT THE SHELL DOOR
@@ -20036,21 +20064,90 @@ module zhao_console_core
       .clk        (gpu_clk),
       .rst_n      (rst_n),
       .flush_i    (pa_seal_fire),
-      .push_i     (vid_tri_id_retire),
-      .id_ok_i    (vid_td_accept),
+      .push_i     (vid_tri_id_retire || vid_tri_id_abort_w),
+      .id_ok_i    (vid_td_accept && !vid_tri_id_abort_w),
       .id_i       (vid_td_id),
       .pop_i      (door_tri_valid_w && door_tri_ready_w),
       .id_o       (tidq_id_w),
       .underflow_o(geom_tidq_underflow_o),
       .overflow_o (geom_tidq_overflow_o),
       .unnamed_o  (geom_tidq_unnamed_o),
-      .level_o    ()
+      // READ AS OF 2026-09-27 (RASTERSWAP). It was `()`, and that is the whole
+      // of the defect below: with nobody reading the occupancy, nothing could
+      // stop the door from taking a triangle whose identity had not arrived.
+      .level_o    (tidq_level_w)
   );
+
+  // ---------------------------------------------------------------------------
+  // THE DOOR WAITS FOR THE IDENTITY (RASTERSWAP, 2026-09-27)
+  // ---------------------------------------------------------------------------
+  // THE DEFECT THIS REPAIRS, MEASURED BY ARENAINFER AND REPRODUCED HERE:
+  //
+  //   tidqids  pushed=0 1 2 3 4 5 6 7 | popped=262143 0 1 2 3 4 5 6
+  //
+  // 262143 is `ID_POISON`. After it, `popped[k] == pushed[k-1]` FOR EVERY k --
+  // the queue was permanently one entry behind, so triangle 1 was dropped for
+  // want of an identity and EVERY TRIANGLE AFTER IT WAS BINNED UNDER ITS
+  // PREDECESSOR'S ARENA DESCRIPTOR INDEX. 74 of 75 on the smoke's fixture.
+  //
+  // It is entry I54's named failure, live: the ids stay IN RANGE and DECODE
+  // CLEANLY, so `td_illegal_o` never fires, the reference COUNT is unaffected,
+  // and the bench's own refs comparison differences two totals and cannot see
+  // it. `underflow=1` was the only trace, and its magnitude is nothing like
+  // what a 1 suggests.
+  //
+  // THE CAUSE IS STRUCTURAL AND IT IS STARTUP, NOT A FRAME EDGE. The fork hands
+  // one triangle to GEOM.SETUP, GEOM.ATTRPACK and GEOM.VERTID on one clock.
+  // GEOM.SETUP is three stages; GEOM.VERTID needs `S_PUB` x3 plus `S_TD` before
+  // the arena hands back an index. THE DOOR IS ALWAYS AHEAD OF THE ID. At the
+  // only underflow the bench measured `pushes=0 pops=1` -- the first door beat
+  // landed before the first push, and every later beat inherited the skew.
+  //
+  // THE REPAIR IS A HANDSHAKE, NOT A TUNED DELAY, which is why it is correct
+  // for any skew rather than for the measured one: the door does not fire until
+  // the queue holds the entry it is about to consume. GEOM.SETUP is 1:1 and
+  // order-preserving and so is the queue, so door beat k and push k name the
+  // same triangle BY CONSTRUCTION.
+  //
+  // ALL THREE CONSUMERS OF THE JOIN ARE GATED, and that is not optional. The
+  // two downstream valids are each `door_tri_valid_w && <the other's ready>`,
+  // so gating only the READY would leave the shell and GEOM.ARENABIN taking a
+  // triangle the door never released; gating only the VALID would leave
+  // `st_o_ready` and GEOM.ATTRPACK's `out_ready_i` retiring a triangle the door
+  // never took. Both halves DROP a triangle rather than misname one, which is
+  // worse, so the gate is applied to the valid and to both upstream readys.
+  //
+  // IT CANNOT DEADLOCK, and the argument names what each side waits on:
+  //   * the queue is filled by GEOM.VERTID's TD retire, whose only backpressure
+  //     is `zhao_geom_paramarena.td_ready_o` = `taking_c && !pv_valid_i`.
+  //     `taking_c` is `sink_c || engine_free_c` -- internal arena state only,
+  //     with NO term from this door;
+  //   * TD outranks the chunk port in that arena's priority
+  //     (`ck_ready_o` is additionally qualified by `!td_valid_i`), so
+  //     GEOM.ARENABIN holding `ab_tri_ready_w` low while it writes a chunk can
+  //     never starve the push that would release the door;
+  //   * and the one case where a push genuinely never comes -- GEOM.VERTID
+  //     aborting on a seal -- is answered by `vid_tri_id_abort_w` above, which
+  //     pushes a nameless entry so the count stays 1:1;
+  //   * while `zhao_geom_tidq`'s flush no longer DISCARDS owed entries, it
+  //     poisons them in place. Discarding them was the other way to strand the
+  //     door and it was what the block did until today.
+  // `geom_tidq_directed` exercises the flush-with-entries-in-flight and the
+  // abort push directly, because a deadlock mode argued is not a deadlock mode
+  // exercised.
+  //
+  // IT COSTS NOTHING IN THROUGHPUT ON THIS PIPELINE, and the reason is
+  // structural rather than lucky: `zhao_geom_vertid.tri_ready_o` is
+  // `(st_q == S_IDLE)`, so the fork already cannot hand over triangle N+1 until
+  // VERTID has finished triangle N -- which is the same event that pushes N's
+  // id. The wait the door now takes is time the fork was already spending.
+  wire [3:0] tidq_level_w;
+  wire       tidq_have_w = (tidq_level_w != 4'd0);
 
   // The fork's single ready and the join's single valid.
   assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w && vid_tri_ready_w;
-  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w;
-  assign door_tri_valid_w = st_o_valid && ap_o_valid_w;
+  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w && tidq_have_w;
+  assign door_tri_valid_w = st_o_valid && ap_o_valid_w && tidq_have_w;
   // THE FORK'S CONJUNCTION. Neither `shell_tri_ready_w` nor `ab_tri_ready_w`
   // is a function of any valid -- the binner's is `(state == S_IDLE) &&
   // !drain_req_r` and GEOM.ARENABIN's is `(st_q == A_IDLE) && ...` -- so this

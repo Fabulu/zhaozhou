@@ -72,7 +72,34 @@
 // law, and the reason this paragraph names the two clocks.
 //
 // Both counters ARE REACHABLE WITH LEGAL STIMULUS -- hold `pop_i` low and push,
-// or pop with nothing pushed -- so neither owes a committed mutant.
+// or pop with nothing pushed -- so neither owes a committed mutant. THAT
+// SENTENCE WAS AN ARGUMENT UNTIL 2026-09-27 and is now a measurement:
+// `geom_tidq_directed` fires all three counters and the poison path. Until that
+// test existed this block had ONLY `lint_geom_tidq`, while `zhao_console_core`
+// and `reports/HANDOVER-20260919.md` both cited "`geom_tidq_directed` drives a
+// real clock and passes" as evidence for the composition. NO SUCH TEST EXISTED.
+//
+// ---------------------------------------------------------------------------
+// THE FLUSH POISONS IN PLACE; IT DOES NOT DISCARD (RASTERSWAP, 2026-09-27)
+// ---------------------------------------------------------------------------
+// This block used to answer `flush_i` by resetting `rd_q`, `wr_q` and `lvl_q`
+// to zero. That is safe ONLY while the door is free to pop an empty queue and
+// take the poison -- which is precisely the defect the door gate now prevents.
+//
+// EVERY ENTRY IN THIS QUEUE IS OWED TO A TRIANGLE THAT IS ALREADY INSIDE
+// GEOM.SETUP. Discarding one does not make that triangle go away; it makes the
+// door beat that will ask for its id unsatisfiable, and with the door gated on
+// occupancy the geometry front end then stops FOREVER. A flush that silently
+// converts a wrong id into a deadlock is a worse instrument than the wrong id.
+//
+// So the entries STAY, their count stays exact, and their NAMES are withdrawn:
+// `stale_q` says how many entries from `rd_q` forward were queued before the
+// flush, and each of them reads out as `ID_POISON` and is counted by
+// `unnamed_o`. That is this block's own stated law -- when it does not know the
+// answer it makes the downstream guard FIRE rather than pass -- applied to the
+// frame edge instead of to startup. A pop on the flush clock itself is stale
+// too: the arena's cursor has already moved, so the id it would hand over names
+// a frame the arena has stopped owning.
 //
 // Conservative SystemVerilog subset (charter §2); elaboration guards inside
 // `initial begin ... end` for Quartus 17.
@@ -133,6 +160,10 @@ module zhao_geom_tidq #(
   logic [ID_W:0] q [0:DEPTH-1];   // {ok, id}
   logic [AW-1:0] rd_q, wr_q;
   logic [AW:0]   lvl_q;
+  // How many entries from `rd_q` forward were queued BEFORE the last flush.
+  // They are still owed to triangles in GEOM.SETUP, so they are still popped --
+  // but they name a frame the arena no longer owns, so they come out poisoned.
+  logic [AW:0]   stale_q;
 
   wire full_c  = (lvl_q == (AW+1)'(DEPTH));
   wire empty_c = (lvl_q == {(AW+1){1'b0}});
@@ -140,9 +171,13 @@ module zhao_geom_tidq #(
   wire        head_ok_c = q[rd_q][ID_W];
   wire [ID_W-1:0] head_id_c = q[rd_q][ID_W-1:0];
 
+  // The head NAMES a triangle only if its acceptance bit is set, it is not
+  // inside the stale window, and this is not itself a flush clock.
+  wire head_named_c = head_ok_c && (stale_q == {(AW+1){1'b0}}) && !flush_i;
+
   // Combinational, so the id is on the port on the very beat the door takes the
   // triangle -- the same clock the binner samples its metadata.
-  assign id_o    = (empty_c || !head_ok_c) ? ID_POISON : head_id_c;
+  assign id_o    = (empty_c || !head_named_c) ? ID_POISON : head_id_c;
   assign level_o = lvl_q;
 
   wire do_push_c = push_i && !full_c;
@@ -157,12 +192,23 @@ module zhao_geom_tidq #(
       underflow_o <= 32'd0;
       overflow_o  <= 32'd0;
       unnamed_o   <= 32'd0;
+      stale_q     <= {(AW+1){1'b0}};
       for (k = 0; k < DEPTH; k = k + 1) q[k] <= {(ID_W+1){1'b0}};
-    end else if (flush_i) begin
-      rd_q  <= {AW{1'b0}};
-      wr_q  <= {AW{1'b0}};
-      lvl_q <= {(AW+1){1'b0}};
     end else begin
+      // THE FLUSH IS NOT AN `else if`. It used to be, and that priority is
+      // exactly what made a push on the seal clock disappear -- which is the
+      // beat GEOM.VERTID's abort entry arrives on. Push, pop and flush are
+      // three independent facts about one clock and all three are honoured.
+      if (flush_i) begin
+        // Everything currently queued loses its name. A pop on this same clock
+        // has already consumed one of them (it read `ID_POISON`, because
+        // `head_named_c` is qualified by `flush_i`), so it is not counted
+        // again.
+        stale_q <= lvl_q - (do_pop_c ? {{AW{1'b0}}, 1'b1} : {(AW+1){1'b0}});
+      end else if (do_pop_c && (stale_q != {(AW+1){1'b0}})) begin
+        stale_q <= stale_q - {{AW{1'b0}}, 1'b1};
+      end
+
       if (do_push_c) begin
         q[wr_q] <= {id_ok_i, id_i};
         wr_q    <= wr_q + {{(AW-1){1'b0}}, 1'b1};
@@ -176,7 +222,10 @@ module zhao_geom_tidq #(
 
       if (push_i && full_c)  overflow_o  <= overflow_o + 32'd1;
       if (pop_i  && empty_c) underflow_o <= underflow_o + 32'd1;
-      if (do_pop_c && !head_ok_c) unnamed_o <= unnamed_o + 32'd1;
+      // `head_named_c`, not `head_ok_c`: an entry whose frame was flushed out
+      // from under it names nothing either, and the number a reader wants is
+      // "how many triangles reached the door with no usable identity".
+      if (do_pop_c && !head_named_c) unnamed_o <= unnamed_o + 32'd1;
     end
   end
 

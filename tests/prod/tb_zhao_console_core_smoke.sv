@@ -2927,10 +2927,21 @@ module tb_zhao_console_core_smoke
       tqi_np_q      <= 0;
       tqi_no_q      <= 0;
     end else begin
-      if (`PC_CORE.vid_tri_id_retire) begin
+      // RASTERSWAP 2026-09-27: the push is the RETIRE BEAT **OR** the seal
+      // abort, because that is what the console now drives into `push_i`. A
+      // tally that counted only the retire would read one short on any frame
+      // whose seal caught GEOM.VERTID mid-triangle, and would then blame the
+      // queue for a skew the probe invented.
+      if (`PC_CORE.vid_tri_id_retire || `PC_CORE.vid_tri_id_abort_w) begin
         tq_push_q <= tq_push_q + 1;
         if (tqi_np_q < TQI_N) begin
-          tqi_push_q[tqi_np_q] <= `PC_CORE.vid_td_id;
+          // THE ID AS THE QUEUE WILL EMIT IT, not the raw wire. An entry whose
+          // acceptance bit is clear reads out as `ID_POISON` by design, so
+          // recording `vid_td_id` for it would make a CORRECT queue look wrong
+          // in the comparison below -- a probe manufacturing its own mismatch.
+          tqi_push_q[tqi_np_q] <=
+              (`PC_CORE.vid_td_accept && !`PC_CORE.vid_tri_id_abort_w)
+                ? `PC_CORE.vid_td_id : 18'h3FFFF;
           tqi_np_q <= tqi_np_q + 1;
         end
       end
@@ -7015,6 +7026,40 @@ module tb_zhao_console_core_smoke
     for (int unsigned q = 0; q < TQI_N; q = q + 1)
       if (q < tqi_no_q) $write("%0d ", tqi_pop_q[q]);
     $display("");
+    // ---- THE JOIN IS CORRECT, ASSERTED (RASTERSWAP, 2026-09-27) -----------
+    // ARENAINFER deliberately did NOT assert here, because the defect was live
+    // and a fatal would have read as its own regression. The defect is taken
+    // now, so the assertion goes in -- and it asserts the CORRECT BEHAVIOUR,
+    // never the bug. "The underflow counter fires" would pass only while the
+    // join is broken; after the repair there is no skew to miss.
+    //
+    // THREE CLAIMS, AND THEY FAIL INDEPENDENTLY:
+    //   1. the door never popped an empty queue. With the door gated on
+    //      occupancy this is structural, so a nonzero here means the gate is
+    //      gone -- which is exactly the regression worth catching.
+    //   2. the two streams are the same LENGTH. A push the door never took, or
+    //      a door beat with no push, is the skew arriving in the other order.
+    //   3. THE STREAMS ARE EQUAL ELEMENT BY ELEMENT. This is the one that
+    //      matters and the only one that could see the original defect: the
+    //      old ids were IN RANGE and DECODED CLEANLY, so counts, range guards
+    //      and totals all agreed while 74 of 75 triangles were binned under
+    //      their predecessor's descriptor.
+    if (geom_tidq_underflow_o != 32'd0) begin
+      $fatal(1, "SMOKE: GEOM.TIDQ underflowed %0d time(s) -- the shell door popped an identity queue that had nothing in it, so a triangle crossed the door before its arena index existed. The door's occupancy gate (zhao_console_core `tidq_have_w`) is not doing its job.",
+             geom_tidq_underflow_o);
+    end
+    if (tq_push_q != tq_pop_q) begin
+      $fatal(1, "SMOKE: GEOM.TIDQ saw %0d push(es) against %0d door beat(s) -- the identity stream and the triangle stream are not 1:1, so some triangle is carrying an index that belongs to another",
+             tq_push_q, tq_pop_q);
+    end
+    for (int unsigned q = 0; q < TQI_N; q = q + 1) begin
+      if ((q < tqi_np_q) && (q < tqi_no_q) && (tqi_pop_q[q] != tqi_push_q[q])) begin
+        $fatal(1, "SMOKE: GEOM.TIDQ handed the shell door id %0d for triangle %0d when GEOM.VERTID pushed %0d -- the join is skewed and every range guard downstream still passes (console entry I54's named failure)",
+               tqi_pop_q[q], q, tqi_push_q[q]);
+      end
+    end
+    $display("SMOKE: tidqjoin   OK: %0d push(es), %0d pop(s), first %0d id(s) equal element by element, underflow=0",
+             tq_push_q, tq_pop_q, (tqi_np_q < tqi_no_q) ? tqi_np_q : tqi_no_q);
     $display("SMOKE: arenabin   tris=%0d unnamed=%0d refs=%0d chunks=%0d links=%0d tiles=%0d",
              geom_ab_tris_o, geom_ab_unnamed_o, geom_ab_refs_o,
              geom_ab_chunks_o, geom_ab_links_o, geom_ab_tiles_o);
