@@ -3528,11 +3528,6 @@ targets:
       # they name reachable without a testbench.
       - fpga/rtl/compositor/zhao_twod_cmd.sv
       - fpga/rtl/compositor/zhao_twod_asset.sv
-      # TEXTURE.PALETTELOAD, composed 2026-09-26 (I13CLOSE). The same ruling
-      # clause as TWOD.ASSET above, for the TEXTURE island: the palette a CLUT
-      # material names now arrives through PublishResource instead of through
-      # eight boundary inputs a testbench drives.
-      - fpga/rtl/texture/zhao_texture_palette_load.sv
       # POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195).
       # Three files because the gap was three separate things: the ART LAW
       # (`_tag`, R195's coefficients, every one a parameter), R5's tile-local
