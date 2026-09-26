@@ -19,43 +19,52 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ---
 
-## NARROWED 2026-09-26 -- `reports/OWNER-ESCALATION-20260926-I34.md`
-## READ ITS **ADDENDUM-2** FIRST: `reports/OWNER-ESCALATION-20260926-I34-ADDENDUM-2.md`
+## OPEN OWNER DECISION 2026-09-26 -- I34's MATERIAL and NAV
+## `reports/OWNER-ESCALATION-20260926-I34.md` + **ADDENDUM-2 (read this one)**
 
-**THIS ESCALATION OVER-ASKED, BY ITS AUTHOR'S OWN LATER MEASUREMENT.** It posed
-two questions. **One was already decided in the vacation directive**, and the
-other **had a default the escalation itself declared and then did not execute.**
+**The recommendation ran and came back a measured NEGATIVE, so this is the
+owner's again -- and it is now the ONLY open owner decision in the campaign.**
+FABRICSINK walked both candidate fabric routes on 2026-09-26.
 
-* **ENCODING: CLOSED, not an owner question.** Material is an opaque, full-width
-  u32 -- the directive's numerical policy for this entry says exactly that, and
-  adds *"do not narrow it to fit an older consumer."* The escalation's claim of
-  *"two incompatible encodings with nothing mapping between them"* is **struck**:
-  `ops.yml` names the mapping inside the sentence that was quoted from it --
-  *"resolved deterministically by TERRAIN.PATCH"* -- so layer-E's `{a, b,
-  weight}` is the **sink input** and `field-ir.md` 7.1's `material:u32` is that
-  block's **output**. Two ends of one pipeline, read as a contradiction.
-* **DESTINATION: the measured finding STANDS and is not withdrawn.** Option 2's
-  SDRAM regions need ~3.7 M cycles against 330 k free; option 3 is a feature
-  deletion; option 1 ships two lanes computed and read by nothing. The directive
-  covers this case -- *"a measured engineering impossibility is a finding, not
-  permission to invent a pass."*
-* **BUT ITS OWN RECOMMENDATION IS NOW RUNNING.** The escalation said the fourth
-  shape -- hunt for a FABRIC consumer, the way velocity closed with no SDRAM at
-  all -- *"is what I will start if you say nothing."* Under a standing vacation
-  directive, **"if you say nothing" was always going to be the state**, so
-  waiting on it was a second escalation wearing a decision's clothes.
-  `BRIEF-FABRICSINK.md` is commissioned.
+* **MATERIAL's route is REAL and ends at I13's boundary, not at a missing
+  consumer.** The layer-E triple already walks eight composed hops and dies at
+  `proj_out_*`, already PER-TRIANGLE -- the granularity the law needs. Past that
+  boundary the mosaic's material bytes are a compile-time constant on every
+  fragment drawn. **So I34's material channel and I13 share ONE blocker**, and
+  whatever closes I13 carries material with it.
+* **AND AT ZERO DRAIN COST.** `zhao_material_window.sv:415-420`'s `match_c` has
+  five terms and `base_rgb`/`recipe_weight` -- the exact bits the mosaic slices
+  -- are **not among them**. The drain price was charged to the triple by
+  conflation with per-cell `{material_set, material_id}`, which nobody proposes.
+* **NAV's route does not exist in either language.** Zero navigation queries
+  across eight trees against a live positive control; one nav port on a composed
+  block and it is the PRODUCER; SW.CPUCOLL is `SPECIFIED` with an empty log and
+  **even built would not read that wire**, because the mirror is specified as
+  re-derivation and `zhao_terrain_writeback.sv:27-32` refuses mirrored state
+  under T4 as a second-writer violation.
 
-**WHAT IS STILL GENUINELY THE OWNER'S**, and only if the fabric hunt returns a
-measured negative: option 1 as a **temporary with a recorded expiry**, versus a
-**bandwidth re-architecture** to afford the directive's regions. That comes back
-with the measurement attached. **Option 3 stays refused** either way.
+**THE TWO LIVE OPTIONS, and they are the owner's:**
 
-**The lesson, recorded because it generalises: an escalation is an instrument,
-and it goes blind in the flattering direction.** Handing a question upward feels
-like the careful act, so nobody audits it the way a decision gets audited, and an
-already-answered question can sit in a docket looking like diligence. **Before
-escalating, grep the standing directive for the entry's own name.**
+1. **Option 1 as a TEMPORARY with a recorded expiry.** Ships two lanes computed
+   and read by nothing -- the false presence this campaign refuses -- so it is
+   defensible only as a declared, dated stopgap.
+2. **A bandwidth re-architecture** to afford the directive's regions. The
+   impossibility is robust and was tested adversarially: handing option 2 BOTH
+   provisional terrain rows entire (54% of the frame, figures their own authors
+   refused to freeze) still leaves a **2,468,566-cycle shortfall at 3.0 : 1**.
+
+**Option 3 -- ruling the channels out of the Earth record -- stays REFUSED.** It
+deletes a feature, first on the list of what the delegation does not cover.
+
+**THREE ERRORS OF MINE THIS ENTRY CARRIED, all now fixed in place:** the
+encoding question was never open (struck IN THE ESCALATION ITSELF, because a
+strike written into an addendum **was re-inherited as authority the same day** by
+a recon for the very packet that found it); the `COMPOSED_NAV` range I quoted
+twice is **dead**, colliding with POST.ECHO, and DECISION RECORD 1 had already
+moved it to `[0x05C4_0000, 0x05E4_0000)` before I wrote it; and my velocity
+analogy -- the whole reason I expected a fabric route to exist -- is **false**,
+because velocity's consumer is a point query at PARTICLE rate and material's is
+at FRAGMENT rate.
 ---
 
 ## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`

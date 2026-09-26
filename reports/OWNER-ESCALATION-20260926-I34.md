@@ -52,11 +52,25 @@ AND MIRRORED by SW.CPUCOLL"* — so the CPU's role is a mirror, not ownership.
 
 * `spec/memory_rules.md` 5b ratifies `COMPOSED_HEIGHT` and `COMPOSED_VELOCITY`
   and has **no composed-material region and no nav region at all**.
-* **Two incompatible encodings are ratified in one tree with nothing mapping
-  between them**: `ops.yml` FIELD.WRITE.MATERIAL, `zref::fieldir::compose_material`
-  and `zhao_field_sinks` all speak layer-E `{u8 a, u8 b, u8 weight}`;
-  `spec/form/field-ir.md` 7.1, the earth adapter and `zhao_terrain_patch_acc` all
-  speak an **opaque u32**.
+* ~~**Two incompatible encodings are ratified in one tree with nothing mapping
+  between them**~~ **-- STRUCK 2026-09-26, BY ITS AUTHOR. THIS CLAIM IS FALSE**
+  and it was **re-inherited as authority the same day it was struck**, by a
+  recon run for the FABRICSINK packet -- because a strike written into a
+  SEPARATE addendum never reaches a reader of THIS file. That is the delivery
+  law (`CLAUDE.md`, *"instructions are not delivered until they are read"*)
+  charging its usual price, so the strike now lives here, in place.
+
+  **`ops.yml` names the mapping inside the sentence this bullet quoted from
+  it**: `FIELD.WRITE.MATERIAL` reads *"2 candidate material IDs + blend weight
+  per cell; **resolved deterministically by TERRAIN.PATCH**"*. So layer-E's
+  `{u8 a, u8 b, u8 weight}` is the **sink INPUT** and `field-ir.md` 7.1's
+  `material:u32` is that same block's **OUTPUT** -- two ends of one pipeline,
+  read as a contradiction because I stopped at the first eleven words. The
+  owner's directive settles the encoding besides: *"its value remains an
+  opaque, full-width u32 ... do not narrow it to fit an older consumer."*
+
+  **Nothing in this document turns on the struck claim.** The destination
+  question below stands on the bandwidth measurement alone.
 * The oracle cannot settle it: `reference/src/zrender/terrain.cpp`'s
   `compose_lattice` writes height and pushes velocity and **builds no material
   and no nav lattice at all.**

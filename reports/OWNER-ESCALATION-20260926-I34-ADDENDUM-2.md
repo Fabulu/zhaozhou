@@ -60,8 +60,9 @@ destinations and exact addresses:
 
 ```
   COMPOSED_MATERIAL  [0x058B0000, 0x05AB0000)   2 MiB
-  COMPOSED_NAV       [0x05AB0000, 0x05CB0000)   2 MiB
+  COMPOSED_NAV       [0x05AB0000, 0x05CB0000)   2 MiB   <- SUPERSEDED, see below
 ```
+
 
 and the bus measurably cannot pay for them. `tools/budget/sdram_bandwidth.py`:
 **one 2 B/vertex plane costs 737,280 cycles against 330,474 free — 2.2× the
@@ -70,6 +71,21 @@ twice velocity's width, so the pair needs on the order of **3.7 million cycles
 against 330 thousand free.** The directive anticipates exactly this case:
 *"A measured engineering impossibility is a finding, not permission to invent a
 pass."* **Reporting it is correct and it stays reported.**
+
+**THE NAV RANGE ABOVE IS DEAD AND I QUOTED IT ANYWAY.** Corrected 2026-09-26
+after FABRICSINK measured it. `[0x05AB_0000, 0x05CB_0000)` **collides with
+POST.ECHO**, which runs `ZHAO_POST_ECHO_BASE = 0x05C0_0000` for
+`SPAN = 0x0003_C000` and therefore ends at `0x05C3_C000`
+(`fpga/rtl/common/zhao_pkg.sv:244-245`).
+
+**And the correction already existed when I wrote this.** DECISION RECORD 1 in
+`reports/OWNER-RULINGS-20260919-EVENING.md:7935` had already moved it to
+**`TERRAIN.COMPOSED_NAV [0x05C4_0000, 0x05E4_0000)`**, 2 MiB / 256 x 8 KiB,
+clearing POST.ECHO's half-open end by 16 KiB. I quoted the DIRECTIVE without
+checking the RULING that supersedes it -- in a document whose whole subject is
+that I failed to check the directive before escalating. **The directive's own
+sentence anticipates exactly this**: *"Before enacting these ranges, check the
+LIVE map, guard, allocator, and branches being integrated."*
 
 **What is not correct is that I stopped there.** My own escalation says, in its
 own words:
@@ -94,31 +110,65 @@ input**; TERRAIN.PATCH resolves it; the u32 is the result. Narrowing the token t
 fit the layer-E form is prohibited by the directive and is not on the table. The
 escalation's "two incompatible encodings" paragraph is **struck**.
 
-**Question 2 (destination): I am executing my own recommended option**, which is
-to commission a packet to look for a **FABRIC** consumer for material and nav,
-the way velocity found one. Velocity was in precisely this position a week ago —
-owner-named, "ratified" destination, SDRAM publish refused on the same bandwidth
-proof — and it closed **with no SDRAM at all**, riding composed height's existing
-route to `zhao_terrain_heighttap`'s §4.3 cell and out to the particle tap. **No
-region, no bandwidth, a real consumer, a number that moves.**
+**Question 2 (destination): THE HUNT RAN AND CAME BACK EMPTY. MEASURED.**
+FABRICSINK walked both candidate fabric routes on 2026-09-26 and both end.
+**So this half is now genuinely the owner's, and it is the ONLY thing in this
+entry that is.**
 
-**I have not walked either route and I am not asserting one exists.** Material
-has a plausible fabric consumer in the mosaic path and nav has one in
-SW.CPUCOLL's mirror; in this tree "X does not exist" runs false at a rate near
-one in two, and it runs false in **both** directions — this addendum is itself a
-false-absence I wrote. The packet's job is to **measure**, and to report a clean
-negative if that is what it finds.
+* **MATERIAL's route is REAL and ends at I13's boundary, not at a missing
+  consumer.** The authored layer-E triple already walks **eight composed hops**
+  and dies at `proj_out_*`, a dangling top-level output of core *and* board --
+  and it is already **per-triangle** there, which is the granularity "never
+  interpolate identifiers" requires. Past that boundary the mosaic's material
+  bytes are a **compile-time constant**, `MAT_BASE_RGB_C = 24'hFF_FF_FF`, on
+  every fragment drawn. **I34's material channel and I13 share one blocker.**
+* **AND THE DRAIN OBJECTION IS MEASURABLY WRONG, in the helpful direction.**
+  `zhao_material_window.sv:415-420`'s `match_c` has five terms -- mode,
+  vertex_alpha, frag_state, material_set, material_id -- and **`base_rgb` and
+  `recipe_weight`, the exact bits the mosaic slices, are not among them.** A
+  per-triangle triple on the rider costs **zero drains**. The drain price is
+  real for per-cell `{material_set, material_id}`, which nobody proposes; it had
+  been charged to the triple by conflation.
+* **NAV's route does not exist in either language.** No navigation query exists
+  at all -- `nav_grid`/`navmesh`/`pathfind`/`zref::nav` are zero hits across
+  eight trees against a live positive control. There is exactly **one** nav port
+  on a composed block and it is the **producer**. SW.CPUCOLL is `maturity:
+  SPECIFIED` with an empty log, and **even built it would not read that wire**:
+  the mirror is specified as RE-DERIVATION, and `zhao_terrain_writeback.sv:27-32`
+  refuses mirrored state under T4 as a second-writer violation.
 
-**What remains genuinely the owner's**, and is NOT being decided here:
+**AND MY VELOCITY ANALOGY -- THE WHOLE REASON I EXPECTED THIS TO WORK -- IS
+FALSE.** I wrote that *"velocity was in precisely this position a week ago"*. It
+was not. **Velocity's consumer is a point query at PARTICLE rate off a single
+staged patch; material's is at FRAGMENT rate.** That difference is exactly why
+velocity was free, and it does not transfer. The analogy was doing the
+persuasive work in this document and it should not have been.
 
-* If the fabric hunt comes back empty, the choice is between **option 1 as a
-  temporary with a recorded expiry** and a **bandwidth re-architecture** to
-  afford the directive's regions. I will bring that back with the measurement
-  rather than adopt option 1 silently, because a computed-and-unread lane is the
-  false presence this campaign exists to refuse.
-* **Option 3 — ruling material and nav out of the Earth record — remains
-  refused** and is not mine to take. It deletes a feature, which is first on the
-  directive's list of what the delegation does not cover.
+---
+
+## SO THE CHOICE IS THE OWNER'S NOW, AND IT IS NARROW
+
+I said I would bring this back with a measurement rather than adopt option 1
+silently. **Here it is.** Two live options:
+
+1. **Option 1 as a TEMPORARY with a recorded expiry** -- the accumulator owns
+   material and nav as patch-local state. It ships two lanes computed and read
+   by nothing, which is the false presence this campaign exists to refuse, so it
+   is only defensible as a declared, dated stopgap.
+2. **A bandwidth re-architecture** to afford the directive's regions. The
+   impossibility is robust: even handing option 2 BOTH provisional terrain rows
+   entire -- 54% of the frame, figures their own authors refused to freeze --
+   leaves a **2,468,566-cycle shortfall at 3.0 : 1**.
+
+**A third path now exists and is cheaper than either, but it is not
+independent:** material's route is complete up to `proj_out_*`, so **whatever
+closes I13's boundary carries material with it at zero drain cost.** That makes
+I34's material channel a consequence of I13 rather than a separate build. **Nav
+has no such path and needs a consumer that does not exist in any language.**
+
+**Option 3 -- ruling material and nav out of the Earth record -- remains
+refused** and is not mine to take. It deletes a feature, which is first on the
+directive's list of what the delegation does not cover.
 
 ---
 
