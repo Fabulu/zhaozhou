@@ -5558,6 +5558,45 @@
 //               write face, u8 triple, one driver (the page stream, i.e.
 //               authored layer E), no override and no second writer. A field
 //               result has no port to arrive on.
+//
+//           AND MATERIAL'S DOWNSTREAM HALF IS WORSE THAN THIS ENTRY RECORDS,
+//           which is the UNFLATTERING direction and therefore worth stating
+//           carefully. Item (1) of the FABRICSINK block below says the
+//           authored triple "DIES AT `proj_out_*` -- WHICH IS ENTRY I13, NOT A
+//           MISSING CONSUMER". `proj_out_mat_a_o` NO LONGER EXISTS AS A PORT
+//           of this module: two occurrences in this file, both in comments,
+//           and the port list at :12003-12004 keeps only `proj_out_refused_o`
+//           and `proj_out_missed_o`.
+//
+//           WHAT REPLACED IT IS THE FINDING. The I13 note at :11995-12002
+//           (CARRIAGE, 2026-09-26) reads "The triangle, its raw w AND ITS
+//           LAYER-E TRIPLE are CONSUMED IN THIS MODULE ... `u_terrain_clipfeed`
+//           takes them". That is TRUE OF THE TRIANGLE AND THE W AND FALSE OF
+//           THE TRIPLE. Measured by hand, because the brief's own trap applies
+//           -- `tests/shell/v3_closure_inherited.vlt` waives UNUSEDSIGNAL
+//           across whole directories, so a dead wire raises nothing and the
+//           count has to be taken manually:
+//             * `tcf_tri_mat_a_w`, `_mat_b_w` and `_weight_w` have EXACTLY TWO
+//               occurrences each in this file -- the declaration at :19568 and
+//               the projector's write at :19705-19707. NO READER.
+//             * `zhao_terrain_clipfeed` HAS NO MATERIAL INPUT PORT AT ALL. Its
+//               material outputs are the GEOM {set, id, mode} trio, driven
+//               from constants at that file's :695-697.
+//           So the triple now has the same status as `tcf_tri_ad/bd/cd_w`,
+//           which the SAME comment block openly declares "DELIBERATELY NOT
+//           USED" -- the difference is that those say so and the triple does
+//           not.
+//
+//           RETIRING A PORT IS NOT CONNECTING A LANE. Material's triple moved
+//           from VISIBLY dangling at two module boundaries to INVISIBLY
+//           dangling on an internal wire, and the register's I13 row shrank.
+//           That is this file's own `.gitignore` chapter in RTL -- making
+//           waste invisible to your tooling is not removing it -- and here the
+//           tooling was told to look away by a directory-wide lint waiver.
+//           NOTHING IS CHANGED HERE: that seam is I13's and TERRAINTEX is live
+//           on it. It is recorded so the next packet does not inherit
+//           "material ends at a boundary" when it ends before one.
+//
 //           ITEM (10) BELOW RECORDS THAT ADDENDUM-2 STRUCK THE "TWO
 //           INCOMPATIBLE ENCODINGS ... WITH NOTHING MAPPING BETWEEN THEM"
 //           PARAGRAPH. THE STRIKE IS WITHDRAWN. What ADDENDUM-2 correctly
