@@ -6788,6 +6788,31 @@ module tb_zhao_console_core_smoke
     // blocks. `proj_b_grants_o` is the one that matters most: it is the
     // ARBITER inside the shared projector granting its second client, and
     // before TERRAIN.GROUP_SEQ was composed it could not move at all.
+    //
+    // COMPILED OUT UNDER THE SLOT-OVERFLOW MUTANT, 2026-09-26
+    // (TERRAINVISIBLE), for the reason this file already gives the degeneracy
+    // gate eighty lines below: the mutation legitimately breaks them, and
+    // running them against a deliberately broken machine would be asserting
+    // the bug. The mutation halves TERR_POOL_SLOTS, so TERRAIN.PAGELOADER
+    // refuses every job the directory places above its range -- which is the
+    // whole point, it is what moves `terr_pl_slot_overflow_o`. MEASURED in
+    // that form: `terrcompose WAIT resident=0/3 ... pl loaded=0`. No page
+    // loads, so no patch composes, so `zhao_terrain_jobissue` issues no
+    // subpatch job, so client B has nothing to carry. Every number below is
+    // then zero BY CONSTRUCTION.
+    //
+    // AND THIS IS WHY IT ONLY SURFACED NOW, which is the part worth keeping.
+    // Until this commit the bench ALSO injected a subpatch job through the
+    // core's `terr_job_*_i` host override, so TESS ran in the mutant form too
+    // -- on a compose cache that was serving `32'h5BADF00D` poison, because
+    // the pages had not loaded. These four checks were passing on POISON. The
+    // override is retired (see THE TERRAIN JOB above), the live producer is
+    // the only producer, and the mutant form now says honestly that its
+    // starved pool composes nothing.
+    //
+    // NOTHING IS WEAKENED FOR PRODUCTION. The plain run and all four other
+    // controls still assert every line of this.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
     if (terr_tess_vertices_o == 0)
       $fatal(1, "SMOKE: TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job port is dead");
     if (terr_fills_forwarded_o == 0)
@@ -6809,6 +6834,7 @@ module tb_zhao_console_core_smoke
     if (terr_light_degen_mismatch_o != 0)
       $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
              terr_light_degen_mismatch_o);
+`endif  // ZHAO_MUT_SLOT_OVERFLOW -- end of the client-B liveness block
     // THE DEGENERACY IS REPAIRED, AND THE PARAGRAPH THAT STOOD HERE WAS WRONG
     // ABOUT ITS CAUSE. It read: "the pages this bench plays are all-zero
     // BODIES ... so the lattice TERRAIN.TESS emits is a flat zero height
@@ -6871,8 +6897,16 @@ module tb_zhao_console_core_smoke
     if (terr_light_stale_reads_o != 0)
       $fatal(1, "SMOKE: the light lane refused %0d reference(s) as stale -- the world store and the projector's arena disagree about a generation",
              terr_light_stale_reads_o);
+    // Same class as the client-B block above: with the mutation's starved page
+    // pool no patch composes and no subpatch job is issued, so no arena is
+    // opened and a zero here describes the mutation rather than a dead
+    // handshake. The stale-read check above is NOT skipped -- zero refusals is
+    // true of a lane that never ran, so it costs nothing to keep and it stays
+    // honest if the mutant ever does compose something.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
     if (terr_groups_opened_o == 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ opened no arena -- the open/gen handshake with the subsystem is dead");
+`endif
     if (terr_release_unsafe_o != 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ released an arena with work outstanding (release_unsafe=%0d)",
              terr_release_unsafe_o);
