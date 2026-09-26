@@ -146,6 +146,39 @@ persuasive work in this document and it should not have been.
 
 ---
 
+## THE OWNER DECIDED IT, 2026-09-26 -- AND CHOSE NONE OF THE OPTIONS OFFERED
+
+**See `reports/OWNER-DECISION-20260926-I34-NAV.md`. It supersedes part of
+the vacation directive, which is amended in place.**
+
+Not option 1 (a dated stopgap), not option 2/3 (a bandwidth re-architecture
+commissioned to preserve the SDRAM topology). **A fourth option: navigation
+truth and its query service belong to SW.CPUCOLL / the CPU simulation
+runtime**, as the terrain ownership contract already said.
+
+* **The FPGA is NOT required to publish a nav lattice into SDRAM when no
+  hardware consumer needs it.** `TERRAIN.COMPOSED_NAV` is struck; neither
+  its original range nor DECISION RECORD 1's relocation is live.
+* **`FIELD.WRITE.NAV` and its behaviour are PRESERVED.** Ownership decision,
+  not deletion.
+* **The replacement obligation is a REAL production query** -- hard
+  passability plus composed movement cost, exposed through the runtime
+  interface Form simulation and game AI actually call. A reference-only
+  helper, a debug counter or a testbench read is **not** completion.
+* **I34 STAYS OPEN until that service is implemented, integrated and
+  tested.** The owner is explicit that the register must not reach zero
+  *"through a dated stopgap, a renamed gap, or a computed-but-unread lane."*
+* **Material is a separate half** and does not close merely because authored
+  terrain materials render -- the bar is that **a Field material write
+  changes the intended consumer.**
+
+**AND THE BANDWIDTH FINDING WAS AN ARGUMENT AGAINST A TRANSPORT, NOT AGAINST
+THE FEATURE.** Everything below this line measured a publication scheme
+nobody needed. The measurement was right; the question was wrong. Kept
+unedited as the record of how that happened.
+
+---
+
 ## SO THE CHOICE IS THE OWNER'S NOW, AND IT IS NARROW
 
 I said I would bring this back with a measurement rather than adopt option 1

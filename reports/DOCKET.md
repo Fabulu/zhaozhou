@@ -19,52 +19,42 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ---
 
-## OPEN OWNER DECISION 2026-09-26 -- I34's MATERIAL and NAV
-## `reports/OWNER-ESCALATION-20260926-I34.md` + **ADDENDUM-2 (read this one)**
+## DECIDED 2026-09-26 -- I34's NAV: CPU-OWNED, with a REAL runtime query
+## `reports/OWNER-DECISION-20260926-I34-NAV.md`
 
-**The recommendation ran and came back a measured NEGATIVE, so this is the
-owner's again -- and it is now the ONLY open owner decision in the campaign.**
-FABRICSINK walked both candidate fabric routes on 2026-09-26.
+**The owner chose NONE of the three options offered and took a fourth.**
+Navigation truth and its query service belong to **SW.CPUCOLL / the CPU
+simulation runtime**, as the terrain ownership contract already said.
 
-* **MATERIAL's route is REAL and ends at I13's boundary, not at a missing
-  consumer.** The layer-E triple already walks eight composed hops and dies at
-  `proj_out_*`, already PER-TRIANGLE -- the granularity the law needs. Past that
-  boundary the mosaic's material bytes are a compile-time constant on every
-  fragment drawn. **So I34's material channel and I13 share ONE blocker**, and
-  whatever closes I13 carries material with it.
-* **AND AT ZERO DRAIN COST.** `zhao_material_window.sv:415-420`'s `match_c` has
-  five terms and `base_rgb`/`recipe_weight` -- the exact bits the mosaic slices
-  -- are **not among them**. The drain price was charged to the triple by
-  conflation with per-cell `{material_set, material_id}`, which nobody proposes.
-* **NAV's route does not exist in either language.** Zero navigation queries
-  across eight trees against a live positive control; one nav port on a composed
-  block and it is the PRODUCER; SW.CPUCOLL is `SPECIFIED` with an empty log and
-  **even built would not read that wire**, because the mirror is specified as
-  re-derivation and `zhao_terrain_writeback.sv:27-32` refuses mirrored state
-  under T4 as a second-writer violation.
+**THIS SUPERSEDES THE VACATION DIRECTIVE** on one point, and the directive
+is amended in place: *"Do not open that memory window or add a writer merely
+to give an otherwise unread output a home."* `TERRAIN.COMPOSED_NAV` is
+struck -- **neither** its original range **nor** DECISION RECORD 1's
+relocation is live. `COMPOSED_MATERIAL` is unaffected.
 
-**THE TWO LIVE OPTIONS, and they are the owner's:**
+**PRESERVED:** `FIELD.WRITE.NAV` and its behaviour, command order, signed
+Q16.16, saturating accumulation, the nonnegative floor, coverage, and
+optional-output presence (an absent output is **not** a write of zero).
+**Hard-blocked terrain stays blocked, including under negative deltas.**
 
-1. **Option 1 as a TEMPORARY with a recorded expiry.** Ships two lanes computed
-   and read by nothing -- the false presence this campaign refuses -- so it is
-   defensible only as a declared, dated stopgap.
-2. **A bandwidth re-architecture** to afford the directive's regions. The
-   impossibility is robust and was tested adversarially: handing option 2 BOTH
-   provisional terrain rows entire (54% of the frame, figures their own authors
-   refused to freeze) still leaves a **2,468,566-cycle shortfall at 3.0 : 1**.
+**THE REPLACEMENT OBLIGATION:** a production CPU-side navigation query --
+hard passability plus composed movement cost -- exposed through the runtime
+interface Form simulation and game AI actually call, reusing canonical field
+evaluation and `compose_nav` semantics. **A reference-only helper, a debug
+counter or a testbench-only read is not completion.** No second writer: the
+CPU derives from its own canonical terrain and the same accepted field
+commands; FPGA results are never fed back as another writer.
 
-**Option 3 -- ruling the channels out of the Earth record -- stays REFUSED.** It
-deletes a feature, first on the list of what the delegation does not cover.
+**I34 STAYS OPEN** until that service is implemented, integrated and tested.
+The owner is explicit: the register must **not** reach zero *"through a
+dated stopgap, a renamed gap, or a computed-but-unread lane."*
 
-**THREE ERRORS OF MINE THIS ENTRY CARRIED, all now fixed in place:** the
-encoding question was never open (struck IN THE ESCALATION ITSELF, because a
-strike written into an addendum **was re-inherited as authority the same day** by
-a recon for the very packet that found it); the `COMPOSED_NAV` range I quoted
-twice is **dead**, colliding with POST.ECHO, and DECISION RECORD 1 had already
-moved it to `[0x05C4_0000, 0x05E4_0000)` before I wrote it; and my velocity
-analogy -- the whole reason I expected a fabric route to exist -- is **false**,
-because velocity's consumer is a point query at PARTICLE rate and material's is
-at FRAGMENT rate.
+**MATERIAL is a separate half** and does not close because authored terrain
+materials render. The bar is that **a Field material write changes the
+intended consumer.**
+
+**Implementation choices beyond this are DELEGATED** -- the owner asked for
+no further questionnaire about the service's internal shape.
 ---
 
 ## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`

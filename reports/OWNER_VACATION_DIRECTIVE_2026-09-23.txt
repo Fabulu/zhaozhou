@@ -117,6 +117,28 @@ reserved interval in memory_rules.md at the reviewed baseline [S4]:
   COMPOSED_MATERIAL  [0x058B0000, 0x05AB0000)   2 MiB
   COMPOSED_NAV       [0x05AB0000, 0x05CB0000)   2 MiB
 
+  >>> SUPERSEDED 2026-09-26 BY THE OWNER, for COMPOSED_NAV ONLY. <<<
+  >>> See reports/OWNER-DECISION-20260926-I34-NAV.md.            <<<
+  >>>
+  >>> The owner's words: "This explicitly supersedes the vacation
+  >>> directive's requirement to create and publish
+  >>> TERRAIN.COMPOSED_NAV in FPGA-local SDRAM. Do not open that
+  >>> memory window or add a writer merely to give an otherwise
+  >>> unread output a home."
+  >>>
+  >>> NEITHER nav range is live: not [0x05AB0000, 0x05CB0000)
+  >>> above, and not DECISION RECORD 1's relocation of it to
+  >>> [0x05C4_0000, 0x05E4_0000) (which was correct about the
+  >>> POST.ECHO collision and is now moot).
+  >>>
+  >>> Navigation truth and its query service belong to SW.CPUCOLL /
+  >>> the CPU simulation runtime. FIELD.WRITE.NAV and its behaviour
+  >>> are PRESERVED -- this is an ownership decision, NOT permission
+  >>> to delete navigation, ignore nav writes, change their meaning,
+  >>> or cut supported field capacity.
+  >>>
+  >>> COMPOSED_MATERIAL above is UNAFFECTED and remains live.
+
 Each provides 256 slots of 8 KiB. A slot can hold the 33x33 top-lattice u32/fx32
 payload plus a presence/validity bitmap and a versioned identity header. Specify
 and generate the exact offsets, padding, lengths and identifiers once. Keep the
