@@ -173,6 +173,13 @@ module zhao_geom_chunkser #(
     output var logic [CHUNK_IDS*32-1:0]  ck_ids_o,
     // The arena's OWN cursor: the index the next accepted chunk receives.
     input  var logic [CHIDX_W-1:0]       ck_alloc_id_i,
+    // The arena really ALLOCATED it. `ck_ready_i` alone is not that: with no
+    // frame open, or with the frame already faulted, the arena consumes
+    // records at full rate and writes none, so a chunk can be taken and never
+    // exist. Bookkeeping that keyed on the handshake would place a head for a
+    // chunk that was thrown away and would then count its own correct
+    // prediction as a chain break.
+    input  var logic                     ck_accept_i,
 
     // ---- the per-tile head, which is what a walk starts FROM ---------------
     // Registered read: present a tile index, read the chunk index one clock
@@ -196,6 +203,7 @@ module zhao_geom_chunkser #(
     output var logic [31:0] refs_serialised_o,
     output var logic [31:0] tiles_with_refs_o,
     output var logic [31:0] chain_break_o,
+    output var logic [31:0] chunks_sunk_o,     // taken by the arena, never written
     output var logic [31:0] head_clash_o,      // a tile opened twice in a pass
     output var logic [31:0] pass_truncated_o,  // the pass ended mid-chunk
     output var logic        busy_o
@@ -298,7 +306,7 @@ module zhao_geom_chunkser #(
     head_wv = 1'b0;
     // A tile's head is the index of its FIRST accepted chunk, taken from the
     // arena's own cursor on the acceptance clock.
-    if (ck_fire_c && !tile_open_q) begin
+    if (ck_fire_c && ck_accept_i && !tile_open_q) begin
       head_we = 1'b1;
       head_wa = tile_q;
       head_wd = ck_alloc_id_i;
@@ -341,6 +349,7 @@ module zhao_geom_chunkser #(
       refs_serialised_o <= 32'd0;
       tiles_with_refs_o <= 32'd0;
       chain_break_o     <= 32'd0;
+      chunks_sunk_o     <= 32'd0;
       head_clash_o      <= 32'd0;
       pass_truncated_o  <= 32'd0;
     end else begin
@@ -405,18 +414,29 @@ module zhao_geom_chunkser #(
 
           C_EMIT: begin
             if (ck_fire_c) begin
-              chunks_emitted_o <= chunks_emitted_o + 32'd1;
+              if (ck_accept_i) begin
+                chunks_emitted_o <= chunks_emitted_o + 32'd1;
 
-              // THE CHAIN CHECK. `expect_q` was loaded on the PREVIOUS
-              // acceptance and `ck_alloc_id_i` is live on THIS one, so the two
-              // sides of this comparison are one acceptance apart and it can
-              // see an allocator that stopped being sequential.
-              if (expect_v_q && (ck_alloc_id_i != expect_q))
-                chain_break_o <= chain_break_o + 32'd1;
-              expect_q   <= ck_alloc_id_i + CHIDX_W'(1);
-              expect_v_q <= 1'b1;
+                // THE CHAIN CHECK. `expect_q` was loaded on the PREVIOUS
+                // acceptance and `ck_alloc_id_i` is live on THIS one, so the
+                // two sides of this comparison are one acceptance apart and it
+                // can see an allocator that stopped being sequential. One
+                // register enable driving both would make it blind to exactly
+                // that -- CLAUDE.md's standing law, and the reason the
+                // comparison is written this way round.
+                if (expect_v_q && (ck_alloc_id_i != expect_q))
+                  chain_break_o <= chain_break_o + 32'd1;
+                expect_q    <= ck_alloc_id_i + CHIDX_W'(1);
+                expect_v_q  <= 1'b1;
+                tile_open_q <= 1'b1;
+              end else begin
+                // Taken and thrown away: no frame open, or the frame has
+                // already faulted and is not going to be published. Counted,
+                // because a chunk that vanishes silently is how a tile list
+                // ends up short in a frame that still looks like a frame.
+                chunks_sunk_o <= chunks_sunk_o + 32'd1;
+              end
 
-              tile_open_q <= 1'b1;
               fill_q      <= {SLOT_W{1'b0}};
               for (k = 0; k < CHUNK_IDS; k = k + 1) stage_q[k] <= 32'd0;
 

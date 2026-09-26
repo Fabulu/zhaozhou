@@ -315,6 +315,18 @@ module zhao_geom_vertid #(
     input  var logic [17:0]             td_id_i,
     output var logic                    tri_id_valid_o,
     output var logic [17:0]             tri_id_o,
+    // THE DESCRIPTOR STEP RETIRED -- accepted or NOT. Console entry I54.
+    //
+    // `tri_id_valid_o` above is qualified by `td_accept_i`, which is correct
+    // for a reader that wants an id and WRONG for a reader that wants to stay
+    // in step with the triangle stream: a descriptor the arena refuses (no
+    // seal, or the frame already faulted) retires here while the same triangle
+    // still goes to GEOM.SETUP. A queue pushed on the accepted beat alone would
+    // fall one entry behind and hand every later triangle its predecessor's
+    // index -- in range, decoding cleanly, wrong, and invisible to every
+    // counter in the arena. So the retire beat is exported beside the
+    // acceptance, and `zhao_geom_tidq` carries the acceptance as a BIT.
+    output var logic                    tri_id_retire_o,
 
     // ---- evidence ------------------------------------------------------------
     output var logic [31:0]             vid_tris_o,
@@ -497,6 +509,8 @@ module zhao_geom_vertid #(
 
   assign tri_id_valid_o = td_valid_o && td_ready_i && td_accept_i;
   assign tri_id_o       = td_id_i;
+  // The same handshake WITHOUT the acceptance term. See the port comment.
+  assign tri_id_retire_o = td_valid_o && td_ready_i;
 
   // `tri_ready_o` is a STATE decode and the seal, never a function of
   // `tri_valid_i`, so the console's fork at GEOM.CLIP's output cannot close a

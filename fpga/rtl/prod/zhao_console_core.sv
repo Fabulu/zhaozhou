@@ -5910,9 +5910,15 @@
 //      `refuse_valid_o` used to be a pulse under an UNUSEDSIGNAL waiver with
 //      no consumer at all.
 //
-// I54. GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
-//      (`u_geom_paramarena.ck_*`) -- TIED TO ZERO, the same standing as I53
-//      and a different missing thing.
+// I54 IS CLOSED AND DELETED, 2026-09-26 (packet CHUNKSER). GEOM.PARAMBUF's
+//      TILE-REFERENCE-CHUNK INTAKE (`u_geom_paramarena.ck_*`) has a REAL
+//      PRODUCER: `u_geom_chunkser`, fed by a serialise pass on
+//      `zhao_geom_binner_v2` and by `u_geom_tidq`'s triangle identity.
+//
+//      The entry's whole history is kept below rather than deleted, because
+//      FOUR of its own statements were measured false on the way here and the
+//      corrections are the part a later reader needs. The closing account is
+//      the last paragraph block of this entry.
 //
 //      `zhao_geom_binner_v2` builds exactly these chunks -- 64 bytes, a
 //      `next` pointer, a count and fourteen triangle ids -- in an ON-CHIP
@@ -5995,6 +6001,71 @@
 //      reference order into chunks of arena triangle ids and stamps the
 //      generation -- and `tri_id_o` is the translation table's one input.
 //      Entry I54 is that block, and it is no longer blocked on an identity.
+//
+//      -- CHUNKSER, 2026-09-26. BUILT AND COMPOSED. `ck_*` is no longer tied:
+//      `u_geom_chunkser` drives it, `u_geom_tidq` carries the identity, and
+//      `zhao_geom_binner_v2` grew a serialise pass to be read from. FOUR of
+//      this entry's own statements were measured FALSE on the way, and they
+//      are listed first because that is the part worth inheriting.
+//
+//      1. "STAMPS THE GENERATION" -- FALSE, AND DANGEROUS IF BELIEVED.
+//      `zhao_geom_paramarena` writes `gen_q` into chunk bytes 6..7 itself and
+//      its header says why: a producer that supplied the generation would let
+//      a carried-over chunk keep last frame's stamp, which is the one thing
+//      the field exists to make detectable. `zhao_geom_chunkser` has no
+//      generation port and must never grow one.
+//
+//      2. "THREE OR FOUR PORTS ON THAT BLOCK" -- FALSE AGAIN, in the
+//      flattering direction again, and this is the SECOND time this entry has
+//      under-estimated in the same direction. `zhao_geom_binner_v2`'s job
+//      drain NEVER LEAVES `zhao_geom_bin_pipe_v2`: `job_*` are internal wires
+//      consumed only by `zhao_raster_tile_pipe_v2`, and the shell discards
+//      even `jobs_taken_o`. The tap crosses binner -> bin_pipe -> shell ->
+//      core, THREE hierarchy levels.
+//
+//      3. THE OBVIOUS COMPOSITION -- watching the live drain go by -- IS
+//      UNSOUND AT ANY FIFO DEPTH. 576 tiles holding one reference each drain
+//      in ~3,456 cycles and require 576 chunks = 4,608 64-bit beats through
+//      the guard. The producer is structurally slower than the stream it would
+//      watch, so depth only makes the loss rarer and keeps it SILENT. The
+//      binner therefore runs a SECOND read walk over the same lists after the
+//      raster drain has finished with them -- `tile_ram`, `ref_ram` and
+//      `next_ram` are written only at frame_begin and at push, so the lists
+//      are intact and the second walk is a pure re-read of the same port.
+//      RASTER's timing is UNCHANGED: this block is not a term in
+//      `job_ready_i`, which is why this is NOT a down-payment on I55.
+//
+//      4. THE IDENTITY NEEDED NO NEW BITS. `tri_continuation_tail_c[47:24]` is
+//      `vertex_rgb`, which owner decision R234 D1 made
+//      `zhao_raster_tile_pipe_v2` OVERWRITE per fragment -- this file already
+//      said the 24 bits are "DEAD on arrival, whatever is put in them" and
+//      drove them with a zero constant. Eighteen of them now carry the arena
+//      index. METAW does not move, the ratified-1877 guard still holds, the
+//      metadata bank gains no slice, and no port crosses the shell for it.
+//      `zhao_geom_bin_pipe_v2` owns the offset and refuses at elaboration if
+//      the tail layout moves, so this cannot start slicing a live attribute.
+//
+//      AND ONE FAULT THIS ENTRY DID NOT NAME, which is the one that would have
+//      shipped. The obvious queue between `tri_id_o` and the shell door is
+//      pushed on `tri_id_valid_o` -- and that port is qualified by
+//      `td_accept_i`, so a descriptor the ARENA REFUSED retires without an id
+//      while its triangle still goes to GEOM.SETUP. The queue would then run
+//      one entry short for the rest of the frame and hand every later triangle
+//      its PREDECESSOR'S index: in range, decoding cleanly, wrong, and
+//      invisible to every counter in the arena or the parambuf. This is the
+//      entry's own "wrong descriptors that decode cleanly" arriving through a
+//      different door. `zhao_geom_vertid` therefore exports
+//      `tri_id_retire_o` -- the same handshake WITHOUT the acceptance term --
+//      and `zhao_geom_tidq` carries the acceptance as a BIT, emitting ALL-ONES
+//      when it does not know. All-ones is above any sealed `tris`, so
+//      `td_illegal_o` REFUSES it; zero would have been accepted.
+//
+//      THE FRAME END MOVED, AND IT HAD TO. The arena publishes as soon as its
+//      frame ends and its writes retire, so `frame_end_i` is now
+//      `cs_frame_done` -- the serialiser's completion pulse -- and not
+//      `render_frame_end_i`. Handing it the raw edge would publish the frame
+//      before a single chunk was written: a published frame whose tile lists
+//      are empty, which is correct-looking and wrong.
 //
 // I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
 //      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
@@ -8354,6 +8425,28 @@ module zhao_console_core
   output logic [31:0] geom_vid_sunk_o,
   output logic [31:0] geom_vid_opens_o,
   output logic [31:0] geom_vid_stall_o,
+  // ---- I54: the chunk serialiser and the identity queue that feeds it ------
+  // `geom_tidq_*` measure the rejoin between GEOM.VERTID's descriptor index and
+  // the triangle it belongs to. On a frame whose ids are sound all three read
+  // ZERO -- and a counter asserted zero is a claim, so each is fired
+  // deliberately by `geom_chunkser_directed` rather than quoted silent.
+  output logic [31:0] geom_tidq_underflow_o,
+  output logic [31:0] geom_tidq_overflow_o,
+  output logic [31:0] geom_tidq_unnamed_o,
+  // `geom_cs_chain_break_o` is the one that would see a chunk chain whose
+  // `next` stopped naming the chunk that follows it. `geom_cs_head_chunk_o` is
+  // what a walk starts FROM: entry I55's consumer reads it, and until that
+  // lands it is the evidence that the heads were placed at all.
+  output logic [31:0] geom_cs_chunks_o,
+  output logic [31:0] geom_cs_refs_o,
+  output logic [31:0] geom_cs_tiles_o,
+  output logic [31:0] geom_cs_chain_break_o,
+  output logic [31:0] geom_cs_head_clash_o,
+  output logic [31:0] geom_cs_truncated_o,
+  output logic [31:0] geom_cs_sunk_o,
+  input  logic [ 9:0] geom_cs_head_tile_i,
+  output logic [31:0] geom_cs_head_chunk_o,
+  output logic        geom_cs_head_valid_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -15977,10 +16070,14 @@ module zhao_console_core
     .td_accept_i   (vid_td_accept),
     .td_id_i       (vid_td_id),
     // I54's half: the triangle's own arena index at the moment it lands.
-    // Nothing consumes it yet and that is DECLARED rather than hidden -- the
-    // chunk serialiser is entry I54 and this is the port it reads.
-    .tri_id_valid_o (vid_tri_id_valid),
-    .tri_id_o       (vid_tri_id),
+    // IT IS CONSUMED AS OF THIS COMMIT -- `u_geom_tidq` below carries it to the
+    // shell door so it reaches the binner's triangle store with its triangle.
+    // `tri_id_retire_o` is the beat the queue is pushed on, NOT
+    // `tri_id_valid_o`: see the queue's header for why the accepted beat alone
+    // would fall out of step on the first refused descriptor.
+    .tri_id_valid_o  (vid_tri_id_valid),
+    .tri_id_o        (vid_tri_id),
+    .tri_id_retire_o (vid_tri_id_retire),
 
     .vid_tris_o          (geom_vid_tris_o),
     .vid_refs_o          (geom_vid_refs_o),
@@ -16002,10 +16099,48 @@ module zhao_console_core
   );
 
   // GEOM.VERTID's seams, declared with the block that drives them.
+  // `vid_tri_id_valid` stays unread ON PURPOSE: the queue below wants the
+  // RETIRE beat and the acceptance as a payload bit, not the conjunction of
+  // the two, and keeping the port lets `geom_vertid_directed` go on asserting
+  // the accepted-id contract it already tests.
   /* verilator lint_off UNUSEDSIGNAL */
   wire        vid_tri_id_valid;
-  wire [17:0] vid_tri_id;
   /* verilator lint_on UNUSEDSIGNAL */
+  wire [17:0] vid_tri_id;
+  wire        vid_tri_id_retire;
+
+  // ---------------------------------------------------------------------------
+  // I54: THE TRIANGLE IDENTITY, REJOINED WITH ITS TRIANGLE AT THE SHELL DOOR
+  // ---------------------------------------------------------------------------
+  // GEOM.VERTID resolves the arena index a few clocks after the fork that sent
+  // the same triangle into GEOM.SETUP, and GEOM.SETUP is three stages more. The
+  // queue holds the ids in between. It is sound because GEOM.SETUP is 1:1 and
+  // order-preserving -- measured, not assumed: its header refuses to cull, its
+  // valid chain is three unconditional assignments, and it has no reject
+  // counter because it has nothing to reject.
+  //
+  // The flush is `pa_seal_fire`, the clock the ARENA's cursors actually move.
+  // Not `render_frame_begin_i`: a seal is a REQUEST there and is held pending
+  // while the drain completes, so the begin edge and the cursor edge can be
+  // many cycles apart, and an id queued under the old cursor names an index in
+  // a different frame's arena.
+  wire [17:0] tidq_id_w;
+  zhao_geom_tidq #(
+      .ID_W(18), .DEPTH(8)
+  ) u_geom_tidq (
+      .clk        (clk),
+      .rst_n      (rst_n),
+      .flush_i    (pa_seal_fire),
+      .push_i     (vid_tri_id_retire),
+      .id_ok_i    (vid_td_accept),
+      .id_i       (vid_td_id),
+      .pop_i      (door_tri_valid_w && door_tri_ready_w),
+      .id_o       (tidq_id_w),
+      .underflow_o(geom_tidq_underflow_o),
+      .overflow_o (geom_tidq_overflow_o),
+      .unnamed_o  (geom_tidq_unnamed_o),
+      .level_o    ()
+  );
 
   // The fork's single ready and the join's single valid.
   assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w && vid_tri_ready_w;
@@ -19102,6 +19237,18 @@ module zhao_console_core
     .WFIFO_W     (WFIFO_W),
     .BUILD_HPS_N (2)
   ) u_shell (
+    // I54: the binner's SERIALISE PASS, out to `u_geom_chunkser`. This is a
+    // second read walk over the tile lists AFTER the raster drain has finished
+    // with them, so it is not a term in the picture's timing.
+    .render_ser_req_i          (cs_ser_req),
+    .render_ser_busy_o         (),
+    .render_ser_done_o         (cs_ser_done),
+    .render_ser_valid_o        (cs_ser_valid),
+    .render_ser_ready_i        (cs_ser_ready),
+    .render_ser_tri_id_o       (cs_ser_tri_id),
+    .render_ser_tile_o         (cs_ser_tile),
+    .render_ser_first_o        (cs_ser_first),
+    .render_ser_last_o         (cs_ser_last),
     .gpu_clk                   (gpu_clk),
     .vid_clk                   (vid_clk),
     .audio_clk                 (audio_clk),
@@ -25088,6 +25235,82 @@ module zhao_console_core
   // refuse chunks the allocator legitimately wrote, or follow pointers past
   // the arena -- and NOTHING would say which default had moved. Named once
   // here, spent twice.
+  // ---------------------------------------------------------------------------
+  // I54: THE CHUNK SERIALISER
+  // ---------------------------------------------------------------------------
+  // It sits HERE, beside the arena, and not inside `zhao_geom_bin_pipe_v2`,
+  // because what it produces is a 64-byte SDRAM record and the arena owns the
+  // guard socket that writes it. What crosses the shell boundary is therefore
+  // the lean reference stream (an 18-bit arena index, a tile index, two list
+  // markers) rather than a 448-bit chunk.
+  //
+  // `geom_done_i` is `render_frame_end_i` -- the same pulse that starts the
+  // binner's raster drain -- and NOT `drain_done`. The request has to be
+  // standing before the binner reaches D_DONE, which is the one clock it
+  // samples it on; asking a clock after the drain finished would miss the
+  // window and the pass would never start.
+  wire        cs_ser_req, cs_ser_done, cs_ser_valid, cs_ser_ready;
+  wire [17:0] cs_ser_tri_id;
+  wire [ 9:0] cs_ser_tile;
+  wire        cs_ser_first, cs_ser_last;
+  wire        cs_ck_valid, cs_ck_ready, cs_ck_accept;
+  wire [31:0] cs_ck_next;
+  wire [15:0] cs_ck_count;
+  wire [14*32-1:0] cs_ck_ids;
+  wire [17:0] cs_ck_alloc_id;
+  wire        cs_frame_done;
+
+  zhao_geom_chunkser #(
+      .CHUNK_IDS (14),
+      .TILES     (576),
+      .TIDX_W    (10),
+      .ID_W      (18),
+      .CHIDX_W   (18)
+  ) u_geom_chunkser (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+
+      .ser_req_o    (cs_ser_req),
+      .ser_done_i   (cs_ser_done),
+      .ser_valid_i  (cs_ser_valid),
+      .ser_ready_o  (cs_ser_ready),
+      .ser_tri_id_i (cs_ser_tri_id),
+      .ser_tile_i   (cs_ser_tile),
+      .ser_first_i  (cs_ser_first),
+      .ser_last_i   (cs_ser_last),
+
+      // The head table is cleared on the clock the ARENA's cursors move, for
+      // the same reason the identity queue is flushed there: a seal is a
+      // REQUEST and is held pending, so the begin edge and the cursor edge are
+      // not the same clock and a head carried across would name a chunk in a
+      // different frame's arena.
+      .frame_start_i (pa_seal_fire),
+      .geom_done_i   (render_frame_end_i),
+
+      .ck_valid_o    (cs_ck_valid),
+      .ck_ready_i    (cs_ck_ready),
+      .ck_next_o     (cs_ck_next),
+      .ck_count_o    (cs_ck_count),
+      .ck_ids_o      (cs_ck_ids),
+      .ck_alloc_id_i (cs_ck_alloc_id),
+      .ck_accept_i   (cs_ck_accept),
+
+      .head_tile_i   (geom_cs_head_tile_i),
+      .head_chunk_o  (geom_cs_head_chunk_o),
+      .head_valid_o  (geom_cs_head_valid_o),
+
+      .ser_frame_done_o (cs_frame_done),
+
+      .chunks_emitted_o  (geom_cs_chunks_o),
+      .refs_serialised_o (geom_cs_refs_o),
+      .tiles_with_refs_o (geom_cs_tiles_o),
+      .chain_break_o     (geom_cs_chain_break_o),
+      .chunks_sunk_o     (geom_cs_sunk_o),
+      .head_clash_o      (geom_cs_head_clash_o),
+      .pass_truncated_o  (geom_cs_truncated_o),
+      .busy_o            ()
+  );
+
   zhao_geom_paramarena #(
       .MAX_VERTS  (GEOM_PA_MAX_VERTS),
       .MAX_TRIS   (GEOM_PA_MAX_TRIS),
@@ -25128,7 +25351,18 @@ module zhao_console_core
       // edge the arena has seen everything the binner will ever see for this
       // frame and possibly more. Using the downstream frame end for an
       // upstream tap is conservative in the safe direction.
-      .frame_end_i   (render_frame_end_i),
+      // AND IT IS NOW HELD UNTIL THE CHUNKS ARE IN. Entry I54. This block
+      // publishes as soon as its frame ends and its writes retire, so handing
+      // it `render_frame_end_i` directly -- correct while `ck_*` was tied --
+      // would publish the frame BEFORE `u_geom_chunkser` had written a single
+      // chunk. The result would be a published frame whose tile lists are
+      // empty: correct-looking, and wrong, which is this entry's whole subject.
+      //
+      // `cs_frame_done` is the serialiser's own completion pulse: the pass has
+      // ended AND its last chunk has been accepted. It is strictly later than
+      // `render_frame_end_i` (the binner's raster drain has to finish first),
+      // so the frame still ends exactly once per frame, later.
+      .frame_end_i   (cs_frame_done),
       .reader_busy_i (pw_busy),
 
       .pb_lease_valid_o   (pa_lease),
@@ -25171,12 +25405,19 @@ module zhao_console_core
       .td_id_o       (vid_td_id),
       .seal_fire_o   (pa_seal_fire),
 
-      // ---- tile-reference chunk: TIED, declared at entry I54 ---------------
-      .ck_valid_i  (1'b0),
-      .ck_ready_o  (),
-      .ck_next_i   (32'd0),
-      .ck_count_i  (16'd0),
-      .ck_ids_i    ('0),
+      // ---- tile-reference chunk: REAL, entry I54 CLOSED --------------------
+      // `u_geom_chunkser` re-aggregates the binner's per-tile reference order
+      // into R7's fourteen-id chunks. The ids are the ARENA's, carried with
+      // each triangle from `td_id_o` above, and never the binner's own 0..127
+      // slots -- those would pass `ck_illegal_o` and `td_illegal_o` and decode
+      // cleanly into the wrong triangles.
+      .ck_valid_i  (cs_ck_valid),
+      .ck_ready_o  (cs_ck_ready),
+      .ck_next_i   (cs_ck_next),
+      .ck_count_i  (cs_ck_count),
+      .ck_ids_i    (cs_ck_ids),
+      .ck_accept_o   (cs_ck_accept),
+      .ck_alloc_id_o (cs_ck_alloc_id),
 
       .scr_req_i   (pw_scr_req),
       .scr_grant_o (pa_scr_grant),
@@ -26106,8 +26347,33 @@ module zhao_console_core
   // section in `design/contracts/RASTER.FRAGMENT.md` for where a future EXPLICIT
   // flat profile would have to put its selector, and why it cannot be a bit of
   // the fragment state word.
+  // ---------------------------------------------------------------------------
+  // AND THE DEAD FIELD IS NOW THE CARRIER FOR I54's TRIANGLE IDENTITY
+  // ---------------------------------------------------------------------------
+  // The paragraph above is still true and is the whole reason this is safe:
+  // `zhao_raster_tile_pipe_v2` overwrites `vertex_rgb` per fragment from the
+  // Gouraud lanes, unconditionally, so nothing downstream READS what is put
+  // here. Eighteen of those twenty-four bits now carry the arena's
+  // TriangleDescriptor index, which is the only way it can reach
+  // `zhao_geom_binner_v2`'s triangle store: the 142-bit triangle record has no
+  // free field, and `tri_src_id_i` is a PER-DRAW instance id -- on a frame
+  // drawn from one source every triangle carries the same value, so it cannot
+  // name a triangle.
+  //
+  // WHAT THIS COSTS: nothing. METAW does not move, the ratified-1877
+  // elaboration guard still holds, the metadata bank gains no slice, and no
+  // port crosses the shell for it. `zhao_geom_bin_pipe_v2` owns the offset
+  // (`ARENA_ID_LO`) and refuses at elaboration if the tail layout moves, so
+  // this cannot silently start slicing a live attribute.
+  //
+  // WHAT IT DOES *NOT* MEAN: the field is not "free space". It is dead by one
+  // owner decision (R234 D1), and if that decision is ever reversed this
+  // carrier must move before `vertex_rgb` becomes live again. Said here rather
+  // than left to be discovered, because a reused dead field is exactly the kind
+  // of thing that reads as harmless until it is not.
   wire [47:0] tri_continuation_tail_c = {
-      TAIL_VERTEX_RGB_UNUSED_C,                        // [47:24] dead: R234 D1
+      TAIL_VERTEX_RGB_UNUSED_C[23:18], tidq_id_w,      // [47:24] I54's arena id
+
       mw_pub_valid ? mw_pub_vertex_alpha
                    : TAIL_VERTEX_ALPHA_DEFAULT_C,      // [23:16] R89's, the span's
       mat_declares_frag_c ? mw_pub_effect_tag

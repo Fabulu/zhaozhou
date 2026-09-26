@@ -2339,6 +2339,12 @@ targets:
       # resource top does not instantiate zhao_console_core, so this block is
       # not reachable through anything else here.
       - fpga/rtl/geometry/zhao_geom_vertid.sv
+      # Entry I54, 2026-09-26: the chunk serialiser and the identity
+      # queue. Census tops of their own here for the same reason
+      # GEOM.VERTID is -- the resource top does not instantiate
+      # zhao_console_core, so nothing else reaches them.
+      - fpga/rtl/geometry/zhao_geom_chunkser.sv
+      - fpga/rtl/geometry/zhao_geom_tidq.sv
       - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --
@@ -3221,6 +3227,11 @@ targets:
       # ProjectedVertex records under {arena, generation, index} and names them
       # in TriangleDescriptors with the ids the ALLOCATOR handed back.
       - fpga/rtl/geometry/zhao_geom_vertid.sv
+      # Added 2026-09-26 (entry I54): the chunk serialiser gives the
+      # arena's ck_* intake a real producer, and the identity queue
+      # carries the descriptor index to the binner's triangle store.
+      - fpga/rtl/geometry/zhao_geom_chunkser.sv
+      - fpga/rtl/geometry/zhao_geom_tidq.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv

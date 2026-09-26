@@ -543,6 +543,15 @@ module zhao_shell_v2_lease_path
 // deliberate decision and an oversight look identical.
   /* verilator lint_off PINCONNECTEMPTY */
   zhao_geom_bin_pipe_v2 u_bin (
+      .ser_req_i                    (1'b0),  // TIE: no triangle traffic here, so there is no reference list to serialise; entry I54's pass is exercised by geom_chunkser_composed
+      .ser_ready_i                  (1'b0),  // TIE: as above
+      .ser_busy_o                   (),
+      .ser_done_o                   (),
+      .ser_valid_o                  (),
+      .ser_tri_id_o                 (),
+      .ser_tile_o                   (),
+      .ser_first_o                  (),
+      .ser_last_o                   (),
       .clk                          (clk),
       .rst_n                        (rst_n),
       .frame_begin_i                (bin_frame_begin_w),

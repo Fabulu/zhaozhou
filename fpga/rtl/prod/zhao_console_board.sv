@@ -1437,6 +1437,28 @@ module zhao_console_board
   output logic [31:0] geom_vid_sunk_o,
   output logic [31:0] geom_vid_opens_o,
   output logic [31:0] geom_vid_stall_o,
+  // ---- I54: the chunk serialiser and the identity queue that feeds it ------
+  // `geom_tidq_*` measure the rejoin between GEOM.VERTID's descriptor index and
+  // the triangle it belongs to. On a frame whose ids are sound all three read
+  // ZERO -- and a counter asserted zero is a claim, so each is fired
+  // deliberately by `geom_chunkser_directed` rather than quoted silent.
+  output logic [31:0] geom_tidq_underflow_o,
+  output logic [31:0] geom_tidq_overflow_o,
+  output logic [31:0] geom_tidq_unnamed_o,
+  // `geom_cs_chain_break_o` is the one that would see a chunk chain whose
+  // `next` stopped naming the chunk that follows it. `geom_cs_head_chunk_o` is
+  // what a walk starts FROM: entry I55's consumer reads it, and until that
+  // lands it is the evidence that the heads were placed at all.
+  output logic [31:0] geom_cs_chunks_o,
+  output logic [31:0] geom_cs_refs_o,
+  output logic [31:0] geom_cs_tiles_o,
+  output logic [31:0] geom_cs_chain_break_o,
+  output logic [31:0] geom_cs_head_clash_o,
+  output logic [31:0] geom_cs_truncated_o,
+  output logic [31:0] geom_cs_sunk_o,
+  input  logic [ 9:0] geom_cs_head_tile_i,
+  output logic [31:0] geom_cs_head_chunk_o,
+  output logic        geom_cs_head_valid_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -4778,6 +4800,19 @@ module zhao_console_board
       .geom_vid_sunk_o                    (geom_vid_sunk_o),
       .geom_vid_opens_o                   (geom_vid_opens_o),
       .geom_vid_stall_o                   (geom_vid_stall_o),
+      .geom_tidq_underflow_o              (geom_tidq_underflow_o),
+      .geom_tidq_overflow_o               (geom_tidq_overflow_o),
+      .geom_tidq_unnamed_o                (geom_tidq_unnamed_o),
+      .geom_cs_chunks_o                   (geom_cs_chunks_o),
+      .geom_cs_refs_o                     (geom_cs_refs_o),
+      .geom_cs_tiles_o                    (geom_cs_tiles_o),
+      .geom_cs_chain_break_o              (geom_cs_chain_break_o),
+      .geom_cs_head_clash_o               (geom_cs_head_clash_o),
+      .geom_cs_truncated_o                (geom_cs_truncated_o),
+      .geom_cs_sunk_o                     (geom_cs_sunk_o),
+      .geom_cs_head_tile_i                (geom_cs_head_tile_i),
+      .geom_cs_head_chunk_o               (geom_cs_head_chunk_o),
+      .geom_cs_head_valid_o               (geom_cs_head_valid_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
       .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
       .geom_pw_chunks_o                   (geom_pw_chunks_o),

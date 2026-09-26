@@ -386,6 +386,11 @@ module tb_zhao_geom_paramarena
       .pv_id_o     (),
       .td_accept_o (),
       .td_id_o     (),
+      // Entry I54's chunk cursor. This bench drives `ck_*` by hand and has no
+      // serialiser in it, so the cursor has no reader here; the block that
+      // reads it is exercised by `geom_chunkser_composed`.
+      .ck_accept_o   (),
+      .ck_alloc_id_o (),
       .seal_fire_o (),
       /* verilator lint_on PINCONNECTEMPTY */
 
