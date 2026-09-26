@@ -9393,15 +9393,54 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: mosaic   fills[tileset/mesh/stray]=[%0d %0d %0d] tile[max/or]=[%0d %0d] first_addr=%08x base=%08x",
              tsfill_lines_q, meshfill_lines_q, strayfill_lines_q,
              tsfill_tile_max_q, tsfill_tile_or_q, tsfill_first_addr_q, TERR_TS_BASE_C);
+    // UNGATED, AND IT IS THE STRONGEST OF THE THREE: no fill may land outside
+    // the two rows this fixture binds, in ANY form. It holds as 0 == 0 where
+    // nothing samples at all.
     if (strayfill_lines_q != 32'd0)
       $fatal(1, "SMOKE: %0d cache fill(s) landed outside BOTH bound rows -- a binding base or a displacement is wrong",
              strayfill_lines_q);
-    if (tsfill_lines_q == 32'd0)
-      $fatal(1, "SMOKE: no cache fill landed inside the TILESET row -- terrain sampled somebody else's texture");
-    // THE ANTI-VACUITY GATE. An unwired mosaic reader displaces by ZERO, so
-    // every tileset fill would land in tile 0 and this would stay at 0.
-    if (tsfill_tile_max_q == 32'd0)
-      $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
+    // THE OTHER TWO ARE A TWO-SIDED LAW OVER `palette_lookups`, NOT PINNED
+    // NUMBERS, AND THE FIRST VERSION OF THEM WAS WRONG IN THE WAY THIS BENCH
+    // HAS NOW BEEN WRONG FIVE TIMES AT THIS SEAM. I wrote `tsfill_lines_q > 0`
+    // bare and `-TerrainFlatLattice` failed on its very next run -- correctly,
+    // because that form leaves layer A flat, GEOM.CLIP culls every terrain
+    // triangle for ZERO AREA, and a terrain arm that produced no FRAGMENT
+    // cannot have filled a line. Asserting a non-zero census against a state
+    // the machine cannot reach is asserting the bug.
+    //
+    // AND THE OBVIOUS SECOND GUESS IS ALSO WRONG, which is the part worth
+    // keeping: gating on `mat_win_clut_owned_o` does NOT work either, because
+    // under `-TerrainFlatLattice` the palette still loads and the window still
+    // publishes an OWNED CLUT material -- measured, `palload loads=1
+    // gen_zero=1 clut[owned/unowned]=[1 0]` -- since the span is resolved at
+    // the door BEFORE the clip culls the triangles behind it. The published
+    // material and the sampled fragment are different facts.
+    //
+    // The quantity that means "a terrain fragment actually sampled CLUT" is
+    // `render_texture_palette_lookups_o`, and the law is written from both
+    // sides so neither half can be switched off by a fixture that quietly
+    // stopped drawing: lookups imply tileset fills with a non-zero pick, and
+    // no lookups imply no tileset fill at all.
+    if (render_texture_palette_lookups_o != 32'd0) begin
+      if (tsfill_lines_q == 32'd0)
+        $fatal(1, "SMOKE: %0d palette lookup(s) and NOT ONE cache fill inside the TILESET row -- a CLUT fragment sampled somebody else's texture",
+               render_texture_palette_lookups_o);
+      // THE ANTI-VACUITY HALF. An unwired mosaic reader displaces by ZERO, so
+      // every tileset fill would land in tile 0 and this would stay at 0.
+      if (tsfill_tile_max_q == 32'd0)
+        $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
+    end else if (tsfill_lines_q != 32'd0) begin
+      $fatal(1, "SMOKE: %0d cache fill(s) came out of the TILESET row with NO palette lookup -- a CLUT8 row was sampled without its palette",
+             tsfill_lines_q);
+    end
+    // ONE ASK PER CLUT SPAN, ANSWERED ONCE, and this one IS live in every form
+    // (it reads 1 == 1 + 0 even under -TerrainFlatLattice). Two counters in two
+    // different blocks, moved by two different enables -- the window's ST_PAL
+    // entry and the loader's own lookup accept. They are equal or the join
+    // dropped or duplicated an ask, which no other counter here would see.
+    if (pal_ld_lookups_o != (mat_win_clut_owned_o + mat_win_clut_unowned_o))
+      $fatal(1, "SMOKE: TEXTURE.PALETTELOAD was asked %0d time(s) and the window published %0d owned + %0d unowned CLUT span(s) -- the palette ask and its answer are not one-to-one",
+             pal_ld_lookups_o, mat_win_clut_owned_o, mat_win_clut_unowned_o);
     if (mat_win_err_unpublished_o != 32'd0 || mat_win_err_underflow_o != 32'd0)
       $fatal(1, "SMOKE: the material window's structural guards fired (unpublished %0d, underflow %0d) -- a triangle reached the door under a material nobody resolved",
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
