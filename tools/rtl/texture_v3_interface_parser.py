@@ -115,9 +115,41 @@ SUPPORTED_DUPLICATE_PROFILES = {
     # difference between refreshing a derived fingerprint and quietly moving
     # a frozen one; a note claiming all four were unchanged would have been
     # the reassuring kind of wrong this file exists to prevent.
+    # RE-PINNED 2026-09-26 (TERRAINTEX), AND THE COUNT MOVED: 105 -> 106.
+    #
+    # Every re-pin above could say "the count stayed at 105", which is the
+    # cheap evidence that the exception SET did not move. This one cannot, so
+    # it owes the expensive evidence instead: THE ONE NEW MARKER, BY NAME.
+    #
+    #     added:   member_name='mosaic_tile'
+    #     removed: (none)
+    #
+    # Obtained the way the 2026-09-18 note describes -- by replaying the
+    # committed manifest's own `elaboration.argv` in a shadow tree and listing
+    # the markers -- and the probe was checked against the BASE commit first,
+    # where it reproduced 105 / a95970fe... exactly, so a differencing tool
+    # that had silently stopped working could not have produced this answer.
+    #
+    # `mosaic_tile` is the field `zhao_texture_binding_resolver_v2`'s
+    # `sample_job_t` gained so TEXTURE.MOSAIC's pick can ride the sample job to
+    # its disposition, where a TILESET row displaces the base by
+    # `tile * 4096`. It is a leaf-internal struct member, exactly the family
+    # the resolver's legality-bit note above weighed: two such markers were
+    # judged not worth spending, ONE is, because the alternative is a second
+    # per-owner side table in the island for a byte that is already travelling
+    # with the job. The island's schema did not move with it:
+    #
+    #   ports                      IDENTICAL, all 120
+    #   parameters                 IDENTICAL, all 16
+    #   module_declaration_sha256  IDENTICAL  <- the interface did not move
+    #   top_source_sha256          MOVED      <- the island's BODY gained
+    #                                            `u_mosaic_hold` and the gate
+    #   canonical_interface_sha256 MOVED      <- it hashes the source closure
+    #                                            and the argv, and the closure
+    #                                            gained one leaf
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
-        "count": 105,
-        "sha256": "a95970fe412b1cb3f054b5749633071a1eb7b15f60c1427ec47f88878885cfec",
+        "count": 106,
+        "sha256": "4626a498b0442051f9bf22ad6166185a4132d162ecef7a4b498dab1e5e474812",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})
@@ -135,6 +167,10 @@ PRODUCTION_SOURCE_CLOSURE = (
     "fpga/rtl/texture/zhao_texture_aux_div6.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    # TEXTURE.MOSAIC's answer, held per owner until the sample that asked for
+    # it can leave (TERRAINTEX, 2026-09-26). A LEAF of the selected root, so it
+    # precedes it, the way TEXTURE.SHEETMOD does below.
+    "fpga/rtl/texture/zhao_texture_mosaic_hold.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
     "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",

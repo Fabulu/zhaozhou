@@ -80,9 +80,21 @@
 //      DEBUG.FRAMEBLIT in `zhao_shell_top_v2`, TERRAIN.CMD and
 //      TERRAIN.PAGELOADER in `zhao_console_core`'s `u_terr_hps_arb`. A third is
 //      an owner ruling, and core entry I27 already records it as one.
+//      *** SEAM 1 IS CLOSED AND THE SENTENCE ABOVE IS FALSE. Corrected
+//      2026-09-26 (gz/terraintex). `zhao_mem_upload u_mem_upload` IS
+//      instantiated, in `zhao_console_core.sv`, and its publication drives
+//      THIS BLOCK'S `dir_*` group: `dir_we_i` is `upl_publish_valid_o &&
+//      (upl_publish_tag_o == MAT_KIND_MATERIAL_SET)`, with `dir_set_index_i`,
+//      `dir_generation_i`, `dir_base_i` and a saturating `dir_count_i` beside
+//      it. The clause is left standing so this correction has something to
+//      point at. ***
 //   2. The fetch port `mem_*` wants a third ENGINE1 requester;
 //      `zhao_geom_mem_adapter` has exactly two, GEOM.MESHFETCH and
 //      GEOM.ASSETFETCH.
+//      *** SEAM 2 IS CLOSED AND THAT SENTENCE IS FALSE TOO, same date. The
+//      `mem_*` group goes through `mr_guard_req`/`mr_guard_rsp` to the REAL
+//      MEM.GUARD as `ZHAO_CLIENT_ENGINE1`, and the record read is one
+//      32-byte burst with an explicit byte-enable shape. ***
 //   3. The REQUEST has no honest producer. Both nouns are live in
 //      `zhao_console_core` and they may NOT be joined: `cmd_draw_material_set_o`
 //      is the DRAW's (entry I41, a boundary) and `mf_r_material_id` is the
@@ -99,7 +111,25 @@
 //
 // THEREFORE THE DIRECTORY WRITE PORT (`dir_*`) AND THE FETCH PORT (`mem_*`)
 // ARE BOUNDARIES, declared as real ports and driven by nobody in this
-// composition. That is the honest shape, and it is the same standing
+// composition.
+//
+// *** THAT CONCLUSION IS FALSE AT THIS TREE, AND IT IS THE MOST EXPENSIVE
+// SENTENCE IN THIS FILE -- it is the one the terrain lane kept reading as
+// "a terrain material would need the lookup machinery built first".
+// Corrected 2026-09-26 (gz/terraintex). BOTH PORTS ARE DRIVEN, by the two
+// seams corrected above, and THE CONSOLE SMOKE EXERCISES THEM END TO END: it
+// uploads a MATERIAL_SET through PublishResource, `$fatal`s if
+// `mat_not_resident_o != 0` -- "MEM.UPLOAD's publication did not reach the
+// directory" -- and its own comment records that the record fetched back "is
+// the one the PublishResource uploaded, bit for bit", having crossed the HPS
+// bridge, the slot-6 write queue and VRAM and come back as ENGINE1.
+//
+// So MATERIAL.RESOLVE IS WHOLE AND LIVE. What a new client owes is an
+// IDENTITY to present at `zhao_material_window`'s door, not a lookup. For
+// terrain that is `zhao_console_core` entry I13's (a) and (b), and the
+// carrier measured for it there is `SetEnvironment 0x0311`'s trailing
+// `pad[12]`. Seams 3 and 4 below are about the MESH path's request and are
+// untouched by this correction. *** That is the honest shape, and it is the same standing
 // `zhao_console_core` entry I39 gives GEOM.ASSEMBLE's descriptor fields: the
 // block is whole, and the field with no owner is a port rather than a
 // constant. Inventing a base here would be worse than leaving it open --

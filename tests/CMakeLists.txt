@@ -12089,7 +12089,7 @@ set_tests_properties(
 # elaborate the identical 26-source closure at explicit shadow settings.
 add_executable(tpb_dir
   texture/texture_island_v3_packet_b_directed.cpp)
-target_link_libraries(tpb_dir PRIVATE zhao_harness)
+target_link_libraries(tpb_dir PRIVATE zhao_harness zhao_zref)
 verilate(tpb_dir
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
@@ -12102,7 +12102,7 @@ add_executable(tpb_prod
   texture/texture_island_v3_packet_b_directed.cpp)
 target_compile_definitions(tpb_prod PRIVATE
   PACKET_B_EXPECT_NO_SHADOWS=1)
-target_link_libraries(tpb_prod PRIVATE zhao_harness)
+target_link_libraries(tpb_prod PRIVATE zhao_harness zhao_zref)
 verilate(tpb_prod
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
@@ -12144,6 +12144,7 @@ function(zhao_packet_b_top_mutant_control
   set(target tpbm_${target_hash})
   add_executable(${target} texture/${DRIVER})
   target_compile_definitions(${target} PRIVATE ${EXPECT_MACRO}=1)
+  target_link_libraries(${target} PRIVATE zhao_zref)
   verilate(${target}
     PREFIX Vzhao_texture_island_v3_top
     TOP_MODULE zhao_texture_island_v3_top
@@ -14162,7 +14163,7 @@ function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
   add_executable(${target}
     texture/texture_island_v3_packet_b_directed.cpp)
   target_compile_definitions(${target} PRIVATE ${CPP_SELECTOR}=1)
-  target_link_libraries(${target} PRIVATE zhao_harness)
+  target_link_libraries(${target} PRIVATE zhao_harness zhao_zref)
   verilate(${target}
     PREFIX Vzhao_texture_island_v3_top
     TOP_MODULE zhao_texture_island_v3_top

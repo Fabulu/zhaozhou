@@ -4688,6 +4688,172 @@
 //      generator was about to DEPEND on the job list, so the port was
 //      probed instead of inferred. That probe is committed.
 //
+//
+//      ================================================================
+//      2026-09-26 (gz/terraintex). THE MOSAIC PICK HAS A READER. ITEM 2
+//      OF CARRIAGE'S "WHAT IS LEFT" IS CLOSED. NO TERRAIN TEXEL SAMPLED,
+//      AND THAT IS SAID FIRST.
+//      ================================================================
+//
+//      TERRAINVISIBLE left this entry a one-line specification --
+//      `texture fragments=1216 samples=1190`, every terrain fragment
+//      reaching the island and taking ZERO samples -- and named three
+//      absent things: (a) a sampling material, (b) a binding key, (c) a
+//      reader for the mosaic pick. (c) IS BUILT. (a) and (b) are NOT, and
+//      the smoke's line is unchanged: 1216 / 1190, `combine_refused = 0`.
+//      The register reads 4 before and 4 after, measured bare, and
+//      `zhao_terrain_normalmap` did NOT leave the BUILT-BUT-NOT-CONNECTED
+//      list -- it was again not composed, as this entry's first
+//      prohibition requires.
+//
+//      WHAT (c) TURNED OUT TO NEED, and the surprise is WHERE the answer
+//      lands. Every previous pass assumed the pick would have to displace
+//      the BINDING SELECTOR -- a tileset as 256 binding rows. Read the
+//      oracle instead: `zref::Tileset` (`zref_render.hpp:166`) is
+//      `uint8_t tiles[256][64*64]`, ONE memory object, and `rast.cpp:370`
+//      samples it as `ts->tiles[tile][(ty << 6) + tx]`. A tile index is
+//      therefore a BYTE DISPLACEMENT INSIDE ONE BOUND TEXTURE,
+//      `tile * 4096`, not a different row. It goes on the ADDRESS, in
+//      `zhao_texture_binding_resolver_v2`, one line after the row's base
+//      leaves the memory. The 256-row reading would have spent the whole
+//      8-bit selector space on one material; it is what the DIRECT-COLOUR
+//      path's `tile_base[]` array does, for a different object.
+//
+//      AND THE DECLARATION IS THE ROW'S, WHICH IS THE MEASUREMENT THAT
+//      MADE THIS AFFORDABLE AT ALL. A per-FRAGMENT "this material is a
+//      mosaic" bit HAS NO CARRIAGE, measured rather than assumed:
+//      `zhao_render_texture_pkg::zhao_texture_v3_request_v2_t` is 362
+//      bits packed solid with no reserved field, and the island's logical
+//      descriptor is 287 bits packed solid too, so the bit would have
+//      been the eleven-file METAW span R234 D1 paid for Gouraud. The
+//      binding row's `mode` word, by contrast, has ELEVEN bits
+//      `binding_row_legal` has always forced to zero
+//      (`row.mode[31:21] == 11'd0`), so `mode[21]` is a mandatory-zero
+//      bit whose zero ALREADY means "not a tileset" in every row this
+//      console has ever accepted -- the same zero-keeps-its-meaning
+//      allocation the ABI uses for `MaterialRecord.fragment_state`. It
+//      costs no field upstream and NO PORT ON THE ISLAND.
+//
+//      A TILESET ROW IS CONSTRAINED, NOT MERELY FLAGGED. `binding_row_legal`
+//      refuses a declared tileset that is not the object 6.2 describes --
+//      CLUT8, unfiltered, mirror on both axes, 64x64 (which is what makes
+//      the TMU's wrap equal `zref::terrain::mirror_texel`), no mip chain,
+//      whole 1 MiB extent inside 32 bits. Six single-field deviations are
+//      checked for CFG_BAD_ROW.
+//
+//      THE JOIN WAS THE PART THAT COULD HAVE SHIPPED A SWAP, and it is
+//      CLAUDE.md's metadata-swap chapter word for word. The expander
+//      offers a fragment's SAMPLE job and its MOSAIC job on the same beat
+//      on two independent handshakes, and the mosaic answers TWO CYCLES
+//      LATER -- so the sample is ALWAYS offered before its own pick
+//      exists, and an ungated per-owner table hands the resolver the
+//      PREVIOUS OCCUPANT of the slot. `zhao_texture_mosaic_hold` is
+//      sealed by the owner's generation and HOLDS the sample; the two
+//      sides of its comparison are loaded by different enables in
+//      different blocks. It cannot deadlock: the expander's
+//      `mosaic_valid_o` does not depend on its `sample_ready_i` and the
+//      island drives the mosaic's `pick_ready_i` with a constant one.
+//
+//      THE EVIDENCE IS A TEXEL, not an elaboration.
+//      `texture_island_v3_packet_b_directed` binds a tileset row and, at
+//      the SAME BASE, an otherwise identical row that does not declare
+//      itself one -- the negative control, for which the pick is still
+//      computed and must move nothing. It asserts the cache fill line
+//      equals `base + mosaic_pick(...) * 4096 + ((mirror_texel(v) << 6) +
+//      mirror_texel(u))`, both functions taken from `zref`, and then
+//      retires the texel. `texture_desc_expand_bind_v2_composed` (60
+//      checks, was 52) proves the same at the planner with
+//      `tileset_samples=3`, `picks_held=9` and `stale_slot_holds=22` --
+//      the seal's positive control, reached by reusing three owner slots
+//      with new generations, so no committed mutant is owed.
+//
+//      AND THE TEST WAS FIRED. With `read_tileset_c` forced to `1'b0`,
+//      2 of 60 composed checks FAIL -- the base and the census, exactly
+//      the two that describe the reader. Restored, verified by content
+//      and timestamp, 60 pass.
+//
+//      (a) AND (b) ARE REFUSED HERE, ON SIZE AND MERGE RISK RATHER THAN
+//      ON ANYTHING BEING UNDECIDED -- and the route is named so the next
+//      lane does not re-derive it. Terrain still declares `MATMODE_NONE`
+//      at `zhao_terrain_clipfeed.sv`'s door and publishes
+//      `sample_count = 0`, so it asks the island for nothing.
+//
+//      WHAT (a) AND (b) ACTUALLY NEED IS ONE PRODUCER, AND THIS ENTRY HAS
+//      BEEN CARRYING THE WRONG SIZE FOR IT. `zhao_material_resolve.sv`'s
+//      header says its four remaining seams include "1. `MEM.UPLOAD` is
+//      composed nowhere" and concludes that "THE DIRECTORY WRITE PORT
+//      (`dir_*`) AND THE FETCH PORT (`mem_*`) ARE BOUNDARIES, declared as
+//      real ports and driven by nobody in this composition". **BOTH
+//      CLAUSES ARE FALSE AT THIS TREE**, and the file is corrected in the
+//      same commit:
+//        * `zhao_mem_upload u_mem_upload` is instantiated in THIS file,
+//          and its publication drives the resolver's `dir_*` group --
+//          `dir_we_i` is `upl_publish_valid_o && (upl_publish_tag_o ==
+//          MAT_KIND_MATERIAL_SET)`;
+//        * the resolver's `mem_*` group goes through `mr_guard_req` /
+//          `mr_guard_rsp` to the real MEM.GUARD as ENGINE1;
+//        * and the console smoke ALREADY EXERCISES BOTH. It uploads a
+//          MATERIAL_SET, `$fatal`s if `mat_not_resident_o != 0`, and its
+//          own comment says the record "is the one the PublishResource
+//          uploaded, bit for bit".
+//      So MATERIAL.RESOLVE is whole and live. What terrain lacks is not
+//      the lookup machinery: it is an IDENTITY to present at the door.
+//
+//      AND THE IDENTITY HAS A CARRIER THE TREE ALREADY HOLDS, measured
+//      rather than proposed. `SetEnvironment 0x0311` is `implemented`,
+//      already decoded, already reaching the terrain lane (the sun), and
+//      it ends in `pad[12]` -- TWELVE MANDATORY-ZERO BYTES, which is the
+//      ratified same-bytes-reinterpretation pattern
+//      `MaterialRecord.fragment_state` used and which `capture_format.md`
+//      1.3 permits because opcode, field set and sizes do not move.
+//      `handle32[material_set] terrain_material_set` plus
+//      `u16 terrain_material_id` plus `pad[6]` fits exactly, and ZERO
+//      KEEPS ITS MEANING: a zero handle is `MATMODE_NONE`, which is what
+//      terrain declares today, so no existing capture changes by a pixel.
+//      It is also the ORACLE'S OWN SHAPE -- `draw_terrain` takes ONE
+//      tileset for the whole call, so a per-frame environment material is
+//      faithful, and a per-PAGE `tileset_id` would make every patch its
+//      own material span.
+//
+//      THE BILL FOR IT, so nobody costs it as a wire: `spec/commands.zidl`
+//      plus an ABI regeneration, CMD.EXEC decode and two new output ports
+//      (which add a PINMISSING to every bench instantiating it -- the
+//      protocol's own warning about `tb_cmd_exec_pair`), three input ports
+//      on `zhao_terrain_clipfeed`, the composer wire, `zhao_prod_top` and
+//      `zhao_console_board` regeneration, and THEN a fixture that uploads
+//      a terrain MaterialRecord, a tileset binding row and tile data. That
+//      last item is the one that moves `texture samples` off 1,190 -- and
+//      it changes the rendered PIXELS, so whoever takes it takes the
+//      oracle with it, exactly as PROJCOLLAPSE said of the geometry.
+//      Four of those files are the tree's most contended and one is the
+//      ABI. It is a packet, not a rider, and it is a BUILD rather than a
+//      decision: the vacation directive section 5 pre-authorises exactly
+//      this kind of generated command field.
+//
+//      REFUSED, AND NAMED. The layer-E triple was NOT wired into
+//      `base_rgb`. CARRIAGE's ground holds -- `base_rgb` is the published
+//      texel RGB at `sample_count == 0`
+//      (`zhao_texture_material_combine_v3.sv:513`) and `recipe_weight` is
+//      the `R_LERP` blend weight (:719-722). The tempting rebuttal, that a
+//      terrain material would be PASSTHRU at count 1 so neither reader is
+//      live, is the comfortable explanation this file says to check
+//      hardest: it makes the overload safe only for the materials somebody
+//      remembers to declare that way, and nothing refuses the pair. The
+//      island's OWN pre-existing overload
+//      (`wr_mosaic_material_a_i(frag_base_rgb_i[23:16])`) is untouched and
+//      is not this packet's to ratify. `GEOM_CLIP_ATTRS` stays 7. No flat
+//      colour stand-in. `zhao_terrain_normalmap` was not composed. No fit
+//      was run.
+//
+//      WHAT THIS LANE GOT WRONG AND CAUGHT: the first draft put the pick's
+//      reader on the SELECTOR (`binding_selector + sample_index +
+//      pick_tile`), which is arithmetically tidy and wrong twice over --
+//      it needs a per-fragment declaration bit that has no carriage, and
+//      it collides with `sample_index` on any material above one sample.
+//      Reading `rast.cpp:370` instead of the RTL's shape settled it in one
+//      line, which is this file's own standing advice about reading the
+//      consumer rather than the entry.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
