@@ -44,8 +44,38 @@ WHAT IT LOOKS FOR, and why each one
    where the fatal cases have been found -- but it is a hint, not a
    verdict, and on its own it does not predict failure.
 2. AN ARRAY READ COMBINATIONALLY through a dynamic index. Forces a per-bit mux
-   the width of the array and pins it in flops whatever the writes do. This is
-   TEXJOIN's second defect: `srgb_q[head_q][0]` in an `always_comb`.
+   the width of the array. This is TEXJOIN's second defect: `srgb_q[head_q][0]`
+   in an `always_comb`.
+
+   "WHATEVER THE WRITES DO" USED TO BE THE REST OF THIS SENTENCE, AND IT IS
+   MEASURED FALSE. Removed 2026-09-26 by FLOPARRAY, which mapped the four arms
+   of `tests/probes/zhao_floparray_probe.sv` against `zhao_forge_assemble`'s
+   34,840-bit vertex store:
+
+       arm  reset loop  read   registers  mem bits
+       p0      yes      comb      34,917         0   <- production, the control
+       p1      NO       comb         245    34,840   <- INFERRED M10K
+       p2      yes      reg       34,984         0
+       p3      NO       reg           77    34,840
+
+   Arm p1 keeps the combinational read in full and still infers a Simple Dual
+   Port M10K, because the read address was ALREADY REGISTERED a cycle ahead of
+   its use and Quartus absorbed that register into the RAM's own read port.
+   The asynchronous reset loop was the entire cause. So rule 2 is a NECESSARY-
+   CONDITION HINT collected from real failures, not a mechanism: a
+   combinational read is a reason to look, and on its own it is not a reason to
+   believe the array cannot infer.
+
+   Note the direction of the error, which is why it survived: the old sentence
+   was ALARMING rather than flattering. It costs work that need not be done --
+   FLOPARRAY kept the registered read anyway, for 168 registers, but it is an
+   improvement rather than the repair the rule implied was mandatory.
+
+   The counter-example does NOT generalise to a read whose address is itself
+   combinational. `zhao_geom_lodstate`'s `st_q[slot_c]` read-modify-write is
+   exactly that case, and there the two properties are a genuine conjunction:
+   neither removing the reset loop nor registering the read moves a single bit
+   on its own (arms l0-l3, same probe).
 3. TWO DYNAMIC WRITE ADDRESSES into one array, which the island brief's S5.3
    forbids by name -- it asks for a two-write-port memory, which the device
    does not have at that shape.
