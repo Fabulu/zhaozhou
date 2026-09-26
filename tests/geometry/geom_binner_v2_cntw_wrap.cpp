@@ -73,8 +73,12 @@ constexpr uint32_t kAreaBit = 1u << (378 % 32);
 
 // 2,049 = one more than the 2,048 a hardcoded 11-bit count can hold.
 constexpr int kPushes = 2049;
-// Must match the -GTRI_CAP the CMake target passes; phase 2 fills the store.
+// Must match the -GTRI_CAP the CMake target passes; phase 3 fills the store.
 constexpr int kTriCap = 4096;
+// 45 whole-canvas triangles x 576 tiles = 25,920 references, which is REFPUSH's
+// measured near-camera giant (25,704) to within one triangle. Chosen to match
+// the measurement, not to fit the arena.
+constexpr int kGiantTris = 45;
 
 #if defined(EXPECT_GEOM_BINNER_V2_CNTW_WRAP)
 constexpr bool kExpectWrap = true;
@@ -166,6 +170,127 @@ void drive_tile0_tri(uint16_t src) {
   dut->tri_meta_i[0] = src;
   dut->tri_meta_i[kAreaWord] |= kAreaBit;
   dut->tok_grant_i = 1;
+}
+
+// A triangle whose half-plane swallows the ENTIRE canvas, so it pushes one
+// reference into every one of the GRID_W x GRID_H tiles. The hypotenuse runs
+// x + y = 2000 px and the canvas corner is x + y = 766, so every corner test
+// passes. Coordinates are S12.8 in 21 signed bits (+/-4,096 px), and +/-1000
+// is comfortably inside that.
+void drive_canvas_tri(uint16_t src) {
+  const int64_t ax = -1000 * 256, ay = -1000 * 256;
+  const int64_t bx = 3000 * 256, by = -1000 * 256;
+  const int64_t cx = -1000 * 256, cy = 3000 * 256;
+  const int64_t vx[3] = {bx, cx, ax};
+  const int64_t vy[3] = {by, cy, ay};
+  const int64_t wx[3] = {cx, ax, bx};
+  const int64_t wy[3] = {cy, ay, by};
+  uint8_t tl = 0;
+  for (int i = 0; i < 3; ++i) {
+    const int32_t kx = static_cast<int32_t>(-(wy[i] - vy[i]));
+    const int32_t ky = static_cast<int32_t>(wx[i] - vx[i]);
+    const int64_t kc = vx[i] * wy[i] - vy[i] * wx[i];
+    const bool tlb = (vy[i] == wy[i]) ? (vx[i] < wx[i]) : (vy[i] < wy[i]);
+    if (tlb) tl = static_cast<uint8_t>(tl | (1u << i));
+    switch (i) {
+      case 0:
+        dut->tri_kx0_i = m23(kx);
+        dut->tri_ky0_i = m23(ky);
+        dut->tri_kc0_i = m48(kc);
+        break;
+      case 1:
+        dut->tri_kx1_i = m23(kx);
+        dut->tri_ky1_i = m23(ky);
+        dut->tri_kc1_i = m48(kc);
+        break;
+      default:
+        dut->tri_kx2_i = m23(kx);
+        dut->tri_ky2_i = m23(ky);
+        dut->tri_kc2_i = m48(kc);
+        break;
+    }
+  }
+  dut->tri_tl_i = tl;
+  dut->tri_ax_i = m21(static_cast<int32_t>(ax));
+  dut->tri_ay_i = m21(static_cast<int32_t>(ay));
+  dut->tri_bx_i = m21(static_cast<int32_t>(bx));
+  dut->tri_by_i = m21(static_cast<int32_t>(by));
+  dut->tri_cx_i = m21(static_cast<int32_t>(cx));
+  dut->tri_cy_i = m21(static_cast<int32_t>(cy));
+  // The bounding box is CLAMPED to the canvas by the caller of this block, so
+  // the fixture presents what GEOM.SETUP would: the whole grid.
+  dut->tri_min_x_i = m12(0);
+  dut->tri_max_x_i = m12(kGridW * 16 - 1);
+  dut->tri_min_y_i = m12(0);
+  dut->tri_max_y_i = m12(kGridH * 16 - 1);
+  dut->tri_src_id_i = src;
+  for (int i = 0; i < kMetaWords; ++i) dut->tri_meta_i[i] = 0;
+  dut->tri_meta_i[0] = src;
+  dut->tri_meta_i[kAreaWord] |= kAreaBit;
+  dut->tok_grant_i = 1;
+}
+
+// Feed `n` triangles from `drv` and return how many were accepted.
+int feed(void (*drv)(uint16_t), int n) {
+  int taken_n = 0;
+  uint64_t g = 0;
+  while (taken_n < n && g < 40000000) {
+    drv(static_cast<uint16_t>(taken_n & 0xffff));
+    dut->tri_valid_i = 1;
+    settle();
+    const bool took = dut->tri_ready_o != 0;
+    tick();
+    if (took) ++taken_n;
+    ++g;
+  }
+  dut->tri_valid_i = 0;
+  dut->tok_grant_i = 0;
+  settle();
+  return taken_n;
+}
+
+// WAIT FOR THE LAST TRIANGLE TO FINISH ENUMERATING. `feed` returns when the
+// final triangle is ACCEPTED, not when it is binned, and a whole-canvas
+// triangle then spends ~2 cycles per tile -- 1,152 of them on a 24x24 grid.
+// Sampling `tile_references_o` a fixed 64 ticks later reads a count that is
+// still rising, which is a measurement of the BENCH's impatience rather than
+// of the machine. `tri_ready_o` is `(state == S_IDLE) && !drain_req_r`, so it
+// rises exactly when the block has nothing left in flight.
+void settle_idle() {
+  uint64_t g = 0;
+  do {
+    tick();
+    settle();
+    ++g;
+  } while (!dut->tri_ready_o && g < 4000000);
+  for (int i = 0; i < 8; ++i) tick();
+  settle();
+}
+
+// Drain the frame and count emitted jobs.
+int drain_frame() {
+  dut->frame_end_i = 1;
+  tick();
+  dut->frame_end_i = 0;
+  int n = 0;
+  uint64_t g = 0;
+  bool done = false;
+  while (!done && g < 40000000) {
+    settle();
+    if (dut->job_valid_o && dut->job_ready_i) ++n;
+    tick();
+    if (dut->drain_done_o) done = true;
+    ++g;
+  }
+  require(done, "the drain completed");
+  return n;
+}
+
+void begin_frame() {
+  dut->frame_begin_i = 1;
+  tick();
+  dut->frame_begin_i = 0;
+  for (int i = 0; i < kGridW * kGridH + 32; ++i) tick();
 }
 
 }  // namespace
@@ -272,7 +397,52 @@ int main(int argc, char** argv) {
       std::printf("PASS: derived CNT_W held %d references in one tile with no wrap\n", kPushes);
   }
 
-  // ---- PHASE 2: THE OVERFLOW COUNTER'S POSITIVE CONTROL -------------------
+  // ---- PHASE 2: A GIANT SURVIVES ------------------------------------------
+  // THE HEADLINE CLAIM, DEMONSTRATED RATHER THAN ARGUED. R7 guarantees a giant
+  // of 32,768 tile references that is never silently truncated. The composed
+  // binner held 1,024 until 2026-09-26, and REFPUSH measured a near-camera
+  // giant at 25,704 references with `tools/render/count_bin_load.cpp` against
+  // the shipped `zref::Binner`.
+  //
+  // `kGiantTris` whole-canvas triangles push one reference into every tile, so
+  // the workload is kGiantTris x TILES = 25,920 references -- the giant's
+  // measured load, reproduced as a shape this bench can build exactly rather
+  // than approximately. At CHUNKS=8192 it must ALL fit:
+  //   * every reference drains, so nothing was lost;
+  //   * `overflow_o` reads ZERO, and that zero is a claim phase 3 checks by
+  //     firing the same counter on a real wall;
+  //   * the OLD capacity could not have held it. 1,024 references is 3.9% of
+  //     this workload and would have walled off after the SECOND triangle.
+  if (!kExpectWrap) {
+    begin_frame();
+    const uint32_t refs_before = dut->tile_references_o;
+    const int fed_giant = feed(drive_canvas_tri, kGiantTris);
+    settle_idle();
+    const bool giant_overflow = dut->overflow_o != 0;
+    const uint32_t giant_refs = dut->tile_references_o - refs_before;
+    const uint32_t giant_depth = dut->max_tile_list_depth_o;
+    const int giant_drained = drain_frame();
+
+    std::printf(
+        "CNTW: giant  tris=%d refs_pushed=%u drained=%d max_depth=%u overflow=%d "
+        "(old 1024-ref arena would hold %.1f%%)\n",
+        fed_giant, giant_refs, giant_drained, giant_depth, giant_overflow ? 1 : 0,
+        100.0 * 1024.0 / static_cast<double>(giant_refs ? giant_refs : 1));
+
+    require(fed_giant == kGiantTris, "every giant triangle was accepted");
+    require(giant_refs == static_cast<uint32_t>(kGiantTris * kGridW * kGridH),
+            "the giant pushed one reference into every tile of every triangle");
+    require(!giant_overflow, "overflow_o read ZERO -- the giant was not truncated");
+    require(giant_drained == static_cast<int>(giant_refs),
+            "every one of the giant's references drained");
+    require(giant_refs > 1024,
+            "the workload really is larger than the arena this composition used to have");
+    if (failures == 0)
+      std::printf("PASS: a %u-reference giant binned whole at 32,768 with overflow_o=0\n",
+                  giant_refs);
+  }
+
+  // ---- PHASE 3: THE OVERFLOW COUNTER'S POSITIVE CONTROL -------------------
   // Phase 1 quotes `overflow_o == 0`, and a detector reading zero is a claim,
   // not a result -- it is the claim to check hardest. So the same binary, the
   // same instance, fires it deliberately: a fresh frame, then TRI_CAP + 1
@@ -286,27 +456,11 @@ int main(int argc, char** argv) {
   // the bug exists.
   if (!kExpectWrap) {
     const uint32_t culled_before = dut->triangles_culled_o;
-    dut->frame_begin_i = 1;
-    tick();
-    dut->frame_begin_i = 0;
-    for (int i = 0; i < kGridW * kGridH + 32; ++i) tick();
+    begin_frame();
     require(dut->overflow_o == 0, "the wall dropped at the frame boundary");
 
-    int fed = 0;
-    guard = 0;
-    while (fed < kTriCap + 1 && guard < 4000000) {
-      drive_tile0_tri(static_cast<uint16_t>(fed & 0xffff));
-      dut->tri_valid_i = 1;
-      settle();
-      const bool took = dut->tri_ready_o != 0;
-      tick();
-      if (took) ++fed;
-      ++guard;
-    }
-    dut->tri_valid_i = 0;
-    dut->tok_grant_i = 0;
-    for (int i = 0; i < 64; ++i) tick();
-    settle();
+    const int fed = feed(drive_tile0_tri, kTriCap + 1);
+    settle_idle();
 
     const uint32_t culled_after = dut->triangles_culled_o;
     std::printf("CNTW: overflow control  fed=%d overflow=%d culled_delta=%u\n", fed,
