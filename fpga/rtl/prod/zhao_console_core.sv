@@ -4482,6 +4482,18 @@
 //      36, exactly what this bench measured before terrain drew
 //      anything.
 //
+//      AND THE PIXELS ARE TERRAIN'S, PROVED BY ISOLATION RATHER THAN
+//      BY ARITHMETIC ON A UNION. `-BadVertex` refuses the MESH's whole
+//      vertex batch, so what the raster writes in that form is terrain
+//      by itself: it measured 512 pixels, which is
+//      `SGF_EXP_TERR_TILES x 256`, terrain's two covered tiles
+//      resolved whole. That control used to assert ZERO -- "the batch
+//      drops, so nothing is rastered" -- which was true only while
+//      terrain drew nothing, and it is a STRONGER check now than the
+//      zero was: a regression that silently stopped terrain drawing
+//      leaves the plain run 256 short and this one 512 short, and only
+//      this one names terrain as the cause.
+//
 //      THE NEGATIVE CONTROL SURVIVES, WITH ITS POLARITY INVERTED.
 //      `-TerrainRelief` is replaced by `-TerrainFlatLattice`: layer A
 //      is left all zeros -- the body every page carried until today --
