@@ -63,6 +63,37 @@ record on confident numbers — including the one GIANTQUOTA refuted yesterday. 
 the bandwidth picture is different from what I state, **that changes the packet**
 and you should say so before building anything.
 
+### AND I ATTACKED THAT NUMBER MYSELF, IN THE DIRECTION THAT COULD KILL IT
+
+**Re-measured 2026-09-26: `330,474` free still holds exactly.** But
+`sdram_bandwidth.py` says something about its own total that the escalation did
+not carry, and it is the kind of thing this campaign is supposed to catch:
+**the two largest rows are PROVISIONAL** — TERRAIN bake (28.41%) and TERRAIN
+streaming (25.65%) — figures *"their own authors refused to freeze"*, with
+`spec/terrain_rules.md:631-639` reading **"Affordability: NOT COSTED"**. Summing
+provisional numerators gives a provisional total, and **54.06% of the frame rests
+on them.**
+
+So the impossibility finding was leaning on uncosted numbers. **I tested whether
+it survives them, and it does, with room to spare:**
+
+| | cycles |
+|---|---:|
+| free today | 330,474 |
+| the two provisional rows | 900,960 |
+| **free if BOTH vanished entirely** | **1,231,434** |
+| option 2 needs | ~3,700,000 |
+| **shortfall in that most generous case** | **2,468,566** |
+
+**Even handing option 2 the entire provisional terrain budget, it still needs
+3.0× the bandwidth that exists.** The finding is not sensitive to the soft
+numbers, which is why it stands as a *measured engineering impossibility* rather
+than an estimate — and now says so with the adversarial case attached rather than
+asking you to trust the headline.
+
+**Note the direction this cuts**: checking it could only have weakened my own
+escalation, which is exactly why it was worth doing.
+
 ## THE JOB — walk the routes, do not assume them
 
 **Velocity was in exactly this position a week ago** and closed **with no SDRAM
