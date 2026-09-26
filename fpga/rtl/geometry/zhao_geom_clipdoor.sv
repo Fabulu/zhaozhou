@@ -152,6 +152,15 @@ module zhao_geom_clipdoor #(
     input  var logic [NCLIENT*3-1:0]            c_behind_i,
     input  var logic [NCLIENT*IDW-1:0]          c_src_id_i,
     input  var logic [NCLIENT-1:0]              c_untex_i,
+    // TERRAIN.NORMALMAP's DETAIL DECLARATION, per client (NORMALMAP,
+    // 2026-09-26). High = this producer's primitives are HEIGHTFIELD surfaces,
+    // so the detail normal's axis-aligned world-XZ perturbation is meaningful
+    // for them (`zref_terrain_normalmap.hpp`: "a heightfield's tangent frame is
+    // axis-aligned in world space"). It is a statement about the PRIMITIVE
+    // CLASS, which is why it belongs to the producer and is not derivable here
+    // or anywhere downstream. This block does not interpret it -- like
+    // `c_untex_i`, it is field placement and nothing else.
+    input  var logic [NCLIENT-1:0]              c_detail_i,
     input  var logic [NCLIENT*2-1:0]            c_cull_mode_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_a_i,
     input  var logic [NCLIENT*ATTRS*32-1:0]     c_attr_b_i,
@@ -200,6 +209,7 @@ module zhao_geom_clipdoor #(
     output var logic [2:0]           o_behind_o,
     output var logic [IDW-1:0]       o_src_id_o,
     output var logic                 o_untex_o,
+    output var logic                 o_detail_o,
     output var logic [1:0]           o_cull_mode_o,
     output var logic [ATTRS*32-1:0]  o_attr_a_o,
     output var logic [ATTRS*32-1:0]  o_attr_b_o,
@@ -334,6 +344,7 @@ module zhao_geom_clipdoor #(
     o_behind_o       = '0;
     o_src_id_o       = '0;
     o_untex_o        = 1'b0;
+    o_detail_o       = 1'b0;
     o_cull_mode_o    = '0;
     o_attr_a_o       = '0;
     o_attr_b_o       = '0;
@@ -359,6 +370,7 @@ module zhao_geom_clipdoor #(
         o_behind_o       = c_behind_i[i*3 +: 3];
         o_src_id_o       = c_src_id_i[i*IDW +: IDW];
         o_untex_o        = c_untex_i[i];
+        o_detail_o       = c_detail_i[i];
         o_cull_mode_o    = c_cull_mode_i[i*2 +: 2];
         o_attr_a_o       = c_attr_a_i[i*AW +: AW];
         o_attr_b_o       = c_attr_b_i[i*AW +: AW];

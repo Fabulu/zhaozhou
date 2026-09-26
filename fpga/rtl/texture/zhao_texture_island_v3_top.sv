@@ -93,6 +93,14 @@ module zhao_texture_island_v3_top #(
     input  var logic [1:0]              frag_class_i,
     input  var logic [$clog2(PAL_SLOTS)-1:0] frag_pal_slot_i,
     input  var logic [GENW-1:0]         frag_pal_gen_i,
+    // TERRAIN.NORMALMAP's PER-FRAGMENT DECLARATION (NORMALMAP, 2026-09-26).
+    // High = this fragment's PRODUCER declared it a heightfield surface, so the
+    // detail normal applies to it. It is a DECLARATION carried from the door and
+    // never a property inferred here: `zref_terrain_normalmap.hpp`'s whole
+    // premise is that "a heightfield's tangent frame is axis-aligned in world
+    // space", which is a statement about the primitive class and not about any
+    // field that happens to be zero (owner directive 2026-09-23 section 3).
+    input  var logic                    frag_detail_i,
 
     // Canonical recoverable frame-fault handshake.
     input  var logic                    frame_fault_clear_valid_i,
@@ -133,6 +141,26 @@ module zhao_texture_island_v3_top #(
     input  var logic [15:0]             pal_load_rgb565_i,
     input  var logic                    pal_load_crc_ok_i,
 
+    // ---- TERRAIN.NORMALMAP's CONFIG AND TILE UPLOAD (NORMALMAP, 2026-09-26) --
+    // ONE write port with TWO destinations and an EXPLICIT selector. The two
+    // destinations have different address and data widths (a 3-bit cfg word
+    // index with 32 bits of payload; a 13-bit flat pyramid word address with a
+    // 16-bit {s8 dz, s8 dx} texel), so the port carries the wider of each and
+    // the narrow destination takes its low bits. `dtl_sel_i` says WHICH -- it is
+    // not derived from the address range, because an address-decoded selector
+    // makes an upload-tool fault land silently in the other destination.
+    //
+    // The producer is `zhao_terrain_normalloader` in `zhao_console_core`, which
+    // carries a published DETAIL_NORMAL page (spec/cartridge.md 4g, kind 16)
+    // word by word, plus the sun/strength writes the core derives from
+    // SetEnvironment. Five modules pass this through unchanged -- the loader
+    // needs MEM.UPLOAD's publication and MEM.GUARD, which live at the core, and
+    // the consumer needs the perspective-corrected fragment, which lives here.
+    input  var logic                    dtl_we_i,
+    input  var logic                    dtl_sel_i,   // 0 = cfg word, 1 = tile word
+    input  var logic [12:0]             dtl_addr_i,
+    input  var logic [31:0]             dtl_data_i,
+
     // Complete Surface Sheet READ request and page response.
     output var logic                    sheet_req_valid_o,
     input  var logic                    sheet_req_ready_i,
@@ -158,6 +186,12 @@ module zhao_texture_island_v3_top #(
     output var logic [15:0]             out_tag_o,
     output var logic [RCTXW-1:0]        out_retire_ctx_o,
     output var logic                    out_refused_o,
+    // TERRAIN.NORMALMAP's shade delta for THIS fragment, s9 with value
+    // raw/256, presented on the same beat as the result above and keyed by the
+    // same owner. `zref::terrain::normalmap_apply` is what the consumer does
+    // with it, and the consumer is the LIT COLOUR LANE, not this island's texel
+    // -- see the DELTA'S CONSUMER block below.
+    output var logic signed [8:0]       out_detail_delta_o,
     output var logic                    quiet_o,
 
     // Compatibility/evidence outputs retained where the replaced path has the
@@ -209,7 +243,30 @@ module zhao_texture_island_v3_top #(
     output var logic [31:0]             err_class_invalid_o,
     output var logic [31:0]             err_palette_unusable_o,
     output var logic [31:0]             err_class_mismatch_o,
-    output var logic                    err_plan_mode_o
+    output var logic                    err_plan_mode_o,
+
+    // ---- TERRAIN.NORMALMAP's evidence, re-exported -------------------------
+    // Every one of these is the leaf's own counter carried out, except
+    // `err_detail_lost_o`, which is THIS composition's and is described where
+    // it is driven.
+    output var logic [31:0]             cnt_detail_fragments_o,
+    output var logic [31:0]             cnt_detail_zeroed_o,
+    output var logic [31:0]             cnt_detail_railed_o,
+    output var logic [31:0]             cnt_detail_cold_o,
+    // Deltas PUBLISHED with a fragment, i.e. read back at the owner's output
+    // beat with the generation matching. This is the "how many times" counter
+    // this repository has a chapter about, and it is the one a test asserts
+    // against the fragment count -- not `cnt_detail_fragments_o`, which counts
+    // what the leaf ACCEPTED and cannot see a delta that never got home.
+    output var logic [31:0]             cnt_detail_published_o,
+    // A fragment reached the perspective stage while the detail pipe could not
+    // accept it, so its delta was never computed. The record then still holds
+    // the ZERO this composition writes at admission under the fragment's OWN
+    // generation, so the fault is a lost RELIEF and never a delta belonging to
+    // another fragment. Unreachable with legal stimulus while the leaf's
+    // `f_ready_o` is high whenever `d_ready_i` is -- see the committed mutant.
+    output var logic [31:0]             err_detail_lost_o,
+    output var logic                    dtl_table_ready_o
 );
   import zhao_render_texture_pkg::*;
 
@@ -1053,6 +1110,132 @@ module zhao_texture_island_v3_top #(
       .fragments_o(cnt_persp_fragments_o), .products_o(persp_products_w),
       .zero_products_o(persp_zero_products_w), .occupancy_o(persp_occupancy_w),
       .idle_o(persp_idle_w));
+
+  // ===========================================================================
+  // TERRAIN.NORMALMAP -- THE PER-FRAGMENT DETAIL TERM (NORMALMAP, 2026-09-26)
+  // ===========================================================================
+  // `zhao_terrain_normalmap` was built to contract on 2026-09-09 and
+  // instantiated NOWHERE for seventeen days. Six packets refused to compose it
+  // and every refusal named the same thing: its input is "a perspective-correct
+  // terrain (u, v) with an integer mip level, tapped from the stream that feeds
+  // the texture path", and no such stream existed.
+  //
+  // IT EXISTS HERE AND IT IS THE LINE ABOVE. `u_persp` runs for EVERY admitted
+  // fragment -- the island's own assertion says so in as many words,
+  // `a_atomic_admission: own_adm_accept_w == (rcp_req_valid_w && rcp_req_ready_w)`
+  // -- so a fragment that takes NO texture sample still has its reciprocal
+  // issued and its u/w, v/w multiplied through. `persp_u_w`/`persp_v_w` are
+  // `signed [31:0]` perspective-correct coordinates, which is `f_u_i`/`f_v_i`'s
+  // declared shape and format exactly. That is why the block goes HERE and not
+  // one level out: this is the only place in the machine where a terrain
+  // fragment's real (u, v) exists.
+  //
+  // THE TAP DOES NOT PARTICIPATE IN THE HANDSHAKE, DELIBERATELY. `f_valid_i` is
+  // the persp transfer BEAT and `persp_rsp_ready_w` is left exactly as it was.
+  // Adding a term to it would put this block inside the island's descriptor/uv
+  // join arbitration, whose correctness argument is structural and does not
+  // include a fourth party. The price is that a detail pipe which could not
+  // accept would LOSE a delta rather than stall one, which is what
+  // `err_detail_lost_o` counts and what `tests/mutants/
+  // zhao_texture_island_v3_top_detail_stall_mutant.sv` fires -- the state is
+  // unreachable with legal stimulus, because `d_ready_i` below is tied high, so
+  // the leaf's II = 1 skid never fills.
+  //
+  // AND A LOST DELTA IS A LOST RELIEF, NEVER SOMEBODY ELSE'S. The record is
+  // keyed by OWNER SLOT and sealed with the owner's GENERATION, read back with
+  // the generation `zhao_texture_v3own` publishes at the OUTPUT -- so a row that
+  // was never written for this fragment fails the compare and the delta reads
+  // as exactly zero. The two sides of that compare are loaded by two different
+  // enables in two different modules (the leaf's response register here, v3own's
+  // output register there), which is the property CLAUDE.md's metadata-swap
+  // chapter says to check first.
+  logic nm_f_ready_w, nm_d_valid_w, nm_idle_w;
+  logic signed [8:0] nm_d_delta_w;
+  logic [15:0] nm_d_src_id_w;
+
+  // THE DECLARATION AND THE LEVEL, held per owner slot from admission. They
+  // arrive with the fragment and are needed several clocks later at the persp
+  // beat, which is the same reason `sheet_m` and `material_m` below are records
+  // and not wires: the island interleaves NCTX contexts, so a wire read at the
+  // persp stage would hand fragment A's declaration to fragment B.
+  localparam int unsigned DTL_DECLW = GENW + 5;   // {gen, declared, lod[3:0]}
+  logic [DTL_DECLW-1:0] dtl_decl_m [0:OWNERS-1];
+  always_ff @(posedge clk) begin
+    if (own_adm_accept_w)
+      dtl_decl_m[own_adm_owner_w[13:8]] <=
+          {own_adm_owner_w[7:0], frag_detail_i, frag_lod_i[LODW-1 -: 4]};
+  end
+
+  wire [DTL_DECLW-1:0] dtl_decl_row_c = dtl_decl_m[persp_owner_w[13:8]];
+  wire dtl_decl_gen_ok_c = (dtl_decl_row_c[DTL_DECLW-1 -: GENW] == persp_owner_w[7:0]);
+  // Fail-safe in the direction that removes relief rather than inventing it: a
+  // row whose generation does not match cannot be this fragment's declaration,
+  // so the fragment is declared UNDETAILED and the leaf forces delta 0 with the
+  // tile read enable held low.
+  wire dtl_declared_c = dtl_decl_row_c[4] && dtl_decl_gen_ok_c;
+  wire persp_xfer_c = persp_rsp_valid_w && persp_rsp_ready_w;
+
+  // ONE WRITE PORT, TWO DESTINATIONS, EXPLICIT SELECTOR. See the port comment.
+  wire nm_cfg_we_c = dtl_we_i && !dtl_sel_i;
+  wire nm_tw_we_c  = dtl_we_i &&  dtl_sel_i;
+
+  zhao_terrain_normalmap #(
+      .SUNS(1), .LEVELS(7), .DELTA_SHIFT(22), .LODW(4)
+  ) u_terrain_normalmap (
+      .clk(clk), .rst_n(rst_n),
+      .cfg_we_i  (nm_cfg_we_c),
+      .cfg_addr_i(dtl_addr_i[2:0]),
+      .cfg_data_i(dtl_data_i),
+      .f_valid_i (persp_xfer_c),
+      .f_ready_o (nm_f_ready_w),
+      .f_u_i     (persp_u_w),
+      .f_v_i     (persp_v_w),
+      .f_detail_i(dtl_declared_c),
+      .f_lod_i   (dtl_decl_row_c[3:0]),
+      // The OWNER is the tag. It is 14 bits into a 16-bit port, and the two
+      // pad bits are zero rather than don't-care so the returned tag compares
+      // equal to the owner it was issued with.
+      .f_src_id_i({2'd0, persp_owner_w}),
+      .d_valid_o (nm_d_valid_w),
+      // TIED HIGH, AND IT IS THE REASON THE TAP CANNOT STALL. The response
+      // goes to a record and not to a stream, so there is nothing for it to
+      // wait on. A block whose consumer never refuses cannot fill its own skid.
+      .d_ready_i (1'b1),
+      .d_delta_o (nm_d_delta_w),
+      .d_src_id_o(nm_d_src_id_w),
+      .tw_we_i   (nm_tw_we_c),
+      .tw_addr_i (dtl_addr_i),
+      .tw_data_i (dtl_data_i[15:0]),
+      .fragments_o  (cnt_detail_fragments_o),
+      .zeroed_o     (cnt_detail_zeroed_o),
+      .railed_o     (cnt_detail_railed_o),
+      .cold_o       (cnt_detail_cold_o),
+      .table_ready_o(dtl_table_ready_o),
+      .idle_o       (nm_idle_w));
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire unused_nm_idle_w = nm_idle_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // THE DELTA RECORD. Written only by the leaf's response, keyed by the owner
+  // the request carried. NOT also written at admission: one array cannot take
+  // two writers on one clock, and an admission-priority write would starve the
+  // response on a busy frame while every counter balanced -- which is the exact
+  // shape this repository has a chapter about. The generation compare at the
+  // read does the work instead, and it does it for free.
+  logic [GENW+8:0] dtl_delta_m [0:OWNERS-1];
+  always_ff @(posedge clk) begin
+    if (nm_d_valid_w)
+      dtl_delta_m[nm_d_src_id_w[13:8]] <= {nm_d_src_id_w[7:0], nm_d_delta_w};
+  end
+
+  // The record is READ at the owner's output beat, which is declared far below
+  // beside the sheet record -- see THE DELTA LEAVES WITH ITS OWNER there.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) err_detail_lost_o <= 32'd0;
+    else if (persp_xfer_c && !nm_f_ready_w)
+      err_detail_lost_o <= err_detail_lost_o + 32'd1;
+  end
 
   // ---------------------------------------------------------------------------
   // Exact descriptor physical image and 301/78/365 owner join.
@@ -2696,6 +2879,48 @@ module zhao_texture_island_v3_top #(
   assign owner_final_owner_w = combine_owner_w;
   assign owner_final_result_w = {
       combine_result_w[TEXTURE_RESULT_W-1:TEXTURE_RESULT_RGB_HI+1], sheet_rgb_w};
+
+  // ===========================================================================
+  // THE DELTA LEAVES WITH ITS OWNER (NORMALMAP, 2026-09-26)
+  // ===========================================================================
+  // Read at the OUTPUT beat rather than at the combine beat, and that is not
+  // arbitrary: the delta does NOT modulate this island's texel. Its consumer is
+  // the LIT COLOUR LANE -- `zref::terrain::normalmap_apply(uint8_t v, delta)`,
+  // whose oracle comment reads "the delta lands on the flat lit colour lanes,
+  // saturating unsigned 8-bit" -- and the lit colour lane is
+  // `zhao_raster_texture_stage_v3`'s `frag_vert_rgb_o`. So the delta is carried
+  // OUT beside the result on the same beat and applied there.
+  //
+  // WHY NOT `u_sheetmod`, WHICH IS THE BLOCK THE COMMISSIONING BRIEF NAMED. Two
+  // independent measurements say it is the wrong consumer for THIS value and
+  // both are structural rather than arguable:
+  //   * a terrain fragment's colour is NOT this island's texel.
+  //     `zhao_raster_fragment.sv:717-721` selects `s1_src_rgb_r` as
+  //     `unit_mul(texel, vertex)` only when the state word's SHADE_MOD bit is
+  //     set, and `TERR_FRAG_STATE` is the opaque profile with SHADE_MOD = 0 --
+  //     so for terrain the texel is computed and discarded, and a delta applied
+  //     to it would change no pixel at all;
+  //   * and the sheet arm is itself shut in the composed console, because
+  //     `frag_aux_i` traces to `mat_flat_request_c[268]`, which
+  //     `zhao_console_core.sv` drives with a literal `1'b0`. `sheet_apply_c`
+  //     therefore cannot be true there. That is a fact about the composer, not
+  //     a defect in this island or in `zhao_texture_sheetmod`, and it is
+  //     recorded here because a brief cited that block as a live consumer.
+  //
+  // The arithmetic is also different in kind: the sheet is a MULTIPLICATIVE
+  // unit8 tint on a texel; this is an ADDITIVE s9 term on a light. Folding one
+  // into the other would be a second home for neither law.
+  wire [GENW+8:0] dtl_delta_row_c = dtl_delta_m[owner_out_owner_w[13:8]];
+  wire dtl_delta_gen_ok_c =
+      (dtl_delta_row_c[GENW+8 -: GENW] == owner_out_owner_w[7:0]);
+  assign out_detail_delta_o =
+      dtl_delta_gen_ok_c ? $signed(dtl_delta_row_c[8:0]) : 9'sd0;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) cnt_detail_published_o <= 32'd0;
+    else if (owner_out_valid_w && out_ready_i && dtl_delta_gen_ok_c)
+      cnt_detail_published_o <= cnt_detail_published_o + 32'd1;
+  end
 
   assign out_valid_o = owner_out_valid_w;
   assign out_status_o = owner_out_result_w[47:40];

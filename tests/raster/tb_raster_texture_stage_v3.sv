@@ -19,7 +19,7 @@ module tb_raster_texture_stage_v3 #(
 
     input  logic         in_valid_i,
     output logic         in_ready_o,
-    input  logic [489:0] in_data_i,
+    input  logic [490:0] in_data_i,
     input  logic         stage_admit_enable_i,
     input  logic         fragment_pause_i,
     input  logic         skid_rst_n_i,
@@ -28,7 +28,7 @@ module tb_raster_texture_stage_v3 #(
     output logic [1:0]   skid_level_o,
     output logic         obs_cand_valid_o,
     output logic         obs_cand_ready_o,
-    output logic [489:0] obs_cand_data_o,
+    output logic [490:0] obs_cand_data_o,
 
     input  logic         frame_fault_clear_valid_i,
     output logic         frame_fault_clear_ready_o,
@@ -137,7 +137,7 @@ module tb_raster_texture_stage_v3 #(
 );
   logic skid_valid_w;
   logic skid_ready_w;
-  logic [489:0] skid_data_w;
+  logic [490:0] skid_data_w;
   logic stage_cand_valid_w;
   logic stage_cand_ready_w;
 
@@ -204,7 +204,7 @@ module tb_raster_texture_stage_v3 #(
       fragment_idle_o && !frame_fault_o;
   assign skid_cancelled_o = skid_cancel_i && (skid_level_o != 2'd0);
 
-  zhao_skid2 #(.W(490)) u_candidate_skid (
+  zhao_skid2 #(.W(491)) u_candidate_skid (
       .clk(clk),
       .rst_n(skid_rst_n_i),
       .up_valid_i(in_valid_i),

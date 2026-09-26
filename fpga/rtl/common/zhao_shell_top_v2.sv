@@ -218,6 +218,24 @@ module zhao_shell_top_v2
   input  logic [15:0] pal_load_rgb565_i,
   input  logic        pal_load_crc_ok_i,
 
+  // TERRAIN.NORMALMAP's config and tile-upload write port (NORMALMAP,
+  // 2026-09-26), carried unchanged toward `zhao_texture_island_v3_top`. The
+  // DETAIL DECLARATION is not here: it rides the candidate as
+  // `detail_required` inside the texture request, so it cannot separate from
+  // the fragment it describes.
+  input  logic        dtl_we_i,
+  input  logic        dtl_sel_i,
+  input  logic [12:0] dtl_addr_i,
+  input  logic [31:0] dtl_data_i,
+  output logic [31:0] cnt_detail_fragments_o,
+  output logic [31:0] cnt_detail_zeroed_o,
+  output logic [31:0] cnt_detail_railed_o,
+  output logic [31:0] cnt_detail_cold_o,
+  output logic [31:0] cnt_detail_published_o,
+  output logic [31:0] cnt_detail_applied_o,
+  output logic [31:0] err_detail_lost_o,
+  output logic        dtl_table_ready_o,
+
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
   input  logic [46:0]  tri_area2_i,
   input  logic [239:0] tri_invw_plane_i,
@@ -1428,6 +1446,18 @@ module zhao_shell_top_v2
     .pal_load_gen_i(pal_load_gen_i), .pal_load_idx_i(pal_load_idx_i),
     .pal_load_rgb565_i(pal_load_rgb565_i),
     .pal_load_crc_ok_i(pal_load_crc_ok_i),
+    .dtl_we_i(dtl_we_i),
+    .dtl_sel_i(dtl_sel_i),
+    .dtl_addr_i(dtl_addr_i),
+    .dtl_data_i(dtl_data_i),
+    .cnt_detail_fragments_o(cnt_detail_fragments_o),
+    .cnt_detail_zeroed_o(cnt_detail_zeroed_o),
+    .cnt_detail_railed_o(cnt_detail_railed_o),
+    .cnt_detail_cold_o(cnt_detail_cold_o),
+    .cnt_detail_published_o(cnt_detail_published_o),
+    .cnt_detail_applied_o(cnt_detail_applied_o),
+    .err_detail_lost_o(err_detail_lost_o),
+    .dtl_table_ready_o(dtl_table_ready_o),
     .sheet_req_valid_o(sheet_req_valid_o), .sheet_req_ready_i(sheet_req_ready_i),
     .sheet_req_op_o(sheet_req_op_o), .sheet_req_handle_o(sheet_req_handle_o),
     .sheet_req_texel_o(sheet_req_texel_o),

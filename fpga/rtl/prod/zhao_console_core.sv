@@ -10782,6 +10782,25 @@ module zhao_console_core
   // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
   // with a pixel behind it). A second application at the vertex would be a
   // second home for one law.
+
+  // ---- TERRAIN.NORMALMAP's RELIEF STRENGTH (NORMALMAP, 2026-09-26) --------
+  // u8 with value raw/256, written to the block's config word 2. ZERO IS
+  // BIT-EXACT OFF by that block's own contract, so this parameter is the
+  // feature's amount knob and `TERR_DETAIL_ELIGIBLE` on the terrain arm is its
+  // class switch -- two questions, two knobs, neither inferred from the other.
+  //
+  // THIS NUMBER IS AUTHORED AND IS OWED A LOOK. CLAUDE.md's first law is that
+  // a look value is chosen by rendering it and looking, and no rendered board
+  // of terrain detail exists yet. 64 (0.25) is a deliberate starting point and
+  // not a measurement dressed as one: at the tile's extreme texel it puts the
+  // delta at roughly a quarter of the colour lane, which is relief that should
+  // read at 240p without flattening the ladder. It is one editable constant
+  // here, reachable from the board, and the pass that looks at it should move
+  // it rather than re-derive it.
+  parameter logic [7:0] TERR_DETAIL_STRENGTH = 8'd64,
+  // Passed to `zhao_terrain_clipfeed`'s own declaration parameter. 0 withdraws
+  // terrain from the detail class without touching the strength above.
+  parameter logic       TERR_DETAIL_ELIGIBLE = 1'b1,
   parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
   parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
 
@@ -11957,6 +11976,28 @@ module zhao_console_core
   output logic [31:0] geom_ma_jobs_h_o,
   // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
   output logic [31:0] geom_ma_jobs_i_o,
+  output logic [31:0] geom_ma_jobs_j_o,
+  // ---- TERRAIN.NORMALMAP's evidence (NORMALMAP, 2026-09-26) ---------------
+  // The loader's seven and the fragment path's eight. `terr_nm_applied_o` is
+  // the one to read for "did the relief reach a pixel": it counts fragments
+  // whose lit colour lane the seam actually CHANGED, which is neither the
+  // fragments offered nor the deltas computed.
+  output logic [31:0]             terr_nm_pages_o,
+  output logic [31:0]             terr_nm_words_o,
+  output logic [31:0]             terr_nm_pages_dropped_o,
+  output logic [31:0]             terr_nm_bad_magic_o,
+  output logic [31:0]             terr_nm_oversize_o,
+  output logic [31:0]             terr_nm_truncated_o,
+  output logic [31:0]             terr_nm_denied_o,
+  output logic [31:0]             terr_nm_frag_o,
+  output logic [31:0]             terr_nm_zeroed_o,
+  output logic [31:0]             terr_nm_railed_o,
+  output logic [31:0]             terr_nm_cold_o,
+  output logic [31:0]             terr_nm_published_o,
+  output logic [31:0]             terr_nm_applied_o,
+  output logic [31:0]             terr_nm_lost_o,
+  output logic                    terr_nm_table_ready_o,
+
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
@@ -16761,6 +16802,7 @@ module zhao_console_core
   // The span's own flat alpha and raster state, latched by the SAME enable as
   // the mode. These are what close entry I20's two open fields below.
   wire [ 7:0]             mw_pub_vertex_alpha;
+  wire                    mw_pub_detail;
   wire [31:0]             mw_pub_frag_state;
   // THE MATERIAL'S HALF of the same declaration (FRAGSTATE, 2026-09-25), latched
   // by the same enable as the published record it belongs to.
@@ -17520,6 +17562,7 @@ module zhao_console_core
   wire [ 2:0]        cd_o_behind;
   wire [15:0]        cd_o_src_id;
   wire               cd_o_untex;
+  wire               cd_o_detail;
   wire [ 1:0]        cd_o_cull_mode;
   wire [GEOM_CLIP_ATTRW-1:0] cd_o_attr_a, cd_o_attr_b, cd_o_attr_c;
   // ---- ARENAID: the per-corner identity and the per-primitive rider --------
@@ -17566,6 +17609,7 @@ module zhao_console_core
   wire [ 2:0]        tcf_o_behind;
   wire [15:0]        tcf_o_src_id;
   wire               tcf_o_untex;
+  wire               tcf_o_detail;
   wire [ 1:0]        tcf_o_cull_mode;
   wire [GEOM_CLIP_ATTRW-1:0] tcf_o_attr_a, tcf_o_attr_b, tcf_o_attr_c;
   wire [31:0]        tcf_o_material_set;
@@ -17647,6 +17691,17 @@ module zhao_console_core
     // that declared untextured would have its u/w and v/w planes replaced by
     // the zero operand, discarding the coordinate law this lane just composed.
     .c_untex_i       ({tcf_o_untex,  pcf_o_untex,        fa_o_untex,        rp_untex_c}),
+    // TERRAIN.NORMALMAP's DETAIL DECLARATION, per client (NORMALMAP,
+    // 2026-09-26). ONLY TERRAIN DECLARES IT, and the three zeros are a LAW
+    // rather than a default: the detail term perturbs a surface normal in world
+    // XZ with no tangent frame, which is sound for a heightfield and meaningless
+    // for a skinned mesh, a camera-facing particle quad or a forge primitive.
+    // Each zero is the producer's own constant inside its own block for the
+    // mesh/particle/forge arms -- `zhao_geom_replay`, `zhao_part_clipfeed` and
+    // `zhao_forge_assemble` carry no heightfield -- and terrain's 1 comes from
+    // `zhao_terrain_clipfeed`'s named `TERR_DETAIL_ELIGIBLE` parameter, so the
+    // owner's switch is a knob and not a literal buried here.
+    .c_detail_i      ({tcf_o_detail, 1'b0,               1'b0,              1'b0}),
     .c_cull_mode_i   ({tcf_o_cull_mode, pcf_o_cull_mode, fa_o_cull_mode,    rp_o_raster[1:0]}),
     .c_attr_a_i      ({tcf_o_attr_a, pcf_o_attr_a,       fa_o_attr_a,       rp_attr_a}),
     .c_attr_b_i      ({tcf_o_attr_b, pcf_o_attr_b,       fa_o_attr_b,       rp_attr_b}),
@@ -17744,6 +17799,7 @@ module zhao_console_core
     .o_behind_o      (cd_o_behind),
     .o_src_id_o      (cd_o_src_id),
     .o_untex_o       (cd_o_untex),
+    .o_detail_o      (cd_o_detail),
     .o_cull_mode_o   (cd_o_cull_mode),
     .o_attr_a_o      (cd_o_attr_a),
     .o_attr_b_o      (cd_o_attr_b),
@@ -20867,7 +20923,8 @@ module zhao_console_core
     .SLOT_R     (GEOM_ATTR_SLOT_R),
     .SLOT_G     (GEOM_ATTR_SLOT_G),
     .SLOT_B     (GEOM_ATTR_SLOT_B),
-    .SLOT_ALPHA (GEOM_ATTR_SLOT_ALPHA)
+    .SLOT_ALPHA (GEOM_ATTR_SLOT_ALPHA),
+    .TERR_DETAIL_ELIGIBLE(TERR_DETAIL_ELIGIBLE)
   ) u_terrain_clipfeed (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -20973,6 +21030,7 @@ module zhao_console_core
     .o_behind_o       (tcf_o_behind),
     .o_src_id_o       (tcf_o_src_id),
     .o_untex_o        (tcf_o_untex),
+    .o_detail_o       (tcf_o_detail),
     .o_cull_mode_o    (tcf_o_cull_mode),
     .o_attr_a_o       (tcf_o_attr_a),
     .o_attr_b_o       (tcf_o_attr_b),
@@ -22773,6 +22831,18 @@ module zhao_console_core
     .pal_load_idx_i            (palld_ld_idx),
     .pal_load_rgb565_i         (palld_ld_rgb565),
     .pal_load_crc_ok_i         (palld_ld_crc_ok),
+    .dtl_we_i                  (dtl_we_c),
+    .dtl_sel_i                 (dtl_sel_c),
+    .dtl_addr_i                (dtl_addr_c),
+    .dtl_data_i                (dtl_data_c),
+    .cnt_detail_fragments_o    (terr_nm_frag_o),
+    .cnt_detail_zeroed_o       (terr_nm_zeroed_o),
+    .cnt_detail_railed_o       (terr_nm_railed_o),
+    .cnt_detail_cold_o         (terr_nm_cold_o),
+    .cnt_detail_published_o    (terr_nm_published_o),
+    .cnt_detail_applied_o      (terr_nm_applied_o),
+    .err_detail_lost_o         (terr_nm_lost_o),
+    .dtl_table_ready_o         (terr_nm_table_ready_o),
     // REAL: GEOM.SETUP's own area, the twenty-first field of the triangle
     // packet whose other twenty arrive as `st_*` two lines below. See the
     // `st_area2` declaration for why this is 47 bits of a 48-bit value and
@@ -28611,6 +28681,149 @@ module zhao_console_core
     .gen_zero_loads_o (pal_ld_gen_zero_o)
   );
 
+
+  // ==========================================================================
+  // TERRAIN.NORMALMAP's HOST AND ITS EPOCH CONFIG (NORMALMAP, 2026-09-26)
+  // ==========================================================================
+  // `zhao_terrain_normalmap` is composed inside `zhao_texture_island_v3_top`,
+  // which is where a terrain fragment's perspective-correct (u, v) exists. Two
+  // things it needs live HERE and cannot live there, which is the whole reason
+  // the `dtl_*` write port crosses the shell:
+  //
+  //   * THE DETAIL TILE. `zhao_terrain_normalloader` carries a published
+  //     DETAIL_NORMAL page (spec/cartridge.md 4g, kind 16) word by word to the
+  //     block's `tw_*` port, under owner ruling R243 D-NORMALS-A -- "in v1,
+  //     commission the pyramid". It needs MEM.UPLOAD's publication beat and a
+  //     MEM.GUARD requester, and both of those are console-level.
+  //   * THE EPOCH COEFFICIENTS. The sun is SetEnvironment's, decoded by
+  //     CMD.EXEC and already computed here for `u_terrain_lightlane` as
+  //     `le_sun_x` / `le_sun_z` in Q16.16. The block's config register is s1.15
+  //     because an s16 register cannot hold Q16.16's 0x10000, so the halving
+  //     below is the conversion the oracle header mandates in as many words:
+  //     "sun15 = clamp(rshift_round(L16, 1), -32768, 32767)". It is ONE
+  //     rounding and it is ROUND-HALF-UP, not a shift: a shift floors, and
+  //     floors disagree on every negative sun.
+  //
+  // ONE WRITE PORT, TWO DESTINATIONS, AND THE LOADER HAS PRIORITY. The page
+  // carries thirty-two words on thirty-two consecutive cycles with no ready, so
+  // a config write must never land between them; the config sequencer below
+  // holds off while the loader is busy. That is not an optimisation, it is the
+  // only correct order: a config write drops `table_ready_o` and forces every
+  // live fragment cold, which is harmless, while a missed tile word is a hole
+  // in the pyramid nothing would report.
+  logic            ntl_tw_we;
+  logic [12:0]     ntl_tw_addr;
+  logic [15:0]     ntl_tw_data;
+  logic            ntl_busy;
+  zhao_guard_req_t ntl_guard_req;
+  zhao_guard_rsp_t ntl_guard_rsp;
+  logic            ntl_beat_valid;
+  logic [63:0]     ntl_beat_data;
+
+  zhao_terrain_normalloader #(
+    .PAGE_KIND   (8'd16),
+    .LAYOUT_WORDS(5461),
+    .CLIENT      (ZHAO_CLIENT_ENGINE1)
+  ) u_terrain_normalloader (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: MEM.UPLOAD's publication, the same beat PART.TABLE's page loader
+    // and MATERIAL.RESOLVE's directory write already take.
+    .pub_valid_i (upl_publish_valid_o),
+    .pub_tag_i   (upl_publish_tag_o),
+    .pub_base_i  (upl_publish_base_o),
+    .pub_extent_i(upl_publish_extent_o),
+
+    // REAL: requester J of the one ENGINE1 asset window.
+    .g_req_o       (ntl_guard_req),
+    .g_rsp_i       (ntl_guard_rsp),
+    .g_beat_valid_i(ntl_beat_valid),
+    .g_beat_data_i (ntl_beat_data),
+
+    .tw_we_o  (ntl_tw_we),
+    .tw_addr_o(ntl_tw_addr),
+    .tw_data_o(ntl_tw_data),
+
+    .pages_o        (terr_nm_pages_o),
+    .words_o        (terr_nm_words_o),
+    .pages_dropped_o(terr_nm_pages_dropped_o),
+    .bad_magic_o    (terr_nm_bad_magic_o),
+    .oversize_o     (terr_nm_oversize_o),
+    .truncated_o    (terr_nm_truncated_o),
+    .denied_o       (terr_nm_denied_o),
+    .busy_o         (ntl_busy)
+  );
+
+  // ---- the epoch config sequencer -----------------------------------------
+  // `rshift_round(x, 1)` is `(x + 1) >>> 1` in two's complement for a
+  // round-half-UP law, which is what `zref::rshift_round` does and what the
+  // oracle header's `sun15` line requires. The clamp is the s16 rail.
+  function automatic logic signed [15:0] sun_q16_to_s15(input logic signed [31:0] l16);
+    logic signed [32:0] r;
+    begin
+      r = ($signed({l16[31], l16}) + 33'sd1) >>> 1;
+      if (r > 33'sd32767) sun_q16_to_s15 = 16'sh7FFF;
+      else if (r < -33'sd32768) sun_q16_to_s15 = 16'sh8000;
+      else sun_q16_to_s15 = r[15:0];
+    end
+  endfunction
+
+  wire signed [15:0] dtl_sun_x15_c = sun_q16_to_s15(le_sun_x);
+  wire signed [15:0] dtl_sun_z15_c = sun_q16_to_s15(le_sun_z);
+
+  // The sequencer writes word 0 (the sun pair) and word 2 (the strength) and
+  // nothing else. Words 3 and 4 -- `uv_shift` and the mip bias/ceiling -- stay
+  // at their reset values, which the block's own header states is the un-mipped
+  // contract behaviour bit-exactly; they are named parameters above rather than
+  // writes here because nothing in this console has a producer for either.
+  logic signed [15:0] dtl_sun_x_written_q, dtl_sun_z_written_q;
+  logic              dtl_strength_written_q;
+  logic              dtl_cfg_we_q;
+  logic [2:0]        dtl_cfg_addr_q;
+  logic [31:0]       dtl_cfg_data_q;
+  wire dtl_sun_stale_c = (dtl_sun_x15_c != dtl_sun_x_written_q) ||
+                         (dtl_sun_z15_c != dtl_sun_z_written_q);
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      dtl_sun_x_written_q    <= 16'sd0;
+      dtl_sun_z_written_q    <= 16'sd0;
+      dtl_strength_written_q <= 1'b0;
+      dtl_cfg_we_q           <= 1'b0;
+      dtl_cfg_addr_q         <= 3'd0;
+      dtl_cfg_data_q         <= 32'd0;
+    end else begin
+      dtl_cfg_we_q <= 1'b0;
+      // The loader owns the port whenever it is running. `ntl_busy` is a LEVEL
+      // held for the whole page, so this cannot slip a write between two of its
+      // thirty-two words.
+      if (!ntl_busy && !ntl_tw_we) begin
+        if (!dtl_strength_written_q) begin
+          dtl_cfg_we_q           <= 1'b1;
+          dtl_cfg_addr_q         <= 3'd2;
+          dtl_cfg_data_q         <= {24'd0, TERR_DETAIL_STRENGTH};
+          dtl_strength_written_q <= 1'b1;
+        end else if (dtl_sun_stale_c) begin
+          dtl_cfg_we_q        <= 1'b1;
+          dtl_cfg_addr_q      <= 3'd0;
+          dtl_cfg_data_q      <= {dtl_sun_z15_c, dtl_sun_x15_c};
+          dtl_sun_x_written_q <= dtl_sun_x15_c;
+          dtl_sun_z_written_q <= dtl_sun_z15_c;
+        end
+      end
+    end
+  end
+
+  // The loader's write wins the cycle it asks for; the sequencer has already
+  // stood down for it above, so this mux resolves nothing that could collide
+  // and is written as a priority anyway because a mux that "cannot" pick the
+  // wrong arm is a mux whose reason should be visible.
+  wire        dtl_we_c   = ntl_tw_we || dtl_cfg_we_q;
+  wire        dtl_sel_c  = ntl_tw_we;
+  wire [12:0] dtl_addr_c = ntl_tw_we ? ntl_tw_addr : {10'd0, dtl_cfg_addr_q};
+  wire [31:0] dtl_data_c = ntl_tw_we ? {16'd0, ntl_tw_data} : dtl_cfg_data_q;
+
   // --------------------------------------------------------------------------
   // GEOM.MEM_ADAPTER.  The whole reason the geometry front end can be in this
   // console at all: two logical requesters, one permitted client.  It forces
@@ -28705,6 +28918,14 @@ module zhao_console_core
     .i_beat_valid_o(palld_beat_valid),
     .i_beat_data_o (palld_beat_data),
 
+    // REAL: requester J, TERRAIN.NORMALMAP's DETAIL_NORMAL page loader
+    // (NORMALMAP, 2026-09-26). One page per PUBLICATION and nothing per frame,
+    // on the same pool, client and direction as the nine above.
+    .j_req_i       (ntl_guard_req),
+    .j_rsp_o       (ntl_guard_rsp),
+    .j_beat_valid_o(ntl_beat_valid),
+    .j_beat_data_o (ntl_beat_data),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -28721,6 +28942,7 @@ module zhao_console_core
     .jobs_g_o     (geom_ma_jobs_g_o),
     .jobs_h_o     (geom_ma_jobs_h_o),
     .jobs_i_o     (geom_ma_jobs_i_o),
+    .jobs_j_o     (geom_ma_jobs_j_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
@@ -29906,6 +30128,7 @@ module zhao_console_core
     // window, so a primitive that disagrees about either gets its own span and
     // cannot be painted with the previous one's opacity.
     .t_vertex_alpha_i (cd_o_vertex_alpha),
+    .t_detail_i       (cd_o_detail),
     .t_frag_state_i   (cd_o_frag_state),
     .t_quality_tier_i (cd_o_quality_tier),
 
@@ -29965,6 +30188,7 @@ module zhao_console_core
     .pub_response_class_o  (mw_pub_response_class),
     .pub_material_mode_o   (mw_pub_material_mode),
     .pub_vertex_alpha_o    (mw_pub_vertex_alpha),
+    .pub_detail_o          (mw_pub_detail),
     .pub_frag_state_o      (mw_pub_frag_state),
     // THE MATERIAL'S FRAGMENT PROFILE, published beside the producer's rather
     // than merged with it, so the authority can be resolved BY NAME below.
@@ -30310,7 +30534,24 @@ module zhao_console_core
   // than left to be discovered, because a reused dead field is exactly the kind
   // of thing that reads as harmless until it is not.
   wire [47:0] tri_continuation_tail_c = {
-      TAIL_VERTEX_RGB_UNUSED_C[23:18], tidq_id_w,      // [47:24] I54's arena id
+      // [47] TERRAIN.NORMALMAP's DETAIL DECLARATION (NORMALMAP, 2026-09-26).
+      // The SECOND field to take up residence in the dead `vertex_rgb` bits,
+      // after I54's arena index at [41:24]. The bargain is the one stated for
+      // I54 and it is restated because it is not free space: these 24 bits are
+      // dead by ONE owner decision (R234 D1, which made
+      // `zhao_raster_tile_pipe_v2` overwrite `vertex_rgb` per fragment from the
+      // Gouraud lanes). If that decision is reversed, BOTH carriers move before
+      // `vertex_rgb` goes live again. Bit 47 is the tail's most significant and
+      // the furthest from the arena index, which grows upward from bit 24.
+      //
+      // IT IS `mw_pub_detail`, NOT A CONSTANT: the declaration originates at
+      // `zhao_terrain_clipfeed`'s own `o_detail_o`, is granted by
+      // `u_geom_clipdoor` on the triangle's own beat, and is published by
+      // `u_material_window` as part of the span record -- the same alignment
+      // `vertex_alpha` and the fragment state already rely on, and the reason
+      // the window's `match_c` gained the field in the same commit.
+      mw_pub_valid && mw_pub_detail,
+      TAIL_VERTEX_RGB_UNUSED_C[22:18], tidq_id_w,      // [46:24] I54's arena id
 
       mw_pub_valid ? mw_pub_vertex_alpha
                    : TAIL_VERTEX_ALPHA_DEFAULT_C,      // [23:16] R89's, the span's

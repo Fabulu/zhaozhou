@@ -248,6 +248,15 @@ module zhao_material_window #(
     // field latched by a different enable, or left out of the identity, is the
     // independently-advancing metadata queue this block exists to refuse.
     input  wire        [ 7:0]       t_vertex_alpha_i,
+    // TERRAIN.NORMALMAP's DETAIL DECLARATION, from the granted client's own
+    // port (NORMALMAP, 2026-09-26). It joins `match_c` below for the same
+    // reason `t_frag_state_i` and `t_vertex_alpha_i` do: this block publishes
+    // ONE record for a whole span, so a primitive whose declaration differs
+    // from the running span's must DRAIN rather than inherit it. Without that
+    // term a terrain triangle and a particle -- both lawfully `MATMODE_NONE`
+    // with a zero pair -- would share a span and one declaration, and the
+    // wrong one would reach half the fragments with every counter balancing.
+    input  wire                     t_detail_i,
     input  wire        [31:0]       t_frag_state_i,
     // The draw's semantic weight, carried as the resolve's quality tier.  The
     // resolver ECHOES it (`tier_q`) and reads it nowhere, so this is a label
@@ -312,6 +321,7 @@ module zhao_material_window #(
     // The span's own alpha and raster state, for entry I20's
     // `tri_continuation_tail_i` and `tri_fragment_state_i`.
     output logic       [ 7:0]       pub_vertex_alpha_o,
+    output logic                    pub_detail_o,
     output logic       [31:0]       pub_frag_state_o,
     // THE MATERIAL'S HALF OF THE SAME THREE QUANTITIES, published beside the
     // producer's so the CORE can resolve the authority by NAME rather than by
@@ -424,6 +434,7 @@ module zhao_material_window #(
   logic [1:0]  pub_class_q;
   logic [1:0]  pub_mode_q;
   logic [7:0]  pub_valpha_q;
+  logic        pub_detail_q;
   logic [31:0] pub_state_q;
   // The MATERIAL's half of the published span (FRAGSTATE, 2026-09-25). There is
   // deliberately no `ask_*` twin for these four: an `ask_*` register exists for
@@ -449,6 +460,7 @@ module zhao_material_window #(
   logic [7:0]  ask_tier_q;
   logic [1:0]  ask_mode_q;
   logic [7:0]  ask_valpha_q;
+  logic        ask_detail_q;
   logic [31:0] ask_state_q;
 
   logic [OCCW-1:0] occupancy_q;
@@ -474,6 +486,7 @@ module zhao_material_window #(
   wire match_c = pub_valid_q &&
                  (t_material_mode_i == pub_mode_q) &&
                  (t_vertex_alpha_i  == pub_valpha_q) &&
+                 (t_detail_i        == pub_detail_q) &&
                  (t_frag_state_i    == pub_state_q) &&
                  (t_material_set_i  == pub_set_q) &&
                  (t_material_id_i   == pub_id_q);
@@ -496,6 +509,7 @@ module zhao_material_window #(
   assign pub_response_class_o  = pub_class_q;
   assign pub_material_mode_o   = pub_mode_q;
   assign pub_vertex_alpha_o    = pub_valpha_q;
+  assign pub_detail_o          = pub_detail_q;
   assign pub_frag_state_o      = pub_state_q;
   assign pub_frag_declared_o   = pub_frag_decl_q;
   assign pub_mat_frag_state_o  = pub_mat_state_q;
@@ -580,6 +594,7 @@ module zhao_material_window #(
       pub_class_q           <= 2'd0;
       pub_mode_q            <= MATMODE_BACKED_C;
       pub_valpha_q          <= 8'd0;
+      pub_detail_q          <= 1'b0;
       pub_state_q           <= 32'd0;
       pub_frag_decl_q       <= 1'b0;
       pub_mat_state_q       <= 32'd0;
@@ -590,6 +605,7 @@ module zhao_material_window #(
       ask_tier_q            <= 8'd0;
       ask_mode_q            <= MATMODE_BACKED_C;
       ask_valpha_q          <= 8'd0;
+      ask_detail_q          <= 1'b0;
       ask_state_q           <= 32'd0;
       no_material_spans_o   <= 32'd0;
       mode_refused_o        <= 32'd0;
@@ -623,6 +639,7 @@ module zhao_material_window #(
             ask_tier_q <= t_quality_tier_i;
             ask_mode_q   <= t_material_mode_i;
             ask_valpha_q <= t_vertex_alpha_i;
+            ask_detail_q <= t_detail_i;
             ask_state_q  <= t_frag_state_i;
             switches_o <= switches_o + 32'd1;
             st_q       <= ST_DRAIN;
@@ -652,6 +669,7 @@ module zhao_material_window #(
               pub_valid_q <= 1'b1;
               pub_mode_q   <= MATMODE_NONE_C;
               pub_valpha_q <= ask_valpha_q;
+              pub_detail_q <= ask_detail_q;
               pub_state_q  <= ask_state_q;
               pub_set_q   <= ask_set_q;   // zero, enforced by `mode_contra_c`
               pub_id_q    <= ask_id_q;    // zero, enforced by `mode_contra_c`
@@ -699,6 +717,7 @@ module zhao_material_window #(
             // metadata queue".
             pub_mode_q   <= MATMODE_BACKED_C;
             pub_valpha_q <= ask_valpha_q;
+            pub_detail_q <= ask_detail_q;
             pub_state_q  <= ask_state_q;
             pub_set_q   <= ask_set_q;
             pub_id_q    <= ask_id_q;

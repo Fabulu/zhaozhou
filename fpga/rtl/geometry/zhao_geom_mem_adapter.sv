@@ -206,6 +206,19 @@ module zhao_geom_mem_adapter
     output var logic            i_beat_valid_o,
     output var logic [63:0]     i_beat_data_o,
 
+    // Requester J, TERRAIN.NORMALMAP's DETAIL_NORMAL page loader (NORMALMAP,
+    // 2026-09-26). ONE page per PUBLICATION and nothing per frame -- the
+    // detail pyramid is resident in M10K once loaded -- so this is the
+    // lightest traffic on the share after H, on the same pool, client and
+    // direction as the nine above, which is 5f's condition for joining here
+    // rather than opening a second ENGINE1 path. `j_beat_last_o` is not
+    // brought out for G's, H's and I's reason: the loader counts its own
+    // eight beats a line.
+    input  var zhao_guard_req_t j_req_i,
+    output var zhao_guard_rsp_t j_rsp_o,
+    output var logic            j_beat_valid_o,
+    output var logic [63:0]     j_beat_data_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -223,6 +236,7 @@ module zhao_geom_mem_adapter
     output var logic [31:0]     jobs_g_o,          // ...and G
     output var logic [31:0]     jobs_h_o,          // ...and H
     output var logic [31:0]     jobs_i_o,          // ...and I
+    output var logic [31:0]     jobs_j_o,          // ...and J
     output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
@@ -242,17 +256,17 @@ module zhao_geom_mem_adapter
   // worst-case wait by at most one 32-byte record -- and it is the SAME core the
   // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
   // two-cycle verdict law is re-derived here.
-  zhao_guard_req_t [8:0] s_req;
-  zhao_guard_rsp_t [8:0] s_rsp;
-  logic            [8:0] s_bv;
+  zhao_guard_req_t [9:0] s_req;
+  zhao_guard_rsp_t [9:0] s_rsp;
+  logic            [9:0] s_bv;
   // G, H and I take no `last`, so bits 6, 7 and 8 of this vector are driven by
   // the share and read by nothing. Named UNUSED here rather than left for the
   // linter to find.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic            [8:0] s_bl;
+  logic            [9:0] s_bl;
   /* verilator lint_on UNUSEDSIGNAL */
   logic           [63:0] s_bd;
-  logic      [8:0][31:0] s_jobs;
+  logic      [9:0][31:0] s_jobs;
 
   assign s_req[0] = a_req_i;
   assign s_req[1] = b_req_i;
@@ -263,6 +277,7 @@ module zhao_geom_mem_adapter
   assign s_req[6] = g_req_i;
   assign s_req[7] = h_req_i;
   assign s_req[8] = i_req_i;
+  assign s_req[9] = j_req_i;
   assign a_rsp_o = s_rsp[0];
   assign b_rsp_o = s_rsp[1];
   assign c_rsp_o = s_rsp[2];
@@ -272,6 +287,7 @@ module zhao_geom_mem_adapter
   assign g_rsp_o = s_rsp[6];
   assign h_rsp_o = s_rsp[7];
   assign i_rsp_o = s_rsp[8];
+  assign j_rsp_o = s_rsp[9];
   assign a_beat_valid_o = s_bv[0];
   assign b_beat_valid_o = s_bv[1];
   assign c_beat_valid_o = s_bv[2];
@@ -281,6 +297,7 @@ module zhao_geom_mem_adapter
   assign g_beat_valid_o = s_bv[6];
   assign h_beat_valid_o = s_bv[7];
   assign i_beat_valid_o = s_bv[8];
+  assign j_beat_valid_o = s_bv[9];
   assign a_beat_last_o  = s_bl[0];
   assign b_beat_last_o  = s_bl[1];
   assign c_beat_last_o  = s_bl[2];
@@ -296,6 +313,7 @@ module zhao_geom_mem_adapter
   assign g_beat_data_o  = s_bd;
   assign h_beat_data_o  = s_bd;
   assign i_beat_data_o  = s_bd;
+  assign j_beat_data_o  = s_bd;
   assign jobs_a_o = s_jobs[0];
   assign jobs_b_o = s_jobs[1];
   assign jobs_c_o = s_jobs[2];
@@ -305,9 +323,10 @@ module zhao_geom_mem_adapter
   assign jobs_g_o = s_jobs[6];
   assign jobs_h_o = s_jobs[7];
   assign jobs_i_o = s_jobs[8];
+  assign jobs_j_o = s_jobs[9];
 
   zhao_mem_share_n #(
-    .N         (9),
+    .N         (10),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (

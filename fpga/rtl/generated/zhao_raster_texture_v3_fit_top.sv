@@ -129,7 +129,7 @@ logic [31:0] texture_samples_w;
   logic earlyz_hold_valid_w;
   logic [1:0] skid_level_w;
   logic stage_candidate_valid_w;
-  logic [489:0] stage_candidate_data_w;
+  logic [490:0] stage_candidate_data_w;
   logic stage_fragment_valid_w;
   logic [7:0] stage_fragment_addr_w;
   logic [23:0] stage_fragment_depth_w;
@@ -207,7 +207,7 @@ logic [31:0] texture_samples_w;
       6'd27: signature_word_c = stage_candidate_data_w[159:128];
       6'd28: signature_word_c = stage_candidate_data_w[287:256];
       6'd29: signature_word_c = stage_candidate_data_w[415:384];
-      6'd30: signature_word_c = {22'd0, stage_candidate_data_w[489:480]};
+      6'd30: signature_word_c = {21'd0, stage_candidate_data_w[490:480]};
       6'd31: signature_word_c = stage_fragment_state_w;
       6'd32: signature_word_c = {stage_fragment_depth_w, stage_fragment_addr_w};
       6'd33: signature_word_c = {stage_fragment_src_w, stage_fragment_status_w,

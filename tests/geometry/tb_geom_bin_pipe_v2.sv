@@ -198,7 +198,7 @@ module tb_geom_bin_pipe_v2 (
     output logic               earlyz_hold_valid_o,
     output logic        [1:0]  skid_level_o,
     output logic               stage_candidate_valid_o,
-    output logic       [489:0] stage_candidate_data_o,
+    output logic       [490:0] stage_candidate_data_o,
     output logic               stage_fragment_valid_o,
     output logic        [7:0]  stage_fragment_addr_o,
     output logic        [23:0] stage_fragment_depth_o,

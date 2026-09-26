@@ -120,6 +120,22 @@ module zhao_raster_tile_pipe_v2 #(
     input  logic         [15:0] pal_load_rgb565_i,
     input  logic                pal_load_crc_ok_i,
 
+    // TERRAIN.NORMALMAP's config and tile-upload write port, carried unchanged
+    // to `zhao_raster_texture_stage_v3` and thence to the island. The DETAIL
+    // DECLARATION is not here: it rides the candidate as `detail_required`.
+    input  logic                dtl_we_i,
+    input  logic                dtl_sel_i,
+    input  logic         [12:0] dtl_addr_i,
+    input  logic         [31:0] dtl_data_i,
+    output logic         [31:0] cnt_detail_fragments_o,
+    output logic         [31:0] cnt_detail_zeroed_o,
+    output logic         [31:0] cnt_detail_railed_o,
+    output logic         [31:0] cnt_detail_cold_o,
+    output logic         [31:0] cnt_detail_published_o,
+    output logic         [31:0] cnt_detail_applied_o,
+    output logic         [31:0] err_detail_lost_o,
+    output logic                dtl_table_ready_o,
+
     // Packet-B Surface Sheet port.  Packet-D's selected profile never issues it.
     output logic                sheet_req_valid_o,
     input  logic                sheet_req_ready_i,
@@ -211,7 +227,7 @@ module zhao_raster_tile_pipe_v2 #(
     output logic                earlyz_hold_valid_o,
     output logic          [1:0] skid_level_o,
     output logic                stage_candidate_valid_o,
-    output logic       [489:0] stage_candidate_data_o,
+    output logic       [490:0] stage_candidate_data_o,
     output logic                stage_fragment_valid_o,
     output logic         [7:0] stage_fragment_addr_o,
     output logic        [23:0] stage_fragment_depth_o,
@@ -739,7 +755,7 @@ module zhao_raster_tile_pipe_v2 #(
   zhao_texture_v3_request_v2_t request_w;
   zhao_raster_continuation_v2_t continuation_w;
   zhao_raster_pretex_v2_t pretex_w;
-  logic [409:0] earlyz_payload_in_w;
+  logic [410:0] earlyz_payload_in_w;
 
   // The low 298 bits preserve the package request's existing low-field layout.
   // Each frozen field is named once here; U/W and V/W come only from their lanes.
@@ -759,6 +775,20 @@ module zhao_raster_tile_pipe_v2 #(
     request_w.sample_count          = flat_request_q[297:296];
     request_w.u_over_w              = attr_join_q_q[LANE_UOW];
     request_w.v_over_w              = attr_join_q_q[LANE_VOW];
+    // TERRAIN.NORMALMAP's declaration (NORMALMAP, 2026-09-26). It rides the
+    // metadata in the DEAD TOP BIT of the continuation tail's `vertex_rgb`
+    // field -- the same 24 bits owner decision R234 D1 made this module
+    // overwrite per fragment three statements below, and of which entry I54's
+    // arena index already uses eighteen. Bit 47 is the tail's most significant,
+    // which is the furthest from that 18-bit field: if the arena index ever
+    // widens it grows upward from bit 24 and meets this last.
+    //
+    // THE SAME BARGAIN, AND IT IS STATED AGAIN BECAUSE IT IS NOT FREE SPACE.
+    // These bits are dead by ONE owner decision. If R234 D1 is ever reversed
+    // and `vertex_rgb` becomes live from the tail again, this carrier and I54's
+    // must both move before that happens. `zhao_geom_bin_pipe_v2` refuses at
+    // elaboration if the tail layout moves, which is what keeps that honest.
+    request_w.detail_required       = continuation_tail_bits_q[47];
 
     continuation_w = '0;
     continuation_w.earlyz.in_tile_addr = {attr_join_row_q[LANE_INVW],
@@ -820,7 +850,7 @@ module zhao_raster_tile_pipe_v2 #(
   logic [23:0] earlyz_cand_depth_w;
   logic [31:0] earlyz_cand_state_w;
   logic [15:0] earlyz_cand_source_w;
-  logic [409:0] earlyz_cand_payload_w;
+  logic [410:0] earlyz_cand_payload_w;
   logic [2:0] earlyz_cand_bin_w;
   logic earlyz_reject_w;
   logic [7:0] earlyz_reject_addr_w;
@@ -830,7 +860,7 @@ module zhao_raster_tile_pipe_v2 #(
 
   assign earlyz_hold_valid_o = earlyz_cand_valid_w;
 
-  zhao_raster_earlyz #(.PAYLOAD_W(410)) u_earlyz (
+  zhao_raster_earlyz #(.PAYLOAD_W(411)) u_earlyz (
       .clk(clk),
       .rst_n(rst_n),
       .tile_begin_i(start_fire_w[START_CLEAR]),
@@ -861,7 +891,7 @@ module zhao_raster_tile_pipe_v2 #(
   zhao_raster_earlyz_payload_v2_t earlyz_payload_out_w;
   zhao_raster_continuation_v2_t continuation_after_earlyz_w;
   zhao_raster_pretex_v2_t pretex_after_earlyz_w;
-  logic [489:0] skid_up_data_w;
+  logic [490:0] skid_up_data_w;
   always_comb begin
     earlyz_payload_out_w = unpack_earlyz_payload(earlyz_cand_payload_w);
     continuation_after_earlyz_w = '0;
@@ -879,7 +909,7 @@ module zhao_raster_tile_pipe_v2 #(
   // -------------------------------------------------------------------------
   // Real 490-bit skid, Packet-C stage, and real fragment leaf.
   logic skid_up_ready_w, skid_dn_valid_w, skid_dn_ready_w;
-  logic [489:0] skid_dn_data_w;
+  logic [490:0] skid_dn_data_w;
   logic stage_cand_ready_w;
   logic stage_frame_fault_w;
   logic stage_clear_valid_w, stage_clear_ready_w;
@@ -917,7 +947,7 @@ module zhao_raster_tile_pipe_v2 #(
                                    stage_admit_gate_w;
   assign stage_candidate_data_o = skid_dn_data_w;
 
-  zhao_skid2 #(.W(490)) u_candidate_skid (
+  zhao_skid2 #(.W(491)) u_candidate_skid (
       .clk(clk),
       .rst_n(rst_n),
       .up_valid_i(earlyz_cand_valid_w && !abort_now_w),
@@ -999,6 +1029,18 @@ module zhao_raster_tile_pipe_v2 #(
       .pal_load_idx_i(pal_load_idx_i),
       .pal_load_rgb565_i(pal_load_rgb565_i),
       .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      .dtl_we_i(dtl_we_i),
+      .dtl_sel_i(dtl_sel_i),
+      .dtl_addr_i(dtl_addr_i),
+      .dtl_data_i(dtl_data_i),
+      .cnt_detail_fragments_o(cnt_detail_fragments_o),
+      .cnt_detail_zeroed_o(cnt_detail_zeroed_o),
+      .cnt_detail_railed_o(cnt_detail_railed_o),
+      .cnt_detail_cold_o(cnt_detail_cold_o),
+      .cnt_detail_published_o(cnt_detail_published_o),
+      .cnt_detail_applied_o(cnt_detail_applied_o),
+      .err_detail_lost_o(err_detail_lost_o),
+      .dtl_table_ready_o(dtl_table_ready_o),
       .sheet_req_valid_o(sheet_req_valid_o),
       .sheet_req_ready_i(sheet_req_ready_i),
       .sheet_req_op_o(sheet_req_op_o),
@@ -1503,7 +1545,7 @@ module zhao_raster_tile_pipe_v2 #(
   logic held_attr_bundle_q;
   logic [ATTR_LANES*43-1:0] held_attr_bundle_payload_q;
   logic held_earlyz_q;
-  logic [489:0] held_earlyz_payload_q;
+  logic [490:0] held_earlyz_payload_q;
   logic held_stage_fragment_q;
   logic [175:0] held_stage_fragment_payload_q;
   logic held_tile_write_q;
@@ -1511,7 +1553,7 @@ module zhao_raster_tile_pipe_v2 #(
   // 43 bits a lane: {q[31:0], row[3:0], col[3:0], last, sat, error}.
   logic [ATTR_LANES*43-1:0] attr_source_payload_w;
   logic [ATTR_LANES*43-1:0] attr_bundle_payload_w;
-  logic [489:0] earlyz_hold_payload_w;
+  logic [490:0] earlyz_hold_payload_w;
   logic [175:0] stage_fragment_payload_w;
 
   // The registered restatement of `incoming_coordinate_bad_c`, over the join
@@ -1566,7 +1608,7 @@ module zhao_raster_tile_pipe_v2 #(
       held_attr_bundle_q <= 1'b0;
       held_attr_bundle_payload_q <= '0;
       held_earlyz_q <= 1'b0;
-      held_earlyz_payload_q <= 490'd0;
+      held_earlyz_payload_q <= 491'd0;
       held_stage_fragment_q <= 1'b0;
       held_stage_fragment_payload_q <= 176'd0;
       held_tile_write_q <= 1'b0;

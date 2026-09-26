@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 71 inputs exist only on the sibling. They get harness ports of
+// 75 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -98,6 +98,10 @@ module zhao_shell_paired_diff_mut
   input  logic [7:0] pal_load_idx_i,
   input  logic [15:0] pal_load_rgb565_i,
   input  logic pal_load_crc_ok_i,
+  input  logic dtl_we_i,
+  input  logic dtl_sel_i,
+  input  logic [12:0] dtl_addr_i,
+  input  logic [31:0] dtl_data_i,
   input  logic [46:0] tri_area2_i,
   input  logic [239:0] tri_invw_plane_i,
   input  logic [239:0] tri_u_over_w_plane_i,
@@ -510,7 +514,7 @@ module zhao_shell_paired_diff_mut
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 81 outputs the historical shell never had
+  // The sibling has 89 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -542,6 +546,18 @@ module zhao_shell_paired_diff_mut
     .pal_load_idx_i(pal_load_idx_i),
     .pal_load_rgb565_i(pal_load_rgb565_i),
     .pal_load_crc_ok_i(pal_load_crc_ok_i),
+    .dtl_we_i(dtl_we_i),
+    .dtl_sel_i(dtl_sel_i),
+    .dtl_addr_i(dtl_addr_i),
+    .dtl_data_i(dtl_data_i),
+    .cnt_detail_fragments_o(),
+    .cnt_detail_zeroed_o(),
+    .cnt_detail_railed_o(),
+    .cnt_detail_cold_o(),
+    .cnt_detail_published_o(),
+    .cnt_detail_applied_o(),
+    .err_detail_lost_o(),
+    .dtl_table_ready_o(),
     .tri_area2_i(tri_area2_i),
     .tri_invw_plane_i(tri_invw_plane_i),
     .tri_u_over_w_plane_i(tri_u_over_w_plane_i),
