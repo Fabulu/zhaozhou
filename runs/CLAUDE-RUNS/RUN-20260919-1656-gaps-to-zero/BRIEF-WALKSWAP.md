@@ -61,9 +61,26 @@ finding — report it rather than dissolving the question into a merge.**
 
 ### AND YOU MUST PRICE IT, because of where it lands
 
-`zhao_geom_bin_pipe_v2` is **the single largest block in the console**. On the
-shipping-part map it is inside `zhao_shell_top_v2` at **58,514 ALUTs — 70% of
-the whole device** — and the campaign is 360% over on logic. The entry's own
+**CORRECTED 2026-09-26 BY THE PACKET THIS BRIEF WAS WRITTEN FOR, AND THE ERROR
+IS MINE TWICE OVER.** This paragraph said `zhao_geom_bin_pipe_v2` is *"the single
+largest block in the console"* at *"58,514 ALUTs — 70% of the whole device"*.
+
+* **58,514 is `zhao_shell_top_v2:u_shell`'s SUBTREE**, the whole shell. I
+  attributed a container's number to one of its children.
+* **It is not the single largest** either: on the sizing map `u_field_host` is
+  39,964 against `u_render_bin`'s 32,380.
+* **And the figure crossed devices in a brief whose next section forbids exactly
+  that.** 58,514 is the SHIPPING-part row; the comparisons around it are
+  sizing-part.
+
+The real numbers, both measured and both named by part —
+`zhao_geom_bin_pipe_v2:u_render_bin` is **32,380 ALUTs on `5CEBA9F31C7`** and
+**42,490 on `5CSEBA6U23I7`**. It is a large block and the caution stands; the
+headline was wrong.
+
+*(WALKSWAP's own counter-example — `zhao_geom_drawjob` at 34,031 — is itself
+stale: PALRAM took that block to 1,378. The conclusion is unaffected, and it is
+worth noting that the correction of an old row quoted another old row.)* The entry's own
 refusal says this is *"an area and throughput change to the block the fit budget
 is tightest on."*
 
