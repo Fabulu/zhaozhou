@@ -10,6 +10,7 @@ fpga/rtl/texture/zhao_texture_mod255.sv
 fpga/rtl/texture/zhao_texture_aux_div6.sv
 fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
 fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+fpga/rtl/texture/zhao_texture_mosaic_hold.sv
 fpga/rtl/texture/zhao_texture_palette_res_v2.sv
 fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
 fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv

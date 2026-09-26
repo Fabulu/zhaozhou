@@ -45,6 +45,7 @@ module zhao_texture_binding_resolver_v2_mutant_wrap #(
     input logic req_selector_overflow_i,
     input logic req_force_refuse_i,
     input logic [7:0] req_binding_selector_i,
+    input logic [7:0] req_mosaic_tile_i,
     input logic signed [31:0] req_u_i,
     input logic signed [31:0] req_v_i,
     input logic [7:0] req_lod_q4_4_i,
@@ -73,6 +74,7 @@ module zhao_texture_binding_resolver_v2_mutant_wrap #(
     output logic [31:0] invalid_row_o,
     output logic [31:0] witness_mismatch_o,
     output logic [31:0] forced_refused_o,
+    output logic [31:0] tileset_samples_o,
     output logic [31:0] cfg_errors_o,
     output logic binding_fault_o,
     output logic data_idle_o
@@ -268,6 +270,7 @@ module zhao_texture_binding_resolver_v2_mutant_wrap #(
       .req_selector_overflow_i(req_selector_overflow_i),
       .req_force_refuse_i(req_force_refuse_i),
       .req_binding_selector_i(req_binding_selector_i),
+      .req_mosaic_tile_i(req_mosaic_tile_i),
       .req_u_i(req_u_i), .req_v_i(req_v_i),
       .req_lod_q4_4_i(req_lod_q4_4_i),
       .req_sample0_class_witness_i(req_sample0_class_witness_i),
@@ -296,6 +299,7 @@ module zhao_texture_binding_resolver_v2_mutant_wrap #(
       .invalid_row_o(invalid_row_o),
       .witness_mismatch_o(witness_mismatch_o),
       .forced_refused_o(forced_refused_o),
+      .tileset_samples_o(tileset_samples_o),
       .cfg_errors_o(cfg_errors_o), .binding_fault_o(binding_fault_o),
       .data_idle_o(data_idle_o));
 
@@ -351,6 +355,7 @@ module NAME #(parameter int unsigned MAXLOG2=11, SLOTW=6, GENW=8) (             
     input logic [7:0] req_page_generation_i,                                    \
     input logic req_selector_overflow_i, input logic req_force_refuse_i,         \
     input logic [7:0] req_binding_selector_i,                                    \
+    input logic [7:0] req_mosaic_tile_i,                                         \
     input logic signed [31:0] req_u_i, input logic signed [31:0] req_v_i,       \
     input logic [7:0] req_lod_q4_4_i,                                            \
     input logic [1:0] req_sample0_class_witness_i,                              \
@@ -375,6 +380,7 @@ module NAME #(parameter int unsigned MAXLOG2=11, SLOTW=6, GENW=8) (             
     output logic [31:0] page_generation_mismatch_o,                            \
     output logic [31:0] invalid_row_o, output logic [31:0] witness_mismatch_o,  \
     output logic [31:0] forced_refused_o, output logic [31:0] cfg_errors_o,     \
+    output logic [31:0] tileset_samples_o,                                       \
     output logic binding_fault_o, output logic data_idle_o);                     \
   zhao_texture_binding_resolver_v2_mutant_wrap #(                                \
       .MUTATION(ID), .MAXLOG2(MAXLOG2), .SLOTW(SLOTW), .GENW(GENW))             \

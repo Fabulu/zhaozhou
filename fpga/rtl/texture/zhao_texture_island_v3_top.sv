@@ -1313,6 +1313,60 @@ module zhao_texture_island_v3_top #(
       .idle_o(mosaic_idle_w), .texture_samples_o(cnt_mosaic_samples_o));
 
   // ---------------------------------------------------------------------------
+  // THE PICK'S LANDING PLACE (2026-09-26, TERRAINTEX).
+  //
+  // Until today `pick_tile_o` had NO READER: `mosaic_tile_w`, `mosaic_tx_w` and
+  // `mosaic_ty_w` occurred exactly twice each in this file -- declared above,
+  // connected above -- and the frozen terrain_rules 6.2 pick was computed for
+  // every fragment and thrown away. It is held here, per owner, and consumed by
+  // `u_binding`, whose TILESET row turns it into the byte displacement
+  // `zref::Tileset` gives a tile (`tiles[256][64*64]`). `pick_tx_o`/`pick_ty_o`
+  // remain unread ON PURPOSE and are not a second half of this gap: they are the
+  // mirrored texel pair, which the TMU recomputes from u/v under the row's own
+  // mirror wrap at log2w = log2h = 6 -- the SAME fold, by the same law. Reading
+  // them here would be a second implementation of `zref::terrain::mirror_texel`
+  // sitting beside the one that ships, which is the duplication this tree has a
+  // chapter about. They are left as the mosaic's public contract.
+  //
+  // WHY A PER-OWNER TABLE AND NOT A FIFO. It is the shape this island already
+  // uses four times over for exactly this problem -- `material_m`,
+  // `owner_required_mask_m`, `descriptor_usable_m`, `join_force_refuse_m` are
+  // all per-owner rows sealed by the owner's generation -- and it needs no
+  // argument about the order two independent handshakes retire in.
+  //
+  // AND THE SEAL IS NOT DECORATION. The mosaic answers TWO CYCLES after the
+  // expander offers the fragment, while the SAMPLE job for the same fragment is
+  // offered on the first of those cycles. So the pick is genuinely late, and an
+  // ungated read would hand `u_binding` the PREVIOUS occupant of the slot --
+  // which is CLAUDE.md's metadata-swap defect, with the detector wired to
+  // operands that move together. `mosaic_pick_ready_c` therefore HOLDS the
+  // request until this owner's own generation is the one stored. It cannot
+  // deadlock: the expander offers the mosaic job on the same beat as the sample,
+  // `u_mosaic` takes it whenever it can advance, and its `pick_ready_i` is a
+  // constant one, so the pick always lands whether or not the sample moves.
+  // DECLARED NOT EXPORTED -- see the note on `binding_tileset_samples_w`
+  // below. Both are fired and asserted by exact amount at their own leaves
+  // (`texture_mosaic_hold_directed`), which is where a leaf counter's
+  // evidence belongs, and neither is named silently into the blanket
+  // UNUSEDSIGNAL waiver this packet's own finding is about.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] mosaic_picks_held_w, mosaic_stale_slot_holds_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic        mosaic_pick_ready_c;
+  logic [7:0]  mosaic_pick_tile_c;
+
+  zhao_texture_mosaic_hold #(.SLOTW(OWNER_SLOTW), .GENW(GENW)) u_mosaic_hold (
+      .clk(clk), .rst_n(rst_n),
+      .pick_valid_i(mosaic_rsp_valid_w),
+      .pick_src_id_i(mosaic_src_w[OWNERW-1:0]),
+      .pick_tile_i(mosaic_tile_w),
+      .smp_handle_i(expand_sample_handle_w),
+      .pick_ready_o(mosaic_pick_ready_c),
+      .pick_tile_o(mosaic_pick_tile_c),
+      .picks_held_o(mosaic_picks_held_w),
+      .stale_slot_holds_o(mosaic_stale_slot_holds_w));
+
+  // ---------------------------------------------------------------------------
   // Fragment expansion and sealed binding resolution.
   logic expand_sample_ready_w;
   logic [SMPW-1:0] expand_sample_handle_w;
@@ -1391,10 +1445,24 @@ module zhao_texture_island_v3_top #(
   logic [31:0] binding_selector_overflow_w, binding_generation_mismatch_w;
   logic [31:0] binding_invalid_row_w, binding_witness_mismatch_w;
   logic [31:0] binding_forced_refused_w, binding_cfg_errors_w;
+  // DECLARED NOT EXPORTED, and said out loud rather than left for the
+  // blanket UNUSEDSIGNAL waiver in `tests/shell/v3_closure_inherited.vlt` to
+  // swallow -- that waiver is how the mosaic pick went unread for weeks and
+  // this packet will not add to its pile silently. `tileset_samples_o` is the
+  // RESOLVER's census of samples planned against a tileset row; it is fired by
+  // stimulus and asserted by exact amount in
+  // `tests/texture/texture_binding_resolver_v2_directed.cpp`, which is where a
+  // leaf counter's evidence belongs. Exporting it would add an island output
+  // port and a shell/tile-pipe/binner lane for a number that is ZERO in the
+  // composed console today and will stay zero until terrain presents a
+  // sampling material -- an uncashed cheque, not observability.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] binding_tileset_samples_w;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic binding_frame_fault_w;
 
-  assign binding_req_valid_w = expand_sample_valid_w;
-  assign expand_sample_ready_w = binding_req_ready_w;
+  assign binding_req_valid_w = expand_sample_valid_w && mosaic_pick_ready_c;
+  assign expand_sample_ready_w = binding_req_ready_w && mosaic_pick_ready_c;
   assign binding_plan_valid_w = plan_req_valid_w;
   assign binding_cfg_valid_w = cfg_valid_i && !lifetime_admission_block_w;
   assign cfg_ready_o = binding_cfg_ready_w && !lifetime_admission_block_w;
@@ -1420,6 +1488,7 @@ module zhao_texture_island_v3_top #(
       .req_selector_overflow_i(expand_sample_selector_overflow_w),
       .req_force_refuse_i(expand_sample_force_refuse_w),
       .req_binding_selector_i(expand_sample_binding_selector_w),
+      .req_mosaic_tile_i(mosaic_pick_tile_c),
       .req_u_i(expand_sample_u_w), .req_v_i(expand_sample_v_w),
       .req_lod_q4_4_i(expand_sample_lod_w),
       .req_sample0_class_witness_i(expand_sample_class_witness_w),
@@ -1446,6 +1515,7 @@ module zhao_texture_island_v3_top #(
       .invalid_row_o(binding_invalid_row_w),
       .witness_mismatch_o(binding_witness_mismatch_w),
       .forced_refused_o(binding_forced_refused_w),
+      .tileset_samples_o(binding_tileset_samples_w),
       .cfg_errors_o(binding_cfg_errors_w), .binding_fault_o(binding_frame_fault_w),
       .data_idle_o(binding_data_idle_w));
 

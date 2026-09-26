@@ -7,6 +7,8 @@
 #include <deque>
 
 #include "verilated.h"
+#include "zref/zref_terrain.hpp"
+
 #include "../harness/zhao_sim.hpp"
 
 namespace {
@@ -60,6 +62,34 @@ uint32_t page_crc(uint8_t generation, const std::array<Row, 256>& rows,
 uint32_t clut_mode() {
   // CLUT8, nearest, repeat U/V, 4x4, no mip.
   return (2u << 8) | (2u << 12);
+}
+
+// The TILESET row of terrain_rules 6.2 / zref::Tileset: CLUT8, unfiltered,
+// MIRROR on both axes, 64x64, no mip chain, mode[21] set. Written out from the
+// field positions rather than as a magic constant so it can be read against
+// `binding_row_legal`'s own decode.
+constexpr uint32_t kModeTilesetBit = 1u << 21;
+uint32_t tileset_mode() {
+  return (0u /* FMT_CLUT8 */) | (0u << 3 /* filter */) | (2u << 4 /* wrap_u mirror */) |
+         (2u << 6 /* wrap_v mirror */) | (6u << 8 /* log2w */) | (6u << 12 /* log2h */) |
+         (0u << 16 /* max_level */) | (0u << 20 /* mip_enable */) | kModeTilesetBit;
+}
+
+constexpr uint32_t kTilesetTileBytes = 64u * 64u;  // zref::Tileset tiles[256][64*64]
+
+// The mosaic triple `write_descriptor` puts in the descriptor for a seed. Kept
+// beside it so the two cannot drift.
+uint8_t seed_mat_a(uint8_t seed) { return static_cast<uint8_t>(0xA0u + seed); }
+uint8_t seed_mat_b(uint8_t seed) { return static_cast<uint8_t>(0xB0u + seed); }
+uint8_t seed_weight(uint8_t seed) { return static_cast<uint8_t>(0xC0u + seed); }
+
+// The ORACLE for the pick, and it is `zref`'s own frozen 6.2 function, not a
+// transcription of the RTL's shift/add trees. The RTL reaches the same number
+// through `mul_cx`/`mul_cy` and `zhao_texture_mod255`, which share no arithmetic
+// with this call.
+uint8_t expected_tile(uint8_t seed, int32_t u, int32_t v) {
+  return zref::terrain::mosaic_pick(seed_mat_a(seed), seed_mat_b(seed), seed_weight(seed), u >> 10,
+                                    v >> 10);
 }
 
 uint16_t owner(unsigned slot, unsigned generation) {
@@ -208,11 +238,17 @@ void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle, uint8_t selec
   for (unsigned sample = 0; sample < count; ++sample) {
     const unsigned selector9 = static_cast<unsigned>(selector) + sample;
     const uint16_t handle = sample_handle(owner_handle, sample);
-    if (selector9 < 256)
+    if (selector9 < 256) {
+      // THE READER'S LAW, stated here independently of the RTL: a TILESET row's
+      // base is displaced by the mosaic's picked tile; every other row is not.
+      uint32_t base = rows[selector9].base;
+      if (rows[selector9].mode & kModeTilesetBit)
+        base += static_cast<uint32_t>(expected_tile(seed, u, v)) * kTilesetTileBytes;
       stats.expected_plans.push_back(
-          PlanExpected{handle, rows[selector9].base, rows[selector9].mode, u, v, lod});
-    else
+          PlanExpected{handle, base, rows[selector9].mode, u, v, lod});
+    } else {
       stats.expected_refusals.push_back(handle);
+    }
   }
 
   d->frag_owner_i = owner_handle;
@@ -368,6 +404,150 @@ int main(int argc, char** argv) {
       "legal composed selector workload has no pad/descriptor/page fault", 0,
       static_cast<uint64_t>(d->desc_pad_fault_o || d->expand_malformed_o ||
                             d->resolver_page_mismatch_o));
+
+  // ==========================================================================
+  // THE MOSAIC PICK'S READER (TERRAINTEX, 2026-09-26)
+  //
+  // Until this commit zhao_texture_mosaic_v2's answer had no reader anywhere:
+  // pick_tile_o landed on a wire that occurred twice in the island and was
+  // consumed nowhere. Everything below is about the answer ARRIVING at an
+  // address, and the oracle for it is zref::terrain::mosaic_pick -- the frozen
+  // 6.2 function -- which shares no arithmetic with the RTL's CSD trees.
+  // ==========================================================================
+  zhao::check(d->resolver_tileset_samples_o == 0,
+              "no tileset row is bound yet, so no sample has been displaced", 0,
+              d->resolver_tileset_samples_o);
+  const uint32_t picks_before = d->mosaic_picks_held_o;
+  zhao::check(picks_before == 3, "one mosaic pick was held for each of the three fragments", 3,
+              picks_before);
+
+  // ---- 1. the tileset row's LEGALITY LAW, both polarities ------------------
+  // A row that declares TILESET and is not the object 6.2 describes must be
+  // refused AT WRITE, so a wrong fold or a mip chain can never be sampled.
+  cfg_immediate(d, 0, 9, 0, nullptr, 0);
+  {
+    struct Bad {
+      const char* what;
+      uint32_t mode;
+    };
+    const Bad bad[] = {
+        {"tileset row declaring RGB565 is refused", (tileset_mode() & ~7u) | 1u},
+        {"tileset row declaring a filter is refused", tileset_mode() | (1u << 3)},
+        {"tileset row wrapping REPEAT in u is refused", (tileset_mode() & ~(3u << 4))},
+        {"tileset row wrapping CLAMP in v is refused",
+         (tileset_mode() & ~(3u << 6)) | (1u << 6)},
+        {"tileset row at 32x64 is refused", (tileset_mode() & ~(0xFu << 8)) | (5u << 8)},
+        {"tileset row with a mip chain is refused",
+         tileset_mode() | (1u << 20) | (1u << 16)},
+    };
+    for (const auto& b : bad) {
+      Row row{0x00400000u, b.mode, 2, 0x55, true};
+      d->cfg_valid_i = 1;
+      d->cfg_op_i = 1;
+      d->cfg_page_generation_i = 9;
+      d->cfg_selector_i = 40;
+      drive_cfg_row(d, row);
+      d->cfg_crc32_i = 0;
+      d->eval();
+      tick(d);
+      d->cfg_valid_i = 0;
+      clear_cfg_row(d);
+      d->cfg_rsp_ready_i = 1;
+      unsigned w = 0;
+      d->eval();
+      while (!d->cfg_rsp_valid_o && w < 50) {
+        tick(d);
+        d->eval();
+        ++w;
+      }
+      zhao::check(d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 3, b.what, 3,
+                  d->cfg_rsp_valid_o ? d->cfg_rsp_status_o : 0xFFu);
+      tick(d);
+      d->cfg_rsp_ready_i = 0;
+    }
+  }
+  cfg_immediate(d, 3, 9, 0, nullptr, 0);  // ABORT the probe page
+
+  // ---- 2. a LEGAL tileset page, and the pick reaching the address ----------
+  std::array<Row, 256> trows{};
+  std::array<bool, 256> tpresent{};
+  // Selector 10 is the tileset; selector 11 beside it is an ORDINARY CLUT row
+  // at the same base, and it is the negative control for every check below:
+  // the pick is computed for it too and must not move its address by one byte.
+  trows[10] = Row{0x00400000u, tileset_mode(), 2, 0x55, true};
+  tpresent[10] = true;
+  trows[11] = Row{0x00400000u, clut_mode(), 2, 0x55, true};
+  tpresent[11] = true;
+  cfg_immediate(d, 0, 11, 0, nullptr, 0);
+  for (unsigned selector : {10u, 11u})
+    cfg_immediate(d, 1, 11, static_cast<uint8_t>(selector), &trows[selector], 0);
+  cfg_end(d, 11, page_crc(11, trows, tpresent));
+
+  // The coordinates are chosen so the picked tile is NOT zero and the three do
+  // not all agree -- a displacement of zero would pass against an unwired
+  // reader, which is this repository's own "rung centre" lesson.
+  struct TCase {
+    unsigned slot;
+    uint8_t generation;
+    uint8_t seed;
+    int32_t u;
+    int32_t v;
+  };
+  const TCase tcases[] = {
+      {20, 0x61, 4, 0x00080000, 0x00040000},
+      {21, 0x62, 5, 0x00130000, static_cast<int32_t>(0xFFF90000u)},
+      {22, 0x63, 6, 0x00210000, 0x00370000},
+  };
+  {
+    uint8_t seen[3];
+    unsigned nonzero = 0;
+    for (unsigned i = 0; i < 3; ++i) {
+      seen[i] = expected_tile(tcases[i].seed, tcases[i].u, tcases[i].v);
+      if (seen[i] != 0) ++nonzero;
+    }
+    const bool ok = (nonzero == 3) && !(seen[0] == seen[1] && seen[1] == seen[2]);
+    zhao::check(ok,
+                "the three picks are non-zero and not all equal, so a dead reader cannot pass", 1,
+                ok ? 1 : 0);
+    std::printf("  mosaic picks: %u %u %u\n", seen[0], seen[1], seen[2]);
+  }
+
+  Stats tstats;
+  for (const auto& t : tcases)
+    submit_and_drain(d, tstats, owner(t.slot, t.generation), 10, 1, t.u, t.v, trows, 11, t.seed);
+  for (const auto& t : tcases)
+    submit_and_drain(d, tstats, owner(t.slot, static_cast<uint8_t>(t.generation + 0x10)), 11, 1,
+                     t.u, t.v, trows, 11, t.seed);
+
+  zhao::check(tstats.errors == 0 && tstats.plans == 6 && tstats.refusals == 0 &&
+                  tstats.expected_plans.empty(),
+              "every planner base matches zref::terrain::mosaic_pick on the tileset row and is "
+              "untouched on the plain row",
+              1,
+              (tstats.errors == 0 && tstats.plans == 6 && tstats.refusals == 0 &&
+               tstats.expected_plans.empty())
+                  ? 1
+                  : 0);
+  zhao::check(d->resolver_tileset_samples_o == 3,
+              "the tileset census counts the three tileset samples and not the three plain ones", 3,
+              d->resolver_tileset_samples_o);
+  zhao::check(d->mosaic_picks_held_o == picks_before + 6,
+              "one pick was held for each of the six new fragments", picks_before + 6,
+              d->mosaic_picks_held_o);
+  // THE HOLD'S POSITIVE CONTROL, by legal stimulus. The second pass reuses the
+  // same three SLOTS with new generations, so each of its samples is offered
+  // while the slot still holds the previous generation's pick. That is exactly
+  // the swap the seal exists to refuse, and a non-zero count proves the seal
+  // was doing work rather than that the state was unreachable.
+  zhao::check(d->mosaic_stale_slot_holds_o > 0,
+              "the generation seal observed a slot holding somebody else's pick", 1,
+              (d->mosaic_stale_slot_holds_o > 0) ? 1 : 0);
+  std::printf("  mosaic: picks_held=%u stale_slot_holds=%u tileset_samples=%u\n",
+              d->mosaic_picks_held_o, d->mosaic_stale_slot_holds_o,
+              d->resolver_tileset_samples_o);
+  stats.issues += tstats.issues;
+  stats.plans += tstats.plans;
+  stats.refusals += tstats.refusals;
 #endif
 
   std::printf("  composed: issue=%u plan=%u refuse=%u pad=%u overflow=%u\n", stats.issues,
