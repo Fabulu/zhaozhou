@@ -323,6 +323,17 @@ for things that exist.
    `reference/` and `runtime/include` and nothing else, and that `runtime/mister`
    is in no build file — a `runtime/`-only service would have satisfied the
    sentence and reached neither the game nor ARM.
+6. **A COMMENT-ONLY EDIT TURNED A MUTANT COPY STALE, and the red was mine.**
+   `mutant_copy_drift` (run AFTER the commit, ruling R121) flagged
+   `zhao_field_earth_adapter_intake_race_mutant.sv`. The two dates: the copy is
+   `f30648f5` (2026-09-25 18:39), production was `fb0ebbb3` (18:37) at the base
+   — copy NEWER, tool silent — and my `82a4b3ff` moved production past it. The
+   tool's signal is PROVENANCE, not similarity, so thirty lines of classification
+   prose are enough to do it. Refreshed in `aee39500`, carrying the note across
+   and touching nothing else. **It is same-day and mine; calling it inherited
+   would have made it nobody's job.** Its `UNUSEDSIGNAL` warning under `-Wall` is
+   the mutation itself and pre-dates me — verified by linting the base blob
+   (`entry_busy_c` at `:1022` there, `:1052` here, same signal).
 
 ---
 
@@ -357,3 +368,10 @@ to the superseded FPGA-publication requirement rather than re-litigating it.
 | `tests/runtime/wizards_directed` | 23 checks — **unchanged**, proving the null default |
 | `tests/runtime/zcon_session_directed` | 12 checks — unchanged |
 | `zhao-desktop --ticks 120 --record` / `--replay` | identical hash stream |
+| `gen_prod_top.py --check` | fresh (86 instances) |
+| `gen_console_board.py --check` | FRESH (1586 core ports, 125 parameters) |
+| `check_quartus17_syntax.py` | RC 0, 657 files, self-test 13 fire / 22 no-fire |
+| `check_case_labels.py` | OK |
+| `gen_shell_paired_diff.py --check` | fresh |
+| `mutant_copy_drift.py` (run AFTER the commit, R121) | OK — 77 copies, every one at least as new as its module. It went RED on my comment-only edit first; see §8.6 |
+| `verilator --lint-only -Wall zhao_field_earth_adapter` | RC 0 |
