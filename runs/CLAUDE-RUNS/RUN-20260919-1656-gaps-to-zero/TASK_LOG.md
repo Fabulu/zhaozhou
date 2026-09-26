@@ -3049,3 +3049,110 @@ Against the shipping part: **317% / 187% / 329% / 57%**.
 
 **Before the next console fit:** WALKSWAP's `wr_words_q` repair is in, so the
 known stall is gone.
+
+### 2026-09-26 - THE OWNER CORRECTED MY SEQUENCING, AND IT KEPT PAYING OUT
+
+**Owner: *"We still need to close all the things first, too, otherwise fit isn't
+complete."*** I had argued a full console fit was not worth two hours because
+the design is 317% over on ALUTs and would not place. **That reasoning was
+wrong, and not in a small way.** A fit of a design with five open gaps measures
+a machine that is not the machine -- the `@pktC` error exactly, fitting an
+arrangement already known to be incomplete. **Completeness is the criterion, not
+placeability.** Gaps first, then the fit.
+
+**Re-reading every refusal with that lens found I had been OVER-RESPECTING
+them**, and the same question -- *is this a DECISION or a BUILD?* -- has now paid
+out three times in one stretch.
+
+### I13: BOTH "UNSETTLED LAWS" ARE SETTLED. NEITHER IS BUILT.
+
+CELLCARRY refused I13 because *"two ARITHMETIC LAWS are unsettled, and a law must
+be settled before a wire is laid."* **The second half is exactly right; the first
+half is wrong by one word.**
+
+* **The shade ladder is FROZEN IN THE ORACLE, with its own comment naming it** --
+  `terrain.cpp`'s `shade_q = (shade + 8191) >> 14;  // the palette ladder (0..4)`.
+* **The S8.24 bound is MANDATED IN `spec/qformats.md`**, in the bounds column:
+  `u/v_over_w | s32 | S 8.24 | **saturate** | round-half-up`.
+
+**Nobody needs to decide anything. The RTL simply does not implement them.**
+CELLCARRY was right to refuse the WIRING -- lay it without these and the pixel is
+wrong against a capture-exact law while every gate passes -- but what it called
+"unsettled" is "unbuilt". **SHADELADDER is running on it.**
+
+### GIANTQUOTA REFUSED I56 AND TOOK TWO OF MY FOUR "DERIVED" ITEMS WITH IT
+
+The fourth packet this week to falsify my own brief.
+
+* **Item (2) is unbuildable at the seam I named.** `ck_giant_i` presumes a chunk
+  has an owning instance. **It does not** -- the binner drains each tile's FIFO
+  in frame-wide TRIANGLE SUBMISSION order because the painter's algorithm
+  requires it, and a 14-id chunk routinely **straddles two instances**. The
+  identity is severed deliberately: the binner exports `tri_src_id_i` on the
+  RASTER port; the serialise port reads a different register. **A class bit there
+  would have to be FABRICATED.**
+* **Item (3) is understated, not missing.** `max(ladder, floor)` **already ships**
+  at `zhao_forge_shadow.sv:255` under a live per-camera floor. Item (3) wants
+  per-instance. **Copy a proven pattern; do not design one.**
+* **It killed its own draft finding.** It wrote that demoting `c_rung_o` "changes
+  ZERO tile references", then ran an adversarial sweep **against its own claim**
+  and falsified it -- shadow hulls are submitted geometry on the same path. That
+  is the standard.
+* **And it landed the missing positive control**: `quota_overflow_o` has three
+  producers and only the descriptor arm had one. The **chunk** arm, `ck_fits_c`
+  -- the exact expression a reservation must modify -- **had never been seen to
+  fire anywhere in the tree.** Now 1 -> 2, negative control beside it, 345/345.
+
+**REFPUSH is running on the seam it identified**, carrying one simplification
+GIANTQUOTA did not draw and which the brief flags as MY CLAIM, not a measurement:
+it concluded the reservation "cannot be a hardware constant" **measured at the
+SEAL**, where the bundle also holds verts and descriptors R7 rules no number for.
+**At the reference push the unit is references, and 32,768 references is exactly
+what R7 rules.** If that holds, item (4)'s ABI change disappears. The brief says
+to check it before building on it.
+
+### AND MY OWN I34 ESCALATION OVER-ASKED, ON BOTH ITS QUESTIONS
+
+Applying the lens to myself. **Two faults, and the first is the campaign's most
+repeated shape appearing in a document I wrote.**
+
+* **The encoding question was never open.** I claimed *"two incompatible
+  encodings ratified in one tree with nothing mapping between them"*. **`ops.yml`
+  names the map inside the sentence I quoted from it** -- *"2 candidate material
+  IDs + blend weight per cell; RESOLVED DETERMINISTICALLY BY TERRAIN.PATCH"*. The
+  layer-E triple is the sink INPUT; `field-ir.md` 7.1's `material:u32` is that
+  block's OUTPUT. **Two ends of one pipeline.** And the directive rules it by
+  name anyway: *"its value remains an opaque, full-width u32 ... do not narrow it
+  to fit an older consumer."* **I escalated it three days after adopting the
+  document that decides it.**
+* **The destination finding STANDS** -- option 2 needs ~3.7 M cycles against
+  330 k free, and the directive itself says a measured impossibility is a
+  finding. **But my escalation said the fabric hunt *"is what I will start if you
+  say nothing"* -- and under a standing vacation directive, saying nothing was
+  always going to be the state.** A default nobody executes is not a default; it
+  is a second escalation wearing a decision's clothes. **BRIEF-FABRICSINK.md is
+  written and queued.**
+
+**AN ESCALATION IS AN INSTRUMENT AND IT GOES BLIND IN THE FLATTERING DIRECTION.**
+Handing a question upward *feels* like the careful act, so nobody audits it the
+way a decision gets audited, and an already-answered question sits in a docket
+looking like diligence. **Two of the three things I treated as owner-blocked this
+week were already settled in documents I had read.** Before escalating, grep the
+standing directive for the entry's own name.
+
+### A PUSH AIMED AT THE WRONG BRANCH, AND THE REJECTION WAS THE GUARD WORKING
+
+I pushed `HEAD:main`. Non-fast-forward. The directive's rule is that this means
+**fetch and inspect new owner commits FIRST, never `--force`** -- so I did, and
+found 485 remote commits from an old merge base, almost all creature work from
+another lane. **None of it was owner direction for this campaign, and none of it
+was blocked.** This lane's branch is `claude/ceiling-architecture-20260912`; I
+had simply aimed at a branch that is not ours. **`main` was protected from me by
+exactly the rule written for the opposite case**, and the right move on a
+non-fast-forward was still to look before doing anything.
+
+### WHERE THINGS STAND
+
+**Running: SHADELADDER (I13's two laws), REFPUSH (I56 at the binner's reference
+push).** Queued: FABRICSINK (I34's material and nav). **Register 5**, measured
+bare at `241e6c73`.
