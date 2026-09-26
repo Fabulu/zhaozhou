@@ -534,15 +534,30 @@ ops:
     class: sink
     profiles: [E]
     semantics: Write the navigation layer of the earth field output (§11.2 layer discipline).
-    operand_q: [spec/qformats.md §Q16.16]
-    result_q: spec/qformats.md §nav-layer
+    operand_q: [spec/qformats.md §2]
+    result_q: spec/qformats.md §2
     rounding: saturating
     reference_function: zref::fieldir::compose_nav
-    implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]
+    implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH, SW.CPUCOLL]
     cost_units: 1
     field_ir_opcode: WRITE.NAV
-    differential_tests: tests/differential/field_sinks_directed.cpp
-    notes: Consumed on the FPGA side and mirrored by SW.CPUCOLL for CPU navigation.
+    differential_tests: tests/differential/field_sinks_directed.cpp, tests/nav/nav_service_directed.cpp
+    notes: >-
+      THE OP AND ITS SEMANTICS ARE PRESERVED; only its CONSUMER moved.
+      reports/OWNER-DECISION-20260926-I34-NAV.md, 2026-09-26: navigation truth
+      and its query service belong to SW.CPUCOLL / the CPU simulation runtime,
+      and the FPGA is no longer required to publish a nav lattice into SDRAM.
+      The consumer is zref::nav::Service (reference/include/zref/zref_nav.hpp),
+      which reduces this op's out-lane through zref::terrain::nav_vertex ->
+      zref::fieldir::compose_nav. FIELD.SEQ.EARTH still evaluates the lane and
+      zhao_field_sinks still composes it in fabric against the same reference;
+      what has no FPGA consumer is the RESULT, and that is now recorded rather
+      than waiting for one.
+      TWO CORRECTIONS IN THE LINES ABOVE, both found 2026-09-26. `result_q` read
+      "spec/qformats.md §nav-layer" and THERE IS NO §nav-layer -- zero hits for
+      "nav" in that whole file; the format is plain Q16.16, which is §2.
+      `notes` read "Consumed on the FPGA side", which zhao_console_core's own
+      I34 audit had already measured FALSE (nav_cost_o's only reader is nothing).
 
   - id: FIELD.WRITE.TAG
     name: Sheet tag write

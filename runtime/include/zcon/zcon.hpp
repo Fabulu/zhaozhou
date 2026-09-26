@@ -145,6 +145,32 @@ class GameTruth {
 };
 
 // ---------------------------------------------------------------------------
+// Tick observer — host state that must advance WITH the simulation
+// ---------------------------------------------------------------------------
+// Added 2026-09-26 (NAVSERVICE) for a specific, checkable reason.
+//
+// The console runtime owns RESOURCES and the game truth owns GAMEPLAY. Some
+// resources are functions of the tick -- the CPU navigation service
+// (`zref::nav::Service`) is the first: field instances begin, evolve and expire
+// on the simulation clock, and the service must be told which tick it is
+// answering for before the simulation asks it anything.
+//
+// `tick()` and `tick_with()` could have done that in the host's own loop. THE
+// REPLAY COULD NOT: `replay_and_compare` advances the simulation internally,
+// so a host with tick-dependent resources had no way to advance them in step,
+// and a recording made with navigation would diverge at tick 1 -- reported as a
+// gameplay desync, which is the worst possible place for that message to
+// appear. The hook exists so replay and live run drive identical inputs.
+//
+// It observes; it must not WRITE gameplay state. A `before_tick` that moved a
+// wizard would be presentation deciding gameplay by another route.
+class TickObserver {
+ public:
+  virtual ~TickObserver() = default;
+  virtual void before_tick(uint32_t tick) = 0;
+};
+
+// ---------------------------------------------------------------------------
 // Session — the fixed-tick host loop
 // ---------------------------------------------------------------------------
 // This is the thing the stubs were not. It owns the tick, feeds the
@@ -153,6 +179,9 @@ class GameTruth {
 class Session {
  public:
   Session(GameTruth* truth, Backend* backend) : truth_(truth), backend_(backend) {}
+
+  /** Host state that advances with the simulation. Optional; see TickObserver. */
+  void set_tick_observer(TickObserver* obs) { observer_ = obs; }
 
   void start(uint64_t seed) {
     seed_ = seed;
@@ -165,6 +194,7 @@ class Session {
 
   // One fixed tick: poll, advance, record, present.
   void tick() {
+    if (observer_ != nullptr) observer_->before_tick(tick_);
     const InputSnapshot in = backend_->poll(tick_);
     truth_->advance(in);
     recorded_inputs_.push_back(in);
@@ -188,6 +218,7 @@ class Session {
   // presentation lags simulation by one frame. That is deliberate and is what
   // a console does; recording it here stops it being read as a bug later.
   void tick_with(const std::vector<uint8_t>& commands) {
+    if (observer_ != nullptr) observer_->before_tick(tick_);
     const InputSnapshot in = backend_->poll(tick_);
     truth_->advance(in);
     recorded_inputs_.push_back(in);
@@ -202,8 +233,12 @@ class Session {
   int replay_and_compare(const std::vector<InputSnapshot>& inputs,
                          const std::vector<uint64_t>& hashes) {
     truth_->reset(seed_);
+    if (observer_ != nullptr) observer_->before_tick(0);
     if (hashes.empty() || truth_->hash() != hashes[0]) return 0;
     for (std::size_t i = 0; i < inputs.size(); ++i) {
+      // The SAME hook the live loop runs, at the same point, so tick-dependent
+      // host resources see an identical sequence in both.
+      if (observer_ != nullptr) observer_->before_tick(static_cast<uint32_t>(i));
       truth_->advance(inputs[i]);
       const std::size_t h = i + 1;
       if (h >= hashes.size() || truth_->hash() != hashes[h])
@@ -220,6 +255,7 @@ class Session {
  private:
   GameTruth* truth_;
   Backend* backend_;
+  TickObserver* observer_ = nullptr;
   uint64_t seed_ = 0;
   uint32_t tick_ = 0;
   std::vector<InputSnapshot> recorded_inputs_;

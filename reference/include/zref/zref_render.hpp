@@ -270,6 +270,33 @@ struct TerrainVelocitySample {
   int32_t velocity = 0;  // fx16 raw (field-ir.md §7.1 earth out lane 2)
 };
 
+/**
+ * TerrainField NAVIGATION output lane, recorded per evaluated vertex.
+ *
+ * The sibling of `TerrainVelocitySample`, and it carries two things that one
+ * does not, both because FIELD.WRITE.NAV's reduction needs them and velocity's
+ * does not:
+ *
+ *   `vi`/`vj` — the LATTICE INDEX, not only the placed coordinate. The nav
+ *     reduction is per-vertex `compose_nav` in command order, so the consumer
+ *     must group samples by vertex; grouping by (wx, wz) would work and would
+ *     make an exact-coordinate compare load-bearing for a correctness law.
+ *   `present` — whether the program DECLARED out-lane 3 at all. `interpret`
+ *     leaves an undeclared lane at the caller's initialiser, so without this
+ *     bit "wrote 0" and "wrote nothing" are indistinguishable — and the owner
+ *     decision of 2026-09-26 names optional-output presence as a PRESERVED
+ *     semantic: an absent output is NOT a write of zero.
+ */
+struct TerrainNavSample {
+  int32_t world_x = 0;  // fx16 raw
+  int32_t world_z = 0;  // fx16 raw
+  int32_t nav = 0;      // fx16 raw (field-ir.md 7.1 earth out lane 3, nav_cost)
+  uint16_t vi = 0;      // lattice column
+  uint16_t vj = 0;      // lattice row
+  uint16_t lane = 0;    // index into the application list: COMMAND ORDER
+  bool present = false; // the program declared out-lane 3
+};
+
 struct RenderResult {
   uint8_t status = 0;  // zhao_abi_error: validation status of the packet
   uint32_t frame_id = 0;

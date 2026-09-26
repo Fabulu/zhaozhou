@@ -484,7 +484,37 @@ module zhao_field_earth_adapter #(
     //     every word it produced.
     //   material_o -- out-lane 2, u32. No block in this repository has an input
     //     for a field-produced material.
-    //   nav_cost_o -- out-lane 3. Likewise.
+    //   nav_cost_o -- out-lane 3. CLASSIFIED, 2026-09-26 (NAVSERVICE), and the
+    //     classification is the point: this output is NOT waiting for an FPGA
+    //     consumer and no future packet should go looking for one.
+    //     reports/OWNER-DECISION-20260926-I34-NAV.md moved navigation truth and
+    //     its query service to SW.CPUCOLL / the CPU simulation runtime and
+    //     STRUCK the TERRAIN.COMPOSED_NAV publication that was going to give
+    //     this lane a home in SDRAM. The consumer is zref::nav::Service, which
+    //     RE-DERIVES the same number from the same accepted commands through
+    //     the same zfield interpreter -- spec/terrain_rules.md §7 ("the FPGA
+    //     bake and the sim bake are the same deterministic function") and
+    //     zhao_terrain_writeback.sv's ruling T4, which refuses mirrored state
+    //     as a SECOND WRITER. Feeding this wire back to the CPU is the thing
+    //     that rule exists to stop.
+    //
+    //     IT IS KEPT, NOT RETIRED, and there are three reasons, any one of
+    //     which is sufficient:
+    //       1. FIELD.WRITE.NAV is PRESERVED by the same decision. The lane is
+    //          the op's output; deleting it would delete navigation from the
+    //          fabric while the decision says the opposite.
+    //       2. It is one ordinal of the earth output record
+    //          {height, velocity, material, nav_cost} frozen in
+    //          spec/form/field-ir.md §7.1. Removing ordinal 3 would renumber
+    //          nothing and cut capacity for something -- an ABI change the
+    //          decision's "preserving existing program/ABI compatibility"
+    //          clause forbids.
+    //       3. The differential against zref::fieldir::compose_nav
+    //          (zhao_field_sinks + tests/differential/field_sinks_directed)
+    //          is what keeps the CPU and the fabric agreeing about what a tile
+    //          costs. Drop the fabric side and the agreement becomes unchecked.
+    //     So the cost of keeping it is a 32-bit register and a mux leg, and the
+    //     cost of removing it is a law. It stays, classified.
     output var logic               ans_valid_o,
     input  var logic               ans_ready_i,
     output var logic signed [31:0] height_o,

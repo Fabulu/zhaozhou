@@ -1101,10 +1101,25 @@ add_test(NAME zcon_frame_build_directed COMMAND test_zcon_frame_build_directed)
 set_tests_properties(zcon_frame_build_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 add_executable(test_wizards_directed runtime/wizards_directed.cpp)
+# Links zhao_zref since 2026-09-26: wizards.hpp consumes zref::nav::Service, the
+# CPU navigation query, per reports/OWNER-DECISION-20260926-I34-NAV.md. The
+# service pointer defaults to null, so THIS test's expectations and hashes are
+# unchanged -- the link is for the header, not for a behaviour change.
+add_executable(test_wizards_nav_directed runtime/wizards_nav_directed.cpp)
+target_link_libraries(test_wizards_directed PRIVATE zhao_zref)
 target_include_directories(test_wizards_directed PRIVATE
   ${CMAKE_SOURCE_DIR}/runtime/include)
 add_test(NAME wizards_directed COMMAND test_wizards_directed)
 set_tests_properties(wizards_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# The WIRED navigation path: the game truth actually consuming the service
+# through zcon::Session, with the tick hook proven load-bearing by a replay
+# that DIVERGES without it. "A reference-only helper is not completion."
+target_link_libraries(test_wizards_nav_directed PRIVATE zhao_zref)
+target_include_directories(test_wizards_nav_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME wizards_nav_directed COMMAND test_wizards_nav_directed)
+set_tests_properties(wizards_nav_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 add_executable(test_zcon_session_directed runtime/zcon_session_directed.cpp)
 target_include_directories(test_zcon_session_directed PRIVATE
@@ -18603,3 +18618,21 @@ add_test(NAME lint_geom_overw_sat
 set_tests_properties(lint_geom_overw_sat PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- SW.CPUCOLL: the CPU navigation query (NAVSERVICE, 2026-09-26) ---------
+# reports/OWNER-DECISION-20260926-I34-NAV.md's five acceptance items, against
+# the PRODUCTION API zref::nav::Service -- no injected cost, no fake consumer.
+# It decodes the REAL committed crater_ring spell from compiler/tests/generated
+# so the chain runs end to end, and it carries the route-selection harness and
+# the CPU-work / memory measurement.
+#
+# NOTE it does NOT add reference/src to its include path. Every other consumer
+# of compose_lattice reaches into that private header; the nav service exposes
+# zref/zref_nav.hpp publicly, so a caller (the game included) needs only the
+# installed include directory.
+add_executable(test_nav_service_directed nav/nav_service_directed.cpp)
+target_link_libraries(test_nav_service_directed PRIVATE zhao_zref)
+target_include_directories(test_nav_service_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME nav_service_directed COMMAND test_nav_service_directed)
+set_tests_properties(nav_service_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)

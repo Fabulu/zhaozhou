@@ -57,9 +57,131 @@
 #include "zcon/zcon.hpp"
 #include "zgame/wizards.hpp"
 
+#include "zref/zref_nav.hpp"
 #include "zref/zref_render.hpp"
 
 namespace {
+
+// ---------------------------------------------------------------------------
+// NAVIGATION (NAVSERVICE, 2026-09-26)
+// ---------------------------------------------------------------------------
+// reports/OWNER-DECISION-20260926-I34-NAV.md: navigation truth and its query
+// service belong to the CPU simulation runtime, and the service has to be
+// reachable by "the runtime interface that Form simulation and game AI can
+// actually call". This host is the thing that calls it: it owns the terrain
+// resource, hands the service to the game truth, and advances it once per tick
+// through zcon::TickObserver -- the same hook in the live loop and in replay.
+//
+// THE PATCH IS A HOST RESOURCE. zcon.hpp's three boundaries put resources in
+// the console runtime and gameplay in the game truth, so the terrain is built
+// here and BORROWED by zgame::Wizards. The alternative -- the game growing its
+// own private terrain -- is the exact thing wizards.hpp warned against when it
+// deferred this connection.
+//
+// It is a 33x33 lattice over the wizard field's 32 m x 32 m, pitch 1 m, so one
+// lattice cell is one game grid cell and the two coordinate systems line up
+// exactly rather than approximately. It carries a VOID CHASM and a STEEP RIDGE
+// so navigation has something to refuse, and a live MIRE field so the composed
+// cost is not uniformly 1.0; without them the service would be attached and
+// provably idle, which is a wire nobody can see working.
+struct NavWorld : public zcon::TickObserver {
+  zref::render::TerrainPatch patch;
+  zref::nav::Service service;
+  zfield::Decoded mire;
+  uint32_t mire_id = 0;
+
+  // The hook zcon::Session calls before every advance, live AND in replay.
+  void before_tick(uint32_t tick) override { service.begin_tick(tick); }
+};
+
+constexpr int kNavLat = 33;
+constexpr int kNavCells = kNavLat - 1;
+constexpr int32_t kNavOne = 1 << 16;
+constexpr int32_t kNavHalfSpanFx = 16 * kNavOne;  // the field is +-16 m
+
+/** nav_cost = +3.0, height = 0: a MIRE. A real earth program, run by the one
+ *  interpreter, offered through the same add_field a spell would use. */
+zfield::Decoded make_mire() {
+  zfield::Decoded p;
+  p.profile = zfield::EARTH;
+  const int32_t vals[4] = {0, 0, 0, 3 * kNavOne};
+  for (int k = 0; k < 4; ++k) {
+    zfield::Instr ins{};
+    ins.op = zfield::OP_LDC;
+    ins.dst = static_cast<uint8_t>(16 + k);
+    ins.imm = static_cast<uint32_t>(vals[k]);
+    p.instrs.push_back(ins);
+  }
+  zfield::Instr end{};
+  end.op = zfield::OP_END;
+  p.instrs.push_back(end);
+  static const char* kIn[12] = {"x", "z", "age", "phase", "p0", "p1",
+                                "p2", "p3", "p4", "p5", "p6", "p7"};
+  for (int i = 0; i < 12; ++i) {
+    zfield::IoLane l{};
+    l.name = kIn[i];
+    l.type = (i == 2) ? 3 : 0;
+    l.reg = static_cast<uint8_t>(i);
+    p.in_lanes.push_back(l);
+  }
+  static const char* kOut[4] = {"height", "velocity", "material", "nav_cost"};
+  for (int k = 0; k < 4; ++k) {
+    zfield::IoLane l{};
+    l.name = kOut[k];
+    l.type = (k == 2) ? 3 : 0;
+    l.reg = static_cast<uint8_t>(16 + k);
+    p.out_lanes.push_back(l);
+  }
+  return p;
+}
+
+void build_nav_world(NavWorld* w) {
+  zref::render::TerrainPatch& p = w->patch;
+  p.width = kNavLat;
+  p.height = kNavLat;
+  p.env_x0 = -kNavHalfSpanFx;
+  p.env_z0 = -kNavHalfSpanFx;
+  p.env_x1 = kNavHalfSpanFx;
+  p.env_z1 = kNavHalfSpanFx;
+  p.heights.assign(static_cast<size_t>(kNavLat) * kNavLat, 0);
+  p.bottom.assign(static_cast<size_t>(kNavLat) * kNavLat, static_cast<int16_t>(-20 * 256));
+  p.cell_state.assign(static_cast<size_t>(kNavCells) * kNavCells, zref::terrain::kSolid);
+
+  // a chasm the wizards cannot cross, two cells wide
+  for (int cj = 6; cj <= 25; ++cj)
+    for (int ci = 10; ci <= 11; ++ci)
+      p.cell_state[static_cast<size_t>(cj) * kNavCells + ci] = zref::terrain::kVoidAuthored;
+
+  // a ridge they cannot climb: 4 m per 1 m step is slope 4, well past the
+  // default 0.6 cosine limit
+  for (int j = 0; j < kNavLat; ++j)
+    for (int i = 24; i < kNavLat; ++i) {
+      const int steps = (i - 23) > 2 ? 2 : (i - 23);
+      p.heights[static_cast<size_t>(j) * kNavLat + i] = static_cast<int16_t>(steps * 4 * 256);
+    }
+
+  zhao_abi::ZhTransform2fx xf{};
+  xf.r00 = kNavOne;
+  xf.r11 = kNavOne;
+  w->service.set_terrain(&p, xf);
+
+  zhao_abi::ZhCmdTerrainField cmd{};
+  cmd.program = 1;
+  // The footprint is placed where the wizards actually walk -- world x in
+  // [-16, 0] m, z in [-6, +6] m, which is game (0..16, 10..22) and contains
+  // player 0s start at game (8, 16). A live field the players never touch
+  // would leave the COST half of this service attached and idle, which is a
+  // wire nobody can see working; the host prints steps cost-scaled so the
+  // opposite is visible too.
+  cmd.footprint.x0 = -kNavHalfSpanFx;
+  cmd.footprint.y0 = -6 * kNavOne;
+  cmd.footprint.x1 = 0;
+  cmd.footprint.y1 = 6 * kNavOne;
+  cmd.start_tick = 0;
+  cmd.duration_ticks = 0xFFFFFFFEu;
+  w->mire = make_mire();
+  w->mire_id = w->service.add_field(&w->mire, cmd);
+}
 
 // C stdio rather than <fstream>, and the reason is measured rather than
 // stylistic: on this toolchain (winlibs g++ 15.x, MinGW) an `std::ofstream`
@@ -242,7 +364,15 @@ int do_replay(const std::string& path) {
 
   DesktopBackend be;
   zgame::Wizards truth;
+  // THE SAME NAV WORLD THE RECORDING WAS MADE IN, advanced through the SAME
+  // TickObserver hook. Replay compares hash streams and navigation is a
+  // simulation input -- replaying without it would diverge at tick 1 and read
+  // as a desync in the game rather than as a host that forgot to set the table.
+  NavWorld nav;
+  build_nav_world(&nav);
+  truth.set_nav(&nav.service, 16 * zgame::kOne);
   zcon::Session s(&truth, &be);
+  s.set_tick_observer(&nav);
   s.start(rec.seed);
   const int diverged = s.replay_and_compare(rec.inputs, rec.hashes);
   if (diverged < 0) {
@@ -333,7 +463,17 @@ int main(int argc, char** argv) {
   }
 
   zgame::Wizards truth;
+
+  // NAVIGATION, attached before the first tick. `16 * zgame::kOne` is the same
+  // kHalfField the transform code below uses to centre the field, passed once
+  // instead of written twice: the game's 0..32 m grid and the service's
+  // -16..+16 m world are the same place, and the mapping lives in one constant.
+  NavWorld nav;
+  build_nav_world(&nav);
+  truth.set_nav(&nav.service, 16 * zgame::kOne);
+
   zcon::Session s(&truth, &be);
+  s.set_tick_observer(&nav);
   s.start(seed);
 
   // The view. This is `ortho_topdown` from tests/render/render_helpers.hpp,
@@ -418,6 +558,8 @@ int main(int argc, char** argv) {
       "      frames submitted %llu, command bytes %llu, resources %zu\n"
       "      RENDERED: last status %u, commands executed %u, resource "
       "misses %u, canvas crc 0x%08X\n"
+      "      nav: %d fields live, %u steps refused, %u steps cost-scaled, "
+      "%llu rebuilds / %llu queries, %zu cache bytes\n"
       "      final state hash 0x%016llX\n",
       ticks, static_cast<unsigned long long>(seed), be.name(),
       truth.wizard(0).health, truth.wizard(0).deaths, truth.wizard(0).x,
@@ -425,7 +567,10 @@ int main(int argc, char** argv) {
       truth.wizard(1).x, truth.wizard(1).y, static_cast<unsigned long long>(be.frames()),
       static_cast<unsigned long long>(be.command_bytes()), be.resource_count(),
       be.last_status(), be.commands_executed(), be.resource_misses(),
-      be.last_crc(), static_cast<unsigned long long>(truth.hash()));
+      be.last_crc(), nav.service.active_fields(), truth.nav_refusals(),
+      truth.nav_scaled(), static_cast<unsigned long long>(nav.service.rebuilds()),
+      static_cast<unsigned long long>(nav.service.queries()), nav.service.cache_bytes(),
+      static_cast<unsigned long long>(truth.hash()));
 
   // ANTI-VACUITY. A host that reports 400 rendered frames while every canvas
   // is still the clear colour has proved nothing, and that exact failure has
