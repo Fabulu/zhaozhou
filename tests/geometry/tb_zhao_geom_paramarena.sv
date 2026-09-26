@@ -398,6 +398,24 @@ module tb_zhao_geom_paramarena
     input  var logic        poke_en_i,
     input  var logic [25:0] poke_waddr_i,
     input  var logic [15:0] poke_data_i,
+    // ---- DIAGNOSTIC: the socket's owed-word ledger, instrumented -------------
+    // Exported so the phase-53 publication stall is a MEASUREMENT and not an
+    // argument.  See the always_ff beside the write queue for what they mean.
+    output var logic [15:0] dbg_wq_occ_o,
+    output var logic [15:0] dbg_wq_owed_o,
+    output var logic [31:0] dbg_issued_words_o,
+    output var logic [31:0] dbg_retired_words_o,
+    output var logic [31:0] dbg_client_credits_o,
+    output var logic [31:0] dbg_collide_o,
+    output var logic [31:0] dbg_collide_words_o,
+    // ---- THROUGHPUT, BOTH PATHS, ONE STIMULUS -------------------------------
+    // Entry I55 asks what the raster-path swap COSTS. These measure the two
+    // producers on the same scene in the same bench: the binner's on-chip job
+    // drain (what the raster path eats today) and the external SDRAM walk.
+    output var logic [31:0] dbg_drain_refs_o,    // job handshakes
+    output var logic [31:0] dbg_drain_cycles_o,  // first handshake -> last
+    output var logic [31:0] dbg_walk_cycles_o,   // clocks the walker was busy
+    output var logic [31:0] dbg_walk_reqs_o,     // guard requests the walk issued
     output var logic        model_error_o,
     output var logic        init_done_o
 );
@@ -866,6 +884,99 @@ module tb_zhao_geom_paramarena
       wq_owed <= wq_owed
                + (wq_promise ? (QPW+1)'(words_of(geom_arb_req.len)) : '0)
                - ((wq_pop && (wq_owed != '0)) ? (QPW+1)'(1) : '0);
+    end
+  end
+
+  // ==========================================================================
+  // DIAGNOSTIC: THE SOCKET'S WORDS, AT THREE POINTS ON ONE PATH
+  // ==========================================================================
+  // `wq_occ` and `wq_owed` are the write queue's STATE, exported because the
+  // first hypothesis for the phase-53 publication stall was this gate -- that
+  // `wq_promise` pairs a REGISTERED grant with a LIVE length and so could
+  // over-owe the queue and hold the arbiter off forever. Measuring it killed
+  // it: at the wedge both read ZERO, the queue is drained and owes nothing.
+  // The counters that tested that hypothesis are not kept, because after it
+  // was disproved they could not be made to fire and a counter asserted zero
+  // and never seen to move is the thing this repository does not ship.
+  assign dbg_wq_occ_o  = {{(16-(QPW+1)){1'b0}}, wq_occ};
+  assign dbg_wq_owed_o = {{(16-(QPW+1)){1'b0}}, wq_owed};
+
+  // ---------------------------------------------- THROUGHPUT, BOTH PATHS ----
+  // `dbg_drain_cycles_o` is the span from the FIRST job handshake to the LAST,
+  // so it excludes the binner's clear phase and any idle before the scene
+  // arrives -- it is the drain itself, which is what the raster path pays.
+  // `dbg_walk_cycles_o` accumulates every clock `busy_o` is high on the walker,
+  // which is the request, the SDRAM round trip and the decode together, and is
+  // what an external producer would pay for the same triangles.
+  logic        drain_started_q;
+  logic [31:0] drain_run_q;
+  wire         job_hs_c = bin_job_valid_o && bin_job_ready_i;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      drain_started_q    <= 1'b0;
+      drain_run_q        <= 32'd0;
+      dbg_drain_refs_o   <= 32'd0;
+      dbg_drain_cycles_o <= 32'd0;
+      dbg_walk_cycles_o  <= 32'd0;
+      dbg_walk_reqs_o    <= 32'd0;
+    end else begin
+      if (drain_started_q) drain_run_q <= drain_run_q + 32'd1;
+      if (job_hs_c) begin
+        drain_started_q    <= 1'b1;
+        dbg_drain_refs_o   <= dbg_drain_refs_o + 32'd1;
+        dbg_drain_cycles_o <= drain_run_q;
+      end
+      if (walk_busy_o) dbg_walk_cycles_o <= dbg_walk_cycles_o + 32'd1;
+      if (walk_req.valid && walk_rsp.ready)
+        dbg_walk_reqs_o <= dbg_walk_reqs_o + 32'd1;
+    end
+  end
+
+  // WHERE THE WORDS GO.  Three totals over one frame, at three points on the
+  // one path: what the ARENA was told it owed (the guard's accept, the same
+  // event and the same function `wr_words_q` grows on), what the ARBITER
+  // credited back to the ENGINE1 CLIENT, and what the SHARE handed to the
+  // arena.  Issued-vs-client localises a loss to the memory fabric;
+  // client-vs-retired localises it to the share's attribution ledger.
+  // The arena adds to wr_words_q on the GUARD'S ok, using the length it
+  // LATCHED when the request was taken -- not a live one.  Mirrored exactly
+  // here, or this probe would measure a different machine than the one that
+  // wedges.
+  logic [6:0] arena_len_words_q;
+  logic       arena_len_wr_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      arena_len_words_q <= 7'd0;
+      arena_len_wr_q    <= 1'b0;
+    end else if (arena_req.valid && arena_rsp.ready) begin
+      arena_len_words_q <= words_of(arena_req.len);
+      arena_len_wr_q    <= arena_req.write;
+    end
+  end
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      dbg_issued_words_o   <= 32'd0;
+      dbg_retired_words_o  <= 32'd0;
+      dbg_client_credits_o <= 32'd0;
+      dbg_collide_o        <= 32'd0;
+      dbg_collide_words_o  <= 32'd0;
+    end else begin
+      if (arena_rsp.ok && arena_len_wr_q)
+        dbg_issued_words_o <= dbg_issued_words_o
+                            + 32'({25'd0, arena_len_words_q});
+      dbg_retired_words_o  <= dbg_retired_words_o  + 32'({24'd0, arena_retire});
+      dbg_client_credits_o <= dbg_client_credits_o + 32'({24'd0, g_credits});
+      // THE COLLISION.  `zhao_geom_paramarena` grows `wr_words_q` on the
+      // guard's `ok` and shrinks it on `retire_words_i`, with BOTH as
+      // non-blocking assignments in ONE always_ff.  Textual order does not
+      // merge them: on a clock where a retirement and an acceptance coincide
+      // the later statement simply overwrites the earlier, and the retired
+      // words are lost from the arena's ledger while the socket's own totals
+      // still balance.  This counts that clock and the words it drops.
+      if (arena_rsp.ok && (arena_retire != 8'd0)) begin
+        dbg_collide_o       <= dbg_collide_o + 32'd1;
+        dbg_collide_words_o <= dbg_collide_words_o + 32'({24'd0, arena_retire});
+      end
     end
   end
 

@@ -6219,6 +6219,78 @@
 //      I54's chunks -- there is nothing to start a walk FROM -- and the
 //      raster-path swap this entry declines to do half-way. Unchanged.
 //
+//      -- WALKSWAP, 2026-09-26. STILL TIED, and for the FIRST TIME the reason
+//      is measured rather than deferred. Both preconditions this entry named
+//      are now met -- ARENAID filled the vertex array, CHUNKSER filled the
+//      chunks -- and the swap is STILL refused, on two blockers neither of
+//      which is an ordering preference.
+//
+//      BLOCKER 1, AND IT IS CIRCULAR. This entry says the swap "removes the
+//      on-chip arena from the raster path". IT CANNOT. `u_geom_chunkser` is
+//      the ONLY driver of `u_geom_paramarena`'s `ck_*` intake, and its only
+//      input is `zhao_geom_binner_v2`'s SERIALISE PASS -- a second read walk
+//      over the very `tile_ram`/`ref_ram`/`next_ram` the swap would delete,
+//      with `ser_tri_id_o` sliced out of `meta_ram`. The on-chip arena is what
+//      FILLS the external one. Deleting it leaves the walker nothing to walk,
+//      so the external path cannot become the sole producer by subtraction:
+//      the two are in SERIES, not in parallel. Entry I54's own text says the
+//      binner "runs a SECOND read walk over the same lists", and the
+//      consequence for I55 was simply never drawn there.
+//
+//      BLOCKER 2: THE RECORD IS THE WRONG SHAPE, BY 1,749 BITS. `t_*` is one
+//      16-byte TriangleDescriptor decoded -- three u16 vertex ids, a material,
+//      a raster word and a source word. `job_*` needs METAW = 1877 bits: SIX
+//      240-bit plane equations (invw, u/w, v/w and R234 D1's three Gouraud
+//      planes), `tri_area2_i` (47), `tri_min_x_i` (12), the 298-bit flat
+//      request, the 48-bit continuation tail and the 32-bit fragment state
+//      -- 437 fixed bits plus 1,440 of plane -- all manufactured by
+//      GEOM.SETUP and GEOM.ATTRPACK from full vertices. The 24-byte
+//      ProjectedVertex DOES
+//      carry what those need (x, y, invw24, status, u/w, v/w, rgba), so the
+//      planes are RECOMPUTABLE -- but only by standing up a SECOND setup and
+//      attrpack back end fed from SDRAM, plus the vertex-fetch arm this block
+//      deliberately does not drive (`zhao_geom_paramwalk.sv` states why, and
+//      it is right to). That is architecture, and it is ADDITION, not
+//      substitution.
+//
+//      THE PRICE, MEASURED, ONE STIMULUS, BOTH PATHS (geom_chunkser_directed's
+//      `price_the_swap`, 19 triangles on tile (0,0) plus 4+4 on two others):
+//        on-chip drain   27 refs / 107-clock span  ->  4.12 clocks/ref
+//        external walk   19 refs / 568 busy clocks -> 29.89 clocks/ref
+//      Same unit on both sides: clocks per TILE REFERENCE delivered to a
+//      raster consumer. The external walk is 7.3x the cost, and its 22 guard
+//      requests are 22 SDRAM round trips where the drain does one on-chip RAM
+//      read.
+//
+//      THE AREA, WITH THE DEVICE NAMED BOTH TIMES. There is NO shipping-part
+//      figure for `zhao_geom_bin_pipe_v2` anywhere in this tree --
+//      `console_entity_attrib_shipping.md` carries no drill-down section at
+//      all. On the SIZING part 5CEBA9F31C7 it is 30,266 ALUTs / 31,736
+//      registers / 446,258 memory bits. `zhao_geom_binner_v2` mapped alone on
+//      the SHIPPING part 5CSEBA6U23I7 is 2,109 registers and 191,296 memory
+//      bits (row `zhao_geom_binner_v2@walkswap`, map_only, rtlCleanAtHead
+//      true; a map row carries no ALMs by construction). NONE of that is
+//      recoverable by the swap, because blocker 1 keeps every bit of it.
+//
+//      SO IT IS A NET LOSS, AND IT IS REFUSED RATHER THAN DEFERRED TO A FIT:
+//      the swap keeps every structure it was supposed to remove, adds a second
+//      geometry back end to the subsystem the budget is tightest on, and pays
+//      7.3x the clocks for the same references. Half-doing it -- ORing the
+//      walk into the live stream -- remains forbidden and was not done.
+//
+//      WHAT WOULD ACTUALLY CLOSE THIS, stated so the next packet need not
+//      re-derive it: a producer that fills the external arena WITHOUT the
+//      on-chip one -- tile binning performed against arena triangle ids
+//      directly -- after which the walk has an independent source and the
+//      comparison this entry asks for becomes meaningful. Until that exists,
+//      `walk_valid_i` and `t_ready_i` have nothing honest to be tied to.
+//
+//      AND THE PIXEL EVIDENCE, MEASURED IN THE COMPOSED CONSOLE: the smoke
+//      reports `paramwalk dirs=0 chunks=0 tris=0` beside `raster pixels=2560`
+//      and `paramarena chunks=10 frames=1`. Every pixel today is the on-chip
+//      path's and the walker contributes nothing -- which is the demonstration
+//      this entry asks for, in the direction it can currently be given.
+//
 // I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
 //      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
 //

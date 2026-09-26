@@ -928,7 +928,6 @@ module zhao_geom_paramarena
       dir_written_q <= 1'b0;
       scr_mine_q    <= 1'b0;
       scr_walker_q  <= 1'b0;
-      wr_words_q    <= '0;
       mstate_q      <= M_IDLE;
       m_addr_q      <= 27'd0;
       m_len_q       <= 7'd0;
@@ -954,20 +953,30 @@ module zhao_geom_paramarena
       fault_source_o      <= 16'd0;
     end else begin
       // ---- retirement ----------------------------------------------------
-      // Counted before anything that could add to it, so a retire and an issue
-      // in the same cycle are both seen. `retire_underflow_o` is the tripwire
-      // for the socket retiring more words than this block ever owed it --
-      // which would mean the share's ledger has attributed somebody else's
-      // write here, and would make every publish decision downstream wrong in
-      // the flattering direction (zero outstanding, publish early).
-      if (retire_words_i != 8'd0) begin
-        if ({8'd0, retire_words_i} > wr_words_q) begin
-          retire_underflow_o <= retire_underflow_o + 32'd1;
-          wr_words_q <= '0;
-        end else begin
-          wr_words_q <= wr_words_q - OUTW'(retire_words_i);
-        end
-      end
+      // `retire_underflow_o` is the tripwire for the socket retiring more words
+      // than this block ever owed it -- which would mean the share's ledger has
+      // attributed somebody else's write here, and would make every publish
+      // decision downstream wrong in the flattering direction (zero
+      // outstanding, publish early).
+      //
+      // `wr_words_q` ITSELF IS NOT UPDATED HERE ANY MORE. It used to be, and
+      // the comment that stood in this place claimed "counted before anything
+      // that could add to it, so a retire and an issue in the same cycle are
+      // both seen." THAT WAS FALSE, and it is the defect this file shipped:
+      // the M_VERD arm below also assigned `wr_words_q`, non-blocking, in THIS
+      // SAME always_ff. Textual order does not merge two non-blocking
+      // assignments to one variable -- the later one simply wins -- so on any
+      // clock where a retirement and a guard acceptance coincided the retired
+      // words were DISCARDED. The block then waited forever in the publication
+      // arm's `wr_words_q != 0` branch for words that had already come back.
+      // Measured: geom_chunkser_directed's 60-phase sweep, phase 53, ONE
+      // collision losing EIGHT words, with the socket's own issued/credited/
+      // retired totals balancing exactly at 716 and every error counter in the
+      // arena, the share and the queue reading zero. Nothing could see it,
+      // because no counter looked at the one quantity that moved.
+      // The single assignment that replaces both is below this always_ff.
+      if ((retire_words_i != 8'd0) && ({8'd0, retire_words_i} > wr_words_q))
+        retire_underflow_o <= retire_underflow_o + 32'd1;
 
       // ---- the address detector -------------------------------------------
       if (addr_view_mismatch_c)
@@ -1176,9 +1185,10 @@ module zhao_geom_paramarena
             frame_fault_q  <= 1'b1;
             mstate_q       <= M_IDLE;
           end else if (guard_rsp_i.ok) begin
-            // The words this request owes the socket, added the cycle the
-            // guard accepts it. This is the ONLY place wr_words_q grows.
-            wr_words_q <= wr_words_q + OUTW'(words_of(m_len_q));
+            // The words this request owes the socket are added by `wr_issue_c`
+            // below, off THIS SAME condition, in the one always_ff that owns
+            // `wr_words_q`. Assigning it from here as well is what lost a
+            // retirement that landed on the same clock.
             m_beat_q   <= 4'd0;
             mstate_q   <= M_WBEAT;
           end
@@ -1202,6 +1212,34 @@ module zhao_geom_paramarena
         default: mstate_q <= M_IDLE;
       endcase
     end
+  end
+
+  // ---------------------------------------------- THE OUTSTANDING-WORD LEDGER
+  // ONE always_ff, ONE assignment, BOTH deltas. `wr_words_q` is the gate the
+  // publication arm waits on ("data must not be published before its writes
+  // retire"), so a lost delta in either direction is a correctness fault:
+  // losing a RETIREMENT wedges the frame forever, and losing an ISSUE would
+  // publish early, which is the flattering direction.
+  //
+  // It was previously written from two places in the big always_ff above -- a
+  // retire arm and the M_VERD accept arm -- under a comment asserting that
+  // putting the retire first made both "seen". Two non-blocking assignments to
+  // one variable do not accumulate; the last one executed wins. Splitting the
+  // register out is what makes the two deltas structurally unable to overwrite
+  // each other, rather than relying on them never coinciding.
+  wire wr_issue_c = (mstate_q == M_VERD) && !guard_rsp_i.violation
+                    && guard_rsp_i.ok;
+  wire [OUTW-1:0] wr_add_c = wr_issue_c ? OUTW'(words_of(m_len_q)) : OUTW'(0);
+  wire [OUTW-1:0] wr_sub_c = OUTW'(retire_words_i);
+  // The saturating case is kept EXACTLY as it was: a retirement larger than the
+  // outstanding count clamps to zero rather than wrapping. It now clamps and
+  // still takes this clock's issue, which the old form also could not do.
+  wire wr_sat_c = (retire_words_i != 8'd0) && ({8'd0, retire_words_i} > wr_words_q);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)          wr_words_q <= '0;
+    else if (wr_sat_c)   wr_words_q <= wr_add_c;
+    else                 wr_words_q <= wr_words_q - wr_sub_c + wr_add_c;
   end
 
 endmodule : zhao_geom_paramarena
