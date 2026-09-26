@@ -5507,6 +5507,143 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST. PATCHV2, 2026-09-26: THE FOUR-CHANNEL SENTENCE
+//      IS RETIRED, AND THE COST IS MEASURED AT LAST. Register 4 -> 4, bare.
+//
+//      Full decision record, in the owner's format:
+//      `reports/DECISION-20260926-I34-PATCH-V2-CHANNELS.md`.
+//
+//      (P1) THE ENTRY'S OWN PRESCRIPTION -- "what closes this entry is
+//           directive 13.2's `zhao_terrain_patch_v2` owning FOUR CHANNELS" --
+//           DOES NOT SURVIVE MEASUREMENT, and it has not survived since
+//           2026-09-26 morning. The accounting, measured rather than
+//           inherited:
+//             ordinal 0 height   -> `u_terrain_patch`. REAL CONSUMER, composed,
+//                                   measured live by composepub case 2.
+//             ordinal 1 velocity -> `u_terrain_veljoin` -> TERRAIN.VELOCITY ->
+//                                   compcache 4.2 -> spdesc -> heighttap ->
+//                                   part_terrain_tap -> `zhao_part_collide`.
+//                                   REAL CONSUMER, composed by TERRVEL.
+//             ordinal 2 material -> NOBODY. The one open channel.
+//             ordinal 3 nav_cost -> OWNER-RULED ELSEWHERE. SW.CPUCOLL /
+//                                   `zref::nav::Service`. Classified, kept.
+//           So a `zhao_terrain_patch_v2`, if built, owns TWO -- and the
+//           channel count is no longer why it would be built.
+//
+//      (P2) AND THE FIELD-MAJOR SWAP HAS ACQUIRED A BILL IT DID NOT HAVE WHEN
+//           13.2 WAS WRITTEN. This is the finding to carry forward, because
+//           nothing else records it. `zhao_terrain_veljoin` rides the
+//           VERTEX-MAJOR per-vertex lane stream and takes this file's
+//           `terr_pt_fld_covers_o` -- at its instantiation,
+//           `.vtx_fire_i(tpt_vtx_valid && tpt_vtx_ready)` and
+//           `.a_covers_i(terr_pt_fld_covers_o)`. A FIELD-MAJOR v2 has neither.
+//           Composing it therefore does not merely replace a reducer: it
+//           obliges whoever does it to RE-HOME a chain that is composed,
+//           tested and reaching a particle contact today. 13.1's "do not leave
+//           two opposite stream-order laws alive" now has a second bill on it.
+//
+//      (P3) MATERIAL'S BLOCKER IS AN ABSENT ENCODING, NOT A MISSING PORT, AND
+//           THAT MEANS ITEM (10) BELOW STRUCK A TRUE PARAGRAPH. Measured by
+//           opening the port lists rather than grepping:
+//             * `zhao_field_sinks.sv:31-49` carries material as
+//               {u8 mat_a, u8 mat_b, u8 weight} on BOTH faces. There is no
+//               32-bit material port on that module in either direction.
+//             * `zref::fieldir::compose_material` -- the reference function
+//               `design/ops.yml:525` names for FIELD.WRITE.MATERIAL -- TAKES A
+//               TRIPLE AND RETURNS A TRIPLE (`zref_fieldir.hpp:103-109`). The
+//               word `u32` appears nowhere in it.
+//             * Nothing in this tree packs three u8s into that u32 and nothing
+//               unpacks it. No encode, no decode, no table, no bit layout.
+//             * `zhao_terrain_compcache_front.sv:169-174` has ONE material
+//               write face, u8 triple, one driver (the page stream, i.e.
+//               authored layer E), no override and no second writer. A field
+//               result has no port to arrive on.
+//           ITEM (10) BELOW RECORDS THAT ADDENDUM-2 STRUCK THE "TWO
+//           INCOMPATIBLE ENCODINGS ... WITH NOTHING MAPPING BETWEEN THEM"
+//           PARAGRAPH. THE STRIKE IS WITHDRAWN. What ADDENDUM-2 correctly
+//           established is that `ops.yml` COMMISSIONS a resolver ("resolved
+//           deterministically by TERRAIN.PATCH"); what it wrongly concluded is
+//           that the two encodings therefore already meet. They do not, and
+//           the function ops.yml itself names is the disproof. A COMMISSIONED
+//           RESOLVER IS NOT AN EXISTING ONE -- which is this file's own
+//           "a thing BUILT is not a thing INSTALLED" read backwards: a BUILD
+//           obligation was mistaken for a DECISION that dissolved the problem.
+//           The original paragraph is therefore CORRECT AS A MEASUREMENT and
+//           is reinstated by this block. (FABRICSINK's four search terms were
+//           genuinely defective -- `material_resolve` has 71 hits none of them
+//           could see -- but its CONCLUSION re-measures true: no map exists.)
+//
+//      (P4) THE COST, MEASURED AT LAST, AND AGAINST THE RIGHT CONTRACT.
+//           `fld_earth_stall_cycles_o` was exported on 2026-09-23 as "the
+//           number that decides whether the field-major machine has to be
+//           built", reached `tb_terrain_composepub.sv:241` and `:381`, and was
+//           READ BY NOTHING until now. `composepub_acceptance` case 11 reads
+//           it, through the four composed production blocks:
+//
+//             engine lat   assoc clocks   stall_cycles   clocks/vertex
+//             (no field)           2252              0           2.07
+//             3                    7698           5445           7.07
+//             20                  26211          23958          24.07
+//             50                  58881          56628          54.07
+//             80                  91551          89298          84.07
+//
+//           clocks(L) = 4,431 + 1,089*L, and THE SLOPE IS ASSERTED rather than
+//           observed -- one un-overlapped engine round trip per covered
+//           vertex -- which is what makes the lat=80 row a reading at the real
+//           engine's price instead of an extrapolation. It is a SWEEP because
+//           a single census at the bench's default latency of 3 would have
+//           measured THE BENCH and reported 7,698, in the flattering
+//           direction.
+//
+//           THE TRAP THE BRIEF NAMED IS HANDLED AS A CONTROL: with no
+//           TerrainField the list is empty and the counter reads zero for a
+//           reason unrelated to the cost, so the empty-list row is kept as an
+//           explicit NEGATIVE CONTROL asserted at 0 beside loaded rows that
+//           assert the counter MOVED.
+//
+//      (P5) AND THE 10,416 THIS ENTRY QUOTES IN THREE PLACES IS A RETIRED
+//           FIGURE. Paragraphs further down, the brief that commissioned this
+//           packet, and `zhao_field_earth_adapter.sv:308` all measure against
+//           it. The owner directive retires it twice:
+//           `reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt`
+//           2.10 -- "The familiar 10,416 clocks is an older comparison
+//           allowance. The amended Earth contract states <=6,000 clocks per
+//           full association" -- and 18.2, "An explanatory older 10,416-clock
+//           allowance cannot replace the stricter active contract without a
+//           recorded amendment." `design/contracts/FIELD.SEQ.EARTH.md:167` is
+//           the active contract.
+//             at lat 80: 91,551 clocks = 15.3x the 6,000 contract.
+//             at lat  3:  7,698 clocks =  1.3x it -- over already, with an
+//                         engine 27x faster than the real one.
+//           Said the way the budget binds: 6,000 clocks buys an engine latency
+//           of 1.44 clocks; the retired 10,416 buys 5.5. NEITHER IS REACHABLE,
+//           SO THE VERDICT DOES NOT TURN ON WHICH ALLOWANCE IS USED. The
+//           correction is about the honesty of the record and it changed
+//           nothing about the answer, which is stated plainly here rather than
+//           left to read as a finding that mattered more than it did. The
+//           older figure is left standing in the paragraphs below, because
+//           they are dated records of what was believed; THIS block is the one
+//           that governs.
+//
+//      (P6) SO WHAT REMAINS ON THIS ENTRY IS EXACTLY TWO NAMEABLE THINGS, and
+//           neither of them is a decision a packet may not take:
+//             a. MATERIAL'S ENCODING. Not a port, not a destination, not an
+//                owner ruling -- an absent u32 <-> {matA, matB, weight} law.
+//                `design/ops.yml:522-523` cites `spec/qformats.md
+//                material-ids` and `material-state` and NEITHER SECTION
+//                EXISTS, which is the same defect already recorded one op
+//                below for FIELD.WRITE.NAV's missing `nav-layer`. Those are
+//                the sections that would hold it.
+//             b. THE 15.3x MISS ABOVE. That is the field-major machine's
+//                commission, now carried by a measured number instead of
+//                arithmetic in a header, and it is a PERFORMANCE packet with a
+//                baseline rather than an architecture packet with an open
+//                question.
+//           HEIGHT IS NOT ONE OF THEM AND NEITHER IS NAV. Closing this entry
+//           on height alone remains forbidden by 20.8 and is not proposed.
+//      =====================================================================
+//
+//      =====================================================================
 //      FABRICSINK, 2026-09-26: BOTH FABRIC ROUTES WALKED. MATERIAL'S IS REAL
 //      AND ENDS AT THIS FILE'S OTHER BOUNDARY; NAV'S DOES NOT EXIST IN EITHER
 //      LANGUAGE. NOTHING WAS COMPOSED AND THE REGISTER DID NOT MOVE (5 -> 5,
@@ -26160,14 +26297,31 @@ module zhao_console_core
     .ans_ready_i(tvj_a_ready),
     .height_o   (efa_height),
 
-    // PRODUCED, NOT CONSUMED, AND DECLARED IN THE INCOMPLETE BLOCK (R159).
-    // These are out-lanes 1, 2 and 3 of the SAME evaluation whose out-lane 0
-    // the height takes, which is directive 20.8's instruction carried out on
-    // the producer's side. `zhao_terrain_patch` has an input for exactly one of
-    // the four, so the other three have nowhere in this console to go -- which
-    // is the CONSUMER-side gap S5 named and the reason entry I34 does not
-    // close. They are named wires rather than bare `()` so the next packet to
-    // build `zhao_terrain_patch_v2` finds them already declared.
+    // OUT-LANES 1, 2 AND 3 OF THE SAME EVALUATION whose out-lane 0 the height
+    // takes, which is directive 20.8's instruction carried out on the
+    // producer's side.
+    //
+    // THIS COMMENT SAID ALL THREE HAD "NOWHERE IN THIS CONSOLE TO GO" AND THAT
+    // WAS TRUE FOR THREE DAYS. Corrected 2026-09-26 (PATCHV2). It was written
+    // on 2026-09-23 and TERRVEL composed velocity's consumer on 2026-09-26, in
+    // this same file, without coming back to the sentence that says it has
+    // none. `efa_velocity` is read by `u_terrain_veljoin` below
+    // (`.a_velocity_i(efa_velocity)`) and reaches `zhao_part_collide`'s
+    // relative-velocity term. A producer-side comment describing its
+    // consumers goes stale the moment somebody builds one, and nothing in the
+    // tree reads it back -- which is CLAUDE.md's own subject.
+    //
+    // THE TRUE ACCOUNTING OF THE FOUR, measured 2026-09-26 and recorded in
+    // `reports/DECISION-20260926-I34-PATCH-V2-CHANNELS.md`:
+    //   0 height   -> `u_terrain_patch`                    REAL CONSUMER
+    //   1 velocity -> `u_terrain_veljoin` -> ... -> PART.COLLIDE   REAL CONSUMER
+    //   2 material -> NOBODY. The only channel still open, and its blocker is
+    //                 not a missing port: nothing in this tree converts
+    //                 between field-ir 7.1's opaque u32 and layer E's
+    //                 {u8 matA, u8 matB, u8 weight} in EITHER direction.
+    //   3 nav_cost -> OWNER-RULED ELSEWHERE, not missing. See the long note
+    //                 beside `nav_cost_o` in the adapter and
+    //                 `reports/OWNER-DECISION-20260926-I34-NAV.md`.
     .velocity_o (efa_velocity),
     .material_o (efa_material),
     .nav_cost_o (efa_nav_cost),
