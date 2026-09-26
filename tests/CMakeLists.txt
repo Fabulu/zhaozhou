@@ -2724,6 +2724,41 @@ verilate(test_geom_attrsetup_directed
   PREFIX Vzhao_geom_attrsetup
   TOP_MODULE zhao_geom_attrsetup
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+
+# GEOM.ATTRSETUP's 2026-09-26 DSP repair (45 -> 36 blocks) rewrote the two
+# partial-plane expressions so they multiply at the operands' true widths. The
+# block exists to emit EXACTLY the oracle's numerator, so the repair owes a
+# proof that no bit moved -- and the strongest available one is not a C++
+# restatement of the old expressions (which would compare the DUT against my own
+# transcription) but the OLD RTL itself.
+#
+# Vattrsetup_old is tests/probes/zhao_attrsetup_mul_probe.sv at VARIANT=0 -- the
+# probe arm that served as the packet's POSITIVE CONTROL and reproduced the
+# pre-repair block on all seven measured numbers. Vattrsetup_new is shipping
+# production. NOT separate copies of one file: two different modules, one of
+# which is deliberately the arithmetic production no longer has.
+#
+# DO NOT "REFRESH" ARM 0 WHEN PRODUCTION MOVES. The usual law for a committed
+# copy is that it goes stale in the flattering direction and must be
+# three-way-merged forward; this one inverts it. Arm 0 is the BASELINE, not a
+# mirror, and refreshing it turns this differential into a comparison of the new
+# block with itself -- green forever, proving nothing.
+add_executable(test_attrsetup_mul_narrow_differential
+  proofs/attrsetup_mul_narrow_differential.cpp)
+target_link_libraries(test_attrsetup_mul_narrow_differential PRIVATE zhao_harness zhao_zref)
+verilate(test_attrsetup_mul_narrow_differential
+  PREFIX Vattrsetup_new
+  TOP_MODULE zhao_geom_attrsetup
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+verilate(test_attrsetup_mul_narrow_differential
+  PREFIX Vattrsetup_old
+  TOP_MODULE zhao_attrsetup_mul_probe
+  VERILATOR_ARGS -GVARIANT=0
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/probes/zhao_attrsetup_mul_probe.sv)
+add_test(NAME attrsetup_mul_narrow_differential
+  COMMAND test_attrsetup_mul_narrow_differential)
+set_tests_properties(attrsetup_mul_narrow_differential
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_executable(test_raster_attrdiv_directed raster/raster_attrdiv_directed.cpp)
 target_link_libraries(test_raster_attrdiv_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_raster_attrdiv_directed
