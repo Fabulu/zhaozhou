@@ -3304,3 +3304,88 @@ the adversarial case instead of a headline.
 routes).** Queued: BINARENA (I55) -- **held deliberately**, because it and
 GIANTREFS would both edit `zhao_geom_binner_v2.sv` heavily and FABRICSINK's
 terrain/field/mosaic territory does not overlap either. **Register 5**, bare.
+
+### 2026-09-26 - FABRICSINK's MEASURED NO, AND GIANTREFS MAKING A RULED REQUIREMENT TRUE
+
+**FABRICSINK walked both fabric routes and returned a measured negative** -- the
+outcome ADDENDUM-2 committed to bringing back rather than adopting option 1
+silently. **I34 is now the campaign's ONLY open owner decision.**
+
+**MATERIAL's route is REAL and ends at I13's boundary, not at a missing
+consumer.** The authored triple walks **eight composed hops** and dies at
+`proj_out_*`, **already PER-TRIANGLE** -- the granularity the
+never-interpolate-identifiers law needs. Past it the mosaic's material bytes are
+a **compile-time constant on every fragment drawn**.
+
+**AND THE DRAIN OBJECTION IS MEASURABLY WRONG, in our favour.**
+`zhao_material_window.sv:415-420`'s `match_c` has five terms and **`base_rgb` and
+`recipe_weight` -- the exact bits the mosaic slices -- are NOT among them.** A
+per-triangle triple costs **ZERO drains.** The price was real only for per-cell
+`{material_set, material_id}`, which nobody proposes; it had been charged to the
+triple **by conflation**, and had deterred passes for weeks.
+
+**NAV is a clean negative**: zero navigation queries across eight trees against a
+live positive control; one nav port and it is the **producer**; SW.CPUCOLL is
+`SPECIFIED` with an empty log and **would not read that wire even if built**,
+because the mirror is re-derivation and T4 refuses mirrored state as a
+second-writer violation.
+
+**THREE ERRORS OF MINE, fixed IN PLACE.** The struck encoding paragraph **was
+re-inherited as authority the same day I struck it** -- FABRICSINK's own recon
+quoted the original escalation, because a strike in a SEPARATE document never
+reaches a reader of the first. The `COMPOSED_NAV` range I quoted **twice** is
+dead (collides with POST.ECHO; DECISION RECORD 1 had already moved it). And **my
+velocity analogy is false** -- velocity's consumer is a point query at PARTICLE
+rate, material's is at FRAGMENT rate, which is exactly why velocity was free.
+
+### GIANTREFS: R7's GIANT NOW SURVIVES, DEMONSTRATED
+
+**32,768 references, R7's number exactly**, as named parameters. Measured on the
+shipping part, **both rows `rtlCleanAtHead: true`**: 191,296 -> **526,592 bits /
+2,130 registers**, +33 M10K, **9.30% of the 553-M10K ceiling**.
+
+**A giant demonstrated rather than argued**: 45 whole-canvas triangles, **25,920
+references binned whole, all drained, `overflow_o = 0`**, with a positive control
+beside it. The old arena would have held **4.0%**.
+
+**And it caught two numbers already in use, one of them mine.**
+
+* **My "raising `CHUNKS` wraps every tile count at 2,048" is FALSE.** `CNT_W`
+  bounds a **per-tile** count whose real ceiling is `min(TRI_CAP, REF_CAP) =
+  128`, so raising `CHUNKS` alone **was always safe.** The derivation is still
+  right -- it found a **third** hardcoded width nobody had recorded, a five-bit
+  pad encoding `CNT_W == 11` where no reader of the localparam would look -- but
+  the alarm I attached was not real.
+* **`@refpush-giantrefs32k` is `rtlCleanAtHead: FALSE`**, and **that is the row
+  the whole +33 M10K came from.** REFPUSH reported both clean. **I verified the
+  flags myself** rather than taking either packet's word: refpush-giantrefs32k
+  False, both giantrefs rows True. *Read `rtlCleanAtHead` first, always.*
+
+**THE BIGGEST INSTRUMENT FINDING YET: `cnt_snap_ready_i` WAS TIED TO ZERO in the
+smoke**, so **every console counter was unobservable from the gating bench.**
+Opened; six assertions now read them, and one was **fired** on purpose. And
+**311 of 351 catalog counters are structurally unpublishable** -- DEBUG.COUNTERS'
+window is a dense register bank at `CATALOG_IDS=40`; widening it costs **+20,032
+registers**, measured, so it refused.
+
+**And it caught itself twice.** It nearly registered a `$fatal` elaboration guard
+as a **ctest that would wedge the suite every run** -- alive 40 minutes at **0.00
+CPU** -- because `$fatal` bypasses `zhao::exit_hard`. And its giant phase first
+read **545 references short** because `feed()` returns on ACCEPT, not on BIN; its
+own counter-versus-drain assertion caught it, where a lazy *"> 1024"* would have
+shipped the wrong number confidently.
+
+### A FALSE ALARM I RAISED AND KILLED BEFORE ACTING ON IT
+
+A `git status` of CARRIAGE's worktree showed **mass staged deletions** --
+`CLAUDE.md`, `CMakeLists.txt`, `.gitignore` -- which is the private-index race
+CLAUDE.md records as costing a packet 529 deletions. **Re-measured before
+messaging anyone: zero staged deletions, zero staged files, every file present.**
+It was a transient snapshot taken mid-git-operation. **One command instead of an
+interrupted packet.**
+
+### WHERE THINGS STAND
+
+**Running: CARRIAGE (I13 item 3), BINARENA (I55's independent producer).**
+Register **5**, bare. Gates 31/31 at baseline, closure lint clean, ledger 246
+rows with zero lost. **I34 is the only entry now waiting on the owner.**
