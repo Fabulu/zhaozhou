@@ -26,11 +26,11 @@ on its own"*. The whole argument for §13.1 is that the field-major form
 
 ## THE DECISION
 
-**Yes — but by LESS than the headline figure, and TWO prerequisites nothing had
-priced are now on the bill: the executor's WIDTH and the compose cache's WRITE
-PORT.** The field-major machine is commissioned and it meets the contract; the
-intercept it removes is a **range**, 851 to 2,762 clocks against the
-vertex-major 4,431, and which end applies is decided by those two blocks.
+**Yes — but by LESS than the headline figure, and THREE prerequisites nothing
+had priced are now on the bill: the executor's WIDTH, the compose cache's WRITE
+PORT, and the authored-lattice SOURCE.** The field-major machine is commissioned and it meets the contract; the
+intercept it removes is a **range**, 851 to 3,581 clocks against the
+vertex-major 4,431 — and **3,581 is where the tree stands today.**
 
 ### What was built to answer it
 
@@ -39,7 +39,7 @@ differential test since 2026-09-20 and **had never been elaborated together** �
 each test does the other block's job in C++, so the composed machine's cost had
 never been a measurement. `tests/terrain/tb_terrain_fieldmajor.sv` instantiates
 both, port for port; `tests/terrain/fieldmajor_census.cpp` drives them.
-**240 checks, 0 failures.** No production RTL changed.
+**245 checks, 0 failures.** No production RTL changed.
 
 The engine between them is modelled **at the same seam and with the same
 declared latencies `composepub_acceptance` case 11 uses**, because the
@@ -160,25 +160,44 @@ adapter's own two clocks, and the consumer's accept"*. The largest single term
 is none of those three: it is the compose cache's two-clocks-per-record write
 port, and it is the term the stream-order swap does **not** remove on its own.
 
+### And the SOURCE is narrow too, and that one is STRUCTURAL
+
+The same question asked of the other end: **INIT reads the authored lattice at
+four vertices per clock in the bench. Can anything supply it?**
+`zhao_terrain_pagestream.sv`'s `S_EMIT` advances one vertex per clock while
+`v_ready_i` holds — **one vertex per clock is the ceiling of the only authored
+lattice producer in the tree**, not four.
+
+**And the field-major form cannot hide it, for a reason that is not a slow
+wire.** In the vertex-major form the intake and the write **overlap**: it is one
+streaming pass whose rate is the slowest stage, which is exactly why case 11's
+no-field control is **2,252** clocks rather than 1,089 + 2,178.
+`zhao_terrain_patch_acc`'s INIT / ACCUM / DRAIN are **exclusive phases** by its
+own header, so the field-major machine **pays for the lattice twice where
+vertex-major pays once**. That is a real cost of the transpose and **no document
+in this tree had priced it**.
+
 **Measured rather than argued**, by `fieldmajor_census` case 4 — the same
-association and the same reduction, drained into the two sinks:
+association and the same reduction, at three rates:
 
-| drain sink | total | drain | vs. 6,000 |
-|---|---|---|---|
-| 1 group / clock (the header's assumed sink) | **851** | 276 | **14 %** |
-| 1 group / 8 clocks (**THE CACHE THAT EXISTS**) | **2,762** | 2,187 | **46 %** |
-| — vertex-major, for comparison | 4,431 | — | 74 % |
+| rate | total | init | drain | vs. 6,000 |
+|---|---|---|---|---|
+| both ends group-wide (the accumulator's ports as built) | **851** | 273 | 276 | **14 %** |
+| only the cache write port left narrow | **2,762** | 273 | 2,187 | **46 %** |
+| **BOTH ends at the tree's real producer and consumer** | **3,581** | 1,092 | 2,187 | **60 %** |
+| — vertex-major, for comparison | 4,431 | — | — | 74 % |
 
-**The floor falls 5.21× in the best case and 1.60× in the worst, and both are
-below the 74 % the swap was commissioned to remove.** So the verdict stands and
-the headline does not: **the field-major intercept is a range, not a number**,
-and which end of it applies is decided by a block neither PATCHV2 nor this
-packet's brief mentions.
+**The floor falls 5.21× at best and 1.24× as the tree stands, and ALL THREE are
+below the 74 % the swap was commissioned to remove.** So **the verdict survives
+every throttle and the headline does not**: the field-major intercept is a
+**range**, and which end applies is decided by two blocks neither PATCHV2 nor
+this packet's brief mentions.
 
-**Widening the compose cache's write port to a group is therefore a sixth named
-prerequisite, worth 1,911 clocks per association** — more than the whole
-field-major walk costs. Case 4 also asserts the thing that must hold either way:
-the reduction is **identical** under both sinks, so a slower consumer costs
+**Widening the compose cache's write port is worth 1,911 clocks per association
+and widening the lattice source a further 819.** Both are named prerequisites and
+neither is a detail — together they are 2,730 clocks, more than three times what
+the whole field-major walk costs. Case 4 also asserts what must hold at every
+rate: the reduction is **identical**, so a slower producer or consumer costs
 clocks and never the answer.
 
 ## WHAT WAS REFUSED, AND WHY IT IS A REFUSAL THIS PACKET CHECKED RATHER THAN INHERITED
@@ -204,9 +223,12 @@ Named, so it cannot be inherited as an open question:
    `terr_pt_fld_covers_o`. A field-major v2 has neither. That chain reaches
    `zhao_part_collide` today and the fences forbid regressing it.
 5. **The executor's width**, above — new on the bill as of this packet.
-6. **The compose cache's write port**, above — also new, and the larger of the
-   two: worth 1,911 clocks per association against the 1,911-clock
-   field-major walk it would otherwise be paying for.
+6. **The compose cache's write port**, above — also new: worth **1,911 clocks**
+   per association.
+7. **The authored-lattice source**, above — `zhao_terrain_pagestream` emits one
+   vertex per clock and INIT wants four; worth a further **819 clocks**, and
+   structural rather than incidental, because the accumulator's exclusive
+   phases cannot overlap intake with write the way the vertex-major pass does.
 
 Doing (1)–(5) inside one packet, against a live composed velocity chain, is the
 subsystem swap PATCHV2 refused for the same reasons and ruling R163 forbids
@@ -225,7 +247,7 @@ on arithmetic.
 
 ## CONSEQUENCES FOR CODE, TESTS AND COMPATIBILITY
 
-* New ctest `fieldmajor_census`, 240 checks. Correctness is checked **before**
+* New ctest `fieldmajor_census`, 245 checks. Correctness is checked **before**
   cost: all 1,089 vertices × 6 lanes against the ratified vertex-major oracle
   `zref::terrain::compose_vertex`, which is the claim behind the whole
   stream-order swap and had never been checked with both blocks in one

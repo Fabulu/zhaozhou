@@ -338,7 +338,10 @@ struct Sim {
   }
 
   // ---- PHASE 1: INIT, one aligned group per clock -------------------------
-  int run_init(const PatchIn& p) {
+  // `gap` is IDLE CLOCKS BETWEEN INIT GROUPS -- the authored lattice SOURCE's
+  // rate. 0 is four vertices per clock; 3 is one vertex per clock, which is
+  // `zhao_terrain_pagestream`'s S_EMIT ceiling (see case 4).
+  int run_init(const PatchIn& p, int gap = 0) {
     int cycles = 0;
     for (int g = 0; g < kAlignedGroups; ++g) {
       const int v0 = 4 * g;
@@ -365,6 +368,12 @@ struct Sim {
       d.eval();
       step();
       ++cycles;
+      for (int q = 0; q < gap; ++q) {
+        d.in_valid_i = 0;
+        d.eval();
+        step();
+        ++cycles;
+      }
     }
     d.in_valid_i = 0;
     d.eval();
@@ -981,10 +990,15 @@ int main(int argc, char** argv) {
   {
     std::printf("case 4: THE SAME MACHINE AGAINST THE COMPOSE CACHE THAT EXISTS\n");
 
-    uint64_t fast = 0, slow = 0;
-    int drain_fast = 0, drain_slow = 0;
+    // row 0: both ends group-wide (the accumulator's ports as built)
+    // row 1: the SINK at the compose cache's real rate
+    // row 2: BOTH ends at the rates the tree's real producer and consumer run
+    uint64_t tot[3] = {0, 0, 0};
+    int init_c[3] = {0, 0, 0}, drain_c[3] = {0, 0, 0};
+    static const int kInitGap[3] = {0, 0, 3};
+    static const int kDrainGap[3] = {0, 7, 7};
 
-    for (int slowsink = 0; slowsink < 2; ++slowsink) {
+    for (int row = 0; row < 3; ++row) {
       Sim s;
       s.reset();
       s.load_tables(lat);
@@ -992,21 +1006,17 @@ int main(int argc, char** argv) {
       s.eng.depth = 1;
 
       const uint64_t t0 = s.clocks;
-      s.run_init(patch);
+      const int ic = s.run_init(patch, kInitGap[row]);
       s.idle(2);
       int groups = 0, covered = 0;
       s.run_assoc(whole, &groups, &covered);
       s.idle(2);
-      // gap 7 == one group per 8 clocks == four vertices at the cache's
-      // two-clocks-per-record rate.
-      const int dc = s.run_drain(patch, slowsink ? 7 : 0);
-      if (slowsink) {
-        slow = s.clocks - t0;
-        drain_slow = dc;
-      } else {
-        fast = s.clocks - t0;
-        drain_fast = dc;
-      }
+      // drain gap 7 == one group per 8 clocks == four vertices at the compose
+      // cache's two-clocks-per-record rate.
+      const int dc = s.run_drain(patch, kDrainGap[row]);
+      tot[row] = s.clocks - t0;
+      init_c[row] = ic;
+      drain_c[row] = dc;
 
       // THE ANSWER MUST NOT CHANGE. A slower sink costs clocks and nothing
       // else; if the reduction depended on the drain's spacing that would be a
@@ -1021,32 +1031,56 @@ int main(int argc, char** argv) {
             s.got_nav[v] != want.nav[v] || s.got_dirty[v] != want.dirty[v])
           ++bad;
       }
-      ck_eq(seen, kVerts, "slow sink: every vertex still drains");
-      ck_eq(bad, 0, "slow sink: the reduction does not depend on the drain's spacing");
+      ck_eq(seen, kVerts, "throttled: every vertex still drains");
+      ck_eq(bad, 0, "throttled: the reduction does not depend on the phases' spacing");
     }
 
-    ck_eq(drain_fast, kAlignedGroups + 3, "the one-group-per-clock drain is 276 clocks");
-    ck_eq(drain_slow, 8 * kAlignedGroups + 3,
-          "the cache's two-clocks-per-record drain is 8 clocks per group");
-    ck(slow > fast, "a slower sink costs more clocks (the control that says gap is live)");
+    ck_eq(init_c[0], kAlignedGroups, "INIT at four vertices/clock is 273 clocks");
+    ck_eq(init_c[2], 4 * kAlignedGroups,
+          "INIT at the page stream's one vertex/clock is 4 clocks per group");
+    ck_eq(drain_c[0], kAlignedGroups + 3, "DRAIN at one group/clock is 276 clocks");
+    ck_eq(drain_c[1], 8 * kAlignedGroups + 3,
+          "DRAIN at the cache's two-clocks-per-record is 8 clocks per group");
+    ck(tot[1] > tot[0], "a slower SINK costs clocks (the control that says the gap is live)");
+    ck(tot[2] > tot[1], "a slower SOURCE costs more again");
 
-    std::printf("\n  the SAME association, the SAME 233-check reduction, two sinks:\n");
-    std::printf("    drain at 1 group / clock (the header's assumed sink) : %llu total, drain %d\n",
-                static_cast<unsigned long long>(fast), drain_fast);
-    std::printf("    drain at 1 group / 8 clocks (THE CACHE THAT EXISTS)  : %llu total, drain %d\n",
-                static_cast<unsigned long long>(slow), drain_slow);
+    std::printf("\n  the SAME association and the SAME reduction, three rates:\n");
+    std::printf("    %-52s %6llu total (init %5d, drain %5d)\n",
+                "both ends group-wide (the acc's ports as built)",
+                static_cast<unsigned long long>(tot[0]), init_c[0], drain_c[0]);
+    std::printf("    %-52s %6llu total (init %5d, drain %5d)\n",
+                "SINK at the compose cache's real rate",
+                static_cast<unsigned long long>(tot[1]), init_c[1], drain_c[1]);
+    std::printf("    %-52s %6llu total (init %5d, drain %5d)\n",
+                "BOTH ends at the tree's real producer/consumer",
+                static_cast<unsigned long long>(tot[2]), init_c[2], drain_c[2]);
+
+    std::printf("\n  AND THE SECOND THROTTLE IS A STRUCTURAL COST, NOT A SLOW WIRE.\n");
+    std::printf("  In the VERTEX-MAJOR form the intake and the write OVERLAP -- one\n");
+    std::printf("  streaming pass, whose rate is the slowest stage -- which is why case\n");
+    std::printf("  11's no-field control is 2,252 clocks and not 1,089 + 2,178. The\n");
+    std::printf("  field-major form CANNOT overlap them: INIT / ACCUM / DRAIN are\n");
+    std::printf("  EXCLUSIVE PHASES by `zhao_terrain_patch_acc`'s own header, so it pays\n");
+    std::printf("  for the lattice twice where vertex-major pays once. That is a real\n");
+    std::printf("  cost of the transpose and no document in this tree had priced it.\n");
+
     std::printf("\n  SO THE FIELD-MAJOR INTERCEPT IS A RANGE, NOT A NUMBER:\n");
-    std::printf("    %llu clocks (%.0f%% of 6,000) if the cache write port is widened to a group\n",
-                static_cast<unsigned long long>(fast), 100.0 * fast / 6000.0);
-    std::printf("    %llu clocks (%.0f%% of 6,000) against today's compose cache\n",
-                static_cast<unsigned long long>(slow), 100.0 * slow / 6000.0);
-    std::printf("    4,431 clocks (74%% of 6,000) is the vertex-major intercept it replaces\n");
-    std::printf("  The floor falls %.2fx in the best case and %.2fx in the worst, and BOTH\n",
-                4431.0 / static_cast<double>(fast), 4431.0 / static_cast<double>(slow));
-    std::printf("  are below the 74%% the field-major swap was commissioned to remove.\n");
-    std::printf("  WIDENING THE CACHE WRITE PORT IS THEREFORE A SEPARATE, NAMED PREREQUISITE\n");
-    std::printf("  and not a detail: it is worth %llu clocks per association.\n\n",
-                static_cast<unsigned long long>(slow - fast));
+    std::printf("    %5llu clocks (%3.0f%% of 6,000) -- both ends widened to a group\n",
+                static_cast<unsigned long long>(tot[0]), 100.0 * tot[0] / 6000.0);
+    std::printf("    %5llu clocks (%3.0f%% of 6,000) -- only the cache write port left narrow\n",
+                static_cast<unsigned long long>(tot[1]), 100.0 * tot[1] / 6000.0);
+    std::printf("    %5llu clocks (%3.0f%% of 6,000) -- AGAINST THE TREE AS IT STANDS TODAY\n",
+                static_cast<unsigned long long>(tot[2]), 100.0 * tot[2] / 6000.0);
+    std::printf("     4431 clocks ( 74%% of 6,000) -- the vertex-major intercept it replaces\n");
+    std::printf("  The floor falls %.2fx at best and %.2fx as the tree stands, and ALL THREE\n",
+                4431.0 / static_cast<double>(tot[0]), 4431.0 / static_cast<double>(tot[2]));
+    std::printf("  are below the 74%% the field-major swap was commissioned to remove -- so\n");
+    std::printf("  the verdict survives every throttle, and the headline does not.\n");
+    std::printf("  WIDENING THE CACHE WRITE PORT IS WORTH %llu CLOCKS PER ASSOCIATION AND\n",
+                static_cast<unsigned long long>(tot[1] - tot[0]));
+    std::printf("  WIDENING THE LATTICE SOURCE A FURTHER %llu. Both are NAMED PREREQUISITES\n",
+                static_cast<unsigned long long>(tot[2] - tot[1]));
+    std::printf("  and neither is a detail.\n\n");
   }
 
   std::printf("fieldmajor_census: %d checks, %d failures\n", g_checks, g_fails);

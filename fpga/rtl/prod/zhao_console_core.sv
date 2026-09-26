@@ -6176,18 +6176,37 @@
 //           two-clocks-per-record write port, and it is the term the
 //           stream-order swap does NOT remove on its own.
 //
+//           AND THE SOURCE IS NARROW TOO, AND THAT ONE IS STRUCTURAL. INIT
+//           reads the authored lattice at four vertices per clock in the bench;
+//           `zhao_terrain_pagestream.sv`'s S_EMIT advances ONE VERTEX PER CLOCK,
+//           which is the ceiling of the only authored-lattice producer in this
+//           tree. And the field-major form CANNOT HIDE IT, for a reason that is
+//           not a slow wire: in the VERTEX-MAJOR form intake and write OVERLAP
+//           -- one streaming pass whose rate is the slowest stage, which is
+//           exactly why case 11's no-field control is 2,252 clocks and not
+//           1,089 + 2,178 -- while `zhao_terrain_patch_acc`'s INIT/ACCUM/DRAIN
+//           are EXCLUSIVE PHASES by its own header. SO THE FIELD-MAJOR MACHINE
+//           PAYS FOR THE LATTICE TWICE WHERE VERTEX-MAJOR PAYS ONCE. That is a
+//           real cost of the transpose and NO DOCUMENT IN THIS TREE HAD PRICED
+//           IT.
+//
 //           MEASURED, by `fieldmajor_census` case 4 -- same association, same
-//           reduction, two sinks:
-//             1 group / clock  (the header's assumed sink) :   851 total,  14%
-//             1 group / 8 clks (THE CACHE THAT EXISTS)     : 2,762 total,  46%
-//             vertex-major, for comparison                 : 4,431 total,  74%
-//           THE FLOOR FALLS 5.21x IN THE BEST CASE AND 1.60x IN THE WORST, AND
-//           BOTH ARE BELOW THE 74% THE SWAP WAS COMMISSIONED TO REMOVE. The
-//           verdict stands; the headline does not. THE FIELD-MAJOR INTERCEPT IS
-//           A RANGE, NOT A NUMBER, and which end applies is decided by a block
-//           neither PATCHV2 nor this packet's brief mentions. Case 4 also
-//           asserts what must hold either way: the reduction is IDENTICAL under
-//           both sinks, so a slower consumer costs clocks and never the answer.
+//           reduction, three rates:
+//             both ends group-wide (the acc's ports as built):   851 total, 14%
+//             only the cache write port left narrow          : 2,762 total, 46%
+//             BOTH ENDS AT THE TREE'S REAL PRODUCER/CONSUMER : 3,581 total, 60%
+//             vertex-major, for comparison                   : 4,431 total, 74%
+//           THE FLOOR FALLS 5.21x AT BEST AND 1.24x AS THE TREE STANDS, AND
+//           ALL THREE ARE BELOW THE 74% THE SWAP WAS COMMISSIONED TO REMOVE.
+//           THE VERDICT SURVIVES EVERY THROTTLE AND THE HEADLINE DOES NOT: the
+//           field-major intercept is A RANGE, and which end applies is decided
+//           by two blocks neither PATCHV2 nor this packet's brief mentions.
+//           Widening the cache write port is worth 1,911 clocks per association
+//           and widening the lattice source a further 819 -- together 2,730,
+//           more than three times what the whole field-major walk costs. Case 4
+//           also asserts what must hold at every rate: the reduction is
+//           IDENTICAL, so a slower producer or consumer costs clocks and never
+//           the answer.
 //
 //      (F5) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD RATHER THAN
 //           INHERITED. Composing `zhao_terrain_patch_v2` is a BUILD, the
@@ -6206,8 +6225,13 @@
 //                tpt_vtx_ready)` and `.a_covers_i(terr_pt_fld_covers_o)`, both
 //                vertex-major, on a chain reaching `zhao_part_collide` today.
 //             5. THE EXECUTOR'S WIDTH, per (F3) -- new on the bill.
-//             6. THE COMPOSE CACHE'S WRITE PORT, per (F4b) -- also new, and the
-//                LARGER of the two at 1,911 clocks per association.
+//             6. THE COMPOSE CACHE'S WRITE PORT, per (F4b) -- also new, 1,911
+//                clocks per association.
+//             7. THE AUTHORED-LATTICE SOURCE, per (F4b) -- `pagestream` emits
+//                one vertex/clock and INIT wants four; a further 819 clocks,
+//                and STRUCTURAL rather than incidental, because the exclusive
+//                phases cannot overlap intake with write the way the
+//                vertex-major pass does.
 //           What changed is that the refusal now sits on a MEASURED NUMBER
 //           saying the build is worth making, instead of on arithmetic.
 //
