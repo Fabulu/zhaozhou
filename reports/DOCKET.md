@@ -55,6 +55,56 @@ intended consumer.**
 
 **Implementation choices beyond this are DELEGATED** -- the owner asked for
 no further questionnaire about the service's internal shape.
+
+### DELIVERED 2026-09-26 (NAVSERVICE, branch `gz/navservice`): the service EXISTS
+
+**`zref::nav::Service`** -- `reference/include/zref/zref_nav.hpp`,
+`reference/src/znav/nav_service.cpp`, shipped inside `zhao_zref`. Hard
+passability plus composed movement cost for a location or a cell.
+
+* **The semantics are CALLED, not restated.** `zfield::interpret` (through
+  `zref::render::compose_lattice`, the ONE §4.1 evaluation),
+  `zref::fieldir::compose_nav` (through `zref::terrain::nav_vertex`),
+  `zref::terrain::column_pick` / `collision_normal` / `covers` /
+  `kMaxPatchFields` / `plane_interp`. `compose_lattice` already computed
+  out-lane 3 at every covered vertex and discarded it; it now records it.
+* **Integrated, not merely available.** `zgame::Wizards` refuses a step into
+  impassable ground and scales it by the composed cost;
+  `runtime/desktop/desktop_main` owns the terrain resource and advances the
+  service through the new `zcon::TickObserver`. `Upheaval`'s `uph_engine`
+  links the same `zhao_zref` (`Upheaval/CMakeLists.txt:56,:108`).
+* **Tested:** `tests/nav/nav_service_directed.cpp` (113 checks, the owner's
+  five acceptance items on the production API, decoding the real committed
+  `crater_ring` spell) and `tests/runtime/wizards_nav_directed.cpp` (77
+  checks, the wired path, including the positive control that a replay
+  WITHOUT the tick hook diverges).
+* **Measured, on x86-64 DESKTOP and labelled as such:** 457 us per tick to
+  rebuild with four live fields on a 33x33 patch, 133 ns per steady-state
+  query, 60,120 bytes of cache for one patch. **ARM is UNVERIFIED** and must
+  not be inferred from these. Complexity is O(V + F*V) on a generation change
+  (V = 1,089, F <= 16) and O(log W + log H) otherwise, **bounded at one
+  patch**; the rebuild counter is the evidence that the cheap number is a
+  cached query and not a hidden walk.
+* **Hardware paths: CLASSIFIED, one RETIRED.** `nav_cost_o` on
+  `zhao_field_earth_adapter` and `efa_nav_cost` in the core are **kept and
+  classified** -- FIELD.WRITE.NAV is preserved, the lane is one ordinal of
+  field-ir §7.1's frozen earth record, and the fabric/oracle differential is
+  what keeps the two sides agreeing on cost. `TERRAIN.COMPOSED_NAV` is
+  **retired**: it never existed in RTL or in `zhao_pkg`, so the retirement is
+  documentary and is recorded in the core's I34 entry so the stale address is
+  not chased again.
+
+**WHAT THIS DOES NOT DO, and the number says so.** The completion register
+read **4** before this work and **4** after. Its I34 row is TERRAIN.PATCH's
+FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its §9.1 intake -- an FPGA boundary
+tie-off that navigation was never what it measured. The nav obligation and the
+register row are different things and building one does not move the other:
+*"Moving nav between categories must not make it disappear."*
+
+**STILL OPEN under this heading:** MATERIAL (a separate half, not this
+packet's), the randomized differential of the CPU cost against
+`zhao_field_sinks`, multi-patch routing (the §4.3 sparse directory in front of
+the service), and ARM measurement.
 ---
 
 ## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`

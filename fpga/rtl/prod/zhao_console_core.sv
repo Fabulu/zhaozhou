@@ -5717,6 +5717,53 @@
 //      =====================================================================
 //
 //      =====================================================================
+//      NAVSERVICE, 2026-09-26: THE NAV CHANNEL'S CPU HALF IS BUILT, AND THE
+//      FPGA HALF IS CLASSIFIED RATHER THAN WAITING.
+//
+//      Items (6) and (7) above are correct measurements and their CONCLUSION
+//      is now superseded by an owner decision, which is the pattern CLAUDE.md
+//      calls "a refusal is only as good as its scope". (7) said "SW.CPUCOLL is
+//      not a consumer -- it is a ledger row, and the architecture says it
+//      should never read that wire". BOTH HALVES OF THAT SENTENCE WERE TRUE AND
+//      THE SECOND ONE WAS THE ANSWER, not the obstacle: the mirror is specified
+//      as RE-DERIVATION, so the CPU was always supposed to own this.
+//
+//      `reports/OWNER-DECISION-20260926-I34-NAV.md`:
+//
+//        "Navigation truth and its query service belong to SW.CPUCOLL / the CPU
+//         simulation runtime, as the existing terrain ownership contract
+//         already says. ... I do NOT require the FPGA to publish a nav lattice
+//         into SDRAM when no hardware consumer needs it."
+//
+//      SO, CONCRETELY, FOR THIS ENTRY:
+//
+//        * `TERRAIN.COMPOSED_NAV` is STRUCK. Item (9) above chases a stale
+//          address for it and DECISION RECORD 1's relocation to
+//          [0x05C4_0000, 0x05E4_0000). NEITHER RANGE IS LIVE and the window is
+//          not to be opened. Item (9) stays as written because it was a true
+//          finding about a document; it is no longer work.
+//        * `efa_nav_cost` is CLASSIFIED, not retired. See the long note beside
+//          `nav_cost_o` in `zhao_field_earth_adapter.sv`: it is one ordinal of
+//          field-ir §7.1's frozen earth output record, FIELD.WRITE.NAV is
+//          explicitly PRESERVED, and the fabric/oracle differential against
+//          `zref::fieldir::compose_nav` is what keeps the two sides agreeing
+//          about what a tile costs. It has no FPGA consumer BY DESIGN now,
+//          which is a different statement from "it is waiting for one", and
+//          the next packet should not go looking.
+//        * THE REPLACEMENT OBLIGATION IS BUILT: `zref::nav::Service`
+//          (`reference/include/zref/zref_nav.hpp`), hard passability plus
+//          composed movement cost, consumed by `zgame::Wizards` and
+//          `runtime/desktop`. 113 + 77 directed checks.
+//
+//      AND THE ENTRY DOES NOT CLOSE ON THAT. The register's I34 row is
+//      TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
+//      intake -- an FPGA boundary tie-off. NAVIGATION WAS NEVER WHAT THAT ROW
+//      MEASURED, so building the nav service does not move the number and must
+//      not be reported as if it had. The owner's own words: "Moving nav between
+//      categories must not make it disappear."
+//      =====================================================================
+//
+//      =====================================================================
 //      TERRVEL, 2026-09-26: THE VELOCITY CHANNEL IS CLOSED. THE ENTRY IS NOT.
 //
 //      `zhao_terrain_velocity` has LEFT the completion register's BUILT BUT

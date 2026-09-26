@@ -7600,15 +7600,40 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: gameplay-rate queries
+    reference_model: zref::nav::Service
     maturity: SPECIFIED
-    maturity_log: []
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-26"
+        commit: pending
+        evidence: reference/include/zref/zref_nav.hpp
+        note: >-
+          THE NAVIGATION HALF IS IMPLEMENTED, INTEGRATED AND TESTED; the
+          maturity stays SPECIFIED and that is deliberate. reports/
+          OWNER-DECISION-20260926-I34-NAV.md moved navigation truth and its
+          query service to this block and superseded the FPGA's
+          TERRAIN.COMPOSED_NAV publication. zref::nav::Service answers hard
+          passability plus composed movement cost for a location or a cell,
+          reusing zfield::interpret (through zref::render::compose_lattice),
+          zref::fieldir::compose_nav, zref::terrain::column_pick /
+          collision_normal / covers / plane_interp -- one evaluation, no second
+          transcription. Callers: zgame::Wizards and runtime/desktop, and
+          Upheaval's uph_engine links the same zhao_zref. Tests:
+          tests/nav/nav_service_directed.cpp (113 checks) and
+          tests/runtime/wizards_nav_directed.cpp (77 checks).
+          THE BLOCK'S OTHER TWO JOBS ARE STILL ABSENT -- the canonical B/D scar
+          mirror and the per-beam occlusion DDA -- so advancing the whole
+          block's maturity on one finished third would be exactly the renamed
+          entry the same decision forbids.
     deferred: false
     cut_order: null
     superseded_by: null
     notes: >-
       Also serves the per-beam occlusion DDA: one ray per beam per view, apex to
       camera eye, N=64 fixed steps vs canonical heightfield; oracle
-      zref::beam::occlusion_intensity (spec/sky_and_beams.md).
+      zref::beam::occlusion_intensity (spec/sky_and_beams.md). NAVIGATION, the
+      block's third job, landed 2026-09-26 as zref::nav::Service -- see the
+      maturity_log entry; the scar mirror and the occlusion DDA have not.
   - id: SW.STREAM
     name: Streaming and asset preparation
     kind: software
