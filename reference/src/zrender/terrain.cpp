@@ -222,12 +222,17 @@ uint8_t sample_sheet(const SurfaceSheet& sheet, const TerrainPatch& patch, fx16 
 
 int32_t field_velocity_lane(const int32_t out[4]) { return out[1]; }
 
+// Earth out-lane 3 (field-ir.md 7.1 {height, velocity, material, nav_cost}).
+// Named here, once, for the same reason lane 1 is.
+int32_t field_nav_lane(const int32_t out[4]) { return out[3]; }
+
 // ---------------------------------------------------- composed lattice ----
 
 terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTransform2fx& xform,
                                          const std::vector<FieldApp>& fields, uint32_t frame_tick,
                                          std::vector<TerrainVelocitySample>* velocity_out,
-                                         SatLedger* L) {
+                                         SatLedger* L,
+                                         std::vector<TerrainNavSample>* nav_out) {
   terrain::ComposedLattice lat;
   const int w = patch.width;
   const int h = patch.height;
@@ -271,9 +276,11 @@ terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTran
   // TerrainField application: apps in command order; columns ascending
   // z-then-x (the cartridge patch order) — the recorded velocity order.
   // Live fields act on the top surface only (§3.4).
+  uint16_t lane_index = 0;
   for (const FieldApp& app : fields) {
     const ZhCmdTerrainField& cmd = app.cmd;
     const zfield::Decoded* prog = app.prog;
+    const uint16_t this_lane = lane_index++;
     if (prog == nullptr) continue;              // resource miss counted at walk time
     if (frame_tick < cmd.start_tick) continue;  // not begun yet
     const uint64_t span = static_cast<uint64_t>(frame_tick) - cmd.start_tick;
@@ -304,6 +311,23 @@ terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTran
         lat.top[idx] = fx_add(fx16{lat.top[idx]}, fx16{out[0]}, L).raw;  // height lane
         if (velocity_out != nullptr) {
           velocity_out->push_back(TerrainVelocitySample{cx, cz, field_velocity_lane(out)});
+        }
+        // NAVIGATION, out-lane 3. Recorded from THIS evaluation -- the §4.1
+        // lattice law forbids a second one, and a nav service that walked the
+        // patch again would be exactly that. `present` is the out-lane COUNT
+        // test, not a value test: `out[]` was zero-initialised above, so a
+        // program with three out-lanes leaves `out[3]` at 0 and the two cases
+        // are otherwise indistinguishable.
+        if (nav_out != nullptr) {
+          TerrainNavSample ns;
+          ns.world_x = cx;
+          ns.world_z = cz;
+          ns.nav = field_nav_lane(out);
+          ns.vi = static_cast<uint16_t>(i);
+          ns.vj = static_cast<uint16_t>(j);
+          ns.lane = this_lane;
+          ns.present = prog->out_lanes.size() > 3;
+          nav_out->push_back(ns);
         }
       }
     }

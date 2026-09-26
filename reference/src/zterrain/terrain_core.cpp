@@ -96,13 +96,15 @@ CollisionNormal collision_normal(const ComposedLattice& lat, const ColumnPick& p
   return out;
 }
 
-ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
-  ColumnResult r;
-  const ColumnPick p = column_pick(lat, wxq, wzq);
-  if (p.cls != ColumnClass::kSolid) {
-    r.cls = p.cls;
-    return r;
-  }
+// 4.3 two-MAD forms with ONE rounding: common denominator ud*vd, one
+// round-half-up division (the corner identities and the single-valued diagonal
+// are asserted by tests/terrain/terrain_dual.cpp). THE ONE implementation:
+// column_query's top and bottom AND the navigation service's composed-cost
+// lattice all come through here, so the interpolation law has one home.
+// Exposed 2026-09-26 under reports/OWNER-DECISION-20260926-I34-NAV.md.
+int32_t plane_interp(const ComposedLattice& lat, const ColumnPick& p, fx16 wxq, fx16 wzq,
+                     const int32_t* plane) {
+  if (p.cls != ColumnClass::kSolid || plane == nullptr) return 0;
   const int ci = p.ci, cj = p.cj;
   const int64_t un = static_cast<int64_t>(wxq.raw) - lat.wx[static_cast<size_t>(ci)];
   const int64_t ud =
@@ -110,27 +112,31 @@ ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
   const int64_t vn = static_cast<int64_t>(wzq.raw) - lat.wz[static_cast<size_t>(cj)];
   const int64_t vd =
       static_cast<int64_t>(lat.wz[static_cast<size_t>(cj) + 1]) - lat.wz[static_cast<size_t>(cj)];
+  if (ud <= 0 || vd <= 0) return 0;  // degenerate placed cell (column_pick's own guard)
   const size_t i00 = static_cast<size_t>(cj) * lat.w + ci;
   const size_t i10 = i00 + 1;
   const size_t i01 = i00 + static_cast<size_t>(lat.w);
   const size_t i11 = i01 + 1;
-  const bool tri_a = p.tri_a;
-  // §4.3 two-MAD forms with ONE rounding: common denominator ud*vd, one
-  // round-half-up division (the corner identities and the single-valued
-  // diagonal are asserted by tests/terrain/terrain_dual.cpp)
-  const auto interp = [&](const std::vector<int32_t>& hgt) -> int32_t {
-    const int64_t h00 = hgt[i00], h10 = hgt[i10], h01 = hgt[i01], h11 = hgt[i11];
-    __int128 num;
-    if (tri_a)
-      num = static_cast<__int128>(h10 - h00) * un * vd + static_cast<__int128>(h11 - h10) * vn * ud;
-    else
-      num = static_cast<__int128>(h11 - h01) * un * vd + static_cast<__int128>(h01 - h00) * vn * ud;
-    const __int128 den = static_cast<__int128>(ud) * vd;
-    return static_cast<int32_t>(h00 + div_rhu(num, den));
-  };
+  const int64_t h00 = plane[i00], h10 = plane[i10], h01 = plane[i01], h11 = plane[i11];
+  __int128 num;
+  if (p.tri_a)
+    num = static_cast<__int128>(h10 - h00) * un * vd + static_cast<__int128>(h11 - h10) * vn * ud;
+  else
+    num = static_cast<__int128>(h11 - h01) * un * vd + static_cast<__int128>(h01 - h00) * vn * ud;
+  const __int128 den = static_cast<__int128>(ud) * vd;
+  return static_cast<int32_t>(h00 + div_rhu(num, den));
+}
+
+ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
+  ColumnResult r;
+  const ColumnPick p = column_pick(lat, wxq, wzq);
+  if (p.cls != ColumnClass::kSolid) {
+    r.cls = p.cls;
+    return r;
+  }
   r.cls = ColumnClass::kSolid;
-  r.top = fx16{interp(lat.top)};
-  r.bottom = lat.dual ? fx16{interp(lat.bottom)} : r.top;
+  r.top = fx16{plane_interp(lat, p, wxq, wzq, lat.top.data())};
+  r.bottom = lat.dual ? fx16{plane_interp(lat, p, wxq, wzq, lat.bottom.data())} : r.top;
   return r;
 }
 

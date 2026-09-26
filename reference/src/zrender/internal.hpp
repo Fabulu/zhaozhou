@@ -401,7 +401,23 @@ struct FieldApp {
 terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTransform2fx& xform,
                                          const std::vector<FieldApp>& fields, uint32_t frame_tick,
                                          std::vector<TerrainVelocitySample>* velocity_out,
-                                         SatLedger* L);
+                                         SatLedger* L,
+                                         std::vector<TerrainNavSample>* nav_out = nullptr);
+
+/** Earth out-lane 1 is velocity (field-ir.md 7.1). The ONE place it is named. */
+int32_t field_velocity_lane(const int32_t out[4]);
+
+/**
+ * Earth out-lane 3 is nav_cost (field-ir.md 7.1). The ONE place it is named,
+ * exactly as `field_velocity_lane` is for lane 1.
+ *
+ * ADDED 2026-09-26 under reports/OWNER-DECISION-20260926-I34-NAV.md. This lane
+ * was EVALUATED and DISCARDED for the whole life of this file -- `out[3]` was
+ * computed by the interpreter and never read, which is the "computed-but-unread
+ * lane" the decision names. Recording it here rather than re-walking the patch
+ * elsewhere is the §4.1 lattice law: ONE evaluation, every consumer.
+ */
+int32_t field_nav_lane(const int32_t out[4]);
 
 /**
  * DrawProcedural (forge_kind heightfield_patch): compose the lattice (above),

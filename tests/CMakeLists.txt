@@ -18603,3 +18603,21 @@ add_test(NAME lint_geom_overw_sat
 set_tests_properties(lint_geom_overw_sat PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- SW.CPUCOLL: the CPU navigation query (NAVSERVICE, 2026-09-26) ---------
+# reports/OWNER-DECISION-20260926-I34-NAV.md's five acceptance items, against
+# the PRODUCTION API zref::nav::Service -- no injected cost, no fake consumer.
+# It decodes the REAL committed crater_ring spell from compiler/tests/generated
+# so the chain runs end to end, and it carries the route-selection harness and
+# the CPU-work / memory measurement.
+#
+# NOTE it does NOT add reference/src to its include path. Every other consumer
+# of compose_lattice reaches into that private header; the nav service exposes
+# zref/zref_nav.hpp publicly, so a caller (the game included) needs only the
+# installed include directory.
+add_executable(test_nav_service_directed nav/nav_service_directed.cpp)
+target_link_libraries(test_nav_service_directed PRIVATE zhao_zref)
+target_include_directories(test_nav_service_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME nav_service_directed COMMAND test_nav_service_directed)
+set_tests_properties(nav_service_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)

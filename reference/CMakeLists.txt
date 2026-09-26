@@ -38,6 +38,7 @@ add_library(zhao_zref STATIC
   src/zfield/zfield_interpret.cpp
   src/zfield/zfield_plan.cpp
   src/zterrain/terrain_core.cpp
+  src/znav/nav_service.cpp
   src/zrender/render_frame.cpp
   src/zrender/rast.cpp
   src/zrender/edgewalk.cpp

@@ -174,6 +174,31 @@ struct ColumnPick {
 ColumnPick column_pick(const ComposedLattice& lat, fx16 wx, fx16 wz);
 
 /**
+ * `plane_interp` — the §4.3 two-MAD interpolation of ANY per-vertex plane at
+ * the point `column_pick` was asked about, on the triangle it picked.
+ *
+ * EXPOSED 2026-09-26 (reports/OWNER-DECISION-20260926-I34-NAV.md) so the CPU
+ * navigation service interpolates the composed NAV lattice with THE SAME
+ * arithmetic `column_query` uses for top and bottom, rather than a second copy
+ * of it. `column_query` is now implemented on top of this call, so there is one
+ * locate, one tie rule and one rounding — the same consolidation `column_pick`
+ * did for the locate on 2026-09-19, one level down.
+ *
+ * terrain_rules §4.1 is why this is the RIGHT reuse and not merely a
+ * convenient one: "Every consumer — tessellation/render, sim height query,
+ * particle collision, velocity, normals, NAV — reads the same composed lattice
+ * values and interpolates them on the SAME triangulation (§4.3)."
+ *
+ * `plane` is `lat.w * lat.h` int32 words, z-then-x, the ComposedLattice's own
+ * indexing. `pick` must be a kSolid pick taken from `lat` at the same (wx, wz);
+ * anything else returns 0, because there is no triangle to interpolate on.
+ * ONE round-half-up division over the common denominator, exactly as §4.3
+ * specifies and as the corner identities in tests/terrain/terrain_dual.cpp pin.
+ */
+int32_t plane_interp(const ComposedLattice& lat, const ColumnPick& pick, fx16 wx, fx16 wz,
+                     const int32_t* plane);
+
+/**
  * THE COLLISION NORMAL -- owner ruling R1, 2026-09-19
  * (reports/OWNER-RULINGS-20260919-EVENING.md; terrain_rules §4.4 amended):
  *
