@@ -140,6 +140,42 @@ that mattered more than it did.
 per-association contract, by an order of magnitude, and the field-major machine
 is commissioned by a measured number rather than by arithmetic in a header.**
 
+### And what the measured line says about the OTHER repair, so the next packet does not have to guess
+
+The census does not only condemn the current arrangement; because it is a
+*line* rather than a number, it prices the obvious alternative too. **This is
+offered as scoping, not as a decision — it is arithmetic on a measured
+intercept and slope, and it has not been built or benched.**
+
+The 1,089·L term exists because `zhao_field_host`'s front holds **one point in
+flight**. Deepening the front to `P` outstanding points amortises that term and
+leaves the intercept alone:
+
+```
+    clocks(L, P)  ~=  4,431  +  1,089 * L / P
+```
+
+* The intercept is **4,431 clocks**, i.e. **4.07 clocks per vertex** of work
+  that is *not* engine latency — the per-vertex walk, the adapter's own two
+  clocks, and the consumer's accept. **That floor is 74 % of the 6,000-clock
+  contract on its own**, leaving 1,569 clocks for everything else.
+* So at the real `L ≈ 80`, meeting the contract by pipelining alone needs
+  `1,089 × 80 / P ≤ 1,569`, i.e. **P ≥ ~56 points in flight** — and it would
+  still be sitting at 74 % of budget before the first field is evaluated, with
+  no margin for a second covering field.
+* The field-major machine's own walk is **273 INIT + 297 UPDATE + 273 DRAIN
+  ≈ 843 clocks** (`design/contracts/FIELD.SEQ.EARTH.md:137-154`, and note it is
+  297 update groups, not 273) plus the executor's vector work — **it attacks
+  the intercept, not just the slope**, because it stops paying a per-vertex
+  round trip at all.
+
+**That is the real argument for §13.1, and it is stronger than "the stall is
+large".** A deeper front would be chasing a 15.3× miss with a ~56-deep pipeline
+into a budget three-quarters consumed by a floor it cannot touch. The
+field-major form removes the floor. Whoever takes the performance packet should
+carry this comparison rather than re-derive it — and should bench it, because
+everything in this subsection after the two measured constants is arithmetic.
+
 ## ALTERNATIVES CONSIDERED AND REFUSED
 
 1. **Inherit "four channels."** Refused: it commissions nav silicon the owner

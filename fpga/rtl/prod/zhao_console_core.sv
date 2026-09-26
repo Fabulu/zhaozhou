@@ -5625,6 +5625,25 @@
 //           they are dated records of what was believed; THIS block is the one
 //           that governs.
 //
+//           AND BECAUSE IT IS A LINE RATHER THAN A NUMBER IT PRICES THE OTHER
+//           REPAIR TOO, which is the part that saves the next packet a day.
+//           OFFERED AS SCOPING, NOT AS A DECISION: everything after the two
+//           measured constants is arithmetic and has not been benched.
+//           The 1,089*L term exists because `zhao_field_host`'s front holds ONE
+//           point in flight; deepening it to P outstanding points amortises
+//           that term and leaves the intercept alone --
+//             clocks(L, P) ~= 4,431 + 1,089*L/P
+//           The INTERCEPT is 4,431 clocks, i.e. 4.07 clocks/vertex that is NOT
+//           engine latency, and THAT FLOOR IS ALREADY 74% OF THE 6,000-CLOCK
+//           CONTRACT ON ITS OWN. So meeting the contract by pipelining alone
+//           needs 1,089*80/P <= 1,569, i.e. P >= ~56 POINTS IN FLIGHT, and
+//           would still start at 74% of budget with no margin for a second
+//           covering field. The field-major walk is 273 INIT + 297 UPDATE +
+//           273 DRAIN ~= 843 clocks plus executor work -- IT ATTACKS THE
+//           INTERCEPT, not just the slope, because it stops paying a
+//           per-vertex round trip at all. That is the real argument for 13.1
+//           and it is stronger than "the stall is large".
+//
 //      (P6) SO WHAT REMAINS ON THIS ENTRY IS EXACTLY TWO NAMEABLE THINGS, and
 //           neither of them is a decision a packet may not take:
 //             a. MATERIAL'S ENCODING. Not a port, not a destination, not an
