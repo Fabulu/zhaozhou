@@ -2682,3 +2682,82 @@ reported the conflict. Right call. The answer:
 `st_q` (9,216), **neither of them free**, which the brief leads with.
 
 **Register 6:** `I13`+`normalmap`, `I34`, `I54`, `I55`, `I56`.
+
+### 2026-09-26 - THE REGISTER CAN REACH 1 WITHOUT THE OWNER. IT CANNOT REACH 0.
+
+`reports/OWNER-ESCALATION-20260926-I34.md`, indexed at the top of
+`reports/DOCKET.md`. **Five of the six remaining entries are engineering and
+need nothing from Fabian. The sixth is I34's material and nav, and ALL THREE of
+the entry's named options breach something the directive protects.**
+
+The directive's authority is to **choose among workable options**. None of these
+is workable, so handing it back is what the directive says to do.
+
+**Option 2 is arithmetically impossible, re-measured rather than quoted:**
+
+| | SDRAM cycles | frame |
+|---|---:|---|
+| today | 330,474 **free** | 19.83% headroom |
+| + composed VELOCITY publish | 406,806 **over** | 24.41% oversubscribed |
+| + the fill-side read | 1,291,542 **over** | 77.49% oversubscribed |
+
+One 2 B/vertex plane costs **737,280 cycles against 330,474 free -- 2.2x the
+entire headroom on its own**. Material (u32) and nav (fx) are each about twice
+velocity's width, so both regions need order **3.7 M cycles against 330 k free**.
+
+**Option 3 is a feature deletion** -- it deletes a requirement `ops.yml` states
+TWICE -- and "NOT authority to delete a feature" is first on the directive's
+list. **Option 1 ships two lanes computed and read by nothing**, which the
+register counts as a gap on purpose.
+
+### AND THEN I CORRECTED MY OWN ESCALATION, WHICH IS THE PART TO REMEMBER
+
+I called option 1 *"cheapest"*. Then I did the recon I had just recommended
+somebody else do -- **twenty minutes of reading, no toolchain** -- and it
+inverted the ranking.
+
+**`zhao_terrain_patch_acc` ALREADY EXISTS** with all four lanes: *"height,
+velocity, material, nav_cost -- 16 RAMs total"*, `out_nav_0_o`..`out_nav_3_o` on
+its ports, and **both writer-selection laws already drafted in its header**,
+marked *"DECLARED HERE, chosen not found ... recorded for negotiation."*
+
+**But it is `not-yet-adopted`, and so is its walker** -- *"adopt when C1 composes
+the Earth datapath"* -- and the manifest states its KNOWN OPEN rather than hiding
+it: **no ready/valid, no backpressure on any phase**, phase exclusivity left as a
+caller obligation the RTL does not enforce.
+
+**So option 1 is composing the FIELD-MAJOR machine plus 13.4's repair, not a
+small change.** I was wrong to call it cheap.
+
+**And that reframes it usefully**: I34's own text says that machine is already on
+the critical path for a reason unrelated to material or nav -- a single field
+over a 33x33 patch is **order 10^5 clocks against a 10,416-clock allowance**. If
+terrain fields run at frame rate it gets built anyway, and **material and nav
+arrive with it**: banks, reducers and drafted laws included.
+
+**What I committed to doing unless told otherwise:** one packet to **MEASURE**
+`fld_earth_stall_cycles_o` against that allowance on a real workload, so the
+throughput case is a number rather than an order-of-magnitude argument. **I did
+NOT derive it from the 19-clocks-per-record intake figure**, which would have
+given ~20,691 and disagreed with the entry's 10^5 -- deriving a number instead of
+measuring it is what this session has already been burned by twice.
+
+**The pattern, written down because it will recur:** the escalation was
+**accurate and incomplete**, because I assembled it from the entry's own three
+options. **An escalation built from an entry's summary inherits that entry's
+blind spots.**
+
+### WHERE I AM
+
+**Running:** CHUNKSER (I54 + I56) and FLOPARRAY (`pos_q`/`inv_q` + `st_q`).
+**At the cap of two.** Plus my own `zhao_console_core@post-palram` map -- the
+whole-console number after PALRAM and ATTRSETUP, map only, 284 sources
+snapshotted.
+
+**I messaged CHUNKSER** that the smoke-control reds it was measuring are real at
+its base `50714814` but already repaired at `0e43dc6b`, told it not to
+cherry-pick the fix, and asked it to **state the base commit in its findings** --
+"red" unqualified would be stale by the time I merge it.
+
+**Register 6.** Queue after the two in flight: I13's carriage, and the earth
+stall measurement.
