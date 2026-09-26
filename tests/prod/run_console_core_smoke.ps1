@@ -210,6 +210,10 @@ param(
   #
   # It also settles a question no identity pass could answer -- whether
   # POST.ECHO taps the compositor's SOURCE or its OUTPUT. See the bench.
+  # PROJCOLLAPSE's positive control for entry I13's named cause: the played
+  # pages get a REAL layer-A height field instead of an all-zero body.  Own
+  # build directory, own TAG (see the paragraph in the tag chain).
+  [switch]$TerrainRelief,
   [switch]$GlowTag,
   # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
@@ -318,6 +322,7 @@ if (-not $BuildIn) {
          elseif ($BadTraceArm) { 'zhao_console_core_smoke_badarm' }
          # EVERY NEW SWITCH NEEDS A TAG HERE -- see the paragraph above, which
          # is about exactly this line being forgotten once already.
+         elseif ($TerrainRelief) { 'zhao_console_core_smoke_relief' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
@@ -394,6 +399,10 @@ if ($NoEchoArm) {
 if ($GlowTag) {
   $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
   Write-Host 'R195 END-TO-END FROM THE ABI: the uploaded MaterialRecord declares a fragment profile whose effect_tag is a GLOW tag (0x7F), DIRECT polarity (passes when gather_frag_lit_o EQUALS the framebuffer pixels carrying a colour, the bloom stage finds cells, and the post pass CHANGES the frame). The declared state word is the all-zero opaque profile, so the tag is the ONLY variable that moves between this form and the plain one -- and because that word is bit-identical to declaring nothing, this form is also the positive control for reading fragment_decl bit 0 rather than testing the payload for zero.'
+}
+if ($TerrainRelief) {
+  $defs += '+define+ZHAO_SMOKE_TERRAIN_RELIEF'
+  Write-Host 'PROJCOLLAPSE CONTROL (entry I13): layer A of every played terrain page carries a REAL height field instead of an all-zero body. DIRECT polarity (passes when terrain triangles reach GEOM.CLIP carrying SCREEN AREA -- `SMOKE: projcol` shows three DIFFERENT corner y values where the plain run shows one value on all three, and `clip culled` falls far below the terrain triangle count). The plain run is the negative control and is unchanged. NOTE: `raster pixels` is NOT 2560 in this form and must not be read as the gated number.'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'

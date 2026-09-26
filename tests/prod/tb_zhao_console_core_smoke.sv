@@ -2710,6 +2710,106 @@ module tb_zhao_console_core_smoke
 `else
   `define PC_CORE dut
 `endif
+
+  // ==========================================================================
+  // PROJCOLLAPSE PROBE (2026-09-26) -- read-only, and it prints NUMBERS
+  // ==========================================================================
+  // CARRIAGE measured `clip submitted=272 culled=256` and reached ZERO AREA by
+  // ELIMINATION (`near` is tested first and counts as clipped; `back` is false
+  // by construction under CULL_NONE).  The elimination is sound and it is not
+  // a value.  This probe captures the three projected corners of the first
+  // PCJ_N terrain triangles at the clipfeed's own handshake, and the
+  // projector's per-vertex result upstream of the arena, so the verdict can be
+  // read off actual x/y rather than inferred from a counter that -- by
+  // `zhao_geom_clip`'s own structure -- cannot discriminate zero-area from
+  // backface.
+  localparam int unsigned PCJ_N = 6;
+  int unsigned        pcj_tri_q;
+  logic signed [20:0] pcj_ax_q [0:PCJ_N-1], pcj_ay_q [0:PCJ_N-1];
+  logic signed [20:0] pcj_bx_q [0:PCJ_N-1], pcj_by_q [0:PCJ_N-1];
+  logic signed [20:0] pcj_cx_q [0:PCJ_N-1], pcj_cy_q [0:PCJ_N-1];
+  logic        [ 2:0] pcj_bh_q [0:PCJ_N-1];
+  logic        [30:0] pcj_aw_q [0:PCJ_N-1];
+  logic        [15:0] pcj_src_q[0:PCJ_N-1];
+  // The projector's OWN per-vertex answer, upstream of `zhao_terrain_wcache`.
+  // If these are distinct and the replayed corners are not, the fault is the
+  // arena; if these are already equal, the fault is the projection.
+  int unsigned        pcj_fill_q;
+  logic signed [20:0] pcj_fx_q [0:PCJ_N-1], pcj_fy_q [0:PCJ_N-1];
+  logic        [30:0] pcj_fw_q [0:PCJ_N-1];
+  logic               pcj_fb_q [0:PCJ_N-1];
+  logic        [ 7:0] pcj_fi_q [0:PCJ_N-1];
+  // The reference indices, so "three copies of one corner" is ruled in or out
+  // on the wire rather than argued from the light lane.
+  int unsigned        pcj_ref_q;
+  logic        [ 7:0] pcj_ia_q [0:PCJ_N-1], pcj_ib_q [0:PCJ_N-1], pcj_ic_q [0:PCJ_N-1];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pcj_tri_q  <= 0;
+      pcj_fill_q <= 0;
+      pcj_ref_q  <= 0;
+    end else begin
+      if (`PC_CORE.tcf_tri_valid_w && `PC_CORE.tcf_tri_ready_w) begin
+        if (pcj_tri_q < PCJ_N) begin
+          pcj_ax_q [pcj_tri_q] <= `PC_CORE.tcf_tri_ax_w;
+          pcj_ay_q [pcj_tri_q] <= `PC_CORE.tcf_tri_ay_w;
+          pcj_bx_q [pcj_tri_q] <= `PC_CORE.tcf_tri_bx_w;
+          pcj_by_q [pcj_tri_q] <= `PC_CORE.tcf_tri_by_w;
+          pcj_cx_q [pcj_tri_q] <= `PC_CORE.tcf_tri_cx_w;
+          pcj_cy_q [pcj_tri_q] <= `PC_CORE.tcf_tri_cy_w;
+          pcj_bh_q [pcj_tri_q] <= `PC_CORE.tcf_tri_behind_w;
+          pcj_aw_q [pcj_tri_q] <= `PC_CORE.tcf_tri_aw_w;
+          pcj_src_q[pcj_tri_q] <= `PC_CORE.tcf_tri_src_id_w;
+        end
+        pcj_tri_q <= pcj_tri_q + 1;
+      end
+      if (`PC_CORE.u_proj_subsystem.b_valid_o) begin
+        if (pcj_fill_q < PCJ_N) begin
+          pcj_fx_q[pcj_fill_q] <= `PC_CORE.u_proj_subsystem.b_x_o;
+          pcj_fy_q[pcj_fill_q] <= `PC_CORE.u_proj_subsystem.b_y_o;
+          pcj_fw_q[pcj_fill_q] <= `PC_CORE.u_proj_subsystem.b_w_o;
+          pcj_fb_q[pcj_fill_q] <= `PC_CORE.u_proj_subsystem.b_behind_o;
+          pcj_fi_q[pcj_fill_q] <= 8'(`PC_CORE.u_proj_subsystem.b_payload_o);
+        end
+        pcj_fill_q <= pcj_fill_q + 1;
+      end
+      if (`PC_CORE.ps_r_valid_c && `PC_CORE.ps_r_ready) begin
+        if (pcj_ref_q < PCJ_N) begin
+          pcj_ia_q[pcj_ref_q] <= 8'(`PC_CORE.ts_r_ia);
+          pcj_ib_q[pcj_ref_q] <= 8'(`PC_CORE.ts_r_ib);
+          pcj_ic_q[pcj_ref_q] <= 8'(`PC_CORE.ts_r_ic);
+        end
+        pcj_ref_q <= pcj_ref_q + 1;
+      end
+    end
+  end
+
+  task automatic pcj_report();
+    int unsigned k;
+    begin
+      $display("SMOKE: terrwc    replay_tri=%0d refused_tri=%0d missed_tri=%0d corner_hits=%0d corner_refusals=%0d corner_misses=%0d overflow=%0d seal_short=%0d",
+               proj_replay_triangles_o, proj_replay_refused_o, proj_replay_missed_o,
+               proj_corner_hits_o, proj_corner_refusals_o, proj_corner_misses_o,
+               proj_arena_overflow_o, proj_arena_seal_short_o);
+      $display("SMOKE: projcol   refs_seen=%0d fills_seen=%0d tris_seen=%0d",
+               pcj_ref_q, pcj_fill_q, pcj_tri_q);
+      for (k = 0; k < PCJ_N; k = k + 1)
+        if (k < pcj_ref_q)
+          $display("SMOKE: projcol   ref[%0d] ia=%0d ib=%0d ic=%0d", k,
+                   pcj_ia_q[k], pcj_ib_q[k], pcj_ic_q[k]);
+      for (k = 0; k < PCJ_N; k = k + 1)
+        if (k < pcj_fill_q)
+          $display("SMOKE: projcol   fill[%0d] index=%0d x=%0d y=%0d w=%0d behind=%0d", k,
+                   pcj_fi_q[k], pcj_fx_q[k], pcj_fy_q[k], pcj_fw_q[k], pcj_fb_q[k]);
+      for (k = 0; k < PCJ_N; k = k + 1)
+        if (k < pcj_tri_q)
+          $display("SMOKE: projcol   tri[%0d] src=%0d A=(%0d,%0d) B=(%0d,%0d) C=(%0d,%0d) behind=%0d aw=%0d", k,
+                   pcj_src_q[k], pcj_ax_q[k], pcj_ay_q[k], pcj_bx_q[k], pcj_by_q[k],
+                   pcj_cx_q[k], pcj_cy_q[k], pcj_bh_q[k], pcj_aw_q[k]);
+    end
+  endtask
+  // ==========================================================================
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
   // The top 4 KiB of RENDER.ASSET_POOL (0x06A0_0000 + 0x0160_0000), which
@@ -4661,6 +4761,51 @@ module tb_zhao_console_core_smoke
       // +32 page_crc32c is written by the fold below, once the body is final.
     end
 
+
+    // ---- -TerrainRelief: LAYER A GETS A REAL HEIGHT FIELD ------------------
+    // PROJCOLLAPSE's positive control for the named cause.  The body of every
+    // played page is all zeros, so layer A -- "Top base height, 33x33,
+    // height16" (spec/terrain_rules.md sec 7, the FIRST plane of the body, at
+    // byte PAGE_CRC_LO_C) -- is a flat field, every lattice height is the same
+    // constant, and under this fixture's camera (SGF_MAT rows 0/1 are the
+    // identity and row 3 is {0,0,1,0}, so ndc_y = world_y / world_z with the
+    // eye at world y = 0) EVERY projected corner gets the SAME screen y.  The
+    // cross product is then exactly zero and GEOM.CLIP culls every terrain
+    // triangle with verdict ZERO_AREA -- lawfully, on a correct projection of
+    // a plane seen edge-on.
+    //
+    // This arm writes relief instead.  height16 is S 1.7.8 metres
+    // (terrain_rules sec 2), so 256 raw is one metre; the pattern is a small
+    // staircase in both lattice axes, which is enough that no triangle has
+    // three corners at one height.  It is written BEFORE the CRC fold below so
+    // the page still seals against its own bytes.
+    //
+    // DIRECT POLARITY, and it does NOT assert the bug: it asserts that a
+    // lattice with relief carries screen area, which stays true after the
+    // fixture is repaired.  The plain build is the negative control and is
+    // unchanged.
+`ifdef ZHAO_SMOKE_TERRAIN_RELIEF
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      automatic int unsigned pbase = PAGE0_OFF_C + r * PAGE_BYTES_C;
+      for (int unsigned vj = 0; vj < 33; vj++)
+        for (int unsigned vi = 0; vi < 33; vi++) begin
+          // EVERY declaration here is `automatic` on purpose: a variable
+          // declared in a begin/end of a STATIC scope has static lifetime and
+          // its initialiser runs ONCE before time zero -- the exact trap the
+          // arena writer above records costing a whole diagnosis.
+          automatic int unsigned k   = vj * 33 + vi;
+          automatic int unsigned a   = pbase + PAGE_CRC_LO_C + 2 * k;
+          // 0..6 metres in a staircase whose two axes have coprime periods, so
+          // no cell has its three corners level. height16 is S 1.7.8 m, so one
+          // metre is 256 raw.
+          automatic int          hm  = 256 * int'((vi % 3) + (vj % 5));
+          automatic logic signed [15:0] h16 = 16'(hm);
+          hps_mem[ a      >> 3][8*( a      % 8) +: 8] = h16[ 7:0];
+          hps_mem[(a + 1) >> 3][8*((a + 1) % 8) +: 8] = h16[15:8];
+        end
+    end
+`endif
+
     // ---- AND ITS BODY CRC, FOLDED OVER THE BYTES THAT ARE ACTUALLY THERE ---
     // Same standing caveat as the record list's fold, stated again rather than
     // cross-referenced because it is the caveat people skip: this bench seals
@@ -6270,6 +6415,7 @@ module tb_zhao_console_core_smoke
              terr_cf_triangles_o, terr_cf_emitted_o, terr_cf_src_mismatch_o,
              terr_cf_uv_sat_o, terr_cf_shade_clamped_o, terr_cf_degenerate_o,
              terr_cf_dq_refused_o, terr_cf_dq_stray_o);
+    pcj_report();
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
@@ -7581,9 +7727,31 @@ module tb_zhao_console_core_smoke
     if (geom_clip_submitted_o != (SGF_EXP_REPLAYED + terr_cf_emitted_o))
       $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d -- the mesh reference wants %0d and TERRAIN.CLIPFEED emitted %0d",
              geom_clip_submitted_o, SGF_EXP_REPLAYED, terr_cf_emitted_o);
+    // PROJCOLLAPSE: this exact equality is the MESH's, and its own comment
+    // above already said what would happen if terrain ever contributed --
+    // "if that ever changes this fires, which is new information rather than
+    // noise". It fired, under `-TerrainRelief`, with exactly that information:
+    // a lattice WITH relief produces 256 triangles that carry screen area and
+    // are then rejected as OFFSCREEN, because this fixture's patch is
+    // SUB-PIXEL. See the two checks under the ifdef and the NOTE below.
+`ifdef ZHAO_SMOKE_TERRAIN_RELIEF
+    if (geom_clip_clipped_o < SGF_EXP_CLIPPED ||
+        geom_clip_clipped_o > (SGF_EXP_CLIPPED + terr_cf_emitted_o))
+      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP clipped=%0d -- the mesh wants %0d and terrain can account for at most %0d more",
+             geom_clip_clipped_o, SGF_EXP_CLIPPED, terr_cf_emitted_o);
+    // THE CONTROL'S OWN CHECK, and it asserts the CORRECT behaviour rather
+    // than the defect: a lattice with relief produces NO zero-area triangle.
+    // It stays true after the fixture is repaired, so it is not a test that
+    // asserts the bug -- the plain run is the negative control and is left
+    // measuring, not asserting, what it finds.
+    if (geom_clip_culled_o != SGF_EXP_CULLED)
+      $fatal(1, "SMOKE: -TerrainRelief: GEOM.CLIP culled=%0d, the mesh reference wants %0d -- a lattice WITH relief must leave no triangle with zero screen area",
+             geom_clip_culled_o, SGF_EXP_CULLED);
+`else
     if (geom_clip_clipped_o != SGF_EXP_CLIPPED)
       $fatal(1, "SMOKE: GEOM.CLIP clipped=%0d -- the reference wants %0d",
              geom_clip_clipped_o, SGF_EXP_CLIPPED);
+`endif
     if (geom_clip_culled_o > (SGF_EXP_CULLED + terr_cf_emitted_o))
       $fatal(1, "SMOKE: GEOM.CLIP culled=%0d exceeds what terrain could account for (%0d) -- a MESH triangle was culled",
              geom_clip_culled_o, SGF_EXP_CULLED + terr_cf_emitted_o);
@@ -7606,8 +7774,31 @@ module tb_zhao_console_core_smoke
     // PROJECTED corners that reach the arena. A non-zero world normal does not
     // imply a non-zero projected area, and the repair was verified against the
     // first while the entry's sentence was written about the second.
+    // AND THE CAUSE IS NAMED, 2026-09-26 (PROJCOLLAPSE), with the value
+    // measured at the seam instead of a verdict reached by elimination.
+    // `SMOKE: projcol` above prints the corners: A=(5851,8192) B=(5862,8192)
+    // C=(5870,8192). The three x DIFFER; only the y is shared, and 8192 in
+    // S 12.8 is 32.0 px -- EXACTLY this view's vertical centre, y0 + h/2 =
+    // 0 + 64/2. It is the viewport centre with a zero ndc_y added to it.
+    //
+    // TWO FIXTURE FACTS, AND BOTH ARE REQUIRED. The camera
+    // (`smoke_geom_fixture_gen.cpp:116`) has rows 0 and 1 the identity and
+    // row 3 {0,0,1,0}, so ndc_y = world_y / world_z with the eye at world
+    // y = 0; and the played pages' BODY is all zeros, so layer A -- the
+    // 33x33 top base height -- is a CONSTANT. Together they put the ground
+    // plane THROUGH THE EYE, and a plane through the eye projects to a LINE.
+    // Every corner gets the same y, the cross product is
+    // (5862-5851)*0 - 0*(5870-5851) = 0 exactly, and the cull is LAWFUL.
+    // `zhao_project_core` is not at fault and neither is the carriage:
+    // `SMOKE: terrwc` reads corner_hits=768 of 768, refusals 0, misses 0.
+    //
+    // PROVEN BY REVERSAL, not by argument: `-TerrainRelief` writes a real
+    // height field into layer A and nothing else, and `culled` goes 256 -> 0
+    // while the corners' y become 8192 / 8265 / 8229. The predicted step was
+    // 36.6 S 12.8 units per metre of relief at this patch's measured
+    // w = 14680064 (224.0 m); the measured steps are 37 and 36.
     if (geom_clip_culled_o != 0)
-      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA. The arm is composed and its value traverses to the door (see `SMOKE: terrcf`); the projected corners enclose no area, so NO TERRAIN FRAGMENT IS DRAWN. This is a FIXTURE defect and entry I13 records it as the next thing to fix -- do not read this line as a design property.",
+      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA -- LAWFULLY. The projection is correct and the PLANE IS EDGE-ON: this fixture's camera leaves world Y on screen Y with the eye at world y=0 (smoke_geom_fixture_gen.cpp:116), and the played pages' all-zero BODY makes layer A a constant, so every lattice vertex has world y=0 and every projected corner gets screen y=8192 (=32.0 px, exactly y0+h/2). See `SMOKE: projcol` for the corners and run -TerrainRelief for the reversal (culled 256 -> 0). Repair is relief in layer A or an eye off the ground plane -- NOT a tolerance on the zero-area test, which would admit a degenerate triangle.",
                geom_clip_culled_o);
     if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
       $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",

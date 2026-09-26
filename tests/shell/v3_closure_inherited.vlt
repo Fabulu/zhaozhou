@@ -19,6 +19,53 @@
 //
 // This is a WAIVER, not a fix. The warnings are real and they belong to their
 // own packets.
+//
+// ---------------------------------------------------------------------------
+// WHAT IT IS HIDING, COUNTED BY HAND -- 2026-09-26 (gz/projcollapse)
+// ---------------------------------------------------------------------------
+// The header above says this closure produces "89 UNUSEDSIGNAL". THAT NUMBER
+// WAS WRITTEN DOWN AND NEVER ACTED ON, which is CLAUDE.md's "a rule that HIDES
+// waste is not a rule that removes it" one level up from a disk: the count is
+// accurate, it has sat in this comment since the file was written, and nothing
+// ever read it back.
+//
+// A hand sweep of `fpga/rtl/texture/` and `fpga/rtl/geometry/` -- occurrence-
+// counting every module-internal declaration and then OPENING each survivor,
+// because the lint is switched off here and cannot be asked -- found 107
+// signals that are DECLARED, DRIVEN EXACTLY ONCE and READ BY NOTHING:
+//
+//    38  zhao_texture_island_top.sv
+//    68  zhao_texture_island_v3_top.sv
+//     1  zhao_vertex_arena.sv
+//
+// `fpga/rtl/raster/`, `common/` and `video/` screened CLEAN at this tier -- 0
+// survivors of 9 candidates, every one already carrying an explicit inline
+// `lint_off` with a stated reason. That is a real negative result, and it
+// localises the problem to the two composed island tops.
+//
+// THE PATTERN IS ONE SHAPE, REPEATED: a leaf module's status or fault `_o`
+// port lands on a same-named local wire, and only a curated subset of those
+// wires is forwarded to the top's own `cnt_*_o` ports. Everything else is a
+// dead end -- so a real fault in RCP accept rate, descriptor generation
+// mismatch, binding-resolver overflow, AUX credit exhaustion, owner-event
+// commits or combiner saturation would produce NO OBSERVABLE SIGNAL ANYWHERE.
+//
+// Three are worse than "an unused wire" and are worth naming:
+//   * `pu_occ` (zhao_texture_island_top.sv:795-797) is SELF-DOCUMENTED --
+//     "Nothing reads pu_occ in either island top -- it is declared, driven and
+//     never consumed" -- and was left that way.
+//   * `desc_generation_mismatch_w` (zhao_texture_island_v3_top.sv:1072, :1111)
+//     is the GENERATION-MISMATCH counter: the exact detector CLAUDE.md's "a
+//     detector wired to two operands that move together" chapter was written
+//     about, wired to a dead end inside the composed island.
+//   * `f_shadow_gen` (fpga/rtl/geometry/zhao_vertex_arena.sv:421, :446, :450)
+//     sits INSIDE that file's formal harness, is driven twice and is read by no
+//     property. The scaffolding for a generation-hazard check exists; the
+//     assertion that would use it was never written, so that hazard class has
+//     zero coverage in an otherwise carefully proven file.
+//
+// DELETING LINES FROM HERE IS STILL HOW THAT PROGRESS BECOMES VISIBLE, as the
+// paragraph above says. This one records what the lines are worth.
 // A NOTE ON THE GLOBS. Verilator reports Windows paths with MIXED
 // separators -- `fpga/rtl/texture\zhao_texture_island_v3_top.sv` -- so a
 // pattern with a forward slash before the basename matches NOTHING, and a
