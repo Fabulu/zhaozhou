@@ -6062,6 +6062,141 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST -- BEFORE THE FIELDMAJOR BLOCK BELOW, WHICH IT
+//      CORRECTS. EARTHMAJOR, 2026-09-26: THE COMPOSED HOST'S ENGINE OVERLAP
+//      IS **ONE**, MEASURED, AT EVERY PARAMETER SETTING. THE DECIDING CELL
+//      BELOW IS OFF BY 18x AND THE BUILD ORDER INVERTS: THE GATHERING FRONT
+//      COMES FIRST, NOT THE ADAPTER. Register 3 -> 3, bare. Nothing composed.
+//
+//      Full decision record, in the owner's format:
+//      `reports/DECISION-20260926-I34-EARTHMAJOR-FRONT-FIRST.md`.
+//
+//      (E1) THE TWO DEPTH COLUMNS BELOW THAT NAME REAL CONFIGURATIONS NAME
+//           NONE. (F3) maps `depth 2` to "THE CONSOLE AS COMPOSED TODAY" and
+//           `depth 32` to "THE ENGINE'S OWN GATED CONFIGURATION", and the
+//           whole commission rests on the second. BOTH SENTENCES REASON ABOUT
+//           `zhao_field_v3_engine`'s CONTEXT COUNT. Neither is about the block
+//           standing between an adapter and that engine, which is
+//           `zhao_field_host_v2` -- the module THIS FILE instantiates as
+//           `u_field_host`.
+//
+//           Its front is ONE sequential state machine, E_IDLE -> E_ZERO ->
+//           E_WRITE -> E_START -> E_RUN -> E_DRAIN -> E_RETIRE, with
+//           `req_ready_o` gated on `state == E_IDLE` (that file :1150). There
+//           is one `state` and one `cur_slot` and NEITHER IS DIMENSIONED BY
+//           ANY PARAMETER, so a context the front never reaches is not a
+//           depth. `FAB_LANES` does not help either and the RTL says so at the
+//           preload port: `fab_pre_data = {FAB_LANES{cur_in[lane_sel]}}` --
+//           THE POINT IS REPLICATED, and that file's header calls it "a WASTE,
+//           not a fix" and names the missing piece: "A front that gathers
+//           FAB_LANES points per grant ... IS NOT BUILT."
+//
+//      (E2) MEASURED RATHER THAN READ OFF THE RTL, because a single-register
+//           argument is not a measurement. `tests/field/field_host_depth_census.cpp`
+//           drives the composed host AT THIS FILE'S OWN TWENTY PARAMETERS --
+//           not the module's defaults, which is the trap
+//           `zhao_field_host.sv:115` already names -- with four clients
+//           saturating for 4,000 clocks. 25 checks, 0 failures:
+//
+//             ACCEPT-TO-ACCEPT INTERVAL     : 62.00 clocks  <- this is L/depth
+//             run latency (accept->response): 62.00 clocks
+//             ENGINE OVERLAP (derived)      :  1.00 evaluations
+//             last status                   : 0x00 StOk, out[0] = 42
+//
+//           The overlap is DERIVED from two operands measured by DIFFERENT
+//           EVENTS -- latency per client by accept-to-response, interval by
+//           accept-to-accept -- which is the first question CLAUDE.md's
+//           metadata-swap chapter says to ask of any checker.
+//
+//      (E3) SO THE COMPOSED COST IS 74,507 CLOCKS, NOT 4,102. A group is FOUR
+//           POINTS and this front answers ONE POINT PER RUN, so a group costs
+//           four accept intervals until a gathering front exists:
+//
+//             the console as composed today     248 clk/grp  74,507  12.42x
+//             ... with the per-point clear off  120 clk/grp  36,491   6.08x
+//             (F4c)'s deciding cell              ~13          4,102   0.68x
+//             vertex-major, the thing replaced    --         91,551  15.3x
+//
+//           THE TRANSPOSE ALONE IS WORTH 1.23x, NOT 22x. Said the way the
+//           budget binds: with the 851 floor and 297 groups A GROUP MUST COST
+//           <= 17.3 CLOCKS. It costs 248.
+//
+//      (E4) AND THE COST DECOMPOSES, WHICH IS THE PART THAT IS ACTIONABLE AND
+//           IS NEW. The 62 clocks are not one lump:
+//             * E_ZERO is 32 clocks -- 52% OF THE RUN -- and needs NO NEW
+//               BLOCK. Directive 6.1 / FH08 already let an image with an
+//               accepted INIT_PROOF skip it and `hdr_ipok` is a live gate in
+//               shipped RTL; it is an AUTHORING act, not an RTL one. The
+//               census asserts the saving is REGS clocks within 20%. THIS
+//               DISCHARGES `design/contracts/GEOM.WARP.md` P9's standing
+//               "Still unmeasured in clocks".
+//             * E_WRITE is IN_LANES = 15, half of what remains. A group-wide
+//               front writes four points into `fab_pre_data`'s four lanes in
+//               the SAME 15 clocks -- that port is already FAB_LANES*32 wide
+//               and only the replication wastes it.
+//             * the census's program is two uops ON PURPOSE, so every figure
+//               above is a FLOOR; a real Earth program adds its own clocks and
+//               `tools/field/measure_earth_budget.cpp` owns that half.
+//           ARITHMETIC ON THESE MEASUREMENTS, DECLARED AS SUCH AND NOT
+//           BENCHED: gathering front (/4) + INIT_PROOF (-32/point) + two runs
+//           outstanding (/2) puts a group at ~15 clocks, ~5,300 per
+//           association -- THE FIRST ARRANGEMENT ANY MEASUREMENT IN THIS TREE
+//           HAS PUT UNDER 6,000, with all three terms named blocks or acts.
+//
+//      (E5) THE BUILD IS REORDERED, NOT REFUSED, and it is asked as
+//           DECISION-OR-BUILD rather than inherited. The field-major adapter
+//           of (F5)'s item 1 is still commissioned and still correct; it is no
+//           longer FIRST. Composing it today lands at 74,507 clocks -- a 1.23x
+//           improvement bought with the whole subsystem swap, INCLUDING the
+//           re-homing of `zhao_terrain_veljoin`, which reaches
+//           `zhao_part_collide` today. And a SCALAR adapter is the thing the
+//           front then replaces: a group-wide adapter presents four points per
+//           request and a scalar one presents one. CLAUDE.md's "a fit that
+//           measures a circuit you already know is wrong is wasted" applies to
+//           a composition too.
+//           WHAT IS NOT WITHDRAWN, so it is not re-inherited as open: the
+//           field-major machine's commission, `zhao_terrain_field_walk` and
+//           `zhao_terrain_patch_acc` as its front and back, FIELDMAJOR's
+//           248-check co-elaboration, and all seven prerequisites. ONLY THEIR
+//           ORDER CHANGES, and only because prerequisite (5) -- "the
+//           executor's WIDTH" -- TURNED OUT NOT TO BE A PARAMETER.
+//
+//      (E6) AND (F4b)'s TWO THROTTLES ARE UNAFFECTED AND STILL OWED. The
+//           compose cache's write port (1,911 clocks) and the authored-lattice
+//           source (819, and structural) are at the accumulator's ends and the
+//           front is upstream of both. All three are additive.
+//
+//      (E7) THE CONTROLS, AND TWO FIRED ON THIS PACKET'S AUTHOR.
+//           * The census's first version asserted PEAK OUTSTANDING == 1, from
+//             the single `state` register. THE HOST ANSWERED 2 AND WAS RIGHT:
+//             FH20 reserves a response entry before acceptance, so a FINISHED
+//             result waits in the delivery queue while the next run is
+//             granted. That overlaps no engine work and amortises no latency,
+//             so counting it as depth divides L by a number that buys nothing.
+//           * The first case 2 loaded INIT_PROOF AFTER the header and reported
+//             1.00 CLOCKS PER RUN -- a 62x speed-up that was entirely
+//             refusals, because `LdInitProof` sets `hdr_loaded[slot] <= 1'b0`
+//             (that file :1472) and invalidates the header. THE RUN-COUNT
+//             CHECK PASSED; ONLY THE STATUS CHECK CAUGHT IT. Every cadence
+//             figure now carries StOk and out[0] == 42 beside it.
+//           * Positive control: case 0 drives the SAME accumulator the DUT
+//             measurement uses from a synthetic trace, requiring 2 then 3 --
+//             and 1, NOT 8, for eight strictly serial runs.
+//           * NO ASSERTION ASSERTS THE BUDGET in either direction.
+//
+//      (E8) AND THREE DOCUMENTS ALREADY CARRIED THIS. `design/contracts/
+//           GEOM.WARP.md` P5 measured it on 2026-09-21, FIVE DAYS BEFORE the
+//           census that contradicts it: "Parameter-independent across CLIENTS,
+//           PROGS, FAB_LANES (WHICH REPLICATES ONE POINT ACROSS LANES AND
+//           DISCARDS THE SURPLUS -- IT DOES NOT ADD POINTS), FAB_GROUP_PTS,
+//           FAB_OUTSTANDING and CREDITS ... It reopens only on an RTL change
+//           that adds a second front." `zhao_field_host.sv`'s own header says
+//           it twice. The knowledge was in the tree, correct, in a contract,
+//           and NOTHING READ IT BACK -- which is this file's own uncashed-
+//           cheque chapter arriving in a measurement instead of in silicon.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST. FIELDMAJOR, 2026-09-26: THE FIELD-MAJOR FORM IS
 //      BENCHED AND IT MEETS THE CONTRACT -- BUT ONLY IF THE EXECUTOR IS ALSO
 //      COMPOSED AT ITS GATED WIDTH. Register 3 -> 3, bare. Nothing composed.
