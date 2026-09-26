@@ -220,6 +220,15 @@ module zhao_terrain_spdesc #(
     input  var logic        [ 5:0] o_lat_vi_i,
     input  var logic        [ 5:0] o_lat_vj_i,
     input  var logic               o_lat_surface_i,
+    // The velocity word, carried through on the SAME borrowed read.
+    // NEW 2026-09-26 (TERRVEL). This block is a pass-through on the lattice
+    // RESPONSE -- o_lat_h_o is a bare assign of c_lat_h_i -- so the velocity
+    // rides the identical combinational path and cannot skew against the
+    // height it describes. Routing it around this block instead, direct from
+    // the compose cache to the heighttap, would have been two fewer edits and
+    // would have put the two halves of one answer on two different paths.
+    output var logic signed [15:0] o_lat_vel_o,
+    output var logic               o_lat_vel_present_o,
     output var logic signed [31:0] o_lat_h_o,
     output var logic signed [31:0] o_lat_wx_o,
     output var logic signed [31:0] o_lat_wz_o,
@@ -228,6 +237,8 @@ module zhao_terrain_spdesc #(
     output var logic        [ 5:0] c_lat_vi_o,
     output var logic        [ 5:0] c_lat_vj_o,
     output var logic               c_lat_surface_o,
+    input  var logic signed [15:0] c_lat_vel_i,
+    input  var logic               c_lat_vel_present_i,
     input  var logic signed [31:0] c_lat_h_i,
     input  var logic signed [31:0] c_lat_wx_i,
     input  var logic signed [31:0] c_lat_wz_i,
@@ -405,6 +416,8 @@ module zhao_terrain_spdesc #(
 
   // The response is not multiplexed: the cycle after an upstream request the
   // datum belongs to upstream, and this block did not inject on that cycle.
+  assign o_lat_vel_o         = c_lat_vel_i;
+  assign o_lat_vel_present_o = c_lat_vel_present_i;
   assign o_lat_h_o  = c_lat_h_i;
   assign o_lat_wx_o = c_lat_wx_i;
   assign o_lat_wz_o = c_lat_wz_i;

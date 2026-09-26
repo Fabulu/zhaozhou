@@ -4498,6 +4498,107 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      TERRVEL, 2026-09-26: THE VELOCITY CHANNEL IS CLOSED. THE ENTRY IS NOT.
+//
+//      `zhao_terrain_velocity` has LEFT the completion register's BUILT BUT
+//      NOT CONNECTED list -- 8 gaps -> 7, connected capabilities 109 -> 110,
+//      measured bare. What follows is what that cost and what it did NOT buy.
+//
+//      (1) THE ARCHITECTURAL BLOCKER WAS NARROWER THAN THIS ENTRY RECORDED,
+//          AND THE MEASUREMENT IS THE USEFUL PART. The entry said joining the
+//          block's own 33x33 sweep to the consumer's vertex stream "is a
+//          scheduler and a composer may not write one". The second half is a
+//          rule about WHERE LOGIC LIVES and it is obeyed: the join is
+//          `zhao_terrain_veljoin`, a named block with a manifest row, a source
+//          list entry and a directed test, exactly EDGECLOSE's precedent.
+//          The FIRST half does not survive measurement.
+//          `zhao_terrain_pagestream` advances its vertex address column-fast
+//          then row over 33x33 (:797-801, EDGE=33, VERTS=1,089) and
+//          `zhao_terrain_velocity`'s law V3 sweep advances identically. THEY
+//          ARE THE SAME WALK. Nothing needs reordering or buffering -- which
+//          is what a scheduler would be. What was needed is a FORK WITH A
+//          JOINT READY and an ADDRESS INTERLOCK, and the interlock is what
+//          turns "the same walk" from a comment into a checked fact.
+//          The seam was designed for this and half-built: `fld_covers_o` on
+//          `zhao_terrain_patch` already says "TERRAIN.VELOCITY consumes the
+//          same per-vertex lane stream for out-lane 1 and takes this answer
+//          ... Exported 2026-08-19 with TERRAIN.VELOCITY."
+//
+//      (2) THE SDRAM PUBLISH IS STILL REFUSED AND WAS NOT BUILT.
+//          `spec/memory_rules.md` 5b's bandwidth proof stands untouched and
+//          `TERRAIN.COMPOSED_VELOCITY`'s guard window stays shut. COMPOSEPUB's
+//          own sentence named the route that was taken instead: "the composed
+//          HEIGHT already reaches its consumers THROUGH FABRIC". So does
+//          velocity now.
+//
+//      (3) WHAT THE CHANNEL ACTUALLY REACHES, all real production modules:
+//            zhao_field_earth_adapter  (ONE evaluation, four out-lanes)
+//              out-lane 0 -> zhao_terrain_patch            (height, unchanged)
+//              out-lane 1 -> zhao_terrain_veljoin              NEW
+//                            -> zhao_terrain_velocity
+//                            -> zhao_terrain_compcache_front  (4.2 plane, NEW)
+//                            -> zhao_forge_cliff_srvshare     (payload 96->113)
+//                            -> zhao_terrain_spdesc
+//                            -> zhao_terrain_heighttap        (4.3's cell, NEW)
+//                            -> zhao_part_terrain_tap         (4.3 interp)
+//                            -> zhao_part_collide             (relative v)
+//          `efa_velocity` was driven by one block and read by nobody from
+//          2026-09-23. It is read, and what it reaches is a particle contact.
+//
+//      (4) NONE OF THAT WAS INVENTED. Every step is a RATIFIED LAW THAT HAD
+//          NEVER BEEN IMPLEMENTED, and finding that out is what made the
+//          packet cheap:
+//            * `spec/terrain_rules.md` 4.3's NORMATIVE pseudocode returns
+//              {class, top, bottom, VELOCITY, matA, matB, weight, sheet} and
+//              computes "velocity = interp(velocity lattice)". There was no
+//              implementation ANYWHERE -- `zhao_terrain_heighttap` IS 4.3 in
+//              fabric and contained zero occurrences of the string, and
+//              `zref::terrain::ColumnResult` carries {cls, top, bottom}.
+//            * 4.1 law 2 names the destination: "Every consumer --
+//              tessellation/render, sim height query, particle collision,
+//              velocity, normals, nav -- reads the SAME composed lattice."
+//            * `design/contracts/PART.COLLIDE.md`:135-139 commissioned the
+//              consumer: "body surface velocity enters the relative-velocity
+//              calculation ... so that the oracle is written with a
+//              relative-velocity form now, rather than an absolute-velocity
+//              form that would have to be rewritten later." The RTL shipped
+//              the absolute form that paragraph warned against.
+//
+//      (5) THE UNITS ARE MEASURED, NOT CHOSEN, and this was checked BEFORE any
+//          arithmetic was written, because a wrong conversion here would have
+//          been an invented physical constant. 4.2 stores velocity as
+//          height16; height16 is fx16 rescaled by 8, i.e. Q8.8 metres, so
+//          1 LSB = 1/256 m. `zhao_part_collide`'s own ratified FORMATS block
+//          (amendment C2 / ruling R3) reads "vel s11 S 2.8 m/tick -> 1 LSB =
+//          1/256 m". The field tick and the particle tick are ONE clock here.
+//          So the two are the SAME UNIT and the only conversion is a
+//          saturating narrow s16 -> s11, counted by `part_ter_vel_sats_o`.
+//          No spec in this tree states the velocity lane's TIME BASE, so had a
+//          scale factor been needed it would have had to be invented, and this
+//          packet would have stopped instead.
+//
+//      (6) NOTHING MOVES WITHOUT A LIVE FIELD, STRUCTURALLY. Law V2 makes the
+//          lattice word exactly zero at any vertex no lane covers, so
+//          `t_vy` is 0 over still ground and `zhao_part_collide`'s arithmetic
+//          collapses bit-for-bit to what it was. That is the whole
+//          compatibility argument and it is why no existing particle test
+//          moves.
+//
+//      (7) WHAT THIS DID NOT CLOSE, AND THE ENTRY STAYS OPEN FOR BOTH:
+//            * MATERIAL and NAV. Untouched, deliberately. Item (B) below puts
+//              them to the OWNER as a decision a packet may not take, and
+//              nothing here changes that: their destination is still
+//              unratified and the tree still declares two incompatible
+//              encodings. The velocity work does NOT generalise to them --
+//              velocity had a ratified destination and a ratified
+//              interpolation law, and they have neither.
+//            * THE INTAKE-versus-LIVE-PATCH hole. See the TERRVEL note in
+//              item (4) of the COMPOSEPUB block below.
+//
+//      (8) `zhao_terrain_normalmap` is now the ONLY entry left on the
+//          register's BUILT BUT NOT CONNECTED list. It is not this entry's.
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST. NARROWED AGAIN 2026-09-23 (PATCHV2), AND THE
 //      BLOCK BELOW IT OVERSTATED ONE THING AND UNDERSTATED ANOTHER.
 //
@@ -4568,6 +4669,80 @@
 //          resident set, a real engine run on the previous frame's uniforms
 //          MOVING NO COUNTER AT ALL. That half is now demonstrated (case 13b)
 //          and closed. Full statement in that block's header.
+//
+//          TERRVEL, 2026-09-26: THE QUESTION THIS ENTRY ASKED IS ANSWERED,
+//          AND THE ANSWER IS "NOTHING DOES". THE HOLE IS NOT CLOSED.
+//
+//          The entry's instruction was to "say what BOUNDS CMD.EXEC's record
+//          stream against the patch schedule rather than assert it is
+//          bounded". Measured, not inherited:
+//
+//            * THE STREAM IS BOUNDED IN QUANTITY. `zhao_cmd_exec`'s
+//              `TFLD_Q = 4` caps a packet at four records and refuses a
+//              bigger one WHOLE (`tfld_overflow_o`); `tq_cp` advances only at
+//              the verdict, so a packet's set becomes visible once,
+//              contiguously, and is never re-offered.
+//            * IT IS BOUNDED IN DRAIN RATE. The adapter's intake is
+//              I_TAKE + 17 x I_DIV + I_WR, about 19 clocks per record, so a
+//              full packet drains in roughly 76.
+//            * IT IS BOUNDED IN TIME RELATIVE TO A PATCH BY NOTHING AT ALL.
+//              `cmd_tfld_ready_w = tfl_cmd_ready && efa_rec_ready`. The first
+//              term is low only while a replay is RUNNING -- 16 clocks at the
+//              head of a patch -- and the second is `(in_st == I_TAKE)`.
+//              NEITHER TERM MENTIONS THE PATCH. For the remaining order 10^5
+//              clocks of a covered walk the joined ready is high.
+//            * THE ONLY THING STANDING IN FOR A BOUND IS A SENTENCE IN
+//              `zhao_cmd_exec.sv`:667-669 -- that staging a packet is
+//              thousands of clocks while a drain is a handful. That is a
+//              property of the cartridge's packet stream, not of this
+//              hardware, and the number it has to beat is not "a handful" but
+//              a patch walk of order 10^5 clocks that nothing tells the
+//              adapter has ended.
+//
+//          WHERE THE CLEAR ACTUALLY IS, stated precisely because the entry's
+//          phrasing invites the wrong file: inside the adapter `patch_open_i`
+//          touches exactly one register (`rep_idx <= 0`). The clear that drops
+//          the binding is the INTAKE's, `b_res[eff_n_c] <= 1'b0` at I_TAKE,
+//          firing for frame F+1's record while frame F's replay-set `b_res` is
+//          still being read by the lane stream.
+//
+//          `fld_earth_idle_o` IS THE RIGHT SIGNAL, CONFIRMED. It is
+//          `(in_st == I_TAKE) && (state == E_IDLE) && !vtx_live`, and
+//          `vtx_live` is raised at a vertex fire with `lanes_i != 0` and is
+//          high for the whole of a patch's field walk. Its ZERO READERS are
+//          re-confirmed at this commit, and it is not alone: `terr_pt_idle_o`
+//          and `terr_fl_idle_o` have the same shape, core port -> board port
+//          -> nothing, and a sweep of the production composers finds NO
+//          `*_idle_o` used as a gate anywhere.
+//
+//          THE CANDIDATE CLOSE IS ONE LINE, AND IT IS NOT TAKEN HERE:
+//            assign cmd_tfld_ready_w =
+//                tfl_cmd_ready && efa_rec_ready && fld_earth_idle_o;
+//          It is refused for two reasons, both of which are MEASUREMENTS
+//          somebody owes before that line lands, and neither of which this
+//          packet could settle without building the thing it would gate:
+//
+//            1. DEADLOCK, and it is reachable rather than theoretical.
+//               `vtx_live` is set by a vertex fire and the adapter has NO PORT
+//               THAT SAYS THE PATCH RETIRED -- that is this very entry's
+//               finding. The composer discards an entire unplaced patch
+//               (`tps_v_ready = tpc_placed ? ... : 1'b1`, :22257), so a walk
+//               abandoned part-way is a legal thing for the console to do. If
+//               `vtx_live` can survive that, the gate holds CMD.EXEC's record
+//               stream for the rest of the frame and the fault is far worse
+//               than the one it repairs. A bounded clear has to exist first.
+//            2. STARVATION. A covered patch walk is order 10^5 clocks against
+//               the 10,416-clock frame allowance this entry already records.
+//               Gating the stream on idle makes it wait for the gaps between
+//               walks. There ARE gaps -- one packet per frame, many patches
+//               per frame -- but that is a SCHEDULING argument, which is the
+//               same kind of claim this hole exists to retire.
+//
+//          AND THE DETECTOR NEARBY IS THE MIRROR IMAGE, not this fault:
+//          `zhao_terrain_fieldlist`'s `open_at_patch_o` counts a PATCH JOB
+//          meeting an UNSEALED LIST. Records arriving mid-patch leave it at
+//          zero, so its silence is not evidence about this hole. Anyone
+//          quoting it as such is reading the wrong counter.
 //
 //          WHAT REMAINS HERE, NARROWED. Intake versus REPLAY is closed.
 //          Intake versus a LIVE PATCH is not, and it is THIS file's to close,
@@ -9073,6 +9248,27 @@ module zhao_console_core
   output logic [15:0]             terr_pt_subpatch_dirty_o,
   output logic                    terr_pt_idle_o,
 
+  // TERRAIN.VELJOIN and TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL).
+  // A counter nobody outside the core can read is not evidence, so the
+  // interlock and the sweep census leave the module edge like every other
+  // terrain census here.
+  output logic [31:0]             terr_vj_lanes_joined_o,
+  output logic [31:0]             terr_vj_sweeps_started_o,
+  output logic [31:0]             terr_vj_sweeps_aborted_o,
+  output logic [31:0]             terr_vj_vtx_mismatch_o,
+  output logic [31:0]             terr_vj_arm_stall_o,
+  output logic [31:0]             terr_tv_samples_o,
+  output logic [31:0]             terr_tv_add_sats_o,
+  output logic [31:0]             terr_tv_rescale_sats_o,
+  output logic [15:0]             terr_tv_moving_mask_o,
+  // The velocity chain's CONSUMER-side numbers. These are the ones that say
+  // the lattice was READ, as opposed to computed: the first counts terrain
+  // samples whose interpolated ground rate was non-zero, the last counts
+  // particle contacts actually RESOLVED against moving ground.
+  output logic [31:0]             part_ter_moving_o,
+  output logic [31:0]             part_ter_vel_sats_o,
+  output logic [31:0]             part_col_moving_ground_o,
+
   output logic                    terr_cc_fill_busy_o,
   output logic                    terr_cc_fill_done_o,
   output logic                    terr_cc_serve_valid_o,
@@ -9080,6 +9276,9 @@ module zhao_console_core
   output logic [31:0]             terr_cc_fill_records_o,
   output logic [31:0]             terr_cc_patches_filled_o,
   output logic [31:0]             terr_cc_patches_served_o,
+  output logic [31:0]             terr_cc_vel_words_o,
+  output logic [31:0]             terr_cc_vel_orphan_o,
+  output logic [31:0]             terr_cc_vel_done_mm_o,
   output logic [31:0]             terr_cc_fill_overrun_o,
   output logic [31:0]             terr_cc_lat_oob_o,
   output logic [31:0]             terr_cc_cs_oob_o,
@@ -11900,6 +12099,12 @@ module zhao_console_core
   wire signed [31:0]        htp_req_x, htp_req_z;
   wire                      htp_rsp_valid, htp_rsp_no_ground;
   wire signed [31:0]        htp_h00, htp_h10, htp_h01, htp_h11, htp_wx00, htp_wz00;
+  // TERRVEL: terrain_rules 4.3's velocity member, as a CELL, broadcast on the
+  // same response the height cell rides. Read by PART.COLLIDE's tap below.
+  wire signed [15:0]        htp_v00, htp_v10, htp_v01, htp_v11;
+  wire signed [PART_VEL_W-1:0] ptt_t_vy;
+  wire                      ptt_t_vy_valid;
+  wire                      htp_vel_present;
   wire [4:0]                htp_sh;
   wire signed [31:0]        htp_na_x, htp_na_y, htp_na_z, htp_nb_x, htp_nb_y, htp_nb_z;
   wire [31:0]               ptt_mismatch, ptt_range;
@@ -11923,6 +12128,7 @@ module zhao_console_core
     .POS_W  (PART_POS_W),
     .NRM_W  (PART_NRM_W),
     .NRM_Q  (10),
+    .VEL_W  (PART_VEL_W),
     .CELLS  (4),
     .SIDE_W (PART_PID_W + 1)
   ) u_part_terrain_tap (
@@ -11955,6 +12161,9 @@ module zhao_console_core
     .t_nx_o    (ptt_t_nx),
     .t_ny_o    (ptt_t_ny),
     .t_nz_o    (ptt_t_nz),
+    // REAL: into PART.COLLIDE, the GROUND's own rate at this sample.
+    .t_vy_o      (ptt_t_vy),
+    .t_vy_valid_o(ptt_t_vy_valid),
 
     // REAL: TERRAIN.HEIGHTTAP.
     .tap_req_valid_o  (htp_req_valid),
@@ -11969,6 +12178,14 @@ module zhao_console_core
     // own collision samples.
     .tap_rsp_valid_i    (tsh_r_rsp_valid_w[0]),
     .tap_rsp_no_ground_i(htp_rsp_no_ground),
+    // TERRVEL: terrain_rules 4.3's velocity member, as a CELL. Interpolated in
+    // this block with the SAME triangle pick as the height beside it, so the
+    // two members of one 4.3 answer cannot come from different triangles.
+    .tap_rsp_v00_i        (htp_v00),
+    .tap_rsp_v10_i        (htp_v10),
+    .tap_rsp_v01_i        (htp_v01),
+    .tap_rsp_v11_i        (htp_v11),
+    .tap_rsp_vel_present_i(htp_vel_present),
     .tap_rsp_h00_i (htp_h00),
     .tap_rsp_h10_i (htp_h10),
     .tap_rsp_h01_i (htp_h01),
@@ -11993,7 +12210,9 @@ module zhao_console_core
     .fills_issued_o     (ptt_issued),
     .fills_landed_o     (part_ter_fills_landed_o),
     .fills_discarded_o  (ptt_discarded),
-    .invalidations_o    (ptt_invals)
+    .invalidations_o    (ptt_invals),
+    .samples_moving_o   (part_ter_moving_o),
+    .vel_sats_o         (part_ter_vel_sats_o)
   );
 
   zhao_part_collide #(
@@ -12033,6 +12252,15 @@ module zhao_console_core
     .t_ny_i    (ptt_t_ny),
     .t_nz_i    (ptt_t_nz),
 
+    // TERRVEL: the moving-surface term design/contracts/PART.COLLIDE.md
+    // commissioned ("body surface velocity enters the relative-velocity
+    // calculation") and the RTL never received. With no live TerrainField,
+    // TERRAIN.VELOCITY's law V2 makes this EXACTLY zero at every vertex, so
+    // the arithmetic is bit-identical to what it was -- which is why no
+    // existing particle test moves.
+    .t_vy_i      (ptt_t_vy),
+    .t_vy_valid_i(ptt_t_vy_valid),
+
     // I7: the one plane, a per-frame owner value with no CMD path.
     .pl_en_i(pop_plane_en_c),
     .pl_nx_i(pop_plane_nx_c),
@@ -12065,6 +12293,7 @@ module zhao_console_core
     .terrain_sample_unavailable_o(part_terrain_sample_unavailable_o),
     .response_refused_o          (part_response_refused_o),
     .field_clamps_o              (part_field_clamps_o),
+    .contacts_moving_ground_o    (part_col_moving_ground_o),
     // The console's collision counter, finally driven by a block that can move
     // it. Before ruling I4 this port was structurally stuck at zero and header
     // entry I4 warned against reading it as "no collisions occurred".
@@ -14794,10 +15023,17 @@ module zhao_console_core
 
   wire        fcl_lat_srv_req;
   wire [12:0] fcl_lat_srv_addr;    // {surface, vj, vi}
-  wire [95:0] fcl_lat_o0_rsp;      // {wz, wx, h}
+  // WIDENED 96 -> 113 ON 2026-09-26 (TERRVEL): {vel_present, vel, wz, wx, h}.
+  // The sharer is payload-generic, so carrying the velocity word back up the
+  // serve chain costs it no port and no logic -- it is a concatenation.
+  wire [112:0] fcl_lat_o0_rsp;     // {vel_present, vel, wz, wx, h}
   wire        fcl_lat_req, fcl_lat_grant, fcl_lat_rsp_valid, fcl_lat_surface;
   wire [ 5:0] fcl_lat_vi, fcl_lat_vj;
-  wire [95:0] fcl_lat_rsp;
+  // FORGE.CLIFF reads the three height/placement fields and has no use for a
+  // ground RATE, so bits [112:96] of its own response are legitimately unread.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [112:0] fcl_lat_rsp;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // ---- the producer, the evaluator and the emission stage ------------------
   wire        fcl_cmd_valid, fcl_cmd_ready, fcl_cmd_vdist_en;
@@ -14883,13 +15119,13 @@ module zhao_console_core
   // composition made up.  Tied low, and the block says so.
   zhao_forge_cliff_srvshare #(
     .REQ_W    (13),
-    .RSP_W    (96),
+    .RSP_W    (113),
     .POISON_EN(1'b0),
     .CENSUS_W (32)
   ) u_cliff_lat_share (
     .clk  (gpu_clk),
     .rst_n(rst_n),
-    .poison_value_i(96'd0),
+    .poison_value_i(113'd0),
 
     // Client 0: TERRAIN.SPDESC's cache side, which carries TESS through the
     // heighttap plus the assembler's own centre-vertex reads.
@@ -14905,7 +15141,7 @@ module zhao_console_core
 
     .srv_req_o        (fcl_lat_srv_req),
     .srv_req_payload_o(fcl_lat_srv_addr),
-    .srv_rsp_payload_i({tcc_lat_wz, tcc_lat_wx, tcc_lat_h}),
+    .srv_rsp_payload_i({tcc_lat_vel_present, tcc_lat_vel, tcc_lat_wz, tcc_lat_wx, tcc_lat_h}),
 
     .grants0_o(fcl_lat_grants0),
     .grants1_o(fcl_lat_grants1),
@@ -16204,6 +16440,21 @@ module zhao_console_core
   // TERRAIN.COMPCACHE, and TERRAIN.TESS's side of the same seam.
   wire                tcc_fill_start, tcc_st_ready, tcc_fill_busy;
   wire signed [31:0]  tcc_lat_h, tcc_lat_wx, tcc_lat_wz;
+  // TERRVEL: the 4.2 velocity word on the same serve request.
+  wire signed [15:0]  tcc_lat_vel;
+  wire                tcc_lat_vel_present;
+
+  // TERRAIN.VELJOIN <-> TERRAIN.VELOCITY, and the join's two forked readies.
+  wire                tvj_a_ready, tvj_p_valid, tvj_p_ready;
+  wire                tvj_v_start_valid, tvj_v_start_ready, tvj_v_abort;
+  wire [4:0]          tvj_v_start_lanes;
+  wire [15:0]         tvj_v_start_patch_id, tvj_v_start_src_id;
+  wire                tvj_v_valid, tvj_v_ready, tvj_v_covers;
+  wire signed [31:0]  tvj_v_velocity;
+  wire [5:0]          tvv_vtx_vi, tvv_vtx_vj;
+  wire                tvv_idle, tvv_done, tvv_vv_valid;
+  wire signed [15:0]  tvv_vv_vel;
+  wire [5:0]          tvv_vv_vi, tvv_vv_vj;
   wire [1:0]          tcc_cs_substance;
   wire                tt_lat_req, tt_lat_surface;
   wire [5:0]          tt_lat_vi, tt_lat_vj;
@@ -16411,6 +16662,16 @@ module zhao_console_core
     // than on the cache directly.  The responses come BACK through the same
     // splice, which is why these three move with the request above.
     .c_lat_h_i       (spd_o_lat_h),
+    // TERRVEL: terrain_rules 4.3's velocity member, finally answered. The
+    // CELL is broadcast, exactly as the height cell is, and the client runs
+    // the interpolation with the triangle pick it has already made.
+    .c_lat_vel_i        (spd_o_lat_vel),
+    .c_lat_vel_present_i(spd_o_lat_vel_present),
+    .rsp_v00_o          (htp_v00),
+    .rsp_v10_o          (htp_v10),
+    .rsp_v01_o          (htp_v01),
+    .rsp_v11_o          (htp_v11),
+    .rsp_vel_present_o  (htp_vel_present),
     .c_lat_wx_i      (spd_o_lat_wx),
     .c_lat_wz_i      (spd_o_lat_wz),
     .c_cs_req_o      (htp_c_cs_req),
@@ -23061,8 +23322,15 @@ module zhao_console_core
     // (its chosen law 2). The adapter uses it to skip the engine run for a
     // lane that misses -- which is the whole of section 9.1's value on this
     // seam -- and never to re-decide it.
-    .fld_valid_i (efa_ans_valid),
-    .fld_ready_o (efa_ans_ready),
+    // THROUGH TERRAIN.VELJOIN FROM 2026-09-26 (TERRVEL). The height word is
+    // still the adapter's own wire, unbuffered and unchanged -- only the
+    // HANDSHAKE is forked, so nothing on this shipped path can be perturbed
+    // by the new consumer. `tvj_p_valid` is high only when TERRAIN.VELOCITY
+    // can also take the word, which is law J1: a lane word dropped for
+    // velocity would shorten the velocity lattice silently while every height
+    // here stayed correct.
+    .fld_valid_i (tvj_p_valid),
+    .fld_ready_o (tvj_p_ready),
     .fld_height_i(efa_height),
     .fld_covers_o(terr_pt_fld_covers_o),
 
@@ -23080,6 +23348,136 @@ module zhao_console_core
 
     .terrain_samples_evaluated_o(terr_pt_samples_o),
     .idle_o                     (terr_pt_idle_o)
+  );
+
+  // ---------------------------------------------------------------------
+  // TERRAIN.VELJOIN + TERRAIN.VELOCITY -- entry I34's velocity channel.
+  // COMPOSED 2026-09-26 (TERRVEL).
+  // ---------------------------------------------------------------------
+  // I34 said joining TERRAIN.VELOCITY's own 33x33 sweep to the consumer's
+  // vertex stream "is a scheduler and a composer may not write one". The
+  // second half of that is a rule about where logic lives and it is obeyed
+  // here: NOTHING below is scheduling. `zhao_terrain_veljoin` is a named
+  // block with a contract and a test, and the composer only wires it.
+  //
+  // The first half turned out to be narrower than it reads.
+  // `zhao_terrain_pagestream` walks column-fast then row over 33x33
+  // (:797-801) and `zhao_terrain_velocity`'s law V3 sweep advances
+  // identically, so the two are THE SAME WALK and the join is a fork with a
+  // joint ready plus an address interlock -- not a reordering.
+  //
+  // THE SEAM WAS ALREADY HALF-BUILT AND SAYS SO. `fld_covers_o`'s header on
+  // the block above reads "TERRAIN.VELOCITY consumes the same per-vertex
+  // lane stream for out-lane 1 and takes this answer ... Exported
+  // 2026-08-19 with TERRAIN.VELOCITY."
+  //
+  // `efa_velocity` -- out-lane 1 of the SAME evaluation whose out-lane 0
+  // feeds the height composition above -- was a dangling wire from
+  // 2026-09-23 until this commit. It is now read.
+  zhao_terrain_veljoin #(
+    .LAT_W(33),
+    .LAT_H(33)
+  ) u_terrain_veljoin (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // The same pulse `u_terrain_patch` clears its section 9.1 list on, so the
+    // join and the list cannot disagree about which patch they belong to.
+    .patch_open_i(tce_job_take),
+    .patch_id_i  (tis_src_id[15:0]),
+    .src_id_i    (tps_v_src_id[15:0]),
+
+    // Sampled at the FIRST VERTEX FIRE and not at `patch_open_i` -- law J2.
+    // The field list is REFILLED by the fieldlist replay after the clear, so
+    // this port reads the previous patch's count at patch_open time.
+    .lanes_i(terr_pt_fields_active_o),
+
+    // The walk, exactly as TERRAIN.PATCH receives it, and exactly the cycle
+    // `u_field_earth_adapter` latches a point on.
+    .vtx_fire_i(tpt_vtx_valid && tpt_vtx_ready),
+    .w_vi_i    (tps_v_vi),
+    .w_vj_i    (tps_v_vj),
+
+    // REAL: earth out-lane 1 and the section 9.1 answer decided ONCE by the
+    // block that owns the list.
+    .a_valid_i   (efa_ans_valid),
+    .a_ready_o   (tvj_a_ready),
+    .a_velocity_i(efa_velocity),
+    .a_covers_i  (terr_pt_fld_covers_o),
+
+    .p_valid_o(tvj_p_valid),
+    .p_ready_i(tvj_p_ready),
+
+    .v_start_valid_o   (tvj_v_start_valid),
+    .v_start_ready_i   (tvj_v_start_ready),
+    .v_start_lanes_o   (tvj_v_start_lanes),
+    .v_start_patch_id_o(tvj_v_start_patch_id),
+    .v_start_src_id_o  (tvj_v_start_src_id),
+    .v_abort_o         (tvj_v_abort),
+
+    .v_valid_o   (tvj_v_valid),
+    .v_ready_i   (tvj_v_ready),
+    .v_velocity_o(tvj_v_velocity),
+    .v_covers_o  (tvj_v_covers),
+
+    .v_vtx_vi_i(tvv_vtx_vi),
+    .v_vtx_vj_i(tvv_vtx_vj),
+    .v_idle_i  (tvv_idle),
+
+    .lanes_joined_o    (terr_vj_lanes_joined_o),
+    .sweeps_started_o  (terr_vj_sweeps_started_o),
+    .sweeps_aborted_o  (),
+    .vtx_mismatch_o    (terr_vj_vtx_mismatch_o),
+    .arm_stall_clocks_o(terr_vj_arm_stall_o),
+    .idle_o            ()
+  );
+
+  zhao_terrain_velocity u_terrain_velocity (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .start_valid_i   (tvj_v_start_valid),
+    .start_ready_o   (tvj_v_start_ready),
+    .start_lanes_i   (tvj_v_start_lanes),
+    .start_patch_id_i(tvj_v_start_patch_id),
+    .start_src_id_i  (tvj_v_start_src_id),
+    .trace_patch_id_o(),
+
+    .abort_i         (tvj_v_abort),
+    .sweeps_aborted_o(terr_vj_sweeps_aborted_o),
+
+    .vtx_vi_o(tvv_vtx_vi),
+    .vtx_vj_o(tvv_vtx_vj),
+
+    .lane_valid_i   (tvj_v_valid),
+    .lane_ready_o   (tvj_v_ready),
+    .lane_velocity_i(tvj_v_velocity),
+    .lane_covers_i  (tvj_v_covers),
+
+    // REAL: TERRAIN.COMPCACHE's velocity plane. `vv_ready_i` is tied HIGH and
+    // that is a statement about the consumer, not a tie-off: the destination
+    // is a single RAM write that can always be accepted, which is the fact
+    // law J1 depends on for the height lane never to be held.
+    .vv_valid_o   (tvv_vv_valid),
+    .vv_ready_i   (1'b1),
+    .vv_velocity_o(tvv_vv_vel),
+    .vv_vi_o      (tvv_vv_vi),
+    .vv_vj_o      (tvv_vv_vj),
+    .vv_moving_o  (),
+    .vv_covered_o (),
+    .vv_src_id_o  (),
+
+    // V5: the 4x4 moving mask is for a consumer to UNION with TERRAIN.PATCH's
+    // dirty mask, never to filter by. Both leave the core edge side by side so
+    // the union is takeable; they are provably disjoint under a travelling
+    // wave and that is asserted in tests/terrain/terrain_velocity_chain.cpp.
+    .moving_mask_o(terr_tv_moving_mask_o),
+    .patch_done_o (tvv_done),
+
+    .terrain_samples_evaluated_o(terr_tv_samples_o),
+    .velocity_add_sats_o        (terr_tv_add_sats_o),
+    .velocity_rescale_sats_o    (terr_tv_rescale_sats_o),
+    .idle_o                     (tvv_idle)
   );
 
   // ==========================================================================
@@ -23212,7 +23610,7 @@ module zhao_console_core
 
     // REAL: TERRAIN.PATCH's field-height lane, entry I34's remaining half.
     .ans_valid_o(efa_ans_valid),
-    .ans_ready_i(efa_ans_ready),
+    .ans_ready_i(tvj_a_ready),
     .height_o   (efa_height),
 
     // PRODUCED, NOT CONSUMED, AND DECLARED IN THE INCOMPLETE BLOCK (R159).
@@ -23318,12 +23716,27 @@ module zhao_console_core
     .mat_w_b_i     (tps_v_mat_b),
     .mat_w_weight_i(tps_v_weight),
 
+    // TERRVEL: the 4.2 velocity lattice, straight off TERRAIN.VELOCITY's
+    // sweep. `vv_ready_i` on that block is tied high because this is one RAM
+    // write and can always be accepted -- which is also what lets
+    // TERRAIN.VELJOIN's ready-join never backpressure the height lane.
+    .vel_we_i   (tvv_vv_valid),
+    .vel_w_vi_i (tvv_vv_vi),
+    .vel_w_vj_i (tvv_vv_vj),
+    .vel_w_val_i(tvv_vv_vel),
+    .vel_done_i (tvv_done),
+
     .cs_we_i         (tbk_cs_fire_c),
     .cs_w_ci_i       (tbk_cs_ci[4:0]),
     .cs_w_cj_i       (tbk_cs_cj[4:0]),
     .cs_w_substance_i(tbk_cs_sub),
 
     .dual_i(tps_v_flags[TERR_FLAG_DUAL_BIT]),
+
+    .vel_words_o        (terr_cc_vel_words_o),
+    .vel_oob_o          (),
+    .vel_orphan_o       (terr_cc_vel_orphan_o),
+    .vel_done_mismatch_o(terr_cc_vel_done_mm_o),
 
     .fill_done_o(terr_cc_fill_done_o),
 
@@ -23352,6 +23765,8 @@ module zhao_console_core
     .lat_h_o      (tcc_lat_h),
     .lat_wx_o     (tcc_lat_wx),
     .lat_wz_o     (tcc_lat_wz),
+    .lat_vel_o         (tcc_lat_vel),
+    .lat_vel_present_o (tcc_lat_vel_present),
 
     // THROUGH FORGE.CLIFF'S CELL-STATE SHARER from 2026-09-25: the chain is
     // TESS -> HEIGHTTAP -> SRVSHARE -> here, with FORGE.CLIFF's window feed
@@ -26540,6 +26955,8 @@ module zhao_console_core
   wire               spd_c_lat_req, spd_c_lat_surface;
   wire [ 5:0]        spd_c_lat_vi, spd_c_lat_vj;
   wire signed [31:0] spd_o_lat_h, spd_o_lat_wx, spd_o_lat_wz;
+  wire signed [15:0] spd_o_lat_vel;
+  wire               spd_o_lat_vel_present;
 
   // ---- TERRAIN.SPDESC -> TERRAIN.LOD --------------------------------------
   wire        spd_sp_valid, spd_sp_ready;
@@ -27248,6 +27665,12 @@ module zhao_console_core
     .c_lat_vj_o     (spd_c_lat_vj),
     .c_lat_surface_o(spd_c_lat_surface),
     // Through the cliff's lattice sharer, client 0's pass-through.
+    // TERRVEL: the velocity word rides the SAME pass-through as the height,
+    // so the two halves of one 4.3 answer cannot skew against each other.
+    .c_lat_vel_i        ($signed(fcl_lat_o0_rsp[111:96])),
+    .c_lat_vel_present_i(fcl_lat_o0_rsp[112]),
+    .o_lat_vel_o        (spd_o_lat_vel),
+    .o_lat_vel_present_o(spd_o_lat_vel_present),
     .c_lat_h_i      ($signed(fcl_lat_o0_rsp[31:0])),
     .c_lat_wx_i     ($signed(fcl_lat_o0_rsp[63:32])),
     .c_lat_wz_i     ($signed(fcl_lat_o0_rsp[95:64])),

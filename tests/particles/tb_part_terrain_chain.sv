@@ -40,6 +40,10 @@ module tb_part_terrain_chain (
     output var logic        [ 5:0] c_lat_vj_o,
     output var logic               c_lat_surface_o,
     input  var logic signed [31:0] c_lat_h_i,
+    // TERRVEL: the compose cache's 4.2 velocity plane, modelled by the driver
+    // exactly as `c_lat_h_i` models its height plane.
+    input  var logic signed [15:0] c_lat_vel_i,
+    input  var logic               c_lat_vel_present_i,
     input  var logic signed [31:0] c_lat_wx_i,
     input  var logic signed [31:0] c_lat_wz_i,
     output var logic               c_cs_req_o,
@@ -57,6 +61,8 @@ module tb_part_terrain_chain (
     output var logic signed [11:0] t_nx_o,
     output var logic signed [11:0] t_ny_o,
     output var logic signed [11:0] t_nz_o,
+    output var logic signed [10:0] t_vy_o,
+    output var logic               t_vy_valid_o,
     output var logic               t_take_o,   // PART.COLLIDE took the beat this cycle
 
     // PART.COLLIDE's output
@@ -81,7 +87,10 @@ module tb_part_terrain_chain (
     output var logic [31:0] terrain_sample_unavailable_o,
     output var logic [31:0] taps_answered_o,
     output var logic [31:0] taps_void_o,
-    output var logic [31:0] taps_off_patch_o
+    output var logic [31:0] taps_off_patch_o,
+    output var logic [31:0] samples_moving_o,
+    output var logic [31:0] vel_sats_o,
+    output var logic [31:0] contacts_moving_ground_o
 );
 
   // ---- the tap -------------------------------------------------------------
@@ -94,6 +103,8 @@ module tb_part_terrain_chain (
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] tr_height, tr_nx, tr_ny, tr_nz;
   logic signed [31:0] o_h, o_wx, o_wz;
+  logic signed [15:0] tr_v00, tr_v10, tr_v01, tr_v11;
+  logic               tr_vpres;
   logic        [ 1:0] o_sub;
   logic [31:0]        tp_fault_pl, tp_fault_pb, tp_ovf, tp_stall, tp_nsat;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -116,6 +127,13 @@ module tb_part_terrain_chain (
       .c_lat_req_o(c_lat_req_o), .c_lat_vi_o(c_lat_vi_o), .c_lat_vj_o(c_lat_vj_o),
       .c_lat_surface_o(c_lat_surface_o),
       .c_lat_h_i(c_lat_h_i), .c_lat_wx_i(c_lat_wx_i), .c_lat_wz_i(c_lat_wz_i),
+      .c_lat_vel_i        (c_lat_vel_i),
+      .c_lat_vel_present_i(c_lat_vel_present_i),
+      .rsp_v00_o          (tr_v00),
+      .rsp_v10_o          (tr_v10),
+      .rsp_v01_o          (tr_v01),
+      .rsp_v11_o          (tr_v11),
+      .rsp_vel_present_o  (tr_vpres),
       .c_cs_req_o(c_cs_req_o), .c_cs_ci_o(c_cs_ci_o), .c_cs_cj_o(c_cs_cj_o),
       .c_cs_substance_i(c_cs_substance_i),
       .taps_answered_o(taps_answered_o), .taps_void_o(taps_void_o),
@@ -139,6 +157,7 @@ module tb_part_terrain_chain (
       .q_side_o(q_side_o),
       .t_valid_o(t_valid_o), .t_height_o(t_height_o),
       .t_nx_o(t_nx_o), .t_ny_o(t_ny_o), .t_nz_o(t_nz_o),
+      .t_vy_o(t_vy_o), .t_vy_valid_o(t_vy_valid_o),
       .tap_req_valid_o(tq_valid), .tap_req_ready_i(tq_ready),
       .tap_req_x_o(tq_x), .tap_req_z_o(tq_z), .tap_req_surface_o(tq_surface),
       .tap_rsp_valid_i(tr_valid), .tap_rsp_no_ground_i(tr_no_ground),
@@ -147,12 +166,16 @@ module tb_part_terrain_chain (
       .tap_rsp_sh_i(tr_sh),
       .tap_rsp_na_x_i(tr_na_x), .tap_rsp_na_y_i(tr_na_y), .tap_rsp_na_z_i(tr_na_z),
       .tap_rsp_nb_x_i(tr_nb_x), .tap_rsp_nb_y_i(tr_nb_y), .tap_rsp_nb_z_i(tr_nb_z),
+      .tap_rsp_v00_i(tr_v00), .tap_rsp_v10_i(tr_v10),
+      .tap_rsp_v01_i(tr_v01), .tap_rsp_v11_i(tr_v11),
+      .tap_rsp_vel_present_i(tr_vpres),
       .particles_o(particles_o), .samples_ground_o(samples_ground_o),
       .samples_no_ground_o(samples_no_ground_o), .samples_missed_o(samples_missed_o),
       .cell_mismatch_o(cell_mismatch_o), .out_of_range_o(out_of_range_o),
       .height_sats_o(height_sats_o), .fills_issued_o(fills_issued_o),
       .fills_landed_o(fills_landed_o), .fills_discarded_o(fills_discarded_o),
-      .invalidations_o(invalidations_o)
+      .invalidations_o(invalidations_o),
+      .samples_moving_o(samples_moving_o), .vel_sats_o(vel_sats_o)
   );
 
   assign t_take_o = s_valid && s_ready;
@@ -174,6 +197,7 @@ module tb_part_terrain_chain (
       .d_restitution_i(16'sd0), .d_friction_i(16'sd0), .d_damping_i(16'sd0),
       .t_valid_i(t_valid_o), .t_height_i(t_height_o),
       .t_nx_i(t_nx_o), .t_ny_i(t_ny_o), .t_nz_i(t_nz_o),
+      .t_vy_i(t_vy_o), .t_vy_valid_i(t_vy_valid_o),
       .pl_en_i(1'b0), .pl_nx_i(12'sd0), .pl_ny_i(12'sd0), .pl_nz_i(12'sd0), .pl_c_i(32'sd0),
       .c_valid_o(c_valid_o), .c_ready_i(c_ready_i), .c_record_o(c_record_o),
       .c_alive_o(c_alive), .c_contact_o(c_contact_o), .c_response_o(c_response),
@@ -183,7 +207,8 @@ module tb_part_terrain_chain (
       .contacts_terrain_o(contacts_terrain_o), .contacts_plane_o(k_pln),
       .already_inside_at_entry_o(k_ins),
       .terrain_sample_unavailable_o(terrain_sample_unavailable_o),
-      .response_refused_o(k_ref), .collision_events_o(k_evt), .field_clamps_o(k_clamp)
+      .response_refused_o(k_ref), .collision_events_o(k_evt), .field_clamps_o(k_clamp),
+      .contacts_moving_ground_o(contacts_moving_ground_o)
   );
 
 endmodule : tb_part_terrain_chain

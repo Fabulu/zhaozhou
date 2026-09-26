@@ -2331,6 +2331,27 @@ module zhao_console_board
   output logic [15:0]             terr_pt_subpatch_dirty_o,
   output logic                    terr_pt_idle_o,
 
+  // TERRAIN.VELJOIN and TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL).
+  // A counter nobody outside the core can read is not evidence, so the
+  // interlock and the sweep census leave the module edge like every other
+  // terrain census here.
+  output logic [31:0]             terr_vj_lanes_joined_o,
+  output logic [31:0]             terr_vj_sweeps_started_o,
+  output logic [31:0]             terr_vj_sweeps_aborted_o,
+  output logic [31:0]             terr_vj_vtx_mismatch_o,
+  output logic [31:0]             terr_vj_arm_stall_o,
+  output logic [31:0]             terr_tv_samples_o,
+  output logic [31:0]             terr_tv_add_sats_o,
+  output logic [31:0]             terr_tv_rescale_sats_o,
+  output logic [15:0]             terr_tv_moving_mask_o,
+  // The velocity chain's CONSUMER-side numbers. These are the ones that say
+  // the lattice was READ, as opposed to computed: the first counts terrain
+  // samples whose interpolated ground rate was non-zero, the last counts
+  // particle contacts actually RESOLVED against moving ground.
+  output logic [31:0]             part_ter_moving_o,
+  output logic [31:0]             part_ter_vel_sats_o,
+  output logic [31:0]             part_col_moving_ground_o,
+
   output logic                    terr_cc_fill_busy_o,
   output logic                    terr_cc_fill_done_o,
   output logic                    terr_cc_serve_valid_o,
@@ -2338,6 +2359,9 @@ module zhao_console_board
   output logic [31:0]             terr_cc_fill_records_o,
   output logic [31:0]             terr_cc_patches_filled_o,
   output logic [31:0]             terr_cc_patches_served_o,
+  output logic [31:0]             terr_cc_vel_words_o,
+  output logic [31:0]             terr_cc_vel_orphan_o,
+  output logic [31:0]             terr_cc_vel_done_mm_o,
   output logic [31:0]             terr_cc_fill_overrun_o,
   output logic [31:0]             terr_cc_lat_oob_o,
   output logic [31:0]             terr_cc_cs_oob_o,
@@ -5151,6 +5175,18 @@ module zhao_console_board
       .terr_pt_samples_o                  (terr_pt_samples_o),
       .terr_pt_subpatch_dirty_o           (terr_pt_subpatch_dirty_o),
       .terr_pt_idle_o                     (terr_pt_idle_o),
+      .terr_vj_lanes_joined_o             (terr_vj_lanes_joined_o),
+      .terr_vj_sweeps_started_o           (terr_vj_sweeps_started_o),
+      .terr_vj_sweeps_aborted_o           (terr_vj_sweeps_aborted_o),
+      .terr_vj_vtx_mismatch_o             (terr_vj_vtx_mismatch_o),
+      .terr_vj_arm_stall_o                (terr_vj_arm_stall_o),
+      .terr_tv_samples_o                  (terr_tv_samples_o),
+      .terr_tv_add_sats_o                 (terr_tv_add_sats_o),
+      .terr_tv_rescale_sats_o             (terr_tv_rescale_sats_o),
+      .terr_tv_moving_mask_o              (terr_tv_moving_mask_o),
+      .part_ter_moving_o                  (part_ter_moving_o),
+      .part_ter_vel_sats_o                (part_ter_vel_sats_o),
+      .part_col_moving_ground_o           (part_col_moving_ground_o),
       .terr_cc_fill_busy_o                (terr_cc_fill_busy_o),
       .terr_cc_fill_done_o                (terr_cc_fill_done_o),
       .terr_cc_serve_valid_o              (terr_cc_serve_valid_o),
@@ -5158,6 +5194,9 @@ module zhao_console_board
       .terr_cc_fill_records_o             (terr_cc_fill_records_o),
       .terr_cc_patches_filled_o           (terr_cc_patches_filled_o),
       .terr_cc_patches_served_o           (terr_cc_patches_served_o),
+      .terr_cc_vel_words_o                (terr_cc_vel_words_o),
+      .terr_cc_vel_orphan_o               (terr_cc_vel_orphan_o),
+      .terr_cc_vel_done_mm_o              (terr_cc_vel_done_mm_o),
       .terr_cc_fill_overrun_o             (terr_cc_fill_overrun_o),
       .terr_cc_lat_oob_o                  (terr_cc_lat_oob_o),
       .terr_cc_cs_oob_o                   (terr_cc_cs_oob_o),

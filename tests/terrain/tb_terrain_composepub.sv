@@ -259,7 +259,27 @@ module tb_terrain_composepub #(
     output var logic [31:0] tap_stall_clocks_o,
 
     output var logic patch_idle_o,
-    output var logic efa_idle_o
+    output var logic efa_idle_o,
+
+    // ---- TERRVEL: the 4.2 velocity plane, fill face and serve face -------
+    // The driver plays the plane exactly as it plays the height planes, and
+    // reads back what TERRAIN.HEIGHTTAP makes of it. `rsp_vel_present_o` is
+    // the statement a consumer needs beside the words: absent means NOT
+    // MEASURED and a zero word means MEASURED AS STILL.
+    input  var logic               vel_we_i,
+    input  var logic        [ 5:0] vel_w_vi_i,
+    input  var logic        [ 5:0] vel_w_vj_i,
+    input  var logic signed [15:0] vel_w_val_i,
+    input  var logic               vel_done_i,
+    output var logic [31:0]        vel_words_o,
+    output var logic [31:0]        vel_oob_o,
+    output var logic [31:0]        vel_orphan_o,
+    output var logic [31:0]        vel_done_mm_o,
+    output var logic signed [15:0] rsp_v00_o,
+    output var logic signed [15:0] rsp_v10_o,
+    output var logic signed [15:0] rsp_v01_o,
+    output var logic signed [15:0] rsp_v11_o,
+    output var logic               rsp_vel_present_o
 );
 
   // ==========================================================================
@@ -274,6 +294,13 @@ module tb_terrain_composepub #(
   logic               t_c_lat_req, t_c_lat_surface;
   logic        [ 5:0] t_c_lat_vi, t_c_lat_vj;
   logic signed [31:0] c_lat_h, c_lat_wx, c_lat_wz;
+  // TERRVEL: the velocity word on the same serve request, carried from the
+  // compose cache into TERRAIN.HEIGHTTAP. Wired REAL rather than tied off --
+  // this bench is the composed chain's acceptance vehicle, and a tie-off here
+  // would leave the cache -> tap hop untested in the one place it is easy to
+  // test.
+  logic signed [15:0] c_lat_vel;
+  logic               c_lat_vpres;
 
   logic       t_c_cs_req;
   logic [4:0] t_c_cs_ci, t_c_cs_cj;
@@ -461,6 +488,13 @@ module tb_terrain_composepub #(
       .mat_w_b_i     (8'd0),
       .mat_w_weight_i(8'd0),
 
+      // TERRVEL: the 4.2 velocity plane's fill face, driven by the C++.
+      .vel_we_i   (vel_we_i),
+      .vel_w_vi_i (vel_w_vi_i),
+      .vel_w_vj_i (vel_w_vj_i),
+      .vel_w_val_i(vel_w_val_i),
+      .vel_done_i (vel_done_i),
+
       .dual_i(dual_i),
 
       .fill_done_o(fill_done_o),
@@ -474,6 +508,8 @@ module tb_terrain_composepub #(
       .lat_vi_i     (t_c_lat_vi),
       .lat_vj_i     (t_c_lat_vj),
       .lat_surface_i(t_c_lat_surface),
+      .lat_vel_o         (c_lat_vel),
+      .lat_vel_present_o (c_lat_vpres),
       .lat_h_o      (c_lat_h),
       .lat_wx_o     (c_lat_wx),
       .lat_wz_o     (c_lat_wz),
@@ -498,6 +534,10 @@ module tb_terrain_composepub #(
       .lat_oob_o       (cc_lat_oob_o),
       .cs_oob_o        (),
       .mat_oob_o       (),
+      .vel_words_o        (vel_words_o),
+      .vel_oob_o          (vel_oob_o),
+      .vel_orphan_o       (vel_orphan_o),
+      .vel_done_mismatch_o(vel_done_mm_o),
       .mat_cells_o     ()
   );
 
@@ -559,6 +599,13 @@ module tb_terrain_composepub #(
       .c_lat_vi_o     (t_c_lat_vi),
       .c_lat_vj_o     (t_c_lat_vj),
       .c_lat_surface_o(t_c_lat_surface),
+      .c_lat_vel_i        (c_lat_vel),
+      .c_lat_vel_present_i(c_lat_vpres),
+      .rsp_v00_o          (rsp_v00_o),
+      .rsp_v10_o          (rsp_v10_o),
+      .rsp_v01_o          (rsp_v01_o),
+      .rsp_v11_o          (rsp_v11_o),
+      .rsp_vel_present_o  (rsp_vel_present_o),
       .c_lat_h_i      (c_lat_h),
       .c_lat_wx_i     (c_lat_wx),
       .c_lat_wz_i     (c_lat_wz),

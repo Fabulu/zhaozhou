@@ -859,6 +859,25 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_pt_samples_o;
   logic [15:0]             terr_pt_subpatch_dirty_o;
   logic                    terr_pt_idle_o;
+  // TERRAIN.VELJOIN + TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL).
+  // Declared here because this bench connects the core by `.*`, so a core port
+  // with no matching signal is an elaboration error and not a warning. The
+  // velocity chain's own numbers are asserted in section VEL below.
+  logic [31:0]             terr_vj_lanes_joined_o;
+  logic [31:0]             terr_vj_sweeps_started_o;
+  logic [31:0]             terr_vj_sweeps_aborted_o;
+  logic [31:0]             terr_vj_vtx_mismatch_o;
+  logic [31:0]             terr_vj_arm_stall_o;
+  logic [31:0]             terr_tv_samples_o;
+  logic [31:0]             terr_tv_add_sats_o;
+  logic [31:0]             terr_tv_rescale_sats_o;
+  logic [15:0]             terr_tv_moving_mask_o;
+  logic [31:0]             part_ter_moving_o;
+  logic [31:0]             part_ter_vel_sats_o;
+  logic [31:0]             part_col_moving_ground_o;
+  logic [31:0]             terr_cc_vel_words_o;
+  logic [31:0]             terr_cc_vel_orphan_o;
+  logic [31:0]             terr_cc_vel_done_mm_o;
   logic                    terr_cc_fill_busy_o;
   logic                    terr_cc_fill_done_o;
   logic                    terr_cc_serve_valid_o;
@@ -6141,6 +6160,51 @@ module tb_zhao_console_core_smoke
              terr_cc_patches_filled_o, terr_cc_patches_served_o,
              terr_cc_fill_records_o, terr_cc_serve_valid_o,
              terr_cc_fill_overrun_o, terr_cc_lat_oob_o, terr_cc_mat_cells_o);
+    // ---- TERRAIN.VELJOIN / TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL) --
+    //
+    // WHAT THIS SMOKE CAN AND CANNOT SAY, stated before the numbers so neither
+    // is over-read. It issues NO TerrainField, so `fields_active_o` is 0 at
+    // every patch and law V2 makes every lattice word exactly zero. So this is
+    // NOT evidence that a field moves the ground -- that is
+    // `terrain_veljoin_directed`'s job, against the oracle. What it IS evidence
+    // of is that the composed machine RUNS the sweep on the real walk: the join
+    // arms on real patches, TERRAIN.VELOCITY completes real 1,089-vertex
+    // lattices, and the compose cache takes the words.
+    //
+    // THE THREE ZEROES BELOW ARE ASSERTED AND EACH ONE HAS BEEN SEEN TO FIRE
+    // ELSEWHERE, because a detector reading zero is a claim:
+    //   vtx_mismatch   fired by terrain_veljoin_directed section 5, which
+    //                  offers a walk address that skips a vertex.
+    //   vel_orphan     fired by the same file's section 6 (a word with no
+    //                  fill buffer held).
+    //   vel_done_mm    fired by section 7 (a done pulse off the 1,089th word).
+    $display("SMOKE: terrvel   sweeps_started=%0d aborted=%0d lanes_joined=%0d arm_stall=%0d | tv_samples=%0d add_sats=%0d resc_sats=%0d moving_mask=%04h | cc_vel_words=%0d",
+             terr_vj_sweeps_started_o, terr_vj_sweeps_aborted_o,
+             terr_vj_lanes_joined_o, terr_vj_arm_stall_o,
+             terr_tv_samples_o, terr_tv_add_sats_o, terr_tv_rescale_sats_o,
+             terr_tv_moving_mask_o, terr_cc_vel_words_o);
+    $display("SMOKE: terrvelc  vtx_mismatch=%0d vel_orphan=%0d vel_done_mm=%0d | part_ter_moving=%0d part_vel_sats=%0d part_col_moving_ground=%0d",
+             terr_vj_vtx_mismatch_o, terr_cc_vel_orphan_o, terr_cc_vel_done_mm_o,
+             part_ter_moving_o, part_ter_vel_sats_o, part_col_moving_ground_o);
+    if (terr_vj_vtx_mismatch_o != 32'd0)
+      $fatal(1, "SMOKE: terrvel vtx_mismatch=%0d -- TERRAIN.VELOCITY's own sweep address disagreed with the pagestream walk",
+             terr_vj_vtx_mismatch_o);
+    if (terr_cc_vel_orphan_o != 32'd0)
+      $fatal(1, "SMOKE: terrvel vel_orphan=%0d -- a velocity word arrived with no fill buffer held",
+             terr_cc_vel_orphan_o);
+    if (terr_cc_vel_done_mm_o != 32'd0)
+      $fatal(1, "SMOKE: terrvel vel_done_mm=%0d -- sweep-complete did not land on the 1,089th word",
+             terr_cc_vel_done_mm_o);
+    // The POSITIVE half, and it is the half that would catch a composition
+    // that elaborates and never runs: with patches served, the sweep must have
+    // started and TERRAIN.VELOCITY must have evaluated samples. A silent
+    // velocity lane beside a working height lane is exactly the failure the
+    // entry this closes spent five packets on.
+    if ((terr_cc_patches_served_o != 32'd0) && (terr_vj_sweeps_started_o == 32'd0))
+      $fatal(1, "SMOKE: terrvel patches were served but no velocity sweep ever started");
+    if ((terr_vj_sweeps_started_o != 32'd0) && (terr_tv_samples_o == 32'd0))
+      $fatal(1, "SMOKE: terrvel a sweep started but TERRAIN.VELOCITY evaluated no samples");
+
     // ---- TERRAIN's TEXTURE COORDINATES, measured on the DUT's own edge ----
     // This bench CAN reach this lane, and the entry that said otherwise was
     // wrong: the terrain spine loads 3 pages with crc_fails=0 and replays 128

@@ -165,6 +165,11 @@ module tb_compcache_front (
       .mat_w_a_i     (mat_w_a),
       .mat_w_b_i     (mat_w_b),
       .mat_w_weight_i(mat_w_weight),
+      .vel_we_i    (1'b0),
+      .vel_w_vi_i  (6'd0),
+      .vel_w_vj_i  (6'd0),
+      .vel_w_val_i (16'sd0),
+      .vel_done_i  (1'b0),
 
       .dual_i(dual),
 
@@ -201,6 +206,12 @@ module tb_compcache_front (
       .lat_oob_o       (lat_oob),
       .cs_oob_o        (cs_oob),
       .mat_oob_o       (mat_oob),
+      .lat_vel_o          (),
+      .lat_vel_present_o  (),
+      .vel_words_o        (),
+      .vel_oob_o          (),
+      .vel_orphan_o       (),
+      .vel_done_mismatch_o(),
       .mat_cells_o     (mat_cells)
   );
 
@@ -247,6 +258,11 @@ module tb_compcache_front (
       .mat_w_a_i     (s_mat_w_a),
       .mat_w_b_i     (s_mat_w_b),
       .mat_w_weight_i(s_mat_w_weight),
+      .vel_we_i    (1'b0),
+      .vel_w_vi_i  (6'd0),
+      .vel_w_vj_i  (6'd0),
+      .vel_w_val_i (16'sd0),
+      .vel_done_i  (1'b0),
 
       .dual_i(s_dual),
 
@@ -283,6 +299,12 @@ module tb_compcache_front (
       .lat_oob_o       (s_lat_oob),
       .cs_oob_o        (s_cs_oob),
       .mat_oob_o       (s_mat_oob),
+      .lat_vel_o          (),
+      .lat_vel_present_o  (),
+      .vel_words_o        (),
+      .vel_oob_o          (),
+      .vel_orphan_o       (),
+      .vel_done_mismatch_o(),
       .mat_cells_o     (s_mat_cells)
   );
 
