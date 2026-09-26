@@ -260,8 +260,32 @@ module zhao_measure_sealplan #(
     input  var logic [QW-1:0] plan_giant_refs_i, // REFERENCES, the reservation
 
     // ---- the live console generations the plan is validated against ------
-    input  var logic [15:0]   res_gen_i,
-    input  var logic [15:0]   view_gen_i,
+    // THE COUNTERS LIVE HERE AND THE CONSOLE SUPPLIES ONLY THE EVENTS, and
+    // that is the whole reason this is two pulses rather than two values.
+    //
+    // A plan declares the generation it was PRICED AGAINST. If the console
+    // simply handed the plan's own numbers back for comparison, or if the
+    // composer derived the live generation from the same wires the plan
+    // arrives on, the two sides of the comparison would move together and the
+    // check could never fire -- CLAUDE.md's metadata-bank law, which is in
+    // this repository because a generation-mismatch counter sat at zero beside
+    // a live record-swapping defect for exactly that reason.
+    //
+    // So the operands are structurally independent: the plan's value is
+    // enabled by `plan_valid_i` (the command stream) and the live value by
+    // these pulses (a resource publication, a view matrix write). Publish a
+    // resource after the host priced its plan and the plan is refused as
+    // stale, which is the check doing its job and is directly testable.
+    //
+    // A "generation" here counts CHANGES and is not a semantic version: all
+    // the comparison needs is that a plan priced before a change differs from
+    // one priced after. Wrapping at 16 bits is harmless for the same reason --
+    // 65,536 resource publications between pricing a plan and sealing it is
+    // not a scenario, and a wider counter would be state bought for nothing.
+    input  var logic          res_bump_i,   // a resource publication retired
+    input  var logic          view_bump_i,  // a view matrix word was written
+    output var logic [15:0]   res_gen_o,    // what a plan must declare
+    output var logic [15:0]   view_gen_o,
 
     // ---- the draw stream, for the selector -------------------------------
     input  var logic          dw_valid_i,
@@ -462,6 +486,14 @@ module zhao_measure_sealplan #(
   logic [15:0] frame_gen_q;
   assign seal_frame_gen_o = frame_gen_q;
 
+  // The two live generations, owned here. See the ports for why they are
+  // counted from events rather than taken as values.
+  logic [15:0] res_gen_q, view_gen_q;
+  assign res_gen_o  = res_gen_q;
+  assign view_gen_o = view_gen_q;
+  wire [15:0] res_gen_i  = res_gen_q;
+  wire [15:0] view_gen_i = view_gen_q;
+
   // ---- the sealed record -------------------------------------------------
   // ONE write port, enable `seal_fire_c`. Immutability is structural.
   logic          sealed_giant_q;
@@ -508,6 +540,8 @@ module zhao_measure_sealplan #(
       st_giant_refs_q <= '0;
 
       frame_gen_q     <= 16'd1;
+      res_gen_q       <= 16'd0;
+      view_gen_q      <= 16'd0;
       sealed_giant_q  <= 1'b0;
       sealed_ginst_q  <= 16'd0;
 
@@ -524,6 +558,10 @@ module zhao_measure_sealplan #(
       giant_mismatch_o<= 32'd0;
       draws_seen_o    <= 32'd0;
     end else begin
+      // ---- the live generations, from the console's own events
+      if (res_bump_i)  res_gen_q  <= res_gen_q  + 16'd1;
+      if (view_bump_i) view_gen_q <= view_gen_q + 16'd1;
+
       // ---- staging. A record arriving mid-frame stages for the NEXT frame;
       // it cannot reach the sealed registers, which have one enable.
       if (plan_valid_i) begin

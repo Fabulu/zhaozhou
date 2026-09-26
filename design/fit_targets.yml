@@ -1892,6 +1892,12 @@ targets:
     sources:
       - fpga/rtl/measure/zhao_measure_tokens.sv
 
+  # MEASURE.SEALPLAN (core entry I56, SEALPLAN 2026-09-26). A leaf target so
+  # the seal's producer can be priced without spending a console fit on it.
+  - top: zhao_measure_sealplan
+    sources:
+      - fpga/rtl/measure/zhao_measure_sealplan.sv
+
   - top: zhao_part_expand
     sources:
       - fpga/rtl/particles/zhao_part_expand.sv
@@ -2573,6 +2579,9 @@ targets:
       - fpga/rtl/input/zhao_input_snapshot.sv
       - fpga/rtl/measure/zhao_measure_governor.sv
       - fpga/rtl/measure/zhao_measure_tokens.sv
+      # MEASURE.SEALPLAN, composed 2026-09-26 (SEALPLAN, entry I56): the
+      # producer of GEOM.PARAMBUF's quota seal.
+      - fpga/rtl/measure/zhao_measure_sealplan.sv
       - fpga/rtl/memory/zhao_hps_arbiter.sv
       - fpga/rtl/memory/zhao_hps_bridge.sv
       - fpga/rtl/memory/zhao_mem_guard.sv
@@ -3010,6 +3019,10 @@ targets:
       - fpga/rtl/texture/zhao_material_window.sv
       # MEASURE.TOKENS, composed on its budget side 2026-09-19 (cmdmem, R18/R33).
       - fpga/rtl/measure/zhao_measure_tokens.sv
+      # MEASURE.SEALPLAN, composed 2026-09-26 (SEALPLAN, entry I56). It is the
+      # only producer of the arena's seal, so a source list without it dies at
+      # elaboration rather than producing a smaller number.
+      - fpga/rtl/measure/zhao_measure_sealplan.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
       # NOT zhao_raster_quant_fin.sv -- THERE IS NO SUCH FILE. The module is

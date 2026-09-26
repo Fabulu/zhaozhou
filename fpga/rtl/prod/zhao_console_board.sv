@@ -1451,6 +1451,24 @@ module zhao_console_board
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- MEASURE.SEALPLAN's evidence (entry I56) ---------------------------
+  // Every one of these has been seen to fire in
+  // `tests/measure/measure_sealplan_directed.cpp`. They leave the core rather
+  // than terminating in a wire named `_unused`, which is the shape entry I56
+  // itself records the shell committing with six binner counters.
+  output logic [31:0] seal_plans_staged_o,
+  output logic [31:0] seal_plans_sealed_o,
+  output logic [31:0] seal_plans_refused_o,
+  output logic [ 7:0] seal_refuse_reason_o,
+  output logic [31:0] seal_default_seals_o,
+  output logic [31:0] seal_lost_o,
+  output logic [31:0] seal_giant_mismatch_o,
+  output logic [31:0] seal_draws_seen_o,
+  output logic [31:0] seal_plans_forwarded_o,
+  output logic [31:0] seal_plans_malformed_o,
+  output logic [17:0] geom_pa_giant_chunks_o,
+  output logic [17:0] geom_pa_giant_refs_o,
+  output logic [31:0] geom_pa_reserve_breach_o,
   // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
   // `geom_vid_reused_o` is the number this whole subsystem exists for: a
   // corner answered from the identity map, i.e. a vertex published ONCE and
@@ -4825,6 +4843,19 @@ module zhao_console_board
       .geom_pa_fault_o                    (geom_pa_fault_o),
       .geom_pa_busy_o                     (geom_pa_busy_o),
       .geom_pa_seal_ready_o               (geom_pa_seal_ready_o),
+      .seal_plans_staged_o                (seal_plans_staged_o),
+      .seal_plans_sealed_o                (seal_plans_sealed_o),
+      .seal_plans_refused_o               (seal_plans_refused_o),
+      .seal_refuse_reason_o               (seal_refuse_reason_o),
+      .seal_default_seals_o               (seal_default_seals_o),
+      .seal_lost_o                        (seal_lost_o),
+      .seal_giant_mismatch_o              (seal_giant_mismatch_o),
+      .seal_draws_seen_o                  (seal_draws_seen_o),
+      .seal_plans_forwarded_o             (seal_plans_forwarded_o),
+      .seal_plans_malformed_o             (seal_plans_malformed_o),
+      .geom_pa_giant_chunks_o             (geom_pa_giant_chunks_o),
+      .geom_pa_giant_refs_o               (geom_pa_giant_refs_o),
+      .geom_pa_reserve_breach_o           (geom_pa_reserve_breach_o),
       .geom_vid_tris_o                    (geom_vid_tris_o),
       .geom_vid_refs_o                    (geom_vid_refs_o),
       .geom_vid_published_o               (geom_vid_published_o),

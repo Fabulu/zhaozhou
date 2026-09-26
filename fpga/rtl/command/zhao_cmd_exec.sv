@@ -712,6 +712,32 @@ module zhao_cmd_exec
     // ---- MEASURE.TOKENS (R18/R33): the ceiling, then each view's request ---
     // One-cycle pulses in commit phase EX_TOK. MEASURE.TOKENS takes both every
     // cycle (a load is never refused), so no ready is needed or offered.
+    // ---- SealFramePlan 0x0003 -> MEASURE.SEALPLAN (directive section 5) ----
+    // THE FRAME ADMISSION PLAN, decoded and handed on. `plan_valid_o` is a
+    // ONE-CYCLE PULSE raised in the packet's COMMIT walk, never at the
+    // record's end: a plan from a packet that is later abandoned must never
+    // reach the validator, for the same reason a SetPost from one does not
+    // reach POST.COMPOSITE. The fields hold stable across the pulse.
+    //
+    // THIS BLOCK DOES NOT VALIDATE THE NUMBERS. It checks the record's own
+    // hygiene -- the reserved flag bits, and that each field fits the seal
+    // width -- and forwards. Whether a plan FITS is a question about four
+    // hardware capacities and R7's reservation, and `zhao_measure_sealplan`
+    // owns it. Two blocks deciding admission is two blocks that can disagree.
+    output logic        plan_valid_o,
+    output logic [ 7:0] plan_view_o,
+    output logic [ 7:0] plan_flags_o,
+    output logic [15:0] plan_res_gen_o,
+    output logic [15:0] plan_view_gen_o,
+    output logic [15:0] plan_giant_inst_o,
+    output logic [17:0] plan_verts_o,        // VERTICES
+    output logic [17:0] plan_tris_o,         // TRIANGLES
+    output logic [17:0] plan_chunks_o,       // CHUNKS
+    output logic [17:0] plan_refs_o,         // TILE REFERENCES
+    output logic [17:0] plan_giant_refs_o,   // TILE REFERENCES, the reservation
+    output logic [31:0] plans_forwarded_o,   // records that reached the pulse
+    output logic [31:0] plans_malformed_o,   // records refused by record hygiene
+
     output logic        tok_budget_valid_o,
     output logic [31:0] tok_budget_geom0_o,
     output logic [31:0] tok_budget_geom1_o,
@@ -1155,6 +1181,20 @@ module zhao_cmd_exec
   localparam int unsigned OFF_PR_SLOT  = ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT;
   localparam int unsigned OFF_PR_KIND  = ZHAO_PUBLISH_RESOURCE_OFF_KIND;
 
+  // SealFramePlan 0x0003 (owner vacation directive section 5), same rule,
+  // same package: every offset comes from the generated ABI and never from a
+  // literal, so a layout move is a build error rather than a wrong field.
+  localparam int unsigned OFF_FP_VIEW  = ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_ID;
+  localparam int unsigned OFF_FP_FLAGS = ZHAO_SEAL_FRAME_PLAN_OFF_FLAGS;
+  localparam int unsigned OFF_FP_RGEN  = ZHAO_SEAL_FRAME_PLAN_OFF_RESOURCE_GEN;
+  localparam int unsigned OFF_FP_VGEN  = ZHAO_SEAL_FRAME_PLAN_OFF_VIEW_GEN;
+  localparam int unsigned OFF_FP_GINST = ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_INSTANCE;
+  localparam int unsigned OFF_FP_VERTS = ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_VERTS;
+  localparam int unsigned OFF_FP_TRIS  = ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_TRIS;
+  localparam int unsigned OFF_FP_CKS   = ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_CHUNKS;
+  localparam int unsigned OFF_FP_REFS  = ZHAO_SEAL_FRAME_PLAN_OFF_PLAN_REFS;
+  localparam int unsigned OFF_FP_GREFS = ZHAO_SEAL_FRAME_PLAN_OFF_GIANT_REFS;
+
   // SetPost 0x0040 and SetGradeTable 0x0041 (R36), same rule, same package.
   localparam int unsigned OFF_SP_GAIN  = ZHAO_SET_POST_OFF_BLOOM_GAIN;
   localparam int unsigned OFF_SP_FLAGS = ZHAO_SET_POST_OFF_FLAGS;
@@ -1336,6 +1376,13 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: SetPresentationContract record size moved; re-read the offsets");
     if (UPL_Q < 2 || UPL_PQ < 2)
       $fatal(1, "zhao_cmd_exec: UPL_Q and UPL_PQ must be >= 2 (the pointers need a bit)");
+    if (ZHAO_SEAL_FRAME_PLAN_BYTES != 48)
+      $fatal(1, "zhao_cmd_exec: SealFramePlan record size moved; re-read the offsets");
+    // Every four-byte field must END before the record's last byte, or the
+    // commit walk would read a word the stream has not finished delivering.
+    // Checked for the LAST one, which is the only one that can straddle.
+    if ((OFF_FP_GREFS + 4) > ZHAO_SEAL_FRAME_PLAN_BYTES)
+      $fatal(1, "zhao_cmd_exec: SealFramePlan.giant_refs runs past the record");
     if (ZHAO_SET_POST_BYTES != 32)
       $fatal(1, "zhao_cmd_exec: SetPost record size moved; re-read the offsets");
     // Both records finish their fields BEFORE their last byte (ink ends at 29 of
@@ -1745,6 +1792,46 @@ module zhao_cmd_exec
   wire [7:0] pq_handle_gen_unused = pq_head[UQ_RES_LO +: 8];
   /* verilator lint_on UNUSEDSIGNAL */
 
+  // ---- SealFramePlan staging (owner vacation directive section 5) ---------
+  // A plan is STATE for the frame it admits: the last VALID one in a packet
+  // wins, and it is staged into a shadow (`sp_fp_*`) only when its record ends
+  // clean. The capture registers (`fp_*`) are overwritten byte by byte and
+  // never leave. This is SetPost's shape, deliberately -- the two commands
+  // have the same lifetime and the same abandon rule, so they should not have
+  // two different mechanisms.
+  logic [ 7:0] fp_view, fp_flags;
+  logic [15:0] fp_rgen, fp_vgen, fp_ginst;
+  logic [31:0] fp_verts, fp_tris, fp_cks, fp_refs, fp_grefs;
+
+  logic        st_plan_v;
+  logic [ 7:0] st_fp_view, st_fp_flags;
+  logic [15:0] st_fp_rgen, st_fp_vgen, st_fp_ginst;
+  logic [17:0] st_fp_verts, st_fp_tris, st_fp_cks, st_fp_refs, st_fp_grefs;
+
+  // RECORD HYGIENE, AND NOTHING MORE. Two questions only, and both are about
+  // the RECORD rather than about the plan:
+  //
+  //   * are the reserved flag bits zero -- REFUSE, NEVER MASK, exactly as
+  //     `sp_ok_c` and `ta_ok_c` above. A flag byte this block does not
+  //     understand may mean the host is speaking a later ABI, and masking it
+  //     would admit a plan under semantics nobody agreed to;
+  //   * does each 32-bit wire field fit the 18-bit seal the console carries.
+  //     A field that does not fit cannot be forwarded at all -- truncating it
+  //     would turn "65,536 too many vertices" into a small legal number, which
+  //     is the flattering direction and exactly the class of error the
+  //     validator downstream exists to refuse loudly.
+  //
+  // EVERYTHING ELSE IS THE VALIDATOR'S. Capacities, the giant's reservation,
+  // the generations and the view's existence are `zhao_measure_sealplan`'s
+  // questions; it holds the capacities and this block does not.
+  logic fp_ok_c;
+  assign fp_ok_c = (fp_flags[7:1] == 7'd0)
+                && (fp_verts[31:18] == 14'd0)
+                && (fp_tris [31:18] == 14'd0)
+                && (fp_cks  [31:18] == 14'd0)
+                && (fp_refs [31:18] == 14'd0)
+                && (fp_grefs[31:18] == 14'd0);
+
   // ---- SetPost / SetGradeTable staging (R35/R36) ---------------------------
   // A SetPost is STATE, like a SetView: the last VALID one in a packet wins, and
   // it is staged into a shadow (`st_*`) only when its record ends clean. The
@@ -1999,6 +2086,21 @@ module zhao_cmd_exec
       twod_loads_issued_o <= 32'd0;
       sp_gain <= 8'd0; sp_flags <= 8'd0; sp_amt <= 8'd0;
       sp_br <= 16'd0; sp_bg <= 16'd0; sp_bb <= 16'd0; sp_flash <= 16'd0; sp_ink <= 16'd0;
+      st_plan_v <= 1'b0;
+      st_fp_view <= 8'd0; st_fp_flags <= 8'd0;
+      st_fp_rgen <= 16'd0; st_fp_vgen <= 16'd0; st_fp_ginst <= 16'd0;
+      st_fp_verts <= 18'd0; st_fp_tris <= 18'd0; st_fp_cks <= 18'd0;
+      st_fp_refs <= 18'd0; st_fp_grefs <= 18'd0;
+      fp_view <= 8'd0; fp_flags <= 8'd0;
+      fp_rgen <= 16'd0; fp_vgen <= 16'd0; fp_ginst <= 16'd0;
+      fp_verts <= 32'd0; fp_tris <= 32'd0; fp_cks <= 32'd0;
+      fp_refs <= 32'd0; fp_grefs <= 32'd0;
+      plan_valid_o <= 1'b0;
+      plan_view_o <= 8'd0; plan_flags_o <= 8'd0;
+      plan_res_gen_o <= 16'd0; plan_view_gen_o <= 16'd0; plan_giant_inst_o <= 16'd0;
+      plan_verts_o <= 18'd0; plan_tris_o <= 18'd0; plan_chunks_o <= 18'd0;
+      plan_refs_o <= 18'd0; plan_giant_refs_o <= 18'd0;
+      plans_forwarded_o <= 32'd0; plans_malformed_o <= 32'd0;
       st_post_v <= 1'b0; st_gain <= 8'd0; st_flags <= 2'd0; st_amt <= 8'd0;
       st_br <= 9'd0; st_bg <= 9'd0; st_bb <= 9'd0; st_flash <= 16'd0; st_ink <= 16'd0;
       gt_curve <= 8'd0; gt_first <= 8'd0; gt_count <= 8'd0;
@@ -2031,6 +2133,7 @@ module zhao_cmd_exec
       stamp_src_truncated_o <= 32'd0; unsupported_o <= 32'd0;
     end else begin
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
+      plan_valid_o       <= 1'b0;   // the plan hand-off is a one-cycle pulse
       tok_budget_valid_o <= 1'b0;   // both token loads are one-cycle pulses
       tok_vreq_valid_o   <= 1'b0;
       // R52: so is the trace arming -- and `clear_i` MUST be a pulse, not a
@@ -2272,6 +2375,28 @@ module zhao_cmd_exec
                 if (rpos == 16'(OFF_PR_KIND)) pr_kind <= pkt_byte_i;
               end
 
+              // ---- SealFramePlan (directive section 5) ---------------------
+              if (r_op == ZHAO_OP_SEAL_FRAME_PLAN) begin
+                if (rpos == 16'(OFF_FP_VIEW))  fp_view  <= pkt_byte_i;
+                if (rpos == 16'(OFF_FP_FLAGS)) fp_flags <= pkt_byte_i;
+                if ((rpos >= 16'(OFF_FP_RGEN)) && (rpos < 16'(OFF_FP_RGEN + 2)))
+                  fp_rgen <= {pkt_byte_i, fp_rgen[15:8]};
+                if ((rpos >= 16'(OFF_FP_VGEN)) && (rpos < 16'(OFF_FP_VGEN + 2)))
+                  fp_vgen <= {pkt_byte_i, fp_vgen[15:8]};
+                if ((rpos >= 16'(OFF_FP_GINST)) && (rpos < 16'(OFF_FP_GINST + 2)))
+                  fp_ginst <= {pkt_byte_i, fp_ginst[15:8]};
+                if ((rpos >= 16'(OFF_FP_VERTS)) && (rpos < 16'(OFF_FP_VERTS + 4)))
+                  fp_verts <= {pkt_byte_i, fp_verts[31:8]};
+                if ((rpos >= 16'(OFF_FP_TRIS)) && (rpos < 16'(OFF_FP_TRIS + 4)))
+                  fp_tris <= {pkt_byte_i, fp_tris[31:8]};
+                if ((rpos >= 16'(OFF_FP_CKS)) && (rpos < 16'(OFF_FP_CKS + 4)))
+                  fp_cks <= {pkt_byte_i, fp_cks[31:8]};
+                if ((rpos >= 16'(OFF_FP_REFS)) && (rpos < 16'(OFF_FP_REFS + 4)))
+                  fp_refs <= {pkt_byte_i, fp_refs[31:8]};
+                if ((rpos >= 16'(OFF_FP_GREFS)) && (rpos < 16'(OFF_FP_GREFS + 4)))
+                  fp_grefs <= {pkt_byte_i, fp_grefs[31:8]};
+              end
+
               // ---- SetPost (R36) -------------------------------------------
               if (r_op == ZHAO_OP_SET_POST) begin
                 if (rpos == 16'(OFF_SP_GAIN))  sp_gain  <= pkt_byte_i;
@@ -2440,6 +2565,25 @@ module zhao_cmd_exec
                                            pr_hlo, pr_res};
                     uq_wp <= uq_wp + (UQW+1)'(1);
                   end
+                end else if (r_op == ZHAO_OP_SEAL_FRAME_PLAN) begin
+                  // STATE, not an event: the last clean one in the packet wins,
+                  // and it reaches the validator only after the packet's
+                  // verdict.
+                  if (fp_ok_c) begin
+                    st_plan_v    <= 1'b1;
+                    st_fp_view   <= fp_view;
+                    st_fp_flags  <= fp_flags;
+                    st_fp_rgen   <= fp_rgen;
+                    st_fp_vgen   <= fp_vgen;
+                    st_fp_ginst  <= fp_ginst;
+                    st_fp_verts  <= fp_verts[17:0];
+                    st_fp_tris   <= fp_tris[17:0];
+                    st_fp_cks    <= fp_cks[17:0];
+                    st_fp_refs   <= fp_refs[17:0];
+                    st_fp_grefs  <= fp_grefs[17:0];
+                  end else begin
+                    `ZHAO_EXEC_INC(plans_malformed_o);
+                  end
                 end else if (r_op == ZHAO_OP_SET_POST) begin
                   // STATE, not an event: the last clean one in the packet wins.
                   if (sp_ok_c) begin
@@ -2571,6 +2715,9 @@ module zhao_cmd_exec
               uq_rp    <= '0;
               // The post state of a refused packet never leaves either.
               st_post_v <= 1'b0;
+              // Nor its plan. A frame admitted on a plan from a packet the
+              // console refused would be a frame whose quota nobody agreed to.
+              st_plan_v <= 1'b0;
               gq_wp     <= '0;
               gq_rp     <= '0;
               poisoned <= 1'b0;
@@ -2608,6 +2755,27 @@ module zhao_cmd_exec
                   gov_view_count_o <= pc_views[1:0];
                 else
                   `ZHAO_EXEC_INC(view_count_refused_o);
+              end
+              // THE PLAN, HANDED ON FIRST. It is consumed at the next frame
+              // begin edge, so the ordering inside a packet cannot matter for
+              // correctness -- it is placed in the earliest commit phase
+              // anyway, because "the frame's admission agreement is in place
+              // before anything else of this packet leaves" is the property a
+              // reader will assume, and it costs nothing to make true.
+              if (st_plan_v) begin
+                plan_valid_o      <= 1'b1;
+                plan_view_o       <= st_fp_view;
+                plan_flags_o      <= st_fp_flags;
+                plan_res_gen_o    <= st_fp_rgen;
+                plan_view_gen_o   <= st_fp_vgen;
+                plan_giant_inst_o <= st_fp_ginst;
+                plan_verts_o      <= st_fp_verts;
+                plan_tris_o       <= st_fp_tris;
+                plan_chunks_o     <= st_fp_cks;
+                plan_refs_o       <= st_fp_refs;
+                plan_giant_refs_o <= st_fp_grefs;
+                st_plan_v         <= 1'b0;
+                `ZHAO_EXEC_INC(plans_forwarded_o);
               end
               tk <= 2'd1;
             end

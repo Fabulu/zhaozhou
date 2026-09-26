@@ -9977,6 +9977,24 @@ module zhao_console_core
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- MEASURE.SEALPLAN's evidence (entry I56) ---------------------------
+  // Every one of these has been seen to fire in
+  // `tests/measure/measure_sealplan_directed.cpp`. They leave the core rather
+  // than terminating in a wire named `_unused`, which is the shape entry I56
+  // itself records the shell committing with six binner counters.
+  output logic [31:0] seal_plans_staged_o,
+  output logic [31:0] seal_plans_sealed_o,
+  output logic [31:0] seal_plans_refused_o,
+  output logic [ 7:0] seal_refuse_reason_o,
+  output logic [31:0] seal_default_seals_o,
+  output logic [31:0] seal_lost_o,
+  output logic [31:0] seal_giant_mismatch_o,
+  output logic [31:0] seal_draws_seen_o,
+  output logic [31:0] seal_plans_forwarded_o,
+  output logic [31:0] seal_plans_malformed_o,
+  output logic [17:0] geom_pa_giant_chunks_o,
+  output logic [17:0] geom_pa_giant_refs_o,
+  output logic [31:0] geom_pa_reserve_breach_o,
   // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
   // `geom_vid_reused_o` is the number this whole subsystem exists for: a
   // corner answered from the identity map, i.e. a vertex published ONCE and
@@ -20782,6 +20800,17 @@ module zhao_console_core
   logic        cmd_draw_valid_w, cmd_draw_ready_w;
   logic [31:0] cmd_draw_form_w, cmd_draw_material_set_w, cmd_draw_transform_w;
   logic [ 7:0] cmd_draw_viewport_mask_w, cmd_draw_semantic_weight_w;
+  // I56: the decoded frame admission plan, CMD.EXEC -> MEASURE.SEALPLAN.
+  logic        cmd_plan_valid_w;
+  logic [ 7:0] cmd_plan_view_w, cmd_plan_flags_w;
+  logic [15:0] cmd_plan_rgen_w, cmd_plan_vgen_w, cmd_plan_ginst_w;
+  logic [17:0] cmd_plan_verts_w, cmd_plan_tris_w, cmd_plan_chunks_w;
+  logic [17:0] cmd_plan_refs_w, cmd_plan_grefs_w;
+  // and the validated seal, MEASURE.SEALPLAN -> GEOM.PARAMBUF.
+  logic        sp_seal_valid_w;
+  logic [17:0] sp_seal_verts_w, sp_seal_tris_w, sp_seal_chunks_w;
+  logic [17:0] sp_seal_refs_w, sp_seal_grefs_w, sp_seal_gchunks_w;
+  logic [15:0] sp_frame_gen_w;
   logic [15:0] cmd_draw_flags_w, cmd_draw_src_id_w;
   logic [23:0] cmd_upl_index;
   logic [ 7:0] cmd_upl_kind, cmd_upl_slot;
@@ -24320,6 +24349,22 @@ module zhao_console_core
     .draw_transform_o      (cmd_draw_transform_w),
     .draw_viewport_mask_o  (cmd_draw_viewport_mask_w),
     .draw_semantic_weight_o(cmd_draw_semantic_weight_w),
+    // I56: the frame admission plan, decoded here and validated in
+    // MEASURE.SEALPLAN. `plan_valid_o` is a commit-phase pulse, so a plan from
+    // an abandoned packet never reaches the validator.
+    .plan_valid_o          (cmd_plan_valid_w),
+    .plan_view_o           (cmd_plan_view_w),
+    .plan_flags_o          (cmd_plan_flags_w),
+    .plan_res_gen_o        (cmd_plan_rgen_w),
+    .plan_view_gen_o       (cmd_plan_vgen_w),
+    .plan_giant_inst_o     (cmd_plan_ginst_w),
+    .plan_verts_o          (cmd_plan_verts_w),
+    .plan_tris_o           (cmd_plan_tris_w),
+    .plan_chunks_o         (cmd_plan_chunks_w),
+    .plan_refs_o           (cmd_plan_refs_w),
+    .plan_giant_refs_o     (cmd_plan_grefs_w),
+    .plans_forwarded_o     (seal_plans_forwarded_o),
+    .plans_malformed_o     (seal_plans_malformed_o),
     .draw_flags_o          (cmd_draw_flags_w),
     .draw_src_id_o         (cmd_draw_src_id_w),
     // R229: the pose rides the same `draw_valid_o` beat, so these need no
@@ -26921,6 +26966,34 @@ module zhao_console_core
   localparam int unsigned GEOM_PA_MAX_TRIS   = 16384;
   localparam int unsigned GEOM_PA_MAX_CHUNKS = 16384;
 
+  // I56, THE SEAL'S OTHER TWO CONSTANTS, AND THEY ARE IN DIFFERENT UNITS FROM
+  // THE THREE ABOVE. The three above are ARENA capacities; these two are TILE
+  // REFERENCES, which live in `zhao_geom_binner_v2` and are not this block's
+  // resource at all. They are named here because the validator needs both
+  // sides of the reservation arithmetic and a literal in a port map is a
+  // number nobody can find.
+  //
+  // GEOM_SEAL_MAX_REFS MUST TRACK `zhao_shell_top_v2`'s RENDER_CHUNKS x
+  // RENDER_CHUNK_REFS (8192 x 4). Raising the binner without raising this
+  // would under-declare the capacity, which is the SAFE direction -- plans
+  // would be refused that could have fit -- but it would still be wrong.
+  localparam int unsigned GEOM_SEAL_MAX_REFS = 32768;
+
+  // R7'S GUARANTEED GIANT, IN TILE REFERENCES. A named, editable constant
+  // because CLAUDE.md rule 6 says every value belongs in one -- and NOT a knob
+  // to turn down: "shrink the guaranteed giant" is on the owner directive's
+  // list of what the delegation does not cover.
+  //
+  // AND THE MEASURED CONSEQUENCE, STATED HERE RATHER THAN DISCOVERED. It is
+  // EQUAL to GEOM_SEAL_MAX_REFS. So a plan that declares a guaranteed giant
+  // must declare ZERO ordinary tile references, and any positive ordinary
+  // reference demand is refused. That is the ruled number enforced honestly;
+  // it is also a statement that the composed binner has exactly enough
+  // reference capacity for the giant and none for anything beside it. The
+  // answer is more reference capacity, which is a fit. In CHUNKS there is real
+  // room: ceil(32768/14) = 2,341 reserved of 16,384, leaving 14,043 ordinary.
+  localparam int unsigned GEOM_SEAL_GIANT_REFS = 32768;
+
   zhao_guard_req_t pa_req, pw_req, gs_m_req;
   zhao_guard_rsp_t pa_rsp, pw_rsp, gs_m_rsp;
   wire             gs_m_beat_valid, gs_m_beat_last;
@@ -27127,18 +27200,27 @@ module zhao_console_core
       .rst_n (rst_n),
       .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
 
-      // The frame's seal. `render_frame_begin_i` is the console's frame edge
-      // and `geom_pa_gen_q` is the generation stamped into every chunk -- a
-      // free-running counter here, because nothing upstream yet owns a frame
-      // generation and inventing an owner for it would be a decision this
-      // packet is not authorised to make. The QUOTA is the arena's own
-      // capacity until the Measure has somewhere to publish one (I-entry).
-      .seal_valid_i  (render_frame_begin_i),
+      // THE FRAME'S SEAL, AND IT IS NO LONGER A CONSTANT. Owner vacation
+      // directive section 5: "A constant equal to arena capacity is not an
+      // admission plan." Until 2026-09-26 these three ports were
+      // `18'(GEOM_PA_MAX_VERTS)`, `18'(GEOM_PA_MAX_TRIS)` and
+      // `18'(GEOM_PA_MAX_CHUNKS)` -- the sentence the directive names, in
+      // literals. They now come from `u_measure_sealplan`, which validates a
+      // per-view plan against every capacity in its own unit and against R7's
+      // giant reservation, and REFUSES it before the seal if it does not fit.
+      //
+      // The frame generation moved WITH the seal, into that block. It was a
+      // counter in this file, and a composer may write a join but should not
+      // own a register -- the seal's generation belongs to the seal's producer
+      // for the same reason the arena refuses to let a caller supply it.
+      .seal_valid_i  (sp_seal_valid_w),
       .seal_ready_o  (geom_pa_seal_ready_o),
-      .seal_verts_i  (18'(GEOM_PA_MAX_VERTS)),
-      .seal_tris_i   (18'(GEOM_PA_MAX_TRIS)),
-      .seal_chunks_i (18'(GEOM_PA_MAX_CHUNKS)),
-      .frame_gen_i   (geom_pa_gen_q),
+      .seal_verts_i  (sp_seal_verts_w),
+      .seal_tris_i   (sp_seal_tris_w),
+      .seal_chunks_i (sp_seal_chunks_w),
+      .seal_giant_refs_i   (sp_seal_grefs_w),
+      .seal_giant_chunks_i (sp_seal_gchunks_w),
+      .frame_gen_i   (sp_frame_gen_w),
       // THE PRODUCER-FINISHED SIGNAL, AND IT ALREADY EXISTED. Entry I56 said
       // "the console has no `the geometry producer has finished this frame`
       // signal, and inventing one upstream is outside this packet's
@@ -27283,6 +27365,9 @@ module zhao_console_core
       .frames_published_o  (geom_pa_frames_o),
       .guard_denied_o      (geom_pa_denied_o),
       .quota_overflow_o    (geom_pa_overflow_o),
+      .q_giant_refs_o        (geom_pa_giant_refs_o),
+      .q_giant_chunks_o      (geom_pa_giant_chunks_o),
+      .giant_reserve_breach_o(geom_pa_reserve_breach_o),
       .records_discarded_o (geom_pa_discarded_o),
       .records_unsealed_o  (geom_pa_unsealed_o),
       .arena_overrun_o     (geom_pa_overrun_o),
@@ -27357,26 +27442,112 @@ module zhao_console_core
       .busy_o           (pw_busy)
   );
 
-  // THE FRAME GENERATION IS THIS COMPOSITION'S AND IS DECLARED AS SUCH:
-  // `geom_pa_gen_q` advances on every ACCEPTED seal, so no two consecutive
-  // frames share a stamp, which is all the staleness gate needs. It is not a
-  // console-wide frame identity and does not claim to be one.
+  // ---- MEASURE.SEALPLAN: the producer of the seal (entry I56) -------------
+  // The frame generation counter that used to sit here is INSIDE this block
+  // now, advancing on the same condition it always did (an accepted seal). It
+  // moved because a composer may write a join and should not own a register,
+  // and because the seal's generation is part of the sealed record.
   //
-  // THE FRAME END IS NO LONGER DERIVED HERE. It was `render_frame_begin_i &&
-  // !geom_pa_seal_ready_o` -- the NEXT frame's begin edge, arriving while the
-  // arena could not seal -- which published a frame one frame edge late and
-  // never published at all in a bench that plays one frame. The arena now
-  // takes `render_frame_end_i`, the console's own producer-finished pulse; the
-  // argument that it is the right edge for an UPSTREAM tap is at the port.
-  logic [15:0] geom_pa_gen_q;
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      geom_pa_gen_q       <= 16'd1;
-    end else begin
-      if (render_frame_begin_i && geom_pa_seal_ready_o)
-        geom_pa_gen_q <= geom_pa_gen_q + 16'd1;
-    end
-  end
+  // THE FRAME END IS STILL `render_frame_end_i`, unchanged: the console's own
+  // producer-finished pulse, which the arena takes directly. This block sees
+  // it too, because it is where the frame's draw stream stops and therefore
+  // where the designated giant can be checked against the stream that was
+  // actually submitted.
+  //
+  // THE TWO GENERATION PULSES ARE REAL CONSOLE EVENTS, not a restatement of
+  // the plan. `cmd_upl_valid && cmd_upl_ready` is a resource publication
+  // retiring; `proj_cfg_we_m` is a view matrix word being written. A plan
+  // priced before either is refused as stale, and the check can fire because
+  // its two operands are enabled by different things -- the plan's by the
+  // command stream, the console's by these.
+  zhao_measure_sealplan #(
+      .MAX_VERTS  (GEOM_PA_MAX_VERTS),
+      .MAX_TRIS   (GEOM_PA_MAX_TRIS),
+      .MAX_CHUNKS (GEOM_PA_MAX_CHUNKS),
+      // THE BINNER'S REFERENCE CAPACITY, AND IT IS NOT THE ARENA'S.
+      // `zhao_shell_top_v2` composes `zhao_geom_bin_pipe_v2` with
+      // RENDER_CHUNKS=8192 x RENDER_CHUNK_REFS=4 = 32,768 tile references.
+      // Kept as a named constant here rather than a literal in a port map,
+      // and it must move with that composition.
+      .MAX_REFS   (GEOM_SEAL_MAX_REFS),
+      .CHUNK_IDS  (14),
+      // R7's guaranteed giant, in TILE REFERENCES. NOT a knob to turn down:
+      // the owner directive's list of what the delegation does not cover has
+      // "shrink the guaranteed giant" on it, and the block refuses any plan
+      // that reserves a different number.
+      .GIANT_REFS (GEOM_SEAL_GIANT_REFS),
+      .QW         (18),
+      .VIEWS      (2)
+  ) u_measure_sealplan (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+
+      .plan_valid_i      (cmd_plan_valid_w),
+      .plan_view_i       (cmd_plan_view_w),
+      .plan_flags_i      (cmd_plan_flags_w),
+      .plan_res_gen_i    (cmd_plan_rgen_w),
+      .plan_view_gen_i   (cmd_plan_vgen_w),
+      .plan_giant_inst_i (cmd_plan_ginst_w),
+      .plan_verts_i      (cmd_plan_verts_w),
+      .plan_tris_i       (cmd_plan_tris_w),
+      .plan_chunks_i     (cmd_plan_chunks_w),
+      .plan_refs_i       (cmd_plan_refs_w),
+      .plan_giant_refs_i (cmd_plan_grefs_w),
+
+      .res_bump_i  (cmd_upl_valid && cmd_upl_ready),
+      .view_bump_i (proj_cfg_we_m),
+      /* verilator lint_off PINCONNECTEMPTY */
+      // The live generations are readable through the counter ports below and
+      // through this block's own registers; no console port carries them yet,
+      // because the host that would read them is the same host that publishes
+      // the plan and it already knows what it published. Declared rather than
+      // omitted: a missing pin is what the next fit finds.
+      .res_gen_o  (),
+      .view_gen_o (),
+      /* verilator lint_on PINCONNECTEMPTY */
+
+      // THE SELECTOR'S STREAM. The draw dispatch, at its own fire, carrying
+      // the declared priority and the stable instance identity.
+      // `semantic_weight` has ridden this wire since the ABI shipped and has
+      // never had a policy consumer; this is it.
+      .dw_valid_i  (cmd_draw_valid_w && cmd_draw_ready_w),
+      .dw_weight_i (cmd_draw_semantic_weight_w),
+      .dw_inst_i   (cmd_draw_src_id_w),
+
+      .frame_begin_i (render_frame_begin_i),
+      .frame_end_i   (render_frame_end_i),
+
+      .seal_ready_i        (geom_pa_seal_ready_o),
+      .seal_valid_o        (sp_seal_valid_w),
+      .seal_verts_o        (sp_seal_verts_w),
+      .seal_tris_o         (sp_seal_tris_w),
+      .seal_chunks_o       (sp_seal_chunks_w),
+      .seal_refs_o         (sp_seal_refs_w),
+      .seal_giant_refs_o   (sp_seal_grefs_w),
+      .seal_giant_chunks_o (sp_seal_gchunks_w),
+      .seal_frame_gen_o    (sp_frame_gen_w),
+      /* verilator lint_off PINCONNECTEMPTY */
+      // The view and resource generations the seal carries, and the sealed
+      // giant's identity. They are latched INSIDE the arena's record for the
+      // fields it takes; these three have no arena port and no other consumer
+      // in this composition, and are left open rather than tied to a wire that
+      // would read as a producer.
+      .seal_view_gen_o      (),
+      .seal_res_gen_o       (),
+      .seal_view_o          (),
+      .seal_giant_present_o (),
+      .seal_giant_inst_o    (),
+      /* verilator lint_on PINCONNECTEMPTY */
+
+      .plans_staged_o   (seal_plans_staged_o),
+      .plans_sealed_o   (seal_plans_sealed_o),
+      .plans_refused_o  (seal_plans_refused_o),
+      .refuse_reason_o  (seal_refuse_reason_o),
+      .default_seals_o  (seal_default_seals_o),
+      .seal_lost_o      (seal_lost_o),
+      .giant_mismatch_o (seal_giant_mismatch_o),
+      .draws_seen_o     (seal_draws_seen_o)
+  );
 
   zhao_geom_assetfetch #(
     .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
