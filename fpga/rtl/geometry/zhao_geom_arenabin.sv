@@ -390,32 +390,43 @@ module zhao_geom_arenabin #(
   // STAGE_IDS slots of a tile in ONE clock, which is why there are fourteen
   // one-read-port banks and not one array.
   //
-  // THE BANKS ARE FORCED INTO BLOCK MEMORY, AND THAT IS A MEASUREMENT, NOT A
-  // PRECAUTION. ARENACOMPOSE, 2026-09-26, put this block through `quartus_map`
-  // for the first time (R212: BINARENA counted these bits from the
-  // DECLARATIONS and could not fit). The declaration above used to carry the
-  // sentence "declared inside an explicit generate rather than as a 2-D
-  // unpacked array, which Quartus 17 does not reliably infer as memory" --
-  // and the generate form DID NOT INFER EITHER. Quartus 17.0.2 put every one
-  // of the 14 x 576 x 18 = 145,152 staging bits into FLIP-FLOPS:
+  // THE STAGING DOES NOT REACH BLOCK MEMORY ON QUARTUS 17.0.2, AND THAT IS A
+  // MEASUREMENT RATHER THAN A SUSPICION. ARENACOMPOSE, 2026-09-26, put this
+  // block through `quartus_map` for the first time -- R212: BINARENA counted
+  // these bits from the DECLARATIONS and was forbidden a fit. Three map_only
+  // rows on the shipping part 5CSEBA6U23I7, all three IDENTICAL:
   //
-  //   without this attribute   146,414 registers,  33,408 block memory bits
-  //   with it                  see the row `zhao_geom_arenabin@ramstyle`
+  //   `@arenacompose`      as written                146,414 reg   33,408 bits
+  //   `@ramstyle`          (* ramstyle = `MACRO *)   146,414 reg   33,408 bits
+  //   `@ramstyle-literal`  (* ramstyle = "M10K" *)   146,414 reg   33,408 bits
   //
-  // Only the module-scope directory arrays (head/tail/hv/fill/nch, 33,408
-  // bits) inferred on their own. 146,414 registers is about 87% of the
-  // shipping part's entire flip-flop count for ONE block, so the difference
-  // between "counted from the declarations" and "inferred as RAM" is the
-  // difference between a block that ships and one that cannot.
+  // WHAT INFERRED: only the five MODULE-SCOPE directory arrays -- head_ram,
+  // tail_ram, hv_ram, fill_ram, nch_ram, 33,408 bits between them, named in
+  // the map report's own RAM Summary. The 14 x 576 x 18 = 145,152-bit STAGING
+  // array did not infer at all, in any of the three, and went to flip-flops.
+  // A 5CSEBA6U23I7 holds about 167,640 of those, so this ONE BLOCK asks for
+  // roughly 87% of the device's registers.
   //
-  // IT IS A KNOB, NOT A CONSTANT, because the owner's control over every
-  // shipped value is a standing rule: `ZHAO_ARENABIN_STAGE_RAMSTYLE` defaults
-  // to "M10K" and can be set to "MLAB" or "logic" by a build that wants the
-  // other trade. Its default is defined immediately below rather than in a
-  // package, so a bench that elaborates this file alone still gets it.
-`ifndef ZHAO_ARENABIN_STAGE_RAMSTYLE
-  `define ZHAO_ARENABIN_STAGE_RAMSTYLE "M10K"
-`endif
+  // THE ATTRIBUTE IS THEREFORE NOT HERE. It was tried twice, it changed
+  // nothing either time, and Quartus said nothing either time. An INERT
+  // synthesis directive left in shipped RTL is worse than none: it reads as a
+  // guarantee that the storage is in memory, and the next person to look at
+  // this file would inherit the guarantee and not the measurement.
+  //
+  // THE DECLARATIONS ARE IDENTICAL IN STYLE to the five that DID infer; the
+  // one difference is that these are declared INSIDE A GENERATE. The header
+  // used to assert the opposite -- "declared inside an explicit generate
+  // rather than as a 2-D unpacked array, which Quartus 17 does not reliably
+  // infer as memory" -- and that is the sentence the fit refuted. Hoisting the
+  // banks to module scope is the next experiment and it is NOT done here: it
+  // is a change to this block's storage architecture, and ARENACOMPOSE's job
+  // was to compose the block and measure it.
+  //
+  // FOURTEEN ONE-READ-PORT BANKS ARE ARCHITECTURALLY REQUIRED whatever the
+  // storage: A_EMITR reads all STAGE_IDS slots of a tile in ONE clock. At
+  // 576 x 18 each, M10K would cost 2 blocks per bank -- 28 of the device's 553
+  // -- so the memory is affordable if it can be reached. THE LIMIT IS THE
+  // INFERENCE, NOT THE CAPACITY.
   logic              stg_we;
   logic [STG_W-1:0]  stg_wsel;
   logic [TIDX_W-1:0] stg_wa;
@@ -532,7 +543,6 @@ module zhao_geom_arenabin #(
   genvar gs;
   generate
     for (gs = 0; gs < STAGE_IDS; gs = gs + 1) begin : g_stage
-      (* ramstyle = `ZHAO_ARENABIN_STAGE_RAMSTYLE *)
       logic [ID_W-1:0] bank [0:TILES-1];
       logic [ID_W-1:0] rd_q;
       always_ff @(posedge clk) begin

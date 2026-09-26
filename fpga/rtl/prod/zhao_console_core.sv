@@ -7964,6 +7964,212 @@
 //          `t_*` it is no longer a demonstration -- it IS the raster swap, and
 //          item (2) is its price.
 //
+//      -- ARENACOMPOSE, 2026-09-26. THE PRODUCER IS COMPOSED. THE ENTRY IS
+//      STILL OPEN, and saying which half moved is the whole point of this
+//      paragraph.
+//
+//      WHAT IS COMPOSED. `u_geom_arenabin` drives `u_geom_paramarena`'s
+//      `ck_*`, its `lk_*` chain patch (which BINARENA built and left with no
+//      caller) and its `frame_end_i`. Its intake is THE SHELL DOOR, made a
+//      two-consumer fork: the same post-clip triangle `u_shell` takes, on the
+//      same clock, with the arena identity from `u_geom_tidq`.
+//      `door_tri_ready_w` is now `shell_tri_ready_w && ab_tri_ready_w`.
+//
+//      WHAT IS RETIRED, by REMOVAL and not by tie-off, because a live path
+//      left with no consumer is dangling ports rather than a capability:
+//      `u_geom_chunkser` and `zhao_geom_chunkser.sv`; `zhao_geom_binner_v2`'s
+//      whole serialise pass (`ser_req_i`, seven `ser_*`, `ser_mode_r`,
+//      `ser_done_r`, `d_jidx_r`, the `take_c` mux, the `D_DONE` arm); the
+//      `ARENA_ID_LO`/`ARENA_ID_W` parameters that existed only to feed
+//      `ser_tri_id_o`; `zhao_shell_top_v2`'s nine `render_ser_*` ports and
+//      `RENDER_SER_ID_W`; and `geom_chunkser_directed`. THE ARENA ID ITSELF IS
+//      NOT RETIRED -- it still rides in the continuation tail's dead
+//      vertex_rgb field. Removing a parameter is not removing a field.
+//
+//      SO BLOCKER 1 IS GONE FOR REAL, not by argument: there is no on-chip
+//      reference array between the geometry and the arena's chunk region,
+//      because the block that read one is not in the tree.
+//
+//      AND I55 IS STILL NOT CLOSED, WHICH IS THE HONEST HALF. Directive
+//      section 4: "a parallel legacy on-chip frame arena that still supplies
+//      the actual pixels is not closure". Every pixel still comes from
+//      `zhao_geom_binner_v2`'s on-chip drain through `zhao_geom_bin_pipe_v2`'s
+//      `job_*`. BLOCKER 2 IS UNTOUCHED AND IS STILL 1,749 BITS. Composing the
+//      producer was NECESSARY and it is not SUFFICIENT.
+//
+//      THE PIXEL EVIDENCE, MEASURED IN THE COMPOSED CONSOLE. The smoke reports
+//      `raster pixels=2816`, `paramarena chunks=15 frames=1` and
+//      `arenabin tris=74 unnamed=1 refs=97 chunks=15 links=4 tiles=11` beside
+//      `binrefs tile_references=101 max_tile_list_depth=59`. The bench now
+//      COMPARES those two reference counts rather than printing them, and the
+//      comparison is TOTAL: an EXCESS is fatal (the arena would hold tiles the
+//      raster never draws) and a SHORTFALL is fatal unless a triangle was
+//      dropped for want of an identity. That is the check no other counter in
+//      that bench can make -- a producer binning a DIFFERENT set of tiles
+//      would fill the arena with a picture nobody draws and every range guard
+//      downstream would still pass.
+//
+//      AND IT FOUND SOMETHING, WHICH IS WHY IT IS 97 AND NOT 101.
+//      `u_geom_tidq` UNDERFLOWS EXACTLY ONCE PER FRAME. The bench now prints
+//      its three counters -- they were DECLARED there and never displayed --
+//      and every form reads the same:
+//
+//        tidq underflow=1  overflow=0  unnamed=0
+//
+//      `unnamed` is ZERO, so the queue never popped an entry marked
+//      not-accepted; it popped an entry that WAS NEVER PUSHED, and handed over
+//      its all-ones poison. GEOM.ARENABIN refuses to bin a triangle with no
+//      identity -- correctly, because index 0 is a real descriptor and a
+//      convenient zero would bin it onto somebody else's triangle -- so that
+//      triangle and its four tile references are dropped and counted.
+//
+//      IT IS ONE PER FRAME IN EVERY FORM: plain, `-Mutant`, `-BadVertex`,
+//      `-NoEchoArm`, `-BadTraceArm` and `-TerrainFlatLattice`, whose scene is
+//      much smaller (36 references against 101) and which still loses exactly
+//      one triangle and exactly four references. So it is a ONE-ENTRY SKEW at
+//      the frame edge and not a function of what the scene contains. The
+//      queue's flush is `pa_seal_fire`; the door's pop is the shell handshake;
+//      an id discarded by that flush whose triangle has not yet crossed the
+//      door is precisely this shape.
+//
+//      IT IS NOT NEW AND IT IS NOT THIS PACKET'S. It has been happening since
+//      entry I54 composed the queue; what is new is that anything reports it.
+//      The RETIRED path carried the all-ones id INTO the chunk, where only a
+//      walk would ever have refused it. SO THE EXTERNAL ARENA'S TILE LISTS ARE
+//      FOUR REFERENCES SHORT OF THE PICTURE ON THIS FIXTURE, and that is said
+//      here rather than left in a counter, because it is a real gap between
+//      what the raster draws and what a walk would find. Closing it is a
+//      GEOM.TIDQ / seal-ordering question, not a GEOM.ARENABIN one, and it is
+//      NOT DONE HERE.
+//
+//      15 CHUNKS IS WHAT THOSE REFERENCES IMPLY at CHUNK_IDS = 14 over 11
+//      tiles with a deepest list of 5 chunks (`max_tile_chunks=5`). The count
+//      was not compared against a remembered number from a different fixture:
+//      entry I55's earlier `chunks=10` was measured when `raster pixels` was
+//      2560 and terrain drew nothing.
+//
+//      ---- THE FIT, AND THE QUESTION WAS NAMED BEFORE IT RAN ----------------
+//
+//      QUESTION: `zhao_geom_arenabin` had NEVER been through `quartus_map`
+//      (R212, and its own manifest row said so). It is now in this console's
+//      closure. Does it synthesize under Quartus 17.0 at all, and what does
+//      its 177,984 bits of DECLARED on-chip state actually cost?
+//
+//      ANSWER, THREE map_only rows on the shipping part 5CSEBA6U23I7, all with
+//      `rtlCleanAtHead` read BEFORE the numbers were quoted:
+//
+//        `@arenacompose`      as written                 146,414 reg / 33,408 b
+//        `@ramstyle`          (* ramstyle = `MACRO *)    146,414 reg / 33,408 b
+//        `@ramstyle-literal`  (* ramstyle = "M10K" *)    146,414 reg / 33,408 b
+//
+//      IT SYNTHESIZES, AND AS WRITTEN IT DOES NOT FIT. Only the five
+//      MODULE-SCOPE directory arrays inferred as memory -- head_ram, tail_ram,
+//      hv_ram, fill_ram, nch_ram, 33,408 bits between them, each named in the
+//      map report's own RAM Summary. The 14 x 576 x 18 = 145,152-bit STAGING
+//      array did not infer at all and went to flip-flops. For scale, without
+//      leaning on a datasheet: `zhao_geom_binner_v2`'s own map row on the same
+//      part is 2,109 registers, so this is SIXTY-NINE TIMES the binner, and
+//      41,910 ALMs at four registers each is 167,640 register sites, so one
+//      block is asking for about 87% of them.
+//
+//      AND THE BLOCK'S OWN HEADER HAD ASSERTED THE OPPOSITE WOULD HAPPEN: the
+//      banks are "declared inside an explicit generate rather than as a 2-D
+//      unpacked array, which Quartus 17 does not reliably infer as memory".
+//      The generate form did not infer either, and that sentence is the one
+//      the fit refuted. The declarations are IDENTICAL IN STYLE to the five
+//      that did infer; the one difference is the generate scope.
+//
+//      THE ATTRIBUTE DID NOT HELP, AND THAT IS ALSO A MEASUREMENT.
+//      `(* ramstyle = ... *)` was tried twice -- once through a macro, once as
+//      a literal with a plain `ifdef` knob, which is the form CLAUDE.md says
+//      engages where a macro does not. Both rows are byte-identical to the
+//      first: 146,414 registers, 33,408 memory bits, and Quartus emitted NO
+//      warning either time. So the attribute is REMOVED rather than left in
+//      place: an inert synthesis directive in shipped RTL reads as a guarantee
+//      that the storage is in memory, and the next reader would inherit the
+//      guarantee instead of the measurement.
+//
+//      THE LIMIT IS THE INFERENCE, NOT THE CAPACITY. Fourteen one-read-port
+//      banks are architecturally required -- A_EMITR reads a whole chunk row
+//      in one clock -- and at 576 x 18 each they would cost 2 M10K apiece, 28
+//      of the device's 553. The memory is affordable if it can be reached.
+//      Hoisting the banks out of the generate to module scope is the next
+//      experiment and it is NOT done here: it changes GEOM.ARENABIN's storage
+//      architecture, and this packet's job was to compose the block and
+//      measure it. Owner directive: "A measured engineering impossibility is a
+//      finding, not permission to invent a pass."
+//
+//      THIS IS THE COUNTED-FROM-DECLARATIONS TRAP AND IT BELONGS IN THIS
+//      ENTRY, because this entry quotes the number. "177,984 bits on chip
+//      against the binner's 360,064" was an honest bit COUNT and a misleading
+//      COST: the binner's bits are real M10K (its own map row reads 2,109
+//      registers / 191,296 block memory bits), and the producer's staging bits
+//      are flip-flops -- still, at this commit, after two attempts to move
+//      them. Bits are not memory until a synthesiser says so, and nothing in
+//      this tree had ever asked one.
+//
+//      ---- THE PRICE, RE-MEASURED AT THIS COMMIT ----------------------------
+//
+//      `price_the_swap` was in `geom_chunkser_directed`, which is deleted. It
+//      is REBUILT in `geom_arenabin_directed.cpp`'s price path, where the
+//      binner is compiled in, FED THE SAME SCENE and drained for real -- which
+//      is what the composed console does, so the probe now models the console
+//      instead of a bench arrangement nobody ships.
+//
+//        on-chip drain   27 refs /  107-clock span  ->   4.12 clocks/ref
+//        external walk   19 tris /  562 busy clocks ->  29.58 clocks/tri
+//        producer        2,176 clocks/frame fixed + 5.82 clocks/ref marginal
+//                                                   ->  5.88 at R7's giant
+//
+//      THE WALK MOVED, from 29.89 to 29.58, and the reason is this change:
+//      WALKSWAP and BINARENA both measured a chain built by a TILE-MAJOR
+//      serialiser, whose successor was always the next allocation;
+//      GEOM.ARENABIN's chain is PATCHED, so the walker follows a different
+//      layout over the same 19 references and the same 22 guard requests. The
+//      ratio is 7.18x rather than 7.3x. This entry's earlier "re-ran
+//      BYTE-IDENTICALLY at 4.12 / 29.89" was true of the tree it was written
+//      on and is no longer true of this one.
+//
+//      ---- WHAT IS STILL REFUSED --------------------------------------------
+//
+//      (1) `paramwalk dirs/chunks/tris` IS STILL 0/0/0, REFUSED AGAIN, and the
+//          refusal is now SHARPER rather than weaker. BINARENA declined to
+//          wire `walk_valid_i` to a tile sequencer because every `t_*` output
+//          dangles -- "a producer driving into nothing: logic added to make a
+//          counter move". That is still exactly true. What changed is that the
+//          walk would now have an honest INDEPENDENT SOURCE to walk, so the
+//          only thing between here and a real walk is a consumer, and a
+//          consumer is item (2), not a sequencer.
+//
+//      (2) THE RASTER SWAP, AND IT IS NOT REACHABLE WITH THIS NUMBER. `job_*`
+//          needs METAW = 1877 bits: six 240-bit plane equations,
+//          `tri_area2_i`, `tri_min_x_i`, the 298-bit flat request, the 48-bit
+//          continuation tail and the 32-bit fragment state. `t_*` is one
+//          16-byte TriangleDescriptor decoded -- 128 bits. The 1,749-bit
+//          difference is manufactured by GEOM.SETUP and GEOM.ATTRPACK from
+//          full vertices, so the swap owes a SECOND setup and attrpack back
+//          end fed from SDRAM plus the vertex-fetch arm `zhao_geom_paramwalk`
+//          deliberately does not drive. That is ADDITION, not substitution,
+//          and the consumer side still costs 7.18x the clocks per reference.
+//          Nothing in this packet reduces it.
+//
+//      (3) A FIT OF THE COMPOSED CONSOLE. THREE map_only rows on one block are
+//          not a console area claim and this entry does not make one. What
+//          they establish is narrower and it is the question that was open:
+//          the block synthesizes under Quartus 17.0.2, and its staging is in
+//          FLIP-FLOPS rather than in memory.
+//
+//      (4) RE-ARCHITECTING GEOM.ARENABIN'S STORAGE, which is what the register
+//          count now demands and which is NOT this packet's to do. Hoisting
+//          the staging banks out of the generate to module scope is the next
+//          experiment; the block's own header carries the three rows, the RAM
+//          Summary that names what did and did not infer, and the reason the
+//          memory is affordable (28 M10K of 553) if the inference can be
+//          reached. Composing the producer did not CREATE that cost -- it
+//          REVEALED it, because BINARENA was forbidden the fit that would
+//          have. Un-composing would hide it again and restore the series
+//          directive section 4 forbids, so it was considered and refused.
+//
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
 //
