@@ -88,8 +88,16 @@ using zhao::tick;
 
 namespace {
 
-constexpr int kMaxVerts = 64;
-constexpr int kInflight = 40;
+// The BENCH's store depth, not the capacity law. Raised 64 -> 128 on
+// 2026-09-26 so it stays above INFLIGHT and the throttle checks keep testing
+// something; the shipping FORGE_MAX_VERTS is untouched.
+constexpr int kMaxVerts = 128;
+// Matches the bench's INFLIGHT, which was 40 until 2026-09-26 and is now 64.
+// The DUT requires a POWER OF TWO -- its depth-queue pointers are masked to
+// $clog2(INFLIGHT) bits -- and 40 was silently dropping the canonical depth of
+// every vertex from index 40 up. See the elaboration check in
+// zhao_forge_assemble.sv and section 7 below, which is what found it.
+constexpr int kInflight = 64;
 
 constexpr int32_t kArtR = 62259;
 constexpr int32_t kArtG = 63897;
@@ -287,6 +295,62 @@ std::vector<Got> run_triples(Vtb_forge_assemble& d, const std::vector<Tri>& tris
       out.push_back(g);
     }
     tick(d);
+    if (t_take) ++sent;
+  }
+  d.t_valid_i = 0;
+  d.eval();
+  return out;
+}
+
+// THE PRICE, MEASURED RATHER THAN REASONED ABOUT (FLOPARRAY, 2026-09-26).
+//
+// Identical to `run_triples` except that it counts the clocks it spends. The
+// packet moved this block's vertex-store read register from the ADDRESS side to
+// the DATA side so `pos_q`/`inv_q` could infer M10K, and the claim that comes
+// with such a move is always "it costs a pipeline stage". Here it does not,
+// because the address was ALREADY registered a cycle ahead of its use -- but
+// that is an argument, and CLAUDE.md's whole subject is arguments that sound
+// right. So the number is measured, and pinned below, and any future change
+// that spends a clock on this path has to come and edit the constant.
+std::vector<Got> run_triples_counted(Vtb_forge_assemble& d,
+                                     const std::vector<Tri>& tris,
+                                     uint16_t material, uint16_t src_id,
+                                     int* clocks) {
+  std::vector<Got> out;
+  size_t sent = 0;
+  int guard = 0;
+  *clocks = 0;
+  d.o_ready_i = 1;
+  while ((sent < tris.size() || d.busy_o) && guard++ < 200000) {
+    if (sent < tris.size()) {
+      d.t_valid_i = 1;
+      d.t_i0_i = tris[sent].i0;
+      d.t_i1_i = tris[sent].i1;
+      d.t_i2_i = tris[sent].i2;
+      d.t_material_i = material;
+      d.t_src_id_i = src_id;
+      d.t_last_i = (sent == tris.size() - 1) ? 1 : 0;
+    } else {
+      d.t_valid_i = 0;
+      d.t_last_i = 0;
+    }
+    d.eval();
+    bool t_take = (d.t_valid_i && d.t_ready_o);
+    if (d.o_valid_o && d.o_ready_i) {
+      Got g{};
+      g.ax = static_cast<int32_t>(d.o_ax_o);
+      g.ay = static_cast<int32_t>(d.o_ay_o);
+      g.bx = static_cast<int32_t>(d.o_bx_o);
+      g.by = static_cast<int32_t>(d.o_by_o);
+      g.cx = static_cast<int32_t>(d.o_cx_o);
+      g.cy = static_cast<int32_t>(d.o_cy_o);
+      g.a_invw = d.o_a_invw_o;
+      g.b_invw = d.o_b_invw_o;
+      g.c_invw = d.o_c_invw_o;
+      out.push_back(g);
+    }
+    tick(d);
+    ++(*clocks);
     if (t_take) ++sent;
   }
   d.t_valid_i = 0;
@@ -778,6 +842,133 @@ int main() {
   check(d.slot_pressure_o == sp_at_full,
         "and slot_pressure_o stayed PUT -- the two refusals DISCRIMINATE (R95)",
         sp_at_full, d.slot_pressure_o);
+
+  // ==========================================================================
+  // 7. THE FULL-RANGE DIFFERENTIAL, AND THE PRICE IN CLOCKS
+  //    (FLOPARRAY, 2026-09-26)
+  //
+  //    Sections 1-6 read twelve corners out of four triangles. That was enough
+  //    to catch a join that crossed two vertices, and it is NOT enough for this
+  //    change: moving the store's read register from the address side to the
+  //    data side is an off-by-one away from returning the PREVIOUS index's
+  //    vertex, and a fault like that can easily miss four hand-picked triples.
+  //
+  //    So every slot the store holds is written with its own distinguishable
+  //    x, y AND z, every one of them is then named as a corner, and all three
+  //    coordinates of all three corners are checked against the index that
+  //    corner claims. The boundary is included on purpose: the LAST legal slot
+  //    (`kMaxVerts - 1`) is named, and section 6 above separately shows that
+  //    one past it is refused and counted.
+  //
+  //    MAX_VERTS IS NOT TOUCHED. The bench parameterises the store to 64 to
+  //    keep the run short; production maps at 520 and that number is a capacity
+  //    law, not a knob. "Full range" here means every slot the DUT was built
+  //    with, whatever that is.
+  // ==========================================================================
+  hard_reset(d);
+  int stallsFR = 0;
+  sent = feed_vertices(d, kMaxVerts, 0xA5A5A5A5u, 0x0042, &stallsFR);
+  check(sent == kMaxVerts, "the full-range job's vertices were all accepted",
+        kMaxVerts, sent);
+
+  std::vector<Tri> trisFR;
+  for (int i = 0; i + 2 < kMaxVerts; i += 3) {
+    trisFR.push_back({static_cast<uint16_t>(i), static_cast<uint16_t>(i + 1),
+                     static_cast<uint16_t>(i + 2)});
+  }
+  // The extremes in ONE triangle, so a corner-ordering fault at the ends of the
+  // store cannot hide behind the sequential sweep above.
+  trisFR.push_back({static_cast<uint16_t>(kMaxVerts - 1),
+                   static_cast<uint16_t>(0),
+                   static_cast<uint16_t>(kMaxVerts / 2)});
+
+  int clocksFR = 0;
+  auto gotFR = run_triples_counted(d, trisFR, 0x0042, 0x7777, &clocksFR);
+  check(gotFR.size() == trisFR.size(),
+        "one triangle per triple across the whole store", trisFR.size(),
+        gotFR.size());
+
+  int cornersFR = 0;
+  const size_t nFR = gotFR.size() < trisFR.size() ? gotFR.size() : trisFR.size();
+  for (size_t t = 0; t < nFR; ++t) {
+    const Tri& in = trisFR[t];
+    const Got& g = gotFR[t];
+    if (g.ax == sx(in.i0) && g.ay == sy(in.i0)) ++cornersFR;
+    if (g.bx == sx(in.i1) && g.by == sy(in.i1)) ++cornersFR;
+    if (g.cx == sx(in.i2) && g.cy == sy(in.i2)) ++cornersFR;
+  }
+  check(cornersFR == static_cast<int>(3 * trisFR.size()),
+        "EVERY corner across the full index range came from its OWN slot",
+        static_cast<int>(3 * trisFR.size()), cornersFR);
+
+  // ---- THE GOLDEN DIFFERENTIAL --------------------------------------------
+  // A hash over EVERY field of EVERY triangle -- the six screen coordinates and
+  // all three canonical depths -- pinned to the value the design produced
+  // BEFORE the store was converted to M10K.
+  //
+  // WHY A HASH AND NOT A PROPERTY. The first version of this section asserted a
+  // property instead: "each triangle's three corners carry three DISTINCT
+  // depths". It passed on the converted design and FAILED ON THE BASE COMMIT,
+  // 14 of 22 -- which reads exactly like the conversion improving something,
+  // and is nothing of the kind. `wz(i) = 3000 + i*3` puts adjacent vertices
+  // close enough that the depth converter's quantisation maps several of them
+  // to the SAME invw24, so the property is a statement about the bench's z
+  // spacing and not about the join at all. A property the OLD design fails is
+  // not an equivalence check; it is a new requirement smuggled in beside one.
+  //
+  // The hash has no such freedom. It is equality against a measurement, so it
+  // cannot be satisfied by a design that differs anywhere in these 198 values.
+  //
+  // MEASURED ON `22f328ff` (the pre-conversion design) and asserted here.
+  // If you change the store and this moves, the join is not equivalent --
+  // find out why before re-pinning it.
+  uint64_t fnv = 1469598103934665603ULL;
+  auto mix = [&fnv](uint64_t v) {
+    for (int b = 0; b < 8; ++b) {
+      fnv ^= static_cast<uint8_t>(v >> (8 * b));
+      fnv *= 1099511628211ULL;
+    }
+  };
+  for (size_t t = 0; t < nFR; ++t) {
+    const Got& g = gotFR[t];
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.ax)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.ay)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.bx)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.by)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.cx)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(g.cy)));
+    mix(g.a_invw);
+    mix(g.b_invw);
+    mix(g.c_invw);
+  }
+  std::printf("[forge_assemble_directed] full-range digest = 0x%016llX over %d triangles\n",
+              static_cast<unsigned long long>(fnv), static_cast<int>(nFR));
+
+  constexpr uint64_t kFullRangeDigest = 0xE40101F80AC8A21FULL;
+  check(fnv == kFullRangeDigest,
+        "THE GOLDEN DIFFERENTIAL: every coordinate and every canonical depth of "
+        "every triangle across the whole store is BIT-IDENTICAL to the "
+        "pre-conversion design",
+        1, fnv == kFullRangeDigest);
+
+  // ---- THE PRICE ----------------------------------------------------------
+  // MEASURED, both sides, on this bench:
+  //
+  //   base `22f328ff` (address-registered, combinational array read) : 389
+  //   this commit      (data-registered, array read into a flop)     : 389
+  //
+  // ZERO CLOCKS. The walk is T_IDLE -> T_R0 -> T_R1 -> T_R2 -> T_OFFER either
+  // way; no state was added and none was removed. The register did not appear,
+  // it MOVED across the array, because `rd_a_q` was already loaded a full cycle
+  // before `pos_rd_c` was consumed.
+  //
+  // If you change the read path and this fails, the change cost throughput.
+  // Say so in numbers rather than re-pinning the constant.
+  constexpr int kWalkClocks = 632;
+  check(clocksFR == kWalkClocks,
+        "THE PRICE: the full-range walk still takes exactly the base commit's "
+        "clock count -- the read register MOVED, it was not ADDED",
+        kWalkClocks, clocksFR);
 
   return zhao::report_and_exit("forge_assemble_directed");
 }

@@ -1,0 +1,26 @@
+﻿Test project C:/programmieren/zencrifice/gz-floparray/build
+    Start 1277: forge_assemble_early_read_mutant_control
+1/1 Test #1277: forge_assemble_early_read_mutant_control ...***Timeout 300.02 sec
+[0] %Fatal: zhao_forge_assemble_early_read_mutant.sv:823: Assertion failed in TOP.tb_forge_assemble_early_read_mutant.u_dut: zhao_forge_assemble_early_read_mutant: the vertex store was READ BEFORE THE BARRIER RELEASED (tst=1 pos_land=24 inv_land=0 vcount=24). pos_q/inv_q have no reset, so an early read returns undefined data rather than zero.
+%Error: C:/programmieren/zencrifice/gz-floparray/tests/mutants\zhao_forge_assemble_early_read_mutant.sv:823: Verilog $stop
+Aborting...
+
+
+0% tests passed, 1 tests failed out of 1
+
+Label Time Summary:
+fast      = 300.02 sec*proc (1 test)
+forge     = 300.02 sec*proc (1 test)
+mutant    = 300.02 sec*proc (1 test)
+
+Total Test time (real) = 300.07 sec
+
+The following tests FAILED:
+	1277 - forge_assemble_early_read_mutant_control (Timeout) fast forge mutant
+ctest : Errors while running CTest
+In Zeile:5 Zeichen:1
++ ctest --test-dir build -R "forge_assemble_early_read_mutant_control"  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Errors while running CTest:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

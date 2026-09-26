@@ -1,4 +1,45 @@
-// zhao_forge_assemble.sv -- the forge meshlet's terminal stage: world vertices
+// zhao_forge_assemble_early_read_mutant.sv -- A COMMITTED MUTANT. NOT PRODUCTION RTL.
+//
+// WHAT WAS CHANGED, and it is ONE line
+// ------------------------------------
+// A_DRAIN's release condition loses its `inv_land_q` half:
+//     if ((pos_land_q == vcount_q) && (inv_land_q == vcount_q))   // production
+//     if  (pos_land_q == vcount_q)                                // here
+// so the triangle walk is released into A_TRIS while the canonical depths are
+// still in flight. The module is renamed so no source list can elaborate it by
+// mistake.
+//
+// WHY IT HAS TO EXIST
+// -------------------
+// FLOPARRAY deleted this block's asynchronous reset loop over `pos_q`/`inv_q`
+// -- the single cause of 34,840 bits sitting in flip-flops, measured by
+// `tests/probes/zhao_floparray_probe.sv` arms p0/p1. Deleting it means the
+// arrays no longer read as zero after reset, and what replaces that guarantee
+// is a PROOF: `t_ready_o` is gated on A_TRIS, and A_DRAIN will not release into
+// A_TRIS until BOTH landing counters agree with `vcount_q`, so every slot a
+// triple can name has been written this job.
+//
+// A proof is an argument. The barrier assertion in the production block is the
+// instrument that holds it to account -- and that assertion is UNREACHABLE WITH
+// LEGAL STIMULUS, because no input sequence can make a correct A_DRAIN release
+// early. CLAUDE.md is explicit about what that owes: "A guard you cannot reach
+// with legal stimulus needs a COMMITTED MUTANT", not a sentence, and not a
+// temporary edit to production RTL -- that is a live-tree hazard AND it leaves
+// the next person the same argument with no evidence.
+//
+// So this file is evidence ABOUT THE INSTRUMENT, not about the design. Its
+// driver has INVERTED POLARITY: the ctest passes when the assertion FIRES.
+//
+// DO NOT WRITE A TEST THAT ASSERTS THE BUG. The positive statement -- that the
+// store holds and every corner comes from its own index -- is asserted by
+// `forge_assemble_directed` against PRODUCTION. This file is kept separate for
+// exactly the reason CLAUDE.md gives: a test that asserts the defect passes
+// only while the defect exists.
+//
+// REGENERATE IT if `zhao_forge_assemble.sv` changes shape. This is a COPY, and
+// a copy of an old version is a positive control for a block that no longer
+// exists. `tools/budget/mutant_copy_drift.py` watches for exactly that.
+//// zhao_forge_assemble.sv -- the forge meshlet's terminal stage: world vertices
 // and index triples in, SCREEN TRIANGLES at GEOM.CLIP's door out.
 //
 // Law: owner ruling R187 -- "the honest door is at GEOM.CLIP's INPUT, not
@@ -171,7 +212,7 @@
 
 `default_nettype none
 
-module zhao_forge_assemble #(
+module zhao_forge_assemble_early_read_mutant #(
     // (MAX_SEGMENTS + 1) * MAX_SIDES = 65 * 8, `zhao_forge_prim`'s own frozen
     // bound restated as a capacity rather than re-decided as a policy.
     parameter int unsigned MAX_VERTS = 520,
@@ -361,16 +402,16 @@ module zhao_forge_assemble #(
   // synthesis translate_off
   initial begin
     if (ATTRS < 7)
-      $fatal(1, "zhao_forge_assemble: GEOM.CLIP's ruling-5 packet is SEVEN slots; ATTRS=%0d", ATTRS);
+      $fatal(1, "zhao_forge_assemble_early_read_mutant: GEOM.CLIP's ruling-5 packet is SEVEN slots; ATTRS=%0d", ATTRS);
     if ((SLOT_INVW >= ATTRS) || (SLOT_UOW >= ATTRS) || (SLOT_VOW >= ATTRS)
         || (SLOT_R >= ATTRS) || (SLOT_G >= ATTRS) || (SLOT_B >= ATTRS)
         || (SLOT_ALPHA >= ATTRS))
-      $fatal(1, "zhao_forge_assemble: an attribute slot index is outside ATTRS");
+      $fatal(1, "zhao_forge_assemble_early_read_mutant: an attribute slot index is outside ATTRS");
     // The projector's result port has no backpressure, so the only thing
     // standing between a burst of offers and a dropped result is this bound.
     // 36 is `zhao_project_core`'s stated GEOM latency.
     if (INFLIGHT < 36)
-      $fatal(1, "zhao_forge_assemble: INFLIGHT (%0d) must cover the projector's 36-clock latency", INFLIGHT);
+      $fatal(1, "zhao_forge_assemble_early_read_mutant: INFLIGHT (%0d) must cover the projector's 36-clock latency", INFLIGHT);
     // INFLIGHT MUST BE A POWER OF TWO, and until 2026-09-26 nothing said so.
     //
     // `DQD = INFLIGHT` sizes `dqf_slot_q`/`dqf_w_q`/`dqf_prof_q`, and the
@@ -392,9 +433,9 @@ module zhao_forge_assemble #(
     // The shipping console passes INFLIGHT = 64 and is unaffected. The BENCH
     // passed 40 and had been measuring this fault since it was written.
     if ((INFLIGHT & (INFLIGHT - 1)) != 0)
-      $fatal(1, "zhao_forge_assemble: INFLIGHT (%0d) must be a POWER OF TWO -- the depth queue's pointers are masked to $clog2(INFLIGHT) bits", INFLIGHT);
+      $fatal(1, "zhao_forge_assemble_early_read_mutant: INFLIGHT (%0d) must be a POWER OF TWO -- the depth queue's pointers are masked to $clog2(INFLIGHT) bits", INFLIGHT);
     if (MAX_VERTS > 32768)
-      $fatal(1, "zhao_forge_assemble: MAX_VERTS exceeds the 15-bit rider payload the owner field leaves");
+      $fatal(1, "zhao_forge_assemble_early_read_mutant: MAX_VERTS exceeds the 15-bit rider payload the owner field leaves");
   end
   // synthesis translate_on
 
@@ -793,7 +834,11 @@ module zhao_forge_assemble #(
       if (!barrier_reported_q && (tst_q != T_IDLE) && (tst_q != T_OFFER)
           && ((pos_land_q != vcount_q) || (inv_land_q != vcount_q))) begin
         barrier_reported_q <= 1'b1;
-        $error("zhao_forge_assemble: the vertex store was READ BEFORE THE BARRIER RELEASED (tst=%0d pos_land=%0d inv_land=%0d vcount=%0d). pos_q/inv_q have no reset, so an early read returns undefined data rather than zero.",
+        // MUTATION 2: $error -> $display, IN THE MUTANT ONLY. Verilator treats
+        // $error under --assert as an assertion failure, calls $stop and ABORTS,
+        // and an abort here blocks on a fault dialog when stdout is a pipe -- the
+        // ctest reported "Timeout 300.02 sec" instead of catching anything.
+        $display("zhao_forge_assemble_early_read_mutant: the vertex store was READ BEFORE THE BARRIER RELEASED (tst=%0d pos_land=%0d inv_land=%0d vcount=%0d). pos_q/inv_q have no reset, so an early read returns undefined data rather than zero.",
                tst_q, pos_land_q, inv_land_q, vcount_q);
       end
     end
@@ -947,7 +992,7 @@ module zhao_forge_assemble #(
           // canonical depth come back on different paths and a triangle built
           // from a landed position and an unlanded depth would carry the
           // PREVIOUS job's invw24 -- the stale-copy fault, per corner.
-          if ((pos_land_q == vcount_q) && (inv_land_q == vcount_q)) begin
+          if (pos_land_q == vcount_q) begin   // MUTATION 1: the inv_land_q half of the barrier is DROPPED
             st_q <= A_TRIS;
           end
         end
@@ -1064,6 +1109,6 @@ module zhao_forge_assemble #(
     end
   end
 
-endmodule : zhao_forge_assemble
+endmodule : zhao_forge_assemble_early_read_mutant
 
 `default_nettype wire

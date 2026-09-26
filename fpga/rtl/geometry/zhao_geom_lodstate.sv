@@ -496,6 +496,20 @@ module zhao_geom_lodstate #(
 
   assign lod_tick_c = (st_w == S_LOD) && lod_ready_w && !lod_valid_w;
 
+  // ---- the slot store's read side (the ports themselves are below) ---------
+  // Declared HERE because the ladder instantiation consumes `st_eff_c`, and a
+  // net used before its declaration is an error under `default_nettype none`.
+  logic [STW-1:0] st_rd_q;      // the registered array read
+  logic           st_v_q [SLOTS_C];
+  logic           st_v_rd_q;    // ... and its valid bit, read in lockstep
+  localparam logic [STW-1:0] ST_INIT = 18'd0;   // {kMesh, hold 0}
+
+  wire lod_wr_c = (st_w == S_LOD) && lod_valid_w;
+
+  // What the ladder actually sees: the stored row if this slot has ever been
+  // written, otherwise the value the old reset loop used to leave there.
+  wire [STW-1:0] st_eff_c = st_v_rd_q ? st_rd_q : ST_INIT;
+
   zhao_geom_lod u_lod (
       .clk  (clk),
       .rst_n(rst_n),
@@ -510,8 +524,10 @@ module zhao_geom_lodstate #(
       .splat_error_i (spl_q),
       .glint_error_i (gli_q),
 
-      .rung_i(st_q[slot_c][17:16]),
-      .hold_i(st_q[slot_c][15:0]),
+      // FED FROM THE REGISTERED READ, not from `st_q[slot_c]` directly. See
+      // the memory port below for why that costs nothing here.
+      .rung_i(st_eff_c[17:16]),
+      .hold_i(st_eff_c[15:0]),
 
       .rung_o (lod_rung_w),
       .hold_o (lod_hold_w),
@@ -519,6 +535,67 @@ module zhao_geom_lodstate #(
       .valid_o(lod_valid_w),
       .ready_o(lod_ready_w)
   );
+
+  // ==========================================================================
+  // THE SLOT STORE'S MEMORY PORT.
+  //
+  // `st_q` used to be read COMBINATIONALLY at `st_q[slot_c]` straight into the
+  // ladder's inputs, evaluated, and written back to the SAME address on the
+  // same edge, with an asynchronous reset loop over the array besides. Measured
+  // (`tests/probes/zhao_floparray_probe.sv`, arms l0-l3): those two properties
+  // are a CONJUNCTION -- removing either one ALONE leaves all 9,216 bits in
+  // flip-flops, and only removing BOTH infers a 512x18 Simple Dual Port M10K.
+  // That is PALRAM's shape exactly, and it is NOT the shape `zhao_forge_assemble`
+  // turned out to have, where the reset loop alone was the whole cause.
+  //
+  // WHY THE REGISTERED READ COSTS NOTHING HERE, which is the part that had to
+  // be measured rather than assumed. A registered read normally inserts a
+  // pipeline stage. It does not here because `slot_c` is already STABLE FOR
+  // SEVERAL STATES before the ladder needs it: `idx_q` is latched on the way
+  // out of S_IDLE and `view_q` only ever changes on a transition that goes to
+  // S_PROJ or S_IDLE -- never on S_RAD -> S_LOD. So between the address
+  // becoming valid and S_LOD consuming it there are at minimum the S_PROJ,
+  // S_WAITW and S_RAD states, and `st_rd_q` has long since settled. The
+  // bench-measured clock count is unchanged; see the packet's findings.
+  //
+  // THE VALIDITY DISCIPLINE replacing the reset loop: the array no longer
+  // clears, so "every slot reads {kMesh, hold 0} before its first write" is now
+  // owed to `st_v_q`, a separate 1-bit-per-slot vector that IS cleared by
+  // reset. That is `zhao_geom_drawjob`'s pal_v_q template verbatim, and its
+  // comment states the reason: the valid bits must be CLEARED by reset and an
+  // asynchronous clear on the payload array would destroy the inference. Unlike
+  // `zhao_forge_assemble` there is no structural barrier to lean on here -- a
+  // creature's FIRST evaluation genuinely reads a slot nobody has written --
+  // so this block needs real valid bits rather than a proof.
+  // (`st_rd_q`, `st_v_q`, `st_v_rd_q`, `ST_INIT`, `lod_wr_c` and `st_eff_c` are
+  // declared just above the ladder instantiation, which consumes `st_eff_c`.)
+  //
+  // NO RESET ON `st_q`, which is what lets it infer. The read and the write
+  // live in one clocked block so Quartus sees a single memory with two ports.
+  // THE VALID MUX IS AFTER THE REGISTER, NEVER BEFORE IT. Writing
+  //     st_rd_q <= st_v_q[slot_c] ? st_q[slot_c] : ST_INIT;
+  // puts a mux between the array and its read register, which is no longer the
+  // plain `rd_q <= mem[addr]` Quartus infers from -- it would cost the whole
+  // 9,216-bit conversion to save one wire. Keep the array read raw and apply
+  // validity downstream.
+  always_ff @(posedge clk) begin
+    st_rd_q <= st_q[slot_c];
+    if (lod_wr_c) st_q[slot_c] <= {lod_rung_w, lod_hold_w};
+  end
+
+  // The valid bits ARE reset, and they are separate flops for exactly that
+  // reason. SLOTS_C of them at one bit each -- 512 flops against the 9,216 the
+  // array gives back.
+  integer v;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (v = 0; v < SLOTS_C; v = v + 1) st_v_q[v] <= 1'b0;
+      st_v_rd_q <= 1'b0;
+    end else begin
+      st_v_rd_q <= st_v_q[slot_c];
+      if (lod_wr_c) st_v_q[slot_c] <= 1'b1;
+    end
+  end
 
   // ---- the caster ----------------------------------------------------------
   assign c_valid_o = (st_w == S_EMIT);
@@ -546,7 +623,11 @@ module zhao_geom_lodstate #(
       rr_issued_q <= 1'b0;
       last_iid_q  <= 16'd0;
       have_last_q <= 1'b0;
-      for (i = 0; i < SLOTS_C; i = i + 1) st_q[i] <= 18'd0;  // {kMesh, hold 0}
+      // THE RESET LOOP OVER `st_q` IS GONE. It used to read
+      //     for (i = 0; i < SLOTS_C; i = i + 1) st_q[i] <= 18'd0;
+      // and, together with the combinational read, it was the CONJUNCTION that
+      // held 9,216 bits in flip-flops. `st_v_q` above carries the "never
+      // written, so read {kMesh, hold 0}" meaning instead, and IT is reset.
       c_instance_id_o  <= 16'd0;
       c_x_o            <= 32'sd0;
       c_z_o            <= 32'sd0;
@@ -670,7 +751,9 @@ module zhao_geom_lodstate #(
 
         S_LOD: begin
           if (lod_valid_w) begin
-            st_q[slot_c]              <= {lod_rung_w, lod_hold_w};
+            // `st_q[slot_c]` is written at the memory port above, under this
+            // exact condition (`lod_wr_c`). Only the ARRAY moved; every counter
+            // and every caster field below is untouched.
             ticks_o                   <= ticks_o + 32'd1;
             rung_counts_o[lod_rung_w] <= rung_counts_o[lod_rung_w] + 32'd1;
             c_instance_id_o           <= iid_q;

@@ -17987,6 +17987,46 @@ add_test(NAME lint_zhao_forge_assemble
 set_tests_properties(lint_zhao_forge_assemble PROPERTIES
   LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# --------------------------------------------------------------------------
+# THE EARLY-READ MUTANT, AND ITS POLARITY IS INVERTED.
+#
+# FLOPARRAY removed this block's asynchronous reset loop over `pos_q`/`inv_q`
+# -- the single cause of 34,840 bits in flip-flops -- so the arrays no longer
+# read as zero after reset. What replaces that guarantee is a PROOF: A_DRAIN
+# will not release the triangle walk into A_TRIS until BOTH landing counters
+# agree with `vcount_q`, and `idx_bad_c` refuses any index outside that range.
+#
+# The production block asserts that barrier. The assertion is UNREACHABLE WITH
+# LEGAL STIMULUS -- no input sequence makes a correct A_DRAIN release early --
+# and CLAUDE.md is explicit that such a guard owes a COMMITTED MUTANT rather
+# than an argument. `tests/mutants/zhao_forge_assemble_early_read_mutant.sv`
+# drops the `inv_land_q` half of the barrier; this test PASSES WHEN THE
+# ASSERTION FIRES, which is what PASS_REGULAR_EXPRESSION expresses here.
+#
+# It reuses the production driver unchanged, under the GOLDEN'S PREFIX, so the
+# mutant is driven by exactly the stimulus the real block gets. Only TOP_MODULE
+# and SOURCES differ.
+add_executable(test_forge_assemble_early_read_mutant_control
+  forge/forge_assemble_directed.cpp)
+target_link_libraries(test_forge_assemble_early_read_mutant_control
+  PRIVATE zhao_harness)
+verilate(test_forge_assemble_early_read_mutant_control
+  PREFIX Vtb_forge_assemble
+  TOP_MODULE tb_forge_assemble_early_read_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_forge_assemble_early_read_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/tb_forge_assemble_early_read_mutant.sv)
+add_test(NAME forge_assemble_early_read_mutant_control
+  COMMAND test_forge_assemble_early_read_mutant_control)
+set_tests_properties(forge_assemble_early_read_mutant_control PROPERTIES
+  PASS_REGULAR_EXPRESSION "READ BEFORE THE BARRIER RELEASED"
+  LABELS "fast;forge;mutant" TIMEOUT 300)
+
 # ${ZHAO_ABI_PKG} IS REQUIRED AND WAS MISSING. `zhao_pkg.sv` line 35 is
 # `import zhao_abi_pkg::*;`, so without it this gate has failed with "Import
 # package not found" SINCE THE DAY IT WAS REGISTERED -- a lint target that has
