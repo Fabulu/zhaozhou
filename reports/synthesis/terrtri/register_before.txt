@@ -1,0 +1,60 @@
+﻿completion register -- computed from the tree, not maintained by hand
+self-test PASSED: the parser sees a planted gap and classifies it
+
+superseded check: 83 production roots CLEAN
+    80 further fit-target tops asked, NOT fatal (leaf measurements
+    and retained oracles, kept BECAUSE they are the old version)  -- 10 hit(s)
+      note   zhao_pair_setup_binner     wires zhao_geom_binner           superseded by zhao_geom_binner_v2
+      note   zhao_pair_tmu_cache        wires zhao_texture_tmu           superseded by zhao_texture_v3own
+      note   zhao_texture_island_top    wires zhao_raster_perspuv_pairpipe superseded by zhao_raster_perspuv_pairpipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_aux_pipe      superseded by zhao_texture_aux_pipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_bilerp_lane   superseded by zhao_texture_bilerp_lane_v2
+      note   zhao_texture_island_top    wires zhao_texture_cache_pipe    superseded by zhao_texture_cache_pipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_mosaic        superseded by zhao_texture_mosaic_v2
+      note   zhao_texture_island_top    wires zhao_texture_palette_res   superseded by zhao_texture_palette_res_v2
+      note   zhao_texture_island_top    wires zhao_texture_rsp_dispatch  superseded by zhao_texture_rsp_dispatch_v2
+      note   zhao_texture_island_top    wires zhao_texture_tmu_plan      superseded by zhao_texture_tmu_plan_v2
+
+zhao_console_core closure modules : 292
+zhao_console_board adds 5 more    : zhao_console_board, zhao_sys_pll, zhao_sys_pll_simclk, zhao_sys_reset, zhao_sys_reset_sync
+    capabilities that reach the machine only through the board: SYS.PLL, SYS.RESET
+tie-off entries in its header     : 9
+    boundary               2
+    resolved-in-composer   4
+    tied-to-zero           1
+    unclassified           2
+
+mandatory rtl capabilities (design/blocks.yml)
+    connected in the console  : 111
+    BUILT BUT NOT CONNECTED   : 1
+    NOT BUILT AT ALL          : 0
+    deferred / waits for board: 0   (cite the ruling, not a gap)
+    EXCUSED BY AN UNCITED FLAG: 0   <- counted AS GAPS: the owner's
+                                     rule is that a deferral must CITE
+                                     its controlling ruling or spec
+    UNRESOLVABLE              : 0   <- counted AS GAPS: not excused,
+                                     UNDEMONSTRATED. Locate the module
+                                     or add it to the alias table.
+    superseded by a ruling    : 2   (cites the ruling, the replacement
+                                     file and a BUILT test; each named)
+
+  SUPERSEDED BY A RULING (not a gap; the note is checked against the tree):
+    TERRAIN.ISLAND
+    TERRAIN.VISIBLE
+
+  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):
+    zhao_terrain_normalmap
+
+MANDATORY GAPS REMAINING          : 6
+  (5 tie-offs + 1 disconnected + 0 unbuilt + 0 uncited + 0 unresolvable)
+
+  I13  boundary             PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+  I34  boundary             TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
+  I54  tied-to-zero         GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
+  I55  unclassified         GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
+  I56  unclassified         GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
+
+A mandatory function is not present if it is a tie-off, fake
+stimulus, an external placeholder for hardware storage, a
+disconnected implementation, pruned dead logic, a stub, a TODO,
+or an unimplemented contract. Drive this to ZERO.
