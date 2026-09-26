@@ -2613,3 +2613,72 @@ launched at `e650481a`. **At the cap of two.**
 **Register 6.** Optimization queue behind them: `zhao_forge_assemble`'s
 `pos_q`/`inv_q` and `zhao_geom_lodstate`'s `st_q`, **both now with targets and
 baselines** (39,167 and 10,826 registers).
+
+### 2026-09-26 - TERRTRI merged: the BENCH was the bug, and I checked it with a FALSE GREEN first
+
+**Merged at `0e43dc6b`. Register 6 -> 6** -- `zhao_terrain_normalmap` stays on the
+disconnected list, refused rather than failed: composing it moves 6 -> 5 while
+changing not one pixel.
+
+**All three red smoke controls are green with ZERO RTL change.** They were BENCH
+defects. The evidence is a number that was zero and should never have been: the
+drain wait went **0 -> 64,143 / 86,475 cycles**, completions **4-of-5 -> 5-of-5**.
+A bench that waited zero cycles for a drain was not waiting at all.
+
+**Verified here, on the merged tree, not taken from the report:**
+
+| arm | RC | the line that matters |
+|---|---|---|
+| `-Mutant` | 0 | *"MUTANT PASS -- `terr_pl_slot_overflow_o` fired 1 time(s). The detector works; production's zero is a measurement."* |
+| `-BadVertex` | 0 | *"one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=8) and the frame completed"* |
+| `-NoEchoArm` | 0 | *"the connected core carries traffic on every wire this bench can reach"* |
+| plain | 0 | `raster pixels=2560`, `terruv 256/256`, `terrlight degenerate=0` |
+
+**`-Mutant` was not a failing control. It was an ABSENT one** -- it died on the
+TERRAINAUX terrain assertion before its inverted-polarity verdict could be read,
+so it proved nothing in either direction while being quoted as evidence. **A
+mutant exists to FAIL, so "it failed" looks like success from a distance and
+nobody checks WHERE.**
+
+### MY FIRST VERIFICATION REPORTED A FALSE GREEN
+
+I looped the arms as `& script $sw`, which binds `-Mutant` as a **positional path
+argument**, not a switch. The script threw a `DirectoryNotFoundException` -- and
+**a PowerShell exception does not set `$LASTEXITCODE`**, so my loop printed
+`-Mutant RC=0` carrying the PREVIOUS command's status. **Three arms "passed"
+without ever running.**
+
+That is the read-the-exit-code-of-the-right-thing trap in a **third costume**,
+after `| tail` and `cmake --build | tail` -- and committed by me *in the act of
+checking somebody else's instrument*. Re-run with `@splat`, every arm announced
+its own build, and the numbers above are from that run.
+
+**And `gate_sweep` does not run the smoke controls**, which is why a green sweep
+sat on three red ones for six days. **Not fixed** -- adding them costs a full
+284-source closure build per arm. Named in 15.25 with the three honest options.
+
+### DECISION RECORD 3, because TERRTRI ASKED instead of deciding
+
+It flagged that `OWNER-DECISIONS-20260920.md` section 5 and the 2026-09-23
+directive disagree about who owns terrain's colour, obeyed my brief's fence, and
+reported the conflict. Right call. The answer:
+
+* **Section 5 is not a reservation** -- its header says *"PARKED, NOT LIVE"* and
+  it states *"it asks the owner for nothing."*
+* **Both premises expired.** Law 1 dissolved with `zhao_terrain_uvlane`; law 2's
+  only stated reason -- entanglement with I49 -- expired when **I49 was deleted
+  the same day section 5 was written.**
+* **My brief was over-cautious and is corrected in place.** It cost nothing this
+  time; a wrong fence becomes a wrong premise in the next entry.
+* **The DIRECTIVE fences it harder**: *"NOT authority to ... remove
+  Gouraud/detail normals."* The engineering decision is delegated; **the
+  capability is not.**
+* **The live blocker was never colour.** It is carriage.
+
+### WHERE I AM
+
+**Running:** CHUNKSER (I54 + I56) and **FLOPARRAY**, launched at `22f328ff` --
+`zhao_forge_assemble`'s `pos_q`/`inv_q` (34,840 bits) and `zhao_geom_lodstate`'s
+`st_q` (9,216), **neither of them free**, which the brief leads with.
+
+**Register 6:** `I13`+`normalmap`, `I34`, `I54`, `I55`, `I56`.
