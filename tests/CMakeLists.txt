@@ -18223,3 +18223,57 @@ foreach(ba_variant fires silent)
   set_tests_properties(mem_blkalign_mut_${ba_variant}
     PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 endforeach()
+
+# ---------------------------------------------------------------------------
+# SHADELADDER -- entry I13's two arithmetic laws, BUILT
+#
+# Both were settled in writing and neither was in the tree: the palette ladder
+# is frozen in `reference/src/zrender/terrain.cpp:633-637` with its own comment
+# naming it, and the S8.24 saturate is mandated in `spec/qformats.md:75`'s
+# bounds column. Each block below has its own `--break-oracle` positive control
+# registered beside it rather than described in a comment.
+# ---------------------------------------------------------------------------
+
+add_executable(test_terrain_shademod_directed terrain/terrain_shademod_directed.cpp)
+target_link_libraries(test_terrain_shademod_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_shademod_directed
+  PREFIX Vzhao_terrain_shademod
+  TOP_MODULE zhao_terrain_shademod
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shademod.sv)
+add_test(NAME terrain_shademod_directed COMMAND test_terrain_shademod_directed)
+set_tests_properties(terrain_shademod_directed
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME shademod_break_oracle COMMAND test_terrain_shademod_directed --break-oracle)
+set_tests_properties(shademod_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_terrain_shademod
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_shademod
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shademod.sv)
+set_tests_properties(lint_terrain_shademod PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_geom_overw_sat_directed geometry/geom_overw_sat_directed.cpp)
+target_link_libraries(test_geom_overw_sat_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_overw_sat_directed
+  PREFIX Vzhao_geom_overw_sat
+  TOP_MODULE zhao_geom_overw_sat
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_overw_sat.sv)
+add_test(NAME geom_overw_sat_directed COMMAND test_geom_overw_sat_directed)
+set_tests_properties(geom_overw_sat_directed
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME geom_overw_sat_break_oracle COMMAND test_geom_overw_sat_directed --break-oracle)
+set_tests_properties(geom_overw_sat_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_geom_overw_sat
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_overw_sat
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_overw_sat.sv)
+set_tests_properties(lint_geom_overw_sat PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

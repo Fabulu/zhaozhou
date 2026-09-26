@@ -113,6 +113,42 @@ inline int32_t geom_over_w(int16_t uv, uint32_t invw24) {
 }
 
 /**
+ * THE SAME LAW ON A WIDE COORDINATE, WITH THE SATURATION THE TYPE CARRIES.
+ *
+ * `geom_over_w` above takes an `int16_t` because the mesh path's coordinate IS
+ * the vertex record's s16 field, and on that domain the product cannot leave
+ * s32 -- which is why GEOM.VATTR has no saturate and is right not to.
+ *
+ * TERRAIN'S COORDINATE IS s32. `zhao_terrain_uvlane`'s `terr_uv_*` is a Q16.16
+ * value in TILE units, so the product reaches 2^55, `rescale_s(.,16)` reaches
+ * 2^39, and the S8.24 bound |value| < 128 becomes an edge a real island
+ * crosses. `spec/qformats.md:75` has always said what happens there --
+ * `u/v_over_w | s32 | S 8.24 | SATURATE | round-half-up` -- and 4's
+ * `rescale_s` is "round-half-up ... followed by saturation to the destination
+ * width". This function is that sentence made executable, and
+ * `zhao_geom_overw_sat` is its RTL.
+ *
+ * It is a strict EXTENSION, not a second law: over the whole `int16_t` domain
+ * it returns exactly what `geom_over_w` returns and never sets `*saturated`.
+ * `tests/geometry/geom_overw_sat_directed.cpp` proves that exhaustively before
+ * it quotes either of them, so that the wide form cannot drift into being a
+ * rival statement of ratified arithmetic -- the failure GEOM.LIGHT's contract
+ * names and TERRAIN.SHADE's header records shipping once.
+ *
+ * `saturated` may be null. Added 2026-09-26 (packet SHADELADDER, entry I13).
+ */
+inline int32_t geom_over_w_wide(int32_t uv, uint32_t invw24, bool* saturated = nullptr) {
+  const int64_t p = static_cast<int64_t>(uv) * static_cast<int64_t>(invw24 & 0xFFFFFFu);
+  const int64_t r = (p + (int64_t{1} << 15)) >> 16;  // arithmetic shift: floor, per 4
+  const bool hi = r > int64_t{INT32_MAX};
+  const bool lo = r < int64_t{INT32_MIN};
+  if (saturated != nullptr) *saturated = hi || lo;
+  if (hi) return INT32_MAX;
+  if (lo) return INT32_MIN;
+  return static_cast<int32_t>(r);
+}
+
+/**
  * The depth test, spec §8: pass iff strictly nearer. TIES FAIL -- decals use an
  * explicit bias rather than an epsilon, so that a scene is reproducible instead
  * of being one rounding mode away from flickering.
