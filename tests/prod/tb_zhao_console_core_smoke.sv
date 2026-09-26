@@ -461,6 +461,13 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_pa_verts_o;
   logic [31:0] geom_pa_tris_o;
   logic [31:0] geom_pa_chunks_o;
+  // BINARENA, 2026-09-26, console entry I55: the arena's chain-patch counters.
+  // Both read zero in this composition because `lk_valid_i` has no caller --
+  // `zhao_geom_arenabin` is built and tested and is NOT composed. Declared here
+  // because the DUT is connected with `.*`, so a core port with no net is an
+  // elaboration error rather than a silent open.
+  logic [31:0] geom_pa_links_o;
+  logic [31:0] geom_pa_link_bad_o;
   logic [31:0] geom_pa_frames_o;
   logic [31:0] geom_pa_denied_o;
   logic [31:0] geom_pa_overflow_o;

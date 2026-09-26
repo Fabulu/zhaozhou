@@ -860,6 +860,11 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0] geom_pa_verts_o,
   output logic [31:0] geom_pa_tris_o,
   output logic [31:0] geom_pa_chunks_o,
+  // BINARENA, 2026-09-26, console entry I55: the arena's chain-patch
+  // counters. This is a WRAPPER over production, connected with `.*`, so a
+  // port the core gains must appear here or the wrapper stops elaborating.
+  output logic [31:0] geom_pa_links_o,
+  output logic [31:0] geom_pa_link_bad_o,
   output logic [31:0] geom_pa_frames_o,
   output logic [31:0] geom_pa_denied_o,
   output logic [31:0] geom_pa_overflow_o,

@@ -10971,7 +10971,17 @@ endforeach()
 # The bench also transcribes the shell's slot-3 write glue -- the `gq` queue,
 # the exact room gate, the owner mux -- rather than inventing one, so what it
 # exercises is the arrangement the console actually composes.
-set(ZHAO_PARAMARENA_SOURCES
+#
+# THE LIST IS SPLIT IN TWO, AND THE SPLIT IS THE EVIDENCE FOR ENTRY I55.
+# `ZHAO_PARAMARENA_BASE_SOURCES` is the memory path, the arena, the walker and
+# GEOM.ARENABIN -- the independent producer. `ZHAO_PARAMARENA_ONCHIP_SOURCES`
+# is the legacy half: the binner, its chunk free-list, the identity queue and
+# the serialiser. `geom_arenabin_directed` builds from the BASE ALONE, with
+# `-GHAVE_ONCHIP=0`, so the chunks that reach SDRAM in that binary cannot have
+# come from an on-chip reference array because the circuit contains none.
+# `ZHAO_PARAMARENA_SOURCES` is their concatenation and every pre-existing
+# target takes it unchanged.
+set(ZHAO_PARAMARENA_BASE_SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
@@ -10988,10 +10998,33 @@ set(ZHAO_PARAMARENA_SOURCES
     # and both arena mutants behave exactly as before, which is why these
     # go in the SHARED list rather than only in the new target.
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    # BINARENA, 2026-09-26, console entry I55. The independent producer is in
+    # the BASE list: it depends on nothing below.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arenabin.sv)
+
+set(ZHAO_PARAMARENA_ONCHIP_SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner_v2.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_chunkser.sv)
+
+set(ZHAO_PARAMARENA_SOURCES
+    ${ZHAO_PARAMARENA_BASE_SOURCES}
+    ${ZHAO_PARAMARENA_ONCHIP_SOURCES})
+
+# THE REFUSAL, CHECKED AT CONFIGURE TIME. The claim entry I55 needs is that the
+# independent producer's build contains no on-chip arena, and a claim nothing
+# enforces is a comment. Adding any of those four files back to the BASE list
+# fails the configure with the reason, rather than quietly turning
+# `geom_arenabin_directed` back into the thing it exists to refute.
+foreach(onchip_source IN LISTS ZHAO_PARAMARENA_ONCHIP_SOURCES)
+  list(FIND ZHAO_PARAMARENA_BASE_SOURCES "${onchip_source}" leak_index)
+  if(NOT leak_index EQUAL -1)
+    message(FATAL_ERROR
+      "console entry I55: the independent-producer source list must not "
+      "contain the on-chip arena -- found ${onchip_source}")
+  endif()
+endforeach()
 
 add_executable(test_geom_paramarena_directed geometry/geom_paramarena_directed.cpp)
 target_link_libraries(test_geom_paramarena_directed PRIVATE zhao_harness)
@@ -11038,6 +11071,78 @@ verilate(test_geom_chunkser_directed
 add_test(NAME geom_chunkser_directed COMMAND test_geom_chunkser_directed)
 set_tests_properties(geom_chunkser_directed
   PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# ENTRY I55 -- THE INDEPENDENT PRODUCER'S ACCEPTANCE.
+#
+# WALKSWAP refused the raster-path swap with measurements and was right: the
+# external arena is filled BY the on-chip one, so the two are in series and the
+# external path cannot become the sole producer by subtraction. Owner vacation
+# directive section 4 rules that this state is not closure, and WALKSWAP's own
+# closing paragraph names the shape that breaks the series -- "a producer that
+# fills the external arena WITHOUT the on-chip one". `zhao_geom_arenabin` is
+# that producer.
+#
+# TWO TARGETS, AND THE DIFFERENCE BETWEEN THEM IS THE ARGUMENT:
+#
+#   geom_arenabin_directed  -GHAVE_ONCHIP=0, BASE sources only. The binner,
+#                           its free-list, the identity queue and the
+#                           serialiser are NOT IN THE BINARY. The chunks that
+#                           reach SDRAM therefore cannot have come from an
+#                           on-chip reference array. This is a claim about the
+#                           circuit, not about a counter.
+#   geom_arenabin_price     -GHAVE_ONCHIP=1, the whole legacy path compiled in
+#                           and clocked. It reports the producer's cost in
+#                           clocks per tile reference -- the same unit entry
+#                           I55 quotes for the consumer side -- and makes the
+#                           one on-chip assertion that is NOT vacuous: the
+#                           serialiser is present, live, and produced nothing.
+#
+# The second exists because the first cannot make that assertion honestly. In
+# a build where those ports are tied off by a generate, asserting they read
+# zero is asserting a constant, which is the vacuous control this campaign has
+# caught twice already.
+# ---------------------------------------------------------------------------
+add_executable(test_geom_arenabin_directed geometry/geom_arenabin_directed.cpp)
+target_link_libraries(test_geom_arenabin_directed PRIVATE zhao_harness)
+verilate(test_geom_arenabin_directed
+  PREFIX Vtb_zhao_geom_paramarena
+  TOP_MODULE tb_zhao_geom_paramarena
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_PARAMARENA_BASE_SOURCES}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
+          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv
+  VERILATOR_ARGS -GHAVE_ONCHIP=0)
+add_test(NAME geom_arenabin_directed COMMAND test_geom_arenabin_directed)
+set_tests_properties(geom_arenabin_directed
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+add_executable(test_geom_arenabin_price geometry/geom_arenabin_directed.cpp)
+target_link_libraries(test_geom_arenabin_price PRIVATE zhao_harness)
+verilate(test_geom_arenabin_price
+  PREFIX Vtb_zhao_geom_paramarena
+  TOP_MODULE tb_zhao_geom_paramarena
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_PARAMARENA_SOURCES}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
+          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv
+  VERILATOR_ARGS -GHAVE_ONCHIP=1)
+add_test(NAME geom_arenabin_price COMMAND test_geom_arenabin_price price)
+set_tests_properties(geom_arenabin_price
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 900)
+
+add_test(NAME lint_geom_arenabin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_arenabin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arenabin.sv)
+set_tests_properties(lint_geom_arenabin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 add_test(NAME lint_geom_chunkser
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
