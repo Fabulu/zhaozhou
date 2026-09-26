@@ -3741,3 +3741,100 @@ already found **`check_ram_inference.py` is blind to the array that failed**).
 
 **Register 4, going to 3 on the I13CLOSE merge.** Remaining after that: **I34**
 (the field-HEIGHT lane) and **I55** (the raster swap half).
+
+### 2026-09-26 (late) - I13 CLOSED, 146k REGISTERS RECOVERED, AND A DECIDING CELL WRONG BY 18x
+
+**REGISTER 4 -> 3. `I13` IS CLOSED.** `proj_out_*` is now two evidence counters
+rather than a triangle lane, and all four items the entry's own TERRTRI list
+named are built and composed.
+
+**The palette identity got a real producer** -- `zhao_texture_palette_load.sv`,
+ENGINE1 requester I. **`pal_load_*` had left the console's edge as eight
+boundary inputs the smoke tied to zero, so no palette slot in this console had
+ever been written by anything.**
+
+**AND "generation zero cannot be handed to the resolver" WAS A BUG, NOT A LAW.**
+I carried it into the brief as a measured fact. `LD_BEGIN` differenced the
+generation against `generation_q[slot]`, **which resets to zero** -- residency
+is the reset guard, and the generation was doing residency's job. `stale=0
+cold=0` is the discriminator; those were the only outcomes available before.
+
+**It caught its own gate asserting the bug**, fired by `-TerrainFlatLattice` on
+the next run -- **and then found the obvious second guard was ALSO wrong**,
+because that form still loads the palette and publishes an owned material.
+
+### ARENAINFER: 146,414 REGISTERS -> 1,010
+
+**A FOURTH QUARTUS INFERENCE KILLER, measured with a nine-arm probe, one
+variable per arm, control FIRED.** *An array declared inside a genvar-indexed
+`generate for` block is not a RAM candidate for Quartus 17.0.2.* A generate-IF
+scope infers; module scope infers; **the LOOP is the killer**, and it carries
+none of GOTCHAS section 10's three.
+
+`zhao_geom_arenabin`: **146,414 reg / 33,408 bits -> 1,010 / 291,456**, map time
+1,025.7s -> 37.1s. Same circuit, declaration moved across a module boundary.
+
+**AND THE CHECKER WAS BLIND TO THE EXACT CLASS IT EXISTS FOR.**
+`check_ram_inference.py` reported **five arrays "that will not infer" -- all
+five ARE inferred** -- and said **nothing** about the 145,152-bit array that was
+the whole defect. **100% false alarms, 100% miss.** Rule 6 now catches it with a
+positive control and two negatives. **Rule 4's remedy was measured WRONG** --
+it told you to put one flat array per lane *inside a generate*, which is the
+killer. Rule 6 predicts **eight more arrays**, three in live TERRAIN.
+
+**And the `tidq` defect is far worse than "four references short": the queue is
+permanently ONE BEHIND.** Triangle 1 dropped; **every triangle after it is
+binned under its predecessor's arena descriptor index -- 74 of 75.** That is
+I54's named failure live, **in an entry the register counts as CLOSED**, with
+ids in range and decoding cleanly so every range guard passes. Costed,
+escalated, **not fixed**: three blocks, a door handshake, a deadlock mode.
+
+### AND THE CORRECTION THAT MATTERS MOST: THE DECIDING CELL WAS WRONG BY 18x
+
+FIELDMAJOR benched the field-major form -- **the two blocks had each carried a
+differential test since 2026-09-20 and had NEVER been elaborated together**,
+each test doing the other's job in C++ -- and reported **4,102 clocks, 0.68x the
+contract, 1.5x margin.** It corrected its own headline once already (851 ->
+3,581 intercept) because it looked too good.
+
+**EARTHMAJOR measured it through the actual front: 74,507 clocks, 12.42x.**
+
+**Both "real configurations read out of the tree" are FALSE**, and they appear in
+`fieldmajor_census.cpp`, the decision record, entry I34, **both**
+`console_inventory.yml` entries **and my brief**: engine overlap is **1.00**,
+measured from a 62.00-clock latency against a 62.00-clock accept-to-accept
+interval **by different events**; and `-GCTX=32 -GLANES=4` gates the engine
+STANDALONE, while **through this front it adds no evaluation and `FAB_LANES`
+REPLICATES.**
+
+**AND THE SHARPEST FINDING CAME OUT OF CATCHING ITS OWN ERROR.** It published
+*"the transpose is worth 1.23x"* in three commits, comparing **74,507 MEASURED
+at L=62 against 91,551 MODELLED at L=80** -- the mismatched-pose law, **committed
+by the packet that had just quoted that law at someone else.** Corrected in all
+four places **with the error stated, not quietly swapped.** Corrected:
+
+**THE TRANSPOSE ALONE IS A WASH** -- vertex-major 71,949 against field-major
+68,369-74,507, 5% better to 4% worse. **The 297-vs-1,089 slope is a property of
+a GROUP-WIDE FRONT, not of the stream order.** Now printed on every run so the
+two figures cannot drift apart again.
+
+**So prerequisite (5) is not a parameter -- it is a NEW BLOCK**, which
+`zhao_field_host.sv`'s own header calls "not built", and **the gathering front
+moves to FIRST and becomes the gate.** It landed the per-point decomposition
+nobody had (**E_ZERO = 32 clocks, 52% of a run**, skippable today under
+`INIT_PROOF`; **E_WRITE = 15**), discharged GEOM.WARP P9, and changed **zero
+non-comment RTL lines** -- verified here.
+
+**The first arrangement any measurement has put under 6,000:** front (/4) +
+`INIT_PROOF` (-32/pt) + two runs outstanding (/2) ~= 5,300. **Declared as
+arithmetic on measurements, not benched.**
+
+### WHERE THINGS STAND
+
+**Register 3**: `I34`, `I55`, `zhao_terrain_normalmap`. **Running: NORMALMAP.**
+Gates 31/31 at baseline, closure lint clean.
+
+**And the honest read: all three remaining gaps are substantial architecture.**
+I34 needs a new gathering front before its adapter; I55 needs a second setup and
+attrpack back end for a 1,749-bit record; the normalmap needs a detail port on a
+composed block with a consumer that reads it.
