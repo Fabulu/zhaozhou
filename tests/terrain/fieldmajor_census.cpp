@@ -82,7 +82,6 @@
 
 namespace {
 
-using zhao::check;
 using Dut = Vtb_terrain_fieldmajor;
 
 constexpr int kLat = 33;
@@ -295,7 +294,6 @@ struct Sim {
   }
 
   void reset() {
-    std::memset(&d.lt_we_i, 0, 0);  // no-op; fields are set explicitly below
     d.rst_n = 0;
     quiesce();
     d.eval();
