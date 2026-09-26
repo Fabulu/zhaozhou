@@ -12314,6 +12314,23 @@ module zhao_console_core
   output logic [31:0]             terr_cf_degenerate_o,
   output logic [31:0]             terr_cf_dq_refused_o,
   output logic [31:0]             terr_cf_dq_stray_o,
+  // ---- I13 (a)/(b): THE MATERIAL IDENTITY'S OWN TWO INSTRUMENTS -----------
+  // `terr_cf_mat_backed_o` is a CENSUS: terrain triangles EMITTED declaring
+  // MATMODE_BACKED. It is exported rather than kept inside the leaf because
+  // the one measurement that separates "it elaborates" from "the value
+  // traverses" is this counter moving in the COMPOSED console -- which is
+  // exactly the lesson this entry's TERRAINUV paragraph records about
+  // `SMOKE: terruv`. A zero here beside a non-zero `terr_cf_emitted_o` says
+  // the host declared no terrain material; the two together cannot be
+  // confused with a stall.
+  //
+  // `terr_cf_mat_orphan_o` is a FAULT: SetEnvironment named a
+  // `terrain_material_id` with a ZERO `terrain_material_set`. That pair would
+  // be refused by `zhao_material_window`'s `mode_contra_c` and would drop the
+  // frame's whole terrain arm, so the clipfeed discards the id and counts it
+  // here instead. THE ORPHAN RULE, in that block's header.
+  output logic [31:0]             terr_cf_mat_backed_o,
+  output logic [31:0]             terr_cf_mat_orphan_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
@@ -15801,6 +15818,41 @@ module zhao_console_core
   // environment never changes under a vertex and no bank write can be refused.
   wire        cmd_env_valid, cmd_env_ready;
   wire [15:0] cmd_env_yaw, cmd_env_pitch, cmd_env_sun, cmd_env_amb;
+
+  // ---- I13 (a)/(b): TERRAIN'S MATERIAL IDENTITY (TERRAINMAT, 2026-09-26) ----
+  // The same SetEnvironment record, two more fields, decoded by the same
+  // CMD.EXEC arm under the same shadow/verdict atomicity -- see that block and
+  // `spec/commands.zidl`. They do NOT go to `zhao_light_env`: they are not bank
+  // words, and that block's own header says which four fields are. They are
+  // latched HERE, on the environment's COMMIT BEAT, and forked to the terrain
+  // arm.
+  //
+  // THE LATCH IS ON `cmd_env_valid && cmd_env_ready`, which is the same beat
+  // the light bank takes the sun on. That is deliberate and it is the whole
+  // atomicity argument: the frame's terrain material becomes live at the exact
+  // instant the frame's sun does, because both are fields of ONE record taken
+  // by ONE handshake. A separate enable here would be a second, independently
+  // advancing copy of one record's state -- the metadata-swap shape CLAUDE.md
+  // names, and the one this composer must not introduce between two halves of
+  // a single command.
+  //
+  // ZERO IS THE RESET VALUE AND ZERO IS MATMODE_NONE, so a console that never
+  // receives a SetEnvironment -- or receives one written before this field
+  // existed -- presents exactly what terrain presented before this change.
+  wire [31:0] cmd_env_terr_mat_set;
+  wire [15:0] cmd_env_terr_mat_id;
+  logic [31:0] terr_env_mat_set_q;
+  logic [15:0] terr_env_mat_id_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      terr_env_mat_set_q <= 32'd0;
+      terr_env_mat_id_q  <= 16'd0;
+    end else if (cmd_env_valid && cmd_env_ready) begin
+      terr_env_mat_set_q <= cmd_env_terr_mat_set;
+      terr_env_mat_id_q  <= cmd_env_terr_mat_id;
+    end
+  end
+
   wire        le_cfg_we, le_cfg_commit, le_hold;
   // R21/R25: the sun direction the bank publishes, for TERRAIN's lit normals.
   wire signed [31:0] le_sun_x, le_sun_y, le_sun_z;
@@ -20211,6 +20263,18 @@ module zhao_console_core
     // one is already applied downstream.
     .sheet_i   (TERR_SHEET_IDENTITY),
 
+    // ---- REAL: THE HOST'S TERRAIN MATERIAL, I13 ITEMS (a) AND (b) ----------
+    // Latched off SetEnvironment's commit beat above. This is a PRODUCER, not
+    // a constant chosen here: the value is host-authored, arrives through the
+    // ABI, is decoded by CMD.EXEC and is refused with the rest of an abandoned
+    // packet. The block DERIVES its material mode from it -- the composer does
+    // not choose the mode, which this entry's TRIMERGE paragraph requires in
+    // as many words ("a material-mode declaration coming from a TERRAIN PORT
+    // rather than a constant chosen here -- the ruling forbids the composer
+    // choosing it").
+    .mat_set_i (terr_env_mat_set_q),
+    .mat_id_i  (terr_env_mat_id_q),
+
     // REAL: client 3 of GEOM.CLIP's door.
     .o_valid_o        (tcf_o_valid),
     .o_ready_i        (tcf_o_ready),
@@ -20233,6 +20297,9 @@ module zhao_console_core
     .o_vertex_alpha_o (tcf_o_vertex_alpha),
     .o_frag_state_o   (tcf_o_frag_state),
     .o_quality_tier_o (tcf_o_quality_tier),
+
+    .mat_backed_o     (terr_cf_mat_backed_o),
+    .mat_id_orphan_o  (terr_cf_mat_orphan_o),
 
     .triangles_o      (terr_cf_triangles_o),
     .emitted_o        (terr_cf_emitted_o),
@@ -25315,6 +25382,8 @@ module zhao_console_core
     .env_sun_pitch_o (cmd_env_pitch),
     .env_sun_colour_o(cmd_env_sun),
     .env_ambient_o   (cmd_env_amb),
+    .env_terr_mat_set_o(cmd_env_terr_mat_set),
+    .env_terr_mat_id_o (cmd_env_terr_mat_id),
     .envs_issued_o   (cmd_exec_envs_o),
     // R41: SetPopulation -> PART.POP (u_part_pop, beside the particle engine).
     .pop_valid_o       (cmd_pop_valid),

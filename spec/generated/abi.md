@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
-zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
+abi_identity_sha256 = 06b5df38e6c838560bc66f7fe8e3359965c1fa87b91b90b91a318cd50373edae
+zidl_sha256         = 8dd155e8e7eabd5926a636b14ca241bbe6b67c32afca3b6822cdb7026328cbda
 ```
 
 ABI version **4**, little-endian, command alignment
@@ -425,7 +425,9 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 | 11 | 1 | `fog` | fog_mode |
 | 12 | 4 | `fog_near` | fx16 |
 | 16 | 4 | `fog_far` | fx16 |
-| 20 | 12 | `pad` | pad (zero) ×12 |
+| 20 | 4 | `terrain_material_set` | handle32 [material_set] |
+| 24 | 2 | `terrain_material_id` | u16 |
+| 26 | 6 | `pad` | pad (zero) ×6 |
 
 `sun_colour` (rgb565) leaves:
 

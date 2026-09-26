@@ -2879,6 +2879,23 @@ module zhao_console_board
   output logic [31:0]             terr_cf_degenerate_o,
   output logic [31:0]             terr_cf_dq_refused_o,
   output logic [31:0]             terr_cf_dq_stray_o,
+  // ---- I13 (a)/(b): THE MATERIAL IDENTITY'S OWN TWO INSTRUMENTS -----------
+  // `terr_cf_mat_backed_o` is a CENSUS: terrain triangles EMITTED declaring
+  // MATMODE_BACKED. It is exported rather than kept inside the leaf because
+  // the one measurement that separates "it elaborates" from "the value
+  // traverses" is this counter moving in the COMPOSED console -- which is
+  // exactly the lesson this entry's TERRAINUV paragraph records about
+  // `SMOKE: terruv`. A zero here beside a non-zero `terr_cf_emitted_o` says
+  // the host declared no terrain material; the two together cannot be
+  // confused with a stall.
+  //
+  // `terr_cf_mat_orphan_o` is a FAULT: SetEnvironment named a
+  // `terrain_material_id` with a ZERO `terrain_material_set`. That pair would
+  // be refused by `zhao_material_window`'s `mode_contra_c` and would drop the
+  // frame's whole terrain arm, so the clipfeed discards the id and counts it
+  // here instead. THE ORPHAN RULE, in that block's header.
+  output logic [31:0]             terr_cf_mat_backed_o,
+  output logic [31:0]             terr_cf_mat_orphan_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
@@ -5533,6 +5550,8 @@ module zhao_console_board
       .terr_cf_degenerate_o               (terr_cf_degenerate_o),
       .terr_cf_dq_refused_o               (terr_cf_dq_refused_o),
       .terr_cf_dq_stray_o                 (terr_cf_dq_stray_o),
+      .terr_cf_mat_backed_o               (terr_cf_mat_backed_o),
+      .terr_cf_mat_orphan_o               (terr_cf_mat_orphan_o),
       .post_busy_o                        (post_busy_o),
       .post_passes_o                      (post_passes_o),
       .post_frames_o                      (post_frames_o),

@@ -171,13 +171,36 @@
 //                    the u/v law this block multiplies. R197's gate in the
 //                    composer is `untex && (sample_count != 0)`, so a textured
 //                    declaration is never refused there.
-//   material_mode    MATMODE_NONE. Owner ruling 1 of 2026-09-22 made it a
-//                    LAWFUL DECLARED MODE, and it is the ONLY mode terrain can
-//                    lawfully present: `material_set`/`material_id` under
-//                    `fpga/rtl/terrain/` return zero hits, re-measured at this
-//                    tree. `zhao_material_window`'s `mode_contra_c` REQUIRES a
-//                    zero {set, id} under it, which is why both are zero here
-//                    and why that zero is a law rather than a tie-off.
+//   material_mode    DERIVED FROM `mat_set_i`, not a constant. UPDATED
+//                    2026-09-26 (TERRAINMAT) -- the sentence this block used
+//                    to carry here said MATMODE_NONE "is the ONLY mode
+//                    terrain can lawfully present", on the evidence that
+//                    `material_set`/`material_id` return zero hits under
+//                    `fpga/rtl/terrain/`. THAT ZERO MEASURED A NAMING
+//                    BOUNDARY BETWEEN TWO LANES, NOT A STRUCTURAL ABSENCE
+//                    (console entry I13's PATCHV2 paragraph, four independent
+//                    counts, including ruling R13 REFUSING a subpatch-uniform
+//                    material -- a refusal is evidence the thing exists to be
+//                    refused). Terrain now presents an identity the host
+//                    authored, and this block derives the mode from it:
+//
+//                      mat_set_i != 0                 -> MATMODE_BACKED, and
+//                                                        the {set, id} pair
+//                                                        goes to the door
+//                      mat_set_i == 0, mat_id_i == 0  -> MATMODE_NONE, the
+//                                                        zero pair the ruling
+//                                                        REQUIRES; this is
+//                                                        every pre-2026-09-26
+//                                                        capture's behaviour,
+//                                                        unchanged
+//                      mat_set_i == 0, mat_id_i != 0  -> ILLEGAL. Counted on
+//                                                        `mat_id_orphan_o`
+//                                                        and declared as the
+//                                                        zero pair. See THE
+//                                                        ORPHAN RULE.
+//
+//                    ZERO KEEPS ITS MEANING, which is the whole of why this
+//                    was affordable: the default is the old behaviour.
 //   behind           the projector's own, per corner.
 //   cull_mode        `TERR_CULL_MODE`, CULL_NONE by default. Terrain emits TOP
 //                    and UNDERSIDE surfaces which face opposite ways, so a
@@ -186,6 +209,45 @@
 //   vertex_alpha     `TERR_VERTEX_ALPHA`, opaque, owner ruling R48.
 //   frag_state       `TERR_FRAG_STATE`, the frame default, a named knob.
 //   quality_tier     0.
+//
+// ---------------------------------------------------------------------------
+// THE ORPHAN RULE, AND WHY IT IS NOT A SILENT REINTERPRETATION
+// ---------------------------------------------------------------------------
+// `zhao_material_window`'s `mode_contra_c` REFUSES a non-zero {set, id} under
+// MATMODE_NONE -- it is a FAULT there, counted on `mode_refused_o`, and a
+// refused triangle does not reach GEOM.CLIP. So a host that writes a
+// `terrain_material_id` while leaving `terrain_material_set` zero must not be
+// handed to the door as it stands: that would spend a real fault on a
+// malformed environment and drop every terrain triangle in the frame.
+//
+// This block therefore declares the ZERO PAIR for that case -- the lawful
+// no-material profile, which is what a zero SET means -- and COUNTS the
+// discarded id on `mat_id_orphan_o`. The owner's vacation directive requires
+// that an unresolved identity be "diagnosed and handled by the declared
+// failure/fallback policy, never silently truncated or made token 0"; the
+// counter is the diagnosis and this paragraph is the declaration. Nothing is
+// narrowed: a non-zero SET carries its full 32 bits and its id's full 16 to
+// the door, whatever their values.
+//
+// THAT COUNTER CAN FIRE ON LEGAL STIMULUS -- offer `{set = 0, id != 0}` --
+// so it owes no committed mutant, and the directed test fires it by exact
+// amount rather than asserting its silence.
+//
+// ---------------------------------------------------------------------------
+// THE IDENTITY IS LATCHED ON THE TRIANGLE'S OWN BEAT
+// ---------------------------------------------------------------------------
+// `mat_set_i` and `mat_id_i` are a FRAME-scoped input that the composer drives
+// from CMD.EXEC's SetEnvironment shadow. They are sampled into `mset_q`/
+// `mid_q` by the SAME enable that latches the triangle's corners and
+// `src_id_q`, and the door reads only the latched copies.
+//
+// This is not defensiveness about a wire that "cannot" move. It is CLAUDE.md's
+// metadata-swap chapter applied before the fact: a combinational path from a
+// frame-global register to a per-primitive output port is exactly the shape
+// where a late environment update repaints a triangle that was accepted under
+// the previous one, and the fault would be invisible -- every counter in the
+// arm would balance, because no counter looks at the field that moved. One
+// enable, one record, no second opinion.
 //
 // Conservative SystemVerilog subset only; Quartus 17.0 syntax rules apply
 // (elaboration checks inside `initial begin ... end`, explicit generate, no
@@ -277,6 +339,17 @@ module zhao_terrain_clipfeed #(
     // THE SHEET IS DELIBERATELY NOT APPLIED HERE.
     input  var logic        [16:0] sheet_i,
 
+    // ---- TERRAIN'S MATERIAL IDENTITY (TERRAINMAT, 2026-09-26) --------------
+    // The host's `SetEnvironment.terrain_material_set` / `.terrain_material_id`,
+    // decoded by CMD.EXEC and forked to this arm by the composer. TWO ports and
+    // not three: the MODE is DERIVED here rather than presented, because the
+    // composer is forbidden to choose it (entry I13, "a material-mode
+    // declaration coming from a TERRAIN PORT rather than a constant chosen
+    // here") and because a third `mode` port would let a caller present a
+    // combination this block's own law refuses. The derivation is above.
+    input  var logic        [31:0] mat_set_i,
+    input  var logic        [15:0] mat_id_i,
+
     // ---- one GEOM.CLIPDOOR client ------------------------------------------
     output var logic                 o_valid_o,
     input  var logic                 o_ready_i,
@@ -327,7 +400,14 @@ module zhao_terrain_clipfeed #(
     // The converter pair's own two faults, re-exported so the composer can
     // name them.
     output var logic [31:0] dq_refused_o,
-    output var logic [31:0] dq_stray_o
+    output var logic [31:0] dq_stray_o,
+    // Triangles EMITTED declaring MATMODE_BACKED -- the census that says the
+    // identity actually traversed rather than merely elaborated. Counted at
+    // the door's grant, not at acceptance, so it cannot run ahead of what the
+    // window will see. It is a census; `mat_id_orphan_o` beside it is a fault.
+    // Both are fired by stimulus in the directed test, by exact amount.
+    output var logic [31:0] mat_backed_o,
+    output var logic [31:0] mat_id_orphan_o
 );
 
   // --------------------------------------------------------------------------
@@ -349,13 +429,25 @@ module zhao_terrain_clipfeed #(
   end
   // synthesis translate_on
 
-  // `zhao_material_window`'s own encoding. MATMODE_NONE is the only mode
-  // terrain can lawfully declare; see WHAT THIS BLOCK DECLARES.
-  localparam logic [1:0] TERR_MATERIAL_MODE_C = 2'd1;
+  // `zhao_material_window`'s own encoding, transcribed rather than imported so
+  // this leaf does not depend on a texture package. Both arms are reachable --
+  // see WHAT THIS BLOCK DECLARES for the derivation.
+  localparam logic [1:0] MATMODE_BACKED_C = 2'd0;
+  localparam logic [1:0] MATMODE_NONE_C   = 2'd1;
 
   // --------------------------------------------------------------------------
   // THE THREE-WAY JOIN
   // --------------------------------------------------------------------------
+  // The identity this triangle was accepted under, and the combinational
+  // legality filter that feeds it.
+  logic [31:0] mset_q;
+  logic [15:0] mid_q;
+  // An id with no set is discarded rather than presented: `mode_contra_c`
+  // would make it a FAULT and drop the frame's terrain. THE ORPHAN RULE.
+  wire         mat_orphan_c = (mat_set_i == 32'd0) && (mat_id_i != 16'd0);
+  wire [31:0]  mat_set_c    = mat_set_i;
+  wire [15:0]  mat_id_c     = mat_orphan_c ? 16'd0 : mat_id_i;
+
   localparam logic [3:0] S_IDLE  = 4'd0,
                          S_ISSUE = 4'd1,
                          S_LAND  = 4'd2,
@@ -689,12 +781,12 @@ module zhao_terrain_clipfeed #(
                                       mod_q[3], mod_q[4], mod_q[5]);
   assign o_attr_c_o       = pack_attr(inv_q[2], ow_q[4], ow_q[5],
                                       mod_q[6], mod_q[7], mod_q[8]);
-  // `mode_contra_c` in `zhao_material_window` REFUSES a non-zero pair under
-  // MATMODE_NONE, so these two zeros are what the ruling REQUIRES rather than
-  // a tie-off standing in for an absent identity.
-  assign o_material_set_o = 32'd0;
-  assign o_material_id_o  = 16'd0;
-  assign o_material_mode_o= TERR_MATERIAL_MODE_C;
+  // THE LATCHED IDENTITY, not the live input. See THE IDENTITY IS LATCHED ON
+  // THE TRIANGLE'S OWN BEAT. `mset_q` is zero exactly when the span is the
+  // lawful no-material one, which is the zero pair `mode_contra_c` requires.
+  assign o_material_set_o = mset_q;
+  assign o_material_id_o  = mid_q;
+  assign o_material_mode_o= (mset_q != 32'd0) ? MATMODE_BACKED_C : MATMODE_NONE_C;
   assign o_vertex_alpha_o = TERR_VERTEX_ALPHA;
   assign o_frag_state_o   = TERR_FRAG_STATE;
   assign o_quality_tier_o = 8'd0;
@@ -718,6 +810,10 @@ module zhao_terrain_clipfeed #(
       cy_q              <= 21'sd0;
       behind_q          <= 3'd0;
       src_id_q          <= {IDW{1'b0}};
+      mset_q            <= 32'd0;
+      mid_q             <= 16'd0;
+      mat_backed_o      <= 32'd0;
+      mat_id_orphan_o   <= 32'd0;
       profile_q         <= 2'd0;
       shade_q           <= 17'd0;
       triangles_o       <= 32'd0;
@@ -757,6 +853,12 @@ module zhao_terrain_clipfeed #(
             cy_q      <= t_cy_i;
             behind_q  <= t_behind_i;
             src_id_q  <= t_src_id_i;
+            // ONE ENABLE, ONE RECORD: the identity is part of the triangle,
+            // captured with its corners and not read live at the door.
+            mset_q    <= mat_set_c;
+            mid_q     <= mat_id_c;
+            if (mat_orphan_c && (mat_id_orphan_o != 32'hffff_ffff))
+              mat_id_orphan_o <= mat_id_orphan_o + 32'd1;
             profile_q <= t_profile_i;
             w_q[0]    <= t_aw_i;
             w_q[1]    <= t_bw_i;
@@ -827,6 +929,11 @@ module zhao_terrain_clipfeed #(
           // case5: hold the beat until the door grants it.
           if (o_ready_i) begin
             emitted_o <= emitted_o + 32'd1;
+            // The census is taken on the SAME grant as `emitted_o`, off the
+            // LATCHED identity, so the two can never describe different
+            // triangles.
+            if ((mset_q != 32'd0) && (mat_backed_o != 32'hffff_ffff))
+              mat_backed_o <= mat_backed_o + 32'd1;
             st_q      <= S_IDLE;
           end
         end

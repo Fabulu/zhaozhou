@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
-//   zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
+//   abi_identity_sha256 = 06b5df38e6c838560bc66f7fe8e3359965c1fa87b91b90b91a318cd50373edae
+//   zidl_sha256         = 8dd155e8e7eabd5926a636b14ca241bbe6b67c32afca3b6822cdb7026328cbda
 #pragma once
 
 #include <cstdint>
@@ -719,7 +719,9 @@ struct ZhCmdSetEnvironment {
   fog_mode fog;  // enum, 1 B
   int32_t fog_near;
   int32_t fog_far;
-  uint8_t pad[12];
+  uint32_t terrain_material_set;  // handle32 {index:24, generation:8} kind=material_set
+  uint16_t terrain_material_id;
+  uint8_t pad[6];
 };
 static_assert(offsetof(ZhCmdSetEnvironment, sun_yaw) == 0, "layout drift: SetEnvironment.sun_yaw");
 static_assert(offsetof(ZhCmdSetEnvironment, sun_pitch) == 2, "layout drift: SetEnvironment.sun_pitch");
@@ -730,7 +732,9 @@ static_assert(offsetof(ZhCmdSetEnvironment, tint_strength) == 10, "layout drift:
 static_assert(offsetof(ZhCmdSetEnvironment, fog) == 11, "layout drift: SetEnvironment.fog");
 static_assert(offsetof(ZhCmdSetEnvironment, fog_near) == 12, "layout drift: SetEnvironment.fog_near");
 static_assert(offsetof(ZhCmdSetEnvironment, fog_far) == 16, "layout drift: SetEnvironment.fog_far");
-static_assert(offsetof(ZhCmdSetEnvironment, pad[0]) == 20, "layout drift: SetEnvironment.pad");
+static_assert(offsetof(ZhCmdSetEnvironment, terrain_material_set) == 20, "layout drift: SetEnvironment.terrain_material_set");
+static_assert(offsetof(ZhCmdSetEnvironment, terrain_material_id) == 24, "layout drift: SetEnvironment.terrain_material_id");
+static_assert(offsetof(ZhCmdSetEnvironment, pad[0]) == 26, "layout drift: SetEnvironment.pad");
 static_assert(sizeof(ZhCmdSetEnvironment) == 32, "layout drift: SetEnvironment payload");
 
 struct ZhRecordSetEnvironment {
@@ -1494,6 +1498,8 @@ inline ZhRecordSetEnvironment zhao_sample_set_environment() {
   r.payload.fog = static_cast<fog_mode>(0u);
   r.payload.fog_near = 547351;
   r.payload.fog_far = 88599;
+  r.payload.terrain_material_set = 704643082u;
+  r.payload.terrain_material_id = 10022u;
   return r;
 }
 
@@ -2099,7 +2105,9 @@ inline void zhao_pack_set_environment(const ZhRecordSetEnvironment& r, std::vect
   w.u8(r.payload.fog);
   w.u32(r.payload.fog_near);
   w.u32(r.payload.fog_far);
-  for (int i = 0; i < 12; ++i) w.u8(r.payload.pad[i]);
+  w.u32(r.payload.terrain_material_set);
+  w.u16(r.payload.terrain_material_id);
+  for (int i = 0; i < 6; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline void zhao_pack_emit_audio_event(const ZhRecordEmitAudioEvent& r, std::vector<uint8_t>& out) {
@@ -2645,7 +2653,9 @@ inline bool zhao_unpack_set_environment(ZhReader& r, ZhRecordSetEnvironment& out
   { uint8_t t; if (!r.take8(t)) return false; out.payload.fog = static_cast<fog_mode>(t); }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.fog_near = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.fog_far = t; }
-  if (!r.skip(12)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.terrain_material_set = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.terrain_material_id = t; }
+  if (!r.skip(6)) return false;
   return true;
 }
 
@@ -3023,7 +3033,7 @@ constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_POPULATION[] = {8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {39, 42, 43, 44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159};
-constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
@@ -3049,7 +3059,7 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DrawPopulation", 0x0301, 32, true, ZHAO_PADS_DRAW_POPULATION, 8},
   {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 7},
   {"DrawSky", 0x0310, 176, false, ZHAO_PADS_DRAW_SKY, 14},
-  {"SetEnvironment", 0x0311, 48, true, ZHAO_PADS_SET_ENVIRONMENT, 12},
+  {"SetEnvironment", 0x0311, 48, true, ZHAO_PADS_SET_ENVIRONMENT, 6},
   {"EmitAudioEvent", 0x0400, 32, true, nullptr, 0},
   {"DebugBootstrap", 0xF001, 64, false, nullptr, 0},
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
@@ -3104,8 +3114,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x7D, 0x8E, 0x03, 0x5C, 0xD3, 0x80, 0x21, 0x4A, 0xD3, 0xF6, 0xBD, 0x44, 0x33, 0x7E, 0x5A, 0xE2, 0x66, 0x19, 0x03, 0xCB, 0xF3, 0x8E, 0x68, 0x35, 0x98, 0x90, 0x05, 0x47, 0xC5, 0x86, 0x42, 0xCE};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x08, 0x43, 0xB3, 0x29, 0xCE, 0xA3, 0xBA, 0x4D, 0xF5, 0x31, 0x75, 0x25, 0x05, 0x37, 0xDC, 0x69, 0x5B, 0x64, 0x75, 0x91, 0x44, 0xCC, 0x7F, 0x53, 0xB9, 0x07, 0x41, 0x1D, 0x57, 0xBD, 0xF7, 0x2B};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x06, 0xB5, 0xDF, 0x38, 0xE6, 0xC8, 0x38, 0x56, 0x0B, 0xC6, 0x6F, 0x7F, 0xE8, 0xE3, 0x35, 0x99, 0x65, 0xC1, 0xFA, 0x87, 0xB9, 0x1B, 0x90, 0xB9, 0x1A, 0x31, 0x8C, 0xD5, 0x03, 0x73, 0xED, 0xAE};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x8D, 0xD1, 0x55, 0xE8, 0xE7, 0xEA, 0xBD, 0x59, 0x26, 0xA6, 0x36, 0xB1, 0x4C, 0xA2, 0x41, 0xBB, 0xE6, 0xB6, 0x7C, 0x32, 0xAF, 0xCA, 0x3B, 0x68, 0x22, 0xCD, 0xB7, 0x02, 0x63, 0x28, 0xCB, 0xDA};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi
