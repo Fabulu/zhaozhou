@@ -4452,6 +4452,22 @@
 //      one subpatch of coverage. `tess_refs=256` was never evidence for
 //      two subpatches; it was evidence for 256 triangles.
 //
+//      AND RETIRING IT EXPOSED FOUR CHECKS THAT HAD BEEN PASSING ON
+//      POISON. In the `-Mutant` form TERR_POOL_SLOTS is halved, so
+//      TERRAIN.PAGELOADER refuses every job above its range and NO
+//      page loads at all (`terrcompose WAIT resident=0/3 ... pl
+//      loaded=0`). The bench's override injected a subpatch job
+//      anyway, so TESS ran there too -- reading a compose cache that
+//      was serving `32'h5BADF00D` because nothing had loaded -- and
+//      `tess_vertices`, `fills_forwarded`, `b_grants` and
+//      `light_emitted` were all non-zero and all describing poison.
+//      With the live producer as the only producer the mutant form
+//      now composes nothing and says so, and those four checks are
+//      guarded there for the reason this bench already wrote out for
+//      the degeneracy gate: running them against a deliberately broken
+//      machine is asserting the bug. Nothing is weakened in
+//      production; five forms still assert every line.
+//
 //      THAT DUPLICATE IS RETIRED, AND THE REASON IS A WALL THIS ENTRY
 //      HAD NEVER REACHED. GEOM.BINNER's triangle store is
 //      `TRI_CAP = 128` PER FRAME (`zhao_geom_bin_pipe_v2.sv:18`), and
