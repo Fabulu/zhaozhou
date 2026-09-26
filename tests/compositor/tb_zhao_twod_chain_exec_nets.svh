@@ -11,6 +11,21 @@
 // of both consumers, and binding the two together by `.*` would make the fork
 // feed itself.
 
+  // SEALPLAN 2026-09-26, console entry I56: the frame admission plan.
+  logic        plan_valid_o;
+  logic [ 7:0] plan_view_o;
+  logic [ 7:0] plan_flags_o;
+  logic [15:0] plan_res_gen_o;
+  logic [15:0] plan_view_gen_o;
+  logic [15:0] plan_giant_inst_o;
+  logic [17:0] plan_verts_o;
+  logic [17:0] plan_tris_o;
+  logic [17:0] plan_chunks_o;
+  logic [17:0] plan_refs_o;
+  logic [17:0] plan_giant_refs_o;
+  logic [31:0] plans_forwarded_o;
+  logic [31:0] plans_malformed_o;
+
   logic proj_cfg_we_o;
   logic proj_cfg_ready_i;
   logic proj_cfg_view_o;

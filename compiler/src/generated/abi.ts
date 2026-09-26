@@ -1,12 +1,12 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 790acb28781b1cf4e4e97542062360951cc28a3e7259166141937dcc832f3de5
-//   zidl_sha256         = c91773e0c7c0e4b28ca6bbaacbe5943f20257364d92c1f7e95b97df08a91b45c
+//   abi_identity_sha256 = 7d8e035cd380214ad3f6bd44337e5ae2661903cbf38e683598900547c58642ce
+//   zidl_sha256         = 0843b329cea3ba4df53175250537dc695b64759144cc7f53b907411d57bdf72b
 
 // ---------------------------------------------------------------- abi ---
 
-export const ZHAO_ABI_VERSION = 3 as const;
+export const ZHAO_ABI_VERSION = 4 as const;
 export const ZHAO_COMMAND_ALIGNMENT = 16 as const;
 export const FRAME_SLOT_BYTES = 1048576 as const;
 export const QFMT_VERSION = 3 as const;
@@ -74,6 +74,7 @@ export const ZHAO_ENUM_WARP_ATTRIBUTE_MODE: readonly number[] = [0, 1];
 // opcodes
 export const ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 export const ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
+export const ZHAO_OP_SEAL_FRAME_PLAN = 0x0003; // 48 B, implemented
 export const ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
 export const ZHAO_OP_SET_VIEW = 0x0010; // 112 B, implemented
 export const ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
@@ -225,6 +226,21 @@ export interface ZhRecordBeginFrame {
   resource_epoch: number; // u32, @4
   flags: number; // u32, @8
   deadline_cycles: number; // u32, @12
+}
+
+/** SealFramePlan 0x0003: 48-byte record (implemented) */
+export interface ZhRecordSealFramePlan {
+  hdr: ZhCmdHeader;
+  view_id: number; // u8, @0
+  flags: number; // u8, @1
+  resource_gen: number; // u16, @2
+  view_gen: number; // u16, @4
+  giant_instance: number; // u16, @6
+  plan_verts: number; // u32, @8
+  plan_tris: number; // u32, @12
+  plan_chunks: number; // u32, @16
+  plan_refs: number; // u32, @20
+  giant_refs: number; // u32, @24
 }
 
 /** EndFrame 0x0002: 32-byte record (implemented) */
@@ -559,6 +575,7 @@ export interface ZhCommandInfo {
 export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'Nop', opcode: 0x0000, recordBytes: 16, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'BeginFrame', opcode: 0x0001, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
+  { name: 'SealFramePlan', opcode: 0x0003, recordBytes: 48, implemented: true, padOffsets: [28, 29, 30, 31], enumChecks: [] },
   { name: 'EndFrame', opcode: 0x0002, recordBytes: 32, implemented: true, padOffsets: [12, 13, 14, 15], enumChecks: [] },
   { name: 'SetView', opcode: 0x0010, recordBytes: 112, implemented: true, padOffsets: [92, 93, 94, 95], enumChecks: [] },
   { name: 'SetPresentationContract', opcode: 0x0020, recordBytes: 48, implemented: true, padOffsets: [24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 0, size: 1, values: [0, 1, 2] }] },
@@ -585,7 +602,7 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'SetPlane', opcode: 0x0306, recordBytes: 64, implemented: true, padOffsets: [18, 19], enumChecks: [] },
   { name: 'DrawSprite', opcode: 0x0307, recordBytes: 64, implemented: true, padOffsets: [22, 23], enumChecks: [] },
 ];
-export const ZHAO_COMMAND_COUNT = 27 as const;
+export const ZHAO_COMMAND_COUNT = 28 as const;
 export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
@@ -774,12 +791,33 @@ export function zhaoSampleBeginFrame(): ZhRecordBeginFrame {
   };
 }
 
+export function zhaoSampleSealFramePlan(): ZhRecordSealFramePlan {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_SEAL_FRAME_PLAN,
+      recordBytes: 48,
+      sourceId: 1342242818, // kind 5, module 1, index 2
+      flags: 0,
+    },
+    view_id: 32,
+    flags: 137,
+    resource_gen: 63077,
+    view_gen: 2654,
+    giant_instance: 48408,
+    plan_verts: 0,
+    plan_tris: 0,
+    plan_chunks: 0,
+    plan_refs: 0,
+    giant_refs: 0,
+  };
+}
+
 export function zhaoSampleEndFrame(): ZhRecordEndFrame {
   return {
     hdr: {
       opcode: ZHAO_OP_END_FRAME,
       recordBytes: 32,
-      sourceId: 1342242818, // kind 5, module 1, index 2
+      sourceId: 1342242819, // kind 5, module 1, index 3
       flags: 0,
     },
     completion_flags: 0,
@@ -793,7 +831,7 @@ export function zhaoSampleSetView(): ZhRecordSetView {
     hdr: {
       opcode: ZHAO_OP_SET_VIEW,
       recordBytes: 112,
-      sourceId: 1342242819, // kind 5, module 1, index 3
+      sourceId: 1342242820, // kind 5, module 1, index 4
       flags: 0,
     },
     view_id: 32,
@@ -812,7 +850,7 @@ export function zhaoSampleSetPresentationContract(): ZhRecordSetPresentationCont
     hdr: {
       opcode: ZHAO_OP_SET_PRESENTATION_CONTRACT,
       recordBytes: 48,
-      sourceId: 1342242820, // kind 5, module 1, index 4
+      sourceId: 1342242821, // kind 5, module 1, index 5
       flags: 0,
     },
     mode: 0,
@@ -829,7 +867,7 @@ export function zhaoSampleTerrainField(): ZhRecordTerrainField {
     hdr: {
       opcode: ZHAO_OP_TERRAIN_FIELD,
       recordBytes: 112,
-      sourceId: 1342242821, // kind 5, module 1, index 5
+      sourceId: 1342242822, // kind 5, module 1, index 6
       flags: 0,
     },
     program: 704643073,
@@ -845,7 +883,7 @@ export function zhaoSampleSurfaceStamp(): ZhRecordSurfaceStamp {
     hdr: {
       opcode: ZHAO_OP_SURFACE_STAMP,
       recordBytes: 64,
-      sourceId: 1342242822, // kind 5, module 1, index 6
+      sourceId: 1342242823, // kind 5, module 1, index 7
       flags: 0,
     },
     brush: 704643073,
@@ -864,7 +902,7 @@ export function zhaoSampleTerrainEpoch(): ZhRecordTerrainEpoch {
     hdr: {
       opcode: ZHAO_OP_TERRAIN_EPOCH,
       recordBytes: 32,
-      sourceId: 1342242823, // kind 5, module 1, index 7
+      sourceId: 1342242824, // kind 5, module 1, index 8
       flags: 0,
     },
     epoch: 0,
@@ -881,7 +919,7 @@ export function zhaoSampleSubmitTerrainSet(): ZhRecordSubmitTerrainSet {
     hdr: {
       opcode: ZHAO_OP_SUBMIT_TERRAIN_SET,
       recordBytes: 48,
-      sourceId: 1342242824, // kind 5, module 1, index 8
+      sourceId: 1342242825, // kind 5, module 1, index 9
       flags: 0,
     },
     resource_epoch: 0,
@@ -902,7 +940,7 @@ export function zhaoSampleDrawForm(): ZhRecordDrawForm {
     hdr: {
       opcode: ZHAO_OP_DRAW_FORM,
       recordBytes: 32,
-      sourceId: 1342242825, // kind 5, module 1, index 9
+      sourceId: 1342242826, // kind 5, module 1, index 10
       flags: 0,
     },
     form: 704643073,
@@ -919,7 +957,7 @@ export function zhaoSampleDrawPopulation(): ZhRecordDrawPopulation {
     hdr: {
       opcode: ZHAO_OP_DRAW_POPULATION,
       recordBytes: 32,
-      sourceId: 1342242826, // kind 5, module 1, index 10
+      sourceId: 1342242827, // kind 5, module 1, index 11
       flags: 0,
     },
     population: 704643073,
@@ -934,7 +972,7 @@ export function zhaoSampleDrawProcedural(): ZhRecordDrawProcedural {
     hdr: {
       opcode: ZHAO_OP_DRAW_PROCEDURAL,
       recordBytes: 64,
-      sourceId: 1342242827, // kind 5, module 1, index 11
+      sourceId: 1342242828, // kind 5, module 1, index 12
       flags: 0,
     },
     program: 704643073,
@@ -952,7 +990,7 @@ export function zhaoSampleDrawSky(): ZhRecordDrawSky {
     hdr: {
       opcode: ZHAO_OP_DRAW_SKY,
       recordBytes: 176,
-      sourceId: 1342242828, // kind 5, module 1, index 12
+      sourceId: 1342242829, // kind 5, module 1, index 13
       flags: 0,
     },
     sky_set: 704643073,
@@ -972,7 +1010,7 @@ export function zhaoSampleSetEnvironment(): ZhRecordSetEnvironment {
     hdr: {
       opcode: ZHAO_OP_SET_ENVIRONMENT,
       recordBytes: 48,
-      sourceId: 1342242829, // kind 5, module 1, index 13
+      sourceId: 1342242830, // kind 5, module 1, index 14
       flags: 0,
     },
     sun_yaw: 22925,
@@ -992,7 +1030,7 @@ export function zhaoSampleEmitAudioEvent(): ZhRecordEmitAudioEvent {
     hdr: {
       opcode: ZHAO_OP_EMIT_AUDIO_EVENT,
       recordBytes: 32,
-      sourceId: 1342242830, // kind 5, module 1, index 14
+      sourceId: 1342242831, // kind 5, module 1, index 15
       flags: 0,
     },
     event_id: 0,
@@ -1008,7 +1046,7 @@ export function zhaoSampleDebugBootstrap(): ZhRecordDebugBootstrap {
     hdr: {
       opcode: ZHAO_OP_DEBUG_BOOTSTRAP,
       recordBytes: 64,
-      sourceId: 1342242831, // kind 5, module 1, index 15
+      sourceId: 1342242832, // kind 5, module 1, index 16
       flags: 0,
     },
     data: [113, 17, 53, 185, 245, 21, 109, 189, 137, 201, 49, 1, 201, 193, 109, 93, 73, 157, 233, 89, 81, 41, 61, 217, 149, 93, 245, 157, 153, 81, 117, 165, 129, 213, 185, 169, 113, 233, 253, 237, 21, 157, 21, 189, 17, 25, 93, 57],
@@ -1020,7 +1058,7 @@ export function zhaoSampleDebugFrameBlit(): ZhRecordDebugFrameBlit {
     hdr: {
       opcode: ZHAO_OP_DEBUG_FRAME_BLIT,
       recordBytes: 48,
-      sourceId: 1342242832, // kind 5, module 1, index 16
+      sourceId: 1342242833, // kind 5, module 1, index 17
       flags: 0,
     },
     dst_slot: 53,
@@ -1036,7 +1074,7 @@ export function zhaoSampleDebugRumble(): ZhRecordDebugRumble {
     hdr: {
       opcode: ZHAO_OP_DEBUG_RUMBLE,
       recordBytes: 32,
-      sourceId: 1342242833, // kind 5, module 1, index 17
+      sourceId: 1342242834, // kind 5, module 1, index 18
       flags: 0,
     },
     pad_index: 113,
@@ -1050,7 +1088,7 @@ export function zhaoSamplePublishResource(): ZhRecordPublishResource {
     hdr: {
       opcode: ZHAO_OP_PUBLISH_RESOURCE,
       recordBytes: 48,
-      sourceId: 1342242834, // kind 5, module 1, index 18
+      sourceId: 1342242835, // kind 5, module 1, index 19
       flags: 0,
     },
     resource: 704643073,
@@ -1071,7 +1109,7 @@ export function zhaoSampleSetPost(): ZhRecordSetPost {
     hdr: {
       opcode: ZHAO_OP_SET_POST,
       recordBytes: 32,
-      sourceId: 1342242835, // kind 5, module 1, index 19
+      sourceId: 1342242836, // kind 5, module 1, index 20
       flags: 0,
     },
     bloom_gain: 134,
@@ -1090,7 +1128,7 @@ export function zhaoSampleSetGradeTable(): ZhRecordSetGradeTable {
     hdr: {
       opcode: ZHAO_OP_SET_GRADE_TABLE,
       recordBytes: 96,
-      sourceId: 1342242836, // kind 5, module 1, index 20
+      sourceId: 1342242837, // kind 5, module 1, index 21
       flags: 0,
     },
     curve: 205,
@@ -1105,7 +1143,7 @@ export function zhaoSampleSetPopulation(): ZhRecordSetPopulation {
     hdr: {
       opcode: ZHAO_OP_SET_POPULATION,
       recordBytes: 48,
-      sourceId: 1342242837, // kind 5, module 1, index 21
+      sourceId: 1342242838, // kind 5, module 1, index 22
       flags: 0,
     },
     population: 704643073,
@@ -1126,7 +1164,7 @@ export function zhaoSampleDebugTraceArm(): ZhRecordDebugTraceArm {
     hdr: {
       opcode: ZHAO_OP_DEBUG_TRACE_ARM,
       recordBytes: 32,
-      sourceId: 1342242838, // kind 5, module 1, index 22
+      sourceId: 1342242839, // kind 5, module 1, index 23
       flags: 0,
     },
     stage_mask: 165,
@@ -1139,7 +1177,7 @@ export function zhaoSampleDrawPosedForm(): ZhRecordDrawPosedForm {
     hdr: {
       opcode: ZHAO_OP_DRAW_POSED_FORM,
       recordBytes: 48,
-      sourceId: 1342242839, // kind 5, module 1, index 23
+      sourceId: 1342242840, // kind 5, module 1, index 24
       flags: 0,
     },
     form: 704643073,
@@ -1159,7 +1197,7 @@ export function zhaoSampleDrawWarpedForm(): ZhRecordDrawWarpedForm {
     hdr: {
       opcode: ZHAO_OP_DRAW_WARPED_FORM,
       recordBytes: 96,
-      sourceId: 1342242840, // kind 5, module 1, index 24
+      sourceId: 1342242841, // kind 5, module 1, index 25
       flags: 0,
     },
     form: 704643073,
@@ -1184,7 +1222,7 @@ export function zhaoSampleSetPlane(): ZhRecordSetPlane {
     hdr: {
       opcode: ZHAO_OP_SET_PLANE,
       recordBytes: 64,
-      sourceId: 1342242841, // kind 5, module 1, index 25
+      sourceId: 1342242842, // kind 5, module 1, index 26
       flags: 0,
     },
     slot: 125,
@@ -1216,7 +1254,7 @@ export function zhaoSampleDrawSprite(): ZhRecordDrawSprite {
     hdr: {
       opcode: ZHAO_OP_DRAW_SPRITE,
       recordBytes: 64,
-      sourceId: 1342242842, // kind 5, module 1, index 26
+      sourceId: 1342242843, // kind 5, module 1, index 27
       flags: 0,
     },
     x: 10553,
@@ -1294,6 +1332,22 @@ export function zhaoPackBeginFrame(r: ZhRecordBeginFrame, w: ZhByteWriter): void
   w.u32(r.resource_epoch);
   w.u32(r.flags);
   w.u32(r.deadline_cycles);
+}
+
+export function zhaoPackSealFramePlan(r: ZhRecordSealFramePlan, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.view_id);
+  w.u8(r.flags);
+  w.u16(r.resource_gen);
+  w.u16(r.view_gen);
+  w.u16(r.giant_instance);
+  w.u32(r.plan_verts);
+  w.u32(r.plan_tris);
+  w.u32(r.plan_chunks);
+  w.u32(r.plan_refs);
+  w.u32(r.giant_refs);
+  w.zeros(4); // pad
 }
 
 export function zhaoPackEndFrame(r: ZhRecordEndFrame, w: ZhByteWriter): void {
@@ -1642,6 +1696,6 @@ export function zhaoPackDrawSprite(r: ZhRecordDrawSprite, w: ZhByteWriter): void
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x79, 0x0A, 0xCB, 0x28, 0x78, 0x1B, 0x1C, 0xF4, 0xE4, 0xE9, 0x75, 0x42, 0x06, 0x23, 0x60, 0x95, 0x1C, 0xC2, 0x8A, 0x3E, 0x72, 0x59, 0x16, 0x61, 0x41, 0x93, 0x7D, 0xCC, 0x83, 0x2F, 0x3D, 0xE5];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0xC9, 0x17, 0x73, 0xE0, 0xC7, 0xC0, 0xE4, 0xB2, 0x8C, 0xA6, 0xBB, 0xAA, 0xCB, 0xE5, 0x94, 0x3F, 0x20, 0x25, 0x73, 0x64, 0xD9, 0x2C, 0x1F, 0x7E, 0x95, 0xB9, 0x7D, 0xF0, 0x8A, 0x91, 0xB4, 0x5C];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x7D, 0x8E, 0x03, 0x5C, 0xD3, 0x80, 0x21, 0x4A, 0xD3, 0xF6, 0xBD, 0x44, 0x33, 0x7E, 0x5A, 0xE2, 0x66, 0x19, 0x03, 0xCB, 0xF3, 0x8E, 0x68, 0x35, 0x98, 0x90, 0x05, 0x47, 0xC5, 0x86, 0x42, 0xCE];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x08, 0x43, 0xB3, 0x29, 0xCE, 0xA3, 0xBA, 0x4D, 0xF5, 0x31, 0x75, 0x25, 0x05, 0x37, 0xDC, 0x69, 0x5B, 0x64, 0x75, 0x91, 0x44, 0xCC, 0x7F, 0x53, 0xB9, 0x07, 0x41, 0x1D, 0x57, 0xBD, 0xF7, 0x2B];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

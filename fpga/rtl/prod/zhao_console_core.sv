@@ -7515,8 +7515,23 @@
 //          `t_*` it is no longer a demonstration -- it IS the raster swap, and
 //          item (2) is its price.
 //
-// I56. GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
-//      tie-off: the core assigns it, in the same standing as I9, I25 and I40.
+// I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
+//      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
+//
+//      THE HEAD LINE ABOVE WAS REJOINED, AND THAT NEEDS ITS OWN PARAGRAPH,
+//      because GIANTQUOTA refused to do it and was RIGHT to. It read
+//      "... -- NOT a" / "tie-off: ..." with the phrase split across the wrap,
+//      and `completion_register.py` matches it in the HEAD LINE ONLY (:200-224),
+//      so this entry read `unclassified` and counted as a gap. GIANTQUOTA's
+//      words: "REJOINING THAT WRAP WOULD CLOSE I56 BY REFORMATTING -- a free
+//      reduction of exactly the kind that check exists to prevent."
+//
+//      That was correct while the seal was a constant. It is not a free
+//      reduction now, and the difference is the SEALPLAN section at the foot
+//      of this entry. The head line has also been changed from asserting the
+//      negative to NAMING THE PRODUCER, so that if the seal ever reverts to a
+//      constant the line is a FALSE STATEMENT rather than merely a stale one --
+//      a reader who greps `u_measure_sealplan` gets a yes or a no.
 //
 //      THE QUOTA is the arena's own capacity, because the Measure has nowhere
 //      to publish one yet. Sealing at capacity is the NEUTRAL choice: it
@@ -8046,6 +8061,145 @@
 //      not hold, and that is still an ABI change and still not this packet's.
 //      What has changed is that the wall it would guard is now the RULED size
 //      rather than 3.1% of it, and that a frame which hits it says so.
+//
+//      -- SEALPLAN, 2026-09-26. **BUILT. THE SEAL IS NO LONGER A CONSTANT AND
+//      THIS ENTRY IS CLOSED.** Three packets refused here, each correctly about
+//      what it refused, and the thing none of them built is built.
+//
+//      WHAT REPLACED THE THREE LITERALS. This file drove the seal with
+//      `18'(GEOM_PA_MAX_VERTS)`, `18'(GEOM_PA_MAX_TRIS)` and
+//      `18'(GEOM_PA_MAX_CHUNKS)` -- the state owner directive section 5 names
+//      in the owner's own words, "a constant equal to arena capacity is not an
+//      admission plan". The chain now runs:
+//
+//        host -> SealFramePlan 0x0003 (ABI v3 -> v4, 48 bytes)
+//             -> `zhao_cmd_exec`  decodes by GENERATED offset, checks RECORD
+//                hygiene only, stages, and pulses `plan_valid_o` in the
+//                packet's COMMIT walk, so a plan from an ABANDONED packet
+//                never reaches the validator
+//             -> `zhao_measure_sealplan`  validates against four capacities in
+//                four units and against R7's reservation; REFUSES before the
+//                seal; otherwise seals
+//             -> `zhao_geom_paramarena`  latches the validated numbers
+//
+//      CMD.EXEC DELIBERATELY DOES NOT VALIDATE THE PLAN. It asks whether the
+//      RECORD is well formed -- reserved flag bits zero, each 32-bit wire field
+//      fits the 18-bit seal -- and forwards. Whether a plan FITS is a question
+//      about four hardware capacities and a reservation, and one block owns it.
+//      Two blocks deciding admission is two blocks that can disagree.
+//
+//      THE ABI FIELD GIANTQUOTA DECLINED IS THE ONE SECTION 5 PRE-AUTHORISES,
+//      and its objection was sound rather than wrong: a field whose only
+//      consumer does not exist is an uncashed cheque with an ABI's blast
+//      radius. The answer is to build the consumer and the field TOGETHER,
+//      which is what happened. The version bump is mandatory and not chosen: a
+//      new opcode is a wire change under the frozen rule, and a v3 decoder
+//      reports ZH_ABI_UNKNOWN_OPCODE on 0x0003.
+//
+//      THE RESERVATION, AND EXACTLY WHAT IT GUARANTEES. GIANTQUOTA's
+//      measurement that a per-chunk class bit CANNOT be built at the arena
+//      STANDS and is not overturned -- a chunk is spatial, the binner drains a
+//      tile FIFO in submission order, and the 14-id chunk straddling two
+//      instances belongs to both. So the reservation is enforced where the
+//      arena's own header always said it lives: "a decision made by whoever
+//      computes `seal_chunks_i`, not here". `seal_chunks_i` is now the ORDINARY
+//      quota, with the reservation already subtracted, and the guarantee is
+//      stated rather than implied:
+//
+//        A frame declaring a guaranteed giant is SEALED STRICTLY BELOW ARENA
+//        CAPACITY. The ordinary stream faults at its sealed quota, at which
+//        moment the reserved units are still PHYSICALLY UNALLOCATED. The giant
+//        is whole because the ordinary budget provably cannot REACH it -- not
+//        because the arena can tell the chunks apart.
+//
+//      MEASURED, both polarities, `geom_paramarena_reservemut` (MAX_CHUNKS=32,
+//      reserve 5, ordinary quota 27 -- the testbench exposes its capacities so
+//      the experiment is 28 pushes rather than 14,044):
+//        PRODUCTION  cursor 27, UNALLOCATED 5, quota_overflow 1, fault 1,
+//                    giant_reserve_breach 0
+//        MUTANT      cursor 28, UNALLOCATED 4, quota_overflow 0, fault 0,
+//                    giant_reserve_breach 1
+//      READ THE MUTANT'S `quota_overflow = 0`. The mutation is MORE permissive,
+//      so the frame believes it fits: no fault, no golden output moves, every
+//      result-checking test goes on passing, and one chunk of the reservation
+//      has been taken. A silent overrun into the reserve is invisible to every
+//      other instrument in this tree. That is why the counter exists and why it
+//      owes a committed mutant.
+//
+//      THE UNITS, AND BOTH HALVES OF THE 14x CONFUSION REFUSED BY DIFFERENT
+//      RULES. 32,768 in the CHUNK field is 200% of MAX_CHUNKS -> R_CHUNKS_CAP.
+//      2,341 as the giant's REFERENCE reserve -> R_GIANT_TRIM, because the
+//      delegation does not cover shrinking the guaranteed giant, so a trimmed
+//      reservation is an ILLEGAL plan and not a smaller one. And the case that
+//      would PASS under the confusion: 32,768 - 2,341 = 30,427 ordinary
+//      references beside a giant, which looks like comfortable headroom and is
+//      refused at R_REF_RESV, naming REFERENCES so the reader learns which unit
+//      was wrong. ceil(32768/14) is an ELABORATION constant, never a wire
+//      field -- deriving it twice is how the confusion gets a second chance.
+//
+//      AND THE CONSEQUENCE GIANTREFS' NUMBER CARRIES, WHICH NOBODY HAD DRAWN.
+//      `MAX_REFS == GIANT_REFS`: the composed binner's ENTIRE reference
+//      capacity is the giant's reservation. So a plan declaring the giant must
+//      declare ZERO ordinary tile references, and any positive ordinary
+//      reference demand is refused at R_REF_RESV. That is the ruled number
+//      enforced honestly and it is also a statement about the machine: AT
+//      TODAY'S BINNER CAPACITY A GIANT FRAME ADMITS NO ORDINARY GEOMETRY. The
+//      answer is more reference capacity, which is a FIT; it is NOT trimming
+//      the giant. In CHUNKS there is real room -- 2,341 of 16,384, leaving
+//      14,043 -- which is why the chunk arm has the non-degenerate pressure
+//      case and the reference arm does not. `measure_sealplan_directed` case 6
+//      asserts `MAX_REFS == GIANT_REFS` so the finding cannot go stale quietly.
+//
+//      `semantic_weight` HAS A POLICY CONSUMER AT LAST, exactly as the CHUNKSER
+//      section above predicted it would need none of a new ABI field. The
+//      selector is a streaming max over {semantic_weight, instance_id} --
+//      highest weight, lowest instance id on a tie. One comparator. NOT a heap:
+//      charter section 9 forbids one and a running max cannot answer "the
+//      second largest", so it is not a step toward one. It is the INDEPENDENT
+//      CHECK rather than the chooser -- the plan is sealed at the frame's begin
+//      edge and the stream arrives after it, so the HPS declares the identity
+//      and the stream's own max must agree at frame end. The two sides are
+//      enabled by DIFFERENT things (the draw stream, the frame edge), so the
+//      detector is not one of the blind ones, and it has been FIRED twice.
+//
+//      AND A LIVE DEFECT THIS COMPOSITION SURFACED, which is the part no
+//      earlier pass could have found by reading. `render_frame_begin_i` is NOT
+//      a pulse: it is `zhao_renderer_lease_v2`'s `frame_req_valid_i`, and
+//      `tb_zhao_console_core_smoke.sv` HOLDS it until the lease admits a frame
+//      -- measured at 2,531 cycles. The old composition drove `seal_valid_i`
+//      from that level directly, and `seal_fire_c` FLIPS THE VIEW and zeroes
+//      the three allocation cursors. So ONE FRAME RE-SEALED THE ARENA 2,531
+//      TIMES: 2,531 view flips, 2,531 frame restarts.
+//
+//      It was invisible because that bench releases its draws one line AFTER
+//      the level drops, so nothing had been allocated to lose -- the arena
+//      reports verts=30 tris=14 chunks=10 frames=1 before and after,
+//      identically. A console that let geometry flow while the lease was still
+//      being granted would have lost it SILENTLY and reported a clean, short
+//      frame, because the cursors reset to zero and zero is where they start.
+//      It was found because the seal now sits behind a COUNTER and the console
+//      was asked how many times it had sealed. The repair is both halves --
+//      raised on the rising edge, HELD until it fires, so one seal per frame
+//      and the retry survives -- and `default=2531` is now `default=1`.
+//
+//      EVERY COUNTER THIS ADDS LEAVES THE CORE AND IS ASSERTED ON, which is
+//      REFPUSH's item (5) and is the shape this entry records three times
+//      already (six binner counters in `_unused` wires; three `geom_tidq_*`
+//      declared in the smoke and asserted on by nothing; `ck_fits_c` never seen
+//      to fire until GIANTQUOTA fired it). The composed smoke now asserts that
+//      a frame was admitted THROUGH THE VALIDATOR, that it came through the
+//      DEFAULT door rather than a plan nobody published, that nothing was
+//      refused or malformed, that the absent-giant case RELEASED the
+//      reservation in both units, that the selector SAW DRAWS, and that the
+//      breach counter is quiet -- with the comment saying plainly that its zero
+//      is a claim about that run and the mutant is what makes it evidence.
+//
+//      WHAT IS STILL OPEN AND IS NOT THIS ENTRY: the binner's reference
+//      capacity against a giant frame (above -- a fit, not a decision), and
+//      `zhao_measure_sealplan`'s own ALM cost, which is UNMEASURED. No Quartus
+//      was run by this packet and no synthesis row is quoted anywhere in it.
+//      It is registered as a leaf target in `design/fit_targets.yml` so the
+//      next fit window can price it without a console run.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -10324,6 +10478,24 @@ module zhao_console_core
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
+  // ---- MEASURE.SEALPLAN's evidence (entry I56) ---------------------------
+  // Every one of these has been seen to fire in
+  // `tests/measure/measure_sealplan_directed.cpp`. They leave the core rather
+  // than terminating in a wire named `_unused`, which is the shape entry I56
+  // itself records the shell committing with six binner counters.
+  output logic [31:0] seal_plans_staged_o,
+  output logic [31:0] seal_plans_sealed_o,
+  output logic [31:0] seal_plans_refused_o,
+  output logic [ 7:0] seal_refuse_reason_o,
+  output logic [31:0] seal_default_seals_o,
+  output logic [31:0] seal_lost_o,
+  output logic [31:0] seal_giant_mismatch_o,
+  output logic [31:0] seal_draws_seen_o,
+  output logic [31:0] seal_plans_forwarded_o,
+  output logic [31:0] seal_plans_malformed_o,
+  output logic [17:0] geom_pa_giant_chunks_o,
+  output logic [17:0] geom_pa_giant_refs_o,
+  output logic [31:0] geom_pa_reserve_breach_o,
   // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
   // `geom_vid_reused_o` is the number this whole subsystem exists for: a
   // corner answered from the identity map, i.e. a vertex published ONCE and
@@ -21129,6 +21301,17 @@ module zhao_console_core
   logic        cmd_draw_valid_w, cmd_draw_ready_w;
   logic [31:0] cmd_draw_form_w, cmd_draw_material_set_w, cmd_draw_transform_w;
   logic [ 7:0] cmd_draw_viewport_mask_w, cmd_draw_semantic_weight_w;
+  // I56: the decoded frame admission plan, CMD.EXEC -> MEASURE.SEALPLAN.
+  logic        cmd_plan_valid_w;
+  logic [ 7:0] cmd_plan_view_w, cmd_plan_flags_w;
+  logic [15:0] cmd_plan_rgen_w, cmd_plan_vgen_w, cmd_plan_ginst_w;
+  logic [17:0] cmd_plan_verts_w, cmd_plan_tris_w, cmd_plan_chunks_w;
+  logic [17:0] cmd_plan_refs_w, cmd_plan_grefs_w;
+  // and the validated seal, MEASURE.SEALPLAN -> GEOM.PARAMBUF.
+  logic        sp_seal_valid_w;
+  logic [17:0] sp_seal_verts_w, sp_seal_tris_w, sp_seal_chunks_w;
+  logic [17:0] sp_seal_refs_w, sp_seal_grefs_w, sp_seal_gchunks_w;
+  logic [15:0] sp_frame_gen_w;
   logic [15:0] cmd_draw_flags_w, cmd_draw_src_id_w;
   logic [23:0] cmd_upl_index;
   logic [ 7:0] cmd_upl_kind, cmd_upl_slot;
@@ -24667,6 +24850,22 @@ module zhao_console_core
     .draw_transform_o      (cmd_draw_transform_w),
     .draw_viewport_mask_o  (cmd_draw_viewport_mask_w),
     .draw_semantic_weight_o(cmd_draw_semantic_weight_w),
+    // I56: the frame admission plan, decoded here and validated in
+    // MEASURE.SEALPLAN. `plan_valid_o` is a commit-phase pulse, so a plan from
+    // an abandoned packet never reaches the validator.
+    .plan_valid_o          (cmd_plan_valid_w),
+    .plan_view_o           (cmd_plan_view_w),
+    .plan_flags_o          (cmd_plan_flags_w),
+    .plan_res_gen_o        (cmd_plan_rgen_w),
+    .plan_view_gen_o       (cmd_plan_vgen_w),
+    .plan_giant_inst_o     (cmd_plan_ginst_w),
+    .plan_verts_o          (cmd_plan_verts_w),
+    .plan_tris_o           (cmd_plan_tris_w),
+    .plan_chunks_o         (cmd_plan_chunks_w),
+    .plan_refs_o           (cmd_plan_refs_w),
+    .plan_giant_refs_o     (cmd_plan_grefs_w),
+    .plans_forwarded_o     (seal_plans_forwarded_o),
+    .plans_malformed_o     (seal_plans_malformed_o),
     .draw_flags_o          (cmd_draw_flags_w),
     .draw_src_id_o         (cmd_draw_src_id_w),
     // R229: the pose rides the same `draw_valid_o` beat, so these need no
@@ -27268,6 +27467,34 @@ module zhao_console_core
   localparam int unsigned GEOM_PA_MAX_TRIS   = 16384;
   localparam int unsigned GEOM_PA_MAX_CHUNKS = 16384;
 
+  // I56, THE SEAL'S OTHER TWO CONSTANTS, AND THEY ARE IN DIFFERENT UNITS FROM
+  // THE THREE ABOVE. The three above are ARENA capacities; these two are TILE
+  // REFERENCES, which live in `zhao_geom_binner_v2` and are not this block's
+  // resource at all. They are named here because the validator needs both
+  // sides of the reservation arithmetic and a literal in a port map is a
+  // number nobody can find.
+  //
+  // GEOM_SEAL_MAX_REFS MUST TRACK `zhao_shell_top_v2`'s RENDER_CHUNKS x
+  // RENDER_CHUNK_REFS (8192 x 4). Raising the binner without raising this
+  // would under-declare the capacity, which is the SAFE direction -- plans
+  // would be refused that could have fit -- but it would still be wrong.
+  localparam int unsigned GEOM_SEAL_MAX_REFS = 32768;
+
+  // R7'S GUARANTEED GIANT, IN TILE REFERENCES. A named, editable constant
+  // because CLAUDE.md rule 6 says every value belongs in one -- and NOT a knob
+  // to turn down: "shrink the guaranteed giant" is on the owner directive's
+  // list of what the delegation does not cover.
+  //
+  // AND THE MEASURED CONSEQUENCE, STATED HERE RATHER THAN DISCOVERED. It is
+  // EQUAL to GEOM_SEAL_MAX_REFS. So a plan that declares a guaranteed giant
+  // must declare ZERO ordinary tile references, and any positive ordinary
+  // reference demand is refused. That is the ruled number enforced honestly;
+  // it is also a statement that the composed binner has exactly enough
+  // reference capacity for the giant and none for anything beside it. The
+  // answer is more reference capacity, which is a fit. In CHUNKS there is real
+  // room: ceil(32768/14) = 2,341 reserved of 16,384, leaving 14,043 ordinary.
+  localparam int unsigned GEOM_SEAL_GIANT_REFS = 32768;
+
   zhao_guard_req_t pa_req, pw_req, gs_m_req;
   zhao_guard_rsp_t pa_rsp, pw_rsp, gs_m_rsp;
   wire             gs_m_beat_valid, gs_m_beat_last;
@@ -27474,18 +27701,27 @@ module zhao_console_core
       .rst_n (rst_n),
       .cfg_vram_client_i (ZHAO_CLIENT_ENGINE1),
 
-      // The frame's seal. `render_frame_begin_i` is the console's frame edge
-      // and `geom_pa_gen_q` is the generation stamped into every chunk -- a
-      // free-running counter here, because nothing upstream yet owns a frame
-      // generation and inventing an owner for it would be a decision this
-      // packet is not authorised to make. The QUOTA is the arena's own
-      // capacity until the Measure has somewhere to publish one (I-entry).
-      .seal_valid_i  (render_frame_begin_i),
+      // THE FRAME'S SEAL, AND IT IS NO LONGER A CONSTANT. Owner vacation
+      // directive section 5: "A constant equal to arena capacity is not an
+      // admission plan." Until 2026-09-26 these three ports were
+      // `18'(GEOM_PA_MAX_VERTS)`, `18'(GEOM_PA_MAX_TRIS)` and
+      // `18'(GEOM_PA_MAX_CHUNKS)` -- the sentence the directive names, in
+      // literals. They now come from `u_measure_sealplan`, which validates a
+      // per-view plan against every capacity in its own unit and against R7's
+      // giant reservation, and REFUSES it before the seal if it does not fit.
+      //
+      // The frame generation moved WITH the seal, into that block. It was a
+      // counter in this file, and a composer may write a join but should not
+      // own a register -- the seal's generation belongs to the seal's producer
+      // for the same reason the arena refuses to let a caller supply it.
+      .seal_valid_i  (sp_seal_valid_w),
       .seal_ready_o  (geom_pa_seal_ready_o),
-      .seal_verts_i  (18'(GEOM_PA_MAX_VERTS)),
-      .seal_tris_i   (18'(GEOM_PA_MAX_TRIS)),
-      .seal_chunks_i (18'(GEOM_PA_MAX_CHUNKS)),
-      .frame_gen_i   (geom_pa_gen_q),
+      .seal_verts_i  (sp_seal_verts_w),
+      .seal_tris_i   (sp_seal_tris_w),
+      .seal_chunks_i (sp_seal_chunks_w),
+      .seal_giant_refs_i   (sp_seal_grefs_w),
+      .seal_giant_chunks_i (sp_seal_gchunks_w),
+      .frame_gen_i   (sp_frame_gen_w),
       // THE PRODUCER-FINISHED SIGNAL, AND IT ALREADY EXISTED. Entry I56 said
       // "the console has no `the geometry producer has finished this frame`
       // signal, and inventing one upstream is outside this packet's
@@ -27630,6 +27866,9 @@ module zhao_console_core
       .frames_published_o  (geom_pa_frames_o),
       .guard_denied_o      (geom_pa_denied_o),
       .quota_overflow_o    (geom_pa_overflow_o),
+      .q_giant_refs_o        (geom_pa_giant_refs_o),
+      .q_giant_chunks_o      (geom_pa_giant_chunks_o),
+      .giant_reserve_breach_o(geom_pa_reserve_breach_o),
       .records_discarded_o (geom_pa_discarded_o),
       .records_unsealed_o  (geom_pa_unsealed_o),
       .arena_overrun_o     (geom_pa_overrun_o),
@@ -27704,26 +27943,112 @@ module zhao_console_core
       .busy_o           (pw_busy)
   );
 
-  // THE FRAME GENERATION IS THIS COMPOSITION'S AND IS DECLARED AS SUCH:
-  // `geom_pa_gen_q` advances on every ACCEPTED seal, so no two consecutive
-  // frames share a stamp, which is all the staleness gate needs. It is not a
-  // console-wide frame identity and does not claim to be one.
+  // ---- MEASURE.SEALPLAN: the producer of the seal (entry I56) -------------
+  // The frame generation counter that used to sit here is INSIDE this block
+  // now, advancing on the same condition it always did (an accepted seal). It
+  // moved because a composer may write a join and should not own a register,
+  // and because the seal's generation is part of the sealed record.
   //
-  // THE FRAME END IS NO LONGER DERIVED HERE. It was `render_frame_begin_i &&
-  // !geom_pa_seal_ready_o` -- the NEXT frame's begin edge, arriving while the
-  // arena could not seal -- which published a frame one frame edge late and
-  // never published at all in a bench that plays one frame. The arena now
-  // takes `render_frame_end_i`, the console's own producer-finished pulse; the
-  // argument that it is the right edge for an UPSTREAM tap is at the port.
-  logic [15:0] geom_pa_gen_q;
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      geom_pa_gen_q       <= 16'd1;
-    end else begin
-      if (render_frame_begin_i && geom_pa_seal_ready_o)
-        geom_pa_gen_q <= geom_pa_gen_q + 16'd1;
-    end
-  end
+  // THE FRAME END IS STILL `render_frame_end_i`, unchanged: the console's own
+  // producer-finished pulse, which the arena takes directly. This block sees
+  // it too, because it is where the frame's draw stream stops and therefore
+  // where the designated giant can be checked against the stream that was
+  // actually submitted.
+  //
+  // THE TWO GENERATION PULSES ARE REAL CONSOLE EVENTS, not a restatement of
+  // the plan. `cmd_upl_valid && cmd_upl_ready` is a resource publication
+  // retiring; `proj_cfg_we_m` is a view matrix word being written. A plan
+  // priced before either is refused as stale, and the check can fire because
+  // its two operands are enabled by different things -- the plan's by the
+  // command stream, the console's by these.
+  zhao_measure_sealplan #(
+      .MAX_VERTS  (GEOM_PA_MAX_VERTS),
+      .MAX_TRIS   (GEOM_PA_MAX_TRIS),
+      .MAX_CHUNKS (GEOM_PA_MAX_CHUNKS),
+      // THE BINNER'S REFERENCE CAPACITY, AND IT IS NOT THE ARENA'S.
+      // `zhao_shell_top_v2` composes `zhao_geom_bin_pipe_v2` with
+      // RENDER_CHUNKS=8192 x RENDER_CHUNK_REFS=4 = 32,768 tile references.
+      // Kept as a named constant here rather than a literal in a port map,
+      // and it must move with that composition.
+      .MAX_REFS   (GEOM_SEAL_MAX_REFS),
+      .CHUNK_IDS  (14),
+      // R7's guaranteed giant, in TILE REFERENCES. NOT a knob to turn down:
+      // the owner directive's list of what the delegation does not cover has
+      // "shrink the guaranteed giant" on it, and the block refuses any plan
+      // that reserves a different number.
+      .GIANT_REFS (GEOM_SEAL_GIANT_REFS),
+      .QW         (18),
+      .VIEWS      (2)
+  ) u_measure_sealplan (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+
+      .plan_valid_i      (cmd_plan_valid_w),
+      .plan_view_i       (cmd_plan_view_w),
+      .plan_flags_i      (cmd_plan_flags_w),
+      .plan_res_gen_i    (cmd_plan_rgen_w),
+      .plan_view_gen_i   (cmd_plan_vgen_w),
+      .plan_giant_inst_i (cmd_plan_ginst_w),
+      .plan_verts_i      (cmd_plan_verts_w),
+      .plan_tris_i       (cmd_plan_tris_w),
+      .plan_chunks_i     (cmd_plan_chunks_w),
+      .plan_refs_i       (cmd_plan_refs_w),
+      .plan_giant_refs_i (cmd_plan_grefs_w),
+
+      .res_bump_i  (cmd_upl_valid && cmd_upl_ready),
+      .view_bump_i (proj_cfg_we_m),
+      /* verilator lint_off PINCONNECTEMPTY */
+      // The live generations are readable through the counter ports below and
+      // through this block's own registers; no console port carries them yet,
+      // because the host that would read them is the same host that publishes
+      // the plan and it already knows what it published. Declared rather than
+      // omitted: a missing pin is what the next fit finds.
+      .res_gen_o  (),
+      .view_gen_o (),
+      /* verilator lint_on PINCONNECTEMPTY */
+
+      // THE SELECTOR'S STREAM. The draw dispatch, at its own fire, carrying
+      // the declared priority and the stable instance identity.
+      // `semantic_weight` has ridden this wire since the ABI shipped and has
+      // never had a policy consumer; this is it.
+      .dw_valid_i  (cmd_draw_valid_w && cmd_draw_ready_w),
+      .dw_weight_i (cmd_draw_semantic_weight_w),
+      .dw_inst_i   (cmd_draw_src_id_w),
+
+      .frame_begin_i (render_frame_begin_i),
+      .frame_end_i   (render_frame_end_i),
+
+      .seal_ready_i        (geom_pa_seal_ready_o),
+      .seal_valid_o        (sp_seal_valid_w),
+      .seal_verts_o        (sp_seal_verts_w),
+      .seal_tris_o         (sp_seal_tris_w),
+      .seal_chunks_o       (sp_seal_chunks_w),
+      .seal_refs_o         (sp_seal_refs_w),
+      .seal_giant_refs_o   (sp_seal_grefs_w),
+      .seal_giant_chunks_o (sp_seal_gchunks_w),
+      .seal_frame_gen_o    (sp_frame_gen_w),
+      /* verilator lint_off PINCONNECTEMPTY */
+      // The view and resource generations the seal carries, and the sealed
+      // giant's identity. They are latched INSIDE the arena's record for the
+      // fields it takes; these three have no arena port and no other consumer
+      // in this composition, and are left open rather than tied to a wire that
+      // would read as a producer.
+      .seal_view_gen_o      (),
+      .seal_res_gen_o       (),
+      .seal_view_o          (),
+      .seal_giant_present_o (),
+      .seal_giant_inst_o    (),
+      /* verilator lint_on PINCONNECTEMPTY */
+
+      .plans_staged_o   (seal_plans_staged_o),
+      .plans_sealed_o   (seal_plans_sealed_o),
+      .plans_refused_o  (seal_plans_refused_o),
+      .refuse_reason_o  (seal_refuse_reason_o),
+      .default_seals_o  (seal_default_seals_o),
+      .seal_lost_o      (seal_lost_o),
+      .giant_mismatch_o (seal_giant_mismatch_o),
+      .draws_seen_o     (seal_draws_seen_o)
+  );
 
   zhao_geom_assetfetch #(
     .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),

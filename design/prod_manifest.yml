@@ -479,6 +479,15 @@ top:
   - zhao_surface_dispatch
   - zhao_measure_governor
   - zhao_measure_tokens
+  # MEASURE.SEALPLAN, built 2026-09-26 (SEALPLAN, core entry I56): the per-view
+  # pre-frame admission plan's validator and the producer of GEOM.PARAMBUF's
+  # quota seal, commissioned by owner vacation directive section 5. Counted
+  # because zhao_console_core instantiates it and the seal that used to be
+  # three capacity literals now comes from it. Two 16-bit generation counters,
+  # one streaming-max comparator and eleven refusal terms; no multiplier and no
+  # memory. NOT a priority heap -- charter section 9 forbids one and a running
+  # max cannot answer "the second largest".
+  - zhao_measure_sealplan
   # PROJ.CFGVALID, built 2026-09-22 (PROJCLOSE), closing core entry I14's
   # remaining half. It is the producer `proj_en_i` never had: the shared
   # projector's rigid-pipeline enable, arming when a view's matrix bank

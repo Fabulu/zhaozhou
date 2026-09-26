@@ -163,6 +163,18 @@ module zhao_console_core_slot_overflow_mutant
   // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
   // would emit a descriptor the record layer cannot store.
   parameter int unsigned GEOM_ASM_VIDW = 16,
+  // ---- THE GEOMETRY IDENTITY SPACE (ARENAID, owner directive section 4) ----
+  // The console's vertex identity is GEOM.REPLAY's own arena lookup key,
+  // {arena, generation, index}, and `zhao_geom_vertid` is the only block that
+  // turns one into a GEOM.PARAMBUF vertex id. Named here because the door and
+  // GEOM.CLIP both carry it opaquely and three literals would drift.
+  parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
+  // The per-primitive rider GEOM.CLIP carries beside `src_id`:
+  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
+  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
+  // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
+  parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
 
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
@@ -174,7 +186,227 @@ module zhao_console_core_slot_overflow_mutant
   // The vertex-attribute store's word (owner ruling R11): slots 1..6 of the
   // packet above -- everything but invw24, which is GEOM.DEPTHQUANT's alone.
   parameter int unsigned GEOM_ATTR_STORE_W = (GEOM_CLIP_ATTRS - 1) * 32,
+  // THE UNTEXTURED DECLARATION OF THE MESH PRODUCER (owner ruling R197,
+  // 2026-09-20). Every triangle GEOM.REPLAY presents at GEOM.CLIP's door
+  // carries the per-primitive `untex` bit, and this is the value it carries:
+  // ZERO, TEXTURED, because every REPLAY triangle is built from a format-0
+  // vertex record (GEOM.VDECODE refuses every other format_id, and the
+  // format-0 layout carries u and v), so its u/w and v/w slots are real. This
+  // is R48's `ALPHA_C` shape exactly -- a per-primitive constant attribute at
+  // a named seam, not a stub: a producer whose records carry no texture
+  // coordinates replaces this value at this seam and nothing else moves. It
+  // is a PARAMETER rather than a localparam so that the committed wrapper
+  // `tests/mutants/zhao_console_core_untex_decl_mutant.sv` can set it to ONE
+  // and prove `geom_untex_refused_o` fires through the composed door -- the
+  // state is unreachable by legal stimulus while the only producer is
+  // textured, and a counter never seen to move is a claim, not a measurement.
+  // ==========================================================================
+  // THE FORGE CHAIN'S KNOBS, composed 2026-09-21 (FORGECOMP)
+  // ==========================================================================
+  // (MAX_SEGMENTS + 1) * MAX_SIDES = 65 * 8, `zhao_forge_prim`'s own frozen
+  // bounds restated as a capacity. Raising either bound without raising this
+  // is what `zhao_forge_assemble`'s `vtx_overflow_o` exists to catch.
+  parameter int unsigned FORGE_MAX_VERTS = 520,
+  // In-flight projector requests. The service's result port has NO
+  // backpressure and its stated latency is 36 clocks; the assembler's
+  // elaboration guard refuses anything below that.
+  parameter int unsigned FORGE_INFLIGHT  = 64,
+  // Forge programs resident per page. A page declaring more is REFUSED WHOLE.
+  parameter int unsigned FORGE_MAX_SCAN  = 16,
+  //
+  // THE AUTHORED COLOUR -- CLAUDE.md rule 6, and the treatment owner ruling
+  // R133's D-FORGESHADOW-A already accepted for `cast_strength_i`.
+  //
+  // A forge primitive's PRE-LIT colour has no producer: the frozen
+  // FORGE_PROGRAM record (`zref_forge_page.hpp`) carries anchors, axes, radii,
+  // a seed and a phase, and NO colour field. R234 D1 rules that the Gouraud
+  // lanes are exactly where an untextured primitive's pre-lit colour belongs,
+  // so the mechanism is ratified and only the VALUE is ours.
+  //
+  // THESE ARE STARTING VALUES CHOSEN BY REASONING AND NOT YET BY LOOKING. The
+  // first forge primitive is a lightning bolt, so they are a hot near-white
+  // with a cool cast rather than a flat white -- but nothing has been rendered
+  // and CLAUDE.md is explicit that measurement cannot choose a value and that
+  // the read at final resolution against what it sits on is the thing. Expect
+  // to move them. They are Q16.16 on the Gouraud lanes, so 65536 is 1.0.
+  parameter int signed FORGE_LIT_R = 32'sd62259,   // 0.95
+  parameter int signed FORGE_LIT_G = 32'sd63897,   // 0.975
+  parameter int signed FORGE_LIT_B = 32'sd65536,   // 1.0
+  parameter int signed FORGE_ALPHA = 32'sd65536,   // 1.0, opaque
+  // The draw's semantic weight, which MATERIAL.RESOLVE ECHOES and reads
+  // nowhere -- a label travelling with its request, not a policy invented here.
+  parameter logic [7:0] FORGE_QUALITY_TIER = 8'd128,
+  // `zhao_geom_clip`'s cull mode for a forge primitive. ZERO = no culling, and
+  // that is the authored choice rather than a default: a ribbon is a two-sided
+  // sheet and a bolt seen from behind must still draw. `zref::raster_state`'s
+  // own numbering.
+  parameter logic [1:0] FORGE_CULL_MODE = 2'd0,
+  // `DrawProcedural` carries NO viewport_mask -- the only draw in the ABI that
+  // does not. So the command asserts BOTH views and the PAGE's own `view_mask`
+  // governs alone, which is where `zref_forge_page.hpp` puts it. This is a
+  // named constant rather than a literal because it is a statement about the
+  // command surface, and the day DrawProcedural grows a mask it is the line
+  // that changes.
+  parameter logic [1:0] FORGE_CMD_VIEW_MASK = 2'b11,
+
+  // ---- FORGE.CLIFF, composed 2026-09-25 (CLIFFPROD) ----------------------
+  // Every one of these is a KNOB rather than a literal, because each decides
+  // something that gets DRAWN, and CLAUDE.md's art law is explicit: never
+  // remove the owner's control in the name of fidelity -- every shape, colour
+  // and timing value belongs in a named, editable constant.
+  //
+  // THE ONE-CELL HALO. The 34x34 window needs the border cells of the FOUR
+  // NEIGHBOURING patches, and the compose cache stages exactly ONE patch, so
+  // no neighbour is reachable -- the 5-bit cell address cannot even express
+  // one. 2'd0 = SOLID (spec/terrain_rules.md 3.3) suppresses the rim at a
+  // patch seam; 2'd1 = VOID would emit a wall around every patch's whole
+  // perimeter -- 128 spurious edges per page against a budget of 512, a
+  // visible grid of walls along every interior seam. See
+  // `zhao_forge_cliff_feed.sv` DECISION RECORD 2 for the argument and for the
+  // island-directory route that supersedes this the day the fill side
+  // publishes a patch coordinate.
+  parameter logic [1:0] CLIFF_HALO_SUBSTANCE = 2'd0,
+
+  // THE PRIORITY DEGRADE'S NEARNESS INPUT IS OFF, and that is a decision with
+  // a reason rather than a tie-off. `vdist` is per-vertex nearness, Q16.16
+  // 1/w (zref_terrain.hpp:414), and NO per-lattice-vertex 1/w store exists
+  // anywhere in fpga/rtl -- re-measured 2026-09-25. The VALUE is computed
+  // (`zhao_project_core.out_d_o`, that exact format) and is even stored per
+  // vertex in `zhao_vertex_arena`'s payload bits [73:42] -- but the index
+  // there is a GROUP-LOCAL 9x9 window slot, not `vj*lat_w + vi`. Recovering
+  // the lattice index needs new ports on `zhao_proj_subsystem` and
+  // `zhao_terrain_group_seq`, and the fill fires ONCE PER VIEW into a
+  // different arena, so a naive store would be written twice with two
+  // different values for one vertex.
+  //
+  // With this LOW the evaluator never asserts `vd_en_o` at all -- ASSERTED,
+  // in forge_cliff_chain lane 6, not argued -- and the degrade falls back to
+  // the reference's OWN null-vdist path, which terrain_rules.md 5 defines as
+  // priority 0 everywhere, i.e. keep scan order under a stable sort. It
+  // changes nothing until a page is still over 512 edges AFTER merging. Turn
+  // it on the day the store exists; the port is wired, not tied.
+  parameter logic CLIFF_VDIST_EN = 1'b0,
+
+  // The owner's off switch for the whole cliff path.
+  parameter logic CLIFF_ARM = 1'b1,
+
+  // The material stamped on every wall triple, paired with the mode below.
+  // `zhao_material_window.sv:354` REFUSES MATMODE_NONE (2'd1) against a
+  // non-zero {set, id}, so these two move together or neither moves.
+  parameter logic [15:0] CLIFF_MATERIAL_ID = 16'd0,
+  parameter logic [ 1:0] CLIFF_MATERIAL_MODE = 2'd1,
+  parameter logic [ 7:0] CLIFF_VERTEX_ALPHA = 8'hFF,
+  // Plain opaque write, z-tested, as FORGE.PRIM's is. A wall is solid
+  // geometry, not a blended overlay.
+  parameter logic [31:0] CLIFF_FRAG_STATE = 32'd0,
+  // The flat art lanes the wall is shaded with -- darker than FORGE.PRIM's,
+  // because a cliff face is a shadowed vertical, not a lit top. AUTHORED BY
+  // EYE against the terrain's own lighting and expected to be adjusted once
+  // somebody looks at a frame: that loop is the job, and these are the three
+  // numbers it turns.
+  parameter logic signed [31:0] CLIFF_LIT_R = 32'sd36044,  // 0.55
+  parameter logic signed [31:0] CLIFF_LIT_G = 32'sd34406,  // 0.525
+  parameter logic signed [31:0] CLIFF_LIT_B = 32'sd32768,  // 0.50
+  parameter logic signed [31:0] CLIFF_ALPHA = 32'sd65536,  // 1.0, opaque
+  // A background producer: it degrades first when the governor sheds work.
+  parameter logic [7:0] CLIFF_QUALITY_TIER = 8'd16,
+  // No culling, for FORGE_CULL_MODE's own reason: a wall's outward sense
+  // comes from the reference's A-before-B endpoint order, and a seam seen
+  // from the wrong side must still draw rather than vanish.
+  parameter logic [1:0] CLIFF_CULL_MODE = 2'd0,
+
   parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
+  // ---- THE MATERIAL-MODE DECLARATIONS (owner ruling 1, 2026-09-22) --------
+  // `zhao_material_window`'s MATMODE_BACKED_C is 2'd0 and MATMODE_NONE_C is
+  // 2'd1. These two are R48-shaped NAMED SEAMS in the same sense
+  // `GEOM_REPLAY_UNTEX_DECL` is: MATERIAL_BACKED is the TRUE value for both
+  // producers, not a default that happened to be right. Every mesh triangle
+  // carries `{rp_o_material_set, rp_o_material}` from its own meshlet and
+  // every forge primitive carries `{fa_o_material_set, fa_o_material_id}` from
+  // its own page, and both expect resolution.
+  //
+  // PART.CLIPFEED's declaration is deliberately NOT here. A producer's mode is
+  // the producer's, and a third constant at this composer would be the
+  // inferred mode owner ruling 1 forbids -- so it comes off
+  // `pcf_o_material_mode`, which the block itself drives.
+  parameter logic [1:0] GEOM_REPLAY_MATERIAL_MODE = 2'd0,
+  parameter logic [1:0] FORGE_MATERIAL_MODE       = 2'd0,
+
+  // ---- THE PER-PRIMITIVE RASTER DECLARATIONS (SHADOWRIDE, 2026-09-23) -----
+  // R89 routes a shadow's flat alpha down `tri_continuation_tail_i`'s
+  // `vertex_alpha` to `zhao_raster_blend_prod.a_i`. THAT IS NECESSARY AND NOT
+  // SUFFICIENT, and the missing half is the reason these are two constants and
+  // not one: `zhao_raster_blend_fin`'s BL_REPLACE arm returns `src_i` and
+  // THROWS THE PRODUCT AWAY (`zhao_raster_blend_fin.sv:42`), so an alpha
+  // delivered under the default raster state changes not one pixel. A shadow
+  // needs BLEND=ALPHA as well, and the blend mode lives in the raster state
+  // word's `[4:3]` -- `tri_fragment_state_i`, entry I20's other half.
+  //
+  // THE MESH AND PARTICLE PROFILES ARE THE FRAME DEFAULT SAID OUT LOUD.
+  // Opaque, and state zero, which `zhao_raster_fragment.sv:214` defines as
+  // "the plain opaque write: depth test off, depth written, blend REPLACE, no
+  // alpha test, stencil ALWAYS + REPLACE, tag written from the packet". That
+  // is what every triangle in this console has always been drawn under; these
+  // constants change nothing about it and make it a producer's declaration
+  // rather than a boundary word nobody named.
+  parameter logic [ 7:0] GEOM_REPLAY_VERTEX_ALPHA = 8'hFF,
+  parameter logic [31:0] GEOM_REPLAY_FRAG_STATE   = 32'd0,
+  parameter logic [ 7:0] PART_VERTEX_ALPHA        = 8'hFF,
+  parameter logic [31:0] PART_FRAG_STATE          = 32'd0,
+  parameter logic [ 7:0] FORGE_VERTEX_ALPHA       = 8'hFF,
+  parameter logic [31:0] FORGE_FRAG_STATE         = 32'd0,
+
+  // ---- FORGE.SHADOW's OWN ART, and all of it is a knob --------------------
+  // OWNER RULING R133 D-FORGESHADOW-A, "accepted as recommended": a caster's
+  // `cast_strength_i` comes "from a named constant at composition". This is
+  // that constant. It is a unit8, so the value is raw/256 and 255 is the
+  // largest representable rather than 1.0 -- 0x60 is about 37 % opacity.
+  //
+  // ITS CORRECTNESS IS A LOOK-GATE AND NOTHING HERE DECIDES IT. The contract
+  // is explicit: "a creature walking across flat ground, a slope, a cliff edge
+  // and a breach, at 240p, watched in motion. A contact shadow either sells
+  // the contact or it does not, and no measurement decides that." So this is
+  // a starting point somebody adjusts by looking, which is why it is one
+  // named parameter and not a derived expression.
+  parameter logic [7:0] SHADOW_STRENGTH = 8'h60,
+  // THE SAME VALUE IN THE OTHER FORMAT, for attribute slot 6. The slot has no
+  // interpolator (`zhao_geom_attrpack` publishes six planes and slot 6 is the
+  // seventh), which is exactly why R89 routed the real alpha down the
+  // continuation tail instead -- so this carries the same number rather than a
+  // second opinion about it. fx16: 0x60/256 * 65536 = 0x6000.
+  parameter logic signed [31:0] SHADOW_ART_ALPHA = 32'sh0000_6000,
+  // THE HULL'S COLOUR. Near-black rather than black: a pure-black shadow reads
+  // as a hole in the ground rather than as shade, and at 240p under one key
+  // light the difference is visible. ART, so it is three knobs.
+  parameter logic signed [31:0] SHADOW_LIT_R = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_G = 32'sh0000_1800,
+  parameter logic signed [31:0] SHADOW_LIT_B = 32'sh0000_2000,
+  // BLEND=ALPHA in [4:3], Z_TEST_EN in [0], Z_WRITE_DIS in [1]. The blend is
+  // what makes the hull transparent at all; the depth test keeps it behind
+  // whatever stands in front of it; and Z_WRITE_DIS is there because a
+  // transparent primitive that writes depth occludes everything drawn after
+  // it, which would be a shadow that erased its own creature.
+  parameter logic [31:0] SHADOW_FRAG_STATE = 32'h0000_000B,
+  // A shadow is a BACKGROUND producer (the contract's backpressure rule), so
+  // it declares the LOWEST semantic weight: if the Measure policy ever degrades
+  // by tier, hulls go first.
+  parameter logic [7:0] SHADOW_QUALITY_TIER = 8'd0,
+  // NO CULLING. A ground-conforming hull can be seen from either side at a
+  // cliff edge, and a winding law inherited from the ring's emission order is
+  // not something to bet a disappearing shadow on.
+  parameter logic [1:0] SHADOW_CULL_MODE = 2'd0,
+  // MATMODE_NONE. A shadow hull has no material record and takes no texture
+  // sample; `zhao_material_window`'s `mode_contra_c` REFUSES this mode paired
+  // with a non-zero {set, id}, which is why the pair beside it is zero, and
+  // R197's door at GEOM.CLIP's input admits an untextured primitive only under
+  // a zero-sample material -- which is what a MATMODE_NONE span publishes.
+  parameter logic [1:0] SHADOW_MATERIAL_MODE = 2'd1,
+  // WHICH SURFACE A SHADOW LANDS ON. `zhao_terrain_heighttap.sv:173` defines
+  // it: "0 = the top surface (the ground a shadow lands on), 1 = the bottom".
+  // The block's own words, so this is a citation and not a choice -- and it is
+  // a named constant because the day a keel-mounted creature wants the other
+  // one, this is the line.
+  parameter logic TERRAIN_TAP_SHADOW_SURFACE = 1'b0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -184,9 +416,45 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
   parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
   parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
+  // THE GOURAUD SLOTS (owner decision R234 D1, 2026-09-21). GEOM.VATTR writes
+  // these three from `zhao_light_stream`; GEOM.CLIP winding-flips them with the
+  // corners; GEOM.ATTRPACK now turns them into three more interpolation planes
+  // instead of dropping them. See that block's `tri_attr_a_i` waiver.
   parameter int unsigned GEOM_ATTR_SLOT_R        = 3,
   parameter int unsigned GEOM_ATTR_SLOT_G        = 4,
   parameter int unsigned GEOM_ATTR_SLOT_B        = 5,
+  // THE SEVENTH SLOT, NAMED 2026-09-21 (FORGECOMP). It was the only one of the
+  // ruling-5 packet's seven with no parameter here, which read as though the
+  // packet were six wide plus a spare. It is not: `zhao_geom_replay`'s own
+  // ATTRW comment enumerates the attribute store as "(u_over_w, v_over_w, r,
+  // g, b, alpha)" and GEOM_ATTR_STORE_W is (GEOM_CLIP_ATTRS - 1) * 32, so slot
+  // 6 is ALPHA and always was. Naming it is not a change; it is the end of a
+  // reader having to derive it.
+  parameter int unsigned GEOM_ATTR_SLOT_ALPHA    = 6,
+  // A POLYGON PARTICLE'S ALPHA (owner ruling 1, 2026-09-22). AN ART VALUE, so
+  // it is a named editable constant and not a derived quantity (CLAUDE.md
+  // rule 6). `draw_population`'s tris branch calls `raster_tri` with three
+  // colour bytes and no alpha at all, so opaque is the reference's own
+  // behaviour; the day particles want to fade, this is the line that changes.
+  // Q16.16, matching FORGE_ALPHA's convention.
+  parameter int signed PART_ALPHA = 32'sd65536,   // 1.0, opaque
+
+  // ---- I13: TERRAIN.CLIPFEED's two operand identities (CARRIAGE) ----------
+  // NEITHER IS A PLAUSIBLE VALUE CHOSEN AT A COMPOSER, which is the only
+  // reason they are allowed to be constants at all.
+  //
+  // `TERR_TINT_IDENTITY` is layer H's RATIFIED ABSENT IDENTITY. RGB565 0xFFFF
+  // is what `cell_tint` defaults to when no tint layer is authored, and it is
+  // exactly 65536 in Q16.16. `spec/terrain_rules.md` 6.5 makes the tint
+  // PER-VERTEX, so when layer H is authored these nine driver wires change and
+  // no RTL does -- `u_terrain_clipfeed` walks all nine operand triples today.
+  //
+  // `TERR_SHEET_IDENTITY` is unity because the surface sheet is ALREADY
+  // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
+  // with a pixel behind it). A second application at the vertex would be a
+  // second home for one law.
+  parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
+  parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -196,6 +464,16 @@ module zhao_console_core_slot_overflow_mutant
   // TERRAIN.TESS's own window index: 81 vertices need 7 bits. The sequencer
   // widens it to PROJ_T_INDEX_W, which carries a refusal bit beside it.
   parameter int unsigned PROJ_T_IDX_W  = 7,
+  // THE SHELL'S VALIDITY MODE, AND IT IS ONE NUMBER WITH TWO CONSUMERS.
+  // Owner ruling 2026-09-22 item 5: "Make the normal configuration explicit
+  // and derived from the actual arena validity mode." It reaches
+  // `zhao_proj_subsystem` (which hands it to the arenas and the shell) AND
+  // `zhao_terrain_group_seq` (which decides whether the sparse-fill knob is
+  // honoured or refused). Before this parameter existed both took the value 1
+  // from their OWN defaults and neither knew the other's -- two constants that
+  // agreed by coincidence. 1 = dense seal, so sparse fill is REFUSED and
+  // counted in this composition, which is the ruling's answer for it.
+  parameter int unsigned PROJ_T_VALID_MODE = 1,
 
   // ---- COMPOSITOR ----------------------------------------------------------
   parameter int unsigned POST_LINE_W   = 384,     // Z60 is the widest view
@@ -850,25 +1128,36 @@ module zhao_console_core_slot_overflow_mutant
   //                          share BROADCASTS beat data and demuxes only
   //                          `beat_valid`, so this is what sees a wrong demux
   //                          delivering another client's bytes.
-  //   geom_pa_unaligned_o    ADDED 2026-09-23, and it is the one detector here
-  //   geom_pw_unaligned_o    whose SILENCE IN SIMULATION IS GUARANTEED
-  //                          WHATEVER THE DESIGN DOES. A JEDEC BL8 sequential
-  //                          burst wraps inside its aligned eight-column (16
-  //                          byte) block; `zhao_vram_arbiter` chops to
-  //                          min(rem, 8, row_tail) and so aligns only to the
-  //                          2048-word ROW; and the behavioural SDRAM model
-  //                          reads and writes LINEARLY. So a misaligned
-  //                          request is served CORRECTLY here and WRONGLY by
-  //                          the part, and no functional test in this tree can
-  //                          fail on it in either polarity. These two count
-  //                          the invariant instead: every clock either block
-  //                          offers the guard an address that is not a
-  //                          multiple of the quantum. The arena's is
-  //                          unreachable with legal stimulus and owes
+  //   geom_pa_unaligned_o    ADDED 2026-09-23. When they were added they were
+  //   geom_pw_unaligned_o    described here as "the one detector whose SILENCE
+  //                          IN SIMULATION IS GUARANTEED WHATEVER THE DESIGN
+  //                          DOES", because `zhao_vram_arbiter` chopped to
+  //                          min(rem, 8, row_tail) -- aligning to the 2048-word
+  //                          ROW and to nothing finer -- while the behavioural
+  //                          SDRAM model read and wrote LINEARLY, so a
+  //                          misaligned request was served CORRECTLY in
+  //                          simulation and WRONGLY by the part.
+  //
+  //                          THAT IS NO LONGER TRUE, AND IT IS THE SAME DAY'S
+  //                          WORK. Owner ruling R243 / D-SDRAM-A repaired the
+  //                          INSTRUMENT first and the design second: the model
+  //                          now wraps inside the aligned eight-column block
+  //                          (`bl8_col`) and the arbiter now CLAMPS to that
+  //                          block (`blk_tail = 8 - col[2:0]`), so a burst can
+  //                          no longer cross it whatever address a client
+  //                          supplies, and a breach would be a FUNCTIONAL
+  //                          failure rather than an invisible one.
+  //
+  //                          So these two now count a PERFORMANCE property --
+  //                          a misaligned request costs one extra burst -- not
+  //                          the last line of defence. They are kept, with
+  //                          their controls: the arena's is unreachable with
+  //                          legal stimulus and owes
   //                          tests/mutants/zhao_geom_paramarena_align_mutant.sv;
   //                          the walker's is reachable, because it is TOLD its
   //                          bases on `pub_*_base_i` rather than computing
-  //                          them.
+  //                          them. The block clamp's own control is
+  //                          tests/mutants/zhao_vram_arbiter_blkalign_mutant.sv.
   //
   // Each of these is asserted ZERO by the smoke, and a counter asserted zero
   // is a claim. The ones reachable with legal stimulus are fired by
@@ -878,9 +1167,14 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_pa_verts_o,
   output logic [31:0] geom_pa_tris_o,
   output logic [31:0] geom_pa_chunks_o,
-  // BINARENA, 2026-09-26, console entry I55: the arena's chain-patch
-  // counters. This is a WRAPPER over production, connected with `.*`, so a
-  // port the core gains must appear here or the wrapper stops elaborating.
+  // BINARENA, 2026-09-26, console entry I55: the chain patch's two counters.
+  // `geom_pa_links_o` counts header rewrites that reached SDRAM;
+  // `geom_pa_link_bad_o` counts patches refused for naming a chunk the
+  // allocation cursor has not reached. Both read zero in this composition
+  // because nothing offers a patch, and both are brought OUT anyway -- a
+  // counter that cannot be read is not evidence about anything, including
+  // about being zero. The second is fired with legal stimulus in
+  // geom_arenabin_directed case 3, so neither owes a committed mutant.
   output logic [31:0] geom_pa_links_o,
   output logic [31:0] geom_pa_link_bad_o,
   output logic [31:0] geom_pa_frames_o,
@@ -899,8 +1193,29 @@ module zhao_console_core_slot_overflow_mutant
   output logic        geom_pa_fault_o,
   output logic        geom_pa_busy_o,
   output logic        geom_pa_seal_ready_o,
-  // GEOM.VERTID's evidence (ARENAID 2026-09-25). Carried into the wrapper so
-  // `.*` can bind it -- owner ruling R220: fix the WRAPPER, never the module.
+  // ---- MEASURE.SEALPLAN's evidence (entry I56) ---------------------------
+  // Every one of these has been seen to fire in
+  // `tests/measure/measure_sealplan_directed.cpp`. They leave the core rather
+  // than terminating in a wire named `_unused`, which is the shape entry I56
+  // itself records the shell committing with six binner counters.
+  output logic [31:0] seal_plans_staged_o,
+  output logic [31:0] seal_plans_sealed_o,
+  output logic [31:0] seal_plans_refused_o,
+  output logic [ 7:0] seal_refuse_reason_o,
+  output logic [31:0] seal_default_seals_o,
+  output logic [31:0] seal_lost_o,
+  output logic [31:0] seal_giant_mismatch_o,
+  output logic [31:0] seal_draws_seen_o,
+  output logic [31:0] seal_plans_forwarded_o,
+  output logic [31:0] seal_plans_malformed_o,
+  output logic [17:0] geom_pa_giant_chunks_o,
+  output logic [17:0] geom_pa_giant_refs_o,
+  output logic [31:0] geom_pa_reserve_breach_o,
+  // ---- GEOM.VERTID, the one geometry identity space (ARENAID, directive 4) --
+  // `geom_vid_reused_o` is the number this whole subsystem exists for: a
+  // corner answered from the identity map, i.e. a vertex published ONCE and
+  // referenced again. `refs == published + reused + sunk` is the identity that
+  // makes the group readable together, and the smoke asserts it.
   output logic [31:0] geom_vid_tris_o,
   output logic [31:0] geom_vid_refs_o,
   output logic [31:0] geom_vid_published_o,
@@ -909,12 +1224,18 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_vid_sunk_o,
   output logic [31:0] geom_vid_opens_o,
   output logic [31:0] geom_vid_stall_o,
-  // Entry I54, 2026-09-26. This wrapper replicates the core's port
-  // list and binds with `.*`, so a port the core gains is a port this
-  // file must gain or the whole bench stops elaborating.
+  // ---- I54: the chunk serialiser and the identity queue that feeds it ------
+  // `geom_tidq_*` measure the rejoin between GEOM.VERTID's descriptor index and
+  // the triangle it belongs to. On a frame whose ids are sound all three read
+  // ZERO -- and a counter asserted zero is a claim, so each is fired
+  // deliberately by `geom_chunkser_directed` rather than quoted silent.
   output logic [31:0] geom_tidq_underflow_o,
   output logic [31:0] geom_tidq_overflow_o,
   output logic [31:0] geom_tidq_unnamed_o,
+  // `geom_cs_chain_break_o` is the one that would see a chunk chain whose
+  // `next` stopped naming the chunk that follows it. `geom_cs_head_chunk_o` is
+  // what a walk starts FROM: entry I55's consumer reads it, and until that
+  // lands it is the evidence that the heads were placed at all.
   output logic [31:0] geom_cs_chunks_o,
   output logic [31:0] geom_cs_refs_o,
   output logic [31:0] geom_cs_tiles_o,
@@ -1711,10 +2032,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             fld_earth_not_begun_o,
   output logic [31:0]             fld_earth_noprog_o,
   output logic [31:0]             fld_earth_faults_o,
-  // NEW 2026-09-23 (PATCHV2). This wrapper binds the production core with
-  // `.*`, so a core port with no wrapper port of the same name is a bind
-  // failure rather than a silent stale control -- which is this file's own
-  // stated reason for being a wrapper and not a copy.
+  //   `fld_earth_short_record_o` is R168's arm on THIS record, NEW 2026-09-23
+  //   (PATCHV2): a run the host called OK that returned fewer than the four
+  //   canonical Earth ordinals. It is not a fault -- section 13.3 rules an
+  //   absent optional lane legitimate -- and it is not silence either, which is
+  //   the whole reason it is a port. A future `zhao_terrain_patch_v2` reducing
+  //   material off a stream of short records would be reducing HOLES, and this
+  //   is the only number that could say so.
   output logic [31:0]             fld_earth_short_record_o,
   output logic [31:0]             fld_earth_lane_desync_o,
   output logic [31:0]             fld_earth_stall_cycles_o,
@@ -1815,8 +2139,11 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_pt_samples_o,
   output logic [15:0]             terr_pt_subpatch_dirty_o,
   output logic                    terr_pt_idle_o,
-  // TERRAIN.VELJOIN + TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL). These
-  // are here because this wrapper connects the core with `.*`.
+
+  // TERRAIN.VELJOIN and TERRAIN.VELOCITY, composed 2026-09-26 (TERRVEL).
+  // A counter nobody outside the core can read is not evidence, so the
+  // interlock and the sweep census leave the module edge like every other
+  // terrain census here.
   output logic [31:0]             terr_vj_lanes_joined_o,
   output logic [31:0]             terr_vj_sweeps_started_o,
   output logic [31:0]             terr_vj_sweeps_aborted_o,
@@ -1826,6 +2153,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_tv_add_sats_o,
   output logic [31:0]             terr_tv_rescale_sats_o,
   output logic [15:0]             terr_tv_moving_mask_o,
+  // The velocity chain's CONSUMER-side numbers. These are the ones that say
+  // the lattice was READ, as opposed to computed: the first counts terrain
+  // samples whose interpolated ground rate was non-zero, the last counts
+  // particle contacts actually RESOLVED against moving ground.
   output logic [31:0]             part_ter_moving_o,
   output logic [31:0]             part_ter_vel_sats_o,
   output logic [31:0]             part_col_moving_ground_o,
@@ -1935,11 +2266,16 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_hps_c5_wait_cycles_o,
   output logic [31:0]             terr_hps_c6_bursts_o,
   output logic [31:0]             terr_hps_c6_wait_cycles_o,
+  // EIGHT CLIENTS SINCE 2026-09-25 (packet EDGECLOSE). Client 7 is
+  // `u_terrain_prepwalk`, the admitted-set PREPARE walker, re-reading the
+  // frame's SEALED LIST. It takes the HIGHEST index deliberately: the arbiter
+  // starves high indices first, and PREPARE is the one reader here whose
+  // failure mode is a COUNTED FALLBACK (`prep_valid_o` low, every edge back to
+  // the conservative constant) rather than a stalled page load or a program
+  // install that never completes. Its cost is +8 KiB/frame at T6's 256
+  // patches, on the HPS-DDR bridge -- a DIFFERENT socket from the local-SDRAM
+  // devstore reads, budgeted separately in `tools/budget/sdram_bandwidth.py`.
   output logic [31:0]             terr_hps_c7_bursts_o,
-  // ---- ENTRY I21's PRODUCER CHAIN, added 2026-09-25 (EDGECLOSE) --------
-  // The wrapper binds with `.*`, so these exist only so that the core's new
-  // counters have somewhere to land. Content-identical to the core's block;
-  // `tools/design/wrapper_port_parity.py` is what says so.
   output logic [31:0]             terr_hps_c7_wait_cycles_o,
 
   // ======================================================================
@@ -2168,7 +2504,14 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 
-  // ---- I13: the projector's TRIANGLE OUTPUT -------------------------------
+  // ---- I13: the projector's TRIANGLE OUTPUT -- RETIRED FROM THIS EDGE -----
+  // The triangle, its raw w and its layer-E triple are CONSUMED IN THIS MODULE
+  // as of 2026-09-26 (CARRIAGE): `u_terrain_clipfeed` takes them, converts the
+  // w to invw24, multiplies terrain's u/v through by it and offers the result
+  // at `u_geom_clipdoor` as the FOURTH client. They are no longer a boundary
+  // and no longer leave this module. `proj_out_refused_o` and
+  // `proj_out_missed_o` stay: they are EVIDENCE about the projector, not the
+  // triangle, and the console ports them out as it ports every other census.
   output logic                    proj_out_refused_o,
   output logic                    proj_out_missed_o,
 
@@ -2191,6 +2534,8 @@ module zhao_console_core_slot_overflow_mutant
   // replay arena carries no profile field and widening it is a change to
   // `zhao_vertex_arena`, not to a composer.
   output logic [1:0]              proj_a_profile_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): it is the depth profile
+  // `u_terrain_clipfeed` hands to its `zhao_geom_depthquant_stream`.
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -2214,6 +2559,10 @@ module zhao_console_core_slot_overflow_mutant
   // projector's own fill beat, the face normal is `zhao_terrain_normals` and
   // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
   // through `zhao_light_env` (R25). The consumer is I13's absent merge.
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the shade is consumed by
+  // `u_terrain_clipfeed` below, which clamps it by `shade_flat_tri`'s law and
+  // runs it through `zhao_terrain_shademod`'s five-rung ladder into GEOM.CLIP
+  // attribute slots 3..5. The counters below stay; they are evidence.
   output logic [31:0]             terr_light_refs_taken_o,
   output logic [31:0]             terr_light_emitted_o,
   output logic [31:0]             terr_light_stale_reads_o,
@@ -2222,9 +2571,29 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_light_degenerate_count_o,
   output logic [31:0]             terr_light_base_sat_o,
   output logic [31:0]             terr_light_degen_mismatch_o,
-  // TERRAIN.UV, added 2026-09-23. Wrapper parity only: `.*` cannot bind a
-  // port the wrapper does not declare, so the control would not elaborate.
-  // Ruling R220 -- fix the WRAPPER, never the module.
+
+  // ---- TERRAIN's TEXTURE COORDINATES: the per-corner u/v (terrain_rules 6.2)
+  // The OTHER half of the same packet, and the same kind of thing as the light
+  // above: a per-vertex quantity the projected arena does not carry, stored
+  // beside it on the projector's own fill beat and replayed with the triangle
+  // it belongs to, tagged with the same `src_id`. Entry I13 named terrain's
+  // u/v as one of the three CARRIAGE items blocking the textured profile and
+  // said the law "is FROZEN and computable" -- this is that law, produced.
+  // Q16.16 TILE units, which is exactly what `zhao_texture_mosaic_v2`'s
+  // `req_u_i`/`req_v_i` declare.
+  //
+  // THE CONSUMER IS THE SAME ABSENT ONE THE LIGHT WAITS FOR, and this edge
+  // says so rather than implying it: GEOM.CLIP's attribute slots 1 and 2 want
+  // u/w and v/w, so the multiply by invw belongs with terrain's `invw24`
+  // producer -- a fourth `zhao_geom_depthquant_stream` client and a `pack_attr`
+  // analogue -- which is I13's next link and is NOT built. These ports are the
+  // arrival point of that work, not a tie-off: the value is real, it traverses,
+  // and `tests/terrain/terrain_uvlane_directed.cpp` proves it against the
+  // frozen law two independent ways.
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the coordinates are consumed
+  // by `u_terrain_clipfeed`, which multiplies each by its corner's invw24
+  // through `zhao_geom_overw_sat` -- the S8.24 saturate `spec/qformats.md:75`
+  // mandates -- and fills slots 1 and 2 with the results.
   output logic [31:0]             terr_uv_refs_taken_o,
   output logic [31:0]             terr_uv_emitted_o,
   output logic [31:0]             terr_uv_stale_reads_o,
@@ -2232,10 +2601,22 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
+
+  // ---- I13: TERRAIN.CLIPFEED's census, 2026-09-26 (CARRIAGE) --------------
+  // `terr_cf_triangles_o` and `terr_cf_emitted_o` DISCRIMINATE (ruling R95): a
+  // block that accepted and never emitted shows the first climbing with the
+  // second pinned, which neither a stall nor a healthy run looks like.
   output logic [31:0]             terr_cf_triangles_o,
   output logic [31:0]             terr_cf_emitted_o,
+  // The three-way join disagreed about which triangle it holds. Its three
+  // operands are loaded by three different enables in three different blocks,
+  // so this comparison is not one of the blind ones.
   output logic [31:0]             terr_cf_src_mismatch_o,
+  // `zhao_geom_overw_sat`'s saturate ENGAGED: a patch past 128 tiles from the
+  // origin. That block holds no state and says the composer must count it.
   output logic [31:0]             terr_cf_uv_sat_o,
+  // The shade left the law's [0, 65536] domain and was clamped. NOT a fault --
+  // `zhao_terrain_shade` emits an unclamped value by design.
   output logic [31:0]             terr_cf_shade_clamped_o,
   output logic [31:0]             terr_cf_degenerate_o,
   output logic [31:0]             terr_cf_dq_refused_o,
@@ -2426,13 +2807,20 @@ module zhao_console_core_slot_overflow_mutant
   // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
   // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
   // as `tri_area2_i` and the three attribute planes were retired before it.
-  // `tri_continuation_tail_i` and `tri_fragment_state_i` were RETIRED from
-  // zhao_console_core's port list 2026-09-25 (FRAGSTATE, entry I20), so this
-  // WRAPPER dropped them with it. `tools/design/wrapper_port_parity.py` is what
-  // caught the two-port skew, and its own message is the rule: fix the wrapper,
-  // never the module (owner ruling R220). A wrapper that keeps a port the real
-  // module dropped cannot bind it even through `.*`, and the failure reads like
-  // a broken core rather than a stale copy.
+  //
+  // `tri_continuation_tail_i` AND `tri_fragment_state_i` LEFT THIS LIST
+  // 2026-09-25 (FRAGSTATE, entry I20), the last two of the PACKET-D ATTRIBUTE
+  // CARRIAGE's six. Both are built below from named owners:
+  //   the 32-bit state word   the MATERIAL's `fragment_state` when
+  //                           `fragment_decl` bit 0 declares it, else the
+  //                           PRODUCER's declaration at `u_geom_clipdoor`;
+  //   `vertex_alpha`          the published span's (owner ruling R89);
+  //   `effect_tag`            the MATERIAL's, default 0 per the owner directive;
+  //   `stencil_reference`     the MATERIAL's, default 0, inert under ALWAYS;
+  //   `vertex_rgb`            NOBODY's -- R234 D1 has the consumer overwrite it
+  //                           per fragment from the Gouraud lanes.
+  // There is no OR anywhere in that composition and no field has two owners at
+  // once; see the block beside `tri_continuation_tail_c`.
   input  logic         fill_req_ready_i,
   output logic         fill_req_valid_o,
   output logic [31:0]  fill_req_addr_o,
@@ -2440,12 +2828,15 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [15:0]  fill_data_i,
   input  logic         fill_refused_i,
   input  logic [63:0]  frame_clear_word_i,
-  // `sheet_req_*` LEFT `zhao_console_core`'s PORT LIST 2026-09-25
-  // (TERRAINAUX): the texture island's AUX read now lands on
-  // `u_surface_sheetshare`'s CLIENT C inside the core instead of
-  // dangling off the board. Six declarations removed from this WRAPPER
-  // so `.*` still binds -- owner ruling R220: fix the wrapper, never
-  // the module.
+  // `sheet_req_*` LEFT THIS LIST 2026-09-25 (TERRAINAUX). It was the composed
+  // texture island's AUX pipe asking SURFACE.SHEET for a layer-F byte, and it
+  // left the console -- and the BOARD -- as a dangling output group while
+  // `zhao_surface_sheet`, the store that answers it, was instantiated a few
+  // thousand lines below in THIS FILE. Its response half was TIED TO ZERO
+  // inside `zhao_shell_top_v2`. The loop is closed through
+  // `u_surface_sheetshare`'s CLIENT C; six ports left this list rather than
+  // being driven, and the arbitration lives in a file with a contract and a
+  // test, which is what entry I32 required of any second requester.
 
   // ---- PACKET-H: the video-domain barrier and echo ----------------------
   // `lease_open` is produced by zhao_video_ready_bridge_v2 and the two

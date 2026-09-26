@@ -157,6 +157,19 @@ module zhao_prod_top (
   logic [32-1:0] u01_forge_src_truncated_o;
   logic [32-1:0] u01_tfld_overflow_o;
   logic [32-1:0] u01_tfld_src_truncated_o;
+  logic [1-1:0] u01_plan_valid_o;
+  logic [8-1:0] u01_plan_view_o;
+  logic [8-1:0] u01_plan_flags_o;
+  logic [16-1:0] u01_plan_res_gen_o;
+  logic [16-1:0] u01_plan_view_gen_o;
+  logic [16-1:0] u01_plan_giant_inst_o;
+  logic [18-1:0] u01_plan_verts_o;
+  logic [18-1:0] u01_plan_tris_o;
+  logic [18-1:0] u01_plan_chunks_o;
+  logic [18-1:0] u01_plan_refs_o;
+  logic [18-1:0] u01_plan_giant_refs_o;
+  logic [32-1:0] u01_plans_forwarded_o;
+  logic [32-1:0] u01_plans_malformed_o;
   logic [1-1:0] u01_tok_budget_valid_o;
   logic [32-1:0] u01_tok_budget_geom0_o;
   logic [32-1:0] u01_tok_budget_geom1_o;
@@ -376,6 +389,19 @@ module zhao_prod_top (
       .forge_src_truncated_o(u01_forge_src_truncated_o),
       .tfld_overflow_o(u01_tfld_overflow_o),
       .tfld_src_truncated_o(u01_tfld_src_truncated_o),
+      .plan_valid_o(u01_plan_valid_o),
+      .plan_view_o(u01_plan_view_o),
+      .plan_flags_o(u01_plan_flags_o),
+      .plan_res_gen_o(u01_plan_res_gen_o),
+      .plan_view_gen_o(u01_plan_view_gen_o),
+      .plan_giant_inst_o(u01_plan_giant_inst_o),
+      .plan_verts_o(u01_plan_verts_o),
+      .plan_tris_o(u01_plan_tris_o),
+      .plan_chunks_o(u01_plan_chunks_o),
+      .plan_refs_o(u01_plan_refs_o),
+      .plan_giant_refs_o(u01_plan_giant_refs_o),
+      .plans_forwarded_o(u01_plans_forwarded_o),
+      .plans_malformed_o(u01_plans_malformed_o),
       .tok_budget_valid_o(u01_tok_budget_valid_o),
       .tok_budget_geom0_o(u01_tok_budget_geom0_o),
       .tok_budget_geom1_o(u01_tok_budget_geom1_o),
@@ -497,7 +523,7 @@ module zhao_prod_top (
   logic u01_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u01_fold_q <= 1'b0;
-    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_draw_valid_o)) & u01_src[15]) ^ (((^u01_draw_form_o)) & u01_src[16]) ^ (((^u01_draw_material_set_o)) & u01_src[17]) ^ (((^u01_draw_transform_o)) & u01_src[18]) ^ (((^u01_draw_viewport_mask_o)) & u01_src[19]) ^ (((^u01_draw_semantic_weight_o)) & u01_src[20]) ^ (((^u01_draw_flags_o)) & u01_src[21]) ^ (((^u01_draw_src_id_o)) & u01_src[22]) ^ (((^u01_draw_posed_o)) & u01_src[23]) ^ (((^u01_draw_clip_id_o)) & u01_src[24]) ^ (((^u01_draw_frame_no_o)) & u01_src[25]) ^ (((^u01_draw_sub_o)) & u01_src[26]) ^ (((^u01_draw_warp_en_o)) & u01_src[27]) ^ (((^u01_draw_warp_program_o)) & u01_src[28]) ^ (((^u01_draw_warp_time_o)) & u01_src[29]) ^ (((^u01_draw_warp_par_o)) & u01_src[30]) ^ (((^u01_draw_warp_attr_o)) & u01_src[31]) ^ (((^u01_draw_warp_attr_res_o)) & u01_src[32]) ^ (((^u01_draw_warp_attr_mode_o)) & u01_src[33]) ^ (((^u01_draw_warp_bx_o)) & u01_src[34]) ^ (((^u01_draw_warp_by_o)) & u01_src[35]) ^ (((^u01_draw_warp_bz_o)) & u01_src[36]) ^ (((^u01_upl_valid_o)) & u01_src[37]) ^ (((^u01_upl_index_o)) & u01_src[38]) ^ (((^u01_upl_kind_o)) & u01_src[39]) ^ (((^u01_upl_hps_addr_o)) & u01_src[40]) ^ (((^u01_upl_vram_addr_o)) & u01_src[41]) ^ (((^u01_upl_len_o)) & u01_src[42]) ^ (((^u01_upl_epoch_o)) & u01_src[43]) ^ (((^u01_upl_dst_slot_o)) & u01_src[44]) ^ (((^u01_upl_new_gen_o)) & u01_src[45]) ^ (((^u01_upl_crc_o)) & u01_src[46]) ^ (((^u01_env_valid_o)) & u01_src[47]) ^ (((^u01_env_sun_yaw_o)) & u01_src[48]) ^ (((^u01_env_sun_pitch_o)) & u01_src[49]) ^ (((^u01_env_sun_colour_o)) & u01_src[50]) ^ (((^u01_env_ambient_o)) & u01_src[51]) ^ (((^u01_envs_issued_o)) & u01_src[52]) ^ (((^u01_pop_valid_o)) & u01_src[53]) ^ (((^u01_pop_population_o)) & u01_src[54]) ^ (((^u01_pop_origin_x_o)) & u01_src[55]) ^ (((^u01_pop_origin_y_o)) & u01_src[56]) ^ (((^u01_pop_origin_z_o)) & u01_src[57]) ^ (((^u01_pop_active_count_o)) & u01_src[58]) ^ (((^u01_pop_plane_c_o)) & u01_src[59]) ^ (((^u01_pop_plane_nx_o)) & u01_src[60]) ^ (((^u01_pop_plane_ny_o)) & u01_src[61]) ^ (((^u01_pop_plane_nz_o)) & u01_src[62]) ^ (((^u01_pop_flags_o)) & u01_src[63]) ^ (((^u01_pops_issued_o)) & u01_src[64]) ^ (((^u01_tfld_valid_o)) & u01_src[65]) ^ (((^u01_tfld_x0_o)) & u01_src[66]) ^ (((^u01_tfld_z0_o)) & u01_src[67]) ^ (((^u01_tfld_x1_o)) & u01_src[68]) ^ (((^u01_tfld_z1_o)) & u01_src[69]) ^ (((^u01_tfld_handle_o)) & u01_src[70]) ^ (((^u01_tfld_cmd_o)) & u01_src[71]) ^ (((^u01_tfld_start_tick_o)) & u01_src[72]) ^ (((^u01_tfld_duration_o)) & u01_src[73]) ^ (((^u01_tfld_params_o)) & u01_src[74]) ^ (((^u01_tfld_last_o)) & u01_src[75]) ^ (((^u01_tflds_issued_o)) & u01_src[76]) ^ (((^u01_forge_valid_o)) & u01_src[77]) ^ (((^u01_forge_program_o)) & u01_src[78]) ^ (((^u01_forge_material_o)) & u01_src[79]) ^ (((^u01_forge_material_id_o)) & u01_src[80]) ^ (((^u01_forge_kind_o)) & u01_src[81]) ^ (((^u01_forge_frame_tick_o)) & u01_src[82]) ^ (((^u01_forge_src_id_o)) & u01_src[83]) ^ (((^u01_forges_issued_o)) & u01_src[84]) ^ (((^u01_forge_overflow_o)) & u01_src[85]) ^ (((^u01_forge_src_truncated_o)) & u01_src[86]) ^ (((^u01_tfld_overflow_o)) & u01_src[87]) ^ (((^u01_tfld_src_truncated_o)) & u01_src[88]) ^ (((^u01_tok_budget_valid_o)) & u01_src[89]) ^ (((^u01_tok_budget_geom0_o)) & u01_src[90]) ^ (((^u01_tok_budget_geom1_o)) & u01_src[91]) ^ (((^u01_tok_budget_frag0_o)) & u01_src[92]) ^ (((^u01_tok_budget_frag1_o)) & u01_src[93]) ^ (((^u01_tok_budget_shared_o)) & u01_src[94]) ^ (((^u01_tok_vreq_valid_o)) & u01_src[95]) ^ (((^u01_tok_vreq_view_o)) & u01_src[96]) ^ (((^u01_tok_vreq_geom_o)) & u01_src[97]) ^ (((^u01_tok_vreq_frag_o)) & u01_src[98]) ^ (((^u01_contracts_applied_o)) & u01_src[99]) ^ (((^u01_gov_view_count_o)) & u01_src[100]) ^ (((^u01_gov_px_err0_o)) & u01_src[101]) ^ (((^u01_gov_px_err1_o)) & u01_src[102]) ^ (((^u01_view_count_refused_o)) & u01_src[103]) ^ (((^u01_post_look_busy_o)) & u01_src[104]) ^ (((^u01_post_bloom_gain_o)) & u01_src[105]) ^ (((^u01_post_grade_valid_o)) & u01_src[106]) ^ (((^u01_post_echo_arm_o)) & u01_src[107]) ^ (((^u01_post_bias_r_o)) & u01_src[108]) ^ (((^u01_post_bias_g_o)) & u01_src[109]) ^ (((^u01_post_bias_b_o)) & u01_src[110]) ^ (((^u01_post_flash_rgb_o)) & u01_src[111]) ^ (((^u01_post_flash_amt_o)) & u01_src[112]) ^ (((^u01_post_ink_rgb_o)) & u01_src[113]) ^ (((^u01_post_pv_we_o)) & u01_src[114]) ^ (((^u01_post_pv_sel_o)) & u01_src[115]) ^ (((^u01_post_pv_addr_o)) & u01_src[116]) ^ (((^u01_post_pv_data_o)) & u01_src[117]) ^ (((^u01_dbg_trace_arm_we_o)) & u01_src[118]) ^ (((^u01_dbg_trace_arm_mask_o)) & u01_src[119]) ^ (((^u01_dbg_trace_clear_o)) & u01_src[120]) ^ (((^u01_packets_committed_o)) & u01_src[121]) ^ (((^u01_packets_abandoned_o)) & u01_src[122]) ^ (((^u01_views_written_o)) & u01_src[123]) ^ (((^u01_stamps_issued_o)) & u01_src[124]) ^ (((^u01_stamp_overflow_o)) & u01_src[125]) ^ (((^u01_view_range_refused_o)) & u01_src[126]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[127]) ^ (((^u01_draws_issued_o)) & u01_src[128]) ^ (((^u01_draw_overflow_o)) & u01_src[129]) ^ (((^u01_draw_src_truncated_o)) & u01_src[130]) ^ (((^u01_posed_draws_issued_o)) & u01_src[131]) ^ (((^u01_pose_clip_refused_o)) & u01_src[132]) ^ (((^u01_warp_draws_issued_o)) & u01_src[133]) ^ (((^u01_warp_draw_refused_o)) & u01_src[134]) ^ (((^u01_uploads_issued_o)) & u01_src[135]) ^ (((^u01_upload_overflow_o)) & u01_src[136]) ^ (((^u01_post_looks_applied_o)) & u01_src[137]) ^ (((^u01_grade_entries_written_o)) & u01_src[138]) ^ (((^u01_post_refused_o)) & u01_src[139]) ^ (((^u01_grade_overflow_o)) & u01_src[140]) ^ (((^u01_trace_arms_applied_o)) & u01_src[141]) ^ (((^u01_trace_arm_refused_o)) & u01_src[142]) ^ (((^u01_viewport_range_refused_o)) & u01_src[143]) ^ (((^u01_tpl_valid_o)) & u01_src[144]) ^ (((^u01_tpl_slot_o)) & u01_src[145]) ^ (((^u01_tpl_role_o)) & u01_src[146]) ^ (((^u01_tpl_blend_o)) & u01_src[147]) ^ (((^u01_tpl_opacity_o)) & u01_src[148]) ^ (((^u01_tpl_format_o)) & u01_src[149]) ^ (((^u01_tpl_wrap_o)) & u01_src[150]) ^ (((^u01_tpl_view_mask_o)) & u01_src[151]) ^ (((^u01_tpl_palette_o)) & u01_src[152]) ^ (((^u01_tpl_width_o)) & u01_src[153]) ^ (((^u01_tpl_height_o)) & u01_src[154]) ^ (((^u01_tpl_flags_o)) & u01_src[155]) ^ (((^u01_tpl_base_o)) & u01_src[156]) ^ (((^u01_tpl_lstride_o)) & u01_src[157]) ^ (((^u01_tpl_lheight_o)) & u01_src[158]) ^ (((^u01_tpl_a_o)) & u01_src[159]) ^ (((^u01_tpl_b_o)) & u01_src[160]) ^ (((^u01_tpl_c_o)) & u01_src[161]) ^ (((^u01_tpl_d_o)) & u01_src[162]) ^ (((^u01_tpl_u0_o)) & u01_src[163]) ^ (((^u01_tpl_v0_o)) & u01_src[164]) ^ (((^u01_tpl_line_scroll_o)) & u01_src[165]) ^ (((^u01_tsp_valid_o)) & u01_src[166]) ^ (((^u01_tsp_x_o)) & u01_src[167]) ^ (((^u01_tsp_y_o)) & u01_src[168]) ^ (((^u01_tsp_w_o)) & u01_src[169]) ^ (((^u01_tsp_h_o)) & u01_src[170]) ^ (((^u01_tsp_base_o)) & u01_src[171]) ^ (((^u01_tsp_lstride_o)) & u01_src[172]) ^ (((^u01_tsp_lheight_o)) & u01_src[173]) ^ (((^u01_tsp_format_o)) & u01_src[174]) ^ (((^u01_tsp_palette_o)) & u01_src[175]) ^ (((^u01_tsp_blend_o)) & u01_src[176]) ^ (((^u01_tsp_view_mask_o)) & u01_src[177]) ^ (((^u01_tsp_tint_o)) & u01_src[178]) ^ (((^u01_tsp_order_o)) & u01_src[179]) ^ (((^u01_tsp_flags_o)) & u01_src[180]) ^ (((^u01_tsp_src_id_o)) & u01_src[181]) ^ (((^u01_tsp_u_o)) & u01_src[182]) ^ (((^u01_tsp_v_o)) & u01_src[183]) ^ (((^u01_tsp_a00_o)) & u01_src[184]) ^ (((^u01_tsp_a01_o)) & u01_src[185]) ^ (((^u01_tsp_a10_o)) & u01_src[186]) ^ (((^u01_tsp_a11_o)) & u01_src[187]) ^ (((^u01_twod_pkt_commit_o)) & u01_src[188]) ^ (((^u01_twod_pkt_abandon_o)) & u01_src[189]) ^ (((^u01_tld_valid_o)) & u01_src[190]) ^ (((^u01_tld_index_o)) & u01_src[191]) ^ (((^u01_tld_hps_addr_o)) & u01_src[192]) ^ (((^u01_tld_len_o)) & u01_src[193]) ^ (((^u01_tld_crc_o)) & u01_src[194]) ^ (((^u01_tld_epoch_o)) & u01_src[195]) ^ (((^u01_tld_dst_slot_o)) & u01_src[196]) ^ (((^u01_twod_planes_staged_o)) & u01_src[197]) ^ (((^u01_twod_sprites_staged_o)) & u01_src[198]) ^ (((^u01_twod_dropped_o)) & u01_src[199]) ^ (((^u01_twod_loads_issued_o)) & u01_src[200]) ^ (((^u01_unsupported_o)) & u01_src[201]);
+    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_draw_valid_o)) & u01_src[15]) ^ (((^u01_draw_form_o)) & u01_src[16]) ^ (((^u01_draw_material_set_o)) & u01_src[17]) ^ (((^u01_draw_transform_o)) & u01_src[18]) ^ (((^u01_draw_viewport_mask_o)) & u01_src[19]) ^ (((^u01_draw_semantic_weight_o)) & u01_src[20]) ^ (((^u01_draw_flags_o)) & u01_src[21]) ^ (((^u01_draw_src_id_o)) & u01_src[22]) ^ (((^u01_draw_posed_o)) & u01_src[23]) ^ (((^u01_draw_clip_id_o)) & u01_src[24]) ^ (((^u01_draw_frame_no_o)) & u01_src[25]) ^ (((^u01_draw_sub_o)) & u01_src[26]) ^ (((^u01_draw_warp_en_o)) & u01_src[27]) ^ (((^u01_draw_warp_program_o)) & u01_src[28]) ^ (((^u01_draw_warp_time_o)) & u01_src[29]) ^ (((^u01_draw_warp_par_o)) & u01_src[30]) ^ (((^u01_draw_warp_attr_o)) & u01_src[31]) ^ (((^u01_draw_warp_attr_res_o)) & u01_src[32]) ^ (((^u01_draw_warp_attr_mode_o)) & u01_src[33]) ^ (((^u01_draw_warp_bx_o)) & u01_src[34]) ^ (((^u01_draw_warp_by_o)) & u01_src[35]) ^ (((^u01_draw_warp_bz_o)) & u01_src[36]) ^ (((^u01_upl_valid_o)) & u01_src[37]) ^ (((^u01_upl_index_o)) & u01_src[38]) ^ (((^u01_upl_kind_o)) & u01_src[39]) ^ (((^u01_upl_hps_addr_o)) & u01_src[40]) ^ (((^u01_upl_vram_addr_o)) & u01_src[41]) ^ (((^u01_upl_len_o)) & u01_src[42]) ^ (((^u01_upl_epoch_o)) & u01_src[43]) ^ (((^u01_upl_dst_slot_o)) & u01_src[44]) ^ (((^u01_upl_new_gen_o)) & u01_src[45]) ^ (((^u01_upl_crc_o)) & u01_src[46]) ^ (((^u01_env_valid_o)) & u01_src[47]) ^ (((^u01_env_sun_yaw_o)) & u01_src[48]) ^ (((^u01_env_sun_pitch_o)) & u01_src[49]) ^ (((^u01_env_sun_colour_o)) & u01_src[50]) ^ (((^u01_env_ambient_o)) & u01_src[51]) ^ (((^u01_envs_issued_o)) & u01_src[52]) ^ (((^u01_pop_valid_o)) & u01_src[53]) ^ (((^u01_pop_population_o)) & u01_src[54]) ^ (((^u01_pop_origin_x_o)) & u01_src[55]) ^ (((^u01_pop_origin_y_o)) & u01_src[56]) ^ (((^u01_pop_origin_z_o)) & u01_src[57]) ^ (((^u01_pop_active_count_o)) & u01_src[58]) ^ (((^u01_pop_plane_c_o)) & u01_src[59]) ^ (((^u01_pop_plane_nx_o)) & u01_src[60]) ^ (((^u01_pop_plane_ny_o)) & u01_src[61]) ^ (((^u01_pop_plane_nz_o)) & u01_src[62]) ^ (((^u01_pop_flags_o)) & u01_src[63]) ^ (((^u01_pops_issued_o)) & u01_src[64]) ^ (((^u01_tfld_valid_o)) & u01_src[65]) ^ (((^u01_tfld_x0_o)) & u01_src[66]) ^ (((^u01_tfld_z0_o)) & u01_src[67]) ^ (((^u01_tfld_x1_o)) & u01_src[68]) ^ (((^u01_tfld_z1_o)) & u01_src[69]) ^ (((^u01_tfld_handle_o)) & u01_src[70]) ^ (((^u01_tfld_cmd_o)) & u01_src[71]) ^ (((^u01_tfld_start_tick_o)) & u01_src[72]) ^ (((^u01_tfld_duration_o)) & u01_src[73]) ^ (((^u01_tfld_params_o)) & u01_src[74]) ^ (((^u01_tfld_last_o)) & u01_src[75]) ^ (((^u01_tflds_issued_o)) & u01_src[76]) ^ (((^u01_forge_valid_o)) & u01_src[77]) ^ (((^u01_forge_program_o)) & u01_src[78]) ^ (((^u01_forge_material_o)) & u01_src[79]) ^ (((^u01_forge_material_id_o)) & u01_src[80]) ^ (((^u01_forge_kind_o)) & u01_src[81]) ^ (((^u01_forge_frame_tick_o)) & u01_src[82]) ^ (((^u01_forge_src_id_o)) & u01_src[83]) ^ (((^u01_forges_issued_o)) & u01_src[84]) ^ (((^u01_forge_overflow_o)) & u01_src[85]) ^ (((^u01_forge_src_truncated_o)) & u01_src[86]) ^ (((^u01_tfld_overflow_o)) & u01_src[87]) ^ (((^u01_tfld_src_truncated_o)) & u01_src[88]) ^ (((^u01_plan_valid_o)) & u01_src[89]) ^ (((^u01_plan_view_o)) & u01_src[90]) ^ (((^u01_plan_flags_o)) & u01_src[91]) ^ (((^u01_plan_res_gen_o)) & u01_src[92]) ^ (((^u01_plan_view_gen_o)) & u01_src[93]) ^ (((^u01_plan_giant_inst_o)) & u01_src[94]) ^ (((^u01_plan_verts_o)) & u01_src[95]) ^ (((^u01_plan_tris_o)) & u01_src[96]) ^ (((^u01_plan_chunks_o)) & u01_src[97]) ^ (((^u01_plan_refs_o)) & u01_src[98]) ^ (((^u01_plan_giant_refs_o)) & u01_src[99]) ^ (((^u01_plans_forwarded_o)) & u01_src[100]) ^ (((^u01_plans_malformed_o)) & u01_src[101]) ^ (((^u01_tok_budget_valid_o)) & u01_src[102]) ^ (((^u01_tok_budget_geom0_o)) & u01_src[103]) ^ (((^u01_tok_budget_geom1_o)) & u01_src[104]) ^ (((^u01_tok_budget_frag0_o)) & u01_src[105]) ^ (((^u01_tok_budget_frag1_o)) & u01_src[106]) ^ (((^u01_tok_budget_shared_o)) & u01_src[107]) ^ (((^u01_tok_vreq_valid_o)) & u01_src[108]) ^ (((^u01_tok_vreq_view_o)) & u01_src[109]) ^ (((^u01_tok_vreq_geom_o)) & u01_src[110]) ^ (((^u01_tok_vreq_frag_o)) & u01_src[111]) ^ (((^u01_contracts_applied_o)) & u01_src[112]) ^ (((^u01_gov_view_count_o)) & u01_src[113]) ^ (((^u01_gov_px_err0_o)) & u01_src[114]) ^ (((^u01_gov_px_err1_o)) & u01_src[115]) ^ (((^u01_view_count_refused_o)) & u01_src[116]) ^ (((^u01_post_look_busy_o)) & u01_src[117]) ^ (((^u01_post_bloom_gain_o)) & u01_src[118]) ^ (((^u01_post_grade_valid_o)) & u01_src[119]) ^ (((^u01_post_echo_arm_o)) & u01_src[120]) ^ (((^u01_post_bias_r_o)) & u01_src[121]) ^ (((^u01_post_bias_g_o)) & u01_src[122]) ^ (((^u01_post_bias_b_o)) & u01_src[123]) ^ (((^u01_post_flash_rgb_o)) & u01_src[124]) ^ (((^u01_post_flash_amt_o)) & u01_src[125]) ^ (((^u01_post_ink_rgb_o)) & u01_src[126]) ^ (((^u01_post_pv_we_o)) & u01_src[127]) ^ (((^u01_post_pv_sel_o)) & u01_src[128]) ^ (((^u01_post_pv_addr_o)) & u01_src[129]) ^ (((^u01_post_pv_data_o)) & u01_src[130]) ^ (((^u01_dbg_trace_arm_we_o)) & u01_src[131]) ^ (((^u01_dbg_trace_arm_mask_o)) & u01_src[132]) ^ (((^u01_dbg_trace_clear_o)) & u01_src[133]) ^ (((^u01_packets_committed_o)) & u01_src[134]) ^ (((^u01_packets_abandoned_o)) & u01_src[135]) ^ (((^u01_views_written_o)) & u01_src[136]) ^ (((^u01_stamps_issued_o)) & u01_src[137]) ^ (((^u01_stamp_overflow_o)) & u01_src[138]) ^ (((^u01_view_range_refused_o)) & u01_src[139]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[140]) ^ (((^u01_draws_issued_o)) & u01_src[141]) ^ (((^u01_draw_overflow_o)) & u01_src[142]) ^ (((^u01_draw_src_truncated_o)) & u01_src[143]) ^ (((^u01_posed_draws_issued_o)) & u01_src[144]) ^ (((^u01_pose_clip_refused_o)) & u01_src[145]) ^ (((^u01_warp_draws_issued_o)) & u01_src[146]) ^ (((^u01_warp_draw_refused_o)) & u01_src[147]) ^ (((^u01_uploads_issued_o)) & u01_src[148]) ^ (((^u01_upload_overflow_o)) & u01_src[149]) ^ (((^u01_post_looks_applied_o)) & u01_src[150]) ^ (((^u01_grade_entries_written_o)) & u01_src[151]) ^ (((^u01_post_refused_o)) & u01_src[152]) ^ (((^u01_grade_overflow_o)) & u01_src[153]) ^ (((^u01_trace_arms_applied_o)) & u01_src[154]) ^ (((^u01_trace_arm_refused_o)) & u01_src[155]) ^ (((^u01_viewport_range_refused_o)) & u01_src[156]) ^ (((^u01_tpl_valid_o)) & u01_src[157]) ^ (((^u01_tpl_slot_o)) & u01_src[158]) ^ (((^u01_tpl_role_o)) & u01_src[159]) ^ (((^u01_tpl_blend_o)) & u01_src[160]) ^ (((^u01_tpl_opacity_o)) & u01_src[161]) ^ (((^u01_tpl_format_o)) & u01_src[162]) ^ (((^u01_tpl_wrap_o)) & u01_src[163]) ^ (((^u01_tpl_view_mask_o)) & u01_src[164]) ^ (((^u01_tpl_palette_o)) & u01_src[165]) ^ (((^u01_tpl_width_o)) & u01_src[166]) ^ (((^u01_tpl_height_o)) & u01_src[167]) ^ (((^u01_tpl_flags_o)) & u01_src[168]) ^ (((^u01_tpl_base_o)) & u01_src[169]) ^ (((^u01_tpl_lstride_o)) & u01_src[170]) ^ (((^u01_tpl_lheight_o)) & u01_src[171]) ^ (((^u01_tpl_a_o)) & u01_src[172]) ^ (((^u01_tpl_b_o)) & u01_src[173]) ^ (((^u01_tpl_c_o)) & u01_src[174]) ^ (((^u01_tpl_d_o)) & u01_src[175]) ^ (((^u01_tpl_u0_o)) & u01_src[176]) ^ (((^u01_tpl_v0_o)) & u01_src[177]) ^ (((^u01_tpl_line_scroll_o)) & u01_src[178]) ^ (((^u01_tsp_valid_o)) & u01_src[179]) ^ (((^u01_tsp_x_o)) & u01_src[180]) ^ (((^u01_tsp_y_o)) & u01_src[181]) ^ (((^u01_tsp_w_o)) & u01_src[182]) ^ (((^u01_tsp_h_o)) & u01_src[183]) ^ (((^u01_tsp_base_o)) & u01_src[184]) ^ (((^u01_tsp_lstride_o)) & u01_src[185]) ^ (((^u01_tsp_lheight_o)) & u01_src[186]) ^ (((^u01_tsp_format_o)) & u01_src[187]) ^ (((^u01_tsp_palette_o)) & u01_src[188]) ^ (((^u01_tsp_blend_o)) & u01_src[189]) ^ (((^u01_tsp_view_mask_o)) & u01_src[190]) ^ (((^u01_tsp_tint_o)) & u01_src[191]) ^ (((^u01_tsp_order_o)) & u01_src[192]) ^ (((^u01_tsp_flags_o)) & u01_src[193]) ^ (((^u01_tsp_src_id_o)) & u01_src[194]) ^ (((^u01_tsp_u_o)) & u01_src[195]) ^ (((^u01_tsp_v_o)) & u01_src[196]) ^ (((^u01_tsp_a00_o)) & u01_src[197]) ^ (((^u01_tsp_a01_o)) & u01_src[198]) ^ (((^u01_tsp_a10_o)) & u01_src[199]) ^ (((^u01_tsp_a11_o)) & u01_src[200]) ^ (((^u01_twod_pkt_commit_o)) & u01_src[201]) ^ (((^u01_twod_pkt_abandon_o)) & u01_src[202]) ^ (((^u01_tld_valid_o)) & u01_src[203]) ^ (((^u01_tld_index_o)) & u01_src[204]) ^ (((^u01_tld_hps_addr_o)) & u01_src[205]) ^ (((^u01_tld_len_o)) & u01_src[206]) ^ (((^u01_tld_crc_o)) & u01_src[207]) ^ (((^u01_tld_epoch_o)) & u01_src[208]) ^ (((^u01_tld_dst_slot_o)) & u01_src[209]) ^ (((^u01_twod_planes_staged_o)) & u01_src[210]) ^ (((^u01_twod_sprites_staged_o)) & u01_src[211]) ^ (((^u01_twod_dropped_o)) & u01_src[212]) ^ (((^u01_twod_loads_issued_o)) & u01_src[213]) ^ (((^u01_unsupported_o)) & u01_src[214]);
 
   // ---- zhao_field_doorbell ----
   logic [63:0] u02_lfsr_q;
@@ -2506,7 +2532,7 @@ module zhao_prod_top (
   logic [18-1:0] u26_publish_chunks_o;
   zhao_guard_req_t u26_guard_req_o;
   zhao_guard_rsp_t u26_guard_rsp_i;
-  assign u26_guard_rsp_i = zhao_guard_rsp_t'(u26_src[224 +: $bits(zhao_guard_rsp_t)]);
+  assign u26_guard_rsp_i = zhao_guard_rsp_t'(u26_src[238 +: $bits(zhao_guard_rsp_t)]);
   logic [64-1:0] u26_guard_wdata_o;
   logic [1-1:0] u26_guard_wvalid_o;
   logic [1-1:0] u26_guard_wlast_o;
@@ -2518,6 +2544,9 @@ module zhao_prod_top (
   logic [32-1:0] u26_frames_published_o;
   logic [32-1:0] u26_guard_denied_o;
   logic [32-1:0] u26_quota_overflow_o;
+  logic [18-1:0] u26_q_giant_refs_o;
+  logic [18-1:0] u26_q_giant_chunks_o;
+  logic [32-1:0] u26_giant_reserve_breach_o;
   logic [32-1:0] u26_records_discarded_o;
   logic [32-1:0] u26_records_unsealed_o;
   logic [32-1:0] u26_arena_overrun_o;
@@ -2539,39 +2568,41 @@ module zhao_prod_top (
       .seal_verts_i(u26_src[14 +: 18]),
       .seal_tris_i(u26_src[21 +: 18]),
       .seal_chunks_i(u26_src[28 +: 18]),
-      .frame_gen_i(u26_src[35 +: 16]),
-      .frame_end_i(u26_src[42 +: 1]),
-      .reader_busy_i(u26_src[49 +: 1]),
+      .seal_giant_refs_i(u26_src[35 +: 18]),
+      .seal_giant_chunks_i(u26_src[42 +: 18]),
+      .frame_gen_i(u26_src[49 +: 16]),
+      .frame_end_i(u26_src[56 +: 1]),
+      .reader_busy_i(u26_src[63 +: 1]),
       .pb_lease_valid_o(u26_pb_lease_valid_o),
       .pb_wr_view_o(u26_pb_wr_view_o),
       .pb_scratch_valid_o(u26_pb_scratch_valid_o),
-      .pv_valid_i(u26_src[56 +: 1]),
+      .pv_valid_i(u26_src[70 +: 1]),
       .pv_ready_o(u26_pv_ready_o),
-      .pv_x_i(u26_src[63 +: 32]),
-      .pv_y_i(u26_src[70 +: 32]),
-      .pv_invw_i(u26_src[77 +: 24]),
-      .pv_status_i(u26_src[84 +: 8]),
-      .pv_uow_i(u26_src[91 +: 32]),
-      .pv_vow_i(u26_src[98 +: 32]),
-      .pv_rgba_i(u26_src[105 +: 32]),
-      .td_valid_i(u26_src[112 +: 1]),
+      .pv_x_i(u26_src[77 +: 32]),
+      .pv_y_i(u26_src[84 +: 32]),
+      .pv_invw_i(u26_src[91 +: 24]),
+      .pv_status_i(u26_src[98 +: 8]),
+      .pv_uow_i(u26_src[105 +: 32]),
+      .pv_vow_i(u26_src[112 +: 32]),
+      .pv_rgba_i(u26_src[119 +: 32]),
+      .td_valid_i(u26_src[126 +: 1]),
       .td_ready_o(u26_td_ready_o),
-      .td_v0_i(u26_src[119 +: 16]),
-      .td_v1_i(u26_src[126 +: 16]),
-      .td_v2_i(u26_src[133 +: 16]),
-      .td_material_i(u26_src[140 +: 16]),
-      .td_raster_i(u26_src[147 +: 32]),
-      .td_source_i(u26_src[154 +: 32]),
-      .ck_valid_i(u26_src[161 +: 1]),
+      .td_v0_i(u26_src[133 +: 16]),
+      .td_v1_i(u26_src[140 +: 16]),
+      .td_v2_i(u26_src[147 +: 16]),
+      .td_material_i(u26_src[154 +: 16]),
+      .td_raster_i(u26_src[161 +: 32]),
+      .td_source_i(u26_src[168 +: 32]),
+      .ck_valid_i(u26_src[175 +: 1]),
       .ck_ready_o(u26_ck_ready_o),
-      .ck_next_i(u26_src[168 +: 32]),
-      .ck_count_i(u26_src[175 +: 16]),
-      .ck_ids_i(u26_src[182 +: 448]),
-      .lk_valid_i(u26_src[189 +: 1]),
+      .ck_next_i(u26_src[182 +: 32]),
+      .ck_count_i(u26_src[189 +: 16]),
+      .ck_ids_i(u26_src[196 +: 448]),
+      .lk_valid_i(u26_src[203 +: 1]),
       .lk_ready_o(u26_lk_ready_o),
-      .lk_index_i(u26_src[196 +: 18]),
-      .lk_next_i(u26_src[203 +: 32]),
-      .lk_count_i(u26_src[210 +: 16]),
+      .lk_index_i(u26_src[210 +: 18]),
+      .lk_next_i(u26_src[217 +: 32]),
+      .lk_count_i(u26_src[224 +: 16]),
       .pv_accept_o(u26_pv_accept_o),
       .pv_id_o(u26_pv_id_o),
       .td_accept_o(u26_td_accept_o),
@@ -2579,7 +2610,7 @@ module zhao_prod_top (
       .ck_accept_o(u26_ck_accept_o),
       .ck_alloc_id_o(u26_ck_alloc_id_o),
       .seal_fire_o(u26_seal_fire_o),
-      .scr_req_i(u26_src[217 +: 1]),
+      .scr_req_i(u26_src[231 +: 1]),
       .scr_grant_o(u26_scr_grant_o),
       .publish_valid_o(u26_publish_valid_o),
       .publish_view_o(u26_publish_view_o),
@@ -2594,9 +2625,9 @@ module zhao_prod_top (
       .guard_rsp_i(u26_guard_rsp_i),
       .guard_wdata_o(u26_guard_wdata_o),
       .guard_wvalid_o(u26_guard_wvalid_o),
-      .guard_wready_i(u26_src[231 +: 1]),
+      .guard_wready_i(u26_src[245 +: 1]),
       .guard_wlast_o(u26_guard_wlast_o),
-      .retire_words_i(u26_src[238 +: 8]),
+      .retire_words_i(u26_src[252 +: 8]),
       .verts_written_o(u26_verts_written_o),
       .tris_written_o(u26_tris_written_o),
       .chunks_written_o(u26_chunks_written_o),
@@ -2605,6 +2636,9 @@ module zhao_prod_top (
       .frames_published_o(u26_frames_published_o),
       .guard_denied_o(u26_guard_denied_o),
       .quota_overflow_o(u26_quota_overflow_o),
+      .q_giant_refs_o(u26_q_giant_refs_o),
+      .q_giant_chunks_o(u26_q_giant_chunks_o),
+      .giant_reserve_breach_o(u26_giant_reserve_breach_o),
       .records_discarded_o(u26_records_discarded_o),
       .records_unsealed_o(u26_records_unsealed_o),
       .arena_overrun_o(u26_arena_overrun_o),
@@ -2621,7 +2655,7 @@ module zhao_prod_top (
   logic u26_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u26_fold_q <= 1'b0;
-    else u26_fold_q <= u26_fold_q ^ (((^u26_seal_ready_o)) & u26_src[0]) ^ (((^u26_pb_lease_valid_o)) & u26_src[1]) ^ (((^u26_pb_wr_view_o)) & u26_src[2]) ^ (((^u26_pb_scratch_valid_o)) & u26_src[3]) ^ (((^u26_pv_ready_o)) & u26_src[4]) ^ (((^u26_td_ready_o)) & u26_src[5]) ^ (((^u26_ck_ready_o)) & u26_src[6]) ^ (((^u26_lk_ready_o)) & u26_src[7]) ^ (((^u26_pv_accept_o)) & u26_src[8]) ^ (((^u26_pv_id_o)) & u26_src[9]) ^ (((^u26_td_accept_o)) & u26_src[10]) ^ (((^u26_td_id_o)) & u26_src[11]) ^ (((^u26_ck_accept_o)) & u26_src[12]) ^ (((^u26_ck_alloc_id_o)) & u26_src[13]) ^ (((^u26_seal_fire_o)) & u26_src[14]) ^ (((^u26_scr_grant_o)) & u26_src[15]) ^ (((^u26_publish_valid_o)) & u26_src[16]) ^ (((^u26_publish_view_o)) & u26_src[17]) ^ (((^u26_publish_gen_o)) & u26_src[18]) ^ (((^u26_publish_vert_base_o)) & u26_src[19]) ^ (((^u26_publish_tri_base_o)) & u26_src[20]) ^ (((^u26_publish_chunk_base_o)) & u26_src[21]) ^ (((^u26_publish_verts_o)) & u26_src[22]) ^ (((^u26_publish_tris_o)) & u26_src[23]) ^ (((^u26_publish_chunks_o)) & u26_src[24]) ^ (((^u26_guard_req_o)) & u26_src[25]) ^ (((^u26_guard_wdata_o)) & u26_src[26]) ^ (((^u26_guard_wvalid_o)) & u26_src[27]) ^ (((^u26_guard_wlast_o)) & u26_src[28]) ^ (((^u26_verts_written_o)) & u26_src[29]) ^ (((^u26_tris_written_o)) & u26_src[30]) ^ (((^u26_chunks_written_o)) & u26_src[31]) ^ (((^u26_links_written_o)) & u26_src[32]) ^ (((^u26_link_illegal_o)) & u26_src[33]) ^ (((^u26_frames_published_o)) & u26_src[34]) ^ (((^u26_guard_denied_o)) & u26_src[35]) ^ (((^u26_quota_overflow_o)) & u26_src[36]) ^ (((^u26_records_discarded_o)) & u26_src[37]) ^ (((^u26_records_unsealed_o)) & u26_src[38]) ^ (((^u26_arena_overrun_o)) & u26_src[39]) ^ (((^u26_view_flip_blocked_o)) & u26_src[40]) ^ (((^u26_publish_blocked_o)) & u26_src[41]) ^ (((^u26_addr_view_bad_o)) & u26_src[42]) ^ (((^u26_burst_unaligned_o)) & u26_src[43]) ^ (((^u26_scr_contend_o)) & u26_src[44]) ^ (((^u26_retire_underflow_o)) & u26_src[45]) ^ (((^u26_fault_source_o)) & u26_src[46]) ^ (((^u26_frame_fault_o)) & u26_src[47]) ^ (((^u26_busy_o)) & u26_src[48]);
+    else u26_fold_q <= u26_fold_q ^ (((^u26_seal_ready_o)) & u26_src[0]) ^ (((^u26_pb_lease_valid_o)) & u26_src[1]) ^ (((^u26_pb_wr_view_o)) & u26_src[2]) ^ (((^u26_pb_scratch_valid_o)) & u26_src[3]) ^ (((^u26_pv_ready_o)) & u26_src[4]) ^ (((^u26_td_ready_o)) & u26_src[5]) ^ (((^u26_ck_ready_o)) & u26_src[6]) ^ (((^u26_lk_ready_o)) & u26_src[7]) ^ (((^u26_pv_accept_o)) & u26_src[8]) ^ (((^u26_pv_id_o)) & u26_src[9]) ^ (((^u26_td_accept_o)) & u26_src[10]) ^ (((^u26_td_id_o)) & u26_src[11]) ^ (((^u26_ck_accept_o)) & u26_src[12]) ^ (((^u26_ck_alloc_id_o)) & u26_src[13]) ^ (((^u26_seal_fire_o)) & u26_src[14]) ^ (((^u26_scr_grant_o)) & u26_src[15]) ^ (((^u26_publish_valid_o)) & u26_src[16]) ^ (((^u26_publish_view_o)) & u26_src[17]) ^ (((^u26_publish_gen_o)) & u26_src[18]) ^ (((^u26_publish_vert_base_o)) & u26_src[19]) ^ (((^u26_publish_tri_base_o)) & u26_src[20]) ^ (((^u26_publish_chunk_base_o)) & u26_src[21]) ^ (((^u26_publish_verts_o)) & u26_src[22]) ^ (((^u26_publish_tris_o)) & u26_src[23]) ^ (((^u26_publish_chunks_o)) & u26_src[24]) ^ (((^u26_guard_req_o)) & u26_src[25]) ^ (((^u26_guard_wdata_o)) & u26_src[26]) ^ (((^u26_guard_wvalid_o)) & u26_src[27]) ^ (((^u26_guard_wlast_o)) & u26_src[28]) ^ (((^u26_verts_written_o)) & u26_src[29]) ^ (((^u26_tris_written_o)) & u26_src[30]) ^ (((^u26_chunks_written_o)) & u26_src[31]) ^ (((^u26_links_written_o)) & u26_src[32]) ^ (((^u26_link_illegal_o)) & u26_src[33]) ^ (((^u26_frames_published_o)) & u26_src[34]) ^ (((^u26_guard_denied_o)) & u26_src[35]) ^ (((^u26_quota_overflow_o)) & u26_src[36]) ^ (((^u26_q_giant_refs_o)) & u26_src[37]) ^ (((^u26_q_giant_chunks_o)) & u26_src[38]) ^ (((^u26_giant_reserve_breach_o)) & u26_src[39]) ^ (((^u26_records_discarded_o)) & u26_src[40]) ^ (((^u26_records_unsealed_o)) & u26_src[41]) ^ (((^u26_arena_overrun_o)) & u26_src[42]) ^ (((^u26_view_flip_blocked_o)) & u26_src[43]) ^ (((^u26_publish_blocked_o)) & u26_src[44]) ^ (((^u26_addr_view_bad_o)) & u26_src[45]) ^ (((^u26_burst_unaligned_o)) & u26_src[46]) ^ (((^u26_scr_contend_o)) & u26_src[47]) ^ (((^u26_retire_underflow_o)) & u26_src[48]) ^ (((^u26_fault_source_o)) & u26_src[49]) ^ (((^u26_frame_fault_o)) & u26_src[50]) ^ (((^u26_busy_o)) & u26_src[51]);
 
   // ---- zhao_geom_paramwalk ----
   logic [63:0] u27_lfsr_q;
@@ -3926,321 +3960,318 @@ module zhao_prod_top (
     if (!rst_n) u45_fold_q <= 1'b0;
     else u45_fold_q <= u45_fold_q ^ (((^u45_targets_valid_o)) & u45_src[0]) ^ (((^u45_busy_o)) & u45_src[1]) ^ (((^u45_cam0_scale_o)) & u45_src[2]) ^ (((^u45_cam1_scale_o)) & u45_src[3]) ^ (((^u45_cam0_thresh_q8_o)) & u45_src[4]) ^ (((^u45_cam1_thresh_q8_o)) & u45_src[5]) ^ (((^u45_cam0_en_o)) & u45_src[6]) ^ (((^u45_cam1_en_o)) & u45_src[7]) ^ (((^u45_hyst_o)) & u45_src[8]) ^ (((^u45_min_hold_o)) & u45_src[9]) ^ (((^u45_morph_step_o)) & u45_src[10]) ^ (((^u45_src_id_o)) & u45_src[11]) ^ (((^u45_deg0_o)) & u45_src[12]) ^ (((^u45_deg1_o)) & u45_src[13]) ^ (((^u45_lod_rep_count0_o)) & u45_src[14]) ^ (((^u45_lod_rep_count1_o)) & u45_src[15]) ^ (((^u45_lod_rep_count2_o)) & u45_src[16]) ^ (((^u45_lod_rep_count3_o)) & u45_src[17]);
 
-  // ---- zhao_measure_tokens ----
+  // ---- zhao_measure_sealplan ----
   logic [63:0] u46_lfsr_q;
   logic [1023:0] u46_src;
   assign u46_src = {16{u46_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u46_lfsr_q <= 64'h0000001C6DF90113;
     else u46_lfsr_q <= {u46_lfsr_q[62:0], (^(u46_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u46_tok_grant_o;
-  logic [1-1:0] u46_tok_shared_o;
-  logic [1-1:0] u46_den_valid_o;
-  logic [1-1:0] u46_den_view_o;
-  logic [1-1:0] u46_den_class_o;
-  logic [3-1:0] u46_den_rep_o;
-  logic [2-1:0] u46_den_reason_o;
-  logic [16-1:0] u46_den_src_id_o;
-  logic [32-1:0] u46_den_cost_o;
-  logic [32-1:0] u46_avail_geom0_o;
-  logic [32-1:0] u46_avail_geom1_o;
-  logic [32-1:0] u46_avail_frag0_o;
-  logic [32-1:0] u46_avail_frag1_o;
-  logic [32-1:0] u46_avail_shared_o;
-  logic [32-1:0] u46_tok_rep_count0_o;
-  logic [32-1:0] u46_tok_rep_count1_o;
-  logic [32-1:0] u46_tok_rep_count2_o;
-  logic [32-1:0] u46_tok_rep_count3_o;
-  logic [32-1:0] u46_tok_rep_count4_o;
-  logic [32-1:0] u46_tok_rep_count5_o;
-  logic [32-1:0] u46_tok_rep_count6_o;
-  logic [32-1:0] u46_tok_rep_count7_o;
-  logic [32-1:0] u46_triangles_culled_o;
-  logic [32-1:0] u46_vreq_clamped_o;
-  zhao_measure_tokens u46_i (
+  logic [16-1:0] u46_res_gen_o;
+  logic [16-1:0] u46_view_gen_o;
+  logic [1-1:0] u46_seal_valid_o;
+  logic [18-1:0] u46_seal_verts_o;
+  logic [18-1:0] u46_seal_tris_o;
+  logic [18-1:0] u46_seal_chunks_o;
+  logic [18-1:0] u46_seal_refs_o;
+  logic [18-1:0] u46_seal_giant_refs_o;
+  logic [18-1:0] u46_seal_giant_chunks_o;
+  logic [16-1:0] u46_seal_frame_gen_o;
+  logic [16-1:0] u46_seal_view_gen_o;
+  logic [16-1:0] u46_seal_res_gen_o;
+  logic [8-1:0] u46_seal_view_o;
+  logic [1-1:0] u46_seal_giant_present_o;
+  logic [16-1:0] u46_seal_giant_inst_o;
+  logic [32-1:0] u46_plans_staged_o;
+  logic [32-1:0] u46_plans_sealed_o;
+  logic [32-1:0] u46_plans_refused_o;
+  logic [8-1:0] u46_refuse_reason_o;
+  logic [32-1:0] u46_default_seals_o;
+  logic [32-1:0] u46_seal_lost_o;
+  logic [32-1:0] u46_giant_mismatch_o;
+  logic [32-1:0] u46_draws_seen_o;
+  zhao_measure_sealplan u46_i (
       .clk(clk),
       .rst_n(rst_n),
-      .budget_valid_i(u46_src[0 +: 1]),
-      .budget_geom0_i(u46_src[7 +: 32]),
-      .budget_geom1_i(u46_src[14 +: 32]),
-      .budget_frag0_i(u46_src[21 +: 32]),
-      .budget_frag1_i(u46_src[28 +: 32]),
-      .budget_shared_i(u46_src[35 +: 32]),
-      .vreq_valid_i(u46_src[42 +: 1]),
-      .vreq_view_i(u46_src[49 +: 1]),
-      .vreq_geom_i(u46_src[56 +: 32]),
-      .vreq_frag_i(u46_src[63 +: 32]),
-      .req_valid_i(u46_src[70 +: 1]),
-      .req_view_i(u46_src[77 +: 1]),
-      .req_class_i(u46_src[84 +: 1]),
-      .req_essential_i(u46_src[91 +: 1]),
-      .req_rep_i(u46_src[98 +: 3]),
-      .req_cost_i(u46_src[105 +: 32]),
-      .req_src_id_i(u46_src[112 +: 16]),
-      .tok_grant_o(u46_tok_grant_o),
-      .tok_shared_o(u46_tok_shared_o),
-      .ret_valid_i(u46_src[119 +: 1]),
-      .ret_view_i(u46_src[126 +: 1]),
-      .ret_class_i(u46_src[133 +: 1]),
-      .ret_shared_i(u46_src[140 +: 1]),
-      .ret_cost_i(u46_src[147 +: 32]),
-      .den_valid_o(u46_den_valid_o),
-      .den_view_o(u46_den_view_o),
-      .den_class_o(u46_den_class_o),
-      .den_rep_o(u46_den_rep_o),
-      .den_reason_o(u46_den_reason_o),
-      .den_src_id_o(u46_den_src_id_o),
-      .den_cost_o(u46_den_cost_o),
-      .avail_geom0_o(u46_avail_geom0_o),
-      .avail_geom1_o(u46_avail_geom1_o),
-      .avail_frag0_o(u46_avail_frag0_o),
-      .avail_frag1_o(u46_avail_frag1_o),
-      .avail_shared_o(u46_avail_shared_o),
-      .tok_rep_count0_o(u46_tok_rep_count0_o),
-      .tok_rep_count1_o(u46_tok_rep_count1_o),
-      .tok_rep_count2_o(u46_tok_rep_count2_o),
-      .tok_rep_count3_o(u46_tok_rep_count3_o),
-      .tok_rep_count4_o(u46_tok_rep_count4_o),
-      .tok_rep_count5_o(u46_tok_rep_count5_o),
-      .tok_rep_count6_o(u46_tok_rep_count6_o),
-      .tok_rep_count7_o(u46_tok_rep_count7_o),
-      .triangles_culled_o(u46_triangles_culled_o),
-      .vreq_clamped_o(u46_vreq_clamped_o)
+      .plan_valid_i(u46_src[0 +: 1]),
+      .plan_view_i(u46_src[7 +: 8]),
+      .plan_flags_i(u46_src[14 +: 8]),
+      .plan_res_gen_i(u46_src[21 +: 16]),
+      .plan_view_gen_i(u46_src[28 +: 16]),
+      .plan_giant_inst_i(u46_src[35 +: 16]),
+      .plan_verts_i(u46_src[42 +: 18]),
+      .plan_tris_i(u46_src[49 +: 18]),
+      .plan_chunks_i(u46_src[56 +: 18]),
+      .plan_refs_i(u46_src[63 +: 18]),
+      .plan_giant_refs_i(u46_src[70 +: 18]),
+      .res_bump_i(u46_src[77 +: 1]),
+      .view_bump_i(u46_src[84 +: 1]),
+      .res_gen_o(u46_res_gen_o),
+      .view_gen_o(u46_view_gen_o),
+      .dw_valid_i(u46_src[91 +: 1]),
+      .dw_weight_i(u46_src[98 +: 8]),
+      .dw_inst_i(u46_src[105 +: 16]),
+      .frame_begin_i(u46_src[112 +: 1]),
+      .frame_end_i(u46_src[119 +: 1]),
+      .seal_ready_i(u46_src[126 +: 1]),
+      .seal_valid_o(u46_seal_valid_o),
+      .seal_verts_o(u46_seal_verts_o),
+      .seal_tris_o(u46_seal_tris_o),
+      .seal_chunks_o(u46_seal_chunks_o),
+      .seal_refs_o(u46_seal_refs_o),
+      .seal_giant_refs_o(u46_seal_giant_refs_o),
+      .seal_giant_chunks_o(u46_seal_giant_chunks_o),
+      .seal_frame_gen_o(u46_seal_frame_gen_o),
+      .seal_view_gen_o(u46_seal_view_gen_o),
+      .seal_res_gen_o(u46_seal_res_gen_o),
+      .seal_view_o(u46_seal_view_o),
+      .seal_giant_present_o(u46_seal_giant_present_o),
+      .seal_giant_inst_o(u46_seal_giant_inst_o),
+      .plans_staged_o(u46_plans_staged_o),
+      .plans_sealed_o(u46_plans_sealed_o),
+      .plans_refused_o(u46_plans_refused_o),
+      .refuse_reason_o(u46_refuse_reason_o),
+      .default_seals_o(u46_default_seals_o),
+      .seal_lost_o(u46_seal_lost_o),
+      .giant_mismatch_o(u46_giant_mismatch_o),
+      .draws_seen_o(u46_draws_seen_o)
   );
   logic u46_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u46_fold_q <= 1'b0;
-    else u46_fold_q <= u46_fold_q ^ (((^u46_tok_grant_o)) & u46_src[0]) ^ (((^u46_tok_shared_o)) & u46_src[1]) ^ (((^u46_den_valid_o)) & u46_src[2]) ^ (((^u46_den_view_o)) & u46_src[3]) ^ (((^u46_den_class_o)) & u46_src[4]) ^ (((^u46_den_rep_o)) & u46_src[5]) ^ (((^u46_den_reason_o)) & u46_src[6]) ^ (((^u46_den_src_id_o)) & u46_src[7]) ^ (((^u46_den_cost_o)) & u46_src[8]) ^ (((^u46_avail_geom0_o)) & u46_src[9]) ^ (((^u46_avail_geom1_o)) & u46_src[10]) ^ (((^u46_avail_frag0_o)) & u46_src[11]) ^ (((^u46_avail_frag1_o)) & u46_src[12]) ^ (((^u46_avail_shared_o)) & u46_src[13]) ^ (((^u46_tok_rep_count0_o)) & u46_src[14]) ^ (((^u46_tok_rep_count1_o)) & u46_src[15]) ^ (((^u46_tok_rep_count2_o)) & u46_src[16]) ^ (((^u46_tok_rep_count3_o)) & u46_src[17]) ^ (((^u46_tok_rep_count4_o)) & u46_src[18]) ^ (((^u46_tok_rep_count5_o)) & u46_src[19]) ^ (((^u46_tok_rep_count6_o)) & u46_src[20]) ^ (((^u46_tok_rep_count7_o)) & u46_src[21]) ^ (((^u46_triangles_culled_o)) & u46_src[22]) ^ (((^u46_vreq_clamped_o)) & u46_src[23]);
+    else u46_fold_q <= u46_fold_q ^ (((^u46_res_gen_o)) & u46_src[0]) ^ (((^u46_view_gen_o)) & u46_src[1]) ^ (((^u46_seal_valid_o)) & u46_src[2]) ^ (((^u46_seal_verts_o)) & u46_src[3]) ^ (((^u46_seal_tris_o)) & u46_src[4]) ^ (((^u46_seal_chunks_o)) & u46_src[5]) ^ (((^u46_seal_refs_o)) & u46_src[6]) ^ (((^u46_seal_giant_refs_o)) & u46_src[7]) ^ (((^u46_seal_giant_chunks_o)) & u46_src[8]) ^ (((^u46_seal_frame_gen_o)) & u46_src[9]) ^ (((^u46_seal_view_gen_o)) & u46_src[10]) ^ (((^u46_seal_res_gen_o)) & u46_src[11]) ^ (((^u46_seal_view_o)) & u46_src[12]) ^ (((^u46_seal_giant_present_o)) & u46_src[13]) ^ (((^u46_seal_giant_inst_o)) & u46_src[14]) ^ (((^u46_plans_staged_o)) & u46_src[15]) ^ (((^u46_plans_sealed_o)) & u46_src[16]) ^ (((^u46_plans_refused_o)) & u46_src[17]) ^ (((^u46_refuse_reason_o)) & u46_src[18]) ^ (((^u46_default_seals_o)) & u46_src[19]) ^ (((^u46_seal_lost_o)) & u46_src[20]) ^ (((^u46_giant_mismatch_o)) & u46_src[21]) ^ (((^u46_draws_seen_o)) & u46_src[22]);
 
-  // ---- zhao_mem_share_wr ----
+  // ---- zhao_measure_tokens ----
   logic [63:0] u47_lfsr_q;
   logic [1023:0] u47_src;
   assign u47_src = {16{u47_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u47_lfsr_q <= 64'h0000001D0C307AC4;
     else u47_lfsr_q <= {u47_lfsr_q[62:0], (^(u47_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  zhao_guard_req_t [3-1:0] u47_req_i;
-  assign u47_req_i[0] = zhao_guard_req_t'(u47_src[0 +: $bits(zhao_guard_req_t)]);
-  assign u47_req_i[1] = zhao_guard_req_t'(u47_src[3 +: $bits(zhao_guard_req_t)]);
-  assign u47_req_i[2] = zhao_guard_req_t'(u47_src[6 +: $bits(zhao_guard_req_t)]);
-  zhao_guard_rsp_t [3-1:0] u47_rsp_o;
-  logic [3-1:0] u47_beat_valid_o;
-  logic [64-1:0] u47_beat_data_o;
-  logic [3-1:0] u47_beat_last_o;
-  logic [3-1:0] u47_wready_o;
-  logic [24-1:0] u47_retire_o;
-  zhao_guard_req_t u47_m_req_o;
-  zhao_guard_rsp_t u47_m_rsp_i;
-  assign u47_m_rsp_i = zhao_guard_rsp_t'(u47_src[28 +: $bits(zhao_guard_rsp_t)]);
-  logic [64-1:0] u47_m_wdata_o;
-  logic [1-1:0] u47_m_wvalid_o;
-  logic [1-1:0] u47_m_wlast_o;
-  logic [96-1:0] u47_jobs_o;
-  logic [32-1:0] u47_denied_o;
-  logic [32-1:0] u47_contention_o;
-  logic [32-1:0] u47_err_short_o;
-  logic [32-1:0] u47_err_long_o;
-  logic [32-1:0] u47_err_unowned_o;
-  logic [32-1:0] u47_retire_unowned_o;
-  logic [32-1:0] u47_wbeat_unowned_o;
-  logic [32-1:0] u47_ledger_full_o;
-  zhao_mem_share_wr u47_i (
+  logic [1-1:0] u47_tok_grant_o;
+  logic [1-1:0] u47_tok_shared_o;
+  logic [1-1:0] u47_den_valid_o;
+  logic [1-1:0] u47_den_view_o;
+  logic [1-1:0] u47_den_class_o;
+  logic [3-1:0] u47_den_rep_o;
+  logic [2-1:0] u47_den_reason_o;
+  logic [16-1:0] u47_den_src_id_o;
+  logic [32-1:0] u47_den_cost_o;
+  logic [32-1:0] u47_avail_geom0_o;
+  logic [32-1:0] u47_avail_geom1_o;
+  logic [32-1:0] u47_avail_frag0_o;
+  logic [32-1:0] u47_avail_frag1_o;
+  logic [32-1:0] u47_avail_shared_o;
+  logic [32-1:0] u47_tok_rep_count0_o;
+  logic [32-1:0] u47_tok_rep_count1_o;
+  logic [32-1:0] u47_tok_rep_count2_o;
+  logic [32-1:0] u47_tok_rep_count3_o;
+  logic [32-1:0] u47_tok_rep_count4_o;
+  logic [32-1:0] u47_tok_rep_count5_o;
+  logic [32-1:0] u47_tok_rep_count6_o;
+  logic [32-1:0] u47_tok_rep_count7_o;
+  logic [32-1:0] u47_triangles_culled_o;
+  logic [32-1:0] u47_vreq_clamped_o;
+  zhao_measure_tokens u47_i (
       .clk(clk),
       .rst_n(rst_n),
-      .req_i(u47_req_i),
-      .rsp_o(u47_rsp_o),
-      .beat_valid_o(u47_beat_valid_o),
-      .beat_data_o(u47_beat_data_o),
-      .beat_last_o(u47_beat_last_o),
-      .wdata_i(u47_src[7 +: 192]),
-      .wvalid_i(u47_src[14 +: 3]),
-      .wlast_i(u47_src[21 +: 3]),
-      .wready_o(u47_wready_o),
-      .retire_o(u47_retire_o),
-      .m_req_o(u47_m_req_o),
-      .m_rsp_i(u47_m_rsp_i),
-      .m_beat_valid_i(u47_src[35 +: 1]),
-      .m_beat_data_i(u47_src[42 +: 64]),
-      .m_beat_last_i(u47_src[49 +: 1]),
-      .m_wdata_o(u47_m_wdata_o),
-      .m_wvalid_o(u47_m_wvalid_o),
-      .m_wlast_o(u47_m_wlast_o),
-      .m_wready_i(u47_src[56 +: 1]),
-      .m_credits_i(u47_src[63 +: 8]),
-      .jobs_o(u47_jobs_o),
-      .denied_o(u47_denied_o),
-      .contention_o(u47_contention_o),
-      .err_short_o(u47_err_short_o),
-      .err_long_o(u47_err_long_o),
-      .err_unowned_o(u47_err_unowned_o),
-      .retire_unowned_o(u47_retire_unowned_o),
-      .wbeat_unowned_o(u47_wbeat_unowned_o),
-      .ledger_full_o(u47_ledger_full_o)
+      .budget_valid_i(u47_src[0 +: 1]),
+      .budget_geom0_i(u47_src[7 +: 32]),
+      .budget_geom1_i(u47_src[14 +: 32]),
+      .budget_frag0_i(u47_src[21 +: 32]),
+      .budget_frag1_i(u47_src[28 +: 32]),
+      .budget_shared_i(u47_src[35 +: 32]),
+      .vreq_valid_i(u47_src[42 +: 1]),
+      .vreq_view_i(u47_src[49 +: 1]),
+      .vreq_geom_i(u47_src[56 +: 32]),
+      .vreq_frag_i(u47_src[63 +: 32]),
+      .req_valid_i(u47_src[70 +: 1]),
+      .req_view_i(u47_src[77 +: 1]),
+      .req_class_i(u47_src[84 +: 1]),
+      .req_essential_i(u47_src[91 +: 1]),
+      .req_rep_i(u47_src[98 +: 3]),
+      .req_cost_i(u47_src[105 +: 32]),
+      .req_src_id_i(u47_src[112 +: 16]),
+      .tok_grant_o(u47_tok_grant_o),
+      .tok_shared_o(u47_tok_shared_o),
+      .ret_valid_i(u47_src[119 +: 1]),
+      .ret_view_i(u47_src[126 +: 1]),
+      .ret_class_i(u47_src[133 +: 1]),
+      .ret_shared_i(u47_src[140 +: 1]),
+      .ret_cost_i(u47_src[147 +: 32]),
+      .den_valid_o(u47_den_valid_o),
+      .den_view_o(u47_den_view_o),
+      .den_class_o(u47_den_class_o),
+      .den_rep_o(u47_den_rep_o),
+      .den_reason_o(u47_den_reason_o),
+      .den_src_id_o(u47_den_src_id_o),
+      .den_cost_o(u47_den_cost_o),
+      .avail_geom0_o(u47_avail_geom0_o),
+      .avail_geom1_o(u47_avail_geom1_o),
+      .avail_frag0_o(u47_avail_frag0_o),
+      .avail_frag1_o(u47_avail_frag1_o),
+      .avail_shared_o(u47_avail_shared_o),
+      .tok_rep_count0_o(u47_tok_rep_count0_o),
+      .tok_rep_count1_o(u47_tok_rep_count1_o),
+      .tok_rep_count2_o(u47_tok_rep_count2_o),
+      .tok_rep_count3_o(u47_tok_rep_count3_o),
+      .tok_rep_count4_o(u47_tok_rep_count4_o),
+      .tok_rep_count5_o(u47_tok_rep_count5_o),
+      .tok_rep_count6_o(u47_tok_rep_count6_o),
+      .tok_rep_count7_o(u47_tok_rep_count7_o),
+      .triangles_culled_o(u47_triangles_culled_o),
+      .vreq_clamped_o(u47_vreq_clamped_o)
   );
   logic u47_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u47_fold_q <= 1'b0;
-    else u47_fold_q <= u47_fold_q ^ (((^u47_rsp_o)) & u47_src[0]) ^ (((^u47_beat_valid_o)) & u47_src[1]) ^ (((^u47_beat_data_o)) & u47_src[2]) ^ (((^u47_beat_last_o)) & u47_src[3]) ^ (((^u47_wready_o)) & u47_src[4]) ^ (((^u47_retire_o)) & u47_src[5]) ^ (((^u47_m_req_o)) & u47_src[6]) ^ (((^u47_m_wdata_o)) & u47_src[7]) ^ (((^u47_m_wvalid_o)) & u47_src[8]) ^ (((^u47_m_wlast_o)) & u47_src[9]) ^ (((^u47_jobs_o)) & u47_src[10]) ^ (((^u47_denied_o)) & u47_src[11]) ^ (((^u47_contention_o)) & u47_src[12]) ^ (((^u47_err_short_o)) & u47_src[13]) ^ (((^u47_err_long_o)) & u47_src[14]) ^ (((^u47_err_unowned_o)) & u47_src[15]) ^ (((^u47_retire_unowned_o)) & u47_src[16]) ^ (((^u47_wbeat_unowned_o)) & u47_src[17]) ^ (((^u47_ledger_full_o)) & u47_src[18]);
+    else u47_fold_q <= u47_fold_q ^ (((^u47_tok_grant_o)) & u47_src[0]) ^ (((^u47_tok_shared_o)) & u47_src[1]) ^ (((^u47_den_valid_o)) & u47_src[2]) ^ (((^u47_den_view_o)) & u47_src[3]) ^ (((^u47_den_class_o)) & u47_src[4]) ^ (((^u47_den_rep_o)) & u47_src[5]) ^ (((^u47_den_reason_o)) & u47_src[6]) ^ (((^u47_den_src_id_o)) & u47_src[7]) ^ (((^u47_den_cost_o)) & u47_src[8]) ^ (((^u47_avail_geom0_o)) & u47_src[9]) ^ (((^u47_avail_geom1_o)) & u47_src[10]) ^ (((^u47_avail_frag0_o)) & u47_src[11]) ^ (((^u47_avail_frag1_o)) & u47_src[12]) ^ (((^u47_avail_shared_o)) & u47_src[13]) ^ (((^u47_tok_rep_count0_o)) & u47_src[14]) ^ (((^u47_tok_rep_count1_o)) & u47_src[15]) ^ (((^u47_tok_rep_count2_o)) & u47_src[16]) ^ (((^u47_tok_rep_count3_o)) & u47_src[17]) ^ (((^u47_tok_rep_count4_o)) & u47_src[18]) ^ (((^u47_tok_rep_count5_o)) & u47_src[19]) ^ (((^u47_tok_rep_count6_o)) & u47_src[20]) ^ (((^u47_tok_rep_count7_o)) & u47_src[21]) ^ (((^u47_triangles_culled_o)) & u47_src[22]) ^ (((^u47_vreq_clamped_o)) & u47_src[23]);
 
-  // ---- zhao_mem_upload ----
+  // ---- zhao_mem_share_wr ----
   logic [63:0] u48_lfsr_q;
   logic [1023:0] u48_src;
   assign u48_src = {16{u48_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u48_lfsr_q <= 64'h0000001DAA67F475;
     else u48_lfsr_q <= {u48_lfsr_q[62:0], (^(u48_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u48_req_ready_o;
-  zhao_hps_burst_req_t u48_hps_req_o;
-  zhao_hps_burst_rsp_t u48_hps_rsp_i;
-  assign u48_hps_rsp_i = zhao_hps_burst_rsp_t'(u48_src[112 +: $bits(zhao_hps_burst_rsp_t)]);
-  zhao_guard_req_t u48_guard_req_o;
-  zhao_guard_rsp_t u48_guard_rsp_i;
-  assign u48_guard_rsp_i = zhao_guard_rsp_t'(u48_src[119 +: $bits(zhao_guard_rsp_t)]);
-  logic [64-1:0] u48_guard_wdata_o;
-  logic [1-1:0] u48_guard_wvalid_o;
-  logic [1-1:0] u48_guard_wlast_o;
-  logic [1-1:0] u48_publish_valid_o;
-  logic [8-1:0] u48_publish_slot_o;
-  logic [16-1:0] u48_publish_generation_o;
-  logic [8-1:0] u48_publish_tag_o;
-  logic [24-1:0] u48_publish_index_o;
-  logic [32-1:0] u48_publish_base_o;
-  logic [32-1:0] u48_publish_extent_o;
-  logic [1-1:0] u48_done_o;
-  logic [8-1:0] u48_status_o;
-  logic [16-1:0] u48_uploads_published_o;
-  logic [128-1:0] u48_refused_o;
-  zhao_mem_upload u48_i (
+  zhao_guard_req_t [3-1:0] u48_req_i;
+  assign u48_req_i[0] = zhao_guard_req_t'(u48_src[0 +: $bits(zhao_guard_req_t)]);
+  assign u48_req_i[1] = zhao_guard_req_t'(u48_src[3 +: $bits(zhao_guard_req_t)]);
+  assign u48_req_i[2] = zhao_guard_req_t'(u48_src[6 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t [3-1:0] u48_rsp_o;
+  logic [3-1:0] u48_beat_valid_o;
+  logic [64-1:0] u48_beat_data_o;
+  logic [3-1:0] u48_beat_last_o;
+  logic [3-1:0] u48_wready_o;
+  logic [24-1:0] u48_retire_o;
+  zhao_guard_req_t u48_m_req_o;
+  zhao_guard_rsp_t u48_m_rsp_i;
+  assign u48_m_rsp_i = zhao_guard_rsp_t'(u48_src[28 +: $bits(zhao_guard_rsp_t)]);
+  logic [64-1:0] u48_m_wdata_o;
+  logic [1-1:0] u48_m_wvalid_o;
+  logic [1-1:0] u48_m_wlast_o;
+  logic [96-1:0] u48_jobs_o;
+  logic [32-1:0] u48_denied_o;
+  logic [32-1:0] u48_contention_o;
+  logic [32-1:0] u48_err_short_o;
+  logic [32-1:0] u48_err_long_o;
+  logic [32-1:0] u48_err_unowned_o;
+  logic [32-1:0] u48_retire_unowned_o;
+  logic [32-1:0] u48_wbeat_unowned_o;
+  logic [32-1:0] u48_ledger_full_o;
+  zhao_mem_share_wr u48_i (
       .clk(clk),
       .rst_n(rst_n),
-      .req_valid_i(u48_src[0 +: 1]),
-      .req_ready_o(u48_req_ready_o),
-      .req_tag_i(u48_src[7 +: 8]),
-      .req_index_i(u48_src[14 +: 24]),
-      .req_hps_addr_i(u48_src[21 +: 64]),
-      .req_vram_addr_i(u48_src[28 +: 32]),
-      .req_len_i(u48_src[35 +: 32]),
-      .req_epoch_i(u48_src[42 +: 16]),
-      .req_dst_slot_i(u48_src[49 +: 8]),
-      .req_new_gen_i(u48_src[56 +: 16]),
-      .req_crc_i(u48_src[63 +: 32]),
-      .cfg_region_base_i(u48_src[70 +: 32]),
-      .cfg_region_bytes_i(u48_src[77 +: 32]),
-      .cfg_arena_base_i(u48_src[84 +: 64]),
-      .cfg_arena_bytes_i(u48_src[91 +: 32]),
-      .cfg_epoch_i(u48_src[98 +: 16]),
-      .hps_req_o(u48_hps_req_o),
-      .hps_req_grant_i(u48_src[105 +: 1]),
-      .hps_rsp_i(u48_hps_rsp_i),
-      .guard_req_o(u48_guard_req_o),
-      .guard_rsp_i(u48_guard_rsp_i),
-      .guard_wdata_o(u48_guard_wdata_o),
-      .guard_wvalid_o(u48_guard_wvalid_o),
-      .guard_wready_i(u48_src[126 +: 1]),
-      .guard_wlast_o(u48_guard_wlast_o),
-      .retire_words_i(u48_src[133 +: 8]),
-      .publish_valid_o(u48_publish_valid_o),
-      .publish_slot_o(u48_publish_slot_o),
-      .publish_generation_o(u48_publish_generation_o),
-      .publish_tag_o(u48_publish_tag_o),
-      .publish_index_o(u48_publish_index_o),
-      .publish_base_o(u48_publish_base_o),
-      .publish_extent_o(u48_publish_extent_o),
-      .done_o(u48_done_o),
-      .status_o(u48_status_o),
-      .uploads_published_o(u48_uploads_published_o),
-      .refused_o(u48_refused_o)
+      .req_i(u48_req_i),
+      .rsp_o(u48_rsp_o),
+      .beat_valid_o(u48_beat_valid_o),
+      .beat_data_o(u48_beat_data_o),
+      .beat_last_o(u48_beat_last_o),
+      .wdata_i(u48_src[7 +: 192]),
+      .wvalid_i(u48_src[14 +: 3]),
+      .wlast_i(u48_src[21 +: 3]),
+      .wready_o(u48_wready_o),
+      .retire_o(u48_retire_o),
+      .m_req_o(u48_m_req_o),
+      .m_rsp_i(u48_m_rsp_i),
+      .m_beat_valid_i(u48_src[35 +: 1]),
+      .m_beat_data_i(u48_src[42 +: 64]),
+      .m_beat_last_i(u48_src[49 +: 1]),
+      .m_wdata_o(u48_m_wdata_o),
+      .m_wvalid_o(u48_m_wvalid_o),
+      .m_wlast_o(u48_m_wlast_o),
+      .m_wready_i(u48_src[56 +: 1]),
+      .m_credits_i(u48_src[63 +: 8]),
+      .jobs_o(u48_jobs_o),
+      .denied_o(u48_denied_o),
+      .contention_o(u48_contention_o),
+      .err_short_o(u48_err_short_o),
+      .err_long_o(u48_err_long_o),
+      .err_unowned_o(u48_err_unowned_o),
+      .retire_unowned_o(u48_retire_unowned_o),
+      .wbeat_unowned_o(u48_wbeat_unowned_o),
+      .ledger_full_o(u48_ledger_full_o)
   );
   logic u48_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u48_fold_q <= 1'b0;
-    else u48_fold_q <= u48_fold_q ^ (((^u48_req_ready_o)) & u48_src[0]) ^ (((^u48_hps_req_o)) & u48_src[1]) ^ (((^u48_guard_req_o)) & u48_src[2]) ^ (((^u48_guard_wdata_o)) & u48_src[3]) ^ (((^u48_guard_wvalid_o)) & u48_src[4]) ^ (((^u48_guard_wlast_o)) & u48_src[5]) ^ (((^u48_publish_valid_o)) & u48_src[6]) ^ (((^u48_publish_slot_o)) & u48_src[7]) ^ (((^u48_publish_generation_o)) & u48_src[8]) ^ (((^u48_publish_tag_o)) & u48_src[9]) ^ (((^u48_publish_index_o)) & u48_src[10]) ^ (((^u48_publish_base_o)) & u48_src[11]) ^ (((^u48_publish_extent_o)) & u48_src[12]) ^ (((^u48_done_o)) & u48_src[13]) ^ (((^u48_status_o)) & u48_src[14]) ^ (((^u48_uploads_published_o)) & u48_src[15]) ^ (((^u48_refused_o)) & u48_src[16]);
+    else u48_fold_q <= u48_fold_q ^ (((^u48_rsp_o)) & u48_src[0]) ^ (((^u48_beat_valid_o)) & u48_src[1]) ^ (((^u48_beat_data_o)) & u48_src[2]) ^ (((^u48_beat_last_o)) & u48_src[3]) ^ (((^u48_wready_o)) & u48_src[4]) ^ (((^u48_retire_o)) & u48_src[5]) ^ (((^u48_m_req_o)) & u48_src[6]) ^ (((^u48_m_wdata_o)) & u48_src[7]) ^ (((^u48_m_wvalid_o)) & u48_src[8]) ^ (((^u48_m_wlast_o)) & u48_src[9]) ^ (((^u48_jobs_o)) & u48_src[10]) ^ (((^u48_denied_o)) & u48_src[11]) ^ (((^u48_contention_o)) & u48_src[12]) ^ (((^u48_err_short_o)) & u48_src[13]) ^ (((^u48_err_long_o)) & u48_src[14]) ^ (((^u48_err_unowned_o)) & u48_src[15]) ^ (((^u48_retire_unowned_o)) & u48_src[16]) ^ (((^u48_wbeat_unowned_o)) & u48_src[17]) ^ (((^u48_ledger_full_o)) & u48_src[18]);
 
-  // ---- zhao_part_clipfeed ----
+  // ---- zhao_mem_upload ----
   logic [63:0] u49_lfsr_q;
   logic [1023:0] u49_src;
   assign u49_src = {16{u49_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u49_lfsr_q <= 64'h0000001E489F6E26;
     else u49_lfsr_q <= {u49_lfsr_q[62:0], (^(u49_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u49_p_ready_o;
-  logic [1-1:0] u49_o_valid_o;
-  logic signed [21-1:0] u49_o_ax_o;
-  logic signed [21-1:0] u49_o_ay_o;
-  logic signed [21-1:0] u49_o_bx_o;
-  logic signed [21-1:0] u49_o_by_o;
-  logic signed [21-1:0] u49_o_cx_o;
-  logic signed [21-1:0] u49_o_cy_o;
-  logic [3-1:0] u49_o_behind_o;
-  logic [16-1:0] u49_o_src_id_o;
-  logic [1-1:0] u49_o_untex_o;
-  logic [2-1:0] u49_o_cull_mode_o;
-  logic [224-1:0] u49_o_attr_a_o;
-  logic [224-1:0] u49_o_attr_b_o;
-  logic [224-1:0] u49_o_attr_c_o;
-  logic [32-1:0] u49_o_material_set_o;
-  logic [16-1:0] u49_o_material_id_o;
-  logic [2-1:0] u49_o_material_mode_o;
-  logic [8-1:0] u49_o_quality_tier_o;
-  logic [32-1:0] u49_o_frag_state_o;
-  logic [32-1:0] u49_particles_o;
-  logic [32-1:0] u49_triangles_o;
-  logic [32-1:0] u49_range_refused_o;
-  logic [32-1:0] u49_stall_full_o;
-  logic [32-1:0] u49_dq_refused_o;
-  logic [32-1:0] u49_dq_stray_o;
-  zhao_part_clipfeed u49_i (
+  logic [1-1:0] u49_req_ready_o;
+  zhao_hps_burst_req_t u49_hps_req_o;
+  zhao_hps_burst_rsp_t u49_hps_rsp_i;
+  assign u49_hps_rsp_i = zhao_hps_burst_rsp_t'(u49_src[112 +: $bits(zhao_hps_burst_rsp_t)]);
+  zhao_guard_req_t u49_guard_req_o;
+  zhao_guard_rsp_t u49_guard_rsp_i;
+  assign u49_guard_rsp_i = zhao_guard_rsp_t'(u49_src[119 +: $bits(zhao_guard_rsp_t)]);
+  logic [64-1:0] u49_guard_wdata_o;
+  logic [1-1:0] u49_guard_wvalid_o;
+  logic [1-1:0] u49_guard_wlast_o;
+  logic [1-1:0] u49_publish_valid_o;
+  logic [8-1:0] u49_publish_slot_o;
+  logic [16-1:0] u49_publish_generation_o;
+  logic [8-1:0] u49_publish_tag_o;
+  logic [24-1:0] u49_publish_index_o;
+  logic [32-1:0] u49_publish_base_o;
+  logic [32-1:0] u49_publish_extent_o;
+  logic [1-1:0] u49_done_o;
+  logic [8-1:0] u49_status_o;
+  logic [16-1:0] u49_uploads_published_o;
+  logic [128-1:0] u49_refused_o;
+  zhao_mem_upload u49_i (
       .clk(clk),
       .rst_n(rst_n),
-      .p_valid_i(u49_src[0 +: 1]),
-      .p_ready_o(u49_p_ready_o),
-      .p_ax_i(u49_src[7 +: 22]),
-      .p_ay_i(u49_src[14 +: 22]),
-      .p_bx_i(u49_src[21 +: 22]),
-      .p_by_i(u49_src[28 +: 22]),
-      .p_cx_i(u49_src[35 +: 22]),
-      .p_cy_i(u49_src[42 +: 22]),
-      .p_w_i(u49_src[49 +: 31]),
-      .p_profile_i(u49_src[56 +: 2]),
-      .p_r_i(u49_src[63 +: 8]),
-      .p_g_i(u49_src[70 +: 8]),
-      .p_b_i(u49_src[77 +: 8]),
-      .p_src_id_i(u49_src[84 +: 16]),
-      .p_depth_test_i(u49_src[91 +: 1]),
-      .p_depth_write_i(u49_src[98 +: 1]),
-      .o_valid_o(u49_o_valid_o),
-      .o_ready_i(u49_src[105 +: 1]),
-      .o_ax_o(u49_o_ax_o),
-      .o_ay_o(u49_o_ay_o),
-      .o_bx_o(u49_o_bx_o),
-      .o_by_o(u49_o_by_o),
-      .o_cx_o(u49_o_cx_o),
-      .o_cy_o(u49_o_cy_o),
-      .o_behind_o(u49_o_behind_o),
-      .o_src_id_o(u49_o_src_id_o),
-      .o_untex_o(u49_o_untex_o),
-      .o_cull_mode_o(u49_o_cull_mode_o),
-      .o_attr_a_o(u49_o_attr_a_o),
-      .o_attr_b_o(u49_o_attr_b_o),
-      .o_attr_c_o(u49_o_attr_c_o),
-      .o_material_set_o(u49_o_material_set_o),
-      .o_material_id_o(u49_o_material_id_o),
-      .o_material_mode_o(u49_o_material_mode_o),
-      .o_quality_tier_o(u49_o_quality_tier_o),
-      .o_frag_state_o(u49_o_frag_state_o),
-      .particles_o(u49_particles_o),
-      .triangles_o(u49_triangles_o),
-      .range_refused_o(u49_range_refused_o),
-      .stall_full_o(u49_stall_full_o),
-      .dq_refused_o(u49_dq_refused_o),
-      .dq_stray_o(u49_dq_stray_o)
+      .req_valid_i(u49_src[0 +: 1]),
+      .req_ready_o(u49_req_ready_o),
+      .req_tag_i(u49_src[7 +: 8]),
+      .req_index_i(u49_src[14 +: 24]),
+      .req_hps_addr_i(u49_src[21 +: 64]),
+      .req_vram_addr_i(u49_src[28 +: 32]),
+      .req_len_i(u49_src[35 +: 32]),
+      .req_epoch_i(u49_src[42 +: 16]),
+      .req_dst_slot_i(u49_src[49 +: 8]),
+      .req_new_gen_i(u49_src[56 +: 16]),
+      .req_crc_i(u49_src[63 +: 32]),
+      .cfg_region_base_i(u49_src[70 +: 32]),
+      .cfg_region_bytes_i(u49_src[77 +: 32]),
+      .cfg_arena_base_i(u49_src[84 +: 64]),
+      .cfg_arena_bytes_i(u49_src[91 +: 32]),
+      .cfg_epoch_i(u49_src[98 +: 16]),
+      .hps_req_o(u49_hps_req_o),
+      .hps_req_grant_i(u49_src[105 +: 1]),
+      .hps_rsp_i(u49_hps_rsp_i),
+      .guard_req_o(u49_guard_req_o),
+      .guard_rsp_i(u49_guard_rsp_i),
+      .guard_wdata_o(u49_guard_wdata_o),
+      .guard_wvalid_o(u49_guard_wvalid_o),
+      .guard_wready_i(u49_src[126 +: 1]),
+      .guard_wlast_o(u49_guard_wlast_o),
+      .retire_words_i(u49_src[133 +: 8]),
+      .publish_valid_o(u49_publish_valid_o),
+      .publish_slot_o(u49_publish_slot_o),
+      .publish_generation_o(u49_publish_generation_o),
+      .publish_tag_o(u49_publish_tag_o),
+      .publish_index_o(u49_publish_index_o),
+      .publish_base_o(u49_publish_base_o),
+      .publish_extent_o(u49_publish_extent_o),
+      .done_o(u49_done_o),
+      .status_o(u49_status_o),
+      .uploads_published_o(u49_uploads_published_o),
+      .refused_o(u49_refused_o)
   );
   logic u49_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u49_fold_q <= 1'b0;
-    else u49_fold_q <= u49_fold_q ^ (((^u49_p_ready_o)) & u49_src[0]) ^ (((^u49_o_valid_o)) & u49_src[1]) ^ (((^u49_o_ax_o)) & u49_src[2]) ^ (((^u49_o_ay_o)) & u49_src[3]) ^ (((^u49_o_bx_o)) & u49_src[4]) ^ (((^u49_o_by_o)) & u49_src[5]) ^ (((^u49_o_cx_o)) & u49_src[6]) ^ (((^u49_o_cy_o)) & u49_src[7]) ^ (((^u49_o_behind_o)) & u49_src[8]) ^ (((^u49_o_src_id_o)) & u49_src[9]) ^ (((^u49_o_untex_o)) & u49_src[10]) ^ (((^u49_o_cull_mode_o)) & u49_src[11]) ^ (((^u49_o_attr_a_o)) & u49_src[12]) ^ (((^u49_o_attr_b_o)) & u49_src[13]) ^ (((^u49_o_attr_c_o)) & u49_src[14]) ^ (((^u49_o_material_set_o)) & u49_src[15]) ^ (((^u49_o_material_id_o)) & u49_src[16]) ^ (((^u49_o_material_mode_o)) & u49_src[17]) ^ (((^u49_o_quality_tier_o)) & u49_src[18]) ^ (((^u49_o_frag_state_o)) & u49_src[19]) ^ (((^u49_particles_o)) & u49_src[20]) ^ (((^u49_triangles_o)) & u49_src[21]) ^ (((^u49_range_refused_o)) & u49_src[22]) ^ (((^u49_stall_full_o)) & u49_src[23]) ^ (((^u49_dq_refused_o)) & u49_src[24]) ^ (((^u49_dq_stray_o)) & u49_src[25]);
+    else u49_fold_q <= u49_fold_q ^ (((^u49_req_ready_o)) & u49_src[0]) ^ (((^u49_hps_req_o)) & u49_src[1]) ^ (((^u49_guard_req_o)) & u49_src[2]) ^ (((^u49_guard_wdata_o)) & u49_src[3]) ^ (((^u49_guard_wvalid_o)) & u49_src[4]) ^ (((^u49_guard_wlast_o)) & u49_src[5]) ^ (((^u49_publish_valid_o)) & u49_src[6]) ^ (((^u49_publish_slot_o)) & u49_src[7]) ^ (((^u49_publish_generation_o)) & u49_src[8]) ^ (((^u49_publish_tag_o)) & u49_src[9]) ^ (((^u49_publish_index_o)) & u49_src[10]) ^ (((^u49_publish_base_o)) & u49_src[11]) ^ (((^u49_publish_extent_o)) & u49_src[12]) ^ (((^u49_done_o)) & u49_src[13]) ^ (((^u49_status_o)) & u49_src[14]) ^ (((^u49_uploads_published_o)) & u49_src[15]) ^ (((^u49_refused_o)) & u49_src[16]);
 
-  // ---- zhao_part_expand ----
+  // ---- zhao_part_clipfeed ----
   logic [63:0] u50_lfsr_q;
   logic [1023:0] u50_src;
   assign u50_src = {16{u50_lfsr_q}};
@@ -4248,605 +4279,644 @@ module zhao_prod_top (
     if (!rst_n) u50_lfsr_q <= 64'h0000001EE6D6E7D7;
     else u50_lfsr_q <= {u50_lfsr_q[62:0], (^(u50_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u50_p_ready_o;
-  logic [1-1:0] u50_t_valid_o;
-  logic signed [22-1:0] u50_t_ax_o;
-  logic signed [22-1:0] u50_t_ay_o;
-  logic signed [22-1:0] u50_t_bx_o;
-  logic signed [22-1:0] u50_t_by_o;
-  logic signed [22-1:0] u50_t_cx_o;
-  logic signed [22-1:0] u50_t_cy_o;
-  logic signed [32-1:0] u50_t_d_o;
-  logic [31-1:0] u50_t_w_o;
-  logic [2-1:0] u50_t_profile_o;
-  logic [8-1:0] u50_t_r_o;
-  logic [8-1:0] u50_t_g_o;
-  logic [8-1:0] u50_t_b_o;
-  logic [1-1:0] u50_t_depth_test_o;
-  logic [1-1:0] u50_t_depth_write_o;
-  logic [16-1:0] u50_t_src_id_o;
-  logic [32-1:0] u50_polygon_particles_o;
-  zhao_part_expand u50_i (
+  logic [1-1:0] u50_o_valid_o;
+  logic signed [21-1:0] u50_o_ax_o;
+  logic signed [21-1:0] u50_o_ay_o;
+  logic signed [21-1:0] u50_o_bx_o;
+  logic signed [21-1:0] u50_o_by_o;
+  logic signed [21-1:0] u50_o_cx_o;
+  logic signed [21-1:0] u50_o_cy_o;
+  logic [3-1:0] u50_o_behind_o;
+  logic [16-1:0] u50_o_src_id_o;
+  logic [1-1:0] u50_o_untex_o;
+  logic [2-1:0] u50_o_cull_mode_o;
+  logic [224-1:0] u50_o_attr_a_o;
+  logic [224-1:0] u50_o_attr_b_o;
+  logic [224-1:0] u50_o_attr_c_o;
+  logic [32-1:0] u50_o_material_set_o;
+  logic [16-1:0] u50_o_material_id_o;
+  logic [2-1:0] u50_o_material_mode_o;
+  logic [8-1:0] u50_o_quality_tier_o;
+  logic [32-1:0] u50_o_frag_state_o;
+  logic [32-1:0] u50_particles_o;
+  logic [32-1:0] u50_triangles_o;
+  logic [32-1:0] u50_range_refused_o;
+  logic [32-1:0] u50_stall_full_o;
+  logic [32-1:0] u50_dq_refused_o;
+  logic [32-1:0] u50_dq_stray_o;
+  zhao_part_clipfeed u50_i (
       .clk(clk),
       .rst_n(rst_n),
       .p_valid_i(u50_src[0 +: 1]),
       .p_ready_o(u50_p_ready_o),
-      .p_in_i(u50_src[7 +: 1]),
-      .p_x_i(u50_src[14 +: 21]),
-      .p_y_i(u50_src[21 +: 21]),
-      .p_d_i(u50_src[28 +: 32]),
-      .p_w_i(u50_src[35 +: 31]),
-      .p_profile_i(u50_src[42 +: 2]),
-      .p_size_i(u50_src[49 +: 8]),
-      .p_r_i(u50_src[56 +: 8]),
-      .p_g_i(u50_src[63 +: 8]),
-      .p_b_i(u50_src[70 +: 8]),
-      .p_src_id_i(u50_src[77 +: 16]),
-      .t_valid_o(u50_t_valid_o),
-      .t_ready_i(u50_src[84 +: 1]),
-      .t_ax_o(u50_t_ax_o),
-      .t_ay_o(u50_t_ay_o),
-      .t_bx_o(u50_t_bx_o),
-      .t_by_o(u50_t_by_o),
-      .t_cx_o(u50_t_cx_o),
-      .t_cy_o(u50_t_cy_o),
-      .t_d_o(u50_t_d_o),
-      .t_w_o(u50_t_w_o),
-      .t_profile_o(u50_t_profile_o),
-      .t_r_o(u50_t_r_o),
-      .t_g_o(u50_t_g_o),
-      .t_b_o(u50_t_b_o),
-      .t_depth_test_o(u50_t_depth_test_o),
-      .t_depth_write_o(u50_t_depth_write_o),
-      .t_src_id_o(u50_t_src_id_o),
-      .polygon_particles_o(u50_polygon_particles_o)
+      .p_ax_i(u50_src[7 +: 22]),
+      .p_ay_i(u50_src[14 +: 22]),
+      .p_bx_i(u50_src[21 +: 22]),
+      .p_by_i(u50_src[28 +: 22]),
+      .p_cx_i(u50_src[35 +: 22]),
+      .p_cy_i(u50_src[42 +: 22]),
+      .p_w_i(u50_src[49 +: 31]),
+      .p_profile_i(u50_src[56 +: 2]),
+      .p_r_i(u50_src[63 +: 8]),
+      .p_g_i(u50_src[70 +: 8]),
+      .p_b_i(u50_src[77 +: 8]),
+      .p_src_id_i(u50_src[84 +: 16]),
+      .p_depth_test_i(u50_src[91 +: 1]),
+      .p_depth_write_i(u50_src[98 +: 1]),
+      .o_valid_o(u50_o_valid_o),
+      .o_ready_i(u50_src[105 +: 1]),
+      .o_ax_o(u50_o_ax_o),
+      .o_ay_o(u50_o_ay_o),
+      .o_bx_o(u50_o_bx_o),
+      .o_by_o(u50_o_by_o),
+      .o_cx_o(u50_o_cx_o),
+      .o_cy_o(u50_o_cy_o),
+      .o_behind_o(u50_o_behind_o),
+      .o_src_id_o(u50_o_src_id_o),
+      .o_untex_o(u50_o_untex_o),
+      .o_cull_mode_o(u50_o_cull_mode_o),
+      .o_attr_a_o(u50_o_attr_a_o),
+      .o_attr_b_o(u50_o_attr_b_o),
+      .o_attr_c_o(u50_o_attr_c_o),
+      .o_material_set_o(u50_o_material_set_o),
+      .o_material_id_o(u50_o_material_id_o),
+      .o_material_mode_o(u50_o_material_mode_o),
+      .o_quality_tier_o(u50_o_quality_tier_o),
+      .o_frag_state_o(u50_o_frag_state_o),
+      .particles_o(u50_particles_o),
+      .triangles_o(u50_triangles_o),
+      .range_refused_o(u50_range_refused_o),
+      .stall_full_o(u50_stall_full_o),
+      .dq_refused_o(u50_dq_refused_o),
+      .dq_stray_o(u50_dq_stray_o)
   );
   logic u50_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u50_fold_q <= 1'b0;
-    else u50_fold_q <= u50_fold_q ^ (((^u50_p_ready_o)) & u50_src[0]) ^ (((^u50_t_valid_o)) & u50_src[1]) ^ (((^u50_t_ax_o)) & u50_src[2]) ^ (((^u50_t_ay_o)) & u50_src[3]) ^ (((^u50_t_bx_o)) & u50_src[4]) ^ (((^u50_t_by_o)) & u50_src[5]) ^ (((^u50_t_cx_o)) & u50_src[6]) ^ (((^u50_t_cy_o)) & u50_src[7]) ^ (((^u50_t_d_o)) & u50_src[8]) ^ (((^u50_t_w_o)) & u50_src[9]) ^ (((^u50_t_profile_o)) & u50_src[10]) ^ (((^u50_t_r_o)) & u50_src[11]) ^ (((^u50_t_g_o)) & u50_src[12]) ^ (((^u50_t_b_o)) & u50_src[13]) ^ (((^u50_t_depth_test_o)) & u50_src[14]) ^ (((^u50_t_depth_write_o)) & u50_src[15]) ^ (((^u50_t_src_id_o)) & u50_src[16]) ^ (((^u50_polygon_particles_o)) & u50_src[17]);
+    else u50_fold_q <= u50_fold_q ^ (((^u50_p_ready_o)) & u50_src[0]) ^ (((^u50_o_valid_o)) & u50_src[1]) ^ (((^u50_o_ax_o)) & u50_src[2]) ^ (((^u50_o_ay_o)) & u50_src[3]) ^ (((^u50_o_bx_o)) & u50_src[4]) ^ (((^u50_o_by_o)) & u50_src[5]) ^ (((^u50_o_cx_o)) & u50_src[6]) ^ (((^u50_o_cy_o)) & u50_src[7]) ^ (((^u50_o_behind_o)) & u50_src[8]) ^ (((^u50_o_src_id_o)) & u50_src[9]) ^ (((^u50_o_untex_o)) & u50_src[10]) ^ (((^u50_o_cull_mode_o)) & u50_src[11]) ^ (((^u50_o_attr_a_o)) & u50_src[12]) ^ (((^u50_o_attr_b_o)) & u50_src[13]) ^ (((^u50_o_attr_c_o)) & u50_src[14]) ^ (((^u50_o_material_set_o)) & u50_src[15]) ^ (((^u50_o_material_id_o)) & u50_src[16]) ^ (((^u50_o_material_mode_o)) & u50_src[17]) ^ (((^u50_o_quality_tier_o)) & u50_src[18]) ^ (((^u50_o_frag_state_o)) & u50_src[19]) ^ (((^u50_particles_o)) & u50_src[20]) ^ (((^u50_triangles_o)) & u50_src[21]) ^ (((^u50_range_refused_o)) & u50_src[22]) ^ (((^u50_stall_full_o)) & u50_src[23]) ^ (((^u50_dq_refused_o)) & u50_src[24]) ^ (((^u50_dq_stray_o)) & u50_src[25]);
 
-  // ---- zhao_part_ladder ----
+  // ---- zhao_part_expand ----
   logic [63:0] u51_lfsr_q;
   logic [1023:0] u51_src;
   assign u51_src = {16{u51_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u51_lfsr_q <= 64'h0000001F850E6188;
     else u51_lfsr_q <= {u51_lfsr_q[62:0], (^(u51_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u51_v_ready_o;
-  logic [1-1:0] u51_r_valid_o;
-  logic [3-1:0] u51_r_rung_o;
-  logic [4-1:0] u51_r_hold_o;
-  logic [1-1:0] u51_r_changed_o;
-  logic [32-1:0] u51_decisions_o;
-  logic [32-1:0] u51_changes_o;
-  logic [32-1:0] u51_held_o;
-  logic [32-1:0] u51_gov_forced_o;
-  zhao_part_ladder u51_i (
+  logic [1-1:0] u51_p_ready_o;
+  logic [1-1:0] u51_t_valid_o;
+  logic signed [22-1:0] u51_t_ax_o;
+  logic signed [22-1:0] u51_t_ay_o;
+  logic signed [22-1:0] u51_t_bx_o;
+  logic signed [22-1:0] u51_t_by_o;
+  logic signed [22-1:0] u51_t_cx_o;
+  logic signed [22-1:0] u51_t_cy_o;
+  logic signed [32-1:0] u51_t_d_o;
+  logic [31-1:0] u51_t_w_o;
+  logic [2-1:0] u51_t_profile_o;
+  logic [8-1:0] u51_t_r_o;
+  logic [8-1:0] u51_t_g_o;
+  logic [8-1:0] u51_t_b_o;
+  logic [1-1:0] u51_t_depth_test_o;
+  logic [1-1:0] u51_t_depth_write_o;
+  logic [16-1:0] u51_t_src_id_o;
+  logic [32-1:0] u51_polygon_particles_o;
+  zhao_part_expand u51_i (
       .clk(clk),
       .rst_n(rst_n),
-      .v_valid_i(u51_src[0 +: 1]),
-      .v_ready_o(u51_v_ready_o),
-      .p_size_i(u51_src[7 +: 16]),
-      .p_trail_i(u51_src[14 +: 16]),
-      .p_narrow_i(u51_src[21 +: 1]),
-      .p_protected_i(u51_src[28 +: 1]),
-      .p_gov_floor_i(u51_src[35 +: 3]),
-      .p_prev_rung_i(u51_src[42 +: 3]),
-      .p_hold_i(u51_src[49 +: 4]),
-      .p_first_i(u51_src[56 +: 1]),
-      .r_valid_o(u51_r_valid_o),
-      .r_ready_i(u51_src[63 +: 1]),
-      .r_rung_o(u51_r_rung_o),
-      .r_hold_o(u51_r_hold_o),
-      .r_changed_o(u51_r_changed_o),
-      .decisions_o(u51_decisions_o),
-      .changes_o(u51_changes_o),
-      .held_o(u51_held_o),
-      .gov_forced_o(u51_gov_forced_o)
+      .p_valid_i(u51_src[0 +: 1]),
+      .p_ready_o(u51_p_ready_o),
+      .p_in_i(u51_src[7 +: 1]),
+      .p_x_i(u51_src[14 +: 21]),
+      .p_y_i(u51_src[21 +: 21]),
+      .p_d_i(u51_src[28 +: 32]),
+      .p_w_i(u51_src[35 +: 31]),
+      .p_profile_i(u51_src[42 +: 2]),
+      .p_size_i(u51_src[49 +: 8]),
+      .p_r_i(u51_src[56 +: 8]),
+      .p_g_i(u51_src[63 +: 8]),
+      .p_b_i(u51_src[70 +: 8]),
+      .p_src_id_i(u51_src[77 +: 16]),
+      .t_valid_o(u51_t_valid_o),
+      .t_ready_i(u51_src[84 +: 1]),
+      .t_ax_o(u51_t_ax_o),
+      .t_ay_o(u51_t_ay_o),
+      .t_bx_o(u51_t_bx_o),
+      .t_by_o(u51_t_by_o),
+      .t_cx_o(u51_t_cx_o),
+      .t_cy_o(u51_t_cy_o),
+      .t_d_o(u51_t_d_o),
+      .t_w_o(u51_t_w_o),
+      .t_profile_o(u51_t_profile_o),
+      .t_r_o(u51_t_r_o),
+      .t_g_o(u51_t_g_o),
+      .t_b_o(u51_t_b_o),
+      .t_depth_test_o(u51_t_depth_test_o),
+      .t_depth_write_o(u51_t_depth_write_o),
+      .t_src_id_o(u51_t_src_id_o),
+      .polygon_particles_o(u51_polygon_particles_o)
   );
   logic u51_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u51_fold_q <= 1'b0;
-    else u51_fold_q <= u51_fold_q ^ (((^u51_v_ready_o)) & u51_src[0]) ^ (((^u51_r_valid_o)) & u51_src[1]) ^ (((^u51_r_rung_o)) & u51_src[2]) ^ (((^u51_r_hold_o)) & u51_src[3]) ^ (((^u51_r_changed_o)) & u51_src[4]) ^ (((^u51_decisions_o)) & u51_src[5]) ^ (((^u51_changes_o)) & u51_src[6]) ^ (((^u51_held_o)) & u51_src[7]) ^ (((^u51_gov_forced_o)) & u51_src[8]);
+    else u51_fold_q <= u51_fold_q ^ (((^u51_p_ready_o)) & u51_src[0]) ^ (((^u51_t_valid_o)) & u51_src[1]) ^ (((^u51_t_ax_o)) & u51_src[2]) ^ (((^u51_t_ay_o)) & u51_src[3]) ^ (((^u51_t_bx_o)) & u51_src[4]) ^ (((^u51_t_by_o)) & u51_src[5]) ^ (((^u51_t_cx_o)) & u51_src[6]) ^ (((^u51_t_cy_o)) & u51_src[7]) ^ (((^u51_t_d_o)) & u51_src[8]) ^ (((^u51_t_w_o)) & u51_src[9]) ^ (((^u51_t_profile_o)) & u51_src[10]) ^ (((^u51_t_r_o)) & u51_src[11]) ^ (((^u51_t_g_o)) & u51_src[12]) ^ (((^u51_t_b_o)) & u51_src[13]) ^ (((^u51_t_depth_test_o)) & u51_src[14]) ^ (((^u51_t_depth_write_o)) & u51_src[15]) ^ (((^u51_t_src_id_o)) & u51_src[16]) ^ (((^u51_polygon_particles_o)) & u51_src[17]);
 
-  // ---- zhao_part_soft ----
+  // ---- zhao_part_ladder ----
   logic [63:0] u52_lfsr_q;
   logic [1023:0] u52_src;
   assign u52_src = {16{u52_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u52_lfsr_q <= 64'h000000202345DB39;
     else u52_lfsr_q <= {u52_lfsr_q[62:0], (^(u52_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u52_p_ready_o;
-  logic [1-1:0] u52_s_valid_o;
-  logic signed [13-1:0] u52_s_min_x_o;
-  logic signed [13-1:0] u52_s_max_x_o;
-  logic signed [13-1:0] u52_s_min_y_o;
-  logic signed [13-1:0] u52_s_max_y_o;
-  logic signed [32-1:0] u52_s_d_o;
-  logic [8-1:0] u52_s_r_o;
-  logic [8-1:0] u52_s_g_o;
-  logic [8-1:0] u52_s_b_o;
-  logic [1-1:0] u52_s_depth_test_o;
-  logic [1-1:0] u52_s_depth_write_o;
-  logic [16-1:0] u52_s_src_id_o;
-  logic [32-1:0] u52_soft_particles_o;
-  zhao_part_soft u52_i (
+  logic [1-1:0] u52_v_ready_o;
+  logic [1-1:0] u52_r_valid_o;
+  logic [3-1:0] u52_r_rung_o;
+  logic [4-1:0] u52_r_hold_o;
+  logic [1-1:0] u52_r_changed_o;
+  logic [32-1:0] u52_decisions_o;
+  logic [32-1:0] u52_changes_o;
+  logic [32-1:0] u52_held_o;
+  logic [32-1:0] u52_gov_forced_o;
+  zhao_part_ladder u52_i (
       .clk(clk),
       .rst_n(rst_n),
-      .vp_x0_i(u52_src[0 +: 12]),
-      .vp_y0_i(u52_src[7 +: 12]),
-      .vp_w_i(u52_src[14 +: 12]),
-      .vp_h_i(u52_src[21 +: 12]),
-      .p_valid_i(u52_src[28 +: 1]),
-      .p_ready_o(u52_p_ready_o),
-      .p_in_i(u52_src[35 +: 1]),
-      .p_x_i(u52_src[42 +: 21]),
-      .p_y_i(u52_src[49 +: 21]),
-      .p_d_i(u52_src[56 +: 32]),
-      .p_size_i(u52_src[63 +: 8]),
-      .p_r_i(u52_src[70 +: 8]),
-      .p_g_i(u52_src[77 +: 8]),
-      .p_b_i(u52_src[84 +: 8]),
-      .p_src_id_i(u52_src[91 +: 16]),
-      .s_valid_o(u52_s_valid_o),
-      .s_ready_i(u52_src[98 +: 1]),
-      .s_min_x_o(u52_s_min_x_o),
-      .s_max_x_o(u52_s_max_x_o),
-      .s_min_y_o(u52_s_min_y_o),
-      .s_max_y_o(u52_s_max_y_o),
-      .s_d_o(u52_s_d_o),
-      .s_r_o(u52_s_r_o),
-      .s_g_o(u52_s_g_o),
-      .s_b_o(u52_s_b_o),
-      .s_depth_test_o(u52_s_depth_test_o),
-      .s_depth_write_o(u52_s_depth_write_o),
-      .s_src_id_o(u52_s_src_id_o),
-      .soft_particles_o(u52_soft_particles_o)
+      .v_valid_i(u52_src[0 +: 1]),
+      .v_ready_o(u52_v_ready_o),
+      .p_size_i(u52_src[7 +: 16]),
+      .p_trail_i(u52_src[14 +: 16]),
+      .p_narrow_i(u52_src[21 +: 1]),
+      .p_protected_i(u52_src[28 +: 1]),
+      .p_gov_floor_i(u52_src[35 +: 3]),
+      .p_prev_rung_i(u52_src[42 +: 3]),
+      .p_hold_i(u52_src[49 +: 4]),
+      .p_first_i(u52_src[56 +: 1]),
+      .r_valid_o(u52_r_valid_o),
+      .r_ready_i(u52_src[63 +: 1]),
+      .r_rung_o(u52_r_rung_o),
+      .r_hold_o(u52_r_hold_o),
+      .r_changed_o(u52_r_changed_o),
+      .decisions_o(u52_decisions_o),
+      .changes_o(u52_changes_o),
+      .held_o(u52_held_o),
+      .gov_forced_o(u52_gov_forced_o)
   );
   logic u52_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u52_fold_q <= 1'b0;
-    else u52_fold_q <= u52_fold_q ^ (((^u52_p_ready_o)) & u52_src[0]) ^ (((^u52_s_valid_o)) & u52_src[1]) ^ (((^u52_s_min_x_o)) & u52_src[2]) ^ (((^u52_s_max_x_o)) & u52_src[3]) ^ (((^u52_s_min_y_o)) & u52_src[4]) ^ (((^u52_s_max_y_o)) & u52_src[5]) ^ (((^u52_s_d_o)) & u52_src[6]) ^ (((^u52_s_r_o)) & u52_src[7]) ^ (((^u52_s_g_o)) & u52_src[8]) ^ (((^u52_s_b_o)) & u52_src[9]) ^ (((^u52_s_depth_test_o)) & u52_src[10]) ^ (((^u52_s_depth_write_o)) & u52_src[11]) ^ (((^u52_s_src_id_o)) & u52_src[12]) ^ (((^u52_soft_particles_o)) & u52_src[13]);
+    else u52_fold_q <= u52_fold_q ^ (((^u52_v_ready_o)) & u52_src[0]) ^ (((^u52_r_valid_o)) & u52_src[1]) ^ (((^u52_r_rung_o)) & u52_src[2]) ^ (((^u52_r_hold_o)) & u52_src[3]) ^ (((^u52_r_changed_o)) & u52_src[4]) ^ (((^u52_decisions_o)) & u52_src[5]) ^ (((^u52_changes_o)) & u52_src[6]) ^ (((^u52_held_o)) & u52_src[7]) ^ (((^u52_gov_forced_o)) & u52_src[8]);
 
-  // ---- zhao_post_gather ----
+  // ---- zhao_part_soft ----
   logic [63:0] u53_lfsr_q;
   logic [1023:0] u53_src;
   assign u53_src = {16{u53_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u53_lfsr_q <= 64'h00000020C17D54EA;
     else u53_lfsr_q <= {u53_lfsr_q[62:0], (^(u53_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u53_flush_busy_o;
-  logic [1-1:0] u53_c_valid_o;
-  logic [4-1:0] u53_c_index_o;
-  logic [16-1:0] u53_c_glow_o;
-  logic signed [8-1:0] u53_c_disp_x_o;
-  logic signed [8-1:0] u53_c_disp_y_o;
-  logic [1-1:0] u53_c_ink_o;
-  logic [32-1:0] u53_fragments_o;
-  logic [32-1:0] u53_glow_saturations_o;
-  logic [32-1:0] u53_disp_clamps_o;
-  logic [32-1:0] u53_cells_flushed_o;
-  zhao_post_gather u53_i (
+  logic [1-1:0] u53_p_ready_o;
+  logic [1-1:0] u53_s_valid_o;
+  logic signed [13-1:0] u53_s_min_x_o;
+  logic signed [13-1:0] u53_s_max_x_o;
+  logic signed [13-1:0] u53_s_min_y_o;
+  logic signed [13-1:0] u53_s_max_y_o;
+  logic signed [32-1:0] u53_s_d_o;
+  logic [8-1:0] u53_s_r_o;
+  logic [8-1:0] u53_s_g_o;
+  logic [8-1:0] u53_s_b_o;
+  logic [1-1:0] u53_s_depth_test_o;
+  logic [1-1:0] u53_s_depth_write_o;
+  logic [16-1:0] u53_s_src_id_o;
+  logic [32-1:0] u53_soft_particles_o;
+  zhao_part_soft u53_i (
       .clk(clk),
       .rst_n(rst_n),
-      .f_valid_i(u53_src[0 +: 1]),
-      .f_x_i(u53_src[7 +: 4]),
-      .f_y_i(u53_src[14 +: 4]),
-      .f_glow_r_i(u53_src[21 +: 8]),
-      .f_glow_g_i(u53_src[28 +: 8]),
-      .f_glow_b_i(u53_src[35 +: 8]),
-      .f_disp_x_i(u53_src[42 +: 16]),
-      .f_disp_y_i(u53_src[49 +: 16]),
-      .f_ink_i(u53_src[56 +: 1]),
-      .tile_start_i(u53_src[63 +: 1]),
-      .tile_flush_i(u53_src[70 +: 1]),
-      .flush_busy_o(u53_flush_busy_o),
-      .c_valid_o(u53_c_valid_o),
-      .c_index_o(u53_c_index_o),
-      .c_glow_o(u53_c_glow_o),
-      .c_disp_x_o(u53_c_disp_x_o),
-      .c_disp_y_o(u53_c_disp_y_o),
-      .c_ink_o(u53_c_ink_o),
-      .fragments_o(u53_fragments_o),
-      .glow_saturations_o(u53_glow_saturations_o),
-      .disp_clamps_o(u53_disp_clamps_o),
-      .cells_flushed_o(u53_cells_flushed_o)
+      .vp_x0_i(u53_src[0 +: 12]),
+      .vp_y0_i(u53_src[7 +: 12]),
+      .vp_w_i(u53_src[14 +: 12]),
+      .vp_h_i(u53_src[21 +: 12]),
+      .p_valid_i(u53_src[28 +: 1]),
+      .p_ready_o(u53_p_ready_o),
+      .p_in_i(u53_src[35 +: 1]),
+      .p_x_i(u53_src[42 +: 21]),
+      .p_y_i(u53_src[49 +: 21]),
+      .p_d_i(u53_src[56 +: 32]),
+      .p_size_i(u53_src[63 +: 8]),
+      .p_r_i(u53_src[70 +: 8]),
+      .p_g_i(u53_src[77 +: 8]),
+      .p_b_i(u53_src[84 +: 8]),
+      .p_src_id_i(u53_src[91 +: 16]),
+      .s_valid_o(u53_s_valid_o),
+      .s_ready_i(u53_src[98 +: 1]),
+      .s_min_x_o(u53_s_min_x_o),
+      .s_max_x_o(u53_s_max_x_o),
+      .s_min_y_o(u53_s_min_y_o),
+      .s_max_y_o(u53_s_max_y_o),
+      .s_d_o(u53_s_d_o),
+      .s_r_o(u53_s_r_o),
+      .s_g_o(u53_s_g_o),
+      .s_b_o(u53_s_b_o),
+      .s_depth_test_o(u53_s_depth_test_o),
+      .s_depth_write_o(u53_s_depth_write_o),
+      .s_src_id_o(u53_s_src_id_o),
+      .soft_particles_o(u53_soft_particles_o)
   );
   logic u53_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u53_fold_q <= 1'b0;
-    else u53_fold_q <= u53_fold_q ^ (((^u53_flush_busy_o)) & u53_src[0]) ^ (((^u53_c_valid_o)) & u53_src[1]) ^ (((^u53_c_index_o)) & u53_src[2]) ^ (((^u53_c_glow_o)) & u53_src[3]) ^ (((^u53_c_disp_x_o)) & u53_src[4]) ^ (((^u53_c_disp_y_o)) & u53_src[5]) ^ (((^u53_c_ink_o)) & u53_src[6]) ^ (((^u53_fragments_o)) & u53_src[7]) ^ (((^u53_glow_saturations_o)) & u53_src[8]) ^ (((^u53_disp_clamps_o)) & u53_src[9]) ^ (((^u53_cells_flushed_o)) & u53_src[10]);
+    else u53_fold_q <= u53_fold_q ^ (((^u53_p_ready_o)) & u53_src[0]) ^ (((^u53_s_valid_o)) & u53_src[1]) ^ (((^u53_s_min_x_o)) & u53_src[2]) ^ (((^u53_s_max_x_o)) & u53_src[3]) ^ (((^u53_s_min_y_o)) & u53_src[4]) ^ (((^u53_s_max_y_o)) & u53_src[5]) ^ (((^u53_s_d_o)) & u53_src[6]) ^ (((^u53_s_r_o)) & u53_src[7]) ^ (((^u53_s_g_o)) & u53_src[8]) ^ (((^u53_s_b_o)) & u53_src[9]) ^ (((^u53_s_depth_test_o)) & u53_src[10]) ^ (((^u53_s_depth_write_o)) & u53_src[11]) ^ (((^u53_s_src_id_o)) & u53_src[12]) ^ (((^u53_soft_particles_o)) & u53_src[13]);
 
-  // ---- zhao_post_gather_store ----
+  // ---- zhao_post_gather ----
   logic [63:0] u54_lfsr_q;
   logic [1023:0] u54_src;
   assign u54_src = {16{u54_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u54_lfsr_q <= 64'h000000215FB4CE9B;
     else u54_lfsr_q <= {u54_lfsr_q[62:0], (^(u54_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u54_gd_present_o;
-  logic signed [8-1:0] u54_gd_dx_o;
-  logic signed [8-1:0] u54_gd_dy_o;
-  logic [1-1:0] u54_gg_present_o;
-  logic [16-1:0] u54_gg_glow_o;
-  logic [1-1:0] u54_gg_ink_o;
-  logic [32-1:0] u54_cells_written_o;
-  logic [32-1:0] u54_oob_writes_o;
-  logic [32-1:0] u54_gd_reads_o;
-  logic [32-1:0] u54_gg_reads_o;
-  logic [32-1:0] u54_gd_miss_o;
-  logic [32-1:0] u54_gg_miss_o;
-  logic [32-1:0] u54_flush_overrun_o;
-  logic [32-1:0] u54_rdw_collide_o;
-  logic [32-1:0] u54_plane_commits_o;
-  zhao_post_gather_store u54_i (
+  logic [1-1:0] u54_flush_busy_o;
+  logic [1-1:0] u54_c_valid_o;
+  logic [4-1:0] u54_c_index_o;
+  logic [16-1:0] u54_c_glow_o;
+  logic signed [8-1:0] u54_c_disp_x_o;
+  logic signed [8-1:0] u54_c_disp_y_o;
+  logic [1-1:0] u54_c_ink_o;
+  logic [32-1:0] u54_fragments_o;
+  logic [32-1:0] u54_glow_saturations_o;
+  logic [32-1:0] u54_disp_clamps_o;
+  logic [32-1:0] u54_cells_flushed_o;
+  zhao_post_gather u54_i (
       .clk(clk),
       .rst_n(rst_n),
-      .plane_w_cells_i(u54_src[0 +: 7]),
-      .plane_rows_i(u54_src[7 +: 7]),
-      .view_rows_i(u54_src[14 +: 7]),
-      .org_valid_i(u54_src[21 +: 1]),
-      .org_cx_i(u54_src[28 +: 7]),
-      .org_cy_i(u54_src[35 +: 7]),
-      .org_ok_i(u54_src[42 +: 1]),
-      .org_close_i(u54_src[49 +: 1]),
-      .w_busy_i(u54_src[56 +: 1]),
-      .w_valid_i(u54_src[63 +: 1]),
-      .w_index_i(u54_src[70 +: 4]),
-      .w_glow_i(u54_src[77 +: 16]),
-      .w_dx_i(u54_src[84 +: 8]),
-      .w_dy_i(u54_src[91 +: 8]),
-      .w_ink_i(u54_src[98 +: 1]),
-      .plane_commit_i(u54_src[105 +: 1]),
-      .gd_req_v_i(u54_src[112 +: 1]),
-      .gd_view_i(u54_src[119 +: 1]),
-      .gd_cx_i(u54_src[126 +: 7]),
-      .gd_cy_i(u54_src[133 +: 7]),
-      .gd_present_o(u54_gd_present_o),
-      .gd_dx_o(u54_gd_dx_o),
-      .gd_dy_o(u54_gd_dy_o),
-      .gg_req_v_i(u54_src[140 +: 1]),
-      .gg_view_i(u54_src[147 +: 1]),
-      .gg_cx_i(u54_src[154 +: 7]),
-      .gg_cy_i(u54_src[161 +: 7]),
-      .gg_present_o(u54_gg_present_o),
-      .gg_glow_o(u54_gg_glow_o),
-      .gg_ink_o(u54_gg_ink_o),
-      .cells_written_o(u54_cells_written_o),
-      .oob_writes_o(u54_oob_writes_o),
-      .gd_reads_o(u54_gd_reads_o),
-      .gg_reads_o(u54_gg_reads_o),
-      .gd_miss_o(u54_gd_miss_o),
-      .gg_miss_o(u54_gg_miss_o),
-      .flush_overrun_o(u54_flush_overrun_o),
-      .rdw_collide_o(u54_rdw_collide_o),
-      .plane_commits_o(u54_plane_commits_o)
+      .f_valid_i(u54_src[0 +: 1]),
+      .f_x_i(u54_src[7 +: 4]),
+      .f_y_i(u54_src[14 +: 4]),
+      .f_glow_r_i(u54_src[21 +: 8]),
+      .f_glow_g_i(u54_src[28 +: 8]),
+      .f_glow_b_i(u54_src[35 +: 8]),
+      .f_disp_x_i(u54_src[42 +: 16]),
+      .f_disp_y_i(u54_src[49 +: 16]),
+      .f_ink_i(u54_src[56 +: 1]),
+      .tile_start_i(u54_src[63 +: 1]),
+      .tile_flush_i(u54_src[70 +: 1]),
+      .flush_busy_o(u54_flush_busy_o),
+      .c_valid_o(u54_c_valid_o),
+      .c_index_o(u54_c_index_o),
+      .c_glow_o(u54_c_glow_o),
+      .c_disp_x_o(u54_c_disp_x_o),
+      .c_disp_y_o(u54_c_disp_y_o),
+      .c_ink_o(u54_c_ink_o),
+      .fragments_o(u54_fragments_o),
+      .glow_saturations_o(u54_glow_saturations_o),
+      .disp_clamps_o(u54_disp_clamps_o),
+      .cells_flushed_o(u54_cells_flushed_o)
   );
   logic u54_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u54_fold_q <= 1'b0;
-    else u54_fold_q <= u54_fold_q ^ (((^u54_gd_present_o)) & u54_src[0]) ^ (((^u54_gd_dx_o)) & u54_src[1]) ^ (((^u54_gd_dy_o)) & u54_src[2]) ^ (((^u54_gg_present_o)) & u54_src[3]) ^ (((^u54_gg_glow_o)) & u54_src[4]) ^ (((^u54_gg_ink_o)) & u54_src[5]) ^ (((^u54_cells_written_o)) & u54_src[6]) ^ (((^u54_oob_writes_o)) & u54_src[7]) ^ (((^u54_gd_reads_o)) & u54_src[8]) ^ (((^u54_gg_reads_o)) & u54_src[9]) ^ (((^u54_gd_miss_o)) & u54_src[10]) ^ (((^u54_gg_miss_o)) & u54_src[11]) ^ (((^u54_flush_overrun_o)) & u54_src[12]) ^ (((^u54_rdw_collide_o)) & u54_src[13]) ^ (((^u54_plane_commits_o)) & u54_src[14]);
+    else u54_fold_q <= u54_fold_q ^ (((^u54_flush_busy_o)) & u54_src[0]) ^ (((^u54_c_valid_o)) & u54_src[1]) ^ (((^u54_c_index_o)) & u54_src[2]) ^ (((^u54_c_glow_o)) & u54_src[3]) ^ (((^u54_c_disp_x_o)) & u54_src[4]) ^ (((^u54_c_disp_y_o)) & u54_src[5]) ^ (((^u54_c_ink_o)) & u54_src[6]) ^ (((^u54_fragments_o)) & u54_src[7]) ^ (((^u54_glow_saturations_o)) & u54_src[8]) ^ (((^u54_disp_clamps_o)) & u54_src[9]) ^ (((^u54_cells_flushed_o)) & u54_src[10]);
 
-  // ---- zhao_post_gather_tag ----
+  // ---- zhao_post_gather_store ----
   logic [63:0] u55_lfsr_q;
   logic [1023:0] u55_src;
   assign u55_src = {16{u55_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u55_lfsr_q <= 64'h00000021FDEC484C;
     else u55_lfsr_q <= {u55_lfsr_q[62:0], (^(u55_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u55_g_valid_o;
-  logic [8-1:0] u55_g_glow_r_o;
-  logic [8-1:0] u55_g_glow_g_o;
-  logic [8-1:0] u55_g_glow_b_o;
-  logic signed [16-1:0] u55_g_disp_x_o;
-  logic signed [16-1:0] u55_g_disp_y_o;
-  logic [1-1:0] u55_g_ink_o;
-  logic [4-1:0] u55_g_x_o;
-  logic [4-1:0] u55_g_y_o;
-  logic [1-1:0] u55_g_tile_start_o;
-  logic [1-1:0] u55_g_tile_flush_o;
-  logic [32-1:0] u55_frag_untagged_o;
-  logic [32-1:0] u55_frag_below_knee_o;
-  logic [32-1:0] u55_frag_lit_o;
-  logic [32-1:0] u55_reserved_channel_o;
-  zhao_post_gather_tag u55_i (
+  logic [1-1:0] u55_gd_present_o;
+  logic signed [8-1:0] u55_gd_dx_o;
+  logic signed [8-1:0] u55_gd_dy_o;
+  logic [1-1:0] u55_gg_present_o;
+  logic [16-1:0] u55_gg_glow_o;
+  logic [1-1:0] u55_gg_ink_o;
+  logic [32-1:0] u55_cells_written_o;
+  logic [32-1:0] u55_oob_writes_o;
+  logic [32-1:0] u55_gd_reads_o;
+  logic [32-1:0] u55_gg_reads_o;
+  logic [32-1:0] u55_gd_miss_o;
+  logic [32-1:0] u55_gg_miss_o;
+  logic [32-1:0] u55_flush_overrun_o;
+  logic [32-1:0] u55_rdw_collide_o;
+  logic [32-1:0] u55_plane_commits_o;
+  zhao_post_gather_store u55_i (
       .clk(clk),
       .rst_n(rst_n),
-      .f_valid_i(u55_src[0 +: 1]),
-      .f_tag_i(u55_src[7 +: 8]),
-      .f_rgb565_i(u55_src[14 +: 16]),
-      .f_x_i(u55_src[21 +: 4]),
-      .f_y_i(u55_src[28 +: 4]),
-      .tile_start_i(u55_src[35 +: 1]),
-      .tile_flush_i(u55_src[42 +: 1]),
-      .g_valid_o(u55_g_valid_o),
-      .g_glow_r_o(u55_g_glow_r_o),
-      .g_glow_g_o(u55_g_glow_g_o),
-      .g_glow_b_o(u55_g_glow_b_o),
-      .g_disp_x_o(u55_g_disp_x_o),
-      .g_disp_y_o(u55_g_disp_y_o),
-      .g_ink_o(u55_g_ink_o),
-      .g_x_o(u55_g_x_o),
-      .g_y_o(u55_g_y_o),
-      .g_tile_start_o(u55_g_tile_start_o),
-      .g_tile_flush_o(u55_g_tile_flush_o),
-      .frag_untagged_o(u55_frag_untagged_o),
-      .frag_below_knee_o(u55_frag_below_knee_o),
-      .frag_lit_o(u55_frag_lit_o),
-      .reserved_channel_o(u55_reserved_channel_o)
+      .plane_w_cells_i(u55_src[0 +: 7]),
+      .plane_rows_i(u55_src[7 +: 7]),
+      .view_rows_i(u55_src[14 +: 7]),
+      .org_valid_i(u55_src[21 +: 1]),
+      .org_cx_i(u55_src[28 +: 7]),
+      .org_cy_i(u55_src[35 +: 7]),
+      .org_ok_i(u55_src[42 +: 1]),
+      .org_close_i(u55_src[49 +: 1]),
+      .w_busy_i(u55_src[56 +: 1]),
+      .w_valid_i(u55_src[63 +: 1]),
+      .w_index_i(u55_src[70 +: 4]),
+      .w_glow_i(u55_src[77 +: 16]),
+      .w_dx_i(u55_src[84 +: 8]),
+      .w_dy_i(u55_src[91 +: 8]),
+      .w_ink_i(u55_src[98 +: 1]),
+      .plane_commit_i(u55_src[105 +: 1]),
+      .gd_req_v_i(u55_src[112 +: 1]),
+      .gd_view_i(u55_src[119 +: 1]),
+      .gd_cx_i(u55_src[126 +: 7]),
+      .gd_cy_i(u55_src[133 +: 7]),
+      .gd_present_o(u55_gd_present_o),
+      .gd_dx_o(u55_gd_dx_o),
+      .gd_dy_o(u55_gd_dy_o),
+      .gg_req_v_i(u55_src[140 +: 1]),
+      .gg_view_i(u55_src[147 +: 1]),
+      .gg_cx_i(u55_src[154 +: 7]),
+      .gg_cy_i(u55_src[161 +: 7]),
+      .gg_present_o(u55_gg_present_o),
+      .gg_glow_o(u55_gg_glow_o),
+      .gg_ink_o(u55_gg_ink_o),
+      .cells_written_o(u55_cells_written_o),
+      .oob_writes_o(u55_oob_writes_o),
+      .gd_reads_o(u55_gd_reads_o),
+      .gg_reads_o(u55_gg_reads_o),
+      .gd_miss_o(u55_gd_miss_o),
+      .gg_miss_o(u55_gg_miss_o),
+      .flush_overrun_o(u55_flush_overrun_o),
+      .rdw_collide_o(u55_rdw_collide_o),
+      .plane_commits_o(u55_plane_commits_o)
   );
   logic u55_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u55_fold_q <= 1'b0;
-    else u55_fold_q <= u55_fold_q ^ (((^u55_g_valid_o)) & u55_src[0]) ^ (((^u55_g_glow_r_o)) & u55_src[1]) ^ (((^u55_g_glow_g_o)) & u55_src[2]) ^ (((^u55_g_glow_b_o)) & u55_src[3]) ^ (((^u55_g_disp_x_o)) & u55_src[4]) ^ (((^u55_g_disp_y_o)) & u55_src[5]) ^ (((^u55_g_ink_o)) & u55_src[6]) ^ (((^u55_g_x_o)) & u55_src[7]) ^ (((^u55_g_y_o)) & u55_src[8]) ^ (((^u55_g_tile_start_o)) & u55_src[9]) ^ (((^u55_g_tile_flush_o)) & u55_src[10]) ^ (((^u55_frag_untagged_o)) & u55_src[11]) ^ (((^u55_frag_below_knee_o)) & u55_src[12]) ^ (((^u55_frag_lit_o)) & u55_src[13]) ^ (((^u55_reserved_channel_o)) & u55_src[14]);
+    else u55_fold_q <= u55_fold_q ^ (((^u55_gd_present_o)) & u55_src[0]) ^ (((^u55_gd_dx_o)) & u55_src[1]) ^ (((^u55_gd_dy_o)) & u55_src[2]) ^ (((^u55_gg_present_o)) & u55_src[3]) ^ (((^u55_gg_glow_o)) & u55_src[4]) ^ (((^u55_gg_ink_o)) & u55_src[5]) ^ (((^u55_cells_written_o)) & u55_src[6]) ^ (((^u55_oob_writes_o)) & u55_src[7]) ^ (((^u55_gd_reads_o)) & u55_src[8]) ^ (((^u55_gg_reads_o)) & u55_src[9]) ^ (((^u55_gd_miss_o)) & u55_src[10]) ^ (((^u55_gg_miss_o)) & u55_src[11]) ^ (((^u55_flush_overrun_o)) & u55_src[12]) ^ (((^u55_rdw_collide_o)) & u55_src[13]) ^ (((^u55_plane_commits_o)) & u55_src[14]);
 
-  // ---- zhao_proj_cfgvalid ----
+  // ---- zhao_post_gather_tag ----
   logic [63:0] u56_lfsr_q;
   logic [1023:0] u56_src;
   assign u56_src = {16{u56_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u56_lfsr_q <= 64'h000000229C23C1FD;
     else u56_lfsr_q <= {u56_lfsr_q[62:0], (^(u56_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u56_en_o;
-  logic [32-1:0] u56_arm_events_o;
-  logic [32-1:0] u56_held_offers_o;
-  zhao_proj_cfgvalid u56_i (
+  logic [1-1:0] u56_g_valid_o;
+  logic [8-1:0] u56_g_glow_r_o;
+  logic [8-1:0] u56_g_glow_g_o;
+  logic [8-1:0] u56_g_glow_b_o;
+  logic signed [16-1:0] u56_g_disp_x_o;
+  logic signed [16-1:0] u56_g_disp_y_o;
+  logic [1-1:0] u56_g_ink_o;
+  logic [4-1:0] u56_g_x_o;
+  logic [4-1:0] u56_g_y_o;
+  logic [1-1:0] u56_g_tile_start_o;
+  logic [1-1:0] u56_g_tile_flush_o;
+  logic [32-1:0] u56_frag_untagged_o;
+  logic [32-1:0] u56_frag_below_knee_o;
+  logic [32-1:0] u56_frag_lit_o;
+  logic [32-1:0] u56_reserved_channel_o;
+  zhao_post_gather_tag u56_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_we_i(u56_src[0 +: 1]),
-      .cfg_view_i(u56_src[7 +: 1]),
-      .cfg_addr_i(u56_src[14 +: 5]),
-      .offer_i(u56_src[21 +: 1]),
-      .en_o(u56_en_o),
-      .arm_events_o(u56_arm_events_o),
-      .held_offers_o(u56_held_offers_o)
+      .f_valid_i(u56_src[0 +: 1]),
+      .f_tag_i(u56_src[7 +: 8]),
+      .f_rgb565_i(u56_src[14 +: 16]),
+      .f_x_i(u56_src[21 +: 4]),
+      .f_y_i(u56_src[28 +: 4]),
+      .tile_start_i(u56_src[35 +: 1]),
+      .tile_flush_i(u56_src[42 +: 1]),
+      .g_valid_o(u56_g_valid_o),
+      .g_glow_r_o(u56_g_glow_r_o),
+      .g_glow_g_o(u56_g_glow_g_o),
+      .g_glow_b_o(u56_g_glow_b_o),
+      .g_disp_x_o(u56_g_disp_x_o),
+      .g_disp_y_o(u56_g_disp_y_o),
+      .g_ink_o(u56_g_ink_o),
+      .g_x_o(u56_g_x_o),
+      .g_y_o(u56_g_y_o),
+      .g_tile_start_o(u56_g_tile_start_o),
+      .g_tile_flush_o(u56_g_tile_flush_o),
+      .frag_untagged_o(u56_frag_untagged_o),
+      .frag_below_knee_o(u56_frag_below_knee_o),
+      .frag_lit_o(u56_frag_lit_o),
+      .reserved_channel_o(u56_reserved_channel_o)
   );
   logic u56_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u56_fold_q <= 1'b0;
-    else u56_fold_q <= u56_fold_q ^ (((^u56_en_o)) & u56_src[0]) ^ (((^u56_arm_events_o)) & u56_src[1]) ^ (((^u56_held_offers_o)) & u56_src[2]);
+    else u56_fold_q <= u56_fold_q ^ (((^u56_g_valid_o)) & u56_src[0]) ^ (((^u56_g_glow_r_o)) & u56_src[1]) ^ (((^u56_g_glow_g_o)) & u56_src[2]) ^ (((^u56_g_glow_b_o)) & u56_src[3]) ^ (((^u56_g_disp_x_o)) & u56_src[4]) ^ (((^u56_g_disp_y_o)) & u56_src[5]) ^ (((^u56_g_ink_o)) & u56_src[6]) ^ (((^u56_g_x_o)) & u56_src[7]) ^ (((^u56_g_y_o)) & u56_src[8]) ^ (((^u56_g_tile_start_o)) & u56_src[9]) ^ (((^u56_g_tile_flush_o)) & u56_src[10]) ^ (((^u56_frag_untagged_o)) & u56_src[11]) ^ (((^u56_frag_below_knee_o)) & u56_src[12]) ^ (((^u56_frag_lit_o)) & u56_src[13]) ^ (((^u56_reserved_channel_o)) & u56_src[14]);
 
-  // ---- zhao_proj_subsystem ----
+  // ---- zhao_proj_cfgvalid ----
   logic [63:0] u57_lfsr_q;
   logic [1023:0] u57_src;
   assign u57_src = {16{u57_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u57_lfsr_q <= 64'h000000233A5B3BAE;
     else u57_lfsr_q <= {u57_lfsr_q[62:0], (^(u57_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u57_a_ready_o;
-  logic [1-1:0] u57_a_valid_o;
-  logic signed [21-1:0] u57_a_x_o;
-  logic signed [21-1:0] u57_a_y_o;
-  logic signed [32-1:0] u57_a_d_o;
-  logic [31-1:0] u57_a_w_o;
-  logic [1-1:0] u57_a_behind_o;
-  logic [1-1:0] u57_a_view_o;
-  logic [2-1:0] u57_a_profile_o;
-  logic [16-1:0] u57_a_payload_o;
-  logic [1-1:0] u57_b_ready_o;
-  logic [1-1:0] u57_fill_landed_o;
-  logic [3-1:0] u57_fill_arena_o;
-  logic [2-1:0] u57_fill_profile_o;
-  logic [8-1:0] u57_open_gen_o;
-  logic [1-1:0] u57_ref_ready_o;
-  logic [1-1:0] u57_out_valid_o;
-  logic signed [21-1:0] u57_out_ax_o;
-  logic signed [21-1:0] u57_out_ay_o;
-  logic signed [21-1:0] u57_out_bx_o;
-  logic signed [21-1:0] u57_out_by_o;
-  logic signed [21-1:0] u57_out_cx_o;
-  logic signed [21-1:0] u57_out_cy_o;
-  logic [3-1:0] u57_out_behind_o;
-  logic [16-1:0] u57_out_src_id_o;
-  logic signed [32-1:0] u57_out_ad_o;
-  logic signed [32-1:0] u57_out_bd_o;
-  logic signed [32-1:0] u57_out_cd_o;
-  logic [31-1:0] u57_out_aw_o;
-  logic [31-1:0] u57_out_bw_o;
-  logic [31-1:0] u57_out_cw_o;
-  logic [1-1:0] u57_out_view_o;
-  logic [8-1:0] u57_out_mat_a_o;
-  logic [8-1:0] u57_out_mat_b_o;
-  logic [8-1:0] u57_out_weight_o;
-  logic [1-1:0] u57_out_refused_o;
-  logic [1-1:0] u57_out_missed_o;
-  logic [32-1:0] u57_replay_triangles_o;
-  logic [32-1:0] u57_replay_refused_o;
-  logic [32-1:0] u57_replay_missed_o;
-  logic [32-1:0] u57_corner_hits_o;
-  logic [32-1:0] u57_corner_refusals_o;
-  logic [32-1:0] u57_corner_misses_o;
-  logic [1-1:0] u57_arena_overflow_o;
-  logic [1-1:0] u57_arena_seal_short_o;
-  logic [1-1:0] u57_shell_idle_o;
-  logic [1-1:0] u57_svc_busy_o;
-  logic [32-1:0] u57_a_grants_o;
-  logic [32-1:0] u57_b_grants_o;
-  logic [32-1:0] u57_contended_o;
-  logic [32-1:0] u57_mat_refused_o;
-  zhao_proj_subsystem u57_i (
+  logic [1-1:0] u57_en_o;
+  logic [32-1:0] u57_arm_events_o;
+  logic [32-1:0] u57_held_offers_o;
+  zhao_proj_cfgvalid u57_i (
       .clk(clk),
       .rst_n(rst_n),
       .cfg_we_i(u57_src[0 +: 1]),
       .cfg_view_i(u57_src[7 +: 1]),
       .cfg_addr_i(u57_src[14 +: 5]),
-      .cfg_data_i(u57_src[21 +: 32]),
-      .en_i(u57_src[28 +: 1]),
-      .a_valid_i(u57_src[35 +: 1]),
-      .a_ready_o(u57_a_ready_o),
-      .a_vx_i(u57_src[42 +: 32]),
-      .a_vy_i(u57_src[49 +: 32]),
-      .a_vz_i(u57_src[56 +: 32]),
-      .a_view_i(u57_src[63 +: 1]),
-      .a_payload_i(u57_src[70 +: 16]),
-      .a_valid_o(u57_a_valid_o),
-      .a_x_o(u57_a_x_o),
-      .a_y_o(u57_a_y_o),
-      .a_d_o(u57_a_d_o),
-      .a_w_o(u57_a_w_o),
-      .a_behind_o(u57_a_behind_o),
-      .a_view_o(u57_a_view_o),
-      .a_profile_o(u57_a_profile_o),
-      .a_payload_o(u57_a_payload_o),
-      .b_valid_i(u57_src[77 +: 1]),
-      .b_ready_o(u57_b_ready_o),
-      .b_vx_i(u57_src[84 +: 32]),
-      .b_vy_i(u57_src[91 +: 32]),
-      .b_vz_i(u57_src[98 +: 32]),
-      .b_view_i(u57_src[105 +: 1]),
-      .b_arena_i(u57_src[112 +: 3]),
-      .b_index_i(u57_src[119 +: 8]),
-      .fill_landed_o(u57_fill_landed_o),
-      .fill_arena_o(u57_fill_arena_o),
-      .fill_profile_o(u57_fill_profile_o),
-      .open_i(u57_src[126 +: 1]),
-      .open_arena_i(u57_src[133 +: 3]),
-      .open_gen_o(u57_open_gen_o),
-      .seal_i(u57_src[140 +: 1]),
-      .seal_arena_i(u57_src[147 +: 3]),
-      .ref_valid_i(u57_src[154 +: 1]),
-      .ref_ready_o(u57_ref_ready_o),
-      .ref_arena_i(u57_src[161 +: 3]),
-      .ref_gen_i(u57_src[168 +: 8]),
-      .ref_ia_i(u57_src[175 +: 8]),
-      .ref_ib_i(u57_src[182 +: 8]),
-      .ref_ic_i(u57_src[189 +: 8]),
-      .ref_src_id_i(u57_src[196 +: 16]),
-      .ref_view_i(u57_src[203 +: 1]),
-      .ref_mat_a_i(u57_src[210 +: 8]),
-      .ref_mat_b_i(u57_src[217 +: 8]),
-      .ref_weight_i(u57_src[224 +: 8]),
-      .out_valid_o(u57_out_valid_o),
-      .out_ready_i(u57_src[231 +: 1]),
-      .out_ax_o(u57_out_ax_o),
-      .out_ay_o(u57_out_ay_o),
-      .out_bx_o(u57_out_bx_o),
-      .out_by_o(u57_out_by_o),
-      .out_cx_o(u57_out_cx_o),
-      .out_cy_o(u57_out_cy_o),
-      .out_behind_o(u57_out_behind_o),
-      .out_src_id_o(u57_out_src_id_o),
-      .out_ad_o(u57_out_ad_o),
-      .out_bd_o(u57_out_bd_o),
-      .out_cd_o(u57_out_cd_o),
-      .out_aw_o(u57_out_aw_o),
-      .out_bw_o(u57_out_bw_o),
-      .out_cw_o(u57_out_cw_o),
-      .out_view_o(u57_out_view_o),
-      .out_mat_a_o(u57_out_mat_a_o),
-      .out_mat_b_o(u57_out_mat_b_o),
-      .out_weight_o(u57_out_weight_o),
-      .out_refused_o(u57_out_refused_o),
-      .out_missed_o(u57_out_missed_o),
-      .replay_triangles_o(u57_replay_triangles_o),
-      .replay_refused_o(u57_replay_refused_o),
-      .replay_missed_o(u57_replay_missed_o),
-      .corner_hits_o(u57_corner_hits_o),
-      .corner_refusals_o(u57_corner_refusals_o),
-      .corner_misses_o(u57_corner_misses_o),
-      .arena_overflow_o(u57_arena_overflow_o),
-      .arena_seal_short_o(u57_arena_seal_short_o),
-      .shell_idle_o(u57_shell_idle_o),
-      .svc_busy_o(u57_svc_busy_o),
-      .a_grants_o(u57_a_grants_o),
-      .b_grants_o(u57_b_grants_o),
-      .contended_o(u57_contended_o),
-      .mat_refused_o(u57_mat_refused_o)
+      .offer_i(u57_src[21 +: 1]),
+      .en_o(u57_en_o),
+      .arm_events_o(u57_arm_events_o),
+      .held_offers_o(u57_held_offers_o)
   );
   logic u57_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u57_fold_q <= 1'b0;
-    else u57_fold_q <= u57_fold_q ^ (((^u57_a_ready_o)) & u57_src[0]) ^ (((^u57_a_valid_o)) & u57_src[1]) ^ (((^u57_a_x_o)) & u57_src[2]) ^ (((^u57_a_y_o)) & u57_src[3]) ^ (((^u57_a_d_o)) & u57_src[4]) ^ (((^u57_a_w_o)) & u57_src[5]) ^ (((^u57_a_behind_o)) & u57_src[6]) ^ (((^u57_a_view_o)) & u57_src[7]) ^ (((^u57_a_profile_o)) & u57_src[8]) ^ (((^u57_a_payload_o)) & u57_src[9]) ^ (((^u57_b_ready_o)) & u57_src[10]) ^ (((^u57_fill_landed_o)) & u57_src[11]) ^ (((^u57_fill_arena_o)) & u57_src[12]) ^ (((^u57_fill_profile_o)) & u57_src[13]) ^ (((^u57_open_gen_o)) & u57_src[14]) ^ (((^u57_ref_ready_o)) & u57_src[15]) ^ (((^u57_out_valid_o)) & u57_src[16]) ^ (((^u57_out_ax_o)) & u57_src[17]) ^ (((^u57_out_ay_o)) & u57_src[18]) ^ (((^u57_out_bx_o)) & u57_src[19]) ^ (((^u57_out_by_o)) & u57_src[20]) ^ (((^u57_out_cx_o)) & u57_src[21]) ^ (((^u57_out_cy_o)) & u57_src[22]) ^ (((^u57_out_behind_o)) & u57_src[23]) ^ (((^u57_out_src_id_o)) & u57_src[24]) ^ (((^u57_out_ad_o)) & u57_src[25]) ^ (((^u57_out_bd_o)) & u57_src[26]) ^ (((^u57_out_cd_o)) & u57_src[27]) ^ (((^u57_out_aw_o)) & u57_src[28]) ^ (((^u57_out_bw_o)) & u57_src[29]) ^ (((^u57_out_cw_o)) & u57_src[30]) ^ (((^u57_out_view_o)) & u57_src[31]) ^ (((^u57_out_mat_a_o)) & u57_src[32]) ^ (((^u57_out_mat_b_o)) & u57_src[33]) ^ (((^u57_out_weight_o)) & u57_src[34]) ^ (((^u57_out_refused_o)) & u57_src[35]) ^ (((^u57_out_missed_o)) & u57_src[36]) ^ (((^u57_replay_triangles_o)) & u57_src[37]) ^ (((^u57_replay_refused_o)) & u57_src[38]) ^ (((^u57_replay_missed_o)) & u57_src[39]) ^ (((^u57_corner_hits_o)) & u57_src[40]) ^ (((^u57_corner_refusals_o)) & u57_src[41]) ^ (((^u57_corner_misses_o)) & u57_src[42]) ^ (((^u57_arena_overflow_o)) & u57_src[43]) ^ (((^u57_arena_seal_short_o)) & u57_src[44]) ^ (((^u57_shell_idle_o)) & u57_src[45]) ^ (((^u57_svc_busy_o)) & u57_src[46]) ^ (((^u57_a_grants_o)) & u57_src[47]) ^ (((^u57_b_grants_o)) & u57_src[48]) ^ (((^u57_contended_o)) & u57_src[49]) ^ (((^u57_mat_refused_o)) & u57_src[50]);
+    else u57_fold_q <= u57_fold_q ^ (((^u57_en_o)) & u57_src[0]) ^ (((^u57_arm_events_o)) & u57_src[1]) ^ (((^u57_held_offers_o)) & u57_src[2]);
 
-  // ---- zhao_raster_attrdiv_svc ----
+  // ---- zhao_proj_subsystem ----
   logic [63:0] u58_lfsr_q;
   logic [1023:0] u58_src;
   assign u58_src = {16{u58_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u58_lfsr_q <= 64'h00000023D892B55F;
     else u58_lfsr_q <= {u58_lfsr_q[62:0], (^(u58_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u58_v_ready_o;
-  logic [1-1:0] u58_r_valid_o;
-  logic signed [32-1:0] u58_q_o;
-  logic [1-1:0] u58_q_saturated_o;
-  logic [1-1:0] u58_q_error_o;
-  logic [47-1:0] u58_rem_o;
-  logic [16-1:0] u58_tag_o;
-  logic [32-1:0] u58_accepted_o;
-  logic [32-1:0] u58_retired_o;
-  logic [32-1:0] u58_stall_clocks_o;
-  logic [1-1:0] u58_rem_range_seen_o;
-  zhao_raster_attrdiv_svc u58_i (
+  logic [1-1:0] u58_a_ready_o;
+  logic [1-1:0] u58_a_valid_o;
+  logic signed [21-1:0] u58_a_x_o;
+  logic signed [21-1:0] u58_a_y_o;
+  logic signed [32-1:0] u58_a_d_o;
+  logic [31-1:0] u58_a_w_o;
+  logic [1-1:0] u58_a_behind_o;
+  logic [1-1:0] u58_a_view_o;
+  logic [2-1:0] u58_a_profile_o;
+  logic [16-1:0] u58_a_payload_o;
+  logic [1-1:0] u58_b_ready_o;
+  logic [1-1:0] u58_fill_landed_o;
+  logic [3-1:0] u58_fill_arena_o;
+  logic [2-1:0] u58_fill_profile_o;
+  logic [8-1:0] u58_open_gen_o;
+  logic [1-1:0] u58_ref_ready_o;
+  logic [1-1:0] u58_out_valid_o;
+  logic signed [21-1:0] u58_out_ax_o;
+  logic signed [21-1:0] u58_out_ay_o;
+  logic signed [21-1:0] u58_out_bx_o;
+  logic signed [21-1:0] u58_out_by_o;
+  logic signed [21-1:0] u58_out_cx_o;
+  logic signed [21-1:0] u58_out_cy_o;
+  logic [3-1:0] u58_out_behind_o;
+  logic [16-1:0] u58_out_src_id_o;
+  logic signed [32-1:0] u58_out_ad_o;
+  logic signed [32-1:0] u58_out_bd_o;
+  logic signed [32-1:0] u58_out_cd_o;
+  logic [31-1:0] u58_out_aw_o;
+  logic [31-1:0] u58_out_bw_o;
+  logic [31-1:0] u58_out_cw_o;
+  logic [1-1:0] u58_out_view_o;
+  logic [8-1:0] u58_out_mat_a_o;
+  logic [8-1:0] u58_out_mat_b_o;
+  logic [8-1:0] u58_out_weight_o;
+  logic [1-1:0] u58_out_refused_o;
+  logic [1-1:0] u58_out_missed_o;
+  logic [32-1:0] u58_replay_triangles_o;
+  logic [32-1:0] u58_replay_refused_o;
+  logic [32-1:0] u58_replay_missed_o;
+  logic [32-1:0] u58_corner_hits_o;
+  logic [32-1:0] u58_corner_refusals_o;
+  logic [32-1:0] u58_corner_misses_o;
+  logic [1-1:0] u58_arena_overflow_o;
+  logic [1-1:0] u58_arena_seal_short_o;
+  logic [1-1:0] u58_shell_idle_o;
+  logic [1-1:0] u58_svc_busy_o;
+  logic [32-1:0] u58_a_grants_o;
+  logic [32-1:0] u58_b_grants_o;
+  logic [32-1:0] u58_contended_o;
+  logic [32-1:0] u58_mat_refused_o;
+  zhao_proj_subsystem u58_i (
       .clk(clk),
       .rst_n(rst_n),
-      .v_valid_i(u58_src[0 +: 1]),
-      .v_ready_o(u58_v_ready_o),
-      .num_i(u58_src[7 +: 96]),
-      .area_i(u58_src[14 +: 47]),
-      .tag_i(u58_src[21 +: 16]),
-      .r_valid_o(u58_r_valid_o),
-      .r_ready_i(u58_src[28 +: 1]),
-      .q_o(u58_q_o),
-      .q_saturated_o(u58_q_saturated_o),
-      .q_error_o(u58_q_error_o),
-      .rem_o(u58_rem_o),
-      .tag_o(u58_tag_o),
-      .accepted_o(u58_accepted_o),
-      .retired_o(u58_retired_o),
-      .stall_clocks_o(u58_stall_clocks_o),
-      .rem_range_seen_o(u58_rem_range_seen_o)
+      .cfg_we_i(u58_src[0 +: 1]),
+      .cfg_view_i(u58_src[7 +: 1]),
+      .cfg_addr_i(u58_src[14 +: 5]),
+      .cfg_data_i(u58_src[21 +: 32]),
+      .en_i(u58_src[28 +: 1]),
+      .a_valid_i(u58_src[35 +: 1]),
+      .a_ready_o(u58_a_ready_o),
+      .a_vx_i(u58_src[42 +: 32]),
+      .a_vy_i(u58_src[49 +: 32]),
+      .a_vz_i(u58_src[56 +: 32]),
+      .a_view_i(u58_src[63 +: 1]),
+      .a_payload_i(u58_src[70 +: 16]),
+      .a_valid_o(u58_a_valid_o),
+      .a_x_o(u58_a_x_o),
+      .a_y_o(u58_a_y_o),
+      .a_d_o(u58_a_d_o),
+      .a_w_o(u58_a_w_o),
+      .a_behind_o(u58_a_behind_o),
+      .a_view_o(u58_a_view_o),
+      .a_profile_o(u58_a_profile_o),
+      .a_payload_o(u58_a_payload_o),
+      .b_valid_i(u58_src[77 +: 1]),
+      .b_ready_o(u58_b_ready_o),
+      .b_vx_i(u58_src[84 +: 32]),
+      .b_vy_i(u58_src[91 +: 32]),
+      .b_vz_i(u58_src[98 +: 32]),
+      .b_view_i(u58_src[105 +: 1]),
+      .b_arena_i(u58_src[112 +: 3]),
+      .b_index_i(u58_src[119 +: 8]),
+      .fill_landed_o(u58_fill_landed_o),
+      .fill_arena_o(u58_fill_arena_o),
+      .fill_profile_o(u58_fill_profile_o),
+      .open_i(u58_src[126 +: 1]),
+      .open_arena_i(u58_src[133 +: 3]),
+      .open_gen_o(u58_open_gen_o),
+      .seal_i(u58_src[140 +: 1]),
+      .seal_arena_i(u58_src[147 +: 3]),
+      .ref_valid_i(u58_src[154 +: 1]),
+      .ref_ready_o(u58_ref_ready_o),
+      .ref_arena_i(u58_src[161 +: 3]),
+      .ref_gen_i(u58_src[168 +: 8]),
+      .ref_ia_i(u58_src[175 +: 8]),
+      .ref_ib_i(u58_src[182 +: 8]),
+      .ref_ic_i(u58_src[189 +: 8]),
+      .ref_src_id_i(u58_src[196 +: 16]),
+      .ref_view_i(u58_src[203 +: 1]),
+      .ref_mat_a_i(u58_src[210 +: 8]),
+      .ref_mat_b_i(u58_src[217 +: 8]),
+      .ref_weight_i(u58_src[224 +: 8]),
+      .out_valid_o(u58_out_valid_o),
+      .out_ready_i(u58_src[231 +: 1]),
+      .out_ax_o(u58_out_ax_o),
+      .out_ay_o(u58_out_ay_o),
+      .out_bx_o(u58_out_bx_o),
+      .out_by_o(u58_out_by_o),
+      .out_cx_o(u58_out_cx_o),
+      .out_cy_o(u58_out_cy_o),
+      .out_behind_o(u58_out_behind_o),
+      .out_src_id_o(u58_out_src_id_o),
+      .out_ad_o(u58_out_ad_o),
+      .out_bd_o(u58_out_bd_o),
+      .out_cd_o(u58_out_cd_o),
+      .out_aw_o(u58_out_aw_o),
+      .out_bw_o(u58_out_bw_o),
+      .out_cw_o(u58_out_cw_o),
+      .out_view_o(u58_out_view_o),
+      .out_mat_a_o(u58_out_mat_a_o),
+      .out_mat_b_o(u58_out_mat_b_o),
+      .out_weight_o(u58_out_weight_o),
+      .out_refused_o(u58_out_refused_o),
+      .out_missed_o(u58_out_missed_o),
+      .replay_triangles_o(u58_replay_triangles_o),
+      .replay_refused_o(u58_replay_refused_o),
+      .replay_missed_o(u58_replay_missed_o),
+      .corner_hits_o(u58_corner_hits_o),
+      .corner_refusals_o(u58_corner_refusals_o),
+      .corner_misses_o(u58_corner_misses_o),
+      .arena_overflow_o(u58_arena_overflow_o),
+      .arena_seal_short_o(u58_arena_seal_short_o),
+      .shell_idle_o(u58_shell_idle_o),
+      .svc_busy_o(u58_svc_busy_o),
+      .a_grants_o(u58_a_grants_o),
+      .b_grants_o(u58_b_grants_o),
+      .contended_o(u58_contended_o),
+      .mat_refused_o(u58_mat_refused_o)
   );
   logic u58_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u58_fold_q <= 1'b0;
-    else u58_fold_q <= u58_fold_q ^ (((^u58_v_ready_o)) & u58_src[0]) ^ (((^u58_r_valid_o)) & u58_src[1]) ^ (((^u58_q_o)) & u58_src[2]) ^ (((^u58_q_saturated_o)) & u58_src[3]) ^ (((^u58_q_error_o)) & u58_src[4]) ^ (((^u58_rem_o)) & u58_src[5]) ^ (((^u58_tag_o)) & u58_src[6]) ^ (((^u58_accepted_o)) & u58_src[7]) ^ (((^u58_retired_o)) & u58_src[8]) ^ (((^u58_stall_clocks_o)) & u58_src[9]) ^ (((^u58_rem_range_seen_o)) & u58_src[10]);
+    else u58_fold_q <= u58_fold_q ^ (((^u58_a_ready_o)) & u58_src[0]) ^ (((^u58_a_valid_o)) & u58_src[1]) ^ (((^u58_a_x_o)) & u58_src[2]) ^ (((^u58_a_y_o)) & u58_src[3]) ^ (((^u58_a_d_o)) & u58_src[4]) ^ (((^u58_a_w_o)) & u58_src[5]) ^ (((^u58_a_behind_o)) & u58_src[6]) ^ (((^u58_a_view_o)) & u58_src[7]) ^ (((^u58_a_profile_o)) & u58_src[8]) ^ (((^u58_a_payload_o)) & u58_src[9]) ^ (((^u58_b_ready_o)) & u58_src[10]) ^ (((^u58_fill_landed_o)) & u58_src[11]) ^ (((^u58_fill_arena_o)) & u58_src[12]) ^ (((^u58_fill_profile_o)) & u58_src[13]) ^ (((^u58_open_gen_o)) & u58_src[14]) ^ (((^u58_ref_ready_o)) & u58_src[15]) ^ (((^u58_out_valid_o)) & u58_src[16]) ^ (((^u58_out_ax_o)) & u58_src[17]) ^ (((^u58_out_ay_o)) & u58_src[18]) ^ (((^u58_out_bx_o)) & u58_src[19]) ^ (((^u58_out_by_o)) & u58_src[20]) ^ (((^u58_out_cx_o)) & u58_src[21]) ^ (((^u58_out_cy_o)) & u58_src[22]) ^ (((^u58_out_behind_o)) & u58_src[23]) ^ (((^u58_out_src_id_o)) & u58_src[24]) ^ (((^u58_out_ad_o)) & u58_src[25]) ^ (((^u58_out_bd_o)) & u58_src[26]) ^ (((^u58_out_cd_o)) & u58_src[27]) ^ (((^u58_out_aw_o)) & u58_src[28]) ^ (((^u58_out_bw_o)) & u58_src[29]) ^ (((^u58_out_cw_o)) & u58_src[30]) ^ (((^u58_out_view_o)) & u58_src[31]) ^ (((^u58_out_mat_a_o)) & u58_src[32]) ^ (((^u58_out_mat_b_o)) & u58_src[33]) ^ (((^u58_out_weight_o)) & u58_src[34]) ^ (((^u58_out_refused_o)) & u58_src[35]) ^ (((^u58_out_missed_o)) & u58_src[36]) ^ (((^u58_replay_triangles_o)) & u58_src[37]) ^ (((^u58_replay_refused_o)) & u58_src[38]) ^ (((^u58_replay_missed_o)) & u58_src[39]) ^ (((^u58_corner_hits_o)) & u58_src[40]) ^ (((^u58_corner_refusals_o)) & u58_src[41]) ^ (((^u58_corner_misses_o)) & u58_src[42]) ^ (((^u58_arena_overflow_o)) & u58_src[43]) ^ (((^u58_arena_seal_short_o)) & u58_src[44]) ^ (((^u58_shell_idle_o)) & u58_src[45]) ^ (((^u58_svc_busy_o)) & u58_src[46]) ^ (((^u58_a_grants_o)) & u58_src[47]) ^ (((^u58_b_grants_o)) & u58_src[48]) ^ (((^u58_contended_o)) & u58_src[49]) ^ (((^u58_mat_refused_o)) & u58_src[50]);
 
-  // ---- zhao_raster_attrinterp ----
+  // ---- zhao_raster_attrdiv_svc ----
   logic [63:0] u59_lfsr_q;
   logic [1023:0] u59_src;
   assign u59_src = {16{u59_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u59_lfsr_q <= 64'h0000002476CA2F10;
     else u59_lfsr_q <= {u59_lfsr_q[62:0], (^(u59_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u59_job_ready_o;
-  logic [1-1:0] u59_cov_ready_o;
-  logic [1-1:0] u59_n_valid_o;
-  logic signed [96-1:0] u59_n_num_o;
-  logic [4-1:0] u59_n_row_o;
-  logic [4-1:0] u59_n_col_o;
-  logic [1-1:0] u59_n_last_o;
-  logic [32-1:0] u59_pixels_o;
-  logic [32-1:0] u59_rows_o;
-  zhao_raster_attrinterp u59_i (
+  logic [1-1:0] u59_v_ready_o;
+  logic [1-1:0] u59_r_valid_o;
+  logic signed [32-1:0] u59_q_o;
+  logic [1-1:0] u59_q_saturated_o;
+  logic [1-1:0] u59_q_error_o;
+  logic [47-1:0] u59_rem_o;
+  logic [16-1:0] u59_tag_o;
+  logic [32-1:0] u59_accepted_o;
+  logic [32-1:0] u59_retired_o;
+  logic [32-1:0] u59_stall_clocks_o;
+  logic [1-1:0] u59_rem_range_seen_o;
+  zhao_raster_attrdiv_svc u59_i (
       .clk(clk),
       .rst_n(rst_n),
-      .job_valid_i(u59_src[0 +: 1]),
-      .job_ready_o(u59_job_ready_o),
-      .job_n0_i(u59_src[7 +: 96]),
-      .job_dndx_i(u59_src[14 +: 72]),
-      .job_dndy_i(u59_src[21 +: 72]),
-      .job_tile_x_i(u59_src[28 +: 12]),
-      .job_tile_y_i(u59_src[35 +: 12]),
-      .cov_valid_i(u59_src[42 +: 1]),
-      .cov_ready_o(u59_cov_ready_o),
-      .cov_row_i(u59_src[49 +: 4]),
-      .cov_mask_i(u59_src[56 +: 16]),
-      .cov_last_i(u59_src[63 +: 1]),
-      .n_valid_o(u59_n_valid_o),
-      .n_ready_i(u59_src[70 +: 1]),
-      .n_num_o(u59_n_num_o),
-      .n_row_o(u59_n_row_o),
-      .n_col_o(u59_n_col_o),
-      .n_last_o(u59_n_last_o),
-      .pixels_o(u59_pixels_o),
-      .rows_o(u59_rows_o)
+      .v_valid_i(u59_src[0 +: 1]),
+      .v_ready_o(u59_v_ready_o),
+      .num_i(u59_src[7 +: 96]),
+      .area_i(u59_src[14 +: 47]),
+      .tag_i(u59_src[21 +: 16]),
+      .r_valid_o(u59_r_valid_o),
+      .r_ready_i(u59_src[28 +: 1]),
+      .q_o(u59_q_o),
+      .q_saturated_o(u59_q_saturated_o),
+      .q_error_o(u59_q_error_o),
+      .rem_o(u59_rem_o),
+      .tag_o(u59_tag_o),
+      .accepted_o(u59_accepted_o),
+      .retired_o(u59_retired_o),
+      .stall_clocks_o(u59_stall_clocks_o),
+      .rem_range_seen_o(u59_rem_range_seen_o)
   );
   logic u59_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u59_fold_q <= 1'b0;
-    else u59_fold_q <= u59_fold_q ^ (((^u59_job_ready_o)) & u59_src[0]) ^ (((^u59_cov_ready_o)) & u59_src[1]) ^ (((^u59_n_valid_o)) & u59_src[2]) ^ (((^u59_n_num_o)) & u59_src[3]) ^ (((^u59_n_row_o)) & u59_src[4]) ^ (((^u59_n_col_o)) & u59_src[5]) ^ (((^u59_n_last_o)) & u59_src[6]) ^ (((^u59_pixels_o)) & u59_src[7]) ^ (((^u59_rows_o)) & u59_src[8]);
+    else u59_fold_q <= u59_fold_q ^ (((^u59_v_ready_o)) & u59_src[0]) ^ (((^u59_r_valid_o)) & u59_src[1]) ^ (((^u59_q_o)) & u59_src[2]) ^ (((^u59_q_saturated_o)) & u59_src[3]) ^ (((^u59_q_error_o)) & u59_src[4]) ^ (((^u59_rem_o)) & u59_src[5]) ^ (((^u59_tag_o)) & u59_src[6]) ^ (((^u59_accepted_o)) & u59_src[7]) ^ (((^u59_retired_o)) & u59_src[8]) ^ (((^u59_stall_clocks_o)) & u59_src[9]) ^ (((^u59_rem_range_seen_o)) & u59_src[10]);
 
-  // ---- zhao_raster_attrstep ----
+  // ---- zhao_raster_attrinterp ----
   logic [63:0] u60_lfsr_q;
   logic [1023:0] u60_src;
   assign u60_src = {16{u60_lfsr_q}};
@@ -4855,15 +4925,14 @@ module zhao_prod_top (
     else u60_lfsr_q <= {u60_lfsr_q[62:0], (^(u60_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u60_job_ready_o;
   logic [1-1:0] u60_cov_ready_o;
-  logic [1-1:0] u60_q_valid_o;
-  logic signed [32-1:0] u60_q_o;
-  logic [4-1:0] u60_q_row_o;
-  logic [4-1:0] u60_q_col_o;
-  logic [1-1:0] u60_q_last_o;
-  logic [1-1:0] u60_q_error_o;
+  logic [1-1:0] u60_n_valid_o;
+  logic signed [96-1:0] u60_n_num_o;
+  logic [4-1:0] u60_n_row_o;
+  logic [4-1:0] u60_n_col_o;
+  logic [1-1:0] u60_n_last_o;
   logic [32-1:0] u60_pixels_o;
-  logic [32-1:0] u60_divides_o;
-  zhao_raster_attrstep u60_i (
+  logic [32-1:0] u60_rows_o;
+  zhao_raster_attrinterp u60_i (
       .clk(clk),
       .rst_n(rst_n),
       .job_valid_i(u60_src[0 +: 1]),
@@ -4871,2598 +4940,2644 @@ module zhao_prod_top (
       .job_n0_i(u60_src[7 +: 96]),
       .job_dndx_i(u60_src[14 +: 72]),
       .job_dndy_i(u60_src[21 +: 72]),
-      .job_area_i(u60_src[28 +: 47]),
-      .job_tile_x_i(u60_src[35 +: 12]),
-      .job_tile_y_i(u60_src[42 +: 12]),
-      .cov_valid_i(u60_src[49 +: 1]),
+      .job_tile_x_i(u60_src[28 +: 12]),
+      .job_tile_y_i(u60_src[35 +: 12]),
+      .cov_valid_i(u60_src[42 +: 1]),
       .cov_ready_o(u60_cov_ready_o),
-      .cov_row_i(u60_src[56 +: 4]),
-      .cov_mask_i(u60_src[63 +: 16]),
-      .cov_last_i(u60_src[70 +: 1]),
-      .q_valid_o(u60_q_valid_o),
-      .q_ready_i(u60_src[77 +: 1]),
-      .q_o(u60_q_o),
-      .q_row_o(u60_q_row_o),
-      .q_col_o(u60_q_col_o),
-      .q_last_o(u60_q_last_o),
-      .q_error_o(u60_q_error_o),
+      .cov_row_i(u60_src[49 +: 4]),
+      .cov_mask_i(u60_src[56 +: 16]),
+      .cov_last_i(u60_src[63 +: 1]),
+      .n_valid_o(u60_n_valid_o),
+      .n_ready_i(u60_src[70 +: 1]),
+      .n_num_o(u60_n_num_o),
+      .n_row_o(u60_n_row_o),
+      .n_col_o(u60_n_col_o),
+      .n_last_o(u60_n_last_o),
       .pixels_o(u60_pixels_o),
-      .divides_o(u60_divides_o)
+      .rows_o(u60_rows_o)
   );
   logic u60_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u60_fold_q <= 1'b0;
-    else u60_fold_q <= u60_fold_q ^ (((^u60_job_ready_o)) & u60_src[0]) ^ (((^u60_cov_ready_o)) & u60_src[1]) ^ (((^u60_q_valid_o)) & u60_src[2]) ^ (((^u60_q_o)) & u60_src[3]) ^ (((^u60_q_row_o)) & u60_src[4]) ^ (((^u60_q_col_o)) & u60_src[5]) ^ (((^u60_q_last_o)) & u60_src[6]) ^ (((^u60_q_error_o)) & u60_src[7]) ^ (((^u60_pixels_o)) & u60_src[8]) ^ (((^u60_divides_o)) & u60_src[9]);
+    else u60_fold_q <= u60_fold_q ^ (((^u60_job_ready_o)) & u60_src[0]) ^ (((^u60_cov_ready_o)) & u60_src[1]) ^ (((^u60_n_valid_o)) & u60_src[2]) ^ (((^u60_n_num_o)) & u60_src[3]) ^ (((^u60_n_row_o)) & u60_src[4]) ^ (((^u60_n_col_o)) & u60_src[5]) ^ (((^u60_n_last_o)) & u60_src[6]) ^ (((^u60_pixels_o)) & u60_src[7]) ^ (((^u60_rows_o)) & u60_src[8]);
 
-  // ---- zhao_raster_fog ----
+  // ---- zhao_raster_attrstep ----
   logic [63:0] u61_lfsr_q;
   logic [1023:0] u61_src;
   assign u61_src = {16{u61_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u61_lfsr_q <= 64'h00000025B3392272;
     else u61_lfsr_q <= {u61_lfsr_q[62:0], (^(u61_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u61_v_ready_o;
-  logic [1-1:0] u61_r_valid_o;
-  logic [8-1:0] u61_r_o;
-  logic [8-1:0] u61_g_o;
-  logic [8-1:0] u61_b_o;
-  logic [16-1:0] u61_tag_o;
-  logic [32-1:0] u61_fragments_o;
-  logic [32-1:0] u61_fogged_fragments_o;
-  logic [32-1:0] u61_clear_fragments_o;
-  zhao_raster_fog u61_i (
+  logic [1-1:0] u61_job_ready_o;
+  logic [1-1:0] u61_cov_ready_o;
+  logic [1-1:0] u61_q_valid_o;
+  logic signed [32-1:0] u61_q_o;
+  logic [4-1:0] u61_q_row_o;
+  logic [4-1:0] u61_q_col_o;
+  logic [1-1:0] u61_q_last_o;
+  logic [1-1:0] u61_q_error_o;
+  logic [32-1:0] u61_pixels_o;
+  logic [32-1:0] u61_divides_o;
+  zhao_raster_attrstep u61_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_en_i(u61_src[0 +: 1]),
-      .cfg_fog_r_i(u61_src[7 +: 8]),
-      .cfg_fog_g_i(u61_src[14 +: 8]),
-      .cfg_fog_b_i(u61_src[21 +: 8]),
-      .v_valid_i(u61_src[28 +: 1]),
-      .v_ready_o(u61_v_ready_o),
-      .r_i(u61_src[35 +: 8]),
-      .g_i(u61_src[42 +: 8]),
-      .b_i(u61_src[49 +: 8]),
-      .fogf_i(u61_src[56 +: 32]),
-      .tag_i(u61_src[63 +: 16]),
-      .r_valid_o(u61_r_valid_o),
-      .r_ready_i(u61_src[70 +: 1]),
-      .r_o(u61_r_o),
-      .g_o(u61_g_o),
-      .b_o(u61_b_o),
-      .tag_o(u61_tag_o),
-      .fragments_o(u61_fragments_o),
-      .fogged_fragments_o(u61_fogged_fragments_o),
-      .clear_fragments_o(u61_clear_fragments_o)
+      .job_valid_i(u61_src[0 +: 1]),
+      .job_ready_o(u61_job_ready_o),
+      .job_n0_i(u61_src[7 +: 96]),
+      .job_dndx_i(u61_src[14 +: 72]),
+      .job_dndy_i(u61_src[21 +: 72]),
+      .job_area_i(u61_src[28 +: 47]),
+      .job_tile_x_i(u61_src[35 +: 12]),
+      .job_tile_y_i(u61_src[42 +: 12]),
+      .cov_valid_i(u61_src[49 +: 1]),
+      .cov_ready_o(u61_cov_ready_o),
+      .cov_row_i(u61_src[56 +: 4]),
+      .cov_mask_i(u61_src[63 +: 16]),
+      .cov_last_i(u61_src[70 +: 1]),
+      .q_valid_o(u61_q_valid_o),
+      .q_ready_i(u61_src[77 +: 1]),
+      .q_o(u61_q_o),
+      .q_row_o(u61_q_row_o),
+      .q_col_o(u61_q_col_o),
+      .q_last_o(u61_q_last_o),
+      .q_error_o(u61_q_error_o),
+      .pixels_o(u61_pixels_o),
+      .divides_o(u61_divides_o)
   );
   logic u61_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u61_fold_q <= 1'b0;
-    else u61_fold_q <= u61_fold_q ^ (((^u61_v_ready_o)) & u61_src[0]) ^ (((^u61_r_valid_o)) & u61_src[1]) ^ (((^u61_r_o)) & u61_src[2]) ^ (((^u61_g_o)) & u61_src[3]) ^ (((^u61_b_o)) & u61_src[4]) ^ (((^u61_tag_o)) & u61_src[5]) ^ (((^u61_fragments_o)) & u61_src[6]) ^ (((^u61_fogged_fragments_o)) & u61_src[7]) ^ (((^u61_clear_fragments_o)) & u61_src[8]);
+    else u61_fold_q <= u61_fold_q ^ (((^u61_job_ready_o)) & u61_src[0]) ^ (((^u61_cov_ready_o)) & u61_src[1]) ^ (((^u61_q_valid_o)) & u61_src[2]) ^ (((^u61_q_o)) & u61_src[3]) ^ (((^u61_q_row_o)) & u61_src[4]) ^ (((^u61_q_col_o)) & u61_src[5]) ^ (((^u61_q_last_o)) & u61_src[6]) ^ (((^u61_q_error_o)) & u61_src[7]) ^ (((^u61_pixels_o)) & u61_src[8]) ^ (((^u61_divides_o)) & u61_src[9]);
 
-  // ---- zhao_raster_toon ----
-  logic [63:0] u63_lfsr_q;
-  logic [1023:0] u63_src;
-  assign u63_src = {16{u63_lfsr_q}};
+  // ---- zhao_raster_fog ----
+  logic [63:0] u62_lfsr_q;
+  logic [1023:0] u62_src;
+  assign u62_src = {16{u62_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u63_lfsr_q <= 64'h00000026EFA815D4;
-    else u63_lfsr_q <= {u63_lfsr_q[62:0], (^(u63_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u63_v_ready_o;
-  logic [1-1:0] u63_r_valid_o;
-  logic signed [32-1:0] u63_r_o;
-  logic signed [32-1:0] u63_g_o;
-  logic signed [32-1:0] u63_b_o;
-  logic [16-1:0] u63_tag_o;
-  logic [2-1:0] u63_band_o;
-  logic [32-1:0] u63_fragments_o;
-  logic [32-1:0] u63_flat_fragments_o;
-  logic [32-1:0] u63_busy_clocks_o;
-  logic [32-1:0] u63_overflow_o;
-  zhao_raster_toon u63_i (
+    if (!rst_n) u62_lfsr_q <= 64'h0000002651709C23;
+    else u62_lfsr_q <= {u62_lfsr_q[62:0], (^(u62_lfsr_q & 64'hD800000000000000)) ^ seed_i};
+  logic [1-1:0] u62_v_ready_o;
+  logic [1-1:0] u62_r_valid_o;
+  logic [8-1:0] u62_r_o;
+  logic [8-1:0] u62_g_o;
+  logic [8-1:0] u62_b_o;
+  logic [16-1:0] u62_tag_o;
+  logic [32-1:0] u62_fragments_o;
+  logic [32-1:0] u62_fogged_fragments_o;
+  logic [32-1:0] u62_clear_fragments_o;
+  zhao_raster_fog u62_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_bands_i(u63_src[0 +: 2]),
-      .cfg_thr0_i(u63_src[7 +: 32]),
-      .cfg_thr1_i(u63_src[14 +: 32]),
-      .cfg_lvl0_i(u63_src[21 +: 32]),
-      .cfg_lvl1_i(u63_src[28 +: 32]),
-      .cfg_lvl2_i(u63_src[35 +: 32]),
-      .v_valid_i(u63_src[42 +: 1]),
-      .v_ready_o(u63_v_ready_o),
-      .r_i(u63_src[49 +: 32]),
-      .g_i(u63_src[56 +: 32]),
-      .b_i(u63_src[63 +: 32]),
-      .tag_i(u63_src[70 +: 16]),
-      .r_valid_o(u63_r_valid_o),
-      .r_ready_i(u63_src[77 +: 1]),
-      .r_o(u63_r_o),
-      .g_o(u63_g_o),
-      .b_o(u63_b_o),
-      .tag_o(u63_tag_o),
-      .band_o(u63_band_o),
-      .fragments_o(u63_fragments_o),
-      .flat_fragments_o(u63_flat_fragments_o),
-      .busy_clocks_o(u63_busy_clocks_o),
-      .overflow_o(u63_overflow_o)
+      .cfg_en_i(u62_src[0 +: 1]),
+      .cfg_fog_r_i(u62_src[7 +: 8]),
+      .cfg_fog_g_i(u62_src[14 +: 8]),
+      .cfg_fog_b_i(u62_src[21 +: 8]),
+      .v_valid_i(u62_src[28 +: 1]),
+      .v_ready_o(u62_v_ready_o),
+      .r_i(u62_src[35 +: 8]),
+      .g_i(u62_src[42 +: 8]),
+      .b_i(u62_src[49 +: 8]),
+      .fogf_i(u62_src[56 +: 32]),
+      .tag_i(u62_src[63 +: 16]),
+      .r_valid_o(u62_r_valid_o),
+      .r_ready_i(u62_src[70 +: 1]),
+      .r_o(u62_r_o),
+      .g_o(u62_g_o),
+      .b_o(u62_b_o),
+      .tag_o(u62_tag_o),
+      .fragments_o(u62_fragments_o),
+      .fogged_fragments_o(u62_fogged_fragments_o),
+      .clear_fragments_o(u62_clear_fragments_o)
   );
-  logic u63_fold_q;
+  logic u62_fold_q;
   always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u63_fold_q <= 1'b0;
-    else u63_fold_q <= u63_fold_q ^ (((^u63_v_ready_o)) & u63_src[0]) ^ (((^u63_r_valid_o)) & u63_src[1]) ^ (((^u63_r_o)) & u63_src[2]) ^ (((^u63_g_o)) & u63_src[3]) ^ (((^u63_b_o)) & u63_src[4]) ^ (((^u63_tag_o)) & u63_src[5]) ^ (((^u63_band_o)) & u63_src[6]) ^ (((^u63_fragments_o)) & u63_src[7]) ^ (((^u63_flat_fragments_o)) & u63_src[8]) ^ (((^u63_busy_clocks_o)) & u63_src[9]) ^ (((^u63_overflow_o)) & u63_src[10]);
+    if (!rst_n) u62_fold_q <= 1'b0;
+    else u62_fold_q <= u62_fold_q ^ (((^u62_v_ready_o)) & u62_src[0]) ^ (((^u62_r_valid_o)) & u62_src[1]) ^ (((^u62_r_o)) & u62_src[2]) ^ (((^u62_g_o)) & u62_src[3]) ^ (((^u62_b_o)) & u62_src[4]) ^ (((^u62_tag_o)) & u62_src[5]) ^ (((^u62_fragments_o)) & u62_src[6]) ^ (((^u62_fogged_fragments_o)) & u62_src[7]) ^ (((^u62_clear_fragments_o)) & u62_src[8]);
 
-  // ---- zhao_shell_top_v2 ----
+  // ---- zhao_raster_toon ----
   logic [63:0] u64_lfsr_q;
   logic [1023:0] u64_src;
   assign u64_src = {16{u64_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u64_lfsr_q <= 64'h000000278DDF8F85;
     else u64_lfsr_q <= {u64_lfsr_q[62:0], (^(u64_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u64_cfg_ready_o;
-  logic [1-1:0] u64_cfg_rsp_valid_o;
-  logic [2-1:0] u64_cfg_rsp_op_o;
-  logic [4-1:0] u64_cfg_rsp_status_o;
-  logic [8-1:0] u64_cfg_rsp_page_generation_o;
-  logic [8-1:0] u64_active_page_generation_o;
-  logic [1-1:0] u64_pal_load_ready_o;
-  logic [1-1:0] u64_fill_req_valid_o;
-  logic [32-1:0] u64_fill_req_addr_o;
-  logic [1-1:0] u64_sheet_req_valid_o;
-  logic [2-1:0] u64_sheet_req_op_o;
-  logic [32-1:0] u64_sheet_req_handle_o;
-  logic [12-1:0] u64_sheet_req_texel_o;
-  logic [16-1:0] u64_sheet_req_src_id_o;
-  logic [1-1:0] u64_pg_ready_o;
-  logic [1-1:0] u64_blank_ack_o;
-  logic [1-1:0] u64_blank_active_o;
-  logic [1-1:0] u64_lease_open_o;
-  logic [2-1:0] u64_frame_slot_ready_o;
-  logic [32-1:0] u64_v2_requests_accepted_o;
-  logic [32-1:0] u64_v2_responses_accepted_o;
-  logic [32-1:0] u64_v2_leases_granted_o;
-  logic [32-1:0] u64_v2_leases_refused_o;
-  logic [32-1:0] u64_v2_faults_latched_o;
-  logic [32-1:0] u64_v2_publications_o;
-  logic [32-1:0] u64_v2_releases_o;
-  logic [32-1:0] u64_v2_ready_events_o;
-  logic [32-1:0] u64_v2_swaps_o;
-  logic [32-1:0] u64_v2_contentions_o;
-  logic [32-1:0] u64_v2_clear_handshakes_o;
-  logic [32-1:0] u64_v2_frames_admitted_o;
-  logic [32-1:0] u64_v2_blit_leases_acquired_o;
-  logic [32-1:0] u64_v2_blit_leases_refused_o;
-  logic [2-1:0] u64_hps_state_i [3];
-  always_comb begin
-    u64_hps_state_i[0] = u64_src[280 +: 2] ^ (2)'(0);
-    u64_hps_state_i[1] = u64_src[280 +: 2] ^ (2)'(1);
-    u64_hps_state_i[2] = u64_src[280 +: 2] ^ (2)'(2);
-  end
-  logic [32-1:0] u64_hps_byte_len_i [3];
-  always_comb begin
-    u64_hps_byte_len_i[0] = u64_src[287 +: 32] ^ (32)'(0);
-    u64_hps_byte_len_i[1] = u64_src[287 +: 32] ^ (32)'(1);
-    u64_hps_byte_len_i[2] = u64_src[287 +: 32] ^ (32)'(2);
-  end
-  logic [1-1:0] u64_ring_wr_valid_o;
-  logic [2-1:0] u64_ring_wr_slot_o;
-  logic [2-1:0] u64_ring_wr_state_o;
-  logic [1-1:0] u64_hps_req_valid_o;
-  logic [1-1:0] u64_hps_req_write_o;
-  logic [32-1:0] u64_hps_req_addr_o;
-  logic [7-1:0] u64_hps_req_len_o;
-  logic [1-1:0] u64_hps_wr_valid_o;
-  logic [64-1:0] u64_hps_wr_data_o;
-  logic [1-1:0] u64_hps_wr_last_o;
-  logic [32-1:0] u64_pad_buttons_i [4];
-  always_comb begin
-    u64_pad_buttons_i[0] = u64_src[336 +: 32] ^ (32)'(0);
-    u64_pad_buttons_i[1] = u64_src[336 +: 32] ^ (32)'(1);
-    u64_pad_buttons_i[2] = u64_src[336 +: 32] ^ (32)'(2);
-    u64_pad_buttons_i[3] = u64_src[336 +: 32] ^ (32)'(3);
-  end
-  logic [16-1:0] u64_pad_lx_i [4];
-  always_comb begin
-    u64_pad_lx_i[0] = u64_src[343 +: 16] ^ (16)'(0);
-    u64_pad_lx_i[1] = u64_src[343 +: 16] ^ (16)'(1);
-    u64_pad_lx_i[2] = u64_src[343 +: 16] ^ (16)'(2);
-    u64_pad_lx_i[3] = u64_src[343 +: 16] ^ (16)'(3);
-  end
-  logic [16-1:0] u64_pad_ly_i [4];
-  always_comb begin
-    u64_pad_ly_i[0] = u64_src[350 +: 16] ^ (16)'(0);
-    u64_pad_ly_i[1] = u64_src[350 +: 16] ^ (16)'(1);
-    u64_pad_ly_i[2] = u64_src[350 +: 16] ^ (16)'(2);
-    u64_pad_ly_i[3] = u64_src[350 +: 16] ^ (16)'(3);
-  end
-  logic [16-1:0] u64_pad_rx_i [4];
-  always_comb begin
-    u64_pad_rx_i[0] = u64_src[357 +: 16] ^ (16)'(0);
-    u64_pad_rx_i[1] = u64_src[357 +: 16] ^ (16)'(1);
-    u64_pad_rx_i[2] = u64_src[357 +: 16] ^ (16)'(2);
-    u64_pad_rx_i[3] = u64_src[357 +: 16] ^ (16)'(3);
-  end
-  logic [16-1:0] u64_pad_ry_i [4];
-  always_comb begin
-    u64_pad_ry_i[0] = u64_src[364 +: 16] ^ (16)'(0);
-    u64_pad_ry_i[1] = u64_src[364 +: 16] ^ (16)'(1);
-    u64_pad_ry_i[2] = u64_src[364 +: 16] ^ (16)'(2);
-    u64_pad_ry_i[3] = u64_src[364 +: 16] ^ (16)'(3);
-  end
-  logic [1-1:0] u64_aud_wr_ready_o;
-  logic [1-1:0] u64_aud_refill_req_o;
-  logic [12-1:0] u64_aud_occupancy_o;
-  logic [1-1:0] u64_pcm_valid_o;
-  logic [16-1:0] u64_pcm_l_o;
-  logic [16-1:0] u64_pcm_r_o;
-  logic [1-1:0] u64_underrun_status_o;
-  logic [32-1:0] u64_audio_underruns_o;
-  logic [1-1:0] u64_px_valid_o;
-  logic [16-1:0] u64_px_rgb_o;
-  logic [10-1:0] u64_px_x_o;
-  logic [8-1:0] u64_px_y_o;
-  logic [1-1:0] u64_px_hsync_o;
-  logic [1-1:0] u64_px_vsync_o;
-  logic [1-1:0] u64_px_hblank_o;
-  logic [1-1:0] u64_px_vblank_o;
-  logic [1-1:0] u64_scaler_violation_o;
-  logic [32-1:0] u64_crc_frame_o;
-  logic [1-1:0] u64_crc_valid_o;
-  logic [32-1:0] u64_crc_bytes_o;
-  logic [1-1:0] u64_crc_size_err_o;
-  logic [1-1:0] u64_gpu_tick_o;
-  logic [32-1:0] u64_gpu_tick_frame_id_o;
-  logic [1-1:0] u64_gpu_tick_repeated_o;
-  logic [1-1:0] u64_gpu_complete_slot_o;
-  logic [64-1:0] u64_deadline_faults_o;
-  logic [64-1:0] u64_frame_cycles_o;
-  logic [3-1:0] u64_slot_state_o [3];
-  logic u64_slot_state_o_fold;
-  always_comb begin
-    u64_slot_state_o_fold = 1'b0;
-    u64_slot_state_o_fold = u64_slot_state_o_fold ^ (^u64_slot_state_o[0]);
-    u64_slot_state_o_fold = u64_slot_state_o_fold ^ (^u64_slot_state_o[1]);
-    u64_slot_state_o_fold = u64_slot_state_o_fold ^ (^u64_slot_state_o[2]);
-  end
-  logic [1-1:0] u64_fence_valid_o;
-  logic [2-1:0] u64_fence_slot_o;
-  logic [1-1:0] u64_fence_ok_o;
-  logic [8-1:0] u64_fence_status_o;
-  logic [2-1:0] u64_mode_act_o;
-  logic [1-1:0] u64_dma_done_o;
-  logic [8-1:0] u64_dma_status_o;
-  logic [1-1:0] u64_blit_done_o;
-  logic [8-1:0] u64_blit_status_o;
-  logic [640-1:0] u64_pad_frame_flat_o;
-  logic [16-1:0] u64_pad_sequence_o [4];
-  logic u64_pad_sequence_o_fold;
-  always_comb begin
-    u64_pad_sequence_o_fold = 1'b0;
-    u64_pad_sequence_o_fold = u64_pad_sequence_o_fold ^ (^u64_pad_sequence_o[0]);
-    u64_pad_sequence_o_fold = u64_pad_sequence_o_fold ^ (^u64_pad_sequence_o[1]);
-    u64_pad_sequence_o_fold = u64_pad_sequence_o_fold ^ (^u64_pad_sequence_o[2]);
-    u64_pad_sequence_o_fold = u64_pad_sequence_o_fold ^ (^u64_pad_sequence_o[3]);
-  end
-  logic [64-1:0] u64_input_gaps_o;
-  logic [8-1:0] u64_rumble_duty_o [4];
-  logic u64_rumble_duty_o_fold;
-  always_comb begin
-    u64_rumble_duty_o_fold = 1'b0;
-    u64_rumble_duty_o_fold = u64_rumble_duty_o_fold ^ (^u64_rumble_duty_o[0]);
-    u64_rumble_duty_o_fold = u64_rumble_duty_o_fold ^ (^u64_rumble_duty_o[1]);
-    u64_rumble_duty_o_fold = u64_rumble_duty_o_fold ^ (^u64_rumble_duty_o[2]);
-    u64_rumble_duty_o_fold = u64_rumble_duty_o_fold ^ (^u64_rumble_duty_o[3]);
-  end
-  logic [4-1:0] u64_rumble_active_o;
-  logic [4-1:0] u64_rumble_pwm_o;
-  logic [64-1:0] u64_rumble_drops_o;
-  logic [1-1:0] u64_cnt_snap_valid_o;
-  logic [16-1:0] u64_cnt_snap_id_o;
-  logic [64-1:0] u64_cnt_snap_value_o;
-  logic [1-1:0] u64_cnt_window_open_o;
-  logic [1-1:0] u64_cnt_cat_violation_o;
-  logic [32-1:0] u64_guard_violations_o;
-  logic [64-1:0] u64_starvation_o;
-  logic [1-1:0] u64_init_done_o;
-  logic [32-1:0] u64_refresh_stalls_o;
-  logic [32-1:0] u64_bank_conflicts_o;
-  logic [32-1:0] u64_scanout_preempted_o;
-  logic [32-1:0] u64_hps_err_count_o;
-  logic [1-1:0] u64_shell_err_wfifo_o;
-  logic [1-1:0] u64_shell_err_route_o;
-  logic [1-1:0] u64_shell_err_cdc_o;
-  logic [1-1:0] u64_shell_err_framer_o;
-  logic [1-1:0] u64_render_tri_ready_o;
-  zhao_guard_req_t u64_geom_guard_req_i;
-  assign u64_geom_guard_req_i = zhao_guard_req_t'(u64_src[434 +: $bits(zhao_guard_req_t)]);
-  zhao_guard_rsp_t u64_geom_guard_rsp_o;
-  logic [1-1:0] u64_geom_beat_valid_o;
-  logic [64-1:0] u64_geom_beat_data_o;
-  logic [1-1:0] u64_geom_beat_last_o;
-  logic [1-1:0] u64_geom_wready_o;
-  logic [8-1:0] u64_geom_retire_words_o;
-  zhao_guard_req_t u64_build_guard_req_i;
-  assign u64_build_guard_req_i = zhao_guard_req_t'(u64_src[483 +: $bits(zhao_guard_req_t)]);
-  zhao_guard_rsp_t u64_build_guard_rsp_o;
-  logic [1-1:0] u64_build_wready_o;
-  logic [8-1:0] u64_build_retire_words_o;
-  logic [1-1:0] u64_build_beat_valid_o;
-  logic [64-1:0] u64_build_beat_data_o;
-  logic [1-1:0] u64_build_beat_last_o;
-  zhao_hps_burst_req_t [2-1:0] u64_build_hps_req_i;
-  assign u64_build_hps_req_i[0] = zhao_hps_burst_req_t'(u64_src[511 +: $bits(zhao_hps_burst_req_t)]);
-  assign u64_build_hps_req_i[1] = zhao_hps_burst_req_t'(u64_src[2 +: $bits(zhao_hps_burst_req_t)]);
-  logic [2-1:0] u64_build_hps_grant_o;
-  zhao_hps_burst_rsp_t [2-1:0] u64_build_hps_rsp_o;
-  logic [64-1:0] u64_build_hps_wait_o;
-  logic [1-1:0] u64_build_hps_wr_ready_o;
-  logic [1-1:0] u64_render_drain_done_o;
-  logic [1-1:0] u64_render_busy_o;
-  logic [32-1:0] u64_render_pixels_o;
-  logic [32-1:0] u64_render_bursts_o;
-  logic [1-1:0] u64_render_stream_error_o;
-  logic [1-1:0] u64_render_drained_o;
-  logic [1-1:0] u64_render_fatal_o;
-  logic [32-1:0] u64_render_issued_words_o;
-  logic [32-1:0] u64_render_retired_words_o;
-  logic [1-1:0] u64_render_overflow_o;
-  logic [1-1:0] u64_render_fragment_error_o;
-  logic [32-1:0] u64_render_texture_fragments_o;
-  logic [32-1:0] u64_render_texture_cache_hits_o;
-  logic [32-1:0] u64_render_texture_cache_misses_o;
-  logic [32-1:0] u64_render_texture_palette_lookups_o;
-  logic [32-1:0] u64_render_texture_plan_accepted_o;
-  logic [32-1:0] u64_render_texture_dispatch_accepted_o;
-  logic [32-1:0] u64_render_texture_combine_refused_o;
-  logic [32-1:0] u64_render_texture_samples_o;
-  logic [1-1:0] u64_gth_valid_o;
-  logic [16-1:0] u64_gth_rgb565_o;
-  logic [8-1:0] u64_gth_tag_o;
-  logic [8-1:0] u64_gth_addr_o;
-  logic signed [12-1:0] u64_gth_x_o;
-  logic signed [12-1:0] u64_gth_y_o;
-  logic [1-1:0] u64_gth_last_o;
-  logic [1-1:0] u64_post_pass_start_o;
-  logic [1-1:0] u64_post_view_o;
-  logic [1-1:0] u64_post_src_valid_o;
-  logic [16-1:0] u64_post_src_rgb_o;
-  logic [1-1:0] u64_post_out_ready_o;
-  logic [1-1:0] u64_post_busy_o;
-  logic [32-1:0] u64_post_passes_o;
-  logic [32-1:0] u64_post_frames_o;
-  logic [1-1:0] u64_post_fault_o;
-  logic [32-1:0] u64_post_src_reads_o;
-  logic [32-1:0] u64_post_src_pixels_o;
-  logic [32-1:0] u64_post_retire_unowned_o;
-  logic [32-1:0] u64_post_share_contention_o;
-  logic [32-1:0] u64_echo_passes_complete_o;
-  logic [32-1:0] u64_echo_passes_torn_o;
-  logic [32-1:0] u64_echo_pixels_written_o;
-  logic [32-1:0] u64_echo_pixels_dropped_o;
-  logic [1-1:0] u64_echo_fault_o;
-  logic [1-1:0] u64_phy_cs_n_o;
-  logic [1-1:0] u64_phy_ras_n_o;
-  logic [1-1:0] u64_phy_cas_n_o;
-  logic [1-1:0] u64_phy_we_n_o;
-  logic [13-1:0] u64_phy_a_o;
-  logic [2-1:0] u64_phy_ba_o;
-  logic [16-1:0] u64_phy_dq_o;
-  logic [1-1:0] u64_phy_dq_oe_o;
-  logic [2-1:0] u64_phy_dqm_o;
-  logic [1-1:0] u64_cmd_pkt_valid_o;
-  logic [8-1:0] u64_cmd_pkt_byte_o;
-  logic [32-1:0] u64_cmd_pkt_len_o;
-  logic [1-1:0] u64_render_ser_busy_o;
-  logic [1-1:0] u64_render_ser_done_o;
-  logic [1-1:0] u64_render_ser_valid_o;
-  logic [18-1:0] u64_render_ser_tri_id_o;
-  logic [10-1:0] u64_render_ser_tile_o;
-  logic [1-1:0] u64_render_ser_first_o;
-  logic [1-1:0] u64_render_ser_last_o;
-  zhao_shell_top_v2 #(
-      .BUILD_HPS_N(32'd2)
-  ) u64_i (
-      .gpu_clk(clk),
-      .vid_clk(clk),
-      .audio_clk(clk),
+  logic [1-1:0] u64_v_ready_o;
+  logic [1-1:0] u64_r_valid_o;
+  logic signed [32-1:0] u64_r_o;
+  logic signed [32-1:0] u64_g_o;
+  logic signed [32-1:0] u64_b_o;
+  logic [16-1:0] u64_tag_o;
+  logic [2-1:0] u64_band_o;
+  logic [32-1:0] u64_fragments_o;
+  logic [32-1:0] u64_flat_fragments_o;
+  logic [32-1:0] u64_busy_clocks_o;
+  logic [32-1:0] u64_overflow_o;
+  zhao_raster_toon u64_i (
+      .clk(clk),
       .rst_n(rst_n),
-      .cfg_valid_i(u64_src[0 +: 1]),
-      .cfg_ready_o(u64_cfg_ready_o),
-      .cfg_op_i(u64_src[7 +: 2]),
-      .cfg_page_generation_i(u64_src[14 +: 8]),
-      .cfg_selector_i(u64_src[21 +: 8]),
-      .cfg_row_i(u64_src[28 +: 75]),
-      .cfg_crc32_i(u64_src[35 +: 32]),
-      .cfg_rsp_valid_o(u64_cfg_rsp_valid_o),
-      .cfg_rsp_ready_i(u64_src[42 +: 1]),
-      .cfg_rsp_op_o(u64_cfg_rsp_op_o),
-      .cfg_rsp_status_o(u64_cfg_rsp_status_o),
-      .cfg_rsp_page_generation_o(u64_cfg_rsp_page_generation_o),
-      .active_page_generation_o(u64_active_page_generation_o),
-      .pal_load_valid_i(u64_src[49 +: 1]),
-      .pal_load_ready_o(u64_pal_load_ready_o),
-      .pal_load_op_i(u64_src[56 +: 2]),
-      .pal_load_slot_i(u64_src[63 +: 2]),
-      .pal_load_gen_i(u64_src[70 +: 8]),
-      .pal_load_idx_i(u64_src[77 +: 8]),
-      .pal_load_rgb565_i(u64_src[84 +: 16]),
-      .pal_load_crc_ok_i(u64_src[91 +: 1]),
-      .tri_area2_i(u64_src[98 +: 47]),
-      .tri_invw_plane_i(u64_src[105 +: 240]),
-      .tri_u_over_w_plane_i(u64_src[112 +: 240]),
-      .tri_v_over_w_plane_i(u64_src[119 +: 240]),
-      .tri_r_plane_i(u64_src[126 +: 240]),
-      .tri_g_plane_i(u64_src[133 +: 240]),
-      .tri_b_plane_i(u64_src[140 +: 240]),
-      .tri_flat_request_i(u64_src[147 +: 298]),
-      .tri_continuation_tail_i(u64_src[154 +: 48]),
-      .tri_fragment_state_i(u64_src[161 +: 32]),
-      .fill_req_ready_i(u64_src[168 +: 1]),
-      .fill_req_valid_o(u64_fill_req_valid_o),
-      .fill_req_addr_o(u64_fill_req_addr_o),
-      .fill_data_valid_i(u64_src[175 +: 1]),
-      .fill_data_i(u64_src[182 +: 16]),
-      .fill_refused_i(u64_src[189 +: 1]),
-      .frame_clear_word_i(u64_src[196 +: 64]),
-      .sheet_req_ready_i(u64_src[203 +: 1]),
-      .sheet_req_valid_o(u64_sheet_req_valid_o),
-      .sheet_req_op_o(u64_sheet_req_op_o),
-      .sheet_req_handle_o(u64_sheet_req_handle_o),
-      .sheet_req_texel_o(u64_sheet_req_texel_o),
-      .sheet_req_src_id_o(u64_sheet_req_src_id_o),
-      .pg_valid_i(u64_src[210 +: 1]),
-      .pg_ready_o(u64_pg_ready_o),
-      .pg_op_i(u64_src[217 +: 2]),
-      .pg_status_i(u64_src[224 +: 2]),
-      .pg_tag_i(u64_src[231 +: 8]),
-      .pg_strength_i(u64_src[238 +: 8]),
-      .pg_src_id_i(u64_src[245 +: 16]),
-      .blank_cmd_i(u64_src[252 +: 1]),
-      .scanout_ack_i(u64_src[259 +: 1]),
-      .frame_swap_valid_i(u64_src[266 +: 1]),
-      .frame_swap_slot_i(u64_src[273 +: 1]),
-      .blank_ack_o(u64_blank_ack_o),
-      .blank_active_o(u64_blank_active_o),
-      .lease_open_o(u64_lease_open_o),
-      .frame_slot_ready_o(u64_frame_slot_ready_o),
-      .v2_requests_accepted_o(u64_v2_requests_accepted_o),
-      .v2_responses_accepted_o(u64_v2_responses_accepted_o),
-      .v2_leases_granted_o(u64_v2_leases_granted_o),
-      .v2_leases_refused_o(u64_v2_leases_refused_o),
-      .v2_faults_latched_o(u64_v2_faults_latched_o),
-      .v2_publications_o(u64_v2_publications_o),
-      .v2_releases_o(u64_v2_releases_o),
-      .v2_ready_events_o(u64_v2_ready_events_o),
-      .v2_swaps_o(u64_v2_swaps_o),
-      .v2_contentions_o(u64_v2_contentions_o),
-      .v2_clear_handshakes_o(u64_v2_clear_handshakes_o),
-      .v2_frames_admitted_o(u64_v2_frames_admitted_o),
-      .v2_blit_leases_acquired_o(u64_v2_blit_leases_acquired_o),
-      .v2_blit_leases_refused_o(u64_v2_blit_leases_refused_o),
-      .hps_state_i(u64_hps_state_i),
-      .hps_byte_len_i(u64_hps_byte_len_i),
-      .ring_wr_valid_o(u64_ring_wr_valid_o),
-      .ring_wr_slot_o(u64_ring_wr_slot_o),
-      .ring_wr_state_o(u64_ring_wr_state_o),
-      .ring_wr_ready_i(u64_src[294 +: 1]),
-      .hps_req_valid_o(u64_hps_req_valid_o),
-      .hps_req_write_o(u64_hps_req_write_o),
-      .hps_req_addr_o(u64_hps_req_addr_o),
-      .hps_req_len_o(u64_hps_req_len_o),
-      .hps_req_grant_i(u64_src[301 +: 1]),
-      .hps_wr_valid_o(u64_hps_wr_valid_o),
-      .hps_wr_data_o(u64_hps_wr_data_o),
-      .hps_wr_last_o(u64_hps_wr_last_o),
-      .hps_rd_valid_i(u64_src[308 +: 1]),
-      .hps_rd_data_i(u64_src[315 +: 64]),
-      .hps_rd_last_i(u64_src[322 +: 1]),
-      .pad_present_i(u64_src[329 +: 4]),
-      .pad_buttons_i(u64_pad_buttons_i),
-      .pad_lx_i(u64_pad_lx_i),
-      .pad_ly_i(u64_pad_ly_i),
-      .pad_rx_i(u64_pad_rx_i),
-      .pad_ry_i(u64_pad_ry_i),
-      .aud_wr_valid_i(u64_src[371 +: 1]),
-      .aud_wr_l_i(u64_src[378 +: 16]),
-      .aud_wr_r_i(u64_src[385 +: 16]),
-      .aud_wr_ready_o(u64_aud_wr_ready_o),
-      .aud_refill_req_o(u64_aud_refill_req_o),
-      .aud_occupancy_o(u64_aud_occupancy_o),
-      .pcm_valid_o(u64_pcm_valid_o),
-      .pcm_l_o(u64_pcm_l_o),
-      .pcm_r_o(u64_pcm_r_o),
-      .underrun_status_o(u64_underrun_status_o),
-      .audio_underruns_o(u64_audio_underruns_o),
-      .px_valid_o(u64_px_valid_o),
-      .px_rgb_o(u64_px_rgb_o),
-      .px_x_o(u64_px_x_o),
-      .px_y_o(u64_px_y_o),
-      .px_hsync_o(u64_px_hsync_o),
-      .px_vsync_o(u64_px_vsync_o),
-      .px_hblank_o(u64_px_hblank_o),
-      .px_vblank_o(u64_px_vblank_o),
-      .scaler_violation_o(u64_scaler_violation_o),
-      .crc_frame_o(u64_crc_frame_o),
-      .crc_valid_o(u64_crc_valid_o),
-      .crc_bytes_o(u64_crc_bytes_o),
-      .crc_size_err_o(u64_crc_size_err_o),
-      .gpu_tick_o(u64_gpu_tick_o),
-      .gpu_tick_frame_id_o(u64_gpu_tick_frame_id_o),
-      .gpu_tick_repeated_o(u64_gpu_tick_repeated_o),
-      .gpu_complete_slot_o(u64_gpu_complete_slot_o),
-      .deadline_faults_o(u64_deadline_faults_o),
-      .frame_cycles_o(u64_frame_cycles_o),
-      .slot_state_o(u64_slot_state_o),
-      .fence_valid_o(u64_fence_valid_o),
-      .fence_slot_o(u64_fence_slot_o),
-      .fence_ok_o(u64_fence_ok_o),
-      .fence_status_o(u64_fence_status_o),
-      .mode_act_o(u64_mode_act_o),
-      .dma_done_o(u64_dma_done_o),
-      .dma_status_o(u64_dma_status_o),
-      .blit_done_o(u64_blit_done_o),
-      .blit_status_o(u64_blit_status_o),
-      .pad_frame_flat_o(u64_pad_frame_flat_o),
-      .pad_sequence_o(u64_pad_sequence_o),
-      .input_gaps_o(u64_input_gaps_o),
-      .rumble_duty_o(u64_rumble_duty_o),
-      .rumble_active_o(u64_rumble_active_o),
-      .rumble_pwm_o(u64_rumble_pwm_o),
-      .rumble_drops_o(u64_rumble_drops_o),
-      .cnt_snap_ready_i(u64_src[392 +: 1]),
-      .cnt_snap_valid_o(u64_cnt_snap_valid_o),
-      .cnt_snap_id_o(u64_cnt_snap_id_o),
-      .cnt_snap_value_o(u64_cnt_snap_value_o),
-      .cnt_window_open_o(u64_cnt_window_open_o),
-      .cnt_cat_violation_o(u64_cnt_cat_violation_o),
-      .guard_violations_o(u64_guard_violations_o),
-      .starvation_o(u64_starvation_o),
-      .init_done_o(u64_init_done_o),
-      .refresh_stalls_o(u64_refresh_stalls_o),
-      .bank_conflicts_o(u64_bank_conflicts_o),
-      .scanout_preempted_o(u64_scanout_preempted_o),
-      .hps_err_count_o(u64_hps_err_count_o),
-      .shell_err_wfifo_o(u64_shell_err_wfifo_o),
-      .shell_err_route_o(u64_shell_err_route_o),
-      .shell_err_cdc_o(u64_shell_err_cdc_o),
-      .shell_err_framer_o(u64_shell_err_framer_o),
-      .render_frame_begin_i(u64_src[399 +: 1]),
-      .render_frame_end_i(u64_src[406 +: 1]),
-      .render_grid_w_i(u64_src[413 +: 6]),
-      .render_grid_h_i(u64_src[420 +: 6]),
-      .render_tri_valid_i(u64_src[427 +: 1]),
-      .render_tri_ready_o(u64_render_tri_ready_o),
-      .geom_guard_req_i(u64_geom_guard_req_i),
-      .geom_guard_rsp_o(u64_geom_guard_rsp_o),
-      .geom_beat_valid_o(u64_geom_beat_valid_o),
-      .geom_beat_data_o(u64_geom_beat_data_o),
-      .geom_beat_last_o(u64_geom_beat_last_o),
-      .geom_wdata_i(u64_src[441 +: 64]),
-      .geom_wvalid_i(u64_src[448 +: 1]),
-      .geom_wready_o(u64_geom_wready_o),
-      .geom_wlast_i(u64_src[455 +: 1]),
-      .geom_retire_words_o(u64_geom_retire_words_o),
-      .geom_pb_lease_i(u64_src[462 +: 1]),
-      .geom_pb_wr_view_i(u64_src[469 +: 1]),
-      .geom_pb_scratch_i(u64_src[476 +: 1]),
-      .build_guard_req_i(u64_build_guard_req_i),
-      .build_guard_rsp_o(u64_build_guard_rsp_o),
-      .build_wdata_i(u64_src[490 +: 64]),
-      .build_wvalid_i(u64_src[497 +: 1]),
-      .build_wready_o(u64_build_wready_o),
-      .build_wlast_i(u64_src[504 +: 1]),
-      .build_retire_words_o(u64_build_retire_words_o),
-      .build_beat_valid_o(u64_build_beat_valid_o),
-      .build_beat_data_o(u64_build_beat_data_o),
-      .build_beat_last_o(u64_build_beat_last_o),
-      .build_hps_req_i(u64_build_hps_req_i),
-      .build_hps_grant_o(u64_build_hps_grant_o),
-      .build_hps_rsp_o(u64_build_hps_rsp_o),
-      .build_hps_wait_o(u64_build_hps_wait_o),
-      .build_hps_wr_valid_i(u64_src[6 +: 2]),
-      .build_hps_wr_data_i(u64_src[13 +: 128]),
-      .build_hps_wr_last_i(u64_src[20 +: 2]),
-      .build_hps_wr_ready_o(u64_build_hps_wr_ready_o),
-      .build_res_valid_i(u64_src[27 +: 1]),
-      .build_res_base_i(u64_src[34 +: 32]),
-      .build_res_span_i(u64_src[41 +: 32]),
-      .render_kx0_i(u64_src[48 +: 23]),
-      .render_ky0_i(u64_src[55 +: 23]),
-      .render_kc0_i(u64_src[62 +: 48]),
-      .render_kx1_i(u64_src[69 +: 23]),
-      .render_ky1_i(u64_src[76 +: 23]),
-      .render_kc1_i(u64_src[83 +: 48]),
-      .render_kx2_i(u64_src[90 +: 23]),
-      .render_ky2_i(u64_src[97 +: 23]),
-      .render_kc2_i(u64_src[104 +: 48]),
-      .render_tl_i(u64_src[111 +: 3]),
-      .render_ax_i(u64_src[118 +: 21]),
-      .render_ay_i(u64_src[125 +: 21]),
-      .render_bx_i(u64_src[132 +: 21]),
-      .render_by_i(u64_src[139 +: 21]),
-      .render_cx_i(u64_src[146 +: 21]),
-      .render_cy_i(u64_src[153 +: 21]),
-      .render_min_x_i(u64_src[160 +: 12]),
-      .render_max_x_i(u64_src[167 +: 12]),
-      .render_min_y_i(u64_src[174 +: 12]),
-      .render_max_y_i(u64_src[181 +: 12]),
-      .render_src_id_i(u64_src[188 +: 16]),
-      .render_fill_word_i(u64_src[195 +: 64]),
-      .render_clear_word_i(u64_src[202 +: 64]),
-      .render_state_i(u64_src[209 +: 32]),
-      .render_src_a_i(u64_src[216 +: 8]),
-      .render_texel_rgb_i(u64_src[223 +: 24]),
-      .render_texel_a_i(u64_src[230 +: 8]),
-      .render_texel_idx_i(u64_src[237 +: 8]),
-      .render_fb_base_i(u64_src[244 +: 27]),
-      .render_fb_stride_i(u64_src[251 +: 16]),
-      .fb_writer_i(u64_src[258 +: 1]),
-      .render_drain_done_o(u64_render_drain_done_o),
-      .render_busy_o(u64_render_busy_o),
-      .render_pixels_o(u64_render_pixels_o),
-      .render_bursts_o(u64_render_bursts_o),
-      .render_stream_error_o(u64_render_stream_error_o),
-      .render_drained_o(u64_render_drained_o),
-      .render_fatal_o(u64_render_fatal_o),
-      .render_issued_words_o(u64_render_issued_words_o),
-      .render_retired_words_o(u64_render_retired_words_o),
-      .render_overflow_o(u64_render_overflow_o),
-      .render_fragment_error_o(u64_render_fragment_error_o),
-      .render_texture_fragments_o(u64_render_texture_fragments_o),
-      .render_texture_cache_hits_o(u64_render_texture_cache_hits_o),
-      .render_texture_cache_misses_o(u64_render_texture_cache_misses_o),
-      .render_texture_palette_lookups_o(u64_render_texture_palette_lookups_o),
-      .render_texture_plan_accepted_o(u64_render_texture_plan_accepted_o),
-      .render_texture_dispatch_accepted_o(u64_render_texture_dispatch_accepted_o),
-      .render_texture_combine_refused_o(u64_render_texture_combine_refused_o),
-      .render_texture_samples_o(u64_render_texture_samples_o),
-      .gth_valid_o(u64_gth_valid_o),
-      .gth_rgb565_o(u64_gth_rgb565_o),
-      .gth_tag_o(u64_gth_tag_o),
-      .gth_addr_o(u64_gth_addr_o),
-      .gth_x_o(u64_gth_x_o),
-      .gth_y_o(u64_gth_y_o),
-      .gth_last_o(u64_gth_last_o),
-      .post_frame_w_i(u64_src[265 +: 9]),
-      .post_frame_h_i(u64_src[272 +: 8]),
-      .post_duo_i(u64_src[279 +: 1]),
-      .post_echo_arm_i(u64_src[286 +: 1]),
-      .post_look_hold_i(u64_src[293 +: 1]),
-      .post_pass_start_o(u64_post_pass_start_o),
-      .post_view_o(u64_post_view_o),
-      .post_src_valid_o(u64_post_src_valid_o),
-      .post_src_ready_i(u64_src[300 +: 1]),
-      .post_src_rgb_o(u64_post_src_rgb_o),
-      .post_out_valid_i(u64_src[307 +: 1]),
-      .post_out_ready_o(u64_post_out_ready_o),
-      .post_out_rgb_i(u64_src[314 +: 16]),
-      .post_out_x_i(u64_src[321 +: 9]),
-      .post_out_y_i(u64_src[328 +: 8]),
-      .post_out_last_i(u64_src[335 +: 1]),
-      .post_echo_valid_i(u64_src[342 +: 1]),
-      .post_echo_rgb_i(u64_src[349 +: 16]),
-      .post_busy_o(u64_post_busy_o),
-      .post_passes_o(u64_post_passes_o),
-      .post_frames_o(u64_post_frames_o),
-      .post_fault_o(u64_post_fault_o),
-      .post_src_reads_o(u64_post_src_reads_o),
-      .post_src_pixels_o(u64_post_src_pixels_o),
-      .post_retire_unowned_o(u64_post_retire_unowned_o),
-      .post_share_contention_o(u64_post_share_contention_o),
-      .echo_passes_complete_o(u64_echo_passes_complete_o),
-      .echo_passes_torn_o(u64_echo_passes_torn_o),
-      .echo_pixels_written_o(u64_echo_pixels_written_o),
-      .echo_pixels_dropped_o(u64_echo_pixels_dropped_o),
-      .echo_fault_o(u64_echo_fault_o),
-      .phy_cs_n_o(u64_phy_cs_n_o),
-      .phy_ras_n_o(u64_phy_ras_n_o),
-      .phy_cas_n_o(u64_phy_cas_n_o),
-      .phy_we_n_o(u64_phy_we_n_o),
-      .phy_a_o(u64_phy_a_o),
-      .phy_ba_o(u64_phy_ba_o),
-      .phy_dq_o(u64_phy_dq_o),
-      .phy_dq_oe_o(u64_phy_dq_oe_o),
-      .phy_dqm_o(u64_phy_dqm_o),
-      .phy_dq_i(u64_src[356 +: 16]),
-      .cmd_pkt_valid_o(u64_cmd_pkt_valid_o),
-      .cmd_pkt_byte_o(u64_cmd_pkt_byte_o),
-      .cmd_pkt_len_o(u64_cmd_pkt_len_o),
-      .cmd_pkt_ready_i(u64_src[363 +: 1]),
-      .render_ser_req_i(u64_src[370 +: 1]),
-      .render_ser_busy_o(u64_render_ser_busy_o),
-      .render_ser_done_o(u64_render_ser_done_o),
-      .render_ser_valid_o(u64_render_ser_valid_o),
-      .render_ser_ready_i(u64_src[377 +: 1]),
-      .render_ser_tri_id_o(u64_render_ser_tri_id_o),
-      .render_ser_tile_o(u64_render_ser_tile_o),
-      .render_ser_first_o(u64_render_ser_first_o),
-      .render_ser_last_o(u64_render_ser_last_o)
+      .cfg_bands_i(u64_src[0 +: 2]),
+      .cfg_thr0_i(u64_src[7 +: 32]),
+      .cfg_thr1_i(u64_src[14 +: 32]),
+      .cfg_lvl0_i(u64_src[21 +: 32]),
+      .cfg_lvl1_i(u64_src[28 +: 32]),
+      .cfg_lvl2_i(u64_src[35 +: 32]),
+      .v_valid_i(u64_src[42 +: 1]),
+      .v_ready_o(u64_v_ready_o),
+      .r_i(u64_src[49 +: 32]),
+      .g_i(u64_src[56 +: 32]),
+      .b_i(u64_src[63 +: 32]),
+      .tag_i(u64_src[70 +: 16]),
+      .r_valid_o(u64_r_valid_o),
+      .r_ready_i(u64_src[77 +: 1]),
+      .r_o(u64_r_o),
+      .g_o(u64_g_o),
+      .b_o(u64_b_o),
+      .tag_o(u64_tag_o),
+      .band_o(u64_band_o),
+      .fragments_o(u64_fragments_o),
+      .flat_fragments_o(u64_flat_fragments_o),
+      .busy_clocks_o(u64_busy_clocks_o),
+      .overflow_o(u64_overflow_o)
   );
   logic u64_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u64_fold_q <= 1'b0;
-    else u64_fold_q <= u64_fold_q ^ (((^u64_cfg_ready_o)) & u64_src[0]) ^ (((^u64_cfg_rsp_valid_o)) & u64_src[1]) ^ (((^u64_cfg_rsp_op_o)) & u64_src[2]) ^ (((^u64_cfg_rsp_status_o)) & u64_src[3]) ^ (((^u64_cfg_rsp_page_generation_o)) & u64_src[4]) ^ (((^u64_active_page_generation_o)) & u64_src[5]) ^ (((^u64_pal_load_ready_o)) & u64_src[6]) ^ (((^u64_fill_req_valid_o)) & u64_src[7]) ^ (((^u64_fill_req_addr_o)) & u64_src[8]) ^ (((^u64_sheet_req_valid_o)) & u64_src[9]) ^ (((^u64_sheet_req_op_o)) & u64_src[10]) ^ (((^u64_sheet_req_handle_o)) & u64_src[11]) ^ (((^u64_sheet_req_texel_o)) & u64_src[12]) ^ (((^u64_sheet_req_src_id_o)) & u64_src[13]) ^ (((^u64_pg_ready_o)) & u64_src[14]) ^ (((^u64_blank_ack_o)) & u64_src[15]) ^ (((^u64_blank_active_o)) & u64_src[16]) ^ (((^u64_lease_open_o)) & u64_src[17]) ^ (((^u64_frame_slot_ready_o)) & u64_src[18]) ^ (((^u64_v2_requests_accepted_o)) & u64_src[19]) ^ (((^u64_v2_responses_accepted_o)) & u64_src[20]) ^ (((^u64_v2_leases_granted_o)) & u64_src[21]) ^ (((^u64_v2_leases_refused_o)) & u64_src[22]) ^ (((^u64_v2_faults_latched_o)) & u64_src[23]) ^ (((^u64_v2_publications_o)) & u64_src[24]) ^ (((^u64_v2_releases_o)) & u64_src[25]) ^ (((^u64_v2_ready_events_o)) & u64_src[26]) ^ (((^u64_v2_swaps_o)) & u64_src[27]) ^ (((^u64_v2_contentions_o)) & u64_src[28]) ^ (((^u64_v2_clear_handshakes_o)) & u64_src[29]) ^ (((^u64_v2_frames_admitted_o)) & u64_src[30]) ^ (((^u64_v2_blit_leases_acquired_o)) & u64_src[31]) ^ (((^u64_v2_blit_leases_refused_o)) & u64_src[32]) ^ (((^u64_ring_wr_valid_o)) & u64_src[33]) ^ (((^u64_ring_wr_slot_o)) & u64_src[34]) ^ (((^u64_ring_wr_state_o)) & u64_src[35]) ^ (((^u64_hps_req_valid_o)) & u64_src[36]) ^ (((^u64_hps_req_write_o)) & u64_src[37]) ^ (((^u64_hps_req_addr_o)) & u64_src[38]) ^ (((^u64_hps_req_len_o)) & u64_src[39]) ^ (((^u64_hps_wr_valid_o)) & u64_src[40]) ^ (((^u64_hps_wr_data_o)) & u64_src[41]) ^ (((^u64_hps_wr_last_o)) & u64_src[42]) ^ (((^u64_aud_wr_ready_o)) & u64_src[43]) ^ (((^u64_aud_refill_req_o)) & u64_src[44]) ^ (((^u64_aud_occupancy_o)) & u64_src[45]) ^ (((^u64_pcm_valid_o)) & u64_src[46]) ^ (((^u64_pcm_l_o)) & u64_src[47]) ^ (((^u64_pcm_r_o)) & u64_src[48]) ^ (((^u64_underrun_status_o)) & u64_src[49]) ^ (((^u64_audio_underruns_o)) & u64_src[50]) ^ (((^u64_px_valid_o)) & u64_src[51]) ^ (((^u64_px_rgb_o)) & u64_src[52]) ^ (((^u64_px_x_o)) & u64_src[53]) ^ (((^u64_px_y_o)) & u64_src[54]) ^ (((^u64_px_hsync_o)) & u64_src[55]) ^ (((^u64_px_vsync_o)) & u64_src[56]) ^ (((^u64_px_hblank_o)) & u64_src[57]) ^ (((^u64_px_vblank_o)) & u64_src[58]) ^ (((^u64_scaler_violation_o)) & u64_src[59]) ^ (((^u64_crc_frame_o)) & u64_src[60]) ^ (((^u64_crc_valid_o)) & u64_src[61]) ^ (((^u64_crc_bytes_o)) & u64_src[62]) ^ (((^u64_crc_size_err_o)) & u64_src[63]) ^ (((^u64_gpu_tick_o)) & u64_src[64]) ^ (((^u64_gpu_tick_frame_id_o)) & u64_src[65]) ^ (((^u64_gpu_tick_repeated_o)) & u64_src[66]) ^ (((^u64_gpu_complete_slot_o)) & u64_src[67]) ^ (((^u64_deadline_faults_o)) & u64_src[68]) ^ (((^u64_frame_cycles_o)) & u64_src[69]) ^ ((u64_slot_state_o_fold) & u64_src[70]) ^ (((^u64_fence_valid_o)) & u64_src[71]) ^ (((^u64_fence_slot_o)) & u64_src[72]) ^ (((^u64_fence_ok_o)) & u64_src[73]) ^ (((^u64_fence_status_o)) & u64_src[74]) ^ (((^u64_mode_act_o)) & u64_src[75]) ^ (((^u64_dma_done_o)) & u64_src[76]) ^ (((^u64_dma_status_o)) & u64_src[77]) ^ (((^u64_blit_done_o)) & u64_src[78]) ^ (((^u64_blit_status_o)) & u64_src[79]) ^ (((^u64_pad_frame_flat_o)) & u64_src[80]) ^ ((u64_pad_sequence_o_fold) & u64_src[81]) ^ (((^u64_input_gaps_o)) & u64_src[82]) ^ ((u64_rumble_duty_o_fold) & u64_src[83]) ^ (((^u64_rumble_active_o)) & u64_src[84]) ^ (((^u64_rumble_pwm_o)) & u64_src[85]) ^ (((^u64_rumble_drops_o)) & u64_src[86]) ^ (((^u64_cnt_snap_valid_o)) & u64_src[87]) ^ (((^u64_cnt_snap_id_o)) & u64_src[88]) ^ (((^u64_cnt_snap_value_o)) & u64_src[89]) ^ (((^u64_cnt_window_open_o)) & u64_src[90]) ^ (((^u64_cnt_cat_violation_o)) & u64_src[91]) ^ (((^u64_guard_violations_o)) & u64_src[92]) ^ (((^u64_starvation_o)) & u64_src[93]) ^ (((^u64_init_done_o)) & u64_src[94]) ^ (((^u64_refresh_stalls_o)) & u64_src[95]) ^ (((^u64_bank_conflicts_o)) & u64_src[96]) ^ (((^u64_scanout_preempted_o)) & u64_src[97]) ^ (((^u64_hps_err_count_o)) & u64_src[98]) ^ (((^u64_shell_err_wfifo_o)) & u64_src[99]) ^ (((^u64_shell_err_route_o)) & u64_src[100]) ^ (((^u64_shell_err_cdc_o)) & u64_src[101]) ^ (((^u64_shell_err_framer_o)) & u64_src[102]) ^ (((^u64_render_tri_ready_o)) & u64_src[103]) ^ (((^u64_geom_guard_rsp_o)) & u64_src[104]) ^ (((^u64_geom_beat_valid_o)) & u64_src[105]) ^ (((^u64_geom_beat_data_o)) & u64_src[106]) ^ (((^u64_geom_beat_last_o)) & u64_src[107]) ^ (((^u64_geom_wready_o)) & u64_src[108]) ^ (((^u64_geom_retire_words_o)) & u64_src[109]) ^ (((^u64_build_guard_rsp_o)) & u64_src[110]) ^ (((^u64_build_wready_o)) & u64_src[111]) ^ (((^u64_build_retire_words_o)) & u64_src[112]) ^ (((^u64_build_beat_valid_o)) & u64_src[113]) ^ (((^u64_build_beat_data_o)) & u64_src[114]) ^ (((^u64_build_beat_last_o)) & u64_src[115]) ^ (((^u64_build_hps_grant_o)) & u64_src[116]) ^ (((^u64_build_hps_rsp_o)) & u64_src[117]) ^ (((^u64_build_hps_wait_o)) & u64_src[118]) ^ (((^u64_build_hps_wr_ready_o)) & u64_src[119]) ^ (((^u64_render_drain_done_o)) & u64_src[120]) ^ (((^u64_render_busy_o)) & u64_src[121]) ^ (((^u64_render_pixels_o)) & u64_src[122]) ^ (((^u64_render_bursts_o)) & u64_src[123]) ^ (((^u64_render_stream_error_o)) & u64_src[124]) ^ (((^u64_render_drained_o)) & u64_src[125]) ^ (((^u64_render_fatal_o)) & u64_src[126]) ^ (((^u64_render_issued_words_o)) & u64_src[127]) ^ (((^u64_render_retired_words_o)) & u64_src[128]) ^ (((^u64_render_overflow_o)) & u64_src[129]) ^ (((^u64_render_fragment_error_o)) & u64_src[130]) ^ (((^u64_render_texture_fragments_o)) & u64_src[131]) ^ (((^u64_render_texture_cache_hits_o)) & u64_src[132]) ^ (((^u64_render_texture_cache_misses_o)) & u64_src[133]) ^ (((^u64_render_texture_palette_lookups_o)) & u64_src[134]) ^ (((^u64_render_texture_plan_accepted_o)) & u64_src[135]) ^ (((^u64_render_texture_dispatch_accepted_o)) & u64_src[136]) ^ (((^u64_render_texture_combine_refused_o)) & u64_src[137]) ^ (((^u64_render_texture_samples_o)) & u64_src[138]) ^ (((^u64_gth_valid_o)) & u64_src[139]) ^ (((^u64_gth_rgb565_o)) & u64_src[140]) ^ (((^u64_gth_tag_o)) & u64_src[141]) ^ (((^u64_gth_addr_o)) & u64_src[142]) ^ (((^u64_gth_x_o)) & u64_src[143]) ^ (((^u64_gth_y_o)) & u64_src[144]) ^ (((^u64_gth_last_o)) & u64_src[145]) ^ (((^u64_post_pass_start_o)) & u64_src[146]) ^ (((^u64_post_view_o)) & u64_src[147]) ^ (((^u64_post_src_valid_o)) & u64_src[148]) ^ (((^u64_post_src_rgb_o)) & u64_src[149]) ^ (((^u64_post_out_ready_o)) & u64_src[150]) ^ (((^u64_post_busy_o)) & u64_src[151]) ^ (((^u64_post_passes_o)) & u64_src[152]) ^ (((^u64_post_frames_o)) & u64_src[153]) ^ (((^u64_post_fault_o)) & u64_src[154]) ^ (((^u64_post_src_reads_o)) & u64_src[155]) ^ (((^u64_post_src_pixels_o)) & u64_src[156]) ^ (((^u64_post_retire_unowned_o)) & u64_src[157]) ^ (((^u64_post_share_contention_o)) & u64_src[158]) ^ (((^u64_echo_passes_complete_o)) & u64_src[159]) ^ (((^u64_echo_passes_torn_o)) & u64_src[160]) ^ (((^u64_echo_pixels_written_o)) & u64_src[161]) ^ (((^u64_echo_pixels_dropped_o)) & u64_src[162]) ^ (((^u64_echo_fault_o)) & u64_src[163]) ^ (((^u64_phy_cs_n_o)) & u64_src[164]) ^ (((^u64_phy_ras_n_o)) & u64_src[165]) ^ (((^u64_phy_cas_n_o)) & u64_src[166]) ^ (((^u64_phy_we_n_o)) & u64_src[167]) ^ (((^u64_phy_a_o)) & u64_src[168]) ^ (((^u64_phy_ba_o)) & u64_src[169]) ^ (((^u64_phy_dq_o)) & u64_src[170]) ^ (((^u64_phy_dq_oe_o)) & u64_src[171]) ^ (((^u64_phy_dqm_o)) & u64_src[172]) ^ (((^u64_cmd_pkt_valid_o)) & u64_src[173]) ^ (((^u64_cmd_pkt_byte_o)) & u64_src[174]) ^ (((^u64_cmd_pkt_len_o)) & u64_src[175]) ^ (((^u64_render_ser_busy_o)) & u64_src[176]) ^ (((^u64_render_ser_done_o)) & u64_src[177]) ^ (((^u64_render_ser_valid_o)) & u64_src[178]) ^ (((^u64_render_ser_tri_id_o)) & u64_src[179]) ^ (((^u64_render_ser_tile_o)) & u64_src[180]) ^ (((^u64_render_ser_first_o)) & u64_src[181]) ^ (((^u64_render_ser_last_o)) & u64_src[182]);
+    else u64_fold_q <= u64_fold_q ^ (((^u64_v_ready_o)) & u64_src[0]) ^ (((^u64_r_valid_o)) & u64_src[1]) ^ (((^u64_r_o)) & u64_src[2]) ^ (((^u64_g_o)) & u64_src[3]) ^ (((^u64_b_o)) & u64_src[4]) ^ (((^u64_tag_o)) & u64_src[5]) ^ (((^u64_band_o)) & u64_src[6]) ^ (((^u64_fragments_o)) & u64_src[7]) ^ (((^u64_flat_fragments_o)) & u64_src[8]) ^ (((^u64_busy_clocks_o)) & u64_src[9]) ^ (((^u64_overflow_o)) & u64_src[10]);
 
-  // ---- zhao_surface_dispatch ----
+  // ---- zhao_shell_top_v2 ----
   logic [63:0] u65_lfsr_q;
   logic [1023:0] u65_src;
   assign u65_src = {16{u65_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u65_lfsr_q <= 64'h000000282C170936;
     else u65_lfsr_q <= {u65_lfsr_q[62:0], (^(u65_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic signed [32-1:0] u65_env_x0_o;
-  logic signed [32-1:0] u65_env_z0_o;
-  logic signed [32-1:0] u65_env_x1_o;
-  logic signed [32-1:0] u65_env_z1_o;
-  logic signed [16-1:0] u65_patch_ix_o;
-  logic signed [16-1:0] u65_patch_iz_o;
-  logic [1-1:0] u65_patch_valid_o;
-  logic [1-1:0] u65_blend_en_o;
-  logic [3-1:0] u65_blend_o;
-  logic [3-1:0] u65_age_shift_o;
-  logic [32-1:0] u65_dispatched_o;
-  logic [32-1:0] u65_pitch_refused_o;
-  logic [32-1:0] u65_env_clamped_o;
-  zhao_surface_dispatch u65_i (
-      .clk(clk),
+  logic [1-1:0] u65_cfg_ready_o;
+  logic [1-1:0] u65_cfg_rsp_valid_o;
+  logic [2-1:0] u65_cfg_rsp_op_o;
+  logic [4-1:0] u65_cfg_rsp_status_o;
+  logic [8-1:0] u65_cfg_rsp_page_generation_o;
+  logic [8-1:0] u65_active_page_generation_o;
+  logic [1-1:0] u65_pal_load_ready_o;
+  logic [1-1:0] u65_fill_req_valid_o;
+  logic [32-1:0] u65_fill_req_addr_o;
+  logic [1-1:0] u65_sheet_req_valid_o;
+  logic [2-1:0] u65_sheet_req_op_o;
+  logic [32-1:0] u65_sheet_req_handle_o;
+  logic [12-1:0] u65_sheet_req_texel_o;
+  logic [16-1:0] u65_sheet_req_src_id_o;
+  logic [1-1:0] u65_pg_ready_o;
+  logic [1-1:0] u65_blank_ack_o;
+  logic [1-1:0] u65_blank_active_o;
+  logic [1-1:0] u65_lease_open_o;
+  logic [2-1:0] u65_frame_slot_ready_o;
+  logic [32-1:0] u65_v2_requests_accepted_o;
+  logic [32-1:0] u65_v2_responses_accepted_o;
+  logic [32-1:0] u65_v2_leases_granted_o;
+  logic [32-1:0] u65_v2_leases_refused_o;
+  logic [32-1:0] u65_v2_faults_latched_o;
+  logic [32-1:0] u65_v2_publications_o;
+  logic [32-1:0] u65_v2_releases_o;
+  logic [32-1:0] u65_v2_ready_events_o;
+  logic [32-1:0] u65_v2_swaps_o;
+  logic [32-1:0] u65_v2_contentions_o;
+  logic [32-1:0] u65_v2_clear_handshakes_o;
+  logic [32-1:0] u65_v2_frames_admitted_o;
+  logic [32-1:0] u65_v2_blit_leases_acquired_o;
+  logic [32-1:0] u65_v2_blit_leases_refused_o;
+  logic [2-1:0] u65_hps_state_i [3];
+  always_comb begin
+    u65_hps_state_i[0] = u65_src[280 +: 2] ^ (2)'(0);
+    u65_hps_state_i[1] = u65_src[280 +: 2] ^ (2)'(1);
+    u65_hps_state_i[2] = u65_src[280 +: 2] ^ (2)'(2);
+  end
+  logic [32-1:0] u65_hps_byte_len_i [3];
+  always_comb begin
+    u65_hps_byte_len_i[0] = u65_src[287 +: 32] ^ (32)'(0);
+    u65_hps_byte_len_i[1] = u65_src[287 +: 32] ^ (32)'(1);
+    u65_hps_byte_len_i[2] = u65_src[287 +: 32] ^ (32)'(2);
+  end
+  logic [1-1:0] u65_ring_wr_valid_o;
+  logic [2-1:0] u65_ring_wr_slot_o;
+  logic [2-1:0] u65_ring_wr_state_o;
+  logic [1-1:0] u65_hps_req_valid_o;
+  logic [1-1:0] u65_hps_req_write_o;
+  logic [32-1:0] u65_hps_req_addr_o;
+  logic [7-1:0] u65_hps_req_len_o;
+  logic [1-1:0] u65_hps_wr_valid_o;
+  logic [64-1:0] u65_hps_wr_data_o;
+  logic [1-1:0] u65_hps_wr_last_o;
+  logic [32-1:0] u65_pad_buttons_i [4];
+  always_comb begin
+    u65_pad_buttons_i[0] = u65_src[336 +: 32] ^ (32)'(0);
+    u65_pad_buttons_i[1] = u65_src[336 +: 32] ^ (32)'(1);
+    u65_pad_buttons_i[2] = u65_src[336 +: 32] ^ (32)'(2);
+    u65_pad_buttons_i[3] = u65_src[336 +: 32] ^ (32)'(3);
+  end
+  logic [16-1:0] u65_pad_lx_i [4];
+  always_comb begin
+    u65_pad_lx_i[0] = u65_src[343 +: 16] ^ (16)'(0);
+    u65_pad_lx_i[1] = u65_src[343 +: 16] ^ (16)'(1);
+    u65_pad_lx_i[2] = u65_src[343 +: 16] ^ (16)'(2);
+    u65_pad_lx_i[3] = u65_src[343 +: 16] ^ (16)'(3);
+  end
+  logic [16-1:0] u65_pad_ly_i [4];
+  always_comb begin
+    u65_pad_ly_i[0] = u65_src[350 +: 16] ^ (16)'(0);
+    u65_pad_ly_i[1] = u65_src[350 +: 16] ^ (16)'(1);
+    u65_pad_ly_i[2] = u65_src[350 +: 16] ^ (16)'(2);
+    u65_pad_ly_i[3] = u65_src[350 +: 16] ^ (16)'(3);
+  end
+  logic [16-1:0] u65_pad_rx_i [4];
+  always_comb begin
+    u65_pad_rx_i[0] = u65_src[357 +: 16] ^ (16)'(0);
+    u65_pad_rx_i[1] = u65_src[357 +: 16] ^ (16)'(1);
+    u65_pad_rx_i[2] = u65_src[357 +: 16] ^ (16)'(2);
+    u65_pad_rx_i[3] = u65_src[357 +: 16] ^ (16)'(3);
+  end
+  logic [16-1:0] u65_pad_ry_i [4];
+  always_comb begin
+    u65_pad_ry_i[0] = u65_src[364 +: 16] ^ (16)'(0);
+    u65_pad_ry_i[1] = u65_src[364 +: 16] ^ (16)'(1);
+    u65_pad_ry_i[2] = u65_src[364 +: 16] ^ (16)'(2);
+    u65_pad_ry_i[3] = u65_src[364 +: 16] ^ (16)'(3);
+  end
+  logic [1-1:0] u65_aud_wr_ready_o;
+  logic [1-1:0] u65_aud_refill_req_o;
+  logic [12-1:0] u65_aud_occupancy_o;
+  logic [1-1:0] u65_pcm_valid_o;
+  logic [16-1:0] u65_pcm_l_o;
+  logic [16-1:0] u65_pcm_r_o;
+  logic [1-1:0] u65_underrun_status_o;
+  logic [32-1:0] u65_audio_underruns_o;
+  logic [1-1:0] u65_px_valid_o;
+  logic [16-1:0] u65_px_rgb_o;
+  logic [10-1:0] u65_px_x_o;
+  logic [8-1:0] u65_px_y_o;
+  logic [1-1:0] u65_px_hsync_o;
+  logic [1-1:0] u65_px_vsync_o;
+  logic [1-1:0] u65_px_hblank_o;
+  logic [1-1:0] u65_px_vblank_o;
+  logic [1-1:0] u65_scaler_violation_o;
+  logic [32-1:0] u65_crc_frame_o;
+  logic [1-1:0] u65_crc_valid_o;
+  logic [32-1:0] u65_crc_bytes_o;
+  logic [1-1:0] u65_crc_size_err_o;
+  logic [1-1:0] u65_gpu_tick_o;
+  logic [32-1:0] u65_gpu_tick_frame_id_o;
+  logic [1-1:0] u65_gpu_tick_repeated_o;
+  logic [1-1:0] u65_gpu_complete_slot_o;
+  logic [64-1:0] u65_deadline_faults_o;
+  logic [64-1:0] u65_frame_cycles_o;
+  logic [3-1:0] u65_slot_state_o [3];
+  logic u65_slot_state_o_fold;
+  always_comb begin
+    u65_slot_state_o_fold = 1'b0;
+    u65_slot_state_o_fold = u65_slot_state_o_fold ^ (^u65_slot_state_o[0]);
+    u65_slot_state_o_fold = u65_slot_state_o_fold ^ (^u65_slot_state_o[1]);
+    u65_slot_state_o_fold = u65_slot_state_o_fold ^ (^u65_slot_state_o[2]);
+  end
+  logic [1-1:0] u65_fence_valid_o;
+  logic [2-1:0] u65_fence_slot_o;
+  logic [1-1:0] u65_fence_ok_o;
+  logic [8-1:0] u65_fence_status_o;
+  logic [2-1:0] u65_mode_act_o;
+  logic [1-1:0] u65_dma_done_o;
+  logic [8-1:0] u65_dma_status_o;
+  logic [1-1:0] u65_blit_done_o;
+  logic [8-1:0] u65_blit_status_o;
+  logic [640-1:0] u65_pad_frame_flat_o;
+  logic [16-1:0] u65_pad_sequence_o [4];
+  logic u65_pad_sequence_o_fold;
+  always_comb begin
+    u65_pad_sequence_o_fold = 1'b0;
+    u65_pad_sequence_o_fold = u65_pad_sequence_o_fold ^ (^u65_pad_sequence_o[0]);
+    u65_pad_sequence_o_fold = u65_pad_sequence_o_fold ^ (^u65_pad_sequence_o[1]);
+    u65_pad_sequence_o_fold = u65_pad_sequence_o_fold ^ (^u65_pad_sequence_o[2]);
+    u65_pad_sequence_o_fold = u65_pad_sequence_o_fold ^ (^u65_pad_sequence_o[3]);
+  end
+  logic [64-1:0] u65_input_gaps_o;
+  logic [8-1:0] u65_rumble_duty_o [4];
+  logic u65_rumble_duty_o_fold;
+  always_comb begin
+    u65_rumble_duty_o_fold = 1'b0;
+    u65_rumble_duty_o_fold = u65_rumble_duty_o_fold ^ (^u65_rumble_duty_o[0]);
+    u65_rumble_duty_o_fold = u65_rumble_duty_o_fold ^ (^u65_rumble_duty_o[1]);
+    u65_rumble_duty_o_fold = u65_rumble_duty_o_fold ^ (^u65_rumble_duty_o[2]);
+    u65_rumble_duty_o_fold = u65_rumble_duty_o_fold ^ (^u65_rumble_duty_o[3]);
+  end
+  logic [4-1:0] u65_rumble_active_o;
+  logic [4-1:0] u65_rumble_pwm_o;
+  logic [64-1:0] u65_rumble_drops_o;
+  logic [1-1:0] u65_cnt_snap_valid_o;
+  logic [16-1:0] u65_cnt_snap_id_o;
+  logic [64-1:0] u65_cnt_snap_value_o;
+  logic [1-1:0] u65_cnt_window_open_o;
+  logic [1-1:0] u65_cnt_cat_violation_o;
+  logic [32-1:0] u65_guard_violations_o;
+  logic [64-1:0] u65_starvation_o;
+  logic [1-1:0] u65_init_done_o;
+  logic [32-1:0] u65_refresh_stalls_o;
+  logic [32-1:0] u65_bank_conflicts_o;
+  logic [32-1:0] u65_scanout_preempted_o;
+  logic [32-1:0] u65_hps_err_count_o;
+  logic [1-1:0] u65_shell_err_wfifo_o;
+  logic [1-1:0] u65_shell_err_route_o;
+  logic [1-1:0] u65_shell_err_cdc_o;
+  logic [1-1:0] u65_shell_err_framer_o;
+  logic [1-1:0] u65_render_tri_ready_o;
+  zhao_guard_req_t u65_geom_guard_req_i;
+  assign u65_geom_guard_req_i = zhao_guard_req_t'(u65_src[434 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u65_geom_guard_rsp_o;
+  logic [1-1:0] u65_geom_beat_valid_o;
+  logic [64-1:0] u65_geom_beat_data_o;
+  logic [1-1:0] u65_geom_beat_last_o;
+  logic [1-1:0] u65_geom_wready_o;
+  logic [8-1:0] u65_geom_retire_words_o;
+  zhao_guard_req_t u65_build_guard_req_i;
+  assign u65_build_guard_req_i = zhao_guard_req_t'(u65_src[483 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u65_build_guard_rsp_o;
+  logic [1-1:0] u65_build_wready_o;
+  logic [8-1:0] u65_build_retire_words_o;
+  logic [1-1:0] u65_build_beat_valid_o;
+  logic [64-1:0] u65_build_beat_data_o;
+  logic [1-1:0] u65_build_beat_last_o;
+  zhao_hps_burst_req_t [2-1:0] u65_build_hps_req_i;
+  assign u65_build_hps_req_i[0] = zhao_hps_burst_req_t'(u65_src[511 +: $bits(zhao_hps_burst_req_t)]);
+  assign u65_build_hps_req_i[1] = zhao_hps_burst_req_t'(u65_src[2 +: $bits(zhao_hps_burst_req_t)]);
+  logic [2-1:0] u65_build_hps_grant_o;
+  zhao_hps_burst_rsp_t [2-1:0] u65_build_hps_rsp_o;
+  logic [64-1:0] u65_build_hps_wait_o;
+  logic [1-1:0] u65_build_hps_wr_ready_o;
+  logic [1-1:0] u65_render_drain_done_o;
+  logic [1-1:0] u65_render_busy_o;
+  logic [32-1:0] u65_render_pixels_o;
+  logic [32-1:0] u65_render_bursts_o;
+  logic [1-1:0] u65_render_stream_error_o;
+  logic [1-1:0] u65_render_drained_o;
+  logic [1-1:0] u65_render_fatal_o;
+  logic [32-1:0] u65_render_issued_words_o;
+  logic [32-1:0] u65_render_retired_words_o;
+  logic [1-1:0] u65_render_overflow_o;
+  logic [1-1:0] u65_render_fragment_error_o;
+  logic [32-1:0] u65_render_texture_fragments_o;
+  logic [32-1:0] u65_render_texture_cache_hits_o;
+  logic [32-1:0] u65_render_texture_cache_misses_o;
+  logic [32-1:0] u65_render_texture_palette_lookups_o;
+  logic [32-1:0] u65_render_texture_plan_accepted_o;
+  logic [32-1:0] u65_render_texture_dispatch_accepted_o;
+  logic [32-1:0] u65_render_texture_combine_refused_o;
+  logic [32-1:0] u65_render_texture_samples_o;
+  logic [1-1:0] u65_gth_valid_o;
+  logic [16-1:0] u65_gth_rgb565_o;
+  logic [8-1:0] u65_gth_tag_o;
+  logic [8-1:0] u65_gth_addr_o;
+  logic signed [12-1:0] u65_gth_x_o;
+  logic signed [12-1:0] u65_gth_y_o;
+  logic [1-1:0] u65_gth_last_o;
+  logic [1-1:0] u65_post_pass_start_o;
+  logic [1-1:0] u65_post_view_o;
+  logic [1-1:0] u65_post_src_valid_o;
+  logic [16-1:0] u65_post_src_rgb_o;
+  logic [1-1:0] u65_post_out_ready_o;
+  logic [1-1:0] u65_post_busy_o;
+  logic [32-1:0] u65_post_passes_o;
+  logic [32-1:0] u65_post_frames_o;
+  logic [1-1:0] u65_post_fault_o;
+  logic [32-1:0] u65_post_src_reads_o;
+  logic [32-1:0] u65_post_src_pixels_o;
+  logic [32-1:0] u65_post_retire_unowned_o;
+  logic [32-1:0] u65_post_share_contention_o;
+  logic [32-1:0] u65_echo_passes_complete_o;
+  logic [32-1:0] u65_echo_passes_torn_o;
+  logic [32-1:0] u65_echo_pixels_written_o;
+  logic [32-1:0] u65_echo_pixels_dropped_o;
+  logic [1-1:0] u65_echo_fault_o;
+  logic [1-1:0] u65_phy_cs_n_o;
+  logic [1-1:0] u65_phy_ras_n_o;
+  logic [1-1:0] u65_phy_cas_n_o;
+  logic [1-1:0] u65_phy_we_n_o;
+  logic [13-1:0] u65_phy_a_o;
+  logic [2-1:0] u65_phy_ba_o;
+  logic [16-1:0] u65_phy_dq_o;
+  logic [1-1:0] u65_phy_dq_oe_o;
+  logic [2-1:0] u65_phy_dqm_o;
+  logic [1-1:0] u65_cmd_pkt_valid_o;
+  logic [8-1:0] u65_cmd_pkt_byte_o;
+  logic [32-1:0] u65_cmd_pkt_len_o;
+  logic [1-1:0] u65_render_ser_busy_o;
+  logic [1-1:0] u65_render_ser_done_o;
+  logic [1-1:0] u65_render_ser_valid_o;
+  logic [18-1:0] u65_render_ser_tri_id_o;
+  logic [10-1:0] u65_render_ser_tile_o;
+  logic [1-1:0] u65_render_ser_first_o;
+  logic [1-1:0] u65_render_ser_last_o;
+  zhao_shell_top_v2 #(
+      .BUILD_HPS_N(32'd2)
+  ) u65_i (
+      .gpu_clk(clk),
+      .vid_clk(clk),
+      .audio_clk(clk),
       .rst_n(rst_n),
-      .pitch_log2_i(u65_src[0 +: 8]),
-      .cmd_tx_i(u65_src[7 +: 32]),
-      .cmd_ty_i(u65_src[14 +: 32]),
-      .cmd_fire_i(u65_src[21 +: 1]),
-      .env_x0_o(u65_env_x0_o),
-      .env_z0_o(u65_env_z0_o),
-      .env_x1_o(u65_env_x1_o),
-      .env_z1_o(u65_env_z1_o),
-      .patch_ix_o(u65_patch_ix_o),
-      .patch_iz_o(u65_patch_iz_o),
-      .patch_valid_o(u65_patch_valid_o),
-      .blend_en_o(u65_blend_en_o),
-      .blend_o(u65_blend_o),
-      .age_shift_o(u65_age_shift_o),
-      .dispatched_o(u65_dispatched_o),
-      .pitch_refused_o(u65_pitch_refused_o),
-      .env_clamped_o(u65_env_clamped_o)
+      .cfg_valid_i(u65_src[0 +: 1]),
+      .cfg_ready_o(u65_cfg_ready_o),
+      .cfg_op_i(u65_src[7 +: 2]),
+      .cfg_page_generation_i(u65_src[14 +: 8]),
+      .cfg_selector_i(u65_src[21 +: 8]),
+      .cfg_row_i(u65_src[28 +: 75]),
+      .cfg_crc32_i(u65_src[35 +: 32]),
+      .cfg_rsp_valid_o(u65_cfg_rsp_valid_o),
+      .cfg_rsp_ready_i(u65_src[42 +: 1]),
+      .cfg_rsp_op_o(u65_cfg_rsp_op_o),
+      .cfg_rsp_status_o(u65_cfg_rsp_status_o),
+      .cfg_rsp_page_generation_o(u65_cfg_rsp_page_generation_o),
+      .active_page_generation_o(u65_active_page_generation_o),
+      .pal_load_valid_i(u65_src[49 +: 1]),
+      .pal_load_ready_o(u65_pal_load_ready_o),
+      .pal_load_op_i(u65_src[56 +: 2]),
+      .pal_load_slot_i(u65_src[63 +: 2]),
+      .pal_load_gen_i(u65_src[70 +: 8]),
+      .pal_load_idx_i(u65_src[77 +: 8]),
+      .pal_load_rgb565_i(u65_src[84 +: 16]),
+      .pal_load_crc_ok_i(u65_src[91 +: 1]),
+      .tri_area2_i(u65_src[98 +: 47]),
+      .tri_invw_plane_i(u65_src[105 +: 240]),
+      .tri_u_over_w_plane_i(u65_src[112 +: 240]),
+      .tri_v_over_w_plane_i(u65_src[119 +: 240]),
+      .tri_r_plane_i(u65_src[126 +: 240]),
+      .tri_g_plane_i(u65_src[133 +: 240]),
+      .tri_b_plane_i(u65_src[140 +: 240]),
+      .tri_flat_request_i(u65_src[147 +: 298]),
+      .tri_continuation_tail_i(u65_src[154 +: 48]),
+      .tri_fragment_state_i(u65_src[161 +: 32]),
+      .fill_req_ready_i(u65_src[168 +: 1]),
+      .fill_req_valid_o(u65_fill_req_valid_o),
+      .fill_req_addr_o(u65_fill_req_addr_o),
+      .fill_data_valid_i(u65_src[175 +: 1]),
+      .fill_data_i(u65_src[182 +: 16]),
+      .fill_refused_i(u65_src[189 +: 1]),
+      .frame_clear_word_i(u65_src[196 +: 64]),
+      .sheet_req_ready_i(u65_src[203 +: 1]),
+      .sheet_req_valid_o(u65_sheet_req_valid_o),
+      .sheet_req_op_o(u65_sheet_req_op_o),
+      .sheet_req_handle_o(u65_sheet_req_handle_o),
+      .sheet_req_texel_o(u65_sheet_req_texel_o),
+      .sheet_req_src_id_o(u65_sheet_req_src_id_o),
+      .pg_valid_i(u65_src[210 +: 1]),
+      .pg_ready_o(u65_pg_ready_o),
+      .pg_op_i(u65_src[217 +: 2]),
+      .pg_status_i(u65_src[224 +: 2]),
+      .pg_tag_i(u65_src[231 +: 8]),
+      .pg_strength_i(u65_src[238 +: 8]),
+      .pg_src_id_i(u65_src[245 +: 16]),
+      .blank_cmd_i(u65_src[252 +: 1]),
+      .scanout_ack_i(u65_src[259 +: 1]),
+      .frame_swap_valid_i(u65_src[266 +: 1]),
+      .frame_swap_slot_i(u65_src[273 +: 1]),
+      .blank_ack_o(u65_blank_ack_o),
+      .blank_active_o(u65_blank_active_o),
+      .lease_open_o(u65_lease_open_o),
+      .frame_slot_ready_o(u65_frame_slot_ready_o),
+      .v2_requests_accepted_o(u65_v2_requests_accepted_o),
+      .v2_responses_accepted_o(u65_v2_responses_accepted_o),
+      .v2_leases_granted_o(u65_v2_leases_granted_o),
+      .v2_leases_refused_o(u65_v2_leases_refused_o),
+      .v2_faults_latched_o(u65_v2_faults_latched_o),
+      .v2_publications_o(u65_v2_publications_o),
+      .v2_releases_o(u65_v2_releases_o),
+      .v2_ready_events_o(u65_v2_ready_events_o),
+      .v2_swaps_o(u65_v2_swaps_o),
+      .v2_contentions_o(u65_v2_contentions_o),
+      .v2_clear_handshakes_o(u65_v2_clear_handshakes_o),
+      .v2_frames_admitted_o(u65_v2_frames_admitted_o),
+      .v2_blit_leases_acquired_o(u65_v2_blit_leases_acquired_o),
+      .v2_blit_leases_refused_o(u65_v2_blit_leases_refused_o),
+      .hps_state_i(u65_hps_state_i),
+      .hps_byte_len_i(u65_hps_byte_len_i),
+      .ring_wr_valid_o(u65_ring_wr_valid_o),
+      .ring_wr_slot_o(u65_ring_wr_slot_o),
+      .ring_wr_state_o(u65_ring_wr_state_o),
+      .ring_wr_ready_i(u65_src[294 +: 1]),
+      .hps_req_valid_o(u65_hps_req_valid_o),
+      .hps_req_write_o(u65_hps_req_write_o),
+      .hps_req_addr_o(u65_hps_req_addr_o),
+      .hps_req_len_o(u65_hps_req_len_o),
+      .hps_req_grant_i(u65_src[301 +: 1]),
+      .hps_wr_valid_o(u65_hps_wr_valid_o),
+      .hps_wr_data_o(u65_hps_wr_data_o),
+      .hps_wr_last_o(u65_hps_wr_last_o),
+      .hps_rd_valid_i(u65_src[308 +: 1]),
+      .hps_rd_data_i(u65_src[315 +: 64]),
+      .hps_rd_last_i(u65_src[322 +: 1]),
+      .pad_present_i(u65_src[329 +: 4]),
+      .pad_buttons_i(u65_pad_buttons_i),
+      .pad_lx_i(u65_pad_lx_i),
+      .pad_ly_i(u65_pad_ly_i),
+      .pad_rx_i(u65_pad_rx_i),
+      .pad_ry_i(u65_pad_ry_i),
+      .aud_wr_valid_i(u65_src[371 +: 1]),
+      .aud_wr_l_i(u65_src[378 +: 16]),
+      .aud_wr_r_i(u65_src[385 +: 16]),
+      .aud_wr_ready_o(u65_aud_wr_ready_o),
+      .aud_refill_req_o(u65_aud_refill_req_o),
+      .aud_occupancy_o(u65_aud_occupancy_o),
+      .pcm_valid_o(u65_pcm_valid_o),
+      .pcm_l_o(u65_pcm_l_o),
+      .pcm_r_o(u65_pcm_r_o),
+      .underrun_status_o(u65_underrun_status_o),
+      .audio_underruns_o(u65_audio_underruns_o),
+      .px_valid_o(u65_px_valid_o),
+      .px_rgb_o(u65_px_rgb_o),
+      .px_x_o(u65_px_x_o),
+      .px_y_o(u65_px_y_o),
+      .px_hsync_o(u65_px_hsync_o),
+      .px_vsync_o(u65_px_vsync_o),
+      .px_hblank_o(u65_px_hblank_o),
+      .px_vblank_o(u65_px_vblank_o),
+      .scaler_violation_o(u65_scaler_violation_o),
+      .crc_frame_o(u65_crc_frame_o),
+      .crc_valid_o(u65_crc_valid_o),
+      .crc_bytes_o(u65_crc_bytes_o),
+      .crc_size_err_o(u65_crc_size_err_o),
+      .gpu_tick_o(u65_gpu_tick_o),
+      .gpu_tick_frame_id_o(u65_gpu_tick_frame_id_o),
+      .gpu_tick_repeated_o(u65_gpu_tick_repeated_o),
+      .gpu_complete_slot_o(u65_gpu_complete_slot_o),
+      .deadline_faults_o(u65_deadline_faults_o),
+      .frame_cycles_o(u65_frame_cycles_o),
+      .slot_state_o(u65_slot_state_o),
+      .fence_valid_o(u65_fence_valid_o),
+      .fence_slot_o(u65_fence_slot_o),
+      .fence_ok_o(u65_fence_ok_o),
+      .fence_status_o(u65_fence_status_o),
+      .mode_act_o(u65_mode_act_o),
+      .dma_done_o(u65_dma_done_o),
+      .dma_status_o(u65_dma_status_o),
+      .blit_done_o(u65_blit_done_o),
+      .blit_status_o(u65_blit_status_o),
+      .pad_frame_flat_o(u65_pad_frame_flat_o),
+      .pad_sequence_o(u65_pad_sequence_o),
+      .input_gaps_o(u65_input_gaps_o),
+      .rumble_duty_o(u65_rumble_duty_o),
+      .rumble_active_o(u65_rumble_active_o),
+      .rumble_pwm_o(u65_rumble_pwm_o),
+      .rumble_drops_o(u65_rumble_drops_o),
+      .cnt_snap_ready_i(u65_src[392 +: 1]),
+      .cnt_snap_valid_o(u65_cnt_snap_valid_o),
+      .cnt_snap_id_o(u65_cnt_snap_id_o),
+      .cnt_snap_value_o(u65_cnt_snap_value_o),
+      .cnt_window_open_o(u65_cnt_window_open_o),
+      .cnt_cat_violation_o(u65_cnt_cat_violation_o),
+      .guard_violations_o(u65_guard_violations_o),
+      .starvation_o(u65_starvation_o),
+      .init_done_o(u65_init_done_o),
+      .refresh_stalls_o(u65_refresh_stalls_o),
+      .bank_conflicts_o(u65_bank_conflicts_o),
+      .scanout_preempted_o(u65_scanout_preempted_o),
+      .hps_err_count_o(u65_hps_err_count_o),
+      .shell_err_wfifo_o(u65_shell_err_wfifo_o),
+      .shell_err_route_o(u65_shell_err_route_o),
+      .shell_err_cdc_o(u65_shell_err_cdc_o),
+      .shell_err_framer_o(u65_shell_err_framer_o),
+      .render_frame_begin_i(u65_src[399 +: 1]),
+      .render_frame_end_i(u65_src[406 +: 1]),
+      .render_grid_w_i(u65_src[413 +: 6]),
+      .render_grid_h_i(u65_src[420 +: 6]),
+      .render_tri_valid_i(u65_src[427 +: 1]),
+      .render_tri_ready_o(u65_render_tri_ready_o),
+      .geom_guard_req_i(u65_geom_guard_req_i),
+      .geom_guard_rsp_o(u65_geom_guard_rsp_o),
+      .geom_beat_valid_o(u65_geom_beat_valid_o),
+      .geom_beat_data_o(u65_geom_beat_data_o),
+      .geom_beat_last_o(u65_geom_beat_last_o),
+      .geom_wdata_i(u65_src[441 +: 64]),
+      .geom_wvalid_i(u65_src[448 +: 1]),
+      .geom_wready_o(u65_geom_wready_o),
+      .geom_wlast_i(u65_src[455 +: 1]),
+      .geom_retire_words_o(u65_geom_retire_words_o),
+      .geom_pb_lease_i(u65_src[462 +: 1]),
+      .geom_pb_wr_view_i(u65_src[469 +: 1]),
+      .geom_pb_scratch_i(u65_src[476 +: 1]),
+      .build_guard_req_i(u65_build_guard_req_i),
+      .build_guard_rsp_o(u65_build_guard_rsp_o),
+      .build_wdata_i(u65_src[490 +: 64]),
+      .build_wvalid_i(u65_src[497 +: 1]),
+      .build_wready_o(u65_build_wready_o),
+      .build_wlast_i(u65_src[504 +: 1]),
+      .build_retire_words_o(u65_build_retire_words_o),
+      .build_beat_valid_o(u65_build_beat_valid_o),
+      .build_beat_data_o(u65_build_beat_data_o),
+      .build_beat_last_o(u65_build_beat_last_o),
+      .build_hps_req_i(u65_build_hps_req_i),
+      .build_hps_grant_o(u65_build_hps_grant_o),
+      .build_hps_rsp_o(u65_build_hps_rsp_o),
+      .build_hps_wait_o(u65_build_hps_wait_o),
+      .build_hps_wr_valid_i(u65_src[6 +: 2]),
+      .build_hps_wr_data_i(u65_src[13 +: 128]),
+      .build_hps_wr_last_i(u65_src[20 +: 2]),
+      .build_hps_wr_ready_o(u65_build_hps_wr_ready_o),
+      .build_res_valid_i(u65_src[27 +: 1]),
+      .build_res_base_i(u65_src[34 +: 32]),
+      .build_res_span_i(u65_src[41 +: 32]),
+      .render_kx0_i(u65_src[48 +: 23]),
+      .render_ky0_i(u65_src[55 +: 23]),
+      .render_kc0_i(u65_src[62 +: 48]),
+      .render_kx1_i(u65_src[69 +: 23]),
+      .render_ky1_i(u65_src[76 +: 23]),
+      .render_kc1_i(u65_src[83 +: 48]),
+      .render_kx2_i(u65_src[90 +: 23]),
+      .render_ky2_i(u65_src[97 +: 23]),
+      .render_kc2_i(u65_src[104 +: 48]),
+      .render_tl_i(u65_src[111 +: 3]),
+      .render_ax_i(u65_src[118 +: 21]),
+      .render_ay_i(u65_src[125 +: 21]),
+      .render_bx_i(u65_src[132 +: 21]),
+      .render_by_i(u65_src[139 +: 21]),
+      .render_cx_i(u65_src[146 +: 21]),
+      .render_cy_i(u65_src[153 +: 21]),
+      .render_min_x_i(u65_src[160 +: 12]),
+      .render_max_x_i(u65_src[167 +: 12]),
+      .render_min_y_i(u65_src[174 +: 12]),
+      .render_max_y_i(u65_src[181 +: 12]),
+      .render_src_id_i(u65_src[188 +: 16]),
+      .render_fill_word_i(u65_src[195 +: 64]),
+      .render_clear_word_i(u65_src[202 +: 64]),
+      .render_state_i(u65_src[209 +: 32]),
+      .render_src_a_i(u65_src[216 +: 8]),
+      .render_texel_rgb_i(u65_src[223 +: 24]),
+      .render_texel_a_i(u65_src[230 +: 8]),
+      .render_texel_idx_i(u65_src[237 +: 8]),
+      .render_fb_base_i(u65_src[244 +: 27]),
+      .render_fb_stride_i(u65_src[251 +: 16]),
+      .fb_writer_i(u65_src[258 +: 1]),
+      .render_drain_done_o(u65_render_drain_done_o),
+      .render_busy_o(u65_render_busy_o),
+      .render_pixels_o(u65_render_pixels_o),
+      .render_bursts_o(u65_render_bursts_o),
+      .render_stream_error_o(u65_render_stream_error_o),
+      .render_drained_o(u65_render_drained_o),
+      .render_fatal_o(u65_render_fatal_o),
+      .render_issued_words_o(u65_render_issued_words_o),
+      .render_retired_words_o(u65_render_retired_words_o),
+      .render_overflow_o(u65_render_overflow_o),
+      .render_fragment_error_o(u65_render_fragment_error_o),
+      .render_texture_fragments_o(u65_render_texture_fragments_o),
+      .render_texture_cache_hits_o(u65_render_texture_cache_hits_o),
+      .render_texture_cache_misses_o(u65_render_texture_cache_misses_o),
+      .render_texture_palette_lookups_o(u65_render_texture_palette_lookups_o),
+      .render_texture_plan_accepted_o(u65_render_texture_plan_accepted_o),
+      .render_texture_dispatch_accepted_o(u65_render_texture_dispatch_accepted_o),
+      .render_texture_combine_refused_o(u65_render_texture_combine_refused_o),
+      .render_texture_samples_o(u65_render_texture_samples_o),
+      .gth_valid_o(u65_gth_valid_o),
+      .gth_rgb565_o(u65_gth_rgb565_o),
+      .gth_tag_o(u65_gth_tag_o),
+      .gth_addr_o(u65_gth_addr_o),
+      .gth_x_o(u65_gth_x_o),
+      .gth_y_o(u65_gth_y_o),
+      .gth_last_o(u65_gth_last_o),
+      .post_frame_w_i(u65_src[265 +: 9]),
+      .post_frame_h_i(u65_src[272 +: 8]),
+      .post_duo_i(u65_src[279 +: 1]),
+      .post_echo_arm_i(u65_src[286 +: 1]),
+      .post_look_hold_i(u65_src[293 +: 1]),
+      .post_pass_start_o(u65_post_pass_start_o),
+      .post_view_o(u65_post_view_o),
+      .post_src_valid_o(u65_post_src_valid_o),
+      .post_src_ready_i(u65_src[300 +: 1]),
+      .post_src_rgb_o(u65_post_src_rgb_o),
+      .post_out_valid_i(u65_src[307 +: 1]),
+      .post_out_ready_o(u65_post_out_ready_o),
+      .post_out_rgb_i(u65_src[314 +: 16]),
+      .post_out_x_i(u65_src[321 +: 9]),
+      .post_out_y_i(u65_src[328 +: 8]),
+      .post_out_last_i(u65_src[335 +: 1]),
+      .post_echo_valid_i(u65_src[342 +: 1]),
+      .post_echo_rgb_i(u65_src[349 +: 16]),
+      .post_busy_o(u65_post_busy_o),
+      .post_passes_o(u65_post_passes_o),
+      .post_frames_o(u65_post_frames_o),
+      .post_fault_o(u65_post_fault_o),
+      .post_src_reads_o(u65_post_src_reads_o),
+      .post_src_pixels_o(u65_post_src_pixels_o),
+      .post_retire_unowned_o(u65_post_retire_unowned_o),
+      .post_share_contention_o(u65_post_share_contention_o),
+      .echo_passes_complete_o(u65_echo_passes_complete_o),
+      .echo_passes_torn_o(u65_echo_passes_torn_o),
+      .echo_pixels_written_o(u65_echo_pixels_written_o),
+      .echo_pixels_dropped_o(u65_echo_pixels_dropped_o),
+      .echo_fault_o(u65_echo_fault_o),
+      .phy_cs_n_o(u65_phy_cs_n_o),
+      .phy_ras_n_o(u65_phy_ras_n_o),
+      .phy_cas_n_o(u65_phy_cas_n_o),
+      .phy_we_n_o(u65_phy_we_n_o),
+      .phy_a_o(u65_phy_a_o),
+      .phy_ba_o(u65_phy_ba_o),
+      .phy_dq_o(u65_phy_dq_o),
+      .phy_dq_oe_o(u65_phy_dq_oe_o),
+      .phy_dqm_o(u65_phy_dqm_o),
+      .phy_dq_i(u65_src[356 +: 16]),
+      .cmd_pkt_valid_o(u65_cmd_pkt_valid_o),
+      .cmd_pkt_byte_o(u65_cmd_pkt_byte_o),
+      .cmd_pkt_len_o(u65_cmd_pkt_len_o),
+      .cmd_pkt_ready_i(u65_src[363 +: 1]),
+      .render_ser_req_i(u65_src[370 +: 1]),
+      .render_ser_busy_o(u65_render_ser_busy_o),
+      .render_ser_done_o(u65_render_ser_done_o),
+      .render_ser_valid_o(u65_render_ser_valid_o),
+      .render_ser_ready_i(u65_src[377 +: 1]),
+      .render_ser_tri_id_o(u65_render_ser_tri_id_o),
+      .render_ser_tile_o(u65_render_ser_tile_o),
+      .render_ser_first_o(u65_render_ser_first_o),
+      .render_ser_last_o(u65_render_ser_last_o)
   );
   logic u65_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u65_fold_q <= 1'b0;
-    else u65_fold_q <= u65_fold_q ^ (((^u65_env_x0_o)) & u65_src[0]) ^ (((^u65_env_z0_o)) & u65_src[1]) ^ (((^u65_env_x1_o)) & u65_src[2]) ^ (((^u65_env_z1_o)) & u65_src[3]) ^ (((^u65_patch_ix_o)) & u65_src[4]) ^ (((^u65_patch_iz_o)) & u65_src[5]) ^ (((^u65_patch_valid_o)) & u65_src[6]) ^ (((^u65_blend_en_o)) & u65_src[7]) ^ (((^u65_blend_o)) & u65_src[8]) ^ (((^u65_age_shift_o)) & u65_src[9]) ^ (((^u65_dispatched_o)) & u65_src[10]) ^ (((^u65_pitch_refused_o)) & u65_src[11]) ^ (((^u65_env_clamped_o)) & u65_src[12]);
+    else u65_fold_q <= u65_fold_q ^ (((^u65_cfg_ready_o)) & u65_src[0]) ^ (((^u65_cfg_rsp_valid_o)) & u65_src[1]) ^ (((^u65_cfg_rsp_op_o)) & u65_src[2]) ^ (((^u65_cfg_rsp_status_o)) & u65_src[3]) ^ (((^u65_cfg_rsp_page_generation_o)) & u65_src[4]) ^ (((^u65_active_page_generation_o)) & u65_src[5]) ^ (((^u65_pal_load_ready_o)) & u65_src[6]) ^ (((^u65_fill_req_valid_o)) & u65_src[7]) ^ (((^u65_fill_req_addr_o)) & u65_src[8]) ^ (((^u65_sheet_req_valid_o)) & u65_src[9]) ^ (((^u65_sheet_req_op_o)) & u65_src[10]) ^ (((^u65_sheet_req_handle_o)) & u65_src[11]) ^ (((^u65_sheet_req_texel_o)) & u65_src[12]) ^ (((^u65_sheet_req_src_id_o)) & u65_src[13]) ^ (((^u65_pg_ready_o)) & u65_src[14]) ^ (((^u65_blank_ack_o)) & u65_src[15]) ^ (((^u65_blank_active_o)) & u65_src[16]) ^ (((^u65_lease_open_o)) & u65_src[17]) ^ (((^u65_frame_slot_ready_o)) & u65_src[18]) ^ (((^u65_v2_requests_accepted_o)) & u65_src[19]) ^ (((^u65_v2_responses_accepted_o)) & u65_src[20]) ^ (((^u65_v2_leases_granted_o)) & u65_src[21]) ^ (((^u65_v2_leases_refused_o)) & u65_src[22]) ^ (((^u65_v2_faults_latched_o)) & u65_src[23]) ^ (((^u65_v2_publications_o)) & u65_src[24]) ^ (((^u65_v2_releases_o)) & u65_src[25]) ^ (((^u65_v2_ready_events_o)) & u65_src[26]) ^ (((^u65_v2_swaps_o)) & u65_src[27]) ^ (((^u65_v2_contentions_o)) & u65_src[28]) ^ (((^u65_v2_clear_handshakes_o)) & u65_src[29]) ^ (((^u65_v2_frames_admitted_o)) & u65_src[30]) ^ (((^u65_v2_blit_leases_acquired_o)) & u65_src[31]) ^ (((^u65_v2_blit_leases_refused_o)) & u65_src[32]) ^ (((^u65_ring_wr_valid_o)) & u65_src[33]) ^ (((^u65_ring_wr_slot_o)) & u65_src[34]) ^ (((^u65_ring_wr_state_o)) & u65_src[35]) ^ (((^u65_hps_req_valid_o)) & u65_src[36]) ^ (((^u65_hps_req_write_o)) & u65_src[37]) ^ (((^u65_hps_req_addr_o)) & u65_src[38]) ^ (((^u65_hps_req_len_o)) & u65_src[39]) ^ (((^u65_hps_wr_valid_o)) & u65_src[40]) ^ (((^u65_hps_wr_data_o)) & u65_src[41]) ^ (((^u65_hps_wr_last_o)) & u65_src[42]) ^ (((^u65_aud_wr_ready_o)) & u65_src[43]) ^ (((^u65_aud_refill_req_o)) & u65_src[44]) ^ (((^u65_aud_occupancy_o)) & u65_src[45]) ^ (((^u65_pcm_valid_o)) & u65_src[46]) ^ (((^u65_pcm_l_o)) & u65_src[47]) ^ (((^u65_pcm_r_o)) & u65_src[48]) ^ (((^u65_underrun_status_o)) & u65_src[49]) ^ (((^u65_audio_underruns_o)) & u65_src[50]) ^ (((^u65_px_valid_o)) & u65_src[51]) ^ (((^u65_px_rgb_o)) & u65_src[52]) ^ (((^u65_px_x_o)) & u65_src[53]) ^ (((^u65_px_y_o)) & u65_src[54]) ^ (((^u65_px_hsync_o)) & u65_src[55]) ^ (((^u65_px_vsync_o)) & u65_src[56]) ^ (((^u65_px_hblank_o)) & u65_src[57]) ^ (((^u65_px_vblank_o)) & u65_src[58]) ^ (((^u65_scaler_violation_o)) & u65_src[59]) ^ (((^u65_crc_frame_o)) & u65_src[60]) ^ (((^u65_crc_valid_o)) & u65_src[61]) ^ (((^u65_crc_bytes_o)) & u65_src[62]) ^ (((^u65_crc_size_err_o)) & u65_src[63]) ^ (((^u65_gpu_tick_o)) & u65_src[64]) ^ (((^u65_gpu_tick_frame_id_o)) & u65_src[65]) ^ (((^u65_gpu_tick_repeated_o)) & u65_src[66]) ^ (((^u65_gpu_complete_slot_o)) & u65_src[67]) ^ (((^u65_deadline_faults_o)) & u65_src[68]) ^ (((^u65_frame_cycles_o)) & u65_src[69]) ^ ((u65_slot_state_o_fold) & u65_src[70]) ^ (((^u65_fence_valid_o)) & u65_src[71]) ^ (((^u65_fence_slot_o)) & u65_src[72]) ^ (((^u65_fence_ok_o)) & u65_src[73]) ^ (((^u65_fence_status_o)) & u65_src[74]) ^ (((^u65_mode_act_o)) & u65_src[75]) ^ (((^u65_dma_done_o)) & u65_src[76]) ^ (((^u65_dma_status_o)) & u65_src[77]) ^ (((^u65_blit_done_o)) & u65_src[78]) ^ (((^u65_blit_status_o)) & u65_src[79]) ^ (((^u65_pad_frame_flat_o)) & u65_src[80]) ^ ((u65_pad_sequence_o_fold) & u65_src[81]) ^ (((^u65_input_gaps_o)) & u65_src[82]) ^ ((u65_rumble_duty_o_fold) & u65_src[83]) ^ (((^u65_rumble_active_o)) & u65_src[84]) ^ (((^u65_rumble_pwm_o)) & u65_src[85]) ^ (((^u65_rumble_drops_o)) & u65_src[86]) ^ (((^u65_cnt_snap_valid_o)) & u65_src[87]) ^ (((^u65_cnt_snap_id_o)) & u65_src[88]) ^ (((^u65_cnt_snap_value_o)) & u65_src[89]) ^ (((^u65_cnt_window_open_o)) & u65_src[90]) ^ (((^u65_cnt_cat_violation_o)) & u65_src[91]) ^ (((^u65_guard_violations_o)) & u65_src[92]) ^ (((^u65_starvation_o)) & u65_src[93]) ^ (((^u65_init_done_o)) & u65_src[94]) ^ (((^u65_refresh_stalls_o)) & u65_src[95]) ^ (((^u65_bank_conflicts_o)) & u65_src[96]) ^ (((^u65_scanout_preempted_o)) & u65_src[97]) ^ (((^u65_hps_err_count_o)) & u65_src[98]) ^ (((^u65_shell_err_wfifo_o)) & u65_src[99]) ^ (((^u65_shell_err_route_o)) & u65_src[100]) ^ (((^u65_shell_err_cdc_o)) & u65_src[101]) ^ (((^u65_shell_err_framer_o)) & u65_src[102]) ^ (((^u65_render_tri_ready_o)) & u65_src[103]) ^ (((^u65_geom_guard_rsp_o)) & u65_src[104]) ^ (((^u65_geom_beat_valid_o)) & u65_src[105]) ^ (((^u65_geom_beat_data_o)) & u65_src[106]) ^ (((^u65_geom_beat_last_o)) & u65_src[107]) ^ (((^u65_geom_wready_o)) & u65_src[108]) ^ (((^u65_geom_retire_words_o)) & u65_src[109]) ^ (((^u65_build_guard_rsp_o)) & u65_src[110]) ^ (((^u65_build_wready_o)) & u65_src[111]) ^ (((^u65_build_retire_words_o)) & u65_src[112]) ^ (((^u65_build_beat_valid_o)) & u65_src[113]) ^ (((^u65_build_beat_data_o)) & u65_src[114]) ^ (((^u65_build_beat_last_o)) & u65_src[115]) ^ (((^u65_build_hps_grant_o)) & u65_src[116]) ^ (((^u65_build_hps_rsp_o)) & u65_src[117]) ^ (((^u65_build_hps_wait_o)) & u65_src[118]) ^ (((^u65_build_hps_wr_ready_o)) & u65_src[119]) ^ (((^u65_render_drain_done_o)) & u65_src[120]) ^ (((^u65_render_busy_o)) & u65_src[121]) ^ (((^u65_render_pixels_o)) & u65_src[122]) ^ (((^u65_render_bursts_o)) & u65_src[123]) ^ (((^u65_render_stream_error_o)) & u65_src[124]) ^ (((^u65_render_drained_o)) & u65_src[125]) ^ (((^u65_render_fatal_o)) & u65_src[126]) ^ (((^u65_render_issued_words_o)) & u65_src[127]) ^ (((^u65_render_retired_words_o)) & u65_src[128]) ^ (((^u65_render_overflow_o)) & u65_src[129]) ^ (((^u65_render_fragment_error_o)) & u65_src[130]) ^ (((^u65_render_texture_fragments_o)) & u65_src[131]) ^ (((^u65_render_texture_cache_hits_o)) & u65_src[132]) ^ (((^u65_render_texture_cache_misses_o)) & u65_src[133]) ^ (((^u65_render_texture_palette_lookups_o)) & u65_src[134]) ^ (((^u65_render_texture_plan_accepted_o)) & u65_src[135]) ^ (((^u65_render_texture_dispatch_accepted_o)) & u65_src[136]) ^ (((^u65_render_texture_combine_refused_o)) & u65_src[137]) ^ (((^u65_render_texture_samples_o)) & u65_src[138]) ^ (((^u65_gth_valid_o)) & u65_src[139]) ^ (((^u65_gth_rgb565_o)) & u65_src[140]) ^ (((^u65_gth_tag_o)) & u65_src[141]) ^ (((^u65_gth_addr_o)) & u65_src[142]) ^ (((^u65_gth_x_o)) & u65_src[143]) ^ (((^u65_gth_y_o)) & u65_src[144]) ^ (((^u65_gth_last_o)) & u65_src[145]) ^ (((^u65_post_pass_start_o)) & u65_src[146]) ^ (((^u65_post_view_o)) & u65_src[147]) ^ (((^u65_post_src_valid_o)) & u65_src[148]) ^ (((^u65_post_src_rgb_o)) & u65_src[149]) ^ (((^u65_post_out_ready_o)) & u65_src[150]) ^ (((^u65_post_busy_o)) & u65_src[151]) ^ (((^u65_post_passes_o)) & u65_src[152]) ^ (((^u65_post_frames_o)) & u65_src[153]) ^ (((^u65_post_fault_o)) & u65_src[154]) ^ (((^u65_post_src_reads_o)) & u65_src[155]) ^ (((^u65_post_src_pixels_o)) & u65_src[156]) ^ (((^u65_post_retire_unowned_o)) & u65_src[157]) ^ (((^u65_post_share_contention_o)) & u65_src[158]) ^ (((^u65_echo_passes_complete_o)) & u65_src[159]) ^ (((^u65_echo_passes_torn_o)) & u65_src[160]) ^ (((^u65_echo_pixels_written_o)) & u65_src[161]) ^ (((^u65_echo_pixels_dropped_o)) & u65_src[162]) ^ (((^u65_echo_fault_o)) & u65_src[163]) ^ (((^u65_phy_cs_n_o)) & u65_src[164]) ^ (((^u65_phy_ras_n_o)) & u65_src[165]) ^ (((^u65_phy_cas_n_o)) & u65_src[166]) ^ (((^u65_phy_we_n_o)) & u65_src[167]) ^ (((^u65_phy_a_o)) & u65_src[168]) ^ (((^u65_phy_ba_o)) & u65_src[169]) ^ (((^u65_phy_dq_o)) & u65_src[170]) ^ (((^u65_phy_dq_oe_o)) & u65_src[171]) ^ (((^u65_phy_dqm_o)) & u65_src[172]) ^ (((^u65_cmd_pkt_valid_o)) & u65_src[173]) ^ (((^u65_cmd_pkt_byte_o)) & u65_src[174]) ^ (((^u65_cmd_pkt_len_o)) & u65_src[175]) ^ (((^u65_render_ser_busy_o)) & u65_src[176]) ^ (((^u65_render_ser_done_o)) & u65_src[177]) ^ (((^u65_render_ser_valid_o)) & u65_src[178]) ^ (((^u65_render_ser_tri_id_o)) & u65_src[179]) ^ (((^u65_render_ser_tile_o)) & u65_src[180]) ^ (((^u65_render_ser_first_o)) & u65_src[181]) ^ (((^u65_render_ser_last_o)) & u65_src[182]);
 
-  // ---- zhao_surface_sheet ----
+  // ---- zhao_surface_dispatch ----
   logic [63:0] u66_lfsr_q;
   logic [1023:0] u66_src;
   assign u66_src = {16{u66_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u66_lfsr_q <= 64'h00000028CA4E82E7;
     else u66_lfsr_q <= {u66_lfsr_q[62:0], (^(u66_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u66_req_ready_o;
-  logic [1-1:0] u66_pg_valid_o;
-  logic [2-1:0] u66_pg_op_o;
-  logic [2-1:0] u66_pg_status_o;
-  logic [8-1:0] u66_pg_tag_o;
-  logic [8-1:0] u66_pg_strength_o;
-  logic [16-1:0] u66_pg_src_id_o;
-  logic [1-1:0] u66_wr_ready_o;
-  logic [1-1:0] u66_wr_miss_o;
-  logic [16-1:0] u66_wr_miss_src_id_o;
-  logic [2-1:0] u66_res_occupancy_o;
-  logic [1-1:0] u66_res_busy_o;
-  logic [1-1:0] u66_res_overflow_o;
-  logic [32-1:0] u66_surface_texels_touched_o;
-  logic [1-1:0] u66_idle_o;
-  zhao_surface_sheet u66_i (
+  logic signed [32-1:0] u66_env_x0_o;
+  logic signed [32-1:0] u66_env_z0_o;
+  logic signed [32-1:0] u66_env_x1_o;
+  logic signed [32-1:0] u66_env_z1_o;
+  logic signed [16-1:0] u66_patch_ix_o;
+  logic signed [16-1:0] u66_patch_iz_o;
+  logic [1-1:0] u66_patch_valid_o;
+  logic [1-1:0] u66_blend_en_o;
+  logic [3-1:0] u66_blend_o;
+  logic [3-1:0] u66_age_shift_o;
+  logic [32-1:0] u66_dispatched_o;
+  logic [32-1:0] u66_pitch_refused_o;
+  logic [32-1:0] u66_env_clamped_o;
+  zhao_surface_dispatch u66_i (
       .clk(clk),
       .rst_n(rst_n),
-      .req_valid_i(u66_src[0 +: 1]),
-      .req_ready_o(u66_req_ready_o),
-      .req_op_i(u66_src[7 +: 2]),
-      .req_handle_i(u66_src[14 +: 32]),
-      .req_texel_i(u66_src[21 +: 12]),
-      .req_src_id_i(u66_src[28 +: 16]),
-      .pg_valid_o(u66_pg_valid_o),
-      .pg_ready_i(u66_src[35 +: 1]),
-      .pg_op_o(u66_pg_op_o),
-      .pg_status_o(u66_pg_status_o),
-      .pg_tag_o(u66_pg_tag_o),
-      .pg_strength_o(u66_pg_strength_o),
-      .pg_src_id_o(u66_pg_src_id_o),
-      .wr_valid_i(u66_src[42 +: 1]),
-      .wr_ready_o(u66_wr_ready_o),
-      .wr_handle_i(u66_src[49 +: 32]),
-      .wr_texel_i(u66_src[56 +: 12]),
-      .wr_tag_i(u66_src[63 +: 8]),
-      .wr_strength_i(u66_src[70 +: 8]),
-      .wr_we_tag_i(u66_src[77 +: 1]),
-      .wr_we_strength_i(u66_src[84 +: 1]),
-      .wr_src_id_i(u66_src[91 +: 16]),
-      .wr_miss_o(u66_wr_miss_o),
-      .wr_miss_src_id_o(u66_wr_miss_src_id_o),
-      .res_occupancy_o(u66_res_occupancy_o),
-      .res_busy_o(u66_res_busy_o),
-      .res_overflow_o(u66_res_overflow_o),
-      .surface_texels_touched_o(u66_surface_texels_touched_o),
-      .idle_o(u66_idle_o)
+      .pitch_log2_i(u66_src[0 +: 8]),
+      .cmd_tx_i(u66_src[7 +: 32]),
+      .cmd_ty_i(u66_src[14 +: 32]),
+      .cmd_fire_i(u66_src[21 +: 1]),
+      .env_x0_o(u66_env_x0_o),
+      .env_z0_o(u66_env_z0_o),
+      .env_x1_o(u66_env_x1_o),
+      .env_z1_o(u66_env_z1_o),
+      .patch_ix_o(u66_patch_ix_o),
+      .patch_iz_o(u66_patch_iz_o),
+      .patch_valid_o(u66_patch_valid_o),
+      .blend_en_o(u66_blend_en_o),
+      .blend_o(u66_blend_o),
+      .age_shift_o(u66_age_shift_o),
+      .dispatched_o(u66_dispatched_o),
+      .pitch_refused_o(u66_pitch_refused_o),
+      .env_clamped_o(u66_env_clamped_o)
   );
   logic u66_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u66_fold_q <= 1'b0;
-    else u66_fold_q <= u66_fold_q ^ (((^u66_req_ready_o)) & u66_src[0]) ^ (((^u66_pg_valid_o)) & u66_src[1]) ^ (((^u66_pg_op_o)) & u66_src[2]) ^ (((^u66_pg_status_o)) & u66_src[3]) ^ (((^u66_pg_tag_o)) & u66_src[4]) ^ (((^u66_pg_strength_o)) & u66_src[5]) ^ (((^u66_pg_src_id_o)) & u66_src[6]) ^ (((^u66_wr_ready_o)) & u66_src[7]) ^ (((^u66_wr_miss_o)) & u66_src[8]) ^ (((^u66_wr_miss_src_id_o)) & u66_src[9]) ^ (((^u66_res_occupancy_o)) & u66_src[10]) ^ (((^u66_res_busy_o)) & u66_src[11]) ^ (((^u66_res_overflow_o)) & u66_src[12]) ^ (((^u66_surface_texels_touched_o)) & u66_src[13]) ^ (((^u66_idle_o)) & u66_src[14]);
+    else u66_fold_q <= u66_fold_q ^ (((^u66_env_x0_o)) & u66_src[0]) ^ (((^u66_env_z0_o)) & u66_src[1]) ^ (((^u66_env_x1_o)) & u66_src[2]) ^ (((^u66_env_z1_o)) & u66_src[3]) ^ (((^u66_patch_ix_o)) & u66_src[4]) ^ (((^u66_patch_iz_o)) & u66_src[5]) ^ (((^u66_patch_valid_o)) & u66_src[6]) ^ (((^u66_blend_en_o)) & u66_src[7]) ^ (((^u66_blend_o)) & u66_src[8]) ^ (((^u66_age_shift_o)) & u66_src[9]) ^ (((^u66_dispatched_o)) & u66_src[10]) ^ (((^u66_pitch_refused_o)) & u66_src[11]) ^ (((^u66_env_clamped_o)) & u66_src[12]);
 
-  // ---- zhao_surface_stamp ----
+  // ---- zhao_surface_sheet ----
   logic [63:0] u67_lfsr_q;
   logic [1023:0] u67_src;
   assign u67_src = {16{u67_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u67_lfsr_q <= 64'h000000296885FC98;
     else u67_lfsr_q <= {u67_lfsr_q[62:0], (^(u67_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u67_cmd_ready_o;
-  logic [1-1:0] u67_fld_ready_o;
-  logic [1-1:0] u67_req_valid_o;
-  logic [2-1:0] u67_req_op_o;
-  logic [32-1:0] u67_req_handle_o;
-  logic [12-1:0] u67_req_texel_o;
-  logic [16-1:0] u67_req_src_id_o;
-  logic [1-1:0] u67_pg_ready_o;
-  logic [1-1:0] u67_wr_valid_o;
-  logic [32-1:0] u67_wr_handle_o;
-  logic [12-1:0] u67_wr_texel_o;
-  logic [8-1:0] u67_wr_tag_o;
-  logic [8-1:0] u67_wr_strength_o;
-  logic [1-1:0] u67_wr_we_tag_o;
-  logic [1-1:0] u67_wr_we_strength_o;
-  logic [16-1:0] u67_wr_src_id_o;
-  logic [1-1:0] u67_res_valid_o;
-  logic [12-1:0] u67_res_texel_o;
-  logic [8-1:0] u67_res_tag_o;
-  logic [8-1:0] u67_res_strength_o;
-  logic [8-1:0] u67_res_before_o;
-  logic [32-1:0] u67_res_handle_o;
-  logic [16-1:0] u67_res_src_id_o;
-  logic [1-1:0] u67_stamp_done_o;
-  logic [1-1:0] u67_stamp_rejected_o;
-  logic [32-1:0] u67_surface_stamps_o;
+  logic [1-1:0] u67_req_ready_o;
+  logic [1-1:0] u67_pg_valid_o;
+  logic [2-1:0] u67_pg_op_o;
+  logic [2-1:0] u67_pg_status_o;
+  logic [8-1:0] u67_pg_tag_o;
+  logic [8-1:0] u67_pg_strength_o;
+  logic [16-1:0] u67_pg_src_id_o;
+  logic [1-1:0] u67_wr_ready_o;
+  logic [1-1:0] u67_wr_miss_o;
+  logic [16-1:0] u67_wr_miss_src_id_o;
+  logic [2-1:0] u67_res_occupancy_o;
+  logic [1-1:0] u67_res_busy_o;
+  logic [1-1:0] u67_res_overflow_o;
   logic [32-1:0] u67_surface_texels_touched_o;
   logic [1-1:0] u67_idle_o;
-  zhao_surface_stamp u67_i (
+  zhao_surface_sheet u67_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cmd_valid_i(u67_src[0 +: 1]),
-      .cmd_ready_o(u67_cmd_ready_o),
-      .cmd_handle_i(u67_src[7 +: 32]),
-      .cmd_operation_i(u67_src[14 +: 8]),
-      .cmd_tag_i(u67_src[21 +: 8]),
-      .cmd_strength_i(u67_src[28 +: 16]),
-      .cmd_tx_i(u67_src[35 +: 32]),
-      .cmd_ty_i(u67_src[42 +: 32]),
-      .cmd_radius_i(u67_src[49 +: 32]),
-      .cmd_ring_width_i(u67_src[56 +: 32]),
-      .cmd_env_x0_i(u67_src[63 +: 32]),
-      .cmd_env_z0_i(u67_src[70 +: 32]),
-      .cmd_env_x1_i(u67_src[77 +: 32]),
-      .cmd_env_z1_i(u67_src[84 +: 32]),
-      .cmd_blend_en_i(u67_src[91 +: 1]),
-      .cmd_blend_i(u67_src[98 +: 3]),
-      .cmd_age_shift_i(u67_src[105 +: 3]),
-      .cmd_field_en_i(u67_src[112 +: 1]),
-      .cmd_src_id_i(u67_src[119 +: 16]),
-      .fld_valid_i(u67_src[126 +: 1]),
-      .fld_ready_o(u67_fld_ready_o),
-      .fld_tag_op_i(u67_src[133 +: 32]),
-      .fld_strength_i(u67_src[140 +: 16]),
-      .req_valid_o(u67_req_valid_o),
-      .req_ready_i(u67_src[147 +: 1]),
-      .req_op_o(u67_req_op_o),
-      .req_handle_o(u67_req_handle_o),
-      .req_texel_o(u67_req_texel_o),
-      .req_src_id_o(u67_req_src_id_o),
-      .pg_valid_i(u67_src[154 +: 1]),
-      .pg_ready_o(u67_pg_ready_o),
-      .pg_status_i(u67_src[161 +: 2]),
-      .pg_strength_i(u67_src[168 +: 8]),
-      .wr_valid_o(u67_wr_valid_o),
-      .wr_ready_i(u67_src[175 +: 1]),
-      .wr_handle_o(u67_wr_handle_o),
-      .wr_texel_o(u67_wr_texel_o),
-      .wr_tag_o(u67_wr_tag_o),
-      .wr_strength_o(u67_wr_strength_o),
-      .wr_we_tag_o(u67_wr_we_tag_o),
-      .wr_we_strength_o(u67_wr_we_strength_o),
-      .wr_src_id_o(u67_wr_src_id_o),
-      .res_valid_o(u67_res_valid_o),
-      .res_ready_i(u67_src[182 +: 1]),
-      .res_texel_o(u67_res_texel_o),
-      .res_tag_o(u67_res_tag_o),
-      .res_strength_o(u67_res_strength_o),
-      .res_before_o(u67_res_before_o),
-      .res_handle_o(u67_res_handle_o),
-      .res_src_id_o(u67_res_src_id_o),
-      .stamp_done_o(u67_stamp_done_o),
-      .stamp_rejected_o(u67_stamp_rejected_o),
-      .surface_stamps_o(u67_surface_stamps_o),
+      .req_valid_i(u67_src[0 +: 1]),
+      .req_ready_o(u67_req_ready_o),
+      .req_op_i(u67_src[7 +: 2]),
+      .req_handle_i(u67_src[14 +: 32]),
+      .req_texel_i(u67_src[21 +: 12]),
+      .req_src_id_i(u67_src[28 +: 16]),
+      .pg_valid_o(u67_pg_valid_o),
+      .pg_ready_i(u67_src[35 +: 1]),
+      .pg_op_o(u67_pg_op_o),
+      .pg_status_o(u67_pg_status_o),
+      .pg_tag_o(u67_pg_tag_o),
+      .pg_strength_o(u67_pg_strength_o),
+      .pg_src_id_o(u67_pg_src_id_o),
+      .wr_valid_i(u67_src[42 +: 1]),
+      .wr_ready_o(u67_wr_ready_o),
+      .wr_handle_i(u67_src[49 +: 32]),
+      .wr_texel_i(u67_src[56 +: 12]),
+      .wr_tag_i(u67_src[63 +: 8]),
+      .wr_strength_i(u67_src[70 +: 8]),
+      .wr_we_tag_i(u67_src[77 +: 1]),
+      .wr_we_strength_i(u67_src[84 +: 1]),
+      .wr_src_id_i(u67_src[91 +: 16]),
+      .wr_miss_o(u67_wr_miss_o),
+      .wr_miss_src_id_o(u67_wr_miss_src_id_o),
+      .res_occupancy_o(u67_res_occupancy_o),
+      .res_busy_o(u67_res_busy_o),
+      .res_overflow_o(u67_res_overflow_o),
       .surface_texels_touched_o(u67_surface_texels_touched_o),
       .idle_o(u67_idle_o)
   );
   logic u67_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u67_fold_q <= 1'b0;
-    else u67_fold_q <= u67_fold_q ^ (((^u67_cmd_ready_o)) & u67_src[0]) ^ (((^u67_fld_ready_o)) & u67_src[1]) ^ (((^u67_req_valid_o)) & u67_src[2]) ^ (((^u67_req_op_o)) & u67_src[3]) ^ (((^u67_req_handle_o)) & u67_src[4]) ^ (((^u67_req_texel_o)) & u67_src[5]) ^ (((^u67_req_src_id_o)) & u67_src[6]) ^ (((^u67_pg_ready_o)) & u67_src[7]) ^ (((^u67_wr_valid_o)) & u67_src[8]) ^ (((^u67_wr_handle_o)) & u67_src[9]) ^ (((^u67_wr_texel_o)) & u67_src[10]) ^ (((^u67_wr_tag_o)) & u67_src[11]) ^ (((^u67_wr_strength_o)) & u67_src[12]) ^ (((^u67_wr_we_tag_o)) & u67_src[13]) ^ (((^u67_wr_we_strength_o)) & u67_src[14]) ^ (((^u67_wr_src_id_o)) & u67_src[15]) ^ (((^u67_res_valid_o)) & u67_src[16]) ^ (((^u67_res_texel_o)) & u67_src[17]) ^ (((^u67_res_tag_o)) & u67_src[18]) ^ (((^u67_res_strength_o)) & u67_src[19]) ^ (((^u67_res_before_o)) & u67_src[20]) ^ (((^u67_res_handle_o)) & u67_src[21]) ^ (((^u67_res_src_id_o)) & u67_src[22]) ^ (((^u67_stamp_done_o)) & u67_src[23]) ^ (((^u67_stamp_rejected_o)) & u67_src[24]) ^ (((^u67_surface_stamps_o)) & u67_src[25]) ^ (((^u67_surface_texels_touched_o)) & u67_src[26]) ^ (((^u67_idle_o)) & u67_src[27]);
+    else u67_fold_q <= u67_fold_q ^ (((^u67_req_ready_o)) & u67_src[0]) ^ (((^u67_pg_valid_o)) & u67_src[1]) ^ (((^u67_pg_op_o)) & u67_src[2]) ^ (((^u67_pg_status_o)) & u67_src[3]) ^ (((^u67_pg_tag_o)) & u67_src[4]) ^ (((^u67_pg_strength_o)) & u67_src[5]) ^ (((^u67_pg_src_id_o)) & u67_src[6]) ^ (((^u67_wr_ready_o)) & u67_src[7]) ^ (((^u67_wr_miss_o)) & u67_src[8]) ^ (((^u67_wr_miss_src_id_o)) & u67_src[9]) ^ (((^u67_res_occupancy_o)) & u67_src[10]) ^ (((^u67_res_busy_o)) & u67_src[11]) ^ (((^u67_res_overflow_o)) & u67_src[12]) ^ (((^u67_surface_texels_touched_o)) & u67_src[13]) ^ (((^u67_idle_o)) & u67_src[14]);
 
-  // ---- zhao_terrain_bake_v2 ----
+  // ---- zhao_surface_stamp ----
   logic [63:0] u68_lfsr_q;
   logic [1023:0] u68_src;
   assign u68_src = {16{u68_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u68_lfsr_q <= 64'h0000002A06BD7649;
     else u68_lfsr_q <= {u68_lfsr_q[62:0], (^(u68_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u68_budget_full_o;
-  logic [8-1:0] u68_bakes_this_frame_o;
   logic [1-1:0] u68_cmd_ready_o;
-  logic [16-1:0] u68_trace_patch_id_o;
-  logic [6-1:0] u68_vtx_vi_o;
-  logic [6-1:0] u68_vtx_vj_o;
-  logic [1-1:0] u68_vtx_ready_o;
-  logic [12-1:0] u68_sheet_texel_o;
-  logic [1-1:0] u68_sc_valid_o;
-  logic signed [16-1:0] u68_sc_scar_o;
-  logic [6-1:0] u68_sc_vi_o;
-  logic [6-1:0] u68_sc_vj_o;
-  logic [1-1:0] u68_sc_touched_o;
-  logic [1-1:0] u68_sc_meets_o;
-  logic [1-1:0] u68_sc_clamped_o;
-  logic [16-1:0] u68_sc_src_id_o;
-  logic [6-1:0] u68_cell_ci_o;
-  logic [6-1:0] u68_cell_cj_o;
-  logic [1-1:0] u68_cell_ready_o;
-  logic [1-1:0] u68_cs_valid_o;
-  logic [8-1:0] u68_cs_state_o;
-  logic [6-1:0] u68_cs_ci_o;
-  logic [6-1:0] u68_cs_cj_o;
-  logic [1-1:0] u68_cs_event_o;
-  logic [2-1:0] u68_cs_sub_o;
-  logic [16-1:0] u68_cs_src_id_o;
-  logic [1-1:0] u68_dig_done_o;
-  logic [1-1:0] u68_bake_done_o;
-  logic [1-1:0] u68_breach_active_o;
+  logic [1-1:0] u68_fld_ready_o;
+  logic [1-1:0] u68_req_valid_o;
+  logic [2-1:0] u68_req_op_o;
+  logic [32-1:0] u68_req_handle_o;
+  logic [12-1:0] u68_req_texel_o;
+  logic [16-1:0] u68_req_src_id_o;
+  logic [1-1:0] u68_pg_ready_o;
+  logic [1-1:0] u68_wr_valid_o;
+  logic [32-1:0] u68_wr_handle_o;
+  logic [12-1:0] u68_wr_texel_o;
+  logic [8-1:0] u68_wr_tag_o;
+  logic [8-1:0] u68_wr_strength_o;
+  logic [1-1:0] u68_wr_we_tag_o;
+  logic [1-1:0] u68_wr_we_strength_o;
+  logic [16-1:0] u68_wr_src_id_o;
+  logic [1-1:0] u68_res_valid_o;
+  logic [12-1:0] u68_res_texel_o;
+  logic [8-1:0] u68_res_tag_o;
+  logic [8-1:0] u68_res_strength_o;
+  logic [8-1:0] u68_res_before_o;
+  logic [32-1:0] u68_res_handle_o;
+  logic [16-1:0] u68_res_src_id_o;
+  logic [1-1:0] u68_stamp_done_o;
+  logic [1-1:0] u68_stamp_rejected_o;
+  logic [32-1:0] u68_surface_stamps_o;
   logic [32-1:0] u68_surface_texels_touched_o;
-  logic [32-1:0] u68_breach_events_o;
-  logic [32-1:0] u68_scar_saturations_o;
-  logic [32-1:0] u68_nobake_clamps_o;
-  logic [32-1:0] u68_bake_radius_rejects_o;
-  logic [32-1:0] u68_sheet_vertices_dug_o;
   logic [1-1:0] u68_idle_o;
-  zhao_terrain_bake_v2 u68_i (
+  zhao_surface_stamp u68_i (
       .clk(clk),
       .rst_n(rst_n),
-      .frame_start_i(u68_src[0 +: 1]),
-      .budget_full_o(u68_budget_full_o),
-      .bakes_this_frame_o(u68_bakes_this_frame_o),
-      .cmd_valid_i(u68_src[7 +: 1]),
+      .cmd_valid_i(u68_src[0 +: 1]),
       .cmd_ready_o(u68_cmd_ready_o),
-      .cmd_patch_id_i(u68_src[14 +: 16]),
-      .cmd_cx_i(u68_src[21 +: 32]),
-      .cmd_cz_i(u68_src[28 +: 32]),
-      .cmd_radius_i(u68_src[35 +: 32]),
-      .cmd_depth_from_i(u68_src[42 +: 32]),
-      .cmd_depth_to_i(u68_src[49 +: 32]),
-      .cmd_env_x0_i(u68_src[56 +: 32]),
-      .cmd_env_z0_i(u68_src[63 +: 32]),
-      .cmd_env_x1_i(u68_src[70 +: 32]),
-      .cmd_env_z1_i(u68_src[77 +: 32]),
-      .cmd_dual_i(u68_src[84 +: 1]),
-      .cmd_cells_i(u68_src[91 +: 1]),
-      .cmd_src_id_i(u68_src[98 +: 16]),
-      .cmd_depth_sheet_i(u68_src[105 +: 1]),
-      .trace_patch_id_o(u68_trace_patch_id_o),
-      .vtx_vi_o(u68_vtx_vi_o),
-      .vtx_vj_o(u68_vtx_vj_o),
-      .vtx_valid_i(u68_src[112 +: 1]),
-      .vtx_ready_o(u68_vtx_ready_o),
-      .vtx_base_i(u68_src[119 +: 16]),
-      .vtx_scar_i(u68_src[126 +: 16]),
-      .vtx_bottom_i(u68_src[133 +: 16]),
-      .vtx_nobake_i(u68_src[140 +: 1]),
-      .sheet_texel_o(u68_sheet_texel_o),
-      .sheet_strength_i(u68_src[147 +: 8]),
-      .sheet_before_i(u68_src[154 +: 8]),
-      .sc_valid_o(u68_sc_valid_o),
-      .sc_ready_i(u68_src[161 +: 1]),
-      .sc_scar_o(u68_sc_scar_o),
-      .sc_vi_o(u68_sc_vi_o),
-      .sc_vj_o(u68_sc_vj_o),
-      .sc_touched_o(u68_sc_touched_o),
-      .sc_meets_o(u68_sc_meets_o),
-      .sc_clamped_o(u68_sc_clamped_o),
-      .sc_src_id_o(u68_sc_src_id_o),
-      .cell_ci_o(u68_cell_ci_o),
-      .cell_cj_o(u68_cell_cj_o),
-      .cell_valid_i(u68_src[168 +: 1]),
-      .cell_ready_o(u68_cell_ready_o),
-      .cell_state_i(u68_src[175 +: 8]),
-      .cs_valid_o(u68_cs_valid_o),
-      .cs_ready_i(u68_src[182 +: 1]),
-      .cs_state_o(u68_cs_state_o),
-      .cs_ci_o(u68_cs_ci_o),
-      .cs_cj_o(u68_cs_cj_o),
-      .cs_event_o(u68_cs_event_o),
-      .cs_sub_o(u68_cs_sub_o),
-      .cs_src_id_o(u68_cs_src_id_o),
-      .dig_done_o(u68_dig_done_o),
-      .bake_done_o(u68_bake_done_o),
-      .breach_active_o(u68_breach_active_o),
+      .cmd_handle_i(u68_src[7 +: 32]),
+      .cmd_operation_i(u68_src[14 +: 8]),
+      .cmd_tag_i(u68_src[21 +: 8]),
+      .cmd_strength_i(u68_src[28 +: 16]),
+      .cmd_tx_i(u68_src[35 +: 32]),
+      .cmd_ty_i(u68_src[42 +: 32]),
+      .cmd_radius_i(u68_src[49 +: 32]),
+      .cmd_ring_width_i(u68_src[56 +: 32]),
+      .cmd_env_x0_i(u68_src[63 +: 32]),
+      .cmd_env_z0_i(u68_src[70 +: 32]),
+      .cmd_env_x1_i(u68_src[77 +: 32]),
+      .cmd_env_z1_i(u68_src[84 +: 32]),
+      .cmd_blend_en_i(u68_src[91 +: 1]),
+      .cmd_blend_i(u68_src[98 +: 3]),
+      .cmd_age_shift_i(u68_src[105 +: 3]),
+      .cmd_field_en_i(u68_src[112 +: 1]),
+      .cmd_src_id_i(u68_src[119 +: 16]),
+      .fld_valid_i(u68_src[126 +: 1]),
+      .fld_ready_o(u68_fld_ready_o),
+      .fld_tag_op_i(u68_src[133 +: 32]),
+      .fld_strength_i(u68_src[140 +: 16]),
+      .req_valid_o(u68_req_valid_o),
+      .req_ready_i(u68_src[147 +: 1]),
+      .req_op_o(u68_req_op_o),
+      .req_handle_o(u68_req_handle_o),
+      .req_texel_o(u68_req_texel_o),
+      .req_src_id_o(u68_req_src_id_o),
+      .pg_valid_i(u68_src[154 +: 1]),
+      .pg_ready_o(u68_pg_ready_o),
+      .pg_status_i(u68_src[161 +: 2]),
+      .pg_strength_i(u68_src[168 +: 8]),
+      .wr_valid_o(u68_wr_valid_o),
+      .wr_ready_i(u68_src[175 +: 1]),
+      .wr_handle_o(u68_wr_handle_o),
+      .wr_texel_o(u68_wr_texel_o),
+      .wr_tag_o(u68_wr_tag_o),
+      .wr_strength_o(u68_wr_strength_o),
+      .wr_we_tag_o(u68_wr_we_tag_o),
+      .wr_we_strength_o(u68_wr_we_strength_o),
+      .wr_src_id_o(u68_wr_src_id_o),
+      .res_valid_o(u68_res_valid_o),
+      .res_ready_i(u68_src[182 +: 1]),
+      .res_texel_o(u68_res_texel_o),
+      .res_tag_o(u68_res_tag_o),
+      .res_strength_o(u68_res_strength_o),
+      .res_before_o(u68_res_before_o),
+      .res_handle_o(u68_res_handle_o),
+      .res_src_id_o(u68_res_src_id_o),
+      .stamp_done_o(u68_stamp_done_o),
+      .stamp_rejected_o(u68_stamp_rejected_o),
+      .surface_stamps_o(u68_surface_stamps_o),
       .surface_texels_touched_o(u68_surface_texels_touched_o),
-      .breach_events_o(u68_breach_events_o),
-      .scar_saturations_o(u68_scar_saturations_o),
-      .nobake_clamps_o(u68_nobake_clamps_o),
-      .bake_radius_rejects_o(u68_bake_radius_rejects_o),
-      .sheet_vertices_dug_o(u68_sheet_vertices_dug_o),
       .idle_o(u68_idle_o)
   );
   logic u68_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u68_fold_q <= 1'b0;
-    else u68_fold_q <= u68_fold_q ^ (((^u68_budget_full_o)) & u68_src[0]) ^ (((^u68_bakes_this_frame_o)) & u68_src[1]) ^ (((^u68_cmd_ready_o)) & u68_src[2]) ^ (((^u68_trace_patch_id_o)) & u68_src[3]) ^ (((^u68_vtx_vi_o)) & u68_src[4]) ^ (((^u68_vtx_vj_o)) & u68_src[5]) ^ (((^u68_vtx_ready_o)) & u68_src[6]) ^ (((^u68_sheet_texel_o)) & u68_src[7]) ^ (((^u68_sc_valid_o)) & u68_src[8]) ^ (((^u68_sc_scar_o)) & u68_src[9]) ^ (((^u68_sc_vi_o)) & u68_src[10]) ^ (((^u68_sc_vj_o)) & u68_src[11]) ^ (((^u68_sc_touched_o)) & u68_src[12]) ^ (((^u68_sc_meets_o)) & u68_src[13]) ^ (((^u68_sc_clamped_o)) & u68_src[14]) ^ (((^u68_sc_src_id_o)) & u68_src[15]) ^ (((^u68_cell_ci_o)) & u68_src[16]) ^ (((^u68_cell_cj_o)) & u68_src[17]) ^ (((^u68_cell_ready_o)) & u68_src[18]) ^ (((^u68_cs_valid_o)) & u68_src[19]) ^ (((^u68_cs_state_o)) & u68_src[20]) ^ (((^u68_cs_ci_o)) & u68_src[21]) ^ (((^u68_cs_cj_o)) & u68_src[22]) ^ (((^u68_cs_event_o)) & u68_src[23]) ^ (((^u68_cs_sub_o)) & u68_src[24]) ^ (((^u68_cs_src_id_o)) & u68_src[25]) ^ (((^u68_dig_done_o)) & u68_src[26]) ^ (((^u68_bake_done_o)) & u68_src[27]) ^ (((^u68_breach_active_o)) & u68_src[28]) ^ (((^u68_surface_texels_touched_o)) & u68_src[29]) ^ (((^u68_breach_events_o)) & u68_src[30]) ^ (((^u68_scar_saturations_o)) & u68_src[31]) ^ (((^u68_nobake_clamps_o)) & u68_src[32]) ^ (((^u68_bake_radius_rejects_o)) & u68_src[33]) ^ (((^u68_sheet_vertices_dug_o)) & u68_src[34]) ^ (((^u68_idle_o)) & u68_src[35]);
+    else u68_fold_q <= u68_fold_q ^ (((^u68_cmd_ready_o)) & u68_src[0]) ^ (((^u68_fld_ready_o)) & u68_src[1]) ^ (((^u68_req_valid_o)) & u68_src[2]) ^ (((^u68_req_op_o)) & u68_src[3]) ^ (((^u68_req_handle_o)) & u68_src[4]) ^ (((^u68_req_texel_o)) & u68_src[5]) ^ (((^u68_req_src_id_o)) & u68_src[6]) ^ (((^u68_pg_ready_o)) & u68_src[7]) ^ (((^u68_wr_valid_o)) & u68_src[8]) ^ (((^u68_wr_handle_o)) & u68_src[9]) ^ (((^u68_wr_texel_o)) & u68_src[10]) ^ (((^u68_wr_tag_o)) & u68_src[11]) ^ (((^u68_wr_strength_o)) & u68_src[12]) ^ (((^u68_wr_we_tag_o)) & u68_src[13]) ^ (((^u68_wr_we_strength_o)) & u68_src[14]) ^ (((^u68_wr_src_id_o)) & u68_src[15]) ^ (((^u68_res_valid_o)) & u68_src[16]) ^ (((^u68_res_texel_o)) & u68_src[17]) ^ (((^u68_res_tag_o)) & u68_src[18]) ^ (((^u68_res_strength_o)) & u68_src[19]) ^ (((^u68_res_before_o)) & u68_src[20]) ^ (((^u68_res_handle_o)) & u68_src[21]) ^ (((^u68_res_src_id_o)) & u68_src[22]) ^ (((^u68_stamp_done_o)) & u68_src[23]) ^ (((^u68_stamp_rejected_o)) & u68_src[24]) ^ (((^u68_surface_stamps_o)) & u68_src[25]) ^ (((^u68_surface_texels_touched_o)) & u68_src[26]) ^ (((^u68_idle_o)) & u68_src[27]);
 
-  // ---- zhao_terrain_clipfeed ----
+  // ---- zhao_terrain_bake_v2 ----
   logic [63:0] u69_lfsr_q;
   logic [1023:0] u69_src;
   assign u69_src = {16{u69_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u69_lfsr_q <= 64'h0000002AA4F4EFFA;
     else u69_lfsr_q <= {u69_lfsr_q[62:0], (^(u69_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u69_t_ready_o;
-  logic [1-1:0] u69_l_ready_o;
-  logic [1-1:0] u69_u_ready_o;
-  logic [1-1:0] u69_o_valid_o;
-  logic signed [21-1:0] u69_o_ax_o;
-  logic signed [21-1:0] u69_o_ay_o;
-  logic signed [21-1:0] u69_o_bx_o;
-  logic signed [21-1:0] u69_o_by_o;
-  logic signed [21-1:0] u69_o_cx_o;
-  logic signed [21-1:0] u69_o_cy_o;
-  logic [3-1:0] u69_o_behind_o;
-  logic [16-1:0] u69_o_src_id_o;
-  logic [1-1:0] u69_o_untex_o;
-  logic [2-1:0] u69_o_cull_mode_o;
-  logic [224-1:0] u69_o_attr_a_o;
-  logic [224-1:0] u69_o_attr_b_o;
-  logic [224-1:0] u69_o_attr_c_o;
-  logic [32-1:0] u69_o_material_set_o;
-  logic [16-1:0] u69_o_material_id_o;
-  logic [2-1:0] u69_o_material_mode_o;
-  logic [8-1:0] u69_o_vertex_alpha_o;
-  logic [32-1:0] u69_o_frag_state_o;
-  logic [8-1:0] u69_o_quality_tier_o;
-  logic [32-1:0] u69_triangles_o;
-  logic [32-1:0] u69_emitted_o;
-  logic [32-1:0] u69_src_id_mismatch_o;
-  logic [32-1:0] u69_uv_sat_o;
-  logic [32-1:0] u69_shade_clamped_o;
-  logic [32-1:0] u69_degenerate_o;
-  logic [32-1:0] u69_dq_refused_o;
-  logic [32-1:0] u69_dq_stray_o;
-  zhao_terrain_clipfeed u69_i (
+  logic [1-1:0] u69_budget_full_o;
+  logic [8-1:0] u69_bakes_this_frame_o;
+  logic [1-1:0] u69_cmd_ready_o;
+  logic [16-1:0] u69_trace_patch_id_o;
+  logic [6-1:0] u69_vtx_vi_o;
+  logic [6-1:0] u69_vtx_vj_o;
+  logic [1-1:0] u69_vtx_ready_o;
+  logic [12-1:0] u69_sheet_texel_o;
+  logic [1-1:0] u69_sc_valid_o;
+  logic signed [16-1:0] u69_sc_scar_o;
+  logic [6-1:0] u69_sc_vi_o;
+  logic [6-1:0] u69_sc_vj_o;
+  logic [1-1:0] u69_sc_touched_o;
+  logic [1-1:0] u69_sc_meets_o;
+  logic [1-1:0] u69_sc_clamped_o;
+  logic [16-1:0] u69_sc_src_id_o;
+  logic [6-1:0] u69_cell_ci_o;
+  logic [6-1:0] u69_cell_cj_o;
+  logic [1-1:0] u69_cell_ready_o;
+  logic [1-1:0] u69_cs_valid_o;
+  logic [8-1:0] u69_cs_state_o;
+  logic [6-1:0] u69_cs_ci_o;
+  logic [6-1:0] u69_cs_cj_o;
+  logic [1-1:0] u69_cs_event_o;
+  logic [2-1:0] u69_cs_sub_o;
+  logic [16-1:0] u69_cs_src_id_o;
+  logic [1-1:0] u69_dig_done_o;
+  logic [1-1:0] u69_bake_done_o;
+  logic [1-1:0] u69_breach_active_o;
+  logic [32-1:0] u69_surface_texels_touched_o;
+  logic [32-1:0] u69_breach_events_o;
+  logic [32-1:0] u69_scar_saturations_o;
+  logic [32-1:0] u69_nobake_clamps_o;
+  logic [32-1:0] u69_bake_radius_rejects_o;
+  logic [32-1:0] u69_sheet_vertices_dug_o;
+  logic [1-1:0] u69_idle_o;
+  zhao_terrain_bake_v2 u69_i (
       .clk(clk),
       .rst_n(rst_n),
-      .t_valid_i(u69_src[0 +: 1]),
-      .t_ready_o(u69_t_ready_o),
-      .t_ax_i(u69_src[7 +: 21]),
-      .t_ay_i(u69_src[14 +: 21]),
-      .t_bx_i(u69_src[21 +: 21]),
-      .t_by_i(u69_src[28 +: 21]),
-      .t_cx_i(u69_src[35 +: 21]),
-      .t_cy_i(u69_src[42 +: 21]),
-      .t_behind_i(u69_src[49 +: 3]),
-      .t_src_id_i(u69_src[56 +: 16]),
-      .t_aw_i(u69_src[63 +: 31]),
-      .t_bw_i(u69_src[70 +: 31]),
-      .t_cw_i(u69_src[77 +: 31]),
-      .t_profile_i(u69_src[84 +: 2]),
-      .l_valid_i(u69_src[91 +: 1]),
-      .l_ready_o(u69_l_ready_o),
-      .l_shade_i(u69_src[98 +: 32]),
-      .l_degenerate_i(u69_src[105 +: 1]),
-      .l_src_id_i(u69_src[112 +: 16]),
-      .u_valid_i(u69_src[119 +: 1]),
-      .u_ready_o(u69_u_ready_o),
-      .u_au_i(u69_src[126 +: 32]),
-      .u_av_i(u69_src[133 +: 32]),
-      .u_bu_i(u69_src[140 +: 32]),
-      .u_bv_i(u69_src[147 +: 32]),
-      .u_cu_i(u69_src[154 +: 32]),
-      .u_cv_i(u69_src[161 +: 32]),
-      .u_src_id_i(u69_src[168 +: 16]),
-      .a_tint_r_i(u69_src[175 +: 17]),
-      .a_tint_g_i(u69_src[182 +: 17]),
-      .a_tint_b_i(u69_src[189 +: 17]),
-      .b_tint_r_i(u69_src[196 +: 17]),
-      .b_tint_g_i(u69_src[203 +: 17]),
-      .b_tint_b_i(u69_src[210 +: 17]),
-      .c_tint_r_i(u69_src[217 +: 17]),
-      .c_tint_g_i(u69_src[224 +: 17]),
-      .c_tint_b_i(u69_src[231 +: 17]),
-      .sheet_i(u69_src[238 +: 17]),
-      .o_valid_o(u69_o_valid_o),
-      .o_ready_i(u69_src[245 +: 1]),
-      .o_ax_o(u69_o_ax_o),
-      .o_ay_o(u69_o_ay_o),
-      .o_bx_o(u69_o_bx_o),
-      .o_by_o(u69_o_by_o),
-      .o_cx_o(u69_o_cx_o),
-      .o_cy_o(u69_o_cy_o),
-      .o_behind_o(u69_o_behind_o),
-      .o_src_id_o(u69_o_src_id_o),
-      .o_untex_o(u69_o_untex_o),
-      .o_cull_mode_o(u69_o_cull_mode_o),
-      .o_attr_a_o(u69_o_attr_a_o),
-      .o_attr_b_o(u69_o_attr_b_o),
-      .o_attr_c_o(u69_o_attr_c_o),
-      .o_material_set_o(u69_o_material_set_o),
-      .o_material_id_o(u69_o_material_id_o),
-      .o_material_mode_o(u69_o_material_mode_o),
-      .o_vertex_alpha_o(u69_o_vertex_alpha_o),
-      .o_frag_state_o(u69_o_frag_state_o),
-      .o_quality_tier_o(u69_o_quality_tier_o),
-      .triangles_o(u69_triangles_o),
-      .emitted_o(u69_emitted_o),
-      .src_id_mismatch_o(u69_src_id_mismatch_o),
-      .uv_sat_o(u69_uv_sat_o),
-      .shade_clamped_o(u69_shade_clamped_o),
-      .degenerate_o(u69_degenerate_o),
-      .dq_refused_o(u69_dq_refused_o),
-      .dq_stray_o(u69_dq_stray_o)
+      .frame_start_i(u69_src[0 +: 1]),
+      .budget_full_o(u69_budget_full_o),
+      .bakes_this_frame_o(u69_bakes_this_frame_o),
+      .cmd_valid_i(u69_src[7 +: 1]),
+      .cmd_ready_o(u69_cmd_ready_o),
+      .cmd_patch_id_i(u69_src[14 +: 16]),
+      .cmd_cx_i(u69_src[21 +: 32]),
+      .cmd_cz_i(u69_src[28 +: 32]),
+      .cmd_radius_i(u69_src[35 +: 32]),
+      .cmd_depth_from_i(u69_src[42 +: 32]),
+      .cmd_depth_to_i(u69_src[49 +: 32]),
+      .cmd_env_x0_i(u69_src[56 +: 32]),
+      .cmd_env_z0_i(u69_src[63 +: 32]),
+      .cmd_env_x1_i(u69_src[70 +: 32]),
+      .cmd_env_z1_i(u69_src[77 +: 32]),
+      .cmd_dual_i(u69_src[84 +: 1]),
+      .cmd_cells_i(u69_src[91 +: 1]),
+      .cmd_src_id_i(u69_src[98 +: 16]),
+      .cmd_depth_sheet_i(u69_src[105 +: 1]),
+      .trace_patch_id_o(u69_trace_patch_id_o),
+      .vtx_vi_o(u69_vtx_vi_o),
+      .vtx_vj_o(u69_vtx_vj_o),
+      .vtx_valid_i(u69_src[112 +: 1]),
+      .vtx_ready_o(u69_vtx_ready_o),
+      .vtx_base_i(u69_src[119 +: 16]),
+      .vtx_scar_i(u69_src[126 +: 16]),
+      .vtx_bottom_i(u69_src[133 +: 16]),
+      .vtx_nobake_i(u69_src[140 +: 1]),
+      .sheet_texel_o(u69_sheet_texel_o),
+      .sheet_strength_i(u69_src[147 +: 8]),
+      .sheet_before_i(u69_src[154 +: 8]),
+      .sc_valid_o(u69_sc_valid_o),
+      .sc_ready_i(u69_src[161 +: 1]),
+      .sc_scar_o(u69_sc_scar_o),
+      .sc_vi_o(u69_sc_vi_o),
+      .sc_vj_o(u69_sc_vj_o),
+      .sc_touched_o(u69_sc_touched_o),
+      .sc_meets_o(u69_sc_meets_o),
+      .sc_clamped_o(u69_sc_clamped_o),
+      .sc_src_id_o(u69_sc_src_id_o),
+      .cell_ci_o(u69_cell_ci_o),
+      .cell_cj_o(u69_cell_cj_o),
+      .cell_valid_i(u69_src[168 +: 1]),
+      .cell_ready_o(u69_cell_ready_o),
+      .cell_state_i(u69_src[175 +: 8]),
+      .cs_valid_o(u69_cs_valid_o),
+      .cs_ready_i(u69_src[182 +: 1]),
+      .cs_state_o(u69_cs_state_o),
+      .cs_ci_o(u69_cs_ci_o),
+      .cs_cj_o(u69_cs_cj_o),
+      .cs_event_o(u69_cs_event_o),
+      .cs_sub_o(u69_cs_sub_o),
+      .cs_src_id_o(u69_cs_src_id_o),
+      .dig_done_o(u69_dig_done_o),
+      .bake_done_o(u69_bake_done_o),
+      .breach_active_o(u69_breach_active_o),
+      .surface_texels_touched_o(u69_surface_texels_touched_o),
+      .breach_events_o(u69_breach_events_o),
+      .scar_saturations_o(u69_scar_saturations_o),
+      .nobake_clamps_o(u69_nobake_clamps_o),
+      .bake_radius_rejects_o(u69_bake_radius_rejects_o),
+      .sheet_vertices_dug_o(u69_sheet_vertices_dug_o),
+      .idle_o(u69_idle_o)
   );
   logic u69_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u69_fold_q <= 1'b0;
-    else u69_fold_q <= u69_fold_q ^ (((^u69_t_ready_o)) & u69_src[0]) ^ (((^u69_l_ready_o)) & u69_src[1]) ^ (((^u69_u_ready_o)) & u69_src[2]) ^ (((^u69_o_valid_o)) & u69_src[3]) ^ (((^u69_o_ax_o)) & u69_src[4]) ^ (((^u69_o_ay_o)) & u69_src[5]) ^ (((^u69_o_bx_o)) & u69_src[6]) ^ (((^u69_o_by_o)) & u69_src[7]) ^ (((^u69_o_cx_o)) & u69_src[8]) ^ (((^u69_o_cy_o)) & u69_src[9]) ^ (((^u69_o_behind_o)) & u69_src[10]) ^ (((^u69_o_src_id_o)) & u69_src[11]) ^ (((^u69_o_untex_o)) & u69_src[12]) ^ (((^u69_o_cull_mode_o)) & u69_src[13]) ^ (((^u69_o_attr_a_o)) & u69_src[14]) ^ (((^u69_o_attr_b_o)) & u69_src[15]) ^ (((^u69_o_attr_c_o)) & u69_src[16]) ^ (((^u69_o_material_set_o)) & u69_src[17]) ^ (((^u69_o_material_id_o)) & u69_src[18]) ^ (((^u69_o_material_mode_o)) & u69_src[19]) ^ (((^u69_o_vertex_alpha_o)) & u69_src[20]) ^ (((^u69_o_frag_state_o)) & u69_src[21]) ^ (((^u69_o_quality_tier_o)) & u69_src[22]) ^ (((^u69_triangles_o)) & u69_src[23]) ^ (((^u69_emitted_o)) & u69_src[24]) ^ (((^u69_src_id_mismatch_o)) & u69_src[25]) ^ (((^u69_uv_sat_o)) & u69_src[26]) ^ (((^u69_shade_clamped_o)) & u69_src[27]) ^ (((^u69_degenerate_o)) & u69_src[28]) ^ (((^u69_dq_refused_o)) & u69_src[29]) ^ (((^u69_dq_stray_o)) & u69_src[30]);
+    else u69_fold_q <= u69_fold_q ^ (((^u69_budget_full_o)) & u69_src[0]) ^ (((^u69_bakes_this_frame_o)) & u69_src[1]) ^ (((^u69_cmd_ready_o)) & u69_src[2]) ^ (((^u69_trace_patch_id_o)) & u69_src[3]) ^ (((^u69_vtx_vi_o)) & u69_src[4]) ^ (((^u69_vtx_vj_o)) & u69_src[5]) ^ (((^u69_vtx_ready_o)) & u69_src[6]) ^ (((^u69_sheet_texel_o)) & u69_src[7]) ^ (((^u69_sc_valid_o)) & u69_src[8]) ^ (((^u69_sc_scar_o)) & u69_src[9]) ^ (((^u69_sc_vi_o)) & u69_src[10]) ^ (((^u69_sc_vj_o)) & u69_src[11]) ^ (((^u69_sc_touched_o)) & u69_src[12]) ^ (((^u69_sc_meets_o)) & u69_src[13]) ^ (((^u69_sc_clamped_o)) & u69_src[14]) ^ (((^u69_sc_src_id_o)) & u69_src[15]) ^ (((^u69_cell_ci_o)) & u69_src[16]) ^ (((^u69_cell_cj_o)) & u69_src[17]) ^ (((^u69_cell_ready_o)) & u69_src[18]) ^ (((^u69_cs_valid_o)) & u69_src[19]) ^ (((^u69_cs_state_o)) & u69_src[20]) ^ (((^u69_cs_ci_o)) & u69_src[21]) ^ (((^u69_cs_cj_o)) & u69_src[22]) ^ (((^u69_cs_event_o)) & u69_src[23]) ^ (((^u69_cs_sub_o)) & u69_src[24]) ^ (((^u69_cs_src_id_o)) & u69_src[25]) ^ (((^u69_dig_done_o)) & u69_src[26]) ^ (((^u69_bake_done_o)) & u69_src[27]) ^ (((^u69_breach_active_o)) & u69_src[28]) ^ (((^u69_surface_texels_touched_o)) & u69_src[29]) ^ (((^u69_breach_events_o)) & u69_src[30]) ^ (((^u69_scar_saturations_o)) & u69_src[31]) ^ (((^u69_nobake_clamps_o)) & u69_src[32]) ^ (((^u69_bake_radius_rejects_o)) & u69_src[33]) ^ (((^u69_sheet_vertices_dug_o)) & u69_src[34]) ^ (((^u69_idle_o)) & u69_src[35]);
 
-  // ---- zhao_terrain_island_dir ----
+  // ---- zhao_terrain_clipfeed ----
   logic [63:0] u70_lfsr_q;
   logic [1023:0] u70_src;
   assign u70_src = {16{u70_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u70_lfsr_q <= 64'h0000002B432C69AB;
     else u70_lfsr_q <= {u70_lfsr_q[62:0], (^(u70_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u70_q_ready_o;
-  logic [1-1:0] u70_res_valid_o;
-  logic [16-1:0] u70_res_ix_o;
-  logic [16-1:0] u70_res_iz_o;
-  logic [1-1:0] u70_a_valid_o;
-  logic [2-1:0] u70_a_outcome_o;
-  logic [32-1:0] u70_a_handle_o;
-  logic [8-1:0] u70_a_tag_o;
-  logic [32-1:0] u70_cnt_resident_o;
-  logic [32-1:0] u70_cnt_open_sky_o;
-  logic [32-1:0] u70_cnt_out_of_extent_o;
-  logic [32-1:0] u70_cnt_bad_pitch_o;
-  zhao_terrain_island_dir u70_i (
+  logic [1-1:0] u70_t_ready_o;
+  logic [1-1:0] u70_l_ready_o;
+  logic [1-1:0] u70_u_ready_o;
+  logic [1-1:0] u70_o_valid_o;
+  logic signed [21-1:0] u70_o_ax_o;
+  logic signed [21-1:0] u70_o_ay_o;
+  logic signed [21-1:0] u70_o_bx_o;
+  logic signed [21-1:0] u70_o_by_o;
+  logic signed [21-1:0] u70_o_cx_o;
+  logic signed [21-1:0] u70_o_cy_o;
+  logic [3-1:0] u70_o_behind_o;
+  logic [16-1:0] u70_o_src_id_o;
+  logic [1-1:0] u70_o_untex_o;
+  logic [2-1:0] u70_o_cull_mode_o;
+  logic [224-1:0] u70_o_attr_a_o;
+  logic [224-1:0] u70_o_attr_b_o;
+  logic [224-1:0] u70_o_attr_c_o;
+  logic [32-1:0] u70_o_material_set_o;
+  logic [16-1:0] u70_o_material_id_o;
+  logic [2-1:0] u70_o_material_mode_o;
+  logic [8-1:0] u70_o_vertex_alpha_o;
+  logic [32-1:0] u70_o_frag_state_o;
+  logic [8-1:0] u70_o_quality_tier_o;
+  logic [32-1:0] u70_triangles_o;
+  logic [32-1:0] u70_emitted_o;
+  logic [32-1:0] u70_src_id_mismatch_o;
+  logic [32-1:0] u70_uv_sat_o;
+  logic [32-1:0] u70_shade_clamped_o;
+  logic [32-1:0] u70_degenerate_o;
+  logic [32-1:0] u70_dq_refused_o;
+  logic [32-1:0] u70_dq_stray_o;
+  zhao_terrain_clipfeed u70_i (
       .clk(clk),
       .rst_n(rst_n),
-      .desc_extent_ix_i(u70_src[0 +: 16]),
-      .desc_extent_iz_i(u70_src[7 +: 16]),
-      .desc_pitch_log2_i(u70_src[14 +: 8]),
-      .q_valid_i(u70_src[21 +: 1]),
-      .q_ready_o(u70_q_ready_o),
-      .q_ix_i(u70_src[28 +: 32]),
-      .q_iz_i(u70_src[35 +: 32]),
-      .q_tag_i(u70_src[42 +: 8]),
-      .res_valid_o(u70_res_valid_o),
-      .res_ready_i(u70_src[49 +: 1]),
-      .res_ix_o(u70_res_ix_o),
-      .res_iz_o(u70_res_iz_o),
-      .res_ans_valid_i(u70_src[56 +: 1]),
-      .res_ans_hit_i(u70_src[63 +: 1]),
-      .res_ans_handle_i(u70_src[70 +: 32]),
-      .a_valid_o(u70_a_valid_o),
-      .a_ready_i(u70_src[77 +: 1]),
-      .a_outcome_o(u70_a_outcome_o),
-      .a_handle_o(u70_a_handle_o),
-      .a_tag_o(u70_a_tag_o),
-      .cnt_resident_o(u70_cnt_resident_o),
-      .cnt_open_sky_o(u70_cnt_open_sky_o),
-      .cnt_out_of_extent_o(u70_cnt_out_of_extent_o),
-      .cnt_bad_pitch_o(u70_cnt_bad_pitch_o)
+      .t_valid_i(u70_src[0 +: 1]),
+      .t_ready_o(u70_t_ready_o),
+      .t_ax_i(u70_src[7 +: 21]),
+      .t_ay_i(u70_src[14 +: 21]),
+      .t_bx_i(u70_src[21 +: 21]),
+      .t_by_i(u70_src[28 +: 21]),
+      .t_cx_i(u70_src[35 +: 21]),
+      .t_cy_i(u70_src[42 +: 21]),
+      .t_behind_i(u70_src[49 +: 3]),
+      .t_src_id_i(u70_src[56 +: 16]),
+      .t_aw_i(u70_src[63 +: 31]),
+      .t_bw_i(u70_src[70 +: 31]),
+      .t_cw_i(u70_src[77 +: 31]),
+      .t_profile_i(u70_src[84 +: 2]),
+      .l_valid_i(u70_src[91 +: 1]),
+      .l_ready_o(u70_l_ready_o),
+      .l_shade_i(u70_src[98 +: 32]),
+      .l_degenerate_i(u70_src[105 +: 1]),
+      .l_src_id_i(u70_src[112 +: 16]),
+      .u_valid_i(u70_src[119 +: 1]),
+      .u_ready_o(u70_u_ready_o),
+      .u_au_i(u70_src[126 +: 32]),
+      .u_av_i(u70_src[133 +: 32]),
+      .u_bu_i(u70_src[140 +: 32]),
+      .u_bv_i(u70_src[147 +: 32]),
+      .u_cu_i(u70_src[154 +: 32]),
+      .u_cv_i(u70_src[161 +: 32]),
+      .u_src_id_i(u70_src[168 +: 16]),
+      .a_tint_r_i(u70_src[175 +: 17]),
+      .a_tint_g_i(u70_src[182 +: 17]),
+      .a_tint_b_i(u70_src[189 +: 17]),
+      .b_tint_r_i(u70_src[196 +: 17]),
+      .b_tint_g_i(u70_src[203 +: 17]),
+      .b_tint_b_i(u70_src[210 +: 17]),
+      .c_tint_r_i(u70_src[217 +: 17]),
+      .c_tint_g_i(u70_src[224 +: 17]),
+      .c_tint_b_i(u70_src[231 +: 17]),
+      .sheet_i(u70_src[238 +: 17]),
+      .o_valid_o(u70_o_valid_o),
+      .o_ready_i(u70_src[245 +: 1]),
+      .o_ax_o(u70_o_ax_o),
+      .o_ay_o(u70_o_ay_o),
+      .o_bx_o(u70_o_bx_o),
+      .o_by_o(u70_o_by_o),
+      .o_cx_o(u70_o_cx_o),
+      .o_cy_o(u70_o_cy_o),
+      .o_behind_o(u70_o_behind_o),
+      .o_src_id_o(u70_o_src_id_o),
+      .o_untex_o(u70_o_untex_o),
+      .o_cull_mode_o(u70_o_cull_mode_o),
+      .o_attr_a_o(u70_o_attr_a_o),
+      .o_attr_b_o(u70_o_attr_b_o),
+      .o_attr_c_o(u70_o_attr_c_o),
+      .o_material_set_o(u70_o_material_set_o),
+      .o_material_id_o(u70_o_material_id_o),
+      .o_material_mode_o(u70_o_material_mode_o),
+      .o_vertex_alpha_o(u70_o_vertex_alpha_o),
+      .o_frag_state_o(u70_o_frag_state_o),
+      .o_quality_tier_o(u70_o_quality_tier_o),
+      .triangles_o(u70_triangles_o),
+      .emitted_o(u70_emitted_o),
+      .src_id_mismatch_o(u70_src_id_mismatch_o),
+      .uv_sat_o(u70_uv_sat_o),
+      .shade_clamped_o(u70_shade_clamped_o),
+      .degenerate_o(u70_degenerate_o),
+      .dq_refused_o(u70_dq_refused_o),
+      .dq_stray_o(u70_dq_stray_o)
   );
   logic u70_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u70_fold_q <= 1'b0;
-    else u70_fold_q <= u70_fold_q ^ (((^u70_q_ready_o)) & u70_src[0]) ^ (((^u70_res_valid_o)) & u70_src[1]) ^ (((^u70_res_ix_o)) & u70_src[2]) ^ (((^u70_res_iz_o)) & u70_src[3]) ^ (((^u70_a_valid_o)) & u70_src[4]) ^ (((^u70_a_outcome_o)) & u70_src[5]) ^ (((^u70_a_handle_o)) & u70_src[6]) ^ (((^u70_a_tag_o)) & u70_src[7]) ^ (((^u70_cnt_resident_o)) & u70_src[8]) ^ (((^u70_cnt_open_sky_o)) & u70_src[9]) ^ (((^u70_cnt_out_of_extent_o)) & u70_src[10]) ^ (((^u70_cnt_bad_pitch_o)) & u70_src[11]);
+    else u70_fold_q <= u70_fold_q ^ (((^u70_t_ready_o)) & u70_src[0]) ^ (((^u70_l_ready_o)) & u70_src[1]) ^ (((^u70_u_ready_o)) & u70_src[2]) ^ (((^u70_o_valid_o)) & u70_src[3]) ^ (((^u70_o_ax_o)) & u70_src[4]) ^ (((^u70_o_ay_o)) & u70_src[5]) ^ (((^u70_o_bx_o)) & u70_src[6]) ^ (((^u70_o_by_o)) & u70_src[7]) ^ (((^u70_o_cx_o)) & u70_src[8]) ^ (((^u70_o_cy_o)) & u70_src[9]) ^ (((^u70_o_behind_o)) & u70_src[10]) ^ (((^u70_o_src_id_o)) & u70_src[11]) ^ (((^u70_o_untex_o)) & u70_src[12]) ^ (((^u70_o_cull_mode_o)) & u70_src[13]) ^ (((^u70_o_attr_a_o)) & u70_src[14]) ^ (((^u70_o_attr_b_o)) & u70_src[15]) ^ (((^u70_o_attr_c_o)) & u70_src[16]) ^ (((^u70_o_material_set_o)) & u70_src[17]) ^ (((^u70_o_material_id_o)) & u70_src[18]) ^ (((^u70_o_material_mode_o)) & u70_src[19]) ^ (((^u70_o_vertex_alpha_o)) & u70_src[20]) ^ (((^u70_o_frag_state_o)) & u70_src[21]) ^ (((^u70_o_quality_tier_o)) & u70_src[22]) ^ (((^u70_triangles_o)) & u70_src[23]) ^ (((^u70_emitted_o)) & u70_src[24]) ^ (((^u70_src_id_mismatch_o)) & u70_src[25]) ^ (((^u70_uv_sat_o)) & u70_src[26]) ^ (((^u70_shade_clamped_o)) & u70_src[27]) ^ (((^u70_degenerate_o)) & u70_src[28]) ^ (((^u70_dq_refused_o)) & u70_src[29]) ^ (((^u70_dq_stray_o)) & u70_src[30]);
 
-  // ---- zhao_terrain_lightlane ----
+  // ---- zhao_terrain_island_dir ----
   logic [63:0] u71_lfsr_q;
   logic [1023:0] u71_src;
   assign u71_src = {16{u71_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u71_lfsr_q <= 64'h0000002BE163E35C;
     else u71_lfsr_q <= {u71_lfsr_q[62:0], (^(u71_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u71_ref_ready_o;
-  logic [1-1:0] u71_light_valid_o;
-  logic signed [32-1:0] u71_light_base_o;
-  logic [1-1:0] u71_light_degenerate_o;
-  logic [16-1:0] u71_light_src_id_o;
-  logic [32-1:0] u71_refs_taken_o;
-  logic [32-1:0] u71_lights_emitted_o;
-  logic [32-1:0] u71_stale_reads_o;
-  logic [32-1:0] u71_normals_evaluated_o;
-  logic [32-1:0] u71_triangles_shaded_o;
-  logic [32-1:0] u71_degenerate_count_o;
-  logic [32-1:0] u71_base_sat_o;
-  logic [32-1:0] u71_degen_mismatch_o;
-  logic [1-1:0] u71_idle_o;
-  zhao_terrain_lightlane u71_i (
+  logic [1-1:0] u71_q_ready_o;
+  logic [1-1:0] u71_res_valid_o;
+  logic [16-1:0] u71_res_ix_o;
+  logic [16-1:0] u71_res_iz_o;
+  logic [1-1:0] u71_a_valid_o;
+  logic [2-1:0] u71_a_outcome_o;
+  logic [32-1:0] u71_a_handle_o;
+  logic [8-1:0] u71_a_tag_o;
+  logic [32-1:0] u71_cnt_resident_o;
+  logic [32-1:0] u71_cnt_open_sky_o;
+  logic [32-1:0] u71_cnt_out_of_extent_o;
+  logic [32-1:0] u71_cnt_bad_pitch_o;
+  zhao_terrain_island_dir u71_i (
       .clk(clk),
       .rst_n(rst_n),
-      .fill_valid_i(u71_src[0 +: 1]),
-      .fill_ready_i(u71_src[7 +: 1]),
-      .fill_arena_i(u71_src[14 +: 3]),
-      .fill_index_i(u71_src[21 +: 8]),
-      .fill_vx_i(u71_src[28 +: 32]),
-      .fill_vy_i(u71_src[35 +: 32]),
-      .fill_vz_i(u71_src[42 +: 32]),
-      .open_i(u71_src[49 +: 1]),
-      .open_arena_i(u71_src[56 +: 3]),
-      .open_gen_i(u71_src[63 +: 8]),
-      .ref_valid_i(u71_src[70 +: 1]),
-      .ref_ready_o(u71_ref_ready_o),
-      .ref_arena_i(u71_src[77 +: 3]),
-      .ref_gen_i(u71_src[84 +: 8]),
-      .ref_ia_i(u71_src[91 +: 8]),
-      .ref_ib_i(u71_src[98 +: 8]),
-      .ref_ic_i(u71_src[105 +: 8]),
-      .ref_src_id_i(u71_src[112 +: 16]),
-      .sun_x_i(u71_src[119 +: 32]),
-      .sun_y_i(u71_src[126 +: 32]),
-      .sun_z_i(u71_src[133 +: 32]),
-      .light_valid_o(u71_light_valid_o),
-      .light_ready_i(u71_src[140 +: 1]),
-      .light_base_o(u71_light_base_o),
-      .light_degenerate_o(u71_light_degenerate_o),
-      .light_src_id_o(u71_light_src_id_o),
-      .refs_taken_o(u71_refs_taken_o),
-      .lights_emitted_o(u71_lights_emitted_o),
-      .stale_reads_o(u71_stale_reads_o),
-      .normals_evaluated_o(u71_normals_evaluated_o),
-      .triangles_shaded_o(u71_triangles_shaded_o),
-      .degenerate_count_o(u71_degenerate_count_o),
-      .base_sat_o(u71_base_sat_o),
-      .degen_mismatch_o(u71_degen_mismatch_o),
-      .idle_o(u71_idle_o)
+      .desc_extent_ix_i(u71_src[0 +: 16]),
+      .desc_extent_iz_i(u71_src[7 +: 16]),
+      .desc_pitch_log2_i(u71_src[14 +: 8]),
+      .q_valid_i(u71_src[21 +: 1]),
+      .q_ready_o(u71_q_ready_o),
+      .q_ix_i(u71_src[28 +: 32]),
+      .q_iz_i(u71_src[35 +: 32]),
+      .q_tag_i(u71_src[42 +: 8]),
+      .res_valid_o(u71_res_valid_o),
+      .res_ready_i(u71_src[49 +: 1]),
+      .res_ix_o(u71_res_ix_o),
+      .res_iz_o(u71_res_iz_o),
+      .res_ans_valid_i(u71_src[56 +: 1]),
+      .res_ans_hit_i(u71_src[63 +: 1]),
+      .res_ans_handle_i(u71_src[70 +: 32]),
+      .a_valid_o(u71_a_valid_o),
+      .a_ready_i(u71_src[77 +: 1]),
+      .a_outcome_o(u71_a_outcome_o),
+      .a_handle_o(u71_a_handle_o),
+      .a_tag_o(u71_a_tag_o),
+      .cnt_resident_o(u71_cnt_resident_o),
+      .cnt_open_sky_o(u71_cnt_open_sky_o),
+      .cnt_out_of_extent_o(u71_cnt_out_of_extent_o),
+      .cnt_bad_pitch_o(u71_cnt_bad_pitch_o)
   );
   logic u71_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u71_fold_q <= 1'b0;
-    else u71_fold_q <= u71_fold_q ^ (((^u71_ref_ready_o)) & u71_src[0]) ^ (((^u71_light_valid_o)) & u71_src[1]) ^ (((^u71_light_base_o)) & u71_src[2]) ^ (((^u71_light_degenerate_o)) & u71_src[3]) ^ (((^u71_light_src_id_o)) & u71_src[4]) ^ (((^u71_refs_taken_o)) & u71_src[5]) ^ (((^u71_lights_emitted_o)) & u71_src[6]) ^ (((^u71_stale_reads_o)) & u71_src[7]) ^ (((^u71_normals_evaluated_o)) & u71_src[8]) ^ (((^u71_triangles_shaded_o)) & u71_src[9]) ^ (((^u71_degenerate_count_o)) & u71_src[10]) ^ (((^u71_base_sat_o)) & u71_src[11]) ^ (((^u71_degen_mismatch_o)) & u71_src[12]) ^ (((^u71_idle_o)) & u71_src[13]);
+    else u71_fold_q <= u71_fold_q ^ (((^u71_q_ready_o)) & u71_src[0]) ^ (((^u71_res_valid_o)) & u71_src[1]) ^ (((^u71_res_ix_o)) & u71_src[2]) ^ (((^u71_res_iz_o)) & u71_src[3]) ^ (((^u71_a_valid_o)) & u71_src[4]) ^ (((^u71_a_outcome_o)) & u71_src[5]) ^ (((^u71_a_handle_o)) & u71_src[6]) ^ (((^u71_a_tag_o)) & u71_src[7]) ^ (((^u71_cnt_resident_o)) & u71_src[8]) ^ (((^u71_cnt_open_sky_o)) & u71_src[9]) ^ (((^u71_cnt_out_of_extent_o)) & u71_src[10]) ^ (((^u71_cnt_bad_pitch_o)) & u71_src[11]);
 
-  // ---- zhao_terrain_lod ----
+  // ---- zhao_terrain_lightlane ----
   logic [63:0] u72_lfsr_q;
   logic [1023:0] u72_src;
   assign u72_src = {16{u72_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u72_lfsr_q <= 64'h0000002C7F9B5D0D;
     else u72_lfsr_q <= {u72_lfsr_q[62:0], (^(u72_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u72_sp_ready_o;
-  logic [1-1:0] u72_out_valid_o;
-  logic [6-1:0] u72_out_ox_o;
-  logic [6-1:0] u72_out_oz_o;
-  logic [2-1:0] u72_out_level_o;
-  logic [2-1:0] u72_out_lvl_nz_o;
-  logic [2-1:0] u72_out_lvl_pz_o;
-  logic [2-1:0] u72_out_lvl_nx_o;
-  logic [2-1:0] u72_out_lvl_px_o;
-  logic [17-1:0] u72_out_morph_o;
-  logic [1-1:0] u72_out_surface_o;
-  logic [1-1:0] u72_out_dual_o;
-  logic [16-1:0] u72_out_src_id_o;
-  logic [8-1:0] u72_out_hold_o;
-  logic [32-1:0] u72_lod_rep_count0_o;
-  logic [32-1:0] u72_lod_rep_count1_o;
-  logic [32-1:0] u72_lod_rep_count2_o;
-  logic [32-1:0] u72_lod_rep_count3_o;
-  logic [32-1:0] u72_terrain_triangles_emitted_o;
+  logic [1-1:0] u72_ref_ready_o;
+  logic [1-1:0] u72_light_valid_o;
+  logic signed [32-1:0] u72_light_base_o;
+  logic [1-1:0] u72_light_degenerate_o;
+  logic [16-1:0] u72_light_src_id_o;
+  logic [32-1:0] u72_refs_taken_o;
+  logic [32-1:0] u72_lights_emitted_o;
+  logic [32-1:0] u72_stale_reads_o;
+  logic [32-1:0] u72_normals_evaluated_o;
+  logic [32-1:0] u72_triangles_shaded_o;
+  logic [32-1:0] u72_degenerate_count_o;
+  logic [32-1:0] u72_base_sat_o;
+  logic [32-1:0] u72_degen_mismatch_o;
   logic [1-1:0] u72_idle_o;
-  zhao_terrain_lod u72_i (
+  zhao_terrain_lightlane u72_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cam0_x_i(u72_src[0 +: 32]),
-      .cam0_y_i(u72_src[7 +: 32]),
-      .cam0_z_i(u72_src[14 +: 32]),
-      .cam0_scale_i(u72_src[21 +: 16]),
-      .cam0_en_i(u72_src[28 +: 1]),
-      .cam1_x_i(u72_src[35 +: 32]),
-      .cam1_y_i(u72_src[42 +: 32]),
-      .cam1_z_i(u72_src[49 +: 32]),
-      .cam1_scale_i(u72_src[56 +: 16]),
-      .cam1_en_i(u72_src[63 +: 1]),
-      .hyst_i(u72_src[70 +: 16]),
-      .min_hold_i(u72_src[77 +: 8]),
-      .morph_step_i(u72_src[84 +: 17]),
-      .dual_i(u72_src[91 +: 1]),
-      .edge_nz_i(u72_src[98 +: 8]),
-      .edge_pz_i(u72_src[105 +: 8]),
-      .edge_nx_i(u72_src[112 +: 8]),
-      .edge_px_i(u72_src[119 +: 8]),
-      .sp_valid_i(u72_src[126 +: 1]),
-      .sp_ready_o(u72_sp_ready_o),
-      .sp_cx_i(u72_src[133 +: 32]),
-      .sp_cy_i(u72_src[140 +: 32]),
-      .sp_cz_i(u72_src[147 +: 32]),
-      .sp_dev1_i(u72_src[154 +: 24]),
-      .sp_dev2_i(u72_src[161 +: 24]),
-      .sp_dev3_i(u72_src[168 +: 24]),
-      .sp_prev_level_i(u72_src[175 +: 2]),
-      .sp_prev_morph_i(u72_src[182 +: 17]),
-      .sp_hold_i(u72_src[189 +: 8]),
-      .sp_src_id_i(u72_src[196 +: 16]),
-      .out_valid_o(u72_out_valid_o),
-      .out_ready_i(u72_src[203 +: 1]),
-      .out_ox_o(u72_out_ox_o),
-      .out_oz_o(u72_out_oz_o),
-      .out_level_o(u72_out_level_o),
-      .out_lvl_nz_o(u72_out_lvl_nz_o),
-      .out_lvl_pz_o(u72_out_lvl_pz_o),
-      .out_lvl_nx_o(u72_out_lvl_nx_o),
-      .out_lvl_px_o(u72_out_lvl_px_o),
-      .out_morph_o(u72_out_morph_o),
-      .out_surface_o(u72_out_surface_o),
-      .out_dual_o(u72_out_dual_o),
-      .out_src_id_o(u72_out_src_id_o),
-      .out_hold_o(u72_out_hold_o),
-      .lod_rep_count0_o(u72_lod_rep_count0_o),
-      .lod_rep_count1_o(u72_lod_rep_count1_o),
-      .lod_rep_count2_o(u72_lod_rep_count2_o),
-      .lod_rep_count3_o(u72_lod_rep_count3_o),
-      .terrain_triangles_emitted_o(u72_terrain_triangles_emitted_o),
+      .fill_valid_i(u72_src[0 +: 1]),
+      .fill_ready_i(u72_src[7 +: 1]),
+      .fill_arena_i(u72_src[14 +: 3]),
+      .fill_index_i(u72_src[21 +: 8]),
+      .fill_vx_i(u72_src[28 +: 32]),
+      .fill_vy_i(u72_src[35 +: 32]),
+      .fill_vz_i(u72_src[42 +: 32]),
+      .open_i(u72_src[49 +: 1]),
+      .open_arena_i(u72_src[56 +: 3]),
+      .open_gen_i(u72_src[63 +: 8]),
+      .ref_valid_i(u72_src[70 +: 1]),
+      .ref_ready_o(u72_ref_ready_o),
+      .ref_arena_i(u72_src[77 +: 3]),
+      .ref_gen_i(u72_src[84 +: 8]),
+      .ref_ia_i(u72_src[91 +: 8]),
+      .ref_ib_i(u72_src[98 +: 8]),
+      .ref_ic_i(u72_src[105 +: 8]),
+      .ref_src_id_i(u72_src[112 +: 16]),
+      .sun_x_i(u72_src[119 +: 32]),
+      .sun_y_i(u72_src[126 +: 32]),
+      .sun_z_i(u72_src[133 +: 32]),
+      .light_valid_o(u72_light_valid_o),
+      .light_ready_i(u72_src[140 +: 1]),
+      .light_base_o(u72_light_base_o),
+      .light_degenerate_o(u72_light_degenerate_o),
+      .light_src_id_o(u72_light_src_id_o),
+      .refs_taken_o(u72_refs_taken_o),
+      .lights_emitted_o(u72_lights_emitted_o),
+      .stale_reads_o(u72_stale_reads_o),
+      .normals_evaluated_o(u72_normals_evaluated_o),
+      .triangles_shaded_o(u72_triangles_shaded_o),
+      .degenerate_count_o(u72_degenerate_count_o),
+      .base_sat_o(u72_base_sat_o),
+      .degen_mismatch_o(u72_degen_mismatch_o),
       .idle_o(u72_idle_o)
   );
   logic u72_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u72_fold_q <= 1'b0;
-    else u72_fold_q <= u72_fold_q ^ (((^u72_sp_ready_o)) & u72_src[0]) ^ (((^u72_out_valid_o)) & u72_src[1]) ^ (((^u72_out_ox_o)) & u72_src[2]) ^ (((^u72_out_oz_o)) & u72_src[3]) ^ (((^u72_out_level_o)) & u72_src[4]) ^ (((^u72_out_lvl_nz_o)) & u72_src[5]) ^ (((^u72_out_lvl_pz_o)) & u72_src[6]) ^ (((^u72_out_lvl_nx_o)) & u72_src[7]) ^ (((^u72_out_lvl_px_o)) & u72_src[8]) ^ (((^u72_out_morph_o)) & u72_src[9]) ^ (((^u72_out_surface_o)) & u72_src[10]) ^ (((^u72_out_dual_o)) & u72_src[11]) ^ (((^u72_out_src_id_o)) & u72_src[12]) ^ (((^u72_out_hold_o)) & u72_src[13]) ^ (((^u72_lod_rep_count0_o)) & u72_src[14]) ^ (((^u72_lod_rep_count1_o)) & u72_src[15]) ^ (((^u72_lod_rep_count2_o)) & u72_src[16]) ^ (((^u72_lod_rep_count3_o)) & u72_src[17]) ^ (((^u72_terrain_triangles_emitted_o)) & u72_src[18]) ^ (((^u72_idle_o)) & u72_src[19]);
+    else u72_fold_q <= u72_fold_q ^ (((^u72_ref_ready_o)) & u72_src[0]) ^ (((^u72_light_valid_o)) & u72_src[1]) ^ (((^u72_light_base_o)) & u72_src[2]) ^ (((^u72_light_degenerate_o)) & u72_src[3]) ^ (((^u72_light_src_id_o)) & u72_src[4]) ^ (((^u72_refs_taken_o)) & u72_src[5]) ^ (((^u72_lights_emitted_o)) & u72_src[6]) ^ (((^u72_stale_reads_o)) & u72_src[7]) ^ (((^u72_normals_evaluated_o)) & u72_src[8]) ^ (((^u72_triangles_shaded_o)) & u72_src[9]) ^ (((^u72_degenerate_count_o)) & u72_src[10]) ^ (((^u72_base_sat_o)) & u72_src[11]) ^ (((^u72_degen_mismatch_o)) & u72_src[12]) ^ (((^u72_idle_o)) & u72_src[13]);
 
-  // ---- zhao_terrain_mipgen ----
+  // ---- zhao_terrain_lod ----
   logic [63:0] u73_lfsr_q;
   logic [1023:0] u73_src;
   assign u73_src = {16{u73_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u73_lfsr_q <= 64'h0000002D1DD2D6BE;
     else u73_lfsr_q <= {u73_lfsr_q[62:0], (^(u73_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u73_busy_o;
-  logic [1-1:0] u73_done_o;
-  logic [10-1:0] u73_done_slot_o;
-  logic [8-1:0] u73_done_gen_o;
-  logic [32-1:0] u73_done_epoch_o;
-  logic [1-1:0] u73_fine_ready_o;
-  logic [1-1:0] u73_m17_valid_o;
-  logic [9-1:0] u73_m17_addr_o;
-  logic [1-1:0] u73_m17_surf_o;
-  logic [16-1:0] u73_m17_h_o;
-  logic [1-1:0] u73_m9_valid_o;
-  logic [7-1:0] u73_m9_addr_o;
-  logic [1-1:0] u73_m9_surf_o;
-  logic [16-1:0] u73_m9_h_o;
-  logic [32-1:0] u73_samples_o;
-  logic [32-1:0] u73_m17_writes_o;
-  logic [32-1:0] u73_m9_writes_o;
-  logic [32-1:0] u73_aborts_o;
-  zhao_terrain_mipgen u73_i (
+  logic [1-1:0] u73_sp_ready_o;
+  logic [1-1:0] u73_out_valid_o;
+  logic [6-1:0] u73_out_ox_o;
+  logic [6-1:0] u73_out_oz_o;
+  logic [2-1:0] u73_out_level_o;
+  logic [2-1:0] u73_out_lvl_nz_o;
+  logic [2-1:0] u73_out_lvl_pz_o;
+  logic [2-1:0] u73_out_lvl_nx_o;
+  logic [2-1:0] u73_out_lvl_px_o;
+  logic [17-1:0] u73_out_morph_o;
+  logic [1-1:0] u73_out_surface_o;
+  logic [1-1:0] u73_out_dual_o;
+  logic [16-1:0] u73_out_src_id_o;
+  logic [8-1:0] u73_out_hold_o;
+  logic [32-1:0] u73_lod_rep_count0_o;
+  logic [32-1:0] u73_lod_rep_count1_o;
+  logic [32-1:0] u73_lod_rep_count2_o;
+  logic [32-1:0] u73_lod_rep_count3_o;
+  logic [32-1:0] u73_terrain_triangles_emitted_o;
+  logic [1-1:0] u73_idle_o;
+  zhao_terrain_lod u73_i (
       .clk(clk),
       .rst_n(rst_n),
-      .start_i(u73_src[0 +: 1]),
-      .busy_o(u73_busy_o),
-      .done_o(u73_done_o),
-      .job_slot_i(u73_src[7 +: 10]),
-      .job_gen_i(u73_src[14 +: 8]),
-      .job_epoch_i(u73_src[21 +: 32]),
-      .done_slot_o(u73_done_slot_o),
-      .done_gen_o(u73_done_gen_o),
-      .done_epoch_o(u73_done_epoch_o),
-      .fine_valid_i(u73_src[28 +: 1]),
-      .fine_ready_o(u73_fine_ready_o),
-      .fine_h_i(u73_src[35 +: 16]),
-      .m17_valid_o(u73_m17_valid_o),
-      .m17_addr_o(u73_m17_addr_o),
-      .m17_surf_o(u73_m17_surf_o),
-      .m17_h_o(u73_m17_h_o),
-      .m9_valid_o(u73_m9_valid_o),
-      .m9_addr_o(u73_m9_addr_o),
-      .m9_surf_o(u73_m9_surf_o),
-      .m9_h_o(u73_m9_h_o),
-      .samples_o(u73_samples_o),
-      .m17_writes_o(u73_m17_writes_o),
-      .m9_writes_o(u73_m9_writes_o),
-      .aborts_o(u73_aborts_o)
+      .cam0_x_i(u73_src[0 +: 32]),
+      .cam0_y_i(u73_src[7 +: 32]),
+      .cam0_z_i(u73_src[14 +: 32]),
+      .cam0_scale_i(u73_src[21 +: 16]),
+      .cam0_en_i(u73_src[28 +: 1]),
+      .cam1_x_i(u73_src[35 +: 32]),
+      .cam1_y_i(u73_src[42 +: 32]),
+      .cam1_z_i(u73_src[49 +: 32]),
+      .cam1_scale_i(u73_src[56 +: 16]),
+      .cam1_en_i(u73_src[63 +: 1]),
+      .hyst_i(u73_src[70 +: 16]),
+      .min_hold_i(u73_src[77 +: 8]),
+      .morph_step_i(u73_src[84 +: 17]),
+      .dual_i(u73_src[91 +: 1]),
+      .edge_nz_i(u73_src[98 +: 8]),
+      .edge_pz_i(u73_src[105 +: 8]),
+      .edge_nx_i(u73_src[112 +: 8]),
+      .edge_px_i(u73_src[119 +: 8]),
+      .sp_valid_i(u73_src[126 +: 1]),
+      .sp_ready_o(u73_sp_ready_o),
+      .sp_cx_i(u73_src[133 +: 32]),
+      .sp_cy_i(u73_src[140 +: 32]),
+      .sp_cz_i(u73_src[147 +: 32]),
+      .sp_dev1_i(u73_src[154 +: 24]),
+      .sp_dev2_i(u73_src[161 +: 24]),
+      .sp_dev3_i(u73_src[168 +: 24]),
+      .sp_prev_level_i(u73_src[175 +: 2]),
+      .sp_prev_morph_i(u73_src[182 +: 17]),
+      .sp_hold_i(u73_src[189 +: 8]),
+      .sp_src_id_i(u73_src[196 +: 16]),
+      .out_valid_o(u73_out_valid_o),
+      .out_ready_i(u73_src[203 +: 1]),
+      .out_ox_o(u73_out_ox_o),
+      .out_oz_o(u73_out_oz_o),
+      .out_level_o(u73_out_level_o),
+      .out_lvl_nz_o(u73_out_lvl_nz_o),
+      .out_lvl_pz_o(u73_out_lvl_pz_o),
+      .out_lvl_nx_o(u73_out_lvl_nx_o),
+      .out_lvl_px_o(u73_out_lvl_px_o),
+      .out_morph_o(u73_out_morph_o),
+      .out_surface_o(u73_out_surface_o),
+      .out_dual_o(u73_out_dual_o),
+      .out_src_id_o(u73_out_src_id_o),
+      .out_hold_o(u73_out_hold_o),
+      .lod_rep_count0_o(u73_lod_rep_count0_o),
+      .lod_rep_count1_o(u73_lod_rep_count1_o),
+      .lod_rep_count2_o(u73_lod_rep_count2_o),
+      .lod_rep_count3_o(u73_lod_rep_count3_o),
+      .terrain_triangles_emitted_o(u73_terrain_triangles_emitted_o),
+      .idle_o(u73_idle_o)
   );
   logic u73_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u73_fold_q <= 1'b0;
-    else u73_fold_q <= u73_fold_q ^ (((^u73_busy_o)) & u73_src[0]) ^ (((^u73_done_o)) & u73_src[1]) ^ (((^u73_done_slot_o)) & u73_src[2]) ^ (((^u73_done_gen_o)) & u73_src[3]) ^ (((^u73_done_epoch_o)) & u73_src[4]) ^ (((^u73_fine_ready_o)) & u73_src[5]) ^ (((^u73_m17_valid_o)) & u73_src[6]) ^ (((^u73_m17_addr_o)) & u73_src[7]) ^ (((^u73_m17_surf_o)) & u73_src[8]) ^ (((^u73_m17_h_o)) & u73_src[9]) ^ (((^u73_m9_valid_o)) & u73_src[10]) ^ (((^u73_m9_addr_o)) & u73_src[11]) ^ (((^u73_m9_surf_o)) & u73_src[12]) ^ (((^u73_m9_h_o)) & u73_src[13]) ^ (((^u73_samples_o)) & u73_src[14]) ^ (((^u73_m17_writes_o)) & u73_src[15]) ^ (((^u73_m9_writes_o)) & u73_src[16]) ^ (((^u73_aborts_o)) & u73_src[17]);
+    else u73_fold_q <= u73_fold_q ^ (((^u73_sp_ready_o)) & u73_src[0]) ^ (((^u73_out_valid_o)) & u73_src[1]) ^ (((^u73_out_ox_o)) & u73_src[2]) ^ (((^u73_out_oz_o)) & u73_src[3]) ^ (((^u73_out_level_o)) & u73_src[4]) ^ (((^u73_out_lvl_nz_o)) & u73_src[5]) ^ (((^u73_out_lvl_pz_o)) & u73_src[6]) ^ (((^u73_out_lvl_nx_o)) & u73_src[7]) ^ (((^u73_out_lvl_px_o)) & u73_src[8]) ^ (((^u73_out_morph_o)) & u73_src[9]) ^ (((^u73_out_surface_o)) & u73_src[10]) ^ (((^u73_out_dual_o)) & u73_src[11]) ^ (((^u73_out_src_id_o)) & u73_src[12]) ^ (((^u73_out_hold_o)) & u73_src[13]) ^ (((^u73_lod_rep_count0_o)) & u73_src[14]) ^ (((^u73_lod_rep_count1_o)) & u73_src[15]) ^ (((^u73_lod_rep_count2_o)) & u73_src[16]) ^ (((^u73_lod_rep_count3_o)) & u73_src[17]) ^ (((^u73_terrain_triangles_emitted_o)) & u73_src[18]) ^ (((^u73_idle_o)) & u73_src[19]);
 
-  // ---- zhao_terrain_patch ----
+  // ---- zhao_terrain_mipgen ----
   logic [63:0] u74_lfsr_q;
   logic [1023:0] u74_src;
   assign u74_src = {16{u74_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u74_lfsr_q <= 64'h0000002DBC0A506F;
     else u74_lfsr_q <= {u74_lfsr_q[62:0], (^(u74_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u74_fld_add_ready_o;
-  logic [1-1:0] u74_fld_add_accept_o;
-  logic [1-1:0] u74_fld_add_reject_o;
-  logic [5-1:0] u74_fields_active_o;
-  logic [16-1:0] u74_trace_patch_id_o;
-  logic [32-1:0] u74_trace_hash_o;
-  logic [16-1:0] u74_trace_cmd_o;
-  logic [32-1:0] u74_programs_rejected_o;
-  logic [1-1:0] u74_vtx_ready_o;
-  logic [1-1:0] u74_fld_ready_o;
-  logic [1-1:0] u74_fld_covers_o;
-  logic [1-1:0] u74_st_valid_o;
-  logic signed [32-1:0] u74_top_o;
-  logic signed [32-1:0] u74_bottom_o;
-  logic signed [32-1:0] u74_compose_top_o;
-  logic [1-1:0] u74_st_dirty_o;
-  logic [16-1:0] u74_st_src_id_o;
-  logic [16-1:0] u74_subpatch_dirty_o;
-  logic [32-1:0] u74_terrain_samples_evaluated_o;
-  logic [1-1:0] u74_idle_o;
-  zhao_terrain_patch u74_i (
+  logic [1-1:0] u74_busy_o;
+  logic [1-1:0] u74_done_o;
+  logic [10-1:0] u74_done_slot_o;
+  logic [8-1:0] u74_done_gen_o;
+  logic [32-1:0] u74_done_epoch_o;
+  logic [1-1:0] u74_fine_ready_o;
+  logic [1-1:0] u74_m17_valid_o;
+  logic [9-1:0] u74_m17_addr_o;
+  logic [1-1:0] u74_m17_surf_o;
+  logic [16-1:0] u74_m17_h_o;
+  logic [1-1:0] u74_m9_valid_o;
+  logic [7-1:0] u74_m9_addr_o;
+  logic [1-1:0] u74_m9_surf_o;
+  logic [16-1:0] u74_m9_h_o;
+  logic [32-1:0] u74_samples_o;
+  logic [32-1:0] u74_m17_writes_o;
+  logic [32-1:0] u74_m9_writes_o;
+  logic [32-1:0] u74_aborts_o;
+  zhao_terrain_mipgen u74_i (
       .clk(clk),
       .rst_n(rst_n),
-      .list_clear_i(u74_src[0 +: 1]),
-      .patch_id_i(u74_src[7 +: 16]),
-      .fld_add_valid_i(u74_src[14 +: 1]),
-      .fld_add_ready_o(u74_fld_add_ready_o),
-      .fld_add_x0_i(u74_src[21 +: 32]),
-      .fld_add_z0_i(u74_src[28 +: 32]),
-      .fld_add_x1_i(u74_src[35 +: 32]),
-      .fld_add_z1_i(u74_src[42 +: 32]),
-      .fld_add_hash_i(u74_src[49 +: 32]),
-      .fld_add_cmd_i(u74_src[56 +: 16]),
-      .fld_add_accept_o(u74_fld_add_accept_o),
-      .fld_add_reject_o(u74_fld_add_reject_o),
-      .fields_active_o(u74_fields_active_o),
-      .trace_patch_id_o(u74_trace_patch_id_o),
-      .trace_hash_o(u74_trace_hash_o),
-      .trace_cmd_o(u74_trace_cmd_o),
-      .programs_rejected_o(u74_programs_rejected_o),
-      .vtx_valid_i(u74_src[63 +: 1]),
-      .vtx_ready_o(u74_vtx_ready_o),
-      .base_i(u74_src[70 +: 16]),
-      .scar_i(u74_src[77 +: 16]),
-      .bottom_i(u74_src[84 +: 16]),
-      .dual_i(u74_src[91 +: 1]),
-      .wx_i(u74_src[98 +: 32]),
-      .wz_i(u74_src[105 +: 32]),
-      .vi_i(u74_src[112 +: 6]),
-      .vj_i(u74_src[119 +: 6]),
-      .src_id_i(u74_src[126 +: 16]),
-      .fld_valid_i(u74_src[133 +: 1]),
-      .fld_ready_o(u74_fld_ready_o),
-      .fld_height_i(u74_src[140 +: 32]),
-      .fld_covers_o(u74_fld_covers_o),
-      .st_valid_o(u74_st_valid_o),
-      .st_ready_i(u74_src[147 +: 1]),
-      .top_o(u74_top_o),
-      .bottom_o(u74_bottom_o),
-      .compose_top_o(u74_compose_top_o),
-      .st_dirty_o(u74_st_dirty_o),
-      .st_src_id_o(u74_st_src_id_o),
-      .subpatch_dirty_o(u74_subpatch_dirty_o),
-      .terrain_samples_evaluated_o(u74_terrain_samples_evaluated_o),
-      .idle_o(u74_idle_o)
+      .start_i(u74_src[0 +: 1]),
+      .busy_o(u74_busy_o),
+      .done_o(u74_done_o),
+      .job_slot_i(u74_src[7 +: 10]),
+      .job_gen_i(u74_src[14 +: 8]),
+      .job_epoch_i(u74_src[21 +: 32]),
+      .done_slot_o(u74_done_slot_o),
+      .done_gen_o(u74_done_gen_o),
+      .done_epoch_o(u74_done_epoch_o),
+      .fine_valid_i(u74_src[28 +: 1]),
+      .fine_ready_o(u74_fine_ready_o),
+      .fine_h_i(u74_src[35 +: 16]),
+      .m17_valid_o(u74_m17_valid_o),
+      .m17_addr_o(u74_m17_addr_o),
+      .m17_surf_o(u74_m17_surf_o),
+      .m17_h_o(u74_m17_h_o),
+      .m9_valid_o(u74_m9_valid_o),
+      .m9_addr_o(u74_m9_addr_o),
+      .m9_surf_o(u74_m9_surf_o),
+      .m9_h_o(u74_m9_h_o),
+      .samples_o(u74_samples_o),
+      .m17_writes_o(u74_m17_writes_o),
+      .m9_writes_o(u74_m9_writes_o),
+      .aborts_o(u74_aborts_o)
   );
   logic u74_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u74_fold_q <= 1'b0;
-    else u74_fold_q <= u74_fold_q ^ (((^u74_fld_add_ready_o)) & u74_src[0]) ^ (((^u74_fld_add_accept_o)) & u74_src[1]) ^ (((^u74_fld_add_reject_o)) & u74_src[2]) ^ (((^u74_fields_active_o)) & u74_src[3]) ^ (((^u74_trace_patch_id_o)) & u74_src[4]) ^ (((^u74_trace_hash_o)) & u74_src[5]) ^ (((^u74_trace_cmd_o)) & u74_src[6]) ^ (((^u74_programs_rejected_o)) & u74_src[7]) ^ (((^u74_vtx_ready_o)) & u74_src[8]) ^ (((^u74_fld_ready_o)) & u74_src[9]) ^ (((^u74_fld_covers_o)) & u74_src[10]) ^ (((^u74_st_valid_o)) & u74_src[11]) ^ (((^u74_top_o)) & u74_src[12]) ^ (((^u74_bottom_o)) & u74_src[13]) ^ (((^u74_compose_top_o)) & u74_src[14]) ^ (((^u74_st_dirty_o)) & u74_src[15]) ^ (((^u74_st_src_id_o)) & u74_src[16]) ^ (((^u74_subpatch_dirty_o)) & u74_src[17]) ^ (((^u74_terrain_samples_evaluated_o)) & u74_src[18]) ^ (((^u74_idle_o)) & u74_src[19]);
+    else u74_fold_q <= u74_fold_q ^ (((^u74_busy_o)) & u74_src[0]) ^ (((^u74_done_o)) & u74_src[1]) ^ (((^u74_done_slot_o)) & u74_src[2]) ^ (((^u74_done_gen_o)) & u74_src[3]) ^ (((^u74_done_epoch_o)) & u74_src[4]) ^ (((^u74_fine_ready_o)) & u74_src[5]) ^ (((^u74_m17_valid_o)) & u74_src[6]) ^ (((^u74_m17_addr_o)) & u74_src[7]) ^ (((^u74_m17_surf_o)) & u74_src[8]) ^ (((^u74_m17_h_o)) & u74_src[9]) ^ (((^u74_m9_valid_o)) & u74_src[10]) ^ (((^u74_m9_addr_o)) & u74_src[11]) ^ (((^u74_m9_surf_o)) & u74_src[12]) ^ (((^u74_m9_h_o)) & u74_src[13]) ^ (((^u74_samples_o)) & u74_src[14]) ^ (((^u74_m17_writes_o)) & u74_src[15]) ^ (((^u74_m9_writes_o)) & u74_src[16]) ^ (((^u74_aborts_o)) & u74_src[17]);
 
-  // ---- zhao_terrain_place ----
+  // ---- zhao_terrain_patch ----
   logic [63:0] u75_lfsr_q;
   logic [1023:0] u75_src;
   assign u75_src = {16{u75_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u75_lfsr_q <= 64'h0000002E5A41CA20;
     else u75_lfsr_q <= {u75_lfsr_q[62:0], (^(u75_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u75_hdr_ready_o;
-  logic [1-1:0] u75_pos_we_o;
-  logic [1-1:0] u75_pos_axis_o;
-  logic [6-1:0] u75_pos_idx_o;
-  logic signed [32-1:0] u75_pos_val_o;
-  logic [1-1:0] u75_pos_done_o;
-  logic signed [32-1:0] u75_vtx_wx_o;
-  logic signed [32-1:0] u75_vtx_wz_o;
-  logic [1-1:0] u75_vtx_placed_o;
-  logic [1-1:0] u75_place_valid_o;
-  logic [16-1:0] u75_place_env_mismatch_o;
-  logic [16-1:0] u75_place_pitch_bad_o;
-  logic [16-1:0] u75_place_range_o;
-  logic [16-1:0] u75_place_patches_o;
-  logic [16-1:0] u75_place_src_id_o;
-  zhao_terrain_place u75_i (
+  logic [1-1:0] u75_fld_add_ready_o;
+  logic [1-1:0] u75_fld_add_accept_o;
+  logic [1-1:0] u75_fld_add_reject_o;
+  logic [5-1:0] u75_fields_active_o;
+  logic [16-1:0] u75_trace_patch_id_o;
+  logic [32-1:0] u75_trace_hash_o;
+  logic [16-1:0] u75_trace_cmd_o;
+  logic [32-1:0] u75_programs_rejected_o;
+  logic [1-1:0] u75_vtx_ready_o;
+  logic [1-1:0] u75_fld_ready_o;
+  logic [1-1:0] u75_fld_covers_o;
+  logic [1-1:0] u75_st_valid_o;
+  logic signed [32-1:0] u75_top_o;
+  logic signed [32-1:0] u75_bottom_o;
+  logic signed [32-1:0] u75_compose_top_o;
+  logic [1-1:0] u75_st_dirty_o;
+  logic [16-1:0] u75_st_src_id_o;
+  logic [16-1:0] u75_subpatch_dirty_o;
+  logic [32-1:0] u75_terrain_samples_evaluated_o;
+  logic [1-1:0] u75_idle_o;
+  zhao_terrain_patch u75_i (
       .clk(clk),
       .rst_n(rst_n),
-      .hdr_valid_i(u75_src[0 +: 1]),
-      .hdr_ready_o(u75_hdr_ready_o),
-      .hdr_pitch_log2_i(u75_src[7 +: 8]),
-      .hdr_patch_ix_i(u75_src[14 +: 16]),
-      .hdr_patch_iz_i(u75_src[21 +: 16]),
-      .hdr_env_x0_i(u75_src[28 +: 32]),
-      .hdr_env_z0_i(u75_src[35 +: 32]),
-      .hdr_src_id_i(u75_src[42 +: 16]),
-      .pos_we_o(u75_pos_we_o),
-      .pos_axis_o(u75_pos_axis_o),
-      .pos_idx_o(u75_pos_idx_o),
-      .pos_val_o(u75_pos_val_o),
-      .pos_done_o(u75_pos_done_o),
-      .vtx_vi_i(u75_src[49 +: 6]),
-      .vtx_vj_i(u75_src[56 +: 6]),
-      .vtx_wx_o(u75_vtx_wx_o),
-      .vtx_wz_o(u75_vtx_wz_o),
-      .vtx_placed_o(u75_vtx_placed_o),
-      .place_valid_o(u75_place_valid_o),
-      .place_env_mismatch_o(u75_place_env_mismatch_o),
-      .place_pitch_bad_o(u75_place_pitch_bad_o),
-      .place_range_o(u75_place_range_o),
-      .place_patches_o(u75_place_patches_o),
-      .place_src_id_o(u75_place_src_id_o)
+      .list_clear_i(u75_src[0 +: 1]),
+      .patch_id_i(u75_src[7 +: 16]),
+      .fld_add_valid_i(u75_src[14 +: 1]),
+      .fld_add_ready_o(u75_fld_add_ready_o),
+      .fld_add_x0_i(u75_src[21 +: 32]),
+      .fld_add_z0_i(u75_src[28 +: 32]),
+      .fld_add_x1_i(u75_src[35 +: 32]),
+      .fld_add_z1_i(u75_src[42 +: 32]),
+      .fld_add_hash_i(u75_src[49 +: 32]),
+      .fld_add_cmd_i(u75_src[56 +: 16]),
+      .fld_add_accept_o(u75_fld_add_accept_o),
+      .fld_add_reject_o(u75_fld_add_reject_o),
+      .fields_active_o(u75_fields_active_o),
+      .trace_patch_id_o(u75_trace_patch_id_o),
+      .trace_hash_o(u75_trace_hash_o),
+      .trace_cmd_o(u75_trace_cmd_o),
+      .programs_rejected_o(u75_programs_rejected_o),
+      .vtx_valid_i(u75_src[63 +: 1]),
+      .vtx_ready_o(u75_vtx_ready_o),
+      .base_i(u75_src[70 +: 16]),
+      .scar_i(u75_src[77 +: 16]),
+      .bottom_i(u75_src[84 +: 16]),
+      .dual_i(u75_src[91 +: 1]),
+      .wx_i(u75_src[98 +: 32]),
+      .wz_i(u75_src[105 +: 32]),
+      .vi_i(u75_src[112 +: 6]),
+      .vj_i(u75_src[119 +: 6]),
+      .src_id_i(u75_src[126 +: 16]),
+      .fld_valid_i(u75_src[133 +: 1]),
+      .fld_ready_o(u75_fld_ready_o),
+      .fld_height_i(u75_src[140 +: 32]),
+      .fld_covers_o(u75_fld_covers_o),
+      .st_valid_o(u75_st_valid_o),
+      .st_ready_i(u75_src[147 +: 1]),
+      .top_o(u75_top_o),
+      .bottom_o(u75_bottom_o),
+      .compose_top_o(u75_compose_top_o),
+      .st_dirty_o(u75_st_dirty_o),
+      .st_src_id_o(u75_st_src_id_o),
+      .subpatch_dirty_o(u75_subpatch_dirty_o),
+      .terrain_samples_evaluated_o(u75_terrain_samples_evaluated_o),
+      .idle_o(u75_idle_o)
   );
   logic u75_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u75_fold_q <= 1'b0;
-    else u75_fold_q <= u75_fold_q ^ (((^u75_hdr_ready_o)) & u75_src[0]) ^ (((^u75_pos_we_o)) & u75_src[1]) ^ (((^u75_pos_axis_o)) & u75_src[2]) ^ (((^u75_pos_idx_o)) & u75_src[3]) ^ (((^u75_pos_val_o)) & u75_src[4]) ^ (((^u75_pos_done_o)) & u75_src[5]) ^ (((^u75_vtx_wx_o)) & u75_src[6]) ^ (((^u75_vtx_wz_o)) & u75_src[7]) ^ (((^u75_vtx_placed_o)) & u75_src[8]) ^ (((^u75_place_valid_o)) & u75_src[9]) ^ (((^u75_place_env_mismatch_o)) & u75_src[10]) ^ (((^u75_place_pitch_bad_o)) & u75_src[11]) ^ (((^u75_place_range_o)) & u75_src[12]) ^ (((^u75_place_patches_o)) & u75_src[13]) ^ (((^u75_place_src_id_o)) & u75_src[14]);
+    else u75_fold_q <= u75_fold_q ^ (((^u75_fld_add_ready_o)) & u75_src[0]) ^ (((^u75_fld_add_accept_o)) & u75_src[1]) ^ (((^u75_fld_add_reject_o)) & u75_src[2]) ^ (((^u75_fields_active_o)) & u75_src[3]) ^ (((^u75_trace_patch_id_o)) & u75_src[4]) ^ (((^u75_trace_hash_o)) & u75_src[5]) ^ (((^u75_trace_cmd_o)) & u75_src[6]) ^ (((^u75_programs_rejected_o)) & u75_src[7]) ^ (((^u75_vtx_ready_o)) & u75_src[8]) ^ (((^u75_fld_ready_o)) & u75_src[9]) ^ (((^u75_fld_covers_o)) & u75_src[10]) ^ (((^u75_st_valid_o)) & u75_src[11]) ^ (((^u75_top_o)) & u75_src[12]) ^ (((^u75_bottom_o)) & u75_src[13]) ^ (((^u75_compose_top_o)) & u75_src[14]) ^ (((^u75_st_dirty_o)) & u75_src[15]) ^ (((^u75_st_src_id_o)) & u75_src[16]) ^ (((^u75_subpatch_dirty_o)) & u75_src[17]) ^ (((^u75_terrain_samples_evaluated_o)) & u75_src[18]) ^ (((^u75_idle_o)) & u75_src[19]);
 
-  // ---- zhao_terrain_residency_v2 ----
+  // ---- zhao_terrain_place ----
   logic [63:0] u76_lfsr_q;
   logic [1023:0] u76_src;
   assign u76_src = {16{u76_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u76_lfsr_q <= 64'h0000002EF87943D1;
     else u76_lfsr_q <= {u76_lfsr_q[62:0], (^(u76_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u76_ready_o;
-  logic [1-1:0] u76_lu_ready_o;
-  logic [1-1:0] u76_lu_valid_o;
-  logic [1-1:0] u76_lu_hit_o;
-  logic [10-1:0] u76_lu_slot_o;
-  logic [8-1:0] u76_lu_gen_o;
-  logic [1-1:0] u76_cl_ready_o;
-  logic [1-1:0] u76_cl_valid_o;
-  logic [1-1:0] u76_cl_same_o;
-  logic [1-1:0] u76_cl_refused_o;
-  logic [10-1:0] u76_cl_slot_o;
-  logic [8-1:0] u76_cl_gen_o;
-  logic [1-1:0] u76_cl_evicted_o;
-  logic [1-1:0] u76_cl_evicted_dirty_o;
-  logic [32-1:0] u76_cl_evicted_island_o;
-  logic signed [16-1:0] u76_cl_evicted_ix_o;
-  logic signed [16-1:0] u76_cl_evicted_iz_o;
-  logic [8-1:0] u76_cl_evicted_gen_o;
-  logic [1-1:0] u76_fin_ready_o;
-  logic [1-1:0] u76_dm_ready_o;
-  logic [1-1:0] u76_pin_ready_o;
-  logic [1-1:0] u76_unpin_ready_o;
-  logic [1-1:0] u76_wb_ready_o;
-  logic [1-1:0] u76_chk_valid_o;
-  logic [1-1:0] u76_chk_stale_o;
-  logic [32-1:0] u76_hits_o;
-  logic [32-1:0] u76_misses_o;
-  logic [32-1:0] u76_claims_o;
-  logic [32-1:0] u76_evictions_o;
-  logic [32-1:0] u76_dirty_evictions_o;
-  logic [32-1:0] u76_refused_all_pinned_o;
-  logic [32-1:0] u76_stale_events_o;
-  logic [32-1:0] u76_crc_failures_o;
-  logic [32-1:0] u76_resident_o;
-  zhao_terrain_residency_v2 u76_i (
+  logic [1-1:0] u76_hdr_ready_o;
+  logic [1-1:0] u76_pos_we_o;
+  logic [1-1:0] u76_pos_axis_o;
+  logic [6-1:0] u76_pos_idx_o;
+  logic signed [32-1:0] u76_pos_val_o;
+  logic [1-1:0] u76_pos_done_o;
+  logic signed [32-1:0] u76_vtx_wx_o;
+  logic signed [32-1:0] u76_vtx_wz_o;
+  logic [1-1:0] u76_vtx_placed_o;
+  logic [1-1:0] u76_place_valid_o;
+  logic [16-1:0] u76_place_env_mismatch_o;
+  logic [16-1:0] u76_place_pitch_bad_o;
+  logic [16-1:0] u76_place_range_o;
+  logic [16-1:0] u76_place_patches_o;
+  logic [16-1:0] u76_place_src_id_o;
+  zhao_terrain_place u76_i (
       .clk(clk),
       .rst_n(rst_n),
-      .ready_o(u76_ready_o),
-      .lu_valid_i(u76_src[0 +: 1]),
-      .lu_ready_o(u76_lu_ready_o),
-      .lu_epoch_i(u76_src[7 +: 32]),
-      .lu_island_i(u76_src[14 +: 32]),
-      .lu_ix_i(u76_src[21 +: 16]),
-      .lu_iz_i(u76_src[28 +: 16]),
-      .lu_valid_o(u76_lu_valid_o),
-      .lu_hit_o(u76_lu_hit_o),
-      .lu_slot_o(u76_lu_slot_o),
-      .lu_gen_o(u76_lu_gen_o),
-      .cl_valid_i(u76_src[35 +: 1]),
-      .cl_ready_o(u76_cl_ready_o),
-      .cl_epoch_i(u76_src[42 +: 32]),
-      .cl_island_i(u76_src[49 +: 32]),
-      .cl_ix_i(u76_src[56 +: 16]),
-      .cl_iz_i(u76_src[63 +: 16]),
-      .cl_expect_crc_i(u76_src[70 +: 32]),
-      .cl_seq_i(u76_src[77 +: 16]),
-      .cl_valid_o(u76_cl_valid_o),
-      .cl_same_o(u76_cl_same_o),
-      .cl_refused_o(u76_cl_refused_o),
-      .cl_slot_o(u76_cl_slot_o),
-      .cl_gen_o(u76_cl_gen_o),
-      .cl_evicted_o(u76_cl_evicted_o),
-      .cl_evicted_dirty_o(u76_cl_evicted_dirty_o),
-      .cl_evicted_island_o(u76_cl_evicted_island_o),
-      .cl_evicted_ix_o(u76_cl_evicted_ix_o),
-      .cl_evicted_iz_o(u76_cl_evicted_iz_o),
-      .cl_evicted_gen_o(u76_cl_evicted_gen_o),
-      .fin_valid_i(u76_src[84 +: 1]),
-      .fin_ready_o(u76_fin_ready_o),
-      .fin_slot_i(u76_src[91 +: 10]),
-      .fin_gen_i(u76_src[98 +: 8]),
-      .fin_epoch_i(u76_src[105 +: 32]),
-      .fin_ok_i(u76_src[112 +: 1]),
-      .fin_crc_i(u76_src[119 +: 32]),
-      .dm_valid_i(u76_src[126 +: 1]),
-      .dm_ready_o(u76_dm_ready_o),
-      .dm_slot_i(u76_src[133 +: 10]),
-      .dm_gen_i(u76_src[140 +: 8]),
-      .dm_epoch_i(u76_src[147 +: 32]),
-      .dm_bd_i(u76_src[154 +: 1]),
-      .dm_f_i(u76_src[161 +: 1]),
-      .dm_mips_i(u76_src[168 +: 1]),
-      .pin_valid_i(u76_src[175 +: 1]),
-      .pin_ready_o(u76_pin_ready_o),
-      .pin_slot_i(u76_src[182 +: 10]),
-      .pin_gen_i(u76_src[189 +: 8]),
-      .pin_epoch_i(u76_src[196 +: 32]),
-      .unpin_valid_i(u76_src[203 +: 1]),
-      .unpin_ready_o(u76_unpin_ready_o),
-      .unpin_slot_i(u76_src[210 +: 10]),
-      .unpin_gen_i(u76_src[217 +: 8]),
-      .unpin_epoch_i(u76_src[224 +: 32]),
-      .wb_valid_i(u76_src[231 +: 1]),
-      .wb_ready_o(u76_wb_ready_o),
-      .wb_slot_i(u76_src[238 +: 10]),
-      .wb_gen_i(u76_src[245 +: 8]),
-      .wb_epoch_i(u76_src[252 +: 32]),
-      .chk_valid_i(u76_src[259 +: 1]),
-      .chk_slot_i(u76_src[266 +: 10]),
-      .chk_gen_i(u76_src[273 +: 8]),
-      .chk_epoch_i(u76_src[280 +: 32]),
-      .chk_valid_o(u76_chk_valid_o),
-      .chk_stale_o(u76_chk_stale_o),
-      .hits_o(u76_hits_o),
-      .misses_o(u76_misses_o),
-      .claims_o(u76_claims_o),
-      .evictions_o(u76_evictions_o),
-      .dirty_evictions_o(u76_dirty_evictions_o),
-      .refused_all_pinned_o(u76_refused_all_pinned_o),
-      .stale_events_o(u76_stale_events_o),
-      .crc_failures_o(u76_crc_failures_o),
-      .resident_o(u76_resident_o)
+      .hdr_valid_i(u76_src[0 +: 1]),
+      .hdr_ready_o(u76_hdr_ready_o),
+      .hdr_pitch_log2_i(u76_src[7 +: 8]),
+      .hdr_patch_ix_i(u76_src[14 +: 16]),
+      .hdr_patch_iz_i(u76_src[21 +: 16]),
+      .hdr_env_x0_i(u76_src[28 +: 32]),
+      .hdr_env_z0_i(u76_src[35 +: 32]),
+      .hdr_src_id_i(u76_src[42 +: 16]),
+      .pos_we_o(u76_pos_we_o),
+      .pos_axis_o(u76_pos_axis_o),
+      .pos_idx_o(u76_pos_idx_o),
+      .pos_val_o(u76_pos_val_o),
+      .pos_done_o(u76_pos_done_o),
+      .vtx_vi_i(u76_src[49 +: 6]),
+      .vtx_vj_i(u76_src[56 +: 6]),
+      .vtx_wx_o(u76_vtx_wx_o),
+      .vtx_wz_o(u76_vtx_wz_o),
+      .vtx_placed_o(u76_vtx_placed_o),
+      .place_valid_o(u76_place_valid_o),
+      .place_env_mismatch_o(u76_place_env_mismatch_o),
+      .place_pitch_bad_o(u76_place_pitch_bad_o),
+      .place_range_o(u76_place_range_o),
+      .place_patches_o(u76_place_patches_o),
+      .place_src_id_o(u76_place_src_id_o)
   );
   logic u76_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u76_fold_q <= 1'b0;
-    else u76_fold_q <= u76_fold_q ^ (((^u76_ready_o)) & u76_src[0]) ^ (((^u76_lu_ready_o)) & u76_src[1]) ^ (((^u76_lu_valid_o)) & u76_src[2]) ^ (((^u76_lu_hit_o)) & u76_src[3]) ^ (((^u76_lu_slot_o)) & u76_src[4]) ^ (((^u76_lu_gen_o)) & u76_src[5]) ^ (((^u76_cl_ready_o)) & u76_src[6]) ^ (((^u76_cl_valid_o)) & u76_src[7]) ^ (((^u76_cl_same_o)) & u76_src[8]) ^ (((^u76_cl_refused_o)) & u76_src[9]) ^ (((^u76_cl_slot_o)) & u76_src[10]) ^ (((^u76_cl_gen_o)) & u76_src[11]) ^ (((^u76_cl_evicted_o)) & u76_src[12]) ^ (((^u76_cl_evicted_dirty_o)) & u76_src[13]) ^ (((^u76_cl_evicted_island_o)) & u76_src[14]) ^ (((^u76_cl_evicted_ix_o)) & u76_src[15]) ^ (((^u76_cl_evicted_iz_o)) & u76_src[16]) ^ (((^u76_cl_evicted_gen_o)) & u76_src[17]) ^ (((^u76_fin_ready_o)) & u76_src[18]) ^ (((^u76_dm_ready_o)) & u76_src[19]) ^ (((^u76_pin_ready_o)) & u76_src[20]) ^ (((^u76_unpin_ready_o)) & u76_src[21]) ^ (((^u76_wb_ready_o)) & u76_src[22]) ^ (((^u76_chk_valid_o)) & u76_src[23]) ^ (((^u76_chk_stale_o)) & u76_src[24]) ^ (((^u76_hits_o)) & u76_src[25]) ^ (((^u76_misses_o)) & u76_src[26]) ^ (((^u76_claims_o)) & u76_src[27]) ^ (((^u76_evictions_o)) & u76_src[28]) ^ (((^u76_dirty_evictions_o)) & u76_src[29]) ^ (((^u76_refused_all_pinned_o)) & u76_src[30]) ^ (((^u76_stale_events_o)) & u76_src[31]) ^ (((^u76_crc_failures_o)) & u76_src[32]) ^ (((^u76_resident_o)) & u76_src[33]);
+    else u76_fold_q <= u76_fold_q ^ (((^u76_hdr_ready_o)) & u76_src[0]) ^ (((^u76_pos_we_o)) & u76_src[1]) ^ (((^u76_pos_axis_o)) & u76_src[2]) ^ (((^u76_pos_idx_o)) & u76_src[3]) ^ (((^u76_pos_val_o)) & u76_src[4]) ^ (((^u76_pos_done_o)) & u76_src[5]) ^ (((^u76_vtx_wx_o)) & u76_src[6]) ^ (((^u76_vtx_wz_o)) & u76_src[7]) ^ (((^u76_vtx_placed_o)) & u76_src[8]) ^ (((^u76_place_valid_o)) & u76_src[9]) ^ (((^u76_place_env_mismatch_o)) & u76_src[10]) ^ (((^u76_place_pitch_bad_o)) & u76_src[11]) ^ (((^u76_place_range_o)) & u76_src[12]) ^ (((^u76_place_patches_o)) & u76_src[13]) ^ (((^u76_place_src_id_o)) & u76_src[14]);
 
-  // ---- zhao_terrain_tess ----
+  // ---- zhao_terrain_residency_v2 ----
   logic [63:0] u77_lfsr_q;
   logic [1023:0] u77_src;
   assign u77_src = {16{u77_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u77_lfsr_q <= 64'h0000002F96B0BD82;
     else u77_lfsr_q <= {u77_lfsr_q[62:0], (^(u77_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u77_job_ready_o;
-  logic [1-1:0] u77_lat_req_o;
-  logic [6-1:0] u77_lat_vi_o;
-  logic [6-1:0] u77_lat_vj_o;
-  logic [1-1:0] u77_lat_surface_o;
-  logic [1-1:0] u77_cs_req_o;
-  logic [5-1:0] u77_cs_ci_o;
-  logic [5-1:0] u77_cs_cj_o;
-  logic [1-1:0] u77_mat_req_o;
-  logic [5-1:0] u77_mat_ci_o;
-  logic [5-1:0] u77_mat_cj_o;
-  logic [1-1:0] u77_tri_valid_o;
-  logic signed [32-1:0] u77_ax_o;
-  logic signed [32-1:0] u77_ay_o;
-  logic signed [32-1:0] u77_az_o;
-  logic signed [32-1:0] u77_bx_o;
-  logic signed [32-1:0] u77_by_o;
-  logic signed [32-1:0] u77_bz_o;
-  logic signed [32-1:0] u77_cx_o;
-  logic signed [32-1:0] u77_cy_o;
-  logic signed [32-1:0] u77_cz_o;
-  logic [1-1:0] u77_surface_o;
-  logic [16-1:0] u77_src_id_o;
-  logic [1-1:0] u77_vtx_valid_o;
-  logic signed [32-1:0] u77_vtx_x_o;
-  logic signed [32-1:0] u77_vtx_y_o;
-  logic signed [32-1:0] u77_vtx_z_o;
-  logic [7-1:0] u77_vtx_index_o;
-  logic [1-1:0] u77_vtx_stride_o;
-  logic [1-1:0] u77_vtx_surface_o;
-  logic [16-1:0] u77_vtx_src_id_o;
-  logic [1-1:0] u77_ref_valid_o;
-  logic [7-1:0] u77_ref_ia_o;
-  logic [7-1:0] u77_ref_ib_o;
-  logic [7-1:0] u77_ref_ic_o;
-  logic [1-1:0] u77_ref_surface_o;
-  logic [16-1:0] u77_ref_src_id_o;
-  logic [8-1:0] u77_ref_mat_a_o;
-  logic [8-1:0] u77_ref_mat_b_o;
-  logic [8-1:0] u77_ref_weight_o;
-  logic [32-1:0] u77_terrain_triangles_emitted_o;
-  logic [32-1:0] u77_terrain_vertices_emitted_o;
-  logic [32-1:0] u77_terrain_refs_emitted_o;
-  logic [32-1:0] u77_mat_unarmed_o;
-  logic [32-1:0] u77_mode_invalid_o;
-  logic [32-1:0] u77_subpatch_rejected_o;
-  logic [32-1:0] u77_lod_clamped_o;
-  logic [1-1:0] u77_job_reject_o;
-  logic [1-1:0] u77_idle_o;
-  zhao_terrain_tess u77_i (
+  logic [1-1:0] u77_ready_o;
+  logic [1-1:0] u77_lu_ready_o;
+  logic [1-1:0] u77_lu_valid_o;
+  logic [1-1:0] u77_lu_hit_o;
+  logic [10-1:0] u77_lu_slot_o;
+  logic [8-1:0] u77_lu_gen_o;
+  logic [1-1:0] u77_cl_ready_o;
+  logic [1-1:0] u77_cl_valid_o;
+  logic [1-1:0] u77_cl_same_o;
+  logic [1-1:0] u77_cl_refused_o;
+  logic [10-1:0] u77_cl_slot_o;
+  logic [8-1:0] u77_cl_gen_o;
+  logic [1-1:0] u77_cl_evicted_o;
+  logic [1-1:0] u77_cl_evicted_dirty_o;
+  logic [32-1:0] u77_cl_evicted_island_o;
+  logic signed [16-1:0] u77_cl_evicted_ix_o;
+  logic signed [16-1:0] u77_cl_evicted_iz_o;
+  logic [8-1:0] u77_cl_evicted_gen_o;
+  logic [1-1:0] u77_fin_ready_o;
+  logic [1-1:0] u77_dm_ready_o;
+  logic [1-1:0] u77_pin_ready_o;
+  logic [1-1:0] u77_unpin_ready_o;
+  logic [1-1:0] u77_wb_ready_o;
+  logic [1-1:0] u77_chk_valid_o;
+  logic [1-1:0] u77_chk_stale_o;
+  logic [32-1:0] u77_hits_o;
+  logic [32-1:0] u77_misses_o;
+  logic [32-1:0] u77_claims_o;
+  logic [32-1:0] u77_evictions_o;
+  logic [32-1:0] u77_dirty_evictions_o;
+  logic [32-1:0] u77_refused_all_pinned_o;
+  logic [32-1:0] u77_stale_events_o;
+  logic [32-1:0] u77_crc_failures_o;
+  logic [32-1:0] u77_resident_o;
+  zhao_terrain_residency_v2 u77_i (
       .clk(clk),
       .rst_n(rst_n),
-      .job_valid_i(u77_src[0 +: 1]),
-      .job_ready_o(u77_job_ready_o),
-      .job_mode_i(u77_src[7 +: 2]),
-      .job_ox_i(u77_src[14 +: 6]),
-      .job_oz_i(u77_src[21 +: 6]),
-      .job_level_i(u77_src[28 +: 2]),
-      .job_lvl_nz_i(u77_src[35 +: 2]),
-      .job_lvl_pz_i(u77_src[42 +: 2]),
-      .job_lvl_nx_i(u77_src[49 +: 2]),
-      .job_lvl_px_i(u77_src[56 +: 2]),
-      .job_morph_i(u77_src[63 +: 17]),
-      .job_surface_i(u77_src[70 +: 1]),
-      .job_dual_i(u77_src[77 +: 1]),
-      .job_src_id_i(u77_src[84 +: 16]),
-      .lat_req_o(u77_lat_req_o),
-      .lat_vi_o(u77_lat_vi_o),
-      .lat_vj_o(u77_lat_vj_o),
-      .lat_surface_o(u77_lat_surface_o),
-      .lat_h_i(u77_src[91 +: 32]),
-      .lat_wx_i(u77_src[98 +: 32]),
-      .lat_wz_i(u77_src[105 +: 32]),
-      .cs_req_o(u77_cs_req_o),
-      .cs_ci_o(u77_cs_ci_o),
-      .cs_cj_o(u77_cs_cj_o),
-      .cs_substance_i(u77_src[112 +: 2]),
-      .mat_req_o(u77_mat_req_o),
-      .mat_ci_o(u77_mat_ci_o),
-      .mat_cj_o(u77_mat_cj_o),
-      .mat_a_i(u77_src[119 +: 8]),
-      .mat_b_i(u77_src[126 +: 8]),
-      .mat_w_i(u77_src[133 +: 8]),
-      .mat_valid_i(u77_src[140 +: 1]),
-      .tri_valid_o(u77_tri_valid_o),
-      .tri_ready_i(u77_src[147 +: 1]),
-      .ax_o(u77_ax_o),
-      .ay_o(u77_ay_o),
-      .az_o(u77_az_o),
-      .bx_o(u77_bx_o),
-      .by_o(u77_by_o),
-      .bz_o(u77_bz_o),
-      .cx_o(u77_cx_o),
-      .cy_o(u77_cy_o),
-      .cz_o(u77_cz_o),
-      .surface_o(u77_surface_o),
-      .src_id_o(u77_src_id_o),
-      .vtx_valid_o(u77_vtx_valid_o),
-      .vtx_ready_i(u77_src[154 +: 1]),
-      .vtx_x_o(u77_vtx_x_o),
-      .vtx_y_o(u77_vtx_y_o),
-      .vtx_z_o(u77_vtx_z_o),
-      .vtx_index_o(u77_vtx_index_o),
-      .vtx_stride_o(u77_vtx_stride_o),
-      .vtx_surface_o(u77_vtx_surface_o),
-      .vtx_src_id_o(u77_vtx_src_id_o),
-      .ref_valid_o(u77_ref_valid_o),
-      .ref_ready_i(u77_src[161 +: 1]),
-      .ref_ia_o(u77_ref_ia_o),
-      .ref_ib_o(u77_ref_ib_o),
-      .ref_ic_o(u77_ref_ic_o),
-      .ref_surface_o(u77_ref_surface_o),
-      .ref_src_id_o(u77_ref_src_id_o),
-      .ref_mat_a_o(u77_ref_mat_a_o),
-      .ref_mat_b_o(u77_ref_mat_b_o),
-      .ref_weight_o(u77_ref_weight_o),
-      .terrain_triangles_emitted_o(u77_terrain_triangles_emitted_o),
-      .terrain_vertices_emitted_o(u77_terrain_vertices_emitted_o),
-      .terrain_refs_emitted_o(u77_terrain_refs_emitted_o),
-      .mat_unarmed_o(u77_mat_unarmed_o),
-      .mode_invalid_o(u77_mode_invalid_o),
-      .subpatch_rejected_o(u77_subpatch_rejected_o),
-      .lod_clamped_o(u77_lod_clamped_o),
-      .job_reject_o(u77_job_reject_o),
-      .idle_o(u77_idle_o)
+      .ready_o(u77_ready_o),
+      .lu_valid_i(u77_src[0 +: 1]),
+      .lu_ready_o(u77_lu_ready_o),
+      .lu_epoch_i(u77_src[7 +: 32]),
+      .lu_island_i(u77_src[14 +: 32]),
+      .lu_ix_i(u77_src[21 +: 16]),
+      .lu_iz_i(u77_src[28 +: 16]),
+      .lu_valid_o(u77_lu_valid_o),
+      .lu_hit_o(u77_lu_hit_o),
+      .lu_slot_o(u77_lu_slot_o),
+      .lu_gen_o(u77_lu_gen_o),
+      .cl_valid_i(u77_src[35 +: 1]),
+      .cl_ready_o(u77_cl_ready_o),
+      .cl_epoch_i(u77_src[42 +: 32]),
+      .cl_island_i(u77_src[49 +: 32]),
+      .cl_ix_i(u77_src[56 +: 16]),
+      .cl_iz_i(u77_src[63 +: 16]),
+      .cl_expect_crc_i(u77_src[70 +: 32]),
+      .cl_seq_i(u77_src[77 +: 16]),
+      .cl_valid_o(u77_cl_valid_o),
+      .cl_same_o(u77_cl_same_o),
+      .cl_refused_o(u77_cl_refused_o),
+      .cl_slot_o(u77_cl_slot_o),
+      .cl_gen_o(u77_cl_gen_o),
+      .cl_evicted_o(u77_cl_evicted_o),
+      .cl_evicted_dirty_o(u77_cl_evicted_dirty_o),
+      .cl_evicted_island_o(u77_cl_evicted_island_o),
+      .cl_evicted_ix_o(u77_cl_evicted_ix_o),
+      .cl_evicted_iz_o(u77_cl_evicted_iz_o),
+      .cl_evicted_gen_o(u77_cl_evicted_gen_o),
+      .fin_valid_i(u77_src[84 +: 1]),
+      .fin_ready_o(u77_fin_ready_o),
+      .fin_slot_i(u77_src[91 +: 10]),
+      .fin_gen_i(u77_src[98 +: 8]),
+      .fin_epoch_i(u77_src[105 +: 32]),
+      .fin_ok_i(u77_src[112 +: 1]),
+      .fin_crc_i(u77_src[119 +: 32]),
+      .dm_valid_i(u77_src[126 +: 1]),
+      .dm_ready_o(u77_dm_ready_o),
+      .dm_slot_i(u77_src[133 +: 10]),
+      .dm_gen_i(u77_src[140 +: 8]),
+      .dm_epoch_i(u77_src[147 +: 32]),
+      .dm_bd_i(u77_src[154 +: 1]),
+      .dm_f_i(u77_src[161 +: 1]),
+      .dm_mips_i(u77_src[168 +: 1]),
+      .pin_valid_i(u77_src[175 +: 1]),
+      .pin_ready_o(u77_pin_ready_o),
+      .pin_slot_i(u77_src[182 +: 10]),
+      .pin_gen_i(u77_src[189 +: 8]),
+      .pin_epoch_i(u77_src[196 +: 32]),
+      .unpin_valid_i(u77_src[203 +: 1]),
+      .unpin_ready_o(u77_unpin_ready_o),
+      .unpin_slot_i(u77_src[210 +: 10]),
+      .unpin_gen_i(u77_src[217 +: 8]),
+      .unpin_epoch_i(u77_src[224 +: 32]),
+      .wb_valid_i(u77_src[231 +: 1]),
+      .wb_ready_o(u77_wb_ready_o),
+      .wb_slot_i(u77_src[238 +: 10]),
+      .wb_gen_i(u77_src[245 +: 8]),
+      .wb_epoch_i(u77_src[252 +: 32]),
+      .chk_valid_i(u77_src[259 +: 1]),
+      .chk_slot_i(u77_src[266 +: 10]),
+      .chk_gen_i(u77_src[273 +: 8]),
+      .chk_epoch_i(u77_src[280 +: 32]),
+      .chk_valid_o(u77_chk_valid_o),
+      .chk_stale_o(u77_chk_stale_o),
+      .hits_o(u77_hits_o),
+      .misses_o(u77_misses_o),
+      .claims_o(u77_claims_o),
+      .evictions_o(u77_evictions_o),
+      .dirty_evictions_o(u77_dirty_evictions_o),
+      .refused_all_pinned_o(u77_refused_all_pinned_o),
+      .stale_events_o(u77_stale_events_o),
+      .crc_failures_o(u77_crc_failures_o),
+      .resident_o(u77_resident_o)
   );
   logic u77_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u77_fold_q <= 1'b0;
-    else u77_fold_q <= u77_fold_q ^ (((^u77_job_ready_o)) & u77_src[0]) ^ (((^u77_lat_req_o)) & u77_src[1]) ^ (((^u77_lat_vi_o)) & u77_src[2]) ^ (((^u77_lat_vj_o)) & u77_src[3]) ^ (((^u77_lat_surface_o)) & u77_src[4]) ^ (((^u77_cs_req_o)) & u77_src[5]) ^ (((^u77_cs_ci_o)) & u77_src[6]) ^ (((^u77_cs_cj_o)) & u77_src[7]) ^ (((^u77_mat_req_o)) & u77_src[8]) ^ (((^u77_mat_ci_o)) & u77_src[9]) ^ (((^u77_mat_cj_o)) & u77_src[10]) ^ (((^u77_tri_valid_o)) & u77_src[11]) ^ (((^u77_ax_o)) & u77_src[12]) ^ (((^u77_ay_o)) & u77_src[13]) ^ (((^u77_az_o)) & u77_src[14]) ^ (((^u77_bx_o)) & u77_src[15]) ^ (((^u77_by_o)) & u77_src[16]) ^ (((^u77_bz_o)) & u77_src[17]) ^ (((^u77_cx_o)) & u77_src[18]) ^ (((^u77_cy_o)) & u77_src[19]) ^ (((^u77_cz_o)) & u77_src[20]) ^ (((^u77_surface_o)) & u77_src[21]) ^ (((^u77_src_id_o)) & u77_src[22]) ^ (((^u77_vtx_valid_o)) & u77_src[23]) ^ (((^u77_vtx_x_o)) & u77_src[24]) ^ (((^u77_vtx_y_o)) & u77_src[25]) ^ (((^u77_vtx_z_o)) & u77_src[26]) ^ (((^u77_vtx_index_o)) & u77_src[27]) ^ (((^u77_vtx_stride_o)) & u77_src[28]) ^ (((^u77_vtx_surface_o)) & u77_src[29]) ^ (((^u77_vtx_src_id_o)) & u77_src[30]) ^ (((^u77_ref_valid_o)) & u77_src[31]) ^ (((^u77_ref_ia_o)) & u77_src[32]) ^ (((^u77_ref_ib_o)) & u77_src[33]) ^ (((^u77_ref_ic_o)) & u77_src[34]) ^ (((^u77_ref_surface_o)) & u77_src[35]) ^ (((^u77_ref_src_id_o)) & u77_src[36]) ^ (((^u77_ref_mat_a_o)) & u77_src[37]) ^ (((^u77_ref_mat_b_o)) & u77_src[38]) ^ (((^u77_ref_weight_o)) & u77_src[39]) ^ (((^u77_terrain_triangles_emitted_o)) & u77_src[40]) ^ (((^u77_terrain_vertices_emitted_o)) & u77_src[41]) ^ (((^u77_terrain_refs_emitted_o)) & u77_src[42]) ^ (((^u77_mat_unarmed_o)) & u77_src[43]) ^ (((^u77_mode_invalid_o)) & u77_src[44]) ^ (((^u77_subpatch_rejected_o)) & u77_src[45]) ^ (((^u77_lod_clamped_o)) & u77_src[46]) ^ (((^u77_job_reject_o)) & u77_src[47]) ^ (((^u77_idle_o)) & u77_src[48]);
+    else u77_fold_q <= u77_fold_q ^ (((^u77_ready_o)) & u77_src[0]) ^ (((^u77_lu_ready_o)) & u77_src[1]) ^ (((^u77_lu_valid_o)) & u77_src[2]) ^ (((^u77_lu_hit_o)) & u77_src[3]) ^ (((^u77_lu_slot_o)) & u77_src[4]) ^ (((^u77_lu_gen_o)) & u77_src[5]) ^ (((^u77_cl_ready_o)) & u77_src[6]) ^ (((^u77_cl_valid_o)) & u77_src[7]) ^ (((^u77_cl_same_o)) & u77_src[8]) ^ (((^u77_cl_refused_o)) & u77_src[9]) ^ (((^u77_cl_slot_o)) & u77_src[10]) ^ (((^u77_cl_gen_o)) & u77_src[11]) ^ (((^u77_cl_evicted_o)) & u77_src[12]) ^ (((^u77_cl_evicted_dirty_o)) & u77_src[13]) ^ (((^u77_cl_evicted_island_o)) & u77_src[14]) ^ (((^u77_cl_evicted_ix_o)) & u77_src[15]) ^ (((^u77_cl_evicted_iz_o)) & u77_src[16]) ^ (((^u77_cl_evicted_gen_o)) & u77_src[17]) ^ (((^u77_fin_ready_o)) & u77_src[18]) ^ (((^u77_dm_ready_o)) & u77_src[19]) ^ (((^u77_pin_ready_o)) & u77_src[20]) ^ (((^u77_unpin_ready_o)) & u77_src[21]) ^ (((^u77_wb_ready_o)) & u77_src[22]) ^ (((^u77_chk_valid_o)) & u77_src[23]) ^ (((^u77_chk_stale_o)) & u77_src[24]) ^ (((^u77_hits_o)) & u77_src[25]) ^ (((^u77_misses_o)) & u77_src[26]) ^ (((^u77_claims_o)) & u77_src[27]) ^ (((^u77_evictions_o)) & u77_src[28]) ^ (((^u77_dirty_evictions_o)) & u77_src[29]) ^ (((^u77_refused_all_pinned_o)) & u77_src[30]) ^ (((^u77_stale_events_o)) & u77_src[31]) ^ (((^u77_crc_failures_o)) & u77_src[32]) ^ (((^u77_resident_o)) & u77_src[33]);
 
-  // ---- zhao_terrain_uvlane ----
+  // ---- zhao_terrain_tess ----
   logic [63:0] u78_lfsr_q;
   logic [1023:0] u78_src;
   assign u78_src = {16{u78_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u78_lfsr_q <= 64'h0000003034E83733;
     else u78_lfsr_q <= {u78_lfsr_q[62:0], (^(u78_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u78_ref_ready_o;
-  logic [1-1:0] u78_uv_valid_o;
-  logic signed [32-1:0] u78_uv_au_o;
-  logic signed [32-1:0] u78_uv_av_o;
-  logic signed [32-1:0] u78_uv_bu_o;
-  logic signed [32-1:0] u78_uv_bv_o;
-  logic signed [32-1:0] u78_uv_cu_o;
-  logic signed [32-1:0] u78_uv_cv_o;
-  logic [16-1:0] u78_uv_src_id_o;
-  logic [32-1:0] u78_refs_taken_o;
-  logic [32-1:0] u78_uvs_emitted_o;
-  logic [32-1:0] u78_stale_reads_o;
-  logic [32-1:0] u78_pitch_clamped_o;
-  logic [32-1:0] u78_pitch_illegal_o;
+  logic [1-1:0] u78_job_ready_o;
+  logic [1-1:0] u78_lat_req_o;
+  logic [6-1:0] u78_lat_vi_o;
+  logic [6-1:0] u78_lat_vj_o;
+  logic [1-1:0] u78_lat_surface_o;
+  logic [1-1:0] u78_cs_req_o;
+  logic [5-1:0] u78_cs_ci_o;
+  logic [5-1:0] u78_cs_cj_o;
+  logic [1-1:0] u78_mat_req_o;
+  logic [5-1:0] u78_mat_ci_o;
+  logic [5-1:0] u78_mat_cj_o;
+  logic [1-1:0] u78_tri_valid_o;
+  logic signed [32-1:0] u78_ax_o;
+  logic signed [32-1:0] u78_ay_o;
+  logic signed [32-1:0] u78_az_o;
+  logic signed [32-1:0] u78_bx_o;
+  logic signed [32-1:0] u78_by_o;
+  logic signed [32-1:0] u78_bz_o;
+  logic signed [32-1:0] u78_cx_o;
+  logic signed [32-1:0] u78_cy_o;
+  logic signed [32-1:0] u78_cz_o;
+  logic [1-1:0] u78_surface_o;
+  logic [16-1:0] u78_src_id_o;
+  logic [1-1:0] u78_vtx_valid_o;
+  logic signed [32-1:0] u78_vtx_x_o;
+  logic signed [32-1:0] u78_vtx_y_o;
+  logic signed [32-1:0] u78_vtx_z_o;
+  logic [7-1:0] u78_vtx_index_o;
+  logic [1-1:0] u78_vtx_stride_o;
+  logic [1-1:0] u78_vtx_surface_o;
+  logic [16-1:0] u78_vtx_src_id_o;
+  logic [1-1:0] u78_ref_valid_o;
+  logic [7-1:0] u78_ref_ia_o;
+  logic [7-1:0] u78_ref_ib_o;
+  logic [7-1:0] u78_ref_ic_o;
+  logic [1-1:0] u78_ref_surface_o;
+  logic [16-1:0] u78_ref_src_id_o;
+  logic [8-1:0] u78_ref_mat_a_o;
+  logic [8-1:0] u78_ref_mat_b_o;
+  logic [8-1:0] u78_ref_weight_o;
+  logic [32-1:0] u78_terrain_triangles_emitted_o;
+  logic [32-1:0] u78_terrain_vertices_emitted_o;
+  logic [32-1:0] u78_terrain_refs_emitted_o;
+  logic [32-1:0] u78_mat_unarmed_o;
+  logic [32-1:0] u78_mode_invalid_o;
+  logic [32-1:0] u78_subpatch_rejected_o;
+  logic [32-1:0] u78_lod_clamped_o;
+  logic [1-1:0] u78_job_reject_o;
   logic [1-1:0] u78_idle_o;
-  zhao_terrain_uvlane u78_i (
+  zhao_terrain_tess u78_i (
       .clk(clk),
       .rst_n(rst_n),
-      .fill_valid_i(u78_src[0 +: 1]),
-      .fill_ready_i(u78_src[7 +: 1]),
-      .fill_arena_i(u78_src[14 +: 3]),
-      .fill_index_i(u78_src[21 +: 8]),
-      .fill_vx_i(u78_src[28 +: 32]),
-      .fill_vz_i(u78_src[35 +: 32]),
-      .fill_surface_i(u78_src[42 +: 1]),
-      .pitch_log2_i(u78_src[49 +: 8]),
-      .open_i(u78_src[56 +: 1]),
-      .open_arena_i(u78_src[63 +: 3]),
-      .open_gen_i(u78_src[70 +: 8]),
-      .ref_valid_i(u78_src[77 +: 1]),
-      .ref_ready_o(u78_ref_ready_o),
-      .ref_arena_i(u78_src[84 +: 3]),
-      .ref_gen_i(u78_src[91 +: 8]),
-      .ref_ia_i(u78_src[98 +: 8]),
-      .ref_ib_i(u78_src[105 +: 8]),
-      .ref_ic_i(u78_src[112 +: 8]),
-      .ref_src_id_i(u78_src[119 +: 16]),
-      .uv_valid_o(u78_uv_valid_o),
-      .uv_ready_i(u78_src[126 +: 1]),
-      .uv_au_o(u78_uv_au_o),
-      .uv_av_o(u78_uv_av_o),
-      .uv_bu_o(u78_uv_bu_o),
-      .uv_bv_o(u78_uv_bv_o),
-      .uv_cu_o(u78_uv_cu_o),
-      .uv_cv_o(u78_uv_cv_o),
-      .uv_src_id_o(u78_uv_src_id_o),
-      .refs_taken_o(u78_refs_taken_o),
-      .uvs_emitted_o(u78_uvs_emitted_o),
-      .stale_reads_o(u78_stale_reads_o),
-      .pitch_clamped_o(u78_pitch_clamped_o),
-      .pitch_illegal_o(u78_pitch_illegal_o),
+      .job_valid_i(u78_src[0 +: 1]),
+      .job_ready_o(u78_job_ready_o),
+      .job_mode_i(u78_src[7 +: 2]),
+      .job_ox_i(u78_src[14 +: 6]),
+      .job_oz_i(u78_src[21 +: 6]),
+      .job_level_i(u78_src[28 +: 2]),
+      .job_lvl_nz_i(u78_src[35 +: 2]),
+      .job_lvl_pz_i(u78_src[42 +: 2]),
+      .job_lvl_nx_i(u78_src[49 +: 2]),
+      .job_lvl_px_i(u78_src[56 +: 2]),
+      .job_morph_i(u78_src[63 +: 17]),
+      .job_surface_i(u78_src[70 +: 1]),
+      .job_dual_i(u78_src[77 +: 1]),
+      .job_src_id_i(u78_src[84 +: 16]),
+      .lat_req_o(u78_lat_req_o),
+      .lat_vi_o(u78_lat_vi_o),
+      .lat_vj_o(u78_lat_vj_o),
+      .lat_surface_o(u78_lat_surface_o),
+      .lat_h_i(u78_src[91 +: 32]),
+      .lat_wx_i(u78_src[98 +: 32]),
+      .lat_wz_i(u78_src[105 +: 32]),
+      .cs_req_o(u78_cs_req_o),
+      .cs_ci_o(u78_cs_ci_o),
+      .cs_cj_o(u78_cs_cj_o),
+      .cs_substance_i(u78_src[112 +: 2]),
+      .mat_req_o(u78_mat_req_o),
+      .mat_ci_o(u78_mat_ci_o),
+      .mat_cj_o(u78_mat_cj_o),
+      .mat_a_i(u78_src[119 +: 8]),
+      .mat_b_i(u78_src[126 +: 8]),
+      .mat_w_i(u78_src[133 +: 8]),
+      .mat_valid_i(u78_src[140 +: 1]),
+      .tri_valid_o(u78_tri_valid_o),
+      .tri_ready_i(u78_src[147 +: 1]),
+      .ax_o(u78_ax_o),
+      .ay_o(u78_ay_o),
+      .az_o(u78_az_o),
+      .bx_o(u78_bx_o),
+      .by_o(u78_by_o),
+      .bz_o(u78_bz_o),
+      .cx_o(u78_cx_o),
+      .cy_o(u78_cy_o),
+      .cz_o(u78_cz_o),
+      .surface_o(u78_surface_o),
+      .src_id_o(u78_src_id_o),
+      .vtx_valid_o(u78_vtx_valid_o),
+      .vtx_ready_i(u78_src[154 +: 1]),
+      .vtx_x_o(u78_vtx_x_o),
+      .vtx_y_o(u78_vtx_y_o),
+      .vtx_z_o(u78_vtx_z_o),
+      .vtx_index_o(u78_vtx_index_o),
+      .vtx_stride_o(u78_vtx_stride_o),
+      .vtx_surface_o(u78_vtx_surface_o),
+      .vtx_src_id_o(u78_vtx_src_id_o),
+      .ref_valid_o(u78_ref_valid_o),
+      .ref_ready_i(u78_src[161 +: 1]),
+      .ref_ia_o(u78_ref_ia_o),
+      .ref_ib_o(u78_ref_ib_o),
+      .ref_ic_o(u78_ref_ic_o),
+      .ref_surface_o(u78_ref_surface_o),
+      .ref_src_id_o(u78_ref_src_id_o),
+      .ref_mat_a_o(u78_ref_mat_a_o),
+      .ref_mat_b_o(u78_ref_mat_b_o),
+      .ref_weight_o(u78_ref_weight_o),
+      .terrain_triangles_emitted_o(u78_terrain_triangles_emitted_o),
+      .terrain_vertices_emitted_o(u78_terrain_vertices_emitted_o),
+      .terrain_refs_emitted_o(u78_terrain_refs_emitted_o),
+      .mat_unarmed_o(u78_mat_unarmed_o),
+      .mode_invalid_o(u78_mode_invalid_o),
+      .subpatch_rejected_o(u78_subpatch_rejected_o),
+      .lod_clamped_o(u78_lod_clamped_o),
+      .job_reject_o(u78_job_reject_o),
       .idle_o(u78_idle_o)
   );
   logic u78_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u78_fold_q <= 1'b0;
-    else u78_fold_q <= u78_fold_q ^ (((^u78_ref_ready_o)) & u78_src[0]) ^ (((^u78_uv_valid_o)) & u78_src[1]) ^ (((^u78_uv_au_o)) & u78_src[2]) ^ (((^u78_uv_av_o)) & u78_src[3]) ^ (((^u78_uv_bu_o)) & u78_src[4]) ^ (((^u78_uv_bv_o)) & u78_src[5]) ^ (((^u78_uv_cu_o)) & u78_src[6]) ^ (((^u78_uv_cv_o)) & u78_src[7]) ^ (((^u78_uv_src_id_o)) & u78_src[8]) ^ (((^u78_refs_taken_o)) & u78_src[9]) ^ (((^u78_uvs_emitted_o)) & u78_src[10]) ^ (((^u78_stale_reads_o)) & u78_src[11]) ^ (((^u78_pitch_clamped_o)) & u78_src[12]) ^ (((^u78_pitch_illegal_o)) & u78_src[13]) ^ (((^u78_idle_o)) & u78_src[14]);
+    else u78_fold_q <= u78_fold_q ^ (((^u78_job_ready_o)) & u78_src[0]) ^ (((^u78_lat_req_o)) & u78_src[1]) ^ (((^u78_lat_vi_o)) & u78_src[2]) ^ (((^u78_lat_vj_o)) & u78_src[3]) ^ (((^u78_lat_surface_o)) & u78_src[4]) ^ (((^u78_cs_req_o)) & u78_src[5]) ^ (((^u78_cs_ci_o)) & u78_src[6]) ^ (((^u78_cs_cj_o)) & u78_src[7]) ^ (((^u78_mat_req_o)) & u78_src[8]) ^ (((^u78_mat_ci_o)) & u78_src[9]) ^ (((^u78_mat_cj_o)) & u78_src[10]) ^ (((^u78_tri_valid_o)) & u78_src[11]) ^ (((^u78_ax_o)) & u78_src[12]) ^ (((^u78_ay_o)) & u78_src[13]) ^ (((^u78_az_o)) & u78_src[14]) ^ (((^u78_bx_o)) & u78_src[15]) ^ (((^u78_by_o)) & u78_src[16]) ^ (((^u78_bz_o)) & u78_src[17]) ^ (((^u78_cx_o)) & u78_src[18]) ^ (((^u78_cy_o)) & u78_src[19]) ^ (((^u78_cz_o)) & u78_src[20]) ^ (((^u78_surface_o)) & u78_src[21]) ^ (((^u78_src_id_o)) & u78_src[22]) ^ (((^u78_vtx_valid_o)) & u78_src[23]) ^ (((^u78_vtx_x_o)) & u78_src[24]) ^ (((^u78_vtx_y_o)) & u78_src[25]) ^ (((^u78_vtx_z_o)) & u78_src[26]) ^ (((^u78_vtx_index_o)) & u78_src[27]) ^ (((^u78_vtx_stride_o)) & u78_src[28]) ^ (((^u78_vtx_surface_o)) & u78_src[29]) ^ (((^u78_vtx_src_id_o)) & u78_src[30]) ^ (((^u78_ref_valid_o)) & u78_src[31]) ^ (((^u78_ref_ia_o)) & u78_src[32]) ^ (((^u78_ref_ib_o)) & u78_src[33]) ^ (((^u78_ref_ic_o)) & u78_src[34]) ^ (((^u78_ref_surface_o)) & u78_src[35]) ^ (((^u78_ref_src_id_o)) & u78_src[36]) ^ (((^u78_ref_mat_a_o)) & u78_src[37]) ^ (((^u78_ref_mat_b_o)) & u78_src[38]) ^ (((^u78_ref_weight_o)) & u78_src[39]) ^ (((^u78_terrain_triangles_emitted_o)) & u78_src[40]) ^ (((^u78_terrain_vertices_emitted_o)) & u78_src[41]) ^ (((^u78_terrain_refs_emitted_o)) & u78_src[42]) ^ (((^u78_mat_unarmed_o)) & u78_src[43]) ^ (((^u78_mode_invalid_o)) & u78_src[44]) ^ (((^u78_subpatch_rejected_o)) & u78_src[45]) ^ (((^u78_lod_clamped_o)) & u78_src[46]) ^ (((^u78_job_reject_o)) & u78_src[47]) ^ (((^u78_idle_o)) & u78_src[48]);
 
-  // ---- zhao_terrain_velocity ----
+  // ---- zhao_terrain_uvlane ----
   logic [63:0] u79_lfsr_q;
   logic [1023:0] u79_src;
   assign u79_src = {16{u79_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u79_lfsr_q <= 64'h00000030D31FB0E4;
     else u79_lfsr_q <= {u79_lfsr_q[62:0], (^(u79_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u79_start_ready_o;
-  logic [16-1:0] u79_trace_patch_id_o;
-  logic [32-1:0] u79_sweeps_aborted_o;
-  logic [6-1:0] u79_vtx_vi_o;
-  logic [6-1:0] u79_vtx_vj_o;
-  logic [1-1:0] u79_lane_ready_o;
-  logic [1-1:0] u79_vv_valid_o;
-  logic signed [16-1:0] u79_vv_velocity_o;
-  logic [6-1:0] u79_vv_vi_o;
-  logic [6-1:0] u79_vv_vj_o;
-  logic [1-1:0] u79_vv_moving_o;
-  logic [1-1:0] u79_vv_covered_o;
-  logic [16-1:0] u79_vv_src_id_o;
-  logic [16-1:0] u79_moving_mask_o;
-  logic [1-1:0] u79_patch_done_o;
-  logic [32-1:0] u79_terrain_samples_evaluated_o;
-  logic [32-1:0] u79_velocity_add_sats_o;
-  logic [32-1:0] u79_velocity_rescale_sats_o;
+  logic [1-1:0] u79_ref_ready_o;
+  logic [1-1:0] u79_uv_valid_o;
+  logic signed [32-1:0] u79_uv_au_o;
+  logic signed [32-1:0] u79_uv_av_o;
+  logic signed [32-1:0] u79_uv_bu_o;
+  logic signed [32-1:0] u79_uv_bv_o;
+  logic signed [32-1:0] u79_uv_cu_o;
+  logic signed [32-1:0] u79_uv_cv_o;
+  logic [16-1:0] u79_uv_src_id_o;
+  logic [32-1:0] u79_refs_taken_o;
+  logic [32-1:0] u79_uvs_emitted_o;
+  logic [32-1:0] u79_stale_reads_o;
+  logic [32-1:0] u79_pitch_clamped_o;
+  logic [32-1:0] u79_pitch_illegal_o;
   logic [1-1:0] u79_idle_o;
-  zhao_terrain_velocity u79_i (
+  zhao_terrain_uvlane u79_i (
       .clk(clk),
       .rst_n(rst_n),
-      .start_valid_i(u79_src[0 +: 1]),
-      .start_ready_o(u79_start_ready_o),
-      .start_lanes_i(u79_src[7 +: 5]),
-      .start_patch_id_i(u79_src[14 +: 16]),
-      .start_src_id_i(u79_src[21 +: 16]),
-      .trace_patch_id_o(u79_trace_patch_id_o),
-      .abort_i(u79_src[28 +: 1]),
-      .sweeps_aborted_o(u79_sweeps_aborted_o),
-      .vtx_vi_o(u79_vtx_vi_o),
-      .vtx_vj_o(u79_vtx_vj_o),
-      .lane_valid_i(u79_src[35 +: 1]),
-      .lane_ready_o(u79_lane_ready_o),
-      .lane_velocity_i(u79_src[42 +: 32]),
-      .lane_covers_i(u79_src[49 +: 1]),
-      .vv_valid_o(u79_vv_valid_o),
-      .vv_ready_i(u79_src[56 +: 1]),
-      .vv_velocity_o(u79_vv_velocity_o),
-      .vv_vi_o(u79_vv_vi_o),
-      .vv_vj_o(u79_vv_vj_o),
-      .vv_moving_o(u79_vv_moving_o),
-      .vv_covered_o(u79_vv_covered_o),
-      .vv_src_id_o(u79_vv_src_id_o),
-      .moving_mask_o(u79_moving_mask_o),
-      .patch_done_o(u79_patch_done_o),
-      .terrain_samples_evaluated_o(u79_terrain_samples_evaluated_o),
-      .velocity_add_sats_o(u79_velocity_add_sats_o),
-      .velocity_rescale_sats_o(u79_velocity_rescale_sats_o),
+      .fill_valid_i(u79_src[0 +: 1]),
+      .fill_ready_i(u79_src[7 +: 1]),
+      .fill_arena_i(u79_src[14 +: 3]),
+      .fill_index_i(u79_src[21 +: 8]),
+      .fill_vx_i(u79_src[28 +: 32]),
+      .fill_vz_i(u79_src[35 +: 32]),
+      .fill_surface_i(u79_src[42 +: 1]),
+      .pitch_log2_i(u79_src[49 +: 8]),
+      .open_i(u79_src[56 +: 1]),
+      .open_arena_i(u79_src[63 +: 3]),
+      .open_gen_i(u79_src[70 +: 8]),
+      .ref_valid_i(u79_src[77 +: 1]),
+      .ref_ready_o(u79_ref_ready_o),
+      .ref_arena_i(u79_src[84 +: 3]),
+      .ref_gen_i(u79_src[91 +: 8]),
+      .ref_ia_i(u79_src[98 +: 8]),
+      .ref_ib_i(u79_src[105 +: 8]),
+      .ref_ic_i(u79_src[112 +: 8]),
+      .ref_src_id_i(u79_src[119 +: 16]),
+      .uv_valid_o(u79_uv_valid_o),
+      .uv_ready_i(u79_src[126 +: 1]),
+      .uv_au_o(u79_uv_au_o),
+      .uv_av_o(u79_uv_av_o),
+      .uv_bu_o(u79_uv_bu_o),
+      .uv_bv_o(u79_uv_bv_o),
+      .uv_cu_o(u79_uv_cu_o),
+      .uv_cv_o(u79_uv_cv_o),
+      .uv_src_id_o(u79_uv_src_id_o),
+      .refs_taken_o(u79_refs_taken_o),
+      .uvs_emitted_o(u79_uvs_emitted_o),
+      .stale_reads_o(u79_stale_reads_o),
+      .pitch_clamped_o(u79_pitch_clamped_o),
+      .pitch_illegal_o(u79_pitch_illegal_o),
       .idle_o(u79_idle_o)
   );
   logic u79_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u79_fold_q <= 1'b0;
-    else u79_fold_q <= u79_fold_q ^ (((^u79_start_ready_o)) & u79_src[0]) ^ (((^u79_trace_patch_id_o)) & u79_src[1]) ^ (((^u79_sweeps_aborted_o)) & u79_src[2]) ^ (((^u79_vtx_vi_o)) & u79_src[3]) ^ (((^u79_vtx_vj_o)) & u79_src[4]) ^ (((^u79_lane_ready_o)) & u79_src[5]) ^ (((^u79_vv_valid_o)) & u79_src[6]) ^ (((^u79_vv_velocity_o)) & u79_src[7]) ^ (((^u79_vv_vi_o)) & u79_src[8]) ^ (((^u79_vv_vj_o)) & u79_src[9]) ^ (((^u79_vv_moving_o)) & u79_src[10]) ^ (((^u79_vv_covered_o)) & u79_src[11]) ^ (((^u79_vv_src_id_o)) & u79_src[12]) ^ (((^u79_moving_mask_o)) & u79_src[13]) ^ (((^u79_patch_done_o)) & u79_src[14]) ^ (((^u79_terrain_samples_evaluated_o)) & u79_src[15]) ^ (((^u79_velocity_add_sats_o)) & u79_src[16]) ^ (((^u79_velocity_rescale_sats_o)) & u79_src[17]) ^ (((^u79_idle_o)) & u79_src[18]);
+    else u79_fold_q <= u79_fold_q ^ (((^u79_ref_ready_o)) & u79_src[0]) ^ (((^u79_uv_valid_o)) & u79_src[1]) ^ (((^u79_uv_au_o)) & u79_src[2]) ^ (((^u79_uv_av_o)) & u79_src[3]) ^ (((^u79_uv_bu_o)) & u79_src[4]) ^ (((^u79_uv_bv_o)) & u79_src[5]) ^ (((^u79_uv_cu_o)) & u79_src[6]) ^ (((^u79_uv_cv_o)) & u79_src[7]) ^ (((^u79_uv_src_id_o)) & u79_src[8]) ^ (((^u79_refs_taken_o)) & u79_src[9]) ^ (((^u79_uvs_emitted_o)) & u79_src[10]) ^ (((^u79_stale_reads_o)) & u79_src[11]) ^ (((^u79_pitch_clamped_o)) & u79_src[12]) ^ (((^u79_pitch_illegal_o)) & u79_src[13]) ^ (((^u79_idle_o)) & u79_src[14]);
 
-  // ---- zhao_twod_asset ----
-  logic [63:0] u82_lfsr_q;
-  logic [1023:0] u82_src;
-  assign u82_src = {16{u82_lfsr_q}};
+  // ---- zhao_terrain_velocity ----
+  logic [63:0] u80_lfsr_q;
+  logic [1023:0] u80_src;
+  assign u80_src = {16{u80_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u82_lfsr_q <= 64'h00000032ADC61DF7;
-    else u82_lfsr_q <= {u82_lfsr_q[62:0], (^(u82_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u82_j_ready_o;
-  zhao_hps_burst_req_t u82_hps_req_o;
-  zhao_hps_burst_rsp_t u82_hps_rsp_i;
-  assign u82_hps_rsp_i = zhao_hps_burst_rsp_t'(u82_src[63 +: $bits(zhao_hps_burst_rsp_t)]);
-  logic [1-1:0] u82_ld_page_we_o;
-  logic [13-1:0] u82_ld_page_addr_o;
-  logic [16-1:0] u82_ld_page_data_o;
-  logic [1-1:0] u82_ld_pal_we_o;
-  logic [10-1:0] u82_ld_pal_addr_o;
-  logic [16-1:0] u82_ld_pal_data_o;
-  logic [32-1:0] u82_loads_started_o;
-  logic [32-1:0] u82_loads_done_o;
-  logic [32-1:0] u82_words_written_o;
-  logic [32-1:0] u82_slot_refused_o;
-  logic [32-1:0] u82_len_refused_o;
-  logic [32-1:0] u82_addr_refused_o;
-  logic [32-1:0] u82_epoch_refused_o;
-  logic [32-1:0] u82_crc_fails_o;
-  logic [32-1:0] u82_regions_zeroed_o;
-  logic [32-1:0] u82_bridge_errs_o;
-  logic [32-1:0] u82_loads_during_pass_o;
-  logic [32-1:0] u82_bursts_o;
-  zhao_twod_asset u82_i (
+    if (!rst_n) u80_lfsr_q <= 64'h0000003171572A95;
+    else u80_lfsr_q <= {u80_lfsr_q[62:0], (^(u80_lfsr_q & 64'hD800000000000000)) ^ seed_i};
+  logic [1-1:0] u80_start_ready_o;
+  logic [16-1:0] u80_trace_patch_id_o;
+  logic [32-1:0] u80_sweeps_aborted_o;
+  logic [6-1:0] u80_vtx_vi_o;
+  logic [6-1:0] u80_vtx_vj_o;
+  logic [1-1:0] u80_lane_ready_o;
+  logic [1-1:0] u80_vv_valid_o;
+  logic signed [16-1:0] u80_vv_velocity_o;
+  logic [6-1:0] u80_vv_vi_o;
+  logic [6-1:0] u80_vv_vj_o;
+  logic [1-1:0] u80_vv_moving_o;
+  logic [1-1:0] u80_vv_covered_o;
+  logic [16-1:0] u80_vv_src_id_o;
+  logic [16-1:0] u80_moving_mask_o;
+  logic [1-1:0] u80_patch_done_o;
+  logic [32-1:0] u80_terrain_samples_evaluated_o;
+  logic [32-1:0] u80_velocity_add_sats_o;
+  logic [32-1:0] u80_velocity_rescale_sats_o;
+  logic [1-1:0] u80_idle_o;
+  zhao_terrain_velocity u80_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_epoch_i(u82_src[0 +: 16]),
-      .j_valid_i(u82_src[7 +: 1]),
-      .j_ready_o(u82_j_ready_o),
-      .j_index_i(u82_src[14 +: 24]),
-      .j_hps_addr_i(u82_src[21 +: 64]),
-      .j_len_i(u82_src[28 +: 32]),
-      .j_crc_i(u82_src[35 +: 32]),
-      .j_epoch_i(u82_src[42 +: 16]),
-      .j_dst_slot_i(u82_src[49 +: 8]),
-      .hps_req_o(u82_hps_req_o),
-      .hps_grant_i(u82_src[56 +: 1]),
-      .hps_rsp_i(u82_hps_rsp_i),
-      .ld_page_we_o(u82_ld_page_we_o),
-      .ld_page_addr_o(u82_ld_page_addr_o),
-      .ld_page_data_o(u82_ld_page_data_o),
-      .ld_pal_we_o(u82_ld_pal_we_o),
-      .ld_pal_addr_o(u82_ld_pal_addr_o),
-      .ld_pal_data_o(u82_ld_pal_data_o),
-      .pass_active_i(u82_src[70 +: 1]),
-      .loads_started_o(u82_loads_started_o),
-      .loads_done_o(u82_loads_done_o),
-      .words_written_o(u82_words_written_o),
-      .slot_refused_o(u82_slot_refused_o),
-      .len_refused_o(u82_len_refused_o),
-      .addr_refused_o(u82_addr_refused_o),
-      .epoch_refused_o(u82_epoch_refused_o),
-      .crc_fails_o(u82_crc_fails_o),
-      .regions_zeroed_o(u82_regions_zeroed_o),
-      .bridge_errs_o(u82_bridge_errs_o),
-      .loads_during_pass_o(u82_loads_during_pass_o),
-      .bursts_o(u82_bursts_o)
+      .start_valid_i(u80_src[0 +: 1]),
+      .start_ready_o(u80_start_ready_o),
+      .start_lanes_i(u80_src[7 +: 5]),
+      .start_patch_id_i(u80_src[14 +: 16]),
+      .start_src_id_i(u80_src[21 +: 16]),
+      .trace_patch_id_o(u80_trace_patch_id_o),
+      .abort_i(u80_src[28 +: 1]),
+      .sweeps_aborted_o(u80_sweeps_aborted_o),
+      .vtx_vi_o(u80_vtx_vi_o),
+      .vtx_vj_o(u80_vtx_vj_o),
+      .lane_valid_i(u80_src[35 +: 1]),
+      .lane_ready_o(u80_lane_ready_o),
+      .lane_velocity_i(u80_src[42 +: 32]),
+      .lane_covers_i(u80_src[49 +: 1]),
+      .vv_valid_o(u80_vv_valid_o),
+      .vv_ready_i(u80_src[56 +: 1]),
+      .vv_velocity_o(u80_vv_velocity_o),
+      .vv_vi_o(u80_vv_vi_o),
+      .vv_vj_o(u80_vv_vj_o),
+      .vv_moving_o(u80_vv_moving_o),
+      .vv_covered_o(u80_vv_covered_o),
+      .vv_src_id_o(u80_vv_src_id_o),
+      .moving_mask_o(u80_moving_mask_o),
+      .patch_done_o(u80_patch_done_o),
+      .terrain_samples_evaluated_o(u80_terrain_samples_evaluated_o),
+      .velocity_add_sats_o(u80_velocity_add_sats_o),
+      .velocity_rescale_sats_o(u80_velocity_rescale_sats_o),
+      .idle_o(u80_idle_o)
   );
-  logic u82_fold_q;
+  logic u80_fold_q;
   always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u82_fold_q <= 1'b0;
-    else u82_fold_q <= u82_fold_q ^ (((^u82_j_ready_o)) & u82_src[0]) ^ (((^u82_hps_req_o)) & u82_src[1]) ^ (((^u82_ld_page_we_o)) & u82_src[2]) ^ (((^u82_ld_page_addr_o)) & u82_src[3]) ^ (((^u82_ld_page_data_o)) & u82_src[4]) ^ (((^u82_ld_pal_we_o)) & u82_src[5]) ^ (((^u82_ld_pal_addr_o)) & u82_src[6]) ^ (((^u82_ld_pal_data_o)) & u82_src[7]) ^ (((^u82_loads_started_o)) & u82_src[8]) ^ (((^u82_loads_done_o)) & u82_src[9]) ^ (((^u82_words_written_o)) & u82_src[10]) ^ (((^u82_slot_refused_o)) & u82_src[11]) ^ (((^u82_len_refused_o)) & u82_src[12]) ^ (((^u82_addr_refused_o)) & u82_src[13]) ^ (((^u82_epoch_refused_o)) & u82_src[14]) ^ (((^u82_crc_fails_o)) & u82_src[15]) ^ (((^u82_regions_zeroed_o)) & u82_src[16]) ^ (((^u82_bridge_errs_o)) & u82_src[17]) ^ (((^u82_loads_during_pass_o)) & u82_src[18]) ^ (((^u82_bursts_o)) & u82_src[19]);
+    if (!rst_n) u80_fold_q <= 1'b0;
+    else u80_fold_q <= u80_fold_q ^ (((^u80_start_ready_o)) & u80_src[0]) ^ (((^u80_trace_patch_id_o)) & u80_src[1]) ^ (((^u80_sweeps_aborted_o)) & u80_src[2]) ^ (((^u80_vtx_vi_o)) & u80_src[3]) ^ (((^u80_vtx_vj_o)) & u80_src[4]) ^ (((^u80_lane_ready_o)) & u80_src[5]) ^ (((^u80_vv_valid_o)) & u80_src[6]) ^ (((^u80_vv_velocity_o)) & u80_src[7]) ^ (((^u80_vv_vi_o)) & u80_src[8]) ^ (((^u80_vv_vj_o)) & u80_src[9]) ^ (((^u80_vv_moving_o)) & u80_src[10]) ^ (((^u80_vv_covered_o)) & u80_src[11]) ^ (((^u80_vv_src_id_o)) & u80_src[12]) ^ (((^u80_moving_mask_o)) & u80_src[13]) ^ (((^u80_patch_done_o)) & u80_src[14]) ^ (((^u80_terrain_samples_evaluated_o)) & u80_src[15]) ^ (((^u80_velocity_add_sats_o)) & u80_src[16]) ^ (((^u80_velocity_rescale_sats_o)) & u80_src[17]) ^ (((^u80_idle_o)) & u80_src[18]);
 
-  // ---- zhao_twod_band ----
+  // ---- zhao_twod_asset ----
   logic [63:0] u83_lfsr_q;
   logic [1023:0] u83_src;
   assign u83_src = {16{u83_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u83_lfsr_q <= 64'h000000334BFD97A8;
     else u83_lfsr_q <= {u83_lfsr_q[62:0], (^(u83_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u83_d_ready_o;
-  logic [1-1:0] u83_e_valid_o;
-  logic signed [16-1:0] u83_e_x_o;
-  logic signed [16-1:0] u83_e_y_o;
-  logic [16-1:0] u83_e_w_o;
-  logic [16-1:0] u83_e_h_o;
-  logic signed [32-1:0] u83_e_u_o;
-  logic signed [32-1:0] u83_e_v_o;
-  logic signed [32-1:0] u83_e_a00_o;
-  logic signed [32-1:0] u83_e_a01_o;
-  logic signed [32-1:0] u83_e_a10_o;
-  logic signed [32-1:0] u83_e_a11_o;
-  logic [3-1:0] u83_e_format_o;
-  logic [8-1:0] u83_e_palette_o;
-  logic [16-1:0] u83_e_tint_o;
-  logic [2-1:0] u83_e_blend_o;
-  logic [2-1:0] u83_e_view_mask_o;
-  logic [8-1:0] u83_e_order_o;
-  logic [16-1:0] u83_e_src_id_o;
-  logic [2-1:0] u83_e_view_sel_o;
-  logic [1-1:0] u83_c_ready_o;
-  logic [1-1:0] u83_rd_valid_o;
-  logic [16-1:0] u83_rd_rgb_o;
-  logic [32-1:0] u83_descriptors_o;
-  logic [32-1:0] u83_desc_overflow_o;
-  logic [32-1:0] u83_sprites_admitted_o;
-  logic [32-1:0] u83_sprites_refused_budget_o;
-  logic [32-1:0] u83_slices_emitted_o;
-  logic [32-1:0] u83_pixels_written_o;
-  logic [32-1:0] u83_pixels_clipped_o;
-  logic [32-1:0] u83_write_oob_o;
-  logic [32-1:0] u83_band_underrun_o;
-  logic [32-1:0] u83_scan_addr_mismatch_o;
-  logic [32-1:0] u83_tint_dropped_o;
-  logic [32-1:0] u83_blend_dropped_o;
-  logic [32-1:0] u83_order_inversion_o;
-  logic [32-1:0] u83_bands_o;
-  logic [1-1:0] u83_list_restart_o;
-  logic [32-1:0] u83_desc_mid_sweep_o;
-  zhao_twod_band u83_i (
+  logic [1-1:0] u83_j_ready_o;
+  zhao_hps_burst_req_t u83_hps_req_o;
+  zhao_hps_burst_rsp_t u83_hps_rsp_i;
+  assign u83_hps_rsp_i = zhao_hps_burst_rsp_t'(u83_src[63 +: $bits(zhao_hps_burst_rsp_t)]);
+  logic [1-1:0] u83_ld_page_we_o;
+  logic [13-1:0] u83_ld_page_addr_o;
+  logic [16-1:0] u83_ld_page_data_o;
+  logic [1-1:0] u83_ld_pal_we_o;
+  logic [10-1:0] u83_ld_pal_addr_o;
+  logic [16-1:0] u83_ld_pal_data_o;
+  logic [32-1:0] u83_loads_started_o;
+  logic [32-1:0] u83_loads_done_o;
+  logic [32-1:0] u83_words_written_o;
+  logic [32-1:0] u83_slot_refused_o;
+  logic [32-1:0] u83_len_refused_o;
+  logic [32-1:0] u83_addr_refused_o;
+  logic [32-1:0] u83_epoch_refused_o;
+  logic [32-1:0] u83_crc_fails_o;
+  logic [32-1:0] u83_regions_zeroed_o;
+  logic [32-1:0] u83_bridge_errs_o;
+  logic [32-1:0] u83_loads_during_pass_o;
+  logic [32-1:0] u83_bursts_o;
+  zhao_twod_asset u83_i (
       .clk(clk),
       .rst_n(rst_n),
-      .frame_start_i(u83_src[0 +: 1]),
-      .frame_w_i(u83_src[7 +: 9]),
-      .frame_h_i(u83_src[14 +: 8]),
-      .view_split_i(u83_src[21 +: 8]),
-      .list_busy_i(u83_src[28 +: 1]),
-      .d_valid_i(u83_src[35 +: 1]),
-      .d_ready_o(u83_d_ready_o),
-      .d_x_i(u83_src[42 +: 16]),
-      .d_y_i(u83_src[49 +: 16]),
-      .d_w_i(u83_src[56 +: 16]),
-      .d_h_i(u83_src[63 +: 16]),
-      .d_u_i(u83_src[70 +: 32]),
-      .d_v_i(u83_src[77 +: 32]),
-      .d_a00_i(u83_src[84 +: 32]),
-      .d_a01_i(u83_src[91 +: 32]),
-      .d_a10_i(u83_src[98 +: 32]),
-      .d_a11_i(u83_src[105 +: 32]),
-      .d_format_i(u83_src[112 +: 3]),
-      .d_palette_i(u83_src[119 +: 8]),
-      .d_tint_i(u83_src[126 +: 16]),
-      .d_blend_i(u83_src[133 +: 2]),
-      .d_view_mask_i(u83_src[140 +: 2]),
-      .d_order_i(u83_src[147 +: 8]),
-      .d_src_id_i(u83_src[154 +: 16]),
-      .e_valid_o(u83_e_valid_o),
-      .e_ready_i(u83_src[161 +: 1]),
-      .e_x_o(u83_e_x_o),
-      .e_y_o(u83_e_y_o),
-      .e_w_o(u83_e_w_o),
-      .e_h_o(u83_e_h_o),
-      .e_u_o(u83_e_u_o),
-      .e_v_o(u83_e_v_o),
-      .e_a00_o(u83_e_a00_o),
-      .e_a01_o(u83_e_a01_o),
-      .e_a10_o(u83_e_a10_o),
-      .e_a11_o(u83_e_a11_o),
-      .e_format_o(u83_e_format_o),
-      .e_palette_o(u83_e_palette_o),
-      .e_tint_o(u83_e_tint_o),
-      .e_blend_o(u83_e_blend_o),
-      .e_view_mask_o(u83_e_view_mask_o),
-      .e_order_o(u83_e_order_o),
-      .e_src_id_o(u83_e_src_id_o),
-      .e_view_sel_o(u83_e_view_sel_o),
-      .c_valid_i(u83_src[168 +: 1]),
-      .c_ready_o(u83_c_ready_o),
-      .c_rgb_i(u83_src[175 +: 16]),
-      .c_x_i(u83_src[182 +: 16]),
-      .c_y_i(u83_src[189 +: 16]),
-      .c_tint_i(u83_src[196 +: 16]),
-      .c_blend_i(u83_src[203 +: 2]),
-      .c_order_i(u83_src[210 +: 8]),
-      .c_src_id_i(u83_src[217 +: 16]),
-      .c_last_i(u83_src[224 +: 1]),
-      .rd_req_v_i(u83_src[231 +: 1]),
-      .rd_x_i(u83_src[238 +: 9]),
-      .rd_y_i(u83_src[245 +: 8]),
-      .rd_valid_o(u83_rd_valid_o),
-      .rd_rgb_o(u83_rd_rgb_o),
-      .descriptors_o(u83_descriptors_o),
-      .desc_overflow_o(u83_desc_overflow_o),
-      .sprites_admitted_o(u83_sprites_admitted_o),
-      .sprites_refused_budget_o(u83_sprites_refused_budget_o),
-      .slices_emitted_o(u83_slices_emitted_o),
-      .pixels_written_o(u83_pixels_written_o),
-      .pixels_clipped_o(u83_pixels_clipped_o),
-      .write_oob_o(u83_write_oob_o),
-      .band_underrun_o(u83_band_underrun_o),
-      .scan_addr_mismatch_o(u83_scan_addr_mismatch_o),
-      .tint_dropped_o(u83_tint_dropped_o),
-      .blend_dropped_o(u83_blend_dropped_o),
-      .order_inversion_o(u83_order_inversion_o),
-      .bands_o(u83_bands_o),
-      .list_restart_o(u83_list_restart_o),
-      .desc_mid_sweep_o(u83_desc_mid_sweep_o)
+      .cfg_epoch_i(u83_src[0 +: 16]),
+      .j_valid_i(u83_src[7 +: 1]),
+      .j_ready_o(u83_j_ready_o),
+      .j_index_i(u83_src[14 +: 24]),
+      .j_hps_addr_i(u83_src[21 +: 64]),
+      .j_len_i(u83_src[28 +: 32]),
+      .j_crc_i(u83_src[35 +: 32]),
+      .j_epoch_i(u83_src[42 +: 16]),
+      .j_dst_slot_i(u83_src[49 +: 8]),
+      .hps_req_o(u83_hps_req_o),
+      .hps_grant_i(u83_src[56 +: 1]),
+      .hps_rsp_i(u83_hps_rsp_i),
+      .ld_page_we_o(u83_ld_page_we_o),
+      .ld_page_addr_o(u83_ld_page_addr_o),
+      .ld_page_data_o(u83_ld_page_data_o),
+      .ld_pal_we_o(u83_ld_pal_we_o),
+      .ld_pal_addr_o(u83_ld_pal_addr_o),
+      .ld_pal_data_o(u83_ld_pal_data_o),
+      .pass_active_i(u83_src[70 +: 1]),
+      .loads_started_o(u83_loads_started_o),
+      .loads_done_o(u83_loads_done_o),
+      .words_written_o(u83_words_written_o),
+      .slot_refused_o(u83_slot_refused_o),
+      .len_refused_o(u83_len_refused_o),
+      .addr_refused_o(u83_addr_refused_o),
+      .epoch_refused_o(u83_epoch_refused_o),
+      .crc_fails_o(u83_crc_fails_o),
+      .regions_zeroed_o(u83_regions_zeroed_o),
+      .bridge_errs_o(u83_bridge_errs_o),
+      .loads_during_pass_o(u83_loads_during_pass_o),
+      .bursts_o(u83_bursts_o)
   );
   logic u83_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u83_fold_q <= 1'b0;
-    else u83_fold_q <= u83_fold_q ^ (((^u83_d_ready_o)) & u83_src[0]) ^ (((^u83_e_valid_o)) & u83_src[1]) ^ (((^u83_e_x_o)) & u83_src[2]) ^ (((^u83_e_y_o)) & u83_src[3]) ^ (((^u83_e_w_o)) & u83_src[4]) ^ (((^u83_e_h_o)) & u83_src[5]) ^ (((^u83_e_u_o)) & u83_src[6]) ^ (((^u83_e_v_o)) & u83_src[7]) ^ (((^u83_e_a00_o)) & u83_src[8]) ^ (((^u83_e_a01_o)) & u83_src[9]) ^ (((^u83_e_a10_o)) & u83_src[10]) ^ (((^u83_e_a11_o)) & u83_src[11]) ^ (((^u83_e_format_o)) & u83_src[12]) ^ (((^u83_e_palette_o)) & u83_src[13]) ^ (((^u83_e_tint_o)) & u83_src[14]) ^ (((^u83_e_blend_o)) & u83_src[15]) ^ (((^u83_e_view_mask_o)) & u83_src[16]) ^ (((^u83_e_order_o)) & u83_src[17]) ^ (((^u83_e_src_id_o)) & u83_src[18]) ^ (((^u83_e_view_sel_o)) & u83_src[19]) ^ (((^u83_c_ready_o)) & u83_src[20]) ^ (((^u83_rd_valid_o)) & u83_src[21]) ^ (((^u83_rd_rgb_o)) & u83_src[22]) ^ (((^u83_descriptors_o)) & u83_src[23]) ^ (((^u83_desc_overflow_o)) & u83_src[24]) ^ (((^u83_sprites_admitted_o)) & u83_src[25]) ^ (((^u83_sprites_refused_budget_o)) & u83_src[26]) ^ (((^u83_slices_emitted_o)) & u83_src[27]) ^ (((^u83_pixels_written_o)) & u83_src[28]) ^ (((^u83_pixels_clipped_o)) & u83_src[29]) ^ (((^u83_write_oob_o)) & u83_src[30]) ^ (((^u83_band_underrun_o)) & u83_src[31]) ^ (((^u83_scan_addr_mismatch_o)) & u83_src[32]) ^ (((^u83_tint_dropped_o)) & u83_src[33]) ^ (((^u83_blend_dropped_o)) & u83_src[34]) ^ (((^u83_order_inversion_o)) & u83_src[35]) ^ (((^u83_bands_o)) & u83_src[36]) ^ (((^u83_list_restart_o)) & u83_src[37]) ^ (((^u83_desc_mid_sweep_o)) & u83_src[38]);
+    else u83_fold_q <= u83_fold_q ^ (((^u83_j_ready_o)) & u83_src[0]) ^ (((^u83_hps_req_o)) & u83_src[1]) ^ (((^u83_ld_page_we_o)) & u83_src[2]) ^ (((^u83_ld_page_addr_o)) & u83_src[3]) ^ (((^u83_ld_page_data_o)) & u83_src[4]) ^ (((^u83_ld_pal_we_o)) & u83_src[5]) ^ (((^u83_ld_pal_addr_o)) & u83_src[6]) ^ (((^u83_ld_pal_data_o)) & u83_src[7]) ^ (((^u83_loads_started_o)) & u83_src[8]) ^ (((^u83_loads_done_o)) & u83_src[9]) ^ (((^u83_words_written_o)) & u83_src[10]) ^ (((^u83_slot_refused_o)) & u83_src[11]) ^ (((^u83_len_refused_o)) & u83_src[12]) ^ (((^u83_addr_refused_o)) & u83_src[13]) ^ (((^u83_epoch_refused_o)) & u83_src[14]) ^ (((^u83_crc_fails_o)) & u83_src[15]) ^ (((^u83_regions_zeroed_o)) & u83_src[16]) ^ (((^u83_bridge_errs_o)) & u83_src[17]) ^ (((^u83_loads_during_pass_o)) & u83_src[18]) ^ (((^u83_bursts_o)) & u83_src[19]);
 
-  // ---- zhao_twod_cmd ----
+  // ---- zhao_twod_band ----
   logic [63:0] u84_lfsr_q;
   logic [1023:0] u84_src;
   assign u84_src = {16{u84_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u84_lfsr_q <= 64'h00000033EA351159;
     else u84_lfsr_q <= {u84_lfsr_q[62:0], (^(u84_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u84_pl_ready_o;
-  logic [1-1:0] u84_sp_ready_o;
-  logic [1-1:0] u84_d_valid_o;
-  logic [1-1:0] u84_d_slot_o;
-  logic [1-1:0] u84_d_enable_o;
-  logic [2-1:0] u84_d_role_o;
-  logic [2-1:0] u84_d_blend_o;
-  logic [8-1:0] u84_d_opacity_o;
-  logic [1-1:0] u84_d_format_o;
-  logic [16-1:0] u84_d_width_o;
-  logic [16-1:0] u84_d_height_o;
-  logic [1-1:0] u84_d_wrap_u_o;
-  logic [1-1:0] u84_d_wrap_v_o;
-  logic signed [32-1:0] u84_d_a_o;
-  logic signed [32-1:0] u84_d_b_o;
-  logic signed [32-1:0] u84_d_c_o;
-  logic signed [32-1:0] u84_d_d_o;
-  logic signed [32-1:0] u84_d_u0_o;
-  logic signed [32-1:0] u84_d_v0_o;
-  logic [2-1:0] u84_d_view_mask_o;
-  logic [8-1:0] u84_d_palette_o;
-  logic [1-1:0] u84_s_valid_o;
-  logic signed [16-1:0] u84_s_x_o;
-  logic signed [16-1:0] u84_s_y_o;
-  logic [16-1:0] u84_s_w_o;
-  logic [16-1:0] u84_s_h_o;
-  logic signed [32-1:0] u84_s_u_o;
-  logic signed [32-1:0] u84_s_v_o;
-  logic signed [32-1:0] u84_s_a00_o;
-  logic signed [32-1:0] u84_s_a01_o;
-  logic signed [32-1:0] u84_s_a10_o;
-  logic signed [32-1:0] u84_s_a11_o;
-  logic [3-1:0] u84_s_format_o;
-  logic [8-1:0] u84_s_palette_o;
-  logic [16-1:0] u84_s_tint_o;
-  logic [2-1:0] u84_s_blend_o;
-  logic [2-1:0] u84_s_view_mask_o;
-  logic [8-1:0] u84_s_order_o;
-  logic [16-1:0] u84_s_src_id_o;
-  logic [1-1:0] u84_ld_bind_we_o;
-  logic [3-1:0] u84_ld_bind_sel_o;
-  logic [13-1:0] u84_ld_bind_base_o;
-  logic [4-1:0] u84_ld_bind_lstride_o;
-  logic [4-1:0] u84_ld_bind_lheight_o;
-  logic [1-1:0] u84_publishing_o;
-  logic [1-1:0] u84_atm_slot_o;
-  logic signed [32-1:0] u84_line_scroll_o;
-  logic [32-1:0] u84_planes_staged_o;
-  logic [32-1:0] u84_sprites_staged_o;
-  logic [32-1:0] u84_plane_refused_o;
-  logic [32-1:0] u84_sprite_refused_o;
-  logic [32-1:0] u84_list_overflow_o;
-  logic [32-1:0] u84_packets_committed_o;
-  logic [32-1:0] u84_packets_abandoned_o;
-  logic [32-1:0] u84_frames_sealed_o;
-  logic [32-1:0] u84_planes_published_o;
-  logic [32-1:0] u84_sprites_published_o;
-  logic [32-1:0] u84_slots_auto_disabled_o;
-  logic [32-1:0] u84_bind_conflict_o;
-  logic [32-1:0] u84_seal_overrun_o;
-  zhao_twod_cmd u84_i (
+  logic [1-1:0] u84_d_ready_o;
+  logic [1-1:0] u84_e_valid_o;
+  logic signed [16-1:0] u84_e_x_o;
+  logic signed [16-1:0] u84_e_y_o;
+  logic [16-1:0] u84_e_w_o;
+  logic [16-1:0] u84_e_h_o;
+  logic signed [32-1:0] u84_e_u_o;
+  logic signed [32-1:0] u84_e_v_o;
+  logic signed [32-1:0] u84_e_a00_o;
+  logic signed [32-1:0] u84_e_a01_o;
+  logic signed [32-1:0] u84_e_a10_o;
+  logic signed [32-1:0] u84_e_a11_o;
+  logic [3-1:0] u84_e_format_o;
+  logic [8-1:0] u84_e_palette_o;
+  logic [16-1:0] u84_e_tint_o;
+  logic [2-1:0] u84_e_blend_o;
+  logic [2-1:0] u84_e_view_mask_o;
+  logic [8-1:0] u84_e_order_o;
+  logic [16-1:0] u84_e_src_id_o;
+  logic [2-1:0] u84_e_view_sel_o;
+  logic [1-1:0] u84_c_ready_o;
+  logic [1-1:0] u84_rd_valid_o;
+  logic [16-1:0] u84_rd_rgb_o;
+  logic [32-1:0] u84_descriptors_o;
+  logic [32-1:0] u84_desc_overflow_o;
+  logic [32-1:0] u84_sprites_admitted_o;
+  logic [32-1:0] u84_sprites_refused_budget_o;
+  logic [32-1:0] u84_slices_emitted_o;
+  logic [32-1:0] u84_pixels_written_o;
+  logic [32-1:0] u84_pixels_clipped_o;
+  logic [32-1:0] u84_write_oob_o;
+  logic [32-1:0] u84_band_underrun_o;
+  logic [32-1:0] u84_scan_addr_mismatch_o;
+  logic [32-1:0] u84_tint_dropped_o;
+  logic [32-1:0] u84_blend_dropped_o;
+  logic [32-1:0] u84_order_inversion_o;
+  logic [32-1:0] u84_bands_o;
+  logic [1-1:0] u84_list_restart_o;
+  logic [32-1:0] u84_desc_mid_sweep_o;
+  zhao_twod_band u84_i (
       .clk(clk),
       .rst_n(rst_n),
-      .pl_valid_i(u84_src[0 +: 1]),
-      .pl_ready_o(u84_pl_ready_o),
-      .pl_slot_i(u84_src[7 +: 8]),
-      .pl_role_i(u84_src[14 +: 8]),
-      .pl_blend_i(u84_src[21 +: 8]),
-      .pl_opacity_i(u84_src[28 +: 8]),
-      .pl_format_i(u84_src[35 +: 8]),
-      .pl_wrap_i(u84_src[42 +: 8]),
-      .pl_view_mask_i(u84_src[49 +: 8]),
-      .pl_palette_i(u84_src[56 +: 8]),
-      .pl_width_i(u84_src[63 +: 16]),
-      .pl_height_i(u84_src[70 +: 16]),
-      .pl_flags_i(u84_src[77 +: 16]),
-      .pl_base_i(u84_src[84 +: 16]),
-      .pl_lstride_i(u84_src[91 +: 8]),
-      .pl_lheight_i(u84_src[98 +: 8]),
-      .pl_a_i(u84_src[105 +: 32]),
-      .pl_b_i(u84_src[112 +: 32]),
-      .pl_c_i(u84_src[119 +: 32]),
-      .pl_d_i(u84_src[126 +: 32]),
-      .pl_u0_i(u84_src[133 +: 32]),
-      .pl_v0_i(u84_src[140 +: 32]),
-      .pl_line_scroll_i(u84_src[147 +: 32]),
-      .sp_valid_i(u84_src[154 +: 1]),
-      .sp_ready_o(u84_sp_ready_o),
-      .sp_x_i(u84_src[161 +: 16]),
-      .sp_y_i(u84_src[168 +: 16]),
-      .sp_w_i(u84_src[175 +: 16]),
-      .sp_h_i(u84_src[182 +: 16]),
-      .sp_base_i(u84_src[189 +: 16]),
-      .sp_lstride_i(u84_src[196 +: 8]),
-      .sp_lheight_i(u84_src[203 +: 8]),
-      .sp_format_i(u84_src[210 +: 8]),
-      .sp_palette_i(u84_src[217 +: 8]),
-      .sp_blend_i(u84_src[224 +: 8]),
-      .sp_view_mask_i(u84_src[231 +: 8]),
-      .sp_tint_i(u84_src[238 +: 16]),
-      .sp_order_i(u84_src[245 +: 8]),
-      .sp_flags_i(u84_src[252 +: 8]),
-      .sp_src_id_i(u84_src[259 +: 16]),
-      .sp_u_i(u84_src[266 +: 32]),
-      .sp_v_i(u84_src[273 +: 32]),
-      .sp_a00_i(u84_src[280 +: 32]),
-      .sp_a01_i(u84_src[287 +: 32]),
-      .sp_a10_i(u84_src[294 +: 32]),
-      .sp_a11_i(u84_src[301 +: 32]),
-      .pkt_commit_i(u84_src[308 +: 1]),
-      .pkt_abandon_i(u84_src[315 +: 1]),
-      .seal_i(u84_src[322 +: 1]),
-      .d_valid_o(u84_d_valid_o),
-      .d_ready_i(u84_src[329 +: 1]),
-      .d_slot_o(u84_d_slot_o),
-      .d_enable_o(u84_d_enable_o),
-      .d_role_o(u84_d_role_o),
-      .d_blend_o(u84_d_blend_o),
-      .d_opacity_o(u84_d_opacity_o),
-      .d_format_o(u84_d_format_o),
-      .d_width_o(u84_d_width_o),
-      .d_height_o(u84_d_height_o),
-      .d_wrap_u_o(u84_d_wrap_u_o),
-      .d_wrap_v_o(u84_d_wrap_v_o),
-      .d_a_o(u84_d_a_o),
-      .d_b_o(u84_d_b_o),
-      .d_c_o(u84_d_c_o),
-      .d_d_o(u84_d_d_o),
-      .d_u0_o(u84_d_u0_o),
-      .d_v0_o(u84_d_v0_o),
-      .d_view_mask_o(u84_d_view_mask_o),
-      .d_palette_o(u84_d_palette_o),
-      .s_valid_o(u84_s_valid_o),
-      .s_ready_i(u84_src[336 +: 1]),
-      .s_x_o(u84_s_x_o),
-      .s_y_o(u84_s_y_o),
-      .s_w_o(u84_s_w_o),
-      .s_h_o(u84_s_h_o),
-      .s_u_o(u84_s_u_o),
-      .s_v_o(u84_s_v_o),
-      .s_a00_o(u84_s_a00_o),
-      .s_a01_o(u84_s_a01_o),
-      .s_a10_o(u84_s_a10_o),
-      .s_a11_o(u84_s_a11_o),
-      .s_format_o(u84_s_format_o),
-      .s_palette_o(u84_s_palette_o),
-      .s_tint_o(u84_s_tint_o),
-      .s_blend_o(u84_s_blend_o),
-      .s_view_mask_o(u84_s_view_mask_o),
-      .s_order_o(u84_s_order_o),
-      .s_src_id_o(u84_s_src_id_o),
-      .ld_bind_we_o(u84_ld_bind_we_o),
-      .ld_bind_sel_o(u84_ld_bind_sel_o),
-      .ld_bind_base_o(u84_ld_bind_base_o),
-      .ld_bind_lstride_o(u84_ld_bind_lstride_o),
-      .ld_bind_lheight_o(u84_ld_bind_lheight_o),
-      .publishing_o(u84_publishing_o),
-      .atm_slot_o(u84_atm_slot_o),
-      .line_scroll_o(u84_line_scroll_o),
-      .planes_staged_o(u84_planes_staged_o),
-      .sprites_staged_o(u84_sprites_staged_o),
-      .plane_refused_o(u84_plane_refused_o),
-      .sprite_refused_o(u84_sprite_refused_o),
-      .list_overflow_o(u84_list_overflow_o),
-      .packets_committed_o(u84_packets_committed_o),
-      .packets_abandoned_o(u84_packets_abandoned_o),
-      .frames_sealed_o(u84_frames_sealed_o),
-      .planes_published_o(u84_planes_published_o),
-      .sprites_published_o(u84_sprites_published_o),
-      .slots_auto_disabled_o(u84_slots_auto_disabled_o),
-      .bind_conflict_o(u84_bind_conflict_o),
-      .seal_overrun_o(u84_seal_overrun_o)
+      .frame_start_i(u84_src[0 +: 1]),
+      .frame_w_i(u84_src[7 +: 9]),
+      .frame_h_i(u84_src[14 +: 8]),
+      .view_split_i(u84_src[21 +: 8]),
+      .list_busy_i(u84_src[28 +: 1]),
+      .d_valid_i(u84_src[35 +: 1]),
+      .d_ready_o(u84_d_ready_o),
+      .d_x_i(u84_src[42 +: 16]),
+      .d_y_i(u84_src[49 +: 16]),
+      .d_w_i(u84_src[56 +: 16]),
+      .d_h_i(u84_src[63 +: 16]),
+      .d_u_i(u84_src[70 +: 32]),
+      .d_v_i(u84_src[77 +: 32]),
+      .d_a00_i(u84_src[84 +: 32]),
+      .d_a01_i(u84_src[91 +: 32]),
+      .d_a10_i(u84_src[98 +: 32]),
+      .d_a11_i(u84_src[105 +: 32]),
+      .d_format_i(u84_src[112 +: 3]),
+      .d_palette_i(u84_src[119 +: 8]),
+      .d_tint_i(u84_src[126 +: 16]),
+      .d_blend_i(u84_src[133 +: 2]),
+      .d_view_mask_i(u84_src[140 +: 2]),
+      .d_order_i(u84_src[147 +: 8]),
+      .d_src_id_i(u84_src[154 +: 16]),
+      .e_valid_o(u84_e_valid_o),
+      .e_ready_i(u84_src[161 +: 1]),
+      .e_x_o(u84_e_x_o),
+      .e_y_o(u84_e_y_o),
+      .e_w_o(u84_e_w_o),
+      .e_h_o(u84_e_h_o),
+      .e_u_o(u84_e_u_o),
+      .e_v_o(u84_e_v_o),
+      .e_a00_o(u84_e_a00_o),
+      .e_a01_o(u84_e_a01_o),
+      .e_a10_o(u84_e_a10_o),
+      .e_a11_o(u84_e_a11_o),
+      .e_format_o(u84_e_format_o),
+      .e_palette_o(u84_e_palette_o),
+      .e_tint_o(u84_e_tint_o),
+      .e_blend_o(u84_e_blend_o),
+      .e_view_mask_o(u84_e_view_mask_o),
+      .e_order_o(u84_e_order_o),
+      .e_src_id_o(u84_e_src_id_o),
+      .e_view_sel_o(u84_e_view_sel_o),
+      .c_valid_i(u84_src[168 +: 1]),
+      .c_ready_o(u84_c_ready_o),
+      .c_rgb_i(u84_src[175 +: 16]),
+      .c_x_i(u84_src[182 +: 16]),
+      .c_y_i(u84_src[189 +: 16]),
+      .c_tint_i(u84_src[196 +: 16]),
+      .c_blend_i(u84_src[203 +: 2]),
+      .c_order_i(u84_src[210 +: 8]),
+      .c_src_id_i(u84_src[217 +: 16]),
+      .c_last_i(u84_src[224 +: 1]),
+      .rd_req_v_i(u84_src[231 +: 1]),
+      .rd_x_i(u84_src[238 +: 9]),
+      .rd_y_i(u84_src[245 +: 8]),
+      .rd_valid_o(u84_rd_valid_o),
+      .rd_rgb_o(u84_rd_rgb_o),
+      .descriptors_o(u84_descriptors_o),
+      .desc_overflow_o(u84_desc_overflow_o),
+      .sprites_admitted_o(u84_sprites_admitted_o),
+      .sprites_refused_budget_o(u84_sprites_refused_budget_o),
+      .slices_emitted_o(u84_slices_emitted_o),
+      .pixels_written_o(u84_pixels_written_o),
+      .pixels_clipped_o(u84_pixels_clipped_o),
+      .write_oob_o(u84_write_oob_o),
+      .band_underrun_o(u84_band_underrun_o),
+      .scan_addr_mismatch_o(u84_scan_addr_mismatch_o),
+      .tint_dropped_o(u84_tint_dropped_o),
+      .blend_dropped_o(u84_blend_dropped_o),
+      .order_inversion_o(u84_order_inversion_o),
+      .bands_o(u84_bands_o),
+      .list_restart_o(u84_list_restart_o),
+      .desc_mid_sweep_o(u84_desc_mid_sweep_o)
   );
   logic u84_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u84_fold_q <= 1'b0;
-    else u84_fold_q <= u84_fold_q ^ (((^u84_pl_ready_o)) & u84_src[0]) ^ (((^u84_sp_ready_o)) & u84_src[1]) ^ (((^u84_d_valid_o)) & u84_src[2]) ^ (((^u84_d_slot_o)) & u84_src[3]) ^ (((^u84_d_enable_o)) & u84_src[4]) ^ (((^u84_d_role_o)) & u84_src[5]) ^ (((^u84_d_blend_o)) & u84_src[6]) ^ (((^u84_d_opacity_o)) & u84_src[7]) ^ (((^u84_d_format_o)) & u84_src[8]) ^ (((^u84_d_width_o)) & u84_src[9]) ^ (((^u84_d_height_o)) & u84_src[10]) ^ (((^u84_d_wrap_u_o)) & u84_src[11]) ^ (((^u84_d_wrap_v_o)) & u84_src[12]) ^ (((^u84_d_a_o)) & u84_src[13]) ^ (((^u84_d_b_o)) & u84_src[14]) ^ (((^u84_d_c_o)) & u84_src[15]) ^ (((^u84_d_d_o)) & u84_src[16]) ^ (((^u84_d_u0_o)) & u84_src[17]) ^ (((^u84_d_v0_o)) & u84_src[18]) ^ (((^u84_d_view_mask_o)) & u84_src[19]) ^ (((^u84_d_palette_o)) & u84_src[20]) ^ (((^u84_s_valid_o)) & u84_src[21]) ^ (((^u84_s_x_o)) & u84_src[22]) ^ (((^u84_s_y_o)) & u84_src[23]) ^ (((^u84_s_w_o)) & u84_src[24]) ^ (((^u84_s_h_o)) & u84_src[25]) ^ (((^u84_s_u_o)) & u84_src[26]) ^ (((^u84_s_v_o)) & u84_src[27]) ^ (((^u84_s_a00_o)) & u84_src[28]) ^ (((^u84_s_a01_o)) & u84_src[29]) ^ (((^u84_s_a10_o)) & u84_src[30]) ^ (((^u84_s_a11_o)) & u84_src[31]) ^ (((^u84_s_format_o)) & u84_src[32]) ^ (((^u84_s_palette_o)) & u84_src[33]) ^ (((^u84_s_tint_o)) & u84_src[34]) ^ (((^u84_s_blend_o)) & u84_src[35]) ^ (((^u84_s_view_mask_o)) & u84_src[36]) ^ (((^u84_s_order_o)) & u84_src[37]) ^ (((^u84_s_src_id_o)) & u84_src[38]) ^ (((^u84_ld_bind_we_o)) & u84_src[39]) ^ (((^u84_ld_bind_sel_o)) & u84_src[40]) ^ (((^u84_ld_bind_base_o)) & u84_src[41]) ^ (((^u84_ld_bind_lstride_o)) & u84_src[42]) ^ (((^u84_ld_bind_lheight_o)) & u84_src[43]) ^ (((^u84_publishing_o)) & u84_src[44]) ^ (((^u84_atm_slot_o)) & u84_src[45]) ^ (((^u84_line_scroll_o)) & u84_src[46]) ^ (((^u84_planes_staged_o)) & u84_src[47]) ^ (((^u84_sprites_staged_o)) & u84_src[48]) ^ (((^u84_plane_refused_o)) & u84_src[49]) ^ (((^u84_sprite_refused_o)) & u84_src[50]) ^ (((^u84_list_overflow_o)) & u84_src[51]) ^ (((^u84_packets_committed_o)) & u84_src[52]) ^ (((^u84_packets_abandoned_o)) & u84_src[53]) ^ (((^u84_frames_sealed_o)) & u84_src[54]) ^ (((^u84_planes_published_o)) & u84_src[55]) ^ (((^u84_sprites_published_o)) & u84_src[56]) ^ (((^u84_slots_auto_disabled_o)) & u84_src[57]) ^ (((^u84_bind_conflict_o)) & u84_src[58]) ^ (((^u84_seal_overrun_o)) & u84_src[59]);
+    else u84_fold_q <= u84_fold_q ^ (((^u84_d_ready_o)) & u84_src[0]) ^ (((^u84_e_valid_o)) & u84_src[1]) ^ (((^u84_e_x_o)) & u84_src[2]) ^ (((^u84_e_y_o)) & u84_src[3]) ^ (((^u84_e_w_o)) & u84_src[4]) ^ (((^u84_e_h_o)) & u84_src[5]) ^ (((^u84_e_u_o)) & u84_src[6]) ^ (((^u84_e_v_o)) & u84_src[7]) ^ (((^u84_e_a00_o)) & u84_src[8]) ^ (((^u84_e_a01_o)) & u84_src[9]) ^ (((^u84_e_a10_o)) & u84_src[10]) ^ (((^u84_e_a11_o)) & u84_src[11]) ^ (((^u84_e_format_o)) & u84_src[12]) ^ (((^u84_e_palette_o)) & u84_src[13]) ^ (((^u84_e_tint_o)) & u84_src[14]) ^ (((^u84_e_blend_o)) & u84_src[15]) ^ (((^u84_e_view_mask_o)) & u84_src[16]) ^ (((^u84_e_order_o)) & u84_src[17]) ^ (((^u84_e_src_id_o)) & u84_src[18]) ^ (((^u84_e_view_sel_o)) & u84_src[19]) ^ (((^u84_c_ready_o)) & u84_src[20]) ^ (((^u84_rd_valid_o)) & u84_src[21]) ^ (((^u84_rd_rgb_o)) & u84_src[22]) ^ (((^u84_descriptors_o)) & u84_src[23]) ^ (((^u84_desc_overflow_o)) & u84_src[24]) ^ (((^u84_sprites_admitted_o)) & u84_src[25]) ^ (((^u84_sprites_refused_budget_o)) & u84_src[26]) ^ (((^u84_slices_emitted_o)) & u84_src[27]) ^ (((^u84_pixels_written_o)) & u84_src[28]) ^ (((^u84_pixels_clipped_o)) & u84_src[29]) ^ (((^u84_write_oob_o)) & u84_src[30]) ^ (((^u84_band_underrun_o)) & u84_src[31]) ^ (((^u84_scan_addr_mismatch_o)) & u84_src[32]) ^ (((^u84_tint_dropped_o)) & u84_src[33]) ^ (((^u84_blend_dropped_o)) & u84_src[34]) ^ (((^u84_order_inversion_o)) & u84_src[35]) ^ (((^u84_bands_o)) & u84_src[36]) ^ (((^u84_list_restart_o)) & u84_src[37]) ^ (((^u84_desc_mid_sweep_o)) & u84_src[38]);
 
-  // ---- zhao_twod_plane ----
+  // ---- zhao_twod_cmd ----
   logic [63:0] u85_lfsr_q;
   logic [1023:0] u85_src;
   assign u85_src = {16{u85_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u85_lfsr_q <= 64'h00000034886C8B0A;
     else u85_lfsr_q <= {u85_lfsr_q[62:0], (^(u85_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u85_d_ready_o;
-  logic [1-1:0] u85_p_ready_o;
+  logic [1-1:0] u85_pl_ready_o;
+  logic [1-1:0] u85_sp_ready_o;
+  logic [1-1:0] u85_d_valid_o;
+  logic [1-1:0] u85_d_slot_o;
+  logic [1-1:0] u85_d_enable_o;
+  logic [2-1:0] u85_d_role_o;
+  logic [2-1:0] u85_d_blend_o;
+  logic [8-1:0] u85_d_opacity_o;
+  logic [1-1:0] u85_d_format_o;
+  logic [16-1:0] u85_d_width_o;
+  logic [16-1:0] u85_d_height_o;
+  logic [1-1:0] u85_d_wrap_u_o;
+  logic [1-1:0] u85_d_wrap_v_o;
+  logic signed [32-1:0] u85_d_a_o;
+  logic signed [32-1:0] u85_d_b_o;
+  logic signed [32-1:0] u85_d_c_o;
+  logic signed [32-1:0] u85_d_d_o;
+  logic signed [32-1:0] u85_d_u0_o;
+  logic signed [32-1:0] u85_d_v0_o;
+  logic [2-1:0] u85_d_view_mask_o;
+  logic [8-1:0] u85_d_palette_o;
   logic [1-1:0] u85_s_valid_o;
-  logic [16-1:0] u85_s_texel_u_o;
-  logic [16-1:0] u85_s_texel_v_o;
-  logic [1-1:0] u85_s_format_o;
+  logic signed [16-1:0] u85_s_x_o;
+  logic signed [16-1:0] u85_s_y_o;
+  logic [16-1:0] u85_s_w_o;
+  logic [16-1:0] u85_s_h_o;
+  logic signed [32-1:0] u85_s_u_o;
+  logic signed [32-1:0] u85_s_v_o;
+  logic signed [32-1:0] u85_s_a00_o;
+  logic signed [32-1:0] u85_s_a01_o;
+  logic signed [32-1:0] u85_s_a10_o;
+  logic signed [32-1:0] u85_s_a11_o;
+  logic [3-1:0] u85_s_format_o;
   logic [8-1:0] u85_s_palette_o;
+  logic [16-1:0] u85_s_tint_o;
   logic [2-1:0] u85_s_blend_o;
-  logic [8-1:0] u85_s_opacity_o;
-  logic [2-1:0] u85_s_role_o;
-  logic [32-1:0] u85_pixels_o;
-  logic [32-1:0] u85_refused_role_o;
-  logic [32-1:0] u85_refused_blend_o;
-  logic [32-1:0] u85_skipped_view_o;
-  logic [32-1:0] u85_wrap_fail_o;
-  logic [32-1:0] u85_disabled_o;
-  zhao_twod_plane u85_i (
+  logic [2-1:0] u85_s_view_mask_o;
+  logic [8-1:0] u85_s_order_o;
+  logic [16-1:0] u85_s_src_id_o;
+  logic [1-1:0] u85_ld_bind_we_o;
+  logic [3-1:0] u85_ld_bind_sel_o;
+  logic [13-1:0] u85_ld_bind_base_o;
+  logic [4-1:0] u85_ld_bind_lstride_o;
+  logic [4-1:0] u85_ld_bind_lheight_o;
+  logic [1-1:0] u85_publishing_o;
+  logic [1-1:0] u85_atm_slot_o;
+  logic signed [32-1:0] u85_line_scroll_o;
+  logic [32-1:0] u85_planes_staged_o;
+  logic [32-1:0] u85_sprites_staged_o;
+  logic [32-1:0] u85_plane_refused_o;
+  logic [32-1:0] u85_sprite_refused_o;
+  logic [32-1:0] u85_list_overflow_o;
+  logic [32-1:0] u85_packets_committed_o;
+  logic [32-1:0] u85_packets_abandoned_o;
+  logic [32-1:0] u85_frames_sealed_o;
+  logic [32-1:0] u85_planes_published_o;
+  logic [32-1:0] u85_sprites_published_o;
+  logic [32-1:0] u85_slots_auto_disabled_o;
+  logic [32-1:0] u85_bind_conflict_o;
+  logic [32-1:0] u85_seal_overrun_o;
+  zhao_twod_cmd u85_i (
       .clk(clk),
       .rst_n(rst_n),
-      .d_valid_i(u85_src[0 +: 1]),
-      .d_ready_o(u85_d_ready_o),
-      .d_slot_i(u85_src[7 +: 1]),
-      .d_enable_i(u85_src[14 +: 1]),
-      .d_role_i(u85_src[21 +: 2]),
-      .d_blend_i(u85_src[28 +: 2]),
-      .d_opacity_i(u85_src[35 +: 8]),
-      .d_format_i(u85_src[42 +: 1]),
-      .d_width_i(u85_src[49 +: 16]),
-      .d_height_i(u85_src[56 +: 16]),
-      .d_wrap_u_i(u85_src[63 +: 1]),
-      .d_wrap_v_i(u85_src[70 +: 1]),
-      .d_a_i(u85_src[77 +: 32]),
-      .d_b_i(u85_src[84 +: 32]),
-      .d_c_i(u85_src[91 +: 32]),
-      .d_d_i(u85_src[98 +: 32]),
-      .d_u0_i(u85_src[105 +: 32]),
-      .d_v0_i(u85_src[112 +: 32]),
-      .d_view_mask_i(u85_src[119 +: 2]),
-      .d_palette_i(u85_src[126 +: 8]),
-      .p_valid_i(u85_src[133 +: 1]),
-      .p_ready_o(u85_p_ready_o),
-      .p_slot_i(u85_src[140 +: 1]),
-      .p_x_i(u85_src[147 +: 16]),
-      .p_y_i(u85_src[154 +: 16]),
-      .p_line_scroll_i(u85_src[161 +: 32]),
-      .view_sel_i(u85_src[168 +: 2]),
+      .pl_valid_i(u85_src[0 +: 1]),
+      .pl_ready_o(u85_pl_ready_o),
+      .pl_slot_i(u85_src[7 +: 8]),
+      .pl_role_i(u85_src[14 +: 8]),
+      .pl_blend_i(u85_src[21 +: 8]),
+      .pl_opacity_i(u85_src[28 +: 8]),
+      .pl_format_i(u85_src[35 +: 8]),
+      .pl_wrap_i(u85_src[42 +: 8]),
+      .pl_view_mask_i(u85_src[49 +: 8]),
+      .pl_palette_i(u85_src[56 +: 8]),
+      .pl_width_i(u85_src[63 +: 16]),
+      .pl_height_i(u85_src[70 +: 16]),
+      .pl_flags_i(u85_src[77 +: 16]),
+      .pl_base_i(u85_src[84 +: 16]),
+      .pl_lstride_i(u85_src[91 +: 8]),
+      .pl_lheight_i(u85_src[98 +: 8]),
+      .pl_a_i(u85_src[105 +: 32]),
+      .pl_b_i(u85_src[112 +: 32]),
+      .pl_c_i(u85_src[119 +: 32]),
+      .pl_d_i(u85_src[126 +: 32]),
+      .pl_u0_i(u85_src[133 +: 32]),
+      .pl_v0_i(u85_src[140 +: 32]),
+      .pl_line_scroll_i(u85_src[147 +: 32]),
+      .sp_valid_i(u85_src[154 +: 1]),
+      .sp_ready_o(u85_sp_ready_o),
+      .sp_x_i(u85_src[161 +: 16]),
+      .sp_y_i(u85_src[168 +: 16]),
+      .sp_w_i(u85_src[175 +: 16]),
+      .sp_h_i(u85_src[182 +: 16]),
+      .sp_base_i(u85_src[189 +: 16]),
+      .sp_lstride_i(u85_src[196 +: 8]),
+      .sp_lheight_i(u85_src[203 +: 8]),
+      .sp_format_i(u85_src[210 +: 8]),
+      .sp_palette_i(u85_src[217 +: 8]),
+      .sp_blend_i(u85_src[224 +: 8]),
+      .sp_view_mask_i(u85_src[231 +: 8]),
+      .sp_tint_i(u85_src[238 +: 16]),
+      .sp_order_i(u85_src[245 +: 8]),
+      .sp_flags_i(u85_src[252 +: 8]),
+      .sp_src_id_i(u85_src[259 +: 16]),
+      .sp_u_i(u85_src[266 +: 32]),
+      .sp_v_i(u85_src[273 +: 32]),
+      .sp_a00_i(u85_src[280 +: 32]),
+      .sp_a01_i(u85_src[287 +: 32]),
+      .sp_a10_i(u85_src[294 +: 32]),
+      .sp_a11_i(u85_src[301 +: 32]),
+      .pkt_commit_i(u85_src[308 +: 1]),
+      .pkt_abandon_i(u85_src[315 +: 1]),
+      .seal_i(u85_src[322 +: 1]),
+      .d_valid_o(u85_d_valid_o),
+      .d_ready_i(u85_src[329 +: 1]),
+      .d_slot_o(u85_d_slot_o),
+      .d_enable_o(u85_d_enable_o),
+      .d_role_o(u85_d_role_o),
+      .d_blend_o(u85_d_blend_o),
+      .d_opacity_o(u85_d_opacity_o),
+      .d_format_o(u85_d_format_o),
+      .d_width_o(u85_d_width_o),
+      .d_height_o(u85_d_height_o),
+      .d_wrap_u_o(u85_d_wrap_u_o),
+      .d_wrap_v_o(u85_d_wrap_v_o),
+      .d_a_o(u85_d_a_o),
+      .d_b_o(u85_d_b_o),
+      .d_c_o(u85_d_c_o),
+      .d_d_o(u85_d_d_o),
+      .d_u0_o(u85_d_u0_o),
+      .d_v0_o(u85_d_v0_o),
+      .d_view_mask_o(u85_d_view_mask_o),
+      .d_palette_o(u85_d_palette_o),
       .s_valid_o(u85_s_valid_o),
-      .s_ready_i(u85_src[175 +: 1]),
-      .s_texel_u_o(u85_s_texel_u_o),
-      .s_texel_v_o(u85_s_texel_v_o),
+      .s_ready_i(u85_src[336 +: 1]),
+      .s_x_o(u85_s_x_o),
+      .s_y_o(u85_s_y_o),
+      .s_w_o(u85_s_w_o),
+      .s_h_o(u85_s_h_o),
+      .s_u_o(u85_s_u_o),
+      .s_v_o(u85_s_v_o),
+      .s_a00_o(u85_s_a00_o),
+      .s_a01_o(u85_s_a01_o),
+      .s_a10_o(u85_s_a10_o),
+      .s_a11_o(u85_s_a11_o),
       .s_format_o(u85_s_format_o),
       .s_palette_o(u85_s_palette_o),
+      .s_tint_o(u85_s_tint_o),
       .s_blend_o(u85_s_blend_o),
-      .s_opacity_o(u85_s_opacity_o),
-      .s_role_o(u85_s_role_o),
-      .pixels_o(u85_pixels_o),
-      .refused_role_o(u85_refused_role_o),
-      .refused_blend_o(u85_refused_blend_o),
-      .skipped_view_o(u85_skipped_view_o),
-      .wrap_fail_o(u85_wrap_fail_o),
-      .disabled_o(u85_disabled_o)
+      .s_view_mask_o(u85_s_view_mask_o),
+      .s_order_o(u85_s_order_o),
+      .s_src_id_o(u85_s_src_id_o),
+      .ld_bind_we_o(u85_ld_bind_we_o),
+      .ld_bind_sel_o(u85_ld_bind_sel_o),
+      .ld_bind_base_o(u85_ld_bind_base_o),
+      .ld_bind_lstride_o(u85_ld_bind_lstride_o),
+      .ld_bind_lheight_o(u85_ld_bind_lheight_o),
+      .publishing_o(u85_publishing_o),
+      .atm_slot_o(u85_atm_slot_o),
+      .line_scroll_o(u85_line_scroll_o),
+      .planes_staged_o(u85_planes_staged_o),
+      .sprites_staged_o(u85_sprites_staged_o),
+      .plane_refused_o(u85_plane_refused_o),
+      .sprite_refused_o(u85_sprite_refused_o),
+      .list_overflow_o(u85_list_overflow_o),
+      .packets_committed_o(u85_packets_committed_o),
+      .packets_abandoned_o(u85_packets_abandoned_o),
+      .frames_sealed_o(u85_frames_sealed_o),
+      .planes_published_o(u85_planes_published_o),
+      .sprites_published_o(u85_sprites_published_o),
+      .slots_auto_disabled_o(u85_slots_auto_disabled_o),
+      .bind_conflict_o(u85_bind_conflict_o),
+      .seal_overrun_o(u85_seal_overrun_o)
   );
   logic u85_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u85_fold_q <= 1'b0;
-    else u85_fold_q <= u85_fold_q ^ (((^u85_d_ready_o)) & u85_src[0]) ^ (((^u85_p_ready_o)) & u85_src[1]) ^ (((^u85_s_valid_o)) & u85_src[2]) ^ (((^u85_s_texel_u_o)) & u85_src[3]) ^ (((^u85_s_texel_v_o)) & u85_src[4]) ^ (((^u85_s_format_o)) & u85_src[5]) ^ (((^u85_s_palette_o)) & u85_src[6]) ^ (((^u85_s_blend_o)) & u85_src[7]) ^ (((^u85_s_opacity_o)) & u85_src[8]) ^ (((^u85_s_role_o)) & u85_src[9]) ^ (((^u85_pixels_o)) & u85_src[10]) ^ (((^u85_refused_role_o)) & u85_src[11]) ^ (((^u85_refused_blend_o)) & u85_src[12]) ^ (((^u85_skipped_view_o)) & u85_src[13]) ^ (((^u85_wrap_fail_o)) & u85_src[14]) ^ (((^u85_disabled_o)) & u85_src[15]);
+    else u85_fold_q <= u85_fold_q ^ (((^u85_pl_ready_o)) & u85_src[0]) ^ (((^u85_sp_ready_o)) & u85_src[1]) ^ (((^u85_d_valid_o)) & u85_src[2]) ^ (((^u85_d_slot_o)) & u85_src[3]) ^ (((^u85_d_enable_o)) & u85_src[4]) ^ (((^u85_d_role_o)) & u85_src[5]) ^ (((^u85_d_blend_o)) & u85_src[6]) ^ (((^u85_d_opacity_o)) & u85_src[7]) ^ (((^u85_d_format_o)) & u85_src[8]) ^ (((^u85_d_width_o)) & u85_src[9]) ^ (((^u85_d_height_o)) & u85_src[10]) ^ (((^u85_d_wrap_u_o)) & u85_src[11]) ^ (((^u85_d_wrap_v_o)) & u85_src[12]) ^ (((^u85_d_a_o)) & u85_src[13]) ^ (((^u85_d_b_o)) & u85_src[14]) ^ (((^u85_d_c_o)) & u85_src[15]) ^ (((^u85_d_d_o)) & u85_src[16]) ^ (((^u85_d_u0_o)) & u85_src[17]) ^ (((^u85_d_v0_o)) & u85_src[18]) ^ (((^u85_d_view_mask_o)) & u85_src[19]) ^ (((^u85_d_palette_o)) & u85_src[20]) ^ (((^u85_s_valid_o)) & u85_src[21]) ^ (((^u85_s_x_o)) & u85_src[22]) ^ (((^u85_s_y_o)) & u85_src[23]) ^ (((^u85_s_w_o)) & u85_src[24]) ^ (((^u85_s_h_o)) & u85_src[25]) ^ (((^u85_s_u_o)) & u85_src[26]) ^ (((^u85_s_v_o)) & u85_src[27]) ^ (((^u85_s_a00_o)) & u85_src[28]) ^ (((^u85_s_a01_o)) & u85_src[29]) ^ (((^u85_s_a10_o)) & u85_src[30]) ^ (((^u85_s_a11_o)) & u85_src[31]) ^ (((^u85_s_format_o)) & u85_src[32]) ^ (((^u85_s_palette_o)) & u85_src[33]) ^ (((^u85_s_tint_o)) & u85_src[34]) ^ (((^u85_s_blend_o)) & u85_src[35]) ^ (((^u85_s_view_mask_o)) & u85_src[36]) ^ (((^u85_s_order_o)) & u85_src[37]) ^ (((^u85_s_src_id_o)) & u85_src[38]) ^ (((^u85_ld_bind_we_o)) & u85_src[39]) ^ (((^u85_ld_bind_sel_o)) & u85_src[40]) ^ (((^u85_ld_bind_base_o)) & u85_src[41]) ^ (((^u85_ld_bind_lstride_o)) & u85_src[42]) ^ (((^u85_ld_bind_lheight_o)) & u85_src[43]) ^ (((^u85_publishing_o)) & u85_src[44]) ^ (((^u85_atm_slot_o)) & u85_src[45]) ^ (((^u85_line_scroll_o)) & u85_src[46]) ^ (((^u85_planes_staged_o)) & u85_src[47]) ^ (((^u85_sprites_staged_o)) & u85_src[48]) ^ (((^u85_plane_refused_o)) & u85_src[49]) ^ (((^u85_sprite_refused_o)) & u85_src[50]) ^ (((^u85_list_overflow_o)) & u85_src[51]) ^ (((^u85_packets_committed_o)) & u85_src[52]) ^ (((^u85_packets_abandoned_o)) & u85_src[53]) ^ (((^u85_frames_sealed_o)) & u85_src[54]) ^ (((^u85_planes_published_o)) & u85_src[55]) ^ (((^u85_sprites_published_o)) & u85_src[56]) ^ (((^u85_slots_auto_disabled_o)) & u85_src[57]) ^ (((^u85_bind_conflict_o)) & u85_src[58]) ^ (((^u85_seal_overrun_o)) & u85_src[59]);
 
-  // ---- zhao_twod_sampler ----
+  // ---- zhao_twod_plane ----
   logic [63:0] u86_lfsr_q;
   logic [1023:0] u86_src;
   assign u86_src = {16{u86_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u86_lfsr_q <= 64'h0000003526A404BB;
     else u86_lfsr_q <= {u86_lfsr_q[62:0], (^(u86_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u86_pw_valid_o;
-  logic [1-1:0] u86_pw_slot_o;
-  logic [16-1:0] u86_pw_x_o;
-  logic [16-1:0] u86_pw_y_o;
-  logic signed [32-1:0] u86_pw_line_scroll_o;
-  logic [1-1:0] u86_pl_ready_o;
-  logic [1-1:0] u86_sp_ready_o;
-  logic [1-1:0] u86_sc_valid_o;
-  logic [16-1:0] u86_sc_rgb_o;
-  logic signed [16-1:0] u86_sc_x_o;
-  logic signed [16-1:0] u86_sc_y_o;
-  logic [16-1:0] u86_sc_tint_o;
-  logic [2-1:0] u86_sc_blend_o;
-  logic [8-1:0] u86_sc_order_o;
-  logic [16-1:0] u86_sc_src_id_o;
-  logic [1-1:0] u86_sc_last_o;
-  logic [1-1:0] u86_atm_en_o;
-  logic [1-1:0] u86_atm_valid_o;
-  logic [16-1:0] u86_atm_rgb_o;
-  logic [8-1:0] u86_atm_opacity_o;
-  logic [1-1:0] u86_atm_add_o;
-  logic [32-1:0] u86_samples_o;
-  logic [32-1:0] u86_plane_samples_o;
-  logic [32-1:0] u86_sprite_samples_o;
-  logic [32-1:0] u86_clut8_samples_o;
-  logic [32-1:0] u86_rgb565_samples_o;
-  logic [32-1:0] u86_texel_wrapped_o;
-  logic [32-1:0] u86_page_oob_o;
-  logic [32-1:0] u86_bind_missing_o;
-  logic [32-1:0] u86_fmt_refused_o;
-  logic [32-1:0] u86_pal_refused_o;
-  logic [32-1:0] u86_skipped_fill_o;
-  logic [32-1:0] u86_atm_underrun_o;
-  logic [32-1:0] u86_walk_stalls_o;
-  logic [32-1:0] u86_sprite_stalls_o;
-  logic [32-1:0] u86_tint_unapplied_o;
-  logic [32-1:0] u86_pair_lost_o;
-  zhao_twod_sampler u86_i (
+  logic [1-1:0] u86_d_ready_o;
+  logic [1-1:0] u86_p_ready_o;
+  logic [1-1:0] u86_s_valid_o;
+  logic [16-1:0] u86_s_texel_u_o;
+  logic [16-1:0] u86_s_texel_v_o;
+  logic [1-1:0] u86_s_format_o;
+  logic [8-1:0] u86_s_palette_o;
+  logic [2-1:0] u86_s_blend_o;
+  logic [8-1:0] u86_s_opacity_o;
+  logic [2-1:0] u86_s_role_o;
+  logic [32-1:0] u86_pixels_o;
+  logic [32-1:0] u86_refused_role_o;
+  logic [32-1:0] u86_refused_blend_o;
+  logic [32-1:0] u86_skipped_view_o;
+  logic [32-1:0] u86_wrap_fail_o;
+  logic [32-1:0] u86_disabled_o;
+  zhao_twod_plane u86_i (
       .clk(clk),
       .rst_n(rst_n),
-      .frame_start_i(u86_src[0 +: 1]),
-      .frame_w_i(u86_src[7 +: 9]),
-      .frame_h_i(u86_src[14 +: 8]),
-      .ld_page_we_i(u86_src[21 +: 1]),
-      .ld_page_addr_i(u86_src[28 +: 13]),
-      .ld_page_data_i(u86_src[35 +: 16]),
-      .ld_pal_we_i(u86_src[42 +: 1]),
-      .ld_pal_addr_i(u86_src[49 +: 10]),
-      .ld_pal_data_i(u86_src[56 +: 16]),
-      .ld_bind_we_i(u86_src[63 +: 1]),
-      .ld_bind_sel_i(u86_src[70 +: 3]),
-      .ld_bind_base_i(u86_src[77 +: 13]),
-      .ld_bind_lstride_i(u86_src[84 +: 4]),
-      .ld_bind_lheight_i(u86_src[91 +: 4]),
-      .atm_slot_i(u86_src[98 +: 1]),
-      .line_scroll_i(u86_src[105 +: 32]),
-      .pw_valid_o(u86_pw_valid_o),
-      .pw_ready_i(u86_src[112 +: 1]),
-      .pw_slot_o(u86_pw_slot_o),
-      .pw_x_o(u86_pw_x_o),
-      .pw_y_o(u86_pw_y_o),
-      .pw_line_scroll_o(u86_pw_line_scroll_o),
-      .pl_valid_i(u86_src[119 +: 1]),
-      .pl_ready_o(u86_pl_ready_o),
-      .pl_texel_u_i(u86_src[126 +: 16]),
-      .pl_texel_v_i(u86_src[133 +: 16]),
-      .pl_format_i(u86_src[140 +: 1]),
-      .pl_palette_i(u86_src[147 +: 8]),
-      .pl_blend_i(u86_src[154 +: 2]),
-      .pl_opacity_i(u86_src[161 +: 8]),
-      .pl_role_i(u86_src[168 +: 2]),
-      .sp_valid_i(u86_src[175 +: 1]),
-      .sp_ready_o(u86_sp_ready_o),
-      .sp_x_i(u86_src[182 +: 16]),
-      .sp_y_i(u86_src[189 +: 16]),
-      .sp_u_i(u86_src[196 +: 32]),
-      .sp_v_i(u86_src[203 +: 32]),
-      .sp_format_i(u86_src[210 +: 3]),
-      .sp_palette_i(u86_src[217 +: 8]),
-      .sp_tint_i(u86_src[224 +: 16]),
-      .sp_blend_i(u86_src[231 +: 2]),
-      .sp_order_i(u86_src[238 +: 8]),
-      .sp_src_id_i(u86_src[245 +: 16]),
-      .sp_last_i(u86_src[252 +: 1]),
-      .sc_valid_o(u86_sc_valid_o),
-      .sc_ready_i(u86_src[259 +: 1]),
-      .sc_rgb_o(u86_sc_rgb_o),
-      .sc_x_o(u86_sc_x_o),
-      .sc_y_o(u86_sc_y_o),
-      .sc_tint_o(u86_sc_tint_o),
-      .sc_blend_o(u86_sc_blend_o),
-      .sc_order_o(u86_sc_order_o),
-      .sc_src_id_o(u86_sc_src_id_o),
-      .sc_last_o(u86_sc_last_o),
-      .atm_req_v_i(u86_src[266 +: 1]),
-      .atm_req_x_i(u86_src[273 +: 9]),
-      .atm_req_y_i(u86_src[280 +: 8]),
-      .atm_en_o(u86_atm_en_o),
-      .atm_valid_o(u86_atm_valid_o),
-      .atm_rgb_o(u86_atm_rgb_o),
-      .atm_opacity_o(u86_atm_opacity_o),
-      .atm_add_o(u86_atm_add_o),
-      .samples_o(u86_samples_o),
-      .plane_samples_o(u86_plane_samples_o),
-      .sprite_samples_o(u86_sprite_samples_o),
-      .clut8_samples_o(u86_clut8_samples_o),
-      .rgb565_samples_o(u86_rgb565_samples_o),
-      .texel_wrapped_o(u86_texel_wrapped_o),
-      .page_oob_o(u86_page_oob_o),
-      .bind_missing_o(u86_bind_missing_o),
-      .fmt_refused_o(u86_fmt_refused_o),
-      .pal_refused_o(u86_pal_refused_o),
-      .skipped_fill_o(u86_skipped_fill_o),
-      .atm_underrun_o(u86_atm_underrun_o),
-      .walk_stalls_o(u86_walk_stalls_o),
-      .sprite_stalls_o(u86_sprite_stalls_o),
-      .tint_unapplied_o(u86_tint_unapplied_o),
-      .pair_lost_o(u86_pair_lost_o)
+      .d_valid_i(u86_src[0 +: 1]),
+      .d_ready_o(u86_d_ready_o),
+      .d_slot_i(u86_src[7 +: 1]),
+      .d_enable_i(u86_src[14 +: 1]),
+      .d_role_i(u86_src[21 +: 2]),
+      .d_blend_i(u86_src[28 +: 2]),
+      .d_opacity_i(u86_src[35 +: 8]),
+      .d_format_i(u86_src[42 +: 1]),
+      .d_width_i(u86_src[49 +: 16]),
+      .d_height_i(u86_src[56 +: 16]),
+      .d_wrap_u_i(u86_src[63 +: 1]),
+      .d_wrap_v_i(u86_src[70 +: 1]),
+      .d_a_i(u86_src[77 +: 32]),
+      .d_b_i(u86_src[84 +: 32]),
+      .d_c_i(u86_src[91 +: 32]),
+      .d_d_i(u86_src[98 +: 32]),
+      .d_u0_i(u86_src[105 +: 32]),
+      .d_v0_i(u86_src[112 +: 32]),
+      .d_view_mask_i(u86_src[119 +: 2]),
+      .d_palette_i(u86_src[126 +: 8]),
+      .p_valid_i(u86_src[133 +: 1]),
+      .p_ready_o(u86_p_ready_o),
+      .p_slot_i(u86_src[140 +: 1]),
+      .p_x_i(u86_src[147 +: 16]),
+      .p_y_i(u86_src[154 +: 16]),
+      .p_line_scroll_i(u86_src[161 +: 32]),
+      .view_sel_i(u86_src[168 +: 2]),
+      .s_valid_o(u86_s_valid_o),
+      .s_ready_i(u86_src[175 +: 1]),
+      .s_texel_u_o(u86_s_texel_u_o),
+      .s_texel_v_o(u86_s_texel_v_o),
+      .s_format_o(u86_s_format_o),
+      .s_palette_o(u86_s_palette_o),
+      .s_blend_o(u86_s_blend_o),
+      .s_opacity_o(u86_s_opacity_o),
+      .s_role_o(u86_s_role_o),
+      .pixels_o(u86_pixels_o),
+      .refused_role_o(u86_refused_role_o),
+      .refused_blend_o(u86_refused_blend_o),
+      .skipped_view_o(u86_skipped_view_o),
+      .wrap_fail_o(u86_wrap_fail_o),
+      .disabled_o(u86_disabled_o)
   );
   logic u86_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u86_fold_q <= 1'b0;
-    else u86_fold_q <= u86_fold_q ^ (((^u86_pw_valid_o)) & u86_src[0]) ^ (((^u86_pw_slot_o)) & u86_src[1]) ^ (((^u86_pw_x_o)) & u86_src[2]) ^ (((^u86_pw_y_o)) & u86_src[3]) ^ (((^u86_pw_line_scroll_o)) & u86_src[4]) ^ (((^u86_pl_ready_o)) & u86_src[5]) ^ (((^u86_sp_ready_o)) & u86_src[6]) ^ (((^u86_sc_valid_o)) & u86_src[7]) ^ (((^u86_sc_rgb_o)) & u86_src[8]) ^ (((^u86_sc_x_o)) & u86_src[9]) ^ (((^u86_sc_y_o)) & u86_src[10]) ^ (((^u86_sc_tint_o)) & u86_src[11]) ^ (((^u86_sc_blend_o)) & u86_src[12]) ^ (((^u86_sc_order_o)) & u86_src[13]) ^ (((^u86_sc_src_id_o)) & u86_src[14]) ^ (((^u86_sc_last_o)) & u86_src[15]) ^ (((^u86_atm_en_o)) & u86_src[16]) ^ (((^u86_atm_valid_o)) & u86_src[17]) ^ (((^u86_atm_rgb_o)) & u86_src[18]) ^ (((^u86_atm_opacity_o)) & u86_src[19]) ^ (((^u86_atm_add_o)) & u86_src[20]) ^ (((^u86_samples_o)) & u86_src[21]) ^ (((^u86_plane_samples_o)) & u86_src[22]) ^ (((^u86_sprite_samples_o)) & u86_src[23]) ^ (((^u86_clut8_samples_o)) & u86_src[24]) ^ (((^u86_rgb565_samples_o)) & u86_src[25]) ^ (((^u86_texel_wrapped_o)) & u86_src[26]) ^ (((^u86_page_oob_o)) & u86_src[27]) ^ (((^u86_bind_missing_o)) & u86_src[28]) ^ (((^u86_fmt_refused_o)) & u86_src[29]) ^ (((^u86_pal_refused_o)) & u86_src[30]) ^ (((^u86_skipped_fill_o)) & u86_src[31]) ^ (((^u86_atm_underrun_o)) & u86_src[32]) ^ (((^u86_walk_stalls_o)) & u86_src[33]) ^ (((^u86_sprite_stalls_o)) & u86_src[34]) ^ (((^u86_tint_unapplied_o)) & u86_src[35]) ^ (((^u86_pair_lost_o)) & u86_src[36]);
+    else u86_fold_q <= u86_fold_q ^ (((^u86_d_ready_o)) & u86_src[0]) ^ (((^u86_p_ready_o)) & u86_src[1]) ^ (((^u86_s_valid_o)) & u86_src[2]) ^ (((^u86_s_texel_u_o)) & u86_src[3]) ^ (((^u86_s_texel_v_o)) & u86_src[4]) ^ (((^u86_s_format_o)) & u86_src[5]) ^ (((^u86_s_palette_o)) & u86_src[6]) ^ (((^u86_s_blend_o)) & u86_src[7]) ^ (((^u86_s_opacity_o)) & u86_src[8]) ^ (((^u86_s_role_o)) & u86_src[9]) ^ (((^u86_pixels_o)) & u86_src[10]) ^ (((^u86_refused_role_o)) & u86_src[11]) ^ (((^u86_refused_blend_o)) & u86_src[12]) ^ (((^u86_skipped_view_o)) & u86_src[13]) ^ (((^u86_wrap_fail_o)) & u86_src[14]) ^ (((^u86_disabled_o)) & u86_src[15]);
 
-  // ---- zhao_twod_sprite ----
+  // ---- zhao_twod_sampler ----
   logic [63:0] u87_lfsr_q;
   logic [1023:0] u87_src;
   assign u87_src = {16{u87_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u87_lfsr_q <= 64'h00000035C4DB7E6C;
     else u87_lfsr_q <= {u87_lfsr_q[62:0], (^(u87_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u87_d_ready_o;
-  logic [1-1:0] u87_s_valid_o;
-  logic signed [16-1:0] u87_s_x_o;
-  logic signed [16-1:0] u87_s_y_o;
-  logic signed [32-1:0] u87_s_u_o;
-  logic signed [32-1:0] u87_s_v_o;
-  logic [3-1:0] u87_s_format_o;
-  logic [8-1:0] u87_s_palette_o;
-  logic [16-1:0] u87_s_tint_o;
-  logic [2-1:0] u87_s_blend_o;
-  logic [8-1:0] u87_s_order_o;
-  logic [16-1:0] u87_s_src_id_o;
-  logic [1-1:0] u87_s_last_o;
-  logic [32-1:0] u87_descriptors_o;
-  logic [32-1:0] u87_skipped_view_o;
-  logic [32-1:0] u87_refused_o;
-  logic [32-1:0] u87_pixels_o;
-  zhao_twod_sprite u87_i (
+  logic [1-1:0] u87_pw_valid_o;
+  logic [1-1:0] u87_pw_slot_o;
+  logic [16-1:0] u87_pw_x_o;
+  logic [16-1:0] u87_pw_y_o;
+  logic signed [32-1:0] u87_pw_line_scroll_o;
+  logic [1-1:0] u87_pl_ready_o;
+  logic [1-1:0] u87_sp_ready_o;
+  logic [1-1:0] u87_sc_valid_o;
+  logic [16-1:0] u87_sc_rgb_o;
+  logic signed [16-1:0] u87_sc_x_o;
+  logic signed [16-1:0] u87_sc_y_o;
+  logic [16-1:0] u87_sc_tint_o;
+  logic [2-1:0] u87_sc_blend_o;
+  logic [8-1:0] u87_sc_order_o;
+  logic [16-1:0] u87_sc_src_id_o;
+  logic [1-1:0] u87_sc_last_o;
+  logic [1-1:0] u87_atm_en_o;
+  logic [1-1:0] u87_atm_valid_o;
+  logic [16-1:0] u87_atm_rgb_o;
+  logic [8-1:0] u87_atm_opacity_o;
+  logic [1-1:0] u87_atm_add_o;
+  logic [32-1:0] u87_samples_o;
+  logic [32-1:0] u87_plane_samples_o;
+  logic [32-1:0] u87_sprite_samples_o;
+  logic [32-1:0] u87_clut8_samples_o;
+  logic [32-1:0] u87_rgb565_samples_o;
+  logic [32-1:0] u87_texel_wrapped_o;
+  logic [32-1:0] u87_page_oob_o;
+  logic [32-1:0] u87_bind_missing_o;
+  logic [32-1:0] u87_fmt_refused_o;
+  logic [32-1:0] u87_pal_refused_o;
+  logic [32-1:0] u87_skipped_fill_o;
+  logic [32-1:0] u87_atm_underrun_o;
+  logic [32-1:0] u87_walk_stalls_o;
+  logic [32-1:0] u87_sprite_stalls_o;
+  logic [32-1:0] u87_tint_unapplied_o;
+  logic [32-1:0] u87_pair_lost_o;
+  zhao_twod_sampler u87_i (
       .clk(clk),
       .rst_n(rst_n),
-      .d_valid_i(u87_src[0 +: 1]),
-      .d_ready_o(u87_d_ready_o),
-      .d_x_i(u87_src[7 +: 16]),
-      .d_y_i(u87_src[14 +: 16]),
-      .d_w_i(u87_src[21 +: 16]),
-      .d_h_i(u87_src[28 +: 16]),
-      .d_u_i(u87_src[35 +: 32]),
-      .d_v_i(u87_src[42 +: 32]),
-      .d_a00_i(u87_src[49 +: 32]),
-      .d_a01_i(u87_src[56 +: 32]),
-      .d_a10_i(u87_src[63 +: 32]),
-      .d_a11_i(u87_src[70 +: 32]),
-      .d_format_i(u87_src[77 +: 3]),
-      .d_palette_i(u87_src[84 +: 8]),
-      .d_tint_i(u87_src[91 +: 16]),
-      .d_blend_i(u87_src[98 +: 2]),
-      .d_view_mask_i(u87_src[105 +: 2]),
-      .d_order_i(u87_src[112 +: 8]),
-      .d_src_id_i(u87_src[119 +: 16]),
-      .view_sel_i(u87_src[126 +: 2]),
-      .s_valid_o(u87_s_valid_o),
-      .s_ready_i(u87_src[133 +: 1]),
-      .s_x_o(u87_s_x_o),
-      .s_y_o(u87_s_y_o),
-      .s_u_o(u87_s_u_o),
-      .s_v_o(u87_s_v_o),
-      .s_format_o(u87_s_format_o),
-      .s_palette_o(u87_s_palette_o),
-      .s_tint_o(u87_s_tint_o),
-      .s_blend_o(u87_s_blend_o),
-      .s_order_o(u87_s_order_o),
-      .s_src_id_o(u87_s_src_id_o),
-      .s_last_o(u87_s_last_o),
-      .descriptors_o(u87_descriptors_o),
-      .skipped_view_o(u87_skipped_view_o),
-      .refused_o(u87_refused_o),
-      .pixels_o(u87_pixels_o)
+      .frame_start_i(u87_src[0 +: 1]),
+      .frame_w_i(u87_src[7 +: 9]),
+      .frame_h_i(u87_src[14 +: 8]),
+      .ld_page_we_i(u87_src[21 +: 1]),
+      .ld_page_addr_i(u87_src[28 +: 13]),
+      .ld_page_data_i(u87_src[35 +: 16]),
+      .ld_pal_we_i(u87_src[42 +: 1]),
+      .ld_pal_addr_i(u87_src[49 +: 10]),
+      .ld_pal_data_i(u87_src[56 +: 16]),
+      .ld_bind_we_i(u87_src[63 +: 1]),
+      .ld_bind_sel_i(u87_src[70 +: 3]),
+      .ld_bind_base_i(u87_src[77 +: 13]),
+      .ld_bind_lstride_i(u87_src[84 +: 4]),
+      .ld_bind_lheight_i(u87_src[91 +: 4]),
+      .atm_slot_i(u87_src[98 +: 1]),
+      .line_scroll_i(u87_src[105 +: 32]),
+      .pw_valid_o(u87_pw_valid_o),
+      .pw_ready_i(u87_src[112 +: 1]),
+      .pw_slot_o(u87_pw_slot_o),
+      .pw_x_o(u87_pw_x_o),
+      .pw_y_o(u87_pw_y_o),
+      .pw_line_scroll_o(u87_pw_line_scroll_o),
+      .pl_valid_i(u87_src[119 +: 1]),
+      .pl_ready_o(u87_pl_ready_o),
+      .pl_texel_u_i(u87_src[126 +: 16]),
+      .pl_texel_v_i(u87_src[133 +: 16]),
+      .pl_format_i(u87_src[140 +: 1]),
+      .pl_palette_i(u87_src[147 +: 8]),
+      .pl_blend_i(u87_src[154 +: 2]),
+      .pl_opacity_i(u87_src[161 +: 8]),
+      .pl_role_i(u87_src[168 +: 2]),
+      .sp_valid_i(u87_src[175 +: 1]),
+      .sp_ready_o(u87_sp_ready_o),
+      .sp_x_i(u87_src[182 +: 16]),
+      .sp_y_i(u87_src[189 +: 16]),
+      .sp_u_i(u87_src[196 +: 32]),
+      .sp_v_i(u87_src[203 +: 32]),
+      .sp_format_i(u87_src[210 +: 3]),
+      .sp_palette_i(u87_src[217 +: 8]),
+      .sp_tint_i(u87_src[224 +: 16]),
+      .sp_blend_i(u87_src[231 +: 2]),
+      .sp_order_i(u87_src[238 +: 8]),
+      .sp_src_id_i(u87_src[245 +: 16]),
+      .sp_last_i(u87_src[252 +: 1]),
+      .sc_valid_o(u87_sc_valid_o),
+      .sc_ready_i(u87_src[259 +: 1]),
+      .sc_rgb_o(u87_sc_rgb_o),
+      .sc_x_o(u87_sc_x_o),
+      .sc_y_o(u87_sc_y_o),
+      .sc_tint_o(u87_sc_tint_o),
+      .sc_blend_o(u87_sc_blend_o),
+      .sc_order_o(u87_sc_order_o),
+      .sc_src_id_o(u87_sc_src_id_o),
+      .sc_last_o(u87_sc_last_o),
+      .atm_req_v_i(u87_src[266 +: 1]),
+      .atm_req_x_i(u87_src[273 +: 9]),
+      .atm_req_y_i(u87_src[280 +: 8]),
+      .atm_en_o(u87_atm_en_o),
+      .atm_valid_o(u87_atm_valid_o),
+      .atm_rgb_o(u87_atm_rgb_o),
+      .atm_opacity_o(u87_atm_opacity_o),
+      .atm_add_o(u87_atm_add_o),
+      .samples_o(u87_samples_o),
+      .plane_samples_o(u87_plane_samples_o),
+      .sprite_samples_o(u87_sprite_samples_o),
+      .clut8_samples_o(u87_clut8_samples_o),
+      .rgb565_samples_o(u87_rgb565_samples_o),
+      .texel_wrapped_o(u87_texel_wrapped_o),
+      .page_oob_o(u87_page_oob_o),
+      .bind_missing_o(u87_bind_missing_o),
+      .fmt_refused_o(u87_fmt_refused_o),
+      .pal_refused_o(u87_pal_refused_o),
+      .skipped_fill_o(u87_skipped_fill_o),
+      .atm_underrun_o(u87_atm_underrun_o),
+      .walk_stalls_o(u87_walk_stalls_o),
+      .sprite_stalls_o(u87_sprite_stalls_o),
+      .tint_unapplied_o(u87_tint_unapplied_o),
+      .pair_lost_o(u87_pair_lost_o)
   );
   logic u87_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u87_fold_q <= 1'b0;
-    else u87_fold_q <= u87_fold_q ^ (((^u87_d_ready_o)) & u87_src[0]) ^ (((^u87_s_valid_o)) & u87_src[1]) ^ (((^u87_s_x_o)) & u87_src[2]) ^ (((^u87_s_y_o)) & u87_src[3]) ^ (((^u87_s_u_o)) & u87_src[4]) ^ (((^u87_s_v_o)) & u87_src[5]) ^ (((^u87_s_format_o)) & u87_src[6]) ^ (((^u87_s_palette_o)) & u87_src[7]) ^ (((^u87_s_tint_o)) & u87_src[8]) ^ (((^u87_s_blend_o)) & u87_src[9]) ^ (((^u87_s_order_o)) & u87_src[10]) ^ (((^u87_s_src_id_o)) & u87_src[11]) ^ (((^u87_s_last_o)) & u87_src[12]) ^ (((^u87_descriptors_o)) & u87_src[13]) ^ (((^u87_skipped_view_o)) & u87_src[14]) ^ (((^u87_refused_o)) & u87_src[15]) ^ (((^u87_pixels_o)) & u87_src[16]);
+    else u87_fold_q <= u87_fold_q ^ (((^u87_pw_valid_o)) & u87_src[0]) ^ (((^u87_pw_slot_o)) & u87_src[1]) ^ (((^u87_pw_x_o)) & u87_src[2]) ^ (((^u87_pw_y_o)) & u87_src[3]) ^ (((^u87_pw_line_scroll_o)) & u87_src[4]) ^ (((^u87_pl_ready_o)) & u87_src[5]) ^ (((^u87_sp_ready_o)) & u87_src[6]) ^ (((^u87_sc_valid_o)) & u87_src[7]) ^ (((^u87_sc_rgb_o)) & u87_src[8]) ^ (((^u87_sc_x_o)) & u87_src[9]) ^ (((^u87_sc_y_o)) & u87_src[10]) ^ (((^u87_sc_tint_o)) & u87_src[11]) ^ (((^u87_sc_blend_o)) & u87_src[12]) ^ (((^u87_sc_order_o)) & u87_src[13]) ^ (((^u87_sc_src_id_o)) & u87_src[14]) ^ (((^u87_sc_last_o)) & u87_src[15]) ^ (((^u87_atm_en_o)) & u87_src[16]) ^ (((^u87_atm_valid_o)) & u87_src[17]) ^ (((^u87_atm_rgb_o)) & u87_src[18]) ^ (((^u87_atm_opacity_o)) & u87_src[19]) ^ (((^u87_atm_add_o)) & u87_src[20]) ^ (((^u87_samples_o)) & u87_src[21]) ^ (((^u87_plane_samples_o)) & u87_src[22]) ^ (((^u87_sprite_samples_o)) & u87_src[23]) ^ (((^u87_clut8_samples_o)) & u87_src[24]) ^ (((^u87_rgb565_samples_o)) & u87_src[25]) ^ (((^u87_texel_wrapped_o)) & u87_src[26]) ^ (((^u87_page_oob_o)) & u87_src[27]) ^ (((^u87_bind_missing_o)) & u87_src[28]) ^ (((^u87_fmt_refused_o)) & u87_src[29]) ^ (((^u87_pal_refused_o)) & u87_src[30]) ^ (((^u87_skipped_fill_o)) & u87_src[31]) ^ (((^u87_atm_underrun_o)) & u87_src[32]) ^ (((^u87_walk_stalls_o)) & u87_src[33]) ^ (((^u87_sprite_stalls_o)) & u87_src[34]) ^ (((^u87_tint_unapplied_o)) & u87_src[35]) ^ (((^u87_pair_lost_o)) & u87_src[36]);
+
+  // ---- zhao_twod_sprite ----
+  logic [63:0] u88_lfsr_q;
+  logic [1023:0] u88_src;
+  assign u88_src = {16{u88_lfsr_q}};
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) u88_lfsr_q <= 64'h000000366312F81D;
+    else u88_lfsr_q <= {u88_lfsr_q[62:0], (^(u88_lfsr_q & 64'hD800000000000000)) ^ seed_i};
+  logic [1-1:0] u88_d_ready_o;
+  logic [1-1:0] u88_s_valid_o;
+  logic signed [16-1:0] u88_s_x_o;
+  logic signed [16-1:0] u88_s_y_o;
+  logic signed [32-1:0] u88_s_u_o;
+  logic signed [32-1:0] u88_s_v_o;
+  logic [3-1:0] u88_s_format_o;
+  logic [8-1:0] u88_s_palette_o;
+  logic [16-1:0] u88_s_tint_o;
+  logic [2-1:0] u88_s_blend_o;
+  logic [8-1:0] u88_s_order_o;
+  logic [16-1:0] u88_s_src_id_o;
+  logic [1-1:0] u88_s_last_o;
+  logic [32-1:0] u88_descriptors_o;
+  logic [32-1:0] u88_skipped_view_o;
+  logic [32-1:0] u88_refused_o;
+  logic [32-1:0] u88_pixels_o;
+  zhao_twod_sprite u88_i (
+      .clk(clk),
+      .rst_n(rst_n),
+      .d_valid_i(u88_src[0 +: 1]),
+      .d_ready_o(u88_d_ready_o),
+      .d_x_i(u88_src[7 +: 16]),
+      .d_y_i(u88_src[14 +: 16]),
+      .d_w_i(u88_src[21 +: 16]),
+      .d_h_i(u88_src[28 +: 16]),
+      .d_u_i(u88_src[35 +: 32]),
+      .d_v_i(u88_src[42 +: 32]),
+      .d_a00_i(u88_src[49 +: 32]),
+      .d_a01_i(u88_src[56 +: 32]),
+      .d_a10_i(u88_src[63 +: 32]),
+      .d_a11_i(u88_src[70 +: 32]),
+      .d_format_i(u88_src[77 +: 3]),
+      .d_palette_i(u88_src[84 +: 8]),
+      .d_tint_i(u88_src[91 +: 16]),
+      .d_blend_i(u88_src[98 +: 2]),
+      .d_view_mask_i(u88_src[105 +: 2]),
+      .d_order_i(u88_src[112 +: 8]),
+      .d_src_id_i(u88_src[119 +: 16]),
+      .view_sel_i(u88_src[126 +: 2]),
+      .s_valid_o(u88_s_valid_o),
+      .s_ready_i(u88_src[133 +: 1]),
+      .s_x_o(u88_s_x_o),
+      .s_y_o(u88_s_y_o),
+      .s_u_o(u88_s_u_o),
+      .s_v_o(u88_s_v_o),
+      .s_format_o(u88_s_format_o),
+      .s_palette_o(u88_s_palette_o),
+      .s_tint_o(u88_s_tint_o),
+      .s_blend_o(u88_s_blend_o),
+      .s_order_o(u88_s_order_o),
+      .s_src_id_o(u88_s_src_id_o),
+      .s_last_o(u88_s_last_o),
+      .descriptors_o(u88_descriptors_o),
+      .skipped_view_o(u88_skipped_view_o),
+      .refused_o(u88_refused_o),
+      .pixels_o(u88_pixels_o)
+  );
+  logic u88_fold_q;
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) u88_fold_q <= 1'b0;
+    else u88_fold_q <= u88_fold_q ^ (((^u88_d_ready_o)) & u88_src[0]) ^ (((^u88_s_valid_o)) & u88_src[1]) ^ (((^u88_s_x_o)) & u88_src[2]) ^ (((^u88_s_y_o)) & u88_src[3]) ^ (((^u88_s_u_o)) & u88_src[4]) ^ (((^u88_s_v_o)) & u88_src[5]) ^ (((^u88_s_format_o)) & u88_src[6]) ^ (((^u88_s_palette_o)) & u88_src[7]) ^ (((^u88_s_tint_o)) & u88_src[8]) ^ (((^u88_s_blend_o)) & u88_src[9]) ^ (((^u88_s_order_o)) & u88_src[10]) ^ (((^u88_s_src_id_o)) & u88_src[11]) ^ (((^u88_s_last_o)) & u88_src[12]) ^ (((^u88_descriptors_o)) & u88_src[13]) ^ (((^u88_skipped_view_o)) & u88_src[14]) ^ (((^u88_refused_o)) & u88_src[15]) ^ (((^u88_pixels_o)) & u88_src[16]);
 
   // One pin, with every output salted by a distinct private source bit,
   // so aliased outputs cannot cancel and nothing is removed for no load.
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) fold_o <= 1'b0;
-    else fold_o <= u00_fold_q ^ u01_fold_q ^ u02_fold_q ^ u03_fold_q ^ u04_fold_q ^ u05_fold_q ^ u06_fold_q ^ u07_fold_q ^ u08_fold_q ^ u09_fold_q ^ u10_fold_q ^ u11_fold_q ^ u12_fold_q ^ u13_fold_q ^ u14_fold_q ^ u15_fold_q ^ u16_fold_q ^ u17_fold_q ^ u18_fold_q ^ u19_fold_q ^ u20_fold_q ^ u21_fold_q ^ u22_fold_q ^ u23_fold_q ^ u24_fold_q ^ u25_fold_q ^ u26_fold_q ^ u27_fold_q ^ u28_fold_q ^ u29_fold_q ^ u30_fold_q ^ u31_fold_q ^ u32_fold_q ^ u33_fold_q ^ u34_fold_q ^ u35_fold_q ^ u36_fold_q ^ u37_fold_q ^ u38_fold_q ^ u39_fold_q ^ u40_fold_q ^ u41_fold_q ^ u42_fold_q ^ u43_fold_q ^ u44_fold_q ^ u45_fold_q ^ u46_fold_q ^ u47_fold_q ^ u48_fold_q ^ u49_fold_q ^ u50_fold_q ^ u51_fold_q ^ u52_fold_q ^ u53_fold_q ^ u54_fold_q ^ u55_fold_q ^ u56_fold_q ^ u57_fold_q ^ u58_fold_q ^ u59_fold_q ^ u60_fold_q ^ u61_fold_q ^ u63_fold_q ^ u64_fold_q ^ u65_fold_q ^ u66_fold_q ^ u67_fold_q ^ u68_fold_q ^ u69_fold_q ^ u70_fold_q ^ u71_fold_q ^ u72_fold_q ^ u73_fold_q ^ u74_fold_q ^ u75_fold_q ^ u76_fold_q ^ u77_fold_q ^ u78_fold_q ^ u79_fold_q ^ u82_fold_q ^ u83_fold_q ^ u84_fold_q ^ u85_fold_q ^ u86_fold_q ^ u87_fold_q;
+    else fold_o <= u00_fold_q ^ u01_fold_q ^ u02_fold_q ^ u03_fold_q ^ u04_fold_q ^ u05_fold_q ^ u06_fold_q ^ u07_fold_q ^ u08_fold_q ^ u09_fold_q ^ u10_fold_q ^ u11_fold_q ^ u12_fold_q ^ u13_fold_q ^ u14_fold_q ^ u15_fold_q ^ u16_fold_q ^ u17_fold_q ^ u18_fold_q ^ u19_fold_q ^ u20_fold_q ^ u21_fold_q ^ u22_fold_q ^ u23_fold_q ^ u24_fold_q ^ u25_fold_q ^ u26_fold_q ^ u27_fold_q ^ u28_fold_q ^ u29_fold_q ^ u30_fold_q ^ u31_fold_q ^ u32_fold_q ^ u33_fold_q ^ u34_fold_q ^ u35_fold_q ^ u36_fold_q ^ u37_fold_q ^ u38_fold_q ^ u39_fold_q ^ u40_fold_q ^ u41_fold_q ^ u42_fold_q ^ u43_fold_q ^ u44_fold_q ^ u45_fold_q ^ u46_fold_q ^ u47_fold_q ^ u48_fold_q ^ u49_fold_q ^ u50_fold_q ^ u51_fold_q ^ u52_fold_q ^ u53_fold_q ^ u54_fold_q ^ u55_fold_q ^ u56_fold_q ^ u57_fold_q ^ u58_fold_q ^ u59_fold_q ^ u60_fold_q ^ u61_fold_q ^ u62_fold_q ^ u64_fold_q ^ u65_fold_q ^ u66_fold_q ^ u67_fold_q ^ u68_fold_q ^ u69_fold_q ^ u70_fold_q ^ u71_fold_q ^ u72_fold_q ^ u73_fold_q ^ u74_fold_q ^ u75_fold_q ^ u76_fold_q ^ u77_fold_q ^ u78_fold_q ^ u79_fold_q ^ u80_fold_q ^ u83_fold_q ^ u84_fold_q ^ u85_fold_q ^ u86_fold_q ^ u87_fold_q ^ u88_fold_q;
 
 endmodule : zhao_prod_top
 
