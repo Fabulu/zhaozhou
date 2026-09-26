@@ -2534,3 +2534,82 @@ reader sees the old file or the new one and never a half-written one.
 queued behind CHUNKSER.
 
 Verified: `check_fit_ledger` over 210 rows, `gate_sweep` RC 0 / 30 matching.
+
+### 2026-09-26 - ATTRSETUP merged: 45 -> 36 DSP, and MY HYPOTHESIS WAS WRONG
+
+**Merged at `c275e876`.** `zhao_geom_attrsetup`: **45 -> 36 DSP** (27x27: 24 ->
+15), **940 -> 836 ALUTs**, registers unchanged at 225. Bit identity **proved**,
+not asserted: a new RTL-vs-RTL differential against probe arm 0, 5 checks over
+**20,013 vectors and 60,039 words with a FIRING negative control**, plus the
+pre-existing benches unchanged at 2,880 pixel-attributes and 32,805 / 0.
+
+**I briefed it on the theory that the declared widths were the cause. They are
+innocent.** Eight arms, one change each, ~14 s a map:
+
+| narrowed | cost |
+|---|---|
+| 96x96 -> 46x32 | **zero** |
+| 46x46 -> 22x21 | **zero** |
+| non-negating 72x72 -> 22x32 | **zero** |
+
+Quartus 17.0.2 already strips the sign extension in the plain
+`WIDE'(narrow) * WIDE'(narrow)` form and was multiplying at true widths all
+along.
+
+**The cause is one operand written `(-(72'(cy_by))) * 72'(va_i)` -- the NEGATION
+TAKEN INSIDE THE CAST.** Arm 7 leaves every width at 72, moves the minus sign
+outside the multiply, and recovers all nine blocks. `-(sext(x,72))` is a 72-bit
+subtract from zero, after which the top 50 bits are no longer a recognisable
+sign replication.
+
+**And the same file proves the distinction twelve lines apart**: its edge
+products negate the PRODUCT and cost nothing; the partials negated the OPERAND
+and cost nine blocks. So the actionable pattern is **not "a wide literal"** but
+**an arithmetic operation applied to a widened value before the multiply** -- and
+my `dsp_mode_census.py` said the wrong thing and would have sent the next packet
+hunting wide casts for zero gain. **The packet corrected the tool.**
+
+**R1/R4 priced and not started**, as asked: a 22x21 quarter-square needs ~2^23
+entries, about 1 Mbit per table against ~2.65 Mbit free -- it does not fit
+undecomposed, and decomposition lands on ALMs, already 3.5x over.
+
+**Four errors it caught in itself, one already PUBLISHED** at `0b72f615` and
+refuted by its own later arms. Also a grep returning zero that was a **broken
+pattern**, re-run against the known defect before its silence was believed.
+
+### THREE SMOKE CONTROLS ARE RED, AND ONE PROVES NOTHING
+
+`-Mutant`, `-BadVertex`, `-NoEchoArm` **all fail in TERRAIN** at base
+`4d9afb25`. ATTRSETUP refused to call them inherited: it reverted its own block
+and re-ran, and **all three reproduce byte-identically including the simulation
+timestamp to the picosecond** -- which is both proof they are not its, and a
+second independent proof that its repair leaves the console cycle-for-cycle
+unchanged.
+
+**`-Mutant` is an ABSENT INSTRUMENT.** It dies on the TERRAINAUX terrain
+assertion **before its inverted-polarity verdict can be read**, so it proves
+nothing in either direction -- and it has been quoted as evidence here.
+
+**`gate_sweep` does not run the smoke controls**, which is why a green sweep sat
+on top of them. Same shape as "the gates do not build", one layer in. Assigned to
+TERRTRI as job 2, outranking I13 if the cause turns out to be RTL.
+
+### A FRAGILITY IN MY OWN TOOL, EXPOSED BY THE MERGE
+
+ATTRSETUP's committed `dsp_mode_census.md` had **lost every mode column** --
+`blockpaths/*.map.rpt` is **gitignored**, so its worktree had none and the tool
+rendered a census of multiplier MODES with no modes in it, **saying nothing about
+the absence**. An instrument that degrades quietly is worse than one that is
+missing. It now **refuses with RC 3** naming the blocks, with
+`--allow-missing-modes` as the deliberate escape. **Guard proven both ways:**
+hiding one `.map.rpt` gives RC 3 naming that block, the flag gives RC 0,
+restoring the file gives RC 0.
+
+### WHERE I AM
+
+**Running:** CHUNKSER (I54 + I56) and **TERRTRI** (I13 + the red controls),
+launched at `e650481a`. **At the cap of two.**
+
+**Register 6.** Optimization queue behind them: `zhao_forge_assemble`'s
+`pos_q`/`inv_q` and `zhao_geom_lodstate`'s `st_q`, **both now with targets and
+baselines** (39,167 and 10,826 registers).
