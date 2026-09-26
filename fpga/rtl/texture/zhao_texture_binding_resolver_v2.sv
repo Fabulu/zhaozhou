@@ -5,6 +5,51 @@
 // the independently activated page register before the active row is read.
 // Every accepted logical job pulses issue exactly once and owns reserved space
 // through either a planner handshake or a next-or-later local refusal.
+//
+// ---------------------------------------------------------------------------
+// THE TILESET ROW -- THE READER FOR TEXTURE.MOSAIC'S PICK (2026-09-26, TERRAINTEX)
+// ---------------------------------------------------------------------------
+// `zhao_texture_mosaic_v2` has computed a per-texel tile pick for every
+// fragment since the V3 island was written, and until today NOTHING READ IT:
+// `mosaic_tile_w`, `mosaic_tx_w` and `mosaic_ty_w` occurred exactly twice each
+// in `zhao_texture_island_v3_top.sv` -- a declaration and a port connection --
+// so the frozen `terrain_rules` 6.2 pick was computed and discarded. This block
+// is that answer's reader, and the reason it lands HERE rather than on the
+// selector is the oracle's own shape.
+//
+// `zref::Tileset` (`zref_render.hpp:166`) is `uint8_t tiles[256][64*64]` -- ONE
+// memory object, 256 CLUT8 tiles of 4,096 bytes -- and `rast.cpp:370` samples it
+// as `ts->tiles[tile][(ty << 6) + tx]`. So a tile index is a BYTE OFFSET inside
+// one bound texture, `tile * 4096`, and NOT a different binding row. Adding it
+// to the row's base is therefore the oracle's arithmetic, not an invented
+// indirection; the alternative (256 binding rows per tileset, the selector
+// carrying the pick) would have spent the whole 8-bit selector space on one
+// material and is what the direct-colour path's `tile_base[]` array does for a
+// DIFFERENT object.
+//
+// THE DECLARATION IS THE ROW'S, AND THAT IS THE WHOLE REASON THIS IS AFFORDABLE.
+// A per-FRAGMENT "this material is a mosaic" bit has NO CARRIAGE: the 362-bit
+// flat request (`zhao_render_texture_pkg::zhao_texture_v3_request_v2_t`) is
+// packed solid with no reserved field, and so is the island's 287-bit logical
+// descriptor -- measured, not assumed. The binding row's `mode` word, by
+// contrast, has ELEVEN bits the legality law has always forced to zero
+// (`row.mode[31:21] == 11'd0`), so `mode[21]` is a mandatory-zero bit whose
+// zero already means "not a tileset" in every row this console has ever
+// accepted. That is the same zero-keeps-its-meaning allocation the ABI uses for
+// `MaterialRecord.fragment_state`, and it costs no field anywhere upstream.
+//
+// A TILESET ROW IS CONSTRAINED, NOT MERELY FLAGGED. `binding_row_legal()`
+// refuses a tileset row that is not exactly the object 6.2 describes: CLUT8,
+// 64x64 (`log2w == log2h == 6`, which is what makes the TMU's mirrored wrap
+// equal to `zref::terrain::mirror_texel`), mirror on both axes, no mip chain,
+// and a base whose whole 1 MiB extent fits in 32 bits. A row that declares the
+// bit and is not that object is CFG_BAD_ROW -- refused at write, never stored.
+//
+// WHAT THIS DOES NOT DO. It does not give terrain a sampling material and it
+// does not give terrain a binding key; both remain absent and both are named in
+// `zhao_console_core.sv` entry I13. A terrain triangle still declares
+// `MATMODE_NONE`, publishes `sample_count = 0` and asks this block for nothing.
+// The pick now HAS a reader; it does not yet have a terrain fragment to read for.
 `default_nettype none
 
 module zhao_texture_binding_resolver_v2 #(
@@ -48,6 +93,13 @@ module zhao_texture_binding_resolver_v2 #(
     input  logic        req_selector_overflow_i,
     input  logic        req_force_refuse_i,
     input  logic [7:0]  req_binding_selector_i,
+    // TEXTURE.MOSAIC's per-texel pick for the fragment this sample belongs to
+    // (`zhao_texture_mosaic_v2.pick_tile_o`). It is READ ONLY when the resolved
+    // row declares `TILESET`; every other row ignores it entirely, so a client
+    // that does not run a mosaic leaves it at zero and nothing changes. The
+    // island holds it per owner and gates this request on the matching pick
+    // having landed, so the value here is always the pick for THIS fragment.
+    input  logic [7:0]  req_mosaic_tile_i,
     input  logic signed [31:0] req_u_i,
     input  logic signed [31:0] req_v_i,
     input  logic [7:0]  req_lod_q4_4_i,
@@ -87,6 +139,12 @@ module zhao_texture_binding_resolver_v2 #(
     output logic [31:0] invalid_row_o,
     output logic [31:0] witness_mismatch_o,
     output logic [31:0] forced_refused_o,
+    // CENSUS, NOT A FAULT: planner records whose base was displaced by a
+    // TEXTURE.MOSAIC pick, i.e. samples that actually read a tileset row. It is
+    // the counter that separates "the reader is composed" from "the pick
+    // reached an address", and it is fired by stimulus in
+    // `texture_binding_resolver_v2_directed` rather than quoted at zero.
+    output logic [31:0] tileset_samples_o,
     output logic [31:0] cfg_errors_o,
     output logic        binding_fault_o,
     output logic        data_idle_o
@@ -120,6 +178,19 @@ module zhao_texture_binding_resolver_v2 #(
   localparam logic [2:0] FMT_ARGB1555 = 3'd3;
   localparam logic [2:0] FMT_ARGB4444 = 3'd4;
 
+  // ---- the tileset declaration (terrain_rules 6.2, zref::Tileset) ----------
+  // `mode[21]`, taken from the eleven bits `binding_row_legal` has always
+  // forced to zero. The stride and the tile geometry are NAMED rather than
+  // spelled as literals in the arithmetic below, because they are the oracle's
+  // numbers and a reader must be able to check them against it: `zref::Tileset`
+  // is `uint8_t tiles[256][64*64]`.
+  localparam int unsigned MODE_TILESET_B      = 21;
+  localparam int unsigned TILESET_TILE_LOG2W  = 6;      // 64 texels
+  localparam int unsigned TILESET_TILE_LOG2H  = 6;      // 64 texels
+  localparam int unsigned TILESET_TILE_LOG2B  = 12;     // 64*64 CLUT8 bytes
+  localparam int unsigned TILESET_TILES       = 256;
+  localparam logic [1:0]  WRAP_MIRROR         = 2'd2;
+
   typedef struct packed {
     logic        valid;               // [74]
     logic [7:0]  palette_generation;  // [73:66]
@@ -134,6 +205,7 @@ module zhao_texture_binding_resolver_v2 #(
     logic            selector_overflow;
     logic            force_refuse;
     logic [7:0]      binding_selector;
+    logic [7:0]      mosaic_tile;
     logic signed [31:0] u;
     logic signed [31:0] v;
     logic [7:0]      lod_q4_4;
@@ -175,6 +247,7 @@ module zhao_texture_binding_resolver_v2 #(
     binding_row_t row;
     logic [2:0] fmt;
     logic filter, mip_enable, clut, direct;
+    logic tileset, tileset_shape_ok;
     logic [1:0] wrap_u, wrap_v;
     logic [3:0] log2w, log2h, max_level, min_dimension, final_level;
     logic [4:0] area_exp;
@@ -191,6 +264,7 @@ module zhao_texture_binding_resolver_v2 #(
       log2h = row.mode[15:12];
       max_level = row.mode[19:16];
       mip_enable = row.mode[20];
+      tileset = row.mode[MODE_TILESET_B];
       clut = (fmt == FMT_CLUT8) || (fmt == FMT_CLUT4);
       direct = (fmt == FMT_RGB565) || (fmt == FMT_ARGB1555) ||
                (fmt == FMT_ARGB4444);
@@ -213,13 +287,32 @@ module zhao_texture_binding_resolver_v2 #(
         max_byte_offset = max_total_texel >> 1;
       else
         max_byte_offset = max_total_texel;
+      // A TILESET ROW IS 256 TILES, so its live extent is the whole object and
+      // not one tile's: the pick can name any of them and the row's bound has
+      // to cover the furthest. `TILESET_TILES - 1` tiles of displacement sit on
+      // top of the single-tile offset the dimensions already gave.
+      if (tileset)
+        max_byte_offset = max_byte_offset +
+            (64'(TILESET_TILES - 1) << TILESET_TILE_LOG2B);
       max_line_end = ({32'd0, row.base} + max_byte_offset) | 64'd15;
+
+      // The declared tileset must BE the object terrain_rules 6.2 and
+      // `zref::Tileset` describe, or it is refused at CFG_WRITE and never
+      // stored. Checking the flag alone would let a row declare a mosaic and
+      // then be sampled with the wrong fold, the wrong format or a mip chain
+      // the oracle has no equivalent for -- a wrong pixel past a gate.
+      tileset_shape_ok = (fmt == FMT_CLUT8) && !filter && !mip_enable &&
+          (max_level == 4'd0) &&
+          (wrap_u == WRAP_MIRROR) && (wrap_v == WRAP_MIRROR) &&
+          (log2w == 4'(TILESET_TILE_LOG2W)) &&
+          (log2h == 4'(TILESET_TILE_LOG2H));
 
       binding_row_legal = row.valid &&
           (row.base[3:0] == 4'd0) &&
           (fmt <= FMT_ARGB4444) &&
           (wrap_u <= 2'd2) && (wrap_v <= 2'd2) &&
-          (row.mode[31:21] == 11'd0) &&
+          (!tileset || tileset_shape_ok) &&
+          (row.mode[31:22] == 10'd0) &&
           (log2w <= 4'(MAXLOG2)) && (log2h <= 4'(MAXLOG2)) &&
           !(clut && filter) &&
           (max_level <= min_dimension) &&
@@ -550,6 +643,20 @@ module zhao_texture_binding_resolver_v2 #(
   logic [1:0] read_class_c;
   logic read_row_bad_c, read_witness_bad_c;
   logic read_generation_bad_c, read_refuse_c;
+  // THE PICK'S ARRIVAL POINT. `zref::Tileset` is one object of 256 CLUT8 tiles
+  // of 4,096 bytes, so the tile index is a byte displacement of the row's base
+  // and the TMU's mirrored 64x64 fold then indexes inside it -- `ts->tiles
+  // [tile][(ty << 6) + tx]`, the whole of `rast.cpp:370`, split across the two
+  // blocks that already own its two halves.
+  logic read_tileset_c;
+  logic [31:0] read_base_c;
+  always_comb begin
+    read_tileset_c = read_row_c.mode[MODE_TILESET_B];
+    read_base_c = read_tileset_c
+        ? (read_row_c.base +
+           ({24'd0, read_job_q.mosaic_tile} << TILESET_TILE_LOG2B))
+        : read_row_c.base;
+  end
   always_comb begin
     read_class_c = binding_class(read_row_c.mode);
     read_generation_bad_c =
@@ -630,6 +737,7 @@ module zhao_texture_binding_resolver_v2 #(
       invalid_row_o <= 32'd0;
       witness_mismatch_o <= 32'd0;
       forced_refused_o <= 32'd0;
+      tileset_samples_o <= 32'd0;
       cfg_errors_o <= 32'd0;
       binding_fault_o <= 1'b0;
     end else begin
@@ -798,6 +906,7 @@ module zhao_texture_binding_resolver_v2 #(
               selector_overflow: req_selector_overflow_i,
               force_refuse: req_force_refuse_i,
               binding_selector: req_binding_selector_i,
+              mosaic_tile: req_mosaic_tile_i,
               u: req_u_i,
               v: req_v_i,
               lod_q4_4: req_lod_q4_4_i,
@@ -837,7 +946,7 @@ module zhao_texture_binding_resolver_v2 #(
           disposition_handle_q <= read_job_q.handle;
           disposition_plan_q.route_token <=
               {read_class_c, read_job_q.handle};
-          disposition_plan_q.base <= read_row_c.base;
+          disposition_plan_q.base <= read_base_c;
           disposition_plan_q.mode <= read_row_c.mode;
           disposition_plan_q.palette_slot <= read_row_c.palette_slot;
           disposition_plan_q.palette_generation <=
@@ -848,6 +957,11 @@ module zhao_texture_binding_resolver_v2 #(
 
           if (read_refuse_c)
             binding_fault_o <= 1'b1;
+          // CENSUS. A sample that is going to be PLANNED against a tileset row
+          // -- so the pick displaced the address that will actually be read.
+          // A refused job is not counted: nothing is sampled for it.
+          if (!read_refuse_c && read_tileset_c)
+            tileset_samples_o <= tileset_samples_o + 32'd1;
           // The page-generation detector is independent of the functional
           // refusal priority: it compares the admission-carried byte with the
           // live activation register exactly once at terminal disposition.
@@ -875,7 +989,7 @@ module zhao_texture_binding_resolver_v2 #(
   initial begin : p_layout_contract
     if ((SLOTW != 6) || (GENW != 8) || (MAXLOG2 != 11))
       $fatal(1, "binding_resolver_v2 requires Packet-B 6/8/11 profile");
-    if (($bits(binding_row_t) != 75) || ($bits(sample_job_t) != 118) ||
+    if (($bits(binding_row_t) != 75) || ($bits(sample_job_t) != 126) ||
         ($bits(planner_job_t) != 164) || (ROUTEW != 18))
       $fatal(1, "binding_resolver_v2 typed record width changed");
   end

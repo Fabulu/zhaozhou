@@ -19,6 +19,7 @@
 #include "Vzhao_texture_island_v3_top.h"
 #include "Vzhao_texture_island_v3_top__Dpi.h"
 #include "verilated.h"
+#include "zref/zref_terrain.hpp"
 #include "svdpi.h"
 #include "../harness/zhao_sim.hpp"
 
@@ -66,6 +67,21 @@ uint32_t binding_mode(uint8_t format, bool filter, uint8_t wrap_u, uint8_t wrap_
   return static_cast<uint32_t>(format & 7u) | (static_cast<uint32_t>(filter) << 3) |
          (static_cast<uint32_t>(wrap_u & 3u) << 4) | (static_cast<uint32_t>(wrap_v & 3u) << 6) |
          (static_cast<uint32_t>(log2w & 15u) << 8) | (static_cast<uint32_t>(log2h & 15u) << 12);
+}
+
+// ---- TEXTURE.MOSAIC's pick, and the row that reads it (TERRAINTEX) --------
+// `mode[21]` is the TILESET declaration `zhao_texture_binding_resolver_v2`
+// added on 2026-09-26, taken from the eleven bits the row's legality law has
+// always forced to zero. A tileset row IS `zref::Tileset`: 256 CLUT8 tiles of
+// 64x64, mirrored on both axes, no mip chain.
+constexpr uint32_t kModeTilesetBit = 1u << 21;
+constexpr uint32_t kTilesetBase = 0x00400000u;
+constexpr uint32_t kTilesetTileBytes = 64u * 64u;
+constexpr uint32_t kTilesetSelector = 28;  // the tileset row
+constexpr uint32_t kPlainMirrorSelector = 29;  // the SAME base, no declaration
+uint32_t tileset_mode() {
+  return binding_mode(0 /* CLUT8 */, false, 2 /* mirror */, 2 /* mirror */, 6, 6) |
+         kModeTilesetBit;
 }
 
 std::array<uint8_t, 10> row_bytes(const BindingRow& row, bool present) {
@@ -237,6 +253,12 @@ struct Harness {
   }
 
   uint16_t fill_word(uint32_t line, unsigned beat) const {
+    // The tileset object is served on EVERY beat so the texel byte is index 5
+    // wherever inside its line the address lands -- the address itself is
+    // asserted separately against the oracle, which is where the tile has to
+    // show up. Serving only beat 0 would make the answer depend on the low
+    // nibble of an address this case is deliberately not choosing.
+    if (line >= kTilesetBase && line < kTilesetBase + 0x00100000u) return 0x0505u;
     if (beat != 0) return 0;
     switch (line) {
       case 0x00001000u:
@@ -720,12 +742,20 @@ void program_bindings(Harness& h) {
   rows[25] = BindingRow{0x00017000u, 0x00000009u, 0, 0, true};
   rows[26] = BindingRow{0x00018000u, 0x00000001u, 0, 0, true};
   rows[27] = BindingRow{0x00019000u, 0x00000001u, 0, 0, true};
-  for (unsigned selector = 1; selector <= 27; ++selector) present[selector] = true;
+  // TERRAINTEX: the tileset row and, at the SAME BASE, an otherwise identical
+  // row that does NOT declare itself one. The second is the negative control
+  // for every tileset check: the mosaic pick is computed for it too, and its
+  // address must not move by one byte.
+  rows[kTilesetSelector] = BindingRow{kTilesetBase, tileset_mode(), 0, 1, true};
+  rows[kPlainMirrorSelector] =
+      BindingRow{kTilesetBase, binding_mode(0, false, 2, 2, 6, 6), 0, 1, true};
+  for (unsigned selector = 1; selector <= kPlainMirrorSelector; ++selector)
+    present[selector] = true;
   const uint32_t crc = binding_crc(1, rows, present);
   BindingRow zero{};
 
   require(binding_command(h, 0, 1, 0, zero, 0, true) == 0, "binding BEGIN failed", h.cycle);
-  for (unsigned selector = 1; selector <= 27; ++selector)
+  for (unsigned selector = 1; selector <= kPlainMirrorSelector; ++selector)
     require(binding_command(h, 1, 1, static_cast<uint8_t>(selector), rows[selector], 0) == 0,
             "binding WRITE failed", h.cycle);
   require(binding_command(h, 2, 1, 0, zero, crc) == 0, "binding END/CRC/seal failed", h.cycle);
@@ -804,6 +834,111 @@ void set_fragment(Harness& h, uint16_t tag, uint32_t retire_seed, uint8_t count,
   h.dut.frag_pal_gen_i = pal_gen;
   h.dut.frag_base_rgb_i = base_rgb;
   h.dut.frag_base_a_i = base_a;
+}
+
+// ===========================================================================
+// THE FIRST TEXEL THAT THE MOSAIC PICK CHOSE (TERRAINTEX, 2026-09-26)
+// ===========================================================================
+// `zhao_texture_mosaic_v2` has computed the frozen terrain_rules 6.2 pick for
+// every fragment this island admits since it was written, and until today
+// NOTHING READ THE ANSWER. This case proves it reaches a texture ADDRESS and
+// that a TEXEL comes back from it, against `zref`'s own 6.2 functions.
+//
+// The two coordinates are chosen so the picked tile is NOT ZERO: a zero
+// displacement is the address an unwired reader would produce, and a check
+// that cannot fail is not evidence. The negative control is a row at the SAME
+// BASE with the same format, fold and dimensions that simply does not declare
+// itself a tileset; its address must be the undisplaced one.
+void run_tileset_mosaic_texel(Harness& h) {
+  // u = u_over_w / invw24 as reals (the island reciprocates invw24 and
+  // multiplies), and the mosaic reads Q16.16 TILE units, so u_q16_16 =
+  // u_over_w * 2^24 / invw24 / 2^8. With invw24 = 2^16 that is simply
+  // u_over_w, which keeps this case's arithmetic inspectable.
+  constexpr uint32_t kInvw24 = 0x00010000u;
+  constexpr int32_t kTexelU = 141;  // world texel index, unfolded
+  constexpr int32_t kTexelV = 77;
+  const int32_t u_q16_16 = kTexelU << 10;  // 64 texels per tile unit
+  const int32_t v_q16_16 = kTexelV << 10;
+
+  constexpr uint8_t kMatA = 0x31;
+  constexpr uint8_t kMatB = 0x7c;
+  constexpr uint8_t kWeight = 0x90;
+
+  const uint8_t tile = zref::terrain::mosaic_pick(kMatA, kMatB, kWeight, u_q16_16 >> 10,
+                                                  v_q16_16 >> 10);
+  const int32_t tx = zref::terrain::mirror_texel(u_q16_16);
+  const int32_t ty = zref::terrain::mirror_texel(v_q16_16);
+  require(tile != 0, "the chosen coordinates pick tile 0, which a dead reader also produces",
+          h.cycle);
+  require(tile == kMatA || tile == kMatB, "the pick is neither candidate", h.cycle);
+
+  // `rast.cpp:370`: ts->tiles[tile][(ty << 6) + tx], one CLUT8 byte.
+  const uint32_t texel_offset =
+      static_cast<uint32_t>(tile) * kTilesetTileBytes + static_cast<uint32_t>((ty << 6) + tx);
+  const uint32_t expected_line = (kTilesetBase + texel_offset) & ~0xfu;
+  const uint32_t plain_line = (kTilesetBase + static_cast<uint32_t>((ty << 6) + tx)) & ~0xfu;
+  require(expected_line != plain_line,
+          "the tileset and plain lines coincide, so this case could not tell them apart", h.cycle);
+
+  std::printf(
+      "packet-b mosaic: pick=%u tx=%d ty=%d tileset_line=%08x plain_line=%08x\n",
+      static_cast<unsigned>(tile), tx, ty, expected_line, plain_line);
+
+  // ---- the tileset row: the pick displaces the address --------------------
+  h.wait_quiet();
+  h.auto_fill = false;
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x1c00, 0xc0000000u, 1, static_cast<uint8_t>(kTilesetSelector), 0, false, 0, 1,
+               (static_cast<uint32_t>(kMatA) << 16) | (static_cast<uint32_t>(kMatB) << 8), 0xff);
+  h.dut.frag_weight_i = kWeight;
+  h.dut.frag_invw24_i = kInvw24;
+  h.dut.frag_u_over_w_i = u_q16_16;
+  h.dut.frag_v_over_w_i = v_q16_16;
+  const auto tileset_ctx = current_retire(h);
+  h.offer_fragment();
+  for (unsigned n = 0; n < 20000 && !h.dut.fill_req_valid_o; ++n) h.step();
+  require(h.dut.fill_req_valid_o, "the tileset sample never reached a cache fill", h.cycle);
+  if (h.dut.fill_req_addr_o != expected_line)
+    std::fprintf(stderr, "  tileset fill line expected=%08x got=%08x\n", expected_line,
+                 h.dut.fill_req_addr_o);
+  require(h.dut.fill_req_addr_o == expected_line,
+          "the mosaic pick did not displace the tileset row's base by tile * 4096", h.cycle);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  h.auto_fill = true;
+  h.fill_active = true;
+  h.fill_line = expected_line;
+  h.fill_beat = 0;
+  h.wait_outputs(h.retired.size() + 1);
+  expect_result(h.retired.back(), 0x00ff00u, 0xff, 5, 0, 0x1c00, tileset_ctx, h.cycle);
+
+  // ---- the negative control: the same pick, an undeclared row -------------
+  h.wait_quiet();
+  h.auto_fill = false;
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x1c01, 0xc0000001u, 1, static_cast<uint8_t>(kPlainMirrorSelector), 0, false, 0,
+               1, (static_cast<uint32_t>(kMatA) << 16) | (static_cast<uint32_t>(kMatB) << 8), 0xff);
+  h.dut.frag_weight_i = kWeight;
+  h.dut.frag_invw24_i = kInvw24;
+  h.dut.frag_u_over_w_i = u_q16_16;
+  h.dut.frag_v_over_w_i = v_q16_16;
+  const auto plain_ctx = current_retire(h);
+  h.offer_fragment();
+  for (unsigned n = 0; n < 20000 && !h.dut.fill_req_valid_o; ++n) h.step();
+  require(h.dut.fill_req_valid_o, "the plain-row sample never reached a cache fill", h.cycle);
+  if (h.dut.fill_req_addr_o != plain_line)
+    std::fprintf(stderr, "  plain fill line expected=%08x got=%08x\n", plain_line,
+                 h.dut.fill_req_addr_o);
+  require(h.dut.fill_req_addr_o == plain_line,
+          "a row that does not declare TILESET was displaced by the mosaic pick anyway", h.cycle);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  h.auto_fill = true;
+  h.fill_active = true;
+  h.fill_line = plain_line;
+  h.fill_beat = 0;
+  h.wait_outputs(h.retired.size() + 1);
+  expect_result(h.retired.back(), 0x00ff00u, 0xff, 5, 0, 0x1c01, plain_ctx, h.cycle);
 }
 
 void run_material_hostile_cases(Harness& h) {
@@ -1868,6 +2003,17 @@ void run_directed() {
     reset_case.wait_outputs(1);
     expect_result(reset_case.retired.back(), 0x334455u, 0x66, 0, 0, 0x50ff, fresh_ctx,
                   reset_case.cycle);
+  }
+
+  // TERRAINTEX: the mosaic pick's texel, in its own harness so it cannot be
+  // read as an artefact of the long sequence above.
+  {
+    Harness* const mosaic_storage = new Harness;
+    Harness& mosaic_case = *mosaic_storage;
+    mosaic_case.reset();
+    program_palette(mosaic_case);
+    program_bindings(mosaic_case);
+    run_tileset_mosaic_texel(mosaic_case);
   }
 
   // A refusal with no accepted FI is malformed cache protocol, not the removed

@@ -12014,6 +12014,7 @@ set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_hold.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
@@ -12103,7 +12104,7 @@ set_tests_properties(
 # elaborate the identical 26-source closure at explicit shadow settings.
 add_executable(tpb_dir
   texture/texture_island_v3_packet_b_directed.cpp)
-target_link_libraries(tpb_dir PRIVATE zhao_harness)
+target_link_libraries(tpb_dir PRIVATE zhao_harness zhao_zref)
 verilate(tpb_dir
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
@@ -12116,7 +12117,7 @@ add_executable(tpb_prod
   texture/texture_island_v3_packet_b_directed.cpp)
 target_compile_definitions(tpb_prod PRIVATE
   PACKET_B_EXPECT_NO_SHADOWS=1)
-target_link_libraries(tpb_prod PRIVATE zhao_harness)
+target_link_libraries(tpb_prod PRIVATE zhao_harness zhao_zref)
 verilate(tpb_prod
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
@@ -12158,6 +12159,7 @@ function(zhao_packet_b_top_mutant_control
   set(target tpbm_${target_hash})
   add_executable(${target} texture/${DRIVER})
   target_compile_definitions(${target} PRIVATE ${EXPECT_MACRO}=1)
+  target_link_libraries(${target} PRIVATE zhao_zref)
   verilate(${target}
     PREFIX Vzhao_texture_island_v3_top
     TOP_MODULE zhao_texture_island_v3_top
@@ -12446,6 +12448,7 @@ verilate(pb_mos
   SOURCES
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_hold.sv
   VERILATOR_ARGS --assert)
 add_test(NAME texture_mosaic_v2_directed COMMAND pb_mos)
 
@@ -12459,6 +12462,7 @@ verilate(pb_mosp
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_hold.sv
     ${CMAKE_CURRENT_SOURCE_DIR}/rtl/tb_texture_mosaic_v2_pair.sv
   VERILATOR_ARGS --assert)
 add_test(NAME texture_mosaic_v2_pair_directed
@@ -13171,10 +13175,13 @@ set(ZHAO_TEXTURE_DESC_EXPAND_BIND_V2_SOURCES
   ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_early_desc_v2_pad_mutant.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_hold.sv
   ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_texture_desc_expand_bind_v2_composed.sv)
 add_executable(tdbv2
   texture/texture_desc_expand_bind_v2_composed.cpp)
-target_link_libraries(tdbv2 PRIVATE zhao_harness)
+target_link_libraries(tdbv2 PRIVATE zhao_harness zhao_zref)
 verilate(tdbv2
   PREFIX Vtb_texture_desc_expand_bind_v2_composed
   TOP_MODULE tb_texture_desc_expand_bind_v2_composed
@@ -13188,7 +13195,7 @@ add_executable(tdbv2_pad
   texture/texture_desc_expand_bind_v2_composed.cpp)
 target_compile_definitions(tdbv2_pad PRIVATE
   ZHAO_COMPOSED_PAD_MUTANT=1)
-target_link_libraries(tdbv2_pad PRIVATE zhao_harness)
+target_link_libraries(tdbv2_pad PRIVATE zhao_harness zhao_zref)
 verilate(tdbv2_pad
   PREFIX Vtb_texture_desc_expand_bind_v2_composed
   TOP_MODULE tb_texture_desc_expand_bind_v2_composed
@@ -13323,13 +13330,13 @@ foreach(relative_source IN LISTS ZHAO_PACKET_C_RELATIVE_SOURCES)
   list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_C_RELATIVE_SOURCES ZHAO_PACKET_C_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 35)
-  message(FATAL_ERROR "Packet-C source manifest must contain exactly 35 SV paths")
+if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 36)
+  message(FATAL_ERROR "Packet-C source manifest must contain exactly 36 SV paths")
 endif()
 list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 0 ZHAO_PACKET_C_FIRST_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 32 ZHAO_PACKET_C_MUTANT_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_STAGE_SOURCE)
-list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 34 ZHAO_PACKET_C_LAST_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_MUTANT_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 34 ZHAO_PACKET_C_STAGE_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 35 ZHAO_PACKET_C_LAST_SOURCE)
 if(NOT ZHAO_PACKET_C_FIRST_SOURCE STREQUAL
    "fpga/rtl/common/zhao_render_texture_pkg.sv" OR
    NOT ZHAO_PACKET_C_MUTANT_SOURCE STREQUAL
@@ -13917,16 +13924,16 @@ foreach(relative_source IN LISTS ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
     "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_D_FULL_RELATIVE_SOURCES ZHAO_PACKET_D_FULL_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 58)
-  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 58 SV paths")
+if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 59)
+  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 59 SV paths")
 endif()
 list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 0 ZHAO_PACKET_D_FULL_FIRST)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 32 ZHAO_PACKET_D_FULL_PC_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 33 ZHAO_PACKET_D_FULL_PC_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 54 ZHAO_PACKET_D_FULL_TILE_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_TILE_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_BIN_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 57 ZHAO_PACKET_D_FULL_TOP)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 33 ZHAO_PACKET_D_FULL_PC_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 34 ZHAO_PACKET_D_FULL_PC_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_TILE_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_TILE_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 57 ZHAO_PACKET_D_FULL_BIN_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 58 ZHAO_PACKET_D_FULL_TOP)
 if(NOT ZHAO_PACKET_D_FULL_FIRST STREQUAL
    "fpga/rtl/generated/zhao_abi_pkg.sv" OR
    NOT ZHAO_PACKET_D_FULL_PC_MUTANT STREQUAL
@@ -14144,8 +14151,8 @@ file(STRINGS "${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}"
   ZHAO_PACKET_E_TOP_RELATIVE_SOURCES
   REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
 list(LENGTH ZHAO_PACKET_E_TOP_RELATIVE_SOURCES ZHAO_PACKET_E_TOP_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 27)
-  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 27 SV paths")
+if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 28)
+  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 28 SV paths")
 endif()
 set(ZHAO_PACKET_E_TOP_SOURCES)
 foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
@@ -14158,10 +14165,10 @@ foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
 endforeach()
 if(NOT ZHAO_PACKET_E_TOP_SOURCES STREQUAL ZHAO_TEXTURE_V3_PACKET_B_SOURCES)
   message(FATAL_ERROR
-    "Packet-E top source manifest diverges from Packet B's exact 27-source authority")
+    "Packet-E top source manifest diverges from Packet B's exact 28-source authority")
 endif()
 set(ZHAO_PACKET_E_TOP_MUTANT_SOURCES ${ZHAO_PACKET_E_TOP_SOURCES})
-list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26
+list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 27
   ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv)
 
 function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
@@ -14171,7 +14178,7 @@ function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
   add_executable(${target}
     texture/texture_island_v3_packet_b_directed.cpp)
   target_compile_definitions(${target} PRIVATE ${CPP_SELECTOR}=1)
-  target_link_libraries(${target} PRIVATE zhao_harness)
+  target_link_libraries(${target} PRIVATE zhao_harness zhao_zref)
   verilate(${target}
     PREFIX Vzhao_texture_island_v3_top
     TOP_MODULE zhao_texture_island_v3_top
@@ -14374,6 +14381,7 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_hold.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
@@ -14408,8 +14416,8 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv)
 list(LENGTH ZHAO_G8A_RASTER_TEXTURE_SOURCES ZHAO_G8A_SOURCE_COUNT)
-if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 49)
-  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 49 sources")
+if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 50)
+  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 50 sources")
 endif()
 foreach(g8a_source IN LISTS ZHAO_G8A_RASTER_TEXTURE_SOURCES)
   if(NOT EXISTS "${g8a_source}")

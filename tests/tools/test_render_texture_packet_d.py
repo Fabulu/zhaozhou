@@ -32,6 +32,7 @@ PACKET_D_FULL_SOURCES = (
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mosaic_hold.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
     "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
@@ -126,7 +127,7 @@ PROTECTED_HASHES = {
         # The field diff that justifies it is recorded once, beside the pin in
         # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
         # 119 -> 119, parameters 16 -> 16.
-        "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b",
+        "6377b5f75da0977eb55b3bf1f9beb5fa673528e19729b18837f487f1138f3e1b",
     # REFRESHED 2026-09-18 FOR A CHANGE TO THE FILE ITSELF, which is a different
     # act from the interface-manifest refreshes above and says so plainly.
     #
@@ -156,7 +157,7 @@ PROTECTED_HASHES = {
     # manifest entry above has done twice. Same treatment, louder note, because
     # this one is a change to LOGIC PLACEMENT rather than to a derived artifact.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a",
+        "18b5d63e560dd32a75836085f1625d83cd3fc565deb94cf8756e1cb62789a599",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -274,7 +275,7 @@ def validate_cmake(text: str) -> None:
         "add_test(NAME geom_binner_v2_meta_addr_swap_mutant COMMAND pd_bim)",
         "geometry/geom_bin_pipe_v2.sources.txt)",
         "Packet-D full source manifest contains a blank record",
-        "Packet-D full source manifest must contain exactly 58 SV paths",
+        "Packet-D full source manifest must contain exactly 59 SV paths",
         "Packet-D full source manifest lost package/selector/stage/top order",
         "SOURCES ${ZHAO_PACKET_D_FULL_SOURCES}",
         "zhao_packet_d_full_target(pd_full)",

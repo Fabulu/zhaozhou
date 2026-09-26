@@ -81,6 +81,15 @@ module tb_texture_desc_expand_bind_v2_composed #(
     output logic [31:0] resolver_refusals_o,
     output logic [31:0] resolver_overflow_o,
     output logic [31:0] resolver_page_mismatch_o,
+    // TERRAINTEX 2026-09-26: the mosaic pick's reader, composed here the way
+    // `zhao_texture_island_v3_top` composes it -- the SAME two production
+    // blocks, not a bench copy of the join.
+    output logic [31:0] resolver_tileset_samples_o,
+    output logic [31:0] mosaic_picks_delivered_o,
+    output logic [31:0] mosaic_picks_held_o,
+    output logic [31:0] mosaic_stale_slot_holds_o,
+    output logic [7:0]  mosaic_pick_tile_o,
+    output logic        mosaic_pick_ready_o,
     output logic resolver_frame_fault_o,
     output logic quiet_o
 );
@@ -111,10 +120,24 @@ module tb_texture_desc_expand_bind_v2_composed #(
   logic [7:0] sample_lod_w;
   logic [1:0] sample_class_witness_w, sample_palette_slot_witness_w;
   logic [7:0] sample_palette_generation_witness_w;
-  logic mosaic_valid_w;
-  logic [13:0] mosaic_owner_unused;
-  logic signed [31:0] mosaic_u_unused, mosaic_v_unused;
-  logic [7:0] mosaic_a_unused, mosaic_b_unused, mosaic_weight_unused;
+  logic mosaic_valid_w, mosaic_req_ready_w;
+  logic [13:0] mosaic_owner_w;
+  logic signed [31:0] mosaic_u_w, mosaic_v_w;
+  logic [7:0] mosaic_a_w, mosaic_b_w, mosaic_weight_w;
+  logic mosaic_rsp_valid_w, mosaic_idle_w;
+  logic [7:0] mosaic_tile_w;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The mirrored texel pair is the mosaic's public contract and is NOT the
+  // reader's business: the TMU recomputes it from u/v under the tileset
+  // row's own mirror wrap. Observed here, consumed nowhere, exactly as in
+  // the island.
+  logic [5:0] mosaic_tx_w, mosaic_ty_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+  /* verilator lint_off UNUSEDSIGNAL */
+  // [15:14] is the island's own 2'b00 pad on the 16-bit src_id; the hold
+  // takes the 14-bit owner beneath it.
+  logic [15:0] mosaic_src_w;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic aux_valid_w, aux_issue_w;
   logic [13:0] aux_owner_unused, aux_issue_owner_unused;
   logic [223:0] aux_context_unused;
@@ -240,12 +263,12 @@ module tb_texture_desc_expand_bind_v2_composed #(
       .sample0_palette_slot_witness_o(sample_palette_slot_witness_w),
       .sample0_palette_generation_witness_o(
           sample_palette_generation_witness_w),
-      .mosaic_valid_o(mosaic_valid_w), .mosaic_ready_i(1'b1),
-      .mosaic_owner_o(mosaic_owner_unused),
-      .mosaic_u_o(mosaic_u_unused), .mosaic_v_o(mosaic_v_unused),
-      .mosaic_material_a_o(mosaic_a_unused),
-      .mosaic_material_b_o(mosaic_b_unused),
-      .mosaic_weight_o(mosaic_weight_unused),
+      .mosaic_valid_o(mosaic_valid_w), .mosaic_ready_i(mosaic_req_ready_w),
+      .mosaic_owner_o(mosaic_owner_w),
+      .mosaic_u_o(mosaic_u_w), .mosaic_v_o(mosaic_v_w),
+      .mosaic_material_a_o(mosaic_a_w),
+      .mosaic_material_b_o(mosaic_b_w),
+      .mosaic_weight_o(mosaic_weight_w),
       .aux_valid_o(aux_valid_w), .aux_ready_i(1'b1),
       .aux_owner_o(aux_owner_unused), .aux_context_o(aux_context_unused),
       .aux_force_refuse_o(aux_force_unused),
@@ -262,6 +285,37 @@ module tb_texture_desc_expand_bind_v2_composed #(
 
   wire data_quiet_c = desc_idle_w && !side_v_q && expand_idle_w &&
                       resolver_data_idle_w;
+
+  // ---------------------------------------------------------------------------
+  // THE MOSAIC PICK AND ITS HOLD, composed exactly as `zhao_texture_island_v3_top`
+  // composes them. Both are PRODUCTION blocks: this bench adds no join logic of
+  // its own, so what it proves is what ships rather than a copy of it.
+  zhao_texture_mosaic_v2 u_mosaic (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(mosaic_valid_w), .req_ready_o(mosaic_req_ready_w),
+      .req_u_i(mosaic_u_w), .req_v_i(mosaic_v_w),
+      .req_mat_a_i(mosaic_a_w), .req_mat_b_i(mosaic_b_w),
+      .req_weight_i(mosaic_weight_w), .req_mosaic_i(1'b1),
+      .req_src_id_i({2'b00, mosaic_owner_w}),
+      .pick_valid_o(mosaic_rsp_valid_w), .pick_ready_i(1'b1),
+      .pick_tile_o(mosaic_tile_w), .pick_tx_o(mosaic_tx_w),
+      .pick_ty_o(mosaic_ty_w), .pick_src_id_o(mosaic_src_w),
+      .idle_o(mosaic_idle_w),
+      .texture_samples_o(mosaic_picks_delivered_o));
+
+  zhao_texture_mosaic_hold #(.SLOTW(6), .GENW(8)) u_mosaic_hold (
+      .clk(clk), .rst_n(rst_n),
+      .pick_valid_i(mosaic_rsp_valid_w),
+      .pick_src_id_i(mosaic_src_w[13:0]),
+      .pick_tile_i(mosaic_tile_w),
+      .smp_handle_i(sample_handle_w),
+      .pick_ready_o(mosaic_pick_ready_o),
+      .pick_tile_o(mosaic_pick_tile_o),
+      .picks_held_o(mosaic_picks_held_o),
+      .stale_slot_holds_o(mosaic_stale_slot_holds_o));
+
+  logic resolver_req_ready_w;
+  assign sample_ready_w = resolver_req_ready_w && mosaic_pick_ready_o;
 
   zhao_texture_binding_resolver_v2 u_resolver (
       .clk(clk), .rst_n(rst_n),
@@ -280,12 +334,14 @@ module tb_texture_desc_expand_bind_v2_composed #(
       .cfg_loader_idle_o(resolver_cfg_idle_unused),
       .binding_crc_busy_o(resolver_crc_busy_unused),
       .binding_seal_pending_o(resolver_seal_pending_unused),
-      .req_valid_i(sample_valid_w), .req_ready_o(sample_ready_w),
+      .req_valid_i(sample_valid_w && mosaic_pick_ready_o),
+      .req_ready_o(resolver_req_ready_w),
       .req_sample_handle_i(sample_handle_w),
       .req_page_generation_i(sample_page_generation_w),
       .req_selector_overflow_i(sample_selector_overflow_w),
       .req_force_refuse_i(sample_force_refuse_w),
       .req_binding_selector_i(sample_binding_selector_w),
+      .req_mosaic_tile_i(mosaic_pick_tile_o),
       .req_u_i(sample_u_w), .req_v_i(sample_v_w),
       .req_lod_q4_4_i(sample_lod_w),
       .req_sample0_class_witness_i(sample_class_witness_w),
@@ -310,12 +366,14 @@ module tb_texture_desc_expand_bind_v2_composed #(
       .invalid_row_o(resolver_invalid_unused),
       .witness_mismatch_o(resolver_witness_unused),
       .forced_refused_o(resolver_forced_unused),
+      .tileset_samples_o(resolver_tileset_samples_o),
       .cfg_errors_o(resolver_cfg_errors_unused),
       .binding_fault_o(resolver_frame_fault_o),
       .data_idle_o(resolver_data_idle_w));
 
-  assign quiet_o = data_quiet_c && !cfg_rsp_valid_o && !plan_valid_o &&
-                   !refuse_valid_o && !frag_valid_i && !cfg_valid_i;
+  assign quiet_o = data_quiet_c && mosaic_idle_w && !cfg_rsp_valid_o &&
+                   !plan_valid_o && !refuse_valid_o && !frag_valid_i &&
+                   !cfg_valid_i;
 
   initial begin : p_profile
     if ($bits(desc_rsp_logical_w) != 287)

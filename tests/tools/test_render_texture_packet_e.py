@@ -32,6 +32,7 @@ TOP_SOURCES = (
     "fpga/rtl/texture/zhao_texture_aux_div6.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mosaic_hold.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
     "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
@@ -218,8 +219,18 @@ CURRENT_HASHES = {
     # indexing and the queue depth cannot drift apart. No port of this module
     # changed -- `zhao_prod_top` was regenerated and confirmed byte-identical,
     # not assumed to be.
+    # REFRESHED 2026-09-26 (TERRAINTEX). The island gained `u_mosaic_hold` --
+    # TEXTURE.MOSAIC's per-owner pick store, sealed by the owner generation --
+    # and one gate: `binding_req_valid_w` now waits for THIS fragment's own
+    # pick to land before its sample may leave. Both are body, not interface.
+    # FIELD-DIFFED BEFORE REFRESHING: ports 120 -> 120, parameters 16 -> 16,
+    # `module_declaration_sha256` IDENTICAL at 8766d3dd2a88dce..., and only
+    # `top_source_sha256` and `canonical_interface_sha256` moved -- the first
+    # because the body changed, the second because it hashes the source
+    # closure and the closure gained `zhao_texture_mosaic_hold.sv`.
+    # Previous pin: 6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a",
+        "18b5d63e560dd32a75836085f1625d83cd3fc565deb94cf8756e1cb62789a599",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
     # interface manifest moved, because two files in its source closure gained
     # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
@@ -240,7 +251,16 @@ CURRENT_HASHES = {
     # named for did not move: `cmb_owner_all_o` and `cmb_rp_o` are new ports of
     # zhao_texture_v3own, which is a CHILD, and the island consumes them
     # internally.
-        "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b",
+    #
+    # REFRESHED AGAIN 2026-09-26 (TERRAINTEX), with the island above. THREE
+    # fields differ and each one had to: the island's own source hash (twice,
+    # as top_source_sha256 and inside source_closure), the new
+    # zhao_texture_mosaic_hold.sv row in that closure, and the
+    # canonical_interface hash derived from them. module_declaration_sha256 is
+    # BYTE-IDENTICAL at 8766d3dd2a88dce... and ports/parameters are 120/16
+    # either side, which is the whole claim this artifact makes. Previous pin:
+    # 60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b.
+        "6377b5f75da0977eb55b3bf1f9beb5fa673528e19729b18837f487f1138f3e1b",
 }
 
 
@@ -576,9 +596,9 @@ def validate_cmake(text: str) -> None:
         "tools/test_packet_e_assertion_control.py",
         "add_test(NAME packet_e_cache_double_resv_behavior COMMAND pe_cb)",
         "texture/texture_island_v3_packet_e.sources.txt)",
-        "Packet-E top source manifest must contain exactly 27 SV paths",
-        "Packet-E top source manifest diverges from Packet B's exact 27-source authority",
-        "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26",
+        "Packet-E top source manifest must contain exactly 28 SV paths",
+        "Packet-E top source manifest diverges from Packet B's exact 28-source authority",
+        "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 27",
         "-GMIGRATION_SHADOWS=1 -D${SV_SELECTOR}",
         "historical_fill_lifetime PACKET_E_EXPECT_PRE_E_FILL_LIFETIME",
         "relabel_refusal PACKET_E_EXPECT_RELABEL_REFUSAL_ERR",
@@ -812,7 +832,7 @@ class PacketEClosureTests(unittest.TestCase):
         prefix, section = cmake[:start], cmake[start:]
         mutations = (
             section.replace("-GLANES=8 -GREQN=2", "-GLANES=8 -GREQN=8", 1),
-            section.replace("list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 26", "list(APPEND ZHAO_PACKET_E_TOP_MUTANT_SOURCES", 1),
+            section.replace("list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 27", "list(APPEND ZHAO_PACKET_E_TOP_MUTANT_SOURCES", 1),
             section.replace("SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}", "SOURCES", 1),
             section.replace("  packet_e_registration_static)", ")", 1),
             section.replace("packet_e_mux_cpp_selector_collision", "packet_e_mux_cpp_collision", 1),

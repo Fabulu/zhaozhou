@@ -29,6 +29,7 @@ PACKET_B_SOURCES = (
     "fpga/rtl/texture/zhao_texture_aux_div6.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mosaic_hold.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
     "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
@@ -88,8 +89,15 @@ PACKET_C_SOURCES = (
 # The field diff that justifies it is recorded once, beside the pin in
 # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
 # 119 -> 119, parameters 16 -> 16.
-INTERFACE_SHA256 = "60534ad89d2a9a39083d4156d46b57848b740a363ea596660dfba6ad6a86139b"  # R9: cnt_texture_samples_o
-PACKET_B_TOP_SHA256 = "6b09550429e91af06f41a8e4f33f801c11eb8d7b2bbd722ea46591326a687d7a"  # R9: cnt_texture_samples_o
+# REFRESHED 2026-09-26 (TERRAINTEX): the island gained `u_mosaic_hold`, the
+# per-owner store that holds TEXTURE.MOSAIC's pick until the sample that
+# asked for it can leave, and the gate in front of the binding resolver.
+# Body only -- ports 120 -> 120, parameters 16 -> 16 and
+# module_declaration_sha256 byte-identical at 8766d3dd2a88dce...; the
+# interface artifact moved only because it hashes the island's source and
+# the source closure, which gained zhao_texture_mosaic_hold.sv.
+INTERFACE_SHA256 = "6377b5f75da0977eb55b3bf1f9beb5fa673528e19729b18837f487f1138f3e1b"  # R9: cnt_texture_samples_o
+PACKET_B_TOP_SHA256 = "18b5d63e560dd32a75836085f1625d83cd3fc565deb94cf8756e1cb62789a599"  # R9: cnt_texture_samples_o
 # RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
 # to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
 # 3 lines x 4 zhao_mem_guard instances = 12 lines, each
@@ -220,7 +228,7 @@ def validate_cmake_registration(text: str) -> None:
         'list(FIND ZHAO_PACKET_C_SEEN "${relative_source}" duplicate_index)',
         'if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")',
         'list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")',
-        "Packet-C source manifest must contain exactly 35 SV paths",
+        "Packet-C source manifest must contain exactly 36 SV paths",
         "Packet-C source manifest lost package-first/mutant-stage/top-last order",
         "add_executable(pc_dir raster/raster_texture_stage_v3_directed.cpp)",
         "add_executable(pc_seq raster/raster_texture_stage_v3_directed.cpp)",
@@ -263,7 +271,7 @@ class PacketCClosureTests(unittest.TestCase):
             tuple(row for row in rows if row in PACKET_B_SOURCES),
             PACKET_B_SOURCES,
         )
-        self.assertEqual(len(rows), 35)
+        self.assertEqual(len(rows), 36)
         self.assertEqual(
             rows[-3:],
             (
