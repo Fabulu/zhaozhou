@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "f020185a28d3d4d79f41177334ecfbba744d5132",
-    "newestRunClean":  true,
+    "newestRunCommit":  "57beb0d34ad2e13a1b3bd87e8a81665d12134200",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -744,6 +744,26 @@
                        "virtualPins":  756
                    },
                    {
+                       "module":  "zhao_geom_binner_v2@walkswap",
+                       "status":  "map_only",
+                       "sourceCommit":  "57beb0d34ad2e13a1b3bd87e8a81665d12134200",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "14d58d825e87ddd7c101027f589fb76052b184bc67cdc1184bec15b8b4ef1952",
+                       "variantOf":  "zhao_geom_binner_v2",
+                       "seconds":  75.4,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2109,
+                       "blockMemoryBits":  191296,
+                       "dspBlocks":  6,
+                       "virtualPins":  3109
+                   },
+                   {
                        "module":  "zhao_geom_clip",
                        "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
                        "rtlCleanAtHead":  false,
@@ -932,6 +952,26 @@
                        "blockMemoryBits":  0,
                        "dspBlocks":  6,
                        "virtualPins":  1433
+                   },
+                   {
+                       "module":  "zhao_geom_paramarena@walkswap",
+                       "status":  "map_only",
+                       "sourceCommit":  "57beb0d34ad2e13a1b3bd87e8a81665d12134200",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "0be41f3810e881b6633b0239d1abc0d2e2114485267870e5c19b5e9e493ade5b",
+                       "variantOf":  "zhao_geom_paramarena",
+                       "seconds":  26.5,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1266,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  1796
                    },
                    {
                        "module":  "zhao_geom_project",
