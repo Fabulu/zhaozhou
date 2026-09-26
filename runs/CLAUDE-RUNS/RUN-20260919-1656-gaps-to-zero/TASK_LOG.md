@@ -2819,3 +2819,47 @@ forbidden and the price demanded because it lands in the console's largest block
 
 **Register 5:** `I13`, `I34` (escalated), `I55` (in flight), `I56`,
 `zhao_terrain_normalmap`.
+
+### 2026-09-26 - the ledger already knew, and the last un-briefed gap gets a brief
+
+**THE DEVICE ANSWER WAS IN THE LEDGER AND I DID NOT READ IT.** Every earlier
+`zhao_console_core` row carries `sizingDevice: 5CEBA9F31C7`,
+`notTargetDevice: true` and a `sizingNote` saying in terms that `almsAvailable`
+is NOT the target device's. My `@post-palram` row has **no device field at all**.
+**I differenced a row flagged `notTargetDevice: true` against an unflagged one
+and looked at neither.**
+
+**The asymmetry is the trap, and it is worth naming exactly**: `-Device` stamps a
+row, the DEFAULT part stamps nothing, so **only one side of a comparison ever
+speaks** and the absence of a flag reads as agreement rather than as silence.
+`run_block_fit.ps1` now writes **`measuredDevice` on EVERY row**. Written
+atomically (temp + `os.replace`) because two lanes are calling that script right
+now, and **syntax-checked with the PowerShell parser rather than assumed**.
+Ledger clean over 221 rows.
+
+**And three further precision items recorded in 15.27** rather than left to be
+discovered: the three console rows are **three different trees** (276 / 284 / 286
+declared sources -- the 284→286 step is the CHUNKSER merge landing between my two
+runs), so **neither pair involving `@post-palram` supports a subtraction**; and
+my claim that *"registers barely depend on the part"* is **an argument, not a
+measurement**, with a visible way to be wrong -- if the shipping part's 553 M10K
+were insufficient where the sizing part's 1,220 sufficed, arrays would fall back
+to flops and registers would RISE. **The pending sizing row is the direct test,
+and if it disagrees the 93,758 figure is withdrawn there.**
+
+**`BRIEF-CELLCARRY.md` written and queued** -- the last gap with no owner
+decision attached. Two packets have refused I13 and both were right; what is
+different is that **the last link now exists**. The blocker is carriage (the
+mosaic's triple is PER SPAN, terrain's layer-E is PER CELL) and **the consumer is
+resident**: `zhao_texture_mosaic_v2`, every link unconditional at module scope,
+which `prod_manifest.yml` states outright. The brief also corrects my own earlier
+fence on §5, per Decision Record 3, so the mistake does not reach a third packet.
+
+### WHERE I AM
+
+**Running:** FLOPARRAY and WALKSWAP (`I55`). **At the cap of two.**
+**Queued:** CELLCARRY (`I13`), the I56 completion (needs a command field and an
+ABI check), and the earth-stall measurement I owe the I34 escalation.
+
+**Register 5.** Reachable to **1** without the owner; **not to 0** --
+`reports/OWNER-ESCALATION-20260926-I34.md`, indexed in `reports/DOCKET.md`.
