@@ -2912,3 +2912,61 @@ its five smoke controls. **At the cap of two.** **Queued:** CELLCARRY (`I13`),
 the I56 completion, and the earth-stall measurement owed to the I34 escalation.
 
 **Register 5.**
+
+### 2026-09-26 - WALKSWAP: job 1 found a PRODUCTION defect, and the swap is refused with numbers
+
+Interim (two control arms outstanding), branch `gz/walkswap` head `740647d3`.
+**NOT MERGED YET.**
+
+**PHASE 53 WAS NOT A BENCH ARTEFACT.** `zhao_geom_paramarena` assigned
+`wr_words_q` from **two places in one `always_ff`** -- the retirement arm and the
+M_VERD guard-accept arm, both non-blocking, **so the later one silently wins**.
+A retire and a guard acceptance on the same clock therefore **discarded the
+retired words**. The comment over the retire arm asserted the exact opposite --
+*"a retire and an issue in the same cycle are both seen"* -- which is why it
+survived review.
+
+Measured: `collide=1 lost=8` while `issued=716 credited=716 retired=716`
+balanced perfectly and **every error counter read zero**. `wr_words_q` stuck at 8
+forever so the publication arm never issued the 32-word directory --
+748 - 32 = 716, exactly the deficit against neighbours at 740 and 756. Repaired
+with a dedicated `always_ff` owning the register. **All 60 phases publish, and
+phase 53 STILL reports `collide=1`** -- the coincidence is still reached, merely
+handled, so the regression cannot pass vacuously.
+
+**That defect would have gone into the next console fit.** Ranking job 1 above
+the entry was the right call.
+
+**THE SWAP IS REFUSED, AND THE PATH IS CIRCULAR.** `u_geom_chunkser` is the only
+driver of the external arena's chunk intake, and its only input is the binner's
+serialise pass over **the very RAMs the swap would delete**. The on-chip arena
+FILLS the external one -- **they are in series, not parallel**, so the external
+path cannot become sole producer by subtraction. The record is also wrong-shaped
+by 1,749 bits (`t_*` is a 16-byte descriptor; `job_*` needs METAW = 1,877 bits).
+Price on the same stimulus: **4.12 clocks/ref on-chip against 29.89 external,
+7.3x**, with 22 SDRAM round trips where the drain does one RAM read. It did not
+OR the walk into the live stream.
+
+**AND IT CAUGHT TWO FALSE CLAIMS IN MY BRIEF.** I wrote that
+`zhao_geom_bin_pipe_v2` is *"the single largest block in the console"* at
+*"58,514 ALUTs -- 70% of the whole device"*. **58,514 is
+`zhao_shell_top_v2:u_shell`'s SUBTREE** -- a container's number attributed to one
+of its children -- it is **not** the largest (`u_field_host` 39,964 against
+bin_pipe's 32,380 on the sizing map), and it is a **SHIPPING-part row sitting
+beside sizing-part comparisons, in a brief whose next section forbids crossing
+devices.** Corrected in place at `96affee3` with both figures named by part:
+**32,380 on `5CEBA9F31C7`, 42,490 on `5CSEBA6U23I7`.**
+
+**I checked its correction rather than accepting it**, and its counter-example
+(drawjob at 34,031) is **itself stale** -- PALRAM took that block to 1,378. The
+conclusion holds; **the correction of an old row quoted another old row**, and
+that is recorded beside it.
+
+**What it caught in itself:** its first diagnosis was a registered-grant /
+live-length construct -- a real different-clocks shape, in production three times
+-- but instrumenting it gave `skew=0` on all 60 phases and `occ=0 owed=0` at the
+wedge. **It deleted those counters rather than ship a permanently-zero
+instrument**, and recorded the shell construct as an open question, not a defect.
+
+**Register 5 before, 5 after** -- correctly unchanged, because it refused I55
+rather than closing it.
