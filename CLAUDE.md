@@ -666,6 +666,78 @@ chapter's own shape: a bump-mapping request sat unread because it landed at the
 repo root where the sweep did not look, and widening the sweep immediately
 surfaced three more owner briefs from the same day, 5,653 lines, none indexed.
 
+## A REFUSAL IS AN INSTRUMENT, AND IT GOES BLIND IN THE FLATTERING DIRECTION
+
+Added 2026-09-26, after the owner corrected a sequencing argument and the
+correction kept paying out. Four entries in one stretch had been treated as
+blocked on a DECISION. **All four were blocked on a BUILD**, and in every case
+the decision was already written down, in a document that had been read.
+
+The owner's words were about fits -- *"we still need to close all the things
+first, too, otherwise fit isn't complete"* -- but the useful part was the lens.
+Applying **"is this a DECISION or a BUILD?"** to every open refusal found:
+
+* **I13's "two unsettled arithmetic laws" are settled and merely unbuilt.** The
+  shade ladder is **frozen in the oracle with its own comment naming it** --
+  `terrain.cpp`'s `shade_q = (shade + 8191) >> 14;  // the palette ladder
+  (0..4)`. The S8.24 bound is **mandated in `spec/qformats.md`**, in the bounds
+  column, which reads `saturate`. Three packets refused the WIRING, correctly --
+  lay it without these and the pixel is wrong against a capture-exact law while
+  every gate passes. But "unsettled" and "unbuilt" are different words and only
+  the second was ever true.
+* **I55's refusal was ruled on before it was written.** A packet measured that
+  the swap is circular and 7.3x more expensive, and named what would close it.
+  Directive section 4 already said *"a parallel legacy on-chip frame arena that
+  still supplies the actual pixels is not closure"* -- the same shape, decided.
+* **I56's packet declined an ABI change** on the sound ground that a field whose
+  consumer does not exist is an uncashed cheque. Directive section 5 says the
+  architect *"is not required to duplicate a large policy engine merely to avoid
+  adding a command or mailbox field"* and to *"authorize the necessary generated
+  command ... and connect its real producer and consumer."* **The owner had
+  pre-authorised the exact thing being avoided.**
+* **And an ESCALATION of mine over-asked on both its questions.** One was decided
+  in the directive three days before I wrote it. The other had a default the
+  escalation itself declared -- *"what I will start if you say nothing"* -- under
+  a standing vacation directive where **saying nothing was always going to be the
+  state.** A default nobody executes is not a default; it is a second escalation
+  wearing a decision's clothes.
+
+**This is the broken-instrument law applied to JUDGEMENT rather than to tools.**
+That law says a defect survives when it makes the answer look better, smaller or
+simpler, because **nobody audits good news**. This is the same asymmetry one
+level up: **refusing, deferring and escalating all FEEL like the careful,
+conservative act**, so they are never audited the way a build is. A refusal gets
+written into an entry, quoted respectfully by the next packet, and inherited --
+and a question that has already been answered can sit in a docket for weeks
+looking exactly like diligence.
+
+Note the direction, because it is the tell. A wrong BUILD gets caught by a gate,
+a bench or a fit. A wrong REFUSAL is caught by nothing at all -- it produces no
+output to be wrong, no counter to read zero, no red. **It is invisible to every
+instrument in the tree by construction.**
+
+**The rules that follow:**
+
+1. **Ask DECISION or BUILD of every refusal you inherit, including your own.**
+   "A law must be settled before a wire is laid" is right; "this law is
+   unsettled" is a claim about the tree, and it is checkable.
+2. **Before escalating, grep the standing directive for the entry's own name.**
+   One command. For I34 it returns the decision, the destinations, the exact
+   addresses and the numerical policy.
+3. **A refusal is only as good as its scope.** Every one of the four above was
+   CORRECT about what it refused and WRONG about what that implied. A packet
+   rightly refusing to lay a wire does not thereby establish that the missing
+   law is open, and that second, larger claim is the one that gets inherited.
+4. **If you write a default, execute it.** "This is what I will do if nobody
+   objects" in a document nobody is reading is not a plan.
+5. **Re-read the refusals whenever the owner corrects your direction.** The
+   correction rarely only means what it says; it usually means a habit is off.
+
+And the general form, which is this file's own subject: **the campaign's rules
+about false absences apply to documents written by this campaign.** Four of the
+five findings above are corrections to briefs, entries and escalations written
+here, three of them mine in the same week. **A document cannot go stale loudly.**
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working
