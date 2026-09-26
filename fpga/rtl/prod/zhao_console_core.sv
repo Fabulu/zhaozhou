@@ -6667,6 +6667,185 @@
 //      commit and is clean (37 outputs match): the ABI was deliberately NOT
 //      moved, because the field it would carry belongs to a plan whose
 //      enforcement seam is not yet built.
+//
+//      -- REFPUSH, 2026-09-26. STILL OPEN, SEAL STILL AT CAPACITY. THE
+//      REFERENCE PUSH CANNOT CARRY THE RESERVATION EITHER, AND THE BLOCKER IS
+//      CAPACITY, NOT IDENTITY. GIANTQUOTA was right that instance identity
+//      survives at that seam and right that a reference is the directive's own
+//      unit. It never asked how many references the seam can HOLD. It holds
+//      1,024, against a reserve of 32,768.
+//
+//      THE MEASUREMENT. `zhao_shell_top_v2:1274` instantiates
+//      `zhao_geom_bin_pipe_v2` as `u_render_bin` overriding exactly ONE
+//      parameter (`ARENA_ID_W`), so the composed binner runs this file's
+//      defaults: `CHUNKS = 256`, `CHUNK_REFS = 4`
+//      (`zhao_geom_binner_v2:225-227`), and `ref_ram [0:(CHUNKS*CHUNK_REFS)-1]`
+//      (:439) is therefore **1,024 tile references per frame**.
+//      `zhao_geom_arena` is a bump allocator handed back WHOLE at
+//      `frame_begin_i` (`zhao_geom_arena.sv:19-21, :53-57`), so nothing is
+//      recycled inside a frame. The brief's rule -- refuse ORDINARY pushes past
+//      `(ref_cap - giant_reserve)` -- evaluates to **1,024 - 32,768 =
+//      -31,744**. It refuses the frame's FIRST ordinary push and still cannot
+//      admit the giant, which needs 32x the entire arena.
+//
+//      RE-MEASURED AT THIS COMMIT RATHER THAN QUOTED.
+//      `reports/BINNER_CAPACITY_FOR_8KM_MAPS.md` carries these numbers from
+//      2026-08-30 and CLAUDE.md's law is never to compare a current tree with
+//      an old measurement. `tools/render/count_bin_load.cpp` rebuilt and run
+//      here against the shipped `zref::Binner` -- which IS this block's binning
+//      law, so it counts exactly what the hardware would have to store:
+//        giant near camera, 126 tris  ->  25,704 refs   (25.1x the arena)
+//        256 creatures, no LOD        ->  30,609 refs   (29.9x)
+//        creature army, 200 x 96      ->  23,912 refs   (23.4x)
+//        one terrain patch 32x32      ->   4,080 refs   ( 4.0x)
+//        sky backdrop, 2 triangles    ->     396 refs   ( 0.4x)
+//      Every August figure reproduces to the reference at today's oracle.
+//
+//      SO R7's "THE GIANT IS NEVER SILENTLY TRUNCATED" IS ALREADY BREACHED,
+//      AND NOT BY THE SEAL. A frame holding a near-camera giant loses ~96% of
+//      its tile references to this block's overflow wall (:118-124) before the
+//      arena's quota is consulted at all. A reservation placed in the ARENA
+//      guards `MAX_CHUNKS * CHUNK_IDS` = 229,376 references of chunk payload --
+//      a resource whose ONLY producer caps at 1,024, so it can never be the
+//      binding one. BOTH seams this entry has considered protect the wrong
+//      wall. That is the finding, and it is why no reservation is built here.
+//
+//      AND THE BREACH IS NOT MERELY UNHANDLED, IT IS UNOBSERVABLE IN THE
+//      COMPOSED CONSOLE. The binner instruments its own wall correctly and the
+//      SHELL THROWS THE INSTRUMENTS AWAY (`zhao_shell_top_v2:1360-1365`):
+//        .binner_tile_references_o     (rp_refs_unused)
+//        .binner_max_tile_list_depth_o (rp_depth_unused)
+//        .binner_triangles_culled_o    (rp_culled_unused)
+//        .binner_arena_full_o          (rp_arenafull_unused)
+//        .binner_arena_used_o          ()
+//      Only `binner_overflow_o` survives, as `render_overflow_o`, and it is a
+//      PASS-THROUGH: this file declares it at :10959, connects it at :20197 and
+//      READS IT NOWHERE, and no test in the tree reads it either. So the
+//      console can neither say that the giant was truncated nor by how much.
+//
+//      NOTE WHAT THAT DOES TO THE EVIDENCE, because it is this file's own law
+//      in a new costume. The counters ARE proven to fire --
+//      `tests/geometry/geom_binner_directed.cpp:437` asserts
+//      `triangles_culled == 12` on a real overflow and :457 asserts
+//      `arena_used <= 256`. That is a positive control AT THE LEAF, and it says
+//      nothing whatever about the composed machine, where the same signals
+//      terminate in wires named `_unused`. "A gate that cannot reach the state
+//      is not evidence about the state" -- here the gate reaches it in a bench
+//      and the console discards the answer. THREE instances of this one shape
+//      sit in this entry now: these six, `u_geom_tidq`'s three counters
+//      declared at `tb_zhao_console_core_smoke.sv:493-495` and asserted on by
+//      nothing, and `ck_fits_c`, which had never been seen to fire anywhere
+//      until GIANTQUOTA fired it deliberately.
+//
+//      THE BRIEF'S CLAIM, CHECKED AS INSTRUCTED. It read: "at the reference
+//      push the unit is references, and 32,768 references is precisely the
+//      number R7 rules, so the reservation IS a hardware constant and no ABI
+//      field is needed at all." THE FIRST HALF IS TRUE AND LOAD-BEARS NOTHING;
+//      THE SECOND IS FALSE TWICE OVER. The unit does match and 32,768 is a
+//      constant -- but a constant is not a reservation. A reservation needs
+//      somewhere to put it, and this seam has 3.1% of the room. And the owner's
+//      directive section 5 answers the ABI half directly, against the brief:
+//      the architect "is not required to duplicate a large policy engine merely
+//      to avoid adding a command or mailbox field", must "authorize the
+//      necessary generated command, publication or service transport and
+//      connect its real producer and consumer", and -- the sentence that names
+//      this entry's present state -- "a constant equal to arena capacity is not
+//      an admission plan". Sealing at capacity therefore remains the NEUTRAL
+//      choice but is a DECLARED SHORTFALL, not a resting place.
+//
+//      AND THE ARITHMETIC EVERY PASS HAS USED UNDERCOUNTS A TRIANGLE BY 9.2x.
+//      `reports/BINNER_CAPACITY_FOR_8KM_MAPS.md` prices a binner triangle at
+//      `TRI_ENT_W = 142` bits and concludes "on these numbers a bigger constant
+//      is exactly what will do". IT PREDATES THE METADATA BANK. That report is
+//      2026-08-30; the Packet-D bank arrives with
+//      `reports/PACKET-D-ATTRIBUTE-RASTER-ABI-20260914.md`. `meta_ram` is
+//      `[0:TRI_CAP-1]` (:536) at `META_SLICES * META_SLICE_W` = 29 * 40 = 1,160
+//      bits, so a triangle in this block costs **142 + 1,160 = 1,302 bits**,
+//      not 142. The report is not wrong; it went STALE, and it went stale in
+//      the flattering direction, which is the direction nobody audits.
+//
+//      MEASURED, THIS COMMIT, `-MapOnly` on `-Device 5CSEBA6U23I7`, row
+//      `zhao_geom_binner_v2@refpush-shipped` in
+//      `reports/synthesis/zhao_block_fit.json`: **191,296 block memory bits**,
+//      2,109 registers, source digest `14d58d825e87`, `rtlCleanAtHead`. It
+//      decomposes to the BIT, which is what makes it a model rather than a
+//      number:
+//        meta    128 x 1,159 = 148,352   (1,160 declared less the one
+//                                         constant-zero pad bit at :527)
+//        tri     128 x   142 =  18,176
+//        tile    576 x    27 =  15,552
+//        ref   1,024 x     7 =   7,168
+//        next    256 x     8 =   2,048
+//                              -------
+//                              191,296   <- the measured total, exactly
+//
+//      AND A CLAIM THIS PACKET MADE AND KILLED BEFORE SHIPPING IT, recorded
+//      because it is the trap at this seam. I first scaled to "giant-capable"
+//      as TRI_CAP 128 -> 4,096 AND CHUNKS 256 -> 8,192 and got 5.85 Mbit
+//      against the recorded 553-M10K ceiling (5.66 Mbit) -- a clean
+//      impossibility, and it was WRONG, because it scaled the parameter the
+//      giant does not need.
+//      **THE GIANT IS TRIANGLE-CHEAP AND REFERENCE-EXPENSIVE**: 126 triangles
+//      (1.0x TRI_CAP) generating 25,704 references (25.1x). The metadata bank
+//      scales with TRI_CAP and TRI_CAP does not have to move for the giant.
+//      Raising CHUNKS ALONE to 8,192 -- 32,768 references, R7's reserve exactly
+//      -- leaves the 148,352-bit metadata bank untouched and touches only
+//      ref_ram (7,168 -> 229,376), next_ram (2,048 -> 106,496) and tile_ram's
+//      two pointer fields.
+//
+//      AND THAT POINT IS MEASURED, NOT PROJECTED. Row
+//      `zhao_geom_binner_v2@refpush-giantrefs32k`, same `-MapOnly`, same
+//      `-Device 5CSEBA6U23I7`, same source digest `14d58d825e87`, with
+//      `-TopParameters CHUNKS=8192,CHUNK_W=13`: **523,712 block memory bits**,
+//      2,121 registers. The decomposition above predicted 523,712 BIT-EXACTLY,
+//      so the model is validated at two independent parameter points rather
+//      than fitted to one. The delta is **+332,416 bits, about +33 M10K**, and
+//      the whole giant-reference-capable binner is 523,712 bits against the
+//      recorded 553-M10K (5.66 Mbit) ceiling -- **9.3% of the device's block
+//      RAM, against 3.4% today.** THAT IS AFFORDABLE, and the confident
+//      impossibility was an artefact of scaling the ARMY's parameter to answer
+//      the GIANT's question. The army IS the expensive case (24,576 triangles
+//      at 1,302 bits each is ~32 Mbit, impossible on this device); the giant is
+//      not, and this entry has been reading the two as one problem.
+//
+//      SO WHAT ACTUALLY BLOCKS THIS ENTRY IS A BUILD, NOT A DECISION, and the
+//      build is named here so the next packet does not re-derive it a fourth
+//      time:
+//        (1) `CHUNKS` 256 -> 8,192 and `CHUNK_W` 8 -> 13 on `u_render_bin`
+//            (`zhao_shell_top_v2:1274`), which is a parameter override, not new
+//            RTL -- the capacities are already build parameters.
+//        (2) A LATENT WIDTH BUG THAT MUST BE FIXED FIRST, found here and not
+//            previously recorded: `CNT_W` is a HARDCODED localparam 11 (:398)
+//            whose own comment says "per-tile reference count, 0...1024". It is
+//            sized to `CHUNKS*CHUNK_REFS` and is NOT derived from it, so raising
+//            CHUNKS silently wraps every tile's count at 2,048. `SLOT_W` (:399)
+//            is likewise hardcoded 2 rather than `$clog2(CHUNK_REFS)`. A
+//            capacity change made without these is a silent corruption, not an
+//            overflow -- the wall would not even fire.
+//            (The map above carries `CNT_W` as shipped, which is why it reads
+//            523,712 and not the 526,592 a correctly widened count costs --
+//            576 x 5 bits. The bug is essentially free to fix.)
+//        (3) ONLY THEN the reservation at the push, which becomes expressible
+//            because `ref_cap - giant_reserve` is finally positive.
+//        (4) A console fit, because (1) moves M10K on a device already over on
+//            ALM. THIS PACKET DID NOT RUN ONE and is not authorised to. The
+//            LEAF delta is measured at +33 M10K; what stays unmeasured is the
+//            composed console's M10K headroom, not this block's cost.
+//        (5) AND WHATEVER COUNTER THE RESERVATION EXPORTS MUST BE READ BY AN
+//            ASSERTION IN THE COMPOSED SMOKE, not merely connected. That smoke
+//            already declares `geom_tidq_underflow_o`, `geom_tidq_overflow_o`
+//            and `geom_tidq_unnamed_o` (:493-495) and asserts on NONE of them
+//            -- three counters wired out of a queue that was not even clocked
+//            until 2026-09-26. A connected counter nobody reads is the
+//            broken-instrument law with a port list.
+//
+//      NOT BUILT BY THIS PACKET, DELIBERATELY: no selector, no ABI field, no
+//      arena port, no binner port, and no capacity change. (1) and (2) together
+//      alter a SHARED, HOT file and the composed shell's memory footprint, and
+//      landing them without the fit that prices them would be an unmeasured
+//      claim on the binding budget. The seal stays at the arena's capacity --
+//      the NEUTRAL choice, and now a DECLARED SHORTFALL in the directive's own
+//      words rather than a resting place.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
