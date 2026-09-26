@@ -36,7 +36,8 @@ machine no `-G` value produces.
 **So the build order inverts.** The field-major adapter is still commissioned
 and still correct; it is no longer FIRST. **The gathering front is**, because
 the walker's four-wide group buys nothing while the front answers one point per
-run — and until it does, the whole transpose is worth 1.23×, not 22×.
+run — and until it does, **the whole transpose is a WASH**, not the 22× the
+deciding cell implies.
 
 ### What was built to answer it
 
@@ -105,8 +106,33 @@ four-point group costs four accept intervals until a gathering front exists.
 | — the record's deciding cell, for comparison | ~13 | 4,102 | 0.68× |
 | — vertex-major, the thing being replaced | — | 91,551 | 15.3× |
 
-**So the transpose alone is worth 1.23×, not 22×.** That is the number that
-changes the build order, and it is the unflattering one.
+### AND THE TWO FORMS COMPARED LIKE FOR LIKE — A SELF-CORRECTION
+
+**The first version of this record said the transpose was worth 1.23×.** It
+reached that by quoting 74,507 (measured here, at L = 62) against the published
+vertex-major **91,551 (modelled, at L = 80)**. **That comparison measures the
+two ENGINES, not the two STREAM ORDERS** — `CLAUDE.md`'s *"a measurement across
+MISMATCHED POSES measures the pose"*, in clocks, by the packet that had just
+quoted that law at someone else.
+
+Evaluated like for like, **both of the census's own lines at the same measured
+L = 62**, and printed by the instrument at the end of every run:
+
+| | clocks | vs. vertex-major |
+|---|---|---|
+| vertex-major `4,431 + 1,089·L` | **71,949** | 1.00× |
+| field-major `851 + 1,188·L` (every group slot) | **74,507** | **1.04× — worse** |
+| field-major `851 + 1,089·L` (masked lanes skipped) | **68,369** | **0.95×** |
+
+**SO THE TRANSPOSE ALONE IS A WASH — between 5 % better and 4 % worse — and
+that, not 1.23× and not 22×, is the number that changes the build order.**
+
+**The reason is exact and it is this packet's sharpest finding.** With a front
+that answers **one point per run, both forms pay one engine round trip per
+COVERED VERTEX.** The 297-against-1,089 slope — FIELDMAJOR's *"the walker
+deletes the per-VERTEX round trip and pays one per GROUP OF FOUR"* — is a
+property of a **GROUP-WIDE FRONT**, not of the stream order. **The transpose
+relocates the work; on its own it removes no round trips at all.**
 
 **Said the other way round, which is how it should be quoted:** with the 851
 floor and 297 groups, **a group must cost ≤ 17.3 clocks** to meet the contract.
@@ -154,8 +180,9 @@ nothing in the tree. So, precisely:
 build — it is a REORDERING of it, on a measurement.** The adapter is worth
 exactly what the front makes it worth:
 
-1. **Composing it today lands at 74,507 clocks**, a 1.23× improvement on the
-   91,551 it replaces, **bought with a whole subsystem swap** — the stream
+1. **Composing it today lands at 74,507 clocks against vertex-major's 71,949 at
+   the same measured engine price** — a **wash, and very slightly worse** —
+   **bought with a whole subsystem swap** — the stream
    order, the patch lifecycle, the accumulator's backpressure, and the
    re-homing of `zhao_terrain_veljoin`, which is reaching `zhao_part_collide`
    today and which §13.1 forbids regressing.

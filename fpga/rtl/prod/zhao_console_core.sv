@@ -6117,9 +6117,24 @@
 //             (F4c)'s deciding cell              ~13          4,102   0.68x
 //             vertex-major, the thing replaced    --         91,551  15.3x
 //
-//           THE TRANSPOSE ALONE IS WORTH 1.23x, NOT 22x. Said the way the
-//           budget binds: with the 851 floor and 297 groups A GROUP MUST COST
-//           <= 17.3 CLOCKS. It costs 248.
+//           AND COMPARED LIKE FOR LIKE -- A SELF-CORRECTION. This block first
+//           read "the transpose is worth 1.23x", reached by quoting 74,507
+//           (measured, L=62) against the published vertex-major 91,551
+//           (MODELLED, L=80). THAT COMPARES THE TWO ENGINES, NOT THE TWO
+//           STREAM ORDERS -- CLAUDE.md's "a measurement across MISMATCHED
+//           POSES measures the pose", in clocks. Both of the census's own
+//           lines at the SAME measured L, printed by the instrument:
+//             vertex-major 4,431 + 1,089*L :  71,949
+//             field-major    851 + 1,188*L :  74,507  every slot      1.04x
+//             field-major    851 + 1,089*L :  68,369  masked skipped  0.95x
+//           SO THE TRANSPOSE ALONE IS A WASH -- 5% better to 4% worse -- and
+//           the reason is exact: WITH A FRONT THAT ANSWERS ONE POINT PER RUN,
+//           BOTH FORMS PAY ONE ROUND TRIP PER COVERED VERTEX. (F2)'s
+//           297-against-1,089 slope is a property of a GROUP-WIDE FRONT and
+//           NOT of the stream order; the transpose RELOCATES the work and on
+//           its own removes no round trips.
+//           Said the way the budget binds: with the 851 floor and 297 groups
+//           A GROUP MUST COST <= 17.3 CLOCKS. It costs 248.
 //
 //      (E4) AND THE COST DECOMPOSES, WHICH IS THE PART THAT IS ACTIONABLE AND
 //           IS NEW. The 62 clocks are not one lump:
@@ -6146,8 +6161,10 @@
 //      (E5) THE BUILD IS REORDERED, NOT REFUSED, and it is asked as
 //           DECISION-OR-BUILD rather than inherited. The field-major adapter
 //           of (F5)'s item 1 is still commissioned and still correct; it is no
-//           longer FIRST. Composing it today lands at 74,507 clocks -- a 1.23x
-//           improvement bought with the whole subsystem swap, INCLUDING the
+//           longer FIRST. Composing it today lands at 74,507 clocks against
+//           vertex-major's 71,949 AT THE SAME MEASURED ENGINE PRICE -- a wash,
+//           and slightly worse -- bought with the whole subsystem swap,
+//           INCLUDING the
 //           re-homing of `zhao_terrain_veljoin`, which reaches
 //           `zhao_part_collide` today. And a SCALAR adapter is the thing the
 //           front then replaces: a group-wide adapter presents four points per

@@ -99,6 +99,28 @@
 // and by different events.
 //
 // ===========================================================================
+// AND THE SECOND DRAFT COMPARED AT TWO DIFFERENT ENGINE PRICES. ALSO RECORDED.
+// ===========================================================================
+// It quoted the composed field-major cost (measured here, L = 62) against the
+// published vertex-major 91,551 (modelled, L = 80) and called the transpose a
+// 1.23x improvement. THAT COMPARISON MEASURES THE TWO ENGINES, NOT THE TWO
+// STREAM ORDERS -- `CLAUDE.md`'s "a measurement across MISMATCHED POSES
+// measures the pose", in clocks.
+//
+// Evaluated like for like, at the SAME measured L, the census's own two lines
+// give 71,949 (vertex-major) against 68,369-74,507 (field-major, depending on
+// whether the adapter skips masked lanes). THE TRANSPOSE ALONE IS A WASH:
+// between 5% better and 4% worse.
+//
+// The reason is exact and is the finding this file exists for. With a front
+// that answers ONE POINT PER RUN, BOTH FORMS PAY ONE ENGINE ROUND TRIP PER
+// COVERED VERTEX. The 297-against-1,089 slope -- "the walker deletes the
+// per-VERTEX round trip and pays one per GROUP OF FOUR" -- is a property of a
+// GROUP-WIDE FRONT and not of the stream order. The transpose relocates the
+// work; on its own it removes no round trips. Both figures are printed at the
+// end of the run so the comparison cannot drift back apart.
+//
+// ===========================================================================
 // THE INSTRUMENT'S POSITIVE CONTROL, AND WHY IT IS NOT OPTIONAL
 // ===========================================================================
 // The headline is a concurrency reading ONE. `CLAUDE.md`: "a detector that has
@@ -539,6 +561,34 @@ int main(int argc, char** argv) {
   std::printf("\n    THE BUDGET SAID THE OTHER WAY ROUND: to reach 6,000 clocks with the\n");
   std::printf("    851 floor and 297 groups, a group must cost <= %.1f clocks.\n",
               (kContract - kFloor) / kGroups);
+
+  // -----------------------------------------------------------------------
+  // AND THE TWO FORMS COMPARED LIKE FOR LIKE, WHICH IS THE POINT.
+  // -----------------------------------------------------------------------
+  // `CLAUDE.md`: "Compare like with like, or do not compare." The published
+  // vertex-major figure of 91,551 was taken with a MODELLED engine at L = 80;
+  // quoting it against a number measured at L = 62 measures the two engines,
+  // not the two stream orders. So BOTH of the census's own lines are evaluated
+  // here at THE SAME MEASURED L.
+  //
+  // AND THE RESULT IS A WASH, which is this file's sharpest finding: with a
+  // front that answers ONE POINT PER RUN, both forms pay ONE ENGINE ROUND TRIP
+  // PER COVERED VERTEX. The 297-against-1,089 slope is a property of a
+  // GROUP-WIDE FRONT, not of the stream order. The transpose RELOCATES the
+  // work; on its own it does not reduce the round trips.
+  const double vm = 4431.0 + 1089.0 * slow.accept_interval;       // case 11's line
+  const double fm_slots = kFloor + 1188.0 * slow.accept_interval;  // 297*4 group slots
+  const double fm_cov = kFloor + 1089.0 * slow.accept_interval;    // masked lanes skipped
+  std::printf("\n  === THE TWO STREAM ORDERS AT THE *SAME* MEASURED ENGINE PRICE ===\n");
+  std::printf("    vertex-major  4,431 + 1,089*L : %7.0f clocks\n", vm);
+  std::printf("    field-major     851 + 1,188*L : %7.0f clocks  (every group slot)   %.2fx\n",
+              fm_slots, fm_slots / vm);
+  std::printf("    field-major     851 + 1,089*L : %7.0f clocks  (masked lanes skipped) %.2fx\n",
+              fm_cov, fm_cov / vm);
+  std::printf("\n    SO THE TRANSPOSE ALONE IS A WASH -- between 5%% better and 4%% worse.\n");
+  std::printf("    Both forms pay one round trip per COVERED VERTEX while the front\n");
+  std::printf("    answers one point per run. The saving the field-major form was\n");
+  std::printf("    commissioned for is ENTIRELY CONTINGENT on a gathering front.\n");
 
   // Verilated mains on this toolchain must exit through `exit_hard` -- see
   // `zhao_sim.hpp`: VlThreadPool's destructor deadlocks at static teardown.
