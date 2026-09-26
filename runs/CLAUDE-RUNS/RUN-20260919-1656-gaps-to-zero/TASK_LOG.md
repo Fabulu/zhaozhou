@@ -2493,3 +2493,44 @@ cap of two.**
 (34,840 bits, **not free**), then `zhao_geom_lodstate`'s `st_q` (9,216 bits).
 Neither has a fit target yet — add one before briefing, not while a lane is
 running preflights.
+
+### 2026-09-26 — the optimization queue's next two blocks get targets, and baselines
+
+Done while ATTRSETUP finished its four console-core smoke controls and CHUNKSER
+worked. Touched nothing in either closure.
+
+**Neither `zhao_forge_assemble` nor `zhao_geom_lodstate` had a fit target**, so
+neither had ever been measured on its own. Both now do, and both are measured:
+
+| row | registers | mem bits | time | digest |
+|---|---:|---:|---:|---|
+| `zhao_forge_assemble@flop-census-20260926` | **39,167** | 2,198 | 124.3 s | `46e4cae54a15` |
+| `zhao_geom_lodstate@flop-census-20260926` | **10,826** | 0 | 41.2 s | `0dfe1327a272` |
+
+Both track the composed entity table (39,005 and 10,801 subtree) — **the same
+leaf-equals-console check the DSP census earned.** A per-block baseline is only
+worth having if the leaf's number survives composition, and the ALM census got
+that wrong historically.
+
+**Neither is free**, unlike `pal_q`: `pos_q`/`inv_q` (34,840 bits) and `st_q`
+(9,216) sit behind an **async reset loop over the array** and a **combinational
+read**, and removing those costs a pipeline stage and a validity discipline.
+The baselines exist so the next packet diffs against a measurement.
+
+**The first attempt failed in 9.8 seconds and that is why it was not a waste.**
+My closure named `zhao_geom_depthquant_stream.sv`, which does not exist — the
+module lives inside `zhao_geom_depthquant.sv` — and the preflight refused it with
+the right sentence: *"This is a missing file, NOT a block that does not fit."*
+The corrected closure then failed `quartus_map` in 9.8 s with five `Error
+(12006)` lines naming **all three** of rcp24's own dependencies at once.
+**Learning a closure by running the map is cheap and exact; guessing it from
+instantiation greps is neither.**
+
+`design/fit_targets.yml` is re-read LIVE at every preflight (GOTCHAS 13), so
+every edit was written to a sibling and `os.replace`d — atomic on NTFS, so a
+reader sees the old file or the new one and never a half-written one.
+
+**`BRIEF-TERRTRI.md` also written and pushed** — I13 plus `zhao_terrain_normalmap`,
+queued behind CHUNKSER.
+
+Verified: `check_fit_ledger` over 210 rows, `gate_sweep` RC 0 / 30 matching.
