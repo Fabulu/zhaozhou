@@ -47,6 +47,35 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260925-1535] Manafold pass 26: Hasty made hasty -- speed and face
+
+**Status:** COMPLETE AND LIVE
+**Archived:** 2026-09-26 (by the Upheaval Studio coordinator on owner instruction; the run's agent crashed after verification)
+**Created:** 2026-09-25 15:35 UTC+02:00
+**Completed:** 2026-09-25 ~20:05 UTC+02:00 (deploy + production verification)
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260925-1535-manafold-pass26-hasty/`
+**Branch:** `manafold-pass26` -> `main` (zhaozhou `4d7c5586`, Upheaval main == `manafold-pass26`)
+
+**Summary:**
+Owner Direction 27 reopened one clip after the planned final pass 25: Hasty did not read
+hasty. Diagnosis before any value moved: Direction 12 had deleted the traverse but left the
+camera's traverse compensation, so all screen motion was a pan carrying the ground
+(relative motion +0.066 px/frame). New instrument `tools/reel/screenmotion.py` (creature vs
+ground motion, known-negative `absent` check). Staging, cadence, surge, follow and a
+symmetric face-check curve (the old one cut at 25-33% instead of leaving) were chosen by eye.
+Two inherited matrix floors were already red (the back-ball packet landed after the pass-25
+matrix receipt); repaired with an off-flag plus a positive control. Matrix 275/275.
+
+**Deliverables:**
+- `P26-IMPLEMENTATION.md`, `P26-NOTES/` (FINDINGS 01-04), `P26-LOOKS/`, `P26-SHEETS/`
+- `P26-REVIEW.md` -- independent review, VERDICT FIXED, all 22 bank CRCs reproduced; only `manafold-hasty` differs from pass 25
+- `P26-PRODUCTION-VERIFY.md` -- upheaval.pages.dev and the deployment alias, 72/72 rows by SHA-256, verifier selftest with 33 index negatives
+
+**Outcome:** Live on upheaval.pages.dev. Manafold is finished (owner, 2026-09-26); next step
+is bringing it into Tribute Upheaval Studio (Upheaval run RUN-20260925-1531).
+
+---
+
 ### [RUN-20260831-1956] Zixxtrixx final explicit whole-S animation pass
 
 **Status:** COMPLETE AND LIVE

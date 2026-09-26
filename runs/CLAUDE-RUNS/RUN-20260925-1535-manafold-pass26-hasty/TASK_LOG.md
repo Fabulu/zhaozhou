@@ -1,7 +1,7 @@
-# Task Log: RUN-20260925-1535 - [Describe objective here]
+# Task Log: RUN-20260925-1535 - Manafold pass 26: make Hasty look hasty
 
 **Created:** 2026-09-25 15:35 UTC+02:00
-**Status:** In Progress
+**Status:** COMPLETE AND LIVE (archived 2026-09-26 by the Upheaval Studio coordinator on owner instruction; the run's own agent crashed after production verification)
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260925-1535-manafold-pass26-hasty/
 
 ---
@@ -289,3 +289,14 @@ and nothing was rewritten or lost. zhaozhou fast-forwarded cleanly.
 
 Four heads agree: zhaozhou `main` == `manafold-pass26`, Upheaval `main` ==
 `manafold-pass26`.
+
+---
+
+### 2026-09-26 - Archived
+
+Owner, 2026-09-26: *"manafold ... it's finished. You can archive its run, too. Its agent
+crashed when it was done."* The last recorded state is `P26-PRODUCTION-VERIFY.md`:
+deployed via `deploy.ps1 -Project upheaval -Branch main`, VERIFIED ON BOTH HOSTS (72/72
+rows, 0 mismatches). `main` == `manafold-pass26` in both repos (`4d7c5586` here). Nothing
+was left half-done beyond this log's closing entry; archived by the Upheaval Studio
+coordinator from a fresh clone.
