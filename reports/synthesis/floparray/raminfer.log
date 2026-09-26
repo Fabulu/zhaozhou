@@ -1,0 +1,889 @@
+﻿ARRAYS THAT WILL NOT INFER AS MEMORY, LARGEST FIRST
+(size is DECLARED bits -- what an M10K would have to hold. It
+ says which findings are worth looking at, and nothing more:
+ a large array read on three ports every cycle belongs in flops
+ and no ranking should suggest otherwise.)
+
+   65536 bits  forge/zhao_forge_cliff_ram.sv  prio_mem_r  [DESIGN]
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+   65536 bits  forge/zhao_forge_cliff.sv  prio_mem_r  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+   65536 bits  audio/zhao_audio_fifo.sv  mem  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   55296 bits  compositor/zhao_post_composite.sv  ring_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   34944 bits  terrain/zhao_terrain_patch_acc.sv  ram_v  [DESIGN]
+               - MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][in_g_i]', '[b][m_addr[b]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+   34944 bits  terrain/zhao_terrain_patch_acc.sv  ram_n  [DESIGN]
+               - MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][in_g_i]', '[b][m_addr[b]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+   34944 bits  terrain/zhao_terrain_patch_acc.sv  ram_m  [DESIGN]
+               - MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][in_g_i]', '[b][m_addr[b]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+   34944 bits  terrain/zhao_terrain_patch_acc.sv  ram_h  [DESIGN]
+               - MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][in_g_i]', '[b][m_addr[b]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+   24576 bits  forge/zhao_forge_cliff_ram.sv  edge_key_r  [DESIGN]
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+   24576 bits  forge/zhao_forge_cliff.sv  edge_key_r  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+   19456 bits  texture/zhao_texture_binding_resolver_v2.sv  page1_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   19456 bits  texture/zhao_texture_binding_resolver_v2.sv  page0_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   17424 bits  terrain/zhao_terrain_lodfeed.sv  lat_mem  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   17408 bits  forge/zhao_forge_cliff_ram.sv  run_mem_r  [DESIGN]
+               - read at MODULE SCOPE through dynamic index `ridx_r` (a continuous assignment is combinational)
+   17408 bits  forge/zhao_forge_cliff.sv  run_mem_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `ridx_r` (a continuous assignment is combinational)
+   12288 bits  terrain/zhao_terrain_residency.sv  py_r  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+   12288 bits  terrain/zhao_terrain_residency.sv  px_r  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+   12288 bits  geometry/zhao_geom_replay.sv  triq_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+   12288 bits  forge/zhao_forge_cliff_ram.sv  edge_span_r  [DESIGN]
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+   12288 bits  forge/zhao_forge_cliff.sv  edge_span_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[idx_r[10:0]]', '[mhead_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    9801 bits  terrain/zhao_terrain_sheetseam.sv  bf_q  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[rd_idx_c][8]', '[sk_idx_q]', '[sr_idx_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+               - the ELEMENT is written through a bit/part-select `[8]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+    8192 bits  texture/zhao_texture_tmu.sv  pal_dat_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [PAL_SLOTS][256] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[pal_vic_r][idx_r]', '[pal_way_c][idx_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    8192 bits  particles/zhao_part_state.sv  chl_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    7680 bits  texture/zhao_texture_island_v3_top.sv  shadow_metadata_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [0:OWNERS-1][0:2] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    4608 bits  compositor/zhao_post_composite.sv  pv_g_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    4096 bits  texture/zhao_texture_tmu_pipe.sv  pal_val_r  [DESIGN]
+               - written from an ASYNC-RESET process (5 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[pal_vic_r]', '[pal_vic_r][rb_idx[rsp_rec]]', '[pal_way_c][rb_idx[rsp_rec]]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+               - the ELEMENT is written through a bit/part-select `[rb_idx[rsp_rec]]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+    4096 bits  texture/zhao_material_resolve.sv  ln_rec_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    4096 bits  terrain/zhao_terrain_residency.sv  gen_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[cl_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    4096 bits  geometry/zhao_light_stream.sv  desc_q  [MECHANICAL]
+               - the ELEMENT is written through a bit/part-select `[7'({cfg_word_c, 5'd0}) +: 32]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+    2688 bits  particles/zhao_part_clipfeed.sv  tri_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+    2304 bits  compositor/zhao_post_composite.sv  pv_r_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    2304 bits  compositor/zhao_post_composite.sv  pv_b_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    2112 bits  texture/zhao_texture_island_top.sv  rob_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    2048 bits  geometry/zhao_light_stream.sv  sd_det_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `sd_rd_sk_c` -- forces a per-bit mux the width of the array
+    2048 bits  field/zhao_field_seq.sv  rf_h  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    2048 bits  field/zhao_field_seq.sv  rf_c  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    2048 bits  field/zhao_field_seq.sv  rf_b  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    2048 bits  field/zhao_field_seq.sv  rf_a  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    2048 bits  field/zhao_field_host_v2.sv  prep_value  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[k]', '[ld_addr_i[PREPW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1988 bits  command/zhao_cmd_exec.sv  tq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1984 bits  forge/zhao_forge_assemble.sv  dqf_w_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `dqf_rp_q` (a continuous assignment is combinational)
+    1824 bits  command/zhao_cmd_exec.sv  wq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1664 bits  command/zhao_cmd_exec.sv  sq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1536 bits  texture/zhao_texture_fragrob.sv  desc_v_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1536 bits  texture/zhao_texture_fragrob.sv  desc_u_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1536 bits  texture/zhao_texture_cache.sv  tag_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [LANES][LINES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[fill_lane_r][fill_idx_r]', '[k][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1536 bits  terrain/zhao_terrain_pagestream.sv  buf_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `p` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ["[fill_p_q][({{(32-$clog2(BEATS+1)){1'b0}}, beat_q} * 64) +: 64]", '[p]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+               - the ELEMENT is written through a bit/part-select `[({{(32-$clog2(BEATS+1)){1'b0}}, beat_q} * 64) +: 64]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+    1536 bits  raster/zhao_raster_toon.sv  sl_lane_r  [DESIGN]
+               - written from an ASYNC-RESET process (8 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [SLOTS][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[dq_tag[SLOTW+1:2]][dq_tag[1:0]]', '[i][c]', '[wr_r][0]', '[wr_r][1]', '[wr_r][2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1536 bits  raster/zhao_raster_texjoin_v2.sv  sv_q  [MECHANICAL]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1536 bits  raster/zhao_raster_texjoin_v2.sv  su_q  [MECHANICAL]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1152 bits  texture/zhao_texture_fragrob.sv  res_rgb_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1152 bits  raster/zhao_raster_texjoin_v2.sv  srgb_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[tail_q][0]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1152 bits  common/zhao_shell_top_v2.sv  recq  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    1152 bits  common/zhao_shell_top.sv  recq  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    1089 bits  terrain/zhao_terrain_bake.sv  meets_row  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `cj` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[k]', '[vj]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1089 bits  raster/zhao_raster_toon_div.sv  rem_s  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    1088 bits  texture/zhao_texture_island_v3_top.sv  sheet_m  [DESIGN]
+               - TWO OR MORE distinct write addresses ['[aux_return_owner_w[13:8]]', '[own_adm_owner_w[13:8]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1056 bits  terrain/zhao_terrain_field_walk.sv  wz  [DESIGN]
+               - read COMBINATIONALLY through dynamic index `cur_j_r` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[cur_j_r]', '[lt_idx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1056 bits  terrain/zhao_terrain_field_walk.sv  wx  [DESIGN]
+               - read COMBINATIONALLY through dynamic index `li_c` -- forces a per-bit mux the width of the array
+    1056 bits  raster/zhao_raster_toon_div.sv  quo_s  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+    1056 bits  raster/zhao_raster_toon_div.sv  low_s  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    1056 bits  raster/zhao_raster_toon_div.sv  den_s  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    1056 bits  particles/zhao_part_project.sv  m_proj  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rp_q` -- forces a per-bit mux the width of the array
+    1024 bits  texture/zhao_texture_rsp_dispatch.sv  cq_d  [MECHANICAL]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [NCLS][CHN] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    1024 bits  texture/zhao_texture_island_top.sv  rob_tag_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  terrain/zhao_terrain_residency.sv  res_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[cl_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  terrain/zhao_terrain_residency.sv  load_r  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[cl_slot_c]', '[fin_slot_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  terrain/zhao_terrain_residency.sv  dirty_r  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[cl_slot_c]', '[dirty_slot_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  raster/zhao_raster_texjoin_v2.sv  ctx_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  raster/zhao_raster_texjoin.sv  ctx_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_r[PW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  particles/zhao_part_hps.sv  wf_m  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `wf_rp_q` -- forces a per-bit mux the width of the array
+    1024 bits  particles/zhao_part_hps.sv  rf_m  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rf_rp_q` (a continuous assignment is combinational)
+    1024 bits  geometry/zhao_light_stream.sv  sd_tag_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  geometry/zhao_geom_ladderbank.sv  spl_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', "[{fill_c, ROWW'(done_q[ROWW-1:0])}]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  geometry/zhao_geom_ladderbank.sv  mic_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', "[{fill_c, ROWW'(done_q[ROWW-1:0])}]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  geometry/zhao_geom_ladderbank.sv  gli_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', "[{fill_c, ROWW'(done_q[ROWW-1:0])}]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  geometry/zhao_geom_ladderbank.sv  bnd_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', "[{fill_c, ROWW'(done_q[ROWW-1:0])}]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  geometry/zhao_geom_cull.sv  mat  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `sel_view` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [0:1][0:15] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[0][ci]', '[1][ci]', '[cfg_view_i][cfg_addr_i[3:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  common/zhao_shell_top_v2.sv  wfifo  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  common/zhao_shell_top_v2.sv  gq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  common/zhao_shell_top_v2.sv  bq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+    1024 bits  common/zhao_shell_top.sv  wfifo  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `wf_rp` -- forces a per-bit mux the width of the array
+    1024 bits  common/zhao_project_core.sv  mat  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [0:1][0:15] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[0][ci]', '[1][ci]', '[cfg_view_i][cfg_addr_i[3:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1024 bits  command/zhao_cmd_exec.sv  sv_mat  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [0:1][0:15] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[sv_view][mo[5:2]]', '[vi][wi]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    1008 bits  texture/zhao_texture_island_top.sv  sampmeta_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     960 bits  command/zhao_cmd_exec.sv  uq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     960 bits  command/zhao_cmd_exec.sv  pq  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `pq_rp` -- forces a per-bit mux the width of the array
+     792 bits  raster/zhao_raster_toon_div.sv  tag_s  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     768 bits  texture/zhao_texture_aux_pipe_v2.sv  return_result_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `return_read_q` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[local_write]', '[return_write_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     768 bits  geometry/zhao_geom_skin.sv  m_q  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `idx` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[12 + i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     768 bits  geometry/zhao_geom_ladderbank.sv  key_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', "[{fill_c, ROWW'(done_q[ROWW-1:0])}]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     768 bits  field/zhao_field_progcache.sv  ent_lru  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[hit_idx]', '[i]', '[k]', '[victim]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     744 bits  command/zhao_cmd_exec.sv  dq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     672 bits  geometry/zhao_geom_vertid.sv  att_q  [DESIGN]
+               - written from an ASYNC-RESET process (4 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `k_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     640 bits  texture/zhao_texture_rsp_dispatch.sv  cq_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [NCLS][CHN] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     576 bits  texture/zhao_texture_fragrob.sv  desc_met_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     576 bits  raster/zhao_raster_tile_pipe_v2.sv  plane_n0_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     576 bits  geometry/zhao_geom_replay.sv  ca_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[ai]', '[rk_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     576 bits  geometry/zhao_geom_attrpack.sv  n0_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[k]', '[lane_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     552 bits  particles/zhao_part_project.sv  m_attr  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rp_q` -- forces a per-bit mux the width of the array
+     544 bits  synth/zhao_probe_compose_pipe.sv  bot  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     544 bits  synth/zhao_probe_compose_pipe.sv  acc  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `s` -- forces a per-bit mux the width of the array
+     512 bits  texture/zhao_texture_v3own.sv  vgen_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  texture/zhao_texture_tmu_pipe.sv  rb_pal  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rsp_rec` -- forces a per-bit mux the width of the array
+     512 bits  texture/zhao_texture_tmu_pipe.sv  pal_tag_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  texture/zhao_texture_tmu.sv  pal_val_r  [DESIGN]
+               - written from an ASYNC-RESET process (5 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[pal_vic_r]', '[pal_vic_r][idx_r]', '[pal_way_c][idx_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+               - the ELEMENT is written through a bit/part-select `[idx_r]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+     512 bits  texture/zhao_texture_island_v3_top.sv  join_validation_generation_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  texture/zhao_texture_cache_pipe_v2.sv  rq_addr  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rq_ip` -- forces a per-bit mux the width of the array
+     512 bits  texture/zhao_texture_cache_pipe.sv  rq_addr  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rq_ip` -- forces a per-bit mux the width of the array
+     512 bits  texture/zhao_texture_aux_pipe_v2.sv  side_handle_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  texture/zhao_texture_aux_pipe_v2.sv  offer_handle_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `offer_read_q` -- forces a per-bit mux the width of the array
+     512 bits  terrain/zhao_terrain_writeback.sv  nxt  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[k]', '[rbeat]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_writeback.sv  cur  [DESIGN]
+               - written from an ASYNC-RESET process (4 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `wbeat` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[BEATS_PER_B-1]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_residency_v2.sv  rr_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `s0_set` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[s0_set]', '[sweep_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_patch.sv  fp_z1  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_patch.sv  fp_z0  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_patch.sv  fp_x1  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_patch.sv  fp_x0  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_pageloader.sv  chunk  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `wbeat` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[k]', '[rbeat]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_fieldlist.sv  e_z1  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_fieldlist.sv  e_z0  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_fieldlist.sv  e_x1  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_fieldlist.sv  e_x0  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  terrain/zhao_terrain_fieldlist.sv  e_hash  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  raster/zhao_raster_toon.sv  sl_q_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  raster/zhao_raster_rcp24_v4.sv  s_x_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_v4.sv  s_w_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_v4.sv  p_x0_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_v3.sv  s_x_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_v3.sv  s_w_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_v3.sv  p_x0_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_rcp24_svc.sv  c_w  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `s1_i_q` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[free_i]', '[m1_i_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  raster/zhao_raster_perspuv_svc.sv  e_q_v  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+     512 bits  raster/zhao_raster_perspuv_svc.sv  e_q_u  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+     512 bits  raster/zhao_raster_perspuv_svc.sv  e_num_v  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_perspuv_svc.sv  e_num_u  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_perspuv_pairpipe_v2.sv  fifo_v_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_perspuv_pairpipe_v2.sv  fifo_u_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_perspuv_pairpipe.sv  fifo_v_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  raster/zhao_raster_perspuv_pairpipe.sv  fifo_u_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     512 bits  particles/zhao_part_update.sv  hist_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `hist_sel_i` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[b]', '[spc_recipe_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  mem/zhao_mem_upload.sv  bbuf_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `beat_q` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  rq_rad_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rq_rd_q` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  pfa_rec_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `pfa_rd_q` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  dq_num_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `dq_rd_q` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  a_nz_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_i_c` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  a_ny_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_i_c` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  a_nx_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_i_c` -- forces a per-bit mux the width of the array
+     512 bits  geometry/zhao_light_stream.sv  a_mag_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[alloc_i_c]', '[rt_tago_w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  geometry/zhao_geom_warpbook.sv  par_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `r_idx_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[k]', '[w_idx_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  geometry/zhao_geom_warpbook.sv  attr_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `r_idx_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[k]', '[w_idx_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  geometry/zhao_geom_meshfetch.sv  d_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `i` (a continuous assignment is combinational)
+     512 bits  geometry/zhao_geom_loomfeed.sv  w_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[beat_q]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  geometry/zhao_geom_lodstate.sv  st_v_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[slot_c]', '[v]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  geometry/zhao_geom_drawjob.sv  h_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `i` (a continuous assignment is combinational)
+     512 bits  geometry/zhao_geom_clipread.sv  row_foff_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[rows_done_q[ROWW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  forge/zhao_forge_shadow.sv  h_m  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `k_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[k_q[3:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_v3_len.sv  bk_n2_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `bk` (a continuous assignment is combinational)
+               - MULTIDIMENSIONAL unpacked array [BANKS][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][l]', '[free_bank_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_v3_dispatch.sv  r2_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_v3_dispatch.sv  r1_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_v3_dispatch.sv  r0_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_v3_dispatch.sv  g_s4_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [GATHERS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[acc_slot_c][pt]', '[i][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_progcache.sv  ent_hash  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[k]', '[victim]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  field/zhao_field_host_v2.sv  prep_gen  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `omap_index` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[k]', '[ld_addr_i[PREPW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  debug/zhao_debug_frameblit.sv  chunk  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `beat` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[beat]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_twod_asset.sv  w_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `drain_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[beat_q]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_post_gather.sv  g_r  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_post_gather.sv  g_g  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_post_gather.sv  g_b  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_post_gather.sv  d_y  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  compositor/zhao_post_gather.sv  d_x  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     512 bits  command/zhao_cmd_dma.sv  hdr_win  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `off` (a continuous assignment is combinational)
+     484 bits  command/zhao_cmd_exec.sv  fq  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     448 bits  field/zhao_field_host_v2.sv  rsp_data  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_idx_c` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [0:CREDITS-1][0:OUT_ORDINALS-1] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[cur_rsv][j]', '[k][j]', '[tail_idx_c][j]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     432 bits  raster/zhao_raster_tile_pipe_v2.sv  plane_dndy_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     432 bits  raster/zhao_raster_tile_pipe_v2.sv  plane_dndx_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     432 bits  geometry/zhao_geom_attrpack.sv  dndy_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[k]', '[lane_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     432 bits  geometry/zhao_geom_attrpack.sv  dndx_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[k]', '[lane_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     428 bits  terrain/zhao_terrain_residency_v2.sv  key_q  [DESIGN]
+               - read COMBINATIONALLY through dynamic index `victim_c` -- forces a per-bit mux the width of the array
+     390 bits  geometry/zhao_geom_skin.sv  acc  [DESIGN]
+               - written from an ASYNC-RESET process (4 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[dst_d2[r]]', '[i]', '[rp + 3]', '[rp]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  texture/zhao_texture_tmu_pipe.sv  rb_rgb  [DESIGN]
+               - written from an ASYNC-RESET process (6 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[a0_rec]', '[fl_rec]', '[pq_rec]', '[rsp_rec]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  texture/zhao_texture_fragrob.sv  wq_m  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  texture/zhao_texture_fragrob.sv  res_a_m  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     384 bits  texture/zhao_material_resolve.sv  ln_index_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `line_sel_c` -- forces a per-bit mux the width of the array
+     384 bits  synth/zhao_probe_banked_rf.sv  q  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [BANKS][COPIES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     384 bits  raster/zhao_raster_texjoin_v2.sv  sbind_q  [MECHANICAL]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     384 bits  raster/zhao_raster_texjoin_v2.sv  sa_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[tail_q][0]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  raster/zhao_raster_texjoin_v2.sv  auxrgb_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  raster/zhao_raster_rcp24_v4.sv  res_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `done_dout` -- forces a per-bit mux the width of the array
+     384 bits  raster/zhao_raster_rcp24_v4.sv  p_m_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  raster/zhao_raster_rcp24_v3.sv  res_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `done_dout` -- forces a per-bit mux the width of the array
+     384 bits  raster/zhao_raster_rcp24_v3.sv  p_m_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  raster/zhao_raster_perspuv_svc.sv  e_mant_v  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  raster/zhao_raster_perspuv_svc.sv  e_mant_u  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  raster/zhao_raster_attrwalk.sv  yq_r  [DESIGN]
+               - written from an ASYNC-RESET process (6 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `prep_r` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', "[prep_r+2'd1]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  particles/zhao_part_clipfeed.sv  inv_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+     384 bits  geometry/zhao_geom_skin_norm.sv  b_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `int` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_skin_norm.sv  a_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `int` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_pose_decode.sv  res  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  geometry/zhao_geom_pose_decode.sv  pa  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[i]', '[k - 1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  geometry/zhao_geom_pose_decode.sv  lr  [DESIGN]
+               - written from an ASYNC-RESET process (5 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[11]', '[3]', '[7]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  geometry/zhao_geom_pose_decode.sv  invq  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_pose_decode.sv  acur  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_meshfetch.sv  xf_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `int` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_mat3x4_mul.sv  b_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (4 sites) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  geometry/zhao_geom_mat3x4_mul.sv  a_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (4 sites) -- WEAK SIGNAL, measured false positives; see the header
+     384 bits  geometry/zhao_geom_loom.sv  pw_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `e` -- forces a per-bit mux the width of the array
+     384 bits  geometry/zhao_geom_loom.sv  param_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `e` -- forces a per-bit mux the width of the array
+     384 bits  field/zhao_field_v3_rf.sv  q  [MECHANICAL]
+               - MULTIDIMENSIONAL unpacked array [BANKS][COPIES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     384 bits  field/zhao_field_v3_normalize.sv  h_a  [DESIGN]
+               - written from an ASYNC-RESET process (13 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [3][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[0][0]', '[0][1]', '[0][2]', '[0][3]', '[1][0]', '[1][1]', '[1][2]', '[1][3]', '[2][0]', '[2][1]', '[2][2]', '[2][3]', '[c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  field/zhao_field_v3_len.sv  f_v_r  [DESIGN]
+               - written from an ASYNC-RESET process (6 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `f_comp_r` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [3][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[0][l]', '[1][l]', '[2][l]', '[c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  field/zhao_field_v2_core.sv  wbq_y  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `wl` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [LANES][0:2] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[l][0]', '[l][1]', '[l][2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  field/zhao_field_host_v2.sv  cur_in  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `lane_sel` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[k]', '[li]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  field/zhao_field_host.sv  cur_in  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `lane_sel` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[k]', '[li]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  field/zhao_field_doorbell.sv  q_data  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `q_ri` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[q_wi]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     384 bits  compositor/zhao_twod_band.sv  gen_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `c_slot_c` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[ft_row]', '[ri]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     368 bits  texture/zhao_texture_island_v3_top.sv  material_fifo_row_m  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `material_fifo_read_q` -- forces a per-bit mux the width of the array
+     344 bits  particles/zhao_part_project.sv  lq_m  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `lq_rp_q` -- forces a per-bit mux the width of the array
+     340 bits  geometry/zhao_geom_cull.sv  len_ceil  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [0:1][0:4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[prep_view][prep_plane]', '[vi][pi]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     288 bits  geometry/zhao_geom_quat2mat.sv  p_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[mseq]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     288 bits  geometry/zhao_geom_loomfeed.sv  cam_q  [DESIGN]
+               - written from an ASYNC-RESET process (10 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[4]', '[5]', '[6]', '[7]', '[8]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     272 bits  terrain/zhao_terrain_lod.sv  mrp  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[fill_idx[3:0]]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     272 bits  synth/zhao_probe_compose_pipe.sv  cov  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+     264 bits  texture/zhao_texture_island_v3_top.sv  refusal_tuple_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `response_class` (a continuous assignment is combinational)
+     264 bits  terrain/zhao_terrain_heighttap.sv  bk_p  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[l]', '[wk_lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  texture/zhao_texture_v3own.sv  req_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_t_in_slot_c` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_texture_v3own.sv  iss_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `iss_t_in_slot_c` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_texture_v3own.sv  cmt_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_texture_v3own.sv  clm_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_texture_tmu_pipe.sv  rb_src  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_texture_rsp_dispatch.sv  raw_d  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     256 bits  texture/zhao_texture_rsp_dispatch.sv  cq_t  [MECHANICAL]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [NCLS][CHN] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     256 bits  texture/zhao_texture_material_combine_v1.sv  jobs_by_recipe_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  texture/zhao_texture_cache_pipe_v2.sv  rs_data  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rs_rp` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[rs_wp[RQW-1:0]]', '[rs_wp[RQW-1:0]][16*k +: 16]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+               - the ELEMENT is written through a bit/part-select `[16*k +: 16]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+     256 bits  texture/zhao_texture_cache_pipe.sv  rs_data  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rs_rp` -- forces a per-bit mux the width of the array
+               - the ELEMENT is written through a bit/part-select `[16*k +: 16]` -- QUARTUS_GOTCHAS section 10's third killer. A per-slice-enabled (byte-enable) write infers NOTHING on this device; an ungated one infers only while the element index is exactly the array's address width. Assemble the word combinationally and write the element WHOLE, or split it into one array per plane.
+     256 bits  texture/zhao_material_resolve.sv  ln_id_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `line_sel_c` -- forces a per-bit mux the width of the array
+     256 bits  texture/zhao_material_resolve.sv  ln_gen_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `line_sel_c` -- forces a per-bit mux the width of the array
+     256 bits  terrain/zhao_terrain_mipreq.sv  q_src  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wp_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  terrain/zhao_terrain_mipreq.sv  q_epoch  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wp_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  terrain/zhao_terrain_mipreq.sv  q_crc  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_q` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wp_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  terrain/zhao_terrain_lodshare.sv  idq_src_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idq_rd_q` (a continuous assignment is combinational)
+     256 bits  terrain/zhao_terrain_lodshare.sv  idq_iz_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idq_rd_q` (a continuous assignment is combinational)
+     256 bits  terrain/zhao_terrain_lodshare.sv  idq_ix_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `idq_rd_q` (a continuous assignment is combinational)
+     256 bits  terrain/zhao_terrain_lodfeed.sv  cy_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `w_sp_o` (a continuous assignment is combinational)
+     256 bits  terrain/zhao_terrain_lod.sv  sid  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[fill_idx[3:0]]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  terrain/zhao_terrain_jdoorbell.sv  r_ticket  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `r_rd` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[r_wr]', "[radv(r_wr, {1'b0, landed_valid_i})]"] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  terrain/zhao_terrain_fieldlist.sv  e_cmd  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `rp_a` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_a]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  raster/zhao_raster_toon.sv  sl_tag_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `rd_r` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  raster/zhao_raster_texjoin.sv  seq_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[i]', '[wr_r[PW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  raster/zhao_raster_rcp24_svc.sv  c_x  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `s1_i_q` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[free_i]', '[m1_i_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  raster/zhao_raster_perspuv_svc.sv  e_tag  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+     256 bits  raster/zhao_raster_perspuv_pairpipe_v2.sv  fifo_tag_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     256 bits  raster/zhao_raster_perspuv_pairpipe.sv  fifo_tag_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     256 bits  raster/zhao_raster_fbwrite.sv  row_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[fill_r[3:0]]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  raster/zhao_raster_fbwrite.sv  out_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `idx` -- forces a per-bit mux the width of the array
+     256 bits  raster/zhao_raster_edgewalk.sv  mask_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `drain_row` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[i]', '[rowb_idx_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  particles/zhao_part_project.sv  m_rad  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `dp_q` -- forces a per-bit mux the width of the array
+     256 bits  measure/zhao_measure_tokens.sv  rep_cnt_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[req_rep_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  geometry/zhao_light_stream.sv  dq_den_q  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `dq_rd_q` -- forces a per-bit mux the width of the array
+     256 bits  geometry/zhao_light_stream.sv  a_src_q  [UNPROVEN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+     256 bits  geometry/zhao_geom_drawjob.sv  pal_v_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `int` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ["[int'(px_index_i)]", '[r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  geometry/zhao_geom_depthquant.sv  sd_tag_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[free_c]', '[si]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  geometry/zhao_geom_clipread.sv  row_slot_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `r` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[i]', '[rows_done_q[ROWW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  geometry/zhao_geom_clipread.sv  row_fcnt_q  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[i]', '[rows_done_q[ROWW-1:0]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_v3_trig.sv  sl_res_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_sl_c` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [2][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[b][l]', '[sh_slot_r[1]][sh_lane_r[1]]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_v3_ring_svc.sv  u_uni_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [UNITS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[free_u_c][i]', '[uu][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_v3_ring_svc.sv  u_d_r  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [UNITS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[free_u_c][i]', '[uu][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_v3_ring_svc.sv  dc_dat_r  [DESIGN]
+               - written from an ASYNC-RESET process (5 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - MULTIDIMENSIONAL unpacked array [DESC][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+               - TWO OR MORE distinct write addresses ['[dc_vic_r][0]', '[dc_vic_r][1]', '[dc_vic_r][2]', '[dc_vic_r][3]', '[w][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_v3_normalize.sv  n2  [DESIGN]
+               - written from an ASYNC-RESET process (5 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `root_lane` (a continuous assignment is combinational)
+     256 bits  field/zhao_field_v3_len.sv  f_n2_r  [UNPROVEN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+     256 bits  field/zhao_field_v3_len.sv  bk_res_r  [DESIGN]
+               - written from an ASYNC-RESET process (3 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `head_bk_c` -- forces a per-bit mux the width of the array
+               - MULTIDIMENSIONAL unpacked array [BANKS][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+     256 bits  field/zhao_field_v2_core.sv  s2_pre  [DESIGN]
+               - written from an ASYNC-RESET process (1 site) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+     256 bits  field/zhao_field_loader.sv  obj_prog_hash  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `pub_sel_i` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[j]', '[st_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_loader.sv  obj_lru  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read COMBINATIONALLY through dynamic index `ai` -- forces a per-bit mux the width of the array
+               - TWO OR MORE distinct write addresses ['[ai]', '[j]', '[st_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_loader.sv  obj_handle32  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - read at MODULE SCOPE through dynamic index `pub_sel_i` (a continuous assignment is combinational)
+               - TWO OR MORE distinct write addresses ['[j]', '[st_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_loader.sv  obj_full_crc  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[j]', '[st_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  field/zhao_field_loader.sv  obj_epoch  [DESIGN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+               - TWO OR MORE distinct write addresses ['[j]', '[st_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+     256 bits  command/zhao_cmd_exec.sv  tf_p  [UNPROVEN]
+               - written from an ASYNC-RESET process (2 sites) -- WEAK SIGNAL, measured false positives; see the header
+
+278 array(s) at or above 256 bits; 682 below it, not shown -- those are control state that is CORRECTLY in flops and would drown the list.
+
+38 array(s) whose size would not resolve from the file alone. Reported rather than guessed: a confident wrong size sends the next pass at the wrong file.
+               ? common/zhao_proj_cfgvalid.sv  seen_q
+               ? common/zhao_stub_top.sv  slot
+               ? common/zhao_synth_probe.sv  window
+               ? field/zhao_field_host_v2.sv  omap_index
+               ? field/zhao_field_host_v2.sv  rsp_id
+               ? field/zhao_field_loader.sv  hdr_b
+               ? field/zhao_field_v3_len.sv  oq_bk_r
+               ? field/zhao_field_v3_rf.sv  mem
+               ? field/zhao_field_v3_ring_svc.sv  oq_u_r
+               ? field/zhao_field_v3_ring_svc.sv  sh_u_r
+               ? forge/zhao_forge_assemble.sv  dqf_slot_q
+               ? geometry/zhao_geom_bonesrc.sv  abody
+               ? geometry/zhao_geom_group_seq.sv  landed_q
+               ? geometry/zhao_geom_vattr.sv  prof_q
+               ? geometry/zhao_light_stream.sv  rq_slot_q
+               ? measure/zhao_measure_histogram.sv  bin_q
+               ? memory/zhao_mem_share2.sv  fl_own
+               ? memory/zhao_mem_share_wr.sv  rq_own
+               ? raster/zhao_raster_texjoin_v2.sv  wq
+               ? synth/zhao_probe_banked_rf.sv  mem

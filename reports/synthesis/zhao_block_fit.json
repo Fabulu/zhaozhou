@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "22f328ff9ec4008c4e1ee89b70360d0501f84efc",
-    "newestRunClean":  false,
+    "newestRunCommit":  "5f896594dc00ca9f0fe98cd3326ec3bdad55f468",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -663,6 +663,26 @@
                        "virtualPins":  1862
                    },
                    {
+                       "module":  "zhao_forge_assemble@fa-final-clean",
+                       "status":  "map_only",
+                       "sourceCommit":  "5f896594dc00ca9f0fe98cd3326ec3bdad55f468",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "de4e365c856d765aaa56837ee26bf3815018dac2d28f931eb3c0368b70b38850",
+                       "variantOf":  "zhao_forge_assemble",
+                       "seconds":  57.4,
+                       "sourcesHashed":  6,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  4327,
+                       "blockMemoryBits":  37038,
+                       "dspBlocks":  3,
+                       "virtualPins":  1862
+                   },
+                   {
                        "module":  "zhao_forge_assemble@fa-noreset-regread",
                        "status":  "map_only",
                        "sourceCommit":  "22f328ff9ec4008c4e1ee89b70360d0501f84efc",
@@ -1096,6 +1116,26 @@
                        "partialStage":  "analysis_and_synthesis",
                        "registers":  10826,
                        "blockMemoryBits":  0,
+                       "dspBlocks":  6,
+                       "virtualPins":  1147
+                   },
+                   {
+                       "module":  "zhao_geom_lodstate@ls-final-clean",
+                       "status":  "map_only",
+                       "sourceCommit":  "5f896594dc00ca9f0fe98cd3326ec3bdad55f468",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "4d15623dd423d6d8e988e5bd1b31d98cc3eeb58e751bde4ae9f09b35d2e39f3e",
+                       "variantOf":  "zhao_geom_lodstate",
+                       "seconds":  53.3,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2118,
+                       "blockMemoryBits":  9216,
                        "dspBlocks":  6,
                        "virtualPins":  1147
                    },
