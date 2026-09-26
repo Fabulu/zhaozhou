@@ -12595,6 +12595,24 @@ verilate(pb_pal
 add_test(NAME texture_palette_res_v2_directed
          COMMAND pb_pal)
 
+# TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26). The palette identity's producer:
+# a four-entry cache keyed on `MaterialRecord.palette_base`, an ENGINE1 reader
+# and the palette store's BEGIN/WRITE/END port. Every counter it owns is fired
+# from its own ports here -- including `base_refused_o` three times, by three
+# different illegalities -- so none of them owes a committed mutant.
+add_executable(pb_palld
+  texture/texture_palette_load_directed.cpp)
+target_link_libraries(pb_palld PRIVATE zhao_harness)
+verilate(pb_palld
+  PREFIX Vzhao_texture_palette_load
+  TOP_MODULE zhao_texture_palette_load
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_load.sv
+  VERILATOR_ARGS --assert -Wall)
+add_test(NAME texture_palette_load_directed
+         COMMAND pb_palld)
+set_tests_properties(texture_palette_load_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(pb_aux
   texture/texture_aux_pipe_v2_directed.cpp)
 target_link_libraries(pb_aux PRIVATE zhao_harness)

@@ -76,6 +76,18 @@ struct Answer {
   uint8_t modes = 0x01;   // tmu_mode 1 -> class NEAR under the default mapping
   bool selector_overflow = false;
   int latency = 3;        // clocks between the request's acceptance and the answer
+  uint32_t palette_base = 0;   // MaterialRecord.palette_base, the palette's name
+};
+
+// What TEXTURE.PALETTELOAD answers when the window asks for a CLUT material's
+// palette identity.  `owned == false` is the fail-safe outcome -- a null,
+// misaligned or out-of-VRAM base, or a denied fetch -- and it must publish ZERO
+// rather than the previous span's pair.
+struct PaletteAnswer {
+  bool owned = true;
+  uint8_t slot = 2;
+  uint8_t generation = 7;
+  int latency = 2;
 };
 
 // What a triangle was shaded with, recorded at the instant the window emitted
@@ -92,6 +104,12 @@ struct InFlight {
   // retain their own profile" clause is about. A checker that cannot see the
   // field that moved is this repository's own worst defect.
   uint8_t material_mode;
+  // ADDED 2026-09-26 (I13CLOSE), for the reason the field above it was added:
+  // a checker that cannot see the field that moved is this repository's own
+  // worst defect, and the palette pair is a field of the published record that
+  // is latched two states later than the rest of it.
+  uint8_t palette_slot;
+  uint8_t palette_generation;
 };
 
 class Bench {
@@ -123,6 +141,12 @@ class Bench {
     top_.rsp_base_binding_i = 0;
     top_.rsp_selector_overflow_i = 0;
     top_.rsp_sample0_modes_i = 0;
+    top_.rsp_palette_base_i = 0;
+    top_.pal_req_ready_i = 1;
+    top_.pal_rsp_valid_i = 0;
+    top_.pal_rsp_owned_i = 0;
+    top_.pal_rsp_slot_i = 0;
+    top_.pal_rsp_gen_i = 0;
     top_.eval();
     for (int i = 0; i < 4; ++i) tick();
     top_.rst_n = 1;
@@ -135,6 +159,9 @@ class Bench {
   int disposed() const { return disposed_; }
 
   void set_answer(const Answer& a) { answer_ = a; }
+  void set_palette(const PaletteAnswer& p) { palette_ = p; }
+  uint32_t palette_base_seen() const { return palette_base_seen_; }
+  int palette_asks() const { return palette_asks_; }
 
   // One clock, with the resolver model and the downstream-span model both
   // running inside it. The span drains one triangle per clock once it has any,
@@ -145,6 +172,8 @@ class Bench {
     top_.eval();
     bool req_fire = top_.req_valid_o && top_.req_ready_i;
     bool rsp_fire = top_.rsp_valid_i && top_.rsp_ready_o;
+    bool pal_req_fire = top_.pal_req_valid_o && top_.pal_req_ready_i;
+    bool pal_rsp_fire = top_.pal_rsp_valid_i && top_.pal_rsp_ready_o;
 
     // ---- the downstream span model ---------------------------------------
     bool emit = top_.t_valid_o && top_.t_ready_i;
@@ -156,6 +185,8 @@ class Bench {
       carried.binding = top_.pub_base_binding_o;
       carried.response_class = top_.pub_response_class_o;
       carried.material_mode = top_.pub_material_mode_o;
+      carried.palette_slot = top_.pub_palette_slot_o;
+      carried.palette_generation = top_.pub_palette_generation_o;
       // A triangle emitted with nothing published is the fault this whole
       // block exists to make impossible; record it so the summary is loud.
       if (!top_.pub_valid_o) ++emitted_unpublished_;
@@ -179,7 +210,9 @@ class Bench {
           t.weight != top_.pub_recipe_weight_o ||
           t.binding != top_.pub_base_binding_o ||
           t.response_class != top_.pub_response_class_o ||
-          t.material_mode != top_.pub_material_mode_o) {
+          t.material_mode != top_.pub_material_mode_o ||
+          t.palette_slot != top_.pub_palette_slot_o ||
+          t.palette_generation != top_.pub_palette_generation_o) {
         ++mismatches_;
       }
       ++disposed_;
@@ -216,7 +249,31 @@ class Bench {
       top_.rsp_base_binding_i = answer_.binding;
       top_.rsp_sample0_modes_i = answer_.modes;
       top_.rsp_selector_overflow_i = answer_.selector_overflow ? 1 : 0;
+      top_.rsp_palette_base_i = answer_.palette_base;
       answered_ = true;
+    }
+
+    // ---- TEXTURE.PALETTELOAD's model, the same one-clock-pulse shape ------
+    // The window leaves ST_PAL on the same edge that takes the answer, so the
+    // pulse must be withdrawn exactly as the resolver's is; a held valid would
+    // answer the NEXT CLUT span instantly with this one's pair, which is the
+    // stale-join fault this whole file is about.
+    if (pal_rsp_fire || pal_answered_) {
+      top_.pal_rsp_valid_i = 0;
+      pal_answered_ = false;
+      pal_pending_ = -1;
+    } else if (pal_req_fire) {
+      pal_pending_ = palette_.latency;
+      palette_base_seen_ = top_.pal_req_base_o;
+      ++palette_asks_;
+    } else if (pal_pending_ > 0) {
+      --pal_pending_;
+    } else if (pal_pending_ == 0) {
+      top_.pal_rsp_valid_i = 1;
+      top_.pal_rsp_owned_i = palette_.owned ? 1 : 0;
+      top_.pal_rsp_slot_i = palette_.slot;
+      top_.pal_rsp_gen_i = palette_.generation;
+      pal_answered_ = true;
     }
 
     top_.eval();
@@ -291,9 +348,14 @@ class Bench {
  private:
   Vzhao_material_window top_;
   Answer answer_{};
+  PaletteAnswer palette_{};
   std::deque<InFlight> span_;
   int pending_ = -1;
   bool answered_ = false;
+  int pal_pending_ = -1;
+  bool pal_answered_ = false;
+  uint32_t palette_base_seen_ = 0;
+  int palette_asks_ = 0;
   uint64_t clocks_ = 0;
   int mismatches_ = 0;
   int disposed_ = 0;
@@ -439,9 +501,15 @@ int main(int argc, char** argv) {
   }
 
   // ==========================================================================
-  // CASE 6 -- the two counted ABSENCES: a CLUT class has no palette-identity
-  // producer in this console, and a 16-bit binding slot narrowed to 8 is a
-  // selector overflow. Both are loud rather than silent.
+  // CASE 6 -- THE PALETTE IDENTITY, PRODUCED. Rewritten 2026-09-26 (I13CLOSE):
+  // it used to assert `clut_unowned_o == 1` for EVERY CLUT material, because
+  // none of them had an identity -- which was a true statement about the
+  // console and a test that pinned the absence. There is a producer now, so
+  // what is asserted is that the window ASKS it, on the record's own
+  // `palette_base`, and PUBLISHES what it answers.
+  //
+  // A 16-bit binding slot narrowed to 8 is still a selector overflow and is
+  // still counted here, unchanged.
   // ==========================================================================
   {
     Bench b;
@@ -449,14 +517,104 @@ int main(int argc, char** argv) {
     a.modes = 0x00;                  // tmu_mode 0 -> CLUT
     a.selector_overflow = true;
     a.latency = 3;
+    a.palette_base = 0x0040'C000u;
     b.set_answer(a);
+    PaletteAnswer p;
+    p.owned = true;
+    p.slot = 3;
+    p.generation = 0x2A;
+    b.set_palette(p);
     b.offer(0x5555'0000u, 0x0007, 0, 3);
     b.drain();
     check(b.top().pub_response_class_o == 0, "case6: tmu_mode 0 maps to CLUT"); ++checks;
-    check(b.top().clut_unowned_o == 1,
-          "case6: a CLUT material is COUNTED -- its palette identity has no producer"); ++checks;
+    check(b.palette_asks() == 1,
+          "case6: ONE palette ask for one CLUT span -- not one per triangle"); ++checks;
+    check(b.palette_base_seen() == 0x0040'C000u,
+          "case6: the ask carries the RECORD's palette_base, not a constant"); ++checks;
+    check(b.top().pub_palette_slot_o == 3 && b.top().pub_palette_generation_o == 0x2A,
+          "case6: the published pair is the one the producer answered"); ++checks;
+    check(b.top().clut_owned_o == 1 && b.top().clut_unowned_o == 0,
+          "case6: an owned CLUT palette moves the owned counter and not the fault"); ++checks;
+    check(b.mismatches() == 0,
+          "case6: every triangle was disposed under the palette pair it was emitted with");
+    ++checks;
     check(b.top().selector_overflow_o == 1,
           "case6: the resolver's selector overflow is carried and counted here too"); ++checks;
+  }
+
+  // ==========================================================================
+  // CASE 6b -- GENERATION ZERO IS AN ORDINARY ANSWER, and slot zero with it.
+  // `zhao_texture_palette_load` allocates generations from a counter that
+  // resets to zero, so the FIRST palette a console ever loads is {slot 0,
+  // generation 0} -- and until 2026-09-26 that was exactly the pair this
+  // console could not distinguish from "no identity at all", because it was
+  // also the composer's constant. The distinction now lives in `owned`, which
+  // is a separate wire, so a real {0, 0} is published and COUNTED AS OWNED.
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    a.modes = 0x00;
+    a.latency = 2;
+    a.palette_base = 0x0040'0000u;
+    b.set_answer(a);
+    PaletteAnswer p;
+    p.owned = true;
+    p.slot = 0;
+    p.generation = 0;
+    b.set_palette(p);
+    b.offer(0x6666'0000u, 0x0001, 0, 4);
+    b.drain();
+    check(b.top().pub_palette_slot_o == 0 && b.top().pub_palette_generation_o == 0,
+          "case6b: a real {slot 0, generation 0} is published"); ++checks;
+    check(b.top().clut_owned_o == 1,
+          "case6b: and it is counted as OWNED, not as the unowned case it looks like");
+    ++checks;
+    check(b.top().clut_unowned_o == 0, "case6b: the fault counter did not move"); ++checks;
+  }
+
+  // ==========================================================================
+  // CASE 6c -- THE FAULT ARM, FIRED. A palette the producer could not make
+  // resident publishes ZERO and is counted; it does NOT hold the stream, and
+  // it does NOT inherit the previous span's pair -- which is the fault that
+  // would be invisible downstream, because a wrong palette draws confident
+  // wrong colours through an entirely healthy handshake.
+  // ==========================================================================
+  {
+    Bench b;
+    Answer a;
+    a.modes = 0x00;
+    a.latency = 2;
+    a.palette_base = 0x0040'C000u;
+    b.set_answer(a);
+    PaletteAnswer good;
+    good.owned = true;
+    good.slot = 2;
+    good.generation = 0x11;
+    b.set_palette(good);
+    b.offer(0x7777'0000u, 0x0001, 0, 3);
+    b.drain();
+    check(b.top().pub_palette_slot_o == 2 && b.top().pub_palette_generation_o == 0x11,
+          "case6c: the first CLUT span published a real pair"); ++checks;
+
+    PaletteAnswer bad;
+    bad.owned = false;
+    bad.slot = 2;          // the producer still names a slot; `owned` is the verdict
+    bad.generation = 0x11;
+    b.set_palette(bad);
+    const int taken = b.offer(0x7777'0000u, 0x0002, 0, 3);
+    b.drain();
+    check(taken == 3, "case6c: an unowned palette does NOT stall the triangle stream");
+    ++checks;
+    check(b.top().pub_palette_slot_o == 0 && b.top().pub_palette_generation_o == 0,
+          "case6c: an unowned palette publishes ZERO, not the previous span's pair");
+    ++checks;
+    check(b.top().clut_unowned_o == 1 && b.top().clut_owned_o == 1,
+          "case6c: one owned and one unowned -- both arms of the decision moved");
+    ++checks;
+    check(b.mismatches() == 0,
+          "case6c: no triangle was disposed under a palette pair it was not emitted with");
+    ++checks;
   }
 
   // ==========================================================================

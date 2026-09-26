@@ -323,6 +323,22 @@ module tb_partmat_acceptance #(
     .rsp_base_binding_i     (rsp_base_binding_i),
     .rsp_selector_overflow_i(1'b0),
     .rsp_sample0_modes_i    (rsp_sample0_modes_i),
+    // THE PALETTE ASK (I13CLOSE, 2026-09-26).  This bench plays no CLUT
+    // material, so ST_PAL is never entered.  The ports are still DRIVEN rather
+    // than left open, and they are driven with an answer that ALWAYS ARRIVES
+    // and says UNOWNED -- so a future CLUT material here produces a counted
+    // refusal instead of a hang, which is the fail-safe direction.
+    .rsp_palette_base_i     (32'd0),
+    .pal_req_valid_o        (),
+    .pal_req_ready_i        (1'b1),
+    .pal_req_base_o         (),
+    .pal_rsp_valid_i        (1'b1),
+    .pal_rsp_ready_o        (),
+    .pal_rsp_owned_i        (1'b0),
+    .pal_rsp_slot_i         (2'd0),
+    .pal_rsp_gen_i          (8'd0),
+    .pub_palette_slot_o     (),
+    .pub_palette_generation_o (),
 
     // ---- I20's fragment-state group, CONNECTED 2026-09-25 (EDGEPREP) ------
     // NOT this packet's work, and fixed here rather than reported, because
@@ -371,6 +387,7 @@ module tb_partmat_acceptance #(
     .no_record_o               (mw_no_record_o),
     .selector_overflow_o       (mw_sel_overflow),
     .clut_unowned_o            (mw_clut_unowned),
+    .clut_owned_o              (),
     .no_material_spans_o       (mw_no_material_spans_o),
     .mode_refused_o            (mw_mode_refused_o),
     .err_unpublished_o         (mw_err_unpublished_o),

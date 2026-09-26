@@ -1608,6 +1608,8 @@ module zhao_console_core_untex_decl_mutant
   // the share, and this is the number that says so rather than a claim that it
   // is light.
   output logic [31:0] geom_ma_jobs_h_o,
+  // Requester I, TEXTURE.PALETTELOAD (I13CLOSE, 2026-09-26).
+  output logic [31:0] geom_ma_jobs_i_o,
 
   // ---- FORGE.SHADOW's chain, composed 2026-09-23 (SHADOWRIDE) --------------
   // GEOM.LADDERBANK: the CREATURE_FORM page's ladder rows.
@@ -2452,6 +2454,17 @@ module zhao_console_core_untex_decl_mutant
   // slot and generation as witnesses and NOTHING in this console produces
   // them. See FINDINGS-texmat2's owner decision.
   output logic [31:0]             mat_win_clut_unowned_o,
+  output logic [31:0]             mat_win_clut_owned_o,
+
+  // ---- TEXTURE.PALETTELOAD evidence (I13CLOSE, 2026-09-26) ---------------
+  output logic [31:0]             pal_ld_lookups_o,
+  output logic [31:0]             pal_ld_hits_o,
+  output logic [31:0]             pal_ld_loads_o,
+  output logic [31:0]             pal_ld_evictions_o,
+  output logic [31:0]             pal_ld_entries_o,
+  output logic [31:0]             pal_ld_denied_o,
+  output logic [31:0]             pal_ld_base_refused_o,
+  output logic [31:0]             pal_ld_gen_zero_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
   // ---- owner ruling 1, 2026-09-22: the NO_MATERIAL mode's two numbers ------
@@ -2777,14 +2790,12 @@ module zhao_console_core_untex_decl_mutant
   output logic [3:0]  cfg_rsp_status_o,
   output logic [7:0]  cfg_rsp_page_generation_o,
   output logic [7:0]  active_page_generation_o,
-  input  logic        pal_load_valid_i,
-  output logic        pal_load_ready_o,
-  input  logic [1:0]  pal_load_op_i,
-  input  logic [1:0]  pal_load_slot_i,
-  input  logic [7:0]  pal_load_gen_i,
-  input  logic [7:0]  pal_load_idx_i,
-  input  logic [15:0] pal_load_rgb565_i,
-  input  logic        pal_load_crc_ok_i,
+  // `pal_load_*` LEFT `zhao_console_core`'s EDGE 2026-09-26 (I13CLOSE): the
+  // producer, `zhao_texture_palette_load`, is composed inside it. All eight
+  // are removed here too -- this wrapper re-exports the core's ports through
+  // `.*`, so a port list that disagrees with the core's does not drift
+  // quietly, it fails to elaborate, and `wrapper_port_parity` reads that
+  // failure as a broken core.
 
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
   // `tri_area2_i` USED TO BE HERE and is now driven internally by
