@@ -135,4 +135,21 @@ from me.
    duplicate job is retired and the generator now refuses to emit a fixture
    that exceeds the cap.
 
+4. **And the last obstacle was neither relief nor placement.** With both knobs
+   turned, `clip` and `binrefs` matched the reference EXACTLY (144/69/0/75 and
+   101/59) and `raster pixels` was still 2,560. Eight counters
+   `zhao_shell_top_v2.sv:1500-1506` leaves dangling said why in one line:
+   `jobs[started/sunk]=[36 0]`, `early_z_rejects=0`, `fragment_covered` at the
+   mesh's 1,190. Nothing was rejected — terrain's 65 tile references were
+   pushed into the binner's arena AFTER the frame had been serialised, because
+   the bench closed its one render frame before the terrain compose ran. A
+   STIMULUS ORDER fault, and the fourth reason a tile can hold references and
+   write no pixel. Moving the compose pass inside the frame window made it
+   2,816.
+5. **A second model correction fell out of it.** `SGF_EXP_PIXELS` was the union
+   of BINNED tiles; `zref::Binner::bin` is conservative by design and so is
+   GEOM.CLIP's box test. For the mesh's fat triangles binned and covered agree,
+   so the formula was right by coincidence of the fixture. The generator now
+   models coverage with `zref::fill_accept` and checks itself against the mesh.
+
 **This did not close I13**, exactly as this record said it would not.
