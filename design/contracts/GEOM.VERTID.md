@@ -279,7 +279,7 @@ same stimulus, same closure, in two worktrees:
 | `paramarena verts` | **0** | **30** | the entry I53 closed |
 | `paramarena tris` | 8 (pre-clip) | 14 (post-clip) | a different, correct set |
 | `vertid refs / published / reused` | — | 42 / 30 / **12** | |
-| **raster pixels** | **2,560** | **2,560** | **unchanged** |
+| **raster pixels** | **2,560** | **2,560** | **unchanged** (both columns are the 2026-09-21 fixture; the gate number became **2,816** on 2026-09-26 when TERRAINVISIBLE made the smoke draw terrain -- this row is a BEFORE/AFTER of GEOM.VERTID and is not the current gate) |
 | raster bursts / issued / retired | 160 / 94,720 / 94,720 | 160 / 94,720 / 94,720 | **unchanged** |
 | clip submitted/clipped/culled/setup | 16 / 2 / 0 / 14 | 16 / 2 / 0 / 14 | **unchanged** |
 | skin steady | 54.52 clk/vertex | 69.39 | +27.3% |

@@ -210,10 +210,38 @@ param(
   #
   # It also settles a question no identity pass could answer -- whether
   # POST.ECHO taps the compositor's SOURCE or its OUTPUT. See the bench.
-  # PROJCOLLAPSE's positive control for entry I13's named cause: the played
-  # pages get a REAL layer-A height field instead of an all-zero body.  Own
-  # build directory, own TAG (see the paragraph in the tag chain).
-  [switch]$TerrainRelief,
+  # ---------------------------------------------------------------------------
+  # -TerrainFlatLattice: THE ZERO BODY, KEPT AS A NAMED CONTROL
+  # ---------------------------------------------------------------------------
+  # REPLACES -TerrainRelief, 2026-09-26 (TERRAINVISIBLE), and the check is the
+  # same one -- it is the FIXTURE that inverted, not the standard.
+  #
+  # PROJCOLLAPSE added `-TerrainRelief` to prove, by reversal, that the played
+  # pages' all-zero layer A was what made every terrain triangle zero-area: the
+  # eye sits at world y = 0, the lattice sat at world y = 0, and a plane through
+  # the eye projects to a line. It measured `culled` 256 -> 0.
+  #
+  # `reports/DECISION-20260926-TERRAIN-FIXTURE.md` then made the relief the
+  # DEFAULT, so the plain run is the one with a ground plane and the flat page
+  # is the switch. With -TerrainFlatLattice layer A is left all zeros and
+  # NOTHING else changes (`+define+ZHAO_SMOKE_TERRAIN_FLAT`, a plain `ifdef` --
+  # CLAUDE.md records that a command-line define cannot override a
+  # FUNCTION-LIKE `define` and says nothing when it fails to).
+  #
+  # DIRECT polarity: the run PASSES when GEOM.CLIP culls every terrain triangle
+  # for ZERO AREA and takes only the mesh's 14 into GEOM.SETUP. What it asserts
+  # is a law of the PROJECTION, which stays true forever -- it is not a test
+  # that asserts a bug, because the flatness is the control's own stimulus, the
+  # way -BadVertex pokes a reserved byte.
+  #
+  # It is also the positive control for a counter the plain run now asserts
+  # ZERO: `geom_clip_culled_o`. Both halves are required before that zero may
+  # be quoted.
+  #
+  # NOTE: `raster pixels` in this form is the MESH's 2560, not the plain run's
+  # 2816, and must not be read as the gated number. Own build directory, own
+  # TAG (see the paragraph in the tag chain).
+  [switch]$TerrainFlatLattice,
   [switch]$GlowTag,
   # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
@@ -322,7 +350,7 @@ if (-not $BuildIn) {
          elseif ($BadTraceArm) { 'zhao_console_core_smoke_badarm' }
          # EVERY NEW SWITCH NEEDS A TAG HERE -- see the paragraph above, which
          # is about exactly this line being forgotten once already.
-         elseif ($TerrainRelief) { 'zhao_console_core_smoke_relief' }
+         elseif ($TerrainFlatLattice) { 'zhao_console_core_smoke_flatlat' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
@@ -400,9 +428,9 @@ if ($GlowTag) {
   $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
   Write-Host 'R195 END-TO-END FROM THE ABI: the uploaded MaterialRecord declares a fragment profile whose effect_tag is a GLOW tag (0x7F), DIRECT polarity (passes when gather_frag_lit_o EQUALS the framebuffer pixels carrying a colour, the bloom stage finds cells, and the post pass CHANGES the frame). The declared state word is the all-zero opaque profile, so the tag is the ONLY variable that moves between this form and the plain one -- and because that word is bit-identical to declaring nothing, this form is also the positive control for reading fragment_decl bit 0 rather than testing the payload for zero.'
 }
-if ($TerrainRelief) {
-  $defs += '+define+ZHAO_SMOKE_TERRAIN_RELIEF'
-  Write-Host 'PROJCOLLAPSE CONTROL (entry I13): layer A of every played terrain page carries a REAL height field instead of an all-zero body. DIRECT polarity (passes when terrain triangles reach GEOM.CLIP carrying SCREEN AREA -- `SMOKE: projcol` shows three DIFFERENT corner y values where the plain run shows one value on all three, and `clip culled` falls far below the terrain triangle count). The plain run is the negative control and is unchanged. NOTE: `raster pixels` is NOT 2560 in this form and must not be read as the gated number.'
+if ($TerrainFlatLattice) {
+  $defs += '+define+ZHAO_SMOKE_TERRAIN_FLAT'
+  Write-Host 'TERRAINVISIBLE CONTROL (entry I13): layer A of every played terrain page is left ALL ZEROS -- the body every page carried until 2026-09-26 -- instead of the affine ground ramp the repaired fixture writes. DIRECT polarity (passes when GEOM.CLIP culls EVERY terrain triangle for ZERO AREA and GEOM.SETUP takes only the mesh reference): a ground plane through the eye projects to a line. It is the positive control for the zero that the plain run asserts on clip culled. NOTE: raster pixels is the MESH total 2560 in this form, NOT the plain run 2816, and must not be read as the gated number.'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'
