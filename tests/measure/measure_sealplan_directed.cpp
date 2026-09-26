@@ -202,6 +202,13 @@ Offered frame_begin(Vzhao_measure_sealplan& dut) {
   o.frame_gen = dut.seal_frame_gen_o;
   zhao::tick(dut);
   dut.frame_begin_i = 0;
+  // ONE IDLE CYCLE WITH THE LEVEL LOW, and it is not padding. The block seals
+  // on the RISING EDGE of `frame_begin_i` (see case 22 and the block's own
+  // comment), so a helper that never clocks the signal low would never re-arm
+  // the edge detector and every frame after the first would silently do
+  // nothing. The composed console cannot present two frame begins with no gap
+  // either -- `render_frame_begin_i` is a lease request with a real ready.
+  zhao::tick(dut);
   dut.eval();
   return o;
 }
@@ -648,6 +655,66 @@ int main() {
     check(o.giant_refs == 0, "case21: with the reservation released, per the directive", 0,
           o.giant_refs);
     check(dut.plans_staged_o == 0, "case21: nothing was ever staged", 0, dut.plans_staged_o);
+  }
+
+  // =========================================================================
+  // 22. A HELD `frame_begin_i` SEALS EXACTLY ONCE.
+  // =========================================================================
+  // THIS IS A REPAIR, NOT A PROPERTY THAT WAS ALWAYS TRUE, and the case exists
+  // because the defect was live in the composition this block replaced.
+  //
+  // `render_frame_begin_i` is `zhao_renderer_lease_v2`'s `frame_req_valid_i`,
+  // a ready/valid request, and `tb_zhao_console_core_smoke.sv` HOLDS IT until
+  // the lease admits a frame -- measured at 2,531 cycles. The previous
+  // composition drove `seal_valid_i` from that level directly, and
+  // `zhao_geom_paramarena`'s `seal_fire_c` FLIPS THE VIEW and zeroes the three
+  // allocation cursors. So one frame re-sealed the arena 2,531 times.
+  //
+  // It was invisible because that bench releases its draws one line AFTER the
+  // level drops, so nothing had been allocated to lose. A console that let
+  // geometry flow while the lease was still being granted would have lost it
+  // silently and reported a clean, short frame.
+  //
+  // Sixty cycles here rather than 2,531: the property is "once per edge", and
+  // it does not get more true with more cycles.
+  {
+    reset(dut);
+    Plan p = legal_no_giant();
+    p.chunks = 1234;
+    publish(dut, p);
+
+    dut.frame_begin_i = 1;
+    dut.eval();
+    const uint32_t gen_at_edge = dut.seal_frame_gen_o;
+    for (int i = 0; i < 60; ++i) zhao::tick(dut);
+    dut.frame_begin_i = 0;
+    dut.eval();
+
+    check(dut.plans_sealed_o == 1, "case22: a level held for 60 cycles sealed ONCE", 1,
+          dut.plans_sealed_o);
+    check(dut.default_seals_o == 0, "case22: and not as a default", 0, dut.default_seals_o);
+    // The generation advanced by exactly one. Under the old arrangement it
+    // advanced once per held cycle, which is the same defect read from the
+    // other side: no two consecutive FRAMES shared a stamp because no two
+    // consecutive CYCLES did.
+    check(dut.seal_frame_gen_o == gen_at_edge + 1,
+          "case22: and the frame generation advanced by exactly one", gen_at_edge + 1,
+          dut.seal_frame_gen_o);
+    check(dut.seal_valid_o == 0, "case22: the request is released once it has fired", 0,
+          dut.seal_valid_o);
+
+    // A SECOND frame, so "once per edge" is not "once ever".
+    frame_end(dut);
+    Plan q = legal_no_giant();
+    q.chunks = 4321;
+    publish(dut, q);
+    dut.frame_begin_i = 1;
+    dut.eval();
+    for (int i = 0; i < 20; ++i) zhao::tick(dut);
+    dut.frame_begin_i = 0;
+    dut.eval();
+    check(dut.plans_sealed_o == 2, "case22: the next edge seals again, once", 2,
+          dut.plans_sealed_o);
   }
 
   std::printf("[measure_sealplan_directed] GIANT_REFS=%u  GIANT_CHUNKS=%u  "

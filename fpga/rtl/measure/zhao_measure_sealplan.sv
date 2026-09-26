@@ -454,14 +454,47 @@ module zhao_measure_sealplan #(
 
   wire plan_ok_c = (reason_c == R_NONE);
 
-  // ---- the seal edge ------------------------------------------------------
-  // The pulse semantics of the previous composition are preserved EXACTLY:
-  // one cycle at the frame's begin edge, never held. Holding the request
-  // across a busy arena would inflate `zhao_geom_paramarena`'s per-cycle
-  // `seal_reject` counter, and changing what an existing counter means while
-  // changing what feeds it is how two packets disagree about a number.
-  wire seal_try_c  = frame_begin_i && plan_ok_c;
-  wire seal_fire_c = seal_try_c && seal_ready_i;
+  // ---- the seal edge, AND A LATENT DEFECT IT REPAIRS ----------------------
+  // ONE SEAL PER FRAME, RAISED ON THE RISING EDGE OF `frame_begin_i` AND HELD
+  // UNTIL THE ARENA TAKES IT.
+  //
+  // The obvious implementation -- `seal_valid_o = frame_begin_i && plan_ok_c`
+  // -- is what the composition did before this block existed, and it is
+  // WRONG, measured rather than argued. `render_frame_begin_i` is NOT a pulse
+  // in the composed console: it is `zhao_renderer_lease_v2`'s
+  // `frame_req_valid_i`, a ready/valid request, and
+  // `tb_zhao_console_core_smoke.sv` HOLDS IT until `v2_frames_admitted_o`
+  // moves -- with a long comment saying exactly why a one-cycle pulse was
+  // wrong there ("a gate that passes because of where somebody else's code
+  // sits is not a gate"). Measured in that smoke: the level is held for
+  // **2,531 cycles**.
+  //
+  // `zhao_geom_paramarena`'s `seal_fire_c` FLIPS THE VIEW and zeroes
+  // `n_verts_q`/`n_tris_q`/`n_chunks_q`. So a held request re-sealed the arena
+  // on every one of those 2,531 cycles: 2,531 view flips and 2,531 frame
+  // restarts for one frame. It is invisible in that bench only because the
+  // draws are released AFTER the level drops -- one line later in the same
+  // task -- so nothing had yet been allocated to throw away. A console that
+  // let geometry flow while the lease was still being granted would lose it
+  // silently, and the arena would report a clean, short frame.
+  //
+  // THE EDGE IS THE REPAIR AND THE HOLD IS THE OTHER HALF. Edge-only would
+  // lose the seal whenever the arena is not ready on that exact cycle -- which
+  // is a real state, because `seal_ok_c` requires the previous frame drained
+  // and no reader busy. So the request is RAISED on the edge and HELD until it
+  // fires, which seals exactly once and still retries. It cannot inflate
+  // `view_flip_blocked_o` beyond what the old arrangement already did: that
+  // counter increments on `seal_valid_i && !seal_ok_c`, and a held level was
+  // already presenting that every cycle.
+  logic fb_q;
+  wire  fb_rise_c = frame_begin_i && !fb_q;
+
+  logic seal_pend_q;
+  // The request is offered from the rising edge itself, not a cycle later, so
+  // a frame whose arena is ready immediately seals on the same edge the old
+  // arrangement did. `plan_ok_c` gates it: an illegal plan raises nothing.
+  wire  seal_try_c  = (fb_rise_c || seal_pend_q) && plan_ok_c;
+  wire  seal_fire_c = seal_try_c && seal_ready_i;
 
   assign seal_valid_o = seal_try_c;
 
@@ -539,6 +572,8 @@ module zhao_measure_sealplan #(
       st_refs_q       <= '0;
       st_giant_refs_q <= '0;
 
+      fb_q            <= 1'b0;
+      seal_pend_q     <= 1'b0;
       frame_gen_q     <= 16'd1;
       res_gen_q       <= 16'd0;
       view_gen_q      <= 16'd0;
@@ -588,8 +623,10 @@ module zhao_measure_sealplan #(
       if (dw_valid_i && draws_seen_o != CNT_MAX)
         draws_seen_o <= draws_seen_o + 32'd1;
 
+      fb_q <= frame_begin_i;
+
       // ---- the frame edge: validate, then seal or refuse
-      if (frame_begin_i) begin
+      if (fb_rise_c) begin
         // The selector restarts with the frame it is about to measure. Placed
         // after the take above in source order so a draw and a frame edge on
         // the same cycle belong to the NEW frame, which is the same direction
@@ -605,21 +642,49 @@ module zhao_measure_sealplan #(
           if (plans_refused_o != CNT_MAX) plans_refused_o <= plans_refused_o + 32'd1;
           refuse_reason_o <= reason_c;
           st_v_q          <= 1'b0;
+          seal_pend_q     <= 1'b0;
         end else if (seal_fire_c) begin
           sealed_giant_q <= p_giant_c;
           sealed_ginst_q <= p_ginst_c;
           frame_gen_q    <= frame_gen_q + 16'd1;
           st_v_q         <= 1'b0;
+          seal_pend_q    <= 1'b0;
           if (have_plan_c) begin
             if (plans_sealed_o != CNT_MAX) plans_sealed_o <= plans_sealed_o + 32'd1;
           end else begin
             if (default_seals_o != CNT_MAX) default_seals_o <= default_seals_o + 32'd1;
           end
         end else begin
-          // The arena could not take it. The plan is KEPT staged -- it
-          // described this view and is still the right plan for the next
-          // edge -- and the lost edge is counted rather than absorbed.
+          // The arena could not take it ON THE EDGE. The request is HELD and
+          // the plan is KEPT staged -- it described this view and is still the
+          // right plan. The deferral is counted once, at the edge, so the
+          // counter reads FRAMES THAT DID NOT SEAL IMMEDIATELY rather than
+          // cycles spent waiting; `zhao_geom_paramarena.view_flip_blocked_o`
+          // already counts the cycles and two counters for one fact is how
+          // they come to disagree.
+          seal_pend_q <= 1'b1;
           if (seal_lost_o != CNT_MAX) seal_lost_o <= seal_lost_o + 32'd1;
+        end
+      end else if (seal_fire_c) begin
+        // THE RETRY LANDED, on some later cycle. Everything the edge arm does
+        // on a seal happens here too -- and it is written out rather than
+        // shared with the arm above, because the two are reached under
+        // different conditions and a shared `if` would have to test both.
+        sealed_giant_q <= p_giant_c;
+        sealed_ginst_q <= p_ginst_c;
+        frame_gen_q    <= frame_gen_q + 16'd1;
+        st_v_q         <= 1'b0;
+        seal_pend_q    <= 1'b0;
+        // The selector restarts here, not at the edge, when the seal was
+        // deferred: the frame the selector measures is the one that was
+        // actually sealed.
+        sel_any_q      <= 1'b0;
+        sel_weight_q   <= 8'd0;
+        sel_inst_q     <= 16'd0;
+        if (have_plan_c) begin
+          if (plans_sealed_o != CNT_MAX) plans_sealed_o <= plans_sealed_o + 32'd1;
+        end else begin
+          if (default_seals_o != CNT_MAX) default_seals_o <= default_seals_o + 32'd1;
         end
       end
 

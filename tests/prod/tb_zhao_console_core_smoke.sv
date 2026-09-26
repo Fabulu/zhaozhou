@@ -484,6 +484,25 @@ module tb_zhao_console_core_smoke
   logic        geom_pa_fault_o;
   logic        geom_pa_busy_o;
   logic        geom_pa_seal_ready_o;
+  // ---- MEASURE.SEALPLAN, the seal's producer (SEALPLAN 2026-09-26, I56) ---
+  // Entry I56 records the shell terminating six binner counters in wires named
+  // `_unused`, and this very bench declaring three `geom_tidq_*` counters that
+  // nothing asserts on. Every one of these is ASSERTED below, not merely
+  // declared: a connected counter nobody reads is the broken-instrument law
+  // with a port list.
+  logic [31:0] seal_plans_staged_o;
+  logic [31:0] seal_plans_sealed_o;
+  logic [31:0] seal_plans_refused_o;
+  logic [ 7:0] seal_refuse_reason_o;
+  logic [31:0] seal_default_seals_o;
+  logic [31:0] seal_lost_o;
+  logic [31:0] seal_giant_mismatch_o;
+  logic [31:0] seal_draws_seen_o;
+  logic [31:0] seal_plans_forwarded_o;
+  logic [31:0] seal_plans_malformed_o;
+  logic [17:0] geom_pa_giant_chunks_o;
+  logic [17:0] geom_pa_giant_refs_o;
+  logic [31:0] geom_pa_reserve_breach_o;
   // GEOM.VERTID -- the one geometry identity space (ARENAID, 2026-09-25).
   logic [31:0] geom_vid_tris_o;
   logic [31:0] geom_vid_refs_o;
@@ -6196,6 +6215,79 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: paramarena flipblock=%0d pubblock=%0d addrbad=%0d scrcontend=%0d retireunder=%0d",
              geom_pa_flipblock_o, geom_pa_pubblock_o, geom_pa_addrbad_o,
              geom_pa_scrcontend_o, geom_pa_retireunder_o);
+
+    // ---- THE SEAL'S PRODUCER, IN THE COMPOSED CONSOLE (entry I56) --------
+    // This smoke publishes no SealFramePlan, so what it exercises is the
+    // DEFAULT admission path -- and that is worth asserting precisely because
+    // it is the path a console with no host plan takes forever.
+    $display("SMOKE: sealplan staged=%0d sealed=%0d refused=%0d reason=%0d default=%0d lost=%0d",
+             seal_plans_staged_o, seal_plans_sealed_o, seal_plans_refused_o,
+             seal_refuse_reason_o, seal_default_seals_o, seal_lost_o);
+    $display("SMOKE: sealplan forwarded=%0d malformed=%0d draws=%0d mismatch=%0d",
+             seal_plans_forwarded_o, seal_plans_malformed_o, seal_draws_seen_o,
+             seal_giant_mismatch_o);
+    $display("SMOKE: sealplan reservation chunks=%0d refs=%0d breach=%0d",
+             geom_pa_giant_chunks_o, geom_pa_giant_refs_o,
+             geom_pa_reserve_breach_o);
+
+    // A FRAME WAS ADMITTED THROUGH THE VALIDATOR. `geom_pa_frames_o` already
+    // says a frame was sealed; this says WHICH DOOR it came through, which is
+    // the difference between a seal and an admission plan.
+    if (seal_default_seals_o == 32'd0) begin
+      $fatal(1, "MEASURE.SEALPLAN: no frame was admitted -- the seal's producer never sealed");
+    end
+    // AND IT CAME THROUGH THE DEFAULT, not through a plan, because this bench
+    // publishes none. A nonzero `plans_sealed_o` here would mean a plan
+    // arrived from somewhere nobody wrote, which is a worse fault than a
+    // missing one.
+    if (seal_plans_sealed_o != 32'd0 || seal_plans_staged_o != 32'd0
+        || seal_plans_forwarded_o != 32'd0) begin
+      $display("SEALPLAN: staged=%0d forwarded=%0d sealed=%0d with no SealFramePlan in the packet",
+               seal_plans_staged_o, seal_plans_forwarded_o, seal_plans_sealed_o);
+      $fatal(1, "MEASURE.SEALPLAN: a plan was admitted that this bench never published");
+    end
+    // NOTHING WAS REFUSED. A refusal here would mean the DEFAULT plan does not
+    // validate against the console's own capacities -- a console that cannot
+    // admit its own default frame.
+    if (seal_plans_refused_o != 32'd0) begin
+      $display("SEALPLAN: refused=%0d reason=%0d", seal_plans_refused_o, seal_refuse_reason_o);
+      $fatal(1, "MEASURE.SEALPLAN: the DEFAULT plan was refused by its own validator");
+    end
+    if (seal_plans_malformed_o != 32'd0) begin
+      $fatal(1, "CMD.EXEC: a SealFramePlan record was malformed and none was sent");
+    end
+    // THE DEFAULT RELEASES THE RESERVATION, which is the directive's explicit
+    // permission for a frame declaring no guaranteed giant -- so the arena's
+    // latched reservation must read ZERO in both units here. This is the
+    // assertion that would catch a default that quietly reserved something,
+    // and it is the one that will change the day this bench publishes a plan.
+    if (geom_pa_giant_chunks_o != 18'd0 || geom_pa_giant_refs_o != 18'd0) begin
+      $display("SEALPLAN: reservation chunks=%0d refs=%0d on a frame with no declared giant",
+               geom_pa_giant_chunks_o, geom_pa_giant_refs_o);
+      $fatal(1, "MEASURE.SEALPLAN: the absent-giant case did not release the reservation");
+    end
+    // THE BREACH DETECTOR. Its zero here is NOT evidence on its own -- it is
+    // unreachable while the validator and `ck_fits_c` are both correct, which
+    // is why it owes a committed mutant. `geom_paramarena_reservemut_fires`
+    // is that mutant and it has been seen to move this counter. What the zero
+    // says here is that the composed console did not hit the fault, which is
+    // a claim about THIS RUN and is asserted as such.
+    if (geom_pa_reserve_breach_o != 32'd0) begin
+      $fatal(1, "GEOM.PARAMBUF: ordinary allocation reached the giant's reserved region");
+    end
+    // AND THE SELECTOR SAW THE FRAME'S DRAWS. A zero would mean the console's
+    // draw dispatch never reached MEASURE.SEALPLAN -- the policy consumer
+    // wired to a stream that is not flowing, which reads exactly like a
+    // correct silent block.
+    if (seal_draws_seen_o == 32'd0) begin
+      $fatal(1, "MEASURE.SEALPLAN: the selector saw no draws -- semantic_weight is not arriving");
+    end
+    // The mismatch detector must be silent on a frame with no declared giant;
+    // `measure_sealplan_directed` case 16 is the same negative control at the
+    // leaf, and cases 14 and 15 are where it has been seen to fire.
+    if (seal_giant_mismatch_o != 32'd0) begin
+      $fatal(1, "MEASURE.SEALPLAN: a giant mismatch on a frame that declared no giant");
+    end
     // THE TWO ALIGNMENT TRIPWIRES. Printed apart from the rest because their
     // zero means something different: the behavioural SDRAM model reads and
     // writes LINEARLY where a JEDEC BL8 sequential burst wraps inside its
