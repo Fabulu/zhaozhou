@@ -4506,6 +4506,25 @@
 //      byte. It is also the positive control for the zero the plain run
 //      now asserts on `geom_clip_culled_o`.
 //
+//      THE WHOLE PASS AS ONE BEFORE/AFTER, both forms of the SAME
+//      bench at the SAME commit, the only difference being whether
+//      layer A carries the ramp (`-TerrainFlatLattice` writes zeros):
+//
+//                             flat (control)      repaired (gate)
+//        clip sub/clip/cull/setup  144/2/128/14     144/69/0/75
+//        binrefs refs / depth        36 / 5          101 / 59
+//        rasterdiag jobs started      36              101
+//        resolved_tiles               10               11
+//        earlyz covered             1190             1216
+//        texture frags / samples  1190 / 1190     1216 / 1190
+//        raster pixels              2560             2816
+//
+//      Every row moves in the direction the repair predicts and none
+//      moves that should not. `culled` 128 -> 0 is the relief; `jobs
+//      started` 36 -> 101 is the compose moving inside the frame;
+//      `texture samples` NOT moving while `frags` does is the
+//      untextured finding below.
+//
 //      THE REGISTER DID NOT MOVE. 5 before, 5 after, measured bare, and
 //      THAT IS CORRECT: a register that moved on a bench-fixture edit
 //      would be the instrument being wrong.
