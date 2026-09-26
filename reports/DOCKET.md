@@ -2378,6 +2378,91 @@ be invented.
 
 ---
 
+### D27. Gouraud terrain + terrain LOD + texture mips in the reference renderer  ·  `Upheaval/runs/CLAUDE-RUNS/RUN-20260925-1531-game-authoring-foundation/RECON-BRIEFS-RENDER.md` (recon G2)
+> *"Definitely queue Gouraud terrain and LOD, and look for all other shaders
+> and mipmaps we added too, there's more rendering machinery now."* — owner,
+> 2026-09-25.
+
+Terrain renders FLAT per cell today: `reference/src/zrender/terrain.cpp:614`
+averages the four corner vertex tints and shades once per triangle pair,
+calling `raster_tri` without `mode.gouraud` — even though the Gouraud
+rasterizer path it needs (`ScreenV.cr/cg/cb`, `TriMode.gouraud`,
+`rast.cpp:238-386`) is already built and already used by creatures. The
+per-vertex colour data (Island Patch layer H, `spec/terrain_rules.md` §2) is
+already on disk; it is only being averaged instead of interpolated.
+`zref_terrain_lod.hpp`'s ladder (`zref::terrain::lod_select`, RTL
+UNIT_VERIFIED as `zhao_terrain_lod.sv`) is never called by the renderer at
+all — only by its own unit tests. Terrain texture mips do not exist in
+`reference/src/zrender` in any form (`zref_render.hpp:168`,
+`tiles[256][64*64]`, one resolution) despite `terrain_rules.md`'s frozen
+5,461-B/tile mip chain law.
+
+**Implement LOD as specified first; expose every tuning constant as a named
+knob rather than a hardcoded value**, so the look can be tuned without
+touching code once it's on screen (hysteresis, min-hold, morph step,
+per-camera scale, and the `dev[L]` deviation derivation itself).
+
+Order (cheapest/most-verified first):
+1. Wire terrain top-surface cells through the existing Gouraud path
+   (`ScreenV.cr/cg/cb` + `mode.gouraud = true`) instead of the flat
+   per-cell average — no new arithmetic, only a new call pattern.
+2. Compute `LodSubpatch::dev[L]` from `TERRAIN.MIPGEN`'s already-built
+   17×17/9×9 height mips (currently undefined anywhere — DOCKET D4 item 1,
+   `reports/TERRAIN-LOD-DEVIATION-20260907.md`) and call `lod_select` from
+   `draw_heightfield`.
+3. Add a mip chain to the terrain tileset and a mip-aware sampler to the
+   mosaic texture branch (`rast.cpp:367`) — this is new law, not wiring;
+   flag to the owner before building, since no RTL contract for it exists
+   yet (`TEXTURE.MOSAIC.md` assigns "the mip level" to `TEXTURE.TMU`, which
+   has never had a terrain-facing mip chain).
+
+**Golden CRC risk:** `terrain.cpp:346` pins untextured terrain as
+"byte-identical legacy flat shading (golden CRC law)." Ship Gouraud/LOD
+gated OFF by default (bit-exact no-op, same pattern as
+`kTerrainDetailStrength = 0` in `zref_terrain_shade.hpp`) so existing
+goldens don't move until turned on deliberately with a regenerated capture
+set.
+
+**Hardware-lane note:** `TERRAIN.LOD`/`NORMALS`/`TESS`/`MIPGEN`/`PROJECT`
+are RTL UNIT_VERIFIED — safe to exercise. `TERRAIN.SHADE`/`NORMALMAP` are
+REFERENCE_COMPLETE only, no RTL block built yet (DOCKET D25); shipping
+visuals on them in the Studio runs ahead of the console and should be
+tracked as such, not assumed equivalent. Terrain texture mips have no RTL
+contract at all.
+
+Confirmed: `origin/main` has not solved any part of this — the identical
+`FLAT stand-in` comment, an uncalled `lod_select`, and the identical
+single-resolution `tiles[256][64*64]` are all present there too.
+
+> Queued on this branch 2026-09-26. It was first pushed to `zixxtrixx-v8-closeout`, which is not where the hardware session reads the docket.
+
+### D28. Rotated terrain islands in the reference renderer (skyscrapers, overhangs)  ·  `docs/OWNER_DOCKET.md` 2026-08-21 §A + `design/contracts/TERRAIN.COMPCACHE.md:71`  — P1
+> *"console view must be able to draw rotated heightmaps."* (owner, 2026-09-26, while
+> Tribute Upheaval Studio builds skyscraper/overhang structures from rotated stacked
+> heightmap sheets for wizard parkour.)
+
+**Status, checked on every recent branch (ceiling-architecture, main, gz/*):** resolved in
+principle ("rotate the ISLAND, not the patch", OWNER_DOCKET 2026-08-21 §A) and not
+implemented anywhere. `spec/terrain_rules.md` islands carry translation only;
+`ComposedLattice` states "must be axis-aligned monotone"; COMPCACHE says a rotated sheet
+must change the reference *first*.
+
+**Ask (static rotation only; real-time toppling stays §B, open):**
+1. An `orientation` field on the island (quat16) plus `pivot`, in `spec/terrain_rules.md`.
+2. Per-vertex placement in `compose_lattice` / `draw_heightfield` through the island
+   transform, with **world-space lighting** (rotate normals; the fixed world light must not
+   rotate with the sheet) and a shared depth buffer across islands.
+3. An inverse-transform helper beside `column_query`, so every world-space query stays exact
+   (the Upheaval sim already does this in its own `RotatedSheetCollision`, and will switch
+   to the reference helper when it lands).
+4. It is gated so the axis-aligned path is bit-exact and existing goldens do not move.
+5. The RTL follow-up (COMPCACHE/TESS "2x2 basis, four multiplies") comes after the reference.
+
+**Upheaval consumes it by a pin bump.** Until then the Studio's Console view shows
+structures as labelled outlines, while the PC GPU path draws them. Structure data already
+carries orientation and pivot, so nothing is re-authored when this lands. Sequencing against
+the deep textured keel (docket) is the hardware lane's call.
+
 ## P2 — stretch, wanted
 
 ### D7. Sunder  ·  `reports/SUNDER.md`
