@@ -16634,7 +16634,22 @@ module zhao_console_core
   zhao_geom_tidq #(
       .ID_W(18), .DEPTH(8)
   ) u_geom_tidq (
-      .clk        (clk),
+      // `gpu_clk`, NOT `clk`. This read `.clk (clk)` from I54's composition
+      // until 2026-09-26, and `clk` IS NOT DECLARED IN THIS MODULE -- the
+      // clock is `gpu_clk` (:10457) and the other 149 instances say so. An
+      // undeclared identifier in a port connection is an IMPLICIT NET, so the
+      // queue was tied to an undriven wire and NEVER CLOCKED: `id_o` held its
+      // reset value and the continuation tail carried a CONSTANT where I54's
+      // arena id belongs (:26881).
+      //
+      // It survived because the block was right and the COMPOSITION was
+      // wrong: `geom_tidq_directed` drives a real clock and passes, and the
+      // console smoke runs `-Wno-fatal`, so Verilator's IMPLICIT warning was
+      // printed and ignored. Entry I34 records the identical failure -- an
+      // adapter composed at the wrong arity, caught only by an explicit -Wall
+      // lint of the closure -- which is why that lint is now worth running
+      // before a fit rather than after one.
+      .clk        (gpu_clk),
       .rst_n      (rst_n),
       .flush_i    (pa_seal_fire),
       .push_i     (vid_tri_id_retire),
