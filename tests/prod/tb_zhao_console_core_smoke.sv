@@ -2816,6 +2816,70 @@ module tb_zhao_console_core_smoke
                    pcj_cx_q[k], pcj_cy_q[k], pcj_bh_q[k], pcj_aw_q[k]);
     end
   endtask
+
+  // ==========================================================================
+  // TERRAINVISIBLE PROBE (2026-09-26) -- THE SUBPATCH JOBS, AS NUMBERS
+  // ==========================================================================
+  // `smoke_geom_fixture_gen.cpp` derives the terrain half of the pixel gate by
+  // calling `zref::terrain::tessellate` on the SAME subpatch jobs the console
+  // issues.  Which jobs those are was, until this probe, read off nobody: the
+  // bench printed `tess_refs=256` and `tess_vertices=162` and the levels, the
+  // subpatch origins and the morph factors behind them were an inference.
+  //
+  // 162 = 2 x 81 and 256 = 2 x 128 are CONSISTENT with two level-0 subpatches
+  // and with nothing else in the level set -- but "consistent with" is exactly
+  // the step CLAUDE.md's broken-instrument chapter is about, and the generator
+  // now DEPENDS on the answer.  So the job port is read directly.
+  //
+  // It is read at `u_terrain_group_seq`'s own output handshake, which is the
+  // port `zhao_terrain_tess` accepts; the sequencer presents each job TWICE
+  // (mode 1 = fill, mode 2 = refs), so `mode` is captured with it rather than
+  // the pairs being assumed.
+  localparam int unsigned TJB_N = 8;
+  int unsigned       tjb_n_q;
+  logic [1:0]        tjb_mode_q [0:TJB_N-1];
+  logic [5:0]        tjb_ox_q   [0:TJB_N-1], tjb_oz_q [0:TJB_N-1];
+  logic [1:0]        tjb_lvl_q  [0:TJB_N-1];
+  logic [1:0]        tjb_nz_q   [0:TJB_N-1], tjb_pz_q [0:TJB_N-1];
+  logic [1:0]        tjb_nx_q   [0:TJB_N-1], tjb_px_q [0:TJB_N-1];
+  logic [16:0]       tjb_morph_q[0:TJB_N-1];
+  logic              tjb_surf_q [0:TJB_N-1], tjb_dual_q[0:TJB_N-1];
+  logic [15:0]       tjb_src_q  [0:TJB_N-1];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tjb_n_q <= 0;
+    end else if (`PC_CORE.tt_job_valid && `PC_CORE.tt_job_ready) begin
+      if (tjb_n_q < TJB_N) begin
+        tjb_mode_q [tjb_n_q] <= `PC_CORE.tt_job_mode;
+        tjb_ox_q   [tjb_n_q] <= `PC_CORE.tt_job_ox;
+        tjb_oz_q   [tjb_n_q] <= `PC_CORE.tt_job_oz;
+        tjb_lvl_q  [tjb_n_q] <= `PC_CORE.tt_job_level;
+        tjb_nz_q   [tjb_n_q] <= `PC_CORE.tt_job_nz;
+        tjb_pz_q   [tjb_n_q] <= `PC_CORE.tt_job_pz;
+        tjb_nx_q   [tjb_n_q] <= `PC_CORE.tt_job_nx;
+        tjb_px_q   [tjb_n_q] <= `PC_CORE.tt_job_px;
+        tjb_morph_q[tjb_n_q] <= `PC_CORE.tt_job_morph;
+        tjb_surf_q [tjb_n_q] <= `PC_CORE.tt_job_surface;
+        tjb_dual_q [tjb_n_q] <= `PC_CORE.tt_job_dual;
+        tjb_src_q  [tjb_n_q] <= `PC_CORE.tt_job_src_id;
+      end
+      tjb_n_q <= tjb_n_q + 1;
+    end
+  end
+
+  task automatic tjb_report();
+    int unsigned k;
+    begin
+      $display("SMOKE: terrjob   presentations=%0d (each subpatch is presented twice: mode 1 fill, mode 2 refs)", tjb_n_q);
+      for (k = 0; k < TJB_N; k = k + 1)
+        if (k < tjb_n_q)
+          $display("SMOKE: terrjob   [%0d] mode=%0d ox=%0d oz=%0d level=%0d nlvl[nz/pz/nx/px]=[%0d %0d %0d %0d] morph=%0d surface=%0d dual=%0d src=%0d",
+                   k, tjb_mode_q[k], tjb_ox_q[k], tjb_oz_q[k], tjb_lvl_q[k],
+                   tjb_nz_q[k], tjb_pz_q[k], tjb_nx_q[k], tjb_px_q[k],
+                   tjb_morph_q[k], tjb_surf_q[k], tjb_dual_q[k], tjb_src_q[k]);
+    end
+  endtask
   // ==========================================================================
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
@@ -6423,6 +6487,7 @@ module tb_zhao_console_core_smoke
              terr_cf_uv_sat_o, terr_cf_shade_clamped_o, terr_cf_degenerate_o,
              terr_cf_dq_refused_o, terr_cf_dq_stray_o);
     pcj_report();
+    tjb_report();
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
