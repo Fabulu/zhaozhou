@@ -18750,3 +18750,26 @@ target_include_directories(test_nav_service_directed PRIVATE
   ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
 add_test(NAME nav_service_directed COMMAND test_nav_service_directed)
 set_tests_properties(nav_service_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# FIELDMAJOR, 2026-09-26: THE COMPOSED FIELD-MAJOR EARTH MACHINE, MEASURED.
+#
+# `zhao_terrain_field_walk` and `zhao_terrain_patch_acc` have each had a full
+# differential test since 2026-09-20 and have NEVER been elaborated together --
+# each test does the other block's job in C++. This is the composition, and its
+# driver measures the association's cost as a LINE in engine latency, at
+# several engine depths, against `design/contracts/FIELD.SEQ.EARTH.md:167`'s
+# active <= 6,000 clocks. It is the field-major counterpart of
+# `composepub_acceptance` case 11's vertex-major census, deliberately at the
+# same modelled seam so the two can be differenced.
+add_executable(test_fieldmajor_census terrain/fieldmajor_census.cpp)
+target_link_libraries(test_fieldmajor_census PRIVATE zhao_harness zhao_zref)
+verilate(test_fieldmajor_census
+  PREFIX Vtb_terrain_fieldmajor
+  TOP_MODULE tb_terrain_fieldmajor
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_field_walk.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_acc.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_fieldmajor.sv)
+add_test(NAME fieldmajor_census COMMAND test_fieldmajor_census)
+set_tests_properties(fieldmajor_census PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
