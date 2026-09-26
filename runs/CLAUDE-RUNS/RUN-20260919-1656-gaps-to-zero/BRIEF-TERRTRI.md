@@ -97,11 +97,17 @@ and owns **one scalar**, `terr_light_base_o`.
   ratified spec. If a flat stand-in is the right call on the ALM budget — and it
   may be — **it must be NAMED a stand-in in the RTL with 6.5 cited beside it**,
   or the next reader inherits a Gouraud law silently implemented as a constant.
-* **`reports/OWNER-DECISIONS-20260920.md` §5 PARKED terrain's two absent laws**
-  with its own recommendation *"Do not rule these yet"*. You may not un-park
-  them. You MAY establish that one of them is no longer a ruling question because
-  its operand exists — which is exactly what the unity-tint identity above
-  argues. **State which you are doing.**
+* **CORRECTED 2026-09-26, and the correction is mine.** This bullet used to say
+  `reports/OWNER-DECISIONS-20260920.md` §5 parked terrain's two absent laws and
+  *"you may not un-park them"*. **§5 is not a reservation** — its own header
+  reads *"PARKED, NOT LIVE"* and says outright *"it asks the owner for
+  nothing"*, and its one stated reason for parking law 2 (entanglement with I49)
+  **expired when I49 was deleted the same day it was written**. Law 1 has since
+  dissolved: `zhao_terrain_uvlane` is composed. **Decision Record 3** in
+  `reports/OWNER-RULINGS-20260919-EVENING.md` rules this out properly. What
+  still fences the outcome is the OWNER DIRECTIVE itself, and it is stricter:
+  *"NOT authority to … remove Gouraud/detail normals"*. The engineering decision
+  is delegated; the per-vertex capability is not.
 * **A prefix of a chain whose last link does not exist is "a tie-off wearing a
   composition's clothes"** — the file's first prohibition. The previous lane
   built nothing for exactly this reason and was right to. **If you reach that

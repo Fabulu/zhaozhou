@@ -8024,3 +8024,83 @@ the form the delegation requires. Nothing about the numerical policy in section
 13.3 changes; what changes is that height's destination is commissioned here
 instead of assumed. Sequencing and the exact writer/reader shapes are the
 packet's to decide.
+
+---
+
+## DECISION RECORD 3 -- SECTION 5 DOES NOT FENCE TERRAIN'S COLOUR, AND THE DIRECTIVE DOES
+
+**Raised by TERRTRI, 2026-09-26**, which flagged that
+`reports/OWNER-DECISIONS-20260920.md` section 5 and
+`reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt` appear to disagree about who
+owns terrain's lit-colour decision. **It obeyed my brief's fence, said so, and
+reported the conflict instead of resolving it.** That was the right call and
+this record answers it, because the next terrain packet cannot be briefed
+without an answer.
+
+### What section 5 actually is
+
+**It is not a reservation.** Its own header reads *"RECLASSIFIED: PARKED, NOT
+LIVE"* and the reclassification says in terms: **"it asks the owner for
+nothing."** Its recommendation is *"Do not rule these yet ... not because they
+are ripe"*, and it gives one stated reason for law 2: that it *"is entangled
+with the texture lane's I49 and should not be ruled in isolation."*
+
+**So section 5 parks two laws for a stated reason, and does not reserve them.**
+My TERRTRI brief called it a fence a packet "may not un-park". **That was
+over-cautious and I am correcting it here**, not because the outcome changed --
+TERRTRI reports the fence cost nothing -- but because a wrong fence in a brief
+becomes a wrong premise in the next entry, which is how this campaign has lost
+most of its time.
+
+### Both of section 5's premises have expired
+
+* **Law 1 (a terrain texture-coordinate law) has DISSOLVED.**
+  `zhao_terrain_uvlane` is built and composed, implementing `terrain_rules` 6.2,
+  which was FROZEN and capture-exact all along. There is nothing left to rule.
+* **Law 2's stated parking REASON has expired.** It was entanglement with I49 --
+  and **I49 was closed and DELETED on 2026-09-20**, the same day section 5 was
+  written. A parking whose only stated reason no longer exists is not a parking;
+  it is an unmaintained note.
+
+### What governs instead, and it is stricter on the thing that matters
+
+`OWNER_VACATION_DIRECTIVE_2026-09-23` postdates section 5 by three days and
+grants standing authority over technical decisions **including amending specs
+and rulings, provided what is superseded is STATED**. That authority reaches
+section 5, and this record is the statement.
+
+**But the directive fences the OUTCOME directly, and harder than section 5 ever
+did.** Its prohibitions include, verbatim: *"NOT authority to delete a feature
+... remove Gouraud/detail normals ... or call reduced work equivalent merely to
+reach zero or fit a device."*
+
+**Terrain's per-vertex lit colour IS the Gouraud question for terrain.**
+`spec/terrain_rules.md` 6.5 makes layer-H tint per-vertex by ratified spec, and
+broadcasting the scalar `terr_light_base_o` into slots 3..5 removes Gouraud for
+terrain. **That move is prohibited by the directive itself**, independently of
+section 5, and TERRTRI refused it on exactly those grounds.
+
+### The ruling
+
+1. **Section 5 no longer parks anything.** Law 1 is dissolved by composition;
+   law 2's stated reason is spent. A packet does not need owner input to work on
+   terrain's colour, and a brief must stop saying it does.
+2. **The ENGINEERING decision is delegated** -- which per-vertex producer, what
+   carriage it rides, where it is stored. A packet may take it, with a decision
+   record naming what it supersedes.
+3. **The CAPABILITY is not negotiable.** Per-vertex terrain colour stands. A
+   flat stand-in is prohibited by the directive, and if one is ever the right
+   call on the ALM budget it is an ESCALATION, not a packet's choice -- and even
+   then it must be NAMED a stand-in in the RTL with `terrain_rules` 6.5 cited
+   beside it.
+4. **The live blocker is not colour at all.** TERRTRI and TERRAINAUX both land on
+   carriage: terrain material identity has zero hits in `fpga/rtl/terrain/`, and
+   the mosaic's `{tile_a, tile_b, weight}` is built per SPAN from
+   `base_rgb[23:16]`/`[15:8]` plus `recipe_weight`, so terrain's per-CELL
+   layer-E triple has no carriage. **Section 5 was never what stood in the way.**
+
+**Superseded by this record:** `reports/OWNER-DECISIONS-20260920.md` section 5's
+status as a live parking, and the sentence in
+`runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/BRIEF-TERRTRI.md` that reads
+*"You may not un-park them."* Section 5's CONTENT is not struck -- its history of
+why the laws were absent remains accurate and useful.

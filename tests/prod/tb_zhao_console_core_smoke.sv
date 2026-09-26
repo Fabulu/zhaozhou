@@ -6430,9 +6430,37 @@ module tb_zhao_console_core_smoke
     // and `terrlight ... degenerate=0` of 256. THIS CHECK IS THE REPAIR'S
     // GATE: a regression that closes the compose door again puts it back to
     // 256-of-256 and this line fires.
+    //
+    // COMPILED OUT UNDER THE SLOT-OVERFLOW MUTANT, 2026-09-26 (TERRTRI), FOR
+    // THE REASON THIS BENCH ALREADY WROTE DOWN 400 LINES BELOW AND THEN WALKED
+    // PAST. The `ifdef ZHAO_MUT_SLOT_OVERFLOW guarding the production terrain
+    // verdict says it exactly: "the mutation legitimately breaks those checks
+    // ... Running them against a deliberately broken machine would be asserting
+    // the bug." This gate arrived later (TERRAINAUX, 2026-09-25) and landed
+    // ABOVE that guarded region, so it was never covered by it.
+    //
+    // The mutation halves TERR_POOL_SLOTS, which makes TERRAIN.PAGELOADER
+    // REFUSE every job the directory places above its range -- that refusal is
+    // the whole point, it is what moves `terr_pl_slot_overflow_o`. A refused
+    // page never becomes resident, so the compose door never opens and
+    // `zhao_terrain_compcache_front` serves its 32'h5BADF00D poison, so every
+    // triangle is degenerate BY CONSTRUCTION. Measured: 12 of 12.
+    //
+    // So this line killed the mutant at [7589420000] before its inverted-
+    // polarity verdict at the `ifdef below could be read -- which made
+    // -Mutant neither a passing control nor a failing one but an ABSENT one,
+    // while the campaign went on quoting it as evidence that the counter fires.
+    // CLAUDE.md states the remedy exactly: "when a mutant trips a SIMULATION
+    // assertion before the synthesizable counter can be read, disable the
+    // assertion IN THE MUTANT ONLY, with the reason beside it."
+    //
+    // NOTHING IS WEAKENED FOR PRODUCTION. Every non-mutant build -- the plain
+    // run and all four other controls -- still asserts degenerate == 0.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
     if (terr_light_degenerate_count_o != 0)
       $fatal(1, "SMOKE: %0d of %0d terrain triangles are DEGENERATE -- the compose cache is serving POISON again (see `SMOKE: terrcompose`: patches_filled and serve_valid are the numbers to read)",
              terr_light_degenerate_count_o, terr_light_shaded_o);
+`endif
     // WHAT THIS STILL DOES NOT PROVE: that the shade VALUE is right. That is
     // proved bit-for-bit against zref in
     // tests/terrain/terrain_lightlane_directed.cpp over a random sub-metre
@@ -6632,8 +6660,36 @@ module tb_zhao_console_core_smoke
     // whole 200,000-cycle budget on any run that refuses a job. That costs
     // nothing but time in production -- and it is exactly the case the slot-
     // overflow mutant creates deliberately.
-    while (((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
-             terr_pl_pages_refused_o) < N_TERR_REC) &&
+    //
+    // AND THE FLOOR IS NOT THE LAW -- CORRECTED 2026-09-26 (TERRTRI), AND THIS
+    // IS THE SAME DISAGREEMENT THE PARAGRAPH ABOVE FIXED ONCE ALREADY.
+    // The loop waited for `< N_TERR_REC` -- THREE -- while every check below
+    // asserts against `terr_lq_issued_o`, which the SECOND SubmitTerrainSet
+    // made FIVE. So the wait stopped two jobs early and the checks then read a
+    // pipeline that was still in flight.
+    //
+    // The tell was printed on every run and read by nobody: `guard=0`. Three
+    // completions have long since happened by the time this line is reached,
+    // so the loop exited on its FIRST evaluation and never waited at all.
+    // Whether the remaining two jobs had finished then depended entirely on
+    // how many cycles the REST of the frame happened to burn -- so the plain
+    // run and -BadTraceArm passed by LUCK, and -BadVertex (pixels=0, a short
+    // raster) and -NoEchoArm (no echo pass) failed with "jobs are stuck in the
+    // queue" and "one job, one completion is broken" against RTL that was
+    // doing exactly what it should. A green that depends on unrelated run
+    // length is not evidence, and the red named the wrong block.
+    //
+    // THE WAIT NOW WAITS FOR WHAT THE CHECKS ASSERT, which STRENGTHENS them:
+    // the equalities below stop meaning "the queue happened to be empty at an
+    // arbitrary moment" and start meaning "the queue DRAINS". The N_TERR_REC
+    // floor stays a floor -- without it a spine that never started satisfies
+    // 0 == 0 == 0 on the first evaluation and the loop proves nothing.
+    while (!(((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
+               terr_pl_pages_refused_o) >= N_TERR_REC) &&
+             (terr_lq_accepted_o == terr_seq_loads_issued_o) &&
+             (terr_lq_issued_o   == terr_lq_accepted_o) &&
+             ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
+               terr_pl_pages_refused_o) == terr_lq_issued_o)) &&
            (guard < 200000)) begin
       @(posedge gpu_clk);
       guard++;
@@ -7048,7 +7104,14 @@ module tb_zhao_console_core_smoke
     // than a number that happened to equal it.
     if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != terr_lq_issued_o)
       $fatal(1, "SMOKE: %0d jobs produced %0d loaded + %0d faulted + %0d refused completions -- 'one job, one completion' is broken (or the wait timed out at guard=%0d)",
-             N_TERR_REC, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
+             // WAS N_TERR_REC -- CORRECTED 2026-09-26 (TERRTRI). The check
+             // compares against terr_lq_issued_o; the message printed a
+             // DIFFERENT quantity, so a genuine shortfall of 4 completions
+             // against 5 jobs read as "3 jobs produced 4 loaded" -- which
+             // looks like MORE completions than jobs, the opposite of the
+             // fault, and sends a reader hunting a duplicate instead of a
+             // straggler. A message must print the operands it compared.
+             terr_lq_issued_o, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, guard);
 
     // EVERY COMPLETION REACHED THE DIRECTORY, AND EVERY ONE WAS GOOD.

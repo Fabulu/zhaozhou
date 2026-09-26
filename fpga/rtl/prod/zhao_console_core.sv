@@ -3679,6 +3679,114 @@
 //      the fixture: the arm's triangles have AREA now, so the merge it waits
 //      behind can be measured when it lands instead of only wired.
 //
+//      RE-MEASURED 2026-09-26 (gz/terrtri). NOTHING WAS COMPOSED HERE EITHER,
+//      and the reason is unchanged and re-measured rather than quoted. What
+//      this lane adds is THREE facts, and the first is about this entry's own
+//      INSTRUMENTS rather than about terrain.
+//
+//      1. THE SMOKE CONTROLS GUARDING THIS ENTRY'S EVIDENCE WERE BROKEN, AND
+//         THE BREAK WAS TERRAIN-SHAPED. Three of the four console-core smoke
+//         controls -- -Mutant, -BadVertex and -NoEchoArm -- were RED, and NOT
+//         ONE was an RTL defect. Two shared a cause: the terrain spine's drain
+//         wait waited for `< N_TERR_REC` (THREE) completions while the checks
+//         it precedes assert against `terr_lq_issued_o`, which TERRAINAUX's
+//         SECOND SubmitTerrainSet made FIVE. It printed `guard=0` on every
+//         run, including the passing ones -- it exited on its first evaluation
+//         and never waited -- so whether the last jobs had finished depended on
+//         how many cycles the REST of the frame burned. The plain run passed by
+//         LUCK; -BadVertex (pixels=0) and -NoEchoArm (no echo pass) did not.
+//         Repaired by waiting for what the checks assert, which STRENGTHENS
+//         them: guard went 0 -> 64,143 and 0 -> 86,475, and `pl loaded` went
+//         4-of-5 and 3-of-5 to 5-of-5. THE JOBS COMPLETED; they needed time,
+//         not repair. No terrain RTL was touched.
+//
+//         AND -Mutant WAS AN ABSENT INSTRUMENT. TERRAINAUX's new
+//         `terr_light_degenerate_count_o != 0` gate landed 400 lines ABOVE the
+//         `ifdef that compiles the production terrain verdict out under the
+//         mutant, so it killed the run before the inverted-polarity verdict
+//         could be read. The mutation halves TERR_POOL_SLOTS, which makes
+//         TERRAIN.PAGELOADER refuse jobs above its range -- that refusal IS the
+//         point -- so no page becomes resident and every triangle is degenerate
+//         BY CONSTRUCTION. Compiled out under the mutant only. It now reads
+//         `terr_pl_slot_overflow_o=1`, firing EXACTLY ONCE as its own header
+//         predicted. Until 2026-09-26 that control proved NOTHING IN EITHER
+//         DIRECTION while this campaign quoted its silence as evidence.
+//
+//      2. THE PERSPECTIVE MULTIPLY'S RANGE BOUND IS NOT MERELY "UNPRICED" --
+//         THE ESCAPE FROM IT IS PROVABLY CLOSED, which is a harder position
+//         than the paragraph above left it. That paragraph says the S8.24 bound
+//         "may force a per-patch u/v origin bias, which is a law and therefore
+//         not a composer's to invent". The obvious rebuttal is that a bias
+//         could be an ALGEBRAIC IDENTITY and therefore nobody's law: the
+//         consumer folds u through `mirror_texel`, whose period is exactly TWO
+//         TILES (`m = u_raw >>> 10`, `per = m % 128`, 64 texels per tile), so a
+//         bias of a whole number of periods vanishes through the fold.
+//         IT DOES NOT VANISH, because the fold is not the only consumer of u.
+//         `reference/src/zrender/rast.cpp:369` passes `u >> 10` -- the
+//         UNFOLDED world texel index -- to `mosaic_pick`, whose multiplicative
+//         hash (73856093 / 19349663) has NO period at all, and whose header
+//         says its constants are frozen because "changing one changes every
+//         capture's pixels". The RTL agrees, port for port:
+//         `zhao_texture_mosaic_v2.sv:79-82` splits `req_u_i >>> 10` for the
+//         pick from `req_u_i[16:10]` for the fold. SO NO NON-ZERO BIAS IS
+//         IDENTITY FOR BOTH, and any bias changes which of the two candidate
+//         tiles EVERY texel selects. The bound is a real law question and the
+//         cheap way out of it is closed. Measured, not argued.
+//
+//      3. TERRAINAUX'S `pub_base_rgb_o` FINDING DOES NOT TRANSFER TO TERRAIN,
+//         and it is the most inviting wrong turn on this entry today. That
+//         paragraph is right that the untextured profile's base colour is not
+//         missing from the TREE -- MATERIAL.RESOLVE's record has a `base_rgb`
+//         and this file's `MAT_BASE_RGB_C` (line 25872) is a constant white
+//         only because the window does not publish the resolved one. But a
+//         PUBLISHED base colour comes from a RESOLVED RECORD, and the only
+//         lawful mode a terrain triangle can present at the door is
+//         `MATMODE_NONE_C`, under which NO RESOLVE IS ISSUED and there is no
+//         record to publish a colour from. `pub_base_rgb_o` is a real leaf
+//         change for the MESH path and it closes nothing here. Re-measured
+//         today: `pub_base_rgb_o` exists in this file's PROSE and in no RTL
+//         anywhere, and `material_set`/`material_id` under `fpga/rtl/terrain/`
+//         still return ZERO hits.
+//
+//      WHAT IS LEFT IS UNCHANGED AND IS NOW FOUR ITEMS, NOT TWO: invw24 (a
+//      fourth `zhao_geom_depthquant_stream` + `zhao_raster_rcp24_v4` pair --
+//      note the MODULE is `_stream` and its FILE is
+//      `fpga/rtl/geometry/zhao_geom_depthquant.sv` without the suffix, and
+//      `zhao_forge_assemble` is under `fpga/rtl/forge/`, not
+//      `fpga/rtl/geometry/`; this entry's prose misplaces both); the
+//      perspective multiply, now blocked on item 2 above; `NCLIENT` 3 -> 4 on
+//      `u_geom_clipdoor`, where a fourth client takes slice 3 at the TOP of
+//      every concatenation; and a terrain material identity. The colour is
+//      still LAST and is still not what blocks.
+//
+//      ON THE PARKED DECISION, STATED PRECISELY BECAUSE IT KEEPS BEING
+//      MIS-CITED. `reports/OWNER-DECISIONS-20260920.md` section 5 parks TWO
+//      laws. ITS LAW 1 IS NO LONGER A RULING QUESTION -- "where does a terrain
+//      triangle sample" is answered by `zhao_terrain_uvlane`, composed below as
+//      `u_terrain_uvlane`, implementing `terrain_rules` 6.2 which is FROZEN
+//      capture-exact. The operand exists; that is not an un-parking, it is the
+//      question dissolving. ITS LAW 2 IS STILL OPEN, but section 5's OWN stated
+//      reason for parking it -- that it "is entangled with the texture lane's
+//      I49 and should not be ruled in isolation" -- HAS EXPIRED, because I49
+//      was closed and DELETED by the texmat2 packet. A parked item whose
+//      parking rationale no longer exists should be re-read before it is
+//      quoted again. This lane did not need it either way: carriage blocks
+//      before colour does.
+//
+//      AND `zhao_terrain_normalmap` WAS AGAIN NOT COMPOSED, deliberately, on
+//      evidence read rather than inherited. It is instantiated NOWHERE in
+//      `fpga/rtl` (one grep hit, its own `module` line) and `f_detail_i`
+//      appears on FOUR LINES, ALL IN ITS OWN FILE. The near-miss that must not
+//      be mistaken for a producer: `zhao_terrain_normalloader` is real and
+//      built, but it drives the `tw_*` TILE UPLOAD port -- the texel data --
+//      which is a different port from the per-fragment `f_detail_i` enable, and
+//      it is uninstantiated too. `design/prod_manifest.yml:1536` states the
+//      consequence exactly: composing the PAIR "would still be a producer and a
+//      consumer with no fragment between them". THE GAP IS THE FRAGMENT
+//      STREAM, NOT THE TILE DATA, and the fragment stream requires terrain
+//      triangles to reach a raster -- which is this entry. Composing it would
+//      move the register from 6 to 5 while changing not one pixel.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
