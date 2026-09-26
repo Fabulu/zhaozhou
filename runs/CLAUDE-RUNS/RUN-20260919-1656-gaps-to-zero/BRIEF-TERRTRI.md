@@ -124,6 +124,33 @@ compose door never opens and `compcache_front` serves poison `32'h5BADF00D`.
 Whether that changes what the smoke can reach is a measurement, not an
 assumption.
 
+## A SECOND JOB, AND IT IS TERRAIN'S: three smoke controls are red, and one proves nothing
+
+**Found by ATTRSETUP on 2026-09-26, measured rather than assumed.** Three of the
+four console-core smoke controls — `-Mutant`, `-BadVertex` and `-NoEchoArm` —
+**all fail in TERRAIN** at base `4d9afb25`. That packet refused to call them
+inherited: it reverted its own block in its own worktree and re-ran, and **all
+three reproduce byte-identically, including the simulation timestamp to the
+picosecond.** Its logs are committed under its lane's
+`reports/synthesis/attrsetup/`.
+
+**`-Mutant` is additionally a LIVE INSTRUMENT DEFECT.** It dies on the
+TERRAINAUX terrain assertion **before its inverted-polarity verdict can be
+read** — so that control **currently proves nothing in either direction**. A
+mutant that cannot report is not a passing control and not a failing one; it is
+an **absent** one, and this campaign has quoted it as evidence.
+
+**`gate_sweep` does not run the smoke controls**, which is exactly why a green
+sweep has been sitting on top of these. That is the same shape as "the gates do
+not build", one layer further in.
+
+**Fix them or explain them, and say which.** The three arrived with the terrain
+merges and this is the terrain packet. If a control is red because the RTL is
+wrong, that is a defect and it outranks I13. If it is red because the control
+itself is stale against a repaired fixture, fix the control and **prove it fires
+on the fault it exists to catch** before quoting its silence. Do not "fix" one
+by weakening what it asserts.
+
 ## Evidence bar
 
 * **A pixel that changes**, through real production modules wired port-for-port
