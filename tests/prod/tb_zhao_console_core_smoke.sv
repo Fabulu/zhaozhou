@@ -2963,7 +2963,30 @@ module tb_zhao_console_core_smoke
   localparam int unsigned SPT_WORDS_C   = 8 + (4 * SPT_ENTRIES_C);  // 64 B + 32 B each
   localparam int unsigned SPT_ARENA_W   = UPL_WORDS_C + MSH_WORDS_C;
   localparam logic [31:0] SPT_MAGIC_C   = 32'h5450_535A;    // 'ZSPT' little-endian
-  localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C + SPT_WORDS_C;
+  // ---- the PALETTE page (I13CLOSE, 2026-09-26) ----------------------------
+  // A FOURTH PublishResource, and the one that closes the palette hole this
+  // bench's terrain-material note used to measure. `spec/cartridge.md` says
+  // palette data is "a SUBTYPE of TEXTURE_PAGE, not a separate family ...
+  // rather than growing an unrelated loader path", so its kind is 10 and no
+  // registry row is allocated for it. Its body is 256 little-endian RGB565
+  // entries -- 512 bytes, a multiple of 64 as every PublishResource requires.
+  //
+  // `PAL_DST_C` IS THE PALETTE'S NAME. `MaterialRecord.palette_base` is a `u32`
+  // the oracle reads the palette FROM, so the address MEM.UPLOAD lands it at is
+  // what record 2 names, and `u_texture_palette_load` keys its four-slot tag on
+  // exactly that value. Nothing here invents an identifier.
+  localparam logic [23:0] PAL_INDEX_C   = 24'h00_7A1E;
+  localparam logic [ 7:0] PAL_KIND_C    = 8'd10;            // TEXTURE_PAGE
+  localparam logic [ 7:0] PAL_SLOT_C    = 8'd0;             // arena slot 0 is free
+  localparam logic [15:0] PAL_GEN_C     = 16'h0031;
+  // +0xC00 in the writable region: the MATERIAL_SET holds +0x000..+0x100, the
+  // MESH_STREAM +0x400..+0x6C0 and the SPECIES_TABLE +0x800..+0x8C0, so this is
+  // the first clear 512 bytes and it ends exactly at the region's end.
+  localparam logic [31:0] PAL_DST_C     = UPL_REGION_C + 32'h0000_0C00;
+  localparam int unsigned PAL_WORDS_C   = 64;               // 256 x RGB565 = 512 B
+  localparam int unsigned PAL_ARENA_W   = UPL_WORDS_C + MSH_WORDS_C + SPT_WORDS_C;
+  localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C + SPT_WORDS_C
+                                        + PAL_WORDS_C;
   // The Loom node the draw's transform handle names, and the draw's own
   // identity. `SMK_DRAW_SRC_C` becomes the meshlet's src_id, which is what the
   // vertex records are attributed to downstream -- it was the job port's
@@ -2979,6 +3002,7 @@ module tb_zhao_console_core_smoke
   logic [255:0] upl_rec2;         // record 2: TERRAIN's material (TERRAINMAT)
   logic [255:0] upl_rec1;         // record 1 -- the one the MESHLET names
   logic [31:0]  upl_crc_material_q, upl_crc_mesh_q, upl_crc_species_q;
+  logic [31:0]  upl_crc_palette_q;   // the fourth page (I13CLOSE, 2026-09-26)
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
   int unsigned pkt_len_q;
   logic        pkt_armed_q;       // set by the initial block once the packet is built
@@ -3225,12 +3249,32 @@ module tb_zhao_console_core_smoke
   // stimulus at an edge, which is what a bench is for, and NOT a producer
   // invented inside the console.
   //
-  // THE ROW IS A DIRECT FORMAT ON PURPOSE. `binding_row_legal` REQUIRES a
+  // ROW 3 IS A DIRECT FORMAT ON PURPOSE. `binding_row_legal` REQUIRES a
   // direct row's {palette_generation, palette_slot} to be zero, so the two
-  // witnesses the console publishes are the page's own LAW rather than a value
-  // anybody chose -- and no palette has to be resident for a texel to arrive.
-  // A CLUT row would need a palette identity that nothing in this console
-  // produces (FINDINGS-texmat2, owner decision D2).
+  // witnesses the console publishes for it are the page's own LAW rather than
+  // a value anybody chose -- and no palette has to be resident for the MESH's
+  // texel to arrive.
+  //
+  // ROW 4 IS NEW, 2026-09-26 (I13CLOSE), AND IT IS THE OPPOSITE CASE. The
+  // sentence that used to end this paragraph read "a CLUT row would need a
+  // palette identity that nothing in this console produces (FINDINGS-texmat2,
+  // owner decision D2)". THAT IS NO LONGER TRUE: `u_texture_palette_load` is
+  // composed in the core, it reads a palette out of the asset pool where a
+  // PublishResource put it, and it answers the material window with the {slot,
+  // generation} of the slot it made resident. Row 4 is terrain's, and it is the
+  // object `spec/terrain_rules.md` 6.2 describes -- CLUT8, unfiltered, mirror
+  // on both axes, 64x64, no mip chain, declared a TILESET by `mode[21]` -- so
+  // terrain's fragments go through `zhao_texture_mosaic_v2`'s pick and the
+  // binding resolver's `tile * 4096` displacement.
+  //
+  // ITS PALETTE PAIR IS {slot 0, generation 0} AND THAT IS THE POINT. The
+  // loader allocates from a per-slot counter that resets to zero, so the first
+  // palette this console ever loads is exactly that pair -- and generation zero
+  // was, until today, the one generation `zhao_texture_palette_res_v2` could
+  // not be handed in a single pass, because its BEGIN guard differenced the
+  // generation alone against a register that RESETS to zero. A row declaring
+  // {0, 0} used to be bindable only against a palette that was never loaded, so
+  // every CLUT sample came back SOURCE_REFUSED magenta.
   //
   // THE SEAL IS NOT HAND-ROLLED. 32'hB37C_0807 is
   // `zhao_binding_seal::page_crc(1, {selector 3 = this row}, ...)` from
@@ -3244,13 +3288,35 @@ module tb_zhao_console_core_smoke
   // fmt 1 (RGB565), filter 0, wrap 0/0, log2w 4, log2h 4, max_level 0, mip 0
   localparam logic [31:0] TEX_MODE_C     = 32'h0000_4401;
   localparam logic [74:0] TEX_ROW_C      = {11'h400, TEX_MODE_C, TEX_BASE_C};
-  localparam logic [31:0] TEX_SEAL_C     = 32'hB37C_0807;
+  // TERRAIN's TILESET row (I13CLOSE, 2026-09-26). fmt 0 (CLUT8), filter 0,
+  // wrap 2/2 (MIRROR, which is what makes the TMU's fold equal
+  // `zref::terrain::mirror_texel`), log2w 6, log2h 6, max_level 0, mip 0, and
+  // bit 21 declaring it a tileset. Every one of those is CHECKED by
+  // `tileset_shape_ok`; a row that declares a mosaic and is not one is refused
+  // at CFG_WRITE with CFG_BAD_ROW rather than sampled with the wrong fold.
+  localparam logic [ 7:0] TERR_SELECTOR_C = 8'd4;
+  // 1 MiB clear of the mesh row at 0x2000 and of MEM.UPLOAD's writable region
+  // at 0x07FF_F000. A tileset's live extent is the WHOLE object -- the pick can
+  // name any of its 256 tiles -- so `binding_row_legal` bounds `base + 1 MiB`.
+  localparam logic [31:0] TERR_TS_BASE_C  = 32'h0010_0000;
+  localparam logic [31:0] TERR_TS_MODE_C  = 32'h0020_66A0;
+  // {valid, palette_generation[7:0], palette_slot[1:0]} = {1, 0, 0}: the pair
+  // TEXTURE.PALETTELOAD produces for the first palette, and the one the
+  // fragment's witness must equal.
+  localparam logic [74:0] TERR_TS_ROW_C   = {11'h400, TERR_TS_MODE_C, TERR_TS_BASE_C};
+  // RESEALED 2026-09-26 (I13CLOSE) for the two-row page, by the SAME model:
+  // `zhao_binding_seal::page_crc(1, {3: the mesh row, 4: the tileset row})`.
+  // The generator was run with a CONTROL in it -- the one-row page, which
+  // reproduced 32'hB37C_0807 exactly -- so this number comes from the fold the
+  // bench was already sealed with and not from a second implementation of it.
+  localparam logic [31:0] TEX_SEAL_C     = 32'hFAC2_FF23;
   localparam logic [15:0] TEX_TEXEL_C    = 16'h07E0;   // saturated green, RGB565
 
   localparam int unsigned TBS_BEGIN  = 0;
   localparam int unsigned TBS_ROW    = 1;
-  localparam int unsigned TBS_END    = 2;
-  localparam int unsigned TBS_ACTIVE = 3;
+  localparam int unsigned TBS_ROW2   = 2;   // terrain's TILESET row (I13CLOSE)
+  localparam int unsigned TBS_END    = 3;
+  localparam int unsigned TBS_ACTIVE = 4;
   int unsigned  tbind_st_q;
   logic         tbind_sent_q;
   logic [3:0]   tbind_status_q;
@@ -3298,6 +3364,12 @@ module tb_zhao_console_core_smoke
             cfg_selector_i <= TEX_SELECTOR_C; cfg_row_i <= TEX_ROW_C;
             cfg_crc32_i <= 32'd0;
           end
+          TBS_ROW2: begin
+            cfg_valid_i <= 1'b1; cfg_op_i <= 2'd1;
+            cfg_page_generation_i <= TEX_PAGE_GEN_C;
+            cfg_selector_i <= TERR_SELECTOR_C; cfg_row_i <= TERR_TS_ROW_C;
+            cfg_crc32_i <= 32'd0;
+          end
           TBS_END: begin
             cfg_valid_i <= 1'b1; cfg_op_i <= 2'd2;
             cfg_page_generation_i <= TEX_PAGE_GEN_C;
@@ -3317,15 +3389,48 @@ module tb_zhao_console_core_smoke
   // Every texel is the same green, because what is being proven here is that a
   // texel ARRIVES -- the value it carries is the island's own directed tests'
   // business and re-checking it here would be a second opinion.
+  // AND IT READS THE ADDRESS NOW (I13CLOSE, 2026-09-26). The paragraph above
+  // is still true about the DATA -- every texel is the same green and the
+  // value is the island's own tests' business -- but the ADDRESS is a
+  // different question and it is this bench's, because it is where terrain's
+  // MOSAIC PICK becomes visible in the composed console.
+  //
+  // `zhao_texture_binding_resolver_v2` displaces a TILESET row's base by
+  // `tile * 4096`, the tile coming from `zhao_texture_mosaic_v2` through
+  // `zhao_texture_mosaic_hold`'s generation seal. So a terrain fill lands at
+  // `TERR_TS_BASE_C + tile*4096 + <the mirror-folded texel's line>`, and the
+  // tile index is recoverable by subtraction.
+  //
+  // THE ANTI-VACUITY STATEMENT IS `tile_max != 0`, and it is the one that
+  // matters: a mosaic reader that was not wired -- which is what this console
+  // had until TERRAINTEX built `zhao_texture_mosaic_hold`, and what an
+  // ungated join would produce -- displaces by ZERO, so every fill would land
+  // in tile 0 and this counter would stay there. TERRAINTEX's own island bench
+  // makes the same argument at its own seam.
   logic       tfill_busy_q;
   logic [3:0] tfill_beat_q;
   logic [31:0] tfill_lines_q, tfill_beats_q;
+  logic [31:0] tsfill_lines_q, meshfill_lines_q, strayfill_lines_q;
+  logic [31:0] tsfill_tile_max_q, tsfill_tile_or_q;
+  logic [31:0] tsfill_first_addr_q;
+  wire  [31:0] tfill_ts_off_c   = fill_req_addr_o - TERR_TS_BASE_C;
+  wire         tfill_in_ts_c    = (fill_req_addr_o >= TERR_TS_BASE_C) &&
+                                  (tfill_ts_off_c < 32'h0010_0000);
+  wire  [31:0] tfill_tile_c     = tfill_ts_off_c >> 12;
+  wire         tfill_in_mesh_c  = (fill_req_addr_o >= TEX_BASE_C) &&
+                                  ((fill_req_addr_o - TEX_BASE_C) < 32'd512);
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       tfill_busy_q      <= 1'b0;
       tfill_beat_q      <= 4'd0;
       tfill_lines_q     <= 32'd0;
       tfill_beats_q     <= 32'd0;
+      tsfill_lines_q    <= 32'd0;
+      meshfill_lines_q  <= 32'd0;
+      strayfill_lines_q <= 32'd0;
+      tsfill_tile_max_q <= 32'd0;
+      tsfill_tile_or_q  <= 32'd0;
+      tsfill_first_addr_q <= 32'd0;
       fill_req_ready_i  <= 1'b1;
       fill_data_valid_i <= 1'b0;
       fill_data_i       <= 16'd0;
@@ -3338,6 +3443,16 @@ module tb_zhao_console_core_smoke
           tfill_beat_q     <= 4'd0;
           tfill_lines_q    <= tfill_lines_q + 32'd1;
           fill_req_ready_i <= 1'b0;
+          if (tfill_in_ts_c) begin
+            if (tsfill_lines_q == 32'd0) tsfill_first_addr_q <= fill_req_addr_o;
+            tsfill_lines_q   <= tsfill_lines_q + 32'd1;
+            tsfill_tile_or_q <= tsfill_tile_or_q | tfill_tile_c;
+            if (tfill_tile_c > tsfill_tile_max_q) tsfill_tile_max_q <= tfill_tile_c;
+          end else if (tfill_in_mesh_c) begin
+            meshfill_lines_q <= meshfill_lines_q + 32'd1;
+          end else begin
+            strayfill_lines_q <= strayfill_lines_q + 32'd1;
+          end
         end
       end else begin
         fill_data_valid_i <= 1'b1;
@@ -4259,10 +4374,13 @@ module tb_zhao_console_core_smoke
   // the core (same list as `PC_CORE` above; keep the two in step).
 `ifdef ZHAO_MUT_SLOT_OVERFLOW
   `define PC_SHELL dut.u_dut.u_shell
+  `define PC_PALETTE dut.u_dut.u_shell.u_render_bin.u_tile.u_texture_stage.u_texture_v3.u_palette
 `elsif ZHAO_MUT_UNTEX_DECL
   `define PC_SHELL dut.u_dut.u_shell
+  `define PC_PALETTE dut.u_dut.u_shell.u_render_bin.u_tile.u_texture_stage.u_texture_v3.u_palette
 `else
   `define PC_SHELL dut.u_shell
+  `define PC_PALETTE dut.u_shell.u_render_bin.u_tile.u_texture_stage.u_texture_v3.u_palette
 `endif
   int unsigned pc_ctrl_busy_q, pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q;
   int unsigned pc_share_fill_q, pc_fbw_stall_q, pc_src_starve_q, pc_src_block_q;
@@ -5225,30 +5343,37 @@ module tb_zhao_console_core_smoke
     // Record 2 makes the resolve terrain's: its own switch, its own
     // resolve, its own record, checked bit for bit below.
     //
-    // ITS SHAPE IS RECORD 1'S ON PURPOSE, minus the weight. It names the
-    // SAME binding selector, because selector 3 is the only row this
-    // fixture programs, and it carries `tmu_mode 1` (NEAREST) so its
-    // class witness matches that row's DIRECT RGB565 class -- the
-    // equality `zhao_texture_binding_resolver_v2`'s `read_witness_bad_c`
-    // enforces between the fragment's declared {class, palette_slot,
-    // palette_generation} and the ROW's. `recipe_weight` is the one
-    // field made different, and it is the discriminator: the flat
-    // request carries it, so a resolve that returned record 1 for
-    // terrain's id cannot look like one that returned record 2.
+    // IT IS A TILESET MATERIAL, 2026-09-26 (I13CLOSE), AND IT WAS NOT
+    // UNTIL TODAY. The paragraph that stood here said "it is NOT a
+    // TILESET material, so the MOSAIC path TERRAINTEX built is still not
+    // exercised by this console", and pointed at a PALETTE HOLE: a
+    // TILESET row is CLUT8 by law, a CLUT sample needs a palette
+    // identity, and nothing in this console produced one. There is a
+    // producer now (`u_texture_palette_load`), so record 2 names
+    // TERRAIN's own row -- selector 4, the CLUT8 tileset -- and carries
+    // `tmu_mode 0` so its CLASS witness is CLUT, which is the equality
+    // `zhao_texture_binding_resolver_v2`'s `read_witness_bad_c` enforces
+    // between the fragment's declared {class, palette_slot,
+    // palette_generation} and the ROW's.
     //
-    // WHAT IT IS NOT: it is NOT a TILESET material, so the MOSAIC path
-    // TERRAINTEX built is still not exercised by this console. That is
-    // not a carriage gap -- see THE PALETTE HOLE in this bench's
-    // terrain-material check below, which measures why.
+    // `palette_base` NAMES THE PAGE THE FOURTH PublishResource UPLOADS.
+    // That is the ratified field and the ratified meaning -- the oracle
+    // reads the palette from this address -- so the identity the window
+    // publishes is derived from the record rather than chosen by a
+    // composer.
+    //
+    // `recipe_weight` STAYS THE DISCRIMINATOR: the flat request carries
+    // it, so a resolve that returned record 1 for terrain's id cannot
+    // look like one that returned record 2.
     begin : build_material2
       zhao_abi_pkg::zhao_material_record_t mr2;
       mr2 = '0;
       mr2.control                    = 8'h01;         // count 1, recipe 0 (PASSTHRU)
       mr2.recipe_weight              = 8'hA7;         // the discriminator: != 0x5A, != 0x80
-      mr2.sample0.binding_slot       = 16'(TEX_SELECTOR_C);
+      mr2.sample0.binding_slot       = 16'(TERR_SELECTOR_C);
       mr2.sample0.binding_generation = TEX_PAGE_GEN_C;
-      mr2.sample0.modes              = 8'h01;         // tmu_mode 1 = NEAREST, wrap 0
-      mr2.palette_base               = 32'h0000_0000; // direct format: no CLUT
+      mr2.sample0.modes              = 8'h00;         // tmu_mode 0 = CLUT, wrap 0
+      mr2.palette_base               = PAL_DST_C;     // the page below, by ADDRESS
       mr2.raster_state               = 32'h0000_0000;
       upl_rec2 = zhao_abi_pkg::zhao_pack_material_record(mr2);
       for (int unsigned w = 0; w < 4; w++) upl_mem[8 + w] = upl_rec2[64*w +: 64];
@@ -5394,6 +5519,26 @@ module tb_zhao_console_core_smoke
       fold_c_i = fold_c_o;
     end
     upl_crc_species_q = ~fold_c_i;
+    // ---- THE PALETTE PAGE (I13CLOSE, 2026-09-26) --------------------------
+    // 256 little-endian RGB565 entries, four to a 64-bit word. The entry is a
+    // FUNCTION OF ITS INDEX and not a constant, so a palette that was loaded
+    // at the wrong offset, or one slot's bytes landing in another's, produces a
+    // different colour rather than the same one. It is deliberately NOT a
+    // gradient in one channel only: `0x0841 * i` walks all three channels
+    // together (0x0841 is one step in red, green and blue at once), and the
+    // `^ 16'h4210` keeps entry 0 off pure black so a palette that never loaded
+    // cannot be mistaken for one that did by reading index 0.
+    for (int unsigned e = 0; e < 256; e++) begin
+      automatic logic [15:0] entry = (16'h0841 * 16'(e)) ^ 16'h4210;
+      upl_mem[PAL_ARENA_W + (e / 4)][16*(e % 4) +: 16] = entry;
+    end
+    fold_c_i = 32'hFFFF_FFFF;
+    for (int unsigned w = 0; w < PAL_WORDS_C; w++) begin
+      fold_d_i = upl_mem[PAL_ARENA_W + w];
+      #1ns;
+      fold_c_i = fold_c_o;
+    end
+    upl_crc_palette_q = ~fold_c_i;
     begin : build_packet
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
       zhao_abi_pkg::zhao_rec_set_presentation_contract_t pc;
@@ -5401,12 +5546,13 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr2;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr3;
+      zhao_abi_pkg::zhao_rec_publish_resource_t pr4;
       zhao_abi_pkg::zhao_rec_draw_form_t        df;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
       zhao_abi_pkg::zhao_rec_set_population_t   spop;
       logic [255:0] bfv, efv;
-      logic [383:0] prv, pr2v, pr3v, pcv, sev, spopv;
+      logic [383:0] prv, pr2v, pr3v, pr4v, pcv, sev, spopv;
       logic [255:0] dfv;
       logic [8*zhao_abi_pkg::ZHAO_SET_VIEW_BYTES-1:0] svv;   // R63 grew SetView 96 -> 112; take the width from the package
       logic [511:0] matv;
@@ -5520,6 +5666,25 @@ module tb_zhao_console_core_smoke
       pr3.epoch          = UPL_EPOCH_C;
       pr3.dst_slot       = SPT_SLOT_C;
       pr3.kind           = SPT_KIND_C;
+      // THE FOURTH PUBLICATION (I13CLOSE): TERRAIN's PALETTE. Kind 10, because
+      // `spec/cartridge.md` makes palette data a SUBTYPE of TEXTURE_PAGE rather
+      // than a family of its own. Nothing in the console watches for this kind:
+      // MEM.UPLOAD lands it in VRAM at `vram_dst` like any other page, and
+      // `u_texture_palette_load` finds it because RECORD 2's `palette_base`
+      // names that address. The page is DATA, and the material record is the
+      // only thing that says what it is for.
+      pr4.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE; pr4.h_record_bytes = 16'd48;
+      pr4.h_source_id    = 32'd91;
+      pr4.resource       = {PAL_INDEX_C, PAL_GEN_C[7:0]};
+      pr4.hps_addr_lo    = UPL_ARENA_C + 32'(PAL_ARENA_W * 8);
+      pr4.hps_addr_hi    = 32'd0;
+      pr4.vram_dst       = PAL_DST_C;
+      pr4.length         = 32'(PAL_WORDS_C * 8);
+      pr4.crc32c         = upl_crc_palette_q;
+      pr4.new_generation = PAL_GEN_C;
+      pr4.epoch          = UPL_EPOCH_C;
+      pr4.dst_slot       = PAL_SLOT_C;
+      pr4.kind           = PAL_KIND_C;
       // THE DRAW ITSELF (`DrawForm 0x0300`). `form` names the page above,
       // `transform` names the Loom node this bench streams, and `flags` is
       // ZERO -- cull mode NONE, the double-sided law every capture was
@@ -5632,6 +5797,7 @@ module tb_zhao_console_core_smoke
       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
       pr3v = zhao_abi_pkg::zhao_pack_publish_resource(pr3);
+      pr4v = zhao_abi_pkg::zhao_pack_publish_resource(pr4);
       dfv  = zhao_abi_pkg::zhao_pack_draw_form(df);
       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
       spopv = zhao_abi_pkg::zhao_pack_set_population(spop);
@@ -5670,6 +5836,13 @@ module tb_zhao_console_core_smoke
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr2v[8*k +: 8];
       ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr3v[8*k +: 8];
+      ro = ro + 48;  nrec = nrec + 1;
+      // The PALETTE page (I13CLOSE). It must land BEFORE the DrawForm and
+      // before SetEnvironment names terrain's material, for the ordinary
+      // reason every publication in this packet does: a resolve that reaches
+      // MATERIAL.RESOLVE before the bytes are in VRAM would read whatever is
+      // there. CMD.EXEC drains its pending-upload queue in record order.
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr4v[8*k +: 8];
       ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = sev[8*k +: 8];
       ro = ro + 48;  nrec = nrec + 1;
@@ -8868,14 +9041,16 @@ module tb_zhao_console_core_smoke
              upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
              sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
              upl_pub_tag_q, upl_pub_index_q, upl_pub_base_q, upl_pub_extent_q);
-    // THREE uploads since 2026-09-19 evening (owner ruling R42): the
-    // MATERIAL_SET, the MESH_STREAM page the DrawForm names, and the
-    // SPECIES_TABLE page PART.TABLE is loaded from.
-    if (upl_done_seen_q != 3 || upl_status_seen_q != 8'd0)
-      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with last status %0d, expected THREE TIMES with 0 (kUploadOk) -- refused=%032x",
+    // FOUR uploads since 2026-09-26 (I13CLOSE): the MATERIAL_SET, the
+    // MESH_STREAM page the DrawForm names, the SPECIES_TABLE page PART.TABLE
+    // is loaded from, and TERRAIN's PALETTE page -- the bytes
+    // `u_texture_palette_load` reads back out of the asset pool and programs
+    // into the island's palette RAM. It was THREE from 2026-09-19 (R42).
+    if (upl_done_seen_q != 4 || upl_status_seen_q != 8'd0)
+      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with last status %0d, expected FOUR TIMES with 0 (kUploadOk) -- refused=%032x",
              upl_done_seen_q, upl_status_seen_q, upl_refused_o);
-    if (upl_pub_seen_q != 1 || msh_pub_seen_q != 1 || upl_published_o != 16'd3)
-      $fatal(1, "SMOKE: MEM.UPLOAD published %0d MATERIAL_SET and %0d MESH_STREAM row(s) (census %0d), expected one of each and three rows in all",
+    if (upl_pub_seen_q != 1 || msh_pub_seen_q != 1 || upl_published_o != 16'd4)
+      $fatal(1, "SMOKE: MEM.UPLOAD published %0d MATERIAL_SET and %0d MESH_STREAM row(s) (census %0d), expected one of each and four rows in all",
              upl_pub_seen_q, msh_pub_seen_q, upl_published_o);
     if (sh_bursts_q != (UPL_ALL_WORDS / 8))
       $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for %0d bytes of upload, expected %0d",
@@ -9023,8 +9198,10 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd13 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd3)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 13, 1, 3)",
+    // 14 and 4 since 2026-09-26 (I13CLOSE): the packet gained a FOURTH
+    // PublishResource, terrain's PALETTE page.
+    if (cmd_commands_o != 32'd14 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd4)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 14, 1, 4)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     // ---- R41 / entry I7: THE POPULATION DESCRIPTOR CAME FROM THE PACKET ----
     // Every one of these was a BOARD PIN before this ruling. The chain is
@@ -9187,6 +9364,44 @@ module tb_zhao_console_core_smoke
     if (pal_ld_denied_o != 32'd0 || pal_ld_base_refused_o != 32'd0)
       $fatal(1, "SMOKE: TEXTURE.PALETTELOAD refused %0d base(s) and was denied %0d fetch(es) -- the fixture names a palette this console cannot read",
              pal_ld_base_refused_o, pal_ld_denied_o);
+    // THE PALETTE WAS RESIDENT WHEN THE FRAGMENTS ASKED, read through the
+    // hierarchy rather than through six new ports. This is the discriminator
+    // the counters above CANNOT make: a palette that never loaded answers
+    // every lookup with SOURCE_REFUSED magenta while `palette_lookups` moves
+    // exactly the same amount. `cold` is "the slot holds nothing" and `stale`
+    // is "it holds a different generation", and BOTH were the only outcomes
+    // available to this console until today -- so these two zeros beside
+    // `palette_lookups` are the statement that a terrain fragment read a
+    // colour out of a palette the console itself loaded.
+    $display("SMOKE: palres    lookups=%0d stale=%0d cold=%0d loads_ok=%0d err[same_gen/incomplete/crc/write]=[%0d %0d %0d %0d]",
+             `PC_PALETTE.lookups_o, `PC_PALETTE.stale_o, `PC_PALETTE.cold_o,
+             `PC_PALETTE.loads_ok_o, `PC_PALETTE.err_same_gen_o,
+             `PC_PALETTE.err_incomplete_o, `PC_PALETTE.err_crc_o,
+             `PC_PALETTE.err_write_outside_o);
+    if (`PC_PALETTE.stale_o != 32'd0 || `PC_PALETTE.cold_o != 32'd0)
+      $fatal(1, "SMOKE: %0d stale and %0d cold palette lookup(s) -- a CLUT fragment read SOURCE_REFUSED magenta instead of a colour",
+             `PC_PALETTE.stale_o, `PC_PALETTE.cold_o);
+    if (`PC_PALETTE.loads_ok_o != pal_ld_loads_o)
+      $fatal(1, "SMOKE: TEXTURE.PALETTELOAD issued %0d load(s) and the RESOLVER accepted %0d -- the producer and the store disagree about residency",
+             pal_ld_loads_o, `PC_PALETTE.loads_ok_o);
+    if (`PC_PALETTE.err_same_gen_o != 32'd0 || `PC_PALETTE.err_incomplete_o != 32'd0 ||
+        `PC_PALETTE.err_crc_o != 32'd0 || `PC_PALETTE.err_write_outside_o != 32'd0)
+      $fatal(1, "SMOKE: the palette store refused a load (same_gen %0d, incomplete %0d, crc %0d, write_outside %0d)",
+             `PC_PALETTE.err_same_gen_o, `PC_PALETTE.err_incomplete_o,
+             `PC_PALETTE.err_crc_o, `PC_PALETTE.err_write_outside_o);
+    // ---- THE MOSAIC, read off the FILL SOCKET's addresses -----------------
+    $display("SMOKE: mosaic   fills[tileset/mesh/stray]=[%0d %0d %0d] tile[max/or]=[%0d %0d] first_addr=%08x base=%08x",
+             tsfill_lines_q, meshfill_lines_q, strayfill_lines_q,
+             tsfill_tile_max_q, tsfill_tile_or_q, tsfill_first_addr_q, TERR_TS_BASE_C);
+    if (strayfill_lines_q != 32'd0)
+      $fatal(1, "SMOKE: %0d cache fill(s) landed outside BOTH bound rows -- a binding base or a displacement is wrong",
+             strayfill_lines_q);
+    if (tsfill_lines_q == 32'd0)
+      $fatal(1, "SMOKE: no cache fill landed inside the TILESET row -- terrain sampled somebody else's texture");
+    // THE ANTI-VACUITY GATE. An unwired mosaic reader displaces by ZERO, so
+    // every tileset fill would land in tile 0 and this would stay at 0.
+    if (tsfill_tile_max_q == 32'd0)
+      $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
     if (mat_win_err_unpublished_o != 32'd0 || mat_win_err_underflow_o != 32'd0)
       $fatal(1, "SMOKE: the material window's structural guards fired (unpublished %0d, underflow %0d) -- a triangle reached the door under a material nobody resolved",
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
