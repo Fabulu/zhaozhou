@@ -5745,3 +5745,54 @@ Its thirteen are already understood and are NOT a defect: `zhao_part_record` is
 a bidirectional codec and this instance uses it decode-only, so every encode
 input is zeroed, `rec_o` is empty, and the instantiation carries a
 `PINCONNECTEMPTY` pragma. It wants a comment, not a change.
+
+## 2026-09-27 - SIX `reference_model:` KEYS NAME NOTHING, AND THAT SILENTLY DISABLES THE DUPLICATE-ARITHMETIC DETECTOR
+
+**Filed for AFTER closure.** The register is at 2 (`I34`, `I55`), both entries
+have a packet, and the agent cap is full. This is not gap work and must not
+displace it. It is filed rather than fixed so it is not rediscovered.
+
+`tools/budget/uncashed_cheques.py` check 5, run bare today, RC 0:
+
+```
+** zref::MeasureHistogram    no reference/ symbol   declared by MEASURE.HISTOGRAM
+** zref::ParticleCollide     no reference/ symbol   declared by PART.COLLIDE
+** zref::ParticleSpawn       no reference/ symbol   declared by PART.SPAWN
+** zref::ParticleState       no reference/ symbol   declared by PART.STATE
+** zref::ParticleUpdate      no reference/ symbol   declared by PART.UPDATE
+** zref::PostComposite       no reference/ symbol   declared by POST.COMPOSITE
+```
+
+**6 of 97 declared reference models do not resolve**, and the tool states the
+consequence itself: those rows are **exempt from check 3 silently**. Check 3 is
+the one instrument this tree has against *a second implementation of ratified
+arithmetic* -- the failure that produced two projector cores. It works by
+finding two blocks that declare the SAME `reference_model`. **A name that
+resolves to nothing can never collide with another block's, so a wrong string
+buys an exemption from the detector.** The defect makes the report SHORTER,
+which is the broken-instrument law living in the ledger rather than in a
+counter.
+
+**VERIFIED, not taken from the tool.** All six were grepped across `reference/`
+and **none appears anywhere, under any namespace** -- so this is not a namespace
+or aliasing artefact. Real neighbouring symbols do exist (`particle_pack`,
+`particle_unpack`, `particle_angle`, `particle_radius`, `composite`,
+`glow_composite`, `composite_trail`, `histogram`), which is precisely what makes
+the trap available: **a plausible-looking CamelCase name can be invented for
+each of the six in about a minute, and that is the one repair that is
+forbidden.**
+
+**The repair is one of two things and never a third**, in the tool's own words:
+name the law that EXISTS, or **REMOVE the key** and say in the row why the block
+has no reference model. Inventing a plausible symbol is the same defect wearing
+a fix's clothes -- it would restore check 3's coverage on paper while pointing it
+at a law nobody wrote.
+
+**So it needs a per-block read of each contract**, not a bulk edit: six blocks,
+each of which either has ratified arithmetic somewhere in `reference/` under a
+name nobody wrote down, or genuinely has none. **PART.\* is five of the six**, so
+start there and expect one answer to cover several.
+
+**Do not do this while packets are live.** `design/blocks.yml` is a shared file
+and this is a six-row edit to it.
+

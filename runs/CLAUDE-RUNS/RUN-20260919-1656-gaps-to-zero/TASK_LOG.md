@@ -3838,3 +3838,62 @@ Gates 31/31 at baseline, closure lint clean.
 I34 needs a new gathering front before its adapter; I55 needs a second setup and
 attrpack back end for a 1,749-bit record; the normalmap needs a detail port on a
 composed block with a consumer that reads it.
+
+### 2026-09-27 - REGISTER 2, BOTH GAPS HAVE A PACKET, AND AN ESCALATION BECAME A TASK
+
+**Written BEFORE either packet's results land**, per the rule about recording
+where you were before reading a measurement that will redirect you.
+
+**Register: 2. `I34` and `I55`. Nothing else.** `BUILT BUT NOT CONNECTED: 0`,
+`NOT BUILT AT ALL: 0`, `uncited: 0`, `unresolvable: 0`. 302 modules in the
+`zhao_console_core` closure, 89 production roots clean of superseded versions.
+
+**Both remaining gaps are now assigned, and the two slots are full:**
+
+* **LANESCOST -> `I34`.** GATHERFRONT built the gathering front, proved it
+  bit-identical at `FRONT_PTS=1`, hit exactly /4 (248 -> 62 clocks/group, 3.21x;
+  30 with `INIT_PROOF`, 1.63x) -- and **refused to compose it for want of one
+  number**: `FAB_LANES`->4 is four datapath replicas on a device already at
+  350% ALUTs, and that packet had no area figure. LANESCOST is producing it:
+  one leaf map at `FAB_LANES` 1 and one at 4, **shipping part, both rows
+  `rtlCleanAtHead`**, then compose or refuse WITH the number.
+* **RASTERSWAP -> `I55`.** Blocker 1 closed with ARENACOMPOSE; blocker 2 is the
+  second setup+attrpack back end fed from SDRAM, against a **1,749-bit METAW
+  shortfall** and a consumer side at **7.18x**. Briefed to land incrementally
+  and declare where it stopped.
+
+### THE ESCALATION I WAS WRONG TO LEAVE OPEN
+
+**The `u_geom_tidq` one-behind defect was sitting escalated, awaiting the
+owner.** Under a standing vacation directive **saying nothing was always going
+to be the state**, so that was not caution -- it was a refusal with no
+instrument able to see it, which is the failure the new CLAUDE.md chapter
+describes, committed by the author of the chapter, four days after writing it.
+
+**Decided and given to RASTERSWAP as STEP ZERO**, because for I55 it is not
+adjacent debt but a **prerequisite**: the swap reads descriptors **by arena
+id**, and 74 of 75 ids currently name the predecessor triangle. A swap built on
+them renders the wrong geometry **with every gate green**.
+
+**Recorded as HANDOVER 15.30.2**, with a forward pointer planted inside 15.30.1
+so a reader of the original paragraph cannot inherit it as current. That section
+had gone stale in the flattering direction: it named the owed check, the check
+was RUN, and it **FAILED** -- and worse, **the owed check as worded would have
+PASSED on the live defect**, because "the ids are not all identical" is a
+variety test on the consumer while the fault needs an equality against the
+producer (`popped[k] == pushed[k]`).
+
+### WHERE THINGS STAND
+
+Gates 31/31 at baseline, closure lint clean at 294 sources, `check_eol_worktree`
+green after the handover write-back. Branch `claude/ceiling-architecture-20260912`
+at `40b8b551`, pushed. **No console or full-device fit is running and none
+should start until the register reads 0** -- a fit that measures a circuit known
+to be wrong is wasted, and both open entries change the closure.
+
+**Still deferred, deliberately:** the counter-catalog debt (the gate is
+APPEND-ONLY against `design/counter_ids.lock`, so two live packets appending
+would fight over a list that must begin with the lock exactly -- it waits for a
+quiet tree); `zhao_terrain_clipfeed` has no directed test; `zhao_geom_arenabin`
+and `zhao_measure_sealplan` have never been through `quartus_map`; ~13 `gz-*`
+worktrees still in place.
