@@ -38,6 +38,35 @@
 // simulation owns it, deformation is canonical and replayable -- so that when
 // SW.STREAM lands (G4) this is what feeds it, rather than the terrain growing
 // its own private truth. Stated rather than left to be discovered.
+//
+// ---------------------------------------------------------------------------
+// NAVIGATION, ADDED 2026-09-26 (NAVSERVICE)
+// ---------------------------------------------------------------------------
+// reports/OWNER-DECISION-20260926-I34-NAV.md commissioned a CPU navigation
+// query and required it to be reachable by "the runtime interface that Form
+// simulation and game AI can actually call". THIS CLASS IS THAT INTERFACE on
+// the console side: it is the only `zcon::GameTruth` in the tree, so a
+// navigation service nothing here consumed would be exactly the "reference-only
+// helper" the decision refuses.
+//
+// So a wizard's step now asks `zref::nav::Service`: it CANNOT enter an
+// impassable cell, and it moves slower where the composed movement cost is
+// higher. Both halves matter -- a service whose cost nobody reads is the
+// computed-but-unread lane the same decision struck on the FPGA side, one
+// layer up.
+//
+// THE POINTER DEFAULTS TO NULL AND THAT IS A COMPATIBILITY DECISION, not a
+// dodge. With no service attached the movement code is byte-identical to the
+// pre-2026-09-26 version, so every recorded input stream and state hash stays
+// valid and `Session::replay_and_compare` keeps locating divergences. The
+// desktop host attaches one (runtime/desktop/desktop_main.cpp), so the shipping
+// runtime DOES navigate; a recording made with a service and replayed without
+// one will diverge at tick 1, which is the replay machinery reporting a real
+// difference in simulation inputs and is correct.
+//
+// Determinism is preserved because the service is a pure function of
+// (canonical terrain, accepted field commands, tick) and holds no clock of its
+// own -- the host advances it with `begin_tick` from the same tick counter.
 
 #ifndef ZGAME_WIZARDS_HPP
 #define ZGAME_WIZARDS_HPP
@@ -46,6 +75,7 @@
 #include <vector>
 
 #include "zcon/zcon.hpp"
+#include "zref/zref_nav.hpp"
 
 namespace zgame {
 
@@ -88,6 +118,18 @@ class Wizards : public zcon::GameTruth {
   static constexpr int32_t kBlastDamage = 34 * kOne;   // three hits kill
   static constexpr int32_t kCraterDepth = kOne / 2;
   static constexpr uint16_t kRespawnTicks = 90;
+
+  // --- navigation tuning, all named ---------------------------------------
+  // A cell costing `kNavRefCost` is walked at full speed; one costing twice
+  // that at half. The reference is the service's own flat_cost by default, so
+  // untouched ground is full speed and only a FIELD slows anyone down.
+  static constexpr int32_t kNavRefCost = 1 << 16;  // Q16.16 1.0
+  // The speed-up floor. A field may drive the composed cost to zero (the law
+  // floors it there), and dividing by it would be a crash in the game loop --
+  // this is the clamp, and it also caps how fast a "road" spell can make a
+  // wizard, which is a game rule and belongs in a knob rather than in a
+  // division's failure mode.
+  static constexpr int32_t kNavMinCost = kNavRefCost / 4;  // at most 4x speed
 
   void reset(uint64_t seed) override {
     seed_ = seed;
@@ -166,6 +208,33 @@ class Wizards : public zcon::GameTruth {
   }
   uint32_t tick() const { return tick_; }
 
+  // --- navigation ----------------------------------------------------------
+  /**
+   * Attach the CPU navigation service. `origin_game` is the point of the game
+   * grid that maps to world (0, 0); the conversion is the EXACT `raw << 8` of
+   * qformats §2/§9, because the game's 1/256 m grid is height16's step and the
+   * service speaks fx16. No rounding exists in the up-conversion, so a wizard
+   * standing on a game cell boundary is on a lattice cell boundary too.
+   *
+   * The service is BORROWED and must outlive this object. Passing nullptr
+   * restores the un-navigated movement exactly.
+   */
+  void set_nav(const zref::nav::Service* nav, int32_t origin_game) {
+    nav_ = nav;
+    nav_origin_ = origin_game;
+  }
+  const zref::nav::Service* nav() const { return nav_; }
+
+  /** How many steps navigation has REFUSED. Diagnostic, and it must move. */
+  uint32_t nav_refusals() const { return nav_refusals_; }
+  /** How many steps navigation has slowed or sped. Diagnostic, and it must move. */
+  uint32_t nav_scaled() const { return nav_scaled_; }
+
+  /** The world point (fx16) a game position maps to. Public so a host can
+   *  place its terrain against the same mapping instead of guessing it. */
+  zref::fx16 world_x(int32_t game_x) const { return zref::fx16{(game_x - nav_origin_) << 8}; }
+  zref::fx16 world_z(int32_t game_y) const { return zref::fx16{(game_y - nav_origin_) << 8}; }
+
  private:
   void advance_wizard(int p, const zcon::PadState& pad) {
     Wizard& w = w_[p];
@@ -181,8 +250,35 @@ class Wizards : public zcon::GameTruth {
       return;
     }
 
-    w.x += static_cast<int32_t>(pad.stick_lx) * kMoveScale;
-    w.y += static_cast<int32_t>(pad.stick_ly) * kMoveScale;
+    int32_t dx = static_cast<int32_t>(pad.stick_lx) * kMoveScale;
+    int32_t dy = static_cast<int32_t>(pad.stick_ly) * kMoveScale;
+    if (nav_ != nullptr && nav_->has_terrain()) {
+      // Scale by the COMPOSED cost where the wizard stands. Integer only:
+      // step * ref / max(cost, floor). Cost 1.0 leaves the step untouched, so
+      // untouched ground behaves exactly as it did before navigation existed.
+      const zref::nav::Result here = nav_->query(world_x(w.x), world_z(w.y));
+      if (here.passable) {
+        int32_t c = here.cost < kNavMinCost ? kNavMinCost : here.cost;
+        if (c != kNavRefCost) {
+          dx = static_cast<int32_t>(static_cast<int64_t>(dx) * kNavRefCost / c);
+          dy = static_cast<int32_t>(static_cast<int64_t>(dy) * kNavRefCost / c);
+          if (dx != 0 || dy != 0) ++nav_scaled_;
+        }
+      }
+      // Axis-separated, so a wizard walking into a wall SLIDES along it rather
+      // than stopping dead -- the diagonal is two independent tests, which is
+      // also why a corner cannot trap anyone.
+      if (!nav_step_ok(w.x + dx, w.y)) {
+        dx = 0;
+        ++nav_refusals_;
+      }
+      if (!nav_step_ok(w.x + dx, w.y + dy)) {
+        dy = 0;
+        ++nav_refusals_;
+      }
+    }
+    w.x += dx;
+    w.y += dy;
     clamp_to_ground(&w.x, &w.y);
 
     if (w.cooldown > 0) --w.cooldown;
@@ -278,6 +374,20 @@ class Wizards : public zcon::GameTruth {
     return (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
   }
 
+  /**
+   * HARD PASSABILITY, and nothing else decides it. The cost is not consulted
+   * here at all: a field that makes ground free must never open a hole, and
+   * that is `zref::fieldir::compose_nav`'s own rule rather than this class's
+   * opinion. A destination the service cannot answer for (kOut, kNoTerrain)
+   * is REFUSED -- the flattering reading would be "no data, let them through",
+   * and that walks a wizard off the island.
+   */
+  bool nav_step_ok(int32_t gx, int32_t gy) const {
+    int32_t cx = gx, cy = gy;
+    clamp_to_ground(&cx, &cy);
+    return nav_->query(world_x(cx), world_z(cy)).passable;
+  }
+
   static void clamp_to_ground(int32_t* x, int32_t* y) {
     if (*x < 0) *x = 0;
     if (*y < 0) *y = 0;
@@ -291,6 +401,16 @@ class Wizards : public zcon::GameTruth {
   std::vector<int32_t> ground_;
   uint64_t seed_ = 0;
   uint32_t tick_ = 0;
+
+  // Navigation is BORROWED state and is deliberately NOT hashed: the service is
+  // the host's, is a pure function of terrain/fields/tick, and hashing a
+  // pointer would make the hash stream depend on an allocation address. What
+  // IS hashed is where the wizards ended up, which is the thing navigation
+  // changes and the thing a replay must reproduce.
+  const zref::nav::Service* nav_ = nullptr;
+  int32_t nav_origin_ = 0;
+  uint32_t nav_refusals_ = 0;
+  uint32_t nav_scaled_ = 0;
 };
 
 }  // namespace zgame
