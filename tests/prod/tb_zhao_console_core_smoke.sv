@@ -6438,6 +6438,32 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: binrefs    sweep_beats=%0d tile_references=%0d (seen=%0d) max_tile_list_depth=%0d (seen=%0d) overflow=%0d",
              cnt_beats_seen_q, cnt_tile_refs_q, cnt_tile_refs_seen_q,
              cnt_tile_depth_q, cnt_tile_depth_seen_q, render_overflow_o);
+    // ---- TERRAINVISIBLE PROBE (2026-09-26): WHERE A FRAGMENT DIES --------
+    // EIGHT counters that `zhao_shell_top_v2.sv:1500-1506` leaves DANGLING at
+    // its `u_render_bin` instantiation -- `raster_jobs_started_o`,
+    // `raster_jobs_sunk_o`, `tilestore_references_o`, `resolved_tiles_o`,
+    // `early_z_covered_o`, `fragment_covered_o`, `blended_fragments_o`, and
+    // `early_z_rejects_o` (which lands on a wire named `rp_ez_unused`).
+    //
+    // They are the only things that separate FOUR different reasons a tile can
+    // hold binner references and still write no pixel: the job was never
+    // started, the job was SUNK, every fragment failed EARLY-Z, or no fragment
+    // was covered at all. Without them `raster pixels=2560` beside
+    // `binrefs tile_references=101` over eleven tiles is a symptom with four
+    // candidate causes and no way to choose -- which is CLAUDE.md's
+    // "identical symptoms" paragraph, and PROJCOLLAPSE's own finding about the
+    // eight projection counters nobody printed, one subsystem downstream.
+    //
+    // Read-only, through the hierarchy. Nothing is connected.
+    $display("SMOKE: rasterdiag jobs[started/sunk]=[%0d %0d] tilestore_refs=%0d resolved_tiles=%0d | earlyz[covered/rejects]=[%0d %0d] frags[covered/blended]=[%0d %0d]",
+             `PC_SHELL.u_render_bin.raster_jobs_started_o,
+             `PC_SHELL.u_render_bin.raster_jobs_sunk_o,
+             `PC_SHELL.u_render_bin.tilestore_references_o,
+             `PC_SHELL.u_render_bin.resolved_tiles_o,
+             `PC_SHELL.u_render_bin.early_z_covered_o,
+             `PC_SHELL.u_render_bin.early_z_rejects_o,
+             `PC_SHELL.u_render_bin.fragment_covered_o,
+             `PC_SHELL.u_render_bin.blended_fragments_o);
     $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
              v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o, v2_frames_admitted_o);

@@ -279,12 +279,71 @@ constexpr int kTerrViewMask = 0x1;
 // about, and it cost this packet one ten-minute run to find.
 constexpr int kBinnerTriCap = 128;
 
+
+// ---- WHICH TILES THE RASTER ACTUALLY RESOLVES ------------------------------
+//
+// A CORRECTION TO THIS FILE'S OWN MODEL, 2026-09-26 (TERRAINVISIBLE), and it
+// was invisible until terrain drew. `SGF_EXP_PIXELS` was "the union of the
+// tiles `zref::Binner` names, times 256". `zref::Binner::bin` is GEOM.BINNER's
+// oracle and it is CONSERVATIVE BY DESIGN -- its own header says a tile is
+// emitted "if the three edge functions can still be satisfied somewhere in
+// it", an affine corner test, not a coverage test. GEOM.CLIP is conservative
+// in the same direction: its box test puts a pixel CENTRE inside the
+// triangle's BOUNDING BOX, never inside the triangle.
+//
+// For the mesh the two agree, because its fourteen triangles are fat: every
+// tile the binner names also receives a covered fragment. So the formula was
+// right for eight months by coincidence of the fixture.
+//
+// TERRAIN BROKE THE COINCIDENCE AND THE MACHINE SAID SO. Measured: GEOM.BINNER
+// pushed 101 references over ELEVEN tiles (`binrefs tile_references=101
+// max_tile_list_depth=59 overflow=0` -- both exactly what this file derived),
+// GEOM.SETUP took all 75 triangles, and `raster pixels` came back 2560 = TEN
+// tiles. A tile that receives a job and no covered fragment is never dirtied
+// and never written, so it costs no pixels.
+//
+// So the pixel gate's tile set is the set of tiles that hold at least one
+// COVERED PIXEL CENTRE, and the predicate is the ratified one: `zref::
+// fill_accept` on the S 8 top-left form, which that function's own comment
+// calls "the C++ transcription of `zhao_raster_fill.sv` -- the module the
+// formal lane proves equal to `E0 + bias >= 0`". Same bytes as the binner's
+// reject rule and the rasterizer's accept rule, so they cannot disagree.
+//
+// THE CHECK THAT SAYS THIS IS A MODEL AND NOT A GUESS: run over the mesh alone
+// it names the same ten tiles the binned formula did, which is the number this
+// bench has measured on the machine since 2026-09-19.
+void covered_tiles(const zref::Setup::Out& s, int32_t min_x, int32_t max_x, int32_t min_y,
+                   int32_t max_y, std::set<std::pair<int, int>>* out, bool* outside) {
+  int64_t base[3];
+  bool rnz[3], tl[3];
+  for (int i = 0; i < 3; ++i) {
+    base[i] = zref::Binner::ep_base(s.e[i]);
+    rnz[i] = zref::Binner::rnz(s.e[i]);
+    tl[i] = s.e[i].tl;
+  }
+  for (int32_t py = min_y; py <= max_y; ++py)
+    for (int32_t px = min_x; px <= max_x; ++px) {
+      bool in = true;
+      for (int i = 0; i < 3 && in; ++i) {
+        const int64_t ep = base[i] + static_cast<int64_t>(s.e[i].kx) * px +
+                           static_cast<int64_t>(s.e[i].ky) * py;
+        in = zref::fill_accept(ep, rnz[i], tl[i]);
+      }
+      if (!in) continue;
+      const int tx = px >> zref::Binner::kTileLog2;
+      const int ty = py >> zref::Binner::kTileLog2;
+      if (tx < 0 || ty < 0 || tx >= kGridTiles || ty >= kGridTiles) *outside = true;
+      out->insert({tx, ty});
+    }
+}
+
 struct Result {
   int replayed = 0;   // view-triangles GEOM.REPLAY emits
   int clipped = 0;    // rejected by GEOM.CLIP for WHERE they are
   int culled = 0;     // rejected for WHAT they are (zero area, backface)
   int accepted = 0;   // reach GEOM.SETUP
-  std::set<std::pair<int, int>> tiles;      // the MESH's tiles
+  std::set<std::pair<int, int>> tiles;      // the MESH's BINNED tiles
+  std::set<std::pair<int, int>> cov_tiles;  // the MESH's COVERED tiles
   bool outside_grid = false;
   // The terrain arm, counted apart so the two populations never blur. The
   // pixel gate is the UNION: `render_pixels_o` counts pixels WRITTEN and the
@@ -293,7 +352,8 @@ struct Result {
   int terr_clipped = 0;
   int terr_culled = 0;
   int terr_accepted = 0;
-  std::set<std::pair<int, int>> terr_tiles;
+  std::set<std::pair<int, int>> terr_tiles;       // BINNED
+  std::set<std::pair<int, int>> terr_cov_tiles;  // COVERED -- the pixel gate
   bool terr_outside_grid = false;
 
   // GEOM.BINNER's two published counters, catalog ids 18 and 19, DERIVED here
@@ -317,9 +377,12 @@ struct Result {
     return m;
   }
 
+  // THE PIXEL GATE. `render_pixels_o` counts pixels WRITTEN and the pipeline
+  // resolves a WHOLE tile once that tile holds a covered fragment, so this is
+  // the union of the COVERED sets -- not of the binned ones.
   std::set<std::pair<int, int>> union_tiles() const {
-    std::set<std::pair<int, int>> u = tiles;
-    for (const auto& t : terr_tiles) u.insert(t);
+    std::set<std::pair<int, int>> u = cov_tiles;
+    for (const auto& t : terr_cov_tiles) u.insert(t);
     return u;
   }
 };
@@ -409,6 +472,7 @@ Result derive(bool partition) {
         ++r.tile_refs;
         ++r.ref_depth[{ref.tx, ref.ty}];
       }
+      covered_tiles(s, o.min_x, o.max_x, o.min_y, o.max_y, &r.cov_tiles, &r.outside_grid);
     }
   }
 
@@ -476,6 +540,8 @@ Result derive(bool partition) {
             ++r.tile_refs;
             ++r.ref_depth[{ref.tx, ref.ty}];
           }
+          covered_tiles(s2, o.min_x, o.max_x, o.min_y, o.max_y, &r.terr_cov_tiles,
+                        &r.terr_outside_grid);
         }
       }
     }
@@ -583,9 +649,9 @@ std::string emit(const Result& r) {
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TERR_CLIPPED  = %d;  // sub-pixel: no pixel centre inside\n", r.terr_clipped); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TERR_CULLED   = %d;  // ZERO AREA -- must stay 0\n", r.terr_culled); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TERR_ACCEPTED = %d;  // into GEOM.SETUP\n", r.terr_accepted); s += b;
-  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TERR_TILES    = %zu;  // tiles TERRAIN touches\n", r.terr_tiles.size()); s += b;
-  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_MESH_TILES    = %zu;  // tiles the MESH touches\n", r.tiles.size()); s += b;
-  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILES    = %zu;  // UNION, mesh + terrain, over both views\n", r.union_tiles().size()); s += b;
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TERR_TILES    = %zu;  // tiles TERRAIN COVERS (binned: %zu)\n", r.terr_cov_tiles.size(), r.terr_tiles.size()); s += b;
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_MESH_TILES    = %zu;  // tiles the MESH COVERS (binned: %zu)\n", r.cov_tiles.size(), r.tiles.size()); s += b;
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILES    = %zu;  // UNION of the COVERED sets -- the tiles the raster resolves\n", r.union_tiles().size()); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_PIXELS   = %zu;  // tiles x 16 x 16 (was 2560, mesh only, before terrain drew)\n", r.union_tiles().size() * 256); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILE_REFS  = %d;  // GEOM.BINNER catalog id 18, references PUSHED\n", r.tile_refs); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILE_DEPTH = %d;  // GEOM.BINNER catalog id 19, the deepest tile list\n", r.max_depth()); s += b;
@@ -623,13 +689,13 @@ std::string emit(const Result& r) {
                   bank.light0_a[2], ndl);
     s += b;
   }
-  s += "// Mesh tiles, (tx,ty):";
-  for (const auto& t : r.tiles) {
+  s += "// Mesh tiles COVERED, (tx,ty):";
+  for (const auto& t : r.cov_tiles) {
     std::snprintf(b, sizeof b, " (%d,%d)", t.first, t.second);
     s += b;
   }
-  s += "\n// Terrain tiles, (tx,ty):";
-  for (const auto& t : r.terr_tiles) {
+  s += "\n// Terrain tiles COVERED, (tx,ty):";
+  for (const auto& t : r.terr_cov_tiles) {
     std::snprintf(b, sizeof b, " (%d,%d)", t.first, t.second);
     s += b;
   }
@@ -692,9 +758,13 @@ int main(int argc, char** argv) {
                 r.terr_submitted, r.terr_clipped);
     return 1;
   }
-  if (r.terr_tiles.empty()) {
-    std::printf("smoke_geom_fixture_gen: terrain is accepted but touches no tile of the %dx%d grid\n",
-                kGridTiles, kGridTiles);
+  if (r.terr_cov_tiles.empty()) {
+    std::printf("smoke_geom_fixture_gen: terrain is accepted into %zu tile(s) and COVERS NO PIXEL CENTRE. "
+                "GEOM.CLIP's box test and the binner's corner test are both conservative -- they put a "
+                "pixel centre in the BOUNDING BOX, never inside the triangle -- so accepted triangles "
+                "can still dirty no tile and write no pixel. Give the patch more screen area: at LOD "
+                "level 0 a cell is 0.5/iz px wide, and the height TILTS are what buy vertical extent.\n",
+                r.terr_tiles.size());
     return 1;
   }
   // THE FRAME MUST FIT IN GEOM.BINNER'S TRIANGLE STORE. Every triangle that
@@ -718,11 +788,11 @@ int main(int argc, char** argv) {
   // the union by construction, and this says the union actually GREW, which is
   // the difference between "terrain draws" and "terrain is drawn somewhere the
   // mesh already was and nothing can tell".
-  if (r.union_tiles().size() <= r.tiles.size()) {
-    std::printf("smoke_geom_fixture_gen: terrain touches %zu tile(s) and the union is still the "
+  if (r.union_tiles().size() <= r.cov_tiles.size()) {
+    std::printf("smoke_geom_fixture_gen: terrain covers %zu tile(s) and the union is still the "
                 "mesh's %zu -- the terrain patch lands entirely inside tiles the mesh already "
                 "resolves, so `render_pixels_o` cannot show it\n",
-                r.terr_tiles.size(), r.tiles.size());
+                r.terr_cov_tiles.size(), r.cov_tiles.size());
     return 1;
   }
   const std::string text = emit(r);
@@ -750,10 +820,10 @@ int main(int argc, char** argv) {
       std::printf("smoke_geom_fixture_gen: %s is STALE against the reference -- regenerate it\n", path);
       return 1;
     }
-    std::printf("smoke_geom_fixture_gen: fresh (mesh replayed=%d clipped=%d accepted=%d tiles=%zu | "
-                "terrain submitted=%d clipped=%d culled=%d accepted=%d tiles=%zu | union tiles=%zu pixels=%zu | binner refs=%d (mesh %d) depth=%d of TRI_CAP %d)\n",
-                r.replayed, r.clipped, r.accepted, r.tiles.size(), r.terr_submitted, r.terr_clipped,
-                r.terr_culled, r.terr_accepted, r.terr_tiles.size(), r.union_tiles().size(),
+    std::printf("smoke_geom_fixture_gen: fresh (mesh replayed=%d clipped=%d accepted=%d covered_tiles=%zu | "
+                "terrain submitted=%d clipped=%d culled=%d accepted=%d covered_tiles=%zu | union tiles=%zu pixels=%zu | binner refs=%d (mesh %d) depth=%d of TRI_CAP %d)\n",
+                r.replayed, r.clipped, r.accepted, r.cov_tiles.size(), r.terr_submitted, r.terr_clipped,
+                r.terr_culled, r.terr_accepted, r.terr_cov_tiles.size(), r.union_tiles().size(),
                 r.union_tiles().size() * 256, r.tile_refs, r.mesh_tile_refs, r.max_depth(),
                 kBinnerTriCap);
     return 0;
@@ -765,10 +835,10 @@ int main(int argc, char** argv) {
   }
   std::fwrite(text.data(), 1, text.size(), f);
   std::fclose(f);
-  std::printf("smoke_geom_fixture_gen: wrote %s (mesh replayed=%d clipped=%d accepted=%d tiles=%zu | "
-              "terrain submitted=%d clipped=%d culled=%d accepted=%d tiles=%zu | union tiles=%zu pixels=%zu | binner refs=%d (mesh %d) depth=%d of TRI_CAP %d)\n",
-              path, r.replayed, r.clipped, r.accepted, r.tiles.size(), r.terr_submitted, r.terr_clipped,
-              r.terr_culled, r.terr_accepted, r.terr_tiles.size(), r.union_tiles().size(),
+  std::printf("smoke_geom_fixture_gen: wrote %s (mesh replayed=%d clipped=%d accepted=%d covered_tiles=%zu | "
+              "terrain submitted=%d clipped=%d culled=%d accepted=%d covered_tiles=%zu | union tiles=%zu pixels=%zu | binner refs=%d (mesh %d) depth=%d of TRI_CAP %d)\n",
+              path, r.replayed, r.clipped, r.accepted, r.cov_tiles.size(), r.terr_submitted, r.terr_clipped,
+              r.terr_culled, r.terr_accepted, r.terr_cov_tiles.size(), r.union_tiles().size(),
               r.union_tiles().size() * 256, r.tile_refs, r.mesh_tile_refs, r.max_depth(),
               kBinnerTriCap);
   return 0;
