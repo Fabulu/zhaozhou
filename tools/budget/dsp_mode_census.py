@@ -23,8 +23,39 @@ On Cyclone V a DSP block in `Two Independent 18x18` mode is doing two
 multiplies; the same block in `Independent 27x27` mode is doing one. So a 27x27
 costs twice what an 18x18 costs, per product. **A block whose DSPs are all 18x18
 is doing arithmetic it needs. A block full of 27x27s is either multiplying wide
-values or DECLARING wide ones** -- and the second is free to fix, because
-operand width is what DSP inference follows.
+values or DECLARING wide ones** -- and the second is sometimes free to fix.
+
+CORRECTED 2026-09-26 BY THE MEASUREMENT THIS TOOL EXISTS TO PROMPT. These two
+lines used to end "because operand width is what DSP inference follows", and
+that is FALSE on Quartus 17.0.2 in the shape everybody writes. The ATTRSETUP
+packet narrowed `zhao_geom_attrsetup`'s declared widths one group at a time --
+96x96 -> 46x32, 46x46 -> 22x21, 72x72 -> 22x32 -- and ALL THREE cost exactly
+nothing: 45 DSP before, 45 DSP after, identical mode table, identical ALUTs.
+Quartus already strips the sign extension in the plain
+`WIDE'(narrow) * WIDE'(narrow)` form and was already multiplying at the true
+widths.
+
+What DID cost 9 of that block's 24 Independent 27x27 was one operand written
+`(-(72'(cy_by))) * 72'(va_i)` -- the NEGATION TAKEN INSIDE THE CAST. Moving the
+minus sign outside the multiply, with every declared width left at 72, recovers
+all nine (probe arm 7). `-(sext(x,72))` is a 72-bit subtract from zero, and
+after it the top 50 bits are no longer a recognisable replication of the sign
+bit, so Quartus must multiply a genuine 72-bit operand.
+
+SO THE ACTIONABLE PATTERN IS NOT "A WIDE LITERAL". It is AN ARITHMETIC
+OPERATION APPLIED TO A WIDENED VALUE BEFORE THE MULTIPLY. A wide cast is free;
+`-(WIDE'(x)) * ...`, and plausibly `(WIDE'(x) op y) * ...`, is not. The same
+file proves the distinction twice over: its edge products negate the PRODUCT,
+`-(46'(cx_bx) * 46'(by_i))`, twelve lines away from the partials that negated
+the OPERAND, and the first shape costs nothing while the second cost nine
+blocks.
+
+A reader who takes the 27x27 column as "declared-width money waiting to be
+collected" will spend a packet and collect zero. The column still SORTS blocks
+usefully -- it is why attrsetup was looked at first, and that was right -- but
+it is a reason to look, not a diagnosis. Evidence:
+tests/probes/zhao_attrsetup_mul_probe.sv, eight arms, and the
+zhao_attrsetup_mul_probe@probe-m0..m7 rows.
 
 Quartus prints exactly this in every `.map.rpt`, in `Analysis & Synthesis DSP
 Block Usage Summary`. This tool reads it across a labelled set of block maps and
@@ -43,6 +74,8 @@ USAGE
 EXIT CODE
     0  census produced
     2  no maps found for that label
+    3  a block's .map.rpt is absent, so its MODE columns would be
+       silently blank -- the one thing this tool exists to print
 """
 
 from __future__ import annotations
@@ -124,6 +157,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--label", default="@dsp-census-20260926")
+    ap.add_argument("--allow-missing-modes", action="store_true",
+                    help="render even when a block's .map.rpt is absent and its "
+                         "mode columns would therefore be blank")
     ap.add_argument("--markdown")
     args = ap.parse_args()
 
@@ -136,12 +172,38 @@ def main() -> int:
         return 2
 
     rows = []
+    missing = []
     for sm in found:
         module = os.path.basename(sm)[: -len(args.label + ".map.summary")]
         s = read_summary(sm)
-        m = read_modes(sm[: -len(".map.summary")] + ".map.rpt")
+        rpt = sm[: -len(".map.summary")] + ".map.rpt"
+        if not os.path.exists(rpt):
+            missing.append(module)
+        m = read_modes(rpt)
         rows.append((module, s, m))
     rows.sort(key=lambda r: -r[1].get("Total DSP Blocks", 0))
+
+    # THE MODE COLUMNS COME FROM THE .map.rpt, AND THAT FILE IS GITIGNORED
+    # (.gitignore, `blockpaths/*.map.rpt`). So in a fresh worktree -- a lane's,
+    # or a clone -- every mode is empty, the columns vanish, and the table still
+    # renders: a census of multiplier MODES with no modes in it, saying nothing
+    # about the absence. That happened on 2026-09-26 and a committed artefact
+    # silently lost the only column this tool exists for.
+    #
+    # An instrument that degrades quietly is worse than one that is missing.
+    # Refuse instead, and say exactly which reports to re-make.
+    if missing:
+        print("dsp_mode_census: %d of %d block(s) have a .map.summary but NO "
+              ".map.rpt, so their MODE columns would be blank:"
+              % (len(missing), len(rows)), file=sys.stderr)
+        for m_ in missing:
+            print("    %s" % m_, file=sys.stderr)
+        print("The .map.rpt is gitignored, so a fresh worktree never has one. "
+              "Re-run the map for these blocks, or pass --allow-missing-modes "
+              "if a table without modes is genuinely what you want.",
+              file=sys.stderr)
+        if not args.allow_missing_modes:
+            return 3
 
     seen_modes = [k for k in MODES if any(k in m for _, _, m in rows)]
     total = sum(s.get("Total DSP Blocks", 0) for _, s, _ in rows)
@@ -158,8 +220,31 @@ def main() -> int:
     a("")
     a("**A `Two Independent 18x18` block is doing two multiplies; an")
     a("`Independent 27x27` block is doing one.** So the 27x27 column is the")
-    a("expensive one, and it is the column that says whether a block is")
-    a("multiplying wide VALUES or merely declaring wide ones.")
+    a("expensive one, and it is the column that sorts blocks worth looking at.")
+    a("")
+    a("**IT IS NOT A DIAGNOSIS, AND \"DECLARED WIDTH\" IS THE WRONG ONE.** This")
+    a("header used to say the 27x27 column separates blocks that multiply wide")
+    a("VALUES from blocks that merely DECLARE wide ones, and that the second is")
+    a("free to fix because inference follows declared width. Measured on")
+    a("2026-09-26, that is false on Quartus 17.0.2: narrowing")
+    a("`zhao_geom_attrsetup`'s declared widths one group at a time (96x96 ->")
+    a("46x32, 46x46 -> 22x21, 72x72 -> 22x32) moved the row by ZERO blocks each")
+    a("time. Quartus already strips the plain `WIDE'(narrow) * WIDE'(narrow)`")
+    a("sign extension. What cost 9 of that block's 24 wide blocks was one")
+    a("operand written `(-(72'(cy_by))) * 72'(va_i)` -- **the negation taken")
+    a("INSIDE the cast** -- and moving the minus sign outside the multiply, at")
+    a("unchanged declared width, recovered all nine.")
+    a("")
+    a("So the pattern to grep for is **an arithmetic operation applied to a")
+    a("widened value before the multiply**, not a wide literal. Evidence:")
+    a("`tests/probes/zhao_attrsetup_mul_probe.sv`, eight arms, rows")
+    a("`zhao_attrsetup_mul_probe@probe-m0..m7`.")
+    a("")
+    a("**A ROW HERE IS A LABELLED SNAPSHOT, NOT THE CURRENT DESIGN.** The table")
+    a("below is whatever `--label` selected. `zhao_geom_attrsetup` was repaired")
+    a("to **36 DSP / 15 wide / 836 ALUTs** on 2026-09-26 (`@gz-after`); any row")
+    a("above showing it at 45 is the pre-repair measurement and is correct as")
+    a("history, not as a budget.")
     a("")
     hdr = "| block | DSP | % of part | registers |"
     sep = "|---|---:|---:|---:|"

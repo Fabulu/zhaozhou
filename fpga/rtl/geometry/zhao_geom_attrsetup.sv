@@ -92,6 +92,14 @@ module zhao_geom_attrsetup (
     // a w is under 2^45 and a term under 2^76; three of them need 78 bits. 96
     // is carried so the widths are obviously sufficient rather than exactly
     // sufficient -- this block is once per triangle, not per pixel.
+    //
+    // THESE THREE WIDTHS ARE THE SPECIFICATION AND THEY ARE NOT KNOBS. The
+    // block's entire justification is that it emits EXACTLY the oracle's
+    // numerator, proved over 32,805 pixel-attributes. Narrowing a MULTIPLY is
+    // legal; narrowing a RESULT is not. The 2026-09-26 DSP repair narrowed
+    // multiplies only -- see "THE PARTIALS MULTIPLY AT THEIR TRUE WIDTHS"
+    // below, which also records that the 96 here costs ZERO DSP blocks and was
+    // measured to, so nobody needs to come back and shrink it.
     output var logic signed [95:0] n0_o,
     output var logic signed [71:0] dndx_o,
     output var logic signed [71:0] dndy_o
@@ -127,14 +135,86 @@ module zhao_geom_attrsetup (
   // ---- the plane ----------------------------------------------------------
   logic signed [95:0] n0_c;
   logic signed [71:0] dndx_c, dndy_c;
+
+  // THE PARTIALS MULTIPLY AT THEIR TRUE WIDTHS. THAT IS WORTH 9 DSP BLOCKS --
+  // 45 -> 36, 8% of the entire shipping 5CSEBA6U23I7 -- AND ZERO BITS.
+  //
+  // Until 2026-09-26 both partials were written `(-(72'(cy_by))) * 72'(va_i)`,
+  // i.e. sign-extend the 22-bit difference to 72, negate it there, and multiply
+  // 72 x 72. The whole file was written that way on purpose: "96 is carried so
+  // the widths are obviously sufficient rather than exactly sufficient -- this
+  // block is once per triangle, not per pixel." That trade is correct against
+  // ALUTs and latency and it is why the block is under a thousand ALUTs. What
+  // nobody measured is where the cost landed, and it landed on the DSP ceiling,
+  // which the failed console fit breaches by 335%.
+  //
+  // BUT THE DECLARED WIDTH IS NOT WHAT COSTS, AND THAT MATTERS FOR EVERY OTHER
+  // BLOCK SOMEBODY IS ABOUT TO "FIX". Measured one change at a time with
+  // tests/probes/zhao_attrsetup_mul_probe.sv, quartus_map 17.0.2, ~14 s a run:
+  //
+  //   arm  change from production                          DSP  27x27  ALUT
+  //    0   nothing (POSITIVE CONTROL)                        45     24   940
+  //    1   w0_0..w2_0  46x46 -> 22x21                        45     24   940
+  //    2   n0_c        96x96 -> 46x32                        45     24   940
+  //    5   dndy only   72x72 -> 22x32                        45     24   940
+  //    6   dndx only   72x72 -> 23x32                        36     15   836
+  //    7   dndx NEGATION MOVED OUT, widths left at 72        36     15   887
+  //    3   both partials narrowed (SHIPPED HERE)             36     15   836
+  //
+  // Arms 1, 2 and 5 are the same plain `WIDE'(narrow) * WIDE'(narrow)` shape and
+  // ALL THREE COST NOTHING: Quartus 17.0.2 already strips that sign extension
+  // and was already multiplying at the true widths. Arm 7 is the one that names
+  // the mechanism -- it leaves every declared width at 72 and merely moves the
+  // minus sign outside the multiply, and it recovers all nine blocks. So the
+  // cost is NEGATING THE SIGN-EXTENDED VALUE: `-(sext(x,72))` is a 72-bit
+  // subtract from zero, after which the top 50 bits are no longer a recognisable
+  // replication of bit 21 and Quartus must multiply a genuine 72-bit operand.
+  // dndy, which never negates, was never affected. The rule to carry away is
+  // that a wide CAST is free and an ARITHMETIC OPERATION applied to the widened
+  // value before the multiply is not.
+  //
+  // 23 IS NOT A TYPO FOR 22, AND MY FIRST REASON FOR IT WAS WRONG. Negating
+  // inside 22 bits wraps at -2^21, and I wrote here that the ports' declared
+  // range reaches that value. IT DOES NOT: cy_by is a 22-bit SIGNED difference
+  // of two signed 21-bit coordinates, so its range is +/-(2^21 - 1) for ANY
+  // port values whatever, not merely for the ones GEOM.CLIP delivers -- the
+  // -2^21 corner of its declared type is unreachable from the pins. 22 bits
+  // would therefore also have been exact.
+  //
+  // 23 is kept for two honest reasons and not the wrong one. It makes the
+  // expression exact for the full DECLARED width of cy_by, so its correctness
+  // rests on cy_by's own type rather than on a range argument about the block
+  // that produces it -- and that argument is exactly the kind that stops being
+  // true when somebody widens a coordinate. And it costs NOTHING: probe arm 6
+  // (23 bits) and arm 3 (23 bits) both measure 36 DSP / 836 ALUTs, identical.
+  //
+  // NOTHING ABOUT THE EMITTED VALUE MOVED. A signed m x n product needs exactly
+  // m + n bits, so 23 x 32 -> 55 and 22 x 32 -> 54 are EXACT and not truncating;
+  // the sign-extension back to 72 is wire; the three-way sum and the
+  // `<<< PIXEL_SHIFT` still happen at 72 bits; and n0_o, dndx_o and dndy_o keep
+  // their declared widths to the bit. PROVED, not asserted:
+  // tests/proofs/attribute_plane_equivalence.cpp and
+  // tests/geometry/geom_attrsetup_directed.cpp, which gains a differential that
+  // runs the old 72-bit expressions and these side by side on the same stimulus.
+  logic signed [22:0] ncy_by, nay_cy, nby_ay;  // negated x partials, exact at 23
+  logic signed [54:0] dxp0, dxp1, dxp2;        // 23 x 32 -> 55 bits, exact
+  logic signed [53:0] dyp0, dyp1, dyp2;        // 22 x 32 -> 54 bits, exact
+
   always_comb begin
     n0_c = 96'(w0_0) * 96'(va_i) + 96'(w1_0) * 96'(vb_i) + 96'(w2_0) * 96'(vc_i);
     // The x partial of w is the NEGATED y difference, and the y partial is the
     // x difference -- the asymmetry is orient's, not a transcription slip.
-    dndx_c = (((-(72'(cy_by)))) * 72'(va_i) + ((-(72'(ay_cy)))) * 72'(vb_i) +
-              ((-(72'(by_ay)))) * 72'(vc_i)) <<< PIXEL_SHIFT;
-    dndy_c = (72'(cx_bx) * 72'(va_i) + 72'(ax_cx) * 72'(vb_i) +
-              72'(bx_ax) * 72'(vc_i)) <<< PIXEL_SHIFT;
+    ncy_by = -(23'(cy_by));
+    nay_cy = -(23'(ay_cy));
+    nby_ay = -(23'(by_ay));
+    dxp0   = ncy_by * va_i;
+    dxp1   = nay_cy * vb_i;
+    dxp2   = nby_ay * vc_i;
+    dyp0   = cx_bx * va_i;
+    dyp1   = ax_cx * vb_i;
+    dyp2   = bx_ax * vc_i;
+    dndx_c = (72'(dxp0) + 72'(dxp1) + 72'(dxp2)) <<< PIXEL_SHIFT;
+    dndy_c = (72'(dyp0) + 72'(dyp1) + 72'(dyp2)) <<< PIXEL_SHIFT;
   end
 
   // ---- one in flight -------------------------------------------------------
