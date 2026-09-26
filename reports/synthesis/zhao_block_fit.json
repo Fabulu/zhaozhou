@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "b7d3add02a86b20a6e87d521142962c2538caa58",
-    "newestRunClean":  false,
+    "newestRunCommit":  "72741bef732cca82f0f0d4f1540a4f39a67da68c",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1109,16 +1109,16 @@
                    {
                        "module":  "zhao_geom_arenabin@arenacompose",
                        "status":  "map_only",
-                       "sourceCommit":  "ea8f1e34ed4f098d1a0f1fe1ee8c8fec3454ae77",
-                       "treeCleanAtHead":  false,
+                       "sourceCommit":  "72741bef732cca82f0f0d4f1540a4f39a67da68c",
+                       "treeCleanAtHead":  true,
                        "rtlCleanAtHead":  true,
                        "ioMode":  "virtual-top-ports",
                        "fitterSeed":  1,
                        "seedSource":  "shell_fit QSF pinned SEED",
                        "measuredDevice":  "5CSEBA6U23I7",
-                       "sourceDigest":  "e1be06614ec69be2f84f056159dfe3fd75d8bf9eb4359c00bc8f8feec3a5e708",
+                       "sourceDigest":  "c3171ec048e823af93d762643bd8414250ed5cff4a3b485c2dafd575317e19ae",
                        "variantOf":  "zhao_geom_arenabin",
-                       "seconds":  663.8,
+                       "seconds":  1025.7,
                        "sourcesHashed":  2,
                        "partial":  true,
                        "partialStage":  "analysis_and_synthesis",
