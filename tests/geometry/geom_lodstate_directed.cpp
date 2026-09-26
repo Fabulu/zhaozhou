@@ -72,7 +72,37 @@ struct Bench {
   std::vector<Caster> got;
 
   // the asset window
-  int beats_left = 0;
+  // THE PRICE, AND WHAT THIS BENCH CAN AND CANNOT SEE (FLOPARRAY, 2026-09-26).
+  //
+  // `st_q` moved out of flip-flops into an M10K (9,216 bits, 10,826 -> 2,118
+  // registers on the block), which required a REGISTERED read where production
+  // had a combinational read-modify-write. A registered read normally inserts a
+  // pipeline stage, so the honest question is what that costs.
+  //
+  // BOTH COUNTERS BELOW ARE INSENSITIVE TO A STAGE ON THIS PATH, and that was
+  // MEASURED, not assumed: a deliberately inserted EXTRA read register --
+  // strictly more latency than the conversion adds -- produced
+  //
+  //     rungs mesh=60 micro=93 splat=21 glint=66, ticks=286, casters=286,
+  //     clocks=106827, busy=43420, 40 checks passed
+  //
+  // which is byte-identical to production. So DO NOT quote `clocks` or `busy`
+  // as proof that the conversion is free; they cannot resolve one cycle here.
+  //
+  // What the control DOES establish is the thing that matters: this path
+  // carries at least two cycles of slack, because adding a whole extra stage
+  // changes nothing observable. The structural reason is that `slot_c` is
+  // stable from the exit of S_IDLE through S_LOD -- `idx_q` latches on the way
+  // out of S_IDLE and `view_q` only ever changes on a transition to
+  // S_PROJ/S_IDLE, never on S_RAD -> S_LOD -- and the ladder's own multi-cycle
+  // evaluation absorbs the rest.
+  //
+  // The counters are kept anyway: they are what makes the insensitivity a
+  // recorded negative result instead of something the next person rediscovers.
+  long g_clocks = 0;
+  long g_busy = 0;
+
+int beats_left = 0;
   uint32_t beat_addr = 0;
 
   // the instance centre's projection, answered from a queue of one
@@ -178,7 +208,7 @@ struct Bench {
       c.rung = static_cast<uint8_t>(d.c_rung_o);
       c.view = d.c_view_o != 0;
     }
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     if (fire) got.push_back(c);
     idle();
     d.eval();
@@ -194,7 +224,7 @@ struct Bench {
     d.cfg_addr_i = addr;
     d.cfg_data_i = data;
     d.eval();
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     idle();
     d.eval();
   }
@@ -205,7 +235,7 @@ struct Bench {
     d.pub_base_i = base;
     d.pub_extent_i = extent;
     d.eval();
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     idle();
     d.eval();
   }
@@ -213,7 +243,7 @@ struct Bench {
   void frame() {
     d.frame_i = 1;
     d.eval();
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     idle();
     d.eval();
   }
@@ -232,7 +262,7 @@ struct Bench {
     d.j_cz_i = cz;
     d.j_view_mask_i = static_cast<uint8_t>(view ? 2 : 1);
     d.eval();
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     idle();
     d.eval();
   }
@@ -256,7 +286,7 @@ struct Bench {
     d.j_cz_i = cz;
     d.j_view_mask_i = mask;
     d.eval();
-    zhao::tick(d);
+    if (d.busy_o) ++g_busy; zhao::tick(d); ++g_clocks;
     idle();
     d.eval();
   }
@@ -650,5 +680,6 @@ int main(int argc, char** argv) {
       top->ticks_o, top->skipped_repeat_o, top->bank_miss_o, top->no_radius_o,
       top->dropped_o, top->out_of_range_o, b.got.size());
   top->final();
+  std::printf("[geom_lodstate_directed] clocks=%ld busy=%ld\n", b.g_clocks, b.g_busy);
   return zhao::report_and_exit("geom_lodstate_directed");
 }

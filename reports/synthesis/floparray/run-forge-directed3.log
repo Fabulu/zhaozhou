@@ -1,0 +1,2 @@
+﻿FAIL: THE PRICE: the full-range walk still takes exactly the base commit's clock count -- the read register MOVED, it was not ADDED: expected 0x5F, got 0x185
+[forge_assemble_directed] 1/127 checks FAILED

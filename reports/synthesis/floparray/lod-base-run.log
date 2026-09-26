@@ -1,0 +1,5 @@
+[geom_lodstate_directed] rungs: mesh=60 micro=93 splat=21 glint=66
+[geom_lodstate_directed] view0 settled at rung 2; view1's first answer was rung 0
+[geom_lodstate_directed] ticks=286 repeats=1680 miss=1 no_radius=1 dropped=1 out_of_range=1 casters=286
+[geom_lodstate_directed] clocks=106827
+[geom_lodstate_directed] 40 checks passed

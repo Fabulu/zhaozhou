@@ -1,0 +1,2 @@
+﻿mutant copy drift: 76 copies checked against 398 production modules (21 files matched no production module)
+OK -- every committed mutant copy is at least as new as the module it copies

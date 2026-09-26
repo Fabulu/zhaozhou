@@ -1,0 +1,29 @@
+﻿[1/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/C_/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilated_threads.cpp.obj
+[2/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/C_/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilated.cpp.obj
+C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilated.cpp:78:10: warning: 'STDOUT_FILENO' redefined
+   78 | # define STDOUT_FILENO _fileno(stdout)
+      |          ^~~~~~~~~~~~~
+In file included from C:/programmieren/dsstuff/mingw64/x86_64-w64-mingw32/include/locale.h:12,
+                 from C:/programmieren/dsstuff/mingw64/include/c++/16.1.0/clocale:47,
+                 from C:/programmieren/dsstuff/mingw64/include/c++/16.1.0/x86_64-w64-mingw32/bits/c++locale.h:41,
+                 from C:/programmieren/dsstuff/mingw64/include/c++/16.1.0/bits/localefwd.h:42,
+                 from C:/programmieren/dsstuff/mingw64/include/c++/16.1.0/string:48,
+                 from C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilatedos.h:664,
+                 from C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilated.cpp:51:
+C:/programmieren/dsstuff/mingw64/x86_64-w64-mingw32/include/stdio.h:75:9: note: this is the location of the previous definition
+   75 | #define STDOUT_FILENO   1
+      |         ^~~~~~~~~~~~~
+C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/include/verilated.cpp:79:10: warning: 'STDERR_FILENO' redefined
+   79 | # define STDERR_FILENO _fileno(stderr)
+      |          ^~~~~~~~~~~~~
+C:/programmieren/dsstuff/mingw64/x86_64-w64-mingw32/include/stdio.h:76:9: note: this is the location of the previous definition
+   76 | #define STDERR_FILENO   2
+      |         ^~~~~~~~~~~~~
+[3/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate___024root__Slow.cpp.obj
+[4/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate__ConstPool__0__Slow.cpp.obj
+[5/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate.cpp.obj
+[6/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate__Syms__Slow.cpp.obj
+[7/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate___024root__0__Slow.cpp.obj
+[8/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/CMakeFiles/test_geom_lodstate_directed.dir/Vtb_geom_lodstate.dir/Vtb_geom_lodstate___024root__0.cpp.obj
+[9/10] Building CXX object tests/CMakeFiles/test_geom_lodstate_directed.dir/geometry/geom_lodstate_directed.cpp.obj
+[10/10] Linking CXX executable tests\test_geom_lodstate_directed.exe

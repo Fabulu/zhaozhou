@@ -1,4 +1,14 @@
-// tb_forge_assemble.sv -- the bench wrapper for `zhao_forge_assemble`, with a
+// tb_forge_assemble_early_read_mutant.sv -- THE MUTANT'S BENCH WRAPPER.
+// NOT PRODUCTION, and not a test of the design.
+//
+// Identical to `tests/forge/tb_forge_assemble.sv` except that it instantiates
+// `zhao_forge_assemble_early_read_mutant` instead of `zhao_forge_assemble`, and
+// is renamed so no source list elaborates it by mistake. It exists only so the
+// mutant can be driven by the same stimulus the real block gets.
+//
+// See `tests/mutants/zhao_forge_assemble_early_read_mutant.sv` for what was
+// mutated and why. REGENERATE BOTH if the production bench changes shape.
+//// tb_forge_assemble.sv -- the bench wrapper for `zhao_forge_assemble`, with a
 // FAKE PROJECTOR standing in for `zhao_part_project`'s third arm.
 //
 // WHY A FAKE PROJECTOR AND NOT A REAL ONE. The property under test is the
@@ -31,7 +41,7 @@
 // would let a completely broken join pass every check.
 `default_nettype none
 
-module tb_forge_assemble #(
+module tb_forge_assemble_early_read_mutant #(
     // Small on purpose. The join, the throttle and the refusal are all
     // exercised in tens of vertices, and a 520-entry store makes every run
     // slower without making any check discriminate more. The PRODUCTION value
@@ -255,7 +265,7 @@ module tb_forge_assemble #(
   assign rs_behind = pbh_q[LAT-1];
   assign rs_slot   = psl_q[LAT-1];
 
-  zhao_forge_assemble #(
+  zhao_forge_assemble_early_read_mutant #(
       .MAX_VERTS (MAX_VERTS),
       .IDW       (16),
       .ATTRS     (ATTRS),
@@ -360,6 +370,6 @@ module tb_forge_assemble #(
                    attr_a[32*S_B +: 32], attr_b[ATTRS*32-1:32], attr_c[ATTRS*32-1:32]};
   /* verilator lint_on UNUSEDSIGNAL */
 
-endmodule : tb_forge_assemble
+endmodule : tb_forge_assemble_early_read_mutant
 
 `default_nettype wire

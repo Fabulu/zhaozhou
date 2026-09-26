@@ -1,0 +1,91 @@
+﻿
+===== tools/budget/completion_register.py =====
+completion register -- computed from the tree, not maintained by hand
+self-test PASSED: the parser sees a planted gap and classifies it
+
+superseded check: 83 production roots CLEAN
+    80 further fit-target tops asked, NOT fatal (leaf measurements
+    and retained oracles, kept BECAUSE they are the old version)  -- 10 hit(s)
+      note   zhao_pair_setup_binner     wires zhao_geom_binner           superseded by zhao_geom_binner_v2
+      note   zhao_pair_tmu_cache        wires zhao_texture_tmu           superseded by zhao_texture_v3own
+      note   zhao_texture_island_top    wires zhao_raster_perspuv_pairpipe superseded by zhao_raster_perspuv_pairpipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_aux_pipe      superseded by zhao_texture_aux_pipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_bilerp_lane   superseded by zhao_texture_bilerp_lane_v2
+      note   zhao_texture_island_top    wires zhao_texture_cache_pipe    superseded by zhao_texture_cache_pipe_v2
+      note   zhao_texture_island_top    wires zhao_texture_mosaic        superseded by zhao_texture_mosaic_v2
+      note   zhao_texture_island_top    wires zhao_texture_palette_res   superseded by zhao_texture_palette_res_v2
+      note   zhao_texture_island_top    wires zhao_texture_rsp_dispatch  superseded by zhao_texture_rsp_dispatch_v2
+      note   zhao_texture_island_top    wires zhao_texture_tmu_plan      superseded by zhao_texture_tmu_plan_v2
+
+zhao_console_core closure modules : 292
+zhao_console_board adds 5 more    : zhao_console_board, zhao_sys_pll, zhao_sys_pll_simclk, zhao_sys_reset, zhao_sys_reset_sync
+    capabilities that reach the machine only through the board: SYS.PLL, SYS.RESET
+tie-off entries in its header     : 9
+    boundary               2
+    resolved-in-composer   4
+    tied-to-zero           1
+    unclassified           2
+
+mandatory rtl capabilities (design/blocks.yml)
+    connected in the console  : 111
+    BUILT BUT NOT CONNECTED   : 1
+    NOT BUILT AT ALL          : 0
+    deferred / waits for board: 0   (cite the ruling, not a gap)
+    EXCUSED BY AN UNCITED FLAG: 0   <- counted AS GAPS: the owner's
+                                     rule is that a deferral must CITE
+                                     its controlling ruling or spec
+    UNRESOLVABLE              : 0   <- counted AS GAPS: not excused,
+                                     UNDEMONSTRATED. Locate the module
+                                     or add it to the alias table.
+    superseded by a ruling    : 2   (cites the ruling, the replacement
+                                     file and a BUILT test; each named)
+
+  SUPERSEDED BY A RULING (not a gap; the note is checked against the tree):
+    TERRAIN.ISLAND
+    TERRAIN.VISIBLE
+
+  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):
+    zhao_terrain_normalmap
+
+MANDATORY GAPS REMAINING          : 6
+  (5 tie-offs + 1 disconnected + 0 unbuilt + 0 uncited + 0 unresolvable)
+
+  I13  boundary             PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+  I34  boundary             TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
+  I54  tied-to-zero         GEOM.PARAMBUF's TILE-REFERENCE-CHUNK INTAKE
+  I55  unclassified         GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
+  I56  unclassified         GEOM.PARAMBUF's FRAME SEAL (`u_geom_paramarena.seal_*_i`) -- NOT a
+
+A mandatory function is not present if it is a tie-off, fake
+stimulus, an external placeholder for hardware storage, a
+disconnected implementation, pruned dead logic, a stub, a TODO,
+or an unimplemented contract. Drive this to ZERO.
+===== tools/quartus/check_console_inventory.py =====
+check_console_inventory: self-test PASSED (both version shapes; an island that names itself is not reachable)
+console inventory: 398 modules declared, 276 elaborated by zhao_console_core, 5 more added by zhao_console_board, 284 fit source files
+  the board framework: zhao_console_board, zhao_sys_pll, zhao_sys_pll_simclk, zhao_sys_reset, zhao_sys_reset_sync
+console inventory OK -- every source is reachable, every reachable module is a source, the latest version is the one wired, and everything out has a declared reason.
+===== tools/quartus/check_prod_manifest.py =====
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_shell_top_v2 parameters=[BUILD_HPS_N=32'd2] modules=78
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_field_host_v2 parameters=[CLIENTS=32'd2, PROGS=32'd8, INSTR_N=32'd32, REGS=32'd32, TABLES=32'd2, TBL_N=32'd64, IN_LANES=32'd15, OUT_LANES=32'd7, OUT_ORDINALS=32'd7, PREP_SCALARS=32'd64, CREDITS=32'd2, FAB_LANES=32'd1, FAB_OUTSTANDING=32'd4, FAB_LONGQ=32'd4, FAB_GATHERS=32'd4, FAB_DIST_BANKS=32'd2, FAB_GROUP_PTS=32'd1, FAB_RING_UNITS=32'd2, FAB_RING_DESC=32'd2] modules=26
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_field_stamp_adapter parameters=[STAMP_BINDING=32'd1, IN_LANES=32'd15, OUT_LANES=32'd7] modules=0
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_field_flow_adapter parameters=[IN_LANES=32'd15, OUT_LANES=32'd7] modules=1
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_field_earth_adapter parameters=[IN_LANES=32'd15, OUT_LANES=32'd7] modules=0
+production parameter elaboration: evidence=verilator-v3param-ast root=zhao_field_warp_adapter parameters=[IN_LANES=32'd15, OUT_LANES=32'd7] modules=0
+ownership role raster_texture_fragment_lifecycle: evidence=verilator-v3param-ast provider_identification=explicit_registry scope=selected_subsystem root=zhao_texture_island_v3_top elaborated=[zhao_texture_v3own]
+prod manifest: 398 modules, 82 tops, 124 inside, 192 excluded, 3 retired census slots
+manifest check OK -- every module counted once or declared absent
+===== tools/quartus/check_quartus17_syntax.py =====
+check_quartus17_syntax: self-test 13 fire / 22 no-fire cases PASSED
+scanned 649 file(s) under fpga/rtl, tests
+no Quartus-17.0-rejected forms found
+===== tools/budget/check_case_labels.py =====
+check_case_labels: self-test 3 fire / 1 no-fire cases PASSED
+tests/command/cmd_exec_directed.cpp: 52 blocks, every label names its own
+===== tools/quartus/gen_prod_top.py --check =====
+fresh: fpga/rtl/prod/zhao_prod_top.sv matches the generator (82 instances)
+===== tools/quartus/gen_console_board.py --check =====
+gen_console_board --check: FRESH (1585 core ports, 123 parameters)
+===== tools/design/gen_shell_paired_diff.py --check =====
+paired diff harness: harness fresh (59 shared inputs, 91 compared outputs, 4 declared divergent)
+paired diff harness: mutant fresh (59 shared inputs, 91 compared outputs, 4 declared divergent)

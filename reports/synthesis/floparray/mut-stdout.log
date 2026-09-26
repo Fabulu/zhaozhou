@@ -1,0 +1,3 @@
+[0] %Fatal: zhao_forge_assemble_early_read_mutant.sv:823: Assertion failed in TOP.tb_forge_assemble_early_read_mutant.u_dut: zhao_forge_assemble_early_read_mutant: the vertex store was READ BEFORE THE BARRIER RELEASED (tst=1 pos_land=24 inv_land=0 vcount=24). pos_q/inv_q have no reset, so an early read returns undefined data rather than zero.
+%Error: C:/programmieren/zencrifice/gz-floparray/tests/mutants\zhao_forge_assemble_early_read_mutant.sv:823: Verilog $stop
+Aborting...

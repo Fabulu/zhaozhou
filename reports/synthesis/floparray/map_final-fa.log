@@ -1,0 +1,9 @@
+﻿preflight: zhao_forge_assemble closure from design/fit_targets.yml (6 file(s))
+snapshot: 6 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 6 declared source(s)
+source digest: de4e365c856d over 6 file(s) -> zhao_forge_assemble@fa-final-clean.sources.sha256
+INCOMPLETE: zhao_forge_assemble kept its synthesis numbers (4327 registers, 37038 memory bits); ALMs and Fmax were 
+never produced.
+zhao_forge_assemble@fa-final-clean map_only            57.4s   ALM -
+WROTE C:\programmieren\zencrifice\gz-floparray\reports\synthesis\zhao_block_fit.json (233 block(s); 1 measured this 
+run)
