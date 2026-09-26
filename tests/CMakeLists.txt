@@ -10123,6 +10123,98 @@ verilate(test_measure_starve_directed
 add_test(NAME measure_starve_directed COMMAND test_measure_starve_directed)
 set_tests_properties(measure_starve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---------------------------------------------------------------------------
+# MEASURE.SEALPLAN -- the per-view pre-frame admission plan's validator and the
+# producer of GEOM.PARAMBUF's quota seal. Console entry I56; owner vacation
+# directive section 5, whose sentence "The quota producer, encoded maximum
+# values, absent-giant case, reservation under pressure, and oversized plans
+# all need real execution and failure tests" is what the cases are organised
+# by.
+#
+# This block IS composed, unlike the two above, so this is not a standalone
+# stopgap: the console's seal comes from it.
+# ---------------------------------------------------------------------------
+set(ZHAO_MEASURE_SEALPLAN_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_sealplan.sv)
+
+add_executable(test_measure_sealplan_directed measure/measure_sealplan_directed.cpp)
+target_link_libraries(test_measure_sealplan_directed PRIVATE zhao_harness)
+target_include_directories(test_measure_sealplan_directed PRIVATE
+                           ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_sealplan_directed
+  PREFIX Vzhao_measure_sealplan
+  TOP_MODULE zhao_measure_sealplan
+  SOURCES ${ZHAO_MEASURE_SEALPLAN_SV})
+add_test(NAME measure_sealplan_directed COMMAND test_measure_sealplan_directed)
+set_tests_properties(measure_sealplan_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_measure_sealplan
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_measure_sealplan
+                 ${ZHAO_MEASURE_SEALPLAN_SV})
+set_tests_properties(lint_measure_sealplan PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE ELABORATION GUARD, FIRED -- AND THE FIRST VERSION OF THIS BLOCK WAS
+# WRONG IN THE FLATTERING DIRECTION, so the correction is recorded here rather
+# than quietly replaced.
+#
+# It was written as a BUILD target with `EXCLUDE_FROM_ALL`, on the stated
+# reasoning that "a `$fatal` under ctest wedges the runner, so build it and
+# never run it: the guard fires at elaboration, which is a compile step."
+# MEASURED: `cmake --build --target ...` with GIANT_REFS=65536 returned RC=0.
+# The build SUCCEEDS. Verilator compiles an `initial` block into the model and
+# `$fatal` fires when the BINARY RUNS, not when it is built -- so the whole
+# arrangement was a target that could never fail, registered as evidence that
+# the guard works. That is precisely the broken-instrument shape: no red, no
+# counter, and a reassuring green.
+#
+# CLAUDE.md's sentence is the one that misleads if read quickly. "`--lint-only`
+# does not run `initial` blocks" is about LINT, and the correct inference is
+# that the guard needs the model to RUN -- not that it moves earlier.
+#
+# So it is registered the way `measure_starve_mask_guard` already does it, and
+# that pattern existed in this file the whole time: run the broken build
+# through the expect-fatal wrapper, which exists because Verilator's abort path
+# does not return under ctest's pipes on Windows -- the real form of the
+# "wedges ctest" hazard, already solved.
+#
+# The break is GIANT_REFS raised above MAX_REFS: a console whose guaranteed
+# giant does not fit its own binner's reference RAM. The guard refuses the
+# build rather than letting the reservation arithmetic run against a capacity
+# that cannot hold it.
+add_executable(test_measure_sealplan_giant_guard measure/measure_sealplan_directed.cpp)
+target_link_libraries(test_measure_sealplan_giant_guard PRIVATE zhao_harness)
+target_include_directories(test_measure_sealplan_giant_guard PRIVATE
+                           ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_sealplan_giant_guard
+  PREFIX Vzhao_measure_sealplan
+  TOP_MODULE zhao_measure_sealplan
+  SOURCES ${ZHAO_MEASURE_SEALPLAN_SV}
+  VERILATOR_ARGS -GGIANT_REFS=65536)
+add_test(NAME measure_sealplan_giant_guard
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_measure_sealplan_giant_guard>
+    -DEXPECT=GIANT_REFS\ exceeds
+    -DRUN_TIMEOUT=10
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
+set_tests_properties(measure_sealplan_giant_guard PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120)
+
+# THE WRAPPER'S OWN NEGATIVE CONTROL. The wrapper reports a pass on a process
+# that never exits, so the branch that must be shown to work is the one where
+# the diagnostic is ABSENT. Pointed at the healthy build, which runs the same
+# module with a legal GIANT_REFS and must therefore NOT produce the message.
+add_test(NAME measure_sealplan_giant_guard_wrapper_control
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_measure_sealplan_directed>
+    -DEXPECT=GIANT_REFS\ exceeds
+    -DRUN_TIMEOUT=60
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
+set_tests_properties(measure_sealplan_giant_guard_wrapper_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120 WILL_FAIL TRUE)
+
 add_test(NAME lint_measure_starve
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_measure_starve
@@ -11276,6 +11368,62 @@ foreach(pal_variant fires silent)
     SOURCES ${pal_sources})
   add_test(NAME geom_paramarena_alignmut_${pal_variant} COMMAND ${pal_target})
   set_tests_properties(geom_paramarena_alignmut_${pal_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
+
+# ---------------------------------------------------------------------------
+# `giant_reserve_breach_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL.
+# SEALPLAN 2026-09-26, console entry I56.
+#
+# The counter watches for an ACCEPTED ordinary chunk carrying total allocation
+# into the region reserved for R7's guaranteed giant. That state needs TWO
+# guarantees to be false and they live in two BLOCKS -- the plan validator's
+# ordinary-quota rule in `zhao_measure_sealplan`, and `ck_fits_c` here -- so
+# neither block can demonstrate the counter alone and no legal stimulus moves
+# it. It owes a COMMITTED MUTANT, and the mutation breaks `ck_fits_c` rather
+# than the validator, so the frame that fires the counter is one whose plan was
+# LEGAL: an allocator overrunning an agreement, which is the fault the detector
+# is for.
+#
+# THE ARENA IS SHRUNK TO MAX_CHUNKS=32 (the testbench exposes its capacities
+# for exactly this) so the experiment is 28 chunk pushes rather than 14,044.
+# The arithmetic is production's; only the magnitudes move.
+#
+# HAVE_ONCHIP=0: this experiment is about the arena's own chunk accounting and
+# drives `ck_valid_i` directly, so the binner and serialiser are not elaborated
+# at all. A module absent from the closure is a stronger statement than a
+# counter at zero.
+# ONE source, TWO executables, opposite expectations.
+# ---------------------------------------------------------------------------
+foreach(prm_variant fires silent)
+  set(prm_target test_geom_paramarena_reservemut_${prm_variant})
+  add_executable(${prm_target} geometry/geom_paramarena_reservemut.cpp)
+  target_link_libraries(${prm_target} PRIVATE zhao_harness)
+  set(prm_sources ${ZHAO_PARAMARENA_SOURCES})
+  if(prm_variant STREQUAL "fires")
+    # The macro reaches BOTH the RTL seam and the C++ expectation, so the two
+    # cannot drift into a driver that expects one block and measures the other.
+    target_compile_definitions(${prm_target} PRIVATE ZHAO_PARAMARENA_RESERVE_MUT)
+    set(prm_vargs -DZHAO_PARAMARENA_RESERVE_MUT)
+    list(APPEND prm_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_paramarena_reserve_mutant.sv)
+  else()
+    set(prm_vargs "")
+    list(APPEND prm_sources
+         ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv)
+  endif()
+  list(APPEND prm_sources
+       ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+  verilate(${prm_target}
+    PREFIX Vtb_zhao_geom_paramarena
+    TOP_MODULE tb_zhao_geom_paramarena
+    VERILATOR_ARGS ${prm_vargs} -GMAX_CHUNKS=32 -GHAVE_ONCHIP=0
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+    SOURCES ${prm_sources})
+  add_test(NAME geom_paramarena_reservemut_${prm_variant} COMMAND ${prm_target})
+  set_tests_properties(geom_paramarena_reservemut_${prm_variant}
     PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 endforeach()
 
