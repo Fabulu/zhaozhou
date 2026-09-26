@@ -3,7 +3,7 @@
 **Branch `gz/chunkser`. Your own worktree. Push ONLY your branch. I merge.**
 Protocol: `PACKET-PROTOCOL.md` in this folder. Read it before you touch anything.
 
-**Two of the register's seven. `I55` is explicitly OUT OF SCOPE** — see the last
+**Two of the register's SIX** (it was seven when this brief was drafted; TERRVEL closed velocity in between — measure it yourself, bare). **`I55` is explicitly OUT OF SCOPE** — see the last
 section, and do not quietly take it on.
 
 ## Read the entries first
