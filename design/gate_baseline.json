@@ -1,7 +1,5 @@
 {
-  "_comment": "Committed status of every check_*.py gate, PLUS the deliberately named EXTRA_GATES in gate_sweep.py that the filename rule cannot see. A gate that MOVES from this -- in either direction -- fails the sweep, because an inherited red being fixed must be recorded and a gate that starts returning 0 by going blind looks exactly like a repair.",
-  "_comment_extras": "A key carrying a flag (e.g. '... --gate') is the SAME FILE asking a DIFFERENT QUESTION: uncashed_cheques.py and refmodel_liveness.py do all their checking inside `if --gate`, so run bare they return 0 whatever they find. The flag is part of the key so it cannot quietly disappear.",
-  "_comment_refmodel_red": "refmodel_liveness --gate is baselined RED on inherited debt: 6 of 102 reference_model declarations name a symbol absent from the oracle (MEASURE.HISTOGRAM, PART.COLLIDE, PART.SPAWN, PART.STATE, PART.UPDATE, POST.COMPOSITE). Those blocks have NO differential test available. Recorded 2026-09-23; not introduced by the commit that added this line.",
+  "_comment": "Committed status of every check_*.py gate. A gate that MOVES from this -- in either direction -- fails the sweep, because an inherited red being fixed must be recorded and a gate that starts returning 0 by going blind looks exactly like a repair.",
   "gates": {
     "tools/budget/check_case_labels.py": 0,
     "tools/budget/mutant_copy_drift.py": 0,
@@ -20,6 +18,7 @@
     "tools/maintenance/check_eol_worktree.py": 0,
     "tools/maintenance/check_git_autocrlf_guard.py": 0,
     "tools/maintenance/check_git_remote_refspec.py": 0,
+    "tools/quartus/check_console_closure_lint.py": 0,
     "tools/quartus/check_console_inventory.py": 0,
     "tools/quartus/check_fit_ledger.py": 0,
     "tools/quartus/check_forbidden_sources.py": 0,
