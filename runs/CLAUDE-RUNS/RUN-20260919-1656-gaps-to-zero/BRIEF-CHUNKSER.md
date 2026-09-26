@@ -8,8 +8,10 @@ section, and do not quietly take it on.
 
 ## Read the entries first
 
-`fpga/rtl/prod/zhao_console_core.sv`, entries **I54** (from ~5738), **I55**
-(~5824) and **I56** (~5868), in full. They are long because four packets have
+`fpga/rtl/prod/zhao_console_core.sv`, entries **I54**, **I55** and **I56**, in
+full. **Find them with `grep -n '^// I5[456]\.'` rather than by line number** —
+that file gained 441 lines in the TERRVEL merge alone, and a stale line number is
+how a reader ends up in the wrong entry. They are long because four packets have
 narrowed them, and **two of those packets amended the entry by measuring a
 premise false.** That is the shape of this work.
 
