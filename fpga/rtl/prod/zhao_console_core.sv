@@ -4027,6 +4027,178 @@
 //      vacuous case as an equality, name it, and take the real control from a
 //      shade inside rung 2 and off its centre.
 //
+//      ================================================================
+//      2026-09-26 (gz/carriage). THE CARRIAGE IS LAID. THE ENTRY STAYS
+//      OPEN, AND NOT ONE PIXEL MOVED -- WHICH IS THE FINDING, NOT THE
+//      FAILURE.
+//      ================================================================
+//
+//      Say the disappointing half first, because five passes refused this
+//      entry rather than lay a wire ahead of its evidence and the sixth
+//      owes them a straight answer. `raster pixels=2560`, UNCHANGED. The
+//      register reads 5 before and 5 after, measured bare. `zhao_terrain_
+//      normalmap` did NOT leave the BUILT-BUT-NOT-CONNECTED list, and it
+//      was again not taken up -- the entry's first prohibition stands and
+//      nothing here needed it.
+//
+//      WHAT IS BUILT AND COMPOSED, and it is items 1, 2 and 3 of the
+//      TERRTRI list in one file, because they are one beat:
+//      `zhao_terrain_clipfeed`, instantiated below as `u_terrain_clipfeed`
+//      and taking slice 3 of `u_geom_clipdoor`, which is `.NCLIENT (4)`.
+//        * BOTH of SHADELADDER's laws are instantiated, which was the
+//          stated delete condition of both deferral rows -- the ladder
+//          (`zhao_terrain_shademod`, nine operand triples per triangle)
+//          and the S8.24 saturate (`zhao_geom_overw_sat`, one instance
+//          walked six times, `sat_o` counted on `uv_sat_o` exactly as that
+//          block's header says the composer owes).
+//        * `invw24` IS DONE: a fourth `zhao_geom_depthquant_stream` +
+//          `zhao_raster_rcp24_v4` pair off `proj_out_aw/bw/cw` -- RAW w,
+//          not 1/w -- wired as `zhao_forge_assemble`'s `u_dq`/`u_rcp`.
+//        * The terrain edge is RETIRED from this module and the board.
+//
+//      AND THE VALUE TRAVERSES, measured in the composed machine under
+//      real backpressure rather than argued:
+//
+//        SMOKE: terruv    refs_taken=256 emitted=256 stale=0
+//        SMOKE: terrlight refs_taken=256 lights=256 shaded=256 degenerate=0
+//        SMOKE: terrcf    triangles=256 emitted=256 src_mismatch=0
+//                         uv_sat=0 shade_clamped=0 dq_refused=0 dq_stray=0
+//        SMOKE: clip      submitted=272 clipped=2 culled=256 setup=14
+//        SMOKE: matwin    resolves=1 switches=2
+//
+//      256 taken, 256 emitted, in lockstep with the other two lanes;
+//      GEOM.CLIP's `submitted` goes 16 -> 272, which is the mesh reference
+//      plus every one of terrain's; terrain forms its OWN material span,
+//      the second switch being a lawful `MATMODE_NONE` that issues no
+//      resolve.
+//
+//      AND THEN EVERY ONE OF THE 256 IS CULLED. `zhao_geom_clip` bumps
+//      `triangles_culled_o` on `VERDICT_ZERO_AREA || s3_back`, and terrain
+//      declares CULL_NONE, under which `s3_back` is false BY
+//      CONSTRUCTION. So the verdict is ZERO AREA: the projected corners of
+//      every terrain triangle in this fixture enclose no screen area, and
+//      no terrain FRAGMENT is produced.
+//
+//      THE CLAIM THAT COST THE PIXEL IS THIS ENTRY'S OWN, and it is the
+//      sixth consecutive pass here stopped by a sentence that was true
+//      about the thing measured and false about the thing meant. The
+//      TERRAINAUX paragraph above reads "THAT FIXTURE IS FIXED ... the
+//      arm's triangles have AREA now, so the merge it waits behind can be
+//      measured when it lands instead of only wired", and its evidence is
+//      `terrlight ... degenerate=0` of 256. **THOSE ARE TWO DIFFERENT
+//      QUANTITIES.** `terr_light_degenerate_o` is the degeneracy of the 3D
+//      FACE NORMAL, computed by `zhao_terrain_normals` from the COMPOSE
+//      CACHE's world positions. Screen area is a property of the PROJECTED
+//      corners that reach the arena. A non-zero world normal does not
+//      imply a non-zero projected area. The repair was real and its
+//      evidence was real; the sentence written afterwards was about the
+//      other quantity, and three packets inherited it. THE FIXTURE'S
+//      TERRAIN TRIANGLES STILL HAVE NO SCREEN AREA, and that is now the
+//      first item on this entry rather than a suspicion.
+//
+//      THE LAYER-E TRIPLE IS REFUSED, ON A GROUND NONE OF THE FIVE
+//      PREVIOUS PACKETS FOUND, and it is the one finding here that would
+//      have cost another whole pass. The TERRAINAUX and CELLCARRY
+//      paragraphs above cost the textured route as "a per-triangle field",
+//      and FABRICSINK measured that `zhao_texture_mosaic_v2` is reachable
+//      inside the selected V3 root and concluded THE CONSUMER IS RESIDENT.
+//      The module is resident. **ITS ANSWER HAS NO READER.**
+//      `mosaic_tile_w`, `mosaic_tx_w` and `mosaic_ty_w` occur EXACTLY
+//      TWICE EACH in `zhao_texture_island_v3_top.sv` -- their `logic`
+//      declaration at :1297-1298 and their port connection at :1311-1312 --
+//      and nothing whatever reads them. They are module-local wires and
+//      not island ports. The sample's tile comes from the binding selector
+//      (`zhao_texture_frag_expand_v2.sv:236-248`), never from the pick.
+//      The unversioned island is the same shape.
+//
+//      SO CARRYING A TRIPLE INTO `base_rgb` WOULD HAVE BEEN A CARRIAGE TO
+//      A READER THAT DOES NOT EXIST -- this file's own first prohibition,
+//      one hop further downstream than anybody had looked -- and the
+//      register would have moved while, once again, not one pixel did.
+//
+//      WHY IT WAS NEVER SEEN: `tests/shell/v3_closure_inherited.vlt:45`
+//      waives UNUSEDSIGNAL for `*fpga?rtl?texture*` wholesale, and again
+//      for `raster`, `geometry`, `common` and `video`. The one instrument
+//      that would have shouted was told to look away. That is CLAUDE.md's
+//      "a rule that HIDES waste is not a rule that removes it", in RTL
+//      rather than on a disk.
+//
+//      AND IT WOULD HAVE BEEN ACTIVELY HARMFUL, which the drain analysis
+//      could not see because it was looking at the window rather than at
+//      the far end. `base_rgb` and `recipe_weight` have LIVE COLOUR
+//      consumers: `zhao_texture_material_combine_v3.sv:513` makes
+//      `base_rgb` the published texel RGB when `sample_count == 0`, and
+//      :719-722 makes `recipe_weight` the blend weight under `R_LERP`.
+//      Both are shut today only because the smoke's material happens to
+//      sample and SHADE_MOD happens to be off. Those bits are safe to
+//      repurpose for a COINCIDENCE, which is not the same as being spare.
+//
+//      THE COLOUR, AND WHY IT IS NOT THE STAND-IN THIS ENTRY REFUSED THREE
+//      TIMES. Slots 3..5 carry `mod_of(shade, tint, sheet)` through the
+//      ratified five-rung ladder, computed PER CORNER PER CHANNEL -- nine
+//      operand triples, nine tint ports. Layer H is unauthored, so the
+//      composer drives all nine from `TERR_TINT_IDENTITY`, which is layer
+//      H's RATIFIED ABSENT IDENTITY (RGB565 0xFFFF, exactly 65536 in
+//      Q16.16, what `cell_tint` already defaults to) and not a plausible
+//      number chosen here. The three corners therefore carry EQUAL values
+//      today BECAUSE THE ONLY PER-VERTEX TERM IS UNAUTHORED, not because
+//      anything averaged or broadcast; authoring layer H is a change to
+//      nine driver wires and to no RTL. The sheet is unity because
+//      `zhao_texture_sheetmod` already applies it PER FRAGMENT.
+//
+//      WHAT STAYS DIVERGENT, stated rather than hidden: the ladder is now
+//      present where it was absent, and everything downstream of the slots
+//      is still the composed path's two narrow roundings against the law's
+//      one. Quoting "the ladder is composed" as "terrain is capture-exact"
+//      would be the component-check error the art law names.
+//
+//      THE BUILDER'S OWN MISTAKE, CAUGHT AND RECORDED because this entry's
+//      last two passes set that standard. The first draft of
+//      `zhao_terrain_clipfeed` declared nine tint ports, walked THREE
+//      operand triples and copied corner A's answer to B and C, reasoning
+//      "all nine agree today, so computing one is the same answer for less
+//      silicon". The ANSWER is the same; THE STRUCTURE IS NOT -- that
+//      draft was a flat broadcast wearing a per-vertex port list, which is
+//      the Gouraud-as-a-constant shape this entry and the owner's
+//      directive both forbid. Verilator's UNUSEDSIGNAL on the six unread
+//      ports caught it, and the instrument that caught it is the one the
+//      paragraph above records being waived four directories away.
+//
+//      THREE SMOKE CHECKS WERE CORRECT CONCLUSIONS ON PREMISES NOTHING
+//      ENFORCED, and all three are rewritten to say what stays true rather
+//      than relaxed:
+//        * "`culled != 0` implies the raster word is not this draw's" does
+//          NOT follow from that counter -- `triangles_culled_o` bumps on
+//          ZERO_AREA or backface and cannot discriminate them, and a
+//          zero-area triangle is a lawful cull under EVERY cull mode. It
+//          was never wrong only because no producer had emitted one.
+//        * "`resolves == switches`" went stale against a RULING, not
+//          against a new arm: owner ruling 1 of 2026-09-22 made
+//          MATMODE_NONE lawful and resolve-free. It now reads
+//          `resolves == switches - no_material_spans`, which pins a third
+//          counter and is STRONGER than what it replaced.
+//        * the clip split `16 / 2 / 0` measured the mesh reference alone.
+//          `submitted` is now `SGF_EXP_REPLAYED + terr_cf_emitted_o`,
+//          which also proves every triangle the new arm emitted ARRIVED.
+//      `culled` is BOUNDED and not made equal to 256: an equality there
+//      would pass only while the defect exists, which is asserting the bug.
+//
+//      WHAT IS LEFT, AND IT IS TWO NAMED THINGS:
+//        1. THE FIXTURE'S TERRAIN TRIANGLES HAVE NO SCREEN AREA. Until
+//           that is repaired terrain draws nothing however complete the
+//           carriage. Measured, not suspected.
+//        2. THE MOSAIC PICK NEEDS A READER INSIDE THE ISLAND before any
+//           layer-E triple is worth carrying. That is real work in
+//           `zhao_texture_island_v3_top`, not a wire in a composer.
+//      The colour is still last and is still not what blocks.
+//
+//      ONE NOTE ON THIS ENTRY'S TITLE, which is now historical: the port
+//      group `proj_out_*` it names no longer leaves this module. The entry
+//      stays OPEN because the ARM it exists for still draws nothing, and
+//      closing it on a retired port list while no terrain fragment reaches
+//      a raster would be the register moving without the picture -- which
+//      is the thing five packets refused and the sixth will not do either.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
@@ -8804,6 +8976,23 @@ module zhao_console_core
   // Q16.16, matching FORGE_ALPHA's convention.
   parameter int signed PART_ALPHA = 32'sd65536,   // 1.0, opaque
 
+  // ---- I13: TERRAIN.CLIPFEED's two operand identities (CARRIAGE) ----------
+  // NEITHER IS A PLAUSIBLE VALUE CHOSEN AT A COMPOSER, which is the only
+  // reason they are allowed to be constants at all.
+  //
+  // `TERR_TINT_IDENTITY` is layer H's RATIFIED ABSENT IDENTITY. RGB565 0xFFFF
+  // is what `cell_tint` defaults to when no tint layer is authored, and it is
+  // exactly 65536 in Q16.16. `spec/terrain_rules.md` 6.5 makes the tint
+  // PER-VERTEX, so when layer H is authored these nine driver wires change and
+  // no RTL does -- `u_terrain_clipfeed` walks all nine operand triples today.
+  //
+  // `TERR_SHEET_IDENTITY` is unity because the surface sheet is ALREADY
+  // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
+  // with a pixel behind it). A second application at the vertex would be a
+  // second home for one law.
+  parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
+  parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
+
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
   parameter int unsigned PROJ_T_DEPTH  = 81,
@@ -10824,27 +11013,14 @@ module zhao_console_core
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 
-  // ---- I13: the projector's TRIANGLE OUTPUT -------------------------------
-  output logic                    proj_out_valid_o,
-  input  logic                    proj_out_ready_i,
-  output logic signed [20:0]      proj_out_ax_o,
-  output logic signed [20:0]      proj_out_ay_o,
-  output logic signed [20:0]      proj_out_bx_o,
-  output logic signed [20:0]      proj_out_by_o,
-  output logic signed [20:0]      proj_out_cx_o,
-  output logic signed [20:0]      proj_out_cy_o,
-  output logic [2:0]              proj_out_behind_o,
-  output logic [15:0]             proj_out_src_id_o,
-  output logic signed [31:0]      proj_out_ad_o,
-  output logic signed [31:0]      proj_out_bd_o,
-  output logic signed [31:0]      proj_out_cd_o,
-  output logic [30:0]             proj_out_aw_o,
-  output logic [30:0]             proj_out_bw_o,
-  output logic [30:0]             proj_out_cw_o,
-  output logic                    proj_out_view_o,
-  output logic [7:0]              proj_out_mat_a_o,
-  output logic [7:0]              proj_out_mat_b_o,
-  output logic [7:0]              proj_out_weight_o,
+  // ---- I13: the projector's TRIANGLE OUTPUT -- RETIRED FROM THIS EDGE -----
+  // The triangle, its raw w and its layer-E triple are CONSUMED IN THIS MODULE
+  // as of 2026-09-26 (CARRIAGE): `u_terrain_clipfeed` takes them, converts the
+  // w to invw24, multiplies terrain's u/v through by it and offers the result
+  // at `u_geom_clipdoor` as the FOURTH client. They are no longer a boundary
+  // and no longer leave this module. `proj_out_refused_o` and
+  // `proj_out_missed_o` stay: they are EVIDENCE about the projector, not the
+  // triangle, and the console ports them out as it ports every other census.
   output logic                    proj_out_refused_o,
   output logic                    proj_out_missed_o,
 
@@ -10867,7 +11043,8 @@ module zhao_console_core
   // replay arena carries no profile field and widening it is a change to
   // `zhao_vertex_arena`, not to a composer.
   output logic [1:0]              proj_a_profile_o,
-  output logic [1:0]              proj_fill_profile_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): it is the depth profile
+  // `u_terrain_clipfeed` hands to its `zhao_geom_depthquant_stream`.
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -10891,11 +11068,10 @@ module zhao_console_core
   // projector's own fill beat, the face normal is `zhao_terrain_normals` and
   // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
   // through `zhao_light_env` (R25). The consumer is I13's absent merge.
-  output logic                    terr_light_valid_o,
-  input  logic                    terr_light_ready_i,
-  output logic signed [31:0]      terr_light_base_o,
-  output logic                    terr_light_degenerate_o,
-  output logic [15:0]             terr_light_src_id_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the shade is consumed by
+  // `u_terrain_clipfeed` below, which clamps it by `shade_flat_tri`'s law and
+  // runs it through `zhao_terrain_shademod`'s five-rung ladder into GEOM.CLIP
+  // attribute slots 3..5. The counters below stay; they are evidence.
   output logic [31:0]             terr_light_refs_taken_o,
   output logic [31:0]             terr_light_emitted_o,
   output logic [31:0]             terr_light_stale_reads_o,
@@ -10923,15 +11099,10 @@ module zhao_console_core
   // arrival point of that work, not a tie-off: the value is real, it traverses,
   // and `tests/terrain/terrain_uvlane_directed.cpp` proves it against the
   // frozen law two independent ways.
-  output logic                    terr_uv_valid_o,
-  input  logic                    terr_uv_ready_i,
-  output logic signed [31:0]      terr_uv_au_o,
-  output logic signed [31:0]      terr_uv_av_o,
-  output logic signed [31:0]      terr_uv_bu_o,
-  output logic signed [31:0]      terr_uv_bv_o,
-  output logic signed [31:0]      terr_uv_cu_o,
-  output logic signed [31:0]      terr_uv_cv_o,
-  output logic [15:0]             terr_uv_src_id_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the coordinates are consumed
+  // by `u_terrain_clipfeed`, which multiplies each by its corner's invw24
+  // through `zhao_geom_overw_sat` -- the S8.24 saturate `spec/qformats.md:75`
+  // mandates -- and fills slots 1 and 2 with the results.
   output logic [31:0]             terr_uv_refs_taken_o,
   output logic [31:0]             terr_uv_emitted_o,
   output logic [31:0]             terr_uv_stale_reads_o,
@@ -10939,6 +11110,26 @@ module zhao_console_core
   output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
+
+  // ---- I13: TERRAIN.CLIPFEED's census, 2026-09-26 (CARRIAGE) --------------
+  // `terr_cf_triangles_o` and `terr_cf_emitted_o` DISCRIMINATE (ruling R95): a
+  // block that accepted and never emitted shows the first climbing with the
+  // second pinned, which neither a stall nor a healthy run looks like.
+  output logic [31:0]             terr_cf_triangles_o,
+  output logic [31:0]             terr_cf_emitted_o,
+  // The three-way join disagreed about which triangle it holds. Its three
+  // operands are loaded by three different enables in three different blocks,
+  // so this comparison is not one of the blind ones.
+  output logic [31:0]             terr_cf_src_mismatch_o,
+  // `zhao_geom_overw_sat`'s saturate ENGAGED: a patch past 128 tiles from the
+  // origin. That block holds no state and says the composer must count it.
+  output logic [31:0]             terr_cf_uv_sat_o,
+  // The shade left the law's [0, 65536] domain and was clamped. NOT a fault --
+  // `zhao_terrain_shade` emits an unclamped value by design.
+  output logic [31:0]             terr_cf_shade_clamped_o,
+  output logic [31:0]             terr_cf_degenerate_o,
+  output logic [31:0]             terr_cf_dq_refused_o,
+  output logic [31:0]             terr_cf_dq_stray_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
@@ -15432,6 +15623,10 @@ module zhao_console_core
   localparam logic [1:0] GEOM_VID_DOM_MESH  = 2'd0;
   localparam logic [1:0] GEOM_VID_DOM_FORGE = 2'd1;
   localparam logic [1:0] GEOM_VID_DOM_PART  = 2'd2;
+  // I13, 2026-09-26 (CARRIAGE). The rider's domain field is two bits and this
+  // is its fourth and last legal value; a fifth producer would have to widen
+  // `GEOM_VID_RIDERW`, which is stated here so it is not discovered later.
+  localparam logic [1:0] GEOM_VID_DOM_TERR  = 2'd3;
   wire [31:0]        cd_o_material_set;
   wire [15:0]        cd_o_material_id;
   wire [ 1:0]        cd_o_material_mode;
@@ -15452,6 +15647,21 @@ module zhao_console_core
   // PART.CLIPFEED's door-client beat. Declared here, beside the door it feeds;
   // the block itself is instantiated down in the PARTICLES cluster, next to the
   // PART.EXPAND whose fan it takes.
+  // ---- I13: TERRAIN.CLIPFEED, the FOURTH door client (CARRIAGE 2026-09-26) --
+  wire               tcf_o_valid, tcf_o_ready;
+  wire signed [20:0] tcf_o_ax, tcf_o_ay, tcf_o_bx, tcf_o_by, tcf_o_cx, tcf_o_cy;
+  wire [ 2:0]        tcf_o_behind;
+  wire [15:0]        tcf_o_src_id;
+  wire               tcf_o_untex;
+  wire [ 1:0]        tcf_o_cull_mode;
+  wire [GEOM_CLIP_ATTRW-1:0] tcf_o_attr_a, tcf_o_attr_b, tcf_o_attr_c;
+  wire [31:0]        tcf_o_material_set;
+  wire [15:0]        tcf_o_material_id;
+  wire [ 1:0]        tcf_o_material_mode;
+  wire [ 7:0]        tcf_o_vertex_alpha;
+  wire [31:0]        tcf_o_frag_state;
+  wire [ 7:0]        tcf_o_quality_tier;
+
   wire               pcf_o_valid, pcf_o_ready;
   wire signed [20:0] pcf_o_ax, pcf_o_ay, pcf_o_bx, pcf_o_by, pcf_o_cx, pcf_o_cy;
   wire [ 2:0]        pcf_o_behind;
@@ -15492,7 +15702,7 @@ module zhao_console_core
   // 2, after the forge, so a busy mesh stream and a busy forge cannot starve
   // them: the search for the next owner starts one PAST the current grant.
   zhao_geom_clipdoor #(
-    .NCLIENT (3),
+    .NCLIENT (4),
     .ATTRS   (GEOM_CLIP_ATTRS),
     .IDW     (16),
     .VKEYW   (GEOM_VID_KEYW),
@@ -15503,22 +15713,31 @@ module zhao_console_core
 
     // Flattened, least significant slice is client 0. Quartus 17.0 will not
     // take an unpacked array port.
-    // Slice 2 is PART.CLIPFEED, slice 1 the forge, slice 0 GEOM.REPLAY.
-    .c_valid_i       ({pcf_o_valid,        fa_o_valid,        rp_o_valid}),
-    .c_ready_o       ({pcf_o_ready,        fa_o_ready,        rp_o_ready}),
-    .c_ax_i          ({pcf_o_ax,           fa_o_ax,           rp_o_ax}),
-    .c_ay_i          ({pcf_o_ay,           fa_o_ay,           rp_o_ay}),
-    .c_bx_i          ({pcf_o_bx,           fa_o_bx,           rp_o_bx}),
-    .c_by_i          ({pcf_o_by,           fa_o_by,           rp_o_by}),
-    .c_cx_i          ({pcf_o_cx,           fa_o_cx,           rp_o_cx}),
-    .c_cy_i          ({pcf_o_cy,           fa_o_cy,           rp_o_cy}),
-    .c_behind_i      ({pcf_o_behind,       fa_o_behind,       rp_o_behind}),
-    .c_src_id_i      ({pcf_o_src_id,       fa_o_src_id,       rp_o_src_id}),
-    .c_untex_i       ({pcf_o_untex,        fa_o_untex,        rp_untex_c}),
-    .c_cull_mode_i   ({pcf_o_cull_mode,    fa_o_cull_mode,    rp_o_raster[1:0]}),
-    .c_attr_a_i      ({pcf_o_attr_a,       fa_o_attr_a,       rp_attr_a}),
-    .c_attr_b_i      ({pcf_o_attr_b,       fa_o_attr_b,       rp_attr_b}),
-    .c_attr_c_i      ({pcf_o_attr_c,       fa_o_attr_c,       rp_attr_c}),
+    // Slice 3 is TERRAIN.CLIPFEED (I13, CARRIAGE 2026-09-26), slice 2
+    // PART.CLIPFEED, slice 1 the forge, slice 0 GEOM.REPLAY. A fourth client
+    // takes slice 3 at the TOP of every concatenation, which is the placement
+    // entry I13 named before this lane existed.
+    .c_valid_i       ({tcf_o_valid,  pcf_o_valid,        fa_o_valid,        rp_o_valid}),
+    .c_ready_o       ({tcf_o_ready,  pcf_o_ready,        fa_o_ready,        rp_o_ready}),
+    .c_ax_i          ({tcf_o_ax,     pcf_o_ax,           fa_o_ax,           rp_o_ax}),
+    .c_ay_i          ({tcf_o_ay,     pcf_o_ay,           fa_o_ay,           rp_o_ay}),
+    .c_bx_i          ({tcf_o_bx,     pcf_o_bx,           fa_o_bx,           rp_o_bx}),
+    .c_by_i          ({tcf_o_by,     pcf_o_by,           fa_o_by,           rp_o_by}),
+    .c_cx_i          ({tcf_o_cx,     pcf_o_cx,           fa_o_cx,           rp_o_cx}),
+    .c_cy_i          ({tcf_o_cy,     pcf_o_cy,           fa_o_cy,           rp_o_cy}),
+    .c_behind_i      ({tcf_o_behind, pcf_o_behind,       fa_o_behind,       rp_o_behind}),
+    .c_src_id_i      ({tcf_o_src_id, pcf_o_src_id,       fa_o_src_id,       rp_o_src_id}),
+    // TERRAIN DECLARES TEXTURED (`o_untex_o` is 0). That is not a formality:
+    // R197's gate in this file is `untex && (sample_count != 0)`, and terrain
+    // declares MATMODE_NONE, so the gate cannot refuse it either way -- but
+    // `zhao_geom_attrpack` DOES branch on `tri_untex_i`, and a terrain triangle
+    // that declared untextured would have its u/w and v/w planes replaced by
+    // the zero operand, discarding the coordinate law this lane just composed.
+    .c_untex_i       ({tcf_o_untex,  pcf_o_untex,        fa_o_untex,        rp_untex_c}),
+    .c_cull_mode_i   ({tcf_o_cull_mode, pcf_o_cull_mode, fa_o_cull_mode,    rp_o_raster[1:0]}),
+    .c_attr_a_i      ({tcf_o_attr_a, pcf_o_attr_a,       fa_o_attr_a,       rp_attr_a}),
+    .c_attr_b_i      ({tcf_o_attr_b, pcf_o_attr_b,       fa_o_attr_b,       rp_attr_b}),
+    .c_attr_c_i      ({tcf_o_attr_c, pcf_o_attr_c,       fa_o_attr_c,       rp_attr_c}),
     // ---- ARENAID: the per-corner identity, per client ---------------------
     // ONLY THE MESH ARM HAS ONE. GEOM.REPLAY carries {arena, gen, index} out
     // of the arena lookups that produced each corner. A forge primitive and a
@@ -15528,9 +15747,15 @@ module zhao_console_core
     // tells `zhao_geom_vertid` not to look. That is a DECLARATION of
     // unshareability, not a lookup that fails: "we could not find it" and "it
     // cannot be found" are different facts and only the second is true here.
-    .c_key_a_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_a}),
-    .c_key_b_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_b}),
-    .c_key_c_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_c}),
+    // TERRAIN's KEYS ARE ZERO FOR THE SAME REASON THE OTHER TWO NON-MESH ARMS'
+    // ARE, and it is a declaration rather than a lookup that failed: a terrain
+    // triangle is reassembled from {arena, index} at replay, but its CORNERS
+    // are lattice vertices of a tessellated patch and no two terrain triangles
+    // share a corner under any definition `zhao_geom_vertid` holds. The rider's
+    // DOMAIN field is what tells that block not to look.
+    .c_key_a_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_a}),
+    .c_key_b_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_b}),
+    .c_key_c_i       ({{GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, {GEOM_VID_KEYW{1'b0}}, rp_o_key_c}),
     // ---- ARENAID: the per-primitive rider, per client ---------------------
     // {material_id[15:0], raster_state[31:0], domain[1:0]}.
     //
@@ -15544,11 +15769,12 @@ module zhao_console_core
     // producers' own `c_cull_mode_i`. So `{30'd0, <that producer's own cull
     // mode>}` IS the true R28 word for a producer with no material half. It is
     // not a convenient zero standing in for something that exists elsewhere.
-    .c_rider_i       ({{pcf_o_material_id, 30'd0, pcf_o_cull_mode, GEOM_VID_DOM_PART},
+    .c_rider_i       ({{tcf_o_material_id, 30'd0, tcf_o_cull_mode, GEOM_VID_DOM_TERR},
+                       {pcf_o_material_id, 30'd0, pcf_o_cull_mode, GEOM_VID_DOM_PART},
                        {fa_o_material_id,  30'd0, fa_o_cull_mode,  GEOM_VID_DOM_FORGE},
                        {rp_o_material,     rp_o_raster,            GEOM_VID_DOM_MESH}}),
-    .c_material_set_i({pcf_o_material_set, fa_o_material_set, rp_o_material_set}),
-    .c_material_id_i ({pcf_o_material_id,  fa_o_material_id,  rp_o_material}),
+    .c_material_set_i({tcf_o_material_set, pcf_o_material_set, fa_o_material_set, rp_o_material_set}),
+    .c_material_id_i ({tcf_o_material_id,  pcf_o_material_id,  fa_o_material_id,  rp_o_material}),
     // THE MATERIAL-MODE DECLARATION, per client (owner ruling 1). Particles
     // declare NO_MATERIAL from `u_part_clipfeed`'s OWN PORT -- never a constant
     // chosen here, because a mode chosen at a composer is the "inferred" mode
@@ -15563,7 +15789,12 @@ module zhao_console_core
     // pair, and one constant cannot be true of both. The parameter survives as
     // the value FORGE.PRIM's own job descriptor carries, which is where a
     // producer's declaration belongs.
-    .c_material_mode_i({pcf_o_material_mode, fa_o_material_mode, GEOM_REPLAY_MATERIAL_MODE}),
+    // TERRAIN DECLARES MATMODE_NONE FROM ITS OWN PORT, never a constant chosen
+    // here. It is the only mode terrain can lawfully present: a search of
+    // `fpga/rtl/terrain/` for `material_set` and `material_id` returns ZERO
+    // hits, re-measured at this tree with `material` at 34 hits in the same
+    // directory as the positive control that the zero is not a broken grep.
+    .c_material_mode_i({tcf_o_material_mode, pcf_o_material_mode, fa_o_material_mode, GEOM_REPLAY_MATERIAL_MODE}),
     // R89's FLAT PER-PRIMITIVE ALPHA and the RASTER STATE WORD, per client, on
     // the same granted beat as the triangle and its material. GEOM.REPLAY
     // declares the opaque profile from named constants: that is the FRAME
@@ -15585,9 +15816,9 @@ module zhao_console_core
     // THIS IS NOT A RESTATEMENT OF THE DEFAULT: the constant said Z_TEST_EN=0
     // and Z_WRITE_DIS=0, i.e. particles always passed the depth test and wrote
     // the depth buffer. The law says test and do not write. Pixels move.
-    .c_vertex_alpha_i({PART_VERTEX_ALPHA, fa_o_vertex_alpha, GEOM_REPLAY_VERTEX_ALPHA}),
-    .c_frag_state_i  ({pcf_o_frag_state,  fa_o_frag_state,   GEOM_REPLAY_FRAG_STATE}),
-    .c_quality_tier_i({pcf_o_quality_tier, fa_o_quality_tier, rp_o_quality_tier}),
+    .c_vertex_alpha_i({tcf_o_vertex_alpha, PART_VERTEX_ALPHA, fa_o_vertex_alpha, GEOM_REPLAY_VERTEX_ALPHA}),
+    .c_frag_state_i  ({tcf_o_frag_state,   pcf_o_frag_state,  fa_o_frag_state,   GEOM_REPLAY_FRAG_STATE}),
+    .c_quality_tier_i({tcf_o_quality_tier, pcf_o_quality_tier, fa_o_quality_tier, rp_o_quality_tier}),
 
     .o_valid_o       (cd_o_valid),
     .o_ready_i       (cd_o_ready),
@@ -18333,6 +18564,44 @@ module zhao_console_core
     .held_offers_o(proj_en_held_offers_o)
   );
 
+  // ---------------------------------------------------------------------------
+  // I13: TERRAIN'S THREE STREAMS, NOW INTERNAL (CARRIAGE, 2026-09-26)
+  // ---------------------------------------------------------------------------
+  // These three bundles used to be dangling top-level outputs of this module
+  // AND of `zhao_console_board`. They are consumed by `u_terrain_clipfeed`
+  // below, which is the fourth `u_geom_clipdoor` client.
+  //
+  // `tcf_tri_ad/bd/cd_w` ARE THE 1/w LANE AND ARE DELIBERATELY NOT USED. This
+  // is a declaration, not an oversight: `zhao_geom_depthquant_stream` consumes
+  // RAW w and performs its OWN reciprocal by the ratified law
+  // (spec/qformats.md 8, owner ruling 2026-08-31 #1), so feeding it the
+  // projector's 1/w would be a second, divergent statement of one law. That
+  // block's own header records that the first draft of its contract made
+  // exactly this mistake. The waiver is scoped to these three signals with the
+  // reason attached rather than set on the file.
+  wire               tcf_tri_valid_w, tcf_tri_ready_w;
+  wire signed [20:0] tcf_tri_ax_w, tcf_tri_ay_w, tcf_tri_bx_w;
+  wire signed [20:0] tcf_tri_by_w, tcf_tri_cx_w, tcf_tri_cy_w;
+  wire [ 2:0]        tcf_tri_behind_w;
+  wire [15:0]        tcf_tri_src_id_w;
+  wire [30:0]        tcf_tri_aw_w, tcf_tri_bw_w, tcf_tri_cw_w;
+  wire [ 1:0]        tcf_tri_profile_w;
+  wire [ 7:0]        tcf_tri_mat_a_w, tcf_tri_mat_b_w, tcf_tri_weight_w;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire signed [31:0] tcf_tri_ad_w, tcf_tri_bd_w, tcf_tri_cd_w;
+  wire               tcf_tri_view_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  wire               tcf_lit_valid_w, tcf_lit_ready_w;
+  wire signed [31:0] tcf_lit_base_w;
+  wire               tcf_lit_degen_w;
+  wire [15:0]        tcf_lit_src_id_w;
+
+  wire               tcf_uv_valid_w, tcf_uv_ready_w;
+  wire signed [31:0] tcf_uv_au_w, tcf_uv_av_w, tcf_uv_bu_w;
+  wire signed [31:0] tcf_uv_bv_w, tcf_uv_cu_w, tcf_uv_cv_w;
+  wire [15:0]        tcf_uv_src_id_w;
+
   zhao_proj_subsystem #(
     .PAYLOAD_A_W (GEOM_PAY_A_W),
     .ARENAS      (PROJ_T_ARENAS),
@@ -18403,7 +18672,7 @@ module zhao_console_core
     // REAL: the terrain arena's lifetime and its landings, both directions.
     .fill_landed_o(ts_fill_landed),
     .fill_arena_o (ts_fill_arena),
-    .fill_profile_o(proj_fill_profile_o),
+    .fill_profile_o(tcf_tri_profile_w),
     .open_i       (ts_open),
     .open_arena_i (ts_open_arena),
     .open_gen_o   (ts_open_gen),
@@ -18437,26 +18706,26 @@ module zhao_console_core
     // packet (two absent terrain-lane LAWS, not wiring -- I13 names both).
     // Wiring corners into a port that wants edge functions would still be the
     // hidden adapter this file must not contain.
-    .out_valid_o  (proj_out_valid_o),
-    .out_ready_i  (proj_out_ready_i),
-    .out_ax_o     (proj_out_ax_o),
-    .out_ay_o     (proj_out_ay_o),
-    .out_bx_o     (proj_out_bx_o),
-    .out_by_o     (proj_out_by_o),
-    .out_cx_o     (proj_out_cx_o),
-    .out_cy_o     (proj_out_cy_o),
-    .out_behind_o (proj_out_behind_o),
-    .out_src_id_o (proj_out_src_id_o),
-    .out_ad_o     (proj_out_ad_o),
-    .out_bd_o     (proj_out_bd_o),
-    .out_cd_o     (proj_out_cd_o),
-    .out_aw_o     (proj_out_aw_o),
-    .out_bw_o     (proj_out_bw_o),
-    .out_cw_o     (proj_out_cw_o),
-    .out_view_o   (proj_out_view_o),
-    .out_mat_a_o  (proj_out_mat_a_o),
-    .out_mat_b_o  (proj_out_mat_b_o),
-    .out_weight_o (proj_out_weight_o),
+    .out_valid_o  (tcf_tri_valid_w),
+    .out_ready_i  (tcf_tri_ready_w),
+    .out_ax_o     (tcf_tri_ax_w),
+    .out_ay_o     (tcf_tri_ay_w),
+    .out_bx_o     (tcf_tri_bx_w),
+    .out_by_o     (tcf_tri_by_w),
+    .out_cx_o     (tcf_tri_cx_w),
+    .out_cy_o     (tcf_tri_cy_w),
+    .out_behind_o (tcf_tri_behind_w),
+    .out_src_id_o (tcf_tri_src_id_w),
+    .out_ad_o     (tcf_tri_ad_w),
+    .out_bd_o     (tcf_tri_bd_w),
+    .out_cd_o     (tcf_tri_cd_w),
+    .out_aw_o     (tcf_tri_aw_w),
+    .out_bw_o     (tcf_tri_bw_w),
+    .out_cw_o     (tcf_tri_cw_w),
+    .out_view_o   (tcf_tri_view_w),
+    .out_mat_a_o  (tcf_tri_mat_a_w),
+    .out_mat_b_o  (tcf_tri_mat_b_w),
+    .out_weight_o (tcf_tri_weight_w),
     .out_refused_o(proj_out_refused_o),
     .out_missed_o (proj_out_missed_o),
 
@@ -18541,11 +18810,11 @@ module zhao_console_core
     .sun_z_i(le_sun_z),
 
     // I13: the light leaves with the triangle it belongs to.
-    .light_valid_o     (terr_light_valid_o),
-    .light_ready_i     (terr_light_ready_i),
-    .light_base_o      (terr_light_base_o),
-    .light_degenerate_o(terr_light_degenerate_o),
-    .light_src_id_o    (terr_light_src_id_o),
+    .light_valid_o     (tcf_lit_valid_w),
+    .light_ready_i     (tcf_lit_ready_w),
+    .light_base_o      (tcf_lit_base_w),
+    .light_degenerate_o(tcf_lit_degen_w),
+    .light_src_id_o    (tcf_lit_src_id_w),
 
     .refs_taken_o       (terr_light_refs_taken_o),
     .lights_emitted_o   (terr_light_emitted_o),
@@ -18624,15 +18893,15 @@ module zhao_console_core
     .ref_src_id_i(ts_r_src_id),
 
     // I13: the coordinates leave with the triangle they belong to.
-    .uv_valid_o  (terr_uv_valid_o),
-    .uv_ready_i  (terr_uv_ready_i),
-    .uv_au_o     (terr_uv_au_o),
-    .uv_av_o     (terr_uv_av_o),
-    .uv_bu_o     (terr_uv_bu_o),
-    .uv_bv_o     (terr_uv_bv_o),
-    .uv_cu_o     (terr_uv_cu_o),
-    .uv_cv_o     (terr_uv_cv_o),
-    .uv_src_id_o (terr_uv_src_id_o),
+    .uv_valid_o  (tcf_uv_valid_w),
+    .uv_ready_i  (tcf_uv_ready_w),
+    .uv_au_o     (tcf_uv_au_w),
+    .uv_av_o     (tcf_uv_av_w),
+    .uv_bu_o     (tcf_uv_bu_w),
+    .uv_bv_o     (tcf_uv_bv_w),
+    .uv_cu_o     (tcf_uv_cu_w),
+    .uv_cv_o     (tcf_uv_cv_w),
+    .uv_src_id_o (tcf_uv_src_id_w),
 
     .refs_taken_o   (terr_uv_refs_taken_o),
     .uvs_emitted_o  (terr_uv_emitted_o),
@@ -18642,6 +18911,153 @@ module zhao_console_core
     /* verilator lint_off PINCONNECTEMPTY */
     .idle_o         ()
     /* verilator lint_on PINCONNECTEMPTY */
+  );
+
+  // ---------------------------------------------------------------------------
+  // I13: TERRAIN.CLIPFEED -- THE FOURTH DOOR CLIENT (CARRIAGE, 2026-09-26)
+  // ---------------------------------------------------------------------------
+  // This is the link entry I13 has named in every re-measurement since
+  // 2026-09-21 and refused to lay five times, each time correctly. What changed
+  // is that SHADELADDER built the two arithmetic laws on 2026-09-26 and
+  // registered both as OPEN deferrals whose stated delete condition is "the
+  // packet that lays the carriage instantiates this module". Both are
+  // instantiated inside `zhao_terrain_clipfeed`, and both deferral paragraphs
+  // are struck in their own files by this commit.
+  //
+  // WHAT IT MEANS FOR THE PICTURE, stated plainly because it is the thing to
+  // check by looking rather than by counting: terrain triangles now reach a
+  // raster. They draw with the interpolated, ladder-quantised shade as their
+  // colour -- `zhao_raster_fragment`'s `s1_src_rgb_r` takes the VERTEX rgb
+  // whenever the state's SHADE_MOD bit is clear, and `TERR_FRAG_STATE` is the
+  // opaque-geometry profile, whose SHADE_MOD is 0. So the surface is the
+  // oracle's UNTEXTURED terrain profile evaluated at a WHITE base: the console
+  // has no terrain material colour to supply a base from, which is a fact
+  // about the tree recorded in this entry and not a choice made here.
+  //
+  // THE TEXTURED PROFILE IS NOT REACHED BY THIS COMMIT and the reason is a new
+  // one -- see this entry's CARRIAGE paragraph for the measurement.
+  zhao_terrain_clipfeed #(
+    .ATTRS      (GEOM_CLIP_ATTRS),
+    .IDW        (16),
+    .SLOT_INVW  (GEOM_ATTR_SLOT_INVW),
+    .SLOT_UOW   (GEOM_ATTR_SLOT_U_OVER_W),
+    .SLOT_VOW   (GEOM_ATTR_SLOT_V_OVER_W),
+    .SLOT_R     (GEOM_ATTR_SLOT_R),
+    .SLOT_G     (GEOM_ATTR_SLOT_G),
+    .SLOT_B     (GEOM_ATTR_SLOT_B),
+    .SLOT_ALPHA (GEOM_ATTR_SLOT_ALPHA)
+  ) u_terrain_clipfeed (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the replayed triangle, its raw w and its layer-E triple.
+    //
+    // THE PROFILE IS THE FILL-BEAT PROFILE AND THAT IS A STATED LIMIT. It is
+    // correct under the projector's own group invariant -- a group holds ONE
+    // view's results, so the profile a vertex was filled under is the profile
+    // its triangle replays under. A genuinely per-TRIANGLE profile is owed
+    // besides, and this entry already records the price: the replay arena
+    // carries no profile field, so `zhao_vertex_arena`'s payload would have to
+    // widen. That is a change to that block, not to this composer, and it is
+    // named here rather than discovered by whoever first runs two views in one
+    // terrain frame.
+    .t_valid_i  (tcf_tri_valid_w),
+    .t_ready_o  (tcf_tri_ready_w),
+    .t_ax_i     (tcf_tri_ax_w),
+    .t_ay_i     (tcf_tri_ay_w),
+    .t_bx_i     (tcf_tri_bx_w),
+    .t_by_i     (tcf_tri_by_w),
+    .t_cx_i     (tcf_tri_cx_w),
+    .t_cy_i     (tcf_tri_cy_w),
+    .t_behind_i (tcf_tri_behind_w),
+    .t_src_id_i (tcf_tri_src_id_w),
+    .t_aw_i     (tcf_tri_aw_w),
+    .t_bw_i     (tcf_tri_bw_w),
+    .t_cw_i     (tcf_tri_cw_w),
+    .t_profile_i(tcf_tri_profile_w),
+
+    // REAL: TERRAIN.SHADE's flat light, through TERRAIN.LIGHTLANE.
+    .l_valid_i     (tcf_lit_valid_w),
+    .l_ready_o     (tcf_lit_ready_w),
+    .l_shade_i     (tcf_lit_base_w),
+    .l_degenerate_i(tcf_lit_degen_w),
+    .l_src_id_i    (tcf_lit_src_id_w),
+
+    // REAL: terrain_rules 6.2's frozen coordinates, through TERRAIN.UVLANE.
+    .u_valid_i (tcf_uv_valid_w),
+    .u_ready_o (tcf_uv_ready_w),
+    .u_au_i    (tcf_uv_au_w),
+    .u_av_i    (tcf_uv_av_w),
+    .u_bu_i    (tcf_uv_bu_w),
+    .u_bv_i    (tcf_uv_bv_w),
+    .u_cu_i    (tcf_uv_cu_w),
+    .u_cv_i    (tcf_uv_cv_w),
+    .u_src_id_i(tcf_uv_src_id_w),
+
+    // ---- LAYER H's TINT, AT ITS RATIFIED ABSENT IDENTITY -------------------
+    // `spec/terrain_rules.md` 6.5 makes layer-H tint a PER-VERTEX quantity
+    // ("tint moved to vertices"), and layer H is UNAUTHORED in this tree. Its
+    // absent identity is RGB565 0xFFFF, which `cell_tint` already defaults to
+    // and which is exactly 65536 in Q16.16 -- so `TERR_TINT_IDENTITY` is a LAW
+    // sitting at its identity, not a plausible number chosen here, and entry
+    // I13 says so in terms: "a unity tint is NOT the stand-in this entry
+    // refused three times; it is an unauthored layer sitting at its exact
+    // identity."
+    //
+    // THESE ARE NINE SEPARATE PORTS ON PURPOSE. The block walks all nine
+    // operand triples, so authoring layer H is a change to what drives these
+    // nine wires and NOT a change to any RTL. A version that computed one
+    // corner and copied it would have been the flat broadcast this entry and
+    // the owner's directive both forbid, and the block's header records that
+    // the first draft was exactly that and what caught it.
+    .a_tint_r_i(TERR_TINT_IDENTITY),
+    .a_tint_g_i(TERR_TINT_IDENTITY),
+    .a_tint_b_i(TERR_TINT_IDENTITY),
+    .b_tint_r_i(TERR_TINT_IDENTITY),
+    .b_tint_g_i(TERR_TINT_IDENTITY),
+    .b_tint_b_i(TERR_TINT_IDENTITY),
+    .c_tint_r_i(TERR_TINT_IDENTITY),
+    .c_tint_g_i(TERR_TINT_IDENTITY),
+    .c_tint_b_i(TERR_TINT_IDENTITY),
+    // UNITY, AND NOT BECAUSE THE SHEET IS ABSENT. `zhao_texture_sheetmod` was
+    // composed by TERRAINAUX on 2026-09-25 and applies the surface sheet PER
+    // FRAGMENT, with a pixel to prove it. Applying it again here would be a
+    // second home for one law and would double-modulate every terrain
+    // fragment. The identity is the correct operand precisely BECAUSE the real
+    // one is already applied downstream.
+    .sheet_i   (TERR_SHEET_IDENTITY),
+
+    // REAL: client 3 of GEOM.CLIP's door.
+    .o_valid_o        (tcf_o_valid),
+    .o_ready_i        (tcf_o_ready),
+    .o_ax_o           (tcf_o_ax),
+    .o_ay_o           (tcf_o_ay),
+    .o_bx_o           (tcf_o_bx),
+    .o_by_o           (tcf_o_by),
+    .o_cx_o           (tcf_o_cx),
+    .o_cy_o           (tcf_o_cy),
+    .o_behind_o       (tcf_o_behind),
+    .o_src_id_o       (tcf_o_src_id),
+    .o_untex_o        (tcf_o_untex),
+    .o_cull_mode_o    (tcf_o_cull_mode),
+    .o_attr_a_o       (tcf_o_attr_a),
+    .o_attr_b_o       (tcf_o_attr_b),
+    .o_attr_c_o       (tcf_o_attr_c),
+    .o_material_set_o (tcf_o_material_set),
+    .o_material_id_o  (tcf_o_material_id),
+    .o_material_mode_o(tcf_o_material_mode),
+    .o_vertex_alpha_o (tcf_o_vertex_alpha),
+    .o_frag_state_o   (tcf_o_frag_state),
+    .o_quality_tier_o (tcf_o_quality_tier),
+
+    .triangles_o      (terr_cf_triangles_o),
+    .emitted_o        (terr_cf_emitted_o),
+    .src_id_mismatch_o(terr_cf_src_mismatch_o),
+    .uv_sat_o         (terr_cf_uv_sat_o),
+    .shade_clamped_o  (terr_cf_shade_clamped_o),
+    .degenerate_o     (terr_cf_degenerate_o),
+    .dq_refused_o     (terr_cf_dq_refused_o),
+    .dq_stray_o       (terr_cf_dq_stray_o)
   );
 
   zhao_geom_proj_lane #(

@@ -2144,26 +2144,6 @@ module zhao_console_core_untex_decl_mutant
   output logic                    terr_tess_idle_o,
 
   // ---- I13: the projector's TRIANGLE OUTPUT -------------------------------
-  output logic                    proj_out_valid_o,
-  input  logic                    proj_out_ready_i,
-  output logic signed [20:0]      proj_out_ax_o,
-  output logic signed [20:0]      proj_out_ay_o,
-  output logic signed [20:0]      proj_out_bx_o,
-  output logic signed [20:0]      proj_out_by_o,
-  output logic signed [20:0]      proj_out_cx_o,
-  output logic signed [20:0]      proj_out_cy_o,
-  output logic [2:0]              proj_out_behind_o,
-  output logic [15:0]             proj_out_src_id_o,
-  output logic signed [31:0]      proj_out_ad_o,
-  output logic signed [31:0]      proj_out_bd_o,
-  output logic signed [31:0]      proj_out_cd_o,
-  output logic [30:0]             proj_out_aw_o,
-  output logic [30:0]             proj_out_bw_o,
-  output logic [30:0]             proj_out_cw_o,
-  output logic                    proj_out_view_o,
-  output logic [7:0]              proj_out_mat_a_o,
-  output logic [7:0]              proj_out_mat_b_o,
-  output logic [7:0]              proj_out_weight_o,
   output logic                    proj_out_refused_o,
   output logic                    proj_out_missed_o,
 
@@ -2186,7 +2166,6 @@ module zhao_console_core_untex_decl_mutant
   // replay arena carries no profile field and widening it is a change to
   // `zhao_vertex_arena`, not to a composer.
   output logic [1:0]              proj_a_profile_o,
-  output logic [1:0]              proj_fill_profile_o,
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -2210,11 +2189,6 @@ module zhao_console_core_untex_decl_mutant
   // projector's own fill beat, the face normal is `zhao_terrain_normals` and
   // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
   // through `zhao_light_env` (R25). The consumer is I13's absent merge.
-  output logic                    terr_light_valid_o,
-  input  logic                    terr_light_ready_i,
-  output logic signed [31:0]      terr_light_base_o,
-  output logic                    terr_light_degenerate_o,
-  output logic [15:0]             terr_light_src_id_o,
   output logic [31:0]             terr_light_refs_taken_o,
   output logic [31:0]             terr_light_emitted_o,
   output logic [31:0]             terr_light_stale_reads_o,
@@ -2226,15 +2200,6 @@ module zhao_console_core_untex_decl_mutant
   // TERRAIN.UV, added 2026-09-23. Wrapper parity only: `.*` cannot bind a
   // port the wrapper does not declare, so the control would not elaborate.
   // Ruling R220 -- fix the WRAPPER, never the module.
-  output logic                    terr_uv_valid_o,
-  input  logic                    terr_uv_ready_i,
-  output logic signed [31:0]      terr_uv_au_o,
-  output logic signed [31:0]      terr_uv_av_o,
-  output logic signed [31:0]      terr_uv_bu_o,
-  output logic signed [31:0]      terr_uv_bv_o,
-  output logic signed [31:0]      terr_uv_cu_o,
-  output logic signed [31:0]      terr_uv_cv_o,
-  output logic [15:0]             terr_uv_src_id_o,
   output logic [31:0]             terr_uv_refs_taken_o,
   output logic [31:0]             terr_uv_emitted_o,
   output logic [31:0]             terr_uv_stale_reads_o,
@@ -2242,6 +2207,14 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
+  output logic [31:0]             terr_cf_triangles_o,
+  output logic [31:0]             terr_cf_emitted_o,
+  output logic [31:0]             terr_cf_src_mismatch_o,
+  output logic [31:0]             terr_cf_uv_sat_o,
+  output logic [31:0]             terr_cf_shade_clamped_o,
+  output logic [31:0]             terr_cf_degenerate_o,
+  output logic [31:0]             terr_cf_dq_refused_o,
+  output logic [31:0]             terr_cf_dq_stray_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE

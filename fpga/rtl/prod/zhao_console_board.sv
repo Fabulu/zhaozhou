@@ -605,6 +605,23 @@ module zhao_console_board
   // Q16.16, matching FORGE_ALPHA's convention.
   parameter int signed PART_ALPHA = 32'sd65536,   // 1.0, opaque
 
+  // ---- I13: TERRAIN.CLIPFEED's two operand identities (CARRIAGE) ----------
+  // NEITHER IS A PLAUSIBLE VALUE CHOSEN AT A COMPOSER, which is the only
+  // reason they are allowed to be constants at all.
+  //
+  // `TERR_TINT_IDENTITY` is layer H's RATIFIED ABSENT IDENTITY. RGB565 0xFFFF
+  // is what `cell_tint` defaults to when no tint layer is authored, and it is
+  // exactly 65536 in Q16.16. `spec/terrain_rules.md` 6.5 makes the tint
+  // PER-VERTEX, so when layer H is authored these nine driver wires change and
+  // no RTL does -- `u_terrain_clipfeed` walks all nine operand triples today.
+  //
+  // `TERR_SHEET_IDENTITY` is unity because the surface sheet is ALREADY
+  // APPLIED, per fragment, by `zhao_texture_sheetmod` (TERRAINAUX, 2026-09-25,
+  // with a pixel behind it). A second application at the vertex would be a
+  // second home for one law.
+  parameter logic [16:0] TERR_TINT_IDENTITY  = 17'd65536,
+  parameter logic [16:0] TERR_SHEET_IDENTITY = 17'd65536,
+
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
   parameter int unsigned PROJ_T_DEPTH  = 81,
@@ -2717,27 +2734,14 @@ module zhao_console_board
   output logic [31:0]             terr_tess_mode_invalid_o,
   output logic                    terr_tess_idle_o,
 
-  // ---- I13: the projector's TRIANGLE OUTPUT -------------------------------
-  output logic                    proj_out_valid_o,
-  input  logic                    proj_out_ready_i,
-  output logic signed [20:0]      proj_out_ax_o,
-  output logic signed [20:0]      proj_out_ay_o,
-  output logic signed [20:0]      proj_out_bx_o,
-  output logic signed [20:0]      proj_out_by_o,
-  output logic signed [20:0]      proj_out_cx_o,
-  output logic signed [20:0]      proj_out_cy_o,
-  output logic [2:0]              proj_out_behind_o,
-  output logic [15:0]             proj_out_src_id_o,
-  output logic signed [31:0]      proj_out_ad_o,
-  output logic signed [31:0]      proj_out_bd_o,
-  output logic signed [31:0]      proj_out_cd_o,
-  output logic [30:0]             proj_out_aw_o,
-  output logic [30:0]             proj_out_bw_o,
-  output logic [30:0]             proj_out_cw_o,
-  output logic                    proj_out_view_o,
-  output logic [7:0]              proj_out_mat_a_o,
-  output logic [7:0]              proj_out_mat_b_o,
-  output logic [7:0]              proj_out_weight_o,
+  // ---- I13: the projector's TRIANGLE OUTPUT -- RETIRED FROM THIS EDGE -----
+  // The triangle, its raw w and its layer-E triple are CONSUMED IN THIS MODULE
+  // as of 2026-09-26 (CARRIAGE): `u_terrain_clipfeed` takes them, converts the
+  // w to invw24, multiplies terrain's u/v through by it and offers the result
+  // at `u_geom_clipdoor` as the FOURTH client. They are no longer a boundary
+  // and no longer leave this module. `proj_out_refused_o` and
+  // `proj_out_missed_o` stay: they are EVIDENCE about the projector, not the
+  // triangle, and the console ports them out as it ports every other census.
   output logic                    proj_out_refused_o,
   output logic                    proj_out_missed_o,
 
@@ -2760,7 +2764,8 @@ module zhao_console_board
   // replay arena carries no profile field and widening it is a change to
   // `zhao_vertex_arena`, not to a composer.
   output logic [1:0]              proj_a_profile_o,
-  output logic [1:0]              proj_fill_profile_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): it is the depth profile
+  // `u_terrain_clipfeed` hands to its `zhao_geom_depthquant_stream`.
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -2784,11 +2789,10 @@ module zhao_console_board
   // projector's own fill beat, the face normal is `zhao_terrain_normals` and
   // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
   // through `zhao_light_env` (R25). The consumer is I13's absent merge.
-  output logic                    terr_light_valid_o,
-  input  logic                    terr_light_ready_i,
-  output logic signed [31:0]      terr_light_base_o,
-  output logic                    terr_light_degenerate_o,
-  output logic [15:0]             terr_light_src_id_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the shade is consumed by
+  // `u_terrain_clipfeed` below, which clamps it by `shade_flat_tri`'s law and
+  // runs it through `zhao_terrain_shademod`'s five-rung ladder into GEOM.CLIP
+  // attribute slots 3..5. The counters below stay; they are evidence.
   output logic [31:0]             terr_light_refs_taken_o,
   output logic [31:0]             terr_light_emitted_o,
   output logic [31:0]             terr_light_stale_reads_o,
@@ -2816,15 +2820,10 @@ module zhao_console_board
   // arrival point of that work, not a tie-off: the value is real, it traverses,
   // and `tests/terrain/terrain_uvlane_directed.cpp` proves it against the
   // frozen law two independent ways.
-  output logic                    terr_uv_valid_o,
-  input  logic                    terr_uv_ready_i,
-  output logic signed [31:0]      terr_uv_au_o,
-  output logic signed [31:0]      terr_uv_av_o,
-  output logic signed [31:0]      terr_uv_bu_o,
-  output logic signed [31:0]      terr_uv_bv_o,
-  output logic signed [31:0]      terr_uv_cu_o,
-  output logic signed [31:0]      terr_uv_cv_o,
-  output logic [15:0]             terr_uv_src_id_o,
+  // RETIRED FROM THIS EDGE 2026-09-26 (CARRIAGE): the coordinates are consumed
+  // by `u_terrain_clipfeed`, which multiplies each by its corner's invw24
+  // through `zhao_geom_overw_sat` -- the S8.24 saturate `spec/qformats.md:75`
+  // mandates -- and fills slots 1 and 2 with the results.
   output logic [31:0]             terr_uv_refs_taken_o,
   output logic [31:0]             terr_uv_emitted_o,
   output logic [31:0]             terr_uv_stale_reads_o,
@@ -2832,6 +2831,26 @@ module zhao_console_board
   output logic [31:0]             terr_uv_pitch_illegal_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
+
+  // ---- I13: TERRAIN.CLIPFEED's census, 2026-09-26 (CARRIAGE) --------------
+  // `terr_cf_triangles_o` and `terr_cf_emitted_o` DISCRIMINATE (ruling R95): a
+  // block that accepted and never emitted shows the first climbing with the
+  // second pinned, which neither a stall nor a healthy run looks like.
+  output logic [31:0]             terr_cf_triangles_o,
+  output logic [31:0]             terr_cf_emitted_o,
+  // The three-way join disagreed about which triangle it holds. Its three
+  // operands are loaded by three different enables in three different blocks,
+  // so this comparison is not one of the blind ones.
+  output logic [31:0]             terr_cf_src_mismatch_o,
+  // `zhao_geom_overw_sat`'s saturate ENGAGED: a patch past 128 tiles from the
+  // origin. That block holds no state and says the composer must count it.
+  output logic [31:0]             terr_cf_uv_sat_o,
+  // The shade left the law's [0, 65536] domain and was clamped. NOT a fault --
+  // `zhao_terrain_shade` emits an unclamped value by design.
+  output logic [31:0]             terr_cf_shade_clamped_o,
+  output logic [31:0]             terr_cf_degenerate_o,
+  output logic [31:0]             terr_cf_dq_refused_o,
+  output logic [31:0]             terr_cf_dq_stray_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
@@ -4510,6 +4529,8 @@ module zhao_console_board
       .GEOM_ATTR_SLOT_B           (GEOM_ATTR_SLOT_B),
       .GEOM_ATTR_SLOT_ALPHA       (GEOM_ATTR_SLOT_ALPHA),
       .PART_ALPHA                 (PART_ALPHA),
+      .TERR_TINT_IDENTITY         (TERR_TINT_IDENTITY),
+      .TERR_SHEET_IDENTITY        (TERR_SHEET_IDENTITY),
       .PROJ_T_ARENAS              (PROJ_T_ARENAS),
       .PROJ_T_DEPTH               (PROJ_T_DEPTH),
       .PROJ_T_INDEX_W             (PROJ_T_INDEX_W),
@@ -5430,31 +5451,10 @@ module zhao_console_board
       .terr_tess_mat_unarmed_o            (terr_tess_mat_unarmed_o),
       .terr_tess_mode_invalid_o           (terr_tess_mode_invalid_o),
       .terr_tess_idle_o                   (terr_tess_idle_o),
-      .proj_out_valid_o                   (proj_out_valid_o),
-      .proj_out_ready_i                   (proj_out_ready_i),
-      .proj_out_ax_o                      (proj_out_ax_o),
-      .proj_out_ay_o                      (proj_out_ay_o),
-      .proj_out_bx_o                      (proj_out_bx_o),
-      .proj_out_by_o                      (proj_out_by_o),
-      .proj_out_cx_o                      (proj_out_cx_o),
-      .proj_out_cy_o                      (proj_out_cy_o),
-      .proj_out_behind_o                  (proj_out_behind_o),
-      .proj_out_src_id_o                  (proj_out_src_id_o),
-      .proj_out_ad_o                      (proj_out_ad_o),
-      .proj_out_bd_o                      (proj_out_bd_o),
-      .proj_out_cd_o                      (proj_out_cd_o),
-      .proj_out_aw_o                      (proj_out_aw_o),
-      .proj_out_bw_o                      (proj_out_bw_o),
-      .proj_out_cw_o                      (proj_out_cw_o),
-      .proj_out_view_o                    (proj_out_view_o),
-      .proj_out_mat_a_o                   (proj_out_mat_a_o),
-      .proj_out_mat_b_o                   (proj_out_mat_b_o),
-      .proj_out_weight_o                  (proj_out_weight_o),
       .proj_out_refused_o                 (proj_out_refused_o),
       .proj_out_missed_o                  (proj_out_missed_o),
       .proj_a_view_o                      (proj_a_view_o),
       .proj_a_profile_o                   (proj_a_profile_o),
-      .proj_fill_profile_o                (proj_fill_profile_o),
       .proj_replay_triangles_o            (proj_replay_triangles_o),
       .proj_replay_refused_o              (proj_replay_refused_o),
       .proj_replay_missed_o               (proj_replay_missed_o),
@@ -5467,11 +5467,6 @@ module zhao_console_board
       .proj_svc_busy_o                    (proj_svc_busy_o),
       .proj_a_grants_o                    (proj_a_grants_o),
       .proj_b_grants_o                    (proj_b_grants_o),
-      .terr_light_valid_o                 (terr_light_valid_o),
-      .terr_light_ready_i                 (terr_light_ready_i),
-      .terr_light_base_o                  (terr_light_base_o),
-      .terr_light_degenerate_o            (terr_light_degenerate_o),
-      .terr_light_src_id_o                (terr_light_src_id_o),
       .terr_light_refs_taken_o            (terr_light_refs_taken_o),
       .terr_light_emitted_o               (terr_light_emitted_o),
       .terr_light_stale_reads_o           (terr_light_stale_reads_o),
@@ -5480,15 +5475,6 @@ module zhao_console_board
       .terr_light_degenerate_count_o      (terr_light_degenerate_count_o),
       .terr_light_base_sat_o              (terr_light_base_sat_o),
       .terr_light_degen_mismatch_o        (terr_light_degen_mismatch_o),
-      .terr_uv_valid_o                    (terr_uv_valid_o),
-      .terr_uv_ready_i                    (terr_uv_ready_i),
-      .terr_uv_au_o                       (terr_uv_au_o),
-      .terr_uv_av_o                       (terr_uv_av_o),
-      .terr_uv_bu_o                       (terr_uv_bu_o),
-      .terr_uv_bv_o                       (terr_uv_bv_o),
-      .terr_uv_cu_o                       (terr_uv_cu_o),
-      .terr_uv_cv_o                       (terr_uv_cv_o),
-      .terr_uv_src_id_o                   (terr_uv_src_id_o),
       .terr_uv_refs_taken_o               (terr_uv_refs_taken_o),
       .terr_uv_emitted_o                  (terr_uv_emitted_o),
       .terr_uv_stale_reads_o              (terr_uv_stale_reads_o),
@@ -5496,6 +5482,14 @@ module zhao_console_board
       .terr_uv_pitch_illegal_o            (terr_uv_pitch_illegal_o),
       .proj_contended_o                   (proj_contended_o),
       .proj_mat_refused_o                 (proj_mat_refused_o),
+      .terr_cf_triangles_o                (terr_cf_triangles_o),
+      .terr_cf_emitted_o                  (terr_cf_emitted_o),
+      .terr_cf_src_mismatch_o             (terr_cf_src_mismatch_o),
+      .terr_cf_uv_sat_o                   (terr_cf_uv_sat_o),
+      .terr_cf_shade_clamped_o            (terr_cf_shade_clamped_o),
+      .terr_cf_degenerate_o               (terr_cf_degenerate_o),
+      .terr_cf_dq_refused_o               (terr_cf_dq_refused_o),
+      .terr_cf_dq_stray_o                 (terr_cf_dq_stray_o),
       .post_busy_o                        (post_busy_o),
       .post_passes_o                      (post_passes_o),
       .post_frames_o                      (post_frames_o),
