@@ -6822,10 +6822,14 @@
 //
 //      WHAT IS STILL REFUSED, AND IT IS THE HALF THIS ENTRY IS ACTUALLY ABOUT.
 //
-//      (1) THE PRODUCER IS NOT COMPOSED. Composing it means retiring
-//          `u_geom_chunkser` as the arena's producer, which leaves
-//          `zhao_geom_binner_v2`'s serialise pass -- `ser_req_i` and seven
-//          `ser_*` outputs, exported through `zhao_shell_top_v2` as
+//      (1) `zhao_geom_arenabin` IS BUILT AND THIS CORE DOES NOT INSTANTIATE
+//          IT. (Said that way round deliberately: `check_entry_claims.py`
+//          keys on PROSE, and the phrase this sentence wants to use lands
+//          next to the name of a block that IS composed, so the tool reads
+//          the claim as being about the binner. It is not.) Instantiating it
+//          means retiring `u_geom_chunkser` as the arena's producer, which
+//          leaves the serialise pass in `zhao_geom_binner_v2` -- `ser_req_i`
+//          and seven `ser_*` outputs, exported through `zhao_shell_top_v2` as
 //          `render_ser_*` -- with no consumer, turning a live path into
 //          dangling ports and making entry I54's text false. That is a
 //          subsystem retirement on the block the fit budget is tightest on,

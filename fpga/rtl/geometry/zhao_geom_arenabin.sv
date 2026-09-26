@@ -51,12 +51,23 @@
 //                             ------------------
 //                             ~360,000 bits of on-chip transpose.
 //
-// THIS BLOCK HOLDS ONE PARTIAL CHUNK PER TILE AND NOTHING ELSE:
+// THIS BLOCK HOLDS ONE PARTIAL CHUNK PER TILE AND A PER-TILE DIRECTORY:
 //
 //     stage_ram  STAGE_IDS x TILES x ID_W = 14 x 576 x 18 = 145,152 bits
-//     head/tail/hv/fill    576 x (18+18+1+4)             =  23,616 bits
-//                                                          -------------
-//                                                          ~168,768 bits
+//     head_ram   576 x CHIDX_W 18                         =  10,368 bits
+//     tail_ram   576 x CHIDX_W 18                         =  10,368 bits
+//     hv_ram     576 x 1                                  =     576 bits
+//     fill_ram   576 x STG_W 4                            =   2,304 bits
+//     nch_ram    576 x CHW 16                             =   9,216 bits
+//                                                           -------------
+//                                                             177,984 bits
+//
+// THAT TOTAL WAS 168,768 IN THE FIRST VERSION OF THIS HEADER AND IT WAS WRONG
+// BY `nch_ram`, WHICH I ADDED AN HOUR LATER. Recorded rather than quietly
+// corrected, because it went wrong in the direction this repo's own law says
+// nobody audits: a block that looks CHEAPER than it is. The per-tile chunk
+// counter exists so `max_tile_chunks_o` measures a tile's list depth instead
+// of a frame total, and it is 9,216 bits that have to be paid for.
 //
 // -- and every FULL chunk leaves for SDRAM the moment its fourteenth id lands.
 // The bound is per-TILE and constant, not per-frame: a giant that covers every
