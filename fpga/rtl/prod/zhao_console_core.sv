@@ -6161,6 +6161,82 @@
 //      this one: R7's giant quota is NOT in force, because the seal is still
 //      the arena's own capacity. That waits on a Measure with somewhere to
 //      publish a number.
+//
+//      -- CHUNKSER, 2026-09-26. STILL OPEN, AND THE SENTENCE ABOVE IS FALSE IN
+//      THE PART THAT MATTERS. The quota does NOT wait on "somewhere to publish
+//      a number". THE SOMEWHERE EXISTS AND IS ALREADY WIRED:
+//      `zhao_geom_paramarena` takes `seal_valid_i`/`seal_ready_o`/
+//      `seal_verts_i`/`seal_tris_i`/`seal_chunks_i`/`frame_gen_i`, latches them
+//      with the view, ENFORCES them (`q_chunks_q`, `ck_fits_c`), faults the
+//      frame on an overrun and counts it at `quota_overflow_o`. What is missing
+//      is a PRODUCER OF THE NUMBER, not a port to publish it into -- and that
+//      difference is the difference between a blocked gap and an unwritten
+//      block. It is the campaign's usual shape: the absence claim was half
+//      true (`zhao_measure_tokens` really has no tile-reference port; its
+//      budgets are abstract tokens, and its own header refuses a priority heap
+//      by charter §9) and the load-bearing half was stale.
+//
+//      A SECOND ABSENCE THAT IS ALSO FALSE, and it is the one that unblocks the
+//      demotion law. THE DECLARED LOD PRIORITY ALREADY EXISTS IN THE SHIPPED
+//      ABI. `spec/commands.zidl` gives `DrawForm`, `DrawPopulation`,
+//      `DrawPosedForm` and `DrawWarpedForm` a `u8 semantic_weight` whose own
+//      comment says it "feeds the Measure policy (degrade order)". It is
+//      decoded (`zhao_cmd_exec.draw_semantic_weight_o`), carried
+//      (`zhao_geom_drawjob.j_side_o`, beside material_set and raster_state) and
+//      rides the meshlet through GEOM.MESHFETCH and GEOM.ASSETFETCH. NOTHING
+//      READS THOSE EIGHT BITS. It is an uncashed cheque, not a missing input,
+//      so "demote by declared LOD priority" needs no new ABI field.
+//
+//      SO THE SHAPE IS: ALLOCATOR POLICY WITH AN EXISTING PRODUCER, not a
+//      Measure port. Owner vacation directive §5 decides the architecture and
+//      is quoted here because it is the specification:
+//        "Reserve the guaranteed giant's 32,768 TILE REFERENCES before ordinary
+//         kMesh allocation, including ceil(32768/14) chunk payload units and
+//         all required vertices/descriptors/metadata. Do not confuse references
+//         with chunks... Select the guaranteed giant by declared priority, then
+//         stable instance identity for ties... A constant equal to arena
+//         capacity is not an admission plan."
+//      ceil(32768/14) = 2,341 chunks, which this block's own parameter comment
+//      already computes. KEEP THE UNITS DISTINCT: `seal_chunks_i` is CHUNKS and
+//      R7's 32,768 is REFERENCES; a reservation expressed in the wrong unit is
+//      14x wrong in the flattering direction.
+//
+//      WHAT IT NEEDS, DERIVED RATHER THAN ESTIMATED, so the next packet does
+//      not re-discover it:
+//        (1) A SELECTOR. A streaming max over the draw stream on
+//            {semantic_weight, instance_id} -- highest weight wins, lowest
+//            instance id breaks the tie, which is the directive's "stable
+//            instance identity". One comparator; NOT a priority heap, which
+//            charter §9 forbids and `zhao_measure_tokens` refuses by name.
+//        (2) A CLASS BIT ON THE ALLOCATION. The arena has ONE chunk cursor and
+//            cannot tell a giant's chunk from an ordinary one, so a reservation
+//            it cannot see is a reservation it cannot enforce. It needs
+//            `ck_giant_i` beside `ck_valid_i` and a `seal_giant_chunks_i`, with
+//            `ck_fits_c` refusing ORDINARY chunks past
+//            `q_chunks_q - q_giant_q` while giant chunks may enter the reserve.
+//            Only then is "the giant is never silently truncated" a property of
+//            the allocator instead of a sentence.
+//        (3) A DEMOTION CONSUMER, or the law is half enforced -- and half a law
+//            that LOOKS enforced is worse than none. `zhao_geom_lodstate` is
+//            COMPOSED (`u_geom_lodstate`, this file; several older comments in
+//            this file saying it is "NOT composed, anywhere" are STALE) and
+//            already holds a per-instance rung with hysteresis under R74. The
+//            demotion is a per-instance COARSEST-ALLOWED-RUNG floor written
+//            into it, so `c_rung_o` becomes max(ladder, floor). That is the
+//            existing declared deterministic order the directive names, not a
+//            second ladder.
+//      The plan's per-object REFERENCE COST is the one quantity the console
+//      does not hold. The directive authorises computing the plan on the HPS
+//      and validating it in hardware, so it arrives as a command field -- an
+//      ABI change, which is why this is declared here rather than done inside a
+//      packet whose gates do not include `npm run abi:check`.
+//
+//      NOT BUILT BY THIS PACKET, and deliberately not half-built: an
+//      unconnected quota block would move this entry from a tie-off to a
+//      DISCONNECTED IMPLEMENTATION, which the register counts as a gap and the
+//      campaign's first rule refuses as a closure. The seal stays at capacity,
+//      which remains the NEUTRAL choice and is still declared rather than
+//      hidden.
 
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
