@@ -2421,3 +2421,75 @@ Remaining: `I13`+`normalmap`, `I34`+`velocity`, `I54`, `I55`, `I56`.
 **Optimization queue:** ATTRSETUP (running) -> `zhao_forge_assemble`'s
 `pos_q`/`inv_q` (34,840 bits, **not free**) -> `zhao_geom_lodstate`'s `st_q`
 (9,216 bits).
+
+### 2026-09-26 — REGISTER 6. TERRVEL merged, CHUNKSER launched.
+
+**Merged at `f400de58`. Register 7 -> 6**, connected capabilities 110 -> 111, and
+**`zhao_terrain_normalmap` is now the ONLY disconnected implementation left in
+the tree.**
+
+**Velocity reaches a particle contact, over fabric**, through real production
+modules end to end: earth adapter out-lane 1 -> new `zhao_terrain_veljoin` ->
+`zhao_terrain_velocity` -> the compose cache's new §4.2 velocity plane -> cliff
+sharer -> spdesc -> heighttap's §4.3 velocity CELL -> the particle tap's
+interpolation -> `zhao_part_collide`'s relative-velocity term. **1,089 lattice
+words per patch agreeing with the oracle at every vertex**, smoke PASS at
+`tv_samples=1089, cc_vel_words=1089, arm_stall=0`, and **the join costs the
+shipped height lane zero clocks**. `efa_velocity` had been driven by one block
+and read by nobody since 2026-09-23.
+
+**THE FIND IS A FALSE ABSENCE THAT FIVE PACKETS CARRIED.** *"Joining it to the
+consumer's vertex stream is a SCHEDULER and a composer may not write one"* — the
+operative half is wrong. The pagestream walks column-fast-then-row over 33×33 and
+velocity's law-V3 sweep advances **identically**. **They are the same walk**, so
+what was needed was a fork with a joint ready and an address interlock. **Nobody
+had compared two loops eight lines apart in two files.** And §4.3's *normative*
+`column_query` tuple already returned `velocity` with nothing implementing it —
+ratified law, never built, which is why it was affordable.
+
+**I34 does not close**, correctly: material and nav stay behind the owner fence,
+and velocity does **not** generalise to them — it had a ratified destination AND
+a ratified interpolation law; they have neither.
+
+**And I34's intake question is ANSWERED rather than repaired.** The stream is
+bounded in quantity (`TFLD_Q = 4`, refuses a bigger packet whole) and in drain
+rate (~19 clocks a record), and **bounded against a patch by nothing at all** —
+`cmd_tfld_ready_w = tfl_cmd_ready && efa_rec_ready`, neither term mentions the
+patch, and for ~10^5 clocks of a covered walk the joined ready is high. The only
+thing standing in for a bound is **a sentence in `zhao_cmd_exec.sv`:667-669**
+about the cartridge's packet cadence — *a property of the packet stream, not of
+this hardware.*
+
+**`fld_earth_idle_o` is confirmed right and its zero readers re-confirmed — and
+it is not alone.** `terr_pt_idle_o` and `terr_fl_idle_o` have the same shape,
+core port -> board port -> nothing, and **a sweep of the production composers
+finds NO `*_idle_o` used as a gate anywhere.** The one-line close is written into
+the entry and deliberately not taken: it carries a reachable deadlock and a
+starvation risk, both needing measurement. A refusal with two named measurements
+attached, not a deferral.
+
+**Three errors it caught in itself**, the first expensive: it ran the velocity
+MADs unconditionally and cut the particle tap from 6 to 8 clocks per particle —
+**a 33% throughput regression it would have shipped as "zero DSP"** — caught by
+`part_terrain_tap_directed` and now gated on presence. Its directed test settled
+across the clock edge and looked exactly like an RTL deadlock. And it claimed
+`-Mutant` was pre-existing red **before noticing it had broken that mutant's
+elaboration**; it says it nearly wrote the flattering version.
+
+**CHUNKSER launched** at `50714814` — I54's chunk serialiser and I56's guaranteed
+giant, with **I55 fenced off**. Two corrections to its own brief before launch:
+find the entries by `grep`, not line number (console core gained 441 lines in the
+TERRVEL merge alone), and the register is six, not the seven it was drafted
+against — with the packet told to measure it itself, bare.
+
+### WHERE I AM
+
+**Running:** ATTRSETUP (45 DSP in 164 lines) and CHUNKSER (I54 + I56). **At the
+cap of two.**
+
+**Register 6:** `I13`+`normalmap`, `I34`, `I54`, `I55`, `I56`.
+
+**Optimization queue behind ATTRSETUP:** `zhao_forge_assemble`'s `pos_q`/`inv_q`
+(34,840 bits, **not free**), then `zhao_geom_lodstate`'s `st_q` (9,216 bits).
+Neither has a fit target yet — add one before briefing, not while a lane is
+running preflights.
