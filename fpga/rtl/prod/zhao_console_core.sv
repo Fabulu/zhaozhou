@@ -6710,6 +6710,33 @@
 //      binding one. BOTH seams this entry has considered protect the wrong
 //      wall. That is the finding, and it is why no reservation is built here.
 //
+//      AND THE BREACH IS NOT MERELY UNHANDLED, IT IS UNOBSERVABLE IN THE
+//      COMPOSED CONSOLE. The binner instruments its own wall correctly and the
+//      SHELL THROWS THE INSTRUMENTS AWAY (`zhao_shell_top_v2:1360-1365`):
+//        .binner_tile_references_o     (rp_refs_unused)
+//        .binner_max_tile_list_depth_o (rp_depth_unused)
+//        .binner_triangles_culled_o    (rp_culled_unused)
+//        .binner_arena_full_o          (rp_arenafull_unused)
+//        .binner_arena_used_o          ()
+//      Only `binner_overflow_o` survives, as `render_overflow_o`, and it is a
+//      PASS-THROUGH: this file declares it at :10959, connects it at :20197 and
+//      READS IT NOWHERE, and no test in the tree reads it either. So the
+//      console can neither say that the giant was truncated nor by how much.
+//
+//      NOTE WHAT THAT DOES TO THE EVIDENCE, because it is this file's own law
+//      in a new costume. The counters ARE proven to fire --
+//      `tests/geometry/geom_binner_directed.cpp:437` asserts
+//      `triangles_culled == 12` on a real overflow and :457 asserts
+//      `arena_used <= 256`. That is a positive control AT THE LEAF, and it says
+//      nothing whatever about the composed machine, where the same signals
+//      terminate in wires named `_unused`. "A gate that cannot reach the state
+//      is not evidence about the state" -- here the gate reaches it in a bench
+//      and the console discards the answer. THREE instances of this one shape
+//      sit in this entry now: these six, `u_geom_tidq`'s three counters
+//      declared at `tb_zhao_console_core_smoke.sv:493-495` and asserted on by
+//      nothing, and `ck_fits_c`, which had never been seen to fire anywhere
+//      until GIANTQUOTA fired it deliberately.
+//
 //      THE BRIEF'S CLAIM, CHECKED AS INSTRUCTED. It read: "at the reference
 //      push the unit is references, and 32,768 references is precisely the
 //      number R7 rules, so the reservation IS a hardware constant and no ABI
