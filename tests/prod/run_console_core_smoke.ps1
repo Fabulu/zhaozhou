@@ -254,6 +254,39 @@ param(
   # 2816, and must not be read as the gated number. Own build directory, own
   # TAG (see the paragraph in the tag chain).
   [switch]$TerrainFlatLattice,
+  # ---------------------------------------------------------------------------
+  # -NoTerrainMaterial: THE ABSENT IDENTITY, KEPT AS A NAMED CONTROL
+  # ---------------------------------------------------------------------------
+  # Added 2026-09-26 (TERRAINMAT, entry I13 items (a) and (b)).
+  #
+  # The plain run now asserts `render_texture_samples_o ==
+  # render_texture_fragments_o` -- EVERY fragment that reaches the texture
+  # island takes a sample. That equality was FALSE by 26 until this packet, and
+  # an equality nobody has watched fail is a claim rather than a gate. THIS IS
+  # THE FORM THAT MAKES IT FAIL, on purpose, from the one variable that moves.
+  #
+  # With -NoTerrainMaterial the SetEnvironment record carries
+  # `terrain_material_set = 0` and `terrain_material_id = 0` -- which is what
+  # every capture written before 2026-09-26 carries, because those two fields
+  # were `pad` then. NOTHING ELSE CHANGES: the same lattice, the same relief,
+  # the same placement, the same 128 terrain triangles emitted.
+  #
+  # DIRECT polarity: the run PASSES when terrain declares MATMODE_NONE, takes
+  # NO sample, and the island's fragment and sample counts therefore DISAGREE.
+  # What it asserts is a law of `zhao_material_window` -- under MATMODE_NONE the
+  # window publishes `NOMAT_SAMPLE_COUNT_C = 0` and `req_valid_o`, which is
+  # literally `(st_q == ST_REQ)`, never asserts -- so it stays true forever and
+  # is not a test that asserts a bug. The absent identity is the control's own
+  # stimulus, the way -BadVertex pokes a reserved byte.
+  #
+  # It is also the positive control for TWO zeros the plain run now asserts:
+  # `terr_cf_mat_orphan_o` and the fragment/sample difference.
+  #
+  # NOTE: `raster pixels` is still 2816 in this form -- terrain DRAWS either
+  # way; what changes is whether its fragments carry a texel. A form that moved
+  # the pixel count would be changing the geometry, which this one does not.
+  # Own build directory, own TAG.
+  [switch]$NoTerrainMaterial,
   [switch]$GlowTag,
   # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
@@ -363,6 +396,8 @@ if (-not $BuildIn) {
          # EVERY NEW SWITCH NEEDS A TAG HERE -- see the paragraph above, which
          # is about exactly this line being forgotten once already.
          elseif ($TerrainFlatLattice) { 'zhao_console_core_smoke_flatlat' }
+         # EVERY NEW SWITCH NEEDS A TAG HERE. This one is 2026-09-26's.
+         elseif ($NoTerrainMaterial) { 'zhao_console_core_smoke_notermat' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
@@ -443,6 +478,10 @@ if ($GlowTag) {
 if ($TerrainFlatLattice) {
   $defs += '+define+ZHAO_SMOKE_TERRAIN_FLAT'
   Write-Host 'TERRAINVISIBLE CONTROL (entry I13): layer A of every played terrain page is left ALL ZEROS -- the body every page carried until 2026-09-26 -- instead of the affine ground ramp the repaired fixture writes. DIRECT polarity (passes when GEOM.CLIP culls EVERY terrain triangle for ZERO AREA and GEOM.SETUP takes only the mesh reference): a ground plane through the eye projects to a line. It is the positive control for the zero that the plain run asserts on clip culled. NOTE: raster pixels is the MESH total 2560 in this form, NOT the plain run 2816, and must not be read as the gated number.'
+}
+if ($NoTerrainMaterial) {
+  $defs += '+define+ZHAO_SMOKE_NO_TERRAIN_MATERIAL'
+  Write-Host 'TERRAINMAT CONTROL (entry I13 items (a)/(b)): SetEnvironment carries terrain_material_set = 0 and terrain_material_id = 0 -- what every capture written before 2026-09-26 carries, because those bytes were pad then. DIRECT polarity (passes when terrain declares MATMODE_NONE, terr_cf_mat_backed_o is ZERO, and the texture island reports FEWER samples than fragments): a fragment published with sample_count = 0 asks for nothing, which is not the same as being refused. It is the positive control for the plain run samples == fragments equality, which was FALSE BY 26 until this packet. NOTE: raster pixels is 2816 in this form too -- terrain draws either way; what moves is whether its fragments carry a texel.'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'

@@ -1167,6 +1167,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_cf_degenerate_o;
   logic [31:0]             terr_cf_dq_refused_o;
   logic [31:0]             terr_cf_dq_stray_o;
+  // I13 (a)/(b), TERRAINMAT: the material identity's census and its fault.
+  logic [31:0]             terr_cf_mat_backed_o;
+  logic [31:0]             terr_cf_mat_orphan_o;
   // R21: TERRAIN's lit normals leave with the triangle they belong to (entry
   // I13). The bench takes every light -- the far side of that edge is the
   // absent GEOM.CLIP merge, and a harness that stalled it would measure its
@@ -2912,6 +2915,12 @@ module tb_zhao_console_core_smoke
   // published row against it.
   localparam logic [23:0] UPL_INDEX_C   = 24'h00_ABCD;
   localparam logic [ 7:0] UPL_KIND_C    = 8'd11;            // spec/cartridge.md 4a: MATERIAL_SET
+  // TERRAIN's record within that set (TERRAINMAT, 2026-09-26). It is legal
+  // because MATERIAL.RESOLVE's `dir_count` for this set is its EXTENT / 32 =
+  // 256 / 32 = EIGHT records, and the resolver refuses an id at or above that
+  // count with ST_REFUSED_ID. Records 3..7 stay the fill pattern and nothing
+  // requests them.
+  localparam logic [15:0] TERR_MAT_ID_C = 16'd2;
   // Slot 1: MATERIAL.RESOLVE's directory has SETS = 4 entries and the arena
   // slot IS the entry, so a MATERIAL_SET must land in slot 0..3 to be found.
   localparam logic [ 7:0] UPL_SLOT_C    = 8'd1;
@@ -2963,6 +2972,7 @@ module tb_zhao_console_core_smoke
   localparam logic [31:0] SMK_POP_HANDLE_C = 32'h0051_C0DE;
   logic [63:0] upl_mem [0:UPL_ALL_WORDS-1];
   logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
+  logic [255:0] upl_rec2;         // record 2: TERRAIN's material (TERRAINMAT)
   logic [255:0] upl_rec1;         // record 1 -- the one the MESHLET names
   logic [31:0]  upl_crc_material_q, upl_crc_mesh_q, upl_crc_species_q;
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
@@ -3356,6 +3366,10 @@ module tb_zhao_console_core_smoke
   logic [2:0]   mat_status_seen_q;
   logic         mat_rec_has_q;
   logic [255:0] mat_rec_q;
+  // TERRAINMAT: the two-record census -- see the comment at its assignment.
+  logic         mat_saw_rec1_q;
+  logic         mat_saw_rec2_q;
+  int unsigned  mat_rec_unknown_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       mat_fired_q            <= 1'b0;
@@ -3363,6 +3377,9 @@ module tb_zhao_console_core_smoke
       mat_status_seen_q      <= 3'd7;
       mat_rec_has_q          <= 1'b0;
       mat_rec_q              <= '0;
+      mat_saw_rec1_q         <= 1'b0;
+      mat_saw_rec2_q         <= 1'b0;
+      mat_rec_unknown_q      <= 0;
     end else begin
       // THE RESPONSE, OBSERVED ON ITS RISING EDGE. The window is ready only
       // in the clock it takes the answer and leaves ST_WAIT on the same edge,
@@ -3375,6 +3392,26 @@ module tb_zhao_console_core_smoke
         mat_status_seen_q <= mat_rsp_status_o;
         mat_rec_has_q     <= mat_rsp_has_record_o;
         mat_rec_q         <= mat_rsp_record_o;
+        // TWO ASKERS NOW, SO ONE LATCH IS NOT A CHECK ANY MORE (TERRAINMAT,
+        // 2026-09-26). Until today exactly one resolve was ever issued, so
+        // `mat_rec_q` held it and comparing that one word against record 1
+        // was exact. Terrain's material makes a SECOND resolve, and the two
+        // land in an order this bench does not get to choose -- GEOM.CLIPDOOR
+        // arbitrates run-length-fair between its four clients, and which of
+        // the mesh and terrain reaches the window first is a property of the
+        // frame, not of the design under test.
+        //
+        // So the census is ORDER-INDEPENDENT and it is an EXACT SET: every
+        // record the resolver ever returned must be one of the two this
+        // fixture uploaded, and both must be returned. `mat_rec_unknown_q`
+        // is the term that stops this being weaker than the single latch it
+        // replaces -- without it, "I saw record 1 and record 2" would still
+        // pass if a third, wrong record had come back in between.
+        if (mat_rsp_has_record_o) begin
+          if      (mat_rsp_record_o == upl_rec1) mat_saw_rec1_q    <= 1'b1;
+          else if (mat_rsp_record_o == upl_rec2) mat_saw_rec2_q    <= 1'b1;
+          else                                   mat_rec_unknown_q <= mat_rec_unknown_q + 1;
+        end
       end
     end
   end
@@ -5163,6 +5200,62 @@ module tb_zhao_console_core_smoke
       upl_rec1 = zhao_abi_pkg::zhao_pack_material_record(mr1);
       for (int unsigned w = 0; w < 4; w++) upl_mem[4 + w] = upl_rec1[64*w +: 64];
     end
+    // ====================================================================
+    // RECORD 2 IS **TERRAIN'S**, and it is what makes this fixture the
+    // first one in which a TERRAIN FRAGMENT TAKES A TEXEL (entry I13
+    // items (a) and (b), TERRAINMAT 2026-09-26).
+    //
+    // Until today terrain declared MATMODE_NONE at GEOM.CLIP's door, so
+    // `zhao_material_window` published `NOMAT_SAMPLE_COUNT_C = 0` and
+    // issued NO RESOLVE AT ALL -- `req_valid_o` is literally
+    // `(st_q == ST_REQ)` and that state was never entered on this arm.
+    // 1,216 fragments reached the island and 1,190 sampled; the 26 that
+    // did not were terrain's, and they were not REFUSED
+    // (`combine_refused=0`) -- THEY ASKED FOR NOTHING.
+    //
+    // WHY A THIRD RECORD RATHER THAN REUSING EITHER OF THE TWO ABOVE:
+    //   * record 0 is a DELIBERATE NEGATIVE DISCRIMINATOR. Its comment
+    //     above says so -- it differs from record 1 "in every field the
+    //     flat request carries", so "it asked for the triangle's
+    //     material" and "it asked for the first one" cannot produce the
+    //     same answer. Repurposing it would have DELETED a live control
+    //     to save a record, which is the shape this campaign refuses.
+    //   * record 1 is the MESH's. If terrain named it too, terrain and
+    //     the mesh would share ONE SPAN -- `match_c` is exactly {mode,
+    //     vertex_alpha, frag_state, set, id} -- and the run would prove
+    //     that terrain can sample SOMEBODY ELSE'S material, which is a
+    //     much weaker statement than that it resolved its own.
+    // Record 2 makes the resolve terrain's: its own switch, its own
+    // resolve, its own record, checked bit for bit below.
+    //
+    // ITS SHAPE IS RECORD 1'S ON PURPOSE, minus the weight. It names the
+    // SAME binding selector, because selector 3 is the only row this
+    // fixture programs, and it carries `tmu_mode 1` (NEAREST) so its
+    // class witness matches that row's DIRECT RGB565 class -- the
+    // equality `zhao_texture_binding_resolver_v2`'s `read_witness_bad_c`
+    // enforces between the fragment's declared {class, palette_slot,
+    // palette_generation} and the ROW's. `recipe_weight` is the one
+    // field made different, and it is the discriminator: the flat
+    // request carries it, so a resolve that returned record 1 for
+    // terrain's id cannot look like one that returned record 2.
+    //
+    // WHAT IT IS NOT: it is NOT a TILESET material, so the MOSAIC path
+    // TERRAINTEX built is still not exercised by this console. That is
+    // not a carriage gap -- see THE PALETTE HOLE in this bench's
+    // terrain-material check below, which measures why.
+    begin : build_material2
+      zhao_abi_pkg::zhao_material_record_t mr2;
+      mr2 = '0;
+      mr2.control                    = 8'h01;         // count 1, recipe 0 (PASSTHRU)
+      mr2.recipe_weight              = 8'hA7;         // the discriminator: != 0x5A, != 0x80
+      mr2.sample0.binding_slot       = 16'(TEX_SELECTOR_C);
+      mr2.sample0.binding_generation = TEX_PAGE_GEN_C;
+      mr2.sample0.modes              = 8'h01;         // tmu_mode 1 = NEAREST, wrap 0
+      mr2.palette_base               = 32'h0000_0000; // direct format: no CLUT
+      mr2.raster_state               = 32'h0000_0000;
+      upl_rec2 = zhao_abi_pkg::zhao_pack_material_record(mr2);
+      for (int unsigned w = 0; w < 4; w++) upl_mem[8 + w] = upl_rec2[64*w +: 64];
+    end
     // ---- THE MESH_STREAM PAGE (owner ruling R29) --------------------------
     // Words MSH_ARENA_W..+MSH_WORDS_C of the same staging arena: the frozen
     // 64-byte header, the 64-byte meshlet descriptor, the index run and the
@@ -5455,6 +5548,29 @@ module tb_zhao_console_core_smoke
       se.sun_pitch   = SGF_ENV_PITCH;
       se.sun_colour  = SGF_ENV_SUN;
       se.ambient     = SGF_ENV_AMB;
+      // I13 (a)/(b): THE HOST DECLARES TERRAIN'S MATERIAL, TERRAINMAT
+      // 2026-09-26. These two fields live in this record's own former
+      // `pad[12]` -- `capture_format.md` 1.3's same-bytes reinterpretation,
+      // the pattern `MaterialRecord.fragment_state` established -- and they
+      // travel the WHOLE command path with the sun beside them: FRAME_RING
+      // -> CMD.SCHEDULER -> CMD.DMA over the real HPS bridge -> CMD.DECODER's
+      // verdict -> CMD.EXEC's R25 arm, which stages them in the same shadow
+      // and commits them with the same ONE assignment. Nothing here reaches
+      // into the core.
+      //
+      // ZERO WOULD BE MATMODE_NONE, so writing these is the whole difference
+      // between this fixture and every one before it.
+`ifdef ZHAO_SMOKE_NO_TERRAIN_MATERIAL
+      // THE CONTROL: the pre-2026-09-26 environment, in which these two bytes
+      // were `pad` and were therefore zero. Zero keeps its meaning -- a zero
+      // set is MATMODE_NONE -- so this form is what this console did before
+      // the field existed, reproduced from the ABI rather than described.
+      se.terrain_material_set = 32'd0;
+      se.terrain_material_id  = 16'd0;
+`else
+      se.terrain_material_set = {UPL_INDEX_C, UPL_GEN_C[7:0]};
+      se.terrain_material_id  = TERR_MAT_ID_C;
+`endif
       // R41: THE POPULATION DESCRIPTOR, from the command packet. Every value
       // here used to be a board pin on zhao_console_core (entry I7) or a
       // provisional seed port (I1's, R46), and they are the SAME values --
@@ -6711,6 +6827,56 @@ module tb_zhao_console_core_smoke
     // the smoke is blind never instruments it and never sees its own counters
     // move in the composed console -- which is the one measurement that
     // separates "it elaborates" from "the value traverses".
+    $display("SMOKE: terrmat   backed=%0d orphan=%0d  (SetEnvironment terrain_material {set=%08x id=%0d})",
+             terr_cf_mat_backed_o, terr_cf_mat_orphan_o,
+             {UPL_INDEX_C, UPL_GEN_C[7:0]}, TERR_MAT_ID_C);
+    // I13 (a): THE IDENTITY TRAVERSED, asserted in the COMPOSED console and
+    // not at a leaf bench. `terr_cf_mat_backed_o` counts terrain triangles
+    // EMITTED at GEOM.CLIP's door declaring MATMODE_BACKED, on the same grant
+    // as `terr_cf_emitted_o`, so the two cannot describe different triangles.
+    // An equality rather than a bound: every triangle this arm emits carries
+    // the frame's terrain material or none of them does, and a partial count
+    // would mean the identity moved under an accepted triangle.
+`ifdef ZHAO_SMOKE_NO_TERRAIN_MATERIAL
+    // THE CONTROL'S OWN ASSERTION, and it is the COMPLEMENT rather than a
+    // relaxation: terrain emitted its triangles and declared NO material on
+    // any of them, because the environment named none.
+    if (terr_cf_emitted_o == 32'd0)
+      $fatal(1, "SMOKE(-NoTerrainMaterial): TERRAIN.CLIPFEED emitted NOTHING -- this control varies the MATERIAL and nothing else, so the arm must still draw");
+    if (terr_cf_mat_backed_o != 32'd0)
+      $fatal(1, "SMOKE(-NoTerrainMaterial): %0d terrain triangle(s) declared MATMODE_BACKED with a ZERO terrain_material_set -- the clipfeed's mode derivation is not reading the set",
+             terr_cf_mat_backed_o);
+`else
+    if (terr_cf_mat_backed_o != terr_cf_emitted_o)
+      $fatal(1, "SMOKE: TERRAIN.CLIPFEED emitted %0d triangle(s) and only %0d declared MATMODE_BACKED -- the material identity did not reach, or did not hold across, the whole arm",
+             terr_cf_emitted_o, terr_cf_mat_backed_o);
+    // COMPILED OUT UNDER THE SLOT-OVERFLOW MUTANT, for the reason this bench
+    // has now written down three times: the mutation halves TERR_POOL_SLOTS,
+    // TERRAIN.PAGELOADER refuses every job above its range, NO page becomes
+    // resident and TERRAIN EMITS NO TRIANGLE AT ALL -- measured here,
+    // `terrcf triangles=0 emitted=0`, `terruv refs_taken=0`. A terrain arm
+    // that emitted nothing cannot have declared anything, so asserting a
+    // non-zero census against a deliberately broken machine is asserting the
+    // bug. THE EQUALITY ABOVE IS NOT GUARDED and holds there as 0 == 0, which
+    // is the stronger half and is exactly what should still be checked.
+    //
+    // I wrote this check unguarded first and the -Mutant form caught it on its
+    // very next run. That is the fourth time this bench has had to learn the
+    // same lesson at this seam, and it is recorded rather than quietly fixed.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
+    if (terr_cf_mat_backed_o == 32'd0)
+      $fatal(1, "SMOKE: NOT ONE terrain triangle declared a material. SetEnvironment's terrain_material_set never reached zhao_terrain_clipfeed, so terrain asks the texture island for nothing and entry I13's item (a) is not closed by this run");
+`endif
+`endif
+    // THE ORPHAN RULE's fault, and it is SILENCE that is being asserted here,
+    // so it is worth saying where the counter is seen to FIRE: not here. It
+    // is fired by stimulus, by exact amount, in
+    // `tests/terrain/terrain_clipfeed_directed.cpp` section 7, by offering
+    // {set = 0, id != 0}. This fixture presents a legal pair, so a non-zero
+    // here means the environment decode corrupted one half of it.
+    if (terr_cf_mat_orphan_o != 32'd0)
+      $fatal(1, "SMOKE: %0d terrain triangle(s) were offered a material id with a ZERO set -- SetEnvironment's two halves did not arrive together",
+             terr_cf_mat_orphan_o);
     $display("SMOKE: terrcf    triangles=%0d emitted=%0d src_mismatch=%0d uv_sat=%0d shade_clamped=%0d degenerate=%0d dq_refused=%0d dq_stray=%0d",
              terr_cf_triangles_o, terr_cf_emitted_o, terr_cf_src_mismatch_o,
              terr_cf_uv_sat_o, terr_cf_shade_clamped_o, terr_cf_degenerate_o,
@@ -8468,6 +8634,46 @@ module tb_zhao_console_core_smoke
     if (render_texture_combine_refused_o != 32'd0)
       $fatal(1, "SMOKE: the combiner refused %0d fragment(s) -- recipe and sample_count disagree, which is material_count_legal's law",
              render_texture_combine_refused_o);
+    // ====================================================================
+    // EVERY FRAGMENT SAMPLES. This is the line entry I13 has been waiting
+    // for since TERRAINVISIBLE, and it is written as a LAW rather than as
+    // a pinned number on purpose (TERRAINMAT, 2026-09-26).
+    //
+    // TERRAINVISIBLE measured `fragments=1216 samples=1190` and named the
+    // 26-fragment gap exactly: "EVERY TERRAIN FRAGMENT REACHED THE ISLAND
+    // AND TOOK NO SAMPLE. That is not a refusal ... THEY ASKED FOR
+    // NOTHING." Both halves of the difference were terrain's, because
+    // terrain declared MATMODE_NONE and the window published
+    // `sample_count = 0`.
+    //
+    // Pinning 1,216 here would pin a MEASURED number in an assertion, and
+    // this entry has been stopped twice by exactly that. `samples ==
+    // fragments` is derivable instead, from the fixture's own premise:
+    // EVERY material this fixture uploads declares `control[1:0] = 1`, one
+    // sample, so one fragment is one sample. It therefore stays true when
+    // the triangle counts move, it stays true in `-TerrainFlatLattice`
+    // (where both sides are the mesh's alone), and it FAILS the moment any
+    // producer at the door goes back to asking for nothing.
+    //
+    // It is not vacuous: it was FALSE at the parent commit, by 26.
+`ifdef ZHAO_SMOKE_NO_TERRAIN_MATERIAL
+    // THE CONTROL'S HALF: the equality below MUST NOT hold here, and saying so
+    // is the whole point of this form. A strict inequality rather than a pinned
+    // difference -- pinning 26 would pin a measured number, and the count is a
+    // property of the fixture's coverage rather than of the law being shown.
+    if (render_texture_samples_o >= render_texture_fragments_o)
+      $fatal(1, "SMOKE(-NoTerrainMaterial): %0d fragment(s) reached the island and %0d sampled. With NO terrain material declared, terrain's fragments must publish sample_count = 0 and the two counts must DISAGREE -- an equality here means the plain run's gate cannot fail and is therefore not a gate",
+             render_texture_fragments_o, render_texture_samples_o);
+    if (render_texture_combine_refused_o != 32'd0)
+      $fatal(1, "SMOKE(-NoTerrainMaterial): the combiner REFUSED %0d fragment(s). Terrain must ASK FOR NOTHING here, not be turned away -- the distinction is what TERRAINVISIBLE measured and it is the reason this arm needed an identity rather than a repair",
+             render_texture_combine_refused_o);
+`else
+    if (render_texture_samples_o != render_texture_fragments_o)
+      $fatal(1, "SMOKE: %0d fragment(s) reached the texture island and only %0d took a sample. The %0d-fragment difference is a producer publishing sample_count = 0 -- it asked for nothing, which is not the same as being refused (combine_refused=%0d). Entry I13 items (a) and (b).",
+             render_texture_fragments_o, render_texture_samples_o,
+             render_texture_fragments_o - render_texture_samples_o,
+             render_texture_combine_refused_o);
+`endif
     // A SAMPLE WITH NO CACHE TRAFFIC WOULD BE A SAMPLE OF NOTHING. The fill
     // socket is the only place a texel can come from in this console, so the
     // line count and the beat count are what say a real page was READ: eight
@@ -8915,9 +9121,47 @@ module tb_zhao_console_core_smoke
     // A window that defaulted to 0 -- or that paired the draw's material_set
     // with some other meshlet's id -- would return record 0, and the two
     // records differ in every field the flat request carries.
-    if (!mat_rec_has_q || mat_rec_q != upl_rec1)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE's record (has=%b) %064x is not record 1 %064x -- the resolve did not ask for the TRIANGLE's material",
-             mat_rec_has_q, mat_rec_q, upl_rec1);
+    if (!mat_rec_has_q)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE answered without a record at all -- the fetch returned nothing the window could publish");
+    // REWRITTEN 2026-09-26 (TERRAINMAT) AND STRICTLY STRONGER. This read
+    // `mat_rec_q != upl_rec1` against a single latch, which was exact while
+    // exactly ONE resolve was ever issued. Terrain's material makes a second
+    // one, so a single latch now holds whichever answered LAST -- a number
+    // that would be right half the time and would have read as a real defect
+    // the other half. The census above replaces it with the exact set.
+    //
+    // BOTH RECORDS, AND NOTHING ELSE. Record 1 is the MESH's, named by the
+    // meshlet descriptor's bytes 4-5. Record 2 is TERRAIN's, named by
+    // SetEnvironment's `terrain_material_id`. They differ in `recipe_weight`,
+    // which the flat request carries, so "it asked for the terrain material"
+    // and "it asked for the mesh's" cannot produce the same answer -- the
+    // same discrimination record 0 was built to provide for the mesh.
+    if (!mat_saw_rec1_q)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE never returned record 1 %064x -- the MESH's resolve did not ask for the TRIANGLE's material",
+             upl_rec1);
+`ifdef ZHAO_SMOKE_NO_TERRAIN_MATERIAL
+    // The control's complement: no terrain material was declared, so the
+    // window entered ST_REQ for the mesh alone and record 2 must NEVER have
+    // been fetched. This is the sharpest statement available that the resolve
+    // in the plain run is TERRAIN'S and not an artefact of uploading a third
+    // record: the record is present in the same uploaded image in both forms.
+    if (mat_saw_rec2_q)
+      $fatal(1, "SMOKE(-NoTerrainMaterial): MATERIAL.RESOLVE returned record 2 with NO terrain material declared -- something other than terrain's identity is asking for it");
+`else
+    // GUARDED FOR THE SAME REASON as the census above: under the slot-overflow
+    // mutant terrain emits no triangle, so it forms no span, so the window
+    // never enters ST_REQ on its behalf and record 2 is never fetched. The
+    // record is still UPLOADED in that form -- the image is identical -- so
+    // what is suspended is the expectation that somebody asked for it.
+`ifndef ZHAO_MUT_SLOT_OVERFLOW
+    if (!mat_saw_rec2_q)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE never returned record 2 %064x -- TERRAIN declared a material identity and no resolve came back with its record. Last record seen: %064x",
+             upl_rec2, mat_rec_q);
+`endif
+`endif
+    if (mat_rec_unknown_q != 0)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE returned %0d record(s) that are NEITHER record 1 nor record 2 -- an asker got somebody else's material. Last: %064x",
+             mat_rec_unknown_q, mat_rec_q);
     $display("SMOKE: matwin   resolves=%0d switches=%0d stall[drain/answer]=[%0d %0d] occ_max=%0d no_record=%0d sel_ovf=%0d clut_unowned=%0d err[unpub/underflow]=[%0d %0d]",
              mat_win_resolves_o, mat_win_switches_o, mat_win_drain_stall_o,
              mat_win_answer_stall_o, mat_win_occupancy_max_o, mat_win_no_record_o,

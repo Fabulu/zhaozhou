@@ -2621,6 +2621,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_cf_degenerate_o,
   output logic [31:0]             terr_cf_dq_refused_o,
   output logic [31:0]             terr_cf_dq_stray_o,
+  // TERRAINMAT, 2026-09-26: this wrapper re-exports every production port
+  // through `.*`, so a port added to `zhao_console_core` must appear here in
+  // the SAME change or this control stops elaborating. It did, and the
+  // `-Mutant` form caught it in the first run after the ports landed.
+  output logic [31:0]             terr_cf_mat_backed_o,
+  output logic [31:0]             terr_cf_mat_orphan_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE

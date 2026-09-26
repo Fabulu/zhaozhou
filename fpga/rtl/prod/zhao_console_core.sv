@@ -4854,6 +4854,208 @@
 //      line, which is this file's own standing advice about reading the
 //      consumer rather than the entry.
 //
+//      ================================================================
+//      2026-09-26 (gz/terrainmat). A TERRAIN FRAGMENT CARRIES A TEXEL.
+//      `texture samples` MOVES 1,190 -> 1,216. ITEMS (a) AND (b) ARE
+//      CLOSED. THE ENTRY STAYS OPEN.
+//      ================================================================
+//
+//      TERRAINVISIBLE left this entry a one-line specification and
+//      TERRAINTEX built the third of its three items. The line was
+//
+//        SMOKE: texture fragments=1216 samples=1190
+//
+//      -- 1,216 fragments reaching the island and 1,190 sampling, with
+//      `combine_refused = 0`. The 26 that did not sample were terrain's,
+//      and they were not refused: THEY ASKED FOR NOTHING, because
+//      terrain declared `MATMODE_NONE` and `zhao_material_window`
+//      publishes `NOMAT_SAMPLE_COUNT_C = 0` under it. It reads
+//
+//        SMOKE: texture fragments=1216 samples=1216 cache[hit/miss]=[1216 27]
+//               plan_accepted=1216 dispatch_accepted=1216 combine_refused=0
+//        SMOKE: terrmat  backed=128 orphan=0
+//               (SetEnvironment terrain_material {set=00abcd02 id=2})
+//        SMOKE: terrcf   triangles=128 emitted=128 src_mismatch=0
+//        SMOKE: matwin   resolves=2 switches=2 no_record=0 sel_ovf=0
+//        SMOKE: material responses=2 misses=2 not_resident=0 fetch_denied=0
+//        SMOKE: raster   pixels=2816 bursts=176
+//
+//      EVERY ONE OF THOSE NUMBERS MOVED IN THE DIRECTION THE CHANGE
+//      PREDICTS AND NONE MOVED THAT SHOULD NOT. `resolves` 1 -> 2 with
+//      `switches` UNCHANGED at 2 is the sentence to read twice: terrain
+//      already formed its own span (CARRIAGE measured the second switch
+//      as "a lawful MATMODE_NONE that issues no resolve"), and what is
+//      new is that the span now RESOLVES. `raster pixels` does NOT move,
+//      and that is correct -- a sample changes a fragment's COLOUR, not
+//      its coverage.
+//
+//      WHAT TERRAIN LACKED WAS AN IDENTITY, NOT A LOOKUP, and that is
+//      TERRAINTEX's finding doing the work. Its correction to
+//      `zhao_material_resolve.sv`'s header -- MEM.UPLOAD IS composed,
+//      `dir_*` and `mem_*` ARE driven, and the smoke already exercised
+//      both end to end -- is what shrank this from a subsystem to a key.
+//      Re-read at this tree rather than quoted.
+//
+//      THE IDENTITY, AND WHERE IT IS DECLARED. `SetEnvironment 0x0311`
+//      ended in `pad[12]`. Two of those bytes are now
+//      `handle32[material_set] terrain_material_set` at offset 36 and
+//      `u16 terrain_material_id` at 40, with `pad[6]` still zero-checked
+//      and the record still 48 bytes. That is `capture_format.md` 1.3's
+//      same-bytes reinterpretation, the pattern
+//      `MaterialRecord.fragment_state` established, and `abi version`
+//      does not move because no opcode, field set or size does. The
+//      whole compatibility argument is that ZERO KEEPS ITS MEANING: a
+//      zero set is `MATMODE_NONE`, which is what terrain declared
+//      before today, so no committed capture changes by a pixel.
+//
+//      THE CHAIN, end to end, every link real:
+//        the host's record -> FRAME_RING -> CMD.SCHEDULER -> CMD.DMA
+//        over the shell's real HPS bridge -> CMD.DECODER's verdict ->
+//        CMD.EXEC's R25 arm (the SAME shadow, the SAME `en_dirty`, the
+//        SAME one assignment that loads the four light fields) ->
+//        latched in this file on the environment's COMMIT BEAT ->
+//        `zhao_terrain_clipfeed`, which DERIVES the mode ->
+//        `u_geom_clipdoor` slice 3 -> `zhao_material_window`, which
+//        drains, switches and RESOLVES -> MATERIAL.RESOLVE's directory
+//        and its ENGINE1 fetch -> the published record's
+//        `sample_count` and `base_binding` -> the binding page ->
+//        the TMU -> a texel in every terrain fragment.
+//
+//      THE MODE IS DERIVED IN THE TERRAIN BLOCK AND NOT CHOSEN HERE,
+//      which this entry's TRIMERGE paragraph requires in as many words.
+//      `zhao_terrain_clipfeed` takes TWO ports, not the three the brief
+//      predicted, and the header says why: a third `mode` port would let
+//      a caller present a combination the block's own law refuses.
+//
+//      THE ORPHAN RULE IS NEW AND IT IS A REAL FAULT, not tidiness.
+//      `mode_contra_c` REFUSES a non-zero {set, id} under MATMODE_NONE,
+//      and a refused triangle does not reach GEOM.CLIP -- so an
+//      environment naming an id with a ZERO set would drop the frame's
+//      ENTIRE terrain arm. The block declares the zero pair for that
+//      case and counts the discarded id on `mat_id_orphan_o`. The
+//      directive requires an unresolved identity be "diagnosed and
+//      handled by the declared failure/fallback policy, never silently
+//      truncated or made token 0"; the counter is the diagnosis and the
+//      block's header is the declaration. It is reachable with legal
+//      stimulus, so it owes NO committed mutant, and it is fired by
+//      exact amount in `terrain_clipfeed_mat_directed` section 3 --
+//      which is also the positive control for the ZERO the smoke now
+//      asserts.
+//
+//      THE IDENTITY IS LATCHED ON THE TRIANGLE'S OWN ACCEPT BEAT, by
+//      the same enable as its corners and `src_id_q`, and the door reads
+//      only the latched copy. In this composer `mat_set_i` is a
+//      FRAME-GLOBAL register that CMD.EXEC reloads on every committed
+//      SetEnvironment, so a combinational path from it to a per-
+//      primitive port would repaint an already-accepted triangle with a
+//      later frame's material -- and NOTHING would count it, because no
+//      counter in the arm looks at the field that moved. That is
+//      CLAUDE.md's metadata-swap chapter exactly. Section 4 of the
+//      directed test stalls the door, MOVES the inputs while the
+//      triangle is in flight, and requires the granted beat to carry the
+//      identity it was accepted under; section 5 is its complement, that
+//      the NEXT triangle does take the new one, because a block that
+//      simply froze the first identity passes section 4 as well.
+//
+//      A CLAIM IN THIS ENTRY IS FALSE, AND IT IS THE ONE THAT CHOSE THE
+//      CARRIER'S SCOPE. The TERRAINTEX paragraph above argues the
+//      frame-wide field is faithful because "`draw_terrain` takes ONE
+//      tileset for the whole call". THERE IS NO `draw_terrain`. The
+//      function is `draw_heightfield`
+//      (`reference/src/zrender/terrain.cpp:355`) and it takes
+//      `const Tileset*` for ONE PATCH; the SELECTION is per patch, at
+//      `reference/src/zrender/render_frame.cpp:373-374` --
+//      `if (patch->tileset_id != 0) ts = res.tileset(patch->tileset_id);`
+//      -- which is the same per-page `tileset_id` PATCHV2's item (4)
+//      named as terrain's material set. So a frame-scoped pair is NOT
+//      equivalent to the reference for a frame whose patches carry
+//      DIFFERENT tileset ids.
+//
+//      IT IS STILL A STRICT CAPABILITY INCREASE -- terrain could
+//      present ZERO tilesets before -- and the limit is DECLARED in
+//      `spec/commands.zidl` beside the field rather than left to be
+//      discovered. The refinement is the page header's own `tileset_id`
+//      (terrain_rules 2.1 +12, read off the wire by
+//      `zhao_terrain_hdrread` and deliberately not exported -- that
+//      file's own :121-127, "when the far corner gains a consumer it
+//      gains a port in the same change") overriding
+//      `terrain_material_id` per patch. ITS COST IS THE CARRIAGE FROM
+//      HDRREAD TO THE CLIPFEED and nothing else: the ABI does not move
+//      and no port built here moves, only what drives `mat_id_i`.
+//
+//      THE MOSAIC IS STILL NOT COMPOSED, AND THE BLOCKER IS NOW
+//      MEASURED RATHER THAN SUSPECTED. TERRAINTEX's reader works and is
+//      proven at the island bench; what this console cannot yet do is
+//      BIND a tileset row, and the reason is a chain of four facts each
+//      read at its own line:
+//        1. a TILESET row is CLUT8 BY LAW -- `tileset_shape_ok`
+//           (`zhao_texture_binding_resolver_v2.sv:304-308`) requires
+//           `fmt == FMT_CLUT8`, which is right, because the oracle's
+//           `zref::Tileset` is `uint8_t tiles[256][64*64]`;
+//        2. a CLUT sample needs a PALETTE IDENTITY, and this composer
+//           publishes it as CONSTANTS -- `MAT_PALETTE_SLOT_C = 2'd0`
+//           and `MAT_PALETTE_GEN_C = 8'd0` in `mat_flat_request_c`;
+//        3. `read_witness_bad_c` (`:673-678`) requires the fragment's
+//           {class, palette_slot, palette_generation} to EQUAL the
+//           ROW's, so the row is forced to {0, 0} too;
+//        4. and generation ZERO is the one generation
+//           `zhao_texture_palette_res_v2` cannot be handed in a single
+//           pass: `generation_q[slot]` RESETS to 0 and `LD_BEGIN`
+//           refuses `ld_gen_i == generation_q[ld_slot_i]` onto
+//           `err_same_gen_o` (`:215-219`), so slot 0 can only reach a
+//           RESIDENT generation 0 by loading some other generation
+//           first and reloading at 0.
+//      Fact 2 is not this lane's discovery -- `zhao_material_window`'s
+//      own header says "for a CLUT format the pair is real and nothing
+//      in this console produces it", and `clut_unowned_o` counts it, so
+//      the gap was already loud. Facts 3 and 4 are what turn "no
+//      producer" into a specification: WHOEVER COMPOSES THE MOSAIC
+//      OWES A PALETTE IDENTITY WITH A REAL PRODUCER, and the ratified
+//      field that would carry it does not exist -- `MaterialRecord` has
+//      `palette_base`, an ADDRESS, and no slot or generation.
+//
+//      SO THIS DOES NOT CLOSE I13. What it removes is items (a) and (b)
+//      of the three TERRAINVISIBLE named, and the terrain fragment that
+//      reaches a raster now carries a texel that came through the
+//      binding page rather than a constant. What the fragments sample is
+//      the DIRECT RGB565 row this fixture already programmed, not a
+//      tileset, so the MOSAIC PICK'S READER IS STILL NOT EXERCISED BY
+//      THIS CONSOLE -- it is proven at `texture_island_v3_packet_b_
+//      directed` and nowhere else. `zhao_terrain_normalmap` was AGAIN
+//      not composed, as this entry's first prohibition requires.
+//
+//      ONE HONEST BOUND ON THE TEXEL'S VALUE, because a count is not a
+//      colour. This bench answers every fill line with one constant
+//      green and never reads `fill_req_addr_o` -- its own paragraph
+//      says so, "what is being proven here is that a texel ARRIVES".
+//      So what moved is that terrain's fragments now take the SAME real
+//      path the mesh's do, through a real binding row, a real cache
+//      miss and a real fill; the texel VALUE is the bench's constant
+//      for both, and this entry must not be read as saying terrain's
+//      colour has been checked against the oracle. It has not.
+//
+//      REFUSED, AND NAMED. The layer-E triple was NOT wired into
+//      `base_rgb` -- CARRIAGE's ground holds and TERRAINTEX's rebuttal
+//      of the comfortable reading holds with it. `GEOM_CLIP_ATTRS`
+//      stays 7. No flat colour stand-in. `kMat` and `kVp` were not
+//      touched and `raster pixels` is unchanged at 2,816, so no oracle
+//      moved. Record 0 of the uploaded MATERIAL_SET was NOT repurposed
+//      for terrain even though it was the cheapest place to put it: it
+//      is a DELIBERATE NEGATIVE DISCRIMINATOR for the mesh's resolve
+//      and reusing it would have deleted a live control to save 32
+//      bytes. Terrain got record 2. No fit was run.
+//
+//      WHAT THIS LANE GOT WRONG AND CAUGHT: the first plan was to make
+//      terrain's material a TILESET row and land the mosaic in the same
+//      pass. The palette chain above is what stopped it, and it was
+//      found by reading `zhao_texture_palette_res_v2`'s load FSM rather
+//      than by a failing run -- which matters, because the FIXTURE
+//      route around it exists (load slot 0 at some generation, then
+//      reload it at 0) and would have produced a passing bench whose
+//      green depended on a contortion nobody would have re-derived.
+//      A CLUT material whose palette identity is a composer constant is
+//      not made correct by a bench that can reach it.
+//
 // I20. THE PACKET-D ATTRIBUTE CARRIAGE IS COMPLETE -- NOT a tie-off: all six
 //      ports are retired from this module's edge and every field of the last
 //      two has a NAMED OWNER. CLOSED 2026-09-25 (FRAGSTATE) under the owner
