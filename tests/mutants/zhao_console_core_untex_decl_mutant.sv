@@ -2603,6 +2603,15 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_cf_degenerate_o,
   output logic [31:0]             terr_cf_dq_refused_o,
   output logic [31:0]             terr_cf_dq_stray_o,
+  // TERRAINMAT, 2026-09-26 -- added here at the MERGE, not in the packet.
+  // This wrapper re-exports every production port through `.*`, so a port
+  // added to `zhao_console_core` must appear here in the SAME change or the
+  // control stops elaborating. TERRAINMAT updated the SLOT_OVERFLOW wrapper
+  // and not this one, and `wrapper_port_parity` went 0 -> 1 on the merge --
+  // which is the gate doing exactly its job, since a `.*` wrapper that cannot
+  // bind a new port fails in a way that READS LIKE A BROKEN CORE.
+  output logic [31:0]             terr_cf_mat_backed_o,
+  output logic [31:0]             terr_cf_mat_orphan_o,
 
   // ---- I17: the compositor's absent neighbours ----------------------------
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
