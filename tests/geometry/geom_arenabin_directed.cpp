@@ -235,11 +235,11 @@ void bring_up(Dut& t) {
   idle(t, 700);
 }
 
-bool seal(Dut& t, uint16_t gen) {
+bool seal(Dut& t, uint16_t gen, uint32_t chunk_quota = 1024) {
   t.seal_valid_i = 1;
   t.seal_verts_i = 256;
   t.seal_tris_i = 256;
-  t.seal_chunks_i = 1024;
+  t.seal_chunks_i = chunk_quota;
   t.frame_gen_i = gen;
   for (int i = 0; i < 20000; ++i) {
     t.eval();
@@ -692,6 +692,94 @@ void case4_the_directory_does_not_outlive_its_frame() {
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// CASE 5 -- `chunk_refused_o`, `overflow_o` AND `flush_cut_o` FIRE.
+// ---------------------------------------------------------------------------
+// ARENACOMPOSE, 2026-09-26. These three counters were asserted ZERO by case 1
+// and NEVER SEEN TO MOVE. A counter asserted zero is a claim, and it is the
+// claim to check hardest -- and the console smoke now PRINTS all three, so
+// quoting their silence without a control would be quoting an instrument
+// nobody has switched on.
+//
+// THEY OWE NO COMMITTED MUTANT, because the state is reachable with legal
+// stimulus: they all fire on ONE event, the arena refusing a chunk, and the
+// arena refuses a chunk when the frame's SEALED CHUNK QUOTA runs out. The
+// quota is a port. So the control is a small seal and a scene that needs more
+// chunks than it allows.
+//
+// THE THREE ARE NOT INDEPENDENT AND THAT IS WORTH SAYING RATHER THAN LETTING
+// A READER INFER IT FROM THREE PASSING CHECKS: `chunk_refused_o` counts the
+// refusal, `overflow_o` latches the same event, and `flush_cut_o` counts the
+// end-of-frame flush giving up because the frame is already walled. One fault,
+// three views of it. What this case proves is that each view is WIRED, not
+// that there are three separate detectors.
+//
+// AND IT ASSERTS THE CORRECT BEHAVIOUR ALONGSIDE, not just the alarm: the
+// block must keep taking triangles at full rate once walled (a permanently low
+// `tri_ready_o` would stall the whole geometry path and look like a defect
+// somewhere else), and the frame must still end.
+void case5_the_quota_refusal_fires() {
+  Dut t;
+  bring_up(t);
+
+  // THREE chunks of quota against a scene that needs far more, and the scene
+  // matters: the wall has to go up DURING BINNING, not during the flush.
+  // `flush_cut_o` fires in A_FLUSHD only when `wall_q` is ALREADY set on
+  // entry, so a frame whose first refusal happens at flush time raises the
+  // wall and goes straight to A_DONE without ever re-entering A_FLUSHD. That
+  // is not a defect -- it is one fault reported once instead of twice -- but
+  // it is why `scene()` with a one-chunk quota fires two of these three and
+  // not the third. Thirty triangles over the whole 4x2 active grid put two
+  // full chunks in every tile, so the third allocation is refused while
+  // triangles are still arriving.
+  ckt(seal(t, 0x5150, 3), "the arena sealed a frame with a three-chunk quota");
+  idle(t, 700);
+
+  for (int i = 0; i < 3; ++i)
+    ckt(push_pv(t, 100 + i), "the three vertices every descriptor names");
+  for (int i = 0; i < kDecoy; ++i) ckt(push_td(t, i), "decoy descriptor taken");
+
+  std::vector<TriPlan> s;
+  {
+    TriPlan whole = {0, 3, 0, 1};
+    for (int i = 0; i < 30; ++i) s.push_back(whole);
+  }
+  for (size_t i = 0; i < s.size(); ++i) {
+    const uint32_t arena_id = static_cast<uint32_t>(i) + kDecoy;
+    push_td(t, arena_id);
+    // THE CORRECT BEHAVIOUR, ASSERTED: every triangle is still ACCEPTED, at
+    // full rate, walled or not. This is the check that would catch a producer
+    // that deadlocks the geometry front end on its own overflow.
+    ckt(push_tri(t, s[i], arena_id, true),
+        "the producer keeps taking triangles after the wall");
+  }
+
+  t.ab_geom_done_i = 1;
+  t.eval();
+  zhao::tick(t);
+  t.ab_geom_done_i = 0;
+  t.eval();
+  for (int i = 0; i < 400000; ++i) {
+    t.eval();
+    if (!t.ab_busy_o) break;
+    zhao::tick(t);
+  }
+
+  ckt(t.ab_chunk_refused_o > 0,
+      "case5: chunk_refused_o FIRED -- the arena refused a chunk past the quota");
+  cke(1, t.ab_overflow_o,
+      "case5: overflow_o LATCHED on the same event");
+  ckt(t.ab_flush_cut_o > 0,
+      "case5: flush_cut_o FIRED -- the end-of-frame flush gave up on a walled frame");
+  ckt(t.ab_chunks_emitted_o > 0,
+      "case5: and the chunks that fitted were still written");
+  std::printf("CASE5 refused=%u overflow=%u flush_cut=%u chunks=%u refs=%u\n",
+              (unsigned)t.ab_chunk_refused_o, (unsigned)t.ab_overflow_o,
+              (unsigned)t.ab_flush_cut_o, (unsigned)t.ab_chunks_emitted_o,
+              (unsigned)t.ab_refs_binned_o);
+}
+
+// ---------------------------------------------------------------------------
 // THE PRICE OF ENTRY I55'S RASTER SWAP -- ONE STIMULUS, BOTH CONSUMERS.
 // ---------------------------------------------------------------------------
 // REBUILT HERE BY ARENACOMPOSE, 2026-09-26. It lived in
@@ -893,6 +981,7 @@ int main(int argc, char** argv) {
     case2_a_nameless_triangle_is_not_binned();
     case3_link_illegal_fires();
     case4_the_directory_does_not_outlive_its_frame();
+    case5_the_quota_refusal_fires();
     std::printf("geom_arenabin_directed: %d checks, %d failures\n", g_checks,
                 g_fail);
   }
