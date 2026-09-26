@@ -219,6 +219,11 @@ struct Sim {
   std::vector<int32_t> streamed_top;
   std::vector<int32_t> streamed_compose_top;
   uint64_t answers_taken = 0;   // adapter -> PATCH field-lane handshakes
+  // EVERY CLOCK THIS DRIVER APPLIES. The association cost contract
+  // (design/contracts/FIELD.SEQ.EARTH.md:167) is denominated in clocks per
+  // 1,089-vertex association, so the census in case 11 needs the bench's own
+  // clock, not a counter inside a module.
+  uint64_t clocks = 0;
 
   void step() {
     eng.drive(d);
@@ -234,6 +239,7 @@ struct Sim {
     }
     if (d.efa_ans_valid_o && d.efa_ans_ready_o) ++answers_taken;
     zhao::tick(d);
+    ++clocks;
     eng.age();
   }
 
@@ -1036,6 +1042,147 @@ int main(int argc, char** argv) {
     ck_eq(s.d.efa_lane_desync_o, 0, "lane shadow stayed aligned across the hold");
     ck_eq(s.d.efa_faults_o, 0, "no engine fault");
     ck_eq(s.d.place_mismatch_o, 0, "no placement fault");
+  }
+
+  // =========================================================================
+  // CASE 11 -- THE ASSOCIATION CYCLE CENSUS (PATCHV2, 2026-09-26)
+  //
+  // `fld_earth_stall_cycles_o` was exported on 2026-09-23 with its purpose
+  // written into the adapter's own header -- "the number that decides whether
+  // the field-major machine ... has to be built before terrain fields can run
+  // at frame rate" -- and was then never read by anything. It reaches
+  // `tb_terrain_composepub.sv:241` and `:381` and this file had ZERO
+  // occurrences of the string. A counter wired to a pin nobody reads is not a
+  // measurement.
+  //
+  // THE TRAP THIS CASE IS BUILT TO AVOID. With no TerrainField issued the list
+  // is empty, the consumer never raises `fld_ready_o`, and the counter reads
+  // ZERO for a reason that has nothing whatever to do with the cost. That is
+  // the broken-instrument shape, so the baseline below is kept as an explicit
+  // NEGATIVE CONTROL beside the loaded rows rather than being the only
+  // reading taken.
+  //
+  // WHAT IS MEASURED, AND WHY IT IS A SWEEP RATHER THAN A NUMBER. This bench
+  // models FIELD.HOST at its client seam with a declared response latency
+  // (`Engine::latency`, default 3). A single census at latency 3 would
+  // measure THE BENCH, not the console, and would do so in the flattering
+  // direction. So the association is run at four declared latencies and the
+  // LINE is reported. The slope is then asserted -- one engine round trip per
+  // covered vertex, nothing overlapped -- which is the structural claim that
+  // licenses reading the row at the real engine's latency instead of guessing
+  // a total.
+  //
+  // THE CONTRACT THE NUMBER IS AGAINST IS **NOT** 10,416. That figure is the
+  // one entry I34, this packet's brief and the adapter's own header all quote,
+  // and the owner directive retires it in writing:
+  // `reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt` section
+  // 2.10 -- "The familiar 10,416 clocks is an older comparison allowance. The
+  // amended Earth contract states <=6,000 clocks per full association" -- and
+  // section 18.2, "An explanatory older 10,416-clock allowance cannot replace
+  // the stricter active contract without a recorded amendment."
+  // `design/contracts/FIELD.SEQ.EARTH.md:167` is that active contract:
+  // "Hard per-association target: <= 6,000 clocks per full 1,089-vertex
+  // association". Both are printed; the ACTIVE one is 6,000.
+  //
+  // NO ASSERTION HERE ASSERTS THE BUDGET. The console misses it today and a
+  // test that asserted the miss would pass only while the defect exists
+  // (CLAUDE.md, "do not write a test that asserts the bug"). What is asserted
+  // is the behaviour that must hold either way: the run count, the slope, and
+  // the counter's own positive and negative controls.
+  // =========================================================================
+  {
+    std::printf("case 11: THE COST OF ONE ASSOCIATION, MEASURED\n");
+
+    const int32_t kCensusLift = 3 << 16;
+
+    // ---- the NEGATIVE CONTROL: the same 1,089-vertex walk, empty list -----
+    uint64_t empty_clocks = 0;
+    {
+      Sim s;
+      s.reset();
+      s.d.tick_i = 50;
+      s.open_patch(11);
+      const uint64_t t0 = s.clocks;
+      s.fill(0, 0, kBase, kScar, kBottom);
+      empty_clocks = s.clocks - t0;
+      ck_eq(s.d.efa_runs_o, 0, "census control: an empty list runs the engine zero times");
+      ck_eq(s.d.efa_stall_cycles_o, 0,
+            "census NEGATIVE CONTROL: an empty list costs ZERO stall -- so a zero "
+            "on a loaded row would mean something");
+      std::printf("  no field at all              : %llu clocks for 1,089 vertices\n",
+                  static_cast<unsigned long long>(empty_clocks));
+    }
+
+    // ---- the loaded rows, one association each ----------------------------
+    static const int kLat[] = {3, 20, 50, 80};
+    const int kRows = static_cast<int>(sizeof(kLat) / sizeof(kLat[0]));
+    uint64_t row_clocks[4] = {0, 0, 0, 0};
+    uint32_t row_stall[4]  = {0, 0, 0, 0};
+
+    for (int k = 0; k < kRows; ++k) {
+      Sim s;
+      s.reset();
+      s.eng.latency = kLat[k];
+      s.eng.out[0]  = kCensusLift;
+      s.eng.present = 0x0F;
+
+      s.d.tick_i = 50;
+      s.bank(/*start_tick=*/0, /*duration=*/100, /*last=*/true, kParams);
+      s.open_patch(11);
+      const Foot f = whole_patch(0, 0);
+      s.add(f.x0, f.z0, f.x1, f.z1, /*cmd=*/1);
+      s.d.eval();
+
+      const uint64_t t0 = s.clocks;
+      const uint32_t s0 = s.d.efa_stall_cycles_o;
+      s.fill(0, 0, kBase, kScar, kBottom);
+      row_clocks[k] = s.clocks - t0;
+      row_stall[k]  = s.d.efa_stall_cycles_o - s0;
+
+      ck_eq(static_cast<int64_t>(s.eng.runs), kVerts,
+            "census: exactly one engine run per covered vertex at this latency");
+      ck_eq(s.d.efa_skipped_uncovered_o, 0, "census: the whole patch was covered");
+      ck_eq(s.d.efa_faults_o, 0, "census: no engine fault");
+      ck(row_stall[k] > 0,
+         "census POSITIVE CONTROL: a covered association moves stall_cycles_o");
+    }
+
+    std::printf("\n  ASSOCIATION CYCLE CENSUS -- one field, whole 33x33 patch, %lld vertices\n",
+                static_cast<long long>(kVerts));
+    std::printf("  %-12s %14s %14s %14s\n",
+                "engine lat", "assoc clocks", "stall_cycles", "clocks/vertex");
+    for (int k = 0; k < kRows; ++k)
+      std::printf("  %-12d %14llu %14u %14.2f\n", kLat[k],
+                  static_cast<unsigned long long>(row_clocks[k]), row_stall[k],
+                  static_cast<double>(row_clocks[k]) / static_cast<double>(kVerts));
+
+    // THE SLOPE IS THE STRUCTURAL CLAIM. If every vertex costs exactly one
+    // un-overlapped engine round trip, adding L clocks to the engine adds
+    // 1,089*L clocks to the association. Asserting this is what makes the row
+    // at the real engine's latency a READING rather than an extrapolation, and
+    // it is correct behaviour for the CURRENT design rather than a bug.
+    for (int k = 1; k < kRows; ++k) {
+      const int64_t want = static_cast<int64_t>(kVerts) * (kLat[k] - kLat[k - 1]);
+      const int64_t got  = static_cast<int64_t>(row_clocks[k]) -
+                           static_cast<int64_t>(row_clocks[k - 1]);
+      ck_eq(got, want,
+            "census: the association serialises ONE engine round trip per vertex "
+            "(clocks scale as 1,089 x engine latency)");
+    }
+
+    // The contract, both numbers, stated rather than asserted.
+    std::printf("\n  ACTIVE contract  : <= 6,000 clocks / full 1,089-vertex association\n");
+    std::printf("                     (design/contracts/FIELD.SEQ.EARTH.md:167)\n");
+    std::printf("  RETIRED figure   : 10,416 -- directive section 2.10 / 18.2 supersede it;\n");
+    std::printf("                     entry I34 and this adapter's header still quote it.\n");
+    for (int k = 0; k < kRows; ++k)
+      std::printf("  at engine lat %-3d: %llu clocks = %.1fx the 6,000 contract, %.1fx the old 10,416\n",
+                  kLat[k], static_cast<unsigned long long>(row_clocks[k]),
+                  static_cast<double>(row_clocks[k]) / 6000.0,
+                  static_cast<double>(row_clocks[k]) / 10416.0);
+    std::printf("  The adapter's own header prices the REAL engine run at REGS(32) +\n");
+    std::printf("  IN_LANES(15) + program length, i.e. order 80-100 clocks; the lat=80\n");
+    std::printf("  row above is that case measured rather than argued.\n\n");
   }
 
   std::printf("\ncomposepub_acceptance: %d checks, %d failures\n", g_checks, g_fails);
