@@ -2615,6 +2615,11 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_shade.sv
       - fpga/rtl/terrain/zhao_terrain_lightlane.sv
       - fpga/rtl/terrain/zhao_terrain_uvlane.sv
+      # I13's fourth zhao_geom_clipdoor client and the two arithmetic
+      # laws it composes (CARRIAGE, 2026-09-26).
+      - fpga/rtl/terrain/zhao_terrain_clipfeed.sv
+      - fpga/rtl/terrain/zhao_terrain_shademod.sv
+      - fpga/rtl/geometry/zhao_geom_overw_sat.sv
       - fpga/rtl/terrain/zhao_terrain_island_dir.sv
       - fpga/rtl/forge/zhao_forge_shadow.sv
       - fpga/rtl/mem/zhao_mem_upload.sv
@@ -3093,6 +3098,11 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_shade.sv
       - fpga/rtl/terrain/zhao_terrain_lightlane.sv
       - fpga/rtl/terrain/zhao_terrain_uvlane.sv
+      # I13's fourth zhao_geom_clipdoor client and the two arithmetic
+      # laws it composes (CARRIAGE, 2026-09-26).
+      - fpga/rtl/terrain/zhao_terrain_clipfeed.sv
+      - fpga/rtl/terrain/zhao_terrain_shademod.sv
+      - fpga/rtl/geometry/zhao_geom_overw_sat.sv
       # Added 2026-09-19, packet P-GEOM. THREE blocks, each with a REAL
       # producer or a REAL consumer inside this closure and not one of them a
       # file added to make a count move:

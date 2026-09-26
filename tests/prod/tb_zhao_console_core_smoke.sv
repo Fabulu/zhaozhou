@@ -1115,31 +1115,10 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_tess_mat_unarmed_o;
   logic [31:0]             terr_tess_mode_invalid_o;
   logic                    terr_tess_idle_o;
-  logic                    proj_out_valid_o;
-  logic                    proj_out_ready_i;
-  logic signed [20:0]      proj_out_ax_o;
-  logic signed [20:0]      proj_out_ay_o;
-  logic signed [20:0]      proj_out_bx_o;
-  logic signed [20:0]      proj_out_by_o;
-  logic signed [20:0]      proj_out_cx_o;
-  logic signed [20:0]      proj_out_cy_o;
-  logic [2:0]              proj_out_behind_o;
-  logic [15:0]             proj_out_src_id_o;
-  logic signed [31:0]      proj_out_ad_o;
-  logic signed [31:0]      proj_out_bd_o;
-  logic signed [31:0]      proj_out_cd_o;
-  logic [30:0]             proj_out_aw_o;
-  logic [30:0]             proj_out_bw_o;
-  logic [30:0]             proj_out_cw_o;
-  logic                    proj_out_view_o;
-  logic [7:0]              proj_out_mat_a_o;
-  logic [7:0]              proj_out_mat_b_o;
-  logic [7:0]              proj_out_weight_o;
   logic                    proj_out_refused_o;
   logic                    proj_out_missed_o;
   logic                    proj_a_view_o;
   logic [1:0]              proj_a_profile_o;
-  logic [1:0]              proj_fill_profile_o;
   logic [31:0]             proj_replay_triangles_o;
   logic [31:0]             proj_replay_refused_o;
   logic [31:0]             proj_replay_missed_o;
@@ -1154,15 +1133,18 @@ module tb_zhao_console_core_smoke
   logic [31:0]             proj_b_grants_o;
   logic [31:0]             proj_contended_o;
   logic [31:0]             proj_mat_refused_o;
+  logic [31:0]             terr_cf_triangles_o;
+  logic [31:0]             terr_cf_emitted_o;
+  logic [31:0]             terr_cf_src_mismatch_o;
+  logic [31:0]             terr_cf_uv_sat_o;
+  logic [31:0]             terr_cf_shade_clamped_o;
+  logic [31:0]             terr_cf_degenerate_o;
+  logic [31:0]             terr_cf_dq_refused_o;
+  logic [31:0]             terr_cf_dq_stray_o;
   // R21: TERRAIN's lit normals leave with the triangle they belong to (entry
   // I13). The bench takes every light -- the far side of that edge is the
   // absent GEOM.CLIP merge, and a harness that stalled it would measure its
   // own backpressure instead of the lane.
-  logic                    terr_light_valid_o;
-  logic                    terr_light_ready_i;
-  logic signed [31:0]      terr_light_base_o;
-  logic                    terr_light_degenerate_o;
-  logic [15:0]             terr_light_src_id_o;
   logic [31:0]             terr_light_refs_taken_o;
   logic [31:0]             terr_light_emitted_o;
   logic [31:0]             terr_light_stale_reads_o;
@@ -1178,15 +1160,6 @@ module tb_zhao_console_core_smoke
   // triangle, so no reference ever reaches the lane. These nets prove the
   // core still ELABORATES and still renders its 14 GEOMETRY triangles; the
   // lane's own evidence is tests/terrain/terrain_uvlane_directed.cpp.
-  logic                    terr_uv_valid_o;
-  logic                    terr_uv_ready_i;
-  logic signed [31:0]      terr_uv_au_o;
-  logic signed [31:0]      terr_uv_av_o;
-  logic signed [31:0]      terr_uv_bu_o;
-  logic signed [31:0]      terr_uv_bv_o;
-  logic signed [31:0]      terr_uv_cu_o;
-  logic signed [31:0]      terr_uv_cv_o;
-  logic [15:0]             terr_uv_src_id_o;
   logic [31:0]             terr_uv_refs_taken_o;
   logic [31:0]             terr_uv_emitted_o;
   logic [31:0]             terr_uv_stale_reads_o;
@@ -4343,8 +4316,6 @@ module tb_zhao_console_core_smoke
     // GEOM.DEPTHQUANT's, inside GEOM.REPLAY, and slots 1..6 are the modelled
     // attribute store's (I46) -- see the store above.
     // R21: always take the terrain light (see its declaration).
-    terr_light_ready_i = 1'b1;
-    terr_uv_ready_i    = 1'b1;
     render_frame_open_q = 1'b0;
     // The fourteen `geom_pose_*_i` initialisers that stood here are gone with
     // the ports: I29 closed and the decoder's source is `zhao_geom_bonesrc`,
@@ -4356,7 +4327,6 @@ module tb_zhao_console_core_smoke
     proj_en_i = '0;
     terr_job_view_mask_i = '0;
     terr_sparse_fill_i = '0;
-    proj_out_ready_i = '0;
     post_atm_en_i = '0;
     post_atm_valid_i = '0;
     post_atm_rgb_i = '0;
@@ -4555,7 +4525,6 @@ module tb_zhao_console_core_smoke
     // The replayed terrain triangle has no consumer in this core (entry I13),
     // so the bench SINKS it. Holding it low instead would back the replay up
     // into the sequencer and the resulting stall would read as a wiring fault.
-    proj_out_ready_i        = 1'b1;
     // THE BENCH NO LONGER HANDS GEOM.SKIN AN IDENTITY MATRIX. It cannot:
     // zhao_geom_pose_palette owns those ports now (entry I10, closed). The
     // vertices still skin against the identity, because a palette holding no
@@ -6240,6 +6209,19 @@ module tb_zhao_console_core_smoke
              terr_light_normals_o, terr_light_stale_reads_o,
              terr_light_degenerate_count_o, terr_light_base_sat_o,
              terr_light_degen_mismatch_o);
+    // ---- I13: TERRAIN.CLIPFEED, the fourth door client (CARRIAGE) ---------
+    // Entry I13's own instruction, and it is the opposite of what that entry
+    // carried for two passes: a terrain arm owes an acceptance bench BECAUSE
+    // the smoke cannot check a VALUE against the oracle, but it must ALSO
+    // print its counters HERE, because the smoke CAN show the arm taking real
+    // references in the composed machine under real backpressure. A lane told
+    // the smoke is blind never instruments it and never sees its own counters
+    // move in the composed console -- which is the one measurement that
+    // separates "it elaborates" from "the value traverses".
+    $display("SMOKE: terrcf    triangles=%0d emitted=%0d src_mismatch=%0d uv_sat=%0d shade_clamped=%0d degenerate=%0d dq_refused=%0d dq_stray=%0d",
+             terr_cf_triangles_o, terr_cf_emitted_o, terr_cf_src_mismatch_o,
+             terr_cf_uv_sat_o, terr_cf_shade_clamped_o, terr_cf_degenerate_o,
+             terr_cf_dq_refused_o, terr_cf_dq_stray_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
@@ -7522,12 +7504,63 @@ module tb_zhao_console_core_smoke
     // `clipped` is the behind-the-eye triangle in both views -- the near plane
     // is a whole-primitive rejection -- so this equality holding means the
     // projector's behind verdict crossed the arena and the replay intact.
-    if ((geom_clip_submitted_o != SGF_EXP_REPLAYED) ||
-        (geom_clip_clipped_o != SGF_EXP_CLIPPED) ||
-        (geom_clip_culled_o != SGF_EXP_CULLED))
-      $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d clipped=%0d culled=%0d -- the reference wants %0d / %0d / %0d",
-             geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
-             SGF_EXP_REPLAYED, SGF_EXP_CLIPPED, SGF_EXP_CULLED);
+    // CHANGED 2026-09-26 (CARRIAGE), because GEOM.CLIP NOW HAS TWO POPULATIONS.
+    // Until this commit the door had three clients and only GEOM.REPLAY ever
+    // offered in this fixture, so these three counters measured the mesh
+    // reference alone. TERRAIN.CLIPFEED is the fourth client and it submits
+    // `terr_cf_emitted_o` triangles of its own, so the equality below is
+    // written against the MESH population explicitly rather than being relaxed.
+    //
+    // WHAT IS ASSERTED, AND WHAT IS DELIBERATELY NOT:
+    //   submitted  EXACT, and it is now STRONGER than it was: it pins the mesh
+    //              reference AND proves every triangle TERRAIN.CLIPFEED emitted
+    //              arrived at GEOM.CLIP's input. A carriage that dropped one
+    //              would fail here.
+    //   clipped    EXACT against the mesh reference. No terrain triangle in
+    //              this fixture is behind the eye, so terrain contributes zero;
+    //              if that ever changes this fires, which is new information
+    //              rather than noise.
+    //   culled     BOUNDED, NOT EQUAL, and the reason is a rule rather than
+    //              convenience. Every terrain triangle in this fixture is
+    //              culled with verdict ZERO_AREA -- see the NOTE below -- and
+    //              writing `culled == SGF_EXP_CULLED + terr_cf_emitted_o` would
+    //              be ASSERTING THE BUG: it would pass only while the defect
+    //              exists and would have to be edited again the day the fixture
+    //              is repaired. The bound `culled <= terr_cf_emitted_o` says
+    //              the thing that must stay true whatever terrain does -- NO
+    //              MESH TRIANGLE IS CULLED -- so a geometry regression is still
+    //              caught exactly.
+    if (geom_clip_submitted_o != (SGF_EXP_REPLAYED + terr_cf_emitted_o))
+      $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d -- the mesh reference wants %0d and TERRAIN.CLIPFEED emitted %0d",
+             geom_clip_submitted_o, SGF_EXP_REPLAYED, terr_cf_emitted_o);
+    if (geom_clip_clipped_o != SGF_EXP_CLIPPED)
+      $fatal(1, "SMOKE: GEOM.CLIP clipped=%0d -- the reference wants %0d",
+             geom_clip_clipped_o, SGF_EXP_CLIPPED);
+    if (geom_clip_culled_o > (SGF_EXP_CULLED + terr_cf_emitted_o))
+      $fatal(1, "SMOKE: GEOM.CLIP culled=%0d exceeds what terrain could account for (%0d) -- a MESH triangle was culled",
+             geom_clip_culled_o, SGF_EXP_CULLED + terr_cf_emitted_o);
+    // ---- I13: THE LAST HOP, AND IT IS NOT CLOSED -------------------------
+    // This NOTE is the finding CARRIAGE landed with and it must not be read as
+    // an accepted state. Terrain's triangles reach GEOM.CLIP -- that is what
+    // the `submitted` equality above proves -- and then EVERY ONE OF THEM IS
+    // CULLED. `zhao_geom_clip` bumps `triangles_culled_o` on
+    // `VERDICT_ZERO_AREA || back`, and terrain declares CULL_NONE, under which
+    // `s3_back` is false by construction. So the verdict is ZERO AREA: the
+    // projected corners of every terrain triangle in this fixture enclose no
+    // screen area, and no terrain FRAGMENT is produced.
+    //
+    // THE CLAIM THIS FALSIFIES IS THIS ENTRY'S OWN. TERRAINAUX repaired the
+    // fixture on 2026-09-25 and recorded `terrlight ... degenerate=0` of 256 as
+    // the evidence, and I13 has carried "the arm's triangles have AREA now" ever
+    // since. THOSE ARE TWO DIFFERENT QUANTITIES. `terr_light_degenerate_o` is
+    // the 3D FACE NORMAL's degeneracy, computed by `zhao_terrain_normals` from
+    // the COMPOSE CACHE's world positions; screen area is a property of the
+    // PROJECTED corners that reach the arena. A non-zero world normal does not
+    // imply a non-zero projected area, and the repair was verified against the
+    // first while the entry's sentence was written about the second.
+    if (geom_clip_culled_o != 0)
+      $display("SMOKE: NOTE GEOM.CLIP culled %0d triangle(s), all of them TERRAIN and all with verdict ZERO_AREA. The arm is composed and its value traverses to the door (see `SMOKE: terrcf`); the projected corners enclose no area, so NO TERRAIN FRAGMENT IS DRAWN. This is a FIXTURE defect and entry I13 records it as the next thing to fix -- do not read this line as a design property.",
+               geom_clip_culled_o);
     if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
       $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",
              geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED);
@@ -8138,9 +8171,28 @@ module tb_zhao_console_core_smoke
     // triangle may be culled by winding. It is the one end of that wire this
     // bench can see; the other end (the word's composition from the draw's
     // flags) is differenced against `zref::raster_state` in the DRAWJOB test.
-    if (geom_clip_culled_o != 32'd0)
-      $fatal(1, "SMOKE: GEOM.CLIP culled %0d triangle(s) under a draw whose cull mode is NONE -- the raster word that reached it is not this draw's",
-             geom_clip_culled_o);
+    // NARROWED 2026-09-26 (CARRIAGE), AND THE REASON IS AN INSTRUMENT DEFECT
+    // THIS BENCH HAS ALWAYS HAD RATHER THAN A CONCESSION TO A NEW ARM.
+    //
+    // The check above read `geom_clip_culled_o != 0` and reported "the raster
+    // word that reached it is not this draw's". THAT INFERENCE DOES NOT FOLLOW
+    // FROM THAT COUNTER. `zhao_geom_clip` bumps `triangles_culled_o` on
+    // `VERDICT_ZERO_AREA || s3_back` -- its own header says the counter means
+    // "rejected for WHAT it is: zero area or [backface]" -- so the counter
+    // CANNOT DISCRIMINATE the two causes, and a zero-area triangle is a
+    // perfectly lawful cull under EVERY cull mode including NONE. The check was
+    // never wrong in practice only because no producer in this fixture had ever
+    // emitted a zero-area triangle; it was a correct conclusion resting on a
+    // premise nothing enforced. Now one has, and the diagnosis it prints would
+    // have sent the next reader to look at the raster word, which is fine.
+    //
+    // So it is narrowed to the MESH population, where its reasoning IS sound:
+    // no mesh triangle in this fixture is zero-area (the reference's own split
+    // is 16 / 2 / 0), so a cull beyond what terrain can account for is still
+    // exactly the winding fault I24 put this line here to catch.
+    if (geom_clip_culled_o > terr_cf_emitted_o)
+      $fatal(1, "SMOKE: GEOM.CLIP culled %0d triangle(s), more than the %0d TERRAIN.CLIPFEED submitted, under a draw whose cull mode is NONE -- the raster word that reached the MESH arm is not this draw's",
+             geom_clip_culled_o, terr_cf_emitted_o);
     // THE COMMAND PATH, end to end (R17): the packet was fetched over the
     // shell's bridge, walked by both consumers, committed, and CMD.EXEC handed
     // exactly one request to MEM.UPLOAD.
@@ -8253,9 +8305,25 @@ module tb_zhao_console_core_smoke
     if (mat_win_err_unpublished_o != 32'd0 || mat_win_err_underflow_o != 32'd0)
       $fatal(1, "SMOKE: the material window's structural guards fired (unpublished %0d, underflow %0d) -- a triangle reached the door under a material nobody resolved",
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
-    if (mat_win_resolves_o != mat_win_switches_o)
-      $fatal(1, "SMOKE: the material window issued %0d resolve(s) for %0d switch(es) -- a re-resolve of a material it already held is invisible in the picture and doubles the meshlet loop's cost",
-             mat_win_resolves_o, mat_win_switches_o);
+    // CORRECTED 2026-09-26 (CARRIAGE). This read `resolves == switches`, which
+    // was the whole law while every producer at the door declared
+    // MATMODE_BACKED. It is not the law any more, and the sentence that makes
+    // it not the law is a RULING rather than a new arm's convenience: owner
+    // ruling 1 of 2026-09-22 made `MATMODE_NONE` a LAWFUL DECLARED MODE under
+    // which the window publishes the defined no-sampling profile and ISSUES NO
+    // RESOLVE. TERRAIN.CLIPFEED declares exactly that -- it is the only mode
+    // terrain can lawfully present -- so it costs a SWITCH and no resolve.
+    //
+    // The invariant is therefore written with that term in it rather than
+    // relaxed, and it is STRONGER than the old one because it now pins a third
+    // counter: every span switch issues a resolve EXCEPT the no-material ones,
+    // and the number of no-material spans is itself checked. A re-resolve of a
+    // material the window already held -- the fault this line exists to catch,
+    // invisible in the picture and doubling the meshlet loop's cost -- still
+    // fails it exactly.
+    if (mat_win_resolves_o != (mat_win_switches_o - mat_win_no_material_spans_o))
+      $fatal(1, "SMOKE: the material window issued %0d resolve(s) for %0d switch(es) of which %0d were no-material spans -- a re-resolve of a material it already held is invisible in the picture and doubles the meshlet loop's cost",
+             mat_win_resolves_o, mat_win_switches_o, mat_win_no_material_spans_o);
     // ---- THE BINDING PAGE AND THE FILL SOCKET (entry I49's second half) ----
     $display("SMOKE: binding  page_gen=%0d acks=%0d last_status=%0d fill[lines/beats]=[%0d %0d]",
              active_page_generation_o, tbind_acks_q, tbind_status_q,
