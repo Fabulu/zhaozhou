@@ -58,6 +58,44 @@ names the same shape the directive requires:
 
 **That is the job. The refusal and the ruling agree on it.**
 
+## WHAT CHANGED UNDER YOU ON 2026-09-26 — read this before costing anything
+
+**GIANTREFS landed after this brief was written, and it moved the ground.**
+
+* **The binner now holds 32,768 tile references, not 1,024.**
+  `RENDER_CHUNKS=8192 / CHUNK_W=13 / CHUNK_REFS=4`, R7's number exactly, as named
+  parameters. Measured `-MapOnly` on **`5CSEBA6U23I7`**, both rows
+  `rtlCleanAtHead: true`: `@giantrefs-shipped` 191,296 bits →
+  `@giantrefs-32k` **526,592 bits / 2,130 registers**, +335,296 bits ≈ **+33
+  M10K, 9.30% of the 553-M10K ceiling.**
+* **A giant was demonstrated surviving**, not argued: 45 whole-canvas triangles
+  = **25,920 references binned whole, all 25,920 drained, `overflow_o = 0`**,
+  with a positive control beside it (`fed=4097 overflow=1 culled_delta=1`). The
+  old arena would have held 4.0% of that.
+* **`CNT_W` is now derived** (`$clog2(REF_CAP + 1)`), along with `SLOT_W` and a
+  third hardcoded width nobody had recorded — a five-bit pad in the max-depth
+  compare that encoded `CNT_W == 11` where no reader of the localparam would
+  look. Four elaboration guards added.
+* **The binner's instruments are partly READ at last.** `tile_references` and
+  `max_tile_list_depth` are published on GEOM.BINNER's own long-declared catalog
+  ids, and `binner_overflow` is now the seventh whole-frame fault term per
+  directive §4. **The smoke had `cnt_snap_ready_i` TIED TO ZERO**, so every
+  console counter was unobservable from the gating bench; that is opened.
+
+**So "the wall eats the giant" is FIXED and is not your problem.** What remains
+yours is unchanged: the walker still has no independent producer.
+
+**AND TWO NUMBERS IN CIRCULATION ARE WRONG — do not inherit them:**
+
+* **"Raising `CHUNKS` silently wraps every tile count at 2,048" is FALSE.** I
+  wrote it, from REFPUSH. `CNT_W` bounds a **per-tile** count whose real ceiling
+  is `min(TRI_CAP, REF_CAP) = 128`, so raising `CHUNKS` alone was **always
+  safe**. The derivation is correct and worth having; the alarm was not.
+* **`@refpush-giantrefs32k` is `rtlCleanAtHead: FALSE`**, and it is the row the
+  original +33 M10K figure came from. REFPUSH reported both rows clean. **Read
+  `rtlCleanAtHead` before you quote any row** — including the ones above, which
+  I verified myself after GIANTREFS flagged it.
+
 ## What §4 also binds you to, and it is not optional
 
 * **Namespaces stay distinct.** *"Pre-clip mesh IDs, transient replay slots,
