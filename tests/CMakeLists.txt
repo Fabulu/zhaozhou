@@ -18936,3 +18936,17 @@ verilate(test_fieldmajor_census
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_fieldmajor.sv)
 add_test(NAME fieldmajor_census COMMAND test_fieldmajor_census)
 set_tests_properties(fieldmajor_census PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# ---- LANESCOST 2026-09-27: the map-receipt extractor's RAM anchor ----------
+# `extract_map_receipt.py` refused FOUR valid `zhao_field_host_v2` leaf maps
+# because its self-check demanded a chosen memory primitive and Analysis &
+# Synthesis writes the literal `AUTO` until the FITTER chooses. The check was
+# right to be loud and wrong about why ("the anchor slipped" -- it had not).
+# These controls assert the corrected behaviour on both sides AND keep the
+# guard's positive control -- the table-of-contents junk it was written for --
+# separate, so widening the token list cannot quietly make it vacuous.
+add_test(NAME extract_map_receipt_controls
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_extract_map_receipt.py -q)
+set_tests_properties(extract_map_receipt_controls PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120)

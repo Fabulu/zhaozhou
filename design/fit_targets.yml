@@ -1594,6 +1594,59 @@ targets:
       - fpga/rtl/field/zhao_field_v3_ring_svc.sv
       - fpga/rtl/field/zhao_field_v3_ring.sv
 
+  # ---- LANESCOST, 2026-09-27: THE LEAF THAT PRICES `FAB_LANES` -------------
+  # `zhao_field_host_v2` had NO fit target of its own. Every number about it
+  # in this tree is a CLOCK number from Verilator; nobody had ever measured
+  # its area, which is exactly why GATHERFRONT could not decide whether to
+  # compose the gathering front and correctly refused to.
+  #
+  # THE FIT QUESTION: what does raising `FAB_LANES` 1 -> 4 cost in ALUTs,
+  # registers, memory bits and DSPs? Four datapath replicas on a console the
+  # campaign already reports over on ALMs is the bill that decides I34's
+  # composition, and `-MapOnly` answers it in minutes where a fit costs hours.
+  #
+  # RUN IT AT THE CONSOLE'S OWN TWENTY PARAMETERS, never the module defaults:
+  # `zhao_field_host.sv:115` names that trap ("a fit that does not override
+  # them is measuring the bench") and the defaults differ in five places --
+  # CLIENTS 2 vs 4, INSTR_N 32 vs 48, PCW 5 vs 6, IN_LANES 12 vs 15 and
+  # FAB_GROUP_PTS 4 vs 1.
+  #
+  # THE TWO PACKAGES LEAD. `zhao_field_ops_pkg` is the one width table both
+  # the executor's `is_long` and the dispatcher's `dst_width_of` call, and
+  # `zhao_field_host_image_pkg` is the image schema this host imports at
+  # :237. A package has to precede its users.
+  - top: zhao_field_host_v2
+    sources:
+      - fpga/rtl/field/zhao_field_ops_pkg.sv
+      - fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+      - fpga/rtl/field/zhao_field_progcache.sv
+      - fpga/rtl/field/zhao_field_alu.sv
+      - fpga/rtl/field/zhao_field_alu_vec.sv
+      - fpga/rtl/field/zhao_field_mul.sv
+      - fpga/rtl/field/zhao_field_isqrt.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_v3_rf.sv
+      - fpga/rtl/field/zhao_field_v3_mulbank.sv
+      - fpga/rtl/field/zhao_field_v3_exec.sv
+      - fpga/rtl/field/zhao_field_v3_core.sv
+      - fpga/rtl/field/zhao_field_v3_dispatch.sv
+      - fpga/rtl/field/zhao_field_v3_spline.sv
+      - fpga/rtl/field/zhao_field_v3_curve.sv
+      - fpga/rtl/field/zhao_field_v3_len.sv
+      - fpga/rtl/field/zhao_field_v3_noise.sv
+      - fpga/rtl/field/zhao_field_v3_normalize.sv
+      - fpga/rtl/field/zhao_field_v3_ring.sv
+      - fpga/rtl/field/zhao_field_v3_ring_svc.sv
+      - fpga/rtl/field/zhao_field_v3_rot.sv
+      - fpga/rtl/field/zhao_field_v3_sbank.sv
+      - fpga/rtl/field/zhao_field_v3_trig.sv
+      - fpga/rtl/field/zhao_field_v3_wbarb.sv
+      - fpga/rtl/field/zhao_field_v3_svcpath.sv
+      - fpga/rtl/field/zhao_field_v3_engine.sv
+      - fpga/rtl/field/zhao_field_host_v2.sv
+
   # ==========================================================================
   # THE REMAINING TWENTY-SEVEN -- every production block is now measurable
   # ==========================================================================
