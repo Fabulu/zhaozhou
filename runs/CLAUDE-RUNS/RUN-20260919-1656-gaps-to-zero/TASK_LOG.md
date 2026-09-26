@@ -3156,3 +3156,82 @@ non-fast-forward was still to look before doing anything.
 **Running: SHADELADDER (I13's two laws), REFPUSH (I56 at the binner's reference
 push).** Queued: FABRICSINK (I34's material and nav). **Register 5**, measured
 bare at `241e6c73`.
+
+### 2026-09-26 (later) - A LIVE DEFECT, A TOOL NOBODY RAN, AND R7's GIANT ALREADY BREACHED
+
+**I54's identity queue had a DEAD CLOCK.** `u_geom_tidq` was composed
+`.clk (clk)` in a module whose clock is `gpu_clk` -- **149 instances say
+`gpu_clk`, exactly one said `clk`**, and an undeclared identifier in a port
+connection is an **implicit net**. So the queue sat on an undriven wire and
+never clocked: `id_o` held its reset value and the continuation tail carried a
+**constant** where I54's arena id belongs. Repaired at `5ed6f773`.
+
+**It is functionally live.** That tail field is the only carriage getting the
+arena id into the binner's triangle store, and the serialise pass produces
+chunks -- **so I54's chunks were being built with a constant triangle
+identity**, on an entry the register counts as CLOSED.
+
+**Three laws let it through at once**: the block was right and the COMPOSITION
+was wrong; the smoke runs `-Wno-fatal`, so the warning printed and was ignored
+(**entry I34 already records this identical failure from three days earlier**);
+and the smoke DECLARES `geom_tidq_underflow_o`/`overflow_o`/`unnamed_o` at
+`:493-495` and **asserts on none of them**.
+
+**AND THE TOOL THAT WOULD HAVE CAUGHT IT EXISTS.**
+`tools/quartus/edgeclose-lint-core.ps1` does exactly this job under `-Wall`, so
+IMPLICIT is fatal to it. **A grep for its name returns nothing outside itself --
+zero callers, ever.** That is `uncashed_cheques.py`'s own subject one level up:
+that tool finds a MODULE installed nowhere; nothing finds a TOOL invoked
+nowhere. **I nearly wrote a second closure linter before grepping for the
+first.**
+
+**Gate 31 now runs it** -- `tools/quartus/check_console_closure_lint.py`,
+discovered by `gate_sweep` because it is `check_*.py` where a `.ps1` can never
+be. It lints with `-Wno-fatal` and refuses ONLY IMPLICIT / MODMISSING /
+PINMISSING, because the closure legitimately carries 147 warnings and **a gate
+that is permanently red is a gate people learn to skip**. **Proven to fire end
+to end**: production re-broken -> RC 1 naming the exact line -> restored ->
+RC 0, with restoration verified on CONTENT. Absent toolchain is **RC 2, not
+RC 0**.
+
+**It also answers a real pre-fit question in 32 seconds**: all 286 declared
+sources exist and 299 modules elaborate, so **the console fit will not die two
+hours in on a missing file**. `closure_liveness.py` asks the opposite question
+and needs a completed fit to answer it.
+
+### REFPUSH: I56 REFUSED A THIRD TIME, AND THE REASON IS THE BIG ONE
+
+**My "the reservation is a hardware constant" claim did NOT survive, and not the
+way either of us expected.** The composed binner's entire reference arena is
+**1,024 references per frame**; my rule evaluates to `1,024 - 32,768 =
+-31,744`. **The seam has the identity GIANTQUOTA found and 3.1% of the
+capacity nobody asked about.**
+
+**So R7's "the giant is never silently truncated" IS ALREADY BREACHED** -- a
+near-camera giant needs **25,704** references, 25x the arena, re-measured
+against the shipped `zref::Binner` rather than quoted from an August document.
+**And it is UNOBSERVABLE**: the shell discards five of six binner instruments
+into `rp_*_unused`, and the survivor `render_overflow_o` is declared, connected
+and **read by nobody** -- the leaf positive control says nothing about the
+composed machine.
+
+**Three more findings from it**: `CNT_W` is hardcoded `11` and not derived, so
+raising `CHUNKS` **silently wraps** every tile count at 2,048 -- a corruption
+the safe-overflow wall would not catch. `BINNER_CAPACITY_FOR_8KM_MAPS.md` prices
+a triangle at 142 bits against today's **1,302 (9.2x, flattering direction)**
+because it predates the metadata bank. And it **caught itself** nearly shipping
+a confident engineering impossibility by scaling the army's parameter to answer
+the giant's question.
+
+**I verified its ledger claim independently** rather than taking it: the fit
+JSON reserialised all 238 rows; **238 -> 240, zero lost**, exactly its two, both
+on the shipping part.
+
+### WHERE THINGS STAND
+
+**Running: SHADELADDER (I13), GIANTREFS (I56's real blocker -- derive `CNT_W`,
+raise the wall to cover 32,768, and make the breach observable).** Queued:
+FABRICSINK (I34), BINARENA (I55). **Register 5**, measured BARE.
+
+**And I ran the register through `| tail` once and read tail's RC 0** -- the
+documented trap, the same one REFPUSH hit today. Re-run bare: **RC 1**, correct.
