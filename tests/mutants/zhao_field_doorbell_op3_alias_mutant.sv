@@ -357,7 +357,14 @@ module zhao_field_doorbell_op3_alias_mutant #(
   localparam logic [1:0] OpLoad   = 2'd0;
   localparam logic [1:0] OpCommit = 2'd1;
   localparam logic [1:0] OpLookup = 2'd2;
+  // KEPT, AND UNUSED ON PURPOSE. The mutation replaces this parameter's only
+  // reader -- `head_is_fh2 = (q_op[q_ri] == OpFh2)` becomes `1'b0` -- so the
+  // declaration going unread IS the mutation, not leftover debris. Deleting it
+  // would diverge this copy from production by a second token and hide what the
+  // file exists to demonstrate; a mutant is production with ONE change.
+  /* verilator lint_off UNUSEDPARAM */
   localparam logic [1:0] OpFh2    = 2'd3;
+  /* verilator lint_on UNUSEDPARAM */
 
   localparam int unsigned PTRW = (POSTS > 1) ? $clog2(POSTS) : 1;
   localparam int unsigned RETW = (RETQ  > 1) ? $clog2(RETQ)  : 1;
