@@ -182,3 +182,33 @@ and the owner decisions, in under 40 lines.
 
 When done: `git worktree remove C:\programmieren\zencrifice\gz-<lane>` only
 after your last push succeeded, and confirm nothing of yours is still running.
+
+## A PACKET DOES NOT SPAWN SUBAGENTS
+
+Added 2026-09-27, after a packet spawned two recon agents and put the live total
+at **four against a hard cap of two**.
+
+**The owner's limit is MAX 2 EXTRA AGENTS, and it was restated to count EVERY
+agent -- explicitly including one that is merely waiting on a fit.** The
+coordinator launches at most two packets, so a packet that spawns even one helper
+breaks the cap, and a packet that spawns two doubles it.
+
+**This is not a criticism of wanting a survey.** Reading a large surface before
+touching it is good practice, and the packet that did this was doing exactly
+that. The failure was mine: **the protocol did not say it, so the brief did not
+either.** It says it now.
+
+* **Do the reading yourself.** A packet has the whole context window it needs.
+* **If a survey is genuinely too large to do inline, say so and stop.** That is a
+  finding the coordinator can act on -- by splitting the packet, or by spending
+  one of its own two slots on a recon. **The coordinator owns the budget; a
+  packet cannot allocate from it.**
+* **If you have already spawned one, let it finish and spawn no more.** The same
+  owner rule that sets the cap **never authorises killing in-flight work**, so the
+  fix is always forward, never a kill.
+
+The general shape, which is this campaign's own: **a budget enforced only at the
+point of issue is not enforced.** The cap was respected where the coordinator
+could see it and exceeded one level down, where nothing was looking -- the same
+structure as an ignore rule that hides waste instead of removing it.
+
