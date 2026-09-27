@@ -4396,3 +4396,94 @@ feared as area on a device 350% over, is **zero**. **Every one of them would hav
 justified a refusal, and every one was wrong.** The door's own probe exists
 precisely because *a refusal with no number is what this packet exists to
 replace.*
+
+### 2026-09-27 (end of night) - BOTH MERGED, GATES HELD, AND THE MERGE GATE FOUND THE PROOF
+
+**Merged MATCARRY (two passes) and DOORCOST. Gates 31/31 at baseline. HEAD
+`72159626`, pushed. Register 2; capabilities 113.** SWAPCLOSE and REDFIX launched.
+
+### THE MERGE GATE IS MINE, AND IT REPRODUCED THE FINDING
+
+Both packets **declared their smoke control forms NOT RUN** rather than implying a
+pass, which is the right call -- the forms belong to the merged tree. Run here:
+
+| form | verdict |
+|---|---|
+| plain | **PASS**, `raster pixels=2816`, `texture fragments=1216` |
+| `-Mutant` (inverted polarity) | **PASS** |
+| `-TerrainFlatLattice` | **PASS** |
+| `-BadVertex` | running |
+| `-NoEchoArm`, `-BadTraceArm` | queued |
+| `-UntexMutant` | **inherited FATAL, attributed, handed to REDFIX** |
+
+**And the plain form carries the proof.** `tile[max/or]` reads **`[6 7]`** where
+it read **`[255 255]`** before. **255 is `0xFF` -- `base_rgb`'s constant.** The
+mosaic's anti-vacuity check had been passing on that constant and **never on the
+page**, because the smoke **never authored layer E**. MATCARRY authored it, and
+`[6 7]` is real page data: **the empirical proof that the composed triple's own
+bytes traverse the chain.** Reproduced on the merged tree, not inherited.
+
+**A second instrument was right for the wrong reason:** `mat_cells=1024` **counts
+cells, not values.**
+
+### WHAT THE TWO PACKETS LANDED
+
+**MATCARRY** -- the carriage, **0 ALUTs, +198 registers, 0 DSP**, four rows one
+parameter apart with identical digests. `+96 = 32 bits x 3 clip stages`,
+`+102 = 34 x 3 setup stages` -- **the structure's own prediction.** Rider 50->82;
+`zhao_geom_setup` gained the `IDW` parameter it lacked. **`zhao_geom_clipdoor`,
+`zhao_geom_clip` and `zhao_geom_attrpack` needed NO RTL** -- already
+parameterised. **But `zhao_terrain_clipfeed` did**, and that is the file my
+decision failed to name: the terrain triple sits upstream of a **serial**
+converter, so a token muxed at the door **belongs to a different triangle.**
+**That was the one place this could have been built wrong with every gate green.**
+
+Evidence: **41/0 with a self-vacuity check**, a committed **wrapper** mutant
+firing **9/9 inverted** on the precise one-behind signature while every other
+counter in the block stays silent, and the console's
+`a_attrpack_setup_same_triangle` -- which **admitted in its own comment that it
+could not fail** -- now discriminating per triangle.
+
+**DOORCOST** -- the door **OPEN**: **-6 ALUT to have** (with **+60 virtual pins,
+exactly its own bit count**) and **+983 ALUT / +0 DSP to use**. `base` is the
+**first shipping-part figure this block has ever had.** 11,381 checks with a
+**separate** shut-door control at 4,084. `walk_job_*` is **BOUND, not TIED** --
+at `JOB_SRC = 0` the branch reading those inputs **is not built**, so no
+capability is withheld; the capability **is** the parameter.
+
+### THREE INHERITED REDS, NOW OWNED
+
+* **Packet-D bit 410.** `ceba0bfe` moved `PRETEX_EARLYZ_KEY_LO` 410->411 and left
+  four constants behind: `PAYLOAD_HI = 409`, `KEY_LO = 411`, **bit 410 belongs to
+  neither.** **Six of thirteen required tests red since 2026-09-26**, proven at
+  base with an **identical cycle 4219**. **The package's self-check compares each
+  constant to its own literal, so it CAN NEVER FIRE** -- which is how a
+  four-constant desync sat beside a checker for a week.
+* **`-UntexMutant`.** Identical at base **including the simulation timestamp
+  `10298916000`**, with the assertion's line shifted by exactly the lines
+  MATCARRY added above it. **Outside the five-form gate**, which is why it needed
+  an owner. Repair prescribed and **not** as a bound.
+* **The board lint's 262 baseline is itself stale** (291 warnings, none naming
+  anything DOORCOST added). **Classify before re-baselining.**
+
+### THE PATTERN I HAVE TO OWN
+
+**Three packets running, each found FIVE false claims in the brief, decision
+record or entry I handed it** -- and MATCARRY's fourth required file was one my
+decision **did not name**. Its own words: *"the briefs are the weak link, not the
+builds ... a refusal or a scope statement, once written, is never re-measured the
+way a build is."* **Both new briefs now carry an explicit instruction to hunt
+themselves for errors.**
+
+**And HANDOVER 15.34 is mine:** I told a packet its build was healthy from a
+process that **was not its**, while its three control forms were already dead
+(PowerShell `Start-Job` dies with the session), then minutes later called a wedge
+on a `verilator_bin` at zero CPU that had **just spawned**. **A process list is
+not a lane; attribute before diagnosing and read CPU as a RATE.**
+
+### FOUR ESTIMATES, ALL WRONG THE ALARMING WAY
+
+**+90,000 vs +11,979 (7.5x). 2,065 wires vs 28 (73x). The carriage feared as area
+vs ZERO. A second back end at +40 DSP -- refused, correctly, and the elaboration
+select made it unnecessary.** **Every one would have justified a refusal.**
+Measuring before refusing has been this run's highest-yield habit.
