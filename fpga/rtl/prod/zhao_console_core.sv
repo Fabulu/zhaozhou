@@ -29890,7 +29890,16 @@ module zhao_console_core
 
   // ---- FIELD.EARTH_ADAPTER's wires, declared ahead of the join below -------
   wire         efa_rec_ready;
-  wire         efa_ans_valid, efa_ans_ready;
+  wire         efa_ans_valid;
+  // THE ADAPTER'S ANSWER-READY IS `tvj_a_ready`, NOT A WIRE OF ITS OWN.
+  // An `efa_ans_ready` was declared on this line beside `efa_ans_valid` and
+  // was connected to nothing at either end -- Verilator's exact words were
+  // "Signal is not driven, nor used". Paired with the live `efa_ans_valid`,
+  // it read as the other half of a wired handshake, and grepping for what
+  // drives the adapter's ready found it and stopped. Removed 2026-09-28,
+  // after it nearly attracted a `busy` term during the I34 pass.
+  // A dangling wire NAMED FOR A PORT is a decoy, and what it costs is not a
+  // warning -- it is a wrong edit to load-bearing flow control.
   wire signed [31:0] efa_height;
   wire signed [31:0] efa_velocity, efa_nav_cost;
   wire [31:0]  efa_material;
@@ -30355,10 +30364,21 @@ module zhao_console_core
     // `reports/DECISION-20260926-I34-PATCH-V2-CHANNELS.md`:
     //   0 height   -> `u_terrain_patch`                    REAL CONSUMER
     //   1 velocity -> `u_terrain_veljoin` -> ... -> PART.COLLIDE   REAL CONSUMER
-    //   2 material -> NOBODY. The only channel still open, and its blocker is
-    //                 not a missing port: nothing in this tree converts
-    //                 between field-ir 7.1's opaque u32 and layer E's
-    //                 {u8 matA, u8 matB, u8 weight} in EITHER direction.
+    //   2 material -> `u_terrain_matjoin` -> `u_terrain_matpub`  REAL CONSUMER
+    //                 CORRECTED 2026-09-28. This line read "NOBODY. The only
+    //                 channel still open", and named its blocker as the absent
+    //                 field-ir 7.1 u32 <-> {u8 matA, u8 matB, u8 weight}
+    //                 conversion. THAT CONVERTER WAS BUILT AND COMPOSED when
+    //                 I34 closed on 2026-09-27. `efa_material` and
+    //                 `efa_present[2]` are taken by `u_terrain_matjoin`, whose
+    //                 `tmj_*` face is read by `u_terrain_matpub` and by the
+    //                 cell store beside it.
+    //                 NOTE WHAT HAPPENED HERE: the paragraph immediately above
+    //                 warns that "a producer-side comment describing its
+    //                 consumers goes stale the moment somebody builds one, and
+    //                 nothing in the tree reads it back". It then did exactly
+    //                 that, to itself, one commit later. The accounting is the
+    //                 thing to re-derive, never to quote.
     //   3 nav_cost -> OWNER-RULED ELSEWHERE, not missing. See the long note
     //                 beside `nav_cost_o` in the adapter and
     //                 `reports/OWNER-DECISION-20260926-I34-NAV.md`.
