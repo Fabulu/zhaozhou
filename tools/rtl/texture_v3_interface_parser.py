@@ -49,7 +49,23 @@ KNOWN_DUPLICATE_PACKAGE_PATH = "fpga/rtl/common/zhao_render_texture_pkg.sv"
 # payload 410 -> 411, pretex 490 -> 491). The package file therefore has a
 # new digest, which this constant is measuring and nothing more: it is the
 # KNOWN-DUPLICATE package's bytes, not the island's schema.
-SUPPORTED_DUPLICATE_PACKAGE_SHA256 = "e508be0729b828b8e8e8bb0aba34776adec17af2925e1b7236aad67f8a8d4fba"
+# RE-PINNED 2026-09-27 (REDFIX), for the bit-410 repair -- and the paragraph
+# ABOVE IS FALSE where it says "every existing TEXREQ_* offset is bit-identical
+# and only three totals moved". `ceba0bfe` moved NINE FIELDS and left four
+# constants behind, so PAYLOAD_HI read 409 while KEY_LO read 411 and BIT 410
+# BELONGED TO NEITHER -- six of the fifteen required Packet-D tests were red for
+# a week, plus an eighth red (`render_texture_packet_a`) that failed at
+# VERILATION and nobody had recorded. The repair took 17 constants changed and 2
+# added. The earlier note is kept rather than deleted because it is the record
+# of what was believed when the digest was last re-pinned, and a strike a reader
+# cannot see is no strike at all.
+#
+# `tools/rtl/check_pretex_offsets.py` now guards this: run unmodified against
+# `ceba0bfe`'s own constants it reports 18 breaches and names all nine moved
+# fields, so it would have failed that commit the day it landed. RE-PINNING THIS
+# DIGEST IS NOT EVIDENCE THE LAYOUT IS RIGHT -- it measures bytes. That checker
+# is what measures the layout.
+SUPPORTED_DUPLICATE_PACKAGE_SHA256 = "4a35ffc12c65db72151a6b9dc8ee0778b1bd1491b10a620faad2ce1de80f5f0d"
 SUPPORTED_DUPLICATE_PROFILES = {
     (SCHEMA_FIXTURE_TOP, SCHEMA_FIXTURE_PURPOSE): {
         "count": 41,
@@ -187,7 +203,13 @@ SUPPORTED_DUPLICATE_PROFILES = {
     #   canonical_interface_sha256 MOVED      <- closure and argv both moved
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 107,
-        "sha256": "86a0c5863523866962285ef57ae75fc315d5579447bc45c43d902b7bef031ca2",
+        # RE-PINNED 2026-09-27 (REDFIX). The COUNT IS UNCHANGED at 107 and
+        # only the digest moved, which is the signature of a change to the
+        # duplicated declarations' CONTENT rather than to their set: the
+        # bit-410 repair rewrote PRETEX/TEXREQ/EZPAY/EARLYZ offsets without
+        # adding or removing a name. A count that moves means a new duplicate;
+        # a digest that moves alone means an existing one was edited.
+        "sha256": "d6674356837fe9941d2a9fd4ce7d9848340c86529a08307f3006046bb55c6278",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})

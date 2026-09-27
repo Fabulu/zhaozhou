@@ -30,6 +30,7 @@
     "tools/rtl/check_global_binding.py": 0,
     "tools/rtl/check_guard_verdict.py": 0,
     "tools/rtl/check_ingress_capture.py": 0,
+    "tools/rtl/check_pretex_offsets.py": 0,
     "tools/rtl/check_texture_v3_interface_manifest.py": 0,
     "tools/rtl/check_v3_banks.py": 1
   }
