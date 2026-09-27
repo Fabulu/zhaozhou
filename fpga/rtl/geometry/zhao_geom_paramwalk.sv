@@ -113,7 +113,19 @@ module zhao_geom_paramwalk
     parameter int unsigned CHUNK_IDS = 14,
     // The arena's chunk count, in chunks. `zhao_geom_parambuf` refuses a
     // `next_chunk` at or above it.
-    parameter int unsigned ARENA_CHUNKS = 16384
+    parameter int unsigned ARENA_CHUNKS = 16384,
+    // THE VERTEX ALLOCATION STRIDE, IN BYTES -- `zhao_geom_paramarena`'s
+    // `PV_STRIDE_B`, which is how far one vertex slot is from the next and is
+    // NOT the record size. R7 keeps the two concepts separate and the owner
+    // directive section 4 repeats the separation by name; the arena allocates
+    // `PV_STRIDE_B` per vertex whether or not it writes all of it.
+    //
+    // IT IS A PARAMETER RATHER THAN THE PACKAGE CONSTANT, and the reason is the
+    // hazard the composer already names for `ARENA_CHUNKS`: two independent
+    // defaults that happen to agree are two things that can drift apart with
+    // nothing to say which one moved. The composer passes ONE localparam to
+    // this block and to the arena, so a stride change reaches both or neither.
+    parameter int unsigned PV_STRIDE_B = 32
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -158,6 +170,66 @@ module zhao_geom_paramwalk
     output var logic [31:0] t_source_o,
     output var logic        t_illegal_o,       // a vertex id past the seal
 
+    // ---- THE THREE PROJECTED VERTICES THE DESCRIPTOR NAMES ------------------
+    // THIS IS THE ARM THE BLOCK DELIBERATELY DID NOT DRIVE, and the comment
+    // that declined it was right at the time. It said a walk-side vertex decode
+    // would be "a second consumer of the same record with no reader -- an
+    // uncashed cheque authored on purpose", and while the record stored colour
+    // through `unit8_of_fx16` that was doubly true: the bytes could not have
+    // rebuilt R234 D1's three Gouraud planes even with a reader.
+    //
+    // SCHEMA v2 CHANGED THE RECORD, NOT THE ARGUMENT'S FORM. The six plane
+    // inputs are now stored at their full 32-bit slot widths, so the planes are
+    // reconstructible, and `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md`
+    // names the reader: the time-multiplexed `u_geom_setup` / `u_geom_attrpack`
+    // pair, fed from here during the raster drain window.
+    //
+    // WHAT IS EMITTED IS THE DECODED FIELD, NOT A PACKED ATTRIBUTE PACKET. The
+    // ruling-5 slot order lives in the composer, where `GEOM_ATTR_SLOT_*` are
+    // already declared and already spent on the live path; packing them a
+    // second time here would be a second expression of that layout, and the two
+    // copies would be free to disagree about which slot carries green.
+    //
+    // x AND y ARE RETURNED AT THEIR STORED WIDTH. `zhao_geom_parambuf` widens
+    // them to 32 bits sign-extended from s21 as a decoding convenience; s21 is
+    // what the record holds and what `zhao_geom_setup` takes, so narrowing back
+    // to 21 here is exact and is not a domain claim.
+    output var logic signed [20:0] t_a_x_o,
+    output var logic signed [20:0] t_a_y_o,
+    output var logic        [23:0] t_a_invw_o,
+    output var logic signed [31:0] t_a_uow_o,
+    output var logic signed [31:0] t_a_vow_o,
+    output var logic signed [31:0] t_a_r_o,
+    output var logic signed [31:0] t_a_g_o,
+    output var logic signed [31:0] t_a_b_o,
+    output var logic signed [31:0] t_a_alpha_o,
+    output var logic signed [20:0] t_b_x_o,
+    output var logic signed [20:0] t_b_y_o,
+    output var logic        [23:0] t_b_invw_o,
+    output var logic signed [31:0] t_b_uow_o,
+    output var logic signed [31:0] t_b_vow_o,
+    output var logic signed [31:0] t_b_r_o,
+    output var logic signed [31:0] t_b_g_o,
+    output var logic signed [31:0] t_b_b_o,
+    output var logic signed [31:0] t_b_alpha_o,
+    output var logic signed [20:0] t_c_x_o,
+    output var logic signed [20:0] t_c_y_o,
+    output var logic        [23:0] t_c_invw_o,
+    output var logic signed [31:0] t_c_uow_o,
+    output var logic signed [31:0] t_c_vow_o,
+    output var logic signed [31:0] t_c_r_o,
+    output var logic signed [31:0] t_c_g_o,
+    output var logic signed [31:0] t_c_b_o,
+    output var logic signed [31:0] t_c_alpha_o,
+    // THE UNTEXTURED DECLARATION, AND IT IS NOT A NEW FIELD. Ruling R197's bit
+    // is already in the record: `zhao_geom_vertid.sv:513` publishes
+    // `pv_status_o = {4'd0, shareable_q, untex_q, dom_q}`, so it is `status[2]`
+    // of every vertex the primitive published. It is taken from vertex A, and
+    // `t_pv_split_o` below counts the case where the three disagree -- which
+    // cannot happen while one primitive publishes all three, and is therefore a
+    // counter that owes a demonstration rather than an assumption.
+    output var logic        t_untex_o,
+
     // ---- the ENGINE1 read socket --------------------------------------------
     output var zhao_guard_req_t guard_req_o,
     input  var zhao_guard_rsp_t guard_rsp_i,
@@ -178,6 +250,24 @@ module zhao_geom_paramwalk
     output var logic [31:0] short_burst_o,
     output var logic [31:0] stray_beat_o,
     output var logic [31:0] gen_race_o,
+    // ---- the vertex arm's own evidence --------------------------------------
+    // Three per emitted triangle. `verts_read_o` counts RECORDS FETCHED, so the
+    // ratio `verts_read_o == 3 * tris_emitted_o` is an invariant a reader can
+    // check: a fetch arm that silently skipped a vertex and reused the previous
+    // one would keep every handshake healthy and break only this.
+    output var logic [31:0] verts_read_o,
+    // A ProjectedVertex whose STATUS BYTE is malformed. `zhao_geom_parambuf`'s
+    // `pv_illegal_o` has had no consumer in this design since v2 moved the s21
+    // refusal to the encoder; this arm is its first reachable reader, and the
+    // fault it now watches -- reserved bits nonzero on the way back out of
+    // SDRAM -- is one only the round trip can produce.
+    output var logic [31:0] verts_illegal_o,
+    // THE THREE VERTICES OF ONE TRIANGLE DISAGREEING ABOUT `untex`. Unreachable
+    // while a single primitive publishes all three, which is why it is declared
+    // here rather than left as a silent pick of vertex A's bit: the alternative
+    // is a block that quietly prefers one vertex and never says that the others
+    // were consulted.
+    output var logic [31:0] t_pv_split_o,
     // THE BURST-ALIGNMENT TRIPWIRE. Unlike the producer's, THIS ONE IS
     // REACHABLE WITH LEGAL STIMULUS and therefore owes no mutant: the walker
     // does not compute its bases, it is TOLD them on `pub_*_base_i`, so a
@@ -196,6 +286,9 @@ module zhao_geom_paramwalk
   localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);  // w=4 bits
   localparam int unsigned CK_BEATS = CK_B / 8;             // w=8 beats
   localparam int unsigned TD_BEATS = TD_B / 8;             // w=2 beats
+  localparam int unsigned PV_B  = ZHAO_PARAMBUF_PV_BYTES;  // w=32 bytes
+  localparam int unsigned PVW   = PV_B * 8;                // w=256 bits
+  localparam int unsigned PV_BEATS = PV_B / 8;             // w=4 beats
 
   // synthesis translate_off
   initial begin
@@ -203,16 +296,46 @@ module zhao_geom_paramwalk
       $fatal(1, "zhao_geom_paramwalk: R7's chunk holds fourteen ids");
     if (MAX_WALK < 1)
       $fatal(1, "zhao_geom_paramwalk: a walk bound of zero follows nothing");
+    // THE STRIDE MUST COVER THE RECORD. A stride narrower than the record makes
+    // vertex k+1 overlap vertex k, so a read of k returns bytes from both and
+    // decodes to a plausible vertex. The arena refuses the same breach from the
+    // writing side; this is the reading side of one law.
+    if (PV_STRIDE_B < PV_B)
+      $fatal(1, "zhao_geom_paramwalk: PV_STRIDE_B is narrower than the record");
+    // A RECORD THAT IS NOT A WHOLE NUMBER OF BEATS IS SHORT-READ WITHOUT A
+    // DIAGNOSTIC. This is the guard `PROJECTEDVERTEX-V2` added on the writing
+    // side after finding `m_beats_q <= 4'(PV_B / 8)` truncating in silence; the
+    // reader divides by the same eight and owes the same guard.
+    if ((PV_B % 8) != 0)
+      $fatal(1, "zhao_geom_paramwalk: PV_B is not a whole number of 8-byte beats");
+    // The burst buffer is sized from PVW, so a record wider than the descriptor
+    // buffer it shares a shift path with would silently drop its top beats.
+    if (PV_BEATS > 15)
+      $fatal(1, "zhao_geom_paramwalk: PV_BEATS does not fit the 4-bit beat counter");
   end
   // synthesis translate_on
 
   // ------------------------------------------------------------- the walk --
-  typedef enum logic [3:0] {
+  // FIVE BITS AND NOT FOUR. The vertex arm takes the state count from fifteen
+  // to nineteen; at `logic [3:0]` the four new names would have wrapped onto
+  // W_IDLE..W_DIR_VERD and the walk would have re-entered the directory read
+  // from the middle of a triangle, which every per-record check downstream
+  // would have passed.
+  typedef enum logic [4:0] {
     W_IDLE,
     W_SCR,        // ask the arena for the scratch
     W_DIR_REQ, W_DIR_VERD, W_DIR_BEAT, W_DIR_CHECK,
     W_CK_REQ,  W_CK_VERD,  W_CK_BEAT,  W_CK_CHECK,
-    W_TD_REQ,  W_TD_VERD,  W_TD_BEAT,  W_TD_EMIT,
+    W_TD_REQ,  W_TD_VERD,  W_TD_BEAT,
+    // ---- the vertex arm, between the descriptor and the emit ---------------
+    // The descriptor NAMES three vertices; until they are fetched the triangle
+    // is three ids and cannot feed a back end. These four states sit between
+    // W_TD_BEAT and W_TD_EMIT so that a triangle is offered to the consumer
+    // COMPLETE or not at all -- an emit that ran before its vertices arrived
+    // would hand over the PREVIOUS triangle's corners with this triangle's ids,
+    // which is this repository's own metadata-swap defect in a new place.
+    W_PV_REQ,  W_PV_VERD,  W_PV_BEAT,  W_PV_DEC,
+    W_TD_EMIT,
     W_END
   } wstate_e;
   wstate_e wstate_q;
@@ -221,6 +344,11 @@ module zhao_geom_paramwalk
   // these and never against the live pub_* inputs.
   logic [15:0] w_gen_q;
   logic [26:0] w_tri_base_q, w_chunk_base_q;
+  // THE VERTEX REGION'S BASE. `pub_vert_base_i` has been a port of this block
+  // since it was written and was used at exactly ONE site -- the directory
+  // round-trip compare -- because nothing here addressed a vertex. It is
+  // latched at walk start now, under the same enable as the other two bases.
+  logic [26:0] w_vert_base_q;
   // THE SEALED VERTEX COUNT, AND THE FIRST DRAFT LATCHED THE WRONG ONE.
   // `zhao_geom_parambuf`'s `td_sealed_vertices_i` is the frame's VERTEX count
   // -- it is what `v0/v1/v2 >= sealed` is tested against -- and this block fed
@@ -259,6 +387,32 @@ module zhao_geom_paramwalk
   // same thing for four times the price.
   logic [CKW-1:0] r_buf_q;
   logic [127:0]   td_buf_q;
+  // A THIRD BUFFER, for the same reason there is a second. `r_buf_q` must hold
+  // the chunk while its ids are walked and `td_buf_q` must hold the descriptor
+  // while its three vertices are fetched -- the descriptor's ids are re-read on
+  // every one of the three requests, so a shared buffer would destroy them on
+  // the first vertex and the second and third would be fetched from whatever
+  // the vertex bytes happened to decode as.
+  logic [PVW-1:0] pv_buf_q;
+  // Which of the descriptor's three vertices is in flight. Two bits, values
+  // 0..2; the value 3 is never reached and the FSM does not depend on it.
+  logic [1:0]     pv_idx_q;
+  // THE THREE DECODED VERTICES, LATCHED. Arrays at MODULE scope, which is the
+  // form this tree has measured as inferring correctly -- `zhao_geom_arenabin`
+  // cost 146,414 registers against 1,010 by declaring storage inside a
+  // `generate for`, and entry I55 carries the three map rows. These are 3-entry
+  // arrays of a few hundred bits and are flip-flops either way; the form is
+  // chosen so the rule is not eroded by an exception nobody re-measures.
+  logic signed [20:0] v_x_q     [3];
+  logic signed [20:0] v_y_q     [3];
+  logic        [23:0] v_invw_q  [3];
+  logic        [7:0]  v_status_q[3];
+  logic signed [31:0] v_uow_q   [3];
+  logic signed [31:0] v_vow_q   [3];
+  logic signed [31:0] v_r_q     [3];
+  logic signed [31:0] v_g_q     [3];
+  logic signed [31:0] v_b_q     [3];
+  logic signed [31:0] v_alpha_q [3];
   // The chain, LATCHED at the chunk's decode. `ck_follow_c` and `ck_next_c`
   // are combinational over `r_buf_q` AND over the decoder's `ck_valid_i`,
   // which is high only in W_CK_CHECK -- so the verdict has to be HELD, not
@@ -282,7 +436,24 @@ module zhao_geom_paramwalk
   // ------------------------------------------------------------- decoding --
   // The one decoder. Fed from the burst buffer for chunks, and from the low
   // 128 bits of the same buffer for descriptors.
-  logic        dec_ck_valid_c, dec_td_valid_c;
+  logic        dec_ck_valid_c, dec_td_valid_c, dec_pv_valid_c;
+  // THE TOP ELEVEN BITS OF x AND y ARE DELIBERATELY NOT READ, and the waiver
+  // says so rather than widening the port to make a warning go away.
+  // `zhao_geom_parambuf` hands these back 32 bits wide, SIGN-EXTENDED from the
+  // s21 the record actually stores; `zhao_geom_setup` takes s21. So `[20:0]` is
+  // the stored value returned to its stored width -- exact, and not a domain
+  // claim. Bits [31:21] are the sign extension the decoder just added and carry
+  // no information this block did not already have.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [31:0] pv_x_c, pv_y_c;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic signed [31:0] pv_uow_c, pv_vow_c;
+  logic signed [31:0] pv_r_c, pv_g_c, pv_b_c, pv_alpha_c;
+  logic        [23:0] pv_invw_c;
+  logic        [7:0]  pv_status_c;
+  logic               pv_illegal_c;
+  logic        [15:0] pv_id_c;
+  logic        [26:0] pv_addr_c;
   logic [31:0] ck_next_c;
   logic [15:0] ck_count_c;
   logic        ck_stale_c, ck_illegal_c, ck_follow_c;
@@ -291,7 +462,17 @@ module zhao_geom_paramwalk
   logic        td_illegal_c;
 
   assign dec_ck_valid_c = (wstate_q == W_CK_CHECK);
-  assign dec_td_valid_c = (wstate_q == W_TD_EMIT);
+  // THE DESCRIPTOR'S DECODE IS HELD ACROSS THE VERTEX FETCH. `td_valid_i` used
+  // to be asserted only in W_TD_EMIT, which was correct while the emit followed
+  // the descriptor's last beat directly. The vertex arm now sits between them,
+  // and the descriptor's ids are read out of `td_buf_q` to ADDRESS each vertex
+  // -- so the decode has to be live in the fetch states too, or the walk would
+  // address vertex slots from a decoder that is being told its bytes are not
+  // valid and answers with its idle output, i.e. slot zero three times.
+  assign dec_td_valid_c = (wstate_q == W_TD_EMIT) || (wstate_q == W_PV_REQ)
+                       || (wstate_q == W_PV_VERD) || (wstate_q == W_PV_BEAT)
+                       || (wstate_q == W_PV_DEC);
+  assign dec_pv_valid_c = (wstate_q == W_PV_DEC);
 
   /* verilator lint_off PINCONNECTEMPTY */
   zhao_geom_parambuf #(
@@ -299,20 +480,29 @@ module zhao_geom_paramwalk
       .ARENA_CHUNKS (ARENA_CHUNKS)
   ) u_rec (
       .clk, .rst_n,
-      // The vertex arm is not driven from here. GEOM.PARAMBUF's projected
-      // vertices are consumed by the raster front end, not by the chunk walk,
-      // and wiring a walk-side vertex decode would be a second consumer of the
-      // same record with no reader -- an uncashed cheque authored on purpose.
-      .pv_valid_i (1'b0),
-      .pv_bytes_i ('0),
-      // SCHEMA v2 added the three Gouraud channels at full precision and
-      // alpha. They are left empty for the same reason as the rest of this
-      // arm: nothing here reads a vertex. Named rather than `.*`-swept so a
-      // future field cannot join the tie-off silently.
-      .pv_x_o (), .pv_y_o (), .pv_invw_o (), .pv_status_o (),
-      .pv_uow_o (), .pv_vow_o (),
-      .pv_r_o (), .pv_g_o (), .pv_b_o (), .pv_alpha_o (),
-      .pv_rgba_o (), .pv_illegal_o (),
+      // THE VERTEX ARM IS DRIVEN. The tie-off that stood here said a walk-side
+      // vertex decode would be "a second consumer of the same record with no
+      // reader -- an uncashed cheque authored on purpose", and it was right
+      // twice over: there was no reader, and under schema v1 the bytes could
+      // not have fed one, because colour was stored through `unit8_of_fx16`
+      // and three of Packet-D's six planes were unrecoverable from it.
+      //
+      // Schema v2 stores all six plane inputs at full width, and
+      // `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md` names the reader.
+      // The cheque is cashed here rather than re-authored.
+      .pv_valid_i (dec_pv_valid_c),
+      .pv_bytes_i (pv_buf_q),
+      .pv_x_o (pv_x_c), .pv_y_o (pv_y_c),
+      .pv_invw_o (pv_invw_c), .pv_status_o (pv_status_c),
+      .pv_uow_o (pv_uow_c), .pv_vow_o (pv_vow_c),
+      .pv_r_o (pv_r_c), .pv_g_o (pv_g_c), .pv_b_o (pv_b_c),
+      .pv_alpha_o (pv_alpha_c),
+      // R7's 8-bit view is DERIVED by the decoder and is not taken here. This
+      // arm exists to feed the six full-precision planes; re-deriving the byte
+      // form beside them would put two representations of one colour on one
+      // interface, and a consumer would be free to pick the lossy one.
+      .pv_rgba_o (),
+      .pv_illegal_o (pv_illegal_c),
 
       .td_valid_i (dec_td_valid_c),
       .td_bytes_i (td_buf_q),
@@ -368,14 +558,45 @@ module zhao_geom_paramwalk
       && (dir_tris_c       == pub_tris_i)
       && (dir_chunks_c     == pub_chunks_i);
 
+  // THE VERTEX SLOT ADDRESS, AND IT IS COMBINATIONAL RATHER THAN LATCHED.
+  //
+  // The other three reads latch `m_addr_q` in the state that decides them. A
+  // vertex cannot: `td_buf_q` is still being shifted when W_TD_BEAT picks the
+  // next state, so the descriptor's ids are not readable there, and `pv_idx_q`
+  // then advances between the three requests. A latch would have to be loaded
+  // from two places with the second easy to miss -- and the failure that
+  // produces is fetching v0 three times, which decodes cleanly, yields a
+  // degenerate triangle, and moves no counter in this block.
+  //
+  // `w_vert_base_q` is the base this walk STARTED under, never the live
+  // `pub_vert_base_i`: the same law the tri and chunk bases already follow, and
+  // for the same reason -- a frame that changed mid-walk would otherwise read
+  // the new frame's vertices through the old frame's descriptor.
+  //
+  // The id comes from the DECODER's outputs, not from a second slice of
+  // `td_buf_q`. `zhao_geom_parambuf` owns the descriptor's layout, and a walker
+  // that re-sliced it would be the second implementation this block's header
+  // exists to refuse.
+  always_comb begin
+    unique case (pv_idx_q)
+      2'd0:    pv_id_c = td_v0_c;
+      2'd1:    pv_id_c = td_v1_c;
+      default: pv_id_c = td_v2_c;
+    endcase
+  end
+  wire [26:0] pv_index_c = 27'(pv_id_c);
+  assign pv_addr_c = 27'(w_vert_base_q + 27'(pv_index_c * 27'(PV_STRIDE_B)));
+
   // ------------------------------------------------------------- the port --
   always_comb begin
     guard_req_o        = '0;
     guard_req_o.valid  = (wstate_q == W_DIR_REQ) || (wstate_q == W_CK_REQ)
-                      || (wstate_q == W_TD_REQ);
+                      || (wstate_q == W_TD_REQ) || (wstate_q == W_PV_REQ);
     guard_req_o.write  = 1'b0;            // this block never writes
     guard_req_o.client = cfg_vram_client_i;
-    guard_req_o.addr   = m_addr_q;
+    // The vertex arm's address is the only one this block does not latch; see
+    // the paragraph above. Every other state drives `m_addr_q` unchanged.
+    guard_req_o.addr   = (wstate_q == W_PV_REQ) ? pv_addr_c : m_addr_q;
     guard_req_o.len    = m_len_q;
     // The guard requires `be == mask_of(len)` EXACTLY. A 16-byte read with an
     // all-ones mask is refused on SHAPE, and that refusal reads like a
@@ -397,6 +618,40 @@ module zhao_geom_paramwalk
   assign t_raster_o   = td_raster_c;
   assign t_source_o   = td_source_c;
   assign t_illegal_o  = td_illegal_c;
+
+  // The three fetched vertices, in the descriptor's own order. Index 0 is v0,
+  // which `zhao_geom_setup` and `zhao_geom_attrpack` both call corner A.
+  assign t_a_x_o     = v_x_q[0];
+  assign t_a_y_o     = v_y_q[0];
+  assign t_a_invw_o  = v_invw_q[0];
+  assign t_a_uow_o   = v_uow_q[0];
+  assign t_a_vow_o   = v_vow_q[0];
+  assign t_a_r_o     = v_r_q[0];
+  assign t_a_g_o     = v_g_q[0];
+  assign t_a_b_o     = v_b_q[0];
+  assign t_a_alpha_o = v_alpha_q[0];
+  assign t_b_x_o     = v_x_q[1];
+  assign t_b_y_o     = v_y_q[1];
+  assign t_b_invw_o  = v_invw_q[1];
+  assign t_b_uow_o   = v_uow_q[1];
+  assign t_b_vow_o   = v_vow_q[1];
+  assign t_b_r_o     = v_r_q[1];
+  assign t_b_g_o     = v_g_q[1];
+  assign t_b_b_o     = v_b_q[1];
+  assign t_b_alpha_o = v_alpha_q[1];
+  assign t_c_x_o     = v_x_q[2];
+  assign t_c_y_o     = v_y_q[2];
+  assign t_c_invw_o  = v_invw_q[2];
+  assign t_c_uow_o   = v_uow_q[2];
+  assign t_c_vow_o   = v_vow_q[2];
+  assign t_c_r_o     = v_r_q[2];
+  assign t_c_g_o     = v_g_q[2];
+  assign t_c_b_o     = v_b_q[2];
+  assign t_c_alpha_o = v_alpha_q[2];
+  // Ruling R197's bit, out of the status byte vertex A was published with.
+  assign t_untex_o   = v_status_q[0][2];
+
+
 
   // The ids this chunk names, out of the burst buffer. The chunk's fourteen
   // u32s start at byte 8, so id `k` is at bit 64 + 32k. `id_c` is the one the
@@ -450,6 +705,24 @@ module zhao_geom_paramwalk
       r_beats_q      <= 4'd0;
       m_addr_q       <= 27'd0;
       m_len_q        <= 7'd0;
+      w_vert_base_q  <= 27'd0;
+      pv_buf_q       <= '0;
+      pv_idx_q       <= 2'd0;
+      for (int unsigned k = 0; k < 3; k++) begin
+        v_x_q[k]      <= 21'sd0;
+        v_y_q[k]      <= 21'sd0;
+        v_invw_q[k]   <= 24'd0;
+        v_status_q[k] <= 8'd0;
+        v_uow_q[k]    <= 32'sd0;
+        v_vow_q[k]    <= 32'sd0;
+        v_r_q[k]      <= 32'sd0;
+        v_g_q[k]      <= 32'sd0;
+        v_b_q[k]      <= 32'sd0;
+        v_alpha_q[k]  <= 32'sd0;
+      end
+      verts_read_o    <= '0;
+      verts_illegal_o <= '0;
+      t_pv_split_o    <= '0;
       id_idx_q       <= 4'd0;
       id_count_q     <= 16'd0;
       walk_done_o    <= 1'b0;
@@ -478,7 +751,7 @@ module zhao_geom_paramwalk
       // compares two of this block's own registers and knows nothing about
       // whose bytes arrived.
       if (beat_valid_i && (wstate_q != W_DIR_BEAT) && (wstate_q != W_CK_BEAT)
-          && (wstate_q != W_TD_BEAT))
+          && (wstate_q != W_TD_BEAT) && (wstate_q != W_PV_BEAT))
         stray_beat_o <= stray_beat_o + 32'd1;
 
       // ---- the frame moved under a live walk --------------------------------
@@ -495,7 +768,15 @@ module zhao_geom_paramwalk
       // constant, and nothing for a corruption to move WITH. It covers all
       // three request states, including the directory read, whose address is
       // SCRATCH_BASE rather than a computed offset.
-      if (guard_req_o.valid && (m_addr_q[ALIGN_LSB-1:0] != '0))
+      // WIDENED TO WATCH THE PORT RATHER THAN THE REGISTER, MUXBUILD
+      // 2026-09-27. It used to test `m_addr_q`, which was the only source of
+      // `guard_req_o.addr` when it was written. The vertex arm adds a second
+      // source, and a tripwire still reading the register would have gone
+      // silent on exactly the requests this packet added -- a detector that
+      // keeps its name, keeps reading zero, and no longer watches the thing it
+      // is quoted about. It remains an INVARIANT over one value against a
+      // constant, so the lockstep-blindness question does not arise.
+      if (guard_req_o.valid && (guard_req_o.addr[ALIGN_LSB-1:0] != '0))
         burst_unaligned_o <= burst_unaligned_o + 32'd1;
 
       case (wstate_q)
@@ -505,6 +786,7 @@ module zhao_geom_paramwalk
           w_gen_q        <= pub_gen_i;
           w_tri_base_q   <= pub_tri_base_i;
           w_chunk_base_q <= pub_chunk_base_i;
+          w_vert_base_q  <= pub_vert_base_i;
           // No saturation: the port is as wide as the published count, so
           // the seal the decoder is tested against is the seal the arena
           // actually published, for every value the arena can publish.
@@ -703,10 +985,107 @@ module zhao_geom_paramwalk
               w_failed_q    <= 1'b1;
               wstate_q      <= W_END;
             end else begin
-              wstate_q <= W_TD_EMIT;
+              // THE DESCRIPTOR IS DECODED BUT THE TRIANGLE IS NOT COMPLETE.
+              // Three vertex reads sit between here and the emit.
+              //
+              // A MALFORMED DESCRIPTOR IS NOT FOLLOWED. `td_illegal_c` means an
+              // id is past the frame's sealed vertex count, so the slot it
+              // names is outside what this frame wrote -- reading it would put
+              // a guard request on an address the arena never published and
+              // decode whatever last occupied it. The triangle is still EMITTED
+              // AND FLAGGED, which is R7's "rejected and counted" and is what
+              // the arm below already did; what is skipped is the fetch, and
+              // the vertex registers keep the previous triangle's values rather
+              // than being filled with a convenient zero. `t_illegal_o` travels
+              // with the record to say so.
+              if (td_illegal_c) begin
+                wstate_q <= W_TD_EMIT;
+              end else begin
+                // Length and beat count are the same for all three vertices and
+                // are loaded once here; only the ADDRESS varies with the index,
+                // and that one is combinational.
+                pv_idx_q  <= 2'd0;
+                m_len_q   <= 7'(PV_B);
+                r_beats_q <= 4'(PV_BEATS);
+                r_beat_q  <= 4'd0;
+                wstate_q  <= W_PV_REQ;
+              end
             end
           end
         end
+        // ---- one ProjectedVertex -----------------------------------------
+        // Three passes of these four states per descriptor. The address is
+        // computed HERE rather than latched at W_TD_BEAT, because `pv_idx_q`
+        // advances in W_PV_DEC and an address latched once would fetch vertex
+        // v0 three times -- which decodes cleanly, produces a degenerate
+        // triangle, and would be visible in no counter in this block.
+        W_PV_REQ: if (guard_rsp_i.ready) begin
+          wstate_q <= W_PV_VERD;
+        end
+
+        W_PV_VERD: begin
+          if (guard_rsp_i.violation) begin
+            guard_denied_o <= guard_denied_o + 32'd1;
+            w_failed_q <= 1'b1;
+            wstate_q   <= W_END;
+          end else if (guard_rsp_i.ok) begin
+            r_beat_q <= 4'd0;
+            wstate_q <= W_PV_BEAT;
+          end
+        end
+
+        // NEITHER THE CHUNK NOR THE DESCRIPTOR IS TOUCHED HERE. The vertex
+        // shifts into its own buffer, so `r_buf_q` still holds the chunk whose
+        // ids are being walked and `td_buf_q` still holds the descriptor whose
+        // ids address these three vertices.
+        W_PV_BEAT: if (beat_valid_i) begin
+          pv_buf_q <= {beat_data_i, pv_buf_q[PVW-1:64]};
+          r_beat_q <= r_beat_q + 4'd1;
+          if (beat_last_i) begin
+            if (r_beat_q != (r_beats_q - 4'd1)) begin
+              short_burst_o <= short_burst_o + 32'd1;
+              w_failed_q    <= 1'b1;
+              wstate_q      <= W_END;
+            end else begin
+              wstate_q <= W_PV_DEC;
+            end
+          end
+        end
+
+        W_PV_DEC: begin
+          verts_read_o <= verts_read_o + 32'd1;
+          // A MALFORMED STATUS BYTE IS COUNTED AND THE WALK CONTINUES. Unlike a
+          // stale chunk, this is not a reason to abandon the chain: the record
+          // is the one the descriptor named and its geometry fields are still
+          // the bytes that were written. The triangle carries `t_illegal_o` for
+          // the identity fault; this counter is the RECORD fault, and the two
+          // are different questions about the same triangle.
+          if (pv_illegal_c) verts_illegal_o <= verts_illegal_o + 32'd1;
+          v_x_q[pv_idx_q]      <= pv_x_c[20:0];
+          v_y_q[pv_idx_q]      <= pv_y_c[20:0];
+          v_invw_q[pv_idx_q]   <= pv_invw_c;
+          v_status_q[pv_idx_q] <= pv_status_c;
+          v_uow_q[pv_idx_q]    <= pv_uow_c;
+          v_vow_q[pv_idx_q]    <= pv_vow_c;
+          v_r_q[pv_idx_q]      <= pv_r_c;
+          v_g_q[pv_idx_q]      <= pv_g_c;
+          v_b_q[pv_idx_q]      <= pv_b_c;
+          v_alpha_q[pv_idx_q]  <= pv_alpha_c;
+          // THE UNTEXTURED BIT MUST AGREE ACROSS THE THREE. One primitive
+          // publishes all three vertices, so it does; the counter exists
+          // because "so it does" is an argument and this is a measurement.
+          // Compared against vertex A's byte, which is already latched when
+          // index 1 and 2 arrive.
+          if ((pv_idx_q != 2'd0) && (pv_status_c[2] != v_status_q[0][2]))
+            t_pv_split_o <= t_pv_split_o + 32'd1;
+          if (pv_idx_q == 2'd2) begin
+            wstate_q <= W_TD_EMIT;
+          end else begin
+            pv_idx_q <= pv_idx_q + 2'd1;
+            wstate_q <= W_PV_REQ;
+          end
+        end
+
         W_TD_EMIT: if (t_ready_i) begin
           tris_emitted_o <= tris_emitted_o + 32'd1;
           // A malformed descriptor is EMITTED AND FLAGGED, not dropped. The
