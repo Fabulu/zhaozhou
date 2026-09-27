@@ -207,12 +207,7 @@
 // "built and not composed" anywhere a gate can read it.
 
 module zhao_console_board
-  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
-  // I34's v1 material token. Imported so the tag and the byte order are
-  // read from `zhao_material_token_pkg` rather than transcribed a fourth
-  // time -- that package exists precisely because three composed sites
-  // had already committed to {matA, matB, weight} independently.
-  import zhao_material_token_pkg::*;
+  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*, zhao_material_token_pkg::*;
 #(
     // ======================================================================
     // THE BOARD'S OWN KNOBS.

@@ -12313,12 +12313,11 @@
 // Conservative SystemVerilog subset (charter S2).
 
 module zhao_console_core
-  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
+  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*, zhao_material_token_pkg::*;
   // I34's v1 material token. Imported so the tag and the byte order are
   // read from `zhao_material_token_pkg` rather than transcribed a fourth
   // time -- that package exists precisely because three composed sites
   // had already committed to {matA, matB, weight} independently.
-  import zhao_material_token_pkg::*;
 #(
   // ---- the shell's own knobs, carried through ------------------------------
   parameter int unsigned FRAMER_Q = 8,
