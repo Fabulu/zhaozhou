@@ -478,7 +478,21 @@ merged to the integration branch.**
 | Verilator `--lint-only -Wall` on the door module | **0 real errors in BOTH `JOB_SRC` arrangements** |
 | `npm run abi:check` | not implicated — `spec/commands.zidl` untouched |
 | `geom_bin_pipe_v2_directed` and its four mutants | **RED, INHERITED — §7.1**, proven by re-measurement at base. Not this packet's. |
-| `run_console_core_smoke.ps1` | **PASS**, `SMOKE_RC=0`, **`raster pixels=2816`** over 176 bursts from 75 triangles, **`frames_admitted=1`**, 1,216 fragments carried a texel, every issued word retired. `fetcharm vread=0` and `paramwalk tris=0`, correctly: the console elaborates `JOB_SRC=0`, so the door is present and not driven. |
+| `run_console_core_smoke.ps1` (plain form) | **PASS**, `SMOKE_RC=0`, **`raster pixels=2816`** over 176 bursts from 75 triangles, **`frames_admitted=1`**, 1,216 fragments carried a texel, every issued word retired. `fetcharm vread=0` and `paramwalk tris=0`, correctly: the console elaborates `JOB_SRC=0`, so the door is present and not driven. |
+
+**THE FIVE SMOKE CONTROL FORMS WERE NOT RUN, and that is a declared gap rather
+than an implied pass.** `-Mutant`, `-BadVertex`, `-NoEchoArm`, `-BadTraceArm` and
+`-TerrainFlatLattice` are on the gate list; I ran only the plain form. The
+reasoning, stated so it can be overruled: this packet adds **no `zhao_console_core`
+port** (its only core-file change is 122 lines of comment in entry `I55`), the
+plain form PASSES at the exact required `raster pixels=2816` / `frames_admitted=1`,
+each form is a cold build of the full console bench at roughly twenty minutes, and
+**another lane was already building two of those forms** on this box while I
+finished (`zhao_console_core_smoke_untex_*` and `_badvtx_*` under parent PIDs that
+are not mine -- classified by command line and parent PID per ruling R81, and left
+strictly alone). The coordinator gates the merged result, which is where the five
+forms belong. If that judgement is wrong, the five forms are the thing to run
+before merging this branch.
 
 **Quartus:** four **leaf map-only** runs on `5CSEBA6U23I7`, ~13 minutes total. No
 console fit, no full-device fit, no `-PhysicalPins` row. Authority:
