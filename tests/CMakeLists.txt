@@ -18274,8 +18274,17 @@ set_tests_properties(field_host_mask_type_separation PROPERTIES
                      LABELS "fast;nightly;mutant" TIMEOUT 300)
 # --------------------------------------------------------------------------
 
+# -Wno-PINCONNECTEMPTY, and the reason is a CONFLICT BETWEEN TWO GATES.
+# An output left unconnected must be written `.port_o ()`: OMITTING it is what
+# Quartus reports as PINMISSING, hours into a fit. Verilator's -Wall then flags
+# that exact form. The two gates demand opposite things about the same text, so
+# one has to yield, and it is this one -- the Quartus failure is expensive and
+# late, this warning carries no information here, and a gate that CANNOT pass is
+# one people learn to skip. The single instance today is
+# `zhao_field_host.sv:772 .rcp0_o ()`, deliberately unconnected under owner
+# ruling R143 with a comment saying so. Every other -Wall class stays ON.
 add_test(NAME lint_zhao_field_host
-         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-PINCONNECTEMPTY
                  --top-module zhao_field_host
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_host.sv
