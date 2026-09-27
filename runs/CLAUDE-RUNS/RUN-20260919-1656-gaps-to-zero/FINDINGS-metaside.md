@@ -80,6 +80,14 @@ different code, so a *layout* error moves exactly one side. What they cannot
 catch is a wrong *value* fed to both, and that is stated beside them rather than
 left for someone to assume they cover it.)
 
+**AND THOSE THREE ASSERTIONS HAVE NOT BEEN SEEN TO FIRE.** They were live and
+silent through a full console frame of 89 triangles — which is evidence the
+round trip is exact, and is *not* evidence that they can go red. CLAUDE.md is
+explicit that a detector reading zero is the claim to check hardest, so this is
+declared as an open instrument rather than quoted as a clean result. Firing them
+needs a fourth committed mutant (a field dropped from the pack), and it is the
+cheapest piece of owed work this packet leaves behind.
+
 ### THE CAPTURE POINT IS PROVEN BY THE WINDOW'S OWN INTERLOCK
 
 `zhao_geom_vertid` loads the state in `S_IDLE` on `tri_valid_i` — **the same
@@ -282,7 +290,34 @@ result I wanted: `tiles=3 empty=23 jobs=13 door=13`, `tris=14`, `vread=45`,
 to the wedge, which is the cleanest possible demonstration that the two were
 separate problems.
 
-### 5.4 — SO THE PARK STANDS, AND ITS REASON CHANGES
+### 5.4 — AND THE SHIPPED CONSOLE IS UNREGRESSED, WHICH IS THE CHECK THAT MATTERS MOST
+
+SCHEMA v3 touches the descriptor every frame writes, so the question that
+outranks everything above is whether the **parked, shipping** arrangement still
+draws. Measured on my own tree at the pushed commit:
+
+```
+SMOKE: clip       submitted=144 clipped=69 culled=0 setup_submitted=75
+SMOKE: raster     pixels=2816 bursts=176 issued=94976 retired=94976 drained=1
+SMOKE: binrefs    tile_references=101 max_tile_list_depth=59 overflow=0
+SMOKE: rasterdiag jobs[started/sunk]=[101 0] tilestore_refs=5248 resolved_tiles=11
+                  earlyz[covered/rejects]=[1216 0] frags[covered/blended]=[1216 0]
+SMOKE: renderlease leases_granted=1 refused=0 clears=1 frames_admitted=1
+SMOKE: tilewalk   PARKED (GEOM_WALK_RASTER=0): the sweep is a STRUCTURAL ZERO
+SMOKE: PASS
+```
+
+**`raster pixels = 2816` and `frames_admitted = 1`** — the gate list's exact
+required values. `setup_submitted = 75` is the reference's own count, and the
+parked invariant holds as a structural zero: `tilewalk tiles=0 jobs=0 door=0`,
+`paramwalk dirs=0 chunks=0 tris=0`.
+
+**And this run reproduces §5.1 independently.** `frags[covered/blended] =
+[1216 0]` on a run that ends `SMOKE: PASS`, from my own tree, at my own commit —
+so the headline finding no longer rests on a log another packet left behind. The
+zero is what success looks like, twice, measured separately.
+
+### 5.5 — SO THE PARK STANDS, AND ITS REASON CHANGES
 
 `GEOM_WALK_RASTER = 0` remains the shipped default. What changes is the entry's
 account of *why*: not "378 bits of metadata", but "the tile never resolves, and
@@ -394,11 +429,8 @@ change, per CLAUDE.md.
   that the top five bits are always zero.** They are, for every chunk this
   console writes, and that is exactly the premise §4 refuses. `tri_id_wide_o`
   counts the records where it is false.
-* **Any Quartus run.** No fit, no map, no `-MapOnly`. **This packet makes no
-  area or timing claim whatsoever** — a gap against Deliverable 5, declared as
-  one rather than filled with an estimate. The machine was carrying two of my
-  own long jobs for the whole session and a third would have been a measurement
-  taken under contention.
+* **Any console or full-device fit**, and any ALM or Fmax claim. The leaf map
+  below is analysis & synthesis only and carries neither; see §8a.
 * **Retiring the binner's drain (Deliverable 8).** It is the *complete oracle*
   directive §7 requires be retained, and at `GEOM_WALK_RASTER = 0` it is the
   thing drawing the picture. Retiring it while the walk arrangement renders zero
@@ -438,7 +470,51 @@ change, per CLAUDE.md.
 
 ---
 
-## 8. GATES AT THE PUSHED COMMITS
+## 8. THE LEAF `-MapOnly` ROW (Deliverable 5)
+
+```
+zhao_geom_paramwalk@metaside-tdv3
+  status            map_only          partial: analysis_and_synthesis
+  rtlCleanAtHead    true              <- READ THIS FIRST, ALWAYS
+  treeCleanAtHead   true
+  measuredDevice    5CSEBA6U23I7      <- the SHIPPING part, not a sizing device
+  sourceCommit      c2c18757          <- this packet's pushed HEAD
+  sourceDigest      cbe05c6dc893...   over 2 declared sources
+  registers         2,756
+  blockMemoryBits   0
+  dspBlocks         0
+  virtualPins       2,078
+  seconds           74.7
+```
+
+**READ THE ROW CORRECTLY, in three parts.**
+
+1. **It carries NO ALMs and NO Fmax.** `-MapOnly` stops after analysis &
+   synthesis, and `run_block_fit.ps1` refused the run until I passed
+   `-RowLabel` precisely so this row could not overwrite a full-fit row and
+   discard its area and timing. Nothing here is an area claim.
+2. **THERE IS NO BASELINE TO DIFFERENCE IT AGAINST.**
+   `zhao_geom_paramwalk` has **never been mapped or fitted** — this is the only
+   row for it in either database. That is the same hole SWAPBUILD found for
+   `zhao_geom_attrpack` (*"had never been mapped or fitted — zero rows in
+   either database"*), one block over. **So SCHEMA v3's cost on this block is
+   NOT measured by this row**; the row is a *new baseline* for whoever changes
+   it next, and saying it is a delta would be this campaign's own
+   "declared-today versus measured-a-week-ago" error with no measurement on the
+   other side at all.
+3. **It is a LABELLED row, so `ruleViolations: []` on it is SILENCE, not
+   compliance.** CLAUDE.md: labelled rows are never rule-checked — 0 of 26
+   carry violations against 12 of 92 unlabelled. Do not quote its empty
+   violation list as a pass.
+
+What it *does* say, cleanly and from a clean tree on the shipping part: the
+walker at SCHEMA v3 infers **no DSP and no block memory**, and holds 2,756
+registers. The 128-bit descriptor widening did not push `td_buf_q` into a RAM
+and did not buy a multiplier.
+
+---
+
+## 9. GATES AT THE PUSHED COMMITS
 
 | gate | result |
 |---|---|
@@ -454,6 +530,7 @@ change, per CLAUDE.md.
 | `check_localparam_comments.py` | **OK** (at `tools/design/`, §6.6) |
 | `mutant_copy_drift.py` | **OK**, 80 copies, **run AFTER each commit** (R121) |
 | console smoke `-WalkRaster -LintOnly` | **RC 0** |
+| console smoke, PLAIN (the SHIPPED, parked arrangement) | **PASS -- raster pixels=2816, frames_admitted=1, resolved_tiles=11, setup_submitted=75, tilewalk a STRUCTURAL ZERO, and frags[covered/blended]=[1216 0] on my own tree** |
 | console smoke `-WalkRaster` (full) | **RAN** — see §5.2/§5.3; still 0 pixels, root cause named |
 | `geom_paramarena_directed` | **647 / 0** (was 620) — case 1c included |
 | `geom_paramwalk_holdstate_fires` | **638 / 0**, INVERTED — substitution observed, seam proven |
@@ -463,7 +540,7 @@ rather than estimated.
 
 ---
 
-## 9. BRANCH AND COMMITS
+## 10. BRANCH AND COMMITS
 
 **Branch `gz/metaside`. Pushed. Never `--force`, never `--force-with-lease`.
 Not merged to the integration branch.**
@@ -473,3 +550,5 @@ Not merged to the integration branch.**
 | `bf649794` | `feat(METASIDE)`: arrangement 1 is BUILDABLE, and the zero it stops at is what SUCCESS looks like |
 | `15bef47a` | `feat(METASIDE)`: TriangleDescriptor v3 carries the material state, and BOTH paths go through one layout |
 | `80195076` | `test(METASIDE)`: the SUBSTITUTION check, and a committed mutant so the refusal is evidence |
+| `c2c18757` | `fix(METASIDE)`: entry I55's account of where the frame stops was wrong in every clause -- here is the line |
+| `13dc9f3a` | `docs(METASIDE)`: the leaf map receipt for the walker at SCHEMA v3, and it is a BASELINE not a delta |
