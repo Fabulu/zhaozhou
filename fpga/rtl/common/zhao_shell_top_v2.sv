@@ -1270,6 +1270,9 @@ module zhao_shell_top_v2
   logic [ 8:0] rp_cov_unused;
   logic        rp_done_unused, rp_degen_unused, rp_busy_unused;
   logic        rp_tok_unused;
+  // I55's door, arrangement 0. See u_render_bin's `walk_job_*` comment.
+  logic        rp_walkready_unused;
+  logic [31:0] rp_walkjobs_unused;
 
   // ---- GEOM.BINNER's INSTRUMENTS, which used to end here (GIANTREFS) ------
   // `rp_refs_unused`, `rp_depth_unused`, `rp_culled_unused` and
@@ -1421,6 +1424,50 @@ module zhao_shell_top_v2
     .tri_flat_request_i(tri_flat_request_i),
     .tri_continuation_tail_i(tri_continuation_tail_i),
     .tri_fragment_state_i(tri_fragment_state_i),
+
+    // ---- I55's RASTER DOOR, AND WHY IT IS BOUND SHUT HERE ----------------
+    //
+    // `JOB_SRC` is not overridden, so `u_render_bin` elaborates arrangement 0:
+    // `u_tile` takes its jobs from the binner's on-chip drain, exactly as this
+    // console has always done, and the `generate` branch that reads these five
+    // inputs IS NOT BUILT. They have no reader in the elaborated circuit.
+    //
+    // THAT IS WHY THIS IS A BINDING AND NOT A TIE-OFF, and the distinction is
+    // one the completion register turns on: a tie-off withholds a capability
+    // from a path that exists, and ruling R159 records that an UNDECLARED one
+    // makes the register go DOWN, which is the easiest and most forbidden way
+    // to move that metric. Here there is no path to withhold anything from --
+    // the capability is `JOB_SRC = 1`, and a named parameter with both
+    // arrangements buildable and tested is the owner's control over it, not a
+    // hidden constant. CLAUDE.md: "never remove the owner's control in the name
+    // of fidelity"; the inverse duty is to say where the control IS.
+    //
+    // IT IS DECLARED, in `zhao_console_core.sv`'s entry I55, which already owns
+    // this exact sentence -- "what is tied is WHO ASKS IT TO WALK and WHO TAKES
+    // THE TRIANGLES". The door is the second half of that, so it is recorded
+    // there rather than as a new entry that would double-count one gap.
+    //
+    // WHAT MUST ARRIVE BEFORE `JOB_SRC` BECOMES 1, in order, from DOORCOST's
+    // FINDINGS: TriangleDescriptor v2 (GEOM.SETUP consumes `tri_area2_i` and
+    // the four scissored box bounds and the 16-byte record carries neither,
+    // and `zhao_geom_setup.sv:386` DEFINES `kc2` from `area2` so the
+    // barycentric identity recovers nothing); then the console-side source
+    // select that feeds `u_geom_setup`/`u_geom_attrpack` from the walk during
+    // the drain window; then a sequencer on `walk_valid_i`. These five wires
+    // are then driven by that sequencer and nothing else changes here.
+    .walk_job_valid_i(1'b0),
+    .walk_job_ready_o(rp_walkready_unused),
+    .walk_job_tile_x_i(12'sd0),
+    .walk_job_tile_y_i(12'sd0),
+    .walk_job_first_i(1'b0),
+    .walk_job_last_i(1'b0),
+    // Structurally zero in arrangement 0 -- the door is not built, so the
+    // counter cannot be anything else, and that is a reason rather than a
+    // silence. When `JOB_SRC` becomes 1 this is the number that must move off
+    // zero before any claim about I55 is worth reading, and it wants a real
+    // reader at the console boundary then, not an empty pin.
+    .walk_jobs_taken_o(rp_walkjobs_unused),
+
     // TIE: MEASURE.TOKENS does not gate the shell render path yet -- the V1
     // shell says the same at its own u_render_bin; when the governor is wired
     // this becomes its grant.

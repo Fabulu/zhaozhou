@@ -21,7 +21,26 @@ module zhao_geom_bin_pipe_v2 #(
     parameter int unsigned CHUNK_W    = 8,
     parameter int unsigned CHUNK_REFS = 4,
     parameter bit ATTR_DSP3           = 1'b0,
-    parameter bit BILERP_DSP2         = 1'b0
+    parameter bit BILERP_DSP2         = 1'b0,
+
+    // ---- I55's RASTER DOOR (DOORCOST, 2026-09-27) ------------------------
+    //
+    // WHICH SOURCE DRIVES `u_tile`'s `job_*`. 0 = the binner's on-chip drain,
+    // which is what this console has always done. 1 = the SDRAM walk, through
+    // the `walk_job_*` port set below.
+    //
+    // THE SELECTION IS AT ELABORATION AND THAT IS THE POINT. A run-time 2:1 mux
+    // on this bus is 2,047 bits wide and was PRICED before this parameter was
+    // written -- `zhao_probe_doorcost_jobmux` measures it, because a refusal
+    // without a number is what this packet exists to replace. A `generate`
+    // select costs ZERO logic and keeps the old arrangement as a complete,
+    // buildable oracle, which is what OWNER_VACATION_DIRECTIVE_2026-09-23.txt
+    // section 7 asks for ("retain the correct complete oracle").
+    //
+    // WHY THIS IS A KNOB AND NOT A REWRITE: CLAUDE.md, "never remove the
+    // owner's control in the name of fidelity". Both arrangements build, both
+    // are tested, and the console names the one it ships.
+    parameter int unsigned JOB_SRC    = 0
     // ARENA_ID_W WAS HERE AND IS RETIRED (ARENACOMPOSE, 2026-09-26). It sized
     // the binner's `ser_tri_id_o`; the serialise pass it belonged to is gone,
     // and `zhao_geom_arenabin` now takes the arena identity straight from
@@ -79,6 +98,47 @@ module zhao_geom_bin_pipe_v2 #(
     input  logic       [297:0] tri_flat_request_i,
     input  logic        [47:0] tri_continuation_tail_i,
     input  logic        [31:0] tri_fragment_state_i,
+
+    // ---- I55's RASTER DOOR -- THE NARROW HALF ----------------------------
+    //
+    // THE THING SIX PACKETS GOT WRONG, AND IT IS WORTH SPELLING OUT. Every
+    // version of entry I55 and both 2026-09-27 decision records speak of
+    // "taking `job_*` from the walk path" as though `job_*` were a stream that
+    // had to be transported to this module. MUXBUILD opened the file, found it
+    // internal, and priced the transport at 2,065 WIRES THROUGH TWO MODULE
+    // BOUNDARIES.
+    //
+    // 2,037 of those 2,065 wires ARE ALREADY PORTS ON THIS MODULE. The time
+    // multiplex feeds the SAME `u_geom_setup` / `u_geom_attrpack` pair from the
+    // walk, and that pair's output arrives here on `tri_*_plane_i`,
+    // `tri_ax_i..tri_cy_i`, `tri_src_id_i`, `tri_area2_i`, `tri_min_x_i`,
+    // `tri_fragment_state_i` and `tri_continuation_tail_i` -- the same ports,
+    // on the same silicon, whichever source fed it. `tri_meta_w` below is built
+    // from them THIRTY LINES FROM HERE. The 1,877-bit metadata never needed
+    // transporting because it was never anywhere else.
+    //
+    // So the door is what the walk knows and the triangle record does not: WHICH
+    // TILE this reference is for, whether it opens or closes that tile's list,
+    // and its own handshake. Twenty-eight bits.
+    //
+    // NOTE THE DIRECTION OF THE ERROR, because it is this repository's own law
+    // running the other way for once: the inherited estimate made the remaining
+    // work look SEVENTY-THREE TIMES BIGGER than it is, and a 2,065-wire price on
+    // the tightest block in the design is exactly the shape a packet refuses
+    // without measuring. LANESCOST predicted +90,000 ALUTs and measured +11,979.
+    // An estimate is wrong in whichever direction nobody is checking.
+    input  logic               walk_job_valid_i,
+    output logic               walk_job_ready_o,
+    input  logic signed [11:0] walk_job_tile_x_i,
+    input  logic signed [11:0] walk_job_tile_y_i,
+    input  logic               walk_job_first_i,
+    input  logic               walk_job_last_i,
+    // The door's own traffic count. It reads a structural zero in
+    // `JOB_SRC == 0` -- the door is not built in that arrangement, so zero is
+    // the truth and not a silent instrument. In `JOB_SRC == 1` it is the number
+    // that must move off zero before any claim about I55 is worth reading, and
+    // `raster_jobs_started_o` beside it says whether the tile pipe agreed.
+    output logic        [31:0] walk_jobs_taken_o,
 
     output logic               tok_req_o,
     input  logic               tok_grant_i,
@@ -335,16 +395,37 @@ module zhao_geom_bin_pipe_v2 #(
   logic [63:0] frame_clear_word_q;
   logic frame_inflight_q;
 
-  // Binner drain splice.
+  // ---- THE BINNER'S DRAIN, AND WHAT `u_tile` ACTUALLY CONSUMES ----------
+  // These were ONE bundle until DOORCOST. They are two now because the drain is
+  // no longer the only thing that can offer a job, and a single bundle is how a
+  // second source comes to be spliced in with an OR -- the arrangement six
+  // packets have refused and which is still refused here.
+  //
+  // `bin_job_*` is what `zhao_geom_binner_v2` offers. `job_*` is what the tile
+  // pipe sees. In `JOB_SRC == 0` they are the same wires and Quartus sees one
+  // net; the rename costs nothing.
+  logic bin_job_valid_w, bin_job_ready_w;
+  logic signed [20:0] bin_job_ax_w, bin_job_ay_w, bin_job_bx_w,
+                      bin_job_by_w, bin_job_cx_w, bin_job_cy_w;
+  logic bin_job_first_w, bin_job_last_w;
+  logic signed [11:0] bin_job_tile_x_w, bin_job_tile_y_w;
+  logic [15:0] bin_job_source_w;
+  logic [METAW-1:0] bin_job_meta_w;
+  // bit 0 aux-profile bad, bit 1 area-profile bad -- decided by the binner at
+  // WRITE and carried in the metadata bank's pad, so the tile pipe reads a
+  // verdict instead of reducing 272 bits of it off the RAM output.
+  logic [1:0] bin_job_profile_bad_w;
+  // THE SAME VERDICT ON THE WRITE EDGE, for a job that never entered the bank.
+  // One expression in the binner, two readers; see that port's comment for why
+  // it is not recomputed here.
+  logic [1:0] bin_write_profile_bad_w;
+
   logic job_valid_w, job_ready_w;
   logic signed [20:0] job_ax_w, job_ay_w, job_bx_w, job_by_w, job_cx_w, job_cy_w;
   logic job_first_w, job_last_w;
   logic signed [11:0] job_tile_x_w, job_tile_y_w;
   logic [15:0] job_source_w;
   logic [METAW-1:0] job_meta_w;
-  // bit 0 aux-profile bad, bit 1 area-profile bad -- decided by the binner at
-  // WRITE and carried in the metadata bank's pad, so the tile pipe reads a
-  // verdict instead of reducing 272 bits of it off the RAM output.
   logic [1:0] job_profile_bad_w;
   logic [15:0] job_tile_index_w;
 
@@ -374,16 +455,17 @@ module zhao_geom_bin_pipe_v2 #(
       .tri_meta_i(tri_meta_w),
       .tok_req_o(tok_req_o),
       .tok_grant_i(tok_grant_i),
-      .job_valid_o(job_valid_w),
-      .job_ready_i(job_ready_w),
-      .job_ax_o(job_ax_w), .job_ay_o(job_ay_w),
-      .job_bx_o(job_bx_w), .job_by_o(job_by_w),
-      .job_cx_o(job_cx_w), .job_cy_o(job_cy_w),
-      .job_first_o(job_first_w), .job_last_o(job_last_w),
-      .job_tile_x_o(job_tile_x_w), .job_tile_y_o(job_tile_y_w),
-      .job_src_id_o(job_source_w),
-      .job_meta_o(job_meta_w),
-      .job_profile_bad_o(job_profile_bad_w),
+      .job_valid_o(bin_job_valid_w),
+      .job_ready_i(bin_job_ready_w),
+      .job_ax_o(bin_job_ax_w), .job_ay_o(bin_job_ay_w),
+      .job_bx_o(bin_job_bx_w), .job_by_o(bin_job_by_w),
+      .job_cx_o(bin_job_cx_w), .job_cy_o(bin_job_cy_w),
+      .job_first_o(bin_job_first_w), .job_last_o(bin_job_last_w),
+      .job_tile_x_o(bin_job_tile_x_w), .job_tile_y_o(bin_job_tile_y_w),
+      .job_src_id_o(bin_job_source_w),
+      .job_meta_o(bin_job_meta_w),
+      .job_profile_bad_o(bin_job_profile_bad_w),
+      .write_profile_bad_o(bin_write_profile_bad_w),
       .drain_busy_o(drain_busy_o),
       .drain_done_o(drain_done_o),
       .tile_references_o(binner_tile_references_o),
@@ -394,7 +476,99 @@ module zhao_geom_bin_pipe_v2 #(
       .arena_used_o(binner_arena_used_o)
   );
 
-  // Stable capture identity derived from the binner's row-major tile origin.
+  // ---- THE DOOR ---------------------------------------------------------
+  //
+  // ONE `generate` SELECT, NO MUX, NO OR. The two arrangements are alternatives
+  // and never coexist, which is the whole reason this is an elaboration
+  // parameter: `OWNER_VACATION_DIRECTIVE_2026-09-23.txt` section 4 rules that
+  // "a parallel legacy on-chip frame arena that still supplies the actual
+  // pixels is not closure", so an arrangement in which BOTH sources can reach
+  // `u_tile` in one frame is not a transitional convenience -- it is the thing
+  // the directive forbids, wearing a select line.
+  //
+  // `JOB_SRC == 1` sources the wide fields from `tri_*`, which is the SAME
+  // silicon's output: `zhao_geom_setup` and `zhao_geom_attrpack` are provably
+  // idle for the whole drain window (`zhao_geom_binner_v2.sv`'s `tri_ready_o`
+  // and the `drain_req_r` priority test), so the time multiplex feeds them from
+  // the walk and their planes arrive here unchanged. The planes are therefore
+  // bit-identical BY CONSTRUCTION rather than by a verification claim, which is
+  // `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md`'s decisive reason and
+  // survives intact here.
+  initial begin : p_job_src_domain
+    if (JOB_SRC > 1)
+      $fatal(1, "zhao_geom_bin_pipe_v2: JOB_SRC=%0d is not a defined arrangement (0=binner drain, 1=SDRAM walk)",
+             JOB_SRC);
+  end
+
+  generate
+    if (JOB_SRC == 0) begin : g_job_from_binner
+      assign job_valid_w         = bin_job_valid_w;
+      assign bin_job_ready_w     = job_ready_w;
+      assign job_ax_w            = bin_job_ax_w;
+      assign job_ay_w            = bin_job_ay_w;
+      assign job_bx_w            = bin_job_bx_w;
+      assign job_by_w            = bin_job_by_w;
+      assign job_cx_w            = bin_job_cx_w;
+      assign job_cy_w            = bin_job_cy_w;
+      assign job_first_w         = bin_job_first_w;
+      assign job_last_w          = bin_job_last_w;
+      assign job_tile_x_w        = bin_job_tile_x_w;
+      assign job_tile_y_w        = bin_job_tile_y_w;
+      assign job_source_w        = bin_job_source_w;
+      assign job_meta_w          = bin_job_meta_w;
+      assign job_profile_bad_w   = bin_job_profile_bad_w;
+      // THE DOOR IS NOT BUILT IN THIS ARRANGEMENT. `walk_job_ready_o` is a
+      // standing refusal, not a tie-off of a live path: there is no consumer
+      // for a walk job here, and a ready that lied would take a triangle and
+      // drop it -- which is the "sequencer with dangling outputs counts
+      // triangles and drops them" failure the walk's own briefs forbid.
+      assign walk_job_ready_o    = 1'b0;
+      assign walk_jobs_taken_o   = 32'd0;
+    end else begin : g_job_from_walk
+      assign job_valid_w         = walk_job_valid_i;
+      assign walk_job_ready_o    = job_ready_w;
+      // The corners, the identity and the whole 1,877-bit metadata come off
+      // this module's OWN INPUT PORTS. Nothing is transported and nothing is
+      // recomputed.
+      assign job_ax_w            = tri_ax_i;
+      assign job_ay_w            = tri_ay_i;
+      assign job_bx_w            = tri_bx_i;
+      assign job_by_w            = tri_by_i;
+      assign job_cx_w            = tri_cx_i;
+      assign job_cy_w            = tri_cy_i;
+      assign job_first_w         = walk_job_first_i;
+      assign job_last_w          = walk_job_last_i;
+      assign job_tile_x_w        = walk_job_tile_x_i;
+      assign job_tile_y_w        = walk_job_tile_y_i;
+      assign job_source_w        = tri_src_id_i;
+      assign job_meta_w          = tri_meta_w;
+      assign job_profile_bad_w   = bin_write_profile_bad_w;
+
+      // THE BINNER'S DRAIN IS STILL BUILT, AND THAT IS AN AREA SAVING THIS
+      // ARRANGEMENT HAS NOT YET TAKEN -- declared here rather than left for a
+      // reader to discover. Its jobs are accepted and discarded so the frame
+      // protocol still reaches `drain_done_o`; the tile pipe's own post-abort
+      // sink already establishes that accepting a job without starting a tile
+      // is a defined act. The pixels come from the walk, so directive section
+      // 4's "parallel legacy arena that still supplies the actual pixels" does
+      // not apply -- but the binner's four RAMs and its drain FSM are dead
+      // weight in this mode, and retiring them is a SUBSYSTEM retirement on a
+      // 1,131-line block with the bin phase and the drain sharing one FSM and
+      // four memories. Named, measured (see the FINDINGS), and not taken here.
+      assign bin_job_ready_w     = 1'b1;
+
+      logic [31:0] walk_taken_q;
+      always_ff @(posedge clk) begin
+        if (!rst_n)                             walk_taken_q <= 32'd0;
+        else if (walk_job_valid_i && job_ready_w) walk_taken_q <= walk_taken_q + 32'd1;
+      end
+      assign walk_jobs_taken_o = walk_taken_q;
+    end
+  endgenerate
+
+  // Stable capture identity derived from the SELECTED source's row-major tile
+  // origin. Correct for both arrangements without a second expression: the walk
+  // supplies the same tile coordinates the binner did.
   assign job_tile_index_w = {4'd0, job_tile_y_w[9:4], job_tile_x_w[9:4]};
 
   logic tile_quiet_w;

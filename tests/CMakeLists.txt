@@ -14263,6 +14263,25 @@ zhao_packet_d_full_target(pd_cancel
 target_compile_definitions(pd_cancel PRIVATE PACKET_D_EXPECT_SKIP_CANCEL=1)
 add_test(NAME geom_bin_pipe_v2_skip_cancel_mutant COMMAND pd_cancel)
 
+# ---- I55's RASTER DOOR (DOORCOST, 2026-09-27) ------------------------------
+# ONE bench, TWO elaborations, so the pair is like-for-like by construction.
+# `pd_door` builds zhao_geom_bin_pipe_v2 with JOB_SRC=1 and drives a job in
+# through `walk_job_*`; `pd_doorshut` builds the SAME source at the default
+# JOB_SRC=0 and requires the identical stimulus to rasterise NOTHING. The shut
+# one is the control that makes the open one mean THE DOOR: without it, pixels
+# only prove that something in a 54-file texture island produced pixels.
+#
+# Both go through `zhao_packet_d_full_target`, never a fresh `verilate()` call,
+# because that helper carries the 60-file manifest this file hard-fails on and
+# the mutant shim whose `define` creates the test-hook ports.
+zhao_packet_d_full_target(pd_door -GJOB_SRC=1)
+target_compile_definitions(pd_door PRIVATE PACKET_D_EXPECT_DOOR=1)
+add_test(NAME geom_bin_pipe_v2_door COMMAND pd_door)
+
+zhao_packet_d_full_target(pd_doorshut)
+target_compile_definitions(pd_doorshut PRIVATE PACKET_D_EXPECT_DOOR_SHUT=1)
+add_test(NAME geom_bin_pipe_v2_door_shut_control COMMAND pd_doorshut)
+
 set_tests_properties(geom_bin_pipe_v2_directed PROPERTIES
   LABELS "fast;nightly;packet-d" TIMEOUT 1800)
 set_tests_properties(geom_bin_pipe_v2_coordinate_mutant PROPERTIES
@@ -14284,6 +14303,14 @@ set_tests_properties(geom_bin_pipe_v2_old_ready_mutant PROPERTIES
 set_tests_properties(geom_bin_pipe_v2_skip_cancel_mutant PROPERTIES
   LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
   PASS_REGULAR_EXPRESSION "Packet-D skip-cancel mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_door PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D I55 door FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_door_shut_control PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D I55 door SHUT control FIRED"
   FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
 
 add_test(NAME packet_d_registration_static
@@ -14307,9 +14334,11 @@ set(ZHAO_PACKET_D_REQUIRED_TESTS
   geom_bin_pipe_v2_identity_cancel_control
   geom_bin_pipe_v2_old_ready_mutant
   geom_bin_pipe_v2_skip_cancel_mutant
+  geom_bin_pipe_v2_door
+  geom_bin_pipe_v2_door_shut_control
   packet_d_registration_static)
 list(LENGTH ZHAO_PACKET_D_REQUIRED_TESTS ZHAO_PACKET_D_REQUIRED_TEST_COUNT)
-if(NOT ZHAO_PACKET_D_REQUIRED_TEST_COUNT EQUAL 13)
+if(NOT ZHAO_PACKET_D_REQUIRED_TEST_COUNT EQUAL 15)
   message(FATAL_ERROR "Packet-D required CTest inventory must contain exactly 13 names")
 endif()
 foreach(required_packet_d_test IN LISTS ZHAO_PACKET_D_REQUIRED_TESTS)

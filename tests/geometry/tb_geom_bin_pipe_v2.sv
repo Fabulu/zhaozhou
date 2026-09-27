@@ -6,7 +6,12 @@
 // availability only and exist solely under ZHAO_PACKET_D_TEST_HOOKS.
 `default_nettype none
 
-module tb_geom_bin_pipe_v2 (
+module tb_geom_bin_pipe_v2 #(
+    // DOORCOST: I55's raster door arrangement, handed straight to the DUT so
+    // ONE bench elaborates both and the comparison is like-for-like by
+    // construction rather than by two harnesses agreeing. `-GJOB_SRC=1`.
+    parameter int unsigned JOB_SRC = 0
+) (
     input  logic clk,
     input  logic rst_n,
 
@@ -50,6 +55,19 @@ module tb_geom_bin_pipe_v2 (
     input  logic       [297:0] tri_flat_request_i,
     input  logic        [47:0] tri_continuation_tail_i,
     input  logic        [31:0] tri_fragment_state_i,
+
+    // ---- I55's RASTER DOOR (DOORCOST) --------------------------------
+    // The wide fields ride the `tri_*` bundle above, which is the whole point:
+    // the time multiplex feeds the same GEOM.SETUP/GEOM.ATTRPACK pair, so a
+    // walk-sourced job arrives on the same ports a binner-sourced one did.
+    // These five are what the walk knows and the triangle record does not.
+    input  logic               walk_job_valid_i,
+    output logic               walk_job_ready_o,
+    input  logic signed [11:0] walk_job_tile_x_i,
+    input  logic signed [11:0] walk_job_tile_y_i,
+    input  logic               walk_job_first_i,
+    input  logic               walk_job_last_i,
+    output logic        [31:0] walk_jobs_taken_o,
 
     // Unchanged flat oracle path, enabled only for the dedicated differential.
     input  logic               old_enable_i,
@@ -236,7 +254,7 @@ module tb_geom_bin_pipe_v2 (
     else if (frame_begin_i) old_clear_q <= frame_clear_word_i;
   end
 
-  zhao_geom_bin_pipe_v2 u_dut (
+  zhao_geom_bin_pipe_v2 #(.JOB_SRC(JOB_SRC)) u_dut (
       // The serialise pass is not requested here: this bench is Packet D's
       // raster path, and with `ser_req_i` low the binner's walk is the raster
       // drain and nothing else -- which is what keeps this bench's numbers
@@ -256,6 +274,13 @@ module tb_geom_bin_pipe_v2 (
       .tri_min_x_i(tri_min_x_i), .tri_max_x_i(tri_max_x_i),
       .tri_min_y_i(tri_min_y_i), .tri_max_y_i(tri_max_y_i),
       .tri_src_id_i(tri_src_id_i), .tri_area2_i(tri_area2_i),
+      .walk_job_valid_i(walk_job_valid_i),
+      .walk_job_ready_o(walk_job_ready_o),
+      .walk_job_tile_x_i(walk_job_tile_x_i),
+      .walk_job_tile_y_i(walk_job_tile_y_i),
+      .walk_job_first_i(walk_job_first_i),
+      .walk_job_last_i(walk_job_last_i),
+      .walk_jobs_taken_o(walk_jobs_taken_o),
       .tri_invw_plane_i(tri_invw_plane_i),
       .tri_u_over_w_plane_i(tri_u_over_w_plane_i),
       .tri_v_over_w_plane_i(tri_v_over_w_plane_i),
