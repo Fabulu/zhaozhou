@@ -4231,3 +4231,84 @@ for**, so they run in sequence, and MUXBUILD is fenced off that rider by name.
 **Six refusals on I55, and every one's stated reason is now discharged:** the
 premise is true, the architecture is chosen, the ids are correct. MUXBUILD is
 the build. **No console fit until the register reads 0.**
+
+### 2026-09-27 (late night) - I55 IS DOWN TO ONE THING, AND SIX PACKETS HAD ASSUMED IT WAS A WIRE
+
+**Register 2.** HEAD `71122893`, pushed. **MATCARRY and DOORCOST launched on
+disjoint GEOM files.**
+
+### MUXBUILD: THE CHEQUE IS CASHED, AND THEN THE REAL BLOCKER
+
+**The ProjectedVertex fetch arm exists and is proven.** Four states, three times
+per descriptor, between the last beat and the emit, so **a triangle is offered
+COMPLETE OR NOT AT ALL.** `geom_paramarena_directed` **351 -> 550 checks, 0
+failures**: every field of all three vertices of all six triangles returns
+**bit-identical through the real guard, arbiter, controller and SDRAM**, with the
+discriminating premise asserted FIRST -- frame A's eight reds all collapse to one
+byte under v1's quantiser.
+
+**The SDRAM question is closed BOTH WAYS.** No new slot is needed (the arm rides
+`guard_req_o`, so a fourth request kind is a **state-machine** addition, not a
+client addition) **and no slot exists** (adapter `a..j` all driven, `wshare N=3`
+all driven). **New: directive section 7's "use the reserved client slot if the
+live design still has it" evaluates FALSE** -- `zhao_vram_arbiter.sv:353` forces
+`port_grant[RESERVED_ID] = 1'b0`. **The reserved slot is structurally dead.**
+
+**AND THE HEADLINE: `job_*` IS NOT A PORT.** `zhao_raster_tile_pipe_v2` is a
+**CHILD** of `zhao_geom_bin_pipe_v2`, fed over **internal wires**. The multiplex
+has a back end and **NO DOOR** -- **2,065 wires** through two module boundaries,
+or **lifting `u_tile` out**, a subsystem retirement on the tightest block.
+
+**SIX PACKETS -- INCLUDING BOTH OF TODAY'S DECISION RECORDS AND MY OWN BRIEFS --
+SAID "TAKE `job_*` FROM THAT PATH" AS THOUGH IT WERE A WIRE. Nobody had opened
+the module.** That is the lesson of the day and it is mine as much as anyone's.
+
+**Second blocker, also unrecorded, and the escape is CIRCULAR:** GEOM.SETUP
+consumes `tri_area2_i` and four scissored bounds; the descriptor carries none.
+`zhao_geom_setup.sv:386` **DEFINES** `kc2` as `area2 - kc0 - kc1`, so the
+barycentric identity recovers nothing and **a back end built on it would be
+correct for any garbage `area2`.** Decided and **deferred for the right reason**:
+it costs live write bandwidth every frame for a consumer that cannot exist until
+the door opens.
+
+### THE MERGE COST 31 PINMISSING, AND THREE COUNTERS NOBODY COULD READ
+
+MUXBUILD's gate list **did not include gate 31**. The closure lint caught all 31
+new walker ports omitted. **Repaired two different ways, because they are two
+kinds of port:**
+
+* **28 data outputs** -> **explicit empty connections** beside the existing
+  "TIED, declared at entry I55" block, with the measured reason recorded. **An
+  omission cannot be told apart from an oversight**, and "the `t_*` outputs
+  dangle" is exactly what five packets refused to FAKE a consumer for.
+* **3 counters** -> **connected, not tied.** `verts_read_o`, `verts_illegal_o`
+  and `t_pv_split_o` are real evidence the arm works. Tying them off would repeat
+  the `geom_tidq_*` failure: **an instrument declared and never read.** Exported
+  as `geom_pw_vread_o` / `_vbad_o` / `_pvsplit_o`.
+
+**And the full cost of three new core ports was paid here**, not deferred: both
+`.*` wrapper mutants (R220 -- fix the wrapper, never the module), the smoke
+bench's wires, **and a reader** -- the bench now prints the arm's own invariant
+`vread == 3 * tris` and **fatals** on a refused record. It holds trivially at
+zero today; **that is the line that moves when the door opens.**
+
+Gates **31/31**, wrapper parity exact **1611/1611** on both, closure lint clean
+at 296, smoke **PASS** at `raster pixels=2816`.
+
+### BOTH SLOTS OUT, ON DISJOINT FILES
+
+* **MATCARRY -> `I34`.** Builds the decided carrier: widen the clipdoor->clip
+  rider, parameterise setup's hard-coded 16-bit `tri_src_id`. **Owns clipdoor,
+  clip, setup.** Must **strike in place** the stale *"zero `material_set` hits
+  under `fpga/rtl/terrain/`"* claim -- **inherited through four refusals and now
+  false** (four hits).
+* **DOORCOST -> `I55`.** Prices both door routes on the **shipping part** under
+  the owner's standing authorisation for diagnostic measurement, then **opens it
+  or refuses with the number.** **Owns bin_pipe_v2, tile_pipe_v2, binner_v2.**
+
+**Both told to stage the HUNK, not the file, on `zhao_console_core.sv`.**
+
+**DOORCOST carries the reason its estimate must not decide:** LANESCOST predicted
+**+90,000 ALUTs** from arithmetic and measured **+11,979 -- 7.5x high, in the
+ALARMING direction.** *"2,065 wires sounds huge"* is an estimate of exactly that
+kind, and **nobody has measured it.**
