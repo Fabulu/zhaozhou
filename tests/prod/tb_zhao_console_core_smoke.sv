@@ -8072,9 +8072,23 @@ module tb_zhao_console_core_smoke
     // every vertex, so zero is the CORRECT answer and asserting otherwise
     // would be asserting the bug.
   `ifndef ZHAO_SMOKE_FIELD_UNCOVERED
+    // THE MESSAGE NAMES THE CAUSE IT NOW HAS EVIDENCE FOR. Until 2026-09-27
+    // this could only say "reached no cell", because the field had never run
+    // and the material channel had never been exercised at all. It runs now, so
+    // the interesting number is `token_refused`: the join SAW a material word
+    // for every cell and REFUSED it.
+    //
+    // A refusal here is `zhao_material_token_pkg`'s tag check doing its job, not
+    // a routing fault. `zmt_tag_ok` requires `[31:24] == 8'hE1`, and the tag
+    // exists precisely so an undecodable word is refused rather than silently
+    // composed -- every 24-bit pattern is a LEGAL material (terrain_rules 6.2),
+    // so without it a stuck bus or an unwritten lane would render. The field
+    // program's out-lane 2 IS the token, tag included
+    // (`zref::fieldir::material_token_encode`), so a program whose ordinal 2 is
+    // a plain register value is correctly refused.
     if (terr_mj_field_composed_o == 32'd0)
-      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s) -- the field's MATERIAL channel reached no cell, so the composed console still has never composed one",
-             fld_earth_runs_o);
+      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d -- if token_refused is NONZERO the material word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1), which means the field PROGRAM is not emitting a v1 material token on out-lane 2, not that the channel is unrouted; if it is ZERO the word never arrived at all",
+             fld_earth_runs_o, terr_mj_token_refused_o);
   `endif
 `endif
     if (terr_mj_token_refused_o != 32'd0)
@@ -10257,12 +10271,26 @@ module tb_zhao_console_core_smoke
     if (fld_db_lookups_o != 32'd1)
       $fatal(1, "SMOKE: the field doorbell handed %0d lookups to the directory against one posted -- the lookup phase has no producer",
              fld_db_lookups_o);
-    // EVERY POST IS ANSWERED, which is the hang ruling R20 forbids leaving open.
-    // Same staging-aware count as above, and for the same reason.
+    // EVERY ANSWERABLE POST IS ANSWERED, which is the hang ruling R20 forbids
+    // leaving open. NOTE THE WORD *ANSWERABLE*, AND THAT IT IS NOT THE SAME
+    // COUNT AS THE POSTS ABOVE -- which is the correction this line needed.
+    //
+    // A LOAD WORD IS NOT ANSWERED, BY DESIGN. `zhao_field_doorbell`'s `D_LOAD`
+    // state advances the queue, mirrors `hdr_written` and counts
+    // `load_words_o`, and WRITES NO RETURN RECORD; only LOOKUP, COMMIT and the
+    // FH2 arm reserve return credit and produce one. So the answerable set is
+    // the 2 I42 probes plus the INSTALL_CAPSULE plus the program COMMIT = 4,
+    // however many microcode words were staged.
+    //
+    // I FIRST WROTE `SFF_N_LOAD + 5` HERE, reusing the post count from the
+    // assertion above, and the run said 4 against 48. Posts CONSUMED and posts
+    // ANSWERED are different populations and this bench had never had to tell
+    // them apart, because before `-FieldActive` the only posts were the two
+    // probes and every one of them was answerable.
 `ifdef ZHAO_SMOKE_FIELD_ACTIVE
-    if (fld_ret_seen_q != 32'(SFF_N_LOAD + 5))
-      $fatal(1, "SMOKE: %0d returns came back for %0d answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
-             fld_ret_seen_q, SFF_N_LOAD + 5);
+    if (fld_ret_seen_q != 32'd4)
+      $fatal(1, "SMOKE: %0d returns came back for FOUR answerable posts (2 I42 probes + INSTALL_CAPSULE + the program COMMIT; the %0d load words are fire-and-forget by `zhao_field_doorbell`'s D_LOAD) -- a post was consumed and never answered, which is the hang ruling R20 forbids",
+             fld_ret_seen_q, SFF_N_LOAD + 1);
 `else
     if (fld_ret_seen_q != 32'd2)
       $fatal(1, "SMOKE: %0d returns came back for two answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
@@ -10279,9 +10307,23 @@ module tb_zhao_console_core_smoke
              fld_db_commits_refused_o);
     if (fld_ret_cm_refused_q != 32'd1)
       $fatal(1, "SMOKE: the refused commit's return did not carry the refusal back to the HPS -- refused and unanswered are the same thing from there");
+    // THE THIRD AND LAST PLAIN-FORM-ONLY CENSUS IN THIS BLOCK. `commits_o` counts
+    // commits the doorbell HANDED TO THE DIRECTORY (`D_CM`), and a law-2 refusal
+    // never reaches it -- so in the no-program form, where the only commit is
+    // the I42 probe, the answer is 0. Under `-FieldActive` the staged program's
+    // own COMMIT is a real insert and the answer is 1, with the probe's refusal
+    // still counted separately in `commits_refused_o`. Both numbers are asserted
+    // because together they say the directory saw exactly the commit it should
+    // and refused exactly the one it should.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_db_commits_o != 32'd1)
+      $fatal(1, "SMOKE: the field doorbell handed %0d commits to the directory against ONE real insert (the staged program's); the I42 probe's commit is refused by law 2 before the directory and is counted in commits_refused=%0d",
+             fld_db_commits_o, fld_db_commits_refused_o);
+`else
     if (fld_db_commits_o != 32'd0)
       $fatal(1, "SMOKE: the field doorbell handed %0d commits to the directory, and the only one posted was refused",
              fld_db_commits_o);
+`endif
     if (fld_db_ret_overflow_o != 32'd0)
       $fatal(1, "SMOKE: the field doorbell's return queue overflowed -- the credit reservation is wrong");
 
@@ -10468,9 +10510,29 @@ module tb_zhao_console_core_smoke
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
     // 14 and 4 since 2026-09-26 (I13CLOSE): the packet gained a FOURTH
     // PublishResource, terrain's PALETTE page.
+    //
+    // AND FIFTEEN UNDER THE FIELD FORMS, because the packet carries a
+    // TerrainField record there and does not otherwise. Corrected 2026-09-27
+    // (NOPROG); it is the FOURTH literal census in this file that was written
+    // for the no-program form and had never been reached in the new ones -- the
+    // positive gate fatals ~2,400 lines above this, so `-FieldActive` never got
+    // here and `-FieldUncovered` had never run to green. See FINDINGS-NOPROG.md
+    // section 11: a mode that fatals early leaves its whole tail unexercised,
+    // and the assertions in that tail can be wrong for the mode with nothing
+    // going red.
+    //
+    // `committed` and `uploads` do NOT move: the TerrainField is lowered by
+    // CMD.EXEC's own arm and hands nothing to MEM.UPLOAD, which is exactly what
+    // asserting all three together is for.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (cmd_commands_o != 32'd15 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd4)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 15, 1, 4 -- fifteen because this form's packet carries a TerrainField record)",
+             cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+`else
     if (cmd_commands_o != 32'd14 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd4)
       $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 14, 1, 4)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+`endif
     // ---- R41 / entry I7: THE POPULATION DESCRIPTOR CAME FROM THE PACKET ----
     // Every one of these was a BOARD PIN before this ruling. The chain is
     // decoder -> CMD.EXEC -> PART.POP -> PART.COLLIDE / PART.TERRAIN_TAP and
@@ -10954,14 +11016,22 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the directory allocated slot %0d, the generator's load words target SFF_SLOT=%0d -- the microcode would be written where no request looks, and the only symptom would be status 0xF0, which is indistinguishable from every other noprog cause on this console",
              fld_commit_slot_q, SFF_SLOT);
     if (fld_commit_ok_q != 32'd1)
-      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the commit ALLOCATES the slot and is posted BEFORE the load words, so a refusal here is the directory refusing the hash and not an ordering fault",
+      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the commit ALLOCATES the slot and is posted AFTER the load words (so `zhao_field_doorbell`'s law 2 sees a written header) and BEFORE the header is re-posted, so a refusal here is either the directory refusing the hash or law 2 seeing no header at all",
              fld_commit_ok_q);
-    // Every load word the generator emitted reached the host. Counted, not
-    // assumed: a mailbox that silently dropped posts would still let the
-    // commit succeed if the header happened through.
-    if (fld_db_load_words_o != 32'(SFF_N_LOAD))
-      $fatal(1, "SMOKE: the doorbell forwarded %0d LOAD word(s), the fixture emits %0d -- a dropped word is a partially written program",
-             fld_db_load_words_o, SFF_N_LOAD);
+    // Every load word the generator emitted reached the host, PLUS THE RE-POSTED
+    // HEADER. Counted, not assumed: a mailbox that silently dropped posts would
+    // still let the commit succeed if the header happened through.
+    //
+    // THE `+ 1` IS THE REPAIR, NOT SLACK. The header is written twice on
+    // purpose -- once last among the generator's words, to satisfy
+    // `zhao_field_doorbell`'s law 2 that a commit needs a written header, and
+    // once after the COMMIT, because a successful insert clears `hdr_loaded`
+    // (`zhao_field_host_v2:1448`). Two guards pull opposite ways and this is the
+    // only ordering that meets both. Writing `SFF_N_LOAD + 1` rather than 44
+    // keeps it tied to the generator: change the program and this moves with it.
+    if (fld_db_load_words_o != 32'(SFF_N_LOAD + 1))
+      $fatal(1, "SMOKE: the doorbell forwarded %0d LOAD word(s), the fixture emits %0d plus ONE re-posted header (%0d) -- a dropped word is a partially written program, and a missing re-post is a slot the commit left un-runnable",
+             fld_db_load_words_o, SFF_N_LOAD, SFF_N_LOAD + 1);
     if (fld_db_addr_refused_o != 32'd0)
       $fatal(1, "SMOKE: %0d LOAD word(s) were refused for an address past LDADDRW -- the fixture is emitting addresses this loader cannot take",
              fld_db_addr_refused_o);
