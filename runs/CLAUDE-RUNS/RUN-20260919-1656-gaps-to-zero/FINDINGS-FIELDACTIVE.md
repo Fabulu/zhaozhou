@@ -312,3 +312,100 @@ that**, and it is recorded here rather than waived.
 Another repository's build (`-DUPHEAVAL_ZHAOZ...`, parent PID 19328) and another
 packet's smoke (`..._smoke_walkras_f72d3823`) ran on this machine throughout.
 Both were identified by command line and parent PID and **neither was touched**.
+---
+
+## THE LIVE FINDING: RESOLVED BY THE FIELD LIST, `noprog` AT THE ADAPTER
+
+**Measured at `30219de7`, `-FieldActive`, and this is the state the packet
+ends in. It is a localised defect, not a mystery, and it is NOT in anything
+this packet wrote.**
+
+```
+fldstage install_ok=1 commit_ok=1 ldr_installs_ok=1 ldr_installs_failed=0
+         ldr_bad_crc=0 ldr_bad_meta=0 ldr_load_bytes=1536
+fldpub   pub_ready=01
+fldlist  records=1 sealed=1 unresolved=0 tail_rejected=0
+fldearth records=1 runs=0 noprog=1089 not_begun=0 skipped_uncovered=0
+         faults=0 short=0 desync=1 stall_cycles=3266
+fldhost  runs=0 noprog=1131 grants=1131 out_incomplete=0 bad_image=0
+terrmat  field_composed=0
+```
+
+**`terr_fl_unresolved_o` READS ZERO.** `zhao_terrain_fieldlist` swept the
+loader's publication port, matched the handle, and sealed the entry with
+`e_res` HIGH (`fieldlist:418`). So the capsule installed, published, AND
+resolved. The publication race I fixed in `8b6dbb82` was real in principle and
+was NOT this fault: that run is otherwise bit-identical to the one before it,
+and the only reason I can say the binary rebuilt at all is that the `fldlist`
+line is new. **A measurement that did not move after a change that must have
+moved it is the tell, and here it correctly says my diagnosis was wrong.**
+
+**WHERE IT BREAKS.** `add_fire_i` on the adapter is
+`tfl_add_valid && tfl_add_ready` (`core:29708`) -- the SAME handshake
+`zhao_terrain_patch` takes at `core:29405`. The adapter sets
+`b_res[rep_idx] <= add_resident_i` on that fire (`adapter:1329`) and raises
+`req_noprog_o` from `cap_noprog <= !b_res[lane_a]` (`:1079`, `:890`).
+
+`noprog` incremented **exactly once per lattice vertex (1,089 = 33x33)**, which
+means the patch's field lane fired per vertex -- so the patch HAS the entry and
+`fields_active_o` is nonzero. The field list says resident; the adapter says
+not. **The adapter's residency flag is the only thing that disagrees.**
+
+`fld_noprog_o = 1131` is not an independent fault: it is the host counting the
+adapter's own raised `req_noprog`, 1,089 from Earth plus the 42 particles the
+FLOW adapter offers at its deliberately-unloaded slot. 1089 + 42 = 1131.
+
+**WHY THIS IS THE INTERESTING RESULT AND NOT A DISAPPOINTMENT.**
+`zhao_field_earth_adapter`'s own header documents this fingerprint, verbatim,
+as the intake-versus-replay race (`adapter:163-172`):
+
+> engine runs=1089  runs_o=0  noprog=1089  skipped=0  not_begun=0
+> faults=0  short=0
+> A FIELD THAT RAN, COST THE ENGINE EVERY CYCLE IT SHOULD, AND MOVED NOTHING,
+> with every other census balancing.
+
+Ours differs in ONE number and the difference matters: the header's signature
+has the ENGINE RUNNING 1,089 times while the adapter reports noprog; ours has
+`fldhost runs=0`, so the engine never ran at all. So this is the same flag, and
+**not** the same already-repaired path. The header also says the repair left
+**"ONE NARROWED RESIDUAL"**, and that `lane_desync_o` structurally CANNOT see
+this class because both its arms difference ENTRY COUNTS and the count is right
+-- only the flag's value is wrong.
+
+**WHAT I HAVE NOT PROVEN, AND AM NOT ASSERTING.** I have not established the
+mechanism by which `b_res` ends low. The clear now sits at I_TAKE on `eff_n_c`
+with the replay explicitly outranking it on a tie (`adapter:1243-1252`), so the
+obvious ordering should hold. A plausible-looking story -- that terrain's patch
+job is ALREADY PENDING when the record arrives, because terrain waits ~108,000
+cycles for its pages, so the replay fires the instant the list seals -- fits the
+evidence and **is exactly the kind of comfortable explanation this repo's own
+rules say to check hardest.** I have not checked it.
+
+**THE NEXT DIAGNOSTIC, NAMED SO IT IS NOT RE-DERIVED.** The adapter exports no
+evidence for the replay side. What separates the remaining candidates in one
+run is a REPLAY COUNTER on the adapter -- entries whose `add_fire_i` was seen,
+and the value of `add_resident_i` at each -- because it distinguishes
+"the replay never fired" from "it fired with resident low" from "it fired with
+resident high and was overwritten". Those three are indistinguishable from
+`noprog_o` alone, which is the header's own complaint about this class.
+
+**AND THE STIMULUS ORDERING IS WHY NO BENCH CAUGHT IT.** Every leaf bench
+submits the record and THEN the patch job. This console has a patch job waiting
+long before the record arrives. That is precisely the value the owner
+commissioned `-FieldActive` to produce: a composed-console ordering no component
+test reproduces.
+
+## STATUS AGAINST THE SIX CLAUSES, HONESTLY
+
+| # | clause | state |
+|---|---|---|
+| 1 | program installed and executed | **INSTALLED** and measured (`installs_ok=1`, `pub_ready=01`, 1,536 B over the real bridge). **NOT EXECUTED** -- `runs=0`. |
+| 2 | covers the intended terrain | **MET** -- `tp_covers=1`, 1,089 vertices offered. |
+| 3 | value that cannot equal the authored baseline by accident | **BLOCKED BY 1.** Instrument identified and wired (`tsfill_tile_max_q`/`_or_q`, baseline `[6 7]`). |
+| 4 | reaches the intended production consumer | **BLOCKED BY 1**, same instrument. |
+| 5 | uncovered control restores the authored result | **BUILT**, not yet run to green. |
+| 6 | no-field forms unchanged | **MET** -- plain smoke PASS, 2,816 px, every `ifndef` arm unchanged. |
+
+**Clause 1 is one defect away, and the defect is in production RTL that this
+packet did not write.** That is a finding, not a failure of the mode: the mode
+did exactly what directive 13.7 built it to do on its first real run.
