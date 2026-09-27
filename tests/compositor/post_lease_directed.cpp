@@ -353,8 +353,16 @@ struct FrameOut {
   unsigned frames = 0, passes = 0, echo_complete = 0, echo_torn = 0, unowned = 0;
   bool fault = false, fbw_bad = false, done = false;
 };
+// `sweep`: at WALK_GATE=1 the post phase is HELD until I55's SDRAM tile sweep
+// has run, so a frame driven without one never opens a pass and never
+// publishes. That is a real property of arrangement 1 and not a bench
+// artefact -- case 8 below is where it is asserted deliberately. Every OTHER
+// case here is about the compositor rather than about the gate, so the helper
+// runs a short sweep for them, and the whole file then measures the same thing
+// it always did with the gate in the way. Case 8 passes `false` and owns its
+// own sweep.
 FrameOut frame(Bench& b, uint32_t base, unsigned stride, unsigned w, unsigned h, bool duo,
-               const std::function<void(Bench&)>& mid = nullptr) {
+               const std::function<void(Bench&)>& mid = nullptr, bool sweep = true) {
   Vtb_post_lease_top& top = b.top;
   const unsigned f0 = top.frames_o, p0 = top.passes_o, ec0 = top.echo_passes_complete_o,
                  et0 = top.echo_passes_torn_o;
@@ -372,6 +380,19 @@ FrameOut frame(Bench& b, uint32_t base, unsigned stride, unsigned w, unsigned h,
   top.raster_quiet_i = 1;
   top.frame_end_i = 1;
   b.step();
+  // BEFORE the callback, and that ordering is load-bearing. `frame_end_i` has
+  // been asserted, so the gate is OWED; several cases below drive the whole
+  // pass from inside `mid` and would sit waiting for a pass that cannot start.
+  // Running the sweep first leaves every one of them measuring what it was
+  // written to measure, with the gate in the way rather than in the test.
+  if (sweep && top.walk_gate_built_o) {
+    // Length is immaterial here; what matters is that the sweep HAPPENS,
+    // because without one the gate holds and the frame never publishes.
+    top.walk_active_i = 1;
+    for (int i = 0; i < 64; ++i) b.step();
+    top.walk_active_i = 0;
+    b.step();
+  }
   if (mid) mid(b);
   b.run_until([&] { return top.frames_o != f0 && !top.busy_o; },
               uint64_t(w) * h * (duo ? 2 : 1) * 200 + 200000);
@@ -647,7 +668,7 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 200; ++i) bb.step();
       bb.top.walk_active_i = 0;
       hold_at_release = bb.top.walk_hold_clocks_o;
-    });
+    }, /*sweep=*/false);   // this case owns its sweep; see `frame()`
     const auto a = audit(m, 0, 768, 384, 8, 1);
     const bool gate = top.walk_gate_built_o != 0;
 

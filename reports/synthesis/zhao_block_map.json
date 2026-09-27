@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "84817e4e34a65b9387ed7496c66fa42f8344f704",
+    "newestRunCommit":  "8e1ab9f6f6340a34f1c02ebed81dfffe36b80372",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "cb508ba65afd3405",
+    "sourceListHash":  "0c5bf2923044f9f9",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -2854,6 +2854,103 @@
                                             ],
                        "inferredMemoryCount":  0,
                        "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_post_leasephasefix-gate0",
+                       "status":  "ok",
+                       "sourceCommit":  "8e1ab9f6f6340a34f1c02ebed81dfffe36b80372",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "0c5bf2923044f9f9",
+                       "sourceFileCount":  403,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_post_lease",
+                       "seconds":  123.9,
+                       "dspBlocks":  1,
+                       "registers":  1382,
+                       "blockMemoryBits":  9984,
+                       "virtualPins":  1004,
+                       "pins":  0,
+                       "estimatedAlms":  1505,
+                       "combAluts":  1445,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_post_echo:u_echo|altsyncram:sk_mem_rtl_0|altsyncram_m3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  35,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_fbread:u_source|altsyncram:q_mem_rtl_0|altsyncram_60q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Unsigned Multiplier":  1
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_post_leasephasefix-gate1",
+                       "status":  "ok",
+                       "sourceCommit":  "8e1ab9f6f6340a34f1c02ebed81dfffe36b80372",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "0c5bf2923044f9f9",
+                       "sourceFileCount":  403,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "topParameters":  "WALK_GATE=1",
+                       "variantOf":  "zhao_post_lease",
+                       "seconds":  82.9,
+                       "dspBlocks":  1,
+                       "registers":  1448,
+                       "blockMemoryBits":  9984,
+                       "virtualPins":  1004,
+                       "pins":  0,
+                       "estimatedAlms":  1539,
+                       "combAluts":  1514,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_post_echo:u_echo|altsyncram:sk_mem_rtl_0|altsyncram_m3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  35,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_fbread:u_source|altsyncram:q_mem_rtl_0|altsyncram_60q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Unsigned Multiplier":  1
+                                            },
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
