@@ -333,6 +333,7 @@ void reset(Vtb_post_lease_top& top) {
   top.frame_admit_i = 0;
   top.frame_end_i = 0;
   top.raster_quiet_i = 0;
+  top.walk_active_i = 0;  // I55's sweep is not running unless a case runs it
   top.echo_arm_i = 1;     // armed unless a case says otherwise (R35)
   top.look_hold_i = 0;
   top.src_ready_i = 0;
@@ -606,6 +607,96 @@ int main(int argc, char** argv) {
                 started_under_hold ? 1 : 0);
     zhao::check(o.done && c.views_at_start.size() == 1, "and the pass runs once the hold drops", 1,
                 c.views_at_start.size());
+  }
+
+  // ---- 8. I55's WALK GATE: the post phase waits for the SDRAM sweep ---------
+  //
+  // ONE DRIVER, TWO ARRANGEMENTS, AND THE DIFFERENCE IS THE PARAMETER.
+  // `post_lease_walkgate` builds `tb_post_lease_top` with `-GWALK_GATE=1`;
+  // `post_lease_directed` is the same binary's source at the default 0. The
+  // stimulus below is IDENTICAL in both, so the divergence is the gate and
+  // cannot be anything else about the frame.
+  //
+  // WHY THE ZERO ARM IS A CONTROL AND NOT A COPY. At WALK_GATE = 0 the pass
+  // MUST start during the window where no sweep is running -- that is the
+  // shipped console, whose raster is fed by the binner's on-chip drain and has
+  // no sweep to wait for. So the two arms assert OPPOSITE things about the
+  // same 300 clocks, and each is the correct behaviour of its own arrangement.
+  // Neither asserts the defect: the defect was arrangement ONE behaving like
+  // arrangement zero.
+  {
+    reset(top);
+    OrderedMem m;
+    Comp c;
+    Bench b{top, m, c};
+    m.allow = window(0, 0x3C000);
+    fill_frame(m, 0, 768, 384, 8);
+    bool started_before_sweep = false;
+    bool post_open_before_sweep = false;
+    unsigned hold_at_release = 0;
+    const auto o = frame(b, 0, 768, 384, 8, false, [&](Bench& bb) {
+      // THE SWEEP HAS NOT STARTED YET, which is the state the console is in
+      // for the whole gap between `frame_end` and the arena's publication.
+      for (int i = 0; i < 300; ++i) {
+        bb.step();
+        if (!c.views_at_start.empty()) started_before_sweep = true;
+        if (bb.top.phase_post_o) post_open_before_sweep = true;
+      }
+      // ... and now it runs, and finishes.
+      bb.top.walk_active_i = 1;
+      for (int i = 0; i < 200; ++i) bb.step();
+      bb.top.walk_active_i = 0;
+      hold_at_release = bb.top.walk_hold_clocks_o;
+    });
+    const auto a = audit(m, 0, 768, 384, 8, 1);
+    const bool gate = top.walk_gate_built_o != 0;
+
+    // THE PREMISE, FIRST AND ON ITS OWN. A `-G` that failed to engage would
+    // build the default and every check below would pass while measuring the
+    // other arrangement -- CLAUDE.md records exactly that outcome twice, with
+    // no diagnostic from the toolchain either time.
+#ifdef POST_LEASE_EXPECT_WALK_GATE
+    zhao::check(gate, "the -GWALK_GATE=1 selector ENGAGED (this binary is the gated build)", 1,
+                gate ? 1 : 0);
+#else
+    zhao::check(!gate, "this binary is the UNGATED control (WALK_GATE defaults to 0)", 0,
+                gate ? 1 : 0);
+#endif
+
+    if (gate) {
+      zhao::check(!post_open_before_sweep,
+                  "WALK_GATE=1: the post phase stays SHUT for 300 clk while the sweep has not started",
+                  0, post_open_before_sweep ? 1 : 0);
+      zhao::check(!started_before_sweep, "and no compositor pass opens in that window", 0,
+                  started_before_sweep ? 1 : 0);
+      zhao::check(hold_at_release >= 300,
+                  "and the hold COUNTED those clocks -- a gate reporting zero held clocks released "
+                  "on the clock it armed",
+                  300, hold_at_release);
+      zhao::check(top.walk_sweeps_gated_o == 1u,
+                  "exactly ONE sweep completed under the hold", 1, top.walk_sweeps_gated_o);
+    } else {
+      zhao::check(post_open_before_sweep,
+                  "WALK_GATE=0 CONTROL: the post phase opens WITHOUT any sweep -- the shipped "
+                  "console has no sweep to wait for",
+                  1, post_open_before_sweep ? 1 : 0);
+      zhao::check(top.walk_hold_clocks_o == 0u && top.walk_sweeps_gated_o == 0u,
+                  "and both gate counters are STRUCTURAL ZEROS, not instruments reading zero", 0,
+                  top.walk_hold_clocks_o + top.walk_sweeps_gated_o);
+    }
+
+    // BOTH ARRANGEMENTS OWE A DRAWN FRAME. The gate is only worth having if
+    // the pass it delays still happens and is still exact; a hold that never
+    // released would satisfy every "stays shut" check above.
+    zhao::check(o.done && o.passes == 1, "the frame completes, once, in BOTH arrangements", 1,
+                o.passes);
+    zhao::check(a.fb_bad == 0 && a.cap_bad == 0,
+                "and the write-back and capture are exact -- the gate delays the pass, it does "
+                "not change it",
+                0, a.fb_bad + a.cap_bad);
+    zhao::check(o.unowned == 0 && !o.fault && !o.fbw_bad,
+                "no unowned credit, no fault, FBWRITE drained", 0,
+                o.unowned + (o.fault ? 1 : 0) + (o.fbw_bad ? 1 : 0));
   }
 
   return zhao::report_and_exit("post_lease_directed");

@@ -14,7 +14,15 @@
 
 module tb_post_lease_top
   import zhao_pkg::*;
-(
+#(
+    // PHASEFIX 2026-09-27. I55's WALK GATE, selected from the command line so
+    // the SAME driver runs both arrangements and the difference between them
+    // is the parameter and nothing else. `post_lease_walkgate` builds this at
+    // 1; `post_lease_directed` is the 0 CONTROL, and it is a control rather
+    // than a formality -- it is what proves the held pass at 1 was held by the
+    // GATE and not by some other property of the stimulus.
+    parameter int unsigned WALK_GATE = 0
+) (
     input  var logic clk,
     input  var logic rst_n,
 
@@ -22,6 +30,7 @@ module tb_post_lease_top
     input  var logic          frame_admit_i,
     input  var logic          frame_end_i,
     input  var logic          raster_quiet_i,
+    input  var logic          walk_active_i,
     input  var logic [ZHAO_VRAM_ADDR_BITS-1:0] fb_base_i,
     input  var logic [15:0]   fb_stride_i,
     input  var logic [8:0]    frame_w_i,
@@ -74,8 +83,17 @@ module tb_post_lease_top
     output var logic          fbw_fatal_o,
     output var logic          fbw_stream_err_o,
     output var logic [31:0]   fbw_issued_words_o,
-    output var logic [31:0]   fbw_retired_words_o
+    output var logic [31:0]   fbw_retired_words_o,
+    output var logic [31:0]   walk_hold_clocks_o,
+    output var logic [31:0]   walk_sweeps_gated_o,
+    // The parameter the driver is running against, read back out rather than
+    // assumed. A driver that believed it had WALK_GATE=1 while the selector
+    // failed to engage would measure unmutated production and pass -- which is
+    // CLAUDE.md's `-D` chapter exactly, and it happened twice in this tree.
+    output var logic          walk_gate_built_o
 );
+
+  assign walk_gate_built_o = (WALK_GATE != 0);
 
   logic               ppx_valid, ppx_ready, ppx_last;
   logic        [15:0] ppx_rgb;
@@ -105,10 +123,11 @@ module tb_post_lease_top
     .drained_o(fbw_drained_o), .fatal_error_o(fbw_fatal_o), .busy_o(fbw_busy_unused)
   );
 
-  zhao_post_lease #(.XW(9), .YW(8)) u_lease (
+  zhao_post_lease #(.XW(9), .YW(8), .WALK_GATE(WALK_GATE)) u_lease (
     .clk(clk), .rst_n(rst_n),
     .lease_live_i(lease_live_i), .frame_admit_i(frame_admit_i), .frame_end_i(frame_end_i),
     .raster_quiet_i(raster_quiet_i), .raster_px_i(1'b0), .fbw_drained_i(fbw_drained_o),
+    .walk_active_i(walk_active_i),
     .fb_base_i(fb_base_i), .fb_stride_i(fb_stride_i),
     .frame_w_i(frame_w_i), .frame_h_i(frame_h_i), .duo_i(duo_i),
     .echo_arm_i(echo_arm_i), .look_hold_i(look_hold_i),
@@ -135,7 +154,9 @@ module tb_post_lease_top
     .echo_passes_torn_o(echo_passes_torn_o),
     .echo_pixels_written_o(echo_pixels_written_o),
     .echo_pixels_dropped_o(echo_pixels_dropped_o),
-    .echo_fault_o(echo_fault_o)
+    .echo_fault_o(echo_fault_o),
+    .walk_hold_clocks_o(walk_hold_clocks_o),
+    .walk_sweeps_gated_o(walk_sweeps_gated_o)
   );
 
   logic unused_c;

@@ -33445,14 +33445,58 @@ module zhao_console_core
     zhao_ms_pack = '0;                                   // the reserve, written zero
     zhao_ms_pack[ZHAO_MS_VALID_LO    +: ZHAO_MS_VALID_W]    = v;
     zhao_ms_pack[ZHAO_MS_DETAIL_LO   +: ZHAO_MS_DETAIL_W]   = detail;
+    // ---- THE LAYOUT MUTANT SEAM (PHASEFIX, 2026-09-27) --------------------
+    // METASIDE declared, honestly, that the three round-trip assertions below
+    // were LIVE AND SILENT through 89 triangles and had NOT been seen to fire.
+    // CLAUDE.md: "a detector that has not been shown to FIRE has not been
+    // tested", and a detector reading zero is the claim to check hardest.
+    //
+    // No legal stimulus can fire them. They compare two expressions of the
+    // SAME inputs, so their disagreement is a LAYOUT fault and layout is not
+    // an input. That is the case the mutant chapter is written for.
+    //
+    // THREE SEAMS, BECAUSE THE THREE ASSERTIONS READ DISJOINT FIELDS. Measured
+    // in this file rather than assumed: `zhao_ms_flat_request` reads VALID,
+    // SAMPCNT, BASEBIND, RECIPE, WEIGHT, BASERGB, RESPCLS, PALSLOT and PALGEN;
+    // `zhao_ms_tail` reads DETAIL, VTXALPHA, EFFTAG and STENREF; and
+    // `zhao_ms_frag_state` reads FRAGST alone. So ONE corrupted field fires
+    // exactly ONE of them, and a single mutant would leave two still untested
+    // while looking like it had covered them.
+    //
+    // THE MUTATION IS A BITWISE NOT, NOT A DROP, AND THAT IS DELIBERATE.
+    // Omitting the write leaves the field ZERO, which AGREES with the
+    // composition on any triangle whose value happens to be zero -- a mutant
+    // that passes is a mutant that proved nothing, and this fixture's defaults
+    // are exactly where zeros live. `~x != x` for every x, so the fault is
+    // present on every sampled clock and cannot be vacuous.
+    //
+    // PLAIN `ifdef`, SELECTING BETWEEN TWO DEFINITIONS. CLAUDE.md records two
+    // combiner mutants that measured UNMUTATED production because a
+    // command-line `-D` cannot override a FUNCTION-LIKE `define` and says
+    // nothing when it fails to. This form is the one `-D` reaches, and each
+    // `else` arm below is byte-identical to the line it replaces -- so with
+    // nothing defined this function is character-for-character what it was.
+    // The negative control is the PLAIN console run, which must stay silent.
+`ifdef ZHAO_MS_MUT_TAIL
+    zhao_ms_pack[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W] = ~vtx_alpha;
+`else
     zhao_ms_pack[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W] = vtx_alpha;
+`endif
     zhao_ms_pack[ZHAO_MS_EFFTAG_LO   +: ZHAO_MS_EFFTAG_W]   = eff_tag;
     zhao_ms_pack[ZHAO_MS_STENREF_LO  +: ZHAO_MS_STENREF_W]  = sten_ref;
+`ifdef ZHAO_MS_MUT_FRAG
+    zhao_ms_pack[ZHAO_MS_FRAGST_LO   +: ZHAO_MS_FRAGST_W]   = ~frag_state;
+`else
     zhao_ms_pack[ZHAO_MS_FRAGST_LO   +: ZHAO_MS_FRAGST_W]   = frag_state;
+`endif
     zhao_ms_pack[ZHAO_MS_SAMPCNT_LO  +: ZHAO_MS_SAMPCNT_W]  = samp_cnt;
     zhao_ms_pack[ZHAO_MS_BASEBIND_LO +: ZHAO_MS_BASEBIND_W] = base_bind;
     zhao_ms_pack[ZHAO_MS_RECIPE_LO   +: ZHAO_MS_RECIPE_W]   = recipe;
+`ifdef ZHAO_MS_MUT_FLAT
+    zhao_ms_pack[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W]   = ~weight;
+`else
     zhao_ms_pack[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W]   = weight;
+`endif
     zhao_ms_pack[ZHAO_MS_BASERGB_LO  +: ZHAO_MS_BASERGB_W]  = base_rgb;
     zhao_ms_pack[ZHAO_MS_RESPCLS_LO  +: ZHAO_MS_RESPCLS_W]  = resp_cls;
     zhao_ms_pack[ZHAO_MS_PALSLOT_LO  +: ZHAO_MS_PALSLOT_W]  = pal_slot;

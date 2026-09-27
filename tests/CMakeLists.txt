@@ -4670,6 +4670,32 @@ verilate(test_post_lease_directed
 add_test(NAME post_lease_directed COMMAND test_post_lease_directed)
 set_tests_properties(post_lease_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# I55's WALK GATE, the OTHER arrangement (PHASEFIX, 2026-09-27). The same
+# driver and the same stimulus with `-GWALK_GATE=1`, so the only difference
+# between the two runs is the parameter. Case 8 asserts OPPOSITE things in the
+# two arms -- at 0 the post phase must open with no sweep (that is the shipped
+# console), at 1 it must stay shut until the sweep finishes -- and each arm
+# checks `walk_gate_built_o` FIRST, so a `-G` that silently failed to engage
+# fails on the premise instead of passing while measuring the other build.
+add_executable(post_lease_walkgate compositor/post_lease_directed.cpp)
+target_link_libraries(post_lease_walkgate PRIVATE zhao_harness zhao_zref)
+target_include_directories(post_lease_walkgate PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
+target_compile_definitions(post_lease_walkgate PRIVATE POST_LEASE_EXPECT_WALK_GATE=1)
+verilate(post_lease_walkgate
+  PREFIX Vtb_post_lease_top
+  TOP_MODULE tb_post_lease_top
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_fbread.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_echo.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_lease.sv
+          ${CMAKE_SOURCE_DIR}/tests/compositor/tb_post_lease_top.sv
+  VERILATOR_ARGS -GWALK_GATE=1)
+add_test(NAME post_lease_walk_gate COMMAND post_lease_walkgate)
+set_tests_properties(post_lease_walk_gate PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # GEOM.VDECODE format 0 -- RAW/CANONICAL, authorised by ruling R11. Format 0
 # is the DIFFERENTIAL REFERENCE: packed formats 1 and 2 are bake-off gated and
 # must decode to bit-identical output, so an error here does not make one wrong
