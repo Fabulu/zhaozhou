@@ -5151,6 +5151,108 @@ module tb_zhao_console_core_smoke
   // ==========================================================================
   // THE RUN.
   // ==========================================================================
+  // ===========================================================================
+  // THE ARRANGEMENT VERDICT -- ONE DEFINITION, REACHED BY EVERY FORM
+  // ===========================================================================
+  // UNPARK, 2026-09-27. These checks used to sit inline at the end of the CLEAN
+  // verdict, which put them inside the `else` arm of `ZHAO_SMOKE_BAD_VERTEX` and
+  // after `-Mutant`'s `disable run`. The consequence was invisible while the
+  // walk arrangement was parked and is the whole point once it is not:
+  //
+  //   * `-BadVertex` COMPILED THEM OUT. Its verdict is the `ifdef` arm and the
+  //     clean arm held these. Measured in arrangement 1 it sweeps 2 tiles and
+  //     issues 65 jobs -- and asserted NOTHING about any of it.
+  //   * `-Mutant` LEFT BEFORE THEM. It reaches its own verdict at the terrain
+  //     page loader and ends the run with `disable run`, ~2,300 lines above.
+  //     Measured in arrangement 1 it sweeps 10 tiles and issues 36 jobs --
+  //     also asserting nothing about any of it.
+  //
+  // So two of the six GATED forms ran a sweep that no check ever looked at.
+  // That is CLAUDE.md's "a gate that cannot reach the state is not evidence
+  // about the state" in its quietest form: nothing was failing, and nothing
+  // could have.
+  //
+  // IT IS A TASK AND NOT A COPY, deliberately. Three pasted copies of an
+  // arrangement check would drift, and the one that drifted would be the copy
+  // in the form nobody runs by hand.
+  //
+  // IT CONTAINS NO `disable` AND NO `$finish`: it asserts and returns, so every
+  // caller keeps its own ending. `-Mutant`'s verdict is still the last thing
+  // that form says.
+  task automatic check_walk_arrangement();
+    if (!geom_walk_raster_o) begin
+      // ---- ARRANGEMENT 0: THE SWEEP IS A STRUCTURAL ZERO ----------------
+      // Asserted, not skipped. `GEOM_WALK_RASTER = 0` gates GEOM.TILEWALK's
+      // `start_i`, so the sweep never begins and every one of these is zero by
+      // construction -- which means a build that accidentally half-engaged the
+      // arrangement (the door parked while the sequencer runs, which would
+      // hold `cl_o_ready` low and stop the console's geometry dead) fails
+      // HERE, loudly, instead of hanging.
+      if (geom_tw_tiles_o != 32'd0 || geom_tw_jobs_o != 32'd0 ||
+          geom_tw_door_o != 32'd0 || geom_pw_tris_o != 32'd0 ||
+          geom_pw_vread_o != 32'd0) begin
+        $fatal(1, "GEOM.TILEWALK: the walk arrangement is PARKED (`geom_walk_raster_o` low) but it moved -- tiles=%0d jobs=%0d door=%0d tris=%0d vread=%0d. Half an engaged arrangement is worse than either whole one.",
+               geom_tw_tiles_o, geom_tw_jobs_o, geom_tw_door_o,
+               geom_pw_tris_o, geom_pw_vread_o);
+      end
+      // AND THE PHASE GATE IS PART OF THAT STRUCTURAL ZERO (PHASEFIX).
+      // At `JOB_SRC = 0` `zhao_post_lease`'s WALK GATE generate branch is not
+      // elaborated, so both counters are tied literals. Asserted rather than
+      // assumed: a gate that quietly became live in the SHIPPED arrangement
+      // would delay every post phase for a sweep that never comes, and the
+      // symptom would be a console that stops publishing frames -- which is
+      // the single most expensive thing this change could get wrong.
+      if (geom_tw_phasehold_o != 32'd0 || geom_tw_phasesweeps_o != 32'd0) begin
+        $fatal(1, "POST.LEASE: the WALK GATE moved in the PARKED arrangement -- phasehold=%0d phasesweeps=%0d. It must not be elaborated at JOB_SRC=0.",
+               geom_tw_phasehold_o, geom_tw_phasesweeps_o);
+      end
+      // THIS LINE USED TO SAY "PARKED ... Entry I55 is OPEN", and both halves
+      // went stale the moment the console was un-parked (UNPARK, 2026-09-27).
+      // `GEOM_WALK_RASTER = 0` is no longer the shipped default and no longer
+      // a park: it is the RETAINED ORACLE that owner directive section 7
+      // requires, reached by `-BinnerDrain`, and a reader who met the old
+      // wording in a log would conclude the console still ships from the
+      // on-chip drain. A bench message is prose, and prose cannot go stale
+      // loudly.
+      $display("SMOKE: tilewalk   ORACLE ARRANGEMENT (GEOM_WALK_RASTER=0): the sweep is a STRUCTURAL ZERO and the binner's on-chip drain feeds the raster. This is NOT the shipped console as of 2026-09-27 -- the console ships at 1, where the SDRAM walk feeds it -- it is the complete oracle owner directive section 7 requires be retained, and it draws the same picture. See entry I55's UNPARK section.");
+    end else if (tw_sweep_incomplete) begin
+      $fatal(1, "GEOM.TILEWALK: the sweep did not complete -- the frame above is PARTIAL");
+    end else begin
+      // ---- ARRANGEMENT 1: THE HOLD HAPPENED, AND IT ENDED (PHASEFIX) -----
+      // BOTH HALVES, because either alone is satisfiable by a broken gate.
+      // `phasesweeps != 1` catches a gate that never engaged (it would have
+      // released at `frame_end` exactly as before this change) and one that
+      // engaged twice. `phasehold == 0` catches a gate that was elaborated
+      // and then released on the same clock it armed -- which draws a correct
+      // picture ONLY if the sweep happened to be instantaneous, and is
+      // therefore a pass that does not mean what it says.
+      if (geom_tw_phasesweeps_o != 32'd1) begin
+        $fatal(1, "POST.LEASE: the WALK GATE completed %0d sweep(s), not 1. At JOB_SRC=1 the post phase must be held for exactly this frame's sweep.",
+               geom_tw_phasesweeps_o);
+      end
+      if (geom_tw_phasehold_o == 32'd0) begin
+        $fatal(1, "POST.LEASE: the WALK GATE reports ZERO held clocks. The sweep takes thousands, so a zero means the gate released on the clock it armed and the pixels below landed for some other reason -- read it as an instrument fault, not a fast console.");
+      end
+    end
+    if (geom_tw_jobs_o != geom_tw_door_o) begin
+      $fatal(1, "GEOM.TILEWALK: %0d job(s) issued but the raster door took %0d",
+             geom_tw_jobs_o, geom_tw_door_o);
+    end
+    if (geom_tw_failed_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d walk(s) ended badly", geom_tw_failed_o);
+    end
+    if (geom_tw_overlap_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d overlapping triangle offer(s)", geom_tw_overlap_o);
+    end
+    if (geom_pw_vread_o != 3 * geom_pw_tris_o) begin
+      $fatal(1, "GEOM.PARAMWALK: vertices read (%0d) is not three per emitted triangle (%0d)",
+             geom_pw_vread_o, geom_pw_tris_o);
+    end
+    if (geom_pw_vbad_o != 32'd0) begin
+      $fatal(1, "GEOM.PARAMWALK: the fetch arm refused %0d vertex record(s)", geom_pw_vbad_o);
+    end
+  endtask
+
   initial begin : run
     int unsigned guard;
 
@@ -9032,6 +9134,15 @@ module tb_zhao_console_core_smoke
              terr_pl_slot_overflow_o, terr_pl_pages_refused_o, terr_pl_fault_verdict_o);
     if (terr_pl_slot_overflow_o == 0)
       $fatal(1, "MUTANT FAILED: terr_pl_slot_overflow_o stayed 0 with TERR_POOL_SLOTS halved -- the counter could not be made to fire, so its zero in production is not evidence");
+    // THE ARRANGEMENT IS ASSERTED HERE TOO (UNPARK, 2026-09-27), and BEFORE the
+    // PASS line rather than after it, so a sweep that misbehaved cannot be
+    // announced as a pass. This form ends with `disable run` ~2,300 lines above
+    // the clean verdict's copy of these checks, so until now it ran the walk and
+    // looked at none of it: measured in arrangement 1 it sweeps 10 tiles and
+    // issues 36 jobs. The mutant breaks the TERRAIN PAGE LOADER, which is
+    // upstream of all of this, so every relation the task asserts still holds --
+    // measured, not assumed: jobs=36 door=36 tris=36 phasesweeps=1.
+    check_walk_arrangement();
     $display("SMOKE: MUTANT PASS -- terr_pl_slot_overflow_o fired %0d time(s). The detector works; production's zero is a measurement.",
              terr_pl_slot_overflow_o);
     $finish;
@@ -9445,6 +9556,14 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / %0d / equal. The MESH batch drops and the frame completes; what is left is TERRAIN ALONE, which covers %0d tile(s) and the pipeline resolves a whole tile.",
              v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o,
              SGF_EXP_TERR_TILES * 256, SGF_EXP_TERR_TILES);
+    // THE ARRANGEMENT IS ASSERTED HERE TOO (UNPARK, 2026-09-27). This form's
+    // verdict is the `ifdef` arm and the clean arm held these checks, so
+    // `-BadVertex` COMPILED THEM OUT -- measured in arrangement 1 it sweeps 2
+    // tiles and issues 65 jobs, and asserted nothing whatever about them. It is
+    // the form where that mattered most: with the whole mesh batch refused, what
+    // the walk draws is TERRAIN ALONE, so this is the only run in which the
+    // sweep's output is separated from the mesh's by the control itself.
+    check_walk_arrangement();
     $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed, writing %0d pixel(s): TERRAIN's %0d tile(s) with the whole mesh refused.",
              geom_rp_poisoned_o, render_pixels_o, SGF_EXP_TERR_TILES);
     $finish;
@@ -9725,9 +9844,39 @@ module tb_zhao_console_core_smoke
     if (geom_clip_culled_o != terr_cf_emitted_o)
       $fatal(1, "SMOKE: -TerrainFlatLattice: GEOM.CLIP culled=%0d and TERRAIN.CLIPFEED emitted %0d -- a lattice at the eye's own height has NO screen area and every one of its triangles must be culled; a shortfall means some triangle acquired area from somewhere",
              geom_clip_culled_o, terr_cf_emitted_o);
-    if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
-      $fatal(1, "SMOKE: -TerrainFlatLattice: GEOM.SETUP took %0d triangle(s) and the MESH reference wants %0d -- with a flat lattice terrain must contribute none",
-             geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED);
+    // THE TIME MULTIPLEX REACHES THIS CONTROL TOO (UNPARK, 2026-09-27), and
+    // this check is the ONE of the five committed control forms that was
+    // ARRANGEMENT-DEPENDENT. Run in arrangement 1 it read
+    //
+    //   GEOM.SETUP took 50 triangle(s) and the MESH reference wants 14
+    //
+    // and 50 is 14 + 36, where 36 is exactly `geom_pw_tris_o`. So the
+    // assertion was not STALE -- it was CORRECT for arrangement 0 and
+    // incomplete for arrangement 1, because `triangles_submitted_o` is a
+    // LIFETIME counter and at `GEOM_WALK_RASTER = 1` GEOM.SETUP processes the
+    // live frame AND the walk's triangles through the same silicon. That is
+    // the architecture's central bet, not a defect, and the clean path one
+    // `else` away had already been taught it by SWAPCLOSE; this arm had not.
+    //
+    // IT IS FIXED BY A SECOND TERM AND NOT BY A SECOND NUMBER, which is what
+    // keeps it from being a weakening:
+    //
+    //   * at arrangement 0 `geom_pw_tris_o` is ZERO -- and that zero is not
+    //     assumed, it is separately asserted as part of the parked
+    //     arrangement's STRUCTURAL ZERO -- so this reduces character-for-
+    //     character to the check that was here. Arrangement 0 loses nothing.
+    //   * at arrangement 1 the walk's contribution is a NAMED TERM counted in
+    //     a DIFFERENT MODULE on a DIFFERENT REGISTER ENABLE, so a walk that
+    //     silently dropped or duplicated a triangle fails HERE as well as at
+    //     the raster door. The check is strictly stronger than it was.
+    //
+    // What this control exists for is untouched: TERRAIN must contribute
+    // NONE, and `SGF_EXP_ACCEPTED` is still the mesh's own reference count
+    // with no terrain term in it.
+    if (geom_setup_triangles_submitted_o != (SGF_EXP_ACCEPTED + geom_pw_tris_o))
+      $fatal(1, "SMOKE: -TerrainFlatLattice: GEOM.SETUP took %0d triangle(s) and the reference wants %0d mesh + %0d from the SDRAM walk = %0d -- with a flat lattice TERRAIN must contribute none. The walk term is `geom_pw_tris_o` and it is ZERO in the parked arrangement, so a nonzero here with the sweep parked is itself the fault.",
+             geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED, geom_pw_tris_o,
+             SGF_EXP_ACCEPTED + geom_pw_tris_o);
     $display("SMOKE: NOTE -TerrainFlatLattice: GEOM.CLIP culled %0d terrain triangle(s), all with verdict ZERO_AREA and all of them LAWFULLY. Layer A is the all-zero body every page carried until 2026-09-26, so every lattice vertex is at world y=0; this fixture's camera leaves world Y on screen Y with the eye at world y=0, the ground plane passes THROUGH the eye, and a plane through the eye projects to a line. `SMOKE: projcol` above prints the corners -- the three x differ and the y do not. The repair is in layer A (the plain run writes an affine ramp 20 m below the eye), NOT a tolerance on the zero-area test, which would admit a degenerate triangle and draw a wrong pixel.",
              geom_clip_culled_o);
 `else
@@ -11291,69 +11440,10 @@ module tb_zhao_console_core_smoke
     // A partial frame is not a smaller frame: `raster pixels` and every
     // texture counter in it are floors, and reading one as a total is how a
     // truncated run gets quoted as a measurement.
-    if (!geom_walk_raster_o) begin
-      // ---- ARRANGEMENT 0: THE SWEEP IS A STRUCTURAL ZERO ----------------
-      // Asserted, not skipped. `GEOM_WALK_RASTER = 0` gates GEOM.TILEWALK's
-      // `start_i`, so the sweep never begins and every one of these is zero by
-      // construction -- which means a build that accidentally half-engaged the
-      // arrangement (the door parked while the sequencer runs, which would
-      // hold `cl_o_ready` low and stop the console's geometry dead) fails
-      // HERE, loudly, instead of hanging.
-      if (geom_tw_tiles_o != 32'd0 || geom_tw_jobs_o != 32'd0 ||
-          geom_tw_door_o != 32'd0 || geom_pw_tris_o != 32'd0 ||
-          geom_pw_vread_o != 32'd0) begin
-        $fatal(1, "GEOM.TILEWALK: the walk arrangement is PARKED (`geom_walk_raster_o` low) but it moved -- tiles=%0d jobs=%0d door=%0d tris=%0d vread=%0d. Half an engaged arrangement is worse than either whole one.",
-               geom_tw_tiles_o, geom_tw_jobs_o, geom_tw_door_o,
-               geom_pw_tris_o, geom_pw_vread_o);
-      end
-      // AND THE PHASE GATE IS PART OF THAT STRUCTURAL ZERO (PHASEFIX).
-      // At `JOB_SRC = 0` `zhao_post_lease`'s WALK GATE generate branch is not
-      // elaborated, so both counters are tied literals. Asserted rather than
-      // assumed: a gate that quietly became live in the SHIPPED arrangement
-      // would delay every post phase for a sweep that never comes, and the
-      // symptom would be a console that stops publishing frames -- which is
-      // the single most expensive thing this change could get wrong.
-      if (geom_tw_phasehold_o != 32'd0 || geom_tw_phasesweeps_o != 32'd0) begin
-        $fatal(1, "POST.LEASE: the WALK GATE moved in the PARKED arrangement -- phasehold=%0d phasesweeps=%0d. It must not be elaborated at JOB_SRC=0.",
-               geom_tw_phasehold_o, geom_tw_phasesweeps_o);
-      end
-      $display("SMOKE: tilewalk   PARKED (GEOM_WALK_RASTER=0): the sweep is a structural zero and the binner's on-chip drain feeds the raster. Entry I55 is OPEN; see FINDINGS-swapclose.md section 5.");
-    end else if (tw_sweep_incomplete) begin
-      $fatal(1, "GEOM.TILEWALK: the sweep did not complete -- the frame above is PARTIAL");
-    end else begin
-      // ---- ARRANGEMENT 1: THE HOLD HAPPENED, AND IT ENDED (PHASEFIX) -----
-      // BOTH HALVES, because either alone is satisfiable by a broken gate.
-      // `phasesweeps != 1` catches a gate that never engaged (it would have
-      // released at `frame_end` exactly as before this change) and one that
-      // engaged twice. `phasehold == 0` catches a gate that was elaborated
-      // and then released on the same clock it armed -- which draws a correct
-      // picture ONLY if the sweep happened to be instantaneous, and is
-      // therefore a pass that does not mean what it says.
-      if (geom_tw_phasesweeps_o != 32'd1) begin
-        $fatal(1, "POST.LEASE: the WALK GATE completed %0d sweep(s), not 1. At JOB_SRC=1 the post phase must be held for exactly this frame's sweep.",
-               geom_tw_phasesweeps_o);
-      end
-      if (geom_tw_phasehold_o == 32'd0) begin
-        $fatal(1, "POST.LEASE: the WALK GATE reports ZERO held clocks. The sweep takes thousands, so a zero means the gate released on the clock it armed and the pixels below landed for some other reason -- read it as an instrument fault, not a fast console.");
-      end
-    end
-    if (geom_tw_jobs_o != geom_tw_door_o) begin
-      $fatal(1, "GEOM.TILEWALK: %0d job(s) issued but the raster door took %0d",
-             geom_tw_jobs_o, geom_tw_door_o);
-    end
-    if (geom_tw_failed_o != 32'd0) begin
-      $fatal(1, "GEOM.TILEWALK: %0d walk(s) ended badly", geom_tw_failed_o);
-    end
-    if (geom_tw_overlap_o != 32'd0) begin
-      $fatal(1, "GEOM.TILEWALK: %0d overlapping triangle offer(s)", geom_tw_overlap_o);
-    end
-    if (geom_pw_vread_o != 3 * geom_pw_tris_o) begin
-      $fatal(1, "GEOM.PARAMWALK: vertices read (%0d) is not three per emitted triangle (%0d)",
-             geom_pw_vread_o, geom_pw_tris_o);
-    end
-    if (geom_pw_vbad_o != 32'd0) begin
-      $fatal(1, "GEOM.PARAMWALK: the fetch arm refused %0d vertex record(s)", geom_pw_vbad_o);
-    end
+    // THE ARRANGEMENT VERDICT. Extracted to a task by UNPARK, 2026-09-27, so
+    // that EVERY form reaches it -- see `check_walk_arrangement`'s own header
+    // for the two that did not.
+    check_walk_arrangement();
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

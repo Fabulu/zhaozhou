@@ -290,24 +290,30 @@ param(
   [switch]$GlowTag,
 
   # ---------------------------------------------------------------------------
-  # -WalkRaster: THE OTHER ARRANGEMENT OF I55's SWAP, BUILDABLE (METASIDE)
+  # -BinnerDrain: THE RETAINED ORACLE, WHICH USED TO BE THE DEFAULT
   # ---------------------------------------------------------------------------
-  # `zhao_console_core`'s `GEOM_WALK_RASTER` ships PARKED at 0: the binner's
-  # on-chip drain feeds the raster, which is the complete oracle owner
-  # directive section 7 asks to keep. At 1 the SDRAM walk feeds it, which is
-  # what entry I55 asks for.
+  # `-WalkRaster` WAS HERE AND IS GONE, 2026-09-27 (UNPARK). It selected
+  # arrangement 1 while the console shipped PARKED at 0. The console now SHIPS
+  # at 1 -- `zhao_console_core.GEOM_WALK_RASTER`, whose comment carries the
+  # measurements -- so a switch meaning "select 1" would select the default and
+  # define a macro nothing reads. CLAUDE.md on exactly that: an inert directive
+  # left in place "reads as a guarantee" and the next reader inherits the
+  # guarantee instead of the measurement. It is REMOVED rather than kept as a
+  # no-op, so `-WalkRaster` now fails loudly against the param check below
+  # and whoever typed it reads this paragraph.
   #
-  # SWAPCLOSE measured arrangement 1 by HAND-EDITING the literal, and its whole
-  # FINDINGS is about numbers nobody else could reproduce without knowing that.
-  # This switch defines `ZHAO_CONSOLE_WALK_RASTER`, which selects 1, in its own
-  # build directory with its own tag.
+  # THIS SWITCH IS ITS MIRROR. It defines `ZHAO_CONSOLE_BINNER_DRAIN`, which
+  # selects `GEOM_WALK_RASTER = 0`: the binner's on-chip drain feeds the
+  # raster. That is the COMPLETE ORACLE owner directive section 7 requires be
+  # retained, and retiring it is refused independently of this flip.
   #
-  # POLARITY IS NOT INVERTED AND THIS IS NOT A CONTROL. It is the second
-  # arrangement of a shipped, parked capability, and what it asserts is the
-  # invariant belonging to THAT arrangement -- the sweep runs and completes --
-  # against the plain run's invariant that it is a structural zero. Both are
-  # required before the park may be called honest.
-  [switch]$WalkRaster,
+  # POLARITY IS NOT INVERTED AND THIS IS NOT A CONTROL. It is the other
+  # arrangement of a real capability, and what it asserts is the invariant
+  # belonging to THAT arrangement -- the sweep is a STRUCTURAL ZERO and the
+  # drain draws the picture -- against the shipped run's invariant that the
+  # sweep runs and completes. Both are required, both are now gated in ctest,
+  # and before the flip only one of them was.
+  [switch]$BinnerDrain,
 
   # ---------------------------------------------------------------------------
   # -MsMutFlat / -MsMutTail / -MsMutFrag: THE THREE ROUND-TRIP ASSERTIONS,
@@ -495,12 +501,17 @@ if (-not $BuildIn) {
          # EVERY NEW SWITCH NEEDS A TAG HERE. This one is 2026-09-26's.
          elseif ($NoTerrainMaterial) { 'zhao_console_core_smoke_notermat' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
-         # EVERY NEW SWITCH NEEDS A TAG HERE. This one is METASIDE's,
-         # and it matters more than most: this form builds a DIFFERENT
-         # ARRANGEMENT of the console, so sharing the plain run's object
-         # directory would mean the plain gate could run a walk-arranged
-         # binary and report the parked console's numbers.
-         elseif ($WalkRaster) { 'zhao_console_core_smoke_walkras' }
+         # THE ARRANGEMENT IS NOT AN ARM OF THIS CHAIN, and the switch that
+         # selects it used to be. UNPARK, 2026-09-27: `-WalkRaster` sat here as
+         # an `elseif`, so it could only ever build ONE of the two arrangements
+         # of a form -- `-Mutant -WalkRaster` took the `_mut` tag and verilated
+         # a WALK-ARRANGED console into the PARKED mutant's object directory.
+         # That is this chain's own documented collision arriving through the
+         # door marked "every new switch needs a tag" rather than past it: the
+         # switch HAD a tag, and the tag was still wrong, because an exclusive
+         # chain cannot express a MODIFIER. The arrangement selector is now an
+         # APPENDING modifier below, beside -LintOnly, and it is `-BinnerDrain`
+         # because the console SHIPS at arrangement 1 as of the same day.
          # EVERY NEW SWITCH NEEDS A TAG HERE. These two are 2026-09-27's, and
          # the UNCOVERED arm must come FIRST because it implies -FieldActive:
          # tested the other way round it would fall through to the positive
@@ -517,6 +528,14 @@ if (-not $BuildIn) {
          elseif ($MsMutTail) { 'zhao_console_core_smoke_msmuttail' }
          elseif ($MsMutFrag) { 'zhao_console_core_smoke_msmutfrag' }
          else { 'zhao_console_core_smoke' }
+  # -BinnerDrain COMBINES with every control form above, so like -LintOnly it
+  # APPENDS rather than joining the chain, and it must come BEFORE the -LintOnly
+  # append. UNPARK, 2026-09-27: running the five committed control forms in the
+  # OTHER arrangement is what needed this -- five forms times two arrangements
+  # is ten object directories, and an exclusive chain can express five. The
+  # arrangement is never a member of that chain, in either polarity, because it
+  # is not a control form: it is the machine every control form runs on.
+  if ($BinnerDrain) { $tag = "${tag}_bindrain" }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
   # whichever tag its companion chose and verilate into a directory a real run
@@ -535,6 +554,16 @@ if (-not $BuildIn) {
 }
 if (-not (Test-Path $BuildIn)) { New-Item -ItemType Directory -Path $BuildIn | Out-Null }
 $bd = (Resolve-Path $BuildIn).Path
+# PRINT THE OBJECT DIRECTORY. UNPARK, 2026-09-27: this script's tag chain
+# carries three separate paragraphs about two forms silently sharing a build
+# directory, and until this line the tag was UNOBSERVABLE from a run's own
+# output -- so "each form has its own tag" could only ever be read off the
+# source, never off the evidence. The collision it warns about is silent BY
+# CONSTRUCTION (the `*.o` are deleted before each compile, so the forms merely
+# rebuild each other), which means the log is the only place it could ever
+# have shown. A run that quotes its own directory lets a reader difference two
+# forms' logs and SEE that they were built apart.
+Write-Host "build dir: $bd"
 
 $top = 'tb_zhao_console_core_smoke'
 
@@ -588,9 +617,9 @@ if ($NoEchoArm) {
   $defs += '+define+ZHAO_SMOKE_NO_ECHO_ARM'
   Write-Host 'NEGATIVE CONTROL: the SetPost leaves POST.ECHO DISARMED (R35); the bench asserts no capture happens'
 }
-if ($WalkRaster) {
-  $defs += '+define+ZHAO_CONSOLE_WALK_RASTER'
-  Write-Host 'I55 ARRANGEMENT 1 (METASIDE): zhao_console_core GEOM_WALK_RASTER = 1 -- the SDRAM walk feeds the raster instead of the binner on-chip drain. DIRECT polarity. This is the SECOND ARRANGEMENT of a shipped parked capability, not a mutant: the plain run asserts the parked structural zero, this one asserts the sweep runs and completes. The console still SHIPS at 0.'
+if ($BinnerDrain) {
+  $defs += '+define+ZHAO_CONSOLE_BINNER_DRAIN'
+  Write-Host 'I55 ARRANGEMENT 0, THE RETAINED ORACLE (UNPARK): zhao_console_core GEOM_WALK_RASTER = 0 -- the binner on-chip drain feeds the raster instead of the SDRAM walk. DIRECT polarity. This is the OTHER ARRANGEMENT of a real capability, not a mutant: the shipped run asserts the sweep runs and completes, this one asserts it is a STRUCTURAL ZERO and the drain draws the picture. The console SHIPS at 1 as of 2026-09-27; owner directive section 7 requires this oracle be retained and it is, buildable and gated.'
 }
 if ($MsMutFlat) {
   $defs += '+define+ZHAO_MS_MUT_FLAT'

@@ -17035,6 +17035,36 @@ add_test(NAME console_core_smoke
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1)
 set_tests_properties(console_core_smoke PROPERTIES LABELS "prod;smoke")
 
+# ---------------------------------------------------------------------------
+# I55's RETAINED ORACLE, GATED (UNPARK, 2026-09-27)
+# ---------------------------------------------------------------------------
+# `zhao_console_core.GEOM_WALK_RASTER` was UN-PARKED to 1 on 2026-09-27, so the
+# plain test above now measures the SDRAM walk feeding the raster -- the shipped
+# console. This test is the other arrangement: `-BinnerDrain` selects 0, where
+# the binner's on-chip drain draws the picture.
+#
+# IT IS REGISTERED BECAUSE THE FLIP WOULD OTHERWISE HAVE COST COVERAGE, WHICH IS
+# THE ONE THING AN UN-PARK MUST NOT DO. While the constant read 0, arrangement 1
+# was reachable only through a switch that NO ctest ran -- so of the two
+# arrangements, exactly one was gated in CI and it was whichever one the constant
+# happened to name. Flipping the constant without this line would simply have
+# moved the ungated arrangement from 1 to 0, and the ungated one would then be
+# the COMPLETE ORACLE that owner directive section 7 requires be retained. An
+# oracle nobody runs is not retained, it is merely present.
+#
+# IT IS NOT AN INVERTED CONTROL and its polarity is DIRECT: it passes when the
+# parked console draws its own picture and the sweep is a STRUCTURAL ZERO --
+# `tilewalk tiles=0 jobs=0 door=0`, `paramwalk tris=0`, and POST.LEASE's walk
+# gate not elaborated at all (`phasehold=0 phasesweeps=0`). That last pair is
+# the assertion that matters most in this direction: a walk gate that quietly
+# became live in the arrangement with no sweep would hold every post phase for
+# a sweep that never comes, and the symptom is a console that stops publishing
+# frames.
+add_test(NAME console_core_smoke_binner_drain
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BinnerDrain)
+set_tests_properties(console_core_smoke_binner_drain PROPERTIES LABELS "prod;smoke")
+
 add_test(NAME console_core_slot_overflow_control
   COMMAND powershell -NoProfile -ExecutionPolicy Bypass
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -Mutant)
