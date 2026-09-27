@@ -5206,7 +5206,15 @@ module tb_zhao_console_core_smoke
         $fatal(1, "POST.LEASE: the WALK GATE moved in the PARKED arrangement -- phasehold=%0d phasesweeps=%0d. It must not be elaborated at JOB_SRC=0.",
                geom_tw_phasehold_o, geom_tw_phasesweeps_o);
       end
-      $display("SMOKE: tilewalk   PARKED (GEOM_WALK_RASTER=0): the sweep is a structural zero and the binner's on-chip drain feeds the raster. Entry I55 is OPEN; see FINDINGS-swapclose.md section 5.");
+      // THIS LINE USED TO SAY "PARKED ... Entry I55 is OPEN", and both halves
+      // went stale the moment the console was un-parked (UNPARK, 2026-09-27).
+      // `GEOM_WALK_RASTER = 0` is no longer the shipped default and no longer
+      // a park: it is the RETAINED ORACLE that owner directive section 7
+      // requires, reached by `-BinnerDrain`, and a reader who met the old
+      // wording in a log would conclude the console still ships from the
+      // on-chip drain. A bench message is prose, and prose cannot go stale
+      // loudly.
+      $display("SMOKE: tilewalk   ORACLE ARRANGEMENT (GEOM_WALK_RASTER=0): the sweep is a STRUCTURAL ZERO and the binner's on-chip drain feeds the raster. This is NOT the shipped console as of 2026-09-27 -- the console ships at 1, where the SDRAM walk feeds it -- it is the complete oracle owner directive section 7 requires be retained, and it draws the same picture. See entry I55's UNPARK section.");
     end else if (tw_sweep_incomplete) begin
       $fatal(1, "GEOM.TILEWALK: the sweep did not complete -- the frame above is PARTIAL");
     end else begin
