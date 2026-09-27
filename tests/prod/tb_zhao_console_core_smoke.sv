@@ -10188,6 +10188,57 @@ module tb_zhao_console_core_smoke
     // control.
     $display("SMOKE: bloom    cells_contributing=%0d disp_edge_clamps=%0d",
              post_bloom_cells_contributing_o, post_displacement_edge_clamps_o);
+    // ====================================================================
+    // THE DIAGNOSTICS FOR EVERY GATE BELOW, HOISTED ABOVE ALL OF THEM
+    // -- added 2026-09-27 (LASTGAP). This bench's THIRD instance of one
+    // lesson, and I committed the second one myself an hour earlier.
+    // ====================================================================
+    // FIELDACTIVE recorded it first: "Diagnostics printed AFTER the assertion
+    // they diagnose ... Moved upstream, reason written beside them." It fixed
+    // the FIELD counters. The MATERIAL WINDOW, the MOSAIC and the TEXTURE
+    // ISLAND all still printed below the assertions that fire on them --
+    // `matwin` at :10959, `mosaic` at :11037, both under the fragment-tag gate
+    // at :10266 and the sample gate at :10376. So each of those gates aborted
+    // the run printing the DIFFERENCE and none of the numbers that explain it.
+    //
+    // MY OWN FIRST ATTEMPT AT THIS PUT THE DISPLAY BELOW THE TAG GATE, which
+    // is the same mistake one line further down: `-FieldActive` fatals on the
+    // tag and never reached it, so the run bought nothing. It is above BOTH
+    // gates now. The lesson that generalises is not "hoist diagnostics" -- it
+    // is that a diagnostic's position must be checked against WHICH gate is
+    // actually firing, not against the one you were thinking about.
+    //
+    // `err[unpub]` IS THE ONE TO READ FIRST. `mat_win_err_unpublished_o` counts
+    // a triangle leaving the door with NO material published, which is exactly
+    // the producer that publishes `sample_count = 0` -- the cause the sample
+    // gate names in prose and could not evidence. A ZERO there says the
+    // shortfall is NOT an unpublished span, and sends the next reader at the
+    // recipe rather than at the window.
+    //
+    // `tile[max/or]` IS THE ONE TO READ SECOND, and it is the whole of clauses
+    // 3 and 4: the tile index is derived by subtraction from the ADDRESS the
+    // texture island issued on its fill requests, so it says which layer-E
+    // pick actually reached the mosaic.
+    //
+    // These DUPLICATE displays that also appear lower down. The later sites sit
+    // inside blocks with their own ordered assertions, and relocating them to
+    // win a diagnostic would be a bigger edit than the diagnostic is worth. A
+    // repeated $display costs a line of log and can never cost a run.
+    $display("SMOKE: early-diag matwin resolves=%0d switches=%0d occ_max=%0d no_record=%0d err[unpub/underflow]=[%0d %0d]",
+             mat_win_resolves_o, mat_win_switches_o, mat_win_occupancy_max_o,
+             mat_win_no_record_o, mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    $display("SMOKE: early-diag upload done=%0d published=%0d | material responses=%0d misses=%0d not_resident=%0d | texture frags=%0d samples=%0d plan=%0d disp=%0d refused=%0d",
+             upl_done_seen_q, upl_published_o,
+             mat_rsp_seen_q, mat_misses_o, mat_not_resident_o,
+             render_texture_fragments_o, render_texture_samples_o,
+             render_texture_plan_accepted_o, render_texture_dispatch_accepted_o,
+             render_texture_combine_refused_o);
+    $display("SMOKE: early-diag mosaic fills[tileset/mesh/stray]=[%0d %0d %0d] tile[max/or]=[%0d %0d] first_addr=%08x | gather frags=%0d [untagged=%0d below_knee=%0d lit=%0d reserved=%0d]",
+             tsfill_lines_q, meshfill_lines_q, strayfill_lines_q,
+             tsfill_tile_max_q, tsfill_tile_or_q, tsfill_first_addr_q,
+             gather_fragments_o, gather_frag_untagged_o, gather_frag_below_knee_o,
+             gather_frag_lit_o, gather_reserved_channel_o);
+
 `ifdef ZHAO_SMOKE_GLOW_TAG
     // POSITIVE, AND THE EQUALITY IS NOT THE ONE IT LOOKS LIKE IT SHOULD BE.
     // The obvious assertion -- "the tag was on every triangle, so all
