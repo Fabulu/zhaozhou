@@ -3434,6 +3434,20 @@ module tb_zhao_console_core_smoke
   // 1 MiB clear of the mesh row at 0x2000 and of MEM.UPLOAD's writable region
   // at 0x07FF_F000. A tileset's live extent is the WHOLE object -- the pick can
   // name any of its 256 tiles -- so `binding_row_legal` bounds `base + 1 MiB`.
+  // ---- LAYER E's AUTHORED BASE MATERIAL (MATCARRY, 2026-09-27) ------------
+  // See the layer-E writer for why these exist and why they are small.
+  // `TERR_E_OFF_C` and `TERR_CELL_EDGE_C` are `zhao_terrain_pagestream`'s
+  // `E_OFF` and `CELL_EDGE`; they are restated here because this bench writes
+  // the page and a silent divergence would author the plane in the wrong place.
+  localparam int unsigned TERR_E_OFF_C     = 7622;
+  localparam int unsigned TERR_CELL_EDGE_C = 32;
+  // matA and matB in DISJOINT ranges, so the picked tile names the arm taken.
+  localparam logic [7:0]  SGF_TERR_MAT_A_LO_C  = 8'd1;
+  localparam logic [7:0]  SGF_TERR_MAT_B_LO_C  = 8'd5;
+  localparam int unsigned TERR_MAT_SPAN_C      = 2;      // matA in 1..2, matB in 5..6
+  // The weight varies per cell, which is what makes the PICK vary per cell.
+  localparam logic [7:0]  SGF_TERR_WEIGHT_LO_C = 8'h30;
+  localparam int unsigned TERR_WEIGHT_SPAN_C   = 160;    // 0x30 .. 0xCF
   localparam logic [31:0] TERR_TS_BASE_C  = 32'h0010_0000;
   localparam logic [31:0] TERR_TS_MODE_C  = 32'h0020_66A0;
   // {valid, palette_generation[7:0], palette_slot[1:0]} = {1, 0, 0}: the pair
@@ -5242,6 +5256,81 @@ module tb_zhao_console_core_smoke
         end
     end
 `endif
+
+    // ---- LAYER E: THE BASE MATERIAL, AND WHY IT WAS NEVER WRITTEN ----------
+    // NEW 2026-09-27 (MATCARRY). Until today this bench authored layer A and
+    // NOTHING ELSE in the page body: bytes [2242, 21320) were the `64'd0` the
+    // arena fill above leaves, so every one of the 1,024 layer-E cells read
+    // `{matA = 0, matB = 0, weight = 0}`.
+    //
+    // THAT WAS INVISIBLE, AND THE REASON IT WAS INVISIBLE IS THE POINT.
+    // `terrmat mat_cells=1024` asserts the layer-E FILL IS COMPLETE and it was
+    // true the whole time -- 1,024 cells really were written, with the value
+    // zero. It counts CELLS, not VALUES, so it is blind to the field that
+    // matters here. And the mosaic's anti-vacuity check below
+    // (`tsfill_tile_max_q != 0`) passed for a reason that had nothing to do
+    // with the mosaic: `zhao_console_core`'s `base_rgb` was the named constant
+    // `MAT_BASE_RGB_C = 24'hFF_FF_FF`, so matA and matB reached the pick as
+    // `8'hFF` REGARDLESS OF THE PAGE, and every tileset fill landed in tile
+    // 255. A constant was standing in for the terrain's material.
+    //
+    // I34's carriage (MATCARRY) replaced that constant with the triangle's own
+    // composed triple, so the pick now reads what the PAGE says -- and the page
+    // said zero, which made `tile_max` 0 and fired the check. The check was
+    // right; the fixture had a hole in it.
+    //
+    // SO THIS IS NOT A GATE BEING RELAXED TO LET A CHANGE THROUGH. It is the
+    // plane the fixture never authored, and supplying it makes that assertion
+    // STRICTLY STRONGER: it stops being satisfiable by a composer-side constant
+    // and starts requiring the page's own bytes to traverse GEOM.CLIPDOOR,
+    // GEOM.CLIP, GEOM.SETUP and the shell to the binding resolver's
+    // displacement.
+    //
+    // THE VALUES ARE NAMED, EDITABLE CONSTANTS and are chosen to be
+    // DISCRIMINATING while perturbing nothing else:
+    //
+    //   * matA and matB come from DISJOINT ranges, so the tile the pick names
+    //     says WHICH ARM of `pick = p < weight ? mat_a : mat_b` was taken.
+    //     A pick stuck on one side is visible as a `tile_or` missing the other
+    //     range's bits.
+    //   * both are SMALL and few, so the fill socket touches a handful of
+    //     tiles rather than hundreds. That keeps the cache-miss count near
+    //     where it was; the only assertion on fills is the RELATIONAL
+    //     `beats == lines * 8`, which holds at any number of lines.
+    //   * the weight VARIES PER CELL, which is what makes the pick vary per
+    //     cell -- and a per-cell-varying pick is exactly the property I34's
+    //     carriage exists to deliver.
+    //   * the fill socket serves `TEX_TEXEL_C` at EVERY address, so changing
+    //     WHICH tile is fetched cannot change a pixel. `raster pixels` stays
+    //     2,816 and the framebuffer/capture comparisons stay at 0 words
+    //     differing -- checked, not assumed.
+    //
+    // Written BEFORE the CRC fold below, like layer A, so the page still seals
+    // against its own bytes.
+    //
+    // Layout, from `spec/terrain_rules.md` and verified against the RTL that
+    // reads it: `zhao_terrain_pagestream.sv:123` `E_OFF = 7622`, `:321-323`
+    // `CELL_EDGE = 32`, `CELLS = 1024`, `E_BYTES = 3072`, `:458-462`
+    // `cell_idx = vj * 32 + vi` with the cell's three bytes at
+    // `E_OFF + 3 * cell_idx`, and `:553-555` `e_byte(0,1,2)` =
+    // `{mat_a, mat_b, weight}`.
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      automatic int unsigned pbase = PAGE0_OFF_C + r * PAGE_BYTES_C;
+      for (int unsigned cj = 0; cj < TERR_CELL_EDGE_C; cj++)
+        for (int unsigned ci = 0; ci < TERR_CELL_EDGE_C; ci++) begin
+          automatic int unsigned cidx = cj * TERR_CELL_EDGE_C + ci;
+          automatic int unsigned ea   = pbase + TERR_E_OFF_C + 3 * cidx;
+          automatic logic [7:0]  ma   = SGF_TERR_MAT_A_LO_C +
+              8'((5 * ci + 11 * cj) % TERR_MAT_SPAN_C);
+          automatic logic [7:0]  mb   = SGF_TERR_MAT_B_LO_C +
+              8'((13 * ci + 3 * cj) % TERR_MAT_SPAN_C);
+          automatic logic [7:0]  wq   = SGF_TERR_WEIGHT_LO_C +
+              8'((7 * ci + 9 * cj) % TERR_WEIGHT_SPAN_C);
+          hps_mem[ ea      >> 3][8*( ea      % 8) +: 8] = ma;
+          hps_mem[(ea + 1) >> 3][8*((ea + 1) % 8) +: 8] = mb;
+          hps_mem[(ea + 2) >> 3][8*((ea + 2) % 8) +: 8] = wq;
+        end
+    end
 
     // ---- AND ITS BODY CRC, FOLDED OVER THE BYTES THAT ARE ACTUALLY THERE ---
     // Same standing caveat as the record list's fold, stated again rather than

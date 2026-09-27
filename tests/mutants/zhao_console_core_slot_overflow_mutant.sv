@@ -171,7 +171,7 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
   // The per-primitive rider GEOM.CLIP carries beside `src_id`:
   // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
-  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  parameter int unsigned GEOM_VID_RIDERW = 32 + 16 + 32 + 2,
   // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
   // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
   parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,

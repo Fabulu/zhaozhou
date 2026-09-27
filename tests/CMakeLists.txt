@@ -7505,6 +7505,68 @@ add_test(NAME lint_terrain_clipfeed
 set_tests_properties(lint_terrain_clipfeed PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# THE POSITIVE CONTROL for I34's per-triangle material token (MATCARRY,
+# 2026-09-27)
+# ---------------------------------------------------------------------------
+# `terrain_clipfeed_mat_directed` section 7 asserts the token arrives WITH ITS
+# OWN TRIANGLE. No legal stimulus can make that fail -- the block latches the
+# token by the same enable as the corners -- so its silence is a claim and owes
+# a committed mutant (CLAUDE.md, "a detector that has not been shown to FIRE
+# has not been tested").
+#
+# `tests/mutants/zhao_terrain_clipfeed_tokenskew_mutant.sv` is a WRAPPER around
+# the real block, not a copy, so `mutant_copy_drift.py` has nothing to go stale.
+# Its one change hands the block the PREVIOUS accepted triangle's token -- the
+# `u_geom_tidq` fault reproduced in this arm.
+#
+# THE POLARITY IS INVERTED: it PASSES when the equality fires on all twelve
+# triangles and when every triangle from the second on received exactly its
+# predecessor's token. The NEGATIVE CONTROL is
+# `terrain_clipfeed_mat_directed`, the same bench built WITHOUT the define,
+# which must report zero mismatches -- the control CLAUDE.md requires for every
+# macro-selected mutant, because a `-D` that never engaged fails SILENTLY.
+#
+# ITS OWN PREFIX (`Vtb_terrain_clipfeed_skew`) so it cannot share the clean
+# run's verilate directory.
+add_executable(test_terrain_clipfeed_tokenskew_mutant
+               mutants/terrain_clipfeed_tokenskew_mutant.cpp)
+target_link_libraries(test_terrain_clipfeed_tokenskew_mutant PRIVATE zhao_harness)
+verilate(test_terrain_clipfeed_tokenskew_mutant
+  PREFIX Vtb_terrain_clipfeed_skew
+  TOP_MODULE tb_terrain_clipfeed_mat
+  VERILATOR_ARGS -DZHAO_MUT_TOKEN_SKEW
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_clipfeed_tokenskew_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_clipfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shademod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_overw_sat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_clipfeed_mat.sv)
+add_test(NAME terrain_clipfeed_tokenskew_mutant
+         COMMAND test_terrain_clipfeed_tokenskew_mutant)
+set_tests_properties(terrain_clipfeed_tokenskew_mutant PROPERTIES
+  LABELS "fast;nightly;mutant" TIMEOUT 600)
+
+add_test(NAME lint_terrain_clipfeed_tokenskew_mutant
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_clipfeed_tokenskew_mutant
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/terrain
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/geometry
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/raster
+                 -I${CMAKE_SOURCE_DIR}/fpga/rtl/field
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_clipfeed.sv
+                 ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_clipfeed_tokenskew_mutant.sv)
+set_tests_properties(lint_terrain_clipfeed_tokenskew_mutant PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ---------------------------------------------------------------------------
 # TERRAIN.PATCH (phase 6, ZH-033)
 #
