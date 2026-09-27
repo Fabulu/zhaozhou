@@ -5372,3 +5372,61 @@ Reversible in the way that matters: `git worktree remove` refuses a dirty tree
 and does not delete branches, so no work is lost and any checkout can be
 recreated. The 15 dirty ones (including `gz-tagphase`, which holds its raw run
 logs) and the 2 unmerged branches are untouched.
+
+### 2026-09-28 - THE TEST TREE COULD NOT CONFIGURE, AND A WORKING SMOKE HID IT
+
+**`cmake --preset` FAILED OUTRIGHT**, so nothing in `build/` could be rebuilt by
+anyone. Cause: `tests/terrain/tb_terrain_matpub.sv:164` subtracted two
+27-bit (`ZHAO_VRAM_ADDR_BITS`) operands into a 32-bit wire; verilate runs
+`-Wall`, so two WIDTHEXPAND warnings became *"%Error: Exiting due to 2
+warning(s)"*, which failed the `verilate()` call, which failed the configure.
+
+**THIS IS THIS CAMPAIGN'S OWN DEFECT AND IT HID FOR A DAY BEHIND A GREEN
+SMOKE.** `run_console_core_smoke.ps1` verilates into its **own TEMP workspace**,
+so every console form built and passed all day while `build/` was
+unconfigurable. **A green that comes from a different build tree says nothing
+about this one** -- a new variant of the stale-binary family, where the lie is
+not an old binary but a *different tree entirely*.
+
+It also surfaced an older one: `build.ninja` still referenced
+`fpga/rtl/geometry/zhao_geom_chunkser.sv`, retired by `ea8f1e34`, and could not
+regenerate itself -- the documented trap whose only fix is `cmake --preset`.
+Both cleared; configure now RC 0.
+
+### THIS CAMPAIGN'S NEW TESTS, VERIFIED IN **THIS** TREE FOR THE FIRST TIME
+
+They had only ever run in packet worktrees, because `build/` has been
+unconfigurable:
+
+```
+walk_meta_hold_directed    RC=0   33 checks, 0 failures
+terrain_matpub_directed    RC=0   46 checks, 0 failures
+terrain_matjoin_directed   RC=0
+field_earth_adapter_directed RC=0  141 checks passed
+```
+
+### I ATTEMPTED THE ARM (a) REMOVAL AND REVERTED IT
+
+The investigation went further than the decision record: **`zhao_terrain_veljoin`
+is a PURE COMBINATIONAL FORK** -- `fork_open = (state == StRun)`,
+`both_ready = p_ready_i && v_ready_i` -- with **no vertex-scoped state at all**.
+So arm (a) is not merely mis-wired: the quantity it wants **does not exist
+anywhere in this composition**, and there is nothing on the consumer's side to
+difference `vtx_live` against.
+
+I removed the arm. The directed test then failed **one** check of 141:
+
+```
+FAIL: case 9b: the shadow guard FIRES on a consumer that disagrees: expected 0x1, got 0x0
+```
+
+**Case 9b is a committed POSITIVE CONTROL for arm (a).** Deleting a guard's
+positive control at the end of a long session is exactly what my own decision
+record forbade -- *"a packet with a test, not an edit; landing a rewritten
+safety detector unreviewed would repeat the mistake this note exists to
+correct."* **Reverted**, and the adapter re-verified at 141/141.
+
+**The attempt was not wasted: the case-9b coupling is NEW information that
+changes the packet's scope**, and it is now known rather than discovered
+mid-change by whoever picks it up. The packet must decide what becomes of 9b,
+because the property it asserts is one this composition cannot have.
