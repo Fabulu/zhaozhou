@@ -108,6 +108,64 @@ inline MaterialState compose_material(MaterialState authored, const MaterialWrit
   return out;
 }
 
+/* ---------------------------------------------------------------------------
+ * THE 32-BIT MATERIAL TOKEN, v1 -- the transport, NOT the law.
+ * ---------------------------------------------------------------------------
+ * `compose_material` above is the ratified law and it speaks TRIPLES. The
+ * Earth record's out-lane 2 is a flat 32-bit word (`zhao_field_earth_adapter`'s
+ * `material_o` and `zhao_terrain_patch_acc`'s `out_mat_0..3_o` are `[31:0]` at
+ * every hop). Nothing in this project mapped between those two shapes, which is
+ * what entry I34 records as material's actual blocker: not a missing port, an
+ * absent encoding.
+ *
+ * THE LOW 24 BITS ARE THE TREE'S EXISTING CONVENTION, PRESERVED, not a fresh
+ * choice: `zhao_terrain_compcache_front.sv` packs its layer-E plane as
+ * `{matA, matB, weight}` and unpacks `[23:16]/[15:8]/[7:0]`, and
+ * `zhao_texture_island_v3_top.sv` reads the mosaic's matA/matB from
+ * `base_rgb[23:16]`/`[15:8]`. A second byte order here would have been a rival
+ * statement of a settled layout.
+ *
+ * THE TOP BYTE IS A VERSION TAG AND IT EXISTS TO MAKE REFUSAL POSSIBLE. Every
+ * 24-bit pattern is a LEGAL material -- `spec/terrain_rules.md` sec 6.2 gives
+ * weight 0 and 255 meanings -- so without a tag there is no way to distinguish
+ * a real result from an unwritten lane, and the ratified presence rule is that
+ * "an absent output is not a write of zero". Token `0` has tag `0x00` and is
+ * therefore REFUSED rather than decoding as the perfectly legal triple
+ * {0,0,0}. Consumers COUNT a refusal; they never substitute for one.
+ *
+ * The fabric half is `fpga/rtl/common/zhao_material_token_pkg.sv`, function for
+ * function; `spec/qformats.md` sec 14 is the prose both are written against.
+ */
+
+/** v1 tag. Mnemonic: Earth material, revision 1. */
+static constexpr uint8_t kMaterialTokenTagV1 = 0xE1u;
+
+/** Pack a composed triple into the 32-bit out-lane word. */
+inline uint32_t material_token_encode(MaterialState m) {
+  return (static_cast<uint32_t>(kMaterialTokenTagV1) << 24) |
+         (static_cast<uint32_t>(m.mat_a) << 16) | (static_cast<uint32_t>(m.mat_b) << 8) |
+         static_cast<uint32_t>(m.weight);
+}
+
+/** True when `tok` carries the v1 tag. The caller checks this BEFORE decoding. */
+inline bool material_token_tag_ok(uint32_t tok) {
+  return static_cast<uint8_t>(tok >> 24) == kMaterialTokenTagV1;
+}
+
+/**
+ * Decode a v1 token. Returns false and leaves `*out` UNTOUCHED when the tag is
+ * not v1 -- the caller keeps whatever it already had, which on the terrain path
+ * is the authored layer-E triple. Deliberately not "returns {0,0,0} on
+ * failure": that is a legal material and would render.
+ */
+inline bool material_token_decode(uint32_t tok, MaterialState* out) {
+  if (!material_token_tag_ok(tok)) return false;
+  out->mat_a = static_cast<uint8_t>(tok >> 16);
+  out->mat_b = static_cast<uint8_t>(tok >> 8);
+  out->weight = static_cast<uint8_t>(tok);
+  return true;
+}
+
 /**
  * NAV: SIGNED movement-cost deltas, combined by SATURATING ADDITION in command
  * order, then clamped at zero below.
