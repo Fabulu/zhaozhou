@@ -2544,32 +2544,60 @@ module tb_zhao_console_core_smoke
   // like a routing defect and be nothing but a race in the bench.
   //
   // =========================================================================
-  // THE COMMIT PRECEDES THE LOAD WORDS. REPAIRED 2026-09-27 (NOPROG). THE
-  // ORDER USED TO BE THE OTHER WAY ROUND, AND THAT IS WHY THE FIRST FIELD THIS
-  // CONSOLE EVER INSTALLED ANSWERED `noprog` 1,089 TIMES.
+  // THE HEADER IS WRITTEN TWICE, AND IT HAS TO BE. REPAIRED 2026-09-27
+  // (NOPROG), AFTER MEASURING THAT TWO PRODUCTION LAWS PULL OPPOSITE WAYS.
+  // THIS IS WHY THE FIRST FIELD THIS CONSOLE EVER INSTALLED ANSWERED `noprog`
+  // 1,089 TIMES.
   // =========================================================================
-  // `zhao_field_progcache`'s header states the two-phase law: "Phase B,
-  // COMMIT: only after a miss ... insert into the first free slot, else evict
-  // the least-recently-used entry", answering INSERTED **with a slot**. THE
-  // COMMIT IS THE ALLOCATOR. So `zhao_field_host_v2:1448` does this, by design
-  // and with its reason written beside it -- "an insert invalidates the slot's
-  // program AND its init proof ... the directory has promised the slot to a
-  // new hash":
+  // TWO GUARDS, BOTH DELIBERATE, BOTH WITH THEIR REASONS WRITTEN BESIDE THEM,
+  // AND NO SINGLE ORDERING OF ONE STAGING PASS SATISFIES BOTH:
   //
-  //     if (pc_cm_valid_i && pc_cm_ready_o && pc_cm_ok_i) begin
-  //       hdr_loaded[pc_cm_slot_c] <= 1'b0;
+  //   `zhao_field_doorbell:429`   wire head_refuse = head_is_commit && !head_hdr_ok;
+  //      A COMMIT for a slot whose HEADER was never written is REFUSED without
+  //      touching the directory. => THE HEADER MUST COME BEFORE THE COMMIT.
   //
-  // The previous order here was INSTALL -> LOAD words (header last) -> COMMIT.
-  // The header set `hdr_loaded[0]`; the commit that followed CLEARED it. Every
-  // request then met `gnoprog_c = req_noprog_i[pick_id] || !hdr_loaded[gslot_c]`
-  // (`zhao_field_host_v2:1306`) and came back 0xF0.
+  //   `zhao_field_host_v2:1448`   if (pc_cm_valid_i && pc_cm_ready_o && pc_cm_ok_i)
+  //                                 hdr_loaded[pc_cm_slot_c] <= 1'b0;
+  //      A successful insert invalidates the slot's program and its init proof,
+  //      because "the directory has promised the slot to a new hash".
+  //      => THE HEADER MUST COME AFTER THE COMMIT TO BE RUNNABLE.
   //
-  // WHY IT READ AS A DEFECT IN PRODUCTION RTL AND IS NOT ONE. That 0xF0 is the
-  // ONLY symptom, and the counter reporting it -- `fld_earth_noprog_o` --
-  // increments in the adapter's `E_WAIT` on the ENGINE's reply, not on the
-  // adapter's own binding flag. `gnoprog_c` is an OR of two independent causes,
-  // so NEITHER `fldearth noprog` NOR `fldhost noprog` can say which one fired.
-  // The fingerprint (1,089 = 33x33) matches the intake-versus-replay race that
+  // MEASURED, BOTH DIRECTIONS, ON THIS BENCH:
+  //   header then commit  -> commit OK, `hdr_loaded` cleared, every request
+  //                          answered 0xF0: `fldearth noprog=1089 runs=0`.
+  //   commit then header  -> doorbell law 2 refuses the commit, `commit_ok`
+  //                          stays 0, the frame gate never opens and the
+  //                          packet DMA never starts: `dma_done=0`,
+  //                          "GEOM.REPLAY released no meshlet".
+  //
+  // THE RESOLUTION THAT REMOVES NO GUARD. The header is written LAST among the
+  // load words (satisfying the doorbell), the COMMIT allocates the slot, and
+  // THE HEADER LOAD WORD IS THEN RE-POSTED (satisfying the host). The doorbell
+  // clears its own `hdr_written` shadow on the same insert (`:684`), so the two
+  // flags stay in step and the re-post lifts both. Nothing is narrowed, no law
+  // is relaxed, and the re-posted word is the generator's own word 42 rather
+  // than anything this bench composes.
+  //
+  // THAT THE RECOVERY WORKS IS NOT ASSUMED HERE. `tests/field/
+  // field_host_v2_directed.cpp` FT029 pins it at the leaf: a successful insert
+  // un-loads the slot (step 3) and re-writing the HEADER ALONE restores it
+  // (step 4), with the microcode, output map and association shown to have
+  // survived. The commit invalidates a MARK; it does not destroy a PROGRAM.
+  //
+  // THE CONTRADICTION IS A REAL FINDING AND IS NOT FIXED HERE. Reconciling it
+  // belongs in production RTL -- either the doorbell's law 2 admits a commit
+  // that ALLOCATES for a not-yet-loaded slot, or the host stops invalidating an
+  // insert into a slot whose hash is the one already there. Both change a
+  // guard, so both are decisions rather than repairs, and a bench is the wrong
+  // place to take them. See FINDINGS-NOPROG.md.
+  //
+  // WHY IT READ AS A DEFECT IN THE EARTH ADAPTER AND IS NOT ONE. The 0xF0 is
+  // the ONLY symptom, and `fld_earth_noprog_o` increments in the adapter's
+  // `E_WAIT` on the ENGINE's reply, not on the adapter's own binding flag.
+  // `zhao_field_host_v2:1306` is `gnoprog_c = req_noprog_i[pick_id] ||
+  // !hdr_loaded[gslot_c]` -- one counter, two independent causes, ORed -- so
+  // NEITHER `fldearth noprog` NOR `fldhost noprog` can say which fired. The
+  // fingerprint (1,089 = 33x33) matches the intake-versus-replay race that
   // `zhao_field_earth_adapter.sv`'s own header documents verbatim, so that is
   // what it was read as. IT WAS NOT THAT. `fldlist open_at_patch=0` says no
   // patch job was ever taken while the list was open -- the ordering that race
@@ -2578,14 +2606,39 @@ module tb_zhao_console_core_smoke
   //
   // THIS COMMENT BLOCK USED TO CARRY ITS OWN REFUTATION. A few lines above it
   // still says "HEADER IS LAST because the header is what marks the slot
-  // runnable" -- and then sequenced the commit after it. Both sentences were
-  // written in the same commit. That is HANDOVER-20260919 15.35's shape: a
-  // document holding the claim and its refutation within a few lines, with
-  // nobody differencing the two.
+  // runnable" -- true, and then it sequenced the commit after it, which unmarks
+  // it. Both sentences were written in the same commit. That is
+  // HANDOVER-20260919 15.35's shape: a document holding the claim and its
+  // refutation within a few lines, with nobody differencing the two.
   localparam int unsigned FLD_STEP_INSTALL_C = 0;
-  localparam int unsigned FLD_STEP_COMMIT_C  = 1;
-  localparam int unsigned FLD_STEP_LOAD0_C   = 2;
-  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_LOAD0_C + SFF_N_LOAD;
+  localparam int unsigned FLD_STEP_LOAD0_C   = 1;
+  localparam int unsigned FLD_STEP_COMMIT_C  = FLD_STEP_LOAD0_C + SFF_N_LOAD;
+  localparam int unsigned FLD_STEP_REHDR_C   = FLD_STEP_COMMIT_C + 1;
+  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_REHDR_C + 1;
+  // The header is the LAST load word the generator emits, and the re-post
+  // step replays exactly that word -- it is not a word this bench composes.
+  localparam int unsigned FLD_HDR_IDX_C      = SFF_N_LOAD - 1;
+
+  // ENTRY I42's PROBE MUST NOT AIM AT THE STAGED SLOT, AND UNDER -FieldActive
+  // SLOT 0 IS THE STAGED SLOT. MEASURED 2026-09-27 (NOPROG).
+  //
+  // The probe's whole meaning is "a COMMIT for a slot whose HEADER was never
+  // written is REFUSED" -- doorbell law 2, fired with legal stimulus in the
+  // smoke itself. In the plain form slot 0 has no header and it fires. Once
+  // this mode stages a real program into slot 0 AND re-posts its header, slot 0
+  // DOES have a header, so the probe's commit is ACCEPTED instead of refused.
+  //
+  // THAT COST BOTH THINGS AT ONCE, AND THE SECOND IS THE ONE THAT BITES:
+  //   * `fld_db_commits_refused_o` went 1 -> 0, so I42's evidence evaporated
+  //     while its assertion still demanded 1;
+  //   * and the accepted commit INSERTED, which cleared `hdr_loaded[0]` a
+  //     SECOND time -- undoing the re-posted header and returning the console
+  //     to `runs=0 noprog=1089`. Measured: `db_commits=2 db_commits_refused=0`.
+  //
+  // So the probe moves to a slot this mode never stages. Its stimulus is
+  // unchanged in kind -- still a commit against a header-less slot -- and the
+  // plain form's probe is untouched at slot 0.
+  localparam logic [2:0] FLD_PROBE_SLOT_C = 3'd7;
 
   localparam logic [31:0] FLD_TICKET_IN = 32'hFD10_0010;
   localparam logic [31:0] FLD_TICKET_LD = 32'hFD10_0020;
@@ -2671,6 +2724,18 @@ module tb_zhao_console_core_smoke
           fld_db_post_hash_i   <= SFF_BODY_CRC;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_IN;
+        end else if (fld_stage_step_q == FLD_STEP_REHDR_C) begin
+          // THE HEADER, RE-POSTED. Byte for byte the generator's own last load
+          // word; the commit above cleared `hdr_loaded` (and the doorbell's
+          // `hdr_written` shadow with it), and this is what lifts them again.
+          fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
+          fld_db_post_kind_i   <= SFF_LD_KIND[FLD_HDR_IDX_C];
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= SFF_LD_ADDR[FLD_HDR_IDX_C];
+          fld_db_post_data_i   <= SFF_LD_DATA[FLD_HDR_IDX_C];
+          fld_db_post_hash_i   <= 32'd0;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_LD;
         end else if (fld_stage_step_q == FLD_STEP_COMMIT_C) begin
           // THE COMMIT, AND IT IS THE ALLOCATOR RATHER THAN A RECEIPT. It runs
           // BEFORE the load words, because a successful insert clears
@@ -2692,7 +2757,7 @@ module tb_zhao_console_core_smoke
           // these fields -- kind, address and the 96-bit payload are all the
           // lowered HostPlan's, which is what keeps 13.7's "may not hand the
           // patch ... an untracked association" satisfied. THE HEADER IS LAST
-          // among these, and the commit no longer follows it.
+          // among these, which is what lets the COMMIT past doorbell law 2.
           fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
           fld_db_post_kind_i   <= SFF_LD_KIND[fld_stage_step_q - FLD_STEP_LOAD0_C];
           fld_db_post_slot_i   <= 3'(SFF_SLOT);
@@ -2713,13 +2778,13 @@ module tb_zhao_console_core_smoke
         if (fld_probe_step_q == 2'd0) begin
           fld_db_post_op_i     <= 2'd2;                  // LOOKUP
           fld_db_post_hash_i   <= 32'hFEED_BEEF;
-          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_slot_i   <= FLD_PROBE_SLOT_C;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_LU;
         end else begin
           fld_db_post_op_i     <= 2'd1;                  // COMMIT, no header
           fld_db_post_hash_i   <= 32'hFEED_BEEF;
-          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_slot_i   <= FLD_PROBE_SLOT_C;
           fld_db_post_ok_i     <= 1'b1;
           fld_db_post_ticket_i <= FLD_TICKET_CM;
         end
@@ -3643,11 +3708,14 @@ module tb_zhao_console_core_smoke
       //
       // `fld_db_load_words_o` is the HOST's own count of load words it has
       // CONSUMED, not posts the mailbox has accepted, so it is the signal that
-      // means the microcode is in. `SFF_N_LOAD` is the generator's word count,
-      // so the two cannot drift: change the program and both move together.
+      // means the microcode is in. `SFF_N_LOAD + 1` is the generator's word
+      // count plus the RE-POSTED HEADER, so the two cannot drift: change the
+      // program and both move together. The `+ 1` is load-bearing -- without it
+      // the frame can open on the pre-commit header, which is the state that
+      // answered 0xF0 1,089 times.
       if (pkt_armed_q && reset_released_q && (fld_install_ok_q != 32'd0) &&
           (fld_commit_ok_q != 32'd0) && fld_stage_done_q &&
-          (fld_db_load_words_o >= 32'(SFF_N_LOAD)) && (ring_writes_q == 0)) begin
+          (fld_db_load_words_o >= 32'(SFF_N_LOAD + 1)) && (ring_writes_q == 0)) begin
 `else
       if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
 `endif
