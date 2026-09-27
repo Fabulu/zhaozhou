@@ -483,6 +483,28 @@ module zhao_shell_top_v2
   input  logic               walk_job_first_i,
   input  logic               walk_job_last_i,
   output logic        [31:0] walk_jobs_taken_o,
+  // ---- I55's PHASE INTERLOCK (PHASEFIX, 2026-09-27) --------------------------
+  // GEOM.TILEWALK's `active_o`, and it is the piece the door was missing.
+  //
+  // The door let the walk's JOBS reach `u_tile`. It did not stop POST from
+  // taking RASTER.FBWRITE's pixel port away while those jobs were still being
+  // drawn -- `rpx_ready` below is `!post_phase_w && fbw_px_ready`, and the
+  // sweep runs strictly AFTER the `frame_end` that arms the post pass, because
+  // it reads an arena that `frame_end` is what seals. So the walk produced its
+  // pixels correctly and had nowhere to put them, for eight packets.
+  //
+  // `u_post_lease` holds the phase shut on this level; see its WALK GATE
+  // header for why `raster_quiet_i` cannot do it (that signal watches the
+  // BINNER, which issues nothing in this arrangement, so it is honestly TRUE
+  // while the machine about to draw the frame has not started).
+  //
+  // READ ONLY AT `JOB_SRC = 1`. In arrangement 0 the lease's gate is not
+  // built, so this input has no reader and the shipped console is unchanged.
+  input  logic               walk_sweep_active_i,
+  // Clocks the post phase was held for the sweep, and sweeps completed under
+  // the hold. Structural zeros in arrangement 0.
+  output logic        [31:0] walk_phase_hold_clocks_o,
+  output logic        [31:0] walk_phase_sweeps_o,
   // ---- D22 TREAD 10: the geometry memory clients -----------------------------
   // The last thing the bench still PLAYED was memory itself. Every earlier
   // tread took something the bench supplied and gave it to a composed block;
@@ -1721,7 +1743,14 @@ module zhao_shell_top_v2
   // Reads in flight on ENGINE0 (owner ruling R38): the lease's share and the
   // read-beat `last` queue below are sized by this ONE number.
   localparam int unsigned POST_E0_MAX_RD = 2;
-  zhao_post_lease #(.XW(9), .YW(8), .MAX_RD(POST_E0_MAX_RD)) u_post_lease (
+  // `WALK_GATE` IS `JOB_SRC`, NOT A SECOND KNOB. The door and the phase
+  // interlock are two halves of ONE arrangement: a console with the door open
+  // and the gate shut draws nothing (I55 for eight packets), and one with the
+  // gate built and the door shut would hold the post phase for a sweep whose
+  // jobs cannot reach the raster. Passing the same parameter makes disagreeing
+  // about it unrepresentable rather than merely discouraged.
+  zhao_post_lease #(.XW(9), .YW(8), .MAX_RD(POST_E0_MAX_RD), .WALK_GATE(JOB_SRC))
+                  u_post_lease (
     .clk(gpu_clk), .rst_n(rst_n),
     // The renderer's live lease: the one the render guard's window comes from.
     .lease_live_i  (rmap_valid_q),
@@ -1730,6 +1759,7 @@ module zhao_shell_top_v2
     .raster_quiet_i(v2_bin_quiet_w),
     .raster_px_i   (rpx_valid),
     .fbw_drained_i (fbw_drained_w),
+    .walk_active_i (walk_sweep_active_i),
     .fb_base_i     (render_fb_base_i),
     .fb_stride_i   (render_fb_stride_i),
     .frame_w_i     (post_frame_w_i),
@@ -1786,7 +1816,9 @@ module zhao_shell_top_v2
     .echo_passes_torn_o(echo_passes_torn_o),
     .echo_pixels_written_o(echo_pixels_written_o),
     .echo_pixels_dropped_o(echo_pixels_dropped_o),
-    .echo_fault_o  (echo_fault_o)
+    .echo_fault_o  (echo_fault_o),
+    .walk_hold_clocks_o (walk_phase_hold_clocks_o),
+    .walk_sweeps_gated_o(walk_phase_sweeps_o)
   );
 
   // THE RENDER GUARD'S WINDOW IS THE RENDERER'S LEASE, AND IT USED TO BE THE

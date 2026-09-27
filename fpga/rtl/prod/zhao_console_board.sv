@@ -1608,6 +1608,24 @@ module zhao_console_board
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // ---- I55's PHASE INTERLOCK (PHASEFIX, 2026-09-27) ----------------------
+  // `zhao_post_lease`'s WALK GATE, brought to the boundary for the same
+  // reason `geom_tw_door_o` was: the door proved the walk's JOBS arrived, and
+  // these prove the walk was given a WINDOW to draw in. Without the gate the
+  // post phase opened at `frame_end` -- correctly, on a `raster_quiet_i` that
+  // watches the BINNER, which issues nothing in this arrangement -- and
+  // `zhao_shell_top_v2:1653` then muxed RASTER.FBWRITE away from the raster
+  // before the sweep had started.
+  //
+  // `geom_tw_phasehold_o` IS THE DIAGNOSIS AND NOT JUST A TALLY. A hold that
+  // never ends says the sweep NEVER STARTED; a hold that ends with
+  // `geom_tw_phasesweeps_o` at 1 says it started and finished. Those two
+  // faults are indistinguishable from every other counter in this console,
+  // which is why the clocks are exported rather than a done bit.
+  // Both are STRUCTURAL ZEROS at `GEOM_WALK_RASTER = 0` -- the gate is not
+  // elaborated -- and the bench asserts that rather than skipping it.
+  output logic [31:0] geom_tw_phasehold_o,
+  output logic [31:0] geom_tw_phasesweeps_o,
   // HIGH FOR THE WHOLE SWEEP. The frame is not finished until this
   // falls: in arrangement 1 the walk is what produces pixels, and the
   // binner's `render_drain_done_o` now says only that the RETAINED
@@ -5111,6 +5129,8 @@ module zhao_console_board
       .geom_tw_stall_o                    (geom_tw_stall_o),
       .geom_tw_overlap_o                  (geom_tw_overlap_o),
       .geom_tw_door_o                     (geom_tw_door_o),
+      .geom_tw_phasehold_o                (geom_tw_phasehold_o),
+      .geom_tw_phasesweeps_o              (geom_tw_phasesweeps_o),
       .geom_tw_busy_o                     (geom_tw_busy_o),
       .geom_walk_raster_o                 (geom_walk_raster_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
