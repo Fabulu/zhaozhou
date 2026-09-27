@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "76426d05f42b496bec000b526c3d4fe9ecd29c45",
+    "newestRunCommit":  "62d8b6a7dbd4b03f79a239814b1d04e818f2d459",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1475,6 +1475,30 @@
                        "blockMemoryBits":  33408,
                        "dspBlocks":  6,
                        "virtualPins":  1305
+                   },
+                   {
+                       "module":  "zhao_geom_attrpack@swapbuild-secondback",
+                       "status":  "map_only",
+                       "sourceCommit":  "62d8b6a7dbd4b03f79a239814b1d04e818f2d459",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "measuredDevice":  "5CSEBA6U23I7",
+                       "sizingDevice":  "5CSEBA6U23I7",
+                       "notTargetDevice":  true,
+                       "sizingNote":  "fitted on 5CSEBA6U23I7 ONLY to measure size; the target is 5CSEBA6U23I7 at 41,910 ALM and almsAvailable below is NOT that device",
+                       "sourceDigest":  "2c5e09ab56a51ce0c3f0cd2662940691eccbe63d0d5d26aff1d596e464b1d3e1",
+                       "variantOf":  "zhao_geom_attrpack",
+                       "seconds":  30,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2327,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  36,
+                       "virtualPins":  2341
                    },
                    {
                        "module":  "zhao_geom_attrsetup@dsp-census-20260926",

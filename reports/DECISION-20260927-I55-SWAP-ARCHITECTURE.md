@@ -99,21 +99,50 @@ RASTERSWAP repaired it.
 
 ### 1. A second INSTANCE is refused on measured DSP
 
-`zhao_geom_attrpack` instantiates one `zhao_geom_attrsetup`, the shared
-multiply-add tree. The only clean row on disk for it —
-`zhao_geom_attrsetup@gz-base`, `map_only`, `rtlCleanAtHead: true` — reads
-**45 DSP**. (The row carries no `measuredDevice` field and therefore inherits
-`zhao_block_fit.json`'s file-level `device: 5CSEBA6U23I7`. It is quoted here as
-an order of magnitude; SWAPBUILD ran its own map of `zhao_geom_attrpack` —
-which had **never been mapped or fitted, zero rows in either database** — and
-that row is the number of record.)
+`zhao_geom_attrpack` had **never been mapped or fitted — zero rows in either
+database** — so the architecture five packets have demanded has never been
+priced. SWAPBUILD mapped it. The row is
+`zhao_geom_attrpack@swapbuild-secondback`:
 
-The shipping part `5CSEBA6U23I7` has **112 DSP**. The console is already
-measured at ~335% of that. LANESCOST refused I34's gathering front on
-**+11,979 ALUT and +9 DSP** three days ago. A second attrpack back end is a
-larger DSP bill than the one already refused, on the same part, in the same
-week. It would be refused on identical arithmetic, and this record declines to
-build it rather than build it and have it refused.
+| | value |
+|---|---|
+| status | `map_only` (analysis & synthesis, 30 s) |
+| `rtlCleanAtHead` | **true** |
+| `treeCleanAtHead` | **true** |
+| `measuredDevice` | **5CSEBA6U23I7** (the shipping part) |
+| `sourceCommit` | `62d8b6a7` — this packet's base |
+| combinational ALUTs | **1,121** |
+| estimate of ALMs needed | **2,354** |
+| registers | **2,327** |
+| block memory bits | 0 |
+| **DSP blocks** | **36** |
+
+Read `rtlCleanAtHead` first, always: it is true, and so is `treeCleanAtHead`.
+
+⚠️ **The row carries `notTargetDevice: true` and that flag is WRONG here.**
+`run_block_fit.ps1:882-887` stamps it on any row where `-Device` was passed,
+without checking whether the value *is* the shipping part. It was
+`5CSEBA6U23I7`. The row's own `sizingNote` contradicts itself in one sentence —
+*"fitted on 5CSEBA6U23I7 ONLY to measure size; the target is 5CSEBA6U23I7"*.
+The part is the target part; the flag is the script's stamping quirk and is
+declared here rather than inherited silently.
+
+Adding `zhao_geom_setup`'s existing clean map row on the same part (500
+combinational ALUTs, 938 estimated ALMs, 1,340 registers, 4 DSP,
+`rtlCleanAtHead: true` — **not** the dirty full-fit row, which reads 743 ALM and
+disagrees in both directions), **a second setup+attrpack back end costs:**
+
+> **+1,621 combinational ALUTs, +3,292 estimated ALMs, +3,667 registers, and
+> +40 DSP**, on `5CSEBA6U23I7`, from a clean tree at this packet's base.
+
+The shipping part has **112 DSP** in total. **+40 DSP is 35.7% of the entire
+device's multiplier budget for one duplicated block**, on a console already
+measured at ~335% of that budget.
+
+LANESCOST refused I34's gathering front three days ago on **+11,979 ALUT and
++9 DSP**. **This is 4.4× that DSP bill.** It would be refused on identical
+arithmetic, and this record declines to build it rather than build it and have
+it refused.
 
 ### 2. A second instance is also a SECOND IMPLEMENTATION OF RATIFIED ARITHMETIC
 
