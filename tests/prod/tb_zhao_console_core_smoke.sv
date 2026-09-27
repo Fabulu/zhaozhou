@@ -2549,16 +2549,111 @@ module tb_zhao_console_core_smoke
   //      here too. HEADER IS LAST because the header is what marks the slot
   //      runnable; the generator emits it last and this FSM does not reorder.
   //
-  //   COMMIT (op 1)                   -> the directory takes the hash.
+  //   COMMIT (op 1)                   -> the directory takes the hash AND
+  //      ALLOCATES THE SLOT. It comes BEFORE the load words, and that ordering
+  //      is the whole of NOPROG's repair -- see the block immediately below.
   //
   // `fld_stage_done_q` then releases the frame. Without that gate the packet
   // could reach CMD.EXEC's TerrainField arm while the program was still being
   // fetched, and the record would resolve `noprog` -- which would look exactly
   // like a routing defect and be nothing but a race in the bench.
+  //
+  // =========================================================================
+  // THE HEADER IS WRITTEN TWICE, AND IT HAS TO BE. REPAIRED 2026-09-27
+  // (NOPROG), AFTER MEASURING THAT TWO PRODUCTION LAWS PULL OPPOSITE WAYS.
+  // THIS IS WHY THE FIRST FIELD THIS CONSOLE EVER INSTALLED ANSWERED `noprog`
+  // 1,089 TIMES.
+  // =========================================================================
+  // TWO GUARDS, BOTH DELIBERATE, BOTH WITH THEIR REASONS WRITTEN BESIDE THEM,
+  // AND NO SINGLE ORDERING OF ONE STAGING PASS SATISFIES BOTH:
+  //
+  //   `zhao_field_doorbell:429`   wire head_refuse = head_is_commit && !head_hdr_ok;
+  //      A COMMIT for a slot whose HEADER was never written is REFUSED without
+  //      touching the directory. => THE HEADER MUST COME BEFORE THE COMMIT.
+  //
+  //   `zhao_field_host_v2:1448`   if (pc_cm_valid_i && pc_cm_ready_o && pc_cm_ok_i)
+  //                                 hdr_loaded[pc_cm_slot_c] <= 1'b0;
+  //      A successful insert invalidates the slot's program and its init proof,
+  //      because "the directory has promised the slot to a new hash".
+  //      => THE HEADER MUST COME AFTER THE COMMIT TO BE RUNNABLE.
+  //
+  // MEASURED, BOTH DIRECTIONS, ON THIS BENCH:
+  //   header then commit  -> commit OK, `hdr_loaded` cleared, every request
+  //                          answered 0xF0: `fldearth noprog=1089 runs=0`.
+  //   commit then header  -> doorbell law 2 refuses the commit, `commit_ok`
+  //                          stays 0, the frame gate never opens and the
+  //                          packet DMA never starts: `dma_done=0`,
+  //                          "GEOM.REPLAY released no meshlet".
+  //
+  // THE RESOLUTION THAT REMOVES NO GUARD. The header is written LAST among the
+  // load words (satisfying the doorbell), the COMMIT allocates the slot, and
+  // THE HEADER LOAD WORD IS THEN RE-POSTED (satisfying the host). The doorbell
+  // clears its own `hdr_written` shadow on the same insert (`:684`), so the two
+  // flags stay in step and the re-post lifts both. Nothing is narrowed, no law
+  // is relaxed, and the re-posted word is the generator's own word 42 rather
+  // than anything this bench composes.
+  //
+  // THAT THE RECOVERY WORKS IS NOT ASSUMED HERE. `tests/field/
+  // field_host_v2_directed.cpp` FT029 pins it at the leaf: a successful insert
+  // un-loads the slot (step 3) and re-writing the HEADER ALONE restores it
+  // (step 4), with the microcode, output map and association shown to have
+  // survived. The commit invalidates a MARK; it does not destroy a PROGRAM.
+  //
+  // THE CONTRADICTION IS A REAL FINDING AND IS NOT FIXED HERE. Reconciling it
+  // belongs in production RTL -- either the doorbell's law 2 admits a commit
+  // that ALLOCATES for a not-yet-loaded slot, or the host stops invalidating an
+  // insert into a slot whose hash is the one already there. Both change a
+  // guard, so both are decisions rather than repairs, and a bench is the wrong
+  // place to take them. See FINDINGS-NOPROG.md.
+  //
+  // WHY IT READ AS A DEFECT IN THE EARTH ADAPTER AND IS NOT ONE. The 0xF0 is
+  // the ONLY symptom, and `fld_earth_noprog_o` increments in the adapter's
+  // `E_WAIT` on the ENGINE's reply, not on the adapter's own binding flag.
+  // `zhao_field_host_v2:1306` is `gnoprog_c = req_noprog_i[pick_id] ||
+  // !hdr_loaded[gslot_c]` -- one counter, two independent causes, ORed -- so
+  // NEITHER `fldearth noprog` NOR `fldhost noprog` can say which fired. The
+  // fingerprint (1,089 = 33x33) matches the intake-versus-replay race that
+  // `zhao_field_earth_adapter.sv`'s own header documents verbatim, so that is
+  // what it was read as. IT WAS NOT THAT. `fldlist open_at_patch=0` says no
+  // patch job was ever taken while the list was open -- the ordering that race
+  // requires never happened -- and `fldlist entries_replayed=1` says the replay
+  // did reach the adapter. The adapter's binding was correct throughout.
+  //
+  // THIS COMMENT BLOCK USED TO CARRY ITS OWN REFUTATION. A few lines above it
+  // still says "HEADER IS LAST because the header is what marks the slot
+  // runnable" -- true, and then it sequenced the commit after it, which unmarks
+  // it. Both sentences were written in the same commit. That is
+  // HANDOVER-20260919 15.35's shape: a document holding the claim and its
+  // refutation within a few lines, with nobody differencing the two.
   localparam int unsigned FLD_STEP_INSTALL_C = 0;
   localparam int unsigned FLD_STEP_LOAD0_C   = 1;
   localparam int unsigned FLD_STEP_COMMIT_C  = FLD_STEP_LOAD0_C + SFF_N_LOAD;
-  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_COMMIT_C + 1;
+  localparam int unsigned FLD_STEP_REHDR_C   = FLD_STEP_COMMIT_C + 1;
+  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_REHDR_C + 1;
+  // The header is the LAST load word the generator emits, and the re-post
+  // step replays exactly that word -- it is not a word this bench composes.
+  localparam int unsigned FLD_HDR_IDX_C      = SFF_N_LOAD - 1;
+
+  // ENTRY I42's PROBE MUST NOT AIM AT THE STAGED SLOT, AND UNDER -FieldActive
+  // SLOT 0 IS THE STAGED SLOT. MEASURED 2026-09-27 (NOPROG).
+  //
+  // The probe's whole meaning is "a COMMIT for a slot whose HEADER was never
+  // written is REFUSED" -- doorbell law 2, fired with legal stimulus in the
+  // smoke itself. In the plain form slot 0 has no header and it fires. Once
+  // this mode stages a real program into slot 0 AND re-posts its header, slot 0
+  // DOES have a header, so the probe's commit is ACCEPTED instead of refused.
+  //
+  // THAT COST BOTH THINGS AT ONCE, AND THE SECOND IS THE ONE THAT BITES:
+  //   * `fld_db_commits_refused_o` went 1 -> 0, so I42's evidence evaporated
+  //     while its assertion still demanded 1;
+  //   * and the accepted commit INSERTED, which cleared `hdr_loaded[0]` a
+  //     SECOND time -- undoing the re-posted header and returning the console
+  //     to `runs=0 noprog=1089`. Measured: `db_commits=2 db_commits_refused=0`.
+  //
+  // So the probe moves to a slot this mode never stages. Its stimulus is
+  // unchanged in kind -- still a commit against a header-less slot -- and the
+  // plain form's probe is untouched at slot 0.
+  localparam logic [2:0] FLD_PROBE_SLOT_C = 3'd7;
 
   localparam logic [31:0] FLD_TICKET_IN = 32'hFD10_0010;
   localparam logic [31:0] FLD_TICKET_LD = 32'hFD10_0020;
@@ -2568,6 +2663,8 @@ module tb_zhao_console_core_smoke
   logic        fld_stage_done_q;
   logic [31:0] fld_install_ok_q;
   logic [31:0] fld_commit_ok_q;
+  logic [ 2:0] fld_commit_slot_q;
+  logic [31:0] fld_commit_inserted_q;
 
   // THE EPOCH AGREEMENT, CHECKED AT ELABORATION.
   //
@@ -2610,6 +2707,8 @@ module tb_zhao_console_core_smoke
       fld_stage_done_q     <= 1'b0;
       fld_install_ok_q     <= 32'd0;
       fld_commit_ok_q      <= 32'd0;
+      fld_commit_slot_q    <= 3'd7;   // NOT SFF_SLOT, so "never latched" cannot read as a pass
+      fld_commit_inserted_q <= 32'd0;
 `endif
     end else begin
 `ifdef ZHAO_SMOKE_FIELD_ACTIVE
@@ -2640,11 +2739,40 @@ module tb_zhao_console_core_smoke
           fld_db_post_hash_i   <= SFF_BODY_CRC;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_IN;
-        end else if (fld_stage_step_q < FLD_STEP_COMMIT_C) begin
+        end else if (fld_stage_step_q == FLD_STEP_REHDR_C) begin
+          // THE HEADER, RE-POSTED. Byte for byte the generator's own last load
+          // word; the commit above cleared `hdr_loaded` (and the doorbell's
+          // `hdr_written` shadow with it), and this is what lifts them again.
+          fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
+          fld_db_post_kind_i   <= SFF_LD_KIND[FLD_HDR_IDX_C];
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= SFF_LD_ADDR[FLD_HDR_IDX_C];
+          fld_db_post_data_i   <= SFF_LD_DATA[FLD_HDR_IDX_C];
+          fld_db_post_hash_i   <= 32'd0;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_LD;
+        end else if (fld_stage_step_q == FLD_STEP_COMMIT_C) begin
+          // THE COMMIT, AND IT IS THE ALLOCATOR RATHER THAN A RECEIPT. It runs
+          // BEFORE the load words, because a successful insert clears
+          // `hdr_loaded` for the slot it hands back; posting it afterwards
+          // un-loads the header the loads just wrote. The slot it returns is
+          // ASSERTED against `SFF_SLOT` below rather than assumed -- on an
+          // empty directory the first free slot is 0, which is what the
+          // generator emits, but "it is 0" is a measurement, not a promise.
+          fld_db_post_op_i     <= 2'd1;                  // COMMIT, slot allocated
+          fld_db_post_kind_i   <= 3'd0;
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= 8'd0;
+          fld_db_post_data_i   <= 96'd0;
+          fld_db_post_hash_i   <= SFF_HASH;
+          fld_db_post_ok_i     <= 1'b1;
+          fld_db_post_ticket_i <= FLD_TICKET_C2;
+        end else begin
           // A LOAD WORD, verbatim from the generator. The bench chooses NONE of
           // these fields -- kind, address and the 96-bit payload are all the
           // lowered HostPlan's, which is what keeps 13.7's "may not hand the
-          // patch ... an untracked association" satisfied.
+          // patch ... an untracked association" satisfied. THE HEADER IS LAST
+          // among these, which is what lets the COMMIT past doorbell law 2.
           fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
           fld_db_post_kind_i   <= SFF_LD_KIND[fld_stage_step_q - FLD_STEP_LOAD0_C];
           fld_db_post_slot_i   <= 3'(SFF_SLOT);
@@ -2653,14 +2781,6 @@ module tb_zhao_console_core_smoke
           fld_db_post_hash_i   <= 32'd0;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_LD;
-        end else begin
-          fld_db_post_op_i     <= 2'd1;                  // COMMIT, header written
-          fld_db_post_kind_i   <= 3'd0;
-          fld_db_post_slot_i   <= 3'(SFF_SLOT);
-          fld_db_post_addr_i   <= 8'd0;
-          fld_db_post_hash_i   <= SFF_HASH;
-          fld_db_post_ok_i     <= 1'b1;
-          fld_db_post_ticket_i <= FLD_TICKET_C2;
         end
       end else if (fld_db_post_valid_i && fld_db_post_ready_o) begin
         fld_db_post_valid_i <= 1'b0;
@@ -2673,13 +2793,13 @@ module tb_zhao_console_core_smoke
         if (fld_probe_step_q == 2'd0) begin
           fld_db_post_op_i     <= 2'd2;                  // LOOKUP
           fld_db_post_hash_i   <= 32'hFEED_BEEF;
-          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_slot_i   <= FLD_PROBE_SLOT_C;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_LU;
         end else begin
           fld_db_post_op_i     <= 2'd1;                  // COMMIT, no header
           fld_db_post_hash_i   <= 32'hFEED_BEEF;
-          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_slot_i   <= FLD_PROBE_SLOT_C;
           fld_db_post_ok_i     <= 1'b1;
           fld_db_post_ticket_i <= FLD_TICKET_CM;
         end
@@ -2724,8 +2844,19 @@ module tb_zhao_console_core_smoke
         // ticket is the field that cannot be right by accident.
         if ((fld_db_ret_ticket_o == FLD_TICKET_IN) && fld_db_ret_ok_o)
           fld_install_ok_q <= fld_install_ok_q + 32'd1;
-        if ((fld_db_ret_ticket_o == FLD_TICKET_C2) && fld_db_ret_ok_o)
+        if ((fld_db_ret_ticket_o == FLD_TICKET_C2) && fld_db_ret_ok_o) begin
           fld_commit_ok_q <= fld_commit_ok_q + 32'd1;
+          // THE SLOT THE DIRECTORY ACTUALLY ALLOCATED, LATCHED RATHER THAN
+          // ASSUMED. `zhao_field_progcache` inserts into "the first free slot,
+          // else evict the least-recently-used entry" and answers with that
+          // slot. The generator emits its load words against `SFF_SLOT`, so if
+          // the directory ever hands back a different slot the microcode would
+          // be written somewhere the request never looks -- and the only
+          // symptom would be 0xF0 again, which is the symptom this packet has
+          // already spent a run chasing. Asserted below.
+          fld_commit_slot_q     <= fld_db_ret_slot_o;
+          fld_commit_inserted_q <= fld_commit_inserted_q + 32'(fld_db_ret_inserted_o);
+        end
 `endif
       end
     end
@@ -3581,8 +3712,25 @@ module tb_zhao_console_core_smoke
       // program is actually resident. Gating on it is not the bench faking a
       // handshake: a real HPS would not submit a frame naming a program whose
       // install it had not seen succeed.
+      //
+      // AND THE SAME LAW APPLIES TO THE LOAD WORDS, WHICH THE REORDER MADE
+      // LOAD-BEARING. ADDED 2026-09-27 (NOPROG). The commit now runs BEFORE
+      // the microcode, so `fld_commit_ok_q` no longer implies the program is
+      // loaded -- it implies only that the slot is allocated. Gating on it
+      // alone would release the frame with the load words still sitting in the
+      // doorbell's queue, which is the identical "ACCEPTED IS NOT COMPLETED"
+      // defect the paragraph above records, one door along.
+      //
+      // `fld_db_load_words_o` is the HOST's own count of load words it has
+      // CONSUMED, not posts the mailbox has accepted, so it is the signal that
+      // means the microcode is in. `SFF_N_LOAD + 1` is the generator's word
+      // count plus the RE-POSTED HEADER, so the two cannot drift: change the
+      // program and both move together. The `+ 1` is load-bearing -- without it
+      // the frame can open on the pre-commit header, which is the state that
+      // answered 0xF0 1,089 times.
       if (pkt_armed_q && reset_released_q && (fld_install_ok_q != 32'd0) &&
-          (fld_commit_ok_q != 32'd0) && (ring_writes_q == 0)) begin
+          (fld_commit_ok_q != 32'd0) && fld_stage_done_q &&
+          (fld_db_load_words_o >= 32'(SFF_N_LOAD + 1)) && (ring_writes_q == 0)) begin
 `else
       if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
 `endif
@@ -7931,6 +8079,8 @@ module tb_zhao_console_core_smoke
     // assertion below and printed NOT ONE of the numbers that say WHY. A
     // diagnostic that only prints after the thing it diagnoses has already
     // stopped the run is a diagnostic nobody ever reads.
+    $display("SMOKE: fldstageB commit_slot=%0d commit_inserted=%0d (SFF_SLOT=%0d SFF_N_LOAD=%0d)",
+             fld_commit_slot_q, fld_commit_inserted_q, SFF_SLOT, SFF_N_LOAD);
     $display("SMOKE: fldstage install_ok=%0d commit_ok=%0d ldr_installs_ok=%0d ldr_installs_failed=%0d ldr_bad_crc=%0d ldr_bad_envelope=%0d ldr_bad_range=%0d ldr_bad_section=%0d ldr_bad_meta=%0d ldr_bridge_errs=%0d ldr_load_bytes=%0d ldr_binds_ok=%0d ldr_bad_operation=%0d",
              fld_install_ok_q, fld_commit_ok_q,
              fld_ldr_installs_ok_o, fld_ldr_installs_failed_o,
@@ -7958,9 +8108,28 @@ module tb_zhao_console_core_smoke
     // separates "the record never arrived" from "the record arrived and the
     // program was not resident yet", and those two look identical from
     // `fld_earth_noprog_o` alone.
-    $display("SMOKE: fldlist  records=%0d sealed=%0d unresolved=%0d tail_rejected=%0d",
+    // THE REPLAY SIDE, AND IT COST NO PORT. `replays_o`, `entries_replayed_o`
+    // and `open_at_patch_o` have been core ports and bench wires since the
+    // fieldlist was composed and NOTHING HAS EVER READ THEM -- the brief that
+    // sent this packet said "the adapter exports no evidence for the replay
+    // side", which is true of the ADAPTER and false of the LIST next to it.
+    //
+    // They are the three numbers that separate the noprog candidates:
+    //   * `entries_replayed_o` is the count of `add_fire` events the list
+    //     ISSUED. The adapter watches that same handshake, so a nonzero here
+    //     beside a noprog adapter says the add fired and the adapter's bank
+    //     did not keep it -- not that the replay never ran.
+    //   * `replays_o` is patch LISTS filled, so `entries_replayed/replays`
+    //     says whether a second job replayed over the first one's binding.
+    //   * `open_at_patch_o` counts a patch job taken while the list was still
+    //     OPEN -- which is precisely the composed-console ordering ("a job
+    //     pending FIRST") that no leaf bench reproduces. A nonzero here is the
+    //     ordering, MEASURED, rather than inherited from a brief.
+    $display("SMOKE: fldlist  records=%0d sealed=%0d unresolved=%0d tail_rejected=%0d replays=%0d entries_replayed=%0d open_at_patch=%0d idle=%0b",
              terr_fl_records_o, terr_fl_records_sealed_o, terr_fl_unresolved_o,
-             terr_fl_tail_rejected_o);
+             terr_fl_tail_rejected_o, terr_fl_replays_o,
+             terr_fl_entries_replayed_o, terr_fl_open_at_patch_o,
+             terr_fl_idle_o);
     $display("SMOKE: fldpatch tp_add_accept=%0b tp_add_reject=%0b tp_covers=%0b",
              terr_pt_fld_add_accept_o, terr_pt_fld_add_reject_o,
              terr_pt_fld_covers_o);
@@ -7984,9 +8153,23 @@ module tb_zhao_console_core_smoke
     // every vertex, so zero is the CORRECT answer and asserting otherwise
     // would be asserting the bug.
   `ifndef ZHAO_SMOKE_FIELD_UNCOVERED
+    // THE MESSAGE NAMES THE CAUSE IT NOW HAS EVIDENCE FOR. Until 2026-09-27
+    // this could only say "reached no cell", because the field had never run
+    // and the material channel had never been exercised at all. It runs now, so
+    // the interesting number is `token_refused`: the join SAW a material word
+    // for every cell and REFUSED it.
+    //
+    // A refusal here is `zhao_material_token_pkg`'s tag check doing its job, not
+    // a routing fault. `zmt_tag_ok` requires `[31:24] == 8'hE1`, and the tag
+    // exists precisely so an undecodable word is refused rather than silently
+    // composed -- every 24-bit pattern is a LEGAL material (terrain_rules 6.2),
+    // so without it a stuck bus or an unwritten lane would render. The field
+    // program's out-lane 2 IS the token, tag included
+    // (`zref::fieldir::material_token_encode`), so a program whose ordinal 2 is
+    // a plain register value is correctly refused.
     if (terr_mj_field_composed_o == 32'd0)
-      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s) -- the field's MATERIAL channel reached no cell, so the composed console still has never composed one",
-             fld_earth_runs_o);
+      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d -- if token_refused is NONZERO the material word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1), which means the field PROGRAM is not emitting a v1 material token on out-lane 2, not that the channel is unrouted; if it is ZERO the word never arrived at all",
+             fld_earth_runs_o, terr_mj_token_refused_o);
   `endif
 `endif
     if (terr_mj_token_refused_o != 32'd0)
@@ -10140,15 +10323,60 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the FLOW adapter answered %0d records with an acceleration computed from a DIFFERENT record -- the join is carrying A's field onto B's particle",
              part_fld_rec_changed_o);
 
-    // 5b. THE PROGRAM DOORBELL ANSWERS BOTH POSTS (entry I42, rulings R43/R20).
+    // 5b. THE PROGRAM DOORBELL ANSWERS EVERY POST (entry I42, rulings R43/R20).
+    //
+    // THE EXPECTED COUNT IS STAGING-AWARE, AND IT WAS NOT. Corrected 2026-09-27
+    // (NOPROG). These two assertions were written for the no-program form and
+    // hard-coded 2 -- the I42 probe pair -- with no `ifdef` guard. Under
+    // `-FieldActive` and `-FieldUncovered` the mode also stages a whole program
+    // through this same mailbox, so the true count is 48, and BOTH assertions
+    // were wrong in both new forms.
+    //
+    // NOTHING HAD EVER SEEN THEM, which is why they survived: the positive gate
+    // (`field_composed`) fatals ~2,000 lines earlier, so `-FieldActive` never
+    // reached this line, and `-FieldUncovered` had been built but never run to
+    // green. The first run that got this far was the one that found them.
+    //
+    // THE ARITHMETIC, SO IT CANNOT DRIFT: 2 probes + 1 INSTALL_CAPSULE +
+    // SFF_N_LOAD load words + 1 COMMIT + 1 RE-POSTED HEADER. Written against
+    // the generator's own `SFF_N_LOAD` rather than the literal 48, so changing
+    // the program moves the expectation with it.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_db_posts_o != 32'(SFF_N_LOAD + 5))
+      $fatal(1, "SMOKE: the field doorbell consumed %0d posts against %0d offered (2 I42 probes + 1 install + %0d load words + 1 commit + 1 re-posted header)",
+             fld_db_posts_o, SFF_N_LOAD + 5, SFF_N_LOAD);
+`else
     if (fld_db_posts_o != 32'd2)
       $fatal(1, "SMOKE: the field doorbell consumed %0d posts against two offered", fld_db_posts_o);
+`endif
     if (fld_db_lookups_o != 32'd1)
       $fatal(1, "SMOKE: the field doorbell handed %0d lookups to the directory against one posted -- the lookup phase has no producer",
              fld_db_lookups_o);
+    // EVERY ANSWERABLE POST IS ANSWERED, which is the hang ruling R20 forbids
+    // leaving open. NOTE THE WORD *ANSWERABLE*, AND THAT IT IS NOT THE SAME
+    // COUNT AS THE POSTS ABOVE -- which is the correction this line needed.
+    //
+    // A LOAD WORD IS NOT ANSWERED, BY DESIGN. `zhao_field_doorbell`'s `D_LOAD`
+    // state advances the queue, mirrors `hdr_written` and counts
+    // `load_words_o`, and WRITES NO RETURN RECORD; only LOOKUP, COMMIT and the
+    // FH2 arm reserve return credit and produce one. So the answerable set is
+    // the 2 I42 probes plus the INSTALL_CAPSULE plus the program COMMIT = 4,
+    // however many microcode words were staged.
+    //
+    // I FIRST WROTE `SFF_N_LOAD + 5` HERE, reusing the post count from the
+    // assertion above, and the run said 4 against 48. Posts CONSUMED and posts
+    // ANSWERED are different populations and this bench had never had to tell
+    // them apart, because before `-FieldActive` the only posts were the two
+    // probes and every one of them was answerable.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_ret_seen_q != 32'd4)
+      $fatal(1, "SMOKE: %0d returns came back for FOUR answerable posts (2 I42 probes + INSTALL_CAPSULE + the program COMMIT; the %0d load words are fire-and-forget by `zhao_field_doorbell`'s D_LOAD) -- a post was consumed and never answered, which is the hang ruling R20 forbids",
+             fld_ret_seen_q, SFF_N_LOAD + 1);
+`else
     if (fld_ret_seen_q != 32'd2)
       $fatal(1, "SMOKE: %0d returns came back for two answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
              fld_ret_seen_q);
+`endif
     if (fld_ret_lu_ok_q != 32'd1)
       $fatal(1, "SMOKE: the lookup's return did not say the directory answered");
     if (fld_ret_lu_hit_q != 32'd0)
@@ -10160,9 +10388,23 @@ module tb_zhao_console_core_smoke
              fld_db_commits_refused_o);
     if (fld_ret_cm_refused_q != 32'd1)
       $fatal(1, "SMOKE: the refused commit's return did not carry the refusal back to the HPS -- refused and unanswered are the same thing from there");
+    // THE THIRD AND LAST PLAIN-FORM-ONLY CENSUS IN THIS BLOCK. `commits_o` counts
+    // commits the doorbell HANDED TO THE DIRECTORY (`D_CM`), and a law-2 refusal
+    // never reaches it -- so in the no-program form, where the only commit is
+    // the I42 probe, the answer is 0. Under `-FieldActive` the staged program's
+    // own COMMIT is a real insert and the answer is 1, with the probe's refusal
+    // still counted separately in `commits_refused_o`. Both numbers are asserted
+    // because together they say the directory saw exactly the commit it should
+    // and refused exactly the one it should.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_db_commits_o != 32'd1)
+      $fatal(1, "SMOKE: the field doorbell handed %0d commits to the directory against ONE real insert (the staged program's); the I42 probe's commit is refused by law 2 before the directory and is counted in commits_refused=%0d",
+             fld_db_commits_o, fld_db_commits_refused_o);
+`else
     if (fld_db_commits_o != 32'd0)
       $fatal(1, "SMOKE: the field doorbell handed %0d commits to the directory, and the only one posted was refused",
              fld_db_commits_o);
+`endif
     if (fld_db_ret_overflow_o != 32'd0)
       $fatal(1, "SMOKE: the field doorbell's return queue overflowed -- the credit reservation is wrong");
 
@@ -10349,9 +10591,29 @@ module tb_zhao_console_core_smoke
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
     // 14 and 4 since 2026-09-26 (I13CLOSE): the packet gained a FOURTH
     // PublishResource, terrain's PALETTE page.
+    //
+    // AND FIFTEEN UNDER THE FIELD FORMS, because the packet carries a
+    // TerrainField record there and does not otherwise. Corrected 2026-09-27
+    // (NOPROG); it is the FOURTH literal census in this file that was written
+    // for the no-program form and had never been reached in the new ones -- the
+    // positive gate fatals ~2,400 lines above this, so `-FieldActive` never got
+    // here and `-FieldUncovered` had never run to green. See FINDINGS-NOPROG.md
+    // section 11: a mode that fatals early leaves its whole tail unexercised,
+    // and the assertions in that tail can be wrong for the mode with nothing
+    // going red.
+    //
+    // `committed` and `uploads` do NOT move: the TerrainField is lowered by
+    // CMD.EXEC's own arm and hands nothing to MEM.UPLOAD, which is exactly what
+    // asserting all three together is for.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (cmd_commands_o != 32'd15 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd4)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 15, 1, 4 -- fifteen because this form's packet carries a TerrainField record)",
+             cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+`else
     if (cmd_commands_o != 32'd14 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd4)
       $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 14, 1, 4)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+`endif
     // ---- R41 / entry I7: THE POPULATION DESCRIPTOR CAME FROM THE PACKET ----
     // Every one of these was a BOARD PIN before this ruling. The chain is
     // decoder -> CMD.EXEC -> PART.POP -> PART.COLLIDE / PART.TERRAIN_TAP and
@@ -10823,15 +11085,34 @@ module tb_zhao_console_core_smoke
     if (fld_install_ok_q != 32'd1)
       $fatal(1, "SMOKE: the INSTALL_CAPSULE post was not answered ok (ok returns=%0d) -- R20 says every refusal is answered, so a missing return is the doorbell's return path and not a refusal",
              fld_install_ok_q);
+    // THE COMMIT, AND THE SLOT IT ALLOCATED. The message below used to say the
+    // commit follows the header; it does not any more, and saying so was how
+    // the noprog run got its order. The commit is phase B of
+    // `zhao_field_progcache`'s two-phase law and it ALLOCATES the slot the
+    // microcode is then loaded into.
+    if (fld_commit_inserted_q != 32'd1)
+      $fatal(1, "SMOKE: the program COMMIT did not INSERT (inserted returns=%0d, ok returns=%0d) -- `zhao_field_progcache` answers INSERTED with a slot on `cm_ok_i`, and without an insert there is no allocated slot for the load words to target",
+             fld_commit_inserted_q, fld_commit_ok_q);
+    if (fld_commit_slot_q != 3'(SFF_SLOT))
+      $fatal(1, "SMOKE: the directory allocated slot %0d, the generator's load words target SFF_SLOT=%0d -- the microcode would be written where no request looks, and the only symptom would be status 0xF0, which is indistinguishable from every other noprog cause on this console",
+             fld_commit_slot_q, SFF_SLOT);
     if (fld_commit_ok_q != 32'd1)
-      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the HEADER load word is emitted LAST by the generator, so a refusal here means the order law saw an unwritten header",
+      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the commit ALLOCATES the slot and is posted AFTER the load words (so `zhao_field_doorbell`'s law 2 sees a written header) and BEFORE the header is re-posted, so a refusal here is either the directory refusing the hash or law 2 seeing no header at all",
              fld_commit_ok_q);
-    // Every load word the generator emitted reached the host. Counted, not
-    // assumed: a mailbox that silently dropped posts would still let the
-    // commit succeed if the header happened through.
-    if (fld_db_load_words_o != 32'(SFF_N_LOAD))
-      $fatal(1, "SMOKE: the doorbell forwarded %0d LOAD word(s), the fixture emits %0d -- a dropped word is a partially written program",
-             fld_db_load_words_o, SFF_N_LOAD);
+    // Every load word the generator emitted reached the host, PLUS THE RE-POSTED
+    // HEADER. Counted, not assumed: a mailbox that silently dropped posts would
+    // still let the commit succeed if the header happened through.
+    //
+    // THE `+ 1` IS THE REPAIR, NOT SLACK. The header is written twice on
+    // purpose -- once last among the generator's words, to satisfy
+    // `zhao_field_doorbell`'s law 2 that a commit needs a written header, and
+    // once after the COMMIT, because a successful insert clears `hdr_loaded`
+    // (`zhao_field_host_v2:1448`). Two guards pull opposite ways and this is the
+    // only ordering that meets both. Writing `SFF_N_LOAD + 1` rather than 44
+    // keeps it tied to the generator: change the program and this moves with it.
+    if (fld_db_load_words_o != 32'(SFF_N_LOAD + 1))
+      $fatal(1, "SMOKE: the doorbell forwarded %0d LOAD word(s), the fixture emits %0d plus ONE re-posted header (%0d) -- a dropped word is a partially written program, and a missing re-post is a slot the commit left un-runnable",
+             fld_db_load_words_o, SFF_N_LOAD, SFF_N_LOAD + 1);
     if (fld_db_addr_refused_o != 32'd0)
       $fatal(1, "SMOKE: %0d LOAD word(s) were refused for an address past LDADDRW -- the fixture is emitting addresses this loader cannot take",
              fld_db_addr_refused_o);
