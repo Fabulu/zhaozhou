@@ -221,6 +221,18 @@ different assertion fires, or when the fixture moves underneath it. The three
 
 **The negative control is the PLAIN run**, which must stay silent.
 
+**ALL THREE HAVE NOW BEEN SEEN TO GO RED.** Each fired on ITS OWN message, and
+the plain run -- the negative control -- stayed silent:
+
+| assertion | line | form | message matched | control |
+|---|---|---|---|---|
+| `a_ms_flat_roundtrip` | `:33785` | `-MsMutFlat` (`~weight`) | *does not reproduce the flat request* | **PASS** |
+| `a_ms_tail_roundtrip` | `:33789` | `-MsMutTail` (`~vtx_alpha`) | *does not reproduce the continuation tail* | **PASS** |
+| `a_ms_frag_roundtrip` | `:33792` | `-MsMutFrag` (`~frag_state`) | *does not reproduce the fragment state* | **PASS** |
+
+So METASIDE's owed item is discharged: three detectors that had never been shown
+to fire now have, individually, each against the fault it exists to catch.
+
 Forms: `run_console_core_smoke.ps1 -MsMutFlat | -MsMutTail | -MsMutFrag`, each
 with its own build-directory tag — all three change the same function, so two
 sharing an object directory would mean the second measured the first's
@@ -382,34 +394,118 @@ the only tell that bug has.
 
 ---
 
-## 8. QUARTUS
+## 8. THE LEAF `-MapOnly` ROWS, AND WHAT THEY COST TO GET
 
-**No Quartus run.** No fit, no map, no `-MapOnly`. **This packet makes NO area
-or timing claim whatsoever.** What was added is a 2-bit FSM, two 32-bit counters
-and one AND term in `zhao_post_lease`, plus one shell input and two core
-outputs; what that costs is a question for the coordinator's fit, and §5 says
-why it matters more than usual here.
+`zhao_post_lease` had **never been mapped or fitted** -- zero rows in
+`zhao_block_map.json` and zero in `zhao_block_fit.json`. So these are a NEW
+BASELINE and a delta measured against it **by the same tool on the same tree in
+the same hour**, which is a real A/B rather than this campaign's
+"declared-today versus measured-a-week-ago" shape.
+
+```
+  module zhao_post_lease, map_only, device 5CSEBA6U23I7, rtlCleanAtHead TRUE
+
+  @phasefix-gate0   1382 reg   1445 combALUT   1505 estALM   1 DSP   9984 bits
+  @phasefix-gate1   1448 reg   1514 combALUT   1539 estALM   1 DSP   9984 bits
+  ----------------------------------------------------------------------------
+  the WALK GATE      +66        +69             +34          +0      +0
+```
+
+**+66 REGISTERS IS EXACTLY 2 + 32 + 32** -- the three-state FSM plus the two
+counters -- so the fitter confirms the arithmetic rather than merely agreeing
+with it in magnitude.
+
+**AND `virtualPins` IS IDENTICAL AT 1004 IN BOTH ROWS**, because `walk_active_i`
+is a port in both builds and merely UNREAD at gate 0. That matters: it means the
+delta is the gate's LOGIC and not a boundary artefact, which is the objection
+CLAUDE.md raises against leaf rows and which usually cannot be answered.
+
+**AGAINST THIS CAMPAIGN'S OWN REFUSAL BAR:** LANESCOST was refused at +11,979
+ALUT / +9 DSP; a second setup+attrpack instance at +1,621 ALUT / +40 DSP; the
+door was called affordable at +983 ALUT / +0 DSP. **+69 comb ALUT and +0 DSP is
+an order of magnitude below the smallest thing this campaign has called
+affordable.**
+
+**READ THESE ROWS CORRECTLY, in three parts, because a map row invites three
+misreadings:**
+
+1. **They carry NO placed ALMs and NO Fmax.** `-MapOnly` stops after analysis
+   and synthesis; `estimatedAlms` is A&S's own estimate. Nothing here is a
+   timing claim, and Section 5 still stands: arrangement 1 as a whole has never
+   been fitted.
+2. **They are LABELLED rows, so `ruleViolations: []` is SILENCE, not
+   compliance.** CLAUDE.md: labelled rows are never rule-checked.
+3. **The `seconds` differ (123.9 against 82.9) and that is NOT a design
+   signal** -- it is wall-clock under different machine load, with three other
+   jobs running. Reading it as "the gate made it faster" would be exactly the
+   kind of number this file warns about.
+
+### And getting these rows is what found the console's Quartus defect
+
+The first attempt at both returned `failed:analysis`, on errors in files I had
+not touched. See Section 6.5 -- it is the most valuable thing in this FINDINGS
+and it was found by running a routine receipt and refusing to wave off its red.
+
+### A tool inconsistency found on the way, reported not fixed
+
+The rows are named `zhao_post_leasephasefix-gate0` -- the label CONCATENATED
+with no separator. `zhao_block_map.json` already holds BOTH conventions:
+`zhao_forge_cliff@edge-split-wip` and `zhao_field_earth_adapterearthlock_after`.
+One database, two spellings, so a reader grepping `module@label` silently misses
+rows. Not mine to fix inside this packet, and named so the next reader does not
+conclude a row is absent when it is merely spelled differently.
 
 ---
 
-## 9. GATES
+## 9. GATES AND RESULTS AT THE PUSHED COMMITS
 
 | gate | result |
 |---|---|
-| `completion_register.py` (bare) | **2** — `I34`, `I55`; no higher than the 2 I started at |
+| `completion_register.py` (bare) | **2** -- `I34`, `I55`; no higher than the 2 I started at |
 | `check_console_inventory.py` | **OK** |
 | `check_prod_manifest.py` | **OK** (409 modules, 89 tops) |
-| `gen_prod_top.py --check` | **fresh (89 instances)** — and see §6.4 |
-| `gen_console_board.py --check` | **FRESH (1626 core ports)** — METASIDE's 1624 plus my two |
-| `gen_shell_paired_diff.py --check` | **fresh**, harness and mutant |
-| `check_quartus17_syntax.py` | **RC 0**, 672 files, self-test 13 fire / 22 no-fire |
+| `gen_prod_top.py --check` | **fresh (89 instances)** -- 89 before and after; see Section 6.4 |
+| `gen_console_board.py --check` | **FRESH (1626 core ports)** -- METASIDE's 1624 plus my two |
+| `gen_shell_paired_diff.py --check` | **fresh**, harness AND mutant |
+| `check_quartus17_syntax.py` | **RC 0**, 672 files, self-test 13 fire / 22 no-fire -- **and see Section 6.5, it does NOT know the form that broke the console** |
 | `check_case_labels.py` | **OK**, self-test 3 fire / 1 no-fire |
-| `zhao_post_lease` lint `-Wall`, `WALK_GATE=0` | **RC 0** |
-| `zhao_post_lease` lint `-Wall`, `-GWALK_GATE=1` | **RC 0** |
-| `gen_shell_fit_ports_v2.py` | **RED, INHERITED** — §6.3, reproduced at base |
-| console smoke `-WalkRaster` | **PASS — raster pixels=2816, resolved_tiles=11, phasehold=68203, phasesweeps=1** |
+| `check_console_closure_lint.py` (gate 31) | **OK**, self-test fired 5/5 |
+| `mutant_copy_drift.py` | **OK**, 80 copies -- run **AFTER** each commit (R121) |
+| `zhao_post_lease` lint `-Wall`, `WALK_GATE=0` and `-GWALK_GATE=1` | **RC 0** both |
+| `gen_shell_fit_ports_v2.py` | **RED, INHERITED since 2026-09-25** -- Section 6.3, reproduced at base |
 
-Remaining runs and their results are in the final report to the coordinator.
+### The console forms
+
+| form | result |
+|---|---|
+| PLAIN (the SHIPPED, parked arrangement) | **PASS** -- `raster pixels=2816`, `frames_admitted=1`, `texture fragments=1216`, `tile[max/or]=[6 7]`, `setup_submitted=75`, sweep a STRUCTURAL ZERO, **and `walkphase phasehold=0 phasesweeps=0`** |
+| `-WalkRaster` (arrangement 1) | **PASS** -- `raster pixels=2816`, `resolved_tiles=11`, `tilewalk tiles=11 jobs=101 door=101`, `paramwalk tris=101`, `phasehold=68203 phasesweeps=1` |
+| `-MsMutFlat` / `-MsMutTail` / `-MsMutFrag` | **PASS**, all three INVERTED -- each assertion fired on its OWN message (Section 4) |
+
+### The directed tests (RULING R60 -- BUILT and RUN at the pushed commit)
+
+| target | checks |
+|---|---|
+| `post_lease_directed` (WALK_GATE=0, the control) | **39 passed** |
+| `post_lease_walkgate` (`-GWALK_GATE=1`) | **41 passed** |
+| `cmd_exec_directed` (R60's named target) | **977 passed** |
+
+41 against 39 is the corroborating signal, not an accident: case 8's gated arm
+carries four checks and its ungated arm two, so the totals differing says the
+`ifdef` engaged on the **C++** side as well as in the RTL -- which a single
+number cannot say. Both arms check `walk_gate_built_o` FIRST, so a `-G` that
+silently failed to engage fails on the premise rather than passing while
+measuring the other build.
+
+### What is NOT covered, said plainly
+
+* **`frame_admit_i` arriving during `WK_OWED`.** The gate returns to `WK_OFF`
+  there, mirroring the pass sequencer's own rule that an admit abandons an
+  arming. The smoke and case 8 each run ONE frame, so neither reaches it. An
+  obviously-complete `case` statement is not a tested path.
+* **The five other committed control forms in arrangement 1** -- Section 5.
+* **Any fit.** Two leaf map rows are not a console area claim and this FINDINGS
+  does not make one.
 
 ---
 
@@ -422,3 +518,6 @@ Not merged to the integration branch.**
 |---|---|
 | `6ff36f86` | `feat(PHASEFIX)`: I55's pixels had nowhere to land because `quiet` names the wrong producer |
 | `736ebf5a` | `feat(PHASEFIX)`: the console DRAWS at GEOM_WALK_RASTER=1 -- 2,816 pixels, every byte through SDRAM |
+| `80d2b979` | `docs(PHASEFIX)`: the FINDINGS -- and the bench's own wait order would have called the working console broken |
+| `8e1ab9f6` | `fix(PHASEFIX)`: the production console does NOT pass quartus_map, and it is two import lines |
+| `d9bcdb39` | `test(PHASEFIX)`: run the WHOLE post-lease suite against the gate, and my first version of it was wrong |
