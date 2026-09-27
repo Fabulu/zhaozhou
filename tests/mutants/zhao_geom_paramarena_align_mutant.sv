@@ -632,7 +632,13 @@ module zhao_geom_paramarena_align_mutant
   // constant: check_localparam_comments reads a bare number as a claim about
   // the value, and this repository shipped an owner ruling 2.4x wrong because
   // a stale `576` sat beside a real `704`.
-  localparam int unsigned PV_B = ZHAO_PARAMBUF_PV_BYTES;   // w=24 bytes
+  // w=32 SINCE SCHEMA v2, AND THE COMMENT SAID 24 UNTIL MUXBUILD FOUND IT.
+  // PVSCHEMA moved `ZHAO_PARAMBUF_PV_BYTES` 24 -> 32 one file away; this
+  // comment is UNCHECKED for the reason spelled out at `CHUNK_OFF_B` below --
+  // `check_localparam_comments` skips a constant whose value reaches a package
+  // import -- so nothing went red. Flattering direction: a reader looking for
+  // room in the record was told there were eight spare bytes that are spent.
+  localparam int unsigned PV_B = ZHAO_PARAMBUF_PV_BYTES;   // w=32 bytes
   localparam int unsigned TD_B = ZHAO_PARAMBUF_TD_BYTES;   // w=16 bytes
   localparam int unsigned CK_B = ZHAO_PARAMBUF_CK_BYTES;   // w=64 bytes
 
@@ -747,7 +753,14 @@ module zhao_geom_paramarena_align_mutant
   // acceptance bench, which reads memory AT that offset, and not by the gate.
   localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
   localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
-  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,264
+  // 2,359,296 AND NOT 2,359,264, CORRECTED MUXBUILD 2026-09-27. 2,097,152 +
+  // 262,144 is 2,359,296, and `VIEW_USED_B` on the line below but one -- whose
+  // 3,407,872 is right -- implies exactly that. The paragraph above predicted
+  // this: it says this constant is not checked because it reaches `TD_B`, a
+  // package import, and "its number below is therefore verified by the
+  // acceptance bench ... and not by the gate". The bench verifies the ADDRESS
+  // it reads at; it never reads the comment.
+  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,296
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
   localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,872
 

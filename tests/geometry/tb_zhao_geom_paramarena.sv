@@ -98,6 +98,12 @@ module tb_zhao_geom_paramarena
     parameter int unsigned MAX_CHUNKS   = 16384,
     parameter int unsigned CHUNK_IDS    = 14,
     parameter int unsigned WALK_MAX     = 4096,
+    // THE VERTEX ALLOCATION STRIDE, DECLARED ONCE AND SPENT TWICE. The arena
+    // allocates by it and the walker addresses by it; before MUXBUILD the two
+    // agreed only because both defaulted to 32. R7 keeps allocation stride and
+    // record size as separate concepts, so this is the stride and not
+    // `ZHAO_PARAMBUF_PV_BYTES`.
+    parameter int unsigned PV_STRIDE_B  = 32,
     // ---- THE ON-CHIP HALF IS OPTIONAL, AND THAT IS THE EVIDENCE ------------
     // BINARENA, 2026-09-26, console entry I55. With `HAVE_ONCHIP = 0` the
     // identity queue, `zhao_geom_binner_v2` and `zhao_geom_chunkser` are NOT
@@ -244,6 +250,39 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] t_source_o,
     output var logic        t_illegal_o,
 
+    // ---- the three ProjectedVertices the descriptor names --------------------
+    // MUXBUILD, 2026-09-27. The walker's vertex arm, exposed so the directed
+    // test can read the COLOUR BACK OUT OF SDRAM at full precision -- which is
+    // schema v2's whole point and is the thing a v1 record could not do.
+    output var logic signed [20:0] t_a_x_o,
+    output var logic signed [20:0] t_a_y_o,
+    output var logic        [23:0] t_a_invw_o,
+    output var logic signed [31:0] t_a_uow_o,
+    output var logic signed [31:0] t_a_vow_o,
+    output var logic signed [31:0] t_a_r_o,
+    output var logic signed [31:0] t_a_g_o,
+    output var logic signed [31:0] t_a_b_o,
+    output var logic signed [31:0] t_a_alpha_o,
+    output var logic signed [20:0] t_b_x_o,
+    output var logic signed [20:0] t_b_y_o,
+    output var logic        [23:0] t_b_invw_o,
+    output var logic signed [31:0] t_b_uow_o,
+    output var logic signed [31:0] t_b_vow_o,
+    output var logic signed [31:0] t_b_r_o,
+    output var logic signed [31:0] t_b_g_o,
+    output var logic signed [31:0] t_b_b_o,
+    output var logic signed [31:0] t_b_alpha_o,
+    output var logic signed [20:0] t_c_x_o,
+    output var logic signed [20:0] t_c_y_o,
+    output var logic        [23:0] t_c_invw_o,
+    output var logic signed [31:0] t_c_uow_o,
+    output var logic signed [31:0] t_c_vow_o,
+    output var logic signed [31:0] t_c_r_o,
+    output var logic signed [31:0] t_c_g_o,
+    output var logic signed [31:0] t_c_b_o,
+    output var logic signed [31:0] t_c_alpha_o,
+    output var logic        t_untex_o,
+
     // ---- the walker's evidence ----------------------------------------------
     output var logic [31:0] dirs_read_o,
     output var logic [31:0] dir_mismatch_o,
@@ -257,6 +296,9 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] short_burst_o,
     output var logic [31:0] stray_beat_o,
     output var logic [31:0] gen_race_o,
+    output var logic [31:0] verts_read_o,
+    output var logic [31:0] verts_illegal_o,
+    output var logic [31:0] t_pv_split_o,
     output var logic [31:0] walk_burst_unaligned_o,
     output var logic [15:0] walk_depth_max_o,
     output var logic        walk_busy_o,
@@ -534,7 +576,8 @@ module tb_zhao_geom_paramarena
       .MAX_VERTS  (MAX_VERTS),
       .MAX_TRIS   (MAX_TRIS),
       .MAX_CHUNKS (MAX_CHUNKS),
-      .CHUNK_IDS  (CHUNK_IDS)
+      .CHUNK_IDS  (CHUNK_IDS),
+      .PV_STRIDE_B(PV_STRIDE_B)
   ) u_arena (
       .clk              (clk),
       .rst_n            (rst_n),
@@ -672,10 +715,17 @@ module tb_zhao_geom_paramarena
   assign pb_scratch_valid_o = pb_scratch_w;
   assign pb_lease_valid_o   = pb_lease_arena;
 
+  // THE STRIDE IS PASSED, NOT DEFAULTED, and it is the SAME expression the
+  // arena above is instantiated with. Two blocks addressing one vertex array
+  // from two independent parameter defaults is the hazard the composer already
+  // names for `ARENA_CHUNKS`: if they ever disagreed the walker would read
+  // between two vertices and decode a plausible record, and nothing would say
+  // which default had moved.
   zhao_geom_paramwalk #(
       .MAX_WALK     (WALK_MAX),
       .CHUNK_IDS    (CHUNK_IDS),
-      .ARENA_CHUNKS (MAX_CHUNKS)
+      .ARENA_CHUNKS (MAX_CHUNKS),
+      .PV_STRIDE_B  (PV_STRIDE_B)
   ) u_walk (
       .clk  (clk),
       .rst_n(rst_n),
@@ -712,6 +762,20 @@ module tb_zhao_geom_paramarena
       .t_source_o  (t_source_o),
       .t_illegal_o (t_illegal_o),
 
+      .t_a_x_o (t_a_x_o), .t_a_y_o (t_a_y_o), .t_a_invw_o (t_a_invw_o),
+      .t_a_uow_o (t_a_uow_o), .t_a_vow_o (t_a_vow_o),
+      .t_a_r_o (t_a_r_o), .t_a_g_o (t_a_g_o), .t_a_b_o (t_a_b_o),
+      .t_a_alpha_o (t_a_alpha_o),
+      .t_b_x_o (t_b_x_o), .t_b_y_o (t_b_y_o), .t_b_invw_o (t_b_invw_o),
+      .t_b_uow_o (t_b_uow_o), .t_b_vow_o (t_b_vow_o),
+      .t_b_r_o (t_b_r_o), .t_b_g_o (t_b_g_o), .t_b_b_o (t_b_b_o),
+      .t_b_alpha_o (t_b_alpha_o),
+      .t_c_x_o (t_c_x_o), .t_c_y_o (t_c_y_o), .t_c_invw_o (t_c_invw_o),
+      .t_c_uow_o (t_c_uow_o), .t_c_vow_o (t_c_vow_o),
+      .t_c_r_o (t_c_r_o), .t_c_g_o (t_c_g_o), .t_c_b_o (t_c_b_o),
+      .t_c_alpha_o (t_c_alpha_o),
+      .t_untex_o (t_untex_o),
+
       .guard_req_o  (walk_req),
       .guard_rsp_i  (walk_rsp),
       .beat_valid_i (walk_beat_valid),
@@ -730,6 +794,9 @@ module tb_zhao_geom_paramarena
       .short_burst_o   (short_burst_o),
       .stray_beat_o    (stray_beat_o),
       .gen_race_o      (gen_race_o),
+      .verts_read_o    (verts_read_o),
+      .verts_illegal_o (verts_illegal_o),
+      .t_pv_split_o    (t_pv_split_o),
       .burst_unaligned_o(walk_burst_unaligned_o),
       .walk_depth_max_o(walk_depth_max_o),
       .busy_o          (walk_busy_o)

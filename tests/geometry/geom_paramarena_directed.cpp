@@ -96,15 +96,25 @@ constexpr uint32_t VIEW0_BASE   = 0x06000000u;
 constexpr uint32_t VIEW1_BASE   = 0x06400000u;
 constexpr uint32_t SCRATCH_BASE = 0x06800000u;
 
-constexpr uint32_t PV_B = 24;
+// SCHEMA v2 MADE THIS 32, AND IT SAT AT 24 BECAUSE NOTHING READ IT.
+// MUXBUILD, 2026-09-27. The value was never used -- every address in this file
+// is built from `PV_SLOT_B` -- so PVSCHEMA's change to
+// `ZHAO_PARAMBUF_PV_BYTES` did not make anything go red here, and the comment
+// below went on asserting "R7 freezes it at 24 bytes" after R7's record had
+// been amended under owner directive section 4. A dead constant with an
+// authoritative comment is a document that cannot go stale loudly.
+constexpr uint32_t PV_B = 32;
 constexpr uint32_t TD_B = 16;
 constexpr uint32_t CK_B = 64;
 
 // THE BURST-ALIGNMENT QUANTUM AND THE VERTEX ALLOCATION STRIDE, 2026-09-23.
-// `PV_B` is the RECORD (R7 freezes it at 24 bytes).  `PV_SLOT_B` is what the
-// allocator ADVANCES by, and it is 32 because 24 is not a multiple of 16 and
-// a 24-byte stride puts every ODD vertex eight bytes into an aligned
-// eight-column block -- where a JEDEC BL8 SEQUENTIAL burst wraps.
+// `PV_B` is the RECORD.  R7 froze it at 24 bytes; owner directive section 4
+// authorised the amendment and PVSCHEMA took it, so under SCHEMA v2 it is 32
+// and the record now fills the slot exactly.  `PV_SLOT_B` is what the
+// allocator ADVANCES by, and it was already 32 under v1 because 24 is not a
+// multiple of 16 and a 24-byte stride puts every ODD vertex eight bytes into
+// an aligned eight-column block -- where a JEDEC BL8 SEQUENTIAL burst wraps.
+// The two are still SEPARATE CONCEPTS and R7 says so; they merely agree now.
 //
 // These mirror `zhao_geom_paramarena`'s `PV_SLOT_B` and `LAYOUT_ALIGN_B`.  A
 // mirrored constant is a frozen copy of yesterday's agreement, so the bench
@@ -350,11 +360,35 @@ bool wait_publish(Dut& t, uint32_t want, int max_wait = 400000) {
   return false;
 }
 
+// s21 comes back from Verilator as a 21-bit unsigned field; the record stores
+// it signed.  Sign-extending in the bench rather than widening the RTL port
+// keeps the stored width the published width.
+int32_t sx21(uint32_t v) {
+  v &= 0x1FFFFFu;
+  return (v & 0x100000u) ? static_cast<int32_t>(v | 0xFFE00000u)
+                         : static_cast<int32_t>(v);
+}
+
+// One ProjectedVertex as the WALK decoded it -- i.e. after the bytes went out
+// through the real guard, arbiter, controller and DRAM and came back.
+struct WalkVertex {
+  int32_t  x, y;
+  uint32_t invw;
+  int32_t  uow, vow, r, g, b, alpha;
+};
+struct WalkTriVerts {
+  WalkVertex v[3];
+  uint8_t    untex;
+};
+
 struct WalkResult {
   bool completed = false;
   bool failed = false;
   std::vector<Descriptor> tris;
   std::vector<uint8_t> illegal;
+  // MUXBUILD: the three vertices the descriptor names, fetched by the walker's
+  // own arm on the same socket.  Parallel to `tris`.
+  std::vector<WalkTriVerts> tverts;
 };
 
 // Run one walk of `head` and collect every triangle it emits.
@@ -383,6 +417,36 @@ WalkResult walk(Dut& t, uint32_t head, int max_wait = 400000) {
       d.source = t.t_source_o;
       r.tris.push_back(d);
       r.illegal.push_back(static_cast<uint8_t>(t.t_illegal_o));
+      WalkTriVerts tv;
+      tv.v[0].x     = sx21(t.t_a_x_o);
+      tv.v[0].y     = sx21(t.t_a_y_o);
+      tv.v[0].invw  = t.t_a_invw_o;
+      tv.v[0].uow   = static_cast<int32_t>(t.t_a_uow_o);
+      tv.v[0].vow   = static_cast<int32_t>(t.t_a_vow_o);
+      tv.v[0].r     = static_cast<int32_t>(t.t_a_r_o);
+      tv.v[0].g     = static_cast<int32_t>(t.t_a_g_o);
+      tv.v[0].b     = static_cast<int32_t>(t.t_a_b_o);
+      tv.v[0].alpha = static_cast<int32_t>(t.t_a_alpha_o);
+      tv.v[1].x     = sx21(t.t_b_x_o);
+      tv.v[1].y     = sx21(t.t_b_y_o);
+      tv.v[1].invw  = t.t_b_invw_o;
+      tv.v[1].uow   = static_cast<int32_t>(t.t_b_uow_o);
+      tv.v[1].vow   = static_cast<int32_t>(t.t_b_vow_o);
+      tv.v[1].r     = static_cast<int32_t>(t.t_b_r_o);
+      tv.v[1].g     = static_cast<int32_t>(t.t_b_g_o);
+      tv.v[1].b     = static_cast<int32_t>(t.t_b_b_o);
+      tv.v[1].alpha = static_cast<int32_t>(t.t_b_alpha_o);
+      tv.v[2].x     = sx21(t.t_c_x_o);
+      tv.v[2].y     = sx21(t.t_c_y_o);
+      tv.v[2].invw  = t.t_c_invw_o;
+      tv.v[2].uow   = static_cast<int32_t>(t.t_c_uow_o);
+      tv.v[2].vow   = static_cast<int32_t>(t.t_c_vow_o);
+      tv.v[2].r     = static_cast<int32_t>(t.t_c_r_o);
+      tv.v[2].g     = static_cast<int32_t>(t.t_c_g_o);
+      tv.v[2].b     = static_cast<int32_t>(t.t_c_b_o);
+      tv.v[2].alpha = static_cast<int32_t>(t.t_c_alpha_o);
+      tv.untex      = static_cast<uint8_t>(t.t_untex_o);
+      r.tverts.push_back(tv);
     }
     if (t.walk_done_o) {
       r.completed = true;
@@ -831,6 +895,115 @@ int main(int argc, char** argv) {
     cke(0, t.chunks_illegal_o, "case 1: no chunk was malformed");
     cke(0, t.walk_cut_o, "case 1: the chain was not cut");
     cke(0, t.gen_race_o, "case 1: the frame did not move under the walk");
+
+    // ---------------------------------------------------------------------
+    // CASE 13 -- THE VERTEX ARM, ON CASE 1's OWN WALK.
+    //
+    // This is the arm `zhao_geom_paramwalk` declined to drive for five
+    // packets. The refusal was right while the record was v1: `zhao_geom_vertid`
+    // stored colour through `unit8_of_fx16`, a lossy `(v + 128) >> 8`, so
+    // R234 D1's three Gouraud planes were unrecoverable from the arena by ANY
+    // back end. Schema v2 stores all six plane inputs at full slot width.
+    //
+    // IT REUSES CASE 1's WALK RATHER THAN RUNNING A SECOND ONE. Case 2b asserts
+    // `dirs_read_o`, `chunks_walked_o` and `tris_emitted_o` as ABSOLUTE counts,
+    // so an extra walk here would break three unrelated checks -- and a test
+    // that renumbers its neighbours' counters to make room is a test that will
+    // be blamed for their next failure.
+    //
+    // THE DISCRIMINATING PROPERTY IS ASSERTED FIRST, so this control cannot
+    // quietly stop discriminating. Frame A's eight reds are 0x1200..0x1207 --
+    // eight DISTINCT stored values that v1's quantiser maps to ONE byte.
+    // `{255,255,255}` would prove nothing: saturated white survives any
+    // quantiser, and so does any value whose low eight bits are zero.
+    {
+      int v1_collisions = 0, v1_distinct = 0;
+      for (size_t a = 0; a < verts.size(); ++a)
+        for (size_t b = a + 1; b < verts.size(); ++b) {
+          const uint32_t qa = (static_cast<uint32_t>(verts[a].r) + 128u) >> 8;
+          const uint32_t qb = (static_cast<uint32_t>(verts[b].r) + 128u) >> 8;
+          if (qa == qb) ++v1_collisions; else ++v1_distinct;
+        }
+      cke(0, static_cast<uint32_t>(v1_distinct),
+          "case 13 PREMISE: under v1's (v+128)>>8 EVERY pair of frame A's"
+          " reds collides, so this case is discriminating");
+      ckt(v1_collisions > 0, "case 13 PREMISE: there are pairs to collide");
+    }
+
+    cke(static_cast<uint32_t>(NT), static_cast<uint32_t>(r.tverts.size()),
+        "case 13: a vertex triple came back for every descriptor");
+    // THREE RECORDS FETCHED PER TRIANGLE. An arm that skipped one and reused
+    // the previous vertex would keep every handshake healthy and break only
+    // this ratio. Absolute, because case 1 is this Dut's first walk -- which
+    // `dirs_read_o == 1` two checks above independently establishes.
+    cke(3u * static_cast<uint32_t>(NT), t.verts_read_o,
+        "case 13: verts_read_o is exactly three per emitted triangle");
+    cke(0, t.verts_illegal_o,
+        "case 13: every fetched status byte was well formed");
+
+    for (size_t i = 0; i < r.tverts.size() && i + 2 < verts.size(); ++i) {
+      for (int k = 0; k < 3; ++k) {
+        const Vertex&     w = verts[i + static_cast<size_t>(k)];
+        const WalkVertex& g = r.tverts[i].v[k];
+        cke(static_cast<uint32_t>(w.x), static_cast<uint32_t>(g.x),
+            "case 13: screen_x is bit-identical through SDRAM");
+        cke(static_cast<uint32_t>(w.y), static_cast<uint32_t>(g.y),
+            "case 13: screen_y is bit-identical through SDRAM");
+        cke(w.invw, g.invw, "case 13: invw24 is bit-identical through SDRAM");
+        cke(static_cast<uint32_t>(w.uow), static_cast<uint32_t>(g.uow),
+            "case 13: u/w is bit-identical through SDRAM");
+        cke(static_cast<uint32_t>(w.vow), static_cast<uint32_t>(g.vow),
+            "case 13: v/w is bit-identical through SDRAM");
+        cke(static_cast<uint32_t>(w.r), static_cast<uint32_t>(g.r),
+            "case 13: the RED Gouraud channel is bit-identical -- a value v1"
+            " could NOT have carried");
+        cke(static_cast<uint32_t>(w.g), static_cast<uint32_t>(g.g),
+            "case 13: the GREEN Gouraud channel is bit-identical");
+        cke(static_cast<uint32_t>(w.b), static_cast<uint32_t>(g.b),
+            "case 13: the BLUE Gouraud channel is bit-identical (negative, so"
+            " the sign survived too)");
+        cke(static_cast<uint32_t>(w.alpha), static_cast<uint32_t>(g.alpha),
+            "case 13: alpha is bit-identical at its s22 stored width");
+      }
+      cke(static_cast<uint32_t>(verts[i].status & 0x04u) ? 1u : 0u,
+          r.tverts[i].untex,
+          "case 13: `untex` is ruling R197's bit out of vertex A's status[2]");
+    }
+
+    // AND THE REDS CAME BACK DIFFERENT. The loop above is per-vertex equality;
+    // this is the property v1 destroyed, stated on its own so a reader need not
+    // infer it from sixty passing comparisons.
+    {
+      int differing = 0;
+      for (size_t a = 0; a < r.tverts.size(); ++a)
+        for (size_t b = a + 1; b < r.tverts.size(); ++b)
+          if (r.tverts[a].v[0].r != r.tverts[b].v[0].r) ++differing;
+      ckt(differing > 0,
+          "case 13: reds that v1 made IDENTICAL come back DISTINCT");
+    }
+
+    // `t_pv_split_o` ON THIS FIXTURE IS NOT ZERO, AND THAT IS CORRECT.
+    // The bench gives every vertex its own status byte -- `((i%4)<<2)|(i%3)` --
+    // so bit 2 alternates and consecutive vertices genuinely disagree. A real
+    // primitive publishes all three, so production never does this. The
+    // expected count is COMPUTED from the fixture rather than pinned to a
+    // number, because a number would have to be re-derived every time the
+    // fixture's status expression changed.
+    {
+      uint32_t want_split = 0;
+      for (size_t i = 0; i < r.tverts.size() && i + 2 < verts.size(); ++i) {
+        const uint8_t u0 = static_cast<uint8_t>((verts[i].status >> 2) & 1u);
+        for (int k = 1; k < 3; ++k)
+          if (((verts[i + static_cast<size_t>(k)].status >> 2) & 1u) != u0)
+            ++want_split;
+      }
+      cke(want_split, t.t_pv_split_o,
+          "case 13: t_pv_split_o counted exactly the vertices whose `untex`"
+          " differs from their triangle's vertex A");
+      ckt(want_split > 0,
+          "case 13: and the fixture really does contain such triangles, so"
+          " that check is not vacuous");
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -1438,6 +1611,125 @@ int main(int argc, char** argv) {
     cke(fired, t.walk_burst_unaligned_o,
         "case 12: the counter did NOT move again once the base was aligned");
   }
+
+  // =======================================================================
+  // FRAME E and CASE 14 -- THE ARM'S TWO COUNTERS ARE FIRED, NOT ASSERTED.
+  //
+  // A dedicated frame, because the two counters must be shown to be SILENT on
+  // sound input before their firing means anything, and no earlier frame in
+  // this file is sound in the relevant way: they all give each vertex its own
+  // status byte. Here the three vertices share one, which is the shape a real
+  // `zhao_geom_vertid` publishes.
+  //
+  // NEITHER COUNTER OWES A COMMITTED MUTANT. Both faults are reachable with
+  // legal stimulus -- a corrupted status byte and a split `untex` bit are
+  // things the ROUND TRIP can produce, and `poke16` writes them into the SDRAM
+  // model exactly where the arena put the record. That is the useful direction:
+  // these counters exist to catch a record corrupted on its way through memory,
+  // not this block's own arithmetic.
+  // =======================================================================
+  {
+    std::printf("\n=== case 14: verts_illegal_o and t_pv_split_o FIRED\n");
+    const uint16_t GEN_E = 0xE5E5;
+    const uint32_t pub_before = t.frames_published_o;
+    ckt(seal(t, 8, 4, 2, GEN_E) >= 0, "E: the seal takes effect");
+
+    // ONE STATUS BYTE FOR ALL THREE: reserved nibble 0, untex SET, domain MESH.
+    const uint8_t ST_E = 0x04;
+    for (int i = 0; i < 3; ++i) {
+      Vertex v;
+      v.x = 100 + i; v.y = -(200 + i);
+      v.invw = 0x00C0D0u + static_cast<uint32_t>(i);
+      v.status = ST_E;
+      v.uow = 0x00030000 + i; v.vow = -(0x00040000 + i);
+      v.r = 0x00005A00 + i; v.g = 0x00006B00 + i; v.b = -(0x00007C00 + i);
+      v.alpha = 0x00010000;
+      ckt(push_pv(t, v), "E: a vertex is accepted");
+    }
+    Descriptor de{0, 1, 2, 0xE100, 0xE2E20000u, 0xE3E30000u};
+    ckt(push_td(t, de), "E: the descriptor is accepted");
+    {
+      uint32_t ids[14] = {0};
+      ids[0] = 0;
+      ckt(push_ck(t, 0xFFFFFFFFu, 1, ids), "E: chunk 0 is accepted");
+    }
+    end_frame(t);
+    ckt(wait_publish(t, pub_before + 1), "E: the frame publishes");
+    cke(GEN_E, t.publish_gen_o, "E: the published generation");
+
+    const uint32_t vbase   = peek32(t, SCRATCH_BASE + 0);
+    const uint32_t v1_addr = vbase + 1u * PV_SLOT_B;
+    // The status byte is bits [73:66] of the record -- NOT byte aligned -- so
+    // it lives in bits [9:2] of the 16-bit word at byte 8. `untex` is
+    // status[2], i.e. bit 4 of that word.
+    const uint16_t saved_w4 =
+        static_cast<uint16_t>(peek32(t, v1_addr + 8) & 0xFFFFu);
+
+    // ---- the NEGATIVE control, first ------------------------------------
+    const uint32_t vi0 = t.verts_illegal_o;
+    const uint32_t sp0 = t.t_pv_split_o;
+    const WalkResult rc = walk(t, 0);
+    ckt(rc.completed && !rc.failed, "case 14: the sound frame walks");
+    cke(1u, static_cast<uint32_t>(rc.tverts.size()),
+        "case 14: one triangle came back");
+    cke(0, t.verts_illegal_o - vi0,
+        "case 14 NEGATIVE CONTROL: verts_illegal_o is SILENT on sound records");
+    cke(0, t.t_pv_split_o - sp0,
+        "case 14 NEGATIVE CONTROL: t_pv_split_o is SILENT when the three"
+        " vertices share one status byte");
+    if (!rc.tverts.empty())
+      cke(1u, static_cast<uint32_t>(rc.tverts[0].untex),
+          "case 14: `untex` came back SET, so the bit under test is a 1 to"
+          " begin with and the flip below really changes it");
+
+    // ---- fire verts_illegal_o -------------------------------------------
+    // GEOM.VERTID.md: status[7:4] is "reserved, written 0. Nonzero is a
+    // malformed record." Those are word bits [9:6].
+    const uint16_t bad_w4 = static_cast<uint16_t>(saved_w4 | (0xF0u << 2));
+    poke16(t, v1_addr + 8, bad_w4);
+    cke(bad_w4, static_cast<uint16_t>(peek32(t, v1_addr + 8) & 0xFFFFu),
+        "case 14: the corrupted status byte really reached DRAM");
+    const uint32_t vi1 = t.verts_illegal_o;
+    const WalkResult rbad = walk(t, 0);
+    ckt(rbad.completed,
+        "case 14: the walk STILL COMPLETED -- a malformed status byte is"
+        " counted, not a reason to abandon the chain");
+    ckt(t.verts_illegal_o > vi1,
+        "case 14: verts_illegal_o FIRED on a status byte corrupted in SDRAM");
+    std::printf("case 14: verts_illegal_o %u -> %u\n", vi1, t.verts_illegal_o);
+
+    // ---- fire t_pv_split_o ----------------------------------------------
+    const uint16_t split_w4 = static_cast<uint16_t>(saved_w4 ^ (1u << 4));
+    poke16(t, v1_addr + 8, split_w4);
+    const uint32_t sp1 = t.t_pv_split_o;
+    const uint32_t vi2 = t.verts_illegal_o;
+    const WalkResult rsplit = walk(t, 0);
+    ckt(rsplit.completed, "case 14: the split-untex walk completed");
+    ckt(t.t_pv_split_o > sp1,
+        "case 14: t_pv_split_o FIRED when one triangle's vertices disagreed"
+        " about the untextured declaration");
+    cke(0, t.verts_illegal_o - vi2,
+        "case 14: and the SPLIT alone did not make the record illegal -- the"
+        " two counters are watching different faults");
+    std::printf("case 14: t_pv_split_o %u -> %u\n", sp1, t.t_pv_split_o);
+
+    // ---- put it back and prove BOTH stop --------------------------------
+    // A control that fires and then keeps firing on healthy input is a stuck
+    // bit, not a detector.
+    poke16(t, v1_addr + 8, saved_w4);
+    cke(saved_w4, static_cast<uint16_t>(peek32(t, v1_addr + 8) & 0xFFFFu),
+        "case 14: the record is restored");
+    const uint32_t vi_fired = t.verts_illegal_o;
+    const uint32_t sp_fired = t.t_pv_split_o;
+    const WalkResult rok = walk(t, 0);
+    ckt(rok.completed && !rok.failed,
+        "case 14: the restored frame walks again");
+    cke(vi_fired, t.verts_illegal_o,
+        "case 14: verts_illegal_o did NOT move again once the byte was sound");
+    cke(sp_fired, t.t_pv_split_o,
+        "case 14: t_pv_split_o did NOT move again once the bit agreed");
+  }
+
   if (unaligned_healthy != 0) {
     std::printf(
         "\n"
@@ -1474,6 +1766,8 @@ int main(int argc, char** argv) {
       "  share ledger_full    = %u\n"
       "  req_unaligned_o      = %u  (the HEALTHY run; ASSERTED ZERO since 2026-09-23)\n"
       "  walk_unaligned_o     = %u  (NON-ZERO BY DESIGN: case 12 fires it LAST)\n"
+      "  verts_read_o         = %u   verts_illegal_o     = %u\n"
+      "  t_pv_split_o         = %u   (both NON-ZERO BY DESIGN: case 14)\n"
       "-----------------------------------------------------------------\n",
       t.frames_published_o, t.verts_written_o, t.tris_written_o, t.chunks_written_o,
       t.publish_blocked_o, t.view_flip_blocked_o, t.quota_overflow_o, t.records_discarded_o,
@@ -1481,7 +1775,8 @@ int main(int argc, char** argv) {
       t.chunks_walked_o, t.chunks_stale_o, t.chunks_illegal_o, t.tris_emitted_o,
       static_cast<unsigned>(t.walk_depth_max_o), t.walk_cut_o, t.guard_violations_o,
       t.addr_view_bad_o, t.wr_in_view0_o, t.wr_in_view1_o, t.wr_in_scratch_o,
-      t.share_ledger_full_o, unaligned_healthy, t.walk_burst_unaligned_o);
+      t.share_ledger_full_o, unaligned_healthy, t.walk_burst_unaligned_o,
+      t.verts_read_o, t.verts_illegal_o, t.t_pv_split_o);
 
   std::printf("geom_paramarena_directed: %d/%d checks failed\n", g_fail, g_checks);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);
