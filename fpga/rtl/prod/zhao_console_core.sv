@@ -3186,10 +3186,18 @@
 //        (a) the merge   -- `u_geom_clip.tri_valid_i` is `cl_in_valid`. One
 //                           producer chain through `u_material_window`'s gate.
 //                           No merge. UNCHANGED.
-//            obligation 2 -- a search of `fpga/rtl/terrain/` for
-//                           `material_set` and `material_id` returns ZERO hits
-//                           TODAY, not on the day it was first written.
-//                           Terrain textures through the mosaic. UNCHANGED.
+//            obligation 2 -- ** STRUCK 2026-09-27 (MATCARRY). THE SENTENCE
+//                           BELOW IS FALSE AT THIS TREE. ** It read: "a search
+//                           of `fpga/rtl/terrain/` for `material_set` and
+//                           `material_id` returns ZERO hits TODAY, not on the
+//                           day it was first written." There are FOUR code
+//                           hits, all in `zhao_terrain_clipfeed.sv` (:391,
+//                           :392, :810, :811), re-measured with the positive
+//                           control the claim asks for -- `material` returns
+//                           72 hits across 9 files in the same directory.
+//                           The zero was TRUE WHEN TAKEN and TERRAINMAT landed
+//                           after it. It has been inherited through four
+//                           refusals, so it is struck rather than deleted.
 //        (b) `invw24`    -- no terrain client of `zhao_geom_depthquant_stream`
 //                           anywhere. `proj_out_aw_o` still leaves this module
 //                           and lands nowhere. UNCHANGED.
@@ -3252,8 +3260,19 @@
 //           common to every client. A door client cannot enter without firing
 //           it. Structural, not argued.
 //        2. "it must carry a {material_set, material_id} pair ... TERRAIN HAS
-//           NEITHER" -- the search still returns ZERO hits today, re-run rather
-//           than quoted, and it NO LONGER MATTERS. Owner ruling 1 of 2026-09-22
+//           NEITHER" -- ** THE CLAUSE "the search still returns ZERO hits
+//           today, re-run rather than quoted" IS STRUCK, 2026-09-27
+//           (MATCARRY): FOUR code hits, `zhao_terrain_clipfeed.sv` :391 :392
+//           :810 :811, control `material` = 72 hits / 9 files. ** And the
+//           second half of this bullet is now false in the OTHER direction
+//           too, which is the more useful correction: TERRAIN HAS BOTH.
+//           `zhao_terrain_clipfeed` takes `mat_set_i`/`mat_id_i` from
+//           `SetEnvironment` through CMD.EXEC and DERIVES its mode at
+//           :812 -- `(mset_q != 0) ? MATMODE_BACKED_C : MATMODE_NONE_C` -- so
+//           MATMODE_NONE is NOT "the only mode terrain can lawfully present".
+//           That matters to I34's carriage: a terrain span reaches a non-zero
+//           `sample_count`, and therefore the mosaic, only on the BACKED arm.
+//           It NO LONGER MATTERS that the pair was once absent. Owner ruling 1 of 2026-09-22
 //           made `MATMODE_NONE_C` a LAWFUL DECLARED MODE: no resolve is issued,
 //           the defined no-sampling profile is published, no fault counter
 //           moves, and a ZERO {set, id} pair is what `mode_contra_c` REQUIRES
@@ -11834,6 +11853,11 @@
 
 module zhao_console_core
   import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
+  // I34's v1 material token. Imported so the tag and the byte order are
+  // read from `zhao_material_token_pkg` rather than transcribed a fourth
+  // time -- that package exists precisely because three composed sites
+  // had already committed to {matA, matB, weight} independently.
+  import zhao_material_token_pkg::*;
 #(
   // ---- the shell's own knobs, carried through ------------------------------
   parameter int unsigned FRAMER_Q = 8,
@@ -11919,8 +11943,49 @@ module zhao_console_core
   // GEOM.CLIP both carry it opaquely and three literals would drift.
   parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
   // The per-primitive rider GEOM.CLIP carries beside `src_id`:
-  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
-  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // {v1 material token[31:0], material_id[15:0], R28 raster_state[31:0],
+  //  producer domain[1:0]}.
+  //
+  // THE TOKEN IS NEW (MATCARRY, 2026-09-27) AND IT IS ADDED AT THE TOP, which
+  // is not cosmetic: `[49:34]`, `[33:2]` and `[1:0]` keep the exact bit
+  // positions `u_geom_vertid` already reads, so widening costs those three
+  // connections nothing and cannot silently re-seat a field.
+  //
+  // IT IS NOT A REUSE OF THE THIRTY ZERO BITS on three of the four client
+  // arms. Those are R28's `raster_state`, allocated and not spare, and the
+  // owner directive section 4 forbids overloading a field or substituting a
+  // convenient zero. Bits that happen to be zero today are not free bits, so
+  // this is thirty-two NEW bits and a fit prices them.
+  //
+  // WHY A WIDENING RATHER THAN AN ALIGNED SIDE QUEUE:
+  // reports/DECISION-20260927-I34-MATERIAL-CARRIER.md. A side FIFO that must
+  // stay in lockstep with a pipeline is the `u_geom_tidq` defect class -- it
+  // ran permanently one behind and binned 74 of 75 triangles under their
+  // predecessor's descriptor while every range guard passed, because the ids
+  // stayed in range and decoded cleanly. A value riding INSIDE the record has
+  // no alignment invariant to break.
+  parameter int unsigned GEOM_VID_RIDERW = 32 + 16 + 32 + 2,
+  // ---- THE PER-TRIANGLE IDENTITY PAST GEOM.CLIP (MATCARRY, 2026-09-27) -----
+  // GEOM.SETUP and GEOM.ATTRPACK are the fork that carries a triangle from
+  // GEOM.CLIP's output to the shell's door, and the ONLY per-triangle sideband
+  // that survived that trip was a 16-bit source id. This is that sideband,
+  // widened to carry the material token and the producer domain with it:
+  //
+  //   {domain[1:0], v1 material token[31:0], src_id[15:0]}
+  //
+  // BOTH HALVES OF THE FORK CARRY IT, and that is the point rather than a
+  // symmetry: the composed assertion `a_attrpack_setup_same_triangle` already
+  // differences the two, and its own comment concedes it "cannot fail" on a
+  // single-source frame because every triangle there carries the same
+  // `src_id`. A material token VARIES PER TRIANGLE on exactly such a frame,
+  // so widening both sides turns a near-vacuous check into a live
+  // per-triangle discriminator whose two operands are loaded by two different
+  // enables in two different modules.
+  // The derived bit positions for both layouts are LOCALPARAMS in the body,
+  // not parameters: they are consequences of the rider layout rather than
+  // choices, and `zhao_console_board` is generated from this port list, so a
+  // parameter here becomes a board knob somebody could set into a layout the
+  // slices do not agree with.
   // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
   // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
   parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
@@ -16013,6 +16078,18 @@ module zhao_console_core
   // that block and not a parameter, because two bits is a law and not a knob;
   // this copy exists only so the console can check its own rider against it,
   // and the guard is what catches the two drifting apart.
+  // ---- I34's TWO CARRIAGE LAYOUTS, each stated once (MATCARRY 2026-09-27) --
+  // The per-primitive rider, clipdoor -> GEOM.CLIP -> GEOM.CLIP's output:
+  //   [81:50] v1 material token   [49:34] material_id
+  //   [33:2]  R28 raster_state    [1:0]   producer domain
+  localparam int unsigned GEOM_VID_MATTOK_LO = 16 + 32 + 2;
+  // The per-triangle identity, GEOM.CLIP's output -> the shell's door, carried
+  // by BOTH halves of the SETUP/ATTRPACK fork:
+  //   [49:48] producer domain   [47:16] v1 material token   [15:0] src_id
+  localparam int unsigned GEOM_TRI_IDENTW    = 16 + 32 + 2;
+  localparam int unsigned GEOM_TRI_MATTOK_LO = 16;
+  localparam int unsigned GEOM_TRI_DOMAIN_LO = 16 + 32;
+
   localparam int unsigned GEOM_OWNER_W_C = 2;
 
   // ==========================================================================
@@ -19184,10 +19261,19 @@ module zhao_console_core
     // producers' own `c_cull_mode_i`. So `{30'd0, <that producer's own cull
     // mode>}` IS the true R28 word for a producer with no material half. It is
     // not a convenient zero standing in for something that exists elsewhere.
-    .c_rider_i       ({{tcf_o_material_id, 30'd0, tcf_o_cull_mode, GEOM_VID_DOM_TERR},
-                       {pcf_o_material_id, 30'd0, pcf_o_cull_mode, GEOM_VID_DOM_PART},
-                       {fa_o_material_id,  30'd0, fa_o_cull_mode,  GEOM_VID_DOM_FORGE},
-                       {rp_o_material,     rp_o_raster,            GEOM_VID_DOM_MESH}}),
+    // THE TOKEN IS THE NEW TOP FIELD, per client (MATCARRY, 2026-09-27).
+    // TERRAIN presents the token its own clipfeed latched with the triangle.
+    // The other three present `32'd0`, AND THAT IS NOT A CONVENIENT ZERO: tag
+    // `8'h00` is not `ZMT_TAG_V1`, so `zmt_tag_ok` REFUSES it and the consumer
+    // below keeps its named constant. That is the token's whole reason for
+    // having a tag -- "an absent output is NOT a write of zero" -- and mesh,
+    // forge and particle primitives genuinely have no layer-E composed triple
+    // to declare. A zero that the encoding DEFINES as absent is a declaration;
+    // a zero standing in for a value that exists elsewhere would not be.
+    .c_rider_i       ({{tcf_o_material_token, tcf_o_material_id, 30'd0, tcf_o_cull_mode, GEOM_VID_DOM_TERR},
+                       {32'd0,                pcf_o_material_id, 30'd0, pcf_o_cull_mode, GEOM_VID_DOM_PART},
+                       {32'd0,                fa_o_material_id,  30'd0, fa_o_cull_mode,  GEOM_VID_DOM_FORGE},
+                       {32'd0,                rp_o_material,     rp_o_raster,            GEOM_VID_DOM_MESH}}),
     .c_material_set_i({tcf_o_material_set, pcf_o_material_set, fa_o_material_set, rp_o_material_set}),
     .c_material_id_i ({tcf_o_material_id,  pcf_o_material_id,  fa_o_material_id,  rp_o_material}),
     // THE MATERIAL-MODE DECLARATION, per client (owner ruling 1). Particles
@@ -19204,11 +19290,36 @@ module zhao_console_core
     // pair, and one constant cannot be true of both. The parameter survives as
     // the value FORGE.PRIM's own job descriptor carries, which is where a
     // producer's declaration belongs.
-    // TERRAIN DECLARES MATMODE_NONE FROM ITS OWN PORT, never a constant chosen
-    // here. It is the only mode terrain can lawfully present: a search of
-    // `fpga/rtl/terrain/` for `material_set` and `material_id` returns ZERO
-    // hits, re-measured at this tree with `material` at 34 hits in the same
-    // directory as the positive control that the zero is not a broken grep.
+    // TERRAIN DECLARES ITS MODE FROM ITS OWN PORT, never a constant chosen
+    // here.
+    //
+    // ** THE TWO SENTENCES THAT WERE HERE ARE STRUCK, 2026-09-27 (MATCARRY).
+    // BOTH WERE FALSE AT THIS TREE, AND ONE OF THEM CLAIMED TO BE
+    // "re-measured at this tree". ** They read: "It is the only mode terrain
+    // can lawfully present: a search of `fpga/rtl/terrain/` for
+    // `material_set` and `material_id` returns ZERO hits, re-measured at this
+    // tree with `material` at 34 hits in the same directory as the positive
+    // control that the zero is not a broken grep."
+    //
+    //   * THE GREP: FOUR code hits, all `zhao_terrain_clipfeed.sv` -- :391,
+    //     :392 (the output ports), :810, :811 (their assigns). The positive
+    //     control now reads 72 hits across 9 files. The zero was TRUE WHEN
+    //     TAKEN; TERRAINMAT landed after it. A document cannot go stale
+    //     loudly, and this one carried its own control, which is exactly what
+    //     made it persuasive for four refusals.
+    //   * "THE ONLY MODE": false. `zhao_terrain_clipfeed.sv:812` DERIVES
+    //     `(mset_q != 32'd0) ? MATMODE_BACKED_C : MATMODE_NONE_C`, so terrain
+    //     presents BACKED whenever the host named a terrain material set.
+    //     `tests/prod/tb_zhao_console_core_smoke.sv` asserts EVERY terrain
+    //     triangle declares BACKED in the composed console, and its
+    //     `-NoTerrainMaterial` control asserts the complement.
+    //
+    // This is load-bearing for I34's carriage rather than a tidy-up: the
+    // mosaic reads its {matA, matB} out of `base_rgb`, which is the published
+    // texel RGB when `sample_count` is zero -- and a terrain span reaches a
+    // non-zero `sample_count` only on the BACKED arm. A reader who believed
+    // "NONE is the only mode" would conclude the carriage below can never be
+    // consumed.
     .c_material_mode_i({tcf_o_material_mode, pcf_o_material_mode, fa_o_material_mode, GEOM_REPLAY_MATERIAL_MODE}),
     // R89's FLAT PER-PRIMITIVE ALPHA and the RASTER STATE WORD, per client, on
     // the same granted beat as the triangle and its material. GEOM.REPLAY
@@ -20489,7 +20600,18 @@ module zhao_console_core
   wire        [ 2:0] st_tl;
   wire signed [20:0] st_ax, st_ay, st_bx, st_by, st_cx, st_cy;
   wire signed [11:0] st_min_x, st_max_x, st_min_y, st_max_y;
-  wire        [15:0] st_src_id;
+  // ---- THE WIDENED PER-TRIANGLE IDENTITY (MATCARRY, 2026-09-27) -----------
+  // {domain[1:0], v1 material token[31:0], src_id[15:0]}, carried INSIDE
+  // GEOM.SETUP's own pipeline registers rather than beside them.
+  wire [GEOM_TRI_IDENTW-1:0] st_ident;
+  wire        [15:0] st_src_id     = st_ident[15:0];
+  wire        [31:0] st_mat_token  = st_ident[GEOM_TRI_MATTOK_LO +: 32];
+  wire        [ 1:0] st_domain     = st_ident[GEOM_TRI_DOMAIN_LO +: 2];
+  // What GEOM.CLIP hands the fork. Both halves take the SAME expression, so
+  // the assertion that differences their outputs is differencing two
+  // independently clocked copies of one value and not two unrelated ones.
+  wire [GEOM_TRI_IDENTW-1:0] cl_o_ident =
+      {cl_o_rider[1:0], cl_o_rider[GEOM_VID_MATTOK_LO +: 32], cl_o_src_id};
 
   // THE TWENTY-FIRST FIELD OF THE SAME PACKET, and until now the only one of
   // them that left this module instead of reaching the door.
@@ -20548,14 +20670,24 @@ module zhao_console_core
   wire         ap_tri_ready_w, ap_o_valid_w;
   wire [239:0] ap_invw_plane_w, ap_u_over_w_plane_w, ap_v_over_w_plane_w;
   wire [239:0] ap_r_plane_w, ap_g_plane_w, ap_b_plane_w;
-  wire [ 15:0] ap_src_id_w;
+  wire [GEOM_TRI_IDENTW-1:0] ap_ident_w;
+  wire [ 15:0] ap_src_id_w = ap_ident_w[15:0];
+  // GEOM.ATTRPACK's copy of the token, from its OWN register. This is the
+  // second operand of the lockstep check below, and it is the reason that
+  // check stops being vacuous on a single-source frame.
+  wire [ 31:0] ap_mat_token_w = ap_ident_w[GEOM_TRI_MATTOK_LO +: 32];
   wire [ 31:0] ap_triangles_w, ap_planes_w;
   wire         door_tri_valid_w, door_tri_ready_w;
   // ARENACOMPOSE: the two halves of the fork the door became.
   wire         shell_tri_ready_w;   // zhao_shell_top_v2's own ready
   wire         ab_tri_ready_w;      // zhao_geom_arenabin's own ready
 
-  zhao_geom_setup u_geom_setup (
+  zhao_geom_setup #(
+    // The sideband widens to carry I34's material token and the producer
+    // domain with the source id. The parameter is new (MATCARRY); the block
+    // still never reads inside the field.
+    .IDW (GEOM_TRI_IDENTW)
+  ) u_geom_setup (
     .clk         (gpu_clk),
     .rst_n       (rst_n),
 
@@ -20574,7 +20706,7 @@ module zhao_console_core
     .tri_max_x_i (cl_o_max_x),
     .tri_min_y_i (cl_o_min_y),
     .tri_max_y_i (cl_o_max_y),
-    .tri_src_id_i(cl_o_src_id),
+    .tri_src_id_i(cl_o_ident),
 
     // REAL: the shell's triangle door.
     .out_valid_o (st_o_valid),
@@ -20600,7 +20732,7 @@ module zhao_console_core
     .out_max_x_o (st_max_x),
     .out_min_y_o (st_min_y),
     .out_max_y_o (st_max_y),
-    .out_src_id_o(st_src_id),
+    .out_src_id_o(st_ident),
 
     .triangles_submitted_o (geom_setup_triangles_submitted_o)
   );
@@ -20668,7 +20800,11 @@ module zhao_console_core
     .SLOT_R        (GEOM_ATTR_SLOT_R),
     .SLOT_G        (GEOM_ATTR_SLOT_G),
     .SLOT_B        (GEOM_ATTR_SLOT_B),
-    .IDW           (16)
+    // The widened per-triangle identity. `zhao_geom_attrpack` was ALREADY
+    // parameterised on `IDW` and uses `[IDW-1:0]` at every site, so this half
+    // of the fork needed NO edit to its RTL -- only this number. Checked at
+    // the file rather than assumed.
+    .IDW           (GEOM_TRI_IDENTW)
   ) u_geom_attrpack (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -20689,7 +20825,7 @@ module zhao_console_core
     .tri_attr_a_i (geom_clip_attr_a_o),
     .tri_attr_b_i (geom_clip_attr_b_o),
     .tri_attr_c_i (geom_clip_attr_c_o),
-    .tri_src_id_i (cl_o_src_id),
+    .tri_src_id_i (cl_o_ident),
     // REAL: R197's declaration, off GEOM.CLIP's accepted packet. GEOM.ATTRPACK
     // is the ONLY reader of the u/w and v/w slots in the tree, and with this
     // bit set it does not read them (its header says what it packs instead).
@@ -20709,7 +20845,7 @@ module zhao_console_core
     .out_r_plane_o        (ap_r_plane_w),
     .out_g_plane_o        (ap_g_plane_w),
     .out_b_plane_o        (ap_b_plane_w),
-    .out_src_id_o         (ap_src_id_w),
+    .out_src_id_o         (ap_ident_w),
 
     .triangles_o (ap_triangles_w),
     .planes_o    (ap_planes_w)
@@ -21072,16 +21208,33 @@ module zhao_console_core
             ap_triangles_w, geom_setup_triangles_submitted_o);
       if (door_tri_valid_w && door_tri_ready_w) begin
         // AND THE IDENTITY, on the clock the door actually takes the pair.
-        // STATED WITHOUT OVERCLAIMING: on a frame drawn from a single source
-        // every triangle carries the same `src_id`, so this cannot fail there
-        // and is not evidence about the join on such a frame. It is a real
-        // check the moment two sources are in flight, and it is the only
-        // reason `ap_src_id_w` is carried at all -- the counter difference
-        // above is what watches the fork.
-        a_attrpack_setup_same_triangle : assert (ap_src_id_w == st_src_id)
+        //
+        // THE CAVEAT THAT USED TO BE HERE IS DISCHARGED (MATCARRY,
+        // 2026-09-27), and it is worth keeping the correction visible because
+        // the caveat was honest and load-bearing. It read: "on a frame drawn
+        // from a single source every triangle carries the same `src_id`, so
+        // this cannot fail there and is not evidence about the join on such a
+        // frame." That was exactly right, and it made this assertion a
+        // detector that could not fire on the console's own smoke.
+        //
+        // The compared field is now the WIDENED per-triangle identity, whose
+        // middle 32 bits are I34's material token -- {matA, matB, weight} from
+        // the terrain cell this triangle came out of. THAT VARIES PER TRIANGLE
+        // ON A SINGLE-SOURCE FRAME. So the equality is now a live
+        // per-triangle discriminator on precisely the frames where it used to
+        // be vacuous, and an off-by-one in either half of the fork parts the
+        // two words.
+        //
+        // AND ITS TWO OPERANDS ARE NOT CO-CLOCKED, which is what CLAUDE.md's
+        // chapter demands before a checker's silence is quoted: `st_ident` is
+        // `zhao_geom_setup`'s s3 register and `ap_ident_w` is
+        // `zhao_geom_attrpack`'s `src_id_q` -- two modules, two enables. A
+        // skew is a state this comparison can actually reach.
+        a_attrpack_setup_same_triangle : assert (ap_ident_w == st_ident)
           else $fatal(1,
-              "the shell's triangle door took GEOM.SETUP's edge functions for source %0h beside GEOM.ATTRPACK's planes for source %0h",
-              st_src_id, ap_src_id_w);
+              "the shell's triangle door took GEOM.SETUP's edge functions for identity %0h beside GEOM.ATTRPACK's planes for identity %0h (src %0h vs %0h, material token %0h vs %0h)",
+              st_ident, ap_ident_w, st_src_id, ap_src_id_w,
+              st_mat_token, ap_mat_token_w);
       end
     end
   end
@@ -22125,6 +22278,27 @@ module zhao_console_core
   wire [30:0]        tcf_tri_aw_w, tcf_tri_bw_w, tcf_tri_cw_w;
   wire [ 1:0]        tcf_tri_profile_w;
   wire [ 7:0]        tcf_tri_mat_a_w, tcf_tri_mat_b_w, tcf_tri_weight_w;
+  // ---- I34's CARRIAGE STARTS HERE (MATCARRY, 2026-09-27) -------------------
+  // Until today these three had EXACTLY TWO occurrences each -- this
+  // declaration and the port that drives them -- and NOTHING read them. That
+  // was entry I34 (M7)'s open surface: "the composed triple reaches the
+  // compose cache and is served to TERRAIN.TESS, which forwards it per
+  // triangle to `tcf_tri_mat_a_w`/`_mat_b_w`/`_weight_w` in this file --
+  // WHERE IT STILL HAS NO READER."
+  //
+  // They were not caught by UNUSEDSIGNAL because
+  // `tests/shell/v3_closure_inherited.vlt` waives it across whole
+  // directories, so a dead wire here raises nothing. Counted by hand.
+  //
+  // The 24 bits become the v1 32-bit token with `zmt_encode`, which is the
+  // committed law rather than a fourth hand-written byte order. The TAG is
+  // what lets the consumer REFUSE: terrain_rules 6.2 gives weight 0 and 255
+  // meanings, so every 24-bit pattern is a legal material state and an
+  // untagged word could not be told from a lane that was never written.
+  wire [31:0] tcf_tri_mat_token_c =
+      zmt_encode(tcf_tri_mat_a_w, tcf_tri_mat_b_w, tcf_tri_weight_w);
+  // The same token, granted at GEOM.CLIP's door on its own triangle's beat.
+  wire [31:0] tcf_o_material_token;
   /* verilator lint_off UNUSEDSIGNAL */
   wire signed [31:0] tcf_tri_ad_w, tcf_tri_bd_w, tcf_tri_cd_w;
   wire               tcf_tri_view_w;
@@ -22514,6 +22688,12 @@ module zhao_console_core
     .t_bw_i     (tcf_tri_bw_w),
     .t_cw_i     (tcf_tri_cw_w),
     .t_profile_i(tcf_tri_profile_w),
+    // REAL: the layer-E triple, encoded once above. It is handed to the BLOCK
+    // rather than muxed at the door because this block is strictly serial --
+    // it converts one triangle over several clocks -- so a token read live at
+    // the door would belong to whatever the projector was offering by then,
+    // not to the triangle being granted. Latched with the corners, it cannot.
+    .t_material_token_i(tcf_tri_mat_token_c),
 
     // REAL: TERRAIN.SHADE's flat light, through TERRAIN.LIGHTLANE.
     .l_valid_i     (tcf_lit_valid_w),
@@ -22598,6 +22778,7 @@ module zhao_console_core
     .o_material_set_o (tcf_o_material_set),
     .o_material_id_o  (tcf_o_material_id),
     .o_material_mode_o(tcf_o_material_mode),
+    .o_material_token_o(tcf_o_material_token),
     .o_vertex_alpha_o (tcf_o_vertex_alpha),
     .o_frag_state_o   (tcf_o_frag_state),
     .o_quality_tier_o (tcf_o_quality_tier),
@@ -32046,15 +32227,70 @@ module zhao_console_core
   // record, and it is ZERO for a non-CLUT span because the WINDOW publishes
   // zero there, which is the same law arriving from its owner.
 
+  // ==========================================================================
+  // I34's LAST LEG: THE MOSAIC'S {matA, matB, weight}, PER TRIANGLE
+  // (MATCARRY, 2026-09-27)
+  // ==========================================================================
+  // `zhao_texture_island_v3_top` reads the mosaic's material pair out of
+  // `base_rgb[23:16]`/`[15:8]` and its weight out of `recipe_weight`. Both
+  // were SPAN values -- a named constant white and the window's published
+  // weight -- so terrain's per-cell triple could not reach the mosaic however
+  // completely the 32 bits were carried. `st_mat_token` is that triple,
+  // arriving on the SAME beat as the edge functions the shell takes, because
+  // it rode inside GEOM.SETUP's own registers.
+  //
+  // THE SUBSTITUTION IS GATED ON THREE THINGS AND EACH ONE IS LOAD-BEARING:
+  //
+  //  1. `zmt_tag_ok` -- the token is a v1 token. This is the encoding's own
+  //     presence law, not a heuristic: every 24-bit pattern is a legal
+  //     material state under terrain_rules 6.2, so only the tag can tell a
+  //     composed result from a lane that was never written.
+  //  2. the producer DOMAIN is TERRAIN. The decision record asks for the mux
+  //     to be "by the rider's domain", and requiring BOTH makes a
+  //     disagreement between the two fields a fault rather than a silent
+  //     pick -- a mis-seated slice cannot present itself as a valid token.
+  //  3. `mw_pub_sample_count != 0`. THIS ONE IS THE ONE THAT WOULD HAVE
+  //     BROKEN PIXELS. `base_rgb` is NOT only the mosaic's material pair:
+  //     at `sample_count == 0` it is the published texel RGB, and
+  //     `recipe_weight` is the blend weight under RECIPE_LERP. Writing the
+  //     token into those bits on a non-sampling span would repaint the
+  //     surface with two material INDICES as though they were colour
+  //     channels. The mosaic pick is also discarded on such a span --
+  //     `zhao_texture_frag_expand_v2`'s `sample_valid_o` needs a non-empty
+  //     required mask, and the pick's only reader is gated on it -- so the
+  //     substitution would have been pure harm with no benefit. Measured,
+  //     not reasoned about.
+  //
+  // WHAT IS STILL THE HOST'S TO OPEN, stated so nobody reads this as more
+  // than it is: a terrain span reaches a non-zero `sample_count` only when it
+  // declares MATMODE_BACKED, which `zhao_terrain_clipfeed` DERIVES from
+  // `SetEnvironment.terrain_material_set`. The console smoke drives that
+  // non-zero and asserts every terrain triangle declares it, so the gate is
+  // open there; a frame that names no terrain material keeps the named
+  // constants, which is the correct behaviour and not a fallback.
+  wire st_mat_token_live_c = zmt_tag_ok(st_mat_token) &&
+                             (st_domain == GEOM_VID_DOM_TERR) &&
+                             (mw_pub_sample_count != 2'd0);
+  // Only the sixteen bits the mosaic reads are replaced. `base_rgb[7:0]` has
+  // no mosaic meaning, so it keeps its named constant rather than being
+  // silently redefined -- the decision record names "base_rgb[23:8] plus
+  // recipe_weight" and this is exactly that and no more.
+  wire [23:0] mat_base_rgb_c =
+      st_mat_token_live_c ? {zmt_mat_a(st_mat_token), zmt_mat_b(st_mat_token),
+                             MAT_BASE_RGB_C[7:0]}
+                          : MAT_BASE_RGB_C;
+  wire [ 7:0] mat_recipe_weight_c =
+      st_mat_token_live_c ? zmt_weight(st_mat_token) : mw_pub_recipe_weight;
+
   wire [297:0] mat_flat_request_c = {
       mw_pub_sample_count,                      // [297:296]
       mw_pub_base_binding,                      // [295:288]
       MAT_LOD_Q4_4_C,                           // [287:280]
       mw_pub_material_recipe,                   // [279:277]
-      mw_pub_recipe_weight,                     // [276:269]
+      mat_recipe_weight_c,                      // [276:269]
       1'b0,                                     // [268]     aux_required
       224'd0,                                   // [267:44]  aux_surface_ctx
-      MAT_BASE_RGB_C,                           // [43:20]
+      mat_base_rgb_c,                           // [43:20]
       MAT_BASE_ALPHA_C,                         // [19:12]
       mw_pub_response_class,                    // [11:10]
       mw_pub_palette_slot,                      // [9:8]

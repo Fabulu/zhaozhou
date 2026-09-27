@@ -6174,6 +6174,7 @@ module zhao_prod_top (
   logic [32-1:0] u70_o_material_set_o;
   logic [16-1:0] u70_o_material_id_o;
   logic [2-1:0] u70_o_material_mode_o;
+  logic [32-1:0] u70_o_material_token_o;
   logic [8-1:0] u70_o_vertex_alpha_o;
   logic [32-1:0] u70_o_frag_state_o;
   logic [8-1:0] u70_o_quality_tier_o;
@@ -6204,34 +6205,35 @@ module zhao_prod_top (
       .t_bw_i(u70_src[70 +: 31]),
       .t_cw_i(u70_src[77 +: 31]),
       .t_profile_i(u70_src[84 +: 2]),
-      .l_valid_i(u70_src[91 +: 1]),
+      .t_material_token_i(u70_src[91 +: 32]),
+      .l_valid_i(u70_src[98 +: 1]),
       .l_ready_o(u70_l_ready_o),
-      .l_shade_i(u70_src[98 +: 32]),
-      .l_degenerate_i(u70_src[105 +: 1]),
-      .l_src_id_i(u70_src[112 +: 16]),
-      .u_valid_i(u70_src[119 +: 1]),
+      .l_shade_i(u70_src[105 +: 32]),
+      .l_degenerate_i(u70_src[112 +: 1]),
+      .l_src_id_i(u70_src[119 +: 16]),
+      .u_valid_i(u70_src[126 +: 1]),
       .u_ready_o(u70_u_ready_o),
-      .u_au_i(u70_src[126 +: 32]),
-      .u_av_i(u70_src[133 +: 32]),
-      .u_bu_i(u70_src[140 +: 32]),
-      .u_bv_i(u70_src[147 +: 32]),
-      .u_cu_i(u70_src[154 +: 32]),
-      .u_cv_i(u70_src[161 +: 32]),
-      .u_src_id_i(u70_src[168 +: 16]),
-      .a_tint_r_i(u70_src[175 +: 17]),
-      .a_tint_g_i(u70_src[182 +: 17]),
-      .a_tint_b_i(u70_src[189 +: 17]),
-      .b_tint_r_i(u70_src[196 +: 17]),
-      .b_tint_g_i(u70_src[203 +: 17]),
-      .b_tint_b_i(u70_src[210 +: 17]),
-      .c_tint_r_i(u70_src[217 +: 17]),
-      .c_tint_g_i(u70_src[224 +: 17]),
-      .c_tint_b_i(u70_src[231 +: 17]),
-      .sheet_i(u70_src[238 +: 17]),
-      .mat_set_i(u70_src[245 +: 32]),
-      .mat_id_i(u70_src[252 +: 16]),
+      .u_au_i(u70_src[133 +: 32]),
+      .u_av_i(u70_src[140 +: 32]),
+      .u_bu_i(u70_src[147 +: 32]),
+      .u_bv_i(u70_src[154 +: 32]),
+      .u_cu_i(u70_src[161 +: 32]),
+      .u_cv_i(u70_src[168 +: 32]),
+      .u_src_id_i(u70_src[175 +: 16]),
+      .a_tint_r_i(u70_src[182 +: 17]),
+      .a_tint_g_i(u70_src[189 +: 17]),
+      .a_tint_b_i(u70_src[196 +: 17]),
+      .b_tint_r_i(u70_src[203 +: 17]),
+      .b_tint_g_i(u70_src[210 +: 17]),
+      .b_tint_b_i(u70_src[217 +: 17]),
+      .c_tint_r_i(u70_src[224 +: 17]),
+      .c_tint_g_i(u70_src[231 +: 17]),
+      .c_tint_b_i(u70_src[238 +: 17]),
+      .sheet_i(u70_src[245 +: 17]),
+      .mat_set_i(u70_src[252 +: 32]),
+      .mat_id_i(u70_src[259 +: 16]),
       .o_valid_o(u70_o_valid_o),
-      .o_ready_i(u70_src[259 +: 1]),
+      .o_ready_i(u70_src[266 +: 1]),
       .o_ax_o(u70_o_ax_o),
       .o_ay_o(u70_o_ay_o),
       .o_bx_o(u70_o_bx_o),
@@ -6249,6 +6251,7 @@ module zhao_prod_top (
       .o_material_set_o(u70_o_material_set_o),
       .o_material_id_o(u70_o_material_id_o),
       .o_material_mode_o(u70_o_material_mode_o),
+      .o_material_token_o(u70_o_material_token_o),
       .o_vertex_alpha_o(u70_o_vertex_alpha_o),
       .o_frag_state_o(u70_o_frag_state_o),
       .o_quality_tier_o(u70_o_quality_tier_o),
@@ -6266,7 +6269,7 @@ module zhao_prod_top (
   logic u70_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u70_fold_q <= 1'b0;
-    else u70_fold_q <= u70_fold_q ^ (((^u70_t_ready_o)) & u70_src[0]) ^ (((^u70_l_ready_o)) & u70_src[1]) ^ (((^u70_u_ready_o)) & u70_src[2]) ^ (((^u70_o_valid_o)) & u70_src[3]) ^ (((^u70_o_ax_o)) & u70_src[4]) ^ (((^u70_o_ay_o)) & u70_src[5]) ^ (((^u70_o_bx_o)) & u70_src[6]) ^ (((^u70_o_by_o)) & u70_src[7]) ^ (((^u70_o_cx_o)) & u70_src[8]) ^ (((^u70_o_cy_o)) & u70_src[9]) ^ (((^u70_o_behind_o)) & u70_src[10]) ^ (((^u70_o_src_id_o)) & u70_src[11]) ^ (((^u70_o_untex_o)) & u70_src[12]) ^ (((^u70_o_detail_o)) & u70_src[13]) ^ (((^u70_o_cull_mode_o)) & u70_src[14]) ^ (((^u70_o_attr_a_o)) & u70_src[15]) ^ (((^u70_o_attr_b_o)) & u70_src[16]) ^ (((^u70_o_attr_c_o)) & u70_src[17]) ^ (((^u70_o_material_set_o)) & u70_src[18]) ^ (((^u70_o_material_id_o)) & u70_src[19]) ^ (((^u70_o_material_mode_o)) & u70_src[20]) ^ (((^u70_o_vertex_alpha_o)) & u70_src[21]) ^ (((^u70_o_frag_state_o)) & u70_src[22]) ^ (((^u70_o_quality_tier_o)) & u70_src[23]) ^ (((^u70_triangles_o)) & u70_src[24]) ^ (((^u70_emitted_o)) & u70_src[25]) ^ (((^u70_src_id_mismatch_o)) & u70_src[26]) ^ (((^u70_uv_sat_o)) & u70_src[27]) ^ (((^u70_shade_clamped_o)) & u70_src[28]) ^ (((^u70_degenerate_o)) & u70_src[29]) ^ (((^u70_dq_refused_o)) & u70_src[30]) ^ (((^u70_dq_stray_o)) & u70_src[31]) ^ (((^u70_mat_backed_o)) & u70_src[32]) ^ (((^u70_mat_id_orphan_o)) & u70_src[33]);
+    else u70_fold_q <= u70_fold_q ^ (((^u70_t_ready_o)) & u70_src[0]) ^ (((^u70_l_ready_o)) & u70_src[1]) ^ (((^u70_u_ready_o)) & u70_src[2]) ^ (((^u70_o_valid_o)) & u70_src[3]) ^ (((^u70_o_ax_o)) & u70_src[4]) ^ (((^u70_o_ay_o)) & u70_src[5]) ^ (((^u70_o_bx_o)) & u70_src[6]) ^ (((^u70_o_by_o)) & u70_src[7]) ^ (((^u70_o_cx_o)) & u70_src[8]) ^ (((^u70_o_cy_o)) & u70_src[9]) ^ (((^u70_o_behind_o)) & u70_src[10]) ^ (((^u70_o_src_id_o)) & u70_src[11]) ^ (((^u70_o_untex_o)) & u70_src[12]) ^ (((^u70_o_detail_o)) & u70_src[13]) ^ (((^u70_o_cull_mode_o)) & u70_src[14]) ^ (((^u70_o_attr_a_o)) & u70_src[15]) ^ (((^u70_o_attr_b_o)) & u70_src[16]) ^ (((^u70_o_attr_c_o)) & u70_src[17]) ^ (((^u70_o_material_set_o)) & u70_src[18]) ^ (((^u70_o_material_id_o)) & u70_src[19]) ^ (((^u70_o_material_mode_o)) & u70_src[20]) ^ (((^u70_o_material_token_o)) & u70_src[21]) ^ (((^u70_o_vertex_alpha_o)) & u70_src[22]) ^ (((^u70_o_frag_state_o)) & u70_src[23]) ^ (((^u70_o_quality_tier_o)) & u70_src[24]) ^ (((^u70_triangles_o)) & u70_src[25]) ^ (((^u70_emitted_o)) & u70_src[26]) ^ (((^u70_src_id_mismatch_o)) & u70_src[27]) ^ (((^u70_uv_sat_o)) & u70_src[28]) ^ (((^u70_shade_clamped_o)) & u70_src[29]) ^ (((^u70_degenerate_o)) & u70_src[30]) ^ (((^u70_dq_refused_o)) & u70_src[31]) ^ (((^u70_dq_stray_o)) & u70_src[32]) ^ (((^u70_mat_backed_o)) & u70_src[33]) ^ (((^u70_mat_id_orphan_o)) & u70_src[34]);
 
   // ---- zhao_terrain_island_dir ----
   logic [63:0] u71_lfsr_q;

@@ -41,6 +41,10 @@ module tb_terrain_clipfeed_mat (
     // ---- THE FIELDS UNDER TEST --------------------------------------------
     input  var logic [31:0] mat_set,
     input  var logic [15:0] mat_id,
+    // I34's v1 material token, offered on the TRIANGLE's beat (MATCARRY,
+    // 2026-09-27). Unlike `mat_set`/`mat_id`, which are frame-scoped, this
+    // varies PER TRIANGLE -- which is the whole property under test.
+    input  var logic [31:0] t_material_token,
 
     // ---- the door ----------------------------------------------------------
     output var logic        o_valid,
@@ -48,6 +52,9 @@ module tb_terrain_clipfeed_mat (
     output var logic [31:0] o_material_set,
     output var logic [15:0] o_material_id,
     output var logic [ 1:0] o_material_mode,
+    // The token granted at the door. The test asserts this equals the token
+    // offered WITH THIS TRIANGLE, per triangle, under interleaving.
+    output var logic [31:0] o_material_token,
     output var logic [15:0] o_src_id,
     output var logic        o_untex,
 
@@ -77,7 +84,29 @@ module tb_terrain_clipfeed_mat (
   localparam logic [16:0] TINT_ID  = 17'd65536;
   localparam logic [16:0] SHEET_ID = 17'd65536;
 
+  // ---- THE DUT, AND WHY IT IS SELECTABLE (MATCARRY, 2026-09-27) ------------
+  // Section 7 of the directed test asserts the material token arrives WITH ITS
+  // OWN TRIANGLE. No legal stimulus at these ports can make that fail -- the
+  // production block latches the token by the same enable as the corners -- so
+  // its silence is a claim and owes a COMMITTED MUTANT.
+  //
+  // `ZHAO_MUT_TOKEN_SKEW` swaps in `zhao_terrain_clipfeed_tokenskew_mutant`, a
+  // WRAPPER around this same production module whose only change is to hand it
+  // the PREVIOUS accepted triangle's token. ONLY THE MODULE NAME IS INSIDE THE
+  // `ifdef`: the parameter list, the port map and every stimulus constant below
+  // are shared, so the two builds cannot differ in anything else.
+  //
+  // IT IS A PLAIN `ifdef` ON PURPOSE. CLAUDE.md records two combiner mutants
+  // that passed while measuring UNMUTATED production, because a command-line
+  // `-D` cannot override a FUNCTION-LIKE `define` and says nothing when it
+  // fails to. An object-like `ifdef` is reached by `-D`, and the two builds are
+  // shown to differ rather than assumed to: one reports 12 mismatches, the
+  // other 0.
+`ifdef ZHAO_MUT_TOKEN_SKEW
+  zhao_terrain_clipfeed_tokenskew_mutant #(
+`else
   zhao_terrain_clipfeed #(
+`endif
       .ATTRS      (7),
       .IDW        (16),
       .SLOT_INVW  (0),
@@ -129,6 +158,7 @@ module tb_terrain_clipfeed_mat (
 
       .mat_set_i (mat_set),
       .mat_id_i  (mat_id),
+      .t_material_token_i(t_material_token),
 
       .o_valid_o        (o_valid),
       .o_ready_i        (o_ready),
@@ -162,6 +192,7 @@ module tb_terrain_clipfeed_mat (
       .o_material_set_o (o_material_set),
       .o_material_id_o  (o_material_id),
       .o_material_mode_o(o_material_mode),
+      .o_material_token_o(o_material_token),
 
       .triangles_o      (triangles),
       .emitted_o        (emitted),

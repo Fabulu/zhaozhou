@@ -127,7 +127,31 @@
 // Conservative SystemVerilog subset only (charter §2); no package deps.
 // Lint: clean under `verilator_bin --lint-only -Wall` (lint_geom_setup).
 
-module zhao_geom_setup (
+module zhao_geom_setup #(
+    // ---- THE PER-TRIANGLE SIDEBAND, PARAMETERISED (MATCARRY, 2026-09-27) ---
+    // This was a hard-coded 16 at three sites -- the input port, the output
+    // port and the three pipeline registers -- with NO parameter, which is
+    // what entry I34's (M7) measured as the reason a per-triangle material
+    // triple had nowhere to ride: "the only per-triangle sideband that
+    // survives that trip today is a 16-bit source id".
+    //
+    // IT IS STILL ONE OPAQUE FIELD AND THIS BLOCK STILL NEVER READS INSIDE IT.
+    // The low SRC_ID_W bits are GEOM.CLIP's per-draw source id, exactly as
+    // before; anything above them belongs to whoever composed this instance
+    // and is carried, not interpreted. That is the stance the block already
+    // took -- out_src_id_o is a carry-through with no arithmetic on it --
+    // widened rather than changed.
+    //
+    // WHY WIDEN THIS RATHER THAN RUN A QUEUE BESIDE IT:
+    // reports/DECISION-20260927-I34-MATERIAL-CARRIER.md. A value riding
+    // INSIDE the record cannot drift from it; an aligned side FIFO is the
+    // u_geom_tidq defect class, which was permanently one behind and
+    // mis-attributed 74 of 75 triangles while every range guard passed.
+    //
+    // The default is 16, so every existing instantiation and bench is
+    // bit-for-bit what it was.
+    parameter int unsigned IDW = 16
+) (
   input  logic clk,
   input  logic rst_n,
 
@@ -147,7 +171,7 @@ module zhao_geom_setup (
   input  logic signed [11:0] tri_max_x_i,
   input  logic signed [11:0] tri_min_y_i,
   input  logic signed [11:0] tri_max_y_i,
-  input  logic        [15:0] tri_src_id_i,
+  input  logic     [IDW-1:0] tri_src_id_i,
 
   // ---- setup triangle out ------------------------------------------------
   // Per edge i: E_i(px,py) = kx_i·px + ky_i·py + kc_i, EXACT, in subpixel².
@@ -176,11 +200,31 @@ module zhao_geom_setup (
   output logic signed [11:0] out_max_x_o,
   output logic signed [11:0] out_min_y_o,
   output logic signed [11:0] out_max_y_o,
-  output logic        [15:0] out_src_id_o,
+  output logic     [IDW-1:0] out_src_id_o,
 
   // ---- counter (spec/counters.md §4: saturate, never wrap) ---------------
   output logic        [31:0] triangles_submitted_o
 );
+
+  // The low 16 bits ARE the source id this block has always carried, and
+  // zhao_geom_clip / zhao_geom_clipdoor both fix theirs at IDW = 16. A
+  // narrower field here would silently truncate the id those blocks handed
+  // over, which is the "truncate a handle" the owner directive section 4
+  // forbids by name -- so it is refused at ELABORATION rather than trimmed.
+  //
+  // It sits inside initial begin ... end because Quartus 17.0 rejects a bare
+  // module-scope elaboration guard (CLAUDE.md, the quartus_map finding of
+  // 2026-09-08). Note what that costs as evidence: --lint-only does NOT run
+  // initial blocks, so a clean lint says NOTHING about this check. It is
+  // fired deliberately by the committed IDW mutant, not by a linter.
+  localparam int unsigned SRC_ID_W = 16;
+  // synthesis translate_off
+  initial begin
+    if (IDW < SRC_ID_W)
+      $fatal(1, "zhao_geom_setup: IDW (%0d) must be at least SRC_ID_W (%0d)",
+             IDW, SRC_ID_W);
+  end
+  // synthesis translate_on
 
   localparam int unsigned DIFF_W  = 23;  // RASTER.EDGEWALK's DIFF_W
   localparam int unsigned PROD_W  = 42;  // 21×21 signed
@@ -215,7 +259,7 @@ module zhao_geom_setup (
   logic signed [20:0] s1_ax, s1_ay, s1_bx, s1_by, s1_cx, s1_cy;
   logic signed [47:0] s1_area2;
   logic signed [11:0] s1_minx, s1_maxx, s1_miny, s1_maxy;
-  logic        [15:0] s1_src;
+  logic     [IDW-1:0] s1_src;
 
   // ============================================================ stage 2 ====
   logic signed [DIFF_W-1:0] s2_kx0, s2_ky0, s2_kx1, s2_ky1, s2_kx2, s2_ky2;
@@ -224,7 +268,7 @@ module zhao_geom_setup (
   logic signed [20:0] s2_ax, s2_ay, s2_bx, s2_by, s2_cx, s2_cy;
   logic signed [47:0] s2_area2;
   logic signed [11:0] s2_minx, s2_maxx, s2_miny, s2_maxy;
-  logic        [15:0] s2_src;
+  logic     [IDW-1:0] s2_src;
 
   // ============================================================ stage 3 ====
   logic signed [DIFF_W-1:0] s3_kx0, s3_ky0, s3_kx1, s3_ky1, s3_kx2, s3_ky2;
@@ -232,7 +276,7 @@ module zhao_geom_setup (
   logic signed [CROSS_W-1:0] s3_kc0, s3_kc1, s3_kc2, s3_area2;
   logic signed [20:0] s3_ax, s3_ay, s3_bx, s3_by, s3_cx, s3_cy;
   logic signed [11:0] s3_minx, s3_maxx, s3_miny, s3_maxy;
-  logic        [15:0] s3_src;
+  logic     [IDW-1:0] s3_src;
 
   // ------------------------------------------------------------ outputs ----
   assign out_valid_o  = s3_v;
@@ -279,7 +323,7 @@ module zhao_geom_setup (
       s1_maxx  <= 12'sd0;
       s1_miny  <= 12'sd0;
       s1_maxy  <= 12'sd0;
-      s1_src   <= 16'd0;
+      s1_src   <= '0;
       s2_kx0   <= {DIFF_W{1'b0}};
       s2_ky0   <= {DIFF_W{1'b0}};
       s2_kx1   <= {DIFF_W{1'b0}};
@@ -302,7 +346,7 @@ module zhao_geom_setup (
       s2_maxx  <= 12'sd0;
       s2_miny  <= 12'sd0;
       s2_maxy  <= 12'sd0;
-      s2_src   <= 16'd0;
+      s2_src   <= '0;
       s3_kx0   <= {DIFF_W{1'b0}};
       s3_ky0   <= {DIFF_W{1'b0}};
       s3_kx1   <= {DIFF_W{1'b0}};
@@ -324,7 +368,7 @@ module zhao_geom_setup (
       s3_maxx  <= 12'sd0;
       s3_miny  <= 12'sd0;
       s3_maxy  <= 12'sd0;
-      s3_src   <= 16'd0;
+      s3_src   <= '0;
       cnt_sub  <= 32'd0;
     end else if (pipe_en) begin
       // ---- S0 → S1 ------------------------------------------------------
