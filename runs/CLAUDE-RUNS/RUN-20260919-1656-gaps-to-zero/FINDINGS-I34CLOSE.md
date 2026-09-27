@@ -218,3 +218,62 @@ its property; I verified the claim's shape and left it alone.
 ## 9. BRANCH AND COMMITS
 
 **`gz/i34close`**, pushed. Never `--force`, never `--force-with-lease`.
+
+---
+
+## 10. THE CONSOLE SMOKE SHARPENS OBLIGATION (B), MEASURED AT THIS COMMIT
+
+`tests/prod/run_console_core_smoke.ps1`, plain form: **PASS, RC 0**.
+
+```
+raster     pixels=2816 bursts=176 ... fatal=0 stream_err=0 overflow=0
+renderlease frames_admitted=1
+terrcompose ps_lattices=11 ps_vertices=11979 place_patches=1 pt_samples=1089
+            cc_records=1089 mat_cells=1024
+terrmat     field_composed=0  token_refused=0  held_overrun=0 | cc_mat_cells=1024
+terrmat     backed=128 orphan=0 (SetEnvironment terrain_material set=00abcd02 id=2)
+mosaic      fills[tileset/mesh/stray]=[23 21 0]  tile[max/or]=[6 7]
+```
+
+**`field_composed=0` is the number that matters, and it is the console's own
+counter saying obligation (B) is not cosmetic.**
+
+The authored material path is proven end to end in the composed console —
+`tile[max/or]=[6 7]` is derived from the page's own layer-E bytes, `mat_cells`
+asserts the complete 1,024-cell fill, `stray=0`. **But `field_composed` is ZERO,
+because no `TerrainField` is ever issued in any smoke form.**
+
+So the owner's acceptance bar — *"verify that a Field material write changes the
+intended consumer"* — is met **at a leaf bench** (`composepub_acceptance` case
+12, through the real `zhao_field_earth_adapter`) and is **NOT exercised in the
+composed console at all**. That is precisely the hole directive 13.7's
+`-FieldActive` exists to close, and it is why (B) is a real obligation rather
+than a tidy-up: **the composed console has never once run a field.**
+
+`held_overrun=0` and `token_refused=0` are consistent with that and are not
+independent evidence — with no field live they cannot move, which is worth
+saying so the next packet does not quote their silence.
+
+## 11. GATES AT THE PUSHED HEAD
+
+| gate | result |
+|---|---|
+| `completion_register.py` (bare) | **2** (`I34`, `I55`), RC 1 — unchanged from base |
+| `check_console_inventory.py` | OK — 408 modules, 296 fit sources |
+| `check_prod_manifest.py` | OK — 408 modules, 88 tops |
+| `gen_prod_top.py --check` | fresh (88 instances) |
+| `gen_console_board.py --check` | FRESH (1616 core ports, 127 parameters) |
+| `check_quartus17_syntax.py` | RC 0 |
+| `gen_shell_paired_diff.py --check` | fresh (harness and mutant) |
+| `check_case_labels.py` | OK, self-test 3 fire / 1 no-fire |
+| `check_console_closure_lint.py` (**gate 31**) | OK — no implicit net, no missing module, no missing pin |
+| console smoke, plain | **PASS**, `raster pixels=2816`, `frames_admitted=1` |
+| `mutant_copy_drift.py` | run AFTER the commit per R121 — see below |
+| the seven directed tests | built and RAN, section 3 |
+
+**I changed COMMENTS ONLY.** No port moved, no parameter moved, no RTL
+behaviour changed — which is why `gen_prod_top`, `gen_console_board` and gate 31
+are all still fresh across an edit to `zhao_console_core.sv`. I ran them anyway
+rather than reasoning that a comment cannot matter: NAVSERVICE's own section 8.6
+records a **comment-only edit turning a mutant copy stale**, so "it is only a
+comment" is a claim this campaign has already disproved once.
