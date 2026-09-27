@@ -1,3 +1,51 @@
+> # CORRECTION, WITHIN THE HOUR: THE 40,091 IS NOT AVAILABLE AND THE TITLE IS WRONG
+>
+> **I counted instances without checking their SIZES. The `n` column implies
+> "n comparable copies" and for two of the largest rows that is false.**
+>
+> ```
+> zhao_vertex_arena      n=4  total 7,694  largest 7,553 = 98%   rest 75, 51, 15
+> zhao_field_v3_mulbank  n=2  total 3,328  largest 3,328 = 100%  rest 0
+> ```
+>
+> `vertex_arena` is ONE real instance (`geom_proj_lane -> geom_wcache`) beside
+> three `g_copy[*]` siblings that are already memory-backed and cost **141 ALUTs
+> between them**. `field_v3_mulbank` is one instance and one that owns NOTHING.
+> **Neither is a duplication opportunity, and together they are 11,022 of the
+> 40,091 I claimed.**
+>
+> Of what remains, the evenly-split rows are mostly LANES, which section 3 below
+> already ruled off the table: `attrgrad_v2` 6 x ~700 and `attrdiv_v2` 6 x 653
+> are raster parallelism, and sharing them cuts capability.
+>
+> **GENUINE CROSS-SUBSYSTEM DUPLICATION, measured per instance:**
+>
+> | module | recoverable | note |
+> |---|---:|---|
+> | `zhao_field_v3_normalize` | ~2,624 | 2,739 + 2,624, FIELD + TERRAIN |
+> | `zhao_field_isqrt` | ~776 | 328 + 263 + 263 + 250 |
+> | `zhao_geom_mat3x4_mul` | ~581 | 588 + 581, LOOM + POSE_DECODE |
+>
+> **About 4,000 ALUTs, not 40,091 -- roughly 6% of the 66,766 needed.**
+> `crc32c_fold` (x14) and `field_rcp24_rom` (x13) are evenly split but spread
+> across many independent consumers, so sharing them needs arbitration and a
+> read-port budget; they are not free either.
+>
+> **AND THE ROM IS NOT THE CHEAP ROW I CALLED IT.** `zhao_field_rcp24_rom` is a
+> 256-entry x 31-bit combinational `unique case` -- a SAME-CYCLE lookup. M10K
+> inference needs a REGISTERED read, so moving it to memory adds a pipeline
+> stage at 13 call sites. At 144 ALUTs per instance for 7,936 bits Quartus has
+> already packed it hard. It is a timing change, not a declaration change.
+>
+> **THE HONEST CONCLUSION, WHICH IS AN ESCALATION.** After checking four
+> candidate classes -- deep arrays (exhausted), small arrays (correctly in
+> flops), ROMs (need a pipeline stage) and duplicated instances (~4,000 ALUTs)
+> -- **there is no identified path to 23% that does not touch capability.** The
+> vacation directive is explicit that delegated authority does not extend to
+> cutting lanes or calling reduced work equivalent to fit a device, and it says
+> a measured conflict of exactly this kind is to be escalated rather than
+> resolved locally. **This is that conflict, and it is the deliverable.**
+
 # Phase 3: the state-relocation lever is EXHAUSTED; the remaining one is duplication
 
 Coordinator, 2026-09-28, measured from `@current-20260928` (`5CSEBA6U23I7`,
