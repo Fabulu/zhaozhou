@@ -525,6 +525,19 @@ int main(int argc, char** argv) {
                 r1.aborted);
   }
 
-  std::printf("terrain_veljoin_directed: %d checks, 0 failures\n", checks);
-  zhao::exit_hard(0);
+  // THE VERDICT WAS A LITERAL UNTIL 2026-09-27 (MATERIALPATH), and that is
+  // recorded rather than quietly repaired. This file used to print "0 failures"
+  // as a HARDCODED string and end in `zhao::exit_hard(0)` -- but `zhao::check`
+  // does not abort, it COUNTS (tests/harness/zhao_sim.cpp:55-63), and
+  // `exit_hard(0)` exits zero unconditionally. So this test printed a clean
+  // verdict and returned SUCCESS even with checks failing, and the only trace
+  // was a FAIL: line in stdout that ctest never reads.
+  //
+  // It is the exact shape CLAUDE.md catalogues -- a detector that cannot go
+  // RED -- sitting on the block that guards entry I34's velocity chain, and its
+  // "19 checks / 0 failures" was being quoted in briefs as evidence that chain
+  // still reaches zhao_part_collide. It was a literal, not a measurement.
+  // `zhao::report_and_exit` prints the real counts and returns a real rc.
+  std::printf("terrain_veljoin_directed: %d assertion sites\n", checks);
+  return zhao::report_and_exit("terrain_veljoin_directed");
 }

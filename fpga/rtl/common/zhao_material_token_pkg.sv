@@ -33,7 +33,7 @@
 // for bit, and this package states it once instead of a third hand-maintained
 // copy. The entry's sentence "nothing packs three u8s into that u32 and nothing
 // unpacks it" is true of the THIRTY-TWO-bit form and was too strong about the
-// twenty-four-bit one; the correction is recorded in FINDINGS-materialpath.md
+// twenty-four-bit one; the correction is recorded in FINDINGS-MATERIALPATH.md
 // rather than quietly absorbed, because it is the reason this layout is not
 // free to be pretty.
 //

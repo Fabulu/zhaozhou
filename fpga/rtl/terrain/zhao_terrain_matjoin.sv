@@ -93,10 +93,22 @@
 // `zhao_terrain_patch` holds ONE vertex at a time: `vtx_ready_o = !busy &&
 // out_free` and `fld_ready_o = busy`. So for a vertex V the order is
 //
-//   accept(V)  ->  lane beats for V  ->  state publish for V  ->  accept(V+1)
+//   accept(V)  ->  lane beats for V  ->  state publish for V
 //
-// and the two faces are mutually exclusive by construction: on the accept cycle
-// `busy` is still low, so no lane word can be offered.
+// and the ACCEPT and LANE faces are mutually exclusive by construction: on the
+// accept cycle `busy` is still low, so no lane word can be offered, and while
+// lane words flow `vtx_ready_o` is low.
+//
+// WHAT IS **NOT** TRUE, and the first version of this header asserted it:
+// accept(V+1) is NOT strictly after the state publish of V. The patch's
+// `out_free = !r_valid || st_ready_i` (that file :285) lets `vtx_ready_o` rise
+// on the SAME CYCLE the held record retires, so an accept and a publish
+// coincide routinely -- it is the steady state. That claim cost nothing in
+// data, because the emit is lossless either way, but it made this block's
+// guard fire 992 times per patch on a correct walk. It was found by
+// `composepub_acceptance` case 12 against the real patch, NOT by reasoning,
+// and it is left written down here because the reasoning was confident and
+// wrong.
 //
 // This block therefore LATCHES the authored triple and the cell address at
 // accept, accumulates the field override across V's lane beats, and EMITS the
@@ -185,7 +197,11 @@ module zhao_terrain_matjoin #(
   wire lane_enabled_c = f_fire_i && f_covers_i && f_present_i;
   wire lane_tag_ok_c  = zmt_tag_ok(f_material_i);
   wire lane_takes_c   = lane_enabled_c && lane_tag_ok_c;
-  wire lane_refuse_c  = lane_enabled_c && !lane_tag_ok_c;
+  // Gated on `held_q` so that `token_refused_o` and `field_composed_o` PARTITION
+  // the same population: tokens that would otherwise have been composed. The
+  // lane words belonging to the 65 cell-less vertices are counted once, by
+  // `lane_no_cell_o`, and never twice.
+  wire lane_refuse_c  = lane_enabled_c && !lane_tag_ok_c && held_q;
 
   // ---- the emitted triple --------------------------------------------------
   // The override if a token was taken for this cell, otherwise the authored
@@ -201,9 +217,25 @@ module zhao_terrain_matjoin #(
   wire [7:0] out_b_c = take_now_c ? zmt_mat_b(f_material_i) : (ov_q ? ov_b_q : auth_b_q);
   wire [7:0] out_w_c = take_now_c ? zmt_weight(f_material_i) : (ov_q ? ov_w_q : auth_w_q);
 
-  // An accept arriving while a cell is still held is the sequencing fault the
-  // header names. It must not lose the held cell, so it emits too.
-  wire overrun_c = a_we_i && held_q;
+  // THE GUARD, CORRECTED 2026-09-27 BY THE CONSOLE-SCALE CASE THAT FIRED IT.
+  // Its first form was `a_we_i && held_q`, and that counted 992 times per patch
+  // on a perfectly correct walk. The reason is one line of
+  // `zhao_terrain_patch.sv`:
+  //
+  //     wire out_free = !r_valid || st_ready_i;      // :285
+  //
+  // so `vtx_ready_o` rises on the SAME CYCLE the held record retires. An accept
+  // and a state publish COINCIDE routinely -- that is the steady state, not a
+  // fault -- and the header's claim that accept(V+1) is strictly after the
+  // publish of V was simply wrong. The data was never affected, because the
+  // emit is lossless either way; what was wrong was the alarm.
+  //
+  // The genuine fault is an accept while the held cell has NOT retired, which
+  // the patch's own `out_free` makes unreachable: an accept needs `!r_valid ||
+  // st_ready_i`, so either the record is already gone (and this block has
+  // already emitted and cleared) or it is retiring this very cycle. Hence the
+  // `!st_fire_i` term. It must not lose the held cell, so it still emits.
+  wire overrun_c = a_we_i && held_q && !st_fire_i;
   wire emit_c    = held_q && (st_fire_i || overrun_c);
 
   assign o_we_o    = emit_c;

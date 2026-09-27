@@ -100,6 +100,15 @@ out_free`, `fld_ready_o = busy`), so:
 and the accept and lane faces are mutually exclusive by construction — on the
 accept cycle `busy` is still low.
 
+**What is NOT true, and the first draft of this contract asserted it:**
+accept(V+1) is *not* strictly after the state publish of V. The patch's
+`out_free = !r_valid || st_ready_i` (`zhao_terrain_patch.sv:285`) lets
+`vtx_ready_o` rise on the **same cycle** the held record retires, so an accept
+and a publish coincide routinely. That error cost nothing in data — the emit is
+lossless either way — but it made `held_overrun_o` fire **992 times per patch on
+a correct walk**, and it was found by `composepub_acceptance` case 12 against the
+real patch rather than by re-reading the RTL. The guard now carries `!st_fire_i`.
+
 The block latches at **accept**, accumulates across V's **lane beats**, and
 emits at V's **state publish**. Emitting at the state publish rather than at the
 next accept pins the material write to the same record as its height, so it can
@@ -152,7 +161,7 @@ The composed triple reaches TERRAIN.COMPCACHE and is served to TERRAIN.TESS,
 which forwards it per triangle to `tcf_tri_mat_{a,b,weight}_w` in
 `zhao_console_core` — where it has **no reader**. Carrying it to the mosaic
 needs a per-triangle source for the flat request's `base_rgb`/`recipe_weight`,
-and that is `I13`'s seam, not this one. See `FINDINGS-materialpath.md` for the
+and that is `I13`'s seam, not this one. See `FINDINGS-MATERIALPATH.md` for the
 measured alignment obstacle.
 
 ## 8. COST

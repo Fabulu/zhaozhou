@@ -18333,6 +18333,11 @@ set(ZHAO_TERRAIN_COMPOSEPUB_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv
+    # TERRAIN.MATJOIN and its encoding package (MATERIALPATH, 2026-09-27):
+    # case 12 drives Earth out-lane 2 through the REAL adapter into the
+    # compose cache's layer-E plane, so the join is a fifth real block here.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_material_token_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_matjoin.sv
     ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_composepub.sv)
 add_executable(test_composepub_acceptance terrain/composepub_acceptance.cpp)
 target_link_libraries(test_composepub_acceptance PRIVATE zhao_harness zhao_zref)

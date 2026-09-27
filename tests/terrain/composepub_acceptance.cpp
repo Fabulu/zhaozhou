@@ -94,7 +94,9 @@
 
 #include "Vtb_terrain_composepub.h"
 
+#include "layere_fixture.hpp"
 #include "zhao_sim.hpp"
+#include "zref/zref_fieldir.hpp"
 #include "zref/zref_terrain.hpp"
 
 using Dut = Vtb_terrain_composepub;
@@ -453,6 +455,14 @@ struct Sim {
         d.vi_i       = static_cast<uint8_t>(vi);
         d.vj_i       = static_cast<uint8_t>(vj);
         d.src_id_i   = static_cast<uint16_t>(vj * kLatW + vi);
+        // The AUTHORED layer-E triple for the cell this vertex owns. In
+        // zhao_console_core it rides TERRAIN.PAGESTREAM's cell beat; here it
+        // rides the vertex offer, which is the same seam. From the SHARED
+        // fixture -- three odd functions of the cell, so an off-by-one cell
+        // and a swapped matA/weight are both visible.
+        d.auth_mat_a_i  = tess_test::mat_a_at(vi, vj);
+        d.auth_mat_b_i  = tess_test::mat_b_at(vi, vj);
+        d.auth_weight_i = tess_test::weight_at(vi, vj);
         d.vtx_valid_i = 1;
         int guard = 0;
         for (;;) {
@@ -510,6 +520,34 @@ struct Sim {
       if (++guard > 100000) { ck(false, "tap(): rsp_tap_valid_o never rose"); break; }
     }
     return a;
+  }
+
+  // ---- ask the COMPOSE CACHE what material it holds -----------------------
+  // The owner's acceptance sentence is about the CONSUMER, so this reads the
+  // plane back through TERRAIN.COMPCACHE's own serve port at its own parity --
+  // never the join's output wire, which would only prove a value was produced.
+  struct Mat {
+    uint8_t a = 0, b = 0, w = 0;
+    bool valid = false;
+  };
+
+  Mat material(int ci, int cj) {
+    d.mat_req_i = 1;
+    d.mat_ci_i  = static_cast<uint8_t>(ci);
+    d.mat_cj_i  = static_cast<uint8_t>(cj);
+    eng.drive(d);
+    d.eval();
+    step();                       // mat_req_ok_q / mat_rd_q are registered
+    d.mat_req_i = 0;
+    eng.drive(d);
+    d.eval();
+    Mat m;
+    m.valid = d.mat_valid_o != 0;
+    m.a = static_cast<uint8_t>(d.mat_a_o);
+    m.b = static_cast<uint8_t>(d.mat_b_o);
+    m.w = static_cast<uint8_t>(d.mat_weight_o);
+    step();
+    return m;
   }
 
   // ---- the reference lattice, built from the words the HARDWARE streamed --
@@ -1183,6 +1221,161 @@ int main(int argc, char** argv) {
     std::printf("  The adapter's own header prices the REAL engine run at REGS(32) +\n");
     std::printf("  IN_LANES(15) + program length, i.e. order 80-100 clocks; the lat=80\n");
     std::printf("  row above is that case measured rather than argued.\n\n");
+  }
+
+
+  // =========================================================================
+  // CASE 12 -- THE OWNER'S MATERIAL ACCEPTANCE, THROUGH THE REAL ADAPTER
+  //
+  //   "Material continues separately through its real Field-to-material path.
+  //    Do not close that half merely because authored terrain materials
+  //    render; VERIFY THAT A FIELD MATERIAL WRITE CHANGES THE INTENDED
+  //    CONSUMER."   -- reports/OWNER-DECISION-20260926-I34-NAV.md
+  //
+  // This is out-lane 2 of the SAME evaluation whose out-lane 0 case 2 already
+  // drives, through the same real `zhao_field_earth_adapter`, composed by
+  // TERRAIN.MATJOIN onto the authored layer-E triple and READ BACK from
+  // TERRAIN.COMPCACHE's serve port. Nothing here is injected.
+  //
+  // THE VALUE IS ASYMMETRIC ON PURPOSE. {0x2A, 0x7C, 0xB3} -- three distinct
+  // bytes -- so a swapped, rotated or truncated layout cannot pass. The
+  // authored triples come from the shared fixture and differ per cell, so
+  // "the block emitted one material for the whole patch" cannot pass either.
+  // =========================================================================
+  {
+    std::printf("case 12: a FIELD material write changes what the compose cache serves\n");
+
+    const zref::fieldir::MaterialState kFieldMat{0x2A, 0x7C, 0xB3};
+    const uint32_t kTok = zref::fieldir::material_token_encode(kFieldMat);
+    constexpr int kCells = (kLatW - 1) * (kLatH - 1);      // 1,024
+    constexpr int kNoCell = kVerts - kCells;               // 65
+
+    // ---- 12a THE NEGATIVE CONTROL FIRST, because "the consumer reads X" is
+    // only evidence if the consumer did NOT read X before. No field at all.
+    uint8_t base_a = 0, base_b = 0, base_w = 0;
+    {
+      Sim s;
+      s.reset();
+      s.d.tick_i = 50;
+      s.open_patch(12);
+      s.fill(0, 0, kBase, kScar, kBottom);
+      ck_eq(s.d.fields_active_o, 0, "12a: no field was issued");
+      const Sim::Mat m = s.material(5, 9);
+      ck(m.valid, "12a: the compose cache served a material triple");
+      base_a = m.a; base_b = m.b; base_w = m.w;
+      ck(m.a == tess_test::mat_a_at(5, 9) && m.b == tess_test::mat_b_at(5, 9) &&
+             m.w == tess_test::weight_at(5, 9),
+         "12a: with no field the AUTHORED layer-E triple must pass through untouched");
+      ck_eq(s.d.mj_field_composed_o, 0, "12a: field_composed with no field");
+      ck_eq(s.d.mj_token_refused_o, 0, "12a: token_refused with no field");
+      ck_eq(s.d.mj_held_overrun_o, 0, "12a: the sequencing guard fired on a correct walk");
+      ck_eq(s.d.mj_cells_written_o, kCells, "12a: one composed write per cell");
+      std::printf("  12a authored triple at (5,9) = {%02X,%02X,%02X}\n", m.a, m.b, m.w);
+    }
+
+    // ---- 12b THE CLAIM. A live Earth field writing out-lane 2.
+    {
+      Sim s;
+      s.reset();
+      s.eng.out[2]  = kTok;
+      s.eng.present = 0x0F;
+      s.d.tick_i = 50;
+      s.bank(/*start_tick=*/0, /*duration=*/100, /*last=*/true, kParams);
+      s.open_patch(12);
+      const Foot f = whole_patch(0, 0);
+      s.add(f.x0, f.z0, f.x1, f.z1, /*cmd=*/1);
+      s.d.eval();
+      ck_eq(s.d.fields_active_o, 1, "12b: one accepted list entry");
+
+      s.fill(0, 0, kBase, kScar, kBottom);
+
+      const Sim::Mat m = s.material(5, 9);
+      ck(m.valid, "12b: the compose cache served a material triple");
+      ck(m.a == kFieldMat.mat_a && m.b == kFieldMat.mat_b && m.w == kFieldMat.weight,
+         "12b: THE CONSUMER'S MATERIAL IS THE FIELD'S, not the authored one");
+      // ... and it is genuinely a CHANGE. Asserted separately, because the
+      // fixture could in principle have handed back the same bytes.
+      ck(!(base_a == kFieldMat.mat_a && base_b == kFieldMat.mat_b &&
+           base_w == kFieldMat.weight),
+         "12b: the authored triple equals the field triple -- this case is vacuous");
+      ck(m.a != base_a || m.b != base_b || m.w != base_w,
+         "12b: the served triple did not move at all");
+
+      ck_eq(s.d.mj_field_composed_o, kCells,
+            "12b: every cell of a whole-patch footprint must have taken the field material");
+      ck_eq(s.d.mj_token_refused_o, 0, "12b: a v1 token was refused");
+      ck_eq(s.d.mj_held_overrun_o, 0, "12b: the sequencing guard fired");
+      ck_eq(s.d.mj_lane_no_cell_o, kNoCell,
+            "12b: the 65 lattice vertices that own no cell must still have been offered a lane word");
+      ck_eq(s.d.efa_skipped_uncovered_o, 0, "12b: every vertex was covered");
+      ck_eq(s.d.efa_faults_o, 0, "12b: no engine fault");
+
+      // THE HEIGHT LANE IS UNDISTURBED. Out-lane 0 is zero in this case, so the
+      // composed top must equal the pre-field top at every vertex -- a material
+      // write must not move the ground.
+      bool height_moved = false;
+      for (size_t i = 0; i < s.streamed_top.size(); ++i)
+        if (s.streamed_top[i] != s.streamed_compose_top[i]) height_moved = true;
+      ck(!height_moved, "12b: a MATERIAL write moved the height lane");
+
+      std::printf("  12b served triple at (5,9) = {%02X,%02X,%02X}  field_composed=%u "
+                  "lane_no_cell=%u\n",
+                  m.a, m.b, m.w, s.d.mj_field_composed_o, s.d.mj_lane_no_cell_o);
+    }
+
+    // ---- 12c THE REFUSAL, through the same real path. A token whose tag is
+    // not v1 is a legal-looking triple and must NOT be composed -- the ratified
+    // rule is that an absent output is not a write of zero, and without the tag
+    // there is no way to tell one from the other.
+    {
+      Sim s;
+      s.reset();
+      s.eng.out[2]  = 0x002A7CB3u;      // the same triple, WRONG TAG
+      s.eng.present = 0x0F;
+      s.d.tick_i = 50;
+      s.bank(0, 100, true, kParams);
+      s.open_patch(12);
+      const Foot f = whole_patch(0, 0);
+      s.add(f.x0, f.z0, f.x1, f.z1, 1);
+      s.d.eval();
+      s.fill(0, 0, kBase, kScar, kBottom);
+
+      const Sim::Mat m = s.material(5, 9);
+      ck(m.a == tess_test::mat_a_at(5, 9) && m.b == tess_test::mat_b_at(5, 9) &&
+             m.w == tess_test::weight_at(5, 9),
+         "12c: a non-v1 token was composed instead of being refused");
+      ck_eq(s.d.mj_field_composed_o, 0, "12c: a refused token was counted as composed");
+      ck_eq(s.d.mj_token_refused_o, kCells,
+            "12c: every covered cell should have refused this token");
+      std::printf("  12c wrong-tag token refused on %u cells, authored triple kept\n",
+                  s.d.mj_token_refused_o);
+    }
+
+    // ---- 12d ABSENT IS NOT A WRITE OF ZERO, at console scale. The engine
+    // answers with ordinal 2 ABSENT while ordinals 0/1/3 are present. The
+    // authored material must survive -- this is the case that would fail if
+    // anybody decided an unwritten lane means {0,0,0}.
+    {
+      Sim s;
+      s.reset();
+      s.eng.out[2]  = kTok;
+      s.eng.present = 0x0F & ~0x04;     // ordinal 2 absent
+      s.d.tick_i = 50;
+      s.bank(0, 100, true, kParams);
+      s.open_patch(12);
+      const Foot f = whole_patch(0, 0);
+      s.add(f.x0, f.z0, f.x1, f.z1, 1);
+      s.d.eval();
+      s.fill(0, 0, kBase, kScar, kBottom);
+
+      const Sim::Mat m = s.material(5, 9);
+      ck(m.a == tess_test::mat_a_at(5, 9) && m.b == tess_test::mat_b_at(5, 9) &&
+             m.w == tess_test::weight_at(5, 9),
+         "12d: an ABSENT ordinal-2 overwrote the authored material");
+      ck_eq(s.d.mj_field_composed_o, 0, "12d: an absent lane was composed");
+      ck_eq(s.d.mj_token_refused_o, 0, "12d: an absent lane was counted as a refusal");
+      std::printf("  12d ordinal-2 absent: authored triple survived, nothing composed\n");
+    }
   }
 
   std::printf("\ncomposepub_acceptance: %d checks, %d failures\n", g_checks, g_fails);

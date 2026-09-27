@@ -7262,6 +7262,16 @@ module tb_zhao_console_core_smoke
     // ground textured with whatever the previous patch left behind.
     if ((terr_cc_patches_served_o != 32'd0) && (terr_cc_mat_cells_o == 32'd0))
       $fatal(1, "SMOKE: terrmat patches were served but NO layer-E material cell was written -- TERRAIN.MATJOIN swallowed the authored plane");
+    // AND THE FILL IS EXACTLY ONE PATCH'S WORTH, which is the assertion the
+    // compose cache's own header asks for and nobody had written:
+    // "a patch owes exactly (LAT_W-1)*(LAT_H-1) = 1,024 cells". Before the
+    // `tpc_placed` gate this read 8,192 -- eight DISCARDED lattices writing
+    // their layer E into the placed patch's parity while every other counter
+    // balanced. An upper bound alone would not have caught it either way
+    // round, so it is asserted as an equality.
+    if ((terr_cc_patches_filled_o != 32'd0) && (terr_cc_mat_cells_o != 32'd1024))
+      $fatal(1, "SMOKE: terrmat mat_cells=%0d -- a completed layer-E fill owes exactly 1,024 cells; anything else means beats from an unplaced lattice reached the plane",
+             terr_cc_mat_cells_o);
     if ((terr_vj_sweeps_started_o != 32'd0) && (terr_tv_samples_o == 32'd0))
       $fatal(1, "SMOKE: terrvel a sweep started but TERRAIN.VELOCITY evaluated no samples");
 
