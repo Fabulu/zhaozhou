@@ -495,12 +495,18 @@ if (-not $BuildIn) {
          # EVERY NEW SWITCH NEEDS A TAG HERE. This one is 2026-09-26's.
          elseif ($NoTerrainMaterial) { 'zhao_console_core_smoke_notermat' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
-         # EVERY NEW SWITCH NEEDS A TAG HERE. This one is METASIDE's,
-         # and it matters more than most: this form builds a DIFFERENT
-         # ARRANGEMENT of the console, so sharing the plain run's object
-         # directory would mean the plain gate could run a walk-arranged
-         # binary and report the parked console's numbers.
-         elseif ($WalkRaster) { 'zhao_console_core_smoke_walkras' }
+         # -WalkRaster USED TO BE AN ARM OF THIS CHAIN and is now an
+         # APPENDING MODIFIER below, beside -LintOnly. UNPARK, 2026-09-27:
+         # it is not a control form, it is the ARRANGEMENT every control form
+         # is run in, so it is ORTHOGONAL to all of them. As an `elseif` it
+         # could only ever build ONE of the two arrangements of a form --
+         # `-Mutant -WalkRaster` took the `_mut` tag and verilated a
+         # walk-arranged console into the PARKED mutant's object directory,
+         # which is this chain's own documented collision arriving through
+         # the door marked "every new switch needs a tag" rather than past
+         # it. The standalone form's tag is UNCHANGED by construction:
+         # 'zhao_console_core_smoke' + '_walkras' is the same string the
+         # `elseif` produced, so no existing form moves directory.
          # EVERY NEW SWITCH NEEDS A TAG HERE. These two are 2026-09-27's, and
          # the UNCOVERED arm must come FIRST because it implies -FieldActive:
          # tested the other way round it would fall through to the positive
@@ -517,6 +523,13 @@ if (-not $BuildIn) {
          elseif ($MsMutTail) { 'zhao_console_core_smoke_msmuttail' }
          elseif ($MsMutFrag) { 'zhao_console_core_smoke_msmutfrag' }
          else { 'zhao_console_core_smoke' }
+  # -WalkRaster COMBINES with every control form above, so like -LintOnly it
+  # APPENDS rather than joining the chain. It must come BEFORE the -LintOnly
+  # append so that `-WalkRaster -LintOnly` keeps the '..._walkras_lint' tag it
+  # already had. UNPARK, 2026-09-27: running the five committed control forms
+  # in arrangement 1 is what needed this -- five forms times two arrangements
+  # is ten object directories, and the chain could express five.
+  if ($WalkRaster) { $tag = "${tag}_walkras" }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
   # whichever tag its companion chose and verilate into a directory a real run
@@ -535,6 +548,16 @@ if (-not $BuildIn) {
 }
 if (-not (Test-Path $BuildIn)) { New-Item -ItemType Directory -Path $BuildIn | Out-Null }
 $bd = (Resolve-Path $BuildIn).Path
+# PRINT THE OBJECT DIRECTORY. UNPARK, 2026-09-27: this script's tag chain
+# carries three separate paragraphs about two forms silently sharing a build
+# directory, and until this line the tag was UNOBSERVABLE from a run's own
+# output -- so "each form has its own tag" could only ever be read off the
+# source, never off the evidence. The collision it warns about is silent BY
+# CONSTRUCTION (the `*.o` are deleted before each compile, so the forms merely
+# rebuild each other), which means the log is the only place it could ever
+# have shown. A run that quotes its own directory lets a reader difference two
+# forms' logs and SEE that they were built apart.
+Write-Host "build dir: $bd"
 
 $top = 'tb_zhao_console_core_smoke'
 
