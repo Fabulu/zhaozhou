@@ -5092,6 +5092,7 @@ module tb_zhao_console_core_smoke
 `define PC_FRAG `PC_SHELL.u_render_bin.u_tile.u_fragment
 `define PC_TILE `PC_SHELL.u_render_bin.u_tile
 `define PC_TEXST `PC_SHELL.u_render_bin.u_tile.u_texture_stage
+`define PC_MOSAIC `PC_TEXST.u_texture_v3.u_mosaic
   // ==========================================================================
   // TAGPHASE'S LOCALISATION PROBE -- WHICH STAGE FIRST CARRIES THE FAULT
   // ==========================================================================
@@ -5277,6 +5278,11 @@ module tb_zhao_console_core_smoke
   logic [7:0]  tg2_ctl_addr_q  [TG2_CAP_N];
   int unsigned tg2_ctl_c_q;
 
+  int unsigned tg4_req_n_q, tg4_pick_n_q, tg4_b_nz_q;
+  int unsigned tg4_pa_q, tg4_pb_q, tg4_rab_q;
+  logic [7:0]  tg4_wab_min_q, tg4_wab_max_q;
+  logic [7:0]  tg4_a_or_q, tg4_b_or_q, tg4_w_or_q, tg4_t_or_q, tg4_t_max_q;
+  logic [7:0]  tg4_w_min_q, tg4_w_max_q;
   int unsigned tg3_job_n_q, tg3_job_nopw_q, tg3_job_inval_q, tg3_job_zs_q, tg3_job_tag_q;
   logic [7:0]  tg3_tag_q  [TG2_CAP_N];
   logic [1:0]  tg3_samp_q [TG2_CAP_N];
@@ -5295,6 +5301,12 @@ module tb_zhao_console_core_smoke
       tg2_post_c_q <= 0; tg2_ret_c_q <= 0;    tg2_ctl_c_q <= 0;
       tg3_job_n_q <= 0; tg3_job_nopw_q <= 0; tg3_job_inval_q <= 0;
       tg3_job_zs_q <= 0; tg3_job_tag_q <= 0; tg3_c_q <= 0;
+      tg4_req_n_q <= 0; tg4_pick_n_q <= 0; tg4_b_nz_q <= 0;
+      tg4_a_or_q <= 8'd0; tg4_b_or_q <= 8'd0; tg4_w_or_q <= 8'd0;
+      tg4_t_or_q <= 8'd0; tg4_t_max_q <= 8'd0;
+      tg4_w_min_q <= 8'hFF; tg4_w_max_q <= 8'd0;
+      tg4_pa_q <= 0; tg4_pb_q <= 0; tg4_rab_q <= 0;
+      tg4_wab_min_q <= 8'hFF; tg4_wab_max_q <= 8'd0;
     end else begin
       // ---- E: submitted to Early-Z ----
       if (`PC_TILE.earlyz_frag_valid_w && `PC_TILE.earlyz_frag_ready_w) begin
@@ -5342,6 +5354,71 @@ module tb_zhao_console_core_smoke
           tg2_ret_c_q <= tg2_ret_c_q + 1;
         end
       end
+      // ---- J: THE MOSAIC PICK, BOTH SIDES (TAGPHASE round 4) ----
+      // WHY THIS EXISTS. Repairing the join moved `tile_or` from 222 to 212 in
+      // `-FieldActive` -- tile 30 stopped being fetched -- and that NARROWS
+      // clause 4's evidence from "both tiles the program names" to one. The
+      // comfortable reading is "the requests became coherent", and this
+      // repository's rule is that the explanation which absolves the design is
+      // the one to check hardest.
+      //
+      // The mosaic's three inputs are the FLAT REQUEST's, measured rather than
+      // assumed: `zhao_texture_island_v3_top.sv:1314-1316` writes
+      // `mosaic_material_a = frag_base_rgb_i[23:16]`,
+      // `mosaic_material_b = frag_base_rgb_i[15:8]` and
+      // `mosaic_weight = frag_weight_i`. Those are `ms[BASERGB]` and
+      // `ms[WEIGHT]` -- exactly the fields the swap corrupted. So the pick was
+      // never a separate defect; it was the same one, and it mattered far more
+      // than three samples.
+      //
+      // THE DISCRIMINATOR IS THE REQUEST SIDE, NOT THE PICK SIDE. If mat_b
+      // still REACHES the mosaic then the composed material's second tile is
+      // arriving and the pick law simply did not select it -- `pick = p <
+      // weight ? mat_a : mat_b` is the frozen law of terrain_rules 6.2 and the
+      // hash is not this packet's business. If mat_b stopped arriving, the
+      // material path is broken and the tidy explanation is wrong.
+      if (`PC_MOSAIC.req_valid_i && `PC_MOSAIC.req_ready_o) begin
+        tg4_req_n_q <= tg4_req_n_q + 1;
+        tg4_a_or_q  <= tg4_a_or_q | `PC_MOSAIC.req_mat_a_i;
+        tg4_b_or_q  <= tg4_b_or_q | `PC_MOSAIC.req_mat_b_i;
+        tg4_w_or_q  <= tg4_w_or_q | `PC_MOSAIC.req_weight_i;
+        if (`PC_MOSAIC.req_weight_i < tg4_w_min_q) tg4_w_min_q <= `PC_MOSAIC.req_weight_i;
+        if (`PC_MOSAIC.req_weight_i > tg4_w_max_q) tg4_w_max_q <= `PC_MOSAIC.req_weight_i;
+        if (`PC_MOSAIC.req_mat_b_i != 8'd0) tg4_b_nz_q <= tg4_b_nz_q + 1;
+      end
+      if (`PC_MOSAIC.pick_valid_o && `PC_MOSAIC.pick_ready_i) begin
+        tg4_pick_n_q <= tg4_pick_n_q + 1;
+        tg4_t_or_q   <= tg4_t_or_q | `PC_MOSAIC.pick_tile_o;
+        if (`PC_MOSAIC.pick_tile_o > tg4_t_max_q) tg4_t_max_q <= `PC_MOSAIC.pick_tile_o;
+        // THE TWO TILES THE FIELD PROGRAM NAMES, COUNTED SEPARATELY. The OR
+        // and the MAX above saturate across 1,216 picks that include MESH
+        // fragments -- the mosaic lane runs with `req_mosaic_i` tied high and
+        // serves every fragment -- so neither can say whether terrain's OWN
+        // second tile was ever selected. These two can.
+        //
+        // GUARDED, because `SFF_MAT_A`/`SFF_MAT_B` live in
+        // `smoke_field_fixture.svh`, which is itself included under this ifdef.
+        // Without the guard every NON-field form dies at verilate with
+        // "Can't find definition of variable: 'SFF_MAT_A'" -- which is how this
+        // probe broke `-Mutant` on its first run.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+        if (`PC_MOSAIC.pick_tile_o == SFF_MAT_A) tg4_pa_q <= tg4_pa_q + 1;
+        if (`PC_MOSAIC.pick_tile_o == SFF_MAT_B) tg4_pb_q <= tg4_pb_q + 1;
+`endif
+      end
+      // AND THE REQUESTS THAT COULD REACH EITHER, which is the denominator the
+      // two counters above are meaningless without: a request whose mat_a/mat_b
+      // are not the field's pair cannot pick either of them, however the hash
+      // falls.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      if (`PC_MOSAIC.req_valid_i && `PC_MOSAIC.req_ready_o &&
+          (`PC_MOSAIC.req_mat_a_i == SFF_MAT_A) &&
+          (`PC_MOSAIC.req_mat_b_i == SFF_MAT_B)) begin
+        tg4_rab_q <= tg4_rab_q + 1;
+        if (`PC_MOSAIC.req_weight_i < tg4_wab_min_q) tg4_wab_min_q <= `PC_MOSAIC.req_weight_i;
+        if (`PC_MOSAIC.req_weight_i > tg4_wab_max_q) tg4_wab_max_q <= `PC_MOSAIC.req_weight_i;
+      end
+`endif
       // ---- I: THE JOIN ITSELF (TAGPHASE round 3) ----
       // Round 2 put the fault at or before `job_metadata_capture_w`, and the
       // control showed THREE matstate fields moving together on the offenders
@@ -10763,6 +10840,16 @@ module tb_zhao_console_core_smoke
     if (geom_wmh_overwrite_o != 32'd0)
       $fatal(1, "SMOKE: %0d record(s) were captured before the previous one was consumed by a job. zhao_geom_tilewalk's handshake is meant to be SERIAL, and this is the violation its own `overlap_o` cannot see -- that guard ANDs `tstate_q != T_TAKE` with a `t_ready_o` containing `tstate_q == T_TAKE`.",
              geom_wmh_overwrite_o);
+
+    // ---- TAGPHASE ROUND 4: THE MOSAIC PICK, BOTH SIDES --------------------
+    $display("SMOKE: early-diag tagphase4 mosaic reqs=%0d picks=%0d | mat_a[or]=%02h mat_b[or]=%02h mat_b_nonzero_reqs=%0d | weight[or/min/max]=[%02h %0d %0d] | pick_tile[or/max]=[%0d %0d]",
+             tg4_req_n_q, tg4_pick_n_q, tg4_a_or_q, tg4_b_or_q, tg4_b_nz_q,
+             tg4_w_or_q, tg4_w_min_q, tg4_w_max_q, tg4_t_or_q, tg4_t_max_q);
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    $display("SMOKE: early-diag tagphase4 field pair: requests naming {%0d,%0d} = %0d, weight[min/max]=[%0d %0d] | picks of MAT_A=%0d, picks of MAT_B=%0d",
+             SFF_MAT_A, SFF_MAT_B, tg4_rab_q, tg4_wab_min_q, tg4_wab_max_q,
+             tg4_pa_q, tg4_pb_q);
+`endif
 
     // ---- TERRAIN.COMPOSED_MATERIAL's publisher, MATPUB 2026-09-27 ----------
     // Hoisted here with the rest: this is ABOVE both the fragment-tag gate and
