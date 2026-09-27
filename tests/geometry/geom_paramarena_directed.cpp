@@ -56,6 +56,7 @@
 // rather than as three hundred failures in ten unrelated cases.
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "verilated.h"
@@ -190,12 +191,43 @@ struct Descriptor {
   // indeterminate value compared against a decoded one, which fails at random.
   int64_t area2 = 0;
   int16_t min_x = 0, max_x = 0, min_y = 0, max_y = 0;
+  // SCHEMA v3's third sixteen bytes, as four 32-bit words because that is how
+  // Verilator presents a 128-bit port and converting it here would be a second
+  // expression of the layout in the one file that exists to check the first.
+  uint32_t matstate[4] = {0, 0, 0, 0};
 };
 
 // A 48-bit field does not fit `get_field`'s uint32_t. Kept separate rather than
 // widening that one, because every existing caller reads a field of 32 bits or
 // fewer and a silent widening is how a 32-bit check starts passing on 48 bits
 // of garbage.
+// Write one field of the 128-bit MATSTATE word, given as four 32-bit host
+// words in the order Verilator presents them. Offsets are `zhao_pkg`'s
+// `ZHAO_MS_*_LO` / `_W`, written out here rather than derived, because a bench
+// that computes the layout from the same expression the RTL uses cannot
+// disagree with it -- and disagreeing with it is the entire job.
+void ms_set(uint32_t* w, int lo, int width, uint32_t value) {
+  const uint64_t mask = (width >= 32) ? 0xFFFFFFFFull
+                                      : ((1ull << width) - 1ull);
+  const uint64_t v = static_cast<uint64_t>(value) & mask;
+  for (int bit = 0; bit < width; ++bit) {
+    if ((v >> bit) & 1ull) w[(lo + bit) >> 5] |= (1u << ((lo + bit) & 31));
+  }
+}
+
+uint32_t ms_get(const uint32_t* w, int lo, int width) {
+  uint32_t out = 0;
+  for (int bit = 0; bit < width; ++bit) {
+    if ((w[(lo + bit) >> 5] >> ((lo + bit) & 31)) & 1u) out |= (1u << bit);
+  }
+  return out;
+}
+
+bool ms_equal(const uint32_t* a, const uint32_t* b) {
+  for (int i = 0; i < 4; ++i) if (a[i] != b[i]) return false;
+  return true;
+}
+
 uint64_t get_field64(const uint8_t* b, int lo, int w) {
   uint64_t v = 0;
   for (int i = 0; i < w; ++i) {
@@ -276,6 +308,7 @@ bool push_td(Dut& t, const Descriptor& d, int max_wait = 20000) {
   t.td_max_x_i = static_cast<uint32_t>(d.max_x) & 0xFFFu;
   t.td_min_y_i = static_cast<uint32_t>(d.min_y) & 0xFFFu;
   t.td_max_y_i = static_cast<uint32_t>(d.max_y) & 0xFFFu;
+  for (int w = 0; w < 4; ++w) t.td_matstate_i[w] = d.matstate[w];
   for (int i = 0; i < max_wait; ++i) {
     t.eval();
     const bool go = t.td_ready_o != 0;
@@ -459,6 +492,7 @@ WalkResult walk(Dut& t, uint32_t head, int max_wait = 400000) {
       d.max_x = sx12(static_cast<uint32_t>(t.t_max_x_o));
       d.min_y = sx12(static_cast<uint32_t>(t.t_min_y_o));
       d.max_y = sx12(static_cast<uint32_t>(t.t_max_y_o));
+      for (int w = 0; w < 4; ++w) d.matstate[w] = t.t_matstate_o[w];
       r.tris.push_back(d);
       r.illegal.push_back(static_cast<uint8_t>(t.t_illegal_o));
       WalkTriVerts tv;
@@ -801,6 +835,36 @@ int main(int argc, char** argv) {
     d.max_x = static_cast<int16_t>(2047 - i * 5);
     d.min_y = static_cast<int16_t>(-1000 + i * 7);
     d.max_y = static_cast<int16_t>(1500 - i * 11);
+    // ---- SCHEMA v3's MATERIAL STATE, AND THE VALUES ARE AGAIN THE TEST ---
+    // Built field by field from `zhao_pkg`'s own offsets, with EVERY ONE of
+    // the fourteen given a value that varies with `i`. Three properties, all
+    // asserted as premises in case 1c before anything is required of the round
+    // trip:
+    //   * EVERY STATE IS DISTINCT, so a decoder that hands back a NEIGHBOUR's
+    //     word fails rather than agreeing with itself. That is the whole point
+    //     -- `u_geom_tidq` was ONE BEHIND and mis-attributed 74 of 75
+    //     triangles with every range guard passing, and a fixture where
+    //     consecutive triangles share a material cannot see it.
+    //   * EVERY FIELD VARIES, so a decoder that pins one field to a constant
+    //     (or to the default it would have taken with no publication) fails on
+    //     that field rather than passing on the thirteen others.
+    //   * THE RESERVE IS ZERO, which the decoder's `td_ms_rsvd_bad_c` requires
+    //     -- so `t_illegal_o` staying low is itself a check that the 13 spare
+    //     bits landed where the layout says.
+    ms_set(d.matstate, 0,   1, 1u);                              // valid
+    ms_set(d.matstate, 1,   1, static_cast<uint32_t>(i & 1));    // detail
+    ms_set(d.matstate, 2,   8, 0x11u + i * 3u);                  // vertex_alpha
+    ms_set(d.matstate, 10,  8, 0x22u + i * 5u);                  // effect_tag
+    ms_set(d.matstate, 18,  8, 0x33u + i * 7u);                  // stencil_ref
+    ms_set(d.matstate, 26, 32, 0xC0DE0000u + i * 0x137u);        // fragment_state
+    ms_set(d.matstate, 58,  2, static_cast<uint32_t>((i + 1) & 3));   // sample_count
+    ms_set(d.matstate, 60,  8, 0x44u + i * 11u);                 // base_binding
+    ms_set(d.matstate, 68,  3, static_cast<uint32_t>((i + 2) & 7));   // material_recipe
+    ms_set(d.matstate, 71,  8, 0x55u + i * 13u);                 // recipe_weight
+    ms_set(d.matstate, 79, 24, 0x9A0000u + i * 0x2111u);         // base_rgb
+    ms_set(d.matstate, 103, 2, static_cast<uint32_t>((i + 3) & 3));   // response_class
+    ms_set(d.matstate, 105, 2, static_cast<uint32_t>((i + 1) & 3));   // palette_slot
+    ms_set(d.matstate, 107, 8, 0x66u + i * 17u);                 // palette_generation
     tris.push_back(d);
     ckt(push_td(t, d), "A: a descriptor is accepted");
   }
@@ -1046,6 +1110,122 @@ int main(int argc, char** argv) {
             static_cast<uint32_t>(static_cast<int32_t>(r.tris[i].max_y)),
             "case 1b: the scissored max_y is bit-identical");
       }
+    }
+
+    // -------------------------------------------------------------------
+    // CASE 1c -- SCHEMA v3's MATERIAL STATE, AND THE SUBSTITUTION TEST
+    //
+    // WHY THIS EXISTS. `zhao_geom_bin_pipe_v2` takes 378 bits its own
+    // `META_FIXED_W` sum names -- the 298-bit flat request, the 48-bit
+    // continuation tail and the 32-bit fragment state -- and `zhao_geom_setup`
+    // mentions all three ZERO times. They arrive on console wires from
+    // `zhao_material_window`, whose publication is HELD across a span. On the
+    // live path that is correct by the window's interlock; on the walk path
+    // the window moved on frames ago, so every walked triangle would have
+    // taken the LAST material's state. Directive section 4 names that
+    // shortcut -- "the span had one material, so reuse the last publication"
+    // -- and forbids it.
+    //
+    // AND THE ONLY CHECK THAT CAN SEE IT IS A SUBSTITUTION CHECK. A round trip
+    // on a fixture where consecutive triangles share a material passes
+    // perfectly while the defect is present, because the wrong answer and the
+    // right one are the same bits. `u_geom_tidq` is this console's own
+    // precedent: ONE BEHIND, 74 of 75 triangles mis-attributed, every range
+    // guard passing. So the states here are DISTINCT per triangle and the
+    // final check is not "is it right" but "is it THIS triangle's and not the
+    // PREVIOUS one's".
+    {
+      std::printf("\n=== case 1c: the material state is THIS triangle's\n");
+      int distinct = 0, rsvd_clear = 0;
+      for (size_t i = 0; i < tris.size(); ++i) {
+        bool uniq = true;
+        for (size_t j = 0; j < i; ++j)
+          if (ms_equal(tris[j].matstate, tris[i].matstate)) uniq = false;
+        if (uniq) ++distinct;
+        if (ms_get(tris[i].matstate, 115, 13) == 0) ++rsvd_clear;
+      }
+      cke(static_cast<uint32_t>(tris.size()), static_cast<uint32_t>(distinct),
+          "case 1c PREMISE: every material state is DISTINCT, so a decoder"
+          " handing back a neighbour's word fails rather than agreeing with"
+          " itself -- the tidq lesson, made a fixture property");
+      cke(static_cast<uint32_t>(tris.size()), static_cast<uint32_t>(rsvd_clear),
+          "case 1c PREMISE: the 13-bit reserve is ZERO in every written state,"
+          " so t_illegal_o staying low is evidence the spare bits landed where"
+          " ZHAO_MS_RSVD_LO says and not on top of a field");
+
+      // EVERY FIELD VARIES ACROSS THE SET. Without this a decoder that pinned
+      // one field to a constant -- or to the profile default it would take
+      // with no publication at all -- would pass on that field while failing
+      // nothing, which is the shape of an anti-vacuity check that passes on a
+      // constant 0xFF.
+      struct Fld { int lo, w; const char* name; };
+      static const Fld FIELDS[] = {
+        {1, 1, "detail"}, {2, 8, "vertex_alpha"}, {10, 8, "effect_tag"},
+        {18, 8, "stencil_reference"}, {26, 32, "fragment_state"},
+        {58, 2, "sample_count"}, {60, 8, "base_binding"},
+        {68, 3, "material_recipe"}, {71, 8, "recipe_weight"},
+        {79, 24, "base_rgb"}, {103, 2, "response_class"},
+        {105, 2, "palette_slot"}, {107, 8, "palette_generation"},
+      };
+      for (const Fld& f : FIELDS) {
+        bool moved = false;
+        for (size_t i = 1; i < tris.size(); ++i)
+          if (ms_get(tris[i].matstate, f.lo, f.w) !=
+              ms_get(tris[0].matstate, f.lo, f.w)) moved = true;
+        ckt(moved, (std::string("case 1c PREMISE: ") + f.name +
+                    " VARIES across the set, so a decoder pinning it to a"
+                    " constant is caught on that field").c_str());
+      }
+
+#ifdef ZHAO_PARAMWALK_HOLDSTATE_MUT
+      // ---- INVERTED POLARITY: THE POSITIVE CONTROL -----------------------
+      // Built against `tests/mutants/zhao_geom_paramwalk_holdstate_mutant.sv`,
+      // whose one substantive line drives `t_matstate_o` from the PREVIOUS
+      // triangle's decode. THIS RUN PASSES WHEN THE SUBSTITUTION CHECK BELOW
+      // WOULD HAVE FAILED, which is the only way "case 1c can see the
+      // forbidden shortcut" stops being an argument and becomes evidence.
+      //
+      // AND IT ASSERTS THE SEAM ENGAGED. CLAUDE.md records two mutants that
+      // measured UNMUTATED production because a `-D` never reached the
+      // `ifndef` it was aimed at, and the builds succeeded with no diagnostic.
+      // So this requires the substitution to be OBSERVED at least once rather
+      // than merely counting zero mismatches -- a run where the seam did not
+      // engage produces zero substitutions and would otherwise read as a pass.
+      {
+        int substituted = 0, survived = 0;
+        for (size_t i = 1; i < r.tris.size() && i < tris.size(); ++i) {
+          if (ms_equal(r.tris[i].matstate, tris[i - 1].matstate)) ++substituted;
+          if (ms_equal(r.tris[i].matstate, tris[i].matstate)) ++survived;
+        }
+        ckt(substituted > 0,
+            "MUTANT (inverted): the walker handed at least one triangle the"
+            " PREVIOUS triangle's material state -- the forbidden 'reuse the"
+            " last publication', observed");
+        cke(0, static_cast<uint32_t>(survived),
+            "MUTANT (inverted): and no triangle got its own, so the seam"
+            " engaged rather than compiling production twice");
+      }
+#else
+      for (size_t i = 0; i < r.tris.size() && i < tris.size(); ++i) {
+        ckt(ms_equal(tris[i].matstate, r.tris[i].matstate),
+            "case 1c: the material state is BIT-IDENTICAL through the real"
+            " guard, arbiter, controller and SDRAM");
+        // THE SUBSTITUTION CHECK ITSELF, and it is the deliverable. It is
+        // written as an INEQUALITY against the previous triangle rather than
+        // as an equality against this one, because those are different claims:
+        // the equality above says "the bytes survived", and this says "they
+        // are not the bytes of the triangle before it". A hold-the-last-value
+        // defect satisfies the first on any fixture and the second on none.
+        if (i > 0) {
+          ckt(!ms_equal(r.tris[i].matstate, tris[i - 1].matstate),
+              "case 1c: triangle N's material state is NOT triangle N-1's --"
+              " the forbidden 'reuse the last publication' cannot pass here");
+        }
+      }
+#endif
+      cke(0, t.tri_id_wide_o,
+          "case 1c: no chunk id exceeded the tail's 18-bit arena field, so"
+          " nothing was truncated (the counter is fired by its own case)");
     }
     cke(1, t.dirs_read_o, "case 1: the directory was read once");
     cke(0, t.dir_mismatch_o, "case 1 / case 2a: dir_mismatch_o is SILENT on a healthy frame");

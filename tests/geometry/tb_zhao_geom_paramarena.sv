@@ -750,7 +750,20 @@ module tb_zhao_geom_paramarena
   // names for `ARENA_CHUNKS`: if they ever disagreed the walker would read
   // between two vertices and decode a plausible record, and nothing would say
   // which default had moved.
+`ifdef ZHAO_PARAMWALK_HOLDSTATE_MUT
+  // THE FOURTH COMMITTED POSITIVE CONTROL (METASIDE, 2026-09-27), and
+  // the only one whose subject is a RULE rather than a counter.
+  // `tests/mutants/zhao_geom_paramwalk_holdstate_mutant.sv` drives
+  // `t_matstate_o` from the PREVIOUS triangle's decode -- directive
+  // section 4's forbidden "reuse the last publication" -- and case 1c's
+  // substitution check must FAIL against it. Selected by a plain `-D`
+  // against a plain `ifdef`: CLAUDE.md records that a `-D` cannot
+  // override a FUNCTION-LIKE define and says nothing when it fails to,
+  // so the selector is this shape and not that one.
+  zhao_geom_paramwalk_holdstate_mutant #(
+`else
   zhao_geom_paramwalk #(
+`endif
       .MAX_WALK     (WALK_MAX),
       .CHUNK_IDS    (CHUNK_IDS),
       .ARENA_CHUNKS (MAX_CHUNKS),
