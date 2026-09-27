@@ -284,6 +284,37 @@ uint64_t make_clear_word(uint32_t rgb, uint8_t tag, uint32_t depth, uint8_t sten
   return w.pack();
 }
 
+// ---- ZHAO_PRETEX_OFFSETS ---------------------------------------------------
+// The absolute bit offsets of `stage_candidate_data_o`'s fields, which is the
+// 491-bit `zhao_raster_pretex_v2_t` record.  THESE WERE FOURTEEN BARE LITERALS
+// SCATTERED THROUGH `check_candidate` UNTIL 2026-09-27 (REDFIX), and that is the
+// whole reason the desync `ceba0bfe` introduced cost a week: the numbers lived
+// here, the layout lived in `fpga/rtl/common/zhao_render_texture_pkg.sv`, and
+// NOTHING RELATED THE TWO.  A literal in a test cannot go stale loudly.
+//
+// `tools/rtl/check_pretex_offsets.py` now reads this block and the package's own
+// `PRETEX_*` constants and fails if they disagree, so the pair has an instrument
+// and the next widening costs a red rather than a week.  Registered as the
+// `pretex_offset_agreement` ctest.  If you move a field, move it in the PACKAGE
+// and re-run that gate; do not edit one side.
+namespace pretex {
+constexpr int kBaseRgb           = 20;
+constexpr int kMaterialRecipe    = 277;
+constexpr int kBaseBinding       = 288;
+constexpr int kSampleCount       = 296;
+constexpr int kVOverW            = 298;
+constexpr int kUOverW            = 330;
+constexpr int kStencilReference  = 363;
+constexpr int kEffectTag         = 371;
+constexpr int kVertexAlpha       = 379;
+constexpr int kVertexRgb         = 387;
+constexpr int kSourceId          = 411;
+constexpr int kFragmentState     = 427;
+constexpr int kInvw24            = 459;
+constexpr int kInTileAddr        = 483;
+}  // namespace pretex
+// ---- end ZHAO_PRETEX_OFFSETS ----------------------------------------------
+
 class Harness {
  public:
   VerilatedContext* context = new VerilatedContext;
@@ -405,37 +436,6 @@ class Harness {
     if (line == 0x00002000u) return 0x0005u;  // CLUT8 raw index 5
     return 0x00c7u;
   }
-
-// ---- ZHAO_PRETEX_OFFSETS ---------------------------------------------------
-// The absolute bit offsets of `stage_candidate_data_o`'s fields, which is the
-// 491-bit `zhao_raster_pretex_v2_t` record.  THESE WERE FOURTEEN BARE LITERALS
-// SCATTERED THROUGH `check_candidate` UNTIL 2026-09-27 (REDFIX), and that is the
-// whole reason the desync `ceba0bfe` introduced cost a week: the numbers lived
-// here, the layout lived in `fpga/rtl/common/zhao_render_texture_pkg.sv`, and
-// NOTHING RELATED THE TWO.  A literal in a test cannot go stale loudly.
-//
-// `tools/rtl/check_pretex_offsets.py` now reads this block and the package's own
-// `PRETEX_*` constants and fails if they disagree, so the pair has an instrument
-// and the next widening costs a red rather than a week.  Registered as the
-// `pretex_offset_agreement` ctest.  If you move a field, move it in the PACKAGE
-// and re-run that gate; do not edit one side.
-namespace pretex {
-constexpr int kBaseRgb           = 20;
-constexpr int kMaterialRecipe    = 277;
-constexpr int kBaseBinding       = 288;
-constexpr int kSampleCount       = 296;
-constexpr int kVOverW            = 298;
-constexpr int kUOverW            = 330;
-constexpr int kStencilReference  = 363;
-constexpr int kEffectTag         = 371;
-constexpr int kVertexAlpha       = 379;
-constexpr int kVertexRgb         = 387;
-constexpr int kSourceId          = 411;
-constexpr int kFragmentState     = 427;
-constexpr int kInvw24            = 459;
-constexpr int kInTileAddr        = 483;
-}  // namespace pretex
-// ---- end ZHAO_PRETEX_OFFSETS ----------------------------------------------
 
   void check_candidate() {
     require(!expected_candidates.empty(),
@@ -1817,11 +1817,29 @@ void run_door(bool door_shut) {
     // in every run.  `tools/rtl/check_pretex_offsets.py` now holds the two sides
     // together, so the numbers above cannot drift silently again.
     //
-    // So the door gets its metadata evidence back: a job whose source identity,
-    // fragment state, depth or continuation tail changed across binner/Early-Z
-    // fails HERE, instead of only failing if it also disturbed a pixel.
-    h->validate_candidates = true;
-    h->validate_fragments = true;
+    // AND THEY ARE STILL OFF, FOR A DIFFERENT AND STILL-LIVE REASON, which I
+    // found by turning them on and measuring rather than by reasoning.
+    //
+    // DOORCOST's stated reason is genuinely discharged: the offsets above are
+    // repaired, named, and held to the package by
+    // `tools/rtl/check_pretex_offsets.py`. So I enabled these two. The door test
+    // then failed with
+    //
+    //     packet-d directed FAIL cycle=1370: Packet-C admitted a candidate
+    //     absent from the zref plane scoreboard
+    //
+    // because THIS test never pushes `expected_candidates` for the jobs it
+    // issues -- the door arm drives the DUT directly and leans on the
+    // framebuffer oracle, so `check_candidate` runs against an empty deque.
+    // Enabling the probes needs a candidate oracle for the door path, which is
+    // door/I55 work and belongs to whoever owns that entry, not to REDFIX.
+    //
+    // Recorded rather than quietly reverted, because the next reader will reach
+    // the same conclusion I did -- the quoted blocker is gone, so flip the flag
+    // -- and the second blocker is not written anywhere else. The offsets are
+    // repaired either way; what is missing is the scoreboard, not the numbers.
+    h->validate_candidates = false;
+    h->validate_fragments = false;
   }
 
   h->begin_frame(1, 1, clear);

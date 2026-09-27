@@ -584,8 +584,17 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "                            !attr_bundle_valid_w;",
         "pretex_w = make_raster_pretex(continuation_w, request_w);",
         "earlyz_payload_in_w = pack_earlyz_payload(pretex_w.payload);",
-        "zhao_raster_earlyz #(.PAYLOAD_W(410))",
-        "zhao_skid2 #(.W(490))",
+        # 411, NOT 410. `ceba0bfe` (NORMALMAP, 2026-09-26) widened the
+        # Early-Z payload to 411 bits and updated the RTL --
+        # `zhao_raster_tile_pipe_v2.sv:869` reads `PAYLOAD_W(411)` -- but not
+        # this pin, so `packet_d_registration_static` has been red on it ever
+        # since. Sixth site of one desync; REDFIX, 2026-09-27.
+        "zhao_raster_earlyz #(.PAYLOAD_W(411))",
+        # 491, NOT 490: the candidate skid carries the WHOLE pretex record,
+        # and `RASTER_PRETEX_W` went 490 -> 491 with the same widening.
+        # `zhao_raster_tile_pipe_v2.sv:956` reads `.W(491)`. Seventh site of
+        # one desync; REDFIX, 2026-09-27.
+        "zhao_skid2 #(.W(491))",
         ".rst_n(rst_n)",
         "zhao_raster_texture_stage_v3 #(",
         ".MIGRATION_SHADOWS(1'b0)",
