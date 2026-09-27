@@ -10092,6 +10092,128 @@
 //      memories, so MUXBUILD was right to call it that, about the binner rather
 //      than about the door.
 //
+//      -- SWAPCLOSE, 2026-09-27. STILL TIED, AND ALL THREE STEPS ARE BUILT.
+//      The walk reached the raster, the time multiplex is MEASURED working, and
+//      the frame does not complete. The console therefore ships in arrangement
+//      0 and this entry stays OPEN. Full account:
+//      `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-swapclose.md`.
+//
+//      WHAT WAS BUILT: (1) TriangleDescriptor SCHEMA v2 -- 32 bytes, `area2`
+//      s48 and the four s12 scissored bounds in a second sixteen, first
+//      sixteen byte-identical to v1, declared once in `zhao_pkg` with encoder
+//      and decoder derived from the same constants and an elaboration guard
+//      that the table FILLS the record. (2) The console-side source select,
+//      upstream of the three-way fork. (3) `zhao_geom_tilewalk`, the sequencer,
+//      plus `t_first_o`/`t_last_o` on the walker -- `last` is what RESOLVES a
+//      tile and only the walk can know it.
+//
+//      MEASURED IN THE COMPOSED CONSOLE at GEOM_WALK_RASTER = 1:
+//
+//        GEOM.SETUP took 89 triangle(s)      the reference wants 75
+//        tilewalk  tiles=3 jobs=13 door=13 failed=0 stall=168 overlap=0
+//        paramwalk dirs=3 chunks=3 tris=14 trisbad=0
+//        fetcharm  vread=45 vbad=0 pvsplit=0
+//        arenabin  AGREES WITH THE BINNER EXACTLY: 101 tile reference(s)
+//        rasterdiag jobs[started/sunk]=[13 0] resolved_tiles=0
+//                   frags[covered/blended]=[149 0]
+//        raster    pixels=0
+//
+//      **89 = 75 + 14, AND 14 IS EXACTLY `tris_emitted_o`.** The time multiplex
+//      is not an argument any more: the SAME silicon processed the live frame
+//      from GEOM.CLIP and then the walk's triangles out of SDRAM. That is the
+//      architecture's central bet and it lands exactly. The door carried every
+//      job -- 13 issued, 13 taken, counted in two modules on two register
+//      enables -- and every fetched vertex record is legal.
+//
+//      WHERE IT STOPS, AND IT IS ONE PLACE. `frags[covered/blended] = [149 0]`:
+//      fragments are generated and NONE EVER BLEND, so the tile pipe never
+//      empties, never reaches RS_SWAP, `resolved_tiles` is 0 and `job_ready_o`
+//      -- `(rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i` -- never
+//      returns. The door shuts after job 13. `be_stall_clocks_o = 168` rules
+//      out the geometry back end: the sequencer is not waiting on
+//      setup/attrpack, it is waiting on the raster.
+//
+//      ---- THE CLAIM THIS ENTRY HAS CARRIED SINCE WALKSWAP IS SHORT BY 378
+//      ---- BITS, AND THAT IS WHY -----------------------------------------
+//
+//      This entry says the swap owes "a SECOND setup and attrpack back end fed
+//      from SDRAM plus the vertex-fetch arm". MEASURED: `zhao_geom_setup`
+//      mentions the flat request, the continuation tail and the fragment state
+//      ZERO times, and `zhao_geom_attrpack` once, in a comment DISCLAIMING one
+//      of them. Those three are 298 + 48 + 32 = 378 of METAW's 1,877 bits and
+//      they come from `zhao_material_window` on console wires. A second
+//      instance of both blocks, bit-identical and perfectly verified, STILL
+//      WOULD NOT PRODUCE THEM. This entry's own arithmetic says so one
+//      paragraph above -- "437 fixed bits plus 1,440 of plane" -- and nobody
+//      differenced the two.
+//
+//      IT IS THE SAME FALSE PREMISE PVSCHEMA KILLED, FAILING A SECOND TIME.
+//      The original was "the 24-byte ProjectedVertex DOES carry what those need
+//      ... so the planes are RECOMPUTABLE". PVSCHEMA corrected the COLOUR half.
+//      The half nobody corrected is that `job_meta` IS NOT ALL PLANES.
+//
+//      AND IT IS WHY THE FRAGMENTS HANG, on the evidence available. The flat
+//      request on the walk path is whatever `zhao_material_window` LAST
+//      published -- `pub_valid_q` is a held register -- not the triangle's. The
+//      flat-request block in this file says of `aux_surface_ctx`: "The
+//      console's AUX response (`pg_*` inside the shell) has no producer either,
+//      so A FRAGMENT THAT ASKED WOULD NEVER RETIRE." 149 fragments never
+//      retired. CONSISTENT WITH THE EVIDENCE AND NOT PROVEN: the texture
+//      counters sit below two further bench assertions and were not reached.
+//      The measurement that settles it is `SMOKE: texture fragments=/samples=`
+//      on arrangement 1 with those two checks relocated.
+//
+//      ---- SO THE CONSOLE SHIPS PARKED, AND THAT IS ONE CONSTANT ----------
+//
+//      `GEOM_WALK_RASTER = 0`. At 1 this console renders ZERO PIXELS, and a
+//      machine that draws nothing is not mergeable. Owner directive section 7:
+//      "retain the correct complete oracle, use only the already-permitted
+//      admission/fallback behavior, and report the deadline miss." The oracle
+//      is retained, buildable and tested; this is the report.
+//
+//      IT IS ONE CONSTANT DRIVING BOTH HALVES BECAUSE HALF AN ARRANGEMENT IS
+//      WORSE THAN EITHER WHOLE ONE. `JOB_SRC = 0` alone would not park this --
+//      it would WEDGE the console: with the door unbuilt `walk_job_ready_o` is
+//      a constant zero, so GEOM.TILEWALK sits in T_JOB forever with `active_o`
+//      high, holding `cl_o_ready` low and stopping the geometry dead.
+//
+//      AND THE PARKED STATE IS ASSERTED, NOT SKIPPED. `geom_walk_raster_o`
+//      tells the bench which console it is gating: at 1 the sweep must start,
+//      finish and hold every counter; at 0 it must be a STRUCTURAL ZERO -- no
+//      tile walked, no job issued, no vertex fetched. A bench that fell silent
+//      on the parked arrangement would be a gate that cannot reach the state it
+//      checks, and its silence would read exactly like a pass.
+//
+//      WHAT REMAINS, AND IT IS NO LONGER A WIRING JOB: the 378 bits need a home
+//      keyed to the triangle. Directive section 4 authorises the mechanism BY
+//      NAME -- "a versioned extension or immutable sidecar keyed by the same
+//      identity" -- so it needs no ruling, and it forbids the shortcut in the
+//      same breath. "The span had one material, so reuse the last publication"
+//      is the convenient zero in disguise: true in this fixture, false in
+//      general, and it would pass every gate. The fields do not decompose
+//      cleanly either -- the flat request and the material's fragment state are
+//      per-MATERIAL and the descriptor already carries `material_id`, but
+//      `vertex_alpha` is the span's (R89), `detail` is terrain's per-primitive
+//      declaration and I54's arena id rides in the same tail. `zhao_material_
+//      window` is in `fpga/rtl/texture/`, which this packet was fenced out of.
+//
+//      THREE DEFECTS FOUND BY READING, NONE VISIBLE TO ANY GATE, AND TWO OF
+//      THEM ARE THE SAME SHAPE. (a) The tile coordinate is the tile's top-left
+//      PIXEL, not an index -- `zhao_geom_binner_v2` drives
+//      `$signed({2'd0, d_jx_r, 4'd0})` and says so in words; emitting indices
+//      would have put every tile inside the top-left 24x24 pixels with every
+//      counter balancing. (b) DOMAIN 3 IS TERRAIN AND WAS BEING REFUSED AS
+//      MALFORMED -- 30 of 45 vertices, by `zhao_geom_parambuf` implementing
+//      GEOM.VERTID.md's "3 reserved (illegal)" while this file declares
+//      `GEOM_VID_DOM_TERR = 2'd3` and `SHARED_DOMAINS` is a FOUR-bit mask. It
+//      survived because `pv_illegal_o` had NO CONSUMER ANYWHERE until this
+//      packet gave the walk one: a detector with no reader is not a detector,
+//      in either direction. (c) `cd_o_owner` and `geom_clipdoor_granted_o` were
+//      three clients wide against `.NCLIENT (4)`, discarding the FOURTH
+//      client's ownership bit and whole grant counter -- and the fourth client
+//      is TERRAIN again. When an arm arrives, the things that DESCRIBE it go
+//      stale, and nothing in the tree reads them back.
+//
 //      `walk_job_*` IS BOUND, NOT TIED, and the difference is structural: with
 //      `JOB_SRC = 0` the branch that reads those inputs IS NOT BUILT, so there
 //      is no path a capability is being withheld from. It is bound at
@@ -13240,6 +13362,20 @@ module zhao_console_core
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // HIGH FOR THE WHOLE SWEEP. The frame is not finished until this
+  // falls: in arrangement 1 the walk is what produces pixels, and the
+  // binner's `render_drain_done_o` now says only that the RETAINED
+  // ORACLE has finished discarding its jobs. A bench that stopped on
+  // the old condition would cut the picture off part way and every
+  // counter would still balance.
+  output logic        geom_tw_busy_o,
+  // WHICH ARRANGEMENT THIS CONSOLE WAS BUILT AS -- a constant, exported so a
+  // bench gates the right invariant instead of skipping one. 1 = the SDRAM
+  // walk feeds the raster; 0 = `zhao_geom_binner_v2`'s on-chip drain does and
+  // the sweep is a structural zero. A bench that merely fell silent when the
+  // walk is parked would be a gate that cannot reach the state it checks, and
+  // its silence would read exactly like a pass.
+  output logic        geom_walk_raster_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -13715,11 +13851,24 @@ module zhao_console_core
   output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
-  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
-  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
-  // (2). `granted_o` is flattened 32 bits each, least significant slice
-  // client 0, so the port widened 64 -> 96 with the third arm.
-  output logic [95:0] geom_clipdoor_granted_o,
+  // FOUR clients: GEOM.REPLAY's mesh triangles (0), the forge (1),
+  // PART.CLIPFEED's polygon particles (2) and TERRAIN.CLIPFEED (3).
+  // `granted_o` is flattened 32 bits each, least significant slice client 0.
+  //
+  // THIS COMMENT SAID "THREE" AND THIS PORT WAS 96 BITS UNTIL 2026-09-27
+  // (SWAPCLOSE), while `u_geom_clipdoor` below has been instantiated with
+  // `.NCLIENT (4)`. The block drives `[NCLIENT*32-1:0]`, so the FOURTH
+  // client's whole 32-bit grant counter was discarded on the way out and
+  // terrain's grant count was not observable at this boundary at all. It
+  // showed up as a Verilator WIDTHEXPAND, which `verilate()` does not surface
+  // because it does not pass `-Wall`.
+  //
+  // IT IS THE SAME SHAPE AS THIS PACKET'S OTHER TERRAIN FINDING. Domain 3 was
+  // being refused as a malformed record by a rule written before terrain was a
+  // producer domain; this is two more places written before terrain was a
+  // client. When an arm arrives, the things that DESCRIBE it are what go
+  // stale, and nothing in the tree reads them back.
+  output logic [127:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -19267,7 +19416,12 @@ module zhao_console_core
   // Which client the beat belongs to. The door publishes it so a composer or a
   // bench can SAY so out loud rather than infer it; nothing downstream routes
   // on it, because a triangle that has entered is a triangle.
-  wire [2:0]         cd_o_owner;
+  // FOUR bits, one per client, because `o_owner_o` is `[NCLIENT-1:0]` and
+  // `NCLIENT` is 4. It was [2:0], so the terrain arm's ownership bit was
+  // discarded. IT STILL HAS NO READER ANYWHERE -- widening stops the
+  // truncation, it does not create a consumer -- and that is said here because
+  // UNUSEDSIGNAL is waived across these directories, so nothing else will.
+  wire [3:0]         cd_o_owner;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // GEOM.REPLAY's untextured declaration -- the R48-shaped named seam, now
@@ -20823,6 +20977,20 @@ module zhao_console_core
   // ALUT / +0 DSP), TriangleDescriptor SCHEMA v2 (`area2` and the scissored
   // box, which GEOM.SETUP consumes and v1 could not carry), and this block --
   // so the triangles now have a consumer and it draws pixels.
+  // ---- I55: WHICH SOURCE FEEDS THE RASTER, IN ONE PLACE -----------------
+  // 1 = the SDRAM walk drives `u_tile`, which is what entry I55 asks for.
+  // 0 = `zhao_geom_binner_v2`'s on-chip drain does, which is the console this
+  // packet inherited and the complete oracle owner directive section 7 asks to
+  // keep buildable.
+  //
+  // IT DRIVES BOTH HALVES AND IT HAS TO. `JOB_SRC` alone parks the DOOR, not
+  // the arrangement: with the door unbuilt `walk_job_ready_o` is a constant
+  // zero, so GEOM.TILEWALK would sit in T_JOB forever with `active_o` high,
+  // which holds `cl_o_ready` low and stops the console's geometry dead. Half
+  // an arrangement is worse than either whole one, so there is one constant
+  // and not two.
+  localparam int unsigned GEOM_WALK_RASTER = 0;
+
   wire               pw_t_valid_w, pw_t_ready_w, pw_t_illegal_w, pw_t_untex_w;
   wire               pw_t_first_w, pw_t_last_w;
   wire [15:0]        pw_t_v0_w, pw_t_v1_w, pw_t_v2_w, pw_t_material_w;
@@ -21502,6 +21670,8 @@ module zhao_console_core
   // which is the invariant the geometry-phase join spends three paragraphs
   // above establishing, restated for the second arrangement rather than
   // assumed to carry over.
+  assign geom_tw_busy_o   = tw_active_w;
+  assign geom_walk_raster_o = (GEOM_WALK_RASTER != 0);
   assign cl_o_ready       = !tw_active_w && st_tri_ready_w && ap_tri_ready_w
                             && vid_tri_ready_w;
   assign st_o_ready       = tw_active_w ? tw_be_out_ready_w
@@ -24883,7 +25053,7 @@ module zhao_console_core
     // ELABORATION, which costs zero logic; the run-time form is priced at
     // 2,050 comb ALUT by `zhao_probe_doorcost_jobmux` and is the forbidden
     // concurrent arrangement with a select line on it.
-    .JOB_SRC     (1)
+    .JOB_SRC     (GEOM_WALK_RASTER)
   ) u_shell (
     // THE BINNER'S SERIALISE PASS WAS EXPORTED HERE AND IS RETIRED
     // (ARENACOMPOSE, 2026-09-26, console entry I55). `render_ser_req_i` and
@@ -31941,7 +32111,11 @@ module zhao_console_core
       // A LEVEL. The block takes its own rising edge, so the composer keeps no
       // register of its own for this. The walk cannot start before publication
       // in any case, because `walk_ready_o` carries `pub_valid_i`.
-      .start_i (pub_valid),
+      // GATED BY THE ARRANGEMENT. At `GEOM_WALK_RASTER = 0` the sweep never
+      // starts, so `active_o` is a structural zero, every select below reads
+      // its GEOM.CLIP side, and this console is byte-identical to the one
+      // before this packet.
+      .start_i ((GEOM_WALK_RASTER != 0) && pub_valid),
 
       .head_tile_o  (tw_head_tile_w),
       .head_chunk_i (geom_ab_head_chunk_o),

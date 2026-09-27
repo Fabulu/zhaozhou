@@ -1608,6 +1608,20 @@ module zhao_console_board
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // HIGH FOR THE WHOLE SWEEP. The frame is not finished until this
+  // falls: in arrangement 1 the walk is what produces pixels, and the
+  // binner's `render_drain_done_o` now says only that the RETAINED
+  // ORACLE has finished discarding its jobs. A bench that stopped on
+  // the old condition would cut the picture off part way and every
+  // counter would still balance.
+  output logic        geom_tw_busy_o,
+  // WHICH ARRANGEMENT THIS CONSOLE WAS BUILT AS -- a constant, exported so a
+  // bench gates the right invariant instead of skipping one. 1 = the SDRAM
+  // walk feeds the raster; 0 = `zhao_geom_binner_v2`'s on-chip drain does and
+  // the sweep is a structural zero. A bench that merely fell silent when the
+  // walk is parked would be a gate that cannot reach the state it checks, and
+  // its silence would read exactly like a pass.
+  output logic        geom_walk_raster_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -2083,11 +2097,24 @@ module zhao_console_board
   output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
-  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
-  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
-  // (2). `granted_o` is flattened 32 bits each, least significant slice
-  // client 0, so the port widened 64 -> 96 with the third arm.
-  output logic [95:0] geom_clipdoor_granted_o,
+  // FOUR clients: GEOM.REPLAY's mesh triangles (0), the forge (1),
+  // PART.CLIPFEED's polygon particles (2) and TERRAIN.CLIPFEED (3).
+  // `granted_o` is flattened 32 bits each, least significant slice client 0.
+  //
+  // THIS COMMENT SAID "THREE" AND THIS PORT WAS 96 BITS UNTIL 2026-09-27
+  // (SWAPCLOSE), while `u_geom_clipdoor` below has been instantiated with
+  // `.NCLIENT (4)`. The block drives `[NCLIENT*32-1:0]`, so the FOURTH
+  // client's whole 32-bit grant counter was discarded on the way out and
+  // terrain's grant count was not observable at this boundary at all. It
+  // showed up as a Verilator WIDTHEXPAND, which `verilate()` does not surface
+  // because it does not pass `-Wall`.
+  //
+  // IT IS THE SAME SHAPE AS THIS PACKET'S OTHER TERRAIN FINDING. Domain 3 was
+  // being refused as a malformed record by a rule written before terrain was a
+  // producer domain; this is two more places written before terrain was a
+  // client. When an arm arrives, the things that DESCRIBE it are what go
+  // stale, and nothing in the tree reads them back.
+  output logic [127:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -5084,6 +5111,8 @@ module zhao_console_board
       .geom_tw_stall_o                    (geom_tw_stall_o),
       .geom_tw_overlap_o                  (geom_tw_overlap_o),
       .geom_tw_door_o                     (geom_tw_door_o),
+      .geom_tw_busy_o                     (geom_tw_busy_o),
+      .geom_walk_raster_o                 (geom_walk_raster_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
       .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
       .geom_pw_chunks_o                   (geom_pw_chunks_o),
