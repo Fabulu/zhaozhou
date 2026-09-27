@@ -6112,7 +6112,106 @@
 //      constant pair 1/0, under which a correct block and a swapping block emit
 //      byte-identical output forever.
 //
-// I34. TERRAIN.PATCH's FIELD LANES -- what REMAINS is a DESTINATION and a SMOKE
+// I34. TERRAIN.PATCH's FIELD LANES -- NOT a tie-off. Both remaining items are
+//      BUILT AND EXERCISED IN THE ASSEMBLED CONSOLE. The head used to continue
+//      "what REMAINS is a DESTINATION and a SMOKE MODE, not a port", and that
+//      is what was closed: `TERRAIN.COMPOSED_MATERIAL` (X3)(a) and directive
+//      13.7's `-FieldActive` positive path (X3)(b).
+//
+//      =====================================================================
+//      CLOSED 2026-09-27, MEASURED IN THE ASSEMBLED CONSOLE BY THE
+//      COORDINATOR AT THE MERGE, NOT INHERITED FROM A PACKET'S REPORT.
+//      Every number below was read out of a run I launched myself, on this
+//      tree, after merging `gz/tagphase`. The register read 1 before this
+//      declaration and 0 after it, and nothing else in the entry was edited
+//      to make that true.
+//
+//      THE OWNER'S SIX ACCEPTANCE CLAUSES
+//      (`reports/OWNER-DECISION-20260927-I34-COMPOSED-MATERIAL.md`), each
+//      answered separately and in the POSITIVE direction:
+//
+//        1 installed AND EXECUTED
+//          `fldearth records=1 runs=1089 noprog=0 not_begun=0
+//           skipped_uncovered=0 faults=0 tail_rejected=0 short=0`
+//        2 covers the intended terrain
+//          `fldpatch tp_covers=1`, `skipped_uncovered=0`
+//        3 a value that CANNOT equal the authored baseline by accident
+//          `terrmat field_composed=1024 token_refused=0`, and the assertion
+//          `SMOKE: fieldmat CLAUSE 3/4 EXECUTED` EXECUTES -- it is not a
+//          number printed above a gate. Delivered at ZERO SILICON: `lower()`
+//          folds the whole uniform block, so no file under `fpga/` changed.
+//        4 reaches the intended PRODUCTION consumer
+//          `mosaic tile[max/or]=[212 212]`, read off THE ADDRESS THE ISLAND
+//          ISSUED. 212 is `SFF_MAT_A` against an authored plane topping out
+//          at 6.
+//        5 the uncovered control RESTORES the authored result
+//          `-FieldUncovered`: `runs=0 skipped_uncovered=1089`,
+//          `field_composed=0`, `CLAUSE 5 EXECUTED tile_max=6`,
+//          `tile[max/or]=[6 7]` -- the plain run's tiles exactly.
+//        6 the no-field forms remain UNCHANGED
+//          plain smoke `SMOKE: PASS`, RC 0, WITH THE PUBLISHER ARMED:
+//          `pixels=2816`, `samples 1216 -> 1216`, `untagged 2816 -> 2816`,
+//          `reserved 0 -> 0`, `tile[max/or]=[6 7]`,
+//          `matpub cells=1024 commits=1 published=1 bursts=64 denied=0`.
+//
+//      CLAUSES 4 AND 5 READ ONE INSTRUMENT IN OPPOSITE DIRECTIONS -- 212
+//      covered, 6 uncovered, 6 with no field -- so each arm is the others'
+//      fail demonstration. That is what makes the pair EVIDENCE rather than
+//      three numbers, and it is preserved deliberately.
+//
+//      WHAT THIS ENTRY IS *NOT* CLOSING ON, stated because the owner's
+//      completion rule is deliberately strict ("I34 must become TRUE IN THE
+//      ASSEMBLED CONSOLE, not close because the document was edited to match
+//      what happens to exist"):
+//        * not on a reduced field -- 16 fields, `REGS(32)`, semantics and
+//          update behaviour all intact; nothing was cut to meet a budget;
+//        * not on testbench stimulus standing in for a live path -- the
+//          program is a REAL Earth spell
+//          (`compiler/src/field_ir/scorch_wash.ts`) fetched and sealed over
+//          the real bridge by FIELD.LOADER;
+//        * not on the bandwidth refusal that killed the sibling regions --
+//          measured HERE at 64 requests per published patch, break-even 129
+//          patches, 0.15% of frame against the siblings' 124%. The owner
+//          reserved the right to a new architecture decision if the built
+//          thing could not meet the contract. It meets it, so no escalation
+//          is owed.
+//
+//      AND CLAUSE 6 WAS MET BY REPAIR, NOT BY DISARMING THE GATE. With the
+//      publisher armed the plain smoke exited 1 on the SAMPLE gate, 1216
+//      against 1213. The cause was a METADATA SWAP AT THIS COMPOSER'S OWN
+//      JOIN: the `JOB_SRC == 1` door held 2,037 of its 1,877-bit metadata
+//      correctly and read the remaining 378 bits -- flat request,
+//      continuation tail, fragment state -- COMBINATIONALLY off
+//      GEOM.PARAMWALK's live bus, which `zhao_geom_tilewalk` releases in
+//      `T_TAKE` while the job is not offered until `T_JOB`. SIXTY OF 101 JOB
+//      ACCEPTS read that bus while it presented no record at all. See
+//      `u_walk_meta_hold` and `zhao_walk_meta_hold.sv`.
+//
+//      A LIVE RED THIS ENTRY DOES NOT COVER AND DOES NOT SILENCE.
+//      Both field forms exit 1 on `fld_earth_lane_desync_o`, and that is
+//      recorded here rather than left to be rediscovered:
+//        * it is INHERITED -- the field RTL is untouched by the clause-6
+//          repair, and the assertion arrived with the FIELDACTIVE packet
+//          (`bab66946`). It was previously UNREACHABLE because the sample
+//          gate fatal fired first; the repair EXPOSED it;
+//        * it reads 1 IN BOTH FORMS -- identically whether the field runs
+//          1,089 times or ZERO (`-FieldUncovered`, `runs=0`), so it is not
+//          proportional to field execution;
+//        * the field's RESULTS are independently checked and correct
+//          (`faults=0`, `field_composed=1024`, `token_refused=0`, 212 at the
+//          consumer, 6 restored under the control);
+//        * and it is a DEFECT, not a missing function. This register counts
+//          absent functionality. A live handshake defect belongs in the
+//          docket, and `register == 0` MUST NOT BE READ AS "the console is
+//          correct".
+//      Its shape is worth keeping: `lane_desync_o` differences the adapter's
+//      `cur_lane < held_lanes` against the consumer's `fld_ready_o`, which
+//      NOTHING loads both of -- the GOOD checker shape by this repository's
+//      own metadata-swap chapter. It is a working instrument reporting
+//      something real, and it is owed a diagnosis, not a mask.
+//      =====================================================================
+//
+//      what REMAINS is a DESTINATION and a SMOKE
 //      MODE, not a port. The head used to read "FIELD-HEIGHT LANE
 //      (`terr_pt_fld_*`) and its section 9.1 LIST INTAKE
 //      (`terr_pt_fld_add_*`) -- BOUNDARY"; that text is STALE and is struck
