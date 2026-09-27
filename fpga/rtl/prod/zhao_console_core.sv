@@ -6112,9 +6112,121 @@
 //      constant pair 1/0, under which a correct block and a swapping block emit
 //      byte-identical output forever.
 //
-// I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
-//      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
-//      composing the terrain compose engine (connected item 10).
+// I34. TERRAIN.PATCH's FIELD LANES -- what REMAINS is a DESTINATION and a SMOKE
+//      MODE, not a port. The head used to read "FIELD-HEIGHT LANE
+//      (`terr_pt_fld_*`) and its section 9.1 LIST INTAKE
+//      (`terr_pt_fld_add_*`) -- BOUNDARY"; that text is STALE and is struck
+//      here by I34CLOSE, 2026-09-27. NEW 2026-09-19, opened by composing the
+//      terrain compose engine (connected item 10).
+//
+//      =====================================================================
+//      READ THIS BLOCK FIRST -- IT IS THE NEWEST AND IT CORRECTS THIS ENTRY'S
+//      OWN HEAD. I34CLOSE, 2026-09-27. THE ENTRY IS STILL OPEN AND THE WORD
+//      "BOUNDARY" WAS STALE ANYWAY -- BOTH AT ONCE, WHICH IS WHY SIX PACKETS
+//      LANDED BETWEEN THEM. Register 2 -> 2, measured BARE. NOTHING BUILT,
+//      NO CLASSIFICATION EDITED: neither substance nor prose moved the number.
+//      Full enumeration: `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/
+//      FINDINGS-I34CLOSE.md`.
+//
+//      (X1) THE THREE PORTS THE REGISTER CLASSIFIES ON DO NOT EXIST.
+//           `terr_pt_fld_valid_i`, `_ready_o` and `_height_i` occur in this
+//           file FIVE TIMES, EVERY ONE INSIDE A COMMENT, and ZERO times as a
+//           port declaration. The surviving `terr_pt_fld_*` ports are three
+//           OUTPUTS -- `add_accept_o`, `add_reject_o`, `covers_o`. The section
+//           9.1 intake left this edge with FIELDARM on 2026-09-22.
+//           `tools/budget/completion_register.py:62,:238` classifies this
+//           entry by REGEX-MATCHING THE WORD "BOUNDARY" IN THIS PROSE, so the
+//           entry has been counted for a measurably false reason -- while
+//           being a genuine gap for three reasons the entry never stated.
+//
+//      (X2) ALL FOUR EARTH OUT-LANES ARE MET, re-measured at this commit
+//           rather than quoted:
+//             0 height   -> `.fld_height_i` :28936 -> u_terrain_patch.
+//                           composepub_acceptance case 2, 154/0.
+//             1 velocity -> `.a_velocity_i` :29007 -> u_terrain_veljoin -> ...
+//                           -> zhao_part_collide. terrain_veljoin_directed 19
+//                           (the REPAIRED test), part_terrain_tap 1297/0.
+//             2 material -> `.f_material_i` :29370 -> u_terrain_matjoin -> ...
+//                           -> `.t_material_token_i` :22818 -> mosaic.
+//                           matjoin 50, clipfeed_mat 41.
+//             3 nav_cost -> classified; citation VERIFIED at four sites.
+//                           `zref::nav::Service` built, integrated, tested:
+//                           nav_service_directed 113/0, wizards_nav 77/0.
+//           SO (M7)'s STATED BLOCKER IS RETIRED. The newest block below still
+//           says the composed triple "STILL HAS NO READER"; MATCARRY landed
+//           that reader at :22818. A layer-cake entry's TOP layer was already
+//           out of date, which is 15.35's subject arriving one level in.
+//
+//      (X3) WHAT ACTUALLY REMAINS, AND NEITHER ITEM IS A CHANNEL. This is the
+//           part no brief and no channel table has ever contained:
+//
+//           (a) `TERRAIN.COMPOSED_MATERIAL` [0x058B_0000, 0x05AB_0000), 2 MiB.
+//               NOT MET, and NOT REFUSED EITHER. Zero hits across `fpga/rtl/`
+//               and ZERO in `spec/memory_rules.md` -- section 5b's table
+//               carries COMPOSED_HEIGHT, COMPOSED_VELOCITY and
+//               COMPOSED_MIP_POOL and has no composed-material region at all.
+//               The allocation lives only in `reports/`.
+//               IT IS LIVE, and the citation chain is short: the vacation
+//               directive section 1 DESTINATIONS commissions it; DECISION
+//               RECORD 1 (`OWNER-RULINGS-20260919-EVENING.md:7934`) swept the
+//               map, MOVED `COMPOSED_NAV` off POST.ECHO and left this one
+//               "(unchanged)"; and on 2026-09-26 THE OWNER STRUCK
+//               `COMPOSED_NAV` AND WROTE IN THE SAME BREATH THAT
+//               `COMPOSED_MATERIAL` IS UNAFFECTED AND REMAINS LIVE
+//               (`DOCKET.md:33`). He looked at exactly this pair and struck
+//               exactly one.
+//               NEITHER MATERIAL PACKET EVER MENTIONED IT: `COMPOSED_MATERIAL`
+//               returns ZERO hits in FINDINGS-MATERIALPATH.md and ZERO in
+//               FINDINGS-MATCARRY.md. The two packets that built the material
+//               channel end to end never met the owner's DESTINATION clause.
+//               THIS IS NOT A CLAIM THAT THE REGION MUST BE BUILT. COMPOSEPUB
+//               refused the SIBLING regions on measured consumer-absence and
+//               bandwidth (`spec/memory_rules.md:450`) and the same argument
+//               may well apply. The claim is that NOBODY HAS ASKED. Compare
+//               (c): a refusal WITH a record is discharged; an absence with no
+//               record of any kind is merely unexamined.
+//               ASK IT AS DECISION-OR-BUILD. Do not build a writer first.
+//
+//           (b) DIRECTIVE 13.7's `-FieldActive` POSITIVE COMPOSED SMOKE MODE.
+//               NOT MET. `grep -rn FieldActive` returns SIX hits and every one
+//               is prose; `tests/prod/run_console_core_smoke.ps1` has no such
+//               switch. The directive requires it to "require nonzero actual
+//               runs, correct complete output values, actual terrain
+//               consumption and successful recovery after a deliberately bad
+//               program/association", and to keep the existing no-program form
+//               as the REFUSAL CONTROL rather than reading it as the positive
+//               gate. This entry's own (D) block below measures five distinct
+//               blockers for it, starting with REGS=32 composed against
+//               `crater_ring`'s need for 36. It is a packet, not an afternoon.
+//
+//           (c) `TERRAIN.COMPOSED_VELOCITY`'s writer is DISCHARGED, not owed.
+//               `spec/memory_rules.md:450`, packet COMPOSEPUB 2026-09-25, is a
+//               full decision record under the directive's own section 0
+//               delegation: refused on measured consumer-absence plus 80.17%
+//               -> 124.41% -> 177.49% of frame. Cited here so it is not
+//               re-counted as a gap by the next sweep.
+//
+//      (X4) FOUR MORE SELF-REFUTING SENTENCES IN THIS FILE, struck where they
+//           stand rather than quietly overwritten:
+//             * :29232-29238, the adapter's own "TRUE ACCOUNTING", still says
+//               "2 material -> NOBODY. The only channel still open" -- THIRTY
+//               LINES ABOVE `u_terrain_matjoin` reading `efa_material` at
+//               :29370, in this same file.
+//             * :29249 calls `ans_present_o` "PRODUCED, NOT CONSUMED";
+//               `efa_present[2]` is read at :29369.
+//             * :13990 says "the three adapter outputs with no consumer are
+//               left OPEN at that instantiation". ONE is open (`nav_cost_o`),
+//               by owner ruling. Two have consumers.
+//             * :8196-8200's "WHAT CLOSING THE REST NEEDS" is three-quarters
+//               spent: patch_v2's four-channel clause is retired by
+//               measurement, the EARTH stream adapter is BUILT, and only
+//               13.7's `-FieldActive` survives -- which is (X3)(b), and is
+//               the one item nobody carried forward.
+//           EVERY ONE of these makes the remaining work look SMALLER or the
+//           entry look more BLOCKED-ON-A-PORT than it is. 15.35's direction
+//           tell, holding across five independent sentences.
+//      =====================================================================
+//
 //
 //      =====================================================================
 //      READ THIS BLOCK FIRST -- IT IS THE NEWEST. MATERIALPATH, 2026-09-27:
