@@ -8285,18 +8285,26 @@ module tb_zhao_console_core_smoke
     // candidate patch lattice, 3,267 of them, and refuses to write this fixture
     // unless every one is a legal token.
     //
-    // THE CAUSE IS THAT THE CONSTANT NEVER ARRIVES. `lower()` folds every
-    // literal into the plan's preload rows at physical register
-    // `scalar_base + s`, and `zhao_field_host_v2`'s register-file preload port
-    // (:1250-1256) writes ONLY zeros and the declared IN_LANES. Measured: this
-    // program's token base 0xE1D41ED0 is preload row -> REGISTER 27, and the
-    // host writes registers 0..14. So out-lane 2 arrives as the computed low
-    // byte alone, tag 0x00, and is refused -- correctly. The same hole made
-    // `wave_pool`'s smoothstep read 0 for 1.0/2.0/3.0 and its amplitude 0.
-    // The full finding, and the two candidate repairs, are in the CONSTANT POOL
-    // block of `tests/prod/smoke_field_fixture_gen.cpp`.
+    // THE CAUSE WAS THAT THE CONSTANT NEVER ARRIVED, AND IT IS NOW REPAIRED
+    // (2026-09-27, LASTGAP). `lower()` folded every uniform-only value into the
+    // plan's preload rows at physical register `scalar_base + s`, and
+    // `zhao_field_host_v2`'s register-file preload port (:1250-1256) writes
+    // ONLY zeros and the declared IN_LANES, at register == LANE INDEX. Measured:
+    // this program's token base 0xE1D41ED0 was a preload row at REGISTER 27 and
+    // the host writes registers 0..14, so out-lane 2 arrived as the computed low
+    // byte alone, tag 0x00, and was refused -- correctly. The same hole made
+    // `wave_pool`'s smoothstep read 0 for 1.0/2.0/3.0.
+    //
+    // `LowerOptions::materialize_scalars` now emits every scalar slot a VECTOR
+    // uop reads as an LDC at the head of the physical stream, so the numbers
+    // arrive in the register file the microcode actually reads. ZERO silicon:
+    // `zhao_field_alu.sv:307` already executes OP_LDC. The fixture generator
+    // proves the delivery structurally -- it walks the emitted stream and
+    // requires every scalar-region read to follow its own LDC carrying
+    // `prep.scalar[]`'s number -- so this fatal firing again means something
+    // NEW, not the repaired defect.
     if (terr_mj_field_composed_o == 32'd0)
-      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d. NONZERO token_refused means the material word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1) -- and the MEASURED cause is NOT the program: the staged program's out-lane 2 is verified a legal v1 token at every vertex by the fixture generator. It is that `lower()` folds literals into preload rows at physical register scalar_base+s and zhao_field_host_v2 never writes those registers (its preload port writes only zeros and IN_LANES), so the token BASE reads zero. See the CONSTANT POOL block in smoke_field_fixture_gen.cpp. If token_refused is ZERO instead, the word never arrived at all and THAT is a routing fault",
+      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d. The constant-pool defect this message used to name is REPAIRED (lower() emits LDC uops; the fixture generator proves every scalar-region read follows its own LDC), so do NOT re-diagnose it as that. NONZERO token_refused means the word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1) -- look for corruption between the adapter and the join, or a second program staged. ZERO token_refused means the word never arrived at all, and THAT is a routing fault",
              fld_earth_runs_o, terr_mj_token_refused_o);
   `endif
 `endif
