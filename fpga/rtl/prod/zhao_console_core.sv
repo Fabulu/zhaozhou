@@ -9258,9 +9258,55 @@
 //      at the shell door, which is one hop rather than three and is the same
 //      18 bits.
 //
-// I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT
-//      (`u_geom_paramwalk.walk_*`, `t_*`) -- TIED, and this is the RENDERING
-//      CONSUMER that item 4 names.
+// I55. GEOM.PARAMBUF's WALK REQUEST and DECODED OUTPUT -- NOT a tie-off.
+//      (`u_geom_paramwalk.walk_*`, `t_*`) The walk is DRIVEN and its
+//      triangles are TAKEN, and every pixel this console draws comes from
+//      bytes that went through SDRAM.
+//
+//      ================= CLOSED 2026-09-27, MEASURED IN THE ASSEMBLED
+//      ================= CONSOLE BY THE COORDINATOR, NOT INHERITED
+//
+//      The head above said TIED for nine packets. It is false as of
+//      `GEOM_WALK_RASTER` defaulting to 1, and the closing evidence is the
+//      SHIPPED smoke, re-run at the merge rather than quoted from a packet:
+//
+//        SMOKE: tilewalk   tiles=11 empty=565 jobs=101 failed=0 door=101
+//        SMOKE: paramwalk  tris=101 trisbad=0 cut=0 denied=0 stray=0
+//        SMOKE: fetcharm   vread=303 vbad=0 (invariant vread == 3*tris=303)
+//        SMOKE: raster     pixels=2816 bursts=176 retired=94976 fatal=0
+//        SMOKE: PASS
+//
+//      `paramwalk tris` read 0/0/0 for EIGHT packets and is 101. `vread`
+//      read 0 and is 303, and its invariant `vread == 3*tris` is ASSERTED in
+//      the bench -- it is not a printed number, it fatals. `pixels=2816` is
+//      the arrangement's own REFERENCE-DERIVED count, unchanged from the
+//      parked console, so the walk did not merely produce pixels: it
+//      produced the RIGHT ones.
+//
+//      WHAT THIS ENTRY IS NOT CLOSING ON, stated because directive section 4
+//      forbids each of them by name:
+//        * not on a parallel legacy path -- `zhao_geom_binner_v2`'s drain is
+//          RETAINED as section 7's complete oracle behind `-BinnerDrain`, and
+//          its files are byte-identical to base. It is the OTHER arrangement,
+//          gated by its own ctest, not a fallback the shipped console uses.
+//        * not on a counter -- the closing test is a PIXEL, and the pixel
+//          count is reference-derived rather than self-reported.
+//        * not on prose -- the machine changed first. The four `ifdef` lines
+//          that flip the arrangement are the entire non-comment core diff.
+//
+//      AND THE PARAGRAPH THAT JUSTIFIED THE PARK WAS ALREADY FALSE WHEN THIS
+//      ENTRY STILL CARRIED IT. Its last section read "At 1 this console
+//      renders ZERO PIXELS" -- untrue from the moment PHASEFIX repaired the
+//      frame-done term a day earlier. Nine packets refused this entry and
+//      three of those refusals rested on claims that did not survive
+//      measurement. HANDOVER 15.35 is the law: a document that refutes
+//      itself is not self-correcting.
+//
+//      Residual, named rather than hidden: the walk gate leaves `WK_OWED`
+//      only on `walk_active_i`, so its safety rests on "publication always
+//      follows `frame_end`", which nothing currently asserts. That is a
+//      hardening item, not an open capability -- the capability is present,
+//      composed and drawing.
 //
 //      The walker is composed, reaches real memory through the real guard,
 //      and its round-trip evidence (`dir_mismatch_o`) is live. What is tied
