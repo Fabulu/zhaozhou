@@ -109,7 +109,12 @@ export interface Block {
   resource_actual?: { source_report?: string; alm?: number; dsp?: number; m10k?: number; fmax_mhz?: number };
   maturity: Maturity;
   maturity_log: MaturityLogEntry[];
-  blocked_on?: 'hardware';
+  // 'none' is a STRUCK 'hardware', kept as a value rather than deleted so the
+  // strike comment beside it survives in blocks.yml: four blocks cite the
+  // 2026-09-13 board characterisation (board_truth.json) that discharged their
+  // block. Both readers compare === 'hardware', so 'none' is inert here rather
+  // than truthy-blocked -- checked before widening the enum.
+  blocked_on?: 'hardware' | 'none';
   deferred?: boolean;
   cut_order?: number | null;
   superseded_by?: string | null;

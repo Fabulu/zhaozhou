@@ -373,7 +373,8 @@
         },
         "blocked_on": {
           "enum": [
-            "hardware"
+            "hardware",
+            "none"
           ]
         },
         "deferred": {
