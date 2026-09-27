@@ -2437,8 +2437,10 @@ module tb_zhao_console_core_smoke
   assign fld_warp_slot_valid_i  = 1'b0;
   assign fld_warp_prog_profile_i = 8'd1;
   assign fld_db_ret_ready_i     = 1'b1;
+`ifndef ZHAO_SMOKE_FIELD_ACTIVE
   assign fld_db_post_kind_i     = 3'd0;
   assign fld_db_post_addr_i     = 8'd0;
+`endif
   // THE LOADER'S STAGING WINDOW. A real base and a real extent rather than
   // zero: a zero-length window would make every install refuse for the same
   // reason, and a bench that cannot tell "refused because the window is empty"
@@ -2447,7 +2449,9 @@ module tb_zhao_console_core_smoke
   // composed loader comes out of reset publishing NOTHING.
   assign fld_ldr_stage_base_i   = 32'h1000_0000;
   assign fld_ldr_stage_bytes_i  = 32'h0010_0000;
+`ifndef ZHAO_SMOKE_FIELD_ACTIVE
   assign fld_db_post_data_i     = 96'd0;
+`endif
 
   // ---- THE F PROFILE IS ARMED AT A SLOT NOTHING WAS LOADED INTO ------------
   // Entry I5's closure, exercised the only way a smoke bench honestly can.
@@ -2458,7 +2462,24 @@ module tb_zhao_console_core_smoke
   // one, and a composed engine that returns a plausible number is exactly what
   // a smoke bench cannot tell from a composed engine returning a plausible
   // number for the wrong reason. A refusal has a named status and a counter.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  // MOVED TO SLOT 7 UNDER `-FieldActive`, and the property is PRESERVED rather
+  // than weakened. Entry I5's closure wants the F profile armed at a slot
+  // NOTHING WAS LOADED INTO, so that every particle walks the whole join and
+  // comes back with a named refusal. `-FieldActive` loads the Earth program
+  // into slot 0 (the loader's first reserved object index), so leaving the
+  // FLOW adapter there would make it find real microcode -- and the four
+  // assertions below (`fld_noprog_o` nonzero, `part_fld_samples_o` zero,
+  // `fld_runs_o` accounting) would be measuring a different experiment while
+  // still reading green-ish. Slot 7 is unloaded in every form of this bench,
+  // so I5's control keeps saying exactly what it said before.
+  //
+  // This is the one place this mode touches another entry's evidence, and it
+  // moves the PROBE rather than the CLAIM.
+  assign fld_flow_slot_i       = 3'd7;
+`else
   assign fld_flow_slot_i       = 3'd0;
+`endif
   assign fld_flow_slot_valid_i = 1'b1;
   assign fld_flow_par_i        = 128'd0;
 
@@ -2485,6 +2506,52 @@ module tb_zhao_console_core_smoke
   logic [31:0] fld_ret_lu_hit_q;
   logic [31:0] fld_ret_cm_refused_q;
   logic [31:0] fld_ret_seen_q;
+
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  // ==========================================================================
+  // THE FIELD PROGRAM IS STAGED AHEAD OF THE FRAME -- directive 13.7
+  // ==========================================================================
+  // `zhao_field_doorbell`'s law 1: "the mailbox is a real queue so the HPS may
+  // stage a whole program ahead of the fabric going idle". This is that stage,
+  // and it runs BEFORE the two I42 probes rather than instead of them -- both
+  // of those still post, still get their answers, and their assertions below
+  // are untouched. A mode that closed one entry by silently retiring another's
+  // evidence would be the renamed gap this campaign exists to stop.
+  //
+  // THE ORDER IS THE WHOLE POINT and it is two transactions on two doors:
+  //
+  //   INSTALL_CAPSULE (op 3, kind 0)  -> `zhao_field_loader`, which FETCHES the
+  //      capsule from region 6 over the REAL HPS bridge, validates its CRC,
+  //      SEALs it and PUBLISHES handle -> hash. Only this makes
+  //      `zhao_terrain_fieldlist` able to resolve the TerrainField's `program`.
+  //
+  //   LOAD WORDS (op 0)               -> `zhao_field_host_v2`'s microcode. The
+  //      loader has no `ld_*` port -- FH15 keeps the backing store and the
+  //      active cache as different objects -- so the executable has to arrive
+  //      here too. HEADER IS LAST because the header is what marks the slot
+  //      runnable; the generator emits it last and this FSM does not reorder.
+  //
+  //   COMMIT (op 1)                   -> the directory takes the hash.
+  //
+  // `fld_stage_done_q` then releases the frame. Without that gate the packet
+  // could reach CMD.EXEC's TerrainField arm while the program was still being
+  // fetched, and the record would resolve `noprog` -- which would look exactly
+  // like a routing defect and be nothing but a race in the bench.
+  localparam int unsigned FLD_STEP_INSTALL_C = 0;
+  localparam int unsigned FLD_STEP_LOAD0_C   = 1;
+  localparam int unsigned FLD_STEP_COMMIT_C  = FLD_STEP_LOAD0_C + SFF_N_LOAD;
+  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_COMMIT_C + 1;
+
+  localparam logic [31:0] FLD_TICKET_IN = 32'hFD10_0010;
+  localparam logic [31:0] FLD_TICKET_LD = 32'hFD10_0020;
+  localparam logic [31:0] FLD_TICKET_C2 = 32'hFD10_0030;
+
+  int unsigned fld_stage_step_q;
+  logic        fld_stage_done_q;
+  logic [31:0] fld_install_ok_q;
+  logic [31:0] fld_commit_ok_q;
+`endif
+
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       fld_db_post_valid_i  <= 1'b0;
@@ -2498,7 +2565,81 @@ module tb_zhao_console_core_smoke
       fld_ret_lu_hit_q     <= 32'd0;
       fld_ret_cm_refused_q <= 32'd0;
       fld_ret_seen_q       <= 32'd0;
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      fld_db_post_kind_i   <= 3'd0;
+      fld_db_post_addr_i   <= 8'd0;
+      fld_db_post_data_i   <= 96'd0;
+      fld_stage_step_q     <= FLD_STEP_INSTALL_C;
+      fld_stage_done_q     <= 1'b0;
+      fld_install_ok_q     <= 32'd0;
+      fld_commit_ok_q      <= 32'd0;
+`endif
     end else begin
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      if (fld_db_post_valid_i && fld_db_post_ready_o && !fld_stage_done_q) begin
+        fld_db_post_valid_i <= 1'b0;
+        if (fld_stage_step_q + 1 == FLD_STEP_DONE_C) fld_stage_done_q <= 1'b1;
+        fld_stage_step_q    <= fld_stage_step_q + 1;
+      end else if (!fld_db_post_valid_i && !fld_stage_done_q) begin
+        fld_db_post_valid_i <= 1'b1;
+        if (fld_stage_step_q == FLD_STEP_INSTALL_C) begin
+          // INSTALL_CAPSULE. `zhao_field_loader:568` reads the staging address
+          // out of data[63:0] and the length out of data[95:64]; the hash is
+          // the capsule's own, so a capsule whose header disagrees with what
+          // the HPS promised is refused rather than installed.
+          fld_db_post_op_i     <= 2'd3;                  // FH2
+          fld_db_post_kind_i   <= 3'd0;                  // INSTALL_CAPSULE
+          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_addr_i   <= 8'd0;
+          fld_db_post_data_i   <= {SFF_CAP_BYTES[31:0], 32'd0, SFF_STAGE_BASE};
+          fld_db_post_hash_i   <= SFF_HASH;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_IN;
+        end else if (fld_stage_step_q < FLD_STEP_COMMIT_C) begin
+          // A LOAD WORD, verbatim from the generator. The bench chooses NONE of
+          // these fields -- kind, address and the 96-bit payload are all the
+          // lowered HostPlan's, which is what keeps 13.7's "may not hand the
+          // patch ... an untracked association" satisfied.
+          fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
+          fld_db_post_kind_i   <= SFF_LD_KIND[fld_stage_step_q - FLD_STEP_LOAD0_C];
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= SFF_LD_ADDR[fld_stage_step_q - FLD_STEP_LOAD0_C];
+          fld_db_post_data_i   <= SFF_LD_DATA[fld_stage_step_q - FLD_STEP_LOAD0_C];
+          fld_db_post_hash_i   <= 32'd0;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_LD;
+        end else begin
+          fld_db_post_op_i     <= 2'd1;                  // COMMIT, header written
+          fld_db_post_kind_i   <= 3'd0;
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= 8'd0;
+          fld_db_post_hash_i   <= SFF_HASH;
+          fld_db_post_ok_i     <= 1'b1;
+          fld_db_post_ticket_i <= FLD_TICKET_C2;
+        end
+      end else if (fld_db_post_valid_i && fld_db_post_ready_o) begin
+        fld_db_post_valid_i <= 1'b0;
+        fld_probe_step_q    <= fld_probe_step_q + 2'd1;
+      end else if (!fld_db_post_valid_i && (fld_probe_step_q != 2'd2)) begin
+        fld_db_post_valid_i <= 1'b1;
+        fld_db_post_kind_i  <= 3'd0;
+        fld_db_post_addr_i  <= 8'd0;
+        fld_db_post_data_i  <= 96'd0;
+        if (fld_probe_step_q == 2'd0) begin
+          fld_db_post_op_i     <= 2'd2;                  // LOOKUP
+          fld_db_post_hash_i   <= 32'hFEED_BEEF;
+          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_LU;
+        end else begin
+          fld_db_post_op_i     <= 2'd1;                  // COMMIT, no header
+          fld_db_post_hash_i   <= 32'hFEED_BEEF;
+          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_ok_i     <= 1'b1;
+          fld_db_post_ticket_i <= FLD_TICKET_CM;
+        end
+      end
+`else
       if (fld_db_post_valid_i && fld_db_post_ready_o) begin
         fld_db_post_valid_i <= 1'b0;
         fld_probe_step_q    <= fld_probe_step_q + 2'd1;
@@ -2518,6 +2659,7 @@ module tb_zhao_console_core_smoke
           fld_db_post_ticket_i <= FLD_TICKET_CM;
         end
       end
+`endif
 
       // The returns, latched by TICKET rather than by arrival order: an order
       // assumption is exactly the thing a join gets wrong, and the ticket is
@@ -2531,6 +2673,15 @@ module tb_zhao_console_core_smoke
         if ((fld_db_ret_ticket_o == FLD_TICKET_CM) && fld_db_ret_refused_o) begin
           fld_ret_cm_refused_q <= fld_ret_cm_refused_q + 32'd1;
         end
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+        // Latched BY TICKET, like the two above, and for the same reason: an
+        // arrival-order assumption is exactly what a join gets wrong, and the
+        // ticket is the field that cannot be right by accident.
+        if ((fld_db_ret_ticket_o == FLD_TICKET_IN) && fld_db_ret_ok_o)
+          fld_install_ok_q <= fld_install_ok_q + 32'd1;
+        if ((fld_db_ret_ticket_o == FLD_TICKET_C2) && fld_db_ret_ok_o)
+          fld_commit_ok_q <= fld_commit_ok_q + 32'd1;
+`endif
       end
     end
   end
@@ -2766,8 +2917,30 @@ module tb_zhao_console_core_smoke
   //     names.
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  // ---- THE TERRAIN FIELD FIXTURE (directive 13.7's `-FieldActive`) ---------
+  // A REAL Earth program (spells/membrane.form -> wave_pool), lowered by the
+  // REAL production library at this console's OWN composed `.REGS (32)`, into
+  // the ZFH2 capsule the loader installs and the doorbell LOAD words the host
+  // executes. GENERATED, never hand-written: 13.7 forbids the bench handing
+  // the patch "an idealized field answer, or an untracked association
+  // assembled differently from production", and the ctest
+  // `smoke_field_fixture_fresh` fails if this header drifts from the generator.
+  `include "smoke_field_fixture.svh"
+`endif
+
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 768;   // records + header + CRC; the `ro` accumulator below is the arithmetic (SetView 112 B since R63)
+  // RAISED 768 -> 896 ON 2026-09-27 (FIELDACTIVE), and the old value was
+  // closer to the edge than entry I34 believed. The entry says "PKT_MAX_C is
+  // 768 and the current packet is 696; one TerrainField record is 112 bytes",
+  // which reads as 72 bytes of headroom. MEASURED at this commit the body is
+  // `ro` = 704 and the packet is 36 + 704 + 4 = 744, so the real headroom was
+  // TWENTY-FOUR bytes and a 112-byte record never fitted. The bound check below
+  // would have caught it loudly -- it is there precisely because an
+  // out-of-range write to an unpacked array is silently DISCARDED -- but the
+  // number in the entry is stale in the flattering direction and is corrected
+  // here rather than left for the next packet to re-derive.
+  localparam int unsigned PKT_MAX_C     = 896;   // records + header + CRC; the `ro` accumulator below is the arithmetic (SetView 112 B since R63, TerrainField 112 B under -FieldActive)
   // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
   // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
   // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
@@ -3199,6 +3372,23 @@ module tb_zhao_console_core_smoke
     if (in_part_region(a)) return 3;
     if (in_loom_region(a)) return 5;
     if ((a >= HPS_BASE) && (a < HPS_BASE + 32'(HPS_WORDS * 8))) return 4;
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    // REGION 6, THE FIELD PROGRAM STAGING WINDOW -- directive 13.7's
+    // `-FieldActive`. `fld_ldr_stage_base_i` has ADVERTISED 0x1000_0000 since
+    // the loader was composed and NOTHING HAS EVER SERVED IT: entry I34's
+    // blocker list says "the bench's played HPS has NO REGION at the staging
+    // base it already advertises, so the loader's first fetch hits the bench's
+    // own $fatal", and that is exactly what the `hps_region(...) == 0` arm
+    // below does. This is that region, and it holds the PRODUCTION PACKER'S
+    // OWN BYTES (tests/prod/smoke_field_fixture.svh, serialize_program_image)
+    // rather than anything this bench invented -- 13.7: "A bring-up bench may
+    // act as HPS by submitting bytes produced by this real software path."
+    //
+    // It is under the ifdef ON PURPOSE. The plain smoke must keep hitting the
+    // $fatal, because the plain smoke installs nothing and a read here would
+    // then be a real defect rather than this mode's traffic.
+    if ((a >= SFF_STAGE_BASE) && (a < SFF_STAGE_BASE + 32'(SFF_CAP_WORDS * 8))) return 6;
+`endif
     return 0;   // 5 is the loom stream; it reads through `hps_read` like 4
   endfunction
 
@@ -3263,6 +3453,9 @@ module tb_zhao_console_core_smoke
              hps_rd_valid_i <= 1'b1;
              hps_rd_data_i  <= (sh_region_q == 1) ? ring_read(sh_addr_q)
                              : (sh_region_q == 2) ? upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3]
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+                             : (sh_region_q == 6) ? SFF_CAP[(sh_addr_q - SFF_STAGE_BASE) >> 3]
+`endif
                              : hps_read(sh_addr_q);
              hps_rd_last_i  <= (sh_beats_q == 1);
              if (sh_region_q == 3) part_ddr_rd_beats_q <= part_ddr_rd_beats_q + 1;
@@ -3319,7 +3512,16 @@ module tb_zhao_console_core_smoke
       // The HPS producer's own walk, charter 7.4: FREE -> ARM_WRITING while the
       // body is written, then READY once it is sealed. CMD.SCHEDULER follows
       // the word forward-only and does not take FREE -> READY in one step.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      // THE FRAME WAITS FOR THE PROGRAM. SW.STREAM stages the plan ahead of
+      // need (doorbell law 1), and this is the bench playing that. Without it
+      // the TerrainField record could reach CMD.EXEC while the capsule was
+      // still in flight over the bridge, resolve `noprog`, and present as a
+      // routing defect that is really a race in the harness.
+      if (pkt_armed_q && reset_released_q && fld_stage_done_q && (ring_writes_q == 0)) begin
+`else
       if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
+`endif
         if (hps_state_i[0] == 2'd0) begin
           hps_state_i[0] <= 2'd1;               // ARM_WRITING
         end else if (hps_state_i[0] == 2'd1) begin
@@ -5798,6 +6000,10 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
       zhao_abi_pkg::zhao_rec_set_population_t   spop;
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      zhao_abi_pkg::zhao_rec_terrain_field_t    tf;
+      logic [8*zhao_abi_pkg::ZHAO_TERRAIN_FIELD_BYTES-1:0] tfv;
+`endif
       logic [255:0] bfv, efv;
       logic [383:0] prv, pr2v, pr3v, pr4v, pcv, sev, spopv;
       logic [255:0] dfv;
@@ -6040,6 +6246,60 @@ module tb_zhao_console_core_smoke
       ta.stage_mask = 8'b0000_0001;
 `endif
       ta.flags      = 8'h01;
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      // ---- THE TerrainField RECORD (ABI 0x0200, 112 B) ---------------------
+      // Every field here is a named constant or comes from the fixture. The
+      // `program` handle is the CAPSULE'S OWN published identity: the loader
+      // reads CANONICAL_PROGRAM_HANDLE32 out of the image header at SEAL and
+      // publishes it, and `zhao_terrain_fieldlist:304` matches the record
+      // against exactly that. Put any other number here and the console
+      // answers `noprog` -- correctly.
+      tf                 = '0;
+      tf.h_opcode        = zhao_abi_pkg::ZHAO_OP_TERRAIN_FIELD;
+      tf.h_record_bytes  = 16'(zhao_abi_pkg::ZHAO_TERRAIN_FIELD_BYTES);
+      tf.h_source_id     = 32'h0000_0200;
+      tf.h_flags         = 32'd0;
+      tf.program_f       = SFF_HANDLE;
+      // THE FOOTPRINT IS THIS MODE'S ANTI-VACUITY KNOB, and it is the only
+      // field that differs between the positive form and its control.
+      // `zhao_terrain_patch` tests it with `zhao_tp_covers`, a CLOSED-interval
+      // AABB against each lattice vertex's world x/z, and a vertex outside it
+      // takes `skipped_uncovered` -- the record is still banked, still
+      // resolved, still replayed, and evaluates NOTHING.
+      //
+      // So the pair differs in ONE FIELD OF ONE RECORD. Same capsule, same
+      // install, same load words, same commit, same packet length, same CRC
+      // arithmetic -- and if the composed console produced the same pixels
+      // either way, the field would be doing nothing and this mode would be
+      // the vacuous pass the brief warns about. That is the comparison, and
+      // it is why the control is a footprint and not a missing record.
+`ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+      // 16384.0 .. 16384.0039 in fx16 -- a real rectangle, nowhere near the
+      // island. NOT a zero rect: a degenerate footprint could be refused for
+      // being degenerate, which would test the wrong thing.
+      tf.footprint.x0    = 32'sh4000_0000;
+      tf.footprint.y0    = 32'sh4000_0000;
+      tf.footprint.x1    = 32'sh4000_0100;
+      tf.footprint.y1    = 32'sh4000_0100;
+`else
+      // +/- 16384.0 in fx16, which contains every lattice vertex this bench
+      // places. Deliberately generous: the question this mode answers is
+      // "does a field reach its consumers", not "is the coverage test tight",
+      // and `terrain_patch`'s own directed test owns the second one.
+      tf.footprint.x0    = -32'sh4000_0000;
+      tf.footprint.y0    = -32'sh4000_0000;
+      tf.footprint.x1    =  32'sh4000_0000;
+      tf.footprint.y1    =  32'sh4000_0000;
+`endif
+      // `age = min(frame_tick - start_tick, duration)`, SATURATED, per
+      // reference/src/zrender/terrain.cpp compose_lattice. start_tick 0 means
+      // the field has begun by the first frame; a nonzero duration means the
+      // phase divide is a real divide and not the `duration == 0 -> 1.0`
+      // shortcut, so the uniform lane carries a computed value.
+      tf.start_tick      = 32'd0;
+      tf.duration_ticks  = 32'd64;
+      tfv = zhao_abi_pkg::zhao_pack_terrain_field(tf);
+`endif
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
@@ -6101,6 +6361,16 @@ module tb_zhao_console_core_smoke
       ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = dfv[8*k +: 8];
       ro = ro + 32;  nrec = nrec + 1;
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+      // AFTER the DrawForm and BEFORE EndFrame. Command order is the law the
+      // field list seals in (13.7: "the hardware still enforces the 16-field
+      // tail-reject policy IN COMMAND ORDER"), and one record is well inside
+      // that bound -- `fld_earth_tail_rejected_o` is asserted zero below, so
+      // its silence is a measurement and not an absence of traffic.
+      for (int unsigned k = 0; k < zhao_abi_pkg::ZHAO_TERRAIN_FIELD_BYTES; k++)
+        pkt_mem[o + ro + k] = tfv[8*k +: 8];
+      ro = ro + zhao_abi_pkg::ZHAO_TERRAIN_FIELD_BYTES;  nrec = nrec + 1;
+`endif
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = efv[8*k +: 8];
       ro = ro + 32;  nrec = nrec + 1;
       // THE PACKET MUST FIT. `pkt_mem` is PKT_MAX_C bytes and an out-of-range
@@ -7455,6 +7725,24 @@ module tb_zhao_console_core_smoke
     if (terr_mj_held_overrun_o != 32'd0)
       $fatal(1, "SMOKE: terrmat held_overrun=%0d -- a page-stream cell beat arrived while the join still held one, so TERRAIN.PATCH is no longer one-vertex-at-a-time",
              terr_mj_held_overrun_o);
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    // `field_composed_o` IS THE HEADLINE NUMBER OF THIS PACKET. It counts cells
+    // the join composed from a LIVE FIELD's material rather than from the
+    // authored layer-E plane -- `zhao_terrain_matjoin:272` increments it only
+    // on `emit_c && ov_eff_c`, i.e. only when an override was actually in
+    // effect. It has read ZERO in every form of this bench since the join was
+    // composed, because no form ever issued a TerrainField.
+    //
+    // It is NOT asserted nonzero in the `-FieldUncovered` control, on purpose:
+    // there the record is banked and resolved and the coverage test rejects
+    // every vertex, so zero is the CORRECT answer and asserting otherwise
+    // would be asserting the bug.
+  `ifndef ZHAO_SMOKE_FIELD_UNCOVERED
+    if (terr_mj_field_composed_o == 32'd0)
+      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s) -- the field's MATERIAL channel reached no cell, so the composed console still has never composed one",
+             fld_earth_runs_o);
+  `endif
+`endif
     if (terr_mj_token_refused_o != 32'd0)
       $fatal(1, "SMOKE: terrmat token_refused=%0d -- a material token was offered with no TerrainField issued at all",
              terr_mj_token_refused_o);
@@ -9131,12 +9419,48 @@ module tb_zhao_console_core_smoke
     // this number cannot quietly fall back to the mesh's while the terrain arm
     // stops drawing -- that check is `smoke_geom_fixture_gen.cpp`'s
     // "terrain touches N tile(s) and the union is still the mesh's".
-`ifndef ZHAO_SMOKE_TERRAIN_FLAT
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+    // THE ANTI-VACUITY CONTROL'S OWN ASSERTION, and the load-bearing one of
+    // the pair. The capsule was installed, the microcode loaded, the hash
+    // committed and the record banked and resolved -- and because its
+    // footprint contains no vertex, the composed lattice must be BYTE FOR BYTE
+    // the plain run's, and the reference's 2816 must still describe the frame.
+    //
+    // If this form did NOT come back to 2816, the field apparatus would be
+    // perturbing the scene through some path other than coverage, and the
+    // positive form's moved pixel count would prove nothing about fields.
+    if (render_pixels_o != SGF_EXP_PIXELS)
+      $fatal(1, "SMOKE: -FieldUncovered wrote %0d pixels and the reference names %0d -- the field covers no vertex in this form, so the frame must be IDENTICAL to the plain run's. A difference here means the install/load/commit path perturbs the scene on its own, which would invalidate -FieldActive's evidence",
+             render_pixels_o, SGF_EXP_PIXELS);
+  `else
+    // THE POSITIVE FORM'S PIXEL COUNT IS REPORTED, NOT YET PINNED, and this
+    // sentence is deliberately explicit about what that does and does not buy.
+    //
+    // `SGF_EXP_PIXELS` is REFERENCE-DERIVED for the AUTHORED lattice, and this
+    // form's lattice is the authored one PLUS a live field's height output, so
+    // that constant does not describe this frame and asserting it would be
+    // asserting the wrong scene. The honest fix is to teach
+    // `smoke_geom_fixture_gen.cpp` to apply the same field through
+    // `zref::fieldir` / compose_lattice and emit a SECOND expectation --
+    // that is a reference-derived number, and it is the right shape.
+    //
+    // WHAT IS ALREADY ASSERTED and does not depend on this number: nonzero
+    // Earth runs, nonzero host runs, zero `out_incomplete` against a required
+    // mask of 0x0F, nonzero `field_composed`, and the control above returning
+    // to exactly 2816. The pixel count is corroboration; those are the gate.
+    $display("SMOKE: NOTE -FieldActive wrote %0d pixels against the AUTHORED-lattice reference %0d (%0d mesh tiles, %0d terrain). This number is not gated: the reference models the authored lattice and this frame's lattice carries a live field's height. The -FieldUncovered control returns to %0d, which is the comparison that says the difference is the FIELD.",
+             render_pixels_o, SGF_EXP_PIXELS, SGF_EXP_MESH_TILES,
+             SGF_EXP_TERR_TILES, SGF_EXP_PIXELS);
+  `endif
+`elsif ZHAO_SMOKE_TERRAIN_FLAT
+`else
     if (render_pixels_o != SGF_EXP_PIXELS)
       $fatal(1, "SMOKE: the render path wrote %0d pixels and the reference names %0d tiles = %0d pixels (of which the MESH accounts for %0d tiles and TERRAIN touches %0d)",
              render_pixels_o, SGF_EXP_TILES, SGF_EXP_PIXELS, SGF_EXP_MESH_TILES,
              SGF_EXP_TERR_TILES);
-`else
+`endif
+`ifdef ZHAO_SMOKE_TERRAIN_FLAT
     // The flat-lattice control draws a DIFFERENT scene -- no terrain at all --
     // so the repaired fixture's pixel number does not describe it. What must
     // still hold is that the MESH's own tiles are all there, which is the
@@ -9554,9 +9878,16 @@ module tb_zhao_console_core_smoke
     if (part_fld_samples_o != 32'd0)
       $fatal(1, "SMOKE: the FLOW adapter delivered %0d real accelerations with no program resident",
              part_fld_samples_o);
+`ifndef ZHAO_SMOKE_FIELD_ACTIVE
+    // KEPT AS THE REFUSAL CONTROL, which is what directive 13.7 asks for by
+    // name: "The current no-program smoke ... explicitly asserts zero completed
+    // FIELD runs; KEEP IT as a refusal/control case instead of treating it as
+    // the positive gate." Under `-FieldActive` a program IS resident and this
+    // becomes the opposite assertion, made in the FIELD.EARTH block below.
     if (fld_runs_o != 32'd0)
       $fatal(1, "SMOKE: FIELD completed %0d walks against zero loaded programs -- the sequencer ran something, and there is nothing in the store for it to have run",
              fld_runs_o);
+`endif
     //    THE IDENTITY GUARD. It differences a record captured at request time
     //    against the live wire, so it CAN fire; a zero here is a measurement.
     if (part_fld_rec_changed_o != 32'd0)
@@ -10206,6 +10537,126 @@ module tb_zhao_console_core_smoke
     // evidence about the stimulus and not about the block. The evidence that
     // they discriminate is `tests/field/field_earth_adapter_directed.cpp`,
     // which fires each of them on purpose (R95).
+    // ------------------------------------------------------------------
+    // TWO STALE SENTENCES IN THE PARAGRAPH ABOVE, corrected 2026-09-27
+    // (FIELDACTIVE) rather than deleted, so the correction is visible:
+    //
+    //   * "the bench's packet is BeginFrame / PublishResource / EndFrame" --
+    //     it is fourteen records and has been for some time.
+    //   * "The console smoke fails every terrain page's CRC, so terrain's
+    //     composed door never opens and no vertex ever reaches
+    //     `zhao_terrain_patch`'s compose lane. Every counter past that door is
+    //     unreachable from here BY CONSTRUCTION" -- MEASURED FALSE at this
+    //     commit. `terr_pt_samples_o` reads 1089 (33x33) on a PLAIN run and
+    //     terrain draws 61 triangles. Entry I34's blocker list says to settle
+    //     exactly this by reading that counter "before writing a line of the
+    //     new mode"; it is settled, and the door is open.
+    //
+    // That second sentence is why this was believed unreachable, and it was
+    // the flattering direction: it made a zero look like a law instead of a
+    // stimulus gap. The counters below are reachable, and `-FieldActive`
+    // reaches them.
+    // ------------------------------------------------------------------
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    // DIRECTIVE 13.7's POSITIVE GATE. "The new active mode must require
+    // NONZERO ACTUAL RUNS, correct complete output values, actual terrain
+    // consumption and successful recovery after a deliberately bad
+    // program/association." The first and third are asserted here; the second
+    // is the composed-output comparison further down; the fourth is the
+    // `-FieldBadProgram` control's.
+    //
+    // 13.7 also says of the zero-assertion form: "keep it as a refusal/control
+    // case instead of treating it as the positive gate." It IS kept -- the
+    // plain smoke still runs the `ifndef` arm below, unchanged.
+    $display("SMOKE: fldearth records=%0d runs=%0d noprog=%0d not_begun=%0d skipped_uncovered=%0d faults=%0d tail_rejected=%0d short=%0d desync=%0d stall_cycles=%0d",
+             fld_earth_records_o, fld_earth_runs_o, fld_earth_noprog_o,
+             fld_earth_not_begun_o, fld_earth_skipped_uncovered_o,
+             fld_earth_faults_o, fld_earth_tail_rejected_o,
+             fld_earth_short_record_o, fld_earth_lane_desync_o,
+             fld_earth_stall_cycles_o);
+    $display("SMOKE: fldstage install_ok=%0d commit_ok=%0d ldr_installs_ok=%0d ldr_installs_failed=%0d ldr_bad_crc=%0d ldr_bad_envelope=%0d ldr_bad_range=%0d ldr_bad_section=%0d ldr_bad_meta=%0d ldr_bridge_errs=%0d ldr_load_bytes=%0d",
+             fld_install_ok_q, fld_commit_ok_q,
+             fld_ldr_installs_ok_o, fld_ldr_installs_failed_o,
+             fld_ldr_bad_crc_o, fld_ldr_bad_envelope_o, fld_ldr_bad_range_o,
+             fld_ldr_bad_section_o, fld_ldr_bad_meta_o, fld_ldr_bridge_errs_o,
+             fld_ldr_load_bytes_o);
+    $display("SMOKE: fldhost  runs=%0d faults=%0d noprog=%0d bad_image=%0d zero_mask=%0d out_incomplete=%0d no_result=%0d uniform_bad=%0d db_load_words=%0d db_fh2_posts=%0d db_addr_refused=%0d",
+             fld_runs_o, fld_run_faults_o, fld_noprog_o, fld_bad_image_o,
+             fld_zero_mask_o, fld_out_incomplete_o, fld_no_result_o,
+             fld_uniform_bad_o, fld_db_load_words_o, fld_db_fh2_posts_o,
+             fld_db_addr_refused_o);
+
+    // ---- THE CAPSULE WAS INSTALLED, over the real bridge -----------------
+    if (fld_ldr_installs_ok_o != 32'd1)
+      $fatal(1, "SMOKE: FIELD.LOADER installed %0d capsule(s), expected exactly 1 -- failed=%0d bad_crc=%0d bad_envelope=%0d bad_range=%0d bad_section=%0d bad_meta=%0d bridge_errs=%0d. The bytes come from tests/prod/smoke_field_fixture.svh over HPS region 6; a refusal here is the capsule or the staging window, not the field path",
+             fld_ldr_installs_ok_o, fld_ldr_installs_failed_o, fld_ldr_bad_crc_o,
+             fld_ldr_bad_envelope_o, fld_ldr_bad_range_o, fld_ldr_bad_section_o,
+             fld_ldr_bad_meta_o, fld_ldr_bridge_errs_o);
+    if (fld_install_ok_q != 32'd1)
+      $fatal(1, "SMOKE: the INSTALL_CAPSULE post was not answered ok (ok returns=%0d) -- R20 says every refusal is answered, so a missing return is the doorbell's return path and not a refusal",
+             fld_install_ok_q);
+    if (fld_commit_ok_q != 32'd1)
+      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the HEADER load word is emitted LAST by the generator, so a refusal here means the order law saw an unwritten header",
+             fld_commit_ok_q);
+    // Every load word the generator emitted reached the host. Counted, not
+    // assumed: a mailbox that silently dropped posts would still let the
+    // commit succeed if the header happened through.
+    if (fld_db_load_words_o != 32'(SFF_N_LOAD))
+      $fatal(1, "SMOKE: the doorbell forwarded %0d LOAD word(s), the fixture emits %0d -- a dropped word is a partially written program",
+             fld_db_load_words_o, SFF_N_LOAD);
+    if (fld_db_addr_refused_o != 32'd0)
+      $fatal(1, "SMOKE: %0d LOAD word(s) were refused for an address past LDADDRW -- the fixture is emitting addresses this loader cannot take",
+             fld_db_addr_refused_o);
+
+    // ---- THE RECORD REACHED THE ADAPTER ----------------------------------
+    if (fld_earth_records_o == 32'd0)
+      $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER banked NO TerrainField record -- the packet carries one at opcode 0x0200, so CMD.EXEC's arm, TERRAIN.FIELDLIST's seal or the two-consumer join dropped it");
+    if (fld_earth_noprog_o != 32'd0)
+      $fatal(1, "SMOKE: %0d record(s) resolved NO PROGRAM -- the record's handle is %08x and the installed capsule publishes the same; a noprog here means the fieldlist's sweep of FIELD.LOADER's publication port did not match",
+             fld_earth_noprog_o, SFF_HANDLE);
+    if (fld_earth_faults_o != 32'd0)
+      $fatal(1, "SMOKE: %0d Earth run(s) FAULTED", fld_earth_faults_o);
+    if (fld_earth_tail_rejected_o != 32'd0)
+      $fatal(1, "SMOKE: %0d record(s) tail-rejected -- one record cannot exceed the 16-field policy",
+             fld_earth_tail_rejected_o);
+    if (fld_earth_short_record_o != 32'd0)
+      $fatal(1, "SMOKE: %0d short Earth record(s)", fld_earth_short_record_o);
+    if (fld_earth_lane_desync_o != 32'd0)
+      $fatal(1, "SMOKE: %0d lane desync(s)", fld_earth_lane_desync_o);
+
+  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+    // ---- THE ANTI-VACUITY CONTROL, INVERTED POLARITY ---------------------
+    // The record is banked and resolved exactly as in the positive form; the
+    // footprint simply contains no vertex. So the machine does all of the
+    // work up to the coverage test and NONE after it. This is what makes the
+    // positive form's numbers mean something: if both forms produced the same
+    // pixels, the field would not be doing the thing.
+    if (fld_earth_runs_o != 32'd0)
+      $fatal(1, "SMOKE: -FieldUncovered ran %0d Earth evaluation(s) -- the footprint is at 16384.0 and contains no lattice vertex, so `zhao_tp_covers` must reject every one",
+             fld_earth_runs_o);
+    if (fld_earth_skipped_uncovered_o == 32'd0)
+      $fatal(1, "SMOKE: -FieldUncovered skipped NOTHING as uncovered -- the record was banked (%0d) but the coverage test never rejected a vertex, so this control is not controlling anything",
+             fld_earth_records_o);
+  `else
+    // ---- THE POSITIVE GATE -----------------------------------------------
+    if (fld_earth_runs_o == 32'd0)
+      $fatal(1, "SMOKE: FIELD.EARTH ran ZERO evaluations -- records=%0d noprog=%0d not_begun=%0d skipped_uncovered=%0d. Directive 13.7 requires NONZERO ACTUAL RUNS; a zero here with records nonzero means the record arrived and nothing evaluated it",
+             fld_earth_records_o, fld_earth_noprog_o, fld_earth_not_begun_o,
+             fld_earth_skipped_uncovered_o);
+    if (fld_earth_not_begun_o != 32'd0)
+      $fatal(1, "SMOKE: %0d record(s) NOT BEGUN -- start_tick is 0, so every frame tick is at or after it",
+             fld_earth_not_begun_o);
+    if (fld_runs_o == 32'd0)
+      $fatal(1, "SMOKE: the FIELD HOST retired ZERO runs while the Earth adapter reports %0d -- the adapter's count and the engine's must both move",
+             fld_earth_runs_o);
+    if (fld_run_faults_o != 32'd0 || fld_bad_image_o != 32'd0 || fld_zero_mask_o != 32'd0)
+      $fatal(1, "SMOKE: the FIELD HOST reports faults=%0d bad_image=%0d zero_mask=%0d on a lowered production image",
+             fld_run_faults_o, fld_bad_image_o, fld_zero_mask_o);
+    if (fld_out_incomplete_o != 32'd0)
+      $fatal(1, "SMOKE: %0d run(s) produced an INCOMPLETE output window -- the image's required mask is 0x0F (four Earth channels) and every run must fill it",
+             fld_out_incomplete_o);
+  `endif
+`else
     if (fld_earth_records_o != 32'd0)
       $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER banked %0d TerrainField uniform record(s) -- this bench issues none, so either the packet changed or the two-consumer join is taking records the field list is not",
              fld_earth_records_o);
@@ -10231,6 +10682,7 @@ module tb_zhao_console_core_smoke
     if (fld_earth_lane_desync_o != 32'd0)
       $fatal(1, "SMOKE: FIELD.EARTH_ADAPTER lane shadow desynchronised %0d time(s) against TERRAIN.PATCH's own busy, with no terrain traffic at all",
              fld_earth_lane_desync_o);
+`endif
 
     // ---- GEOM.BINNER's INSTRUMENTS, ASSERTED (GIANTREFS) ------------------
     // Entry I56 item (5). These are not a $display: a connected counter nobody
