@@ -169,6 +169,13 @@ inline constexpr const char* kRefusalEmptyRequiredMask =
     "a descriptor declaring outputs while its required_mask is zero";
 inline constexpr const char* kRefusalOutputCount =
     "an output count disagreeing with the declared output map";
+/** Materialising the constant pool needs the VALUES, and `prep` is the only
+ *  thing that carries them. Lowering with `materialize_scalars` and a null
+ *  `prep` would otherwise emit LDC uops loading zero -- which is EXACTLY the
+ *  defect this option exists to repair, wearing the repair's name. Refuse by
+ *  name instead. */
+inline constexpr const char* kRefusalNoPreparedValues =
+    "materialize_scalars was asked for without prepared values to materialise";
 
 // ======================================================================
 // THE TRANSLATOR
@@ -290,6 +297,51 @@ struct LowerOptions {
    *  to trust when it is the plain one, and the contraction owns its own
    *  differential. */
   bool contract = false;
+  /** DELIVER THE CONSTANT POOL AS LDC UOPS INSTEAD OF AS A BROADCAST PRELOAD.
+   *
+   *  THE DEFECT THIS REPAIRS, measured 2026-09-27 (MATFIELD, then LASTGAP).
+   *  `lower()` places every uniform-only value -- which includes every literal
+   *  AND every result of the uniform instruction block -- in the "broadcast
+   *  uniform region" at physical register `scalar_base + s`, and the physical
+   *  uops SOURCE those registers. NOTHING IN THE COMPOSED CONSOLE WRITES THEM.
+   *  `zhao_field_host_v2`'s register-file preload port writes zeros on the slow
+   *  path and the point's own IN_LANES on the fast one, at register == LANE
+   *  INDEX; there is no association-broadcast phase and no doorbell kind that
+   *  would feed one. So every program executed on zeros, retired cleanly, and
+   *  no counter could see it -- every counter is true and not one looks at a
+   *  value.
+   *
+   *  WHAT THIS OPTION DOES. Every scalar slot a VECTOR uop sources is emitted
+   *  as an `LDC dst=scalar_base+s, imm=prep->scalar[s]` at the head of the
+   *  physical stream. `LDC` is not new silicon: `zhao_field_alu.sv:307` already
+   *  reads `OP_LDC: result_o = $signed(imm_i)`, and the doorbell's `LdUop` arm
+   *  already carries a 32-bit immediate at `ld_data_i[63:32]`. The console
+   *  needs 293,352 ALUTs against 227,120 present, so a repair that spends
+   *  instruction slots the ISA already has, rather than area, is the only one
+   *  that can be afforded.
+   *
+   *  WHAT IT DOES NOT CHANGE, stated because the owner's ruling fixes all four.
+   *  Not CAPACITY: the same program computes the same result from the same
+   *  inputs. Not SEMANTICS: an LDC of a value and a broadcast of the same value
+   *  are the same number in the same register, and `prepare()` remains the only
+   *  thing that computes it. Not the DESTINATION: the output map is untouched.
+   *  And not UPDATE BEHAVIOUR -- this is the one worth spelling out, because it
+   *  looks like it should. `lower()` ALREADY takes `prep` and already binds the
+   *  association's prepared values into the image it returns; the preload rows
+   *  it emits today are that association's numbers. This option moves those
+   *  numbers from one emitted section to another. "Same program, new
+   *  parameters" is the same act either way -- re-run `lower()` with the new
+   *  `Prepared` and re-stage -- and it re-stages FEWER doorbell words, because
+   *  only the slots a vector uop actually reads are materialised.
+   *
+   *  ON BY DEFAULT, deliberately. A lowering that is correct only for a host
+   *  with an association-broadcast phase, on a tree whose only composed host
+   *  has none, is a default that ships a program which cannot compute. That is
+   *  this repository's own law about defects that lie in the flattering
+   *  direction: the image loads, runs, retires and is wrong. Set it false to
+   *  observe the broadcast form -- the directed differential does exactly that,
+   *  by name, so the old shape stays measured rather than deleted. */
+  bool materialize_scalars = true;
   /** Physical register ceiling for this composition. The console composes
    *  REGS=32 today (zhao_console_core.sv:15662) and FH22 asks for 64; the
    *  high-water check reports against whatever is set here rather than
@@ -343,6 +395,13 @@ struct HostPlan {
    *  mark -- the actual RF requirement, which n_vreg alone understates. */
   int register_high_water = 0;
   int contraction_saved = 0;
+  /** How many LDC uops `materialize_scalars` prepended. ZERO when the option is
+   *  off, and zero is also what a program with no scalar reads legitimately
+   *  produces -- so a test asserting "the constant pool arrived" must assert
+   *  this against the slots it KNOWS are read, never merely that it is nonzero.
+   *  A count is not a value; that distinction is what let the original defect
+   *  live behind a wall of true counters. */
+  int materialized_scalars = 0;
 
   uint32_t canonical_hash = 0;
   uint32_t canonical_program_handle32 = 0;

@@ -543,111 +543,137 @@ int main(int argc, char** argv) {
     lw.push_back({kLdUop, (uint32_t)i, hp.uops[i].word(), 0});
 
   // =========================================================================
-  // THE CONSTANT POOL IS NEVER DELIVERED, AND NO FIXTURE CAN FIX IT.
-  // Measured 2026-09-27 (MATFIELD). This is the packet's principal finding and
-  // it is a PRODUCTION gap, not a bench one. Read this before changing the
-  // emission below.
+  // THE CONSTANT POOL, AND HOW IT IS NOW DELIVERED.
+  // Found by MATFIELD 2026-09-27; repaired by LASTGAP the same day.
   // =========================================================================
-  // `lower()` folds every uniform-only value -- which includes EVERY LITERAL --
-  // into the plan's PRELOAD ROWS, and places them in the "broadcast uniform
-  // region" at physical register `scalar_base + s`
-  // (`zfield_host_plan.hpp:220-235`, `Translator::reg_of`). The physical uops
-  // then SOURCE those registers.
-  //
-  // `zhao_field_host_v2` never writes them. Its register-file preload port
-  // (`:1250-1256`) writes exactly two things:
+  // THE DEFECT. `lower()` placed every uniform-only value -- every literal AND
+  // every result of the uniform instruction block -- in the "broadcast uniform
+  // region" at physical register `scalar_base + s`, and the physical uops
+  // SOURCED those registers. `zhao_field_host_v2` never writes them: its
+  // register-file preload port (`:1250-1256`) writes
   //
   //     fab_pre_we  = (state == E_ZERO) || ((state == E_WRITE) &&
   //                                         (lane_i < IN_LANES));
   //
-  // zeros on the slow path, and the declared IN_LANES from the point's own
-  // inputs. Registers at or above `IN_LANES` are therefore ALWAYS ZERO, and the
-  // ones below it are overwritten by the point's input lanes every point.
+  // zeros on the slow path and the point's own IN_LANES on the fast one, at
+  // register == LANE INDEX. There is no association-broadcast phase and no
+  // doorbell kind that would feed one. So every program executed on zeros,
+  // retired cleanly, and NOTHING IN THE TREE COULD SEE IT -- every counter is
+  // true and not one looks at a value.
   //
-  // MEASURED, both programs, at the settings this console composes:
+  // MEASURED at the settings this console composes: `scorch_wash` at
+  // scalar_base 8 put its material token base 0xE1D41ED0 at REGISTER 27, and
+  // the host writes registers 0..14.
   //
-  //   scorch_wash  scalar_base 8,  20 preload rows at registers 8..27.
-  //                Its material token base 0xE1D41ED0 is at REGISTER 27.
-  //   wave_pool    scalar_base 12, 19 preload rows at registers 12..30.
-  //                MAT_SOIL is at register 29, the nav quarter 0x4000 at 30,
-  //                and the smoothstep macro's 1.0 / 2.0 / 3.0 at 26 / 27 / 28.
+  // THE REPAIR, and it cost ZERO SILICON (decision record
+  // reports/DECISION-20260927-I34-CONSTANT-POOL.md). `lower()` now emits every
+  // scalar slot a VECTOR uop reads as an `LDC dst=scalar_base+s,
+  // imm=prep->scalar[s]` at the head of the physical stream
+  // (`LowerOptions::materialize_scalars`, ON by default). `LDC` is not new
+  // hardware: `zhao_field_alu.sv:307` already reads
+  // `OP_LDC: result_o = $signed(imm_i)`, and the doorbell's `LdUop` arm already
+  // carries the 32-bit immediate at `ld_data_i[63:32]`. Nothing under `fpga/`
+  // changed.
   //
-  // The host writes registers 0..14. NONE of those constants arrives.
+  // IT TOOK A TAG TO MAKE THE DEFECT VISIBLE. A height that is silently zero
+  // looks like a field that ran; a MATERIAL that is silently wrong is REFUSED
+  // and counted, because `spec/qformats.md` sec 14.1 gives the token a version
+  // byte for exactly this purpose. `terrmat field_composed=0
+  // token_refused=1024` was that byte doing its job.
   //
-  // WHAT IT MEANS, stated plainly: the composed console cannot execute ANY
-  // lowered Field program correctly, because every program has literals. The
-  // engine runs, retires and answers -- `fldearth runs=1089 noprog=0 faults=0`,
-  // `fldhost out_incomplete=0 uniform_bad=0 bad_image=0` -- and computes on
-  // zeros. wave_pool's envelope evaluated smoothstep with 0 for 1.0, 2.0 and
-  // 3.0 and its amplitude p4 was 0, so its height output was ZERO for its whole
-  // recorded life. `run_console_core_smoke.ps1` asserted in prose that "raster
-  // pixels is NOT the plain run's 2816 in this form"; that was never measured
-  // and was false.
+  // THE `LdUniform` NON-REPAIR, kept here because it is the attractive wrong
+  // answer and somebody will reach for it again. `LdUniform` writes `fab_sb_*`
+  // -> `zhao_field_v3_sbank`, which LOOKS like "the register file the microcode
+  // reads". IT IS NOT. That bank is instantiated in `zhao_field_v3_svcpath` and
+  // its read address is driven solely by `zhao_field_v3_ring_svc`'s `f_slot_r`,
+  // loaded from a RING instruction's IMMEDIATE (`ring_svc:404-407`). It is the
+  // RING service's four-operand uniform file, not a general constant pool, and
+  // this program contains no RING. MATFIELD built it, disproved it by reading
+  // `ring_svc`, and measured `token_refused` unmoved at 1024 with it in place.
+  // NO `LdUniform` WORD IS EMITTED.
+
+  // ---- THE CONSTANT POOL ARRIVED: A STRUCTURAL CHECK, NOT A COUNT ----------
+  // The owner's clause 3 is about a VALUE, and this repository has twice
+  // shipped a check that passed on a constant. So this does not assert
+  // `materialized_scalars != 0` -- a count is not a value, and a count is
+  // exactly what stayed true and uninformative while the defect shipped.
   //
-  // WHY NOTHING SAW IT. Every counter is true and not one looks at a value. The
-  // only value-bearing gate in this mode was the positive form's pixel count,
-  // and it was deliberately left UNPINNED -- correctly, at the time, because the
-  // staged program was a height spell whose composed lattice the oracle does not
-  // model. The one number that could have caught this was the one number nobody
-  // could assert.
-  //
-  // IT TOOK A TAG TO MAKE IT VISIBLE. A height that is silently zero looks like
-  // a field that ran; a MATERIAL that is silently wrong is REFUSED and counted,
-  // because `spec/qformats.md` sec 14.1 gives the token a version byte for
-  // exactly this purpose. `terrmat field_composed=0 token_refused=1024` is that
-  // byte doing its job.
-  //
-  // THE TWO CANDIDATE REPAIRS, BOTH OF WHICH ARE DECISIONS AND NEITHER OF WHICH
-  // BELONGS IN A BENCH:
-  //
-  //   (a) RTL. Give the host a per-slot constant RAM, loaded by the doorbell,
-  //       and extend the preload phase to write registers
-  //       `scalar_base .. scalar_base + n - 1` from it after the input lanes.
-  //       A new doorbell kind, a new RAM, and a change to a production block.
-  //   (b) LIBRARY. Make `lower()` materialise folded constants as LDC uops
-  //       inside the physical program instead of as preload rows. ZERO silicon
-  //       cost; it spends a few uops and a few registers, and the measured
-  //       high-water is 28 against a ceiling of 32. RECOMMENDED for that reason.
-  //
-  // Until one of them lands, this generator emits the PREPARED rows only. They
-  // are correct and they are needed -- an ordinal whose OUTPUT_MAP row says
-  // PREPARED_SCALAR is seeded from `prep_value[]` at point start (:1669) and
-  // never touches the register file, which is why this program's height and
-  // velocity ordinals (both hoisted constants) are the two lanes that DO arrive.
-  //
-  // AND THE INDEX WAS WRONG TOO, which is a real bug this packet did fix. The
-  // old emission passed `addr = physical_register` under a comment reading
-  // "`addr` is the prepared index". `LdPrepared` writes `prep_value[ld_addr_i]`
-  // (:1586-1589) and that file is addressed by the SCALAR INDEX `s` -- the same
-  // space `OutputSource::source_index` carries for a prepared ordinal
-  // (`zfield_host_plan.cpp:423`, `o.source_index = t.idx`). So the rows landed
-  // at `scalar_base + s` instead of `s`. The comment was right about the field
-  // and the code did not do it.
+  // It walks the NON-LDC uops, collects every register they read that lies in
+  // the scalar region, and requires each one to be written by an EARLIER LDC
+  // carrying `prep.scalar[]`'s own number. That is the property the machine
+  // needs, stated over the EMITTED STREAM rather than over the option that
+  // produced it, so it fails if the option is off, if the ordering is wrong, or
+  // if a single slot is missed.
+  {
+    std::vector<int> ldc_at((size_t)(hp.scalar_base + (int)fp.n_scalar), -1);
+    int checked_reads = 0;
+    for (size_t ui = 0; ui < hp.uops.size(); ++ui) {
+      const hp_ns::Mapped& m = hp.uops[ui];
+      if (m.op == zfield::OP_LDC) {
+        const int sidx = m.dst - hp.scalar_base;
+        if (sidx < 0 || sidx >= (int)fp.n_scalar) continue;
+        if ((uint32_t)prep.scalar[(size_t)sidx] != m.imm) {
+          std::printf("smoke_field_fixture_gen: LDC at uop %u loads 0x%08X into r%d but "
+                      "prepared slot %d holds 0x%08X\n",
+                      (unsigned)ui, m.imm, m.dst, sidx, (uint32_t)prep.scalar[(size_t)sidx]);
+          return 1;
+        }
+        ldc_at[(size_t)m.dst] = (int)ui;
+        continue;
+      }
+      for (int g = 0; g < m.n_groups && g < 3; ++g) {
+        const int start = (g == 0) ? m.a : (g == 1) ? m.b : m.c;
+        for (int k = 0; k < m.group_width[g]; ++k) {
+          const int r = start + k;
+          if (r < hp.scalar_base || r >= hp.scalar_base + (int)fp.n_scalar) continue;
+          if (ldc_at[(size_t)r] < 0 || ldc_at[(size_t)r] >= (int)ui) {
+            std::printf("smoke_field_fixture_gen: uop %u reads r%d, which is in the scalar "
+                        "region and is NOT loaded by an earlier LDC. The constant pool does "
+                        "not reach the execution register file.\n",
+                        (unsigned)ui, r);
+            return 1;
+          }
+          checked_reads++;
+        }
+      }
+    }
+    if (checked_reads == 0) {
+      std::printf("smoke_field_fixture_gen: NO uop reads the scalar region at all, so this "
+                  "check proved nothing about the constant pool. The program or its "
+                  "lowering changed shape -- do not read this as a pass.\n");
+      return 1;
+    }
+    // And the material token's own base must be one of the numbers delivered.
+    // This is the byte clause 3 turns on, so it is named rather than left to
+    // the general walk above.
+    bool token_base_seen = false;
+    for (size_t ui = 0; ui < hp.uops.size(); ++ui)
+      if (hp.uops[ui].op == zfield::OP_LDC &&
+          (hp.uops[ui].imm & 0xFF000000u) == 0xE1000000u)
+        token_base_seen = true;
+    if (!token_base_seen) {
+      std::printf("smoke_field_fixture_gen: no LDC carries a v1 material token base (tag "
+                  "0xE1). out-lane 2 cannot become a legal token in the console.\n");
+      return 1;
+    }
+    std::printf("smoke_field_fixture_gen: constant pool delivered -- %d LDC uops, %d scalar "
+                "reads each proven to follow its own LDC, material token base present\n",
+                hp.materialized_scalars, checked_reads);
+  }
+
+  // THE PREPARED FILE, indexed by the SCALAR INDEX `s`, which is what
+  //     `OutputSource::source_index` carries for a PREPARED_SCALAR ordinal
+  //     (`zfield_host_plan.cpp`, `o.source_index = t.idx` on the scalar arm).
+  //     STILL NEEDED, AND NOT SUPERSEDED BY THE LDCs: an ordinal whose
+  //     OUTPUT_MAP row says PREPARED_SCALAR is seeded from `prep_value[]` at
+  //     point start (`zhao_field_host_v2.sv:1669`) and never touches the
+  //     register file at all. This program's height and velocity ordinals are
+  //     both prepared scalars, so these rows are what makes them arrive.
+  //     The VALID bit is driven independently of the value so a genuine zero
+  //     and a withheld value do not look alike, and the generation must match
+  //     the association's or the seed is refused (:1309-1321).
   for (size_t i = 0; i < hp.preload.size(); ++i) {
-    const uint32_t preg
- = (uint32_t)hp.preload[i].physical_register;
     const uint32_t val = (uint32_t)hp.preload[i].value;
-
-    // NO `LdUniform` WORD IS EMITTED, AND THAT IS A DELIBERATE NON-REPAIR.
-    //     An earlier version of this packet posted one here, reasoning that
-    //     `LdUniform` writes `fab_sb_*` -> `zhao_field_v3_sbank` and that this
-    //     is "the register file the microcode reads". IT IS NOT. That bank is
-    //     instantiated in `zhao_field_v3_svcpath` and its read address is
-    //     driven solely by `zhao_field_v3_ring_svc`'s `f_slot_r`, which is
-    //     loaded from a RING instruction's IMMEDIATE (`ring_svc:404-407`). It
-    //     is the RING service's four-operand uniform file, not a general
-    //     constant pool, and this program contains no RING. Posting into it
-    //     would have been an inert write shipped under a repair's name.
-    //     See the CONSTANT POOL block above `main()` for what is actually
-    //     wrong and why this fixture cannot fix it.
-    (void)preg;
-
-    // THE PREPARED FILE, indexed by the SCALAR INDEX `s`, which is what
-    //     `OutputSource::source_index` carries for a PREPARED_SCALAR ordinal
-    //     (`zfield_host_plan.cpp:423`, `o.source_index = t.idx` on the scalar
-    //     arm). The VALID bit is driven independently of the value so a genuine
-    //     zero and a withheld value do not look alike, and the generation must
-    //     match the association's or the seed is refused (:1309-1321).
     uint64_t w = (uint64_t)val;
     w |= (1ull << 32);                 // VALID
     w |= ((uint64_t)kAssocGen) << 40;  // generation
@@ -716,10 +742,26 @@ int main(int argc, char** argv) {
                 "// outputs=%d required_mask(ORDINAL)=0x%02X window_mask(POSITION)=0x%02X",
                 hp.output_count, ord_mask, win_mask);
   line(buf);
+  // THIS LINE USED TO SAY the preload rows are "each posted TWICE: kind 3
+  // UNIFORM to the scalar bank AND kind 7 PREPARED to the prepared file". They
+  // are not and never were after MATFIELD removed the `LdUniform` post in the
+  // same commit that wrote the sentence -- exactly ONE word is emitted per
+  // preload row, kind 7. Corrected 2026-09-27 (LASTGAP); a comment that
+  // overstates what is delivered is the same hazard as a counter that does.
   std::snprintf(buf, sizeof buf,
-                "// uops=%u preload_rows=%u (each posted TWICE: kind 3 UNIFORM to the scalar "
-                "bank AND kind 7 PREPARED to the prepared file) image_bytes=%u",
-                (unsigned)hp.uops.size(), (unsigned)hp.preload.size(), (unsigned)image.size());
+                "// uops=%u (of which %d are constant-pool LDC) preload_rows=%u "
+                "(one kind-7 PREPARED word each) image_bytes=%u",
+                (unsigned)hp.uops.size(), hp.materialized_scalars,
+                (unsigned)hp.preload.size(), (unsigned)image.size());
+  line(buf);
+  o += "\n";
+  // THE TWO COUNTS THE BENCH ASSERTS. They are emitted rather than restated so
+  // the generator and the bench cannot hold two opinions about one number.
+  std::snprintf(buf, sizeof buf, "localparam int unsigned SFF_N_UOPS = %u;",
+                (unsigned)hp.uops.size());
+  line(buf);
+  std::snprintf(buf, sizeof buf, "localparam int unsigned SFF_N_LDC = %d;",
+                hp.materialized_scalars);
   line(buf);
   o += "\n";
 

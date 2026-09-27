@@ -331,6 +331,56 @@ bool lower(const Fplan& fp, const Decoded& prog, const Prepared* prep, const Low
   auto touch = [&](int r) {
     if (r + 1 > hwm) hwm = r + 1;
   };
+
+  // WHICH SCALAR SLOTS DOES THE VECTOR STREAM ACTUALLY READ? Collected from
+  // `src` -- the contracted stream when contraction is on -- because the
+  // contraction changes which slots are sourced, and materialising a slot the
+  // contracted stream no longer reads would spend an instruction slot on
+  // nothing. Answering this from `fp.uops` would be the wrong question on the
+  // contracted path.
+  std::vector<uint8_t> slot_read((size_t)fp.n_scalar, 0);
+  for (const VecUop& u : src)
+    for (int j = 0; j < u.n_src; ++j)
+      if (u.src[j].kind == SrcKind::kSca && u.src[j].idx < fp.n_scalar)
+        slot_read[(size_t)u.src[j].idx] = 1;
+
+  // ---- 1b. THE CONSTANT POOL, AS LDC UOPS AT THE HEAD OF THE STREAM -------
+  //
+  // See LowerOptions::materialize_scalars for the defect and why this is a
+  // library repair and not an RTL one. The LDCs go FIRST, so every scalar a
+  // later uop reads is defined before the read -- which is the property
+  // verify_init_proof walks for, and it walks hp.uops in emission order.
+  if (opt.materialize_scalars) {
+    for (int s = 0; s < (int)fp.n_scalar; ++s) {
+      if (!slot_read[(size_t)s]) continue;
+      // The VALUES are the association's, and `prep` is the only thing that
+      // carries them. Emitting LDC #0 here would reproduce the exact defect
+      // under the repair's name, so refuse instead.
+      if (prep == nullptr || s >= (int)prep->scalar.size())
+        return no(kRefusalNoPreparedValues);
+      const int r = opt.scalar_base + s;
+      if (r < 0 || r >= kPhysicalRegisters) return no(kRefusalRegisterRange);
+      const optable::OpShape* shape = optable::shape_of(OP_LDC);
+      if (shape == nullptr) return no(kRefusalUnknownShape);
+      Mapped m;
+      m.op = OP_LDC;
+      m.dst = r;
+      // From the GENERATED table, never a hand-written 1. This file's own law:
+      // a width that is a local guess is how ROT2 came to read the wrong port.
+      m.dst_width = (int)shape->dst_width;
+      m.n_groups = (int)shape->n_groups;  // zero -- LDC reads no register
+      m.imm = (uint32_t)prep->scalar[(size_t)s];
+      // No canonical pc: this uop has no line in the .zprog, because it is
+      // carrying a value the uniform block already computed. 0xFFFF says so
+      // rather than pointing at an instruction that did not emit it.
+      m.src_pc = 0xFFFF;
+      hp.vector_write_mask |= bit64(r);
+      touch(r);
+      hp.uops.push_back(m);
+      hp.materialized_scalars++;
+    }
+  }
+
   for (const VecUop& u : src) {
     Mapped m;
     if (!tr.map_one(u, &m)) return no(tr.refusal().c_str());
@@ -375,9 +425,19 @@ bool lower(const Fplan& fp, const Decoded& prog, const Prepared* prep, const Low
       const int slot = (int)fp.in_slot[(size_t)i];
       const int r = opt.scalar_base + slot;
       if (r < 0 || r >= kPhysicalRegisters) return no(kRefusalRegisterRange);
-      row.physical_register = (uint16_t)r;
       row.prepared_slot = (uint16_t)slot;
-      touch(r);
+      // THE REGISTER IS NAMED ONLY WHEN SOMETHING WRITES IT. Under
+      // materialisation a uniform input lives in a register exactly when its
+      // slot is materialised; a slot no vector uop reads gets no LDC, so
+      // naming a register for it would be the map asserting a location that
+      // is never written -- which is the shape of the defect this option
+      // repairs, re-created one field along. The value is still fully
+      // described: `prepared_slot` carries it, and ZFH_ADDR_UNUSED is the
+      // spelling this file already reserves for "no address", never slot 0.
+      if (!opt.materialize_scalars || (slot < (int)fp.n_scalar && slot_read[(size_t)slot])) {
+        row.physical_register = (uint16_t)r;
+        touch(r);
+      }
     } else {
       // Only an ACTUALLY unused input may be UNUSED_PROVEN. The declared value
       // still exists in the association record for validation and capture.
@@ -389,11 +449,23 @@ bool lower(const Fplan& fp, const Decoded& prog, const Prepared* prep, const Low
   // The whole broadcast region is association-owned and immutable: it is
   // written once per association and shared by every context, so a per-point
   // write into it is a cross-context corruption, not a local bug.
-  for (int s = 0; s < (int)fp.n_scalar; ++s) {
-    const int r = opt.scalar_base + s;
-    if (r < 0 || r >= kPhysicalRegisters) return no(kRefusalRegisterRange);
-    hp.association_register_mask |= bit64(r);
-    touch(r);
+  //
+  // UNDER MATERIALISATION THERE IS NO BROADCAST REGION AT ALL, and that is the
+  // honest statement rather than a convenience. The constants arrive as this
+  // point's own LDC writes, so they are POINT state, not association state:
+  // claiming them as association-owned would (a) put them in
+  // initial_defined_mask, which would make verify_init_proof's read-before-def
+  // walk trivially satisfied for every one of them -- the walk would stop being
+  // evidence -- and (b) collide with immutable_register_mask, since the LDCs
+  // are vector writes. Both of those are the proof lying in the flattering
+  // direction, so the region is left empty and the LDCs carry the whole claim.
+  if (!opt.materialize_scalars) {
+    for (int s = 0; s < (int)fp.n_scalar; ++s) {
+      const int r = opt.scalar_base + s;
+      if (r < 0 || r >= kPhysicalRegisters) return no(kRefusalRegisterRange);
+      hp.association_register_mask |= bit64(r);
+      touch(r);
+    }
   }
   hp.immutable_register_mask = hp.association_register_mask;
   hp.initial_defined_mask = hp.association_register_mask | hp.point_register_mask;
