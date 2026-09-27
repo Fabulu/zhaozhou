@@ -573,6 +573,16 @@ module zhao_shell_v2_lease_path
       .tri_min_y_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
       .tri_max_y_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
       .tri_src_id_i                 (16'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      // DOORCOST: I55's raster door. Same reason as every line above it -- this
+      // harness owns the LEASE PROTOCOL and not the raster, and JOB_SRC is not
+      // overridden, so the branch that would read these is not built.
+      .walk_job_valid_i             (1'b0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .walk_job_ready_o             (),
+      .walk_job_tile_x_i            (12'sd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .walk_job_tile_y_i            (12'sd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .walk_job_first_i             (1'b0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .walk_job_last_i              (1'b0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .walk_jobs_taken_o            (),
       .tri_area2_i                  (tri_area2_i),
       .tri_invw_plane_i             (tri_invw_plane_i),
       .tri_u_over_w_plane_i         (tri_u_over_w_plane_i),

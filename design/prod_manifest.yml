@@ -1302,6 +1302,7 @@ excluded:
   # e_num_u does not; six candidate explanations have been eliminated with it.
   # Never in the machine, so it is a probe, not a top.
   - zhao_probe_ram_infer: probe  RAM-inference discriminator probe; five/three array variants at one geometry
+  - zhao_probe_doorcost_jobmux: probe  the RUN-TIME 2:1 multiplex on the 2,048-bit job bus, and nothing else, so its map row is that multiplex's cost and nothing else. FINDINGS-muxbuild.md refused entry I55's raster door at "2,065 wires through two module boundaries" with NO AREA NUMBER, being fenced off Quartus; this prices the arrangement that refusal was about. The shipped door does not contain it -- zhao_geom_bin_pipe_v2's JOB_SRC selects at ELABORATION, which costs zero logic -- because the two sources are alternatives and directive section 4 rules that a parallel legacy arena still supplying the pixels is not closure. Never in the machine.
 
 
   # Same reason code, same shape: a composition top that exists to put a real

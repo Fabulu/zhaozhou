@@ -1670,6 +1670,233 @@ void run_sequence_mutant(bool old_ready, bool skip_cancel) {
   std::printf("Packet-D identity/cancel control FIRED\n");
 }
 
+
+// ---- I55's RASTER DOOR (DOORCOST, 2026-09-27) -----------------------------
+//
+// WHAT THIS PROVES, EXACTLY: that zhao_geom_bin_pipe_v2's walk_job_* door
+// carries a job into u_tile, and that the tile the door produces is
+// BYTE-IDENTICAL to the tile the binner's on-chip drain produces from the same
+// triangles -- the same zref oracle, the same candidates, the same 256
+// framebuffer beats, compared per beat and not by a counter.
+//
+// WHAT IT DOES NOT PROVE, said here so nothing quotes it for more: NO PIXEL HERE
+// CAME FROM BYTES THAT WENT THROUGH SDRAM. The planes are driven by this bench
+// exactly as GEOM.SETUP and GEOM.ATTRPACK drive them in the console. Closing
+// entry I55 additionally needs TriangleDescriptor v2 -- GEOM.SETUP consumes
+// tri_area2_i and the four scissored box bounds, the 16-byte record carries
+// neither, and zhao_geom_setup.sv:386 DEFINES kc2 from area2 so the barycentric
+// identity recovers nothing -- and the console-side select that feeds that pair
+// from the walk during the drain window. See FINDINGS-doorcost.md.
+//
+// WHY IT IS DISCRIMINATING AND NOT A PICTURE WITH NO PROOF:
+//
+//   * tri_valid_i IS NEVER ASSERTED. The binner is offered no triangle at all,
+//     so binner_tile_references_o and jobs_taken_o must both stay ZERO. Every
+//     fragment that appears entered through the door or did not exist.
+//   * the door's counter is read BEFORE the first offer and must be zero -- a
+//     counter shown firing without first being shown silent is not a control.
+//   * the SAME SOURCE built at JOB_SRC=0 is the negative control, target
+//     pd_doorshut: there the generate branch is not built, walk_job_ready_o can
+//     never rise, and the identical stimulus must rasterise NOTHING. That
+//     control is what makes the positive one mean THE DOOR, rather than meaning
+//     "something in this block produced pixels".
+//
+// The two triangles are the two halves of tile (0,0), flat-shaded, which is the
+// one scene in this file that needs no palette, binding, sheet or cache-fill
+// traffic -- so nothing here depends on the texture island being programmed.
+
+// job_tile_x_o/job_tile_y_o are the tile's PIXEL ORIGIN, not its index:
+// zhao_geom_binner_v2.sv:880 is $signed({2'd0, d_jx_r, 4'd0}), and
+// job_tile_index_w slices bits [9:4] back out. The door must speak the same
+// units, or the capture identity would name a different tile while every range
+// guard downstream still passed.
+constexpr int kDoorTilePixels = 16;
+
+void door_offer(Harness& h, const Job& job, int tile_x, int tile_y, bool first, bool last) {
+  h.drive_job(job);  // the wide fields ride tri_*; tri_valid_i stays low
+  h.dut->walk_job_tile_x_i = static_cast<int16_t>(tile_x * kDoorTilePixels);
+  h.dut->walk_job_tile_y_i = static_cast<int16_t>(tile_y * kDoorTilePixels);
+  h.dut->walk_job_first_i = first ? 1 : 0;
+  h.dut->walk_job_last_i = last ? 1 : 0;
+  h.dut->walk_job_valid_i = 1;
+  for (unsigned guard = 0; guard < 20000; ++guard) {
+    h.dut->clk = 0;
+    h.dut->eval();
+    if (h.dut->walk_job_ready_o) {
+      h.step();
+      h.dut->walk_job_valid_i = 0;
+      clear_wide(h.dut->tri_flat_request_i);
+      h.dut->tri_continuation_tail_i = 0;
+      return;
+    }
+    h.step();
+  }
+  fail("walk job offer did not handshake at the door");
+}
+
+void run_door(bool door_shut) {
+  auto* h = new Harness;
+  h->reset();
+  begin_test(door_shut
+                 ? "I55 door SHUT control: JOB_SRC=0 rasterises nothing from walk_job_*"
+                 : "I55 door: a walk-sourced job rasterises a byte-identical tile");
+
+  const uint64_t clear = make_clear_word(0x102030u, 0x07, 0x010203, 0x09);
+  const Triangle a = make_triangle(0, 0, 16, 0, 0, 16, 0, 15, 0, 15);
+  const Triangle b = make_triangle(16, 0, 16, 16, 0, 16, 0, 15, 0, 15);
+  Material flat;
+  flat.base_rgb = flat.result_rgb = flat.vertex_rgb = 0x336699u;
+  flat.vertex_alpha = flat.base_alpha = flat.result_alpha = 0xd5;
+  flat.effect_tag = 0x5c;
+  flat.stencil = 0xa6;
+  flat.state = 0;
+  const Job ja = make_job(a, 0x0f01, 0x500000, flat);
+  const Job jb = make_job(b, 0x0f02, 0x500000, flat);
+
+  h->reset_capture();
+  h->capture_outputs = true;
+  if (door_shut) {
+    // Nothing may be rasterised, so there is no oracle to meet, and a scoreboard
+    // entry here would assert the bug rather than the behaviour.
+    h->validate_candidates = false;
+    h->validate_fragments = false;
+    h->validate_framebuffer = false;
+  } else {
+    // THE FRAMEBUFFER ORACLE IS ON, AND IT IS THE PIXEL EVIDENCE: every one of
+    // the tile's 256 beats is compared against zref for rgb565, in-tile address,
+    // x, y, src_id and last -- through the REAL ports fb_*, not through a probe.
+    // If the door delivered a job whose metadata, tile identity or ordering
+    // differed, those comparisons fail rather than a counter merely reading low.
+    h->expected_tiles.push_back(build_tile_oracle({ja, jb}, 0, 0, 0, clear));
+
+    // ---- AND THE CANDIDATE/FRAGMENT PROBES ARE OFF, FOR AN INHERITED REASON --
+    //
+    // `check_candidate` reads `stage_candidate_data_o` at the offsets 410
+    // (source_id), 426 (fragment_state), 458 (invw24) and 482 (in-tile address).
+    // THOSE OFFSETS ARE STALE BY ONE BIT and have been since 2026-09-26.
+    //
+    // Commit ceba0bfe (NORMALMAP) widened the Early-Z PAYLOAD by one bit and
+    // moved `PRETEX_EARLYZ_KEY_LO` 410 -> 411 and `_HI` 489 -> 490 in
+    // zhao_render_texture_pkg.sv. It did NOT move the four KEY field constants
+    // that sit inside that span, so they still describe the pre-NORMALMAP
+    // layout. The package is internally inconsistent in a way a packed struct
+    // cannot be: `PRETEX_EARLYZ_PAYLOAD_HI` is 409 and `PRETEX_EARLYZ_KEY_LO` is
+    // 411, so BIT 410 BELONGS TO NEITHER FIELD.
+    //
+    // MEASURED, not inferred: reading each field one bit higher returns exactly
+    // the expected value. depth@458 = 0xa00000 and depth@459 = 0x500000 = expected;
+    // src@410 = 0x1e02 and src@411 = 0x0f01 = expected. Two fields, one of which
+    // (`src_id`) is an IDENTITY and not an arithmetic quantity, both off by a
+    // single left shift -- which is a bit offset and cannot be a data error.
+    //
+    // IT IS NOT THIS PACKET'S AND IT IS NOT THIS DOOR'S. `ceba0bfe` is an
+    // ancestor of this branch's base, and `pd_full` -- the binner-sourced
+    // arrangement, JOB_SRC=0, on the pre-existing flat differential -- fails at
+    // its FIRST candidate with byte-identical diagnostic values. The whole
+    // `geom_bin_pipe_v2_directed` family has been red since that commit.
+    //
+    // The repair belongs to the raster/texture lane because it decides what every
+    // fragment field MEANS, and the arithmetic is unambiguous: the key is 80 bits
+    // (16 + 32 + 24 + 8) and at KEY_LO = 411 it lands exactly on KEY_HI = 490, so
+    // source_id 411..426, fragment_state 427..458, invw24 459..482, in-tile
+    // address 483..490, and PAYLOAD_HI 409 -> 410.
+    //
+    // SO THIS TEST DOES NOT COPY EITHER SET OF NUMBERS. Asserting the stale ones
+    // would assert the bug; asserting the corrected ones would make this door's
+    // evidence depend on a repair nobody has reviewed. The framebuffer oracle
+    // above needs neither, because it reads real ports.
+    h->validate_candidates = false;
+    h->validate_fragments = false;
+  }
+
+  h->begin_frame(1, 1, clear);
+
+  // SHOWN SILENT FIRST.
+  require(h->dut->walk_jobs_taken_o == 0,
+          "door counter was not silent before the first offer");
+  require(h->dut->binner_tile_references_o == 0 && h->dut->jobs_taken_o == 0,
+          "the binner had already binned something before any triangle was offered");
+
+  if (door_shut) {
+    // The door is not built, so walk_job_ready_o is a standing refusal. Offer for
+    // a generous window and require that it never once rises.
+    h->drive_job(ja);
+    h->dut->walk_job_tile_x_i = 0;
+    h->dut->walk_job_tile_y_i = 0;
+    h->dut->walk_job_first_i = 1;
+    h->dut->walk_job_last_i = 0;
+    h->dut->walk_job_valid_i = 1;
+    for (unsigned i = 0; i < 4000; ++i) {
+      h->dut->clk = 0;
+      h->dut->eval();
+      require(!h->dut->walk_job_ready_o, "a door bound shut accepted a walk job");
+      h->step();
+    }
+    h->dut->walk_job_valid_i = 0;
+  } else {
+    door_offer(*h, ja, 0, 0, true, false);
+    door_offer(*h, jb, 0, 0, false, true);
+  }
+
+  h->end_frame();
+  for (unsigned guard = 0; guard < 20000 && h->drain_done_events == 0; ++guard) h->step();
+  require(h->drain_done_events == 1, "the frame never drained");
+  h->wait_quiet();
+
+  // THE BINNER NEVER SAW A TRIANGLE, IN EITHER ARRANGEMENT. This is what makes
+  // any pixel below attributable to the door and to nothing else.
+  //
+  // `binner_tile_references_o` is the binner's OWN census and is the right
+  // instrument. `jobs_taken_o` IS NOT: zhao_geom_bin_pipe_v2.sv:736 increments it
+  // on `job_valid_w && job_ready_w`, which is the job the TILE PIPE accepted from
+  // WHICHEVER SOURCE the arrangement selected. My first draft asserted it zero
+  // here and it fired -- correctly -- on the door's own two jobs. Reading a
+  // source-agnostic counter as a binner counter is the kind of wrong operand this
+  // repository keeps finding, and it is recorded here rather than quietly fixed.
+  require(h->dut->binner_tile_references_o == 0,
+          "the binner binned a reference although tri_valid_i was never asserted");
+
+  if (door_shut) {
+    require(h->dut->walk_jobs_taken_o == 0, "a door bound shut counted a job");
+    require(h->dut->jobs_taken_o == 0, "a door bound shut let a job reach the tile pipe");
+    require(h->fb_fires == 0 && h->cand_fires == 0 && h->fragment_fires == 0 &&
+                h->tile_done_events == 0 && h->dut->raster_jobs_started_o == 0,
+            "a door bound shut rasterised something");
+    std::printf("Packet-D I55 door SHUT control FIRED: walk_jobs_taken=0 fb=0 tiles=0\n");
+  } else {
+    require(h->dut->walk_jobs_taken_o == 2,
+            "the door did not count exactly the two jobs offered");
+    // AND `jobs_taken_o` AGREES -- BUT THAT IS NOT INDEPENDENT CORROBORATION, and
+    // saying so is the point. In this arrangement `job_valid_w` IS
+    // `walk_job_valid_i`, so both counters increment on the SAME condition and
+    // the comparison is structurally blind to every fault that condition
+    // participates in. What the PAIR is good for is telling the two arrangements
+    // apart: in JOB_SRC=0 `jobs_taken_o` counts binner jobs while
+    // `walk_jobs_taken_o` reads a structural zero, which is the shut-door control
+    // below.
+    require(h->dut->jobs_taken_o == 2, "the tile pipe did not take the door's two jobs");
+    // MEASURED, THEN ASSERTED. These numbers were read off the hardware before
+    // being written down, because a guessed expectation that happens to pass is
+    // indistinguishable from one that was checked. My first draft asserted
+    // `started == 1` and it fired: BOTH references of a tile start work, and only
+    // an ABORTED one is sunk instead -- the identity-abort case earlier in this
+    // file is the 1-started/1-sunk shape, which is exactly what made 1 look right.
+    require(h->dut->raster_jobs_started_o == 2,
+            "the door's two jobs did not both start work");
+    require(h->dut->raster_jobs_sunk_o == 0, "a door job was sunk instead of started");
+    require(h->cand_fires == 256 && h->fragment_fires == 256,
+            "the door's tile did not admit and retire a full 16x16 of fragments");
+    require(h->tile_done_events == 1, "the door's tile never completed");
+    require(h->fb_fires == 256,
+            "the door's tile did not resolve a full 16x16 of framebuffer beats");
+    require(h->dut->resolved_tiles_o == 1, "resolved_tiles did not count the door's tile");
+    std::printf("Packet-D I55 door FIRED: walk_jobs_taken=%u fb_beats=%u tiles=%u\n",
+                h->dut->walk_jobs_taken_o, h->fb_fires, h->tile_done_events);
+  }
+  require(h->dut->quiet_o && h->dut->texture_quiet_o && h->dut->fragment_idle_o,
+          "door test ended without structural quiet");
+}
+
 }  // namespace
 
 double sc_time_stamp() { return 0.0; }
@@ -1686,6 +1913,10 @@ int main(int argc, char** argv) {
   run_sequence_mutant(false, true);
 #elif defined(PACKET_D_EXPECT_IDENTITY_ABORT)
   run_sequence_mutant(false, false);
+#elif defined(PACKET_D_EXPECT_DOOR_SHUT)
+  run_door(true);
+#elif defined(PACKET_D_EXPECT_DOOR)
+  run_door(false);
 #else
   run_healthy();
 #endif

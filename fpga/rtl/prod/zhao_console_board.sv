@@ -1547,6 +1547,14 @@ module zhao_console_board
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
   output logic [31:0] geom_pw_unaligned_o,
+  // GEOM.PARAMWALK's fetch arm (MUXBUILD, 2026-09-27). `geom_pw_vread_o`
+  // counts RECORDS FETCHED, so `vread == 3 * geom_pw_tris_o` is the
+  // invariant; `geom_pw_vbad_o` counts a vertex the arm refused; and
+  // `geom_pw_pvsplit_o` counts the three vertices of one triangle
+  // disagreeing on their untextured flag.
+  output logic [31:0] geom_pw_vread_o,
+  output logic [31:0] geom_pw_vbad_o,
+  output logic [31:0] geom_pw_pvsplit_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -5009,6 +5017,9 @@ module zhao_console_board
       .geom_pw_stray_o                    (geom_pw_stray_o),
       .geom_pw_genrace_o                  (geom_pw_genrace_o),
       .geom_pw_unaligned_o                (geom_pw_unaligned_o),
+      .geom_pw_vread_o                    (geom_pw_vread_o),
+      .geom_pw_vbad_o                     (geom_pw_vbad_o),
+      .geom_pw_pvsplit_o                  (geom_pw_pvsplit_o),
       .geom_pw_depth_o                    (geom_pw_depth_o),
       .geom_ws_denied_o                   (geom_ws_denied_o),
       .geom_ws_contention_o               (geom_ws_contention_o),

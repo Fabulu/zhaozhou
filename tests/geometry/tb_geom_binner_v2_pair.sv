@@ -174,6 +174,11 @@ module tb_geom_binner_v2_pair #(
       // pair bench does not difference it. Connected explicitly rather than
       // left off: an omitted port is a PINMISSING the next fit discovers.
       .job_profile_bad_o(v2_job_profile_bad_w),
+      // DOORCOST: the WRITE-EDGE verdict. This bench compares the drain's
+      // read-back verdict against the oracle, which is a different quantity
+      // valid on a different cycle, so it is deliberately unconnected here
+      // rather than tied to the same net. `()`, never an omission.
+      .write_profile_bad_o(),
     // The serialise pass is NOT REQUESTED in this bench, deliberately. This
     // pair proves the V2 transport is the unversioned binner's, cycle for
     // cycle; with `ser_req_i` low, `ser_mode_r` can never set and the raster

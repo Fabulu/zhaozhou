@@ -9958,6 +9958,128 @@
 //      or timing claim whatsoever; the vertex arm adds four states, a 256-bit
 //      buffer and three small register files, and what that costs is a question
 //      for the coordinator's fit.
+//
+//      -- DOORCOST, 2026-09-27. STILL TIED, AND THE DOOR IS OPEN AND MEASURED.
+//      The refusal above is discharged and the price is on the shipping part.
+//
+//      THE 2,065-WIRE PRICE WAS AN ESTIMATE AND IT WAS 73x TOO BIG. MUXBUILD
+//      measured that `job_*` is internal -- which is TRUE, is the real finding,
+//      and stands -- and priced opening it at "2,065 wires through two module
+//      boundaries, or lift `u_tile` out -- a subsystem retirement on the
+//      tightest block". **2,037 of those 2,065 wires ARE ALREADY PORTS ON
+//      `zhao_geom_bin_pipe_v2`.** The time multiplex feeds the SAME
+//      `u_geom_setup`/`u_geom_attrpack` pair, and that pair's output arrives at
+//      the binner's own `tri_*` ports whichever source fed it -- verified in
+//      THIS FILE and not from a comment: `u_geom_setup.out_kx0_o` -> `st_kx0`
+//      (:20582) -> `u_shell.render_kx0_i` (:24633) -> `u_render_bin.tri_kx0_i`
+//      (`zhao_shell_top_v2.sv`:1405), and `u_geom_attrpack.out_r_plane_o` ->
+//      `ap_r_plane_w` (:20709) -> `.tri_r_plane_i` (:24418). The whole
+//      1,877-bit metadata is assembled INSIDE `zhao_geom_bin_pipe_v2` from
+//      those ports, thirty lines above the binner instantiation. THE RECORD
+//      NEVER NEEDED TRANSPORTING BECAUSE IT WAS NEVER ANYWHERE ELSE.
+//
+//      So the door is what the WALK knows and the triangle record does not:
+//      which TILE a reference is for, whether it opens or closes that tile's
+//      list, and its own handshake. TWENTY-EIGHT BITS, plus a counter.
+//
+//      THE PRICE, ON THE SHIPPING PART, `rtlCleanAtHead` TRUE BOTH ROWS, at
+//      the console's own CHUNKS=8192 / CHUNK_W=13 (`run_block_map.ps1`,
+//      map-only, device `5CSEBA6U23I7` named on every row; a map row carries no
+//      ALMs or Fmax by construction, and `estimatedAlms` is Analysis &
+//      Synthesis's own estimate, not a placed count):
+//
+//        @doorcost-base      36,672 comb ALUT  38,368 reg  89 DSP  892,204 bits
+//        @doorcost-src0      36,666            38,368      89      892,204
+//        @doorcost-src1walk  37,655            36,489      89      285,612
+//
+//      `@doorcost-base` IS THE FIRST SHIPPING-PART FIGURE THIS BLOCK HAS EVER
+//      HAD -- the paragraph above says "there is NO shipping-part figure for
+//      `zhao_geom_bin_pipe_v2` anywhere in this tree", and that was true. Do
+//      NOT difference it against the 30,266-ALUT sizing-part row quoted there:
+//      different device, and that row's CHUNKS is not stated.
+//
+//      `src0` is the CONTROL and it is why the door is free to open: the ports
+//      exist, the `generate` select is present, and the arrangement this console
+//      elaborates measures **-6 ALUTs, identical registers, identical DSP,
+//      identical memory bits, and exactly +60 virtual pins** -- which is the
+//      door's own bit count (1+1+12+12+1+1+32). It can fail: had the select
+//      wrongly built the mux it would read about +2,050.
+//
+//      `src1walk` is the door DRIVING: **+983 comb ALUT, +0 DSP, -1,879
+//      registers and -606,592 block memory bits** against base. The memory and
+//      register deltas are Quartus PRUNING the binner's payload path once
+//      nothing reads `bin_job_meta_w` -- which is what the end state removes by
+//      design, but this arrangement still CONTAINS the drain, so that saving is
+//      declared as available rather than taken.
+//
+//      AGAINST THIS CAMPAIGN'S OWN REFUSAL BAR: LANESCOST was refused at
+//      +11,979 ALUT / +9 DSP, and a second setup+attrpack instance at +1,621
+//      ALUT / +40 DSP. **+983 ALUT and +0 DSP is below the smallest thing this
+//      campaign has refused, on the axis that is 335% over.** The door is
+//      AFFORDABLE, and the estimate that made it look unaffordable was wrong in
+//      the alarming direction -- the same direction LANESCOST's +90,000 was.
+//
+//      A RUN-TIME MUX IS REFUSED, AND NOW WITH A NUMBER.
+//      `fpga/rtl/synth/zhao_probe_doorcost_jobmux.sv` is that 2:1 multiplex on
+//      the 2,048-bit bundle and nothing else: **2,050 comb ALUT, 0 registers, 0
+//      DSP** -- one LUT per bit, as arithmetic predicts. Its `estimatedAlms` of
+//      4,107 is a boundary artefact of 6,164 virtual pins on a module that is
+//      pure combinational logic, and is NOT quoted as its cost. Both of
+//      MUXBUILD's routes need that mux, because both leave the binner's drain
+//      live -- so the two routes it presented as alternatives have the SAME
+//      price, and the elaboration select avoids it entirely. Directive section 4
+//      is why: "a parallel legacy on-chip frame arena that still supplies the
+//      actual pixels is not closure", so an arrangement where both sources can
+//      reach `u_tile` in one frame is that forbidden thing with a select line.
+//
+//      WHAT IS BUILT: `JOB_SRC` on `zhao_geom_bin_pipe_v2` (0 = the binner's
+//      drain, today's console and the retained oracle; 1 = the walk), the
+//      `walk_job_*` port set, and `write_profile_bad_o` on
+//      `zhao_geom_binner_v2` -- the profile verdict on the WRITE edge, two
+//      wires off the expression that block already evaluates for the pad,
+//      because `job_profile_bad_o` is read back out of the metadata bank and so
+//      exists only for a job the binner STORED.
+//
+//      THE DOOR IS TESTED AND THE TEST IS DISCRIMINATING.
+//      `geom_bin_pipe_v2_door` (target `pd_door`, `-GJOB_SRC=1`): **11,378
+//      checks, 0 failures.** Two walk-sourced jobs on tile (0,0) produce
+//      `started=2 sunk=0 tiles=1 fb=256 resolved=1 cand=256 frag=256` with
+//      **`binner_tile_references_o == 0`** -- `tri_valid_i` is NEVER asserted,
+//      so the binner bins nothing and all 256 framebuffer beats, compared
+//      PER BEAT against `zref` for rgb565/address/x/y/src_id/last, came through
+//      the door or did not exist. `geom_bin_pipe_v2_door_shut_control`
+//      (`pd_doorshut`, JOB_SRC=0, SAME source): **4,084 checks**, the identical
+//      stimulus, `walk_job_ready_o` asserted low on 4,000 consecutive cycles,
+//      and fb/cand/frag/tiles/started all ZERO. That control is what makes the
+//      open one mean THE DOOR.
+//
+//      AND I55 IS STILL NOT CLOSED. `walk_valid_i` and `t_ready_i` are still
+//      tied, `paramwalk dirs/chunks/tris` is still 0/0/0, and NO PIXEL YET
+//      COMES FROM BYTES THAT WENT THROUGH SDRAM. The door is a DOOR; what is
+//      still owed, in order, is (1) TriangleDescriptor v2, because GEOM.SETUP
+//      consumes `tri_area2_i` and the four scissored box bounds and the 16-byte
+//      record carries neither -- decided in
+//      `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V2.md` and DEFERRED THERE
+//      ON A REASON THIS PACKET DISCHARGES: it was deferred because it "costs
+//      live write bandwidth every frame for a consumer that cannot exist until
+//      the door opens", and the door now exists and is priced, so the deferral's
+//      stated ground is gone and TD v2 is the next build; (2) the console-side
+//      select that feeds `u_geom_setup`/`u_geom_attrpack` from the walk during
+//      the drain window, placed UPSTREAM of the three-way fork as
+//      `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md` requires; (3) a
+//      sequencer on `walk_valid_i`; and (4) the binner's drain retired by
+//      REMOVAL, which is the -606,592 bits above and is a genuine subsystem
+//      retirement -- the bin phase and the drain share ONE FSM and FOUR
+//      memories, so MUXBUILD was right to call it that, about the binner rather
+//      than about the door.
+//
+//      `walk_job_*` IS BOUND, NOT TIED, and the difference is structural: with
+//      `JOB_SRC = 0` the branch that reads those inputs IS NOT BUILT, so there
+//      is no path a capability is being withheld from. It is bound at
+//      `zhao_shell_top_v2`'s `u_render_bin` with that reasoning beside it, and
+//      it is DECLARED HERE rather than as a new entry, because this entry
+//      already owns the sentence -- "what is tied is WHO ASKS IT TO WALK and
+//      WHO TAKES THE TRIANGLES" -- and a second entry would count one gap twice.
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
 //

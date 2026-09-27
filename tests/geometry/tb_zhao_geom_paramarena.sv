@@ -1509,6 +1509,8 @@ module tb_zhao_geom_paramarena
       .job_tile_x_o(bin_job_tile_x_o), .job_tile_y_o(bin_job_tile_y_o),
       .job_src_id_o(bin_job_src_id_o), .job_meta_o(),
       .job_profile_bad_o(),
+      // DOORCOST: intentionally unconnected, like the line above it.
+      .write_profile_bad_o(),
       .drain_busy_o(), .drain_done_o(bin_drain_done_o),
       .tile_references_o(bin_tile_references_o),
       .max_tile_list_depth_o(),
