@@ -4487,3 +4487,42 @@ not a lane; attribute before diagnosing and read CPU as a RATE.**
 vs ZERO. A second back end at +40 DSP -- refused, correctly, and the elaboration
 select made it unnecessary.** **Every one would have justified a refusal.**
 Measuring before refusing has been this run's highest-yield habit.
+
+### 2026-09-27 - THE MERGE GATE IS COMPLETE AND CLEAN, ALL SIX FORMS
+
+Both MATCARRY and DOORCOST declared their control forms NOT RUN rather than
+implying a pass. Run here against the MERGED tree, which is where they belong:
+
+| form | polarity | verdict |
+|---|---|---|
+| plain | - | **PASS** `raster pixels=2816` `texture fragments=1216` |
+| `-Mutant` | INVERTED (passes when the counter fires) | **PASS** |
+| `-TerrainFlatLattice` | DIRECT | **PASS** |
+| `-BadVertex` | DIRECT (R31: passes when the batch drops and the frame completes) | **RC 0** |
+| `-NoEchoArm` | negative control | **RC 0**, 1 PASS line |
+| `-BadTraceArm` | - | **RC 0**, 2 PASS lines |
+| `-UntexMutant` | - | inherited FATAL, attributed, **REDFIX owns it** |
+
+**Zero `SMOKE: FAIL`, zero `%Error`, zero assertion failures across the whole
+run.**
+
+**One form needed reading rather than trusting.** `-BadVertex` prints **no PASS
+line by design** -- its exit code is the verdict -- and my first grep reported a
+green by matching **`fatal=0` case-insensitively** against a `FATAL` pattern. The
+line it "found" was the raster summary. **A pattern that matches the wrong thing
+reports a verdict it never read**, which is the broken-instrument law inside a
+grep, so the forms were re-counted by `SMOKE: PASS` and `SMOKE: FAIL` lines
+explicitly.
+
+### TWO PROCESS ITEMS CLOSED
+
+* **I was over the agent cap.** SWAPCLOSE spawned two recons, taking the live
+  total to **four against a hard two** -- a limit the owner restated to count
+  **every** agent. My two packets ARE the cap, so the breach was one level down
+  where nothing was looking. **Not killed** (the same rule never authorises
+  killing in-flight work); told to finish and spawn no more, and
+  `PACKET-PROTOCOL.md` now carries the rule with the forward fix. **A budget
+  enforced only at the point of issue is not enforced.**
+* **Killed a stray `find` of my own** that had scanned the whole zencrifice tree
+  for over an hour, answering a question I had already answered another way,
+  against two live builds.
