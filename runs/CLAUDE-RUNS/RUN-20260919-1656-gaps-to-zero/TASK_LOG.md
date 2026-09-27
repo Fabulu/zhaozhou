@@ -4526,3 +4526,112 @@ explicitly.
 * **Killed a stray `find` of my own** that had scanned the whole zencrifice tree
   for over an hour, answering a question I had already answered another way,
   against two live builds.
+
+### 2026-09-27 - REDFIX MERGED, AND THE PRESCRIBED FIX WAS ITSELF WRONG
+
+**Register 2. Gates 32/32 at baseline. HEAD `2a4f6791`, pushed.** SWAPCLOSE
+still live on I55.
+
+### THE REPAIR I HANDED OVER WOULD HAVE LEFT THE BUG
+
+`FINDINGS-doorcost` section 7.1 offered *"exact replacements, derived from the
+layout, not guessed"*. **They are FIVE of the NINETEEN edits the repair needs.**
+The continuation tail sits **inside** the payload above the request so it moved
+too, and `detail_required` had **no PRETEX constant at all**. Applied as written
+they leave `VERTEX_RGB_HI = 409` and `SOURCE_ID_LO = 411` -- **the same orphaned
+bit 410, moved one field** -- and `check_candidate` reads that tail at
+386/378/370/362, so **four more fields would still misread.** Real repair: **17
+constants changed, 2 added.**
+
+**And the count was wrong too:** six of **FIFTEEN** required tests, not thirteen.
+The CMake guard checks 15; **only its `FATAL_ERROR` message said 13**, and that
+sentence had propagated into two documents.
+
+**AN EIGHTH RED NOBODY HAD RECORDED.** `render_texture_packet_a`, a registered
+ctest, **fails at VERILATION at base** -- measured on a clean tree before any
+edit. `ceba0bfe` left **three** files inconsistent, not two. Now 5/5.
+
+**And the diagnosis was half wrong in the instructive direction:** *"the
+package's own self-check cannot catch it"* is true of **one** check and **false
+of the package** -- `expect_span` **was firing the whole week and nothing read
+it.** A blind instrument and an unread one, side by side, and only the blind one
+had been noticed.
+
+### THE INSTRUMENT, WHICH WAS THE ACTUAL DELIVERABLE
+
+`PRETEX_OFFSET_CONTRACT_OK` asserts **`410 == 410`**. Beside it now: a **tiling**
+check (every bit in exactly one field, no hole, no overlap) and a **cross-record**
+check tying PRETEX to TEXREQ/EZPAY/EARLYZ -- the sets maintained independently
+and therefore able to drift apart. Plus `tools/rtl/check_pretex_offsets.py`,
+**because the actual victim was C++ LITERALS no SystemVerilog check can reach.**
+
+**Fired five ways, and the one that matters: run unmodified against `ceba0bfe`'s
+own constants it reports 18 breaches and names all nine moved fields. IT WOULD
+HAVE FAILED THAT COMMIT THE DAY IT LANDED.** Baselined as **gate 32**.
+
+### THE OTHER TWO REDS
+
+* **`-UntexMutant` green**, scoped to the replay arm as an **equality between two
+  measured counters, not a bound**, with an explicit non-vacuity guard --
+  `128 == 128` is **also satisfied by a dead terrain arm**. It still catches the
+  original fault: in the plain run 144 against 128 fires and reports **16, exactly
+  the mesh count**. No GEOM edit, no new port.
+* **Board lint CLASSIFIED, not re-baselined**: 290, identity-diffed against base,
+  **0 new and 0 gone.** The protocol's row was wrong three ways -- 290 not 262;
+  `DECLFILENAME` is **1** of 290 while the unmentioned **`UNUSEDPARAM` is 209**;
+  and those 209 are **one generated FIELD file**. My brief's "known asymmetry"
+  about deduplication is **also false** -- neither tool dedupes and there are no
+  duplicates.
+
+### THREE PINS WENT STALE IN SEQUENCE, AND ONE CARRIED A FALSE COMMENT
+
+The bit-410 repair legitimately rewrote `zhao_render_texture_pkg.sv`, so the
+package digest, the duplicate-profile fingerprint and the generated interface
+manifest all went stale. **Re-pinned or regenerated, none waived.**
+
+**The comment above the first pin was FALSE and is struck IN PLACE**, not
+replaced: it recorded `ceba0bfe` as *"every existing TEXREQ_* offset is
+bit-identical and only three totals moved"*. **Nine moved.** The old note is kept
+because it records what was believed when the digest was last pinned, and **a
+strike a reader cannot see is no strike at all.**
+
+**The profile re-pin has its own reading:** the **count stayed at 107** and only
+the digest moved -- the signature of an edit to a duplicated declaration's
+**content** rather than to the **set** of them. A count that moves means a new
+duplicate; a digest moving alone means an existing one was edited.
+
+**Written into the parser: re-pinning a digest is NOT evidence the layout is
+right. It measures bytes. Gate 32 measures the layout.**
+
+### SWAPCLOSE, IN FLIGHT
+
+Pushed and green (`576caacf`, `4513c7c5`): **TD v2 with the non-circularity
+premise (620/0)**, the sequencer with a **committed mutant firing at 3** (47/0),
+the door, the select, `t_first_o`/`t_last_o`, **17/17** in the affected family.
+
+**Four findings no existing gate could see, and three are the same shape --
+terrain silently dropped:**
+
+1. **The tile coordinate is a PIXEL, not an index.** Every tile would have
+   collapsed into the top-left 24x24 **with all counters balancing.**
+2. **Domain 3 is TERRAIN and was refused as malformed** -- **30 of 45 vertices**
+   -- by a contract line predating the terrain arm, surviving only because
+   **`pv_illegal_o` had no reader anywhere.** Repaired; `vbad = 0`.
+3. **`cd_o_owner` `[2:0]` and `geom_clipdoor_granted_o` `[95:0]` while `NCLIENT`
+   is 4** -- the dropped client is **terrain again**. Found by REDFIX inside an
+   accepted board-lint red nobody had read.
+4. **Per-triangle material metadata is not in the record**, taken live from a
+   held publication -- a real section 4 shortfall.
+
+**My contention hypothesis was killed by construction** -- `job_valid_w =
+walk_job_valid_i` is the sole issuer and the drain is accepted-and-discarded at
+`bin_job_ready_w = 1'b1`. Relayed that section 4 **authorises a versioned
+extension or immutable sidecar BY NAME** for finding 4, so no ruling is needed --
+and warned that *"the material was the same for this span"* is the convenient
+zero in disguise: **true in the fixture, false in general, and it would pass every
+gate.**
+
+**Finding 4 may be the SAME false premise as the colour half.** *"The planes are
+recomputable"* concealed that the record did not carry the colour; it may equally
+have concealed that it does not carry the material. If so, **the claim PVSCHEMA
+corrected was broader than anyone has yet corrected.**
