@@ -308,6 +308,38 @@ param(
   # against the plain run's invariant that it is a structural zero. Both are
   # required before the park may be called honest.
   [switch]$WalkRaster,
+
+  # ---------------------------------------------------------------------------
+  # -MsMutFlat / -MsMutTail / -MsMutFrag: THE THREE ROUND-TRIP ASSERTIONS,
+  # FIRED (PHASEFIX, 2026-09-27)
+  # ---------------------------------------------------------------------------
+  # `zhao_console_core`'s `a_ms_flat_roundtrip`, `a_ms_tail_roundtrip` and
+  # `a_ms_frag_roundtrip` compare the MATSTATE pack/unpack pair against the
+  # readable composition. METASIDE declared, honestly, that all three were LIVE
+  # AND SILENT through 89 triangles and had NOT been seen to fire -- and
+  # CLAUDE.md is explicit that a detector reading zero is the claim to check
+  # hardest.
+  #
+  # NO LEGAL STIMULUS CAN FIRE THEM. Both sides are expressions of the SAME
+  # inputs, so what they differ on is the LAYOUT, and layout is not an input.
+  # That is the case the committed-mutant chapter exists for.
+  #
+  # THREE SWITCHES BECAUSE THE THREE ASSERTIONS READ DISJOINT FIELDS -- measured
+  # in `zhao_ms_flat_request` / `zhao_ms_tail` / `zhao_ms_frag_state`, not
+  # assumed. One corrupted field fires exactly one of them, so a single control
+  # would leave two untested while LOOKING like it had covered all three.
+  #
+  # POLARITY IS INVERTED, AND THE CHECK IS NOT MERELY `rc != 0`. A control that
+  # accepts any failure passes when the build breaks, when a different assertion
+  # fires, or when the fixture changes underneath it -- so each form also
+  # requires ITS OWN assertion's message in the output. The three messages are
+  # distinct strings, which is what makes that possible.
+  #
+  # THE NEGATIVE CONTROL IS THE PLAIN RUN, which must stay silent; each `else`
+  # arm in the seam is byte-identical to the line it replaces.
+  [switch]$MsMutFlat,
+  [switch]$MsMutTail,
+  [switch]$MsMutFrag,
   # ---------------------------------------------------------------------------
   # -FieldActive: THE FIRST FIELD THE COMPOSED CONSOLE HAS EVER RUN
   # ---------------------------------------------------------------------------
@@ -476,6 +508,14 @@ if (-not $BuildIn) {
          # which is the exact collision the paragraph above records.
          elseif ($FieldUncovered) { 'zhao_console_core_smoke_flduncov' }
          elseif ($FieldActive) { 'zhao_console_core_smoke_fldactive' }
+         # EVERY NEW SWITCH NEEDS A TAG HERE. These three are PHASEFIX's, and
+         # they need SEPARATE ones from each other as well as from the plain
+         # run: all three change the same function, so two of them sharing an
+         # object directory would mean the second form measured the first
+         # form's mutation and passed for the wrong reason.
+         elseif ($MsMutFlat) { 'zhao_console_core_smoke_msmutflat' }
+         elseif ($MsMutTail) { 'zhao_console_core_smoke_msmuttail' }
+         elseif ($MsMutFrag) { 'zhao_console_core_smoke_msmutfrag' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
@@ -551,6 +591,18 @@ if ($NoEchoArm) {
 if ($WalkRaster) {
   $defs += '+define+ZHAO_CONSOLE_WALK_RASTER'
   Write-Host 'I55 ARRANGEMENT 1 (METASIDE): zhao_console_core GEOM_WALK_RASTER = 1 -- the SDRAM walk feeds the raster instead of the binner on-chip drain. DIRECT polarity. This is the SECOND ARRANGEMENT of a shipped parked capability, not a mutant: the plain run asserts the parked structural zero, this one asserts the sweep runs and completes. The console still SHIPS at 0.'
+}
+if ($MsMutFlat) {
+  $defs += '+define+ZHAO_MS_MUT_FLAT'
+  Write-Host 'MATSTATE LAYOUT MUTANT (PHASEFIX): the pack writes ~weight into ZHAO_MS_WEIGHT. INVERTED POLARITY -- this form PASSES when `a_ms_flat_roundtrip` FIRES. A bitwise NOT rather than a dropped write, because a dropped field reads ZERO and agrees with the composition wherever the value is zero, which is a mutant that proves nothing.'
+}
+if ($MsMutTail) {
+  $defs += '+define+ZHAO_MS_MUT_TAIL'
+  Write-Host 'MATSTATE LAYOUT MUTANT (PHASEFIX): the pack writes ~vtx_alpha into ZHAO_MS_VTXALPHA. INVERTED POLARITY -- this form PASSES when `a_ms_tail_roundtrip` FIRES.'
+}
+if ($MsMutFrag) {
+  $defs += '+define+ZHAO_MS_MUT_FRAG'
+  Write-Host 'MATSTATE LAYOUT MUTANT (PHASEFIX): the pack writes ~frag_state into ZHAO_MS_FRAGST. INVERTED POLARITY -- this form PASSES when `a_ms_frag_roundtrip` FIRES.'
 }
 if ($GlowTag) {
   $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
@@ -672,9 +724,40 @@ Write-Host '--- smoke run ---'
 # not one. The verilate step above needs the suite ahead, so the order changes
 # here deliberately.
 $env:PATH = "$gxx;$env:PATH"
-& $exe
-$rc = $LASTEXITCODE
+# THE THREE MATSTATE LAYOUT CONTROLS NEED THE TEXT, not just the code, because
+# "the run failed" is satisfied by a broken build. Every other form keeps the
+# untouched path below, so their streaming and their exit code are unchanged.
+$msMut = ($MsMutFlat -or $MsMutTail -or $MsMutFrag)
+if ($msMut) {
+  $msOut = & $exe 2>&1
+  $rc = $LASTEXITCODE
+  # R82: the FULL output, then filter. Printed before any verdict, so a form
+  # that fails for an unexpected reason still says what happened.
+  $msOut | ForEach-Object { Write-Host $_ }
+} else {
+  & $exe
+  $rc = $LASTEXITCODE
+}
 Write-Host "SMOKE_RC=$rc"
+if ($msMut) {
+  $want = if ($MsMutFlat) { 'does not reproduce the flat request' }
+          elseif ($MsMutTail) { 'does not reproduce the continuation tail' }
+          else { 'does not reproduce the fragment state' }
+  $name = if ($MsMutFlat) { 'a_ms_flat_roundtrip' }
+          elseif ($MsMutTail) { 'a_ms_tail_roundtrip' }
+          else { 'a_ms_frag_roundtrip' }
+  $hit = @($msOut | Where-Object { "$_" -like "*$want*" }).Count
+  if ($rc -eq 0) {
+    Write-Host "MUTANT CONTROL FAILED: the run PASSED with the MATSTATE layout corrupted. $name cannot fire, so its silence in the plain run is not evidence about the round trip."
+    exit 1
+  }
+  if ($hit -eq 0) {
+    Write-Host "MUTANT CONTROL FAILED: the run failed (rc=$rc) but NOT on $name -- nothing in the output says '$want'. A control that accepts any failure is a control that passes when the build breaks."
+    exit 1
+  }
+  Write-Host "MUTANT CONTROL PASS: $name FIRED (rc=$rc, matched '$want'). The assertion has now been SEEN to go red, so its silence elsewhere is evidence."
+  exit 0
+}
 if ($NoTableLoad) {
   # INVERTED. A zero here would mean the PART.TABLE checks pass with the table
   # never loaded -- which would make them evidence about something other than

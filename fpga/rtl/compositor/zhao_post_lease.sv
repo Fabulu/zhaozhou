@@ -21,6 +21,63 @@
 //     only when the bin pipe is QUIET (every tile resolved), no raster pixel is
 //     pending, and RASTER.FBWRITE is DRAINED -- every word the raster issued has
 //     RETIRED, so the read-back cannot overtake a write still in flight.
+//     ... AND, at `WALK_GATE = 1`, only after I55's SDRAM TILE SWEEP has run and
+//     finished. See THE WALK GATE below: "quiet" is a claim about a producer,
+//     and in that arrangement the producer it names is not the one drawing.
+//
+// ---------------------------------------------------------------------------
+// THE WALK GATE (PHASEFIX, 2026-09-27) -- WHY `raster_quiet_i` IS NOT ENOUGH
+// ---------------------------------------------------------------------------
+// Console entry I55's arrangement 1 (`zhao_console_core.GEOM_WALK_RASTER = 1`,
+// `zhao_geom_bin_pipe_v2.JOB_SRC = 1`) feeds `zhao_raster_tile_pipe_v2` from
+// GEOM.TILEWALK's sweep over the SDRAM parameter arena instead of from
+// `zhao_geom_binner_v2`'s on-chip drain. That sweep cannot begin until the
+// arena has SEALED and PUBLISHED, and the seal is caused by the very
+// `frame_end_i` that arms this block -- so the sweep runs strictly AFTER the
+// arming, in the drain window.
+//
+// `raster_quiet_i` is `zhao_geom_bin_pipe_v2.quiet_o`, and every term of it
+// describes the BINNER and the tile pipe. At `JOB_SRC = 1` the binner issues no
+// job at all, so at `frame_end` the tile pipe is genuinely idle and `quiet_o`
+// is genuinely TRUE -- while the machine that is about to draw the entire frame
+// has not started. The post phase therefore opened, `zhao_shell_top_v2`'s
+//
+//     assign rpx_ready = !post_phase_w && fbw_px_ready;      // :1653
+//
+// muxed RASTER.FBWRITE away from the raster, and the sweep's pixels had nowhere
+// to land: MEASURED as `resolve_ready=0` with `fb_valid=1` against `fb_ready=0`
+// and `raster pixels=0`, for eight packets.
+//
+// THIS IS NOT A BROKEN COUNTER; IT IS A CORRECT SIGNAL ASKED THE WRONG
+// QUESTION. CLAUDE.md: "a gate that cannot reach the state is not evidence
+// about the state." `quiet_o` is wired to the producer that was the producer
+// when it was written, and the arrangement changed the producer out from under
+// it. Nothing in it can go red, because there is no fault in what it watches.
+//
+// SO THE GATE IS A SECOND TERM AND NOT A REPAIR OF THE FIRST. `walk_active_i`
+// is GEOM.TILEWALK's `active_o` -- high for the whole sweep -- and the small
+// FSM below turns it into "this frame's sweep is OWED or RUNNING", which is
+// what `frame_end` starts and what the sweep's own completion ends. The two
+// terms are enabled by different things (the bin pipe's state machine, and a
+// sequencer three modules away), which is the property CLAUDE.md's chapter on
+// lockstep detectors asks for.
+//
+// WHY NOT THE OTHER TWO SHAPES:
+//   * ARBITRATE the pixel port instead of switching it -- refused, and not on
+//     area. POST.COMPOSITE READS THE FRAMEBUFFER AS ITS SOURCE. A raster
+//     writing into it during a post pass would be composited from a
+//     half-written frame, which is a correctness fault and not a cost.
+//   * RUN THE SWEEP EARLIER -- impossible, not merely expensive. The walk reads
+//     an arena that does not exist until the frame seals.
+// So the post phase opens LATER, which is the only one of the three that is
+// both correct and free.
+//
+// AT `WALK_GATE = 0` NONE OF THIS IS BUILT. The generate below drives
+// `walk_hold_c` from a literal `1'b0`, both counters are structural zeros, and
+// `walk_active_i` has no reader -- so the SHIPPED console (`JOB_SRC = 0`) is
+// byte-identical to the one before this change. The shell passes its own
+// `JOB_SRC` through as `WALK_GATE`, so the door and the gate CANNOT disagree
+// about which arrangement is elaborated; they are one parameter, not two.
 //   * EXCLUSIVE, AND NOT THE FRONT BUFFER. The pass arms only while the RENDER
 //     lease is live (`lease_live_i`: the slot manager's live lease naming the
 //     renderer). That lease is on the BACK slot by construction -- the manager
@@ -131,7 +188,12 @@ module zhao_post_lease
     // READS IN FLIGHT on ENGINE0 (owner ruling R38): the share's MAX_RD, and the
     // reader's queue is sized to hold that many 64-byte reads (8 beats each).
     // Chosen on the console smoke's post census -- see THE MEMORY BUDGET below.
-    parameter int unsigned MAX_RD = 2
+    parameter int unsigned MAX_RD = 2,
+    // I55's SDRAM tile sweep holds the post phase shut until it has drawn.
+    // 0 = the shipped console: not built, `walk_active_i` has no reader.
+    // 1 = arrangement 1. Driven from `zhao_shell_top_v2`'s `JOB_SRC`, never
+    // written independently -- see THE WALK GATE above.
+    parameter int unsigned WALK_GATE = 0
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -143,6 +205,9 @@ module zhao_post_lease
     input  var logic          raster_quiet_i,   // bin pipe quiet (all tiles resolved)
     input  var logic          raster_px_i,      // a raster pixel is on offer
     input  var logic          fbw_drained_i,    // RASTER.FBWRITE: every word retired
+    // GEOM.TILEWALK's `active_o`: I55's SDRAM sweep is running. A LEVEL, on
+    // this same clock. READ ONLY AT `WALK_GATE = 1`; see THE WALK GATE above.
+    input  var logic          walk_active_i,
     input  var logic [ZHAO_VRAM_ADDR_BITS-1:0] fb_base_i,
     input  var logic [15:0]   fb_stride_i,
     input  var logic [XW-1:0] frame_w_i,        // the VIEW's size, from the mode
@@ -212,7 +277,17 @@ module zhao_post_lease
     output var logic [31:0]   echo_passes_torn_o,
     output var logic [31:0]   echo_pixels_written_o,
     output var logic [31:0]   echo_pixels_dropped_o,
-    output var logic          echo_fault_o
+    output var logic          echo_fault_o,
+
+    // ---- THE WALK GATE's evidence -------------------------------------------
+    // Clocks the post phase was held shut waiting for I55's sweep, and the
+    // number of sweeps that completed under the hold. BOTH are structural zeros
+    // at `WALK_GATE = 0`. `walk_hold_clocks_o` is the one to read when the
+    // console does not finish a frame: a hold that never ends says the sweep
+    // never started, which is a different fault from a sweep that stalled, and
+    // no other counter in this design separates them.
+    output var logic [31:0]   walk_hold_clocks_o,
+    output var logic [31:0]   walk_sweeps_gated_o
 );
 
   localparam int unsigned RYW = YW + 1;          // the reader's tall Duo pass
@@ -246,10 +321,81 @@ module zhao_post_lease
   zhao_guard_rsp_t [2:0] sh_rsp;
   logic [2:0][6:0]       sh_req_len_q;     // length when the share took it
 
+  // ==========================================================================
+  // THE WALK GATE -- "this frame's SDRAM sweep is owed or running"
+  // ==========================================================================
+  // Three states and no arithmetic. It is a separate FSM from the pass
+  // sequencer on purpose: the pass sequencer's states describe the COMPOSITOR,
+  // and folding a producer's lifetime into them would make one enable govern
+  // both sides of `raster_done_c` -- the lockstep shape CLAUDE.md names.
+  //
+  //   WK_OFF  nothing owed. `walk_hold_c` low; the gate is not in the way.
+  //   WK_OWED `frame_end_i` has armed the frame and the sweep has not started.
+  //           This state is why the gate is not simply `!walk_active_i`: at
+  //           the instant of `frame_end` the sweep has not begun, so that
+  //           expression is TRUE and the post phase opens in the gap -- which
+  //           is precisely the defect, not the repair.
+  //   WK_RUN  the sweep is running. Left when `walk_active_i` falls.
+  //
+  // `frame_admit_i` returns it to WK_OFF, matching the pass sequencer's own
+  // rule that a newly admitted frame abandons an arming: a gate that stayed
+  // owed across an admit would hold the NEXT frame's post phase for a sweep
+  // that belonged to the previous one.
+  typedef enum logic [1:0] {
+    WK_OFF  = 2'd0,
+    WK_OWED = 2'd1,
+    WK_RUN  = 2'd2
+  } wkstate_e;
+
+  logic walk_hold_c;
+
+  generate
+    if (WALK_GATE == 0) begin : g_no_walk_gate
+      // NOT BUILT. `walk_active_i` has no reader in this arrangement, so there
+      // is no capability being withheld -- there is no path. The counters are
+      // structural zeros and say so; they are not instruments reading zero.
+      assign walk_hold_c         = 1'b0;
+      assign walk_hold_clocks_o  = 32'd0;
+      assign walk_sweeps_gated_o = 32'd0;
+    end else begin : g_walk_gate
+      wkstate_e    wk_q;
+      logic [31:0] wk_hold_q, wk_swept_q;
+
+      assign walk_hold_c         = (wk_q != WK_OFF);
+      assign walk_hold_clocks_o  = wk_hold_q;
+      assign walk_sweeps_gated_o = wk_swept_q;
+
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          wk_q       <= WK_OFF;
+          wk_hold_q  <= 32'd0;
+          wk_swept_q <= 32'd0;
+        end else begin
+          if (wk_q != WK_OFF) wk_hold_q <= wk_hold_q + 32'd1;
+
+          case (wk_q)
+            WK_OFF:  if (frame_end_i && lease_live_i) wk_q <= WK_OWED;
+            WK_OWED: if (walk_active_i)               wk_q <= WK_RUN;
+            WK_RUN:  if (!walk_active_i) begin
+                       wk_q       <= WK_OFF;
+                       wk_swept_q <= wk_swept_q + 32'd1;
+                     end
+            default: wk_q <= WK_OFF;
+          endcase
+
+          // An admitted frame abandons the arming, exactly as `st_q` does.
+          if (frame_admit_i) wk_q <= WK_OFF;
+        end
+      end
+    end
+  endgenerate
+
   // The raster is finished with the slot: every tile resolved, nothing on the
-  // pixel port, every raster word retired.
+  // pixel port, every raster word retired -- and, at `WALK_GATE = 1`, the
+  // SDRAM sweep that produces every one of those pixels has run and finished.
   logic raster_done_c;
-  assign raster_done_c = raster_quiet_i && !raster_px_i && fbw_drained_i;
+  assign raster_done_c = raster_quiet_i && !raster_px_i && fbw_drained_i
+                         && !walk_hold_c;
 
   logic echo_busy, rd_busy, rd_done_unused, rd_fault;
 
@@ -627,8 +773,13 @@ module zhao_post_lease
   end
 
 
+  // `walk_active_i` is here because at `WALK_GATE = 0` the gate above is not
+  // built and nothing else reads it. That is the intended structure, not an
+  // oversight, so it is sunk EXPLICITLY rather than waived by a lint file --
+  // a directory-wide UNUSEDSIGNAL waiver is how this tree lost `id_c`.
   logic unused_c;
-  assign unused_c = ^{rd_busy, rd_done_unused, rd_overflow_unused, ec_complete_unused,
+  assign unused_c = ^{walk_active_i,
+                      rd_busy, rd_done_unused, rd_overflow_unused, ec_complete_unused,
                       sh_bv[0], sh_bv[2], sh_bl_unused, sh_jobs_unused, sh_denied_unused,
                       sh_short_unused, sh_long_unused, sh_unowned_unused};
 

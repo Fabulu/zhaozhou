@@ -547,12 +547,27 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_tw_stall_o;
   logic [31:0] geom_tw_overlap_o;
   logic [31:0] geom_tw_door_o;
+  // I55's PHASE INTERLOCK (PHASEFIX). `phasehold` is CLOCKS the post phase was
+  // held shut waiting for the sweep; `phasesweeps` is sweeps that completed
+  // under the hold. Read together they separate the two faults nothing else in
+  // this bench can tell apart: a hold that never ends (the sweep never
+  // started) from a hold that ends once (the sweep ran and the frame drew).
+  logic [31:0] geom_tw_phasehold_o;
+  logic [31:0] geom_tw_phasesweeps_o;
   logic        geom_tw_busy_o;
   logic        geom_walk_raster_o;
   // Latched by the post-drain wait below and REFUSED at the end of the report.
   // Not a fatal where it is set: the whole point of the walk's checks moving to
   // the end is that a failing frame gets to say what it did first.
   logic        tw_sweep_incomplete = 1'b0;
+  // PHASEFIX 2026-09-27. In arrangement 1 the sweep is now waited for BEFORE
+  // `render_drain_done_o`, because the post phase is held shut until the sweep
+  // finishes -- so the drain cannot complete until the sweep has. Waiting in
+  // the old order would poll `geom_tw_busy_o` after the sweep was already over
+  // and print "GEOM.TILEWALK NEVER STARTED" about a frame it had just drawn:
+  // a bench whose own wait order makes a working console look broken.
+  // This flag is what stops the later wait from re-asking a settled question.
+  logic        tw_sweep_observed   = 1'b0;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -6804,6 +6819,47 @@ module tb_zhao_console_core_smoke
     @(posedge gpu_clk);
     render_frame_end_i <= 1'b0;
 
+    // ---- ARRANGEMENT 1: THE SWEEP IS INSIDE THE DRAIN, SO IT COMES FIRST ---
+    // (PHASEFIX, 2026-09-27.) `render_drain_done_o` is
+    // `fbw_drained && !post_busy_o`, and the post phase is now HELD SHUT until
+    // GEOM.TILEWALK's sweep has run -- which is the whole repair, because
+    // otherwise POST takes RASTER.FBWRITE's pixel port before the walk has
+    // drawn a single pixel. So in arrangement 1 the drain CANNOT complete
+    // until the sweep has, and waiting for the drain first would simply block
+    // here for the sweep with no diagnosis if it never started.
+    //
+    // Arrangement 0 does not execute one statement of this block, so the
+    // shipped console's stimulus is unchanged.
+    if (geom_walk_raster_o) begin
+      int unsigned pf_rise;
+      int unsigned pf_run;
+      pf_rise = 0;
+      while (!geom_tw_busy_o && (pf_rise < 400000)) begin
+        @(posedge gpu_clk);
+        pf_rise = pf_rise + 1;
+      end
+      if (!geom_tw_busy_o) begin
+        tw_sweep_incomplete = 1'b1;
+        $display("SMOKE: NOTE GEOM.TILEWALK NEVER STARTED -- %0d cycles after frame_end `geom_tw_busy_o` is still low. The post phase is being held for a sweep that is not coming; read `phasehold` below, which is the counter that separates THAT from a sweep that stalled.",
+                 pf_rise);
+      end else begin
+        pf_run = 0;
+        while (geom_tw_busy_o && (pf_run < 2000000)) begin
+          @(posedge gpu_clk);
+          pf_run = pf_run + 1;
+        end
+        if (geom_tw_busy_o) begin
+          tw_sweep_incomplete = 1'b1;
+          $display("SMOKE: NOTE GEOM.TILEWALK DID NOT FINISH in %0d cycles -- the frame below is PARTIAL and every counter in it is a FLOOR rather than a total. Read it as a diagnosis, never as a measurement.",
+                   pf_run);
+        end else begin
+          $display("SMOKE: tilewalk   started %0d clk after frame_end, swept the frame in %0d gpu clocks -- INSIDE the post phase's hold, which is what gives its pixels somewhere to land",
+                   pf_rise, pf_run);
+        end
+      end
+      tw_sweep_observed = 1'b1;
+    end
+
     guard = 0;
     while (!render_drain_done_o && (guard < 200000)) begin
       @(posedge gpu_clk);
@@ -6831,6 +6887,15 @@ module tb_zhao_console_core_smoke
     begin
       int unsigned tw_rise;
       int unsigned tw_wait;
+      // PHASEFIX 2026-09-27: SKIPPED WHEN THE SWEEP HAS ALREADY BEEN WATCHED.
+      // With the post phase held for the sweep, the sweep necessarily finishes
+      // BEFORE `render_drain_done_o` rises, so by the time control reaches here
+      // `geom_tw_busy_o` is low again -- and the loops below would read that as
+      // "never started" on a console that had just drawn the frame. The block
+      // is left standing rather than deleted because arrangement 0 still runs
+      // it unchanged, and because it is the wait a future arrangement that does
+      // NOT hold the phase would need.
+      if (!tw_sweep_observed) begin
       // ---- WAIT FOR IT TO START, AND REFUSE TO PROCEED IF IT NEVER DOES ---
       // `geom_tw_busy_o` is LOW before the sweep begins, so waiting only for
       // it to FALL returns immediately when the sweep has not started -- the
@@ -6868,6 +6933,7 @@ module tb_zhao_console_core_smoke
       // sweep that finished instantly -- the flattering direction, and the
       // exact confusion this wait was added to remove. The parked arrangement
       // says so in its own words at the end of the report instead.
+      end
       repeat (2000) @(posedge gpu_clk);
     end
 
@@ -7391,6 +7457,21 @@ module tb_zhao_console_core_smoke
              geom_tw_tiles_o, geom_tw_empty_o, geom_tw_jobs_o,
              geom_tw_failed_o, geom_tw_stall_o, geom_tw_overlap_o,
              geom_tw_door_o);
+    // ---- AND THE WINDOW THE DOOR NEEDED (PHASEFIX, 2026-09-27) -----------
+    // `phasehold` is CLOCKS `zhao_post_lease` held the post phase shut for the
+    // sweep; `phasesweeps` is sweeps that completed under that hold. Until
+    // this existed the door carried every job and the console still drew
+    // nothing, because POST had taken RASTER.FBWRITE's pixel port at
+    // `frame_end` -- on a `raster_quiet_i` that watches the BINNER, which
+    // issues no job at all in this arrangement and was therefore honestly
+    // TRUE while the machine about to draw the frame had not started.
+    //
+    // READ THEM TOGETHER OR NOT AT ALL. `phasesweeps == 1` alone would also
+    // be printed by a gate that released early; `phasehold` alone cannot say
+    // whether the hold ever ended. It is the pair that says the post phase
+    // waited, and then stopped waiting because the sweep was done.
+    $display("SMOKE: walkphase  phasehold=%0d clk phasesweeps=%0d",
+             geom_tw_phasehold_o, geom_tw_phasesweeps_o);
     // THE JOB AND THE DOOR ARE COUNTED IN DIFFERENT MODULES, ON DIFFERENT
     // REGISTER ENABLES -- `jobs_issued_o` inside GEOM.TILEWALK on its own
     // handshake, `walk_jobs_taken_o` inside the bin pipe on the tile pipe's.
@@ -10944,9 +11025,36 @@ module tb_zhao_console_core_smoke
                geom_tw_tiles_o, geom_tw_jobs_o, geom_tw_door_o,
                geom_pw_tris_o, geom_pw_vread_o);
       end
+      // AND THE PHASE GATE IS PART OF THAT STRUCTURAL ZERO (PHASEFIX).
+      // At `JOB_SRC = 0` `zhao_post_lease`'s WALK GATE generate branch is not
+      // elaborated, so both counters are tied literals. Asserted rather than
+      // assumed: a gate that quietly became live in the SHIPPED arrangement
+      // would delay every post phase for a sweep that never comes, and the
+      // symptom would be a console that stops publishing frames -- which is
+      // the single most expensive thing this change could get wrong.
+      if (geom_tw_phasehold_o != 32'd0 || geom_tw_phasesweeps_o != 32'd0) begin
+        $fatal(1, "POST.LEASE: the WALK GATE moved in the PARKED arrangement -- phasehold=%0d phasesweeps=%0d. It must not be elaborated at JOB_SRC=0.",
+               geom_tw_phasehold_o, geom_tw_phasesweeps_o);
+      end
       $display("SMOKE: tilewalk   PARKED (GEOM_WALK_RASTER=0): the sweep is a structural zero and the binner's on-chip drain feeds the raster. Entry I55 is OPEN; see FINDINGS-swapclose.md section 5.");
     end else if (tw_sweep_incomplete) begin
       $fatal(1, "GEOM.TILEWALK: the sweep did not complete -- the frame above is PARTIAL");
+    end else begin
+      // ---- ARRANGEMENT 1: THE HOLD HAPPENED, AND IT ENDED (PHASEFIX) -----
+      // BOTH HALVES, because either alone is satisfiable by a broken gate.
+      // `phasesweeps != 1` catches a gate that never engaged (it would have
+      // released at `frame_end` exactly as before this change) and one that
+      // engaged twice. `phasehold == 0` catches a gate that was elaborated
+      // and then released on the same clock it armed -- which draws a correct
+      // picture ONLY if the sweep happened to be instantaneous, and is
+      // therefore a pass that does not mean what it says.
+      if (geom_tw_phasesweeps_o != 32'd1) begin
+        $fatal(1, "POST.LEASE: the WALK GATE completed %0d sweep(s), not 1. At JOB_SRC=1 the post phase must be held for exactly this frame's sweep.",
+               geom_tw_phasesweeps_o);
+      end
+      if (geom_tw_phasehold_o == 32'd0) begin
+        $fatal(1, "POST.LEASE: the WALK GATE reports ZERO held clocks. The sweep takes thousands, so a zero means the gate released on the clock it armed and the pixels below landed for some other reason -- read it as an instrument fault, not a fast console.");
+      end
     end
     if (geom_tw_jobs_o != geom_tw_door_o) begin
       $fatal(1, "GEOM.TILEWALK: %0d job(s) issued but the raster door took %0d",

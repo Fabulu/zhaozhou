@@ -12313,12 +12313,11 @@
 // Conservative SystemVerilog subset (charter S2).
 
 module zhao_console_core
-  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
+  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*, zhao_material_token_pkg::*;
   // I34's v1 material token. Imported so the tag and the byte order are
   // read from `zhao_material_token_pkg` rather than transcribed a fourth
   // time -- that package exists precisely because three composed sites
   // had already committed to {matA, matB, weight} independently.
-  import zhao_material_token_pkg::*;
 #(
   // ---- the shell's own knobs, carried through ------------------------------
   parameter int unsigned FRAMER_Q = 8,
@@ -13579,6 +13578,24 @@ module zhao_console_core
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // ---- I55's PHASE INTERLOCK (PHASEFIX, 2026-09-27) ----------------------
+  // `zhao_post_lease`'s WALK GATE, brought to the boundary for the same
+  // reason `geom_tw_door_o` was: the door proved the walk's JOBS arrived, and
+  // these prove the walk was given a WINDOW to draw in. Without the gate the
+  // post phase opened at `frame_end` -- correctly, on a `raster_quiet_i` that
+  // watches the BINNER, which issues nothing in this arrangement -- and
+  // `zhao_shell_top_v2:1653` then muxed RASTER.FBWRITE away from the raster
+  // before the sweep had started.
+  //
+  // `geom_tw_phasehold_o` IS THE DIAGNOSIS AND NOT JUST A TALLY. A hold that
+  // never ends says the sweep NEVER STARTED; a hold that ends with
+  // `geom_tw_phasesweeps_o` at 1 says it started and finished. Those two
+  // faults are indistinguishable from every other counter in this console,
+  // which is why the clocks are exported rather than a done bit.
+  // Both are STRUCTURAL ZEROS at `GEOM_WALK_RASTER = 0` -- the gate is not
+  // elaborated -- and the bench asserts that rather than skipping it.
+  output logic [31:0] geom_tw_phasehold_o,
+  output logic [31:0] geom_tw_phasesweeps_o,
   // HIGH FOR THE WHOLE SWEEP. The frame is not finished until this
   // falls: in arrangement 1 the walk is what produces pixels, and the
   // binner's `render_drain_done_o` now says only that the RETAINED
@@ -25544,6 +25561,16 @@ module zhao_console_core
     // must move off zero before any claim about I55 is worth reading, and the
     // shell's binding comment said so before there was anything to read it.
     .walk_jobs_taken_o         (geom_tw_door_o),
+    // ---- AND THE WINDOW THE DOOR NEEDED (PHASEFIX, 2026-09-27) ----------
+    // The door carried every job and the console still drew nothing, because
+    // POST had already taken RASTER.FBWRITE's pixel port. `u_post_lease`
+    // holds the phase shut on this level. It is the SWEEP's own `active_o` --
+    // not a restatement of the arrangement constant -- so the hold ends
+    // because the sweep ended, and a sweep that never starts holds forever
+    // and says so in `geom_tw_phasehold_o` instead of drawing a blank frame.
+    .walk_sweep_active_i       (tw_active_w),
+    .walk_phase_hold_clocks_o  (geom_tw_phasehold_o),
+    .walk_phase_sweeps_o       (geom_tw_phasesweeps_o),
     // REAL: the shell's ONE geometry guard socket, driven by
     // `u_geom_mem_adapter`, which merges GEOM.MESHFETCH and GEOM.ASSETFETCH
     // into it. These five were boundary ports (a bench answered the grants
@@ -33417,14 +33444,58 @@ module zhao_console_core
     zhao_ms_pack = '0;                                   // the reserve, written zero
     zhao_ms_pack[ZHAO_MS_VALID_LO    +: ZHAO_MS_VALID_W]    = v;
     zhao_ms_pack[ZHAO_MS_DETAIL_LO   +: ZHAO_MS_DETAIL_W]   = detail;
+    // ---- THE LAYOUT MUTANT SEAM (PHASEFIX, 2026-09-27) --------------------
+    // METASIDE declared, honestly, that the three round-trip assertions below
+    // were LIVE AND SILENT through 89 triangles and had NOT been seen to fire.
+    // CLAUDE.md: "a detector that has not been shown to FIRE has not been
+    // tested", and a detector reading zero is the claim to check hardest.
+    //
+    // No legal stimulus can fire them. They compare two expressions of the
+    // SAME inputs, so their disagreement is a LAYOUT fault and layout is not
+    // an input. That is the case the mutant chapter is written for.
+    //
+    // THREE SEAMS, BECAUSE THE THREE ASSERTIONS READ DISJOINT FIELDS. Measured
+    // in this file rather than assumed: `zhao_ms_flat_request` reads VALID,
+    // SAMPCNT, BASEBIND, RECIPE, WEIGHT, BASERGB, RESPCLS, PALSLOT and PALGEN;
+    // `zhao_ms_tail` reads DETAIL, VTXALPHA, EFFTAG and STENREF; and
+    // `zhao_ms_frag_state` reads FRAGST alone. So ONE corrupted field fires
+    // exactly ONE of them, and a single mutant would leave two still untested
+    // while looking like it had covered them.
+    //
+    // THE MUTATION IS A BITWISE NOT, NOT A DROP, AND THAT IS DELIBERATE.
+    // Omitting the write leaves the field ZERO, which AGREES with the
+    // composition on any triangle whose value happens to be zero -- a mutant
+    // that passes is a mutant that proved nothing, and this fixture's defaults
+    // are exactly where zeros live. `~x != x` for every x, so the fault is
+    // present on every sampled clock and cannot be vacuous.
+    //
+    // PLAIN `ifdef`, SELECTING BETWEEN TWO DEFINITIONS. CLAUDE.md records two
+    // combiner mutants that measured UNMUTATED production because a
+    // command-line `-D` cannot override a FUNCTION-LIKE `define` and says
+    // nothing when it fails to. This form is the one `-D` reaches, and each
+    // `else` arm below is byte-identical to the line it replaces -- so with
+    // nothing defined this function is character-for-character what it was.
+    // The negative control is the PLAIN console run, which must stay silent.
+`ifdef ZHAO_MS_MUT_TAIL
+    zhao_ms_pack[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W] = ~vtx_alpha;
+`else
     zhao_ms_pack[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W] = vtx_alpha;
+`endif
     zhao_ms_pack[ZHAO_MS_EFFTAG_LO   +: ZHAO_MS_EFFTAG_W]   = eff_tag;
     zhao_ms_pack[ZHAO_MS_STENREF_LO  +: ZHAO_MS_STENREF_W]  = sten_ref;
+`ifdef ZHAO_MS_MUT_FRAG
+    zhao_ms_pack[ZHAO_MS_FRAGST_LO   +: ZHAO_MS_FRAGST_W]   = ~frag_state;
+`else
     zhao_ms_pack[ZHAO_MS_FRAGST_LO   +: ZHAO_MS_FRAGST_W]   = frag_state;
+`endif
     zhao_ms_pack[ZHAO_MS_SAMPCNT_LO  +: ZHAO_MS_SAMPCNT_W]  = samp_cnt;
     zhao_ms_pack[ZHAO_MS_BASEBIND_LO +: ZHAO_MS_BASEBIND_W] = base_bind;
     zhao_ms_pack[ZHAO_MS_RECIPE_LO   +: ZHAO_MS_RECIPE_W]   = recipe;
+`ifdef ZHAO_MS_MUT_FLAT
+    zhao_ms_pack[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W]   = ~weight;
+`else
     zhao_ms_pack[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W]   = weight;
+`endif
     zhao_ms_pack[ZHAO_MS_BASERGB_LO  +: ZHAO_MS_BASERGB_W]  = base_rgb;
     zhao_ms_pack[ZHAO_MS_RESPCLS_LO  +: ZHAO_MS_RESPCLS_W]  = resp_cls;
     zhao_ms_pack[ZHAO_MS_PALSLOT_LO  +: ZHAO_MS_PALSLOT_W]  = pal_slot;
