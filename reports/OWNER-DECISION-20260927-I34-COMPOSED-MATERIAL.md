@@ -68,16 +68,52 @@ conflict is measured rather than estimated.**
 
 ## WHAT IT MEANS FOR THE REGISTER
 
-**`I34` cannot be closed by editing prose**, and this is now doubly binding,
-because the entry's `BOUNDARY` head is **already known to be stale**:
-`terr_pt_fld_valid_i`, `_ready_o` and `_height_i` occur in
-`zhao_console_core.sv` five times, **every one a comment, zero as a port
-declaration**, while `completion_register.py` classifies the entry by
-regex-matching that word.
+**`I34` cannot be closed by editing prose.** The owner's sentence is the
+governing test: *"`I34` must become true in the assembled console."*
 
-**That makes a prose edit the easiest way to move the number and the one thing
-forbidden.** The owner's sentence is the governing test: *"`I34` must become true
-in the assembled console."*
+> ### CORRECTION, 2026-09-27, AND IT IS MINE
+>
+> **This section previously claimed that `completion_register.py` classifies
+> `I34` by regex-matching `BOUNDARY`, and that removing that word would move the
+> number. BOTH HALVES ARE FALSE.** Found by NOPROG, which checked the tool
+> instead of believing the record.
+>
+> **What the register actually does** (`completion_register.py:236-243`):
+>
+> ```
+> kind = "resolved-in-composer" if NOT_A_TIEOFF.search(head)
+>        else "tied-to-zero"    if TIED_ZERO.search(blob)
+>        else "boundary"        if BOUNDARY.search(blob)
+>        else "unclassified"
+> mandatory_gap = kind != "resolved-in-composer"
+> ```
+>
+> **`BOUNDARY` only sets the LABEL.** A `boundary` entry is still a gap --
+> deleting the word would change the label to `unclassified` and **the count
+> would not move at all.** The ONLY string that removes an entry from the
+> mandatory count is **`NOT a tie-off`, and only IN THE HEAD LINE.**
+>
+> **So my warning was aimed at a harmless edit while the dangerous one went
+> unnamed.** The dangerous edit is adding `NOT a tie-off` to `I34`'s head, and
+> **the owner's prohibition covers exactly that** -- it is the renamed gap.
+>
+> **The tool is already hardened against the accidental form, and its reason is
+> worth reading.** A body occurrence is a **HARD FAILURE**, not a silent
+> exclusion, because the marker used to be searched across head + body -- and on
+> 2026-09-19 entry `I35` read as CLOSED **twice**: once when its author used the
+> phrase in an explanation, and again when they **QUOTED THE PHRASE WHILE
+> DESCRIBING THE FIRST ACCIDENT.** *"An entry could be settled by writing a
+> sentence about it."*
+>
+> **That is the register's own instance of this campaign's law**, recorded in the
+> tool: *"THE REGISTER WAS READING A CONVENTION RATHER THAN A STRUCTURE. Prose is
+> not a declaration."*
+>
+> **And the stale-`BOUNDARY` observation stands on its own**, unaffected by the
+> above: `terr_pt_fld_valid_i`, `_ready_o` and `_height_i` occur in
+> `zhao_console_core.sv` **five times, every one a comment, zero as a port
+> declaration.** The label is wrong about the machine. It simply is not what
+> makes `I34` count.
 
 ## THE STANDING BAR FOR ANY PACKET ON THIS ENTRY
 
