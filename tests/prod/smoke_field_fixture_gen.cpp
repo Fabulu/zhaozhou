@@ -128,6 +128,25 @@ constexpr int kSlot = 0;
 // and the bench cannot disagree about where the capsule is.
 constexpr uint32_t kStageBase = 0x10000000u;
 
+// THE LIVE RESOURCE EPOCH, and it is not decoration.
+//
+// `u_field_loader` is composed with `CHECK_EPOCH(1'b1)` and its `cfg_epoch_i`
+// is the console's `fld_cfg_plan_base_i`, which the smoke bench drives to
+// 0xF1E1D000 (`tb_zhao_console_core_smoke.sv:2416`). `zhao_field_loader:764`
+// refuses any capsule whose header RESOURCE_EPOCH differs, with verdict
+// V_BAD_META, BEFORE a slot is reserved -- "so a stale image cannot displace a
+// live one on its way to being rejected".
+//
+// FOUND THE EXPENSIVE WAY, 2026-09-27: the first `-FieldActive` run left this
+// at the library default of 0, the loader refused the capsule as stale, the
+// fieldlist then had nothing to resolve the handle against, and the console
+// reported ZERO Earth runs. Every visible symptom pointed downstream -- at the
+// adapter, the join, the coverage test -- and the cause was one header word
+// this generator never filled in. The bench ASSERTS the two agree
+// (`SFF_EPOCH` against `fld_cfg_plan_base_i`) so the next person gets a named
+// refusal instead of a silent zero.
+constexpr uint32_t kResourceEpoch = 0xF1E1D000u;
+
 // ---------------------------------------------------------------------------
 // THE DOORBELL LOAD KINDS -- `zhao_field_host_v2`'s own, via
 // `zhao_console_core.sv:16192`: "0 uop / 1 table entry / 2 header / 3 uniform"
@@ -249,6 +268,7 @@ int main(int argc, char** argv) {
   opt.register_ceiling = kRegisterCeiling;
   opt.canonical_program_handle32 = fp.canonical_hash;
   opt.source_id32 = dr.prog.source_id;
+  opt.resource_epoch = kResourceEpoch;
 
   hp_ns::HostPlan hp;
   std::string refusal;
@@ -355,6 +375,35 @@ int main(int argc, char** argv) {
   line("localparam logic [31:0] SFF_HANDLE = " + hex32(hp.canonical_program_handle32) + ";");
   line("localparam logic [31:0] SFF_HASH   = " + hex32(hp.canonical_hash) + ";");
   line("localparam logic [31:0] SFF_STAGE_BASE = " + hex32(kStageBase) + ";");
+  line("// The loader composes CHECK_EPOCH=1 and refuses a capsule stamped for a");
+  line("// different resource epoch as STALE (V_BAD_META). The bench asserts this");
+  line("// equals its own `fld_cfg_plan_base_i`, so a change to either is a named");
+  line("// refusal rather than a silent zero-runs result.");
+  line("localparam logic [31:0] SFF_EPOCH = " + hex32(hp.resource_epoch) + ";");
+  line("");
+  // THE HASH THE INSTALL POST MUST CARRY, and it is NOT the program hash.
+  //
+  // `zhao_field_loader:968` compares the CRC it folded over the RECEIVED BYTES
+  // against `fh2_hash_i`, and refuses with V_BAD_CRC on a mismatch. That fold
+  // masks bytes 12..15 to zero "exactly as the packer's own rule requires", so
+  // the value it arrives at is the image header's own BODY_CRC32C field --
+  // which is read straight out of the serialised image here rather than
+  // recomputed, because recomputing it would be a SECOND implementation of the
+  // packer's rule and the two could disagree silently.
+  //
+  // Posting SFF_HASH here instead looks completely reasonable (it is "the
+  // program's hash", the doorbell field is called `hash`, and the fieldlist
+  // matches on a hash) and is wrong. The two constants are emitted with
+  // different names for that reason.
+  {
+    uint32_t body_crc = 0;
+    for (int b = 0; b < 4; ++b)
+      body_crc |= ((uint32_t)image[(size_t)(12 + b)]) << (8 * b);
+    line("// The INSTALL post's `hash` operand: the image's BODY_CRC32C (header");
+    line("// offset 12), NOT the canonical program hash. zhao_field_loader:968");
+    line("// folds the received bytes with 12..15 masked and compares to this.");
+    line("localparam logic [31:0] SFF_BODY_CRC = " + hex32(body_crc) + ";");
+  }
   std::snprintf(buf, sizeof buf, "localparam int unsigned SFF_SLOT = %d;", kSlot);
   line(buf);
   o += "\n";

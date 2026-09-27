@@ -2413,7 +2413,10 @@ module tb_zhao_console_core_smoke
   // return can be tied to the plan that produced it, and this bench checks
   // nothing about its value. A recognisable constant is easier to see in a
   // waveform than a zero that could be a floating net.
-  assign fld_cfg_plan_base_i    = 32'hF1E1_D000;
+  // NAMED, so the field fixture's elaboration check can compare against it
+  // rather than against a literal repeated in two files.
+  localparam logic [31:0] FLD_CFG_PLAN_BASE_C = 32'hF1E1_D000;
+  assign fld_cfg_plan_base_i    = FLD_CFG_PLAN_BASE_C;
   // LOW: ask for the fast path. It is a REQUEST and not a permission -- the
   // host gates the no-clear path on the image's INIT_PROOF (`hdr_ipok`) and
   // NOT on this bit being low, so a bench cannot reach the fast path by
@@ -2550,6 +2553,25 @@ module tb_zhao_console_core_smoke
   logic        fld_stage_done_q;
   logic [31:0] fld_install_ok_q;
   logic [31:0] fld_commit_ok_q;
+
+  // THE EPOCH AGREEMENT, CHECKED AT ELABORATION.
+  //
+  // `u_field_loader` is composed `CHECK_EPOCH(1'b1)` with `cfg_epoch_i` tied to
+  // `fld_cfg_plan_base_i`, and it refuses a capsule stamped for a different
+  // resource epoch as STALE -- `zhao_field_loader:764`, verdict V_BAD_META,
+  // BEFORE a slot is reserved. The fixture stamps its capsule at generation
+  // time and cannot see this bench's wire.
+  //
+  // The first `-FieldActive` run had these disagreeing (fixture 0 against the
+  // bench's 0xF1E1D000) and the console reported ZERO Earth runs with every
+  // downstream counter reading a perfectly innocent zero. That is the
+  // flattering direction: the failure was upstream of every instrument that
+  // could have named it. An elaboration check turns it into a message.
+  initial begin
+    if (SFF_EPOCH !== FLD_CFG_PLAN_BASE_C)
+      $fatal(1, "SMOKE: the field fixture is stamped for resource epoch %08x and this bench drives %08x. FIELD.LOADER composes CHECK_EPOCH=1 and would refuse the capsule as STALE with V_BAD_META, which presents downstream as zero Earth runs and no named cause. Fix kResourceEpoch in tests/prod/smoke_field_fixture_gen.cpp and regenerate.",
+             SFF_EPOCH, FLD_CFG_PLAN_BASE_C);
+  end
 `endif
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
@@ -2592,7 +2614,15 @@ module tb_zhao_console_core_smoke
           fld_db_post_slot_i   <= 3'd0;
           fld_db_post_addr_i   <= 8'd0;
           fld_db_post_data_i   <= {SFF_CAP_BYTES[31:0], 32'd0, SFF_STAGE_BASE};
-          fld_db_post_hash_i   <= SFF_HASH;
+          // THE BODY CRC, NOT THE PROGRAM HASH, and the distinction cost a run.
+          // `zhao_field_loader:968` compares this operand against the CRC it
+          // folded over the bytes it actually RECEIVED, with the header's own
+          // crc field masked to zero -- so the value it wants is the image's
+          // BODY_CRC32C. `SFF_HASH` is the canonical PROGRAM hash, which is
+          // what the FIELDLIST matches on, a different question at a different
+          // block. Posting SFF_HASH here reads perfectly sensibly (the port is
+          // called `hash`) and refuses with V_BAD_CRC.
+          fld_db_post_hash_i   <= SFF_BODY_CRC;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_IN;
         end else if (fld_stage_step_q < FLD_STEP_COMMIT_C) begin
@@ -7719,6 +7749,39 @@ module tb_zhao_console_core_smoke
     //                  It is UNREACHABLE here by construction -- TERRAIN.PATCH
     //                  holds one vertex at a time -- which is exactly why it
     //                  is fired at the block's own ports instead.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    // THE FIELD STAGE'S EVIDENCE IS PRINTED HERE, UPSTREAM OF THE JOIN IT
+    // FEEDS, and the placement is a lesson rather than a preference. These
+    // three lines first sat beside their assertions, several hundred lines
+    // further down -- so the FIRST failing run fatalled at the terrmat
+    // assertion below and printed NOT ONE of the numbers that say WHY. A
+    // diagnostic that only prints after the thing it diagnoses has already
+    // stopped the run is a diagnostic nobody ever reads.
+    $display("SMOKE: fldstage install_ok=%0d commit_ok=%0d ldr_installs_ok=%0d ldr_installs_failed=%0d ldr_bad_crc=%0d ldr_bad_envelope=%0d ldr_bad_range=%0d ldr_bad_section=%0d ldr_bad_meta=%0d ldr_bridge_errs=%0d ldr_load_bytes=%0d ldr_binds_ok=%0d ldr_bad_operation=%0d",
+             fld_install_ok_q, fld_commit_ok_q,
+             fld_ldr_installs_ok_o, fld_ldr_installs_failed_o,
+             fld_ldr_bad_crc_o, fld_ldr_bad_envelope_o, fld_ldr_bad_range_o,
+             fld_ldr_bad_section_o, fld_ldr_bad_meta_o, fld_ldr_bridge_errs_o,
+             fld_ldr_load_bytes_o, fld_ldr_binds_ok_o, fld_ldr_bad_operation_o);
+    $display("SMOKE: fldpub   pub_ready=%02x pub_pinned=%02x pub_handle=%08x pub_prog_hash=%08x pub_gen=%0d (fixture handle=%08x hash=%08x)",
+             fld_ldr_pub_ready_o, fld_ldr_pub_pinned_o, fld_ldr_pub_handle_o,
+             fld_ldr_pub_prog_hash_o, fld_ldr_pub_gen_o, SFF_HANDLE, SFF_HASH);
+    $display("SMOKE: fldearth records=%0d runs=%0d noprog=%0d not_begun=%0d skipped_uncovered=%0d faults=%0d tail_rejected=%0d short=%0d desync=%0d stall_cycles=%0d idle=%0d",
+             fld_earth_records_o, fld_earth_runs_o, fld_earth_noprog_o,
+             fld_earth_not_begun_o, fld_earth_skipped_uncovered_o,
+             fld_earth_faults_o, fld_earth_tail_rejected_o,
+             fld_earth_short_record_o, fld_earth_lane_desync_o,
+             fld_earth_stall_cycles_o, fld_earth_idle_o);
+    $display("SMOKE: fldhost  runs=%0d faults=%0d noprog=%0d bad_image=%0d zero_mask=%0d out_incomplete=%0d no_result=%0d uniform_bad=%0d grants=%0d db_posts=%0d db_load_words=%0d db_fh2_posts=%0d db_addr_refused=%0d db_commits=%0d db_commits_refused=%0d",
+             fld_runs_o, fld_run_faults_o, fld_noprog_o, fld_bad_image_o,
+             fld_zero_mask_o, fld_out_incomplete_o, fld_no_result_o,
+             fld_uniform_bad_o, fld_grants_o, fld_db_posts_o,
+             fld_db_load_words_o, fld_db_fh2_posts_o, fld_db_addr_refused_o,
+             fld_db_commits_o, fld_db_commits_refused_o);
+    $display("SMOKE: fldpatch tp_add_accept=%0b tp_add_reject=%0b tp_covers=%0b",
+             terr_pt_fld_add_accept_o, terr_pt_fld_add_reject_o,
+             terr_pt_fld_covers_o);
+`endif
     $display("SMOKE: terrmat  field_composed=%0d token_refused=%0d held_overrun=%0d | cc_mat_cells=%0d",
              terr_mj_field_composed_o, terr_mj_token_refused_o,
              terr_mj_held_overrun_o, terr_cc_mat_cells_o);
@@ -10568,24 +10631,6 @@ module tb_zhao_console_core_smoke
     // 13.7 also says of the zero-assertion form: "keep it as a refusal/control
     // case instead of treating it as the positive gate." It IS kept -- the
     // plain smoke still runs the `ifndef` arm below, unchanged.
-    $display("SMOKE: fldearth records=%0d runs=%0d noprog=%0d not_begun=%0d skipped_uncovered=%0d faults=%0d tail_rejected=%0d short=%0d desync=%0d stall_cycles=%0d",
-             fld_earth_records_o, fld_earth_runs_o, fld_earth_noprog_o,
-             fld_earth_not_begun_o, fld_earth_skipped_uncovered_o,
-             fld_earth_faults_o, fld_earth_tail_rejected_o,
-             fld_earth_short_record_o, fld_earth_lane_desync_o,
-             fld_earth_stall_cycles_o);
-    $display("SMOKE: fldstage install_ok=%0d commit_ok=%0d ldr_installs_ok=%0d ldr_installs_failed=%0d ldr_bad_crc=%0d ldr_bad_envelope=%0d ldr_bad_range=%0d ldr_bad_section=%0d ldr_bad_meta=%0d ldr_bridge_errs=%0d ldr_load_bytes=%0d",
-             fld_install_ok_q, fld_commit_ok_q,
-             fld_ldr_installs_ok_o, fld_ldr_installs_failed_o,
-             fld_ldr_bad_crc_o, fld_ldr_bad_envelope_o, fld_ldr_bad_range_o,
-             fld_ldr_bad_section_o, fld_ldr_bad_meta_o, fld_ldr_bridge_errs_o,
-             fld_ldr_load_bytes_o);
-    $display("SMOKE: fldhost  runs=%0d faults=%0d noprog=%0d bad_image=%0d zero_mask=%0d out_incomplete=%0d no_result=%0d uniform_bad=%0d db_load_words=%0d db_fh2_posts=%0d db_addr_refused=%0d",
-             fld_runs_o, fld_run_faults_o, fld_noprog_o, fld_bad_image_o,
-             fld_zero_mask_o, fld_out_incomplete_o, fld_no_result_o,
-             fld_uniform_bad_o, fld_db_load_words_o, fld_db_fh2_posts_o,
-             fld_db_addr_refused_o);
-
     // ---- THE CAPSULE WAS INSTALLED, over the real bridge -----------------
     if (fld_ldr_installs_ok_o != 32'd1)
       $fatal(1, "SMOKE: FIELD.LOADER installed %0d capsule(s), expected exactly 1 -- failed=%0d bad_crc=%0d bad_envelope=%0d bad_range=%0d bad_section=%0d bad_meta=%0d bridge_errs=%0d. The bytes come from tests/prod/smoke_field_fixture.svh over HPS region 6; a refusal here is the capsule or the staging window, not the field path",

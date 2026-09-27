@@ -17,12 +17,22 @@
 localparam logic [31:0] SFF_HANDLE = 32'h8BDCEB63;
 localparam logic [31:0] SFF_HASH   = 32'h8BDCEB63;
 localparam logic [31:0] SFF_STAGE_BASE = 32'h10000000;
+// The loader composes CHECK_EPOCH=1 and refuses a capsule stamped for a
+// different resource epoch as STALE (V_BAD_META). The bench asserts this
+// equals its own `fld_cfg_plan_base_i`, so a change to either is a named
+// refusal rather than a silent zero-runs result.
+localparam logic [31:0] SFF_EPOCH = 32'hF1E1D000;
+
+// The INSTALL post's `hash` operand: the image's BODY_CRC32C (header
+// offset 12), NOT the canonical program hash. zhao_field_loader:968
+// folds the received bytes with 12..15 masked and compares to this.
+localparam logic [31:0] SFF_BODY_CRC = 32'h6556A68A;
 localparam int unsigned SFF_SLOT = 0;
 
 localparam int unsigned SFF_CAP_BYTES = 1472;
 localparam int unsigned SFF_CAP_WORDS = 184;
 localparam logic [63:0] SFF_CAP [0:183] = '{
-  64'h000000013248465A, 64'h66117636000005C0, 64'h8BDCEB6300000002, 64'h000000008BDCEB63, 
+  64'h000000013248465A, 64'h6556A68A000005C0, 64'h8BDCEB6300000002, 64'hF1E1D0008BDCEB63, 
   64'h0000000100000001, 64'h0040000630010002, 64'hFB7BAC9800000000, 64'h0000000000000000, 
   64'h000002D400010001, 64'h000002D4000000C0, 64'h0000000100400002, 64'h00000040000003C0, 
   64'h0000001100080003, 64'h0000008800000400, 64'h0000000C00080004, 64'h00000060000004C0, 
