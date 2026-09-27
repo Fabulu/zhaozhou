@@ -5545,3 +5545,50 @@ all fail on `PINCONNECTEMPTY` for `.port_o ()` -- **the exact form Quartus's
 other gate. The fix is a one-line `-Wno-PINCONNECTEMPTY` (plus `DECLFILENAME`
 for the board) with the reason recorded -- a POLICY call about which linter
 yields, made deliberately rather than at the end of a long session.
+
+#### WHERE I AM, written BEFORE the smoke comes back
+
+Console core smoke is running behind commit `7fda8717`. Position, so it is not
+reconstructed after the result redirects me:
+
+**In progress:** triaging the 27 real `lint_zhao_console_board` warnings ONE AT A
+TIME. Two are closed, and the pattern so far is that the cheap-looking ones are
+not the shallow ones.
+
+* **2 x SIMILARNAME -- CHECKED, recorded, NOT fixed.** `MAT_BASE_RGB_C` (a
+  localparam white placeholder, still read) and `mat_base_rgb_c` (the wire that
+  SUPERSEDED it) differ only in case, 78 lines apart, and mean opposite things.
+  Cause: this tree uses `_c` for COMBINATIONAL, so a localparam carrying `_C`
+  breaks the convention AND lands on the wire's name. Renaming the CONSTANT fixes
+  both; it is 3 code sites plus comments, on the material path, and wants the
+  smoke behind it. Recorded in the paramwalk finding, deliberately not done.
+* **1 x UNUSEDSIGNAL -- `efa_ans_ready`, FIXED.** The only one of the 25 that was
+  "not driven, NOR used". A decoy: declared beside the live `efa_ans_valid`, the
+  real ready being `tvj_a_ready`. Removed. Found the adapter's channel-2
+  accounting stale in the same read and corrected it.
+
+**Next step, and it is read-only so it proceeds while the smoke runs:** the
+remaining 24 UNUSEDSIGNALs. They fall into groups and should be triaged as
+groups, not individually:
+
+  (a) GEOM.PARAMWALK's dangling face -- `pw_t_v0/v1/v2_w`, `pw_t_material_w`,
+      `pw_t_raster_w`, `pw_t_source_w[31:16]`, `pw_t_illegal_w`,
+      `pw_tri_id_wide_w`. I55's "back end and NO DOOR" covers most of this and
+      says so at the instantiation. `pw_t_illegal_w` is the one that ISN'T
+      covered -- it is a declared-and-unconnected DEFENCE, already written up.
+  (b) FIELD.EARTH_ADAPTER leftovers -- `efa_nav_cost` (owner-ruled elsewhere),
+      `efa_ans_field`, `efa_present[3,1:0]`. Check each against the four-channel
+      accounting rather than assuming the comment is current; it just wasn't.
+  (c) width overshoots -- `tlf_w_slot[10]`, `tlf_inv_slot[10]`,
+      `tlf_chk_slot[10]`, `omap_src_c[15:6]`, `ms[127:58,25:0]`. Probably a
+      declared width wider than the used range. Cheap, and the ONLY group where
+      "probably benign" is likely to survive contact.
+  (d) unclassified, and therefore the interesting ones -- `gw_o_p_src_id`,
+      `tw_frame_done_w`, `vid_tri_id`, `tps_v_cell_fire_c`, `fld_resp_window_c`,
+      `fld_resp_count_c`, `sp_seal_refs_w`, `st_mat_token_live_c`.
+      **`tw_frame_done_w` is the one I would look at first**: a tilewalk
+      FRAME-DONE that nothing reads is the same shape as `pw_t_illegal_w`.
+
+**Not to be forgotten while this runs:** do NOT edit `zhao_console_core.sv` until
+the smoke returns -- a suite reads the live tree and its greens are then worth no
+more than its reds.
