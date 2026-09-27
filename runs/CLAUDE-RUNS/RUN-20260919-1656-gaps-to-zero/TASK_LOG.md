@@ -4737,3 +4737,110 @@ live lanes were **told rather than silently cleaned**, which is the half that wa
 missing the last time this happened. **METASIDE woke on its poller's death and
 explicitly DECLINED to re-arm, citing the trap by name.** The rule working from
 the lane's side.
+
+### 2026-09-27 - I55 IS CLOSED. THE REGISTER READS 1.
+
+**`I55` CLOSED**, declared by the coordinator after **measuring the shipped
+console at the merge**, not from a packet's report. UNPARK deliberately refused
+to write the head line and assembled the evidence instead -- the right call, since
+the string that removes an entry from the count is not a packet's to write.
+
+```
+tilewalk   tiles=11 jobs=101 door=101 failed=0
+paramwalk  tris=101              <- 0/0/0 for EIGHT packets
+fetcharm   vread=303 vbad=0      <- invariant vread == 3*tris, ASSERTED, fatals
+raster     pixels=2816
+SMOKE: PASS
+```
+
+`pixels=2816` is the arrangement's own **reference-derived** count, unchanged
+from the parked console -- so the walk did not merely produce pixels, **it
+produced the RIGHT ones.**
+
+**AND THE REGISTER'S OWN GUARD FIRED ON ME.** My declaration landed on the
+entry's continuation line rather than its head, and the tool hard-failed: *"That
+phrase settles an entry and must therefore be a DECLARATION, not prose ... An
+entry that can be closed by a sentence about it is not a register."* That guard
+exists because an entry once read CLOSED **twice** -- once when its author used
+the phrase, and again **when they QUOTED IT WHILE DESCRIBING THE FIRST
+ACCIDENT.** It caught the coordinator doing the same thing.
+
+**The paragraph that justified the park was already false while the entry still
+carried it** -- *"At 1 this console renders ZERO PIXELS"*, untrue from the moment
+PHASEFIX repaired the frame-done term a day earlier.
+
+### I34: THE PUBLISHER IS BUILT AND LIVE
+
+**`TERRAIN.COMPOSED_MATERIAL`**: `cells=1024 commits=1 published=1 bursts=64
+denied=0`, ~900 ALM, **0 DSP**, 6 M10K. Capabilities **113 -> 114**. The owner
+declined the refusal and commissioned it; it exists.
+
+**Five of six clauses met**, clause 3 **at zero silicon** and clause 4 read off
+**the address the island issued** (`tile[max/or]=[212 222]`, 212 and 30 being
+exactly `SFF_MAT_A`/`SFF_MAT_B` against an authored plane topping out at 6).
+**Clause 5 uses the SAME instrument in the opposite direction** -- `[6 7]` -- which
+is what makes the pair evidence rather than two numbers.
+
+**MATFIELD's two dead assertions now EXECUTE and PASS**, and each arm is the
+others' fail-demonstration: **212 / 6 / 6.**
+
+**And the cost question the owner reserved is answered by measurement, in the
+direction of building:** 64 requests per patch, break-even **129 patches**,
+**0.15% of frame** against the siblings' 124%. COMPOSEPUB's bandwidth refusal
+**does not carry across**, and neither does its "no consumer" ground.
+
+### CLAUSE 6, AND THE DEFECT IS THIS REPOSITORY'S OWN NAMED ONE
+
+With the publisher armed the plain smoke exits 1 on the **sample** gate, 1216
+against 1213. **MATPUB did not disarm it**, correctly -- that would disconnect
+function and hide a defect the field forms were already hitting.
+
+**TAGPHASE localised it by measurement**, and it is **a metadata swap at the
+composer's join**:
+
+> At `GEOM_WALK_RASTER = 1` the door reads **2,037** metadata bits from
+> SETUP/ATTRPACK, **which hold their output until the job is taken** -- and the
+> remaining **378 bits of material state from PARAMWALK's LIVE OUTPUT BUS**,
+> which the tile walker released several cycles earlier in `T_TAKE`. **A's
+> corners and A's planes with B's material state.**
+
+**One cause for both symptoms**, which two predecessors argued as one cause and
+as two **without measuring either**: `zhao_ms_flat_request` returns all-zero when
+the stored `VALID` bit is low (-> `sample_count = 0`, the three fragments with no
+plan), while `zhao_ms_tail` reads `EFFTAG` **UNGATED BY VALID** (-> the stray
+tag).
+
+Proved by a four-point probe rather than argued: **WALK 101 records all clean,
+LIVE 75 all clean, FRAG input already dirty at 2, STORE the same.** So the
+corruption is between the door and the fragment leaf.
+
+**Repair built and pushed**: `zhao_walk_meta_hold.sv`, one hold register and two
+interlock counters, **33 checks / 0 failures**, `-Wall` RC 0. **Its assertions are
+about the record HOLDING, not about the swap** -- *"the counter fires on the swap"
+would pass only while the defect exists.* Both new counters are fired by ordinary
+stimulus **with the silence half beside them**, because without that *"case 4
+passes for a counter that increments on every job."*
+
+### THREE OF MY CLAIMS KILLED, AND A BLIND DETECTOR
+
+* **My named repair site does not exist.** The bench drives `frame_clear_word_i =
+  '0`, one 64-bit constant covering colour **and** tag, and `zhao_raster_tilestore`
+  has **no byte enables by design** -- so a cleared pixel's tag is zero **by
+  construction**. Those pixels were **WRITTEN, not cleared.**
+* **DOORCOST's sentence, which I merged and propagated** -- *"the same ports, on
+  the same silicon, whichever source fed it"* -- is **true of the ports and FALSE
+  OF THE TIMING.** That sentence is why nobody looked here.
+* **I conflated the tag with the failing gate.** The gate that fires is the
+  **sample** gate; the stray tag is a separate, latent symptom.
+* **`overlap_o` is a structural zero.** `zhao_geom_tilewalk` increments it on
+  `(tstate_q != T_TAKE) && t_valid_i && t_ready_o` while **`t_ready_o` itself
+  contains `(tstate_q == T_TAKE)`** -- contradictory terms. It also counts a
+  **take** where its own comment says **offer**. **And its committed mutant fires
+  it only by deleting that state term**, so `overlap = 0` is evidence about the
+  mutant's edit, **not about the handshake it claims to watch.** A positive
+  control validating the wrong thing is a new variant for the catalogue.
+  `err_overwrite_o` watches the same property **from the consumer's side, where
+  no producer term can cancel it** -- which is the shape that fixes this class.
+
+**Eleven consecutive packets have found their brief wrong in a load-bearing
+place.** The briefs are mine.
