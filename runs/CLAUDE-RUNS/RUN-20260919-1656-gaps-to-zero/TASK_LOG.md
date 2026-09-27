@@ -4085,3 +4085,79 @@ mattered.
 Gates **31/31 at baseline** across all three merges. Branch
 `claude/ceiling-architecture-20260912` at `e9c384d3`, pushed. **No console fit
 running and none should start until the register reads 0.**
+
+### 2026-09-27 (late) - THE OWNER'S MATERIAL TEST IS MET, AND A FENCE I SET WAS GUARDED BY A TEST THAT COULD NOT FAIL
+
+**Register 2.** `I34` (carrier decided, packet not yet launched), `I55`
+(PVSCHEMA, running). **Connected capabilities 112 -> 113.** Gates 31/31 at
+baseline across four merges. HEAD `b3f47993`, pushed.
+
+### MATERIALPATH: THE OWNER'S OWN TEST, MET END TO END
+
+> *"verify that a Field material write changes the intended consumer"*
+
+`composepub_acceptance` **154/0**, through the real adapter, **read from the
+consumer's serve port**: authored `{9D,EA,B4}` -> served `{2A,7C,B3}`,
+`field_composed=1024`, the height lane asserted unmoved.
+
+**The encoding is authored ONCE** -- `spec/qformats.md` section 14, which is
+**literally the `material-ids` and `material-state` anchors `ops.yml` had been
+citing into thin air** -- plus `zhao_material_token_pkg.sv` and
+`zref::fieldir::material_token_encode/_decode`. The low 24 bits are
+**TRANSCRIBED from three composed sites, not chosen**; the top byte is a v1 tag,
+because **every 24-bit pattern is a legal material**, so the adapter's additive
+zero would otherwise decode as `{0,0,0}` and RENDER. Exercised both ways with an
+asymmetric value **plus a rotated-token negative control proving the test could
+tell**.
+
+**IT CORRECTED MY BRIEF ON ARBITRATION AND WAS RIGHT.** I asked for a second
+writer into the **authored plane**; `zref_fieldir.hpp` forbids exactly that by
+name -- *"LIVE COMPOSITION, NEVER PERSISTENT MUTATION"*. It belongs at the
+**compose point**, where height's already is, under `compose_material`'s
+ratified last-enabled-writer-wins in command order -- reached by presenting the
+same two words in **both orders**.
+
+### AND A FENCE I SET WAS GUARDED BY AN INSTRUMENT THAT COULD NOT REPORT A BREACH
+
+**`terrain_veljoin_directed` printed a HARDCODED `0 failures` and
+`exit_hard(0)`.** It could not fail. **`19/0` is the number I put in THREE
+consecutive briefs as the evidence for "DO NOT REGRESS VELOCITY"** -- the fence
+protecting the one composed chain reaching a particle contact. Repaired by
+MATERIALPATH; recorded as HANDOVER **15.33**.
+
+The part worth keeping: **a number copied into a brief acquires authority it
+never earned.** Four packets measured against it. Before a brief cites a test as
+a fence, **confirm that test can fail** -- one look at how it exits.
+
+**Same packet, same class:** a pre-existing **8x layer-E over-write** --
+11 lattices streamed, 1 placed, `mat_cells=8192` against a documented contract
+of **1,024**. Attribution settled by source **and** a base-commit run, so
+"inherited" was demonstrated rather than assumed. Repaired to 1,024.
+
+### I34's CARRIER, DECIDED HERE RATHER THAN LEFT IN A REFUSAL
+
+MATERIALPATH refused the last leg for a correct reason -- *"which is correct is
+an engineering choice, not a fact in the tree"* -- and **a choice left inside a
+refusal is a choice nobody makes.** Taken under the delegation, recorded in
+`reports/DECISION-20260927-I34-MATERIAL-CARRIER.md`.
+
+**WIDEN THE RIDERS; DO NOT ADD A PARALLEL ALIGNED FIFO.** The reason is this
+session's own evidence: **a side queue that must stay in lockstep with a
+pipeline is precisely the `u_geom_tidq` defect class**, which was permanently one
+behind, mis-attributed **74 of 75** triangles, and survived because the ids
+stayed **in range and decoded cleanly**. A value riding **inside** the record
+cannot drift from it. Widening costs **bits**, which a fit prices; a FIFO costs
+an **alignment invariant nothing in the tree can check cheaply**.
+
+**Two objections killed by MATERIALPATH's measurements:** the drain price is
+**not owed** (`match_c` has five terms; neither `base_rgb` nor `recipe_weight` is
+one), which **answers a question entry I34 had explicitly left open and
+correctly declined to answer unmeasured** -- and the *"zero `material_set` hits
+under `fpga/rtl/terrain/`"* blocker **inherited through FOUR refusals is false**;
+there are four.
+
+**Declared unpriced:** no `-MapOnly` row is attached. The building packet owes a
+leaf row on the shipping part and may refuse on it.
+
+**Not launched yet, deliberately:** the work is GEOM and **GEOM is PVSCHEMA's
+lane**. Launching it now would mean two packets editing the same files.
