@@ -9770,6 +9770,194 @@
 //      (`zhao_geom_paramarena.sv:804-811`), the reference model, and the three
 //      committed arena mutants, which are COPIES and go stale in the
 //      flattering direction.
+//
+//      -- MUXBUILD, 2026-09-27. STILL TIED. THE VERTEX ARM IS BUILT, AND THE
+//      THING THAT STOPS THE SWAP IS NOT WHAT THIS ENTRY HAS SAID FOR SIX
+//      PACKETS. It is not a back end, and it is not a record. It is that THE
+//      RASTER CONSUMER HAS NO PORT TO BE FED THROUGH.
+//
+//      WHAT WAS BUILT, AND IT IS THE PIECE FIVE PACKETS NAMED AS MISSING.
+//      `zhao_geom_paramwalk` instantiated `zhao_geom_parambuf` with the entire
+//      ProjectedVertex arm tied to `'0`, under a comment calling it "an
+//      uncashed cheque authored on purpose". THE CHEQUE IS CASHED: four states
+//      -- W_PV_REQ / W_PV_VERD / W_PV_BEAT / W_PV_DEC -- run three times per
+//      descriptor, between its last beat and the emit, and the block now emits
+//      the three decoded vertices beside the ids. The triangle is offered
+//      COMPLETE or not at all; an emit that ran before its vertices arrived
+//      would hand over the previous triangle's corners with this triangle's
+//      ids, which is this repository's own metadata-swap defect in a new place.
+//
+//      NO NEW SDRAM CLIENT, AND BOTH SHARES ARE STILL FULL. The reads issue on
+//      `guard_req_o`, the socket the walker already owns -- its FSM already
+//      multiplexed directory, chunk and descriptor reads onto one port, so a
+//      fourth kind is a state-machine addition and not a client addition.
+//      Verified rather than inherited: `zhao_geom_mem_adapter` has ten
+//      requesters `a..j`, all ten driven by real producers, and it is NOT
+//      parameterised on the count -- the letters are hardcoded ports, so
+//      widening it is a port pair plus arbitration plus a round-robin re-proof.
+//      `u_geom_wshare` is `N=3` with `gs_req[0]=ma_m_req`, `gs_req[1]=pa_req`,
+//      `gs_req[2]=pw_req`.
+//
+//      AND DIRECTIVE SECTION 7's ESCAPE HATCH IS SHUT, which nobody had
+//      checked. It says to prefer "the currently reserved client slot IF THE
+//      LIVE DESIGN STILL HAS IT AVAILABLE". IT DOES NOT.
+//      `zhao_vram_arbiter.sv:107` names `RESERVED_ID = 3'd5`, `:246` records
+//      that it appears in no selector arm, and `:353` forces
+//      `port_grant[RESERVED_ID] = 1'b0` so the port cannot even latch a
+//      request. `zhao_terrain_prepshare.sv:45-60` had already measured this for
+//      its own lane and written it down; it is confirmed here rather than
+//      re-derived. The conditional in the directive evaluates FALSE, so any
+//      future new client on this path costs a widening, not a slot.
+//
+//      ---- THE BLOCKER THAT IS ACTUALLY LEFT, AND IT IS NEW ----------------
+//
+//      `job_*` IS NOT A PORT. Every version of this entry, and
+//      `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md`, speaks of taking
+//      `job_*` "from that path rather than from the binner's on-chip drain" as
+//      though `job_*` were a stream one could mux. It is not a stream at the
+//      composition at all: it is a bundle of INTERNAL WIRES inside
+//      `zhao_geom_bin_pipe_v2`, declared at `:339-349`, running from
+//      `u_binner` (`zhao_geom_binner_v2`) to `u_tile`
+//      (`zhao_raster_tile_pipe_v2`) -- both of them CHILDREN of that one
+//      module. The only `job_`-named things on its port list are two counters,
+//      `jobs_taken_o` and `job_stall_clocks_o`, and `zhao_shell_top_v2` wires
+//      both to unused nets.
+//
+//      SO THERE IS NOWHERE TO ADMIT A SECOND SOURCE. The time multiplex feeds
+//      `u_geom_setup` / `u_geom_attrpack` -- which is available, and the
+//      idleness argument at `zhao_geom_binner_v2.sv:818/931/941` still holds --
+//      but their output goes to the SHELL, and the shell hands it to
+//      `zhao_geom_bin_pipe_v2`, which stores it in `meta_ram` and drains it to
+//      a raster the composition cannot reach.
+//
+//      THE PRICE OF OPENING IT, COUNTED FROM THE DECLARATIONS: valid + ready +
+//      6x21 corners + first + last + 2x12 tile + 16 tile_index + 16 src_id +
+//      METAW 1877 + 2 profile_bad = 2,065 WIRES, which have to become ports on
+//      `zhao_geom_bin_pipe_v2` and then on `zhao_shell_top_v2` -- or `u_tile`
+//      has to be lifted out of the bin pipe entirely. Either is a structural
+//      change to the block the fit budget is tightest on, and this packet is
+//      forbidden a console fit, so it is NAMED here and NOT taken. Owner
+//      directive: "A measured engineering impossibility is a finding, not
+//      permission to invent a pass." This is not an impossibility -- it is a
+//      subsystem retirement with a number on it, and it is the next packet's.
+//
+//      ---- AND A SECOND BLOCKER, MEASURED THE SAME WAY -------------------
+//
+//      `GEOM.SETUP` TAKES FIVE FIELDS THE ARENA DOES NOT STORE:
+//      `tri_area2_i` (s48) and the four s12 bounds of the section 8 SCISSORED
+//      scan box. The 16-byte TriangleDescriptor is three u16 ids, a u16
+//      material, a u32 raster word and a u32 source word -- 128 bits, all
+//      spoken for. `zhao_geom_vertid`, which WRITES the descriptor, is not even
+//      handed them: it takes the corners, the attributes, `tri_untex_i`,
+//      `tri_material_i`, `tri_raster_i` and `tri_src_id_i` from the GEOM.CLIP
+//      packet, and not those five.
+//
+//      THE ELEGANT ESCAPE IS CIRCULAR, AND THAT IS THE MEASUREMENT WORTH
+//      INHERITING. The barycentric identity `kc0 + kc1 + kc2 = 2A` holds for
+//      every triangle, and GEOM.SETUP emits all three constants -- so 2A looks
+//      recoverable from its own outputs with two adds and no multiplier.
+//      `zhao_geom_setup.sv:384-387`:
+//
+//        s3_kc0 <= sxprod(s2_p0) - sxprod(s2_p1);
+//        s3_kc1 <= sxprod(s2_p2) - sxprod(s2_p3);
+//        s3_kc2 <= s2_area2 - (sxprod(s2_p0) - sxprod(s2_p1))
+//                           - (sxprod(s2_p2) - sxprod(s2_p3));
+//
+//      `kc2` IS DEFINED AS `area2 - kc0 - kc1`. The block computes only TWO of
+//      the three cross products and spends the supplied 2A to avoid the third,
+//      so the identity holds BY CONSTRUCTION and carries no information. A back
+//      end built on it would have computed `kc2` as `(kc0+kc1+kc2) - kc0 - kc1`
+//      -- identically `kc2` for ANY garbage `area2` -- and produced plausible
+//      planes from an unconstrained number with every handshake healthy and
+//      every counter balanced. `tri_area2_i` is load-bearing input arithmetic,
+//      not a passthrough.
+//
+//      THE ANSWER IS A RECORD, AND IT FITS:
+//      `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V2.md`. TD v2 at 32 bytes
+//      carries `area2` s48 and the four s12 bounds in a second sixteen bytes,
+//      with the first sixteen BYTE-IDENTICAL to v1. At full R7 capacity
+//      `VIEW_USED_B` goes 3,407,872 -> 3,670,016 against a `VIEW_SPAN` of
+//      4,194,304 -- it fits with 524,288 bytes spare and no region in
+//      `spec/memory_rules.md` section 5c moves. Cost: the triangle arm's SDRAM
+//      traffic doubles, 2 beats to 4. Recomputing instead was REFUSED, because
+//      `zhao_geom_clip.sv:460` is `out_area2_o = flip ? -s3_area : s3_area` --
+//      the winding-flipped area -- and a second site computing it owes
+//      bit-equality with that at every triangle, cull mode and degenerate case,
+//      which is precisely the verification burden the time multiplex was chosen
+//      to avoid. `untex` is NOT added: it is already `status[2]` of every
+//      ProjectedVertex (`zhao_geom_vertid.sv:513`), and a second storage site
+//      for one fact is how two copies come to disagree. TD v2 IS DECIDED AND IS
+//      NOT BUILT HERE.
+//
+//      ---- WHAT MOVED, AND WHAT DID NOT --------------------------------------
+//
+//      `paramwalk dirs/chunks/tris` IS STILL 0/0/0 IN THE CONSOLE.
+//      `walk_valid_i` is still `1'b0` and every `t_*` output is still
+//      unconnected, and that is REFUSED for the sixth time on the ground the
+//      previous five gave: with no consumer, a tile sequencer would count
+//      triangles and drop them. Nothing in this packet changes that, because
+//      the consumer is the thing the 2,065 wires above are about.
+//
+//      IN THE BENCH IT MOVED A LONG WAY. `geom_paramarena_directed` is 550
+//      checks, 0 failures (351 at PVSCHEMA's commit), and `verts_read_o` reads
+//      57 -- fifty-seven ProjectedVertex records fetched back through the REAL
+//      guard, arbiter, controller and SDRAM and decoded. Case 13 requires every
+//      field of all three vertices of all six of frame A's triangles back
+//      BIT-IDENTICAL, and asserts its own discriminating premise first: frame
+//      A's eight reds are 0x1200..0x1207, eight distinct values that v1's
+//      `(v+128)>>8` maps to ONE byte. That is schema v2's whole point,
+//      demonstrated rather than argued, and it is the half of "the planes are
+//      recomputable" that can be shown without the back end.
+//
+//      TWO NEW COUNTERS, BOTH FIRED WITH LEGAL STIMULUS AND BOTH SHOWN SILENT
+//      FIRST. `verts_illegal_o` (a malformed status byte on the way back) went
+//      2 -> 3 and `t_pv_split_o` (one triangle's vertices disagreeing about
+//      `untex`) went 13 -> 14, each isolated from the other, each stopping when
+//      the record was restored. Neither owes a mutant: both faults are things
+//      the ROUND TRIP can produce, which is the useful direction. Case 14 built
+//      its own frame for them, because no earlier frame in that file is sound
+//      in the relevant way -- the fixture gives every vertex its own status
+//      byte, so `t_pv_split_o` fires there by construction, and a counter shown
+//      firing without first being shown silent is not a control.
+//
+//      AND `pv_illegal_o` HAS A REACHABLE READER FOR THE FIRST TIME. PVSCHEMA
+//      moved the s21 refusal to the encoder and left that port watching the
+//      status byte with no consumer anywhere in the design; the walk is now
+//      one, and case 14 is its demonstration.
+//
+//      ONE DETECTOR WAS REPAIRED BEFORE IT COULD GO BLIND.
+//      `burst_unaligned_o` tested `m_addr_q`, which was the only source of
+//      `guard_req_o.addr` when it was written. The vertex arm's address is
+//      COMBINATIONAL -- `td_buf_q` is still shifting when W_TD_BEAT decides,
+//      and `pv_idx_q` advances between the three requests -- so the tripwire
+//      would have gone silent on exactly the requests this packet added while
+//      keeping its name and its zero. It now tests `guard_req_o.addr`. It is
+//      still an invariant over one value against a constant, so the
+//      lockstep-blindness question does not arise.
+//
+//      THREE STALE NUMBERS CORRECTED, ALL IN THE FLATTERING DIRECTION.
+//      `zhao_geom_paramarena.sv` declared `PV_B` with the comment "w=24 bytes"
+//      after the package had said 32 since PVSCHEMA, and `CHUNK_OFF_B` with
+//      "2,359,264" against a real 2,359,296 -- both unchecked, because
+//      `check_localparam_comments` SKIPS a constant whose value reaches a
+//      package import, which that block's own comment explains two lines before
+//      the unchecked number is wrong. And `geom_paramarena_directed.cpp` held
+//      `constexpr uint32_t PV_B = 24;` under a comment reading "R7 freezes it
+//      at 24 bytes"; nothing went red because the constant is DEAD -- every
+//      address in that file is built from `PV_SLOT_B`.
+//
+//      A DEAD WIRE FOUND AND LEFT, NAMED SO IT IS NOT REDISCOVERED. `id_c`
+//      (`zhao_geom_paramwalk.sv`) has no reader: the CHUNKSER repair added
+//      `id0_c` for the first id of a chunk and `nxt_id_c` for the next, and the
+//      wire between them was orphaned. It survives because
+//      `tests/shell/v3_closure_inherited.vlt` waives UNUSEDSIGNAL across whole
+//      directories. Measured INHERITED, not this packet's: linting a throwaway
+//      copy of the file at b4bd4830 reports the identical one warning.
+//
+//      NO QUARTUS RUN. No fit, no map, no `-MapOnly`. This packet makes NO area
+//      or timing claim whatsoever; the vertex arm adds four states, a 256-bit
+//      buffer and three small register files, and what that costs is a question
+//      for the coordinator's fit.
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
 //
