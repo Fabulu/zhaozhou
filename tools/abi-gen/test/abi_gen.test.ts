@@ -40,7 +40,11 @@ function parseAndLayout(source: string) {
 
 test('parser accepts the real commands.zidl', () => {
   const ir = parseAndLayout(zidlSource());
-  assert.equal(ir.abi.version, 3); // ABI v3 (SetEnvironment 0x0311, 2026-08-17)
+  // ABI v4: +SealFramePlan 0x0003, the seal-plan command the vacation
+  // directive pre-authorised. This line read 3 for eleven days after the bump
+  // and the suite was red for it -- the same drift the commands.length line
+  // below already records having suffered once.
+  assert.equal(ir.abi.version, 4);
   assert.equal(ir.abi.commandAlignment, 16);
   // v3: +SetEnvironment 0x0311, +TerrainEpoch 0x0220, +SubmitTerrainSet 0x0230
   // (all three reserved when added). The terrain pair is ruling T5's ABI,
@@ -48,7 +52,12 @@ test('parser accepts the real commands.zidl', () => {
   // is built, the executor is not, and `reserved` is what says so on the wire.
   // +PublishResource 0x0030 (owner ruling R17, implemented): 19 commands. This
   // line read 18 after R17 landed and the suite was red for it.
-  assert.equal(ir.commands.length, 19);
+  // 28 as of 2026-09-27. This read 19 while the zidl carried 28 -- NINE
+  // commands behind, not one. A hand-maintained count drifts silently every
+  // time an opcode lands; it is kept because it is the only assertion that
+  // fails when a command is added with no other evidence, and it is now
+  // cross-checked by the ratified-table test below, which reads the spec.
+  assert.equal(ir.commands.length, 28);
   // SetEnvironment was promoted to IMPLEMENTED by owner ruling R25 (2026-09-19);
   // the frame wire is unchanged, so the version is too.
   const env = ir.commands.find((c) => c.name === 'SetEnvironment');
@@ -90,12 +99,33 @@ test('layout law: record size must be a multiple of command_alignment', () => {
 
 test('computed record sizes match the ratified table (capture_format.md 1.3)', () => {
   const ir = parseAndLayout(zidlSource());
-  const want: Record<string, number> = {
-    Nop: 16, BeginFrame: 32, EndFrame: 32, SetView: 96, SetPresentationContract: 48,
-    TerrainField: 112, SurfaceStamp: 64, DrawForm: 32, DrawPopulation: 32,
-    DrawProcedural: 64, EmitAudioEvent: 32, DebugBootstrap: 64,
-    DebugFrameBlit: 48, DebugRumble: 32, DrawSky: 176, SetEnvironment: 48,
-  };
+  // THE TABLE IS READ FROM THE SPEC, NOT COPIED INTO THIS FILE.
+  //
+  // It used to be a hand-kept literal here, which made capture_format.md 1.3 and
+  // this test two independent copies of one ratified table -- and they drifted:
+  // on 2026-09-27 the document was missing ELEVEN of the generator's twenty-eight
+  // commands (nine of them implemented), listed SetView at 96 after owner ruling
+  // R63 grew it to 112, and still called SetEnvironment reserved after R25
+  // promoted it. This test was the only thing in the tree that noticed, and it
+  // could not be run on Node 24 at all, so nobody read it for eleven days.
+  //
+  // Parsing the document makes the drift impossible rather than merely detected.
+  const tableSource = readFileSync(path.join(repoRoot(), 'spec', 'capture_format.md'), 'utf8');
+  const want: Record<string, number> = {};
+  for (const m of tableSource.matchAll(/^\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|\s*0x[0-9a-fA-F]{4}\s*\|\s*(\d+)\s*\|/gm)) {
+    const name = m[1];
+    const bytes = m[2];
+    if (name === undefined || bytes === undefined) continue;
+    want[name] = Number(bytes);
+  }
+  // ANTI-VACUITY. A regex that matches nothing would make every assertion below
+  // vacuous and this test would pass by measuring an empty object -- precisely
+  // the failure this repository catalogues as "a number that is exactly zero is
+  // a broken instrument until proven otherwise". The table has 28 rows; require
+  // most of them, and require the two rows whose corrections motivated this.
+  assert.ok(Object.keys(want).length >= 25, `parsed only ${Object.keys(want).length} rows from capture_format.md 1.3`);
+  assert.equal(want.SetView, 112);
+  assert.equal(want.SealFramePlan, 48);
   for (const [name, bytes] of Object.entries(want)) {
     const c = ir.commands.find((x) => x.name === name);
     assert.ok(c, name);

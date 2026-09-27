@@ -68,6 +68,21 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     commandBytes: 80,
   }, new Uint8Array([...cmd('BeginFrame'), ...cmd('Nop'), ...cmd('EndFrame')]));
 
+  // COMMAND BYTES ARE MEASURED FROM THE PAYLOAD, NOT RESTATED.
+  // This read `32 + 96 + 48 + 16 + 32`, and the 96 was SetView's size before
+  // owner ruling R63 grew it to 112 (`fx16 eye[3]` + `pad[4]`). The payload
+  // then measured 240 while the header still declared 224, so the frame the
+  // corpus calls VALID validated to ZH_ABI_BAD_LENGTH -- the corpus was
+  // testing the validator with a deliberately malformed frame and calling the
+  // result a regression. It was the THIRD hardcoded copy of that one record
+  // size, after capture_format.md 1.3 and abi_gen.test.ts.
+  const fullPayload = new Uint8Array([
+    ...cmd('BeginFrame'),
+    ...cmd('SetView'),
+    ...cmd('SetPresentationContract'),
+    ...cmd('Nop'),
+    ...cmd('EndFrame'),
+  ]);
   const full = buildFrame(ir, {
     abiVersion: ir.abi.version,
     flags: 0,
@@ -76,14 +91,8 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     resourceEpoch: 1,
     deadline: 1234,
     commandCount: 5,
-    commandBytes: 32 + 96 + 48 + 16 + 32,
-  }, new Uint8Array([
-    ...cmd('BeginFrame'),
-    ...cmd('SetView'),
-    ...cmd('SetPresentationContract'),
-    ...cmd('Nop'),
-    ...cmd('EndFrame'),
-  ]));
+    commandBytes: fullPayload.length,
+  }, fullPayload);
 
   // debug frame: one DebugBootstrap record, header flag set/cleared below
   const debugStream = new Uint8Array([...cmd('BeginFrame'), ...cmd('DebugBootstrap')]);
@@ -110,6 +119,9 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     abiVersion: ir.abi.version, flags: 0, frameId: 4, sequence: 3, resourceEpoch: 1,
     deadline: 0, commandCount: 0, commandBytes: 0,
   }, new Uint8Array(0));
+
+  // Offsets INTO the full stream, measured from the records themselves.
+  const spcModeOffset = cmd('BeginFrame').length + cmd('SetView').length + 16;
 
   const cases: { name: string; packet: Uint8Array }[] = [
     { name: 'valid_minimal', packet: base },
@@ -144,10 +156,20 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     { name: 'record_reserved_nonzero', packet: reframe(mutate32(base, HEADER_BYTES + 12, 0x1, false)) },
     { name: 'payload_pad_nonzero', packet: reframe(mutate(base, HEADER_BYTES + 48 + 16 + 12, 0x42)) },
 
-    // enum range (ABI v2, capture_format.md 3.2 step 7). full stream:
-    // BeginFrame@0 (32B), SetView@32 (96B), SetPresentationContract@128 (48B);
-    // the SPC payload 'mode' (video_mode u8) sits at stream offset 128+16.
-    { name: 'enum_out_of_range', packet: reframe(mutate(full, HEADER_BYTES + 128 + 16, 0x07)) },
+    // enum range (ABI v2, capture_format.md 3.2 step 7). The SPC payload's
+    // `mode` (video_mode u8) is the first payload byte of the third record, so
+    // its stream offset is the two records before it plus one record header.
+    //
+    // THIS WAS A HARDCODED 128, spelled out in a comment as
+    // "SetView@32 (96B), SetPresentationContract@128". Owner ruling R63 grew
+    // SetView to 112, moving SPC to 144 -- so the mutation landed inside
+    // SetView's payload instead of on the enum, and the case reported
+    // ZH_ABI_UNKNOWN_OPCODE (7) where it asserts ZH_ABI_BAD_VALUE (9). A
+    // corpus that mutates by hardcoded offset stops testing what it names the
+    // moment any earlier record changes size, and it fails LOUDLY only because
+    // the expected error is recorded; a case whose mutation silently landed on
+    // a pad byte would have gone on passing while testing nothing.
+    { name: 'enum_out_of_range', packet: reframe(mutate(full, HEADER_BYTES + spcModeOffset, 0x07)) },
 
     // walk-level
     { name: 'count_mismatch', packet: mutate32(base, OFF_COMMAND_COUNT, 2, true) },

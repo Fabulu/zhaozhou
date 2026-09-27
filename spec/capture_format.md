@@ -155,19 +155,39 @@ a `0xF000-0xF0FF` opcode MUST set frame header flags bit0
 | Nop | 0x0000 | 16 | implemented |
 | BeginFrame | 0x0001 | 32 | implemented |
 | EndFrame | 0x0002 | 32 | implemented |
-| SetView | 0x0010 | 96 | implemented |
+| SealFramePlan | 0x0003 | 48 | **implemented [v4]** |
+| SetView | 0x0010 | 112 | **implemented [R63]** |
 | SetPresentationContract | 0x0020 | 48 | implemented |
+| PublishResource | 0x0030 | 48 | **implemented [gap]** |
+| SetPost | 0x0040 | 32 | **implemented [gap]** |
+| SetGradeTable | 0x0041 | 96 | **implemented [gap]** |
 | TerrainField | 0x0200 | 112 | **implemented [w3]** |
 | SurfaceStamp | 0x0210 | 64 | **implemented [w3]** |
+| TerrainEpoch | 0x0220 | 32 | reserved [gap] |
+| SubmitTerrainSet | 0x0230 | 48 | reserved [gap] |
 | DrawForm | 0x0300 | 32 | **implemented [w3]** |
 | DrawPopulation | 0x0301 | 32 | **implemented [w3]** |
 | DrawProcedural | 0x0302 | 64 | **implemented [w3]** |
-| EmitAudioEvent | 0x0400 | 32 | **implemented [w3]** |
+| SetPopulation | 0x0303 | 48 | **implemented [gap]** |
+| DrawWarpedForm | 0x0304 | 96 | **implemented [gap]** |
+| DrawPosedForm | 0x0305 | 48 | **implemented [gap]** |
+| SetPlane | 0x0306 | 64 | **implemented [gap]** |
+| DrawSprite | 0x0307 | 64 | **implemented [gap]** |
 | DrawSky | 0x0310 | 176 | reserved |
-| SetEnvironment | 0x0311 | 48 | reserved [v3] |
+| SetEnvironment | 0x0311 | 48 | **implemented [R25]** |
+| EmitAudioEvent | 0x0400 | 32 | **implemented [w3]** |
 | DebugBootstrap | 0xF001 | 64 | reserved |
 | DebugFrameBlit | 0xF002 | 48 | implemented |
+| DebugTraceArm | 0xF003 | 32 | **implemented [gap]** |
 | DebugRumble | 0xF004 | 32 | implemented |
+
+**[R25] `SetEnvironment` IS IMPLEMENTED**, promoted by owner ruling R25 (2026-09-19). The frame wire is unchanged, so the ABI version did not move with it -- which is why this row's bytes were right while its status was stale. Recorded because a `reserved` row is read as "no producer exists", and one does.
+
+**[gap] ADDED 2026-09-27 -- THESE ROWS WERE MISSING, NOT WRONG.** This table declares itself generator-computed, and eleven of the generator's twenty-eight commands had no row at all (nine of them `implemented`). The table listed seventeen. Nothing in the tree reported it except `tools/abi-gen`'s ratified-table test, which has been red since 2026-09-16 and which `node --test dist/test/` could not even reach on Node 24 -- so the one instrument that could see this was itself unreadable. `npm run abi:check` stayed green throughout, as `spec/commands.zidl` warns it must: it "is a drift gate and goes green on a field nothing reads." Rows are sorted by opcode; every pre-existing row kept its recorded byte count and status text verbatim.
+
+**[R63] `SetView` GREW, 96 -> 112.** Unlike the `[w3]` rows below this is NOT a same-bytes reinterpretation: owner ruling R63 (`reports/OWNER-RULINGS-20260919-EVENING.md`, commit `3361c67b`) added `fx16 eye[3]` plus `pad[4]`, exactly 16 bytes, so every byte offset after the token fields MOVED and pre-R63 captures containing a `SetView` do not parse against this layout. It is recorded here because this table had said 96 since the ruling landed, and the ONLY thing in the tree that noticed was `tools/abi-gen`'s ratified-table test -- which was red for eleven days while `npm run abi:check` stayed green beside it, exactly as `spec/commands.zidl` warns: that gate "is a drift gate and goes green on a field nothing reads."
+
+**[v4] `SealFramePlan` 0x0003** is the ABI v3 -> v4 bump's new opcode (`spec/commands.zidl`, VERSION DECISION at its definition). It was absent from this table entirely rather than listed and wrong. A v3 decoder reports `ZH_ABI_UNKNOWN_OPCODE` on it, which is why the generation is distinguishable at frame validation.
 
 **[w3] Same-bytes reinterpretations** (the v2 `u8 mode` → `video_mode`
 precedent applied to never-executed reserved payload; every byte offset and
