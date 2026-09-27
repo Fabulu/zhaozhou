@@ -580,6 +580,37 @@ true-dual-port.
 
 ## 11. The fit reads the LIVE working tree, so editing during a fit rewrites what was measured
 
+> **AND THE SUPERSESSION BELOW IS SCOPED TO ONE SCRIPT. `run_block_map.ps1`
+> DOES *NOT* SNAPSHOT -- IT READS THE LIVE TREE.** Added 2026-09-28, checked
+> rather than assumed while a console map was running.
+>
+> The box below says "Block fits now **snapshot** their sources", and
+> `run_block_map.ps1` is a per-block tool whose header says it INHERITS
+> deliberately from `run_block_fit.ps1`. A reader reasonably generalises. Do
+> not: the map has **no snapshot logic whatsoever** (`grep -n snapshot
+> tools/quartus/run_block_map.ps1` returns nothing), there is no
+> `<workspace>/src`, and the generated QSF points at ABSOLUTE LIVE-TREE paths:
+>
+> ```
+> set_global_assignment -name SYSTEMVERILOG_FILE \
+>   C:/programmieren/zencrifice/<tree>/fpga/rtl/common/zhao_pkg.sv
+> ```
+>
+> So for a MAP, section 11's original heading is still exactly right: editing a
+> `.sv` in its closure rewrites what is being measured, and a console map has
+> 299 sources in its closure.
+>
+> **THE CHECK IS THE ONE THIS FILE ALREADY PRESCRIBES, AND IT IS TWO COMMANDS:**
+> look for the `src/` directory in the workspace, or read a
+> `SYSTEMVERILOG_FILE` line out of the generated QSF. A snapshotting run also
+> PRINTS its snapshot line; a map prints none, and an absent line is easy to
+> read as "I missed it" rather than "it never happens". Check the QSF, which
+> cannot be ambiguous.
+>
+> The general rule, because this will recur the next time a third runner is
+> added: **snapshotting is a property of the SCRIPT, not of the word "block".**
+> Sources and config already have different rules (gotcha 13); runners now do
+> too.
 > **SUPERSEDED FOR `run_block_fit.ps1` ON 2026-09-03, AND THIS HEADING IS NOW
 > WRONG FOR BLOCK FITS. Read this box before obeying the section.**
 >
