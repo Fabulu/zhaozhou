@@ -216,6 +216,20 @@ pixels** across 11 tiles with `frames_admitted=1`; the retained oracle draws the
 same 2,816 from the other producer. **The same picture from two producers, which
 is the only form of "it works" worth having.**
 
+### AND THE UN-PARK CHANGED NO DOCUMENTED GATE VALUE, which is worth stating
+
+`PACKET-PROTOCOL.md`'s gate table requires the plain run at
+**`raster pixels=2816`, `frames_admitted=1`**, `-TerrainFlatLattice` at the
+mesh's **2,560** and `-BadVertex` at **512**. **Every one of those still holds,
+unchanged, at the newly shipped arrangement** — measured above. The table needs
+no amendment for this flip.
+
+That is the cleanest statement of what un-parking did and did not do: it changed
+**which silicon produces the picture** and **nothing about the picture**. The
+only expected value anywhere that had to move was the *triangle* count inside
+`-TerrainFlatLattice`, and it moved by gaining the walk's own term rather than a
+new literal (section 1).
+
 ---
 
 ## 6. CLAIMS FOUND FALSE (Deliverable 6)
@@ -281,6 +295,24 @@ exits **1** on two SILENT literal connections
 `c93fe343`, in the same session, reports the **same two names** and the
 **identical** header — `9 declared, 2 reasoned, 19 by group comment, 2 SILENT`,
 22 literal-connection rows on both sides. Neither line is one I touched.
+
+### 6.7 — THE BRIEF WAS RIGHT AND THE ENTRY WAS WRONG, for once in that direction
+
+The brief's do-not-regress list cites `geom_bin_pipe_v2_door` at **11,381**
+checks. Entry `I55` says **11,378**. The measurement's own source —
+`FINDINGS-doorcost.md`, from the packet that ran it — says **11,381** in four
+separate places, and so does `TASK_LOG.md` twice. **So the entry carries a
+transcribed number that is three low, and the brief carries the measured one.**
+
+I did not re-run the test (it needs a build tree this packet deliberately did not
+stand up, §9), so I am **not editing either figure**: replacing a number I have
+not measured with another number I have not measured is how this drift started.
+It is named so the next reader does not average them. Provenance favours 11,381
+decisively — six independent citations against one.
+
+Worth recording because this campaign's habit is to assume the brief is the
+unreliable document. Here the brief is the accurate one, and the entry — the
+thing packets quote as authoritative — is the copy that drifted.
 
 ---
 
@@ -449,3 +481,49 @@ rather than parked**, which is why they are named here.
 
 **Branch `gz/unpark`. Pushed. Never `--force`, never `--force-with-lease`. Not
 merged to the integration branch.**
+
+| commit | what |
+|---|---|
+| `c40589ca` | `test(UNPARK)`: the five control forms could not be run in arrangement 1 -- the tag chain could only express five of ten |
+| `3088cbbc` | `test(UNPARK)`: one of the five controls was ARRANGEMENT-DEPENDENT and two were asserting nothing at all |
+| `9b75a9a0` | `feat(UNPARK)`: THE CONSOLE SHIPS AT ARRANGEMENT 1 -- and the oracle is gated for the first time |
+
+### Reproducing every number above
+
+The probe is the committed smoke script; there is no throwaway tooling behind
+any figure here. From PowerShell with `tools\env\zhao-env.ps1` sourced:
+
+```
+tests\prod\run_console_core_smoke.ps1                                  # SHIPPED, arrangement 1
+tests\prod\run_console_core_smoke.ps1 -BinnerDrain                     # the retained oracle, arrangement 0
+tests\prod\run_console_core_smoke.ps1 -Mutant                          # ... and each control form,
+tests\prod\run_console_core_smoke.ps1 -BadVertex                       #     in either arrangement,
+tests\prod\run_console_core_smoke.ps1 -NoEchoArm                       #     by adding -BinnerDrain
+tests\prod\run_console_core_smoke.ps1 -BadTraceArm
+tests\prod\run_console_core_smoke.ps1 -TerrainFlatLattice
+```
+
+Every form now prints `build dir:` as its second line, so a reader can difference
+two logs and **see** they were built apart instead of reading the tag chain and
+trusting it.
+
+---
+
+## 11. ONE RECOMMENDED AMENDMENT TO `PACKET-PROTOCOL.md`, NOT MADE HERE
+
+That file is the coordinator's, so this is a recommendation rather than an edit.
+
+**Ruling R82 says `... 2>&1 | Out-File -Encoding utf8 <log>` and read the log.
+That recipe silently discards almost everything these scripts print.**
+`run_console_core_smoke.ps1` says nearly all of it through `Write-Host`, which
+writes to the **Information** stream and **never enters the pipeline** — so
+`2>&1` captures only the simulator's native stdout. A `-LintOnly` run, which
+exits before the simulator, produces a **zero-byte log under RC=0**.
+
+The fix is one character: **`*>&1`**, not `2>&1`.
+
+This is R82's own subject arriving through the recipe written to enforce it —
+the same shape as the `[IO.File]` entry in CLAUDE.md, where advice that is
+correct in substance aims packets at the wrong place when followed literally.
+I lost two forms' logs to it before noticing, and the tell was a **log size**,
+not a failure.
