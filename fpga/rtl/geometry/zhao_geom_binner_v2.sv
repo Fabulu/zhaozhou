@@ -346,6 +346,30 @@ module zhao_geom_binner_v2 #(
   // comment depends on -- the verdict arrives on the edge the metadata does,
   // because it comes out of the same word.
   output logic               [1:0] job_profile_bad_o,
+
+  // ---- THE SAME VERDICT, ON THE WRITE EDGE (DOORCOST, 2026-09-27) --------
+  //
+  // `job_profile_bad_o` above is the verdict READ BACK out of the metadata
+  // bank's pad on the drain edge, so it exists only for a job THIS BLOCK
+  // STORED. Console entry I55's SDRAM walk feeds the raster from
+  // `zhao_geom_bin_pipe_v2`'s own `tri_*` ports, which never enter this bank --
+  // so on that path there is no stored word to read the verdict out of, and the
+  // consumer would be handed a verdict about some other triangle.
+  //
+  // WHY A PORT AND NOT A RECOMPUTE ONE LEVEL UP. The verdict is a pure
+  // combinational function of `tri_meta_i`, already computed here as
+  // `meta_aux_bad_c` / `meta_area_bad_c` because the pad needs it. Exporting it
+  // is TWO WIRES OFF AN EXISTING EXPRESSION and adds no logic whatever.
+  // Recomputing those two lines in the parent would be a SECOND EXPRESSION of
+  // the Packet-D bit layout -- and the comment beside that expression already
+  // records that two copies of this exact fact is "the shape this repository
+  // keeps finding gone stale". One expression, two readers.
+  //
+  // THE TWO PORTS ARE DIFFERENT QUANTITIES AND MUST NOT BE READ AS SPARES:
+  // this one is valid on the cycle `tri_valid_i && tri_ready_o` accepts a
+  // triangle; `job_profile_bad_o` is valid on the cycle `job_valid_o` offers a
+  // drained job. They describe the same triangle only when both refer to it.
+  output logic               [1:0] write_profile_bad_o,
   output logic               drain_busy_o,
   output logic               drain_done_o,   // one-cycle pulse: frame drained
 
@@ -557,6 +581,9 @@ module zhao_geom_binner_v2 #(
   logic meta_aux_bad_c, meta_area_bad_c;
   assign meta_aux_bad_c  = tri_meta_i[268] || (tri_meta_i[267:44] != 224'd0);
   assign meta_area_bad_c = (tri_meta_i[424:378] == 47'd0);
+
+  // The write-edge export. Same expression, same cycle, no new logic.
+  assign write_profile_bad_o = {meta_area_bad_c, meta_aux_bad_c};
 
   // Two pad bits are needed. The elaboration guard is not decorative: at a
   // METAW that happens to align to the 40-bit slice there is no pad at all,
