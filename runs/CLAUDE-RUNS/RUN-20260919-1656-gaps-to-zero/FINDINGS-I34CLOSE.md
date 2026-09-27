@@ -277,3 +277,84 @@ are all still fresh across an edit to `zhao_console_core.sv`. I ran them anyway
 rather than reasoning that a comment cannot matter: NAVSERVICE's own section 8.6
 records a **comment-only edit turning a mutant copy stale**, so "it is only a
 comment" is a claim this campaign has already disproved once.
+
+---
+
+## 12. CORRECTION TO MY OWN FINDING (A), AND THE DECISION IT NEEDS
+
+**I wrote in section 1b that "nobody has asked" about
+`TERRAIN.COMPOSED_MATERIAL`. That is too strong, and the precise version is
+more useful.** Found by sweeping the remaining mentions rather than stopping at
+the RTL grep.
+
+**THE MEASUREMENT EXISTS.** `reports/OWNER-ESCALATION-20260926-I34-ADDENDUM-2.md`
+FAULT 2 and `BRIEF-FABRICSINK.md` both carry it, from
+`tools/budget/sdram_bandwidth.py`:
+
+| | SDRAM cycles | frame |
+|---|---:|---|
+| today | 330,474 **free** | 19.83% headroom |
+| + composed VELOCITY publish | 406,806 **over** | 24.41% oversubscribed |
+| + the fill-side read that makes it a consumer | 1,291,542 **over** | 77.49% oversubscribed |
+
+**One 2 B/vertex plane costs 737,280 cycles against 330,474 free — 2.2x the
+entire headroom on its own**, and material-as-u32 is about twice velocity's
+width. The pair needs on the order of **3.7 M cycles against 330 k free.**
+
+**WHAT DOES NOT EXIST IS THE DECISION RECORD**, and the difference is the whole
+point:
+
+* For `COMPOSED_HEIGHT` and `COMPOSED_VELOCITY`, COMPOSEPUB wrote a full
+  decision record **into `spec/memory_rules.md:450`** — the place decisions
+  bind — with question, chosen option, alternatives, consequences. **That
+  obligation is discharged.**
+* For `COMPOSED_MATERIAL` the same arithmetic was delivered **as an
+  ESCALATION**, which handover 15.30 has already criticised in exactly these
+  terms: the escalation *"declared its own default … and under a standing
+  vacation directive, saying nothing was always going to be the state. A
+  default nobody executes is not a default; it is a second escalation wearing a
+  decision's clothes."*
+* **And the owner then answered that escalation** — on 2026-09-26 — **striking
+  `COMPOSED_NAV` and writing in the same breath that `COMPOSED_MATERIAL` is
+  unaffected and remains live.**
+
+**So the state is: a sound measurement, no binding record, and an owner who
+looked at this exact pair of regions three days ago and deliberately struck
+only the other one.**
+
+### THE DECISION THIS NEEDS, with evidence and a recommendation
+
+Per PACKET-PROTOCOL rule 4, I stop on this gap and write it up rather than
+deciding it myself.
+
+**QUESTION.** Does `TERRAIN.COMPOSED_MATERIAL [0x058B_0000, 0x05AB_0000)` get
+built, or get a COMPOSEPUB-shaped refusal recorded in `spec/memory_rules.md`?
+
+**MY RECOMMENDATION: record the refusal, in the spec, in COMPOSEPUB's format —
+do not build the writer.** The grounds are already measured and are the
+owner's own test:
+
+1. **The consumer test fails the same way.** The composed material triple
+   already reaches its real consumer **through fabric** — compose cache → TESS →
+   token → shell → mosaic, proven per-triangle by MATCARRY and re-measured here.
+   An SDRAM plane would be read by nothing, which is precisely *"a DMA into
+   unused memory is not a consumer"* and the ground owner ruling **R64** used to
+   retire both mip pools.
+2. **The bandwidth finding is decisive and is the directive's own escape**:
+   *"a measured engineering impossibility is a finding, not permission to invent
+   a pass."*
+3. **The precedent is exact and six days old** — the sibling regions, same
+   section, same packet format.
+
+**WHY I DID NOT JUST WRITE IT.** The owner re-affirmed this specific region as
+live **three days ago**, in the act of striking its neighbour. Converting an
+owner-re-affirmed destination into a refusal is not the same kind of act as
+recording a refusal he has never ruled on, and the delegation covers
+implementation choices rather than retiring a destination he has just looked at
+and kept. **It is one short decision record and it should be written with that
+sentence in front of whoever writes it.**
+
+**AND IT WOULD NOT CLOSE `I34` ANYWAY.** Obligation (B), directive 13.7's
+`-FieldActive`, is independent and is NOT MET — with the composed console's own
+`field_composed=0` as the measurement. **Both must land before this entry
+closes.**
