@@ -11365,6 +11365,33 @@ set_tests_properties(lint_geom_tidq PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# GEOM.TIDQ's DIRECTED TEST (RASTERSWAP, 2026-09-27).
+#
+# It did not exist until today, and that is the point worth recording here:
+# `fpga/rtl/prod/zhao_console_core.sv` and `reports/HANDOVER-20260919.md` BOTH
+# cited "`geom_tidq_directed` drives a real clock and passes" as the evidence
+# that the block was sound while its composition was not. The line above --
+# `lint_geom_tidq` -- was the whole of this block's test coverage, and the
+# module header's claim that its counters "ARE REACHABLE WITH LEGAL STIMULUS
+# ... so neither owes a committed mutant" had never been demonstrated.
+#
+# This file fires all three counters, reproduces the console's startup skew
+# UNGATED (so `underflow_o` is seen to move), and then requires
+# `popped[k] == pushed[k]` under the occupancy gate `zhao_console_core` now
+# applies. Its two hardest cases are the FLUSH WITH ENTRIES STILL OWED and the
+# PUSH ON THE FLUSH CLOCK -- the two ways a seal can strand a triangle that is
+# already inside GEOM.SETUP, both of which turn into a permanent stall of the
+# geometry front end the moment the door is gated.
+add_executable(test_geom_tidq_directed geometry/geom_tidq_directed.cpp)
+target_link_libraries(test_geom_tidq_directed PRIVATE zhao_harness)
+verilate(test_geom_tidq_directed
+  PREFIX Vzhao_geom_tidq
+  TOP_MODULE zhao_geom_tidq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tidq.sv)
+add_test(NAME geom_tidq_directed COMMAND test_geom_tidq_directed)
+set_tests_properties(geom_tidq_directed
+  PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
 # ---------------------------------------------------------------------------
 # GEOM.VERTID -- the one geometry identity space (ARENAID 2026-09-25, owner
 # vacation directive section 4; console entry I53).

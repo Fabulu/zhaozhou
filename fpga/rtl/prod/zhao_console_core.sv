@@ -8517,6 +8517,29 @@
 //      corrections are the part a later reader needs. The closing account is
 //      the last paragraph block of this entry.
 //
+//      AND A FIFTH, WHICH IS THE SHARPEST OF THEM (RASTERSWAP, 2026-09-27).
+//      THIS ENTRY WAS CLOSED WHILE ITS OWN NAMED FAILURE WAS LIVE IN THE
+//      COMPOSED CONSOLE. The failure it exists to prevent is written three
+//      paragraphs down -- "a chunk of BINNER SLOTS would decode cleanly into
+//      the wrong triangles with every range guard passing" -- and from the day
+//      `u_geom_tidq` was composed until 2026-09-27 the queue ran PERMANENTLY
+//      ONE ENTRY BEHIND: `popped[k] == pushed[k-1]`, so 74 of 75 triangles
+//      were binned under their PREDECESSOR's arena descriptor index. In range.
+//      Decoding cleanly. Every range guard passing. Exactly the sentence.
+//
+//      The cause was not this block and not the identity: it was the JOIN.
+//      GEOM.SETUP is three stages while GEOM.VERTID needs `S_PUB` x3 plus
+//      `S_TD`, so the shell door was structurally AHEAD of the id from the
+//      first beat of every run. It is repaired by gating the door on the
+//      queue's occupancy; see entry I55's RASTERSWAP paragraph for the
+//      measurement, the deadlock modes and the test.
+//
+//      THE LESSON FOR A CLOSING PACKET, and it is this file's own law arriving
+//      one level up: THE ENTRY NAMED THE FAILURE, THE GUARD AGAINST IT WAS
+//      BUILT AND CORRECT, AND NOTHING EVER CHECKED THAT THE TWO WERE WIRED
+//      TOGETHER IN THE RIGHT ORDER. `underflow_o` was the one trace it left,
+//      it read 1, and a 1 looks like a rounding error rather than like 99%.
+//
 //      `zhao_geom_binner_v2` builds exactly these chunks -- 64 bytes, a
 //      `next` pointer, a count and fourteen triangle ids -- in an ON-CHIP
 //      arena (CHUNKS = 256, CHUNK_REFS = 4) that R7's external arena exists to
@@ -9126,6 +9149,62 @@
 //          REVEALED it, because BINARENA was forbidden the fit that would
 //          have. Un-composing would hide it again and restore the series
 //          directive section 4 forbids, so it was considered and refused.
+//
+//      -- RASTERSWAP, 2026-09-27. STILL TIED, AND THE IDS ARE NOW CORRECT.
+//      The swap is not built. What is built is its PRECONDITION, and until
+//      today nobody knew it was unmet.
+//
+//      THE ARENA WAS NAMING THE WRONG TRIANGLES, 74 OF 75. `u_geom_tidq` was
+//      permanently ONE ENTRY BEHIND, so every triangle after the first was
+//      binned under its PREDECESSOR'S arena descriptor index. ARENAINFER
+//      measured it and costed the repair; this packet took it. The paragraph
+//      above that calls it "one per frame" and "four references short of the
+//      picture" is RIGHT ABOUT THE VISIBLE PART AND WRONG ABOUT THE SIZE: the
+//      four dropped references were one triangle with no identity, and the
+//      other 74 triangles carried a neighbour's index -- in range, decoding
+//      cleanly, invisible to every guard, and invisible to the refs comparison
+//      too, because that differences two TOTALS.
+//
+//      MEASURED BEFORE AND AFTER, SAME FIXTURE, SAME SCRIPT:
+//
+//        before  tidqids  pushed=0 1 2 3 4 5 6 7 | popped=262143 0 1 2 3 4 5 6
+//                tidq     underflow=1   arenabin tris=74 unnamed=1 refs=97
+//                arenabin SHORTFALL 4 reference(s) against GEOM.BINNER's 101
+//
+//        after   tidqids  pushed=0 1 2 3 4 5 6 7 | popped=0 1 2 3 4 5 6 7
+//                tidq     underflow=0   arenabin tris=75 unnamed=0 refs=101
+//                arenabin AGREES WITH THE BINNER EXACTLY: 101
+//
+//      `raster pixels=2816` and `frames_admitted=1` are UNCHANGED, and the
+//      whole-frame cost is unchanged too: `sdram_busy` 645,849 -> 645,846 over
+//      the same fixture, three clocks in ~730,000, with identical burst
+//      counts. The door gate is free because `zhao_geom_vertid.tri_ready_o` is
+//      `(st_q == S_IDLE)` -- the fork already could not hand over triangle N+1
+//      until VERTID finished N, which is the same event that pushes N's id.
+//
+//      BEWARE ONE COUNTER HERE. `vertid stall` reads 1774 before and 0 after.
+//      THAT IS NOT 1,774 CLOCKS SAVED. `vid_stall_o` counts
+//      `tri_valid_i && !tri_ready_o`, and this block's `tri_valid_i` is
+//      qualified by GEOM.SETUP's ready -- so gating the door moved one of the
+//      counter's own operands and the wait is now absorbed upstream of the
+//      fork instead of being counted at VERTID's input. The frame costs the
+//      same. Quoting that zero as a speed-up would be this campaign's
+//      "measured refusals and called it a 62x speed-up" in new clothes.
+//
+//      WHAT THIS CHANGES FOR THE SWAP, precisely and no further: a walk over
+//      the external arena would, until this commit, have followed chunk lists
+//      in which 99% of the triangle ids named the wrong triangle. Directive
+//      section 4 asks for "a complete frame whose output depends on the bytes
+//      written and read through the real guard/arbiter/controller path" -- and
+//      those bytes were present and DESCRIBED THE WRONG GEOMETRY. They no
+//      longer do. That is a precondition met, NOT a swap performed.
+//
+//      BLOCKER 2 IS UNTOUCHED AND IS STILL 1,749 BITS. Nothing here reduces
+//      the second GEOM.SETUP and GEOM.ATTRPACK back end, the vertex-fetch arm,
+//      or the consumer side's 7.18x. `paramwalk dirs/chunks/tris` is STILL
+//      0/0/0 and is refused for the third time on the same ground: every `t_*`
+//      output dangles, so a tile sequencer would count triangles and drop
+//      them. This packet ran NO Quartus map and makes NO area or timing claim.
 //
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
@@ -19816,7 +19895,11 @@ module zhao_console_core
 
     // REAL: the shell's Packet-D attribute carriage.
     .out_valid_o          (ap_o_valid_w),
-    .out_ready_i          (door_tri_ready_w && st_o_valid),
+    // `tidq_have_w` is the third term as of 2026-09-27 (RASTERSWAP) and it is
+    // required, not defensive: without it GEOM.ATTRPACK would retire a packet
+    // on a clock the door did not fire, and the join would lose a triangle
+    // instead of misnaming one. See the door block for the whole argument.
+    .out_ready_i          (door_tri_ready_w && st_o_valid && tidq_have_w),
     .out_invw_plane_o     (ap_invw_plane_w),
     .out_u_over_w_plane_o (ap_u_over_w_plane_w),
     .out_v_over_w_plane_o (ap_v_over_w_plane_w),
@@ -19985,7 +20068,14 @@ module zhao_console_core
     .vid_id_unnameable_o (),
     .vid_seal_abort_o    (),
     .vid_stall_o         (geom_vid_stall_o),
-    .busy_o              ()
+    // READ AS OF 2026-09-27 (RASTERSWAP), and it costs no new port on a leaf.
+    // The seal ABORTS a triangle this block is mid-way through, so no
+    // TriangleDescriptor ever retires for it -- but GEOM.SETUP already has that
+    // triangle and the shell door will still ask for its identity. `busy_o` is
+    // `(st_q != S_IDLE)`, so `pa_seal_fire && vid_busy_w` IS that abort, as a
+    // one-clock pulse, without adding an output to a block instantiated in
+    // three places.
+    .busy_o              (vid_busy_w)
   );
 
   // GEOM.VERTID's seams, declared with the block that drives them.
@@ -19998,6 +20088,23 @@ module zhao_console_core
   /* verilator lint_on UNUSEDSIGNAL */
   wire [17:0] vid_tri_id;
   wire        vid_tri_id_retire;
+  wire        vid_busy_w;
+
+  // THE ABORT, AS A PUSH (RASTERSWAP, 2026-09-27). The invariant the door gate
+  // below rests on is that the queue receives EXACTLY ONE ENTRY PER TRIANGLE
+  // THAT CROSSED THE FORK. `tri_id_retire_o` alone does not give that: on a
+  // seal edge GEOM.VERTID throws away the triangle it is holding and retires no
+  // descriptor for it, while GEOM.SETUP -- which took the same triangle on the
+  // same clock from the same fork -- still delivers it to the door. Without an
+  // entry for it the door would wait for a push that can never arrive.
+  //
+  // So the abort pushes a NAMELESS entry. `id_ok_i` is forced low on that beat
+  // rather than trusting `vid_td_accept`, which is the arena's reply to a
+  // `td_valid_o` that is suppressed on exactly this clock and therefore means
+  // nothing here. The two cannot coincide: `td_valid_o` is
+  // `(st_q == S_TD) && !frame_seal_i`, so a retire and a seal are mutually
+  // exclusive by construction.
+  wire        vid_tri_id_abort_w = pa_seal_fire && vid_busy_w;
 
   // ---------------------------------------------------------------------------
   // I54: THE TRIANGLE IDENTITY, REJOINED WITH ITS TRIANGLE AT THE SHELL DOOR
@@ -20027,30 +20134,110 @@ module zhao_console_core
       // arena id belongs (:26881).
       //
       // It survived because the block was right and the COMPOSITION was
-      // wrong: `geom_tidq_directed` drives a real clock and passes, and the
-      // console smoke runs `-Wno-fatal`, so Verilator's IMPLICIT warning was
-      // printed and ignored. Entry I34 records the identical failure -- an
+      // wrong, and the console smoke runs `-Wno-fatal`, so Verilator's
+      // IMPLICIT warning was printed and ignored.
+      //
+      // THIS SENTENCE USED TO CITE `geom_tidq_directed` AS "drives a real
+      // clock and passes", AND THAT TEST DID NOT EXIST (RASTERSWAP,
+      // 2026-09-27). `zhao_geom_tidq` had exactly one entry in the whole tree
+      // -- `lint_geom_tidq` -- while this line and
+      // `reports/HANDOVER-20260919.md:3159` both offered it as the evidence
+      // that the block was sound. That is the campaign's false-PRESENCE shape
+      // and it is the worse one: a reader who greps the name finds the
+      // citation and stops looking. The test is written now
+      // (`tests/geometry/geom_tidq_directed.cpp`, 83 checks, registered), so
+      // the claim is true as of this commit -- but it was made first and
+      // earned second, which is the part worth leaving on the record. Entry I34 records the identical failure -- an
       // adapter composed at the wrong arity, caught only by an explicit -Wall
       // lint of the closure -- which is why that lint is now worth running
       // before a fit rather than after one.
       .clk        (gpu_clk),
       .rst_n      (rst_n),
       .flush_i    (pa_seal_fire),
-      .push_i     (vid_tri_id_retire),
-      .id_ok_i    (vid_td_accept),
+      .push_i     (vid_tri_id_retire || vid_tri_id_abort_w),
+      .id_ok_i    (vid_td_accept && !vid_tri_id_abort_w),
       .id_i       (vid_td_id),
       .pop_i      (door_tri_valid_w && door_tri_ready_w),
       .id_o       (tidq_id_w),
       .underflow_o(geom_tidq_underflow_o),
       .overflow_o (geom_tidq_overflow_o),
       .unnamed_o  (geom_tidq_unnamed_o),
-      .level_o    ()
+      // READ AS OF 2026-09-27 (RASTERSWAP). It was `()`, and that is the whole
+      // of the defect below: with nobody reading the occupancy, nothing could
+      // stop the door from taking a triangle whose identity had not arrived.
+      .level_o    (tidq_level_w)
   );
+
+  // ---------------------------------------------------------------------------
+  // THE DOOR WAITS FOR THE IDENTITY (RASTERSWAP, 2026-09-27)
+  // ---------------------------------------------------------------------------
+  // THE DEFECT THIS REPAIRS, MEASURED BY ARENAINFER AND REPRODUCED HERE:
+  //
+  //   tidqids  pushed=0 1 2 3 4 5 6 7 | popped=262143 0 1 2 3 4 5 6
+  //
+  // 262143 is `ID_POISON`. After it, `popped[k] == pushed[k-1]` FOR EVERY k --
+  // the queue was permanently one entry behind, so triangle 1 was dropped for
+  // want of an identity and EVERY TRIANGLE AFTER IT WAS BINNED UNDER ITS
+  // PREDECESSOR'S ARENA DESCRIPTOR INDEX. 74 of 75 on the smoke's fixture.
+  //
+  // It is entry I54's named failure, live: the ids stay IN RANGE and DECODE
+  // CLEANLY, so `td_illegal_o` never fires, the reference COUNT is unaffected,
+  // and the bench's own refs comparison differences two totals and cannot see
+  // it. `underflow=1` was the only trace, and its magnitude is nothing like
+  // what a 1 suggests.
+  //
+  // THE CAUSE IS STRUCTURAL AND IT IS STARTUP, NOT A FRAME EDGE. The fork hands
+  // one triangle to GEOM.SETUP, GEOM.ATTRPACK and GEOM.VERTID on one clock.
+  // GEOM.SETUP is three stages; GEOM.VERTID needs `S_PUB` x3 plus `S_TD` before
+  // the arena hands back an index. THE DOOR IS ALWAYS AHEAD OF THE ID. At the
+  // only underflow the bench measured `pushes=0 pops=1` -- the first door beat
+  // landed before the first push, and every later beat inherited the skew.
+  //
+  // THE REPAIR IS A HANDSHAKE, NOT A TUNED DELAY, which is why it is correct
+  // for any skew rather than for the measured one: the door does not fire until
+  // the queue holds the entry it is about to consume. GEOM.SETUP is 1:1 and
+  // order-preserving and so is the queue, so door beat k and push k name the
+  // same triangle BY CONSTRUCTION.
+  //
+  // ALL THREE CONSUMERS OF THE JOIN ARE GATED, and that is not optional. The
+  // two downstream valids are each `door_tri_valid_w && <the other's ready>`,
+  // so gating only the READY would leave the shell and GEOM.ARENABIN taking a
+  // triangle the door never released; gating only the VALID would leave
+  // `st_o_ready` and GEOM.ATTRPACK's `out_ready_i` retiring a triangle the door
+  // never took. Both halves DROP a triangle rather than misname one, which is
+  // worse, so the gate is applied to the valid and to both upstream readys.
+  //
+  // IT CANNOT DEADLOCK, and the argument names what each side waits on:
+  //   * the queue is filled by GEOM.VERTID's TD retire, whose only backpressure
+  //     is `zhao_geom_paramarena.td_ready_o` = `taking_c && !pv_valid_i`.
+  //     `taking_c` is `sink_c || engine_free_c` -- internal arena state only,
+  //     with NO term from this door;
+  //   * TD outranks the chunk port in that arena's priority
+  //     (`ck_ready_o` is additionally qualified by `!td_valid_i`), so
+  //     GEOM.ARENABIN holding `ab_tri_ready_w` low while it writes a chunk can
+  //     never starve the push that would release the door;
+  //   * and the one case where a push genuinely never comes -- GEOM.VERTID
+  //     aborting on a seal -- is answered by `vid_tri_id_abort_w` above, which
+  //     pushes a nameless entry so the count stays 1:1;
+  //   * while `zhao_geom_tidq`'s flush no longer DISCARDS owed entries, it
+  //     poisons them in place. Discarding them was the other way to strand the
+  //     door and it was what the block did until today.
+  // `geom_tidq_directed` exercises the flush-with-entries-in-flight and the
+  // abort push directly, because a deadlock mode argued is not a deadlock mode
+  // exercised.
+  //
+  // IT COSTS NOTHING IN THROUGHPUT ON THIS PIPELINE, and the reason is
+  // structural rather than lucky: `zhao_geom_vertid.tri_ready_o` is
+  // `(st_q == S_IDLE)`, so the fork already cannot hand over triangle N+1 until
+  // VERTID has finished triangle N -- which is the same event that pushes N's
+  // id. The wait the door now takes is time the fork was already spending.
+  wire [3:0] tidq_level_w;
+  wire       tidq_have_w = (tidq_level_w != 4'd0);
 
   // The fork's single ready and the join's single valid.
   assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w && vid_tri_ready_w;
-  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w;
-  assign door_tri_valid_w = st_o_valid && ap_o_valid_w;
+  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w && tidq_have_w;
+  assign door_tri_valid_w = st_o_valid && ap_o_valid_w && tidq_have_w;
   // THE FORK'S CONJUNCTION. Neither `shell_tri_ready_w` nor `ab_tri_ready_w`
   // is a function of any valid -- the binner's is `(state == S_IDLE) &&
   // !drain_req_r` and GEOM.ARENABIN's is `(st_q == A_IDLE) && ...` -- so this
