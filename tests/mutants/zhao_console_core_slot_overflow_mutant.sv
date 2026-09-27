@@ -1275,6 +1275,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
   output logic [31:0] geom_pw_unaligned_o,
+  // GEOM.PARAMWALK's fetch arm counters (MUXBUILD, 2026-09-27). Added to the
+  // WRAPPER, never to the module -- owner ruling R220. `.*` cannot bind a
+  // port the wrapper does not declare, so the control would not elaborate.
+  output logic [31:0] geom_pw_vread_o,
+  output logic [31:0] geom_pw_vbad_o,
+  output logic [31:0] geom_pw_pvsplit_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,

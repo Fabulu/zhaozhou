@@ -13038,6 +13038,14 @@ module zhao_console_core
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
   output logic [31:0] geom_pw_unaligned_o,
+  // GEOM.PARAMWALK's fetch arm (MUXBUILD, 2026-09-27). `geom_pw_vread_o`
+  // counts RECORDS FETCHED, so `vread == 3 * geom_pw_tris_o` is the
+  // invariant; `geom_pw_vbad_o` counts a vertex the arm refused; and
+  // `geom_pw_pvsplit_o` counts the three vertices of one triangle
+  // disagreeing on their untextured flag.
+  output logic [31:0] geom_pw_vread_o,
+  output logic [31:0] geom_pw_vbad_o,
+  output logic [31:0] geom_pw_pvsplit_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -31252,6 +31260,49 @@ module zhao_console_core
       .t_source_o   (),
       .t_illegal_o  (),
 
+      // ---- THE FETCH ARM'S VERTEX FIELDS: TIED, SAME DECLARATION ---------
+      // MUXBUILD built the ProjectedVertex fetch arm and PROVED it (550
+      // checks, every field of all three vertices bit-identical out of real
+      // SDRAM). It has no consumer here for one measured reason: `job_*` IS
+      // NOT A PORT. `zhao_raster_tile_pipe_v2` is a CHILD of
+      // `zhao_geom_bin_pipe_v2`, fed over internal wires, so the multiplex
+      // has a back end and NO DOOR -- 2,065 wires through two module
+      // boundaries to open it. See entry I55 and FINDINGS-muxbuild.
+      //
+      // THESE ARE EXPLICIT EMPTY CONNECTIONS, NOT OMISSIONS. An omitted pin
+      // is a `PINMISSING`; gate 31 refuses it and caught all 31 of these on
+      // the merge. An omission cannot be told apart from an oversight, and
+      // "the t_* outputs dangle" is precisely what five packets refused to
+      // FAKE a consumer for -- so it must be stated, not left implied.
+      .t_a_x_o         (),
+      .t_a_y_o         (),
+      .t_a_invw_o      (),
+      .t_a_uow_o       (),
+      .t_a_vow_o       (),
+      .t_a_r_o         (),
+      .t_a_g_o         (),
+      .t_a_b_o         (),
+      .t_a_alpha_o     (),
+      .t_b_x_o         (),
+      .t_b_y_o         (),
+      .t_b_invw_o      (),
+      .t_b_uow_o       (),
+      .t_b_vow_o       (),
+      .t_b_r_o         (),
+      .t_b_g_o         (),
+      .t_b_b_o         (),
+      .t_b_alpha_o     (),
+      .t_c_x_o         (),
+      .t_c_y_o         (),
+      .t_c_invw_o      (),
+      .t_c_uow_o       (),
+      .t_c_vow_o       (),
+      .t_c_r_o         (),
+      .t_c_g_o         (),
+      .t_c_b_o         (),
+      .t_c_alpha_o     (),
+      .t_untex_o    (),
+
       .guard_req_o  (pw_req),
       .guard_rsp_i  (pw_rsp),
       .beat_valid_i (gs_beat_valid[2]),
@@ -31272,6 +31323,14 @@ module zhao_console_core
       .gen_race_o       (geom_pw_genrace_o),
       .burst_unaligned_o(geom_pw_unaligned_o),
       .walk_depth_max_o (geom_pw_depth_o),
+      // THE FETCH ARM'S THREE COUNTERS ARE READ, NOT TIED. They can fire --
+      // MUXBUILD fired two of them with legal stimulus and showed them silent
+      // first -- and an instrument nobody reads is the `geom_tidq_*` failure
+      // this console has already paid for once. `verts_read_o == 3 *
+      // tris_emitted_o` is an invariant a reader can check.
+      .verts_read_o     (geom_pw_vread_o),
+      .verts_illegal_o  (geom_pw_vbad_o),
+      .t_pv_split_o     (geom_pw_pvsplit_o),
       .busy_o           (pw_busy)
   );
 

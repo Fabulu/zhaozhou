@@ -547,6 +547,12 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_pw_stray_o;
   logic [31:0] geom_pw_genrace_o;
   logic [31:0] geom_pw_unaligned_o;
+  // GEOM.PARAMWALK's fetch arm counters (MUXBUILD, 2026-09-27). The bench
+  // binds the core with `.*`, so a core port with no wire here is an
+  // elaboration error, not a silent drop.
+  logic [31:0] geom_pw_vread_o;
+  logic [31:0] geom_pw_vbad_o;
+  logic [31:0] geom_pw_pvsplit_o;
   logic [15:0] geom_pw_depth_o;
   logic [31:0] geom_ws_denied_o;
   logic [31:0] geom_ws_contention_o;
@@ -6894,6 +6900,22 @@ module tb_zhao_console_core_smoke
              geom_pw_tris_o, geom_pw_trisbad_o, geom_pw_cut_o,
              geom_pw_denied_o, geom_pw_short_o, geom_pw_stray_o,
              geom_pw_genrace_o);
+    // THE FETCH ARM (MUXBUILD, 2026-09-27). These are READ, not merely
+    // declared -- the `geom_tidq_*` lesson is that a counter the bench
+    // declares and never prints is an instrument nobody can consult.
+    // `vread == 3 * tris` is the arm's own stated invariant; it holds
+    // trivially at zero here because the walk request is still tied, and it
+    // is the line that will move when the raster door opens.
+    $display("SMOKE: fetcharm  vread=%0d vbad=%0d pvsplit=%0d (invariant vread == 3*tris=%0d)",
+             geom_pw_vread_o, geom_pw_vbad_o, geom_pw_pvsplit_o,
+             3 * geom_pw_tris_o);
+    if (geom_pw_vread_o != 3 * geom_pw_tris_o) begin
+      $fatal(1, "GEOM.PARAMWALK: vertices read (%0d) is not three per emitted triangle (%0d)",
+             geom_pw_vread_o, geom_pw_tris_o);
+    end
+    if (geom_pw_vbad_o != 32'd0) begin
+      $fatal(1, "GEOM.PARAMWALK: the fetch arm refused %0d vertex record(s)", geom_pw_vbad_o);
+    end
     $display("SMOKE: geomwshare denied=%0d contention=%0d err[short/long/unowned]=[%0d %0d %0d] retireunowned=%0d wbeatunowned=%0d ledgerfull=%0d",
              geom_ws_denied_o, geom_ws_contention_o, geom_ws_short_o,
              geom_ws_long_o, geom_ws_unowned_o, geom_ws_retire_unowned_o,
