@@ -1,3 +1,51 @@
+> # STOP. THE TWO HEADLINE TARGETS IN THIS NOTE WERE ALREADY REPAIRED.
+>
+> **The baseline this whole note is built on -- `@post-palram` -- completed at
+> 2026-09-26 05:21:08. Commit `86f9a04d` (FLOPARRAY) landed at 05:51:08, THIRTY
+> MINUTES LATER, and it converted exactly the two arrays this note ranks first.**
+>
+> ```
+> zhao_forge_assemble   39,167 -> 4,327 regs   mem 2,198 -> 37,038   ALM 26,811 -> 3,420
+> zhao_geom_lodstate    10,826 -> 2,118 regs   mem     0 ->  9,216   ALM  7,876 ->  2,740
+>                      -43,548 registers, -28,527 estimated ALMs, ZERO added clocks
+> ```
+>
+> So "`zhao_forge_assemble` is the one to look at first" is **pointing at work
+> that is finished**, and `zhao_geom_lodstate`'s `st_q` is already a Simple Dual
+> Port 512x18 with the reset loop removed, the read registered and the valid mux
+> moved downstream -- with a comment in the source explaining each choice. I read
+> that comment, admired it, and still did not check its date against my
+> measurement's.
+>
+> **This is the "never compare a current file to an old measurement" law, and it
+> is the fourth and largest inflation in this note.** Declared-today versus
+> measured-a-week-ago is a different question wearing the same shape, and it
+> produced confident nonsense: a ranked roadmap whose top two entries, 48,548
+> registers between them, were spent before I started.
+>
+> It is also the CASHED CHEQUE in reverse -- this repository's standing warning
+> is about documents that go on calling a settled item outstanding, and this note
+> became one within hours of being written.
+>
+> **WHAT SURVIVES.** The method is sound and the remaining rows are unaffected:
+> `zhao_field_v3_exec` (24,795 own regs), `zhao_cmd_exec` (12,149),
+> `zhao_geom_ladderbank` (5,951 own regs, 0 mem) and `zhao_material_resolve`
+> (5,207) were not touched by FLOPARRAY and are now the head of the list. The
+> concentration finding also survives and is the useful part: the overflow sits
+> in a handful of modules, not spread across 600.
+>
+> **AND FLOPARRAY IS THE PROOF THE LEVER IS REAL.** It is the same trade this
+> note argues for, executed and measured: -28,527 estimated ALMs from two arrays
+> at zero added clocks, M10K rather than MLAB ("Total MLAB memory bits : 0" on
+> all three RAMs, so the bits did not return as logic under another name), and
+> the cost declared rather than hidden -- lodstate gives back 8,708 rather than
+> 9,216 because the conversion ADDS 512 valid bits, a read register and its valid
+> companion.
+>
+> **DO NOT QUOTE ANY TOTAL IN THIS NOTE.** Every figure below descends from
+> `@post-palram` and is ~43,548 registers too high. The console map running as I
+> write measures the CURRENT tree on the SAME device; use its numbers.
+
 > ## CORRECTION, SAME DAY, BEFORE ANYONE ACTS ON THIS
 >
 > **The static scan OVER-PREDICTS, and this note originally leaned on it as the
