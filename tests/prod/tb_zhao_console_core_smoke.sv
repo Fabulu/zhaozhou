@@ -4063,6 +4063,79 @@ module tb_zhao_console_core_smoke
       end
     end
   end
+  // ==========================================================================
+  // MATPUB'S TAG PROBE -- WHICH PIXEL, WHICH TAG BYTE, AND WHERE IT SITS
+  // ==========================================================================
+  // The fragment-tag gate at the bottom of this file reports a DIFFERENCE
+  // ("2815 of 2816 were untagged") and nothing whatever about the offender.
+  // LASTGAP handed the pixel over as an explicit HYPOTHESIS and said plainly it
+  // had not proved it. A hypothesis about ONE pixel is cheap to settle and
+  // expensive to argue, so this records the OFFENDING BEATS THEMSELVES: the tag
+  // byte, the screen position, the tile-local address and the beat's ordinal.
+  //
+  // IT TAPS THE SAME NET THE COUNTER DOES, which is what makes it evidence
+  // about the fragment rather than a second opinion: `zhao_post_gather_tag`
+  // classifies on `f_tag_i[7:6]`, and the core drives that port from
+  // `gth_tag_w`. This probe reads `gth_tag_w`. The two cannot disagree about
+  // what arrived.
+  //
+  // `mpb_tag_nz_q` IS THE ONE THAT SEPARATES TWO STORIES, and it is the reason
+  // the probe counts more than it captures: a tag byte that is nonzero but
+  // whose top two bits are 0b00 is a GLOW tag, counted by the gate as
+  // below-knee or lit and not as an offence. Counting "nonzero at all" beside
+  // "reserved" says whether the stream carries one stray byte or a population
+  // of them of which one crossed a threshold. Those need different repairs and
+  // the difference counter alone cannot tell them apart.
+  localparam int MPB_TAGCAP_N = 8;
+  logic [7:0]         mpb_tag_q    [MPB_TAGCAP_N];
+  logic signed [11:0] mpb_tag_x_q  [MPB_TAGCAP_N];
+  logic signed [11:0] mpb_tag_y_q  [MPB_TAGCAP_N];
+  logic [7:0]         mpb_tag_ad_q [MPB_TAGCAP_N];
+  int unsigned        mpb_tag_ix_q [MPB_TAGCAP_N];
+  int unsigned        mpb_tag_n_q;    // offending beats seen (may exceed capture)
+  int unsigned        mpb_gth_n_q;    // gather beats seen; the ordinal source
+  int unsigned        mpb_tag_nz_q;   // beats whose tag byte is nonzero AT ALL
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mpb_tag_n_q  <= 0;
+      mpb_gth_n_q  <= 0;
+      mpb_tag_nz_q <= 0;
+    end else if (`PC_CORE.gth_valid_w) begin
+      mpb_gth_n_q <= mpb_gth_n_q + 1;
+      if (`PC_CORE.gth_tag_w[7:6] != 2'b00) mpb_tag_nz_q <= mpb_tag_nz_q + 1;
+      // CAPTURE ON *ANY* NONZERO TAG BYTE, NOT ON THE GATE'S PREDICATE.
+      // MATPUB, first probe pass: `-FieldActive` and `-FieldUncovered` BOTH
+      // report two beats with a nonzero tag byte, and they differ only in
+      // whether one of the two reaches a reserved CHANNEL. So the gate's
+      // predicate (`[7:6] != 0`) is NOT the population of interest -- capturing
+      // on it showed the one offender and hid the one that has been there all
+      // along. `mpb_tag_nz_q` now counts the gate's predicate and the CAPTURE
+      // takes the wider set, which is the way round that lets the two forms be
+      // differenced against each other and against the plain run.
+      if (`PC_CORE.gth_tag_w != 8'd0) begin
+        if (mpb_tag_n_q < MPB_TAGCAP_N) begin
+          mpb_tag_q   [mpb_tag_n_q] <= `PC_CORE.gth_tag_w;
+          mpb_tag_x_q [mpb_tag_n_q] <= `PC_CORE.gth_x_w;
+          mpb_tag_y_q [mpb_tag_n_q] <= `PC_CORE.gth_y_w;
+          mpb_tag_ad_q[mpb_tag_n_q] <= `PC_CORE.gth_addr_w;
+          mpb_tag_ix_q[mpb_tag_n_q] <= mpb_gth_n_q;
+        end
+        mpb_tag_n_q <= mpb_tag_n_q + 1;
+      end
+    end
+  end
+
+  // MATPUB'S QUIESCENCE CONTROL, and it is a CONTROL rather than a cure.
+  // The sample law's `$fatal` asserts a DIAGNOSIS -- "the difference is a
+  // producer publishing sample_count = 0" -- and that is an interpretation of
+  // the difference, not the only mechanism that can produce one. A counter pair
+  // read while beats are still in flight produces the same shortfall with no
+  // defect behind it. These hold the two counts taken BEFORE an idle span so
+  // the same two can be printed after it; if they move, the bench was reading a
+  // machine that had not finished, and if they do not, the shortfall is real
+  // and the gate's prose is describing it correctly.
+  int unsigned mpb_q_frag_b, mpb_q_samp_b, mpb_q_gfrag_b, mpb_q_unt_b, mpb_q_res_b;
+
   // ---- THE MATERIAL RESOLVE, OBSERVED (entry I49, CLOSED 2026-09-20) -------
   // The bench no longer issues the request. `u_material_window` does, from the
   // triangle's own {material_set, material_id, semantic weight} -- the DRAW's
@@ -10238,6 +10311,33 @@ module tb_zhao_console_core_smoke
              tsfill_tile_max_q, tsfill_tile_or_q, tsfill_first_addr_q,
              gather_fragments_o, gather_frag_untagged_o, gather_frag_below_knee_o,
              gather_frag_lit_o, gather_reserved_channel_o);
+
+    // ---- MATPUB: WHICH PIXEL, AND IS EITHER SYMPTOM A QUIESCENCE ARTEFACT --
+    // Both displays sit ABOVE the fragment-tag gate and above the sample gate,
+    // which is where the run actually stops. That position is checked against
+    // the gate that FIRES rather than the one I had in mind -- LASTGAP paid a
+    // full console build to learn that distinction and wrote it down.
+    $display("SMOKE: early-diag tagprobe gather_beats=%0d reserved_beats=%0d tagged_beats=%0d",
+             mpb_gth_n_q, mpb_tag_nz_q, mpb_tag_n_q);
+    for (int t = 0; t < MPB_TAGCAP_N; t++)
+      if (t < int'(mpb_tag_n_q))
+        $display("SMOKE: early-diag tagprobe[%0d] tag=%02h ch=%0d strength=%0d x=%0d y=%0d tileaddr=%02h (row=%0d col=%0d) beat=%0d",
+                 t, mpb_tag_q[t], mpb_tag_q[t][7:6], mpb_tag_q[t][5:0],
+                 mpb_tag_x_q[t], mpb_tag_y_q[t], mpb_tag_ad_q[t],
+                 mpb_tag_ad_q[t][7:4], mpb_tag_ad_q[t][3:0], mpb_tag_ix_q[t]);
+
+    mpb_q_frag_b  = render_texture_fragments_o;
+    mpb_q_samp_b  = render_texture_samples_o;
+    mpb_q_gfrag_b = gather_fragments_o;
+    mpb_q_unt_b   = gather_frag_untagged_o;
+    mpb_q_res_b   = gather_reserved_channel_o;
+    repeat (20000) @(posedge gpu_clk);
+    $display("SMOKE: early-diag quiesce after 20000 idle clocks: texture frags %0d -> %0d, samples %0d -> %0d | gather frags %0d -> %0d, untagged %0d -> %0d, reserved %0d -> %0d",
+             mpb_q_frag_b, render_texture_fragments_o,
+             mpb_q_samp_b, render_texture_samples_o,
+             mpb_q_gfrag_b, gather_fragments_o,
+             mpb_q_unt_b, gather_frag_untagged_o,
+             mpb_q_res_b, gather_reserved_channel_o);
 
 `ifdef ZHAO_SMOKE_GLOW_TAG
     // POSITIVE, AND THE EQUALITY IS NOT THE ONE IT LOOKS LIKE IT SHOULD BE.

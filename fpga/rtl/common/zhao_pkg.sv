@@ -680,6 +680,36 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_TERRAIN_DEVSTORE_BASE = 32'h0586_0000;
   localparam logic [31:0] ZHAO_TERRAIN_DEVSTORE_SPAN = 32'h0005_0000; // 1024 * (256 + 64)
 
+  // --------------------------------------------------------------------------
+  // TERRAIN.COMPOSED_MATERIAL -- the composed layer-E plane, published per
+  // patch.  Owner ruling `reports/OWNER-DECISION-20260927-I34-COMPOSED-
+  // MATERIAL.md`; shape fixed by `reports/DECISION-20260927-I34-COMPOSED-
+  // MATERIAL-PUBLISHER.md`.  Producer: `zhao_terrain_matpub`.
+  //
+  // 256 slots x 8,192 B = 2 MiB, carved out of bank 2's reserved tail.  THE
+  // THREE NEIGHBOURS, checked rather than assumed, because a region table is
+  // exactly the kind of document that goes stale quietly:
+  //
+  //   TERRAIN.DEVSTORE  ends at 0x0586_0000 + 0x0005_0000 = 0x058B_0000,
+  //                     which is this base EXACTLY -- they abut, they do not
+  //                     overlap;
+  //   this region       0x058B_0000 .. 0x05AA_FFFF inclusive, half-open end
+  //                     0x05AB_0000, agreeing to the byte with the table in
+  //                     spec/memory_rules.md 5b;
+  //   POST.ECHO         takes 0x05C0_0000, so 0x05AB_0000 .. 0x05C0_0000
+  //                     stays reserved between them.
+  //
+  // A PLANE IS 4,096 B AND THE SLOT IS 8,192, so the payload occupies the
+  // first half.  The slack is the OWNER's commissioned slot size and is left
+  // unspent deliberately: the publisher writes 64 bursts and not 128, and the
+  // cost table in the decision record is written against that number.
+  //
+  // BOTH ARE KNOBS.  `zhao_terrain_matpub` takes them as parameters at the
+  // composition site and refuses at elaboration any parameterisation whose
+  // footprint does not fit the span it is given.
+  localparam logic [31:0] ZHAO_TERRAIN_COMPOSED_MATERIAL_BASE = 32'h058B_0000;
+  localparam logic [31:0] ZHAO_TERRAIN_COMPOSED_MATERIAL_SPAN = 32'h0020_0000; // 256 * 8192
+
   // Duo canvas map (spec/video_rules.md §3.1): two 256x192 views vertically
   // centered at x offsets 0 / 256, y offset 24; border rows are black and
   // part of the displayed stream.
